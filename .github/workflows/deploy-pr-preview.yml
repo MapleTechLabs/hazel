@@ -9,9 +9,10 @@ on:
 concurrency:
     group: pr-preview-${{ github.event.pull_request.number }}
     # Queue instead of cancelling: whether to cancel is decided by the *incoming* run, so any
-    # cancellation could cut short an in-progress teardown and leak the preview stage. Newer
-    # pending runs still replace older pending ones.
+    # cancellation could cut short an in-progress teardown and leak the preview stage. `queue: max`
+    # keeps every pending run too (the default replaces a pending teardown with the next event).
     cancel-in-progress: false
+    queue: max
 
 permissions:
     contents: read
