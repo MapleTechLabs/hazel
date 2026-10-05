@@ -68,6 +68,9 @@ jobs:
             - name: Type check
               run: bun run typecheck
 
+            - name: Type check the alchemy stack
+              run: bun run alchemy:typecheck
+
     test:
         runs-on: ubuntu-latest
         permissions:
