@@ -12,6 +12,7 @@ import { PresenceCleanupCronLayer } from "./cron/presence-cleanup-cron.ts"
 import { StatusExpirationCronLayer } from "./cron/status-expiration-cron.ts"
 import { TypingIndicatorCleanupCronLayer } from "./cron/typing-indicator-cleanup-cron.ts"
 import { UploadCleanupCronLayer } from "./cron/upload-cleanup-cron.ts"
+import { requireApiSecret } from "./services/api-secret.ts"
 import { BotUserServiceLive } from "./services/bot-user-service.ts"
 import { OpenRouterLanguageModelLayer } from "./services/openrouter-service.ts"
 import { RssPollCronLayer } from "./cron/rss-poll-cron.ts"
@@ -83,7 +84,7 @@ const AllRoutes = Layer.mergeAll(WorkflowApiLive).pipe(
 )
 
 // Main server layer
-const ServerLayer = HttpRouter.serve(AllRoutes).pipe(
+const ServerLayer = HttpRouter.serve(AllRoutes, { middleware: requireApiSecret }).pipe(
 	Layer.provide(AllWorkflows),
 	Layer.provide(AllCronJobs),
 	Layer.provide(Logger.layer([Logger.consolePretty()])),
