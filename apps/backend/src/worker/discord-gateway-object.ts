@@ -6,6 +6,7 @@
  * from a per-minute cron, which also restarts the session after a deploy or an eviction; while a
  * session runs, an alarm every 30s keeps the object warm and restarts a session that ended.
  */
+import { bindBotGateways } from "@hazel/bot-gateway/object"
 import * as Cloudflare from "alchemy/Cloudflare"
 import { RuntimeContext } from "alchemy/RuntimeContext"
 import { Context, Effect, Layer, Option, Ref } from "effect"
@@ -34,6 +35,8 @@ export const DiscordGatewayObjectLive = DiscordGatewayObject.make(
 	Effect.gen(function* () {
 		const state = yield* Cloudflare.DurableObjectState
 		const env = yield* Cloudflare.WorkerEnvironment
+		// Cross-script binding to the bot gateway's Durable Objects (BotGatewayService publishes there).
+		const botGateways = yield* bindBotGateways
 		return Effect.gen(function* () {
 			const instanceScope = yield* Effect.scope
 			const services = yield* Layer.build(
@@ -42,7 +45,7 @@ export const DiscordGatewayObjectLive = DiscordGatewayObject.make(
 				DiscordGatewayService.layer.pipe(
 					Layer.provide(AppServicesLive),
 					Layer.provideMerge(FetchHttpClient.layer),
-					Layer.provide(objectPlatformLive(env)),
+					Layer.provide(objectPlatformLive(env, botGateways)),
 				) as unknown as Layer.Layer<DiscordGatewayService>,
 			)
 			const gateway = Context.get(services, DiscordGatewayService)

@@ -3,6 +3,7 @@
  * Objects that replace the Bun process's background loops and Redis. The Bun entry is `index.ts`.
  * Plan: infra/cloudflare-migration-plan.md, Phase 4.
  */
+import { bindBotGateways } from "@hazel/bot-gateway/object"
 import { HazelStack, hazelWorkerProps, stageProps } from "@hazel/infra/cloudflare"
 import { cachedRecoverable } from "@hazel/infra/cached-recoverable"
 import { isolateContext } from "@hazel/infra/worker-http"
@@ -65,13 +66,15 @@ export default Api.make(
 		const rateLimiters = yield* RateLimiterObject
 		const outbox = yield* OutboxDispatcherObject
 		const discordGateway = yield* DiscordGatewayObject
+		// Hosted by the bot-gateway Worker; BotGatewayService publishes bot events into it.
+		const botGateways = yield* bindBotGateways
 		const env = yield* Cloudflare.WorkerEnvironment
 		const exec = yield* Cloudflare.WorkerExecutionContext
 
 		// The graph builds on the first request, not here: init also runs at plan time, where
 		// alchemy would auto-bind every `Config` read.
 		const isolate = isolateContext(yield* Effect.context())
-		const app = yield* cachedRecoverable(buildApp(isolate, env, rateLimiters))
+		const app = yield* cachedRecoverable(buildApp(isolate, env, rateLimiters, botGateways))
 
 		// Backstops for the Durable Objects: drain anything a missed kick left behind, and keep
 		// the Discord gateway session up across deploys and evictions.

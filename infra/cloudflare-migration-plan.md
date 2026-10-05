@@ -205,6 +205,15 @@ One DO per bot:
 - The backend's `bot-gateway-service` writes via a DO RPC stub instead of HTTP to Durable Streams.
   bot-commands SSE also lives on the DO.
 
+**As built** (`apps/bot-gateway/src/worker.ts`, `src/gateway/*`): bots send their token in the
+first frame, not on the upgrade, so the gateway Worker terminates the bot's socket, sends HELLO,
+answers HEARTBEATs, authenticates IDENTIFY/RESUME through the `HAZEL_DB` Hyperdrive, then relays
+the session to `BotGateway.getByName(botId)` over a hibernatable DO socket. The Worker's
+lease-TTL watchdog closes silent clients; the DO rejects a second session unless it RESUMEs the
+live session's id (the old lease semantics). The backend picks a `BotGatewayTransport`: Durable
+Streams HTTP on Bun, `layerDurableObject(namespace)` on Workers. The Bun gateway and
+`docker/durable-streams` stay until the Bun backend is retired (Phase 7).
+
 ## Phase 7: Bots, observability, cleanup
 
 - **`bots/hazel-bot`, `bots/linear-bot`**: **out of scope, separate follow-up.** They're rewritten

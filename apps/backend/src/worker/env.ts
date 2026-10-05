@@ -39,10 +39,6 @@ export const apiEnv = ({ stage, urls }: HazelStackContext) =>
 		// Workflows run on the Railway-hosted cluster (infra/cloudflare-migration-plan.md, Phase 5)
 		requirePlainEntry("CLUSTER_URL"),
 
-		// Bot gateway event delivery (Durable Streams until the BotGateway Durable Object lands)
-		optionalPlain("DURABLE_STREAMS_URL"),
-		optionalSecret("DURABLE_STREAMS_TOKEN"),
-
 		// Integrations
 		requireSecretEntry("INTEGRATION_ENCRYPTION_KEY"),
 		optionalPlain("INTEGRATION_ENCRYPTION_KEY_VERSION"),

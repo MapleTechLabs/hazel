@@ -10,7 +10,7 @@ export default defineConfig({
 			"apps/link-preview-worker",
 			"apps/web",
 			"libs/*",
-			"!apps/bot-gateway",
+			"apps/bot-gateway",
 		],
 		coverage: {
 			reporter: ["text", "json-summary", "json"],

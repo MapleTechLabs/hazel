@@ -23,6 +23,7 @@ export interface HazelDomains {
 	readonly electric?: string
 	readonly linkPreview?: string
 	readonly rivet?: string
+	readonly botGateway?: string
 }
 
 export const ZONE = "hazel.sh"
@@ -35,6 +36,7 @@ const PRD_DOMAINS: HazelDomains = {
 	electric: "electric.hazel.sh",
 	linkPreview: "link-preview.hazel.sh",
 	rivet: "rivet.hazel.sh",
+	botGateway: "bot-gateway.hazel.sh",
 }
 
 const hazelStageResult = (stage: string): Result.Result<HazelStage, HazelStageError> => {

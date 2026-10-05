@@ -8,6 +8,7 @@ import { layerKvResultPersistence } from "@hazel/effect-cloudflare"
 import { readHazelDbBinding } from "@hazel/infra/cloudflare"
 import { workerEnvLayer } from "@hazel/infra/worker-runtime"
 import { Effect, Layer, Option, Redacted } from "effect"
+import { type BotGatewayNamespace, BotGatewayTransport } from "../services/bot-gateway-transport"
 
 /** KV namespace backing the session/user-lookup caches (Redis on Bun). */
 export const CACHE_BINDING = "CACHE"
@@ -32,9 +33,10 @@ const cacheNamespace = (env: Record<string, unknown>): KVNamespace => {
  * `DatabaseConnection` the fetch handler provides (sockets are bound to the request that opened
  * them).
  */
-export const requestPlatformLive = (env: Record<string, unknown>) =>
+export const requestPlatformLive = (env: Record<string, unknown>, botGateways: BotGatewayNamespace) =>
 	Layer.mergeAll(
 		Database.layerRequestScoped,
+		BotGatewayTransport.layerDurableObject(botGateways),
 		layerKvResultPersistence(cacheNamespace(env)),
 		workerEnvLayer(env),
 	)
@@ -43,8 +45,9 @@ export const requestPlatformLive = (env: Record<string, unknown>) =>
  * Platform services for a Durable Object. A Durable Object may keep connections across the
  * calls it serves, so it holds one pooled client (through Hyperdrive) for its in-memory lifetime.
  */
-export const objectPlatformLive = (env: Record<string, unknown>) =>
+export const objectPlatformLive = (env: Record<string, unknown>, botGateways: BotGatewayNamespace) =>
 	Layer.mergeAll(
+		BotGatewayTransport.layerDurableObject(botGateways),
 		Layer.unwrap(
 			Effect.sync(() =>
 				Database.layer({ url: Redacted.make(hazelDbConnectionString(env)), ssl: false }),

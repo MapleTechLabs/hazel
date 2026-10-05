@@ -6,6 +6,7 @@
  * Woken three ways: `kick()` after a request that wrote outbox events, an alarm while retries are
  * pending, and the api Worker's per-minute cron as a backstop.
  */
+import { bindBotGateways } from "@hazel/bot-gateway/object"
 import * as Cloudflare from "alchemy/Cloudflare"
 import { RuntimeContext } from "alchemy/RuntimeContext"
 import { Context, Effect, Layer, Ref } from "effect"
@@ -36,6 +37,8 @@ export const OutboxDispatcherObjectLive = OutboxDispatcherObject.make(
 	Effect.gen(function* () {
 		const state = yield* Cloudflare.DurableObjectState
 		const env = yield* Cloudflare.WorkerEnvironment
+		// Cross-script binding to the bot gateway's Durable Objects (BotGatewayService publishes there).
+		const botGateways = yield* bindBotGateways
 		return Effect.gen(function* () {
 			const workerId = `cf-outbox-${crypto.randomUUID()}`
 			// Built in the instance scope, once per in-memory instance: its pooled client lives as
@@ -46,7 +49,7 @@ export const OutboxDispatcherObjectLive = OutboxDispatcherObject.make(
 				MessageOutboxProcessor.layer.pipe(
 					Layer.provide(AppServicesLive),
 					Layer.provideMerge(FetchHttpClient.layer),
-					Layer.provide(objectPlatformLive(env)),
+					Layer.provide(objectPlatformLive(env, botGateways)),
 				) as unknown as Layer.Layer<MessageOutboxProcessor>,
 			)
 			const processor = Context.get(services, MessageOutboxProcessor)

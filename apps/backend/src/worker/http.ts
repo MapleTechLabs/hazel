@@ -9,6 +9,7 @@ import type { HttpEffect } from "alchemy/Http"
 import { type Context, Effect, Layer } from "effect"
 import { FetchHttpClient, HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
 import { AllRoutes, AppAuthorizationLive, AppServicesLive } from "../app"
+import type { BotGatewayNamespace } from "../services/bot-gateway-transport"
 import { OUTBOX_DISPATCHER_NAME, type OutboxDispatcherObject } from "./outbox-dispatcher-object"
 import { provideRequestDatabase, requestPlatformLive } from "./platform"
 import { type RateLimiterObject, rateLimiterLive } from "./rate-limiter-object"
@@ -18,6 +19,7 @@ export const buildApp = (
 	isolate: Context.Context<never>,
 	env: Record<string, unknown>,
 	rateLimiters: Cloudflare.DurableObject<RateLimiterObject>,
+	botGateways: BotGatewayNamespace,
 ) =>
 	forIsolate(isolate)(
 		HttpRouter.toHttpEffect(
@@ -29,7 +31,7 @@ export const buildApp = (
 				Layer.provideMerge(rateLimiterLive(rateLimiters)),
 				Layer.provideMerge(FetchHttpClient.layer),
 				Layer.provideMerge(WorkerPlatformLive),
-				Layer.provideMerge(requestPlatformLive(env)),
+				Layer.provideMerge(requestPlatformLive(env, botGateways)),
 			) as unknown as Layer.Layer<never, never, HttpRouter.HttpRouter>,
 		),
 	).pipe(Effect.map(bridgeHandler))

@@ -20,6 +20,7 @@ import {
 import { plainWithDefault } from "@hazel/infra/env"
 import Actors from "./apps/actors/alchemy.run.ts"
 import ApiLive, { Api } from "./apps/backend/src/worker.ts"
+import BotGateway from "./apps/bot-gateway/alchemy.run.ts"
 import Docs from "./apps/docs/alchemy.run.ts"
 import ElectricProxy from "./apps/electric-proxy/alchemy.run.ts"
 import Landing from "./apps/landing/alchemy.run.ts"
@@ -89,6 +90,8 @@ export default Alchemy.Stack(
 	Effect.gen(function* () {
 		const { stage, domains, urls } = yield* HazelStack
 
+		// Before api, which binds its BotGateway Durable Objects cross-script.
+		const botGateway = yield* BotGateway
 		// The Live layer registers the api Worker's Durable Object classes in its bundle.
 		const api = yield* Effect.provide(Api, ApiLive)
 		// Also yields the `electric` Worker (self-hosted Electric in a Container) on deployed stages.
@@ -113,6 +116,7 @@ export default Alchemy.Stack(
 		return {
 			...summary,
 			apiWorker: api.workerName,
+			botGatewayWorker: botGateway.workerName,
 			electricProxyWorker: electricProxy.workerName,
 			webWorker: web.workerName,
 			linkPreviewWorker: linkPreview.workerName,

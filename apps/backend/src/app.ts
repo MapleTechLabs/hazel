@@ -1,7 +1,8 @@
 /**
  * The backend's runtime-agnostic application: routes plus every service that does not depend on
  * the host platform. Entry points (`index.ts` on Bun, `worker.ts` on Cloudflare) provide the
- * platform layer: `Database`, `Persistence`, `RateLimiter`, the tracer and the ConfigProvider.
+ * platform layer: `Database`, `Persistence`, `RateLimiter`, `BotGatewayTransport`, the tracer and
+ * the ConfigProvider.
  */
 import { HttpApiScalar } from "effect/http-api"
 import { FetchHttpClient, HttpRouter, HttpServerResponse } from "effect/http"
@@ -177,7 +178,7 @@ export const PolicyLive = Layer.mergeAll(
 
 /**
  * Services shared by every runtime. Still requires the platform services (`Database`,
- * `Persistence`, `RateLimiter`) from the entry point.
+ * `Persistence`, `RateLimiter`, `BotGatewayTransport`) from the entry point.
  */
 export const AppServicesLive = Layer.mergeAll(
 	RepoLive,

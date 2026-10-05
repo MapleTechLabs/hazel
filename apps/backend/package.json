@@ -30,6 +30,7 @@
 		"@effect/sql-pg": "catalog:effect",
 		"@hazel/auth": "workspace:*",
 		"@hazel/backend-core": "workspace:*",
+		"@hazel/bot-gateway": "workspace:*",
 		"@hazel/db": "workspace:*",
 		"@hazel/domain": "workspace:*",
 		"@hazel/effect-bun": "workspace:*",
