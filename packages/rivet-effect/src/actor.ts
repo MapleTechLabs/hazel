@@ -180,7 +180,7 @@ export const destroy = <TState, TConnParams, TConnState, TVars, TInput>(
 export function effect<TState, TConnParams, TConnState, TVars, TInput, AEff = void>(
 	genFn: (
 		c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
-	) => Generator<Effect.Yieldable.Any, AEff, never>,
+	) => Generator<Effect.Effect<any, any, any>, AEff, never>,
 ): (c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, undefined>) => Promise<AEff> {
 	return (c) => {
 		const gen = genFn(c)

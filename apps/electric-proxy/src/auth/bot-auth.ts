@@ -18,7 +18,7 @@ export interface AuthenticatedBot {
 /**
  * Bot authentication error
  */
-export class BotAuthenticationError extends Schema.TaggedErrorClass<BotAuthenticationError>(
+export class BotAuthenticationError extends Schema.TaggedError<BotAuthenticationError>(
 	"BotAuthenticationError",
 )("BotAuthenticationError", {
 	message: Schema.String,

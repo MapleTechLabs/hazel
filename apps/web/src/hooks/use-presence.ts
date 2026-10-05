@@ -1,4 +1,4 @@
-import { Atom, AsyncResult } from "effect/unstable/reactivity"
+import { Atom, AsyncResult } from "effect/reactivity"
 import { useAtomMount, useAtomSet, useAtomValue } from "@effect/atom-react"
 import type { ChannelId, UserId } from "@hazel/schema"
 import { eq } from "@tanstack/db"

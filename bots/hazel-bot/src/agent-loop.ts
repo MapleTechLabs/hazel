@@ -1,4 +1,4 @@
-import { AiError, LanguageModel, Prompt, type Response, type Toolkit } from "effect/unstable/ai"
+import { AiError, LanguageModel, Prompt, type Response, type Toolkit } from "effect/ai"
 import { Cause, Duration, Effect, Queue, Stream } from "effect"
 
 import { withDegenerationDetection } from "./degeneration-detector.ts"

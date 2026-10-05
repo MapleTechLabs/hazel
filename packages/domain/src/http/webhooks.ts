@@ -1,4 +1,4 @@
-import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/unstable/httpapi"
+import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/http-api"
 import { Schema } from "effect"
 import { InternalServerError, WorkflowInitializationError } from "../errors"
 import { RequiredScopes } from "../scopes/required-scopes"
@@ -8,7 +8,7 @@ export class WebhookResponse extends Schema.Class<WebhookResponse>("WebhookRespo
 	message: Schema.optional(Schema.String),
 }) {}
 
-export class InvalidWebhookSignature extends Schema.TaggedErrorClass<InvalidWebhookSignature>(
+export class InvalidWebhookSignature extends Schema.TaggedError<InvalidWebhookSignature>(
 	"InvalidWebhookSignature",
 )(
 	"InvalidWebhookSignature",
@@ -24,7 +24,7 @@ export class GitHubWebhookResponse extends Schema.Class<GitHubWebhookResponse>("
 	messagesCreated: Schema.optional(Schema.Number),
 }) {}
 
-export class InvalidGitHubWebhookSignature extends Schema.TaggedErrorClass<InvalidGitHubWebhookSignature>(
+export class InvalidGitHubWebhookSignature extends Schema.TaggedError<InvalidGitHubWebhookSignature>(
 	"InvalidGitHubWebhookSignature",
 )(
 	"InvalidGitHubWebhookSignature",

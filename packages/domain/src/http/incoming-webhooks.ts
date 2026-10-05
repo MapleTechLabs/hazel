@@ -1,4 +1,4 @@
-import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/unstable/httpapi"
+import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/http-api"
 import { ChannelWebhookId } from "@hazel/schema"
 import { Schema } from "effect"
 import { InternalServerError } from "../errors"
@@ -154,7 +154,7 @@ export class WebhookMessageResponse extends Schema.Class<WebhookMessageResponse>
 }) {}
 
 // Error: Webhook not found
-export class WebhookNotFoundError extends Schema.TaggedErrorClass<WebhookNotFoundError>()(
+export class WebhookNotFoundError extends Schema.TaggedError<WebhookNotFoundError>()(
 	"WebhookNotFoundError",
 	{
 		message: Schema.String,
@@ -163,7 +163,7 @@ export class WebhookNotFoundError extends Schema.TaggedErrorClass<WebhookNotFoun
 ) {}
 
 // Error: Webhook is disabled
-export class WebhookDisabledError extends Schema.TaggedErrorClass<WebhookDisabledError>()(
+export class WebhookDisabledError extends Schema.TaggedError<WebhookDisabledError>()(
 	"WebhookDisabledError",
 	{
 		message: Schema.String,
@@ -172,7 +172,7 @@ export class WebhookDisabledError extends Schema.TaggedErrorClass<WebhookDisable
 ) {}
 
 // Error: Invalid webhook token
-export class InvalidWebhookTokenError extends Schema.TaggedErrorClass<InvalidWebhookTokenError>()(
+export class InvalidWebhookTokenError extends Schema.TaggedError<InvalidWebhookTokenError>()(
 	"InvalidWebhookTokenError",
 	{
 		message: Schema.String,

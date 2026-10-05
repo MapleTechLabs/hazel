@@ -12,7 +12,7 @@ import { Schema } from "effect"
 /**
  * Tauri API not available in the current environment
  */
-export class TauriNotAvailableError extends Schema.TaggedErrorClass<TauriNotAvailableError>()(
+export class TauriNotAvailableError extends Schema.TaggedError<TauriNotAvailableError>()(
 	"TauriNotAvailableError",
 	{
 		message: Schema.String,
@@ -23,7 +23,7 @@ export class TauriNotAvailableError extends Schema.TaggedErrorClass<TauriNotAvai
 /**
  * A Tauri command invocation failed
  */
-export class TauriCommandError extends Schema.TaggedErrorClass<TauriCommandError>()("TauriCommandError", {
+export class TauriCommandError extends Schema.TaggedError<TauriCommandError>()("TauriCommandError", {
 	message: Schema.String,
 	command: Schema.String,
 	detail: Schema.optional(Schema.String),
@@ -36,14 +36,14 @@ export class TauriCommandError extends Schema.TaggedErrorClass<TauriCommandError
 /**
  * OAuth callback timed out waiting for user to complete authentication
  */
-export class OAuthTimeoutError extends Schema.TaggedErrorClass<OAuthTimeoutError>()("OAuthTimeoutError", {
+export class OAuthTimeoutError extends Schema.TaggedError<OAuthTimeoutError>()("OAuthTimeoutError", {
 	message: Schema.String,
 }) {}
 
 /**
  * OAuth provider returned an error during authentication
  */
-export class OAuthCallbackError extends Schema.TaggedErrorClass<OAuthCallbackError>()("OAuthCallbackError", {
+export class OAuthCallbackError extends Schema.TaggedError<OAuthCallbackError>()("OAuthCallbackError", {
 	message: Schema.String,
 	error: Schema.String,
 	errorDescription: Schema.optional(Schema.String),
@@ -52,12 +52,9 @@ export class OAuthCallbackError extends Schema.TaggedErrorClass<OAuthCallbackErr
 /**
  * No authorization code was received from OAuth callback
  */
-export class MissingAuthCodeError extends Schema.TaggedErrorClass<MissingAuthCodeError>()(
-	"MissingAuthCodeError",
-	{
-		message: Schema.String,
-	},
-) {}
+export class MissingAuthCodeError extends Schema.TaggedError<MissingAuthCodeError>()("MissingAuthCodeError", {
+	message: Schema.String,
+}) {}
 
 // ============================================================================
 // Token Storage Errors
@@ -66,7 +63,7 @@ export class MissingAuthCodeError extends Schema.TaggedErrorClass<MissingAuthCod
 /**
  * Failed to perform an operation on the token store
  */
-export class TokenStoreError extends Schema.TaggedErrorClass<TokenStoreError>()("TokenStoreError", {
+export class TokenStoreError extends Schema.TaggedError<TokenStoreError>()("TokenStoreError", {
 	message: Schema.String,
 	operation: Schema.Literals(["load", "get", "set", "delete"]),
 	detail: Schema.optional(Schema.String),
@@ -75,7 +72,7 @@ export class TokenStoreError extends Schema.TaggedErrorClass<TokenStoreError>()(
 /**
  * A required token was not found in the store
  */
-export class TokenNotFoundError extends Schema.TaggedErrorClass<TokenNotFoundError>()("TokenNotFoundError", {
+export class TokenNotFoundError extends Schema.TaggedError<TokenNotFoundError>()("TokenNotFoundError", {
 	message: Schema.String,
 	tokenType: Schema.Literals(["access", "refresh", "expiresAt"]),
 }) {}
@@ -87,7 +84,7 @@ export class TokenNotFoundError extends Schema.TaggedErrorClass<TokenNotFoundErr
 /**
  * Failed to exchange authorization code for tokens
  */
-export class TokenExchangeError extends Schema.TaggedErrorClass<TokenExchangeError>()("TokenExchangeError", {
+export class TokenExchangeError extends Schema.TaggedError<TokenExchangeError>()("TokenExchangeError", {
 	message: Schema.String,
 	detail: Schema.optional(Schema.String),
 }) {}
@@ -95,7 +92,7 @@ export class TokenExchangeError extends Schema.TaggedErrorClass<TokenExchangeErr
 /**
  * Failed to decode token response from server
  */
-export class TokenDecodeError extends Schema.TaggedErrorClass<TokenDecodeError>()("TokenDecodeError", {
+export class TokenDecodeError extends Schema.TaggedError<TokenDecodeError>()("TokenDecodeError", {
 	message: Schema.String,
 	detail: Schema.optional(Schema.String),
 }) {}
@@ -107,7 +104,7 @@ export class TokenDecodeError extends Schema.TaggedErrorClass<TokenDecodeError>(
 /**
  * Failed to connect to the desktop app's local OAuth server
  */
-export class DesktopConnectionError extends Schema.TaggedErrorClass<DesktopConnectionError>()(
+export class DesktopConnectionError extends Schema.TaggedError<DesktopConnectionError>()(
 	"DesktopConnectionError",
 	{
 		message: Schema.String,
@@ -119,7 +116,7 @@ export class DesktopConnectionError extends Schema.TaggedErrorClass<DesktopConne
 /**
  * Invalid OAuth state parameter received in callback
  */
-export class InvalidDesktopStateError extends Schema.TaggedErrorClass<InvalidDesktopStateError>()(
+export class InvalidDesktopStateError extends Schema.TaggedError<InvalidDesktopStateError>()(
 	"InvalidDesktopStateError",
 	{
 		message: Schema.String,

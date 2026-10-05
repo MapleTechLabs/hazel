@@ -1,8 +1,8 @@
 import { BunSocket } from "@effect/platform-bun"
 import { Config, Effect, Layer } from "effect"
-import { DevTools } from "effect/unstable/devtools"
-import { FetchHttpClient } from "effect/unstable/http"
-import { Otlp, OtlpSerialization } from "effect/unstable/observability"
+import { DevTools } from "effect/devtools"
+import { FetchHttpClient } from "effect/http"
+import { Otlp, OtlpSerialization } from "effect/observability"
 
 /**
  * Create an OpenTelemetry tracing layer with a specific service name.
@@ -31,13 +31,13 @@ import { Otlp, OtlpSerialization } from "effect/unstable/observability"
 export const createTracingLayer = (otelServiceName: string) =>
 	Layer.unwrap(
 		Effect.gen(function* () {
-			const environment = yield* Config.string("OTEL_ENVIRONMENT").pipe(Config.withDefault("local"))
-			const commitSha = yield* Config.string("RAILWAY_GIT_COMMIT_SHA").pipe(
-				Config.orElse(() => Config.string("COMMIT_SHA")),
+			const environment = yield* Config.String("OTEL_ENVIRONMENT").pipe(Config.withDefault("local"))
+			const commitSha = yield* Config.String("RAILWAY_GIT_COMMIT_SHA").pipe(
+				Config.orElse(() => Config.String("COMMIT_SHA")),
 				Config.withDefault("unknown"),
 			)
 
-			const nodeEnv = yield* Config.string("NODE_ENV").pipe(Config.withDefault("development"))
+			const nodeEnv = yield* Config.String("NODE_ENV").pipe(Config.withDefault("development"))
 
 			if (environment === "local") {
 				if (nodeEnv === "production") {
@@ -49,7 +49,7 @@ export const createTracingLayer = (otelServiceName: string) =>
 				return DevTools.layerWebSocket().pipe(Layer.provide(BunSocket.layerWebSocketConstructor))
 			}
 
-			const otelBaseUrl = yield* Config.string("OTEL_BASE_URL")
+			const otelBaseUrl = yield* Config.String("OTEL_BASE_URL")
 
 			return Otlp.layer({
 				baseUrl: otelBaseUrl,

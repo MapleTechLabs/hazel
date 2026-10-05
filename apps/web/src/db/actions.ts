@@ -55,7 +55,7 @@ const getMountedConversationId = (channelId: ChannelId) =>
 const MessageRetrySchedule = Schedule.exponential(Duration.seconds(1), 2).pipe(
 	Schedule.jittered,
 	Schedule.while((metadata) => isErrorRetryable(metadata.input)),
-	Schedule.both(Schedule.recurs(3)),
+	(schedule) => Schedule.max([schedule, Schedule.recurs(3)]),
 )
 
 export const sendMessageAction = optimisticAction({
@@ -111,13 +111,7 @@ export const sendMessageAction = optimisticAction({
 			// Create retry schedule with optional attempt callback
 			const scheduleWithCallback = props.onRetryAttempt
 				? MessageRetrySchedule.pipe(
-						Schedule.tapOutput((out: [Duration.Duration, number]) =>
-							Effect.sync(() => {
-								// out is [Duration, number] from intersect
-								const attemptCount = out[1] + 1
-								props.onRetryAttempt!(attemptCount)
-							}),
-						),
+						Schedule.tap(({ attempt }) => Effect.sync(() => props.onRetryAttempt!(attempt))),
 					)
 				: MessageRetrySchedule
 

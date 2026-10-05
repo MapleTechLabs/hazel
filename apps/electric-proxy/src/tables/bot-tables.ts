@@ -6,14 +6,11 @@ import type { WhereClauseResult } from "./where-clause-builder"
 /**
  * Error thrown when bot table access is denied or where clause cannot be generated
  */
-export class BotTableAccessError extends Schema.TaggedErrorClass<BotTableAccessError>()(
-	"BotTableAccessError",
-	{
-		message: Schema.String,
-		detail: Schema.optional(Schema.String),
-		table: Schema.String,
-	},
-) {}
+export class BotTableAccessError extends Schema.TaggedError<BotTableAccessError>()("BotTableAccessError", {
+	message: Schema.String,
+	detail: Schema.optional(Schema.String),
+	table: Schema.String,
+}) {}
 
 /**
  * Tables that bots can access through the Electric proxy.

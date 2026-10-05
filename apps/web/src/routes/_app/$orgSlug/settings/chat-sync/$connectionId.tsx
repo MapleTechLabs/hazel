@@ -1,4 +1,4 @@
-import { AsyncResult } from "effect/unstable/reactivity"
+import { AsyncResult } from "effect/reactivity"
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
 import type { SyncChannelLinkId, SyncConnectionId } from "@hazel/schema"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"

@@ -1,4 +1,4 @@
-import { Rpc, RpcGroup } from "effect/unstable/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { Schema } from "effect"
 import { InternalServerError, UnauthorizedError } from "../errors"
 import { IntegrationRequestId, OrganizationId } from "@hazel/schema"

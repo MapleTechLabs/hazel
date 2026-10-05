@@ -4,7 +4,7 @@
  * @description Effect Atom-based state management for Tauri app updates
  */
 
-import { Atom } from "effect/unstable/reactivity"
+import { Atom } from "effect/reactivity"
 import {
 	getTauriProcess,
 	getTauriUpdater,

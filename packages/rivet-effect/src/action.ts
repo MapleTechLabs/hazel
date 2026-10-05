@@ -46,7 +46,7 @@ export function effect<
 	genFn: (
 		c: ActorContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 		...args: Args
-	) => Generator<Effect.Yieldable.Any, AEff, never>,
+	) => Generator<Effect.Effect<any, any, any>, AEff, never>,
 ): (c: ActionContext<TState, TConnParams, TConnState, TVars, TInput, undefined>, ...args: Args) => AEff {
 	return ((c, ...args) => {
 		const gen = genFn(c, ...args)

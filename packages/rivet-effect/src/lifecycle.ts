@@ -29,7 +29,7 @@ const runWithContextExit = <A, E, R>(
 
 const runGeneratorWithContext = <A>(
 	context: unknown,
-	gen: Generator<Effect.Yieldable.Any, A, never>,
+	gen: Generator<Effect.Effect<any, any, any>, A, never>,
 ): Promise<A> =>
 	runWithContext(
 		context,
@@ -37,7 +37,7 @@ const runGeneratorWithContext = <A>(
 	)
 
 const makeAsyncLifecycle = <C, Args extends unknown[], AEff>(
-	genFn: (context: C, ...args: Args) => Generator<Effect.Yieldable.Any, AEff, never>,
+	genFn: (context: C, ...args: Args) => Generator<Effect.Effect<any, any, any>, AEff, never>,
 ) => {
 	return (context: C, ...args: Args): Promise<AEff> =>
 		runGeneratorWithContext(context, genFn(context, ...args))
@@ -48,7 +48,7 @@ export namespace OnCreate {
 		genFn: (
 			c: CreateContext<TState, TInput, undefined>,
 			input: TInput,
-		) => Generator<Effect.Yieldable.Any, AEff, never>,
+		) => Generator<Effect.Effect<any, any, any>, AEff, never>,
 	): ((c: CreateContext<TState, TInput, undefined>, input: TInput) => Promise<AEff>) =>
 		makeAsyncLifecycle(genFn)
 }
@@ -57,7 +57,7 @@ export namespace OnWake {
 	export const effect = <TState, TConnParams, TConnState, TVars, TInput, AEff = void>(
 		genFn: (
 			c: WakeContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
-		) => Generator<Effect.Yieldable.Any, AEff, never>,
+		) => Generator<Effect.Effect<any, any, any>, AEff, never>,
 	): ((c: WakeContext<TState, TConnParams, TConnState, TVars, TInput, undefined>) => Promise<AEff>) =>
 		makeAsyncLifecycle(genFn)
 }
@@ -66,7 +66,7 @@ export namespace OnDestroy {
 	export const effect = <TState, TConnParams, TConnState, TVars, TInput, AEff = void>(
 		genFn: (
 			c: DestroyContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
-		) => Generator<Effect.Yieldable.Any, AEff, never>,
+		) => Generator<Effect.Effect<any, any, any>, AEff, never>,
 	): ((c: DestroyContext<TState, TConnParams, TConnState, TVars, TInput, undefined>) => Promise<AEff>) =>
 		makeAsyncLifecycle(genFn)
 }
@@ -75,7 +75,7 @@ export namespace OnSleep {
 	export const effect = <TState, TConnParams, TConnState, TVars, TInput, AEff = void>(
 		genFn: (
 			c: SleepContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
-		) => Generator<Effect.Yieldable.Any, AEff, never>,
+		) => Generator<Effect.Effect<any, any, any>, AEff, never>,
 	): ((c: SleepContext<TState, TConnParams, TConnState, TVars, TInput, undefined>) => Promise<AEff>) =>
 		makeAsyncLifecycle(genFn)
 }
@@ -85,7 +85,7 @@ export namespace OnStateChange {
 		genFn: (
 			c: StateChangeContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 			newState: TState,
-		) => Generator<Effect.Yieldable.Any, void, never>,
+		) => Generator<Effect.Effect<any, any, any>, void, never>,
 	): (
 		c: StateChangeContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 		newState: TState,
@@ -111,7 +111,7 @@ export namespace OnBeforeConnect {
 		genFn: (
 			c: BeforeConnectContext<TState, TVars, TInput, undefined>,
 			params: TConnParams,
-		) => Generator<Effect.Yieldable.Any, AEff, never>,
+		) => Generator<Effect.Effect<any, any, any>, AEff, never>,
 	): ((c: BeforeConnectContext<TState, TVars, TInput, undefined>, params: TConnParams) => Promise<AEff>) =>
 		makeAsyncLifecycle(genFn)
 }
@@ -121,7 +121,7 @@ export namespace OnConnect {
 		genFn: (
 			c: ConnectContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 			conn: Conn<TState, TConnParams, TConnState, TVars, TInput, undefined>,
-		) => Generator<Effect.Yieldable.Any, AEff, never>,
+		) => Generator<Effect.Effect<any, any, any>, AEff, never>,
 	): ((
 		c: ConnectContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 		conn: Conn<TState, TConnParams, TConnState, TVars, TInput, undefined>,
@@ -133,7 +133,7 @@ export namespace OnDisconnect {
 		genFn: (
 			c: DisconnectContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 			conn: Conn<TState, TConnParams, TConnState, TVars, TInput, undefined>,
-		) => Generator<Effect.Yieldable.Any, AEff, never>,
+		) => Generator<Effect.Effect<any, any, any>, AEff, never>,
 	): ((
 		c: DisconnectContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 		conn: Conn<TState, TConnParams, TConnState, TVars, TInput, undefined>,
@@ -145,7 +145,7 @@ export namespace CreateConnState {
 		genFn: (
 			c: CreateConnStateContext<TState, TVars, TInput, undefined>,
 			params: TConnParams,
-		) => Generator<Effect.Yieldable.Any, TConnState, never>,
+		) => Generator<Effect.Effect<any, any, any>, TConnState, never>,
 	): ((
 		c: CreateConnStateContext<TState, TVars, TInput, undefined>,
 		params: TConnParams,
@@ -159,7 +159,7 @@ export namespace OnBeforeActionResponse {
 			name: string,
 			args: unknown[],
 			output: Out,
-		) => Generator<Effect.Yieldable.Any, Out, never>,
+		) => Generator<Effect.Effect<any, any, any>, Out, never>,
 	): ((
 		c: BeforeActionResponseContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 		name: string,
@@ -173,7 +173,7 @@ export namespace CreateState {
 		genFn: (
 			c: CreateContext<TState, TInput, undefined>,
 			input: TInput,
-		) => Generator<Effect.Yieldable.Any, TState, never>,
+		) => Generator<Effect.Effect<any, any, any>, TState, never>,
 	): ((c: CreateContext<TState, TInput, undefined>, input: TInput) => Promise<TState>) =>
 		makeAsyncLifecycle(genFn)
 }
@@ -183,7 +183,7 @@ export namespace CreateVars {
 		genFn: (
 			c: CreateVarsContext<TState, TInput, undefined>,
 			driverCtx: unknown,
-		) => Generator<Effect.Yieldable.Any, TVars, never>,
+		) => Generator<Effect.Effect<any, any, any>, TVars, never>,
 	): ((c: CreateVarsContext<TState, TInput, undefined>, driverCtx: unknown) => Promise<TVars>) =>
 		makeAsyncLifecycle(genFn)
 }
@@ -193,7 +193,7 @@ export namespace OnRequest {
 		genFn: (
 			c: RequestContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 			request: Request,
-		) => Generator<Effect.Yieldable.Any, Response, never>,
+		) => Generator<Effect.Effect<any, any, any>, Response, never>,
 	): ((
 		c: RequestContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 		request: Request,
@@ -205,7 +205,7 @@ export namespace OnWebSocket {
 		genFn: (
 			c: WebSocketContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 			websocket: UniversalWebSocket,
-		) => Generator<Effect.Yieldable.Any, AEff, never>,
+		) => Generator<Effect.Effect<any, any, any>, AEff, never>,
 	): ((
 		c: WebSocketContext<TState, TConnParams, TConnState, TVars, TInput, undefined>,
 		websocket: UniversalWebSocket,

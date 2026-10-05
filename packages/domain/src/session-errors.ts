@@ -1,7 +1,7 @@
 import { Schema } from "effect"
 
 // 401 Errors - Client needs to re-authenticate
-export class SessionNotProvidedError extends Schema.TaggedErrorClass<SessionNotProvidedError>(
+export class SessionNotProvidedError extends Schema.TaggedError<SessionNotProvidedError>(
 	"SessionNotProvidedError",
 )(
 	"SessionNotProvidedError",
@@ -12,7 +12,7 @@ export class SessionNotProvidedError extends Schema.TaggedErrorClass<SessionNotP
 	{ httpApiStatus: 401 },
 ) {}
 
-export class SessionAuthenticationError extends Schema.TaggedErrorClass<SessionAuthenticationError>(
+export class SessionAuthenticationError extends Schema.TaggedError<SessionAuthenticationError>(
 	"SessionAuthenticationError",
 )(
 	"SessionAuthenticationError",
@@ -23,7 +23,7 @@ export class SessionAuthenticationError extends Schema.TaggedErrorClass<SessionA
 	{ httpApiStatus: 401 },
 ) {}
 
-export class InvalidJwtPayloadError extends Schema.TaggedErrorClass<InvalidJwtPayloadError>(
+export class InvalidJwtPayloadError extends Schema.TaggedError<InvalidJwtPayloadError>(
 	"InvalidJwtPayloadError",
 )(
 	"InvalidJwtPayloadError",
@@ -34,7 +34,7 @@ export class InvalidJwtPayloadError extends Schema.TaggedErrorClass<InvalidJwtPa
 	{ httpApiStatus: 401 },
 ) {}
 
-export class SessionExpiredError extends Schema.TaggedErrorClass<SessionExpiredError>("SessionExpiredError")(
+export class SessionExpiredError extends Schema.TaggedError<SessionExpiredError>("SessionExpiredError")(
 	"SessionExpiredError",
 	{
 		message: Schema.String,
@@ -43,7 +43,7 @@ export class SessionExpiredError extends Schema.TaggedErrorClass<SessionExpiredE
 	{ httpApiStatus: 401 },
 ) {}
 
-export class InvalidBearerTokenError extends Schema.TaggedErrorClass<InvalidBearerTokenError>(
+export class InvalidBearerTokenError extends Schema.TaggedError<InvalidBearerTokenError>(
 	"InvalidBearerTokenError",
 )(
 	"InvalidBearerTokenError",
@@ -55,7 +55,7 @@ export class InvalidBearerTokenError extends Schema.TaggedErrorClass<InvalidBear
 ) {}
 
 // 503 Errors - Infrastructure/Service issues (client can retry)
-export class SessionLoadError extends Schema.TaggedErrorClass<SessionLoadError>("SessionLoadError")(
+export class SessionLoadError extends Schema.TaggedError<SessionLoadError>("SessionLoadError")(
 	"SessionLoadError",
 	{
 		message: Schema.String,
@@ -64,7 +64,7 @@ export class SessionLoadError extends Schema.TaggedErrorClass<SessionLoadError>(
 	{ httpApiStatus: 503 },
 ) {}
 
-export class SessionRefreshError extends Schema.TaggedErrorClass<SessionRefreshError>("SessionRefreshError")(
+export class SessionRefreshError extends Schema.TaggedError<SessionRefreshError>("SessionRefreshError")(
 	"SessionRefreshError",
 	{
 		message: Schema.String,
@@ -73,7 +73,7 @@ export class SessionRefreshError extends Schema.TaggedErrorClass<SessionRefreshE
 	{ httpApiStatus: 401 },
 ) {}
 
-export class ClerkUserFetchError extends Schema.TaggedErrorClass<ClerkUserFetchError>("ClerkUserFetchError")(
+export class ClerkUserFetchError extends Schema.TaggedError<ClerkUserFetchError>("ClerkUserFetchError")(
 	"ClerkUserFetchError",
 	{
 		message: Schema.String,

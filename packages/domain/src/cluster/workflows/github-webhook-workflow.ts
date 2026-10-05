@@ -1,11 +1,10 @@
-import { Workflow } from "effect/unstable/workflow"
+import { Workflow } from "effect/workflow"
 import { Schema } from "effect"
 import { GitHubWebhookWorkflowError } from "../activities/github-activities.ts"
 
 // GitHub webhook workflow - triggered when a GitHub webhook event is received
 // Processes the event and creates messages in subscribed channels
-export const GitHubWebhookWorkflow = Workflow.make({
-	name: "GitHubWebhookWorkflow",
+export const GitHubWebhookWorkflow = Workflow.make("GitHubWebhookWorkflow", {
 	payload: {
 		// GitHub delivery ID (unique per webhook delivery) - used for idempotency
 		deliveryId: Schema.String,

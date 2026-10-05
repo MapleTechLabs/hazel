@@ -1,6 +1,6 @@
 import { UserId } from "@hazel/schema"
 import { Schema } from "effect"
-import { Persistable } from "effect/unstable/persistence"
+import { Persistable } from "effect/persistence"
 import { UserLookupCacheError } from "../errors.ts"
 
 /**

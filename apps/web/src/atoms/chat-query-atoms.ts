@@ -1,4 +1,4 @@
-import { Atom } from "effect/unstable/reactivity"
+import { Atom } from "effect/reactivity"
 import type { Message, PinnedMessage, User } from "@hazel/domain/models"
 import type { ChannelId } from "@hazel/schema"
 import { eq } from "@tanstack/db"

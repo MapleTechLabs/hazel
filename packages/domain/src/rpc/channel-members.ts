@@ -1,4 +1,4 @@
-import { Rpc, RpcGroup } from "effect/unstable/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { Schema } from "effect"
 import { InternalServerError, UnauthorizedError } from "../errors"
 import { ChannelId, ChannelMemberId } from "@hazel/schema"
@@ -21,7 +21,7 @@ export class ChannelMemberResponse extends Schema.Class<ChannelMemberResponse>("
  * Error thrown when a channel member is not found.
  * Used in update and delete operations.
  */
-export class ChannelMemberNotFoundError extends Schema.TaggedErrorClass<ChannelMemberNotFoundError>()(
+export class ChannelMemberNotFoundError extends Schema.TaggedError<ChannelMemberNotFoundError>()(
 	"ChannelMemberNotFoundError",
 	{
 		channelMemberId: ChannelMemberId,

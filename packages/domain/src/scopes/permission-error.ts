@@ -1,7 +1,7 @@
 import { Predicate, Schema } from "effect"
 import type { ApiScope } from "./api-scope"
 
-export class PermissionError extends Schema.TaggedErrorClass<PermissionError>("PermissionError")(
+export class PermissionError extends Schema.TaggedError<PermissionError>("PermissionError")(
 	"PermissionError",
 	{
 		message: Schema.String,

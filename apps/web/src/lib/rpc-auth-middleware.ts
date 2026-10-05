@@ -2,8 +2,8 @@
  * Client-side RPC auth middleware — attaches the Clerk session token as a
  * Bearer header on outbound RPC requests.
  */
-import { Headers } from "effect/unstable/http"
-import { RpcMiddleware } from "effect/unstable/rpc"
+import { Headers } from "effect/http"
+import { RpcMiddleware } from "effect/rpc"
 import { AuthMiddleware } from "@hazel/domain/rpc"
 import { Effect } from "effect"
 import { getClerkToken } from "~/lib/clerk-token"

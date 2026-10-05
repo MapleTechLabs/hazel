@@ -1,11 +1,10 @@
-import { Workflow } from "effect/unstable/workflow"
+import { Workflow } from "effect/workflow"
 import { ChannelId, OrganizationId, RssSubscriptionId } from "@hazel/schema"
 import { Schema } from "effect"
 import { RssFeedPollWorkflowError } from "../activities/rss-activities.ts"
 
 // RSS feed poll workflow - triggered by cron job for each subscription due for polling
-export const RssFeedPollWorkflow = Workflow.make({
-	name: "RssFeedPollWorkflow",
+export const RssFeedPollWorkflow = Workflow.make("RssFeedPollWorkflow", {
 	payload: {
 		// Subscription ID - used for idempotency within a polling window
 		subscriptionId: RssSubscriptionId,

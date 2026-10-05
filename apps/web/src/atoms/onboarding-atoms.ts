@@ -1,4 +1,4 @@
-import { Atom } from "effect/unstable/reactivity"
+import { Atom } from "effect/reactivity"
 import type { OrganizationId } from "@hazel/schema"
 
 // Step identifiers. Clerk handles org creation during sign-up via its

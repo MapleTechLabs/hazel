@@ -1,4 +1,4 @@
-import type { Response } from "effect/unstable/ai"
+import type { Response } from "effect/ai"
 import { Effect, Stream } from "effect"
 
 import { DegenerateOutputError } from "./errors.ts"

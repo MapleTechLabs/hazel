@@ -28,7 +28,7 @@ export const MarkUploadsFailedResult = Schema.Struct({
 export type MarkUploadsFailedResult = typeof MarkUploadsFailedResult.Type
 
 // Error types for cleanup activities
-export class FindStaleUploadsError extends Schema.TaggedErrorClass<FindStaleUploadsError>()(
+export class FindStaleUploadsError extends Schema.TaggedError<FindStaleUploadsError>()(
 	"FindStaleUploadsError",
 	{
 		message: Schema.String,
@@ -38,7 +38,7 @@ export class FindStaleUploadsError extends Schema.TaggedErrorClass<FindStaleUplo
 	readonly retryable = true // Database errors are transient
 }
 
-export class MarkUploadsFailedError extends Schema.TaggedErrorClass<MarkUploadsFailedError>()(
+export class MarkUploadsFailedError extends Schema.TaggedError<MarkUploadsFailedError>()(
 	"MarkUploadsFailedError",
 	{
 		message: Schema.String,

@@ -6,8 +6,8 @@ import * as Context from "effect/Context"
 export class EnvVars extends Context.Service<EnvVars>()("EnvVars", {
 	make: Effect.gen(function* () {
 		return {
-			IS_DEV: yield* Config.boolean("IS_DEV").pipe(Config.withDefault(false)),
-			DATABASE_URL: yield* Config.redacted("DATABASE_URL"),
+			IS_DEV: yield* Config.Boolean("IS_DEV").pipe(Config.withDefault(false)),
+			DATABASE_URL: yield* Config.Redacted("DATABASE_URL"),
 		} as const
 	}),
 }) {

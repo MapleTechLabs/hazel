@@ -18,14 +18,14 @@ const DEFAULT_ACTORS_URL = "https://rivet.hazel.sh"
  * - GATEWAY_URL (optional) - Gateway URL for inbound bot websocket delivery
  */
 export const BotEnvConfig = Config.all({
-	botToken: Config.redacted("BOT_TOKEN"),
-	backendUrl: Config.string("BACKEND_URL").pipe(Config.withDefault("https://api.hazel.sh")),
-	gatewayUrl: Config.string("GATEWAY_URL").pipe(Config.withDefault("https://bot-gateway.hazel.sh")),
-	actorsUrl: Config.string("ACTORS_URL").pipe(
-		Config.orElse(() => Config.string("RIVET_URL")),
+	botToken: Config.Redacted("BOT_TOKEN"),
+	backendUrl: Config.String("BACKEND_URL").pipe(Config.withDefault("https://api.hazel.sh")),
+	gatewayUrl: Config.String("GATEWAY_URL").pipe(Config.withDefault("https://bot-gateway.hazel.sh")),
+	actorsUrl: Config.String("ACTORS_URL").pipe(
+		Config.orElse(() => Config.String("RIVET_URL")),
 		Config.withDefault(DEFAULT_ACTORS_URL),
 	),
-	healthPort: Config.number("PORT").pipe(Config.withDefault(0)),
+	healthPort: Config.Number("PORT").pipe(Config.withDefault(0)),
 })
 
 export type BotEnvConfig = Effect.Success<typeof BotEnvConfig>

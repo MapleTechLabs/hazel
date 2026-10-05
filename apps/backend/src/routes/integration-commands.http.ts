@@ -1,4 +1,4 @@
-import { HttpApiBuilder } from "effect/unstable/httpapi"
+import { HttpApiBuilder } from "effect/http-api"
 import { BotCommandRepo, BotInstallationRepo, BotRepo } from "@hazel/backend-core"
 import { InternalServerError } from "@hazel/domain"
 import { AvailableCommandsResponse } from "@hazel/domain/http"

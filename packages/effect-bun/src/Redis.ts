@@ -6,7 +6,7 @@ import { Config, Duration, Effect, Layer, Match, Schema, Context } from "effect"
 /**
  * Base Redis error - used for unknown error codes
  */
-export class RedisError extends Schema.TaggedErrorClass<RedisError>()("RedisError", {
+export class RedisError extends Schema.TaggedError<RedisError>()("RedisError", {
 	message: Schema.String,
 	code: Schema.optional(Schema.String),
 	cause: Schema.optional(Schema.Unknown),
@@ -16,7 +16,7 @@ export class RedisError extends Schema.TaggedErrorClass<RedisError>()("RedisErro
  * Connection to Redis server was closed
  * Bun error code: ERR_REDIS_CONNECTION_CLOSED
  */
-export class RedisConnectionClosedError extends Schema.TaggedErrorClass<RedisConnectionClosedError>()(
+export class RedisConnectionClosedError extends Schema.TaggedError<RedisConnectionClosedError>()(
 	"RedisConnectionClosedError",
 	{
 		message: Schema.String,
@@ -27,7 +27,7 @@ export class RedisConnectionClosedError extends Schema.TaggedErrorClass<RedisCon
  * Failed to authenticate with Redis server
  * Bun error code: ERR_REDIS_AUTHENTICATION_FAILED
  */
-export class RedisAuthenticationError extends Schema.TaggedErrorClass<RedisAuthenticationError>()(
+export class RedisAuthenticationError extends Schema.TaggedError<RedisAuthenticationError>()(
 	"RedisAuthenticationError",
 	{
 		message: Schema.String,
@@ -38,7 +38,7 @@ export class RedisAuthenticationError extends Schema.TaggedErrorClass<RedisAuthe
  * Received an invalid response from Redis server
  * Bun error code: ERR_REDIS_INVALID_RESPONSE
  */
-export class RedisInvalidResponseError extends Schema.TaggedErrorClass<RedisInvalidResponseError>()(
+export class RedisInvalidResponseError extends Schema.TaggedError<RedisInvalidResponseError>()(
 	"RedisInvalidResponseError",
 	{
 		message: Schema.String,
@@ -266,7 +266,7 @@ export class Redis extends Context.Service<
 	static readonly Default = Layer.effect(
 		Redis,
 		Effect.gen(function* () {
-			const url = yield* Config.string("REDIS_URL").pipe(Config.withDefault("redis://localhost:6379"))
+			const url = yield* Config.String("REDIS_URL").pipe(Config.withDefault("redis://localhost:6379"))
 			const client = new RedisClient(url)
 
 			yield* Effect.tryPromise({

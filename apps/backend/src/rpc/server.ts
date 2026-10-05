@@ -1,4 +1,4 @@
-import { RpcServer } from "effect/unstable/rpc"
+import { RpcServer } from "effect/rpc"
 import {
 	AttachmentRpcs,
 	BotRpcs,

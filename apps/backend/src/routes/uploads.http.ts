@@ -1,4 +1,4 @@
-import { HttpApiBuilder } from "effect/unstable/httpapi"
+import { HttpApiBuilder } from "effect/http-api"
 import { AttachmentRepo, BotRepo, OrganizationRepo } from "@hazel/backend-core"
 import { Database } from "@hazel/db"
 import { CurrentUser, UnauthorizedError, withRemapDbErrors } from "@hazel/domain"

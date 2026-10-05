@@ -1,4 +1,4 @@
-import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/unstable/httpapi"
+import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
 import { Schema } from "effect"
 import { AvatarUrl, ChannelId, ChannelWebhookId, OrganizationId } from "@hazel/schema"
 import { InternalServerError, UnauthorizedError } from "../../errors"
@@ -72,7 +72,7 @@ export class ApiV1ChannelWebhookCreatedResponse extends Schema.Class<ApiV1Channe
 
 // ============ ERRORS ============
 
-export class ApiV1ChannelNotFoundError extends Schema.TaggedErrorClass<ApiV1ChannelNotFoundError>()(
+export class ApiV1ChannelNotFoundError extends Schema.TaggedError<ApiV1ChannelNotFoundError>()(
 	"ApiV1ChannelNotFoundError",
 	{
 		channelId: ChannelId,
@@ -81,7 +81,7 @@ export class ApiV1ChannelNotFoundError extends Schema.TaggedErrorClass<ApiV1Chan
 	{ httpApiStatus: 404 },
 ) {}
 
-export class ApiV1OrganizationNotFoundError extends Schema.TaggedErrorClass<ApiV1OrganizationNotFoundError>()(
+export class ApiV1OrganizationNotFoundError extends Schema.TaggedError<ApiV1OrganizationNotFoundError>()(
 	"ApiV1OrganizationNotFoundError",
 	{
 		organizationId: OrganizationId,

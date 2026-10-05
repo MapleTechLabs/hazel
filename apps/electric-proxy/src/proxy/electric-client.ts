@@ -6,7 +6,7 @@ import { proxyElectricDuration, proxyElectricErrors } from "../observability/met
 /**
  * Error thrown when Electric proxy request fails
  */
-export class ElectricProxyError extends Schema.TaggedErrorClass<ElectricProxyError>()("ElectricProxyError", {
+export class ElectricProxyError extends Schema.TaggedError<ElectricProxyError>()("ElectricProxyError", {
 	message: Schema.String,
 	detail: Schema.optional(Schema.String),
 }) {}

@@ -1,4 +1,4 @@
-import { HttpApiBuilder } from "effect/unstable/httpapi"
+import { HttpApiBuilder } from "effect/http-api"
 import { IntegrationConnectionRepo } from "@hazel/backend-core"
 import { InternalServerError } from "@hazel/domain"
 import type { ExternalChannelId, OrganizationId } from "@hazel/schema"
@@ -463,7 +463,7 @@ const handleGetDiscordGuildChannels = Effect.fn("integration-resources.getDiscor
 		const { orgId, guildId } = path
 		yield* getActiveDiscordConnection(orgId)
 
-		const botToken = yield* Config.redacted("DISCORD_BOT_TOKEN")
+		const botToken = yield* Config.Redacted("DISCORD_BOT_TOKEN")
 		const discordApiClient = yield* Discord.DiscordApiClient
 		const channels = yield* discordApiClient.listGuildChannels(guildId, Redacted.value(botToken)).pipe(
 			Effect.mapError(

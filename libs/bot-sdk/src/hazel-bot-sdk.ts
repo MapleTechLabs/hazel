@@ -5,8 +5,8 @@
  * Hazel message, channel, membership, and command events are pre-configured.
  */
 
-import { HttpApiClient } from "effect/unstable/httpapi"
-import { FetchHttpClient } from "effect/unstable/http"
+import { HttpApiClient } from "effect/http-api"
+import { FetchHttpClient } from "effect/http"
 import type {
 	AttachmentId,
 	BotId,
@@ -1988,8 +1988,8 @@ export const createHazelBot = <Commands extends CommandGroup<any> = EmptyCommand
 	// LOG_LEVEL env var overrides config (e.g. LOG_LEVEL=debug bun run dev)
 	const LoggerLayer = Layer.unwrap(
 		Effect.gen(function* () {
-			const nodeEnv = yield* Config.string("NODE_ENV").pipe(Config.withDefault("development"))
-			const envLogLevel = yield* Config.string("LOG_LEVEL").pipe(Config.withDefault(""))
+			const nodeEnv = yield* Config.String("NODE_ENV").pipe(Config.withDefault("development"))
+			const envLogLevel = yield* Config.String("LOG_LEVEL").pipe(Config.withDefault(""))
 			const defaultFormat: LogFormat = nodeEnv === "production" ? "structured" : "pretty"
 
 			const resolvedLevel = envLogLevel

@@ -1,4 +1,4 @@
-import { Rpc, RpcGroup } from "effect/unstable/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { ChannelId, GitHubSubscriptionId } from "@hazel/schema"
 import { Schema } from "effect"
 import { InternalServerError, UnauthorizedError } from "../errors"
@@ -31,7 +31,7 @@ export class GitHubSubscriptionListResponse extends Schema.Class<GitHubSubscript
 /**
  * Error thrown when a GitHub subscription is not found.
  */
-export class GitHubSubscriptionNotFoundError extends Schema.TaggedErrorClass<GitHubSubscriptionNotFoundError>()(
+export class GitHubSubscriptionNotFoundError extends Schema.TaggedError<GitHubSubscriptionNotFoundError>()(
 	"GitHubSubscriptionNotFoundError",
 	{
 		subscriptionId: GitHubSubscriptionId,
@@ -41,7 +41,7 @@ export class GitHubSubscriptionNotFoundError extends Schema.TaggedErrorClass<Git
 /**
  * Error thrown when trying to subscribe to a repo that's already subscribed.
  */
-export class GitHubSubscriptionExistsError extends Schema.TaggedErrorClass<GitHubSubscriptionExistsError>()(
+export class GitHubSubscriptionExistsError extends Schema.TaggedError<GitHubSubscriptionExistsError>()(
 	"GitHubSubscriptionExistsError",
 	{
 		channelId: ChannelId,
@@ -52,7 +52,7 @@ export class GitHubSubscriptionExistsError extends Schema.TaggedErrorClass<GitHu
 /**
  * Error thrown when the organization doesn't have GitHub connected.
  */
-export class GitHubNotConnectedError extends Schema.TaggedErrorClass<GitHubNotConnectedError>()(
+export class GitHubNotConnectedError extends Schema.TaggedError<GitHubNotConnectedError>()(
 	"GitHubNotConnectedError",
 	{},
 ) {}

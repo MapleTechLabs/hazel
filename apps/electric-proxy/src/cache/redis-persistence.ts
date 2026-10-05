@@ -1,4 +1,4 @@
-import { Persistence } from "effect/unstable/persistence"
+import { Persistence } from "effect/persistence"
 import { Redis, RedisResultPersistenceLive } from "@hazel/effect-bun"
 import { Effect, Layer, Redacted } from "effect"
 import { ProxyConfigService } from "../config"

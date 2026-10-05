@@ -3,7 +3,7 @@
  * @description Atoms for notification sound system state management
  */
 
-import { Atom } from "effect/unstable/reactivity"
+import { Atom } from "effect/reactivity"
 import { Schema } from "effect"
 import { platformStorageRuntime } from "~/lib/platform-storage"
 

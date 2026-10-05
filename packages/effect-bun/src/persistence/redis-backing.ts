@@ -1,4 +1,4 @@
-import { Persistence } from "effect/unstable/persistence"
+import { Persistence } from "effect/persistence"
 import { Duration, Effect, Layer } from "effect"
 import { identity } from "effect/Function"
 import { Redis } from "../Redis.js"

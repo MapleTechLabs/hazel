@@ -1,4 +1,4 @@
-import { Activity } from "effect/unstable/workflow"
+import { Activity } from "effect/workflow"
 import { and, Database, eq, isNull, schema, sql } from "@hazel/db"
 import { Cluster } from "@hazel/domain"
 import { Effect } from "effect"

@@ -1,4 +1,4 @@
-import { Sse } from "effect/unstable/encoding"
+import { Sse } from "effect/encoding"
 import { Duration, Effect, Queue, Schedule, Stream } from "effect"
 
 const HEARTBEAT_INTERVAL = "25 seconds" as const

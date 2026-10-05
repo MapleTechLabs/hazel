@@ -1,4 +1,4 @@
-import { Rpc, RpcGroup } from "effect/unstable/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { Schema } from "effect"
 import { InternalServerError, UnauthorizedError } from "../errors"
 import { ChannelId, ChannelSectionId, OrganizationId } from "@hazel/schema"
@@ -21,7 +21,7 @@ export class ChannelSectionResponse extends Schema.Class<ChannelSectionResponse>
  * Error thrown when a channel section is not found.
  * Used in update and delete operations.
  */
-export class ChannelSectionNotFoundError extends Schema.TaggedErrorClass<ChannelSectionNotFoundError>()(
+export class ChannelSectionNotFoundError extends Schema.TaggedError<ChannelSectionNotFoundError>()(
 	"ChannelSectionNotFoundError",
 	{
 		sectionId: ChannelSectionId,

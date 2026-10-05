@@ -1,4 +1,4 @@
-import { HttpApiClient } from "effect/unstable/httpapi"
+import { HttpApiClient } from "effect/http-api"
 import { and, Database, eq, isNull, schema, sql } from "@hazel/db"
 import { Cluster, WorkflowInitializationError } from "@hazel/domain"
 import { Context, Array, Config, Effect, Layer, Option } from "effect"
@@ -18,7 +18,7 @@ export class MessageSideEffectService extends Context.Service<MessageSideEffectS
 		make: Effect.gen(function* () {
 			const db = yield* Database.Database
 			const discordSyncWorker = yield* DiscordSyncWorker
-			const clusterUrl = yield* Config.string("CLUSTER_URL")
+			const clusterUrl = yield* Config.String("CLUSTER_URL")
 			const client = yield* HttpApiClient.make(Cluster.WorkflowApi, {
 				baseUrl: clusterUrl,
 			})

@@ -18,7 +18,7 @@ export type { CollectionStatus } from "@tanstack/db"
  * Error returned when the collection's last error is retrieved.
  * Wraps the underlying TanStack DB error with collection context.
  */
-export class CollectionSyncEffectError extends Schema.TaggedErrorClass<CollectionSyncEffectError>()(
+export class CollectionSyncEffectError extends Schema.TaggedError<CollectionSyncEffectError>()(
 	"CollectionSyncEffectError",
 	{
 		message: Schema.String,

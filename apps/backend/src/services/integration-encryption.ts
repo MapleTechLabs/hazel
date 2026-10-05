@@ -8,7 +8,7 @@ export interface EncryptedToken {
 
 const EncryptionOperation = Schema.Literals(["encrypt", "decrypt", "importKey"])
 
-export class IntegrationEncryptionError extends Schema.TaggedErrorClass<IntegrationEncryptionError>()(
+export class IntegrationEncryptionError extends Schema.TaggedError<IntegrationEncryptionError>()(
 	"IntegrationEncryptionError",
 	{
 		cause: Schema.Unknown,
@@ -16,7 +16,7 @@ export class IntegrationEncryptionError extends Schema.TaggedErrorClass<Integrat
 	},
 ) {}
 
-export class KeyVersionNotFoundError extends Schema.TaggedErrorClass<KeyVersionNotFoundError>()(
+export class KeyVersionNotFoundError extends Schema.TaggedError<KeyVersionNotFoundError>()(
 	"KeyVersionNotFoundError",
 	{
 		keyVersion: Schema.Number,
@@ -26,17 +26,17 @@ export class KeyVersionNotFoundError extends Schema.TaggedErrorClass<KeyVersionN
 export class IntegrationEncryption extends Context.Service<IntegrationEncryption>()("IntegrationEncryption", {
 	make: Effect.gen(function* () {
 		// Load encryption keys from config (support key rotation)
-		const currentKey = yield* Config.redacted("INTEGRATION_ENCRYPTION_KEY")
-		const currentKeyVersion = yield* Config.number("INTEGRATION_ENCRYPTION_KEY_VERSION").pipe(
+		const currentKey = yield* Config.Redacted("INTEGRATION_ENCRYPTION_KEY")
+		const currentKeyVersion = yield* Config.Number("INTEGRATION_ENCRYPTION_KEY_VERSION").pipe(
 			Config.withDefault(1),
 		)
 
 		// Optional: Previous key for decryption during rotation
-		const previousKeyOption = yield* Config.redacted("INTEGRATION_ENCRYPTION_KEY_PREV").pipe(
+		const previousKeyOption = yield* Config.Redacted("INTEGRATION_ENCRYPTION_KEY_PREV").pipe(
 			Config.option,
 		)
 		const previousKey = Option.getOrUndefined(previousKeyOption)
-		const previousKeyVersion = yield* Config.number("INTEGRATION_ENCRYPTION_KEY_VERSION_PREV").pipe(
+		const previousKeyVersion = yield* Config.Number("INTEGRATION_ENCRYPTION_KEY_VERSION_PREV").pipe(
 			Config.withDefault(0),
 		)
 

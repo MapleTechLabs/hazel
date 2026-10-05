@@ -35,7 +35,7 @@
 		"@hazel/effect-bun": "workspace:*",
 		"@hazel/integrations": "workspace:*",
 		"@hazel/schema": "workspace:*",
-		"dfx": "^1.0.13",
+		"dfx": "^1.1.0",
 		"drizzle-orm": "^0.45.1",
 		"effect": "catalog:effect",
 		"jose": "^6.1.3",

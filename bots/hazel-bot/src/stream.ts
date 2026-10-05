@@ -1,5 +1,5 @@
 import type { AIContentChunk } from "@hazel-chat/bot-sdk"
-import type { Response } from "effect/unstable/ai"
+import type { Response } from "effect/ai"
 import { Match } from "effect"
 
 export const mapEffectPartToChunk: (part: Response.AnyPart) => AIContentChunk | null =

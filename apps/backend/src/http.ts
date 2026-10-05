@@ -1,5 +1,5 @@
 import { Layer } from "effect"
-import { HttpApiBuilder } from "effect/unstable/httpapi"
+import { HttpApiBuilder } from "effect/http-api"
 import { HazelApi } from "./api"
 import { HttpApiV1IntegrationsLive, HttpMessagesApiLive } from "./routes/api-v1"
 import { HttpKlipyLive } from "./routes/klipy.http"

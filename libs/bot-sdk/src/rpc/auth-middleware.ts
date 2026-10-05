@@ -5,8 +5,8 @@
  * into all RPC requests for authentication with the backend.
  */
 
-import { Headers } from "effect/unstable/http"
-import { RpcMiddleware } from "effect/unstable/rpc"
+import { Headers } from "effect/http"
+import { RpcMiddleware } from "effect/rpc"
 import { AuthMiddleware } from "@hazel/domain/rpc"
 import { Effect } from "effect"
 

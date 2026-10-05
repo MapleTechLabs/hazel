@@ -53,7 +53,7 @@ export const decodeClerkJwtClaims = Schema.decodeUnknownEffect(ClerkJwtClaims)
 export class BackendAuth extends Context.Service<BackendAuth>()("@hazel/auth/BackendAuth", {
 	make: Effect.gen(function* () {
 		const clerk = yield* ClerkClient
-		const clerkSecretKey = yield* Config.redacted("CLERK_SECRET_KEY")
+		const clerkSecretKey = yield* Config.Redacted("CLERK_SECRET_KEY")
 
 		const normalizeAvatarUrl = (avatarUrl: string | null | undefined): string | null =>
 			avatarUrl?.trim() ? avatarUrl : null

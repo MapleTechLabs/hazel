@@ -1,4 +1,4 @@
-import { Headers } from "effect/unstable/http"
+import { Headers } from "effect/http"
 import { BotRepo, UserRepo } from "@hazel/backend-core"
 import { CurrentUser, InvalidBearerTokenError, SessionNotProvidedError } from "@hazel/domain"
 import { Effect, Layer, Option } from "effect"

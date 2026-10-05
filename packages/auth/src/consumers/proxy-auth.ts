@@ -5,7 +5,7 @@ import { Context, Config, Effect, Layer, Option, Redacted, Schema } from "effect
 import { UserLookupCache } from "../cache/user-lookup-cache.ts"
 import type { AuthenticatedUserContext } from "../types.ts"
 
-export class ProxyAuthenticationError extends Schema.TaggedErrorClass<ProxyAuthenticationError>()(
+export class ProxyAuthenticationError extends Schema.TaggedError<ProxyAuthenticationError>()(
 	"ProxyAuthenticationError",
 	{
 		message: Schema.String,
@@ -25,7 +25,7 @@ export class ProxyAuth extends Context.Service<ProxyAuth>()("@hazel/auth/ProxyAu
 		const userLookupCache = yield* UserLookupCache
 		const db = yield* Database.Database
 		const decodeClerkClaims = Schema.decodeUnknownEffect(ClerkJwtClaims)
-		const clerkSecretKey = yield* Config.redacted("CLERK_SECRET_KEY")
+		const clerkSecretKey = yield* Config.Redacted("CLERK_SECRET_KEY")
 
 		const lookupUser = Effect.fn("ProxyAuth.lookupUser")(function* (externalId: string) {
 			const cached = yield* userLookupCache

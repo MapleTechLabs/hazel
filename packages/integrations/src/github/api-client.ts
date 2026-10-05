@@ -1,4 +1,4 @@
-import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/unstable/http"
+import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http"
 import { Context, Duration, Effect, Layer, Schedule, Schema } from "effect"
 
 /**
@@ -97,14 +97,14 @@ export type GitHubAccountInfo = typeof GitHubAccountInfo.Type
 // ============================================================================
 
 // Error for when GitHub API request fails
-export class GitHubApiError extends Schema.TaggedErrorClass<GitHubApiError>()("GitHubApiError", {
+export class GitHubApiError extends Schema.TaggedError<GitHubApiError>()("GitHubApiError", {
 	message: Schema.String,
 	status: Schema.optional(Schema.Number),
 	cause: Schema.optional(Schema.Unknown),
 }) {}
 
 // Error for when PR is not found
-export class GitHubPRNotFoundError extends Schema.TaggedErrorClass<GitHubPRNotFoundError>()(
+export class GitHubPRNotFoundError extends Schema.TaggedError<GitHubPRNotFoundError>()(
 	"GitHubPRNotFoundError",
 	{
 		owner: Schema.String,
@@ -114,13 +114,10 @@ export class GitHubPRNotFoundError extends Schema.TaggedErrorClass<GitHubPRNotFo
 ) {}
 
 // Error for when rate limit is exceeded
-export class GitHubRateLimitError extends Schema.TaggedErrorClass<GitHubRateLimitError>()(
-	"GitHubRateLimitError",
-	{
-		message: Schema.String,
-		retryAfter: Schema.optional(Schema.Number), // seconds until rate limit resets
-	},
-) {}
+export class GitHubRateLimitError extends Schema.TaggedError<GitHubRateLimitError>()("GitHubRateLimitError", {
+	message: Schema.String,
+	retryAfter: Schema.optional(Schema.Number), // seconds until rate limit resets
+}) {}
 
 // ============================================================================
 // GitHub API Response Schemas (internal, for validation)
@@ -269,7 +266,7 @@ const DEFAULT_TIMEOUT = Duration.seconds(30)
  * Retries up to 3 times with exponential backoff (100ms, 200ms, 400ms)
  * only for rate limits (429) and server errors (5xx).
  */
-const makeRetrySchedule = Schedule.exponential("100 millis").pipe(Schedule.both(Schedule.recurs(3)))
+const makeRetrySchedule = Schedule.max([Schedule.exponential("100 millis"), Schedule.recurs(3)])
 
 /**
  * Check if an error is retryable (rate limit or server error)

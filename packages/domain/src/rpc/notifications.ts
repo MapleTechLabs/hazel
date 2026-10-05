@@ -1,4 +1,4 @@
-import { Rpc, RpcGroup } from "effect/unstable/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { Schema } from "effect"
 import { InternalServerError, UnauthorizedError } from "../errors"
 import { ChannelId, MessageId, NotificationId } from "@hazel/schema"
@@ -20,7 +20,7 @@ export class NotificationResponse extends Schema.Class<NotificationResponse>("No
  * Error thrown when a notification is not found.
  * Used in update and delete operations.
  */
-export class NotificationNotFoundError extends Schema.TaggedErrorClass<NotificationNotFoundError>()(
+export class NotificationNotFoundError extends Schema.TaggedError<NotificationNotFoundError>()(
 	"NotificationNotFoundError",
 	{
 		notificationId: NotificationId,

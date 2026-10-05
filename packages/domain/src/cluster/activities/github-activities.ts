@@ -33,7 +33,7 @@ export const CreateGitHubMessagesResult = Schema.Struct({
 export type CreateGitHubMessagesResult = Schema.Schema.Type<typeof CreateGitHubMessagesResult>
 
 // Error types for GitHub activities
-export class GetGitHubSubscriptionsError extends Schema.TaggedErrorClass<GetGitHubSubscriptionsError>()(
+export class GetGitHubSubscriptionsError extends Schema.TaggedError<GetGitHubSubscriptionsError>()(
 	"GetGitHubSubscriptionsError",
 	{
 		repositoryId: Schema.Number,
@@ -44,7 +44,7 @@ export class GetGitHubSubscriptionsError extends Schema.TaggedErrorClass<GetGitH
 	readonly retryable = true // Database errors are transient
 }
 
-export class CreateGitHubMessageError extends Schema.TaggedErrorClass<CreateGitHubMessageError>()(
+export class CreateGitHubMessageError extends Schema.TaggedError<CreateGitHubMessageError>()(
 	"CreateGitHubMessageError",
 	{
 		channelId: ChannelId,

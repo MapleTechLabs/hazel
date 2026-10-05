@@ -18,7 +18,7 @@
  * // Then use platformStorageRuntime in Atom.kvs
  */
 
-import { Atom } from "effect/unstable/reactivity"
+import { Atom } from "effect/reactivity"
 import { layer } from "./platform-key-value-store"
 
 export const platformStorageRuntime = Atom.runtime(layer) as Atom.AtomRuntime<any, any>

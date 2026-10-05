@@ -1,5 +1,5 @@
-import { HttpApiBuilder } from "effect/unstable/httpapi"
-import { HttpClient } from "effect/unstable/http"
+import { HttpApiBuilder } from "effect/http-api"
+import { HttpClient } from "effect/http"
 import { KlipyApiError } from "@hazel/domain/http"
 import { Config, Effect, Redacted, Schema } from "effect"
 import { HazelApi } from "../api"
@@ -95,7 +95,7 @@ const fetchKlipy = (
 export const HttpKlipyLive = HttpApiBuilder.group(HazelApi, "klipy", (handlers) =>
 	Effect.gen(function* () {
 		const httpClient = yield* HttpClient.HttpClient
-		const apiKeyRedacted = yield* Config.redacted("KLIPY_API_KEY")
+		const apiKeyRedacted = yield* Config.Redacted("KLIPY_API_KEY")
 		const apiKey = Redacted.value(apiKeyRedacted)
 
 		return handlers

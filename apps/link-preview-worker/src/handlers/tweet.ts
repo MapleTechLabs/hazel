@@ -1,4 +1,4 @@
-import { HttpApiBuilder } from "effect/unstable/httpapi"
+import { HttpApiBuilder } from "effect/http-api"
 import { Effect } from "effect"
 import { LinkPreviewApi } from "../api"
 import { KVCache } from "../cache"

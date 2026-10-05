@@ -1,4 +1,3 @@
-import { Atom } from "effect/unstable/reactivity"
 import { Layer, ManagedRuntime } from "effect"
 import { ApiClient } from "./api-client"
 import { HazelRpcClient } from "./rpc-atom-client"
@@ -18,14 +17,19 @@ import { TracerLive } from "./telemetry"
 export const runtimeLayer = Layer.mergeAll(ApiClient.layer, HazelRpcClient.layer, TracerLive)
 
 /**
+ * MemoMap shared between the ManagedRuntime and the atom runtime factory.
+ */
+export const sharedMemoMap = Layer.makeMemoMapUnsafe()
+
+/**
  * Managed runtime for imperative Effect execution
  *
- * Uses Atom.defaultMemoMap to ensure layer memoization is shared with
- * Atom.runtime() calls. This prevents duplicate WebSocket connections by
+ * Uses sharedMemoMap to ensure layer memoization is shared with
+ * atom runtimes created via `atomRuntime` (see registry.ts). This prevents duplicate WebSocket connections by
  * ensuring both the ManagedRuntime (for collections) and AtomRuntime (for
  * mutations) build layers with the same MemoMap, allowing Effect to reuse
  * already-built layer instances.
  *
  * Used by collections.ts and other imperative code that calls runtime.runPromise().
  */
-export const runtime = ManagedRuntime.make(runtimeLayer, { memoMap: Atom.defaultMemoMap })
+export const runtime = ManagedRuntime.make(runtimeLayer, { memoMap: sharedMemoMap })

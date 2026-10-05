@@ -17,7 +17,7 @@ import {
 } from "@hazel/backend-core"
 import { ExternalChannelId } from "@hazel/schema"
 import { CurrentUser, InternalServerError, UnauthorizedError } from "@hazel/domain"
-import { HttpApiBuilder } from "effect/unstable/httpapi"
+import { HttpApiBuilder } from "effect/http-api"
 import { Effect, Option } from "effect"
 import { HazelApi } from "../api"
 import { generateTransactionId } from "../lib/create-transactionId"

@@ -1,4 +1,4 @@
-import { LanguageModel } from "effect/unstable/ai"
+import { LanguageModel } from "effect/ai"
 import {
 	generateIntegrationInstructions,
 	type AIContentChunk,
@@ -35,7 +35,7 @@ const mapErrorToUserMessage = (error: unknown): string => {
  * Creates a streaming AI session in the given channel and runs the agent loop.
  */
 export const handleAIRequest = (params: {
-	bot: HazelBotClient
+	bot: HazelBotClient["Service"]
 	message: string
 	channelId: ChannelId
 	orgId: OrganizationId
@@ -50,7 +50,7 @@ export const handleAIRequest = (params: {
 			integrations: Array.from(enabledIntegrations),
 		})
 
-		const modelName = yield* Config.string("AI_MODEL").pipe(Config.withDefault("moonshotai/kimi-k2.5"))
+		const modelName = yield* Config.String("AI_MODEL").pipe(Config.withDefault("moonshotai/kimi-k2.5"))
 
 		// Generate dynamic instructions based on enabled integrations
 		const integrationInstructions = generateIntegrationInstructions(
@@ -157,7 +157,7 @@ export const handleAIRequest = (params: {
 		Effect.provideServiceEffect(
 			LanguageModel.LanguageModel,
 			Effect.gen(function* () {
-				const model = yield* Config.string("AI_MODEL").pipe(
+				const model = yield* Config.String("AI_MODEL").pipe(
 					Config.withDefault("google/gemini-3-flash-preview"),
 				)
 				return yield* makeOpenRouterModel(model)

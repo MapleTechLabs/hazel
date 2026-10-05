@@ -1,4 +1,4 @@
-import { Rpc, RpcGroup } from "effect/unstable/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { Schema } from "effect"
 import {
 	ChannelId,
@@ -53,7 +53,7 @@ export class ConnectWorkspaceSearchResponse extends Schema.Class<ConnectWorkspac
 	data: Schema.Array(ConnectWorkspaceSearchResult),
 }) {}
 
-export class ConnectInviteNotFoundError extends Schema.TaggedErrorClass<ConnectInviteNotFoundError>()(
+export class ConnectInviteNotFoundError extends Schema.TaggedError<ConnectInviteNotFoundError>()(
 	"ConnectInviteNotFoundError",
 	{
 		inviteId: ConnectInviteId,
@@ -61,7 +61,7 @@ export class ConnectInviteNotFoundError extends Schema.TaggedErrorClass<ConnectI
 	},
 ) {}
 
-export class ConnectInviteInvalidStateError extends Schema.TaggedErrorClass<ConnectInviteInvalidStateError>()(
+export class ConnectInviteInvalidStateError extends Schema.TaggedError<ConnectInviteInvalidStateError>()(
 	"ConnectInviteInvalidStateError",
 	{
 		inviteId: ConnectInviteId,
@@ -70,14 +70,14 @@ export class ConnectInviteInvalidStateError extends Schema.TaggedErrorClass<Conn
 	},
 ) {}
 
-export class ConnectWorkspaceNotFoundError extends Schema.TaggedErrorClass<ConnectWorkspaceNotFoundError>()(
+export class ConnectWorkspaceNotFoundError extends Schema.TaggedError<ConnectWorkspaceNotFoundError>()(
 	"ConnectWorkspaceNotFoundError",
 	{
 		message: Schema.String,
 	},
 ) {}
 
-export class ConnectChannelAlreadySharedError extends Schema.TaggedErrorClass<ConnectChannelAlreadySharedError>()(
+export class ConnectChannelAlreadySharedError extends Schema.TaggedError<ConnectChannelAlreadySharedError>()(
 	"ConnectChannelAlreadySharedError",
 	{
 		channelId: ChannelId,

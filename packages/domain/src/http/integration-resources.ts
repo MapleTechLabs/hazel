@@ -1,4 +1,4 @@
-import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/unstable/httpapi"
+import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
 import { Effect, Schema } from "effect"
 import * as CurrentUser from "../current-user"
 import { InternalServerError, UnauthorizedError } from "../errors"
@@ -131,7 +131,7 @@ export class DiscordGuildChannelsResponse extends Schema.Class<DiscordGuildChann
 }) {}
 
 // Error when organization doesn't have the integration connected
-export class IntegrationNotConnectedForPreviewError extends Schema.TaggedErrorClass<IntegrationNotConnectedForPreviewError>()(
+export class IntegrationNotConnectedForPreviewError extends Schema.TaggedError<IntegrationNotConnectedForPreviewError>()(
 	"IntegrationNotConnectedForPreviewError",
 	{
 		provider: IntegrationProvider,
@@ -139,7 +139,7 @@ export class IntegrationNotConnectedForPreviewError extends Schema.TaggedErrorCl
 ) {}
 
 // Error when resource cannot be found
-export class ResourceNotFoundError extends Schema.TaggedErrorClass<ResourceNotFoundError>()(
+export class ResourceNotFoundError extends Schema.TaggedError<ResourceNotFoundError>()(
 	"ResourceNotFoundError",
 	{
 		url: Schema.String,
@@ -148,7 +148,7 @@ export class ResourceNotFoundError extends Schema.TaggedErrorClass<ResourceNotFo
 ) {}
 
 // Error when integration API returns an error (authorization, rate limit, etc.)
-export class IntegrationResourceError extends Schema.TaggedErrorClass<IntegrationResourceError>()(
+export class IntegrationResourceError extends Schema.TaggedError<IntegrationResourceError>()(
 	"IntegrationResourceError",
 	{
 		url: Schema.String,

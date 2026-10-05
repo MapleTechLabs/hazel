@@ -42,7 +42,7 @@ export const PostRssItemsResult = Schema.Struct({
 export type PostRssItemsResult = Schema.Schema.Type<typeof PostRssItemsResult>
 
 // Error types for RSS activities
-export class FetchRssFeedError extends Schema.TaggedErrorClass<FetchRssFeedError>()("FetchRssFeedError", {
+export class FetchRssFeedError extends Schema.TaggedError<FetchRssFeedError>()("FetchRssFeedError", {
 	subscriptionId: Schema.String,
 	feedUrl: Schema.String,
 	message: Schema.String,
@@ -51,7 +51,7 @@ export class FetchRssFeedError extends Schema.TaggedErrorClass<FetchRssFeedError
 	readonly retryable = true
 }
 
-export class PostRssItemsError extends Schema.TaggedErrorClass<PostRssItemsError>()("PostRssItemsError", {
+export class PostRssItemsError extends Schema.TaggedError<PostRssItemsError>()("PostRssItemsError", {
 	channelId: ChannelId,
 	message: Schema.String,
 	cause: Schema.Unknown.pipe(Schema.optional),
@@ -59,7 +59,7 @@ export class PostRssItemsError extends Schema.TaggedErrorClass<PostRssItemsError
 	readonly retryable = true
 }
 
-export class UpdateSubscriptionStateError extends Schema.TaggedErrorClass<UpdateSubscriptionStateError>()(
+export class UpdateSubscriptionStateError extends Schema.TaggedError<UpdateSubscriptionStateError>()(
 	"UpdateSubscriptionStateError",
 	{
 		subscriptionId: Schema.String,

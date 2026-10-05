@@ -1,4 +1,4 @@
-import { Command, Prompt } from "effect/unstable/cli"
+import { Command, Prompt } from "effect/cli"
 import { Console, Effect } from "effect"
 import pc from "picocolors"
 import { CertManager } from "../services/cert-manager.ts"
@@ -16,7 +16,7 @@ export const certsSetupEffect = Effect.gen(function* () {
 		yield* Console.log(pc.dim(`  ${certs.certPath}`))
 		yield* Console.log(pc.dim(`  ${certs.keyPath}`))
 
-		const regenerate = yield* Prompt.confirm({
+		const regenerate = yield* Prompt.Confirm({
 			message: "Regenerate certificates?",
 			initial: false,
 		})
@@ -29,7 +29,7 @@ export const certsSetupEffect = Effect.gen(function* () {
 
 	if (!hasMkcert) {
 		yield* Console.log(pc.yellow("mkcert not found."))
-		const install = yield* Prompt.confirm({
+		const install = yield* Prompt.Confirm({
 			message: "Install mkcert via Homebrew?",
 			initial: true,
 		})

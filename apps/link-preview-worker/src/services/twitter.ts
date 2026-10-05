@@ -1,10 +1,10 @@
-import { FetchHttpClient, HttpClient } from "effect/unstable/http"
+import { FetchHttpClient, HttpClient } from "effect/http"
 import { Context, Effect, Layer, Schema } from "effect"
 
 const SYNDICATION_URL = "https://cdn.syndication.twimg.com"
 const TWEET_ID_REGEX = /^[0-9]+$/
 
-export class TwitterApiError extends Schema.TaggedErrorClass<TwitterApiError>("TwitterApiError")(
+export class TwitterApiError extends Schema.TaggedError<TwitterApiError>("TwitterApiError")(
 	"TwitterApiError",
 	{
 		message: Schema.String,

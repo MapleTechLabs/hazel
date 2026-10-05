@@ -40,7 +40,7 @@ const DatabaseErrorType = Schema.Literals([
 	"query_error",
 ])
 
-export class DatabaseError extends Schema.TaggedErrorClass<DatabaseError>()("DatabaseError", {
+export class DatabaseError extends Schema.TaggedError<DatabaseError>()("DatabaseError", {
 	type: DatabaseErrorType,
 	cause: Schema.Unknown,
 }) {
@@ -69,7 +69,7 @@ const matchPgError = (error: unknown) => {
 	return null
 }
 
-export class DatabaseConnectionLostError extends Schema.TaggedErrorClass<DatabaseConnectionLostError>()(
+export class DatabaseConnectionLostError extends Schema.TaggedError<DatabaseConnectionLostError>()(
 	"DatabaseConnectionLostError",
 	{
 		cause: Schema.Unknown,
@@ -106,10 +106,10 @@ const makeService = (config: Config) =>
 		yield* Effect.tryPromise(() => sql`SELECT 1`).pipe(
 			Effect.retry(
 				Schedule.jittered(Schedule.spaced("1.25 seconds")).pipe(
-					Schedule.both(Schedule.recurs(10)),
-					Schedule.tapOutput(([output]) =>
+					(schedule) => Schedule.max([schedule, Schedule.recurs(10)]),
+					Schedule.tap(({ attempt }) =>
 						Effect.logWarning(
-							`[Database client]: Connection to the database failed. Retrying (attempt ${output}).`,
+							`[Database client]: Connection to the database failed. Retrying (attempt ${attempt}).`,
 						),
 					),
 				),

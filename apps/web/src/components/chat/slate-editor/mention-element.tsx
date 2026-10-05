@@ -1,6 +1,6 @@
 "use client"
 
-import { AsyncResult } from "effect/unstable/reactivity"
+import { AsyncResult } from "effect/reactivity"
 import { useAtomValue } from "@effect/atom-react"
 import type { UserId } from "@hazel/schema"
 import { Button as PrimitiveButton } from "react-aria-components"

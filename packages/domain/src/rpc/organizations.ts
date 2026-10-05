@@ -1,4 +1,4 @@
-import { Rpc, RpcGroup } from "effect/unstable/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { Schema } from "effect"
 import { InternalServerError, UnauthorizedError } from "../errors"
 import { OrganizationId } from "@hazel/schema"
@@ -20,7 +20,7 @@ export class OrganizationResponse extends Schema.Class<OrganizationResponse>("Or
  * Error thrown when an organization is not found.
  * Used in update and delete operations.
  */
-export class OrganizationNotFoundError extends Schema.TaggedErrorClass<OrganizationNotFoundError>()(
+export class OrganizationNotFoundError extends Schema.TaggedError<OrganizationNotFoundError>()(
 	"OrganizationNotFoundError",
 	{
 		organizationId: OrganizationId,
@@ -30,7 +30,7 @@ export class OrganizationNotFoundError extends Schema.TaggedErrorClass<Organizat
 /**
  * Error thrown when trying to create or update an organization with a slug that already exists.
  */
-export class OrganizationSlugAlreadyExistsError extends Schema.TaggedErrorClass<OrganizationSlugAlreadyExistsError>()(
+export class OrganizationSlugAlreadyExistsError extends Schema.TaggedError<OrganizationSlugAlreadyExistsError>()(
 	"OrganizationSlugAlreadyExistsError",
 	{
 		message: Schema.String,
@@ -41,7 +41,7 @@ export class OrganizationSlugAlreadyExistsError extends Schema.TaggedErrorClass<
 /**
  * Error thrown when trying to join an organization via public invite but the org has public invites disabled.
  */
-export class PublicInviteDisabledError extends Schema.TaggedErrorClass<PublicInviteDisabledError>()(
+export class PublicInviteDisabledError extends Schema.TaggedError<PublicInviteDisabledError>()(
 	"PublicInviteDisabledError",
 	{
 		organizationId: OrganizationId,
@@ -51,7 +51,7 @@ export class PublicInviteDisabledError extends Schema.TaggedErrorClass<PublicInv
 /**
  * Error thrown when a user is already a member of the organization they're trying to join.
  */
-export class AlreadyMemberError extends Schema.TaggedErrorClass<AlreadyMemberError>()("AlreadyMemberError", {
+export class AlreadyMemberError extends Schema.TaggedError<AlreadyMemberError>()("AlreadyMemberError", {
 	organizationId: OrganizationId,
 	organizationSlug: Schema.NullOr(Schema.String),
 }) {}

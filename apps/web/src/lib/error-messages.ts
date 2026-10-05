@@ -1,5 +1,5 @@
-import { HttpClientError } from "effect/unstable/http"
-import { RpcClientError } from "effect/unstable/rpc"
+import { HttpClientError } from "effect/http"
+import { RpcClientError } from "effect/rpc"
 import {
 	AIProviderUnavailableError,
 	AIRateLimitError,

@@ -1,4 +1,4 @@
-import { FetchHttpClient } from "effect/unstable/http"
+import { FetchHttpClient } from "effect/http"
 import { ConfigProvider, Layer, ManagedRuntime } from "effect"
 import { TokenValidationLive } from "../auth"
 

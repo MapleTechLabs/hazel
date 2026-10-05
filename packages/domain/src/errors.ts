@@ -1,7 +1,7 @@
 import { Effect, Predicate, Schema, SchemaIssue } from "effect"
 import { ChannelId, MessageId } from "@hazel/schema"
 
-export class UnauthorizedError extends Schema.TaggedErrorClass<UnauthorizedError>("UnauthorizedError")(
+export class UnauthorizedError extends Schema.TaggedError<UnauthorizedError>("UnauthorizedError")(
 	"UnauthorizedError",
 	{
 		message: Schema.String,
@@ -18,9 +18,7 @@ export class UnauthorizedError extends Schema.TaggedErrorClass<UnauthorizedError
  * Error thrown when an OAuth authorization code has expired or has already been used.
  * This is a specific 401 error that indicates the user must restart the OAuth flow.
  */
-export class OAuthCodeExpiredError extends Schema.TaggedErrorClass<OAuthCodeExpiredError>(
-	"OAuthCodeExpiredError",
-)(
+export class OAuthCodeExpiredError extends Schema.TaggedError<OAuthCodeExpiredError>("OAuthCodeExpiredError")(
 	"OAuthCodeExpiredError",
 	{
 		message: Schema.String,
@@ -32,7 +30,7 @@ export class OAuthCodeExpiredError extends Schema.TaggedErrorClass<OAuthCodeExpi
 	}
 }
 
-export class OAuthStateMismatchError extends Schema.TaggedErrorClass<OAuthStateMismatchError>()(
+export class OAuthStateMismatchError extends Schema.TaggedError<OAuthStateMismatchError>()(
 	"OAuthStateMismatchError",
 	{
 		message: Schema.String,
@@ -44,7 +42,7 @@ export class OAuthStateMismatchError extends Schema.TaggedErrorClass<OAuthStateM
 	}
 }
 
-export class OAuthRedemptionPendingError extends Schema.TaggedErrorClass<OAuthRedemptionPendingError>()(
+export class OAuthRedemptionPendingError extends Schema.TaggedError<OAuthRedemptionPendingError>()(
 	"OAuthRedemptionPendingError",
 	{
 		message: Schema.String,
@@ -56,7 +54,7 @@ export class OAuthRedemptionPendingError extends Schema.TaggedErrorClass<OAuthRe
 	}
 }
 
-export class InternalServerError extends Schema.TaggedErrorClass<InternalServerError>("InternalServerError")(
+export class InternalServerError extends Schema.TaggedError<InternalServerError>("InternalServerError")(
 	"InternalServerError",
 	{
 		message: Schema.String,
@@ -66,7 +64,7 @@ export class InternalServerError extends Schema.TaggedErrorClass<InternalServerE
 	{ httpApiStatus: 500 },
 ) {}
 
-export class WorkflowInitializationError extends Schema.TaggedErrorClass<WorkflowInitializationError>(
+export class WorkflowInitializationError extends Schema.TaggedError<WorkflowInitializationError>(
 	"WorkflowInitializationError",
 )(
 	"WorkflowInitializationError",
@@ -77,7 +75,7 @@ export class WorkflowInitializationError extends Schema.TaggedErrorClass<Workflo
 	{ httpApiStatus: 500 },
 ) {}
 
-export class DmChannelAlreadyExistsError extends Schema.TaggedErrorClass<DmChannelAlreadyExistsError>(
+export class DmChannelAlreadyExistsError extends Schema.TaggedError<DmChannelAlreadyExistsError>(
 	"DmChannelAlreadyExistsError",
 )(
 	"DmChannelAlreadyExistsError",
@@ -92,9 +90,7 @@ export class DmChannelAlreadyExistsError extends Schema.TaggedErrorClass<DmChann
  * Error thrown when a message is not found.
  * Used in update, delete, and thread creation operations.
  */
-export class MessageNotFoundError extends Schema.TaggedErrorClass<MessageNotFoundError>(
-	"MessageNotFoundError",
-)(
+export class MessageNotFoundError extends Schema.TaggedError<MessageNotFoundError>("MessageNotFoundError")(
 	"MessageNotFoundError",
 	{
 		messageId: MessageId,
@@ -106,7 +102,7 @@ export class MessageNotFoundError extends Schema.TaggedErrorClass<MessageNotFoun
  * Error thrown when attempting to create a thread within a thread.
  * Nested threads are not supported.
  */
-export class NestedThreadError extends Schema.TaggedErrorClass<NestedThreadError>("NestedThreadError")(
+export class NestedThreadError extends Schema.TaggedError<NestedThreadError>("NestedThreadError")(
 	"NestedThreadError",
 	{
 		channelId: ChannelId,
@@ -118,7 +114,7 @@ export class NestedThreadError extends Schema.TaggedErrorClass<NestedThreadError
  * Error thrown when the workflow service is unreachable or unavailable.
  * Used when the cluster service cannot be contacted.
  */
-export class WorkflowServiceUnavailableError extends Schema.TaggedErrorClass<WorkflowServiceUnavailableError>(
+export class WorkflowServiceUnavailableError extends Schema.TaggedError<WorkflowServiceUnavailableError>(
 	"WorkflowServiceUnavailableError",
 )(
 	"WorkflowServiceUnavailableError",

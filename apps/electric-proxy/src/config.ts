@@ -21,26 +21,26 @@ export interface ProxyConfig {
  */
 export class ProxyConfigService extends Context.Service<ProxyConfigService>()("ProxyConfigService", {
 	make: Effect.gen(function* () {
-		const electricUrl = yield* Config.string("ELECTRIC_URL")
-		const electricSourceId = yield* Config.string("ELECTRIC_SOURCE_ID").pipe(
+		const electricUrl = yield* Config.String("ELECTRIC_URL")
+		const electricSourceId = yield* Config.String("ELECTRIC_SOURCE_ID").pipe(
 			Config.option,
 			Config.map(Option.getOrUndefined),
 		)
-		const electricSourceSecret = yield* Config.string("ELECTRIC_SOURCE_SECRET").pipe(
+		const electricSourceSecret = yield* Config.String("ELECTRIC_SOURCE_SECRET").pipe(
 			Config.option,
 			Config.map(Option.getOrUndefined),
 		)
-		const allowedOrigin = yield* Config.string("ALLOWED_ORIGIN").pipe(
+		const allowedOrigin = yield* Config.String("ALLOWED_ORIGIN").pipe(
 			Config.withDefault("http://localhost:3000"),
 		)
-		const databaseUrl = yield* Config.redacted("DATABASE_URL")
-		const isDev = yield* Config.boolean("IS_DEV").pipe(Config.withDefault(false))
-		const port = yield* Config.number("PORT").pipe(Config.withDefault(8184))
-		const otlpEndpoint = yield* Config.string("OTLP_ENDPOINT").pipe(
+		const databaseUrl = yield* Config.Redacted("DATABASE_URL")
+		const isDev = yield* Config.Boolean("IS_DEV").pipe(Config.withDefault(false))
+		const port = yield* Config.Number("PORT").pipe(Config.withDefault(8184))
+		const otlpEndpoint = yield* Config.String("OTLP_ENDPOINT").pipe(
 			Config.option,
 			Config.map(Option.getOrUndefined),
 		)
-		const redisUrl = yield* Config.redacted("REDIS_URL").pipe(
+		const redisUrl = yield* Config.Redacted("REDIS_URL").pipe(
 			Config.withDefault(Redacted.make("redis://localhost:6380")),
 		)
 

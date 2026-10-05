@@ -1,4 +1,4 @@
-import { HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
+import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api"
 import { Schema } from "effect"
 import { CurrentUser, InternalServerError, UnauthorizedError } from "../"
 import { AttachmentId, BotId, ChannelId, OrganizationId } from "@hazel/schema"
@@ -115,7 +115,7 @@ export class PresignUploadResponse extends Schema.Class<PresignUploadResponse>("
 
 // ============ Error Schemas ============
 
-export class UploadError extends Schema.TaggedErrorClass<UploadError>("UploadError")(
+export class UploadError extends Schema.TaggedError<UploadError>("UploadError")(
 	"UploadError",
 	{
 		message: Schema.String,
@@ -123,7 +123,7 @@ export class UploadError extends Schema.TaggedErrorClass<UploadError>("UploadErr
 	{ httpApiStatus: 500 },
 ) {}
 
-export class BotNotFoundForUploadError extends Schema.TaggedErrorClass<BotNotFoundForUploadError>(
+export class BotNotFoundForUploadError extends Schema.TaggedError<BotNotFoundForUploadError>(
 	"BotNotFoundForUploadError",
 )(
 	"BotNotFoundForUploadError",
@@ -133,7 +133,7 @@ export class BotNotFoundForUploadError extends Schema.TaggedErrorClass<BotNotFou
 	{ httpApiStatus: 404 },
 ) {}
 
-export class OrganizationNotFoundForUploadError extends Schema.TaggedErrorClass<OrganizationNotFoundForUploadError>(
+export class OrganizationNotFoundForUploadError extends Schema.TaggedError<OrganizationNotFoundForUploadError>(
 	"OrganizationNotFoundForUploadError",
 )(
 	"OrganizationNotFoundForUploadError",

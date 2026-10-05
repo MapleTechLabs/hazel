@@ -13,7 +13,7 @@ export const UserRpcLive = UserRpcs.toLayer(
 		const userRepo = yield* UserRepo
 
 		return {
-			"user.me": () => CurrentUser.Context.asEffect(),
+			"user.me": () => CurrentUser.Context,
 
 			"user.update": ({ id, ...payload }) =>
 				db

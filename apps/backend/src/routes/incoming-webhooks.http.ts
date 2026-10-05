@@ -1,5 +1,5 @@
 import { createHash, timingSafeEqual } from "node:crypto"
-import { HttpApiBuilder } from "effect/unstable/httpapi"
+import { HttpApiBuilder } from "effect/http-api"
 import { ChannelWebhookRepo, MessageOutboxRepo, MessageRepo } from "@hazel/backend-core"
 import { Database } from "@hazel/db"
 import type { MessageEmbed as DbMessageEmbed } from "@hazel/db"

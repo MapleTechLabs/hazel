@@ -1,4 +1,4 @@
-import { Command, Flag, Prompt } from "effect/unstable/cli"
+import { Command, Flag, Prompt } from "effect/cli"
 import { Database, schema, isNull } from "@hazel/db"
 import type { BotId, BotInstallationId, OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { Console, Effect, Option, Redacted } from "effect"
@@ -6,9 +6,9 @@ import { randomUUID } from "crypto"
 import pc from "picocolors"
 
 // CLI Options
-const nameOption = Flag.string("name").pipe(Flag.withDescription("Bot name"), Flag.optional)
+const nameOption = Flag.String("name").pipe(Flag.withDescription("Bot name"), Flag.optional)
 
-const orgOption = Flag.string("org").pipe(
+const orgOption = Flag.String("org").pipe(
 	Flag.withDescription("Organization ID to install bot in"),
 	Flag.optional,
 )
@@ -43,7 +43,7 @@ export const botsCommand = Command.make("bots", { name: nameOption, org: orgOpti
 		const nameValue = Option.getOrUndefined(name)
 		const botName =
 			nameValue ??
-			(yield* Prompt.text({
+			(yield* Prompt.String({
 				message: "Enter bot name",
 				validate: (s) =>
 					s.trim().length > 0 ? Effect.succeed(s.trim()) : Effect.fail("Name is required"),
@@ -68,7 +68,7 @@ export const botsCommand = Command.make("bots", { name: nameOption, org: orgOpti
 		const orgValue = Option.getOrUndefined(org)
 		const orgId: OrganizationId =
 			(orgValue as OrganizationId) ??
-			((yield* Prompt.select({
+			((yield* Prompt.Select({
 				message: "Select organization to install bot in",
 				choices: orgs.map((o) => ({ title: o.name, value: o.id })),
 			})) as OrganizationId)

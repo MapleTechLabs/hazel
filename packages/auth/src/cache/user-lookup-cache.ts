@@ -1,4 +1,4 @@
-import { Persistence } from "effect/unstable/persistence"
+import { Persistence } from "effect/persistence"
 import type { UserId } from "@hazel/schema"
 import { Context, Duration, Effect, Exit, Layer, Metric, Option } from "effect"
 import { UserLookupCacheError } from "../errors.ts"

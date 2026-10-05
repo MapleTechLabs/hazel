@@ -43,21 +43,21 @@ import {
 export const DEFAULT_MAX_MESSAGES_PER_CHANNEL = 50
 export const DEFAULT_CHAT_SYNC_CONCURRENCY = 5
 
-export class DiscordSyncConfigurationError extends Schema.TaggedErrorClass<DiscordSyncConfigurationError>()(
+export class DiscordSyncConfigurationError extends Schema.TaggedError<DiscordSyncConfigurationError>()(
 	"DiscordSyncConfigurationError",
 	{
 		message: Schema.String,
 	},
 ) {}
 
-export class DiscordSyncConnectionNotFoundError extends Schema.TaggedErrorClass<DiscordSyncConnectionNotFoundError>()(
+export class DiscordSyncConnectionNotFoundError extends Schema.TaggedError<DiscordSyncConnectionNotFoundError>()(
 	"DiscordSyncConnectionNotFoundError",
 	{
 		syncConnectionId: SyncConnectionId,
 	},
 ) {}
 
-export class DiscordSyncChannelLinkNotFoundError extends Schema.TaggedErrorClass<DiscordSyncChannelLinkNotFoundError>()(
+export class DiscordSyncChannelLinkNotFoundError extends Schema.TaggedError<DiscordSyncChannelLinkNotFoundError>()(
 	"DiscordSyncChannelLinkNotFoundError",
 	{
 		syncConnectionId: SyncConnectionId,
@@ -65,21 +65,18 @@ export class DiscordSyncChannelLinkNotFoundError extends Schema.TaggedErrorClass
 	},
 ) {}
 
-export class DiscordSyncMessageNotFoundError extends Schema.TaggedErrorClass<DiscordSyncMessageNotFoundError>()(
+export class DiscordSyncMessageNotFoundError extends Schema.TaggedError<DiscordSyncMessageNotFoundError>()(
 	"DiscordSyncMessageNotFoundError",
 	{
 		messageId: MessageId,
 	},
 ) {}
 
-export class DiscordSyncApiError extends Schema.TaggedErrorClass<DiscordSyncApiError>()(
-	"DiscordSyncApiError",
-	{
-		message: Schema.String,
-		status: Schema.optional(Schema.Number),
-		detail: Schema.optional(Schema.String),
-	},
-) {}
+export class DiscordSyncApiError extends Schema.TaggedError<DiscordSyncApiError>()("DiscordSyncApiError", {
+	message: Schema.String,
+	status: Schema.optional(Schema.Number),
+	detail: Schema.optional(Schema.String),
+}) {}
 
 type ChatSyncProvider = ChatSyncConnection.ChatSyncProvider
 
@@ -232,7 +229,7 @@ export const ChatSyncCoreWorkerMake: Effect.Effect<Record<string, Function>, unk
 
 		const getAttachmentPublicUrlBase = Effect.fn("discordSyncWorker.getAttachmentPublicUrlBase")(
 			function* () {
-				const configuredBaseUrl = yield* Config.string("S3_PUBLIC_URL").pipe(Config.option)
+				const configuredBaseUrl = yield* Config.String("S3_PUBLIC_URL").pipe(Config.option)
 				if (Option.isNone(configuredBaseUrl) || configuredBaseUrl.value.trim().length === 0) {
 					return yield* Effect.fail(
 						new DiscordSyncConfigurationError({
@@ -511,7 +508,7 @@ export const ChatSyncCoreWorkerMake: Effect.Effect<Record<string, Function>, unk
 						return currentConfig
 					}
 
-					const botTokenOption = yield* Config.redacted("DISCORD_BOT_TOKEN").pipe(Config.option)
+					const botTokenOption = yield* Config.Redacted("DISCORD_BOT_TOKEN").pipe(Config.option)
 					if (Option.isNone(botTokenOption)) {
 						return Option.none()
 					}

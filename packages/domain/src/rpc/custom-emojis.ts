@@ -1,4 +1,4 @@
-import { Rpc, RpcGroup } from "effect/unstable/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { Schema } from "effect"
 import { InternalServerError, UnauthorizedError } from "../errors"
 import { CustomEmojiId, OrganizationId, TransactionId } from "@hazel/schema"
@@ -18,7 +18,7 @@ export class CustomEmojiResponse extends Schema.Class<CustomEmojiResponse>("Cust
 /**
  * Error thrown when a custom emoji is not found.
  */
-export class CustomEmojiNotFoundError extends Schema.TaggedErrorClass<CustomEmojiNotFoundError>()(
+export class CustomEmojiNotFoundError extends Schema.TaggedError<CustomEmojiNotFoundError>()(
 	"CustomEmojiNotFoundError",
 	{
 		customEmojiId: CustomEmojiId,
@@ -28,7 +28,7 @@ export class CustomEmojiNotFoundError extends Schema.TaggedErrorClass<CustomEmoj
 /**
  * Error thrown when a custom emoji name conflicts with an existing one in the same org.
  */
-export class CustomEmojiNameConflictError extends Schema.TaggedErrorClass<CustomEmojiNameConflictError>()(
+export class CustomEmojiNameConflictError extends Schema.TaggedError<CustomEmojiNameConflictError>()(
 	"CustomEmojiNameConflictError",
 	{
 		name: Schema.String,
@@ -40,7 +40,7 @@ export class CustomEmojiNameConflictError extends Schema.TaggedErrorClass<Custom
  * Error thrown when a custom emoji with the same name exists but was soft-deleted.
  * Contains the deleted emoji's info so the frontend can offer to restore it.
  */
-export class CustomEmojiDeletedExistsError extends Schema.TaggedErrorClass<CustomEmojiDeletedExistsError>()(
+export class CustomEmojiDeletedExistsError extends Schema.TaggedError<CustomEmojiDeletedExistsError>()(
 	"CustomEmojiDeletedExistsError",
 	{
 		customEmojiId: CustomEmojiId,

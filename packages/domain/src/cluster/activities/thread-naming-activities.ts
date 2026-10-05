@@ -43,7 +43,7 @@ export type UpdateThreadNameResult = typeof UpdateThreadNameResult.Type
 // ============================================================================
 
 /** Thread channel does not exist */
-export class ThreadChannelNotFoundError extends Schema.TaggedErrorClass<ThreadChannelNotFoundError>()(
+export class ThreadChannelNotFoundError extends Schema.TaggedError<ThreadChannelNotFoundError>()(
 	"ThreadChannelNotFoundError",
 	{ threadChannelId: ChannelId },
 ) {
@@ -51,7 +51,7 @@ export class ThreadChannelNotFoundError extends Schema.TaggedErrorClass<ThreadCh
 }
 
 /** Original message that started the thread was not found */
-export class OriginalMessageNotFoundError extends Schema.TaggedErrorClass<OriginalMessageNotFoundError>()(
+export class OriginalMessageNotFoundError extends Schema.TaggedError<OriginalMessageNotFoundError>()(
 	"OriginalMessageNotFoundError",
 	{ threadChannelId: ChannelId, messageId: MessageId },
 ) {
@@ -59,7 +59,7 @@ export class OriginalMessageNotFoundError extends Schema.TaggedErrorClass<Origin
 }
 
 /** Database query failed during context gathering */
-export class ThreadContextQueryError extends Schema.TaggedErrorClass<ThreadContextQueryError>()(
+export class ThreadContextQueryError extends Schema.TaggedError<ThreadContextQueryError>()(
 	"ThreadContextQueryError",
 	{
 		threadChannelId: ChannelId,
@@ -75,7 +75,7 @@ export class ThreadContextQueryError extends Schema.TaggedErrorClass<ThreadConte
 // ============================================================================
 
 /** AI provider is unreachable or returned an error */
-export class AIProviderUnavailableError extends Schema.TaggedErrorClass<AIProviderUnavailableError>()(
+export class AIProviderUnavailableError extends Schema.TaggedError<AIProviderUnavailableError>()(
 	"AIProviderUnavailableError",
 	{ provider: Schema.String, cause: Schema.Unknown.pipe(Schema.optional) },
 ) {
@@ -83,7 +83,7 @@ export class AIProviderUnavailableError extends Schema.TaggedErrorClass<AIProvid
 }
 
 /** AI provider rate limited the request */
-export class AIRateLimitError extends Schema.TaggedErrorClass<AIRateLimitError>()("AIRateLimitError", {
+export class AIRateLimitError extends Schema.TaggedError<AIRateLimitError>()("AIRateLimitError", {
 	provider: Schema.String,
 	retryAfter: Schema.Number.pipe(Schema.optional),
 }) {
@@ -91,13 +91,10 @@ export class AIRateLimitError extends Schema.TaggedErrorClass<AIRateLimitError>(
 }
 
 /** AI response could not be parsed or was empty */
-export class AIResponseParseError extends Schema.TaggedErrorClass<AIResponseParseError>()(
-	"AIResponseParseError",
-	{
-		threadChannelId: ChannelId,
-		rawResponse: Schema.String.pipe(Schema.optional),
-	},
-) {
+export class AIResponseParseError extends Schema.TaggedError<AIResponseParseError>()("AIResponseParseError", {
+	threadChannelId: ChannelId,
+	rawResponse: Schema.String.pipe(Schema.optional),
+}) {
 	readonly retryable = false // Bad data won't fix itself
 }
 
@@ -106,7 +103,7 @@ export class AIResponseParseError extends Schema.TaggedErrorClass<AIResponsePars
 // ============================================================================
 
 /** Database update for thread name failed */
-export class ThreadNameUpdateError extends Schema.TaggedErrorClass<ThreadNameUpdateError>()(
+export class ThreadNameUpdateError extends Schema.TaggedError<ThreadNameUpdateError>()(
 	"ThreadNameUpdateError",
 	{ threadChannelId: ChannelId, newName: Schema.String, cause: Schema.Unknown.pipe(Schema.optional) },
 ) {

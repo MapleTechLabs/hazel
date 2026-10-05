@@ -1,5 +1,5 @@
 import { createPrivateKey } from "node:crypto"
-import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/unstable/http"
+import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http"
 import { Context, Config, Effect, Layer, Redacted, Schema } from "effect"
 import { SignJWT } from "jose"
 
@@ -10,7 +10,7 @@ import { SignJWT } from "jose"
 /**
  * Error when JWT generation fails.
  */
-export class GitHubAppJWTError extends Schema.TaggedErrorClass<GitHubAppJWTError>()("GitHubAppJWTError", {
+export class GitHubAppJWTError extends Schema.TaggedError<GitHubAppJWTError>()("GitHubAppJWTError", {
 	message: Schema.String,
 	cause: Schema.optional(Schema.Unknown),
 }) {}
@@ -18,7 +18,7 @@ export class GitHubAppJWTError extends Schema.TaggedErrorClass<GitHubAppJWTError
 /**
  * Error when installation token generation fails.
  */
-export class GitHubInstallationTokenError extends Schema.TaggedErrorClass<GitHubInstallationTokenError>()(
+export class GitHubInstallationTokenError extends Schema.TaggedError<GitHubInstallationTokenError>()(
 	"GitHubInstallationTokenError",
 	{
 		installationId: Schema.String,
@@ -78,9 +78,9 @@ const GitHubErrorApiResponse = Schema.Struct({
  */
 export const loadGitHubAppConfig = Effect.withSpan("GitHubAppJWTService.loadConfig")(
 	Effect.gen(function* () {
-		const appId = yield* Config.string("GITHUB_APP_ID")
-		const appSlug = yield* Config.string("GITHUB_APP_SLUG")
-		const privateKeyBase64 = yield* Config.redacted("GITHUB_APP_PRIVATE_KEY")
+		const appId = yield* Config.String("GITHUB_APP_ID")
+		const appSlug = yield* Config.String("GITHUB_APP_SLUG")
+		const privateKeyBase64 = yield* Config.Redacted("GITHUB_APP_PRIVATE_KEY")
 
 		// Decode the base64 private key
 		const privateKey = Buffer.from(Redacted.value(privateKeyBase64), "base64").toString("utf-8")

@@ -1,5 +1,5 @@
-import { HttpApiBuilder } from "effect/unstable/httpapi"
-import { HttpServerRequest } from "effect/unstable/http"
+import { HttpApiBuilder } from "effect/http-api"
+import { HttpServerRequest } from "effect/http"
 import { BotRepo } from "@hazel/backend-core"
 import { InvalidBearerTokenError, UnauthorizedError } from "@hazel/domain"
 import { ValidateBotTokenResponse } from "@hazel/domain/http"
@@ -24,7 +24,7 @@ export const HttpInternalLive = HttpApiBuilder.group(HazelApi, "internal", (hand
 
 			// Optionally verify internal secret for server-to-server auth
 			const internalSecretOption = yield* Effect.orDie(
-				Config.string("INTERNAL_SECRET").pipe(Config.option).asEffect(),
+				Config.String("INTERNAL_SECRET").pipe(Config.option),
 			)
 			const internalSecret = Option.getOrUndefined(internalSecretOption)
 

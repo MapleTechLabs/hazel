@@ -1,4 +1,4 @@
-import { AsyncResult } from "effect/unstable/reactivity"
+import { AsyncResult } from "effect/reactivity"
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router"
 import { Match } from "effect"

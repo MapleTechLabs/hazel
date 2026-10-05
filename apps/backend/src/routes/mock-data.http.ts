@@ -1,4 +1,4 @@
-import { HttpApiBuilder } from "effect/unstable/httpapi"
+import { HttpApiBuilder } from "effect/http-api"
 import { Database } from "@hazel/db"
 import { CurrentUser, withRemapDbErrors } from "@hazel/domain"
 import { GenerateMockDataResponse } from "@hazel/domain/http"

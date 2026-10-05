@@ -1,4 +1,4 @@
-import { AsyncResult } from "effect/unstable/reactivity"
+import { AsyncResult } from "effect/reactivity"
 import { useAtomValue } from "@effect/atom-react"
 import type { ChannelId } from "@hazel/schema"
 import { useCallback, useMemo } from "react"
