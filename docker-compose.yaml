@@ -27,7 +27,9 @@ services:
 
     # Electric - Real-time sync for Postgres
     electric:
-        image: electricsql/electric:canary
+        # Docker Hub's electricsql/electric repo is broken (pulls are denied); Electric publishes to
+        # electricsql/electric-temp until Docker repairs it. Switch back once it's restored.
+        image: electricsql/electric-temp:canary
         ports:
             - "3333:3000"
         environment:
