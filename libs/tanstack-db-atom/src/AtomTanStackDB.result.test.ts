@@ -61,6 +61,9 @@ function createControlledCollection<T extends object>(
 			},
 		},
 		startSync: true,
+		// Disable GC: TanStack DB collects collections that sync without subscribers,
+		// and fake timers would otherwise run that GC before the atom subscribes
+		gcTime: 0,
 	}
 
 	return { collection: createCollection<T>(config) }
@@ -150,6 +153,7 @@ describe("Result Pattern Matching", () => {
 					},
 				},
 				startSync: true,
+				gcTime: 0,
 			}
 
 			const collection = createCollection(config)
@@ -209,6 +213,7 @@ describe("Result Pattern Matching", () => {
 					},
 				},
 				startSync: true,
+				gcTime: 0,
 			}
 
 			const collection = createCollection(config)
@@ -264,6 +269,7 @@ describe("Result Pattern Matching", () => {
 					},
 				},
 				startSync: true,
+				gcTime: 0,
 			}
 
 			const initialCol = createCollection(config)
@@ -294,6 +300,7 @@ describe("Result Pattern Matching", () => {
 					},
 				},
 				startSync: true,
+				gcTime: 0,
 			}
 
 			const collection = createCollection(config)
@@ -366,6 +373,7 @@ describe("Result Pattern Matching", () => {
 					},
 				},
 				startSync: true,
+				gcTime: 0,
 			}
 
 			const collection = createCollection(config)
@@ -514,9 +522,12 @@ describe("Result Pattern Matching", () => {
 					.limit(1),
 			)
 
+			// Ordered/limited queries settle asynchronously, so mount the atom to receive the ready update
+			const unsubscribe = registry.subscribe(firstTodoAtom, () => {}, { immediate: true })
 			await vi.runAllTimersAsync()
 
 			const result = registry.get(firstTodoAtom)
+			unsubscribe()
 			expect(Result.isSuccess(result)).toBe(true)
 
 			if (Result.isSuccess(result)) {

@@ -24,29 +24,29 @@ export function useTypingIndicators({ channelId, staleThreshold = 6000 }: UseTyp
 	const [now, setNow] = useState(() => Date.now())
 	const lastCollectionSnapshotRef = useRef<string | null>(null)
 
-	const { data: typingIndicatorsData } = useLiveQuery(
-		(q) =>
+	const { data: typingIndicatorsData } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ typing: typingIndicatorCollection })
 				.where(({ typing }) => eq(typing.channelId, channelId))
 				.orderBy(({ typing }) => typing.lastTyped, "desc")
 				.limit(10),
-		[channelId],
-	)
+		queryKey: [channelId],
+	})
 
-	const { data: channelMembersData } = useLiveQuery(
-		(q) =>
+	const { data: channelMembersData } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ member: channelMemberCollection })
 				.where(({ member }) => eq(member.channelId, channelId))
 				.orderBy(({ member }) => member.createdAt, "desc"),
-		[channelId],
-	)
+		queryKey: [channelId],
+	})
 
-	const { data: usersData } = useLiveQuery(
-		(q) => q.from({ user: userCollection }).orderBy(({ user }) => user.createdAt, "desc"),
-		[],
-	)
+	const { data: usersData } = useLiveQuery({
+		query: (q) => q.from({ user: userCollection }).orderBy(({ user }) => user.createdAt, "desc"),
+		queryKey: [],
+	})
 
 	useMountEffect(() => {
 		const interval = setInterval(() => {

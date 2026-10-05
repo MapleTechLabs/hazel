@@ -60,15 +60,15 @@ export function ChatHeader() {
 	const { handleToggleHidden } = useChannelMemberActions(channel?.currentUser, "conversation")
 
 	// Fallback query for channel data when user is not a member
-	const { data: channelFallback } = useLiveQuery(
-		(q) =>
+	const { data: channelFallback } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ channel: channelCollection })
 				.where(({ channel: c }) => eq(c.id, channelId))
 				.findOne()
 				.select(({ channel: c }) => ({ ...c })),
-		[channelId],
-	)
+		queryKey: [channelId],
+	})
 
 	// Determine if this is a thread and fetch parent channel data
 	const isThread = channel?.type === "thread"

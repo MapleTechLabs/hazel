@@ -1,14 +1,13 @@
 import type { Row, ShapeStreamOptions } from "@electric-sql/client"
 import type { StandardSchemaV1 } from "@standard-schema/spec"
-import type { Collection, CollectionConfig, CollectionStatus } from "@tanstack/db"
+import type { Collection, CollectionConfig } from "@tanstack/db"
 import { BTreeIndex } from "@tanstack/db"
 import type { ElectricCollectionUtils, Txid } from "@tanstack/electric-db-collection"
 import { electricCollectionOptions } from "@tanstack/electric-db-collection"
 import { createCollection as tanstackCreateCollection } from "@tanstack/react-db"
-import { Effect, type ManagedRuntime, Option, Schema } from "effect"
+import { Effect, type ManagedRuntime, Schema } from "effect"
 import { AwaitTxIdError, InvalidTxIdError, MaxRetriesExceededError, TxIdTimeoutError } from "./errors"
 import { convertDeleteHandler, convertInsertHandler, convertUpdateHandler } from "./handlers"
-import { CollectionInErrorEffectError, wrapTanStackError } from "./tanstack-errors"
 import type { BackoffConfig, EffectElectricCollectionConfig } from "./types"
 
 // Re-export CollectionStatus from @tanstack/db
@@ -51,13 +50,26 @@ const DEFAULT_BACKOFF_CONFIG: Required<BackoffConfig> = {
 export const COLLECTION_ERROR_STATE_CHANGED_EVENT = "collection:error-state-changed"
 
 /**
+ * Detail payload of {@link COLLECTION_ERROR_STATE_CHANGED_EVENT}
+ */
+export interface CollectionErrorStateChangedDetail {
+	readonly collectionId: string | undefined
+	readonly isError: boolean
+	readonly error?: unknown
+}
+
+/**
  * Dispatch an event when collection error state changes
  */
-function dispatchErrorStateChanged(collectionId: string | undefined, isError: boolean): void {
+function dispatchErrorStateChanged(
+	collectionId: string | undefined,
+	isError: boolean,
+	error?: unknown,
+): void {
 	if (typeof window !== "undefined") {
 		window.dispatchEvent(
-			new CustomEvent(COLLECTION_ERROR_STATE_CHANGED_EVENT, {
-				detail: { collectionId, isError },
+			new CustomEvent<CollectionErrorStateChangedDetail>(COLLECTION_ERROR_STATE_CHANGED_EVENT, {
+				detail: { collectionId, isError, error },
 			}),
 		)
 	}
@@ -116,7 +128,7 @@ function createBackoffOnError(
 		retryCount++
 
 		// Dispatch error state changed event
-		dispatchErrorStateChanged(collectionId, true)
+		dispatchErrorStateChanged(collectionId, true, error)
 
 		// Check if this is a 401 auth error - stop retrying and trigger session expired
 		const errorStatus = (error as { status?: number })?.status
@@ -213,33 +225,6 @@ export interface EffectElectricCollectionUtils extends ElectricCollectionUtils {
 		txid: Txid,
 		timeout?: number,
 	) => Effect.Effect<boolean, TxIdTimeoutError | InvalidTxIdError | AwaitTxIdError>
-
-	/**
-	 * Returns the last error that occurred during sync, if any.
-	 * The error is wrapped in an Effect Option for null-safety.
-	 */
-	readonly lastErrorEffect: Effect.Effect<Option.Option<CollectionSyncEffectError>>
-
-	/**
-	 * Returns whether the collection is currently in an error state.
-	 */
-	readonly isErrorEffect: Effect.Effect<boolean>
-
-	/**
-	 * Returns the count of errors that have occurred since the collection started.
-	 */
-	readonly errorCountEffect: Effect.Effect<number>
-
-	/**
-	 * Returns the current collection status.
-	 */
-	readonly statusEffect: Effect.Effect<CollectionStatus>
-
-	/**
-	 * Clears the error state and attempts to recover the collection.
-	 * Fails with CollectionSyncEffectError if the clear operation fails.
-	 */
-	readonly clearErrorEffect: Effect.Effect<void, CollectionSyncEffectError>
 }
 
 /**
@@ -382,50 +367,11 @@ export function effectElectricCollectionOptions(
 		)
 	}
 
-	// Error tracking utilities
-	const lastErrorEffect = Effect.sync(() =>
-		Option.fromNullishOr(standardConfig.utils.lastError).pipe(
-			Option.map(
-				(lastError) =>
-					new CollectionSyncEffectError({
-						message: lastError instanceof Error ? lastError.message : String(lastError),
-						collectionId: config.id,
-						cause: wrapTanStackError(lastError, { collectionId: config.id }),
-					}),
-			),
-		),
-	)
-
-	const isErrorEffect = Effect.sync(() => standardConfig.utils.isError)
-
-	const errorCountEffect = Effect.sync(() => standardConfig.utils.errorCount)
-
-	const statusEffect = Effect.sync(() => standardConfig.utils.status)
-
-	const clearErrorEffect = Effect.try({
-		try: () => {
-			standardConfig.utils.clearError()
-			// Dispatch event after clearing error
-			dispatchErrorStateChanged(config.id, false)
-		},
-		catch: (error) =>
-			new CollectionSyncEffectError({
-				message: `Failed to clear error: ${error instanceof Error ? error.message : String(error)}`,
-				collectionId: config.id,
-				cause: error,
-			}),
-	})
-
 	return {
 		...standardConfig,
 		utils: {
 			...standardConfig.utils,
 			awaitTxIdEffect,
-			lastErrorEffect,
-			isErrorEffect,
-			errorCountEffect,
-			statusEffect,
-			clearErrorEffect,
 		},
 	}
 }

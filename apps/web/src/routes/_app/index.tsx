@@ -15,8 +15,8 @@ function RouteComponent() {
 		data: membership,
 		isLoading,
 		isReady,
-	} = useLiveQuery(
-		(q) => {
+	} = useLiveQuery({
+		query: (q) => {
 			return q
 				.from({ member: organizationMemberCollection })
 				.innerJoin({ org: organizationCollection }, ({ member, org }) =>
@@ -31,8 +31,8 @@ function RouteComponent() {
 				)
 				.findOne()
 		},
-		[user?.id, user?.organizationId],
-	)
+		queryKey: [user?.id, user?.organizationId],
+	})
 
 	if (isLoading || isAuthLoading || !isReady) {
 		return <Loader />

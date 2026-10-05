@@ -16,8 +16,8 @@ export type PartnerOrgInfo = {
  * that are part of active Hazel Connect conversations.
  */
 export function useSharedChannels(currentOrgId: OrganizationId | undefined) {
-	const { data: mounts } = useLiveQuery(
-		(q) =>
+	const { data: mounts } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ ccc: connectConversationChannelCollection })
 				.where(({ ccc }) => eq(ccc.isActive, true))
@@ -28,19 +28,19 @@ export function useSharedChannels(currentOrgId: OrganizationId | undefined) {
 					isActive: ccc.isActive,
 					deletedAt: ccc.deletedAt,
 				})),
-		[],
-	)
+		queryKey: [],
+	})
 
-	const { data: orgs } = useLiveQuery(
-		(q) =>
+	const { data: orgs } = useLiveQuery({
+		query: (q) =>
 			q.from({ org: organizationCollection }).select(({ org }) => ({
 				id: org.id,
 				name: org.name,
 				slug: org.slug,
 				logoUrl: org.logoUrl,
 			})),
-		[],
-	)
+		queryKey: [],
+	})
 
 	return useMemo(() => {
 		const result = new Map<ChannelId, PartnerOrgInfo[]>()

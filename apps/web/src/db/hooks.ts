@@ -15,8 +15,8 @@ import {
 import { channelMemberWithUserCollection, threadWithMemberCollection } from "./materialized-collections"
 
 export const useMessage = (messageId: MessageId) => {
-	const { data, ...rest } = useLiveQuery(
-		(q) =>
+	const { data, ...rest } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ message: messageCollection })
 				.innerJoin({ author: userCollection }, ({ message, author }) =>
@@ -26,8 +26,8 @@ export const useMessage = (messageId: MessageId) => {
 				.findOne()
 				.select(({ message, author }) => ({ ...message, author: author }))
 				.orderBy((q) => q.message.createdAt, "desc"),
-		[messageId],
-	)
+		queryKey: [messageId],
+	})
 
 	return {
 		data,
@@ -42,16 +42,16 @@ type ChannelWithMembers = Channel.Type & {
 }
 
 export const useChannel = (channelId: ChannelId) => {
-	const { data, ...rest } = useLiveQuery(
-		(q) =>
+	const { data, ...rest } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ channel: channelCollection })
 				.where((t) => eq(t.channel.id, channelId))
 				.innerJoin({ member: channelMemberWithUserCollection }, ({ channel, member }) =>
 					eq(channel.id, member.channelId),
 				),
-		[channelId],
-	)
+		queryKey: [channelId],
+	})
 
 	const channelWithMember = data.reduce(
 		(acc, row) => {
@@ -75,16 +75,16 @@ export const useChannel = (channelId: ChannelId) => {
  * Only fetches the channel itself, not members
  */
 export const useParentChannel = (parentChannelId: ChannelId | null) => {
-	const { data, ...rest } = useLiveQuery(
-		(q) =>
+	const { data, ...rest } = useLiveQuery({
+		query: (q) =>
 			parentChannelId
 				? q
 						.from({ channel: channelCollection })
 						.where((t) => eq(t.channel.id, parentChannelId))
 						.findOne()
 				: null,
-		[parentChannelId],
-	)
+		queryKey: [parentChannelId],
+	})
 
 	return {
 		parentChannel: data ?? null,
@@ -95,16 +95,16 @@ export const useParentChannel = (parentChannelId: ChannelId | null) => {
 export const useChannelWithCurrentUser = (channelId: ChannelId) => {
 	const { user } = useAuth()
 
-	const { data, ...rest } = useLiveQuery(
-		(q) =>
+	const { data, ...rest } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ channel: channelCollection })
 				.where((t) => eq(t.channel.id, channelId))
 				.innerJoin({ member: channelMemberWithUserCollection }, ({ channel, member }) =>
 					eq(channel.id, member.channelId),
 				),
-		[channelId],
-	)
+		queryKey: [channelId],
+	})
 
 	const channelWithMember = data.reduce(
 		(acc, row) => {
@@ -134,16 +134,16 @@ export const useChannelWithCurrentUser = (channelId: ChannelId) => {
 }
 
 export const useAttachments = (messageId: MessageId) => {
-	const { data: attachments, ...rest } = useLiveQuery(
-		(q) =>
+	const { data: attachments, ...rest } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({
 					attachments: attachmentCollection,
 				})
 				.where(({ attachments }) => eq(attachments.messageId, messageId))
 				.orderBy(({ attachments }) => attachments.uploadedAt, "asc"),
-		[messageId],
-	)
+		queryKey: [messageId],
+	})
 
 	return {
 		attachments: attachments || [],
@@ -152,8 +152,8 @@ export const useAttachments = (messageId: MessageId) => {
 }
 
 export const useChannelAttachments = (channelId: ChannelId) => {
-	const { data, ...rest } = useLiveQuery(
-		(q) =>
+	const { data, ...rest } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ attachments: attachmentCollection })
 				.leftJoin({ user: userCollection }, ({ attachments, user }) =>
@@ -167,8 +167,8 @@ export const useChannelAttachments = (channelId: ChannelId) => {
 					),
 				)
 				.orderBy(({ attachments }) => attachments.uploadedAt, "desc"),
-		[channelId],
-	)
+		queryKey: [channelId],
+	})
 
 	return {
 		attachments: data || [],
@@ -181,8 +181,8 @@ export const useChannelAttachments = (channelId: ChannelId) => {
  * Returns a map of provider -> connection for easy lookup.
  */
 export const useIntegrationConnections = (organizationId: OrganizationId | null) => {
-	const { data, ...rest } = useLiveQuery(
-		(q) =>
+	const { data, ...rest } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ connection: integrationConnectionCollection })
 				.where(({ connection }) =>
@@ -193,8 +193,8 @@ export const useIntegrationConnections = (organizationId: OrganizationId | null)
 						isNull(connection.deletedAt),
 					),
 				),
-		[organizationId],
-	)
+		queryKey: [organizationId],
+	})
 
 	// Build a map of provider -> connection for easy lookup
 	const connectionsByProvider = new Map<
@@ -227,8 +227,8 @@ export const useIntegrationConnection = (
 	organizationId: OrganizationId | null,
 	provider: IntegrationConnection.IntegrationProvider,
 ) => {
-	const { data, ...rest } = useLiveQuery(
-		(q) =>
+	const { data, ...rest } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ connection: integrationConnectionCollection })
 				.where(({ connection }) =>
@@ -240,8 +240,8 @@ export const useIntegrationConnection = (
 						isNull(connection.deletedAt),
 					),
 				),
-		[organizationId, provider],
-	)
+		queryKey: [organizationId, provider],
+	})
 
 	// If no organizationId, return empty result
 	if (!organizationId) {
@@ -269,8 +269,8 @@ export const useUserIntegrationConnection = (
 	userId: UserId | undefined,
 	provider: IntegrationConnection.IntegrationProvider,
 ) => {
-	const { data, ...rest } = useLiveQuery(
-		(q) =>
+	const { data, ...rest } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ connection: integrationConnectionCollection })
 				.where(({ connection }) =>
@@ -282,8 +282,8 @@ export const useUserIntegrationConnection = (
 						isNull(connection.deletedAt),
 					),
 				),
-		[organizationId, userId, provider],
-	)
+		queryKey: [organizationId, userId, provider],
+	})
 
 	if (!organizationId || !userId) {
 		return {
@@ -317,8 +317,8 @@ export const useActiveThreads = (organizationId: OrganizationId | null, userId: 
 	}, [])
 
 	// Get threads where user is a member
-	const { data: threads } = useLiveQuery(
-		(q) =>
+	const { data: threads } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ thread: threadWithMemberCollection })
 				.where(({ thread }) =>
@@ -328,27 +328,27 @@ export const useActiveThreads = (organizationId: OrganizationId | null, userId: 
 						eq(thread.member.isHidden, false),
 					),
 				),
-		[organizationId, userId],
-	)
+		queryKey: [organizationId, userId],
+	})
 
 	// Get thread IDs for message count query
 	const threadIds = useMemo(() => threads?.map((t) => t.channel.id) ?? [], [threads])
 
 	// Get all messages in threads to count them
-	const { data: threadMessages } = useLiveQuery(
-		(q) =>
+	const { data: threadMessages } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ message: messageCollection })
 				.where(({ message }) =>
 					inArray(message.channelId, threadIds.length > 0 ? threadIds : ([""] as ChannelId[])),
 				)
 				.select(({ message }) => ({ channelId: message.channelId })),
-		[threadIds],
-	)
+		queryKey: [threadIds],
+	})
 
 	// Get user's recent messages in thread channels only to filter by activity
-	const { data: recentMessages } = useLiveQuery(
-		(q) =>
+	const { data: recentMessages } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ message: messageCollection })
 				.where(({ message }) =>
@@ -359,8 +359,8 @@ export const useActiveThreads = (organizationId: OrganizationId | null, userId: 
 					),
 				)
 				.select(({ message }) => ({ channelId: message.channelId })),
-		[userId, threeDaysAgo, threadIds],
-	)
+		queryKey: [userId, threeDaysAgo, threadIds],
+	})
 
 	// Filter threads to only those with recent activity, 3+ messages, and group by parent
 	const threadsByParent = useMemo(() => {
@@ -401,16 +401,16 @@ export const useActiveThreads = (organizationId: OrganizationId | null, userId: 
  * Use this instead of user.firstName for machine users to avoid stale names.
  */
 export const useBotName = (userId: UserId | undefined, userType: string | undefined | null) => {
-	const { data } = useLiveQuery(
-		(q) =>
+	const { data } = useLiveQuery({
+		query: (q) =>
 			userId && userType === "machine"
 				? q
 						.from({ bot: botCollection })
 						.where(({ bot }) => and(eq(bot.userId, userId), isNull(bot.deletedAt)))
 						.select(({ bot }) => ({ name: bot.name }))
 				: null,
-		[userId, userType],
-	)
+		queryKey: [userId, userType],
+	})
 	return data?.[0]?.name ?? null
 }
 
@@ -426,8 +426,8 @@ export type BotWithUser = Bot.Type & {
  * Joins bots with their machine users to get avatar data.
  */
 export const useMyBots = (createdBy: UserId | undefined) => {
-	const { data, ...rest } = useLiveQuery(
-		(q) =>
+	const { data, ...rest } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ bot: botCollection })
 				.innerJoin({ user: userCollection }, ({ bot, user }) => eq(bot.userId, user.id))
@@ -436,8 +436,8 @@ export const useMyBots = (createdBy: UserId | undefined) => {
 				)
 				.select(({ bot, user }) => ({ ...bot, user }))
 				.orderBy(({ bot }) => bot.createdAt, "desc"),
-		[createdBy],
-	)
+		queryKey: [createdBy],
+	})
 
 	return {
 		bots: (data ?? []) as BotWithUser[],
@@ -450,8 +450,8 @@ export const useMyBots = (createdBy: UserId | undefined) => {
  * Joins bots with their machine users to get avatar data.
  */
 export const useInstalledBots = (organizationId: OrganizationId | undefined) => {
-	const { data, ...rest } = useLiveQuery(
-		(q) =>
+	const { data, ...rest } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ installation: botInstallationCollection })
 				.innerJoin({ bot: botCollection }, ({ installation, bot }) => eq(installation.botId, bot.id))
@@ -464,8 +464,8 @@ export const useInstalledBots = (organizationId: OrganizationId | undefined) => 
 				)
 				.select(({ bot, user }) => ({ ...bot, user }))
 				.orderBy(({ bot }) => bot.name, "asc"),
-		[organizationId],
-	)
+		queryKey: [organizationId],
+	})
 
 	return {
 		bots: (data ?? []) as BotWithUser[],
@@ -480,8 +480,8 @@ export const useInstalledBots = (organizationId: OrganizationId | undefined) => 
  */
 export const usePublicBots = (organizationId: OrganizationId | undefined) => {
 	// Get public bots with their machine users
-	const { data: botsWithUsers, ...rest } = useLiveQuery(
-		(q) =>
+	const { data: botsWithUsers, ...rest } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ bot: botCollection })
 				.innerJoin({ user: userCollection }, ({ bot, user }) => eq(bot.userId, user.id))
@@ -489,20 +489,20 @@ export const usePublicBots = (organizationId: OrganizationId | undefined) => {
 				.where(({ bot }) => and(eq(bot.isPublic, true), isNull(bot.deletedAt)))
 				.select(({ bot, user, creator }) => ({ ...bot, user, creator }))
 				.orderBy(({ bot }) => bot.installCount, "desc"),
-		[],
-	)
+		queryKey: [],
+	})
 
 	// Get installed bot IDs for this organization
-	const { data: installations } = useLiveQuery(
-		(q) =>
+	const { data: installations } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ installation: botInstallationCollection })
 				.where(({ installation }) =>
 					eq(installation.organizationId, organizationId ?? ("" as OrganizationId)),
 				)
 				.select(({ installation }) => ({ botId: installation.botId })),
-		[organizationId],
-	)
+		queryKey: [organizationId],
+	})
 
 	// Build set of installed bot IDs
 	const installedBotIds = useMemo(() => new Set((installations ?? []).map((i) => i.botId)), [installations])

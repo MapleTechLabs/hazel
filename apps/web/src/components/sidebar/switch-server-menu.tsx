@@ -20,8 +20,8 @@ export const SwitchServerMenu = ({ onCreateOrganization }: SwitchServerMenuProps
 
 	const { organizationId: currentOrgId } = useOrganization()
 
-	const { data: userOrganizations } = useLiveQuery(
-		(q) =>
+	const { data: userOrganizations } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ member: organizationMemberCollection })
 				.innerJoin({ org: organizationCollection }, ({ member, org }) =>
@@ -29,8 +29,8 @@ export const SwitchServerMenu = ({ onCreateOrganization }: SwitchServerMenuProps
 				)
 				.where(({ member }) => eq(member.userId, user?.id || ""))
 				.orderBy(({ member }) => member.createdAt, "asc"),
-		[user?.id],
-	)
+		queryKey: [user?.id],
+	})
 
 	const handleSelectionChange = (keys: "all" | Set<React.Key>) => {
 		if (keys === "all" || keys.size === 0) return

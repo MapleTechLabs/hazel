@@ -65,6 +65,9 @@ function createMutableCollection<T extends object>(
 			},
 		},
 		startSync: true,
+		// Disable GC: TanStack DB collects collections that sync without subscribers,
+		// and fake timers would otherwise run that GC before the atom subscribes
+		gcTime: 0,
 	}
 
 	const collection = createCollection<T>(config)
@@ -329,6 +332,7 @@ describe("Advanced Subscription Patterns", () => {
 				},
 			},
 			startSync: true,
+			gcTime: 0,
 		}
 
 		const collection = createCollection(config)

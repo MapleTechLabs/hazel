@@ -18,15 +18,15 @@ export function ChannelJoinBanner({ channelId }: ChannelJoinBannerProps) {
 	const joinChannel = useAtomSet(joinChannelAction, { mode: "promiseExit" })
 
 	// Query the channel directly (no membership join)
-	const { data: channel } = useLiveQuery(
-		(q) =>
+	const { data: channel } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ channel: channelCollection })
 				.where(({ channel }) => eq(channel.id, channelId))
 				.findOne()
 				.select(({ channel }) => ({ ...channel })),
-		[channelId],
-	)
+		queryKey: [channelId],
+	})
 
 	const handleJoin = async () => {
 		if (!user?.id) return
@@ -72,15 +72,15 @@ export function ChannelJoinBanner({ channelId }: ChannelJoinBannerProps) {
 export function useIsChannelMember(channelId: ChannelId) {
 	const { user } = useAuth()
 
-	const { data: membership } = useLiveQuery(
-		(q) =>
+	const { data: membership } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ m: channelMemberCollection })
 				.where(({ m }) => eq(m.channelId, channelId))
 				.where(({ m }) => eq(m.userId, user?.id || ""))
 				.findOne(),
-		[channelId, user?.id],
-	)
+		queryKey: [channelId, user?.id],
+	})
 
 	return !!membership
 }

@@ -25,8 +25,8 @@ export function OrgSetupStep({ onBack, onContinue }: OrgSetupStepProps) {
 	const clerkOrgName = userMemberships?.data?.[0]?.organization.name
 
 	// Watch our local DB for the org appearing (via Clerk webhook).
-	const { data: localOrg } = useLiveQuery(
-		(q) => {
+	const { data: localOrg } = useLiveQuery({
+		query: (q) => {
 			if (!user?.id || !clerkOrgSlug) return undefined
 			return q
 				.from({ member: organizationMemberCollection })
@@ -36,8 +36,8 @@ export function OrgSetupStep({ onBack, onContinue }: OrgSetupStepProps) {
 				.where(({ member, org }) => eq(member.userId, user.id) && eq(org.slug, clerkOrgSlug))
 				.findOne()
 		},
-		[user?.id, clerkOrgSlug],
-	)
+		queryKey: [user?.id, clerkOrgSlug],
+	})
 
 	// Auto-advance once both Clerk says the org exists AND our DB has the row.
 	useEffect(() => {

@@ -31,8 +31,8 @@ export function ComposerEditor({ placeholder, className }: ComposerEditorProps) 
 		channelId,
 	})
 
-	const { data: channelMembersData } = useLiveQuery(
-		(q) =>
+	const { data: channelMembersData } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ member: channelMemberCollection })
 				.where(({ member }) =>
@@ -40,12 +40,12 @@ export function ComposerEditor({ placeholder, className }: ComposerEditorProps) 
 				)
 				.orderBy(({ member }) => member.createdAt, "desc")
 				.findOne(),
-		[channelId, user?.id],
-	)
+		queryKey: [channelId, user?.id],
+	})
 
 	// Query the current user's last message in this channel for Arrow Up editing
-	const { data: lastOwnMessage } = useLiveQuery(
-		(q) =>
+	const { data: lastOwnMessage } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ message: messageCollection })
 				.where(({ message }) =>
@@ -53,8 +53,8 @@ export function ComposerEditor({ placeholder, className }: ComposerEditorProps) 
 				)
 				.orderBy(({ message }) => message.createdAt, "desc")
 				.findOne(),
-		[channelId, user?.id],
-	)
+		queryKey: [channelId, user?.id],
+	})
 
 	// Populate editor when editingMessageId transitions to a new message
 	// (fired by toolbar/context menu or Arrow-Up in an empty composer). The

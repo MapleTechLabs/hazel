@@ -26,10 +26,10 @@ export function InlineThreadPreview({
 	const { openThread } = useChatStable()
 
 	// Fetch thread name
-	const { data: threadData } = useLiveQuery(
-		(q) => q.from({ channel: channelCollection }).where((q) => eq(q.channel.id, threadChannelId)),
-		[threadChannelId],
-	)
+	const { data: threadData } = useLiveQuery({
+		query: (q) => q.from({ channel: channelCollection }).where((q) => eq(q.channel.id, threadChannelId)),
+		queryKey: [threadChannelId],
+	})
 	const threadName = threadData?.[0]?.name
 	const hasCustomName = threadName && threadName !== "Thread"
 
@@ -39,15 +39,15 @@ export function InlineThreadPreview({
 	const totalCount = countData?.[0]?.count ?? 0
 
 	// Get last message timestamp and unique authors for avatar stack
-	const { data: threadMessages } = useLiveQuery(
-		(q) =>
+	const { data: threadMessages } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ message: messageCollection })
 				.where(({ message }) => eq(message.channelId, threadChannelId))
 				.orderBy(({ message }) => message.createdAt, "desc")
 				.limit(10), // Get enough to find unique authors
-		[threadChannelId],
-	)
+		queryKey: [threadChannelId],
+	})
 
 	// Get unique author IDs (up to maxPreviewMessages)
 	const uniqueAuthorIds = useMemo(() => {

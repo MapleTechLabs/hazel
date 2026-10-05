@@ -47,10 +47,10 @@ function IntegrationsPage({ channelId, orgSlug }: { channelId: ChannelId; orgSlu
 	const { organizationId } = useOrganization()
 
 	// Fetch channel name for edit modal
-	const { data: channelData } = useLiveQuery(
-		(q) => q.from({ channel: channelCollection }).where((q) => eq(q.channel.id, channelId)),
-		[channelId],
-	)
+	const { data: channelData } = useLiveQuery({
+		query: (q) => q.from({ channel: channelCollection }).where((q) => eq(q.channel.id, channelId)),
+		queryKey: [channelId],
+	})
 	const channelName = channelData?.[0]?.name ?? ""
 
 	const [webhooks, setWebhooks] = useState<WebhookData[]>([])

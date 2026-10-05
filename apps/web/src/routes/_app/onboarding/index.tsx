@@ -40,8 +40,8 @@ function RouteComponent() {
 	}
 
 	// Fetch user's organizations to determine if they're creating or joining
-	const { data: userOrganizations } = useLiveQuery(
-		(q) =>
+	const { data: userOrganizations } = useLiveQuery({
+		query: (q) =>
 			user?.id
 				? q
 						.from({ member: organizationMemberCollection })
@@ -52,8 +52,8 @@ function RouteComponent() {
 						.orderBy(({ member }) => member.createdAt, "asc")
 						.findOne()
 				: undefined,
-		[user?.id],
-	)
+		queryKey: [user?.id],
+	})
 
 	const orgId = userOrganizations?.org.id
 	const organization = userOrganizations?.org

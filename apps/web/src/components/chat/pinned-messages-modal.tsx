@@ -18,8 +18,8 @@ export function PinnedMessagesModal() {
 		from: "/$orgSlug/chat/$id/",
 	})
 
-	const { data: pinnedMessages } = useLiveQuery(
-		(q) =>
+	const { data: pinnedMessages } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ pinned: pinnedMessageCollection })
 				.where(({ pinned }) => eq(pinned.channelId, channelId))
@@ -38,8 +38,8 @@ export function PinnedMessagesModal() {
 					},
 				}))
 				.orderBy(({ pinned }) => pinned.pinnedAt, "desc"),
-		[channelId],
-	)
+		queryKey: [channelId],
+	})
 
 	// Memoize sorted pins to avoid re-sorting on every render
 	const sortedPins = useMemo(

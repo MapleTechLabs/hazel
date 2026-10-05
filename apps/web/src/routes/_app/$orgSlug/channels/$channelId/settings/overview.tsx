@@ -149,15 +149,15 @@ function ChannelSettingsForm({
 function OverviewPage() {
 	const { channelId } = Route.useParams()
 
-	const { data: channelResult } = useLiveQuery(
-		(q) =>
+	const { data: channelResult } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ channel: channelCollection })
 				.where(({ channel }) => eq(channel.id, channelId as ChannelId))
 				.findOne()
 				.select(({ channel }) => ({ channel })),
-		[channelId],
-	)
+		queryKey: [channelId],
+	})
 	const channel = channelResult?.channel
 
 	return (

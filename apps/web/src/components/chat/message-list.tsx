@@ -346,7 +346,6 @@ export function MessageList({ ref }: { ref?: React.Ref<MessageListRef> }) {
 
 	const { data, fetchNextPage, hasNextPage, isLoading } = useLiveInfiniteQuery(messagesInfiniteQuery, {
 		pageSize: 30,
-		getNextPageParam: (lastPage) => (lastPage.length === 30 ? lastPage.length : undefined),
 	})
 
 	const messages = (data || []) as MessageWithPinned[]

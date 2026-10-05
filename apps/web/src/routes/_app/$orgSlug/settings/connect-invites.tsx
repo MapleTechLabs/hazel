@@ -127,15 +127,15 @@ function IncomingInviteRow({
 	const declineInvite = useAtomSet(declineConnectInviteMutation, { mode: "promiseExit" })
 
 	// Resolve host organization name
-	const { data: hostOrg } = useLiveQuery(
-		(q) =>
+	const { data: hostOrg } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ org: organizationCollection })
 				.where(({ org }) => eq(org.id, invite.hostOrganizationId))
 				.findOne()
 				.select(({ org }) => ({ name: org.name, slug: org.slug, logoUrl: org.logoUrl })),
-		[invite.hostOrganizationId],
-	)
+		queryKey: [invite.hostOrganizationId],
+	})
 
 	const statusBadge = getConnectInviteStatusBadge(invite.status)
 

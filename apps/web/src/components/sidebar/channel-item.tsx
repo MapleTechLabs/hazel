@@ -36,7 +36,6 @@ export interface SidebarChannelData {
 	readonly parentChannelId: ChannelId | null
 	readonly sectionId: ChannelSectionId | null
 	readonly updatedAt?: DateLike | null
-	readonly [key: string]: unknown
 }
 
 export interface SidebarChannelMemberData {
@@ -47,7 +46,6 @@ export interface SidebarChannelMemberData {
 	readonly isFavorite: boolean
 	readonly isHidden: boolean
 	readonly notificationCount: number
-	readonly [key: string]: unknown
 }
 
 interface ChannelItemProps {

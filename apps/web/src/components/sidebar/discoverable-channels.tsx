@@ -23,8 +23,8 @@ export function DiscoverableChannels({ organizationId, onBrowseAll }: Discoverab
 	const isCollapsed = useAtomValue(sectionCollapsedAtomFamily("default"))
 
 	// Get all non-thread public/private channels the user is a member of
-	const { data: userChannels } = useLiveQuery(
-		(q) =>
+	const { data: userChannels } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ channel: channelCollection })
 				.innerJoin({ m: channelMemberCollection }, ({ channel, m }) => eq(m.channelId, channel.id))
@@ -37,12 +37,12 @@ export function DiscoverableChannels({ organizationId, onBrowseAll }: Discoverab
 					),
 				)
 				.select(({ m }) => ({ channelId: m.channelId })),
-		[user?.id, organizationId],
-	)
+		queryKey: [user?.id, organizationId],
+	})
 
 	// Get public channels user hasn't joined, excluding threads
-	const { data: discoverableChannels } = useLiveQuery(
-		(q) => {
+	const { data: discoverableChannels } = useLiveQuery({
+		query: (q) => {
 			const userChannelIds = userChannels?.map((m) => m.channelId) || []
 
 			let query = q
@@ -59,8 +59,8 @@ export function DiscoverableChannels({ organizationId, onBrowseAll }: Discoverab
 				.orderBy(({ channel }) => channel.createdAt, "asc")
 				.select(({ channel }) => ({ ...channel }))
 		},
-		[user?.id, userChannels, organizationId],
-	)
+		queryKey: [user?.id, userChannels, organizationId],
+	})
 
 	if (
 		isCollapsed ||

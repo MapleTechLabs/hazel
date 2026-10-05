@@ -58,8 +58,8 @@ function TeamSettings() {
 		mode: "promiseExit",
 	})
 
-	const { data: teamMembers } = useLiveQuery(
-		(q) =>
+	const { data: teamMembers } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ members: organizationMemberCollection })
 				.where(({ members }) => eq(members.organizationId, organizationId))
@@ -69,8 +69,8 @@ function TeamSettings() {
 				)
 				.where(({ user }) => eq(user.userType, "user"))
 				.select(({ members, user, presence }) => ({ ...members, user, presence })),
-		[organizationId],
-	)
+		queryKey: [organizationId],
+	})
 
 	const getInitials = (name: string) => {
 		const [firstName, lastName] = name.split(" ")

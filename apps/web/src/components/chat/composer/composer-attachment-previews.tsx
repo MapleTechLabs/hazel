@@ -16,15 +16,15 @@ export function ComposerAttachmentPreviews({ className }: ComposerAttachmentPrev
 	const { attachmentIds, uploadingFiles, replyToMessageId } = useChatDraft()
 	const { removeAttachment } = useChatStable()
 
-	const { data: attachments } = useLiveQuery(
-		(q) =>
+	const { data: attachments } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({
 					attachments: attachmentCollection,
 				})
 				.where(({ attachments }) => inArray(attachments.id, attachmentIds)),
-		[attachmentIds],
-	)
+		queryKey: [attachmentIds],
+	})
 
 	if (attachmentIds.length === 0 && uploadingFiles.length === 0) {
 		return null

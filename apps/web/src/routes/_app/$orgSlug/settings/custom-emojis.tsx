@@ -95,8 +95,8 @@ function CustomEmojisSettings() {
 	}, [previewUrl])
 
 	// Get custom emojis for this org with creator info
-	const { data: customEmojis, isLoading: isLoadingEmojis } = useLiveQuery(
-		(q) =>
+	const { data: customEmojis, isLoading: isLoadingEmojis } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ emoji: customEmojiCollection })
 				.where(({ emoji }) => eq(emoji.organizationId, organizationId))
@@ -110,8 +110,8 @@ function CustomEmojisSettings() {
 					creatorFirstName: creator.firstName,
 					creatorLastName: creator.lastName,
 				})),
-		[organizationId],
-	)
+		queryKey: [organizationId],
+	})
 
 	// File selection handler (shared by FileTrigger and DropZone)
 	const processFile = useCallback((file: File) => {

@@ -14,8 +14,8 @@ export const FavoriteSection = (props: {
 }) => {
 	const { user } = useAuth()
 
-	const { data: favoriteChannels } = useLiveQuery(
-		(q) =>
+	const { data: favoriteChannels } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ channel: channelCollection })
 				.innerJoin({ member: channelMemberCollection }, ({ channel, member }) =>
@@ -30,8 +30,8 @@ export const FavoriteSection = (props: {
 					),
 				)
 				.orderBy(({ channel }) => channel.createdAt, "asc"),
-		[user?.id, props.organizationId],
-	)
+		queryKey: [user?.id, props.organizationId],
+	})
 
 	const { publicPrivateChannels, dmChannels } = useMemo(() => {
 		if (!favoriteChannels) return { publicPrivateChannels: [], dmChannels: [] }

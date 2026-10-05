@@ -71,6 +71,9 @@ function createDelayedCollection<T extends object>(
 			},
 		},
 		startSync: true,
+		// Disable GC: TanStack DB collects collections that sync without subscribers,
+		// and fake timers would otherwise run that GC before the atom subscribes
+		gcTime: 0,
 	}
 
 	const collection = createCollection<T>(config)
@@ -150,6 +153,7 @@ describe("Timing and Async Behavior", () => {
 				},
 			},
 			startSync: true,
+			gcTime: 0,
 		}
 
 		const collection = createCollection(config)
@@ -306,6 +310,7 @@ describe("Timing and Async Behavior", () => {
 				},
 			},
 			startSync: true,
+			gcTime: 0,
 		}
 
 		const collection = createCollection(config)

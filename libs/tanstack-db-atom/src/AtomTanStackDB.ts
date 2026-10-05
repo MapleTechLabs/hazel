@@ -20,6 +20,46 @@ import { constUndefined } from "effect/Function"
 import type { CollectionStatus, ConditionalQueryFn, QueryFn, QueryOptions } from "./types"
 
 /**
+ * Mirrors a collection's lifecycle and data into the current atom.
+ * Recomputes on data changes and on status-only transitions (e.g. loading -> ready),
+ * which TanStack DB reports through `status:change` rather than `subscribeChanges`.
+ * Returns the initial result.
+ */
+const trackCollectionResult = <A>(
+	get: Atom.AtomContext,
+	collection: Collection<any, any, any>,
+	extract: () => A,
+	messages: { readonly failed: string; readonly cleanedUp: string },
+): AsyncResult.AsyncResult<A, Error> => {
+	const read = (): AsyncResult.AsyncResult<A, Error> => {
+		const status: CollectionStatus = collection.status
+		switch (status) {
+			case "error":
+				return AsyncResult.fail(new Error(messages.failed))
+			case "loading":
+			case "idle":
+				return AsyncResult.initial(true)
+			case "cleaned-up":
+				return AsyncResult.fail(new Error(messages.cleanedUp))
+			default:
+				return AsyncResult.success(extract())
+		}
+	}
+	const update = () => get.setSelf(read())
+
+	// Subscribe before reading the initial state so async sync completion is observed
+	const subscription = collection.subscribeChanges(update)
+	const unsubscribeStatus = collection.on("status:change", update)
+
+	get.addFinalizer(() => {
+		subscription.unsubscribe()
+		unsubscribeStatus()
+	})
+
+	return read()
+}
+
+/**
  * Creates an Atom from a TanStack DB collection
  * Returns a Result that tracks the collection's lifecycle state
  */
@@ -29,55 +69,12 @@ export const makeCollectionAtom = <T extends object, TKey extends string | numbe
 	return Atom.readable((get) => {
 		// Start sync if not already started
 		collection.startSyncImmediate()
-
-		// Set up subscription immediately, before checking initial status
-		// This ensures we get notified when async sync completes
-		const subscription = collection.subscribeChanges(() => {
-			const status: CollectionStatus = collection.status
-
-			if (status === "error") {
-				get.setSelf(AsyncResult.fail(new Error("Collection failed to load")))
-				return
-			}
-
-			if (status === "loading" || status === "idle") {
-				get.setSelf(AsyncResult.initial(true))
-				return
-			}
-
-			if (status === "cleaned-up") {
-				get.setSelf(AsyncResult.fail(new Error("Collection has been cleaned up")))
-				return
-			}
-
-			const newData = Array.from(collection.entries()).map(([_, value]) => value)
-			get.setSelf(AsyncResult.success(newData))
-		})
-
-		// Cleanup on unmount
-		get.addFinalizer(() => {
-			subscription.unsubscribe()
-		})
-
-		// Return initial state based on current status
-		const status: CollectionStatus = collection.status
-
-		if (status === "error") {
-			return AsyncResult.fail(new Error("Collection failed to load"))
-		}
-
-		if (status === "loading" || status === "idle") {
-			return AsyncResult.initial(true)
-		}
-
-		if (status === "cleaned-up") {
-			return AsyncResult.fail(new Error("Collection has been cleaned up"))
-		}
-
-		// Get current data
-		const initialData = Array.from(collection.entries()).map(([_, value]) => value)
-
-		return AsyncResult.success(initialData)
+		return trackCollectionResult(
+			get,
+			collection,
+			() => Array.from(collection.entries()).map(([_, value]) => value),
+			{ failed: "Collection failed to load", cleanedUp: "Collection has been cleaned up" },
+		)
 	})
 }
 
@@ -91,57 +88,15 @@ export const makeSingleCollectionAtom = <T extends object, TKey extends string |
 	return Atom.readable((get) => {
 		// Start sync if not already started
 		collection.startSyncImmediate()
-
-		// Set up subscription immediately, before checking initial status
-		// This ensures we get notified when async sync completes
-		const subscription = collection.subscribeChanges(() => {
-			const status: CollectionStatus = collection.status
-
-			if (status === "error") {
-				get.setSelf(AsyncResult.fail(new Error("Collection failed to load")))
-				return
-			}
-
-			if (status === "loading" || status === "idle") {
-				get.setSelf(AsyncResult.initial(true))
-				return
-			}
-
-			if (status === "cleaned-up") {
-				get.setSelf(AsyncResult.fail(new Error("Collection has been cleaned up")))
-				return
-			}
-
-			const entries = Array.from(collection.entries())
-			const newData = entries.length > 0 ? entries[0]![1] : undefined
-			get.setSelf(AsyncResult.success(newData))
-		})
-
-		// Cleanup on unmount
-		get.addFinalizer(() => {
-			subscription.unsubscribe()
-		})
-
-		// Return initial state based on current status
-		const status: CollectionStatus = collection.status
-
-		if (status === "error") {
-			return AsyncResult.fail(new Error("Collection failed to load"))
-		}
-
-		if (status === "loading" || status === "idle") {
-			return AsyncResult.initial(true)
-		}
-
-		if (status === "cleaned-up") {
-			return AsyncResult.fail(new Error("Collection has been cleaned up"))
-		}
-
-		// Get current data (single result)
-		const entries = Array.from(collection.entries())
-		const initialData = entries.length > 0 ? entries[0]![1] : undefined
-
-		return AsyncResult.success(initialData)
+		return trackCollectionResult(
+			get,
+			collection,
+			() => {
+				const entries = Array.from(collection.entries())
+				return entries.length > 0 ? entries[0]![1] : undefined
+			},
+			{ failed: "Collection failed to load", cleanedUp: "Collection has been cleaned up" },
+		)
 	})
 }
 
@@ -161,59 +116,17 @@ export const makeQuery = <TContext extends Context>(
 			gcTime: options?.gcTime ?? 0, // Let atom lifecycle manage GC by default
 		})
 
-		// Set up subscription immediately, before checking initial status
-		// This ensures we get notified when async sync completes
-		const subscription = collection.subscribeChanges(() => {
-			const status: CollectionStatus = collection.status
-
-			if (status === "error") {
-				get.setSelf(AsyncResult.fail(new Error("Query failed to load")))
-				return
-			}
-
-			if (status === "loading" || status === "idle") {
-				get.setSelf(AsyncResult.initial(true))
-				return
-			}
-
-			if (status === "cleaned-up") {
-				get.setSelf(AsyncResult.fail(new Error("Query collection has been cleaned up")))
-				return
-			}
-
-			// Get current data - handle both single and array results
-			const isSingleResult = (collection as any).config?.singleResult === true
-			const entries = Array.from(collection.entries()).map(([_, value]) => value)
-			const newData = (isSingleResult ? entries[0] : entries) as InferResultType<TContext>
-			get.setSelf(AsyncResult.success(newData))
-		})
-
-		// Cleanup on unmount
-		get.addFinalizer(() => {
-			subscription.unsubscribe()
-		})
-
-		// Return initial state based on current status
-		const status: CollectionStatus = collection.status
-
-		if (status === "error") {
-			return AsyncResult.fail(new Error("Query failed to load"))
-		}
-
-		if (status === "loading" || status === "idle") {
-			return AsyncResult.initial(true)
-		}
-
-		if (status === "cleaned-up") {
-			return AsyncResult.fail(new Error("Query collection has been cleaned up"))
-		}
-
-		// Get current data - handle both single and array results
+		// Handle both single and array results
 		const isSingleResult = (collection as any).config?.singleResult === true
-		const entries = Array.from(collection.entries()).map(([_, value]) => value)
-		const initialData = (isSingleResult ? entries[0] : entries) as InferResultType<TContext>
-
-		return AsyncResult.success(initialData)
+		return trackCollectionResult(
+			get,
+			collection,
+			() => {
+				const entries = Array.from(collection.entries()).map(([_, value]) => value)
+				return (isSingleResult ? entries[0] : entries) as unknown as InferResultType<TContext>
+			},
+			{ failed: "Query failed to load", cleanedUp: "Query collection has been cleaned up" },
+		)
 	})
 }
 
