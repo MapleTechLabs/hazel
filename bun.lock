@@ -75,12 +75,16 @@
         "@hazel/db": "workspace:*",
         "@hazel/domain": "workspace:*",
         "@hazel/effect-bun": "workspace:*",
+        "@hazel/infra": "workspace:*",
         "@hazel/schema": "workspace:*",
+        "alchemy": "catalog:alchemy",
         "effect": "catalog:effect",
       },
       "devDependencies": {
+        "@cloudflare/workers-types": "catalog:alchemy",
         "@types/bun": "1.3.9",
         "typescript": "^5.9.3",
+        "vitest": "^4.1.0",
       },
     },
     "apps/cluster": {
