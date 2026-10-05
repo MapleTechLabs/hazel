@@ -12,7 +12,6 @@ import { Database } from "@hazel/db"
 import { Context, Effect, Layer, Redacted, Schema } from "effect"
 import { EnvVars } from "../lib/env-vars"
 import { formatError } from "../lib/format-error"
-import { DatabaseLive } from "./database"
 import { MessageSideEffectService } from "./message-side-effect-service"
 
 const OUTBOX_BATCH_SIZE = 100
@@ -247,7 +246,6 @@ export class MessageOutboxDispatcher extends Context.Service<MessageOutboxDispat
 	},
 ) {
 	static readonly layer = Layer.effect(this, this.make).pipe(
-		Layer.provide(DatabaseLive),
 		Layer.provide(EnvVars.layer),
 		Layer.provide(MessageOutboxRepo.layer),
 		Layer.provide(MessageSideEffectService.layer),

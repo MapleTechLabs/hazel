@@ -90,7 +90,34 @@ export type Config = {
 	ssl: boolean
 }
 
-const makeService = (config: Config) =>
+/**
+ * A drizzle client scoped to the current request. On Cloudflare Workers a TCP socket belongs to
+ * the request that opened it, so an isolate-wide pool cannot be shared across requests; the
+ * Worker provides one of these per request (see {@link makeRequestConnection}) and
+ * {@link layerRequestScoped} reads it on every query.
+ */
+export class DatabaseConnection extends Context.Service<DatabaseConnection, { readonly db: Client }>()(
+	"DatabaseConnection",
+) {}
+
+/**
+ * A lazily-connecting client for one request. postgres.js opens no socket until the first
+ * query, so requests that never touch the database cost nothing. Through Hyperdrive the pool
+ * lives at the edge, so `max` stays small and type fetching is skipped.
+ */
+export const makeRequestConnection = (
+	url: string,
+): { readonly db: Client; readonly end: () => Promise<void> } => {
+	const sql = postgres(url, {
+		max: 5,
+		fetch_types: false,
+		idle_timeout: 5,
+		connect_timeout: 10,
+	})
+	return { db: drizzle(sql, { schema }), end: () => sql.end({ timeout: 5 }) }
+}
+
+const makePooledClient = (config: Config) =>
 	Effect.gen(function* () {
 		const sql = yield* Effect.acquireRelease(
 			Effect.sync(() =>
@@ -119,24 +146,39 @@ const makeService = (config: Config) =>
 		)
 
 		const db = drizzle(sql, { schema })
+		return Effect.succeed(db)
+	})
 
+/** The request's client; a defect when the Worker forgot to provide one. */
+const requestClient: Effect.Effect<Client> = Effect.serviceOption(DatabaseConnection).pipe(
+	Effect.flatMap((connection) =>
+		Option.isSome(connection)
+			? Effect.succeed(connection.value.db)
+			: Effect.die(new Error("DatabaseConnection is not provided for this request")),
+	),
+)
+
+const makeService = (getDb: Effect.Effect<Client>) =>
+	Effect.gen(function* () {
 		const execute = Effect.fn(<T>(fn: (client: Client) => Promise<T>) =>
-			Effect.tryPromise({
-				try: () => fn(db),
-				catch: (cause) => {
-					const error = matchPgError(cause)
-					if (error !== null) {
-						return error
-					}
-					throw cause
-				},
-			}),
+			Effect.flatMap(getDb, (db) =>
+				Effect.tryPromise({
+					try: () => fn(db),
+					catch: (cause) => {
+						const error = matchPgError(cause)
+						if (error !== null) {
+							return error
+						}
+						throw cause
+					},
+				}),
+			),
 		)
 
 		const transaction = Effect.fn("Database.transaction")(<T, E, R>(effect: Effect.Effect<T, E, R>) =>
-			Effect.context<R>().pipe(
-				Effect.map((services) => Effect.runPromiseExitWith(services)),
-				Effect.flatMap((runPromiseExit) =>
+			Effect.all([getDb, Effect.context<R>()]).pipe(
+				Effect.map(([db, services]) => [db, Effect.runPromiseExitWith(services)] as const),
+				Effect.flatMap(([db, runPromiseExit]) =>
 					Effect.callback<T, DatabaseError | E, R>((resume) => {
 						db.transaction(async (tx: TransactionClient) => {
 							const txWrapper: TxFn = (fn: (client: TransactionClient) => Promise<any>) =>
@@ -258,4 +300,9 @@ type Shape = Effect.Success<ReturnType<typeof makeService>>
 
 export class Database extends Context.Service<Database, Shape>()("Database") {}
 
-export const layer = (config: Config) => Layer.effect(Database, makeService(config))
+/** A long-lived pool, for long-running processes (Bun servers, the cluster). */
+export const layer = (config: Config) =>
+	Layer.effect(Database, Effect.flatMap(makePooledClient(config), makeService))
+
+/** Reads the per-request {@link DatabaseConnection}; for Cloudflare Workers and Durable Objects. */
+export const layerRequestScoped = Layer.effect(Database, makeService(requestClient))

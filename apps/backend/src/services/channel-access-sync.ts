@@ -2,7 +2,6 @@ import { and, eq, isNull, notInArray, schema } from "@hazel/db"
 import type { ChannelId, ConnectConversationId, OrganizationId, UserId } from "@hazel/schema"
 import { Context, Effect, Layer } from "effect"
 import { transactionAwareExecute } from "../lib/transaction-aware-execute"
-import { DatabaseLive } from "./database"
 
 export class ChannelAccessSyncService extends Context.Service<ChannelAccessSyncService>()(
 	"ChannelAccessSyncService",
@@ -395,5 +394,5 @@ export class ChannelAccessSyncService extends Context.Service<ChannelAccessSyncS
 		}),
 	},
 ) {
-	static readonly layer = Layer.effect(this, this.make).pipe(Layer.provide(DatabaseLive))
+	static readonly layer = Layer.effect(this, this.make)
 }
