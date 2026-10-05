@@ -1,7 +1,7 @@
 import { ELECTRIC_PROTOCOL_QUERY_PARAMS } from "@electric-sql/client"
 import { Effect, Metric, Schema } from "effect"
-import { ProxyConfigService } from "../config"
 import { proxyElectricDuration, proxyElectricErrors } from "../observability/metrics"
+import { ElectricUpstream } from "./electric-upstream"
 
 /**
  * Error thrown when Electric proxy request fails
@@ -13,7 +13,7 @@ export class ElectricProxyError extends Schema.TaggedError<ElectricProxyError>()
 
 /**
  * Prepares the Electric SQL proxy URL from a request URL
- * Copies over Electric-specific query params and adds auth if configured
+ * Copies over Electric-specific query params and adds the upstream's auth params
  *
  * @param requestUrl - The incoming request URL
  * @returns Effect that succeeds with the prepared Electric SQL origin URL
@@ -21,9 +21,9 @@ export class ElectricProxyError extends Schema.TaggedError<ElectricProxyError>()
 export const prepareElectricUrl = Effect.fn("ElectricClient.prepareElectricUrl")(function* (
 	requestUrl: string,
 ) {
-	const config = yield* ProxyConfigService
+	const upstream = yield* ElectricUpstream
 	const url = new URL(requestUrl)
-	const originUrl = new URL(`${config.electricUrl}/v1/shape`)
+	const originUrl = new URL(`${upstream.baseUrl}/v1/shape`)
 
 	// Copy Electric-specific query params
 	url.searchParams.forEach((value, key) => {
@@ -32,14 +32,12 @@ export const prepareElectricUrl = Effect.fn("ElectricClient.prepareElectricUrl")
 		}
 	})
 
-	// Add Electric Cloud authentication if configured
-	const sourceId = config.electricSourceId
-	const sourceSecret = config.electricSourceSecret
-	const hasElectricAuth = sourceId !== undefined && sourceSecret !== undefined
-	yield* Effect.annotateCurrentSpan("electric.auth.configured", hasElectricAuth)
-	if (hasElectricAuth) {
-		originUrl.searchParams.set("source_id", sourceId)
-		originUrl.searchParams.set("secret", sourceSecret)
+	// Electric's own authentication (ELECTRIC_SECRET), set after the copy so a client cannot override it
+	const authEntries = Object.entries(upstream.authParams)
+	yield* Effect.annotateCurrentSpan("electric.auth.configured", authEntries.length > 0)
+	yield* Effect.annotateCurrentSpan("electric.upstream", upstream.kind)
+	for (const [key, value] of authEntries) {
+		originUrl.searchParams.set(key, value)
 	}
 
 	return originUrl
@@ -55,13 +53,14 @@ export const prepareElectricUrl = Effect.fn("ElectricClient.prepareElectricUrl")
 export const proxyElectricRequest = Effect.fn("ElectricClient.proxyElectricRequest")(function* (
 	originUrl: string | URL,
 ) {
+	const upstream = yield* ElectricUpstream
 	const urlStr = typeof originUrl === "string" ? originUrl : originUrl.toString()
 	const targetUrl = new URL(urlStr)
 	yield* Effect.annotateCurrentSpan("url.path", targetUrl.pathname)
 	yield* Effect.annotateCurrentSpan("server.address", targetUrl.host)
 	const start = Date.now()
 	const response = yield* Effect.tryPromise({
-		try: () => fetch(urlStr),
+		try: () => upstream.fetch(urlStr),
 		catch: (error) =>
 			new ElectricProxyError({
 				message: "Failed to fetch from Electric SQL",
