@@ -17,7 +17,8 @@
 			"@hazel/infra/env": ["./packages/infra/src/env.ts"],
 			"@hazel/infra/worker-http": ["./packages/infra/src/cloudflare/worker-http.ts"],
 			"@hazel/infra/worker-runtime": ["./packages/infra/src/cloudflare/worker-runtime.ts"],
-			"@hazel/infra/cached-recoverable": ["./packages/infra/src/cloudflare/cached-recoverable.ts"]
+			"@hazel/infra/cached-recoverable": ["./packages/infra/src/cloudflare/cached-recoverable.ts"],
+			"@hazel/infra/hazel-db": ["./packages/infra/src/cloudflare/hazel-db.ts"]
 		}
 	},
 	"include": ["alchemy.run.ts", "apps/*/alchemy.run.ts"]

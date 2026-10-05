@@ -10,7 +10,8 @@
 		"./env": "./src/env.ts",
 		"./worker-http": "./src/cloudflare/worker-http.ts",
 		"./worker-runtime": "./src/cloudflare/worker-runtime.ts",
-		"./cached-recoverable": "./src/cloudflare/cached-recoverable.ts"
+		"./cached-recoverable": "./src/cloudflare/cached-recoverable.ts",
+		"./hazel-db": "./src/cloudflare/hazel-db.ts"
 	},
 	"scripts": {
 		"test": "vitest run",
