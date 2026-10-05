@@ -15,6 +15,7 @@ import { EnvVars } from "../lib/env-vars"
 import { createChatSyncDbHarness, type ChatSyncDbHarness } from "../test/chat-sync-db-harness"
 import { serviceShape } from "../test/effect-helpers"
 import { MessageOutboxDispatcher } from "./message-outbox-dispatcher"
+import { MessageOutboxProcessor } from "./message-outbox-processor"
 import { MessageSideEffectService } from "./message-side-effect-service"
 
 const CHANNEL_ID = "00000000-0000-4000-8000-000000000001" as ChannelId
@@ -45,6 +46,7 @@ const runDispatcherEffect = <A, E, R>(
 		Effect.scoped(
 			make.pipe(
 				Effect.provide(Layer.effect(MessageOutboxDispatcher, MessageOutboxDispatcher.make)),
+				Effect.provide(Layer.effect(MessageOutboxProcessor, MessageOutboxProcessor.make)),
 				Effect.provide(Layer.succeed(MessageSideEffectService, sideEffects)),
 				Effect.provide(MessageOutboxRepo.layer),
 				Effect.provide(

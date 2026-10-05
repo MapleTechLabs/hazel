@@ -1,29 +1,13 @@
 import { Pool, type PoolClient } from "pg"
-import {
-	MessageCreatedPayloadSchema,
-	MessageDeletedPayloadSchema,
-	type MessageOutboxEventRecord,
-	MessageOutboxRepo,
-	MessageUpdatedPayloadSchema,
-	ReactionCreatedPayloadSchema,
-	ReactionDeletedPayloadSchema,
-} from "@hazel/backend-core/repositories"
 import { Database } from "@hazel/db"
-import { Context, Effect, Layer, Redacted, Schema } from "effect"
+import { Context, Effect, Layer, Redacted } from "effect"
 import { EnvVars } from "../lib/env-vars"
-import { formatError } from "../lib/format-error"
-import { MessageSideEffectService } from "./message-side-effect-service"
+import { MessageOutboxProcessor } from "./message-outbox-processor"
 
-const OUTBOX_BATCH_SIZE = 100
 const OUTBOX_POLL_MIN_MS = 250
 const OUTBOX_POLL_MAX_MS = 2_000
 const OUTBOX_LOCK_RETRY_INTERVAL = "5 seconds"
-const OUTBOX_LOCK_TIMEOUT_MS = 2 * 60 * 1000
-const OUTBOX_FAILURE_LIMIT = 25
 const OUTBOX_DISPATCHER_LOCK_KEY = 1_046_277_921
-
-const computeRetryDelayMs = (attempt: number): number =>
-	Math.min(5_000 * 3 ** Math.max(0, attempt - 1), 300_000)
 
 export class MessageOutboxDispatcher extends Context.Service<MessageOutboxDispatcher>()(
 	"MessageOutboxDispatcher",
@@ -31,8 +15,7 @@ export class MessageOutboxDispatcher extends Context.Service<MessageOutboxDispat
 		make: Effect.gen(function* () {
 			const envVars = yield* EnvVars
 			const database = yield* Database.Database
-			const outboxRepo = yield* MessageOutboxRepo
-			const sideEffects = yield* MessageSideEffectService
+			const processor = yield* MessageOutboxProcessor
 			const workerId = `backend-outbox-${crypto.randomUUID()}`
 
 			const pool = yield* Effect.acquireRelease(
@@ -60,96 +43,7 @@ export class MessageOutboxDispatcher extends Context.Service<MessageOutboxDispat
 					yield* Effect.sync(() => reserved.release())
 				})
 
-			const processEvent = Effect.fn("MessageOutboxDispatcher.processEvent")(function* (
-				event: MessageOutboxEventRecord,
-			) {
-				const dedupeKey = `hazel:outbox:${event.eventType}:${event.aggregateId}:${event.sequence}`
-
-				switch (event.eventType) {
-					case "message_created":
-						yield* sideEffects.handleMessageCreated(
-							Schema.decodeUnknownSync(MessageCreatedPayloadSchema)(event.payload),
-							dedupeKey,
-						)
-						break
-					case "message_updated":
-						yield* sideEffects.handleMessageUpdated(
-							Schema.decodeUnknownSync(MessageUpdatedPayloadSchema)(event.payload),
-							dedupeKey,
-						)
-						break
-					case "message_deleted":
-						yield* sideEffects.handleMessageDeleted(
-							Schema.decodeUnknownSync(MessageDeletedPayloadSchema)(event.payload),
-							dedupeKey,
-						)
-						break
-					case "reaction_created":
-						yield* sideEffects.handleReactionCreated(
-							Schema.decodeUnknownSync(ReactionCreatedPayloadSchema)(event.payload),
-							dedupeKey,
-						)
-						break
-					case "reaction_deleted":
-						yield* sideEffects.handleReactionDeleted(
-							Schema.decodeUnknownSync(ReactionDeletedPayloadSchema)(event.payload),
-							dedupeKey,
-						)
-						break
-				}
-			})
-
-			const processBatch = Effect.fnUntraced(function* () {
-				const batch = yield* outboxRepo.claimNextBatch({
-					limit: OUTBOX_BATCH_SIZE,
-					workerId,
-					lockTimeoutMs: OUTBOX_LOCK_TIMEOUT_MS,
-				})
-
-				if (batch.length === 0) {
-					return { isEmpty: true } as const
-				}
-
-				yield* Effect.gen(function* () {
-					for (const event of batch) {
-						const result = yield* processEvent(event).pipe(Effect.result)
-						if (result._tag === "Success") {
-							yield* outboxRepo.markProcessed(event.id)
-							continue
-						}
-
-						const nextAttempt = event.attemptCount + 1
-						const errorMessage = formatError(result.failure)
-
-						yield* Effect.logWarning("Outbox event processing failed", {
-							eventId: event.id,
-							eventType: event.eventType,
-							sequence: event.sequence,
-							attempt: nextAttempt,
-							willRetry: nextAttempt < OUTBOX_FAILURE_LIMIT,
-							error: errorMessage,
-						})
-
-						if (nextAttempt >= OUTBOX_FAILURE_LIMIT) {
-							yield* outboxRepo.markFailed(event.id, {
-								lastError: errorMessage,
-							})
-							continue
-						}
-
-						yield* outboxRepo.markRetry(event.id, {
-							availableAt: new Date(Date.now() + computeRetryDelayMs(nextAttempt)),
-							lastError: errorMessage,
-						})
-					}
-				}).pipe(
-					Effect.withSpan("MessageOutboxDispatcher.processBatch", {
-						attributes: { "batch.size": batch.length },
-					}),
-				)
-
-				return { isEmpty: false } as const
-			})
+			const processBatch = () => processor.processBatch(workerId)
 
 			const runLeaderLoop = Effect.gen(function* () {
 				let pollDelayMs = OUTBOX_POLL_MIN_MS
@@ -247,7 +141,6 @@ export class MessageOutboxDispatcher extends Context.Service<MessageOutboxDispat
 ) {
 	static readonly layer = Layer.effect(this, this.make).pipe(
 		Layer.provide(EnvVars.layer),
-		Layer.provide(MessageOutboxRepo.layer),
-		Layer.provide(MessageSideEffectService.layer),
+		Layer.provide(MessageOutboxProcessor.layer),
 	)
 }

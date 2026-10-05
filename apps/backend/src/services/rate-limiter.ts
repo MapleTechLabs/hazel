@@ -1,4 +1,3 @@
-import { Redis, type RedisErrors } from "@hazel/effect-bun"
 import { Context, Effect, Layer, Schema } from "effect"
 
 /**
@@ -21,85 +20,27 @@ export class RateLimiterError extends Schema.TaggedError<RateLimiterError>()("Ra
 }) {}
 
 /**
- * Fixed-window rate limiting Lua script.
- *
- * This script atomically:
- * 1. Gets the current count for the key
- * 2. If no key exists, creates it with count=1 and TTL=windowMs
- * 3. If key exists and count < limit, increments and returns allowed
- * 4. If key exists and count >= limit, returns denied with TTL info
- *
- * Returns: [allowed (0/1), remaining, resetAfterMs]
+ * Fixed-window rate limiting. Implementations: Redis on Bun (`rate-limiter-redis.ts`), a Durable
+ * Object per key on Cloudflare (`worker/rate-limiter-object.ts`), memory in tests.
  */
-const FIXED_WINDOW_SCRIPT = `
-local key = KEYS[1]
-local limit = tonumber(ARGV[1])
-local windowMs = tonumber(ARGV[2])
-
-local current = tonumber(redis.call("GET", key) or "0")
-local ttl = tonumber(redis.call("PTTL", key))
-
-if ttl < 0 then
-  ttl = windowMs
-end
-
-if current < limit then
-  if current == 0 then
-    redis.call("SET", key, 1, "PX", windowMs)
-  else
-    redis.call("INCR", key)
-  end
-  return {1, limit - current - 1, ttl}
-else
-  return {0, 0, ttl}
-end
-`
-
-/**
- * Rate limiter service backed by Redis via @hazel/effect-bun
- */
-export class RateLimiter extends Context.Service<RateLimiter>()("RateLimiter", {
-	make: Effect.gen(function* () {
-		const redis = yield* Redis
-
-		return {
-			/**
-			 * Check and consume from a rate limit bucket using fixed-window algorithm.
-			 *
-			 * @param key - Unique key for this rate limit (e.g., "messages:user-123")
-			 * @param limit - Maximum requests allowed per window
-			 * @param windowMs - Window duration in milliseconds
-			 * @returns RateLimitResult with allowed status and metadata
-			 */
-			consume: (key: string, limit: number, windowMs: number) =>
-				redis
-					.send<[number, number, number]>("EVAL", [
-						FIXED_WINDOW_SCRIPT,
-						"1",
-						`ratelimit:${key}`,
-						String(limit),
-						String(windowMs),
-					])
-					.pipe(
-						Effect.map(([allowed, remaining, resetAfterMs]) => ({
-							allowed: allowed === 1,
-							remaining,
-							resetAfterMs,
-							limit,
-						})),
-						Effect.mapError(
-							(e: RedisErrors) =>
-								new RateLimiterError({
-									message: "Failed to execute rate limit check",
-									cause: e,
-								}),
-						),
-					),
-		}
-	}),
-}) {
-	static readonly layer = Layer.effect(this, this.make).pipe(Layer.provide(Redis.Default))
-}
+export class RateLimiter extends Context.Service<
+	RateLimiter,
+	{
+		/**
+		 * Check and consume from a rate limit bucket using fixed-window algorithm.
+		 *
+		 * @param key - Unique key for this rate limit (e.g., "messages:user-123")
+		 * @param limit - Maximum requests allowed per window
+		 * @param windowMs - Window duration in milliseconds
+		 * @returns RateLimitResult with allowed status and metadata
+		 */
+		readonly consume: (
+			key: string,
+			limit: number,
+			windowMs: number,
+		) => Effect.Effect<RateLimitResult, RateLimiterError>
+	}
+>()("RateLimiter") {}
 
 /**
  * In-memory rate limiter for testing (no Redis required)

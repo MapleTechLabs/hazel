@@ -2,16 +2,16 @@
  * Bun entry point (Railway). Kept runnable during the Cloudflare cutover; the Worker entry is
  * `worker.ts`. See infra/cloudflare-migration-plan.md.
  */
-import { BunHttpServer, BunRuntime } from "@effect/platform-bun"
+import { BunHttpServer, BunRuntime, BunSocket } from "@effect/platform-bun"
 import { Redis, RedisResultPersistenceLive } from "@hazel/effect-bun"
 import { createTracingLayer } from "@hazel/effect-bun/Telemetry"
 import { Config, ConfigProvider, Layer } from "effect"
 import { HttpMiddleware, HttpRouter } from "effect/http"
 import { AllRoutes, AppAuthorizationLive, AppServicesLive, HazelApi } from "./app"
-import { DiscordGatewayService } from "./services/chat-sync/discord-gateway-service"
+import { DiscordGatewayBackgroundLive } from "./services/chat-sync/discord-gateway-service"
 import { DatabaseLive } from "./services/database"
 import { MessageOutboxDispatcher } from "./services/message-outbox-dispatcher"
-import { RateLimiter } from "./services/rate-limiter"
+import { RateLimiterRedisLive } from "./services/rate-limiter-redis"
 
 export { HazelApi }
 
@@ -24,10 +24,13 @@ const TracerLive = createTracingLayer("api")
 const PersistenceLive = RedisResultPersistenceLive.pipe(Layer.provide(Redis.Default))
 
 /** Bun's platform services: a pooled database and Redis-backed caches and rate limits. */
-const PlatformLive = Layer.mergeAll(DatabaseLive, PersistenceLive, Redis.Default, RateLimiter.layer)
+const PlatformLive = Layer.mergeAll(DatabaseLive, PersistenceLive, Redis.Default, RateLimiterRedisLive)
 
 /** Long-running loops; on Cloudflare these are Durable Objects driven by crons. */
-const BackgroundLive = Layer.mergeAll(DiscordGatewayService.layer, MessageOutboxDispatcher.layer)
+const BackgroundLive = Layer.mergeAll(
+	DiscordGatewayBackgroundLive.pipe(Layer.provide(BunSocket.layerWebSocketConstructor)),
+	MessageOutboxDispatcher.layer,
+)
 
 const MainLive = Layer.mergeAll(AppServicesLive, BackgroundLive).pipe(
 	Layer.provideMerge(PlatformLive),

@@ -4,11 +4,13 @@
 import { appendFileSync } from "node:fs"
 import * as Alchemy from "alchemy"
 import * as Cloudflare from "alchemy/Cloudflare"
+import * as Planetscale from "alchemy/Planetscale"
 import { ConfigError } from "effect/Config"
 import { SourceError } from "effect/ConfigProvider"
 import * as Effect from "effect/Effect"
 import * as Layer from "effect/Layer"
 import {
+	declareHazelDb,
 	formatHazelStage,
 	HazelStack,
 	type HazelStackContext,
@@ -17,6 +19,7 @@ import {
 } from "@hazel/infra/cloudflare"
 import { plainWithDefault } from "@hazel/infra/env"
 import Actors from "./apps/actors/alchemy.run.ts"
+import ApiLive, { Api } from "./apps/backend/src/worker.ts"
 import Docs from "./apps/docs/alchemy.run.ts"
 import Landing from "./apps/landing/alchemy.run.ts"
 import LinkPreview from "./apps/link-preview-worker/alchemy.run.ts"
@@ -55,6 +58,7 @@ const HazelStackLive = Layer.effect(
 			stage,
 			domains,
 			isDevServer,
+			db: yield* declareHazelDb(stage),
 			urls: {
 				web: yield* resolveUrl(domains.web, "HAZEL_WEB_URL", "http://localhost:3000"),
 				api: yield* resolveUrl(domains.api, "HAZEL_API_URL", "http://localhost:3003"),
@@ -74,13 +78,18 @@ const HazelStackLive = Layer.effect(
 export default Alchemy.Stack(
 	"hazel",
 	{
-		providers: Cloudflare.providers(),
+		// PlanetScale's credential lookup runs when the layer is built; `alchemy dev` never needs it.
+		providers: isDevServer
+			? Cloudflare.providers()
+			: Cloudflare.providers().pipe(Layer.provideMerge(Planetscale.providers())),
 		// ALCHEMY_LOCAL_STATE=1 uses .alchemy/ file state instead of the account-wide store.
 		state: process.env.ALCHEMY_LOCAL_STATE ? Alchemy.localState() : Cloudflare.state(),
 	},
 	Effect.gen(function* () {
 		const { stage, domains, urls } = yield* HazelStack
 
+		// The Live layer registers the api Worker's Durable Object classes in its bundle.
+		const api = yield* Effect.provide(Api, ApiLive)
 		const linkPreview = yield* LinkPreview
 		const actors = yield* Actors
 		const web = yield* Web
@@ -100,6 +109,7 @@ export default Alchemy.Stack(
 
 		return {
 			...summary,
+			apiWorker: api.workerName,
 			webWorker: web.workerName,
 			linkPreviewWorker: linkPreview.workerName,
 			actorsWorker: actors.workerName,

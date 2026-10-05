@@ -91,41 +91,59 @@ const InsertMessageOutboxEventSchema = Schema.Struct({
 
 const InsertMessageOutboxEventArraySchema = Schema.Array(InsertMessageOutboxEventSchema)
 
+/**
+ * Observes outbox inserts for the current request. A long-running dispatcher polls and needs
+ * nothing (the default is a no-op); the Cloudflare Worker installs a per-request recorder and
+ * wakes its dispatcher Durable Object once the response is sent and the write has committed.
+ */
+export class OutboxWrites extends Context.Reference<{ readonly mark: () => void }>("OutboxWrites", {
+	defaultValue: () => ({ mark: () => {} }),
+}) {}
+
+const markOutboxWrite = Effect.gen(function* () {
+	const writes = yield* OutboxWrites
+	writes.mark()
+})
+
 export class MessageOutboxRepo extends Context.Service<MessageOutboxRepo>()("MessageOutboxRepo", {
 	make: Effect.gen(function* () {
 		const db = yield* Database.Database
 
 		const insert = (data: InsertMessageOutboxEvent, tx?: TxFn) =>
-			db.makeQueryWithSchema(InsertMessageOutboxEventSchema, (execute, input) =>
-				execute((client) =>
-					client
-						.insert(schema.messageOutboxEventsTable)
-						.values({
-							eventType: input.eventType,
-							aggregateId: input.aggregateId,
-							channelId: input.channelId,
-							payload: input.payload as Record<string, unknown>,
-						})
-						.returning(),
-				),
-			)(data, tx)
+			db
+				.makeQueryWithSchema(InsertMessageOutboxEventSchema, (execute, input) =>
+					execute((client) =>
+						client
+							.insert(schema.messageOutboxEventsTable)
+							.values({
+								eventType: input.eventType,
+								aggregateId: input.aggregateId,
+								channelId: input.channelId,
+								payload: input.payload as Record<string, unknown>,
+							})
+							.returning(),
+					),
+				)(data, tx)
+				.pipe(Effect.tap(() => markOutboxWrite))
 
 		const insertMany = (data: ReadonlyArray<InsertMessageOutboxEvent>, tx?: TxFn) =>
-			db.makeQueryWithSchema(InsertMessageOutboxEventArraySchema, (execute, input) =>
-				execute((client) =>
-					client
-						.insert(schema.messageOutboxEventsTable)
-						.values(
-							input.map((event) => ({
-								eventType: event.eventType,
-								aggregateId: event.aggregateId,
-								channelId: event.channelId,
-								payload: event.payload as Record<string, unknown>,
-							})),
-						)
-						.returning(),
-				),
-			)(data, tx)
+			db
+				.makeQueryWithSchema(InsertMessageOutboxEventArraySchema, (execute, input) =>
+					execute((client) =>
+						client
+							.insert(schema.messageOutboxEventsTable)
+							.values(
+								input.map((event) => ({
+									eventType: event.eventType,
+									aggregateId: event.aggregateId,
+									channelId: event.channelId,
+									payload: event.payload as Record<string, unknown>,
+								})),
+							)
+							.returning(),
+					),
+				)(data, tx)
+				.pipe(Effect.tap(() => markOutboxWrite))
 
 		const claimNextBatch = (params: ClaimNextBatchParams, tx?: TxFn) =>
 			db.makeQuery((execute, data: ClaimNextBatchParams) => {
