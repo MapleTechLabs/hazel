@@ -81,7 +81,7 @@ export const declareHazelDb = (stage: HazelStage) =>
 		const { HAZEL_PG_CLUSTER_SIZE } = yield* plainWithDefault("HAZEL_PG_CLUSTER_SIZE", "PS_10")
 		const database = yield* Planetscale.PostgresDatabase("hazel-db", {
 			name: PLANETSCALE_DATABASE,
-			clusterSize: HAZEL_PG_CLUSTER_SIZE,
+			clusterSize: HAZEL_PG_CLUSTER_SIZE ?? "PS_10",
 		}).pipe(RemovalPolicy.retain())
 
 		// Distinct ids on purpose: alchemy keys state by id alone, across resource types.

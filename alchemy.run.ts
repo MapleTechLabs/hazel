@@ -21,6 +21,7 @@ import { plainWithDefault } from "@hazel/infra/env"
 import Actors from "./apps/actors/alchemy.run.ts"
 import ApiLive, { Api } from "./apps/backend/src/worker.ts"
 import Docs from "./apps/docs/alchemy.run.ts"
+import ElectricProxy from "./apps/electric-proxy/alchemy.run.ts"
 import Landing from "./apps/landing/alchemy.run.ts"
 import LinkPreview from "./apps/link-preview-worker/alchemy.run.ts"
 import Web from "./apps/web/alchemy.run.ts"
@@ -90,6 +91,8 @@ export default Alchemy.Stack(
 
 		// The Live layer registers the api Worker's Durable Object classes in its bundle.
 		const api = yield* Effect.provide(Api, ApiLive)
+		// Also yields the `electric` Worker (self-hosted Electric in a Container) on deployed stages.
+		const electricProxy = yield* ElectricProxy
 		const linkPreview = yield* LinkPreview
 		const actors = yield* Actors
 		const web = yield* Web
@@ -110,6 +113,7 @@ export default Alchemy.Stack(
 		return {
 			...summary,
 			apiWorker: api.workerName,
+			electricProxyWorker: electricProxy.workerName,
 			webWorker: web.workerName,
 			linkPreviewWorker: linkPreview.workerName,
 			actorsWorker: actors.workerName,

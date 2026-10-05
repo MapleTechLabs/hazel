@@ -1,6 +1,8 @@
 {
 	"compilerOptions": {
 		"lib": ["ESNext"],
+		// Bun for the Bun entry, workers-types for the Worker and the Electric container host.
+		"types": ["bun", "@cloudflare/workers-types"],
 		"target": "ESNext",
 		"module": "Preserve",
 		"moduleDetection": "force",

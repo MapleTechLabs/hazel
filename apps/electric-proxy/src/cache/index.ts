@@ -9,5 +9,3 @@ export {
 } from "./access-context-cache"
 
 export { type AccessContextCache, AccessContextCacheService } from "./access-context-service"
-
-export { MemoryPersistenceLive, RedisPersistenceLive } from "./redis-persistence"

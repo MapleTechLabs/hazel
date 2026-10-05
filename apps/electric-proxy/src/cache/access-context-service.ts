@@ -30,7 +30,8 @@ export interface AccessContextCache {
 
 /**
  * Access context caching service.
- * Uses PersistedCache to cache bot access contexts with Redis persistence.
+ * Uses PersistedCache to cache bot access contexts in the provided ResultPersistence
+ * (Redis on Bun, Workers KV on Cloudflare).
  *
  * Note: Database.Database is intentionally NOT included in dependencies
  * as it's a global infrastructure layer provided at the application root.
@@ -100,7 +101,7 @@ export class AccessContextCacheService extends Context.Service<AccessContextCach
 					botId: BotId,
 					userId: UserId,
 				) {
-					yield* Effect.annotateCurrentSpan("cache.system", "redis")
+					yield* Effect.annotateCurrentSpan("cache.system", "persistence")
 					yield* Effect.annotateCurrentSpan("cache.name", "electric-proxy:access-context:bot")
 					yield* Effect.annotateCurrentSpan("cache.operation", "get")
 					yield* Effect.annotateCurrentSpan("cache.lookup_performed", false)
@@ -110,7 +111,7 @@ export class AccessContextCacheService extends Context.Service<AccessContextCach
 				}),
 
 				invalidateBot: Effect.fn("AccessContextCache.invalidateBot")(function* (botId: BotId) {
-					yield* Effect.annotateCurrentSpan("cache.system", "redis")
+					yield* Effect.annotateCurrentSpan("cache.system", "persistence")
 					yield* Effect.annotateCurrentSpan("cache.name", "electric-proxy:access-context:bot")
 					yield* Effect.annotateCurrentSpan("cache.operation", "invalidate")
 					// Note: We don't have userId here, but invalidation only uses the primary key (botId)

@@ -1,10 +1,13 @@
 import { Context, Config, Effect, Layer, Option, Redacted } from "effect"
 
 /**
- * Proxy configuration interface
+ * Configuration of the Bun entry (`index.ts`). The Cloudflare Worker reads its env in `worker.ts`.
  */
 export interface ProxyConfig {
 	readonly electricUrl: string
+	/** Self-hosted Electric's `ELECTRIC_SECRET`, sent as the `secret` query param. */
+	readonly electricSecret: Redacted.Redacted<string> | undefined
+	/** Electric Cloud (legacy Railway deployment only; the Worker talks to self-hosted Electric). */
 	readonly electricSourceId: string | undefined
 	readonly electricSourceSecret: string | undefined
 	readonly allowedOrigin: string
@@ -16,12 +19,16 @@ export interface ProxyConfig {
 }
 
 /**
- * Proxy configuration service.
+ * Bun entry configuration service.
  * Reads configuration from environment variables.
  */
 export class ProxyConfigService extends Context.Service<ProxyConfigService>()("ProxyConfigService", {
 	make: Effect.gen(function* () {
 		const electricUrl = yield* Config.String("ELECTRIC_URL")
+		const electricSecret = yield* Config.Redacted("ELECTRIC_SECRET").pipe(
+			Config.option,
+			Config.map(Option.getOrUndefined),
+		)
 		const electricSourceId = yield* Config.String("ELECTRIC_SOURCE_ID").pipe(
 			Config.option,
 			Config.map(Option.getOrUndefined),
@@ -46,6 +53,7 @@ export class ProxyConfigService extends Context.Service<ProxyConfigService>()("P
 
 		return {
 			electricUrl,
+			electricSecret,
 			electricSourceId,
 			electricSourceSecret,
 			allowedOrigin,

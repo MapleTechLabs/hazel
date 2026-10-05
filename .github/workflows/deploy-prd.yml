@@ -65,6 +65,8 @@ jobs:
             GITHUB_WEBHOOK_SECRET: ${{ secrets.HAZEL_GITHUB_WEBHOOK_SECRET }}
             INTERNAL_SECRET: ${{ secrets.INTERNAL_SECRET }}
             KLIPY_API_KEY: ${{ secrets.KLIPY_API_KEY }}
+            # electric-proxy + self-hosted Electric (DATABASE_URL comes from the stack's replication role)
+            ELECTRIC_SECRET: ${{ secrets.ELECTRIC_SECRET }}
             OTEL_BASE_URL: ${{ vars.OTEL_BASE_URL }}
             MAPLE_INGEST_KEY: ${{ secrets.MAPLE_INGEST_KEY }}
         steps:
