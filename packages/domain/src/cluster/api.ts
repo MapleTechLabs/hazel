@@ -1,5 +1,5 @@
-import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
-import { WorkflowProxy } from "effect/unstable/workflow"
+import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/http-api"
+import { WorkflowProxy } from "effect/workflow"
 import { Schema } from "effect"
 import {
 	CleanupUploadsWorkflow,

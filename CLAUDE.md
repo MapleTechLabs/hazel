@@ -210,6 +210,8 @@ Without both changes, Electric sync requests for the new table will be rejected 
 
 > **Skill Available**: Run `/effect-best-practices` for comprehensive Effect-TS patterns. The skill auto-activates when writing Context.Service, Schema.TaggedError, Layer composition, or effect-atom code.
 
+> **Version note**: The repo is on Effect `4.0.1` stable. Former `effect/unstable/*` modules import from `effect/*` (e.g. `effect/http`, `effect/rpc`, `effect/workflow`), and `effect/unstable/httpapi` is now `effect/http-api`. Constructors are PascalCase (`Config.String`, `Schema.TaggedError`, `Flag.Boolean`).
+
 > **Naming note**: As of `effect@4.0.0-beta.57` the `ServiceMap` module was renamed back to `Context`. The v3 `Context.Tag` API is gone — `Context.Service` (with a `make` option) is the v4 way to declare services. Older code may still reference `ServiceMap`; treat any new `ServiceMap` import as a mistake.
 
 ### Always Use `Context.Service` for Services

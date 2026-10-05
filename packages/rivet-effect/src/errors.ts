@@ -1,6 +1,6 @@
 import { Cause, Schema } from "effect"
 
-export class RuntimeExecutionError extends Schema.TaggedErrorClass<RuntimeExecutionError>()(
+export class RuntimeExecutionError extends Schema.TaggedError<RuntimeExecutionError>()(
 	"RuntimeExecutionError",
 	{
 		message: Schema.String,
@@ -16,7 +16,7 @@ export const makeRuntimeExecutionError = (operation: string, cause: Cause.Cause<
 		cause: Cause.pretty(cause),
 	})
 
-export class StatePersistenceError extends Schema.TaggedErrorClass<StatePersistenceError>()(
+export class StatePersistenceError extends Schema.TaggedError<StatePersistenceError>()(
 	"StatePersistenceError",
 	{
 		message: Schema.String,

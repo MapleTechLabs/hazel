@@ -5,7 +5,7 @@
  * in browser code. Server-side implementations live in the backend package.
  */
 
-import { RpcMiddleware } from "effect/unstable/rpc"
+import { RpcMiddleware } from "effect/rpc"
 import { Schema as S } from "effect"
 import * as CurrentUser from "../current-user"
 import { UnauthorizedError } from "../errors"

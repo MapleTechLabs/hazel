@@ -1,4 +1,4 @@
-import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/unstable/httpapi"
+import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/http-api"
 import { Effect, Schema } from "effect"
 import { CurrentUser } from "../"
 import { RequiredScopes } from "../scopes/required-scopes"
@@ -57,7 +57,7 @@ export class KlipyCategoriesResponse extends Schema.Class<KlipyCategoriesRespons
 
 // ============ Error Schemas ============
 
-export class KlipyApiError extends Schema.TaggedErrorClass<KlipyApiError>("KlipyApiError")(
+export class KlipyApiError extends Schema.TaggedError<KlipyApiError>("KlipyApiError")(
 	"KlipyApiError",
 	{
 		message: Schema.String,

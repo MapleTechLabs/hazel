@@ -3,7 +3,7 @@ import { Schema } from "effect"
 /**
  * Error thrown when session cache operations fail
  */
-export class SessionCacheError extends Schema.TaggedErrorClass<SessionCacheError>()("SessionCacheError", {
+export class SessionCacheError extends Schema.TaggedError<SessionCacheError>()("SessionCacheError", {
 	message: Schema.String,
 	cause: Schema.optional(Schema.Unknown),
 }) {}
@@ -11,16 +11,13 @@ export class SessionCacheError extends Schema.TaggedErrorClass<SessionCacheError
 /**
  * Error thrown when user lookup cache operations fail
  */
-export class UserLookupCacheError extends Schema.TaggedErrorClass<UserLookupCacheError>()(
-	"UserLookupCacheError",
-	{
-		message: Schema.String,
-		cause: Schema.optional(Schema.Unknown),
-	},
-) {}
+export class UserLookupCacheError extends Schema.TaggedError<UserLookupCacheError>()("UserLookupCacheError", {
+	message: Schema.String,
+	cause: Schema.optional(Schema.Unknown),
+}) {}
 
 /** Error thrown when fetching an organization from the identity provider fails. */
-export class OrganizationFetchError extends Schema.TaggedErrorClass<OrganizationFetchError>()(
+export class OrganizationFetchError extends Schema.TaggedError<OrganizationFetchError>()(
 	"OrganizationFetchError",
 	{
 		message: Schema.String,
@@ -29,7 +26,7 @@ export class OrganizationFetchError extends Schema.TaggedErrorClass<Organization
 ) {}
 
 /** Error thrown when creating an organization in the identity provider fails. */
-export class OrganizationCreateError extends Schema.TaggedErrorClass<OrganizationCreateError>()(
+export class OrganizationCreateError extends Schema.TaggedError<OrganizationCreateError>()(
 	"OrganizationCreateError",
 	{
 		message: Schema.String,

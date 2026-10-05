@@ -1,4 +1,4 @@
-import { Command, Flag, Prompt } from "effect/unstable/cli"
+import { Command, Flag, Prompt } from "effect/cli"
 import { Console, Effect, Redacted } from "effect"
 import pc from "picocolors"
 import { SecretGenerator } from "../services/secrets.ts"
@@ -8,18 +8,18 @@ import { ENV_TEMPLATES, extractExistingConfig, maskSecret, type Config, type S3C
 import { promptWithExisting, getExistingValue } from "../prompts.ts"
 
 // CLI Options
-export const skipValidation = Flag.boolean("skip-validation").pipe(
+export const skipValidation = Flag.Boolean("skip-validation").pipe(
 	Flag.withDescription("Skip credential validation (API calls)"),
 	Flag.withDefault(false),
 )
 
-export const force = Flag.boolean("force").pipe(
+export const force = Flag.Boolean("force").pipe(
 	Flag.withAlias("f"),
 	Flag.withDescription("Overwrite existing .env files without prompting"),
 	Flag.withDefault(false),
 )
 
-export const dryRun = Flag.boolean("dry-run").pipe(
+export const dryRun = Flag.Boolean("dry-run").pipe(
 	Flag.withAlias("n"),
 	Flag.withDescription("Show what would be done without writing files"),
 	Flag.withDefault(false),
@@ -48,7 +48,7 @@ export const envCommand = Command.make(
 				if (hasExistingValues) {
 					yield* Console.log(pc.cyan("Found existing configuration - values will be prefilled"))
 				}
-				const overwrite = yield* Prompt.confirm({
+				const overwrite = yield* Prompt.Confirm({
 					message: "Existing .env files found. Overwrite?",
 					initial: hasExistingValues,
 				})
@@ -79,7 +79,7 @@ export const envCommand = Command.make(
 						pc.yellow("\u26A0\uFE0F  Database not reachable.") +
 							` Run ${pc.cyan("`docker compose up -d`")} first.`,
 					)
-					const continueAnyway = yield* Prompt.confirm({
+					const continueAnyway = yield* Prompt.Confirm({
 						message: "Continue anyway?",
 						initial: true,
 					})
@@ -185,7 +185,7 @@ export const envCommand = Command.make(
 				yield* Console.log(pc.green("\u2713") + " Found existing S3 configuration")
 				yield* Console.log(pc.dim(`  Bucket: ${existingS3Bucket.value}`))
 				yield* Console.log(pc.dim(`  Endpoint: ${existingS3Endpoint.value}`))
-				const keepS3 = yield* Prompt.confirm({
+				const keepS3 = yield* Prompt.Confirm({
 					message: "Keep existing S3 configuration?",
 					initial: true,
 				})
@@ -204,7 +204,7 @@ export const envCommand = Command.make(
 			}
 
 			if (!s3Config) {
-				const setupS3 = yield* Prompt.confirm({
+				const setupS3 = yield* Prompt.Confirm({
 					message: "Set up Cloudflare R2/S3 storage? (file uploads)",
 					initial: false,
 				})
@@ -251,7 +251,7 @@ export const envCommand = Command.make(
 			if (existingConfig.linear) {
 				yield* Console.log(pc.green("\u2713") + " Found existing Linear configuration")
 				yield* Console.log(pc.dim(`  CLIENT_ID: ${maskSecret(existingConfig.linear.clientId.value)}`))
-				const keepLinear = yield* Prompt.confirm({
+				const keepLinear = yield* Prompt.Confirm({
 					message: "Keep existing Linear configuration?",
 					initial: true,
 				})
@@ -264,7 +264,7 @@ export const envCommand = Command.make(
 			}
 
 			if (!linearConfig) {
-				const setupLinear = yield* Prompt.confirm({
+				const setupLinear = yield* Prompt.Confirm({
 					message: "Set up Linear OAuth? (for Linear integration)",
 					initial: false,
 				})
@@ -302,7 +302,7 @@ export const envCommand = Command.make(
 			// Check if GitHub is already configured
 			if (existingConfig.githubWebhookSecret) {
 				yield* Console.log(pc.green("\u2713") + " Found existing GitHub webhook secret")
-				const keepGithub = yield* Prompt.confirm({
+				const keepGithub = yield* Prompt.Confirm({
 					message: "Keep existing GitHub webhook secret?",
 					initial: true,
 				})
@@ -312,14 +312,14 @@ export const envCommand = Command.make(
 			}
 
 			if (!githubWebhookSecret) {
-				const setupGithub = yield* Prompt.confirm({
+				const setupGithub = yield* Prompt.Confirm({
 					message: "Set up GitHub webhook secret?",
 					initial: false,
 				})
 
 				if (setupGithub) {
 					yield* Console.log(pc.dim("Generate a random secret for GitHub webhook verification\n"))
-					const useGenerated = yield* Prompt.confirm({
+					const useGenerated = yield* Prompt.Confirm({
 						message: "Auto-generate a secure secret?",
 						initial: true,
 					})
@@ -329,7 +329,7 @@ export const envCommand = Command.make(
 						yield* Console.log(`Generated: ${pc.cyan(githubWebhookSecret)}`)
 						yield* Console.log(pc.dim("Save this for your GitHub webhook configuration\n"))
 					} else {
-						const secretRedacted = yield* Prompt.password({ message: "GitHub Webhook Secret" })
+						const secretRedacted = yield* Prompt.Password({ message: "GitHub Webhook Secret" })
 						githubWebhookSecret = Redacted.value(secretRedacted)
 					}
 				}
@@ -343,7 +343,7 @@ export const envCommand = Command.make(
 			// Check if OpenRouter is already configured
 			if (existingConfig.openrouterApiKey) {
 				yield* Console.log(pc.green("\u2713") + " Found existing OpenRouter API key")
-				const keepOpenRouter = yield* Prompt.confirm({
+				const keepOpenRouter = yield* Prompt.Confirm({
 					message: "Keep existing OpenRouter API key?",
 					initial: true,
 				})
@@ -353,7 +353,7 @@ export const envCommand = Command.make(
 			}
 
 			if (!openrouterApiKey) {
-				const setupOpenRouter = yield* Prompt.confirm({
+				const setupOpenRouter = yield* Prompt.Confirm({
 					message: "Set up OpenRouter API? (for AI thread naming)",
 					initial: false,
 				})

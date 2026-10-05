@@ -1,4 +1,4 @@
-import { AsyncResult } from "effect/unstable/reactivity"
+import { AsyncResult } from "effect/reactivity"
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
 import type { KlipyCategory, KlipyGif, KlipySearchResponse } from "@hazel/domain/http"
 import { Exit } from "effect"

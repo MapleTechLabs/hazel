@@ -21,7 +21,7 @@ export type ValidationIssue = typeof ValidationIssue.Type
  *
  * @permanent This error will not resolve on retry - the data must be modified
  */
-export class DuplicateKeyEffectError extends Schema.TaggedErrorClass<DuplicateKeyEffectError>()(
+export class DuplicateKeyEffectError extends Schema.TaggedError<DuplicateKeyEffectError>()(
 	"DuplicateKeyEffectError",
 	{
 		message: Schema.String,
@@ -36,7 +36,7 @@ export class DuplicateKeyEffectError extends Schema.TaggedErrorClass<DuplicateKe
  *
  * @permanent Keys are immutable - delete and recreate instead
  */
-export class KeyUpdateNotAllowedEffectError extends Schema.TaggedErrorClass<KeyUpdateNotAllowedEffectError>()(
+export class KeyUpdateNotAllowedEffectError extends Schema.TaggedError<KeyUpdateNotAllowedEffectError>()(
 	"KeyUpdateNotAllowedEffectError",
 	{
 		message: Schema.String,
@@ -51,7 +51,7 @@ export class KeyUpdateNotAllowedEffectError extends Schema.TaggedErrorClass<KeyU
  *
  * @permanent The data must include a valid key
  */
-export class UndefinedKeyEffectError extends Schema.TaggedErrorClass<UndefinedKeyEffectError>()(
+export class UndefinedKeyEffectError extends Schema.TaggedError<UndefinedKeyEffectError>()(
 	"UndefinedKeyEffectError",
 	{
 		message: Schema.String,
@@ -65,7 +65,7 @@ export class UndefinedKeyEffectError extends Schema.TaggedErrorClass<UndefinedKe
  *
  * @permanent The data must be corrected to match the schema
  */
-export class SchemaValidationEffectError extends Schema.TaggedErrorClass<SchemaValidationEffectError>()(
+export class SchemaValidationEffectError extends Schema.TaggedError<SchemaValidationEffectError>()(
 	"SchemaValidationEffectError",
 	{
 		message: Schema.String,
@@ -86,7 +86,7 @@ export class SchemaValidationEffectError extends Schema.TaggedErrorClass<SchemaV
  * @recoverable May succeed if the item is created before retry, or may indicate
  * a stale UI state that needs refresh
  */
-export class KeyNotFoundEffectError extends Schema.TaggedErrorClass<KeyNotFoundEffectError>()(
+export class KeyNotFoundEffectError extends Schema.TaggedError<KeyNotFoundEffectError>()(
 	"KeyNotFoundEffectError",
 	{
 		message: Schema.String,
@@ -101,7 +101,7 @@ export class KeyNotFoundEffectError extends Schema.TaggedErrorClass<KeyNotFoundE
  *
  * @recoverable Call clearError() on the collection to recover
  */
-export class CollectionInErrorEffectError extends Schema.TaggedErrorClass<CollectionInErrorEffectError>()(
+export class CollectionInErrorEffectError extends Schema.TaggedError<CollectionInErrorEffectError>()(
 	"CollectionInErrorEffectError",
 	{
 		message: Schema.String,
@@ -116,7 +116,7 @@ export class CollectionInErrorEffectError extends Schema.TaggedErrorClass<Collec
  *
  * @recoverable Start a new transaction to retry
  */
-export class TransactionStateEffectError extends Schema.TaggedErrorClass<TransactionStateEffectError>()(
+export class TransactionStateEffectError extends Schema.TaggedError<TransactionStateEffectError>()(
 	"TransactionStateEffectError",
 	{
 		message: Schema.String,

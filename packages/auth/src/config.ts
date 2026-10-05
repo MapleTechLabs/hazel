@@ -12,8 +12,8 @@ export interface AuthConfigShape {
 
 export class AuthConfig extends Context.Service<AuthConfig>()("@hazel/auth/AuthConfig", {
 	make: Effect.gen(function* () {
-		const clerkSecretKey = yield* Config.string("CLERK_SECRET_KEY")
-		const clerkPublishableKey = yield* Config.string("CLERK_PUBLISHABLE_KEY").pipe(Config.withDefault(""))
+		const clerkSecretKey = yield* Config.String("CLERK_SECRET_KEY")
+		const clerkPublishableKey = yield* Config.String("CLERK_PUBLISHABLE_KEY").pipe(Config.withDefault(""))
 
 		return {
 			clerkSecretKey,

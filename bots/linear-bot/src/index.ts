@@ -1,6 +1,6 @@
-import { LanguageModel } from "effect/unstable/ai"
+import { LanguageModel } from "effect/ai"
 import { OpenRouterClient, OpenRouterLanguageModel } from "@effect/ai-openrouter"
-import { FetchHttpClient } from "effect/unstable/http"
+import { FetchHttpClient } from "effect/http"
 import { Config, Effect, Layer, Schema } from "effect"
 import { runHazelBot } from "@hazel-chat/bot-sdk"
 import { LinearApiClient } from "@hazel/integrations/linear"
@@ -11,7 +11,7 @@ import { commands, IssueCommand, IssueifyCommand, GeneratedIssueSchema } from ".
 // ============================================================================
 
 const OpenRouterClientLayer = OpenRouterClient.layerConfig({
-	apiKey: Config.redacted("OPENROUTER_API_KEY"),
+	apiKey: Config.Redacted("OPENROUTER_API_KEY"),
 }).pipe(Layer.provide(FetchHttpClient.layer))
 
 const OpenRouterModelLayer = OpenRouterLanguageModel.layer({

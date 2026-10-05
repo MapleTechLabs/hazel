@@ -27,7 +27,7 @@ export const UpdateConnectionStatusResult = Schema.Struct({
 export type UpdateConnectionStatusResult = Schema.Schema.Type<typeof UpdateConnectionStatusResult>
 
 // Error types for installation activities
-export class FindConnectionByInstallationError extends Schema.TaggedErrorClass<FindConnectionByInstallationError>()(
+export class FindConnectionByInstallationError extends Schema.TaggedError<FindConnectionByInstallationError>()(
 	"FindConnectionByInstallationError",
 	{
 		installationId: Schema.Number,
@@ -38,7 +38,7 @@ export class FindConnectionByInstallationError extends Schema.TaggedErrorClass<F
 	readonly retryable = true // Database errors are transient
 }
 
-export class UpdateConnectionStatusError extends Schema.TaggedErrorClass<UpdateConnectionStatusError>()(
+export class UpdateConnectionStatusError extends Schema.TaggedError<UpdateConnectionStatusError>()(
 	"UpdateConnectionStatusError",
 	{
 		installationId: Schema.Number,

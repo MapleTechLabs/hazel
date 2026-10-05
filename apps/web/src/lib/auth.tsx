@@ -1,6 +1,6 @@
 import { useAuth as useClerkAuth, useClerk } from "@clerk/react"
 import { useAtomValue } from "@effect/atom-react"
-import { AsyncResult } from "effect/unstable/reactivity"
+import { AsyncResult } from "effect/reactivity"
 import { HazelRpcClient } from "./services/common/rpc-atom-client"
 
 interface LoginOptions {

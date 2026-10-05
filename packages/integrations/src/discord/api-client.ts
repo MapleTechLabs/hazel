@@ -1,4 +1,4 @@
-import { FetchHttpClient, HttpBody, HttpClient, HttpClientRequest } from "effect/unstable/http"
+import { FetchHttpClient, HttpBody, HttpClient, HttpClientRequest } from "effect/http"
 import { Context, Duration, Effect, Layer, Result, Schema } from "effect"
 
 export const DiscordAccountInfo = Schema.Struct({
@@ -62,7 +62,7 @@ const DiscordErrorApiResponse = Schema.Struct({
 	message: Schema.String.pipe(Schema.withDecodingDefaultKey(Effect.succeed("Unknown Discord error"))),
 })
 
-export class DiscordApiError extends Schema.TaggedErrorClass<DiscordApiError>()("DiscordApiError", {
+export class DiscordApiError extends Schema.TaggedError<DiscordApiError>()("DiscordApiError", {
 	message: Schema.String,
 	status: Schema.optional(Schema.Number),
 	cause: Schema.optional(Schema.Unknown),

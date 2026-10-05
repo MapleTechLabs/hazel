@@ -1,4 +1,4 @@
-import { Rpc, RpcGroup } from "effect/unstable/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { ChannelId, RssSubscriptionId } from "@hazel/schema"
 import { Schema } from "effect"
 import { InternalServerError, UnauthorizedError } from "../errors"
@@ -21,14 +21,14 @@ export class RssSubscriptionListResponse extends Schema.Class<RssSubscriptionLis
 	data: Schema.Array(RssSubscription.Schema),
 }) {}
 
-export class RssSubscriptionNotFoundError extends Schema.TaggedErrorClass<RssSubscriptionNotFoundError>()(
+export class RssSubscriptionNotFoundError extends Schema.TaggedError<RssSubscriptionNotFoundError>()(
 	"RssSubscriptionNotFoundError",
 	{
 		subscriptionId: RssSubscriptionId,
 	},
 ) {}
 
-export class RssSubscriptionExistsError extends Schema.TaggedErrorClass<RssSubscriptionExistsError>()(
+export class RssSubscriptionExistsError extends Schema.TaggedError<RssSubscriptionExistsError>()(
 	"RssSubscriptionExistsError",
 	{
 		channelId: ChannelId,
@@ -36,7 +36,7 @@ export class RssSubscriptionExistsError extends Schema.TaggedErrorClass<RssSubsc
 	},
 ) {}
 
-export class RssFeedValidationError extends Schema.TaggedErrorClass<RssFeedValidationError>()(
+export class RssFeedValidationError extends Schema.TaggedError<RssFeedValidationError>()(
 	"RssFeedValidationError",
 	{
 		feedUrl: Schema.String,

@@ -13,7 +13,7 @@ const IntegrationProviderSchema = Schema.Literals(["linear", "github", "figma", 
 /**
  * Error when exchanging authorization code for tokens fails.
  */
-export class TokenExchangeError extends Schema.TaggedErrorClass<TokenExchangeError>()("TokenExchangeError", {
+export class TokenExchangeError extends Schema.TaggedError<TokenExchangeError>()("TokenExchangeError", {
 	provider: IntegrationProviderSchema,
 	message: Schema.String,
 	cause: Schema.optional(Schema.Unknown),
@@ -22,7 +22,7 @@ export class TokenExchangeError extends Schema.TaggedErrorClass<TokenExchangeErr
 /**
  * Error when fetching account info from provider fails.
  */
-export class AccountInfoError extends Schema.TaggedErrorClass<AccountInfoError>()("AccountInfoError", {
+export class AccountInfoError extends Schema.TaggedError<AccountInfoError>()("AccountInfoError", {
 	provider: IntegrationProviderSchema,
 	message: Schema.String,
 	cause: Schema.optional(Schema.Unknown),
@@ -31,7 +31,7 @@ export class AccountInfoError extends Schema.TaggedErrorClass<AccountInfoError>(
 /**
  * Error when refreshing access token fails.
  */
-export class TokenRefreshError extends Schema.TaggedErrorClass<TokenRefreshError>()("TokenRefreshError", {
+export class TokenRefreshError extends Schema.TaggedError<TokenRefreshError>()("TokenRefreshError", {
 	provider: IntegrationProviderSchema,
 	message: Schema.String,
 	cause: Schema.optional(Schema.Unknown),
@@ -40,7 +40,7 @@ export class TokenRefreshError extends Schema.TaggedErrorClass<TokenRefreshError
 /**
  * Error when provider is not supported or not configured.
  */
-export class ProviderNotConfiguredError extends Schema.TaggedErrorClass<ProviderNotConfiguredError>()(
+export class ProviderNotConfiguredError extends Schema.TaggedError<ProviderNotConfiguredError>()(
 	"ProviderNotConfiguredError",
 	{
 		provider: IntegrationProviderSchema,

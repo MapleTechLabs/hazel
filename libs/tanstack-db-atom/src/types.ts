@@ -3,7 +3,7 @@
  * @since 1.0.0
  */
 
-import type { Atom, AsyncResult } from "effect/unstable/reactivity"
+import type { Atom, AsyncResult } from "effect/reactivity"
 import type {
 	Collection,
 	Context,

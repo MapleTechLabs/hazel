@@ -8,7 +8,7 @@
  * when frontend imports RPC group definitions that reference this middleware.
  */
 
-import { RpcMiddleware } from "effect/unstable/rpc"
+import { RpcMiddleware } from "effect/rpc"
 import {
 	CurrentUser,
 	InvalidBearerTokenError,

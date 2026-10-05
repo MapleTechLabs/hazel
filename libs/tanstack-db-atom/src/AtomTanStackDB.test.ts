@@ -16,7 +16,7 @@
  * @since 1.0.0
  */
 
-import { AsyncResult as Result, AtomRegistry as Registry } from "effect/unstable/reactivity"
+import { AsyncResult as Result, AtomRegistry as Registry } from "effect/reactivity"
 import { type Collection, createCollection, eq, type NonSingleResult, type SingleResult } from "@tanstack/db"
 import { describe, expect, it } from "vitest"
 import {

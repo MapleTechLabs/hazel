@@ -1,4 +1,4 @@
-import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/unstable/httpapi"
+import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
 import {
 	ChannelId,
 	ExternalChannelId,
@@ -44,21 +44,21 @@ export class ChatSyncDeleteResponse extends Schema.Class<ChatSyncDeleteResponse>
 	transactionId: TransactionId,
 }) {}
 
-export class ChatSyncConnectionNotFoundError extends Schema.TaggedErrorClass<ChatSyncConnectionNotFoundError>()(
+export class ChatSyncConnectionNotFoundError extends Schema.TaggedError<ChatSyncConnectionNotFoundError>()(
 	"ChatSyncConnectionNotFoundError",
 	{
 		syncConnectionId: SyncConnectionId,
 	},
 ) {}
 
-export class ChatSyncChannelLinkNotFoundError extends Schema.TaggedErrorClass<ChatSyncChannelLinkNotFoundError>()(
+export class ChatSyncChannelLinkNotFoundError extends Schema.TaggedError<ChatSyncChannelLinkNotFoundError>()(
 	"ChatSyncChannelLinkNotFoundError",
 	{
 		syncChannelLinkId: SyncChannelLinkId,
 	},
 ) {}
 
-export class ChatSyncConnectionExistsError extends Schema.TaggedErrorClass<ChatSyncConnectionExistsError>()(
+export class ChatSyncConnectionExistsError extends Schema.TaggedError<ChatSyncConnectionExistsError>()(
 	"ChatSyncConnectionExistsError",
 	{
 		organizationId: OrganizationId,
@@ -67,7 +67,7 @@ export class ChatSyncConnectionExistsError extends Schema.TaggedErrorClass<ChatS
 	},
 ) {}
 
-export class ChatSyncIntegrationNotConnectedError extends Schema.TaggedErrorClass<ChatSyncIntegrationNotConnectedError>()(
+export class ChatSyncIntegrationNotConnectedError extends Schema.TaggedError<ChatSyncIntegrationNotConnectedError>()(
 	"ChatSyncIntegrationNotConnectedError",
 	{
 		organizationId: OrganizationId,
@@ -75,7 +75,7 @@ export class ChatSyncIntegrationNotConnectedError extends Schema.TaggedErrorClas
 	},
 ) {}
 
-export class ChatSyncChannelLinkExistsError extends Schema.TaggedErrorClass<ChatSyncChannelLinkExistsError>()(
+export class ChatSyncChannelLinkExistsError extends Schema.TaggedError<ChatSyncChannelLinkExistsError>()(
 	"ChatSyncChannelLinkExistsError",
 	{
 		syncConnectionId: SyncConnectionId,

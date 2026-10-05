@@ -18,19 +18,17 @@ export class TokenValidationConfigService extends Context.Service<TokenValidatio
 	"TokenValidationConfigService",
 	{
 		make: Effect.gen(function* () {
-			const clerkSecretKey = yield* optionalValue(Config.redacted("CLERK_SECRET_KEY").asEffect())
+			const clerkSecretKey = yield* optionalValue(Config.Redacted("CLERK_SECRET_KEY"))
 
 			const backendUrl = yield* optionalValue(
-				Config.string("BACKEND_URL")
-					.pipe(
-						Config.orElse(() => Config.string("API_BASE_URL")),
-						Config.orElse(() => Config.string("VITE_BACKEND_URL")),
-						Config.orElse(() => Config.string("VITE_API_BASE_URL")),
-					)
-					.asEffect(),
+				Config.String("BACKEND_URL").pipe(
+					Config.orElse(() => Config.String("API_BASE_URL")),
+					Config.orElse(() => Config.String("VITE_BACKEND_URL")),
+					Config.orElse(() => Config.String("VITE_API_BASE_URL")),
+				),
 			)
 
-			const internalSecret = yield* optionalValue(Config.redacted("INTERNAL_SECRET").asEffect())
+			const internalSecret = yield* optionalValue(Config.Redacted("INTERNAL_SECRET"))
 
 			const config: TokenValidationConfig = {
 				clerkSecretKey: clerkSecretKey as Option.Option<Redacted.Redacted>,

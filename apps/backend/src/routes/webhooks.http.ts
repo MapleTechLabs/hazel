@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto"
 import { verifyWebhook as verifyClerkWebhook } from "@clerk/backend/webhooks"
-import { HttpApiBuilder, HttpApiClient } from "effect/unstable/httpapi"
-import { HttpServerRequest } from "effect/unstable/http"
+import { HttpApiBuilder, HttpApiClient } from "effect/http-api"
+import { HttpServerRequest } from "effect/http"
 import { Cluster, InternalServerError, WorkflowInitializationError } from "@hazel/domain"
 import { GitHubWebhookResponse, InvalidGitHubWebhookSignature } from "@hazel/domain/http"
 import { Config, Effect, pipe, Redacted } from "effect"
@@ -26,7 +26,7 @@ export const HttpWebhookLive = HttpApiBuilder.group(HazelApi, "webhooks", (handl
 				)
 
 				const signingSecret = yield* Effect.gen(function* () {
-					return yield* Config.string("CLERK_WEBHOOK_SECRET")
+					return yield* Config.String("CLERK_WEBHOOK_SECRET")
 				}).pipe(
 					Effect.catchTag("ConfigError", (err) =>
 						Effect.fail(
@@ -120,12 +120,12 @@ export const HttpWebhookLive = HttpApiBuilder.group(HazelApi, "webhooks", (handl
 					),
 				)
 
-				const skipSignatureVerification = yield* Config.boolean("GITHUB_WEBHOOK_SKIP_SIGNATURE").pipe(
+				const skipSignatureVerification = yield* Config.Boolean("GITHUB_WEBHOOK_SKIP_SIGNATURE").pipe(
 					Config.withDefault(false),
 				)
 
 				const webhookSecret = yield* Effect.gen(function* () {
-					return yield* Config.redacted("GITHUB_WEBHOOK_SECRET")
+					return yield* Config.Redacted("GITHUB_WEBHOOK_SECRET")
 				}).pipe(
 					Effect.catchTag("ConfigError", () =>
 						skipSignatureVerification
@@ -189,7 +189,7 @@ export const HttpWebhookLive = HttpApiBuilder.group(HazelApi, "webhooks", (handl
 					action: payload.action,
 				})
 
-				const clusterUrl = yield* Config.string("CLUSTER_URL")
+				const clusterUrl = yield* Config.String("CLUSTER_URL")
 				const client = yield* HttpApiClient.make(Cluster.WorkflowApi, {
 					baseUrl: clusterUrl,
 				})

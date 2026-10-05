@@ -1,6 +1,6 @@
 import type { ChannelId } from "@hazel/schema"
 import { Duration, Schema } from "effect"
-import { Persistable } from "effect/unstable/persistence"
+import { Persistable } from "effect/persistence"
 
 /**
  * Cache configuration constants
@@ -24,7 +24,7 @@ export type BotAccessContext = {
 /**
  * Cache lookup error - when we fail to fetch from database
  */
-export class AccessContextLookupError extends Schema.TaggedErrorClass<AccessContextLookupError>()(
+export class AccessContextLookupError extends Schema.TaggedError<AccessContextLookupError>()(
 	"AccessContextLookupError",
 	{
 		message: Schema.String,

@@ -20,7 +20,7 @@ import {
 /**
  * Error thrown when table access is denied or where clause cannot be generated
  */
-export class TableAccessError extends Schema.TaggedErrorClass<TableAccessError>()("TableAccessError", {
+export class TableAccessError extends Schema.TaggedError<TableAccessError>()("TableAccessError", {
 	message: Schema.String,
 	detail: Schema.optional(Schema.String),
 	table: Schema.String,

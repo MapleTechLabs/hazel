@@ -1,4 +1,4 @@
-import { Rpc, RpcGroup } from "effect/unstable/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { Schema } from "effect"
 import * as CurrentUser from "../current-user"
 import { InternalServerError, UnauthorizedError } from "../errors"
@@ -21,7 +21,7 @@ export class UserResponse extends Schema.Class<UserResponse>("UserResponse")({
  * Error thrown when a user is not found.
  * Used in update operations.
  */
-export class UserNotFoundError extends Schema.TaggedErrorClass<UserNotFoundError>()("UserNotFoundError", {
+export class UserNotFoundError extends Schema.TaggedError<UserNotFoundError>()("UserNotFoundError", {
 	userId: UserId,
 }) {}
 

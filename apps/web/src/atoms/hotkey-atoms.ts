@@ -1,4 +1,4 @@
-import { Atom } from "effect/unstable/reactivity"
+import { Atom } from "effect/reactivity"
 import { useAtomSet, useAtomValue } from "@effect/atom-react"
 import { normalizeHotkey, validateHotkey, type Hotkey } from "@tanstack/react-hotkeys"
 import { Schema } from "effect"

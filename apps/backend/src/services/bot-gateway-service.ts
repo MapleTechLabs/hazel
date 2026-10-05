@@ -24,7 +24,7 @@ const buildStreamPath = (baseUrl: string, botId: BotId): string =>
 const responseText = (response: Response): Promise<string> =>
 	response.text().catch(() => `${response.status} ${response.statusText}`)
 
-export class DurableStreamRequestError extends Schema.TaggedErrorClass<DurableStreamRequestError>()(
+export class DurableStreamRequestError extends Schema.TaggedError<DurableStreamRequestError>()(
 	"DurableStreamRequestError",
 	{
 		message: Schema.String,
@@ -36,10 +36,10 @@ export class BotGatewayService extends Context.Service<BotGatewayService>()("Bot
 	make: Effect.gen(function* () {
 		const installationRepo = yield* BotInstallationRepo
 		const channelRepo = yield* ChannelRepo
-		const durableStreamsUrl = yield* Config.string("DURABLE_STREAMS_URL").pipe(
+		const durableStreamsUrl = yield* Config.String("DURABLE_STREAMS_URL").pipe(
 			Config.withDefault(DEFAULT_DURABLE_STREAMS_URL),
 		)
-		const durableStreamsToken = yield* Config.option(Config.string("DURABLE_STREAMS_TOKEN"))
+		const durableStreamsToken = yield* Config.option(Config.String("DURABLE_STREAMS_TOKEN"))
 		const authHeaders: Record<string, string> = Option.isSome(durableStreamsToken)
 			? { Authorization: `Bearer ${durableStreamsToken.value}` }
 			: {}

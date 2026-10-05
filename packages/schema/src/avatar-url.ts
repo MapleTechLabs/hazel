@@ -1,7 +1,7 @@
-import { HttpClient } from "effect/unstable/http"
+import { HttpClient } from "effect/http"
 import { Duration, Effect, Option, Schema, SchemaGetter } from "effect"
 
-export class InvalidAvatarUrlError extends Schema.TaggedErrorClass<InvalidAvatarUrlError>()(
+export class InvalidAvatarUrlError extends Schema.TaggedError<InvalidAvatarUrlError>()(
 	"InvalidAvatarUrlError",
 	{
 		message: Schema.String,

@@ -1,5 +1,5 @@
-import { HttpApiBuilder } from "effect/unstable/httpapi"
-import { FetchHttpClient, HttpClient } from "effect/unstable/http"
+import { HttpApiBuilder } from "effect/http-api"
+import { FetchHttpClient, HttpClient } from "effect/http"
 import { Effect } from "effect"
 import metascraper from "metascraper"
 import metascraperDescription from "metascraper-description"

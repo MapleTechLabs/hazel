@@ -1,4 +1,4 @@
-import { FetchHttpClient, HttpClient, HttpClientResponse } from "effect/unstable/http"
+import { FetchHttpClient, HttpClient, HttpClientResponse } from "effect/http"
 import { randomUUID } from "node:crypto"
 import { Database, schema } from "@hazel/db"
 import type { ChannelId, MessageId, MessageReactionId, OrganizationId, UserId } from "@hazel/schema"

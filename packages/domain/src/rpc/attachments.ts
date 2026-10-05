@@ -1,4 +1,4 @@
-import { Rpc, RpcGroup } from "effect/unstable/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { Schema } from "effect"
 import { InternalServerError, UnauthorizedError } from "../errors"
 import { AttachmentId } from "@hazel/schema"
@@ -11,7 +11,7 @@ import { RequiredScopes } from "../scopes/required-scopes"
  * Error thrown when an attachment is not found.
  * Used in delete operations.
  */
-export class AttachmentNotFoundError extends Schema.TaggedErrorClass<AttachmentNotFoundError>()(
+export class AttachmentNotFoundError extends Schema.TaggedError<AttachmentNotFoundError>()(
 	"AttachmentNotFoundError",
 	{
 		attachmentId: AttachmentId,

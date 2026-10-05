@@ -1,4 +1,4 @@
-import { Rpc, RpcGroup } from "effect/unstable/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { BotId } from "@hazel/schema"
 import { Schema } from "effect"
 import { InternalServerError, UnauthorizedError } from "../errors"
@@ -61,14 +61,14 @@ export class PublicBotListResponse extends Schema.Class<PublicBotListResponse>("
 /**
  * Error thrown when a bot is not found.
  */
-export class BotNotFoundError extends Schema.TaggedErrorClass<BotNotFoundError>()("BotNotFoundError", {
+export class BotNotFoundError extends Schema.TaggedError<BotNotFoundError>()("BotNotFoundError", {
 	botId: BotId,
 }) {}
 
 /**
  * Error thrown when a bot is already installed in the organization.
  */
-export class BotAlreadyInstalledError extends Schema.TaggedErrorClass<BotAlreadyInstalledError>()(
+export class BotAlreadyInstalledError extends Schema.TaggedError<BotAlreadyInstalledError>()(
 	"BotAlreadyInstalledError",
 	{
 		botId: BotId,

@@ -1,13 +1,13 @@
-import { ClusterWorkflowEngine } from "effect/unstable/cluster"
-import { HttpApiBuilder } from "effect/unstable/httpapi"
-import { HttpMiddleware, HttpRouter, HttpServer } from "effect/unstable/http"
+import { ClusterWorkflowEngine } from "effect/cluster"
+import { HttpApiBuilder } from "effect/http-api"
+import { HttpMiddleware, HttpRouter, HttpServer } from "effect/http"
 import { BunClusterSocket, BunHttpServer, BunRuntime } from "@effect/platform-bun"
 import { PgClient } from "@effect/sql-pg"
-import { WorkflowProxyServer } from "effect/unstable/workflow"
+import { WorkflowProxyServer } from "effect/workflow"
 import { Database } from "@hazel/db"
 import { Cluster } from "@hazel/domain"
 import { createTracingLayer } from "@hazel/effect-bun/Telemetry"
-import { Config, Effect, Layer, Logger, Redacted } from "effect"
+import { Config, ConfigProvider, Effect, Layer, Logger, Redacted } from "effect"
 import { PresenceCleanupCronLayer } from "./cron/presence-cleanup-cron.ts"
 import { StatusExpirationCronLayer } from "./cron/status-expiration-cron.ts"
 import { TypingIndicatorCleanupCronLayer } from "./cron/typing-indicator-cleanup-cron.ts"
@@ -29,7 +29,7 @@ const WorkflowEngineLayer = ClusterWorkflowEngine.layer.pipe(
 	Layer.provideMerge(BunClusterSocket.layer()),
 	Layer.provideMerge(
 		PgClient.layerConfig({
-			url: Config.redacted("EFFECT_DATABASE_URL"),
+			url: Config.Redacted("EFFECT_DATABASE_URL"),
 		}),
 	),
 )
@@ -91,13 +91,16 @@ const ServerLayer = HttpRouter.serve(AllRoutes).pipe(
 		BunHttpServer.layerConfig(
 			Config.all({
 				hostname: Config.succeed("::"),
-				port: Config.number("PORT").pipe(Config.withDefault(3020)),
+				port: Config.Number("PORT").pipe(Config.withDefault(3020)),
 				idleTimeout: Config.succeed(120),
 			}),
 		),
 	),
 )
 
-ServerLayer.pipe(Layer.provide(WorkflowEngineLayer), Layer.provide(TracerLive), Layer.launch).pipe(
-	BunRuntime.runMain,
-)
+ServerLayer.pipe(
+	Layer.provide(WorkflowEngineLayer),
+	Layer.provide(TracerLive),
+	Layer.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ preserveEmptyStrings: true }))),
+	Layer.launch,
+).pipe(BunRuntime.runMain)

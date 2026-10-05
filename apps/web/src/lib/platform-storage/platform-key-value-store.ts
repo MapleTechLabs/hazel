@@ -7,7 +7,7 @@
  */
 
 import { BrowserKeyValueStore } from "@effect/platform-browser"
-import type * as KeyValueStore from "effect/unstable/persistence/KeyValueStore"
+import type * as KeyValueStore from "effect/persistence/KeyValueStore"
 import type { Layer } from "effect"
 import { isTauri } from "~/lib/tauri"
 import { layerTauriStore } from "./tauri-key-value-store"

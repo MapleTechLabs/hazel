@@ -1,4 +1,4 @@
-import { HttpApiClient } from "effect/unstable/httpapi"
+import { HttpApiClient } from "effect/http-api"
 import {
 	ChannelMemberRepo,
 	ChannelRepo,
@@ -478,17 +478,15 @@ export const ChannelRpcLive = ChannelRpcs.toLayer(
 
 					const originalMessageId = originalMessageResult[0]!.id
 
-					const clusterUrl = yield* Config.string("CLUSTER_URL")
-						.asEffect()
-						.pipe(
-							Effect.mapError(
-								() =>
-									new WorkflowServiceUnavailableError({
-										message: "CLUSTER_URL not configured",
-										cause: "Missing CLUSTER_URL environment variable",
-									}),
-							),
-						)
+					const clusterUrl = yield* Config.String("CLUSTER_URL").pipe(
+						Effect.mapError(
+							() =>
+								new WorkflowServiceUnavailableError({
+									message: "CLUSTER_URL not configured",
+									cause: "Missing CLUSTER_URL environment variable",
+								}),
+						),
+					)
 					const client = yield* HttpApiClient.make(Cluster.WorkflowApi, {
 						baseUrl: clusterUrl,
 					})

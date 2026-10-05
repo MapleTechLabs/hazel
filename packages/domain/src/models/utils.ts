@@ -1,4 +1,4 @@
-import * as VariantSchema from "effect/unstable/schema/VariantSchema"
+import * as VariantSchema from "effect/schema/VariantSchema"
 import type { Brand } from "effect/Brand"
 import * as DateTime from "effect/DateTime"
 import * as Effect from "effect/Effect"
@@ -33,7 +33,7 @@ export {
 	 * @example
 	 * ```ts
 	 * export class Group extends Model.Class<Group>("Group")({
-	 *   id: Model.Generated(GroupId),
+	 *   id: Model.GeneratedByDb(GroupId),
 	 *   name: Schema.NonEmptyTrimmedString,
 	 *   createdAt: Model.DateTimeInsertFromDate,
 	 *   updatedAt: Model.DateTimeUpdateFromDate
@@ -189,14 +189,12 @@ export interface Date extends Schema.decodeTo<Schema.DateTimeUtc, Schema.String>
 /** A DateTime.Utc serialized as ISO date string (YYYY-MM-DD). */
 export const Date: Date = Schema.String.pipe(
 	Schema.decodeTo(Schema.DateTimeUtc, {
-		decode: SchemaGetter.transformOrFail((s: string) => {
+		decode: SchemaGetter.transformEffect((s: string) => {
 			const opt = DateTime.make(s)
 			if (opt._tag === "Some") {
 				return Effect.succeed(DateTime.removeTime(opt.value))
 			}
-			return Effect.fail(
-				new SchemaIssue.InvalidValue(Option.some(s), { message: "Invalid date format" }),
-			)
+			return Effect.fail(new SchemaIssue.InvalidValue({ message: "Invalid date format" }, s))
 		}),
 		encode: SchemaGetter.transform((dt: DateTime.Utc) => DateTime.formatIsoDate(dt)),
 	}),
@@ -324,14 +322,14 @@ export const JsonFromString = <S extends Schema.Top>(schema: S): JsonFromString<
 	}) as JsonFromString<S>
 }
 
-export interface UuidV4Insert<B extends string | symbol> extends VariantSchema.Field<{
+export interface UuidV4Insert<B extends string> extends VariantSchema.Field<{
 	readonly select: Schema.brand<typeof Schema.Uint8Array, B>
 	readonly insert: VariantSchema.Overrideable<Schema.brand<typeof Schema.Uint8Array, B>>
 	readonly update: Schema.brand<typeof Schema.Uint8Array, B>
 	readonly json: Schema.brand<typeof Schema.Uint8Array, B>
 }> {}
 
-export const UuidV4WithGenerate = <B extends string | symbol>(
+export const UuidV4WithGenerate = <B extends string>(
 	schema: Schema.brand<typeof Schema.Uint8Array, B>,
 ): VariantSchema.Overrideable<Schema.brand<typeof Schema.Uint8Array, B>> =>
 	VariantSchema.Overrideable(schema, {
@@ -339,7 +337,7 @@ export const UuidV4WithGenerate = <B extends string | symbol>(
 	})
 
 /** A UUID v4 field auto-generated on insert. */
-export const UuidV4Insert = <const B extends string | symbol>(
+export const UuidV4Insert = <const B extends string>(
 	schema: Schema.brand<typeof Schema.Uint8Array, B>,
 ): UuidV4Insert<B> =>
 	Field({

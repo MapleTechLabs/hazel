@@ -7,11 +7,10 @@ import { Effect, Schedule } from "effect"
 import { getClerkToken } from "./clerk-token"
 import { runtime } from "./services/common/runtime"
 
-const retrySchedule = Schedule.exponential("2 seconds").pipe(
-	Schedule.jittered,
-	Schedule.either(Schedule.spaced("60 seconds")),
-	Schedule.both(Schedule.recurs(8)),
-)
+const retrySchedule = Schedule.max([
+	Schedule.min([Schedule.exponential("2 seconds").pipe(Schedule.jittered), Schedule.spaced("60 seconds")]),
+	Schedule.recurs(8),
+])
 
 const shouldRetry = (response: Response): boolean => response.status >= 500 && response.status < 600
 

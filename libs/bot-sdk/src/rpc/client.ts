@@ -5,8 +5,8 @@
  * Uses FetchHttpClient for HTTP transport and NDJSON serialization.
  */
 
-import { FetchHttpClient } from "effect/unstable/http"
-import { RpcClient, RpcSerialization } from "effect/unstable/rpc"
+import { FetchHttpClient } from "effect/http"
+import { RpcClient, RpcSerialization } from "effect/rpc"
 import { ChannelRpcs, MessageReactionRpcs, MessageRpcs, TypingIndicatorRpcs } from "@hazel/domain/rpc"
 import { Effect, Layer, Context } from "effect"
 import { createBotAuthMiddleware } from "./auth-middleware.ts"

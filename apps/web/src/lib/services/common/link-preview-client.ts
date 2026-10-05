@@ -1,5 +1,5 @@
-import { FetchHttpClient } from "effect/unstable/http"
-import { AtomHttpApi } from "effect/unstable/reactivity"
+import { FetchHttpClient } from "effect/http"
+import { AtomHttpApi } from "effect/reactivity"
 
 import { LinkPreviewApi } from "@hazel/link-preview-worker"
 

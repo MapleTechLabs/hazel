@@ -1,4 +1,4 @@
-import { Atom, type AsyncResult } from "effect/unstable/reactivity"
+import { Atom, type AsyncResult } from "effect/reactivity"
 import type { Collection, Transaction } from "@tanstack/db"
 import { createTransaction } from "@tanstack/db"
 import type { Txid } from "@tanstack/electric-db-collection"

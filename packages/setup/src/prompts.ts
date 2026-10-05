@@ -1,4 +1,4 @@
-import { Prompt } from "effect/unstable/cli"
+import { Prompt } from "effect/cli"
 import { Effect, Redacted } from "effect"
 import type { EnvReadResult } from "./services/env-writer.ts"
 import { getEnvValues, maskSecret, type EnvValue } from "./templates.ts"
@@ -25,11 +25,11 @@ export const promptWithExisting = (options: {
 		// No existing values - standard prompt
 		if (existingValues.length === 0) {
 			if (isSecret) {
-				const result = yield* Prompt.password({ message })
+				const result = yield* Prompt.Password({ message })
 				// Redacted is an opaque type, need to handle it
 				return Redacted.value(result)
 			}
-			return yield* Prompt.text({
+			return yield* Prompt.String({
 				message,
 				validate: validate ?? ((s) => Effect.succeed(s)),
 			})
@@ -42,7 +42,7 @@ export const promptWithExisting = (options: {
 			const defaultMessage = `${message} [${displayValue}]`
 
 			if (isSecret) {
-				const result = yield* Prompt.text({
+				const result = yield* Prompt.String({
 					message: defaultMessage,
 					validate: (s) => {
 						// Empty input means keep existing
@@ -54,7 +54,7 @@ export const promptWithExisting = (options: {
 				return result
 			}
 
-			return yield* Prompt.text({
+			return yield* Prompt.String({
 				message: defaultMessage,
 				default: existing.value,
 				validate: validate ?? ((s) => Effect.succeed(s)),
@@ -70,17 +70,17 @@ export const promptWithExisting = (options: {
 		}))
 		choices.push({ title: "Enter a new value", value: NEW_VALUE_OPTION })
 
-		const selected = yield* Prompt.select({
+		const selected = yield* Prompt.Select({
 			message: `Select ${key}`,
 			choices,
 		})
 
 		if (selected === NEW_VALUE_OPTION) {
 			if (isSecret) {
-				const result = yield* Prompt.password({ message })
+				const result = yield* Prompt.Password({ message })
 				return (result as any).value ?? result
 			}
-			return yield* Prompt.text({
+			return yield* Prompt.String({
 				message,
 				validate: validate ?? ((s) => Effect.succeed(s)),
 			})

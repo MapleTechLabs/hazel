@@ -1,4 +1,4 @@
-import { Rpc, RpcGroup } from "effect/unstable/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { Schema } from "effect"
 import { InternalServerError, UnauthorizedError } from "../errors"
 import { TypingIndicatorId } from "@hazel/schema"
@@ -22,7 +22,7 @@ export class TypingIndicatorResponse extends Schema.Class<TypingIndicatorRespons
  * Error thrown when a typing indicator is not found.
  * Used in update and delete operations.
  */
-export class TypingIndicatorNotFoundError extends Schema.TaggedErrorClass<TypingIndicatorNotFoundError>()(
+export class TypingIndicatorNotFoundError extends Schema.TaggedError<TypingIndicatorNotFoundError>()(
 	"TypingIndicatorNotFoundError",
 	{
 		typingIndicatorId: TypingIndicatorId,

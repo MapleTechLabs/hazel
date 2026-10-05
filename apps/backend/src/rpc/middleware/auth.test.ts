@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest"
-import { Headers } from "effect/unstable/http"
-import type { SuccessValue } from "effect/unstable/rpc/RpcMiddleware"
+import { Headers } from "effect/http"
+import type { SuccessValue } from "effect/rpc/RpcMiddleware"
 import { BotRepo, UserRepo } from "@hazel/backend-core"
 import { CurrentUser, type CurrentUser as CurrentUserNamespace } from "@hazel/domain"
 import type { UserId } from "@hazel/schema"

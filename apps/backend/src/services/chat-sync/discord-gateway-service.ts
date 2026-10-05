@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { FetchHttpClient } from "effect/unstable/http"
+import { FetchHttpClient } from "effect/http"
 import { BunSocket } from "@effect/platform-bun"
 import { ChatSyncChannelLinkRepo } from "@hazel/backend-core"
 import {
@@ -576,8 +576,8 @@ export class DiscordGatewayService extends Context.Service<DiscordGatewayService
 		const discordSyncWorker = yield* DiscordSyncWorker
 		const channelLinkRepo = yield* ChatSyncChannelLinkRepo
 
-		const gatewayEnabled = yield* Config.boolean("DISCORD_GATEWAY_ENABLED").pipe(Config.withDefault(true))
-		const configuredIntents = yield* Config.number("DISCORD_GATEWAY_INTENTS").pipe(
+		const gatewayEnabled = yield* Config.Boolean("DISCORD_GATEWAY_ENABLED").pipe(Config.withDefault(true))
+		const configuredIntents = yield* Config.Number("DISCORD_GATEWAY_INTENTS").pipe(
 			// GUILDS + GUILD_MESSAGES + GUILD_MESSAGE_REACTIONS + MESSAGE_CONTENT
 			Config.withDefault(DISCORD_REQUIRED_GATEWAY_INTENTS),
 		)
@@ -591,7 +591,7 @@ export class DiscordGatewayService extends Context.Service<DiscordGatewayService
 				},
 			)
 		}
-		const botTokenOption = yield* Config.redacted("DISCORD_BOT_TOKEN").pipe(Config.option)
+		const botTokenOption = yield* Config.Redacted("DISCORD_BOT_TOKEN").pipe(Config.option)
 
 		if (!gatewayEnabled) {
 			yield* Effect.logInfo("Discord gateway disabled via DISCORD_GATEWAY_ENABLED=false")

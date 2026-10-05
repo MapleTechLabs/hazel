@@ -9,7 +9,7 @@
  * @since 1.0.0
  */
 
-import { Atom, AsyncResult as Result, AtomRegistry as Registry } from "effect/unstable/reactivity"
+import { Atom, AsyncResult as Result, AtomRegistry as Registry } from "effect/reactivity"
 import { type Collection, createCollection, eq, type NonSingleResult } from "@tanstack/db"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { makeCollectionAtom, makeQuery } from "./AtomTanStackDB"

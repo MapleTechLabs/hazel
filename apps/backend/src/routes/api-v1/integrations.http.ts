@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto"
-import { HttpApiBuilder } from "effect/unstable/httpapi"
-import { HttpServerRequest } from "effect/unstable/http"
+import { HttpApiBuilder } from "effect/http-api"
+import { HttpServerRequest } from "effect/http"
 import { ChannelRepo, ChannelWebhookRepo, OrganizationMemberRepo } from "@hazel/backend-core"
 import { and, Database, eq, isNull, schema } from "@hazel/db"
 import { CurrentUser, InternalServerError, UnauthorizedError } from "@hazel/domain"

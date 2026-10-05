@@ -1,5 +1,5 @@
-import { HttpApiClient } from "effect/unstable/httpapi"
-import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/unstable/http"
+import { HttpApiClient } from "effect/http-api"
+import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http"
 import { HazelApi } from "@hazel/domain/http"
 import { Layer, Context, Duration, Effect, Schedule } from "effect"
 import { AuthenticationError } from "./errors.ts"

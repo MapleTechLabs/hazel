@@ -2,7 +2,7 @@ import { Schema } from "effect"
 
 export const RelativeUrl = Schema.String.check(
 	Schema.isNonEmpty(),
-	Schema.isStartsWith("/"),
+	Schema.isStartingWith("/"),
 	Schema.makeFilter((url: string) => !url.startsWith("//") || "Protocol-relative URLs are not allowed"),
 )
 

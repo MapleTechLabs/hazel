@@ -1,4 +1,4 @@
-import { Atom } from "effect/unstable/reactivity"
+import { Atom } from "effect/reactivity"
 import { useAtomMount, useAtomSet, useAtomValue } from "@effect/atom-react"
 import type { Theme as ThemeModel } from "@hazel/domain/models"
 import { Schema } from "effect"

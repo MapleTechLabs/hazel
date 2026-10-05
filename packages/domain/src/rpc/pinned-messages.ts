@@ -1,4 +1,4 @@
-import { Rpc, RpcGroup } from "effect/unstable/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { Schema } from "effect"
 import { InternalServerError, UnauthorizedError } from "../errors"
 import { ChannelId, MessageId, PinnedMessageId } from "@hazel/schema"
@@ -21,7 +21,7 @@ export class PinnedMessageResponse extends Schema.Class<PinnedMessageResponse>("
  * Error thrown when a pinned message is not found.
  * Used in update and delete operations.
  */
-export class PinnedMessageNotFoundError extends Schema.TaggedErrorClass<PinnedMessageNotFoundError>()(
+export class PinnedMessageNotFoundError extends Schema.TaggedError<PinnedMessageNotFoundError>()(
 	"PinnedMessageNotFoundError",
 	{
 		pinnedMessageId: PinnedMessageId,

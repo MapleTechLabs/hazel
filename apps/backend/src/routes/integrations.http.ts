@@ -1,5 +1,5 @@
-import { HttpApiBuilder } from "effect/unstable/httpapi"
-import { HttpServerRequest, HttpServerResponse, Cookies } from "effect/unstable/http"
+import { HttpApiBuilder } from "effect/http-api"
+import { HttpServerRequest, HttpServerResponse, Cookies } from "effect/http"
 import { IntegrationConnectionRepo, OrganizationRepo } from "@hazel/backend-core"
 import { CurrentUser, InternalServerError, UnauthorizedError } from "@hazel/domain"
 import type { OrganizationId, UserId } from "@hazel/schema"
@@ -49,7 +49,7 @@ const OAuthState = Schema.Struct({
  * Retry schedule for OAuth operations.
  * Retries up to 3 times with exponential backoff (100ms, 200ms, 400ms)
  */
-const oauthRetrySchedule = Schedule.exponential("100 millis").pipe(Schedule.both(Schedule.recurs(3)))
+const oauthRetrySchedule = Schedule.max([Schedule.exponential("100 millis"), Schedule.recurs(3)])
 
 const CRAFT_ALLOWED_HOST = "connect.craft.do"
 const CRAFT_BASE_URL_PATH_PATTERN = /^\/links\/[^/]+\/api\/v1$/
@@ -311,8 +311,8 @@ const handleGetOAuthUrl = Effect.fn("integrations.getOAuthUrl")(function* (
 		),
 	)
 
-	const frontendUrl = yield* Config.string("FRONTEND_URL")
-	const cookieDomain = yield* Config.string("COOKIE_DOMAIN")
+	const frontendUrl = yield* Config.String("FRONTEND_URL")
+	const cookieDomain = yield* Config.String("COOKIE_DOMAIN")
 
 	// Get org slug for redirect URL
 	const orgRepo = yield* OrganizationRepo
@@ -338,7 +338,7 @@ const handleGetOAuthUrl = Effect.fn("integrations.getOAuthUrl")(function* (
 
 	// Determine environment from NODE_ENV config
 	// Local dev uses "local" so production can redirect callbacks back to localhost
-	const nodeEnv = yield* Config.string("NODE_ENV").pipe(Config.withDefault("production"))
+	const nodeEnv = yield* Config.String("NODE_ENV").pipe(Config.withDefault("production"))
 	const environment = nodeEnv === "development" ? "local" : "production"
 	const cookieSecure = nodeEnv !== "development"
 
@@ -458,8 +458,8 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 	const request = yield* HttpServerRequest.HttpServerRequest
 	const sessionCookieName = `${OAUTH_SESSION_COOKIE_PREFIX}${provider}`
 	const sessionCookie = request.cookies[sessionCookieName]
-	const cookieDomain = yield* Config.string("COOKIE_DOMAIN")
-	const nodeEnv = yield* Config.string("NODE_ENV").pipe(Config.withDefault("production"))
+	const cookieDomain = yield* Config.String("COOKIE_DOMAIN")
+	const nodeEnv = yield* Config.String("NODE_ENV").pipe(Config.withDefault("production"))
 	const cookieSecure = nodeEnv !== "development"
 
 	yield* Effect.logInfo("OAuth callback received", {
@@ -546,7 +546,7 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 	if (!parsedState && installation_id && setup_action === "update") {
 		const connectionRepo = yield* IntegrationConnectionRepo
 		const orgRepo = yield* OrganizationRepo
-		const frontendUrl = yield* Config.string("FRONTEND_URL")
+		const frontendUrl = yield* Config.String("FRONTEND_URL")
 
 		yield* Effect.logInfo("GitHub update callback - looking up by installation ID", {
 			event: "integration_callback_installation_lookup",

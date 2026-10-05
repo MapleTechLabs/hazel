@@ -1,4 +1,4 @@
-import { Activity } from "effect/unstable/workflow"
+import { Activity } from "effect/workflow"
 import { and, Database, eq, inArray, isNull, ne, or, schema, sql } from "@hazel/db"
 import { Cluster } from "@hazel/domain"
 import type { ChannelMemberId, NotificationId, OrganizationMemberId, UserId } from "@hazel/schema"

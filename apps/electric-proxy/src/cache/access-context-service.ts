@@ -1,4 +1,4 @@
-import { PersistedCache, Persistence } from "effect/unstable/persistence"
+import { PersistedCache, Persistence } from "effect/persistence"
 import { and, Database, eq, isNull, schema } from "@hazel/db"
 import type { BotId, ChannelId, UserId } from "@hazel/schema"
 import { Context, Effect, Layer, Schema } from "effect"

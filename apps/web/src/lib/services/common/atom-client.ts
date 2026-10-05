@@ -1,4 +1,4 @@
-import { AtomHttpApi } from "effect/unstable/reactivity"
+import { AtomHttpApi } from "effect/reactivity"
 import { HazelApi } from "@hazel/domain/http"
 import { CustomFetchLive } from "./api-client"
 

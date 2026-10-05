@@ -1,4 +1,4 @@
-import { Toolkit } from "effect/unstable/ai"
+import { Toolkit } from "effect/ai"
 import { LinearApiClient, makeLinearSdkClient } from "@hazel/integrations/linear"
 import { CraftApiClient } from "@hazel/integrations/craft"
 import type { IntegrationConnection } from "@hazel/domain/models"
@@ -105,7 +105,7 @@ const baseHandlers = {
 		}),
 } as const
 
-const buildLinearHandlers = (options: { bot: HazelBotClient; orgId: OrganizationId }) => {
+const buildLinearHandlers = (options: { bot: HazelBotClient["Service"]; orgId: OrganizationId }) => {
 	const getLinearToken = () =>
 		(options.bot as any).integration
 			.getToken(options.orgId, "linear")
@@ -208,7 +208,7 @@ const buildLinearHandlers = (options: { bot: HazelBotClient; orgId: Organization
 	} as const
 }
 
-const buildCraftHandlers = (options: { bot: HazelBotClient; orgId: OrganizationId }) => {
+const buildCraftHandlers = (options: { bot: HazelBotClient["Service"]; orgId: OrganizationId }) => {
 	const getCraftCredentials = () =>
 		(options.bot as any).integration.getToken(options.orgId, "craft").pipe(
 			Effect.map((r: any) => ({
@@ -295,7 +295,7 @@ const buildCraftHandlers = (options: { bot: HazelBotClient; orgId: OrganizationI
  * Returns an Effect that yields a WithHandler ready for use with LanguageModel.
  */
 export const buildToolkit = (options: {
-	bot: HazelBotClient
+	bot: HazelBotClient["Service"]
 	orgId: OrganizationId
 	enabledIntegrations: Set<IntegrationConnection.IntegrationProvider>
 }) => {

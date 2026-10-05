@@ -1,6 +1,6 @@
 "use client"
 
-import { AsyncResult } from "effect/unstable/reactivity"
+import { AsyncResult } from "effect/reactivity"
 import { useAtomValue } from "@effect/atom-react"
 import { useMemo } from "react"
 import { LinkPreviewClient } from "~/lib/services/common/link-preview-client"

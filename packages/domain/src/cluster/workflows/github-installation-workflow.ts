@@ -1,4 +1,4 @@
-import { Workflow } from "effect/unstable/workflow"
+import { Workflow } from "effect/workflow"
 import { Schema } from "effect"
 import { GitHubInstallationWorkflowError } from "../activities/github-installation-activities.ts"
 
@@ -11,8 +11,7 @@ import { GitHubInstallationWorkflowError } from "../activities/github-installati
  * - `suspend`: Installation was suspended - marks connection as "suspended"
  * - `unsuspend`: Installation was unsuspended - marks connection as "active"
  */
-export const GitHubInstallationWorkflow = Workflow.make({
-	name: "GitHubInstallationWorkflow",
+export const GitHubInstallationWorkflow = Workflow.make("GitHubInstallationWorkflow", {
 	payload: {
 		// GitHub delivery ID (unique per webhook delivery) - used for idempotency
 		deliveryId: Schema.String,

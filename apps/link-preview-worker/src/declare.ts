@@ -1,4 +1,4 @@
-import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/unstable/httpapi"
+import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
 import { Schema } from "effect"
 
 // Health check API
@@ -25,7 +25,7 @@ export class LinkPreviewData extends Schema.Class<LinkPreviewData>("LinkPreviewD
 	publisher: Schema.optional(Schema.String),
 }) {}
 
-export class LinkPreviewError extends Schema.TaggedErrorClass<LinkPreviewError>()(
+export class LinkPreviewError extends Schema.TaggedError<LinkPreviewError>()(
 	"LinkPreviewError",
 	{
 		message: Schema.String,
@@ -51,7 +51,7 @@ export class LinkPreviewGroup extends HttpApiGroup.make("linkPreview")
 	.prefix("/link-preview") {}
 
 // Tweet Schemas
-export class TweetError extends Schema.TaggedErrorClass<TweetError>()(
+export class TweetError extends Schema.TaggedError<TweetError>()(
 	"TweetError",
 	{
 		message: Schema.String,

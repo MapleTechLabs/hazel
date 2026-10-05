@@ -1,4 +1,4 @@
-import { Rpc, RpcGroup } from "effect/unstable/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { AvatarUrl, ChannelId, ChannelWebhookId } from "@hazel/schema"
 import { Schema } from "effect"
 import { InternalServerError, UnauthorizedError } from "../errors"
@@ -41,7 +41,7 @@ export class ChannelWebhookListResponse extends Schema.Class<ChannelWebhookListR
 /**
  * Error thrown when a webhook is not found.
  */
-export class ChannelWebhookNotFoundError extends Schema.TaggedErrorClass<ChannelWebhookNotFoundError>()(
+export class ChannelWebhookNotFoundError extends Schema.TaggedError<ChannelWebhookNotFoundError>()(
 	"ChannelWebhookNotFoundError",
 	{
 		webhookId: ChannelWebhookId,

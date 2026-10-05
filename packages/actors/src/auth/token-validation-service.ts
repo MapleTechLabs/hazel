@@ -1,5 +1,5 @@
 import { verifyToken } from "@clerk/backend"
-import { HttpClient, HttpClientRequest } from "effect/unstable/http"
+import { HttpClient, HttpClientRequest } from "effect/http"
 import { ClerkJwtClaims } from "@hazel/schema"
 import { Context, Effect, Layer, Option, Redacted, Schema } from "effect"
 import { TokenValidationConfigService } from "./config-service"

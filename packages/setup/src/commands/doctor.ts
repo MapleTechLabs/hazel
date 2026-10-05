@@ -1,4 +1,4 @@
-import { Command } from "effect/unstable/cli"
+import { Command } from "effect/cli"
 import { Console, Effect } from "effect"
 import pc from "picocolors"
 import { Doctor, type CheckResult } from "../services/doctor.ts"

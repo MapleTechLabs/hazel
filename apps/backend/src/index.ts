@@ -1,7 +1,7 @@
-import { HttpApiScalar } from "effect/unstable/httpapi"
-import { FetchHttpClient, HttpRouter, HttpMiddleware, HttpServerResponse } from "effect/unstable/http"
+import { HttpApiScalar } from "effect/http-api"
+import { FetchHttpClient, HttpRouter, HttpMiddleware, HttpServerResponse } from "effect/http"
 import { BunHttpServer, BunRuntime } from "@effect/platform-bun"
-import { RpcSerialization, RpcServer } from "effect/unstable/rpc"
+import { RpcSerialization, RpcServer } from "effect/rpc"
 import {
 	AttachmentRepo,
 	BotCommandRepo,
@@ -209,7 +209,7 @@ const MainLive = Layer.mergeAll(
 	OAuthBearerAuth.layer,
 ).pipe(
 	Layer.provideMerge(FetchHttpClient.layer),
-	Layer.provideMerge(ConfigProvider.layer(ConfigProvider.fromEnv())),
+	Layer.provideMerge(ConfigProvider.layer(ConfigProvider.fromEnv({ preserveEmptyStrings: true }))),
 )
 
 const ServerLayer = HttpRouter.serve(AllRoutes).pipe(
@@ -233,7 +233,7 @@ const ServerLayer = HttpRouter.serve(AllRoutes).pipe(
 	Layer.provide(
 		BunHttpServer.layerConfig(
 			Config.all({
-				port: Config.number("PORT").pipe(Config.withDefault(3003)),
+				port: Config.Number("PORT").pipe(Config.withDefault(3003)),
 				idleTimeout: Config.succeed(120),
 			}),
 		),

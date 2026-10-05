@@ -1,4 +1,4 @@
-import { Atom, AsyncResult } from "effect/unstable/reactivity"
+import { Atom, AsyncResult } from "effect/reactivity"
 import type { OrganizationId } from "@hazel/schema"
 import { and, eq, isNull } from "@tanstack/db"
 import { customEmojiCollection } from "~/db/collections"

@@ -1,7 +1,7 @@
 import { BunRuntime } from "@effect/platform-bun"
 import { ProxyAuth } from "@hazel/auth/proxy"
 import { Database } from "@hazel/db"
-import { Effect, Layer, Logger, Metric } from "effect"
+import { ConfigProvider, Effect, Layer, Logger, Metric } from "effect"
 import { validateBotToken } from "./auth/bot-auth"
 import { validateSession } from "./auth/user-auth"
 import {
@@ -524,4 +524,9 @@ const ServerLive = Layer.effectDiscard(
 	}),
 )
 
-Layer.launch(ServerLive.pipe(Layer.provide(MainLive))).pipe(BunRuntime.runMain)
+Layer.launch(
+	ServerLive.pipe(
+		Layer.provide(MainLive),
+		Layer.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ preserveEmptyStrings: true }))),
+	),
+).pipe(BunRuntime.runMain)

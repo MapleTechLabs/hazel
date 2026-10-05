@@ -1,4 +1,4 @@
-import { Tool } from "effect/unstable/ai"
+import { Tool } from "effect/ai"
 import { Schema } from "effect"
 
 export const GetCurrentTime = Tool.make("get_current_time", {

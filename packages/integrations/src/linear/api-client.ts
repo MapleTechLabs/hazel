@@ -5,7 +5,7 @@
  * retries, and proper error handling.
  */
 
-import { FetchHttpClient, HttpBody, HttpClient, HttpClientRequest } from "effect/unstable/http"
+import { FetchHttpClient, HttpBody, HttpClient, HttpClientRequest } from "effect/http"
 import { Context, Duration, Effect, Layer, Option, Schedule, Schema } from "effect"
 
 // ============================================================================
@@ -87,28 +87,25 @@ export type LinearAccountInfo = typeof LinearAccountInfo.Type
 // Error Types
 // ============================================================================
 
-export class LinearApiError extends Schema.TaggedErrorClass<LinearApiError>()("LinearApiError", {
+export class LinearApiError extends Schema.TaggedError<LinearApiError>()("LinearApiError", {
 	message: Schema.String,
 	status: Schema.optional(Schema.Number),
 	cause: Schema.optional(Schema.Unknown),
 }) {}
 
-export class LinearRateLimitError extends Schema.TaggedErrorClass<LinearRateLimitError>()(
-	"LinearRateLimitError",
-	{
-		message: Schema.String,
-		retryAfter: Schema.optional(Schema.Number),
-	},
-) {}
+export class LinearRateLimitError extends Schema.TaggedError<LinearRateLimitError>()("LinearRateLimitError", {
+	message: Schema.String,
+	retryAfter: Schema.optional(Schema.Number),
+}) {}
 
-export class LinearIssueNotFoundError extends Schema.TaggedErrorClass<LinearIssueNotFoundError>()(
+export class LinearIssueNotFoundError extends Schema.TaggedError<LinearIssueNotFoundError>()(
 	"LinearIssueNotFoundError",
 	{
 		issueId: Schema.String,
 	},
 ) {}
 
-export class LinearTeamNotFoundError extends Schema.TaggedErrorClass<LinearTeamNotFoundError>()(
+export class LinearTeamNotFoundError extends Schema.TaggedError<LinearTeamNotFoundError>()(
 	"LinearTeamNotFoundError",
 	{
 		message: Schema.String,
@@ -378,7 +375,7 @@ const parseLinearErrorMessage = (errorMessage: string): string => {
  * Retry schedule for transient Linear API errors.
  * Retries up to 3 times with exponential backoff (100ms, 200ms, 400ms)
  */
-const makeRetrySchedule = Schedule.exponential("100 millis").pipe(Schedule.both(Schedule.recurs(3)))
+const makeRetrySchedule = Schedule.max([Schedule.exponential("100 millis"), Schedule.recurs(3)])
 
 /**
  * Check if an error is retryable (rate limit or server error)

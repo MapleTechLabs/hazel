@@ -111,20 +111,20 @@ const extractGatewayOp = (payload: string | BufferSource): string | undefined =>
 export class GatewayConfig extends Context.Service<GatewayConfig>()("GatewayConfig", {
 	make: Effect.gen(function* () {
 		const config = {
-			port: yield* Config.int("PORT").pipe(Config.withDefault(DEFAULT_PORT)),
-			isDev: yield* Config.boolean("IS_DEV").pipe(Config.withDefault(false)),
-			databaseUrl: yield* Config.redacted("DATABASE_URL"),
-			durableStreamsUrl: yield* Config.string("DURABLE_STREAMS_URL").pipe(
+			port: yield* Config.Int("PORT").pipe(Config.withDefault(DEFAULT_PORT)),
+			isDev: yield* Config.Boolean("IS_DEV").pipe(Config.withDefault(false)),
+			databaseUrl: yield* Config.Redacted("DATABASE_URL"),
+			durableStreamsUrl: yield* Config.String("DURABLE_STREAMS_URL").pipe(
 				Config.withDefault(DEFAULT_DURABLE_STREAMS_URL),
 			),
-			durableStreamsToken: yield* Config.option(Config.string("DURABLE_STREAMS_TOKEN")),
-			heartbeatIntervalMs: yield* Config.int("GATEWAY_HEARTBEAT_INTERVAL_MS").pipe(
+			durableStreamsToken: yield* Config.option(Config.String("DURABLE_STREAMS_TOKEN")),
+			heartbeatIntervalMs: yield* Config.Int("GATEWAY_HEARTBEAT_INTERVAL_MS").pipe(
 				Config.withDefault(DEFAULT_HEARTBEAT_INTERVAL_MS),
 			),
-			leaseTtlSeconds: yield* Config.int("GATEWAY_LEASE_TTL_SECONDS").pipe(
+			leaseTtlSeconds: yield* Config.Int("GATEWAY_LEASE_TTL_SECONDS").pipe(
 				Config.withDefault(DEFAULT_LEASE_TTL_SECONDS),
 			),
-			batchAckTimeoutMs: yield* Config.int("GATEWAY_BATCH_ACK_TIMEOUT_MS").pipe(
+			batchAckTimeoutMs: yield* Config.Int("GATEWAY_BATCH_ACK_TIMEOUT_MS").pipe(
 				Config.withDefault(DEFAULT_BATCH_ACK_TIMEOUT_MS),
 			),
 		} as const
@@ -138,24 +138,21 @@ export class GatewayConfig extends Context.Service<GatewayConfig>()("GatewayConf
 	static readonly layer = Layer.effect(this, this.make)
 }
 
-class GatewayAuthError extends Schema.TaggedErrorClass<GatewayAuthError>()("GatewayAuthError", {
+class GatewayAuthError extends Schema.TaggedError<GatewayAuthError>()("GatewayAuthError", {
 	message: Schema.String,
 }) {}
 
-class GatewayProtocolError extends Schema.TaggedErrorClass<GatewayProtocolError>()("GatewayProtocolError", {
+class GatewayProtocolError extends Schema.TaggedError<GatewayProtocolError>()("GatewayProtocolError", {
 	message: Schema.String,
 }) {}
 
-export class GatewayStartupError extends Schema.TaggedErrorClass<GatewayStartupError>()(
-	"GatewayStartupError",
-	{
-		dependency: Schema.Literals(["config", "database", "redis", "tracer", "server"]),
-		message: Schema.String,
-		cause: Schema.optional(Schema.Unknown),
-	},
-) {}
+export class GatewayStartupError extends Schema.TaggedError<GatewayStartupError>()("GatewayStartupError", {
+	dependency: Schema.Literals(["config", "database", "redis", "tracer", "server"]),
+	message: Schema.String,
+	cause: Schema.optional(Schema.Unknown),
+}) {}
 
-class DurableStreamGatewayError extends Schema.TaggedErrorClass<DurableStreamGatewayError>()(
+class DurableStreamGatewayError extends Schema.TaggedError<DurableStreamGatewayError>()(
 	"DurableStreamGatewayError",
 	{
 		message: Schema.String,
@@ -769,7 +766,7 @@ const DatabaseLive = Layer.unwrap(
 	}),
 )
 
-const ConfigProviderLive = ConfigProvider.layer(ConfigProvider.fromEnv())
+const ConfigProviderLive = ConfigProvider.layer(ConfigProvider.fromEnv({ preserveEmptyStrings: true }))
 
 type StartupDependency = "config" | "database" | "redis" | "tracer" | "server"
 

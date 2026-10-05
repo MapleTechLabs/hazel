@@ -125,9 +125,9 @@ export const loadProviderConfig = (provider: OAuthIntegrationProvider) => {
 	const staticConfig = PROVIDER_CONFIGS[provider]
 
 	return Config.all({
-		apiBaseUrl: Config.string("API_BASE_URL"),
-		clientId: Config.string(`${prefix}_CLIENT_ID`),
-		clientSecret: Config.redacted(`${prefix}_CLIENT_SECRET`),
+		apiBaseUrl: Config.String("API_BASE_URL"),
+		clientId: Config.String(`${prefix}_CLIENT_ID`),
+		clientSecret: Config.Redacted(`${prefix}_CLIENT_SECRET`),
 	}).pipe(
 		Config.map(
 			(envConfig): OAuthProviderConfig => ({

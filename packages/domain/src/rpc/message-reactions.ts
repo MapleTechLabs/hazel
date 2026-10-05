@@ -1,4 +1,4 @@
-import { Rpc, RpcGroup } from "effect/unstable/rpc"
+import { Rpc, RpcGroup } from "effect/rpc"
 import { Schema } from "effect"
 import { InternalServerError, UnauthorizedError } from "../errors"
 import { MessageReactionId } from "@hazel/schema"
@@ -23,7 +23,7 @@ export class MessageReactionResponse extends Schema.Class<MessageReactionRespons
  * Error thrown when a message reaction is not found.
  * Used in update and delete operations.
  */
-export class MessageReactionNotFoundError extends Schema.TaggedErrorClass<MessageReactionNotFoundError>()(
+export class MessageReactionNotFoundError extends Schema.TaggedError<MessageReactionNotFoundError>()(
 	"MessageReactionNotFoundError",
 	{
 		messageReactionId: MessageReactionId,

@@ -8,16 +8,16 @@ import { type EncryptedToken, IntegrationEncryption } from "./integration-encryp
 import { OAuthHttpClient } from "./oauth/oauth-http-client"
 import { type OAuthIntegrationProvider, loadProviderConfig } from "./oauth/provider-config"
 
-export class TokenNotFoundError extends Schema.TaggedErrorClass<TokenNotFoundError>()("TokenNotFoundError", {
+export class TokenNotFoundError extends Schema.TaggedError<TokenNotFoundError>()("TokenNotFoundError", {
 	connectionId: IntegrationConnectionIdSchema,
 }) {}
 
-export class TokenRefreshError extends Schema.TaggedErrorClass<TokenRefreshError>()("TokenRefreshError", {
+export class TokenRefreshError extends Schema.TaggedError<TokenRefreshError>()("TokenRefreshError", {
 	provider: IntegrationConnection.IntegrationProvider,
 	cause: Schema.Unknown,
 }) {}
 
-export class ConnectionNotFoundError extends Schema.TaggedErrorClass<ConnectionNotFoundError>()(
+export class ConnectionNotFoundError extends Schema.TaggedError<ConnectionNotFoundError>()(
 	"ConnectionNotFoundError",
 	{
 		connectionId: IntegrationConnectionIdSchema,
@@ -224,17 +224,15 @@ export class IntegrationTokenService extends Context.Service<IntegrationTokenSer
 				// Load provider config to get client credentials
 				const providerConfig = yield* loadProviderConfig(
 					connection.provider as OAuthIntegrationProvider,
+				).pipe(
+					Effect.mapError(
+						(cause) =>
+							new TokenRefreshError({
+								provider: connection.provider,
+								cause: `Failed to load provider config: ${cause}`,
+							}),
+					),
 				)
-					.asEffect()
-					.pipe(
-						Effect.mapError(
-							(cause) =>
-								new TokenRefreshError({
-									provider: connection.provider,
-									cause: `Failed to load provider config: ${cause}`,
-								}),
-						),
-					)
 
 				yield* Effect.logDebug("Refreshing OAuth token", { provider: connection.provider })
 
