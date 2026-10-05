@@ -8,7 +8,8 @@ on:
 
 concurrency:
     group: pr-preview-${{ github.event.pull_request.number }}
-    cancel-in-progress: true
+    # Never cancel a teardown: a destroy cut short leaks the preview stage.
+    cancel-in-progress: ${{ github.event.action != 'closed' && github.event.action != 'unlabeled' }}
 
 permissions:
     contents: read

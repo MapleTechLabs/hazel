@@ -43,10 +43,10 @@ const ElectricUpstreamLive = Layer.unwrap(
 	Effect.gen(function* () {
 		const config = yield* ProxyConfigService
 		const authParams: Record<string, string> = {}
+		// Self-hosted (`ELECTRIC_SECRET`) wins; the Cloud pair applies only without it.
 		if (config.electricSecret !== undefined) {
 			authParams.secret = Redacted.value(config.electricSecret)
-		}
-		if (config.electricSourceId !== undefined && config.electricSourceSecret !== undefined) {
+		} else if (config.electricSourceId !== undefined && config.electricSourceSecret !== undefined) {
 			authParams.source_id = config.electricSourceId
 			authParams.secret = config.electricSourceSecret
 		}

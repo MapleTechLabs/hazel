@@ -38,6 +38,8 @@ export const apiEnv = ({ stage, urls }: HazelStackContext) =>
 
 		// Workflows run on the Railway-hosted cluster (infra/cloudflare-migration-plan.md, Phase 5)
 		requirePlainEntry("CLUSTER_URL"),
+		// Sent by `makeClusterClient`; the cluster rejects workflow calls without it once set.
+		optionalSecret("CLUSTER_API_SECRET"),
 
 		// Integrations
 		requireSecretEntry("INTEGRATION_ENCRYPTION_KEY"),
