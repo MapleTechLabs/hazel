@@ -10,8 +10,8 @@ import {
 import type { BotCommandData } from "../types"
 
 export function useBotCommands(orgId: OrganizationId, _channelId: string): BotCommandData[] {
-	const { data } = useLiveQuery(
-		(q) =>
+	const { data } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ command: botCommandCollection })
 				.innerJoin({ bot: botCollection }, ({ command, bot }) => eq(command.botId, bot.id))
@@ -36,8 +36,8 @@ export function useBotCommands(orgId: OrganizationId, _channelId: string): BotCo
 					botName: bot.name,
 					avatarUrl: user.avatarUrl,
 				})),
-		[orgId],
-	)
+		queryKey: [orgId],
+	})
 
 	return useMemo(() => {
 		return (data ?? []).map(

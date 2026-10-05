@@ -35,8 +35,8 @@ function RouteComponent() {
 	const createDmModal = useModal("create-dm")
 
 	// Get all channels with members and users in a single query
-	const { data: channelsData, isLoading: channelsLoading } = useLiveQuery(
-		(q) =>
+	const { data: channelsData, isLoading: channelsLoading } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ channel: channelCollection })
 				.innerJoin({ member: channelMemberCollection }, ({ channel, member }) =>
@@ -45,8 +45,8 @@ function RouteComponent() {
 				.innerJoin({ user: userCollection }, ({ member, user }) => eq(user.id, member.userId))
 				.where((q) => eq(q.channel.organizationId, organizationId))
 				.orderBy(({ channel }) => channel.createdAt, "asc"),
-		[organizationId],
-	)
+		queryKey: [organizationId],
+	})
 
 	const { publicChannels, privateChannels, dmChannels } = useMemo(() => {
 		if (!channelsData || !me?.id) {

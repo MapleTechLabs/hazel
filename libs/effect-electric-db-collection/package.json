@@ -12,11 +12,11 @@
 		"test": "npx vitest --run"
 	},
 	"dependencies": {
-		"@electric-sql/client": "1.5.15",
+		"@electric-sql/client": "1.5.28",
 		"@standard-schema/spec": "^1.1.0",
-		"@tanstack/db": "0.6.5",
-		"@tanstack/electric-db-collection": "0.3.3",
-		"@tanstack/react-db": "0.1.83",
+		"@tanstack/db": "0.11.3",
+		"@tanstack/electric-db-collection": "0.5.4",
+		"@tanstack/react-db": "0.5.3",
 		"@tanstack/store": "^0.8.0",
 		"effect": "catalog:effect"
 	},

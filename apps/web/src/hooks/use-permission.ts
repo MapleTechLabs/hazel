@@ -32,8 +32,8 @@ export function usePermission() {
 	const { user, isLoading: isAuthLoading } = useAuth()
 	const { organizationId } = useOrganization()
 
-	const { data: member, isLoading: isMemberLoading } = useLiveQuery(
-		(q) =>
+	const { data: member, isLoading: isMemberLoading } = useLiveQuery({
+		query: (q) =>
 			organizationId && user?.id
 				? q
 						.from({ m: organizationMemberCollection })
@@ -41,8 +41,8 @@ export function usePermission() {
 						.where(({ m }) => eq(m.userId, user.id))
 						.findOne()
 				: null,
-		[organizationId, user?.id],
-	)
+		queryKey: [organizationId, user?.id],
+	})
 
 	const role = member?.role as OrganizationMember.OrganizationRole | undefined
 

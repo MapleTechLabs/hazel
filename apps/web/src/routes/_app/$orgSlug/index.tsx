@@ -39,8 +39,8 @@ function RouteComponent() {
 		mode: "promiseExit",
 	})
 
-	const { data: membersData } = useLiveQuery(
-		(q) =>
+	const { data: membersData } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ member: organizationMemberCollection })
 				.where(({ member }) => eq(member.organizationId, organizationId))
@@ -55,8 +55,8 @@ function RouteComponent() {
 					joinedAt: member.joinedAt,
 					presence,
 				})),
-		[organizationId],
-	)
+		queryKey: [organizationId],
+	})
 
 	const { user } = useAuth()
 

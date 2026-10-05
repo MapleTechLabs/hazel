@@ -39,32 +39,32 @@ export function NotificationSoundProvider({ children }: NotificationSoundProvide
 	const sessionStartTime = useAtomValue(sessionStartTimeAtom)
 	const currentChannelId = useAtomValue(currentChannelIdAtom)
 
-	const { data: userData } = useLiveQuery(
-		(q) =>
+	const { data: userData } = useLiveQuery({
+		query: (q) =>
 			user?.id
 				? q
 						.from({ u: userCollection })
 						.where(({ u }) => eq(u.id, user.id))
 						.findOne()
 				: null,
-		[user?.id],
-	)
+		queryKey: [user?.id],
+	})
 
 	const doNotDisturb = userData?.settings?.doNotDisturb ?? false
 	const quietHoursStart = userData?.settings?.quietHoursStart ?? "22:00"
 	const quietHoursEnd = userData?.settings?.quietHoursEnd ?? "08:00"
 
-	const { data: member } = useLiveQuery(
-		(q) =>
+	const { data: member } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ member: organizationMemberCollection })
 				.where(({ member }) => eq(member.userId, user?.id))
 				.findOne(),
-		[user?.id],
-	)
+		queryKey: [user?.id],
+	})
 
-	const { data: recentNotifications } = useLiveQuery(
-		(q) =>
+	const { data: recentNotifications } = useLiveQuery({
+		query: (q) =>
 			member?.id
 				? q
 						.from({ notification: notificationCollection })
@@ -72,8 +72,8 @@ export function NotificationSoundProvider({ children }: NotificationSoundProvide
 						.orderBy(({ notification }) => notification.createdAt, "desc")
 						.limit(MAX_RECENT_NOTIFICATIONS)
 				: null,
-		[member?.id],
-	)
+		queryKey: [member?.id],
+	})
 
 	const latestValuesRef = useRef({
 		settings,

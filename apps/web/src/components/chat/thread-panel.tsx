@@ -45,10 +45,10 @@ function ThreadContent({
 	const generateName = useAtomSet(generateThreadNameMutation, { mode: "promiseExit" })
 	const authorIdentity = useChatAuthorIdentity(originalMessage?.authorId, originalMessage?.author)
 
-	const { data: threadData } = useLiveQuery(
-		(q) => q.from({ channel: channelCollection }).where((q) => eq(q.channel.id, threadChannelId)),
-		[threadChannelId],
-	)
+	const { data: threadData } = useLiveQuery({
+		query: (q) => q.from({ channel: channelCollection }).where((q) => eq(q.channel.id, threadChannelId)),
+		queryKey: [threadChannelId],
+	})
 
 	const thread = threadData?.[0]
 	const threadName = thread?.name || "Thread"

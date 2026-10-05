@@ -33,18 +33,18 @@ export function JoinChannelView({ onClose, onBack }: JoinChannelViewProps) {
 	const joinChannel = useAtomSet(joinChannelAction, { mode: "promiseExit" })
 
 	// Get all channels the user is already a member of
-	const { data: userChannels } = useLiveQuery(
-		(q) =>
+	const { data: userChannels } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ m: channelMemberCollection })
 				.where(({ m }) => eq(m.userId, user?.id || ""))
 				.select(({ m }) => ({ channelId: m.channelId })),
-		[user?.id],
-	)
+		queryKey: [user?.id],
+	})
 
 	// Get all channels the user hasn't joined yet
-	const { data: unjoinedChannels } = useLiveQuery(
-		(q) => {
+	const { data: unjoinedChannels } = useLiveQuery({
+		query: (q) => {
 			const userChannelIds = userChannels?.map((m) => m.channelId) || []
 
 			if (userChannelIds.length === 0) {
@@ -62,8 +62,8 @@ export function JoinChannelView({ onClose, onBack }: JoinChannelViewProps) {
 				.where(({ channel }) => eq(channel.organizationId, organizationId || ""))
 				.select(({ channel }) => ({ ...channel }))
 		},
-		[user?.id, userChannels, organizationId],
-	)
+		queryKey: [user?.id, userChannels, organizationId],
+	})
 
 	const searchQuery = currentPage.type === "join-channel" ? currentPage.searchQuery : ""
 

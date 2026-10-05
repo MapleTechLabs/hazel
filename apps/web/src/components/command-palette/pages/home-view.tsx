@@ -65,8 +65,8 @@ export function HomeView({ navigateToPage, onClose }: HomeViewProps) {
 	// Get channel data for recent channels (memoized to prevent infinite re-renders)
 	const recentChannelIds = useMemo(() => recentChannels.map((rc) => rc.channelId), [recentChannels])
 
-	const { data: recentChannelData } = useLiveQuery(
-		(q) =>
+	const { data: recentChannelData } = useLiveQuery({
+		query: (q) =>
 			recentChannelIds.length > 0 && organizationId
 				? q
 						.from({ channel: channelCollection })
@@ -78,8 +78,8 @@ export function HomeView({ navigateToPage, onClose }: HomeViewProps) {
 						)
 						.select(({ channel }) => ({ ...channel }))
 				: null,
-		[recentChannelIds, organizationId],
-	)
+		queryKey: [recentChannelIds, organizationId],
+	})
 
 	// Sort and filter recent channels by visitedAt order
 	const sortedRecentChannels = useMemo(() => {
@@ -91,8 +91,8 @@ export function HomeView({ navigateToPage, onClose }: HomeViewProps) {
 	}, [recentChannelData, recentChannels])
 
 	// Query all user channels (public/private) for search
-	const { data: allChannels } = useLiveQuery(
-		(q) =>
+	const { data: allChannels } = useLiveQuery({
+		query: (q) =>
 			organizationId && user?.id
 				? q
 						.from({ channel: channelCollection })
@@ -109,12 +109,12 @@ export function HomeView({ navigateToPage, onClose }: HomeViewProps) {
 						)
 						.orderBy(({ channel }) => channel.name, "asc")
 				: null,
-		[organizationId, user?.id],
-	)
+		queryKey: [organizationId, user?.id],
+	})
 
 	// Query DM channels with all members for search
-	const { data: dmChannelData } = useLiveQuery(
-		(q) =>
+	const { data: dmChannelData } = useLiveQuery({
+		query: (q) =>
 			organizationId && user?.id
 				? q
 						.from({ channel: channelCollection })
@@ -128,8 +128,8 @@ export function HomeView({ navigateToPage, onClose }: HomeViewProps) {
 							),
 						)
 				: null,
-		[organizationId, user?.id],
-	)
+		queryKey: [organizationId, user?.id],
+	})
 
 	// Process DM data to group by channel and get other members
 	const dmChannels = useMemo(() => {

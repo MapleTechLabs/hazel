@@ -24,16 +24,16 @@ export function useThemeSettings() {
 	const { user } = useAuth()
 
 	// Read from userCollection (TanStack DB) - auto-updates on collection change
-	const { data: userData } = useLiveQuery(
-		(q) =>
+	const { data: userData } = useLiveQuery({
+		query: (q) =>
 			user?.id
 				? q
 						.from({ u: userCollection })
 						.where(({ u }) => eq(u.id, user.id))
 						.findOne()
 				: null,
-		[user?.id],
-	)
+		queryKey: [user?.id],
+	})
 
 	// Get optimistic action setter
 	const updateUser = useAtomSet(updateUserAction, { mode: "promiseExit" })

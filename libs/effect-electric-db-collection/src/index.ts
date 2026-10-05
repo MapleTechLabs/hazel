@@ -4,6 +4,7 @@
 export type { Txid } from "@tanstack/electric-db-collection"
 export {
 	COLLECTION_ERROR_STATE_CHANGED_EVENT,
+	type CollectionErrorStateChangedDetail,
 	CollectionSyncEffectError,
 	type CollectionStatus,
 	createEffectCollection,

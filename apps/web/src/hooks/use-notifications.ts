@@ -25,8 +25,8 @@ function useOrganizationMember() {
 	const { user } = useAuth()
 	const { organizationId } = useOrganization()
 
-	const { data, isLoading } = useLiveQuery(
-		(q) =>
+	const { data, isLoading } = useLiveQuery({
+		query: (q) =>
 			user?.id && organizationId
 				? q
 						.from({ member: organizationMemberCollection })
@@ -35,8 +35,8 @@ function useOrganizationMember() {
 						)
 						.findOne()
 				: null,
-		[user?.id, organizationId],
-	)
+		queryKey: [user?.id, organizationId],
+	})
 
 	return { member: data, memberId: data?.id, isLoading }
 }
@@ -52,8 +52,8 @@ export function useNotifications() {
 	const { memberId, isLoading: memberLoading } = useOrganizationMember()
 	const [optimisticReadIds, setOptimisticReadIds] = useState<Set<NotificationId>>(new Set())
 
-	const { data: notificationsData, isLoading: notificationsLoading } = useLiveQuery(
-		(q) =>
+	const { data: notificationsData, isLoading: notificationsLoading } = useLiveQuery({
+		query: (q) =>
 			memberId
 				? q
 						.from({ notification: notificationCollection })
@@ -69,8 +69,8 @@ export function useNotifications() {
 						.where(({ notification }) => eq(notification.memberId, memberId))
 						.orderBy(({ notification }) => notification.createdAt, "desc")
 				: null,
-		[memberId],
-	)
+		queryKey: [memberId],
+	})
 
 	const notifications = useMemo<NotificationWithDetails[]>(() => {
 		if (!notificationsData) return []
@@ -154,8 +154,8 @@ export function useNotifications() {
 export function useUnreadNotificationCount() {
 	const { memberId, isLoading: memberLoading } = useOrganizationMember()
 
-	const { data: notifications, isLoading: notificationsLoading } = useLiveQuery(
-		(q) =>
+	const { data: notifications, isLoading: notificationsLoading } = useLiveQuery({
+		query: (q) =>
 			memberId
 				? q
 						.from({ notification: notificationCollection })
@@ -163,8 +163,8 @@ export function useUnreadNotificationCount() {
 							and(eq(notification.memberId, memberId), isNull(notification.readAt)),
 						)
 				: null,
-		[memberId],
-	)
+		queryKey: [memberId],
+	})
 
 	return {
 		unreadCount: notifications?.length ?? 0,

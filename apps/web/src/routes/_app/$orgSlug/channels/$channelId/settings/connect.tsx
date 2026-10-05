@@ -40,25 +40,25 @@ function ConnectPage() {
 	const { organizationId } = useOrganization()
 	const [showShareModal, setShowShareModal] = useState(false)
 
-	const { data: channel } = useLiveQuery(
-		(q) =>
+	const { data: channel } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ channel: channelCollection })
 				.where(({ channel }) => eq(channel.id, channelId as ChannelId))
 				.findOne()
 				.select(({ channel }) => ({ name: channel.name })),
-		[channelId],
-	)
+		queryKey: [channelId],
+	})
 
 	// Check if channel is actually shared (more than one active mount)
-	const { data: connections } = useLiveQuery(
-		(q) =>
+	const { data: connections } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ ccc: connectConversationChannelCollection })
 				.where(({ ccc }) => eq(ccc.isActive, true))
 				.select(({ ccc }) => ({ ...ccc })),
-		[],
-	)
+		queryKey: [],
+	})
 
 	// Get outgoing invites for this channel (RPC returns all org invites, filter by channelId)
 	const outgoingResult = useAtomValue(listOutgoingInvitesQuery(organizationId!))
@@ -209,15 +209,15 @@ function ConnectionRow({
 	const disconnect = useAtomSet(disconnectConnectOrgMutation, { mode: "promiseExit" })
 
 	// Try to resolve org name from local collection
-	const { data: org } = useLiveQuery(
-		(q) =>
+	const { data: org } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ org: organizationCollection })
 				.where(({ org }) => eq(org.id, organizationId as OrganizationId))
 				.findOne()
 				.select(({ org }) => ({ name: org.name, slug: org.slug, logoUrl: org.logoUrl })),
-		[organizationId],
-	)
+		queryKey: [organizationId],
+	})
 
 	const isOwnOrg = organizationId === currentOrgId
 	const isGuestLeavingConversation = viewerRole === "guest" && role === "host"

@@ -12,8 +12,8 @@ export function useOrganization() {
 	const params = useParams({ strict: false })
 	const orgSlug = params.orgSlug as string
 
-	const { data, isLoading } = useLiveQuery(
-		(q) =>
+	const { data, isLoading } = useLiveQuery({
+		query: (q) =>
 			orgSlug
 				? q
 						.from({ org: organizationCollection })
@@ -21,8 +21,8 @@ export function useOrganization() {
 						.orderBy(({ org }) => org.createdAt, "asc")
 						.findOne()
 				: null,
-		[orgSlug],
-	)
+		queryKey: [orgSlug],
+	})
 
 	return {
 		organization: data,

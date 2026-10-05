@@ -25,10 +25,10 @@ interface RenameThreadModalProps {
 }
 
 export function RenameThreadModal({ threadId, isOpen, onOpenChange }: RenameThreadModalProps) {
-	const { data: threadData } = useLiveQuery(
-		(q) => q.from({ channel: channelCollection }).where((q) => eq(q.channel.id, threadId)),
-		[threadId],
-	)
+	const { data: threadData } = useLiveQuery({
+		query: (q) => q.from({ channel: channelCollection }).where((q) => eq(q.channel.id, threadId)),
+		queryKey: [threadId],
+	})
 
 	const thread = threadData?.[0]
 

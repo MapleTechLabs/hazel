@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import type {
+	CollectionErrorStateChangedDetail,
 	CollectionStatus,
 	CollectionSyncEffectError,
 	EffectCollection,
@@ -85,73 +86,71 @@ export interface UseCollectionErrorResult {
 export function useCollectionError(
 	collection: EffectCollection<any, any> | null | undefined,
 ): UseCollectionErrorResult {
-	// Local state for tracking collection error state
-	const [isError, setIsError] = useState(false)
+	const [hasSyncError, setHasSyncError] = useState(false)
 	const [errorCount, setErrorCount] = useState(0)
 	const [lastError, setLastError] = useState<Error | null>(null)
 	const [status, setStatus] = useState<CollectionStatus>("idle")
 
-	// Sync state from collection utilities
 	useEffect(() => {
+		setHasSyncError(false)
+		setErrorCount(0)
+		setLastError(null)
+
 		if (!collection) {
-			setIsError(false)
-			setErrorCount(0)
-			setLastError(null)
 			setStatus("idle")
 			return
 		}
 
-		// Sync state from collection utils
-		const syncState = () => {
-			setIsError(collection.utils.isError)
-			setErrorCount(collection.utils.errorCount)
-			setLastError(collection.utils.lastError || null)
-			setStatus(collection.utils.status)
-		}
+		// Collection lifecycle status (idle/loading/ready/error/cleaned-up)
+		setStatus(collection.status)
+		const unsubscribeStatus = collection.on("status:change", (event) => {
+			setStatus(event.status)
+			if (event.status === "error") {
+				setErrorCount((count) => count + 1)
+			}
+		})
 
-		// Initial state sync
-		syncState()
-
-		// Listen for error state change events for immediate updates
+		// Shape sync errors reported by the Electric collection's onError handler
 		const handleErrorStateChanged = (event: Event) => {
-			const customEvent = event as CustomEvent<{ collectionId: string | undefined; isError: boolean }>
-			// Only sync if event is for this collection or all collections
-			if (
-				customEvent.detail.collectionId === undefined ||
-				customEvent.detail.collectionId === (collection as any).id
-			) {
-				syncState()
+			const { detail } = event as CustomEvent<CollectionErrorStateChangedDetail>
+			if (detail.collectionId !== undefined && detail.collectionId !== collection.id) return
+
+			setHasSyncError(detail.isError)
+			if (detail.isError) {
+				setErrorCount((count) => count + 1)
+				setLastError(
+					detail.error instanceof Error
+						? detail.error
+						: new Error(String(detail.error ?? "Sync error")),
+				)
 			}
 		}
 
 		window.addEventListener(COLLECTION_ERROR_STATE_CHANGED_EVENT, handleErrorStateChanged)
 
-		// Fallback polling at 10-second interval as safety net
-		const interval = setInterval(syncState, 10000)
-
 		return () => {
+			unsubscribeStatus()
 			window.removeEventListener(COLLECTION_ERROR_STATE_CHANGED_EVENT, handleErrorStateChanged)
-			clearInterval(interval)
 		}
 	}, [collection])
 
-	// Clear error callback
+	// Restart sync: a collection in the error state can be cleaned up and preloaded again
 	const clearError = useCallback(() => {
 		if (!collection) return
 
-		try {
-			collection.utils.clearError()
-			// Sync state after clearing
-			setIsError(collection.utils.isError)
-			setErrorCount(collection.utils.errorCount)
-			setLastError(collection.utils.lastError || null)
-			setStatus(collection.utils.status)
-		} catch (error) {
-			console.error("Failed to clear collection error:", error)
-		}
+		setHasSyncError(false)
+		setLastError(null)
+		if (collection.status !== "error") return
+
+		collection
+			.cleanup()
+			.then(() => collection.preload())
+			.catch((error) => {
+				console.error("Failed to restart collection sync:", error)
+			})
 	}, [collection])
 
-	// Derived state
+	const isError = status === "error" || hasSyncError
 	const needsRecovery = isError && errorCount > 0
 	const isPermanent = lastError ? isPermanentError(lastError) : false
 	const isRecoverable_ = lastError ? isRecoverableError(lastError) : false

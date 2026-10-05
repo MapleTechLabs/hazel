@@ -39,8 +39,8 @@ export function useSearchQuery({
 	limit = 50,
 }: UseSearchQueryOptions) {
 	// First, get accessible channel IDs (channels where user is a member)
-	const { data: accessibleChannels } = useLiveQuery(
-		(q) =>
+	const { data: accessibleChannels } = useLiveQuery({
+		query: (q) =>
 			organizationId && userId
 				? q
 						.from({ member: channelMemberCollection })
@@ -52,8 +52,8 @@ export function useSearchQuery({
 						)
 						.select(({ channel }) => ({ id: channel.id }))
 				: null,
-		[organizationId, userId],
-	)
+		queryKey: [organizationId, userId],
+	})
 
 	const accessibleChannelIds = useMemo(
 		() => accessibleChannels?.map((c) => c.id) ?? [],
@@ -85,8 +85,8 @@ export function useSearchQuery({
 	const shouldSearch = (query.trim().length > 0 || filters.length > 0) && searchChannelIds.length > 0
 
 	// Main search query
-	const { data: searchResults, status } = useLiveQuery(
-		(q) => {
+	const { data: searchResults, status } = useLiveQuery({
+		query: (q) => {
 			if (!shouldSearch || searchChannelIds.length === 0) {
 				return null
 			}
@@ -133,15 +133,15 @@ export function useSearchQuery({
 					channel,
 				}))
 		},
-		[shouldSearch, searchChannelIds, query, fromFilter?.id, beforeDate, afterDate, limit],
-	)
+		queryKey: [shouldSearch, searchChannelIds, query, fromFilter?.id, beforeDate, afterDate, limit],
+	})
 
 	// Get message IDs for attachment count query
 	const messageIds = useMemo(() => searchResults?.map((r) => r.message.id) ?? [], [searchResults])
 
 	// Query attachment counts for results
-	const { data: attachmentData } = useLiveQuery(
-		(q) =>
+	const { data: attachmentData } = useLiveQuery({
+		query: (q) =>
 			messageIds.length > 0
 				? q
 						.from({ attachment: attachmentCollection })
@@ -153,8 +153,8 @@ export function useSearchQuery({
 							fileName: attachment.fileName,
 						}))
 				: null,
-		[messageIds],
-	)
+		queryKey: [messageIds],
+	})
 
 	// Build attachment count map and filter by "has" if needed
 	const attachmentCountMap = useMemo(() => {
@@ -234,8 +234,8 @@ export function useSearchQuery({
  */
 export function useUserSuggestions(partial: string, organizationId: OrganizationId | null) {
 	// Query users by firstName, filtered by organization membership
-	const { data: users } = useLiveQuery(
-		(q) => {
+	const { data: users } = useLiveQuery({
+		query: (q) => {
 			if (!organizationId) return null
 
 			let query = q
@@ -256,12 +256,12 @@ export function useUserSuggestions(partial: string, organizationId: Organization
 				.limit(20)
 				.select(({ user }) => ({ ...user }))
 		},
-		[organizationId, partial],
-	)
+		queryKey: [organizationId, partial],
+	})
 
 	// Also query by lastName if partial is provided
-	const { data: usersByLastName } = useLiveQuery(
-		(q) => {
+	const { data: usersByLastName } = useLiveQuery({
+		query: (q) => {
 			if (!organizationId || partial.length === 0) return null
 
 			return q
@@ -280,8 +280,8 @@ export function useUserSuggestions(partial: string, organizationId: Organization
 				.limit(20)
 				.select(({ user }) => ({ ...user }))
 		},
-		[organizationId, partial],
-	)
+		queryKey: [organizationId, partial],
+	})
 
 	// Merge and deduplicate results
 	const filteredUsers = useMemo(() => {
@@ -309,8 +309,8 @@ export function useChannelSuggestions(
 	organizationId: OrganizationId | null,
 	userId: UserId | undefined,
 ) {
-	const { data: channels } = useLiveQuery(
-		(q) =>
+	const { data: channels } = useLiveQuery({
+		query: (q) =>
 			organizationId && userId && partial.length > 0
 				? q
 						.from({ channel: channelCollection })
@@ -324,8 +324,8 @@ export function useChannelSuggestions(
 						.select(({ channel }) => ({ ...channel }))
 						.limit(10)
 				: null,
-		[organizationId, userId, partial],
-	)
+		queryKey: [organizationId, userId, partial],
+	})
 
 	// Filter channels by partial match
 	const filteredChannels = useMemo(() => {

@@ -101,8 +101,8 @@ const ChannelSection = ({
 }: ChannelSectionProps) => {
 	const { user } = useAuth()
 
-	const { data: userChannels } = useLiveQuery(
-		(q) => {
+	const { data: userChannels } = useLiveQuery({
+		query: (q) => {
 			const query = q
 				.from({ channel: channelCollection })
 				.innerJoin({ member: channelMemberCollection }, ({ channel, member }) =>
@@ -124,8 +124,8 @@ const ChannelSection = ({
 
 			return query
 		},
-		[user?.id, organizationId, sectionId],
-	)
+		queryKey: [user?.id, organizationId, sectionId],
+	})
 
 	const channels = useMemo(() => {
 		if (!userChannels) return []
@@ -206,8 +206,8 @@ const DmChannelGroup = (props: {
 }) => {
 	const { user } = useAuth()
 
-	const { data: userDmChannels } = useLiveQuery(
-		(q) =>
+	const { data: userDmChannels } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ channel: channelCollection })
 				.innerJoin({ member: channelMemberCollection }, ({ channel, member }) =>
@@ -223,8 +223,8 @@ const DmChannelGroup = (props: {
 					),
 				)
 				.orderBy(({ channel }) => channel.createdAt, "asc"),
-		[user?.id, props.organizationId],
-	)
+		queryKey: [user?.id, props.organizationId],
+	})
 
 	const dmChannels = useMemo(() => {
 		if (!userDmChannels) return []
@@ -265,16 +265,16 @@ export function ChannelsSidebar(props: { openChannelsBrowser: () => void }) {
 	const createSectionModal = useModal("create-section")
 
 	// Query channel sections for this organization
-	const { data: sections } = useLiveQuery(
-		(q) =>
+	const { data: sections } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ section: channelSectionCollection })
 				.where((qb) =>
 					and(eq(qb.section.organizationId, organizationId || ""), isNull(qb.section.deletedAt)),
 				)
 				.orderBy(({ section }) => section.order, "asc"),
-		[organizationId],
-	)
+		queryKey: [organizationId],
+	})
 
 	return (
 		<Sidebar collapsible="none" className="flex flex-1">

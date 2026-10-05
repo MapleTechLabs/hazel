@@ -733,14 +733,14 @@ function ChannelLinkRow({
 	const webhookPermissionLabel = WEBHOOK_PERMISSION_LABELS[webhookPermissionStatus]
 
 	// Look up the Hazel channel name
-	const { data: channelData } = useLiveQuery(
-		(q) =>
+	const { data: channelData } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ channel: channelCollection })
 				.where(({ channel }) => eq(channel.id, link.hazelChannelId))
 				.select(({ channel }) => ({ ...channel })),
-		[link.hazelChannelId],
-	)
+		queryKey: [link.hazelChannelId],
+	})
 	const hazelChannel = channelData?.[0]
 
 	return (

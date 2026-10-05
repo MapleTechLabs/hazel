@@ -46,15 +46,15 @@ export function OpenStatusIntegrationContent({ organizationId }: OpenStatusInteg
 	listWebhooksRef.current = listWebhooks
 
 	// Query all channels in organization (public and private only, not DMs/threads)
-	const { data: channelsData } = useLiveQuery(
-		(q) =>
+	const { data: channelsData } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ channel: channelCollection })
 				.where(({ channel }) => eq(channel.organizationId, organizationId))
 				.where(({ channel }) => or(eq(channel.type, "public"), eq(channel.type, "private")))
 				.select(({ channel }) => ({ ...channel })),
-		[organizationId],
-	)
+		queryKey: [organizationId],
+	})
 
 	const channels = channelsData ?? []
 

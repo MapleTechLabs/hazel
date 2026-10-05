@@ -22,8 +22,8 @@ function RouteComponent() {
 		data: userOrganizations,
 		isLoading,
 		isReady,
-	} = useLiveQuery(
-		(q) =>
+	} = useLiveQuery({
+		query: (q) =>
 			user?.id
 				? q
 						.from({ member: organizationMemberCollection })
@@ -34,8 +34,8 @@ function RouteComponent() {
 						.orderBy(({ member }) => member.joinedAt, "asc")
 						.select(({ member, org }) => ({ member, org }))
 				: undefined,
-		[user?.id],
-	)
+		queryKey: [user?.id],
+	})
 
 	if (isLoading || isAuthLoading || !isReady) {
 		return <Loader />

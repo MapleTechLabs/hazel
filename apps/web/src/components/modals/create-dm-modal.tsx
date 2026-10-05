@@ -44,8 +44,8 @@ export function CreateDmModal({ isOpen, onOpenChange }: CreateDmModalProps) {
 	})
 
 	// Query organization users with presence status
-	const { data: organizationUsers } = useLiveQuery(
-		(q) =>
+	const { data: organizationUsers } = useLiveQuery({
+		query: (q) =>
 			q
 				.from({ member: organizationMemberCollection })
 				.innerJoin({ user: userCollection }, ({ member, user }) => eq(member.userId, user.id))
@@ -58,8 +58,8 @@ export function CreateDmModal({ isOpen, onOpenChange }: CreateDmModalProps) {
 					...user,
 					presence,
 				})),
-		[organizationId],
-	)
+		queryKey: [organizationId],
+	})
 
 	const form = useAppForm({
 		defaultValues: {

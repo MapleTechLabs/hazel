@@ -112,8 +112,8 @@ export function useMentionOptions(state: AutocompleteState, orgId?: Organization
 	)
 
 	// Query mentionable bots installed in the organization
-	const { data: mentionableBots } = useLiveQuery(
-		(q) =>
+	const { data: mentionableBots } = useLiveQuery({
+		query: (q) =>
 			orgId
 				? q
 						.from({ installation: botInstallationCollection })
@@ -133,8 +133,8 @@ export function useMentionOptions(state: AutocompleteState, orgId?: Organization
 							user,
 						}))
 				: null,
-		[orgId],
-	)
+		queryKey: [orgId],
+	})
 
 	const presenceMap = useMemo(() => {
 		const map = new Map<string, "online" | "offline" | "away" | "busy" | "dnd">()
@@ -179,7 +179,7 @@ export function useMentionOptions(state: AutocompleteState, orgId?: Organization
 						id: bot.userId,
 						type: "bot",
 						displayName: bot.name,
-						avatarUrl: bot.user?.avatarUrl,
+						avatarUrl: bot.user?.avatarUrl ?? undefined,
 					},
 				})
 			}
@@ -201,7 +201,7 @@ export function useMentionOptions(state: AutocompleteState, orgId?: Organization
 						id: member.user.id,
 						type: "user",
 						displayName,
-						avatarUrl: member.user.avatarUrl,
+						avatarUrl: member.user.avatarUrl ?? undefined,
 						status,
 					},
 				})

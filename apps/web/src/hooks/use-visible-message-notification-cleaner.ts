@@ -35,8 +35,8 @@ export function useVisibleMessageNotificationCleaner(options: UseVisibleMessageN
 	const deletedMessageIdsRef = useRef<Set<string>>(new Set())
 
 	// Query for current member ID
-	const { data: member } = useLiveQuery(
-		(q) =>
+	const { data: member } = useLiveQuery({
+		query: (q) =>
 			user?.id && organizationId
 				? q
 						.from({ member: organizationMemberCollection })
@@ -45,12 +45,12 @@ export function useVisibleMessageNotificationCleaner(options: UseVisibleMessageN
 						)
 						.findOne()
 				: null,
-		[user?.id, organizationId],
-	)
+		queryKey: [user?.id, organizationId],
+	})
 
 	// Query notifications for this channel (message type only)
-	const { data: channelNotifications } = useLiveQuery(
-		(q) =>
+	const { data: channelNotifications } = useLiveQuery({
+		query: (q) =>
 			member?.id
 				? q
 						.from({ notification: notificationCollection })
@@ -62,8 +62,8 @@ export function useVisibleMessageNotificationCleaner(options: UseVisibleMessageN
 							),
 						)
 				: null,
-		[member?.id, channelId],
-	)
+		queryKey: [member?.id, channelId],
+	})
 
 	// Build a Set of message IDs that have notifications
 	const messageIdsWithNotifications = useMemo(() => {

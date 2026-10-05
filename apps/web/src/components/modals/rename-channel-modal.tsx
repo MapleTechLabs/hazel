@@ -25,10 +25,10 @@ interface RenameChannelModalProps {
 }
 
 export function RenameChannelModal({ channelId, isOpen, onOpenChange }: RenameChannelModalProps) {
-	const { data: channelData } = useLiveQuery(
-		(q) => q.from({ channel: channelCollection }).where((q) => eq(q.channel.id, channelId)),
-		[channelId],
-	)
+	const { data: channelData } = useLiveQuery({
+		query: (q) => q.from({ channel: channelCollection }).where((q) => eq(q.channel.id, channelId)),
+		queryKey: [channelId],
+	})
 
 	const channel = channelData?.[0]
 

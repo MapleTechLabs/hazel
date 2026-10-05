@@ -52,8 +52,8 @@ export const selectUnreadCountsByChannel = (
 }
 
 export const useNotificationUnreadCountsByChannel = (memberId: OrganizationMemberId | undefined) => {
-	const { data, isLoading } = useLiveQuery(
-		(q) =>
+	const { data, isLoading } = useLiveQuery({
+		query: (q) =>
 			memberId
 				? q
 						.from({ notification: notificationCollection })
@@ -61,8 +61,8 @@ export const useNotificationUnreadCountsByChannel = (memberId: OrganizationMembe
 							and(eq(notification.memberId, memberId), isNull(notification.readAt)),
 						)
 				: null,
-		[memberId],
-	)
+		queryKey: [memberId],
+	})
 
 	const unreadByChannel = useMemo(() => {
 		if (!data) return new Map<ChannelId, number>()
