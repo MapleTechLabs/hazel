@@ -26,3 +26,4 @@ opensrc/
 
 # Migration exports (contain PII — user emails, IDs, avatars)
 apps/backend/exports/
+.alchemy/
