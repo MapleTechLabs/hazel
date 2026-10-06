@@ -240,7 +240,7 @@ Independent screens. Each is one ticket and one agent-sized unit. Rough size fro
 
 ### Phase 7: Cutover
 
-1. Beta: deploy at `beta.app.hazel.sh` and in a desktop beta channel, using the same backend. Team dogfoods it.
+1. Beta: local only for now (§8). The team runs the Foldkit build locally against the real backend.
 2. Parity freeze: every route covered, every scenario identical, no unmocked RPCs, behavioral parity green.
 3. Switch `app.hazel.sh`, keep legacy deployable for a two-week rollback window, then delete `apps/web` and the legacy-only dependencies.
 
@@ -306,13 +306,18 @@ What exists today: fixture backend, Clerk stub, deterministic capture, pixel and
 
 ---
 
-## 8. Open decisions
+## 8. Decisions
+
+Decided (2026-10-07):
+
+- **Legacy UI freeze policy** (§2.2): any PR that changes the legacy UI gets a review subagent first. It runs parity against the pinned baseline and flags visual changes to screens that are already ported. A flagged change has to land on the Foldkit side in the same PR, followed by a re-pin.
+- **Beta rollout:** local only for now. `bun run parity serve` and a local Foldkit build; no subdomain or toggle yet.
+- **Foldkit upstream:** keep missing pieces (submenus, bottom-anchored VirtualList, React Aria-compatible item attributes) local in `apps/web-foldkit/src/ui` for now.
+
+Still open:
 
 1. **Data layer** (§3.2): TanStack DB bridge (recommended) vs a native normalized Model store. Decided by S2.
 2. **Editor** (§3.4): ProseMirror vs Tiptap vs Lexical. Decided by S3.
-3. **Legacy UI freeze policy** (§2.2): who approves legacy visual changes during the migration?
-4. **Beta rollout:** a separate subdomain, or an in-app toggle that swaps bundles?
-5. **Foldkit upstream:** contribute missing pieces (submenus, bottom-anchored VirtualList, React Aria-compatible item attributes) upstream, or keep them local?
 
 ---
 
