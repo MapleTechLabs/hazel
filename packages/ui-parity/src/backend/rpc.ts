@@ -24,13 +24,14 @@ import {
 	UserRpcs,
 } from "@hazel/domain/rpc"
 import { CurrentUser } from "@hazel/domain"
-import { UserPresenceStatus } from "@hazel/domain/models"
-import { UserPresenceStatusResponse } from "@hazel/domain/rpc"
+import { TypingIndicator, UserPresenceStatus } from "@hazel/domain/models"
+import { TypingIndicatorResponse, UserPresenceStatusResponse } from "@hazel/domain/rpc"
 import type { TransactionId } from "@hazel/schema"
 import { Effect, Layer } from "effect"
 import { HttpRouter } from "effect/http"
 import { RpcSerialization, RpcServer } from "effect/rpc"
 import type { Dataset } from "../fixtures/dataset.ts"
+import { stableId } from "../fixtures/ids.ts"
 
 /**
  * Fixture RPC backend: the real Effect RPC server (same groups, same NDJSON
@@ -88,6 +89,23 @@ const defaultHandlers = (dataset: Dataset): Record<string, (payload: unknown) =>
 		})
 	},
 	"channelMember.clearNotifications": () => ({ transactionId: FIXTURE_TRANSACTION_ID }),
+	// Typing indicators are echoed back but never synced, so no indicator appears in captures.
+	"typingIndicator.create": (payload) => {
+		const { channelId, memberId, lastTyped } = payload as {
+			channelId: string
+			memberId: string
+			lastTyped: number
+		}
+		return new TypingIndicatorResponse({
+			data: TypingIndicator.Schema.make({
+				id: stableId(`typing:${memberId}`),
+				channelId,
+				memberId,
+				lastTyped,
+			} as never),
+			transactionId: FIXTURE_TRANSACTION_ID,
+		})
+	},
 	"organization.getBySlugPublic": () => null,
 	"chatSync.connection.list": () => ({ data: [] }),
 	...dataset.rpc,

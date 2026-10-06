@@ -1,0 +1,14 @@
+/* Same stylesheet as the legacy app: identical tokens, utilities and variants. */
+@import "../../web/src/styles/styles.css";
+@import "../../web/src/styles/code-syntax.css";
+
+/* Scan both apps so the generated utilities are a superset of the legacy stylesheet. */
+@source "./";
+@source "../../web/src";
+
+/* React Aria injects this at runtime for every pressable; the ported controls carry the same attribute. */
+@layer {
+	[data-react-aria-pressable] {
+		touch-action: pan-x pan-y pinch-zoom;
+	}
+}

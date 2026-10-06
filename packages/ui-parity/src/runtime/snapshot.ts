@@ -187,3 +187,63 @@ export const collectSnapshot = (input: {
 
 	return { viewport: { width: vw, height: vh }, nodes }
 }
+
+/**
+ * Indented serialization of the rendered body: the reference markup a port has to
+ * reproduce (tags, classes, data-/aria- attributes, SVG). Runs inside the page.
+ */
+export const serializeDom = (): string => {
+	const SKIP = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE"])
+	const VOID = new Set([
+		"AREA",
+		"BR",
+		"COL",
+		"EMBED",
+		"HR",
+		"IMG",
+		"INPUT",
+		"LINK",
+		"META",
+		"SOURCE",
+		"TRACK",
+		"WBR",
+	])
+	const lines: string[] = []
+	const escape = (value: string) =>
+		value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;")
+	const walk = (node: Node, depth: number) => {
+		const indent = "  ".repeat(depth)
+		if (node.nodeType === Node.TEXT_NODE) {
+			const text = node.textContent?.replace(/\s+/g, " ").trim()
+			if (text) lines.push(indent + escape(text))
+			return
+		}
+		if (node.nodeType !== Node.ELEMENT_NODE) return
+		const element = node as Element
+		if (SKIP.has(element.tagName) || element.hasAttribute("data-parity")) return
+		const tag = element.tagName.toLowerCase()
+		// Sorted so DOM dumps diff on content, not on the order a framework happens to set attributes.
+		const attrs = [...element.attributes]
+			.sort((a, b) => a.name.localeCompare(b.name))
+			.map((attr) => (attr.value === "" ? ` ${attr.name}` : ` ${attr.name}="${escape(attr.value)}"`))
+			.join("")
+		const children = [...element.childNodes]
+		const onlyText = children.length === 1 && children[0]!.nodeType === Node.TEXT_NODE
+		if (VOID.has(element.tagName)) lines.push(`${indent}<${tag}${attrs}>`)
+		else if (children.length === 0) lines.push(`${indent}<${tag}${attrs}></${tag}>`)
+		else if (onlyText)
+			lines.push(
+				`${indent}<${tag}${attrs}>${escape(children[0]!.textContent?.replace(/\s+/g, " ").trim() ?? "")}</${tag}>`,
+			)
+		else {
+			lines.push(`${indent}<${tag}${attrs}>`)
+			for (const child of children) walk(child, depth + 1)
+			lines.push(`${indent}</${tag}>`)
+		}
+	}
+	const html = document.documentElement
+	const htmlAttrs = [...html.attributes].map((attr) => ` ${attr.name}="${escape(attr.value)}"`).join("")
+	lines.push(`<!-- <html${htmlAttrs}> -->`)
+	walk(document.body, 0)
+	return lines.join("\n")
+}

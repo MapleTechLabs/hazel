@@ -4,7 +4,14 @@ import { parseArgs } from "node:util"
 import { chromium } from "playwright"
 import { startFixtureBackend } from "./backend/server.ts"
 import { buildTarget } from "./build.ts"
-import { captureDir, captureTarget, expandVariants, type CaptureResult } from "./capture.ts"
+import {
+	BROWSER_LAUNCH_OPTIONS,
+	captureDir,
+	captureTarget,
+	expandVariants,
+	type CaptureResult,
+} from "./capture.ts"
+import { codegenFile } from "./codegen.ts"
 import { compareVariant } from "./compare.ts"
 import { uncoveredRoutes } from "./coverage.ts"
 import {
@@ -26,6 +33,8 @@ const usage = `ui-parity: compare the legacy React UI against the Foldkit UI
   bun parity run [--filter x] [--baseline legacy] [--candidate foldkit] [--run name]
                                                         capture both targets, diff, write the report
   bun parity selfcheck [--filter x] [--target legacy]   capture one target twice; anything not identical is flaky
+  bun parity capture <target> [--filter x] [--run name] capture one target (screenshots, snapshots, reference DOM)
+  bun parity codegen <file.html> [--line N] [--name viewName]  reference markup → Foldkit view code
   bun parity list                                       list scenario variants
   bun parity coverage                                   legacy routes and the scenarios that cover them
 `
@@ -42,6 +51,8 @@ const { positionals, values } = parseArgs({
 		run: { type: "string" },
 		dataset: { type: "string", default: "default" },
 		tolerance: { type: "string", default: "0" },
+		line: { type: "string" },
+		name: { type: "string" },
 	},
 })
 
@@ -94,15 +105,24 @@ const compareRun = (input: {
 	const runDir = join(outDir, "runs", input.run)
 	const diffDir = join(runDir, "diff")
 	mkdirSync(diffDir, { recursive: true })
-	const comparisons = input.variants.map((variant) =>
-		compareVariant({
+	// A capture that crashed or logged errors is not evidence of parity, whatever the pixels say.
+	const unhealthy = new Map(
+		[...input.baselineResults, ...input.candidateResults]
+			.filter((result) => !result.ok || result.consoleErrors.length > 0)
+			.map((result) => [result.variantId, result]),
+	)
+	const comparisons = input.variants.map((variant) => {
+		const comparison = compareVariant({
 			variantId: variant.id,
 			baselineDir: captureDir(input.run, input.baselineLabel),
 			candidateDir: captureDir(input.run, input.candidateLabel),
 			outDir: diffDir,
 			tolerance: Number(values.tolerance),
-		}),
-	)
+		})
+		return unhealthy.has(variant.id) && comparison.status !== "missing"
+			? { ...comparison, status: "fail" as const }
+			: comparison
+	})
 	const summary = buildSummary({
 		run: input.run,
 		baseline: input.baselineLabel,
@@ -152,6 +172,27 @@ switch (command) {
 		break
 	}
 
+	case "capture": {
+		const name = (positionals[1] ?? "legacy") as TargetName
+		const run = values.run ?? `${timestamp()}-capture-${name}`
+		const servers = startServers([name])
+		const results = await captureTarget({ target: name, run, variants: expandVariants(values.filter) })
+		await servers.stop()
+		console.log(
+			`\n${results.filter((result) => result.ok).length}/${results.length} captured → ${captureDir(run, name)}`,
+		)
+		break
+	}
+
+	case "codegen": {
+		const file = positionals[1]
+		if (!file) throw new Error(usage)
+		console.log(
+			codegenFile(file, { line: values.line ? Number(values.line) : undefined, name: values.name }),
+		)
+		break
+	}
+
 	case "coverage": {
 		const routes = uncoveredRoutes()
 		for (const { route, scenarios } of routes)
@@ -168,7 +209,7 @@ switch (command) {
 		const run = values.run ?? `${timestamp()}-${candidate}-vs-${baseline}`
 		const variants = expandVariants(values.filter)
 		const servers = startServers([baseline, candidate])
-		const browser = await chromium.launch()
+		const browser = await chromium.launch(BROWSER_LAUNCH_OPTIONS)
 		// Same-target comparisons (legacy vs legacy) need distinct folders.
 		const candidateLabel = baseline === candidate ? `${candidate}-b` : candidate
 		const baselineResults = await captureTarget({ target: baseline, run, variants, browser })
@@ -200,7 +241,7 @@ switch (command) {
 		const run = values.run ?? `${timestamp()}-selfcheck-${target}`
 		const variants = expandVariants(values.filter)
 		const servers = startServers([target])
-		const browser = await chromium.launch()
+		const browser = await chromium.launch(BROWSER_LAUNCH_OPTIONS)
 		const first = await captureTarget({ target, label: `${target}-1`, run, variants, browser })
 		const second = await captureTarget({ target, label: `${target}-2`, run, variants, browser })
 		await browser.close()

@@ -12,39 +12,39 @@ The acceptance test is `packages/ui-parity` (see its README). A screen counts as
 
 **Legacy app** (`apps/web`, inventoried 2026-10-07):
 
-| | |
-|---|---|
-| Routes | 56 route files (10.9k lines), 39 user-facing routes |
-| Components | 391 files, 48.9k lines. The biggest directories are `chat/` (6.2k), `ui/` (6.4k), `slate-editor/` (4.8k), `icons/` (4.0k, 91 SVG components), `modals/` (3.7k) and `integrations/` (3.7k) |
-| UI kit | 55 React Aria Components primitives styled with Tailwind v4, `tailwind-variants` (15 files), `tailwindcss-react-aria-components` variants (`selected:`, `pressed:`, `entering:`…) and `data-slot` hooks (362 lines) |
-| State | 33 effect-atom files (RPC atoms plus UI state), 24 Electric-synced TanStack DB collections, ~97 `useLiveQuery` call sites, and `db/actions.ts` (970 lines of optimistic mutations) |
-| Transport | Effect RPC over HTTP NDJSON (`HazelRpcClient`, 72 call sites), `HazelApiClient` HTTP API (14 files), Rivet actor websocket for streaming AI messages |
-| React-only dependencies | Slate (22 files), frimousse, @legendapp/list, motion (10 files), react-tweet, @videojs/react, embla, input-otp, sonner (47 files), Clerk prebuilt components (3) |
-| Dead dependencies | realtimekit-react(-ui), react-error-boundary, @paper-design/shaders-react, react-stately, remark-gfm/math, class-variance-authority. Drop them now; they are out of scope |
-| Tests | 18 vitest files. The Slate markdown serializer suite (1014 lines) is a useful spec. No route or e2e tests |
+|                         |                                                                                                                                                                                                                     |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Routes                  | 56 route files (10.9k lines), 39 user-facing routes                                                                                                                                                                 |
+| Components              | 391 files, 48.9k lines. The biggest directories are `chat/` (6.2k), `ui/` (6.4k), `slate-editor/` (4.8k), `icons/` (4.0k, 91 SVG components), `modals/` (3.7k) and `integrations/` (3.7k)                           |
+| UI kit                  | 55 React Aria Components primitives styled with Tailwind v4, `tailwind-variants` (15 files), `tailwindcss-react-aria-components` variants (`selected:`, `pressed:`, `entering:`…) and `data-slot` hooks (362 lines) |
+| State                   | 33 effect-atom files (RPC atoms plus UI state), 24 Electric-synced TanStack DB collections, ~97 `useLiveQuery` call sites, and `db/actions.ts` (970 lines of optimistic mutations)                                  |
+| Transport               | Effect RPC over HTTP NDJSON (`HazelRpcClient`, 72 call sites), `HazelApiClient` HTTP API (14 files), Rivet actor websocket for streaming AI messages                                                                |
+| React-only dependencies | Slate (22 files), frimousse, @legendapp/list, motion (10 files), react-tweet, @videojs/react, embla, input-otp, sonner (47 files), Clerk prebuilt components (3)                                                    |
+| Dead dependencies       | realtimekit-react(-ui), react-error-boundary, @paper-design/shaders-react, react-stately, remark-gfm/math, class-variance-authority. Drop them now; they are out of scope                                           |
+| Tests                   | 18 vitest files. The Slate markdown serializer suite (1014 lines) is a useful spec. No route or e2e tests                                                                                                           |
 
 **Foldkit** (0.166.0, studied from source):
 
 - Elm Architecture on Effect. The app is one Schema-typed Model. `update` returns Commands (named Effects), and `view` builds HTML through a Snabbdom-based builder with Tailwind classes passed as strings.
 - **Fits well:**
-  - Effect services are provided once through `resources`, so the existing `RpcClient` layer drops straight in. The typing-game example does exactly this.
-  - External streams become `Subscription`s.
-  - Sockets and media become `ManagedResource`s.
-  - Imperative widgets attach through `Mount`.
-  - Typed bidirectional routing.
-  - Headless `@foldkit/ui` components: Dialog, Menu, Popover, Tooltip, Toast, Listbox, Combobox, Tabs, DragAndDrop, FileDrop, Calendar, DatePicker, VirtualList, Animation.
-  - Story and Scene tests.
-  - A DevTools MCP an agent can use to inspect the running Model.
+    - Effect services are provided once through `resources`, so the existing `RpcClient` layer drops straight in. The typing-game example does exactly this.
+    - External streams become `Subscription`s.
+    - Sockets and media become `ManagedResource`s.
+    - Imperative widgets attach through `Mount`.
+    - Typed bidirectional routing.
+    - Headless `@foldkit/ui` components: Dialog, Menu, Popover, Tooltip, Toast, Listbox, Combobox, Tabs, DragAndDrop, FileDrop, Calendar, DatePicker, VirtualList, Animation.
+    - Story and Scene tests.
+    - A DevTools MCP an agent can use to inspect the running Model.
 - **Gaps that affect us:**
-  - There is no React interop. Its own docs say so: "no escape hatch".
-  - Routes are a flat union with no layout nesting; layouts are view helpers.
-  - No per-route code splitting.
-  - VirtualList has no bottom-anchored mode and no dynamic measurement.
-  - Menu has no submenus and no context menus.
-  - Data attributes follow Headless UI conventions (`data-active`, `data-closed`, `data-enter`), not React Aria's.
-  - HMR is a full reload that restores the Model.
-  - It is pre-1.0 and breaks APIs often: ~31 minor versions between 0.135 and 0.166.
-  - It pins `effect` and `@effect/platform-browser` to exactly `4.0.0`, while the repo is on 4.0.1.
+    - There is no React interop. Its own docs say so: "no escape hatch".
+    - Routes are a flat union with no layout nesting; layouts are view helpers.
+    - No per-route code splitting.
+    - VirtualList has no bottom-anchored mode and no dynamic measurement.
+    - Menu has no submenus and no context menus.
+    - Data attributes follow Headless UI conventions (`data-active`, `data-closed`, `data-enter`), not React Aria's.
+    - HMR is a full reload that restores the Model.
+    - It is pre-1.0 and breaks APIs often: ~31 minor versions between 0.135 and 0.166.
+    - It pins `effect` and `@effect/platform-browser` to exactly `4.0.0`, while the repo is on 4.0.1.
 
 ---
 
@@ -70,19 +70,19 @@ The parity harness is what makes building in parallel and cutting over in one sw
 
 A lot of `apps/web` is plain TypeScript or Effect code. It moves, unchanged, into a new shared package, `packages/web-core`, used by both apps:
 
-| Module | Lines | Notes |
-|---|---|---|
-| `db/collections.ts`, `db/actions.ts`, `libs/effect-electric-db-collection` | ~1.5k | Collections plus optimistic actions. TanStack DB core has no framework dependency |
-| `lib/services/common/*` (RPC client, runtime) | | Becomes the Foldkit `resources` layer |
-| `lib/theme/*`, `lib/helper/generate-shades.ts` | ~950 | CSS-variable theming, presets, remix |
-| `lib/error-messages.ts`, error mapping in `lib/toast-exit.tsx` | ~1k | Exit-to-message mapping. The toast rendering part is React |
-| `lib/search-filter-parser.ts`, `utils/timezone.ts`, `utils/presence.ts` | ~600 | |
-| `lib/notifications/*`, `notification-sound-manager.ts`, `native-notifications.ts` | ~700 | Orchestrator plus sinks |
-| `lib/hotkeys/hotkey-registry.ts` | 91 | Binding definitions; Foldkit `keyBindings` consumes them |
-| `lib/upload-to-storage.ts` | 82 | XHR with progress |
-| `lib/clerk-token.ts`, `lib/tauri*.ts`, `lib/platform-storage/*` | | |
-| `styles/theme.css`, `styles/styles.css`, `styles/code-syntax.css` | ~1k | Imported by both apps. This is the main reason pixel parity is achievable |
-| Icons: the 91 SVG components | 4k | Generate Foldkit view functions from the same SVG source with a script; don't rewrite by hand |
+| Module                                                                            | Lines | Notes                                                                                         |
+| --------------------------------------------------------------------------------- | ----- | --------------------------------------------------------------------------------------------- |
+| `db/collections.ts`, `db/actions.ts`, `libs/effect-electric-db-collection`        | ~1.5k | Collections plus optimistic actions. TanStack DB core has no framework dependency             |
+| `lib/services/common/*` (RPC client, runtime)                                     |       | Becomes the Foldkit `resources` layer                                                         |
+| `lib/theme/*`, `lib/helper/generate-shades.ts`                                    | ~950  | CSS-variable theming, presets, remix                                                          |
+| `lib/error-messages.ts`, error mapping in `lib/toast-exit.tsx`                    | ~1k   | Exit-to-message mapping. The toast rendering part is React                                    |
+| `lib/search-filter-parser.ts`, `utils/timezone.ts`, `utils/presence.ts`           | ~600  |                                                                                               |
+| `lib/notifications/*`, `notification-sound-manager.ts`, `native-notifications.ts` | ~700  | Orchestrator plus sinks                                                                       |
+| `lib/hotkeys/hotkey-registry.ts`                                                  | 91    | Binding definitions; Foldkit `keyBindings` consumes them                                      |
+| `lib/upload-to-storage.ts`                                                        | 82    | XHR with progress                                                                             |
+| `lib/clerk-token.ts`, `lib/tauri*.ts`, `lib/platform-storage/*`                   |       |                                                                                               |
+| `styles/theme.css`, `styles/styles.css`, `styles/code-syntax.css`                 | ~1k   | Imported by both apps. This is the main reason pixel parity is achievable                     |
+| Icons: the 91 SVG components                                                      | 4k    | Generate Foldkit view functions from the same SVG source with a script; don't rewrite by hand |
 
 Extracting a module must not change behavior. The check is a parity run of current `main` against the pinned baseline (`--baseline legacy --candidate legacy` with a fresh build), which has to report `identical` across the board. The same harness that guards the port also guards these refactors.
 
@@ -110,7 +110,7 @@ apps/web-foldkit/src
 - Layouts are view helpers: `orgShell(model, h, page)` wraps every `/$orgSlug/*` page, and `settingsShell` and `channelSettingsShell` work the same way. Shell state (sidebar collapse, panel widths, section collapse) lives in a `shell` Submodel at the root, so it survives navigation.
 - Page Submodels are optional (`maybeChatPage`). Navigating builds a page with `foldChildInit` and drops the previous one, which matches React's unmount semantics.
 - The redirects legacy does in `beforeLoad` (`/_app/index`, `channels/$id/settings/index`) become `onUrlChange` → `Navigation.replaceUrl` Commands.
-- There is no code splitting. Measure the bundle in Phase 0. If it is a problem, lazy-load heavy *libraries* (editor, video.js, embla) inside their Mounts with dynamic `import()`. That is supported because Mount `execute` is an Effect.
+- There is no code splitting. Measure the bundle in Phase 0. If it is a problem, lazy-load heavy _libraries_ (editor, video.js, embla) inside their Mounts with dynamic `import()`. That is supported because Mount `execute` is an Effect.
 
 ### 3.2 Data: TanStack DB stays, the Model holds query results
 
@@ -129,15 +129,15 @@ Pixel parity depends on producing **the same DOM boxes with the same class strin
 
 How to bridge the attribute-convention differences:
 
-| React Aria hook | Foldkit equivalent | Approach |
-|---|---|---|
-| `selected:` / `data-[selected]` | `data-selected` | Same attribute, works unchanged |
-| `focused` (item) | `data-active` | `@custom-variant` in the Foldkit app's CSS maps the RAC variant name onto Foldkit's attribute |
-| `entering:` / `exiting:` | `data-enter` / `data-leave` / `data-closed` | Custom variants; animation durations are taken from the legacy CSS |
-| `pressed:`, `hovered:`, `focus-visible:` | no attribute | Custom variants map to `:active`, `:hover`, `:focus-visible` (RAC's hover/press have touch-specific semantics; capture differences in parity interaction scenarios) |
-| `open:`, `disabled:`, `invalid:`, `placement-*:` | `data-open`, `data-disabled`, `data-invalid`, `data-placement` | Custom variants |
-| `data-slot=…` | n/a | Emit the same `data-slot` attributes so parent selectors keep working |
-| `composeRenderProps` render functions (52 sites) | `itemToConfig(item, { isActive, isSelected })` | Compute classes from Model state |
+| React Aria hook                                  | Foldkit equivalent                                             | Approach                                                                                                                                                            |
+| ------------------------------------------------ | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `selected:` / `data-[selected]`                  | `data-selected`                                                | Same attribute, works unchanged                                                                                                                                     |
+| `focused` (item)                                 | `data-active`                                                  | `@custom-variant` in the Foldkit app's CSS maps the RAC variant name onto Foldkit's attribute                                                                       |
+| `entering:` / `exiting:`                         | `data-enter` / `data-leave` / `data-closed`                    | Custom variants; animation durations are taken from the legacy CSS                                                                                                  |
+| `pressed:`, `hovered:`, `focus-visible:`         | no attribute                                                   | Custom variants map to `:active`, `:hover`, `:focus-visible` (RAC's hover/press have touch-specific semantics; capture differences in parity interaction scenarios) |
+| `open:`, `disabled:`, `invalid:`, `placement-*:` | `data-open`, `data-disabled`, `data-invalid`, `data-placement` | Custom variants                                                                                                                                                     |
+| `data-slot=…`                                    | n/a                                                            | Emit the same `data-slot` attributes so parent selectors keep working                                                                                               |
+| `composeRenderProps` render functions (52 sites) | `itemToConfig(item, { isActive, isSelected })`                 | Compute classes from Model state                                                                                                                                    |
 
 Where `@foldkit/ui` can't produce the needed DOM, build the primitive directly on `h` plus `Anchor`/floating-ui. Known cases: Menu/Listbox item wrappers only accept `className` and `content`; menus need submenus and context menus (`ui/context-menu.tsx`); Menu/Combobox items are restricted to string types. Upstream fixes where they're general.
 
@@ -145,22 +145,22 @@ Every primitive gets an isolated parity scenario on a component gallery route (�
 
 ### 3.4 React-only dependencies
 
-| Legacy | Replacement | Notes |
-|---|---|---|
-| Slate composer and viewer (22 files, 4.8k lines) | Composer: **ProseMirror or Tiptap (vanilla) in a `Mount`** (`Mount.defineStream` emits doc changes). Viewer: a **pure Foldkit view** of a parsed markdown AST (no editor instance per message) | Biggest risk. Spike S3 picks the editor. The serializer's 1014-line test suite becomes the spec for markdown round-trips. Command-palette search editor: same Mount |
-| `@legendapp/list` message list | Custom bottom-anchored list: a Mount measures row heights (ResizeObserver) and a Subscription reports them, with prepend anchoring and stick-to-bottom in `update` | Spike S4. Visually inert, so screenshots can't regress from it, but scroll behavior needs Scene tests plus manual QA |
-| frimousse emoji picker (314 lines) | Rewrite with Foldkit (grid plus search over the same emoji data) | Small |
-| sonner (47 files) | `@foldkit/ui` Toast, restyled to sonner's markup and classes | Toast position and stacking get parity scenarios with a fixture-triggered toast |
-| motion (10 files) | CSS animations where possible; `motion` vanilla `animate()` in Mounts for onboarding, globe and agent steps | Parity runs freeze animations, so verify end states and check motion manually |
-| @videojs/react | video.js vanilla in a Mount | |
-| embla-carousel-react | `embla-carousel` vanilla in a Mount | |
-| react-tweet | Use `react-tweet/api` (framework-free fetch) plus a Foldkit view that copies its markup | |
-| input-otp | Rewrite (one input plus visual slots) | |
-| Clerk `<SignIn>`, `<SignUp>`, `<CreateOrganization>` | `Clerk.mountSignIn(el)` and friends in a Mount: clerk-js's own vanilla API | Auth state: a Subscription on `Clerk.addListener`; token via web-core `getClerkToken` |
-| `@tanstack/react-form` + arktype | `foldkit/fieldValidation` (Schema rules) | arktype schemas get ported to Effect Schema |
-| `@tanstack/react-hotkeys` | `Subscription.keyBindings` fed from the web-core registry plus user overrides in the Model | |
-| effect-atom UI state (modals, panels, command palette, chat state) | Model fields and Submodels | e.g. `modal-atoms` becomes a `Modal` union in the root Model |
-| PostHog provider | Plain `posthog-js` calls in Commands | |
+| Legacy                                                             | Replacement                                                                                                                                                                                    | Notes                                                                                                                                                               |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Slate composer and viewer (22 files, 4.8k lines)                   | Composer: **ProseMirror or Tiptap (vanilla) in a `Mount`** (`Mount.defineStream` emits doc changes). Viewer: a **pure Foldkit view** of a parsed markdown AST (no editor instance per message) | Biggest risk. Spike S3 picks the editor. The serializer's 1014-line test suite becomes the spec for markdown round-trips. Command-palette search editor: same Mount |
+| `@legendapp/list` message list                                     | Custom bottom-anchored list: a Mount measures row heights (ResizeObserver) and a Subscription reports them, with prepend anchoring and stick-to-bottom in `update`                             | Spike S4. Visually inert, so screenshots can't regress from it, but scroll behavior needs Scene tests plus manual QA                                                |
+| frimousse emoji picker (314 lines)                                 | Rewrite with Foldkit (grid plus search over the same emoji data)                                                                                                                               | Small                                                                                                                                                               |
+| sonner (47 files)                                                  | `@foldkit/ui` Toast, restyled to sonner's markup and classes                                                                                                                                   | Toast position and stacking get parity scenarios with a fixture-triggered toast                                                                                     |
+| motion (10 files)                                                  | CSS animations where possible; `motion` vanilla `animate()` in Mounts for onboarding, globe and agent steps                                                                                    | Parity runs freeze animations, so verify end states and check motion manually                                                                                       |
+| @videojs/react                                                     | video.js vanilla in a Mount                                                                                                                                                                    |                                                                                                                                                                     |
+| embla-carousel-react                                               | `embla-carousel` vanilla in a Mount                                                                                                                                                            |                                                                                                                                                                     |
+| react-tweet                                                        | Use `react-tweet/api` (framework-free fetch) plus a Foldkit view that copies its markup                                                                                                        |                                                                                                                                                                     |
+| input-otp                                                          | Rewrite (one input plus visual slots)                                                                                                                                                          |                                                                                                                                                                     |
+| Clerk `<SignIn>`, `<SignUp>`, `<CreateOrganization>`               | `Clerk.mountSignIn(el)` and friends in a Mount: clerk-js's own vanilla API                                                                                                                     | Auth state: a Subscription on `Clerk.addListener`; token via web-core `getClerkToken`                                                                               |
+| `@tanstack/react-form` + arktype                                   | `foldkit/fieldValidation` (Schema rules)                                                                                                                                                       | arktype schemas get ported to Effect Schema                                                                                                                         |
+| `@tanstack/react-hotkeys`                                          | `Subscription.keyBindings` fed from the web-core registry plus user overrides in the Model                                                                                                     |                                                                                                                                                                     |
+| effect-atom UI state (modals, panels, command palette, chat state) | Model fields and Submodels                                                                                                                                                                     | e.g. `modal-atoms` becomes a `Modal` union in the root Model                                                                                                        |
+| PostHog provider                                                   | Plain `posthog-js` calls in Commands                                                                                                                                                           |                                                                                                                                                                     |
 
 ### 3.5 Platform
 
@@ -178,14 +178,14 @@ Each phase ends with a parity milestone. Phases 3 to 5 can be staffed in paralle
 
 Every spike produces a short decision record in `docs/foldkit-decisions/`.
 
-| Spike | Question | Exit criterion |
-|---|---|---|
-| S1 Skeleton | Can Foldkit boot our stack? | `apps/web-foldkit` builds with the parity env; `window.Clerk` auth, RPC `resources`, `user.me`; `settings-team` scenario **identical** |
-| S2 Data bridge | TanStack DB bridge vs a normalized Model store | Benchmark on a `heavy` dataset (10k messages, 500 channels): update latency, render time, memory, dev-mode freeze cost. Decide §3.2 |
-| S3 Editor | ProseMirror vs Tiptap vs Lexical in a Mount | Composer scenario **identical** (empty, focused, with draft); serializer suite passes against the new model; mention autocomplete works |
-| S4 Chat list | Bottom-anchored virtualization | 10k-message channel scrolls at 60fps, prepend keeps position, sticks to bottom on new message |
-| S5 Primitive parity | Do custom variants plus `@foldkit/ui` reach pixel identity? | Button, Menu (open), Dialog, Tooltip, Select, Tabs all **identical** in the gallery, in both themes |
-| S6 Effect pin | Foldkit peers `effect@4.0.0` exactly | Either Foldkit runs on 4.0.1 (bun `overrides`, verify tests) or Foldkit releases support 4.0.1 |
+| Spike                                                       | Question                                                    | Exit criterion                                                                                                                          |
+| ----------------------------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| S1 Skeleton ✅ ([record](foldkit-decisions/s1-skeleton.md)) | Can Foldkit boot our stack?                                 | `apps/web-foldkit` builds with the parity env; `window.Clerk` auth, RPC `resources`, `user.me`; `settings-team` scenario **identical**  |
+| S2 Data bridge                                              | TanStack DB bridge vs a normalized Model store              | Benchmark on a `heavy` dataset (10k messages, 500 channels): update latency, render time, memory, dev-mode freeze cost. Decide §3.2     |
+| S3 Editor                                                   | ProseMirror vs Tiptap vs Lexical in a Mount                 | Composer scenario **identical** (empty, focused, with draft); serializer suite passes against the new model; mention autocomplete works |
+| S4 Chat list                                                | Bottom-anchored virtualization                              | 10k-message channel scrolls at 60fps, prepend keeps position, sticks to bottom on new message                                           |
+| S5 Primitive parity                                         | Do custom variants plus `@foldkit/ui` reach pixel identity? | Button, Menu (open), Dialog, Tooltip, Select, Tabs all **identical** in the gallery, in both themes                                     |
+| S6 Effect pin ✅ (runs on 4.0.1, see S1)                    | Foldkit peers `effect@4.0.0` exactly                        | Either Foldkit runs on 4.0.1 (bun `overrides`, verify tests) or Foldkit releases support 4.0.1                                          |
 
 If S3 or S4 fails badly, stop and reconsider. Those two are the migration's load-bearing walls.
 
@@ -221,16 +221,16 @@ If S3 or S4 fails badly, stop and reconsider. Those two are the migration's load
 
 Independent screens. Each is one ticket and one agent-sized unit. Rough size from legacy line counts:
 
-| Area | Routes | Legacy lines | Notes |
-|---|---|---|---|
-| Notifications | 5 | ~200 + list | |
-| My settings | profile, notifications, linked accounts, desktop | ~920 | profile picture crop (pointer interaction) |
-| Org settings | general, team, invitations, custom emojis, debug, connect invites | ~2.3k | custom emojis has drag-and-drop upload |
-| Integrations | index, installed, marketplace, your apps, `$integrationId` | ~1.7k + 3.7k components | `$integrationId` is the largest route (969) |
-| Chat sync | index, `$connectionId` | ~1.2k | |
-| Channel settings | overview, integrations, connect | ~1k + 2.7k components | |
-| Org home, channel browser, profile | 3 | ~760 | |
-| Onboarding, join, select org, auth pages | 6 | ~800 | motion; Clerk Mounts |
+| Area                                     | Routes                                                            | Legacy lines            | Notes                                       |
+| ---------------------------------------- | ----------------------------------------------------------------- | ----------------------- | ------------------------------------------- |
+| Notifications                            | 5                                                                 | ~200 + list             |                                             |
+| My settings                              | profile, notifications, linked accounts, desktop                  | ~920                    | profile picture crop (pointer interaction)  |
+| Org settings                             | general, team, invitations, custom emojis, debug, connect invites | ~2.3k                   | custom emojis has drag-and-drop upload      |
+| Integrations                             | index, installed, marketplace, your apps, `$integrationId`        | ~1.7k + 3.7k components | `$integrationId` is the largest route (969) |
+| Chat sync                                | index, `$connectionId`                                            | ~1.2k                   |                                             |
+| Channel settings                         | overview, integrations, connect                                   | ~1k + 2.7k components   |                                             |
+| Org home, channel browser, profile       | 3                                                                 | ~760                    |                                             |
+| Onboarding, join, select org, auth pages | 6                                                                 | ~800                    | motion; Clerk Mounts                        |
 
 ### Phase 6: Platform and polish
 
@@ -265,12 +265,12 @@ What exists today: fixture backend, Clerk stub, deterministic capture, pixel and
 
 - Scenarios for the remaining 29 routes.
 - Datasets:
-  - `empty` (new org, no channels)
-  - `heavy` (500 channels, 10k messages, long names, many unreads)
-  - `member` (non-admin, so permission-gated UI is hidden)
-  - `onboarding` (`isOnboarded: false`)
-  - `rich` (threads, embeds, attachments, pinned messages, custom emojis, bots, integrations)
-  - `errors` (selected RPCs fail, to cover toasts and error states)
+    - `empty` (new org, no channels)
+    - `heavy` (500 channels, 10k messages, long names, many unreads)
+    - `member` (non-admin, so permission-gated UI is hidden)
+    - `onboarding` (`isOnboarded: false`)
+    - `rich` (threads, embeds, attachments, pinned messages, custom emojis, bots, integrations)
+    - `errors` (selected RPCs fail, to cover toasts and error states)
 
 ### 6.2 New capabilities
 
@@ -291,18 +291,18 @@ What exists today: fixture backend, Clerk stub, deterministic capture, pixel and
 
 ## 7. Risks
 
-| Risk | Likelihood | Impact | Mitigation |
-|---|---|---|---|
-| Editor replacement can't match Slate's behavior and markup | Medium | High | S3 before anything else; the serializer spec; run the editor's DOM output through the same classes |
-| Chat list virtualization or scroll anchoring regresses | Medium | High | S4; Scene tests on scroll Messages; manual QA checklist |
-| Foldkit API churn (pre-1.0, ~weekly breaking renames) | High | Medium | Pin exact versions; upgrade on a schedule in dedicated PRs; parity proves no visual change |
-| Effect version pin (`4.0.0` exact) blocks repo upgrades | Medium | Medium | S6; coordinate with Foldkit maintainers; overrides |
-| Single-Model performance with large synced data | Medium | High | S2 benchmark; keep the bulk data in TanStack DB (§3.2); `createKeyedLazy` for message rows |
-| Overlay positioning differs (RAC positioning vs floating-ui) | High | Low | Per-overlay scenarios; tune offset and flip middleware to match |
-| Accessibility regressions (Foldkit UI not audited) | Medium | Medium | Accessibility snapshots (§6.2); keyboard flows in Scene tests |
-| Legacy keeps changing during migration | High | Medium | Pinned baseline plus the "port with the change" policy (§2.2) |
-| Bundle size without route splitting | Low | Medium | Measure in S1; lazy-load heavy libraries inside Mounts |
-| Two codebases for months | Certain | Medium | Shared web-core; finish Phase 2 fast so all later work is parallel |
+| Risk                                                         | Likelihood | Impact | Mitigation                                                                                         |
+| ------------------------------------------------------------ | ---------- | ------ | -------------------------------------------------------------------------------------------------- |
+| Editor replacement can't match Slate's behavior and markup   | Medium     | High   | S3 before anything else; the serializer spec; run the editor's DOM output through the same classes |
+| Chat list virtualization or scroll anchoring regresses       | Medium     | High   | S4; Scene tests on scroll Messages; manual QA checklist                                            |
+| Foldkit API churn (pre-1.0, ~weekly breaking renames)        | High       | Medium | Pin exact versions; upgrade on a schedule in dedicated PRs; parity proves no visual change         |
+| Effect version pin (`4.0.0` exact) blocks repo upgrades      | Medium     | Medium | S6; coordinate with Foldkit maintainers; overrides                                                 |
+| Single-Model performance with large synced data              | Medium     | High   | S2 benchmark; keep the bulk data in TanStack DB (§3.2); `createKeyedLazy` for message rows         |
+| Overlay positioning differs (RAC positioning vs floating-ui) | High       | Low    | Per-overlay scenarios; tune offset and flip middleware to match                                    |
+| Accessibility regressions (Foldkit UI not audited)           | Medium     | Medium | Accessibility snapshots (§6.2); keyboard flows in Scene tests                                      |
+| Legacy keeps changing during migration                       | High       | Medium | Pinned baseline plus the "port with the change" policy (§2.2)                                      |
+| Bundle size without route splitting                          | Low        | Medium | Measure in S1; lazy-load heavy libraries inside Mounts                                             |
+| Two codebases for months                                     | Certain    | Medium | Shared web-core; finish Phase 2 fast so all later work is parallel                                 |
 
 ---
 

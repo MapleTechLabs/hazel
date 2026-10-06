@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { chromium, type Browser } from "playwright"
 import { fixtureBackendUrl, fixtureElectricUrl, outDir, targets, type TargetName } from "./config.ts"
-import { BOX_STYLE_PROPS, collectSnapshot, TEXT_STYLE_PROPS } from "./runtime/snapshot.ts"
+import { BOX_STYLE_PROPS, collectSnapshot, serializeDom, TEXT_STYLE_PROPS } from "./runtime/snapshot.ts"
 import { installDeterminism, waitForVisualQuiet } from "./runtime/stabilize.ts"
 import {
 	datasets,
@@ -51,6 +51,31 @@ export const captureDir = (run: string, target: string) => join(outDir, "runs", 
 
 const SEED = 0x4a2e1
 
+/**
+ * Pages are served via `route.fulfill` (canonical origin), which Chromium treats as a
+ * public address; its Local Network Access checks would then block calls to the
+ * loopback fixture backend. Everything here is local, so the checks are disabled.
+ */
+export const BROWSER_LAUNCH_OPTIONS = {
+	args: [
+		"--disable-features=LocalNetworkAccessChecks,BlockInsecurePrivateNetworkRequests,PrivateNetworkAccessSendPreflights",
+	],
+}
+
+/**
+ * Every target is loaded through the same origin (requests are proxied to the target's
+ * port), so anything that prints `location.origin` renders identically across targets.
+ */
+/**
+ * Console noise that does not indicate a broken capture: analytics without a key, the
+ * Rivet actor endpoint (not part of the fixture backend), and requests the harness itself
+ * blocked (listed separately in `blockedRequests`).
+ */
+const IGNORED_CONSOLE_ERRORS =
+	/PostHog|Failed to load resource: the server responded with a status of 404|\/rivet\/|ERR_BLOCKED_BY_CLIENT/
+
+export const CANONICAL_ORIGIN = "http://localhost:4800"
+
 export const captureTarget = async (options: {
 	readonly target: TargetName
 	/** Output folder name under the run; defaults to the target name (self-checks capture one target twice). */
@@ -62,12 +87,9 @@ export const captureTarget = async (options: {
 	const target = targets[options.target]
 	const dir = captureDir(options.run, options.label ?? options.target)
 	mkdirSync(dir, { recursive: true })
-	const browser = options.browser ?? (await chromium.launch())
-	const allowedOrigins = new Set([
-		`http://localhost:${target.port}`,
-		fixtureBackendUrl,
-		new URL(fixtureElectricUrl).origin,
-	])
+	const browser = options.browser ?? (await chromium.launch(BROWSER_LAUNCH_OPTIONS))
+	const targetOrigin = `http://localhost:${target.port}`
+	const allowedOrigins = new Set([CANONICAL_ORIGIN, fixtureBackendUrl, new URL(fixtureElectricUrl).origin])
 
 	const results: CaptureResult[] = []
 	for (const variant of options.variants) {
@@ -100,7 +122,11 @@ export const captureTarget = async (options: {
 				blockedRequests.push(`${url.origin}${url.pathname}`)
 				return route.abort("blockedbyclient")
 			}
-			if (url.origin === `http://localhost:${target.port}`) return route.continue()
+			if (url.origin === CANONICAL_ORIGIN) {
+				return route
+					.fetch({ url: `${targetOrigin}${url.pathname}${url.search}` })
+					.then((response) => route.fulfill({ response }))
+			}
 			return route.continue({
 				headers: { ...route.request().headers(), "x-parity-dataset": dataset.name },
 			})
@@ -108,7 +134,7 @@ export const captureTarget = async (options: {
 
 		let error: string | undefined
 		try {
-			await page.goto(`http://localhost:${target.port}${variant.scenario.path}`, { waitUntil: "load" })
+			await page.goto(`${CANONICAL_ORIGIN}${variant.scenario.path}`, { waitUntil: "load" })
 			await page.evaluate(waitForVisualQuiet, { quietMs: 400, timeoutMs: 8000 })
 			if (variant.scenario.steps) {
 				await variant.scenario.steps(page)
@@ -126,6 +152,7 @@ export const captureTarget = async (options: {
 				boxProps: [...BOX_STYLE_PROPS],
 			})
 			writeFileSync(join(dir, `${variant.id}.json`), JSON.stringify({ url: page.url(), ...snapshot }))
+			writeFileSync(join(dir, `${variant.id}.html`), await page.evaluate(serializeDom))
 		} catch (cause) {
 			error = cause instanceof Error ? cause.message.split("\n")[0] : String(cause)
 			await page.screenshot({ path: join(dir, `${variant.id}.png`) }).catch(() => undefined)
@@ -136,7 +163,7 @@ export const captureTarget = async (options: {
 			variantId: variant.id,
 			ok: !error,
 			error,
-			consoleErrors: consoleErrors.filter((line) => !/PostHog|Failed to load resource/.test(line)),
+			consoleErrors: consoleErrors.filter((line) => !IGNORED_CONSOLE_ERRORS.test(line)),
 			blockedRequests: [...new Set(blockedRequests)],
 			durationMs: Math.round(performance.now() - started),
 		}

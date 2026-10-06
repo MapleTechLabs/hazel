@@ -26,6 +26,8 @@ bun run parity run                            # capture both, diff, write the re
 
 - **Same data in both apps.** Both apps are built with `VITE_BACKEND_URL` / `VITE_ELECTRIC_URL` pointing at the fixture backend (`src/config.ts`). Datasets live in `src/fixtures/datasets/` as typed rows with deterministic IDs (`stableId("user:ada")`).
 - **No Clerk network.** `src/runtime/clerk-stub.ts` defines `window.Clerk` before the app boots. `@clerk/react` sees a loaded instance and never downloads clerk-js, and `getToken()` returns a fixed token. The Foldkit app has to read auth through `window.Clerk` too (as `apps/web/src/lib/clerk-token.ts` already does) for the stub to apply.
+- **One origin.** Every target is captured through `http://localhost:4800`, proxied to the target's port, so UI that prints `location.origin` matches across targets.
+- **Healthy captures only.** A capture that crashes, fails a step, or logs console errors (apart from known noise) marks its variant as `fail`, even when the pixels match. Two identical error screens are not parity.
 - **Determinism.** Frozen clock (`dataset.now`), seeded `Math.random`, UTC, en-US, `deviceScaleFactor: 1`, animations and transitions frozen, carets and scrollbars hidden, service worker blocked, and every request outside the three local origins aborted. A capture waits for fonts and images, then for 400ms with no DOM mutations.
 - **Two kinds of diff.**
   - *Pixels*: strict (any channel differs) and perceptual (pixelmatch, anti-aliasing ignored). Differing pixels are grouped into regions.
@@ -62,14 +64,32 @@ bun run parity build foldkit && bun run parity run --filter settings-team
 
 `--filter` matches a variant id substring (`chat-channel--mobile`) or an area (`settings`). The exit code is non-zero if anything fails, so the loop can be scripted.
 
-### 4. Track what's left
+### 4. Get the reference markup for a screen
+
+```bash
+bun run parity capture legacy --filter settings-team --run ref
+bun run parity codegen .parity/runs/ref/legacy/settings-team--desktop--light.html --line 120 --name orgHeader
+```
+
+Every capture also writes `<variant>.html`, an indented dump of the rendered DOM with sorted attributes. Diff the legacy and Foldkit dumps to find attribute-level differences. `codegen` turns any subtree into Foldkit `h(...)` code with class strings kept verbatim. For components, prefer porting the legacy `twMerge`/`tv` call itself (see `docs/foldkit-decisions/s1-skeleton.md`) and use codegen for one-off markup.
+
+### 5. Check that a legacy refactor is visually neutral
+
+```bash
+bun run parity build legacy-head          # working-tree legacy app
+bun run parity run --baseline legacy --candidate legacy-head
+```
+
+Used by the `legacy-ui-guard` subagent (`.claude/agents/legacy-ui-guard.md`) for every change to legacy code.
+
+### 6. Track what's left
 
 ```bash
 bun run parity coverage   # every legacy route, ✓ if a scenario visits it
 bun run parity list       # every scenario × viewport × theme variant
 ```
 
-### 5. Add a scenario
+### 7. Add a scenario
 
 Add an entry to `src/scenarios.ts`. Steps must use accessible locators (`getByRole`, `getByText`) so the same script drives both apps. If a step works in one app and not the other, that is a parity bug (wrong role or missing label), not a test bug. Add a dataset under `src/fixtures/datasets/` when a screen needs different data (empty org, long names, many unreads), and register it in `datasets`.
 

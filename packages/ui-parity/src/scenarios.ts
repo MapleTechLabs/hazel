@@ -123,7 +123,13 @@ export const scenarios: ReadonlyArray<Scenario> = [
 
 	// Settings
 	{ id: "settings-general", area: "settings", title: "Organization settings", path: `${org}/settings` },
-	{ id: "settings-team", area: "settings", title: "Team members", path: `${org}/settings/team` },
+	{
+		id: "settings-team",
+		area: "settings",
+		title: "Team members",
+		path: `${org}/settings/team`,
+		themes: ["light", "dark"],
+	},
 	{
 		id: "settings-invitations",
 		area: "settings",
