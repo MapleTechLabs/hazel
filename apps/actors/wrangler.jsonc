@@ -1,3 +1,4 @@
+// Local `wrangler dev` only. Deploys go through alchemy: apps/actors/alchemy.run.ts
 {
 	"name": "hazel-actors",
 	"main": "src/index.ts",

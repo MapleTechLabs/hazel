@@ -1,13 +1,14 @@
 import { createHmac, timingSafeEqual } from "node:crypto"
 import { verifyWebhook as verifyClerkWebhook } from "@clerk/backend/webhooks"
-import { HttpApiBuilder, HttpApiClient } from "effect/http-api"
+import { HttpApiBuilder } from "effect/http-api"
 import { HttpServerRequest } from "effect/http"
-import { Cluster, InternalServerError, WorkflowInitializationError } from "@hazel/domain"
+import { InternalServerError, WorkflowInitializationError } from "@hazel/domain"
 import { GitHubWebhookResponse, InvalidGitHubWebhookSignature } from "@hazel/domain/http"
 import { Config, Effect, pipe, Redacted } from "effect"
 import { HazelApi, InvalidWebhookSignature, WebhookResponse } from "../api"
 import { ClerkSync } from "@hazel/backend-core/services"
 import { ChannelAccessSyncService } from "../services/channel-access-sync"
+import { makeClusterClient } from "../lib/cluster-client"
 
 export const HttpWebhookLive = HttpApiBuilder.group(HazelApi, "webhooks", (handlers) =>
 	handlers
@@ -190,9 +191,7 @@ export const HttpWebhookLive = HttpApiBuilder.group(HazelApi, "webhooks", (handl
 				})
 
 				const clusterUrl = yield* Config.String("CLUSTER_URL")
-				const client = yield* HttpApiClient.make(Cluster.WorkflowApi, {
-					baseUrl: clusterUrl,
-				})
+				const client = yield* makeClusterClient(clusterUrl)
 
 				const wrapWorkflowError = (label: string) => (err: unknown) =>
 					Effect.fail(

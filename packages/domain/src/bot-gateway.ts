@@ -1,4 +1,4 @@
-import { Schema } from "effect"
+import { type Effect, Schema } from "effect"
 import { Channel, ChannelMember, Message } from "./models"
 import { BotId, ChannelId, OrganizationId, UserId } from "@hazel/schema"
 
@@ -181,3 +181,30 @@ export const BotGatewayServerFrame = Schema.Union([
 ])
 
 export type BotGatewayServerFrame = Schema.Schema.Type<typeof BotGatewayServerFrame>
+
+/**
+ * The `BotGateway` Durable Object's RPC contract (one object per bot, addressed by `BotId`).
+ * Shared by the gateway Worker that hosts the object and by the backend that publishes into it,
+ * so neither side imports the other's runtime.
+ */
+export class BotGatewayEventRejectedError extends Schema.TaggedError<BotGatewayEventRejectedError>()(
+	"BotGatewayEventRejectedError",
+	{
+		message: Schema.String,
+	},
+) {}
+
+/** Where an appended event landed in the bot's log, in the protocol's offset format. */
+export interface BotGatewayPublishResult {
+	readonly offset: string
+}
+
+export interface BotGatewayRpc {
+	/**
+	 * Append one event (a `BotGatewayEnvelope` as JSON text, the exact wire form bots decode) to
+	 * the bot's log and deliver it to the connected session, if any.
+	 */
+	readonly publish: (
+		eventJson: string,
+	) => Effect.Effect<BotGatewayPublishResult, BotGatewayEventRejectedError>
+}

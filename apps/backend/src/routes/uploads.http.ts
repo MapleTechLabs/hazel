@@ -13,12 +13,12 @@ import {
 	UploadError,
 } from "@hazel/domain/http"
 import { AttachmentId } from "@hazel/schema"
-import { S3 } from "@hazel/effect-bun"
-import { randomUUIDv7 } from "bun"
+import { v7 as randomUUIDv7 } from "uuid"
 import { Effect, Match, Option } from "effect"
 import { HazelApi } from "../api"
 import { AttachmentPolicy } from "../policies/attachment-policy"
 import { OrganizationPolicy } from "../policies/organization-policy"
+import { ObjectStorage } from "../services/object-storage"
 import { checkAvatarRateLimit } from "../services/rate-limit-helpers"
 
 /**
@@ -39,7 +39,7 @@ const makePresignUploadResponse = (input: {
 export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handlers) =>
 	Effect.gen(function* () {
 		const db = yield* Database.Database
-		const s3 = yield* S3
+		const storage = yield* ObjectStorage
 		const attachmentPolicy = yield* AttachmentPolicy
 		const organizationPolicy = yield* OrganizationPolicy
 		const attachmentRepo = yield* AttachmentRepo
@@ -80,13 +80,8 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 								`Generating presigned URL for user avatar upload: ${key} (size: ${req.fileSize} bytes, type: ${req.contentType})`,
 							)
 
-							const uploadUrl = yield* s3
-								.presign(key, {
-									acl: "public-read",
-									method: "PUT",
-									type: req.contentType,
-									expiresIn: 300, // 5 minutes
-								})
+							const uploadUrl = yield* storage
+								.presignPut(key, { contentType: req.contentType, expiresIn: 300 })
 								.pipe(
 									Effect.mapError(
 										(error) =>
@@ -160,13 +155,8 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 								`Generating presigned URL for bot avatar upload: ${key} (size: ${req.fileSize} bytes, type: ${req.contentType})`,
 							)
 
-							const uploadUrl = yield* s3
-								.presign(key, {
-									acl: "public-read",
-									method: "PUT",
-									type: req.contentType,
-									expiresIn: 300, // 5 minutes
-								})
+							const uploadUrl = yield* storage
+								.presignPut(key, { contentType: req.contentType, expiresIn: 300 })
 								.pipe(
 									Effect.mapError(
 										(error) =>
@@ -237,13 +227,8 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 								`Generating presigned URL for organization avatar upload: ${key} (size: ${req.fileSize} bytes, type: ${req.contentType})`,
 							)
 
-							const uploadUrl = yield* s3
-								.presign(key, {
-									acl: "public-read",
-									method: "PUT",
-									type: req.contentType,
-									expiresIn: 300, // 5 minutes
-								})
+							const uploadUrl = yield* storage
+								.presignPut(key, { contentType: req.contentType, expiresIn: 300 })
 								.pipe(
 									Effect.mapError(
 										(error) =>
@@ -304,13 +289,8 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 								`Generating presigned URL for custom emoji upload: ${key} (size: ${req.fileSize} bytes, type: ${req.contentType})`,
 							)
 
-							const uploadUrl = yield* s3
-								.presign(key, {
-									acl: "public-read",
-									method: "PUT",
-									type: req.contentType,
-									expiresIn: 300, // 5 minutes
-								})
+							const uploadUrl = yield* storage
+								.presignPut(key, { contentType: req.contentType, expiresIn: 300 })
 								.pipe(
 									Effect.mapError(
 										(error) =>
@@ -372,13 +352,8 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 								.pipe(withRemapDbErrors("AttachmentRepo", "create"))
 
 							// Generate presigned URL
-							const uploadUrl = yield* s3
-								.presign(attachmentId, {
-									acl: "public-read",
-									method: "PUT",
-									type: req.contentType,
-									expiresIn: 300, // 5 minutes
-								})
+							const uploadUrl = yield* storage
+								.presignPut(attachmentId, { contentType: req.contentType, expiresIn: 300 })
 								.pipe(
 									Effect.mapError(
 										(error) =>

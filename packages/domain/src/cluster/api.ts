@@ -21,6 +21,13 @@ export const workflows = [
 ] as const
 
 // HTTP API definition for the cluster service
+/**
+ * Header carrying the cluster API's shared secret (`CLUSTER_API_SECRET`). The cluster stays on
+ * Railway while the backend runs on Cloudflare, so its workflow API is reachable from the public
+ * internet and rejects calls without it whenever the secret is configured.
+ */
+export const CLUSTER_API_SECRET_HEADER = "x-hazel-cluster-secret"
+
 export class WorkflowApi extends HttpApi.make("api")
 	.add(WorkflowProxy.toHttpApiGroup("workflows", workflows))
 	.add(HttpApiGroup.make("health").add(HttpApiEndpoint.get("ok", "/health", { success: Schema.String }))) {}

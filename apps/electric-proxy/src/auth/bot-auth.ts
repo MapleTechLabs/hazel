@@ -93,7 +93,7 @@ export const validateBotToken = Effect.fn("ElectricProxy.validateBotToken")(func
 	const bot = botOption.value
 	yield* Effect.annotateCurrentSpan("auth.token.valid", true)
 
-	// Get cached access context from Redis-backed cache
+	// Get cached access context (persistence-backed cache)
 	const cache = yield* AccessContextCacheService
 	const accessContext = yield* cache.getBotContext(bot.id, bot.userId)
 	yield* Effect.annotateCurrentSpan("proxy.bot.channel_count", accessContext.channelIds.length)

@@ -1,0 +1,15 @@
+{
+	"include": ["src/**/*.ts"],
+	"compilerOptions": {
+		"target": "esnext",
+		"module": "preserve",
+		"lib": ["ES2023"],
+		"moduleResolution": "bundler",
+		"allowImportingTsExtensions": true,
+		"verbatimModuleSyntax": true,
+		"noEmit": true,
+		"skipLibCheck": true,
+		"strict": true,
+		"types": ["@cloudflare/workers-types"]
+	}
+}

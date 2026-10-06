@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto"
 import { FetchHttpClient } from "effect/http"
-import { BunSocket } from "@effect/platform-bun"
 import { ChatSyncChannelLinkRepo } from "@hazel/backend-core"
 import {
 	ExternalChannelId,
@@ -13,6 +12,7 @@ import {
 import { DiscordConfig } from "dfx"
 import { DiscordGateway, DiscordLive } from "dfx/gateway"
 import { Context, Config, Effect, Layer, Option, Redacted, Ref, Schema } from "effect"
+import type * as Socket from "effect/socket/Socket"
 import { DiscordSyncWorker, DiscordSyncWorkerLayer } from "./discord-sync-worker"
 import type { ChatSyncIngressMessageAttachment } from "./chat-sync-core-worker"
 
@@ -595,16 +595,12 @@ export class DiscordGatewayService extends Context.Service<DiscordGatewayService
 
 		if (!gatewayEnabled) {
 			yield* Effect.logInfo("Discord gateway disabled via DISCORD_GATEWAY_ENABLED=false")
-			return {
-				start: Effect.void,
-			}
+			return { run: Option.none() }
 		}
 
 		if (Option.isNone(botTokenOption)) {
 			yield* Effect.logWarning("Discord gateway disabled: DISCORD_BOT_TOKEN is not configured")
-			return {
-				start: Effect.void,
-			}
+			return { run: Option.none() }
 		}
 
 		const botToken = Redacted.value(botTokenOption.value)
@@ -617,7 +613,6 @@ export class DiscordGatewayService extends Context.Service<DiscordGatewayService
 					gateway: { intents },
 				}),
 			),
-			Layer.provide(BunSocket.layerWebSocketConstructor),
 			Layer.provide(FetchHttpClient.layer),
 		)
 
@@ -662,7 +657,16 @@ export class DiscordGatewayService extends Context.Service<DiscordGatewayService
 				error: String(error),
 			})
 
-		const start = Effect.gen(function* () {
+		/**
+		 * The gateway session: connects, then handles dispatches until the connection is lost for
+		 * good. Never fails; the host decides where it runs (a forked fiber on Bun, a Durable
+		 * Object on Cloudflare) and supplies the WebSocket constructor.
+		 *
+		 * The cast restores the requirement the circular `DiscordSyncWorker` typing collapses to
+		 * `unknown` (see chat-sync-core-worker.ts); the only service left unprovided here is the
+		 * WebSocket constructor.
+		 */
+		const run = Effect.gen(function* () {
 			yield* Effect.logInfo("Starting Discord gateway background worker with dfx", {
 				intents,
 			})
@@ -726,16 +730,10 @@ export class DiscordGatewayService extends Context.Service<DiscordGatewayService
 						cause: String(cause),
 					}),
 				),
-				Effect.forkScoped,
-				Effect.asVoid,
 			)
-		})
+		}) as Effect.Effect<void, never, Socket.WebSocketConstructor>
 
-		yield* start
-
-		return {
-			start: Effect.void,
-		}
+		return { run: Option.some(run) }
 	}),
 }) {
 	static readonly layer = Layer.effect(this, this.make).pipe(
@@ -743,3 +741,16 @@ export class DiscordGatewayService extends Context.Service<DiscordGatewayService
 		Layer.provide(ChatSyncChannelLinkRepo.layer),
 	)
 }
+
+/**
+ * Runs the gateway for the lifetime of the enclosing scope, on a long-lived process. Requires a
+ * `WebSocketConstructor` (Bun's, or the global one).
+ */
+export const DiscordGatewayBackgroundLive = Layer.effectDiscard(
+	Effect.gen(function* () {
+		const gateway = yield* DiscordGatewayService
+		if (Option.isSome(gateway.run)) {
+			yield* Effect.forkScoped(gateway.run.value)
+		}
+	}),
+).pipe(Layer.provide(DiscordGatewayService.layer))

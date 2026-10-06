@@ -1,0 +1,21 @@
+{
+	"name": "@hazel/effect-cloudflare",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"main": "src/index.ts",
+	"exports": {
+		".": "./src/index.ts",
+		"./KvPersistence": "./src/KvPersistence.ts"
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"effect": "catalog:effect"
+	},
+	"devDependencies": {
+		"@cloudflare/workers-types": "catalog:alchemy",
+		"typescript": "^5.9.3"
+	}
+}

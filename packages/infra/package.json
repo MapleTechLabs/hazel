@@ -1,0 +1,29 @@
+{
+	"name": "@hazel/infra",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"sideEffects": false,
+	"exports": {
+		".": "./src/index.ts",
+		"./cloudflare": "./src/cloudflare/index.ts",
+		"./env": "./src/env.ts",
+		"./worker-http": "./src/cloudflare/worker-http.ts",
+		"./worker-runtime": "./src/cloudflare/worker-runtime.ts",
+		"./cached-recoverable": "./src/cloudflare/cached-recoverable.ts"
+	},
+	"scripts": {
+		"test": "vitest run",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"alchemy": "catalog:alchemy",
+		"effect": "catalog:effect"
+	},
+	"devDependencies": {
+		"@cloudflare/workers-types": "catalog:alchemy",
+		"@types/node": "^24.0.0",
+		"typescript": "^5.9.3",
+		"vitest": "^4.1.0"
+	}
+}

@@ -1,0 +1,17 @@
+{
+	"include": ["src/worker.ts", "src/worker/**/*.ts"],
+	"compilerOptions": {
+		"target": "esnext",
+		"module": "preserve",
+		"lib": ["ES2023", "DOM", "DOM.Iterable"],
+		"moduleResolution": "bundler",
+		"allowImportingTsExtensions": true,
+		"verbatimModuleSyntax": true,
+		"noEmit": true,
+		"skipLibCheck": true,
+		"strict": true,
+		"noFallthroughCasesInSwitch": true,
+		// No bun types: anything Bun-only reachable from the Worker graph fails here.
+		"types": ["node", "@cloudflare/workers-types"]
+	}
+}

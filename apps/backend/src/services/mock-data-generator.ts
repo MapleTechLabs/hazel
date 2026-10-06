@@ -15,7 +15,6 @@ import type {
 	UserId,
 } from "@hazel/schema"
 import { Context, Effect, Layer } from "effect"
-import { DatabaseLive } from "./database"
 
 // Professional team members for a tech startup
 const TEAM_MEMBERS = [
@@ -488,5 +487,5 @@ export class MockDataGenerator extends Context.Service<MockDataGenerator>()("Moc
 		}
 	}),
 }) {
-	static readonly layer = Layer.effect(this, this.make).pipe(Layer.provide(DatabaseLive))
+	static readonly layer = Layer.effect(this, this.make)
 }

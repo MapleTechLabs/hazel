@@ -1,5 +1,5 @@
 import { BunSocket } from "@effect/platform-bun"
-import { Config, Effect, Layer } from "effect"
+import { Config, Effect, Layer, Option, Redacted } from "effect"
 import { DevTools } from "effect/devtools"
 import { FetchHttpClient } from "effect/http"
 import { Otlp, OtlpSerialization } from "effect/observability"
@@ -10,7 +10,9 @@ import { Otlp, OtlpSerialization } from "effect/observability"
  * Environment variables:
  * - OTEL_ENVIRONMENT (default: "local"): Environment (local/staging/production)
  * - RAILWAY_GIT_COMMIT_SHA / COMMIT_SHA (default: "unknown"): Git commit SHA for service version
- * - OTEL_BASE_URL: OTLP collector endpoint (e.g. "http://otel-collector.railway.internal:4318")
+ * - OTEL_BASE_URL: OTLP endpoint (e.g. "https://ingest.maple.dev")
+ * - MAPLE_INGEST_KEY (optional): sent as `Authorization: Bearer …`, for exporting straight to
+ *   Maple without a collector in between
  *
  * Behavior:
  * - local environment: Uses Effect DevTools WebSocket (ws://localhost:34437)
@@ -50,9 +52,14 @@ export const createTracingLayer = (otelServiceName: string) =>
 			}
 
 			const otelBaseUrl = yield* Config.String("OTEL_BASE_URL")
+			const ingestKey = yield* Config.option(Config.Redacted("MAPLE_INGEST_KEY"))
 
 			return Otlp.layer({
 				baseUrl: otelBaseUrl,
+				headers: Option.match(ingestKey, {
+					onNone: () => undefined,
+					onSome: (key) => ({ authorization: `Bearer ${Redacted.value(key)}` }),
+				}),
 				resource: {
 					serviceName: otelServiceName,
 					serviceVersion: commitSha,

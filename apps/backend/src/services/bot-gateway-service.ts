@@ -6,119 +6,24 @@ import {
 } from "@hazel/domain"
 import type { Channel, ChannelMember, Message } from "@hazel/domain/models"
 import type { BotId, ChannelId, OrganizationId } from "@hazel/schema"
-import { Context, Config, DateTime, Effect, Layer, Option, Ref, Schema } from "effect"
+import { Context, DateTime, Effect, Layer, type Schema } from "effect"
+import { BotGatewayTransport, DurableStreamRequestError } from "./bot-gateway-transport"
 
-const DEFAULT_DURABLE_STREAMS_URL = "http://localhost:4437/v1/stream"
+export { BotGatewayTransport, DurableStreamRequestError }
 
 /** Get epoch milliseconds from Date or DateTime.Utc */
 const toEpochMs = (d: Date | DateTime.Utc): number =>
 	d instanceof Date ? d.getTime() : DateTime.toEpochMillis(d)
 
-const normalizeBaseUrl = (value: string): string => value.replace(/\/+$/, "")
-
 const createDeliveryId = (): string => crypto.randomUUID()
-
-const buildStreamPath = (baseUrl: string, botId: BotId): string =>
-	`${normalizeBaseUrl(baseUrl)}/bots/${botId}/gateway`
-
-const responseText = (response: Response): Promise<string> =>
-	response.text().catch(() => `${response.status} ${response.statusText}`)
-
-export class DurableStreamRequestError extends Schema.TaggedError<DurableStreamRequestError>()(
-	"DurableStreamRequestError",
-	{
-		message: Schema.String,
-		cause: Schema.Unknown,
-	},
-) {}
 
 export class BotGatewayService extends Context.Service<BotGatewayService>()("BotGatewayService", {
 	make: Effect.gen(function* () {
 		const installationRepo = yield* BotInstallationRepo
 		const channelRepo = yield* ChannelRepo
-		const durableStreamsUrl = yield* Config.String("DURABLE_STREAMS_URL").pipe(
-			Config.withDefault(DEFAULT_DURABLE_STREAMS_URL),
-		)
-		const durableStreamsToken = yield* Config.option(Config.String("DURABLE_STREAMS_TOKEN"))
-		const authHeaders: Record<string, string> = Option.isSome(durableStreamsToken)
-			? { Authorization: `Bearer ${durableStreamsToken.value}` }
-			: {}
-		const ensuredStreamsRef = yield* Ref.make(new Set<string>())
+		const transport = yield* BotGatewayTransport
 
-		const ensureStream = Effect.fn("BotGatewayService.ensureStream")(function* (botId: BotId) {
-			const ensured = yield* Ref.get(ensuredStreamsRef)
-			if (ensured.has(botId)) {
-				return
-			}
-
-			const url = buildStreamPath(durableStreamsUrl, botId)
-			const response = yield* Effect.tryPromise({
-				try: () =>
-					fetch(url, {
-						method: "PUT",
-						headers: {
-							"Content-Type": "application/json",
-							...authHeaders,
-						},
-					}),
-				catch: (cause) =>
-					new DurableStreamRequestError({
-						message: `Failed to create durable stream for bot ${botId}`,
-						cause,
-					}),
-			})
-
-			if (!response.ok && response.status !== 409) {
-				const detail = yield* Effect.promise(() => responseText(response))
-				return yield* Effect.fail(
-					new DurableStreamRequestError({
-						message: `Failed to create durable stream for bot ${botId}: ${detail}`,
-						cause: response.status,
-					}),
-				)
-			}
-
-			yield* Ref.update(ensuredStreamsRef, (current) => {
-				const next = new Set(current)
-				next.add(botId)
-				return next
-			})
-		})
-
-		const appendToBot = Effect.fn("BotGatewayService.appendToBot")(function* (
-			botId: BotId,
-			envelope: BotGatewayEnvelope,
-		) {
-			yield* ensureStream(botId)
-
-			const url = buildStreamPath(durableStreamsUrl, botId)
-			const response = yield* Effect.tryPromise({
-				try: () =>
-					fetch(url, {
-						method: "POST",
-						headers: {
-							"Content-Type": "application/json",
-							...authHeaders,
-						},
-						body: JSON.stringify(envelope),
-					}),
-				catch: (cause) =>
-					new DurableStreamRequestError({
-						message: `Failed to append durable stream event for bot ${botId}`,
-						cause,
-					}),
-			})
-
-			if (!response.ok) {
-				const detail = yield* Effect.promise(() => responseText(response))
-				return yield* Effect.fail(
-					new DurableStreamRequestError({
-						message: `Failed to append durable stream event for bot ${botId}: ${detail}`,
-						cause: response.status,
-					}),
-				)
-			}
-		})
+		const appendToBot = (botId: BotId, envelope: BotGatewayEnvelope) => transport.append(botId, envelope)
 
 		const publishToInstalledBots = Effect.fn("BotGatewayService.publishToInstalledBots")(function* (
 			organizationId: OrganizationId,
@@ -263,37 +168,16 @@ export class BotGatewayService extends Context.Service<BotGatewayService>()("Bot
 			}))
 		})
 
-		const proxyRead = Effect.fn("BotGatewayService.proxyRead")(function* (
-			botId: BotId,
-			query: URLSearchParams,
-		) {
-			yield* ensureStream(botId)
-
-			const url = new URL(buildStreamPath(durableStreamsUrl, botId))
-			for (const [key, value] of query.entries()) {
-				url.searchParams.set(key, value)
-			}
-
-			return yield* Effect.tryPromise({
-				try: () => fetch(url.toString(), { method: "GET", headers: { ...authHeaders } }),
-				catch: (cause) =>
-					new DurableStreamRequestError({
-						message: `Failed to read durable stream for bot ${botId}`,
-						cause,
-					}),
-			})
-		})
-
 		return {
 			appendToBot,
 			publishCommand,
 			publishMessageEvent,
 			publishChannelEvent,
 			publishChannelMemberEvent,
-			proxyRead,
 		}
 	}),
 }) {
+	/** Requires `BotGatewayTransport`, which the entry point provides for its runtime. */
 	static readonly layer = Layer.effect(this, this.make).pipe(
 		Layer.provide(BotInstallationRepo.layer),
 		Layer.provide(ChannelRepo.layer),

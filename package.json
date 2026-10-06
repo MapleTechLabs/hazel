@@ -19,6 +19,10 @@
 				"@effect/atom-react": "4.0.1",
 				"@effect/ai-openrouter": "4.0.1",
 				"@effect/vitest": "4.0.1"
+			},
+			"alchemy": {
+				"@cloudflare/workers-types": "4.20260603.1",
+				"alchemy": "2.0.0-beta.80"
 			}
 		}
 	},
@@ -36,12 +40,22 @@
 		"test": "vitest",
 		"test:once": "vitest run",
 		"test:debug": "vitest --inspect-brk --no-file-parallelism",
-		"test:coverage": "vitest run --coverage --coverage.reporter=text"
+		"test:coverage": "vitest run --coverage --coverage.reporter=text",
+		"alchemy:deploy:prd": "alchemy deploy --yes --adopt --stage ${HAZEL_STAGE:-prd}",
+		"alchemy:deploy:pr": "alchemy deploy --yes --adopt --stage pr-${PR_NUMBER}",
+		"alchemy:destroy:pr": "alchemy destroy --yes --stage pr-${PR_NUMBER}",
+		"alchemy:dev": "ALCHEMY_LOCAL_STATE=1 alchemy dev --stage dev_${USER} --env-file .env.local",
+		"alchemy:typecheck": "tsc -p tsconfig.alchemy.json"
 	},
 	"devDependencies": {
+		"@cloudflare/workers-types": "catalog:alchemy",
 		"@effect/vitest": "catalog:effect",
+		"@hazel/infra": "workspace:*",
 		"@rolldown/plugin-babel": "^0.2.1",
+		"@types/node": "^24",
 		"@vitest/coverage-v8": "^4.1.0",
+		"alchemy": "catalog:alchemy",
+		"effect": "catalog:effect",
 		"oxfmt": "^0.40.0",
 		"oxlint": "^1.55.0",
 		"rollup-plugin-visualizer": "7.0.1",

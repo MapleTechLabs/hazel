@@ -24,6 +24,7 @@ export {
 	MessageDeletedPayloadSchema,
 	MessageOutboxRepo,
 	MessageUpdatedPayloadSchema,
+	OutboxWrites,
 	ReactionCreatedPayloadSchema,
 	ReactionDeletedPayloadSchema,
 	type MessageCreatedPayload,

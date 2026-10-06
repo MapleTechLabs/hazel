@@ -1,5 +1,7 @@
 {
 	"include": ["**/*.ts", "**/*.tsx"],
+	// Cloudflare Worker sources typecheck under workers-types: tsconfig.worker.json
+	"exclude": ["src/worker.ts", "src/worker/**", "node_modules"],
 	"compilerOptions": {
 		"target": "ES2022",
 		"module": "ESNext",

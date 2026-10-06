@@ -16,12 +16,11 @@ import {
 	SyncBotCommandsResponse,
 	UpdateBotSettingsResponse,
 } from "@hazel/domain/http"
-import { Redis } from "@hazel/effect-bun"
 import { Cause, Effect, Option, Stream } from "effect"
 import { HazelApi } from "../api.ts"
 import { BotGatewayService } from "../services/bot-gateway-service.ts"
 import { IntegrationTokenService } from "../services/integration-token-service.ts"
-import { createCommandSseStream } from "./bot-commands.sse.ts"
+import { createSseHeartbeatStream } from "./bot-commands.sse.ts"
 
 /**
  * Hash a token using SHA-256 (Web Crypto API)
@@ -76,21 +75,11 @@ export const HttpBotCommandsLive = HttpApiBuilder.group(HazelApi, "bot-commands"
 				// Validate bot token
 				const bot = yield* validateBotToken
 
-				const redis = yield* Redis
-				const channel = `bot:${bot.id}:commands`
-
 				yield* Effect.logInfo(`Bot ${bot.id} (${bot.name}) connecting to SSE stream`)
 
-				// Merge command events with keepalive heartbeat events so idle connections stay active.
-				const sseStream = createCommandSseStream({
-					botId: bot.id,
-					botName: bot.name,
-					channel,
-					redis,
-				}).pipe(
-					Stream.tap(() => Effect.logDebug("Sending SSE event")),
-					Stream.encodeText,
-				)
+				// Commands are delivered through the bot gateway (`BotGatewayService.publishCommand`);
+				// this stream only keeps legacy SSE clients' connections alive.
+				const sseStream = createSseHeartbeatStream().pipe(Stream.encodeText)
 
 				// Return SSE response
 				return HttpServerResponse.stream(sseStream, {

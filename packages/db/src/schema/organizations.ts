@@ -39,9 +39,7 @@ export const organizationsTable = pgTable(
 		// claiming the same Clerk org. Partial so soft-deleted rows don't block re-creation.
 		uniqueIndex("organizations_clerk_org_id_unique")
 			.using("btree", sql`((${table.settings}->>'clerkOrganizationId'))`)
-			.where(
-				sql`${table.deletedAt} IS NULL AND ${table.settings}->>'clerkOrganizationId' IS NOT NULL`,
-			),
+			.where(sql`${table.deletedAt} IS NULL AND ${table.settings}->>'clerkOrganizationId' IS NOT NULL`),
 	],
 )
 

@@ -1,6 +1,5 @@
-import { HttpApiClient } from "effect/http-api"
 import { and, Database, eq, isNull, schema, sql } from "@hazel/db"
-import { Cluster, WorkflowInitializationError } from "@hazel/domain"
+import { WorkflowInitializationError } from "@hazel/domain"
 import { Context, Array, Config, Effect, Layer, Option } from "effect"
 import type {
 	MessageCreatedPayload,
@@ -11,6 +10,7 @@ import type {
 } from "@hazel/backend-core"
 import { formatError } from "../lib/format-error"
 import { DiscordSyncWorker, DiscordSyncWorkerLayer } from "./chat-sync/discord-sync-worker"
+import { makeClusterClient } from "../lib/cluster-client"
 
 export class MessageSideEffectService extends Context.Service<MessageSideEffectService>()(
 	"MessageSideEffectService",
@@ -19,9 +19,7 @@ export class MessageSideEffectService extends Context.Service<MessageSideEffectS
 			const db = yield* Database.Database
 			const discordSyncWorker = yield* DiscordSyncWorker
 			const clusterUrl = yield* Config.String("CLUSTER_URL")
-			const client = yield* HttpApiClient.make(Cluster.WorkflowApi, {
-				baseUrl: clusterUrl,
-			})
+			const client = yield* makeClusterClient(clusterUrl)
 
 			const resolveIntegrationBotUserId = Effect.fn(
 				"MessageSideEffectService.resolveIntegrationBotUserId",

@@ -1,0 +1,83 @@
+name: Deploy PR Preview (Cloudflare via Alchemy)
+
+# Label-gated: a PR gets its own stage (`pr-<n>`) while it carries `preview`, torn down when the
+# label comes off or the PR closes. Previews share one preview database (`HAZEL_PG_URL`).
+on:
+    pull_request:
+        types: [opened, reopened, synchronize, labeled, unlabeled, closed]
+
+concurrency:
+    group: pr-preview-${{ github.event.pull_request.number }}
+    # Queue instead of cancelling: whether to cancel is decided by the *incoming* run, so any
+    # cancellation could cut short an in-progress teardown and leak the preview stage. `queue: max`
+    # keeps every pending run too (the default replaces a pending teardown with the next event).
+    cancel-in-progress: false
+    queue: max
+
+permissions:
+    contents: read
+    pull-requests: write
+
+jobs:
+    preview:
+        if: >-
+            ${{ github.event.pull_request.head.repo.full_name == github.repository
+            && ((github.event.action == 'unlabeled' && github.event.label.name == 'preview')
+                || (github.event.action != 'unlabeled'
+                    && contains(github.event.pull_request.labels.*.name, 'preview'))) }}
+        runs-on: ubuntu-latest
+        timeout-minutes: 45
+        environment:
+            name: pr-preview
+            url: ${{ steps.deploy.outputs.web_url }}
+        env:
+            # `unlabeled` only reaches here for the `preview` label, so both mean teardown.
+            TEARDOWN: ${{ (github.event.action == 'closed' || github.event.action == 'unlabeled') && 'true' || 'false' }}
+            PR_NUMBER: ${{ github.event.pull_request.number }}
+            COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
+            CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+            CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+            HAZEL_PG_URL: ${{ secrets.HAZEL_PG_URL }}
+            VITE_CLERK_PUBLISHABLE_KEY: ${{ vars.VITE_CLERK_PUBLISHABLE_KEY }}
+            CLERK_PUBLISHABLE_KEY: ${{ vars.CLERK_PUBLISHABLE_KEY }}
+            CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+            S3_BUCKET: ${{ vars.S3_BUCKET }}
+            S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
+            S3_PUBLIC_URL: ${{ vars.S3_PUBLIC_URL }}
+            S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+            S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+            CLUSTER_URL: ${{ vars.CLUSTER_URL }}
+            CLUSTER_API_SECRET: ${{ secrets.CLUSTER_API_SECRET }}
+            INTEGRATION_ENCRYPTION_KEY: ${{ secrets.INTEGRATION_ENCRYPTION_KEY }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Deploy setup
+              uses: ./.github/actions/deploy-env
+
+            - name: Deploy preview stage
+              id: deploy
+              if: ${{ env.TEARDOWN != 'true' }}
+              run: bun run alchemy:deploy:pr
+
+            - name: Destroy preview stage
+              if: ${{ env.TEARDOWN == 'true' }}
+              run: bun run alchemy:destroy:pr
+
+            - name: Comment the preview URLs
+              if: ${{ env.TEARDOWN != 'true' && steps.deploy.outcome == 'success' }}
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  WEB_URL: ${{ steps.deploy.outputs.web_url }}
+                  API_URL: ${{ steps.deploy.outputs.api_url }}
+              run: |
+                  marker="<!-- hazel-preview-comment -->"
+                  body="$marker
+                  **Preview** for \`${COMMIT_SHA:0:7}\`: app $WEB_URL · api $API_URL"
+                  existing=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -1)
+                  if [ -n "$existing" ]; then
+                    gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$existing" -f body="$body" >/dev/null
+                  else
+                    gh pr comment "$PR_NUMBER" --body "$body"
+                  fi

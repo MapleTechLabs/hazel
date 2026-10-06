@@ -1,0 +1,94 @@
+name: Deploy PRD (Cloudflare via Alchemy)
+
+# Gated on CI passing on main (not `push: main`); `workflow_dispatch` skips the gate.
+on:
+    workflow_run:
+        workflows: ["Test"]
+        types: [completed]
+        branches: [main]
+    workflow_dispatch:
+
+concurrency:
+    group: deploy-prd
+    cancel-in-progress: false
+
+permissions:
+    contents: read
+
+jobs:
+    deploy:
+        # Only CI runs for pushes to this repo's main deploy; a PR's Test run must never reach prd.
+        if: >-
+            ${{ github.event_name == 'workflow_dispatch'
+            || (github.event.workflow_run.conclusion == 'success'
+                && github.event.workflow_run.event == 'push'
+                && github.event.workflow_run.head_repository.full_name == github.repository) }}
+        runs-on: ubuntu-latest
+        timeout-minutes: 45
+        environment:
+            name: production
+            url: https://app.hazel.sh
+        env:
+            # On workflow_run, `github.sha` is the branch head, not the commit CI tested.
+            COMMIT_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+            CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+            CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+            PLANETSCALE_API_TOKEN_ID: ${{ secrets.PLANETSCALE_API_TOKEN_ID }}
+            PLANETSCALE_API_TOKEN: ${{ secrets.PLANETSCALE_API_TOKEN }}
+            PLANETSCALE_ORGANIZATION: ${{ vars.PLANETSCALE_ORGANIZATION }}
+            # Build inputs (web)
+            VITE_CLERK_PUBLISHABLE_KEY: ${{ vars.VITE_CLERK_PUBLISHABLE_KEY }}
+            VITE_PUBLIC_POSTHOG_KEY: ${{ vars.VITE_PUBLIC_POSTHOG_KEY }}
+            VITE_MAPLE_PUBLIC_KEY: ${{ vars.VITE_MAPLE_PUBLIC_KEY }}
+            # api Worker (apps/backend/src/worker/env.ts)
+            CLERK_PUBLISHABLE_KEY: ${{ vars.CLERK_PUBLISHABLE_KEY }}
+            CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+            CLERK_WEBHOOK_SECRET: ${{ secrets.CLERK_WEBHOOK_SECRET }}
+            COOKIE_DOMAIN: ${{ vars.COOKIE_DOMAIN }}
+            S3_BUCKET: ${{ vars.S3_BUCKET }}
+            S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
+            S3_PUBLIC_URL: ${{ vars.S3_PUBLIC_URL }}
+            S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+            S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+            CLUSTER_URL: ${{ vars.CLUSTER_URL }}
+            CLUSTER_API_SECRET: ${{ secrets.CLUSTER_API_SECRET }}
+            INTEGRATION_ENCRYPTION_KEY: ${{ secrets.INTEGRATION_ENCRYPTION_KEY }}
+            INTEGRATION_ENCRYPTION_KEY_VERSION: ${{ vars.INTEGRATION_ENCRYPTION_KEY_VERSION }}
+            INTEGRATION_ENCRYPTION_KEY_PREV: ${{ secrets.INTEGRATION_ENCRYPTION_KEY_PREV }}
+            INTEGRATION_ENCRYPTION_KEY_VERSION_PREV: ${{ vars.INTEGRATION_ENCRYPTION_KEY_VERSION_PREV }}
+            LINEAR_CLIENT_ID: ${{ vars.LINEAR_CLIENT_ID }}
+            LINEAR_CLIENT_SECRET: ${{ secrets.LINEAR_CLIENT_SECRET }}
+            DISCORD_CLIENT_ID: ${{ vars.DISCORD_CLIENT_ID }}
+            DISCORD_CLIENT_SECRET: ${{ secrets.DISCORD_CLIENT_SECRET }}
+            DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+            DISCORD_GATEWAY_ENABLED: ${{ vars.DISCORD_GATEWAY_ENABLED }}
+            GITHUB_APP_ID: ${{ vars.HAZEL_GITHUB_APP_ID }}
+            GITHUB_APP_SLUG: ${{ vars.HAZEL_GITHUB_APP_SLUG }}
+            GITHUB_APP_PRIVATE_KEY: ${{ secrets.HAZEL_GITHUB_APP_PRIVATE_KEY }}
+            GITHUB_WEBHOOK_SECRET: ${{ secrets.HAZEL_GITHUB_WEBHOOK_SECRET }}
+            INTERNAL_SECRET: ${{ secrets.INTERNAL_SECRET }}
+            KLIPY_API_KEY: ${{ secrets.KLIPY_API_KEY }}
+            # electric-proxy + self-hosted Electric (DATABASE_URL comes from the stack's replication role)
+            ELECTRIC_SECRET: ${{ secrets.ELECTRIC_SECRET }}
+            OTEL_BASE_URL: ${{ vars.OTEL_BASE_URL }}
+            MAPLE_INGEST_KEY: ${{ secrets.MAPLE_INGEST_KEY }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  ref: ${{ env.COMMIT_SHA }}
+
+            - name: Deploy setup
+              uses: ./.github/actions/deploy-env
+
+            - name: Deploy with Alchemy
+              run: bun run alchemy:deploy:prd
+
+            - name: Check the api serves this revision
+              run: |
+                  for attempt in 1 2 3 4 5 6; do
+                    if curl -fsS https://api.hazel.sh/health >/dev/null; then exit 0; fi
+                    sleep 10
+                  done
+                  echo "::error::api.hazel.sh/health did not answer after the deploy"
+                  exit 1

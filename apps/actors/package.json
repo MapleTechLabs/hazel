@@ -5,7 +5,6 @@
 	"module": "src/index.ts",
 	"scripts": {
 		"dev": "wrangler dev --port=6420",
-		"deploy": "wrangler deploy",
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {

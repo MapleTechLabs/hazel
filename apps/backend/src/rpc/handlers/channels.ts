@@ -1,4 +1,3 @@
-import { HttpApiClient } from "effect/http-api"
 import {
 	ChannelMemberRepo,
 	ChannelRepo,
@@ -8,7 +7,6 @@ import {
 } from "@hazel/backend-core"
 import { Database, schema } from "@hazel/db"
 import {
-	Cluster,
 	CurrentUser,
 	DmChannelAlreadyExistsError,
 	InternalServerError,
@@ -25,6 +23,7 @@ import { ChannelPolicy } from "../../policies/channel-policy"
 import { UserPolicy } from "../../policies/user-policy"
 import { BotGatewayService } from "../../services/bot-gateway-service"
 import { ChannelAccessSyncService } from "../../services/channel-access-sync"
+import { makeClusterClient } from "../../lib/cluster-client"
 
 export const ChannelRpcLive = ChannelRpcs.toLayer(
 	Effect.gen(function* () {
@@ -487,9 +486,7 @@ export const ChannelRpcLive = ChannelRpcs.toLayer(
 								}),
 						),
 					)
-					const client = yield* HttpApiClient.make(Cluster.WorkflowApi, {
-						baseUrl: clusterUrl,
-					})
+					const client = yield* makeClusterClient(clusterUrl)
 
 					yield* client.workflows
 						.ThreadNamingWorkflow({
