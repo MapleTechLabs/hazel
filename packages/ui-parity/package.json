@@ -1,0 +1,23 @@
+{
+	"name": "@hazel/ui-parity",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"parity": "bun run src/cli.ts",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@hazel/domain": "workspace:*",
+		"@hazel/schema": "workspace:*",
+		"effect": "catalog:effect",
+		"pixelmatch": "^7.1.0",
+		"playwright": "^1.56.0",
+		"pngjs": "^7.0.0"
+	},
+	"devDependencies": {
+		"@types/bun": "1.3.9",
+		"@types/pngjs": "^6.0.5",
+		"typescript": "^5.9.3"
+	}
+}

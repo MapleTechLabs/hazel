@@ -41,6 +41,7 @@
 		"test:once": "vitest run",
 		"test:debug": "vitest --inspect-brk --no-file-parallelism",
 		"test:coverage": "vitest run --coverage --coverage.reporter=text",
+		"parity": "bun run --cwd packages/ui-parity src/cli.ts",
 		"alchemy:deploy:prd": "alchemy deploy --yes --adopt --stage ${HAZEL_STAGE:-prd}",
 		"alchemy:deploy:pr": "alchemy deploy --yes --adopt --stage pr-${PR_NUMBER}",
 		"alchemy:destroy:pr": "alchemy destroy --yes --stage pr-${PR_NUMBER}",
