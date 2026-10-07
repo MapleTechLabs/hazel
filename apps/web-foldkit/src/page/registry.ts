@@ -5,6 +5,10 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import type { HazelRpc } from "../rpc"
 import type { AppRoute } from "../route"
 import * as Auth from "./auth"
+import * as ChannelSettingsConnect from "./channel-settings/connect"
+import * as ChannelSettingsIntegrations from "./channel-settings/integrations"
+import * as ChannelSettingsOverview from "./channel-settings/overview"
+import * as ChannelSettingsRedirect from "./channel-settings/redirect"
 import * as ChatChannel from "./chat/channel"
 import * as ChatIndex from "./chat-index"
 import type { PageHost, PageMessageBase, PageSlotBase, PageStep, PageViewInputs, Shared } from "./contract"
@@ -22,6 +26,8 @@ import * as Join from "./join"
 import * as Onboarding from "./onboarding"
 import * as OnboardingSetupOrganization from "./onboarding/setup-organization"
 import * as SelectOrganization from "./select-organization"
+import * as SettingsChatSync from "./settings/chat-sync"
+import * as SettingsChatSyncConnection from "./settings/chat-sync-connection"
 import * as TeamSettings from "./settings/team"
 import * as SettingsConnectInvites from "./settings/connect-invites"
 import * as SettingsCustomEmojis from "./settings/custom-emojis"
@@ -57,6 +63,12 @@ export const pages = [
 	OnboardingSetupOrganization.page,
 	SelectOrganization.page,
 	Join.page,
+	ChannelSettingsRedirect.page,
+	ChannelSettingsOverview.page,
+	ChannelSettingsConnect.page,
+	ChannelSettingsIntegrations.page,
+	SettingsChatSync.page,
+	SettingsChatSyncConnection.page,
 ]
 
 export const PageSlot = Schema.Union(pages.map((page) => page.Slot))
