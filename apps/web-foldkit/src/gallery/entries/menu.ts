@@ -72,6 +72,7 @@ const interaction = embedInteraction<Model, Message>((message) => Message.GotInt
 
 const foldMenuOutMessage = Menu.OutMessage.match<Update.Step<Model, Message>>({
 	SelectedItem: () => (model) => ({ model }),
+	ActivatedLink: () => (model) => ({ model }),
 })
 
 const foldActions = Update.foldChild({

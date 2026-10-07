@@ -5,8 +5,10 @@ import { Mount } from "foldkit"
 import type { Update } from "foldkit"
 import { createLazy, type Html, type HtmlBuilder } from "foldkit/html"
 import { modifyFields } from "foldkit/struct"
+import type * as Menu from "../ui/menu"
 import { sidebarContent, sidebarSectionGroup, sidebarStatic } from "../ui/sidebar"
-import { orgSwitcherHeader, type ShellContext, userMenuFooter } from "./app-shell"
+import type { ShellContext } from "./context"
+import { orgSwitcherHeader, type SwitcherOrg, userMenuFooter } from "./menus"
 import { emptyData, Message, type Model } from "./channels-sidebar/model"
 import { dragDescription } from "./channels-sidebar/tree"
 import { sectionGroupContent } from "./channels-sidebar/view"
@@ -119,9 +121,19 @@ const ScrollActiveIntoView = Mount.define("ScrollActiveIntoView", {
 		}),
 })
 
-export interface ViewContext {
+/** The shell's menus in the sidebar header and footer. Message mappers must be module-level (memo args). */
+export interface SidebarChrome<ParentMessage> {
+	readonly userMenu: Menu.Model
+	readonly orgSwitcher: Menu.Model
+	readonly organizations: ReadonlyArray<SwitcherOrg>
+	readonly toUserMenuMessage: (message: Menu.Message) => ParentMessage
+	readonly toOrgSwitcherMessage: (message: Menu.Message) => ParentMessage
+}
+
+export interface ViewContext<ParentMessage> {
 	readonly shell: ShellContext
 	readonly activeChannelId: string | undefined
+	readonly chrome: SidebarChrome<ParentMessage>
 }
 
 /** The shell fields the sidebar reads, as primitives so the lazy slot can compare them. */
@@ -141,6 +153,11 @@ const sidebarBody = <ParentMessage>(
 	model: Model,
 	activeChannelId: string | undefined,
 	toParentMessage: (message: Message) => ParentMessage,
+	userMenu: Menu.Model,
+	orgSwitcher: Menu.Model,
+	organizations: ReadonlyArray<SwitcherOrg>,
+	toUserMenuMessage: (message: Menu.Message) => ParentMessage,
+	toOrgSwitcherMessage: (message: Menu.Message) => ParentMessage,
 	...[orgSlug, pathname, orgName, orgLogoUrl, displayName, email, avatarUrl, appVersion]: ShellArgs
 ): Html => {
 	const shell: ShellContext = {
@@ -154,7 +171,7 @@ const sidebarBody = <ParentMessage>(
 		appVersion,
 	}
 	return sidebarStatic(h, "flex flex-1", [
-		orgSwitcherHeader(h, shell),
+		orgSwitcherHeader(h, orgSwitcher, shell, organizations, toOrgSwitcherMessage),
 		sidebarContent(h, { state: "expanded" }, [
 			sidebarSectionGroup(
 				h,
@@ -166,7 +183,7 @@ const sidebarBody = <ParentMessage>(
 				}),
 			),
 		]),
-		userMenuFooter(h, shell),
+		userMenuFooter(h, userMenu, shell, toUserMenuMessage),
 		dragDescription(h),
 	])
 }
@@ -180,15 +197,20 @@ const sidebarSlot = createLazy()
 export const view = <ParentMessage>(
 	h: HtmlBuilder<ParentMessage>,
 	model: Model,
-	context: ViewContext,
+	context: ViewContext<ParentMessage>,
 	toParentMessage: (message: Message) => ParentMessage,
 ): Html => {
-	const { shell } = context
+	const { shell, chrome } = context
 	return sidebarSlot(sidebarBody<ParentMessage>, [
 		h,
 		model,
 		context.activeChannelId,
 		toParentMessage,
+		chrome.userMenu,
+		chrome.orgSwitcher,
+		chrome.organizations,
+		chrome.toUserMenuMessage,
+		chrome.toOrgSwitcherMessage,
 		shell.orgSlug,
 		shell.pathname,
 		shell.organization?.name,

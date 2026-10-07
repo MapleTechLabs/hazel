@@ -4,8 +4,8 @@ import { Command } from "foldkit"
 import type { Update } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
-import * as MessageList from "../../mount/message-list"
-import { ChannelInfo, PAGE_SIZE } from "./queries"
+import * as MessageList from "../../../mount/message-list"
+import { ChannelInfo, PAGE_SIZE } from "../queries"
 import {
 	aggregateReactions,
 	ChatMessage,
@@ -15,7 +15,7 @@ import {
 	shareMessages,
 	shareStickyKeys,
 	toDisplayRows,
-} from "./rows"
+} from "../rows"
 
 /** Channel page (`routes/_app/$orgSlug/chat/$id.tsx` + `$id/index.tsx`), read path. */
 
