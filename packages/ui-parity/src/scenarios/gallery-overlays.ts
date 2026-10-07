@@ -249,5 +249,21 @@ export const galleryOverlaysArea: AreaModule = {
 				await page.getByRole("dialog").waitFor()
 			},
 		}),
+		// SHEET
+		overlay("sheet", "sheet", "Sheet: closed triggers"),
+		overlay("sheet", "sheet-open", "Sheet: right, floating", {
+			viewports: both,
+			steps: async (page) => {
+				await button(page, "Open sheet").click()
+				await page.getByRole("dialog").waitFor()
+			},
+		}),
+		overlay("sheet", "sheet-left", "Sheet: left, docked", {
+			viewports: both,
+			steps: async (page) => {
+				await button(page, "Open left sheet").click()
+				await page.getByRole("dialog").waitFor()
+			},
+		}),
 	],
 }
