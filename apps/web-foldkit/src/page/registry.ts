@@ -7,6 +7,7 @@ import type { AppRoute } from "../route"
 import * as ChatChannel from "./chat/channel"
 import type { PageHost, PageMessageBase, PageSlotBase, PageStep, PageViewInputs, Shared } from "./contract"
 import type { PageOutMessage } from "./out-message"
+import * as MySettingsAppearance from "./my-settings/appearance"
 import * as MySettingsDesktop from "./my-settings/desktop"
 import * as MySettingsLinkedAccounts from "./my-settings/linked-accounts"
 import * as MySettingsNotifications from "./my-settings/notifications"
@@ -21,6 +22,7 @@ export const pages = [
 	Root.page,
 	TeamSettings.page,
 	ChatChannel.page,
+	MySettingsAppearance.page,
 	MySettingsDesktop.page,
 	MySettingsLinkedAccounts.page,
 	MySettingsNotifications.page,

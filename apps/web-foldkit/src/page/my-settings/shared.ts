@@ -19,10 +19,7 @@ export const pageHeader = <Message>(h: HtmlBuilder<Message>, title: string, subt
 		sectionHeaderGroup(h, {}, [
 			h.div(
 				[h.Class("flex flex-1 flex-col justify-center gap-0.5 self-stretch")],
-				[
-					sectionHeaderHeading(h, {}, [title]),
-					sectionHeaderSubheading(h, {}, [subtitle]),
-				],
+				[sectionHeaderHeading(h, {}, [title]), sectionHeaderSubheading(h, {}, [subtitle])],
 			),
 		]),
 	])

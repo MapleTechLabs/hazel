@@ -14,7 +14,9 @@ const userRow = Subscription.make<PageSubscriptionInput<Model>, Message>()((entr
 		{
 			modelToDependencies: ({ shared }) => ({ userId: shared.currentUser?.id ?? null }),
 			dependenciesToStream: ({ userId }) =>
-				userId === null ? Stream.empty : userRowStream(userId, (row) => Message.UpdatedUserRow({ row })),
+				userId === null
+					? Stream.empty
+					: userRowStream(userId, (row) => Message.UpdatedUserRow({ row })),
 		},
 	),
 }))

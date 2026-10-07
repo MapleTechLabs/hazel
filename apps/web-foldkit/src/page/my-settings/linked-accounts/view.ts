@@ -47,7 +47,9 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 								[h.Class("flex items-start gap-4")],
 								[
 									h.img([
-										h.Src("https://cdn.brandfetch.io/discord.com/w/64/h/64/theme/dark/icon"),
+										h.Src(
+											"https://cdn.brandfetch.io/discord.com/w/64/h/64/theme/dark/icon",
+										),
 										h.Alt("Discord"),
 										h.Class("size-10 rounded-lg"),
 									]),

@@ -17,7 +17,13 @@ import {
 	UpdateUserSettings,
 } from "./command"
 import { Message } from "./message"
-import { DEFAULT_SOUND_SETTINGS, type Model, type QuietHoursField, settingsOf, type SoundSettings } from "./model"
+import {
+	DEFAULT_SOUND_SETTINGS,
+	type Model,
+	type QuietHoursField,
+	settingsOf,
+	type SoundSettings,
+} from "./model"
 
 type Return = PageReturn<Model, Message>
 
@@ -105,7 +111,13 @@ export const init = (): Return => ({
 		sound: DEFAULT_SOUND_SETTINGS,
 		settings: null,
 		optimisticSettings: null,
-		volume: Slider.init({ id: "notification-volume", values: [0.5], minValue: 0, maxValue: 1, step: 0.1 }),
+		volume: Slider.init({
+			id: "notification-volume",
+			values: [0.5],
+			minValue: 0,
+			maxValue: 1,
+			step: 0.1,
+		}),
 		quietHoursStart: Segments.init({ id: "quiet-hours-start", kind: "time", value: DEFAULT_QUIET_START }),
 		quietHoursEnd: Segments.init({ id: "quiet-hours-end", kind: "time", value: DEFAULT_QUIET_END }),
 		notificationStatus: "idle",
@@ -116,7 +128,9 @@ export const init = (): Return => ({
 
 export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
-		LoadedSoundSettings: ({ sound }) => ({ model: syncVolume(modifyFields(model, { sound: () => sound })) }),
+		LoadedSoundSettings: ({ sound }) => ({
+			model: syncVolume(modifyFields(model, { sound: () => sound })),
+		}),
 		CompletedSaveSoundSettings: () => ({ model }),
 		ToggledSounds: ({ isSelected }) => withSound(model, { enabled: isSelected }),
 		SelectedSound: ({ soundFile }) => withSound(model, { soundFile }),
@@ -139,10 +153,14 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		}),
 		UpdatedUserRow: ({ row }) => ({
 			model: syncQuietHours(
-				modifyFields(model, { settings: () => row?.settings ?? null, optimisticSettings: () => null }),
+				modifyFields(model, {
+					settings: () => row?.settings ?? null,
+					optimisticSettings: () => null,
+				}),
 			),
 		}),
-		ToggledDoNotDisturb: ({ isSelected }) => withUserSettings(model, shared, { doNotDisturb: isSelected }),
+		ToggledDoNotDisturb: ({ isSelected }) =>
+			withUserSettings(model, shared, { doNotDisturb: isSelected }),
 		ToggledShowQuietHours: ({ isSelected }) =>
 			withUserSettings(model, shared, { showQuietHoursInStatus: isSelected }),
 		GotQuietHoursMessage: ({ field, message: child }) => {
@@ -153,7 +171,10 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			if (time === undefined || after.committed === before.committed) return result
 			const patch = field === "start" ? { quietHoursStart: time } : { quietHoursEnd: time }
 			const written = withUserSettings(result.model, shared, patch as Partial<User.UserSettings>)
-			return { model: written.model, commands: [...(result.commands ?? []), ...(written.commands ?? [])] }
+			return {
+				model: written.model,
+				commands: [...(result.commands ?? []), ...(written.commands ?? [])],
+			}
 		},
 		SucceededUpdateUserSettings: () => ({ model }),
 		FailedUpdateUserSettings: () => ({
@@ -164,4 +185,3 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		}),
 		GotInteractionMessage: ({ message: child }) => interaction.fold(model, child),
 	})
-

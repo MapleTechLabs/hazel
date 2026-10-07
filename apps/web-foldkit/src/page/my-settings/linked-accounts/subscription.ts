@@ -42,7 +42,10 @@ const discordConnection = Subscription.make<PageSubscriptionInput<Model>, Messag
 							(rows) => {
 								const row = rows[0]
 								const connection: DiscordConnection | null = row
-									? { status: row.status, externalAccountName: row.externalAccountName ?? null }
+									? {
+											status: row.status,
+											externalAccountName: row.externalAccountName ?? null,
+										}
 									: null
 								return Message.UpdatedDiscordConnection({ connection })
 							},

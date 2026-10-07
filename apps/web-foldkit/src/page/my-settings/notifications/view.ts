@@ -20,7 +20,8 @@ const soundOptions: ReadonlyArray<{ value: SoundFile; label: string; description
 	{ value: "notification03", label: "Sound 2", description: "Modern alert" },
 ]
 
-const isSoundFile = (value: string): value is SoundFile => value === "notification01" || value === "notification03"
+const isSoundFile = (value: string): value is SoundFile =>
+	value === "notification01" || value === "notification03"
 
 const soundSettings = (h: HtmlBuilder<Message>, model: Model, wiring: Interaction.Wiring<Message>): Html => {
 	const enabled = model.sound.enabled
@@ -47,47 +48,72 @@ const soundSettings = (h: HtmlBuilder<Message>, model: Model, wiring: Interactio
 							id: "notification-sound",
 							value: model.sound.soundFile,
 							onChange: (value) =>
-								Message.SelectedSound({ soundFile: isSoundFile(value) ? value : "notification01" }),
+								Message.SelectedSound({
+									soundFile: isSoundFile(value) ? value : "notification01",
+								}),
 							isDisabled: !enabled,
 							className: "grid grid-cols-1 gap-3 sm:grid-cols-2",
 							interaction: wiring,
 						},
 						(radio) =>
 							soundOptions.map((option) =>
-								radio(option.value, { className: "cursor-pointer" }, ({ isSelected, isFocusVisible }) => [
-									h.div(
-										[
-											h.Class(
-												twMerge(
-													"relative flex items-center gap-3 rounded-lg border-2 border-border bg-secondary p-4 transition-all",
-													isSelected && "border-ring bg-secondary/50",
-													isFocusVisible && "ring-2 ring-ring ring-offset-2",
-													!enabled && "cursor-not-allowed opacity-50",
-												),
-											),
-										],
-										[
-											h.div(
-												[
-													h.Class(
-														twMerge(
-															"relative flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
-															isSelected ? "border-primary bg-primary" : "border-input bg-bg",
-														),
+								radio(
+									option.value,
+									{ className: "cursor-pointer" },
+									({ isSelected, isFocusVisible }) => [
+										h.div(
+											[
+												h.Class(
+													twMerge(
+														"relative flex items-center gap-3 rounded-lg border-2 border-border bg-secondary p-4 transition-all",
+														isSelected && "border-ring bg-secondary/50",
+														isFocusVisible && "ring-2 ring-ring ring-offset-2",
+														!enabled && "cursor-not-allowed opacity-50",
 													),
-												],
-												isSelected ? [h.div([h.Class("size-2 rounded-full bg-primary-fg")], [])] : [],
-											),
-											h.div(
-												[h.Class("flex flex-1 flex-col")],
-												[
-													h.span([h.Class("font-medium text-sm")], [option.label]),
-													h.span([h.Class("text-muted-fg text-xs")], [option.description]),
-												],
-											),
-										],
-									),
-								]),
+												),
+											],
+											[
+												h.div(
+													[
+														h.Class(
+															twMerge(
+																"relative flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
+																isSelected
+																	? "border-primary bg-primary"
+																	: "border-input bg-bg",
+															),
+														),
+													],
+													isSelected
+														? [
+																h.div(
+																	[
+																		h.Class(
+																			"size-2 rounded-full bg-primary-fg",
+																		),
+																	],
+																	[],
+																),
+															]
+														: [],
+												),
+												h.div(
+													[h.Class("flex flex-1 flex-col")],
+													[
+														h.span(
+															[h.Class("font-medium text-sm")],
+															[option.label],
+														),
+														h.span(
+															[h.Class("text-muted-fg text-xs")],
+															[option.description],
+														),
+													],
+												),
+											],
+										),
+									],
+								),
 							),
 					),
 				],
@@ -95,19 +121,23 @@ const soundSettings = (h: HtmlBuilder<Message>, model: Model, wiring: Interactio
 			h.div(
 				[h.Class("flex flex-col gap-2")],
 				[
-					slider(h, { model: model.volume, toParentMessage: toVolumeMessage, interaction: wiring }, (parts) => [
-						h.div(
-							[h.Class("flex items-center justify-between")],
-							[
-								h.div([h.Class("font-medium text-sm")], ["Volume"]),
-								parts.output({
-									className: "text-muted-fg text-sm",
-									format: (values) => `${Math.round((values[0] ?? 0) * 100)}%`,
-								}),
-							],
-						),
-						parts.track(),
-					]),
+					slider(
+						h,
+						{ model: model.volume, toParentMessage: toVolumeMessage, interaction: wiring },
+						(parts) => [
+							h.div(
+								[h.Class("flex items-center justify-between")],
+								[
+									h.div([h.Class("font-medium text-sm")], ["Volume"]),
+									parts.output({
+										className: "text-muted-fg text-sm",
+										format: (values) => `${Math.round((values[0] ?? 0) * 100)}%`,
+									}),
+								],
+							),
+							parts.track(),
+						],
+					),
 				],
 			),
 			h.div(
@@ -178,7 +208,10 @@ const doNotDisturb = (h: HtmlBuilder<Message>, model: Model, wiring: Interaction
 				[h.Class("flex flex-col gap-3")],
 				[
 					h.div([h.Class("font-medium text-sm")], ["Quiet hours"]),
-					h.p([h.Class("text-muted-fg text-sm")], ["No notifications will be sent during these hours"]),
+					h.p(
+						[h.Class("text-muted-fg text-sm")],
+						["No notifications will be sent during these hours"],
+					),
 					h.div(
 						[h.Class("flex flex-col gap-4 sm:flex-row sm:items-center")],
 						[...timeField("start", "Start time"), ...timeField("end", "End time")],

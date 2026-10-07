@@ -40,7 +40,11 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 						outMessage:
 							connectionStatus === "success"
 								? toast("success", "Discord account linked")
-								: toast("error", "Failed to link Discord account", errorCode ?? "Please try again."),
+								: toast(
+										"error",
+										"Failed to link Discord account",
+										errorCode ?? "Please try again.",
+									),
 					},
 		ShowedLinkResult: () => ({
 			model,

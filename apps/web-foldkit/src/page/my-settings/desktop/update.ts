@@ -45,6 +45,9 @@ export const update = (model: Model, message: Message): PageReturn<Model, Messag
 		CheckedAutostart: ({ isEnabled }) => ({
 			model: modifyFields(model, { autostartEnabled: () => isEnabled }),
 		}),
-		ToggledAutostart: ({ isSelected }) => ({ model, commands: [SetAutostart({ isEnabled: isSelected })] }),
+		ToggledAutostart: ({ isSelected }) => ({
+			model,
+			commands: [SetAutostart({ isEnabled: isSelected })],
+		}),
 		GotInteractionMessage: ({ message: child }) => interaction.fold(model, child),
 	})

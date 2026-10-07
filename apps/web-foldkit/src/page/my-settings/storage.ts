@@ -15,7 +15,6 @@ export const readStored = <S extends Schema.Constraint>(key: string, schema: S) 
 	)
 
 export const writeStored = <S extends Schema.Constraint>(key: string, schema: S, value: S["Type"]) =>
-	KeyValueStore.KeyValueStore.use((store) => KeyValueStore.toSchemaStore(store, schema).set(key, value)).pipe(
-		Effect.provide(platformStorageLayer),
-		Effect.ignore,
-	)
+	KeyValueStore.KeyValueStore.use((store) =>
+		KeyValueStore.toSchemaStore(store, schema).set(key, value),
+	).pipe(Effect.provide(platformStorageLayer), Effect.ignore)

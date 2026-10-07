@@ -17,7 +17,10 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 				[
 					settingsRow(
 						h,
-						{ title: "Launch at Startup", description: "Automatically start the app when you log in." },
+						{
+							title: "Launch at Startup",
+							description: "Automatically start the app when you log in.",
+						},
 						h.div(
 							[h.Class("flex flex-col gap-4")],
 							[
@@ -30,7 +33,8 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 												id: "my-settings-autostart",
 												isSelected: model.autostartEnabled ?? false,
 												isDisabled: model.autostartEnabled === null,
-												onChange: (isSelected) => Message.ToggledAutostart({ isSelected }),
+												onChange: (isSelected) =>
+													Message.ToggledAutostart({ isSelected }),
 												interaction: interaction.wiring(model),
 											},
 											"Open at login",

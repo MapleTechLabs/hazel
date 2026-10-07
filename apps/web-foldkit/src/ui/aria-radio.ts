@@ -4,7 +4,8 @@ import { visuallyHiddenStyle } from "./checkbox"
 
 /**
  * React Aria's unstyled `RadioGroup` and `Radio` (react-aria-components), for screens that pass
- * their own className and render-prop children. The styled kit version is `radio.ts`.
+ * their own className (or RAC's default `react-aria-*` class) and render-prop children. The styled
+ * kit version is `radio.ts`.
  */
 export interface AriaRadioGroupOptions<Message> {
 	readonly id: string
@@ -43,7 +44,9 @@ export const ariaRadioGroup = <Message>(
 	const radio: AriaRadio = (value, part, children) => {
 		const id = `${options.id}-${value}`
 		const isSelected = options.value === value
-		const interactionState = interaction ? Interaction.stateOf(interaction.model, id) : Interaction.idleState
+		const interactionState = interaction
+			? Interaction.stateOf(interaction.model, id)
+			: Interaction.idleState
 		const select = options.onChange?.(value)
 		// Roving tabindex: the selected radio, or every radio while nothing is selected.
 		const tabIndex = options.value === null || isSelected ? 0 : -1
@@ -57,7 +60,7 @@ export const ariaRadioGroup = <Message>(
 		}
 		return h.label(
 			[
-				...(part.className === undefined ? [] : [h.Class(part.className)]),
+				h.Class(part.className ?? "react-aria-Radio"),
 				h.DataAttribute("rac", ""),
 				h.DataAttribute("react-aria-pressable", "true"),
 				...(isSelected ? [h.DataAttribute("selected", "true")] : []),
@@ -89,7 +92,9 @@ export const ariaRadioGroup = <Message>(
 							h.DataAttribute("react-aria-pressable", "true"),
 							h.Attribute("style", ""),
 							...(part.ariaLabel === undefined ? [] : [h.AriaLabel(part.ariaLabel)]),
-							...(isDisabled ? [h.Disabled(true)] : [h.Tabindex(tabIndex), h.Attribute("title", "")]),
+							...(isDisabled
+								? [h.Disabled(true)]
+								: [h.Tabindex(tabIndex), h.Attribute("title", "")]),
 							h.Checked(isSelected),
 							...(interaction
 								? Interaction.handlers(h, interaction, id, {
@@ -109,7 +114,7 @@ export const ariaRadioGroup = <Message>(
 
 	return h.div(
 		[
-			...(options.className === undefined ? [] : [h.Class(options.className)]),
+			h.Class(options.className ?? "react-aria-RadioGroup"),
 			h.DataAttribute("rac", ""),
 			h.DataAttribute("orientation", "vertical"),
 			h.Role("radiogroup"),
