@@ -97,7 +97,9 @@ export const schema = new Schema({
 			toDOM: (node) => [
 				"span",
 				{ contenteditable: "false", class: mentionClassName(node.attrs.userId) },
-				`@${node.attrs.displayName}`,
+				// Two text nodes, like React's `@{fullName}`.
+				"@",
+				node.attrs.displayName,
 				voidSpacer,
 			],
 		},
