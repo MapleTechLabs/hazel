@@ -166,7 +166,7 @@ describe("channel page list", () => {
 		expect(rendered(nudged)).toEqual(rendered(before))
 		const far = update(
 			before,
-			listMessage(MessageList.Message.ScrolledList({ scrollTop: before.list.scrollTop + 1500 })),
+			listMessage(MessageList.Message.ScrolledList({ scrollTop: before.list.scrollTop + 3000 })),
 		).model
 		expect(rendered(far)).not.toEqual(rendered(before))
 	})
