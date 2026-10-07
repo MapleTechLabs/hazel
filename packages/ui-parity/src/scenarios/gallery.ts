@@ -382,5 +382,15 @@ export const galleryArea: AreaModule = {
 				await page.mouse.move(group.x + group.width * 0.62, y, { steps: 5 })
 			},
 		}),
+		gallery("field-validation-state", {
+			id: "gallery-field-validation-state",
+			title: "Field validation state: idle, validating, valid, invalid",
+			themes: ["light", "dark"],
+		}),
+		gallery("form-error-summary", {
+			id: "gallery-form-error-summary",
+			title: "Form error summary: default and custom titles, empty",
+			themes: ["light", "dark"],
+		}),
 	],
 }

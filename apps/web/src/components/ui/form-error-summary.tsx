@@ -1,16 +1,7 @@
 "use client"
 
 import { twMerge } from "tailwind-merge"
-import { tv } from "tailwind-variants"
-
-const formErrorSummaryStyles = tv({
-	base: [
-		"rounded-lg border p-4",
-		"bg-danger-subtle/50 border-danger-subtle-fg/20",
-		"text-danger-subtle-fg",
-		"animate-[field-error-enter_0.2s_ease-out]",
-	],
-})
+import { formErrorSummaryPartStyles, formErrorSummaryStyles } from "./form-error-summary.styles"
 
 export interface FormError {
 	/** Field name or label */
@@ -55,11 +46,12 @@ export function FormErrorSummary({
 
 	return (
 		<div className={twMerge(formErrorSummaryStyles(), className)} role="alert" aria-live="polite">
-			<p className="mb-2 font-medium text-sm">{title}</p>
-			<ul className="list-inside list-disc space-y-1 text-sm">
+			<p className={formErrorSummaryPartStyles.title}>{title}</p>
+			<ul className={formErrorSummaryPartStyles.list}>
 				{errors.map((error, index) => (
 					<li key={index}>
-						<span className="font-medium">{error.field}:</span> {error.message}
+						<span className={formErrorSummaryPartStyles.field}>{error.field}:</span>{" "}
+						{error.message}
 					</li>
 				))}
 			</ul>
