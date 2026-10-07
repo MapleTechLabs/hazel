@@ -13,21 +13,24 @@ import type { DisplayRow } from "./rows"
 /** The channel route's content: header, tab bar, message list and composer (desktop). */
 
 /** `ChatHeader` for a regular channel. */
-const chatHeaderView = <M>(h: HtmlBuilder<M>, model: Model): Html =>
+const chatHeaderView = <M>(channel: Model["channel"], h: HtmlBuilder<M>): Html =>
 	h.div(
 		[h.Class("flex h-14 shrink-0 items-center justify-between border-border border-b bg-bg px-4")],
 		[
 			h.div(
 				[h.Class("flex items-center gap-3")],
-				model.channel === null
+				channel === null
 					? [h.div([h.Class("h-4 w-32 animate-pulse rounded-sm bg-secondary")], [])]
 					: [
-							model.channel.icon
-								? h.span([h.Attribute("data-slot", "icon"), h.Class("size-5 text-muted-fg")], [model.channel.icon])
+							channel.icon
+								? h.span(
+										[h.Attribute("data-slot", "icon"), h.Class("size-5 text-muted-fg")],
+										[channel.icon],
+									)
 								: IconHashtag(h, { className: "size-5 text-muted-fg" }),
 							h.div(
 								[h.Class("flex items-center gap-2")],
-								[h.h2([h.Class("font-semibold text-fg text-sm")], [model.channel.name])],
+								[h.h2([h.Class("font-semibold text-fg text-sm")], [channel.name])],
 							),
 						],
 			),
@@ -52,10 +55,15 @@ const chatHeaderView = <M>(h: HtmlBuilder<M>, model: Model): Html =>
 	)
 
 /** `Tab` from `components/ui/tabs.tsx`, horizontal orientation. */
-const tabView = <M>(h: HtmlBuilder<M>, options: { id: string; label: string; icon: Html; isSelected: boolean }) =>
+const tabView = <M>(
+	h: HtmlBuilder<M>,
+	options: { id: string; label: string; icon: Html; isSelected: boolean },
+) =>
 	h.div(
 		[
-			...(options.isSelected ? [h.Attribute("aria-selected", "true"), h.Attribute("data-selected", "true")] : [h.Attribute("aria-selected", "false")]),
+			...(options.isSelected
+				? [h.Attribute("aria-selected", "true"), h.Attribute("data-selected", "true")]
+				: [h.Attribute("aria-selected", "false")]),
 			h.Class(
 				twMerge(
 					twMerge(
@@ -185,7 +193,11 @@ const emptyStateView = <M>(h: HtmlBuilder<M>): Html =>
 		],
 	)
 
-const messageListView = <M>(h: HtmlBuilder<M>, model: Model, toParentMessage: (message: Message) => M): Html => {
+const messageListView = <M>(
+	h: HtmlBuilder<M>,
+	model: Model,
+	toParentMessage: (message: Message) => M,
+): Html => {
 	if (!model.hasLoadedMessages) return h.div([], [])
 	if (model.messages.length === 0) return emptyStateView(h)
 	const list = MessageList.view(h, model.list, {
@@ -198,12 +210,19 @@ const messageListView = <M>(h: HtmlBuilder<M>, model: Model, toParentMessage: (m
 	pruneRowSlots()
 	return h.div(
 		[
-			h.Class("isolate flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-2 transition-opacity duration-200"),
+			h.Class(
+				"isolate flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-2 transition-opacity duration-200",
+			),
 			h.Attribute("style", "overflow-anchor: auto; scroll-behavior: auto; opacity: 1;"),
 		],
 		[list],
 	)
 }
+
+// The chrome around the list only changes with the channel, not on every scroll frame.
+const lazyHeader = createLazy()
+const lazyTabBar = createLazy()
+const lazyComposer = createLazy()
 
 /** `SplitPanelRoot` > `SplitPanelContent` with the channel's messages route inside. */
 export const view = <M>(h: HtmlBuilder<M>, model: Model, toParentMessage: (message: Message) => M): Html =>
@@ -213,10 +232,13 @@ export const view = <M>(h: HtmlBuilder<M>, model: Model, toParentMessage: (messa
 			h.div(
 				[h.Class(contentStyles())],
 				[
-					chatHeaderView(h, model),
-					chatTabBarView(h),
-					h.div([h.Class("flex min-h-0 flex-1 flex-col overflow-hidden")], [messageListView(h, model, toParentMessage)]),
-					composerPlaceholderView(h),
+					lazyHeader(chatHeaderView, [model.channel, h]) ?? h.div([], []),
+					lazyTabBar(chatTabBarView, [h]) ?? h.div([], []),
+					h.div(
+						[h.Class("flex min-h-0 flex-1 flex-col overflow-hidden")],
+						[messageListView(h, model, toParentMessage)],
+					),
+					lazyComposer(composerPlaceholderView, [h]) ?? h.div([], []),
 				],
 			),
 		],

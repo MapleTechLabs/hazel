@@ -1,11 +1,11 @@
 import { ChannelId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
-import { Command, Subscription } from "foldkit"
+import { Command } from "foldkit"
 import type { Update } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
 import * as MessageList from "../../mount/message-list"
-import { ChannelInfo, channelStream, messagesStream, PAGE_SIZE, reactionsStream } from "./data"
+import { ChannelInfo, PAGE_SIZE } from "./queries"
 import {
 	aggregateReactions,
 	ChatMessage,
@@ -13,6 +13,7 @@ import {
 	DisplayRow,
 	shareKeys,
 	shareMessages,
+	shareStickyKeys,
 	toDisplayRows,
 } from "./rows"
 
@@ -73,9 +74,20 @@ const liftList = (model: Model, result: MessageList.ListReturn): PageReturn => (
 
 /** Re-derives the rows, then tells the list about the new keys so it can keep its anchor. */
 const deriveRows = (model: Model): PageReturn => {
-	const rows = toDisplayRows(model.messages, aggregateReactions(model.reactions, model.currentUserId ?? undefined), model.rows)
+	const rows = toDisplayRows(
+		model.messages,
+		aggregateReactions(model.reactions, model.currentUserId ?? undefined),
+		model.rows,
+	)
 	const withRows = modifyFields(model, { rows: () => rows })
-	return liftList(withRows, MessageList.setKeys(withRows.list, shareKeys(withRows.list.keys, rows)))
+	return liftList(
+		withRows,
+		MessageList.setKeys(
+			withRows.list,
+			shareKeys(withRows.list.keys, rows),
+			shareStickyKeys(withRows.list.stickyKeys, rows),
+		),
+	)
 }
 
 /** Widens the window by a page when the reader nears the oldest loaded message. */
@@ -107,32 +119,3 @@ export const setCurrentUserId = (model: Model, currentUserId: UserId | null): Pa
 	model.currentUserId === currentUserId
 		? { model }
 		: deriveRows(modifyFields(model, { currentUserId: () => currentUserId }))
-
-// SUBSCRIPTION
-
-export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
-	channel: entry(
-		{ channelId: ChannelId },
-		{
-			modelToDependencies: (model) => ({ channelId: model.channelId }),
-			dependenciesToStream: ({ channelId }) =>
-				channelStream(channelId, (channel) => Message.UpdatedChannel({ channel })),
-		},
-	),
-	messages: entry(
-		{ channelId: ChannelId, limit: Schema.Number },
-		{
-			modelToDependencies: (model) => ({ channelId: model.channelId, limit: model.limit }),
-			dependenciesToStream: ({ channelId, limit }) =>
-				messagesStream(channelId, limit, (messages) => Message.UpdatedMessages({ messages })),
-		},
-	),
-	reactions: entry(
-		{ channelId: ChannelId },
-		{
-			modelToDependencies: (model) => ({ channelId: model.channelId }),
-			dependenciesToStream: ({ channelId }) =>
-				reactionsStream(channelId, (reactions) => Message.UpdatedReactions({ reactions })),
-		},
-	),
-}))

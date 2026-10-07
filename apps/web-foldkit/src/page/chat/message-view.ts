@@ -24,7 +24,11 @@ export const dateDividerView = <Message>(h: HtmlBuilder<Message>, label: string,
 		[
 			...(isStuck ? [] : [h.div([h.Class("absolute inset-x-4 border-t border-border")], [])]),
 			h.span(
-				[h.Class("relative rounded-lg bg-secondary px-3 py-1 font-mono text-muted-fg text-xs shadow-sm")],
+				[
+					h.Class(
+						"relative rounded-lg bg-secondary px-3 py-1 font-mono text-muted-fg text-xs shadow-sm",
+					),
+				],
 				[label],
 			),
 		],
@@ -102,12 +106,20 @@ export const messageRowView = <Message>(h: HtmlBuilder<Message>, row: MessageRow
 						[h.Class("flex items-baseline gap-2")],
 						[
 							h.span([h.Class("font-semibold text-fg")], [displayName]),
-							...(message.author.userType === "machine" ? [badge(h, { intent: "primary" }, ["APP"])] : []),
-							h.span([h.Class("text-muted-fg text-xs")], isEdited ? [time, " (edited)"] : [time]),
+							...(message.author.userType === "machine"
+								? [badge(h, { intent: "primary" }, ["APP"])]
+								: []),
+							h.span(
+								[h.Class("text-muted-fg text-xs")],
+								isEdited ? [time, " (edited)"] : [time],
+							),
 							...(message.isPinned
 								? [
 										h.span(
-											[h.Class("flex items-center gap-1 text-warning text-xs"), h.Attribute("title", "Pinned message")],
+											[
+												h.Class("flex items-center gap-1 text-warning text-xs"),
+												h.Attribute("title", "Pinned message"),
+											],
 											[IconPin(h, { className: "size-3" }), h.span([], ["Pinned"])],
 										),
 									]
@@ -120,7 +132,12 @@ export const messageRowView = <Message>(h: HtmlBuilder<Message>, row: MessageRow
 	const reactionList =
 		reactions.length === 0
 			? []
-			: [h.div([h.Class("mt-2 flex flex-wrap gap-1")], reactions.map((reaction) => reactionButton(h, reaction)))]
+			: [
+					h.div(
+						[h.Class("mt-2 flex flex-wrap gap-1")],
+						reactions.map((reaction) => reactionButton(h, reaction)),
+					),
+				]
 
 	return h.div(
 		[
@@ -151,7 +168,11 @@ export const messageRowView = <Message>(h: HtmlBuilder<Message>, row: MessageRow
 							avatarOrTime,
 							h.div(
 								[h.Class("min-w-0 flex-1")],
-								[...header, ...(message.content ? [markdownView(h, message.content)] : []), ...reactionList],
+								[
+									...header,
+									...(message.content ? [markdownView(h, message.content)] : []),
+									...reactionList,
+								],
 							),
 						],
 					),

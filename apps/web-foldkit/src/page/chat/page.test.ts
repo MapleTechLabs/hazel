@@ -40,14 +40,18 @@ const VIEWPORT = 600
 
 const listMessage = (listMessage: MessageList.Message) => Message.GotListMessage({ message: listMessage })
 /** The list's own result; the page's `Command.mapMessages` wraps it in `GotListMessage`. */
-const applied = (version: number, scrollTop: number) => MessageList.Message.CompletedApplyScroll({ version, scrollTop })
+const applied = (version: number, scrollTop: number) =>
+	MessageList.Message.CompletedApplyScroll({ version, scrollTop })
 const completed = (version: number, scrollTop: number) => listMessage(applied(version, scrollTop))
 
 /** Every rendered row measured at its real height: 72px per message, 40px for the date divider. */
 const measureAll = (current: Model) =>
 	listMessage(
 		MessageList.Message.MeasuredRows({
-			measurements: current.rows.map((row) => ({ key: row.key, height: row._tag === "DateHeader" ? HEADER : ROW })),
+			measurements: current.rows.map((row) => ({
+				key: row.key,
+				height: row._tag === "DateHeader" ? HEADER : ROW,
+			})),
 		}),
 	)
 
@@ -67,7 +71,11 @@ const readingHistory = (): Model => {
 	run(completed(current.list.scrollVersion, current.list.scrollTop))
 	run(measureAll(current))
 	run(completed(current.list.scrollVersion, current.list.scrollTop))
-	run(listMessage(MessageList.Message.ScrolledList({ scrollTop: offsetOf(current, chatMessage(80).id) + 10 })))
+	run(
+		listMessage(
+			MessageList.Message.ScrolledList({ scrollTop: offsetOf(current, chatMessage(80).id) + 10 }),
+		),
+	)
 	return current
 }
 
@@ -91,7 +99,9 @@ describe("channel page list", () => {
 	test("keeps the anchored message in place when an older page is prepended", () => {
 		const before = readingHistory()
 		const anchorKey = chatMessage(80).id
-		expect(before.list.anchor).toEqual(MessageList.ViewportAnchor.Row({ key: anchorKey, viewportOffset: -10 }))
+		expect(before.list.anchor).toEqual(
+			MessageList.ViewportAnchor.Row({ key: anchorKey, viewportOffset: -10 }),
+		)
 		const viewportTopBefore = offsetOf(before, anchorKey) - before.list.scrollTop
 
 		story(
@@ -104,14 +114,38 @@ describe("channel page list", () => {
 				expect(offsetOf(current, anchorKey) - current.list.scrollTop).toBe(viewportTopBefore)
 				expect(current.list.anchor).toEqual(before.list.anchor)
 			}),
-			Command.resolve(MessageList.ApplyScroll, applied(before.list.scrollVersion + 1, before.list.scrollTop + 30 * ESTIMATE)),
+			Command.resolve(
+				MessageList.ApplyScroll,
+				applied(before.list.scrollVersion + 1, before.list.scrollTop + 30 * ESTIMATE),
+			),
 			// The new rows get measured at 72px: the anchor still does not move on screen.
 			message(measureAll(update(before, Message.UpdatedMessages({ messages: page(40, 99) })).model)),
 			model((current) => {
 				expect(current.list.scrollTop).toBe(before.list.scrollTop + 30 * ROW)
 				expect(offsetOf(current, anchorKey) - current.list.scrollTop).toBe(viewportTopBefore)
 			}),
-			Command.resolve(MessageList.ApplyScroll, applied(before.list.scrollVersion + 2, before.list.scrollTop + 30 * ROW)),
+			Command.resolve(
+				MessageList.ApplyScroll,
+				applied(before.list.scrollVersion + 2, before.list.scrollTop + 30 * ROW),
+			),
+		)
+	})
+
+	test("anchors to the first message, not the date divider, at the very top", () => {
+		const atTop = update(
+			readingHistory(),
+			listMessage(MessageList.Message.ScrolledList({ scrollTop: 0 })),
+		).model
+		// The divider stays first when same-day messages are prepended, so it cannot anchor.
+		expect(atTop.list.anchor).toEqual(
+			MessageList.ViewportAnchor.Row({ key: chatMessage(70).id, viewportOffset: HEADER }),
+		)
+		story(
+			update,
+			given(atTop),
+			message(Message.UpdatedMessages({ messages: page(40, 99) })),
+			model((current) => expect(current.list.scrollTop).toBe(30 * ESTIMATE)),
+			Command.resolve(MessageList.ApplyScroll, applied(atTop.list.scrollVersion + 1, 30 * ESTIMATE)),
 		)
 	})
 
@@ -122,8 +156,14 @@ describe("channel page list", () => {
 		expect(prepended.commands?.map((command) => command.name)).toEqual(["ApplyScroll"])
 		const stale = update(prepended.model, listMessage(MessageList.Message.ScrolledList({ scrollTop: 3 })))
 		expect(stale.model).toBe(prepended.model)
-		const done = update(stale.model, completed(prepended.model.list.scrollVersion, prepended.model.list.scrollTop))
-		const fresh = update(done.model, listMessage(MessageList.Message.ScrolledList({ scrollTop: done.model.list.scrollTop })))
+		const done = update(
+			stale.model,
+			completed(prepended.model.list.scrollVersion, prepended.model.list.scrollTop),
+		)
+		const fresh = update(
+			done.model,
+			listMessage(MessageList.Message.ScrolledList({ scrollTop: done.model.list.scrollTop })),
+		)
 		expect(fresh.model.list.anchor).toEqual(before.list.anchor)
 	})
 
@@ -147,7 +187,10 @@ describe("channel page list", () => {
 				expect(current.list.anchor._tag).toBe("End")
 				expect(current.list.scrollTop).toBe(endBefore + ESTIMATE)
 			}),
-			Command.resolve(MessageList.ApplyScroll, applied(atEnd.list.scrollVersion + 1, endBefore + ESTIMATE)),
+			Command.resolve(
+				MessageList.ApplyScroll,
+				applied(atEnd.list.scrollVersion + 1, endBefore + ESTIMATE),
+			),
 		)
 	})
 

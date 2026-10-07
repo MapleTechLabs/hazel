@@ -104,12 +104,16 @@ export const aggregateReactions = (
 	reactions: ReadonlyArray<ChatReaction>,
 	currentUserId: string | undefined,
 ): ReadonlyMap<string, ReadonlyArray<AggregatedReaction>> => {
-	const byMessage = new Map<string, Map<string, { count: number; hasReacted: boolean; userIds: UserId[] }>>()
+	const byMessage = new Map<
+		string,
+		Map<string, { count: number; hasReacted: boolean; userIds: UserId[] }>
+	>()
 	for (const reaction of reactions) {
 		let byEmoji = byMessage.get(reaction.messageId)
 		if (byEmoji === undefined) byMessage.set(reaction.messageId, (byEmoji = new Map()))
 		let entry = byEmoji.get(reaction.emoji)
-		if (entry === undefined) byEmoji.set(reaction.emoji, (entry = { count: 0, hasReacted: false, userIds: [] }))
+		if (entry === undefined)
+			byEmoji.set(reaction.emoji, (entry = { count: 0, hasReacted: false, userIds: [] }))
 		entry.count++
 		entry.userIds.push(reaction.userId)
 		if (reaction.userId === currentUserId) entry.hasReacted = true
@@ -158,13 +162,19 @@ export const toDisplayRows = (
 			message.createdAtMs - previous.createdAtMs > GROUP_THRESHOLD_MS ||
 			previous.replyToMessageId !== null
 		const isGroupEnd =
-			next === null || message.authorId !== next.authorId || next.createdAtMs - message.createdAtMs > GROUP_THRESHOLD_MS
+			next === null ||
+			message.authorId !== next.authorId ||
+			next.createdAtMs - message.createdAtMs > GROUP_THRESHOLD_MS
 
 		const date = new Date(message.createdAtMs).toDateString()
 		if (date !== lastDate) {
 			const key = `header-${date}`
 			const old = previousByKey.get(key)
-			rows.push(old !== undefined && old._tag === "DateHeader" ? old : { _tag: "DateHeader", key, label: date })
+			rows.push(
+				old !== undefined && old._tag === "DateHeader"
+					? old
+					: { _tag: "DateHeader", key, label: date },
+			)
 			lastDate = date
 		}
 
@@ -182,6 +192,14 @@ export const toDisplayRows = (
 		)
 	}
 	return rows
+}
+
+/** Keys of the date dividers, reusing the previous array when they did not change. */
+export const shareStickyKeys = (previous: ReadonlyArray<string>, rows: ReadonlyArray<DisplayRow>) => {
+	const next = rows.flatMap((row) => (row._tag === "DateHeader" ? [row.key] : []))
+	return next.length === previous.length && next.every((key, index) => key === previous[index])
+		? previous
+		: next
 }
 
 /** Row keys for the list, reusing the previous array when nothing moved. */

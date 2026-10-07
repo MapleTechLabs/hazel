@@ -29,6 +29,8 @@ export const Model = Schema.Struct({
 	estimatedRowHeightPx: Schema.Number,
 	followThresholdPx: Schema.Number,
 	keys: Schema.Array(Schema.String),
+	/** Rows that never anchor the viewport (date dividers move with the first message of their day). */
+	stickyKeys: Schema.Array(Schema.String),
 	measuredHeights: Schema.Record(Schema.String, Schema.Number),
 	viewportHeight: Schema.Number,
 	scrollTop: Schema.Number,
@@ -62,6 +64,7 @@ export const init = (config: {
 	estimatedRowHeightPx: config.estimatedRowHeightPx,
 	followThresholdPx: config.followThresholdPx ?? 1,
 	keys: [],
+	stickyKeys: [],
 	measuredHeights: {},
 	viewportHeight: 0,
 	scrollTop: 0,
@@ -124,11 +127,23 @@ export const rowIndexAt = (layout: Layout, y: number): number => {
 	return Math.min(low, Math.max(0, count - 1))
 }
 
-/** The anchor that describes `scrollTop`: the end when within the follow threshold, else the top row. */
+let lastStickyKeys: ReadonlyArray<string> | undefined
+let lastStickySet: ReadonlySet<string> = new Set()
+const stickySetOf = (model: Model) => {
+	if (lastStickyKeys !== model.stickyKeys) {
+		lastStickyKeys = model.stickyKeys
+		lastStickySet = new Set(model.stickyKeys)
+	}
+	return lastStickySet
+}
+
+/** The anchor that describes `scrollTop`: the end when within the follow threshold, else the top non-sticky row. */
 export const anchorAt = (model: Model, layout: Layout, scrollTop: number): ViewportAnchor => {
 	const distanceFromEnd = layout.totalHeight - model.viewportHeight - scrollTop
 	if (model.keys.length === 0 || distanceFromEnd <= model.followThresholdPx) return ViewportAnchor.End()
-	const index = rowIndexAt(layout, scrollTop)
+	const sticky = stickySetOf(model)
+	let index = rowIndexAt(layout, scrollTop)
+	while (index < model.keys.length - 1 && sticky.has(model.keys[index]!)) index++
 	return ViewportAnchor.Row({ key: model.keys[index]!, viewportOffset: layout.offsets[index]! - scrollTop })
 }
 
@@ -230,8 +245,14 @@ export const update = (model: Model, message: Message): ListReturn =>
 	})
 
 /** The parent's rows changed (prepended page, new message, deletion). Keeps the anchor in place. */
-export const setKeys = (model: Model, keys: ReadonlyArray<string>): ListReturn =>
-	model.keys === keys ? { model } : reconcile(modifyFields(model, { keys: () => keys }))
+export const setKeys = (
+	model: Model,
+	keys: ReadonlyArray<string>,
+	stickyKeys: ReadonlyArray<string> = model.stickyKeys,
+): ListReturn =>
+	model.keys === keys && model.stickyKeys === stickyKeys
+		? { model }
+		: reconcile(modifyFields(model, { keys: () => keys, stickyKeys: () => stickyKeys }))
 
 /** Jumps to the newest row and follows it (after sending a message). */
 export const scrollToEnd = (model: Model): ListReturn =>
@@ -239,9 +260,7 @@ export const scrollToEnd = (model: Model): ListReturn =>
 
 /** Within half a viewport of the oldest loaded row: time to load an older page. */
 export const isNearStart = (model: Model) =>
-	model.viewportHeight > 0 &&
-	model.keys.length > 0 &&
-	model.scrollTop < model.viewportHeight / 2
+	model.viewportHeight > 0 && model.keys.length > 0 && model.scrollTop < model.viewportHeight / 2
 
 // MOUNT
 
@@ -259,11 +278,15 @@ const observeList = (element: Element): Stream.Stream<ObservedMessage> =>
 				if (!(element instanceof HTMLElement)) return () => undefined
 				Queue.offerUnsafe(queue, Message.ResizedViewport({ viewportHeight: element.clientHeight }))
 
-				const onScroll = () => Queue.offerUnsafe(queue, Message.ScrolledList({ scrollTop: element.scrollTop }))
+				const onScroll = () =>
+					Queue.offerUnsafe(queue, Message.ScrolledList({ scrollTop: element.scrollTop }))
 				element.addEventListener("scroll", onScroll, { passive: true })
 
 				const viewportObserver = new ResizeObserver(() =>
-					Queue.offerUnsafe(queue, Message.ResizedViewport({ viewportHeight: element.clientHeight })),
+					Queue.offerUnsafe(
+						queue,
+						Message.ResizedViewport({ viewportHeight: element.clientHeight }),
+					),
 				)
 				viewportObserver.observe(element)
 
@@ -271,9 +294,12 @@ const observeList = (element: Element): Stream.Stream<ObservedMessage> =>
 				const rowObserver = new ResizeObserver((entries) => {
 					const measurements = entries.flatMap((entry) => {
 						const key = entry.target.getAttribute(ROW_KEY_ATTRIBUTE)
-						return key === null ? [] : [{ key, height: entry.target.getBoundingClientRect().height }]
+						return key === null
+							? []
+							: [{ key, height: entry.target.getBoundingClientRect().height }]
 					})
-					if (measurements.length > 0) Queue.offerUnsafe(queue, Message.MeasuredRows({ measurements }))
+					if (measurements.length > 0)
+						Queue.offerUnsafe(queue, Message.MeasuredRows({ measurements }))
 				})
 				const observedRows = new Set<Element>()
 				const reconcileRows = () => {
@@ -362,8 +388,21 @@ export const view = <Item, ParentMessage>(
 				h.Attribute(ROW_KEY_ATTRIBUTE, key),
 				h.Style(
 					isStuck
-						? { contain: "layout style paint", left: "0px", position: "sticky", right: "0px", top: "0px", "z-index": "1000" }
-						: { contain: "layout style paint", left: "0px", position: "absolute", right: "0px", top: `${layout.offsets[index]}px` },
+						? {
+								contain: "layout style paint",
+								left: "0px",
+								position: "sticky",
+								right: "0px",
+								top: "0px",
+								"z-index": "1000",
+							}
+						: {
+								contain: "layout style paint",
+								left: "0px",
+								position: "absolute",
+								right: "0px",
+								top: `${layout.offsets[index]}px`,
+							},
 				),
 			],
 			[inputs.itemToView(item, { isStuck })],
@@ -372,7 +411,8 @@ export const view = <Item, ParentMessage>(
 	// The pinned divider comes after the positioned rows, as in `@legendapp/list`.
 	const rows: Html[] = []
 	if (range !== undefined) {
-		for (let index = range.start; index <= range.end; index++) if (index !== stickyIndex) rows.push(row(index))
+		for (let index = range.start; index <= range.end; index++)
+			if (index !== stickyIndex) rows.push(row(index))
 		if (stickyIndex !== undefined) rows.push(row(stickyIndex))
 	}
 
@@ -395,7 +435,13 @@ export const view = <Item, ParentMessage>(
 				],
 				[
 					h.div(
-						[h.Style({ height: `${layout.totalHeight}px`, position: "relative", "min-width": "0px" })],
+						[
+							h.Style({
+								height: `${layout.totalHeight}px`,
+								position: "relative",
+								"min-width": "0px",
+							}),
+						],
 						rows,
 					),
 				],

@@ -67,7 +67,10 @@ const editorView = <Message>(h: HtmlBuilder<Message>): Html =>
 								[h.Attribute("class", ""), h.Attribute("data-slate-leaf", "true")],
 								[
 									h.span(
-										[h.Attribute("data-slate-length", "0"), h.Attribute("data-slate-zero-width", "n")],
+										[
+											h.Attribute("data-slate-length", "0"),
+											h.Attribute("data-slate-zero-width", "n"),
+										],
 										["﻿", h.br([])],
 									),
 									h.span(
@@ -115,36 +118,71 @@ export const composerPlaceholderView = <Message>(h: HtmlBuilder<Message>): Html 
 								[h.Class("w-full")],
 								[
 									h.div(
-										[h.Class("relative inset-ring inset-ring-secondary flex h-max flex-col rounded-xl bg-secondary")],
+										[
+											h.Class(
+												"relative inset-ring inset-ring-secondary flex h-max flex-col rounded-xl bg-secondary",
+											),
+										],
 										[
 											h.div([h.Class("relative w-full")], [editorView(h)]),
 											h.input([
-												h.Attribute("accept", "image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"),
+												h.Attribute(
+													"accept",
+													"image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv",
+												),
 												h.Attribute("aria-label", "File upload"),
 												h.Class("hidden"),
 												h.Attribute("multiple", ""),
 												h.Attribute("type", "file"),
 											]),
 											h.div(
-												[h.Class("flex w-full items-center justify-between gap-3 px-3 py-2")],
+												[
+													h.Class(
+														"flex w-full items-center justify-between gap-3 px-3 py-2",
+													),
+												],
 												[
 													h.div(
 														[h.Class("flex items-center gap-3")],
 														[
 															actionButton(
 																h,
-																{ className: `${ACTION_CLASS} transition-colors hover:text-fg disabled:opacity-50`, isAria: false },
-																[IconPaperclip2(h, { className: "size-4 text-muted-fg" }), "Attach"],
+																{
+																	className: `${ACTION_CLASS} transition-colors hover:text-fg disabled:opacity-50`,
+																	isAria: false,
+																},
+																[
+																	IconPaperclip2(h, {
+																		className: "size-4 text-muted-fg",
+																	}),
+																	"Attach",
+																],
 															),
 															actionButton(
 																h,
-																{ className: `${ACTION_CLASS} outline-none transition-colors hover:text-fg`, isAria: true },
-																[IconGif(h, { className: "size-4 text-muted-fg" }), "GIF"],
+																{
+																	className: `${ACTION_CLASS} outline-none transition-colors hover:text-fg`,
+																	isAria: true,
+																},
+																[
+																	IconGif(h, {
+																		className: "size-4 text-muted-fg",
+																	}),
+																	"GIF",
+																],
 															),
 															actionButton(
 																h,
-																{ className: `${ACTION_CLASS} outline-none transition-colors hover:text-fg`, isAria: true },
-																[IconEmoji1(h, { className: "size-4 text-muted-fg" }), "Emoji"],
+																{
+																	className: `${ACTION_CLASS} outline-none transition-colors hover:text-fg`,
+																	isAria: true,
+																},
+																[
+																	IconEmoji1(h, {
+																		className: "size-4 text-muted-fg",
+																	}),
+																	"Emoji",
+																],
 															),
 														],
 													),
