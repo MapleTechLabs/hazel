@@ -15,9 +15,12 @@ import { Message } from "./app/message"
 import { Model, sharedOf, shellContextOf } from "./app/model"
 import { toPageMessage } from "./app/view"
 import * as CommandPalette from "./overlay/command-palette"
+import type { Return as CommandPaletteReturn } from "./overlay/command-palette/update"
 import * as Modal from "./overlay/modal"
 import * as Toasts from "./overlay/toasts"
+import { can } from "./page/contract"
 import { PageOutMessage } from "./page/out-message"
+import { ModalOutMessage } from "./overlay/out-message"
 import { enterRoute, informShared, type PageTransition, updatePage } from "./page/registry"
 import { authRedirect, routeRedirect } from "./redirect"
 import { urlToAppRoute } from "./route"
@@ -44,19 +47,69 @@ const foldOverlay =
 		commands: Command.mapMessages(result.commands, toParentMessage),
 	})
 
-const withModal = foldOverlay(
-	(model, modal: Modal.Model) => modifyFields(model, { modal: () => modal }),
-	(message: Modal.Message) => Message.GotModalMessage({ message }),
-)
-const withCommandPalette = foldOverlay(
-	(model, commandPalette: CommandPalette.Model) =>
-		modifyFields(model, { commandPalette: () => commandPalette }),
-	(message: CommandPalette.Message) => Message.GotCommandPaletteMessage({ message }),
-)
 const withToasts = foldOverlay(
 	(model, toasts: Toasts.Model) => modifyFields(model, { toasts: () => toasts }),
 	(message: Toasts.Message) => Message.GotToastsMessage({ message }),
 )
+
+/** Completed overlay actions: follow the link, then show the toast (legacy `onSuccess` order). */
+const completedOverlay = (model: Model, href: string | null, toast: Toasts.ToastRequest | null): Return => {
+	const toasted = toast === null ? { model } : withToasts(model, Toasts.push(model.toasts, toast))
+	return {
+		model: toasted.model,
+		commands: [...(toasted.commands ?? []), ...(href === null ? [] : [NavigateInternal({ url: href })])],
+	}
+}
+
+const followModalOutMessage = (model: Model, outMessage: Option.Option<ModalOutMessage>): Return =>
+	Option.match(outMessage, {
+		onNone: () => ({ model }),
+		onSome: ModalOutMessage.match<Return>({
+			Closed: () => ({ model }),
+			Completed: ({ href, toast }) => completedOverlay(model, href, toast),
+			RequestedToast: ({ toast }) => withToasts(model, Toasts.push(model.toasts, toast)),
+		}),
+	})
+
+/** The modal slot after an open or update; a closing OutMessage already dropped the slot. */
+const withModal = (model: Model, transition: Modal.Transition): Return => {
+	const followed = followModalOutMessage(modifyFields(model, { modal: () => transition.model }), transition.outMessage)
+	return {
+		model: followed.model,
+		commands: [
+			...Command.mapMessages(transition.commands, (message) => Message.GotModalMessage({ message })),
+			...(followed.commands ?? []),
+		],
+	}
+}
+
+const withCommandPalette = (model: Model, result: CommandPaletteReturn): Return => {
+	const next = modifyFields(model, { commandPalette: () => result.model })
+	const commands = Command.mapMessages(result.commands, (message) => Message.GotCommandPaletteMessage({ message }))
+	const followed = Option.match(Option.fromNullishOr(result.outMessage), {
+		onNone: (): Return => ({ model: next }),
+		onSome: CommandPalette.OutMessage.match<Return>({
+			Completed: ({ href, toast }) => completedOverlay(next, href, toast),
+			RequestedModal: ({ modal }) => withModal(next, Modal.open(next.modal, modal, sharedOf(next))),
+			RequestedToast: ({ toast }) => withToasts(next, Toasts.push(next.toasts, toast)),
+		}),
+	})
+	return { model: followed.model, commands: [...commands, ...(followed.commands ?? [])] }
+}
+
+/** `useAppHotkey` handlers in `$orgSlug/layout.tsx`. */
+const pressedHotkey = (model: Model, actionId: string): Return => {
+	const shared = sharedOf(model)
+	const openModal = (modal: Modal.ModalRequest) => withModal(model, Modal.open(model.modal, modal, shared))
+	if (actionId === "commandPalette.open" || actionId === "search.open")
+		// Legacy passes `initialPage`, but the palette shows its own (reset) page: always home.
+		return withCommandPalette(model, CommandPalette.open(model.commandPalette, "home", shared))
+	if (actionId === "channel.create")
+		return can(shared, "channel.create") ? openModal({ _tag: "NewChannel" }) : { model }
+	if (actionId === "dm.create") return openModal({ _tag: "CreateDm" })
+	if (actionId === "invite.email") return openModal({ _tag: "EmailInvite" })
+	return { model }
+}
 
 /** Runs the OutMessage's consequence after `result`, keeping both sets of Commands. */
 const withCommands = (result: Return, outMessage: Option.Option<PageOutMessage>): Return =>
@@ -87,11 +140,11 @@ const handleOutMessage = (outMessage: PageOutMessage): Step =>
 		RequestedModal:
 			({ modal }) =>
 			(model) =>
-				withModal(model, Modal.open(model.modal, modal)),
+				withModal(model, Modal.open(model.modal, modal, sharedOf(model))),
 		RequestedCommandPalette:
 			({ page }) =>
 			(model) =>
-				withCommandPalette(model, CommandPalette.open(model.commandPalette, page)),
+				withCommandPalette(model, CommandPalette.open(model.commandPalette, page, sharedOf(model))),
 		RequestedSignOut: () => (model) => ({ model, commands: [SignOut({})] }),
 	})
 
@@ -154,7 +207,7 @@ export const init: Runtime.RoutingApplicationInit<Model, Message, void, HazelRpc
 			nowMs: 0,
 			page: null,
 			shell: Shell.init(),
-			modal: Modal.init(),
+			modal: null,
 			commandPalette: CommandPalette.init(),
 			toasts: Toasts.init(),
 		},
@@ -224,8 +277,9 @@ export const update = (model: Model, message: Message): Return =>
 				Option.fromNullishOr(result.outMessage),
 			)
 		},
-		GotModalMessage: ({ message }) => withModal(model, Modal.update(model.modal, message)),
+		GotModalMessage: ({ message }) => withModal(model, Modal.update(model.modal, message, sharedOf(model))),
 		GotCommandPaletteMessage: ({ message }) =>
-			withCommandPalette(model, CommandPalette.update(model.commandPalette, message)),
+			withCommandPalette(model, CommandPalette.update(model.commandPalette, message, sharedOf(model))),
+		PressedHotkey: ({ actionId }) => pressedHotkey(model, actionId),
 		GotToastsMessage: ({ message }) => withToasts(model, Toasts.update(model.toasts, message)),
 	})

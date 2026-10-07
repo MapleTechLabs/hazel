@@ -32,6 +32,11 @@ const toUserMenuMessage = (message: Menu.Message) =>
 const toOrgSwitcherMessage = (message: Menu.Message) =>
 	toShellMessage(Shell.Message.GotOrgSwitcherMessage({ message }))
 export const toPageMessage = (message: PageMessage): Message => ({ _tag: "GotPageMessage", message })
+const toModalMessage = (message: Modal.Message): Message => ({ _tag: "GotModalMessage", message })
+const toCommandPaletteMessage = (message: CommandPalette.Message): Message => ({
+	_tag: "GotCommandPaletteMessage",
+	message,
+})
 
 const shellContextOf = (model: Model, orgSlug: string): ShellContext => ({
 	orgSlug,
@@ -146,7 +151,16 @@ const body = (model: Model, h: HtmlBuilder<Message>): Html => {
 		secondarySidebar: secondarySidebar(model, h, context),
 		unreadNotificationCount: model.shell.unreadNotificationCount,
 		toaster: Toasts.view(h, model.toasts),
-		overlays: [Modal.view(h, model.modal), CommandPalette.view(h, model.commandPalette)],
+		overlays: [
+			Modal.view(h, model.modal, sharedOf(model), toModalMessage),
+			h.submodel({
+				slotId: "command-palette",
+				model: model.commandPalette,
+				view: CommandPalette.view,
+				viewInputs: { shared: sharedOf(model) },
+				toParentMessage: toCommandPaletteMessage,
+			}),
+		],
 	})
 }
 

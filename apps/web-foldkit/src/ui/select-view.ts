@@ -64,8 +64,8 @@ const PortalSelect = Mount.defineStream("PortalSelect", {
 // VIEW
 
 export type ViewInputs = Readonly<{
-	/** The `Label` inside the Select. */
-	label: string
+	/** The `Label` inside the Select; omit it when the label sits outside (legacy create-channel). */
+	label?: string
 	placeholder?: string
 	/** Select `className`. */
 	className?: string
@@ -96,10 +96,12 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, view
 			h.Attribute("data-slot", "control"),
 		],
 		[
-			h.span(
-				[h.Class(labelStyles()), h.Attribute("data-slot", "label"), h.Id(labelId(model.id))],
-				[viewInputs.label],
-			),
+			viewInputs.label === undefined
+				? h.empty
+				: h.span(
+						[h.Class(labelStyles()), h.Attribute("data-slot", "label"), h.Id(labelId(model.id))],
+						[viewInputs.label],
+					),
 			h.span(
 				[h.Attribute("data-slot", "control"), h.Class(selectTriggerWrapperClassName)],
 				[
@@ -108,7 +110,12 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, view
 							...(isOpen ? [h.Attribute("aria-controls", listboxId(model.id))] : []),
 							h.Attribute("aria-expanded", isOpen ? "true" : "false"),
 							h.Attribute("aria-haspopup", "listbox"),
-							h.Attribute("aria-labelledby", `${valueId(model.id)} ${labelId(model.id)}`),
+							h.Attribute(
+								"aria-labelledby",
+								viewInputs.label === undefined
+									? valueId(model.id)
+									: `${valueId(model.id)} ${labelId(model.id)}`,
+							),
 							h.Class(twMerge(twMerge(...selectTriggerBase), undefined)),
 							...flag("data-disabled", model.isDisabled),
 							...flag("data-pressed", isOpen),

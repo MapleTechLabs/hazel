@@ -8,6 +8,9 @@ import { pageSubscriptions } from "../page/registry"
 import { orgSlugOf } from "../route"
 import type { Member, Organization } from "../session"
 import * as ShellSubscription from "../shell/subscription"
+import * as CommandPalette from "../overlay/command-palette"
+import { layoutHotkeys } from "../overlay/hotkeys"
+import * as Modal from "../overlay/modal"
 import { clerkAuthStream } from "./clerk"
 import { Message } from "./message"
 import { type Model, pageHostOf, sharedOf } from "./model"
@@ -86,6 +89,30 @@ const rootSubscriptions = Subscription.make<Model, Message>()((entry) => ({
 	),
 }))
 
+const overlaySubscriptions = Subscription.make<Model, Message>()((entry) => ({
+	// `$orgSlug/layout.tsx` hotkeys: only inside the signed-in org shell.
+	layoutHotkeys: entry(
+		{ isEnabled: Schema.Boolean },
+		{
+			modelToDependencies: (model) => ({
+				isEnabled: model.auth === "SignedIn" && orgSlugOf(model.route) !== undefined,
+			}),
+			dependenciesToStream: ({ isEnabled }) =>
+				isEnabled ? layoutHotkeys((actionId) => Message.PressedHotkey({ actionId })) : Stream.empty,
+		},
+	),
+}))
+
+const commandPaletteSubscriptions = Subscription.lift(CommandPalette.subscriptions)<Model, Message>({
+	read: (model) => Option.some({ model: model.commandPalette, shared: sharedOf(model) }),
+	toParentMessage: (message): Message => ({ _tag: "GotCommandPaletteMessage", message }),
+})
+
+const modalSubscriptions = Subscription.lift(Modal.subscriptions)<Model, Message>({
+	read: (model) => Option.some({ modal: model.modal, shared: sharedOf(model) }),
+	toParentMessage: (message): Message => ({ _tag: "GotModalMessage", message }),
+})
+
 const shellSubscriptions = Subscription.lift(ShellSubscription.subscriptions)<Model, Message>({
 	read: (model) => Option.some({ model: model.shell, route: model.route, shared: sharedOf(model) }),
 	// Literal wrappers: constructors would re-validate every row payload.
@@ -97,4 +124,11 @@ const pages = Subscription.lift(pageSubscriptions)<Model, Message>({
 	toParentMessage: (message): Message => ({ _tag: "GotPageMessage", message }),
 })
 
-export const subscriptions = Subscription.aggregate(rootSubscriptions, shellSubscriptions, pages)
+export const subscriptions = Subscription.aggregate(
+	rootSubscriptions,
+	overlaySubscriptions,
+	commandPaletteSubscriptions,
+	modalSubscriptions,
+	shellSubscriptions,
+	pages,
+)
