@@ -1,4 +1,5 @@
-import { ChannelId, type MessageId, type UserId } from "@hazel/schema"
+import type { MessageEmbed } from "@hazel/domain/models"
+import { ChannelId, OrganizationId, type MessageId, type UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { extractUrls } from "~/components/link-preview.utils"
 import type { ChatMessage, ChatReaction } from "./rows"
@@ -12,8 +13,17 @@ export const ChannelInfo = Schema.Struct({
 	name: Schema.String,
 	type: Schema.String,
 	icon: Schema.NullOr(Schema.String),
+	organizationId: OrganizationId,
+	parentChannelId: Schema.NullOr(ChannelId),
 })
 export type ChannelInfo = typeof ChannelInfo.Type
+
+export const ParentChannelInfo = Schema.Struct({
+	id: ChannelId,
+	name: Schema.String,
+	icon: Schema.NullOr(Schema.String),
+})
+export type ParentChannelInfo = typeof ParentChannelInfo.Type
 
 /** Rows come out of collections decoded with the domain schemas, so ids are already branded. */
 export interface MessageQueryRow {
@@ -21,7 +31,7 @@ export interface MessageQueryRow {
 	readonly channelId: ChannelId
 	readonly authorId: UserId
 	readonly content: string
-	readonly embeds: ReadonlyArray<unknown> | null
+	readonly embeds: MessageEmbed.MessageEmbeds | null
 	readonly replyToMessageId: MessageId | null
 	readonly threadChannelId: ChannelId | null
 	readonly createdAt: Date
@@ -47,6 +57,8 @@ export interface ChannelQueryRow {
 	readonly name: string
 	readonly type: string
 	readonly icon: string | null
+	readonly organizationId: OrganizationId
+	readonly parentChannelId: ChannelId | null
 }
 
 export const toChatMessage = (row: MessageQueryRow): ChatMessage => ({
@@ -54,6 +66,7 @@ export const toChatMessage = (row: MessageQueryRow): ChatMessage => ({
 	channelId: row.channelId,
 	authorId: row.authorId,
 	content: row.content,
+	embeds: row.embeds ?? null,
 	// `Message.Provider`'s `hasEmbed`: rich embeds, or any URL in the text.
 	hasEmbeds: (row.embeds?.length ?? 0) > 0 || extractUrls(row.content).length > 0,
 	replyToMessageId: row.replyToMessageId ?? null,

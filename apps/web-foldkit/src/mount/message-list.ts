@@ -41,6 +41,11 @@ export const Model = Schema.Struct({
 	/** First and last rendered rows. Moved in chunks, so most scroll frames change no DOM. */
 	renderedFromKey: Schema.NullOr(Schema.String),
 	renderedToKey: Schema.NullOr(Schema.String),
+	/**
+	 * The divider drawn without its line. `@legendapp/list` only reports a new sticky header when it
+	 * recalculates (data, layout, or rendering new rows), not on scrolls inside rendered rows.
+	 */
+	stuckKey: Schema.NullOr(Schema.String),
 })
 export type Model = typeof Model.Type
 
@@ -76,6 +81,7 @@ export const init = (config: {
 	appliedScrollVersion: 0,
 	renderedFromKey: null,
 	renderedToKey: null,
+	stuckKey: null,
 })
 
 // LAYOUT
@@ -254,13 +260,35 @@ const keepRendered = (model: Model): Model => {
 	return modifyFields(model, { renderedFromKey: () => from, renderedToKey: () => to })
 }
 
-const withRendered = (result: ListReturn): ListReturn => {
-	const model = keepRendered(result.model)
+/** The divider above the first visible row (the one `position: sticky` pins). */
+const stickyKeyAt = (model: Model): string | null => {
+	if (model.viewportHeight === 0 || model.keys.length === 0) return null
+	const sticky = stickySetOf(model)
+	for (let index = rowIndexAt(layoutOf(model), model.scrollTop); index >= 0; index--)
+		if (sticky.has(model.keys[index]!)) return model.keys[index]!
+	return null
+}
+
+const withStuckKey = (model: Model): Model => {
+	const stuckKey = stickyKeyAt(model)
+	return stuckKey === model.stuckKey ? model : modifyFields(model, { stuckKey: () => stuckKey })
+}
+
+/** Keeps the rendered range around the viewport; a recalculation also re-reads the stuck divider. */
+const withRendered = (result: ListReturn, isRecalculation = true): ListReturn => {
+	const rendered = keepRendered(result.model)
+	const hasMoved =
+		rendered.renderedFromKey !== result.model.renderedFromKey ||
+		rendered.renderedToKey !== result.model.renderedToKey
+	const model = isRecalculation || hasMoved ? withStuckKey(rendered) : rendered
 	return model === result.model ? result : { ...result, model }
 }
 
-export const update = (model: Model, message: Message): ListReturn =>
-	withRendered(updateScroll(model, message))
+export const update = (model: Model, message: Message): ListReturn => {
+	const result = updateScroll(model, message)
+	// A scroll, or an event that changed nothing (re-observed rows), is not a recalculation.
+	return withRendered(result, message._tag !== "ScrolledList" && result.model !== model)
+}
 
 const updateScroll = (model: Model, message: Message): ListReturn =>
 	Message.match<ListReturn>(message, {
@@ -348,7 +376,7 @@ const observeList = (element: Element): Stream.Stream<ObservedMessage> =>
 						const key = entry.target.getAttribute(ROW_KEY_ATTRIBUTE)
 						return key === null
 							? []
-							: [{ key, height: entry.target.getBoundingClientRect().height }]
+							: [{ key, height: roundSize(entry.target.getBoundingClientRect().height) }]
 					})
 					if (measurements.length > 0)
 						Queue.offerUnsafe(queue, Message.MeasuredRows({ measurements }))
@@ -381,6 +409,9 @@ const observeList = (element: Element): Stream.Stream<ObservedMessage> =>
 			(cleanup) => Effect.sync(cleanup),
 		).pipe(Effect.flatMap(() => Effect.never)),
 	)
+
+/** `@legendapp/list`'s `updateItemSize` stores `Math.round(height)`, so offsets land where it puts them. */
+const roundSize = (size: number) => Math.round(size)
 
 /** Container-owned Mount: scroll position, viewport height and row heights, all from one element. */
 export const ObserveMessageList = Mount.defineStream("ObserveMessageList", {
@@ -429,13 +460,14 @@ export const view = <Item, ParentMessage>(
 	const row = (index: number) => {
 		const item = inputs.items[index]!
 		const key = inputs.itemToKey(item)
-		const isStuck = index === stickyIndex
+		const isStuck = key === model.stuckKey
+		const isPinned = index === stickyIndex
 		return h.keyed("div")(
 			key,
 			[
 				h.Attribute(ROW_KEY_ATTRIBUTE, key),
 				h.Style(
-					isStuck
+					isPinned
 						? {
 								contain: "layout style paint",
 								left: "0px",
@@ -459,8 +491,12 @@ export const view = <Item, ParentMessage>(
 	// The pinned divider comes after the positioned rows, as in `@legendapp/list`.
 	const rows: Html[] = []
 	if (range !== undefined) {
-		for (let index = range.start; index <= range.end; index++)
-			if (index !== stickyIndex) rows.push(row(index))
+		// The divider heading the first rendered row renders too, so it is measured with the rest.
+		const start =
+			range.start > 0 && inputs.isStickyHeader(inputs.items[range.start - 1]!)
+				? range.start - 1
+				: range.start
+		for (let index = start; index <= range.end; index++) if (index !== stickyIndex) rows.push(row(index))
 		if (stickyIndex !== undefined) rows.push(row(stickyIndex))
 	}
 

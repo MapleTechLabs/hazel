@@ -192,6 +192,8 @@ export type ViewInputs = Readonly<{
 	className?: string
 	/** `MenuContent` popover.className. */
 	popoverClassName?: string
+	/** A `MenuHeader` before the root menu's entries (e.g. a row of quick actions). */
+	header?: Html
 	/** A `MenuItem`'s own className, by key. */
 	itemClassName?: (key: string) => string | undefined
 }>
@@ -313,6 +315,7 @@ const overlay = (model: Model, open: Open, viewInputs: ViewInputs, h: HtmlBuilde
 										elementId: menuId(model.id),
 										labelledBy: isAtPointer ? undefined : triggerId(model.id),
 										entries: model.entries,
+										header: viewInputs.header,
 										focusedKey: rootFocus,
 										onKeyDown: isAtPointer ? toMenuKey : undefined,
 									}),
@@ -391,6 +394,7 @@ type MenuLevel = Readonly<{
 	elementId: string
 	labelledBy: string | undefined
 	entries: ReadonlyArray<Entry>
+	header?: Html | undefined
 	focusedKey: Option.Option<string>
 	onKeyDown?: (key: string, modifiers: KeyboardModifiers) => Message
 }>
@@ -424,54 +428,60 @@ const menuElement = (
 					]
 				: []),
 		],
-		Array.map(level.entries, (entry, index) => {
-			if (entry._tag === "Item") return itemView(entry.item)
-			if (entry._tag === "Separator")
-				return h.div([h.Class(twMerge(dropdownSeparatorBase)), h.Role("separator")])
-			const labelId = `${level.elementId}-section-${index}`
-			const sectionHeader = Option.map(entry.header, (found) => ({
-				...found,
-				id: headerId(model.id, found.key),
-			}))
-			const labelledBy = Option.isSome(sectionHeader)
-				? Option.some(sectionHeader.value.id)
-				: Option.as(entry.label, labelId)
-			return h.section(
-				[
-					...Option.match(labelledBy, {
-						onNone: () => [],
-						onSome: (id) => [h.Attribute("aria-labelledby", id)],
-					}),
-					h.Class(section()),
-					h.Attribute("data-rac", ""),
-					h.Role("group"),
-				],
-				[
-					...Option.match(sectionHeader, {
-						onNone: () => [],
-						onSome: (found) => [
-							h.header(
-								[
-									h.Class(
-										twMerge(menuHeaderBase, found.hasSeparator && menuHeaderSeparator),
-									),
-									h.Id(found.id),
-									h.Role("presentation"),
-								],
-								viewInputs.content(found.key),
-							),
-						],
-					}),
-					...Option.match(entry.label, {
-						onNone: () => [],
-						onSome: (label) => [
-							h.header([h.Class(header()), h.Id(labelId), h.Role("presentation")], [label]),
-						],
-					}),
-					...Array.map(entry.items, itemView),
-				],
-			)
-		}),
+		[
+			...(level.header ? [level.header] : []),
+			...Array.map(level.entries, (entry, index) => {
+				if (entry._tag === "Item") return itemView(entry.item)
+				if (entry._tag === "Separator")
+					return h.div([h.Class(twMerge(dropdownSeparatorBase)), h.Role("separator")])
+				const labelId = `${level.elementId}-section-${index}`
+				const sectionHeader = Option.map(entry.header, (found) => ({
+					...found,
+					id: headerId(model.id, found.key),
+				}))
+				const labelledBy = Option.isSome(sectionHeader)
+					? Option.some(sectionHeader.value.id)
+					: Option.as(entry.label, labelId)
+				return h.section(
+					[
+						...Option.match(labelledBy, {
+							onNone: () => [],
+							onSome: (id) => [h.Attribute("aria-labelledby", id)],
+						}),
+						h.Class(section()),
+						h.Attribute("data-rac", ""),
+						h.Role("group"),
+					],
+					[
+						...Option.match(sectionHeader, {
+							onNone: () => [],
+							onSome: (found) => [
+								h.header(
+									[
+										h.Class(
+											twMerge(
+												menuHeaderBase,
+												found.hasSeparator && menuHeaderSeparator,
+											),
+										),
+										h.Id(found.id),
+										h.Role("presentation"),
+									],
+									viewInputs.content(found.key),
+								),
+							],
+						}),
+						...Option.match(entry.label, {
+							onNone: () => [],
+							onSome: (label) => [
+								h.header([h.Class(header()), h.Id(labelId), h.Role("presentation")], [label]),
+							],
+						}),
+						...Array.map(entry.items, itemView),
+					],
+				)
+			}),
+		],
 	)
 }
 

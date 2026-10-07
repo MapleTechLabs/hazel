@@ -1,12 +1,17 @@
 import { ChannelId, MessageId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { Command, given, message, model, story } from "foldkit/story"
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import * as MessageList from "../../../mount/message-list"
 import { init, Message, type Model, update } from "./page"
 import type { ChatMessage } from "../rows"
 
 /** Update-loop tests for the channel page's list: prepend anchoring, following the end, paging. */
+
+// The Files tab's `ui/aria/interaction` names `document` at import; node has none.
+vi.hoisted(() => {
+	if (!("document" in globalThis)) Object.assign(globalThis, { document: new EventTarget() })
+})
 
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`
 const channelId = Schema.decodeSync(ChannelId)(uuid(1))
@@ -20,6 +25,7 @@ const chatMessage = (n: number): ChatMessage => ({
 	channelId,
 	authorId: n % 2 === 0 ? ada : grace,
 	content: `message ${n}`,
+	embeds: null,
 	hasEmbeds: false,
 	replyToMessageId: null,
 	threadChannelId: null,

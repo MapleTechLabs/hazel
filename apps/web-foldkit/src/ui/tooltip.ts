@@ -17,6 +17,8 @@ import type { Placement } from "./aria/position"
 
 // MODEL
 
+const DEFAULT_SHOW_DELAY_MS = 1500
+
 export const Model = Schema.Struct({
 	id: Schema.String,
 	isOpen: Schema.Boolean,
@@ -24,15 +26,21 @@ export const Model = Schema.Struct({
 	isFocused: Schema.Boolean,
 	/** Bumped on every show or hide request, so a stale delay never acts. */
 	version: Schema.Number,
+	/** TooltipTrigger `delay` (React Aria default 1500ms). */
+	delayMs: Schema.Number,
 })
 export type Model = typeof Model.Type
 
-export const init = (id: string): Model => ({
+export const init = (id: string): Model => initWithDelay(id, DEFAULT_SHOW_DELAY_MS)
+
+/** A trigger with its own `delay`. */
+export const initWithDelay = (id: string, delayMs: number): Model => ({
 	id,
 	isOpen: false,
 	isHovered: false,
 	isFocused: false,
 	version: 0,
+	delayMs,
 })
 
 // MESSAGE
@@ -57,14 +65,15 @@ export const tooltipId = (id: string) => `${id}-tooltip`
 // COMMAND
 
 /** useTooltipTriggerState defaults. */
-const SHOW_DELAY = Duration.millis(1500)
 const HIDE_DELAY = Duration.millis(500)
 
 const WaitForShowDelay = Command.define("WaitForShowDelay", {
-	args: { version: Schema.Number },
+	args: { version: Schema.Number, delayMs: Schema.Number },
 	messages: [Message.CompletedWaitForShowDelay],
-	execute: ({ version }) =>
-		Effect.sleep(SHOW_DELAY).pipe(Effect.as(Message.CompletedWaitForShowDelay({ version }))),
+	execute: ({ version, delayMs }) =>
+		Effect.sleep(Duration.millis(delayMs)).pipe(
+			Effect.as(Message.CompletedWaitForShowDelay({ version })),
+		),
 })
 
 const WaitForHideDelay = Command.define("WaitForHideDelay", {
@@ -82,7 +91,7 @@ const requestShow = (model: Model, isFocus: boolean): UpdateReturn => {
 	const version = model.version + 1
 	const next = modifyFields(model, { version: () => version })
 	if (model.isOpen || isFocus) return { model: modifyFields(next, { isOpen: () => true }) }
-	return { model: next, commands: [WaitForShowDelay({ version })] }
+	return { model: next, commands: [WaitForShowDelay({ version, delayMs: model.delayMs })] }
 }
 
 const requestHide = (model: Model, isImmediate: boolean): UpdateReturn => {

@@ -77,7 +77,8 @@ export const update = (model: Model, message: Message) =>
 // VIEW
 
 export type ViewInputs = Readonly<{
-	content: ReadonlyArray<Html | string>
+	/** Children; a function when they hold Mounts or Submodels (viewInputs only scope top-level functions). */
+	content: ReadonlyArray<Html | string> | (() => ReadonlyArray<Html | string>)
 	className?: string
 }>
 
@@ -98,6 +99,6 @@ export const view = defineView<Model, Message, ViewInputs>((model, viewInputs, h
 			h.Attribute("data-rac", ""),
 			h.OnKeyDownPreventDefault(navigate),
 		],
-		[...viewInputs.content],
+		[...(typeof viewInputs.content === "function" ? viewInputs.content() : viewInputs.content)],
 	)
 })

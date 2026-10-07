@@ -13,6 +13,7 @@ import {
 	type ChannelInfo,
 	type ChannelQueryRow,
 	type MessageQueryRow,
+	type ParentChannelInfo,
 	type ReactionQueryRow,
 	toChatMessage,
 	toChatReaction,
@@ -72,7 +73,51 @@ export const channelStream = <Message>(
 		(rows) => {
 			const row = rows[0]
 			return toMessage(
-				row ? { id: row.id, name: row.name, type: row.type, icon: row.icon ?? null } : null,
+				row
+					? {
+							id: row.id,
+							name: row.name,
+							type: row.type,
+							icon: row.icon ?? null,
+							organizationId: row.organizationId,
+							parentChannelId: row.parentChannelId ?? null,
+						}
+					: null,
 			)
 		},
+	)
+
+/** `useParentChannel`: the thread's parent for the header breadcrumb. */
+export const parentChannelStream = <Message>(
+	parentChannelId: ChannelId,
+	toMessage: (channel: ParentChannelInfo | null) => Message,
+): Stream.Stream<Message> =>
+	liveQueryStream<ChannelQueryRow, Message>(
+		(q) =>
+			q
+				.from({ channel: channelCollection })
+				.where((t) => eq(t.channel.id, parentChannelId))
+				.findOne(),
+		(rows) => {
+			const row = rows[0]
+			return toMessage(row ? { id: row.id, name: row.name, icon: row.icon ?? null } : null)
+		},
+	)
+
+/** `threadMessagesWithAuthorAtomFamily`: the open thread panel's messages, oldest first. */
+export const threadPanelStream = <Message>(
+	threadChannelId: ChannelId,
+	toMessage: (messages: ReadonlyArray<ChatMessage>) => Message,
+): Stream.Stream<Message> =>
+	liveQueryStream<MessageQueryRow, Message>(
+		(q) =>
+			q
+				.from({ message: messageCollection })
+				.leftJoin({ author: userCollection }, ({ message, author }) =>
+					eq(message.authorId, author.id),
+				)
+				.where(({ message }) => eq(message.channelId, threadChannelId))
+				.select(({ message, author }) => ({ ...message, author, pinnedMessage: null }))
+				.orderBy(({ message }) => message.createdAt, "asc"),
+		(rows) => toMessage(rows.map(toChatMessage)),
 	)
