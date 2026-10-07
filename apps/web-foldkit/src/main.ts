@@ -20,6 +20,7 @@ import { toPageMessage } from "./app/view"
 import * as CommandPalette from "./overlay/command-palette"
 import type { Return as CommandPaletteReturn } from "./overlay/command-palette/update"
 import * as Modal from "./overlay/modal"
+import * as Platform from "./platform"
 import * as Toasts from "./overlay/toaster"
 import { can } from "./page/contract"
 import { PageOutMessage } from "./page/out-message"
@@ -40,7 +41,7 @@ import {
 
 export { Message } from "./app/message"
 export { Model } from "./app/model"
-export { subscriptions } from "./app/subscription"
+export { managedResources, subscriptions } from "./app/subscription"
 export { view } from "./app/view"
 
 /** Read before the first render, so a stored theme never flashes the default (`Atom.kvs` reads sync). */
@@ -301,6 +302,7 @@ export const init: Runtime.RoutingApplicationInit<Model, Message, Flags, Resourc
 			modal: null,
 			commandPalette: CommandPalette.init(),
 			toasts: Toasts.init(),
+			platform: Platform.init(),
 		},
 		url,
 	)
@@ -337,7 +339,11 @@ export const update = (model: Model, message: Message): Return =>
 		CompletedDeliverNotifications: () => ({ model }),
 		ChangedAuth: ({ auth }) => {
 			const next = modifyFields(model, { auth: () => auth })
-			const fetchUser = auth === "SignedIn" && model.auth !== "SignedIn" ? [FetchCurrentUser({})] : []
+			// Legacy `userAtom` runs wherever `useAuth()` mounts: the join page queries it signed out too.
+			const isUserQueried =
+				(auth === "SignedIn" && model.auth !== "SignedIn") ||
+				(auth === "SignedOut" && model.auth === "Loading" && model.route._tag === "Join")
+			const fetchUser = isUserQueried ? [FetchCurrentUser({})] : []
 			return Update.combine<Model, Message, Resources>(next, [
 				informPage,
 				redirect,
@@ -388,4 +394,11 @@ export const update = (model: Model, message: Message): Return =>
 			withCommandPalette(model, CommandPalette.update(model.commandPalette, message, sharedOf(model))),
 		PressedHotkey: ({ actionId }) => pressedHotkey(model, actionId),
 		GotToastsMessage: ({ message }) => withToasts(model, Toasts.update(model.toasts, message)),
+		GotPlatformMessage: ({ message }) => {
+			const result = Platform.update(model.platform, message)
+			return {
+				model: modifyFields(model, { platform: () => result.model }),
+				commands: Command.mapMessages(result.commands, (child) => Message.GotPlatformMessage({ message: child })),
+			}
+		},
 	})

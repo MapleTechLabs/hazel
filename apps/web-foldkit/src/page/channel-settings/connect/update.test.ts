@@ -64,3 +64,26 @@ describe("channel connect", () => {
 		expect(latest.commands?.map((command) => command.name)).toEqual(["SearchWorkspaces"])
 	})
 })
+
+describe("revoke failure", () => {
+	test("Revoke sends connectShare.invite.revoke for the invite and toasts the failure", () => {
+		const description = "This invite may have already been revoked or expired."
+		story(
+			run,
+			given(initial.model),
+			message(Message.SucceededListOutgoingInvites({ organizationId, invites: [invite] })),
+			message(Message.ClickedRevokeInvite({ inviteId })),
+			Command.expectExact(RevokeInvite({ inviteId })),
+			Command.resolve(
+				RevokeInvite,
+				Message.FailedRevokeInvite({ inviteId, title: "Invite not found", description }),
+			),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({
+					toast: { intent: "error", title: "Invite not found", description },
+				}),
+			),
+			model((current) => expect(current.revokingInviteIds).toEqual([])),
+		)
+	})
+})

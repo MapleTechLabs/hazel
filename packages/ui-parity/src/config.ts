@@ -45,7 +45,7 @@ export const fixtureElectricUrl = `http://localhost:${FIXTURE_ELECTRIC_PORT}/v1/
  * The pinned reference UI. `bun run parity build legacy` builds this commit unless `--ref` is given.
  * Move it only in a dedicated re-pin commit, with legacy-vs-legacy parity showing what changed.
  */
-export const LEGACY_BASELINE_REF = "6f7eccf00"
+export const LEGACY_BASELINE_REF = "639aa8d26"
 
 export type TargetName = "legacy" | "legacy-head" | "foldkit"
 

@@ -40,7 +40,7 @@ const ListIncomingInvites = Command.define("ListIncomingInvites", {
 		),
 })
 
-const AcceptInvite = Command.define("AcceptInvite", {
+export const AcceptInvite = Command.define("AcceptInvite", {
 	args: { inviteId: ConnectInviteId, guestOrganizationId: OrganizationId },
 	messages: [Message.SucceededAccept, Message.FailedAccept],
 	execute: ({ inviteId, guestOrganizationId }) =>

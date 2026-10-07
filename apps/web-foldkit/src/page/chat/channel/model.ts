@@ -73,6 +73,8 @@ export const Model = Schema.Struct({
 	/** `isThreadCreating`: the thread the panel shows is still being created. */
 	pendingThreadChannelId: Schema.NullOr(ChannelId),
 	isGeneratingThreadName: Schema.Boolean,
+	/** `channelMember.clearNotifications` was sent for this visit. */
+	hasClearedNotifications: Schema.Boolean,
 })
 export type Model = typeof Model.Type
 
@@ -115,6 +117,8 @@ export const Message = defineMessageUnion({
 	PressedGlobalKey: { key: Schema.String },
 	/** The window lost focus or the tab was hidden: typing stops. */
 	LeftWindow: {},
+	SucceededClearNotifications: {},
+	FailedClearNotifications: { reason: Schema.String },
 })
 export type Message = typeof Message.Type
 

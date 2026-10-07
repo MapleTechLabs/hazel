@@ -9,6 +9,7 @@ import { failureToast, successToast } from "../../../ui/toast-exit"
 import type { PageReturn, Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
 import { addMenuEntries, Message, type Model } from "./model"
+import { fetchDiscordGuilds } from "./discord"
 import { fetchConnections } from "./rpc"
 
 type Return = PageReturn<Model, Message>
@@ -52,6 +53,17 @@ export const DeleteConnection = Command.define("DeleteConnection", {
 		}),
 })
 
+/** `AddConnectionModal`'s guild query; the modal mounts with the loaded list. */
+export const ListDiscordGuilds = Command.define("ListDiscordGuilds", {
+	args: { organizationId: OrganizationId },
+	messages: [Message.SucceededListDiscordGuilds, Message.FailedListDiscordGuilds],
+	execute: ({ organizationId }) =>
+		fetchDiscordGuilds(organizationId).pipe(
+			Effect.map((guilds) => Message.SucceededListDiscordGuilds({ guilds })),
+			Effect.catch(() => Effect.succeed(Message.FailedListDiscordGuilds())),
+		),
+})
+
 // INIT
 
 /** Runs the list query for the current organization (`organizationId!` waits for it in legacy). */
@@ -79,6 +91,7 @@ export const init = (_route: unknown, shared: Shared): Return =>
 				placement: "bottom end",
 			}),
 			isAddModalOpen: false,
+			discordGuilds: { _tag: "Loading" },
 			deleteTarget: null,
 			deleteModal: Modal.init("chat-sync-delete"),
 			isDeleting: false,
@@ -131,14 +144,24 @@ const foldDeleteModal = (model: Model, message: Modal.Message): Return => {
 
 export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
-		SucceededListConnections: ({ organizationId, connections }) =>
-			organizationId === model.requestedOrganizationId
-				? {
-						model: modifyFields(model, {
-							connections: () => ({ _tag: "Loaded" as const, connections }),
-						}),
-					}
-				: { model },
+		SucceededListConnections: ({ organizationId, connections }) => {
+			if (organizationId !== model.requestedOrganizationId) return { model }
+			const next = modifyFields(model, {
+				connections: () => ({ _tag: "Loaded" as const, connections }),
+			})
+			// The loading and error states return early, so a fresh list remounts the modal.
+			if (model.connections._tag === "Loaded") return { model: next }
+			return {
+				model: modifyFields(next, { discordGuilds: () => ({ _tag: "Loading" as const }) }),
+				commands: [ListDiscordGuilds({ organizationId })],
+			}
+		},
+		SucceededListDiscordGuilds: ({ guilds }) => ({
+			model: modifyFields(model, { discordGuilds: () => ({ _tag: "Loaded" as const, items: guilds }) }),
+		}),
+		FailedListDiscordGuilds: () => ({
+			model: modifyFields(model, { discordGuilds: () => ({ _tag: "Failed" as const }) }),
+		}),
 		FailedListConnections: ({ organizationId }) =>
 			organizationId === model.requestedOrganizationId
 				? { model: modifyFields(model, { connections: () => ({ _tag: "Failed" as const }) }) }

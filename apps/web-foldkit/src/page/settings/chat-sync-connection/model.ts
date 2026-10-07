@@ -3,6 +3,7 @@ import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
+import { DiscordChannel, DiscordResource } from "../chat-sync/discord"
 import { Connection } from "../chat-sync/model"
 
 export const SyncDirection = Schema.Literals(["both", "hazel_to_external", "external_to_hazel"])
@@ -45,6 +46,8 @@ export const Model = Schema.Struct({
 	linkMenus: Schema.Array(Menu.Model),
 	/** `AddChannelLinkModal isOpen` (the modal itself is not ported yet). */
 	isAddLinkModalOpen: Schema.Boolean,
+	/** The modal's Discord channel query, which runs once the connection is found. */
+	discordChannels: DiscordResource(DiscordChannel),
 	deleteTarget: Schema.NullOr(LinkTarget),
 	deleteLinkModal: Modal.Model,
 	isDeletingLink: Schema.Boolean,
@@ -56,6 +59,8 @@ export type Model = typeof Model.Type
 export const Message = defineMessageUnion({
 	SucceededListConnections: { organizationId: OrganizationId, connections: Schema.Array(Connection) },
 	FailedListConnections: { organizationId: OrganizationId },
+	SucceededListDiscordChannels: { channels: Schema.Array(DiscordChannel) },
+	FailedListDiscordChannels: {},
 	SucceededListChannelLinks: { links: Schema.Array(ChannelLink) },
 	FailedListChannelLinks: {},
 	UpdatedChannelNames: { names: Schema.Record(Schema.String, Schema.String) },

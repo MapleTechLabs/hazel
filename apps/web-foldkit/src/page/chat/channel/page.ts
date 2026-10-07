@@ -61,6 +61,7 @@ export const init = (
 	threadMemberId: null,
 	pendingThreadChannelId: null,
 	isGeneratingThreadName: false,
+	hasClearedNotifications: false,
 })
 
 export const composerEditorId = (channelId: string) => `composer-${channelId}`
@@ -260,6 +261,8 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 			const thread = Write.updateDraft(channel.model, "thread", Draft.Message.LeftWindow(), shared)
 			return { ...thread, commands: [...(channel.commands ?? []), ...(thread.commands ?? [])] }
 		},
+		SucceededClearNotifications: () => ({ model }),
+		FailedClearNotifications: () => ({ model }),
 		GotFilesMessage: ({ message: filesMessage }) => {
 			if (model.files === null) return { model }
 			const result = FilesPage.update(model.files, filesMessage)

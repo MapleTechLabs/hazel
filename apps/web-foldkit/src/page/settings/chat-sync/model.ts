@@ -3,6 +3,7 @@ import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
+import { DiscordGuild, DiscordResource } from "./discord"
 
 export const ConnectionStatus = Schema.Literals(["active", "paused", "error", "disabled"])
 export type ConnectionStatus = typeof ConnectionStatus.Type
@@ -36,6 +37,8 @@ export const Model = Schema.Struct({
 	emptyAddMenu: Menu.Model,
 	/** `AddConnectionModal isOpen` (the modal itself is not ported yet). */
 	isAddModalOpen: Schema.Boolean,
+	/** The modal's guild query, which runs whenever the modal mounts (the list has loaded). */
+	discordGuilds: DiscordResource(DiscordGuild),
 	deleteTarget: Schema.NullOr(DeleteTarget),
 	deleteModal: Modal.Model,
 	isDeleting: Schema.Boolean,
@@ -45,6 +48,8 @@ export type Model = typeof Model.Type
 export const Message = defineMessageUnion({
 	SucceededListConnections: { organizationId: OrganizationId, connections: Schema.Array(Connection) },
 	FailedListConnections: { organizationId: OrganizationId },
+	SucceededListDiscordGuilds: { guilds: Schema.Array(DiscordGuild) },
+	FailedListDiscordGuilds: {},
 	ClickedConnection: { connectionId: SyncConnectionId },
 	ClickedDeleteConnection: { target: DeleteTarget },
 	ClickedConfirmDelete: {},

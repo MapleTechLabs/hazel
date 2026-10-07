@@ -8,6 +8,7 @@ import * as Modal from "../overlay/modal"
 import * as Toasts from "../overlay/toaster"
 import { PageMessage } from "../page/registry"
 import { Auth, CurrentUser, Member, Organization } from "../session"
+import * as Platform from "../platform"
 import * as Shell from "../shell/model"
 import { ResolvedTheme } from "../theme"
 
@@ -38,6 +39,7 @@ export const Message = defineMessageUnion({
 	GotModalMessage: { message: Modal.Message },
 	GotCommandPaletteMessage: { message: CommandPalette.Message },
 	GotToastsMessage: { message: Toasts.Message },
+	GotPlatformMessage: { message: Platform.Message },
 	/** A legacy `useAppHotkey` binding fired (`lib/hotkeys/hotkey-registry.ts` id). */
 	PressedHotkey: { actionId: Schema.String },
 })

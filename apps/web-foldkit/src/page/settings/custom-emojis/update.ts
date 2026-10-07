@@ -135,7 +135,7 @@ const RestoreEmoji = Command.define("RestoreCustomEmoji", {
 		),
 })
 
-const DeleteEmoji = Command.define("DeleteCustomEmoji", {
+export const DeleteEmoji = Command.define("DeleteCustomEmoji", {
 	args: { emojiId: CustomEmojiId, name: Schema.String },
 	messages: [Message.SucceededDeleteEmoji, Message.FailedDeleteEmoji],
 	execute: ({ emojiId, name }) =>

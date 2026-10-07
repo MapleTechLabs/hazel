@@ -6,7 +6,7 @@ import { describe, expect, test } from "vitest"
 import type { Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
 import { Message } from "./model"
-import { DeleteConnection, init, ListConnections, sharedChanged, update } from "./update"
+import { DeleteConnection, init, ListConnections, ListDiscordGuilds, sharedChanged, update } from "./update"
 import { sharedDefaults } from "../../test-shared"
 
 const organizationId = Schema.decodeSync(OrganizationId)("00000000-0000-4000-8000-000000000001")
@@ -66,7 +66,29 @@ describe("chat sync connections", () => {
 				ListConnections,
 				Message.SucceededListConnections({ organizationId, connections: [] }),
 			),
+			// The reloaded list remounts the add modal, so its guild query runs again.
+			Command.resolve(ListDiscordGuilds, Message.FailedListDiscordGuilds()),
 			model((current) => expect(current.connections).toEqual({ _tag: "Loaded", connections: [] })),
 		)
+	})
+
+	test("a loaded list mounts the add modal, which lists the Discord guilds", () => {
+		const guild = { id: "918273645500120", name: "Hazel Community", icon: null, owner: true }
+		story(
+			updateWithShared,
+			given(init(undefined, shared).model),
+			message(Message.SucceededListConnections({ organizationId, connections: [connection] })),
+			Command.expectExact(ListDiscordGuilds({ organizationId })),
+			Command.resolve(ListDiscordGuilds, Message.SucceededListDiscordGuilds({ guilds: [guild] })),
+			model((current) => expect(current.discordGuilds).toEqual({ _tag: "Loaded", items: [guild] })),
+		)
+	})
+
+	test("a failed list renders no modal and sends no guild query", () => {
+		const failed = updateWithShared(
+			init(undefined, shared).model,
+			Message.FailedListConnections({ organizationId }),
+		)
+		expect(failed.commands ?? []).toHaveLength(0)
 	})
 })
