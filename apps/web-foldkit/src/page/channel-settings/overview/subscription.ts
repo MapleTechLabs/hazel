@@ -31,7 +31,11 @@ const own = Subscription.make<PageSubscriptionInput<Model>, Message>()((entry) =
 						const row = rows[0]
 						return Message.UpdatedChannel({
 							channel: row
-								? { id: row.channel.id, name: row.channel.name, icon: row.channel.icon ?? null }
+								? {
+										id: row.channel.id,
+										name: row.channel.name,
+										icon: row.channel.icon ?? null,
+									}
 								: null,
 						})
 					},

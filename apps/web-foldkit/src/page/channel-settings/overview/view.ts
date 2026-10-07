@@ -71,7 +71,9 @@ const settingsForm = (h: HtmlBuilder<Message>, model: Model, form: Form): Html =
 					interaction: { wiring, target: nameInputTarget },
 					attributes: [
 						h.AriaInvalid(form.isNameDirty && !isNameValid(form.name)),
-						...(form.isNameDirty && !isNameValid(form.name) ? [h.DataAttribute("invalid", "true")] : []),
+						...(form.isNameDirty && !isNameValid(form.name)
+							? [h.DataAttribute("invalid", "true")]
+							: []),
 					],
 				}),
 			]),

@@ -27,7 +27,9 @@ export type Model = typeof Model.Type
 export const isNameValid = (name: string) => name.length > 1 && name.length < 101
 
 export const canSave = (form: Form) =>
-	!(form.isNameDirty && !isNameValid(form.name)) && !form.isSubmitting && (form.isNameDirty || form.isIconDirty)
+	!(form.isNameDirty && !isNameValid(form.name)) &&
+	!form.isSubmitting &&
+	(form.isNameDirty || form.isIconDirty)
 
 export const nameInputTarget = "channel-name-input"
 export const saveButtonTarget = "channel-save"

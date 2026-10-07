@@ -18,17 +18,18 @@ export const tabHeader = <Message>(
 		sectionHeaderGroup(h, {}, [
 			h.div(
 				[h.Class("flex flex-1 flex-col justify-center gap-1")],
-				[
-					sectionHeaderHeading(h, {}, [heading]),
-					sectionHeaderSubheading(h, {}, [subheading]),
-				],
+				[sectionHeaderHeading(h, {}, [heading]), sectionHeaderSubheading(h, {}, [subheading])],
 			),
 			...actions,
 		]),
 	])
 
 /** `components/channel-icon.tsx` */
-export const channelIcon = <Message>(h: HtmlBuilder<Message>, icon: string | null, className?: string): Html =>
+export const channelIcon = <Message>(
+	h: HtmlBuilder<Message>,
+	icon: string | null,
+	className?: string,
+): Html =>
 	icon
 		? h.span([h.Attribute("data-slot", "icon"), ...(className ? [h.Class(className)] : [])], [icon])
 		: IconHashtag(h, { className })

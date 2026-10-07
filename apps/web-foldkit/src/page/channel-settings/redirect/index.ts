@@ -23,6 +23,8 @@ export const page = definePage(
 		}),
 		update: (model) => ({ model }),
 		// `component: () => null`
-		view: Submodel.defineView<typeof Model.Type, typeof Message.Type, PageViewInputs>((_m, _i, h) => h.empty),
+		view: Submodel.defineView<typeof Model.Type, typeof Message.Type, PageViewInputs>(
+			(_m, _i, h) => h.empty,
+		),
 	},
 )

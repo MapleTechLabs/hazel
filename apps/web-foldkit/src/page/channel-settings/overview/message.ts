@@ -3,7 +3,11 @@ import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import * as Interaction from "../../../ui/aria/interaction"
 
-export const LoadedChannel = Schema.Struct({ id: ChannelId, name: Schema.String, icon: Schema.NullOr(Schema.String) })
+export const LoadedChannel = Schema.Struct({
+	id: ChannelId,
+	name: Schema.String,
+	icon: Schema.NullOr(Schema.String),
+})
 
 export const Message = defineMessageUnion({
 	UpdatedChannel: { channel: Schema.NullOr(LoadedChannel) },

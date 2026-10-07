@@ -93,12 +93,18 @@ export const update = (model: Model, message: Message): Return =>
 			model: withForm(model, (form) => ({ ...form, name, isNameDirty: true })),
 		}),
 		ClearedIcon: () => ({
-			model: withForm(model, (form) => ({ ...form, icon: null, isIconDirty: form.initialIcon !== null })),
+			model: withForm(model, (form) => ({
+				...form,
+				icon: null,
+				isIconDirty: form.initialIcon !== null,
+			})),
 		}),
 		SubmittedForm: () => submit(model),
 		SucceededUpdateChannel: () => ({
 			model: withForm(model, (form) => ({ ...form, isSubmitting: false, isIconDirty: false })),
-			outMessage: PageOutMessage.RequestedToast({ toast: successToast("Channel updated successfully") }),
+			outMessage: PageOutMessage.RequestedToast({
+				toast: successToast("Channel updated successfully"),
+			}),
 		}),
 		FailedUpdateChannel: ({ title, description }) => ({
 			model: withForm(model, (form) => ({ ...form, isSubmitting: false })),
