@@ -152,5 +152,5 @@ export const diffAria = (baseline: string, candidate: string): AriaDelta => {
 	return { missing: onlyBaseline, extra: onlyCandidate }
 }
 
-/** The role an ARIA snapshot line describes (`- button "Send"` → `button`, `- text: hi` → `text`). */
-export const ariaRole = (line: string) => line.replace(/^- /, "").match(/^[\w-]+/)?.[0] ?? line
+/** The role an ARIA snapshot line describes (`- button "Send"` → `button`, `- /url: /x` → `/url`). */
+export const ariaRole = (line: string) => line.replace(/^- /, "").match(/^\/?[\w-]+/)?.[0] ?? line
