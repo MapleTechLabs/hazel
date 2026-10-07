@@ -71,6 +71,11 @@ export const waitForVisualQuiet = async ({ quietMs, timeoutMs }: { quietMs: numb
 			resolve()
 		}
 	})
+	// SMIL animations (the spin loader's <animateTransform>) ignore the CSS freeze; pin them at t=0.
+	for (const svg of document.querySelectorAll("svg")) {
+		svg.pauseAnimations()
+		svg.setCurrentTime(0)
+	}
 	// Two frames so the last mutation is painted.
 	await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
 }

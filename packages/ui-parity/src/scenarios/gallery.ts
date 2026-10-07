@@ -33,5 +33,40 @@ export const galleryArea: AreaModule = {
 				await page.keyboard.press("Tab")
 			},
 		}),
+		gallery("button", {
+			id: "gallery-button-pressed",
+			title: "Button: pointer held down on secondary",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.getByRole("button", { name: "secondary", exact: true }).hover()
+				await page.mouse.down()
+			},
+		}),
+		gallery("button", {
+			id: "gallery-button-clicked",
+			title: "Button: focused by pointer (no ring), pointer moved away",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.getByRole("button", { name: "outline", exact: true }).click()
+				await page.mouse.move(0, 0)
+			},
+		}),
+		gallery("button", {
+			id: "gallery-button-keyboard-pressed",
+			title: "Button: Space held on the focused button",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.keyboard.press("Tab")
+				await page.keyboard.down(" ")
+			},
+		}),
+		gallery("button", {
+			id: "gallery-button-pending-hover",
+			title: "Button: hovering a pending button shows no hover state",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.getByRole("button", { name: /Saving/ }).hover()
+			},
+		}),
 	],
 }
