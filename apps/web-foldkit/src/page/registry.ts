@@ -10,6 +10,7 @@ import type { PageHost, PageMessageBase, PageSlotBase, PageStep, PageViewInputs,
 import type { PageOutMessage } from "./out-message"
 import * as OnboardingSetupOrganization from "./onboarding/setup-organization"
 import * as Root from "./root"
+import * as SelectOrganization from "./select-organization"
 import * as TeamSettings from "./settings/team"
 
 /**
@@ -23,6 +24,7 @@ export const pages = [
 	Auth.signInPage,
 	Auth.signUpPage,
 	OnboardingSetupOrganization.page,
+	SelectOrganization.page,
 ]
 
 export const PageSlot = Schema.Union(pages.map((page) => page.Slot))
