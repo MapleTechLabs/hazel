@@ -26,3 +26,15 @@ export const cardHeader = <Message>(h: HtmlBuilder<Message>, children: Html[]): 
 
 export const cardHeaderGroup = <Message>(h: HtmlBuilder<Message>, children: Html[]): Html =>
 	h.div([h.Class(twMerge(cardStyles.cardHeaderGroup))], children)
+
+export const cardTitle = <Message>(
+	h: HtmlBuilder<Message>,
+	options: { readonly className?: string },
+	children: Array<Html | string>,
+): Html => h.h2([h.Class(twMerge(cardStyles.cardTitle, options.className))], children)
+
+export const cardDescription = <Message>(
+	h: HtmlBuilder<Message>,
+	options: { readonly className?: string },
+	children: Array<Html | string>,
+): Html => h.p([h.Class(twMerge(cardStyles.cardDescription, options.className))], children)

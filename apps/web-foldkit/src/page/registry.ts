@@ -9,6 +9,7 @@ import * as ChatChannel from "./chat/channel"
 import * as Join from "./join"
 import type { PageHost, PageMessageBase, PageSlotBase, PageStep, PageViewInputs, Shared } from "./contract"
 import type { PageOutMessage } from "./out-message"
+import * as Onboarding from "./onboarding"
 import * as OnboardingSetupOrganization from "./onboarding/setup-organization"
 import * as Root from "./root"
 import * as SelectOrganization from "./select-organization"
@@ -24,6 +25,7 @@ export const pages = [
 	ChatChannel.page,
 	Auth.signInPage,
 	Auth.signUpPage,
+	Onboarding.page,
 	OnboardingSetupOrganization.page,
 	SelectOrganization.page,
 	Join.page,
