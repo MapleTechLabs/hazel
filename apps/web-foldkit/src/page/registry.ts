@@ -5,6 +5,7 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import type { HazelRpc } from "../rpc"
 import type { AppRoute } from "../route"
 import * as ChannelSettingsConnect from "./channel-settings/connect"
+import * as ChannelSettingsIntegrations from "./channel-settings/integrations"
 import * as ChannelSettingsOverview from "./channel-settings/overview"
 import * as ChannelSettingsRedirect from "./channel-settings/redirect"
 import * as ChatChannel from "./chat/channel"
@@ -26,6 +27,7 @@ export const pages = [
 	ChannelSettingsRedirect.page,
 	ChannelSettingsOverview.page,
 	ChannelSettingsConnect.page,
+	ChannelSettingsIntegrations.page,
 	SettingsChatSync.page,
 	SettingsChatSyncConnection.page,
 ]
