@@ -142,19 +142,21 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 								{
 									id: `${ID}-name`,
 									value: model.name,
-									isInvalid: model.nameError !== null,
 									onInput: (value) => Message.ChangedName({ value }),
 								},
 								(field) => [
 									field.label(["Channel Name"]),
 									inputGroup(h, { attributes: [h.Role("presentation")] }, [
 										IconHashtag(h),
+										// Only the input is invalid: React Aria never renders the FieldError here.
 										field.input({
 											placeholder: "general",
-											attributes: [h.Attribute("aria-invalid", model.nameError !== null ? "true" : "false")],
+											attributes: [
+												h.Attribute("aria-invalid", model.nameError === null ? "false" : "true"),
+												...(model.nameError === null ? [] : [h.Attribute("data-invalid", "true")]),
+											],
 										}),
 									]),
-									...(model.nameError === null ? [] : [field.fieldError([model.nameError])]),
 								],
 							),
 							label(h, {}, ["Channel Type"]),
