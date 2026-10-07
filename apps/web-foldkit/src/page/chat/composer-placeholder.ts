@@ -90,10 +90,11 @@ const editorView = <Message>(h: HtmlBuilder<Message>): Html =>
 		],
 	)
 
-export const composerPlaceholderView = <Message>(h: HtmlBuilder<Message>): Html =>
+export const composerPlaceholderView = <Message>(h: HtmlBuilder<Message>, typing: Html = null): Html =>
 	h.div(
 		[h.Class("relative shrink-0 px-4 pb-4 pt-2.5")],
 		[
+			typing,
 			h.div(
 				[h.Class("relative"), h.Attribute("data-rac", "")],
 				[
