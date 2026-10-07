@@ -1,4 +1,4 @@
-import type { Html, HtmlBuilder } from "foldkit/html"
+import type { Attribute, ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { IconChevronRight, IconEye, IconHashtag, IconPin, IconThread } from "../../icons"
 import { avatar } from "../../ui/avatar"
 import { button } from "../../ui/button"
@@ -30,7 +30,7 @@ const ROW = "flex h-14 shrink-0 items-center justify-between border-border borde
 
 export const pinnedButton = <M>(
 	h: HtmlBuilder<M>,
-	attributes: ReadonlyArray<ReturnType<HtmlBuilder<M>["Attribute"]>>,
+	attributes: ReadonlyArray<Attribute<M> | ChildAttribute>,
 	overlay: Html,
 ) =>
 	button(

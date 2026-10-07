@@ -12,6 +12,7 @@ import {
 	customEmojiCollection,
 	messageCollection,
 	organizationCollection,
+	pinnedMessageCollection,
 	typingIndicatorCollection,
 	userCollection,
 	userPresenceStatusCollection,
@@ -25,6 +26,7 @@ import {
 	type ChannelMemberInfo,
 	type ChannelMemberRow,
 	type CustomEmojiInfo,
+	type PinnedInfo,
 	type PresenceInfo,
 	type PresenceRow,
 	type ReplyTarget,
@@ -229,4 +231,58 @@ export const orgSlugStream = <M>(organizationId: OrganizationId, toMessage: (org
 				.where(({ org }) => eq(org.id, organizationId))
 				.findOne(),
 		(rows) => toMessage(rows[0]?.slug ?? null),
+	)
+
+interface PinnedRow {
+	readonly pinned: { readonly id: string; readonly messageId: MessageId; readonly pinnedAt: Date }
+	readonly message: {
+		readonly authorId: UserId
+		readonly content: string
+		readonly createdAt: Date
+		readonly updatedAt: Date | null
+		readonly author?: {
+			readonly firstName: string
+			readonly lastName: string
+			readonly avatarUrl?: string | null
+		} | null
+	}
+}
+
+/** `PinnedMessagesModal`'s query, sorted by pin time like its `sortedPins`. */
+export const pinnedStream = <M>(channelId: ChannelId, toMessage: (pins: ReadonlyArray<PinnedInfo>) => M) =>
+	liveQueryStream<PinnedRow, M>(
+		(q) =>
+			q
+				.from({ pinned: pinnedMessageCollection })
+				.where(({ pinned }) => eq(pinned.channelId, channelId))
+				.innerJoin({ message: messageCollection }, ({ pinned, message }) =>
+					eq(pinned.messageId, message.id),
+				)
+				.leftJoin({ author: userCollection }, ({ message, author }) =>
+					eq(message.authorId, author.id),
+				)
+				.select(({ pinned, message, author }) => ({ pinned, message: { ...message, author } }))
+				.orderBy(({ pinned }) => pinned.pinnedAt, "desc"),
+		(rows) =>
+			toMessage(
+				rows
+					.map((row) => ({
+						pinnedId: row.pinned.id,
+						messageId: row.pinned.messageId,
+						authorId: row.message.authorId,
+						author: row.message.author
+							? {
+									firstName: row.message.author.firstName,
+									lastName: row.message.author.lastName,
+									avatarUrl: row.message.author.avatarUrl ?? null,
+								}
+							: null,
+						content: row.message.content,
+						createdAtMs: new Date(row.message.createdAt).getTime(),
+						updatedAtMs:
+							row.message.updatedAt === null ? null : new Date(row.message.updatedAt).getTime(),
+						pinnedAtMs: new Date(row.pinned.pinnedAt).getTime(),
+					}))
+					.sort((a, b) => a.pinnedAtMs - b.pinnedAtMs),
+			),
 	)

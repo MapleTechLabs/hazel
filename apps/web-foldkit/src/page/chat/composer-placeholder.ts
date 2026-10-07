@@ -36,7 +36,7 @@ const actionButton = <Message>(
 		children,
 	)
 
-const editorView = <Message>(h: HtmlBuilder<Message>): Html =>
+const editorView = <Message>(h: HtmlBuilder<Message>, placeholder: string): Html =>
 	h.div(
 		[
 			h.Attribute("aria-autocomplete", "list"),
@@ -80,7 +80,7 @@ const editorView = <Message>(h: HtmlBuilder<Message>): Html =>
 											h.Attribute("data-slate-placeholder", "true"),
 											h.Attribute("style", PLACEHOLDER_STYLE),
 										],
-										["Type a message..."],
+										[placeholder],
 									),
 								],
 							),
@@ -98,103 +98,103 @@ export const composerPlaceholderView = <Message>(
 ): Html =>
 	h.div(
 		[h.Class("relative shrink-0 px-4 pb-4 pt-2.5")],
+		[typing, composerBoxView(h, { placeholder: "Type a message...", replyIndicator })],
+	)
+
+/** `SlateMessageComposer`'s DropZone and Frame (the thread panel uses it with "Reply in thread..."). */
+export const composerBoxView = <Message>(
+	h: HtmlBuilder<Message>,
+	{ placeholder, replyIndicator }: { readonly placeholder: string; readonly replyIndicator: Html },
+): Html =>
+	h.div(
+		[h.Class("relative"), h.Attribute("data-rac", "")],
 		[
-			typing,
 			h.div(
-				[h.Class("relative"), h.Attribute("data-rac", "")],
+				[h.Attribute("style", VISUALLY_HIDDEN)],
+				[
+					h.button(
+						[
+							h.Attribute("aria-label", "DropZone"),
+							h.Attribute("data-react-aria-pressable", "true"),
+							h.Attribute("tabindex", "0"),
+							h.Attribute("type", "button"),
+						],
+						[],
+					),
+				],
+			),
+			h.div(
+				[h.Class("relative flex h-max items-center gap-3")],
 				[
 					h.div(
-						[h.Attribute("style", VISUALLY_HIDDEN)],
+						[h.Class("w-full")],
 						[
-							h.button(
-								[
-									h.Attribute("aria-label", "DropZone"),
-									h.Attribute("data-react-aria-pressable", "true"),
-									h.Attribute("tabindex", "0"),
-									h.Attribute("type", "button"),
-								],
-								[],
-							),
-						],
-					),
-					h.div(
-						[h.Class("relative flex h-max items-center gap-3")],
-						[
+							replyIndicator,
 							h.div(
-								[h.Class("w-full")],
 								[
-									replyIndicator,
+									// ComposerFrame: square top corners under a reply or edit indicator.
+									h.Class(
+										cn(
+											"relative inset-ring inset-ring-secondary flex h-max flex-col rounded-xl bg-secondary",
+											replyIndicator !== null && "rounded-t-none",
+										),
+									),
+								],
+								[
+									h.div([h.Class("relative w-full")], [editorView(h, placeholder)]),
+									h.input([
+										h.Attribute(
+											"accept",
+											"image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv",
+										),
+										h.Attribute("aria-label", "File upload"),
+										h.Class("hidden"),
+										h.Attribute("multiple", ""),
+										h.Attribute("type", "file"),
+									]),
 									h.div(
+										[h.Class("flex w-full items-center justify-between gap-3 px-3 py-2")],
 										[
-											// ComposerFrame: square top corners under a reply or edit indicator.
-											h.Class(
-												cn(
-													"relative inset-ring inset-ring-secondary flex h-max flex-col rounded-xl bg-secondary",
-													replyIndicator !== null && "rounded-t-none",
-												),
-											),
-										],
-										[
-											h.div([h.Class("relative w-full")], [editorView(h)]),
-											h.input([
-												h.Attribute(
-													"accept",
-													"image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv",
-												),
-												h.Attribute("aria-label", "File upload"),
-												h.Class("hidden"),
-												h.Attribute("multiple", ""),
-												h.Attribute("type", "file"),
-											]),
 											h.div(
+												[h.Class("flex items-center gap-3")],
 												[
-													h.Class(
-														"flex w-full items-center justify-between gap-3 px-3 py-2",
-													),
-												],
-												[
-													h.div(
-														[h.Class("flex items-center gap-3")],
+													actionButton(
+														h,
+														{
+															className: `${ACTION_CLASS} transition-colors hover:text-fg disabled:opacity-50`,
+															isAria: false,
+														},
 														[
-															actionButton(
-																h,
-																{
-																	className: `${ACTION_CLASS} transition-colors hover:text-fg disabled:opacity-50`,
-																	isAria: false,
-																},
-																[
-																	IconPaperclip2(h, {
-																		className: "size-4 text-muted-fg",
-																	}),
-																	"Attach",
-																],
-															),
-															actionButton(
-																h,
-																{
-																	className: `${ACTION_CLASS} outline-none transition-colors hover:text-fg`,
-																	isAria: true,
-																},
-																[
-																	IconGif(h, {
-																		className: "size-4 text-muted-fg",
-																	}),
-																	"GIF",
-																],
-															),
-															actionButton(
-																h,
-																{
-																	className: `${ACTION_CLASS} outline-none transition-colors hover:text-fg`,
-																	isAria: true,
-																},
-																[
-																	IconEmoji1(h, {
-																		className: "size-4 text-muted-fg",
-																	}),
-																	"Emoji",
-																],
-															),
+															IconPaperclip2(h, {
+																className: "size-4 text-muted-fg",
+															}),
+															"Attach",
+														],
+													),
+													actionButton(
+														h,
+														{
+															className: `${ACTION_CLASS} outline-none transition-colors hover:text-fg`,
+															isAria: true,
+														},
+														[
+															IconGif(h, {
+																className: "size-4 text-muted-fg",
+															}),
+															"GIF",
+														],
+													),
+													actionButton(
+														h,
+														{
+															className: `${ACTION_CLASS} outline-none transition-colors hover:text-fg`,
+															isAria: true,
+														},
+														[
+															IconEmoji1(h, {
+																className: "size-4 text-muted-fg",
+															}),
+															"Emoji",
 														],
 													),
 												],

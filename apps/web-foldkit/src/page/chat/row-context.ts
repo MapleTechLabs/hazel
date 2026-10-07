@@ -92,6 +92,7 @@ const buildContext = <M>(
 	return {
 		tooltip: {
 			active: isIdle ? null : overlays.tooltip,
+			hoveredKey: isIdle ? null : overlays.hoveredTriggerKey,
 			toMessage: (message) =>
 				overlaysMessage(toParentMessage, Overlays.Message.GotTooltipMessage({ tooltip: message })),
 			userName: (userId) => names.get(userId) ?? null,

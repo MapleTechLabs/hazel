@@ -8,6 +8,7 @@ import * as TooltipHost from "../tooltip-host"
 
 export interface TooltipContext<M> {
 	readonly active: TooltipHost.Model
+	readonly hoveredKey: string | null
 	readonly toMessage: (message: TooltipHost.Message) => M
 	/** Display names for the reaction tooltip ("You" for the signed-in user). */
 	readonly userName: (userId: string) => string | null
@@ -69,6 +70,7 @@ export const reactionButton = <M>(
 	TooltipHost.tooltipTrigger(h, {
 		key: `${messageId}:reaction:${reaction.emoji}`,
 		active: context.active,
+		hoveredKey: context.hoveredKey,
 		delayMs: 300,
 		toMessage: context.toMessage,
 		placement: "top",
@@ -126,6 +128,7 @@ export const statusEmojiView = <M>(
 	return TooltipHost.tooltipTrigger(h, {
 		key: `${messageId}:status`,
 		active: context.active,
+		hoveredKey: context.hoveredKey,
 		delayMs: 300,
 		toMessage: context.toMessage,
 		placement: "top",

@@ -284,8 +284,11 @@ const withRendered = (result: ListReturn, isRecalculation = true): ListReturn =>
 	return model === result.model ? result : { ...result, model }
 }
 
-export const update = (model: Model, message: Message): ListReturn =>
-	withRendered(updateScroll(model, message), message._tag !== "ScrolledList")
+export const update = (model: Model, message: Message): ListReturn => {
+	const result = updateScroll(model, message)
+	// A scroll, or an event that changed nothing (re-observed rows), is not a recalculation.
+	return withRendered(result, message._tag !== "ScrolledList" && result.model !== model)
+}
 
 const updateScroll = (model: Model, message: Message): ListReturn =>
 	Message.match<ListReturn>(message, {

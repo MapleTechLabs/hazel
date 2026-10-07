@@ -23,6 +23,8 @@ export const Model = Schema.Struct({
 	hoverVersion: Schema.Number,
 	toolbar: Toolbar.Model,
 	tooltip: TooltipHost.Model,
+	/** The tooltip trigger under the pointer (`data-hovered`). */
+	hoveredTriggerKey: Schema.NullOr(Schema.String),
 	moreMenu: Schema.NullOr(MessageMenu),
 	contextMenu: Schema.NullOr(MessageMenu),
 	/** The author popover open from an avatar (key `<messageId>:avatar`) or a pinned row. */
@@ -42,6 +44,7 @@ export const init = (): Model => ({
 	hoverVersion: 0,
 	toolbar: Toolbar.init({ label: "Message actions" }),
 	tooltip: null,
+	hoveredTriggerKey: null,
 	moreMenu: null,
 	contextMenu: null,
 	popover: null,
@@ -167,9 +170,17 @@ export const update = (model: Model, message: Message, facts: MessageFacts): Ove
 			const result = TooltipHost.update(model.tooltip, tooltip, (inner) =>
 				Message.GotTooltipMessage({ tooltip: inner }),
 			)
-			return result.model === model.tooltip && (result.commands ?? []).length === 0
+			const hoveredTriggerKey =
+				tooltip.message._tag === "HoveredTrigger"
+					? tooltip.key
+					: tooltip.message._tag === "UnhoveredTrigger" && model.hoveredTriggerKey === tooltip.key
+						? null
+						: model.hoveredTriggerKey
+			return result.model === model.tooltip &&
+				(result.commands ?? []).length === 0 &&
+				hoveredTriggerKey === model.hoveredTriggerKey
 				? { model }
-				: { model: { ...model, tooltip: result.model }, commands: result.commands }
+				: { model: { ...model, tooltip: result.model, hoveredTriggerKey }, commands: result.commands }
 		},
 		GotMoreMenuMessage: ({ messageId, message: menuMessage }) =>
 			mapped(
@@ -250,5 +261,6 @@ const messageIdOfKey = (key: string) => key.split(":")[0]
 /** Whether an open overlay renders inside this message's row (so the row cannot reuse its memo). */
 export const ownsRow = (model: Model, messageId: MessageId): boolean =>
 	(model.tooltip !== null && messageIdOfKey(model.tooltip.id) === messageId) ||
+	(model.hoveredTriggerKey !== null && messageIdOfKey(model.hoveredTriggerKey) === messageId) ||
 	(model.contextMenu !== null && model.contextMenu.messageId === messageId) ||
 	(model.popover !== null && messageIdOfKey(model.popover.key) === messageId)

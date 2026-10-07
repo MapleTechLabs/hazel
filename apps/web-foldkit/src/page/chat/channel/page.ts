@@ -13,6 +13,7 @@ import {
 	CustomEmojiInfo,
 	emptyLookups,
 	Lookups,
+	PinnedInfo,
 	PresenceInfo,
 	ReplyTarget,
 	ThreadChannelInfo,
@@ -53,6 +54,10 @@ export const Model = Schema.Struct({
 	reactions: Schema.Array(ChatReaction),
 	lookups: Lookups,
 	members: Schema.NullOr(Schema.Array(ChannelMemberInfo)),
+	/** `PinnedMessagesModal`'s pins, oldest pin first. */
+	pinned: Schema.Array(PinnedInfo),
+	/** The open thread panel's messages, oldest first. */
+	threadMessages: Schema.Array(ChatMessage),
 	typing: Schema.Array(TypingInfo),
 	typingNowMs: Schema.Number,
 	/** Ids the reply and thread lookups select, kept stable while the window does not change them. */
@@ -87,6 +92,8 @@ export const Message = defineMessageUnion({
 	UpdatedThreadMessages: { messages: Schema.Array(ThreadMessageInfo) },
 	UpdatedReplyTargets: { targets: Schema.Array(ReplyTarget) },
 	UpdatedMembers: { members: Schema.Array(ChannelMemberInfo) },
+	UpdatedPinned: { pins: Schema.Array(PinnedInfo) },
+	UpdatedThreadPanelMessages: { messages: Schema.Array(ChatMessage) },
 	UpdatedTyping: { typing: Schema.Array(TypingInfo) },
 	TickedTypingClock: { nowMs: Schema.Number },
 	GotListMessage: { message: MessageList.Message },
@@ -120,6 +127,8 @@ export const init = (
 	reactions: [],
 	lookups: emptyLookups,
 	members: null,
+	pinned: [],
+	threadMessages: [],
 	typing: [],
 	typingNowMs: 0,
 	replyIds: [],
@@ -243,6 +252,10 @@ export const update = (model: Model, message: Message): PageReturn =>
 		UpdatedThreadMessages: ({ messages }) => withLookup(model, "threadMessages", messages),
 		UpdatedReplyTargets: ({ targets }) => withLookup(model, "replyTargets", targets),
 		UpdatedMembers: ({ members }) => ({ model: modifyFields(model, { members: () => members }) }),
+		UpdatedPinned: ({ pins }) => ({ model: modifyFields(model, { pinned: () => pins }) }),
+		UpdatedThreadPanelMessages: ({ messages }) => ({
+			model: modifyFields(model, { threadMessages: (previous) => shareMessages(previous, messages) }),
+		}),
 		UpdatedTyping: ({ typing }) => ({ model: modifyFields(model, { typing: () => typing }) }),
 		TickedTypingClock: ({ nowMs }) => ({ model: modifyFields(model, { typingNowMs: () => nowMs }) }),
 		GotListMessage: ({ message: listMessage }) =>

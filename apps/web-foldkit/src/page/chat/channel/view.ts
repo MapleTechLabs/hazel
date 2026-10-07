@@ -6,9 +6,10 @@ import { dateDividerView, messageRowView, type RowContext } from "../../../chat/
 import * as MessageList from "../../../mount/message-list"
 import { joinBannerView, typingIndicatorView, typingUsersOf } from "../banners"
 import { composerPlaceholderView } from "../composer-placeholder"
-import { authorIdentity } from "../derive"
+import { authorIdentity, toDeriveContext } from "../derive"
 import * as FilesView from "../files/view"
-import { chatHeaderView, pinnedButton } from "../header"
+import { chatHeaderView } from "../header"
+import { pinnedPopoverView } from "../pinned"
 import {
 	deleteMessageModal,
 	messageToolbarOverlay,
@@ -22,6 +23,7 @@ import { isMemberOf, Message, type Model } from "./page"
 import { idleRowContext, rowContextFor } from "../row-context"
 import type { DisplayRow } from "../rows"
 import { chatTabBarView } from "../tab-bar"
+import { threadPanelView } from "../thread-panel"
 
 /** The channel route's content: header, tab bar, message list and composer (desktop). */
 
@@ -132,6 +134,7 @@ const imageViewerOverlay = <M>(
 			? {
 					name: `${row.message.author.firstName} ${row.message.author.lastName}`,
 					avatarUrl: row.message.author.avatarUrl,
+					seed: `${row.message.author.firstName} ${row.message.author.lastName}`,
 				}
 			: null,
 		createdAtMs: row.message.createdAtMs,
@@ -192,6 +195,9 @@ const headerView = <M>(
 	members: Model["members"],
 	lookups: Model["lookups"],
 	currentUserId: Model["currentUserId"],
+	pinnedPopover: Model["overlays"]["pinned"],
+	pins: Model["pinned"],
+	toParentMessage: (message: Message) => M,
 	h: HtmlBuilder<M>,
 ): Html => {
 	const model = { lookups, members, currentUserId }
@@ -209,7 +215,11 @@ const headerView = <M>(
 			return user ? [authorIdentity(user, botNames.get(member.userId))] : []
 		}),
 		isHiddenDm: currentMember?.isHidden ?? false,
-		pinnedTrigger: pinnedButton(h, [h.Attribute("aria-expanded", "false")], h.empty),
+		pinnedTrigger: pinnedPopoverView(h, pinnedPopover, pins, (message) =>
+			toParentMessage(
+				Message.GotOverlaysMessage({ message: Overlays.Message.GotPinnedMessage({ message }) }),
+			),
+		),
 	})
 }
 
@@ -233,6 +243,9 @@ export const view = <M>(h: HtmlBuilder<M>, model: Model, toParentMessage: (messa
 						model.members,
 						model.lookups,
 						model.currentUserId,
+						model.overlays.pinned,
+						model.pinned,
+						toParentMessage,
 						h,
 					]) ?? h.empty,
 					lazyTabBar(chatTabBarView, [model.tab, toParentMessage, h]) ?? h.empty,
@@ -245,5 +258,25 @@ export const view = <M>(h: HtmlBuilder<M>, model: Model, toParentMessage: (messa
 							]),
 				],
 			),
+			threadPanelOverlay(h, model, toParentMessage),
 		],
 	)
+
+/** The `SplitPanel` beside the channel while a thread is open. */
+const threadPanelOverlay = <M>(
+	h: HtmlBuilder<M>,
+	model: Model,
+	toParentMessage: (message: Message) => M,
+): Html => {
+	const thread = model.overlays.thread
+	if (thread === null) return h.empty
+	const name = model.lookups.threadChannels.find((channel) => channel.id === thread.threadChannelId)?.name
+	return threadPanelView(h, {
+		threadName: name || "Thread",
+		original: model.messages.find((message) => message.id === thread.messageId) ?? null,
+		messages: model.threadMessages,
+		context: toDeriveContext(model.lookups, model.currentUserId ?? undefined),
+		rowContext: idleRowContext(h, model, toParentMessage),
+		onClose: toParentMessage(Message.GotOverlaysMessage({ message: Overlays.Message.ClosedThread() })),
+	})
+}

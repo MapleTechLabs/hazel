@@ -165,3 +165,22 @@ export const byKey = <A, K extends string>(items: ReadonlyArray<A>, key: (item: 
 	for (const item of items) map.set(key(item), item)
 	return map
 }
+
+/** A row of `PinnedMessagesModal`: the pin, its message and the author. */
+export const PinnedInfo = Schema.Struct({
+	pinnedId: Schema.String,
+	messageId: MessageId,
+	authorId: UserId,
+	author: Schema.NullOr(
+		Schema.Struct({
+			firstName: Schema.String,
+			lastName: Schema.String,
+			avatarUrl: Schema.NullOr(Schema.String),
+		}),
+	),
+	content: Schema.String,
+	createdAtMs: Schema.Number,
+	updatedAtMs: Schema.NullOr(Schema.Number),
+	pinnedAtMs: Schema.Number,
+})
+export type PinnedInfo = typeof PinnedInfo.Type

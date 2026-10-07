@@ -20,6 +20,7 @@ const POSITION_PADDING = 12
 const placeToolbar = (overlay: HTMLElement, target: HTMLElement) => {
 	overlay.style.position = "absolute"
 	overlay.style.zIndex = "50"
+	for (const side of ["top", "bottom", "left", "right"]) overlay.style.removeProperty(side)
 	overlay.style.top = "0px"
 	overlay.style.maxHeight = `${window.visualViewport?.height ?? window.innerHeight}px`
 	const result = calculatePosition({
@@ -143,6 +144,7 @@ export interface ToolbarInputs<M> {
 	readonly messageId: string
 	readonly isOwnMessage: boolean
 	readonly tooltip: TooltipHost.Model
+	readonly hoveredKey: string | null
 	readonly toTooltipMessage: (message: TooltipHost.Message) => M
 	readonly onReply: M
 	readonly onDelete: M
@@ -168,6 +170,7 @@ const action = <M>(
 	TooltipHost.tooltipTrigger(h, {
 		key: `${inputs.messageId}:toolbar:${options.key}`,
 		active: inputs.tooltip,
+		hoveredKey: inputs.hoveredKey,
 		toMessage: inputs.toTooltipMessage,
 		content: [options.label],
 		toTrigger: (attributes, overlay) =>

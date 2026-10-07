@@ -1,6 +1,6 @@
 import { Schema } from "effect"
 import { Command, type Update } from "foldkit"
-import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
+import { type ChildAttribute, childAttributes, type Html, type HtmlBuilder } from "foldkit/html"
 import type { Placement } from "../ui/aria/position"
 import * as Tooltip from "../ui/tooltip"
 
@@ -55,6 +55,8 @@ const closedModel = (key: string, delayMs: number) => {
 export interface TriggerOptions<M> {
 	readonly key: string
 	readonly active: Model
+	/** The trigger under the pointer: React Aria's `data-hovered` on the TooltipTrigger. */
+	readonly hoveredKey?: string | null
 	readonly delayMs?: number
 	readonly toMessage: (message: Message) => M
 	readonly toTrigger: (attributes: ReadonlyArray<ChildAttribute>, overlay: Html) => Html
@@ -75,7 +77,11 @@ export const tooltipTrigger = <M>(h: HtmlBuilder<M>, options: TriggerOptions<M>)
 		model,
 		view: Tooltip.view,
 		viewInputs: {
-			toTrigger: options.toTrigger,
+			toTrigger:
+				options.hoveredKey === options.key
+					? (attributes, overlay) =>
+							options.toTrigger([...attributes, ...childAttributes([h.Attribute("data-hovered", "true")])], overlay)
+					: options.toTrigger,
 			content: model.isOpen ? options.content : [],
 			placement: options.placement,
 			className: options.className,

@@ -119,6 +119,7 @@ export const messageToolbarOverlay = <M>(
 									messageId,
 									isOwnMessage: facts.isOwnMessage(messageId),
 									tooltip: overlays.tooltip,
+									hoveredKey: overlays.hoveredTriggerKey,
 									toTooltipMessage: (tooltip) =>
 										toOverlay(Overlays.Message.GotTooltipMessage({ tooltip })),
 									onReply: toOverlay(Overlays.Message.ClickedReply({ messageId })),

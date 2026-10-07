@@ -103,3 +103,21 @@ export const parentChannelStream = <Message>(
 			return toMessage(row ? { id: row.id, name: row.name, icon: row.icon ?? null } : null)
 		},
 	)
+
+/** `threadMessagesWithAuthorAtomFamily`: the open thread panel's messages, oldest first. */
+export const threadPanelStream = <Message>(
+	threadChannelId: ChannelId,
+	toMessage: (messages: ReadonlyArray<ChatMessage>) => Message,
+): Stream.Stream<Message> =>
+	liveQueryStream<MessageQueryRow, Message>(
+		(q) =>
+			q
+				.from({ message: messageCollection })
+				.leftJoin({ author: userCollection }, ({ message, author }) =>
+					eq(message.authorId, author.id),
+				)
+				.where(({ message }) => eq(message.channelId, threadChannelId))
+				.select(({ message, author }) => ({ ...message, author, pinnedMessage: null }))
+				.orderBy(({ message }) => message.createdAt, "asc"),
+		(rows) => toMessage(rows.map(toChatMessage)),
+	)

@@ -2,13 +2,20 @@ import { ChannelId, MessageId, OrganizationId } from "@hazel/schema"
 import { Option, Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
 import * as FilesSubscriptions from "../files/subscriptions"
-import { channelStream, messagesStream, parentChannelStream, reactionsStream } from "../data"
+import {
+	channelStream,
+	messagesStream,
+	parentChannelStream,
+	reactionsStream,
+	threadPanelStream,
+} from "../data"
 import {
 	attachmentsStream,
 	botsStream,
 	customEmojisStream,
 	discordSyncedStream,
 	membersStream,
+	pinnedStream,
 	presenceStream,
 	replyTargetsStream,
 	threadChannelsStream,
@@ -126,6 +133,25 @@ const chat = Subscription.make<Input, Message>()((entry) => ({
 				replyTargetsStream(replyIds, (targets) => Message.UpdatedReplyTargets({ targets })),
 		},
 	),
+	chatThreadPanel: entry(
+		{ threadChannelId: Schema.NullOr(ChannelId) },
+		{
+			modelToDependencies: ({ model }) => ({
+				threadChannelId: model.overlays.thread?.threadChannelId ?? null,
+			}),
+			dependenciesToStream: ({ threadChannelId }) =>
+				threadChannelId === null
+					? Stream.make(Message.UpdatedThreadPanelMessages({ messages: [] }))
+					: threadPanelStream(threadChannelId, (messages) =>
+							Message.UpdatedThreadPanelMessages({ messages }),
+						),
+		},
+	),
+	chatPinned: entry(byChannel, {
+		modelToDependencies: channelOf,
+		dependenciesToStream: ({ channelId }) =>
+			pinnedStream(channelId, (pins) => Message.UpdatedPinned({ pins })),
+	}),
 	chatMembers: entry(byChannel, {
 		modelToDependencies: channelOf,
 		dependenciesToStream: ({ channelId }) =>
