@@ -378,6 +378,31 @@ export const show = (model: Model, options: ShowOptions): UpdateReturn & { reado
 	return { ...syncPause(model, restartTimer(added, id)), id }
 }
 
+/**
+ * A serializable toast request, for Messages and OutMessages (a page's `RequestedToast`).
+ * `durationMs` omitted means sonner's 4s default; `null` keeps the toast until dismissed.
+ */
+export const Request = Schema.Struct({
+	kind: Schema.NullOr(Kind),
+	title: Schema.String,
+	description: Schema.optionalKey(Schema.String),
+	actionLabel: Schema.optionalKey(Schema.String),
+	durationMs: Schema.optionalKey(Schema.NullOr(Schema.Number)),
+})
+export type Request = typeof Request.Type
+
+/** `show` for a Request: what a root `toasts` slot calls when a page asks for a toast. */
+export const showRequest = (model: Model, request: Request): UpdateReturn & { readonly id: number } =>
+	show(model, {
+		kind: request.kind,
+		title: request.title,
+		...(request.description === undefined ? {} : { description: request.description }),
+		...(request.actionLabel === undefined ? {} : { actionLabel: request.actionLabel }),
+		...(request.durationMs === undefined
+			? {}
+			: { duration: request.durationMs ?? Number.POSITIVE_INFINITY }),
+	})
+
 /** sonner's `toast.dismiss(id)`. */
 export const dismiss = (model: Model, id: number): UpdateReturn => deleteToast(model, id)
 
