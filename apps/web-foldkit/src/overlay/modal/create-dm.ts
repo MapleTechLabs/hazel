@@ -85,7 +85,13 @@ const successMessage = (model: Model) => {
 
 const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
-		GotFrameMessage: ({ message }) => (isFrameClosed(model.frame, message) ? { model, outMessage: closed } : { model }),
+		// `autoFocus`: after the frame has portaled and focused its dialog.
+		GotFrameMessage: ({ message }) =>
+			isFrameClosed(model.frame, message)
+				? { model, outMessage: closed }
+				: message._tag === "CompletedPortalModal"
+					? { model, commands: [FocusSearch({})] }
+					: { model },
 		ChangedSearch: ({ value }) => ({ model: modifyFields(model, { searchQuery: () => value }) }),
 		FocusedSearch: () => ({ model: modifyFields(model, { isSearchFocused: () => true }) }),
 		BlurredSearch: () => ({ model: modifyFields(model, { isSearchFocused: () => false }) }),
@@ -135,7 +141,6 @@ export const modal = defineModal(
 				organizationUsers: [],
 				isSubmitting: false,
 			},
-			commands: [FocusSearch({})],
 		}),
 		update,
 		view,
