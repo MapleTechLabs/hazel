@@ -145,16 +145,21 @@ const toastView = (h: HtmlBuilder<Message>, model: Model, item: Item, index: num
 
 export type ViewInputs = Readonly<{ theme: "light" | "dark" }>
 
+const regionAttributes = <M>(h: HtmlBuilder<M>) => [
+	h.Attribute("aria-label", "Notifications alt+T"),
+	h.Tabindex(-1),
+	h.Attribute("aria-live", "polite"),
+	h.Attribute("aria-relevant", "additions text"),
+	h.Attribute("aria-atomic", "false"),
+]
+
+/** sonner's region with no toast queued, for roots that host no toaster state (the gallery). */
+export const emptyRegion = <M>(h: HtmlBuilder<M>): Html => h.section(regionAttributes(h), [])
+
 /** The `<section>` sonner always renders, with the toast list while any toast is queued. */
 export const view = Submodel.defineView<Model, Message, ViewInputs>((model, viewInputs, h) =>
 	h.section(
-		[
-			h.Attribute("aria-label", "Notifications alt+T"),
-			h.Tabindex(-1),
-			h.Attribute("aria-live", "polite"),
-			h.Attribute("aria-relevant", "additions text"),
-			h.Attribute("aria-atomic", "false"),
-		],
+		regionAttributes(h),
 		model.toasts.length === 0
 			? []
 			: [
