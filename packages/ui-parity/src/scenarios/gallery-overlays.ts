@@ -358,5 +358,25 @@ export const galleryOverlaysArea: AreaModule = {
 				},
 			},
 		),
+		// TIMEZONE SELECT
+		overlay("timezone-select", "timezone-select", "Timezone select: selected and empty"),
+		overlay("timezone-select", "timezone-select-type", "Timezone select: typing filters the zones", {
+			steps: async (page) => {
+				await page.getByRole("combobox").nth(1).fill("new")
+				await page.getByRole("listbox").waitFor()
+			},
+		}),
+		overlay(
+			"timezone-select",
+			"timezone-select-arrow",
+			"Timezone select: ArrowDown opens the list at the selected zone",
+			{
+				steps: async (page) => {
+					await page.getByRole("combobox").first().focus()
+					await page.keyboard.press("ArrowDown")
+					await page.getByRole("listbox").waitFor()
+				},
+			},
+		),
 	],
 }
