@@ -4,8 +4,8 @@ import { defineMessageUnion } from "foldkit/message"
 import * as CommandMenu from "../../ui/command-menu"
 import { ModalRequest } from "../modal"
 import { ToastRequest } from "../toasts"
-import { ChannelSummary, ChannelType, DmChannel, SearchFilter, Theme } from "./model"
-import { RecentSearch, SearchData } from "./search-data"
+import { ChannelSummary, ChannelType, DmChannel, Theme } from "./model"
+import { RecentSearch, SearchAutocomplete, SearchData, Suggestion } from "./search-data"
 
 export const Message = defineMessageUnion({
 	GotMenuMessage: { message: CommandMenu.Message },
@@ -29,10 +29,13 @@ export const Message = defineMessageUnion({
 	SucceededJoinChannel: {},
 	FailedJoinChannel: { toast: ToastRequest },
 	// Search page
-	ChangedSearchInput: { value: Schema.String },
-	SelectedSearchFilter: { filter: SearchFilter },
-	ClickedRemoveFilter: { index: Schema.Number },
+	EditedSearch: { text: Schema.String, autocomplete: Schema.NullOr(SearchAutocomplete) },
 	PressedSearchKey: { key: Schema.Literals(["ArrowDown", "ArrowUp", "Enter", "BackspaceAtStart"]) },
+	PressedAutocompleteKey: { key: Schema.Literals(["ArrowDown", "ArrowUp", "Enter", "Tab", "Escape"]) },
+	HoveredSuggestion: { index: Schema.Number },
+	ClickedSuggestion: { index: Schema.Number },
+	UpdatedSuggestions: { suggestions: Schema.Array(Suggestion) },
+	ClickedRemoveFilter: { index: Schema.Number },
 	ClickedClearSearch: {},
 	ClickedSearchResult: { index: Schema.Number },
 	ClickedRecentSearch: { index: Schema.Number },

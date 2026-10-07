@@ -43,3 +43,20 @@ export const SearchData = Schema.Struct({
 export type SearchData = typeof SearchData.Type
 
 export const emptySearchData: SearchData = { results: [], isLoading: false, hasQuery: false }
+
+/** The open `filter:` autocomplete (`FilterAutocompleteState`). */
+export const SearchAutocomplete = Schema.Struct({
+	filterType: Schema.Literals(["from", "in", "has"]),
+	search: Schema.String,
+	filterStartOffset: Schema.Number,
+})
+export type SearchAutocomplete = typeof SearchAutocomplete.Type
+
+/** One `currentSuggestions` option: a user, a channel or a `has:` value. */
+export const Suggestion = Schema.Struct({
+	id: Schema.String,
+	label: Schema.String,
+	avatarUrl: Schema.NullOr(Schema.String),
+	kind: Schema.Literals(["user", "channel", "has"]),
+})
+export type Suggestion = typeof Suggestion.Type

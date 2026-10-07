@@ -19,6 +19,7 @@ import { Message, OutMessage } from "./message"
 import { initialPageState, isFormPage, type Model, type Page, type PageState } from "./model"
 import { emptySearchData } from "./search-data"
 import { menuSectionsOf, NAVIGATION, parseKey, SETTINGS, STATUS_OPTIONS, THEME_OPTIONS } from "./menu"
+import { LoadRecentSearches } from "./search-mount"
 import { updateSearch } from "./search-update"
 
 export type Return = Update.ReturnWithOutMessage<Model, Message, OutMessage, HazelRpc>
@@ -44,6 +45,9 @@ export const init = (): Model => ({
 	theme: "system",
 	search: emptySearchData,
 	recentSearches: [],
+	searchAutocomplete: null,
+	suggestionIndex: 0,
+	suggestions: [],
 })
 
 // PAGES
@@ -67,7 +71,7 @@ const focusCommandsOf = (page: PageState) =>
 		: page._tag === "JoinChannel"
 			? [FocusInput({ selector: `#${JOIN_CHANNEL_INPUT_ID}` })]
 			: page._tag === "Search"
-				? []
+				? [LoadRecentSearches({})]
 				: [FocusInput({ selector: `#${CommandMenu.searchId(MENU_ID)}` })]
 
 const showPage = (model: Model, page: PageState, history: ReadonlyArray<PageState>, shared: Shared): Return => ({
@@ -221,10 +225,13 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 					: { model, commands: [JoinChannel({ channelId, userId: shared.currentUser.id })] },
 			SucceededJoinChannel: () => closedWith(model, null, successToast("Successfully joined channel")),
 			FailedJoinChannel: ({ toast }) => ({ model, outMessage: OutMessage.RequestedToast({ toast }) }),
-			ChangedSearchInput: (found) => updateSearch(model, found, shared),
-			SelectedSearchFilter: (found) => updateSearch(model, found, shared),
-			ClickedRemoveFilter: (found) => updateSearch(model, found, shared),
+			EditedSearch: (found) => updateSearch(model, found, shared),
 			PressedSearchKey: (found) => updateSearch(model, found, shared),
+			PressedAutocompleteKey: (found) => updateSearch(model, found, shared),
+			HoveredSuggestion: (found) => updateSearch(model, found, shared),
+			ClickedSuggestion: (found) => updateSearch(model, found, shared),
+			UpdatedSuggestions: (found) => updateSearch(model, found, shared),
+			ClickedRemoveFilter: (found) => updateSearch(model, found, shared),
 			ClickedClearSearch: (found) => updateSearch(model, found, shared),
 			ClickedSearchResult: (found) => updateSearch(model, found, shared),
 			ClickedRecentSearch: (found) => updateSearch(model, found, shared),

@@ -1,7 +1,7 @@
 import { ChannelId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import * as CommandMenu from "../../ui/command-menu"
-import { RecentSearch, SearchData, SearchFilter } from "./search-data"
+import { RecentSearch, SearchAutocomplete, SearchData, SearchFilter, Suggestion } from "./search-data"
 
 export { FilterType, SearchFilter } from "./search-data"
 
@@ -96,5 +96,8 @@ export const Model = Schema.Struct({
 	search: SearchData,
 	/** `recentSearchesAtom` (platform storage), loaded when the search page opens. */
 	recentSearches: Schema.Array(RecentSearch),
+	searchAutocomplete: Schema.NullOr(SearchAutocomplete),
+	suggestionIndex: Schema.Number,
+	suggestions: Schema.Array(Suggestion),
 })
 export type Model = typeof Model.Type

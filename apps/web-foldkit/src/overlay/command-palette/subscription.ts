@@ -8,6 +8,7 @@ import { liveQueryStream } from "../../data/live-query"
 import type { Shared } from "../../page/contract"
 import { channelMemberWithUserCollection } from "../data"
 import { readRecentChannelIds } from "./commands"
+import { searchSubscriptions } from "./search-subscription"
 import { Message } from "./message"
 import type { ChannelSummary, DmChannel, Model } from "./model"
 
@@ -223,5 +224,5 @@ const pageSubscriptions = Subscription.make<Input, Message>()((entry) => ({
 
 /** Keys are prefixed: Subscription keys share one namespace across the root aggregate. */
 export const subscriptions = Object.fromEntries(
-	Object.entries(pageSubscriptions).map(([key, entry]) => [`commandPalette.${key}`, entry]),
+	Object.entries({ ...pageSubscriptions, ...searchSubscriptions }).map(([key, entry]) => [`commandPalette.${key}`, entry]),
 )
