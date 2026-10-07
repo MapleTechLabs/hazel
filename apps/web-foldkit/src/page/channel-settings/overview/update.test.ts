@@ -57,3 +57,31 @@ describe("channel settings overview", () => {
 		expect(next.form?.name).toBe("draft")
 	})
 })
+
+describe("save failure", () => {
+	test("Save changes sends channel.update with the edited name and current icon", () => {
+		story(
+			update,
+			given(loaded),
+			message(Message.ChangedName({ name: "general-renamed" })),
+			message(Message.SubmittedForm()),
+			Command.expectExact(UpdateChannel({ id: channelId, name: "general-renamed", icon: "🎉" })),
+			Command.resolve(
+				UpdateChannel,
+				Message.FailedUpdateChannel({
+					title: "Channel not found",
+					description: "This channel may have been deleted.",
+				}),
+			),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({
+					toast: {
+						intent: "error",
+						title: "Channel not found",
+						description: "This channel may have been deleted.",
+					},
+				}),
+			),
+		)
+	})
+})

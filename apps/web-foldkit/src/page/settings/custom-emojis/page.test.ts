@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 import { CustomEmojiId, OrganizationId, OrganizationMemberId } from "@hazel/schema"
 import { Schema } from "effect"
+import { Command, expectOutMessage, given, message, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
+import { PageOutMessage } from "../../out-message"
 import type { Shared } from "../../contract"
 import { formatDistanceToNow } from "../format-distance"
 import { Message } from "./message"
-import { generateEmojiName, init, update, validateEmojiName } from "./update"
+import { DeleteEmoji, generateEmojiName, init, update, validateEmojiName } from "./update"
 import { sharedDefaults } from "../../test-shared"
 
 /** Update-loop tests for custom emojis: names, file checks and the delete confirmation. */
@@ -15,7 +17,12 @@ const shared: Shared = {
 	auth: "SignedIn",
 	orgSlug: "hazel",
 	currentUser: null,
-	organization: { id: Schema.decodeSync(OrganizationId)(uuid(1)), name: "Hazel", slug: "hazel", logoUrl: null },
+	organization: {
+		id: Schema.decodeSync(OrganizationId)(uuid(1)),
+		name: "Hazel",
+		slug: "hazel",
+		logoUrl: null,
+	},
 	member: { id: Schema.decodeSync(OrganizationMemberId)(uuid(2)), role: "admin" },
 	nowMs: 0,
 	...sharedDefaults,
@@ -41,10 +48,14 @@ describe("file selection", () => {
 		const gif = new File(["x"], "parrot.gif", { type: "image/gif" })
 		const svg = new File(["x"], "logo.svg", { type: "image/svg+xml" })
 		const big = new File([new Uint8Array(256 * 1024 + 1)], "big.png", { type: "image/png" })
-		expect(update(init().model, Message.SelectedFiles({ files: [svg] }), shared).outMessage).toMatchObject({
+		expect(
+			update(init().model, Message.SelectedFiles({ files: [svg] }), shared).outMessage,
+		).toMatchObject({
 			toast: { title: "Invalid file type" },
 		})
-		expect(update(init().model, Message.SelectedFiles({ files: [big] }), shared).outMessage).toMatchObject({
+		expect(
+			update(init().model, Message.SelectedFiles({ files: [big] }), shared).outMessage,
+		).toMatchObject({
 			toast: { title: "File too large" },
 		})
 		const accepted = update(init().model, Message.SelectedFiles({ files: [gif] }), shared)
@@ -53,7 +64,11 @@ describe("file selection", () => {
 
 	test("a preview starts a draft with the generated name, lowercased on edit", () => {
 		const file = new File(["x"], "Ship It.png", { type: "image/png" })
-		const drafted = update(init().model, Message.CreatedPreview({ file, previewUrl: "blob:1" }), shared).model
+		const drafted = update(
+			init().model,
+			Message.CreatedPreview({ file, previewUrl: "blob:1" }),
+			shared,
+		).model
 		expect(drafted.draft).toMatchObject({ name: "ship_it", nameError: null })
 		const edited = update(drafted, Message.ChangedEmojiName({ value: "Ship It" }), shared).model
 		expect(edited.draft).toMatchObject({
@@ -65,11 +80,18 @@ describe("file selection", () => {
 
 describe("delete confirmation", () => {
 	test("confirming closes the modal and deletes the target", () => {
-		const open = update(init().model, Message.ClickedDeleteEmoji({ id: shipit, name: "shipit" }), shared).model
+		const open = update(
+			init().model,
+			Message.ClickedDeleteEmoji({ id: shipit, name: "shipit" }),
+			shared,
+		).model
 		expect(open.deleteModal.isOpen).toBe(true)
 		const confirmed = update(open, Message.ClickedConfirmDelete(), shared)
 		expect(confirmed.model).toMatchObject({ deleteTarget: null, deleteModal: { isOpen: false } })
-		expect(confirmed.commands?.[0]).toMatchObject({ name: "DeleteCustomEmoji", args: { emojiId: shipit } })
+		expect(confirmed.commands?.[0]).toMatchObject({
+			name: "DeleteCustomEmoji",
+			args: { emojiId: shipit },
+		})
 	})
 
 	test("failure toasts the legacy message", () => {
@@ -90,5 +112,23 @@ describe("formatDistanceToNow", () => {
 		expect(ago(40 * 1440)).toBe("about 1 month ago")
 		expect(ago(100 * 1440)).toBe("3 months ago")
 		expect(ago(400 * 1440)).toBe("about 1 year ago")
+	})
+})
+
+describe("delete failure", () => {
+	test("confirming sends customEmoji.delete for the target, then toasts the failure", () => {
+		story(
+			(current: Parameters<typeof update>[0], next: Message) => update(current, next, shared),
+			given(init().model),
+			message(Message.ClickedDeleteEmoji({ id: shipit, name: "shipit" })),
+			message(Message.ClickedConfirmDelete()),
+			Command.expectExact(DeleteEmoji({ emojiId: shipit, name: "shipit" })),
+			Command.resolve(DeleteEmoji, Message.FailedDeleteEmoji()),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({
+					toast: { intent: "error", title: "Failed to delete emoji", description: null },
+				}),
+			),
+		)
 	})
 })

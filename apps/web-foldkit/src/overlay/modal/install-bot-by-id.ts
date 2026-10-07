@@ -24,7 +24,7 @@ const Model = Schema.Struct({
 })
 type Model = typeof Model.Type
 
-const Message = defineMessageUnion({
+export const Message = defineMessageUnion({
 	GotFrameMessage: { message: FrameMessage },
 	ChangedBotId: { value: Schema.String },
 	ClickedCancel: {},
@@ -59,7 +59,7 @@ const installErrorFor = (cause: Cause.Cause<unknown>): string | null =>
 				: null,
 	})
 
-const InstallBotById = Command.define("InstallBotById", {
+export const InstallBotById = Command.define("InstallBotById", {
 	args: { botId: Schema.String },
 	messages: [Message.SucceededInstallBot, Message.FailedInstallBot],
 	execute: ({ botId }) =>
@@ -93,7 +93,7 @@ const submitted = (model: Model): Return => {
 	}
 }
 
-const update = (model: Model, message: Message): Return =>
+export const update = (model: Model, message: Message): Return =>
 	Message.match<Return>(message, {
 		GotFrameMessage: ({ message }) => (isFrameClosed(model.frame, message) ? { model, outMessage: closed } : { model }),
 		ChangedBotId: ({ value }) => ({
