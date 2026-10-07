@@ -1,6 +1,6 @@
 import { Option, Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
-import type { Attribute, HtmlBuilder } from "foldkit/html"
+import type { HtmlBuilder, TextareaAttribute } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
 
@@ -24,15 +24,29 @@ const Press = Schema.Struct({
 	isInside: Schema.Boolean,
 })
 
+const Focus = Schema.Struct({ target: Schema.String, isTextInput: Schema.Boolean })
+
 export const Model = Schema.Struct({
 	modality: Schema.NullOr(Modality),
-	hovered: Schema.NullOr(Schema.String),
-	focused: Schema.NullOr(Schema.String),
+	/** Nested targets hover together (an input inside a hovered group). */
+	hovered: Schema.Array(Schema.String),
+	focused: Schema.NullOr(Focus),
+	/** Targets with focus inside them (useFocusWithin). */
+	focusWithin: Schema.Array(Schema.String),
+	/** useFocusRing latches this on focus; later modality changes update it only if they qualify. */
+	isFocusVisible: Schema.Boolean,
 	press: Schema.NullOr(Press),
 })
 export type Model = typeof Model.Type
 
-export const init = (): Model => ({ modality: null, hovered: null, focused: null, press: null })
+export const init = (): Model => ({
+	modality: null,
+	hovered: [],
+	focused: null,
+	focusWithin: [],
+	isFocusVisible: false,
+	press: null,
+})
 
 // MESSAGE
 
@@ -43,9 +57,12 @@ export const Message = defineMessageUnion({
 	ReleasedPointer: {},
 	PressedKey: { target: Schema.String, key: Schema.String },
 	ReleasedKey: { target: Schema.String, key: Schema.String },
-	FocusedTarget: { target: Schema.String },
+	FocusedTarget: { target: Schema.String, isTextInput: Schema.Boolean },
+	EnteredFocusWithin: { target: Schema.String },
+	LeftFocusWithin: { target: Schema.String },
 	BlurredTarget: { target: Schema.String },
-	ChangedModality: { modality: Modality },
+	PressedDocumentKey: { key: Schema.String },
+	PressedDocumentPointer: {},
 })
 export type Message = typeof Message.Type
 
@@ -58,13 +75,13 @@ export const update = (model: Model, message: Message): { model: Model } =>
 	Message.match<{ model: Model }>(message, {
 		EnteredTarget: ({ target }) => ({
 			model: modifyFields(model, {
-				hovered: () => target,
+				hovered: (hovered) => (hovered.includes(target) ? hovered : [...hovered, target]),
 				press: (press) => (press?.target === target ? { ...press, isInside: true } : press),
 			}),
 		}),
 		LeftTarget: ({ target }) => ({
 			model: modifyFields(model, {
-				hovered: (hovered) => (hovered === target ? null : hovered),
+				hovered: (hovered) => hovered.filter((hoveredTarget) => hoveredTarget !== target),
 				press: (press) => (press?.target === target ? { ...press, isInside: false } : press),
 			}),
 		}),
@@ -73,6 +90,7 @@ export const update = (model: Model, message: Message): { model: Model } =>
 				button === 0
 					? modifyFields(model, {
 							modality: () => "pointer",
+							isFocusVisible: () => false,
 							press: () => ({ target, source: "pointer", isInside: true }),
 						})
 					: model,
@@ -92,17 +110,46 @@ export const update = (model: Model, message: Message): { model: Model } =>
 					? modifyFields(model, { press: () => null })
 					: model,
 		}),
-		FocusedTarget: ({ target }) => ({
+		FocusedTarget: ({ target, isTextInput }) => {
+			const modality = model.modality ?? "virtual"
+			return {
+				model: modifyFields(model, {
+					focused: () => ({ target, isTextInput }),
+					modality: () => modality,
+					isFocusVisible: () => modality !== "pointer",
+				}),
+			}
+		},
+		EnteredFocusWithin: ({ target }) => ({
 			model: modifyFields(model, {
-				focused: () => target,
-				modality: (modality) => modality ?? "virtual",
+				focusWithin: (focusWithin) =>
+					focusWithin.includes(target) ? focusWithin : [...focusWithin, target],
+			}),
+		}),
+		LeftFocusWithin: ({ target }) => ({
+			model: modifyFields(model, {
+				focusWithin: (focusWithin) => focusWithin.filter((withinTarget) => withinTarget !== target),
 			}),
 		}),
 		BlurredTarget: ({ target }) => ({
-			model: modifyFields(model, { focused: (focused) => (focused === target ? null : focused) }),
+			model:
+				model.focused?.target === target
+					? modifyFields(model, { focused: () => null, isFocusVisible: () => false })
+					: model,
 		}),
-		ChangedModality: ({ modality }) => ({
-			model: model.modality === modality ? model : modifyFields(model, { modality: () => modality }),
+		// Typing inside a text input keeps its focus state; only Tab and Escape count (isKeyboardFocusEvent).
+		PressedDocumentKey: ({ key }) => ({
+			model: modifyFields(model, {
+				modality: () => "keyboard",
+				isFocusVisible: (isFocusVisible) =>
+					model.focused !== null &&
+					(!model.focused.isTextInput || key === "Tab" || key === "Escape")
+						? true
+						: isFocusVisible,
+			}),
+		}),
+		PressedDocumentPointer: () => ({
+			model: modifyFields(model, { modality: () => "pointer", isFocusVisible: () => false }),
 		}),
 	})
 
@@ -126,14 +173,14 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
 				type: "keydown",
 				filterMapEvent: (event) =>
 					isModalityKey(event)
-						? Option.some(Message.ChangedModality({ modality: "keyboard" }))
+						? Option.some(Message.PressedDocumentKey({ key: event.key }))
 						: Option.none(),
 				options: { capture: true },
 			}),
 			Subscription.fromEvent({
 				target: document,
 				type: "pointerdown",
-				mapEvent: () => Message.ChangedModality({ modality: "pointer" }),
+				mapEvent: () => Message.PressedDocumentPointer(),
 				options: { capture: true },
 			}),
 		),
@@ -158,8 +205,12 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
 
 // VIEW
 
+/** Every attribute here is valid on any element, textarea included (no innerHTML). */
+type Attribute<Message> = TextareaAttribute<Message>
+
 export interface State {
 	readonly isHovered: boolean
+	readonly isFocusWithin: boolean
 	readonly isPressed: boolean
 	readonly isFocused: boolean
 	readonly isFocusVisible: boolean
@@ -167,18 +218,23 @@ export interface State {
 
 export const idleState: State = {
 	isHovered: false,
+	isFocusWithin: false,
 	isPressed: false,
 	isFocused: false,
 	isFocusVisible: false,
 }
 
 export const stateOf = (model: Model, target: string): State => {
-	const isFocused = model.focused === target
+	const isFocused = model.focused?.target === target
+	const isFocusWithin = model.focusWithin.includes(target)
 	return {
-		isHovered: model.hovered === target,
+		isHovered: model.hovered.includes(target),
+		isFocusWithin,
 		isPressed: model.press?.target === target && model.press.isInside,
 		isFocused,
-		isFocusVisible: isFocused && model.modality !== "pointer",
+		// A focus-within target (Group) follows the modality; its own listener is not a text input.
+		isFocusVisible:
+			(isFocused && model.isFocusVisible) || (isFocusWithin && model.modality !== "pointer"),
 	}
 }
 
@@ -193,6 +249,10 @@ export interface TargetOptions {
 	readonly isHoverDisabled?: boolean
 	readonly isPressDisabled?: boolean
 	readonly isFocusDisabled?: boolean
+	/** useFocusWithin instead of useFocus (React Aria Group, CheckboxGroup, RadioGroup). */
+	readonly isWithin?: boolean
+	/** useFocusRing({ isTextInput }): typing in the field does not switch it to focus-visible. */
+	readonly isTextInput?: boolean
 }
 
 /** Event handlers that feed one target's state into the Submodel. */
@@ -220,10 +280,17 @@ export const handlers = <ParentMessage>(
 			]
 	const focus = options.isFocusDisabled
 		? []
-		: [
-				h.OnFocus(send(Message.FocusedTarget({ target }))),
-				h.OnBlur(send(Message.BlurredTarget({ target }))),
-			]
+		: options.isWithin
+			? [
+					h.OnFocusEnter(send(Message.EnteredFocusWithin({ target }))),
+					h.OnFocusLeave(send(Message.LeftFocusWithin({ target }))),
+				]
+			: [
+					h.OnFocus(
+						send(Message.FocusedTarget({ target, isTextInput: options.isTextInput ?? false })),
+					),
+					h.OnBlur(send(Message.BlurredTarget({ target }))),
+				]
 	return [...hover, ...press, ...focus]
 }
 
@@ -235,6 +302,7 @@ export const stateAttributes = <ParentMessage>(
 ): ReadonlyArray<Attribute<ParentMessage>> => [
 	...(state.isHovered ? [h.DataAttribute("hovered", "true")] : []),
 	...(state.isPressed && options.includePress !== false ? [h.DataAttribute("pressed", "true")] : []),
+	...(state.isFocusWithin ? [h.DataAttribute("focus-within", "true")] : []),
 	...(state.isFocused ? [h.DataAttribute("focused", "true")] : []),
 	...(state.isFocusVisible ? [h.DataAttribute("focus-visible", "true")] : []),
 ]

@@ -99,5 +99,94 @@ export const galleryArea: AreaModule = {
 				await page.mouse.down()
 			},
 		}),
+		gallery("input", {
+			id: "gallery-input",
+			title: "Input: plain states and groups",
+			themes: ["light", "dark"],
+		}),
+		gallery("input", {
+			id: "gallery-input-hover",
+			title: "Input: hovered",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.getByRole("textbox", { name: "Name" }).hover()
+			},
+		}),
+		gallery("input", {
+			id: "gallery-input-typed",
+			title: "Input: focused by click, text typed",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.getByRole("textbox", { name: "Name" }).click()
+				await page.keyboard.type("Grace Hopper")
+				await page.mouse.move(0, 0)
+			},
+		}),
+		gallery("input", {
+			id: "gallery-input-invalid-focus",
+			title: "Input: invalid input focused by keyboard",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.getByRole("textbox", { name: "Filled" }).focus()
+				await page.keyboard.press("Tab")
+			},
+		}),
+		gallery("text-field", {
+			id: "gallery-text-field",
+			title: "Text field: label, description, invalid, disabled, required",
+			themes: ["light", "dark"],
+		}),
+		gallery("text-field", {
+			id: "gallery-text-field-focus",
+			title: "Text field: first field focused by keyboard",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.keyboard.press("Tab")
+			},
+		}),
+		gallery("text-field", {
+			id: "gallery-text-field-typed",
+			title: "Text field: text typed into the invalid field after clearing it",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.getByRole("textbox", { name: "Invalid" }).fill("")
+				await page.getByRole("textbox", { name: "Invalid" }).pressSequentially("ada@hazel.sh")
+			},
+		}),
+		gallery("text-field", {
+			id: "gallery-text-field-label-click",
+			title: "Text field: clicking a label focuses its input",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.getByText("Username", { exact: true }).click()
+			},
+		}),
+		gallery("textarea", { id: "gallery-textarea", title: "Textarea: states", themes: ["light", "dark"] }),
+		gallery("textarea", {
+			id: "gallery-textarea-typed",
+			title: "Textarea: multi-line text grows the field",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.getByRole("textbox", { name: "Message" }).click()
+				await page.keyboard.type("First line")
+				await page.keyboard.press("Enter")
+				await page.keyboard.type("Second line")
+				await page.keyboard.press("Enter")
+				await page.keyboard.type("Third line")
+			},
+		}),
+		gallery("textarea", {
+			id: "gallery-textarea-hover",
+			title: "Textarea: hovered",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.getByRole("textbox", { name: "Notes" }).hover()
+			},
+		}),
+		gallery("field", {
+			id: "gallery-field",
+			title: "Field: label, description, errors, fieldset",
+			themes: ["light", "dark"],
+		}),
 	],
 }
