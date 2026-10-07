@@ -21,6 +21,7 @@ import { Route as DevEmbedsIndexRouteImport } from './routes/dev/embeds/index'
 import { Route as AppSelectOrganizationIndexRouteImport } from './routes/_app/select-organization/index'
 import { Route as AppOnboardingIndexRouteImport } from './routes/_app/onboarding/index'
 import { Route as AppOrgSlugIndexRouteImport } from './routes/_app/$orgSlug/index'
+import { Route as DevGalleryComponentRouteImport } from './routes/dev/gallery/$component'
 import { Route as DevEmbedsRailwayRouteImport } from './routes/dev/embeds/railway'
 import { Route as DevEmbedsOpenstatusRouteImport } from './routes/dev/embeds/openstatus'
 import { Route as DevEmbedsGithubRouteImport } from './routes/dev/embeds/github'
@@ -124,6 +125,11 @@ const AppOrgSlugIndexRoute = AppOrgSlugIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppOrgSlugLayoutRoute,
+} as any)
+const DevGalleryComponentRoute = DevGalleryComponentRouteImport.update({
+  id: '/dev/gallery/$component',
+  path: '/dev/gallery/$component',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const DevEmbedsRailwayRoute = DevEmbedsRailwayRouteImport.update({
   id: '/dev/embeds/railway',
@@ -394,6 +400,7 @@ export interface FileRoutesByFullPath {
   '/dev/embeds/github': typeof DevEmbedsGithubRoute
   '/dev/embeds/openstatus': typeof DevEmbedsOpenstatusRoute
   '/dev/embeds/railway': typeof DevEmbedsRailwayRoute
+  '/dev/gallery/$component': typeof DevGalleryComponentRoute
   '/$orgSlug/': typeof AppOrgSlugIndexRoute
   '/onboarding/': typeof AppOnboardingIndexRoute
   '/select-organization/': typeof AppSelectOrganizationIndexRoute
@@ -446,6 +453,7 @@ export interface FileRoutesByTo {
   '/dev/embeds/github': typeof DevEmbedsGithubRoute
   '/dev/embeds/openstatus': typeof DevEmbedsOpenstatusRoute
   '/dev/embeds/railway': typeof DevEmbedsRailwayRoute
+  '/dev/gallery/$component': typeof DevGalleryComponentRoute
   '/$orgSlug': typeof AppOrgSlugIndexRoute
   '/onboarding': typeof AppOnboardingIndexRoute
   '/select-organization': typeof AppSelectOrganizationIndexRoute
@@ -501,6 +509,7 @@ export interface FileRoutesById {
   '/dev/embeds/github': typeof DevEmbedsGithubRoute
   '/dev/embeds/openstatus': typeof DevEmbedsOpenstatusRoute
   '/dev/embeds/railway': typeof DevEmbedsRailwayRoute
+  '/dev/gallery/$component': typeof DevGalleryComponentRoute
   '/_app/$orgSlug/': typeof AppOrgSlugIndexRoute
   '/_app/onboarding/': typeof AppOnboardingIndexRoute
   '/_app/select-organization/': typeof AppSelectOrganizationIndexRoute
@@ -559,6 +568,7 @@ export interface FileRouteTypes {
     | '/dev/embeds/github'
     | '/dev/embeds/openstatus'
     | '/dev/embeds/railway'
+    | '/dev/gallery/$component'
     | '/$orgSlug/'
     | '/onboarding/'
     | '/select-organization/'
@@ -611,6 +621,7 @@ export interface FileRouteTypes {
     | '/dev/embeds/github'
     | '/dev/embeds/openstatus'
     | '/dev/embeds/railway'
+    | '/dev/gallery/$component'
     | '/$orgSlug'
     | '/onboarding'
     | '/select-organization'
@@ -665,6 +676,7 @@ export interface FileRouteTypes {
     | '/dev/embeds/github'
     | '/dev/embeds/openstatus'
     | '/dev/embeds/railway'
+    | '/dev/gallery/$component'
     | '/_app/$orgSlug/'
     | '/_app/onboarding/'
     | '/_app/select-organization/'
@@ -716,6 +728,7 @@ export interface RootRouteChildren {
   DevEmbedsGithubRoute: typeof DevEmbedsGithubRoute
   DevEmbedsOpenstatusRoute: typeof DevEmbedsOpenstatusRoute
   DevEmbedsRailwayRoute: typeof DevEmbedsRailwayRoute
+  DevGalleryComponentRoute: typeof DevGalleryComponentRoute
   DevEmbedsIndexRoute: typeof DevEmbedsIndexRoute
 }
 
@@ -804,6 +817,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/$orgSlug/'
       preLoaderRoute: typeof AppOrgSlugIndexRouteImport
       parentRoute: typeof AppOrgSlugLayoutRoute
+    }
+    '/dev/gallery/$component': {
+      id: '/dev/gallery/$component'
+      path: '/dev/gallery/$component'
+      fullPath: '/dev/gallery/$component'
+      preLoaderRoute: typeof DevGalleryComponentRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/dev/embeds/railway': {
       id: '/dev/embeds/railway'
@@ -1355,6 +1375,7 @@ const rootRouteChildren: RootRouteChildren = {
   DevEmbedsGithubRoute: DevEmbedsGithubRoute,
   DevEmbedsOpenstatusRoute: DevEmbedsOpenstatusRoute,
   DevEmbedsRailwayRoute: DevEmbedsRailwayRoute,
+  DevGalleryComponentRoute: DevGalleryComponentRoute,
   DevEmbedsIndexRoute: DevEmbedsIndexRoute,
 }
 export const routeTree = rootRouteImport

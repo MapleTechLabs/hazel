@@ -63,7 +63,7 @@ The parity harness is what makes building in parallel and cutting over in one sw
 
 ### 2.2 Freeze the reference UI
 
-- The baseline is `bun run parity build legacy --ref <sha>`. Start with `0126176e0` and move it forward only on purpose (§6.3).
+- The baseline is `bun run parity build legacy`, which builds `LEGACY_BASELINE_REF` (`packages/ui-parity/src/config.ts`). It started at `0126176e0` and was re-pinned to `ef1fce35b` on 2026-10-07 to add the component gallery (every existing scenario identical). Move it forward only on purpose (§6.3).
 - Any change to the legacy UI after the pin creates migration debt. Policy: no visual changes to legacy screens that are already ported unless the Foldkit side gets the same change in the same PR, followed by a re-pin.
 
 ### 2.3 Reuse everything that isn't React
