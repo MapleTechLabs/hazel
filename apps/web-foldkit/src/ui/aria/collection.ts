@@ -147,3 +147,7 @@ export const moveKey = (
 
 /** CSS id selector for a generated element id (ids here are built from safe keys). */
 export const idSelector = (id: string) => `#${CSS.escape(id)}`
+
+/** Selects the item at `index` inside a labelled composite, for widgets whose items carry no id. */
+export const labelledChildSelector = (label: string, index: number) =>
+	`[aria-label="${CSS.escape(label)}"] > :nth-child(${index + 1})`
