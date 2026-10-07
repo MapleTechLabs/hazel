@@ -5,14 +5,16 @@ import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
 import { IconEdit } from "../../icons"
 import type { Placement } from "../../ui/aria/position"
+import * as Interaction from "../../ui/aria/interaction"
 import { button } from "../../ui/button"
 import * as Tooltip from "../../ui/tooltip"
 import { defineGallery } from "../define"
 import { galleryFrame, gallerySection } from "../frame"
+import { embedInteraction } from "../interaction"
 
 // MODEL
 
-const Model = Schema.Struct({ tooltips: Schema.Array(Tooltip.Model) })
+const Model = Schema.Struct({ tooltips: Schema.Array(Tooltip.Model), interaction: Interaction.Model })
 type Model = typeof Model.Type
 
 const ids = ["top", "bottom", "right", "rename", "inverse", "no-arrow"] as const
@@ -21,8 +23,11 @@ const ids = ["top", "bottom", "right", "rename", "inverse", "no-arrow"] as const
 
 const Message = defineMessageUnion({
 	GotTooltipMessage: { id: Schema.String, message: Tooltip.Message },
+	GotInteractionMessage: { message: Interaction.Message },
 })
 type Message = typeof Message.Type
+
+const interaction = embedInteraction<Model, Message>((message) => Message.GotInteractionMessage({ message }))
 
 // UPDATE
 
@@ -43,6 +48,7 @@ type Example = Readonly<{
 	id: (typeof ids)[number]
 	trigger: (
 		h: HtmlBuilder<Message>,
+		wiring: Interaction.Wiring<Message>,
 		attributes: Parameters<Tooltip.ViewInputs["toTrigger"]>[0],
 		overlay: Html,
 	) => Html
@@ -54,8 +60,8 @@ type Example = Readonly<{
 
 const outlineTrigger =
 	(label: string): Example["trigger"] =>
-	(h, attributes, overlay) =>
-		button(h, { intent: "outline", attributes }, [label, overlay])
+	(h, wiring, attributes, overlay) =>
+		button(h, { intent: "outline", attributes, interaction: { wiring, target: label } }, [label, overlay])
 
 const placementExamples: ReadonlyArray<Example> = [
 	{ id: "top", trigger: outlineTrigger("Top"), content: "Add reaction" },
@@ -66,12 +72,13 @@ const placementExamples: ReadonlyArray<Example> = [
 const variantExamples: ReadonlyArray<Example> = [
 	{
 		id: "rename",
-		trigger: (h, attributes, overlay) =>
+		trigger: (h, wiring, attributes, overlay) =>
 			button(
 				h,
 				{
 					intent: "plain",
 					size: "sq-sm",
+					interaction: { wiring, target: "rename" },
 					attributes: [...attributes, h.Attribute("aria-label", "Rename thread")],
 				},
 				[IconEdit(h, { className: "size-4", attributes: { "data-slot": "icon" } }), overlay],
@@ -94,7 +101,8 @@ const view = (model: Model, h: HtmlBuilder<Message>) => {
 						model: tooltip,
 						view: Tooltip.view,
 						viewInputs: {
-							toTrigger: (attributes, overlay) => spec.trigger(h, attributes, overlay),
+							toTrigger: (attributes, overlay) =>
+								spec.trigger(h, interaction.wiring(model), attributes, overlay),
 							content: [spec.content],
 							placement: spec.placement,
 							inverse: spec.inverse,
@@ -112,10 +120,12 @@ const view = (model: Model, h: HtmlBuilder<Message>) => {
 
 export const gallery = defineGallery<Model, Message>("Tooltip", {
 	Model,
-	init: () => ({ model: { tooltips: Array.map(ids, Tooltip.init) } }),
+	init: () => ({ model: { tooltips: Array.map(ids, Tooltip.init), interaction: Interaction.init() } }),
 	update: (model, message) =>
 		Message.match<Update.Return<Model, Message>>(message, {
 			GotTooltipMessage: ({ id, message }) => foldTooltip(id)(model, message),
+			GotInteractionMessage: ({ message }) => interaction.fold(model, message),
 		}),
+	subscriptions: interaction.subscriptions,
 	view,
 })

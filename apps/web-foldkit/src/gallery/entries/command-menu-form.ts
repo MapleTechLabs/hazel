@@ -4,6 +4,7 @@ import type { HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
 import { IconHashtag, IconLock } from "../../icons"
+import * as Interaction from "../../ui/aria/interaction"
 import { button } from "../../ui/button"
 import * as CommandMenu from "../../ui/command-menu"
 import {
@@ -18,10 +19,16 @@ import {
 import { view as commandMenuView } from "../../ui/command-menu-view"
 import { defineGallery } from "../define"
 import { galleryFrame, gallerySection } from "../frame"
+import { embedInteraction } from "../interaction"
 
 // MODEL
 
-const Model = Schema.Struct({ palette: CommandMenu.Model, name: Schema.String, visibility: Schema.String })
+const Model = Schema.Struct({
+	palette: CommandMenu.Model,
+	name: Schema.String,
+	visibility: Schema.String,
+	interaction: Interaction.Model,
+})
 type Model = typeof Model.Type
 
 // MESSAGE
@@ -32,8 +39,11 @@ const Message = defineMessageUnion({
 	ChangedName: { value: Schema.String },
 	ChangedVisibility: { value: Schema.String },
 	GotPaletteMessage: { message: CommandMenu.Message },
+	GotInteractionMessage: { message: Interaction.Message },
 })
 type Message = typeof Message.Type
+
+const interaction = embedInteraction<Model, Message>((message) => Message.GotInteractionMessage({ message }))
 
 // UPDATE
 
@@ -62,9 +72,15 @@ const closePalette = Update.foldChildStep({ update: CommandMenu.close, ...palett
 const view = (model: Model, h: HtmlBuilder<Message>) =>
 	galleryFrame(h, "Command menu form", [
 		gallerySection(h, "Command menu form", [
-			button(h, { intent: "outline", attributes: [h.OnClick(Message.ClickedCreateChannel())] }, [
-				"Create channel",
-			]),
+			button(
+				h,
+				{
+					intent: "outline",
+					attributes: [h.OnClick(Message.ClickedCreateChannel())],
+					interaction: { wiring: interaction.wiring(model), target: "create-channel" },
+				},
+				["Create channel"],
+			),
 			h.submodel({
 				slotId: "palette",
 				model: model.palette,
@@ -137,7 +153,12 @@ const view = (model: Model, h: HtmlBuilder<Message>) =>
 export const gallery = defineGallery<Model, Message>("Command menu form", {
 	Model,
 	init: () => ({
-		model: { palette: CommandMenu.init({ id: "create", sections: [] }), name: "", visibility: "public" },
+		model: {
+			palette: CommandMenu.init({ id: "create", sections: [] }),
+			name: "",
+			visibility: "public",
+			interaction: Interaction.init(),
+		},
 	}),
 	update: (model, message) =>
 		Message.match<Update.Return<Model, Message>>(message, {
@@ -146,6 +167,8 @@ export const gallery = defineGallery<Model, Message>("Command menu form", {
 			ChangedName: ({ value }) => ({ model: modifyFields(model, { name: () => value }) }),
 			ChangedVisibility: ({ value }) => ({ model: modifyFields(model, { visibility: () => value }) }),
 			GotPaletteMessage: ({ message }) => foldPalette(model, message),
+			GotInteractionMessage: ({ message }) => interaction.fold(model, message),
 		}),
+	subscriptions: interaction.subscriptions,
 	view,
 })

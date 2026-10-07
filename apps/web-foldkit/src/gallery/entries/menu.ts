@@ -4,6 +4,7 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
 import { IconDots, IconFolder, IconFolderPlus, IconLeave, IconStar, IconVolumeMute } from "../../icons"
+import * as Interaction from "../../ui/aria/interaction"
 import { button } from "../../ui/button"
 import * as Menu from "../../ui/menu"
 import {
@@ -15,10 +16,16 @@ import {
 } from "../../ui/menu-view"
 import { defineGallery } from "../define"
 import { galleryFrame, gallerySection } from "../frame"
+import { embedInteraction } from "../interaction"
 
 // MODEL
 
-const Model = Schema.Struct({ actions: Menu.Model, density: Menu.Model, more: Menu.Model })
+const Model = Schema.Struct({
+	actions: Menu.Model,
+	density: Menu.Model,
+	more: Menu.Model,
+	interaction: Interaction.Model,
+})
 type Model = typeof Model.Type
 
 const actions = Menu.init({
@@ -55,8 +62,11 @@ const Message = defineMessageUnion({
 	GotActionsMessage: { message: Menu.Message },
 	GotDensityMessage: { message: Menu.Message },
 	GotMoreMessage: { message: Menu.Message },
+	GotInteractionMessage: { message: Interaction.Message },
 })
 type Message = typeof Message.Type
+
+const interaction = embedInteraction<Model, Message>((message) => Message.GotInteractionMessage({ message }))
 
 // UPDATE
 
@@ -91,6 +101,7 @@ const foldMore = Update.foldChild({
 // VIEW
 
 const view = (model: Model, h: HtmlBuilder<Message>) => {
+	const wiring = interaction.wiring(model)
 	const actionsLabel = (key: string, text: string) => menuLabel(h, "actions", key, text)
 	const contentByKey: Record<string, () => ReadonlyArray<Html>> = {
 		mute: () => [
@@ -117,7 +128,11 @@ const view = (model: Model, h: HtmlBuilder<Message>) => {
 				view: menuView,
 				viewInputs: {
 					toTrigger: (attributes, overlay) =>
-						button(h, { intent: "outline", attributes }, ["Actions", overlay]),
+						button(
+							h,
+							{ intent: "outline", attributes, interaction: { wiring, target: "actions" } },
+							["Actions", overlay],
+						),
 					content: (key) => contentByKey[key]?.() ?? [],
 					className: "w-56",
 				},
@@ -131,7 +146,11 @@ const view = (model: Model, h: HtmlBuilder<Message>) => {
 				view: menuView,
 				viewInputs: {
 					toTrigger: (attributes, overlay) =>
-						button(h, { intent: "outline", attributes }, ["Density", overlay]),
+						button(
+							h,
+							{ intent: "outline", attributes, interaction: { wiring, target: "density" } },
+							["Density", overlay],
+						),
 					content: (key) =>
 						key === "compact"
 							? [menuLabel(h, "density", key, "Compact")]
@@ -153,6 +172,7 @@ const view = (model: Model, h: HtmlBuilder<Message>) => {
 						h.button(
 							[
 								...attributes,
+								...Interaction.targetAttributes(h, wiring, "more"),
 								h.Attribute("aria-label", "More"),
 								h.Class(menuTriggerClassName()),
 								h.Attribute("data-react-aria-pressable", "true"),
@@ -172,12 +192,14 @@ const view = (model: Model, h: HtmlBuilder<Message>) => {
 
 export const gallery = defineGallery<Model, Message>("Menu", {
 	Model,
-	init: () => ({ model: { actions, density, more } }),
+	init: () => ({ model: { actions, density, more, interaction: Interaction.init() } }),
 	update: (model, message) =>
 		Message.match<Update.Return<Model, Message>>(message, {
 			GotActionsMessage: ({ message }) => foldActions(model, message),
 			GotDensityMessage: ({ message }) => foldDensity(model, message),
 			GotMoreMessage: ({ message }) => foldMore(model, message),
+			GotInteractionMessage: ({ message }) => interaction.fold(model, message),
 		}),
+	subscriptions: interaction.subscriptions,
 	view,
 })
