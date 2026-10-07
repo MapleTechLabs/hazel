@@ -245,7 +245,30 @@ export const datePickerScenarios: ReadonlyArray<Scenario> = [
 	}),
 ]
 
+const checkbox = (page: Page, name: string) => page.getByRole("checkbox", { name, exact: true })
+
+export const tableSelectionScenarios: ReadonlyArray<Scenario> = [
+	kit("table-selection", "table-selection", "Table: checkbox selection, one selected, one disabled"),
+	kit("table-selection", "table-selection-row", "Table: clicking a row toggles it", {
+		steps: (page) => page.getByRole("row", { name: /Alan Turing/ }).click(),
+	}),
+	kit("table-selection", "table-selection-all", "Table: the header checkbox selects every row", {
+		steps: (page) => checkbox(page, "Select All").click({ force: true }),
+	}),
+	kit("table-selection", "table-selection-hover", "Table: hovered selectable row", {
+		steps: (page) => page.getByRole("row", { name: /Ada Lovelace/ }).hover(),
+	}),
+	kit("table-selection", "table-selection-keyboard", "Table: Space toggles the focused row", {
+		steps: async (page) => {
+			await page.keyboard.press("Tab")
+			await page.keyboard.press("ArrowDown")
+			await page.keyboard.press(" ")
+		},
+	}),
+]
+
 export const galleryKitScenarios: ReadonlyArray<Scenario> = [
+	...tableSelectionScenarios,
 	...calendarScenarios,
 	...rangeCalendarScenarios,
 	...datePickerScenarios,
