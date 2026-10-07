@@ -8,7 +8,9 @@ import {
 	FetchCurrentUser,
 	LoadExternal,
 	NavigateInternal,
+	DeliverNotifications,
 	ReplaceUrl,
+	SaveSoundSettings,
 	SaveThemePreference,
 	SignOut,
 } from "./app/command"
@@ -26,6 +28,7 @@ import { enterRoute, informShared, type PageTransition, updatePage } from "./pag
 import { authRedirect, routeRedirect } from "./redirect"
 import { urlToAppRoute } from "./route"
 import type { Resources } from "./rpc"
+import { loadSoundSettings, SoundSettings } from "./notification-sound"
 import * as Shell from "./shell/update"
 import {
 	loadThemePreference,
@@ -41,12 +44,17 @@ export { subscriptions } from "./app/subscription"
 export { view } from "./app/view"
 
 /** Read before the first render, so a stored theme never flashes the default (`Atom.kvs` reads sync). */
-export const Flags = Schema.Struct({ themePreference: ThemePreference, systemTheme: ResolvedTheme })
+export const Flags = Schema.Struct({
+	themePreference: ThemePreference,
+	systemTheme: ResolvedTheme,
+	soundSettings: SoundSettings,
+})
 export type Flags = typeof Flags.Type
 
 export const flags: Effect.Effect<Flags> = Effect.all({
 	themePreference: loadThemePreference,
 	systemTheme: Effect.sync(resolveSystemTheme),
+	soundSettings: loadSoundSettings,
 })
 
 type Return = Update.Return<Model, Message, Resources>
@@ -174,6 +182,13 @@ const handleOutMessage = (outMessage: PageOutMessage): Step =>
 			({ preference }) =>
 			(model) =>
 				requestTheme(model, preference),
+		RequestedSoundSettings:
+			({ settings }) =>
+			(model) =>
+				Update.combine<Model, Message, Resources>(modifyFields(model, { soundSettings: () => settings }), [
+					(m) => ({ model: m, commands: [SaveSoundSettings({ settings })] }),
+					informPage,
+				]),
 		RequestedCurrentUserRefresh:
 			({ toast }) =>
 			(model) => {
@@ -279,6 +294,7 @@ export const init: Runtime.RoutingApplicationInit<Model, Message, Flags, Resourc
 			nowMs: 0,
 			themePreference: flags.themePreference,
 			systemTheme: flags.systemTheme,
+			soundSettings: flags.soundSettings,
 			page: null,
 			shell: Shell.init(),
 			modal: null,
@@ -312,6 +328,12 @@ export const update = (model: Model, message: Message): Return =>
 			transitionTheme(model, modifyFields(model, { systemTheme: () => theme }), false),
 		CompletedApplyTheme: () => ({ model }),
 		CompletedSaveThemePreference: () => ({ model }),
+		CompletedSaveSoundSettings: () => ({ model }),
+		UpdatedRecentNotifications: ({ ids }) => ({
+			model,
+			commands: ids.length === 0 ? [] : [DeliverNotifications({ ids })],
+		}),
+		CompletedDeliverNotifications: () => ({ model }),
 		ChangedAuth: ({ auth }) => {
 			const next = modifyFields(model, { auth: () => auth })
 			const fetchUser = auth === "SignedIn" && model.auth !== "SignedIn" ? [FetchCurrentUser({})] : []

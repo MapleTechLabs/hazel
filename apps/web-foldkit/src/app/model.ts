@@ -6,6 +6,7 @@ import type { PageHost, Shared } from "../page/contract"
 import { PageSlot } from "../page/registry"
 import { AppRoute, orgSectionOf, orgSlugOf } from "../route"
 import { Auth, CurrentUser, Member, Organization } from "../session"
+import { SoundSettings } from "../notification-sound"
 import * as Shell from "../shell/model"
 import { ResolvedTheme, resolveTheme, ThemePreference } from "../theme"
 import type { Context as ShellUpdateContext } from "../shell/update"
@@ -25,6 +26,8 @@ export const Model = Schema.Struct({
 	/** The stored theme preference (`themeAtom`, `themeCustomizationAtom`), and the system's theme. */
 	themePreference: ThemePreference,
 	systemTheme: ResolvedTheme,
+	/** `notificationSoundSettingsAtom`, stored like legacy. */
+	soundSettings: SoundSettings,
 	page: Schema.NullOr(PageSlot),
 	shell: Shell.Model,
 	modal: Modal.Model,
@@ -45,6 +48,7 @@ export const sharedOf = (model: Model): Shared => ({
 	nowMs: model.nowMs,
 	isMobile: model.shell.isMobile,
 	theme: { ...model.themePreference, resolved: resolvedThemeOf(model) },
+	soundSettings: model.soundSettings,
 })
 
 export const pageHostOf = (model: Model): PageHost => ({ page: model.page, shared: sharedOf(model) })

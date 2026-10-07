@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, test } from "vitest"
 import { ApplyTheme, SaveThemePreference } from "./app/command"
 import { sharedOf } from "./app/model"
 import { init, Message, requestTheme, update } from "./main"
+import { DEFAULT_SOUND_SETTINGS } from "./notification-sound"
 import {
 	defaultCustomization,
 	defaultThemePreference,
@@ -48,7 +49,7 @@ describe("stored theme preference", () => {
 const boot = (themePreference = defaultThemePreference()) =>
 	Option.match(fromString("http://localhost/sign-in"), {
 		onNone: () => expect.unreachable("url"),
-		onSome: (url) => init({ themePreference, systemTheme: "light" }, url),
+		onSome: (url) => init({ themePreference, systemTheme: "light", soundSettings: DEFAULT_SOUND_SETTINGS }, url),
 	})
 
 describe("root theme", () => {

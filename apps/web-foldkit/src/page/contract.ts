@@ -5,6 +5,7 @@ import { Command, Submodel, Subscription, type Update } from "foldkit"
 import type { Resources } from "../rpc"
 import type { AppRoute, RouteOf, RouteTag } from "../route"
 import type { Auth, CurrentUser, Member, Organization } from "../session"
+import type { SoundSettings } from "../notification-sound"
 import type { ThemeState } from "../theme"
 import type { PageOutMessage } from "./out-message"
 
@@ -25,6 +26,8 @@ export interface Shared {
 	readonly isMobile: boolean
 	/** The stored mode and customization, and the resolved light/dark theme (`resolvedThemeAtom`). */
 	readonly theme: ThemeState
+	/** `notificationSoundSettingsAtom`: what the sound sink and "Test sound" use. */
+	readonly soundSettings: SoundSettings
 }
 
 /** `usePermission().can(action)` */

@@ -1,3 +1,4 @@
+import { DEFAULT_SOUND_SETTINGS } from "../notification-sound"
 import { defaultThemePreference } from "../theme"
 import type { Shared } from "./contract"
 
@@ -5,4 +6,5 @@ import type { Shared } from "./contract"
 export const sharedDefaults = {
 	isMobile: false,
 	theme: { ...defaultThemePreference(), resolved: "light" },
+	soundSettings: DEFAULT_SOUND_SETTINGS,
 } satisfies Partial<Shared>

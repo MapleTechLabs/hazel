@@ -33,8 +33,8 @@ memoized views and a `sharedChanged` hook. `page/root/` shows a page that only r
   OAuth callback's `connectionStatus`/`errorCode`); never read `window.location.search`. A page that
   cleans its own URL keys by path so the cleanup arrives as `routeChanged`.
 - **Shared data.** `Shared` holds `auth`, `orgSlug`, `currentUser`, `organization`, `member` (id and role),
-  `nowMs`, `isMobile` (the shell's `(max-width: 767px)` query) and `theme` (the stored `mode` and
-  `customization`, plus `resolved` light/dark). `update`, `routeChanged` and `sharedChanged` receive it, the view gets it as
+  `nowMs`, `isMobile` (the shell's `(max-width: 767px)` query), `theme` (the stored `mode` and
+  `customization`, plus `resolved` light/dark) and `soundSettings` (the notification sound settings). `update`, `routeChanged` and `sharedChanged` receive it, the view gets it as
   `viewInputs.shared`, and Subscriptions read it as `input.shared`. Never copy it into the Model; if
   derived state depends on it, recompute in `sharedChanged`. Permissions: `can(shared, "channel.create")`.
   Tests spread `sharedDefaults` (`page/test-shared.ts`) into their `Shared` literal.
@@ -51,7 +51,8 @@ memoized views and a `sharedChanged` hook. `page/root/` shows a page that only r
   `PageOutMessage.RequestedToast`, `RequestedModal` (one variant per legacy modal, see
   `overlay/modal.ts`), `RequestedNavigation({ href, replace, toast? })`, `RequestedCommandPalette`,
   `RequestedSignOut`, `RequestedTheme({ preference })` (the root applies and persists it; never touch
-  the theme classes or storage in a page), `RequestedCurrentUserRefresh({ toast? })` (re-runs `user.me`, e.g. after an
+  the theme classes or storage in a page), `RequestedSoundSettings({ settings })`,
+  `RequestedCurrentUserRefresh({ toast? })` (re-runs `user.me`, e.g. after an
   avatar change) (`page/out-message.ts`). Plain links need nothing: an `<a href>` is followed by the app.
   - A toast with an `id` replaces the toast with the same id (sonner's `id`): give a loading toast an
     id and send the success or error toast with the same id.
