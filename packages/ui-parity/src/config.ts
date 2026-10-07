@@ -10,12 +10,24 @@ export const outDir = resolve(parityRoot, ".parity")
  * the harness at once (e.g. 4900, 5000). Builds embed the backend URLs, so they are kept per base.
  */
 export const DEFAULT_PORT_BASE = 4790
+/** Ports Chromium refuses to load (net::ERR_UNSAFE_PORT) in the range a base can reach. */
+const CHROMIUM_UNSAFE_PORTS = new Set([
+	1719, 1720, 1723, 2049, 3659, 4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669, 6679,
+	6697, 10080,
+])
 export const PORT_BASE = (() => {
 	const raw = process.env.PARITY_PORT_BASE
 	if (!raw) return DEFAULT_PORT_BASE
 	const base = Number(raw)
 	if (!Number.isInteger(base) || base < 1024 || base > 65000)
 		throw new Error(`ui-parity: PARITY_PORT_BASE must be an integer port base, got "${raw}"`)
+	const unsafe = [0, 1, 2, 3, 4]
+		.map((offset) => base + offset)
+		.filter((port) => CHROMIUM_UNSAFE_PORTS.has(port))
+	if (unsafe.length)
+		throw new Error(
+			`ui-parity: PARITY_PORT_BASE=${base} reaches Chromium-blocked port ${unsafe.join(", ")}`,
+		)
 	return base
 })()
 
