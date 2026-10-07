@@ -9,6 +9,7 @@ import type { PageHost, PageMessageBase, PageSlotBase, PageStep, PageViewInputs,
 import type { PageOutMessage } from "./out-message"
 import * as MySettingsDesktop from "./my-settings/desktop"
 import * as MySettingsLinkedAccounts from "./my-settings/linked-accounts"
+import * as MySettingsNotifications from "./my-settings/notifications"
 import * as Root from "./root"
 import * as TeamSettings from "./settings/team"
 
@@ -16,7 +17,14 @@ import * as TeamSettings from "./settings/team"
  * Every routed page, registered once. Adding a page: import its module and append `X.page` below.
  * Routes without a page render their layout around an empty placeholder (see README.md).
  */
-export const pages = [Root.page, TeamSettings.page, ChatChannel.page, MySettingsDesktop.page, MySettingsLinkedAccounts.page]
+export const pages = [
+	Root.page,
+	TeamSettings.page,
+	ChatChannel.page,
+	MySettingsDesktop.page,
+	MySettingsLinkedAccounts.page,
+	MySettingsNotifications.page,
+]
 
 export const PageSlot = Schema.Union(pages.map((page) => page.Slot))
 export type PageSlot = typeof PageSlot.Type
