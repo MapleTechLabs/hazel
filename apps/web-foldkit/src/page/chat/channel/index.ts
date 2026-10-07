@@ -3,6 +3,7 @@ import type { RouteOf } from "../../../route"
 import { definePage, type PageViewInputs } from "../../contract"
 import { PageOutMessage } from "../../out-message"
 import { type ChatTab, init, Message, Model, setCurrentUserId, setTab, tabPath, update } from "./page"
+import { clearNotificationsOnMount } from "./clear-notifications"
 import { subscriptions } from "./subscription"
 import { view as channelView } from "./view"
 
@@ -22,12 +23,14 @@ export const page = definePage(
 		routes: ["ChatChannel", "ChatFiles", "ChatFilesMedia"],
 		// A new channel is a new page (React remounted on `key={id}`); its tabs keep the instance.
 		key: (route) => route.channelId,
-		init: (route, shared) => ({
-			model: init(route.channelId, shared.currentUser?.id ?? null, {
-				tab: tabOf(route),
-				orgSlug: route.orgSlug,
-			}),
-		}),
+		init: (route, shared) =>
+			clearNotificationsOnMount(
+				init(route.channelId, shared.currentUser?.id ?? null, {
+					tab: tabOf(route),
+					orgSlug: route.orgSlug,
+				}),
+				shared,
+			),
 		update: (model, message, shared) =>
 			message._tag === "ClickedMobileMenu"
 				? { model, outMessage: PageOutMessage.RequestedMobileSidebar() }
@@ -45,6 +48,10 @@ export const page = definePage(
 			channelView(h, model, toSelf, inputs.shared.isMobile),
 		),
 		subscriptions,
-		sharedChanged: (model, shared) => setCurrentUserId(model, shared.currentUser?.id ?? null),
+		sharedChanged: (model, shared) => {
+			const withUser = setCurrentUserId(model, shared.currentUser?.id ?? null)
+			const cleared = clearNotificationsOnMount(withUser.model, shared)
+			return { ...cleared, commands: [...(withUser.commands ?? []), ...(cleared.commands ?? [])] }
+		},
 	},
 )

@@ -1,7 +1,7 @@
 import { ChannelId, type NotificationId, OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { eq } from "@tanstack/db"
 import { Option, Schema, Stream } from "effect"
-import { Subscription } from "foldkit"
+import { ManagedResource, Subscription } from "foldkit"
 import { notificationCollection, organizationCollection, organizationMemberCollection } from "~/db/collections"
 import { liveQueryStream } from "../data/live-query"
 import { pageSubscriptions } from "../page/registry"
@@ -13,6 +13,7 @@ import * as ShellSubscription from "../shell/subscription"
 import * as CommandPalette from "../overlay/command-palette"
 import { layoutHotkeys } from "../overlay/hotkeys"
 import * as Modal from "../overlay/modal"
+import * as Platform from "../platform"
 import * as Toasts from "../overlay/toaster"
 import { clerkAuthStream } from "./clerk"
 import { Message } from "./message"
@@ -168,6 +169,18 @@ const shellSubscriptions = Subscription.lift(ShellSubscription.subscriptions)<Mo
 	toParentMessage: (message): Message => ({ _tag: "GotShellMessage", message }),
 })
 
+/** `PresenceProvider` runs inside the loaded `$orgSlug` layout, once `user.me` answered. */
+const presenceUserIdOf = (model: Model): UserId | null => {
+	const orgSlug = orgSlugOf(model.route)
+	return orgSlug !== undefined && model.loadedOrgSlug === orgSlug ? (model.currentUser?.id ?? null) : null
+}
+
+const platformSubscriptions = Subscription.lift(Platform.subscriptions)<Model, Message>({
+	read: (model) =>
+		Option.some({ model: model.platform, userId: presenceUserIdOf(model), pathname: model.pathname }),
+	toParentMessage: (message): Message => ({ _tag: "GotPlatformMessage", message }),
+})
+
 const toastSubscriptions = Subscription.lift(Toasts.subscriptions)<Model, Message>({
 	read: (model) => Option.some(model.toasts.toaster),
 	toParentMessage: (message): Message => ({ _tag: "GotToastsMessage", message }),
@@ -187,4 +200,11 @@ export const subscriptions = Subscription.aggregate(
 	toastSubscriptions,
 	shellSubscriptions,
 	pages,
+	platformSubscriptions,
 )
+
+/** App-lifetime managed resources (the Rivet client). */
+export const managedResources = ManagedResource.lift(Platform.managedResources)<Model, Message>({
+	read: (model) => Option.some(model.platform),
+	toParentMessage: (message): Message => ({ _tag: "GotPlatformMessage", message }),
+})

@@ -4,7 +4,7 @@ import "./styles.css"
 
 import { Runtime } from "foldkit"
 import { galleryComponentOf, startGallery } from "./gallery/boot"
-import { Flags, flags, init, Message, Model, subscriptions, update, view } from "./main"
+import { Flags, flags, init, managedResources, Message, Model, subscriptions, update, view } from "./main"
 import { ResourcesLive } from "./rpc"
 
 const container = document.getElementById("app")!
@@ -18,6 +18,7 @@ const startApplication = () =>
 			update,
 			view,
 			subscriptions,
+			managedResources,
 			resources: ResourcesLive,
 			container,
 			routing: {
