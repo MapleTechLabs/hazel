@@ -128,3 +128,18 @@ export const personalIds = {
 	longMember: stableId("user:member-00"),
 	missingUser: stableId("user:does-not-exist"),
 }
+
+/**
+ * Legacy treats presence older than 45s as offline, and default seeds lastSeenAt 5 minutes ago.
+ * Here everyone but Linus was seen at `now`, so stored statuses (online, away, busy) show.
+ */
+export const personalPresenceDataset: Dataset = {
+	...defaultDataset,
+	name: "personal-presence",
+	tables: {
+		...tables,
+		user_presence_status: (tables.user_presence_status ?? []).map((row) =>
+			row.userId === defaultIds.user("linus") ? row : { ...row, lastSeenAt: now, updatedAt: now },
+		),
+	},
+}
