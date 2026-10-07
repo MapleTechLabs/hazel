@@ -3,8 +3,8 @@ import { OrganizationId } from "@hazel/schema"
 import { Effect, Exit, Schema } from "effect"
 import { Command } from "foldkit"
 import { load } from "foldkit/navigation"
+import { HazelApiClient } from "../../../../rpc"
 import { failureToast } from "../shared/exit-toast"
-import { withHazelApi } from "../shared/http"
 import { Message } from "./message"
 
 const Provider = IntegrationConnection.IntegrationProvider
@@ -39,7 +39,7 @@ export const GetOAuthUrl = Command.define("IntegrationGetOAuthUrl", {
 	args: target,
 	messages: [Message.SucceededGetOAuthUrl, Message.FailedGetOAuthUrl],
 	execute: (params) =>
-		withHazelApi((client) =>
+		HazelApiClient.use((client) =>
 			client.integrations.getOAuthUrl({ params, query: { level: "organization" } }),
 		).pipe(
 			Effect.map((response) =>
@@ -63,7 +63,7 @@ export const Disconnect = Command.define("IntegrationDisconnect", {
 	messages: [Message.CompletedDisconnect],
 	execute: (params) =>
 		Effect.exit(
-			withHazelApi((client) =>
+			HazelApiClient.use((client) =>
 				client.integrations.disconnect({ params, query: { level: "organization" } }),
 			),
 		).pipe(
@@ -97,7 +97,7 @@ export const ConnectApiKey = Command.define("IntegrationConnectApiKey", {
 	messages: [Message.SucceededConnectApiKey, Message.FailedConnectApiKey],
 	execute: ({ orgId, provider, token, baseUrl }) =>
 		Effect.exit(
-			withHazelApi((client) =>
+			HazelApiClient.use((client) =>
 				client.integrations.connectApiKey({
 					params: { orgId, provider },
 					payload: { token, baseUrl },

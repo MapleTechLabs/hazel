@@ -24,7 +24,7 @@ import { ModalOutMessage } from "./overlay/out-message"
 import { enterRoute, informShared, type PageTransition, updatePage } from "./page/registry"
 import { authRedirect, routeRedirect } from "./redirect"
 import { urlToAppRoute } from "./route"
-import type { HazelRpc } from "./rpc"
+import type { Resources } from "./rpc"
 import * as Shell from "./shell/update"
 
 export { Message } from "./app/message"
@@ -32,8 +32,8 @@ export { Model } from "./app/model"
 export { subscriptions } from "./app/subscription"
 export { view } from "./app/view"
 
-type Return = Update.Return<Model, Message, HazelRpc>
-type Step = Update.Step<Model, Message, HazelRpc>
+type Return = Update.Return<Model, Message, Resources>
+type Step = Update.Step<Model, Message, Resources>
 
 // CHILDREN
 
@@ -211,7 +211,7 @@ const enteredRoute: Step = (model) => applyPage(enterRoute(model.page, model.rou
 
 // INIT
 
-export const init: Runtime.RoutingApplicationInit<Model, Message, void, HazelRpc> = (url: Url) => {
+export const init: Runtime.RoutingApplicationInit<Model, Message, void, Resources> = (url: Url) => {
 	const model = withUrl(
 		{
 			route: { _tag: "Root" },
@@ -230,7 +230,7 @@ export const init: Runtime.RoutingApplicationInit<Model, Message, void, HazelRpc
 		},
 		url,
 	)
-	return Update.combine<Model, Message, HazelRpc>(model, [enteredRoute, informShell, redirect])
+	return Update.combine<Model, Message, Resources>(model, [enteredRoute, informShell, redirect])
 }
 
 // UPDATE
@@ -243,7 +243,7 @@ export const update = (model: Model, message: Message): Return =>
 				External: ({ href }) => ({ model, commands: [LoadExternal({ href })] }),
 			}),
 		ChangedUrl: ({ url }) =>
-			Update.combine<Model, Message, HazelRpc>(withUrl(model, url), [
+			Update.combine<Model, Message, Resources>(withUrl(model, url), [
 				enteredRoute,
 				informShell,
 				redirect,
@@ -256,26 +256,26 @@ export const update = (model: Model, message: Message): Return =>
 		ChangedAuth: ({ auth }) => {
 			const next = modifyFields(model, { auth: () => auth })
 			const fetchUser = auth === "SignedIn" && model.auth !== "SignedIn" ? [FetchCurrentUser({})] : []
-			return Update.combine<Model, Message, HazelRpc>(next, [
+			return Update.combine<Model, Message, Resources>(next, [
 				informPage,
 				redirect,
 				(m) => ({ model: m, commands: fetchUser }),
 			])
 		},
 		SucceededFetchCurrentUser: ({ user }) =>
-			Update.combine<Model, Message, HazelRpc>(modifyFields(model, { currentUser: () => user }), [
+			Update.combine<Model, Message, Resources>(modifyFields(model, { currentUser: () => user }), [
 				informPage,
 				informShell,
 			]),
 		FailedFetchCurrentUser: () => ({ model }),
 		CompletedSignOut: () => ({ model }),
 		UpdatedOrganization: ({ organization }) =>
-			Update.combine<Model, Message, HazelRpc>(
+			Update.combine<Model, Message, Resources>(
 				modifyFields(model, { organization: () => organization }),
 				[informPage, informShell],
 			),
 		UpdatedMember: ({ member }) =>
-			Update.combine<Model, Message, HazelRpc>(modifyFields(model, { member: () => member }), [
+			Update.combine<Model, Message, Resources>(modifyFields(model, { member: () => member }), [
 				informPage,
 				informShell,
 			]),
@@ -296,7 +296,7 @@ export const update = (model: Model, message: Message): Return =>
 			// `Shared.isMobile` comes from the shell's viewport query.
 			return result.model.isMobile === model.shell.isMobile
 				? shelled
-				: Update.combine<Model, Message, HazelRpc>(shelled.model, [
+				: Update.combine<Model, Message, Resources>(shelled.model, [
 						(m) => ({ model: m, commands: shelled.commands }),
 						informPage,
 					])

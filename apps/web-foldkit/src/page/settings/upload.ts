@@ -1,8 +1,7 @@
 import type { OrganizationId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
-import { HazelApiClient } from "~/lib/services/common/atom-client"
 import { uploadErrorMessages, uploadToStorage } from "~/lib/upload-to-storage"
-import { runAtomFn } from "../../data/actions"
+import { HazelApiClient } from "../../rpc"
 
 /** Port of `hooks/use-upload.ts` for the settings uploads (organization logo, custom emoji). */
 
@@ -23,10 +22,11 @@ export type UploadTarget =
 const fail = (message: string, description: string | null) =>
 	Effect.fail(new UploadFailedError({ message, description }))
 
-const presign = HazelApiClient.mutation("uploads", "presign")
-
 /** Validates, presigns and PUTs the file; succeeds with the storage key (the legacy `UploadResult`). */
-export const uploadFile = (target: UploadTarget, file: File): Effect.Effect<string, UploadFailedError> =>
+export const uploadFile = (
+	target: UploadTarget,
+	file: File,
+): Effect.Effect<string, UploadFailedError, HazelApiClient> =>
 	Effect.gen(function* () {
 		const isEmoji = target.type === "custom-emoji"
 		const allowed = isEmoji ? ALLOWED_EMOJI_TYPES : ALLOWED_AVATAR_TYPES
@@ -43,14 +43,16 @@ export const uploadFile = (target: UploadTarget, file: File): Effect.Effect<stri
 				`File size must be less than ${isEmoji ? "256KB" : `${maxSize / 1024 / 1024}MB`}`,
 			)
 		}
-		const presigned = yield* runAtomFn(presign, {
-			payload: {
-				type: target.type,
-				organizationId: target.organizationId,
-				contentType: file.type,
-				fileSize: file.size,
-			},
-		}).pipe(Effect.catch(() => fail("Upload failed", "Failed to get upload URL. Please try again.")))
+		const presigned = yield* HazelApiClient.use((client) =>
+			client.uploads.presign({
+				payload: {
+					type: target.type,
+					organizationId: target.organizationId,
+					contentType: file.type,
+					fileSize: file.size,
+				},
+			}),
+		).pipe(Effect.catch(() => fail("Upload failed", "Failed to get upload URL. Please try again.")))
 		const result = yield* Effect.promise(() =>
 			uploadToStorage(presigned.uploadUrl, file, { timeout: 60000 }),
 		)

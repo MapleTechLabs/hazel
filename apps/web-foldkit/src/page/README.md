@@ -34,8 +34,9 @@ memoized views and a `sharedChanged` hook. `page/root/` shows a page that only r
   `viewInputs.shared`, and Subscriptions read it as `input.shared`. Never copy it into the Model; if
   derived state depends on it, recompute in `sharedChanged`. Permissions: `can(shared, "channel.create")`.
   Tests spread `sharedDefaults` (`page/test-shared.ts`) into their `Shared` literal.
-- **RPC.** Commands `yield* HazelRpc` (`src/rpc.ts`); it is the app's `resources` layer. Map every `Exit`
-  to a Message (`SucceededX` / `FailedX`).
+- **RPC and HTTP API.** Commands `yield* HazelRpc`, or `yield* HazelApiClient` for the HTTP API (legacy
+  `HazelApiClient`: base URL and authenticated fetch). Both are the app's `resources` (`src/rpc.ts`).
+  Map every `Exit` to a Message (`SucceededX` / `FailedX`).
 - **Optimistic mutations.** Run the legacy `db/actions` atoms with `runAtomFn` (`src/data/actions.ts`, one
   registry for the app) and map the result with `settle`, `successToast` and `failureToast` (legacy
   `exitToast`, with per-tag handlers).

@@ -1,17 +1,12 @@
-import { HazelApi } from "@hazel/domain/http"
 import { OrganizationId } from "@hazel/schema"
 import { Effect } from "effect"
 import { Command } from "foldkit"
 import { load } from "foldkit/navigation"
-import { HttpApiClient } from "effect/http-api"
-import { CustomFetchLive } from "~/lib/services/common/api-client"
+import { HazelApiClient } from "../../../rpc"
 import { Message } from "./message"
 
 /** The legacy `HazelApiClient` (HTTP API, cookie or bearer auth through `authenticatedFetch`). */
-const integrations = HttpApiClient.make(HazelApi, { baseUrl: import.meta.env.VITE_BACKEND_URL }).pipe(
-	Effect.map((client) => client.integrations),
-	Effect.provide(CustomFetchLive),
-)
+const integrations = HazelApiClient.useSync((client) => client.integrations)
 
 const readSearchParam = (params: URLSearchParams, key: string) => params.get(key) ?? null
 
