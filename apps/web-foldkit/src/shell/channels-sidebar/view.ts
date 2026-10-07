@@ -4,6 +4,7 @@ import { twMerge } from "tailwind-merge"
 import { IconMagnifier3, IconUsers } from "../../icons"
 import { sidebarItem, sidebarLink } from "../../ui/sidebar"
 import type { Model } from "./model"
+import { createChannelHint } from "./create-channel-hint"
 import { hotkeyLabel } from "./hotkey-label"
 import {
 	CHANNEL_ACTIVE,
@@ -233,6 +234,7 @@ export const sectionGroupContent = <M>(
 	itemContext: Omit<ItemContext, "presenceByUser" | "nowMs" | "currentUserId"> & {
 		readonly activeChannelId: string | undefined
 		readonly onActiveMount: Attribute<M>
+		readonly onDismissCreateChannelHint: Attribute<M>
 	},
 ): Html[] => {
 	const context: SectionsContext<M> = {
@@ -267,6 +269,9 @@ export const sectionGroupContent = <M>(
 						context,
 					),
 					...discoverSection(h, model, context),
+					...(defaultEntries.length === 0 && canCreateChannel && !model.isCreateChannelHintDismissed
+						? [createChannelHint(h, itemContext.onDismissCreateChannelHint)]
+						: []),
 					...model.sections.map((section) =>
 						channelSection(
 							h,
