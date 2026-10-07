@@ -20,6 +20,7 @@ import { toPageMessage } from "./app/view"
 import * as CommandPalette from "./overlay/command-palette"
 import type { Return as CommandPaletteReturn } from "./overlay/command-palette/update"
 import * as Modal from "./overlay/modal"
+import * as Platform from "./platform"
 import * as Toasts from "./overlay/toasts"
 import { can } from "./page/contract"
 import { PageOutMessage } from "./page/out-message"
@@ -301,6 +302,7 @@ export const init: Runtime.RoutingApplicationInit<Model, Message, Flags, Resourc
 			modal: null,
 			commandPalette: CommandPalette.init(),
 			toasts: Toasts.init(),
+			platform: Platform.init(),
 		},
 		url,
 	)
@@ -388,4 +390,11 @@ export const update = (model: Model, message: Message): Return =>
 			withCommandPalette(model, CommandPalette.update(model.commandPalette, message, sharedOf(model))),
 		PressedHotkey: ({ actionId }) => pressedHotkey(model, actionId),
 		GotToastsMessage: ({ message }) => withToasts(model, Toasts.update(model.toasts, message)),
+		GotPlatformMessage: ({ message }) => {
+			const result = Platform.update(model.platform, message)
+			return {
+				model: modifyFields(model, { platform: () => result.model }),
+				commands: Command.mapMessages(result.commands, (child) => Message.GotPlatformMessage({ message: child })),
+			}
+		},
 	})

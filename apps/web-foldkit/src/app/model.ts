@@ -7,6 +7,7 @@ import { PageSlot } from "../page/registry"
 import { AppRoute, orgSectionOf, orgSlugOf } from "../route"
 import { Auth, CurrentUser, Member, Organization } from "../session"
 import { SoundSettings } from "../notification-sound"
+import * as Platform from "../platform"
 import * as Shell from "../shell/model"
 import { ResolvedTheme, resolveTheme, ThemePreference } from "../theme"
 import type { Context as ShellUpdateContext } from "../shell/update"
@@ -35,6 +36,8 @@ export const Model = Schema.Struct({
 	modal: Modal.Model,
 	commandPalette: CommandPalette.Model,
 	toasts: Toasts.Model,
+	/** Presence and the Rivet client (legacy `PresenceProvider`, `lib/rivet-client.ts`). */
+	platform: Platform.Model,
 })
 export type Model = typeof Model.Type
 

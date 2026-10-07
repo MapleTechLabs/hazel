@@ -13,6 +13,7 @@ import * as ShellSubscription from "../shell/subscription"
 import * as CommandPalette from "../overlay/command-palette"
 import { layoutHotkeys } from "../overlay/hotkeys"
 import * as Modal from "../overlay/modal"
+import * as Platform from "../platform"
 import { clerkAuthStream } from "./clerk"
 import { Message } from "./message"
 import { type Model, pageHostOf, sharedOf } from "./model"
@@ -167,6 +168,18 @@ const shellSubscriptions = Subscription.lift(ShellSubscription.subscriptions)<Mo
 	toParentMessage: (message): Message => ({ _tag: "GotShellMessage", message }),
 })
 
+/** `PresenceProvider` runs inside the loaded `$orgSlug` layout, once `user.me` answered. */
+const presenceUserIdOf = (model: Model): UserId | null => {
+	const orgSlug = orgSlugOf(model.route)
+	return orgSlug !== undefined && model.loadedOrgSlug === orgSlug ? (model.currentUser?.id ?? null) : null
+}
+
+const platformSubscriptions = Subscription.lift(Platform.subscriptions)<Model, Message>({
+	read: (model) =>
+		Option.some({ model: model.platform, userId: presenceUserIdOf(model), pathname: model.pathname }),
+	toParentMessage: (message): Message => ({ _tag: "GotPlatformMessage", message }),
+})
+
 const pages = Subscription.lift(pageSubscriptions)<Model, Message>({
 	read: (model) => Option.some(pageHostOf(model)),
 	toParentMessage: (message): Message => ({ _tag: "GotPageMessage", message }),
@@ -180,4 +193,5 @@ export const subscriptions = Subscription.aggregate(
 	modalSubscriptions,
 	shellSubscriptions,
 	pages,
+	platformSubscriptions,
 )
