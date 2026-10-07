@@ -4,6 +4,7 @@ import type { Command } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import type { HazelRpc } from "../rpc"
 import type { AppRoute } from "../route"
+import * as Auth from "./auth"
 import * as ChatChannel from "./chat/channel"
 import * as ChatIndex from "./chat-index"
 import type { PageHost, PageMessageBase, PageSlotBase, PageStep, PageViewInputs, Shared } from "./contract"
@@ -17,6 +18,10 @@ import * as IntegrationsSettings from "./settings/integrations/index"
 import * as InstalledAppsSettings from "./settings/integrations/installed"
 import * as MarketplaceSettings from "./settings/integrations/marketplace"
 import * as YourAppsSettings from "./settings/integrations/your-apps"
+import * as Join from "./join"
+import * as Onboarding from "./onboarding"
+import * as OnboardingSetupOrganization from "./onboarding/setup-organization"
+import * as SelectOrganization from "./select-organization"
 import * as TeamSettings from "./settings/team"
 import * as SettingsConnectInvites from "./settings/connect-invites"
 import * as SettingsCustomEmojis from "./settings/custom-emojis"
@@ -46,6 +51,12 @@ export const pages = [
 	SettingsConnectInvites.page,
 	SettingsInvitations.page,
 	SettingsCustomEmojis.page,
+	Auth.signInPage,
+	Auth.signUpPage,
+	Onboarding.page,
+	OnboardingSetupOrganization.page,
+	SelectOrganization.page,
+	Join.page,
 ]
 
 export const PageSlot = Schema.Union(pages.map((page) => page.Slot))
