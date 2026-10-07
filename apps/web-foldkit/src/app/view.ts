@@ -97,6 +97,7 @@ const sectionBody = (model: Model, h: HtmlBuilder<Message>): Html => {
 				channel: model.shell.settingsChannel,
 				selectedTab: tab,
 				onSelectTab: (href) => h.OnClick(Message.ClickedLayoutTab({ href })),
+				onChangeTab: (toHref) => h.OnChange((tab) => Message.ClickedLayoutTab({ href: toHref(tab) })),
 			},
 			pageBody(model, h, true),
 		)
