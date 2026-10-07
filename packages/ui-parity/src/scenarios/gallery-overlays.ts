@@ -426,5 +426,48 @@ export const galleryOverlaysArea: AreaModule = {
 				await menuItem(page, "Settings").hover()
 			},
 		}),
+		// COMMAND MENU FORM
+		overlay("command-menu-form", "command-menu-form-open", "Command menu form: opened", {
+			viewports: both,
+			steps: async (page) => {
+				await button(page, "Create channel").click()
+				await page.getByRole("dialog").waitFor()
+			},
+		}),
+		overlay(
+			"command-menu-form",
+			"command-menu-form-input",
+			"Command menu form: typing in the focused input",
+			{
+				steps: async (page) => {
+					await button(page, "Create channel").click()
+					await page.getByRole("textbox", { name: "Name" }).fill("design-reviews")
+				},
+			},
+		),
+		overlay(
+			"command-menu-form",
+			"command-menu-form-toggle",
+			"Command menu form: choosing the second option",
+			{
+				steps: async (page) => {
+					await button(page, "Create channel").click()
+					await page.getByRole("radio", { name: "Private" }).check({ force: true })
+				},
+			},
+		),
+		overlay("command-menu-form", "command-menu-form-escape", "Command menu form: Escape closes", {
+			steps: async (page) => {
+				await button(page, "Create channel").click()
+				await page.getByRole("dialog").waitFor()
+				await page.keyboard.press("Escape")
+			},
+		}),
+		overlay("command-menu-form", "command-menu-form-back", "Command menu form: the back button closes", {
+			steps: async (page) => {
+				await button(page, "Create channel").click()
+				await page.getByRole("dialog").getByRole("button").first().click()
+			},
+		}),
 	],
 }

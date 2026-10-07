@@ -80,6 +80,7 @@ export type OutMessage = typeof OutMessage.Type
 // IDS
 
 export const searchId = (id: string) => `${id}-search`
+export const dialogId = (id: string) => `${id}-dialog`
 export const listId = (id: string) => `${id}-list`
 export const itemId = (id: string, key: string) => `${id}-item-${key}`
 

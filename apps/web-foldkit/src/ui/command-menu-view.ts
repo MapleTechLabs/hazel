@@ -1,6 +1,6 @@
 import { Array, Effect, Option, Queue, Schema, Stream } from "effect"
 import { Mount, Submodel } from "foldkit"
-import type { Html, HtmlBuilder } from "foldkit/html"
+import { type ChildAttribute, childAttributes, type Html, type HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import {
 	type CommandMenuSize,
@@ -36,7 +36,16 @@ import {
 	trackViewportHeight,
 	watchInteractOutside,
 } from "./aria/overlay"
-import { type Item, itemId, listId, Message, type Model, searchId, visibleSections } from "./command-menu"
+import {
+	dialogId,
+	type Item,
+	itemId,
+	listId,
+	Message,
+	type Model,
+	searchId,
+	visibleSections,
+} from "./command-menu"
 import { descriptionId, labelId } from "./menu"
 
 // MOUNT
@@ -54,7 +63,9 @@ const PortalCommandMenu = Mount.defineStream("PortalCommandMenu", {
 					const releasePortal = portalOverlay(element, { isModal: true })
 					const overlay = element.querySelector<HTMLElement>("[data-modal-overlay]")
 					const releaseViewport = overlay ? trackViewportHeight(overlay) : () => undefined
-					document.getElementById(searchId(id))?.focus({ preventScroll: true })
+					;(document.getElementById(searchId(id)) ?? document.getElementById(dialogId(id)))?.focus({
+						preventScroll: true,
+					})
 					const releaseFocus = containFocus(element)
 					const releaseOutside = isDismissable
 						? watchInteractOutside(`[data-modal-content="${CSS.escape(id)}"]`, () =>
@@ -112,6 +123,8 @@ export type ViewInputs = Readonly<{
 	escapeButton?: boolean
 	className?: string
 	"aria-label"?: string
+	/** CommandMenu `isFormPage`: render these instead of the search field and list. */
+	toFormPage?: (closeAttributes: ReadonlyArray<ChildAttribute>) => ReadonlyArray<Html>
 }>
 
 export const view = Submodel.defineView<Model, Message, ViewInputs>((model, viewInputs, h) =>
@@ -124,6 +137,12 @@ const commandMenuOverlay = (model: Model, viewInputs: ViewInputs, h: HtmlBuilder
 		[
 			h.Attribute("style", "display: contents;"),
 			h.OnMount(PortalCommandMenu({ id: model.id, isDismissable })),
+			// NOTE: on list pages the search field owns Escape (clear first, then close).
+			h.OnKeyDownPreventDefault((key) =>
+				key === "Escape" && viewInputs.toFormPage
+					? Option.some(Message.ClickedEscapeButton())
+					: Option.none(),
+			),
 		],
 		[
 			h.span([
@@ -156,18 +175,25 @@ const commandMenuOverlay = (model: Model, viewInputs: ViewInputs, h: HtmlBuilder
 									h.Attribute("aria-label", viewInputs["aria-label"] ?? "Command Menu"),
 									h.Class(commandMenuDialogClassName),
 									h.Attribute("data-rac", ""),
+									h.Id(dialogId(model.id)),
 									h.Role("dialog"),
 									h.Attribute("tabindex", "-1"),
 								],
 								[
 									h.div(
 										[h.Class(commandMenuContentsClassName)],
-										[
-											searchField(model, viewInputs, h),
-											focusScopeSentinel(h, "start"),
-											list(model, viewInputs, h),
-											focusScopeSentinel(h, "end"),
-										],
+										viewInputs.toFormPage
+											? viewInputs.toFormPage(
+													childAttributes([
+														h.OnClick(Message.ClickedEscapeButton()),
+													]),
+												)
+											: [
+													searchField(model, viewInputs, h),
+													focusScopeSentinel(h, "start"),
+													list(model, viewInputs, h),
+													focusScopeSentinel(h, "end"),
+												],
 									),
 								],
 							),
