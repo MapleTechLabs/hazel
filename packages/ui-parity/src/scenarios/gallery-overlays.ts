@@ -307,5 +307,56 @@ export const galleryOverlaysArea: AreaModule = {
 				await page.keyboard.press("Escape")
 			},
 		}),
+		// COMBO BOX
+		overlay("combo-box", "combo-box", "Combo box: empty and selected"),
+		overlay("combo-box", "combo-box-type", "Combo box: typing filters and opens the list", {
+			steps: async (page) => {
+				await page.getByRole("combobox", { name: "Channel" }).fill("de")
+				await page.getByRole("listbox").waitFor()
+			},
+		}),
+		overlay(
+			"combo-box",
+			"combo-box-arrow",
+			"Combo box: ArrowDown opens all items and moves the virtual focus",
+			{
+				steps: async (page) => {
+					await page.getByRole("combobox", { name: "Channel" }).focus()
+					await page.keyboard.press("ArrowDown")
+					await page.getByRole("listbox").waitFor()
+					await page.keyboard.press("ArrowDown")
+				},
+			},
+		),
+		overlay("combo-box", "combo-box-button", "Combo box: the chevron button shows every item", {
+			steps: async (page) => {
+				await page.getByRole("button", { name: /Selected/ }).click()
+				await page.getByRole("listbox").waitFor()
+			},
+		}),
+		overlay("combo-box", "combo-box-choose", "Combo box: choosing an item fills the input", {
+			steps: async (page) => {
+				await page.getByRole("combobox", { name: "Channel" }).fill("eng")
+				await page.getByRole("option", { name: "Engineering" }).click()
+			},
+		}),
+		overlay("combo-box", "combo-box-hover", "Combo box: hovered option", {
+			steps: async (page) => {
+				await page.getByRole("combobox", { name: "Channel" }).fill("e")
+				await page.getByRole("option", { name: "Design" }).hover()
+			},
+		}),
+		overlay(
+			"combo-box",
+			"combo-box-escape",
+			"Combo box: Escape closes and reverts the text to the selection",
+			{
+				steps: async (page) => {
+					await page.getByRole("combobox", { name: "Channel" }).fill("ra")
+					await page.getByRole("listbox").waitFor()
+					await page.keyboard.press("Escape")
+				},
+			},
+		),
 	],
 }

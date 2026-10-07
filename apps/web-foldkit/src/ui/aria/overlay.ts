@@ -150,6 +150,28 @@ const preventScroll = (): (() => void) => {
 	}
 }
 
+/**
+ * ariaHideOutside as useComboBox uses it: every element outside `visible` gets aria-hidden, so
+ * assistive technology only reaches the input and its listbox while the list is open.
+ */
+export const ariaHideOutside = (visible: ReadonlyArray<Element>): (() => void) => {
+	const hidden: Array<Element> = []
+	const walk = (parent: Element) => {
+		for (const child of parent.children) {
+			if (child.tagName === "SCRIPT" || visible.includes(child)) continue
+			if (visible.some((element) => child.contains(element))) walk(child)
+			else if (child.getAttribute("aria-hidden") !== "true") {
+				child.setAttribute("aria-hidden", "true")
+				hidden.push(child)
+			}
+		}
+	}
+	walk(document.body)
+	return () => {
+		for (const element of hidden) element.removeAttribute("aria-hidden")
+	}
+}
+
 // DISMISS (useInteractOutside)
 
 /**
