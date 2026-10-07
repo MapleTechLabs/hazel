@@ -12,6 +12,11 @@ import * as NotificationsInbox from "./notifications/inbox"
 import * as OrgHome from "./home"
 import * as Profile from "./profile"
 import * as Root from "./root"
+import * as IntegrationSettings from "./settings/integrations/detail"
+import * as IntegrationsSettings from "./settings/integrations/index"
+import * as InstalledAppsSettings from "./settings/integrations/installed"
+import * as MarketplaceSettings from "./settings/integrations/marketplace"
+import * as YourAppsSettings from "./settings/integrations/your-apps"
 import * as TeamSettings from "./settings/team"
 
 /**
@@ -26,6 +31,11 @@ export const pages = [
 	OrgHome.page,
 	Profile.page,
 	ChatIndex.page,
+	IntegrationsSettings.page,
+	InstalledAppsSettings.page,
+	MarketplaceSettings.page,
+	YourAppsSettings.page,
+	IntegrationSettings.page,
 ]
 
 export const PageSlot = Schema.Union(pages.map((page) => page.Slot))
