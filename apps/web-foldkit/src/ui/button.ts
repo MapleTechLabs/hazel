@@ -1,4 +1,4 @@
-import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
+import type { Attribute, ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import type { VariantProps } from "tailwind-variants"
 import { twMerge } from "tailwind-merge"
 import { buttonStyles } from "~/components/ui/button.styles"
@@ -14,7 +14,7 @@ export const button = <Message>(
 	h: HtmlBuilder<Message>,
 	options: ButtonVariants & {
 		readonly className?: string
-		readonly attributes?: ReadonlyArray<Attribute<Message>>
+		readonly attributes?: ReadonlyArray<Attribute<Message> | ChildAttribute>
 	},
 	children: Array<Html | string>,
 ): Html =>
