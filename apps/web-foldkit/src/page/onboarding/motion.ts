@@ -1,11 +1,8 @@
-import { Effect, Schema } from "effect"
-import { Mount } from "foldkit"
-import type { Attribute, HtmlBuilder } from "foldkit/html"
-import { defineMessageUnion } from "foldkit/message"
+import { Schema } from "effect"
 
 /**
- * The `motion` enter transitions of the entry screens, run with the Web Animations API on mount.
- * Elements carry motion's end-state inline style, so the settled frame matches legacy exactly.
+ * The `motion` enter transitions of the entry screens, for a Mount to run with the Web Animations
+ * API. Elements carry motion's end-state inline style, so the settled frame matches legacy exactly.
  */
 
 export const MOTION_END_STYLE = "opacity: 1; filter: blur(0px); transform: none;"
@@ -16,11 +13,9 @@ export const Preset = Schema.Literals([
 	"StepBackward",
 	"NumberForward",
 	"NumberBackward",
+	"Pop",
 ])
 export type Preset = typeof Preset.Type
-
-export const MotionMessage = defineMessageUnion({ CompletedEnterAnimation: {} })
-export type MotionMessage = typeof MotionMessage.Type
 
 type From = { readonly opacity: number; readonly blur: number; readonly transform: string }
 
@@ -49,31 +44,22 @@ const presets: Readonly<Record<Preset, { from: From; duration: number; easing: s
 		duration: 200,
 		easing: "ease",
 	},
+	// city card badges: `initial={{ scale: 0 }}`, motion's default spring approximated
+	Pop: { from: { opacity: 1, blur: 0, transform: "scale(0)" }, duration: 300, easing: "ease-out" },
 }
 
-const EnterAnimation = Mount.define("EnterAnimation", {
-	args: { preset: Preset },
-	messages: [MotionMessage.CompletedEnterAnimation],
-	execute: ({ element, preset }) =>
-		Effect.sync(() => {
-			const { from, duration, easing } = presets[preset]
-			element.animate(
-				[
+/** Motion writes only the properties it animated. */
+export const endStyleOf = (preset: Preset) => (preset === "Pop" ? "transform: none;" : MOTION_END_STYLE)
+
+export const animateEnter = (element: Element, preset: Preset): void => {
+	const { from, duration, easing } = presets[preset]
+	element.animate(
+		preset === "Pop"
+			? [{ transform: from.transform }, { transform: "none" }]
+			: [
 					{ opacity: from.opacity, filter: `blur(${from.blur}px)`, transform: from.transform },
 					{ opacity: 1, filter: "blur(0px)", transform: "none" },
 				],
-				{ duration, easing },
-			)
-			return MotionMessage.CompletedEnterAnimation()
-		}),
-})
-
-/** The end-state style plus the enter animation, for an element that appears with `preset`. */
-export const enterAnimation = <Message>(
-	h: HtmlBuilder<Message>,
-	preset: Preset,
-	toMessage: (message: MotionMessage) => Message,
-): ReadonlyArray<Attribute<Message>> => [
-	h.Attribute("style", MOTION_END_STYLE),
-	h.OnMount(Mount.mapMessage(EnterAnimation({ preset }), toMessage)),
-]
+		{ duration, easing },
+	)
+}

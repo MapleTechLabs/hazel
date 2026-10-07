@@ -36,5 +36,5 @@ export const update = (model: Model, message: Message): Return =>
 		}),
 		CompletedRedirectToSignIn: () => ({ model }),
 		CompletedNavigateToWorkspace: () => ({ model }),
-		GotMotionMessage: () => ({ model }),
+		CompletedEnterAnimation: () => ({ model }),
 	})

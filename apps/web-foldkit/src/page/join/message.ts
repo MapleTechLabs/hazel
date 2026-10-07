@@ -1,6 +1,5 @@
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
-import { MotionMessage } from "../onboarding/motion"
 import { PublicOrganization } from "./model"
 
 export const Message = defineMessageUnion({
@@ -11,6 +10,6 @@ export const Message = defineMessageUnion({
 	FailedJoinWorkspace: { title: Schema.String, description: Schema.NullOr(Schema.String) },
 	CompletedRedirectToSignIn: {},
 	CompletedNavigateToWorkspace: {},
-	GotMotionMessage: { message: MotionMessage },
+	CompletedEnterAnimation: {},
 })
 export type Message = typeof Message.Type

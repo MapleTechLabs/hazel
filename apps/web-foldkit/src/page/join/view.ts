@@ -1,15 +1,25 @@
-import { Submodel } from "foldkit"
+import { Effect } from "effect"
+import { Mount, Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { avatar } from "../../ui/avatar"
 import { button } from "../../ui/button"
 import { loader } from "../../ui/loader"
 import type { PageViewInputs, Shared } from "../contract"
 import { backgroundImage, logoContent, panelCard, panelFrame } from "../onboarding/brand-panel"
-import { enterAnimation, type MotionMessage } from "../onboarding/motion"
+import { animateEnter, endStyleOf } from "../onboarding/motion"
 import { Message } from "./message"
 import type { Model, PublicOrganization } from "./model"
 
-const toMotionMessage = (message: MotionMessage): Message => Message.GotMotionMessage({ message })
+/** `cardVariants`: the card fades, rises and unblurs in. */
+const CardEnterAnimation = Mount.define("JoinCardEnterAnimation", {
+	args: {},
+	messages: [Message.CompletedEnterAnimation],
+	execute: ({ element }) =>
+		Effect.sync(() => {
+			animateEnter(element, "Card")
+			return Message.CompletedEnterAnimation()
+		}),
+})
 
 const homeLink = <M>(h: HtmlBuilder<M>, className: string, children: ReadonlyArray<Html>): Html =>
 	h.a([h.Class(className), h.Href("/")], [...children])
@@ -44,7 +54,8 @@ const animatedCard = (h: HtmlBuilder<Message>, children: ReadonlyArray<Html>): H
 	h.div(
 		[
 			h.Class("m-auto flex w-full max-w-sm flex-col items-center text-center"),
-			...enterAnimation(h, "Card", toMotionMessage),
+			h.Attribute("style", endStyleOf("Card")),
+			h.OnMount(CardEnterAnimation({})),
 		],
 		[...children],
 	)
