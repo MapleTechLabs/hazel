@@ -6,6 +6,7 @@ import type { HazelRpc } from "../rpc"
 import type { AppRoute } from "../route"
 import * as Auth from "./auth"
 import * as ChatChannel from "./chat/channel"
+import * as Join from "./join"
 import type { PageHost, PageMessageBase, PageSlotBase, PageStep, PageViewInputs, Shared } from "./contract"
 import type { PageOutMessage } from "./out-message"
 import * as OnboardingSetupOrganization from "./onboarding/setup-organization"
@@ -25,6 +26,7 @@ export const pages = [
 	Auth.signUpPage,
 	OnboardingSetupOrganization.page,
 	SelectOrganization.page,
+	Join.page,
 ]
 
 export const PageSlot = Schema.Union(pages.map((page) => page.Slot))
