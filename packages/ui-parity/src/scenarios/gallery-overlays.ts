@@ -265,5 +265,47 @@ export const galleryOverlaysArea: AreaModule = {
 				await page.getByRole("dialog").waitFor()
 			},
 		}),
+		// CONTEXT MENU
+		overlay("context-menu", "context-menu", "Context menu: closed trigger"),
+		overlay("context-menu", "context-menu-open", "Context menu: opened at the pointer", {
+			steps: async (page) => {
+				await page
+					.getByText("Right-click this message")
+					.click({ button: "right", position: { x: 60, y: 40 } })
+				await page.getByRole("menu").waitFor()
+			},
+		}),
+		overlay("context-menu", "context-menu-hover", "Context menu: hovered danger item", {
+			steps: async (page) => {
+				await page
+					.getByText("Right-click this message")
+					.click({ button: "right", position: { x: 60, y: 40 } })
+				await menuItem(page, "Delete message").hover()
+			},
+		}),
+		overlay(
+			"context-menu",
+			"context-menu-keyboard",
+			"Context menu: arrow keys are ignored until an item has focus, as in React Aria",
+			{
+				steps: async (page) => {
+					await page
+						.getByText("Right-click this message")
+						.click({ button: "right", position: { x: 60, y: 40 } })
+					await page.getByRole("menu").waitFor()
+					await page.keyboard.press("ArrowDown")
+					await page.keyboard.press("ArrowDown")
+				},
+			},
+		),
+		overlay("context-menu", "context-menu-escape", "Context menu: Escape closes", {
+			steps: async (page) => {
+				await page
+					.getByText("Right-click this message")
+					.click({ button: "right", position: { x: 60, y: 40 } })
+				await page.getByRole("menu").waitFor()
+				await page.keyboard.press("Escape")
+			},
+		}),
 	],
 }

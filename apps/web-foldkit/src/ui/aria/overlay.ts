@@ -161,7 +161,7 @@ export const watchInteractOutside = (insideSelector: string, onInteractOutside: 
 	const isOutside = (event: Event) =>
 		event.target instanceof Element ? event.target.closest(insideSelector) === null : true
 	const onPointerDown = (event: PointerEvent) => {
-		isPressStartedOutside = isOutside(event)
+		isPressStartedOutside = event.button === 0 && isOutside(event)
 		if (isPressStartedOutside) event.preventDefault()
 	}
 	const onPointerUp = (event: PointerEvent) => {

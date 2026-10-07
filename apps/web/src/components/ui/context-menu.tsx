@@ -1,5 +1,6 @@
 import { createContext, use, useEffect, useRef, useState } from "react"
 import { twMerge } from "tailwind-merge"
+import { contextMenuTriggerBase } from "./context-menu.styles"
 import {
 	MenuContent,
 	type MenuContentProps,
@@ -60,7 +61,7 @@ const ContextMenuTrigger = ({ className, ...props }: ContextMenuTriggerProps) =>
 	}
 	return (
 		<div
-			className={twMerge("cursor-default focus:outline-hidden", className)}
+			className={twMerge(contextMenuTriggerBase, className)}
 			ref={buttonRef}
 			aria-haspopup="menu"
 			onContextMenu={onContextMenu}

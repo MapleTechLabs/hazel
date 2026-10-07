@@ -49,6 +49,8 @@ export const Popup = Schema.Union([
 		modality: Modality,
 		submenu: Schema.Option(Submenu),
 		search: Schema.String,
+		/** Set when a ContextMenu opened at the pointer (Popover `offset` / `crossOffset`). */
+		pointerOffset: Schema.Option(Schema.Struct({ offset: Schema.Number, crossOffset: Schema.Number })),
 	}),
 ])
 type Open = Extract<typeof Popup.Type, { _tag: "Open" }>
@@ -59,6 +61,7 @@ export const Model = Schema.Struct({
 	selectionMode: SelectionMode,
 	selectedKeys: Schema.Array(Schema.String),
 	placement: Schema.String,
+	anchor: Schema.Literals(["Trigger", "Pointer"]),
 	popup: Popup,
 })
 export type Model = typeof Model.Type
@@ -68,6 +71,7 @@ export type Model = typeof Model.Type
 export const Message = defineMessageUnion({
 	PressedTrigger: { pointerType: Schema.String },
 	PressedTriggerKey: { key: Schema.String },
+	PressedContextMenu: { offset: Schema.Number, crossOffset: Schema.Number },
 	PressedMenuKey: { key: Schema.String, isModified: Schema.Boolean },
 	HoveredItem: { key: Schema.String },
 	UnhoveredItem: { key: Schema.String },
@@ -78,6 +82,7 @@ export const Message = defineMessageUnion({
 	CompletedWaitForTypeaheadReset: { search: Schema.String },
 	CompletedPositionMenu: {},
 	CompletedPortalMenu: {},
+	CompletedCaptureContextMenu: {},
 })
 export type Message = typeof Message.Type
 
@@ -121,12 +126,15 @@ export const init = (config: {
 	readonly selectedKeys?: ReadonlyArray<string>
 	/** MenuContent `placement`; MenuTrigger's own default is `bottom start`. */
 	readonly placement?: Placement
+	/** `Pointer` for a ContextMenu, which opens where the trigger is right-clicked. */
+	readonly anchor?: "Trigger" | "Pointer"
 }): Model => ({
 	id: config.id,
 	entries: config.entries,
 	selectionMode: config.selectionMode ?? "None",
 	selectedKeys: config.selectedKeys ?? [],
 	placement: config.placement ?? "bottom start",
+	anchor: config.anchor ?? "Trigger",
 	popup: { _tag: "Closed" },
 })
 
@@ -135,6 +143,7 @@ export const init = (config: {
 export const triggerId = (id: string) => `${id}-trigger`
 export const menuId = (id: string) => `${id}-menu`
 export const submenuId = (id: string) => `${id}-submenu`
+export const popoverId = (id: string) => `${id}-popover`
 export const itemId = (id: string, key: string) => `${id}-item-${key}`
 export const labelId = (id: string, key: string) => `${id}-label-${key}`
 export const descriptionId = (id: string, key: string) => `${id}-description-${key}`
@@ -260,7 +269,15 @@ const opened = (model: Model, strategy: "None" | "First" | "Last", modality: Mod
 	// NOTE: the portal Mount moves initial focus, since the trigger's tree is inert until it runs.
 	return withOpen(
 		model,
-		{ _tag: "Open", focusedKey, hoveredKey: Option.none(), modality, submenu: Option.none(), search: "" },
+		{
+			_tag: "Open",
+			focusedKey,
+			hoveredKey: Option.none(),
+			modality,
+			submenu: Option.none(),
+			search: "",
+			pointerOffset: Option.none(),
+		},
 		false,
 	)
 }
@@ -382,6 +399,20 @@ export const update = (model: Model, message: Message): UpdateReturn => {
 				Match.when("ArrowUp", () => opened(model, "Last", "Keyboard")),
 				Match.orElse(() => ({ model })),
 			),
+		PressedContextMenu: ({ offset, crossOffset }) =>
+			withOpen(
+				model,
+				{
+					_tag: "Open",
+					focusedKey: Option.none(),
+					hoveredKey: Option.none(),
+					modality: "Pointer",
+					submenu: Option.none(),
+					search: "",
+					pointerOffset: Option.some({ offset, crossOffset }),
+				},
+				false,
+			),
 		PressedMenuKey: ({ key, isModified }) =>
 			ifOpen((open) => pressedMenuKey(model, open, key, isModified)),
 		HoveredItem: ({ key }) =>
@@ -444,5 +475,6 @@ export const update = (model: Model, message: Message): UpdateReturn => {
 			),
 		CompletedPositionMenu: () => ({ model }),
 		CompletedPortalMenu: () => ({ model }),
+		CompletedCaptureContextMenu: () => ({ model }),
 	})
 }
