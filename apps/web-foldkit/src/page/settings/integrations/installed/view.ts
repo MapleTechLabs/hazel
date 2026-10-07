@@ -26,8 +26,10 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 						sectionHeaderSubheading(h, {}, ["Manage applications installed in your workspace."]),
 					],
 				),
-				// The "Install by ID" modal is root-owned and has no ModalRequest variant yet.
-				button(h, { intent: "outline" }, [IconPlus(h, { className: "size-4" }), "Install by ID"]),
+				button(h, { intent: "outline", onPress: Message.ClickedInstallById() }, [
+					IconPlus(h, { className: "size-4" }),
+					"Install by ID",
+				]),
 			]),
 		]),
 		model.bots === null

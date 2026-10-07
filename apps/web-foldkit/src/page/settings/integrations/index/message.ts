@@ -8,5 +8,6 @@ export const Message = defineMessageUnion({
 	UpdatedConnections: { connections: Schema.Array(Connection) },
 	SucceededListWebhooks: { names: Schema.Array(Schema.String) },
 	FailedListWebhooks: {},
+	ClickedRequestIntegration: {},
 })
 export type Message = typeof Message.Type

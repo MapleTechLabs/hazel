@@ -57,4 +57,8 @@ export const update = (model: Model, message: Message): Return =>
 				replace: false,
 			}),
 		}),
+		ClickedInstallById: () => ({
+			model,
+			outMessage: PageOutMessage.RequestedModal({ modal: { _tag: "InstallBotById" } }),
+		}),
 	})

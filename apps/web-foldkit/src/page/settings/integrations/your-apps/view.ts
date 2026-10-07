@@ -18,12 +18,17 @@ import type { Model } from "./model"
 
 /** Port of `routes/_app/$orgSlug/settings/integrations/your-apps.tsx`. */
 
-// The create modal is root-owned and has no ModalRequest variant yet.
 const createButton = (h: HtmlBuilder<Message>, size?: "md"): Html =>
-	button(h, size === "md" ? { intent: "primary", size, className: "shrink-0" } : { intent: "primary" }, [
-		IconPlus(h, { attributes: { "data-slot": "icon" } }),
-		"Create Application",
-	])
+	button(
+		h,
+		size === "md"
+			? { intent: "primary", size, className: "shrink-0", onPress: Message.ClickedCreateApplication() }
+			: { intent: "primary", onPress: Message.ClickedCreateApplication() },
+		[
+			IconPlus(h, { attributes: { "data-slot": "icon" } }),
+			"Create Application",
+		],
+	)
 
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, _inputs, h) =>
 	fragment(h, [

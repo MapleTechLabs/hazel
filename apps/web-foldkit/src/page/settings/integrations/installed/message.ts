@@ -10,5 +10,6 @@ export const Message = defineMessageUnion({
 	SucceededUninstallBot: {},
 	FailedUninstallBot: { toast: ToastRequest },
 	ClickedBrowseMarketplace: {},
+	ClickedInstallById: {},
 })
 export type Message = typeof Message.Type
