@@ -3,7 +3,6 @@ import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { BUILT_IN_PRESETS, COLOR_SWATCHES } from "~/lib/theme/presets"
-import * as Interaction from "../../../ui/aria/interaction"
 import { ariaRadioGroup } from "../../../ui/aria-radio"
 import { button } from "../../../ui/button"
 import { view as selectView } from "../../../ui/select-view"
@@ -51,23 +50,6 @@ const renderGrayOption = <M>(h: HtmlBuilder<M>, item: { readonly key: string }) 
 	grayPalettePreview(h, toGrayPalette(item.key)),
 ]
 
-/**
- * Hover and focus-visible wiring without press tracking: the press subscription's restart on release
- * draws from Math.random (an Effect fiber interrupt), which would shift the seeded remix colors.
- */
-const generateButtonInteraction = (
-	h: HtmlBuilder<Message>,
-	wiring: Interaction.Wiring<Message>,
-	isPending: boolean,
-) => [
-	h.DataAttribute("rac", ""),
-	...Interaction.handlers(h, wiring, GENERATE_TARGET, {
-		isHoverDisabled: isPending,
-		isPressDisabled: true,
-	}),
-	...Interaction.stateAttributes(h, Interaction.stateOf(wiring.model, GENERATE_TARGET)),
-]
-
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, { shared }, h) => {
 	const wiring = interaction.wiring(model)
 	const { customization, mode } = shared.theme
@@ -113,7 +95,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 							size: "sm",
 							isPending: model.isGenerating,
 							onPress: Message.ClickedGenerate(),
-							attributes: generateButtonInteraction(h, wiring, model.isGenerating),
+							interaction: { wiring, target: GENERATE_TARGET },
 						},
 						[generateIcon(h), "Generate"],
 					),
