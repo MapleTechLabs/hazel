@@ -152,6 +152,8 @@ export interface ToolbarInputs<M> {
 	readonly isOwnMessage: boolean
 	readonly tooltip: TooltipHost.Model
 	readonly hoveredKey: string | null
+	/** The tooltip key of the focused toolbar button. */
+	readonly focusedKey: string | null
 	readonly toTooltipMessage: (message: TooltipHost.Message) => M
 	readonly onReact: (emoji: string) => M
 	readonly onCopy: M
@@ -200,6 +202,9 @@ const action = <M>(
 						h.Attribute("aria-label", options.label),
 						h.Attribute("data-rac", ""),
 						h.Attribute("data-react-aria-pressable", "true"),
+						...(inputs.focusedKey === `${inputs.messageId}:toolbar:${options.key}`
+							? [h.Attribute("data-focused", "true")]
+							: []),
 					],
 				},
 				[options.content, overlay, options.overlay ?? h.empty],

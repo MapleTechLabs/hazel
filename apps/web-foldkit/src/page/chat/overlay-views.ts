@@ -42,7 +42,11 @@ export const trackHoverAttribute = <M>(h: HtmlBuilder<M>, toParentMessage: ToPar
 	)
 
 /** `MessageToolbar` in its body portal, for the hovered message. */
-export const messageToolbarOverlay = <M>(h: HtmlBuilder<M>, model: Model, toParentMessage: ToParent<M>): Html => {
+export const messageToolbarOverlay = <M>(
+	h: HtmlBuilder<M>,
+	model: Model,
+	toParentMessage: ToParent<M>,
+): Html => {
 	const overlays = model.overlays
 	const messageId = overlays.hoveredMessageId
 	const row = messageId === null ? undefined : model.rows.find((candidate) => candidate.key === messageId)
@@ -114,9 +118,11 @@ export const messageToolbarOverlay = <M>(h: HtmlBuilder<M>, model: Model, toPare
 									isOwnMessage: facts.isOwnMessage(messageId),
 									tooltip: overlays.tooltip,
 									hoveredKey: overlays.hoveredTriggerKey,
+									focusedKey: overlays.focusedTriggerKey,
 									toTooltipMessage: (tooltip) =>
 										toOverlay(Overlays.Message.GotTooltipMessage({ tooltip })),
-									onReact: (emoji) => toOverlay(Overlays.Message.ClickedReaction({ messageId, emoji })),
+									onReact: (emoji) =>
+										toOverlay(Overlays.Message.ClickedReaction({ messageId, emoji })),
 									onCopy: toOverlay(Overlays.Message.ClickedCopy({ messageId })),
 									onEdit: toOverlay(Overlays.Message.ClickedEdit({ messageId })),
 									onReply: toOverlay(Overlays.Message.ClickedReply({ messageId })),
@@ -129,7 +135,12 @@ export const messageToolbarOverlay = <M>(h: HtmlBuilder<M>, model: Model, toPare
 												: EmojiDialog.init(`reaction-picker-${messageId}`),
 											{
 												toMessage: (message) =>
-													toOverlay(Overlays.Message.GotReactionPickerMessage({ messageId, message })),
+													toOverlay(
+														Overlays.Message.GotReactionPickerMessage({
+															messageId,
+															message,
+														}),
+													),
 												toTrigger: render,
 												customEmojis: model.lookups.customEmojis,
 											},
@@ -159,7 +170,8 @@ export const reactionModalView = <M>(h: HtmlBuilder<M>, model: Model, toParentMe
 		className: "overflow-hidden p-0!",
 		toContent: () => [
 			pickerView(h, current.picker, {
-				toMessage: (message) => toOverlay(Overlays.Message.GotReactionModalPickerMessage({ message })),
+				toMessage: (message) =>
+					toOverlay(Overlays.Message.GotReactionModalPickerMessage({ message })),
 				className: "h-[420px]",
 			}),
 		],

@@ -80,8 +80,27 @@ const PortalMenu = Mount.defineStream("PortalMenu", {
 						insideSelector: popoverSelector(id),
 						onInteractOutside: () => Queue.offerUnsafe(queue, Message.PressedOutside()),
 					})
+					// useMenuItem focuses an item in onHoverStart, synchronously, so the click that follows
+					// lands on a focused item and never focuses it with the mouse (Chrome keeps :focus-visible).
+					const onPointerOver = (event: Event) => {
+						if (!(event instanceof PointerEvent) || event.pointerType === "touch") return
+						const item =
+							event.target instanceof Element
+								? event.target.closest('[role^="menuitem"]')
+								: null
+						if (
+							item instanceof HTMLElement &&
+							item.getAttribute("aria-disabled") !== "true" &&
+							document.activeElement !== item
+						)
+							item.focus({ preventScroll: true })
+					}
+					element.addEventListener("pointerover", onPointerOver)
 					Queue.offerUnsafe(queue, Message.CompletedPortalMenu())
-					return release
+					return () => {
+						element.removeEventListener("pointerover", onPointerOver)
+						release()
+					}
 				}),
 				(release) => Effect.sync(release),
 			).pipe(Effect.flatMap(() => Effect.never)),
@@ -107,6 +126,38 @@ type CaptureContextMenuMessage = Extract<
 	Message,
 	{ _tag: "CompletedCaptureContextMenu" | "PressedContextMenu" }
 >
+
+/**
+ * useMenuTrigger's `onPressStart`: `focusWithoutScrolling(trigger)` on pointerdown, before the
+ * mousedown. The trigger is then focused by script, not by the mouse, so Chrome keeps
+ * `:focus-visible` for the menu and the trigger that focus later moves to (legacy's 1px ring).
+ */
+const FocusTriggerOnPress = Mount.define("FocusTriggerOnPress", {
+	messages: [Message.CompletedFocusTriggerOnPress],
+	execute: ({ element }) =>
+		Effect.acquireRelease(
+			Effect.sync(() => {
+				const onPointerDown = (event: Event) => {
+					if (
+						!(event instanceof PointerEvent) ||
+						event.button !== 0 ||
+						event.pointerType === "touch"
+					)
+						return
+					// A trigger wrapping a Button hands the press props to the inner Button, which is focused.
+					const pressable =
+						event.target instanceof Element
+							? event.target.closest("[data-react-aria-pressable]")
+							: null
+					const target = pressable !== null && element.contains(pressable) ? pressable : element
+					if (target instanceof HTMLElement) target.focus({ preventScroll: true })
+				}
+				element.addEventListener("pointerdown", onPointerDown)
+				return () => element.removeEventListener("pointerdown", onPointerDown)
+			}),
+			(release) => Effect.sync(release),
+		).pipe(Effect.as(Message.CompletedFocusTriggerOnPress())),
+})
 
 /** ContextMenuTrigger's `onContextMenu`: open at the pointer, offset from the trigger's bottom left. */
 const CaptureContextMenu = Mount.defineStream("CaptureContextMenu", {
@@ -210,6 +261,9 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, view
 		...(isOpen
 			? [h.Attribute("aria-controls", menuId(model.id)), h.Attribute("data-pressed", "true")]
 			: []),
+		// Mounts start on insertion: keyed, so a button that turns into this trigger is a new node.
+		h.Key(triggerId(model.id)),
+		h.OnMount(FocusTriggerOnPress()),
 		h.OnPointerDown((pointerType, button) =>
 			button === 0 ? Option.some(Message.PressedTrigger({ pointerType })) : Option.none(),
 		),
@@ -315,7 +369,10 @@ const overlay = (model: Model, open: Open, viewInputs: ViewInputs, h: HtmlBuilde
 										elementId: menuId(model.id),
 										labelledBy: isAtPointer ? undefined : triggerId(model.id),
 										entries: model.entries,
-										header: typeof viewInputs.header === "function" ? viewInputs.header() : viewInputs.header,
+										header:
+											typeof viewInputs.header === "function"
+												? viewInputs.header()
+												: viewInputs.header,
 										focusedKey: rootFocus,
 										onKeyDown: isAtPointer ? toMenuKey : undefined,
 									}),
