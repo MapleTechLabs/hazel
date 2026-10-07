@@ -1,4 +1,5 @@
 import type { Page } from "playwright"
+import { galleryKitScenarios } from "./gallery-kit.ts"
 import type { AreaModule, Scenario, ViewportName } from "./types.ts"
 
 /**
@@ -497,5 +498,6 @@ export const galleryOverlaysArea: AreaModule = {
 				await page.getByRole("dialog").waitFor()
 			},
 		}),
+		...galleryKitScenarios,
 	],
 }
