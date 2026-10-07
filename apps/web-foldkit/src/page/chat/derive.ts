@@ -1,5 +1,4 @@
 import type { ChannelId, MessageId, UserId } from "@hazel/schema"
-import { formatCustomEmojiKey } from "~/lib/custom-emoji-utils"
 import { type AttachmentInfo, byKey, type Lookups, type PresenceInfo, type UserInfo } from "./lookups"
 import {
 	type AggregatedReaction,
@@ -155,9 +154,6 @@ const refsOf = (context: DeriveContext, content: string): MarkdownRefs => ({
 		return name && imageUrl ? [{ name, imageUrl }] : []
 	}),
 })
-
-/** Same key format as the legacy custom emoji map. */
-export const customEmojiKey = formatCustomEmojiKey
 
 const NO_REACTIONS: ReadonlyArray<ChatReaction> = []
 const NO_ATTACHMENTS: ReadonlyArray<AttachmentInfo> = []
