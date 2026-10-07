@@ -51,7 +51,7 @@ export const positionOverlay = (overlay: HTMLElement, config: PositionConfig): (
 			offset: config.offset,
 			crossOffset: config.crossOffset ?? 0,
 			maxHeight: undefined,
-			arrowSize: arrow ? arrow.getBoundingClientRect().width : 0,
+			arrowSize: arrow ? arrow.offsetWidth : 0,
 			arrowBoundaryOffset: 0,
 		})
 		overlay.style.top = ""
@@ -73,9 +73,10 @@ export const positionOverlay = (overlay: HTMLElement, config: PositionConfig): (
 				result.placement === "top" || result.placement === "bottom"
 					? "translateX(-50%)"
 					: "translateY(-50%)"
+			for (const side of ["top", "bottom", "left", "right"]) arrow.style.removeProperty(side)
+			arrow.style.setProperty(result.placement, "100%")
 			if (result.arrowOffsetLeft != null) arrow.style.left = `${result.arrowOffsetLeft}px`
 			if (result.arrowOffsetTop != null) arrow.style.top = `${result.arrowOffsetTop}px`
-			arrow.style.setProperty(result.placement, "100%")
 		}
 	}
 

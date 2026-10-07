@@ -24,6 +24,11 @@ const overlay = (
 
 const button = (page: Page, name: string) => page.getByRole("button", { name, exact: true })
 const menuItem = (page: Page, name: string) => page.getByRole("menuitem", { name })
+/** React Aria shows hover tooltips only once the last interaction was a pointer press. */
+const hoverAfterPointerPress = async (page: Page, name: string) => {
+	await page.mouse.click(1200, 800)
+	await button(page, name).hover()
+}
 const focusByTab = async (page: Page, name: string) => {
 	for (let presses = 0; presses < 10; presses++) {
 		await page.keyboard.press("Tab")
@@ -115,6 +120,44 @@ export const galleryOverlaysArea: AreaModule = {
 			steps: async (page) => {
 				await button(page, "More").click()
 				await page.getByRole("menu").waitFor()
+			},
+		}),
+		// TOOLTIP
+		overlay("tooltip", "tooltip", "Tooltip: closed triggers"),
+		overlay("tooltip", "tooltip-hover", "Tooltip: shown by hover", {
+			steps: async (page) => {
+				await hoverAfterPointerPress(page, "Top")
+				await page.getByRole("tooltip").waitFor()
+			},
+		}),
+		overlay("tooltip", "tooltip-focus", "Tooltip: shown by keyboard focus", {
+			steps: async (page) => {
+				await focusByTab(page, "Rename thread")
+				await page.getByRole("tooltip").waitFor()
+			},
+		}),
+		overlay("tooltip", "tooltip-bottom", "Tooltip: bottom placement", {
+			steps: async (page) => {
+				await hoverAfterPointerPress(page, "Bottom")
+				await page.getByRole("tooltip").waitFor()
+			},
+		}),
+		overlay("tooltip", "tooltip-right", "Tooltip: right placement", {
+			steps: async (page) => {
+				await hoverAfterPointerPress(page, "Right")
+				await page.getByRole("tooltip").waitFor()
+			},
+		}),
+		overlay("tooltip", "tooltip-inverse", "Tooltip: inverse", {
+			steps: async (page) => {
+				await hoverAfterPointerPress(page, "Inverse")
+				await page.getByRole("tooltip").waitFor()
+			},
+		}),
+		overlay("tooltip", "tooltip-no-arrow", "Tooltip: without an arrow", {
+			steps: async (page) => {
+				await hoverAfterPointerPress(page, "No arrow")
+				await page.getByRole("tooltip").waitFor()
 			},
 		}),
 	],
