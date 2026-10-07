@@ -106,6 +106,7 @@ export const channelItem = <M>(
 	notificationCount: number,
 	partners: ReadonlyArray<PartnerOrg>,
 	context: ItemContext,
+	menu: Html = dotsMenuTrigger(h),
 ): Html => {
 	const href = chatHref(context, entry.channel.id)
 	return sidebarItem(h, {}, [
@@ -120,7 +121,7 @@ export const channelItem = <M>(
 				label(h, [entry.channel.name]),
 			],
 		),
-		dotsMenuTrigger(h),
+		menu,
 		...badgeIf(h, notificationCount),
 	])
 }
