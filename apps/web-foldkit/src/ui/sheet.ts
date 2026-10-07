@@ -28,6 +28,10 @@ export type ViewInputs = Readonly<{
 	isBlurred?: boolean
 	closeButton?: boolean
 	className?: string
+	/** `aria-label` on the dialog; without it the dialog is labelled by its title. */
+	ariaLabel?: string
+	/** Extra attributes ModalOverlay spreads on the overlay (`data-slot`, `data-intent`). */
+	overlayAttributes?: Readonly<Record<string, string>>
 }>
 
 export const view = Submodel.defineView<Model, Message, ViewInputs>((model, viewInputs, h) => {
@@ -67,6 +71,9 @@ const sheetOverlay = (model: Model, viewInputs: ViewInputs, h: HtmlBuilder<Messa
 					h.Class(sheetOverlayClassName(false, false, viewInputs.isBlurred ?? false)),
 					h.Attribute("data-modal-overlay", ""),
 					h.Attribute("data-rac", ""),
+					...Object.entries(viewInputs.overlayAttributes ?? {}).map(([name, value]) =>
+						h.Attribute(name, value),
+					),
 				],
 				[
 					h.div(
@@ -85,12 +92,18 @@ const sheetOverlay = (model: Model, viewInputs: ViewInputs, h: HtmlBuilder<Messa
 						],
 						[
 							...(isDismissable ? [dismissButton(h, Message.ClickedClose())] : []),
-							dialog(h, { id: dialogId(model.id), role, labelledBy: titleId(model.id) }, [
-								...viewInputs.toContent(closeAttributes),
-								...((viewInputs.closeButton ?? true) && isDismissable
-									? [dialogCloseIcon(h, closeAttributes, sheetCloseIconClassName)]
-									: []),
-							]),
+							dialog(
+								h,
+								viewInputs.ariaLabel
+									? { id: dialogId(model.id), role, ariaLabel: viewInputs.ariaLabel }
+									: { id: dialogId(model.id), role, labelledBy: titleId(model.id) },
+								[
+									...viewInputs.toContent(closeAttributes),
+									...((viewInputs.closeButton ?? true) && isDismissable
+										? [dialogCloseIcon(h, closeAttributes, sheetCloseIconClassName)]
+										: []),
+								],
+							),
 						],
 					),
 				],

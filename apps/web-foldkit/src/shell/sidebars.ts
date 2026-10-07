@@ -1,4 +1,4 @@
-import type { Html, HtmlBuilder } from "foldkit/html"
+import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import {
 	IconArrowPath,
 	IconBell,
@@ -192,12 +192,12 @@ export const mySettingsSidebar = <Message>(
 	])
 }
 
-/** `NotificationsSidebar`. NOTE: "Mark all as read" is not wired yet (notifications pages, wave 2). */
+/** `NotificationsSidebar`; "Mark all as read" follows the optimistic unread count. */
 export const notificationsSidebar = <Message>(
 	h: HtmlBuilder<Message>,
 	context: ShellContext,
 	chrome: SidebarChrome<Message>,
-	unreadCount: number,
+	markAllRead: Readonly<{ unreadCount: number; isPending: boolean; onPress: Attribute<Message> }>,
 ): Html => {
 	const base = `/${context.orgSlug}/notifications`
 	const path = context.pathname
@@ -224,12 +224,20 @@ export const notificationsSidebar = <Message>(
 					item("Threads", `${base}/threads`, fuzzy(`${base}/threads`), IconThread),
 					item("Direct Messages", `${base}/dms`, fuzzy(`${base}/dms`), IconMsgs),
 				]),
-				...(unreadCount > 0
+				...(markAllRead.unreadCount > 0
 					? [
 							sidebarSection(h, {}, [
-								button(h, { intent: "outline", size: "sm", className: "w-full" }, [
-									"Mark all as read",
-								]),
+								button(
+									h,
+									{
+										intent: "outline",
+										size: "sm",
+										className: "w-full",
+										isPending: markAllRead.isPending,
+										attributes: [markAllRead.onPress],
+									},
+									["Mark all as read"],
+								),
 							]),
 						]
 					: []),

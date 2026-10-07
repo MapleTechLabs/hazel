@@ -10,6 +10,7 @@ import { sidebarContent, sidebarSectionGroup, sidebarStatic } from "../ui/sideba
 import type { ShellContext } from "./context"
 import { orgSwitcherHeader, type SwitcherOrg, userMenuFooter } from "./menus"
 import { emptyData, Message, type Model } from "./channels-sidebar/model"
+import { PersistDismissedHint } from "./channels-sidebar/hints"
 import { dragDescription } from "./channels-sidebar/tree"
 import { sectionGroupContent } from "./channels-sidebar/view"
 
@@ -24,7 +25,13 @@ export { Message, Model } from "./channels-sidebar/model"
 
 // INIT
 
-export const init = (): Model => ({ organizationId: null, currentUserId: null, nowMs: 0, ...emptyData })
+export const init = (): Model => ({
+	organizationId: null,
+	currentUserId: null,
+	nowMs: 0,
+	...emptyData,
+	isCreateChannelHintDismissed: false,
+})
 
 // UPDATE
 
@@ -87,6 +94,14 @@ export const update = (model: Model, message: Message): SidebarReturn =>
 		UpdatedDiscoverableChannels: ({ channels }) => ({
 			model: modifyFields(model, { discoverableChannels: () => channels }),
 		}),
+		LoadedDismissedHints: ({ isCreateChannelHintDismissed }) => ({
+			model: modifyFields(model, { isCreateChannelHintDismissed: () => isCreateChannelHintDismissed }),
+		}),
+		ClickedDismissCreateChannelHint: () => ({
+			model: modifyFields(model, { isCreateChannelHintDismissed: () => true }),
+			commands: [PersistDismissedHint({ hintId: "create-channel" })],
+		}),
+		CompletedPersistDismissedHint: () => ({ model }),
 	})
 
 /** The root learned the organization or the signed-in user; the sidebar's queries depend on both. */
@@ -180,6 +195,9 @@ const sidebarBody = <ParentMessage>(
 					pathname,
 					activeChannelId,
 					onActiveMount: h.OnMount(Mount.mapMessage(ScrollActiveIntoView(), toParentMessage)),
+					onDismissCreateChannelHint: h.OnClick(
+						toParentMessage(Message.ClickedDismissCreateChannelHint()),
+					),
 				}),
 			),
 		]),
