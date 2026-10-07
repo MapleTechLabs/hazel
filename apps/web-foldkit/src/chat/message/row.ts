@@ -17,10 +17,13 @@ export interface RowContext<M> {
 	readonly tooltip: TooltipContext<M>
 	readonly toOpenImage: (messageId: MessageId, index: number) => M
 	readonly toOpenThread: (threadChannelId: ChannelId, messageId: MessageId) => M
-	/** Extra attributes for the row's context menu trigger and the avatar's popover trigger. */
-	readonly contextMenuTrigger: (row: MessageRow) => ReadonlyArray<ChildAttribute>
-	readonly contextMenuOverlay: (row: MessageRow) => Html
-	readonly avatarTrigger: (row: MessageRow, content: Html) => Html
+	/** The row's ContextMenuTrigger: `render` with no extra attributes, or inside the open menu. */
+	readonly contextMenu: (
+		row: MessageRow,
+		render: (attributes: ReadonlyArray<ChildAttribute>, overlay: Html) => Html,
+	) => Html
+	/** The author avatar, a `UserProfilePopover` trigger. */
+	readonly avatar: (row: MessageRow) => Html
 }
 
 /** `DateDivider`: the line is hidden while the divider is pinned to the top. */
@@ -87,7 +90,7 @@ export const messageRowView = <M>(h: HtmlBuilder<M>, row: MessageRow, context: R
 	const isGroupStart = isGroupStartOf(row)
 	const showAvatar = isGroupStart || message.replyToMessageId !== null || message.hasEmbeds
 	const avatarOrTime = showAvatar
-		? context.avatarTrigger(row, h.empty)
+		? context.avatar(row)
 		: h.div(
 				[
 					h.Class(
@@ -97,71 +100,86 @@ export const messageRowView = <M>(h: HtmlBuilder<M>, row: MessageRow, context: R
 				[formatTime(message.createdAtMs)],
 			)
 
-	return h.div(
-		[
-			...context.contextMenuTrigger(row),
-			h.Attribute("aria-haspopup", "menu"),
-			// ContextMenuTrigger: twMerge("cursor-default focus:outline-hidden", className)
-			h.Class(twMerge("cursor-default focus:outline-hidden", "block w-full text-left")),
-		],
-		[
-			h.div(
-				[
-					h.Class(
-						cn(
-							"group relative flex flex-col rounded-lg px-0.5 py-1 hover:bg-secondary",
-							isGroupStart ? "mt-2" : "",
-							isGroupEndOf(row) ? "mb-2" : "",
-							message.isPinned
-								? "rounded-l-none border-warning border-l-4 bg-warning/10 pl-2 shadow-sm hover:bg-warning/15"
-								: "",
-						),
-					),
-					h.Attribute("data-id", message.id),
-					h.Id(`message-${message.id}`),
-				],
-				[
-					row.reply === null ? h.empty : replySectionView(h, row.reply, null),
-					h.div(
-						[h.Class("flex gap-4")],
-						[
-							avatarOrTime,
-							h.div(
-								[h.Class("min-w-0 flex-1")],
-								[
-									showAvatar && message.author !== null
-										? headerView(
-												h,
-												row,
-												statusEmojiView(h, message.id, row.status, context.tooltip),
-											)
-										: h.empty,
-									...contentView(h, row),
-									attachmentsView(h, row.attachments, {
-										toOpenImage: (index) => context.toOpenImage(message.id, index),
-									}),
-									row.reactions.length === 0
-										? h.empty
-										: h.div(
-												[h.Class("mt-2 flex flex-wrap gap-1")],
-												row.reactions.map((reaction) =>
-													reactionButton(h, message.id, reaction, context.tooltip),
-												),
-											),
-									row.thread === null
-										? h.empty
-										: threadPreviewView(
-												h,
-												row.thread,
-												context.toOpenThread(row.thread.threadChannelId, message.id),
-											),
-								],
+	return context.contextMenu(row, (attributes, overlay) =>
+		h.div(
+			[
+				...attributes,
+				h.Attribute("aria-haspopup", "menu"),
+				// ContextMenuTrigger: twMerge("cursor-default focus:outline-hidden", className)
+				h.Class(twMerge("cursor-default focus:outline-hidden", "block w-full text-left")),
+			],
+			[
+				h.div(
+					[
+						h.Class(
+							cn(
+								"group relative flex flex-col rounded-lg px-0.5 py-1 hover:bg-secondary",
+								isGroupStart ? "mt-2" : "",
+								isGroupEndOf(row) ? "mb-2" : "",
+								message.isPinned
+									? "rounded-l-none border-warning border-l-4 bg-warning/10 pl-2 shadow-sm hover:bg-warning/15"
+									: "",
 							),
-						],
-					),
-				],
-			),
-			context.contextMenuOverlay(row),
-		],
+						),
+						h.Attribute("data-id", message.id),
+						h.Id(`message-${message.id}`),
+					],
+					[
+						row.reply === null ? h.empty : replySectionView(h, row.reply, null),
+						h.div(
+							[h.Class("flex gap-4")],
+							[
+								avatarOrTime,
+								h.div(
+									[h.Class("min-w-0 flex-1")],
+									[
+										showAvatar && message.author !== null
+											? headerView(
+													h,
+													row,
+													statusEmojiView(
+														h,
+														message.id,
+														row.status,
+														context.tooltip,
+													),
+												)
+											: h.empty,
+										...contentView(h, row),
+										attachmentsView(h, row.attachments, {
+											toOpenImage: (index) => context.toOpenImage(message.id, index),
+										}),
+										row.reactions.length === 0
+											? h.empty
+											: h.div(
+													[h.Class("mt-2 flex flex-wrap gap-1")],
+													row.reactions.map((reaction) =>
+														reactionButton(
+															h,
+															message.id,
+															reaction,
+															context.tooltip,
+														),
+													),
+												),
+										row.thread === null
+											? h.empty
+											: threadPreviewView(
+													h,
+													row.thread,
+													context.toOpenThread(
+														row.thread.threadChannelId,
+														message.id,
+													),
+												),
+									],
+								),
+							],
+						),
+					],
+				),
+				overlay,
+			],
+		),
 	)
 }

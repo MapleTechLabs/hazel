@@ -13,6 +13,7 @@ export const UserInfo = Schema.Struct({
 	email: Schema.String,
 	avatarUrl: Schema.NullOr(Schema.String),
 	userType: Schema.String,
+	timezone: Schema.NullOr(Schema.String),
 })
 export type UserInfo = typeof UserInfo.Type
 
@@ -104,6 +105,7 @@ export interface UserRow {
 	readonly email: string
 	readonly avatarUrl?: string | null
 	readonly userType: string
+	readonly timezone?: string | null
 }
 
 export const toUserInfo = (row: UserRow): UserInfo => ({
@@ -113,6 +115,7 @@ export const toUserInfo = (row: UserRow): UserInfo => ({
 	email: row.email,
 	avatarUrl: row.avatarUrl ?? null,
 	userType: row.userType,
+	timezone: row.timezone ?? null,
 })
 
 export interface PresenceRow {

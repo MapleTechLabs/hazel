@@ -263,7 +263,7 @@ export const update = (model: Model, message: Message): PageReturn =>
 		GotListMessage: ({ message: listMessage }) =>
 			loadOlderWhenNearStart(liftList(model, MessageList.update(model.list, listMessage))),
 		GotOverlaysMessage: ({ message: overlaysMessage }) =>
-			liftOverlays(model, Overlays.update(model.overlays, overlaysMessage)),
+			liftOverlays(model, Overlays.update(model.overlays, overlaysMessage, factsOf(model))),
 		GotFilesMessage: ({ message: filesMessage }) => {
 			if (model.files === null) return { model }
 			const result = FilesPage.update(model.files, filesMessage)
@@ -275,6 +275,16 @@ export const update = (model: Model, message: Message): PageReturn =>
 			}
 		},
 	})
+
+/** Message facts the overlays read when a menu opens. */
+export const factsOf = (model: Model): Overlays.MessageFacts => {
+	const find = (messageId: MessageId) => model.messages.find((message) => message.id === messageId)
+	return {
+		isOwnMessage: (messageId) => find(messageId)?.authorId === model.currentUserId,
+		isPinned: (messageId) => find(messageId)?.isPinned ?? false,
+		isThreadChannel: model.channel?.type === "thread",
+	}
+}
 
 /** The signed-in user arrived after the page was created (reactions need it for `hasReacted`). */
 export const setCurrentUserId = (model: Model, currentUserId: UserId | null): PageReturn =>

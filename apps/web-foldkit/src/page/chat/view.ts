@@ -9,6 +9,14 @@ import { composerPlaceholderView } from "./composer-placeholder"
 import { authorIdentity } from "./derive"
 import * as FilesView from "./files/view"
 import { chatHeaderView, pinnedButton } from "./header"
+import {
+	deleteMessageModal,
+	messageToolbarOverlay,
+	type ReplyPreview,
+	replyIndicatorView,
+	replyPreviewOf,
+	trackHoverAttribute,
+} from "./overlay-views"
 import * as Overlays from "./overlays"
 import { isMemberOf, Message, type Model } from "./page"
 import { idleRowContext, rowContextFor } from "./row-context"
@@ -81,14 +89,28 @@ const messageListView = <M>(
 		toParentMessage: (message) => toParentMessage(Message.GotListMessage({ message })),
 	})
 	pruneRowSlots()
-	return h.div(
+	// Keyed: the not-yet-loaded placeholder is also a div, and a reused element never runs OnMount.
+	return h.keyed("div")(
+		"message-list-container",
 		[
 			h.Class(
 				"isolate flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-2 transition-opacity duration-200",
 			),
 			h.Attribute("style", "overflow-anchor: auto; scroll-behavior: auto; opacity: 1;"),
+			trackHoverAttribute(h, toParentMessage),
 		],
-		[list],
+		[
+			// The legacy hover highlight is injected CSS, so it holds while the toolbar is hovered.
+			model.overlays.hoveredMessageId === null
+				? h.empty
+				: h.style(
+						[],
+						[
+							`#message-${model.overlays.hoveredMessageId} { background-color: var(--color-secondary) !important; }`,
+						],
+					),
+			list,
+		],
 	)
 }
 
@@ -136,15 +158,25 @@ const messagesOutlet = <M>(h: HtmlBuilder<M>, model: Model, toParentMessage: (me
 		),
 		lazyComposer(composerView, [
 			typingUsers.length === 0 ? null : typingUsers.map((user) => user.firstName).join(),
+			replyPreviewOf(model),
+			toParentMessage,
 			h,
 		]) ?? h.empty,
 		imageViewerOverlay(h, model, toParentMessage),
+		messageToolbarOverlay(h, model, toParentMessage),
+		deleteMessageModal(h, model, toParentMessage),
 	]
 }
 
-const composerView = <M>(typingKey: string | null, h: HtmlBuilder<M>) =>
+const composerView = <M>(
+	typingKey: string | null,
+	reply: ReplyPreview | null,
+	toParentMessage: (message: Message) => M,
+	h: HtmlBuilder<M>,
+) =>
 	composerPlaceholderView(
 		h,
+		reply === null ? null : replyIndicatorView(h, reply, toParentMessage),
 		typingKey === null
 			? null
 			: typingIndicatorView(

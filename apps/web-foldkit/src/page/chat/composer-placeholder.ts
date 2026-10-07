@@ -1,4 +1,5 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
+import { cn } from "~/lib/utils"
 import { IconEmoji1, IconGif, IconPaperclip2 } from "../../icons"
 
 /**
@@ -90,7 +91,11 @@ const editorView = <Message>(h: HtmlBuilder<Message>): Html =>
 		],
 	)
 
-export const composerPlaceholderView = <Message>(h: HtmlBuilder<Message>, typing: Html = null): Html =>
+export const composerPlaceholderView = <Message>(
+	h: HtmlBuilder<Message>,
+	replyIndicator: Html = null,
+	typing: Html = null,
+): Html =>
 	h.div(
 		[h.Class("relative shrink-0 px-4 pb-4 pt-2.5")],
 		[
@@ -118,10 +123,15 @@ export const composerPlaceholderView = <Message>(h: HtmlBuilder<Message>, typing
 							h.div(
 								[h.Class("w-full")],
 								[
+									replyIndicator,
 									h.div(
 										[
+											// ComposerFrame: square top corners under a reply or edit indicator.
 											h.Class(
-												"relative inset-ring inset-ring-secondary flex h-max flex-col rounded-xl bg-secondary",
+												cn(
+													"relative inset-ring inset-ring-secondary flex h-max flex-col rounded-xl bg-secondary",
+													replyIndicator !== null && "rounded-t-none",
+												),
 											),
 										],
 										[
