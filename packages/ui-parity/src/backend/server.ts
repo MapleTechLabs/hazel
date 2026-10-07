@@ -1,4 +1,5 @@
 import type { Dataset } from "../fixtures/dataset.ts"
+import { handleAsset, isAssetRequest } from "./assets.ts"
 import { corsHeaders, handleShape } from "./electric.ts"
 import { makeRpcWebHandler, type RpcLog } from "./rpc.ts"
 
@@ -48,6 +49,7 @@ export const startFixtureBackend = (options: {
 			const url = new URL(request.url)
 			if (request.method === "OPTIONS")
 				return new Response(null, { status: 204, headers: corsHeaders(request) })
+			if (isAssetRequest(url)) return handleAsset(request, url)
 
 			const dataset = resolveDataset(request)
 			if (url.pathname.startsWith("/rpc")) {
