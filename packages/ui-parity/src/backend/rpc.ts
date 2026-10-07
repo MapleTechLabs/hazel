@@ -121,7 +121,12 @@ export const makeRpcWebHandler = (dataset: Dataset, log: RpcLog) => {
 			tag,
 			(payload: unknown) => {
 				const respond = canned[tag]
-				if (respond) return Effect.sync(() => respond(payload))
+				// A handler may return an Effect (e.g. `Effect.fail(new SomeTypedError(...))`) to fail with a typed error.
+				if (respond)
+					return Effect.suspend(() => {
+						const result = respond(payload)
+						return Effect.isEffect(result) ? result : Effect.succeed(result)
+					})
 				log.unmocked.add(tag)
 				return Effect.die(`ui-parity: no fixture for RPC "${tag}"`)
 			},
