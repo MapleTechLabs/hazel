@@ -259,5 +259,37 @@ export const galleryArea: AreaModule = {
 				await page.getByText("Invalid", { exact: true }).hover()
 			},
 		}),
+		gallery("radio", {
+			id: "gallery-radio",
+			title: "Radio: groups and states",
+			themes: ["light", "dark"],
+		}),
+		gallery("radio", {
+			id: "gallery-radio-clicked",
+			title: "Radio: clicking selects an option",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.getByText("Compact", { exact: true }).click()
+				await page.getByText("Dark", { exact: true }).click()
+				await page.mouse.move(0, 0)
+			},
+		}),
+		gallery("radio", {
+			id: "gallery-radio-keyboard",
+			title: "Radio: Tab focuses the selected option, ArrowDown moves the selection",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.keyboard.press("Tab")
+				await page.keyboard.press("ArrowDown")
+			},
+		}),
+		gallery("radio", {
+			id: "gallery-radio-hover",
+			title: "Radio: hovered",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.getByText("Spacious", { exact: true }).hover()
+			},
+		}),
 	],
 }
