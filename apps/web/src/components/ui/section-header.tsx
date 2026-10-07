@@ -1,20 +1,21 @@
 import type { ComponentPropsWithRef } from "react"
 import { cn } from "~/lib/utils"
+import { sectionHeaderStyles } from "./section-header.styles"
 
 const SectionHeaderRoot = ({ className, children, ...props }: ComponentPropsWithRef<"div">) => (
-	<div {...props} className={cn("flex flex-col gap-5 border-border border-b pb-5", className)}>
+	<div {...props} className={cn(sectionHeaderStyles.root, className)}>
 		{children}
 	</div>
 )
 
 const SectionHeaderGroup = ({ className, children, ...props }: ComponentPropsWithRef<"div">) => (
-	<div {...props} className={cn("relative flex flex-col items-start gap-4 md:flex-row", className)}>
+	<div {...props} className={cn(sectionHeaderStyles.group, className)}>
 		{children}
 	</div>
 )
 
 const SectionHeaderActions = ({ className, children, ...props }: ComponentPropsWithRef<"div">) => (
-	<div {...props} className={cn("flex gap-3", className)}>
+	<div {...props} className={cn(sectionHeaderStyles.actions, className)}>
 		{children}
 	</div>
 )
@@ -25,13 +26,20 @@ const SectionHeaderHeading = ({
 	size = "lg",
 	...props
 }: ComponentPropsWithRef<"h2"> & { size?: "lg" | "xl" }) => (
-	<h2 {...props} className={cn("font-semibold text-fg", size === "xl" ? "text-2xl" : "text-lg", className)}>
+	<h2
+		{...props}
+		className={cn(
+			sectionHeaderStyles.heading,
+			size === "xl" ? sectionHeaderStyles.headingXl : sectionHeaderStyles.headingLg,
+			className,
+		)}
+	>
 		{children}
 	</h2>
 )
 
 const SectionHeaderSubheading = ({ className, children, ...props }: ComponentPropsWithRef<"p">) => (
-	<p {...props} className={cn("text-muted-fg text-sm", className)}>
+	<p {...props} className={cn(sectionHeaderStyles.subheading, className)}>
 		{children}
 	</p>
 )
