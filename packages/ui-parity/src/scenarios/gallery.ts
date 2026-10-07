@@ -323,5 +323,64 @@ export const galleryArea: AreaModule = {
 				await page.getByText("Desktop notifications", { exact: true }).hover()
 			},
 		}),
+		gallery("slider", {
+			id: "gallery-slider",
+			title: "Slider: single, range, disabled, vertical",
+			themes: ["light", "dark"],
+		}),
+		gallery("slider", {
+			id: "gallery-slider-keyboard",
+			title: "Slider: Tab to the thumb, ArrowRight three times",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.keyboard.press("Tab")
+				await page.keyboard.press("ArrowRight")
+				await page.keyboard.press("ArrowRight")
+				await page.keyboard.press("ArrowRight")
+			},
+		}),
+		gallery("slider", {
+			id: "gallery-slider-range-keyboard",
+			title: "Slider: range thumb sent to its bound with End, then PageDown",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.getByRole("slider", { name: "Price range" }).focus()
+				await page.keyboard.press("End")
+				await page.keyboard.press("PageDown")
+			},
+		}),
+		gallery("slider", {
+			id: "gallery-slider-hover",
+			title: "Slider: hovered thumb",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.getByRole("slider", { name: "Volume" }).hover({ force: true })
+			},
+		}),
+		gallery("slider", {
+			id: "gallery-slider-track-press",
+			title: "Slider: pressing the track at 75% moves the thumb there and focuses it",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				const group = await page.getByRole("group", { name: "Volume" }).boundingBox()
+				const thumb = await page.getByRole("slider", { name: "Volume" }).boundingBox()
+				if (!group || !thumb) throw new Error("slider not laid out")
+				await page.mouse.click(group.x + group.width * 0.75, thumb.y + thumb.height / 2)
+			},
+		}),
+		gallery("slider", {
+			id: "gallery-slider-dragging",
+			title: "Slider: thumb mid-drag from 40% to 62%",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				const group = await page.getByRole("group", { name: "Volume" }).boundingBox()
+				const thumb = await page.getByRole("slider", { name: "Volume" }).boundingBox()
+				if (!group || !thumb) throw new Error("slider not laid out")
+				const y = thumb.y + thumb.height / 2
+				await page.mouse.move(group.x + group.width * 0.4, y)
+				await page.mouse.down()
+				await page.mouse.move(group.x + group.width * 0.62, y, { steps: 5 })
+			},
+		}),
 	],
 }
