@@ -29,6 +29,22 @@ const renderPng = (path: string): Buffer => {
 
 export const isAssetRequest = (url: URL) => url.pathname.startsWith("/r2/")
 
+/**
+ * Renders every fixture image a dataset references before the first capture. Lazily rendered, the
+ * first capture of a run saw images trickle in (and legacy's chat list re-anchor) while later ones
+ * got them at once; warm, every capture of either app gets them at the same speed.
+ */
+export const warmAssets = (datasets: Iterable<{ readonly tables: unknown }>) => {
+	for (const dataset of datasets) {
+		for (const [path] of JSON.stringify(dataset.tables).matchAll(
+			/\/r2\/[^"\\?#\s]+\.(?:png|jpe?g|gif|webp)/gi,
+		)) {
+			if (!cache.has(path)) cache.set(path, renderPng(path))
+		}
+	}
+	return cache.size
+}
+
 export const handleAsset = (request: Request, url: URL): Response => {
 	if (!/\.(png|jpg|jpeg|gif|webp)$/i.test(url.pathname))
 		return new Response("not found", { status: 404, headers: corsHeaders(request) })

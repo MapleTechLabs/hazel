@@ -1,5 +1,5 @@
 import type { Dataset } from "../fixtures/dataset.ts"
-import { handleAsset, isAssetRequest } from "./assets.ts"
+import { handleAsset, isAssetRequest, warmAssets } from "./assets.ts"
 import { corsHeaders, handleShape } from "./electric.ts"
 import { type PushedChange, pushChange } from "./live-events.ts"
 import { makeRpcWebHandler, type RpcLog } from "./rpc.ts"
@@ -16,6 +16,7 @@ export const startFixtureBackend = (options: {
 	readonly defaultDataset: string
 }) => {
 	const log: RpcLog = { unmocked: new Set() }
+	warmAssets(options.datasets.values())
 	const rpcHandlers = new Map<string, ReturnType<typeof makeRpcWebHandler>>()
 	const rpcFor = (dataset: Dataset) => {
 		let handler = rpcHandlers.get(dataset.name)

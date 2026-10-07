@@ -85,6 +85,20 @@ const IGNORED_CONSOLE_ERRORS =
 const SIGNED_OUT_CONSOLE_ERRORS =
 	/^\[Live Query Error\] Source collection '\w+' entered error state|^An error occurred while syncing collection: \w+,[\s\S]*HTTP Error 401/
 
+/**
+ * Screenshots until two in a row are byte-identical. Compositor-only motion (the overscroll bounce
+ * after a wheel scroll hits an edge) is invisible to the in-page settle checks but not to pixels.
+ */
+const stableScreenshot = async (take: () => Promise<Buffer>) => {
+	let previous = await take()
+	for (let attempt = 0; attempt < 10; attempt++) {
+		const next = await take()
+		if (next.equals(previous)) return next
+		previous = next
+	}
+	return previous
+}
+
 export const captureTarget = async (options: {
 	readonly target: TargetName
 	/** Output folder name under the run; defaults to the target name (self-checks capture one target twice). */
@@ -153,13 +167,15 @@ export const captureTarget = async (options: {
 				await variant.scenario.steps(page)
 				await page.evaluate(waitForVisualQuiet, { quietMs: 300, timeoutMs: 5000 })
 			}
-			await page.screenshot({
-				path: join(dir, `${variant.id}.png`),
-				fullPage: variant.scenario.fullPage ?? false,
-				mask: variant.scenario.mask?.(page) as never,
-				animations: "disabled",
-				caret: "hide",
-			})
+			const screenshot = await stableScreenshot(() =>
+				page.screenshot({
+					fullPage: variant.scenario.fullPage ?? false,
+					mask: variant.scenario.mask?.(page) as never,
+					animations: "disabled",
+					caret: "hide",
+				}),
+			)
+			writeFileSync(join(dir, `${variant.id}.png`), screenshot)
 			const snapshot = await page.evaluate(collectSnapshot, {
 				textProps: [...TEXT_STYLE_PROPS],
 				boxProps: [...BOX_STYLE_PROPS],
