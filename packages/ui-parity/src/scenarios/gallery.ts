@@ -227,5 +227,37 @@ export const galleryArea: AreaModule = {
 				await page.getByRole("button", { name: "Clear search" }).first().hover()
 			},
 		}),
+		gallery("checkbox", {
+			id: "gallery-checkbox",
+			title: "Checkbox: states, description, groups",
+			themes: ["light", "dark"],
+		}),
+		gallery("checkbox", {
+			id: "gallery-checkbox-clicked",
+			title: "Checkbox: clicking checks it (no focus ring)",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.getByText("Unchecked", { exact: true }).click()
+				await page.getByText("Reactions", { exact: true }).click()
+				await page.mouse.move(0, 0)
+			},
+		}),
+		gallery("checkbox", {
+			id: "gallery-checkbox-keyboard",
+			title: "Checkbox: Tab then Space checks the first box with a focus ring",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.keyboard.press("Tab")
+				await page.keyboard.press(" ")
+			},
+		}),
+		gallery("checkbox", {
+			id: "gallery-checkbox-hover",
+			title: "Checkbox: hovered",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.getByText("Invalid", { exact: true }).hover()
+			},
+		}),
 	],
 }
