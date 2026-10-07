@@ -49,6 +49,7 @@ const rootSubscriptions = Subscription.make<Model, Message>()((entry) => ({
 							(rows) => {
 								const org = rows[0]
 								return Message.UpdatedOrganization({
+									orgSlug,
 									organization: org
 										? {
 												id: org.id,

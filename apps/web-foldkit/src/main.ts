@@ -290,6 +290,7 @@ export const init: Runtime.RoutingApplicationInit<Model, Message, Flags, Resourc
 			auth: "Loading",
 			currentUser: null,
 			organization: null,
+			loadedOrgSlug: null,
 			member: null,
 			nowMs: 0,
 			themePreference: flags.themePreference,
@@ -350,9 +351,9 @@ export const update = (model: Model, message: Message): Return =>
 			]),
 		FailedFetchCurrentUser: () => ({ model }),
 		CompletedSignOut: () => ({ model }),
-		UpdatedOrganization: ({ organization }) =>
+		UpdatedOrganization: ({ orgSlug, organization }) =>
 			Update.combine<Model, Message, Resources>(
-				modifyFields(model, { organization: () => organization }),
+				modifyFields(model, { organization: () => organization, loadedOrgSlug: () => orgSlug }),
 				[informPage, informShell],
 			),
 		UpdatedMember: ({ member }) =>

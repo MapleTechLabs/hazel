@@ -152,8 +152,12 @@ const body = (model: Model, h: HtmlBuilder<Message>): Html => {
 	if (isPublicRoute(route)) return appRoot(h, model, [pageBody(model, h, false)])
 	// `_app/layout.tsx`: a loader until Clerk knows the session; signed out redirects to sign-in.
 	if (model.auth !== "SignedIn") return appRoot(h, model, [appLoader(h)])
+	// `AppShell`: a loader until `user.me` answers.
+	if (model.currentUser === null) return appRoot(h, model, [appLoader(h)])
 	const orgSlug = orgSlugOf(route)
 	if (orgSlug === undefined) return appRoot(h, model, [pageBody(model, h, false)])
+	// `$orgSlug/layout.tsx`: a loader while `useOrganization()` loads the route's organization.
+	if (model.loadedOrgSlug !== orgSlug) return appRoot(h, model, [appLoader(h)])
 	const context = shellContextOf(model, orgSlug)
 	return orgShell(h, context, {
 		page: sectionBody(model, h),

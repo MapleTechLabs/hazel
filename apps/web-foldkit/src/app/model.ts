@@ -21,6 +21,8 @@ export const Model = Schema.Struct({
 	auth: Auth,
 	currentUser: Schema.NullOr(CurrentUser),
 	organization: Schema.NullOr(Organization),
+	/** The slug whose organization query has answered; until it matches the route, a loader shows. */
+	loadedOrgSlug: Schema.NullOr(Schema.String),
 	member: Schema.NullOr(Member),
 	nowMs: Schema.Number,
 	/** The stored theme preference (`themeAtom`, `themeCustomizationAtom`), and the system's theme. */
