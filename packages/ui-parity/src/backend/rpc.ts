@@ -25,7 +25,11 @@ import {
 } from "@hazel/domain/rpc"
 import { CurrentUser, SessionNotProvidedError } from "@hazel/domain"
 import { TypingIndicator, UserPresenceStatus } from "@hazel/domain/models"
-import { TypingIndicatorResponse, UserPresenceStatusResponse } from "@hazel/domain/rpc"
+import {
+	ChatSyncConnectionListResponse,
+	TypingIndicatorResponse,
+	UserPresenceStatusResponse,
+} from "@hazel/domain/rpc"
 import type { TransactionId } from "@hazel/schema"
 import { Effect, Layer } from "effect"
 import { HttpRouter } from "effect/http"
@@ -108,7 +112,7 @@ const defaultHandlers = (dataset: Dataset): Record<string, (payload: unknown) =>
 		})
 	},
 	"organization.getBySlugPublic": () => null,
-	"chatSync.connection.list": () => ({ data: [] }),
+	"chatSync.connection.list": () => new ChatSyncConnectionListResponse({ data: [] }),
 	// Per-area handlers (`src/scenarios/<area>.ts`), then the dataset's own overrides.
 	...areaRpcHandlers(dataset),
 	...dataset.rpc,

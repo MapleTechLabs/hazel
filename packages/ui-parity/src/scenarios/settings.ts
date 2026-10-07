@@ -1,4 +1,4 @@
-import { ChatSyncConnectionListResponse, ConnectInviteListResponse } from "@hazel/domain/rpc"
+import { ConnectInviteListResponse } from "@hazel/domain/rpc"
 import { defaultIds } from "../fixtures/datasets/default.ts"
 import { errorsDataset } from "../fixtures/datasets/errors.ts"
 import { chatSyncIds } from "../fixtures/datasets/integrations-rpc.ts"
@@ -191,8 +191,6 @@ export const settingsArea: AreaModule = {
 	],
 	datasets: [integrationsDataset, memberDataset, memberEmptyDataset, errorsDataset],
 	rpc: () => ({
-		// The built-in handler returns a plain object, which fails to encode as the response class.
-		"chatSync.connection.list": () => new ChatSyncConnectionListResponse({ data: [] }),
 		"connectShare.invite.listIncoming": () => new ConnectInviteListResponse({ data: [] }),
 		"connectShare.invite.listOutgoing": () => new ConnectInviteListResponse({ data: [] }),
 	}),
