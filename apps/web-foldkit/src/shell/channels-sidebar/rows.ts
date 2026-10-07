@@ -1,5 +1,6 @@
 import {
 	ChannelId,
+	ChannelMemberId,
 	ChannelSectionId,
 	ConnectConversationId,
 	OrganizationId,
@@ -22,6 +23,7 @@ export const SidebarChannel = Schema.Struct({
 export type SidebarChannel = typeof SidebarChannel.Type
 
 export const SidebarMember = Schema.Struct({
+	id: ChannelMemberId,
 	isMuted: Schema.Boolean,
 	isFavorite: Schema.Boolean,
 	notificationCount: Schema.Number,
