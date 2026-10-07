@@ -1,6 +1,11 @@
+import { OrganizationId, UserId } from "@hazel/schema"
 import { eq } from "@tanstack/db"
-import { Effect, Schema, Stream } from "effect"
+import { Effect, Option, Schema, Stream } from "effect"
 import { Command, Runtime, Subscription, Update } from "foldkit"
+import * as ChatPage from "./page/chat/page"
+import * as ChatPageSubscriptions from "./page/chat/subscriptions"
+import * as ChatPageView from "./page/chat/view"
+import * as ChannelsSidebar from "./shell/channels-sidebar"
 import type { Document, HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
 import { load, pushUrl, UrlRequest } from "foldkit/navigation"
@@ -22,7 +27,7 @@ import { applyTheme, ResolvedTheme } from "./theme"
 // MODEL
 
 const CurrentUser = Schema.Struct({
-	id: Schema.String,
+	id: UserId,
 	firstName: Schema.String,
 	lastName: Schema.String,
 	email: Schema.String,
@@ -30,7 +35,7 @@ const CurrentUser = Schema.Struct({
 })
 
 const Organization = Schema.Struct({
-	id: Schema.String,
+	id: OrganizationId,
 	name: Schema.String,
 	logoUrl: Schema.NullOr(Schema.String),
 })
@@ -42,6 +47,8 @@ export const Model = Schema.Struct({
 	organization: Schema.NullOr(Organization),
 	teamMembers: Schema.Array(TeamMember),
 	nowMs: Schema.Number,
+	chatPage: Schema.NullOr(ChatPage.Model),
+	channelsSidebar: ChannelsSidebar.Model,
 })
 export type Model = typeof Model.Type
 
@@ -59,6 +66,8 @@ export const Message = defineMessageUnion({
 	UpdatedOrganization: { organization: Schema.NullOr(Organization) },
 	UpdatedTeamMembers: { members: Schema.Array(TeamMember) },
 	TickedPresenceClock: { nowMs: Schema.Number },
+	GotChatPageMessage: { message: ChatPage.Message },
+	GotChannelsSidebarMessage: { message: ChannelsSidebar.Message },
 })
 export type Message = typeof Message.Type
 
@@ -105,6 +114,51 @@ const FetchCurrentUser = Command.define("FetchCurrentUser", {
 		),
 })
 
+// CHILDREN
+
+/** A channel route gets a fresh page; any other route drops it (React's unmount semantics). */
+const chatPageFor = (route: AppRoute, previous: ChatPage.Model | null, currentUserId: UserId | null) =>
+	route._tag !== "ChatChannel"
+		? null
+		: previous !== null && previous.channelId === route.channelId
+			? previous
+			: ChatPage.init(route.channelId, currentUserId)
+
+const foldChatPage = (model: Model, step: (page: ChatPage.Model) => ChatPage.PageReturn) =>
+	Update.foldChildStep<Model, Message, ChatPage.Model, ChatPage.Message>({
+		update: step,
+		read: (parent: Model) => Option.fromNullishOr(parent.chatPage),
+		write: (parent: Model, chatPage: ChatPage.Model) =>
+			modifyFields(parent, { chatPage: () => chatPage }),
+		toParentMessage: (message: ChatPage.Message) => Message.GotChatPageMessage({ message }),
+	})(model)
+
+const foldChannelsSidebar = (
+	model: Model,
+	step: (sidebar: ChannelsSidebar.Model) => ChannelsSidebar.SidebarReturn,
+) =>
+	Update.foldChildStep<Model, Message, ChannelsSidebar.Model, ChannelsSidebar.Message>({
+		update: step,
+		read: (parent: Model) => Option.some(parent.channelsSidebar),
+		write: (parent: Model, channelsSidebar: ChannelsSidebar.Model) =>
+			modifyFields(parent, { channelsSidebar: () => channelsSidebar }),
+		toParentMessage: (message: ChannelsSidebar.Message) => Message.GotChannelsSidebarMessage({ message }),
+	})(model)
+
+const syncSidebarContext = (model: Model) =>
+	foldChannelsSidebar(model, (sidebar) =>
+		ChannelsSidebar.setContext(sidebar, {
+			organizationId: model.organization?.id ?? null,
+			currentUserId: model.currentUser?.id ?? null,
+		}),
+	)
+
+const withCurrentUser = (model: Model, user: typeof CurrentUser.Type): Model =>
+	modifyFields(model, { currentUser: () => user })
+
+const withOrganization = (model: Model, organization: typeof Organization.Type | null): Model =>
+	modifyFields(model, { organization: () => organization })
+
 // INIT
 
 export const init: Runtime.RoutingApplicationInit<Model, Message, void, HazelRpc> = (url: Url) => ({
@@ -115,6 +169,8 @@ export const init: Runtime.RoutingApplicationInit<Model, Message, void, HazelRpc
 		organization: null,
 		teamMembers: [],
 		nowMs: 0,
+		chatPage: chatPageFor(urlToAppRoute(url), null, null),
+		channelsSidebar: ChannelsSidebar.init(),
 	},
 	commands: [FetchCurrentUser({})],
 })
@@ -128,22 +184,32 @@ export const update = (model: Model, message: Message) =>
 				Internal: ({ url }) => ({ model, commands: [NavigateInternal({ url: urlToString(url) })] }),
 				External: ({ href }) => ({ model, commands: [LoadExternal({ href })] }),
 			}),
-		ChangedUrl: ({ url }) => ({
-			model: modifyFields(model, { route: () => urlToAppRoute(url), pathname: () => url.pathname }),
-		}),
+		ChangedUrl: ({ url }) => {
+			const route = urlToAppRoute(url)
+			return {
+				model: modifyFields(model, {
+					route: () => route,
+					pathname: () => url.pathname,
+					chatPage: () => chatPageFor(route, model.chatPage, model.currentUser?.id ?? null),
+				}),
+			}
+		},
 		CompletedNavigateInternal: () => ({ model }),
 		CompletedLoadExternal: () => ({ model }),
 		ChangedSystemTheme: ({ theme }) => ({ model, commands: [ApplyTheme({ theme })] }),
 		CompletedApplyTheme: () => ({ model }),
-		SucceededFetchCurrentUser: ({ user }) => ({
-			model: modifyFields(model, { currentUser: () => user }),
-		}),
+		SucceededFetchCurrentUser: ({ user }) =>
+			Update.combine<Model, Message, HazelRpc>(withCurrentUser(model, user), [
+				(next) => foldChatPage(next, (page) => ChatPage.setCurrentUserId(page, user.id)),
+				syncSidebarContext,
+			]),
 		FailedFetchCurrentUser: () => ({ model }),
-		UpdatedOrganization: ({ organization }) => ({
-			model: modifyFields(model, { organization: () => organization }),
-		}),
+		UpdatedOrganization: ({ organization }) => syncSidebarContext(withOrganization(model, organization)),
 		UpdatedTeamMembers: ({ members }) => ({ model: modifyFields(model, { teamMembers: () => members }) }),
 		TickedPresenceClock: ({ nowMs }) => ({ model: modifyFields(model, { nowMs: () => nowMs }) }),
+		GotChatPageMessage: ({ message }) => foldChatPage(model, (page) => ChatPage.update(page, message)),
+		GotChannelsSidebarMessage: ({ message }) =>
+			foldChannelsSidebar(model, (sidebar) => ChannelsSidebar.update(sidebar, message)),
 	})
 
 // SUBSCRIPTION
@@ -161,7 +227,7 @@ interface TeamMemberRow {
 	readonly presence?: { readonly status: string; readonly lastSeenAt: Date } | undefined
 }
 
-export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
+const rootSubscriptions = Subscription.make<Model, Message>()((entry) => ({
 	systemTheme: Subscription.persistent(
 		Subscription.fromMediaQuery({
 			query: "(prefers-color-scheme: dark)",
@@ -181,7 +247,7 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
 			dependenciesToStream: ({ orgSlug }) =>
 				orgSlug === null
 					? Stream.empty
-					: liveQueryStream<{ id: string; name: string; logoUrl: string | null }, Message>(
+					: liveQueryStream<{ id: OrganizationId; name: string; logoUrl: string | null }, Message>(
 							(q) =>
 								q
 									.from({ org: organizationCollection })
@@ -248,10 +314,46 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
 	),
 }))
 
+const chatPageSubscriptions = Subscription.lift(ChatPageSubscriptions.subscriptions)<Model, Message>({
+	read: (model) => Option.fromNullishOr(model.chatPage),
+	toParentMessage: (message) => Message.GotChatPageMessage({ message }),
+})
+
+const channelsSidebarSubscriptions = Subscription.lift(ChannelsSidebar.subscriptions)<Model, Message>({
+	read: (model) =>
+		model.route._tag === "ChatChannel" ? Option.some(model.channelsSidebar) : Option.none(),
+	toParentMessage: (message: ChannelsSidebar.Message) => Message.GotChannelsSidebarMessage({ message }),
+})
+
+export const subscriptions = Subscription.aggregate(
+	rootSubscriptions,
+	chatPageSubscriptions,
+	channelsSidebarSubscriptions,
+)
+
 // VIEW
 
 const displayNameOf = (user: typeof CurrentUser.Type) =>
 	user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.email || "User"
+
+// Module-level so memoized child views see the same function on every render.
+const toChatPageMessage = (message: ChatPage.Message) => Message.GotChatPageMessage({ message })
+const toChannelsSidebarMessage = (message: ChannelsSidebar.Message) =>
+	Message.GotChannelsSidebarMessage({ message })
+
+const shellContextOf = (model: Model, orgSlug: string) => ({
+	orgSlug,
+	pathname: model.pathname,
+	organization: model.organization ?? undefined,
+	currentUser: model.currentUser
+		? {
+				displayName: displayNameOf(model.currentUser),
+				email: model.currentUser.email,
+				avatarUrl: model.currentUser.avatarUrl,
+			}
+		: undefined,
+	appVersion: __APP_VERSION__,
+})
 
 export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
 	title: "Hazel Chat",
@@ -259,19 +361,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
 		TeamSettings: ({ orgSlug }) =>
 			orgShell(
 				h,
-				{
-					orgSlug,
-					pathname: model.pathname,
-					organization: model.organization ?? undefined,
-					currentUser: model.currentUser
-						? {
-								displayName: displayNameOf(model.currentUser),
-								email: model.currentUser.email,
-								avatarUrl: model.currentUser.avatarUrl,
-							}
-						: undefined,
-					appVersion: __APP_VERSION__,
-				},
+				shellContextOf(model, orgSlug),
 				settingsLayout(
 					h,
 					teamPage(h, {
@@ -281,6 +371,22 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
 					}),
 				),
 			),
+		ChatChannel: ({ orgSlug, channelId }) => {
+			const shell = shellContextOf(model, orgSlug)
+			return orgShell(
+				h,
+				shell,
+				model.chatPage === null
+					? h.div([], [])
+					: ChatPageView.view(h, model.chatPage, toChatPageMessage),
+				ChannelsSidebar.view(
+					h,
+					model.channelsSidebar,
+					{ shell, activeChannelId: channelId },
+					toChannelsSidebarMessage,
+				),
+			)
+		},
 		NotFound: ({ path }) => h.div([h.Id("app")], [`Not found: ${path}`]),
 	}),
 })
