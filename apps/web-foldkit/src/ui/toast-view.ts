@@ -12,6 +12,8 @@ import {
 	offsetOf,
 	VISIBLE_TOASTS,
 } from "./toast"
+// Pending-button announcements; every root renders the toaster, so they load with it.
+import "./aria/pending-announcement"
 
 /** sonner's Toaster markup (`position="bottom-right"`, `richColors`, the shared className and style). */
 
