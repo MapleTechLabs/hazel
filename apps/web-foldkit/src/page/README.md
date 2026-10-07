@@ -55,7 +55,8 @@ memoized views and a `sharedChanged` hook. `page/root/` shows a page that only r
   `RequestedCurrentUserRefresh({ toast? })` (re-runs `user.me`, e.g. after an
   avatar change) (`page/out-message.ts`). Plain links need nothing: an `<a href>` is followed by the app.
   - A toast with an `id` replaces the toast with the same id (sonner's `id`): give a loading toast an
-    id and send the success or error toast with the same id.
+    id and send the success or error toast with the same id. The root's toaster (`overlay/toaster.ts`,
+    the kit's sonner port) renders it; pages only import `ToastRequest` from `overlay/toasts.ts`.
   - One `update` returns one OutMessage. Navigation and a toast together: `RequestedNavigation`'s
     `toast`. A modal's own result (toast, navigation, closing) is the modal's job, not the page's: the
     page only sends `RequestedModal` with the request fields the modal declares.

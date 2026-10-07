@@ -13,6 +13,7 @@ import * as ShellSubscription from "../shell/subscription"
 import * as CommandPalette from "../overlay/command-palette"
 import { layoutHotkeys } from "../overlay/hotkeys"
 import * as Modal from "../overlay/modal"
+import * as Toasts from "../overlay/toaster"
 import { clerkAuthStream } from "./clerk"
 import { Message } from "./message"
 import { type Model, pageHostOf, sharedOf } from "./model"
@@ -167,6 +168,11 @@ const shellSubscriptions = Subscription.lift(ShellSubscription.subscriptions)<Mo
 	toParentMessage: (message): Message => ({ _tag: "GotShellMessage", message }),
 })
 
+const toastSubscriptions = Subscription.lift(Toasts.subscriptions)<Model, Message>({
+	read: (model) => Option.some(model.toasts.toaster),
+	toParentMessage: (message): Message => ({ _tag: "GotToastsMessage", message }),
+})
+
 const pages = Subscription.lift(pageSubscriptions)<Model, Message>({
 	read: (model) => Option.some(pageHostOf(model)),
 	toParentMessage: (message): Message => ({ _tag: "GotPageMessage", message }),
@@ -178,6 +184,7 @@ export const subscriptions = Subscription.aggregate(
 	overlaySubscriptions,
 	commandPaletteSubscriptions,
 	modalSubscriptions,
+	toastSubscriptions,
 	shellSubscriptions,
 	pages,
 )

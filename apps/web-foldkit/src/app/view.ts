@@ -1,7 +1,7 @@
 import type { Document, Html, HtmlBuilder } from "foldkit/html"
 import * as CommandPalette from "../overlay/command-palette"
 import * as Modal from "../overlay/modal"
-import * as Toasts from "../overlay/toasts"
+import * as Toasts from "../overlay/toaster"
 import { type PageMessage, viewPage } from "../page/registry"
 import { type AppRoute, isPublicRoute, orgSectionOf, orgSlugOf } from "../route"
 import { displayNameOf } from "../session"
@@ -22,7 +22,7 @@ import { mySettingsSidebar, notificationsSidebar, settingsSidebar } from "../she
 import type * as Menu from "../ui/menu"
 import type * as ModalKit from "../ui/modal"
 import { Message } from "./message"
-import { type Model, sharedOf } from "./model"
+import { type Model, resolvedThemeOf, sharedOf } from "./model"
 
 // Module-level and built as literals: memoized shell views compare them by reference, and
 // wrapper constructors would re-validate large payloads (sidebar rows, message pages) per dispatch.
@@ -40,6 +40,9 @@ const clickedMarkAllRead = toShellMessage(
 )
 const openedMobileSidebar = toShellMessage(Shell.Message.ToggledSidebar({ isOpen: true }))
 export const toPageMessage = (message: PageMessage): Message => ({ _tag: "GotPageMessage", message })
+const toToastsMessage = (message: Toasts.Message): Message => ({ _tag: "GotToastsMessage", message })
+const toaster = (h: HtmlBuilder<Message>, model: Model): Html =>
+	Toasts.view(h, model.toasts, resolvedThemeOf(model), toToastsMessage)
 const toModalMessage = (message: Modal.Message): Message => ({ _tag: "GotModalMessage", message })
 const toCommandPaletteMessage = (message: CommandPalette.Message): Message => ({
 	_tag: "GotCommandPaletteMessage",
@@ -142,7 +145,7 @@ const secondarySidebar = (model: Model, h: HtmlBuilder<Message>, context: ShellC
 }
 
 const appRoot = (h: HtmlBuilder<Message>, model: Model, children: ReadonlyArray<Html>): Html =>
-	h.div([h.Id("app")], [Toasts.view(h, model.toasts), ...children])
+	h.div([h.Id("app")], [toaster(h, model), ...children])
 
 const body = (model: Model, h: HtmlBuilder<Message>): Html => {
 	const route = model.route
@@ -164,7 +167,7 @@ const body = (model: Model, h: HtmlBuilder<Message>): Html => {
 		secondarySidebar: secondarySidebar(model, h, context),
 		// The bell reads `useUnreadNotificationCount`, which has no optimistic layer.
 		unreadNotificationCount: model.shell.notifications.unreadIds.length,
-		toaster: Toasts.view(h, model.toasts),
+		toaster: toaster(h, model),
 		overlays: [
 			Modal.view(h, model.modal, sharedOf(model), toModalMessage),
 			h.submodel({
