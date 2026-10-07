@@ -33,6 +33,8 @@ export const Model = Schema.Struct({
 	organizations: Schema.Array(PartnerOrg),
 	memberChannelIds: Schema.NullOr(Schema.Array(ChannelId)),
 	discoverableChannels: Schema.Array(DiscoverableChannel),
+	/** `useFeatureHint("create-channel")`, persisted across organizations. */
+	isCreateChannelHintDismissed: Schema.Boolean,
 })
 export type Model = typeof Model.Type
 
@@ -54,6 +56,9 @@ export const Message = defineMessageUnion({
 	UpdatedOrganizations: { organizations: Schema.Array(PartnerOrg) },
 	UpdatedMemberChannelIds: { channelIds: Schema.Array(ChannelId) },
 	UpdatedDiscoverableChannels: { channels: Schema.Array(DiscoverableChannel) },
+	LoadedDismissedHints: { isCreateChannelHintDismissed: Schema.Boolean },
+	ClickedDismissCreateChannelHint: {},
+	CompletedPersistDismissedHint: {},
 })
 export type Message = typeof Message.Type
 
@@ -70,4 +75,4 @@ export const emptyData = {
 	organizations: [],
 	memberChannelIds: null,
 	discoverableChannels: [],
-} satisfies Omit<Model, "organizationId" | "currentUserId" | "nowMs">
+} satisfies Omit<Model, "organizationId" | "currentUserId" | "nowMs" | "isCreateChannelHintDismissed">

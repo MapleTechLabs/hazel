@@ -104,6 +104,8 @@ export const inputGroup = <Message>(
 		/** React Aria GroupContext from a field: mirrored as data-disabled/data-invalid. */
 		readonly isDisabled?: boolean
 		readonly isInvalid?: boolean
+		/** TextField's GroupContext sets `presentation`; a bare Group is `group`. */
+		readonly role?: "group" | "presentation"
 		readonly interaction?: InteractionTarget<Message>
 		readonly attributes?: ReadonlyArray<Attribute<Message>>
 	},
@@ -114,7 +116,7 @@ export const inputGroup = <Message>(
 			h.Class(twMerge(twMerge(...inputGroupStyles), options.className)),
 			h.DataAttribute("rac", ""),
 			h.DataAttribute("slot", "control"),
-			h.Role("group"),
+			h.Role(options.role ?? "group"),
 			...(options.isDisabled ? [h.DataAttribute("disabled", "true")] : []),
 			...(options.isInvalid ? [h.DataAttribute("invalid", "true")] : []),
 			...(options.interaction

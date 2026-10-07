@@ -124,21 +124,38 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, view
 	])
 	return viewInputs.toTrigger(
 		triggerAttributes,
-		model.isOpen ? modalOverlay(model, viewInputs, h) : h.empty,
+		model.isOpen ? modalOverlay(model, viewInputs, h, (message) => message) : h.empty,
 	)
 })
 
-const modalOverlay = (model: Model, viewInputs: ViewInputs, h: HtmlBuilder<Message>): Html => {
+/**
+ * A controlled Modal (`<Modal isOpen>` with no DialogTrigger) rendered in the parent's view, so the
+ * content can carry the parent's Messages; the Modal's own Messages go through `toParentMessage`.
+ */
+export const controlledModal = <ParentMessage>(
+	h: HtmlBuilder<ParentMessage>,
+	options: Omit<ViewInputs, "toTrigger"> & {
+		readonly model: Model
+		readonly toParentMessage: (message: Message) => ParentMessage
+	},
+): Html => (options.model.isOpen ? modalOverlay(options.model, options, h, options.toParentMessage) : h.empty)
+
+const modalOverlay = <ParentMessage>(
+	model: Model,
+	viewInputs: Omit<ViewInputs, "toTrigger">,
+	h: HtmlBuilder<ParentMessage>,
+	send: (message: Message) => ParentMessage,
+): Html => {
 	const size = viewInputs.size ?? "lg"
 	const role = viewInputs.role ?? "dialog"
 	const isDismissable = viewInputs.isDismissable ?? role !== "alertdialog"
-	const closeAttributes = childAttributes([h.OnClick(Message.ClickedClose())])
+	const closeAttributes = childAttributes([h.OnClick(send(Message.ClickedClose()))])
 	return h.div(
 		[
 			h.Attribute("style", "display: contents;"),
-			h.OnMount(PortalModal({ id: model.id, isDismissable })),
+			h.OnMount(Mount.mapMessage(PortalModal({ id: model.id, isDismissable }), send)),
 			h.OnKeyDownPreventDefault((key) =>
-				key === "Escape" ? Option.some(Message.PressedEscape()) : Option.none(),
+				key === "Escape" ? Option.some(send(Message.PressedEscape())) : Option.none(),
 			),
 		],
 		[
@@ -163,7 +180,7 @@ const modalOverlay = (model: Model, viewInputs: ViewInputs, h: HtmlBuilder<Messa
 							h.Attribute("data-slot", "modal-content"),
 						],
 						[
-							...(isDismissable ? [dismissButton(h, Message.ClickedClose())] : []),
+							...(isDismissable ? [dismissButton(h, send(Message.ClickedClose()))] : []),
 							dialog(h, { id: dialogId(model.id), role, labelledBy: titleId(model.id) }, [
 								...viewInputs.toContent(closeAttributes),
 								...((viewInputs.closeButton ?? true) && isDismissable

@@ -1,4 +1,4 @@
-import type { Html, HtmlBuilder } from "foldkit/html"
+import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import { IconBell, IconDashboard, IconGear, IconMsgs, Logo } from "../icons"
 import { linkClassName } from "../ui/link"
 import {
@@ -14,11 +14,14 @@ import {
 	sidebarSectionGroup,
 	sidebarStatic,
 } from "../ui/sidebar"
+import type * as Modal from "../ui/modal"
 import { isActiveFuzzy, type ShellContext } from "./context"
+import { mobileNav, mobileSidebarPlaceholder, mobileSidebarSheet } from "./mobile"
 
 /**
  * Org shell: port of `routes/_app/$orgSlug/layout.tsx` + `AppSidebar` (nav rail and the
- * route's secondary sidebar) + `SidebarInset`. Desktop, expanded, web (no Tauri titlebar).
+ * route's secondary sidebar) + `SidebarInset`. Expanded, web (no Tauri titlebar); on mobile the
+ * sidebar moves into a sheet and `MobileNav` joins the inset.
  */
 
 const NAV_ACTIVE = "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
@@ -94,6 +97,14 @@ const navRail = <Message>(h: HtmlBuilder<Message>, context: ShellContext, unread
 	])
 }
 
+export interface MobileShell<Message> {
+	readonly isMobile: boolean
+	readonly isSidebarOpen: boolean
+	/** Opens the sidebar sheet (the bottom nav's Menu button). */
+	readonly onMenu: Attribute<Message>
+	readonly toSheetMessage: (message: Modal.Message) => Message
+}
+
 /**
  * `SidebarProvider` > `AppSidebar` (nav rail + `secondarySidebar`) + `SidebarInset` > `page`.
  * `overlays` are the root's toaster, modal and command palette slots.
@@ -107,21 +118,42 @@ export const orgShell = <Message>(
 		unreadNotificationCount: number
 		toaster: Html
 		overlays: ReadonlyArray<Html>
+		mobile: MobileShell<Message>
 	}>,
-): Html =>
-	h.div(
+): Html => {
+	const sidebarChildren = [navRail(h, context, parts.unreadNotificationCount), parts.secondarySidebar]
+	const { mobile } = parts
+	return h.div(
 		[h.Id("app")],
 		[
 			parts.toaster,
 			sidebarProvider(h, { width: "350px" }, [
-				sidebarDock(
-					h,
-					{ state: "expanded", className: "overflow-hidden *:data-[sidebar=default]:flex-row" },
-					[navRail(h, context, parts.unreadNotificationCount), parts.secondarySidebar],
-				),
-				// NOTE: legacy renders `MobileNav` and the command palette here; the mobile shell is wave 2.
-				sidebarInset(h, "pb-16 md:pb-0", [parts.page]),
+				mobile.isMobile
+					? mobileSidebarPlaceholder(h)
+					: sidebarDock(
+							h,
+							{
+								state: "expanded",
+								className: "overflow-hidden *:data-[sidebar=default]:flex-row",
+							},
+							sidebarChildren,
+						),
+				// NOTE: legacy also renders the command palette inside the inset; it lives in `overlays`.
+				sidebarInset(h, "pb-16 md:pb-0", [
+					parts.page,
+					...(mobile.isMobile ? [mobileNav(h, context, mobile.onMenu)] : []),
+				]),
 			]),
+			...(mobile.isMobile
+				? [
+						mobileSidebarSheet(h, {
+							isOpen: mobile.isSidebarOpen,
+							children: sidebarChildren,
+							toMessage: mobile.toSheetMessage,
+						}),
+					]
+				: []),
 			...parts.overlays,
 		],
 	)
+}

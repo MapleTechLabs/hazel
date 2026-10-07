@@ -24,12 +24,19 @@ type Attributes<Message> = ReadonlyArray<Attribute<Message> | ChildAttribute>
 /** `Dialog`: the element with role dialog (or alertdialog) that holds the content. */
 export const dialog = <Message>(
 	h: HtmlBuilder<Message>,
-	options: Readonly<{ id: string; role: string; labelledBy?: string; className?: string }>,
+	options: Readonly<{
+		id: string
+		role: string
+		labelledBy?: string
+		ariaLabel?: string
+		className?: string
+	}>,
 	children: Children,
 ): Html =>
 	h.section(
 		[
 			...(options.labelledBy ? [h.Attribute("aria-labelledby", options.labelledBy)] : []),
+			...(options.ariaLabel ? [h.Attribute("aria-label", options.ariaLabel)] : []),
 			h.Class(twMerge(dialogBase, options.className)),
 			h.Attribute("data-rac", ""),
 			h.Attribute("data-slot", "dialog"),
@@ -54,9 +61,16 @@ export const dialogTitle = <Message>(
 	return options.id ? h.h2(attributes, [text]) : h.h3(attributes, [text])
 }
 
-/** `DialogDescription`. */
-export const dialogDescription = <Message>(h: HtmlBuilder<Message>, text: string, className?: string): Html =>
-	h.p([h.Attribute("data-slot", "description"), h.Class(twMerge(dialogDescriptionBase, className))], [text])
+/** `DialogDescription`; pass children for rich text (`<strong>` runs). */
+export const dialogDescription = <Message>(
+	h: HtmlBuilder<Message>,
+	content: string | Children,
+	className?: string,
+): Html =>
+	h.p(
+		[h.Attribute("data-slot", "description"), h.Class(twMerge(dialogDescriptionBase, className))],
+		typeof content === "string" ? [content] : [...content],
+	)
 
 /** `DialogHeader`; `title` and `description` render the title and description like the legacy props. */
 export const dialogHeader = <Message>(

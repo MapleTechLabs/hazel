@@ -1,5 +1,6 @@
 import { Submodel } from "foldkit"
 import { definePage, type PageViewInputs } from "../../contract"
+import { PageOutMessage } from "../../out-message"
 import { init, Message, Model, setCurrentUserId, update } from "./page"
 import { subscriptions } from "./subscription"
 import { view as channelView } from "./view"
@@ -16,7 +17,10 @@ export const page = definePage(
 		// A new channel is a new page; React remounted on `key={id}` too.
 		key: (route) => route.channelId,
 		init: (route, shared) => ({ model: init(route.channelId, shared.currentUser?.id ?? null) }),
-		update: (model, message) => update(model, message),
+		update: (model, message) =>
+			message._tag === "ClickedMobileMenu"
+				? { model, outMessage: PageOutMessage.RequestedMobileSidebar() }
+				: update(model, message),
 		view: Submodel.defineView<Model, Message, PageViewInputs>((model, _inputs, h) =>
 			channelView(h, model, toSelf),
 		),

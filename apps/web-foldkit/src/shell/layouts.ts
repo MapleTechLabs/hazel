@@ -20,6 +20,9 @@ export const contentColumnLayout = <Message>(h: HtmlBuilder<Message>, page: Html
 export const ChannelSettingsTab = ["overview", "integrations", "connect"] as const
 export type ChannelSettingsTab = (typeof ChannelSettingsTab)[number]
 
+const isChannelSettingsTab = (value: string): value is ChannelSettingsTab =>
+	ChannelSettingsTab.some((tab) => tab === value)
+
 const tabLabels: Readonly<Record<ChannelSettingsTab, string>> = {
 	overview: "Overview",
 	integrations: "Integrations",
@@ -42,6 +45,8 @@ export const channelSettingsLayout = <Message>(
 		selectedTab: ChannelSettingsTab
 		/** Tabs navigate on selection, as `onSelectionChange` does. */
 		onSelectTab: (href: string) => Attribute<Message>
+		/** The mobile `<select>` navigates on change, with the chosen option's href. */
+		onChangeTab: (toHref: (tab: string) => string) => Attribute<Message>
 	}>,
 	page: Html,
 ): Html => {
@@ -123,7 +128,33 @@ export const channelSettingsLayout = <Message>(
 									),
 								],
 							),
-							// NOTE: legacy's mobile `<select>` (md:hidden) is part of the mobile shell work.
+							h.div(
+								[h.Class("md:hidden")],
+								[
+									h.select(
+										[
+											h.Class(
+												"w-full appearance-none rounded-lg border border-input bg-bg px-[calc(--spacing(3.5)-1px)] py-[calc(--spacing(2.5)-1px)] text-base/6 text-fg outline-hidden focus:border-ring/70 focus:ring-3 focus:ring-ring/20 sm:px-[calc(--spacing(3)-1px)] sm:py-[calc(--spacing(1.5)-1px)] sm:text-sm/6",
+											),
+											h.Value(options.selectedTab),
+											options.onChangeTab((tab) =>
+												hrefOf(isChannelSettingsTab(tab) ? tab : options.selectedTab),
+											),
+										],
+										ChannelSettingsTab.map((tab) =>
+											h.option(
+												[
+													h.Value(tab),
+													...(tab === options.selectedTab
+														? [h.Selected(true)]
+														: []),
+												],
+												[tabLabels[tab]],
+											),
+										),
+									),
+								],
+							),
 							h.div(
 								[
 									h.Class(
