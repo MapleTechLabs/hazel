@@ -239,6 +239,12 @@ export const stateAttributes = <ParentMessage>(
 	...(state.isFocusVisible ? [h.DataAttribute("focus-visible", "true")] : []),
 ]
 
-/** usePress disables text selection on the target while a pointer press is held. */
-export const isPointerPressing = (model: Model, target: string) =>
+/** usePress disables text selection on the target while a pointer press is held (`style="user-select: none;"`). */
+export const pressStyleAttributes = <ParentMessage>(
+	h: HtmlBuilder<ParentMessage>,
+	model: Model,
+	target: string,
+): ReadonlyArray<Attribute<ParentMessage>> =>
 	model.press?.target === target && model.press.source === "pointer"
+		? [h.Attribute("style", "user-select: none;")]
+		: []

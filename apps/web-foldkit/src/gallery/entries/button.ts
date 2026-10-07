@@ -1,5 +1,5 @@
-import { Option, Schema } from "effect"
-import { Subscription, Update } from "foldkit"
+import { Schema } from "effect"
+import type { Update } from "foldkit"
 import type { HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
@@ -9,6 +9,7 @@ import { button, type ButtonOptions } from "../../ui/button"
 import { loader } from "../../ui/loader"
 import { defineGallery } from "../define"
 import { galleryFrame, gallerySection } from "../frame"
+import { embedInteraction } from "../interaction"
 
 // MODEL
 
@@ -26,26 +27,15 @@ const Message = defineMessageUnion({
 })
 type Message = typeof Message.Type
 
-// UPDATE
+const interaction = embedInteraction<Model, Message>((message) => Message.GotInteractionMessage({ message }))
 
-const foldInteraction = Update.foldChild({
-	update: Interaction.update,
-	read: (model: Model) => Option.some(model.interaction),
-	write: (model: Model, interaction: Interaction.Model) =>
-		modifyFields(model, { interaction: () => interaction }),
-	toParentMessage: (message: Interaction.Message): Message => Message.GotInteractionMessage({ message }),
-})
+// UPDATE
 
 const update = (model: Model, message: Message) =>
 	Message.match<Update.Return<Model, Message>>(message, {
 		ClickedButton: ({ label }) => ({ model: modifyFields(model, { lastClicked: () => label }) }),
-		GotInteractionMessage: ({ message }) => foldInteraction(model, message),
+		GotInteractionMessage: ({ message }) => interaction.fold(model, message),
 	})
-
-const subscriptions = Subscription.lift(Interaction.subscriptions)<Model, Message>({
-	read: (model) => Option.some(model.interaction),
-	toParentMessage: (message) => Message.GotInteractionMessage({ message }),
-})
 
 // VIEW
 
@@ -54,10 +44,7 @@ const sizes = ["xs", "sm", "md", "lg"] as const
 const squareSizes = ["sq-xs", "sq-sm", "sq-md", "sq-lg"] as const
 
 const view = (model: Model, h: HtmlBuilder<Message>) => {
-	const wiring: Interaction.Wiring<Message> = {
-		model: model.interaction,
-		toParentMessage: (message) => Message.GotInteractionMessage({ message }),
-	}
+	const wiring = interaction.wiring(model)
 	// Every button gets its own interaction target; the label doubles as the target id.
 	const demo = (label: string, options: ButtonOptions<Message> = {}) => ({
 		...options,
@@ -128,5 +115,5 @@ export const gallery = defineGallery<Model, Message>("Button", {
 	init: () => ({ model: { lastClicked: null, interaction: Interaction.init() } }),
 	update,
 	view,
-	subscriptions,
+	subscriptions: interaction.subscriptions,
 })

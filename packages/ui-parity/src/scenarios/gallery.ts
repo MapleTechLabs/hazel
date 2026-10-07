@@ -68,5 +68,36 @@ export const galleryArea: AreaModule = {
 				await page.getByRole("button", { name: /Saving/ }).hover()
 			},
 		}),
+		gallery("link", {
+			id: "gallery-link",
+			title: "Link: href, no href, disabled",
+			themes: ["light", "dark"],
+		}),
+		gallery("link", {
+			id: "gallery-link-hover",
+			title: "Link: hovered",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.getByRole("link", { name: "Documentation" }).hover()
+			},
+		}),
+		gallery("link", {
+			id: "gallery-link-focus-visible",
+			title: "Link: keyboard focus ring on the second link",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.keyboard.press("Tab")
+				await page.keyboard.press("Tab")
+			},
+		}),
+		gallery("link", {
+			id: "gallery-link-pressed",
+			title: "Link: pointer held on a link without href",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.getByRole("link", { name: "Pressable text" }).hover()
+				await page.mouse.down()
+			},
+		}),
 	],
 }

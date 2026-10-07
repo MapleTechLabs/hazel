@@ -62,9 +62,7 @@ export const button = <Message>(
 							...state,
 							isPressed: state.isPressed && !isPending,
 						}),
-						...(Interaction.isPointerPressing(interaction.wiring.model, interaction.target)
-							? [h.Attribute("style", "user-select: none;")]
-							: []),
+						...Interaction.pressStyleAttributes(h, interaction.wiring.model, interaction.target),
 					]
 				: []),
 			...(options.onPress !== undefined && !isDisabled && !isPending
