@@ -10,7 +10,7 @@ import * as FilesView from "../files/view"
 import { mobileMenuButton } from "../../../shell/mobile"
 import { chatHeaderView } from "../header"
 import { pinnedPopoverView } from "../pinned"
-import { messageToolbarOverlay, trackHoverAttribute } from "../overlay-views"
+import { messageToolbarOverlay, reactionModalView, trackHoverAttribute } from "../overlay-views"
 import { attachmentInfoFrom, composerAreaView, replyPreviewOf } from "../composer-view"
 import type * as Draft from "../../../composer/draft"
 import { draftView, type ReplyPreview } from "../../../composer/draft-view"
@@ -165,6 +165,7 @@ const messagesOutlet = <M>(h: HtmlBuilder<M>, model: Model, toParentMessage: (me
 		]) ?? h.empty,
 		imageViewerOverlay(h, model, toParentMessage),
 		messageToolbarOverlay(h, model, toParentMessage),
+		reactionModalView(h, model, toParentMessage),
 	]
 }
 

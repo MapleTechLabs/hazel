@@ -11,7 +11,7 @@ import { emptyLookups, type Lookups } from "../lookups"
 import * as FilesPage from "../files/page"
 import * as Overlays from "../overlays"
 import { PAGE_SIZE } from "../queries"
-import { shareIds, shareKeys, shareMessages, shareStickyKeys } from "../rows"
+import { applyMessageChanges, shareIds, shareKeys, shareMessages, shareStickyKeys } from "../rows"
 import { type ChatTab, Message, type Model, type PageReturn } from "./model"
 import * as Write from "./write"
 
@@ -52,6 +52,7 @@ export const init = (
 	threadIds: [],
 	rows: [],
 	limit: PAGE_SIZE,
+	offset: 0,
 	list: MessageList.init({ id: listId(channelId), estimatedRowHeightPx: 80 }),
 	overlays: Overlays.init(),
 	files: filesFor(channelId, options.orgSlug ?? null, options.tab ?? "messages", null),
@@ -125,14 +126,37 @@ const deriveRows = (model: Model): PageReturn => {
 const withLookup = <K extends keyof Lookups>(model: Model, key: K, value: Lookups[K]): PageReturn =>
 	deriveRows(modifyFields(model, { lookups: (lookups) => ({ ...lookups, [key]: value }) }))
 
-/** Widens the window by a page when the reader nears the oldest loaded message. */
-const loadOlderWhenNearStart = (result: PageReturn): PageReturn => {
+/** The most messages the window holds (S2 condition 1); past it, older pages slide the window. */
+export const MAX_WINDOW = 10 * PAGE_SIZE
+
+/** Grows the window by a page near the oldest message, then slides it; near the end it slides back. */
+const loadWhenNearEdge = (result: PageReturn): PageReturn => {
 	const { model } = result
 	const isPageFull = model.messages.length >= model.limit
-	return isPageFull && MessageList.isNearStart(model.list)
-		? { ...result, model: modifyFields(model, { limit: (limit) => limit + PAGE_SIZE }) }
-		: result
+	if (isPageFull && MessageList.isNearStart(model.list)) {
+		const next =
+			model.limit < MAX_WINDOW
+				? modifyFields(model, { limit: (limit) => limit + PAGE_SIZE })
+				: modifyFields(model, { offset: (offset) => offset + PAGE_SIZE })
+		return { ...result, model: withWindowFollow(next) }
+	}
+	if (model.offset > 0 && MessageList.isNearEnd(model.list))
+		return {
+			...result,
+			model: withWindowFollow(modifyFields(model, { offset: (offset) => Math.max(0, offset - PAGE_SIZE) })),
+		}
+	return result
 }
+
+/** Only a window that reaches the newest message follows the end. */
+const withWindowFollow = (model: Model): Model => {
+	const list = MessageList.setCanFollowEnd(model.list, model.offset === 0)
+	return list === model.list ? model : modifyFields(model, { list: () => list })
+}
+
+/** Back to the newest page (after sending from a scrolled-back window). */
+export const resetWindow = (model: Model): Model =>
+	model.offset === 0 ? model : withWindowFollow(modifyFields(model, { offset: () => 0, limit: () => PAGE_SIZE }))
 
 const liftOverlays = (model: Model, result: Overlays.OverlaysReturn): PageReturn => {
 	const next = result.model === model.overlays ? model : modifyFields(model, { overlays: () => result.model })
@@ -176,6 +200,13 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 					messages: (previous) => shareMessages(previous, messages),
 				}),
 			),
+		ChangedMessages: ({ order, upserts }) =>
+			deriveRows(
+				modifyFields(model, {
+					hasLoadedMessages: () => true,
+					messages: (previous) => applyMessageChanges(previous, order, upserts),
+				}),
+			),
 		UpdatedReactions: ({ reactions }) => deriveRows(modifyFields(model, { reactions: () => reactions })),
 		UpdatedUsers: ({ users }) => withLookup(model, "users", users),
 		UpdatedPresence: ({ presence }) =>
@@ -202,7 +233,7 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 		UpdatedTyping: ({ typing }) => ({ model: modifyFields(model, { typing: () => typing }) }),
 		TickedTypingClock: ({ nowMs }) => ({ model: modifyFields(model, { typingNowMs: () => nowMs }) }),
 		GotListMessage: ({ message: listMessage }) =>
-			loadOlderWhenNearStart(liftList(model, MessageList.update(model.list, listMessage))),
+			loadWhenNearEdge(liftList(model, MessageList.update(model.list, listMessage))),
 		GotOverlaysMessage: ({ message: overlaysMessage }) =>
 			liftOverlays(model, Overlays.update(model.overlays, overlaysMessage, factsOf(model))),
 		// Reported to the root as `RequestedMobileSidebar` by `index.ts`.

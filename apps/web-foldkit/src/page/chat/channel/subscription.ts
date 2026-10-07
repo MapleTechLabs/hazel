@@ -4,7 +4,7 @@ import { Subscription } from "foldkit"
 import * as FilesSubscriptions from "../files/subscriptions"
 import {
 	channelStream,
-	messagesStream,
+	messageChangesStream,
 	parentChannelStream,
 	reactionsStream,
 	threadPanelStream,
@@ -65,11 +65,13 @@ const chat = Subscription.make<Input, Message>()((entry) => ({
 		},
 	),
 	chatMessages: entry(
-		{ channelId: ChannelId, limit: Schema.Number },
+		{ channelId: ChannelId, limit: Schema.Number, offset: Schema.Number },
 		{
-			modelToDependencies: ({ model }) => ({ channelId: model.channelId, limit: model.limit }),
-			dependenciesToStream: ({ channelId, limit }) =>
-				messagesStream(channelId, limit, (messages) => Message.UpdatedMessages({ messages })),
+			modelToDependencies: ({ model }) => ({ channelId: model.channelId, limit: model.limit, offset: model.offset }),
+			dependenciesToStream: ({ channelId, limit, offset }) =>
+				messageChangesStream(channelId, limit, offset, ({ order, upserts }) =>
+					Message.ChangedMessages({ order, upserts }),
+				),
 		},
 	),
 	chatReactions: entry(byChannel, {

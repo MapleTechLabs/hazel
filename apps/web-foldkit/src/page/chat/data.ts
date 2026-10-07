@@ -1,4 +1,4 @@
-import type { ChannelId } from "@hazel/schema"
+import type { ChannelId, MessageId } from "@hazel/schema"
 import { eq } from "@tanstack/db"
 import type { Stream } from "effect"
 import {
@@ -9,6 +9,7 @@ import {
 	userCollection,
 } from "~/db/collections"
 import { liveQueryStream } from "../../data/live-query"
+import { liveQueryChangeSetStream } from "../../data/live-query-changes"
 import {
 	type ChannelInfo,
 	type ChannelQueryRow,
@@ -46,6 +47,36 @@ export const messagesStream = <Message>(
 				.limit(limit)
 				.offset(0),
 		(rows) => toMessage(rows.map(toChatMessage)),
+	)
+
+/**
+ * The window of `messagesStream` as change sets: `offset` newest messages skipped, `limit` kept.
+ * Only inserted and updated rows are converted per change (S2 condition 2).
+ */
+export const messageChangesStream = <Message>(
+	channelId: ChannelId,
+	limit: number,
+	offset: number,
+	toMessage: (changes: { order: ReadonlyArray<MessageId>; upserts: ReadonlyArray<ChatMessage> }) => Message,
+): Stream.Stream<Message> =>
+	liveQueryChangeSetStream<MessageQueryRow, Message>(
+		(q) =>
+			q
+				.from({ message: messageCollection })
+				.leftJoin({ pinned: pinnedMessageCollection }, ({ message, pinned }) =>
+					eq(message.id, pinned.messageId),
+				)
+				.leftJoin({ author: userCollection }, ({ message, author }) =>
+					eq(message.authorId, author.id),
+				)
+				.where(({ message }) => eq(message.channelId, channelId))
+				.select(({ message, pinned, author }) => ({ ...message, pinnedMessage: pinned, author }))
+				.orderBy(({ message }) => message.createdAt, "desc")
+				.limit(limit)
+				.offset(offset),
+		(row) => row.id,
+		({ order, upserts }) =>
+			toMessage({ order: order as ReadonlyArray<MessageId>, upserts: upserts.map(toChatMessage) }),
 	)
 
 export const reactionsStream = <Message>(

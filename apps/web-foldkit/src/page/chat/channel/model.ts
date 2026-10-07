@@ -58,6 +58,8 @@ export const Model = Schema.Struct({
 	/** Oldest first, with date headers; what the list renders. */
 	rows: Schema.Array(DisplayRow),
 	limit: Schema.Number,
+	/** Newest messages skipped: the window slides older once it holds `MAX_WINDOW` messages. */
+	offset: Schema.Number,
 	list: MessageList.Model,
 	overlays: Overlays.Model,
 	/** The Files tab (`$id/files` and `$id/files/media`), present while one of them is shown. */
@@ -82,6 +84,8 @@ export const Message = defineMessageUnion({
 	ClickedTab: { tab: ChatTab },
 	UpdatedParentChannel: { channel: Schema.NullOr(ParentChannelInfo) },
 	UpdatedMessages: { messages: Schema.Array(ChatMessage) },
+	/** The window as a change set: the ids in order, plus inserted and updated rows. */
+	ChangedMessages: { order: Schema.Array(MessageId), upserts: Schema.Array(ChatMessage) },
 	UpdatedReactions: { reactions: Schema.Array(ChatReaction) },
 	UpdatedUsers: { users: Schema.Array(UserInfo) },
 	UpdatedPresence: { presence: Schema.Array(PresenceInfo) },

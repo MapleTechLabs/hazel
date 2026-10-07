@@ -28,6 +28,8 @@ export const Model = Schema.Struct({
 	id: Schema.String,
 	estimatedRowHeightPx: Schema.Number,
 	followThresholdPx: Schema.Number,
+	/** False while the loaded window stops short of the newest row: the end is then not "live". */
+	canFollowEnd: Schema.Boolean,
 	keys: Schema.Array(Schema.String),
 	/** Rows that never anchor the viewport (date dividers move with the first message of their day). */
 	stickyKeys: Schema.Array(Schema.String),
@@ -71,6 +73,7 @@ export const init = (config: {
 	id: config.id,
 	estimatedRowHeightPx: config.estimatedRowHeightPx,
 	followThresholdPx: config.followThresholdPx ?? 1,
+	canFollowEnd: true,
 	keys: [],
 	stickyKeys: [],
 	measuredHeights: {},
@@ -151,7 +154,8 @@ const stickySetOf = (model: Model) => {
 /** The anchor that describes `scrollTop`: the end when within the follow threshold, else the top non-sticky row. */
 export const anchorAt = (model: Model, layout: Layout, scrollTop: number): ViewportAnchor => {
 	const distanceFromEnd = layout.totalHeight - model.viewportHeight - scrollTop
-	if (model.keys.length === 0 || distanceFromEnd <= model.followThresholdPx) return ViewportAnchor.End()
+	if (model.keys.length === 0 || (model.canFollowEnd && distanceFromEnd <= model.followThresholdPx))
+		return ViewportAnchor.End()
 	const sticky = stickySetOf(model)
 	let index = rowIndexAt(layout, scrollTop)
 	while (index < model.keys.length - 1 && sticky.has(model.keys[index]!)) index++
@@ -337,6 +341,24 @@ export const setKeys = (
 /** Jumps to the newest row and follows it (after sending a message). */
 export const scrollToEnd = (model: Model): ListReturn =>
 	withRendered(reconcile(modifyFields(model, { anchor: () => ViewportAnchor.End() })))
+
+/** Within half a viewport of the newest loaded row: time to load a newer page of a capped window. */
+export const isNearEnd = (model: Model) =>
+	model.viewportHeight > 0 &&
+	model.keys.length > 0 &&
+	maxScrollTop(model, layoutOf(model)) - model.scrollTop < model.viewportHeight / 2
+
+/** Whether the window reaches the newest row; while it does not, the list anchors on rows only. */
+export const setCanFollowEnd = (model: Model, canFollowEnd: boolean): Model =>
+	model.canFollowEnd === canFollowEnd
+		? model
+		: modifyFields(model, {
+				canFollowEnd: () => canFollowEnd,
+				anchor: (anchor) =>
+					!canFollowEnd && anchor._tag === "End" && model.viewportHeight > 0 && model.keys.length > 0
+						? anchorAt({ ...model, canFollowEnd: false }, layoutOf(model), model.scrollTop)
+						: anchor,
+			})
 
 /** Within half a viewport of the oldest loaded row: time to load an older page. */
 export const isNearStart = (model: Model) =>

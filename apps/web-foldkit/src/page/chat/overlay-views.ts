@@ -1,5 +1,7 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import * as EmojiDialog from "../../emoji-picker/dialog"
+import { pickerView } from "../../emoji-picker/view"
+import { controlledModal } from "../../ui/modal"
 import { Mount } from "foldkit"
 import { IconDotsVertical, IconStar, IconThread } from "../../icons"
 import {
@@ -142,4 +144,24 @@ export const messageToolbarOverlay = <M>(h: HtmlBuilder<M>, model: Model, toPare
 			),
 		],
 	)
+}
+
+/** The context menu's emoji picker modal (`ModalContent size="xs"` around the picker). */
+export const reactionModalView = <M>(h: HtmlBuilder<M>, model: Model, toParentMessage: ToParent<M>): Html => {
+	const current = model.overlays.reactionModal
+	if (current === null) return h.empty
+	const toOverlay = toOverlays(toParentMessage)
+	return controlledModal(h, {
+		model: current.modal,
+		toParentMessage: (message) => toOverlay(Overlays.Message.GotReactionModalMessage({ message })),
+		size: "xs",
+		closeButton: false,
+		className: "overflow-hidden p-0!",
+		toContent: () => [
+			pickerView(h, current.picker, {
+				toMessage: (message) => toOverlay(Overlays.Message.GotReactionModalPickerMessage({ message })),
+				className: "h-[420px]",
+			}),
+		],
+	})
 }

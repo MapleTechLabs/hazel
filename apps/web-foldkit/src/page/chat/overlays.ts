@@ -4,6 +4,8 @@ import { Command, type Update } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
 import * as TooltipHost from "../../chat/tooltip-host"
 import * as EmojiDialog from "../../emoji-picker/dialog"
+import * as Picker from "../../emoji-picker/picker"
+import * as Modal from "../../ui/modal"
 import * as Menu from "../../ui/menu"
 import * as Popover from "../../ui/popover"
 import * as Toolbar from "../../ui/toolbar"
@@ -33,6 +35,8 @@ export const Model = Schema.Struct({
 	imageViewer: Schema.NullOr(Schema.Struct({ messageId: MessageId, index: Schema.Number })),
 	/** The toolbar's "Add reaction" picker while it is open. */
 	reactionPicker: Schema.NullOr(Schema.Struct({ messageId: MessageId, dialog: EmojiDialog.Model })),
+	/** The context menu's "Add Reaction": a modal holding the picker. */
+	reactionModal: Schema.NullOr(Schema.Struct({ messageId: MessageId, modal: Modal.Model, picker: Picker.Model })),
 	/** `useChatThread`: the thread panel beside the channel. */
 	thread: Schema.NullOr(Schema.Struct({ threadChannelId: ChannelId, messageId: MessageId })),
 })
@@ -51,6 +55,7 @@ export const init = (): Model => ({
 	pinned: Popover.init("pinned-messages"),
 	imageViewer: null,
 	reactionPicker: null,
+	reactionModal: null,
 	thread: null,
 })
 
@@ -78,6 +83,8 @@ export const Message = defineMessageUnion({
 	ClosedImageViewer: {},
 	SelectedViewerImage: { index: Schema.Number },
 	GotReactionPickerMessage: { messageId: MessageId, message: EmojiDialog.Message },
+	GotReactionModalMessage: { message: Modal.Message },
+	GotReactionModalPickerMessage: { message: Picker.Message },
 	ClickedThreadPreview: { threadChannelId: ChannelId, messageId: MessageId },
 	ClosedThread: {},
 })
@@ -303,6 +310,39 @@ export const update = (model: Model, message: Message, facts: MessageFacts): Ove
 				? next
 				: { ...next, outMessage: OutMessage.RequestedReaction({ messageId, emoji: result.outMessage.emoji }) }
 		},
+		GotReactionModalMessage: ({ message: modalMessage }) => {
+			const current = model.reactionModal
+			if (current === null) return { model }
+			const result = Modal.update(current.modal, modalMessage)
+			return mapped(
+				model,
+				result,
+				(modal) => ({ reactionModal: modal.isOpen ? { ...current, modal } : null }),
+				(inner) => Message.GotReactionModalMessage({ message: inner }),
+			)
+		},
+		GotReactionModalPickerMessage: ({ message: pickerMessage }) => {
+			const current = model.reactionModal
+			if (current === null) return { model }
+			const result = Picker.update(current.picker, pickerMessage)
+			const next = mapped(
+				model,
+				result,
+				(picker) => ({ reactionModal: { ...current, picker } }),
+				(inner) => Message.GotReactionModalPickerMessage({ message: inner }),
+			)
+			// `handleReaction(emoji)` then `modal.close()`.
+			return result.outMessage === undefined
+				? next
+				: {
+						...next,
+						model: { ...next.model, reactionModal: null },
+						outMessage: OutMessage.RequestedReaction({
+							messageId: current.messageId,
+							emoji: result.outMessage.emoji,
+						}),
+					}
+		},
 		ClickedThreadPreview: ({ threadChannelId, messageId }) =>
 			set(model, { thread: { threadChannelId, messageId } }),
 		ClosedThread: () => set(model, { thread: null }),
@@ -318,3 +358,18 @@ export const ownsRow = (model: Model, messageId: MessageId): boolean =>
 	(model.hoveredTriggerKey !== null && messageIdOfKey(model.hoveredTriggerKey) === messageId) ||
 	(model.contextMenu !== null && model.contextMenu.messageId === messageId) ||
 	(model.popover !== null && messageIdOfKey(model.popover.key) === messageId)
+
+/** The context menu's "Add Reaction" opens the picker modal, which loads its data. */
+export const openReactionModal = (model: Model, messageId: MessageId): OverlaysReturn => ({
+	model: {
+		...model,
+		reactionModal: {
+			messageId,
+			modal: { id: "reaction-picker-modal", isOpen: true },
+			picker: Picker.init("reaction-picker-modal-picker"),
+		},
+	},
+	commands: Command.mapMessages([Picker.LoadEmojiData()], (message) =>
+		Message.GotReactionModalPickerMessage({ message }),
+	),
+})

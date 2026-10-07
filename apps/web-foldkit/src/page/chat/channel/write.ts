@@ -25,6 +25,7 @@ import {
 import * as Overlays from "../overlays"
 import type { ChatMessage } from "../rows"
 import { Message, type Model, type PageReturn } from "./model"
+import { resetWindow } from "./page"
 
 /** The channel page's write path: `ChatProvider`'s actions and the two drafts (channel and thread). */
 
@@ -76,9 +77,10 @@ export const liftDraft = (model: Model, which: Which, result: DraftUpdate.Return
 		// `onMessageSent`: the channel's list scrolls to the bottom.
 		SentMessage: () => {
 			if (which === "thread") return { model: next, commands }
-			const scrolled = MessageList.scrollToEnd(next.list)
+			const present = resetWindow(next)
+			const scrolled = MessageList.scrollToEnd(present.list)
 			return {
-				model: { ...next, list: scrolled.model },
+				model: { ...present, list: scrolled.model },
 				commands: [
 					...commands,
 					...Command.mapMessages(scrolled.commands ?? [], (message) => Message.GotListMessage({ message })),
@@ -205,8 +207,12 @@ export const handleOverlaysOut = (model: Model, out: Overlays.OutMessage): PageR
 			if (action === "copy-id") return copy(model, messageId, "Message ID has been copied to your clipboard.")
 			if (action === "delete")
 				return { model, outMessage: PageOutMessage.RequestedModal({ modal: { _tag: "DeleteMessage", messageId } }) }
-			// "add-reaction" opens the context menu's emoji picker modal (`emoji-picker` wiring).
-			return { model }
+			// "add-reaction": the context menu's emoji picker modal.
+			const opened = Overlays.openReactionModal(model.overlays, messageId)
+			return {
+				model: { ...model, overlays: opened.model },
+				commands: Command.mapMessages(opened.commands ?? [], (message) => Message.GotOverlaysMessage({ message })),
+			}
 		},
 	})
 
