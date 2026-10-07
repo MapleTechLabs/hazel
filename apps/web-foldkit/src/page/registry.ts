@@ -16,6 +16,11 @@ import type { PageOutMessage } from "./out-message"
 import * as NotificationsInbox from "./notifications/inbox"
 import * as OrgHome from "./home"
 import * as Profile from "./profile"
+import * as MySettingsAppearance from "./my-settings/appearance"
+import * as MySettingsDesktop from "./my-settings/desktop"
+import * as MySettingsLinkedAccounts from "./my-settings/linked-accounts"
+import * as MySettingsNotifications from "./my-settings/notifications"
+import * as MySettingsProfile from "./my-settings/profile"
 import * as Root from "./root"
 import * as IntegrationSettings from "./settings/integrations/detail"
 import * as IntegrationsSettings from "./settings/integrations/index"
@@ -69,6 +74,11 @@ export const pages = [
 	ChannelSettingsIntegrations.page,
 	SettingsChatSync.page,
 	SettingsChatSyncConnection.page,
+	MySettingsAppearance.page,
+	MySettingsDesktop.page,
+	MySettingsLinkedAccounts.page,
+	MySettingsNotifications.page,
+	MySettingsProfile.page,
 ]
 
 export const PageSlot = Schema.Union(pages.map((page) => page.Slot))
