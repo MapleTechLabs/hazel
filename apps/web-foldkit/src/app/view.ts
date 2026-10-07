@@ -17,6 +17,7 @@ import {
 	sectionLayout,
 } from "../shell/layouts"
 import * as Shell from "../shell/model"
+import * as Notifications from "../shell/notifications"
 import { mySettingsSidebar, notificationsSidebar, settingsSidebar } from "../shell/sidebars"
 import type * as Menu from "../ui/menu"
 import type * as ModalKit from "../ui/modal"
@@ -34,6 +35,9 @@ const toOrgSwitcherMessage = (message: Menu.Message) =>
 	toShellMessage(Shell.Message.GotOrgSwitcherMessage({ message }))
 const toMobileSidebarMessage = (message: ModalKit.Message) =>
 	toShellMessage({ _tag: "GotMobileSidebarMessage", message })
+const clickedMarkAllRead = toShellMessage(
+	Shell.Message.GotNotificationsMessage({ message: Notifications.Message.ClickedMarkAllRead() }),
+)
 const openedMobileSidebar = toShellMessage(Shell.Message.ToggledSidebar({ isOpen: true }))
 export const toPageMessage = (message: PageMessage): Message => ({ _tag: "GotPageMessage", message })
 
@@ -117,7 +121,11 @@ const secondarySidebar = (model: Model, h: HtmlBuilder<Message>, context: ShellC
 	if (section === "Settings") return settingsSidebar(h, context, chrome)
 	if (section === "MySettings") return mySettingsSidebar(h, context, chrome)
 	if (section === "Notifications")
-		return notificationsSidebar(h, context, chrome, shell.unreadNotificationCount)
+		return notificationsSidebar(h, context, chrome, {
+			unreadCount: Notifications.unreadIdsOf(shell.notifications).length,
+			isPending: Notifications.isMarkingAllRead(shell.notifications),
+			onPress: h.OnClick(clickedMarkAllRead),
+		})
 	const route = model.route
 	return ChannelsSidebar.view(
 		h,
@@ -149,7 +157,8 @@ const body = (model: Model, h: HtmlBuilder<Message>): Html => {
 	return orgShell(h, context, {
 		page: sectionBody(model, h),
 		secondarySidebar: secondarySidebar(model, h, context),
-		unreadNotificationCount: model.shell.unreadNotificationCount,
+		// The bell reads `useUnreadNotificationCount`, which has no optimistic layer.
+		unreadNotificationCount: model.shell.notifications.unreadIds.length,
 		toaster: Toasts.view(h, model.toasts),
 		overlays: [Modal.view(h, model.modal), CommandPalette.view(h, model.commandPalette)],
 		mobile: {

@@ -1,4 +1,4 @@
-import { ChannelId, OrganizationMemberId, UserId } from "@hazel/schema"
+import { ChannelId, NotificationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { and, eq, isNull } from "@tanstack/db"
 import { Option, Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
@@ -12,6 +12,7 @@ import { liveQueryStream } from "../data/live-query"
 import type { Shared } from "../page/contract"
 import { type AppRoute, orgSectionOf } from "../route"
 import * as ChannelsSidebar from "./channels-sidebar"
+import * as Notifications from "./notifications"
 import { type ChannelSummary, Message, type Model } from "./model"
 
 /** What the shell's Subscriptions see: its Model plus the root's route and shared state. */
@@ -74,7 +75,7 @@ const own = Subscription.make<Input, Message>()((entry) => ({
 						),
 		},
 	),
-	// `useUnreadNotificationCount`: the nav rail's bell badge.
+	// `useUnreadNotificationCount`, with ids: the bell badge and "Mark all as read".
 	shellUnreadNotifications: entry(
 		{ memberId: Schema.NullOr(OrganizationMemberId) },
 		{
@@ -82,14 +83,19 @@ const own = Subscription.make<Input, Message>()((entry) => ({
 			dependenciesToStream: ({ memberId }) =>
 				memberId === null
 					? Stream.empty
-					: liveQueryStream<unknown, Message>(
+					: liveQueryStream<{ readonly id: NotificationId }, Message>(
 							(q) =>
 								q
 									.from({ notification: notificationCollection })
 									.where(({ notification }) =>
 										and(eq(notification.memberId, memberId), isNull(notification.readAt)),
 									),
-							(rows) => Message.UpdatedUnreadNotificationCount({ count: rows.length }),
+							(rows): Message => ({
+								_tag: "GotNotificationsMessage",
+								message: Notifications.Message.UpdatedUnreadNotifications({
+									ids: rows.map((row) => row.id),
+								}),
+							}),
 						),
 		},
 	),
