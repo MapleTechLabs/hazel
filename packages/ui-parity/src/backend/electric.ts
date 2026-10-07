@@ -61,51 +61,64 @@ export const corsHeaders = (request: Request): Record<string, string> => ({
 		"electric-handle, electric-offset, electric-schema, electric-cursor, electric-up-to-date",
 })
 
-export const handleShape = (request: Request, dataset: Dataset): Response | Promise<Response> => {
-	const url = new URL(request.url)
-	const table = url.searchParams.get("table") as TableName | null
-	const rows = (table && dataset.tables[table]) || []
-	const handle = `parity-${dataset.name}-${table}`
-	const base = {
-		...corsHeaders(request),
-		"content-type": "application/json",
-		"cache-control": "no-store",
-		"electric-handle": handle,
-		"electric-offset": SHAPE_OFFSET,
-		"electric-schema": JSON.stringify(schemaFor(rows)),
-	}
+type ResponseKind = "initial" | "snapshot" | "live"
 
-	if (url.searchParams.get("live") === "true") {
-		const upToDate = () =>
-			Response.json([{ headers: { control: "up-to-date", global_last_seen_lsn: "0" } }], {
-				headers: { ...base, "electric-up-to-date": "", "electric-cursor": "0" },
-			})
-		return Bun.sleep(LIVE_POLL_DELAY_MS).then(upToDate)
-	}
+const UP_TO_DATE = { headers: { control: "up-to-date", global_last_seen_lsn: "0" } }
 
-	const isSubsetSnapshot = ["where", "limit", "order_by", "subset__where", "subset__limit"].some((param) =>
-		url.searchParams.has(param),
-	)
+const encodeBody = (table: TableName | null, rows: ReadonlyArray<Row>, kind: ResponseKind) => {
+	if (kind === "live") return JSON.stringify([UP_TO_DATE])
 	const changeMessages = rows.map((row) => ({
 		key: `"public"."${table}"/"${String(row.id)}"`,
 		value: Object.fromEntries(Object.entries(row).map(([column, value]) => [column, encodeValue(value)])),
 		headers: { operation: "insert", relation: ["public", table] },
 	}))
+	if (kind === "snapshot")
+		return JSON.stringify({
+			metadata: { snapshot_mark: 0, xmin: "0", xmax: "0", xip_list: [], database_lsn: "0" },
+			data: changeMessages,
+		})
+	return JSON.stringify([...changeMessages, UP_TO_DATE])
+}
 
-	if (isSubsetSnapshot) {
-		return Response.json(
-			{
-				metadata: { snapshot_mark: 0, xmin: "0", xmax: "0", xip_list: [], database_lsn: "0" },
-				data: changeMessages,
-			},
-			{ headers: base },
-		)
+/** Datasets are immutable, so each (dataset, table, kind) body and schema header is encoded once. */
+const encoded = new WeakMap<Dataset, Map<string, { readonly schema: string; readonly body: string }>>()
+
+const encodedShape = (dataset: Dataset, table: TableName | null, kind: ResponseKind) => {
+	let byKey = encoded.get(dataset)
+	if (!byKey) {
+		byKey = new Map()
+		encoded.set(dataset, byKey)
 	}
+	const key = `${table}:${kind}`
+	let entry = byKey.get(key)
+	if (!entry) {
+		const rows = (table && dataset.tables[table]) || []
+		entry = { schema: JSON.stringify(schemaFor(rows)), body: encodeBody(table, rows, kind) }
+		byKey.set(key, entry)
+	}
+	return entry
+}
 
-	return Response.json(
-		[...changeMessages, { headers: { control: "up-to-date", global_last_seen_lsn: "0" } }],
-		{
-			headers: { ...base, "electric-up-to-date": "", "electric-cursor": "0" },
-		},
+export const handleShape = (request: Request, dataset: Dataset): Response | Promise<Response> => {
+	const url = new URL(request.url)
+	const table = url.searchParams.get("table") as TableName | null
+	const isLive = url.searchParams.get("live") === "true"
+	const isSubsetSnapshot = ["where", "limit", "order_by", "subset__where", "subset__limit"].some((param) =>
+		url.searchParams.has(param),
 	)
+	const kind: ResponseKind = isLive ? "live" : isSubsetSnapshot ? "snapshot" : "initial"
+	const { schema, body } = encodedShape(dataset, table, kind)
+	const base = {
+		...corsHeaders(request),
+		"content-type": "application/json",
+		"cache-control": "no-store",
+		"electric-handle": `parity-${dataset.name}-${table}`,
+		"electric-offset": SHAPE_OFFSET,
+		"electric-schema": schema,
+	}
+	const upToDate = { ...base, "electric-up-to-date": "", "electric-cursor": "0" }
+
+	if (kind === "live")
+		return Bun.sleep(LIVE_POLL_DELAY_MS).then(() => new Response(body, { headers: upToDate }))
+	return new Response(body, { headers: kind === "snapshot" ? base : upToDate })
 }
