@@ -86,7 +86,10 @@ const toggleScenarios = [
 ]
 
 const toggleGroupScenarios = [
-	gallery("toggle-group", { id: "gallery-toggle-group", title: "Toggle group: single, multiple, vertical" }),
+	gallery("toggle-group", {
+		id: "gallery-toggle-group",
+		title: "Toggle group: single, multiple, vertical",
+	}),
 	gallery("toggle-group", {
 		id: "gallery-toggle-group-hover",
 		title: "Toggle group: hovered item",
@@ -123,6 +126,10 @@ const staticScenarios = [
 		title: "Section header, label and footer",
 	}),
 	gallery("text", { id: "gallery-text", title: "Text, strong, code, keyboard" }),
+	gallery("progress-bar", {
+		id: "gallery-progress-bar",
+		title: "Progress bar: values, header, indeterminate",
+	}),
 	gallery("toolbar", { id: "gallery-toolbar", title: "Toolbar: horizontal, vertical" }),
 	gallery("toolbar", {
 		id: "gallery-toolbar-arrow-keys",
@@ -135,6 +142,57 @@ const staticScenarios = [
 	}),
 ]
 
+const table = (page: Page, name: string) => page.getByRole("grid", { name, exact: true })
+
+const tableScenarios = [
+	gallery("table", { id: "gallery-table", title: "Table: selectable, sortable, grid, striped, empty" }),
+	gallery("table", {
+		id: "gallery-table-click",
+		title: "Table: row selection by click",
+		steps: async (page) => {
+			await table(page, "Members")
+				.getByRole("row", { name: /Ada Lovelace/ })
+				.click()
+			await page.mouse.move(0, 0)
+		},
+	}),
+	gallery("table", {
+		id: "gallery-table-arrow-keys",
+		title: "Table: keyboard focus ring and arrow keys skip disabled rows",
+		steps: async (page) => {
+			await page.keyboard.press("Tab")
+			await page.keyboard.press("ArrowDown")
+			await page.keyboard.press("ArrowDown")
+		},
+	}),
+	gallery("table", {
+		id: "gallery-table-cell-keys",
+		title: "Table: cell focus by click, arrow keys move between cells",
+		steps: async (page) => {
+			await table(page, "Members").getByRole("gridcell", { name: "Owner" }).click()
+			await page.mouse.move(0, 0)
+			await page.keyboard.press("ArrowDown")
+			await page.keyboard.press("ArrowRight")
+		},
+	}),
+	gallery("table", {
+		id: "gallery-table-sort",
+		title: "Table: sortable header hover and sort change",
+		steps: async (page) => {
+			const sortable = table(page, "Sortable members")
+			await sortable.getByRole("columnheader", { name: "Channels" }).click()
+			await sortable.getByRole("columnheader", { name: "Channels" }).click()
+			await sortable.getByRole("columnheader", { name: "Name" }).hover()
+		},
+	}),
+]
+
 export const galleryDataArea: AreaModule = {
-	scenarios: [...tabsScenarios, ...toggleScenarios, ...toggleGroupScenarios, ...staticScenarios],
+	scenarios: [
+		...tabsScenarios,
+		...toggleScenarios,
+		...toggleGroupScenarios,
+		...staticScenarios,
+		...tableScenarios,
+	],
 }
