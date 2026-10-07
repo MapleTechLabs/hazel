@@ -17,6 +17,13 @@
 		"@tanstack/db": "0.11.3",
 		"effect": "catalog:effect",
 		"foldkit": "0.166.0",
+		"prosemirror-commands": "^1.7.2",
+		"prosemirror-history": "^1.5.1",
+		"prosemirror-keymap": "^1.2.3",
+		"prosemirror-model": "^1.25.12",
+		"prosemirror-state": "^1.4.4",
+		"prosemirror-transform": "^1.12.2",
+		"prosemirror-view": "^1.42.6",
 		"tailwind-merge": "^3.5.0",
 		"tailwind-variants": "^3.2.2"
 	},
