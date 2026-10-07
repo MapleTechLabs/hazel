@@ -1,6 +1,7 @@
 import type { Dataset } from "./fixtures/dataset.ts"
 import { defaultDataset } from "./fixtures/datasets/default.ts"
 import { chatArea } from "./scenarios/chat.ts"
+import { composerArea } from "./scenarios/composer.ts"
 import { entryArea } from "./scenarios/entry.ts"
 import { galleryArea } from "./scenarios/gallery.ts"
 import { homeArea } from "./scenarios/home.ts"
@@ -24,6 +25,7 @@ const areas: ReadonlyArray<AreaModule> = [
 	homeArea,
 	entryArea,
 	galleryArea,
+	composerArea,
 ]
 
 const uniqueBy = <A>(items: ReadonlyArray<A>, key: (item: A) => string, kind: string) => {
