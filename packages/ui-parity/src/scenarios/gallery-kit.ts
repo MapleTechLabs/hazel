@@ -154,7 +154,101 @@ export const dropdownScenarios: ReadonlyArray<Scenario> = [
 	}),
 ]
 
+/** A calendar day cell; React Aria names them "Thursday, March 12, 2026" (with "Today, " etc.). */
+const day = (page: Page, date: string) => page.getByRole("button", { name: new RegExp(`\\b${date}\\b`) })
+
+/** Tabs until a calendar day cell has focus. */
+const tabToDay = async (page: Page, date: string) => {
+	for (let presses = 0; presses < 15; presses++) {
+		await page.keyboard.press("Tab")
+		const focused = await day(page, date)
+			.first()
+			.evaluate((element) => element === document.activeElement)
+		if (focused) return
+	}
+	throw new Error(`tabToDay: "${date}" never received focus`)
+}
+
+const eventDate = (page: Page) => page.getByRole("application", { name: /^Event date/ })
+
+export const calendarScenarios: ReadonlyArray<Scenario> = [
+	kit("calendar", "calendar", "Calendar: selected date, today marker, minimum date"),
+	kit("calendar", "calendar-hover", "Calendar: hovered day", {
+		steps: (page) => day(page, "March 20, 2026").first().hover(),
+	}),
+	kit("calendar", "calendar-select", "Calendar: clicking a day selects it", {
+		steps: (page) => day(page, "March 25, 2026").first().click(),
+	}),
+	kit("calendar", "calendar-keyboard", "Calendar: Tab focuses the selected day, arrows move", {
+		steps: async (page) => {
+			await tabToDay(page, "March 18, 2026")
+			await page.keyboard.press("ArrowRight")
+			await page.keyboard.press("ArrowDown")
+		},
+	}),
+	kit("calendar", "calendar-keyboard-month", "Calendar: arrows cross into the next month, Enter selects", {
+		steps: async (page) => {
+			await tabToDay(page, "March 18, 2026")
+			await page.keyboard.press("ArrowDown")
+			await page.keyboard.press("ArrowDown")
+			await page.keyboard.press("Enter")
+		},
+	}),
+	kit("calendar", "calendar-next", "Calendar: the next button shows the next month", {
+		steps: async (page) => {
+			await eventDate(page).getByRole("button", { name: "Next", exact: true }).first().click()
+			await page.getByRole("application", { name: "Event date, April 2026" }).waitFor()
+		},
+	}),
+]
+
+export const rangeCalendarScenarios: ReadonlyArray<Scenario> = [
+	kit("range-calendar", "range-calendar", "RangeCalendar: selected range"),
+	kit("range-calendar", "range-calendar-anchor", "RangeCalendar: first click anchors, hover highlights", {
+		steps: async (page) => {
+			await day(page, "March 16, 2026").click()
+			await day(page, "March 20, 2026").hover()
+		},
+	}),
+	kit("range-calendar", "range-calendar-select", "RangeCalendar: two clicks select a new range", {
+		steps: async (page) => {
+			await day(page, "March 16, 2026").click()
+			await day(page, "March 19, 2026").click()
+		},
+	}),
+	kit("range-calendar", "range-calendar-hover", "RangeCalendar: hovered day inside the range", {
+		steps: (page) => day(page, "March 10, 2026").hover(),
+	}),
+]
+
+export const datePickerScenarios: ReadonlyArray<Scenario> = [
+	kit("date-picker", "date-picker", "DatePicker: with a value, labelled and empty"),
+	kit("date-picker", "date-picker-open", "DatePicker: the calendar button opens the calendar", {
+		steps: async (page) => {
+			await page
+				.getByRole("button", { name: /^Calendar/ })
+				.first()
+				.click()
+			await page.getByRole("dialog").waitFor()
+		},
+	}),
+	kit("date-picker", "date-picker-choose", "DatePicker: choosing a day fills the field and closes", {
+		steps: async (page) => {
+			await page
+				.getByRole("button", { name: /^Calendar/ })
+				.first()
+				.click()
+			await page.getByRole("dialog").waitFor()
+			await day(page, "March 24, 2026").click()
+			await page.getByRole("dialog").waitFor({ state: "detached" })
+		},
+	}),
+]
+
 export const galleryKitScenarios: ReadonlyArray<Scenario> = [
+	...calendarScenarios,
+	...rangeCalendarScenarios,
+	...datePickerScenarios,
 	...toastScenarios,
 	...listBoxScenarios,
 	...dropdownScenarios,

@@ -31,7 +31,7 @@ export interface DateFieldParts {
 	readonly dateInput: (options?: { readonly className?: string }) => Html
 }
 
-const hiddenInputStyle =
+export const hiddenInputStyle =
 	"border: 0px; clip: rect(0px, 0px, 0px, 0px); clip-path: inset(50%); height: 1px; margin: -1px; overflow: hidden; padding: 0px; position: fixed; width: 1px; white-space: nowrap; top: 0px; left: 0px;"
 
 const fieldName = (type: Segments.SegmentType) =>
@@ -40,12 +40,104 @@ const fieldName = (type: Segments.SegmentType) =>
 	) ?? type
 
 /** useDatePickerGroup's description of the committed value. */
-const selectedDescription = (model: Segments.Model) => {
+export const selectedDescription = (model: Segments.Model) => {
 	if (model.committed === null) return null
 	const date = Segments.dateValueOf(model)
 	return model.kind === "date"
 		? `Selected Date: ${new Intl.DateTimeFormat(navigator.language, { dateStyle: "long", timeZone: "UTC" }).format(date)}`
 		: `Selected Time: ${new Intl.DateTimeFormat(navigator.language, { hour: "numeric", minute: "2-digit", timeZone: "UTC" }).format(date)}`
+}
+
+/** The DateInput's segments: contenteditable spinbuttons plus aria-hidden literals. */
+export const dateSegments = <ParentMessage>(
+	h: HtmlBuilder<ParentMessage>,
+	options: {
+		readonly model: Segments.Model
+		readonly toParentMessage: (message: Segments.Message) => ParentMessage
+		readonly interaction?: Interaction.Wiring<ParentMessage> | undefined
+		/** The field's label id; segments are then labelled by themselves and it. */
+		readonly labelledBy?: string | undefined
+		/** On the first editable segment only. */
+		readonly describedBy?: string | undefined
+		/** Appended to each segment's name (`"month, " + ariaLabel`), as an aria-label on the field does. */
+		readonly ariaLabel?: string | undefined
+	},
+): Array<Html> => {
+	const { model, interaction, describedBy } = options
+	const send = options.toParentMessage
+	const statusAttributes = [
+		...(model.isDisabled ? [h.DataAttribute("disabled", "true")] : []),
+		...(model.isInvalid ? [h.DataAttribute("invalid", "true")] : []),
+	]
+	const segment = (part: Segments.Segment, isFirstEditable: boolean) => {
+		if (part.type === "literal")
+			return h.span(
+				[
+					h.AriaHidden(true),
+					h.Class(twJoin(...dateSegmentStyles)),
+					h.DataAttribute("rac", ""),
+					h.DataAttribute("type", "literal"),
+					...statusAttributes,
+				],
+				[part.text],
+			)
+		const type = part.type
+		const id = Segments.segmentId(model, type)
+		const limits = Segments.segmentLimits(type)
+		const state = interaction ? Interaction.stateOf(interaction.model, id) : Interaction.idleState
+		return h.span(
+			[
+				h.Id(id),
+				h.Class(twJoin(...dateSegmentStyles)),
+				h.Role("spinbutton"),
+				h.DataAttribute("rac", ""),
+				h.DataAttribute("type", type),
+				...statusAttributes,
+				...(part.isPlaceholder ? [h.DataAttribute("placeholder", "true")] : []),
+				h.AriaLabel(`${fieldName(type)}, ${options.ariaLabel ?? ""}`),
+				...(options.labelledBy === undefined
+					? []
+					: [h.AriaLabelledBy(`${id} ${options.labelledBy}`)]),
+				...(isFirstEditable && describedBy !== undefined ? [h.AriaDescribedBy(describedBy)] : []),
+				...(model.isInvalid ? [h.AriaInvalid(true)] : []),
+				h.Attribute("aria-valuemin", String(limits.min)),
+				h.Attribute("aria-valuemax", String(limits.max)),
+				...(part.value === null ? [] : [h.Attribute("aria-valuenow", String(part.value))]),
+				h.Attribute("aria-valuetext", part.valueText),
+				h.Attribute("style", "caret-color: transparent;"),
+				...(model.isDisabled
+					? [h.AriaDisabled(true), h.Attribute("contenteditable", "false")]
+					: [
+							h.Attribute("contenteditable", "true"),
+							h.Attribute("autocorrect", "off"),
+							h.Attribute("spellcheck", "false"),
+							h.Attribute("enterkeyhint", "next"),
+							...(type === "dayPeriod" ? [] : [h.Attribute("inputmode", "numeric")]),
+							h.Tabindex(0),
+							h.OnKeyDownPreventDefault((key) =>
+								Segments.isSegmentKey(key)
+									? Option.some(
+											send(Segments.Message.PressedSegmentKey({ segment: type, key })),
+										)
+									: Option.none(),
+							),
+							...(interaction
+								? [
+										...Interaction.handlers(h, interaction, id, {
+											isPressDisabled: true,
+											isTextInput: true,
+										}),
+										...Interaction.stateAttributes(h, state),
+									]
+								: []),
+						]),
+			],
+			[part.text],
+		)
+	}
+	const segments = Segments.segmentsOf(model)
+	const firstEditable = segments.findIndex((part) => part.type !== "literal")
+	return segments.map((part, index) => segment(part, index === firstEditable))
 }
 
 /** Returns the field plus React Aria's hidden siblings (the native date input, the description). */
@@ -78,77 +170,6 @@ export const dateField = <ParentMessage>(
 				...(hasDescription ? [ids.description] : []),
 				...(model.isInvalid ? [ids.error] : []),
 			].join(" ") || undefined
-		const segment = (part: Segments.Segment, isFirstEditable: boolean) => {
-			if (part.type === "literal")
-				return h.span(
-					[
-						h.AriaHidden(true),
-						h.Class(twJoin(...dateSegmentStyles)),
-						h.DataAttribute("rac", ""),
-						h.DataAttribute("type", "literal"),
-						...statusAttributes,
-					],
-					[part.text],
-				)
-			const type = part.type
-			const id = Segments.segmentId(model, type)
-			const limits = Segments.segmentLimits(type)
-			const state = interaction ? Interaction.stateOf(interaction.model, id) : Interaction.idleState
-			return h.span(
-				[
-					h.Id(id),
-					h.Class(twJoin(...dateSegmentStyles)),
-					h.Role("spinbutton"),
-					h.DataAttribute("rac", ""),
-					h.DataAttribute("type", type),
-					...statusAttributes,
-					...(part.isPlaceholder ? [h.DataAttribute("placeholder", "true")] : []),
-					h.AriaLabel(`${fieldName(type)}, `),
-					...(hasLabel ? [h.AriaLabelledBy(`${id} ${ids.label}`)] : []),
-					...(isFirstEditable && describedBy !== undefined ? [h.AriaDescribedBy(describedBy)] : []),
-					...(model.isInvalid ? [h.AriaInvalid(true)] : []),
-					h.Attribute("aria-valuemin", String(limits.min)),
-					h.Attribute("aria-valuemax", String(limits.max)),
-					...(part.value === null ? [] : [h.Attribute("aria-valuenow", String(part.value))]),
-					h.Attribute("aria-valuetext", part.valueText),
-					h.Attribute("style", "caret-color: transparent;"),
-					...(model.isDisabled
-						? [h.AriaDisabled(true), h.Attribute("contenteditable", "false")]
-						: [
-								h.Attribute("contenteditable", "true"),
-								h.Attribute("autocorrect", "off"),
-								h.Attribute("spellcheck", "false"),
-								h.Attribute("enterkeyhint", "next"),
-								...(type === "dayPeriod" ? [] : [h.Attribute("inputmode", "numeric")]),
-								h.Tabindex(0),
-								h.OnKeyDownPreventDefault((key) =>
-									Segments.isSegmentKey(key)
-										? Option.some(
-												send(
-													Segments.Message.PressedSegmentKey({
-														segment: type,
-														key,
-													}),
-												),
-											)
-										: Option.none(),
-								),
-								...(interaction
-									? [
-											...Interaction.handlers(h, interaction, id, {
-												isPressDisabled: true,
-												isTextInput: true,
-											}),
-											...Interaction.stateAttributes(h, state),
-										]
-									: []),
-							]),
-				],
-				[part.text],
-			)
-		}
-		const segments = Segments.segmentsOf(model)
-		const firstEditable = segments.findIndex((part) => part.type !== "literal")
 		const groupState = interaction
 			? Interaction.stateOf(interaction.model, ids.group)
 			: Interaction.idleState
@@ -190,7 +211,13 @@ export const dateField = <ParentMessage>(
 										]
 									: []),
 							],
-							segments.map((part, index) => segment(part, index === firstEditable)),
+							dateSegments(h, {
+								model,
+								toParentMessage: send,
+								interaction,
+								labelledBy: hasLabel ? ids.label : undefined,
+								describedBy,
+							}),
 						),
 						h.input([
 							// React Aria's hidden Input renders an empty class attribute.

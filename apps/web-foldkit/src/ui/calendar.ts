@@ -180,6 +180,18 @@ const withFocusedDate = (model: Model, focusedDate: D.CalendarDate): Model =>
 		}),
 	})
 
+/** A picker reopening its calendar: the value, focused (or today when empty). */
+export const showValue = (model: Model, value: Option.Option<D.CalendarDate>): Model =>
+	modifyFields(
+		withFocusedDate(
+			model,
+			Option.getOrElse(value, () => model.today),
+		),
+		{
+			value: () => value,
+		},
+	)
+
 const focusDate = (model: Model, date: D.CalendarDate): UpdateReturn => {
 	const clamped = Option.match(model.minValue, {
 		onNone: () => date,

@@ -57,7 +57,8 @@ const chevronLeft =
 const chevronRight =
 	"M16.28 11.47a.75.75 0 0 1 0 1.06l-7.5 7.5a.75.75 0 0 1-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 0 1 1.06-1.06l7.5 7.5Z"
 
-export type ViewInputs = Readonly<{ ariaLabel: string }>
+/** Without `ariaLabel` (inside a DatePicker) the calendar is named by its visible month alone. */
+export type ViewInputs = Readonly<{ ariaLabel?: string }>
 
 const header = (h: HtmlBuilder<Message>, model: Model, monthYear: string): Html => {
 	const wiring: Interaction.Wiring<Message> = {
@@ -248,7 +249,7 @@ const grid = (h: HtmlBuilder<Message>, model: Model, label: string): Html =>
 
 export const view = Submodel.defineView<Model, Message, ViewInputs>((model, viewInputs, h) => {
 	const monthYear = D.formatMonthYear(model.focusedDate)
-	const label = `${viewInputs.ariaLabel}, ${monthYear}`
+	const label = viewInputs.ariaLabel === undefined ? monthYear : `${viewInputs.ariaLabel}, ${monthYear}`
 	return h.div(
 		[
 			h.AriaLabel(label),
