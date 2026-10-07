@@ -47,7 +47,13 @@ export const interaction = embedInteraction<Model, Message>((message) =>
 )
 
 export const init = (): Return => ({
-	model: { search: "", bots: null, installedBotIds: [], installingBotIds: [], interaction: Interaction.init() },
+	model: {
+		search: "",
+		bots: null,
+		installedBotIds: [],
+		installingBotIds: [],
+		interaction: Interaction.init(),
+	},
 })
 
 const doneInstalling = (model: Model, botId: BotId) =>

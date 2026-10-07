@@ -69,7 +69,10 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				...toast(
 					next,
 					status === "success"
-						? successToast(`Connected to ${name}`, "Your account has been successfully connected.")
+						? successToast(
+								`Connected to ${name}`,
+								"Your account has been successfully connected.",
+							)
 						: errorToast(`Failed to connect to ${name}`, errorMessageFromCode(errorCode)),
 				),
 				commands: [AcknowledgeOAuthCallback({})],

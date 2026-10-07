@@ -28,10 +28,7 @@ const requestWebhooksOnce = (model: Model, shared: Shared): PageReturn<Model, Me
 				commands: [ListOrganizationWebhooks({})],
 			}
 
-export const init = (
-	route: RouteOf<"SettingsIntegrations">,
-	shared: Shared,
-): PageReturn<Model, Message> =>
+export const init = (route: RouteOf<"SettingsIntegrations">, shared: Shared): PageReturn<Model, Message> =>
 	requestWebhooksOnce(
 		{
 			orgSlug: route.orgSlug,
@@ -67,4 +64,3 @@ export const update = (model: Model, message: Message): PageReturn<Model, Messag
 		}),
 		FailedListWebhooks: () => ({ model }),
 	})
-

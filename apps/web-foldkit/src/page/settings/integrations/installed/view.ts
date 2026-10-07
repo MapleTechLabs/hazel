@@ -36,10 +36,13 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 				? emptyState(h, {
 						icon: (className) => IconRobot(h, { className }),
 						title: "No installed applications",
-						description: "Browse the Marketplace to find and install applications for your workspace.",
-						action: button(h, { intent: "primary", onPress: Message.ClickedBrowseMarketplace() }, [
-							"Browse Marketplace",
-						]),
+						description:
+							"Browse the Marketplace to find and install applications for your workspace.",
+						action: button(
+							h,
+							{ intent: "primary", onPress: Message.ClickedBrowseMarketplace() },
+							["Browse Marketplace"],
+						),
 					})
 				: h.div(
 						[h.Class("grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3")],

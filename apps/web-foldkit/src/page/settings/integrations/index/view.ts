@@ -1,11 +1,6 @@
 import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
-import {
-	categories,
-	getBrandfetchIcon,
-	type Integration,
-	integrations,
-} from "~/lib/integrations/__data"
+import { categories, getBrandfetchIcon, type Integration, integrations } from "~/lib/integrations/__data"
 import { IconPlus } from "../../../../icons"
 import { button } from "../../../../ui/button"
 import { emptyState } from "../../../../ui/empty-state"
@@ -35,7 +30,10 @@ const connectionStatus = (h: HtmlBuilder<Message>, connected: boolean, comingSoo
 		: h.div(
 				[h.Class("flex items-center gap-1.5")],
 				[
-					h.div([h.Class(`size-1.5 rounded-full ${connected ? "bg-success" : "bg-secondary"}`)], []),
+					h.div(
+						[h.Class(`size-1.5 rounded-full ${connected ? "bg-success" : "bg-secondary"}`)],
+						[],
+					),
 					h.span(
 						[h.Class(`text-xs ${connected ? "text-success" : "text-muted-fg"}`)],
 						[connected ? "Connected" : "Not connected"],
@@ -71,7 +69,10 @@ const cardBody = (h: HtmlBuilder<Message>, integration: Integration, status: Htm
 							),
 							h.div(
 								[h.Class("flex flex-col gap-0.5")],
-								[h.h3([h.Class("font-semibold text-fg text-sm")], [integration.name]), status],
+								[
+									h.h3([h.Class("font-semibold text-fg text-sm")], [integration.name]),
+									status,
+								],
 							),
 						],
 					),
@@ -86,12 +87,26 @@ const integrationCard = (h: HtmlBuilder<Message>, integration: Integration, conn
 	integration.comingSoon
 		? h.keyed("div")(
 				integration.id,
-				[h.Class("relative flex flex-col overflow-hidden rounded-xl border border-border bg-bg opacity-70")],
+				[
+					h.Class(
+						"relative flex flex-col overflow-hidden rounded-xl border border-border bg-bg opacity-70",
+					),
+				],
 				[
 					cardBody(h, integration, connectionStatus(h, false, true)),
 					h.div(
-						[h.Class("flex items-center justify-end border-border border-t bg-bg-muted/50 px-5 py-3")],
-						[strokeIcon(h, { className: "size-4 text-muted-fg/50", strokeWidth: "2", d: CHEVRON_RIGHT })],
+						[
+							h.Class(
+								"flex items-center justify-end border-border border-t bg-bg-muted/50 px-5 py-3",
+							),
+						],
+						[
+							strokeIcon(h, {
+								className: "size-4 text-muted-fg/50",
+								strokeWidth: "2",
+								d: CHEVRON_RIGHT,
+							}),
+						],
 					),
 				],
 			)
@@ -107,7 +122,11 @@ const integrationCard = (h: HtmlBuilder<Message>, integration: Integration, conn
 				[
 					cardBody(h, integration, connectionStatus(h, connected, false)),
 					h.div(
-						[h.Class("flex items-center justify-between border-border border-t bg-bg-muted/50 px-5 py-3")],
+						[
+							h.Class(
+								"flex items-center justify-between border-border border-t bg-bg-muted/50 px-5 py-3",
+							),
+						],
 						[
 							h.span(
 								[
@@ -118,7 +137,8 @@ const integrationCard = (h: HtmlBuilder<Message>, integration: Integration, conn
 								["Configure"],
 							),
 							strokeIcon(h, {
-								className: "size-4 text-muted-fg transition-transform group-hover:translate-x-0.5",
+								className:
+									"size-4 text-muted-fg transition-transform group-hover:translate-x-0.5",
 								strokeWidth: "2",
 								d: CHEVRON_RIGHT,
 							}),

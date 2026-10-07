@@ -63,7 +63,9 @@ export const Disconnect = Command.define("IntegrationDisconnect", {
 	messages: [Message.CompletedDisconnect],
 	execute: (params) =>
 		Effect.exit(
-			withHazelApi((client) => client.integrations.disconnect({ params, query: { level: "organization" } })),
+			withHazelApi((client) =>
+				client.integrations.disconnect({ params, query: { level: "organization" } }),
+			),
 		).pipe(
 			Effect.map((exit) =>
 				Message.CompletedDisconnect({
@@ -96,7 +98,10 @@ export const ConnectApiKey = Command.define("IntegrationConnectApiKey", {
 	execute: ({ orgId, provider, token, baseUrl }) =>
 		Effect.exit(
 			withHazelApi((client) =>
-				client.integrations.connectApiKey({ params: { orgId, provider }, payload: { token, baseUrl } }),
+				client.integrations.connectApiKey({
+					params: { orgId, provider },
+					payload: { token, baseUrl },
+				}),
 			),
 		).pipe(
 			Effect.map((exit) =>

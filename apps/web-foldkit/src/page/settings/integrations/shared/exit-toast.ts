@@ -14,12 +14,6 @@ export type ErrorHandlers = Readonly<Record<string, (error: { readonly _tag: str
 const hasTag = (error: unknown): error is { readonly _tag: string } =>
 	typeof error === "object" && error !== null && "_tag" in error && typeof error._tag === "string"
 
-export const errorTagOf = (cause: Cause.Cause<unknown>): string | null =>
-	Option.match(Cause.findErrorOption(cause), {
-		onNone: () => null,
-		onSome: (error) => (hasTag(error) ? error._tag : null),
-	})
-
 const userErrorOf = (cause: Cause.Cause<unknown>, handlers: ErrorHandlers): UserErrorMessage =>
 	Option.match(Cause.findErrorOption(cause), {
 		onNone: () => getUserFriendlyError(cause),

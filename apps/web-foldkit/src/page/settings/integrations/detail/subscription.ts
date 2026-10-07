@@ -20,8 +20,12 @@ export const subscriptions = Subscription.make<PageSubscriptionInput<Model>, Mes
 			dependenciesToStream: ({ organizationId, provider }) =>
 				organizationId === null || !isProvider(provider)
 					? Stream.empty
-					: liveQueryStream<ConnectionRow, Message>(connectionsQuery(organizationId, provider), (rows) =>
-							Message.UpdatedConnection({ connection: rows[0] ? toConnection(rows[0]) : null }),
+					: liveQueryStream<ConnectionRow, Message>(
+							connectionsQuery(organizationId, provider),
+							(rows) =>
+								Message.UpdatedConnection({
+									connection: rows[0] ? toConnection(rows[0]) : null,
+								}),
 						),
 		},
 	),

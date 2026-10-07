@@ -20,7 +20,10 @@ const SLIDERS_ICON =
 
 const brandIcon = (h: H, integration: Integration) =>
 	h.img([
-		h.Attribute("src", getBrandfetchIcon(integration.logoDomain, { theme: "light", type: integration.logoType })),
+		h.Attribute(
+			"src",
+			getBrandfetchIcon(integration.logoDomain, { theme: "light", type: integration.logoType }),
+		),
 		h.Attribute("alt", ""),
 		h.Class("size-4 rounded object-contain"),
 	])
@@ -33,7 +36,10 @@ const centered = (h: H, icon: Html, title: string | Array<string>, body: Array<s
 			h.div(
 				[h.Class("flex flex-col gap-1")],
 				[
-					h.p([h.Class("font-medium text-fg text-sm")], typeof title === "string" ? [title] : title),
+					h.p(
+						[h.Class("font-medium text-fg text-sm")],
+						typeof title === "string" ? [title] : title,
+					),
 					h.p([h.Class("text-muted-fg text-sm")], body),
 				],
 			),
@@ -66,11 +72,13 @@ export const disconnectedState = (h: H, integration: Integration, isConnecting: 
 	)
 
 export const verifyingState = (h: H, integration: Integration): Html =>
-	centered(h, spinner(h, "size-6 animate-spin text-muted-fg"), "Verifying connection...", [
-		"Please wait while we verify your ",
-		integration.name,
-		" connection.",
-	], [])
+	centered(
+		h,
+		spinner(h, "size-6 animate-spin text-muted-fg"),
+		"Verifying connection...",
+		["Please wait while we verify your ", integration.name, " connection."],
+		[],
+	)
 
 export const connectedState = (
 	h: H,
@@ -79,7 +87,8 @@ export const connectedState = (
 	options: { readonly canConfigure: boolean },
 ): Html => {
 	const connection = model.connection
-	const showConfigureButton = options.canConfigure && integration.id === "github" && connection?.hasInstallationId
+	const showConfigureButton =
+		options.canConfigure && integration.id === "github" && connection?.hasInstallationId
 	return h.div(
 		[h.Class("flex items-center justify-between gap-4")],
 		[
@@ -88,12 +97,21 @@ export const connectedState = (
 				[
 					h.div(
 						[h.Class("flex size-10 items-center justify-center rounded-xl bg-success-subtle")],
-						[strokeIcon(h, { className: "size-5 text-success-subtle-fg", strokeWidth: "2", d: CHECK })],
+						[
+							strokeIcon(h, {
+								className: "size-5 text-success-subtle-fg",
+								strokeWidth: "2",
+								d: CHECK,
+							}),
+						],
 					),
 					h.div(
 						[h.Class("flex flex-col gap-0.5")],
 						[
-							h.p([h.Class("font-medium text-fg text-sm")], ["Connected to ", integration.name]),
+							h.p(
+								[h.Class("font-medium text-fg text-sm")],
+								["Connected to ", integration.name],
+							),
 							...(connection?.externalAccountName
 								? [h.p([h.Class("text-muted-fg text-xs")], [connection.externalAccountName])]
 								: []),
@@ -112,7 +130,10 @@ export const connectedState = (
 						},
 						model.isConnecting
 							? [spinner(h, "size-4 animate-spin"), "Redirecting..."]
-							: [strokeIcon(h, { className: "size-4", strokeWidth: "2", d: SLIDERS_ICON }), "Configure on GitHub"],
+							: [
+									strokeIcon(h, { className: "size-4", strokeWidth: "2", d: SLIDERS_ICON }),
+									"Configure on GitHub",
+								],
 					)
 				: button(
 						h,
@@ -212,7 +233,8 @@ export const configOptionRow = (h: H, option: ConfigOption, isEnabled: boolean):
 							{
 								id: `config-option-${option.id}`,
 								isSelected: isEnabled,
-								onChange: (isSelected) => Message.ToggledConfigOption({ optionId: option.id, isSelected }),
+								onChange: (isSelected) =>
+									Message.ToggledConfigOption({ optionId: option.id, isSelected }),
 							},
 							[],
 						),

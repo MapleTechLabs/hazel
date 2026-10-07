@@ -17,7 +17,8 @@ const dataSubscriptions = Subscription.make<PageSubscriptionInput<Model>, Messag
 		{},
 		{
 			modelToDependencies: () => ({}),
-			dependenciesToStream: () => liveQueryStream<PublicBotRow, Message>(publicBotsQuery(), toPublicBots),
+			dependenciesToStream: () =>
+				liveQueryStream<PublicBotRow, Message>(publicBotsQuery(), toPublicBots),
 		},
 	),
 	installations: entry(
@@ -31,7 +32,8 @@ const dataSubscriptions = Subscription.make<PageSubscriptionInput<Model>, Messag
 					? Stream.empty
 					: liveQueryStream<{ readonly botId: BotId }, Message>(
 							installationsQuery(organizationId),
-							(rows) => Message.UpdatedInstalledBotIds({ botIds: rows.map((row) => row.botId) }),
+							(rows) =>
+								Message.UpdatedInstalledBotIds({ botIds: rows.map((row) => row.botId) }),
 						),
 		},
 	),

@@ -154,8 +154,18 @@ const featuresPanel = (h: H, integration: Integration): Html =>
 							[h.Class("flex items-center gap-2.5 text-sm")],
 							[
 								h.div(
-									[h.Class("flex size-5 shrink-0 items-center justify-center rounded-sm bg-success-subtle")],
-									[strokeIcon(h, { className: "size-3 text-success-subtle-fg", strokeWidth: "3", d: CHECK })],
+									[
+										h.Class(
+											"flex size-5 shrink-0 items-center justify-center rounded-sm bg-success-subtle",
+										),
+									],
+									[
+										strokeIcon(h, {
+											className: "size-3 text-success-subtle-fg",
+											strokeWidth: "3",
+											d: CHECK,
+										}),
+									],
 								),
 								h.span([h.Class("text-fg")], [feature]),
 							],
@@ -171,7 +181,9 @@ const backLink = (h: H): Html =>
 		[
 			h.Type("button"),
 			h.OnClick(Message.ClickedBack()),
-			h.Class("-ml-1 flex w-fit items-center gap-1 text-muted-fg text-sm transition-colors hover:text-fg"),
+			h.Class(
+				"-ml-1 flex w-fit items-center gap-1 text-muted-fg text-sm transition-colors hover:text-fg",
+			),
 		],
 		[
 			strokeIcon(h, { className: "size-4", strokeWidth: "2", d: "M15 19l-7-7 7-7" }),

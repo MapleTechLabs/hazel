@@ -19,7 +19,16 @@ import * as TeamSettings from "./settings/team"
  * Every routed page, registered once. Adding a page: import its module and append `X.page` below.
  * Routes without a page render their layout around an empty placeholder (see README.md).
  */
-export const pages = [Root.page, TeamSettings.page, ChatChannel.page, IntegrationsSettings.page, InstalledAppsSettings.page, MarketplaceSettings.page, YourAppsSettings.page, IntegrationSettings.page]
+export const pages = [
+	Root.page,
+	TeamSettings.page,
+	ChatChannel.page,
+	IntegrationsSettings.page,
+	InstalledAppsSettings.page,
+	MarketplaceSettings.page,
+	YourAppsSettings.page,
+	IntegrationSettings.page,
+]
 
 export const PageSlot = Schema.Union(pages.map((page) => page.Slot))
 export type PageSlot = typeof PageSlot.Type

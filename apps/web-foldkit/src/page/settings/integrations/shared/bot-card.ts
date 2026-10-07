@@ -1,7 +1,14 @@
 import type { IntegrationConnection } from "@hazel/domain/models"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { getIntegrationIconUrl, groupScopesByResource, INTEGRATION_PROVIDERS } from "~/lib/bot-scopes"
-import { IconArrowPath, IconCheck, IconDotsVertical, IconDownload, IconEdit, IconTrash } from "../../../../icons"
+import {
+	IconArrowPath,
+	IconCheck,
+	IconDotsVertical,
+	IconDownload,
+	IconEdit,
+	IconTrash,
+} from "../../../../icons"
 import { avatar } from "../../../../ui/avatar"
 import { badge } from "../../../../ui/badge"
 import { button } from "../../../../ui/button"
@@ -45,19 +52,25 @@ const permissions = <Message>(h: HtmlBuilder<Message>, bot: Bot): ReadonlyArray<
 								],
 							),
 						),
-						...bot.allowedIntegrations.filter(isProvider).map((provider) =>
-							h.span(
-								[h.Class("inline-flex items-center gap-1 rounded bg-secondary px-1.5 py-0.5")],
-								[
-									h.img([
-										h.Attribute("src", getIntegrationIconUrl(provider, 32)),
-										h.Attribute("alt", INTEGRATION_PROVIDERS[provider].label),
-										h.Attribute("title", INTEGRATION_PROVIDERS[provider].label),
-										h.Class("size-3 rounded-sm"),
-									]),
-								],
+						...bot.allowedIntegrations
+							.filter(isProvider)
+							.map((provider) =>
+								h.span(
+									[
+										h.Class(
+											"inline-flex items-center gap-1 rounded bg-secondary px-1.5 py-0.5",
+										),
+									],
+									[
+										h.img([
+											h.Attribute("src", getIntegrationIconUrl(provider, 32)),
+											h.Attribute("alt", INTEGRATION_PROVIDERS[provider].label),
+											h.Attribute("title", INTEGRATION_PROVIDERS[provider].label),
+											h.Class("size-3 rounded-sm"),
+										]),
+									],
+								),
 							),
-						),
 					],
 				),
 			]
@@ -93,7 +106,10 @@ const actionsMenu = <Message>(
 	const label = (key: string, text: string) => menuLabel(h, menu.id, key, text)
 	const content: Record<string, () => ReadonlyArray<Html>> = {
 		edit: () => [IconEdit(h, { className: "size-4" }), label("edit", "Edit")],
-		regenerate: () => [IconArrowPath(h, { className: "size-4" }), label("regenerate", "Regenerate Token")],
+		regenerate: () => [
+			IconArrowPath(h, { className: "size-4" }),
+			label("regenerate", "Regenerate Token"),
+		],
 		delete: () => [IconTrash(h, { className: "size-4" }), label("delete", "Delete")],
 	}
 	return h.submodel({
@@ -159,7 +175,9 @@ export const botCard = <Message>(h: HtmlBuilder<Message>, bot: Bot, actions: Bot
 								[h.Class("flex items-center gap-2")],
 								[
 									h.h3([h.Class("font-semibold text-fg text-sm truncate")], [bot.name]),
-									...(bot.isPublic ? [badge(h, { intent: "secondary", size: "sm" }, ["Public"])] : []),
+									...(bot.isPublic
+										? [badge(h, { intent: "secondary", size: "sm" }, ["Public"])]
+										: []),
 								],
 							),
 							h.p(
@@ -180,7 +198,11 @@ export const botCard = <Message>(h: HtmlBuilder<Message>, bot: Bot, actions: Bot
 									"flex items-center justify-end border-border border-t bg-muted/20 px-4 py-2.5 mt-auto",
 								),
 							],
-							[button(h, { size: "sm", intent: "outline", onPress: actions.onUninstall }, ["Uninstall"])],
+							[
+								button(h, { size: "sm", intent: "outline", onPress: actions.onUninstall }, [
+									"Uninstall",
+								]),
+							],
 						),
 					]
 				: []),
@@ -220,17 +242,22 @@ export const marketplaceBotCard = <Message>(
 			),
 			h.div([h.Class("flex-1 px-4 py-3")], [...permissions(h, bot)]),
 			h.div(
-				[h.Class("flex items-center justify-between border-border border-t bg-muted/20 px-4 py-3 mt-auto")],
+				[
+					h.Class(
+						"flex items-center justify-between border-border border-t bg-muted/20 px-4 py-3 mt-auto",
+					),
+				],
 				[
 					h.span(
 						[h.Class("flex items-center gap-1.5 text-muted-fg text-xs")],
 						[IconDownload(h, { className: "size-3.5" }), bot.installCount.toLocaleString()],
 					),
 					options.isInstalled
-						? button(h, { intent: "outline", size: "sm", isDisabled: true, className: "gap-1.5" }, [
-								IconCheck(h, { className: "size-3.5" }),
-								"Installed",
-							])
+						? button(
+								h,
+								{ intent: "outline", size: "sm", isDisabled: true, className: "gap-1.5" },
+								[IconCheck(h, { className: "size-3.5" }), "Installed"],
+							)
 						: button(
 								h,
 								{

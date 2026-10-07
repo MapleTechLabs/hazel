@@ -5,7 +5,10 @@ import { Connection } from "../shared/connections"
 import { CallbackStatus } from "./model"
 
 export const Message = defineMessageUnion({
-	CompletedReadOAuthCallback: { status: Schema.NullOr(CallbackStatus), errorCode: Schema.NullOr(Schema.String) },
+	CompletedReadOAuthCallback: {
+		status: Schema.NullOr(CallbackStatus),
+		errorCode: Schema.NullOr(Schema.String),
+	},
 	AcknowledgedOAuthCallback: {},
 	UpdatedConnection: { connection: Schema.NullOr(Connection) },
 	ClickedBack: {},
