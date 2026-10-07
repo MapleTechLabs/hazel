@@ -41,7 +41,7 @@ import {
 
 export { Message } from "./app/message"
 export { Model } from "./app/model"
-export { subscriptions } from "./app/subscription"
+export { managedResources, subscriptions } from "./app/subscription"
 export { view } from "./app/view"
 
 /** Read before the first render, so a stored theme never flashes the default (`Atom.kvs` reads sync). */

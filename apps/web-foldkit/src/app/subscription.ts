@@ -1,7 +1,7 @@
 import { ChannelId, type NotificationId, OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { eq } from "@tanstack/db"
 import { Option, Schema, Stream } from "effect"
-import { Subscription } from "foldkit"
+import { ManagedResource, Subscription } from "foldkit"
 import { notificationCollection, organizationCollection, organizationMemberCollection } from "~/db/collections"
 import { liveQueryStream } from "../data/live-query"
 import { pageSubscriptions } from "../page/registry"
@@ -195,3 +195,9 @@ export const subscriptions = Subscription.aggregate(
 	pages,
 	platformSubscriptions,
 )
+
+/** App-lifetime managed resources (the Rivet client). */
+export const managedResources = ManagedResource.lift(Platform.managedResources)<Model, Message>({
+	read: (model) => Option.some(model.platform),
+	toParentMessage: (message): Message => ({ _tag: "GotPlatformMessage", message }),
+})
