@@ -19,6 +19,7 @@ import {
 	TrackEmojiUsage,
 } from "./draft"
 import * as EmojiDialog from "../emoji-picker/dialog"
+import * as GifPicker from "../gif-picker/picker"
 import * as ComposerUpdate from "./update"
 import * as Typing from "./typing"
 import { DropEvent } from "./drop"
@@ -264,6 +265,16 @@ export const update = (model: Model, message: Message, context: Context): Return
 			return { ...inserted, commands: [...(next.commands ?? []), TrackEmojiUsage({ emoji }), ...(inserted.commands ?? [])] }
 		},
 		CompletedTrackEmojiUsage: () => ({ model }),
+		GotGifPickerMessage: ({ message: gifMessage }) => {
+			const result = GifPicker.update(model.gifPicker, gifMessage)
+			const next: Return = {
+				model: { ...model, gifPicker: result.model },
+				commands: Command.mapMessages(result.commands ?? [], (inner) => Message.GotGifPickerMessage({ message: inner })),
+			}
+			if (result.outMessage === undefined) return next
+			const sent = update(next.model, Message.SelectedGif({ url: result.outMessage.url }), context)
+			return { ...sent, commands: [...(next.commands ?? []), ...(sent.commands ?? [])] }
+		},
 		// `handleGifSelect` sends the GIF URL as a message of its own.
 		SelectedGif: ({ url }) =>
 			context.currentUserId === null

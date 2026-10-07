@@ -9,8 +9,9 @@ import { button } from "../ui/button"
 import { loader } from "../ui/loader"
 import { fileInputId, hasTopContent, isUploading, Message, type Model } from "./draft"
 import * as EmojiDialog from "../emoji-picker/dialog"
+import * as GifPickerView from "../gif-picker/view"
 import { TrackFileDrop } from "./drop"
-import { composerBoxView, type PickerButton } from "./view"
+import { composerBoxView } from "./view"
 
 /** A draft's composer: `SlateMessageComposer` with previews, indicators, the drop zone and the actions. */
 
@@ -24,7 +25,6 @@ export interface DraftViewInputs<M> {
 	readonly toMessage: (message: Message) => M
 	readonly replyPreview: ReplyPreview | null
 	readonly attachmentInfo: (id: AttachmentId) => { readonly fileName: string; readonly fileSize: number } | null
-	readonly gifTrigger?: (render: PickerButton) => Html
 }
 
 const removeButton = <M>(h: HtmlBuilder<M>, onPress: M, label?: string) =>
@@ -202,7 +202,11 @@ export const draftView = <M>(h: HtmlBuilder<M>, model: Model, inputs: DraftViewI
 			h.OnClick(toMessage(Message.ClickedAttach())),
 			...(uploading ? [h.Attribute("disabled", "")] : []),
 		],
-		...(inputs.gifTrigger === undefined ? {} : { gifTrigger: inputs.gifTrigger }),
+		gifTrigger: (render) =>
+			GifPickerView.view(h, model.gifPicker, {
+				toMessage: (message) => toMessage(Message.GotGifPickerMessage({ message })),
+				toTrigger: render,
+			}),
 		emojiTrigger: (render) =>
 			EmojiDialog.view(h, model.emojiPicker, {
 				toMessage: (message) => toMessage(Message.GotEmojiPickerMessage({ message })),

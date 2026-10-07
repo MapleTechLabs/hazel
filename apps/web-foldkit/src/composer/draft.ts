@@ -25,6 +25,7 @@ import * as Composer from "./composer"
 import * as Typing from "./typing"
 import { emojiUsageAtom } from "~/atoms/emoji-atoms"
 import * as EmojiDialog from "../emoji-picker/dialog"
+import * as GifPicker from "../gif-picker/picker"
 import { trackEmojiUsage } from "../emoji-picker/usage"
 import { DropEvent } from "./drop"
 import { UploadEvent } from "./upload"
@@ -62,6 +63,8 @@ export const Model = Schema.Struct({
 	isDropTarget: Schema.Boolean,
 	/** The Emoji button's `EmojiPickerDialog`. */
 	emojiPicker: EmojiDialog.Model,
+	/** The GIF button's `GifPickerDialog`. */
+	gifPicker: GifPicker.Model,
 })
 export type Model = typeof Model.Type
 
@@ -78,6 +81,7 @@ export const init = (channelId: ChannelId, editorId: string, placeholder = "Type
 	isDraggingOnPage: false,
 	isDropTarget: false,
 	emojiPicker: EmojiDialog.init(`${editorId}-emoji-picker`),
+	gifPicker: GifPicker.init(`${editorId}-gif-picker`),
 })
 
 /** `useChatDraft().isUploading`. */
@@ -119,6 +123,7 @@ export const Message = defineMessageUnion({
 	SelectedEmoji: { emoji: Schema.String, label: Schema.String, imageUrl: Schema.NullOr(Schema.String) },
 	SelectedGif: { url: Schema.String },
 	GotEmojiPickerMessage: { message: EmojiDialog.Message },
+	GotGifPickerMessage: { message: GifPicker.Message },
 	CompletedTrackEmojiUsage: {},
 	CompletedExecuteBotCommand: { succeeded: Schema.Boolean, toast: ToastRequest },
 })
