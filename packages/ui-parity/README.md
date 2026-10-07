@@ -121,4 +121,7 @@ If a capture logs `unmocked RPCs: ...`, add a canned response to your area modul
 
 - The legacy composer has role `combobox` and no accessible name, and the sidebar's drag handles all share the name "Drag". The Foldkit port should keep the roles visible users rely on, and the scenarios encode today's names.
 - Chromium only. Font rendering differs across OSes, so compare captures made on the same machine (or the same CI image), never a mix.
+- Clerk's prebuilt `<SignIn>`, `<SignUp>` and `<CreateOrganization>` mount through `Clerk.mountSignIn` and friends, which the stub no-ops. The sign-in, sign-up, setup-organization and empty select-organization scenarios capture the surrounding page and the empty container, not the Clerk form. The Foldkit port mounts the same clerk-js components into the same container, so the form itself is Clerk's and stays out of scope.
+- Signed-out scenarios use a dataset with `signedOut: true`: the stub installs Clerk with no session or user, and authenticated RPCs fail with `SessionNotProvidedError`. The app's Electric fetch then answers 401 locally for the collections it preloads; those console errors are expected there and ignored for signed-out datasets only.
+- The onboarding timezone step runs infinite `motion` star animations, so its captures wait out the 8s quiet timeout. The stars are invisible in daytime, so the frame is still deterministic.
 - Electric live updates aren't simulated. Scenarios show steady state, and writes succeed without changing data. Optimistic-update visuals need dedicated datasets.

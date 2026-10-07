@@ -40,6 +40,8 @@ export interface Dataset {
 	readonly now: Date
 	readonly currentUser: typeof CurrentUser.Schema.Type & { readonly clerkUserId: string }
 	readonly clerkOrgId: string | null
+	/** Anonymous visitor: Clerk has no session and authenticated RPCs fail as they would without a token. */
+	readonly signedOut?: boolean
 	readonly tables: Partial<Record<TableName, ReadonlyArray<Row>>>
 	/** Canned RPC successes keyed by RPC tag. Values are the decoded (Type-side) success value. */
 	readonly rpc: Readonly<Record<string, (payload: unknown) => unknown>>

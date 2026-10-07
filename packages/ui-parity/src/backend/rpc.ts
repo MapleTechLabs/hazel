@@ -23,7 +23,7 @@ import {
 	UserPresenceStatusRpcs,
 	UserRpcs,
 } from "@hazel/domain/rpc"
-import { CurrentUser } from "@hazel/domain"
+import { CurrentUser, SessionNotProvidedError } from "@hazel/domain"
 import { TypingIndicator, UserPresenceStatus } from "@hazel/domain/models"
 import { TypingIndicatorResponse, UserPresenceStatusResponse } from "@hazel/domain/rpc"
 import type { TransactionId } from "@hazel/schema"
@@ -133,7 +133,19 @@ export const makeRpcWebHandler = (dataset: Dataset, log: RpcLog) => {
 	const AuthLive = Layer.succeed(
 		AuthMiddleware,
 		AuthMiddleware.of((effect) =>
-			Effect.provideService(effect, CurrentUser.Context, new CurrentUser.Schema(dataset.currentUser)),
+			// Signed-out datasets send no bearer token, so authenticated RPCs fail like the real backend.
+			dataset.signedOut
+				? Effect.fail(
+						new SessionNotProvidedError({
+							message: "No session",
+							detail: "ui-parity: signed out",
+						}),
+					)
+				: Effect.provideService(
+						effect,
+						CurrentUser.Context,
+						new CurrentUser.Schema(dataset.currentUser),
+					),
 		),
 	)
 	const ScopesLive = Layer.succeed(

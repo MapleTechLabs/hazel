@@ -15,55 +15,66 @@ export interface ClerkStubIdentity {
 	readonly clerkOrgId: string | null
 }
 
-export const installClerkStub = (identity: ClerkStubIdentity) => {
+/** `null` installs a signed-out Clerk: no client session, no user, no organization. */
+export const installClerkStub = (identity: ClerkStubIdentity | null) => {
 	const noop = () => {}
 	const asyncNoop = async () => {}
-	const user = {
-		id: identity.clerkUserId,
-		firstName: identity.firstName,
-		lastName: identity.lastName,
-		fullName: `${identity.firstName} ${identity.lastName}`,
-		imageUrl: identity.imageUrl,
-		hasImage: true,
-		primaryEmailAddress: { emailAddress: identity.email },
-		emailAddresses: [{ emailAddress: identity.email }],
-		externalAccounts: [],
-		organizationMemberships: identity.clerkOrgId
-			? [{ organization: { id: identity.clerkOrgId }, role: "org:admin", permissions: [] }]
-			: [],
-		publicMetadata: {},
-		unsafeMetadata: {},
-		reload: asyncNoop,
-		update: asyncNoop,
-	}
-	const organization = identity.clerkOrgId ? { id: identity.clerkOrgId, name: "Org", slug: "org" } : null
-	const session = {
-		id: "sess_parity",
-		status: "active",
-		user,
-		lastActiveOrganizationId: identity.clerkOrgId,
-		factorVerificationAge: null,
-		lastActiveToken: {
-			getRawString: () => "parity-token",
-			jwt: {
-				claims: {
-					sub: identity.clerkUserId,
-					sid: "sess_parity",
-					org_id: identity.clerkOrgId ?? undefined,
+	const signedIn = (id: ClerkStubIdentity) => {
+		const user = {
+			id: id.clerkUserId,
+			firstName: id.firstName,
+			lastName: id.lastName,
+			fullName: `${id.firstName} ${id.lastName}`,
+			imageUrl: id.imageUrl,
+			hasImage: true,
+			primaryEmailAddress: { emailAddress: id.email },
+			emailAddresses: [{ emailAddress: id.email }],
+			externalAccounts: [],
+			organizationMemberships: id.clerkOrgId
+				? [{ organization: { id: id.clerkOrgId }, role: "org:admin", permissions: [] }]
+				: [],
+			publicMetadata: {},
+			unsafeMetadata: {},
+			reload: asyncNoop,
+			update: asyncNoop,
+		}
+		const organization = id.clerkOrgId ? { id: id.clerkOrgId, name: "Org", slug: "org" } : null
+		const session = {
+			id: "sess_parity",
+			status: "active",
+			user,
+			lastActiveOrganizationId: id.clerkOrgId,
+			factorVerificationAge: null,
+			lastActiveToken: {
+				getRawString: () => "parity-token",
+				jwt: {
+					claims: {
+						sub: id.clerkUserId,
+						sid: "sess_parity",
+						org_id: id.clerkOrgId ?? undefined,
+					},
 				},
 			},
-		},
-		getToken: async () => "parity-token",
-		checkAuthorization: () => true,
-		touch: asyncNoop,
+			getToken: async () => "parity-token",
+			checkAuthorization: () => true,
+			touch: asyncNoop,
+		}
+		const client = {
+			sessions: [session],
+			signedInSessions: [session],
+			activeSessions: [session],
+			lastActiveSessionId: session.id,
+		}
+		return { client, session, user, organization }
 	}
-	const client = {
-		sessions: [session],
-		signedInSessions: [session],
-		activeSessions: [session],
-		lastActiveSessionId: session.id,
+	const signedOut = {
+		client: { sessions: [], signedInSessions: [], activeSessions: [], lastActiveSessionId: null },
+		session: null,
+		user: null,
+		organization: null,
 	}
-	const resources = { client, session, user, organization }
+	const resources = identity ? signedIn(identity) : signedOut
+	const { client, session, user, organization } = resources
 	const listeners = new Set<(r: typeof resources) => void>()
 
 	const base: Record<string, unknown> = {
@@ -75,7 +86,7 @@ export const installClerkStub = (identity: ClerkStubIdentity) => {
 		frontendApi: "parity.clerk.invalid",
 		publishableKey: "pk_test_parity",
 		isSatellite: false,
-		isSignedIn: true,
+		isSignedIn: identity !== null,
 		client,
 		session,
 		user,
