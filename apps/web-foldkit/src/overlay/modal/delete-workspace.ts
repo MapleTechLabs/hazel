@@ -12,6 +12,7 @@ import { textField } from "../../ui/text-field"
 import { toastForCause } from "../action"
 import { closed, completed, ModalOutMessage, successToast } from "../out-message"
 import { ToastRequest } from "../toasts"
+import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalViewInputs } from "./contract"
 import { Frame, FrameMessage, frameView, initFrame, isFrameClosed, modalTitle } from "./frame"
 
@@ -169,7 +170,7 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 
 export const modal = defineModal(
 	"DeleteWorkspace",
-	{ request: { organizationId: OrganizationId, organizationName: Schema.String }, Model, Message },
+	{ request: Requests.DeleteWorkspace, Model, Message },
 	{
 		init: ({ organizationId, organizationName }) => ({
 			model: {

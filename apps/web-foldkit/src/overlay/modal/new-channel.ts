@@ -17,6 +17,7 @@ import { textField } from "../../ui/text-field"
 import { runAction, toastForCause } from "../action"
 import { closed, completed, ModalOutMessage, successToast } from "../out-message"
 import { ToastRequest } from "../toasts"
+import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalViewInputs } from "./contract"
 import { Frame, FrameMessage, frameView, initFrame, isFrameClosed, modalDescription, modalTitle } from "./frame"
 
@@ -200,7 +201,7 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 
 export const modal = defineModal(
 	"NewChannel",
-	{ request: {}, Model, Message },
+	{ request: Requests.NewChannel, Model, Message },
 	{
 		init: () => ({
 			model: {

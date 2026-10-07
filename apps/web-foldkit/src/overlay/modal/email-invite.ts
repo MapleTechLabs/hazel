@@ -12,6 +12,7 @@ import * as Select from "../../ui/select"
 import { view as selectView } from "../../ui/select-view"
 import { closed, completed, errorToast, ModalOutMessage, successToast } from "../out-message"
 import { ToastRequest } from "../toasts"
+import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalViewInputs } from "./contract"
 import { type InviteRole, sendInvites } from "./email-invite-clerk"
 import { Frame, FrameMessage, frameView, initFrame, isFrameClosed, modalDescription, modalTitle } from "./frame"
@@ -250,7 +251,7 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 
 export const modal = defineModal(
 	"EmailInvite",
-	{ request: {}, Model, Message },
+	{ request: Requests.EmailInvite, Model, Message },
 	{
 		init: () => ({
 			model: { frame: initFrame(ID), invites: [newRow(0)], nextRowId: 1, isSubmitting: false },

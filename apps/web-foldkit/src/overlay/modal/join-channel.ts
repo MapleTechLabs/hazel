@@ -16,6 +16,7 @@ import { input } from "../../ui/input"
 import { runAction, toastForCause } from "../action"
 import { closed, completed, ModalOutMessage, successToast } from "../out-message"
 import { ToastRequest } from "../toasts"
+import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalSubscriptionInput, type ModalViewInputs } from "./contract"
 import { Frame, FrameMessage, frameView, initFrame, isFrameClosed, modalDescription, modalTitle } from "./frame"
 
@@ -226,7 +227,7 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 
 export const modal = defineModal(
 	"JoinChannel",
-	{ request: {}, Model, Message },
+	{ request: Requests.JoinChannel, Model, Message },
 	{
 		init: () => ({
 			model: {

@@ -15,6 +15,7 @@ import { textField, textFieldIds } from "../../ui/text-field"
 import { runAction, toastForCause } from "../action"
 import { closed, completed, ModalOutMessage, successToast } from "../out-message"
 import { ToastRequest } from "../toasts"
+import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalSubscriptionInput, type ModalViewInputs } from "./contract"
 import {
 	Frame,
@@ -261,6 +262,6 @@ const spec = renameModalSpec({
 
 export const modal = defineModal(
 	"RenameChannel",
-	{ request: { channelId: ChannelId }, Model, Message },
+	{ request: Requests.RenameChannel, Model, Message },
 	{ ...spec, init: ({ channelId }) => spec.init(channelId) },
 )

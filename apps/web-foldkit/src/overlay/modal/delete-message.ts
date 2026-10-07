@@ -8,6 +8,7 @@ import { button } from "../../ui/button"
 import { dialogFooter, dialogHeader } from "../../ui/dialog"
 import { runAction } from "../action"
 import { closed } from "../out-message"
+import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalViewInputs } from "./contract"
 import { Frame, FrameMessage, frameView, initFrame, isFrameClosed, modalDescription, modalTitle } from "./frame"
 
@@ -71,7 +72,7 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 
 export const modal = defineModal(
 	"DeleteMessage",
-	{ request: { messageId: MessageId }, Model, Message },
+	{ request: Requests.DeleteMessage, Model, Message },
 	{
 		init: ({ messageId }) => ({ model: { messageId, frame: initFrame("delete-message") } }),
 		update,

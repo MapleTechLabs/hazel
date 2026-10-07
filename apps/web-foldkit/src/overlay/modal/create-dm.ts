@@ -8,6 +8,7 @@ import { HazelRpc } from "../../rpc"
 import type { Shared } from "../../page/contract"
 import { toastForCause } from "../action"
 import { closed, completed, ModalOutMessage, successToast } from "../out-message"
+import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalSubscriptionInput } from "./contract"
 import { findExistingDmChannel, organizationUsersStream } from "./create-dm-data"
 import { Message, Model, SEARCH_ID } from "./create-dm-model"
@@ -123,7 +124,7 @@ const subscriptions = Subscription.make<ModalSubscriptionInput<Model>, Message>(
 
 export const modal = defineModal(
 	"CreateDm",
-	{ request: {}, Model, Message },
+	{ request: Requests.CreateDm, Model, Message },
 	{
 		init: () => ({
 			model: {

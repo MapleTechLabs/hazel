@@ -12,16 +12,20 @@ import * as CreateOrganization from "./modal/create-organization"
 import * as CreateSection from "./modal/create-section"
 import * as DeleteChannel from "./modal/delete-channel"
 import * as DeleteMessage from "./modal/delete-message"
+import * as DeleteBot from "./modal/delete-bot"
 import * as DeleteWorkspace from "./modal/delete-workspace"
 import * as EditBot from "./modal/edit-bot"
 import * as EmailInvite from "./modal/email-invite"
 import * as Feedback from "./modal/feedback"
+import * as InstallBotById from "./modal/install-bot-by-id"
 import * as JoinChannel from "./modal/join-channel"
 import * as NewChannel from "./modal/new-channel"
+import * as RegenerateBotToken from "./modal/regenerate-bot-token"
 import * as RenameChannel from "./modal/rename-channel"
 import * as RenameThread from "./modal/rename-thread"
 import * as RequestIntegration from "./modal/request-integration"
 import * as SetStatus from "./modal/set-status"
+import type { ModalRequest } from "./modal/requests"
 import type { ModalOutMessage } from "./out-message"
 
 /**
@@ -45,12 +49,14 @@ const modals = [
 	RequestIntegration.modal,
 	CreateBot.modal,
 	EditBot.modal,
+	InstallBotById.modal,
+	RegenerateBotToken.modal,
+	DeleteBot.modal,
 	DeleteMessage.modal,
 ]
 
 /** What a page or the shell asks for. One variant per legacy modal. */
-export const ModalRequest = Schema.Union(modals.map((modal) => modal.Request))
-export type ModalRequest = typeof ModalRequest.Type
+export { ModalRequest } from "./modal/requests"
 
 export const Model = Schema.NullOr(Schema.Union(modals.map((modal) => modal.Slot)))
 export type Model = typeof Model.Type

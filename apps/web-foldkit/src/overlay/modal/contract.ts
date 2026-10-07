@@ -44,20 +44,21 @@ export interface ModalStep<Slot, Wrapped> {
 	readonly outMessage: Option.Option<ModalOutMessage>
 }
 
-/** Request `{ _tag: id, ...fields }`, slot `{ _tag: id, model }`, Messages `{ _tag: id, message }`. */
+/** Request `{ _tag: id, ...fields }` (from `requests.ts`), slot `{ _tag: id, model }`, Messages `{ _tag: id, message }`. */
+/** The request schema comes from `requests.ts`, so out-messages stay free of modal views. */
 export const defineModal = <
 	const Id extends string,
-	const Fields extends Schema.Struct.Fields,
+	RequestSchema extends Schema.Top & { readonly Type: { readonly _tag: Id } },
 	ModelSchema extends Schema.Top,
 	MessageSchema extends Schema.Top,
 >(
 	id: Id,
-	schemas: { readonly request: Fields; readonly Model: ModelSchema; readonly Message: MessageSchema },
-	spec: ModalSpec<Schema.TaggedStruct<Id, Fields>["Type"], ModelSchema["Type"], MessageSchema["Type"]>,
+	schemas: { readonly request: RequestSchema; readonly Model: ModelSchema; readonly Message: MessageSchema },
+	spec: ModalSpec<RequestSchema["Type"], ModelSchema["Type"], MessageSchema["Type"]>,
 ) => {
 	type Model = ModelSchema["Type"]
 	type Message = MessageSchema["Type"]
-	const Request = Schema.TaggedStruct(id, schemas.request)
+	const Request = schemas.request
 	const Slot = Schema.TaggedStruct(id, { model: schemas.Model })
 	const Wrapped = Schema.TaggedStruct(id, { message: schemas.Message })
 	type RequestType = typeof Request.Type

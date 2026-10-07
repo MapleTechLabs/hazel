@@ -1,4 +1,5 @@
 import { ChannelId } from "@hazel/schema"
+import * as Requests from "./requests"
 import { defineModal } from "./contract"
 import { Message, Model, renameModalSpec } from "./rename-channel"
 
@@ -20,6 +21,6 @@ const spec = renameModalSpec({
 
 export const modal = defineModal(
 	"RenameThread",
-	{ request: { threadId: ChannelId }, Model, Message },
+	{ request: Requests.RenameThread, Model, Message },
 	{ ...spec, init: ({ threadId }) => spec.init(threadId) },
 )
