@@ -21,14 +21,7 @@ import {
 } from "~/components/ui/menu.styles"
 import { popoverContentBase, popoverInnerClassName } from "~/components/ui/popover.styles"
 import { IconCheck, IconChevronRight } from "../icons"
-import {
-	dismissButton,
-	focusScopeSentinel,
-	portalOverlay,
-	positionOverlay,
-	restoreFocusTo,
-	watchInteractOutside,
-} from "./aria/overlay"
+import { dismissButton, focusScopeSentinel, openModalPopover, positionOverlay } from "./aria/overlay"
 import type { Placement } from "./aria/position"
 import {
 	descriptionId,
@@ -60,28 +53,17 @@ const PortalMenu = Mount.defineStream("PortalMenu", {
 		Stream.callback<PortalMenuMessage>((queue) =>
 			Effect.acquireRelease(
 				Effect.sync(() => {
-					const restoreFocus = restoreFocusTo(triggerId(id), element)
-					const releasePortal = portalOverlay(element, { isModal: true })
-					const popover = element.querySelector<HTMLElement>(popoverSelector(id))
-					const releasePosition = popover
-						? positionOverlay(popover, {
-								triggerId: triggerId(id),
-								placement: placement as Placement,
-								offset: MENU_OFFSET,
-								isTriggerWidthSet: true,
-							})
-						: () => undefined
-					document.getElementById(initialFocusId)?.focus({ preventScroll: true })
-					const releaseOutside = watchInteractOutside(popoverSelector(id), () =>
-						Queue.offerUnsafe(queue, Message.PressedOutside()),
-					)
+					const release = openModalPopover(element, {
+						triggerId: triggerId(id),
+						placement: placement as Placement,
+						offset: MENU_OFFSET,
+						isTriggerWidthSet: true,
+						initialFocusId,
+						insideSelector: popoverSelector(id),
+						onInteractOutside: () => Queue.offerUnsafe(queue, Message.PressedOutside()),
+					})
 					Queue.offerUnsafe(queue, Message.CompletedPortalMenu())
-					return () => {
-						releaseOutside()
-						releasePosition()
-						releasePortal()
-						restoreFocus()
-					}
+					return release
 				}),
 				(release) => Effect.sync(release),
 			).pipe(Effect.flatMap(() => Effect.never)),
@@ -226,6 +208,7 @@ const overlay = (model: Model, open: Open, viewInputs: ViewInputs, h: HtmlBuilde
 							h.Attribute("data-rac", ""),
 							h.Attribute("data-trigger", "MenuTrigger"),
 							h.Attribute("data-menu-popover", model.id),
+							h.Attribute("data-popover", ""),
 							h.Attribute("dir", "ltr"),
 							h.Role("dialog"),
 							h.Attribute("tabindex", "-1"),

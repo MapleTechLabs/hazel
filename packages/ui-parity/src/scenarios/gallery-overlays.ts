@@ -207,5 +207,33 @@ export const galleryOverlaysArea: AreaModule = {
 				await page.getByRole("tooltip").waitFor()
 			},
 		}),
+		// SELECT
+		overlay("select", "select", "Select: selected, placeholder and disabled"),
+		overlay("select", "select-open", "Select: opened by click on a selected value", {
+			steps: async (page) => {
+				await page.getByRole("button", { name: /Clear after/ }).click()
+				await page.getByRole("listbox").waitFor()
+			},
+		}),
+		overlay("select", "select-keyboard", "Select: opened with ArrowDown, option hovered by keyboard", {
+			steps: async (page) => {
+				await page.keyboard.press("Tab")
+				await page.keyboard.press("ArrowDown")
+				await page.getByRole("listbox").waitFor()
+				await page.keyboard.press("ArrowDown")
+			},
+		}),
+		overlay("select", "select-choose", "Select: choosing an option updates the value", {
+			steps: async (page) => {
+				await page.getByRole("button", { name: /Reminder/ }).click()
+				await page.getByRole("option", { name: "Today" }).click()
+			},
+		}),
+		overlay("select", "select-option-hover", "Select: hovered option", {
+			steps: async (page) => {
+				await page.getByRole("button", { name: /Reminder/ }).click()
+				await page.getByRole("option", { name: "30 minutes" }).hover()
+			},
+		}),
 	],
 }

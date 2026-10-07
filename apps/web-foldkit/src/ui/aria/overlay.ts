@@ -254,6 +254,32 @@ export const observeDialogParts = (root: Element): (() => void) => {
 	}
 }
 
+// MODAL POPOVER (Popover with an underlay, as MenuTrigger, Select and DialogTrigger render it)
+
+/**
+ * Everything a modal popover does on mount: portal `root` to the body with the rest inert and
+ * scroll locked, position its `[data-popover]` panel, move focus in, dismiss on outside press,
+ * and give focus back to the trigger on release.
+ */
+export const openModalPopover = (
+	root: Element,
+	config: PositionConfig &
+		Readonly<{ initialFocusId: string; insideSelector: string; onInteractOutside: () => void }>,
+): (() => void) => {
+	const restoreFocus = restoreFocusTo(config.triggerId, root)
+	const releasePortal = portalOverlay(root, { isModal: true })
+	const popover = root.querySelector<HTMLElement>("[data-popover]")
+	const releasePosition = popover ? positionOverlay(popover, config) : () => undefined
+	document.getElementById(config.initialFocusId)?.focus({ preventScroll: true })
+	const releaseOutside = watchInteractOutside(config.insideSelector, config.onInteractOutside)
+	return () => {
+		releaseOutside()
+		releasePosition()
+		releasePortal()
+		restoreFocus()
+	}
+}
+
 // MARKUP
 
 /** React Aria's visually hidden `DismissButton`, rendered at both ends of a modal popover. */
