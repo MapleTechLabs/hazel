@@ -291,5 +291,37 @@ export const galleryArea: AreaModule = {
 				await page.getByText("Spacious", { exact: true }).hover()
 			},
 		}),
+		gallery("switch", {
+			id: "gallery-switch",
+			title: "Switch: off, on, disabled, description",
+			themes: ["light", "dark"],
+		}),
+		gallery("switch", {
+			id: "gallery-switch-clicked",
+			title: "Switch: clicking turns it on",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.getByText("Off", { exact: true }).click()
+				await page.mouse.move(0, 0)
+			},
+		}),
+		gallery("switch", {
+			id: "gallery-switch-keyboard",
+			title: "Switch: Tab then Space toggles with a focus ring",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.keyboard.press("Tab")
+				await page.keyboard.press("Tab")
+				await page.keyboard.press(" ")
+			},
+		}),
+		gallery("switch", {
+			id: "gallery-switch-hover",
+			title: "Switch: hovered",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.getByText("Desktop notifications", { exact: true }).hover()
+			},
+		}),
 	],
 }
