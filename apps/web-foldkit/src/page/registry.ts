@@ -5,6 +5,7 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import type { HazelRpc } from "../rpc"
 import type { AppRoute } from "../route"
 import * as ChatChannel from "./chat/channel"
+import * as ChatIndex from "./chat-index"
 import type { PageHost, PageMessageBase, PageSlotBase, PageStep, PageViewInputs, Shared } from "./contract"
 import type { PageOutMessage } from "./out-message"
 import * as OrgHome from "./home"
@@ -16,7 +17,14 @@ import * as TeamSettings from "./settings/team"
  * Every routed page, registered once. Adding a page: import its module and append `X.page` below.
  * Routes without a page render their layout around an empty placeholder (see README.md).
  */
-export const pages = [Root.page, TeamSettings.page, ChatChannel.page, OrgHome.page, Profile.page]
+export const pages = [
+	Root.page,
+	TeamSettings.page,
+	ChatChannel.page,
+	OrgHome.page,
+	Profile.page,
+	ChatIndex.page,
+]
 
 export const PageSlot = Schema.Union(pages.map((page) => page.Slot))
 export type PageSlot = typeof PageSlot.Type
