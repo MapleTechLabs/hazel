@@ -9,6 +9,7 @@ import { CopyEmail, CreateDm, FindDm } from "./commands"
 import { Message } from "./message"
 import { type DirectoryMember, filterMembers, type Model } from "./model"
 import { init, update } from "./update"
+import { sharedDefaults } from "../test-shared"
 
 // `ui/aria/interaction` names `document` when its module loads; the update loop never touches it.
 vi.hoisted(() => {
@@ -38,6 +39,7 @@ const shared: Shared = {
 	organization: { id: organizationId, name: "Hazel", slug: "hazel", logoUrl: null },
 	member: null,
 	nowMs: 0,
+	...sharedDefaults,
 }
 
 const member = (id: UserId, firstName: string, lastName: string): DirectoryMember => ({

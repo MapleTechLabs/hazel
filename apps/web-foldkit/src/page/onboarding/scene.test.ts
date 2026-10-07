@@ -11,6 +11,7 @@ import { AutoFocus } from "./navigation"
 import { DrawGlobePath, TwinkleStar } from "./timezone/globe"
 import { init, update } from "./update"
 import { view } from "./view"
+import { sharedDefaults } from "../test-shared"
 
 /** The onboarding flow's update loop, driven through the rendered steps. */
 
@@ -35,6 +36,7 @@ const shared: Shared = {
 	organization: null,
 	member: null,
 	nowMs: Date.UTC(2026, 2, 12, 15),
+	...sharedDefaults,
 }
 const membership = {
 	organizationId: Schema.decodeSync(OrganizationId)(uuid(2)),

@@ -4,6 +4,7 @@ import { describe, expect, test } from "vitest"
 import type { Shared } from "../../contract"
 import { Message } from "./message"
 import { init, sharedChanged, update } from "./update"
+import { sharedDefaults } from "../../test-shared"
 
 /** Update-loop tests for connect invitations: list requests and the accept/decline lifecycle. */
 
@@ -17,6 +18,7 @@ const shared = (organizationId: OrganizationId | null): Shared => ({
 	organization: organizationId === null ? null : { id: organizationId, name: "Hazel", slug: "hazel", logoUrl: null },
 	member: null,
 	nowMs: 0,
+	...sharedDefaults,
 })
 
 describe("connect invitations", () => {

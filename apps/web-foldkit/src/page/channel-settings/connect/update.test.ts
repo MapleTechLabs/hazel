@@ -9,6 +9,7 @@ import { ListOutgoingInvites, RevokeInvite } from "./command"
 import { Message } from "./model"
 import * as ShareModal from "./share-modal"
 import { init, update } from "./update"
+import { sharedDefaults } from "../../test-shared"
 
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`
 const organizationId = Schema.decodeSync(OrganizationId)(uuid(1))
@@ -21,6 +22,7 @@ const shared: Shared = {
 	organization: { id: organizationId, name: "Hazel", slug: "hazel", logoUrl: null },
 	member: null,
 	nowMs: 0,
+	...sharedDefaults,
 }
 const run = (current: Parameters<typeof update>[0], next: Message) => update(current, next, shared)
 const initial = init({ _tag: "ChannelSettingsConnect", orgSlug: "hazel", channelId }, shared)

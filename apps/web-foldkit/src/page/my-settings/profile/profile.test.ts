@@ -10,6 +10,7 @@ import { dragTo } from "./crop"
 import { errorsOf, isSaveDisabled } from "./form"
 import { Message } from "./message"
 import { init, update } from "./update"
+import { sharedDefaults } from "../../test-shared"
 
 /** Update-loop tests for the profile form and the avatar crop interaction. */
 
@@ -29,6 +30,7 @@ const shared: Shared = {
 	organization: null,
 	member: null,
 	nowMs: 0,
+	...sharedDefaults,
 }
 const pageUpdate = (current: Parameters<typeof update>[0], next: Message) => update(current, next, shared)
 const initial = () => init(undefined, shared).model

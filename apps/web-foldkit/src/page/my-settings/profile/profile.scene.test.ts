@@ -8,6 +8,7 @@ import * as ComboBox from "../../../ui/combo-box"
 import { Message } from "./message"
 import { init, update } from "./update"
 import { profileView } from "./view"
+import { sharedDefaults } from "../../test-shared"
 
 /** The profile form through its view: typing validates and toggles Save, as the legacy form does. */
 
@@ -26,6 +27,7 @@ const shared: Shared = {
 	organization: null,
 	member: null,
 	nowMs: 0,
+	...sharedDefaults,
 }
 
 const config = {

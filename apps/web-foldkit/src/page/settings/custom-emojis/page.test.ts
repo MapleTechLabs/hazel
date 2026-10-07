@@ -6,6 +6,7 @@ import type { Shared } from "../../contract"
 import { formatDistanceToNow } from "../format-distance"
 import { Message } from "./message"
 import { generateEmojiName, init, update, validateEmojiName } from "./update"
+import { sharedDefaults } from "../../test-shared"
 
 /** Update-loop tests for custom emojis: names, file checks and the delete confirmation. */
 
@@ -17,6 +18,7 @@ const shared: Shared = {
 	organization: { id: Schema.decodeSync(OrganizationId)(uuid(1)), name: "Hazel", slug: "hazel", logoUrl: null },
 	member: { id: Schema.decodeSync(OrganizationMemberId)(uuid(2)), role: "admin" },
 	nowMs: 0,
+	...sharedDefaults,
 }
 const shipit = Schema.decodeSync(CustomEmojiId)(uuid(3))
 

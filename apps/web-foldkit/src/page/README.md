@@ -29,10 +29,11 @@ memoized views and a `sharedChanged` hook. `page/root/` shows a page that only r
 - **Route params.** `init(route, shared)` receives the route variant, typed by `routes`. Store the params
   you need in the Model. `key(route)` decides when a navigation keeps the same instance (default: the whole
   route); a kept instance gets `routeChanged(model, route, shared)` instead of a new `init`.
-- **Shared data.** `Shared` holds `auth`, `orgSlug`, `currentUser`, `organization`, `member` (id and role)
-  and `nowMs`. `update`, `routeChanged` and `sharedChanged` receive it, the view gets it as
+- **Shared data.** `Shared` holds `auth`, `orgSlug`, `currentUser`, `organization`, `member` (id and role),
+  `nowMs` and `isMobile` (the shell's `(max-width: 767px)` query). `update`, `routeChanged` and `sharedChanged` receive it, the view gets it as
   `viewInputs.shared`, and Subscriptions read it as `input.shared`. Never copy it into the Model; if
   derived state depends on it, recompute in `sharedChanged`. Permissions: `can(shared, "channel.create")`.
+  Tests spread `sharedDefaults` (`page/test-shared.ts`) into their `Shared` literal.
 - **RPC.** Commands `yield* HazelRpc` (`src/rpc.ts`); it is the app's `resources` layer. Map every `Exit`
   to a Message (`SucceededX` / `FailedX`).
 - **Live queries.** Use `liveQueryStream` (`src/data/live-query.ts`) with the legacy `useLiveQuery`

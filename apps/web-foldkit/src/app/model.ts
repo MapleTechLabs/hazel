@@ -36,6 +36,7 @@ export const sharedOf = (model: Model): Shared => ({
 	organization: model.organization,
 	member: model.member,
 	nowMs: model.nowMs,
+	isMobile: model.shell.isMobile,
 })
 
 export const pageHostOf = (model: Model): PageHost => ({ page: model.page, shared: sharedOf(model) })

@@ -10,6 +10,7 @@ import { SaveSoundSettings, UpdateUserSettings } from "./command"
 import { Message } from "./message"
 import { settingsOf } from "./model"
 import { init, update } from "./update"
+import { sharedDefaults } from "../../test-shared"
 
 /** Update-loop tests for notification preferences: optimistic user settings and the sound settings. */
 
@@ -29,6 +30,7 @@ const shared: Shared = {
 	organization: null,
 	member: null,
 	nowMs: 0,
+	...sharedDefaults,
 }
 const pageUpdate = (current: Parameters<typeof update>[0], next: Message) => update(current, next, shared)
 const row = {

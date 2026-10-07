@@ -20,6 +20,8 @@ export interface Shared {
 	readonly member: Member | null
 	/** Wall clock for presence, ticking every 30 s (legacy `presenceNowSignal`). */
 	readonly nowMs: number
+	/** `useSidebar().isMobile`: the `(max-width: 767px)` viewport. */
+	readonly isMobile: boolean
 }
 
 /** `usePermission().can(action)` */

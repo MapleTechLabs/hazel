@@ -25,6 +25,7 @@ import { Message } from "./message"
 import type { Model } from "./model"
 import { init, update } from "./update"
 import { view } from "./view"
+import { sharedDefaults } from "../../../test-shared"
 
 const orgId = Schema.decodeSync(OrganizationId)("00000000-0000-4000-8000-000000000001")
 const shared: Shared = {
@@ -34,6 +35,7 @@ const shared: Shared = {
 	organization: { id: orgId, name: "Hazel", slug: "hazel", logoUrl: null },
 	member: null,
 	nowMs: 0,
+	...sharedDefaults,
 }
 
 const config = {

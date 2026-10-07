@@ -278,7 +278,7 @@ export const update = (model: Model, message: Message): Return =>
 		GotPageMessage: ({ message }) => applyPage(updatePage(model.page, message, sharedOf(model)))(model),
 		GotShellMessage: ({ message }) => {
 			const result = Shell.update(model.shell, message, shellContextOf(model))
-			return withCommands(
+			const shelled = withCommands(
 				{
 					model: modifyFields(model, { shell: () => result.model }),
 					commands: Command.mapMessages(result.commands, (child) =>
@@ -287,6 +287,13 @@ export const update = (model: Model, message: Message): Return =>
 				},
 				Option.fromNullishOr(result.outMessage),
 			)
+			// `Shared.isMobile` comes from the shell's viewport query.
+			return result.model.isMobile === model.shell.isMobile
+				? shelled
+				: Update.combine<Model, Message, HazelRpc>(shelled.model, [
+						(m) => ({ model: m, commands: shelled.commands }),
+						informPage,
+					])
 		},
 		GotModalMessage: ({ message }) => withModal(model, Modal.update(model.modal, message, sharedOf(model))),
 		GotCommandPaletteMessage: ({ message }) =>
