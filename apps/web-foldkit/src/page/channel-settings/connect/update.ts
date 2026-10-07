@@ -1,7 +1,9 @@
 import { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import type { RouteOf } from "../../../route"
+import * as Interaction from "../../../ui/aria/interaction"
 import { successToast } from "../../../ui/toast-exit"
+import { embedInteraction } from "../../settings/integrations/shared/interaction"
 import type { PageReturn, Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
 import { DisconnectOrganization, ListOutgoingInvites, RevokeInvite } from "./command"
@@ -9,6 +11,13 @@ import { Message, type Model, rowRoles } from "./model"
 import * as ShareModal from "./share-modal"
 
 type Return = PageReturn<Model, Message>
+
+export const interaction = embedInteraction<Model, Message>((message) =>
+	Message.GotInteractionMessage({ message }),
+)
+
+/** The interaction target of an invite's Revoke button. */
+export const revokeTarget = (inviteId: string) => `revoke-${inviteId}`
 
 const requestInvites = (model: Model, shared: Shared): Return => {
 	const organizationId = shared.organization?.id ?? null
@@ -31,6 +40,7 @@ export const init = (route: RouteOf<"ChannelSettingsConnect">, shared: Shared): 
 			revokingInviteIds: [],
 			disconnectingMountIds: [],
 			share: ShareModal.init(),
+			interaction: Interaction.init(),
 		},
 		shared,
 	)
@@ -63,7 +73,11 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			model.revokingInviteIds.includes(inviteId)
 				? { model }
 				: {
-						model: modifyFields(model, { revokingInviteIds: (ids) => [...ids, inviteId] }),
+						model: modifyFields(model, {
+							revokingInviteIds: (ids) => [...ids, inviteId],
+							interaction: (state) =>
+								Interaction.disabledTargets(state, [revokeTarget(inviteId)]),
+						}),
 						commands: [RevokeInvite({ inviteId })],
 					},
 		SucceededRevokeInvite: ({ inviteId }) => ({
@@ -75,6 +89,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			model: modifyFields(model, { revokingInviteIds: (ids) => without(ids, inviteId) }),
 			outMessage: toastOut(title, description),
 		}),
+		GotInteractionMessage: ({ message }) => interaction.fold(model, message),
 		ClickedDisconnect: ({ mountId }) => {
 			const mount = model.mounts.find((candidate) => candidate.id === mountId)
 			const currentOrgId = shared.organization?.id ?? null

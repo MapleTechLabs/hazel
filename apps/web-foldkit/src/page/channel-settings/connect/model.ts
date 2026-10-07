@@ -1,6 +1,7 @@
 import { ChannelId, ConnectConversationId, ConnectInviteId, OrganizationId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
+import * as Interaction from "../../../ui/aria/interaction"
 import * as ShareModal from "./share-modal"
 
 export const Mount = Schema.Struct({
@@ -38,6 +39,7 @@ export const Model = Schema.Struct({
 	revokingInviteIds: Schema.Array(Schema.String),
 	disconnectingMountIds: Schema.Array(Schema.String),
 	share: ShareModal.Model,
+	interaction: Interaction.Model,
 })
 export type Model = typeof Model.Type
 
@@ -49,6 +51,7 @@ export const Message = defineMessageUnion({
 	FailedListOutgoingInvites: {},
 	ClickedShareChannel: {},
 	ClickedRevokeInvite: { inviteId: ConnectInviteId },
+	GotInteractionMessage: { message: Interaction.Message },
 	SucceededRevokeInvite: { inviteId: ConnectInviteId },
 	FailedRevokeInvite: {
 		inviteId: ConnectInviteId,

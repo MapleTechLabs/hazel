@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { ConnectInviteId, OrganizationId } from "@hazel/schema"
 import { Schema } from "effect"
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"

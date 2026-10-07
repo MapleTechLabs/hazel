@@ -11,6 +11,7 @@ import { getSharedConversationMountsForChannel } from "~/lib/connect-shared-chan
 import { liveQueryStream } from "../../../data/live-query"
 import type { PageSubscriptionInput } from "../../contract"
 import { Message, type Model, type OrgSummary } from "./model"
+import { interaction } from "./update"
 
 interface MountRow {
 	readonly id: string
@@ -33,7 +34,7 @@ interface OrgRow {
 const mountOrgIds = (model: Model) =>
 	[...new Set(model.mounts.map((mount) => mount.organizationId))].sort().join(",")
 
-export const subscriptions = Subscription.make<PageSubscriptionInput<Model>, Message>()((entry) => ({
+const dataSubscriptions = Subscription.make<PageSubscriptionInput<Model>, Message>()((entry) => ({
 	channelName: entry(
 		{ channelId: ChannelId },
 		{
@@ -110,3 +111,5 @@ export const subscriptions = Subscription.make<PageSubscriptionInput<Model>, Mes
 		},
 	),
 }))
+
+export const subscriptions = { ...interaction.subscriptions, ...dataSubscriptions }

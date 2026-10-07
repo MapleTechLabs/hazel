@@ -90,6 +90,7 @@ export const Message = defineMessageUnion({
 	CompletedPositionMenu: {},
 	CompletedPortalMenu: {},
 	CompletedCaptureContextMenu: {},
+	CompletedFocusTriggerOnPress: {},
 })
 export type Message = typeof Message.Type
 
@@ -509,5 +510,6 @@ export const update = (model: Model, message: Message): UpdateReturn => {
 		CompletedPositionMenu: () => ({ model }),
 		CompletedPortalMenu: () => ({ model }),
 		CompletedCaptureContextMenu: () => ({ model }),
+		CompletedFocusTriggerOnPress: () => ({ model }),
 	})
 }

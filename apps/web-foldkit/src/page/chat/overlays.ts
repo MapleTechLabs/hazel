@@ -27,6 +27,8 @@ export const Model = Schema.Struct({
 	tooltip: TooltipHost.Model,
 	/** The tooltip trigger under the pointer (`data-hovered`). */
 	hoveredTriggerKey: Schema.NullOr(Schema.String),
+	/** The toolbar button with focus (React Aria useFocus, so `data-focused` at any modality). */
+	focusedTriggerKey: Schema.NullOr(Schema.String),
 	moreMenu: Schema.NullOr(MessageMenu),
 	contextMenu: Schema.NullOr(MessageMenu),
 	/** The author popover open from an avatar (key `<messageId>:avatar`) or a pinned row. */
@@ -36,7 +38,9 @@ export const Model = Schema.Struct({
 	/** The toolbar's "Add reaction" picker while it is open. */
 	reactionPicker: Schema.NullOr(Schema.Struct({ messageId: MessageId, dialog: EmojiDialog.Model })),
 	/** The context menu's "Add Reaction": a modal holding the picker. */
-	reactionModal: Schema.NullOr(Schema.Struct({ messageId: MessageId, modal: Modal.Model, picker: Picker.Model })),
+	reactionModal: Schema.NullOr(
+		Schema.Struct({ messageId: MessageId, modal: Modal.Model, picker: Picker.Model }),
+	),
 	/** `useChatThread`: the thread panel beside the channel. */
 	thread: Schema.NullOr(Schema.Struct({ threadChannelId: ChannelId, messageId: MessageId })),
 })
@@ -49,6 +53,7 @@ export const init = (): Model => ({
 	toolbar: Toolbar.init({ label: "Message actions" }),
 	tooltip: null,
 	hoveredTriggerKey: null,
+	focusedTriggerKey: null,
 	moreMenu: null,
 	contextMenu: null,
 	popover: null,
@@ -91,7 +96,16 @@ export const Message = defineMessageUnion({
 export type Message = typeof Message.Type
 
 /** `useMessageActions` handlers the overlays trigger; the page runs them. */
-export const MessageAction = Schema.Literals(["reply", "edit", "thread", "pin", "copy", "copy-id", "delete", "add-reaction"])
+export const MessageAction = Schema.Literals([
+	"reply",
+	"edit",
+	"thread",
+	"pin",
+	"copy",
+	"copy-id",
+	"delete",
+	"add-reaction",
+])
 export type MessageAction = typeof MessageAction.Type
 
 export const OutMessage = defineMessageUnion({
@@ -213,11 +227,21 @@ export const update = (model: Model, message: Message, facts: MessageFacts): Ove
 					: tooltip.message._tag === "UnhoveredTrigger" && model.hoveredTriggerKey === tooltip.key
 						? null
 						: model.hoveredTriggerKey
+			const focusedTriggerKey =
+				tooltip.message._tag === "FocusedTrigger"
+					? tooltip.key
+					: tooltip.message._tag === "BlurredTrigger" && model.focusedTriggerKey === tooltip.key
+						? null
+						: model.focusedTriggerKey
 			return result.model === model.tooltip &&
 				(result.commands ?? []).length === 0 &&
-				hoveredTriggerKey === model.hoveredTriggerKey
+				hoveredTriggerKey === model.hoveredTriggerKey &&
+				focusedTriggerKey === model.focusedTriggerKey
 				? { model }
-				: { model: { ...model, tooltip: result.model, hoveredTriggerKey }, commands: result.commands }
+				: {
+						model: { ...model, tooltip: result.model, hoveredTriggerKey, focusedTriggerKey },
+						commands: result.commands,
+					}
 		},
 		GotMoreMenuMessage: ({ messageId, message: menuMessage }) => {
 			const result = Menu.update(moreMenuFor(model, messageId, facts), menuMessage)
@@ -308,7 +332,13 @@ export const update = (model: Model, message: Message, facts: MessageFacts): Ove
 			// `handleReaction` with the picked emoji's string.
 			return result.outMessage === undefined
 				? next
-				: { ...next, outMessage: OutMessage.RequestedReaction({ messageId, emoji: result.outMessage.emoji }) }
+				: {
+						...next,
+						outMessage: OutMessage.RequestedReaction({
+							messageId,
+							emoji: result.outMessage.emoji,
+						}),
+					}
 		},
 		GotReactionModalMessage: ({ message: modalMessage }) => {
 			const current = model.reactionModal
@@ -347,7 +377,6 @@ export const update = (model: Model, message: Message, facts: MessageFacts): Ove
 			set(model, { thread: { threadChannelId, messageId } }),
 		ClosedThread: () => set(model, { thread: null }),
 	})
-
 
 /** The message id a tooltip or popover key belongs to (keys are `<messageId>:<part>`). */
 const messageIdOfKey = (key: string) => key.split(":")[0]

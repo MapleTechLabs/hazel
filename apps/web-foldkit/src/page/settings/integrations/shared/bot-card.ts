@@ -11,6 +11,7 @@ import {
 } from "../../../../icons"
 import { avatar } from "../../../../ui/avatar"
 import { badge } from "../../../../ui/badge"
+import type * as Interaction from "../../../../ui/aria/interaction"
 import { button } from "../../../../ui/button"
 import * as Menu from "../../../../ui/menu"
 import { menuLabel, menuTriggerClassName, view as menuView } from "../../../../ui/menu-view"
@@ -212,7 +213,16 @@ export const botCard = <Message>(h: HtmlBuilder<Message>, bot: Bot, actions: Bot
 export const marketplaceBotCard = <Message>(
 	h: HtmlBuilder<Message>,
 	bot: PublicBot,
-	options: { readonly isInstalled: boolean; readonly isInstalling: boolean; readonly onInstall: Message },
+	options: {
+		readonly isInstalled: boolean
+		readonly isInstalling: boolean
+		readonly onInstall: Message
+		/** The Install button's hover, press and focus state. */
+		readonly installInteraction?: {
+			readonly wiring: Interaction.Wiring<Message>
+			readonly target: string
+		}
+	},
 ): Html =>
 	h.keyed("div")(
 		bot.id,
@@ -265,6 +275,9 @@ export const marketplaceBotCard = <Message>(
 									size: "sm",
 									onPress: options.onInstall,
 									isDisabled: options.isInstalling,
+									...(options.installInteraction === undefined
+										? {}
+										: { interaction: options.installInteraction }),
 								},
 								[options.isInstalling ? "Installing..." : "Install"],
 							),

@@ -7,10 +7,27 @@ import { HazelRpc } from "../../../rpc"
 import type { PageReturn, Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
 import { failureToast, settle, successToast } from "../../../data/actions"
+import * as Interaction from "../../../ui/aria/interaction"
+import { embedInteraction } from "../integrations/shared/interaction"
 import { Message } from "./message"
 import type { Model } from "./model"
 
 type Return = PageReturn<Model, Message>
+
+export const interaction = embedInteraction<Model, Message>((message) =>
+	Message.GotInteractionMessage({ message }),
+)
+
+/** The interaction targets of one invite's Decline and Accept buttons. */
+export const declineTarget = (inviteId: ConnectInviteId) => `decline-${inviteId}`
+export const acceptTarget = (inviteId: ConnectInviteId) => `accept-${inviteId}`
+
+/** Both buttons of the row disable while either action runs, which ends their hover. */
+const busy = (model: Model, inviteId: ConnectInviteId) =>
+	modifyFields(model, {
+		interaction: (state) =>
+			Interaction.disabledTargets(state, [declineTarget(inviteId), acceptTarget(inviteId)]),
+	})
 
 const inviteNotFound = (description: string) => ({
 	ConnectInviteNotFoundError: { title: "Invite not found", description },
@@ -114,7 +131,14 @@ const requestFor = (model: Model, shared: Shared): Return => {
 
 export const init = (_route: unknown, shared: Shared): Return =>
 	requestFor(
-		{ requestedFor: null, invites: [], hostOrganizations: [], acceptingIds: [], decliningIds: [] },
+		{
+			requestedFor: null,
+			invites: [],
+			hostOrganizations: [],
+			acceptingIds: [],
+			decliningIds: [],
+			interaction: Interaction.init(),
+		},
 		shared,
 	)
 
@@ -122,7 +146,8 @@ export const sharedChanged = requestFor
 
 // UPDATE
 
-const without = (ids: ReadonlyArray<ConnectInviteId>, id: ConnectInviteId) => ids.filter((other) => other !== id)
+const without = (ids: ReadonlyArray<ConnectInviteId>, id: ConnectInviteId) =>
+	ids.filter((other) => other !== id)
 
 /** Legacy invalidates the `connectInvites:incoming:<org>` reactivity key after a successful mutation. */
 const refetch = (model: Model): ReadonlyArray<Command.Command<Message, never, HazelRpc>> =>
@@ -139,7 +164,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			shared.organization === null
 				? { model }
 				: {
-						model: modifyFields(model, { acceptingIds: (ids) => [...ids, inviteId] }),
+						model: modifyFields(busy(model, inviteId), {
+							acceptingIds: (ids) => [...ids, inviteId],
+						}),
 						commands: [AcceptInvite({ inviteId, guestOrganizationId: shared.organization.id })],
 					},
 		SucceededAccept: ({ inviteId }) => ({
@@ -152,7 +179,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			outMessage: PageOutMessage.RequestedToast({ toast }),
 		}),
 		ClickedDecline: ({ inviteId }) => ({
-			model: modifyFields(model, { decliningIds: (ids) => [...ids, inviteId] }),
+			model: modifyFields(busy(model, inviteId), { decliningIds: (ids) => [...ids, inviteId] }),
 			commands: [DeclineInvite({ inviteId })],
 		}),
 		SucceededDecline: ({ inviteId }) => ({
@@ -164,4 +191,5 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			model: modifyFields(model, { decliningIds: (ids) => without(ids, inviteId) }),
 			outMessage: PageOutMessage.RequestedToast({ toast }),
 		}),
+		GotInteractionMessage: ({ message }) => interaction.fold(model, message),
 	})

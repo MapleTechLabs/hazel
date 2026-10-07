@@ -1,5 +1,6 @@
 import { ConnectInviteId, OrganizationId } from "@hazel/schema"
 import { Schema } from "effect"
+import * as Interaction from "../../../ui/aria/interaction"
 
 export const Invite = Schema.Struct({
 	id: ConnectInviteId,
@@ -19,5 +20,6 @@ export const Model = Schema.Struct({
 	hostOrganizations: Schema.Array(HostOrganization),
 	acceptingIds: Schema.Array(ConnectInviteId),
 	decliningIds: Schema.Array(ConnectInviteId),
+	interaction: Interaction.Model,
 })
 export type Model = typeof Model.Type

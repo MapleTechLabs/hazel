@@ -46,6 +46,9 @@ export const interaction = embedInteraction<Model, Message>((message) =>
 	Message.GotInteractionMessage({ message }),
 )
 
+/** The interaction target of a bot card's Install button. */
+export const installTarget = (botId: BotId) => `install-${botId}`
+
 export const init = (): Return => ({
 	model: {
 		search: "",
@@ -67,7 +70,10 @@ export const update = (model: Model, message: Message): Return =>
 		}),
 		ChangedSearch: ({ search }) => ({ model: modifyFields(model, { search: () => search }) }),
 		ClickedInstall: ({ botId }) => ({
-			model: modifyFields(model, { installingBotIds: (ids) => [...ids, botId] }),
+			model: modifyFields(model, {
+				installingBotIds: (ids) => [...ids, botId],
+				interaction: (state) => Interaction.disabledTargets(state, [installTarget(botId)]),
+			}),
 			commands: [InstallBot({ botId })],
 		}),
 		SucceededInstallBot: ({ botId }) => ({

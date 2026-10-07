@@ -2,6 +2,7 @@ import { ConnectInviteId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import { ToastRequest } from "../../../overlay/toasts"
+import * as Interaction from "../../../ui/aria/interaction"
 import { HostOrganization, Invite } from "./model"
 
 export const Message = defineMessageUnion({
@@ -14,5 +15,6 @@ export const Message = defineMessageUnion({
 	ClickedDecline: { inviteId: ConnectInviteId },
 	SucceededDecline: { inviteId: ConnectInviteId },
 	FailedDecline: { inviteId: ConnectInviteId, toast: ToastRequest },
+	GotInteractionMessage: { message: Interaction.Message },
 })
 export type Message = typeof Message.Type
