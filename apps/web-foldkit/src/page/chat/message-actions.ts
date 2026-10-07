@@ -13,7 +13,7 @@ import {
 import { ToastRequest } from "../../overlay/toasts"
 import { HazelRpc } from "../../rpc"
 import { notRetryable, rateLimited, runChatAction, toastOfExit } from "./action-effects"
-import { trackEmojiUsage } from "./emoji-usage"
+import { trackEmojiUsage } from "../../emoji-picker/usage"
 
 /**
  * The message actions of `ChatProvider` and `useMessageActions`: each Command runs the same

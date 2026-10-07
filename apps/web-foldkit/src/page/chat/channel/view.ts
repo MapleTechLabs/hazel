@@ -1,4 +1,4 @@
-import { type ChildAttribute, childAttributes, createLazy, type Html, type HtmlBuilder } from "foldkit/html"
+import { createLazy, type Html, type HtmlBuilder } from "foldkit/html"
 import { contentStyles, rootStyles } from "~/components/ui/split-panel/split-panel.styles"
 import { isImageAttachment } from "../../../chat/attachments"
 import { imageViewerView } from "../../../chat/image-viewer"
@@ -13,7 +13,7 @@ import { pinnedPopoverView } from "../pinned"
 import { messageToolbarOverlay, trackHoverAttribute } from "../overlay-views"
 import { attachmentInfoFrom, composerAreaView, replyPreviewOf } from "../composer-view"
 import type * as Draft from "../../../composer/draft"
-import type { ReplyPreview } from "../../../composer/draft-view"
+import { draftView, type ReplyPreview } from "../../../composer/draft-view"
 import * as Overlays from "../overlays"
 import { isMemberOf, Message, type Model } from "./page"
 import { idleRowContext, rowContextFor } from "../row-context"
@@ -164,15 +164,9 @@ const messagesOutlet = <M>(h: HtmlBuilder<M>, model: Model, toParentMessage: (me
 			h,
 		]) ?? h.empty,
 		imageViewerOverlay(h, model, toParentMessage),
-		messageToolbarOverlay(h, model, toParentMessage, closedPicker(h)),
+		messageToolbarOverlay(h, model, toParentMessage),
 	]
 }
-
-/** A DialogTrigger's closed state: the trigger only. */
-const closedPicker =
-	<M>(h: HtmlBuilder<M>) =>
-	(render: (attributes: ReadonlyArray<ChildAttribute>, overlay: Html) => Html) =>
-		render(childAttributes([h.Attribute("aria-expanded", "false")]), h.empty)
 
 const composerView = <M>(
 	typingKey: string | null,
@@ -303,5 +297,17 @@ const threadPanelOverlay = <M>(
 		context: toDeriveContext(model.lookups, model.currentUserId ?? undefined),
 		rowContext: idleRowContext(h, model, toParentMessage),
 		onClose: toParentMessage(Message.GotOverlaysMessage({ message: Overlays.Message.ClosedThread() })),
+		onGenerateName: toParentMessage(Message.ClickedGenerateThreadName()),
+		onRename: toParentMessage(Message.ClickedRenameThread()),
+		isGeneratingName: model.isGeneratingThreadName,
+		isCreating: model.pendingThreadChannelId === thread.threadChannelId,
+		composer:
+			model.threadDraft === null
+				? h.empty
+				: draftView(h, model.threadDraft, {
+						toMessage: (message) => toParentMessage(Message.GotThreadDraftMessage({ message })),
+						replyPreview: replyPreviewOf(model, model.threadDraft),
+						attachmentInfo: attachmentInfoFrom(model.lookups.attachments),
+					}),
 	})
 }

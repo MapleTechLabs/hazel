@@ -1,5 +1,5 @@
 import { Mount } from "foldkit"
-import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
+import { type Attribute, type ChildAttribute, childAttributes, type Html, type HtmlBuilder } from "foldkit/html"
 import { defineView } from "foldkit/submodel"
 import { cn } from "~/lib/utils"
 import { cx } from "~/utils/cx"
@@ -34,7 +34,7 @@ export interface BoxExtras<M> {
 	readonly emojiTrigger?: (render: PickerButton) => Html
 }
 
-export type PickerButton = (attributes: ReadonlyArray<Attribute<never>>, overlay: Html) => Html
+export type PickerButton = (attributes: ReadonlyArray<ChildAttribute>, overlay: Html) => Html
 
 /** The GIF and Emoji `AriaButton`s (DialogTrigger children). */
 const pickerButton =
@@ -42,7 +42,7 @@ const pickerButton =
 	(attributes, overlay) =>
 		h.button(
 			[
-				...(attributes as ReadonlyArray<Attribute<M>>),
+				...attributes,
 				h.Class(PICKER_BUTTON_CLASS),
 				h.Attribute("data-rac", ""),
 				h.Attribute("data-react-aria-pressable", "true"),
@@ -55,7 +55,7 @@ const pickerButton =
 const closedPicker =
 	<M>(h: HtmlBuilder<M>) =>
 	(render: PickerButton) =>
-		render([h.Attribute("aria-expanded", "false") as Attribute<never>], h.empty)
+		render(childAttributes([h.Attribute("aria-expanded", "false")]), h.empty)
 
 /** `ComposerActions`: hidden file input, then Attach, GIF and Emoji. */
 const actions = <M>(h: HtmlBuilder<M>, extras: BoxExtras<M>): Array<Html> => [

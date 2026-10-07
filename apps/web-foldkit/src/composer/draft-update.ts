@@ -16,7 +16,9 @@ import {
 	SendMessage,
 	ExecuteBotCommand,
 	fileInputId,
+	TrackEmojiUsage,
 } from "./draft"
+import * as EmojiDialog from "../emoji-picker/dialog"
 import * as ComposerUpdate from "./update"
 import * as Typing from "./typing"
 import { DropEvent } from "./drop"
@@ -248,6 +250,20 @@ export const update = (model: Model, message: Message, context: Context): Return
 					: EditorCommands.InsertCustomEmoji({ editorId: editorIdOf(model), name: label, imageUrl }),
 			]),
 		}),
+		GotEmojiPickerMessage: ({ message: dialogMessage }) => {
+			const result = EmojiDialog.update(model.emojiPicker, dialogMessage)
+			const next: Return = {
+				model: { ...model, emojiPicker: result.model },
+				commands: Command.mapMessages(result.commands ?? [], (inner) =>
+					Message.GotEmojiPickerMessage({ message: inner }),
+				),
+			}
+			if (result.outMessage === undefined) return next
+			const { emoji, label, imageUrl } = result.outMessage
+			const inserted = update(next.model, Message.SelectedEmoji({ emoji, label, imageUrl }), context)
+			return { ...inserted, commands: [...(next.commands ?? []), TrackEmojiUsage({ emoji }), ...(inserted.commands ?? [])] }
+		},
+		CompletedTrackEmojiUsage: () => ({ model }),
 		// `handleGifSelect` sends the GIF URL as a message of its own.
 		SelectedGif: ({ url }) =>
 			context.currentUserId === null

@@ -8,6 +8,7 @@ import { IconClose, IconEdit } from "../icons"
 import { button } from "../ui/button"
 import { loader } from "../ui/loader"
 import { fileInputId, hasTopContent, isUploading, Message, type Model } from "./draft"
+import * as EmojiDialog from "../emoji-picker/dialog"
 import { TrackFileDrop } from "./drop"
 import { composerBoxView, type PickerButton } from "./view"
 
@@ -24,7 +25,6 @@ export interface DraftViewInputs<M> {
 	readonly replyPreview: ReplyPreview | null
 	readonly attachmentInfo: (id: AttachmentId) => { readonly fileName: string; readonly fileSize: number } | null
 	readonly gifTrigger?: (render: PickerButton) => Html
-	readonly emojiTrigger?: (render: PickerButton) => Html
 }
 
 const removeButton = <M>(h: HtmlBuilder<M>, onPress: M, label?: string) =>
@@ -203,6 +203,11 @@ export const draftView = <M>(h: HtmlBuilder<M>, model: Model, inputs: DraftViewI
 			...(uploading ? [h.Attribute("disabled", "")] : []),
 		],
 		...(inputs.gifTrigger === undefined ? {} : { gifTrigger: inputs.gifTrigger }),
-		...(inputs.emojiTrigger === undefined ? {} : { emojiTrigger: inputs.emojiTrigger }),
+		emojiTrigger: (render) =>
+			EmojiDialog.view(h, model.emojiPicker, {
+				toMessage: (message) => toMessage(Message.GotEmojiPickerMessage({ message })),
+				toTrigger: render,
+				customEmojis: model.composer.customEmojis,
+			}),
 	})
 }

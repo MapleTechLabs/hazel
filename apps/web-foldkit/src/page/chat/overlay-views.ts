@@ -1,4 +1,5 @@
-import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
+import type { Html, HtmlBuilder } from "foldkit/html"
+import * as EmojiDialog from "../../emoji-picker/dialog"
 import { Mount } from "foldkit"
 import { IconDotsVertical, IconStar, IconThread } from "../../icons"
 import {
@@ -39,12 +40,7 @@ export const trackHoverAttribute = <M>(h: HtmlBuilder<M>, toParentMessage: ToPar
 	)
 
 /** `MessageToolbar` in its body portal, for the hovered message. */
-export const messageToolbarOverlay = <M>(
-	h: HtmlBuilder<M>,
-	model: Model,
-	toParentMessage: ToParent<M>,
-	addReaction: (render: (attributes: ReadonlyArray<ChildAttribute>, overlay: Html) => Html) => Html,
-): Html => {
+export const messageToolbarOverlay = <M>(h: HtmlBuilder<M>, model: Model, toParentMessage: ToParent<M>): Html => {
 	const overlays = model.overlays
 	const messageId = overlays.hoveredMessageId
 	const row = messageId === null ? undefined : model.rows.find((candidate) => candidate.key === messageId)
@@ -123,7 +119,19 @@ export const messageToolbarOverlay = <M>(
 									onEdit: toOverlay(Overlays.Message.ClickedEdit({ messageId })),
 									onReply: toOverlay(Overlays.Message.ClickedReply({ messageId })),
 									onDelete: toOverlay(Overlays.Message.ClickedDelete({ messageId })),
-									addReaction: (render) => addReaction(render),
+									addReaction: (render) =>
+										EmojiDialog.view(
+											h,
+											overlays.reactionPicker?.messageId === messageId
+												? overlays.reactionPicker.dialog
+												: EmojiDialog.init(`reaction-picker-${messageId}`),
+											{
+												toMessage: (message) =>
+													toOverlay(Overlays.Message.GotReactionPickerMessage({ messageId, message })),
+												toTrigger: render,
+												customEmojis: model.lookups.customEmojis,
+											},
+										),
 									moreActions,
 								}),
 						},

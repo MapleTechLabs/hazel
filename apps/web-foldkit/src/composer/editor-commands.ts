@@ -13,6 +13,11 @@ import { ComposerEmoji, Message, withEditor } from "./composer"
 
 /** Commands that act on a live composer editor (the legacy `SlateMessageEditorRef` calls). */
 
+/** Legacy inserts in `requestAnimationFrame`, after a closing picker has left the DOM. */
+const nextFrame = Effect.callback<void>((resume) => {
+	requestAnimationFrame(() => resume(Effect.void))
+})
+
 /** `setContent` plus `focus` (editing a message, restoring a failed send). */
 export const SetEditorContent = Command.define("SetEditorContent", {
 	args: { editorId: Schema.String, markdown: Schema.String },
@@ -42,7 +47,8 @@ export const InsertEditorText = Command.define("InsertEditorText", {
 	args: { editorId: Schema.String, text: Schema.String },
 	messages: [Message.CompletedInsertEditorText],
 	execute: ({ editorId, text }) =>
-		withEditor(editorId, (view) => focusAndInsertText(view, text)).pipe(
+		nextFrame.pipe(
+			Effect.andThen(withEditor(editorId, (view) => focusAndInsertText(view, text))),
 			Effect.as(Message.CompletedInsertEditorText()),
 		),
 })
@@ -51,7 +57,8 @@ export const InsertCustomEmoji = Command.define("InsertCustomEmoji", {
 	args: { editorId: Schema.String, name: Schema.String, imageUrl: Schema.String },
 	messages: [Message.CompletedInsertCustomEmoji],
 	execute: ({ editorId, name, imageUrl }) =>
-		withEditor(editorId, (view) => insertCustomEmoji(view, name, imageUrl)).pipe(
+		nextFrame.pipe(
+			Effect.andThen(withEditor(editorId, (view) => insertCustomEmoji(view, name, imageUrl))),
 			Effect.as(Message.CompletedInsertCustomEmoji()),
 		),
 })

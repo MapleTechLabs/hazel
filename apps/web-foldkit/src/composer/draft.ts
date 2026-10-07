@@ -23,6 +23,9 @@ import {
 } from "../page/chat/action-effects"
 import * as Composer from "./composer"
 import * as Typing from "./typing"
+import { emojiUsageAtom } from "~/atoms/emoji-atoms"
+import * as EmojiDialog from "../emoji-picker/dialog"
+import { trackEmojiUsage } from "../emoji-picker/usage"
 import { DropEvent } from "./drop"
 import { UploadEvent } from "./upload"
 
@@ -57,6 +60,8 @@ export const Model = Schema.Struct({
 	typing: Typing.Model,
 	isDraggingOnPage: Schema.Boolean,
 	isDropTarget: Schema.Boolean,
+	/** The Emoji button's `EmojiPickerDialog`. */
+	emojiPicker: EmojiDialog.Model,
 })
 export type Model = typeof Model.Type
 
@@ -72,6 +77,7 @@ export const init = (channelId: ChannelId, editorId: string, placeholder = "Type
 	typing: Typing.init(),
 	isDraggingOnPage: false,
 	isDropTarget: false,
+	emojiPicker: EmojiDialog.init(`${editorId}-emoji-picker`),
 })
 
 /** `useChatDraft().isUploading`. */
@@ -112,6 +118,8 @@ export const Message = defineMessageUnion({
 	LeftWindow: {},
 	SelectedEmoji: { emoji: Schema.String, label: Schema.String, imageUrl: Schema.NullOr(Schema.String) },
 	SelectedGif: { url: Schema.String },
+	GotEmojiPickerMessage: { message: EmojiDialog.Message },
+	CompletedTrackEmojiUsage: {},
 	CompletedExecuteBotCommand: { succeeded: Schema.Boolean, toast: ToastRequest },
 })
 export type Message = typeof Message.Type
@@ -244,4 +252,12 @@ export const ExecuteBotCommand = Command.define("ExecuteBotCommand", {
 				},
 			},
 		),
+})
+
+/** `ComposerActions.handleEmojiSelect` counts the emoji before inserting it. */
+export const TrackEmojiUsage = Command.define("TrackEmojiUsage", {
+	args: { emoji: Schema.String },
+	messages: [Message.CompletedTrackEmojiUsage],
+	execute: ({ emoji }) =>
+		Effect.sync(() => trackEmojiUsage(emojiUsageAtom, emoji)).pipe(Effect.as(Message.CompletedTrackEmojiUsage())),
 })

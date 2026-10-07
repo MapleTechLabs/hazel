@@ -6,7 +6,7 @@ import { markdownView } from "../../chat/markdown/markdown-view"
 import { IconClose, IconEdit, IconPenSparkle } from "../../icons"
 import { avatar } from "../../ui/avatar"
 import { button } from "../../ui/button"
-import { composerBoxView } from "./composer-placeholder"
+import { loader } from "../../ui/loader"
 import { type DeriveContext, authorIdentity, messageRowData } from "./derive"
 import type { ChatMessage, GroupPosition, MessageRow } from "./rows"
 
@@ -39,16 +39,24 @@ export interface ThreadPanelInputs<M> {
 	readonly context: DeriveContext
 	readonly rowContext: RowContext<M>
 	readonly onClose: M
+	readonly onGenerateName: M
+	readonly onRename: M
+	readonly isGeneratingName: boolean
+	/** `isThreadCreating`: the composer waits for `channel.createThread`. */
+	readonly isCreating: boolean
+	/** The thread's own composer (`SlateMessageComposer placeholder="Reply in thread..."`). */
+	readonly composer: Html
 }
 
-const headerButton = <M>(h: HtmlBuilder<M>, label: string, icon: Html, onPress?: M): Html =>
+const headerButton = <M>(h: HtmlBuilder<M>, label: string, icon: Html, onPress: M, isDisabled = false): Html =>
 	button(
 		h,
 		{
 			intent: "plain",
 			size: "sq-sm",
 			className: "rounded p-1 hover:bg-secondary",
-			...(onPress === undefined ? {} : { onPress }),
+			onPress,
+			isDisabled,
 			attributes: [h.Attribute("aria-label", label)],
 		},
 		[icon],
@@ -158,10 +166,14 @@ export const threadPanelView = <M>(h: HtmlBuilder<M>, inputs: ThreadPanelInputs<
 											headerButton(
 												h,
 												"Generate thread name",
-												IconPenSparkle(h, {
-													className: "size-4",
-													attributes: { "data-slot": "icon" },
-												}),
+												inputs.isGeneratingName
+													? loader(h, { className: "size-4" })
+													: IconPenSparkle(h, {
+															className: "size-4",
+															attributes: { "data-slot": "icon" },
+														}),
+												inputs.onGenerateName,
+												inputs.isGeneratingName,
 											),
 											headerButton(
 												h,
@@ -170,6 +182,7 @@ export const threadPanelView = <M>(h: HtmlBuilder<M>, inputs: ThreadPanelInputs<
 													className: "size-4",
 													attributes: { "data-slot": "icon" },
 												}),
+												inputs.onRename,
 											),
 											headerButton(
 												h,
@@ -191,10 +204,12 @@ export const threadPanelView = <M>(h: HtmlBuilder<M>, inputs: ThreadPanelInputs<
 							h.div(
 								[h.Class("border-border border-t bg-bg px-4 py-3")],
 								[
-									composerBoxView(h, {
-										placeholder: "Reply in thread...",
-										replyIndicator: null,
-									}),
+									inputs.isCreating
+										? h.div(
+												[h.Class("flex items-center justify-center gap-2 py-3 text-muted-fg text-sm")],
+												[loader(h, { className: "size-4" }), "Creating thread..."],
+											)
+										: inputs.composer,
 								],
 							),
 						],

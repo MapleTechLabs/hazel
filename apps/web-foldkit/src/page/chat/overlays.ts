@@ -3,6 +3,7 @@ import { Duration, Effect, Schema } from "effect"
 import { Command, type Update } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
 import * as TooltipHost from "../../chat/tooltip-host"
+import * as EmojiDialog from "../../emoji-picker/dialog"
 import * as Menu from "../../ui/menu"
 import * as Popover from "../../ui/popover"
 import * as Toolbar from "../../ui/toolbar"
@@ -30,6 +31,8 @@ export const Model = Schema.Struct({
 	popover: Schema.NullOr(MessagePopover),
 	pinned: Popover.Model,
 	imageViewer: Schema.NullOr(Schema.Struct({ messageId: MessageId, index: Schema.Number })),
+	/** The toolbar's "Add reaction" picker while it is open. */
+	reactionPicker: Schema.NullOr(Schema.Struct({ messageId: MessageId, dialog: EmojiDialog.Model })),
 	/** `useChatThread`: the thread panel beside the channel. */
 	thread: Schema.NullOr(Schema.Struct({ threadChannelId: ChannelId, messageId: MessageId })),
 })
@@ -47,6 +50,7 @@ export const init = (): Model => ({
 	popover: null,
 	pinned: Popover.init("pinned-messages"),
 	imageViewer: null,
+	reactionPicker: null,
 	thread: null,
 })
 
@@ -73,6 +77,7 @@ export const Message = defineMessageUnion({
 	ClickedAttachmentImage: { messageId: MessageId, index: Schema.Number },
 	ClosedImageViewer: {},
 	SelectedViewerImage: { index: Schema.Number },
+	GotReactionPickerMessage: { messageId: MessageId, message: EmojiDialog.Message },
 	ClickedThreadPreview: { threadChannelId: ChannelId, messageId: MessageId },
 	ClosedThread: {},
 })
@@ -177,8 +182,9 @@ export const update = (model: Model, message: Message, facts: MessageFacts): Ove
 			const version = model.hoverVersion + 1
 			return { model: { ...model, hoverVersion: version }, commands: [WaitForHideToolbar({ version })] }
 		},
+		// The toolbar stays while its emoji picker is open (the picker is inside it).
 		CompletedWaitForHideToolbar: ({ version }) =>
-			version === model.hoverVersion && !model.isToolbarHovered
+			version === model.hoverVersion && !model.isToolbarHovered && model.reactionPicker === null
 				? set(model, { hoveredMessageId: null })
 				: { model },
 		EnteredToolbar: () => set(model, { isToolbarHovered: true, hoverVersion: model.hoverVersion + 1 }),
@@ -280,6 +286,23 @@ export const update = (model: Model, message: Message, facts: MessageFacts): Ove
 			model.imageViewer === null
 				? { model }
 				: set(model, { imageViewer: { ...model.imageViewer, index } }),
+		GotReactionPickerMessage: ({ messageId, message: dialogMessage }) => {
+			const current =
+				model.reactionPicker?.messageId === messageId
+					? model.reactionPicker.dialog
+					: EmojiDialog.init(`reaction-picker-${messageId}`)
+			const result = EmojiDialog.update(current, dialogMessage)
+			const next = mapped(
+				model,
+				result,
+				(dialog) => ({ reactionPicker: dialog.isOpen ? { messageId, dialog } : null }),
+				(inner) => Message.GotReactionPickerMessage({ messageId, message: inner }),
+			)
+			// `handleReaction` with the picked emoji's string.
+			return result.outMessage === undefined
+				? next
+				: { ...next, outMessage: OutMessage.RequestedReaction({ messageId, emoji: result.outMessage.emoji }) }
+		},
 		ClickedThreadPreview: ({ threadChannelId, messageId }) =>
 			set(model, { thread: { threadChannelId, messageId } }),
 		ClosedThread: () => set(model, { thread: null }),
