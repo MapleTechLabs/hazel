@@ -160,7 +160,12 @@ const foldChannelsSidebar = (
 export const update = (model: Model, message: Message, context: Context): ShellReturn => {
 	const result = Message.match<ShellReturn>(message, {
 		GotChannelsSidebarMessage: ({ message }) =>
-			foldChannelsSidebar(model, (sidebar) => ChannelsSidebar.update(sidebar, message)),
+			message._tag === "ClickedBrowseChannels"
+				? // `openChannelsBrowser` passes `initialPage`, which the palette never reads: it opens home.
+					requested(model, PageOutMessage.RequestedCommandPalette({ page: "home" }))
+				: message._tag === "ClickedAddDirectMessage"
+					? requested(model, PageOutMessage.RequestedModal({ modal: { _tag: "CreateDm" } }))
+					: foldChannelsSidebar(model, (sidebar) => ChannelsSidebar.update(sidebar, message)),
 		GotUserMenuMessage: ({ message }) => foldUserMenu(model, message),
 		GotOrgSwitcherMessage: ({ message }) => foldOrgSwitcher(model, message),
 		UpdatedUserOrganizations: ({ organizations }) => ({

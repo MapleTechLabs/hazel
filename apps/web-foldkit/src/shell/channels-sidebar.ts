@@ -87,6 +87,8 @@ export const update = (model: Model, message: Message): SidebarReturn =>
 		UpdatedDiscoverableChannels: ({ channels }) => ({
 			model: modifyFields(model, { discoverableChannels: () => channels }),
 		}),
+		ClickedBrowseChannels: () => ({ model }),
+		ClickedAddDirectMessage: () => ({ model }),
 	})
 
 /** The root learned the organization or the signed-in user; the sidebar's queries depend on both. */
@@ -180,6 +182,8 @@ const sidebarBody = <ParentMessage>(
 					pathname,
 					activeChannelId,
 					onActiveMount: h.OnMount(Mount.mapMessage(ScrollActiveIntoView(), toParentMessage)),
+					onBrowseChannels: h.OnClick(toParentMessage(Message.ClickedBrowseChannels())),
+					onAddDirectMessage: h.OnClick(toParentMessage(Message.ClickedAddDirectMessage())),
 				}),
 			),
 		]),

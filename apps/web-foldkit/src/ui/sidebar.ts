@@ -1,4 +1,4 @@
-import type { Html, HtmlBuilder } from "foldkit/html"
+import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import { twJoin, twMerge } from "tailwind-merge"
 import { linkClassName } from "./link"
 
@@ -227,11 +227,17 @@ export const sidebarSection = <Message>(
  */
 export const sidebarItem = <Message>(
 	h: HtmlBuilder<Message>,
-	options: { readonly isCurrent?: boolean; readonly ariaLabel?: string; readonly className?: string },
+	options: {
+		readonly isCurrent?: boolean
+		readonly ariaLabel?: string
+		readonly className?: string
+		readonly attributes?: ReadonlyArray<Attribute<Message>>
+	},
 	children: Html[],
 ): Html =>
 	h.span(
 		[
+			...(options.attributes ?? []),
 			h.Attribute("data-slot", "sidebar-item"),
 			h.Class(
 				linkClassName({

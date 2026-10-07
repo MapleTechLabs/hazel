@@ -38,7 +38,12 @@ export const dotsMenuTrigger = <M>(h: HtmlBuilder<M>): Html =>
 /** `SectionGroup`'s header. A single action is a plain button; more actions open a menu. */
 export const sectionGroupHeader = <M>(
 	h: HtmlBuilder<M>,
-	options: { readonly name: string; readonly isCollapsed: boolean; readonly hasMenu: boolean },
+	options: {
+		readonly name: string
+		readonly isCollapsed: boolean
+		readonly hasMenu: boolean
+		readonly onAdd?: Attribute<M>
+	},
 ): Html =>
 	h.div(
 		[h.Class("col-span-full flex items-center justify-between gap-x-2 pl-2.5 text-muted-fg text-xs/5")],
@@ -61,7 +66,9 @@ export const sectionGroupHeader = <M>(
 					intent: "plain",
 					isCircle: true,
 					size: "sq-xs",
-					attributes: options.hasMenu ? menuTriggerAttributes(h) : [h.Attribute("data-rac", "")],
+					attributes: options.hasMenu
+						? menuTriggerAttributes(h)
+						: [h.Attribute("data-rac", ""), ...(options.onAdd ? [options.onAdd] : [])],
 				},
 				[IconPlus(h)],
 			),

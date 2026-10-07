@@ -54,6 +54,9 @@ export const Message = defineMessageUnion({
 	UpdatedOrganizations: { organizations: Schema.Array(PartnerOrg) },
 	UpdatedMemberChannelIds: { channelIds: Schema.Array(ChannelId) },
 	UpdatedDiscoverableChannels: { channels: Schema.Array(DiscoverableChannel) },
+	/** Overlay triggers; the shell's update turns them into `RequestedCommandPalette` / `RequestedModal`. */
+	ClickedBrowseChannels: {},
+	ClickedAddDirectMessage: {},
 })
 export type Message = typeof Message.Type
 
