@@ -37,6 +37,8 @@ const usage = `ui-parity: compare the legacy React UI against the Foldkit UI
   bun parity serve [--dataset default]                  fixture backend + both builds, for side-by-side browsing
   bun parity run [--filter x] [--baseline legacy] [--candidate foldkit] [--run name]
                                                         capture both targets, diff, write the report
+  bun parity compare --run name [--baseline legacy] [--candidate foldkit]
+                                                        re-diff an existing run's captures (no recapture)
   bun parity selfcheck [--filter x] [--target legacy]   capture one target twice; anything not identical is flaky
   bun parity capture <target> [--filter x] [--run name] capture one target (screenshots, snapshots, reference DOM)
   bun parity codegen <file.html> [--line N] [--name viewName]  reference markup → Foldkit view code
@@ -123,6 +125,7 @@ const compareRun = (input: {
 			candidateDir: captureDir(input.run, input.candidateLabel),
 			outDir: diffDir,
 			tolerance: Number(values.tolerance),
+			ignoreBackgroundCalls: variant.scenario.path.startsWith("/dev/gallery/"),
 		})
 		return unhealthy.has(variant.id) && comparison.status !== "missing"
 			? { ...comparison, status: "fail" as const }
@@ -160,7 +163,9 @@ switch (command) {
 			existsSync(join(buildDir(name), "index.html")),
 		)
 		const servers = startServers(available, values.dataset)
-		console.log(`fixture backend  ${servers.backend.url}  (dataset: ${values.dataset}, port base ${PORT_BASE})`)
+		console.log(
+			`fixture backend  ${servers.backend.url}  (dataset: ${values.dataset}, port base ${PORT_BASE})`,
+		)
 		for (const name of available) console.log(`${name.padEnd(16)} http://localhost:${targets[name].port}`)
 		console.log("ctrl+c to stop")
 		process.on("SIGINT", async () => {
@@ -236,6 +241,27 @@ switch (command) {
 			variants,
 			baselineResults,
 			candidateResults,
+		})
+		process.exitCode = summary.totals.fail + summary.totals.missing > 0 ? 1 : 0
+		break
+	}
+
+	case "compare": {
+		if (!values.run) throw new Error(usage)
+		const baselineLabel = values.baseline
+		const candidateLabel =
+			values.baseline === values.candidate ? `${values.candidate}-b` : values.candidate
+		const readResults = (label: string): CaptureResult[] =>
+			JSON.parse(readFileSync(join(captureDir(values.run!, label), "_results.json"), "utf8"))
+		const baselineResults = readResults(baselineLabel)
+		const captured = new Set(baselineResults.map((result) => result.variantId))
+		const summary = compareRun({
+			run: values.run,
+			baselineLabel,
+			candidateLabel,
+			variants: expandVariants(values.filter).filter((variant) => captured.has(variant.id)),
+			baselineResults,
+			candidateResults: readResults(candidateLabel),
 		})
 		process.exitCode = summary.totals.fail + summary.totals.missing > 0 ? 1 : 0
 		break

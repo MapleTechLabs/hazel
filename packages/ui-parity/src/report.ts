@@ -71,6 +71,17 @@ export const renderMarkdown = (summary: RunSummary, runDir: string) => {
 		`identical ${summary.totals.identical} · pass ${summary.totals.pass} · fail ${summary.totals.fail} · missing ${summary.totals.missing}`,
 		"",
 	]
+	const behaviorOnly = summary.variants.filter(
+		({ comparison }) =>
+			comparison.behavior.length > 0 &&
+			(comparison.visualStatus === "identical" || comparison.visualStatus === "pass"),
+	)
+	const withBehavior = summary.variants.filter(({ comparison }) => comparison.behavior.length > 0)
+	if (withBehavior.length)
+		lines.push(
+			`behavior: ${withBehavior.length} variants send different backend calls (${behaviorOnly.length} of them identical or pass on pixels).`,
+			"",
+		)
 	const ranked = [...summary.variants].sort(
 		(a, b) => b.comparison.perceptualPixels - a.comparison.perceptualPixels,
 	)
@@ -84,6 +95,9 @@ export const renderMarkdown = (summary: RunSummary, runDir: string) => {
 			if (capture?.error) lines.push(`- capture error: ${capture.error}`)
 		}
 		if (comparison.sizeMismatch) lines.push(`- page size differs`)
+		for (const line of comparison.behavior.slice(0, 10)) lines.push(`- ${line}`)
+		if (comparison.behavior.length > 10)
+			lines.push(`- …${comparison.behavior.length - 10} more call differences`)
 		lines.push(
 			`- images: ${relative(runDir, join(runDir, summary.baseline, `${variant.id}.png`))}, ${summary.candidate}/${variant.id}.png, diff/${comparison.diffImage}`,
 		)
@@ -258,7 +272,7 @@ function renderDetail(id){
   if (!v) { detail.innerHTML = "<p>No variants.</p>"; return; }
   current = v.variant.id; renderList();
   const c = v.comparison;
-  const errs = [v.baselineCapture, v.candidateCapture].flatMap((cap, i) => cap ? [cap.error && ((i?C:B)+": "+cap.error), ...(cap.consoleErrors||[]).slice(0,3).map(e => (i?C:B)+" console: "+e)].filter(Boolean) : []);
+  const errs = [v.baselineCapture, v.candidateCapture].flatMap((cap, i) => cap ? [cap.error && ((i?C:B)+": "+cap.error), ...(cap.consoleErrors||[]).slice(0,3).map(e => (i?C:B)+" console: "+e)].filter(Boolean) : []).concat((c.behavior||[]).slice(0,10));
   detail.innerHTML =
     '<h2 style="margin:0;font-size:16px">'+esc(v.variant.title)+'</h2>'+
     '<div class="meta"><span class="dot '+c.status+'" style="display:inline-block"></span> '+c.status+' · '+c.perceptualPixels+'px perceptual · '+c.strictPixels+'px strict · '+c.mismatchPercent+'% · '+v.variant.viewport+' · '+v.variant.theme+' · <code>'+esc(v.variant.path)+'</code>'+(c.sizeMismatch?' · <b>size differs</b>':'')+'</div>'+

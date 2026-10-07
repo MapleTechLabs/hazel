@@ -1,5 +1,6 @@
 import type { Dataset } from "../fixtures/dataset.ts"
 import { handleAsset, isAssetRequest, warmAssets } from "./assets.ts"
+import { makeCallLog } from "./call-log.ts"
 import { corsHeaders, handleShape } from "./electric.ts"
 import { type PushedChange, pushChange } from "./live-events.ts"
 import { makeRpcWebHandler, type RpcLog } from "./rpc.ts"
@@ -16,6 +17,7 @@ export const startFixtureBackend = (options: {
 	readonly defaultDataset: string
 }) => {
 	const log: RpcLog = { unmocked: new Set() }
+	const calls = makeCallLog()
 	warmAssets(options.datasets.values())
 	const rpcHandlers = new Map<string, ReturnType<typeof makeRpcWebHandler>>()
 	const rpcFor = (dataset: Dataset) => {
@@ -57,15 +59,20 @@ export const startFixtureBackend = (options: {
 			if (request.method === "OPTIONS")
 				return new Response(null, { status: 204, headers: corsHeaders(request) })
 			if (isAssetRequest(url)) return handleAsset(request, url)
+			const callLog = calls.handle(request, url)
+			if (callLog) return callLog
 
 			const dataset = resolveDataset(request)
 			if (url.pathname.startsWith("/rpc")) {
+				await calls.recordRpc(request)
 				const rpcRequest = new Request(new URL("/rpc", url), request)
 				const response = await rpcFor(dataset).handler(rpcRequest)
 				const headers = new Headers(response.headers)
 				for (const [key, value] of Object.entries(corsHeaders(request))) headers.set(key, value)
 				return new Response(response.body, { status: response.status, headers })
 			}
+			// Not served (the HTTP API is outside the fixture), but still part of the behavior under test.
+			await calls.recordHttp(request, url)
 			return new Response("not found", { status: 404, headers: corsHeaders(request) })
 		},
 	})
