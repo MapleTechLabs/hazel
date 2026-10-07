@@ -117,6 +117,9 @@ const navButton = <M>(h: HtmlBuilder<M>, side: "left" | "right", onPress: M): Ht
 		],
 	)
 
+/** Marks an overlay that legacy portals from inside the message list (React tree, not DOM). */
+export const LIST_PORTAL_ATTRIBUTE = "list-portal"
+
 export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<M>): Html => {
 	const { images, author } = inputs
 	const selectedIndex = Math.min(Math.max(inputs.index, 0), Math.max(images.length - 1, 0))
@@ -138,6 +141,9 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 			h.Class(
 				"fixed inset-0 isolate z-9999 flex items-center justify-center bg-black/90 transition-opacity duration-200",
 			),
+			// Legacy renders the viewer through a React portal inside the message list, so React's
+			// pointerleave never sees the pointer leave the list for it. Hover tracking reads this.
+			h.DataAttribute(LIST_PORTAL_ATTRIBUTE, ""),
 			h.OnMount(onMount),
 		],
 		[

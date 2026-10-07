@@ -4,6 +4,7 @@ import { Mount } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { IconCopy, IconEdit, IconEmojiAdd, IconReply, IconTrash } from "../../icons"
+import { LIST_PORTAL_ATTRIBUTE } from "../image-viewer"
 import { calculatePosition } from "../../ui/aria/position"
 import { button } from "../../ui/button"
 import { separator } from "../../ui/separator"
@@ -103,7 +104,13 @@ export const TrackMessageHover = Mount.defineStream("TrackMessageHover", {
 								HoverEvent.PointerEnteredMessage({ messageId: messageId.value }),
 							)
 					}
-					const onLeave = () => Queue.offerUnsafe(queue, HoverEvent.PointerLeftList())
+					// React's onPointerLeave follows the React tree: moving into a portal the list rendered is no leave.
+					const onLeave = (event: Event) => {
+						const entered = event instanceof PointerEvent ? event.relatedTarget : null
+						if (entered instanceof Element && entered.closest(`[data-${LIST_PORTAL_ATTRIBUTE}]`))
+							return
+						Queue.offerUnsafe(queue, HoverEvent.PointerLeftList())
+					}
 					// ContextMenuTrigger's `onContextMenu`, delegated; the open row handles its own.
 					const onContextMenu = (event: Event) => {
 						if (!(event instanceof MouseEvent) || event.defaultPrevented) return
