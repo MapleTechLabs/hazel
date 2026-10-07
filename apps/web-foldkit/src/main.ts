@@ -152,6 +152,11 @@ const handleOutMessage = (outMessage: PageOutMessage): Step =>
 			(model) =>
 				withCommandPalette(model, CommandPalette.open(model.commandPalette, page, sharedOf(model))),
 		RequestedSignOut: () => (model) => ({ model, commands: [SignOut({})] }),
+		RequestedMobileSidebar: () => (model) => ({
+			model: modifyFields(model, {
+				shell: (shell) => modifyFields(shell, { isSidebarOpen: () => true }),
+			}),
+		}),
 	})
 
 const applyPage =

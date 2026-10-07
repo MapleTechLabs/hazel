@@ -4,6 +4,7 @@ import { twMerge } from "tailwind-merge"
 import { IconMagnifier3, IconUsers } from "../../icons"
 import { sidebarItem, sidebarLink } from "../../ui/sidebar"
 import type { Model } from "./model"
+import { createChannelHint } from "./create-channel-hint"
 import { hotkeyLabel } from "./hotkey-label"
 import {
 	CHANNEL_ACTIVE,
@@ -26,7 +27,9 @@ interface SectionsContext<M> extends ItemContext {
 	readonly activeChannelId: string | undefined
 	readonly onActiveMount: Attribute<M>
 	readonly onBrowseChannels: Attribute<M>
-	readonly onAddDirectMessage: Attribute<M>
+	/** The row's dots menu and a section's "+" action, built where the Messages are known. */
+	readonly rowMenu: (entry: ChannelEntry) => Html
+	readonly sectionAction: (sectionKey: string) => Html
 	readonly unreadByChannel: ReadonlyMap<string, number>
 	readonly partnersByChannel: ReturnType<typeof partnerOrgsByChannel>
 }
@@ -58,15 +61,22 @@ const rowsOf = <M>(
 		}),
 	)
 
-const channelRow = <M>(h: HtmlBuilder<M>, entry: ChannelEntry, context: SectionsContext<M>): RowSpec => ({
+/** Favorites render `ChannelItem` without `partnerOrgs`, so they never show the shared-org badge. */
+const channelRow = <M>(
+	h: HtmlBuilder<M>,
+	entry: ChannelEntry,
+	context: SectionsContext<M>,
+	options: { readonly showsPartners: boolean } = { showsPartners: true },
+): RowSpec => ({
 	key: entry.channel.id,
 	label: entry.channel.name,
 	content: channelItem(
 		h,
 		entry,
 		context.unreadByChannel.get(entry.channel.id) ?? entry.member.notificationCount,
-		context.partnersByChannel.get(entry.channel.id) ?? [],
+		options.showsPartners ? (context.partnersByChannel.get(entry.channel.id) ?? []) : [],
 		context,
+		context.rowMenu(entry),
 	),
 })
 
@@ -147,7 +157,9 @@ const favoritesSection = <M>(h: HtmlBuilder<M>, model: Model, context: SectionsC
 		entry.channel.type === "public" || entry.channel.type === "private"
 	const isDm = (entry: ChannelEntry) => entry.channel.type === "direct" || entry.channel.type === "single"
 	const specs = [
-		...model.favorites.filter(isPublicOrPrivate).map((entry) => channelRow(h, entry, context)),
+		...model.favorites
+			.filter(isPublicOrPrivate)
+			.map((entry) => channelRow(h, entry, context, { showsPartners: false })),
 		...model.favorites
 			.filter(isDm)
 			.flatMap((entry) => dmRow(h, model.dmChannels[entry.channel.id], context)),
@@ -176,7 +188,6 @@ const channelSection = <M>(
 		readonly key: string
 		readonly name: string
 		readonly entries: ReadonlyArray<ChannelEntry>
-		readonly hasMenu: boolean
 	},
 	context: SectionsContext<M>,
 ): Html => {
@@ -184,7 +195,11 @@ const channelSection = <M>(
 	return treeSection(h, {
 		id: treeId,
 		ariaLabel: `${options.name} channels`,
-		header: sectionGroupHeader(h, { name: options.name, isCollapsed: false, hasMenu: options.hasMenu }),
+		header: sectionGroupHeader(h, {
+			name: options.name,
+			isCollapsed: false,
+			action: context.sectionAction(options.key),
+		}),
 		allowsDragging: true,
 		rows: rowsOf(
 			h,
@@ -236,7 +251,9 @@ export const sectionGroupContent = <M>(
 		readonly activeChannelId: string | undefined
 		readonly onActiveMount: Attribute<M>
 		readonly onBrowseChannels: Attribute<M>
-		readonly onAddDirectMessage: Attribute<M>
+		readonly onDismissCreateChannelHint: Attribute<M>
+		readonly rowMenu: (entry: ChannelEntry) => Html
+		readonly sectionAction: (sectionKey: string) => Html
 	},
 ): Html[] => {
 	const context: SectionsContext<M> = {
@@ -266,11 +283,13 @@ export const sectionGroupContent = <M>(
 							key: "default",
 							name: "Channels",
 							entries: defaultEntries,
-							hasMenu: canCreateChannel,
 						},
 						context,
 					),
 					...discoverSection(h, model, context),
+					...(defaultEntries.length === 0 && canCreateChannel && !model.isCreateChannelHintDismissed
+						? [createChannelHint(h, itemContext.onDismissCreateChannelHint)]
+						: []),
 					...model.sections.map((section) =>
 						channelSection(
 							h,
@@ -278,7 +297,6 @@ export const sectionGroupContent = <M>(
 								key: section.id,
 								name: section.name,
 								entries: model.sectionChannels[section.id] ?? [],
-								hasMenu: true,
 							},
 							context,
 						),
@@ -289,8 +307,7 @@ export const sectionGroupContent = <M>(
 						header: sectionGroupHeader(h, {
 							name: "Direct Messages",
 							isCollapsed: false,
-							hasMenu: false,
-							onAdd: context.onAddDirectMessage,
+							action: context.sectionAction("dms"),
 						}),
 						allowsDragging: false,
 						rows: rowsOf(

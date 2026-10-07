@@ -2,6 +2,7 @@ import { ChannelId, ChannelSectionId, OrganizationId, OrganizationMemberId, User
 import { Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
 import * as Data from "./data"
+import { dismissedHintStream } from "./hints"
 import { dmPartners } from "./items"
 import { Message, type Model } from "./model"
 import * as People from "./people-data"
@@ -40,6 +41,7 @@ const partnerUserIds = (model: Model): Array<UserId> =>
 	].sort()
 
 export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
+	sidebarDismissedHints: Subscription.persistent(dismissedHintStream),
 	sidebarPresenceClock: entry(
 		{},
 		{

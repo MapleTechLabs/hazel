@@ -43,6 +43,7 @@ export const Message = defineMessageUnion({
 	UpdatedMessages: { messages: Schema.Array(ChatMessage) },
 	UpdatedReactions: { reactions: Schema.Array(ChatReaction) },
 	GotListMessage: { message: MessageList.Message },
+	ClickedMobileMenu: {},
 })
 export type Message = typeof Message.Type
 
@@ -112,6 +113,8 @@ export const update = (model: Model, message: Message): PageReturn =>
 		UpdatedReactions: ({ reactions }) => deriveRows(modifyFields(model, { reactions: () => reactions })),
 		GotListMessage: ({ message: listMessage }) =>
 			loadOlderWhenNearStart(liftList(model, MessageList.update(model.list, listMessage))),
+		// Reported to the root as `RequestedMobileSidebar` by `index.ts`.
+		ClickedMobileMenu: () => ({ model }),
 	})
 
 /** The signed-in user arrived after the page was created (reactions need it for `hasReacted`). */

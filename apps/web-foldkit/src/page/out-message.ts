@@ -12,5 +12,7 @@ export const PageOutMessage = defineMessageUnion({
 	RequestedModal: { modal: ModalRequest },
 	RequestedCommandPalette: { page: CommandPalettePage },
 	RequestedSignOut: {},
+	/** The mobile header's menu button: open the sidebar sheet (`setIsOpenOnMobile(true)`). */
+	RequestedMobileSidebar: {},
 })
 export type PageOutMessage = typeof PageOutMessage.Type

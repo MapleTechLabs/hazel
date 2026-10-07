@@ -35,15 +35,23 @@ export const dotsMenuTrigger = <M>(h: HtmlBuilder<M>): Html =>
 		[IconDots(h, { className: "size-4" })],
 	)
 
-/** `SectionGroup`'s header. A single action is a plain button; more actions open a menu. */
+/** `SectionGroup`'s single-action "+" button (no menu). */
+export const sectionPlusButton = <M>(h: HtmlBuilder<M>, attributes: ReadonlyArray<Attribute<M>>): Html =>
+	button(
+		h,
+		{
+			intent: "plain",
+			isCircle: true,
+			size: "sq-xs",
+			attributes: [h.Attribute("data-rac", ""), ...attributes],
+		},
+		[IconPlus(h)],
+	)
+
+/** `SectionGroup`'s header; `action` is the "+" button or its menu. */
 export const sectionGroupHeader = <M>(
 	h: HtmlBuilder<M>,
-	options: {
-		readonly name: string
-		readonly isCollapsed: boolean
-		readonly hasMenu: boolean
-		readonly onAdd?: Attribute<M>
-	},
+	options: { readonly name: string; readonly isCollapsed: boolean; readonly action: Html },
 ): Html =>
 	h.div(
 		[h.Class("col-span-full flex items-center justify-between gap-x-2 pl-2.5 text-muted-fg text-xs/5")],
@@ -60,18 +68,7 @@ export const sectionGroupHeader = <M>(
 					strong(h, [options.name]),
 				],
 			),
-			button(
-				h,
-				{
-					intent: "plain",
-					isCircle: true,
-					size: "sq-xs",
-					attributes: options.hasMenu
-						? menuTriggerAttributes(h)
-						: [h.Attribute("data-rac", ""), ...(options.onAdd ? [options.onAdd] : [])],
-				},
-				[IconPlus(h)],
-			),
+			options.action,
 		],
 	)
 

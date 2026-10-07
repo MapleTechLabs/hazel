@@ -4,6 +4,11 @@ import type { Command } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import type { HazelRpc } from "../rpc"
 import type { AppRoute } from "../route"
+import * as Auth from "./auth"
+import * as ChannelSettingsConnect from "./channel-settings/connect"
+import * as ChannelSettingsIntegrations from "./channel-settings/integrations"
+import * as ChannelSettingsOverview from "./channel-settings/overview"
+import * as ChannelSettingsRedirect from "./channel-settings/redirect"
 import * as ChatChannel from "./chat/channel"
 import * as ChatIndex from "./chat-index"
 import type { PageHost, PageMessageBase, PageSlotBase, PageStep, PageViewInputs, Shared } from "./contract"
@@ -11,13 +16,29 @@ import type { PageOutMessage } from "./out-message"
 import * as NotificationsInbox from "./notifications/inbox"
 import * as OrgHome from "./home"
 import * as Profile from "./profile"
+import * as MySettingsAppearance from "./my-settings/appearance"
+import * as MySettingsDesktop from "./my-settings/desktop"
+import * as MySettingsLinkedAccounts from "./my-settings/linked-accounts"
+import * as MySettingsNotifications from "./my-settings/notifications"
+import * as MySettingsProfile from "./my-settings/profile"
 import * as Root from "./root"
 import * as IntegrationSettings from "./settings/integrations/detail"
 import * as IntegrationsSettings from "./settings/integrations/index"
 import * as InstalledAppsSettings from "./settings/integrations/installed"
 import * as MarketplaceSettings from "./settings/integrations/marketplace"
 import * as YourAppsSettings from "./settings/integrations/your-apps"
+import * as Join from "./join"
+import * as Onboarding from "./onboarding"
+import * as OnboardingSetupOrganization from "./onboarding/setup-organization"
+import * as SelectOrganization from "./select-organization"
+import * as SettingsChatSync from "./settings/chat-sync"
+import * as SettingsChatSyncConnection from "./settings/chat-sync-connection"
 import * as TeamSettings from "./settings/team"
+import * as SettingsConnectInvites from "./settings/connect-invites"
+import * as SettingsCustomEmojis from "./settings/custom-emojis"
+import * as SettingsDebug from "./settings/debug"
+import * as SettingsGeneral from "./settings/general"
+import * as SettingsInvitations from "./settings/invitations"
 
 /**
  * Every routed page, registered once. Adding a page: import its module and append `X.page` below.
@@ -36,6 +57,28 @@ export const pages = [
 	MarketplaceSettings.page,
 	YourAppsSettings.page,
 	IntegrationSettings.page,
+	SettingsGeneral.page,
+	SettingsDebug.page,
+	SettingsConnectInvites.page,
+	SettingsInvitations.page,
+	SettingsCustomEmojis.page,
+	Auth.signInPage,
+	Auth.signUpPage,
+	Onboarding.page,
+	OnboardingSetupOrganization.page,
+	SelectOrganization.page,
+	Join.page,
+	ChannelSettingsRedirect.page,
+	ChannelSettingsOverview.page,
+	ChannelSettingsConnect.page,
+	ChannelSettingsIntegrations.page,
+	SettingsChatSync.page,
+	SettingsChatSyncConnection.page,
+	MySettingsAppearance.page,
+	MySettingsDesktop.page,
+	MySettingsLinkedAccounts.page,
+	MySettingsNotifications.page,
+	MySettingsProfile.page,
 ]
 
 export const PageSlot = Schema.Union(pages.map((page) => page.Slot))
