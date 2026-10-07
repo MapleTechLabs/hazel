@@ -55,8 +55,9 @@ export const StepForm = defineTaggedUnion({
 export type StepForm = typeof StepForm.Type
 
 export const Model = Schema.Struct({
-	/** `?step=` at load (the route carries only `orgId`); `undefined` until read. */
-	urlStep: Schema.UndefinedOr(Schema.NullOr(Schema.String)),
+	/** The route's `?step=` and `?orgId=` at load; later step changes rewrite the URL from these. */
+	urlStep: Schema.NullOr(Schema.String),
+	orgId: Schema.NullOr(OrganizationId),
 	/** `undefined` until the live query is ready. */
 	membership: Schema.UndefinedOr(Schema.NullOr(Membership)),
 	isInitialized: Schema.Boolean,
@@ -69,7 +70,8 @@ export const Model = Schema.Struct({
 	form: StepForm,
 	isProcessing: Schema.Boolean,
 	error: Schema.NullOr(Schema.String),
-	browserTimezone: Schema.String,
+	/** `undefined` until read; the flow starts once it is known. */
+	browserTimezone: Schema.UndefinedOr(Schema.String),
 	hasRedirected: Schema.Boolean,
 	/** Focus and hover state for the form fields (React Aria's `data-focused` and friends). */
 	interaction: Interaction.Model,

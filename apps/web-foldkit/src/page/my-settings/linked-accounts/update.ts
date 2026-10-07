@@ -1,9 +1,10 @@
+import { Option } from "effect"
 import { modifyFields } from "foldkit/struct"
 import * as Interaction from "../../../ui/aria/interaction"
 import type { PageReturn, Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
 import { embedInteraction } from "../shared"
-import { DisconnectDiscord, ReadLinkResult, ShowLinkResult, StartDiscordLink } from "./command"
+import { DisconnectDiscord, ShowLinkResult, StartDiscordLink } from "./command"
 import { Message } from "./message"
 import type { Model } from "./model"
 import type { RouteOf } from "../../../route"
@@ -17,35 +18,44 @@ export const interaction = embedInteraction<Model, Message>((message) =>
 const toast = (intent: "success" | "error", title: string, description: string | null = null) =>
 	PageOutMessage.RequestedToast({ toast: { intent, title, description } })
 
-export const init = (route: RouteOf<"MySettingsLinkedAccounts">): Return => ({
-	model: {
-		orgSlug: route.orgSlug,
-		connection: null,
-		isConnecting: false,
-		isDisconnecting: false,
-		interaction: Interaction.init(),
-	},
-	commands: [ReadLinkResult({})],
-})
+type Route = RouteOf<"MySettingsLinkedAccounts">
+
+/** The OAuth callback's `?connection_status=&provider=&error_code=`: toast, then clean the URL. */
+const linkResult = (model: Model, route: Route): Return => {
+	const status = Option.getOrNull(route.connectionStatus)
+	if (status === null || Option.getOrNull(route.provider) !== "discord") return { model }
+	return {
+		model,
+		commands: [ShowLinkResult({})],
+		outMessage:
+			status === "success"
+				? toast("success", "Discord account linked")
+				: toast(
+						"error",
+						"Failed to link Discord account",
+						Option.getOrNull(route.errorCode) ?? "Please try again.",
+					),
+	}
+}
+
+export const init = (route: Route): Return =>
+	linkResult(
+		{
+			orgSlug: route.orgSlug,
+			connection: null,
+			isConnecting: false,
+			isDisconnecting: false,
+			interaction: Interaction.init(),
+		},
+		route,
+	)
+
+/** Same page, new search: a later callback redirect, or the cleaned URL (nothing to show). */
+export const routeChanged = (model: Model, route: Route): Return => linkResult(model, route)
 
 export const update = (model: Model, message: Message, shared: Shared): Return => {
 	const orgId = shared.currentUser?.organizationId ?? null
 	return Message.match<Return>(message, {
-		ReadLinkResult: ({ connectionStatus, provider, errorCode }) =>
-			connectionStatus === null || provider !== "discord"
-				? { model }
-				: {
-						model,
-						commands: [ShowLinkResult({})],
-						outMessage:
-							connectionStatus === "success"
-								? toast("success", "Discord account linked")
-								: toast(
-										"error",
-										"Failed to link Discord account",
-										errorCode ?? "Please try again.",
-									),
-					},
 		ShowedLinkResult: () => ({
 			model,
 			outMessage: PageOutMessage.RequestedNavigation({

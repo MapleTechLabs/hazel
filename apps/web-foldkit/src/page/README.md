@@ -29,6 +29,9 @@ memoized views and a `sharedChanged` hook. `page/root/` shows a page that only r
 - **Route params.** `init(route, shared)` receives the route variant, typed by `routes`. Store the params
   you need in the Model. `key(route)` decides when a navigation keeps the same instance (default: the whole
   route); a kept instance gets `routeChanged(model, route, shared)` instead of a new `init`.
+  Search params legacy reads with `Route.useSearch()` are typed route fields too (`Onboarding.step`, the
+  OAuth callback's `connectionStatus`/`errorCode`); never read `window.location.search`. A page that
+  cleans its own URL keys by path so the cleanup arrives as `routeChanged`.
 - **Shared data.** `Shared` holds `auth`, `orgSlug`, `currentUser`, `organization`, `member` (id and role),
   `nowMs` and `isMobile` (the shell's `(max-width: 767px)` query). `update`, `routeChanged` and `sharedChanged` receive it, the view gets it as
   `viewInputs.shared`, and Subscriptions read it as `input.shared`. Never copy it into the Model; if

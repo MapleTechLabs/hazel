@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { OrganizationId } from "@hazel/schema"
-import { Schema } from "effect"
+import { Option, Schema } from "effect"
 import {
 	click,
 	Command,
@@ -20,7 +20,7 @@ import { describe, expect, test } from "vitest"
 import type { Shared } from "../../../contract"
 import { PageOutMessage } from "../../../out-message"
 import { errorToast, successToast } from "../shared/exit-toast"
-import { AcknowledgeOAuthCallback, ConnectApiKey, Disconnect, ReadOAuthCallback } from "./command"
+import { AcknowledgeOAuthCallback, ConnectApiKey, Disconnect } from "./command"
 import { Message } from "./message"
 import type { Model } from "./model"
 import { init, update } from "./update"
@@ -42,27 +42,32 @@ const config = {
 	update: (model: Model, next: Message) => update(model, next, shared),
 	view: (model: Model, h: Parameters<typeof view>[2]) => view(model, { shared }, h),
 }
-const pageFor = (integrationId: string) =>
-	init({ _tag: "SettingsIntegration", orgSlug: "hazel", integrationId })
+/** The route, with the OAuth callback redirect's `?connection_status=&error_code=` when given. */
+const pageFor = (integrationId: string, callback?: { status: string; errorCode?: string }) =>
+	init({
+		_tag: "SettingsIntegration",
+		orgSlug: "hazel",
+		integrationId,
+		connectionStatus: Option.fromNullishOr(callback?.status),
+		errorCode: Option.fromNullishOr(callback?.errorCode),
+	})
 
 describe("integration detail page", () => {
 	test("a failed OAuth callback toasts the mapped error, then clears the search params", () => {
-		const page = pageFor("linear")
+		const page = pageFor("linear", { status: "error", errorCode: "token_exchange_failed" })
+		expect(page.outMessage).toEqual(
+			PageOutMessage.RequestedToast({
+				toast: errorToast(
+					"Failed to connect to Linear",
+					"Could not authenticate with the provider. Please try again.",
+				),
+			}),
+		)
+		expect(page.commands?.map((command) => command.name)).toEqual([AcknowledgeOAuthCallback.name])
 		Story.story(
 			config.update,
 			Story.given(page.model),
-			Story.message(
-				Message.CompletedReadOAuthCallback({ status: "error", errorCode: "token_exchange_failed" }),
-			),
-			Story.expectOutMessage(
-				PageOutMessage.RequestedToast({
-					toast: errorToast(
-						"Failed to connect to Linear",
-						"Could not authenticate with the provider. Please try again.",
-					),
-				}),
-			),
-			Story.Command.resolve(AcknowledgeOAuthCallback, Message.AcknowledgedOAuthCallback()),
+			Story.message(Message.AcknowledgedOAuthCallback()),
 			Story.expectOutMessage(
 				PageOutMessage.RequestedNavigation({
 					href: "/hazel/settings/integrations/linear",
@@ -75,13 +80,7 @@ describe("integration detail page", () => {
 	test("a successful callback verifies until the connection syncs in", () => {
 		scene(
 			config,
-			given(
-				update(
-					pageFor("linear").model,
-					Message.CompletedReadOAuthCallback({ status: "success", errorCode: null }),
-					shared,
-				).model,
-			),
+			given(pageFor("linear", { status: "success" }).model),
 			expectView(text("Verifying connection...")).toExist(),
 			Subscription.emit(
 				Message.UpdatedConnection({
@@ -127,28 +126,19 @@ describe("integration detail page", () => {
 		)
 	})
 
-	test("a successful callback toasts the connection", () => {
-		Story.story(
-			config.update,
-			Story.given(pageFor("linear").model),
-			Story.message(Message.CompletedReadOAuthCallback({ status: "success", errorCode: null })),
-			Story.expectOutMessage(
-				PageOutMessage.RequestedToast({
-					toast: successToast(
-						"Connected to Linear",
-						"Your account has been successfully connected.",
-					),
-				}),
-			),
-			Story.Command.resolve(AcknowledgeOAuthCallback, Message.AcknowledgedOAuthCallback()),
-			Story.model((model) => {
-				if (!model.pendingVerification) throw new Error("expected pendingVerification")
+	test("a successful callback toasts the connection and verifies it", () => {
+		const page = pageFor("linear", { status: "success" })
+		expect(page.outMessage).toEqual(
+			PageOutMessage.RequestedToast({
+				toast: successToast("Connected to Linear", "Your account has been successfully connected."),
 			}),
 		)
+		expect(page.model.pendingVerification).toBe(true)
 	})
 
-	test("init reads the OAuth callback params", () => {
-		expect(pageFor("linear").commands?.map((command) => command.name)).toEqual([ReadOAuthCallback.name])
+	test("no callback params, or an unknown status, show nothing", () => {
+		expect(pageFor("linear").commands ?? []).toEqual([])
+		expect(pageFor("linear", { status: "pending" }).outMessage).toBeUndefined()
 	})
 
 	test("the back link returns to the integrations list", () => {

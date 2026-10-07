@@ -9,32 +9,23 @@ import { DEFAULT_BRAND_COLOR, getDefaultThemeCustomization } from "~/lib/theme/p
 import { HazelRpc } from "../../rpc"
 import { applyTheme, resolveSystemTheme } from "../../theme"
 import { clerkResource } from "./clerk"
-import { Step } from "./flow"
 import { Message } from "./message"
 import { Theme } from "./model"
 
-export const ReadLocation = Command.define("ReadOnboardingLocation", {
+export const ReadBrowserTimezone = Command.define("ReadBrowserTimezone", {
 	args: {},
-	messages: [Message.GotLocation],
+	messages: [Message.GotBrowserTimezone],
 	execute: () =>
 		Effect.sync(() =>
-			Message.GotLocation({
-				urlStep: new URLSearchParams(window.location.search).get("step"),
-				browserTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-			}),
+			Message.GotBrowserTimezone({ browserTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
 		),
 })
 
-/** `navigate({ search: (prev) => ({ ...prev, step }), replace: true })` */
+/** `navigate({ search: (prev) => ({ ...prev, step }), replace: true })`, the href from `onboardingHref`. */
 export const ReplaceStepUrl = Command.define("ReplaceOnboardingStepUrl", {
-	args: { step: Step },
+	args: { href: Schema.String },
 	messages: [Message.CompletedReplaceStepUrl],
-	execute: ({ step }) =>
-		Effect.suspend(() => {
-			const params = new URLSearchParams(window.location.search)
-			params.set("step", step)
-			return replaceUrl(`${window.location.pathname}?${params}`)
-		}).pipe(Effect.as(Message.CompletedReplaceStepUrl())),
+	execute: ({ href }) => replaceUrl(href).pipe(Effect.as(Message.CompletedReplaceStepUrl())),
 })
 
 /** `clerkUser.update({ firstName, lastName })` */

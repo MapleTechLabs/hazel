@@ -1,5 +1,5 @@
 import { OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
-import { Schema } from "effect"
+import { Option, Schema } from "effect"
 import { Command, Mount, click, expect, given, role, scene, text, type } from "foldkit/scene"
 import { describe, test, vi } from "vitest"
 import type { Shared } from "../contract"
@@ -57,14 +57,12 @@ const ready = (
 	extra: ReadonlyArray<Message> = [],
 ): Model => {
 	const steps = [
-		Message.GotLocation({ urlStep, browserTimezone: "UTC" }),
+		Message.GotBrowserTimezone({ browserTimezone: "UTC" }),
 		Message.UpdatedMembership({ membership: member }),
 		...extra,
 	]
-	return steps.reduce(
-		(model, message) => update(model, message, shared).model,
-		init(undefined, shared).model,
-	)
+	const route = { _tag: "Onboarding" as const, orgId: Option.none(), step: Option.fromNullishOr(urlStep) }
+	return steps.reduce((model, message) => update(model, message, shared).model, init(route, shared).model)
 }
 
 const settled = Message.CompletedEnterAnimation()

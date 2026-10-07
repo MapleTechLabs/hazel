@@ -8,22 +8,6 @@ import { Message } from "./message"
 /** The legacy `HazelApiClient` (HTTP API, cookie or bearer auth through `authenticatedFetch`). */
 const integrations = HazelApiClient.useSync((client) => client.integrations)
 
-const readSearchParam = (params: URLSearchParams, key: string) => params.get(key) ?? null
-
-export const ReadLinkResult = Command.define("ReadLinkResult", {
-	args: {},
-	messages: [Message.ReadLinkResult],
-	execute: () =>
-		Effect.sync(() => {
-			const params = new URLSearchParams(window.location.search)
-			return Message.ReadLinkResult({
-				connectionStatus: readSearchParam(params, "connection_status"),
-				provider: readSearchParam(params, "provider"),
-				errorCode: readSearchParam(params, "error_code"),
-			})
-		}),
-})
-
 /** Sequences the clean-URL navigation after the result toast (one OutMessage per update). */
 export const ShowLinkResult = Command.define("ShowLinkResult", {
 	args: {},

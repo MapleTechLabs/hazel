@@ -1,3 +1,4 @@
+import { Option, Schema } from "effect"
 import { getIntegrationById } from "~/lib/integrations/__data"
 import type { RouteOf } from "../../../../route"
 import type { PageReturn, Shared } from "../../../contract"
@@ -9,11 +10,12 @@ import {
 	Disconnect,
 	GetOAuthUrl,
 	isProvider,
-	ReadOAuthCallback,
 	RedirectToProvider,
 } from "./command"
 import { Message } from "./message"
-import type { Model } from "./model"
+import { CallbackStatus, type Model } from "./model"
+
+const callbackStatus = Schema.decodeUnknownOption(CallbackStatus)
 
 type Return = PageReturn<Model, Message>
 
@@ -31,20 +33,26 @@ const errorMessageFromCode = (errorCode: string | null): string =>
 						? "The connection request expired. Please try again."
 						: "An unexpected error occurred. Please try again."
 
-export const init = (route: RouteOf<"SettingsIntegration">): Return => ({
-	model: {
-		orgSlug: route.orgSlug,
-		integrationId: route.integrationId,
-		connection: null,
-		pendingVerification: false,
-		isConnecting: false,
-		isDisconnecting: false,
-		apiToken: "",
-		apiBaseUrl: "",
-		enabledOptionIds: [],
-	},
-	commands: [ReadOAuthCallback({})],
-})
+type Route = RouteOf<"SettingsIntegration">
+
+export const init = (route: Route): Return =>
+	oauthCallback(
+		{
+			orgSlug: route.orgSlug,
+			integrationId: route.integrationId,
+			connection: null,
+			pendingVerification: false,
+			isConnecting: false,
+			isDisconnecting: false,
+			apiToken: "",
+			apiBaseUrl: "",
+			enabledOptionIds: [],
+		},
+		route,
+	)
+
+/** Same page, new search: a later callback redirect, or the cleaned URL (nothing to show). */
+export const routeChanged = (model: Model, route: Route): Return => oauthCallback(model, route)
 
 const nameOf = (model: Model) => getIntegrationById(model.integrationId)?.name
 
@@ -52,6 +60,23 @@ const toast = (model: Model, request: Parameters<typeof PageOutMessage.Requested
 	model,
 	outMessage: PageOutMessage.RequestedToast({ toast: request }),
 })
+
+/** The OAuth callback redirect's `connection_status` and `error_code`: toast, then clean the URL. */
+const oauthCallback = (model: Model, route: Route): Return => {
+	const status = Option.getOrNull(callbackStatus(Option.getOrNull(route.connectionStatus)))
+	const name = nameOf(model)
+	if (status === null || name === undefined) return { model }
+	const next = { ...model, pendingVerification: model.pendingVerification || status === "success" }
+	return {
+		...toast(
+			next,
+			status === "success"
+				? successToast(`Connected to ${name}`, "Your account has been successfully connected.")
+				: errorToast(`Failed to connect to ${name}`, errorMessageFromCode(Option.getOrNull(route.errorCode))),
+		),
+		commands: [AcknowledgeOAuthCallback({})],
+	}
+}
 
 /** The org and provider a request targets, or nothing while the organization is unknown. */
 const targetOf = (model: Model, shared: Shared) =>
@@ -61,23 +86,6 @@ const targetOf = (model: Model, shared: Shared) =>
 
 export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
-		CompletedReadOAuthCallback: ({ status, errorCode }) => {
-			const name = nameOf(model)
-			if (status === null || name === undefined) return { model }
-			const next = { ...model, pendingVerification: model.pendingVerification || status === "success" }
-			return {
-				...toast(
-					next,
-					status === "success"
-						? successToast(
-								`Connected to ${name}`,
-								"Your account has been successfully connected.",
-							)
-						: errorToast(`Failed to connect to ${name}`, errorMessageFromCode(errorCode)),
-				),
-				commands: [AcknowledgeOAuthCallback({})],
-			}
-		},
 		AcknowledgedOAuthCallback: () => ({
 			model,
 			outMessage: PageOutMessage.RequestedNavigation({

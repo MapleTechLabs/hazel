@@ -3,6 +3,7 @@ import type { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import { DEFAULT_BRAND_COLOR } from "~/lib/theme/presets"
 import type { HazelRpc } from "../../rpc"
+import { onboardingHref } from "../../route"
 import * as ChoiceBox from "../../ui/choice-box"
 import type { PageReturn, Shared } from "../contract"
 import { CompleteOnboarding, ReadThemePreference, ReplaceStepUrl } from "./command"
@@ -26,7 +27,7 @@ const formFor = (model: Model, step: Step, shared: Shared): StepForm =>
 		),
 		Match.when("timezoneSelection", () =>
 			StepForm.Timezone({
-				selected: model.data.timezone ?? model.browserTimezone,
+				selected: model.data.timezone ?? model.browserTimezone ?? "UTC",
 				query: "",
 				debouncedQuery: "",
 				hoveredOffset: null,
@@ -81,7 +82,10 @@ export const enterStep = (
 	})
 	return {
 		model: next,
-		commands: [...(options.syncUrl ? [ReplaceStepUrl({ step })] : []), ...stepCommands(next, step)],
+		commands: [
+			...(options.syncUrl ? [ReplaceStepUrl({ href: onboardingHref(model.orgId, step) })] : []),
+			...stepCommands(next, step),
+		],
 	}
 }
 
@@ -113,7 +117,8 @@ export const goBack = (model: Model, shared: Shared): Return => {
  * An organization with a slug means the user was invited into it.
  */
 export const initializeWhenReady = (model: Model, shared: Shared): Return => {
-	if (model.isInitialized || model.urlStep === undefined || model.membership === undefined) return { model }
+	if (model.isInitialized || model.browserTimezone === undefined || model.membership === undefined)
+		return { model }
 	const userType = model.membership?.slug ? "invited" : "creator"
 	const step = stepFromUrl(model.urlStep, userType) ?? "welcome"
 	return enterStep(modifyFields(model, { isInitialized: () => true, userType: () => userType }), step, {

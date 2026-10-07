@@ -8,22 +8,6 @@ import { failureToast } from "../shared/exit-toast"
 import { Message } from "./message"
 
 const Provider = IntegrationConnection.IntegrationProvider
-const callbackStatus = Schema.decodeUnknownOption(Schema.Literals(["success", "error"]))
-
-/** `Route.useSearch()`: the OAuth callback redirect's `connection_status` and `error_code`. */
-export const ReadOAuthCallback = Command.define("IntegrationReadOAuthCallback", {
-	args: {},
-	messages: [Message.CompletedReadOAuthCallback],
-	execute: () =>
-		Effect.sync(() => {
-			const search = new URLSearchParams(window.location.search)
-			const status = callbackStatus(search.get("connection_status"))
-			return Message.CompletedReadOAuthCallback({
-				status: status._tag === "Some" ? status.value : null,
-				errorCode: search.get("error_code"),
-			})
-		}),
-})
 
 /** The toast is out; clearing the search params is the second OutMessage of the callback effect. */
 export const AcknowledgeOAuthCallback = Command.define("IntegrationAcknowledgeOAuthCallback", {
