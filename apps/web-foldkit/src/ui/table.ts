@@ -1,14 +1,15 @@
 import { Effect, Option, Schema } from "effect"
-import type { Update } from "foldkit"
+import { Subscription, type Update } from "foldkit"
 import * as Command from "foldkit/command"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
 import * as Collection from "./aria/collection"
+import * as Interaction from "./aria/interaction"
 
 /**
- * Port of `components/ui/table.tsx` (React Aria Table): row selection (single, replace
- * behavior), sortable columns, grid focus (rows, cells, column headers) and arrow-key
- * navigation. The view lives in `table-view.ts`.
+ * Port of `components/ui/table.tsx` (React Aria Table): row selection (single with replace
+ * behavior, multiple with toggle behavior and selection checkboxes), sortable columns, grid
+ * focus (rows, cells, column headers) and arrow-key navigation. The view lives in `table-view.ts`.
  */
 
 // MODEL
@@ -19,7 +20,7 @@ export type SortDirection = typeof SortDirection.Type
 export const SortDescriptor = Schema.Struct({ column: Schema.String, direction: SortDirection })
 export type SortDescriptor = typeof SortDescriptor.Type
 
-export const SelectionMode = Schema.Literals(["none", "single"])
+export const SelectionMode = Schema.Literals(["none", "single", "multiple"])
 export type SelectionMode = typeof SelectionMode.Type
 
 export const Focus = Schema.Union([
@@ -39,6 +40,8 @@ export const Model = Schema.Struct({
 	maybeHoveredRow: Schema.Option(Schema.String),
 	maybeHoveredColumn: Schema.Option(Schema.String),
 	modality: Collection.Modality,
+	/** Hover, press and focus of the selection checkboxes. */
+	interaction: Interaction.Model,
 })
 export type Model = typeof Model.Type
 
@@ -56,6 +59,7 @@ export const init = (config: {
 	maybeHoveredRow: Option.none(),
 	maybeHoveredColumn: Option.none(),
 	modality: "Unknown",
+	interaction: Interaction.init(),
 })
 
 /** The current sort, for the parent to order its rows (RA's controlled `sortDescriptor`). */
@@ -76,6 +80,9 @@ export const Message = defineMessageUnion({
 	FocusedColumn: { column: Schema.String },
 	BlurredTable: {},
 	NavigatedToRow: { row: Schema.String, isSelectable: Schema.Boolean },
+	PressedRowSpace: { row: Schema.String },
+	ToggledAll: { keys: Schema.Array(Schema.String) },
+	GotInteractionMessage: { message: Interaction.Message },
 	ReleasedKey: {},
 	CompletedFocusRow: {},
 })
@@ -106,10 +113,18 @@ const withFocus = (model: Model, focus: Focus) => modifyFields(model, { focus: (
 const withModality = (model: Model, modality: Collection.Modality) =>
 	modifyFields(model, { modality: () => modality })
 
+/** Replace behavior selects the row; toggle behavior (multiple) flips it. */
 const selectRow = (model: Model, row: string, isSelectable: boolean) =>
-	isSelectable && model.selectionMode === "single"
-		? modifyFields(model, { selectedKeys: () => [row] })
-		: model
+	!isSelectable
+		? model
+		: model.selectionMode === "single"
+			? modifyFields(model, { selectedKeys: () => [row] })
+			: model.selectionMode === "multiple"
+				? modifyFields(model, {
+						selectedKeys: (keys) =>
+							keys.includes(row) ? keys.filter((key) => key !== row) : [...keys, row],
+					})
+				: model
 
 const nextSort = (model: Model, column: string): SortDescriptor =>
 	Option.match(model.maybeSort, {
@@ -153,9 +168,36 @@ export const update = (model: Model, message: Message) =>
 		FocusedCell: ({ row, column }) => ({ model: withFocus(model, { _tag: "Cell", row, column }) }),
 		FocusedColumn: ({ column }) => ({ model: withFocus(model, { _tag: "Column", column }) }),
 		BlurredTable: () => ({ model: withFocus(model, { _tag: "Outside" }) }),
+		// Toggle behavior moves focus without selecting; Space toggles instead.
 		NavigatedToRow: ({ row, isSelectable }) => ({
-			model: selectRow(withModality(model, "Keyboard"), row, isSelectable),
+			model:
+				model.selectionMode === "multiple"
+					? withModality(model, "Keyboard")
+					: selectRow(withModality(model, "Keyboard"), row, isSelectable),
+		}),
+		PressedRowSpace: ({ row }) => ({ model: selectRow(withModality(model, "Keyboard"), row, true) }),
+		// The header checkbox: select every enabled row, or clear them all once they are.
+		ToggledAll: ({ keys }) => ({
+			model: modifyFields(model, {
+				selectedKeys: (selected) => (keys.every((key) => selected.includes(key)) ? [] : [...keys]),
+			}),
 		}),
 		ReleasedKey: () => ({ model: withModality(model, "Keyboard") }),
+		GotInteractionMessage: ({ message: child }) => ({
+			model: modifyFields(model, {
+				interaction: () => Interaction.update(model.interaction, child).model,
+			}),
+		}),
 		CompletedFocusRow: () => ({ model }),
 	})
+
+// SUBSCRIPTION
+
+/** Modality tracking for the selection checkboxes (lift it where checkboxes are shown). */
+export const subscriptions = Subscription.lift(Interaction.subscriptions)<Model, Message>({
+	read: (model) => Option.some(model.interaction),
+	toParentMessage: (message) => Message.GotInteractionMessage({ message }),
+})
+
+/** The utility column holding "Select All". */
+export const SELECTION_COLUMN = "__selection"

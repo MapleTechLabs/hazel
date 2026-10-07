@@ -127,13 +127,15 @@ export const update = (model: Model, message: Message): { model: Model } =>
 					? modifyFields(model, { press: () => null })
 					: model,
 		}),
-		// Programmatic focus (no key or pointer event first) switches to virtual modality.
+		// Programmatic focus (no key or pointer event first) switches to virtual modality. usePress
+		// focuses a pressed target on pointerdown, before the mousedown that re-arms the flag; here the
+		// native focus lands after mousedown, so a press's own focus leaves the flag armed.
 		FocusedTarget: ({ target, isTextInput }) => ({
 			model: modifyFields(model, {
 				focused: () => ({ target, isTextInput }),
 				modality: (modality) => (model.hasEventBeforeFocus ? modality : "virtual"),
 				isFocusVisible: (isFocusVisible) => (model.hasEventBeforeFocus ? isFocusVisible : true),
-				hasEventBeforeFocus: () => false,
+				hasEventBeforeFocus: () => model.press?.target === target && model.press.source === "pointer",
 			}),
 		}),
 		EnteredFocusWithin: ({ target }) => ({
@@ -151,7 +153,12 @@ export const update = (model: Model, message: Message): { model: Model } =>
 			model: model.focused?.target === target ? modifyFields(model, { focused: () => null }) : model,
 		}),
 		PressedDocumentKey: ({ key }) => ({ model: receivedKey(model, key) }),
-		ReleasedDocumentKey: ({ key }) => ({ model: receivedKey(model, key) }),
+		// usePress ends a keyboard press on keyup anywhere, so a press survives focus moving away.
+		ReleasedDocumentKey: ({ key }) => ({
+			model: modifyFields(receivedKey(model, key), {
+				press: (press) => (press?.source === "keyboard" && isPressKey(key) ? null : press),
+			}),
+		}),
 		PressedDocumentPointer: () => ({
 			model: modifyFields(model, {
 				modality: () => "pointer",
@@ -173,7 +180,7 @@ const isModalityKey = (event: KeyboardEvent) =>
 		event.key === "Meta"
 	)
 
-export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
+export const subscriptions = Subscription.make<Model, Message>()(() => ({
 	modality: Subscription.persistent(
 		Stream.mergeAll(
 			[
@@ -205,23 +212,43 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
 			{ concurrency: "unbounded" },
 		),
 	),
-	// usePress ends a pointer press on pointerup anywhere in the document.
-	pointerRelease: entry(
-		{ isPointerPressed: Schema.Boolean },
-		{
-			modelToDependencies: (model) => ({ isPointerPressed: model.press?.source === "pointer" }),
-			dependenciesToStream: ({ isPointerPressed }) =>
-				isPointerPressed
-					? Subscription.fromEvent({
-							target: document,
-							type: "pointerup",
-							mapEvent: () => Message.ReleasedPointer(),
-							options: { capture: true },
-						})
-					: Stream.empty,
-		},
+	// usePress ends a pointer press on pointerup anywhere in the document. Always subscribed:
+	// restarting the stream per press would cost a fiber (and a seeded random draw) each time.
+	pointerRelease: Subscription.persistent(
+		Subscription.fromEvent({
+			target: document,
+			type: "pointerup",
+			mapEvent: () => Message.ReleasedPointer(),
+			options: { capture: true },
+		}),
 	),
 }))
+
+// GLOBAL MODALITY
+
+/**
+ * React Aria's module-level modality (useFocusVisible's `currentModality`), for code that reads it
+ * synchronously at event time, such as Mounts. Views read the Submodel's `modality` instead.
+ */
+let globalModality: Modality | null = null
+let isGlobalModalityTracked = false
+
+export const trackGlobalModality = () => {
+	if (isGlobalModalityTracked) return
+	isGlobalModalityTracked = true
+	const toKeyboard = (event: KeyboardEvent) => {
+		if (isModalityKey(event) && !event.altKey) globalModality = "keyboard"
+	}
+	const toPointer = () => {
+		globalModality = "pointer"
+	}
+	document.addEventListener("keydown", toKeyboard, true)
+	document.addEventListener("keyup", toKeyboard, true)
+	document.addEventListener("pointerdown", toPointer, true)
+	document.addEventListener("pointerup", toPointer, true)
+}
+
+export const currentGlobalModality = (): Modality | null => globalModality
 
 // VIEW
 
@@ -334,3 +361,16 @@ export const pressStyleAttributes = <ParentMessage>(
 	model.press?.target === target && model.press.source === "pointer"
 		? [h.Attribute("style", "user-select: none;")]
 		: []
+
+/** Everything a React Aria pressable writes for one target: `data-rac`, handlers and state. */
+export const targetAttributes = <ParentMessage>(
+	h: HtmlBuilder<ParentMessage>,
+	wiring: Wiring<ParentMessage>,
+	target: string,
+	options: TargetOptions = {},
+): ReadonlyArray<Attribute<ParentMessage>> => [
+	h.DataAttribute("rac", ""),
+	...handlers(h, wiring, target, options),
+	...stateAttributes(h, stateOf(wiring.model, target)),
+	...pressStyleAttributes(h, wiring.model, target),
+]

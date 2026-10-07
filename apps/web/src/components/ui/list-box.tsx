@@ -4,7 +4,6 @@ import {
 	ListBoxItem as ListBoxItemPrimitive,
 	ListBox as ListBoxPrimitive,
 } from "react-aria-components"
-import { twJoin, twMerge } from "tailwind-merge"
 import IconCheck from "~/components/icons/icon-check"
 import { cx } from "~/lib/primitive"
 import {
@@ -14,15 +13,15 @@ import {
 	type DropdownSectionProps,
 	dropdownItemStyles,
 } from "./dropdown"
+import {
+	listBoxBase,
+	listBoxCheckIconClassName,
+	listBoxItemClassName,
+	listBoxSectionClassName,
+} from "./list-box.styles"
 
 const ListBox = <T extends object>({ className, ...props }: ListBoxProps<T>) => (
-	<ListBoxPrimitive
-		{...props}
-		className={cx(
-			"grid max-h-96 w-full min-w-56 scroll-py-1 grid-cols-[auto_1fr] flex-col gap-y-1 overflow-y-auto overscroll-contain rounded-xl border bg-bg p-1 outline-hidden [scrollbar-width:thin] has-data-[slot=drag-icon]:grid-cols-[auto_auto_1fr] [&::-webkit-scrollbar]:size-0.5 *:[[role='group']+[role=group]]:mt-4 *:[[role='group']+[role=separator]]:mt-1",
-			className,
-		)}
-	/>
+	<ListBoxPrimitive {...props} className={cx(listBoxBase, className)} />
 )
 
 const ListBoxItem = <T extends object>({ children, className, ...props }: ListBoxItemProps<T>) => {
@@ -33,14 +32,7 @@ const ListBoxItem = <T extends object>({ children, className, ...props }: ListBo
 			className={composeRenderProps(className, (className, renderProps) =>
 				dropdownItemStyles({
 					...renderProps,
-					className: twJoin(
-						"group not-has-[[slot=description]]:items-start",
-						// "has-data-[slot=drag-icon]:*:data-[slot=check-icon]:absolute has-data-[slot=drag-icon]:*:data-[slot=check-icon]:right-0",
-						"has-data-[slot=drag-icon]:*:[[slot=label]]:col-start-3",
-						"has-data-[slot=drag-icon]:*:data-[slot=icon]:col-start-2",
-						"href" in props ? "cursor-pointer" : "cursor-default",
-						className,
-					),
+					className: listBoxItemClassName("href" in props, className),
 				}),
 			)}
 			data-slot="list-box-item"
@@ -86,10 +78,7 @@ const ListBoxItem = <T extends object>({ children, className, ...props }: ListBo
 							</svg>
 						)}
 						{isSelected && (
-							<IconCheck
-								className="-mx-0.5 mr-2 h-[1lh] w-5 shrink-0 group-allows-dragging:col-start-2 sm:w-4"
-								data-slot="check-icon"
-							/>
+							<IconCheck className={listBoxCheckIconClassName} data-slot="check-icon" />
 						)}
 						{typeof children === "function" ? (
 							children(renderProps)
@@ -106,12 +95,7 @@ const ListBoxItem = <T extends object>({ children, className, ...props }: ListBo
 }
 
 const ListBoxSection = <T extends object>({ className, ...props }: DropdownSectionProps<T>) => {
-	return (
-		<DropdownSection
-			className={twMerge("gap-y-1 *:data-[slot=list-box-item]:last:-mb-1.5", className)}
-			{...props}
-		/>
-	)
+	return <DropdownSection className={listBoxSectionClassName(className)} {...props} />
 }
 
 const ListBoxLabel = DropdownLabel

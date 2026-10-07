@@ -10,6 +10,7 @@ import {
 	tooltipArrowInverse,
 	tooltipStyles,
 } from "~/components/ui/tooltip.styles"
+import { currentGlobalModality, trackGlobalModality } from "./aria/interaction"
 import { portalOverlay, positionOverlay } from "./aria/overlay"
 import type { Placement } from "./aria/position"
 
@@ -125,39 +126,6 @@ export const update = (model: Model, message: Message): UpdateReturn =>
 		CompletedPortalTooltip: () => ({ model }),
 	})
 
-// INTERACTION MODALITY
-
-/**
- * React Aria's global modality (useFocusVisible): keyboard after a key press, pointer after a
- * pointer press. Kept local until the shared interaction helpers land.
- */
-let modality: "keyboard" | "pointer" | null = null
-const trackModality = (() => {
-	let isInstalled = false
-	return () => {
-		if (isInstalled) return
-		isInstalled = true
-		const toKeyboard = (event: KeyboardEvent) => {
-			if (
-				!event.metaKey &&
-				!event.altKey &&
-				!event.ctrlKey &&
-				event.key !== "Control" &&
-				event.key !== "Shift" &&
-				event.key !== "Meta"
-			)
-				modality = "keyboard"
-		}
-		const toPointer = () => {
-			modality = "pointer"
-		}
-		document.addEventListener("keydown", toKeyboard, true)
-		document.addEventListener("keyup", toKeyboard, true)
-		document.addEventListener("pointerdown", toPointer, true)
-		document.addEventListener("pointerup", toPointer, true)
-	}
-})()
-
 // MOUNT
 
 type TrackTriggerMessage = Exclude<
@@ -184,7 +152,7 @@ const TrackTrigger = Mount.defineStream("TrackTooltipTrigger", {
 		Stream.callback<TrackTriggerMessage>((queue) =>
 			Effect.acquireRelease(
 				Effect.sync(() => {
-					trackModality()
+					trackGlobalModality()
 					const emit = (message: TrackTriggerMessage) => Queue.offerUnsafe(queue, message)
 					const listeners: ReadonlyArray<readonly [string, (event: Event) => void]> = [
 						[
@@ -192,7 +160,9 @@ const TrackTrigger = Mount.defineStream("TrackTooltipTrigger", {
 							(event) => {
 								if (event instanceof PointerEvent && event.pointerType !== "touch")
 									emit(
-										Message.HoveredTrigger({ isPointerModality: modality === "pointer" }),
+										Message.HoveredTrigger({
+											isPointerModality: currentGlobalModality() === "pointer",
+										}),
 									)
 							},
 						],
@@ -205,7 +175,12 @@ const TrackTrigger = Mount.defineStream("TrackTooltipTrigger", {
 						],
 						[
 							"focus",
-							() => emit(Message.FocusedTrigger({ isFocusVisible: modality !== "pointer" })),
+							() =>
+								emit(
+									Message.FocusedTrigger({
+										isFocusVisible: currentGlobalModality() !== "pointer",
+									}),
+								),
 						],
 						["blur", () => emit(Message.BlurredTrigger())],
 						["pointerdown", () => emit(Message.PressedTrigger())],

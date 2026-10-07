@@ -1,37 +1,43 @@
-import { Option, Record, Schema } from "effect"
-import { Update } from "foldkit"
+import { Record, Schema } from "effect"
+import type { Update } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
+import { modifyFields } from "foldkit/struct"
 import { IconStar } from "../../icons"
-import * as Toggle from "../../ui/toggle"
+import * as Interaction from "../../ui/aria/interaction"
+import { toggle, type ToggleOptions } from "../../ui/toggle"
 import { defineGallery } from "../define"
 import { galleryFrame, gallerySection } from "../frame"
+import { embedInteraction } from "../interaction"
 
 // MODEL
 
-const Model = Schema.Record(Schema.String, Toggle.Model)
+const Model = Schema.Struct({
+	selected: Schema.Record(Schema.String, Schema.Boolean),
+	interaction: Interaction.Model,
+})
 type Model = typeof Model.Type
 
 // MESSAGE
 
 const Message = defineMessageUnion({
-	GotToggleMessage: { id: Schema.String, message: Toggle.Message },
+	PressedToggle: { id: Schema.String },
+	GotInteractionMessage: { message: Interaction.Message },
 })
 type Message = typeof Message.Type
 
-// UPDATE
+const interaction = embedInteraction<Model, Message>((message) => Message.GotInteractionMessage({ message }))
 
-const foldToggle = (id: string) =>
-	Update.foldChild({
-		update: Toggle.update,
-		read: (model: Model) => Record.get(model, id),
-		write: (model, nextToggle) => ({ ...model, [id]: nextToggle }),
-		toParentMessage: (message) => Message.GotToggleMessage({ id, message }),
-	})
+// UPDATE
 
 const update = (model: Model, message: Message) =>
 	Message.match<Update.Return<Model, Message>>(message, {
-		GotToggleMessage: ({ id, message }) => foldToggle(id)(model, message),
+		PressedToggle: ({ id }) => ({
+			model: modifyFields(model, {
+				selected: (selected) => ({ ...selected, [id]: !(selected[id] ?? false) }),
+			}),
+		}),
+		GotInteractionMessage: ({ message }) => interaction.fold(model, message),
 	})
 
 // VIEW
@@ -39,7 +45,7 @@ const update = (model: Model, message: Message) =>
 const sizes = ["xs", "sm", "md", "lg"] as const
 const squareSizes = ["sq-xs", "sq-sm", "sq-md", "sq-lg"] as const
 
-interface ToggleSpec extends Omit<Toggle.ViewInputs, "content"> {
+interface ToggleSpec extends Omit<ToggleOptions<Message>, "isSelected" | "onPress" | "interaction"> {
 	readonly id: string
 	readonly isSelected?: boolean
 	readonly content: (h: HtmlBuilder<Message>) => ReadonlyArray<Html | string>
@@ -95,41 +101,47 @@ const sections: ReadonlyArray<readonly [string, ReadonlyArray<ToggleSpec>]> = [
 	],
 ]
 
-const view = (model: Model, h: HtmlBuilder<Message>) =>
-	galleryFrame(
+const view = (model: Model, h: HtmlBuilder<Message>) => {
+	const wiring = interaction.wiring(model)
+	return galleryFrame(
 		h,
 		"Toggle",
 		sections.map(([title, toggles]) =>
 			gallerySection(
 				h,
 				title,
-				toggles.flatMap(({ id, isSelected: _isSelected, content, ...viewInputs }) =>
-					Option.match(Record.get(model, id), {
-						onNone: () => [],
-						onSome: (toggle) => [
-							h.submodel({
-								slotId: id,
-								model: toggle,
-								view: Toggle.view,
-								viewInputs: { ...viewInputs, content: content(h) },
-								toParentMessage: (message) => Message.GotToggleMessage({ id, message }),
-							}),
-						],
-					}),
+				toggles.map(({ id, isSelected: _isSelected, content, ...options }) =>
+					toggle(
+						h,
+						{
+							...options,
+							isSelected: Record.get(model.selected, id).pipe(
+								(found) => found._tag === "Some" && found.value,
+							),
+							onPress: Message.PressedToggle({ id }),
+							interaction: { wiring, target: id },
+						},
+						content(h),
+					),
 				),
 			),
 		),
 	)
+}
 
 export const gallery = defineGallery<Model, Message>("Toggle", {
 	Model,
 	init: () => ({
-		model: Record.fromEntries(
-			sections.flatMap(([, toggles]) =>
-				toggles.map(({ id, isSelected }) => [id, Toggle.init({ isSelected })] as const),
+		model: {
+			selected: Record.fromEntries(
+				sections.flatMap(([, toggles]) =>
+					toggles.map(({ id, isSelected }) => [id, isSelected ?? false] as const),
+				),
 			),
-		),
+			interaction: Interaction.init(),
+		},
 	}),
 	update,
+	subscriptions: interaction.subscriptions,
 	view,
 })

@@ -3,15 +3,17 @@ import { Update } from "foldkit"
 import type { HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
+import * as Interaction from "../../ui/aria/interaction"
 import { button } from "../../ui/button"
 import { dialogBody, dialogClose, dialogDescription, dialogHeader, dialogTitle } from "../../ui/dialog"
 import * as Popover from "../../ui/popover"
 import { defineGallery } from "../define"
 import { galleryFrame, gallerySection } from "../frame"
+import { embedInteraction } from "../interaction"
 
 // MODEL
 
-const Model = Schema.Struct({ details: Popover.Model, pinned: Popover.Model })
+const Model = Schema.Struct({ details: Popover.Model, pinned: Popover.Model, interaction: Interaction.Model })
 type Model = typeof Model.Type
 
 // MESSAGE
@@ -19,8 +21,11 @@ type Model = typeof Model.Type
 const Message = defineMessageUnion({
 	GotDetailsMessage: { message: Popover.Message },
 	GotPinnedMessage: { message: Popover.Message },
+	GotInteractionMessage: { message: Interaction.Message },
 })
 type Message = typeof Message.Type
+
+const interaction = embedInteraction<Model, Message>((message) => Message.GotInteractionMessage({ message }))
 
 // UPDATE
 
@@ -49,7 +54,15 @@ const view = (model: Model, h: HtmlBuilder<Message>) =>
 				view: Popover.view,
 				viewInputs: {
 					toTrigger: (attributes, overlay) =>
-						button(h, { intent: "outline", attributes }, ["Details", overlay]),
+						button(
+							h,
+							{
+								intent: "outline",
+								attributes,
+								interaction: { wiring: interaction.wiring(model), target: "details" },
+							},
+							["Details", overlay],
+						),
 					toContent: (closeAttributes) => [
 						dialogHeader(h, {}, [
 							dialogTitle(h, {}, "Notifications"),
@@ -69,7 +82,15 @@ const view = (model: Model, h: HtmlBuilder<Message>) =>
 				view: Popover.view,
 				viewInputs: {
 					toTrigger: (attributes, overlay) =>
-						button(h, { intent: "outline", attributes }, ["With arrow", overlay]),
+						button(
+							h,
+							{
+								intent: "outline",
+								attributes,
+								interaction: { wiring: interaction.wiring(model), target: "with-arrow" },
+							},
+							["With arrow", overlay],
+						),
 					toContent: () => [
 						dialogHeader(h, {}, [
 							dialogTitle(h, {}, "Pinned"),
@@ -86,11 +107,19 @@ const view = (model: Model, h: HtmlBuilder<Message>) =>
 
 export const gallery = defineGallery<Model, Message>("Popover", {
 	Model,
-	init: () => ({ model: { details: Popover.init("details"), pinned: Popover.init("pinned") } }),
+	init: () => ({
+		model: {
+			interaction: Interaction.init(),
+			details: Popover.init("details"),
+			pinned: Popover.init("pinned"),
+		},
+	}),
 	update: (model, message) =>
 		Message.match<Update.Return<Model, Message>>(message, {
+			GotInteractionMessage: ({ message }) => interaction.fold(model, message),
 			GotDetailsMessage: ({ message }) => foldDetails(model, message),
 			GotPinnedMessage: ({ message }) => foldPinned(model, message),
 		}),
+	subscriptions: interaction.subscriptions,
 	view,
 })

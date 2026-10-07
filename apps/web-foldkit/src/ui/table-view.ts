@@ -5,7 +5,9 @@ import { twJoin, twMerge } from "tailwind-merge"
 import { tableStyles } from "~/components/ui/table.styles"
 import { IconChevronDown } from "../icons"
 import * as Collection from "./aria/collection"
-import { cellId, columnId, Message, type Model, rowId } from "./table"
+import * as Interaction from "./aria/interaction"
+import { checkbox } from "./checkbox"
+import { cellId, columnId, Message, type Model, rowId, SELECTION_COLUMN } from "./table"
 
 export interface TableColumn {
 	readonly key: string
@@ -40,6 +42,12 @@ export const view = defineView<Model, Message, ViewInputs>((model, viewInputs, h
 	const { focus, modality } = model
 	const { columns, rows, bleed, grid, striped } = viewInputs
 	const isSelectable = model.selectionMode !== "none"
+	const isMultiple = model.selectionMode === "multiple"
+	const columnOffset = isMultiple ? 1 : 0
+	const wiring: Interaction.Wiring<Message> = {
+		model: model.interaction,
+		toParentMessage: (message) => Message.GotInteractionMessage({ message }),
+	}
 	const hasRows = Array.isReadonlyArrayNonEmpty(rows)
 	const isVisible = modality !== "Pointer"
 	const isFocusWithin = focus._tag !== "Outside"
@@ -62,10 +70,15 @@ export const view = defineView<Model, Message, ViewInputs>((model, viewInputs, h
 		)
 
 	const rowNavigation = (fromRow: string) => (keyboardKey: string) =>
-		Option.map(verticalTarget(fromRow, keyboardKey), (row) => ({
-			focusSelector: Collection.idSelector(rowId(model, row)),
-			message: Message.NavigatedToRow({ row, isSelectable }),
-		}))
+		isMultiple && keyboardKey === " "
+			? Option.some({
+					focusSelector: Collection.idSelector(rowId(model, fromRow)),
+					message: Message.PressedRowSpace({ row: fromRow }),
+				})
+			: Option.map(verticalTarget(fromRow, keyboardKey), (row) => ({
+					focusSelector: Collection.idSelector(rowId(model, row)),
+					message: Message.NavigatedToRow({ row, isSelectable }),
+				}))
 
 	// NOTE: keydown bubbles from rows and cells (which may already have moved focus), so this reads the
 	// live focus: it only acts while the table element itself is focused, before RA-style redirection.
@@ -105,7 +118,7 @@ export const view = defineView<Model, Message, ViewInputs>((model, viewInputs, h
 				h.Class(twMerge(twMerge(tableStyles.column({ bleed, grid, isResizable: false })))),
 				h.Id(columnId(model, column.key)),
 				h.Role("columnheader"),
-				h.Attribute("aria-colindex", String(index + 1)),
+				h.Attribute("aria-colindex", String(index + 1 + columnOffset)),
 				...(column.allowsSorting ? [h.Attribute("aria-sort", sortDirection ?? "none")] : []),
 				...(column.allowsSorting ? [h.Attribute("data-allows-sorting", "true")] : []),
 				...(sortDirection === undefined ? [] : [h.Attribute("data-sort-direction", sortDirection)]),
@@ -155,6 +168,87 @@ export const view = defineView<Model, Message, ViewInputs>((model, viewInputs, h
 		twMerge(twJoin(...tableStyles.cell({ allowResize: false, bleed, grid, striped }))),
 	)
 
+	const rowHeaderKey = Option.getOrElse(
+		Option.map(
+			Array.findFirst(columns, (column) => column.isRowHeader === true),
+			(column) => column.key,
+		),
+		() => firstColumnKey,
+	)
+
+	/** TableRow's leading cell with `<Checkbox slot="selection" />`; the row's press toggles it. */
+	const selectionCell = (row: TableRow, isSelected: boolean, isDisabled: boolean): Html => {
+		const checkboxId = `${rowId(model, row.key)}-select`
+		return h.keyed("td")(
+			SELECTION_COLUMN,
+			[
+				h.Class(
+					twMerge(
+						twMerge(twJoin(...tableStyles.cell({ allowResize: false, bleed, grid, striped }))),
+						tableStyles.dragCell,
+					),
+				),
+				h.Id(cellId(model, row.key, SELECTION_COLUMN)),
+				h.Role("gridcell"),
+				h.Attribute("data-collection", model.id),
+				h.Attribute("data-column-index", "0"),
+				h.Attribute("data-key", `${row.key}-${SELECTION_COLUMN}`),
+				...rac(h, "table-cell"),
+				h.Tabindex(-1),
+				...Collection.stateAttributes(h, { isSelected }),
+			],
+			[
+				checkbox(
+					h,
+					{
+						id: checkboxId,
+						isSelected,
+						isDisabled,
+						slot: "selection",
+						ariaLabel: "Select",
+						labelledBy: `${checkboxId} ${cellId(model, row.key, rowHeaderKey)}`,
+						interaction: wiring,
+					},
+					[],
+				),
+			],
+		)
+	}
+
+	const enabledKeys = Array.map(enabledRows, (row) => row.key)
+	const selectedEnabled = Array.filter(enabledKeys, (key) => model.selectedKeys.includes(key))
+	const isAllSelected = enabledKeys.length > 0 && selectedEnabled.length === enabledKeys.length
+	const selectionColumn = h.keyed("th")(
+		SELECTION_COLUMN,
+		[
+			h.Class(twMerge(...tableStyles.utilityColumn(bleed))),
+			h.Id(columnId(model, SELECTION_COLUMN)),
+			h.Role("columnheader"),
+			h.Attribute("aria-colindex", "1"),
+			h.Attribute("data-collection", model.id),
+			h.Attribute("data-key", SELECTION_COLUMN),
+			...rac(h, "table-column"),
+			h.Attribute("data-react-aria-pressable", "true"),
+			h.Tabindex(focus._tag === "Column" && focus.column === SELECTION_COLUMN ? 0 : -1),
+			h.OnFocusEnter(Message.FocusedColumn({ column: SELECTION_COLUMN })),
+		],
+		[
+			checkbox(
+				h,
+				{
+					id: `${model.id}-select-all`,
+					isSelected: isAllSelected,
+					isIndeterminate: !isAllSelected && selectedEnabled.length > 0,
+					slot: "selection",
+					ariaLabel: "Select All",
+					interaction: wiring,
+					onChange: () => Message.ToggledAll({ keys: enabledKeys }),
+				},
+				[],
+			),
+		],
+	)
+
 	const rowView = (row: TableRow): Html => {
 		const isDisabled = row.isDisabled === true
 		const isSelected = isSelectable && model.selectedKeys.includes(row.key)
@@ -168,7 +262,7 @@ export const view = defineView<Model, Message, ViewInputs>((model, viewInputs, h
 				isFocusVisibleWithin: isWithin && isVisible,
 				isDragging: false,
 				isDisabled,
-				isActionable: false,
+				isActionable: isMultiple,
 				striped,
 			}),
 		)
@@ -187,7 +281,7 @@ export const view = defineView<Model, Message, ViewInputs>((model, viewInputs, h
 					h.Id(cellId(model, row.key, columnKey)),
 					h.Role(isRowHeader ? "rowheader" : "gridcell"),
 					h.Attribute("data-collection", model.id),
-					h.Attribute("data-column-index", String(index)),
+					h.Attribute("data-column-index", String(index + columnOffset)),
 					h.Attribute("data-key", `${row.key}-${columnKey}`),
 					...rac(h, "table-cell"),
 					h.Tabindex(isFocused ? 0 : -1),
@@ -226,7 +320,7 @@ export const view = defineView<Model, Message, ViewInputs>((model, viewInputs, h
 				h.Role("row"),
 				h.AriaLabelledBy(cellId(model, row.key, firstColumnKey)),
 				...(isSelectable
-					? [h.AriaSelected(isSelected), h.Attribute("data-selection-mode", "single")]
+					? [h.AriaSelected(isSelected), h.Attribute("data-selection-mode", model.selectionMode)]
 					: []),
 				h.Attribute("data-collection", model.id),
 				h.Attribute("data-key", row.key),
@@ -242,7 +336,10 @@ export const view = defineView<Model, Message, ViewInputs>((model, viewInputs, h
 				...(isWithin && isVisible ? [h.DataAttribute("focus-visible-within", "true")] : []),
 				...interactive,
 			],
-			Array.map(row.cells, cellView),
+			[
+				...(isMultiple ? [selectionCell(row, isSelected, isDisabled)] : []),
+				...Array.map(row.cells, cellView),
+			],
 		)
 	}
 
@@ -283,7 +380,12 @@ export const view = defineView<Model, Message, ViewInputs>((model, viewInputs, h
 					h.Role("rowgroup"),
 					...Collection.stateAttributes(h, { isHovered: Option.isSome(model.maybeHoveredColumn) }),
 				],
-				[h.tr([h.Role("row")], Array.map(columns, columnView))],
+				[
+					h.tr(
+						[h.Role("row")],
+						[...(isMultiple ? [selectionColumn] : []), ...Array.map(columns, columnView)],
+					),
+				],
 			),
 			h.tbody(
 				[

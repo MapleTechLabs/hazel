@@ -64,15 +64,19 @@ const PortalSelect = Mount.defineStream("PortalSelect", {
 // VIEW
 
 export type ViewInputs = Readonly<{
-	/** The `Label` inside the Select; none when omitted (the trigger is named by its value). */
+	/** The `Label` inside the Select; omit it and pass `ariaLabel` for an unlabelled Select. */
 	label?: string
-	placeholder?: string
-	/** Select `className`. */
-	className?: string
-	/** Select `aria-label` without a visible Label (the label span is omitted). */
 	ariaLabel?: string
+	placeholder?: string
+	/** Select `className` and `style`. */
+	className?: string
+	style?: string
 	/** SelectTrigger `className`. */
 	triggerClassName?: string
+	/** SelectContent `className` (the ListBox). */
+	listBoxClassName?: string
+	/** HiddenSelect options carry text only for string items (React Aria's `textValue`). */
+	isHiddenOptionTextless?: boolean
 	/** SelectTrigger children, replacing the SelectValue and chevron. */
 	renderTrigger?: <M>(h: HtmlBuilder<M>, selected: Option.Option<Item>) => Array<Html>
 	/** SelectItem children that are not a plain string label. */
@@ -102,14 +106,21 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, view
 			...flag("data-open", isOpen),
 			h.Attribute("data-rac", ""),
 			h.Attribute("data-slot", "control"),
+			...(viewInputs.style === undefined ? [] : [h.Attribute("style", viewInputs.style)]),
 		],
 		[
-			viewInputs.ariaLabel === undefined && viewInputs.label !== undefined
-				? h.span(
-						[h.Class(labelStyles()), h.Attribute("data-slot", "label"), h.Id(labelId(model.id))],
-						[viewInputs.label],
-					)
-				: h.empty,
+			...(viewInputs.label === undefined || viewInputs.ariaLabel !== undefined
+				? []
+				: [
+						h.span(
+							[
+								h.Class(labelStyles()),
+								h.Attribute("data-slot", "label"),
+								h.Id(labelId(model.id)),
+							],
+							[viewInputs.label],
+						),
+					]),
 			h.span(
 				[h.Attribute("data-slot", "control"), h.Class(selectTriggerWrapperClassName)],
 				[
@@ -118,22 +129,20 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, view
 							...(isOpen ? [h.Attribute("aria-controls", listboxId(model.id))] : []),
 							h.Attribute("aria-expanded", isOpen ? "true" : "false"),
 							h.Attribute("aria-haspopup", "listbox"),
-							...(viewInputs.ariaLabel !== undefined
+							...(viewInputs.ariaLabel === undefined
 								? [
+										h.Attribute(
+											"aria-labelledby",
+											`${valueId(model.id)} ${labelId(model.id)}`,
+										),
+									]
+								: [
 										h.Attribute("aria-label", viewInputs.ariaLabel),
 										h.Attribute(
 											"aria-labelledby",
 											`${valueId(model.id)} ${triggerId(model.id)}`,
 										),
-									]
-								: viewInputs.label === undefined
-									? [h.Attribute("aria-labelledby", valueId(model.id))]
-									: [
-											h.Attribute(
-												"aria-labelledby",
-												`${valueId(model.id)} ${labelId(model.id)}`,
-											),
-										]),
+									]),
 							h.Class(twMerge(twMerge(...selectTriggerBase), viewInputs.triggerClassName)),
 							...flag("data-disabled", model.isDisabled),
 							...flag("data-pressed", isOpen),
@@ -191,19 +200,19 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, view
 										}),
 									]),
 							model.popup._tag === "Open"
-								? selectPopover(model, model.popup, h, viewInputs.renderOption)
+								? selectPopover(model, model.popup, viewInputs, h)
 								: h.empty,
 						],
 					),
 				],
 			),
-			hiddenSelect(model, h),
+			hiddenSelect(model, viewInputs, h),
 		],
 	)
 })
 
 /** HiddenSelect: the native select React Aria keeps for autofill and forms. */
-const hiddenSelect = (model: Model, h: HtmlBuilder<Message>): Html =>
+const hiddenSelect = (model: Model, viewInputs: ViewInputs, h: HtmlBuilder<Message>): Html =>
 	h.div(
 		[
 			h.Attribute("aria-hidden", "true"),
@@ -228,7 +237,10 @@ const hiddenSelect = (model: Model, h: HtmlBuilder<Message>): Html =>
 						[
 							h.option([], []),
 							...Array.map(model.items, (candidate) =>
-								h.option([h.Attribute("value", candidate.key)], [candidate.label]),
+								h.option(
+									[h.Attribute("value", candidate.key)],
+									viewInputs.isHiddenOptionTextless ? [] : [candidate.label],
+								),
 							),
 						],
 					),
@@ -237,14 +249,7 @@ const hiddenSelect = (model: Model, h: HtmlBuilder<Message>): Html =>
 		],
 	)
 
-type RenderOption = ViewInputs["renderOption"]
-
-const selectPopover = (
-	model: Model,
-	open: Open,
-	h: HtmlBuilder<Message>,
-	renderOption: RenderOption,
-): Html => {
+const selectPopover = (model: Model, open: Open, viewInputs: ViewInputs, h: HtmlBuilder<Message>): Html => {
 	const initialFocusId = Option.match(open.focusedKey, {
 		onNone: () => listboxId(model.id),
 		onSome: (key) => optionId(model.id, key),
@@ -304,7 +309,7 @@ const selectPopover = (
 								[h.Class(popoverInnerClassName), h.Attribute("data-slot", "popover-inner")],
 								[
 									focusScopeSentinel(h, "start"),
-									listbox(model, open, h, renderOption),
+									listbox(model, open, viewInputs, h),
 									focusScopeSentinel(h, "end"),
 								],
 							),
@@ -322,11 +327,11 @@ const selectPopover = (
 	)
 }
 
-const listbox = (model: Model, open: Open, h: HtmlBuilder<Message>, renderOption: RenderOption): Html =>
+const listbox = (model: Model, open: Open, viewInputs: ViewInputs, h: HtmlBuilder<Message>): Html =>
 	h.div(
 		[
 			h.Attribute("aria-labelledby", labelId(model.id)),
-			h.Class(twMerge(twMerge(selectListBoxBase), undefined)),
+			h.Class(twMerge(twMerge(selectListBoxBase), viewInputs.listBoxClassName)),
 			h.Attribute("data-layout", "stack"),
 			h.Attribute("data-orientation", "vertical"),
 			h.Attribute("data-rac", ""),
@@ -334,7 +339,7 @@ const listbox = (model: Model, open: Open, h: HtmlBuilder<Message>, renderOption
 			h.Role("listbox"),
 			h.Attribute("tabindex", Option.isSome(open.focusedKey) ? "-1" : "0"),
 		],
-		Array.map(model.items, (candidate) => option(model, open, candidate, h, renderOption)),
+		Array.map(model.items, (candidate) => option(model, open, candidate, h, viewInputs.renderOption)),
 	)
 
 const option = (
@@ -342,7 +347,7 @@ const option = (
 	open: Open,
 	candidate: Item,
 	h: HtmlBuilder<Message>,
-	renderOption: RenderOption,
+	renderOption: ViewInputs["renderOption"],
 ): Html => {
 	const { key } = candidate
 	const isSelected = Option.contains(model.selectedKey, key)
