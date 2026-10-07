@@ -6,7 +6,7 @@ import {
 	moveChannelToSectionAction,
 	updateChannelMemberAction,
 } from "~/db/actions"
-import { failureToast, runAtomFn, settle, successToast } from "../../page/settings/effects"
+import { failureToast, runAtomFn, settle, successToast } from "../../data/actions"
 import { HazelRpc } from "../../rpc"
 import { Message } from "./model"
 

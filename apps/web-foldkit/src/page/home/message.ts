@@ -3,6 +3,7 @@ import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import * as Interaction from "../../ui/aria/interaction"
 import * as Menu from "../../ui/menu"
+import { ToastRequest } from "../../overlay/toasts"
 import { DirectoryMember } from "./model"
 
 export const Message = defineMessageUnion({
@@ -17,7 +18,7 @@ export const Message = defineMessageUnion({
 	FoundExistingDm: { channelId: ChannelId },
 	FoundNoDm: { userId: UserId, name: Schema.String },
 	SucceededCreateDm: { channelId: ChannelId, name: Schema.String },
-	FailedCreateDm: { title: Schema.String, description: Schema.NullOr(Schema.String) },
+	FailedCreateDm: { toast: ToastRequest },
 	SucceededCopyEmail: { email: Schema.String },
 	FailedCopyEmail: {},
 })

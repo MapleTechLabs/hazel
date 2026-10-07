@@ -121,9 +121,9 @@ export const update = (model: Model, message: Message, shared: Shared): PageRetu
 				toast: { intent: "success", title: `Started conversation with ${name}`, description: null, id: DM_TOAST_ID },
 			}),
 		}),
-		FailedCreateDm: ({ title, description }) => ({
+		FailedCreateDm: ({ toast: failure }) => ({
 			model,
-			outMessage: toast("error", title, description, DM_TOAST_ID),
+			outMessage: PageOutMessage.RequestedToast({ toast: { ...failure, id: DM_TOAST_ID } }),
 		}),
 		SucceededCopyEmail: ({ email }) => ({
 			model,

@@ -36,6 +36,9 @@ memoized views and a `sharedChanged` hook. `page/root/` shows a page that only r
   Tests spread `sharedDefaults` (`page/test-shared.ts`) into their `Shared` literal.
 - **RPC.** Commands `yield* HazelRpc` (`src/rpc.ts`); it is the app's `resources` layer. Map every `Exit`
   to a Message (`SucceededX` / `FailedX`).
+- **Optimistic mutations.** Run the legacy `db/actions` atoms with `runAtomFn` (`src/data/actions.ts`, one
+  registry for the app) and map the result with `settle`, `successToast` and `failureToast` (legacy
+  `exitToast`, with per-tag handlers).
 - **Live queries.** Use `liveQueryStream` (`src/data/live-query.ts`) with the legacy `useLiveQuery`
   builder, inside an `entry` whose dependencies come from `input.model` and `input.shared`. Return
   `Stream.empty` until the dependencies exist. Keys are prefixed with the page id automatically.

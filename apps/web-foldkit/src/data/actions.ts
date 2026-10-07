@@ -1,9 +1,12 @@
 import { Cause, Effect } from "effect"
 import { type AsyncResult, type Atom, AtomRegistry } from "effect/reactivity"
 import { getUserFriendlyError } from "~/lib/error-messages"
-import type { ToastRequest } from "../../overlay/toasts"
+import type { ToastRequest } from "../overlay/toasts"
 
-/** Effects shared by the organization settings pages. */
+/**
+ * Mutations through the legacy optimistic actions (`db/actions.ts`), with `exitToast`-style toasts.
+ * One atom registry for the whole app, so concurrent actions share state like legacy's one registry.
+ */
 
 const registry = AtomRegistry.make()
 

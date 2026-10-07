@@ -2,7 +2,7 @@ import type { OrganizationId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
 import { HazelApiClient } from "~/lib/services/common/atom-client"
 import { uploadErrorMessages, uploadToStorage } from "~/lib/upload-to-storage"
-import { runAtomFn } from "./effects"
+import { runAtomFn } from "../../data/actions"
 
 /** Port of `hooks/use-upload.ts` for the settings uploads (organization logo, custom emoji). */
 
