@@ -37,7 +37,7 @@ const headerView = <M>(context: FilesContext<M>, fileCount: number): Html => {
 				model: model.filter,
 				view: selectView,
 				// Kit gap: legacy has no Label and puts `w-36` on the trigger (see the report).
-				viewInputs: { label: "" },
+				viewInputs: { triggerClassName: "w-36" },
 				toParentMessage: (message) => toParentMessage(Message.GotFilterSelectMessage({ message })),
 			}),
 			h.span(

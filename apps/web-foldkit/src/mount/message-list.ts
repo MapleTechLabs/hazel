@@ -376,7 +376,7 @@ const observeList = (element: Element): Stream.Stream<ObservedMessage> =>
 						const key = entry.target.getAttribute(ROW_KEY_ATTRIBUTE)
 						return key === null
 							? []
-							: [{ key, height: entry.target.getBoundingClientRect().height }]
+							: [{ key, height: roundSize(entry.target.getBoundingClientRect().height) }]
 					})
 					if (measurements.length > 0)
 						Queue.offerUnsafe(queue, Message.MeasuredRows({ measurements }))
@@ -409,6 +409,9 @@ const observeList = (element: Element): Stream.Stream<ObservedMessage> =>
 			(cleanup) => Effect.sync(cleanup),
 		).pipe(Effect.flatMap(() => Effect.never)),
 	)
+
+/** `@legendapp/list`'s `roundSize`: heights floored to 1/8 px, so offsets land where it puts them. */
+const roundSize = (size: number) => Math.floor(size * 8) / 8
 
 /** Container-owned Mount: scroll position, viewport height and row heights, all from one element. */
 export const ObserveMessageList = Mount.defineStream("ObserveMessageList", {
@@ -488,8 +491,12 @@ export const view = <Item, ParentMessage>(
 	// The pinned divider comes after the positioned rows, as in `@legendapp/list`.
 	const rows: Html[] = []
 	if (range !== undefined) {
-		for (let index = range.start; index <= range.end; index++)
-			if (index !== stickyIndex) rows.push(row(index))
+		// The divider heading the first rendered row renders too, so it is measured with the rest.
+		const start =
+			range.start > 0 && inputs.isStickyHeader(inputs.items[range.start - 1]!)
+				? range.start - 1
+				: range.start
+		for (let index = start; index <= range.end; index++) if (index !== stickyIndex) rows.push(row(index))
 		if (stickyIndex !== undefined) rows.push(row(stickyIndex))
 	}
 
