@@ -11,6 +11,7 @@ import {
 	observeDialogParts,
 	portalOverlay,
 	restoreFocusTo,
+	restoreFocusToPrevious,
 	trackViewportHeight,
 	watchInteractOutside,
 } from "./aria/overlay"
@@ -66,13 +67,16 @@ type PortalModalMessage = Extract<Message, { _tag: "CompletedPortalModal" | "Pre
 
 /** The Overlay + ModalOverlay + FocusScope behavior shared by Modal and Sheet. */
 export const PortalModal = Mount.defineStream("PortalModal", {
-	args: { id: Schema.String, isDismissable: Schema.Boolean },
+	/** `restoresToPrevious`: a controlled overlay with no trigger returns focus to what had it before. */
+	args: { id: Schema.String, isDismissable: Schema.Boolean, restoresToPrevious: Schema.Boolean },
 	messages: [Message.CompletedPortalModal, Message.PressedOutside],
-	execute: ({ element, id, isDismissable }) =>
+	execute: ({ element, id, isDismissable, restoresToPrevious }) =>
 		Stream.callback<PortalModalMessage>((queue) =>
 			Effect.acquireRelease(
 				Effect.sync(() => {
-					const restoreFocus = restoreFocusTo(triggerId(id), element)
+					const restoreFocus = restoresToPrevious
+						? restoreFocusToPrevious(element)
+						: restoreFocusTo(triggerId(id), element)
 					const releasePortal = portalOverlay(element, { isModal: true })
 					const overlay = element.querySelector<HTMLElement>("[data-modal-overlay]")
 					const releaseViewport = overlay ? trackViewportHeight(overlay) : () => undefined
@@ -136,7 +140,7 @@ const modalOverlay = (model: Model, viewInputs: ViewInputs, h: HtmlBuilder<Messa
 	return h.div(
 		[
 			h.Attribute("style", "display: contents;"),
-			h.OnMount(PortalModal({ id: model.id, isDismissable })),
+			h.OnMount(PortalModal({ id: model.id, isDismissable, restoresToPrevious: false })),
 			h.OnKeyDownPreventDefault((key) =>
 				key === "Escape" ? Option.some(Message.PressedEscape()) : Option.none(),
 			),
