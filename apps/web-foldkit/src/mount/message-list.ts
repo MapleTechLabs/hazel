@@ -5,6 +5,7 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
 import { defineTaggedUnion } from "foldkit/schema"
 import { modifyFields } from "foldkit/struct"
+import { calculate, emptyPool, Pool } from "./message-list-pool"
 
 /**
  * Bottom-anchored virtual list for chat (the `@legendapp/list` replacement, plan §3.4).
@@ -40,12 +41,24 @@ export const Model = Schema.Struct({
 	/** Last `ApplyScroll` issued and last one completed; a scroll is pending while they differ. */
 	scrollVersion: Schema.Number,
 	appliedScrollVersion: Schema.Number,
-	/** First and last rendered rows. Moved in chunks, so most scroll frames change no DOM. */
+	/** LegendList's containers: which row each rendered `<div>` holds, in DOM order. */
+	pool: Pool,
+	/**
+	 * While the reader scrolls, rows render from a wide overscan window in row order instead (LegendList's
+	 * 300px draw distance inserts a row subtree nearly every frame, and each insertion restyles the
+	 * page). The pool keeps running and takes over again once the scroll settles.
+	 */
+	isScrolling: Schema.Boolean,
+	scrollEventVersion: Schema.Number,
+	isSettleWaitPending: Schema.Boolean,
+	/** First and last row of the overscan window. Moved in chunks, so most scroll frames change no DOM. */
 	renderedFromKey: Schema.NullOr(Schema.String),
 	renderedToKey: Schema.NullOr(Schema.String),
+	/** `activeStickyIndex`: the divider pinned `position: sticky`. */
+	activeStickyKey: Schema.NullOr(Schema.String),
 	/**
-	 * The divider drawn without its line. `@legendapp/list` only reports a new sticky header when it
-	 * recalculates (data, layout, or rendering new rows), not on scrolls inside rendered rows.
+	 * The divider drawn without its line. Legacy containers read it from React state only when they
+	 * re-render (data, layout, a newly assigned row), so a scroll alone leaves it stale.
 	 */
 	stuckKey: Schema.NullOr(Schema.String),
 })
@@ -60,6 +73,7 @@ export const Message = defineMessageUnion({
 		measurements: Schema.Array(Schema.Struct({ key: Schema.String, height: Schema.Number })),
 	},
 	CompletedApplyScroll: { version: Schema.Number, scrollTop: Schema.Number },
+	CompletedWaitForScrollSettle: { version: Schema.Number },
 })
 export type Message = typeof Message.Type
 
@@ -82,8 +96,13 @@ export const init = (config: {
 	anchor: ViewportAnchor.End(),
 	scrollVersion: 0,
 	appliedScrollVersion: 0,
+	pool: emptyPool,
+	isScrolling: false,
+	scrollEventVersion: 0,
+	isSettleWaitPending: false,
 	renderedFromKey: null,
 	renderedToKey: null,
+	activeStickyKey: null,
 	stuckKey: null,
 })
 
@@ -198,6 +217,16 @@ export const ApplyScroll = Command.define("ApplyScroll", {
 		}),
 })
 
+/** How long without a scroll event before the overscan window gives way to LegendList's containers. */
+const SCROLL_SETTLE_MS = 200
+
+export const WaitForScrollSettle = Command.define("WaitForScrollSettle", {
+	args: { version: Schema.Number },
+	messages: [Message.CompletedWaitForScrollSettle],
+	execute: ({ version }) =>
+		Effect.sleep(SCROLL_SETTLE_MS).pipe(Effect.as(Message.CompletedWaitForScrollSettle({ version }))),
+})
+
 // UPDATE
 
 export type ListReturn = Update.Return<Model, Message>
@@ -225,11 +254,7 @@ const changedMeasurements = (
 	measurements: ReadonlyArray<{ readonly key: string; readonly height: number }>,
 ) => measurements.filter(({ key, height }) => model.measuredHeights[key] !== height)
 
-/**
- * Inserting rows is the expensive part of a scroll frame (the shared stylesheet's `:has()` rules
- * restyle the page per inserted subtree), so the rendered range only moves when the viewport comes
- * within `RENDER_MARGIN_PX` of its edge, and then by `RENDER_CHUNK_PX` past the viewport.
- */
+/** The overscan window moves when the viewport comes within this margin of its edge, by this chunk. */
 const RENDER_MARGIN_PX = 200
 const RENDER_CHUNK_PX = 2400
 
@@ -239,11 +264,8 @@ export const renderedIndexes = (model: Model, layout: Layout) => {
 	return from === undefined || to === undefined || from > to ? undefined : { from, to }
 }
 
-const keepRendered = (model: Model): Model => {
-	if (model.viewportHeight === 0 || model.keys.length === 0)
-		return model.renderedFromKey === null && model.renderedToKey === null
-			? model
-			: modifyFields(model, { renderedFromKey: () => null, renderedToKey: () => null })
+const keepOverscan = (model: Model): Model => {
+	if (!model.isScrolling || model.viewportHeight === 0 || model.keys.length === 0) return model
 	const layout = layoutOf(model)
 	const top = model.scrollTop
 	const bottom = top + model.viewportHeight
@@ -254,58 +276,112 @@ const keepRendered = (model: Model): Model => {
 		layout.offsets[current.to + 1]! >= Math.min(layout.totalHeight, bottom + RENDER_MARGIN_PX)
 	)
 		return model
-	// A date divider stays first while older same-day rows prepend after it, so it never bounds the range.
-	const sticky = stickySetOf(model)
-	const toIndex = rowIndexAt(layout, bottom + RENDER_CHUNK_PX)
-	let fromIndex = rowIndexAt(layout, Math.max(0, top - RENDER_CHUNK_PX))
-	while (fromIndex < toIndex && sticky.has(model.keys[fromIndex]!)) fromIndex++
-	const from = model.keys[fromIndex]!
-	const to = model.keys[toIndex]!
+	const from = model.keys[rowIndexAt(layout, Math.max(0, top - RENDER_CHUNK_PX))]!
+	const to = model.keys[rowIndexAt(layout, bottom + RENDER_CHUNK_PX)]!
 	return modifyFields(model, { renderedFromKey: () => from, renderedToKey: () => to })
 }
 
-/** The divider above the first visible row (the one `position: sticky` pins). */
-const stickyKeyAt = (model: Model): string | null => {
-	if (model.viewportHeight === 0 || model.keys.length === 0) return null
-	const sticky = stickySetOf(model)
-	for (let index = rowIndexAt(layoutOf(model), model.scrollTop); index >= 0; index--)
-		if (sticky.has(model.keys[index]!)) return model.keys[index]!
-	return null
+/** A scroll event that is not the echo of our own `ApplyScroll`: the reader is scrolling. */
+const startedScrolling = (model: Model): ListReturn => {
+	const version = Num.increment(model.scrollEventVersion)
+	const scrolling = modifyFields(model, {
+		isScrolling: () => true,
+		scrollEventVersion: () => version,
+		isSettleWaitPending: () => true,
+	})
+	return model.isSettleWaitPending
+		? { model: scrolling }
+		: { model: scrolling, commands: [WaitForScrollSettle({ version })] }
 }
 
-const withStuckKey = (model: Model): Model => {
-	const stuckKey = stickyKeyAt(model)
-	return stuckKey === model.stuckKey ? model : modifyFields(model, { stuckKey: () => stuckKey })
+let lastStickyIndexesInputs: readonly [unknown, unknown] | undefined
+let lastStickyIndexes: ReadonlyArray<number> = []
+const stickyIndexesOf = (model: Model, layout: Layout) => {
+	if (lastStickyIndexesInputs?.[0] !== model.stickyKeys || lastStickyIndexesInputs[1] !== layout) {
+		lastStickyIndexesInputs = [model.stickyKeys, layout]
+		lastStickyIndexes = model.stickyKeys
+			.flatMap((key) => {
+				const index = layout.indexByKey.get(key)
+				return index === undefined ? [] : [index]
+			})
+			.sort((a, b) => a - b)
+	}
+	return lastStickyIndexes
 }
 
-/** Keeps the rendered range around the viewport; a recalculation also re-reads the stuck divider. */
-const withRendered = (result: ListReturn, isRecalculation = true): ListReturn => {
-	const rendered = keepRendered(result.model)
-	const hasMoved =
-		rendered.renderedFromKey !== result.model.renderedFromKey ||
-		rendered.renderedToKey !== result.model.renderedToKey
-	const model = isRecalculation || hasMoved ? withStuckKey(rendered) : rendered
+/** What triggered a pass. After a scroll only newly assigned containers re-render (and re-read `stuckKey`). */
+type Trigger = "Scroll" | "Data" | "Layout"
+
+/** Runs LegendList's `calculateItemsInView` for the current layout and scroll position. */
+const withPool = (result: ListReturn, trigger: Trigger): ListReturn => {
+	const model = result.model
+	const layout = layoutOf(model)
+	const calculation = calculate(model.pool, {
+		keys: model.keys,
+		stickyIndexes: stickyIndexesOf(model, layout),
+		indexByKey: layout.indexByKey,
+		offsets: layout.offsets,
+		scrollTop: model.scrollTop,
+		viewportHeight: model.viewportHeight,
+		estimatedItemSize: model.estimatedRowHeightPx,
+		isDataChange: trigger === "Data",
+	})
+	if (calculation === undefined) return withOverscan(result)
+	const { pool, activeStickyKey } = calculation
+	const stuckKey = trigger !== "Scroll" || pool !== model.pool ? activeStickyKey : model.stuckKey
+	if (pool === model.pool && activeStickyKey === model.activeStickyKey && stuckKey === model.stuckKey)
+		return withOverscan(result)
+	return withOverscan({
+		...result,
+		model: modifyFields(model, {
+			pool: () => pool,
+			activeStickyKey: () => activeStickyKey,
+			stuckKey: () => stuckKey,
+		}),
+	})
+}
+
+const withOverscan = (result: ListReturn): ListReturn => {
+	const model = keepOverscan(result.model)
 	return model === result.model ? result : { ...result, model }
 }
 
 export const update = (model: Model, message: Message): ListReturn => {
 	const result = updateScroll(model, message)
-	// A scroll, or an event that changed nothing (re-observed rows), is not a recalculation.
-	return withRendered(result, message._tag !== "ScrolledList" && result.model !== model)
+	// Re-observed rows that changed nothing are not a recalculation.
+	if (result.model === model) return result
+	const isScroll =
+		message._tag === "ScrolledList" ||
+		message._tag === "CompletedApplyScroll" ||
+		message._tag === "CompletedWaitForScrollSettle"
+	return withPool(result, isScroll ? "Scroll" : "Layout")
 }
 
 const updateScroll = (model: Model, message: Message): ListReturn =>
 	Message.match<ListReturn>(message, {
 		// While our own scroll is in flight the event describes the pre-patch DOM, so it is ignored.
-		ScrolledList: ({ scrollTop }) =>
-			isScrollPending(model)
-				? { model }
-				: {
+		ScrolledList: ({ scrollTop }) => {
+			if (isScrollPending(model)) return { model }
+			const scrolled = modifyFields(model, {
+				scrollTop: () => scrollTop,
+				anchor: () => anchorAt(model, layoutOf(model), scrollTop),
+			})
+			// The scroll event our own `ApplyScroll` causes lands where the model already is.
+			return Math.abs(scrollTop - model.scrollTop) < 1
+				? { model: scrolled }
+				: startedScrolling(scrolled)
+		},
+		CompletedWaitForScrollSettle: ({ version }) =>
+			version === model.scrollEventVersion
+				? {
 						model: modifyFields(model, {
-							scrollTop: () => scrollTop,
-							anchor: () => anchorAt(model, layoutOf(model), scrollTop),
+							isScrolling: () => false,
+							isSettleWaitPending: () => false,
+							renderedFromKey: () => null,
+							renderedToKey: () => null,
 						}),
-					},
+					}
+				: { model, commands: [WaitForScrollSettle({ version: model.scrollEventVersion })] },
 		ResizedViewport: ({ viewportHeight }) =>
 			reconcile(modifyFields(model, { viewportHeight: () => viewportHeight })),
 		MeasuredRows: ({ measurements }) => {
@@ -336,11 +412,11 @@ export const setKeys = (
 ): ListReturn =>
 	model.keys === keys && model.stickyKeys === stickyKeys
 		? { model }
-		: withRendered(reconcile(modifyFields(model, { keys: () => keys, stickyKeys: () => stickyKeys })))
+		: withPool(reconcile(modifyFields(model, { keys: () => keys, stickyKeys: () => stickyKeys })), "Data")
 
 /** Jumps to the newest row and follows it (after sending a message). */
 export const scrollToEnd = (model: Model): ListReturn =>
-	withRendered(reconcile(modifyFields(model, { anchor: () => ViewportAnchor.End() })))
+	withPool(reconcile(modifyFields(model, { anchor: () => ViewportAnchor.End() })), "Layout")
 
 /** Within half a viewport of the newest loaded row: time to load a newer page of a capped window. */
 export const isNearEnd = (model: Model) =>
@@ -355,7 +431,10 @@ export const setCanFollowEnd = (model: Model, canFollowEnd: boolean): Model =>
 		: modifyFields(model, {
 				canFollowEnd: () => canFollowEnd,
 				anchor: (anchor) =>
-					!canFollowEnd && anchor._tag === "End" && model.viewportHeight > 0 && model.keys.length > 0
+					!canFollowEnd &&
+					anchor._tag === "End" &&
+					model.viewportHeight > 0 &&
+					model.keys.length > 0
 						? anchorAt({ ...model, canFollowEnd: false }, layoutOf(model), model.scrollTop)
 						: anchor,
 			})
@@ -403,22 +482,31 @@ const observeList = (element: Element): Stream.Stream<ObservedMessage> =>
 					if (measurements.length > 0)
 						Queue.offerUnsafe(queue, Message.MeasuredRows({ measurements }))
 				})
-				const observedRows = new Set<Element>()
+				// Containers are recycled: a container that gets a new row is observed afresh, so the new
+				// row is measured even when it happens to be as tall as the previous one.
+				const observedRows = new Map<Element, string | null>()
 				const reconcileRows = () => {
 					const rows = new Set(element.querySelectorAll(`[${ROW_KEY_ATTRIBUTE}]`))
-					for (const row of observedRows)
+					for (const row of observedRows.keys())
 						if (!rows.has(row)) {
 							rowObserver.unobserve(row)
 							observedRows.delete(row)
 						}
-					for (const row of rows)
-						if (!observedRows.has(row)) {
-							rowObserver.observe(row)
-							observedRows.add(row)
-						}
+					for (const row of rows) {
+						const key = row.getAttribute(ROW_KEY_ATTRIBUTE)
+						if (observedRows.get(row) === key) continue
+						if (observedRows.has(row)) rowObserver.unobserve(row)
+						rowObserver.observe(row)
+						observedRows.set(row, key)
+					}
 				}
 				const mutationObserver = new MutationObserver(reconcileRows)
-				mutationObserver.observe(element, { childList: true, subtree: true })
+				mutationObserver.observe(element, {
+					childList: true,
+					subtree: true,
+					attributes: true,
+					attributeFilter: [ROW_KEY_ATTRIBUTE],
+				})
 				reconcileRows()
 
 				return () => {
@@ -457,12 +545,8 @@ export interface ViewInputs<Item, ParentMessage> {
 	readonly toParentMessage: (message: Message) => ParentMessage
 }
 
-/** The rendered rows (kept by `update`) and the first visible one. */
-export const visibleRange = (model: Model, layout: Layout) => {
-	const rendered = renderedIndexes(model, layout)
-	if (model.viewportHeight === 0 || rendered === undefined) return undefined
-	return { start: rendered.from, end: rendered.to, firstVisible: rowIndexAt(layout, model.scrollTop) }
-}
+/** LegendList's `POSITION_OUT_OF_VIEW`, where empty containers wait. */
+const OUT_OF_VIEW_PX = -10000000
 
 export const view = <Item, ParentMessage>(
 	h: HtmlBuilder<ParentMessage>,
@@ -470,57 +554,67 @@ export const view = <Item, ParentMessage>(
 	inputs: ViewInputs<Item, ParentMessage>,
 ): Html => {
 	const layout = layoutOf(model)
-	const range = visibleRange(model, layout)
-	let stickyIndex: number | undefined
-	if (range !== undefined)
-		for (let index = range.firstVisible; index >= 0; index--)
-			if (inputs.isStickyHeader(inputs.items[index]!)) {
-				stickyIndex = index
-				break
-			}
-
+	const sticky = stickySetOf(model)
+	const emptyContainer = (slot: number) =>
+		h.keyed("div")(
+			`empty-${slot}`,
+			[
+				h.Style({
+					contain: "layout style paint",
+					left: "0px",
+					position: "absolute",
+					right: "0px",
+					top: `${OUT_OF_VIEW_PX}px`,
+				}),
+			],
+			[],
+		)
+	// Keyed by row, so switching between the overscan window and the containers moves nodes.
 	const row = (index: number) => {
-		const item = inputs.items[index]!
-		const key = inputs.itemToKey(item)
-		const isStuck = key === model.stuckKey
-		const isPinned = index === stickyIndex
+		const key = model.keys[index]!
+		const isActive = key === model.activeStickyKey
+		// PositionViewSticky: every divider stacks by index; only the active one is sticky.
+		const style: Record<string, string> = sticky.has(key)
+			? {
+					contain: "layout style paint",
+					left: "0px",
+					position: isActive ? "sticky" : "absolute",
+					right: "0px",
+					top: isActive ? "0px" : `${layout.offsets[index]}px`,
+					"z-index": `${index + 1000}`,
+				}
+			: {
+					contain: "layout style paint",
+					left: "0px",
+					position: "absolute",
+					right: "0px",
+					top: `${layout.offsets[index]}px`,
+				}
 		return h.keyed("div")(
 			key,
-			[
-				h.Attribute(ROW_KEY_ATTRIBUTE, key),
-				h.Style(
-					isPinned
-						? {
-								contain: "layout style paint",
-								left: "0px",
-								position: "sticky",
-								right: "0px",
-								top: "0px",
-								"z-index": "1000",
-							}
-						: {
-								contain: "layout style paint",
-								left: "0px",
-								position: "absolute",
-								right: "0px",
-								top: `${layout.offsets[index]}px`,
-							},
-				),
-			],
-			[inputs.itemToView(item, { isStuck })],
+			[h.Attribute("data-index", `${index}`), h.Attribute(ROW_KEY_ATTRIBUTE, key), h.Style(style)],
+			[inputs.itemToView(inputs.items[index]!, { isStuck: key === model.stuckKey })],
 		)
 	}
-	// The pinned divider comes after the positioned rows, as in `@legendapp/list`.
-	const rows: Html[] = []
-	if (range !== undefined) {
-		// The divider heading the first rendered row renders too, so it is measured with the rest.
-		const start =
-			range.start > 0 && inputs.isStickyHeader(inputs.items[range.start - 1]!)
-				? range.start - 1
-				: range.start
-		for (let index = start; index <= range.end; index++) if (index !== stickyIndex) rows.push(row(index))
-		if (stickyIndex !== undefined) rows.push(row(stickyIndex))
+	const overscanRows = () => {
+		const range = renderedIndexes(model, layout)
+		if (range === undefined) return []
+		const indexes = Array.from({ length: range.to - range.from + 1 }, (_, offset) => range.from + offset)
+		const activeIndex =
+			model.activeStickyKey === null ? undefined : layout.indexByKey.get(model.activeStickyKey)
+		// The pinned divider renders even when its day started above the window.
+		return [
+			...indexes.filter((index) => index !== activeIndex),
+			...(activeIndex === undefined ? [] : [activeIndex]),
+		].map(row)
 	}
+	const containerRows = () =>
+		Array.from({ length: model.pool.pooledCount }, (_, slot) => {
+			const key = model.pool.slots[slot] ?? null
+			const index = key === null ? undefined : layout.indexByKey.get(key)
+			return index === undefined ? emptyContainer(slot) : row(index)
+		})
+	const rows = model.viewportHeight === 0 ? [] : model.isScrolling ? overscanRows() : containerRows()
 
 	return h.div(
 		[

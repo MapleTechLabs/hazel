@@ -11,7 +11,9 @@ import type { ChatMessage } from "../rows"
 // The Files tab's `ui/aria/interaction` and ProseMirror's view read `document` at import; node has none.
 vi.hoisted(() => {
 	if (!("document" in globalThis))
-		Object.assign(globalThis, { document: Object.assign(new EventTarget(), { documentElement: { style: {} } }) })
+		Object.assign(globalThis, {
+			document: Object.assign(new EventTarget(), { documentElement: { style: {} } }),
+		})
 })
 
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`
@@ -156,7 +158,7 @@ describe("channel page list", () => {
 		)
 	})
 
-	test("moves the rendered rows in chunks, not on every scroll frame", () => {
+	test("renders LegendList's window: the viewport plus its draw distance, recalculated only past it", () => {
 		let before = init(channelId, ada)
 		for (const next of [
 			Message.UpdatedMessages({ messages: page(0, 199) }),
@@ -165,17 +167,19 @@ describe("channel page list", () => {
 			before = update(before, next).model
 		before = update(before, completed(before.list.scrollVersion, before.list.scrollTop)).model
 		before = update(before, listMessage(MessageList.Message.ScrolledList({ scrollTop: 8000 }))).model
-		const rendered = (current: Model) => [current.list.renderedFromKey, current.list.renderedToKey]
+		const rendered = (current: Model) => current.list.pool.slots.filter((key) => key !== null).length
+		// Containers outside the window keep their rows until reused, so a few more than one window.
+		expect(rendered(before)).toBeLessThan(2 * Math.ceil((VIEWPORT + 600) / ESTIMATE))
 		const nudged = update(
 			before,
-			listMessage(MessageList.Message.ScrolledList({ scrollTop: before.list.scrollTop + 40 })),
+			listMessage(MessageList.Message.ScrolledList({ scrollTop: before.list.scrollTop + 10 })),
 		).model
-		expect(rendered(nudged)).toEqual(rendered(before))
+		expect(nudged.list.pool).toBe(before.list.pool)
 		const far = update(
 			before,
 			listMessage(MessageList.Message.ScrolledList({ scrollTop: before.list.scrollTop + 3000 })),
 		).model
-		expect(rendered(far)).not.toEqual(rendered(before))
+		expect(far.list.pool.slots).not.toEqual(before.list.pool.slots)
 	})
 
 	// Story requires Commands to resolve before the next Message, so this race is driven by hand.
