@@ -11,6 +11,7 @@ import * as MySettingsAppearance from "./my-settings/appearance"
 import * as MySettingsDesktop from "./my-settings/desktop"
 import * as MySettingsLinkedAccounts from "./my-settings/linked-accounts"
 import * as MySettingsNotifications from "./my-settings/notifications"
+import * as MySettingsProfile from "./my-settings/profile"
 import * as Root from "./root"
 import * as TeamSettings from "./settings/team"
 
@@ -26,6 +27,7 @@ export const pages = [
 	MySettingsDesktop.page,
 	MySettingsLinkedAccounts.page,
 	MySettingsNotifications.page,
+	MySettingsProfile.page,
 ]
 
 export const PageSlot = Schema.Union(pages.map((page) => page.Slot))

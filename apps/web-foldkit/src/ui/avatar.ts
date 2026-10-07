@@ -12,6 +12,8 @@ export interface AvatarProps {
 	readonly src?: string | null
 	readonly alt?: string
 	readonly seed?: string
+	/** AvatarFallback text when there is no image and no seed. */
+	readonly initials?: string
 	readonly isSquare?: boolean
 	readonly className?: string
 	readonly badge?: Html
@@ -39,7 +41,9 @@ export const avatar = <Message>(h: HtmlBuilder<Message>, props: AvatarProps): Ht
 						[facehash(h, seed)],
 					),
 				]
-			: []
+			: props.initials
+				? [h.span([h.Class(cx("text-quaternary", styles[size].initials))], [props.initials])]
+				: []
 	return h.div(
 		[
 			h.Attribute("data-avatar", "true"),
