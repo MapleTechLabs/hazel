@@ -13,6 +13,7 @@ import {
 	choiceBoxLabelStyles,
 	choiceBoxStyles,
 } from "~/components/ui/choice-box.styles"
+import { announce, gridSelectionMessage } from "./aria/announcer"
 import * as Interaction from "./aria/interaction"
 import { checkbox } from "./checkbox"
 
@@ -57,6 +58,7 @@ export const Message = defineMessageUnion({
 	PressedGridKey: { key: Schema.String, ...Navigation },
 	FocusedGrid: { keys: Schema.Array(Schema.String) },
 	CompletedFocusItem: {},
+	CompletedAnnounceSelection: {},
 })
 export type Message = typeof Message.Type
 
@@ -70,6 +72,27 @@ const FocusItem = Command.define("FocusItem", {
 	execute: ({ elementId }) =>
 		Dom.focus(`#${CSS.escape(elementId)}`).pipe(Effect.ignore, Effect.as(Message.CompletedFocusItem())),
 })
+
+const AnnounceSelection = Command.define("AnnounceChoiceBoxSelection", {
+	args: { message: Schema.String },
+	messages: [Message.CompletedAnnounceSelection],
+	execute: ({ message }) =>
+		Effect.sync(() => announce(message)).pipe(Effect.as(Message.CompletedAnnounceSelection())),
+})
+
+/** useGridSelectionAnnouncement. Legacy's ChoiceBox items never resolve a row text, so names stay out. */
+const selectionAnnouncement = (previous: Model, next: Model): Option.Option<string> =>
+	previous.selectedKeys === next.selectedKeys
+		? Option.none()
+		: Option.some(
+				gridSelectionMessage({
+					previous: previous.selectedKeys,
+					next: next.selectedKeys,
+					isReplace: false,
+					isMultiple: next.selectionMode === "multiple",
+					rowText: () => "",
+				}),
+			).pipe(Option.filter((text) => text !== ""))
 
 // UPDATE
 
@@ -106,7 +129,18 @@ const keyFor = (key: string, current: number, keys: ReadonlyArray<string>, colum
 	return Option.fromNullishOr(keys[target])
 }
 
-export const update = (model: Model, message: Message): Update.Return<Model, Message> =>
+export const update = (model: Model, message: Message): Update.Return<Model, Message> => {
+	const result = updateChoiceBox(model, message)
+	return Option.match(selectionAnnouncement(model, result.model), {
+		onNone: () => result,
+		onSome: (text) => ({
+			...result,
+			commands: [...(result.commands ?? []), AnnounceSelection({ message: text })],
+		}),
+	})
+}
+
+const updateChoiceBox = (model: Model, message: Message): Update.Return<Model, Message> =>
 	Message.match<Update.Return<Model, Message>>(message, {
 		ClickedItem: ({ key }) => ({ model: modifyFields(toggle(model, key), { focusedKey: () => key }) }),
 		ToggledSelectionCheckbox: ({ key }) => ({ model: toggle(model, key) }),
@@ -126,6 +160,7 @@ export const update = (model: Model, message: Message): Update.Return<Model, Mes
 			return target === undefined ? { model } : focusKey(model, target)
 		},
 		CompletedFocusItem: () => ({ model }),
+		CompletedAnnounceSelection: () => ({ model }),
 	})
 
 // VIEW

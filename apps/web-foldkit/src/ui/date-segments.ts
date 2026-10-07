@@ -2,6 +2,7 @@ import { Effect, Schema } from "effect"
 import { Command, type Update } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
+import { announce, clearAssertive } from "./aria/announcer"
 
 /**
  * The editing state behind DateField/TimeField: React Aria's IncompleteDate, useDateFieldState and
@@ -208,6 +209,7 @@ export const segmentsOf = (model: Model): ReadonlyArray<Segment> => {
 export const Message = defineMessageUnion({
 	PressedSegmentKey: { segment: Schema.String, key: Schema.String },
 	CompletedFocusSegment: {},
+	CompletedAnnounceValue: {},
 })
 export type Message = typeof Message.Type
 
@@ -226,6 +228,18 @@ const FocusSegment = Command.define("FocusSegment", {
 		Effect.sync(() => {
 			document.getElementById(elementId)?.focus()
 			return Message.CompletedFocusSegment()
+		}),
+})
+
+/** useSpinButton: a focused segment clears the assertive log and announces its new value text. */
+const AnnounceValue = Command.define("AnnounceSegmentValue", {
+	args: { valueText: Schema.String },
+	messages: [Message.CompletedAnnounceValue],
+	execute: ({ valueText }) =>
+		Effect.sync(() => {
+			clearAssertive()
+			announce(valueText)
+			return Message.CompletedAnnounceValue()
 		}),
 })
 
@@ -362,7 +376,26 @@ const keyActions: Record<string, (model: Model, type: SegmentType) => Update.Ret
 /** Keys a segment handles (and prevents): spin and navigation keys, plus printable characters. */
 export const isSegmentKey = (key: string) => key in keyActions || key.length === 1
 
-export const update = (model: Model, message: Message): Update.Return<Model, Message> =>
+const valueTextOf = (model: Model, type: SegmentType) =>
+	segmentsOf(model).find((segment) => segment.type === type)?.valueText
+
+/** The segment holding focus after an update: a FocusSegment target, else the pressed one. */
+const focusedAfter = (model: Model, pressed: SegmentType, result: Update.Return<Model, Message>) => {
+	const target = result.commands?.find((command) => command.name === FocusSegment.name)?.args?.elementId
+	return segmentOrder(model.kind).find((type) => segmentId(model, type) === target) ?? pressed
+}
+
+export const update = (model: Model, message: Message): Update.Return<Model, Message> => {
+	const result = updateSegments(model, message)
+	if (message._tag !== "PressedSegmentKey") return result
+	const focused = focusedAfter(model, message.segment as SegmentType, result)
+	const valueText = valueTextOf(result.model, focused)
+	return valueText === undefined || valueText === valueTextOf(model, focused)
+		? result
+		: { ...result, commands: [...(result.commands ?? []), AnnounceValue({ valueText })] }
+}
+
+const updateSegments = (model: Model, message: Message): Update.Return<Model, Message> =>
 	Message.match<Update.Return<Model, Message>>(message, {
 		PressedSegmentKey: ({ segment, key }) => {
 			const type = segment as SegmentType
@@ -378,4 +411,5 @@ export const update = (model: Model, message: Message): Update.Return<Model, Mes
 					)
 		},
 		CompletedFocusSegment: () => ({ model }),
+		CompletedAnnounceValue: () => ({ model }),
 	})

@@ -2,6 +2,7 @@ import type { Attribute, ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import type { VariantProps } from "tailwind-variants"
 import { twMerge } from "tailwind-merge"
 import { buttonStyles } from "~/components/ui/button.styles"
+import { announce } from "./aria/announcer"
 import * as Interaction from "./aria/interaction"
 
 /** Port of `components/ui/button.tsx` (React Aria Button). */
@@ -14,6 +15,37 @@ export const buttonClassName = (variants: ButtonVariants, className?: string) =>
 /** React Aria keeps these handlers on a pending button (Button.tsx PRESERVED_EVENT_PATTERN). */
 const preservedWhilePending = /Focus|Blur|Hover|Pointer(Enter|Leave|Over|Out)|Mouse(Enter|Leave|Over|Out)/
 const isEventAttribute = (attribute: { readonly _tag: string }) => attribute._tag.startsWith("On")
+
+let generatedIds = 0
+
+/**
+ * RAC Button announces a focused button whose pending state flips, as an `img` labelled by the
+ * button. One document observer follows `data-pending`, so no button needs a Mount.
+ */
+const watchPendingButtons = () => {
+	const observer = new MutationObserver((records) => {
+		records.forEach((record) => {
+			const element = record.target
+			const isPending = element instanceof Element && element.hasAttribute("data-pending")
+			const wasPending = record.oldValue !== null
+			if (
+				element instanceof HTMLButtonElement &&
+				isPending !== wasPending &&
+				document.activeElement === element
+			) {
+				if (element.id === "") element.id = `react-aria-button-${++generatedIds}`
+				announce({ labelledBy: element.id })
+			}
+		})
+	})
+	observer.observe(document.documentElement, {
+		subtree: true,
+		attributes: true,
+		attributeOldValue: true,
+		attributeFilter: ["data-pending"],
+	})
+}
+if (typeof document !== "undefined" && typeof MutationObserver !== "undefined") watchPendingButtons()
 
 /** Options of React Aria's unstyled Button (`ariaButton`). */
 export interface AriaButtonOptions<Message> {

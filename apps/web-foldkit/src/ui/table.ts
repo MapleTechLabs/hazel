@@ -3,6 +3,7 @@ import { Subscription, type Update } from "foldkit"
 import * as Command from "foldkit/command"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
+import { announce, gridSelectionMessage } from "./aria/announcer"
 import * as Collection from "./aria/collection"
 import * as Interaction from "./aria/interaction"
 
@@ -72,19 +73,20 @@ export const Message = defineMessageUnion({
 	UnhoveredRow: { row: Schema.String },
 	HoveredColumn: { column: Schema.String },
 	UnhoveredColumn: { column: Schema.String },
-	PressedRow: { row: Schema.String, isSelectable: Schema.Boolean },
+	PressedRow: { row: Schema.String, isSelectable: Schema.Boolean, rowText: Schema.String },
 	ClickedColumn: { column: Schema.String },
 	FocusedTable: { targetRow: Schema.String },
 	FocusedRow: { row: Schema.String },
 	FocusedCell: { row: Schema.String, column: Schema.String },
 	FocusedColumn: { column: Schema.String },
 	BlurredTable: {},
-	NavigatedToRow: { row: Schema.String, isSelectable: Schema.Boolean },
-	PressedRowSpace: { row: Schema.String },
+	NavigatedToRow: { row: Schema.String, isSelectable: Schema.Boolean, rowText: Schema.String },
+	PressedRowSpace: { row: Schema.String, rowText: Schema.String },
 	ToggledAll: { keys: Schema.Array(Schema.String) },
 	GotInteractionMessage: { message: Interaction.Message },
 	ReleasedKey: {},
 	CompletedFocusRow: {},
+	CompletedAnnounce: {},
 })
 export type Message = typeof Message.Type
 
@@ -106,6 +108,62 @@ const FocusRowFromTable = Command.define("FocusRowFromTable", {
 			return Message.CompletedFocusRow()
 		}),
 })
+
+const Announce = Command.define("AnnounceTable", {
+	args: { message: Schema.String, timeout: Schema.Number },
+	messages: [Message.CompletedAnnounce],
+	execute: ({ message, timeout }) =>
+		Effect.sync(() => announce(message, timeout)).pipe(Effect.as(Message.CompletedAnnounce())),
+})
+
+const SELECTION_TIMEOUT = 7000
+/** useTable announces a sort change for 500 ms. */
+const SORT_TIMEOUT = 500
+
+const rowTextOf = (message: Message) =>
+	message._tag === "PressedRow" || message._tag === "NavigatedToRow" || message._tag === "PressedRowSpace"
+		? Option.some({ row: message.row, text: message.rowText })
+		: Option.none()
+
+/**
+ * useTable's live announcements: useGridSelectionAnnouncement on a selection change and the sort
+ * description. Legacy's columns render through a function, so the column name is always empty.
+ */
+const announcementsFor = (previous: Model, next: Model, message: Message) => {
+	const selection =
+		previous.selectedKeys === next.selectedKeys
+			? ""
+			: gridSelectionMessage({
+					previous: previous.selectedKeys,
+					next:
+						message._tag === "ToggledAll" && next.selectedKeys.length > 0
+							? "all"
+							: next.selectedKeys,
+					isReplace: next.selectionMode === "single",
+					isMultiple: next.selectionMode === "multiple",
+					rowText: (key) =>
+						Option.match(rowTextOf(message), {
+							onNone: () => "",
+							onSome: ({ row, text }) => (row === key ? text : ""),
+						}),
+				})
+	const sort = Option.filter(
+		next.maybeSort,
+		(sort) =>
+			!Option.exists(
+				previous.maybeSort,
+				(before) => before.column === sort.column && before.direction === sort.direction,
+			),
+	)
+	return [
+		...(selection === "" ? [] : [Announce({ message: selection, timeout: SELECTION_TIMEOUT })]),
+		...Option.toArray(
+			Option.map(sort, (sort) =>
+				Announce({ message: `sorted by column  in ${sort.direction} order`, timeout: SORT_TIMEOUT }),
+			),
+		),
+	]
+}
 
 // UPDATE
 
@@ -138,7 +196,15 @@ const nextSort = (model: Model, column: string): SortDescriptor =>
 const without = (maybeKey: Option.Option<string>, key: string) =>
 	Option.filter(maybeKey, (other) => other !== key)
 
-export const update = (model: Model, message: Message) =>
+export const update = (model: Model, message: Message): Update.Return<Model, Message> => {
+	const result = updateTable(model, message)
+	const announcements = announcementsFor(model, result.model, message)
+	return announcements.length === 0
+		? result
+		: { ...result, commands: [...(result.commands ?? []), ...announcements] }
+}
+
+const updateTable = (model: Model, message: Message) =>
 	Message.match<Update.Return<Model, Message>>(message, {
 		HoveredRow: ({ row }) => ({
 			model: modifyFields(model, { maybeHoveredRow: () => Option.some(row) }),
@@ -189,6 +255,7 @@ export const update = (model: Model, message: Message) =>
 			}),
 		}),
 		CompletedFocusRow: () => ({ model }),
+		CompletedAnnounce: () => ({ model }),
 	})
 
 // SUBSCRIPTION

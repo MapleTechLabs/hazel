@@ -110,9 +110,15 @@ export const portalOverlay = (element: Element, options: { readonly isModal: boo
 
 const inertCounts = new WeakMap<Element, number>()
 
+/** React Aria keeps its live announcer and top-layer nodes reachable while an overlay hides the rest. */
+const staysVisible = (element: Element) =>
+	element.tagName === "SCRIPT" ||
+	element.hasAttribute("data-live-announcer") ||
+	element.hasAttribute("data-react-aria-top-layer")
+
 const hideOutside = (visible: Element): (() => void) => {
 	const hidden = [...document.body.children].filter(
-		(child) => child !== visible && !child.contains(visible) && child.tagName !== "SCRIPT",
+		(child) => child !== visible && !child.contains(visible) && !staysVisible(child),
 	)
 	for (const element of hidden) {
 		const count = inertCounts.get(element) ?? 0
@@ -158,7 +164,7 @@ export const ariaHideOutside = (visible: ReadonlyArray<Element>): (() => void) =
 	const hidden: Array<Element> = []
 	const walk = (parent: Element) => {
 		for (const child of parent.children) {
-			if (child.tagName === "SCRIPT" || visible.includes(child)) continue
+			if (staysVisible(child) || visible.includes(child)) continue
 			if (visible.some((element) => child.contains(element))) walk(child)
 			else if (child.getAttribute("aria-hidden") !== "true") {
 				child.setAttribute("aria-hidden", "true")
