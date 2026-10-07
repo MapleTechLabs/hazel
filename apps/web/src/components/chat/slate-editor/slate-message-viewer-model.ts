@@ -1,4 +1,5 @@
-import { type Path, Text } from "slate"
+import { Element, type Path, Text } from "slate"
+import { decorateCodeBlock } from "./slate-code-decorator"
 import { decorateEmoji } from "./slate-emoji-decorator"
 import { decorateMarkdown } from "./slate-markdown-decorations"
 
@@ -22,4 +23,20 @@ export type ViewerLeaf = Readonly<Record<string, unknown> & { text: string }>
 export function viewerLeaves(text: { text: string }, path: Path, parent: unknown): ReadonlyArray<ViewerLeaf> {
 	const ranges = [...decorateMarkdown([text, path], parent), ...decorateEmoji([text, path], parent)]
 	return Text.decorations(text, ranges).map(({ leaf }) => leaf as ViewerLeaf)
+}
+
+/** Leaves of a code block's text: the Prism ranges the viewer's `decorate` gives the block. */
+export function codeBlockLeaves(
+	block: unknown,
+	blockPath: Path,
+	text: { text: string },
+	textPath: Path,
+): ReadonlyArray<ViewerLeaf> {
+	if (!Element.isElement(block)) return [text as ViewerLeaf]
+	const ranges = decorateCodeBlock([block, blockPath]).map((range) => ({
+		...range,
+		anchor: { path: textPath, offset: range.anchor.offset },
+		focus: { path: textPath, offset: range.focus.offset },
+	}))
+	return Text.decorations(text as Text, ranges).map(({ leaf }) => leaf as ViewerLeaf)
 }

@@ -3,6 +3,7 @@
 import type { ReactNode } from "react"
 import { Badge, type BadgeProps } from "~/components/ui/badge"
 import { cn } from "~/lib/utils"
+import { colorMap } from "./embed-markdown.styles"
 
 export interface EmbedMarkdownProps {
 	/** The markdown text to render */
@@ -17,22 +18,6 @@ interface ParsedSegment {
 	url?: string
 	color?: string
 	children?: ParsedSegment[]
-}
-
-/** Map of color names to Tailwind classes */
-const colorMap: Record<string, string> = {
-	red: "text-red-500",
-	green: "text-green-500",
-	yellow: "text-yellow-500",
-	blue: "text-blue-500",
-	purple: "text-purple-500",
-	orange: "text-orange-500",
-	gray: "text-gray-500",
-	// Semantic aliases
-	success: "text-green-500",
-	error: "text-red-500",
-	warning: "text-yellow-500",
-	info: "text-blue-500",
 }
 
 /**
