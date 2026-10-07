@@ -1,3 +1,4 @@
+import { Match } from "effect"
 import type { Node as ProseMirrorNode } from "prosemirror-model"
 import { isSpecialMention, schema } from "./schema"
 
@@ -52,53 +53,48 @@ const serializeInline = (node: ProseMirrorNode) =>
 		.map((child) => serializeToMarkdown([child]))
 		.join("")
 
+const serializeTable = (node: ProseMirrorNode) =>
+	childrenOf(node)
+		.flatMap((row, rowIndex) => {
+			const cells = childrenOf(row)
+			const line = `| ${cells.map(serializeInline).join(" | ")} |`
+			if (rowIndex !== 0) return [line]
+			const separators = cells.map((cell) =>
+				cell.attrs.align === "center" ? ":---:" : cell.attrs.align === "right" ? "---:" : "---",
+			)
+			return [line, `| ${separators.join(" | ")} |`]
+		})
+		.join("\n")
+
 /** Composer blocks (or loose inline nodes) to the markdown sent to the backend. */
 export function serializeToMarkdown(nodes: ReadonlyArray<ProseMirrorNode>): string {
 	return nodes
 		.map((node): string => {
 			if (node.isText) return node.text ?? ""
-			switch (node.type.name) {
-				case "custom-emoji":
-					return `![custom-emoji:${node.attrs.name}](${node.attrs.imageUrl})`
-				case "mention":
-					return isSpecialMention(node.attrs.userId)
+			return Match.value(node.type.name).pipe(
+				Match.when("custom-emoji", () => `![custom-emoji:${node.attrs.name}](${node.attrs.imageUrl})`),
+				Match.when("mention", () =>
+					isSpecialMention(node.attrs.userId)
 						? `@[directive:${node.attrs.userId}]`
-						: `@[userId:${node.attrs.userId}]`
-				case "paragraph":
-					return serializeInline(node)
-				case "blockquote":
-					return serializeInline(node)
+						: `@[userId:${node.attrs.userId}]`,
+				),
+				Match.when("paragraph", () => serializeInline(node)),
+				Match.when("blockquote", () =>
+					serializeInline(node)
 						.split("\n")
 						.map((line) => `> ${line}`)
-						.join("\n")
-				case "code-block":
-					return `\`\`\`${node.attrs.language ?? ""}\n${node.textContent}\n\`\`\``
-				case "subtext":
-					return `-# ${serializeInline(node)}`
-				case "list-item":
-					return node.attrs.ordered ? `1. ${serializeInline(node)}` : `- ${serializeInline(node)}`
-				case "table": {
-					const rows = childrenOf(node)
-					return rows
-						.flatMap((row, rowIndex) => {
-							const cells = childrenOf(row)
-							const line = `| ${cells.map(serializeInline).join(" | ")} |`
-							if (rowIndex !== 0) return [line]
-							const separators = cells.map((cell) =>
-								cell.attrs.align === "center" ? ":---:" : cell.attrs.align === "right" ? "---:" : "---",
-							)
-							return [line, `| ${separators.join(" | ")} |`]
-						})
-						.join("\n")
-				}
-				case "table-row":
-				case "table-cell":
-					return ""
-				case "heading":
-					return `${"#".repeat(node.attrs.level)} ${serializeInline(node)}`
-				default:
-					return node.textContent
-			}
+						.join("\n"),
+				),
+				Match.when("code-block", () => `\`\`\`${node.attrs.language ?? ""}\n${node.textContent}\n\`\`\``),
+				Match.when("subtext", () => `-# ${serializeInline(node)}`),
+				Match.when("list-item", () =>
+					node.attrs.ordered ? `1. ${serializeInline(node)}` : `- ${serializeInline(node)}`,
+				),
+				Match.when("table", () => serializeTable(node)),
+				Match.whenOr("table-row", "table-cell", () => ""),
+				Match.when("heading", () => `${"#".repeat(node.attrs.level)} ${serializeInline(node)}`),
+				Match.orElse(() => node.textContent),
+			)
 		})
 		.join("\n")
 }

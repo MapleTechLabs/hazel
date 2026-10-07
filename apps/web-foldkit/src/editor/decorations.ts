@@ -1,3 +1,5 @@
+import { Match } from "effect"
+
 /**
  * Discord-style markdown highlighting for the composer, ported from the legacy
  * `slate-markdown-decorators.tsx` (`decorateMarkdown` + `MarkdownLeaf` in composer mode)
@@ -150,25 +152,17 @@ export const LINK_CLASS = "cursor-pointer text-primary underline hover:text-prim
 export function leafClassName(leaf: LeafProps): string {
 	if (!leaf.type) return ""
 	if (leaf.isMarker) return "text-muted-fg/50 select-none"
-	switch (leaf.type) {
-		case "bold":
-			return "font-bold"
-		case "italic":
-			return "italic"
-		case "strikethrough":
-			return "line-through"
-		case "code":
-			return "bg-accent/50 rounded px-1 py-0.5 font-mono text-sm"
-		case "underline":
-			return "underline"
-		case "highlight":
-			return "bg-highlight rounded px-0.5"
-		case "spoiler":
-			return "bg-muted blur-sm hover:blur-none transition-all"
-		case "link":
-		case "url":
-			return LINK_CLASS
-	}
+	return Match.value(leaf.type).pipe(
+		Match.when("bold", () => "font-bold"),
+		Match.when("italic", () => "italic"),
+		Match.when("strikethrough", () => "line-through"),
+		Match.when("code", () => "bg-accent/50 rounded px-1 py-0.5 font-mono text-sm"),
+		Match.when("underline", () => "underline"),
+		Match.when("highlight", () => "bg-highlight rounded px-0.5"),
+		Match.when("spoiler", () => "bg-muted blur-sm hover:blur-none transition-all"),
+		Match.whenOr("link", "url", () => LINK_CLASS),
+		Match.exhaustive,
+	)
 }
 
 /** Leaves for one text run, ready to render. */

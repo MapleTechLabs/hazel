@@ -1,4 +1,4 @@
-import { Effect, Queue, Schema, Stream } from "effect"
+import { Effect, Match, Queue, Schema, Stream } from "effect"
 import { Command, Mount } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
 import type { EditorEvent } from "../editor/editor-view"
@@ -90,22 +90,17 @@ type EditorMessage =
 	| typeof Message.PressedEscape.Type
 	| typeof Message.PressedArrowUpInEmpty.Type
 
-const eventToMessage = (event: EditorEvent): EditorMessage => {
-	switch (event._tag) {
-		case "ChangedDoc":
-			return Message.UpdatedDraft({ markdown: event.markdown, isEmpty: event.isEmpty })
-		case "ChangedAutocomplete":
-			return Message.ChangedAutocomplete({ autocomplete: event.autocomplete })
-		case "PressedAutocompleteKey":
-			return Message.PressedAutocompleteKey({ key: event.key })
-		case "Submitted":
-			return Message.SubmittedDraft({ markdown: event.markdown })
-		case "PressedEscape":
-			return Message.PressedEscape()
-		case "PressedArrowUpInEmpty":
-			return Message.PressedArrowUpInEmpty()
-	}
-}
+const eventToMessage = (event: EditorEvent): EditorMessage =>
+	Match.value(event).pipe(
+		Match.tagsExhaustive({
+			ChangedDoc: ({ markdown, isEmpty }) => Message.UpdatedDraft({ markdown, isEmpty }),
+			ChangedAutocomplete: ({ autocomplete }) => Message.ChangedAutocomplete({ autocomplete }),
+			PressedAutocompleteKey: ({ key }) => Message.PressedAutocompleteKey({ key }),
+			Submitted: ({ markdown }) => Message.SubmittedDraft({ markdown }),
+			PressedEscape: () => Message.PressedEscape(),
+			PressedArrowUpInEmpty: () => Message.PressedArrowUpInEmpty(),
+		}),
+	)
 
 // MOUNT
 

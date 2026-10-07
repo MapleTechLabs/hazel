@@ -1,3 +1,4 @@
+import { Match } from "effect"
 import type { Update } from "foldkit"
 import { CloseAutocomplete, InsertMention, Message, type Model, type PresenceStatus, SyncAutocompleteOptions } from "./composer"
 
@@ -84,17 +85,13 @@ export const update = (model: Model, message: Message): Return =>
 		PressedAutocompleteKey: ({ key }) => {
 			const count = mentionOptions(model).length
 			const index = clampedActiveIndex(model)
-			switch (key) {
-				case "ArrowDown":
-					return { model: { ...model, activeIndex: index >= count - 1 ? 0 : index + 1 } }
-				case "ArrowUp":
-					return { model: { ...model, activeIndex: index <= 0 ? count - 1 : index - 1 } }
-				case "Enter":
-				case "Tab":
-					return select(model, index)
-				case "Escape":
-					return { model, commands: [CloseAutocomplete({ editorId: model.editorId })] }
-			}
+			return Match.value(key).pipe(
+				Match.when("ArrowDown", (): Return => ({ model: { ...model, activeIndex: index >= count - 1 ? 0 : index + 1 } })),
+				Match.when("ArrowUp", (): Return => ({ model: { ...model, activeIndex: index <= 0 ? count - 1 : index - 1 } })),
+				Match.whenOr("Enter", "Tab", () => select(model, index)),
+				Match.when("Escape", (): Return => ({ model, commands: [CloseAutocomplete({ editorId: model.editorId })] })),
+				Match.exhaustive,
+			)
 		},
 		HoveredAutocompleteOption: ({ index }) => ({ model: { ...model, activeIndex: index } }),
 		ClickedAutocompleteOption: ({ index }) => select(model, index),
