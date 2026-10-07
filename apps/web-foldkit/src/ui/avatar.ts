@@ -15,6 +15,8 @@ export interface AvatarProps {
 	readonly isSquare?: boolean
 	readonly className?: string
 	readonly badge?: Html
+	/** Fallback text without an image or seed (legacy `initials`, rendered by AvatarFallback). */
+	readonly initials?: string
 }
 
 export const avatar = <Message>(h: HtmlBuilder<Message>, props: AvatarProps): Html => {
@@ -39,7 +41,9 @@ export const avatar = <Message>(h: HtmlBuilder<Message>, props: AvatarProps): Ht
 						[facehash(h, seed)],
 					),
 				]
-			: []
+			: props.initials
+				? [h.span([h.Class(cx("text-quaternary", styles[size].initials))], [props.initials])]
+				: []
 	return h.div(
 		[
 			h.Attribute("data-avatar", "true"),

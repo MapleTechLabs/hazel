@@ -21,8 +21,11 @@ export const card = <Message>(
 		children,
 	)
 
-export const cardHeader = <Message>(h: HtmlBuilder<Message>, children: Html[]): Html =>
-	h.div([h.Class(twMerge(cardStyles.cardHeader))], children)
+export const cardHeader = <Message>(h: HtmlBuilder<Message>, children: Html[], className?: string): Html =>
+	h.div([h.Class(twMerge(cardStyles.cardHeader, className))], children)
 
 export const cardHeaderGroup = <Message>(h: HtmlBuilder<Message>, children: Html[]): Html =>
 	h.div([h.Class(twMerge(cardStyles.cardHeaderGroup))], children)
+
+export const cardBody = <Message>(h: HtmlBuilder<Message>, children: Html[], className?: string): Html =>
+	h.div([h.Class(twMerge(cardStyles.cardBody, className))], children)
