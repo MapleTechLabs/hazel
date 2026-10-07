@@ -13,6 +13,7 @@ import {
 } from "./capture.ts"
 import { codegenFile } from "./codegen.ts"
 import { compareVariant } from "./compare.ts"
+import { clerkIdentityFor } from "./fixtures/identity.ts"
 import { uncoveredRoutes } from "./coverage.ts"
 import {
 	BUILD_STAMP_FILE,
@@ -63,14 +64,7 @@ const { positionals, values } = parseArgs({
 const identityFor = (datasetName: string) => {
 	const dataset = datasets.get(datasetName)
 	if (!dataset) throw new Error(`unknown dataset ${datasetName}`)
-	return {
-		clerkUserId: dataset.currentUser.clerkUserId,
-		email: dataset.currentUser.email,
-		firstName: dataset.currentUser.firstName ?? "",
-		lastName: dataset.currentUser.lastName ?? "",
-		imageUrl: "",
-		clerkOrgId: dataset.clerkOrgId,
-	}
+	return clerkIdentityFor(dataset)
 }
 
 /** Starts the fixture backend plus a static server for each requested target. */

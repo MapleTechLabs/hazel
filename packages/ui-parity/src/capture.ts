@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { chromium, type Browser } from "playwright"
 import { CANONICAL_ORIGIN, fixtureBackendUrl, fixtureElectricUrl, outDir, targets, type TargetName } from "./config.ts"
+import { clerkIdentityFor } from "./fixtures/identity.ts"
 import { BOX_STYLE_PROPS, collectSnapshot, serializeDom, TEXT_STYLE_PROPS } from "./runtime/snapshot.ts"
 import { installDeterminism, waitForVisualQuiet } from "./runtime/stabilize.ts"
 import {
@@ -110,6 +111,10 @@ export const captureTarget = async (options: {
 
 		await page.clock.setFixedTime(dataset.now)
 		await page.addInitScript(installDeterminism, SEED)
+		// Read by the Clerk stub that `serve.ts` injects, so each scenario signs in as its dataset's user.
+		await page.addInitScript((identity) => {
+			;(window as unknown as { __parityClerkIdentity: unknown }).__parityClerkIdentity = identity
+		}, clerkIdentityFor(dataset))
 		await page.route("**/*", (route) => {
 			const url = new URL(route.request().url())
 			if (!allowedOrigins.has(url.origin)) {

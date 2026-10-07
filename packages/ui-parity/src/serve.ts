@@ -6,9 +6,10 @@ import { installClerkStub, type ClerkStubIdentity } from "./runtime/clerk-stub.t
  * Static SPA server for a built target. Falls back to index.html for client
  * routes and injects the Clerk stub as the first script, so the app boots signed
  * in with no network access to Clerk, whether opened by Playwright or by hand.
+ * Captures set `window.__parityClerkIdentity` first to sign in as the scenario's dataset user.
  */
 export const serveStatic = (root: string, port: number, identity: ClerkStubIdentity) => {
-	const stub = `<script>(${installClerkStub.toString()})(${JSON.stringify(identity)})</script>`
+	const stub = `<script>(${installClerkStub.toString()})(window.__parityClerkIdentity ?? ${JSON.stringify(identity)})</script>`
 	const indexHtml = readFileSync(join(root, "index.html"), "utf8").replace("<head>", `<head>${stub}`)
 
 	return Bun.serve({
