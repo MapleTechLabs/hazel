@@ -63,11 +63,7 @@ const shellContextOf = (model: Model, orgSlug: string): ShellContext => ({
 /** The routed page, or an empty placeholder until its page is ported. */
 const pageBody = (model: Model, h: HtmlBuilder<Message>, isInsideMain: boolean): Html => {
 	if (model.page !== null) return viewPage(h, model.page, { shared: sharedOf(model) }, toPageMessage)
-	const route = model.route
-	// The prebuilt Clerk form mounts into this container (`Clerk.mountSignIn`), like `<SignIn>` does.
-	if (route._tag === "SignIn" || route._tag === "SignUp")
-		return h.div([h.Attribute("data-clerk-component", route._tag)], [])
-	const placeholder = h.Attribute("data-page-placeholder", route._tag)
+	const placeholder = h.Attribute("data-page-placeholder", model.route._tag)
 	return isInsideMain ? h.div([placeholder], []) : h.main([placeholder], [])
 }
 
