@@ -378,5 +378,53 @@ export const galleryOverlaysArea: AreaModule = {
 				},
 			},
 		),
+		// COMMAND MENU
+		overlay("command-menu", "command-menu", "Command menu: closed"),
+		overlay(
+			"command-menu",
+			"command-menu-escape",
+			"Command menu: Escape clears the search, then closes",
+			{
+				steps: async (page) => {
+					await button(page, "Open command menu").click()
+					await page.getByRole("searchbox").fill("set")
+					await page.keyboard.press("Escape")
+					await page.keyboard.press("Escape")
+				},
+			},
+		),
+		overlay("command-menu", "command-menu-open", "Command menu: opened", {
+			viewports: both,
+			steps: async (page) => {
+				await button(page, "Open command menu").click()
+				await page.getByRole("menu").waitFor()
+			},
+		}),
+		overlay("command-menu", "command-menu-filter", "Command menu: typing filters the items", {
+			steps: async (page) => {
+				await button(page, "Open command menu").click()
+				await page.getByRole("searchbox").fill("chan")
+			},
+		}),
+		overlay("command-menu", "command-menu-empty", "Command menu: no results", {
+			steps: async (page) => {
+				await button(page, "Open command menu").click()
+				await page.getByRole("searchbox").fill("zzz")
+			},
+		}),
+		overlay("command-menu", "command-menu-arrow", "Command menu: arrow keys move the virtual focus", {
+			steps: async (page) => {
+				await button(page, "Open command menu").click()
+				await page.getByRole("menu").waitFor()
+				await page.keyboard.press("ArrowDown")
+				await page.keyboard.press("ArrowDown")
+			},
+		}),
+		overlay("command-menu", "command-menu-hover", "Command menu: hovered item", {
+			steps: async (page) => {
+				await button(page, "Open command menu").click()
+				await menuItem(page, "Settings").hover()
+			},
+		}),
 	],
 }

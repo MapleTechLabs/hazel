@@ -302,6 +302,16 @@ export const openModalPopover = (
 	}
 }
 
+/** FocusScope `restoreFocus` for overlays opened without a trigger: back to whatever had focus. */
+export const restoreFocusToPrevious = (overlay: Element): (() => void) => {
+	const previous = document.activeElement
+	return () => {
+		const active = document.activeElement
+		if (active !== null && active !== document.body && !overlay.contains(active)) return
+		if (previous instanceof HTMLElement) previous.focus({ preventScroll: true })
+	}
+}
+
 // MARKUP
 
 /** React Aria's visually hidden `DismissButton`, rendered at both ends of a modal popover. */
