@@ -1,9 +1,11 @@
 import { ConnectInviteId, OrganizationId } from "@hazel/schema"
 import { Schema } from "effect"
+import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
+import { PageOutMessage } from "../../out-message"
 import type { Shared } from "../../contract"
 import { Message } from "./message"
-import { init, sharedChanged, update } from "./update"
+import { AcceptInvite, init, sharedChanged, update } from "./update"
 import { sharedDefaults } from "../../test-shared"
 
 /** Update-loop tests for connect invitations: list requests and the accept/decline lifecycle. */
@@ -15,7 +17,8 @@ const shared = (organizationId: OrganizationId | null): Shared => ({
 	auth: "SignedIn",
 	orgSlug: "hazel",
 	currentUser: null,
-	organization: organizationId === null ? null : { id: organizationId, name: "Hazel", slug: "hazel", logoUrl: null },
+	organization:
+		organizationId === null ? null : { id: organizationId, name: "Hazel", slug: "hazel", logoUrl: null },
 	member: null,
 	nowMs: 0,
 	...sharedDefaults,
@@ -26,7 +29,10 @@ describe("connect invitations", () => {
 		const waiting = init(undefined, shared(null))
 		expect(waiting.commands ?? []).toEqual([])
 		const requested = sharedChanged(waiting.model, shared(hazel))
-		expect(requested.commands?.[0]).toMatchObject({ name: "ListIncomingInvites", args: { organizationId: hazel } })
+		expect(requested.commands?.[0]).toMatchObject({
+			name: "ListIncomingInvites",
+			args: { organizationId: hazel },
+		})
 		expect(sharedChanged(requested.model, shared(hazel)).commands ?? []).toEqual([])
 	})
 
@@ -52,5 +58,24 @@ describe("connect invitations", () => {
 		expect(failed.model.decliningIds).toEqual([])
 		expect(failed.commands ?? []).toEqual([])
 		expect(failed.outMessage).toMatchObject({ toast })
+	})
+})
+
+describe("accept failure", () => {
+	test("Accept sends connectShare.invite.accept for this organization and toasts the failure", () => {
+		const toast = {
+			intent: "error" as const,
+			title: "Cannot accept",
+			description: "This invite is no longer in an acceptable state.",
+		}
+		story(
+			(current: Parameters<typeof update>[0], next: Message) => update(current, next, shared(hazel)),
+			given(init(undefined, shared(hazel)).model),
+			message(Message.ClickedAccept({ inviteId })),
+			Command.expectExact(AcceptInvite({ inviteId, guestOrganizationId: hazel })),
+			Command.resolve(AcceptInvite, Message.FailedAccept({ inviteId, toast })),
+			expectOutMessage(PageOutMessage.RequestedToast({ toast })),
+			model((current) => expect(current.acceptingIds).toEqual([])),
+		)
 	})
 })

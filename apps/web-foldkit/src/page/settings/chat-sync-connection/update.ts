@@ -12,6 +12,7 @@ import {
 	DisconnectConnection,
 	ListChannelLinks,
 	ListConnections,
+	ListDiscordChannels,
 	RemoveChannelLink,
 	ScheduleReturnToList,
 	UpdateChannelLink,
@@ -39,6 +40,7 @@ export const init = (route: RouteOf<"SettingsChatSyncConnection">, shared: Share
 			channelNames: {},
 			linkMenus: [],
 			isAddLinkModalOpen: false,
+			discordChannels: { _tag: "Loading" },
 			deleteTarget: null,
 			deleteLinkModal: Modal.init("chat-sync-remove-link"),
 			isDeletingLink: false,
@@ -148,18 +150,29 @@ const listHref = (shared: Shared) => `/${shared.orgSlug ?? ""}/settings/chat-syn
 
 export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
-		SucceededListConnections: ({ organizationId, connections }) =>
-			organizationId === model.requestedOrganizationId
-				? {
-						model: modifyFields(model, {
-							connection: () => ({
-								_tag: "Loaded" as const,
-								connection:
-									connections.find((found) => found.id === model.connectionId) ?? null,
-							}),
-						}),
-					}
-				: { model },
+		SucceededListConnections: ({ organizationId, connections }) => {
+			if (organizationId !== model.requestedOrganizationId) return { model }
+			const connection = connections.find((found) => found.id === model.connectionId) ?? null
+			const next = modifyFields(model, {
+				connection: () => ({ _tag: "Loaded" as const, connection }),
+			})
+			// `AddChannelLinkModal` mounts once the connection is found, and queries its guild.
+			const previous = model.connection._tag === "Loaded" ? model.connection.connection : null
+			if (connection === null || previous?.externalWorkspaceId === connection.externalWorkspaceId)
+				return { model: next }
+			return {
+				model: modifyFields(next, { discordChannels: () => ({ _tag: "Loading" as const }) }),
+				commands: [ListDiscordChannels({ organizationId, guildId: connection.externalWorkspaceId })],
+			}
+		},
+		SucceededListDiscordChannels: ({ channels }) => ({
+			model: modifyFields(model, {
+				discordChannels: () => ({ _tag: "Loaded" as const, items: channels }),
+			}),
+		}),
+		FailedListDiscordChannels: () => ({
+			model: modifyFields(model, { discordChannels: () => ({ _tag: "Failed" as const }) }),
+		}),
 		// A failed query is not "initial", and no connection is found in it.
 		FailedListConnections: ({ organizationId }) =>
 			organizationId === model.requestedOrganizationId

@@ -3,6 +3,7 @@ import { type Cause, Effect, Exit, Schema } from "effect"
 import { Command } from "foldkit"
 import { HazelRpc } from "../../../rpc"
 import { failureToast } from "../../../ui/toast-exit"
+import { fetchDiscordGuildChannels } from "../chat-sync/discord"
 import { fetchConnections } from "../chat-sync/rpc"
 import { type ChannelLink, DIRECTION_LABELS, Message, SyncDirection, WebhookPermission } from "./model"
 
@@ -26,6 +27,17 @@ export const ListConnections = Command.define("ListConnections", {
 		fetchConnections(organizationId).pipe(
 			Effect.map((connections) => Message.SucceededListConnections({ organizationId, connections })),
 			Effect.catch(() => Effect.succeed(Message.FailedListConnections({ organizationId }))),
+		),
+})
+
+/** `AddChannelLinkModal`'s channel query for the connection's guild. */
+export const ListDiscordChannels = Command.define("ListDiscordChannels", {
+	args: { organizationId: OrganizationId, guildId: Schema.String },
+	messages: [Message.SucceededListDiscordChannels, Message.FailedListDiscordChannels],
+	execute: ({ organizationId, guildId }) =>
+		fetchDiscordGuildChannels(organizationId, guildId).pipe(
+			Effect.map((channels) => Message.SucceededListDiscordChannels({ channels })),
+			Effect.catch(() => Effect.succeed(Message.FailedListDiscordChannels())),
 		),
 })
 

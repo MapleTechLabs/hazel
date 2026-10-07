@@ -103,3 +103,26 @@ describe("channel integrations", () => {
 		)
 	})
 })
+
+describe("list failure", () => {
+	test("mount sends channelWebhook.list and rssSubscription.list for the channel", () => {
+		expect(initial.commands).toMatchObject([
+			{ name: "ListWebhooks", args: { channelId } },
+			{ name: "ListRss", args: { channelId } },
+		])
+	})
+
+	test("a failed webhook list stops loading and toasts", () => {
+		story(
+			run,
+			given(initial.model),
+			message(Message.FailedList({ list: "webhooks", title: "Channel not found", description: null })),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({
+					toast: { intent: "error", title: "Channel not found", description: null },
+				}),
+			),
+			model((current) => expect(current.webhooks.isLoading).toBe(false)),
+		)
+	})
+})
