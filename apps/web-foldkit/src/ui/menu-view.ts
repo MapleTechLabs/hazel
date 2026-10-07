@@ -132,7 +132,7 @@ type CaptureContextMenuMessage = Extract<
  * mousedown. The trigger is then focused by script, not by the mouse, so Chrome keeps
  * `:focus-visible` for the menu and the trigger that focus later moves to (legacy's 1px ring).
  */
-const FocusTriggerOnPress = Mount.define("FocusTriggerOnPress", {
+export const FocusTriggerOnPress = Mount.define("FocusTriggerOnPress", {
 	messages: [Message.CompletedFocusTriggerOnPress],
 	execute: ({ element }) =>
 		Effect.acquireRelease(

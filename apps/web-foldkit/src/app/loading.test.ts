@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 import { OrganizationId, UserId } from "@hazel/schema"
 import { Option, Schema } from "effect"
-import { expect as sceneExpect, given, role, scene } from "foldkit/scene"
+import { Mount, expect as sceneExpect, given, role, scene } from "foldkit/scene"
 import { fromString } from "foldkit/url"
 import { describe, expect, test } from "vitest"
 import { init, update } from "../main"
 import { DEFAULT_SOUND_SETTINGS } from "../notification-sound"
 import { defaultThemePreference } from "../theme"
+import * as Menu from "../ui/menu"
+import { FocusTriggerOnPress } from "../ui/menu-view"
 import { Message } from "./message"
 import type { Model } from "./model"
 import { view } from "./view"
@@ -51,7 +53,16 @@ const loader = role("progressbar", { name: "Loading" })
 
 /** Whether the root renders the loader (`<ProgressBar aria-label="Loading">`). */
 const expectLoader = (model: Model, isShown: boolean) =>
-	scene(config, given(model), isShown ? sceneExpect(loader).toExist() : sceneExpect(loader).toBeAbsent())
+	isShown
+		? scene(config, given(model), sceneExpect(loader).toExist())
+		: scene(
+				config,
+				given(model),
+				sceneExpect(loader).toBeAbsent(),
+				// The sidebar's two section menus focus their trigger on press.
+				Mount.resolve(FocusTriggerOnPress, Menu.Message.CompletedFocusTriggerOnPress()),
+				Mount.resolve(FocusTriggerOnPress, Menu.Message.CompletedFocusTriggerOnPress()),
+			)
 
 describe("root loading states", () => {
 	test("a signed-in org route waits for user.me, then for the organization", () => {
@@ -59,7 +70,9 @@ describe("root loading states", () => {
 		expectLoader(signedIn, true)
 		const withUser = after(signedIn, [Message.SucceededFetchCurrentUser({ user: ada })])
 		expectLoader(withUser, true)
-		const withOrg = after(withUser, [Message.UpdatedOrganization({ orgSlug: "hazel", organization: hazel })])
+		const withOrg = after(withUser, [
+			Message.UpdatedOrganization({ orgSlug: "hazel", organization: hazel }),
+		])
 		expectLoader(withOrg, false)
 	})
 
