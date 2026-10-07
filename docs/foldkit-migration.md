@@ -182,7 +182,7 @@ Every spike produces a short decision record in `docs/foldkit-decisions/`.
 | ----------------------------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | S1 Skeleton ✅ ([record](foldkit-decisions/s1-skeleton.md)) | Can Foldkit boot our stack?                                 | `apps/web-foldkit` builds with the parity env; `window.Clerk` auth, RPC `resources`, `user.me`; `settings-team` scenario **identical**  |
 | S2 Data bridge                                              | TanStack DB bridge vs a normalized Model store              | Benchmark on a `heavy` dataset (10k messages, 500 channels): update latency, render time, memory, dev-mode freeze cost. Decide §3.2     |
-| S3 Editor                                                   | ProseMirror vs Tiptap vs Lexical in a Mount                 | Composer scenario **identical** (empty, focused, with draft); serializer suite passes against the new model; mention autocomplete works |
+| S3 Editor ✅ ([record](foldkit-decisions/s3-editor.md)): ProseMirror | ProseMirror vs Tiptap vs Lexical in a Mount                 | Composer scenario **identical** (empty, focused, with draft); serializer suite passes against the new model; mention autocomplete works |
 | S4 Chat list                                                | Bottom-anchored virtualization                              | 10k-message channel scrolls at 60fps, prepend keeps position, sticks to bottom on new message                                           |
 | S5 Primitive parity                                         | Do custom variants plus `@foldkit/ui` reach pixel identity? | Button, Menu (open), Dialog, Tooltip, Select, Tabs all **identical** in the gallery, in both themes                                     |
 | S6 Effect pin ✅ (runs on 4.0.1, see S1)                    | Foldkit peers `effect@4.0.0` exactly                        | Either Foldkit runs on 4.0.1 (bun `overrides`, verify tests) or Foldkit releases support 4.0.1                                          |
@@ -259,7 +259,7 @@ Independent screens. Each is one ticket and one agent-sized unit. Rough size fro
 
 ## 6. Parity harness roadmap
 
-What exists today: fixture backend, Clerk stub, deterministic capture, pixel and structural diff, HTML report, `selfcheck`, `coverage` (10 of 39 routes). Additions in order of need:
+What exists today: fixture backend, Clerk stub (signed in per dataset, or signed out), deterministic capture, pixel and structural diff, HTML report, `selfcheck`, `coverage` (38 of 39 routes as of 2026-10-07), parallel runs (`PARITY_PORT_BASE`), the component gallery, and datasets `default`, `member`, `errors`, `integrations`, `onboarding`, `empty`, `signed-out`, `multi-org`, `inbox`, `personal-*`. Additions in order of need:
 
 ### 6.1 Coverage (before Phase 1, parallelizable)
 
@@ -317,7 +317,7 @@ Decided (2026-10-07):
 Still open:
 
 1. **Data layer** (§3.2): TanStack DB bridge (recommended) vs a native normalized Model store. Decided by S2.
-2. **Editor** (§3.4): ProseMirror vs Tiptap vs Lexical. Decided by S3.
+2. ~~**Editor**~~ decided 2026-10-07 by S3: **ProseMirror** (vanilla) in a Mount. Composer gallery scenarios identical, serializer suite 78/78 ([record](foldkit-decisions/s3-editor.md)).
 
 ---
 
