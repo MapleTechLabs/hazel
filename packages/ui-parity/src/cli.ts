@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { parseArgs } from "node:util"
 import { chromium } from "playwright"
@@ -15,10 +15,12 @@ import { codegenFile } from "./codegen.ts"
 import { compareVariant } from "./compare.ts"
 import { uncoveredRoutes } from "./coverage.ts"
 import {
+	BUILD_STAMP_FILE,
 	buildDir,
 	FIXTURE_BACKEND_PORT,
 	FIXTURE_ELECTRIC_PORT,
 	outDir,
+	PORT_BASE,
 	targets,
 	type TargetName,
 } from "./config.ts"
@@ -27,6 +29,8 @@ import { datasets } from "./scenarios.ts"
 import { serveStatic } from "./serve.ts"
 
 const usage = `ui-parity: compare the legacy React UI against the Foldkit UI
+
+  PARITY_PORT_BASE=4900 offsets every port (default 4790) so worktrees can run in parallel
 
   bun parity build <legacy|foldkit> [--ref <git-ref>]   build a target against the fixture backend
   bun parity serve [--dataset default]                  fixture backend + both builds, for side-by-side browsing
@@ -81,6 +85,13 @@ const startServers = (names: ReadonlyArray<TargetName>, datasetName = "default")
 		const dir = buildDir(name)
 		if (!existsSync(join(dir, "index.html")))
 			throw new Error(`No build for "${name}". Run: bun parity build ${name}`)
+		// Builds embed the backend URLs; one made for another base would talk to someone else's backend.
+		const stampFile = join(dir, BUILD_STAMP_FILE)
+		const stamp = existsSync(stampFile) ? JSON.parse(readFileSync(stampFile, "utf8")) : { portBase: 4790 }
+		if (stamp.portBase !== PORT_BASE)
+			throw new Error(
+				`Build "${name}" targets PARITY_PORT_BASE=${stamp.portBase}, not ${PORT_BASE}. Rebuild: bun parity build ${name}`,
+			)
 		return serveStatic(dir, targets[name].port, identityFor(datasetName))
 	})
 	return {
@@ -155,7 +166,7 @@ switch (command) {
 			existsSync(join(buildDir(name), "index.html")),
 		)
 		const servers = startServers(available, values.dataset)
-		console.log(`fixture backend  ${servers.backend.url}  (dataset: ${values.dataset})`)
+		console.log(`fixture backend  ${servers.backend.url}  (dataset: ${values.dataset}, port base ${PORT_BASE})`)
 		for (const name of available) console.log(`${name.padEnd(16)} http://localhost:${targets[name].port}`)
 		console.log("ctrl+c to stop")
 		process.on("SIGINT", async () => {

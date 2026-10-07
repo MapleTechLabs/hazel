@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { chromium, type Browser } from "playwright"
-import { fixtureBackendUrl, fixtureElectricUrl, outDir, targets, type TargetName } from "./config.ts"
+import { CANONICAL_ORIGIN, fixtureBackendUrl, fixtureElectricUrl, outDir, targets, type TargetName } from "./config.ts"
 import { BOX_STYLE_PROPS, collectSnapshot, serializeDom, TEXT_STYLE_PROPS } from "./runtime/snapshot.ts"
 import { installDeterminism, waitForVisualQuiet } from "./runtime/stabilize.ts"
 import {
@@ -63,18 +63,12 @@ export const BROWSER_LAUNCH_OPTIONS = {
 }
 
 /**
- * Every target is loaded through the same origin (requests are proxied to the target's
- * port), so anything that prints `location.origin` renders identically across targets.
- */
-/**
  * Console noise that does not indicate a broken capture: analytics without a key, the
  * Rivet actor endpoint (not part of the fixture backend), and requests the harness itself
  * blocked (listed separately in `blockedRequests`).
  */
 const IGNORED_CONSOLE_ERRORS =
 	/PostHog|Failed to load resource: the server responded with a status of 404|\/rivet\/|ERR_BLOCKED_BY_CLIENT/
-
-export const CANONICAL_ORIGIN = "http://localhost:4800"
 
 export const captureTarget = async (options: {
 	readonly target: TargetName

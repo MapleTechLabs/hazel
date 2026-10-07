@@ -5,9 +5,29 @@ export const parityRoot = resolve(import.meta.dir, "..")
 /** Gitignored working area: builds, captures, reports. */
 export const outDir = resolve(parityRoot, ".parity")
 
-export const FIXTURE_BACKEND_PORT = 4790
+/**
+ * Every port is an offset from `PARITY_PORT_BASE` (default 4790), so parallel worktrees can run
+ * the harness at once (e.g. 4900, 5000). Builds embed the backend URLs, so they are kept per base.
+ */
+export const DEFAULT_PORT_BASE = 4790
+export const PORT_BASE = (() => {
+	const raw = process.env.PARITY_PORT_BASE
+	if (!raw) return DEFAULT_PORT_BASE
+	const base = Number(raw)
+	if (!Number.isInteger(base) || base < 1024 || base > 65000)
+		throw new Error(`ui-parity: PARITY_PORT_BASE must be an integer port base, got "${raw}"`)
+	return base
+})()
+
+export const FIXTURE_BACKEND_PORT = PORT_BASE
 /** Electric gets its own origin so shape polling never competes with RPC for connections. */
-export const FIXTURE_ELECTRIC_PORT = 4793
+export const FIXTURE_ELECTRIC_PORT = PORT_BASE + 3
+/**
+ * Every target is loaded through this origin (requests are proxied to the target's port), so
+ * anything that prints `location.origin` renders identically across targets. Playwright fulfils it
+ * in-browser and nothing binds it, so it stays fixed for every base and captures match across worktrees.
+ */
+export const CANONICAL_ORIGIN = "http://localhost:4800"
 export const fixtureBackendUrl = `http://localhost:${FIXTURE_BACKEND_PORT}`
 export const fixtureElectricUrl = `http://localhost:${FIXTURE_ELECTRIC_PORT}/v1/shape`
 
@@ -23,11 +43,11 @@ export interface Target {
 }
 
 export const targets: Record<TargetName, Target> = {
-	legacy: { name: "legacy", port: 4791, appDir: "apps/web", distDir: "dist" },
+	legacy: { name: "legacy", port: PORT_BASE + 1, appDir: "apps/web", distDir: "dist" },
 	/** The legacy app from the working tree: refactors of legacy code must stay identical to the pinned `legacy`. */
-	"legacy-head": { name: "legacy-head", port: 4794, appDir: "apps/web", distDir: "dist" },
+	"legacy-head": { name: "legacy-head", port: PORT_BASE + 4, appDir: "apps/web", distDir: "dist" },
 	// Placeholder until the Foldkit app exists; same contract: a Vite app reading the same env vars.
-	foldkit: { name: "foldkit", port: 4792, appDir: "apps/web-foldkit", distDir: "dist" },
+	foldkit: { name: "foldkit", port: PORT_BASE + 2, appDir: "apps/web-foldkit", distDir: "dist" },
 }
 
 /** Env both apps are built with: every backend points at the fixture server, analytics off. */
@@ -42,4 +62,8 @@ export const buildEnv = {
 	VITE_PUBLIC_POSTHOG_HOST: "",
 } as const
 
-export const buildDir = (target: TargetName) => resolve(outDir, "builds", target)
+export const buildDir = (target: TargetName) =>
+	resolve(outDir, PORT_BASE === DEFAULT_PORT_BASE ? "builds" : `builds-${PORT_BASE}`, target)
+
+/** Written into every build so a build is never served against a backend on another base. */
+export const BUILD_STAMP_FILE = ".parity-build.json"

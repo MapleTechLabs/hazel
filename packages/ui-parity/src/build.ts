@@ -1,11 +1,19 @@
 import { $ } from "bun"
-import { existsSync, rmSync } from "node:fs"
+import { existsSync, rmSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { resolve } from "node:path"
-import { buildDir, buildEnv, repoRoot, targets, type TargetName } from "./config.ts"
+import {
+	BUILD_STAMP_FILE,
+	buildDir,
+	buildEnv,
+	PORT_BASE,
+	repoRoot,
+	targets,
+	type TargetName,
+} from "./config.ts"
 
 /**
- * Builds a target into `.parity/builds/<target>`.
+ * Builds a target into `.parity/builds/<target>` (`builds-<base>/` for a non-default `PARITY_PORT_BASE`).
  *
  * `ref` pins the build to a git commit via a throwaway worktree. Pin the legacy
  * baseline (e.g. the last commit before migration work started) so the reference
@@ -29,5 +37,6 @@ export const buildTarget = async (name: TargetName, options: { readonly ref?: st
 	rmSync(dest, { recursive: true, force: true })
 	console.log(`[build] ${name}${options.ref ? ` @ ${options.ref}` : ""} → ${dest}`)
 	await $`bunx vite build --outDir ${dest} --emptyOutDir`.cwd(appDir).env({ ...process.env, ...buildEnv })
+	writeFileSync(resolve(dest, BUILD_STAMP_FILE), JSON.stringify({ portBase: PORT_BASE, ref: options.ref ?? null }))
 	return dest
 }
