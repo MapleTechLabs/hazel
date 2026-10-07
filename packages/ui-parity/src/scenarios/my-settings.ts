@@ -1,7 +1,11 @@
 import { deflateSync } from "node:zlib"
 import type { Page } from "playwright"
 import { inboxDataset } from "../fixtures/datasets/inbox.ts"
-import { personalOverflowDataset, personalPrefsDataset } from "../fixtures/datasets/personal.ts"
+import {
+	personalOverflowDataset,
+	personalPrefsDataset,
+	personalPresenceDataset,
+} from "../fixtures/datasets/personal.ts"
 import { org, type AreaModule } from "./types.ts"
 
 const crcTable = Array.from({ length: 256 }, (_, n) => {
@@ -58,7 +62,7 @@ const openCropDialog = async (page: Page) => {
 const settings = `${org}/my-settings`
 
 export const mySettingsArea: AreaModule = {
-	datasets: [inboxDataset, personalPrefsDataset, personalOverflowDataset],
+	datasets: [inboxDataset, personalPrefsDataset, personalOverflowDataset, personalPresenceDataset],
 	scenarios: [
 		{
 			id: "my-settings-profile",
