@@ -3,7 +3,6 @@ import { Update } from "foldkit"
 import type { HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
-import * as Interaction from "../../ui/aria/interaction"
 import { button } from "../../ui/button"
 import {
 	dialogBody,
@@ -17,11 +16,10 @@ import * as Modal from "../../ui/modal"
 import * as Sheet from "../../ui/sheet"
 import { defineGallery } from "../define"
 import { galleryFrame, gallerySection } from "../frame"
-import { embedInteraction } from "../interaction"
 
 // MODEL
 
-const Model = Schema.Struct({ details: Modal.Model, navigation: Modal.Model, interaction: Interaction.Model })
+const Model = Schema.Struct({ details: Modal.Model, navigation: Modal.Model })
 type Model = typeof Model.Type
 
 // MESSAGE
@@ -29,11 +27,8 @@ type Model = typeof Model.Type
 const Message = defineMessageUnion({
 	GotDetailsMessage: { message: Modal.Message },
 	GotNavigationMessage: { message: Modal.Message },
-	GotInteractionMessage: { message: Interaction.Message },
 })
 type Message = typeof Message.Type
-
-const interaction = embedInteraction<Model, Message>((message) => Message.GotInteractionMessage({ message }))
 
 // UPDATE
 
@@ -62,15 +57,7 @@ const view = (model: Model, h: HtmlBuilder<Message>) =>
 				view: Sheet.view,
 				viewInputs: {
 					toTrigger: (attributes, overlay) =>
-						button(
-							h,
-							{
-								intent: "outline",
-								attributes,
-								interaction: { wiring: interaction.wiring(model), target: "open-sheet" },
-							},
-							["Open sheet", overlay],
-						),
+						button(h, { intent: "outline", attributes }, ["Open sheet", overlay]),
 					toContent: (closeAttributes) => [
 						dialogHeader(h, {}, [
 							dialogTitle(h, { id: Modal.titleId("details") }, "Channel details"),
@@ -90,15 +77,7 @@ const view = (model: Model, h: HtmlBuilder<Message>) =>
 				view: Sheet.view,
 				viewInputs: {
 					toTrigger: (attributes, overlay) =>
-						button(
-							h,
-							{
-								intent: "outline",
-								attributes,
-								interaction: { wiring: interaction.wiring(model), target: "open-left-sheet" },
-							},
-							["Open left sheet", overlay],
-						),
+						button(h, { intent: "outline", attributes }, ["Open left sheet", overlay]),
 					toContent: () => [
 						dialogHeader(h, {
 							title: { id: Modal.titleId("navigation"), text: "Navigation" },
@@ -115,19 +94,11 @@ const view = (model: Model, h: HtmlBuilder<Message>) =>
 
 export const gallery = defineGallery<Model, Message>("Sheet", {
 	Model,
-	init: () => ({
-		model: {
-			interaction: Interaction.init(),
-			details: Modal.init("details"),
-			navigation: Modal.init("navigation"),
-		},
-	}),
+	init: () => ({ model: { details: Modal.init("details"), navigation: Modal.init("navigation") } }),
 	update: (model, message) =>
 		Message.match<Update.Return<Model, Message>>(message, {
-			GotInteractionMessage: ({ message }) => interaction.fold(model, message),
 			GotDetailsMessage: ({ message }) => foldDetails(model, message),
 			GotNavigationMessage: ({ message }) => foldNavigation(model, message),
 		}),
-	subscriptions: interaction.subscriptions,
 	view,
 })

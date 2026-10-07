@@ -4,17 +4,15 @@ import type { HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
 import type { ModalSize } from "~/components/ui/modal.styles"
-import * as Interaction from "../../ui/aria/interaction"
 import { button } from "../../ui/button"
 import { dialogBody, dialogClose, dialogFooter, dialogHeader } from "../../ui/dialog"
 import * as Modal from "../../ui/modal"
 import { defineGallery } from "../define"
 import { galleryFrame, gallerySection } from "../frame"
-import { embedInteraction } from "../interaction"
 
 // MODEL
 
-const Model = Schema.Struct({ modals: Schema.Array(Modal.Model), interaction: Interaction.Model })
+const Model = Schema.Struct({ modals: Schema.Array(Modal.Model) })
 type Model = typeof Model.Type
 
 const sizes: ReadonlyArray<Readonly<{ id: string; label: string; size: ModalSize }>> = [
@@ -27,11 +25,8 @@ const sizes: ReadonlyArray<Readonly<{ id: string; label: string; size: ModalSize
 
 const Message = defineMessageUnion({
 	GotModalMessage: { id: Schema.String, message: Modal.Message },
-	GotInteractionMessage: { message: Interaction.Message },
 })
 type Message = typeof Message.Type
-
-const interaction = embedInteraction<Model, Message>((message) => Message.GotInteractionMessage({ message }))
 
 // UPDATE
 
@@ -64,15 +59,7 @@ const view = (model: Model, h: HtmlBuilder<Message>) =>
 					view: Modal.view,
 					viewInputs: {
 						toTrigger: (attributes, overlay) =>
-							button(
-								h,
-								{
-									intent: "outline",
-									attributes,
-									interaction: { wiring: interaction.wiring(model), target: example.id },
-								},
-								[example.label, overlay],
-							),
+							button(h, { intent: "outline", attributes }, [example.label, overlay]),
 						toContent: (closeAttributes) => [
 							dialogHeader(h, {
 								title: { id: Modal.titleId(example.id), text: `${example.label} modal` },
@@ -99,15 +86,7 @@ const view = (model: Model, h: HtmlBuilder<Message>) =>
 				view: Modal.view,
 				viewInputs: {
 					toTrigger: (attributes, overlay) =>
-						button(
-							h,
-							{
-								intent: "outline",
-								attributes,
-								interaction: { wiring: interaction.wiring(model), target: "blurred" },
-							},
-							["Blurred", overlay],
-						),
+						button(h, { intent: "outline", attributes }, ["Blurred", overlay]),
 					toContent: (closeAttributes) => [
 						dialogHeader(h, {
 							title: { id: Modal.titleId("blurred"), text: "Blurred backdrop" },
@@ -125,17 +104,10 @@ const view = (model: Model, h: HtmlBuilder<Message>) =>
 
 export const gallery = defineGallery<Model, Message>("Modal", {
 	Model,
-	init: () => ({
-		model: {
-			interaction: Interaction.init(),
-			modals: Array.map(["sm", "xl", "fullscreen", "blurred"], Modal.init),
-		},
-	}),
+	init: () => ({ model: { modals: Array.map(["sm", "xl", "fullscreen", "blurred"], Modal.init) } }),
 	update: (model, message) =>
 		Message.match<Update.Return<Model, Message>>(message, {
-			GotInteractionMessage: ({ message }) => interaction.fold(model, message),
 			GotModalMessage: ({ id, message }) => foldModal(id)(model, message),
 		}),
-	subscriptions: interaction.subscriptions,
 	view,
 })

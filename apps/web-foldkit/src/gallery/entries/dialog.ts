@@ -3,7 +3,6 @@ import { Update } from "foldkit"
 import type { HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
-import * as Interaction from "../../ui/aria/interaction"
 import { button } from "../../ui/button"
 import {
 	dialogBody,
@@ -16,11 +15,10 @@ import {
 import * as Modal from "../../ui/modal"
 import { defineGallery } from "../define"
 import { galleryFrame, gallerySection } from "../frame"
-import { embedInteraction } from "../interaction"
 
 // MODEL
 
-const Model = Schema.Struct({ rename: Modal.Model, remove: Modal.Model, interaction: Interaction.Model })
+const Model = Schema.Struct({ rename: Modal.Model, remove: Modal.Model })
 type Model = typeof Model.Type
 
 // MESSAGE
@@ -28,11 +26,8 @@ type Model = typeof Model.Type
 const Message = defineMessageUnion({
 	GotRenameMessage: { message: Modal.Message },
 	GotRemoveMessage: { message: Modal.Message },
-	GotInteractionMessage: { message: Interaction.Message },
 })
 type Message = typeof Message.Type
-
-const interaction = embedInteraction<Model, Message>((message) => Message.GotInteractionMessage({ message }))
 
 // UPDATE
 
@@ -61,15 +56,7 @@ const view = (model: Model, h: HtmlBuilder<Message>) =>
 				view: Modal.view,
 				viewInputs: {
 					toTrigger: (attributes, overlay) =>
-						button(
-							h,
-							{
-								intent: "outline",
-								attributes,
-								interaction: { wiring: interaction.wiring(model), target: "open-dialog" },
-							},
-							["Open dialog", overlay],
-						),
+						button(h, { intent: "outline", attributes }, ["Open dialog", overlay]),
 					toContent: (closeAttributes) => [
 						dialogHeader(h, {}, [
 							dialogTitle(h, { id: Modal.titleId("rename") }, "Rename thread"),
@@ -99,15 +86,7 @@ const view = (model: Model, h: HtmlBuilder<Message>) =>
 				view: Modal.view,
 				viewInputs: {
 					toTrigger: (attributes, overlay) =>
-						button(
-							h,
-							{
-								intent: "danger",
-								attributes,
-								interaction: { wiring: interaction.wiring(model), target: "delete-channel" },
-							},
-							["Delete channel", overlay],
-						),
+						button(h, { intent: "danger", attributes }, ["Delete channel", overlay]),
 					toContent: (closeAttributes) => [
 						dialogHeader(h, {
 							title: { id: Modal.titleId("remove"), text: "Delete channel?" },
@@ -128,19 +107,11 @@ const view = (model: Model, h: HtmlBuilder<Message>) =>
 
 export const gallery = defineGallery<Model, Message>("Dialog", {
 	Model,
-	init: () => ({
-		model: {
-			interaction: Interaction.init(),
-			rename: Modal.init("rename"),
-			remove: Modal.init("remove"),
-		},
-	}),
+	init: () => ({ model: { rename: Modal.init("rename"), remove: Modal.init("remove") } }),
 	update: (model, message) =>
 		Message.match<Update.Return<Model, Message>>(message, {
-			GotInteractionMessage: ({ message }) => interaction.fold(model, message),
 			GotRenameMessage: ({ message }) => foldRename(model, message),
 			GotRemoveMessage: ({ message }) => foldRemove(model, message),
 		}),
-	subscriptions: interaction.subscriptions,
 	view,
 })
