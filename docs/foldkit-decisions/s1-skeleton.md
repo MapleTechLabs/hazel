@@ -43,6 +43,10 @@ Question: can Foldkit boot Hazel's stack (Clerk auth, Effect RPC, Electric/TanSt
 | React Aria injects `[data-react-aria-pressable]{touch-action:…}` and sets `data-current` alongside `aria-current` | Same attributes and the same rule in the Foldkit CSS                    |
 | Each target ran on its own port, so origin-printing UI differed                                                   | All targets captured through one canonical origin                       |
 | Two identical _error_ screens counted as "identical"                                                              | Captures that crash or log errors now **fail**, whatever the pixels     |
+| Random UI (theme remix) depended on how many incidental `Math.random` draws (Effect span ids) came first             | `reseedRandom(page)` right before the random action                     |
+| Parallel harness runs collided on fixed ports; base 6000 hit a Chromium-blocked port, 5000 is macOS AirPlay          | `PARITY_PORT_BASE`, validated against Chromium's unsafe-port list        |
+| Every scenario signed in as the default user                                                                       | Captures inject the dataset's Clerk identity (or signed-out)            |
+| `:has()` utilities in the shared stylesheet restyle the whole page on every DOM insertion (heavy chat, both apps) | Fixed the worst rule (`input-otp`); the rest is a separate legacy pass  |
 
 ## Not done in S1 (by design)
 
