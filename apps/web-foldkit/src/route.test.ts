@@ -1,9 +1,9 @@
-import { UserId } from "@hazel/schema"
+import { OrganizationId, UserId } from "@hazel/schema"
 import { Option, Schema } from "effect"
 import { fromString } from "foldkit/url"
 import { describe, expect, it } from "vitest"
 import { authRedirect, rootRedirect, routeRedirect } from "./redirect"
-import { type AppRoute, orgSectionOf, urlToAppRoute } from "./route"
+import { type AppRoute, onboardingHref, orgSectionOf, urlToAppRoute } from "./route"
 import type { CurrentUser } from "./session"
 
 const channelId = "0b5a1f7e-3c55-5d0e-9a51-0b7e6b2f0c11"
@@ -77,7 +77,37 @@ describe("urlToAppRoute", () => {
 			splat: "factor-one",
 			redirectUrl: Option.some("/hazel"),
 		})
-		expect(parse(`/onboarding?orgId=${orgId}`)).toMatchObject({ orgId: Option.some(orgId) })
+		expect(parse(`/onboarding?orgId=${orgId}`)).toMatchObject({ orgId: Option.some(orgId), step: Option.none() })
+	})
+
+	it("types the search params legacy reads with `Route.useSearch()`", () => {
+		expect(parse(`/onboarding?orgId=${orgId}&step=themeSelection`)).toMatchObject({
+			_tag: "Onboarding",
+			step: Option.some("themeSelection"),
+		})
+		expect(
+			parse("/hazel/my-settings/linked-accounts?connection_status=error&provider=discord&error_code=db_error"),
+		).toMatchObject({
+			_tag: "MySettingsLinkedAccounts",
+			connectionStatus: Option.some("error"),
+			provider: Option.some("discord"),
+			errorCode: Option.some("db_error"),
+		})
+		expect(parse("/hazel/settings/integrations/linear?connection_status=success")).toMatchObject({
+			_tag: "SettingsIntegration",
+			integrationId: "linear",
+			connectionStatus: Option.some("success"),
+			errorCode: Option.none(),
+		})
+		expect(parse("/hazel/settings/integrations/installed?connection_status=success")._tag).toBe(
+			"SettingsIntegrationsInstalled",
+		)
+	})
+
+	it("prints the onboarding step URL in legacy search order", () => {
+		const id = Schema.decodeUnknownSync(OrganizationId)(orgId)
+		expect(onboardingHref(id, "role")).toBe(`/onboarding?orgId=${orgId}&step=role`)
+		expect(onboardingHref(null, "welcome")).toBe("/onboarding?step=welcome")
 	})
 
 	it("falls back to NotFound", () => {

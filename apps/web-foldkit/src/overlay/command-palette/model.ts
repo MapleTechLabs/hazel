@@ -92,7 +92,6 @@ export const Model = Schema.Struct({
 	memberChannelIds: Schema.NullOr(Schema.Array(ChannelId)),
 	unjoinedChannels: Schema.NullOr(Schema.Array(ChannelSummary)),
 	presenceStatus: Schema.String,
-	theme: Theme,
 	search: SearchData,
 	/** `recentSearchesAtom` (platform storage), loaded when the search page opens. */
 	recentSearches: Schema.Array(RecentSearch),

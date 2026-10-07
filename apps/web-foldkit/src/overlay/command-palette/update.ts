@@ -10,8 +10,6 @@ import {
 	CreateChannel,
 	FocusInput,
 	JoinChannel,
-	LoadTheme,
-	SaveTheme,
 	SetPresenceStatus,
 	TrackRecentChannel,
 } from "./commands"
@@ -42,7 +40,6 @@ export const init = (): Model => ({
 	memberChannelIds: null,
 	unjoinedChannels: null,
 	presenceStatus: "online",
-	theme: "system",
 	search: emptySearchData,
 	recentSearches: [],
 	searchAutocomplete: null,
@@ -81,8 +78,7 @@ const showPage = (model: Model, page: PageState, history: ReadonlyArray<PageStat
 
 /** `useCommandPalette().open(page)`: a fresh page and no history. */
 export const open = (model: Model, page: Page, shared: Shared): Return => {
-	const shown = showPage(modifyFields(model, { isOpen: () => true }), initialPageState(page), [], shared)
-	return { ...shown, commands: [...(shown.commands ?? []), LoadTheme({})] }
+	return showPage(modifyFields(model, { isOpen: () => true }), initialPageState(page), [], shared)
 }
 
 /** `close()`: back to the initial state (home, no history). */
@@ -146,8 +142,10 @@ const selectedItem = (model: Model, key: string, shared: Shared): Return => {
 	const theme = THEME_OPTIONS.find((option) => `theme:${option.value}` === key)
 	if (theme !== undefined)
 		return {
-			model: close(modifyFields(model, { theme: () => theme.value })),
-			commands: [SaveTheme({ theme: theme.value })],
+			model: close(model),
+			outMessage: OutMessage.RequestedTheme({
+				preference: { mode: theme.value, customization: shared.theme.customization },
+			}),
 		}
 	return { model }
 }
@@ -200,7 +198,6 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				model: modifyFields(model, { unjoinedChannels: () => channels }),
 			}),
 			UpdatedPresenceStatus: ({ status }) => ({ model: modifyFields(model, { presenceStatus: () => status }) }),
-			LoadedTheme: ({ theme }) => ({ model: modifyFields(model, { theme: () => theme }) }),
 			ChangedChannelName: ({ value }) =>
 				model.page._tag === "CreateChannel"
 					? { model: withPage(model, { ...model.page, name: value, error: null }) }

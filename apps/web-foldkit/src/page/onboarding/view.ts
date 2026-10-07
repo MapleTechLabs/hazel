@@ -83,8 +83,8 @@ const stepBody = (h: HtmlBuilder<Message>, model: Model, shared: Shared): Html |
 	const interaction = { model: model.interaction, toParentMessage: toInteractionMessage }
 	if (form._tag === "Profile") return profileStep(h, form, interaction)
 	if (form._tag === "Timezone")
-		return timezoneStep(h, form, { browserTimezone: model.browserTimezone, nowMs: shared.nowMs })
-	if (form._tag === "Theme") return themeStep(h, form)
+		return timezoneStep(h, form, { browserTimezone: model.browserTimezone ?? "UTC", nowMs: shared.nowMs })
+	if (form._tag === "Theme") return themeStep(h, shared.theme)
 	if (form._tag === "Choice")
 		return model.step === "useCases" ? useCaseStep(h, form.box) : roleStep(h, form.box)
 	if (form._tag === "Invite") return inviteStep(h, form, interaction)

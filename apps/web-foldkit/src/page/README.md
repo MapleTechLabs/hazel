@@ -29,19 +29,31 @@ memoized views and a `sharedChanged` hook. `page/root/` shows a page that only r
 - **Route params.** `init(route, shared)` receives the route variant, typed by `routes`. Store the params
   you need in the Model. `key(route)` decides when a navigation keeps the same instance (default: the whole
   route); a kept instance gets `routeChanged(model, route, shared)` instead of a new `init`.
-- **Shared data.** `Shared` holds `auth`, `orgSlug`, `currentUser`, `organization`, `member` (id and role)
-  and `nowMs`. `update`, `routeChanged` and `sharedChanged` receive it, the view gets it as
+  Search params legacy reads with `Route.useSearch()` are typed route fields too (`Onboarding.step`, the
+  OAuth callback's `connectionStatus`/`errorCode`); never read `window.location.search`. A page that
+  cleans its own URL keys by path so the cleanup arrives as `routeChanged`.
+- **Shared data.** `Shared` holds `auth`, `orgSlug`, `currentUser`, `organization`, `member` (id and role),
+  `nowMs`, `isMobile` (the shell's `(max-width: 767px)` query), `theme` (the stored `mode` and
+  `customization`, plus `resolved` light/dark) and `soundSettings` (the notification sound settings). `update`, `routeChanged` and `sharedChanged` receive it, the view gets it as
   `viewInputs.shared`, and Subscriptions read it as `input.shared`. Never copy it into the Model; if
   derived state depends on it, recompute in `sharedChanged`. Permissions: `can(shared, "channel.create")`.
-- **RPC.** Commands `yield* HazelRpc` (`src/rpc.ts`); it is the app's `resources` layer. Map every `Exit`
-  to a Message (`SucceededX` / `FailedX`).
+  Tests spread `sharedDefaults` (`page/test-shared.ts`) into their `Shared` literal.
+- **RPC and HTTP API.** Commands `yield* HazelRpc`, or `yield* HazelApiClient` for the HTTP API (legacy
+  `HazelApiClient`: base URL and authenticated fetch). Both are the app's `resources` (`src/rpc.ts`).
+  Map every `Exit` to a Message (`SucceededX` / `FailedX`).
+- **Optimistic mutations.** Run the legacy `db/actions` atoms with `runAtomFn` (`src/data/actions.ts`, one
+  registry for the app) and map the result with `settle`, `successToast` and `failureToast` (legacy
+  `exitToast`, with per-tag handlers).
 - **Live queries.** Use `liveQueryStream` (`src/data/live-query.ts`) with the legacy `useLiveQuery`
   builder, inside an `entry` whose dependencies come from `input.model` and `input.shared`. Return
   `Stream.empty` until the dependencies exist. Keys are prefixed with the page id automatically.
 - **Toasts, modals, navigation, palette.** Return an OutMessage from `update`:
   `PageOutMessage.RequestedToast`, `RequestedModal` (one variant per legacy modal, see
   `overlay/modal.ts`), `RequestedNavigation({ href, replace, toast? })`, `RequestedCommandPalette`,
-  `RequestedSignOut` (`page/out-message.ts`). Plain links need nothing: an `<a href>` is followed by the app.
+  `RequestedSignOut`, `RequestedTheme({ preference })` (the root applies and persists it; never touch
+  the theme classes or storage in a page), `RequestedSoundSettings({ settings })`,
+  `RequestedCurrentUserRefresh({ toast? })` (re-runs `user.me`, e.g. after an
+  avatar change) (`page/out-message.ts`). Plain links need nothing: an `<a href>` is followed by the app.
   - A toast with an `id` replaces the toast with the same id (sonner's `id`): give a loading toast an
     id and send the success or error toast with the same id.
   - One `update` returns one OutMessage. Navigation and a toast together: `RequestedNavigation`'s

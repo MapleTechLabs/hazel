@@ -5,7 +5,7 @@ import * as ChoiceBox from "../../ui/choice-box"
 import { Membership, Theme } from "./model"
 
 export const Message = defineMessageUnion({
-	GotLocation: { urlStep: Schema.NullOr(Schema.String), browserTimezone: Schema.String },
+	GotBrowserTimezone: { browserTimezone: Schema.String },
 	UpdatedMembership: { membership: Schema.NullOr(Membership) },
 	ClickedBack: {},
 	ClickedGetStarted: {},
@@ -26,11 +26,9 @@ export const Message = defineMessageUnion({
 	SucceededUpdateTimezone: { timezone: Schema.String },
 	FailedUpdateTimezone: { title: Schema.String, description: Schema.NullOr(Schema.String) },
 	// Theme
-	GotThemePreference: { theme: Theme, brandColor: Schema.String },
 	SelectedBrandColor: { hex: Schema.String },
 	SelectedTheme: { theme: Theme },
 	ClickedContinueTheme: {},
-	CompletedPreviewTheme: {},
 	// Use case and role
 	GotChoiceBoxMessage: { message: ChoiceBox.Message },
 	ClickedContinueChoice: {},

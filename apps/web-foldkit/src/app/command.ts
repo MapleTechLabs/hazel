@@ -2,7 +2,10 @@ import { Effect, Schema } from "effect"
 import { Command } from "foldkit"
 import { load, pushUrl, replaceUrl } from "foldkit/navigation"
 import { HazelRpc } from "../rpc"
-import { applyTheme, ResolvedTheme } from "../theme"
+import { applyTheme, ResolvedTheme, saveThemePreference, ThemeCustomization, ThemePreference } from "../theme"
+import { saveSoundSettings, SoundSettings } from "../notification-sound"
+import { deliverNotifications } from "./notification-sinks"
+import { NotificationId } from "@hazel/schema"
 import { signOut } from "./clerk"
 import { Message } from "./message"
 
@@ -26,9 +29,30 @@ export const LoadExternal = Command.define("LoadExternal", {
 })
 
 export const ApplyTheme = Command.define("ApplyTheme", {
-	args: { theme: ResolvedTheme },
+	args: { resolved: ResolvedTheme, customization: ThemeCustomization },
 	messages: [Message.CompletedApplyTheme],
-	execute: ({ theme }) => applyTheme(theme).pipe(Effect.as(Message.CompletedApplyTheme())),
+	execute: ({ resolved, customization }) =>
+		applyTheme(resolved, customization).pipe(Effect.as(Message.CompletedApplyTheme())),
+})
+
+export const SaveThemePreference = Command.define("SaveThemePreference", {
+	args: { preference: ThemePreference },
+	messages: [Message.CompletedSaveThemePreference],
+	execute: ({ preference }) =>
+		saveThemePreference(preference).pipe(Effect.as(Message.CompletedSaveThemePreference())),
+})
+
+export const SaveSoundSettings = Command.define("SaveSoundSettings", {
+	args: { settings: SoundSettings },
+	messages: [Message.CompletedSaveSoundSettings],
+	execute: ({ settings }) => saveSoundSettings(settings).pipe(Effect.as(Message.CompletedSaveSoundSettings())),
+})
+
+/** `notificationOrchestrator.enqueue(events)`; it skips what it has already processed. */
+export const DeliverNotifications = Command.define("DeliverNotifications", {
+	args: { ids: Schema.Array(NotificationId) },
+	messages: [Message.CompletedDeliverNotifications],
+	execute: ({ ids }) => deliverNotifications(ids).pipe(Effect.as(Message.CompletedDeliverNotifications())),
 })
 
 export const SignOut = Command.define("SignOut", {

@@ -4,10 +4,9 @@ import { Command } from "foldkit"
 import * as Dom from "foldkit/dom"
 import { createChannelAction, joinChannelAction } from "~/db/actions"
 import { HazelRpc } from "../../rpc"
-import { applyTheme, resolveSystemTheme } from "../../theme"
 import { runAction, toastForCause } from "../action"
 import { Message } from "./message"
-import { ChannelType, Theme } from "./model"
+import { ChannelType } from "./model"
 
 /** Side effects of the palette pages, each the call legacy makes from the same handler. */
 
@@ -65,7 +64,6 @@ export const SetPresenceStatus = Command.define("SetPresenceStatus", {
 		}).pipe(Effect.ignoreCause, done),
 })
 
-const THEME_KEY = "hazel-ui-theme"
 const RECENT_CHANNELS_KEY = "recentChannels"
 const MAX_RECENT_CHANNELS = 8
 
@@ -75,28 +73,6 @@ const readJson = (key: string) =>
 		return raw === null ? null : (JSON.parse(raw) as unknown)
 	}).pipe(Effect.orElseSucceed(() => null))
 
-const decodeTheme = Schema.decodeUnknownOption(Theme)
-
-/** `themeAtom` (`hazel-ui-theme` in platform storage, JSON encoded). */
-export const LoadTheme = Command.define("LoadTheme", {
-	args: {},
-	messages: [Message.LoadedTheme],
-	execute: () =>
-		readJson(THEME_KEY).pipe(
-			Effect.map((raw) => Message.LoadedTheme({ theme: Option.getOrElse(decodeTheme(raw), () => "system") })),
-		),
-})
-
-/** `setTheme(theme)`: persist the preference and apply the resolved theme. */
-export const SaveTheme = Command.define("SaveTheme", {
-	args: { theme: Theme },
-	messages: [Message.CompletedEffect],
-	execute: ({ theme }) =>
-		Effect.sync(() => localStorage.setItem(THEME_KEY, JSON.stringify(theme))).pipe(
-			Effect.andThen(applyTheme(theme === "system" ? resolveSystemTheme() : theme)),
-			done,
-		),
-})
 
 const RecentChannels = Schema.Array(Schema.Struct({ channelId: Schema.String, visitedAt: Schema.Number }))
 const decodeRecent = Schema.decodeUnknownOption(RecentChannels)

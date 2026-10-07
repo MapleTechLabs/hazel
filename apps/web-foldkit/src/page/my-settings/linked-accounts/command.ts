@@ -1,33 +1,12 @@
-import { HazelApi } from "@hazel/domain/http"
 import { OrganizationId } from "@hazel/schema"
 import { Effect } from "effect"
 import { Command } from "foldkit"
 import { load } from "foldkit/navigation"
-import { HttpApiClient } from "effect/http-api"
-import { CustomFetchLive } from "~/lib/services/common/api-client"
+import { HazelApiClient } from "../../../rpc"
 import { Message } from "./message"
 
 /** The legacy `HazelApiClient` (HTTP API, cookie or bearer auth through `authenticatedFetch`). */
-const integrations = HttpApiClient.make(HazelApi, { baseUrl: import.meta.env.VITE_BACKEND_URL }).pipe(
-	Effect.map((client) => client.integrations),
-	Effect.provide(CustomFetchLive),
-)
-
-const readSearchParam = (params: URLSearchParams, key: string) => params.get(key) ?? null
-
-export const ReadLinkResult = Command.define("ReadLinkResult", {
-	args: {},
-	messages: [Message.ReadLinkResult],
-	execute: () =>
-		Effect.sync(() => {
-			const params = new URLSearchParams(window.location.search)
-			return Message.ReadLinkResult({
-				connectionStatus: readSearchParam(params, "connection_status"),
-				provider: readSearchParam(params, "provider"),
-				errorCode: readSearchParam(params, "error_code"),
-			})
-		}),
-})
+const integrations = HazelApiClient.useSync((client) => client.integrations)
 
 /** Sequences the clean-URL navigation after the result toast (one OutMessage per update). */
 export const ShowLinkResult = Command.define("ShowLinkResult", {

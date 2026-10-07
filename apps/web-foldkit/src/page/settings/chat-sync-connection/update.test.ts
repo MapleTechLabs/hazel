@@ -9,6 +9,7 @@ import { PageOutMessage } from "../../out-message"
 import { RemoveChannelLink, ScheduleReturnToList, DisconnectConnection, ListChannelLinks } from "./command"
 import { Message } from "./model"
 import { init, update } from "./update"
+import { sharedDefaults } from "../../test-shared"
 
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`
 const organizationId = Schema.decodeSync(OrganizationId)(uuid(1))
@@ -21,6 +22,7 @@ const shared: Shared = {
 	organization: { id: organizationId, name: "Hazel", slug: "hazel", logoUrl: null },
 	member: null,
 	nowMs: 0,
+	...sharedDefaults,
 }
 const link = {
 	id: linkId,

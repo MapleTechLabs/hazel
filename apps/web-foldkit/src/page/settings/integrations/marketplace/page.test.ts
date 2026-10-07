@@ -20,6 +20,7 @@ import { Message } from "./message"
 import type { Model } from "./model"
 import { InstallBot, init, update } from "./update"
 import { view } from "./view"
+import { sharedDefaults } from "../../../test-shared"
 
 const shared: Shared = {
 	auth: "SignedIn",
@@ -28,6 +29,7 @@ const shared: Shared = {
 	organization: null,
 	member: null,
 	nowMs: 0,
+	...sharedDefaults,
 }
 
 const botId = Schema.decodeSync(BotId)("00000000-0000-4000-8000-000000000001")

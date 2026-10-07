@@ -1,8 +1,8 @@
 import { ChannelId, OrganizationId, UserId } from "@hazel/schema"
-import { Effect, Exit, Schema } from "effect"
+import { Effect, Schema } from "effect"
 import { Command, Mount } from "foldkit"
 import * as Dom from "foldkit/dom"
-import { getUserFriendlyError } from "~/lib/error-messages"
+import { failureToast, settle } from "../../data/actions"
 import { HazelRpc } from "../../rpc"
 import { searchFieldIds } from "../../ui/search-field"
 import { dmChannelRows, findExistingDmChannel } from "./dm"
@@ -49,19 +49,11 @@ export const CreateDm = Command.define("CreateDm", {
 	execute: ({ organizationId, userId, name }) =>
 		Effect.gen(function* () {
 			const rpc = yield* HazelRpc
-			const exit = yield* Effect.exit(
+			return yield* settle(
 				rpc("channel.createDm", { organizationId, participantIds: [userId], type: "single" }),
+				(result) => Message.SucceededCreateDm({ channelId: result.data.id, name }),
+				(cause) => Message.FailedCreateDm({ toast: failureToast(cause) }),
 			)
-			return Exit.match(exit, {
-				onSuccess: (result) => Message.SucceededCreateDm({ channelId: result.data.id, name }),
-				onFailure: (cause) => {
-					const error = getUserFriendlyError(cause)
-					return Message.FailedCreateDm({
-						title: error.title,
-						description: error.description ?? null,
-					})
-				},
-			})
 		}),
 })
 

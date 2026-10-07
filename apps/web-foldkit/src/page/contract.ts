@@ -2,9 +2,11 @@ import type { RpcActionName } from "@hazel/domain/scopes"
 import { canPerform, RPC_SCOPE_MAP } from "@hazel/domain/scopes"
 import { Array, Option, Schema } from "effect"
 import { Command, Submodel, Subscription, type Update } from "foldkit"
-import type { HazelRpc } from "../rpc"
+import type { Resources } from "../rpc"
 import type { AppRoute, RouteOf, RouteTag } from "../route"
 import type { Auth, CurrentUser, Member, Organization } from "../session"
+import type { SoundSettings } from "../notification-sound"
+import type { ThemeState } from "../theme"
 import type { PageOutMessage } from "./out-message"
 
 /** The page contract: every routed page is a Submodel registered once in `registry.ts`. See README.md. */
@@ -20,6 +22,12 @@ export interface Shared {
 	readonly member: Member | null
 	/** Wall clock for presence, ticking every 30 s (legacy `presenceNowSignal`). */
 	readonly nowMs: number
+	/** `useSidebar().isMobile`: the `(max-width: 767px)` viewport. */
+	readonly isMobile: boolean
+	/** The stored mode and customization, and the resolved light/dark theme (`resolvedThemeAtom`). */
+	readonly theme: ThemeState
+	/** `notificationSoundSettingsAtom`: what the sound sink and "Test sound" use. */
+	readonly soundSettings: SoundSettings
 }
 
 /** `usePermission().can(action)` */
@@ -36,7 +44,7 @@ export interface PageSubscriptionInput<Model> {
 	readonly shared: Shared
 }
 
-export type PageReturn<Model, Message> = Update.ReturnWithOutMessage<Model, Message, PageOutMessage, HazelRpc>
+export type PageReturn<Model, Message> = Update.ReturnWithOutMessage<Model, Message, PageOutMessage, Resources>
 
 // SPEC (what a page module provides)
 
@@ -48,7 +56,7 @@ export interface PageSpec<Tags extends RouteTag, Model, Message> {
 	readonly init: (route: RouteOf<Tags>, shared: Shared) => PageReturn<Model, Message>
 	readonly update: (model: Model, message: Message, shared: Shared) => PageReturn<Model, Message>
 	readonly view: Submodel.View<Model, Message, PageViewInputs>
-	readonly subscriptions?: Subscription.Subscriptions<PageSubscriptionInput<Model>, Message, HazelRpc>
+	readonly subscriptions?: Subscription.Subscriptions<PageSubscriptionInput<Model>, Message, Resources>
 	/** Same instance, new route (search params, or a tab inside the page). */
 	readonly routeChanged?: (model: Model, route: RouteOf<Tags>, shared: Shared) => PageReturn<Model, Message>
 	/** The signed-in user, organization or membership changed. */
@@ -72,7 +80,7 @@ export interface PageHost {
 
 export interface PageStep<Slot, Wrapped> {
 	readonly slot: Slot
-	readonly commands: ReadonlyArray<Command.Command<Wrapped, never, HazelRpc>>
+	readonly commands: ReadonlyArray<Command.Command<Wrapped, never, Resources>>
 	readonly outMessage: Option.Option<PageOutMessage>
 }
 

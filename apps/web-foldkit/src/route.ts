@@ -9,7 +9,8 @@ export const AppRoute = defineRouteUnion({
 	SignIn: { splat: Schema.String, redirectUrl: Schema.Option(Schema.String) },
 	SignUp: { splat: Schema.String, redirectUrl: Schema.Option(Schema.String) },
 	Join: { slug: Schema.String },
-	Onboarding: { orgId: Schema.Option(OrganizationId) },
+	/** `?orgId=&step=` (`validateSearch` in `onboarding/index.tsx`). */
+	Onboarding: { orgId: Schema.Option(OrganizationId), step: Schema.Option(Schema.String) },
 	OnboardingSetupOrganization: { orgId: Schema.Option(OrganizationId) },
 	SelectOrganization: {},
 	OrgHome: { orgSlug: Schema.String },
@@ -23,7 +24,13 @@ export const AppRoute = defineRouteUnion({
 	ChannelSettingsConnect: { orgSlug: Schema.String, channelId: ChannelId },
 	MySettingsAppearance: { orgSlug: Schema.String },
 	MySettingsProfile: { orgSlug: Schema.String },
-	MySettingsLinkedAccounts: { orgSlug: Schema.String },
+	/** The OAuth callback redirect's `?connection_status=&provider=&error_code=`. */
+	MySettingsLinkedAccounts: {
+		orgSlug: Schema.String,
+		connectionStatus: Schema.Option(Schema.String),
+		provider: Schema.Option(Schema.String),
+		errorCode: Schema.Option(Schema.String),
+	},
 	MySettingsNotifications: { orgSlug: Schema.String },
 	MySettingsDesktop: { orgSlug: Schema.String },
 	NotificationsAll: { orgSlug: Schema.String },
@@ -43,7 +50,13 @@ export const AppRoute = defineRouteUnion({
 	SettingsIntegrationsInstalled: { orgSlug: Schema.String },
 	SettingsIntegrationsMarketplace: { orgSlug: Schema.String },
 	SettingsIntegrationsYourApps: { orgSlug: Schema.String },
-	SettingsIntegration: { orgSlug: Schema.String, integrationId: Schema.String },
+	/** The OAuth callback redirect's `?connection_status=&error_code=`. */
+	SettingsIntegration: {
+		orgSlug: Schema.String,
+		integrationId: Schema.String,
+		connectionStatus: Schema.Option(Schema.String),
+		errorCode: Schema.Option(Schema.String),
+	},
 	NotFound: { path: Schema.String },
 })
 export type AppRoute = typeof AppRoute.Type
@@ -55,6 +68,18 @@ export type RouteOf<Tag extends RouteTag> = Extract<AppRoute, { readonly _tag: T
 const RedirectQuery = Schema.Struct({ redirect_url: Schema.OptionFromOptional(Schema.String) })
 const OrgIdQuery = Schema.Struct({ orgId: Schema.OptionFromOptional(OrganizationId) })
 type OrgIdQuery = typeof OrgIdQuery.Type
+const OnboardingQuery = Schema.Struct({
+	orgId: Schema.OptionFromOptional(OrganizationId),
+	step: Schema.OptionFromOptional(Schema.String),
+})
+type OnboardingQuery = typeof OnboardingQuery.Type
+/** Legacy `validateSearch` passes these through unchecked; pages decode the values they act on. */
+const OAuthCallbackQuery = Schema.Struct({
+	connection_status: Schema.OptionFromOptional(Schema.String),
+	provider: Schema.OptionFromOptional(Schema.String),
+	error_code: Schema.OptionFromOptional(Schema.String),
+})
+type OAuthCallbackQuery = typeof OAuthCallbackQuery.Type
 
 /** `/sign-in/$`: the bare prefix and any splat below it (Clerk's own sub-routes). */
 const authRouters = (
@@ -109,7 +134,19 @@ const orgRouters = [
 	pipe(channelSettings("connect"), Route.mapTo(AppRoute.ChannelSettingsConnect)),
 	pipe(orgPath("my-settings"), Route.mapTo(AppRoute.MySettingsAppearance)),
 	pipe(orgPath("my-settings", "profile"), Route.mapTo(AppRoute.MySettingsProfile)),
-	pipe(orgPath("my-settings", "linked-accounts"), Route.mapTo(AppRoute.MySettingsLinkedAccounts)),
+	pipe(
+		orgPath("my-settings", "linked-accounts"),
+		query(OAuthCallbackQuery),
+		Route.mapTo({
+			make: ({ orgSlug, connection_status, provider, error_code }: { orgSlug: string } & OAuthCallbackQuery) =>
+				AppRoute.MySettingsLinkedAccounts.make({
+					orgSlug,
+					connectionStatus: connection_status,
+					provider,
+					errorCode: error_code,
+				}),
+		}),
+	),
 	pipe(orgPath("my-settings", "notifications"), Route.mapTo(AppRoute.MySettingsNotifications)),
 	pipe(orgPath("my-settings", "desktop"), Route.mapTo(AppRoute.MySettingsDesktop)),
 	pipe(orgPath("notifications"), Route.mapTo(AppRoute.NotificationsAll)),
@@ -146,7 +183,21 @@ const orgRouters = [
 	pipe(
 		orgPath("settings", "integrations"),
 		slash(string("integrationId")),
-		Route.mapTo(AppRoute.SettingsIntegration),
+		query(OAuthCallbackQuery),
+		Route.mapTo({
+			make: ({
+				orgSlug,
+				integrationId,
+				connection_status,
+				error_code,
+			}: { orgSlug: string; integrationId: string } & OAuthCallbackQuery) =>
+				AppRoute.SettingsIntegration.make({
+					orgSlug,
+					integrationId,
+					connectionStatus: connection_status,
+					errorCode: error_code,
+				}),
+		}),
 	),
 ] as const
 
@@ -159,8 +210,8 @@ export const urlToAppRoute = Route.parseUrlWithFallback(
 		pipe(literal("join"), slash(string("slug")), Route.mapTo(AppRoute.Join)),
 		pipe(
 			literal("onboarding"),
-			query(OrgIdQuery),
-			Route.mapTo({ make: (query: OrgIdQuery) => AppRoute.Onboarding.make(query) }),
+			query(OnboardingQuery),
+			Route.mapTo({ make: (query: OnboardingQuery) => AppRoute.Onboarding.make(query) }),
 		),
 		pipe(
 			literal("onboarding"),
@@ -192,3 +243,7 @@ export const orgSectionOf = (route: AppRoute): OrgSection | undefined => {
 	if (route._tag.startsWith("Notifications")) return "Notifications"
 	return "Chat"
 }
+
+/** `/onboarding` with its search in legacy order: `navigate({ search: (prev) => ({ ...prev, step }) })`. */
+export const onboardingHref = (orgId: OrganizationId | null, step: string): string =>
+	`/onboarding?${new URLSearchParams([...(orgId === null ? [] : [["orgId", orgId]]), ["step", step]])}`

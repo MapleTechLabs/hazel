@@ -6,7 +6,9 @@ import type { PageHost, Shared } from "../page/contract"
 import { PageSlot } from "../page/registry"
 import { AppRoute, orgSectionOf, orgSlugOf } from "../route"
 import { Auth, CurrentUser, Member, Organization } from "../session"
+import { SoundSettings } from "../notification-sound"
 import * as Shell from "../shell/model"
+import { ResolvedTheme, resolveTheme, ThemePreference } from "../theme"
 import type { Context as ShellUpdateContext } from "../shell/update"
 import { can } from "../page/contract"
 
@@ -19,8 +21,15 @@ export const Model = Schema.Struct({
 	auth: Auth,
 	currentUser: Schema.NullOr(CurrentUser),
 	organization: Schema.NullOr(Organization),
+	/** The slug whose organization query has answered; until it matches the route, a loader shows. */
+	loadedOrgSlug: Schema.NullOr(Schema.String),
 	member: Schema.NullOr(Member),
 	nowMs: Schema.Number,
+	/** The stored theme preference (`themeAtom`, `themeCustomizationAtom`), and the system's theme. */
+	themePreference: ThemePreference,
+	systemTheme: ResolvedTheme,
+	/** `notificationSoundSettingsAtom`, stored like legacy. */
+	soundSettings: SoundSettings,
 	page: Schema.NullOr(PageSlot),
 	shell: Shell.Model,
 	modal: Modal.Model,
@@ -29,6 +38,9 @@ export const Model = Schema.Struct({
 })
 export type Model = typeof Model.Type
 
+export const resolvedThemeOf = (model: Model): ResolvedTheme =>
+	resolveTheme(model.themePreference.mode, model.systemTheme)
+
 export const sharedOf = (model: Model): Shared => ({
 	auth: model.auth,
 	orgSlug: orgSlugOf(model.route) ?? null,
@@ -36,6 +48,9 @@ export const sharedOf = (model: Model): Shared => ({
 	organization: model.organization,
 	member: model.member,
 	nowMs: model.nowMs,
+	isMobile: model.shell.isMobile,
+	theme: { ...model.themePreference, resolved: resolvedThemeOf(model) },
+	soundSettings: model.soundSettings,
 })
 
 export const pageHostOf = (model: Model): PageHost => ({ page: model.page, shared: sharedOf(model) })
