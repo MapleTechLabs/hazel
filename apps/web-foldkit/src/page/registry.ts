@@ -8,6 +8,7 @@ import * as Auth from "./auth"
 import * as ChatChannel from "./chat/channel"
 import type { PageHost, PageMessageBase, PageSlotBase, PageStep, PageViewInputs, Shared } from "./contract"
 import type { PageOutMessage } from "./out-message"
+import * as OnboardingSetupOrganization from "./onboarding/setup-organization"
 import * as Root from "./root"
 import * as TeamSettings from "./settings/team"
 
@@ -21,6 +22,7 @@ export const pages = [
 	ChatChannel.page,
 	Auth.signInPage,
 	Auth.signUpPage,
+	OnboardingSetupOrganization.page,
 ]
 
 export const PageSlot = Schema.Union(pages.map((page) => page.Slot))
