@@ -7,7 +7,7 @@ import { inputGroup } from "../../../ui/input"
 import { sectionLabelRoot } from "../../../ui/section-label"
 import { textField } from "../../../ui/text-field"
 import * as TimezoneSelect from "../../../ui/timezone-select"
-import type { PageViewInputs } from "../../contract"
+import type { PageViewInputs, Shared } from "../../contract"
 import { pageHeader } from "../shared"
 import { profilePictureUpload } from "./avatar-view"
 import { errorsOf, initialsOf, isSaveDisabled } from "./form"
@@ -54,7 +54,8 @@ const section = (h: HtmlBuilder<Message>, title: string, children: ReadonlyArray
 		[sectionLabelRoot(h, { size: "sm", title, isRequired, className: "max-lg:hidden" }), ...children],
 	)
 
-export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, { shared }, h) => {
+/** The page body as a plain view (Scene tests render it directly). */
+export const profileView = (model: Model, shared: Shared, h: HtmlBuilder<Message>): Html => {
 	const user = shared.currentUser
 	const errors = errorsOf(model)
 	return h.form(
@@ -142,4 +143,8 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 			),
 		],
 	)
-})
+}
+
+export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, { shared }, h) =>
+	profileView(model, shared, h),
+)
