@@ -159,7 +159,8 @@ export const resetWindow = (model: Model): Model =>
 	model.offset === 0 ? model : withWindowFollow(modifyFields(model, { offset: () => 0, limit: () => PAGE_SIZE }))
 
 const liftOverlays = (model: Model, result: Overlays.OverlaysReturn): PageReturn => {
-	const next = result.model === model.overlays ? model : modifyFields(model, { overlays: () => result.model })
+	const next =
+		result.model === model.overlays ? model : Write.syncThreadDraft(modifyFields(model, { overlays: () => result.model }))
 	const commands = Command.mapMessages(result.commands ?? [], (message) => Message.GotOverlaysMessage({ message }))
 	if (result.outMessage === undefined) return { model: next, commands }
 	const handled = Write.handleOverlaysOut(next, result.outMessage)

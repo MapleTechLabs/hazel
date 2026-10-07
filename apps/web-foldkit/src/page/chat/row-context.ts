@@ -119,9 +119,10 @@ const buildContext = <M>(
 					toTrigger: render,
 					content: contextMenuContent(h, factsOf(model).isPinned(row.message.id)),
 					className: "min-w-56",
-					header: contextMenuHeader(h, (emoji) =>
-						overlaysMessage(toParentMessage, Overlays.Message.ClickedReaction({ messageId: row.message.id, emoji })),
-					),
+					header: () =>
+						contextMenuHeader(h, (emoji) =>
+							overlaysMessage(toParentMessage, Overlays.Message.ClickedReaction({ messageId: row.message.id, emoji })),
+						),
 				},
 				toParentMessage: (message) =>
 					overlaysMessage(toParentMessage, Overlays.Message.GotContextMenuMessage({ message })),

@@ -151,7 +151,7 @@ const openThread = (model: Model, threadChannelId: ChannelId, messageId: Message
 	threadMemberId: model.threadDraft?.channelId === threadChannelId ? model.threadMemberId : null,
 })
 
-const newThreadDraft = (model: Model, threadChannelId: ChannelId): Draft.Model => {
+export const newThreadDraft = (model: Model, threadChannelId: ChannelId): Draft.Model => {
 	const draft = Draft.init(threadChannelId, `thread-composer-${threadChannelId}`, "Reply in thread...")
 	const { members, presence, mentionableBots, botCommands, customEmojis } = model.draft.composer
 	return { ...draft, composer: { ...draft.composer, members, presence, mentionableBots, botCommands, customEmojis } }
@@ -282,4 +282,13 @@ export const insertGlobalKey = (model: Model, key: string): PageReturn => {
 			(message) => wrapDraft(which)(Draft.Message.GotComposerMessage({ message })),
 		),
 	}
+}
+
+/** The thread panel's draft follows the open thread (a new panel, a new `ChatProvider`). */
+export const syncThreadDraft = (model: Model): Model => {
+	const thread = model.overlays.thread
+	if (thread === null) return model.threadDraft === null ? model : { ...model, threadDraft: null, threadMemberId: null }
+	return model.threadDraft?.channelId === thread.threadChannelId
+		? model
+		: { ...model, threadDraft: newThreadDraft(model, thread.threadChannelId), threadMemberId: null }
 }

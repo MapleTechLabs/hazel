@@ -192,8 +192,8 @@ export type ViewInputs = Readonly<{
 	className?: string
 	/** `MenuContent` popover.className. */
 	popoverClassName?: string
-	/** A `MenuHeader` before the root menu's entries (e.g. a row of quick actions). */
-	header?: Html
+	/** A `MenuHeader` before the root menu's entries; a function when it carries the parent's handlers. */
+	header?: Html | (() => Html)
 	/** A `MenuItem`'s own className, by key. */
 	itemClassName?: (key: string) => string | undefined
 }>
@@ -315,7 +315,7 @@ const overlay = (model: Model, open: Open, viewInputs: ViewInputs, h: HtmlBuilde
 										elementId: menuId(model.id),
 										labelledBy: isAtPointer ? undefined : triggerId(model.id),
 										entries: model.entries,
-										header: viewInputs.header,
+										header: typeof viewInputs.header === "function" ? viewInputs.header() : viewInputs.header,
 										focusedKey: rootFocus,
 										onKeyDown: isAtPointer ? toMenuKey : undefined,
 									}),
