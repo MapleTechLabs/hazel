@@ -31,6 +31,7 @@ import { Effect, Layer } from "effect"
 import { HttpRouter } from "effect/http"
 import { RpcSerialization, RpcServer } from "effect/rpc"
 import type { Dataset } from "../fixtures/dataset.ts"
+import { areaRpcHandlers } from "../scenarios.ts"
 import { stableId } from "../fixtures/ids.ts"
 
 /**
@@ -108,6 +109,8 @@ const defaultHandlers = (dataset: Dataset): Record<string, (payload: unknown) =>
 	},
 	"organization.getBySlugPublic": () => null,
 	"chatSync.connection.list": () => ({ data: [] }),
+	// Per-area handlers (`src/scenarios/<area>.ts`), then the dataset's own overrides.
+	...areaRpcHandlers(dataset),
 	...dataset.rpc,
 })
 
