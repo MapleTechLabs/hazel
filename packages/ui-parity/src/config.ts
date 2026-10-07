@@ -10,10 +10,10 @@ export const outDir = resolve(parityRoot, ".parity")
  * the harness at once (e.g. 4900, 5000). Builds embed the backend URLs, so they are kept per base.
  */
 export const DEFAULT_PORT_BASE = 4790
-/** Ports Chromium refuses to load (net::ERR_UNSAFE_PORT) in the range a base can reach. */
+/** Ports Chromium refuses to load (net::ERR_UNSAFE_PORT), plus 5000 and 7000 (macOS AirPlay Receiver). */
 const CHROMIUM_UNSAFE_PORTS = new Set([
-	1719, 1720, 1723, 2049, 3659, 4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669, 6679,
-	6697, 10080,
+	5000, 7000, 1719, 1720, 1723, 2049, 3659, 4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668,
+	6669, 6679, 6697, 10080,
 ])
 export const PORT_BASE = (() => {
 	const raw = process.env.PARITY_PORT_BASE
@@ -25,9 +25,7 @@ export const PORT_BASE = (() => {
 		.map((offset) => base + offset)
 		.filter((port) => CHROMIUM_UNSAFE_PORTS.has(port))
 	if (unsafe.length)
-		throw new Error(
-			`ui-parity: PARITY_PORT_BASE=${base} reaches Chromium-blocked port ${unsafe.join(", ")}`,
-		)
+		throw new Error(`ui-parity: PARITY_PORT_BASE=${base} reaches blocked port ${unsafe.join(", ")}`)
 	return base
 })()
 
