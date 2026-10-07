@@ -103,7 +103,7 @@ const navRail = <Message>(h: HtmlBuilder<Message>, context: ShellContext): Html 
 	])
 }
 
-const orgSwitcherHeader = <Message>(h: HtmlBuilder<Message>, context: ShellContext): Html =>
+export const orgSwitcherHeader = <Message>(h: HtmlBuilder<Message>, context: ShellContext): Html =>
 	sidebarHeader(h, { state: "expanded", className: "border-b h-14" }, [
 		h.button(
 			[
@@ -142,7 +142,7 @@ const orgSwitcherHeader = <Message>(h: HtmlBuilder<Message>, context: ShellConte
 		),
 	])
 
-const userMenuFooter = <Message>(h: HtmlBuilder<Message>, context: ShellContext): Html => {
+export const userMenuFooter = <Message>(h: HtmlBuilder<Message>, context: ShellContext): Html => {
 	const displayName = context.currentUser?.displayName ?? "User"
 	return sidebarFooter(h, "flex flex-row justify-between gap-4 group-data-[state=collapsed]:flex-col", [
 		h.button(
@@ -320,7 +320,13 @@ const toasterRegion = <Message>(h: HtmlBuilder<Message>): Html =>
 		[],
 	)
 
-export const orgShell = <Message>(h: HtmlBuilder<Message>, context: ShellContext, page: Html): Html =>
+/** `secondarySidebar` is the route's sidebar next to the nav rail (settings by default). */
+export const orgShell = <Message>(
+	h: HtmlBuilder<Message>,
+	context: ShellContext,
+	page: Html,
+	secondarySidebar: Html = settingsSidebar(h, context),
+): Html =>
 	h.div(
 		[h.Id("app")],
 		[
@@ -329,7 +335,7 @@ export const orgShell = <Message>(h: HtmlBuilder<Message>, context: ShellContext
 				sidebarDock(
 					h,
 					{ state: "expanded", className: "overflow-hidden *:data-[sidebar=default]:flex-row" },
-					[navRail(h, context), settingsSidebar(h, context)],
+					[navRail(h, context), secondarySidebar],
 				),
 				sidebarInset(h, "pb-16 md:pb-0", [page]),
 			]),

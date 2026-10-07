@@ -1,6 +1,7 @@
 import type { Dataset } from "./fixtures/dataset.ts"
 import { defaultDataset } from "./fixtures/datasets/default.ts"
 import { chatArea } from "./scenarios/chat.ts"
+import { chatListArea } from "./scenarios/chat-list.ts"
 import { composerArea } from "./scenarios/composer.ts"
 import { entryArea } from "./scenarios/entry.ts"
 import { galleryArea } from "./scenarios/gallery.ts"
@@ -18,6 +19,7 @@ export * from "./scenarios/types.ts"
 /** Every area module. Scenarios live in `src/scenarios/<area>.ts`; only this list is shared. */
 const areas: ReadonlyArray<AreaModule> = [
 	chatArea,
+	chatListArea,
 	navigationArea,
 	notificationsArea,
 	settingsArea,

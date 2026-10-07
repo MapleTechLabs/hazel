@@ -1,8 +1,8 @@
 import { AnimatePresence, motion } from "motion/react"
 import { createContext, useContext, useRef } from "react"
-import { tv } from "tailwind-variants"
 import { PANEL_CONSTRAINTS } from "~/atoms/panel-atoms"
 import { SplitPanelHandle } from "./split-panel-handle"
+import { contentStyles, panelStyles, rootStyles } from "./split-panel.styles"
 import { usePanelResize } from "./use-panel-resize"
 
 // ============================================================================
@@ -27,26 +27,7 @@ function useSplitPanelContext() {
 // Styles
 // ============================================================================
 
-const rootStyles = tv({
-	base: "flex h-full w-full overflow-hidden",
-})
-
-const contentStyles = tv({
-	base: "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overscroll-contain",
-})
-
-const panelStyles = tv({
-	base: ["relative flex h-full flex-shrink-0 flex-col overflow-hidden", "border-border bg-bg"],
-	variants: {
-		position: {
-			left: "border-r",
-			right: "border-l",
-		},
-	},
-	defaultVariants: {
-		position: "right",
-	},
-})
+// Defined in split-panel.styles.ts so the Foldkit app composes the same classes.
 
 // ============================================================================
 // SplitPanelRoot
