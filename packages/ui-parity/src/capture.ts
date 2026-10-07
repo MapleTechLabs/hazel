@@ -1,7 +1,14 @@
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { chromium, type Browser } from "playwright"
-import { CANONICAL_ORIGIN, fixtureBackendUrl, fixtureElectricUrl, outDir, targets, type TargetName } from "./config.ts"
+import {
+	CANONICAL_ORIGIN,
+	fixtureBackendUrl,
+	fixtureElectricUrl,
+	outDir,
+	targets,
+	type TargetName,
+} from "./config.ts"
 import { clerkIdentityFor } from "./fixtures/identity.ts"
 import { BOX_STYLE_PROPS, collectSnapshot, serializeDom, TEXT_STYLE_PROPS } from "./runtime/snapshot.ts"
 import { installDeterminism, waitForVisualQuiet } from "./runtime/stabilize.ts"
@@ -70,6 +77,13 @@ export const BROWSER_LAUNCH_OPTIONS = {
  */
 const IGNORED_CONSOLE_ERRORS =
 	/PostHog|Failed to load resource: the server responded with a status of 404|\/rivet\/|ERR_BLOCKED_BY_CLIENT/
+
+/**
+ * Signed out, the app's Electric fetch answers 401 itself (no Clerk token) for the collections it
+ * preloads, which is what an anonymous visitor's console shows too.
+ */
+const SIGNED_OUT_CONSOLE_ERRORS =
+	/^\[Live Query Error\] Source collection '\w+' entered error state|^An error occurred while syncing collection: \w+,[\s\S]*HTTP Error 401/
 
 export const captureTarget = async (options: {
 	readonly target: TargetName
@@ -162,7 +176,11 @@ export const captureTarget = async (options: {
 			variantId: variant.id,
 			ok: !error,
 			error,
-			consoleErrors: consoleErrors.filter((line) => !IGNORED_CONSOLE_ERRORS.test(line)),
+			consoleErrors: consoleErrors.filter(
+				(line) =>
+					!IGNORED_CONSOLE_ERRORS.test(line) &&
+					!(dataset.signedOut && SIGNED_OUT_CONSOLE_ERRORS.test(line)),
+			),
 			blockedRequests: [...new Set(blockedRequests)],
 			durationMs: Math.round(performance.now() - started),
 		}

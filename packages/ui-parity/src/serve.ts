@@ -8,8 +8,9 @@ import { installClerkStub, type ClerkStubIdentity } from "./runtime/clerk-stub.t
  * in with no network access to Clerk, whether opened by Playwright or by hand.
  * Captures set `window.__parityClerkIdentity` first to sign in as the scenario's dataset user.
  */
-export const serveStatic = (root: string, port: number, identity: ClerkStubIdentity) => {
-	const stub = `<script>(${installClerkStub.toString()})(window.__parityClerkIdentity ?? ${JSON.stringify(identity)})</script>`
+export const serveStatic = (root: string, port: number, identity: ClerkStubIdentity | null) => {
+	// A capture may inject `null` (signed out), so test presence rather than `??`.
+	const stub = `<script>(${installClerkStub.toString()})("__parityClerkIdentity" in window ? window.__parityClerkIdentity : ${JSON.stringify(identity)})</script>`
 	const indexHtml = readFileSync(join(root, "index.html"), "utf8").replace("<head>", `<head>${stub}`)
 
 	return Bun.serve({
