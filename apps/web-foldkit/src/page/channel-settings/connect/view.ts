@@ -12,6 +12,7 @@ import { tabHeader } from "../section-header"
 import { type Invite, Message, type Model, type Mount, rowRoles } from "./model"
 import type * as ShareModal from "./share-modal"
 import { shareChannelModal } from "./share-modal-view"
+import { interaction, revokeTarget } from "./update"
 
 /** Port of `channels/$channelId/settings/connect.tsx`. */
 
@@ -140,6 +141,10 @@ const inviteRow = (h: HtmlBuilder<Message>, model: Model, invite: Invite): Html 
 									size: "sm",
 									isDisabled: isRevoking,
 									onPress: Message.ClickedRevokeInvite({ inviteId: invite.id }),
+									interaction: {
+										wiring: interaction.wiring(model),
+										target: revokeTarget(invite.id),
+									},
 								},
 								[isRevoking ? "Revoking..." : "Revoke"],
 							),

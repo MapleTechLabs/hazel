@@ -8,6 +8,7 @@ import { card, cardHeader } from "../../../ui/card"
 import { emptyState } from "../../../ui/empty-state"
 import type { PageViewInputs } from "../../contract"
 import { Message } from "./message"
+import { acceptTarget, declineTarget, interaction } from "./update"
 import type { Invite, Model } from "./model"
 
 /** Port of `routes/_app/$orgSlug/settings/connect-invites.tsx`. */
@@ -55,6 +56,10 @@ const inviteRow = (h: HtmlBuilder<Message>, model: Model, invite: Invite): Html 
 											size: "sm",
 											isDisabled: isBusy,
 											onPress: Message.ClickedDecline({ inviteId: invite.id }),
+											interaction: {
+												wiring: interaction.wiring(model),
+												target: declineTarget(invite.id),
+											},
 										},
 										[isDeclining ? "Declining..." : "Decline"],
 									),
@@ -65,6 +70,10 @@ const inviteRow = (h: HtmlBuilder<Message>, model: Model, invite: Invite): Html 
 											size: "sm",
 											isDisabled: isBusy,
 											onPress: Message.ClickedAccept({ inviteId: invite.id }),
+											interaction: {
+												wiring: interaction.wiring(model),
+												target: acceptTarget(invite.id),
+											},
 										},
 										[isAccepting ? "Accepting..." : "Accept"],
 									),
@@ -93,7 +102,12 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 								[
 									h.h2([h.Class("font-semibold text-fg text-lg")], ["Connect invitations"]),
 									...(pendingInvites.length > 0
-										? [badge(h, { intent: "secondary" }, [`${pendingInvites.length}`, " pending"])]
+										? [
+												badge(h, { intent: "secondary" }, [
+													`${pendingInvites.length}`,
+													" pending",
+												]),
+											]
 										: []),
 								],
 							),

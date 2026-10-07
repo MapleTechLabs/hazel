@@ -6,15 +6,18 @@ import { organizationCollection } from "~/db/collections"
 import { liveQueryStream } from "../../../data/live-query"
 import type { PageSubscriptionInput } from "../../contract"
 import { Message } from "./message"
+import { interaction } from "./update"
 import type { Model } from "./model"
 
 /** Host organization names (legacy: one `organizationCollection` live query per row). */
-export const subscriptions = Subscription.make<PageSubscriptionInput<Model>, Message>()((entry) => ({
+const dataSubscriptions = Subscription.make<PageSubscriptionInput<Model>, Message>()((entry) => ({
 	hostOrganizations: entry(
 		{ organizationIds: Schema.Array(OrganizationId) },
 		{
 			modelToDependencies: ({ model }) => ({
-				organizationIds: [...new Set(model.invites.map((invite) => invite.hostOrganizationId))].sort(),
+				organizationIds: [
+					...new Set(model.invites.map((invite) => invite.hostOrganizationId)),
+				].sort(),
 			}),
 			dependenciesToStream: ({ organizationIds }) =>
 				organizationIds.length === 0
@@ -33,3 +36,5 @@ export const subscriptions = Subscription.make<PageSubscriptionInput<Model>, Mes
 		},
 	),
 }))
+
+export const subscriptions = { ...interaction.subscriptions, ...dataSubscriptions }

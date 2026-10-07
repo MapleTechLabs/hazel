@@ -13,7 +13,7 @@ import { marketplaceBotCard } from "../shared/bot-card"
 import type { PublicBot } from "../shared/bots"
 import { fragment, listSpinner } from "../shared/view"
 import { Message } from "./message"
-import { interaction } from "./update"
+import { installTarget, interaction } from "./update"
 import type { Model } from "./model"
 
 /** Port of `routes/_app/$orgSlug/settings/integrations/marketplace.tsx`. */
@@ -77,6 +77,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 										isInstalled: model.installedBotIds.includes(bot.id),
 										isInstalling: model.installingBotIds.includes(bot.id),
 										onInstall: Message.ClickedInstall({ botId: bot.id }),
+										installInteraction: { wiring, target: installTarget(bot.id) },
 									}),
 								),
 							),

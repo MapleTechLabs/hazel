@@ -168,6 +168,22 @@ export const update = (model: Model, message: Message): { model: Model } =>
 		}),
 	})
 
+/**
+ * What disabling targets (React Aria Button `isDisabled`) does to their state: useHover's
+ * `isDisabled` effect ends the hover until the next pointer entry, and useFocus's synthetic blur
+ * (a MutationObserver on `disabled`) ends the focus. Call it in the update that disables them.
+ */
+export const disabledTargets = (model: Model, targets: ReadonlyArray<string>): Model => {
+	const isHovered = model.hovered.some((target) => targets.includes(target))
+	const isFocused = model.focused !== null && targets.includes(model.focused.target)
+	return isHovered || isFocused
+		? modifyFields(model, {
+				hovered: (hovered) => hovered.filter((target) => !targets.includes(target)),
+				focused: (focused) => (isFocused ? null : focused),
+			})
+		: model
+}
+
 // SUBSCRIPTION
 
 /** useFocusVisible's isValidKey: modifier chords and bare modifiers don't switch to keyboard. */
