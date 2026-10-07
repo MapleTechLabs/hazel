@@ -4,7 +4,8 @@ import { defineMessageUnion } from "foldkit/message"
 import * as CommandMenu from "../../ui/command-menu"
 import { ModalRequest } from "../modal"
 import { ToastRequest } from "../toasts"
-import { ChannelSummary, ChannelType, DmChannel, Theme } from "./model"
+import { ThemePreference } from "../../theme"
+import { ChannelSummary, ChannelType, DmChannel } from "./model"
 import { RecentSearch, SearchAutocomplete, SearchData, Suggestion } from "./search-data"
 
 export const Message = defineMessageUnion({
@@ -18,7 +19,6 @@ export const Message = defineMessageUnion({
 	UpdatedMemberChannelIds: { channelIds: Schema.Array(ChannelId) },
 	UpdatedUnjoinedChannels: { channels: Schema.Array(ChannelSummary) },
 	UpdatedPresenceStatus: { status: Schema.String },
-	LoadedTheme: { theme: Theme },
 	ChangedChannelName: { value: Schema.String },
 	ChangedChannelType: { value: ChannelType },
 	SubmittedCreateChannel: {},
@@ -51,5 +51,7 @@ export const OutMessage = defineMessageUnion({
 	Completed: { href: Schema.NullOr(Schema.String), toast: Schema.NullOr(ToastRequest) },
 	RequestedModal: { modal: ModalRequest },
 	RequestedToast: { toast: ToastRequest },
+	/** `setTheme(mode)`: the root applies and persists it. */
+	RequestedTheme: { preference: ThemePreference },
 })
 export type OutMessage = typeof OutMessage.Type

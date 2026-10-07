@@ -2,13 +2,11 @@ import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
-import { ResolvedTheme } from "../../../theme"
 import { GitHubRepo, Provider, RssFeed, RowKind, Webhook } from "./model"
 
 const Failure = { title: Schema.String, description: Schema.NullOr(Schema.String) }
 
 export const Message = defineMessageUnion({
-	ChangedSystemTheme: { theme: ResolvedTheme },
 	UpdatedGitHubConnection: { isConnected: Schema.Boolean },
 	SucceededListWebhooks: { webhooks: Schema.Array(Webhook) },
 	SucceededListRss: { feeds: Schema.Array(RssFeed) },

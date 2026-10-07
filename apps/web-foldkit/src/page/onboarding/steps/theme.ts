@@ -3,12 +3,12 @@ import { twMerge } from "tailwind-merge"
 import { appearanceDark, appearanceLight, appearanceSystem } from "../../../ui/appearance-previews"
 import { visuallyHiddenStyle } from "../../../ui/checkbox"
 import { Message } from "../message"
-import type { StepForm, Theme } from "../model"
+import type { ThemeState } from "../../../theme"
+import type { Theme } from "../model"
 import { onboardingNavigation, stepHeader } from "../navigation"
 
 /** `theme-selection-step.tsx`: React Aria's unstyled RadioGroup/Radio with ColorSwatch and previews. */
 
-type ThemeForm = Extract<StepForm, { _tag: "Theme" }>
 
 /** `parseColor(hex).getColorName("en-US")` for each swatch. */
 const SWATCHES = [
@@ -88,12 +88,12 @@ const radioGroup = (h: HtmlBuilder<Message>, ariaLabel: string, className: strin
 		children,
 	)
 
-const brandColors = (h: HtmlBuilder<Message>, form: ThemeForm): Html =>
+const brandColors = (h: HtmlBuilder<Message>, theme: ThemeState): Html =>
 	radioGroup(h, "Brand color", "flex items-center", [
 		h.div(
 			[h.Class("flex flex-wrap gap-2")],
 			SWATCHES.map((swatch) => {
-				const isSelected = form.brandColor.toLowerCase() === swatch.hex.toLowerCase()
+				const isSelected = theme.customization.primary.toLowerCase() === swatch.hex.toLowerCase()
 				return ariaRadio(
 					h,
 					{
@@ -131,13 +131,13 @@ const brandColors = (h: HtmlBuilder<Message>, form: ThemeForm): Html =>
 		),
 	])
 
-const displayPreferences = (h: HtmlBuilder<Message>, form: ThemeForm): Html =>
+const displayPreferences = (h: HtmlBuilder<Message>, theme: ThemeState): Html =>
 	radioGroup(
 		h,
 		"Display preference",
 		"flex gap-4 sm:gap-5",
 		THEMES.map((option) => {
-			const isSelected = form.theme === option.value
+			const isSelected = theme.mode === option.value
 			return ariaRadio(
 				h,
 				{
@@ -188,7 +188,7 @@ const sectionHeading = (h: HtmlBuilder<Message>, title: string, description: str
 	h.p([h.Class("text-muted-fg text-sm")], [description]),
 ]
 
-export const themeStep = (h: HtmlBuilder<Message>, form: ThemeForm): Html =>
+export const themeStep = (h: HtmlBuilder<Message>, theme: ThemeState): Html =>
 	h.div(
 		[h.Class("space-y-4 sm:space-y-6"), h.DataAttribute("testid", "onboarding-step-theme")],
 		[
@@ -203,7 +203,7 @@ export const themeStep = (h: HtmlBuilder<Message>, form: ThemeForm): Html =>
 						[h.Class("space-y-3")],
 						[
 							...sectionHeading(h, "Brand color", "Select your preferred accent color"),
-							brandColors(h, form),
+							brandColors(h, theme),
 						],
 					),
 					h.hr([h.Class("h-px w-full border-none bg-border")]),
@@ -217,7 +217,7 @@ export const themeStep = (h: HtmlBuilder<Message>, form: ThemeForm): Html =>
 										"-mx-3 overflow-x-auto px-3 pt-2 sm:mx-0 sm:overflow-x-visible sm:px-0",
 									),
 								],
-								[displayPreferences(h, form)],
+								[displayPreferences(h, theme)],
 							),
 						],
 					),

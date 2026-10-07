@@ -1,3 +1,4 @@
+import { NotificationId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import { UrlRequest } from "foldkit/navigation"
@@ -18,11 +19,17 @@ export const Message = defineMessageUnion({
 	CompletedLoadExternal: {},
 	ChangedSystemTheme: { theme: ResolvedTheme },
 	CompletedApplyTheme: {},
+	CompletedSaveThemePreference: {},
+	CompletedSaveSoundSettings: {},
+	/** The member's latest notifications (newest first), for the sound and native sinks. */
+	UpdatedRecentNotifications: { ids: Schema.Array(NotificationId) },
+	CompletedDeliverNotifications: {},
 	ChangedAuth: { auth: Auth },
 	SucceededFetchCurrentUser: { user: CurrentUser },
 	FailedFetchCurrentUser: { reason: Schema.String },
 	CompletedSignOut: {},
-	UpdatedOrganization: { organization: Schema.NullOr(Organization) },
+	/** The organization query for `orgSlug` answered (found or not). */
+	UpdatedOrganization: { orgSlug: Schema.String, organization: Schema.NullOr(Organization) },
 	UpdatedMember: { member: Schema.NullOr(Member) },
 	TickedPresenceClock: { nowMs: Schema.Number },
 	ClickedLayoutTab: { href: Schema.String },

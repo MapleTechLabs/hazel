@@ -1,11 +1,11 @@
 import { Match } from "effect"
 import type { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
-import { DEFAULT_BRAND_COLOR } from "~/lib/theme/presets"
 import type { HazelRpc } from "../../rpc"
+import { onboardingHref } from "../../route"
 import * as ChoiceBox from "../../ui/choice-box"
 import type { PageReturn, Shared } from "../contract"
-import { CompleteOnboarding, ReadThemePreference, ReplaceStepUrl } from "./command"
+import { CompleteOnboarding, ReplaceStepUrl } from "./command"
 import { type Direction, nextStep, previousStep, type Step, stepFromUrl } from "./flow"
 import type { Message } from "./message"
 import { type Data, type Model, StepForm } from "./model"
@@ -26,7 +26,7 @@ const formFor = (model: Model, step: Step, shared: Shared): StepForm =>
 		),
 		Match.when("timezoneSelection", () =>
 			StepForm.Timezone({
-				selected: model.data.timezone ?? model.browserTimezone,
+				selected: model.data.timezone ?? model.browserTimezone ?? "UTC",
 				query: "",
 				debouncedQuery: "",
 				hoveredOffset: null,
@@ -34,9 +34,7 @@ const formFor = (model: Model, step: Step, shared: Shared): StepForm =>
 				isSubmitting: false,
 			}),
 		),
-		Match.when("themeSelection", () =>
-			StepForm.Theme({ theme: "system", brandColor: DEFAULT_BRAND_COLOR }),
-		),
+		Match.when("themeSelection", () => StepForm.Theme()),
 		Match.when("useCases", () =>
 			StepForm.Choice({
 				box: ChoiceBox.init({ id: "team-size", selectedKeys: model.data.useCases.slice(0, 1) }),
@@ -52,9 +50,7 @@ const formFor = (model: Model, step: Step, shared: Shared): StepForm =>
 	)
 
 const stepCommands = (model: Model, step: Step): ReadonlyArray<Command.Command<Message, never, HazelRpc>> =>
-	step === "themeSelection"
-		? [ReadThemePreference({})]
-		: step === "finalization"
+	step === "finalization"
 			? [
 					CompleteOnboarding({
 						memberId: model.membership?.memberId ?? null,
@@ -81,7 +77,10 @@ export const enterStep = (
 	})
 	return {
 		model: next,
-		commands: [...(options.syncUrl ? [ReplaceStepUrl({ step })] : []), ...stepCommands(next, step)],
+		commands: [
+			...(options.syncUrl ? [ReplaceStepUrl({ href: onboardingHref(model.orgId, step) })] : []),
+			...stepCommands(next, step),
+		],
 	}
 }
 
@@ -113,7 +112,8 @@ export const goBack = (model: Model, shared: Shared): Return => {
  * An organization with a slug means the user was invited into it.
  */
 export const initializeWhenReady = (model: Model, shared: Shared): Return => {
-	if (model.isInitialized || model.urlStep === undefined || model.membership === undefined) return { model }
+	if (model.isInitialized || model.browserTimezone === undefined || model.membership === undefined)
+		return { model }
 	const userType = model.membership?.slug ? "invited" : "creator"
 	const step = stepFromUrl(model.urlStep, userType) ?? "welcome"
 	return enterStep(modifyFields(model, { isInitialized: () => true, userType: () => userType }), step, {

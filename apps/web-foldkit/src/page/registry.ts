@@ -2,7 +2,7 @@ import { Array, Option, Schema } from "effect"
 import { Subscription } from "foldkit"
 import type { Command } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
-import type { HazelRpc } from "../rpc"
+import type { Resources } from "../rpc"
 import type { AppRoute } from "../route"
 import * as Auth from "./auth"
 import * as ChannelSettingsConnect from "./channel-settings/connect"
@@ -90,7 +90,7 @@ export type PageMessage = typeof PageMessage.Type
 /** The page slot after a transition, with the Commands and OutMessage that came with it. */
 export interface PageTransition {
 	readonly slot: PageSlot | null
-	readonly commands: ReadonlyArray<Command.Command<PageMessage, never, HazelRpc>>
+	readonly commands: ReadonlyArray<Command.Command<PageMessage, never, Resources>>
 	readonly outMessage: Option.Option<PageOutMessage>
 }
 
@@ -146,7 +146,7 @@ export const informShared = (current: PageSlot | null, shared: Shared): PageTran
 				onSome: (page) => toTransition(page.sharedChanged(current, shared), current),
 			})
 
-export const pageSubscriptions = Subscription.aggregate<PageHost, PageMessage, HazelRpc>()(
+export const pageSubscriptions = Subscription.aggregate<PageHost, PageMessage, Resources>()(
 	...pages.map((page) => page.subscriptions),
 )
 

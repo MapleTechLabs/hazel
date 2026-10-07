@@ -10,15 +10,12 @@ import { PageOutMessage } from "../../out-message"
 import { embedInteraction } from "../shared"
 import {
 	ExpireNotificationStatus,
-	LoadSoundSettings,
 	PlayTestSound,
-	SaveSoundSettings,
 	SendTestNotification,
 	UpdateUserSettings,
 } from "./command"
 import { Message } from "./message"
 import {
-	DEFAULT_SOUND_SETTINGS,
 	type Model,
 	type QuietHoursField,
 	settingsOf,
@@ -61,19 +58,20 @@ const syncQuietHours = (model: Model): Model => {
 }
 
 /** The slider follows the stored volume and is disabled with the sounds. */
-const syncVolume = (model: Model): Model =>
+const syncVolume = (model: Model, sound: SoundSettings): Model =>
 	modifyFields(model, {
 		volume: (volume) =>
-			volume.values[0] === model.sound.volume && volume.isDisabled === !model.sound.enabled
+			volume.values[0] === sound.volume && volume.isDisabled === !sound.enabled
 				? volume
-				: { ...volume, values: [model.sound.volume], isDisabled: !model.sound.enabled },
+				: { ...volume, values: [sound.volume], isDisabled: !sound.enabled },
 	})
 
-const withSound = (model: Model, patch: Partial<SoundSettings>): Return => {
-	const sound = { ...model.sound, ...patch }
+/** `updateSettings(patch)`: the root stores it and informs the page (`sharedChanged`). */
+const withSound = (model: Model, shared: Shared, patch: Partial<SoundSettings>): Return => {
+	const settings = { ...shared.soundSettings, ...patch }
 	return {
-		model: syncVolume(modifyFields(model, { sound: () => sound })),
-		commands: [SaveSoundSettings({ sound })],
+		model: syncVolume(model, settings),
+		outMessage: PageOutMessage.RequestedSoundSettings({ settings }),
 	}
 }
 
@@ -106,9 +104,9 @@ const foldVolume = Update.foldChild({
 	toParentMessage: toVolumeMessage,
 })
 
-export const init = (): Return => ({
-	model: syncVolume({
-		sound: DEFAULT_SOUND_SETTINGS,
+export const init = (_route: unknown, shared: Shared): Return => ({
+	model: syncVolume(
+		{
 		settings: null,
 		optimisticSettings: null,
 		volume: Slider.init({
@@ -122,24 +120,24 @@ export const init = (): Return => ({
 		quietHoursEnd: Segments.init({ id: "quiet-hours-end", kind: "time", value: DEFAULT_QUIET_END }),
 		notificationStatus: "idle",
 		interaction: Interaction.init(),
-	}),
-	commands: [LoadSoundSettings({})],
+		},
+		shared.soundSettings,
+	),
+})
+
+export const sharedChanged = (model: Model, shared: Shared): Return => ({
+	model: syncVolume(model, shared.soundSettings),
 })
 
 export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
-		LoadedSoundSettings: ({ sound }) => ({
-			model: syncVolume(modifyFields(model, { sound: () => sound })),
-		}),
-		CompletedSaveSoundSettings: () => ({ model }),
-		ToggledSounds: ({ isSelected }) => withSound(model, { enabled: isSelected }),
-		SelectedSound: ({ soundFile }) => withSound(model, { soundFile }),
+		ToggledSounds: ({ isSelected }) => withSound(model, shared, { enabled: isSelected }),
+		SelectedSound: ({ soundFile }) => withSound(model, shared, { soundFile }),
 		GotVolumeMessage: ({ message: child }) => {
 			const result = foldVolume(model, child)
 			const volume = result.model.volume.values[0]
-			if (volume === undefined || volume === model.sound.volume) return result
-			const saved = withSound(result.model, { volume })
-			return { model: saved.model, commands: [...(result.commands ?? []), ...(saved.commands ?? [])] }
+			if (volume === undefined || volume === shared.soundSettings.volume) return result
+			return { ...withSound(result.model, shared, { volume }), commands: result.commands ?? [] }
 		},
 		ClickedTestSound: () => ({ model, commands: [PlayTestSound({})] }),
 		CompletedTestSound: () => ({ model }),

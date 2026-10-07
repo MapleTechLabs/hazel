@@ -6,8 +6,6 @@ import * as Select from "../../../ui/select"
 import { Customization, ThemeMode } from "./model"
 
 export const Message = defineMessageUnion({
-	LoadedAppearance: { mode: ThemeMode, customization: Customization },
-	CompletedApplyAppearance: {},
 	SelectedPreset: { presetId: Schema.String },
 	ClickedGenerate: {},
 	GeneratedRemixOptions: { options: Schema.Array(Customization) },

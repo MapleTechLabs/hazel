@@ -3,7 +3,6 @@ import { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import type { ToastRequest } from "../../../overlay/toasts"
 import type { RouteOf } from "../../../route"
-import { resolveSystemTheme } from "../../../theme"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
 import { successToast } from "../../../ui/toast-exit"
@@ -28,7 +27,6 @@ const idleCard: ProviderCard = {
 export const init = (route: RouteOf<"ChannelSettingsIntegrations">): Return => ({
 	model: {
 		channelId: route.channelId,
-		resolvedTheme: resolveSystemTheme(),
 		isGitHubConnected: false,
 		webhooks: { isLoading: true, items: [] },
 		rss: { isLoading: true, items: [] },
@@ -137,7 +135,6 @@ const settleRowAction = (model: Model, kind: RowKind, id: string): Model => {
 
 export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
-		ChangedSystemTheme: ({ theme }) => ({ model: modifyFields(model, { resolvedTheme: () => theme }) }),
 		UpdatedGitHubConnection: ({ isConnected }) => {
 			if (isConnected === model.isGitHubConnected) return { model }
 			const next = modifyFields(model, { isGitHubConnected: () => isConnected })

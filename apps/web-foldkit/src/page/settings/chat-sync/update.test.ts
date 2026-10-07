@@ -7,6 +7,7 @@ import type { Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
 import { Message } from "./model"
 import { DeleteConnection, init, ListConnections, sharedChanged, update } from "./update"
+import { sharedDefaults } from "../../test-shared"
 
 const organizationId = Schema.decodeSync(OrganizationId)("00000000-0000-4000-8000-000000000001")
 const connectionId = Schema.decodeSync(SyncConnectionId)("00000000-0000-4000-8000-000000000002")
@@ -17,6 +18,7 @@ const shared: Shared = {
 	organization: { id: organizationId, name: "Hazel", slug: "hazel", logoUrl: null },
 	member: null,
 	nowMs: 0,
+	...sharedDefaults,
 }
 const connection = {
 	id: connectionId,

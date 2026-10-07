@@ -63,11 +63,7 @@ const shellContextOf = (model: Model, orgSlug: string): ShellContext => ({
 /** The routed page, or an empty placeholder until its page is ported. */
 const pageBody = (model: Model, h: HtmlBuilder<Message>, isInsideMain: boolean): Html => {
 	if (model.page !== null) return viewPage(h, model.page, { shared: sharedOf(model) }, toPageMessage)
-	const route = model.route
-	// The prebuilt Clerk form mounts into this container (`Clerk.mountSignIn`), like `<SignIn>` does.
-	if (route._tag === "SignIn" || route._tag === "SignUp")
-		return h.div([h.Attribute("data-clerk-component", route._tag)], [])
-	const placeholder = h.Attribute("data-page-placeholder", route._tag)
+	const placeholder = h.Attribute("data-page-placeholder", model.route._tag)
 	return isInsideMain ? h.div([placeholder], []) : h.main([placeholder], [])
 }
 
@@ -156,8 +152,12 @@ const body = (model: Model, h: HtmlBuilder<Message>): Html => {
 	if (isPublicRoute(route)) return appRoot(h, model, [pageBody(model, h, false)])
 	// `_app/layout.tsx`: a loader until Clerk knows the session; signed out redirects to sign-in.
 	if (model.auth !== "SignedIn") return appRoot(h, model, [appLoader(h)])
+	// `AppShell`: a loader until `user.me` answers.
+	if (model.currentUser === null) return appRoot(h, model, [appLoader(h)])
 	const orgSlug = orgSlugOf(route)
 	if (orgSlug === undefined) return appRoot(h, model, [pageBody(model, h, false)])
+	// `$orgSlug/layout.tsx`: a loader while `useOrganization()` loads the route's organization.
+	if (model.loadedOrgSlug !== orgSlug) return appRoot(h, model, [appLoader(h)])
 	const context = shellContextOf(model, orgSlug)
 	return orgShell(h, context, {
 		page: sectionBody(model, h),

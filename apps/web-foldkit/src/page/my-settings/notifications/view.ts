@@ -10,7 +10,7 @@ import { switchControl } from "../../../ui/switch"
 import type { PageViewInputs } from "../../contract"
 import { divider, pageHeader, settingsRow } from "../shared"
 import { Message } from "./message"
-import { type Model, settingsOf, type SoundFile } from "./model"
+import { type Model, settingsOf, type SoundFile, type SoundSettings } from "./model"
 import { interaction, toQuietHoursMessage, toVolumeMessage } from "./update"
 
 /** Port of `routes/_app/$orgSlug/my-settings/notifications.tsx`. */
@@ -23,8 +23,13 @@ const soundOptions: ReadonlyArray<{ value: SoundFile; label: string; description
 const isSoundFile = (value: string): value is SoundFile =>
 	value === "notification01" || value === "notification03"
 
-const soundSettings = (h: HtmlBuilder<Message>, model: Model, wiring: Interaction.Wiring<Message>): Html => {
-	const enabled = model.sound.enabled
+const soundSettings = (
+	h: HtmlBuilder<Message>,
+	model: Model,
+	sound: SoundSettings,
+	wiring: Interaction.Wiring<Message>,
+): Html => {
+	const enabled = sound.enabled
 	return h.div(
 		[h.Class("flex flex-col gap-6")],
 		[
@@ -46,7 +51,7 @@ const soundSettings = (h: HtmlBuilder<Message>, model: Model, wiring: Interactio
 						h,
 						{
 							id: "notification-sound",
-							value: model.sound.soundFile,
+							value: sound.soundFile,
 							onChange: (value) =>
 								Message.SelectedSound({
 									soundFile: isSoundFile(value) ? value : "notification01",
@@ -241,7 +246,7 @@ const doNotDisturb = (h: HtmlBuilder<Message>, model: Model, wiring: Interaction
 	)
 }
 
-export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, _inputs, h) => {
+export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, { shared }, h) => {
 	const wiring = interaction.wiring(model)
 	return h.form(
 		[h.Class("flex flex-col gap-6 px-4 lg:px-8")],
@@ -253,7 +258,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 					settingsRow(
 						h,
 						{ title: "Sound settings", description: "Notification sounds" },
-						soundSettings(h, model, wiring),
+						soundSettings(h, model, shared.soundSettings, wiring),
 					),
 					divider(h),
 					settingsRow(

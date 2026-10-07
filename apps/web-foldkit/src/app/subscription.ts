@@ -1,11 +1,13 @@
-import { OrganizationId, UserId } from "@hazel/schema"
+import { ChannelId, type NotificationId, OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { eq } from "@tanstack/db"
 import { Option, Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
-import { organizationCollection, organizationMemberCollection } from "~/db/collections"
+import { notificationCollection, organizationCollection, organizationMemberCollection } from "~/db/collections"
 import { liveQueryStream } from "../data/live-query"
 import { pageSubscriptions } from "../page/registry"
-import { orgSlugOf } from "../route"
+import { SoundSettings } from "../notification-sound"
+import { wireNotificationSinks } from "./notification-sinks"
+import { type AppRoute, orgSlugOf } from "../route"
 import type { Member, Organization } from "../session"
 import * as ShellSubscription from "../shell/subscription"
 import * as CommandPalette from "../overlay/command-palette"
@@ -47,6 +49,7 @@ const rootSubscriptions = Subscription.make<Model, Message>()((entry) => ({
 							(rows) => {
 								const org = rows[0]
 								return Message.UpdatedOrganization({
+									orgSlug,
 									organization: org
 										? {
 												id: org.id,
@@ -89,6 +92,51 @@ const rootSubscriptions = Subscription.make<Model, Message>()((entry) => ({
 	),
 }))
 
+/** `currentChannelIdAtom`: the channel the chat routes show. */
+const currentChannelIdOf = (route: AppRoute): ChannelId | null =>
+	route._tag.startsWith("Chat") && "channelId" in route ? route.channelId : null
+
+const MAX_RECENT_NOTIFICATIONS = 250
+
+/** `NotificationSoundProvider` in `$orgSlug/layout.tsx`: sound and native notification sinks. */
+const notificationSubscriptions = Subscription.make<Model, Message>()((entry) => ({
+	notificationSinks: entry(
+		{
+			userId: Schema.NullOr(UserId),
+			settings: SoundSettings,
+			currentChannelId: Schema.NullOr(ChannelId),
+		},
+		{
+			modelToDependencies: (model) => ({
+				userId: orgSlugOf(model.route) === undefined ? null : (model.currentUser?.id ?? null),
+				settings: model.soundSettings,
+				currentChannelId: currentChannelIdOf(model.route),
+			}),
+			dependenciesToStream: ({ userId, settings, currentChannelId }) =>
+				userId === null ? Stream.empty : wireNotificationSinks({ userId, settings, currentChannelId }),
+		},
+	),
+	// The provider's `recentNotifications` query, for the membership in the route's organization.
+	recentNotifications: entry(
+		{ memberId: Schema.NullOr(OrganizationMemberId) },
+		{
+			modelToDependencies: (model) => ({ memberId: model.member?.id ?? null }),
+			dependenciesToStream: ({ memberId }) =>
+				memberId === null
+					? Stream.empty
+					: liveQueryStream<{ readonly id: NotificationId }, Message>(
+							(q) =>
+								q
+									.from({ notification: notificationCollection })
+									.where(({ notification }) => eq(notification.memberId, memberId))
+									.orderBy(({ notification }) => notification.createdAt, "desc")
+									.limit(MAX_RECENT_NOTIFICATIONS),
+							(rows) => Message.UpdatedRecentNotifications({ ids: rows.map((row) => row.id) }),
+						),
+		},
+	),
+}))
+
 const overlaySubscriptions = Subscription.make<Model, Message>()((entry) => ({
 	// `$orgSlug/layout.tsx` hotkeys: only inside the signed-in org shell.
 	layoutHotkeys: entry(
@@ -126,6 +174,7 @@ const pages = Subscription.lift(pageSubscriptions)<Model, Message>({
 
 export const subscriptions = Subscription.aggregate(
 	rootSubscriptions,
+	notificationSubscriptions,
 	overlaySubscriptions,
 	commandPaletteSubscriptions,
 	modalSubscriptions,

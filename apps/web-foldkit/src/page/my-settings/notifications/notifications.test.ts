@@ -6,10 +6,11 @@ import { describe, expect, test } from "vitest"
 import type { Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
 import { UserRow } from "../user"
-import { SaveSoundSettings, UpdateUserSettings } from "./command"
+import { UpdateUserSettings } from "./command"
 import { Message } from "./message"
 import { settingsOf } from "./model"
-import { init, update } from "./update"
+import { init, sharedChanged, update } from "./update"
+import { sharedDefaults } from "../../test-shared"
 
 /** Update-loop tests for notification preferences: optimistic user settings and the sound settings. */
 
@@ -29,6 +30,7 @@ const shared: Shared = {
 	organization: null,
 	member: null,
 	nowMs: 0,
+	...sharedDefaults,
 }
 const pageUpdate = (current: Parameters<typeof update>[0], next: Message) => update(current, next, shared)
 const row = {
@@ -44,7 +46,7 @@ describe("notification preferences", () => {
 	test("the synced quiet hours drive the time fields", () => {
 		story(
 			pageUpdate,
-			given(init().model),
+			given(init(undefined, shared).model),
 			message(Message.UpdatedUserRow({ row: Schema.decodeUnknownSync(UserRow)(row) })),
 			model((current) => {
 				expect(current.quietHoursStart.committed).toBe("21:30:00")
@@ -56,7 +58,7 @@ describe("notification preferences", () => {
 	test("do not disturb is written optimistically with the other settings kept", () => {
 		story(
 			pageUpdate,
-			given(init().model),
+			given(init(undefined, shared).model),
 			message(Message.UpdatedUserRow({ row: Schema.decodeUnknownSync(UserRow)(row) })),
 			message(Message.ToggledDoNotDisturb({ isSelected: true })),
 			model((current) =>
@@ -76,16 +78,24 @@ describe("notification preferences", () => {
 		)
 	})
 
-	test("turning sounds off saves them and disables the volume slider", () => {
+	test("turning sounds off asks the root to store them", () => {
 		story(
 			pageUpdate,
-			given(init().model),
+			given(init(undefined, shared).model),
 			message(Message.ToggledSounds({ isSelected: false })),
-			model((current) => {
-				expect(current.sound.enabled).toBe(false)
-				expect(current.volume.isDisabled).toBe(true)
-			}),
-			Command.resolve(SaveSoundSettings, Message.CompletedSaveSoundSettings()),
+			model((current) => expect(current.volume.isDisabled).toBe(true)),
+			expectOutMessage(
+				PageOutMessage.RequestedSoundSettings({ settings: { ...shared.soundSettings, enabled: false } }),
+			),
 		)
+	})
+
+	test("the volume slider follows Shared.soundSettings", () => {
+		const next = sharedChanged(init(undefined, shared).model, {
+			...shared,
+			soundSettings: { ...shared.soundSettings, volume: 0.8, enabled: false },
+		}).model
+		expect(next.volume.values).toEqual([0.8])
+		expect(next.volume.isDisabled).toBe(true)
 	})
 })

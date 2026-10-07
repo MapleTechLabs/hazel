@@ -4,24 +4,12 @@ import * as Interaction from "../../../ui/aria/interaction"
 import * as Segments from "../../../ui/date-segments"
 import * as Slider from "../../../ui/slider"
 
-/** `NotificationSoundSettings` (`atoms/notification-sound-atoms.ts`). */
-export const SoundFile = Schema.Literals(["notification01", "notification03"])
-export type SoundFile = typeof SoundFile.Type
-
-export const SoundSettings = Schema.Struct({
-	enabled: Schema.Boolean,
-	volume: Schema.Number,
-	soundFile: SoundFile,
-	cooldownMs: Schema.Number,
-})
-export type SoundSettings = typeof SoundSettings.Type
-
-export const DEFAULT_SOUND_SETTINGS: SoundSettings = {
-	enabled: true,
-	volume: 0.5,
-	soundFile: "notification01",
-	cooldownMs: 1000,
-}
+/** The sound settings are `Shared.soundSettings` (root-owned, like the legacy provider's atom). */
+export {
+	DEFAULT_SOUND_SETTINGS,
+	SoundFile,
+	SoundSettings,
+} from "../../../notification-sound"
 
 export const NotificationStatus = Schema.Literals(["idle", "sent", "unavailable"])
 export type NotificationStatus = typeof NotificationStatus.Type
@@ -30,7 +18,6 @@ export const QuietHoursField = Schema.Literals(["start", "end"])
 export type QuietHoursField = typeof QuietHoursField.Type
 
 export const Model = Schema.Struct({
-	sound: SoundSettings,
 	/** The user row's settings, as synced. */
 	settings: Schema.NullOr(User.UserSettingsSchema),
 	/** A write in flight or not yet synced back (the legacy optimistic collection update). */

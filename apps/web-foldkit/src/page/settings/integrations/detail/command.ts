@@ -3,27 +3,11 @@ import { OrganizationId } from "@hazel/schema"
 import { Effect, Exit, Schema } from "effect"
 import { Command } from "foldkit"
 import { load } from "foldkit/navigation"
+import { HazelApiClient } from "../../../../rpc"
 import { failureToast } from "../shared/exit-toast"
-import { withHazelApi } from "../shared/http"
 import { Message } from "./message"
 
 const Provider = IntegrationConnection.IntegrationProvider
-const callbackStatus = Schema.decodeUnknownOption(Schema.Literals(["success", "error"]))
-
-/** `Route.useSearch()`: the OAuth callback redirect's `connection_status` and `error_code`. */
-export const ReadOAuthCallback = Command.define("IntegrationReadOAuthCallback", {
-	args: {},
-	messages: [Message.CompletedReadOAuthCallback],
-	execute: () =>
-		Effect.sync(() => {
-			const search = new URLSearchParams(window.location.search)
-			const status = callbackStatus(search.get("connection_status"))
-			return Message.CompletedReadOAuthCallback({
-				status: status._tag === "Some" ? status.value : null,
-				errorCode: search.get("error_code"),
-			})
-		}),
-})
 
 /** The toast is out; clearing the search params is the second OutMessage of the callback effect. */
 export const AcknowledgeOAuthCallback = Command.define("IntegrationAcknowledgeOAuthCallback", {
@@ -39,7 +23,7 @@ export const GetOAuthUrl = Command.define("IntegrationGetOAuthUrl", {
 	args: target,
 	messages: [Message.SucceededGetOAuthUrl, Message.FailedGetOAuthUrl],
 	execute: (params) =>
-		withHazelApi((client) =>
+		HazelApiClient.use((client) =>
 			client.integrations.getOAuthUrl({ params, query: { level: "organization" } }),
 		).pipe(
 			Effect.map((response) =>
@@ -63,7 +47,7 @@ export const Disconnect = Command.define("IntegrationDisconnect", {
 	messages: [Message.CompletedDisconnect],
 	execute: (params) =>
 		Effect.exit(
-			withHazelApi((client) =>
+			HazelApiClient.use((client) =>
 				client.integrations.disconnect({ params, query: { level: "organization" } }),
 			),
 		).pipe(
@@ -97,7 +81,7 @@ export const ConnectApiKey = Command.define("IntegrationConnectApiKey", {
 	messages: [Message.SucceededConnectApiKey, Message.FailedConnectApiKey],
 	execute: ({ orgId, provider, token, baseUrl }) =>
 		Effect.exit(
-			withHazelApi((client) =>
+			HazelApiClient.use((client) =>
 				client.integrations.connectApiKey({
 					params: { orgId, provider },
 					payload: { token, baseUrl },

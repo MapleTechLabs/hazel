@@ -68,9 +68,9 @@ const generateButtonInteraction = (
 	...Interaction.stateAttributes(h, Interaction.stateOf(wiring.model, GENERATE_TARGET)),
 ]
 
-export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, _inputs, h) => {
+export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, { shared }, h) => {
 	const wiring = interaction.wiring(model)
-	const { customization } = model
+	const { customization, mode } = shared.theme
 	const activePresetId = BUILT_IN_PRESETS.find(
 		(preset) =>
 			preset.customization.primary === customization.primary &&
@@ -219,7 +219,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 				h,
 				{
 					id: "display-preference",
-					value: model.mode,
+					value: mode,
 					onChange: toModeMessage,
 					ariaLabel: "Display preference",
 					className: "flex gap-5",

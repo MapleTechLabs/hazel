@@ -8,6 +8,7 @@ import { Message } from "./message"
 import type { Model, NotificationItem } from "./model"
 import { MarkNotificationRead, routeChanged, update } from "./update"
 import { inboxView } from "./view"
+import { sharedDefaults } from "../../test-shared"
 
 /** Inbox update and view: grouping, category tabs, and marking unread notifications read. */
 
@@ -24,6 +25,7 @@ const shared: Shared = {
 	organization: null,
 	member: null,
 	nowMs: NOW,
+	...sharedDefaults,
 }
 
 const item = (n: number, overrides: Partial<NotificationItem>): NotificationItem => ({

@@ -9,13 +9,6 @@ import { Message } from "./message"
 import type { Model } from "./model"
 
 export const subscriptions = Subscription.make<PageSubscriptionInput<Model>, Message>()((entry) => ({
-	// `resolvedThemeAtom` picks the GitHub logo variant; the page contract does not share the theme.
-	systemTheme: Subscription.persistent(
-		Subscription.fromMediaQuery({
-			query: "(prefers-color-scheme: dark)",
-			mapMatches: (isDark) => Message.ChangedSystemTheme({ theme: isDark ? "dark" : "light" }),
-		}),
-	),
 	// `useIntegrationConnection(organizationId, "github")`
 	gitHubConnection: entry(
 		{ organizationId: Schema.NullOr(OrganizationId) },

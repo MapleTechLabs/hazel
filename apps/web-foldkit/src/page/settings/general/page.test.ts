@@ -6,6 +6,7 @@ import type { Shared } from "../../contract"
 import { Message } from "./message"
 import type { Model } from "./model"
 import { sharedChanged, update } from "./update"
+import { sharedDefaults } from "../../test-shared"
 
 /** Update-loop tests for the general settings page: name drafts, saves and the delete flow. */
 
@@ -19,6 +20,7 @@ const shared = (name: string, role: "owner" | "admin" | "member" = "owner"): Sha
 	organization: { id: organizationId, name, slug: "hazel", logoUrl: null },
 	member: { id: Schema.decodeSync(OrganizationMemberId)(uuid(2)), role },
 	nowMs: 0,
+	...sharedDefaults,
 })
 
 const model = (name: string): Model => ({

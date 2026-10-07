@@ -4,11 +4,9 @@ import * as Interaction from "../../../ui/aria/interaction"
 import * as Segments from "../../../ui/date-segments"
 import * as Slider from "../../../ui/slider"
 import { UserRow } from "../user"
-import { QuietHoursField, SoundFile, SoundSettings } from "./model"
+import { QuietHoursField, SoundFile } from "./model"
 
 export const Message = defineMessageUnion({
-	LoadedSoundSettings: { sound: SoundSettings },
-	CompletedSaveSoundSettings: {},
 	ToggledSounds: { isSelected: Schema.Boolean },
 	SelectedSound: { soundFile: SoundFile },
 	GotVolumeMessage: { message: Slider.Message },

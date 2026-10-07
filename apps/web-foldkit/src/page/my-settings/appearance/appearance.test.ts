@@ -1,13 +1,28 @@
 // @vitest-environment jsdom
 import { Option, Schema } from "effect"
-import { Command, given, message, model, story } from "foldkit/story"
+import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
-import { ApplyAppearance, GenerateRemixOptions } from "./command"
+import type { Shared } from "../../contract"
+import { PageOutMessage } from "../../out-message"
+import { sharedDefaults } from "../../test-shared"
+import { GenerateRemixOptions } from "./command"
 import { Message } from "./message"
 import { Customization } from "./model"
-import { init, update } from "./update"
+import { init, sharedChanged, update } from "./update"
 
 /** Update-loop tests for the Appearance page: presets, gray palette, remix and display mode. */
+
+const shared: Shared = {
+	auth: "SignedIn",
+	orgSlug: "hazel",
+	currentUser: null,
+	organization: null,
+	member: null,
+	nowMs: 0,
+	...sharedDefaults,
+}
+const pageUpdate = (current: Parameters<typeof update>[0], next: Message) => update(current, next, shared)
+const initial = () => init(undefined, shared).model
 
 const ocean = Schema.decodeSync(Customization)({
 	primary: "#0EA5E9",
@@ -16,24 +31,29 @@ const ocean = Schema.decodeSync(Customization)({
 })
 
 describe("appearance", () => {
-	test("a preset applies and persists its customization", () => {
+	test("a preset asks the root to apply and persist its customization", () => {
 		story(
-			update,
-			given(init().model),
+			pageUpdate,
+			given(initial()),
 			message(Message.SelectedPreset({ presetId: "ocean" })),
-			model((current) => {
-				expect(current.customization).toEqual(ocean)
-				expect(current.grayPalette.selectedKey).toEqual(Option.some("gray-cool"))
-			}),
-			Command.expectHas(ApplyAppearance({ mode: "system", customization: ocean, shouldPersist: true })),
-			Command.resolveAll([ApplyAppearance, Message.CompletedApplyAppearance()]),
+			expectOutMessage(
+				PageOutMessage.RequestedTheme({ preference: { mode: "system", customization: ocean } }),
+			),
 		)
+	})
+
+	test("the gray palette Select follows Shared.theme", () => {
+		const next = sharedChanged(initial(), {
+			...shared,
+			theme: { mode: "system", customization: ocean, resolved: "light" },
+		}).model
+		expect(next.grayPalette.selectedKey).toEqual(Option.some("gray-cool"))
 	})
 
 	test("Generate shows the pending state until the options arrive", () => {
 		story(
-			update,
-			given(init().model),
+			pageUpdate,
+			given(initial()),
 			message(Message.ClickedGenerate()),
 			model((current) => expect(current.isGenerating).toBe(true)),
 			Command.resolve(GenerateRemixOptions, Message.GeneratedRemixOptions({ options: [ocean] })),
@@ -46,11 +66,14 @@ describe("appearance", () => {
 
 	test("the display mode keeps the customization", () => {
 		story(
-			update,
-			given(init().model),
+			pageUpdate,
+			given(initial()),
 			message(Message.SelectedThemeMode({ mode: "dark" })),
-			model((current) => expect(current.mode).toBe("dark")),
-			Command.resolve(ApplyAppearance, Message.CompletedApplyAppearance()),
+			expectOutMessage(
+				PageOutMessage.RequestedTheme({
+					preference: { mode: "dark", customization: shared.theme.customization },
+				}),
+			),
 		)
 	})
 })
