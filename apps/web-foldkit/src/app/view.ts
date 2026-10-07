@@ -19,6 +19,7 @@ import {
 import * as Shell from "../shell/model"
 import { mySettingsSidebar, notificationsSidebar, settingsSidebar } from "../shell/sidebars"
 import type * as Menu from "../ui/menu"
+import type * as ModalKit from "../ui/modal"
 import { Message } from "./message"
 import { type Model, sharedOf } from "./model"
 
@@ -31,6 +32,9 @@ const toUserMenuMessage = (message: Menu.Message) =>
 	toShellMessage(Shell.Message.GotUserMenuMessage({ message }))
 const toOrgSwitcherMessage = (message: Menu.Message) =>
 	toShellMessage(Shell.Message.GotOrgSwitcherMessage({ message }))
+const toMobileSidebarMessage = (message: ModalKit.Message) =>
+	toShellMessage({ _tag: "GotMobileSidebarMessage", message })
+const openedMobileSidebar = toShellMessage(Shell.Message.ToggledSidebar({ isOpen: true }))
 export const toPageMessage = (message: PageMessage): Message => ({ _tag: "GotPageMessage", message })
 
 const shellContextOf = (model: Model, orgSlug: string): ShellContext => ({
@@ -147,6 +151,12 @@ const body = (model: Model, h: HtmlBuilder<Message>): Html => {
 		unreadNotificationCount: model.shell.unreadNotificationCount,
 		toaster: Toasts.view(h, model.toasts),
 		overlays: [Modal.view(h, model.modal), CommandPalette.view(h, model.commandPalette)],
+		mobile: {
+			isMobile: model.shell.isMobile,
+			isSidebarOpen: model.shell.isSidebarOpen,
+			onMenu: h.OnClick(openedMobileSidebar),
+			toSheetMessage: toMobileSidebarMessage,
+		},
 	})
 }
 

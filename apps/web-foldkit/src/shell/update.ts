@@ -1,11 +1,13 @@
 import type { OrganizationId, UserId } from "@hazel/schema"
 import { Option } from "effect"
-import { Update } from "foldkit"
+import { Command, Update } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import { PageOutMessage } from "../page/out-message"
 import * as Menu from "../ui/menu"
+import * as Modal from "../ui/modal"
 import * as ChannelsSidebar from "./channels-sidebar"
 import { ORG_SWITCHER_ID, orgSwitcherEntries, USER_MENU_ID, userMenuEntries } from "./menus"
+import { MOBILE_SIDEBAR_ID } from "./mobile"
 import { Message, type Model } from "./model"
 
 // CONTEXT
@@ -29,6 +31,7 @@ export const init = (): Model => ({
 	userOrganizations: [],
 	unreadNotificationCount: 0,
 	settingsChannel: null,
+	isMobile: false,
 	isSidebarOpen: false,
 	collapsedSectionIds: [],
 	panelWidths: {},
@@ -46,6 +49,8 @@ const withMenuEntries = (model: Model, context: Context): Model => {
 		context.currentUserId,
 		context.isChatSection,
 		context.canCreateChannel,
+		context.organizationId,
+		model.isMobile,
 		model.userOrganizations,
 	])
 	if (signature === model.menuSignature) return model
@@ -53,14 +58,25 @@ const withMenuEntries = (model: Model, context: Context): Model => {
 		menuSignature: () => signature,
 		userMenu: (menu) => Menu.reflectEntries(menu, userMenuEntries(orgSlug, context.currentUserId ?? "")),
 		orgSwitcher: (menu) =>
-			Menu.reflectEntries(
-				menu,
-				orgSwitcherEntries({
-					orgSlug,
-					isChat: context.isChatSection,
-					canCreateChannel: context.canCreateChannel,
-					organizations: model.userOrganizations,
-				}),
+			modifyFields(
+				Menu.reflectEntries(
+					menu,
+					orgSwitcherEntries({
+						orgSlug,
+						isChat: context.isChatSection,
+						isMobile: model.isMobile,
+						canCreateChannel: context.canCreateChannel,
+						organizations: model.userOrganizations,
+					}),
+				),
+				// Mobile shows `SwitchServerMenu` alone: a single-selection list with the current org checked.
+				{
+					selectionMode: () => (model.isMobile ? "Single" : "None"),
+					selectedKeys: () =>
+						model.isMobile && context.organizationId !== null
+							? [`org:${context.organizationId}`]
+							: [],
+				},
 			),
 	})
 }
@@ -97,7 +113,10 @@ const switcherModals: Readonly<Record<string, PageOutMessage>> = {
 const switchedOrganization = (model: Model, key: string): ShellReturn =>
 	Option.match(
 		Option.fromNullishOr(
-			model.userOrganizations.find((organization) => `org:${organization.id}` === key),
+			model.userOrganizations.find(
+				(organization) =>
+					`org:${organization.id}` === key && !model.orgSwitcher.selectedKeys.includes(key),
+			),
 		),
 		{
 			onNone: () => ({ model }),
@@ -173,6 +192,16 @@ export const update = (model: Model, message: Message, context: Context): ShellR
 			model: modifyFields(model, { settingsChannel: () => channel }),
 		}),
 		ToggledSidebar: ({ isOpen }) => ({ model: modifyFields(model, { isSidebarOpen: () => isOpen }) }),
+		ChangedViewport: ({ isMobile }) => ({ model: modifyFields(model, { isMobile: () => isMobile }) }),
+		GotMobileSidebarMessage: ({ message }) => {
+			const sheet = Modal.update({ id: MOBILE_SIDEBAR_ID, isOpen: model.isSidebarOpen }, message)
+			return {
+				model: modifyFields(model, { isSidebarOpen: () => sheet.model.isOpen }),
+				commands: Command.mapMessages(sheet.commands ?? [], (child) =>
+					Message.GotMobileSidebarMessage({ message: child }),
+				),
+			}
+		},
 		ToggledSection: ({ sectionId }) => ({
 			model: modifyFields(model, {
 				collapsedSectionIds: (ids) =>

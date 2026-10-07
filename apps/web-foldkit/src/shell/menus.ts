@@ -46,13 +46,27 @@ export const userMenuEntries = (orgSlug: string, userId: string): ReadonlyArray<
 	Menu.item("logout"),
 ]
 
-/** Chat routes get the full menu; settings and my-settings a shorter one (desktop only). */
+/** `SwitchServerMenu` at the root: the orgs section, a separator, then "Create server". */
+const switchServerEntries = (organizations: ReadonlyArray<SwitcherOrg>): ReadonlyArray<Menu.Entry> => [
+	Menu.section(
+		undefined,
+		organizations.map((organization) =>
+			Menu.item(`org:${organization.id}`, { textValue: organization.name }),
+		),
+	),
+	Menu.separator,
+	Menu.item("create-server", { textValue: "Create server" }),
+]
+
+/** Chat routes get the full menu, settings and my-settings a shorter one; mobile only switches orgs. */
 export const orgSwitcherEntries = (options: {
 	readonly orgSlug: string
 	readonly isChat: boolean
+	readonly isMobile: boolean
 	readonly canCreateChannel: boolean
 	readonly organizations: ReadonlyArray<SwitcherOrg>
 }): ReadonlyArray<Menu.Entry> => {
+	if (options.isMobile) return switchServerEntries(options.organizations)
 	const org = `/${options.orgSlug}`
 	// NOTE: legacy renders the orgs as a single-selection section plus a separator; the kit submenu takes leaves.
 	const switchServer = Menu.item("switch-server", {

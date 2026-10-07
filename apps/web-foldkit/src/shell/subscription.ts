@@ -38,6 +38,13 @@ const settingsChannelId = (route: AppRoute) =>
 		: null
 
 const own = Subscription.make<Input, Message>()((entry) => ({
+	// `useMediaQuery("(max-width: 767px)")` in `SidebarProvider`.
+	shellViewport: Subscription.persistent(
+		Subscription.fromMediaQuery({
+			query: "(max-width: 767px)",
+			mapMatches: (isMobile) => Message.ChangedViewport({ isMobile }),
+		}),
+	),
 	// `SwitchServerMenu`: every organization the user belongs to, oldest membership first.
 	shellUserOrganizations: entry(
 		{ userId: Schema.NullOr(UserId) },

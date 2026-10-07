@@ -2,6 +2,7 @@ import { ChannelId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import * as Menu from "../ui/menu"
+import * as Modal from "../ui/modal"
 import * as ChannelsSidebar from "./channels-sidebar"
 
 /** The shell around every org page; it lives at the root, so it survives navigation. */
@@ -32,8 +33,11 @@ export const Model = Schema.Struct({
 	unreadNotificationCount: Schema.Number,
 	/** `channels/$channelId/settings/layout.tsx` header (name and icon). */
 	settingsChannel: Schema.NullOr(ChannelSummary),
-	// Hooks for the mobile shell and resizable panels (wave 2).
+	/** `useSidebar().isMobile`: the `(max-width: 767px)` media query. */
+	isMobile: Schema.Boolean,
+	/** `isOpenOnMobile`: the sidebar sheet opened from the header or the bottom nav. */
 	isSidebarOpen: Schema.Boolean,
+	// Hooks for resizable panels (wave 2).
 	collapsedSectionIds: Schema.Array(Schema.String),
 	panelWidths: Schema.Record(Schema.String, Schema.Number),
 })
@@ -49,6 +53,8 @@ export const Message = defineMessageUnion({
 	UpdatedUnreadNotificationCount: { count: Schema.Number },
 	UpdatedSettingsChannel: { channel: Schema.NullOr(ChannelSummary) },
 	ToggledSidebar: { isOpen: Schema.Boolean },
+	ChangedViewport: { isMobile: Schema.Boolean },
+	GotMobileSidebarMessage: { message: Modal.Message },
 	ToggledSection: { sectionId: Schema.String },
 	ResizedPanel: { panel: Schema.String, width: Schema.Number },
 })
