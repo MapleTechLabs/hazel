@@ -149,6 +149,28 @@ describe("channel page list", () => {
 		)
 	})
 
+	test("moves the rendered rows in chunks, not on every scroll frame", () => {
+		let before = init(channelId, ada)
+		for (const next of [
+			Message.UpdatedMessages({ messages: page(0, 199) }),
+			listMessage(MessageList.Message.ResizedViewport({ viewportHeight: VIEWPORT })),
+		])
+			before = update(before, next).model
+		before = update(before, completed(before.list.scrollVersion, before.list.scrollTop)).model
+		before = update(before, listMessage(MessageList.Message.ScrolledList({ scrollTop: 8000 }))).model
+		const rendered = (current: Model) => [current.list.renderedFromKey, current.list.renderedToKey]
+		const nudged = update(
+			before,
+			listMessage(MessageList.Message.ScrolledList({ scrollTop: before.list.scrollTop + 40 })),
+		).model
+		expect(rendered(nudged)).toEqual(rendered(before))
+		const far = update(
+			before,
+			listMessage(MessageList.Message.ScrolledList({ scrollTop: before.list.scrollTop + 1500 })),
+		).model
+		expect(rendered(far)).not.toEqual(rendered(before))
+	})
+
 	// Story requires Commands to resolve before the next Message, so this race is driven by hand.
 	test("ignores scroll events that describe the DOM before a pending scroll was applied", () => {
 		const before = readingHistory()

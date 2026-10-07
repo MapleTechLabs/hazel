@@ -38,6 +38,9 @@ export const Model = Schema.Struct({
 	/** Last `ApplyScroll` issued and last one completed; a scroll is pending while they differ. */
 	scrollVersion: Schema.Number,
 	appliedScrollVersion: Schema.Number,
+	/** First and last rendered rows. Moved in chunks, so most scroll frames change no DOM. */
+	renderedFromKey: Schema.NullOr(Schema.String),
+	renderedToKey: Schema.NullOr(Schema.String),
 })
 export type Model = typeof Model.Type
 
@@ -71,6 +74,8 @@ export const init = (config: {
 	anchor: ViewportAnchor.End(),
 	scrollVersion: 0,
 	appliedScrollVersion: 0,
+	renderedFromKey: null,
+	renderedToKey: null,
 })
 
 // LAYOUT
@@ -210,7 +215,54 @@ const changedMeasurements = (
 	measurements: ReadonlyArray<{ readonly key: string; readonly height: number }>,
 ) => measurements.filter(({ key, height }) => model.measuredHeights[key] !== height)
 
+/**
+ * Inserting rows is the expensive part of a scroll frame (the shared stylesheet's `:has()` rules
+ * restyle the page per inserted subtree), so the rendered range only moves when the viewport comes
+ * within `RENDER_MARGIN_PX` of its edge, and then by `RENDER_CHUNK_PX` past the viewport.
+ */
+const RENDER_MARGIN_PX = 200
+const RENDER_CHUNK_PX = 2400
+
+export const renderedIndexes = (model: Model, layout: Layout) => {
+	const from = model.renderedFromKey === null ? undefined : layout.indexByKey.get(model.renderedFromKey)
+	const to = model.renderedToKey === null ? undefined : layout.indexByKey.get(model.renderedToKey)
+	return from === undefined || to === undefined || from > to ? undefined : { from, to }
+}
+
+const keepRendered = (model: Model): Model => {
+	if (model.viewportHeight === 0 || model.keys.length === 0)
+		return model.renderedFromKey === null && model.renderedToKey === null
+			? model
+			: modifyFields(model, { renderedFromKey: () => null, renderedToKey: () => null })
+	const layout = layoutOf(model)
+	const top = model.scrollTop
+	const bottom = top + model.viewportHeight
+	const current = renderedIndexes(model, layout)
+	if (
+		current !== undefined &&
+		layout.offsets[current.from]! <= Math.max(0, top - RENDER_MARGIN_PX) &&
+		layout.offsets[current.to + 1]! >= Math.min(layout.totalHeight, bottom + RENDER_MARGIN_PX)
+	)
+		return model
+	// A date divider stays first while older same-day rows prepend after it, so it never bounds the range.
+	const sticky = stickySetOf(model)
+	const toIndex = rowIndexAt(layout, bottom + RENDER_CHUNK_PX)
+	let fromIndex = rowIndexAt(layout, Math.max(0, top - RENDER_CHUNK_PX))
+	while (fromIndex < toIndex && sticky.has(model.keys[fromIndex]!)) fromIndex++
+	const from = model.keys[fromIndex]!
+	const to = model.keys[toIndex]!
+	return modifyFields(model, { renderedFromKey: () => from, renderedToKey: () => to })
+}
+
+const withRendered = (result: ListReturn): ListReturn => {
+	const model = keepRendered(result.model)
+	return model === result.model ? result : { ...result, model }
+}
+
 export const update = (model: Model, message: Message): ListReturn =>
+	withRendered(updateScroll(model, message))
+
+const updateScroll = (model: Model, message: Message): ListReturn =>
 	Message.match<ListReturn>(message, {
 		// While our own scroll is in flight the event describes the pre-patch DOM, so it is ignored.
 		ScrolledList: ({ scrollTop }) =>
@@ -252,11 +304,11 @@ export const setKeys = (
 ): ListReturn =>
 	model.keys === keys && model.stickyKeys === stickyKeys
 		? { model }
-		: reconcile(modifyFields(model, { keys: () => keys, stickyKeys: () => stickyKeys }))
+		: withRendered(reconcile(modifyFields(model, { keys: () => keys, stickyKeys: () => stickyKeys })))
 
 /** Jumps to the newest row and follows it (after sending a message). */
 export const scrollToEnd = (model: Model): ListReturn =>
-	reconcile(modifyFields(model, { anchor: () => ViewportAnchor.End() }))
+	withRendered(reconcile(modifyFields(model, { anchor: () => ViewportAnchor.End() })))
 
 /** Within half a viewport of the oldest loaded row: time to load an older page. */
 export const isNearStart = (model: Model) =>
@@ -349,19 +401,15 @@ export interface ViewInputs<Item, ParentMessage> {
 	readonly itemToView: (item: Item, context: { readonly isStuck: boolean }) => Html
 	/** Date separators: the one above the viewport is pinned to the top (`isStuck`). */
 	readonly isStickyHeader: (item: Item) => boolean
-	readonly overscanPx?: number
 	readonly toParentMessage: (message: Message) => ParentMessage
 }
 
-/** First visible row through last visible row, widened by the overscan. */
-export const visibleRange = (model: Model, layout: Layout, overscanPx: number) => {
-	if (model.viewportHeight === 0 || model.keys.length === 0) return undefined
-	const start = rowIndexAt(layout, Math.max(0, model.scrollTop - overscanPx))
-	const end = rowIndexAt(layout, model.scrollTop + model.viewportHeight + overscanPx)
-	return { start, end, firstVisible: rowIndexAt(layout, model.scrollTop) }
+/** The rendered rows (kept by `update`) and the first visible one. */
+export const visibleRange = (model: Model, layout: Layout) => {
+	const rendered = renderedIndexes(model, layout)
+	if (model.viewportHeight === 0 || rendered === undefined) return undefined
+	return { start: rendered.from, end: rendered.to, firstVisible: rowIndexAt(layout, model.scrollTop) }
 }
-
-const DEFAULT_OVERSCAN_PX = 300
 
 export const view = <Item, ParentMessage>(
 	h: HtmlBuilder<ParentMessage>,
@@ -369,7 +417,7 @@ export const view = <Item, ParentMessage>(
 	inputs: ViewInputs<Item, ParentMessage>,
 ): Html => {
 	const layout = layoutOf(model)
-	const range = visibleRange(model, layout, inputs.overscanPx ?? DEFAULT_OVERSCAN_PX)
+	const range = visibleRange(model, layout)
 	let stickyIndex: number | undefined
 	if (range !== undefined)
 		for (let index = range.firstVisible; index >= 0; index--)
