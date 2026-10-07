@@ -1,5 +1,6 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { IconPlus } from "../../../icons"
+import type { ResolvedTheme } from "../../../theme"
 import { badge } from "../../../ui/badge"
 import { button } from "../../../ui/button"
 import { providerLogoUrl } from "./command"
@@ -52,8 +53,8 @@ export const menuOf = (model: Model, kind: "rss" | "github", id: string) =>
 // GITHUB
 
 /** Dark UI gets the light logo and vice versa. */
-const gitHubLogo = (model: Model) =>
-	providerLogoUrl("github.com", "symbol", model.resolvedTheme === "dark" ? "light" : "dark")
+const gitHubLogo = (resolved: ResolvedTheme) =>
+	providerLogoUrl("github.com", "symbol", resolved === "dark" ? "light" : "dark")
 
 const EVENT_LABELS: Readonly<Record<string, string>> = {
 	push: "Push",
@@ -65,7 +66,7 @@ const EVENT_LABELS: Readonly<Record<string, string>> = {
 	star: "Stars",
 }
 
-const gitHubItem = (h: HtmlBuilder<Message>, model: Model, repo: GitHubRepo): Html => {
+const gitHubItem = (h: HtmlBuilder<Message>, model: Model, repo: GitHubRepo, logo: string): Html => {
 	const labels = repo.enabledEvents.map((event) => EVENT_LABELS[event] ?? event)
 	const remaining = repo.enabledEvents.length - 3
 	return h.keyed("div")(
@@ -76,7 +77,7 @@ const gitHubItem = (h: HtmlBuilder<Message>, model: Model, repo: GitHubRepo): Ht
 			),
 		],
 		[
-			h.img([h.Src(gitHubLogo(model)), h.Alt("GitHub"), h.Class("size-8 rounded-full object-cover")]),
+			h.img([h.Src(logo), h.Alt("GitHub"), h.Class("size-8 rounded-full object-cover")]),
 			h.div(
 				[h.Class("min-w-0 flex-1")],
 				[
@@ -131,8 +132,10 @@ const gitHubItem = (h: HtmlBuilder<Message>, model: Model, repo: GitHubRepo): Ht
 	)
 }
 
-export const gitHubCard = (h: HtmlBuilder<Message>, model: Model): Html => {
-	const logo = h.img([h.Src(gitHubLogo(model)), h.Alt("GitHub"), h.Class("size-10 rounded-lg")])
+/** `resolvedThemeAtom` picks the GitHub logo variant (`Shared.theme.resolved`). */
+export const gitHubCard = (h: HtmlBuilder<Message>, model: Model, resolved: ResolvedTheme): Html => {
+	const logoSrc = gitHubLogo(resolved)
+	const logo = h.img([h.Src(logoSrc), h.Alt("GitHub"), h.Class("size-10 rounded-lg")])
 	const description = "Receive repository events in this channel"
 	if (!model.isGitHubConnected)
 		return h.div(
@@ -194,7 +197,7 @@ export const gitHubCard = (h: HtmlBuilder<Message>, model: Model): Html => {
 								)
 							: h.div(
 									[h.Class("flex flex-col gap-2")],
-									repos.map((repo) => gitHubItem(h, model, repo)),
+									repos.map((repo) => gitHubItem(h, model, repo, logoSrc)),
 								),
 				],
 			),

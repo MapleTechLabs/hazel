@@ -2,7 +2,6 @@ import { ChannelId, ChannelWebhookId, GitHubSubscriptionId, RssSubscriptionId } 
 import { Schema } from "effect"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
-import { ResolvedTheme } from "../../../theme"
 
 export const Webhook = Schema.Struct({
 	id: ChannelWebhookId,
@@ -73,7 +72,6 @@ export const ConfirmTarget = Schema.Struct({ kind: RowKind, id: Schema.String })
 
 export const Model = Schema.Struct({
 	channelId: ChannelId,
-	resolvedTheme: ResolvedTheme,
 	isGitHubConnected: Schema.Boolean,
 	webhooks: listOf(Webhook),
 	rss: listOf(RssFeed),

@@ -102,7 +102,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 			h.div(
 				[h.Class("flex flex-col gap-4")],
 				[
-					gitHubCard(h, model),
+					gitHubCard(h, model, shared.theme.resolved),
 					rssCard(h, model),
 					providerCard(h, model, "openstatus", shared),
 					providerCard(h, model, "railway", shared),

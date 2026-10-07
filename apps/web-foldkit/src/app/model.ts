@@ -7,6 +7,7 @@ import { PageSlot } from "../page/registry"
 import { AppRoute, orgSectionOf, orgSlugOf } from "../route"
 import { Auth, CurrentUser, Member, Organization } from "../session"
 import * as Shell from "../shell/model"
+import { ResolvedTheme, resolveTheme, ThemePreference } from "../theme"
 import type { Context as ShellUpdateContext } from "../shell/update"
 import { can } from "../page/contract"
 
@@ -21,6 +22,9 @@ export const Model = Schema.Struct({
 	organization: Schema.NullOr(Organization),
 	member: Schema.NullOr(Member),
 	nowMs: Schema.Number,
+	/** The stored theme preference (`themeAtom`, `themeCustomizationAtom`), and the system's theme. */
+	themePreference: ThemePreference,
+	systemTheme: ResolvedTheme,
 	page: Schema.NullOr(PageSlot),
 	shell: Shell.Model,
 	modal: Modal.Model,
@@ -28,6 +32,9 @@ export const Model = Schema.Struct({
 	toasts: Toasts.Model,
 })
 export type Model = typeof Model.Type
+
+export const resolvedThemeOf = (model: Model): ResolvedTheme =>
+	resolveTheme(model.themePreference.mode, model.systemTheme)
 
 export const sharedOf = (model: Model): Shared => ({
 	auth: model.auth,
@@ -37,6 +44,7 @@ export const sharedOf = (model: Model): Shared => ({
 	member: model.member,
 	nowMs: model.nowMs,
 	isMobile: model.shell.isMobile,
+	theme: { ...model.themePreference, resolved: resolvedThemeOf(model) },
 })
 
 export const pageHostOf = (model: Model): PageHost => ({ page: model.page, shared: sharedOf(model) })

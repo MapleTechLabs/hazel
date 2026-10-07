@@ -2,7 +2,7 @@ import { Effect, Schema } from "effect"
 import { Command } from "foldkit"
 import { load, pushUrl, replaceUrl } from "foldkit/navigation"
 import { HazelRpc } from "../rpc"
-import { applyTheme, ResolvedTheme } from "../theme"
+import { applyTheme, ResolvedTheme, saveThemePreference, ThemeCustomization, ThemePreference } from "../theme"
 import { signOut } from "./clerk"
 import { Message } from "./message"
 
@@ -26,9 +26,17 @@ export const LoadExternal = Command.define("LoadExternal", {
 })
 
 export const ApplyTheme = Command.define("ApplyTheme", {
-	args: { theme: ResolvedTheme },
+	args: { resolved: ResolvedTheme, customization: ThemeCustomization },
 	messages: [Message.CompletedApplyTheme],
-	execute: ({ theme }) => applyTheme(theme).pipe(Effect.as(Message.CompletedApplyTheme())),
+	execute: ({ resolved, customization }) =>
+		applyTheme(resolved, customization).pipe(Effect.as(Message.CompletedApplyTheme())),
+})
+
+export const SaveThemePreference = Command.define("SaveThemePreference", {
+	args: { preference: ThemePreference },
+	messages: [Message.CompletedSaveThemePreference],
+	execute: ({ preference }) =>
+		saveThemePreference(preference).pipe(Effect.as(Message.CompletedSaveThemePreference())),
 })
 
 export const SignOut = Command.define("SignOut", {

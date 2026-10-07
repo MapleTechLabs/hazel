@@ -1,12 +1,14 @@
 import { OrganizationId, OrganizationMemberId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineTaggedUnion } from "foldkit/schema"
+import { ThemeMode } from "../../theme"
 import * as Interaction from "../../ui/aria/interaction"
 import * as ChoiceBox from "../../ui/choice-box"
 import { Direction, Step, UserType } from "./flow"
 
-export const Theme = Schema.Literals(["system", "light", "dark"])
-export type Theme = typeof Theme.Type
+/** The theme step reads and requests `Shared.theme`; it keeps no theme state of its own. */
+export const Theme = ThemeMode
+export type Theme = ThemeMode
 
 /** The user's first organization membership (creator vs invited flow). */
 export const Membership = Schema.Struct({
@@ -44,7 +46,7 @@ export const StepForm = defineTaggedUnion({
 		detectionAttempted: Schema.Boolean,
 		isSubmitting: Schema.Boolean,
 	},
-	Theme: { theme: Theme, brandColor: Schema.String },
+	Theme: {},
 	Choice: { box: ChoiceBox.Model },
 	Invite: {
 		emails: Schema.Array(Schema.String),

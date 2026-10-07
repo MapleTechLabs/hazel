@@ -1,15 +1,16 @@
-import { Option } from "effect"
+import { Theme } from "@hazel/domain/models"
+import { Option, Schema } from "effect"
 import { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import * as Interaction from "../../ui/aria/interaction"
 import * as ChoiceBox from "../../ui/choice-box"
 import type { RouteOf } from "../../route"
+import type { ThemeCustomization, ThemeMode } from "../../theme"
 import type { Shared } from "../contract"
 import { PageOutMessage } from "../out-message"
 import {
 	DebounceTimezoneQuery,
 	LoadHome,
-	PreviewTheme,
 	ReadBrowserTimezone,
 	SendInvites,
 	UpdateProfile,
@@ -70,6 +71,14 @@ export const sharedChanged = (model: Model, shared: Shared): Return => {
 			: model
 	return redirectIfOnboarded(seeded, shared)
 }
+
+const decodeHexColor = Schema.decodeUnknownOption(Theme.HexColor)
+
+/** `setTheme` / `setBrandColor`: the step previews its choice on the whole app through the root. */
+const requestTheme = (model: Model, mode: ThemeMode, customization: ThemeCustomization): Return => ({
+	model,
+	outMessage: PageOutMessage.RequestedTheme({ preference: { mode, customization } }),
+})
 
 const hasTag = <Tag extends StepForm["_tag"]>(
 	form: StepForm,
@@ -186,22 +195,17 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				outMessage: toast("error", title, description),
 			})),
 
-		GotThemePreference: ({ theme, brandColor }) =>
-			withForm(model, "Theme", () => ({
-				model: setForm(model, StepForm.Theme({ theme, brandColor })),
-			})),
 		SelectedBrandColor: ({ hex }) =>
-			withForm(model, "Theme", (form) => ({
-				model: setForm(model, StepForm.Theme({ ...form, brandColor: hex })),
-				commands: [PreviewTheme({ theme: form.theme, brandColor: hex })],
-			})),
+			withForm(model, "Theme", () =>
+				Option.match(decodeHexColor(hex), {
+					onNone: () => ({ model }),
+					onSome: (primary) =>
+						requestTheme(model, shared.theme.mode, { ...shared.theme.customization, primary }),
+				}),
+			),
 		SelectedTheme: ({ theme }) =>
-			withForm(model, "Theme", (form) => ({
-				model: setForm(model, StepForm.Theme({ ...form, theme })),
-				commands: [PreviewTheme({ theme, brandColor: form.brandColor })],
-			})),
+			withForm(model, "Theme", () => requestTheme(model, theme, shared.theme.customization)),
 		ClickedContinueTheme: () => advance(model, shared),
-		CompletedPreviewTheme: () => ({ model }),
 
 		GotChoiceBoxMessage: ({ message: boxMessage }) =>
 			withForm(model, "Choice", (form) => {

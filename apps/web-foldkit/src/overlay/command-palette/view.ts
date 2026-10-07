@@ -113,7 +113,12 @@ const THEME_ICONS: Readonly<Record<string, (h: HtmlBuilder<Message>) => Html>> =
 const THEME_LABELS: Readonly<Record<string, string>> = { system: "System", light: "Light", dark: "Dark" }
 
 /** The children of one `CommandMenuItem`, by key. */
-const itemContent = (h: HtmlBuilder<Message>, model: Model, key: string): ReadonlyArray<Html> => {
+const itemContent = (
+	h: HtmlBuilder<Message>,
+	model: Model,
+	shared: Shared,
+	key: string,
+): ReadonlyArray<Html> => {
 	const action = QUICK_ACTIONS[key]
 	if (action)
 		return [
@@ -142,7 +147,7 @@ const itemContent = (h: HtmlBuilder<Message>, model: Model, key: string): Readon
 	if (kind === "theme")
 		return [
 			THEME_ICONS[value]?.(h) ?? h.empty,
-			label(h, key, [THEME_LABELS[value] ?? value, ...(model.theme === value ? [current(h)] : [])]),
+			label(h, key, [THEME_LABELS[value] ?? value, ...(shared.theme.mode === value ? [current(h)] : [])]),
 		]
 	return []
 }
@@ -156,7 +161,7 @@ export interface ViewInputs {
 	readonly shared: Shared
 }
 
-export const view = Submodel.defineView<Model, Message, ViewInputs>((model, _inputs, h) => {
+export const view = Submodel.defineView<Model, Message, ViewInputs>((model, { shared }, h) => {
 	if (!model.isOpen) return h.empty
 	const page = model.page
 	return h.submodel({
@@ -164,7 +169,7 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, _inp
 		model: model.menu,
 		view: commandMenuView,
 		viewInputs: {
-			content: (key) => itemContent(h, model, key),
+			content: (key) => itemContent(h, model, shared, key),
 			placeholder: PLACEHOLDERS[page._tag] ?? "Where would you like to go?",
 			...(isFormPage(page)
 				? {

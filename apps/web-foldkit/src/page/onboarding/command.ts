@@ -1,16 +1,11 @@
-import { Theme as ThemeModel } from "@hazel/domain/models"
 import { OrganizationMemberId, UserId } from "@hazel/schema"
 import { Cause, Duration, Effect, Exit, Option, Schema } from "effect"
 import { Command } from "foldkit"
 import { load, replaceUrl } from "foldkit/navigation"
 import { getUserFriendlyError } from "~/lib/error-messages"
-import { applyBrandColor } from "~/lib/theme/apply"
-import { DEFAULT_BRAND_COLOR, getDefaultThemeCustomization } from "~/lib/theme/presets"
 import { HazelRpc } from "../../rpc"
-import { applyTheme, resolveSystemTheme } from "../../theme"
 import { clerkResource } from "./clerk"
 import { Message } from "./message"
-import { Theme } from "./model"
 
 export const ReadBrowserTimezone = Command.define("ReadBrowserTimezone", {
 	args: {},
@@ -69,62 +64,6 @@ export const UpdateTimezone = Command.define("UpdateUserTimezone", {
 				description: friendly.description ?? null,
 			})
 		}),
-})
-
-const THEME_KEY = "hazel-ui-theme"
-const BRAND_COLOR_KEY = "brand-color"
-const CUSTOMIZATION_KEY = "hazel-theme-customization"
-
-const readJson = (key: string): unknown => {
-	const raw = window.localStorage.getItem(key)
-	return raw === null
-		? null
-		: Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Unknown))(raw).pipe(Option.getOrNull)
-}
-const hasPrimary = (value: unknown): value is { readonly primary: string } =>
-	typeof value === "object" && value !== null && "primary" in value && typeof value.primary === "string"
-
-/** `useTheme()`: the stored mode and brand colour, with the provider's defaults. */
-export const ReadThemePreference = Command.define("ReadThemePreference", {
-	args: {},
-	messages: [Message.GotThemePreference],
-	execute: () =>
-		Effect.sync(() => {
-			const theme = Schema.decodeUnknownOption(Theme)(readJson(THEME_KEY)).pipe(
-				Option.getOrElse(() => "system" as const),
-			)
-			const customization = readJson(CUSTOMIZATION_KEY) ?? getDefaultThemeCustomization()
-			const brandColor = readJson(BRAND_COLOR_KEY)
-			return Message.GotThemePreference({
-				theme,
-				brandColor: hasPrimary(customization)
-					? customization.primary
-					: typeof brandColor === "string"
-						? brandColor
-						: DEFAULT_BRAND_COLOR,
-			})
-		}),
-})
-
-/** `setTheme` / `setBrandColor`: the step previews its choice on the whole app immediately. */
-export const PreviewTheme = Command.define("PreviewTheme", {
-	args: { theme: Theme, brandColor: Schema.String },
-	messages: [Message.CompletedPreviewTheme],
-	execute: ({ theme, brandColor }) =>
-		Effect.gen(function* () {
-			const customization = readJson(CUSTOMIZATION_KEY) ?? getDefaultThemeCustomization()
-			window.localStorage.setItem(THEME_KEY, JSON.stringify(theme))
-			window.localStorage.setItem(BRAND_COLOR_KEY, JSON.stringify(brandColor))
-			if (hasPrimary(customization))
-				window.localStorage.setItem(
-					CUSTOMIZATION_KEY,
-					JSON.stringify({ ...customization, primary: brandColor }),
-				)
-			yield* applyTheme(theme === "system" ? resolveSystemTheme() : theme)
-			const hex: ThemeModel.HexColor = Schema.decodeUnknownSync(ThemeModel.HexColor)(brandColor)
-			applyBrandColor(hex)
-			return Message.CompletedPreviewTheme()
-		}).pipe(Effect.catch(() => Effect.succeed(Message.CompletedPreviewTheme()))),
 })
 
 /** `organization.inviteMember` for each address on the active Clerk organization. */

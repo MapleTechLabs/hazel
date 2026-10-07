@@ -18,6 +18,7 @@ export const Message = defineMessageUnion({
 	CompletedLoadExternal: {},
 	ChangedSystemTheme: { theme: ResolvedTheme },
 	CompletedApplyTheme: {},
+	CompletedSaveThemePreference: {},
 	ChangedAuth: { auth: Auth },
 	SucceededFetchCurrentUser: { user: CurrentUser },
 	FailedFetchCurrentUser: { reason: Schema.String },

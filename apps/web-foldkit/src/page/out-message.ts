@@ -3,6 +3,7 @@ import { defineMessageUnion } from "foldkit/message"
 import { Page as CommandPalettePage } from "../overlay/command-palette/model"
 import { ModalRequest } from "../overlay/modal/requests"
 import { ToastRequest } from "../overlay/toasts"
+import { ThemePreference } from "../theme"
 
 /** Facts a page (or the shell) reports to the root, which owns navigation and the overlays. */
 export const PageOutMessage = defineMessageUnion({
@@ -12,6 +13,8 @@ export const PageOutMessage = defineMessageUnion({
 	RequestedModal: { modal: ModalRequest },
 	RequestedCommandPalette: { page: CommandPalettePage },
 	RequestedSignOut: {},
+	/** Apply and persist the theme (legacy `setTheme` / `setCustomization`); read it back as `Shared.theme`. */
+	RequestedTheme: { preference: ThemePreference },
 	/** Re-run `user.me` (legacy `useAtomRefresh(userAtom)`), with the toast that goes with it. */
 	RequestedCurrentUserRefresh: { toast: Schema.optionalKey(ToastRequest) },
 	/** The mobile header's menu button: open the sidebar sheet (`setIsOpenOnMobile(true)`). */

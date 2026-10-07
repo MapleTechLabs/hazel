@@ -1,8 +1,9 @@
 import { OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { Option, Schema } from "effect"
 import { Command, Mount, click, expect, given, role, scene, text, type } from "foldkit/scene"
-import { describe, test, vi } from "vitest"
+import { describe, test, vi, expect as vitestExpect } from "vitest"
 import type { Shared } from "../contract"
+import { PageOutMessage } from "../out-message"
 import { CompleteOnboarding, ReplaceStepUrl, SendInvites, UpdateProfile } from "./command"
 import { Message } from "./message"
 import type { Model } from "./model"
@@ -48,6 +49,13 @@ const membership = {
 const config = {
 	update: (model: Model, message: Message) => update(model, message, shared),
 	view: (model: Model, h: Parameters<typeof view>[2]) => view(model, { shared }, h),
+}
+
+/** Shared with a stored dark theme, as `Shared.theme` reports it. */
+const darkShared: Shared = { ...shared, theme: { ...shared.theme, mode: "dark", resolved: "dark" } }
+const darkConfig = {
+	update: (model: Model, message: Message) => update(model, message, darkShared),
+	view: (model: Model, h: Parameters<typeof view>[2]) => view(model, { shared: darkShared }, h),
 }
 
 /** The page once `?step=` and the membership are known. */
@@ -115,12 +123,8 @@ describe("onboarding flow", () => {
 
 	test("an invited member follows the shorter flow and skips the team size step", () => {
 		scene(
-			config,
-			given(
-				ready("themeSelection", membership, [
-					Message.GotThemePreference({ theme: "dark", brandColor: "#099250" }),
-				]),
-			),
+			darkConfig,
+			given(ready("themeSelection", membership)),
 			expect(role("heading", { name: "Choose your theme" })).toExist(),
 			expect(role("radio", { name: "Dark mode" })).toBeChecked(),
 			Mount.resolve(EnterAnimation, settled),
@@ -130,6 +134,18 @@ describe("onboarding flow", () => {
 			expect(text(/Step\s*5\s*of\s*5/)).toExist(),
 			Mount.resolve(EnterAnimation, settled),
 		)
+	})
+
+	test("the theme step previews a choice through the root", () => {
+		const themed = ready("themeSelection", membership)
+		vitestExpect(update(themed, Message.SelectedTheme({ theme: "light" }), darkShared).outMessage).toEqual(
+			PageOutMessage.RequestedTheme({
+				preference: { mode: "light", customization: darkShared.theme.customization },
+			}),
+		)
+		vitestExpect(
+			update(themed, Message.SelectedBrandColor({ hex: "#099250" }), darkShared).outMessage,
+		).toMatchObject({ preference: { mode: "dark", customization: { primary: "#099250" } } })
 	})
 
 	test("skipping the invites finalizes with the collected answers, then reloads into the org", () => {

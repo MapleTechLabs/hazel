@@ -5,9 +5,10 @@ import { modifyFields } from "foldkit/struct"
 import { GRAY_PALETTE_LABELS, getBuiltInPreset } from "~/lib/theme/presets"
 import * as Interaction from "../../../ui/aria/interaction"
 import * as Select from "../../../ui/select"
-import type { PageReturn } from "../../contract"
+import type { PageReturn, Shared } from "../../contract"
+import { PageOutMessage } from "../../out-message"
 import { embedInteraction } from "../shared"
-import { ApplyAppearance, defaultCustomization, GenerateRemixOptions, LoadAppearance } from "./command"
+import { GenerateRemixOptions } from "./command"
 import { Message } from "./message"
 import type { Customization, Model, ThemeMode } from "./model"
 import { GRAY_PALETTES } from "./presets"
@@ -32,56 +33,51 @@ const grayPaletteSelect = (selected: Theme.GrayPalette) =>
 		selectedKey: selected,
 	})
 
-/** Keeps the gray palette Select on the current palette. */
-const withCustomization = (model: Model, customization: Customization): Model =>
+/** The gray palette Select follows `Shared.theme`, whoever changed it. */
+const withGrayPalette = (model: Model, shared: Shared): Model =>
 	modifyFields(model, {
-		customization: () => customization,
-		grayPalette: (select) => ({ ...select, selectedKey: Option.some(customization.grayPalette) }),
+		grayPalette: (select) =>
+			Option.contains(select.selectedKey, shared.theme.customization.grayPalette)
+				? select
+				: { ...select, selectedKey: Option.some(shared.theme.customization.grayPalette) },
 	})
 
+/** `setTheme` / `setCustomization`: the root applies and persists it, then informs the page. */
 const apply = (model: Model, mode: ThemeMode, customization: Customization): Return => ({
-	model: withCustomization(modifyFields(model, { mode: () => mode }), customization),
-	commands: [ApplyAppearance({ mode, customization, shouldPersist: true })],
+	model,
+	outMessage: PageOutMessage.RequestedTheme({ preference: { mode, customization } }),
 })
 
 /** Folds the gray palette Select; a changed selection applies the palette like `setGrayPalette`. */
-const foldGrayPalette = (model: Model, message: Select.Message): Return => {
+const foldGrayPalette = (model: Model, message: Select.Message, shared: Shared): Return => {
 	const result = Select.update(model.grayPalette, message)
 	const next = modifyFields(model, { grayPalette: () => result.model })
 	const commands = Command.mapMessages(result.commands ?? [], toGrayPaletteMessage)
 	const key = result.outMessage?.key
 	if (key === undefined || !isGrayPalette(key)) return { model: next, commands }
-	const applied = apply(next, next.mode, { ...next.customization, grayPalette: key })
-	return { model: applied.model, commands: [...commands, ...(applied.commands ?? [])] }
+	const { mode, customization } = shared.theme
+	return { ...apply(next, mode, { ...customization, grayPalette: key }), commands }
 }
 
-export const init = (): Return => {
-	const customization = defaultCustomization()
-	return {
-		model: {
-			mode: "system",
-			customization,
-			remixOptions: [],
-			isGenerating: false,
-			grayPalette: grayPaletteSelect(customization.grayPalette),
-			interaction: Interaction.init(),
-		},
-		commands: [LoadAppearance({})],
-	}
-}
+export const init = (_route: unknown, shared: Shared): Return => ({
+	model: {
+		remixOptions: [],
+		isGenerating: false,
+		grayPalette: grayPaletteSelect(shared.theme.customization.grayPalette),
+		interaction: Interaction.init(),
+	},
+})
 
-export const update = (model: Model, message: Message): Return =>
-	Message.match<Return>(message, {
-		LoadedAppearance: ({ mode, customization }) => ({
-			model: withCustomization(modifyFields(model, { mode: () => mode }), customization),
-			commands: [ApplyAppearance({ mode, customization, shouldPersist: false })],
-		}),
-		CompletedApplyAppearance: () => ({ model }),
+export const sharedChanged = (model: Model, shared: Shared): Return => ({ model: withGrayPalette(model, shared) })
+
+export const update = (model: Model, message: Message, shared: Shared): Return => {
+	const { mode, customization } = shared.theme
+	return Message.match<Return>(message, {
 		SelectedPreset: ({ presetId }) => {
 			const preset = getBuiltInPreset(presetId)
 			if (preset === undefined) return { model }
 			const { primary, grayPalette, radius } = preset.customization
-			return apply(model, model.mode, { primary, grayPalette, radius })
+			return apply(model, mode, { primary, grayPalette, radius })
 		},
 		// A pending React Aria button ends its hover (useHover with isDisabled).
 		ClickedGenerate: () => {
@@ -97,10 +93,11 @@ export const update = (model: Model, message: Message): Return =>
 		GeneratedRemixOptions: ({ options }) => ({
 			model: modifyFields(model, { remixOptions: () => options, isGenerating: () => false }),
 		}),
-		SelectedRemixTheme: ({ customization }) => apply(model, model.mode, customization),
-		SelectedBrandColor: ({ hex }) => apply(model, model.mode, { ...model.customization, primary: hex }),
-		SelectedRadius: ({ radius }) => apply(model, model.mode, { ...model.customization, radius }),
-		SelectedThemeMode: ({ mode }) => apply(model, mode, model.customization),
-		GotGrayPaletteMessage: ({ message: child }) => foldGrayPalette(model, child),
+		SelectedRemixTheme: ({ customization: remixed }) => apply(model, mode, remixed),
+		SelectedBrandColor: ({ hex }) => apply(model, mode, { ...customization, primary: hex }),
+		SelectedRadius: ({ radius }) => apply(model, mode, { ...customization, radius }),
+		SelectedThemeMode: ({ mode: picked }) => apply(model, picked, customization),
+		GotGrayPaletteMessage: ({ message: child }) => foldGrayPalette(model, child, shared),
 		GotInteractionMessage: ({ message: child }) => interaction.fold(model, child),
 	})
+}

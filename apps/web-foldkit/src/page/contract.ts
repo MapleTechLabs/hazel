@@ -5,6 +5,7 @@ import { Command, Submodel, Subscription, type Update } from "foldkit"
 import type { Resources } from "../rpc"
 import type { AppRoute, RouteOf, RouteTag } from "../route"
 import type { Auth, CurrentUser, Member, Organization } from "../session"
+import type { ThemeState } from "../theme"
 import type { PageOutMessage } from "./out-message"
 
 /** The page contract: every routed page is a Submodel registered once in `registry.ts`. See README.md. */
@@ -22,6 +23,8 @@ export interface Shared {
 	readonly nowMs: number
 	/** `useSidebar().isMobile`: the `(max-width: 767px)` viewport. */
 	readonly isMobile: boolean
+	/** The stored mode and customization, and the resolved light/dark theme (`resolvedThemeAtom`). */
+	readonly theme: ThemeState
 }
 
 /** `usePermission().can(action)` */

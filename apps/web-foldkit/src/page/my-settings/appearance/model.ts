@@ -1,23 +1,14 @@
-import { Theme } from "@hazel/domain/models"
 import { Schema } from "effect"
+import { ThemeCustomization } from "../../../theme"
 import * as Interaction from "../../../ui/aria/interaction"
 import * as Select from "../../../ui/select"
 
-/** The theme mode the user picked (`themeAtom`). */
-export const ThemeMode = Schema.Literals(["system", "light", "dark"])
-export type ThemeMode = typeof ThemeMode.Type
-
-/** `themeCustomizationAtom`: brand color, gray palette and radius. */
-export const Customization = Schema.Struct({
-	primary: Theme.HexColor,
-	grayPalette: Theme.GrayPalette,
-	radius: Theme.RadiusPreset,
-})
-export type Customization = typeof Customization.Type
+/** The mode and customization are `Shared.theme` (root-owned); the page keeps only its own state. */
+export { ThemeMode } from "../../../theme"
+export const Customization = ThemeCustomization
+export type Customization = ThemeCustomization
 
 export const Model = Schema.Struct({
-	mode: ThemeMode,
-	customization: Customization,
 	remixOptions: Schema.Array(Customization),
 	isGenerating: Schema.Boolean,
 	grayPalette: Select.Model,

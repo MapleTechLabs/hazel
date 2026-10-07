@@ -1,4 +1,4 @@
-import { Option } from "effect"
+import { Effect, Option, Schema } from "effect"
 import { Command, type Runtime, Update } from "foldkit"
 import { UrlRequest } from "foldkit/navigation"
 import { modifyFields } from "foldkit/struct"
@@ -9,10 +9,11 @@ import {
 	LoadExternal,
 	NavigateInternal,
 	ReplaceUrl,
+	SaveThemePreference,
 	SignOut,
 } from "./app/command"
 import { Message } from "./app/message"
-import { Model, sharedOf, shellContextOf } from "./app/model"
+import { Model, resolvedThemeOf, sharedOf, shellContextOf } from "./app/model"
 import { toPageMessage } from "./app/view"
 import * as CommandPalette from "./overlay/command-palette"
 import type { Return as CommandPaletteReturn } from "./overlay/command-palette/update"
@@ -26,11 +27,27 @@ import { authRedirect, routeRedirect } from "./redirect"
 import { urlToAppRoute } from "./route"
 import type { Resources } from "./rpc"
 import * as Shell from "./shell/update"
+import {
+	loadThemePreference,
+	ResolvedTheme,
+	resolveSystemTheme,
+	type ThemeCustomization,
+	ThemePreference,
+} from "./theme"
 
 export { Message } from "./app/message"
 export { Model } from "./app/model"
 export { subscriptions } from "./app/subscription"
 export { view } from "./app/view"
+
+/** Read before the first render, so a stored theme never flashes the default (`Atom.kvs` reads sync). */
+export const Flags = Schema.Struct({ themePreference: ThemePreference, systemTheme: ResolvedTheme })
+export type Flags = typeof Flags.Type
+
+export const flags: Effect.Effect<Flags> = Effect.all({
+	themePreference: loadThemePreference,
+	systemTheme: Effect.sync(resolveSystemTheme),
+})
 
 type Return = Update.Return<Model, Message, Resources>
 type Step = Update.Step<Model, Message, Resources>
@@ -92,6 +109,7 @@ const withCommandPalette = (model: Model, result: CommandPaletteReturn): Return 
 			Completed: ({ href, toast }) => completedOverlay(next, href, toast),
 			RequestedModal: ({ modal }) => withModal(next, Modal.open(next.modal, modal, sharedOf(next))),
 			RequestedToast: ({ toast }) => withToasts(next, Toasts.push(next.toasts, toast)),
+			RequestedTheme: ({ preference }) => requestTheme(next, preference),
 		}),
 	})
 	return { model: followed.model, commands: [...commands, ...(followed.commands ?? [])] }
@@ -152,6 +170,10 @@ const handleOutMessage = (outMessage: PageOutMessage): Step =>
 			(model) =>
 				withCommandPalette(model, CommandPalette.open(model.commandPalette, page, sharedOf(model))),
 		RequestedSignOut: () => (model) => ({ model, commands: [SignOut({})] }),
+		RequestedTheme:
+			({ preference }) =>
+			(model) =>
+				requestTheme(model, preference),
 		RequestedCurrentUserRefresh:
 			({ toast }) =>
 			(model) => {
@@ -207,11 +229,44 @@ const withUrl = (model: Model, url: Url): Model => {
 	})
 }
 
+// THEME
+
+const isSameCustomization = (first: ThemeCustomization, second: ThemeCustomization) =>
+	first.primary === second.primary && first.grayPalette === second.grayPalette && first.radius === second.radius
+
+/**
+ * The legacy theme atoms' effects after a change: re-apply when the resolved mode or the
+ * customization changed, persist a user's choice, and tell the page when `Shared.theme` moved.
+ */
+const transitionTheme = (previous: Model, next: Model, shouldPersist: boolean): Return => {
+	const resolved = resolvedThemeOf(next)
+	const { mode, customization } = next.themePreference
+	const isApplied =
+		resolved !== resolvedThemeOf(previous) ||
+		!isSameCustomization(customization, previous.themePreference.customization)
+	const commands = [
+		...(isApplied ? [ApplyTheme({ resolved, customization })] : []),
+		...(shouldPersist ? [SaveThemePreference({ preference: next.themePreference })] : []),
+	]
+	return isApplied || mode !== previous.themePreference.mode
+		? Update.combine<Model, Message, Resources>(next, [(m) => ({ model: m, commands }), informPage])
+		: { model: next, commands }
+}
+
+/** `RequestedTheme` from a page or the palette: the user's choice, applied and persisted. */
+export const requestTheme = (model: Model, preference: ThemePreference): Return =>
+	transitionTheme(model, modifyFields(model, { themePreference: () => preference }), true)
+
+const appliedTheme: Step = (model) => ({
+	model,
+	commands: [ApplyTheme({ resolved: resolvedThemeOf(model), customization: model.themePreference.customization })],
+})
+
 const enteredRoute: Step = (model) => applyPage(enterRoute(model.page, model.route, sharedOf(model)))(model)
 
 // INIT
 
-export const init: Runtime.RoutingApplicationInit<Model, Message, void, Resources> = (url: Url) => {
+export const init: Runtime.RoutingApplicationInit<Model, Message, Flags, Resources> = (flags, url) => {
 	const model = withUrl(
 		{
 			route: { _tag: "Root" },
@@ -222,6 +277,8 @@ export const init: Runtime.RoutingApplicationInit<Model, Message, void, Resource
 			organization: null,
 			member: null,
 			nowMs: 0,
+			themePreference: flags.themePreference,
+			systemTheme: flags.systemTheme,
 			page: null,
 			shell: Shell.init(),
 			modal: null,
@@ -230,7 +287,7 @@ export const init: Runtime.RoutingApplicationInit<Model, Message, void, Resource
 		},
 		url,
 	)
-	return Update.combine<Model, Message, Resources>(model, [enteredRoute, informShell, redirect])
+	return Update.combine<Model, Message, Resources>(model, [appliedTheme, enteredRoute, informShell, redirect])
 }
 
 // UPDATE
@@ -251,8 +308,10 @@ export const update = (model: Model, message: Message): Return =>
 		CompletedNavigateInternal: () => ({ model }),
 		CompletedReplaceUrl: () => ({ model }),
 		CompletedLoadExternal: () => ({ model }),
-		ChangedSystemTheme: ({ theme }) => ({ model, commands: [ApplyTheme({ theme })] }),
+		ChangedSystemTheme: ({ theme }) =>
+			transitionTheme(model, modifyFields(model, { systemTheme: () => theme }), false),
 		CompletedApplyTheme: () => ({ model }),
+		CompletedSaveThemePreference: () => ({ model }),
 		ChangedAuth: ({ auth }) => {
 			const next = modifyFields(model, { auth: () => auth })
 			const fetchUser = auth === "SignedIn" && model.auth !== "SignedIn" ? [FetchCurrentUser({})] : []

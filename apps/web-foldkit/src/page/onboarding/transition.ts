@@ -1,12 +1,11 @@
 import { Match } from "effect"
 import type { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
-import { DEFAULT_BRAND_COLOR } from "~/lib/theme/presets"
 import type { HazelRpc } from "../../rpc"
 import { onboardingHref } from "../../route"
 import * as ChoiceBox from "../../ui/choice-box"
 import type { PageReturn, Shared } from "../contract"
-import { CompleteOnboarding, ReadThemePreference, ReplaceStepUrl } from "./command"
+import { CompleteOnboarding, ReplaceStepUrl } from "./command"
 import { type Direction, nextStep, previousStep, type Step, stepFromUrl } from "./flow"
 import type { Message } from "./message"
 import { type Data, type Model, StepForm } from "./model"
@@ -35,9 +34,7 @@ const formFor = (model: Model, step: Step, shared: Shared): StepForm =>
 				isSubmitting: false,
 			}),
 		),
-		Match.when("themeSelection", () =>
-			StepForm.Theme({ theme: "system", brandColor: DEFAULT_BRAND_COLOR }),
-		),
+		Match.when("themeSelection", () => StepForm.Theme()),
 		Match.when("useCases", () =>
 			StepForm.Choice({
 				box: ChoiceBox.init({ id: "team-size", selectedKeys: model.data.useCases.slice(0, 1) }),
@@ -53,9 +50,7 @@ const formFor = (model: Model, step: Step, shared: Shared): StepForm =>
 	)
 
 const stepCommands = (model: Model, step: Step): ReadonlyArray<Command.Command<Message, never, HazelRpc>> =>
-	step === "themeSelection"
-		? [ReadThemePreference({})]
-		: step === "finalization"
+	step === "finalization"
 			? [
 					CompleteOnboarding({
 						memberId: model.membership?.memberId ?? null,

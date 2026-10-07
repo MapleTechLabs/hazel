@@ -26,11 +26,9 @@ export const Message = defineMessageUnion({
 	SucceededUpdateTimezone: { timezone: Schema.String },
 	FailedUpdateTimezone: { title: Schema.String, description: Schema.NullOr(Schema.String) },
 	// Theme
-	GotThemePreference: { theme: Theme, brandColor: Schema.String },
 	SelectedBrandColor: { hex: Schema.String },
 	SelectedTheme: { theme: Theme },
 	ClickedContinueTheme: {},
-	CompletedPreviewTheme: {},
 	// Use case and role
 	GotChoiceBoxMessage: { message: ChoiceBox.Message },
 	ClickedContinueChoice: {},

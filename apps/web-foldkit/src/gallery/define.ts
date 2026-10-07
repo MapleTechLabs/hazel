@@ -1,7 +1,7 @@
 import { Effect } from "effect"
 import { Runtime } from "foldkit"
 import { HazelRpc, HazelRpcLive } from "../rpc"
-import { applyTheme, resolveSystemTheme } from "../theme"
+import { applyTheme, defaultCustomization, resolveSystemTheme } from "../theme"
 
 /**
  * A gallery entry is a self-contained Foldkit program for one primitive, booted on
@@ -20,7 +20,7 @@ export const defineGallery = <Model, Message extends { _tag: string }>(
 	title,
 	start: (container) => {
 		// Same theme effects as the app's ThemeProvider port; captures fix the color scheme, so once is enough.
-		Effect.runSync(applyTheme(resolveSystemTheme()))
+		Effect.runSync(applyTheme(resolveSystemTheme(), defaultCustomization()))
 		Runtime.run(
 			Runtime.makeElement<Model, Message, HazelRpc>({ ...program, container, resources: HazelRpcLive }),
 		)
