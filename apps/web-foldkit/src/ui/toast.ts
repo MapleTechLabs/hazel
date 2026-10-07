@@ -403,6 +403,17 @@ export const showRequest = (model: Model, request: Request): UpdateReturn & { re
 			: { duration: request.durationMs ?? Number.POSITIVE_INFINITY }),
 	})
 
+/** The root's page request (`overlay/toasts.ts` ToastRequest: `intent`, nullable `description`). */
+export const fromIntentRequest = (request: {
+	readonly intent: Kind
+	readonly title: string
+	readonly description: string | null
+}): Request => ({
+	kind: request.intent,
+	title: request.title,
+	...(request.description === null ? {} : { description: request.description }),
+})
+
 /** sonner's `toast.dismiss(id)`. */
 export const dismiss = (model: Model, id: number): UpdateReturn => deleteToast(model, id)
 
