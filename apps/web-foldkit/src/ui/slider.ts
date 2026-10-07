@@ -243,6 +243,10 @@ export const slider = <ParentMessage>(
 	// React Aria names thumb inputs after the label id (or the group id without a label).
 	const labelledBy = options.ariaLabel === undefined ? ids.label : ids.group
 	const thumbId = (index: number) => `${labelledBy}-${index}`
+	// Set when `render` draws the Label. Without one React Aria leaves the group unnamed and names
+	// the thumb after the group. `parts.label` comes before `parts.track` in every render.
+	let hasLabel = false
+	const thumbLabelledBy = () => (options.ariaLabel === undefined && hasLabel ? ids.label : ids.group)
 	const orientationAttribute = h.DataAttribute("orientation", model.orientation)
 	const disabledAttributes = model.isDisabled ? [h.DataAttribute("disabled", "true")] : []
 	const target = (part: string) => `${model.id}-${part}`
@@ -289,7 +293,7 @@ export const slider = <ParentMessage>(
 							h.Type("range"),
 							h.Attribute("aria-describedby", ""),
 							h.Attribute("aria-details", ""),
-							h.AriaLabelledBy(labelledBy),
+							h.AriaLabelledBy(thumbLabelledBy()),
 							h.AriaOrientation(model.orientation),
 							h.Attribute("aria-valuetext", String(value)),
 							h.Min(String(thumbMin(model, index))),
@@ -320,7 +324,10 @@ export const slider = <ParentMessage>(
 	}
 
 	const parts: SliderParts = {
-		label: (children) => Field.label(h, { id: ids.label }, children),
+		label: (children) => {
+			hasLabel = true
+			return Field.label(h, { id: ids.label }, children)
+		},
 		output: (outputOptions = {}) =>
 			h.output(
 				[
@@ -409,6 +416,7 @@ export const slider = <ParentMessage>(
 		},
 	}
 
+	const children = render(parts)
 	return h.div(
 		[
 			h.Class(twMerge(twMerge(...sliderStyles), options.className)),
@@ -417,9 +425,13 @@ export const slider = <ParentMessage>(
 			orientationAttribute,
 			h.Role("group"),
 			h.Id(ids.group),
-			options.ariaLabel === undefined ? h.AriaLabelledBy(ids.label) : h.AriaLabel(options.ariaLabel),
+			...(options.ariaLabel !== undefined
+				? [h.AriaLabel(options.ariaLabel)]
+				: hasLabel
+					? [h.AriaLabelledBy(ids.label)]
+					: []),
 			...disabledAttributes,
 		],
-		render(parts),
+		children,
 	)
 }

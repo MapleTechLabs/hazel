@@ -275,7 +275,8 @@ const listbox = (model: Model, open: Open, viewInputs: ViewInputs, h: HtmlBuilde
 			h.Attribute("aria-label", "Suggestions"),
 			h.Attribute(
 				"aria-labelledby",
-				`${listboxId(model.id)} ${viewInputs.label === undefined ? inputId(model.id) : labelId(model.id)}`,
+				// useComboBox falls back to the button ("Show suggestions") without a Label.
+				`${listboxId(model.id)} ${viewInputs.label === undefined ? buttonId(model.id) : labelId(model.id)}`,
 			),
 			h.Class(twMerge(twMerge(comboBoxListBoxBase), viewInputs.listBoxClassName)),
 			h.Attribute("data-layout", "stack"),
