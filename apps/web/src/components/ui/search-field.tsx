@@ -8,29 +8,25 @@ import IconMagnifier from "~/components/icons/icon-magnifier-3"
 import { fieldStyles } from "~/components/ui/field"
 import { cx } from "~/lib/primitive"
 import { Input, InputGroup } from "./input"
+import { searchFieldStyles } from "./search-field.styles"
 
 export function SearchField({ className, ...props }: SearchFieldProps) {
 	return (
 		<SearchFieldPrimitive
 			{...props}
 			aria-label={props["aria-label"] ?? "Search"}
-			className={cx(fieldStyles({ className: "group/search-field" }), className)}
+			className={cx(fieldStyles({ className: searchFieldStyles.field }), className)}
 		/>
 	)
 }
 
 export function SearchInput(props: InputProps) {
 	return (
-		<InputGroup className="[--input-gutter-end:--spacing(8)]">
-			<IconMagnifier className="in-disabled:opacity-50" />
+		<InputGroup className={searchFieldStyles.group}>
+			<IconMagnifier className={searchFieldStyles.icon} />
 			<Input {...props} />
-			<Button
-				className={twJoin(
-					"touch-target grid place-content-center pressed:text-fg text-muted-fg hover:text-fg group-empty/search-field:invisible",
-					"px-3 py-2 sm:px-2.5 sm:py-1.5 sm:text-sm/5",
-				)}
-			>
-				<IconClose className="size-5 sm:size-4" />
+			<Button className={twJoin(searchFieldStyles.clearButton)}>
+				<IconClose className={searchFieldStyles.clearIcon} />
 			</Button>
 		</InputGroup>
 	)

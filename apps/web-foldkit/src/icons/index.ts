@@ -6,6 +6,8 @@ export interface IconOptions {
 	readonly className?: string
 	/** Overrides (or with `null` removes) root attributes, like spreading props in the legacy component. */
 	readonly attributes?: Readonly<Record<string, string | null>>
+	/** Replaces the `<title>` text, like the legacy components' `title` prop. */
+	readonly title?: string
 }
 
 const icon = <Message>(
@@ -36,7 +38,7 @@ export const IconArrowLeft = <Message>(h: HtmlBuilder<Message>, options: IconOpt
 		},
 		options,
 		[
-			h.title([], ["arrow-left"]),
+			h.title([], [options.title ?? "arrow-left"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -78,7 +80,7 @@ export const IconArrowPath = <Message>(h: HtmlBuilder<Message>, options: IconOpt
 		},
 		options,
 		[
-			h.title([], ["arrow-path"]),
+			h.title([], [options.title ?? "arrow-path"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -120,7 +122,7 @@ export const IconBellSlash = <Message>(h: HtmlBuilder<Message>, options: IconOpt
 		},
 		options,
 		[
-			h.title([], ["bell-slash"]),
+			h.title([], [options.title ?? "bell-slash"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -185,7 +187,7 @@ export const IconBell = <Message>(h: HtmlBuilder<Message>, options: IconOptions 
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -240,7 +242,7 @@ export const IconBrainSparkle = <Message>(h: HtmlBuilder<Message>, options: Icon
 		},
 		options,
 		[
-			h.title([], ["brain sparkle"]),
+			h.title([], [options.title ?? "brain sparkle"]),
 			h.g(
 				[h.Attribute("fill", "none")],
 				[
@@ -284,7 +286,7 @@ export const IconBranch = <Message>(h: HtmlBuilder<Message>, options: IconOption
 		},
 		options,
 		[
-			h.title([], ["branch"]),
+			h.title([], [options.title ?? "branch"]),
 			h.path(
 				[
 					h.Attribute("d", "M5 3 V12 H13"),
@@ -311,7 +313,7 @@ export const IconChangelog = <Message>(h: HtmlBuilder<Message>, options: IconOpt
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -364,7 +366,7 @@ export const IconChartBar = <Message>(h: HtmlBuilder<Message>, options: IconOpti
 		},
 		options,
 		[
-			h.title([], ["chart-bar"]),
+			h.title([], [options.title ?? "chart-bar"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -436,7 +438,7 @@ export const IconChatBubble = <Message>(h: HtmlBuilder<Message>, options: IconOp
 		},
 		options,
 		[
-			h.title([], ["chat-bubble"]),
+			h.title([], [options.title ?? "chat-bubble"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -468,7 +470,7 @@ export const IconCheck = <Message>(h: HtmlBuilder<Message>, options: IconOptions
 		},
 		options,
 		[
-			h.title([], ["check"]),
+			h.title([], [options.title ?? "check"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -499,7 +501,7 @@ export const IconChevronDown = <Message>(h: HtmlBuilder<Message>, options: IconO
 		},
 		options,
 		[
-			h.title([], ["chevron-down"]),
+			h.title([], [options.title ?? "chevron-down"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -530,7 +532,7 @@ export const IconChevronLeft = <Message>(h: HtmlBuilder<Message>, options: IconO
 		},
 		options,
 		[
-			h.title([], ["chevron-left"]),
+			h.title([], [options.title ?? "chevron-left"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -561,7 +563,7 @@ export const IconChevronRight = <Message>(h: HtmlBuilder<Message>, options: Icon
 		},
 		options,
 		[
-			h.title([], ["chevron-right"]),
+			h.title([], [options.title ?? "chevron-right"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -592,7 +594,7 @@ export const IconChevronUpDown = <Message>(h: HtmlBuilder<Message>, options: Ico
 		},
 		options,
 		[
-			h.title([], ["chevron-up-down"]),
+			h.title([], [options.title ?? "chevron-up-down"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -634,7 +636,7 @@ export const IconChevronUp = <Message>(h: HtmlBuilder<Message>, options: IconOpt
 		},
 		options,
 		[
-			h.title([], ["chevron-up"]),
+			h.title([], [options.title ?? "chevron-up"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -665,7 +667,7 @@ export const IconCircleDottedUser = <Message>(h: HtmlBuilder<Message>, options: 
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -839,7 +841,7 @@ export const IconCirclePause = <Message>(h: HtmlBuilder<Message>, options: IconO
 		},
 		options,
 		[
-			h.title([], ["pause"]),
+			h.title([], [options.title ?? "pause"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -890,7 +892,7 @@ export const IconCirclePlus = <Message>(h: HtmlBuilder<Message>, options: IconOp
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -932,7 +934,7 @@ export const IconClock = <Message>(h: HtmlBuilder<Message>, options: IconOptions
 		},
 		options,
 		[
-			h.title([], ["clock"]),
+			h.title([], [options.title ?? "clock"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -978,7 +980,7 @@ export const IconClose = <Message>(h: HtmlBuilder<Message>, options: IconOptions
 		},
 		options,
 		[
-			h.title([], ["close"]),
+			h.title([], [options.title ?? "close"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -1019,7 +1021,7 @@ export const IconCode = <Message>(h: HtmlBuilder<Message>, options: IconOptions 
 		},
 		options,
 		[
-			h.title([], ["code"]),
+			h.title([], [options.title ?? "code"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -1065,7 +1067,7 @@ export const IconOffice = <Message>(h: HtmlBuilder<Message>, options: IconOption
 		},
 		options,
 		[
-			h.title([], ["office"]),
+			h.title([], [options.title ?? "office"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -1142,7 +1144,7 @@ export const IconConnect = <Message>(h: HtmlBuilder<Message>, options: IconOptio
 		},
 		options,
 		[
-			h.title([], ["connect"]),
+			h.title([], [options.title ?? "connect"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -1203,7 +1205,7 @@ export const IconCopy = <Message>(h: HtmlBuilder<Message>, options: IconOptions 
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -1247,7 +1249,7 @@ export const IconCube = <Message>(h: HtmlBuilder<Message>, options: IconOptions 
 		},
 		options,
 		[
-			h.title([], ["cube"]),
+			h.title([], [options.title ?? "cube"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -1299,7 +1301,7 @@ export const IconDashboard = <Message>(h: HtmlBuilder<Message>, options: IconOpt
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -1366,7 +1368,7 @@ export const IconDiscord = <Message>(h: HtmlBuilder<Message>, options: IconOptio
 		},
 		options,
 		[
-			h.title([], ["Discord"]),
+			h.title([], [options.title ?? "Discord"]),
 			h.path(
 				[
 					h.Attribute(
@@ -1392,7 +1394,7 @@ export const IconDotsVertical = <Message>(h: HtmlBuilder<Message>, options: Icon
 		},
 		options,
 		[
-			h.title([], ["dots-vertical"]),
+			h.title([], [options.title ?? "dots-vertical"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -1440,7 +1442,7 @@ export const IconDots = <Message>(h: HtmlBuilder<Message>, options: IconOptions 
 		},
 		options,
 		[
-			h.title([], ["dots"]),
+			h.title([], [options.title ?? "dots"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -1488,7 +1490,7 @@ export const IconDownload = <Message>(h: HtmlBuilder<Message>, options: IconOpti
 		},
 		options,
 		[
-			h.title([], ["download"]),
+			h.title([], [options.title ?? "download"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -1530,7 +1532,7 @@ export const IconEdit = <Message>(h: HtmlBuilder<Message>, options: IconOptions 
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -1584,7 +1586,7 @@ export const IconEmoji1 = <Message>(h: HtmlBuilder<Message>, options: IconOption
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -1646,7 +1648,7 @@ export const IconEmojiAdd = <Message>(h: HtmlBuilder<Message>, options: IconOpti
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -1720,7 +1722,7 @@ export const IconEnvelope = <Message>(h: HtmlBuilder<Message>, options: IconOpti
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -1764,7 +1766,7 @@ export const IconEyeSlash = <Message>(h: HtmlBuilder<Message>, options: IconOpti
 		},
 		options,
 		[
-			h.title([], ["eye-slash"]),
+			h.title([], [options.title ?? "eye-slash"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -1827,7 +1829,7 @@ export const IconEye = <Message>(h: HtmlBuilder<Message>, options: IconOptions =
 		},
 		options,
 		[
-			h.title([], ["eye"]),
+			h.title([], [options.title ?? "eye"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -1869,7 +1871,7 @@ export const IconFolderPlus = <Message>(h: HtmlBuilder<Message>, options: IconOp
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -1922,7 +1924,7 @@ export const IconFolder = <Message>(h: HtmlBuilder<Message>, options: IconOption
 		},
 		options,
 		[
-			h.title([], ["folder"]),
+			h.title([], [options.title ?? "folder"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -1964,7 +1966,7 @@ export const IconFolders = <Message>(h: HtmlBuilder<Message>, options: IconOptio
 		},
 		options,
 		[
-			h.title([], ["folder"]),
+			h.title([], [options.title ?? "folder"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -2006,7 +2008,7 @@ export const IconGear = <Message>(h: HtmlBuilder<Message>, options: IconOptions 
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -2048,7 +2050,7 @@ export const IconGif = <Message>(h: HtmlBuilder<Message>, options: IconOptions =
 		},
 		options,
 		[
-			h.title([], ["GIF"]),
+			h.title([], [options.title ?? "GIF"]),
 			h.g(
 				[h.Attribute("fill", "none")],
 				[
@@ -2095,7 +2097,7 @@ export const IconGridCirclePlus = <Message>(h: HtmlBuilder<Message>, options: Ic
 		},
 		options,
 		[
-			h.title([], ["grid-circle-plus"]),
+			h.title([], [options.title ?? "grid-circle-plus"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -2234,7 +2236,7 @@ export const IconHeart = <Message>(h: HtmlBuilder<Message>, options: IconOptions
 		},
 		options,
 		[
-			h.title([], ["heart"]),
+			h.title([], [options.title ?? "heart"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -2266,7 +2268,7 @@ export const IconIntegratio = <Message>(h: HtmlBuilder<Message>, options: IconOp
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -2340,7 +2342,7 @@ export const IconLeave = <Message>(h: HtmlBuilder<Message>, options: IconOptions
 		},
 		options,
 		[
-			h.title([], ["leave"]),
+			h.title([], [options.title ?? "leave"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -2402,7 +2404,7 @@ export const IconLightbulb = <Message>(h: HtmlBuilder<Message>, options: IconOpt
 		},
 		options,
 		[
-			h.title([], ["lightbulb"]),
+			h.title([], [options.title ?? "lightbulb"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -2504,7 +2506,7 @@ export const IconExternalLink = <Message>(h: HtmlBuilder<Message>, options: Icon
 		},
 		options,
 		[
-			h.title([], ["external-link"]),
+			h.title([], [options.title ?? "external-link"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -2546,7 +2548,7 @@ export const IconLoader = <Message>(h: HtmlBuilder<Message>, options: IconOption
 		},
 		options,
 		[
-			h.title([], ["loader"]),
+			h.title([], [options.title ?? "loader"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -2654,7 +2656,7 @@ export const IconLock = <Message>(h: HtmlBuilder<Message>, options: IconOptions 
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -2708,7 +2710,7 @@ export const IconLogout = <Message>(h: HtmlBuilder<Message>, options: IconOption
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -2750,7 +2752,7 @@ export const IconMagicWandSparkle = <Message>(h: HtmlBuilder<Message>, options: 
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -2823,7 +2825,7 @@ export const IconMagnifier3 = <Message>(h: HtmlBuilder<Message>, options: IconOp
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -2877,7 +2879,7 @@ export const IconMapPin = <Message>(h: HtmlBuilder<Message>, options: IconOption
 		},
 		options,
 		[
-			h.title([], ["map-pin"]),
+			h.title([], [options.title ?? "map-pin"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -2941,7 +2943,7 @@ export const IconMegaphone = <Message>(h: HtmlBuilder<Message>, options: IconOpt
 		},
 		options,
 		[
-			h.title([], ["megaphone"]),
+			h.title([], [options.title ?? "megaphone"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -2997,7 +2999,7 @@ export const IconMenu = <Message>(h: HtmlBuilder<Message>, options: IconOptions 
 		},
 		options,
 		[
-			h.title([], ["menu"]),
+			h.title([], [options.title ?? "menu"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -3048,7 +3050,7 @@ export const IconMinus = <Message>(h: HtmlBuilder<Message>, options: IconOptions
 		},
 		options,
 		[
-			h.title([], ["minus"]),
+			h.title([], [options.title ?? "minus"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -3079,7 +3081,7 @@ export const IconMoon = <Message>(h: HtmlBuilder<Message>, options: IconOptions 
 		},
 		options,
 		[
-			h.title([], ["moon"]),
+			h.title([], [options.title ?? "moon"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -3113,7 +3115,7 @@ export const IconMsgClock = <Message>(h: HtmlBuilder<Message>, options: IconOpti
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -3155,7 +3157,7 @@ export const IconMsgs = <Message>(h: HtmlBuilder<Message>, options: IconOptions 
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -3198,7 +3200,7 @@ export const IconPaintbrush = <Message>(h: HtmlBuilder<Message>, options: IconOp
 		},
 		options,
 		[
-			h.title([], ["paintbrush"]),
+			h.title([], [options.title ?? "paintbrush"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -3242,7 +3244,7 @@ export const IconPaperclip2 = <Message>(h: HtmlBuilder<Message>, options: IconOp
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -3274,7 +3276,7 @@ export const IconPenSparkle = <Message>(h: HtmlBuilder<Message>, options: IconOp
 		},
 		options,
 		[
-			h.title([], ["magic-wand"]),
+			h.title([], [options.title ?? "magic-wand"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -3318,7 +3320,7 @@ export const IconProfiles2 = <Message>(h: HtmlBuilder<Message>, options: IconOpt
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "#ffffff")],
 				[
@@ -3389,7 +3391,7 @@ export const IconPhone = <Message>(h: HtmlBuilder<Message>, options: IconOptions
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -3421,7 +3423,7 @@ export const IconPin = <Message>(h: HtmlBuilder<Message>, options: IconOptions =
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -3463,7 +3465,7 @@ export const IconPlay = <Message>(h: HtmlBuilder<Message>, options: IconOptions 
 		},
 		options,
 		[
-			h.title([], ["play"]),
+			h.title([], [options.title ?? "play"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -3509,7 +3511,7 @@ export const IconPlus = <Message>(h: HtmlBuilder<Message>, options: IconOptions 
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -3552,7 +3554,7 @@ export const IconPresentationChart = <Message>(h: HtmlBuilder<Message>, options:
 		},
 		options,
 		[
-			h.title([], ["presentation-chart"]),
+			h.title([], [options.title ?? "presentation-chart"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -3616,7 +3618,7 @@ export const IconReply = <Message>(h: HtmlBuilder<Message>, options: IconOptions
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -3658,7 +3660,7 @@ export const IconRobot = <Message>(h: HtmlBuilder<Message>, options: IconOptions
 		},
 		options,
 		[
-			h.title([], ["robot"]),
+			h.title([], [options.title ?? "robot"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -3734,7 +3736,7 @@ export const IconRocket = <Message>(h: HtmlBuilder<Message>, options: IconOption
 		},
 		options,
 		[
-			h.title([], ["rocket"]),
+			h.title([], [options.title ?? "rocket"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -3810,7 +3812,7 @@ export const IconServers = <Message>(h: HtmlBuilder<Message>, options: IconOptio
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -3877,7 +3879,7 @@ export const IconShare = <Message>(h: HtmlBuilder<Message>, options: IconOptions
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -3919,7 +3921,7 @@ export const IconShop = <Message>(h: HtmlBuilder<Message>, options: IconOptions 
 		},
 		options,
 		[
-			h.title([], ["shop"]),
+			h.title([], [options.title ?? "shop"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -3987,7 +3989,7 @@ export const IconSparkles = <Message>(h: HtmlBuilder<Message>, options: IconOpti
 		},
 		options,
 		[
-			h.title([], ["sparkles"]),
+			h.title([], [options.title ?? "sparkles"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -4054,7 +4056,7 @@ export const IconSquareCommand = <Message>(h: HtmlBuilder<Message>, options: Ico
 		},
 		options,
 		[
-			h.title([], ["command"]),
+			h.title([], [options.title ?? "command"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -4087,7 +4089,7 @@ export const IconSquareTerminal = <Message>(h: HtmlBuilder<Message>, options: Ic
 		},
 		options,
 		[
-			h.title([], ["square terminal"]),
+			h.title([], [options.title ?? "square terminal"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -4149,7 +4151,7 @@ export const IconSun = <Message>(h: HtmlBuilder<Message>, options: IconOptions =
 		},
 		options,
 		[
-			h.title([], ["sun"]),
+			h.title([], [options.title ?? "sun"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -4277,7 +4279,7 @@ export const IconSupport = <Message>(h: HtmlBuilder<Message>, options: IconOptio
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -4354,7 +4356,7 @@ export const IconThread = <Message>(h: HtmlBuilder<Message>, options: IconOption
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -4419,7 +4421,7 @@ export const IconTrash = <Message>(h: HtmlBuilder<Message>, options: IconOptions
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -4481,7 +4483,7 @@ export const IconUnpin = <Message>(h: HtmlBuilder<Message>, options: IconOptions
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -4545,7 +4547,7 @@ export const IconUser = <Message>(h: HtmlBuilder<Message>, options: IconOptions 
 		},
 		options,
 		[
-			h.title([], ["user"]),
+			h.title([], [options.title ?? "user"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -4587,7 +4589,7 @@ export const IconUsersPlus = <Message>(h: HtmlBuilder<Message>, options: IconOpt
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -4654,7 +4656,7 @@ export const IconUsers = <Message>(h: HtmlBuilder<Message>, options: IconOptions
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -4718,7 +4720,7 @@ export const IconVolumeMute = <Message>(h: HtmlBuilder<Message>, options: IconOp
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -4761,7 +4763,7 @@ export const IconVolume = <Message>(h: HtmlBuilder<Message>, options: IconOption
 		},
 		options,
 		[
-			h.title([], ["badge 13"]),
+			h.title([], [options.title ?? "badge 13"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -4794,7 +4796,7 @@ export const IconWarning = <Message>(h: HtmlBuilder<Message>, options: IconOptio
 		},
 		options,
 		[
-			h.title([], ["warning"]),
+			h.title([], [options.title ?? "warning"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -4836,7 +4838,7 @@ export const IconWebhook = <Message>(h: HtmlBuilder<Message>, options: IconOptio
 		},
 		options,
 		[
-			h.title([], ["webhook"]),
+			h.title([], [options.title ?? "webhook"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[
@@ -4962,7 +4964,7 @@ export const IconXmark = <Message>(h: HtmlBuilder<Message>, options: IconOptions
 		},
 		options,
 		[
-			h.title([], ["xmark"]),
+			h.title([], [options.title ?? "xmark"]),
 			h.g(
 				[h.Attribute("fill", "currentColor")],
 				[

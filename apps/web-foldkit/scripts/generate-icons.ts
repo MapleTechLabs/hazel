@@ -53,6 +53,8 @@ const out: string[] = [
 	"\treadonly className?: string",
 	"\t/** Overrides (or with `null` removes) root attributes, like spreading props in the legacy component. */",
 	"\treadonly attributes?: Readonly<Record<string, string | null>>",
+	"\t/** Replaces the `<title>` text, like the legacy components' `title` prop. */",
+	"\treadonly title?: string",
 	"}",
 	"",
 	"const icon = <Message>(h: HtmlBuilder<Message>, root: Readonly<Record<string, string>>, options: IconOptions, children: Html[]): Html => {",
@@ -68,7 +70,16 @@ const out: string[] = [
 	"",
 ]
 for (const [name, markup] of icons) {
-	const { rootAttributes, children } = htmlChildrenToFoldkit(markup, 2)
+	const { rootAttributes, children: rawChildren } = htmlChildrenToFoldkit(markup, 2)
+	// The legacy icons take a `title` prop for their first <title> child.
+	const children = rawChildren.map((child, index) =>
+		index === 0
+			? child.replace(
+					/^(\s*)h\.title\(\s*\[\],\s*\[\s*("(?:[^"\\]|\\.)*"),?\s*\],?\s*\)$/,
+					"$1h.title([], [options.title ?? $2])",
+				)
+			: child,
+	)
 	const root = Object.fromEntries(
 		rootAttributes.map((attr) => [attr.name === "viewbox" ? "viewBox" : attr.name, attr.value]),
 	)

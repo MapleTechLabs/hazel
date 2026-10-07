@@ -1,27 +1,12 @@
 "use client"
 
 import { twMerge } from "tailwind-merge"
-import { tv } from "tailwind-variants"
 
 import IconCheck from "~/components/icons/icon-check"
 import { IconLoader } from "~/components/icons/icon-loader"
+import { validationStateIconStyles, validationStateStyles } from "./field-validation-state.styles"
 
 export type ValidationState = "idle" | "validating" | "valid" | "invalid"
-
-const validationStateStyles = tv({
-	base: "absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center",
-	variants: {
-		state: {
-			idle: "hidden",
-			validating: "text-muted-fg animate-spin",
-			valid: "text-success-fg",
-			invalid: "text-danger-subtle-fg",
-		},
-	},
-	defaultVariants: {
-		state: "idle",
-	},
-})
 
 export interface FieldValidationStateProps {
 	/** Current validation state */
@@ -51,9 +36,11 @@ export function FieldValidationState({ state, className }: FieldValidationStateP
 
 	return (
 		<span className={twMerge(validationStateStyles({ state }), className)} aria-hidden="true">
-			{state === "validating" && <IconLoader className="size-4" title="Validating..." />}
-			{state === "valid" && <IconCheck className="size-4" title="Valid" />}
-			{state === "invalid" && <InvalidIcon className="size-4" />}
+			{state === "validating" && (
+				<IconLoader className={validationStateIconStyles} title="Validating..." />
+			)}
+			{state === "valid" && <IconCheck className={validationStateIconStyles} title="Valid" />}
+			{state === "invalid" && <InvalidIcon className={validationStateIconStyles} />}
 		</span>
 	)
 }
