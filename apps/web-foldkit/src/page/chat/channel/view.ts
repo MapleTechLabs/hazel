@@ -2,6 +2,7 @@ import { createLazy, type Html, type HtmlBuilder } from "foldkit/html"
 import { contentStyles, rootStyles } from "~/components/ui/split-panel/split-panel.styles"
 import { IconFolders, IconHashtag, IconMsgs, IconPin } from "../../../icons"
 import * as MessageList from "../../../mount/message-list"
+import { mobileMenuButton } from "../../../shell/mobile"
 import { button } from "../../../ui/button"
 import { tabStrip, tabView } from "../../../ui/tab-strip"
 import { composerPlaceholderView } from "../composer-placeholder"
@@ -12,26 +13,36 @@ import type { DisplayRow } from "../rows"
 /** The channel route's content: header, tab bar, message list and composer (desktop). */
 
 /** `ChatHeader` for a regular channel. */
-const chatHeaderView = <M>(channel: Model["channel"], h: HtmlBuilder<M>): Html =>
+const chatHeaderView = <M>(
+	channel: Model["channel"],
+	h: HtmlBuilder<M>,
+	toParentMessage: (message: Message) => M,
+): Html =>
 	h.div(
 		[h.Class("flex h-14 shrink-0 items-center justify-between border-border border-b bg-bg px-4")],
 		[
 			h.div(
 				[h.Class("flex items-center gap-3")],
-				channel === null
-					? [h.div([h.Class("h-4 w-32 animate-pulse rounded-sm bg-secondary")], [])]
-					: [
-							channel.icon
-								? h.span(
-										[h.Attribute("data-slot", "icon"), h.Class("size-5 text-muted-fg")],
-										[channel.icon],
-									)
-								: IconHashtag(h, { className: "size-5 text-muted-fg" }),
-							h.div(
-								[h.Class("flex items-center gap-2")],
-								[h.h2([h.Class("font-semibold text-fg text-sm")], [channel.name])],
-							),
-						],
+				[
+					mobileMenuButton(h, { onPress: h.OnClick(toParentMessage(Message.ClickedMobileMenu())) }),
+					...(channel === null
+						? [h.div([h.Class("h-4 w-32 animate-pulse rounded-sm bg-secondary")], [])]
+						: [
+								channel.icon
+									? h.span(
+											[
+												h.Attribute("data-slot", "icon"),
+												h.Class("size-5 text-muted-fg"),
+											],
+											[channel.icon],
+										)
+									: IconHashtag(h, { className: "size-5 text-muted-fg" }),
+								h.div(
+									[h.Class("flex items-center gap-2")],
+									[h.h2([h.Class("font-semibold text-fg text-sm")], [channel.name])],
+								),
+							]),
+				],
 			),
 			h.div(
 				[h.Class("flex items-center gap-2")],
@@ -151,7 +162,7 @@ export const view = <M>(h: HtmlBuilder<M>, model: Model, toParentMessage: (messa
 			h.div(
 				[h.Class(contentStyles())],
 				[
-					lazyHeader(chatHeaderView, [model.channel, h]) ?? h.div([], []),
+					lazyHeader(chatHeaderView, [model.channel, h, toParentMessage]) ?? h.div([], []),
 					lazyTabBar(chatTabBarView, [h]) ?? h.div([], []),
 					h.div(
 						[h.Class("flex min-h-0 flex-1 flex-col overflow-hidden")],
