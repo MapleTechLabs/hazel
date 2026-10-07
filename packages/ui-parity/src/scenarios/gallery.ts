@@ -497,5 +497,27 @@ export const galleryArea: AreaModule = {
 				await page.keyboard.type("945p")
 			},
 		}),
+		gallery("input-otp", {
+			id: "gallery-input-otp",
+			title: "Input OTP: empty, prefilled, disabled",
+			themes: ["light", "dark"],
+		}),
+		gallery("input-otp", {
+			id: "gallery-input-otp-focus",
+			title: "Input OTP: focused, first slot active with the caret",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.getByRole("textbox", { name: "Verification code" }).focus()
+			},
+		}),
+		gallery("input-otp", {
+			id: "gallery-input-otp-typed",
+			title: "Input OTP: four digits typed",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.getByRole("textbox", { name: "Verification code" }).focus()
+				await page.keyboard.type("4821")
+			},
+		}),
 	],
 }
