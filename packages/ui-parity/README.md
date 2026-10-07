@@ -92,7 +92,7 @@ bun run parity list       # every scenario × viewport × theme variant
 
 ### 7. Add a scenario
 
-Add an entry to the area file `src/scenarios/<area>.ts` (an `AreaModule`: scenarios, the datasets the area introduces, and area-level canned RPCs). `src/scenarios.ts` only aggregates areas. Steps must use accessible locators (`getByRole`, `getByText`) so the same script drives both apps. If a step works in one app and not the other, that is a parity bug (wrong role or missing label), not a test bug. Add a dataset under `src/fixtures/datasets/` when a screen needs different data (empty org, long names, many unreads), and register it in `datasets`.
+Add an entry to the area file `src/scenarios/<area>.ts` (an `AreaModule`: scenarios, the datasets the area introduces, and area-level canned RPCs). `src/scenarios.ts` only aggregates areas. Steps must use accessible locators (`getByRole`, `getByText`) so the same script drives both apps. If a step works in one app and not the other, that is a parity bug (wrong role or missing label), not a test bug. Add a dataset under `src/fixtures/datasets/` when a screen needs different data (empty org, long names, many unreads), and list it in your area module's `datasets`.
 
 If a capture logs `unmocked RPCs: ...`, add a canned response to your area module's `rpc`, or to `dataset.rpc` if it is dataset-specific. `defaultHandlers` in `src/backend/rpc.ts` is for handlers every screen needs.
 
