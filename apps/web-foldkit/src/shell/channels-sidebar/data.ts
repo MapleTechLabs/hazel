@@ -1,4 +1,4 @@
-import type { ChannelId, ChannelSectionId, OrganizationId, UserId } from "@hazel/schema"
+import type { ChannelId, ChannelMemberId, ChannelSectionId, OrganizationId, UserId } from "@hazel/schema"
 import { and, eq, inArray, isNull, not, or } from "@tanstack/db"
 import { channelCollection, channelMemberCollection, channelSectionCollection } from "~/db/collections"
 import { liveQueryStream } from "../../data/live-query"
@@ -17,6 +17,7 @@ interface ChannelRow {
 	readonly sectionId: ChannelSectionId | null
 }
 export interface MemberRow {
+	readonly id: ChannelMemberId
 	readonly userId: UserId
 	readonly isMuted: boolean
 	readonly isFavorite: boolean
@@ -35,6 +36,7 @@ const toChannel = (row: ChannelRow): SidebarChannel => ({
 	sectionId: row.sectionId ?? null,
 })
 export const toMember = (row: MemberRow): SidebarMember => ({
+	id: row.id,
 	isMuted: row.isMuted,
 	isFavorite: row.isFavorite,
 	notificationCount: row.notificationCount,

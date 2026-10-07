@@ -66,11 +66,17 @@ const PortalSelect = Mount.defineStream("PortalSelect", {
 export type ViewInputs = Readonly<{
 	/** The `Label` inside the Select; none when omitted (the trigger is named by its value). */
 	label?: string
-	/** `SelectTrigger` className. */
-	triggerClassName?: string
 	placeholder?: string
 	/** Select `className`. */
 	className?: string
+	/** Select `aria-label` without a visible Label (the label span is omitted). */
+	ariaLabel?: string
+	/** SelectTrigger `className`. */
+	triggerClassName?: string
+	/** SelectTrigger children, replacing the SelectValue and chevron. */
+	renderTrigger?: <M>(h: HtmlBuilder<M>, selected: Option.Option<Item>) => Array<Html>
+	/** SelectItem children that are not a plain string label. */
+	renderOption?: <M>(h: HtmlBuilder<M>, item: Item) => Array<Html>
 }>
 
 type Open = Extract<Model["popup"], { _tag: "Open" }>
@@ -98,12 +104,12 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, view
 			h.Attribute("data-slot", "control"),
 		],
 		[
-			viewInputs.label === undefined
-				? h.empty
-				: h.span(
+			viewInputs.ariaLabel === undefined && viewInputs.label !== undefined
+				? h.span(
 						[h.Class(labelStyles()), h.Attribute("data-slot", "label"), h.Id(labelId(model.id))],
 						[viewInputs.label],
-					),
+					)
+				: h.empty,
 			h.span(
 				[h.Attribute("data-slot", "control"), h.Class(selectTriggerWrapperClassName)],
 				[
@@ -112,12 +118,22 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, view
 							...(isOpen ? [h.Attribute("aria-controls", listboxId(model.id))] : []),
 							h.Attribute("aria-expanded", isOpen ? "true" : "false"),
 							h.Attribute("aria-haspopup", "listbox"),
-							h.Attribute(
-								"aria-labelledby",
-								viewInputs.label === undefined
-									? valueId(model.id)
-									: `${valueId(model.id)} ${labelId(model.id)}`,
-							),
+							...(viewInputs.ariaLabel !== undefined
+								? [
+										h.Attribute("aria-label", viewInputs.ariaLabel),
+										h.Attribute(
+											"aria-labelledby",
+											`${valueId(model.id)} ${triggerId(model.id)}`,
+										),
+									]
+								: viewInputs.label === undefined
+									? [h.Attribute("aria-labelledby", valueId(model.id))]
+									: [
+											h.Attribute(
+												"aria-labelledby",
+												`${valueId(model.id)} ${labelId(model.id)}`,
+											),
+										]),
 							h.Class(twMerge(twMerge(...selectTriggerBase), viewInputs.triggerClassName)),
 							...flag("data-disabled", model.isDisabled),
 							...flag("data-pressed", isOpen),
@@ -143,34 +159,40 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, view
 							),
 						],
 						[
-							Option.match(selectedItem, {
-								onNone: () =>
-									h.span(
-										[
-											h.Class(selectValueClassName),
-											h.Attribute("data-placeholder", "true"),
-											h.Attribute("data-rac", ""),
-											h.Attribute("data-slot", "select-value"),
-											h.Id(valueId(model.id)),
-										],
-										[viewInputs.placeholder ?? "Select an item"],
-									),
-								onSome: (found) =>
-									h.span(
-										[
-											h.Class(selectValueClassName),
-											h.Attribute("data-rac", ""),
-											h.Attribute("data-slot", "select-value"),
-											h.Id(valueId(model.id)),
-										],
-										[optionLabel(h, found.label)],
-									),
-							}),
-							IconChevronUpDown(h, {
-								className: selectChevronClassName,
-								attributes: { "data-slot": "chevron" },
-							}),
-							model.popup._tag === "Open" ? selectPopover(model, model.popup, h) : h.empty,
+							...(viewInputs.renderTrigger
+								? viewInputs.renderTrigger(h, selectedItem)
+								: [
+										Option.match(selectedItem, {
+											onNone: () =>
+												h.span(
+													[
+														h.Class(selectValueClassName),
+														h.Attribute("data-placeholder", "true"),
+														h.Attribute("data-rac", ""),
+														h.Attribute("data-slot", "select-value"),
+														h.Id(valueId(model.id)),
+													],
+													[viewInputs.placeholder ?? "Select an item"],
+												),
+											onSome: (found) =>
+												h.span(
+													[
+														h.Class(selectValueClassName),
+														h.Attribute("data-rac", ""),
+														h.Attribute("data-slot", "select-value"),
+														h.Id(valueId(model.id)),
+													],
+													[optionLabel(h, found.label)],
+												),
+										}),
+										IconChevronUpDown(h, {
+											className: selectChevronClassName,
+											attributes: { "data-slot": "chevron" },
+										}),
+									]),
+							model.popup._tag === "Open"
+								? selectPopover(model, model.popup, h, viewInputs.renderOption)
+								: h.empty,
 						],
 					),
 				],
@@ -215,7 +237,14 @@ const hiddenSelect = (model: Model, h: HtmlBuilder<Message>): Html =>
 		],
 	)
 
-const selectPopover = (model: Model, open: Open, h: HtmlBuilder<Message>): Html => {
+type RenderOption = ViewInputs["renderOption"]
+
+const selectPopover = (
+	model: Model,
+	open: Open,
+	h: HtmlBuilder<Message>,
+	renderOption: RenderOption,
+): Html => {
 	const initialFocusId = Option.match(open.focusedKey, {
 		onNone: () => listboxId(model.id),
 		onSome: (key) => optionId(model.id, key),
@@ -275,7 +304,7 @@ const selectPopover = (model: Model, open: Open, h: HtmlBuilder<Message>): Html 
 								[h.Class(popoverInnerClassName), h.Attribute("data-slot", "popover-inner")],
 								[
 									focusScopeSentinel(h, "start"),
-									listbox(model, open, h),
+									listbox(model, open, h, renderOption),
 									focusScopeSentinel(h, "end"),
 								],
 							),
@@ -293,7 +322,7 @@ const selectPopover = (model: Model, open: Open, h: HtmlBuilder<Message>): Html 
 	)
 }
 
-const listbox = (model: Model, open: Open, h: HtmlBuilder<Message>): Html =>
+const listbox = (model: Model, open: Open, h: HtmlBuilder<Message>, renderOption: RenderOption): Html =>
 	h.div(
 		[
 			h.Attribute("aria-labelledby", labelId(model.id)),
@@ -305,10 +334,16 @@ const listbox = (model: Model, open: Open, h: HtmlBuilder<Message>): Html =>
 			h.Role("listbox"),
 			h.Attribute("tabindex", Option.isSome(open.focusedKey) ? "-1" : "0"),
 		],
-		Array.map(model.items, (candidate) => option(model, open, candidate, h)),
+		Array.map(model.items, (candidate) => option(model, open, candidate, h, renderOption)),
 	)
 
-const option = (model: Model, open: Open, candidate: Item, h: HtmlBuilder<Message>): Html => {
+const option = (
+	model: Model,
+	open: Open,
+	candidate: Item,
+	h: HtmlBuilder<Message>,
+	renderOption: RenderOption,
+): Html => {
 	const { key } = candidate
 	const isSelected = Option.contains(model.selectedKey, key)
 	const isFocused = Option.contains(open.focusedKey, key)
@@ -348,7 +383,9 @@ const option = (model: Model, open: Open, candidate: Item, h: HtmlBuilder<Messag
 						}),
 					]
 				: []),
-			optionLabel(h, candidate.label, optionLabelId(model.id, key)),
+			...(renderOption
+				? renderOption(h, candidate)
+				: [optionLabel(h, candidate.label, optionLabelId(model.id, key))]),
 		],
 	)
 }

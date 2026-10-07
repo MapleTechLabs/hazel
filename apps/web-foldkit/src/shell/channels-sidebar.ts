@@ -10,7 +10,19 @@ import { sidebarContent, sidebarSectionGroup, sidebarStatic } from "../ui/sideba
 import type { ShellContext } from "./context"
 import { orgSwitcherHeader, type SwitcherOrg, userMenuFooter } from "./menus"
 import { emptyData, Message, type Model } from "./channels-sidebar/model"
-import { dragDescription } from "./channels-sidebar/tree"
+import { PageOutMessage } from "../page/out-message"
+import { PersistDismissedHint } from "./channels-sidebar/hints"
+import {
+	requestedSectionAction,
+	rowMenuOf,
+	sectionActionsOf,
+	sectionMenuOf,
+	type SidebarReturn,
+	updateRowMenu,
+	updateSectionMenu,
+} from "./channels-sidebar/menu-update"
+import { rowMenuView, sectionMenuView } from "./channels-sidebar/menus"
+import { dragDescription, sectionPlusButton } from "./channels-sidebar/tree"
 import { sectionGroupContent } from "./channels-sidebar/view"
 
 /**
@@ -24,11 +36,17 @@ export { Message, Model } from "./channels-sidebar/model"
 
 // INIT
 
-export const init = (): Model => ({ organizationId: null, currentUserId: null, nowMs: 0, ...emptyData })
+export const init = (): Model => ({
+	organizationId: null,
+	currentUserId: null,
+	nowMs: 0,
+	...emptyData,
+	isCreateChannelHintDismissed: false,
+})
 
 // UPDATE
 
-export type SidebarReturn = Update.Return<Model, Message>
+export type { SidebarReturn } from "./channels-sidebar/menu-update"
 
 /**
  * Every DM partner's derived status at `nowMs`. After the first tick, a tick only lands (and
@@ -87,6 +105,23 @@ export const update = (model: Model, message: Message): SidebarReturn =>
 		UpdatedDiscoverableChannels: ({ channels }) => ({
 			model: modifyFields(model, { discoverableChannels: () => channels }),
 		}),
+		LoadedDismissedHints: ({ isCreateChannelHintDismissed }) => ({
+			model: modifyFields(model, { isCreateChannelHintDismissed: () => isCreateChannelHintDismissed }),
+		}),
+		ClickedDismissCreateChannelHint: () => ({
+			model: modifyFields(model, { isCreateChannelHintDismissed: () => true }),
+			commands: [PersistDismissedHint({ hintId: "create-channel" })],
+		}),
+		CompletedPersistDismissedHint: () => ({ model }),
+		GotRowMenuMessage: ({ channelId, orgSlug, message }) =>
+			updateRowMenu(model, channelId, orgSlug, message),
+		GotSectionMenuMessage: ({ sectionKey, message }) => updateSectionMenu(model, sectionKey, message),
+		ClickedSectionAction: ({ action }) => requestedSectionAction(model, action),
+		SucceededSidebarAction: ({ toast }) => ({
+			model,
+			outMessage: PageOutMessage.RequestedToast({ toast }),
+		}),
+		FailedSidebarAction: ({ toast }) => ({ model, outMessage: PageOutMessage.RequestedToast({ toast }) }),
 	})
 
 /** The root learned the organization or the signed-in user; the sidebar's queries depend on both. */
@@ -180,12 +215,48 @@ const sidebarBody = <ParentMessage>(
 					pathname,
 					activeChannelId,
 					onActiveMount: h.OnMount(Mount.mapMessage(ScrollActiveIntoView(), toParentMessage)),
+					onDismissCreateChannelHint: h.OnClick(
+						toParentMessage(Message.ClickedDismissCreateChannelHint()),
+					),
+					rowMenu: (entry) =>
+						rowMenuView(h, {
+							menu: rowMenuOf(model, entry.channel.id),
+							entry,
+							sections: model.sections,
+							toMessage: (message) =>
+								toParentMessage(
+									Message.GotRowMenuMessage({
+										channelId: entry.channel.id,
+										orgSlug,
+										message,
+									}),
+								),
+						}),
+					sectionAction: (sectionKey) => sectionActionView(h, model, sectionKey, toParentMessage),
 				}),
 			),
 		]),
 		userMenuFooter(h, userMenu, shell, toUserMenuMessage),
 		dragDescription(h),
 	])
+}
+
+/** A single action is a plain "+" button; several actions or a deletable section open a menu. */
+const sectionActionView = <ParentMessage>(
+	h: HtmlBuilder<ParentMessage>,
+	model: Model,
+	sectionKey: string,
+	toParentMessage: (message: Message) => ParentMessage,
+): Html => {
+	const { actions, isEditable } = sectionActionsOf(model, sectionKey)
+	const [only] = actions
+	return only !== undefined && actions.length === 1 && !isEditable
+		? sectionPlusButton(h, [h.OnClick(toParentMessage(Message.ClickedSectionAction({ action: only })))])
+		: sectionMenuView(h, {
+				menu: sectionMenuOf(model, sectionKey),
+				toMessage: (message) =>
+					toParentMessage(Message.GotSectionMenuMessage({ sectionKey, message })),
+			})
 }
 
 /**

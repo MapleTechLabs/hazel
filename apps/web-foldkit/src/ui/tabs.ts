@@ -143,9 +143,15 @@ export interface TabPanelItem {
 }
 
 export type ViewInputs = Readonly<{
-	listLabel: string
+	/** TabList `aria-label`; omitted when undefined, like a TabList without one. */
+	listLabel?: string
 	tabs: ReadonlyArray<TabItem>
 	panels: ReadonlyArray<TabPanelItem>
+	/**
+	 * Renders a panel's content when set (instead of `content`). Use it for content with event
+	 * handlers: a top-level function is scoped to the parent, a nested Html handler is not.
+	 */
+	renderPanel?: (key: string) => ReadonlyArray<Html | string>
 	className?: string
 	listClassName?: string
 }>
@@ -232,7 +238,7 @@ export const view = defineView<Model, Message, ViewInputs>((model, viewInputs, h
 				h.OnBlur(Message.BlurredPanel()),
 				h.OnKeyUp(() => Message.ReleasedKey()),
 			],
-			[...panel.content],
+			[...(viewInputs.renderPanel ? viewInputs.renderPanel(panel.key) : panel.content)],
 		)
 
 	return h.div(
@@ -251,7 +257,7 @@ export const view = defineView<Model, Message, ViewInputs>((model, viewInputs, h
 					h.Class(twMerge([...tabsStyles.tabList(orientation), viewInputs.listClassName])),
 					h.Id(model.id),
 					h.Role("tablist"),
-					h.AriaLabel(viewInputs.listLabel),
+					...(viewInputs.listLabel === undefined ? [] : [h.AriaLabel(viewInputs.listLabel)]),
 					h.AriaOrientation(orientation),
 					h.Attribute("data-collection", model.id),
 					h.Attribute("data-orientation", orientation),

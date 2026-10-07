@@ -220,7 +220,11 @@ export interface SliderViewOptions<ParentMessage> {
 
 export interface SliderParts {
 	readonly label: (children: Array<Html | string>) => Html
-	readonly output: () => Html
+	/** `className` is merged as `cx(sliderOutputStyles, className)`; `format` is the render-prop text. */
+	readonly output: (options?: {
+		readonly className?: string
+		readonly format?: (values: ReadonlyArray<number>) => string
+	}) => Html
 	readonly track: () => Html
 }
 
@@ -317,17 +321,17 @@ export const slider = <ParentMessage>(
 
 	const parts: SliderParts = {
 		label: (children) => Field.label(h, { id: ids.label }, children),
-		output: () =>
+		output: (outputOptions = {}) =>
 			h.output(
 				[
-					h.Class(twMerge(twMerge(sliderOutputStyles))),
+					h.Class(twMerge(twMerge(sliderOutputStyles), outputOptions.className)),
 					h.AriaLive("off"),
 					h.DataAttribute("rac", ""),
 					orientationAttribute,
 					...disabledAttributes,
 					h.For(model.values.map((_, index) => thumbId(index)).join(" ")),
 				],
-				[String(model.values[0] ?? "")],
+				[outputOptions.format ? outputOptions.format(model.values) : String(model.values[0] ?? "")],
 			),
 		track: () => {
 			const state = interaction

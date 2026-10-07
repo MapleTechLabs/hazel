@@ -99,6 +99,7 @@ export const Message = defineMessageUnion({
 	GotListMessage: { message: MessageList.Message },
 	GotOverlaysMessage: { message: Overlays.Message },
 	GotFilesMessage: { message: FilesPage.Message },
+	ClickedMobileMenu: {},
 })
 export type Message = typeof Message.Type
 
@@ -262,6 +263,8 @@ export const update = (model: Model, message: Message): PageReturn =>
 			loadOlderWhenNearStart(liftList(model, MessageList.update(model.list, listMessage))),
 		GotOverlaysMessage: ({ message: overlaysMessage }) =>
 			liftOverlays(model, Overlays.update(model.overlays, overlaysMessage, factsOf(model))),
+		// Reported to the root as `RequestedMobileSidebar` by `index.ts`.
+		ClickedMobileMenu: () => ({ model }),
 		GotFilesMessage: ({ message: filesMessage }) => {
 			if (model.files === null) return { model }
 			const result = FilesPage.update(model.files, filesMessage)

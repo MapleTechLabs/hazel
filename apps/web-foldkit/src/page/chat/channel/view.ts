@@ -8,6 +8,7 @@ import { joinBannerView, typingIndicatorView, typingUsersOf } from "../banners"
 import { composerPlaceholderView } from "../composer-placeholder"
 import { authorIdentity, toDeriveContext } from "../derive"
 import * as FilesView from "../files/view"
+import { mobileMenuButton } from "../../../shell/mobile"
 import { chatHeaderView } from "../header"
 import { pinnedPopoverView } from "../pinned"
 import {
@@ -215,6 +216,11 @@ const headerView = <M>(
 			return user ? [authorIdentity(user, botNames.get(member.userId))] : []
 		}),
 		isHiddenDm: currentMember?.isHidden ?? false,
+		mobileMenu: (className) =>
+			mobileMenuButton(h, {
+				onPress: h.OnClick(toParentMessage(Message.ClickedMobileMenu())),
+				...(className === undefined ? {} : { className }),
+			}),
 		pinnedTrigger: pinnedPopoverView(h, pinnedPopover, pins, (message) =>
 			toParentMessage(
 				Message.GotOverlaysMessage({ message: Overlays.Message.GotPinnedMessage({ message }) }),

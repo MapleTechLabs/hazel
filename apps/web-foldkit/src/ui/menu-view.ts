@@ -187,13 +187,15 @@ export type ViewInputs = Readonly<{
 	/** Renders the trigger. Spread `attributes` on it and put `overlay` last among its children. */
 	toTrigger: (attributes: ReadonlyArray<ChildAttribute>, overlay: Html) => Html
 	/** The children of one item (icon, label, shortcut, description), or of a section's header. */
-	content: (key: string) => ReadonlyArray<Html>
+	content: (key: string) => ReadonlyArray<Html | string>
 	/** `MenuContent` className. */
 	className?: string
 	/** `MenuContent` popover.className. */
 	popoverClassName?: string
 	/** A `MenuHeader` before the root menu's entries (e.g. a row of quick actions). */
 	header?: Html
+	/** A `MenuItem`'s own className, by key. */
+	itemClassName?: (key: string) => string | undefined
 }>
 
 const popoverClassName = (className?: string) =>
@@ -503,14 +505,15 @@ const menuItem = (
 	const isSelected = isSelectable && Array.contains(model.selectedKeys, key)
 	const intent = Option.getOrUndefined(entry.intent)
 	const legacyIntent = legacyIntents[intent ?? "None"]
+	const ownClassName = viewInputs.itemClassName?.(key)
 	const className = hasSubmenu
 		? twMerge(
 				legacyIntent === "danger" && menuItemSubmenuOpen.danger,
 				legacyIntent === "warning" && menuItemSubmenuOpen.warning,
 				legacyIntent === undefined && menuItemSubmenuOpen.none,
-				undefined,
+				ownClassName,
 			)
-		: undefined
+		: ownClassName
 	const flag = (name: string, isOn: boolean) => (isOn ? [h.Attribute(name, "true")] : [])
 	const href = Option.getOrUndefined(entry.href)
 

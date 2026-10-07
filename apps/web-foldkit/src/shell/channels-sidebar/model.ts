@@ -1,6 +1,8 @@
 import { ChannelId, OrganizationId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
+import { ToastRequest } from "../../overlay/toasts"
+import * as Menu from "../../ui/menu"
 import {
 	ChannelEntry,
 	ConnectMount,
@@ -33,10 +35,19 @@ export const Model = Schema.Struct({
 	organizations: Schema.Array(PartnerOrg),
 	memberChannelIds: Schema.NullOr(Schema.Array(ChannelId)),
 	discoverableChannels: Schema.Array(DiscoverableChannel),
+	/** `useFeatureHint("create-channel")`, persisted across organizations. */
+	isCreateChannelHintDismissed: Schema.Boolean,
+	/** The one open row or section menu (`channel:<id>` or `section:<key>`); closed menus are not kept. */
+	openMenu: Schema.NullOr(
+		Schema.Struct({ target: Schema.String, orgSlug: Schema.String, menu: Menu.Model }),
+	),
 })
 export type Model = typeof Model.Type
 
 // MESSAGE
+
+export const SectionAction = Schema.Literals(["create-channel", "join-channel", "create-dm"])
+export type SectionAction = typeof SectionAction.Type
 
 export const Message = defineMessageUnion({
 	ChangedContext: {},
@@ -54,6 +65,14 @@ export const Message = defineMessageUnion({
 	UpdatedOrganizations: { organizations: Schema.Array(PartnerOrg) },
 	UpdatedMemberChannelIds: { channelIds: Schema.Array(ChannelId) },
 	UpdatedDiscoverableChannels: { channels: Schema.Array(DiscoverableChannel) },
+	LoadedDismissedHints: { isCreateChannelHintDismissed: Schema.Boolean },
+	ClickedDismissCreateChannelHint: {},
+	CompletedPersistDismissedHint: {},
+	GotRowMenuMessage: { channelId: ChannelId, orgSlug: Schema.String, message: Menu.Message },
+	GotSectionMenuMessage: { sectionKey: Schema.String, message: Menu.Message },
+	ClickedSectionAction: { action: SectionAction },
+	SucceededSidebarAction: { toast: ToastRequest },
+	FailedSidebarAction: { toast: ToastRequest },
 })
 export type Message = typeof Message.Type
 
@@ -70,4 +89,5 @@ export const emptyData = {
 	organizations: [],
 	memberChannelIds: null,
 	discoverableChannels: [],
-} satisfies Omit<Model, "organizationId" | "currentUserId" | "nowMs">
+	openMenu: null,
+} satisfies Omit<Model, "organizationId" | "currentUserId" | "nowMs" | "isCreateChannelHintDismissed">

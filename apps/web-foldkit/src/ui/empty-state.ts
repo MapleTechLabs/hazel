@@ -9,7 +9,8 @@ export const emptyState = <Message>(
 		readonly title: string
 		readonly icon?: (className: string) => Html
 		readonly description?: string
-		readonly action?: Html
+		/** The action slot's children (legacy `action`; a FileTrigger renders a button and an input). */
+		readonly action?: Html | ReadonlyArray<Html>
 		readonly className?: string
 	},
 ): Html =>
@@ -23,6 +24,13 @@ export const emptyState = <Message>(
 			...(options.description
 				? [h.p([h.Class(emptyStateStyles.description)], [options.description])]
 				: []),
-			...(options.action ? [h.div([h.Class(emptyStateStyles.action)], [options.action])] : []),
+			...(options.action
+				? [
+						h.div(
+							[h.Class(emptyStateStyles.action)],
+							globalThis.Array.isArray(options.action) ? [...options.action] : [options.action],
+						),
+					]
+				: []),
 		],
 	)

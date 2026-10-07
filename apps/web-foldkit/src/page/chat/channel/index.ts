@@ -29,15 +29,17 @@ export const page = definePage(
 			}),
 		}),
 		update: (model, message) =>
-			message._tag === "ClickedTab" && message.tab !== model.tab && model.orgSlug !== null
-				? {
-						model,
-						outMessage: PageOutMessage.RequestedNavigation({
-							href: tabPath(model.orgSlug, model.channelId, message.tab),
-							replace: false,
-						}),
-					}
-				: update(model, message),
+			message._tag === "ClickedMobileMenu"
+				? { model, outMessage: PageOutMessage.RequestedMobileSidebar() }
+				: message._tag === "ClickedTab" && message.tab !== model.tab && model.orgSlug !== null
+					? {
+							model,
+							outMessage: PageOutMessage.RequestedNavigation({
+								href: tabPath(model.orgSlug, model.channelId, message.tab),
+								replace: false,
+							}),
+						}
+					: update(model, message),
 		routeChanged: (model, route) => ({ model: setTab(model, tabOf(route)) }),
 		view: Submodel.defineView<Model, Message, PageViewInputs>((model, _inputs, h) =>
 			channelView(h, model, toSelf),

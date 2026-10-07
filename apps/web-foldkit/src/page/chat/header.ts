@@ -24,6 +24,8 @@ export interface HeaderInputs {
 	readonly isHiddenDm: boolean
 	/** The pinned messages trigger (a popover trigger with its overlay). */
 	readonly pinnedTrigger: Html
+	/** The mobile menu button (`md:hidden`), with an extra className for the fallback header. */
+	readonly mobileMenu: (className?: string) => Html
 }
 
 const ROW = "flex h-14 shrink-0 items-center justify-between border-border border-b bg-bg px-4"
@@ -115,6 +117,7 @@ export const chatHeaderView = <M>(h: HtmlBuilder<M>, inputs: HeaderInputs): Html
 		return h.div(
 			[h.Class("flex h-14 shrink-0 items-center border-border border-b bg-bg px-4")],
 			[
+				inputs.mobileMenu("mr-3"),
 				channel
 					? h.div(
 							[h.Class("flex items-center gap-3")],
@@ -132,17 +135,20 @@ export const chatHeaderView = <M>(h: HtmlBuilder<M>, inputs: HeaderInputs): Html
 		[
 			h.div(
 				[h.Class("flex items-center gap-3")],
-				channel.type === "thread"
-					? [threadTitle(h, inputs, channel)]
-					: isDirectMessage
-						? dmTitle(h, inputs.otherMembers)
-						: [
-								channelIcon(h, channel.icon, "size-5 text-muted-fg"),
-								h.div(
-									[h.Class("flex items-center gap-2")],
-									[h.h2([h.Class("font-semibold text-fg text-sm")], [channel.name])],
-								),
-							],
+				[
+					inputs.mobileMenu(),
+					...(channel.type === "thread"
+						? [threadTitle(h, inputs, channel)]
+						: isDirectMessage
+							? dmTitle(h, inputs.otherMembers)
+							: [
+									channelIcon(h, channel.icon, "size-5 text-muted-fg"),
+									h.div(
+										[h.Class("flex items-center gap-2")],
+										[h.h2([h.Class("font-semibold text-fg text-sm")], [channel.name])],
+									),
+								]),
+				],
 			),
 			h.div(
 				[h.Class("flex items-center gap-2")],
