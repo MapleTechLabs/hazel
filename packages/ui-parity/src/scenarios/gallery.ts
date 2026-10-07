@@ -435,5 +435,67 @@ export const galleryArea: AreaModule = {
 				await page.getByText("Growing company", { exact: true }).hover()
 			},
 		}),
+		gallery("date-field", {
+			id: "gallery-date-field",
+			title: "Date field: empty, filled, disabled, invalid",
+			themes: ["light", "dark"],
+		}),
+		gallery("date-field", {
+			id: "gallery-date-field-focus",
+			title: "Date field: Tab focuses the month segment",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.keyboard.press("Tab")
+			},
+		}),
+		gallery("date-field", {
+			id: "gallery-date-field-typed",
+			title: "Date field: digits typed into the empty field fill every segment",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.keyboard.press("Tab")
+				await page.keyboard.type("372026")
+			},
+		}),
+		gallery("date-field", {
+			id: "gallery-date-field-arrows",
+			title: "Date field: ArrowUp/ArrowDown step segments, ArrowRight moves between them",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.getByRole("spinbutton", { name: /month, Due date/ }).focus()
+				await page.keyboard.press("ArrowUp")
+				await page.keyboard.press("ArrowRight")
+				await page.keyboard.press("ArrowDown")
+				await page.keyboard.press("ArrowDown")
+				await page.keyboard.press("Backspace")
+			},
+		}),
+		gallery("time-field", {
+			id: "gallery-time-field",
+			title: "Time field: filled, empty, disabled",
+			themes: ["light", "dark"],
+		}),
+		gallery("time-field", {
+			id: "gallery-time-field-arrows",
+			title: "Time field: hour and minute stepped, day period toggled",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.keyboard.press("Tab")
+				await page.keyboard.press("ArrowUp")
+				await page.keyboard.press("ArrowRight")
+				await page.keyboard.press("ArrowDown")
+				await page.keyboard.press("ArrowRight")
+				await page.keyboard.press("ArrowUp")
+			},
+		}),
+		gallery("time-field", {
+			id: "gallery-time-field-typed",
+			title: "Time field: digits and a day period typed into the empty field",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.getByRole("spinbutton", { name: /hour, Reminder/ }).focus()
+				await page.keyboard.type("945p")
+			},
+		}),
 	],
 }
