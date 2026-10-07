@@ -83,14 +83,24 @@ bun run parity run --baseline legacy --candidate legacy-head
 
 Used by the `legacy-ui-guard` subagent (`.claude/agents/legacy-ui-guard.md`) for every change to legacy code.
 
-### 6. Track what's left
+### 6. Component gallery (UI kit primitives)
+
+`/dev/gallery/<name>` renders every state of one primitive in both apps:
+
+- Legacy: `apps/web/src/dev-gallery/entries/<name>.tsx` exports `title` and a `Gallery` component, picked up by a glob in `routes/dev/gallery/$component.tsx`.
+- Foldkit: `apps/web-foldkit/src/gallery/entries/<name>.ts` exports `gallery = defineGallery(title, { Model, init, update, view })`, a self-contained program that `entry.ts` boots instead of the app on that path. Wrap the view in `galleryFrame` and `gallerySection` (`gallery/frame.ts`), the ports of `dev-gallery/frame.tsx`.
+- Scenarios go in `src/scenarios/gallery.ts`. Static states (variants, disabled, invalid) are rendered by the entry; interactive ones (hover, focus-visible, pressed, open) come from steps, so they test behavior too.
+
+A new legacy entry is not in the pinned baseline until the next re-pin. Until then compare against the working tree: `bun run parity build legacy-head && bun run parity run --baseline legacy-head --candidate foldkit --filter gallery`.
+
+### 7. Track what's left
 
 ```bash
 bun run parity coverage   # every legacy route, ✓ if a scenario visits it
 bun run parity list       # every scenario × viewport × theme variant
 ```
 
-### 7. Add a scenario
+### 8. Add a scenario
 
 Add an entry to the area file `src/scenarios/<area>.ts` (an `AreaModule`: scenarios, the datasets the area introduces, and area-level canned RPCs). `src/scenarios.ts` only aggregates areas. Steps must use accessible locators (`getByRole`, `getByText`) so the same script drives both apps. If a step works in one app and not the other, that is a parity bug (wrong role or missing label), not a test bug. Add a dataset under `src/fixtures/datasets/` when a screen needs different data (empty org, long names, many unreads), and list it in your area module's `datasets`.
 
