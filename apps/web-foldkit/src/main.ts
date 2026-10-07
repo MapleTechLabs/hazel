@@ -128,11 +128,17 @@ const withCommands = (result: Return, outMessage: Option.Option<PageOutMessage>)
 const handleOutMessage = (outMessage: PageOutMessage): Step =>
 	PageOutMessage.match<Step>(outMessage, {
 		RequestedNavigation:
-			({ href, replace }) =>
-			(model) => ({
-				model,
-				commands: [replace ? ReplaceUrl({ url: href }) : NavigateInternal({ url: href })],
-			}),
+			({ href, replace, toast }) =>
+			(model) => {
+				const toasted = toast === undefined ? { model } : withToasts(model, Toasts.push(model.toasts, toast))
+				return {
+					model: toasted.model,
+					commands: [
+						...(toasted.commands ?? []),
+						replace ? ReplaceUrl({ url: href }) : NavigateInternal({ url: href }),
+					],
+				}
+			},
 		RequestedToast:
 			({ toast }) =>
 			(model) =>

@@ -66,12 +66,6 @@ export const CreateDm = Command.define("CreateDm", {
 })
 
 /** The success toast goes out before navigating, which drops this page. */
-export const ShowCreatedDm = Command.define("ShowCreatedDm", {
-	args: { channelId: ChannelId },
-	messages: [Message.ShowedCreatedDmToast],
-	execute: ({ channelId }) => Effect.succeed(Message.ShowedCreatedDmToast({ channelId })),
-})
-
 /** `handleCopyEmail`. */
 export const CopyEmail = Command.define("CopyEmail", {
 	args: { email: Schema.String },

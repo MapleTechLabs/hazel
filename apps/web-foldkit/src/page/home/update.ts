@@ -5,7 +5,7 @@ import * as Interaction from "../../ui/aria/interaction"
 import * as Menu from "../../ui/menu"
 import type { PageReturn, Shared } from "../contract"
 import { PageOutMessage } from "../out-message"
-import { CopyEmail, CreateDm, FindDm, FocusSearch, ShowCreatedDm } from "./commands"
+import { CopyEmail, CreateDm, FindDm, FocusSearch } from "./commands"
 import { Message } from "./message"
 import { type DirectoryMember, menuEntries, menuIdOf, type Model } from "./model"
 
@@ -13,8 +13,15 @@ export const init = (): PageReturn<Model, Message> => ({
 	model: { members: null, searchQuery: "", menus: {}, interaction: Interaction.init() },
 })
 
-const toast = (intent: "success" | "error" | "loading", title: string, description: string | null) =>
-	PageOutMessage.RequestedToast({ toast: { intent, title, description } })
+/** The DM flow's toasts share one id, so each replaces the previous (legacy `exitToast` loading). */
+const DM_TOAST_ID = "home-create-dm"
+
+const toast = (
+	intent: "success" | "error" | "loading",
+	title: string,
+	description: string | null,
+	id?: string,
+) => PageOutMessage.RequestedToast({ toast: { intent, title, description, ...(id === undefined ? {} : { id }) } })
 
 const navigateToChannel = (shared: Shared, channelId: string) =>
 	PageOutMessage.RequestedNavigation({ href: `/${shared.orgSlug ?? ""}/chat/${channelId}`, replace: false })
@@ -102,22 +109,21 @@ export const update = (model: Model, message: Message, shared: Shared): PageRetu
 				? {
 						model,
 						commands: [CreateDm({ organizationId, userId, name })],
-						outMessage: toast("loading", `Starting conversation with ${name}...`, null),
+						outMessage: toast("loading", `Starting conversation with ${name}...`, null, DM_TOAST_ID),
 					}
 				: { model }
 		},
 		SucceededCreateDm: ({ channelId, name }) => ({
 			model,
-			commands: [ShowCreatedDm({ channelId })],
-			outMessage: toast("success", `Started conversation with ${name}`, null),
-		}),
-		ShowedCreatedDmToast: ({ channelId }) => ({
-			model,
-			outMessage: navigateToChannel(shared, channelId),
+			outMessage: PageOutMessage.RequestedNavigation({
+				href: `/${shared.orgSlug ?? ""}/chat/${channelId}`,
+				replace: false,
+				toast: { intent: "success", title: `Started conversation with ${name}`, description: null, id: DM_TOAST_ID },
+			}),
 		}),
 		FailedCreateDm: ({ title, description }) => ({
 			model,
-			outMessage: toast("error", title, description),
+			outMessage: toast("error", title, description, DM_TOAST_ID),
 		}),
 		SucceededCopyEmail: ({ email }) => ({
 			model,

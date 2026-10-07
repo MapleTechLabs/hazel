@@ -5,7 +5,7 @@ import { describe, expect, test, vi } from "vitest"
 import * as Menu from "../../ui/menu"
 import type { Shared } from "../contract"
 import { PageOutMessage } from "../out-message"
-import { CopyEmail, CreateDm, FindDm, ShowCreatedDm } from "./commands"
+import { CopyEmail, CreateDm, FindDm } from "./commands"
 import { Message } from "./message"
 import { type DirectoryMember, filterMembers, type Model } from "./model"
 import { init, update } from "./update"
@@ -129,22 +129,22 @@ describe("org home directory", () => {
 						intent: "loading",
 						title: "Starting conversation with Grace Hopper...",
 						description: null,
+						id: "home-create-dm",
 					},
 				}),
 			),
 			Command.resolve(CreateDm, Message.SucceededCreateDm({ channelId, name: "Grace Hopper" })),
 			expectOutMessage(
-				PageOutMessage.RequestedToast({
+				PageOutMessage.RequestedNavigation({
+					href: `/hazel/chat/${channelId}`,
+					replace: false,
 					toast: {
 						intent: "success",
 						title: "Started conversation with Grace Hopper",
 						description: null,
+						id: "home-create-dm",
 					},
 				}),
-			),
-			Command.resolve(ShowCreatedDm, Message.ShowedCreatedDmToast({ channelId })),
-			expectOutMessage(
-				PageOutMessage.RequestedNavigation({ href: `/hazel/chat/${channelId}`, replace: false }),
 			),
 		)
 	})
