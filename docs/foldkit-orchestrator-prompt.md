@@ -23,7 +23,7 @@ Work on branch `experiment-2.0`. Commit in logical units with the repo's attribu
 - Any change under apps/web, libs/ or shared styles must be visually neutral. Prove it with the `legacy-ui-guard` subagent (or `bun run parity run --baseline legacy --candidate legacy-head`) before committing.
 - Scenario steps use accessible locators only (getByRole/getByText). A missing role or label in Foldkit is a port bug.
 - Use branded ID types from @hazel/schema; follow the Effect patterns in CLAUDE.md.
-- The legacy baseline is pinned at 0126176e0: `bun run parity build legacy --ref 0126176e0`.
+- The legacy baseline is pinned by `LEGACY_BASELINE_REF` in packages/ui-parity/src/config.ts (0126176e0, re-pinned to ef1fce35b for the gallery): `bun run parity build legacy`.
 
 ## Step 0: make the harness safe for parallel agents (do this yourself, first)
 The harness uses fixed ports (4790–4794 and the canonical origin 4800), so two worktrees running parity at once will collide. Add a `PARITY_PORT_BASE` env var (default 4790) that offsets every port in packages/ui-parity/src/config.ts and capture.ts (CANONICAL_ORIGIN). Make sure builds still embed the correct backend URLs per base. Verify `bun run parity selfcheck --filter settings` passes with two different bases running at the same time. Commit.

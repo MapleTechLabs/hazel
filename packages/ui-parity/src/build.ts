@@ -6,6 +6,7 @@ import {
 	BUILD_STAMP_FILE,
 	buildDir,
 	buildEnv,
+	LEGACY_BASELINE_REF,
 	PORT_BASE,
 	repoRoot,
 	targets,
@@ -21,12 +22,13 @@ import {
  */
 export const buildTarget = async (name: TargetName, options: { readonly ref?: string } = {}) => {
 	const target = targets[name]
+	const ref = options.ref ?? (name === "legacy" ? LEGACY_BASELINE_REF : undefined)
 	let root = repoRoot
-	if (options.ref) {
+	if (ref) {
 		// Outside the repo so root-level tooling (vitest, oxlint, tsc) never crawls a second checkout.
-		root = resolve(homedir(), ".cache/hazel-ui-parity/worktrees", `${name}-${options.ref}`)
+		root = resolve(homedir(), ".cache/hazel-ui-parity/worktrees", `${name}-${ref}`)
 		if (!existsSync(root)) {
-			await $`git -C ${repoRoot} worktree add --detach ${root} ${options.ref}`
+			await $`git -C ${repoRoot} worktree add --detach ${root} ${ref}`
 			await $`bun install --frozen-lockfile`.cwd(root)
 		}
 	}
@@ -35,8 +37,8 @@ export const buildTarget = async (name: TargetName, options: { readonly ref?: st
 
 	const dest = buildDir(name)
 	rmSync(dest, { recursive: true, force: true })
-	console.log(`[build] ${name}${options.ref ? ` @ ${options.ref}` : ""} → ${dest}`)
+	console.log(`[build] ${name}${ref ? ` @ ${ref}` : ""} → ${dest}`)
 	await $`bunx vite build --outDir ${dest} --emptyOutDir`.cwd(appDir).env({ ...process.env, ...buildEnv })
-	writeFileSync(resolve(dest, BUILD_STAMP_FILE), JSON.stringify({ portBase: PORT_BASE, ref: options.ref ?? null }))
+	writeFileSync(resolve(dest, BUILD_STAMP_FILE), JSON.stringify({ portBase: PORT_BASE, ref: ref ?? null }))
 	return dest
 }

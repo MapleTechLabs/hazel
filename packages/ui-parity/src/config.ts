@@ -43,6 +43,12 @@ export const CANONICAL_ORIGIN = "http://localhost:4800"
 export const fixtureBackendUrl = `http://localhost:${FIXTURE_BACKEND_PORT}`
 export const fixtureElectricUrl = `http://localhost:${FIXTURE_ELECTRIC_PORT}/v1/shape`
 
+/**
+ * The pinned reference UI. `bun run parity build legacy` builds this commit unless `--ref` is given.
+ * Move it only in a dedicated re-pin commit, with legacy-vs-legacy parity showing what changed.
+ */
+export const LEGACY_BASELINE_REF = "ef1fce35b"
+
 export type TargetName = "legacy" | "legacy-head" | "foldkit"
 
 export interface Target {

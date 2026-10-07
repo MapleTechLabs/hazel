@@ -3,7 +3,7 @@
 Pixel-level comparison of the legacy React frontend (`apps/web`) against the Foldkit frontend (`apps/web-foldkit`). It is the acceptance test for the migration: a screen counts as ported when its scenarios come back `identical`.
 
 ```bash
-bun run parity build legacy --ref 0126176e0   # freeze the reference UI at a commit
+bun run parity build legacy                   # the pinned reference UI (LEGACY_BASELINE_REF in src/config.ts)
 bun run parity build foldkit                  # build the Foldkit app from the working tree
 bun run parity run                            # capture both, diff, write the report
 ```
