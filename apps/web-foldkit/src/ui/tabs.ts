@@ -143,7 +143,8 @@ export interface TabPanelItem {
 }
 
 export type ViewInputs = Readonly<{
-	listLabel: string
+	/** TabList `aria-label`; omitted when undefined, like a TabList without one. */
+	listLabel?: string
 	tabs: ReadonlyArray<TabItem>
 	panels: ReadonlyArray<TabPanelItem>
 	className?: string
@@ -251,7 +252,7 @@ export const view = defineView<Model, Message, ViewInputs>((model, viewInputs, h
 					h.Class(twMerge([...tabsStyles.tabList(orientation), viewInputs.listClassName])),
 					h.Id(model.id),
 					h.Role("tablist"),
-					h.AriaLabel(viewInputs.listLabel),
+					...(viewInputs.listLabel === undefined ? [] : [h.AriaLabel(viewInputs.listLabel)]),
 					h.AriaOrientation(orientation),
 					h.Attribute("data-collection", model.id),
 					h.Attribute("data-orientation", orientation),
