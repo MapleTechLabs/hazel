@@ -114,16 +114,17 @@ export const messageToolbarOverlay = <M>(
 						view: Toolbar.view,
 						viewInputs: {
 							className: "rounded-lg border border-border bg-bg shadow-sm",
-							content: toolbarContent(h, {
-								messageId,
-								isOwnMessage: facts.isOwnMessage(messageId),
-								tooltip: overlays.tooltip,
-								toTooltipMessage: (tooltip) =>
-									toOverlay(Overlays.Message.GotTooltipMessage({ tooltip })),
-								onReply: toOverlay(Overlays.Message.ClickedReply({ messageId })),
-								onDelete: toOverlay(Overlays.Message.ClickedDelete({ messageId })),
-								moreActions,
-							}),
+							content: () =>
+								toolbarContent(h, {
+									messageId,
+									isOwnMessage: facts.isOwnMessage(messageId),
+									tooltip: overlays.tooltip,
+									toTooltipMessage: (tooltip) =>
+										toOverlay(Overlays.Message.GotTooltipMessage({ tooltip })),
+									onReply: toOverlay(Overlays.Message.ClickedReply({ messageId })),
+									onDelete: toOverlay(Overlays.Message.ClickedDelete({ messageId })),
+									moreActions,
+								}),
 						},
 						toParentMessage: (message) =>
 							toOverlay(Overlays.Message.GotToolbarMessage({ message })),
