@@ -22,6 +22,8 @@ export const Leaf = Schema.Struct({
 	isDisabled: Schema.Boolean,
 	intent: Schema.Option(Intent),
 	hasDescription: Schema.Boolean,
+	/** `MenuItemLink` / `MenuItem href`: renders an `<a>`, which the app's link handling follows. */
+	href: Schema.Option(Schema.String),
 })
 export type Leaf = typeof Leaf.Type
 
@@ -30,7 +32,12 @@ export type Item = typeof Item.Type
 
 export const Entry = Schema.Union([
 	Schema.TaggedStruct("Item", { item: Item }),
-	Schema.TaggedStruct("Section", { label: Schema.Option(Schema.String), items: Schema.Array(Item) }),
+	Schema.TaggedStruct("Section", {
+		label: Schema.Option(Schema.String),
+		/** `MenuHeader` as the section's first child; its content is `content(key)`. */
+		header: Schema.Option(Schema.Struct({ key: Schema.String, hasSeparator: Schema.Boolean })),
+		items: Schema.Array(Item),
+	}),
 	Schema.TaggedStruct("Separator", {}),
 ])
 export type Entry = typeof Entry.Type
@@ -88,6 +95,8 @@ export type Message = typeof Message.Type
 
 export const OutMessage = defineMessageUnion({
 	SelectedItem: { key: Schema.String },
+	/** A link item activated from the keyboard; a click is followed by the `<a>` itself. */
+	ActivatedLink: { key: Schema.String, href: Schema.String },
 })
 export type OutMessage = typeof OutMessage.Type
 
@@ -96,7 +105,13 @@ export type OutMessage = typeof OutMessage.Type
 export const leaf = (
 	key: string,
 	options: Partial<
-		Readonly<{ textValue: string; isDisabled: boolean; intent: Intent; hasDescription: boolean }>
+		Readonly<{
+			textValue: string
+			isDisabled: boolean
+			intent: Intent
+			hasDescription: boolean
+			href: string
+		}>
 	> = {},
 ): Leaf => ({
 	key,
@@ -104,6 +119,7 @@ export const leaf = (
 	isDisabled: options.isDisabled ?? false,
 	intent: Option.fromNullishOr(options.intent),
 	hasDescription: options.hasDescription ?? false,
+	href: Option.fromNullishOr(options.href),
 })
 
 export const item = (
@@ -111,9 +127,17 @@ export const item = (
 	options: Parameters<typeof leaf>[1] & Readonly<{ submenu?: ReadonlyArray<Leaf> }> = {},
 ): Entry => ({ _tag: "Item", item: { ...leaf(key, options), submenu: options.submenu ?? [] } })
 
-export const section = (label: string | undefined, items: ReadonlyArray<Entry>): Entry => ({
+export const section = (
+	label: string | undefined,
+	items: ReadonlyArray<Entry>,
+	options: Readonly<{ header?: Readonly<{ key: string; hasSeparator?: boolean }> }> = {},
+): Entry => ({
 	_tag: "Section",
 	label: Option.fromNullishOr(label),
+	header: Option.map(Option.fromNullishOr(options.header), (header) => ({
+		key: header.key,
+		hasSeparator: header.hasSeparator ?? false,
+	})),
 	items: Array.flatMap(items, (entry) => (entry._tag === "Item" ? [entry.item] : [])),
 })
 
@@ -138,6 +162,10 @@ export const init = (config: {
 	popup: { _tag: "Closed" },
 })
 
+/** The parent owns the menu's structure (it follows data), so it reflects it in; state is kept. */
+export const reflectEntries = (model: Model, entries: ReadonlyArray<Entry>): Model =>
+	modifyFields(model, { entries: () => entries })
+
 // IDS
 
 export const triggerId = (id: string) => `${id}-trigger`
@@ -147,6 +175,7 @@ export const popoverId = (id: string) => `${id}-popover`
 export const itemId = (id: string, key: string) => `${id}-item-${key}`
 export const labelId = (id: string, key: string) => `${id}-label-${key}`
 export const descriptionId = (id: string, key: string) => `${id}-description-${key}`
+export const headerId = (id: string, key: string) => `${id}-header-${key}`
 
 // COLLECTION
 
@@ -305,9 +334,13 @@ const activated = (model: Model, open: Open, key: string, modality: Modality): U
 		)
 	}
 	const selectedKeys = model.selectionMode === "Single" ? [key] : model.selectedKeys
+	const href = Option.flatMap(findItem(model, key), (found) => found.href)
 	return {
 		model: modifyFields(closed(model), { selectedKeys: () => selectedKeys }),
-		outMessage: OutMessage.SelectedItem({ key }),
+		outMessage:
+			Option.isSome(href) && modality === "Keyboard"
+				? OutMessage.ActivatedLink({ key, href: href.value })
+				: OutMessage.SelectedItem({ key }),
 	}
 }
 

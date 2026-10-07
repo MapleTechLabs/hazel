@@ -19,7 +19,7 @@ import { profilePopoverContent } from "../../chat/profile-popover"
 import { button } from "../../ui/button"
 import { contextMenuView, menuLabel } from "../../ui/menu-view"
 import * as Overlays from "./overlays"
-import { factsOf, Message, type Model } from "./page"
+import { factsOf, Message, type Model } from "./channel/page"
 import type { MessageRow } from "./rows"
 
 /**

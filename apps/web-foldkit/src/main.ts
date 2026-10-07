@@ -1,392 +1,231 @@
-import { OrganizationId, UserId } from "@hazel/schema"
-import { eq } from "@tanstack/db"
-import { Effect, Option, Schema, Stream } from "effect"
-import { Command, Runtime, Subscription, Update } from "foldkit"
-import * as ChatPage from "./page/chat/page"
-import * as ChatPageSubscriptions from "./page/chat/subscriptions"
-import * as ChatPageView from "./page/chat/view"
-import * as ChannelsSidebar from "./shell/channels-sidebar"
-import type { Document, HtmlBuilder } from "foldkit/html"
-import { defineMessageUnion } from "foldkit/message"
-import { load, pushUrl, UrlRequest } from "foldkit/navigation"
+import { Option } from "effect"
+import { Command, type Runtime, Update } from "foldkit"
+import { UrlRequest } from "foldkit/navigation"
 import { modifyFields } from "foldkit/struct"
-import { Url, toString as urlToString } from "foldkit/url"
+import { toString as urlToString, type Url } from "foldkit/url"
 import {
-	organizationCollection,
-	organizationMemberCollection,
-	userCollection,
-	userPresenceStatusCollection,
-} from "~/db/collections"
-import { liveQueryStream } from "./data/live-query"
-import { settingsLayout, TeamMember, teamPage } from "./page/team"
-import { AppRoute, orgSlugOf, urlToAppRoute } from "./route"
-import { HazelRpc } from "./rpc"
-import { orgShell } from "./shell/app-shell"
-import { applyTheme, ResolvedTheme } from "./theme"
+	ApplyTheme,
+	FetchCurrentUser,
+	LoadExternal,
+	NavigateInternal,
+	ReplaceUrl,
+	SignOut,
+} from "./app/command"
+import { Message } from "./app/message"
+import { Model, sharedOf, shellContextOf } from "./app/model"
+import { toPageMessage } from "./app/view"
+import * as CommandPalette from "./overlay/command-palette"
+import * as Modal from "./overlay/modal"
+import * as Toasts from "./overlay/toasts"
+import { PageOutMessage } from "./page/out-message"
+import { enterRoute, informShared, type PageTransition, updatePage } from "./page/registry"
+import { authRedirect, routeRedirect } from "./redirect"
+import { urlToAppRoute } from "./route"
+import type { HazelRpc } from "./rpc"
+import * as Shell from "./shell/update"
 
-// MODEL
+export { Message } from "./app/message"
+export { Model } from "./app/model"
+export { subscriptions } from "./app/subscription"
+export { view } from "./app/view"
 
-const CurrentUser = Schema.Struct({
-	id: UserId,
-	firstName: Schema.String,
-	lastName: Schema.String,
-	email: Schema.String,
-	avatarUrl: Schema.NullOr(Schema.String),
-})
-
-const Organization = Schema.Struct({
-	id: OrganizationId,
-	name: Schema.String,
-	logoUrl: Schema.NullOr(Schema.String),
-})
-
-export const Model = Schema.Struct({
-	route: AppRoute,
-	pathname: Schema.String,
-	currentUser: Schema.NullOr(CurrentUser),
-	organization: Schema.NullOr(Organization),
-	teamMembers: Schema.Array(TeamMember),
-	nowMs: Schema.Number,
-	chatPage: Schema.NullOr(ChatPage.Model),
-	channelsSidebar: ChannelsSidebar.Model,
-})
-export type Model = typeof Model.Type
-
-// MESSAGE
-
-export const Message = defineMessageUnion({
-	ClickedLink: { request: UrlRequest },
-	ChangedUrl: { url: Url },
-	CompletedNavigateInternal: {},
-	CompletedLoadExternal: {},
-	ChangedSystemTheme: { theme: ResolvedTheme },
-	CompletedApplyTheme: {},
-	SucceededFetchCurrentUser: { user: CurrentUser },
-	FailedFetchCurrentUser: { reason: Schema.String },
-	UpdatedOrganization: { organization: Schema.NullOr(Organization) },
-	UpdatedTeamMembers: { members: Schema.Array(TeamMember) },
-	TickedPresenceClock: { nowMs: Schema.Number },
-	GotChatPageMessage: { message: ChatPage.Message },
-	GotChannelsSidebarMessage: { message: ChannelsSidebar.Message },
-})
-export type Message = typeof Message.Type
-
-// COMMAND
-
-const NavigateInternal = Command.define("NavigateInternal", {
-	args: { url: Schema.String },
-	messages: [Message.CompletedNavigateInternal],
-	execute: ({ url }) => pushUrl(url).pipe(Effect.as(Message.CompletedNavigateInternal())),
-})
-
-const LoadExternal = Command.define("LoadExternal", {
-	args: { href: Schema.String },
-	messages: [Message.CompletedLoadExternal],
-	execute: ({ href }) => load(href).pipe(Effect.as(Message.CompletedLoadExternal())),
-})
-
-const ApplyTheme = Command.define("ApplyTheme", {
-	args: { theme: ResolvedTheme },
-	messages: [Message.CompletedApplyTheme],
-	execute: ({ theme }) => applyTheme(theme).pipe(Effect.as(Message.CompletedApplyTheme())),
-})
-
-const FetchCurrentUser = Command.define("FetchCurrentUser", {
-	args: {},
-	messages: [Message.SucceededFetchCurrentUser, Message.FailedFetchCurrentUser],
-	execute: () =>
-		Effect.gen(function* () {
-			const client = yield* HazelRpc
-			const user = yield* client("user.me", undefined)
-			return Message.SucceededFetchCurrentUser({
-				user: {
-					id: user.id,
-					firstName: user.firstName ?? "",
-					lastName: user.lastName ?? "",
-					email: user.email,
-					avatarUrl: user.avatarUrl ?? null,
-				},
-			})
-		}).pipe(
-			Effect.catch((error) =>
-				Effect.succeed(Message.FailedFetchCurrentUser({ reason: String(error) })),
-			),
-		),
-})
+type Return = Update.Return<Model, Message, HazelRpc>
+type Step = Update.Step<Model, Message, HazelRpc>
 
 // CHILDREN
 
-/** A channel route gets a fresh page; any other route drops it (React's unmount semantics). */
-const chatPageFor = (route: AppRoute, previous: ChatPage.Model | null, currentUserId: UserId | null) =>
-	route._tag !== "ChatChannel"
-		? null
-		: previous !== null && previous.channelId === route.channelId
-			? previous
-			: ChatPage.init(route.channelId, currentUserId)
+const foldOverlay =
+	<Child, ChildMessage>(
+		write: (model: Model, child: Child) => Model,
+		toParentMessage: (message: ChildMessage) => Message,
+	) =>
+	(model: Model, result: Update.Return<Child, ChildMessage>): Return => ({
+		model: write(model, result.model),
+		commands: Command.mapMessages(result.commands, toParentMessage),
+	})
 
-const foldChatPage = (model: Model, step: (page: ChatPage.Model) => ChatPage.PageReturn) =>
-	Update.foldChildStep<Model, Message, ChatPage.Model, ChatPage.Message>({
-		update: step,
-		read: (parent: Model) => Option.fromNullishOr(parent.chatPage),
-		write: (parent: Model, chatPage: ChatPage.Model) =>
-			modifyFields(parent, { chatPage: () => chatPage }),
-		toParentMessage: (message: ChatPage.Message) => Message.GotChatPageMessage({ message }),
-	})(model)
+const withModal = foldOverlay(
+	(model, modal: Modal.Model) => modifyFields(model, { modal: () => modal }),
+	(message: Modal.Message) => Message.GotModalMessage({ message }),
+)
+const withCommandPalette = foldOverlay(
+	(model, commandPalette: CommandPalette.Model) =>
+		modifyFields(model, { commandPalette: () => commandPalette }),
+	(message: CommandPalette.Message) => Message.GotCommandPaletteMessage({ message }),
+)
+const withToasts = foldOverlay(
+	(model, toasts: Toasts.Model) => modifyFields(model, { toasts: () => toasts }),
+	(message: Toasts.Message) => Message.GotToastsMessage({ message }),
+)
 
-const foldChannelsSidebar = (
-	model: Model,
-	step: (sidebar: ChannelsSidebar.Model) => ChannelsSidebar.SidebarReturn,
-) =>
-	Update.foldChildStep<Model, Message, ChannelsSidebar.Model, ChannelsSidebar.Message>({
-		update: step,
-		read: (parent: Model) => Option.some(parent.channelsSidebar),
-		write: (parent: Model, channelsSidebar: ChannelsSidebar.Model) =>
-			modifyFields(parent, { channelsSidebar: () => channelsSidebar }),
-		toParentMessage: (message: ChannelsSidebar.Message) => Message.GotChannelsSidebarMessage({ message }),
-	})(model)
+/** Runs the OutMessage's consequence after `result`, keeping both sets of Commands. */
+const withCommands = (result: Return, outMessage: Option.Option<PageOutMessage>): Return =>
+	Option.match(outMessage, {
+		onNone: () => result,
+		onSome: (found) => {
+			const followed = handleOutMessage(found)(result.model)
+			return {
+				model: followed.model,
+				commands: [...(result.commands ?? []), ...(followed.commands ?? [])],
+			}
+		},
+	})
 
-const syncSidebarContext = (model: Model) =>
-	foldChannelsSidebar(model, (sidebar) =>
-		ChannelsSidebar.setContext(sidebar, {
-			organizationId: model.organization?.id ?? null,
-			currentUserId: model.currentUser?.id ?? null,
-		}),
+/** A page or the shell reported a fact; the root owns navigation and the overlays. */
+const handleOutMessage = (outMessage: PageOutMessage): Step =>
+	PageOutMessage.match<Step>(outMessage, {
+		RequestedNavigation:
+			({ href, replace }) =>
+			(model) => ({
+				model,
+				commands: [replace ? ReplaceUrl({ url: href }) : NavigateInternal({ url: href })],
+			}),
+		RequestedToast:
+			({ toast }) =>
+			(model) =>
+				withToasts(model, Toasts.push(model.toasts, toast)),
+		RequestedModal:
+			({ modal }) =>
+			(model) =>
+				withModal(model, Modal.open(model.modal, modal)),
+		RequestedCommandPalette:
+			({ page }) =>
+			(model) =>
+				withCommandPalette(model, CommandPalette.open(model.commandPalette, page)),
+		RequestedSignOut: () => (model) => ({ model, commands: [SignOut({})] }),
+	})
+
+const applyPage =
+	(transition: PageTransition): Step =>
+	(model) =>
+		withCommands(
+			{
+				model: modifyFields(model, { page: () => transition.slot }),
+				commands: Command.mapMessages(transition.commands, toPageMessage),
+			},
+			transition.outMessage,
+		)
+
+/** The shell's menus and sidebar follow the route, organization, user and role. */
+const informShell: Step = (model) => {
+	const result = Shell.informContext(model.shell, shellContextOf(model))
+	return {
+		model: modifyFields(model, { shell: () => result.model }),
+		commands: Command.mapMessages(result.commands, (message) => Message.GotShellMessage({ message })),
+	}
+}
+
+const informPage: Step = (model) => applyPage(informShared(model.page, sharedOf(model)))(model)
+
+/** `beforeLoad` redirects and the signed-out gate, re-checked whenever the route or auth changes. */
+const redirect: Step = (model) => {
+	const target = Option.orElse(routeRedirect(model.route, { isProd: import.meta.env.PROD }), () =>
+		authRedirect(model.route, model.auth, model.currentUrl),
 	)
+	return {
+		model,
+		commands: Option.match(target, { onNone: () => [], onSome: (url) => [ReplaceUrl({ url })] }),
+	}
+}
 
-const withCurrentUser = (model: Model, user: typeof CurrentUser.Type): Model =>
-	modifyFields(model, { currentUser: () => user })
+const withUrl = (model: Model, url: Url): Model => {
+	const route = urlToAppRoute(url)
+	return modifyFields(model, {
+		route: () => route,
+		pathname: () => url.pathname,
+		currentUrl: () => `${url.pathname}${Option.getOrElse(url.search, () => "")}`,
+	})
+}
 
-const withOrganization = (model: Model, organization: typeof Organization.Type | null): Model =>
-	modifyFields(model, { organization: () => organization })
+const enteredRoute: Step = (model) => applyPage(enterRoute(model.page, model.route, sharedOf(model)))(model)
 
 // INIT
 
-export const init: Runtime.RoutingApplicationInit<Model, Message, void, HazelRpc> = (url: Url) => ({
-	model: {
-		route: urlToAppRoute(url),
-		pathname: url.pathname,
-		currentUser: null,
-		organization: null,
-		teamMembers: [],
-		nowMs: 0,
-		chatPage: chatPageFor(urlToAppRoute(url), null, null),
-		channelsSidebar: ChannelsSidebar.init(),
-	},
-	commands: [FetchCurrentUser({})],
-})
+export const init: Runtime.RoutingApplicationInit<Model, Message, void, HazelRpc> = (url: Url) => {
+	const model = withUrl(
+		{
+			route: { _tag: "Root" },
+			pathname: "",
+			currentUrl: "",
+			auth: "Loading",
+			currentUser: null,
+			organization: null,
+			member: null,
+			nowMs: 0,
+			page: null,
+			shell: Shell.init(),
+			modal: Modal.init(),
+			commandPalette: CommandPalette.init(),
+			toasts: Toasts.init(),
+		},
+		url,
+	)
+	return Update.combine<Model, Message, HazelRpc>(model, [enteredRoute, informShell, redirect])
+}
 
 // UPDATE
 
-export const update = (model: Model, message: Message) =>
-	Message.match<Update.Return<Model, Message, HazelRpc>>(message, {
+export const update = (model: Model, message: Message): Return =>
+	Message.match<Return>(message, {
 		ClickedLink: ({ request }) =>
-			UrlRequest.match<Update.Return<Model, Message, HazelRpc>>(request, {
+			UrlRequest.match<Return>(request, {
 				Internal: ({ url }) => ({ model, commands: [NavigateInternal({ url: urlToString(url) })] }),
 				External: ({ href }) => ({ model, commands: [LoadExternal({ href })] }),
 			}),
-		ChangedUrl: ({ url }) => {
-			const route = urlToAppRoute(url)
-			return {
-				model: modifyFields(model, {
-					route: () => route,
-					pathname: () => url.pathname,
-					chatPage: () => chatPageFor(route, model.chatPage, model.currentUser?.id ?? null),
-				}),
-			}
-		},
+		ChangedUrl: ({ url }) =>
+			Update.combine<Model, Message, HazelRpc>(withUrl(model, url), [
+				enteredRoute,
+				informShell,
+				redirect,
+			]),
 		CompletedNavigateInternal: () => ({ model }),
+		CompletedReplaceUrl: () => ({ model }),
 		CompletedLoadExternal: () => ({ model }),
 		ChangedSystemTheme: ({ theme }) => ({ model, commands: [ApplyTheme({ theme })] }),
 		CompletedApplyTheme: () => ({ model }),
+		ChangedAuth: ({ auth }) => {
+			const next = modifyFields(model, { auth: () => auth })
+			const fetchUser = auth === "SignedIn" && model.auth !== "SignedIn" ? [FetchCurrentUser({})] : []
+			return Update.combine<Model, Message, HazelRpc>(next, [
+				informPage,
+				redirect,
+				(m) => ({ model: m, commands: fetchUser }),
+			])
+		},
 		SucceededFetchCurrentUser: ({ user }) =>
-			Update.combine<Model, Message, HazelRpc>(withCurrentUser(model, user), [
-				(next) => foldChatPage(next, (page) => ChatPage.setCurrentUserId(page, user.id)),
-				syncSidebarContext,
+			Update.combine<Model, Message, HazelRpc>(modifyFields(model, { currentUser: () => user }), [
+				informPage,
+				informShell,
 			]),
 		FailedFetchCurrentUser: () => ({ model }),
-		UpdatedOrganization: ({ organization }) => syncSidebarContext(withOrganization(model, organization)),
-		UpdatedTeamMembers: ({ members }) => ({ model: modifyFields(model, { teamMembers: () => members }) }),
-		TickedPresenceClock: ({ nowMs }) => ({ model: modifyFields(model, { nowMs: () => nowMs }) }),
-		GotChatPageMessage: ({ message }) => foldChatPage(model, (page) => ChatPage.update(page, message)),
-		GotChannelsSidebarMessage: ({ message }) =>
-			foldChannelsSidebar(model, (sidebar) => ChannelsSidebar.update(sidebar, message)),
-	})
-
-// SUBSCRIPTION
-
-interface TeamMemberRow {
-	readonly id: string
-	readonly userId: string
-	readonly role: TeamMember["role"]
-	readonly user: {
-		readonly firstName: string
-		readonly lastName: string
-		readonly email: string
-		readonly avatarUrl?: string | null
-	}
-	readonly presence?: { readonly status: string; readonly lastSeenAt: Date } | undefined
-}
-
-const rootSubscriptions = Subscription.make<Model, Message>()((entry) => ({
-	systemTheme: Subscription.persistent(
-		Subscription.fromMediaQuery({
-			query: "(prefers-color-scheme: dark)",
-			mapMatches: (isDark) => Message.ChangedSystemTheme({ theme: isDark ? "dark" : "light" }),
-		}),
-	),
-	// Legacy `presenceNowSignal`: wall clock for deriving stale presence.
-	presenceClock: Subscription.persistent(
-		Stream.concat(Stream.succeed(undefined), Stream.tick("30 seconds")).pipe(
-			Stream.map(() => Message.TickedPresenceClock({ nowMs: Date.now() })),
-		),
-	),
-	organization: entry(
-		{ orgSlug: Schema.NullOr(Schema.String) },
-		{
-			modelToDependencies: (model) => ({ orgSlug: orgSlugOf(model.route) ?? null }),
-			dependenciesToStream: ({ orgSlug }) =>
-				orgSlug === null
-					? Stream.empty
-					: liveQueryStream<{ id: OrganizationId; name: string; logoUrl: string | null }, Message>(
-							(q) =>
-								q
-									.from({ org: organizationCollection })
-									.where(({ org }) => eq(org.slug, orgSlug))
-									.orderBy(({ org }) => org.createdAt, "asc")
-									.findOne(),
-							(rows) => {
-								const org = rows[0]
-								return Message.UpdatedOrganization({
-									organization: org
-										? { id: org.id, name: org.name, logoUrl: org.logoUrl ?? null }
-										: null,
-								})
-							},
-						),
-		},
-	),
-	teamMembers: entry(
-		{ organizationId: Schema.NullOr(Schema.String) },
-		{
-			modelToDependencies: (model) => ({
-				organizationId: model.route._tag === "TeamSettings" ? (model.organization?.id ?? null) : null,
-			}),
-			dependenciesToStream: ({ organizationId }) =>
-				organizationId === null
-					? Stream.empty
-					: liveQueryStream<TeamMemberRow, Message>(
-							// Same query as `routes/_app/$orgSlug/settings/team.tsx`.
-							(q) =>
-								q
-									.from({ members: organizationMemberCollection })
-									.where(({ members }) => eq(members.organizationId, organizationId))
-									.innerJoin({ user: userCollection }, ({ members, user }) =>
-										eq(members.userId, user.id),
-									)
-									.leftJoin(
-										{ presence: userPresenceStatusCollection },
-										({ user, presence }) => eq(user.id, presence.userId),
-									)
-									.where(({ user }) => eq(user.userType, "user"))
-									.select(({ members, user, presence }) => ({
-										...members,
-										user,
-										presence,
-									})),
-							(rows) =>
-								Message.UpdatedTeamMembers({
-									members: rows.map((row) => ({
-										id: row.id,
-										userId: row.userId,
-										role: row.role,
-										firstName: row.user.firstName,
-										lastName: row.user.lastName,
-										email: row.user.email,
-										avatarUrl: row.user.avatarUrl ?? null,
-										presenceStatus: row.presence?.status ?? null,
-										presenceLastSeenMs: row.presence
-											? new Date(row.presence.lastSeenAt).getTime()
-											: null,
-									})),
-								}),
-						),
-		},
-	),
-}))
-
-const chatPageSubscriptions = Subscription.lift(ChatPageSubscriptions.subscriptions)<Model, Message>({
-	read: (model) => Option.fromNullishOr(model.chatPage),
-	toParentMessage: (message) => Message.GotChatPageMessage({ message }),
-})
-
-const channelsSidebarSubscriptions = Subscription.lift(ChannelsSidebar.subscriptions)<Model, Message>({
-	read: (model) =>
-		model.route._tag === "ChatChannel" ? Option.some(model.channelsSidebar) : Option.none(),
-	toParentMessage: (message: ChannelsSidebar.Message) => Message.GotChannelsSidebarMessage({ message }),
-})
-
-export const subscriptions = Subscription.aggregate(
-	rootSubscriptions,
-	chatPageSubscriptions,
-	channelsSidebarSubscriptions,
-)
-
-// VIEW
-
-const displayNameOf = (user: typeof CurrentUser.Type) =>
-	user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.email || "User"
-
-// Module-level so memoized child views see the same function on every render.
-const toChatPageMessage = (message: ChatPage.Message) => Message.GotChatPageMessage({ message })
-const toChannelsSidebarMessage = (message: ChannelsSidebar.Message) =>
-	Message.GotChannelsSidebarMessage({ message })
-
-const shellContextOf = (model: Model, orgSlug: string) => ({
-	orgSlug,
-	pathname: model.pathname,
-	organization: model.organization ?? undefined,
-	currentUser: model.currentUser
-		? {
-				displayName: displayNameOf(model.currentUser),
-				email: model.currentUser.email,
-				avatarUrl: model.currentUser.avatarUrl,
-			}
-		: undefined,
-	appVersion: __APP_VERSION__,
-})
-
-export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
-	title: "Hazel Chat",
-	body: AppRoute.match(model.route, {
-		TeamSettings: ({ orgSlug }) =>
-			orgShell(
-				h,
-				shellContextOf(model, orgSlug),
-				settingsLayout(
-					h,
-					teamPage(h, {
-						members: model.teamMembers,
-						currentUserId: model.currentUser?.id,
-						nowMs: model.nowMs,
-					}),
-				),
+		CompletedSignOut: () => ({ model }),
+		UpdatedOrganization: ({ organization }) =>
+			Update.combine<Model, Message, HazelRpc>(
+				modifyFields(model, { organization: () => organization }),
+				[informPage, informShell],
 			),
-		ChatChannel: ({ orgSlug, channelId }) => {
-			const shell = shellContextOf(model, orgSlug)
-			return orgShell(
-				h,
-				shell,
-				model.chatPage === null
-					? h.div([], [])
-					: ChatPageView.view(h, model.chatPage, toChatPageMessage),
-				ChannelsSidebar.view(
-					h,
-					model.channelsSidebar,
-					{ shell, activeChannelId: channelId },
-					toChannelsSidebarMessage,
-				),
+		UpdatedMember: ({ member }) =>
+			Update.combine<Model, Message, HazelRpc>(modifyFields(model, { member: () => member }), [
+				informPage,
+				informShell,
+			]),
+		TickedPresenceClock: ({ nowMs }) => ({ model: modifyFields(model, { nowMs: () => nowMs }) }),
+		ClickedLayoutTab: ({ href }) => ({ model, commands: [NavigateInternal({ url: href })] }),
+		GotPageMessage: ({ message }) => applyPage(updatePage(model.page, message, sharedOf(model)))(model),
+		GotShellMessage: ({ message }) => {
+			const result = Shell.update(model.shell, message, shellContextOf(model))
+			return withCommands(
+				{
+					model: modifyFields(model, { shell: () => result.model }),
+					commands: Command.mapMessages(result.commands, (child) =>
+						Message.GotShellMessage({ message: child }),
+					),
+				},
+				Option.fromNullishOr(result.outMessage),
 			)
 		},
-		NotFound: ({ path }) => h.div([h.Id("app")], [`Not found: ${path}`]),
-	}),
-})
+		GotModalMessage: ({ message }) => withModal(model, Modal.update(model.modal, message)),
+		GotCommandPaletteMessage: ({ message }) =>
+			withCommandPalette(model, CommandPalette.update(model.commandPalette, message)),
+		GotToastsMessage: ({ message }) => withToasts(model, Toasts.update(model.toasts, message)),
+	})

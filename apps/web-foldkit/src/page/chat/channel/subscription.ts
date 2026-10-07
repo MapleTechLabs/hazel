@@ -1,51 +1,41 @@
 import { ChannelId, MessageId, OrganizationId } from "@hazel/schema"
 import { Option, Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
-import * as FilesSubscriptions from "./files/subscriptions"
-import { channelStream, messagesStream, parentChannelStream, reactionsStream } from "./data"
+import * as FilesSubscriptions from "../files/subscriptions"
+import { channelStream, messagesStream, parentChannelStream, reactionsStream } from "../data"
 import {
 	attachmentsStream,
 	botsStream,
 	customEmojisStream,
 	discordSyncedStream,
 	membersStream,
-	orgSlugStream,
 	presenceStream,
 	replyTargetsStream,
 	threadChannelsStream,
 	threadMessagesStream,
 	typingStream,
 	usersStream,
-} from "./lookup-data"
+} from "../lookup-data"
+import type { PageSubscriptionInput } from "../../contract"
 import { Message, type Model } from "./page"
+
+type Input = PageSubscriptionInput<Model>
 
 /** The channel page's live queries; split from `page.ts` so the update loop has no collection imports. */
 
 const byChannel = { channelId: ChannelId }
-const channelOf = (model: Model) => ({ channelId: model.channelId })
+const channelOf = ({ model }: Input) => ({ channelId: model.channelId })
 
-const chat = Subscription.make<Model, Message>()((entry) => ({
+const chat = Subscription.make<Input, Message>()((entry) => ({
 	chatChannel: entry(byChannel, {
 		modelToDependencies: channelOf,
 		dependenciesToStream: ({ channelId }) =>
 			channelStream(channelId, (channel) => Message.UpdatedChannel({ channel })),
 	}),
-	chatOrgSlug: entry(
-		{ organizationId: Schema.NullOr(OrganizationId) },
-		{
-			modelToDependencies: (model) => ({
-				organizationId: model.orgSlug === null ? (model.channel?.organizationId ?? null) : null,
-			}),
-			dependenciesToStream: ({ organizationId }) =>
-				organizationId === null
-					? Stream.empty
-					: orgSlugStream(organizationId, (orgSlug) => Message.UpdatedOrgSlug({ orgSlug })),
-		},
-	),
 	chatParentChannel: entry(
 		{ parentChannelId: Schema.NullOr(ChannelId) },
 		{
-			modelToDependencies: (model) => ({
+			modelToDependencies: ({ model }) => ({
 				parentChannelId: model.channel?.type === "thread" ? model.channel.parentChannelId : null,
 			}),
 			dependenciesToStream: ({ parentChannelId }) =>
@@ -59,7 +49,7 @@ const chat = Subscription.make<Model, Message>()((entry) => ({
 	chatMessages: entry(
 		{ channelId: ChannelId, limit: Schema.Number },
 		{
-			modelToDependencies: (model) => ({ channelId: model.channelId, limit: model.limit }),
+			modelToDependencies: ({ model }) => ({ channelId: model.channelId, limit: model.limit }),
 			dependenciesToStream: ({ channelId, limit }) =>
 				messagesStream(channelId, limit, (messages) => Message.UpdatedMessages({ messages })),
 		},
@@ -93,7 +83,7 @@ const chat = Subscription.make<Model, Message>()((entry) => ({
 	chatCustomEmojis: entry(
 		{ organizationId: Schema.NullOr(OrganizationId) },
 		{
-			modelToDependencies: (model) => ({ organizationId: model.channel?.organizationId ?? null }),
+			modelToDependencies: ({ model }) => ({ organizationId: model.channel?.organizationId ?? null }),
 			dependenciesToStream: ({ organizationId }) =>
 				organizationId === null
 					? Stream.empty
@@ -115,7 +105,7 @@ const chat = Subscription.make<Model, Message>()((entry) => ({
 	chatThreadChannels: entry(
 		{ threadIds: Schema.Array(ChannelId) },
 		{
-			modelToDependencies: (model) => ({ threadIds: model.threadIds }),
+			modelToDependencies: ({ model }) => ({ threadIds: model.threadIds }),
 			dependenciesToStream: ({ threadIds }) =>
 				threadChannelsStream(threadIds, (channels) => Message.UpdatedThreadChannels({ channels })),
 		},
@@ -123,7 +113,7 @@ const chat = Subscription.make<Model, Message>()((entry) => ({
 	chatThreadMessages: entry(
 		{ threadIds: Schema.Array(ChannelId) },
 		{
-			modelToDependencies: (model) => ({ threadIds: model.threadIds }),
+			modelToDependencies: ({ model }) => ({ threadIds: model.threadIds }),
 			dependenciesToStream: ({ threadIds }) =>
 				threadMessagesStream(threadIds, (messages) => Message.UpdatedThreadMessages({ messages })),
 		},
@@ -131,7 +121,7 @@ const chat = Subscription.make<Model, Message>()((entry) => ({
 	chatReplyTargets: entry(
 		{ replyIds: Schema.Array(MessageId) },
 		{
-			modelToDependencies: (model) => ({ replyIds: model.replyIds }),
+			modelToDependencies: ({ model }) => ({ replyIds: model.replyIds }),
 			dependenciesToStream: ({ replyIds }) =>
 				replyTargetsStream(replyIds, (targets) => Message.UpdatedReplyTargets({ targets })),
 		},
@@ -150,7 +140,7 @@ const chat = Subscription.make<Model, Message>()((entry) => ({
 	chatTypingClock: entry(
 		{ isTyping: Schema.Boolean },
 		{
-			modelToDependencies: (model) => ({ isTyping: model.typing.length > 0 }),
+			modelToDependencies: ({ model }) => ({ isTyping: model.typing.length > 0 }),
 			dependenciesToStream: ({ isTyping }) =>
 				isTyping
 					? Stream.concat(Stream.succeed(undefined), Stream.tick("1 second")).pipe(
@@ -161,8 +151,8 @@ const chat = Subscription.make<Model, Message>()((entry) => ({
 	),
 }))
 
-const files = Subscription.lift(FilesSubscriptions.subscriptions)<Model, Message>({
-	read: (model) => Option.fromNullishOr(model.files),
+const files = Subscription.lift(FilesSubscriptions.subscriptions)<Input, Message>({
+	read: ({ model }) => Option.fromNullishOr(model.files),
 	toParentMessage: (message) => Message.GotFilesMessage({ message }),
 })
 

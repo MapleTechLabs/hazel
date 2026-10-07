@@ -16,7 +16,7 @@ import * as Modal from "../../ui/modal"
 import * as Toolbar from "../../ui/toolbar"
 import { identityOf, toDeriveContext } from "./derive"
 import * as Overlays from "./overlays"
-import { factsOf, Message, type Model } from "./page"
+import { factsOf, Message, type Model } from "./channel/page"
 
 /** Overlays rendered outside the rows: hover toolbar, delete confirmation, reply indicator. */
 

@@ -1,14 +1,14 @@
 import { createLazy, type Html, type HtmlBuilder } from "foldkit/html"
 import { contentStyles, rootStyles } from "~/components/ui/split-panel/split-panel.styles"
-import { isImageAttachment } from "../../chat/attachments"
-import { imageViewerView } from "../../chat/image-viewer"
-import { dateDividerView, messageRowView, type RowContext } from "../../chat/message/row"
-import * as MessageList from "../../mount/message-list"
-import { joinBannerView, typingIndicatorView, typingUsersOf } from "./banners"
-import { composerPlaceholderView } from "./composer-placeholder"
-import { authorIdentity } from "./derive"
-import * as FilesView from "./files/view"
-import { chatHeaderView, pinnedButton } from "./header"
+import { isImageAttachment } from "../../../chat/attachments"
+import { imageViewerView } from "../../../chat/image-viewer"
+import { dateDividerView, messageRowView, type RowContext } from "../../../chat/message/row"
+import * as MessageList from "../../../mount/message-list"
+import { joinBannerView, typingIndicatorView, typingUsersOf } from "../banners"
+import { composerPlaceholderView } from "../composer-placeholder"
+import { authorIdentity } from "../derive"
+import * as FilesView from "../files/view"
+import { chatHeaderView, pinnedButton } from "../header"
 import {
 	deleteMessageModal,
 	messageToolbarOverlay,
@@ -16,12 +16,12 @@ import {
 	replyIndicatorView,
 	replyPreviewOf,
 	trackHoverAttribute,
-} from "./overlay-views"
-import * as Overlays from "./overlays"
+} from "../overlay-views"
+import * as Overlays from "../overlays"
 import { isMemberOf, Message, type Model } from "./page"
-import { idleRowContext, rowContextFor } from "./row-context"
-import type { DisplayRow } from "./rows"
-import { chatTabBarView } from "./tab-bar"
+import { idleRowContext, rowContextFor } from "../row-context"
+import type { DisplayRow } from "../rows"
+import { chatTabBarView } from "../tab-bar"
 
 /** The channel route's content: header, tab bar, message list and composer (desktop). */
 

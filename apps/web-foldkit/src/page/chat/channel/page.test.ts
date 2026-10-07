@@ -2,9 +2,9 @@ import { ChannelId, MessageId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { Command, given, message, model, story } from "foldkit/story"
 import { describe, expect, test, vi } from "vitest"
-import * as MessageList from "../../mount/message-list"
+import * as MessageList from "../../../mount/message-list"
 import { init, Message, type Model, update } from "./page"
-import type { ChatMessage } from "./rows"
+import type { ChatMessage } from "../rows"
 
 /** Update-loop tests for the channel page's list: prepend anchoring, following the end, paging. */
 

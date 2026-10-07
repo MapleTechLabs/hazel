@@ -1,16 +1,22 @@
-import type { Html, HtmlBuilder } from "foldkit/html"
+import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { cx } from "~/utils/cx"
-import { IconFolders, IconMsgs } from "../../icons"
-import { type ChatTab, Message } from "./channel/page"
 
-/** `ChatTabBar`: Messages and Files tabs; selecting one navigates like the legacy `onSelectionChange`. */
+/**
+ * Stateless `Tabs` > `TabList` > `Tab` (`components/ui/tabs.tsx`, horizontal) for tab bars whose
+ * selection is the route: the chat tab bar and the channel settings tabs. `ui/tabs.ts` is the stateful kit.
+ */
 
-/** `Tab` from `components/ui/tabs.tsx`, horizontal orientation. */
-const tabView = <M>(
+export const tabView = <M>(
 	h: HtmlBuilder<M>,
-	options: { id: string; label: string; icon: Html; isSelected: boolean; onClick: M },
-) =>
+	options: {
+		readonly id: string
+		readonly label: string
+		readonly icon?: Html
+		readonly isSelected: boolean
+		readonly attributes?: ReadonlyArray<Attribute<M>>
+	},
+): Html =>
 	h.div(
 		[
 			...(options.isSelected
@@ -36,10 +42,10 @@ const tabView = <M>(
 			h.Attribute("data-slot", "tab"),
 			h.Attribute("role", "tab"),
 			h.Attribute("tabindex", options.isSelected ? "0" : "-1"),
-			h.OnClick(options.onClick),
+			...(options.attributes ?? []),
 		],
 		[
-			options.icon,
+			...(options.icon ? [options.icon] : []),
 			options.label,
 			...(options.isSelected
 				? [
@@ -61,14 +67,15 @@ const tabView = <M>(
 		],
 	)
 
-export const chatTabBarView = <M>(
-	tab: ChatTab,
-	toParentMessage: (message: Message) => M,
+/** `Tabs` (horizontal) wrapping one `TabList`. */
+export const tabStrip = <M>(
 	h: HtmlBuilder<M>,
+	options: { readonly className?: string; readonly tabListClassName?: string },
+	tabs: ReadonlyArray<Html>,
 ): Html =>
 	h.div(
 		[
-			h.Class(cx("flex-col", "group/tabs flex gap-4 forced-color-adjust-none")),
+			h.Class(cx("flex-col", "group/tabs flex gap-4 forced-color-adjust-none", options.className)),
 			h.Attribute("data-orientation", "horizontal"),
 			h.Attribute("data-rac", ""),
 		],
@@ -81,7 +88,7 @@ export const chatTabBarView = <M>(
 							"[--tab-list-gutter:--spacing(1)]",
 							"relative flex forced-color-adjust-none",
 							"flex-row gap-x-(--tab-list-gutter) rounded-(--tab-list-rounded) border-b py-(--tab-list-gutter)",
-							"px-4",
+							options.tabListClassName,
 						]),
 					),
 					h.Attribute("data-orientation", "horizontal"),
@@ -89,22 +96,7 @@ export const chatTabBarView = <M>(
 					h.Attribute("data-slot", "tab-list"),
 					h.Attribute("role", "tablist"),
 				],
-				[
-					tabView(h, {
-						id: "messages",
-						label: "Messages",
-						icon: IconMsgs(h, { className: "size-4", attributes: { "data-slot": "icon" } }),
-						isSelected: tab === "messages",
-						onClick: toParentMessage(Message.ClickedTab({ tab: "messages" })),
-					}),
-					tabView(h, {
-						id: "files",
-						label: "Files",
-						icon: IconFolders(h, { className: "size-4", attributes: { "data-slot": "icon" } }),
-						isSelected: tab !== "messages",
-						onClick: toParentMessage(Message.ClickedTab({ tab: "files" })),
-					}),
-				],
+				[...tabs],
 			),
 		],
 	)

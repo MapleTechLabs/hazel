@@ -21,6 +21,8 @@ import { keyboardStyles } from "~/components/ui/keyboard.styles"
 import {
 	menuChevronClassName,
 	menuContentStyles,
+	menuHeaderBase,
+	menuHeaderSeparator,
 	menuItemSubmenuOpen,
 	menuPopoverBase,
 	menuTriggerBase,
@@ -32,6 +34,7 @@ import type { Placement } from "./aria/position"
 import {
 	descriptionId,
 	type Entry,
+	headerId,
 	itemId,
 	labelId,
 	type Leaf,
@@ -183,7 +186,7 @@ export const menuTriggerClassName = (className?: string) => twMerge(twMerge(...m
 export type ViewInputs = Readonly<{
 	/** Renders the trigger. Spread `attributes` on it and put `overlay` last among its children. */
 	toTrigger: (attributes: ReadonlyArray<ChildAttribute>, overlay: Html) => Html
-	/** The children of one item (icon, label, shortcut, description), as in the legacy JSX. */
+	/** The children of one item (icon, label, shortcut, description), or of a section's header. */
 	content: (key: string) => ReadonlyArray<Html>
 	/** `MenuContent` className. */
 	className?: string
@@ -429,22 +432,47 @@ const menuElement = (
 				if (entry._tag === "Item") return itemView(entry.item)
 				if (entry._tag === "Separator")
 					return h.div([h.Class(twMerge(dropdownSeparatorBase)), h.Role("separator")])
-				const headerId = `${level.elementId}-section-${index}`
+				const labelId = `${level.elementId}-section-${index}`
+				const sectionHeader = Option.map(entry.header, (found) => ({
+					...found,
+					id: headerId(model.id, found.key),
+				}))
+				const labelledBy = Option.isSome(sectionHeader)
+					? Option.some(sectionHeader.value.id)
+					: Option.as(entry.label, labelId)
 				return h.section(
 					[
-						...(Option.isSome(entry.label) ? [h.Attribute("aria-labelledby", headerId)] : []),
+						...Option.match(labelledBy, {
+							onNone: () => [],
+							onSome: (id) => [h.Attribute("aria-labelledby", id)],
+						}),
 						h.Class(section()),
 						h.Attribute("data-rac", ""),
 						h.Role("group"),
 					],
 					[
+						...Option.match(sectionHeader, {
+							onNone: () => [],
+							onSome: (found) => [
+								h.header(
+									[
+										h.Class(
+											twMerge(
+												menuHeaderBase,
+												found.hasSeparator && menuHeaderSeparator,
+											),
+										),
+										h.Id(found.id),
+										h.Role("presentation"),
+									],
+									viewInputs.content(found.key),
+								),
+							],
+						}),
 						...Option.match(entry.label, {
 							onNone: () => [],
 							onSome: (label) => [
-								h.header(
-									[h.Class(header()), h.Id(headerId), h.Role("presentation")],
-									[label],
-								),
+								h.header([h.Class(header()), h.Id(labelId), h.Role("presentation")], [label]),
 							],
 						}),
 						...Array.map(entry.items, itemView),
@@ -484,8 +512,9 @@ const menuItem = (
 			)
 		: undefined
 	const flag = (name: string, isOn: boolean) => (isOn ? [h.Attribute(name, "true")] : [])
+	const href = Option.getOrUndefined(entry.href)
 
-	return h.keyed("div")(
+	return h.keyed(href === undefined ? "div" : "a")(
 		key,
 		[
 			...(isSelectable ? [h.Attribute("aria-checked", isSelected ? "true" : "false")] : []),
@@ -520,6 +549,7 @@ const menuItem = (
 			...flag("data-selected", isSelected),
 			...(isSelectable ? [h.Attribute("data-selection-mode", "single")] : []),
 			h.Attribute("data-slot", "menu-item"),
+			...(href === undefined ? [] : [h.Href(href)]),
 			h.Id(itemId(model.id, key)),
 			h.Role(isSelectable ? "menuitemradio" : "menuitem"),
 			...(entry.isDisabled ? [] : [h.Attribute("tabindex", isFocused ? "0" : "-1")]),

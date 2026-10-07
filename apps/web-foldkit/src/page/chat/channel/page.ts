@@ -1,12 +1,11 @@
 import { ChannelId, MessageId, UserId } from "@hazel/schema"
-import { Effect, Schema } from "effect"
+import { Schema } from "effect"
 import { Command } from "foldkit"
-import { pushUrl } from "foldkit/navigation"
 import type { Update } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
-import * as MessageList from "../../mount/message-list"
-import { replyIdsOf, threadIdsOf, toDeriveContext, toDisplayRows } from "./derive"
+import * as MessageList from "../../../mount/message-list"
+import { replyIdsOf, threadIdsOf, toDeriveContext, toDisplayRows } from "../derive"
 import {
 	AttachmentInfo,
 	BotInfo,
@@ -20,10 +19,10 @@ import {
 	ThreadMessageInfo,
 	TypingInfo,
 	UserInfo,
-} from "./lookups"
-import * as FilesPage from "./files/page"
-import * as Overlays from "./overlays"
-import { ChannelInfo, PAGE_SIZE, ParentChannelInfo } from "./queries"
+} from "../lookups"
+import * as FilesPage from "../files/page"
+import * as Overlays from "../overlays"
+import { ChannelInfo, PAGE_SIZE, ParentChannelInfo } from "../queries"
 import {
 	ChatMessage,
 	ChatReaction,
@@ -32,7 +31,7 @@ import {
 	shareKeys,
 	shareMessages,
 	shareStickyKeys,
-} from "./rows"
+} from "../rows"
 
 /** Channel page (`routes/_app/$orgSlug/chat/$id.tsx` + `$id/index.tsx`), read path. */
 
@@ -75,7 +74,6 @@ export const Message = defineMessageUnion({
 	UpdatedChannel: { channel: Schema.NullOr(ChannelInfo) },
 	UpdatedOrgSlug: { orgSlug: Schema.NullOr(Schema.String) },
 	ClickedTab: { tab: ChatTab },
-	CompletedNavigateToTab: {},
 	UpdatedParentChannel: { channel: Schema.NullOr(ParentChannelInfo) },
 	UpdatedMessages: { messages: Schema.Array(ChatMessage) },
 	UpdatedReactions: { reactions: Schema.Array(ChatReaction) },
@@ -155,17 +153,10 @@ export const setTab = (model: Model, tab: ChatTab): Model =>
 				files: (files) => filesFor(model.channelId, model.orgSlug, tab, files),
 			})
 
-// COMMAND
+// ROUTES
 
-const tabPath = (orgSlug: string, channelId: ChannelId, tab: ChatTab) =>
+export const tabPath = (orgSlug: string, channelId: ChannelId, tab: ChatTab) =>
 	`/${orgSlug}/chat/${channelId}${tab === "messages" ? "" : tab === "files" ? "/files" : "/files/media"}`
-
-/** `ChatTabBar`'s `navigate` on selection. */
-const NavigateToTab = Command.define("NavigateToTab", {
-	args: { path: Schema.String },
-	messages: [Message.CompletedNavigateToTab],
-	execute: ({ path }) => pushUrl(path).pipe(Effect.as(Message.CompletedNavigateToTab())),
-})
 
 // UPDATE
 
@@ -229,14 +220,8 @@ export const update = (model: Model, message: Message): PageReturn =>
 							files: (files) => (files === null ? null : { ...files, orgSlug }),
 						}),
 					},
-		ClickedTab: ({ tab }) =>
-			tab === model.tab || model.orgSlug === null
-				? { model }
-				: {
-						model,
-						commands: [NavigateToTab({ path: tabPath(model.orgSlug, model.channelId, tab) })],
-					},
-		CompletedNavigateToTab: () => ({ model }),
+		// Navigation is an OutMessage, raised by the page definition (`index.ts`).
+		ClickedTab: () => ({ model }),
 		UpdatedParentChannel: ({ channel }) => ({
 			model: modifyFields(model, { parentChannel: () => channel }),
 		}),
