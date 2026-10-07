@@ -1,107 +1,23 @@
-import { ChannelId, MessageId, UserId } from "@hazel/schema"
-import { Schema } from "effect"
+import type { ChannelId, ChannelMemberId, MessageId, UserId } from "@hazel/schema"
 import { Command } from "foldkit"
-import type { Update } from "foldkit"
-import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
+import * as Composer from "../../../composer/composer"
+import * as Draft from "../../../composer/draft"
 import * as MessageList from "../../../mount/message-list"
+import type { Shared } from "../../contract"
+import { PageOutMessage } from "../../out-message"
 import { replyIdsOf, threadIdsOf, toDeriveContext, toDisplayRows } from "../derive"
-import {
-	AttachmentInfo,
-	BotInfo,
-	ChannelMemberInfo,
-	CustomEmojiInfo,
-	emptyLookups,
-	Lookups,
-	PinnedInfo,
-	PresenceInfo,
-	ReplyTarget,
-	ThreadChannelInfo,
-	ThreadMessageInfo,
-	TypingInfo,
-	UserInfo,
-} from "../lookups"
+import { emptyLookups, type Lookups } from "../lookups"
 import * as FilesPage from "../files/page"
 import * as Overlays from "../overlays"
-import { ChannelInfo, PAGE_SIZE, ParentChannelInfo } from "../queries"
-import {
-	ChatMessage,
-	ChatReaction,
-	DisplayRow,
-	shareIds,
-	shareKeys,
-	shareMessages,
-	shareStickyKeys,
-} from "../rows"
+import { PAGE_SIZE } from "../queries"
+import { shareIds, shareKeys, shareMessages, shareStickyKeys } from "../rows"
+import { type ChatTab, Message, type Model, type PageReturn } from "./model"
+import * as Write from "./write"
 
 /** Channel page (`routes/_app/$orgSlug/chat/$id.tsx` + `$id/index.tsx`), read path. */
 
-export const ChatTab = Schema.Literals(["messages", "files", "media"])
-export type ChatTab = typeof ChatTab.Type
-
-// MODEL
-
-export const Model = Schema.Struct({
-	channelId: ChannelId,
-	tab: ChatTab,
-	orgSlug: Schema.NullOr(Schema.String),
-	currentUserId: Schema.NullOr(UserId),
-	channel: Schema.NullOr(ChannelInfo),
-	parentChannel: Schema.NullOr(ParentChannelInfo),
-	hasLoadedMessages: Schema.Boolean,
-	/** Newest first, as the query returns them. */
-	messages: Schema.Array(ChatMessage),
-	reactions: Schema.Array(ChatReaction),
-	lookups: Lookups,
-	members: Schema.NullOr(Schema.Array(ChannelMemberInfo)),
-	/** `PinnedMessagesModal`'s pins, oldest pin first. */
-	pinned: Schema.Array(PinnedInfo),
-	/** The open thread panel's messages, oldest first. */
-	threadMessages: Schema.Array(ChatMessage),
-	typing: Schema.Array(TypingInfo),
-	typingNowMs: Schema.Number,
-	/** Ids the reply and thread lookups select, kept stable while the window does not change them. */
-	replyIds: Schema.Array(MessageId),
-	threadIds: Schema.Array(ChannelId),
-	/** Oldest first, with date headers; what the list renders. */
-	rows: Schema.Array(DisplayRow),
-	limit: Schema.Number,
-	list: MessageList.Model,
-	overlays: Overlays.Model,
-	/** The Files tab (`$id/files` and `$id/files/media`), present while one of them is shown. */
-	files: Schema.NullOr(FilesPage.Model),
-})
-export type Model = typeof Model.Type
-
-// MESSAGE
-
-export const Message = defineMessageUnion({
-	UpdatedChannel: { channel: Schema.NullOr(ChannelInfo) },
-	UpdatedOrgSlug: { orgSlug: Schema.NullOr(Schema.String) },
-	ClickedTab: { tab: ChatTab },
-	UpdatedParentChannel: { channel: Schema.NullOr(ParentChannelInfo) },
-	UpdatedMessages: { messages: Schema.Array(ChatMessage) },
-	UpdatedReactions: { reactions: Schema.Array(ChatReaction) },
-	UpdatedUsers: { users: Schema.Array(UserInfo) },
-	UpdatedPresence: { presence: Schema.Array(PresenceInfo) },
-	UpdatedBots: { bots: Schema.Array(BotInfo) },
-	UpdatedCustomEmojis: { customEmojis: Schema.Array(CustomEmojiInfo) },
-	UpdatedAttachments: { attachments: Schema.Array(AttachmentInfo) },
-	UpdatedDiscordSynced: { messageIds: Schema.Array(MessageId) },
-	UpdatedThreadChannels: { channels: Schema.Array(ThreadChannelInfo) },
-	UpdatedThreadMessages: { messages: Schema.Array(ThreadMessageInfo) },
-	UpdatedReplyTargets: { targets: Schema.Array(ReplyTarget) },
-	UpdatedMembers: { members: Schema.Array(ChannelMemberInfo) },
-	UpdatedPinned: { pins: Schema.Array(PinnedInfo) },
-	UpdatedThreadPanelMessages: { messages: Schema.Array(ChatMessage) },
-	UpdatedTyping: { typing: Schema.Array(TypingInfo) },
-	TickedTypingClock: { nowMs: Schema.Number },
-	GotListMessage: { message: MessageList.Message },
-	GotOverlaysMessage: { message: Overlays.Message },
-	GotFilesMessage: { message: FilesPage.Message },
-	ClickedMobileMenu: {},
-})
-export type Message = typeof Message.Type
+export { ChatTab, Message, Model, type PageReturn } from "./model"
 
 // INIT
 
@@ -139,7 +55,14 @@ export const init = (
 	list: MessageList.init({ id: listId(channelId), estimatedRowHeightPx: 80 }),
 	overlays: Overlays.init(),
 	files: filesFor(channelId, options.orgSlug ?? null, options.tab ?? "messages", null),
+	draft: Draft.init(channelId, composerEditorId(channelId)),
+	threadDraft: null,
+	threadMemberId: null,
+	pendingThreadChannelId: null,
+	isGeneratingThreadName: false,
 })
+
+export const composerEditorId = (channelId: string) => `composer-${channelId}`
 
 /** The Files Submodel for a tab: kept across `files` and `files/media`, dropped on Messages. */
 const filesFor = (
@@ -169,8 +92,6 @@ export const tabPath = (orgSlug: string, channelId: ChannelId, tab: ChatTab) =>
 	`/${orgSlug}/chat/${channelId}${tab === "messages" ? "" : tab === "files" ? "/files" : "/files/media"}`
 
 // UPDATE
-
-export type PageReturn = Update.Return<Model, Message>
 
 const liftList = (model: Model, result: MessageList.ListReturn): PageReturn => ({
 	// An unchanged list keeps the page reference, so ignored events cost no render.
@@ -213,12 +134,25 @@ const loadOlderWhenNearStart = (result: PageReturn): PageReturn => {
 		: result
 }
 
-const liftOverlays = (model: Model, result: Overlays.OverlaysReturn): PageReturn => ({
-	model: result.model === model.overlays ? model : modifyFields(model, { overlays: () => result.model }),
-	commands: Command.mapMessages(result.commands, (message) => Message.GotOverlaysMessage({ message })),
-})
+const liftOverlays = (model: Model, result: Overlays.OverlaysReturn): PageReturn => {
+	const next = result.model === model.overlays ? model : modifyFields(model, { overlays: () => result.model })
+	const commands = Command.mapMessages(result.commands ?? [], (message) => Message.GotOverlaysMessage({ message }))
+	if (result.outMessage === undefined) return { model: next, commands }
+	const handled = Write.handleOverlaysOut(next, result.outMessage)
+	return { ...handled, commands: [...commands, ...(handled.commands ?? [])] }
+}
 
-export const update = (model: Model, message: Message): PageReturn =>
+/** Runs a second step on the first's Model, keeping both steps' commands. */
+const combine = (first: PageReturn, second: (model: Model) => PageReturn): PageReturn => {
+	const next = second(first.model)
+	return {
+		...next,
+		commands: [...(first.commands ?? []), ...(next.commands ?? [])],
+		...(first.outMessage === undefined || next.outMessage !== undefined ? {} : { outMessage: first.outMessage }),
+	}
+}
+
+export const update = (model: Model, message: Message, shared: Shared | null = null): PageReturn =>
 	Message.match<PageReturn>(message, {
 		UpdatedChannel: ({ channel }) => ({ model: modifyFields(model, { channel: () => channel }) }),
 		UpdatedOrgSlug: ({ orgSlug }) =>
@@ -244,9 +178,17 @@ export const update = (model: Model, message: Message): PageReturn =>
 			),
 		UpdatedReactions: ({ reactions }) => deriveRows(modifyFields(model, { reactions: () => reactions })),
 		UpdatedUsers: ({ users }) => withLookup(model, "users", users),
-		UpdatedPresence: ({ presence }) => withLookup(model, "presence", presence),
+		UpdatedPresence: ({ presence }) =>
+			combine(
+				withLookup(model, "presence", presence),
+				(next) => Write.forwardComposerData(next, Composer.Message.UpdatedPresence({ presence: Write.toComposerPresence(presence) })),
+			),
 		UpdatedBots: ({ bots }) => withLookup(model, "bots", bots),
-		UpdatedCustomEmojis: ({ customEmojis }) => withLookup(model, "customEmojis", customEmojis),
+		UpdatedCustomEmojis: ({ customEmojis }) =>
+			combine(
+				withLookup(model, "customEmojis", customEmojis),
+				(next) => Write.forwardComposerData(next, Composer.Message.UpdatedCustomEmojis({ emojis: customEmojis })),
+			),
 		UpdatedAttachments: ({ attachments }) => withLookup(model, "attachments", attachments),
 		UpdatedDiscordSynced: ({ messageIds }) => withLookup(model, "discordSyncedIds", messageIds),
 		UpdatedThreadChannels: ({ channels }) => withLookup(model, "threadChannels", channels),
@@ -265,6 +207,27 @@ export const update = (model: Model, message: Message): PageReturn =>
 			liftOverlays(model, Overlays.update(model.overlays, overlaysMessage, factsOf(model))),
 		// Reported to the root as `RequestedMobileSidebar` by `index.ts`.
 		ClickedMobileMenu: () => ({ model }),
+		GotDraftMessage: ({ message: draftMessage }) => Write.updateDraft(model, "channel", draftMessage, shared),
+		GotThreadDraftMessage: ({ message: draftMessage }) => Write.updateDraft(model, "thread", draftMessage, shared),
+		GotActionMessage: ({ message: actionMessage }) => Write.handleActionMessage(model, actionMessage),
+		UpdatedThreadMember: ({ memberId }) => ({ model: modifyFields(model, { threadMemberId: () => memberId }) }),
+		ClickedGenerateThreadName: () => Write.generateThreadName(model),
+		ClickedRenameThread: () =>
+			model.overlays.thread === null
+				? { model }
+				: {
+						model,
+						outMessage: PageOutMessage.RequestedModal({
+							modal: { _tag: "RenameThread", threadId: model.overlays.thread.threadChannelId },
+						}),
+					},
+		PressedGlobalKey: ({ key }) => Write.insertGlobalKey(model, key),
+		LeftWindow: () => {
+			const channel = Write.updateDraft(model, "channel", Draft.Message.LeftWindow(), shared)
+			if (channel.model.threadDraft === null) return channel
+			const thread = Write.updateDraft(channel.model, "thread", Draft.Message.LeftWindow(), shared)
+			return { ...thread, commands: [...(channel.commands ?? []), ...(thread.commands ?? [])] }
+		},
 		GotFilesMessage: ({ message: filesMessage }) => {
 			if (model.files === null) return { model }
 			const result = FilesPage.update(model.files, filesMessage)

@@ -4,7 +4,6 @@ import { Command, type Update } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
 import * as TooltipHost from "../../chat/tooltip-host"
 import * as Menu from "../../ui/menu"
-import * as Modal from "../../ui/modal"
 import * as Popover from "../../ui/popover"
 import * as Toolbar from "../../ui/toolbar"
 
@@ -30,8 +29,6 @@ export const Model = Schema.Struct({
 	/** The author popover open from an avatar (key `<messageId>:avatar`) or a pinned row. */
 	popover: Schema.NullOr(MessagePopover),
 	pinned: Popover.Model,
-	deleteModal: Modal.Model,
-	replyToMessageId: Schema.NullOr(MessageId),
 	imageViewer: Schema.NullOr(Schema.Struct({ messageId: MessageId, index: Schema.Number })),
 	/** `useChatThread`: the thread panel beside the channel. */
 	thread: Schema.NullOr(Schema.Struct({ threadChannelId: ChannelId, messageId: MessageId })),
@@ -49,8 +46,6 @@ export const init = (): Model => ({
 	contextMenu: null,
 	popover: null,
 	pinned: Popover.init("pinned-messages"),
-	deleteModal: Modal.init("delete-message"),
-	replyToMessageId: null,
 	imageViewer: null,
 	thread: null,
 })
@@ -71,9 +66,10 @@ export const Message = defineMessageUnion({
 	GotPopoverMessage: { key: Schema.String, message: Popover.Message },
 	GotPinnedMessage: { message: Popover.Message },
 	ClickedReply: { messageId: MessageId },
-	ClickedCancelReply: {},
 	ClickedDelete: { messageId: MessageId },
-	GotDeleteModalMessage: { message: Modal.Message },
+	ClickedCopy: { messageId: MessageId },
+	ClickedEdit: { messageId: MessageId },
+	ClickedReaction: { messageId: MessageId, emoji: Schema.String },
 	ClickedAttachmentImage: { messageId: MessageId, index: Schema.Number },
 	ClosedImageViewer: {},
 	SelectedViewerImage: { index: Schema.Number },
@@ -81,6 +77,16 @@ export const Message = defineMessageUnion({
 	ClosedThread: {},
 })
 export type Message = typeof Message.Type
+
+/** `useMessageActions` handlers the overlays trigger; the page runs them. */
+export const MessageAction = Schema.Literals(["reply", "edit", "thread", "pin", "copy", "copy-id", "delete", "add-reaction"])
+export type MessageAction = typeof MessageAction.Type
+
+export const OutMessage = defineMessageUnion({
+	RequestedMessageAction: { messageId: MessageId, action: MessageAction },
+	RequestedReaction: { messageId: MessageId, emoji: Schema.String },
+})
+export type OutMessage = typeof OutMessage.Type
 
 /** What the overlays need to know about a message when a menu opens. */
 export interface MessageFacts {
@@ -102,9 +108,27 @@ const WaitForHideToolbar = Command.define("WaitForHideToolbar", {
 
 // UPDATE
 
-export type OverlaysReturn = Update.Return<Model, Message>
+export type OverlaysReturn = Update.ReturnWithOutMessage<Model, Message, OutMessage>
 
 const set = (model: Model, fields: Partial<Model>): OverlaysReturn => ({ model: { ...model, ...fields } })
+
+const action = (model: Model, messageId: MessageId, requested: MessageAction): OverlaysReturn => ({
+	model,
+	outMessage: OutMessage.RequestedMessageAction({ messageId, action: requested }),
+})
+
+/** A menu's selection, reported as the message action its item key names. */
+const withSelection = (
+	result: OverlaysReturn,
+	messageId: MessageId,
+	menuOut: Menu.OutMessage | undefined,
+): OverlaysReturn => {
+	if (menuOut === undefined || menuOut._tag !== "SelectedItem") return result
+	const parsed = Schema.decodeUnknownOption(MessageAction)(menuOut.key)
+	return parsed._tag === "Some"
+		? { ...result, outMessage: OutMessage.RequestedMessageAction({ messageId, action: parsed.value }) }
+		: result
+}
 
 const mapped = <Child, ChildMessage>(
 	model: Model,
@@ -182,13 +206,19 @@ export const update = (model: Model, message: Message, facts: MessageFacts): Ove
 				? { model }
 				: { model: { ...model, tooltip: result.model, hoveredTriggerKey }, commands: result.commands }
 		},
-		GotMoreMenuMessage: ({ messageId, message: menuMessage }) =>
-			mapped(
-				model,
-				Menu.update(moreMenuFor(model, messageId, facts), menuMessage),
-				(menu) => ({ moreMenu: { messageId, menu } }),
-				(inner) => Message.GotMoreMenuMessage({ messageId, message: inner }),
-			),
+		GotMoreMenuMessage: ({ messageId, message: menuMessage }) => {
+			const result = Menu.update(moreMenuFor(model, messageId, facts), menuMessage)
+			return withSelection(
+				mapped(
+					model,
+					result,
+					(menu) => ({ moreMenu: { messageId, menu } }),
+					(inner) => Message.GotMoreMenuMessage({ messageId, message: inner }),
+				),
+				messageId,
+				result.outMessage,
+			)
+		},
 		RightClickedMessage: ({ messageId, offset, crossOffset }) => {
 			const menu = Menu.init({
 				id: "message-context-menu",
@@ -205,11 +235,16 @@ export const update = (model: Model, message: Message, facts: MessageFacts): Ove
 		GotContextMenuMessage: ({ message: menuMessage }) => {
 			const current = model.contextMenu
 			if (current === null) return { model }
-			return mapped(
-				model,
-				Menu.update(current.menu, menuMessage),
-				(menu) => ({ contextMenu: { messageId: current.messageId, menu } }),
-				(inner) => Message.GotContextMenuMessage({ message: inner }),
+			const result = Menu.update(current.menu, menuMessage)
+			return withSelection(
+				mapped(
+					model,
+					result,
+					(menu) => ({ contextMenu: { messageId: current.messageId, menu } }),
+					(inner) => Message.GotContextMenuMessage({ message: inner }),
+				),
+				current.messageId,
+				result.outMessage,
 			)
 		},
 		GotPopoverMessage: ({ key, message: popoverMessage }) => {
@@ -231,17 +266,14 @@ export const update = (model: Model, message: Message, facts: MessageFacts): Ove
 				(pinned) => ({ pinned }),
 				(inner) => Message.GotPinnedMessage({ message: inner }),
 			),
-		ClickedReply: ({ messageId }) => set(model, { replyToMessageId: messageId }),
-		ClickedCancelReply: () => set(model, { replyToMessageId: null }),
-		ClickedDelete: () =>
-			mapped(model, Modal.open(model.deleteModal), (deleteModal) => ({ deleteModal }), wrapModal),
-		GotDeleteModalMessage: ({ message: modalMessage }) =>
-			mapped(
-				model,
-				Modal.update(model.deleteModal, modalMessage),
-				(deleteModal) => ({ deleteModal }),
-				wrapModal,
-			),
+		ClickedReply: ({ messageId }) => action(model, messageId, "reply"),
+		ClickedDelete: ({ messageId }) => action(model, messageId, "delete"),
+		ClickedCopy: ({ messageId }) => action(model, messageId, "copy"),
+		ClickedEdit: ({ messageId }) => action(model, messageId, "edit"),
+		ClickedReaction: ({ messageId, emoji }) => ({
+			model,
+			outMessage: OutMessage.RequestedReaction({ messageId, emoji }),
+		}),
 		ClickedAttachmentImage: ({ messageId, index }) => set(model, { imageViewer: { messageId, index } }),
 		ClosedImageViewer: () => set(model, { imageViewer: null }),
 		SelectedViewerImage: ({ index }) =>
@@ -253,7 +285,6 @@ export const update = (model: Model, message: Message, facts: MessageFacts): Ove
 		ClosedThread: () => set(model, { thread: null }),
 	})
 
-const wrapModal = (message: Modal.Message) => Message.GotDeleteModalMessage({ message })
 
 /** The message id a tooltip or popover key belongs to (keys are `<messageId>:<part>`). */
 const messageIdOfKey = (key: string) => key.split(":")[0]

@@ -8,9 +8,10 @@ import type { ChatMessage } from "../rows"
 
 /** Update-loop tests for the channel page's list: prepend anchoring, following the end, paging. */
 
-// The Files tab's `ui/aria/interaction` names `document` at import; node has none.
+// The Files tab's `ui/aria/interaction` and ProseMirror's view read `document` at import; node has none.
 vi.hoisted(() => {
-	if (!("document" in globalThis)) Object.assign(globalThis, { document: new EventTarget() })
+	if (!("document" in globalThis))
+		Object.assign(globalThis, { document: Object.assign(new EventTarget(), { documentElement: { style: {} } }) })
 })
 
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`

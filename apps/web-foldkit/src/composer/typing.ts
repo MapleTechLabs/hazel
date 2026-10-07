@@ -82,16 +82,19 @@ export const DeleteTypingIndicator = Command.define("DeleteTypingIndicator", {
 		}).pipe(Effect.ignore, Effect.as(Message.CompletedDeleteTypingIndicator())),
 })
 
-const WaitForHeartbeatInterval = Command.define("WaitForHeartbeatInterval", {
+export const WaitForHeartbeatInterval = Command.define("WaitForHeartbeatInterval", {
 	args: { version: Schema.Number },
 	messages: [Message.CompletedWaitForHeartbeatInterval],
+	// Timers stay pending while typing goes on; a newer version supersedes them.
+	interrupt: true,
 	execute: ({ version }) =>
 		Effect.sleep(HEARTBEAT_INTERVAL).pipe(Effect.as(Message.CompletedWaitForHeartbeatInterval({ version }))),
 })
 
-const WaitForTypingTimeout = Command.define("WaitForTypingTimeout", {
+export const WaitForTypingTimeout = Command.define("WaitForTypingTimeout", {
 	args: { version: Schema.Number },
 	messages: [Message.CompletedWaitForTypingTimeout],
+	interrupt: true,
 	execute: ({ version }) =>
 		Effect.sleep(TYPING_TIMEOUT).pipe(Effect.as(Message.CompletedWaitForTypingTimeout({ version }))),
 })

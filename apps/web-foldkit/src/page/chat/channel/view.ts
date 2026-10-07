@@ -1,24 +1,19 @@
-import { createLazy, type Html, type HtmlBuilder } from "foldkit/html"
+import { type ChildAttribute, childAttributes, createLazy, type Html, type HtmlBuilder } from "foldkit/html"
 import { contentStyles, rootStyles } from "~/components/ui/split-panel/split-panel.styles"
 import { isImageAttachment } from "../../../chat/attachments"
 import { imageViewerView } from "../../../chat/image-viewer"
 import { dateDividerView, messageRowView, type RowContext } from "../../../chat/message/row"
 import * as MessageList from "../../../mount/message-list"
 import { joinBannerView, typingIndicatorView, typingUsersOf } from "../banners"
-import { composerPlaceholderView } from "../composer-placeholder"
 import { authorIdentity, toDeriveContext } from "../derive"
 import * as FilesView from "../files/view"
 import { mobileMenuButton } from "../../../shell/mobile"
 import { chatHeaderView } from "../header"
 import { pinnedPopoverView } from "../pinned"
-import {
-	deleteMessageModal,
-	messageToolbarOverlay,
-	type ReplyPreview,
-	replyIndicatorView,
-	replyPreviewOf,
-	trackHoverAttribute,
-} from "../overlay-views"
+import { messageToolbarOverlay, trackHoverAttribute } from "../overlay-views"
+import { attachmentInfoFrom, composerAreaView, replyPreviewOf } from "../composer-view"
+import type * as Draft from "../../../composer/draft"
+import type { ReplyPreview } from "../../../composer/draft-view"
 import * as Overlays from "../overlays"
 import { isMemberOf, Message, type Model } from "./page"
 import { idleRowContext, rowContextFor } from "../row-context"
@@ -162,32 +157,56 @@ const messagesOutlet = <M>(h: HtmlBuilder<M>, model: Model, toParentMessage: (me
 		),
 		lazyComposer(composerView, [
 			typingUsers.length === 0 ? null : typingUsers.map((user) => user.firstName).join(),
-			replyPreviewOf(model),
+			model.draft,
+			replyPreviewOf(model, model.draft),
+			model.lookups.attachments,
 			toParentMessage,
 			h,
 		]) ?? h.empty,
 		imageViewerOverlay(h, model, toParentMessage),
-		messageToolbarOverlay(h, model, toParentMessage),
-		deleteMessageModal(h, model, toParentMessage),
+		messageToolbarOverlay(h, model, toParentMessage, closedPicker(h)),
 	]
 }
 
+/** A DialogTrigger's closed state: the trigger only. */
+const closedPicker =
+	<M>(h: HtmlBuilder<M>) =>
+	(render: (attributes: ReadonlyArray<ChildAttribute>, overlay: Html) => Html) =>
+		render(childAttributes([h.Attribute("aria-expanded", "false")]), h.empty)
+
 const composerView = <M>(
 	typingKey: string | null,
+	draft: Draft.Model,
 	reply: ReplyPreview | null,
+	attachments: Model["lookups"]["attachments"],
 	toParentMessage: (message: Message) => M,
 	h: HtmlBuilder<M>,
 ) =>
-	composerPlaceholderView(
+	composerAreaView(
 		h,
-		reply === null ? null : replyIndicatorView(h, reply, toParentMessage),
 		typingKey === null
 			? null
 			: typingIndicatorView(
 					h,
 					typingKey.split(",").map((firstName) => ({ firstName })),
 				),
+		draft,
+		{
+			toMessage: toDraftMessage(toParentMessage),
+			replyPreview: reply,
+			attachmentInfo: attachmentInfoFrom(attachments),
+		},
 	)
+
+/** One mapping function per parent mapping, so the composer's lazy arguments stay equal. */
+const draftMappers = new WeakMap<object, (message: Draft.Message) => unknown>()
+const toDraftMessage = <M>(toParentMessage: (message: Message) => M): ((message: Draft.Message) => M) => {
+	const cached = draftMappers.get(toParentMessage)
+	if (cached) return cached as (message: Draft.Message) => M
+	const mapper = (message: Draft.Message) => toParentMessage(Message.GotDraftMessage({ message }))
+	draftMappers.set(toParentMessage, mapper)
+	return mapper
+}
 
 const headerView = <M>(
 	channel: Model["channel"],

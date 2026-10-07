@@ -24,7 +24,18 @@ import {
 	usersStream,
 } from "../lookup-data"
 import type { PageSubscriptionInput } from "../../contract"
-import { Message, type Model } from "./page"
+import * as Composer from "../../../composer/composer"
+import {
+	botCommandsStream,
+	mentionableBotsStream,
+	mentionMembersStream,
+	ownMembershipStream,
+} from "../../../composer/data"
+import * as Draft from "../../../composer/draft"
+import { uploadStream } from "../../../composer/upload"
+import type { HazelRpc } from "../../../rpc"
+import { globalTypingStream, leftWindowStream } from "../../../composer/window-events"
+import { isMemberOf, Message, type Model } from "./page"
 
 type Input = PageSubscriptionInput<Model>
 
@@ -177,9 +188,106 @@ const chat = Subscription.make<Input, Message>()((entry) => ({
 	),
 }))
 
+const toChannelComposer = (message: Composer.Message) =>
+	Message.GotDraftMessage({ message: Draft.Message.GotComposerMessage({ message }) })
+
+const uploadEntry = (which: "channel" | "thread") => ({
+	modelToDependencies: ({ model }: Input) => {
+		const draft = which === "channel" ? model.draft : model.threadDraft
+		return {
+			upload: draft?.currentUpload ?? null,
+			channelId: draft?.channelId ?? null,
+			organizationId: model.channel?.organizationId ?? null,
+		}
+	},
+	dependenciesToStream: ({ upload, channelId, organizationId }: UploadDependencies) =>
+		upload === null || channelId === null || organizationId === null
+			? Stream.empty
+			: uploadStream({ fileId: upload.fileId, file: upload.file, channelId, organizationId }).pipe(
+					Stream.map((event) => {
+						const message = Draft.Message.GotUploadEvent({ event })
+						return which === "channel"
+							? Message.GotDraftMessage({ message })
+							: Message.GotThreadDraftMessage({ message })
+					}),
+				),
+})
+
+const UploadDependencies = Schema.Struct({
+	upload: Schema.NullOr(Draft.CurrentUpload),
+	channelId: Schema.NullOr(ChannelId),
+	organizationId: Schema.NullOr(OrganizationId),
+})
+type UploadDependencies = typeof UploadDependencies.Type
+
+/** The write path's streams: composer data, uploads, global typing and window blur. */
+const write = Subscription.make<Input, Message, HazelRpc>()((entry) => ({
+	composerMembers: entry(byChannel, {
+		modelToDependencies: channelOf,
+		dependenciesToStream: ({ channelId }) =>
+			mentionMembersStream(channelId, (members) =>
+				toChannelComposer(Composer.Message.UpdatedMentionMembers({ members })),
+			),
+	}),
+	composerBots: entry(
+		{ organizationId: Schema.NullOr(Schema.String) },
+		{
+			modelToDependencies: ({ shared }) => ({ organizationId: shared.currentUser?.organizationId ?? null }),
+			dependenciesToStream: ({ organizationId }) =>
+				organizationId === null
+					? Stream.empty
+					: mentionableBotsStream(organizationId, (bots) =>
+							toChannelComposer(Composer.Message.UpdatedMentionableBots({ bots })),
+						),
+		},
+	),
+	composerCommands: entry(
+		{ organizationId: Schema.NullOr(Schema.String) },
+		{
+			modelToDependencies: ({ shared }) => ({ organizationId: shared.currentUser?.organizationId ?? null }),
+			dependenciesToStream: ({ organizationId }) =>
+				organizationId === null
+					? Stream.empty
+					: botCommandsStream(organizationId, (commands) =>
+							toChannelComposer(Composer.Message.UpdatedBotCommands({ commands })),
+						),
+		},
+	),
+	threadMembership: entry(
+		{ threadChannelId: Schema.NullOr(ChannelId), userId: Schema.NullOr(Schema.String) },
+		{
+			modelToDependencies: ({ model }) => ({
+				threadChannelId: model.overlays.thread?.threadChannelId ?? null,
+				userId: model.currentUserId,
+			}),
+			dependenciesToStream: ({ threadChannelId, userId }) =>
+				threadChannelId === null || userId === null
+					? Stream.empty
+					: ownMembershipStream(threadChannelId, userId, (memberId) => Message.UpdatedThreadMember({ memberId })),
+		},
+	),
+	channelUpload: entry(UploadDependencies.fields, uploadEntry("channel")),
+	threadUpload: entry(UploadDependencies.fields, uploadEntry("thread")),
+	globalTyping: entry(
+		{ isActive: Schema.Boolean },
+		{
+			modelToDependencies: ({ model }) => ({ isActive: model.tab === "messages" && isMemberOf(model) !== false }),
+			dependenciesToStream: ({ isActive }) =>
+				isActive ? globalTypingStream((key) => Message.PressedGlobalKey({ key })) : Stream.empty,
+		},
+	),
+	leftWindow: entry(
+		{},
+		{
+			modelToDependencies: () => ({}),
+			dependenciesToStream: () => leftWindowStream(Message.LeftWindow()),
+		},
+	),
+}))
+
 const files = Subscription.lift(FilesSubscriptions.subscriptions)<Input, Message>({
 	read: ({ model }) => Option.fromNullishOr(model.files),
 	toParentMessage: (message) => Message.GotFilesMessage({ message }),
 })
 
-export const subscriptions = Subscription.aggregate(chat, files)
+export const subscriptions = Subscription.aggregate(chat, write, files)
