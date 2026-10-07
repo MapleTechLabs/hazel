@@ -1,6 +1,7 @@
 import { ChannelId, ChannelMemberId, MessageId, OrganizationId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import type { Shared } from "../../contract"
+import { sharedDefaults } from "../../test-shared"
 import type { ChatMessage } from "../rows"
 import { init, type Model, update } from "./page"
 import type { Message } from "./model"
@@ -18,6 +19,7 @@ export const graceMessageId = Schema.decodeSync(MessageId)(uuid(1001))
 export const adaMessageId = Schema.decodeSync(MessageId)(uuid(1002))
 
 export const shared: Shared = {
+	...sharedDefaults,
 	auth: "SignedIn",
 	orgSlug: "hazel",
 	currentUser: {

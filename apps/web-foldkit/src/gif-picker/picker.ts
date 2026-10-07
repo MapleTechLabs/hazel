@@ -3,7 +3,7 @@ import { Duration, Effect, Schema } from "effect"
 import { Command, type Update } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
 import { HazelApiClient } from "~/lib/services/common/atom-client"
-import { runAtomFn } from "../page/settings/effects"
+import { runAtomFn } from "../data/actions"
 import { PopoverEvent } from "../picker-popover/popover"
 
 /**

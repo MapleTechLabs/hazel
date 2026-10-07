@@ -41,8 +41,8 @@ export const page = definePage(
 						}
 					: update(model, message, shared),
 		routeChanged: (model, route) => ({ model: setTab(model, tabOf(route)) }),
-		view: Submodel.defineView<Model, Message, PageViewInputs>((model, _inputs, h) =>
-			channelView(h, model, toSelf),
+		view: Submodel.defineView<Model, Message, PageViewInputs>((model, inputs, h) =>
+			channelView(h, model, toSelf, inputs.shared.isMobile),
 		),
 		subscriptions,
 		sharedChanged: (model, shared) => setCurrentUserId(model, shared.currentUser?.id ?? null),

@@ -7,7 +7,7 @@ import {
 	type UserErrorMessage,
 } from "~/lib/error-messages"
 import type { ToastRequest } from "../../overlay/toasts"
-import { runAtomFn } from "../settings/effects"
+import { runAtomFn } from "../../data/actions"
 
 /** Running the legacy optimistic actions (`db/actions.ts`) and their `exitToast` mapping. */
 

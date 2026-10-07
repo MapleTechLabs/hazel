@@ -5,7 +5,7 @@ import { HazelApiClient } from "~/lib/services/common/atom-client"
 import { type UploadErrorType, uploadErrorMessages, uploadToStorage } from "~/lib/upload-to-storage"
 import { ToastRequest } from "../overlay/toasts"
 import { HazelRpc } from "../rpc"
-import { runAtomFn } from "../page/settings/effects"
+import { runAtomFn } from "../data/actions"
 
 /**
  * Port of `useFileUpload().uploadFile`: presign (`uploads.presign`), PUT with progress, then

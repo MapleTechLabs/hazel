@@ -212,6 +212,7 @@ const headerView = <M>(
 	currentUserId: Model["currentUserId"],
 	pinnedPopover: Model["overlays"]["pinned"],
 	pins: Model["pinned"],
+	isMobile: boolean,
 	toParentMessage: (message: Message) => M,
 	h: HtmlBuilder<M>,
 ): Html => {
@@ -230,11 +231,14 @@ const headerView = <M>(
 			return user ? [authorIdentity(user, botNames.get(member.userId))] : []
 		}),
 		isHiddenDm: currentMember?.isHidden ?? false,
+		// Legacy renders the menu button only on mobile (`isMobile` in `ChatHeader`).
 		mobileMenu: (className) =>
-			mobileMenuButton(h, {
-				onPress: h.OnClick(toParentMessage(Message.ClickedMobileMenu())),
-				...(className === undefined ? {} : { className }),
-			}),
+			isMobile
+				? mobileMenuButton(h, {
+						onPress: h.OnClick(toParentMessage(Message.ClickedMobileMenu())),
+						...(className === undefined ? {} : { className }),
+					})
+				: h.empty,
 		pinnedTrigger: pinnedPopoverView(h, pinnedPopover, pins, (message) =>
 			toParentMessage(
 				Message.GotOverlaysMessage({ message: Overlays.Message.GotPinnedMessage({ message }) }),
@@ -249,7 +253,12 @@ const lazyTabBar = createLazy()
 const lazyComposer = createLazy()
 
 /** `SplitPanelRoot` > `SplitPanelContent` with the channel's current tab inside. */
-export const view = <M>(h: HtmlBuilder<M>, model: Model, toParentMessage: (message: Message) => M): Html =>
+export const view = <M>(
+	h: HtmlBuilder<M>,
+	model: Model,
+	toParentMessage: (message: Message) => M,
+	isMobile = false,
+): Html =>
 	h.div(
 		[h.Class(rootStyles({ className: "h-[calc(100dvh-4rem)] md:h-dvh" }))],
 		[
@@ -265,6 +274,7 @@ export const view = <M>(h: HtmlBuilder<M>, model: Model, toParentMessage: (messa
 						model.currentUserId,
 						model.overlays.pinned,
 						model.pinned,
+						isMobile,
 						toParentMessage,
 						h,
 					]) ?? h.empty,
