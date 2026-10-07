@@ -469,5 +469,33 @@ export const galleryOverlaysArea: AreaModule = {
 				await page.getByRole("dialog").getByRole("button").first().click()
 			},
 		}),
+		// MODAL
+		overlay("modal", "modal", "Modal: closed triggers"),
+		overlay("modal", "modal-small", "Modal: small", {
+			viewports: both,
+			steps: async (page) => {
+				await button(page, "Small").click()
+				await page.getByRole("dialog").waitFor()
+			},
+		}),
+		overlay("modal", "modal-extra-large", "Modal: extra large", {
+			steps: async (page) => {
+				await button(page, "Extra large").click()
+				await page.getByRole("dialog").waitFor()
+			},
+		}),
+		overlay("modal", "modal-fullscreen", "Modal: fullscreen", {
+			viewports: both,
+			steps: async (page) => {
+				await button(page, "Fullscreen").click()
+				await page.getByRole("dialog").waitFor()
+			},
+		}),
+		overlay("modal", "modal-blurred", "Modal: blurred backdrop, no close icon", {
+			steps: async (page) => {
+				await button(page, "Blurred").click()
+				await page.getByRole("dialog").waitFor()
+			},
+		}),
 	],
 }
