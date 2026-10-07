@@ -6,6 +6,7 @@ import {
 	personalPrefsDataset,
 	personalPresenceDataset,
 } from "../fixtures/datasets/personal.ts"
+import { reseedRandom } from "../runtime/stabilize.ts"
 import { org, type AreaModule } from "./types.ts"
 
 const crcTable = Array.from({ length: 256 }, (_, n) => {
@@ -97,6 +98,8 @@ export const mySettingsArea: AreaModule = {
 			title: "Appearance with generated remix options",
 			path: settings,
 			steps: async (page) => {
+				// Remix colors come from Math.random; reseed so they depend only on the generator.
+				await reseedRandom(page)
 				await page.getByRole("button", { name: "Generate" }).click()
 				await page
 					.getByText("Click generate to create random theme combinations.")

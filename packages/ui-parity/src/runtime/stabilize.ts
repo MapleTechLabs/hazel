@@ -8,6 +8,11 @@
  */
 export const installDeterminism = (seed: number) => {
 	let state = seed >>> 0
+	// Steps call this (via `reseedRandom`) right before an action whose output is random, so the
+	// result depends on that action alone, not on how many incidental draws (span ids...) came first.
+	;(window as unknown as { __parityReseed: (next: number) => void }).__parityReseed = (next) => {
+		state = next >>> 0
+	}
 	Math.random = () => {
 		// mulberry32
 		state = (state + 0x6d2b79f5) >>> 0
@@ -74,3 +79,12 @@ export const waitForVisualQuiet = async ({ quietMs, timeoutMs }: { quietMs: numb
 	// Two frames so the last mutation is painted.
 	await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
 }
+
+/** Restart the seeded `Math.random` sequence. Use right before a step whose visible output is random. */
+export const reseedRandom = (
+	page: { evaluate: (fn: (seed: number) => void, seed: number) => Promise<unknown> },
+	seed = 0x5eed,
+) =>
+	page.evaluate((next) => {
+		;(window as unknown as { __parityReseed: (value: number) => void }).__parityReseed(next)
+	}, seed)
