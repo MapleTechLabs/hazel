@@ -1,4 +1,5 @@
 import type { Dataset, Row, TableName } from "../fixtures/dataset.ts"
+import { changesAfter, waitForChange } from "./live-events.ts"
 
 /**
  * Serves Electric shape requests (`GET /v1/shape?table=...`) from a fixture
@@ -118,7 +119,19 @@ export const handleShape = (request: Request, dataset: Dataset): Response | Prom
 	}
 	const upToDate = { ...base, "electric-up-to-date": "", "electric-cursor": "0" }
 
-	if (kind === "live")
-		return Bun.sleep(LIVE_POLL_DELAY_MS).then(() => new Response(body, { headers: upToDate }))
+	if (kind === "live") {
+		// Pushed live events (see live-events.ts) are delivered here; with none, this is the plain poll.
+		const pushed = () => changesAfter(dataset.name, table ?? "", url.searchParams.get("offset"))
+		const respond = () => {
+			const { messages, offset } = pushed()
+			const headers = { ...upToDate, "electric-offset": offset }
+			return messages.length === 0
+				? new Response(body, { headers })
+				: new Response(JSON.stringify([...messages, UP_TO_DATE]), { headers })
+		}
+		return pushed().messages.length > 0
+			? respond()
+			: waitForChange(dataset.name, table ?? "", LIVE_POLL_DELAY_MS).then(respond)
+	}
 	return new Response(body, { headers: kind === "snapshot" ? base : upToDate })
 }

@@ -13,6 +13,8 @@ export interface FrameStats {
 	readonly longTaskMs: number
 	readonly scrolledPx: number
 	readonly maxRowsInDom: number
+	/** scrollTop / scrollHeight before and after the run. */
+	readonly geometry: readonly [number, number, number, number]
 }
 
 /** Init script: records when the first message row enters the DOM (ms since navigation start). */
@@ -56,7 +58,10 @@ export const measureFrames = (
 		let scroller = row?.parentElement ?? null
 		while (
 			scroller &&
-			!(scroller.scrollHeight > scroller.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(scroller).overflowY))
+			!(
+				scroller.scrollHeight > scroller.clientHeight + 1 &&
+				/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)
+			)
 		)
 			scroller = scroller.parentElement
 		if (!scroller) throw new Error("no scroller")
@@ -76,6 +81,7 @@ export const measureFrames = (
 		let blankFrames = 0
 		let scrolledPx = 0
 		let maxRowsInDom = 0
+		const startGeometry = [scroller.scrollTop, scroller.scrollHeight] as const
 		let last = await nextFrame()
 		const end = last + seconds * 1000
 		for (;;) {
@@ -91,7 +97,13 @@ export const measureFrames = (
 			if (now > end) break
 		}
 		observer.disconnect()
-		return { frameMs, blankFrames, longTasks, longTaskMs, scrolledPx, maxRowsInDom }
+		const geometry = [...startGeometry, scroller.scrollTop, scroller.scrollHeight].map(Math.round) as [
+			number,
+			number,
+			number,
+			number,
+		]
+		return { frameMs, blankFrames, longTasks, longTaskMs, scrolledPx, maxRowsInDom, geometry }
 	}, options)
 
 export interface PrependAnchorStats {
@@ -114,7 +126,10 @@ export const measurePrependAnchor = (page: Page): Promise<PrependAnchorStats> =>
 		let scroller = row?.parentElement ?? null
 		while (
 			scroller &&
-			!(scroller.scrollHeight > scroller.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(scroller).overflowY))
+			!(
+				scroller.scrollHeight > scroller.clientHeight + 1 &&
+				/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)
+			)
 		)
 			scroller = scroller.parentElement
 		if (!scroller) throw new Error("no scroller")
@@ -124,7 +139,9 @@ export const measurePrependAnchor = (page: Page): Promise<PrependAnchorStats> =>
 		// Start one viewport from the top (outside the half-viewport threshold) and let rows render.
 		scroller.scrollTop = viewport
 		for (let frame = 0; frame < 15; frame++) await nextFrame()
-		const anchorElement = document.elementFromPoint(rect.left + rect.width / 2, rect.top + 60)?.closest("[data-id]")
+		const anchorElement = document
+			.elementFromPoint(rect.left + rect.width / 2, rect.top + 60)
+			?.closest("[data-id]")
 		const anchorId = anchorElement?.getAttribute("data-id")
 		if (!anchorElement || !anchorId) throw new Error("no anchor row under the probe")
 		const relativeTop = () => {
@@ -145,7 +162,11 @@ export const measurePrependAnchor = (page: Page): Promise<PrependAnchorStats> =>
 				return
 			}
 			const deviation = Math.abs(top - (startTop + ownScroll))
-			trace.push([Math.round(scroller.scrollTop), scroller.scrollHeight, Math.round(top - (startTop + ownScroll))])
+			trace.push([
+				Math.round(scroller.scrollTop),
+				scroller.scrollHeight,
+				Math.round(top - (startTop + ownScroll)),
+			])
 			maxDeviationPx = Math.max(maxDeviationPx, deviation)
 			if (deviation > 1) framesOver1px++
 		}
@@ -169,3 +190,87 @@ export const measurePrependAnchor = (page: Page): Promise<PrependAnchorStats> =>
 			trace,
 		}
 	})
+
+export interface LiveUpdateStats {
+	readonly newMessageMs: ReadonlyArray<number>
+	readonly stuckToBottom: number
+	readonly newMessageVisible: number
+	readonly reactionAddMs: ReadonlyArray<number>
+	readonly reactionRemoveMs: ReadonlyArray<number>
+}
+
+/**
+ * Pushes messages (then a reaction toggle on each) through the fixture's live events while the
+ * reader sits at the bottom; times each until it shows in the DOM and checks the list followed it.
+ */
+export const measureLiveUpdates = (
+	page: Page,
+	options: { readonly pushUrl: string; readonly channelId: string; readonly authorId: string; readonly nowMs: number; readonly count: number; readonly idBase: number },
+): Promise<LiveUpdateStats> =>
+	page.evaluate(async ({ pushUrl, channelId, authorId, nowMs, count, idBase }) => {
+		const row = document.querySelector("[data-id]")
+		let scroller = row?.parentElement ?? null
+		while (
+			scroller &&
+			!(scroller.scrollHeight > scroller.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(scroller).overflowY))
+		)
+			scroller = scroller.parentElement
+		if (!scroller) throw new Error("no scroller")
+		const list = scroller
+		const nextFrame = () => new Promise<number>((resolve) => requestAnimationFrame(resolve))
+		const until = async (condition: () => boolean) => {
+			const started = performance.now()
+			while (!condition()) {
+				if (performance.now() - started > 5000) return Number.NaN
+				await nextFrame()
+			}
+			return performance.now()
+		}
+		const push = (body: unknown) => fetch(pushUrl, { method: "POST", body: JSON.stringify(body) })
+		const uuid = (prefix: string, index: number) => `${prefix}-0000-4000-8000-${String(idBase + index).padStart(12, "0")}`
+		list.scrollTop = list.scrollHeight
+		for (let frame = 0; frame < 20; frame++) await nextFrame()
+
+		const newMessageMs: number[] = []
+		const reactionAddMs: number[] = []
+		const reactionRemoveMs: number[] = []
+		let stuckToBottom = 0
+		let newMessageVisible = 0
+		for (let index = 1; index <= count; index++) {
+			const id = uuid("eeeeeeee", index)
+			const began = performance.now()
+			await push({
+				table: "messages",
+				operation: "insert",
+				row: {
+					id,
+					channelId,
+					conversationId: null,
+					authorId,
+					content: `Live message ${index} arriving at the bottom`,
+					embeds: null,
+					replyToMessageId: null,
+					threadChannelId: null,
+					createdAt: new Date(nowMs + index * 1000).toISOString(),
+					updatedAt: null,
+					deletedAt: null,
+				},
+			})
+			newMessageMs.push((await until(() => document.querySelector(`[data-id="${id}"]`) !== null)) - began)
+			for (let frame = 0; frame < 15; frame++) await nextFrame()
+			if (list.scrollHeight - list.clientHeight - list.scrollTop <= 2) stuckToBottom++
+			const element = document.querySelector(`[data-id="${id}"]`)
+			if (element && element.getBoundingClientRect().bottom <= list.getBoundingClientRect().bottom + 1) newMessageVisible++
+
+			const reactionId = uuid("dddddddd", index)
+			const reaction = { id: reactionId, messageId: id, channelId, conversationId: null, userId: authorId, emoji: "🚀", createdAt: new Date(nowMs).toISOString() }
+			const hasRocket = () => (document.querySelector(`[data-id="${id}"]`)?.textContent ?? "").includes("🚀")
+			const addBegan = performance.now()
+			await push({ table: "message_reactions", operation: "insert", row: reaction })
+			reactionAddMs.push((await until(hasRocket)) - addBegan)
+			const removeBegan = performance.now()
+			await push({ table: "message_reactions", operation: "delete", row: reaction })
+			reactionRemoveMs.push((await until(() => !hasRocket())) - removeBegan)
+		}
+		return { newMessageMs, stuckToBottom, newMessageVisible, reactionAddMs, reactionRemoveMs }
+	}, options)

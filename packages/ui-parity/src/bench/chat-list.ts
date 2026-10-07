@@ -4,7 +4,14 @@ import { parseArgs } from "node:util"
 import { chromium, type Page } from "playwright"
 import { startFixtureBackend } from "../backend/server.ts"
 import { BROWSER_LAUNCH_OPTIONS } from "../capture.ts"
-import { buildDir, FIXTURE_BACKEND_PORT, FIXTURE_ELECTRIC_PORT, targets, type TargetName } from "../config.ts"
+import {
+	buildDir,
+	FIXTURE_BACKEND_PORT,
+	FIXTURE_ELECTRIC_PORT,
+	fixtureElectricUrl,
+	targets,
+	type TargetName,
+} from "../config.ts"
 import { heavyIds } from "../fixtures/datasets/heavy.ts"
 import { clerkIdentityFor } from "../fixtures/identity.ts"
 import { datasets } from "../scenarios.ts"
@@ -12,6 +19,7 @@ import { serveStatic } from "../serve.ts"
 import {
 	installFirstRowProbe,
 	measureFrames,
+	measureLiveUpdates,
 	measurePrependAnchor,
 	prepareList,
 	type FrameStats,
@@ -35,6 +43,7 @@ const { values } = parseArgs({
 		headed: { type: "boolean", default: false },
 		trace: { type: "boolean", default: false },
 		"anchor-only": { type: "boolean", default: false },
+		live: { type: "boolean", default: false },
 	},
 })
 
@@ -50,10 +59,20 @@ const backend = startFixtureBackend({
 })
 const servers = names.map((name) => {
 	const dir = buildDir(name)
-	if (!existsSync(join(dir, "index.html"))) throw new Error(`No build for "${name}". Run: bun parity build ${name}`)
+	if (!existsSync(join(dir, "index.html")))
+		throw new Error(`No build for "${name}". Run: bun parity build ${name}`)
 	return serveStatic(dir, targets[name].port, clerkIdentityFor(dataset))
 })
 const browser = await chromium.launch({ ...BROWSER_LAUNCH_OPTIONS, headless: !values.headed })
+
+/** JS heap in MB after a forced GC, through the DevTools protocol. */
+const heapMb = async (page: Page) => {
+	const cdp = await page.context().newCDPSession(page)
+	await cdp.send("HeapProfiler.collectGarbage")
+	const { usedSize } = await cdp.send("Runtime.getHeapUsage")
+	await cdp.detach()
+	return Math.round(usedSize / 1e5) / 10
+}
 
 const openChannel = async (name: TargetName): Promise<{ page: Page; firstRowMs: number }> => {
 	const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 })
@@ -89,19 +108,65 @@ const summarize = (label: string, stats: FrameStats) => {
 		longTaskMs: Math.round(stats.longTaskMs),
 		scrolledPx: Math.round(stats.scrolledPx),
 		rowsInDom: stats.maxRowsInDom,
+		geometry: stats.geometry.join("/"),
 	}
 }
 
 const results: Array<Record<string, unknown>> = []
 for (const name of names) {
 	for (let run = 1; run <= Number(values.runs); run++) {
+		if (values.live) {
+			const live = await openChannel(name)
+			const stats = await measureLiveUpdates(live.page, {
+				pushUrl: `${new URL(fixtureElectricUrl).origin}/__parity/push`,
+				channelId: heavyIds.bigChannelId,
+				authorId: heavyIds.currentUserId,
+				nowMs: dataset.now.getTime() + run * 100_000,
+				count: 10,
+				idBase: run * 1000 + targets[name].port,
+			})
+			results.push({
+				target: name,
+				run,
+				label: "live events",
+				newMessageP50: percentile(stats.newMessageMs, 50),
+				newMessageP95: percentile(stats.newMessageMs, 95),
+				stuckToBottom: `${stats.stuckToBottom}/10`,
+				newMessageVisible: `${stats.newMessageVisible}/10`,
+				reactionAddP50: percentile(stats.reactionAddMs, 50),
+				reactionRemoveP50: percentile(stats.reactionRemoveMs, 50),
+			})
+			await live.page.context().close()
+			continue
+		}
+
 		if (!values["anchor-only"]) {
-		const { page, firstRowMs } = await openChannel(name)
-		const up = await measureFrames(page, { direction: -1, seconds: Number(values.seconds), speed: Number(values.speed) })
-		const down = await measureFrames(page, { direction: 1, seconds: Number(values.seconds), speed: Number(values.speed) })
-		results.push({ target: name, run, firstRowMs: Math.round(firstRowMs), ...summarize("up (paging)", up) })
-		results.push({ target: name, run, firstRowMs: Math.round(firstRowMs), ...summarize("down (loaded)", down) })
-		await page.context().close()
+			const { page, firstRowMs } = await openChannel(name)
+			const heapAfterLoadMb = await heapMb(page)
+			const up = await measureFrames(page, {
+				direction: -1,
+				seconds: Number(values.seconds),
+				speed: Number(values.speed),
+			})
+			const down = await measureFrames(page, {
+				direction: 1,
+				seconds: Number(values.seconds),
+				speed: Number(values.speed),
+			})
+			results.push({
+				target: name,
+				run,
+				firstRowMs: Math.round(firstRowMs),
+				heapMb: heapAfterLoadMb,
+				...summarize("up (paging)", up),
+			})
+			results.push({
+				target: name,
+				run,
+				heapMb: await heapMb(page),
+				...summarize("down (loaded)", down),
+			})
+			await page.context().close()
 		}
 
 		const fresh = await openChannel(name)

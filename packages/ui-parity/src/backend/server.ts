@@ -1,5 +1,6 @@
 import type { Dataset } from "../fixtures/dataset.ts"
 import { corsHeaders, handleShape } from "./electric.ts"
+import { type PushedChange, pushChange } from "./live-events.ts"
 import { makeRpcWebHandler, type RpcLog } from "./rpc.ts"
 
 /**
@@ -34,9 +35,14 @@ export const startFixtureBackend = (options: {
 	const electric = Bun.serve({
 		port: options.electricPort,
 		idleTimeout: 0,
-		fetch(request) {
+		async fetch(request) {
 			if (request.method === "OPTIONS")
 				return new Response(null, { status: 204, headers: corsHeaders(request) })
+			if (request.method === "POST" && new URL(request.url).pathname === "/__parity/push") {
+				const change: PushedChange = await request.json()
+				const seq = pushChange(resolveDataset(request).name, change)
+				return Response.json({ seq }, { headers: corsHeaders(request) })
+			}
 			return handleShape(request, resolveDataset(request))
 		},
 	})
