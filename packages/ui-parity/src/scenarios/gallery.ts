@@ -188,5 +188,44 @@ export const galleryArea: AreaModule = {
 			title: "Field: label, description, errors, fieldset",
 			themes: ["light", "dark"],
 		}),
+		gallery("search-field", {
+			id: "gallery-search-field",
+			title: "Search field: empty, filled, disabled, labelled",
+			themes: ["light", "dark"],
+		}),
+		gallery("search-field", {
+			id: "gallery-search-field-typed",
+			title: "Search field: typing reveals the clear button",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.getByRole("searchbox", { name: "Search messages" }).click()
+				await page.keyboard.type("standup")
+			},
+		}),
+		gallery("search-field", {
+			id: "gallery-search-field-cleared",
+			title: "Search field: clear button empties the field",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.getByRole("button", { name: "Clear search" }).first().click()
+			},
+		}),
+		gallery("search-field", {
+			id: "gallery-search-field-escape",
+			title: "Search field: Escape clears the focused field",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.getByRole("searchbox", { name: "Search channels" }).focus()
+				await page.keyboard.press("Escape")
+			},
+		}),
+		gallery("search-field", {
+			id: "gallery-search-field-clear-hover",
+			title: "Search field: hovered clear button",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.getByRole("button", { name: "Clear search" }).first().hover()
+			},
+		}),
 	],
 }

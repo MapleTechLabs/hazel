@@ -33,8 +33,13 @@ export const Model = Schema.Struct({
 	focused: Schema.NullOr(Focus),
 	/** Targets with focus inside them (useFocusWithin). */
 	focusWithin: Schema.Array(Schema.String),
-	/** useFocusRing latches this on focus; later modality changes update it only if they qualify. */
+	/**
+	 * useFocusVisibleListener's flag (modality is not pointer). Keyboard events while a text input
+	 * is focused leave it alone unless the key is Tab or Escape (isKeyboardFocusEvent).
+	 */
 	isFocusVisible: Schema.Boolean,
+	/** A key or pointer event happened since the last focus; otherwise a focus is virtual. */
+	hasEventBeforeFocus: Schema.Boolean,
 	press: Schema.NullOr(Press),
 })
 export type Model = typeof Model.Type
@@ -44,7 +49,8 @@ export const init = (): Model => ({
 	hovered: [],
 	focused: null,
 	focusWithin: [],
-	isFocusVisible: false,
+	isFocusVisible: true,
+	hasEventBeforeFocus: false,
 	press: null,
 })
 
@@ -62,6 +68,7 @@ export const Message = defineMessageUnion({
 	LeftFocusWithin: { target: Schema.String },
 	BlurredTarget: { target: Schema.String },
 	PressedDocumentKey: { key: Schema.String },
+	ReleasedDocumentKey: { key: Schema.String },
 	PressedDocumentPointer: {},
 })
 export type Message = typeof Message.Type
@@ -70,6 +77,15 @@ export type Message = typeof Message.Type
 
 /** usePress starts a keyboard press on Enter and Space only. */
 const isPressKey = (key: string) => key === "Enter" || key === " "
+
+/** handleKeyboardEvent: keyboard modality; the flag follows unless typing inside a text input. */
+const receivedKey = (model: Model, key: string): Model =>
+	modifyFields(model, {
+		modality: () => "keyboard",
+		hasEventBeforeFocus: () => true,
+		isFocusVisible: (isFocusVisible) =>
+			model.focused?.isTextInput && key !== "Tab" && key !== "Escape" ? isFocusVisible : true,
+	})
 
 export const update = (model: Model, message: Message): { model: Model } =>
 	Message.match<{ model: Model }>(message, {
@@ -91,6 +107,7 @@ export const update = (model: Model, message: Message): { model: Model } =>
 					? modifyFields(model, {
 							modality: () => "pointer",
 							isFocusVisible: () => false,
+							hasEventBeforeFocus: () => true,
 							press: () => ({ target, source: "pointer", isInside: true }),
 						})
 					: model,
@@ -110,16 +127,15 @@ export const update = (model: Model, message: Message): { model: Model } =>
 					? modifyFields(model, { press: () => null })
 					: model,
 		}),
-		FocusedTarget: ({ target, isTextInput }) => {
-			const modality = model.modality ?? "virtual"
-			return {
-				model: modifyFields(model, {
-					focused: () => ({ target, isTextInput }),
-					modality: () => modality,
-					isFocusVisible: () => modality !== "pointer",
-				}),
-			}
-		},
+		// Programmatic focus (no key or pointer event first) switches to virtual modality.
+		FocusedTarget: ({ target, isTextInput }) => ({
+			model: modifyFields(model, {
+				focused: () => ({ target, isTextInput }),
+				modality: (modality) => (model.hasEventBeforeFocus ? modality : "virtual"),
+				isFocusVisible: (isFocusVisible) => (model.hasEventBeforeFocus ? isFocusVisible : true),
+				hasEventBeforeFocus: () => false,
+			}),
+		}),
 		EnteredFocusWithin: ({ target }) => ({
 			model: modifyFields(model, {
 				focusWithin: (focusWithin) =>
@@ -132,24 +148,16 @@ export const update = (model: Model, message: Message): { model: Model } =>
 			}),
 		}),
 		BlurredTarget: ({ target }) => ({
-			model:
-				model.focused?.target === target
-					? modifyFields(model, { focused: () => null, isFocusVisible: () => false })
-					: model,
+			model: model.focused?.target === target ? modifyFields(model, { focused: () => null }) : model,
 		}),
-		// Typing inside a text input keeps its focus state; only Tab and Escape count (isKeyboardFocusEvent).
-		PressedDocumentKey: ({ key }) => ({
-			model: modifyFields(model, {
-				modality: () => "keyboard",
-				isFocusVisible: (isFocusVisible) =>
-					model.focused !== null &&
-					(!model.focused.isTextInput || key === "Tab" || key === "Escape")
-						? true
-						: isFocusVisible,
-			}),
-		}),
+		PressedDocumentKey: ({ key }) => ({ model: receivedKey(model, key) }),
+		ReleasedDocumentKey: ({ key }) => ({ model: receivedKey(model, key) }),
 		PressedDocumentPointer: () => ({
-			model: modifyFields(model, { modality: () => "pointer", isFocusVisible: () => false }),
+			model: modifyFields(model, {
+				modality: () => "pointer",
+				isFocusVisible: () => false,
+				hasEventBeforeFocus: () => true,
+			}),
 		}),
 	})
 
@@ -167,22 +175,34 @@ const isModalityKey = (event: KeyboardEvent) =>
 
 export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
 	modality: Subscription.persistent(
-		Stream.merge(
-			Subscription.fromEventFilterMap({
-				target: document,
-				type: "keydown",
-				filterMapEvent: (event) =>
-					isModalityKey(event)
-						? Option.some(Message.PressedDocumentKey({ key: event.key }))
-						: Option.none(),
-				options: { capture: true },
-			}),
-			Subscription.fromEvent({
-				target: document,
-				type: "pointerdown",
-				mapEvent: () => Message.PressedDocumentPointer(),
-				options: { capture: true },
-			}),
+		Stream.mergeAll(
+			[
+				Subscription.fromEventFilterMap({
+					target: document,
+					type: "keydown",
+					filterMapEvent: (event) =>
+						isModalityKey(event)
+							? Option.some(Message.PressedDocumentKey({ key: event.key }))
+							: Option.none(),
+					options: { capture: true },
+				}),
+				Subscription.fromEventFilterMap({
+					target: document,
+					type: "keyup",
+					filterMapEvent: (event) =>
+						isModalityKey(event)
+							? Option.some(Message.ReleasedDocumentKey({ key: event.key }))
+							: Option.none(),
+					options: { capture: true },
+				}),
+				Subscription.fromEvent({
+					target: document,
+					type: "pointerdown",
+					mapEvent: () => Message.PressedDocumentPointer(),
+					options: { capture: true },
+				}),
+			],
+			{ concurrency: "unbounded" },
 		),
 	),
 	// usePress ends a pointer press on pointerup anywhere in the document.
@@ -232,9 +252,7 @@ export const stateOf = (model: Model, target: string): State => {
 		isFocusWithin,
 		isPressed: model.press?.target === target && model.press.isInside,
 		isFocused,
-		// A focus-within target (Group) follows the modality; its own listener is not a text input.
-		isFocusVisible:
-			(isFocused && model.isFocusVisible) || (isFocusWithin && model.modality !== "pointer"),
+		isFocusVisible: (isFocused || isFocusWithin) && model.isFocusVisible,
 	}
 }
 

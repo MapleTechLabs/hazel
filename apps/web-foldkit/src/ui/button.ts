@@ -15,10 +15,15 @@ export const buttonClassName = (variants: ButtonVariants, className?: string) =>
 const preservedWhilePending = /Focus|Blur|Hover|Pointer(Enter|Leave|Over|Out)|Mouse(Enter|Leave|Over|Out)/
 const isEventAttribute = (attribute: { readonly _tag: string }) => attribute._tag.startsWith("On")
 
-export interface ButtonOptions<Message> extends ButtonVariants {
+/** Options of React Aria's unstyled Button (`ariaButton`). */
+export interface AriaButtonOptions<Message> {
 	readonly className?: string
 	readonly isDisabled?: boolean
 	readonly isPending?: boolean
+	/** React Aria `excludeFromTabOrder`: `tabindex="-1"`. */
+	readonly excludeFromTabOrder?: boolean
+	/** React Aria `preventFocusOnPress`: the button never reports focus. */
+	readonly preventFocusOnPress?: boolean
 	readonly onPress?: Message
 	/**
 	 * Hover, press and focus-visible state from the page's interaction Submodel. Without it the
@@ -28,9 +33,12 @@ export interface ButtonOptions<Message> extends ButtonVariants {
 	readonly attributes?: ReadonlyArray<Attribute<Message>>
 }
 
-export const button = <Message>(
+export interface ButtonOptions<Message> extends ButtonVariants, AriaButtonOptions<Message> {}
+
+/** React Aria's Button primitive: `className` is used as is. */
+export const ariaButton = <Message>(
 	h: HtmlBuilder<Message>,
-	options: ButtonOptions<Message>,
+	options: AriaButtonOptions<Message>,
 	children: Array<Html | string>,
 ): Html => {
 	const isDisabled = options.isDisabled ?? false
@@ -45,10 +53,12 @@ export const button = <Message>(
 	)
 	return h.button(
 		[
-			h.Class(buttonClassName(options, options.className)),
+			...(options.className === undefined ? [] : [h.Class(options.className)]),
 			h.Type("button"),
 			h.DataAttribute("react-aria-pressable", "true"),
-			...(isDisabled ? [h.Disabled(true), h.DataAttribute("disabled", "true")] : [h.Tabindex(0)]),
+			...(isDisabled
+				? [h.Disabled(true), h.DataAttribute("disabled", "true")]
+				: [h.Tabindex(options.excludeFromTabOrder ? -1 : 0)]),
 			...(isPending ? [h.AriaDisabled(true), h.DataAttribute("pending", "true")] : []),
 			...(interaction
 				? [
@@ -56,7 +66,7 @@ export const button = <Message>(
 						...Interaction.handlers(h, interaction.wiring, interaction.target, {
 							isHoverDisabled: isDisabled || isPending,
 							isPressDisabled: isDisabled || isPending,
-							isFocusDisabled: isDisabled,
+							isFocusDisabled: isDisabled || (options.preventFocusOnPress ?? false),
 						}),
 						...Interaction.stateAttributes(h, {
 							...state,
@@ -73,3 +83,21 @@ export const button = <Message>(
 		children,
 	)
 }
+
+export const button = <Message>(
+	h: HtmlBuilder<Message>,
+	options: ButtonOptions<Message>,
+	children: Array<Html | string>,
+): Html =>
+	ariaButton(
+		h,
+		{
+			...options,
+			// Only the variants reach tv(), as in the legacy call; className is merged afterwards.
+			className: buttonClassName(
+				{ intent: options.intent, size: options.size, isCircle: options.isCircle },
+				options.className,
+			),
+		},
+		children,
+	)

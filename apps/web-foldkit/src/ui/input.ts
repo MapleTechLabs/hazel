@@ -12,6 +12,10 @@ export interface InteractionTarget<Message> {
 /** What a TextField hands its Input through React Aria context. */
 export interface FieldInputContext<Message> {
 	readonly id: string
+	/** `text` for TextField, `search` for SearchField. */
+	readonly type?: string
+	/** SearchField forwards its aria-label to the input. */
+	readonly ariaLabel?: string
 	readonly labelledBy?: string
 	readonly describedBy?: string
 	readonly isDisabled: boolean
@@ -44,9 +48,10 @@ export const inputElement = <Message>(
 	const fieldAttributes = field
 		? [
 				h.Id(field.id),
+				...(field.ariaLabel === undefined ? [] : [h.AriaLabel(field.ariaLabel)]),
 				...(field.labelledBy === undefined ? [] : [h.AriaLabelledBy(field.labelledBy)]),
 				...(field.describedBy === undefined ? [] : [h.AriaDescribedBy(field.describedBy)]),
-				h.Type("text"),
+				h.Type(field.type ?? "text"),
 				...(isDisabled ? [] : [h.Tabindex(0), h.Attribute("title", "")]),
 				...(field.isRequired ? [h.Required(true)] : []),
 				h.Value(field.value),
@@ -96,6 +101,9 @@ export const inputGroup = <Message>(
 	h: HtmlBuilder<Message>,
 	options: {
 		readonly className?: string
+		/** React Aria GroupContext from a field: mirrored as data-disabled/data-invalid. */
+		readonly isDisabled?: boolean
+		readonly isInvalid?: boolean
 		readonly interaction?: InteractionTarget<Message>
 		readonly attributes?: ReadonlyArray<Attribute<Message>>
 	},
@@ -107,9 +115,12 @@ export const inputGroup = <Message>(
 			h.DataAttribute("rac", ""),
 			h.DataAttribute("slot", "control"),
 			h.Role("group"),
+			...(options.isDisabled ? [h.DataAttribute("disabled", "true")] : []),
+			...(options.isInvalid ? [h.DataAttribute("invalid", "true")] : []),
 			...(options.interaction
 				? [
 						...Interaction.handlers(h, options.interaction.wiring, options.interaction.target, {
+							isHoverDisabled: options.isDisabled ?? false,
 							isPressDisabled: true,
 							isWithin: true,
 						}),
