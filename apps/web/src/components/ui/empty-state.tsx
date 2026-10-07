@@ -1,5 +1,6 @@
 import type { ComponentType, ReactNode } from "react"
 import { cn } from "~/lib/utils"
+import { emptyStateStyles } from "./empty-state.styles"
 
 interface EmptyStateProps {
 	icon?: ComponentType<{ className?: string }>
@@ -11,15 +12,15 @@ interface EmptyStateProps {
 
 export function EmptyState({ icon: Icon, title, description, action, className }: EmptyStateProps) {
 	return (
-		<div className={cn("flex flex-col items-center justify-center py-16 text-center", className)}>
+		<div className={cn(emptyStateStyles.root, className)}>
 			{Icon && (
-				<div className="mb-4 flex size-12 items-center justify-center rounded-xl bg-secondary">
-					<Icon className="size-6 text-muted-fg" />
+				<div className={emptyStateStyles.iconWrapper}>
+					<Icon className={emptyStateStyles.icon} />
 				</div>
 			)}
-			<h3 className="font-semibold text-fg">{title}</h3>
-			{description && <p className="mt-1 max-w-sm text-muted-fg text-sm">{description}</p>}
-			{action && <div className="mt-4">{action}</div>}
+			<h3 className={emptyStateStyles.title}>{title}</h3>
+			{description && <p className={emptyStateStyles.description}>{description}</p>}
+			{action && <div className={emptyStateStyles.action}>{action}</div>}
 		</div>
 	)
 }

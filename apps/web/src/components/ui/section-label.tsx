@@ -1,16 +1,8 @@
 import type { ComponentPropsWithRef, ReactNode } from "react"
 import { cn } from "~/lib/utils"
+import { sectionLabelStyles } from "./section-label.styles"
 
-const styles = {
-	sm: {
-		heading: "gap-0.5 text-sm font-semibold",
-		subheading: "text-sm",
-	},
-	md: {
-		heading: "gap-1 text-base font-semibold",
-		subheading: "text-base",
-	},
-}
+const styles = sectionLabelStyles.sizes
 
 interface SectionLabelRootProps {
 	title: ReactNode
@@ -31,19 +23,28 @@ export const SectionLabelRoot = ({
 }: SectionLabelRootProps) => {
 	return (
 		<div className={className}>
-			<h3 className={cn("flex items-center text-fg", styles[size].heading)}>
+			<h3 className={cn(sectionLabelStyles.heading, styles[size].heading)}>
 				{title}
-				<span className={cn("hidden text-primary", isRequired && "block")}>*</span>
+				<span
+					className={cn(
+						sectionLabelStyles.required,
+						isRequired && sectionLabelStyles.requiredShown,
+					)}
+				>
+					*
+				</span>
 			</h3>
 
-			{description && <p className={cn("text-muted-fg", styles[size].subheading)}>{description}</p>}
+			{description && (
+				<p className={cn(sectionLabelStyles.description, styles[size].subheading)}>{description}</p>
+			)}
 			{children}
 		</div>
 	)
 }
 
 const SectionLabelActions = ({ className, children, ...props }: ComponentPropsWithRef<"div">) => (
-	<div {...props} className={cn("mt-3 flex gap-2", className)}>
+	<div {...props} className={cn(sectionLabelStyles.actions, className)}>
 		{children}
 	</div>
 )

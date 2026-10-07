@@ -1,5 +1,6 @@
 import type { ComponentPropsWithRef } from "react"
 import { cn } from "~/lib/utils"
+import { sectionFooterStyles } from "./section-footer.styles"
 
 const SectionFooterRoot = ({
 	isCard,
@@ -10,8 +11,8 @@ const SectionFooterRoot = ({
 	<div
 		{...props}
 		className={cn(
-			"flex items-center border-border border-t",
-			isCard ? "gap-4 px-4 py-3 md:py-4 lg:px-6" : "gap-5 pt-4 md:pt-5",
+			sectionFooterStyles.root,
+			isCard ? sectionFooterStyles.rootCard : sectionFooterStyles.rootPlain,
 			className,
 		)}
 	>
@@ -20,7 +21,7 @@ const SectionFooterRoot = ({
 )
 
 const SectionFooterActions = ({ className, children, ...props }: ComponentPropsWithRef<"div">) => (
-	<div {...props} className={cn("flex flex-1 justify-end gap-3", className)}>
+	<div {...props} className={cn(sectionFooterStyles.actions, className)}>
 		{children}
 	</div>
 )

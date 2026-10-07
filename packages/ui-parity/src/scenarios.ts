@@ -4,6 +4,7 @@ import { chatArea } from "./scenarios/chat.ts"
 import { composerArea } from "./scenarios/composer.ts"
 import { entryArea } from "./scenarios/entry.ts"
 import { galleryArea } from "./scenarios/gallery.ts"
+import { galleryDataArea } from "./scenarios/gallery-data.ts"
 import { homeArea } from "./scenarios/home.ts"
 import { integrationsArea } from "./scenarios/integrations.ts"
 import { mySettingsArea } from "./scenarios/my-settings.ts"
@@ -26,6 +27,7 @@ const areas: ReadonlyArray<AreaModule> = [
 	entryArea,
 	galleryArea,
 	composerArea,
+	galleryDataArea,
 ]
 
 const uniqueBy = <A>(items: ReadonlyArray<A>, key: (item: A) => string, kind: string) => {

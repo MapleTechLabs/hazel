@@ -1,12 +1,13 @@
 import { Separator as Divider, type SeparatorProps } from "react-aria-components"
 import { twMerge } from "tailwind-merge"
+import { separatorStyles } from "./separator.styles"
 
 export function Separator({ orientation = "horizontal", className, ...props }: SeparatorProps) {
 	return (
 		<Divider
 			className={twMerge(
-				"shrink-0 border-0 bg-border forced-colors:bg-[ButtonBorder]",
-				orientation === "horizontal" ? "h-px w-full" : "h-full w-px",
+				separatorStyles.base,
+				orientation === "horizontal" ? separatorStyles.horizontal : separatorStyles.vertical,
 				className,
 			)}
 			{...props}

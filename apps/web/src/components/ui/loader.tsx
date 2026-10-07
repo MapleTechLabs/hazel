@@ -1,9 +1,10 @@
 import { ProgressBar } from "react-aria-components"
 import { twMerge } from "tailwind-merge"
+import { loaderStyles } from "./loader.styles"
 
 const Ring = ({ className, ...props }: React.SVGProps<SVGSVGElement>) => (
 	<svg
-		className={twMerge("size-4", className)}
+		className={twMerge(loaderStyles.svg, className)}
 		{...props}
 		xmlns="http://www.w3.org/2000/svg"
 		width={16}
@@ -26,7 +27,7 @@ const Ring = ({ className, ...props }: React.SVGProps<SVGSVGElement>) => (
 )
 
 const Spin = ({ className, ...props }: React.SVGProps<SVGSVGElement>) => (
-	<svg className={twMerge("size-4", className)} viewBox="0 0 2400 2400" {...props}>
+	<svg className={twMerge(loaderStyles.svg, className)} viewBox="0 0 2400 2400" {...props}>
 		<g strokeWidth="200" strokeLinecap="round" fill="none">
 			<line x1="1200" y1="600" x2="1200" y2="100" />
 			<line opacity="0.5" x1="1200" y1="2300" x2="1200" y2="1800" />
@@ -86,12 +87,7 @@ export function Loader({ isIndeterminate = true, ref, ...props }: LoaderProps) {
 		>
 			<LoaderPrimitive
 				role="presentation"
-				className={twMerge(
-					"size-4",
-					["ring"].includes(variant) && "animate-spin",
-					variant === "spin" && "stroke-current",
-					className,
-				)}
+				className={twMerge(...loaderStyles.loader(variant), className)}
 				ref={ref}
 				{...spinnerProps}
 			/>
