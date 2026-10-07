@@ -18,6 +18,11 @@ import * as InstalledAppsSettings from "./settings/integrations/installed"
 import * as MarketplaceSettings from "./settings/integrations/marketplace"
 import * as YourAppsSettings from "./settings/integrations/your-apps"
 import * as TeamSettings from "./settings/team"
+import * as SettingsConnectInvites from "./settings/connect-invites"
+import * as SettingsCustomEmojis from "./settings/custom-emojis"
+import * as SettingsDebug from "./settings/debug"
+import * as SettingsGeneral from "./settings/general"
+import * as SettingsInvitations from "./settings/invitations"
 
 /**
  * Every routed page, registered once. Adding a page: import its module and append `X.page` below.
@@ -36,6 +41,11 @@ export const pages = [
 	MarketplaceSettings.page,
 	YourAppsSettings.page,
 	IntegrationSettings.page,
+	SettingsGeneral.page,
+	SettingsDebug.page,
+	SettingsConnectInvites.page,
+	SettingsInvitations.page,
+	SettingsCustomEmojis.page,
 ]
 
 export const PageSlot = Schema.Union(pages.map((page) => page.Slot))
