@@ -126,6 +126,12 @@ const staticScenarios = [
 		title: "Section header, label and footer",
 	}),
 	gallery("text", { id: "gallery-text", title: "Text, strong, code, keyboard" }),
+	gallery("loader", {
+		id: "gallery-loader",
+		title: "Loader: ring and spin variants",
+		// The spin variant rotates with SMIL, which the harness cannot freeze.
+		mask: (page) => [page.getByRole("progressbar", { name: /^Spinning/ })],
+	}),
 	gallery("progress-bar", {
 		id: "gallery-progress-bar",
 		title: "Progress bar: values, header, indeterminate",
@@ -187,6 +193,37 @@ const tableScenarios = [
 	}),
 ]
 
+const treeRow = (page: Page, name: string) => page.getByRole("row", { name, exact: false })
+
+const treeScenarios = [
+	gallery("tree", { id: "gallery-tree", title: "Tree: nested, expanded, disabled" }),
+	gallery("tree", {
+		id: "gallery-tree-click",
+		title: "Tree: focus by click, collapse and expand with the chevron",
+		steps: async (page) => {
+			await treeRow(page, "backend").click()
+			await treeRow(page, "Engineering").getByRole("button").first().click()
+			await treeRow(page, "Design").getByRole("button").first().click()
+			await page.mouse.move(0, 0)
+		},
+	}),
+	gallery("tree", {
+		id: "gallery-tree-arrow-keys",
+		title: "Tree: arrow keys move focus, expand and collapse",
+		steps: async (page) => {
+			await page.keyboard.press("Tab")
+			await page.keyboard.press("ArrowDown")
+			await page.keyboard.press("ArrowDown")
+			await page.keyboard.press("ArrowDown")
+			await page.keyboard.press("ArrowDown")
+			await page.keyboard.press("ArrowRight")
+			await page.keyboard.press("ArrowUp")
+			await page.keyboard.press("ArrowUp")
+			await page.keyboard.press("ArrowLeft")
+		},
+	}),
+]
+
 export const galleryDataArea: AreaModule = {
 	scenarios: [
 		...tabsScenarios,
@@ -194,5 +231,6 @@ export const galleryDataArea: AreaModule = {
 		...toggleGroupScenarios,
 		...staticScenarios,
 		...tableScenarios,
+		...treeScenarios,
 	],
 }
