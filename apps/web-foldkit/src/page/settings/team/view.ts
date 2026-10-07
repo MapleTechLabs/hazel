@@ -1,27 +1,17 @@
-import { Schema } from "effect"
+import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { getEffectivePresenceStatus } from "~/utils/presence"
 import { getStatusBadgeIntent, getStatusLabel } from "~/utils/status"
-import { IconDotsVertical, IconPlus } from "../icons"
-import { avatar } from "../ui/avatar"
-import { badge } from "../ui/badge"
-import { button } from "../ui/button"
-import { card, cardHeader, cardHeaderGroup } from "../ui/card"
+import { IconDotsVertical, IconPlus } from "../../../icons"
+import { avatar } from "../../../ui/avatar"
+import { badge } from "../../../ui/badge"
+import { button } from "../../../ui/button"
+import { card, cardHeader, cardHeaderGroup } from "../../../ui/card"
+import type { PageViewInputs } from "../../contract"
+import type { Message } from "./message"
+import type { Model, TeamMember } from "./model"
 
 /** Port of `routes/_app/$orgSlug/settings/team.tsx` (read path; menus and modals follow in Phase 5). */
-
-export const TeamMember = Schema.Struct({
-	id: Schema.String,
-	userId: Schema.String,
-	role: Schema.Literals(["owner", "admin", "member"]),
-	firstName: Schema.String,
-	lastName: Schema.String,
-	email: Schema.String,
-	avatarUrl: Schema.NullOr(Schema.String),
-	presenceStatus: Schema.NullOr(Schema.String),
-	presenceLastSeenMs: Schema.NullOr(Schema.Number),
-})
-export type TeamMember = typeof TeamMember.Type
 
 const getInitials = (name: string) => {
 	const [firstName, lastName] = name.split(" ")
@@ -217,9 +207,6 @@ export const teamPage = <Message>(
 		],
 	)
 
-/** `routes/_app/$orgSlug/settings/layout.tsx` */
-export const settingsLayout = <Message>(h: HtmlBuilder<Message>, page: Html): Html =>
-	h.main(
-		[h.Class("h-full w-full min-w-0 bg-bg")],
-		[h.div([h.Class("flex h-full min-h-0 w-full flex-col overflow-y-auto pt-6 pb-12")], [page])],
-	)
+export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, { shared }, h) =>
+	teamPage(h, { members: model.members, currentUserId: shared.currentUser?.id, nowMs: shared.nowMs }),
+)
