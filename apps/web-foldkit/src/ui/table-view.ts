@@ -54,6 +54,15 @@ export const view = defineView<Model, Message, ViewInputs>((model, viewInputs, h
 	const enabledRows = Array.filter(rows, (row) => row.isDisabled !== true)
 	const rowKeys = Array.map(rows, (row) => row.key)
 	const isDisabledRow = (key: string) => !Array.some(enabledRows, (row) => row.key === key)
+	// useTable's getRowText: the row header cell (isRowHeader, else the first column) when it is text.
+	const rowHeaderIndex = Math.max(
+		0,
+		columns.findIndex((column) => column.isRowHeader === true),
+	)
+	const rowText = (key: string) => {
+		const cell = rows.find((row) => row.key === key)?.cells[rowHeaderIndex]
+		return typeof cell === "string" ? cell : ""
+	}
 	const firstColumnKey = Option.getOrElse(
 		Option.map(Array.head(columns), (column) => column.key),
 		() => "",
@@ -73,11 +82,11 @@ export const view = defineView<Model, Message, ViewInputs>((model, viewInputs, h
 		isMultiple && keyboardKey === " "
 			? Option.some({
 					focusSelector: Collection.idSelector(rowId(model, fromRow)),
-					message: Message.PressedRowSpace({ row: fromRow }),
+					message: Message.PressedRowSpace({ row: fromRow, rowText: rowText(fromRow) }),
 				})
 			: Option.map(verticalTarget(fromRow, keyboardKey), (row) => ({
 					focusSelector: Collection.idSelector(rowId(model, row)),
-					message: Message.NavigatedToRow({ row, isSelectable }),
+					message: Message.NavigatedToRow({ row, isSelectable, rowText: rowText(row) }),
 				}))
 
 	// NOTE: keydown bubbles from rows and cells (which may already have moved focus), so this reads the
@@ -100,7 +109,7 @@ export const view = defineView<Model, Message, ViewInputs>((model, viewInputs, h
 		)
 		return Option.map(maybeTarget, ({ row, column }) => ({
 			focusSelector: Collection.idSelector(cellId(model, row, column)),
-			message: Message.NavigatedToRow({ row, isSelectable }),
+			message: Message.NavigatedToRow({ row, isSelectable, rowText: rowText(row) }),
 		}))
 	}
 
@@ -308,7 +317,11 @@ export const view = defineView<Model, Message, ViewInputs>((model, viewInputs, h
 							? rowNavigation(row.key)(keyboardKey)
 							: Option.none(),
 					),
-					h.OnPointerDown(() => Option.some(Message.PressedRow({ row: row.key, isSelectable }))),
+					h.OnPointerDown(() =>
+						Option.some(
+							Message.PressedRow({ row: row.key, isSelectable, rowText: rowText(row.key) }),
+						),
+					),
 					h.OnMouseEnter(Message.HoveredRow({ row: row.key })),
 					h.OnMouseLeave(Message.UnhoveredRow({ row: row.key })),
 				]

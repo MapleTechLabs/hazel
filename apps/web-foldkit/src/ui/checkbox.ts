@@ -1,3 +1,5 @@
+import { Schema } from "effect"
+import { CustomElement } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import {
@@ -17,6 +19,16 @@ import * as Field from "./field"
  */
 export const visuallyHiddenStyle =
 	"border: 0px; clip: rect(0px, 0px, 0px, 0px); clip-path: inset(50%); height: 1px; margin: -1px; overflow: hidden; padding: 0px; position: absolute; width: 1px; white-space: nowrap;"
+
+/**
+ * useCheckbox sets `input.indeterminate`, a DOM property with no attribute. A CustomElement spec is
+ * Foldkit's public way to build a property attribute; it is applied to the native input here.
+ */
+const indeterminateProperty = CustomElement.define({
+	tag: "hazel-indeterminate",
+	properties: { indeterminate: Schema.Boolean },
+	events: {},
+})
 
 export interface CheckboxOptions<Message> {
 	/** Element id of the input and the interaction target. */
@@ -109,6 +121,7 @@ export const checkbox = <Message>(
 						...(options.value === undefined ? [] : [h.Attribute("value", options.value)]),
 						// Foldkit mirrors the live value into the `checked` attribute; React keeps the initial one.
 						h.Checked(options.isSelected),
+						indeterminateProperty.withMessage(h).Indeterminate(isIndeterminate),
 						...(interaction
 							? Interaction.handlers(h, interaction, options.id, {
 									isHoverDisabled: true,
