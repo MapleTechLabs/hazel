@@ -410,8 +410,8 @@ const observeList = (element: Element): Stream.Stream<ObservedMessage> =>
 		).pipe(Effect.flatMap(() => Effect.never)),
 	)
 
-/** `@legendapp/list`'s `roundSize`: heights floored to 1/8 px, so offsets land where it puts them. */
-const roundSize = (size: number) => Math.floor(size * 8) / 8
+/** `@legendapp/list`'s `updateItemSize` stores `Math.round(height)`, so offsets land where it puts them. */
+const roundSize = (size: number) => Math.round(size)
 
 /** Container-owned Mount: scroll position, viewport height and row heights, all from one element. */
 export const ObserveMessageList = Mount.defineStream("ObserveMessageList", {
