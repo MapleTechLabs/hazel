@@ -1,39 +1,29 @@
 import { OrganizationId, SyncConnectionId } from "@hazel/schema"
-import { Effect, Exit, Option, Schema } from "effect"
+import { Effect, Exit, Option } from "effect"
 import { Command, Update } from "foldkit"
 import { modifyFields } from "foldkit/struct"
-import { toDate } from "~/lib/utils"
 import { HazelRpc } from "../../../rpc"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
 import { failureToast, successToast } from "../../../ui/toast-exit"
 import type { PageReturn, Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
-import { addMenuEntries, type Connection, ConnectionStatus, Message, type Model } from "./model"
+import { addMenuEntries, Message, type Model } from "./model"
+import { fetchConnections } from "./rpc"
 
 type Return = PageReturn<Model, Message>
 type Step = Update.StepWithOutMessage<Model, Message, PageOutMessage>
 
 // COMMAND
 
-const isStatus = Schema.is(ConnectionStatus)
-
 export const ListConnections = Command.define("ListConnections", {
 	args: { organizationId: OrganizationId },
 	messages: [Message.SucceededListConnections, Message.FailedListConnections],
 	execute: ({ organizationId }) =>
-		Effect.gen(function* () {
-			const client = yield* HazelRpc
-			const response = yield* client("chatSync.connection.list", { organizationId })
-			const connections: ReadonlyArray<Connection> = response.data.map((connection) => ({
-				id: connection.id,
-				displayName: connection.externalWorkspaceName || "Discord Server",
-				status: isStatus(connection.status) ? connection.status : "active",
-				externalWorkspaceId: connection.externalWorkspaceId,
-				lastSyncedAtMs: connection.lastSyncedAt ? toDate(connection.lastSyncedAt).getTime() : null,
-			}))
-			return Message.SucceededListConnections({ organizationId, connections })
-		}).pipe(Effect.catch(() => Effect.succeed(Message.FailedListConnections({ organizationId })))),
+		fetchConnections(organizationId).pipe(
+			Effect.map((connections) => Message.SucceededListConnections({ organizationId, connections })),
+			Effect.catch(() => Effect.succeed(Message.FailedListConnections({ organizationId }))),
+		),
 })
 
 export const DeleteConnection = Command.define("DeleteConnection", {
@@ -53,7 +43,10 @@ export const DeleteConnection = Command.define("DeleteConnection", {
 							isRetryable: false,
 						},
 					})
-					return Message.FailedDeleteConnection({ title: toast.title, description: toast.description })
+					return Message.FailedDeleteConnection({
+						title: toast.title,
+						description: toast.description,
+					})
 				},
 			})
 		}),
@@ -100,7 +93,9 @@ export const sharedChanged = (model: Model, shared: Shared): Return => requestLi
 const foldAddMenuOutMessage = Menu.OutMessage.match<Step>({
 	SelectedItem:
 		({ key }) =>
-		(model) => ({ model: key === "discord" ? modifyFields(model, { isAddModalOpen: () => true }) : model }),
+		(model) => ({
+			model: key === "discord" ? modifyFields(model, { isAddModalOpen: () => true }) : model,
+		}),
 	ActivatedLink: () => (model) => ({ model }),
 })
 
@@ -138,7 +133,11 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 	Message.match<Return>(message, {
 		SucceededListConnections: ({ organizationId, connections }) =>
 			organizationId === model.requestedOrganizationId
-				? { model: modifyFields(model, { connections: () => ({ _tag: "Loaded" as const, connections }) }) }
+				? {
+						model: modifyFields(model, {
+							connections: () => ({ _tag: "Loaded" as const, connections }),
+						}),
+					}
 				: { model },
 		FailedListConnections: ({ organizationId }) =>
 			organizationId === model.requestedOrganizationId

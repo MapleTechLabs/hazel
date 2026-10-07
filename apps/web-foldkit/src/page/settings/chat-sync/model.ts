@@ -13,6 +13,7 @@ export const Connection = Schema.Struct({
 	displayName: Schema.String,
 	status: ConnectionStatus,
 	externalWorkspaceId: Schema.String,
+	errorMessage: Schema.NullOr(Schema.String),
 	lastSyncedAtMs: Schema.NullOr(Schema.Number),
 })
 export type Connection = typeof Connection.Type
@@ -56,7 +57,10 @@ export const Message = defineMessageUnion({
 export type Message = typeof Message.Type
 
 export const STATUS_CONFIG: Readonly<
-	Record<ConnectionStatus, { readonly label: string; readonly dotClass: string; readonly textClass: string }>
+	Record<
+		ConnectionStatus,
+		{ readonly label: string; readonly dotClass: string; readonly textClass: string }
+	>
 > = {
 	active: { label: "Active", dotClass: "bg-success", textClass: "text-success" },
 	paused: { label: "Paused", dotClass: "bg-warning", textClass: "text-warning" },

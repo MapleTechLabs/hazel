@@ -1,16 +1,13 @@
 import { Submodel } from "foldkit"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { buttonStyles } from "~/components/ui/button.styles"
-import { dialogDescriptionBase } from "~/components/ui/dialog.styles"
 import { IconArrowPath, IconChevronDown, IconPlus, IconTrash, IconWarning } from "../../../icons"
 import { badge } from "../../../ui/badge"
-import { button } from "../../../ui/button"
-import { dialog, dialogClose, dialogFooter, dialogHeader, dialogTitle } from "../../../ui/dialog"
 import { emptyState } from "../../../ui/empty-state"
 import { loader } from "../../../ui/loader"
 import type * as Menu from "../../../ui/menu"
 import { menuTriggerClassName, view as menuView } from "../../../ui/menu-view"
-import * as Modal from "../../../ui/modal"
+import type * as Modal from "../../../ui/modal"
 import {
 	sectionHeaderGroup,
 	sectionHeaderHeading,
@@ -19,6 +16,8 @@ import {
 } from "../../../ui/section-header"
 import type { PageViewInputs } from "../../contract"
 import { discordLogo, slackLogo } from "./brand-icons"
+import { confirmDialog } from "./confirm-dialog"
+import { formatSyncedAt } from "./rpc"
 import { type Connection, Message, type Model, STATUS_CONFIG } from "./model"
 
 /** Port of `settings/chat-sync/index.tsx`. */
@@ -91,14 +90,6 @@ const addConnectionDropdown = (
 		toParentMessage,
 	})
 
-const lastSynced = (ms: number) =>
-	new Date(ms).toLocaleDateString(undefined, {
-		month: "short",
-		day: "numeric",
-		hour: "numeric",
-		minute: "2-digit",
-	})
-
 const connectionCard = (h: HtmlBuilder<Message>, connection: Connection): Html => {
 	const statusConfig = STATUS_CONFIG[connection.status]
 	return h.keyed("div")(
@@ -133,12 +124,25 @@ const connectionCard = (h: HtmlBuilder<Message>, connection: Connection): Html =
 									h.div(
 										[h.Class("flex flex-col gap-0.5")],
 										[
-											h.h3([h.Class("font-semibold text-fg text-sm")], [connection.displayName]),
+											h.h3(
+												[h.Class("font-semibold text-fg text-sm")],
+												[connection.displayName],
+											),
 											h.div(
 												[h.Class("flex items-center gap-1.5")],
 												[
-													h.div([h.Class(`size-1.5 rounded-full ${statusConfig.dotClass}`)], []),
-													h.span([h.Class(`text-xs ${statusConfig.textClass}`)], [statusConfig.label]),
+													h.div(
+														[
+															h.Class(
+																`size-1.5 rounded-full ${statusConfig.dotClass}`,
+															),
+														],
+														[],
+													),
+													h.span(
+														[h.Class(`text-xs ${statusConfig.textClass}`)],
+														[statusConfig.label],
+													),
 												],
 											),
 										],
@@ -153,16 +157,29 @@ const connectionCard = (h: HtmlBuilder<Message>, connection: Connection): Html =
 							h.span([], ["Guild ID: ", connection.externalWorkspaceId]),
 							...(connection.lastSyncedAtMs === null
 								? []
-								: [h.span([], ["Last synced:", " ", lastSynced(connection.lastSyncedAtMs)])]),
+								: [
+										h.span(
+											[],
+											["Last synced:", " ", formatSyncedAt(connection.lastSyncedAtMs)],
+										),
+									]),
 						],
 					),
 				],
 			),
 			h.div(
-				[h.Class("flex items-center justify-between border-border border-t bg-bg-muted/50 px-5 py-3")],
+				[
+					h.Class(
+						"flex items-center justify-between border-border border-t bg-bg-muted/50 px-5 py-3",
+					),
+				],
 				[
 					h.span(
-						[h.Class("font-medium text-fg text-xs opacity-0 transition-opacity group-hover:opacity-100")],
+						[
+							h.Class(
+								"font-medium text-fg text-xs opacity-0 transition-opacity group-hover:opacity-100",
+							),
+						],
 						["Manage"],
 					),
 					h.div(
@@ -185,7 +202,9 @@ const connectionCard = (h: HtmlBuilder<Message>, connection: Connection): Html =
 							),
 							h.svg(
 								[
-									h.Class("size-4 text-muted-fg transition-transform group-hover:translate-x-0.5"),
+									h.Class(
+										"size-4 text-muted-fg transition-transform group-hover:translate-x-0.5",
+									),
 									h.Attribute("fill", "none"),
 									h.Attribute("stroke", "currentColor"),
 									h.Attribute("stroke-width", "2"),
@@ -208,56 +227,20 @@ const connectionCard = (h: HtmlBuilder<Message>, connection: Connection): Html =
 }
 
 const deleteModal = (h: HtmlBuilder<Message>, model: Model): Html =>
-	h.submodel({
+	confirmDialog(h, {
 		slotId: "delete-connection",
-		model: model.deleteModal,
-		view: Modal.view,
-		viewInputs: {
-			// Controlled `isOpen` with no DialogTrigger.
-			toTrigger: (_attributes, overlay) => overlay,
-			size: "md",
-			toContent: (closeAttributes) => [
-				dialog(
-					h,
-					{ id: "chat-sync-delete-inner", role: "dialog", labelledBy: "chat-sync-delete-title" },
-					[
-						dialogHeader(h, {}, [
-							h.div(
-								[
-									h.Class(
-										"flex size-12 items-center justify-center rounded-lg border border-danger/10 bg-danger/5",
-									),
-								],
-								[IconWarning(h, { className: "size-6 text-danger" })],
-							),
-							dialogTitle(h, { id: "chat-sync-delete-title" }, "Delete Connection"),
-							h.p(
-								[h.Attribute("data-slot", "description"), h.Class(dialogDescriptionBase)],
-								[
-									"Are you sure you want to delete the connection to",
-									" ",
-									h.span([h.Class("font-medium text-fg")], [model.deleteTarget?.name ?? ""]),
-									"? This will also remove all linked channels. This action cannot be undone.",
-								],
-							),
-						]),
-						dialogFooter(h, [
-							dialogClose(h, closeAttributes, ["Cancel"], "secondary"),
-							button(
-								h,
-								{
-									intent: "danger",
-									isDisabled: model.isDeleting,
-									isPending: model.isDeleting,
-									onPress: Message.ClickedConfirmDelete(),
-								},
-								[model.isDeleting ? "Deleting..." : "Delete Connection"],
-							),
-						]),
-					],
-				),
-			],
-		},
+		modal: model.deleteModal,
+		icon: IconWarning(h, { className: "size-6 text-danger" }),
+		title: "Delete Connection",
+		description: [
+			"Are you sure you want to delete the connection to",
+			model.deleteTarget?.name ?? "",
+			"? This will also remove all linked channels. This action cannot be undone.",
+		],
+		confirmLabel: "Delete Connection",
+		pendingLabel: "Deleting...",
+		isPending: model.isDeleting,
+		onConfirm: Message.ClickedConfirmDelete(),
 		toParentMessage: toDeleteModalMessage,
 	})
 
@@ -285,7 +268,12 @@ const loadedBody = (h: HtmlBuilder<Message>, model: Model, connections: Readonly
 				icon: (className) => IconArrowPath(h, { className }),
 				title: "No sync connections yet",
 				description: "Connect an external platform to start syncing messages with Hazel channels.",
-				action: addConnectionDropdown(h, "add-connection-empty", model.emptyAddMenu, toEmptyAddMenuMessage),
+				action: addConnectionDropdown(
+					h,
+					"add-connection-empty",
+					model.emptyAddMenu,
+					toEmptyAddMenuMessage,
+				),
 			})
 		: h.div(
 				[h.Class("grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3")],

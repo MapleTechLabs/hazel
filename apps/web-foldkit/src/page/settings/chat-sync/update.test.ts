@@ -23,9 +23,11 @@ const connection = {
 	displayName: "Hazel Community",
 	status: "active" as const,
 	externalWorkspaceId: "1",
+	errorMessage: null,
 	lastSyncedAtMs: null,
 }
-const updateWithShared = (current: Parameters<typeof update>[0], next: Message) => update(current, next, shared)
+const updateWithShared = (current: Parameters<typeof update>[0], next: Message) =>
+	update(current, next, shared)
 
 describe("chat sync connections", () => {
 	test("waits for the organization before listing", () => {
@@ -43,7 +45,9 @@ describe("chat sync connections", () => {
 		story(
 			updateWithShared,
 			given(loaded),
-			message(Message.ClickedDeleteConnection({ target: { id: connectionId, name: "Hazel Community" } })),
+			message(
+				Message.ClickedDeleteConnection({ target: { id: connectionId, name: "Hazel Community" } }),
+			),
 			model((current) => expect(current.deleteModal.isOpen).toBe(true)),
 			message(Message.ClickedConfirmDelete()),
 			Command.resolve(DeleteConnection, Message.SucceededDeleteConnection()),
@@ -56,7 +60,10 @@ describe("chat sync connections", () => {
 				expect(current.deleteTarget).toBeNull()
 				expect(current.connections._tag).toBe("Loading")
 			}),
-			Command.resolve(ListConnections, Message.SucceededListConnections({ organizationId, connections: [] })),
+			Command.resolve(
+				ListConnections,
+				Message.SucceededListConnections({ organizationId, connections: [] }),
+			),
 			model((current) => expect(current.connections).toEqual({ _tag: "Loaded", connections: [] })),
 		)
 	})

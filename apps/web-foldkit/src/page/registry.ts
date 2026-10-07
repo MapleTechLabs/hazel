@@ -11,6 +11,7 @@ import type { PageHost, PageMessageBase, PageSlotBase, PageStep, PageViewInputs,
 import type { PageOutMessage } from "./out-message"
 import * as Root from "./root"
 import * as SettingsChatSync from "./settings/chat-sync"
+import * as SettingsChatSyncConnection from "./settings/chat-sync-connection"
 import * as TeamSettings from "./settings/team"
 
 /**
@@ -24,6 +25,7 @@ export const pages = [
 	ChannelSettingsRedirect.page,
 	ChannelSettingsOverview.page,
 	SettingsChatSync.page,
+	SettingsChatSyncConnection.page,
 ]
 
 export const PageSlot = Schema.Union(pages.map((page) => page.Slot))
