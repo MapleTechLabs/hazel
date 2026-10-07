@@ -168,17 +168,20 @@ const foldOrgSwitcher = Update.foldChild({
 	foldOutMessage: foldOrgSwitcherOutMessage,
 })
 
+/** The sidebar's Commands, plus its OutMessage (modals, navigation, toasts) for the root. */
 const foldChannelsSidebar = (
 	model: Model,
 	step: (sidebar: ChannelsSidebar.Model) => ChannelsSidebar.SidebarReturn,
-): Update.Return<Model, Message> =>
-	Update.foldChildStep<Model, Message, ChannelsSidebar.Model, ChannelsSidebar.Message>({
-		update: step,
-		read: (parent: Model) => Option.some(parent.channelsSidebar),
-		write: (parent: Model, channelsSidebar: ChannelsSidebar.Model) =>
-			modifyFields(parent, { channelsSidebar: () => channelsSidebar }),
-		toParentMessage: (message: ChannelsSidebar.Message) => Message.GotChannelsSidebarMessage({ message }),
-	})(model)
+): ShellUpdateReturn => {
+	const result = step(model.channelsSidebar)
+	return {
+		model: modifyFields(model, { channelsSidebar: () => result.model }),
+		commands: Command.mapMessages(result.commands ?? [], (message) =>
+			Message.GotChannelsSidebarMessage({ message }),
+		),
+		...(result.outMessage === undefined ? {} : { outMessage: result.outMessage }),
+	}
+}
 
 export const update = (model: Model, message: Message, context: Context): ShellUpdateReturn => {
 	const result = Message.match<ShellUpdateReturn>(message, {
@@ -226,10 +229,13 @@ export const update = (model: Model, message: Message, context: Context): ShellU
 }
 
 /** The root learned a new route, organization, user or role. */
-export const informContext = (model: Model, context: Context): Update.Return<Model, Message> =>
-	foldChannelsSidebar(withMenuEntries(model, context), (sidebar) =>
+export const informContext = (model: Model, context: Context): Update.Return<Model, Message, HazelRpc> => {
+	// `setContext` only resets data, so there is no OutMessage to forward.
+	const { model: next, commands } = foldChannelsSidebar(withMenuEntries(model, context), (sidebar) =>
 		ChannelsSidebar.setContext(sidebar, {
 			organizationId: context.organizationId,
 			currentUserId: context.currentUserId,
 		}),
 	)
+	return { model: next, commands }
+}
