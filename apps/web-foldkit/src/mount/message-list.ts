@@ -146,16 +146,25 @@ export const scrollTopForAnchor = (model: Model, layout: Layout, anchor: Viewpor
 
 // COMMAND
 
-/** Writes `scrollTop` once the pending patch has committed, before the browser paints. */
+/** `To` jumps to an offset (the end); `By` shifts by how far the anchor moved, keeping any scroll the reader did meanwhile. */
+export const ScrollAdjustment = defineTaggedUnion({
+	To: { scrollTop: Schema.Number },
+	By: { deltaPx: Schema.Number },
+})
+export type ScrollAdjustment = typeof ScrollAdjustment.Type
+
+/** Adjusts `scrollTop` once the pending patch has committed, before the browser paints. */
 export const ApplyScroll = Command.define("ApplyScroll", {
-	args: { id: Schema.String, scrollTop: Schema.Number, version: Schema.Number },
+	args: { id: Schema.String, adjustment: ScrollAdjustment, version: Schema.Number },
 	messages: [Message.CompletedApplyScroll],
-	execute: ({ id, scrollTop, version }) =>
+	execute: ({ id, adjustment, version }) =>
 		Effect.gen(function* () {
 			yield* Render.afterCommit
 			const element = document.getElementById(id)
-			if (element !== null) element.scrollTop = scrollTop
-			return Message.CompletedApplyScroll({ version, scrollTop: element?.scrollTop ?? scrollTop })
+			if (element === null) return Message.CompletedApplyScroll({ version, scrollTop: 0 })
+			element.scrollTop =
+				adjustment._tag === "To" ? adjustment.scrollTop : element.scrollTop + adjustment.deltaPx
+			return Message.CompletedApplyScroll({ version, scrollTop: element.scrollTop })
 		}),
 })
 
@@ -171,9 +180,13 @@ const reconcile = (model: Model): ListReturn => {
 	const target = scrollTopForAnchor(model, layoutOf(model), model.anchor)
 	if (Math.abs(target - model.scrollTop) < 0.5) return { model }
 	const version = Num.increment(model.scrollVersion)
+	const adjustment =
+		model.anchor._tag === "End"
+			? ScrollAdjustment.To({ scrollTop: target })
+			: ScrollAdjustment.By({ deltaPx: target - model.scrollTop })
 	return {
 		model: modifyFields(model, { scrollTop: () => target, scrollVersion: () => version }),
-		commands: [ApplyScroll({ id: model.id, scrollTop: target, version })],
+		commands: [ApplyScroll({ id: model.id, adjustment, version })],
 	}
 }
 
@@ -203,6 +216,7 @@ export const update = (model: Model, message: Message): ListReturn =>
 			for (const { key, height } of changed) heights[key] = height
 			return reconcile(modifyFields(model, { measuredHeights: () => heights }))
 		},
+		// The DOM now matches the layout, so the anchor is re-read from where the reader really is.
 		CompletedApplyScroll: ({ version, scrollTop }) =>
 			version !== model.scrollVersion
 				? { model }
@@ -210,6 +224,7 @@ export const update = (model: Model, message: Message): ListReturn =>
 						model: modifyFields(model, {
 							appliedScrollVersion: () => version,
 							scrollTop: () => scrollTop,
+							anchor: () => anchorAt(model, layoutOf(model), scrollTop),
 						}),
 					},
 	})
