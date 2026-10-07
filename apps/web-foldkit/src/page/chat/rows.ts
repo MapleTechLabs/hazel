@@ -135,7 +135,10 @@ const sameReactions = (a: ReadonlyArray<AggregatedReaction>, b: ReadonlyArray<Ag
 
 const NO_REACTIONS: ReadonlyArray<AggregatedReaction> = []
 
-/** Oldest-first rows with a date header before each day; `messagesNewestFirst` is the query order. */
+/**
+ * Oldest-first rows with a date header before each day; `messagesNewestFirst` is the query order.
+ * Rows are plain literals: the tagged-union constructors validate, which costs ms per 10k rows.
+ */
 export const toDisplayRows = (
 	messagesNewestFirst: ReadonlyArray<ChatMessage>,
 	reactionsByMessage: ReadonlyMap<string, ReadonlyArray<AggregatedReaction>>,
@@ -161,7 +164,7 @@ export const toDisplayRows = (
 		if (date !== lastDate) {
 			const key = `header-${date}`
 			const old = previousByKey.get(key)
-			rows.push(old !== undefined && old._tag === "DateHeader" ? old : DisplayRow.DateHeader({ key, label: date }))
+			rows.push(old !== undefined && old._tag === "DateHeader" ? old : { _tag: "DateHeader", key, label: date })
 			lastDate = date
 		}
 
@@ -175,7 +178,7 @@ export const toDisplayRows = (
 				old.groupPosition === groupPosition &&
 				sameReactions(old.reactions, reactions)
 				? old
-				: DisplayRow.MessageRow({ key: message.id, message, groupPosition, reactions }),
+				: { _tag: "MessageRow", key: message.id, message, groupPosition, reactions },
 		)
 	}
 	return rows

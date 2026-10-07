@@ -66,7 +66,8 @@ export const init = (channelId: ChannelId, currentUserId: UserId | null): Model 
 export type PageReturn = Update.Return<Model, Message>
 
 const liftList = (model: Model, result: MessageList.ListReturn): PageReturn => ({
-	model: modifyFields(model, { list: () => result.model }),
+	// An unchanged list keeps the page reference, so ignored events cost no render.
+	model: result.model === model.list ? model : modifyFields(model, { list: () => result.model }),
 	commands: Command.mapMessages(result.commands, (message) => Message.GotListMessage({ message })),
 })
 
