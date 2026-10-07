@@ -276,7 +276,7 @@ What exists today: fixture backend, Clerk stub (signed in per dataset, or signed
 
 - **Component gallery:** add a `/_dev/gallery/*` route to legacy (then re-pin) and the same to Foldkit, one scenario per primitive state. This is the fastest feedback loop in Phase 1.
 - **Behavioral parity (done):** the fixture backend records every RPC (tag plus payload) and HTTP API request per capture, and `compare` diffs the call logs between apps, order-insensitive, with presence and typing noise excluded (see the ui-parity README). A difference fails the variant.
-- **Accessibility snapshots:** store `page.locator("body").ariaSnapshot()` per capture and diff it. That catches role and name regressions that pixels miss.
+- **Accessibility snapshots (done, report-only):** every capture stores `page.locator("body").ariaSnapshot()`, and `summary.md` lists the deltas grouped by role. That catches role and name regressions that pixels miss. Variants fail on it only with `--strict-a11y`, until the existing deltas are triaged; then make it the default.
 - **Timed states:** dataset-level response delays (`rpcDelayMs`, shape delay) so loading states can be captured deliberately.
 - **Fixture-driven live events:** push an Electric change during a scenario (new message arrives, typing indicator appears) for real-time UI states.
 

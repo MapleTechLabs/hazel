@@ -34,6 +34,7 @@ bun run parity run                            # capture both, diff, write the re
     - Order is ignored: calls are compared as a multiset per tag, because the two apps fire concurrent queries in different orders.
     - Payload keys are sorted, and version-4 UUIDs (minted by the app with `crypto.randomUUID`) become `<random-uuid>`. Fixture ids are version 5 (`stableId`) and are compared as is.
     - `IGNORED_CALLS` (presence heartbeats, typing indicators) are never compared. `PRESENCE_ONLY_CALLS` (the presence status write on mount, Rivet actor metadata polling) only have to be sent by both apps or by neither, because their count depends on how long the capture ran. On `/dev/gallery/*` both lists are ignored: the Foldkit gallery boots a standalone program without the app root.
+- **Accessibility.** Every capture stores `page.locator("body").ariaSnapshot()` as `aria` in `<variant>.json`. `compare` diffs the trees as multisets of lines (indentation stripped, so wrapper depth doesn't count) and `summary.md` ends with an "a11y deltas" section: differences grouped by role across the run, then per variant. It does not fail variants yet, so existing deltas can be triaged; `--strict-a11y` makes any ARIA difference a `fail`.
 - **Two kinds of diff.**
   - *Pixels*: strict (any channel differs) and perceptual (pixelmatch, anti-aliasing ignored). Differing pixels are grouped into regions.
   - *Structure*: every visible text run and accessible control is recorded with its box and the computed styles that determine its look. Records are matched across apps by text or by role and name, never by DOM shape, because the two implementations won't share markup. Output reads like `font-weight: 600 → 500 on 18 text runs`, plus the elements that moved as a result.
@@ -117,7 +118,7 @@ If a capture logs `unmocked RPCs: ...`, add a canned response to your area modul
 `.parity/` (gitignored):
 
 - `builds/<target>/`: static builds
-- `runs/<run>/<target>/<variant>.png|.json`: screenshots and snapshots (structure, `calls`)
+- `runs/<run>/<target>/<variant>.png|.json`: screenshots and snapshots (structure, `calls`, `aria`)
 - `runs/<run>/diff/`: pixelmatch diff images
 - `runs/<run>/summary.md`: agent-readable digest
 - `runs/<run>/summary.json`: everything, machine-readable

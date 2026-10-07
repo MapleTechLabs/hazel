@@ -1,6 +1,7 @@
 import { writeFileSync } from "node:fs"
 import { join, relative } from "node:path"
 import type { CaptureResult, CaptureVariant } from "./capture.ts"
+import { ariaRole } from "./behavior.ts"
 import type { VariantComparison } from "./compare.ts"
 
 export interface RunSummary {
@@ -160,7 +161,54 @@ export const renderMarkdown = (summary: RunSummary, runDir: string) => {
 			)
 		lines.push("")
 	}
+	lines.push(...renderA11y(summary))
 	return lines.join("\n")
+}
+
+/**
+ * ARIA snapshot differences, grouped by role across the run. Report-only unless `--strict-a11y`,
+ * so existing deltas can be triaged before they gate anything.
+ */
+const renderA11y = (summary: RunSummary) => {
+	const affected = summary.variants.filter(
+		({ comparison }) => comparison.a11y.missing.length + comparison.a11y.extra.length > 0,
+	)
+	if (!affected.length) return ["## a11y deltas", "", "None.", ""]
+	const groups = new Map<string, { variants: Set<string>; lines: Map<string, number> }>()
+	for (const { variant, comparison } of affected) {
+		for (const [change, list] of [
+			[`missing in ${summary.candidate}`, comparison.a11y.missing],
+			[`extra in ${summary.candidate}`, comparison.a11y.extra],
+		] as const) {
+			for (const line of list) {
+				const key = `${change}: ${ariaRole(line)}`
+				const group = groups.get(key) ?? { variants: new Set(), lines: new Map() }
+				group.variants.add(variant.id)
+				group.lines.set(line, (group.lines.get(line) ?? 0) + 1)
+				groups.set(key, group)
+			}
+		}
+	}
+	const lines = [
+		"## a11y deltas",
+		"",
+		`${affected.length} variants differ in their ARIA tree. Groups by role, most widespread first:`,
+		"",
+	]
+	for (const [key, group] of [...groups]
+		.sort((a, b) => b[1].variants.size - a[1].variants.size)
+		.slice(0, 25)) {
+		const examples = [...group.lines]
+			.sort((a, b) => b[1] - a[1])
+			.slice(0, 3)
+			.map(([line, count]) => `\`${line.slice(0, 80)}\` ×${count}`)
+		lines.push(`- ${key} in ${group.variants.size} variants: ${examples.join(", ")}`)
+	}
+	lines.push("", "Per variant (missing / extra lines):", "")
+	for (const { variant, comparison } of affected)
+		lines.push(`- ${variant.id}: -${comparison.a11y.missing.length} / +${comparison.a11y.extra.length}`)
+	lines.push("")
+	return lines
 }
 
 export const writeReport = (summary: RunSummary, runDir: string) => {
@@ -273,10 +321,11 @@ function renderDetail(id){
   current = v.variant.id; renderList();
   const c = v.comparison;
   const errs = [v.baselineCapture, v.candidateCapture].flatMap((cap, i) => cap ? [cap.error && ((i?C:B)+": "+cap.error), ...(cap.consoleErrors||[]).slice(0,3).map(e => (i?C:B)+" console: "+e)].filter(Boolean) : []).concat((c.behavior||[]).slice(0,10));
+  const a11y = c.a11y && (c.a11y.missing.length || c.a11y.extra.length) ? '<details class="meta"><summary>a11y deltas: -'+c.a11y.missing.length+' / +'+c.a11y.extra.length+'</summary><pre>'+c.a11y.missing.map(l => "- "+esc(l)).concat(c.a11y.extra.map(l => "+ "+esc(l))).join("\\n")+'</pre></details>' : "";
   detail.innerHTML =
     '<h2 style="margin:0;font-size:16px">'+esc(v.variant.title)+'</h2>'+
     '<div class="meta"><span class="dot '+c.status+'" style="display:inline-block"></span> '+c.status+' · '+c.perceptualPixels+'px perceptual · '+c.strictPixels+'px strict · '+c.mismatchPercent+'% · '+v.variant.viewport+' · '+v.variant.theme+' · <code>'+esc(v.variant.path)+'</code>'+(c.sizeMismatch?' · <b>size differs</b>':'')+'</div>'+
-    (errs.length ? '<div class="errors">'+errs.map(esc).join("<br>")+'</div>' : '')+
+    (errs.length ? '<div class="errors">'+errs.map(esc).join("<br>")+'</div>' : '')+a11y+
     '<div class="modes">'+["swipe","onion","blink","side","diff"].map(m => '<button data-mode="'+m+'" aria-pressed="'+(m===mode)+'">'+m+'</button>').join("")+'<span class="meta" style="margin:0">keys: 1-5 modes · j/k next/prev</span></div>'+
     stage(v) + deltasTable(c);
   const swipe = document.getElementById("swipe"), onion = document.getElementById("onion"), top = document.getElementById("top");

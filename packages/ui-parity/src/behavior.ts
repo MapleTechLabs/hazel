@@ -1,8 +1,9 @@
 import type { RecordedCall } from "./backend/call-log.ts"
 
 /**
- * Behavioral parity: the backend calls of two captures, compared as multisets, because legacy and
- * Foldkit fire concurrent queries in different orders.
+ * Behavioral parity (call logs) and accessibility parity (ARIA snapshots) between two captures.
+ * Both are compared as multisets: legacy and Foldkit fire concurrent queries in different orders,
+ * and ARIA trees nest through different wrappers, so only what was sent or exposed counts.
  */
 
 /**
@@ -132,3 +133,24 @@ export const diffCallLogs = (
 	}
 	return lines
 }
+
+export interface AriaDelta {
+	/** ARIA snapshot lines (indentation stripped) present only in the baseline. */
+	readonly missing: ReadonlyArray<string>
+	/** Lines present only in the candidate. */
+	readonly extra: ReadonlyArray<string>
+}
+
+const ariaLines = (snapshot: string) =>
+	snapshot
+		.split("\n")
+		.map((line) => line.trim())
+		.filter(Boolean)
+
+export const diffAria = (baseline: string, candidate: string): AriaDelta => {
+	const { onlyBaseline, onlyCandidate } = unmatched(ariaLines(baseline), ariaLines(candidate))
+	return { missing: onlyBaseline, extra: onlyCandidate }
+}
+
+/** The role an ARIA snapshot line describes (`- button "Send"` → `button`, `- text: hi` → `text`). */
+export const ariaRole = (line: string) => line.replace(/^- /, "").match(/^[\w-]+/)?.[0] ?? line

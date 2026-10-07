@@ -188,11 +188,12 @@ export const captureTarget = async (options: {
 				textProps: [...TEXT_STYLE_PROPS],
 				boxProps: [...BOX_STYLE_PROPS],
 			})
-			// Behavior as of the screenshot: the calls sent so far.
+			// Behavior and accessibility, as of the screenshot: calls sent so far and the ARIA tree.
 			const calls: RecordedCall[] = await fetch(callLogUrl).then((response) => response.json())
+			const aria = await page.locator("body").ariaSnapshot()
 			writeFileSync(
 				join(dir, `${variant.id}.json`),
-				JSON.stringify({ url: page.url(), ...snapshot, calls }),
+				JSON.stringify({ url: page.url(), ...snapshot, calls, aria }),
 			)
 			writeFileSync(join(dir, `${variant.id}.html`), await page.evaluate(serializeDom))
 		} catch (cause) {

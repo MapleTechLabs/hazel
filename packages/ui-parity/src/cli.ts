@@ -35,9 +35,10 @@ const usage = `ui-parity: compare the legacy React UI against the Foldkit UI
 
   bun parity build <legacy|foldkit> [--ref <git-ref>]   build a target against the fixture backend
   bun parity serve [--dataset default]                  fixture backend + both builds, for side-by-side browsing
-  bun parity run [--filter x] [--baseline legacy] [--candidate foldkit] [--run name]
+  bun parity run [--filter x] [--baseline legacy] [--candidate foldkit] [--run name] [--strict-a11y]
                                                         capture both targets, diff, write the report
-  bun parity compare --run name [--baseline legacy] [--candidate foldkit]
+                                                        (--strict-a11y: ARIA tree differences fail too)
+  bun parity compare --run name [--baseline legacy] [--candidate foldkit] [--strict-a11y]
                                                         re-diff an existing run's captures (no recapture)
   bun parity selfcheck [--filter x] [--target legacy]   capture one target twice; anything not identical is flaky
   bun parity capture <target> [--filter x] [--run name] capture one target (screenshots, snapshots, reference DOM)
@@ -58,6 +59,7 @@ const { positionals, values } = parseArgs({
 		run: { type: "string" },
 		dataset: { type: "string", default: "default" },
 		tolerance: { type: "string", default: "0" },
+		"strict-a11y": { type: "boolean", default: false },
 		line: { type: "string" },
 		name: { type: "string" },
 	},
@@ -125,6 +127,7 @@ const compareRun = (input: {
 			candidateDir: captureDir(input.run, input.candidateLabel),
 			outDir: diffDir,
 			tolerance: Number(values.tolerance),
+			strictA11y: values["strict-a11y"],
 			ignoreBackgroundCalls: variant.scenario.path.startsWith("/dev/gallery/"),
 		})
 		return unhealthy.has(variant.id) && comparison.status !== "missing"
