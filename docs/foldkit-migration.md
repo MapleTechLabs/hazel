@@ -8,6 +8,16 @@ The acceptance test is `packages/ui-parity` (see its README). A screen counts as
 
 ---
 
+## Status (2026-10-07, end of day)
+
+Every legacy route is ported. The last full run before the final polish and a11y merges (`burndown-2`, foldkit vs the pinned legacy, 707 variants) had **0 failures**: 551 identical, 156 pass, every pass at 0 perceptual pixels, and **0 behavioral differences** (RPC and HTTP call logs). After it, a11y-parity cut variants with ARIA snapshot deltas from 454 to 105 (74 of those were gallery entries the old pin lacked; it has since been re-pinned) and final-polish removed the hidden structural deltas inside passes (post-click hover, focus outlines, chat row order, image viewer).
+
+Open before the cutover gate (§7 Phase 7.2):
+- Re-run the full suite with `--strict-a11y` on the merged tree; expected leftovers are 5 chat variants where legacy measures rows before content loads (documented in the final-polish report) and 4 legacy timing quirks in table announcements.
+- onboarding-timezone keeps about 500 strict px from compositor layering of Foldkit's star animation (an opacity-only animation removes it but changes the twinkle).
+- Not ported, no scenario coverage: AddConnection/AddChannelLink modals, set-status pickers, the Rivet token stream for AI messages, link unfurls/tweets/YouTube/GIF content (network), Tauri-specific blocks, carousel (embla Mount).
+- Phase 6 (platform polish) and the manual QA checklist (§5 last item) remain.
+
 ## 1. Starting point
 
 **Legacy app** (`apps/web`, inventoried 2026-10-07):
