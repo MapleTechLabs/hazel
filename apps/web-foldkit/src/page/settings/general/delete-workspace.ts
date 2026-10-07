@@ -36,7 +36,8 @@ export const deleteWorkspaceModal = (h: HtmlBuilder<Message>, model: Model, orga
 					Field.description(h, {}, [
 						"This action ",
 						h.strong([], ["cannot be undone"]),
-						". This will permanently delete the workspace ",
+						". This will permanently delete the workspace",
+						" ",
 						h.strong([], [organization.name]),
 						", all channels, messages, and remove all member access.",
 					]),

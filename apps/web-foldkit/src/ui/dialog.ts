@@ -54,9 +54,16 @@ export const dialogTitle = <Message>(
 	return options.id ? h.h2(attributes, [text]) : h.h3(attributes, [text])
 }
 
-/** `DialogDescription`. */
-export const dialogDescription = <Message>(h: HtmlBuilder<Message>, text: string, className?: string): Html =>
-	h.p([h.Attribute("data-slot", "description"), h.Class(twMerge(dialogDescriptionBase, className))], [text])
+/** `DialogDescription`; pass children for rich text (`<strong>` runs). */
+export const dialogDescription = <Message>(
+	h: HtmlBuilder<Message>,
+	content: string | Children,
+	className?: string,
+): Html =>
+	h.p(
+		[h.Attribute("data-slot", "description"), h.Class(twMerge(dialogDescriptionBase, className))],
+		typeof content === "string" ? [content] : [...content],
+	)
 
 /** `DialogHeader`; `title` and `description` render the title and description like the legacy props. */
 export const dialogHeader = <Message>(
