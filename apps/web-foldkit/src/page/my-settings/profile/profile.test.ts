@@ -5,7 +5,7 @@ import { Command, expectOutMessage, given, message, model, story } from "foldkit
 import { describe, expect, test } from "vitest"
 import type { Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
-import { SaveProfile } from "./command"
+import { ResetAvatar, SaveProfile } from "./command"
 import { dragTo } from "./crop"
 import { errorsOf, isSaveDisabled } from "./form"
 import { Message } from "./message"
@@ -89,6 +89,28 @@ describe("profile form", () => {
 				}),
 			),
 			model((current) => expect(current.cropModal.isOpen).toBe(false)),
+		)
+	})
+})
+
+describe("avatar", () => {
+	test("a reset avatar refreshes the current user, with the success toast", () => {
+		story(
+			pageUpdate,
+			given(initial()),
+			message(Message.ClickedResetAvatar()),
+			model((current) => expect(current.isResetting).toBe(true)),
+			Command.resolve(ResetAvatar, Message.CompletedResetAvatar({ isReset: true })),
+			expectOutMessage(
+				PageOutMessage.RequestedCurrentUserRefresh({
+					toast: {
+						intent: "success",
+						title: "Profile picture reset to account photo",
+						description: null,
+					},
+				}),
+			),
+			model((current) => expect(current.isResetting).toBe(false)),
 		)
 	})
 })

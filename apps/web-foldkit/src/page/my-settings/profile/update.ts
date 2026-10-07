@@ -38,6 +38,10 @@ const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"]
 const toast = (intent: "success" | "error", title: string, description: string | null = null) =>
 	PageOutMessage.RequestedToast({ toast: { intent, title, description } })
 
+/** The avatar changed in Clerk: `refreshCurrentUser()` re-reads `user.me`, then the success toast. */
+const refreshUser = (title: string) =>
+	PageOutMessage.RequestedCurrentUserRefresh({ toast: { intent: "success", title, description: null } })
+
 const merge = (first: Return, second: Return): Return => ({
 	model: second.model,
 	commands: [...(first.commands ?? []), ...(second.commands ?? [])],
@@ -237,7 +241,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		CompletedUploadAvatar: ({ isUploaded }) => ({
 			model: modifyFields(model, { isUploading: () => false }),
 			outMessage: isUploaded
-				? toast("success", "Profile picture updated")
+				? refreshUser("Profile picture updated")
 				: toast("error", "Upload failed", "Failed to update profile picture. Please try again."),
 		}),
 		ClickedResetAvatar: () => ({
@@ -247,7 +251,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		CompletedResetAvatar: ({ isReset }) => ({
 			model: modifyFields(model, { isResetting: () => false }),
 			outMessage: isReset
-				? toast("success", "Profile picture reset to account photo")
+				? refreshUser("Profile picture reset to account photo")
 				: toast("error", "Failed to reset profile picture"),
 		}),
 		GotCropModalMessage: ({ message: child }) => foldCropModal(model, child),

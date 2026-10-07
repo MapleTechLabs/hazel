@@ -152,6 +152,12 @@ const handleOutMessage = (outMessage: PageOutMessage): Step =>
 			(model) =>
 				withCommandPalette(model, CommandPalette.open(model.commandPalette, page, sharedOf(model))),
 		RequestedSignOut: () => (model) => ({ model, commands: [SignOut({})] }),
+		RequestedCurrentUserRefresh:
+			({ toast }) =>
+			(model) => {
+				const toasted = toast === undefined ? { model } : withToasts(model, Toasts.push(model.toasts, toast))
+				return { model: toasted.model, commands: [...(toasted.commands ?? []), FetchCurrentUser({})] }
+			},
 		RequestedMobileSidebar: () => (model) => ({
 			model: modifyFields(model, {
 				shell: (shell) => modifyFields(shell, { isSidebarOpen: () => true }),

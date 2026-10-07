@@ -42,7 +42,8 @@ memoized views and a `sharedChanged` hook. `page/root/` shows a page that only r
 - **Toasts, modals, navigation, palette.** Return an OutMessage from `update`:
   `PageOutMessage.RequestedToast`, `RequestedModal` (one variant per legacy modal, see
   `overlay/modal.ts`), `RequestedNavigation({ href, replace, toast? })`, `RequestedCommandPalette`,
-  `RequestedSignOut` (`page/out-message.ts`). Plain links need nothing: an `<a href>` is followed by the app.
+  `RequestedSignOut`, `RequestedCurrentUserRefresh({ toast? })` (re-runs `user.me`, e.g. after an
+  avatar change) (`page/out-message.ts`). Plain links need nothing: an `<a href>` is followed by the app.
   - A toast with an `id` replaces the toast with the same id (sonner's `id`): give a loading toast an
     id and send the success or error toast with the same id.
   - One `update` returns one OutMessage. Navigation and a toast together: `RequestedNavigation`'s

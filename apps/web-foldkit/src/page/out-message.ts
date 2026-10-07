@@ -12,6 +12,8 @@ export const PageOutMessage = defineMessageUnion({
 	RequestedModal: { modal: ModalRequest },
 	RequestedCommandPalette: { page: CommandPalettePage },
 	RequestedSignOut: {},
+	/** Re-run `user.me` (legacy `useAtomRefresh(userAtom)`), with the toast that goes with it. */
+	RequestedCurrentUserRefresh: { toast: Schema.optionalKey(ToastRequest) },
 	/** The mobile header's menu button: open the sidebar sheet (`setIsOpenOnMobile(true)`). */
 	RequestedMobileSidebar: {},
 })
