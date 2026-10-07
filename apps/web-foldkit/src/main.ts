@@ -339,7 +339,11 @@ export const update = (model: Model, message: Message): Return =>
 		CompletedDeliverNotifications: () => ({ model }),
 		ChangedAuth: ({ auth }) => {
 			const next = modifyFields(model, { auth: () => auth })
-			const fetchUser = auth === "SignedIn" && model.auth !== "SignedIn" ? [FetchCurrentUser({})] : []
+			// Legacy `userAtom` runs wherever `useAuth()` mounts: the join page queries it signed out too.
+			const isUserQueried =
+				(auth === "SignedIn" && model.auth !== "SignedIn") ||
+				(auth === "SignedOut" && model.auth === "Loading" && model.route._tag === "Join")
+			const fetchUser = isUserQueried ? [FetchCurrentUser({})] : []
 			return Update.combine<Model, Message, Resources>(next, [
 				informPage,
 				redirect,
