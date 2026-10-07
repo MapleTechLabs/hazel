@@ -12,12 +12,13 @@ import * as TeamSettings from "./settings/team"
 import * as SettingsConnectInvites from "./settings/connect-invites"
 import * as SettingsDebug from "./settings/debug"
 import * as SettingsGeneral from "./settings/general"
+import * as SettingsInvitations from "./settings/invitations"
 
 /**
  * Every routed page, registered once. Adding a page: import its module and append `X.page` below.
  * Routes without a page render their layout around an empty placeholder (see README.md).
  */
-export const pages = [Root.page, TeamSettings.page, ChatChannel.page, SettingsGeneral.page, SettingsDebug.page, SettingsConnectInvites.page]
+export const pages = [Root.page, TeamSettings.page, ChatChannel.page, SettingsGeneral.page, SettingsDebug.page, SettingsConnectInvites.page, SettingsInvitations.page]
 
 export const PageSlot = Schema.Union(pages.map((page) => page.Slot))
 export type PageSlot = typeof PageSlot.Type
