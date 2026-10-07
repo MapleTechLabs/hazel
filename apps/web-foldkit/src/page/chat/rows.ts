@@ -145,6 +145,26 @@ export const shareMessages = (
 	})
 }
 
+/** Applies a change set: rows in `order`, upserts replacing, everything else kept by reference. */
+export const applyMessageChanges = (
+	previous: ReadonlyArray<ChatMessage>,
+	order: ReadonlyArray<MessageId>,
+	upserts: ReadonlyArray<ChatMessage>,
+): ReadonlyArray<ChatMessage> => {
+	const byId = new Map(previous.map((message) => [message.id, message]))
+	for (const message of upserts) {
+		const old = byId.get(message.id)
+		byId.set(message.id, old !== undefined && deepEqual(old, message) ? old : message)
+	}
+	const next = order.flatMap((id) => {
+		const message = byId.get(id)
+		return message === undefined ? [] : [message]
+	})
+	return next.length === previous.length && next.every((message, index) => message === previous[index])
+		? previous
+		: next
+}
+
 /** Keys of the date dividers, reusing the previous array when they did not change. */
 export const shareStickyKeys = (previous: ReadonlyArray<string>, rows: ReadonlyArray<DisplayRow>) => {
 	const next = rows.flatMap((row) => (row._tag === "DateHeader" ? [row.key] : []))

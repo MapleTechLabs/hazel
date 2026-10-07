@@ -1,5 +1,5 @@
 import { Effect, Match, Queue, Schema, Stream } from "effect"
-import { Command, Mount } from "foldkit"
+import { Command, File, Mount } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
 import type { EditorEvent } from "../editor/editor-view"
 import {
@@ -31,6 +31,43 @@ export const MentionMember = Schema.Struct({
 })
 export type MentionMember = typeof MentionMember.Type
 
+export const MentionableBot = Schema.Struct({
+	userId: Schema.String,
+	name: Schema.String,
+	description: Schema.NullOr(Schema.String),
+	avatarUrl: Schema.NullOr(Schema.String),
+})
+export type MentionableBot = typeof MentionableBot.Type
+
+/** Legacy `BotCommandData` (provider is always "bot"). */
+export const BotCommand = Schema.Struct({
+	id: Schema.String,
+	name: Schema.String,
+	description: Schema.String,
+	bot: Schema.Struct({ id: Schema.String, name: Schema.String, avatarUrl: Schema.NullOr(Schema.String) }),
+	arguments: Schema.Array(
+		Schema.Struct({
+			name: Schema.String,
+			description: Schema.NullOr(Schema.String),
+			required: Schema.Boolean,
+			placeholder: Schema.NullOr(Schema.String),
+			type: Schema.String,
+		}),
+	),
+})
+export type BotCommand = typeof BotCommand.Type
+
+export const ComposerEmoji = Schema.Struct({ name: Schema.String, imageUrl: Schema.String })
+export type ComposerEmoji = typeof ComposerEmoji.Type
+
+/** Legacy `CommandInputState` while a slash command collects its arguments. */
+export const CommandInput = Schema.Struct({
+	command: BotCommand,
+	values: Schema.Record(Schema.String, Schema.String),
+	focusedFieldIndex: Schema.Number,
+})
+export type CommandInput = typeof CommandInput.Type
+
 export const TriggerId = Schema.Literals(["mention", "command", "emoji"])
 
 export const AutocompleteQuery = Schema.Struct({ trigger: TriggerId, search: Schema.String })
@@ -45,6 +82,10 @@ export const Model = Schema.Struct({
 	activeIndex: Schema.Number,
 	members: Schema.Array(MentionMember),
 	presence: Schema.Array(Schema.Struct({ userId: Schema.String, status: PresenceStatus })),
+	mentionableBots: Schema.Array(MentionableBot),
+	botCommands: Schema.Array(BotCommand),
+	customEmojis: Schema.Array(ComposerEmoji),
+	commandInput: Schema.NullOr(CommandInput),
 })
 export type Model = typeof Model.Type
 
@@ -57,6 +98,10 @@ export const init = (editorId: string, placeholder = "Type a message..."): Model
 	activeIndex: 0,
 	members: [],
 	presence: [],
+	mentionableBots: [],
+	botCommands: [],
+	customEmojis: [],
+	commandInput: null,
 })
 
 // MESSAGE
@@ -70,6 +115,7 @@ export const Message = defineMessageUnion({
 	SubmittedDraft: { markdown: Schema.String },
 	PressedEscape: {},
 	PressedArrowUpInEmpty: {},
+	PastedFiles: { files: Schema.Array(File.File) },
 	HoveredAutocompleteOption: { index: Schema.Number },
 	ClickedAutocompleteOption: { index: Schema.Number },
 	UpdatedMentionMembers: { members: Schema.Array(MentionMember) },
@@ -78,6 +124,22 @@ export const Message = defineMessageUnion({
 	CompletedSyncAutocompleteOptions: {},
 	CompletedCloseAutocomplete: {},
 	CompletedKeepEditorFocus: {},
+	CompletedSetEditorContent: {},
+	CompletedClearEditor: {},
+	CompletedFocusEditor: {},
+	CompletedInsertEditorText: {},
+	CompletedInsertCustomEmoji: {},
+	UpdatedMentionableBots: { bots: Schema.Array(MentionableBot) },
+	UpdatedBotCommands: { commands: Schema.Array(BotCommand) },
+	UpdatedCustomEmojis: { emojis: Schema.Array(ComposerEmoji) },
+	CompletedInsertEmoji: {},
+	CompletedRemoveTriggerText: {},
+	UpdatedCommandValue: { argName: Schema.String, value: Schema.String },
+	FocusedCommandField: { index: Schema.Number },
+	PressedCommandFieldKey: { index: Schema.Number, key: Schema.String, shiftKey: Schema.Boolean },
+	ClickedExecuteCommand: {},
+	ClickedCancelCommand: {},
+	CompletedFocusCommandField: {},
 })
 export type Message = typeof Message.Type
 
@@ -89,6 +151,7 @@ type EditorMessage =
 	| typeof Message.SubmittedDraft.Type
 	| typeof Message.PressedEscape.Type
 	| typeof Message.PressedArrowUpInEmpty.Type
+	| typeof Message.PastedFiles.Type
 
 const eventToMessage = (event: EditorEvent): EditorMessage =>
 	Match.value(event).pipe(
@@ -99,6 +162,7 @@ const eventToMessage = (event: EditorEvent): EditorMessage =>
 			Submitted: ({ markdown }) => Message.SubmittedDraft({ markdown }),
 			PressedEscape: () => Message.PressedEscape(),
 			PressedArrowUpInEmpty: () => Message.PressedArrowUpInEmpty(),
+			PastedFiles: ({ files }) => Message.PastedFiles({ files }),
 		}),
 	)
 
@@ -114,6 +178,7 @@ export const MountEditor = Mount.defineStream("MountEditor", {
 		Message.SubmittedDraft,
 		Message.PressedEscape,
 		Message.PressedArrowUpInEmpty,
+		Message.PastedFiles,
 	],
 	execute: ({ element, editorId, placeholder, viewStateChanges }) =>
 		Stream.callback<EditorMessage>((queue) =>
@@ -175,7 +240,7 @@ export const KeepEditorFocus = Mount.define("KeepEditorFocus", {
 
 // COMMAND
 
-const withEditor = (editorId: string, f: (view: NonNullable<ReturnType<typeof editorById>>) => void) =>
+export const withEditor = (editorId: string, f: (view: NonNullable<ReturnType<typeof editorById>>) => void) =>
 	Effect.sync(() => {
 		const view = editorById(editorId)
 		if (view) f(view)

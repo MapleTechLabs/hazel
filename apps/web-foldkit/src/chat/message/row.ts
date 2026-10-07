@@ -17,6 +17,8 @@ export interface RowContext<M> {
 	readonly tooltip: TooltipContext<M>
 	readonly toOpenImage: (messageId: MessageId, index: number) => M
 	readonly toOpenThread: (threadChannelId: ChannelId, messageId: MessageId) => M
+	/** A reaction pill's press: toggle that emoji (legacy `handleReaction`). */
+	readonly toReact: (messageId: MessageId, emoji: string) => M
 	/** The row's ContextMenuTrigger: `render` with no extra attributes, or inside the open menu. */
 	readonly contextMenu: (
 		row: MessageRow,
@@ -159,6 +161,7 @@ export const messageRowView = <M>(h: HtmlBuilder<M>, row: MessageRow, context: R
 															message.id,
 															reaction,
 															context.tooltip,
+															context.toReact(message.id, reaction.emoji),
 														),
 													),
 												),

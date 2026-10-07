@@ -1,7 +1,9 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
+import * as EmojiDialog from "../../emoji-picker/dialog"
+import { pickerView } from "../../emoji-picker/view"
+import { controlledModal } from "../../ui/modal"
 import { Mount } from "foldkit"
-import { cn } from "~/lib/utils"
-import { IconClose, IconDotsVertical, IconStar, IconThread, IconWarning } from "../../icons"
+import { IconDotsVertical, IconStar, IconThread } from "../../icons"
 import {
 	HoverEvent,
 	PlaceMessageToolbar,
@@ -9,12 +11,8 @@ import {
 	TrackMessageHover,
 	toolbarContent,
 } from "../../chat/message/toolbar"
-import { button } from "../../ui/button"
-import { dialogDescription, dialogFooter, dialogHeader, dialogTitle } from "../../ui/dialog"
 import { menuLabel, menuTriggerClassName, view as menuView } from "../../ui/menu-view"
-import * as Modal from "../../ui/modal"
 import * as Toolbar from "../../ui/toolbar"
-import { identityOf, toDeriveContext } from "./derive"
 import * as Overlays from "./overlays"
 import { factsOf, Message, type Model } from "./channel/page"
 
@@ -44,11 +42,7 @@ export const trackHoverAttribute = <M>(h: HtmlBuilder<M>, toParentMessage: ToPar
 	)
 
 /** `MessageToolbar` in its body portal, for the hovered message. */
-export const messageToolbarOverlay = <M>(
-	h: HtmlBuilder<M>,
-	model: Model,
-	toParentMessage: ToParent<M>,
-): Html => {
+export const messageToolbarOverlay = <M>(h: HtmlBuilder<M>, model: Model, toParentMessage: ToParent<M>): Html => {
 	const overlays = model.overlays
 	const messageId = overlays.hoveredMessageId
 	const row = messageId === null ? undefined : model.rows.find((candidate) => candidate.key === messageId)
@@ -122,8 +116,24 @@ export const messageToolbarOverlay = <M>(
 									hoveredKey: overlays.hoveredTriggerKey,
 									toTooltipMessage: (tooltip) =>
 										toOverlay(Overlays.Message.GotTooltipMessage({ tooltip })),
+									onReact: (emoji) => toOverlay(Overlays.Message.ClickedReaction({ messageId, emoji })),
+									onCopy: toOverlay(Overlays.Message.ClickedCopy({ messageId })),
+									onEdit: toOverlay(Overlays.Message.ClickedEdit({ messageId })),
 									onReply: toOverlay(Overlays.Message.ClickedReply({ messageId })),
 									onDelete: toOverlay(Overlays.Message.ClickedDelete({ messageId })),
+									addReaction: (render) =>
+										EmojiDialog.view(
+											h,
+											overlays.reactionPicker?.messageId === messageId
+												? overlays.reactionPicker.dialog
+												: EmojiDialog.init(`reaction-picker-${messageId}`),
+											{
+												toMessage: (message) =>
+													toOverlay(Overlays.Message.GotReactionPickerMessage({ messageId, message })),
+												toTrigger: render,
+												customEmojis: model.lookups.customEmojis,
+											},
+										),
 									moreActions,
 								}),
 						},
@@ -136,109 +146,22 @@ export const messageToolbarOverlay = <M>(
 	)
 }
 
-/** `DeleteMessageModal` (opened from the toolbar or the context menu). */
-export const deleteMessageModal = <M>(
-	h: HtmlBuilder<M>,
-	model: Model,
-	toParentMessage: ToParent<M>,
-): Html => {
-	const modal = model.overlays.deleteModal
-	if (!modal.isOpen) return h.empty
-	return h.submodel({
-		slotId: "delete-message-modal",
-		model: modal,
-		view: Modal.view,
-		viewInputs: {
-			toTrigger: (_attributes, overlay) => overlay,
-			size: "md",
-			toContent: (closeAttributes) => [
-				dialogHeader(h, {}, [
-					h.div(
-						[
-							h.Class(
-								"flex size-12 items-center justify-center rounded-lg border border-danger/10 bg-danger/5",
-							),
-						],
-						[IconWarning(h, { className: "size-6 text-danger" })],
-					),
-					dialogTitle(h, { id: Modal.titleId(modal.id) }, "Delete message"),
-					dialogDescription(
-						h,
-						"Are you sure you want to delete this message? This action cannot be undone.",
-					),
-				]),
-				dialogFooter(h, [
-					button(h, { intent: "outline", attributes: [...closeAttributes] }, ["Cancel"]),
-					button(h, { intent: "danger", attributes: [...closeAttributes] }, ["Delete message"]),
-				]),
-			],
-		},
-		toParentMessage: (message) =>
-			toOverlays(toParentMessage)(Overlays.Message.GotDeleteModalMessage({ message })),
+/** The context menu's emoji picker modal (`ModalContent size="xs"` around the picker). */
+export const reactionModalView = <M>(h: HtmlBuilder<M>, model: Model, toParentMessage: ToParent<M>): Html => {
+	const current = model.overlays.reactionModal
+	if (current === null) return h.empty
+	const toOverlay = toOverlays(toParentMessage)
+	return controlledModal(h, {
+		model: current.modal,
+		toParentMessage: (message) => toOverlay(Overlays.Message.GotReactionModalMessage({ message })),
+		size: "xs",
+		closeButton: false,
+		className: "overflow-hidden p-0!",
+		toContent: () => [
+			pickerView(h, current.picker, {
+				toMessage: (message) => toOverlay(Overlays.Message.GotReactionModalPickerMessage({ message })),
+				className: "h-[420px]",
+			}),
+		],
 	})
 }
-
-/** What `ReplyIndicator` shows: the replied-to author and first line. */
-export interface ReplyPreview {
-	readonly authorName: string
-	readonly firstLine: string
-}
-
-let lastReply: ReplyPreview | null = null
-
-/** The reply being composed, reusing the previous object while it shows the same text. */
-export const replyPreviewOf = (model: Model): ReplyPreview | null => {
-	const replyTo = model.overlays.replyToMessageId
-	const message =
-		replyTo === null ? undefined : model.messages.find((candidate) => candidate.id === replyTo)
-	if (message === undefined) return (lastReply = null)
-	const author = identityOf(
-		toDeriveContext(model.lookups, model.currentUserId ?? undefined),
-		message.authorId,
-	)
-	const next = { authorName: author?.displayName ?? "", firstLine: message.content.split("\n")[0] ?? "" }
-	if (
-		lastReply !== null &&
-		lastReply.authorName === next.authorName &&
-		lastReply.firstLine === next.firstLine
-	)
-		return lastReply
-	return (lastReply = next)
-}
-
-/** `ReplyIndicator` above the composer while replying. */
-export const replyIndicatorView = <M>(
-	h: HtmlBuilder<M>,
-	reply: ReplyPreview,
-	toParentMessage: ToParent<M>,
-): Html =>
-	h.div(
-		[
-			h.Class(
-				cn(
-					"flex items-center justify-between gap-2 rounded-t-lg border border-border border-b-0 bg-secondary px-3 py-2",
-				),
-			),
-		],
-		[
-			h.div(
-				[h.Class("flex items-center gap-2 text-sm")],
-				[
-					h.span([h.Class("text-muted-fg")], ["Replying to"]),
-					h.span([h.Class("font-semibold text-fg")], [reply.authorName]),
-					h.span([h.Class("max-w-xs truncate text-muted-fg")], [reply.firstLine]),
-				],
-			),
-			button(
-				h,
-				{
-					size: "sq-xs",
-					intent: "plain",
-					className: "!p-1",
-					onPress: toOverlays(toParentMessage)(Overlays.Message.ClickedCancelReply()),
-					attributes: [h.Attribute("aria-label", "Cancel reply")],
-				},
-				[IconClose(h, { className: "size-3.5", attributes: { "data-slot": "icon" } })],
-			),
-		],
-	)

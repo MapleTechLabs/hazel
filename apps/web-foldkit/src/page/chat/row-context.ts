@@ -33,7 +33,7 @@ const overlaysMessage = <M>(toParentMessage: ToParent<M>, message: Overlays.Mess
 	toParentMessage(Message.GotOverlaysMessage({ message }))
 
 /** `ContextMenuHeader` with the quick reactions row. */
-const contextMenuHeader = <M>(h: HtmlBuilder<M>): Html =>
+const contextMenuHeader = <M>(h: HtmlBuilder<M>, toReact: (emoji: string) => M): Html =>
 	h.header(
 		[h.Class(twMerge(menuHeaderBase, false, "flex items-center gap-1 px-1 py-1"))],
 		TOP_EMOJIS.map((emoji) =>
@@ -43,6 +43,7 @@ const contextMenuHeader = <M>(h: HtmlBuilder<M>): Html =>
 					size: "sq-md",
 					intent: "plain",
 					className: "p-1! text-lg hover:bg-secondary",
+					onPress: toReact(emoji),
 					attributes: [h.Attribute("aria-label", `React with ${emoji}`)],
 				},
 				[emoji],
@@ -100,6 +101,8 @@ const buildContext = <M>(
 		},
 		toOpenImage: (messageId, index) =>
 			overlaysMessage(toParentMessage, Overlays.Message.ClickedAttachmentImage({ messageId, index })),
+		toReact: (messageId, emoji) =>
+			overlaysMessage(toParentMessage, Overlays.Message.ClickedReaction({ messageId, emoji })),
 		toOpenThread: (threadChannelId, messageId) =>
 			overlaysMessage(
 				toParentMessage,
@@ -116,7 +119,10 @@ const buildContext = <M>(
 					toTrigger: render,
 					content: contextMenuContent(h, factsOf(model).isPinned(row.message.id)),
 					className: "min-w-56",
-					header: contextMenuHeader(h),
+					header: () =>
+						contextMenuHeader(h, (emoji) =>
+							overlaysMessage(toParentMessage, Overlays.Message.ClickedReaction({ messageId: row.message.id, emoji })),
+						),
 				},
 				toParentMessage: (message) =>
 					overlaysMessage(toParentMessage, Overlays.Message.GotContextMenuMessage({ message })),

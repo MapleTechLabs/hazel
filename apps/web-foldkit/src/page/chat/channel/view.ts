@@ -5,20 +5,15 @@ import { imageViewerView } from "../../../chat/image-viewer"
 import { dateDividerView, messageRowView, type RowContext } from "../../../chat/message/row"
 import * as MessageList from "../../../mount/message-list"
 import { joinBannerView, typingIndicatorView, typingUsersOf } from "../banners"
-import { composerPlaceholderView } from "../composer-placeholder"
 import { authorIdentity, toDeriveContext } from "../derive"
 import * as FilesView from "../files/view"
 import { mobileMenuButton } from "../../../shell/mobile"
 import { chatHeaderView } from "../header"
 import { pinnedPopoverView } from "../pinned"
-import {
-	deleteMessageModal,
-	messageToolbarOverlay,
-	type ReplyPreview,
-	replyIndicatorView,
-	replyPreviewOf,
-	trackHoverAttribute,
-} from "../overlay-views"
+import { messageToolbarOverlay, reactionModalView, trackHoverAttribute } from "../overlay-views"
+import { attachmentInfoFrom, composerAreaView, replyPreviewOf } from "../composer-view"
+import type * as Draft from "../../../composer/draft"
+import { draftView, type ReplyPreview } from "../../../composer/draft-view"
 import * as Overlays from "../overlays"
 import { isMemberOf, Message, type Model } from "./page"
 import { idleRowContext, rowContextFor } from "../row-context"
@@ -162,32 +157,51 @@ const messagesOutlet = <M>(h: HtmlBuilder<M>, model: Model, toParentMessage: (me
 		),
 		lazyComposer(composerView, [
 			typingUsers.length === 0 ? null : typingUsers.map((user) => user.firstName).join(),
-			replyPreviewOf(model),
+			model.draft,
+			replyPreviewOf(model, model.draft),
+			model.lookups.attachments,
 			toParentMessage,
 			h,
 		]) ?? h.empty,
 		imageViewerOverlay(h, model, toParentMessage),
 		messageToolbarOverlay(h, model, toParentMessage),
-		deleteMessageModal(h, model, toParentMessage),
+		reactionModalView(h, model, toParentMessage),
 	]
 }
 
 const composerView = <M>(
 	typingKey: string | null,
+	draft: Draft.Model,
 	reply: ReplyPreview | null,
+	attachments: Model["lookups"]["attachments"],
 	toParentMessage: (message: Message) => M,
 	h: HtmlBuilder<M>,
 ) =>
-	composerPlaceholderView(
+	composerAreaView(
 		h,
-		reply === null ? null : replyIndicatorView(h, reply, toParentMessage),
 		typingKey === null
 			? null
 			: typingIndicatorView(
 					h,
 					typingKey.split(",").map((firstName) => ({ firstName })),
 				),
+		draft,
+		{
+			toMessage: toDraftMessage(toParentMessage),
+			replyPreview: reply,
+			attachmentInfo: attachmentInfoFrom(attachments),
+		},
 	)
+
+/** One mapping function per parent mapping, so the composer's lazy arguments stay equal. */
+const draftMappers = new WeakMap<object, (message: Draft.Message) => unknown>()
+const toDraftMessage = <M>(toParentMessage: (message: Message) => M): ((message: Draft.Message) => M) => {
+	const cached = draftMappers.get(toParentMessage)
+	if (cached) return cached as (message: Draft.Message) => M
+	const mapper = (message: Draft.Message) => toParentMessage(Message.GotDraftMessage({ message }))
+	draftMappers.set(toParentMessage, mapper)
+	return mapper
+}
 
 const headerView = <M>(
 	channel: Model["channel"],
@@ -198,6 +212,7 @@ const headerView = <M>(
 	currentUserId: Model["currentUserId"],
 	pinnedPopover: Model["overlays"]["pinned"],
 	pins: Model["pinned"],
+	isMobile: boolean,
 	toParentMessage: (message: Message) => M,
 	h: HtmlBuilder<M>,
 ): Html => {
@@ -216,11 +231,14 @@ const headerView = <M>(
 			return user ? [authorIdentity(user, botNames.get(member.userId))] : []
 		}),
 		isHiddenDm: currentMember?.isHidden ?? false,
+		// Legacy renders the menu button only on mobile (`isMobile` in `ChatHeader`).
 		mobileMenu: (className) =>
-			mobileMenuButton(h, {
-				onPress: h.OnClick(toParentMessage(Message.ClickedMobileMenu())),
-				...(className === undefined ? {} : { className }),
-			}),
+			isMobile
+				? mobileMenuButton(h, {
+						onPress: h.OnClick(toParentMessage(Message.ClickedMobileMenu())),
+						...(className === undefined ? {} : { className }),
+					})
+				: h.empty,
 		pinnedTrigger: pinnedPopoverView(h, pinnedPopover, pins, (message) =>
 			toParentMessage(
 				Message.GotOverlaysMessage({ message: Overlays.Message.GotPinnedMessage({ message }) }),
@@ -235,7 +253,12 @@ const lazyTabBar = createLazy()
 const lazyComposer = createLazy()
 
 /** `SplitPanelRoot` > `SplitPanelContent` with the channel's current tab inside. */
-export const view = <M>(h: HtmlBuilder<M>, model: Model, toParentMessage: (message: Message) => M): Html =>
+export const view = <M>(
+	h: HtmlBuilder<M>,
+	model: Model,
+	toParentMessage: (message: Message) => M,
+	isMobile = false,
+): Html =>
 	h.div(
 		[h.Class(rootStyles({ className: "h-[calc(100dvh-4rem)] md:h-dvh" }))],
 		[
@@ -251,6 +274,7 @@ export const view = <M>(h: HtmlBuilder<M>, model: Model, toParentMessage: (messa
 						model.currentUserId,
 						model.overlays.pinned,
 						model.pinned,
+						isMobile,
 						toParentMessage,
 						h,
 					]) ?? h.empty,
@@ -284,5 +308,17 @@ const threadPanelOverlay = <M>(
 		context: toDeriveContext(model.lookups, model.currentUserId ?? undefined),
 		rowContext: idleRowContext(h, model, toParentMessage),
 		onClose: toParentMessage(Message.GotOverlaysMessage({ message: Overlays.Message.ClosedThread() })),
+		onGenerateName: toParentMessage(Message.ClickedGenerateThreadName()),
+		onRename: toParentMessage(Message.ClickedRenameThread()),
+		isGeneratingName: model.isGeneratingThreadName,
+		isCreating: model.pendingThreadChannelId === thread.threadChannelId,
+		composer:
+			model.threadDraft === null
+				? h.empty
+				: draftView(h, model.threadDraft, {
+						toMessage: (message) => toParentMessage(Message.GotThreadDraftMessage({ message })),
+						replyPreview: replyPreviewOf(model, model.threadDraft),
+						attachmentInfo: attachmentInfoFrom(model.lookups.attachments),
+					}),
 	})
 }

@@ -21,6 +21,7 @@ export type BehaviorEvent =
 	| { readonly _tag: "PressedAutocompleteKey"; readonly key: AutocompleteKey }
 	| { readonly _tag: "PressedEscape" }
 	| { readonly _tag: "PressedArrowUpInEmpty" }
+	| { readonly _tag: "PastedFiles"; readonly files: ReadonlyArray<File> }
 
 const currentBlock = (state: EditorState) => {
 	const { $from } = state.selection
@@ -86,6 +87,35 @@ const isAtStart = (state: EditorState) => state.selection.empty && state.selecti
 const isAtEnd = (state: EditorState) =>
 	state.selection.empty && state.selection.$from.parentOffset === state.selection.$from.parent.content.size
 
+/** `withFilePaste`'s accepted types (`ACCEPTED_FILE_TYPES`). */
+const ACCEPTED_FILE_TYPES = [
+	"image/*",
+	"video/*",
+	"audio/*",
+	"application/pdf",
+	"application/msword",
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+	"application/vnd.ms-excel",
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+	"text/plain",
+	"text/csv",
+]
+
+const isFileTypeAccepted = (type: string) =>
+	ACCEPTED_FILE_TYPES.some((accepted) =>
+		accepted.endsWith("/*") ? type.startsWith(accepted.slice(0, -1)) : type === accepted,
+	)
+
+/** `withFilePaste`: copied files first, else image items (screenshots). */
+const pastedFiles = (data: DataTransfer): ReadonlyArray<File> => {
+	const files = Array.from(data.files).filter((file) => isFileTypeAccepted(file.type))
+	if (files.length > 0) return files
+	return Array.from(data.items).flatMap((item) => {
+		const file = item.kind === "file" && isFileTypeAccepted(item.type) ? item.getAsFile() : null
+		return file ? [file] : []
+	})
+}
+
 const AUTOCOMPLETE_KEYS: ReadonlyArray<string> = ["ArrowDown", "ArrowUp", "Enter", "Tab", "Escape"]
 
 export const behaviorPlugin = (emit: (event: BehaviorEvent) => void, isUploading: () => boolean) => {
@@ -97,10 +127,8 @@ export const behaviorPlugin = (emit: (event: BehaviorEvent) => void, isUploading
 			tr = withDetectedLanguage(tr, node, offset)
 		})
 		if (tr.docChanged) view.dispatch(tr)
-		const blocks = blocksOf(view.state.doc)
-		const markdown = serializeToMarkdown(blocks).trim()
-		if (!markdown && isValueEmpty(blocks)) return
-		emit({ _tag: "Submitted", markdown })
+		// The host decides about empty drafts: legacy allows them when attachments are pending.
+		emit({ _tag: "Submitted", markdown: serializeToMarkdown(blocksOf(view.state.doc)).trim() })
 	}
 
 	const handleKeyDown = (view: EditorView, event: KeyboardEvent): boolean => {
@@ -208,6 +236,11 @@ export const behaviorPlugin = (emit: (event: BehaviorEvent) => void, isUploading
 			handleTextInput,
 			// Legacy pastes plain text: inside code blocks verbatim, elsewhere one block per line.
 			handlePaste: (view, event) => {
+				const files = event.clipboardData ? pastedFiles(event.clipboardData) : []
+				if (files.length > 0) {
+					emit({ _tag: "PastedFiles", files })
+					return true
+				}
 				const text = event.clipboardData?.getData("text/plain")
 				if (!text) return false
 				const lines = text.replace(/\r\n?/g, "\n").split("\n")

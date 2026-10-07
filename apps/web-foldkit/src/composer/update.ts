@@ -1,81 +1,70 @@
 import { Match } from "effect"
 import type { Update } from "foldkit"
-import { CloseAutocomplete, InsertMention, Message, type Model, type PresenceStatus, SyncAutocompleteOptions } from "./composer"
+import { CloseAutocomplete, InsertMention, Message, type Model, SyncAutocompleteOptions } from "./composer"
+import { FocusCommandField, FocusEditor, InsertEmoji, RemoveTriggerText } from "./editor-commands"
+import { clampedActiveIndex, commandOptions, emojiOptions, mentionOptions, optionCount } from "./options"
 
-/** One row of the mention popover (legacy `AutocompleteOption<MentionData>`). */
-export interface MentionOption {
-	readonly id: string
-	readonly label: string
-	readonly description: string | null
-	readonly type: "user" | "channel" | "here"
-	readonly displayName: string
-	readonly avatarUrl: string | null
-	readonly status: PresenceStatus | null
-}
+/** The composer's own update: the autocomplete listbox, trigger selection and command input fields. */
 
-/** Legacy `useMentionOptions`: @channel and @here first, then channel members, filtered by search. */
-export const mentionOptions = (model: Model): ReadonlyArray<MentionOption> => {
-	if (model.autocomplete?.trigger !== "mention") return []
-	const search = model.autocomplete.search.toLowerCase()
-	const special: Array<MentionOption> = [
-		{ id: "channel", label: "@channel", description: "Notify all members in this channel" },
-		{ id: "here", label: "@here", description: "Notify all online members" },
-	]
-		.filter(({ id }) => id.includes(search))
-		.map(({ id, label, description }) => ({
-			id,
-			label,
-			description,
-			type: id === "channel" ? "channel" : "here",
-			displayName: id,
-			avatarUrl: null,
-			status: null,
-		}))
-	// Mentionable bots come next in legacy; the bot collections are not bridged yet (Phase 4).
-	const statusOf = new Map(model.presence.map((row) => [row.userId, row.status]))
-	const members = model.members.flatMap((member): Array<MentionOption> => {
-		const displayName = `${member.firstName} ${member.lastName}`
-		if (!displayName.toLowerCase().includes(search)) return []
-		return [
-			{
-				id: member.userId,
-				label: displayName,
-				description: null,
-				type: "user",
-				displayName,
-				avatarUrl: member.avatarUrl,
-				status: statusOf.get(member.userId) ?? "offline",
-			},
-		]
-	})
-	return [...special, ...members]
-}
-
-/** Legacy `useSlateAutocomplete` clamps the index to the current list. */
-export const clampedActiveIndex = (model: Model) => {
-	const count = mentionOptions(model).length
-	return count > 0 ? Math.min(model.activeIndex, count - 1) : 0
-}
+export { clampedActiveIndex, mentionOptions, type MentionOption } from "./options"
 
 type Return = Update.Return<Model, Message>
 
-const optionCountOf = (model: Model) =>
-	model.autocomplete === null ? 0 : model.autocomplete.trigger === "mention" ? mentionOptions(model).length : 0
-
 /** Keep the editor's key capture in step with what the popover shows. */
 const withOptionSync = (previous: Model, model: Model): Return =>
-	optionCountOf(previous) === optionCountOf(model)
+	optionCount(previous) === optionCount(model)
 		? { model }
-		: { model, commands: [SyncAutocompleteOptions({ editorId: model.editorId, optionCount: optionCountOf(model) })] }
+		: { model, commands: [SyncAutocompleteOptions({ editorId: model.editorId, optionCount: optionCount(model) })] }
 
+/** Legacy `handleSelectByIndex`, routed by trigger. */
 const select = (model: Model, index: number): Return => {
-	const option = mentionOptions(model)[index]
-	if (!option) return { model }
-	return {
-		model: { ...model, activeIndex: 0 },
-		commands: [InsertMention({ editorId: model.editorId, userId: option.id, displayName: option.displayName })],
+	const editorId = model.editorId
+	const reset = { ...model, activeIndex: 0 }
+	const trigger = model.autocomplete?.trigger
+	if (trigger === "mention") {
+		const option = mentionOptions(model)[index]
+		return option
+			? { model: reset, commands: [InsertMention({ editorId, userId: option.id, displayName: option.displayName })] }
+			: { model }
 	}
+	if (trigger === "command") {
+		const option = commandOptions(model)[index]
+		// Command input mode (Discord-style): the `/query` text goes, the argument panel opens.
+		return option
+			? {
+					model: { ...reset, commandInput: { command: option.command, values: {}, focusedFieldIndex: 0 } },
+					commands: [RemoveTriggerText({ editorId }), FocusCommandField({ editorId, index: 0 })],
+				}
+			: { model }
+	}
+	const option = emojiOptions(model)[index]
+	return option
+		? {
+				model: reset,
+				commands: [
+					InsertEmoji({
+						editorId,
+						emoji: option.emoji,
+						custom: option.imageUrl === null ? null : { name: option.name, imageUrl: option.imageUrl },
+					}),
+				],
+			}
+		: { model }
 }
+
+const focusField = (model: Model, index: number): Return =>
+	model.commandInput === null
+		? { model }
+		: {
+				model: { ...model, commandInput: { ...model.commandInput, focusedFieldIndex: index } },
+				commands: [FocusCommandField({ editorId: model.editorId, index })],
+			}
+
+/** `handleCommandCancel`: leave input mode and focus the editor. */
+export const cancelCommand = (model: Model): Return => ({
+	model: { ...model, commandInput: null },
+	commands: [FocusEditor({ editorId: model.editorId })],
+})
 
 export const update = (model: Model, message: Message): Return =>
 	Message.match<Return>(message, {
@@ -83,7 +72,7 @@ export const update = (model: Model, message: Message): Return =>
 		ChangedAutocomplete: ({ autocomplete }) =>
 			withOptionSync(model, { ...model, autocomplete, activeIndex: autocomplete === null ? 0 : model.activeIndex }),
 		PressedAutocompleteKey: ({ key }) => {
-			const count = mentionOptions(model).length
+			const count = optionCount(model)
 			const index = clampedActiveIndex(model)
 			return Match.value(key).pipe(
 				Match.when("ArrowDown", (): Return => ({ model: { ...model, activeIndex: index >= count - 1 ? 0 : index + 1 } })),
@@ -97,12 +86,46 @@ export const update = (model: Model, message: Message): Return =>
 		ClickedAutocompleteOption: ({ index }) => select(model, index),
 		UpdatedMentionMembers: ({ members }) => withOptionSync(model, { ...model, members }),
 		UpdatedPresence: ({ presence }) => ({ model: { ...model, presence } }),
-		// Phase 4: send, edit-last-message and cancel-edit.
+		UpdatedMentionableBots: ({ bots }) => withOptionSync(model, { ...model, mentionableBots: bots }),
+		UpdatedBotCommands: ({ commands }) => withOptionSync(model, { ...model, botCommands: commands }),
+		UpdatedCustomEmojis: ({ emojis }) => withOptionSync(model, { ...model, customEmojis: emojis }),
+		UpdatedCommandValue: ({ argName, value }) =>
+			model.commandInput === null
+				? { model }
+				: {
+						model: {
+							...model,
+							commandInput: { ...model.commandInput, values: { ...model.commandInput.values, [argName]: value } },
+						},
+					},
+		FocusedCommandField: ({ index }) =>
+			model.commandInput === null
+				? { model }
+				: { model: { ...model, commandInput: { ...model.commandInput, focusedFieldIndex: index } } },
+		// `CommandInputPanel.handleKeyDown`: Tab moves between fields; Enter and Escape reach the draft.
+		PressedCommandFieldKey: ({ index, key, shiftKey }) => {
+			const last = (model.commandInput?.command.arguments.length ?? 1) - 1
+			if (key === "Tab") return focusField(model, shiftKey ? Math.max(0, index - 1) : Math.min(last, index + 1))
+			return key === "Escape" ? cancelCommand(model) : { model }
+		},
+		// The draft executes (it knows the organization and channel).
+		ClickedExecuteCommand: () => ({ model }),
+		ClickedCancelCommand: () => cancelCommand(model),
+		// The draft (`draft-update.ts`) acts on these; a bare composer (the gallery) ignores them.
 		SubmittedDraft: () => ({ model }),
 		PressedEscape: () => ({ model }),
 		PressedArrowUpInEmpty: () => ({ model }),
+		PastedFiles: () => ({ model }),
 		CompletedInsertMention: () => ({ model }),
 		CompletedSyncAutocompleteOptions: () => ({ model }),
 		CompletedCloseAutocomplete: () => ({ model }),
 		CompletedKeepEditorFocus: () => ({ model }),
+		CompletedSetEditorContent: () => ({ model }),
+		CompletedClearEditor: () => ({ model }),
+		CompletedFocusEditor: () => ({ model }),
+		CompletedInsertEditorText: () => ({ model }),
+		CompletedInsertCustomEmoji: () => ({ model }),
+		CompletedInsertEmoji: () => ({ model }),
+		CompletedRemoveTriggerText: () => ({ model }),
+		CompletedFocusCommandField: () => ({ model }),
 	})

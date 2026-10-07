@@ -66,6 +66,7 @@ export const reactionButton = <M>(
 	messageId: string,
 	reaction: AggregatedReaction,
 	context: TooltipContext<M>,
+	onPress?: M,
 ): Html =>
 	TooltipHost.tooltipTrigger(h, {
 		key: `${messageId}:reaction:${reaction.emoji}`,
@@ -88,6 +89,7 @@ export const reactionButton = <M>(
 						),
 					),
 					...PRESSABLE(h),
+					...(onPress === undefined ? [] : [h.OnClick(onPress)]),
 				],
 				[
 					reaction.imageUrl

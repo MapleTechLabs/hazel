@@ -2,7 +2,7 @@ import { MessageId } from "@hazel/schema"
 import { Effect, Option, Queue, Schema, Stream } from "effect"
 import { Mount } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
-import type { Html, HtmlBuilder } from "foldkit/html"
+import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { IconCopy, IconEdit, IconEmojiAdd, IconReply, IconTrash } from "../../icons"
 import { calculatePosition } from "../../ui/aria/position"
 import { button } from "../../ui/button"
@@ -146,8 +146,13 @@ export interface ToolbarInputs<M> {
 	readonly tooltip: TooltipHost.Model
 	readonly hoveredKey: string | null
 	readonly toTooltipMessage: (message: TooltipHost.Message) => M
+	readonly onReact: (emoji: string) => M
+	readonly onCopy: M
+	readonly onEdit: M
 	readonly onReply: M
 	readonly onDelete: M
+	/** The "Add reaction" button wrapped by its emoji picker (DialogTrigger). */
+	readonly addReaction: (render: (attributes: ReadonlyArray<ChildAttribute>, overlay: Html) => Html) => Html
 	/** The "More actions" menu trigger with its menu. */
 	readonly moreActions: Html
 }
@@ -164,7 +169,8 @@ const action = <M>(
 		readonly className: string
 		readonly content: Html | string
 		readonly onPress?: M
-		readonly extra?: ReadonlyArray<ReturnType<HtmlBuilder<M>["Attribute"]>>
+		readonly extra?: ReadonlyArray<ChildAttribute>
+		readonly overlay?: Html
 	},
 ): Html =>
 	TooltipHost.tooltipTrigger(h, {
@@ -189,7 +195,7 @@ const action = <M>(
 						h.Attribute("data-react-aria-pressable", "true"),
 					],
 				},
-				[options.content, overlay],
+				[options.content, overlay, options.overlay ?? h.empty],
 			),
 	})
 
@@ -204,21 +210,26 @@ export const toolbarContent = <M>(h: HtmlBuilder<M>, inputs: ToolbarInputs<M>): 
 			label: `React with ${emoji}`,
 			className: "p-1.5! text-base hover:bg-secondary",
 			content: emoji,
+			onPress: inputs.onReact(emoji),
 		}),
 	),
 	separator(h, { orientation: "vertical", className: "mx-0.5 h-4" }),
-	action(h, inputs, {
-		key: "add-reaction",
-		label: "Add reaction",
-		className: ACTION_CLASS,
-		content: icon(h, IconEmojiAdd),
-		extra: [h.Attribute("aria-expanded", "false")],
-	}),
+	inputs.addReaction((attributes, overlay) =>
+		action(h, inputs, {
+			key: "add-reaction",
+			label: "Add reaction",
+			className: ACTION_CLASS,
+			content: icon(h, IconEmojiAdd),
+			extra: attributes,
+			overlay,
+		}),
+	),
 	action(h, inputs, {
 		key: "copy",
 		label: "Copy message",
 		className: ACTION_CLASS,
 		content: icon(h, IconCopy),
+		onPress: inputs.onCopy,
 	}),
 	...(inputs.isOwnMessage
 		? [
@@ -227,6 +238,7 @@ export const toolbarContent = <M>(h: HtmlBuilder<M>, inputs: ToolbarInputs<M>): 
 					label: "Edit message",
 					className: ACTION_CLASS,
 					content: icon(h, IconEdit),
+					onPress: inputs.onEdit,
 				}),
 			]
 		: []),
