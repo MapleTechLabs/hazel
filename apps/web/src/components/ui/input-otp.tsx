@@ -25,7 +25,9 @@ export function InputOTPControl({ className, ...props }: React.ComponentProps<"s
 	return (
 		<span
 			data-slot="control"
-			className={twMerge("flex items-center gap-2 has-disabled:opacity-50", className)}
+			// `has-[input:disabled]`, not `has-disabled`: Chrome cannot narrow `:has(:not([data-rac]):disabled)`,
+			// so that rule restyled the whole document on every DOM insertion (S4 heavy-dataset scroll).
+			className={twMerge("flex items-center gap-2 has-[input:disabled]:opacity-50", className)}
 			{...props}
 		/>
 	)
