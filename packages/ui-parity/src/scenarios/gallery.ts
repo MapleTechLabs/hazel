@@ -392,5 +392,48 @@ export const galleryArea: AreaModule = {
 			title: "Form error summary: default and custom titles, empty",
 			themes: ["light", "dark"],
 		}),
+		gallery("choice-box", {
+			id: "gallery-choice-box",
+			title: "Choice box: grid, stack, multiple",
+			themes: ["light", "dark"],
+		}),
+		gallery("choice-box", {
+			id: "gallery-choice-box-clicked",
+			title: "Choice box: clicking selects an item in each list",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.getByText("Just me", { exact: true }).click()
+				await page.getByText("Free", { exact: true }).click()
+				await page.getByText("Random", { exact: true }).click()
+				await page.mouse.move(0, 0)
+			},
+		}),
+		gallery("choice-box", {
+			id: "gallery-choice-box-keyboard",
+			title: "Choice box: Tab into the grid, ArrowRight moves focus, Space selects",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.keyboard.press("Tab")
+				await page.keyboard.press("ArrowRight")
+				await page.keyboard.press(" ")
+			},
+		}),
+		gallery("choice-box", {
+			id: "gallery-choice-box-stack-keyboard",
+			title: "Choice box: clicking the selected plan deselects it, ArrowUp moves focus",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.getByText("Pro", { exact: true }).click()
+				await page.keyboard.press("ArrowUp")
+			},
+		}),
+		gallery("choice-box", {
+			id: "gallery-choice-box-hover",
+			title: "Choice box: hovered item",
+			themes: ["light", "dark"],
+			steps: async (page) => {
+				await page.getByText("Growing company", { exact: true }).hover()
+			},
+		}),
 	],
 }

@@ -28,6 +28,12 @@ export interface CheckboxOptions<Message> {
 	/** Form value; inside a CheckboxGroup this is the item's value. */
 	readonly value?: string
 	readonly describedBy?: string
+	/** React Aria slot, e.g. `selection` for a GridList row's checkbox. */
+	readonly slot?: string
+	readonly ariaLabel?: string
+	readonly labelledBy?: string
+	/** usePress stops press events at the checkbox, so an enclosing row does not also react. */
+	readonly stopsClickPropagation?: boolean
 	readonly onChange?: (isSelected: boolean) => Message
 	readonly className?: string
 	readonly interaction?: Interaction.Wiring<Message>
@@ -58,6 +64,7 @@ export const checkbox = <Message>(
 			h.DataAttribute("rac", ""),
 			h.DataAttribute("react-aria-pressable", "true"),
 			h.DataAttribute("slot", "control"),
+			...(options.slot === undefined ? [] : [h.Attribute("slot", options.slot)]),
 			...(options.isSelected ? [h.DataAttribute("selected", "true")] : []),
 			...(isIndeterminate ? [h.DataAttribute("indeterminate", "true")] : []),
 			...(isDisabled ? [h.DataAttribute("disabled", "true")] : []),
@@ -75,7 +82,13 @@ export const checkbox = <Message>(
 				: []),
 			...(toggle === undefined || isDisabled
 				? []
-				: [h.OnClick(toggle, { defaultAction: "Prevent", focusSelector: `#${options.id}` })]),
+				: [
+						h.OnClick(toggle, {
+							defaultAction: "Prevent",
+							focusSelector: `#${options.id}`,
+							...(options.stopsClickPropagation ? { propagation: "Stop" as const } : {}),
+						}),
+					]),
 		],
 		[
 			h.span(
@@ -88,6 +101,8 @@ export const checkbox = <Message>(
 						h.Attribute("style", ""),
 						...(isDisabled ? [h.Disabled(true)] : [h.Tabindex(0), h.Attribute("title", "")]),
 						...(isInvalid ? [h.AriaInvalid(true)] : []),
+						...(options.ariaLabel === undefined ? [] : [h.AriaLabel(options.ariaLabel)]),
+						...(options.labelledBy === undefined ? [] : [h.AriaLabelledBy(options.labelledBy)]),
 						...(options.describedBy === undefined
 							? []
 							: [h.AriaDescribedBy(options.describedBy)]),
