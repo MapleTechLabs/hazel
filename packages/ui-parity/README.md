@@ -29,7 +29,12 @@ bun run parity run                            # capture both, diff, write the re
 - **One origin.** Every target is captured through `http://localhost:4800`, proxied to the target's port, so UI that prints `location.origin` matches across targets. Playwright fulfils that origin in-browser and nothing binds it.
 - **Parallel runs.** Ports are offsets from `PARITY_PORT_BASE` (default `4790`): backend `+0`, legacy `+1`, foldkit `+2`, Electric `+3`, legacy-head `+4`. Give each worktree or agent its own base (`PARITY_PORT_BASE=4900 bun run parity …`, then 5000, 5100). Builds embed the backend URLs, so a non-default base builds into `.parity/builds-<base>/` and `serve`/`run` refuse a build made for another base. Captures are byte-identical across bases.
 - **Healthy captures only.** A capture that crashes, fails a step, or logs console errors (apart from known noise) marks its variant as `fail`, even when the pixels match. Two identical error screens are not parity.
-- **Determinism.** Frozen clock (`dataset.now`), seeded `Math.random`, UTC, en-US, `deviceScaleFactor: 1`, animations and transitions frozen, carets and scrollbars hidden, service worker blocked, and every request outside the three local origins aborted. A capture waits for fonts and images, then for 400ms with no DOM mutations.
+- **Determinism.** Frozen clock (`dataset.now`), seeded `Math.random`, UTC, en-US, `deviceScaleFactor: 1`, animations and transitions frozen, carets and scrollbars hidden, service worker blocked, and every request outside the three local origins aborted. A capture waits for fonts and every image to decode, then for 400ms with no DOM mutations, then for two consecutive frames in which no scroll offset, scroll extent or image changes (late images make the chat list re-anchor). Anything that moved restarts the wait, up to the timeout. The screenshot is retaken until two in a row are identical, for motion only the compositor sees (the overscroll bounce after a wheel scroll). Fixture images are rendered when the backend starts, so the first capture of a run doesn't get them later than the rest. Infinite Web Animations (`element.animate`, motion's `repeat: Infinity`) are paused at the last frame of their first iteration, like the CSS freeze, and SMIL animations at t=0.
+- **Behavior.** Capture tags every backend request with `x-parity-capture`, and the fixture backend logs each RPC (tag plus encoded payload) and each HTTP API request (method, path, body) per capture (`src/backend/call-log.ts`). The log as of the screenshot is stored in `<variant>.json` as `calls`. `compare` diffs the two logs (`src/behavior.ts`) and any difference fails the variant, with lines like `rpc: message.create payload differs at .content` or `rpc: channelMember.clearNotifications not sent (1× in baseline)` in `summary.md`:
+    - Order is ignored: calls are compared as a multiset per tag, because the two apps fire concurrent queries in different orders.
+    - Payload keys are sorted, and version-4 UUIDs (minted by the app with `crypto.randomUUID`) become `<random-uuid>`. Fixture ids are version 5 (`stableId`) and are compared as is.
+    - `IGNORED_CALLS` (presence heartbeats, typing indicators) are never compared. `PRESENCE_ONLY_CALLS` (the presence status write on mount, Rivet actor metadata polling) only have to be sent by both apps or by neither, because their count depends on how long the capture ran. On `/dev/gallery/*` both lists are ignored: the Foldkit gallery boots a standalone program without the app root.
+- **Accessibility.** Every capture stores `page.locator("body").ariaSnapshot()` as `aria` in `<variant>.json`. `compare` diffs the trees as multisets of lines (indentation stripped, so wrapper depth doesn't count) and `summary.md` ends with an "a11y deltas" section: differences grouped by role across the run, then per variant. It does not fail variants yet, so existing deltas can be triaged; `--strict-a11y` makes any ARIA difference a `fail`.
 - **Two kinds of diff.**
   - *Pixels*: strict (any channel differs) and perceptual (pixelmatch, anti-aliasing ignored). Differing pixels are grouped into regions.
   - *Structure*: every visible text run and accessible control is recorded with its box and the computed styles that determine its look. Records are matched across apps by text or by role and name, never by DOM shape, because the two implementations won't share markup. Output reads like `font-weight: 600 → 500 on 18 text runs`, plus the elements that moved as a result.
@@ -62,6 +67,8 @@ bun run parity build foldkit && bun run parity run --filter settings-team
 1. Read `.parity/runs/<run>/summary.md`. Root causes are listed first (grouped style deltas), then knock-on moves, then elements missing from or extra in Foldkit.
 2. Fix the Foldkit view and repeat until the variant is `identical`.
 3. When it's not obvious, open `index.html` in the same run folder. It has swipe, onion skin, blink, side-by-side and diff modes (keys `1`–`5`, `j`/`k` to step through). Click a red region to highlight the elements responsible.
+
+`bun run parity compare --run <run>` re-diffs an existing run's captures without capturing again (after changing compare or report code).
 
 `--filter` matches a variant id substring (`chat-channel--mobile`) or an area (`settings`). The exit code is non-zero if anything fails, so the loop can be scripted.
 
@@ -111,7 +118,7 @@ If a capture logs `unmocked RPCs: ...`, add a canned response to your area modul
 `.parity/` (gitignored):
 
 - `builds/<target>/`: static builds
-- `runs/<run>/<target>/<variant>.png|.json`: screenshots and structural snapshots
+- `runs/<run>/<target>/<variant>.png|.json`: screenshots and snapshots (structure, `calls`, `aria`)
 - `runs/<run>/diff/`: pixelmatch diff images
 - `runs/<run>/summary.md`: agent-readable digest
 - `runs/<run>/summary.json`: everything, machine-readable
@@ -127,5 +134,5 @@ If a capture logs `unmocked RPCs: ...`, add a canned response to your area modul
 - Chromium only. Font rendering differs across OSes, so compare captures made on the same machine (or the same CI image), never a mix.
 - Clerk's prebuilt `<SignIn>`, `<SignUp>` and `<CreateOrganization>` mount through `Clerk.mountSignIn` and friends, which the stub no-ops. The sign-in, sign-up, setup-organization and empty select-organization scenarios capture the surrounding page and the empty container, not the Clerk form. The Foldkit port mounts the same clerk-js components into the same container, so the form itself is Clerk's and stays out of scope.
 - Signed-out scenarios use a dataset with `signedOut: true`: the stub installs Clerk with no session or user, and authenticated RPCs fail with `SessionNotProvidedError`. The app's Electric fetch then answers 401 locally for the collections it preloads; those console errors are expected there and ignored for signed-out datasets only.
-- The onboarding timezone step runs infinite `motion` star animations, so its captures wait out the 8s quiet timeout. The stars are invisible in daytime, so the frame is still deterministic.
+- The onboarding timezone step runs infinite `motion` star animations. The Web Animations parts are frozen (see Determinism), but legacy animates the stars' `scale` from JavaScript every frame, so legacy captures still wait out the 8s quiet timeout. The frozen opacity is 0 in daytime, so the frame is deterministic.
 - Electric live updates aren't simulated. Scenarios show steady state, and writes succeed without changing data. Optimistic-update visuals need dedicated datasets.

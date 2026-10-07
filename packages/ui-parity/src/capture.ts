@@ -9,6 +9,7 @@ import {
 	targets,
 	type TargetName,
 } from "./config.ts"
+import { CALL_LOG_PATH, CAPTURE_HEADER, type RecordedCall } from "./backend/call-log.ts"
 import { clerkIdentityFor } from "./fixtures/identity.ts"
 import { BOX_STYLE_PROPS, collectSnapshot, serializeDom, TEXT_STYLE_PROPS } from "./runtime/snapshot.ts"
 import { installDeterminism, waitForVisualQuiet } from "./runtime/stabilize.ts"
@@ -85,6 +86,20 @@ const IGNORED_CONSOLE_ERRORS =
 const SIGNED_OUT_CONSOLE_ERRORS =
 	/^\[Live Query Error\] Source collection '\w+' entered error state|^An error occurred while syncing collection: \w+,[\s\S]*HTTP Error 401/
 
+/**
+ * Screenshots until two in a row are byte-identical. Compositor-only motion (the overscroll bounce
+ * after a wheel scroll hits an edge) is invisible to the in-page settle checks but not to pixels.
+ */
+const stableScreenshot = async (take: () => Promise<Buffer>) => {
+	let previous = await take()
+	for (let attempt = 0; attempt < 10; attempt++) {
+		const next = await take()
+		if (next.equals(previous)) return next
+		previous = next
+	}
+	return previous
+}
+
 export const captureTarget = async (options: {
 	readonly target: TargetName
 	/** Output folder name under the run; defaults to the target name (self-checks capture one target twice). */
@@ -115,6 +130,9 @@ export const captureTarget = async (options: {
 			extraHTTPHeaders: {},
 		})
 		const page = await context.newPage()
+		// Tags every backend request, so the fixture backend can log this capture's calls.
+		const captureKey = `${options.label ?? options.target}/${variant.id}`
+		const callLogUrl = `${fixtureBackendUrl}${CALL_LOG_PATH}?capture=${encodeURIComponent(captureKey)}`
 		page.setDefaultTimeout(5000)
 		const consoleErrors: string[] = []
 		const blockedRequests: string[] = []
@@ -141,7 +159,11 @@ export const captureTarget = async (options: {
 					.then((response) => route.fulfill({ response }))
 			}
 			return route.continue({
-				headers: { ...route.request().headers(), "x-parity-dataset": dataset.name },
+				headers: {
+					...route.request().headers(),
+					"x-parity-dataset": dataset.name,
+					[CAPTURE_HEADER]: captureKey,
+				},
 			})
 		})
 
@@ -153,24 +175,33 @@ export const captureTarget = async (options: {
 				await variant.scenario.steps(page)
 				await page.evaluate(waitForVisualQuiet, { quietMs: 300, timeoutMs: 5000 })
 			}
-			await page.screenshot({
-				path: join(dir, `${variant.id}.png`),
-				fullPage: variant.scenario.fullPage ?? false,
-				mask: variant.scenario.mask?.(page) as never,
-				animations: "disabled",
-				caret: "hide",
-			})
+			const screenshot = await stableScreenshot(() =>
+				page.screenshot({
+					fullPage: variant.scenario.fullPage ?? false,
+					mask: variant.scenario.mask?.(page) as never,
+					animations: "disabled",
+					caret: "hide",
+				}),
+			)
+			writeFileSync(join(dir, `${variant.id}.png`), screenshot)
 			const snapshot = await page.evaluate(collectSnapshot, {
 				textProps: [...TEXT_STYLE_PROPS],
 				boxProps: [...BOX_STYLE_PROPS],
 			})
-			writeFileSync(join(dir, `${variant.id}.json`), JSON.stringify({ url: page.url(), ...snapshot }))
+			// Behavior and accessibility, as of the screenshot: calls sent so far and the ARIA tree.
+			const calls: RecordedCall[] = await fetch(callLogUrl).then((response) => response.json())
+			const aria = await page.locator("body").ariaSnapshot()
+			writeFileSync(
+				join(dir, `${variant.id}.json`),
+				JSON.stringify({ url: page.url(), ...snapshot, calls, aria }),
+			)
 			writeFileSync(join(dir, `${variant.id}.html`), await page.evaluate(serializeDom))
 		} catch (cause) {
 			error = cause instanceof Error ? cause.message.split("\n")[0] : String(cause)
 			await page.screenshot({ path: join(dir, `${variant.id}.png`) }).catch(() => undefined)
 		}
 		await context.close()
+		await fetch(callLogUrl, { method: "DELETE" }).catch(() => undefined)
 
 		const result: CaptureResult = {
 			variantId: variant.id,

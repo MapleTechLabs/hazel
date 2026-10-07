@@ -2,7 +2,12 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import pixelmatch from "pixelmatch"
 import { PNG } from "pngjs"
+import type { RecordedCall } from "./backend/call-log.ts"
+import { type AriaDelta, diffAria, diffCallLogs } from "./behavior.ts"
 import type { DomSnapshot, Rect, SnapshotNode } from "./runtime/snapshot.ts"
+
+/** What `capture.ts` writes per variant: the structural snapshot plus the call log and ARIA tree. */
+type CaptureSnapshot = DomSnapshot & { readonly calls?: ReadonlyArray<RecordedCall>; readonly aria?: string }
 
 /**
  * Compares one variant captured by a baseline target and a candidate target.
@@ -12,6 +17,8 @@ import type { DomSnapshot, Rect, SnapshotNode } from "./runtime/snapshot.ts"
  * 2. regions: differing pixels clustered into boxes, largest first
  * 3. structure: text runs + controls paired by identity, with box and style deltas,
  *    attached to the regions they overlap
+ * Plus behavior (backend calls, fails the variant) and accessibility (ARIA tree, reported only
+ * unless `strictA11y`).
  */
 
 export interface StyleDelta {
@@ -39,6 +46,8 @@ export interface Region extends Rect {
 export interface VariantComparison {
 	readonly variantId: string
 	readonly status: "identical" | "pass" | "fail" | "missing"
+	/** Status from pixels alone, before behavior (and strict a11y) are taken into account. */
+	readonly visualStatus: "identical" | "pass" | "fail" | "missing"
 	readonly width: number
 	readonly height: number
 	readonly sizeMismatch: boolean
@@ -49,6 +58,9 @@ export interface VariantComparison {
 	readonly deltas: ReadonlyArray<NodeDelta>
 	readonly missingInCandidate: ReadonlyArray<SnapshotNode>
 	readonly extraInCandidate: ReadonlyArray<SnapshotNode>
+	/** Call-log differences, one readable line each; any line fails the variant. */
+	readonly behavior: ReadonlyArray<string>
+	readonly a11y: AriaDelta
 	readonly diffImage?: string
 }
 
@@ -197,6 +209,10 @@ export const compareVariant = (options: {
 	readonly outDir: string
 	/** Perceptual pixels allowed before the variant fails. Pixel-perfect means 0. */
 	readonly tolerance?: number
+	/** Fail the variant on ARIA snapshot differences too (`--strict-a11y`). */
+	readonly strictA11y?: boolean
+	/** Skip app-root background calls (gallery pages, see `diffCallLogs`). */
+	readonly ignoreBackgroundCalls?: boolean
 }): VariantComparison => {
 	const { variantId } = options
 	const baselinePng = join(options.baselineDir, `${variantId}.png`)
@@ -205,6 +221,7 @@ export const compareVariant = (options: {
 		return {
 			variantId,
 			status: "missing",
+			visualStatus: "missing",
 			width: 0,
 			height: 0,
 			sizeMismatch: false,
@@ -215,6 +232,8 @@ export const compareVariant = (options: {
 			deltas: [],
 			missingInCandidate: [],
 			extraInCandidate: [],
+			behavior: [],
+			a11y: { missing: [], extra: [] },
 		}
 	}
 
@@ -236,7 +255,7 @@ export const compareVariant = (options: {
 	const diffImage = `${variantId}.diff.png`
 	writeFileSync(join(options.outDir, diffImage), PNG.sync.write(diff))
 
-	const readSnapshot = (dir: string): DomSnapshot | undefined => {
+	const readSnapshot = (dir: string): CaptureSnapshot | undefined => {
 		const path = join(dir, `${variantId}.json`)
 		return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : undefined
 	}
@@ -267,15 +286,23 @@ export const compareVariant = (options: {
 			].slice(0, 12),
 		}))
 
+	const behavior = diffCallLogs(baseSnap?.calls ?? [], candSnap?.calls ?? [], {
+		ignoreBackground: options.ignoreBackgroundCalls,
+	})
+	const a11y = diffAria(baseSnap?.aria ?? "", candSnap?.aria ?? "")
+	const a11yFails = options.strictA11y && (a11y.missing.length > 0 || a11y.extra.length > 0)
+
 	const tolerance = options.tolerance ?? 0
+	const pixelStatus =
+		strictPixels === 0
+			? "identical"
+			: perceptualPixels <= tolerance && a.width === b.width && a.height === b.height
+				? "pass"
+				: "fail"
 	return {
 		variantId,
-		status:
-			strictPixels === 0
-				? "identical"
-				: perceptualPixels <= tolerance && a.width === b.width && a.height === b.height
-					? "pass"
-					: "fail",
+		status: behavior.length || a11yFails ? "fail" : pixelStatus,
+		visualStatus: pixelStatus,
 		width,
 		height,
 		sizeMismatch: a.width !== b.width || a.height !== b.height,
@@ -284,6 +311,8 @@ export const compareVariant = (options: {
 		mismatchPercent: Math.round((perceptualPixels / (width * height)) * 100_000) / 1000,
 		regions,
 		...structural,
+		behavior,
+		a11y,
 		diffImage,
 	}
 }

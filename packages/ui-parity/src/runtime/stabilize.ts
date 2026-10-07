@@ -47,42 +47,82 @@ export const installDeterminism = (seed: number) => {
 }
 
 /**
- * Resolves once the page has visually settled: fonts loaded, images decoded, and
- * no DOM mutations for `quietMs`. Runs inside the page via `page.evaluate`.
+ * Resolves once the page has visually settled: fonts loaded, images decoded, no DOM mutations for
+ * `quietMs`, then two consecutive frames with no scroll or layout change. Late image loads and the
+ * scroll re-anchoring they trigger restart the wait. Runs inside the page via `page.evaluate`.
  */
 export const waitForVisualQuiet = async ({ quietMs, timeoutMs }: { quietMs: number; timeoutMs: number }) => {
 	const deadline = performance.now() + timeoutMs
-	await document.fonts.ready
-	await Promise.all(
-		[...document.images].map((image) =>
-			image.complete ? undefined : image.decode().catch(() => undefined),
-		),
-	)
-	await new Promise<void>((resolve) => {
-		let timer = setTimeout(done, quietMs)
-		const observer = new MutationObserver(() => {
-			clearTimeout(timer)
-			if (performance.now() > deadline) return done()
-			timer = setTimeout(done, quietMs)
+	const untilDeadline = (promise: Promise<unknown>) =>
+		Promise.race([promise, new Promise((resolve) => setTimeout(resolve, deadline - performance.now()))])
+	const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve))
+	const decodeImages = () =>
+		untilDeadline(Promise.all([...document.images].map((image) => image.decode().catch(() => undefined))))
+	const mutationQuiet = () =>
+		new Promise<void>((resolve) => {
+			let timer = setTimeout(done, quietMs)
+			const observer = new MutationObserver(() => {
+				clearTimeout(timer)
+				if (performance.now() > deadline) return done()
+				timer = setTimeout(done, quietMs)
+			})
+			observer.observe(document.documentElement, {
+				subtree: true,
+				childList: true,
+				attributes: true,
+				characterData: true,
+			})
+			function done() {
+				observer.disconnect()
+				resolve()
+			}
 		})
-		observer.observe(document.documentElement, {
-			subtree: true,
-			childList: true,
-			attributes: true,
-			characterData: true,
-		})
-		function done() {
-			observer.disconnect()
-			resolve()
+	// Scroll offsets and extents of the window and every scrollable or overflowing element, plus image state.
+	const layoutSignature = () => {
+		const root = document.documentElement
+		const parts: Array<number | string> = [scrollX, scrollY, root.scrollWidth, root.scrollHeight]
+		for (const element of document.querySelectorAll("*")) {
+			const { scrollTop, scrollLeft, scrollHeight, scrollWidth, clientHeight, clientWidth } = element
+			if (scrollTop || scrollLeft || scrollHeight > clientHeight || scrollWidth > clientWidth)
+				parts.push(scrollTop, scrollLeft, scrollHeight, scrollWidth, clientHeight, clientWidth)
 		}
-	})
-	// SMIL animations (the spin loader's <animateTransform>) ignore the CSS freeze; pin them at t=0.
-	for (const svg of document.querySelectorAll("svg")) {
-		svg.pauseAnimations()
-		svg.setCurrentTime(0)
+		for (const image of document.images) parts.push(image.complete ? image.naturalWidth : "-")
+		return parts.join(",")
 	}
-	// Two frames so the last mutation is painted.
-	await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+	// Infinite Web Animations (motion's `repeat: Infinity`, `element.animate`) never settle. Pause each at
+	// the last frame of its first iteration, the WAAPI twin of the CSS freeze above. CSS-driven ones are left
+	// alone. Rate 0 also makes the screenshot's `animations: "disabled"` skip them instead of cancelling.
+	const freezeInfiniteAnimations = () => {
+		for (const animation of document.getAnimations()) {
+			if (animation instanceof CSSAnimation || animation instanceof CSSTransition) continue
+			const timing = animation.effect?.getComputedTiming()
+			if (!timing || timing.endTime !== Infinity || typeof timing.duration !== "number") continue
+			if (animation.playbackRate === 0) continue
+			animation.pause()
+			animation.currentTime = (timing.delay ?? 0) + Math.max(0, timing.duration - 0.001)
+			animation.playbackRate = 0
+		}
+	}
+
+	await document.fonts.ready
+	for (;;) {
+		await decodeImages()
+		freezeInfiniteAnimations()
+		await mutationQuiet()
+		freezeInfiniteAnimations()
+		// SMIL animations (the spin loader's <animateTransform>) ignore the CSS freeze; pin them at t=0.
+		for (const svg of document.querySelectorAll("svg")) {
+			svg.pauseAnimations()
+			svg.setCurrentTime(0)
+		}
+		await decodeImages()
+		// Two frames with nothing moving, so the last change is painted and nothing is still settling.
+		const first = layoutSignature()
+		await nextFrame()
+		const second = layoutSignature()
+		await nextFrame()
+		if ((first === second && second === layoutSignature()) || performance.now() > deadline) return
+	}
 }
 
 /** Restart the seeded `Math.random` sequence. Use right before a step whose visible output is random. */
