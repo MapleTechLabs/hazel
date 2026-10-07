@@ -6,7 +6,13 @@ import { describe, expect, test } from "vitest"
 import * as Menu from "../../../ui/menu"
 import type { Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
-import { RemoveChannelLink, ScheduleReturnToList, DisconnectConnection, ListChannelLinks } from "./command"
+import {
+	DisconnectConnection,
+	ListChannelLinks,
+	ListDiscordChannels,
+	RemoveChannelLink,
+	ScheduleReturnToList,
+} from "./command"
 import { Message } from "./model"
 import { init, update } from "./update"
 import { sharedDefaults } from "../../test-shared"
@@ -92,5 +98,36 @@ describe("chat sync connection", () => {
 				PageOutMessage.RequestedNavigation({ href: "/hazel/settings/chat-sync", replace: false }),
 			),
 		)
+	})
+
+	test("a found connection mounts the link modal, which lists its guild's Discord channels", () => {
+		const connection = {
+			id: connectionId,
+			displayName: "Hazel Community",
+			status: "active" as const,
+			externalWorkspaceId: "918273645500120",
+			errorMessage: null,
+			lastSyncedAtMs: null,
+		}
+		const channel = { id: "1", guildId: "918273645500120", name: "general", type: 0, parentId: null }
+		story(
+			run,
+			given(init(route, shared).model),
+			message(Message.SucceededListConnections({ organizationId, connections: [connection] })),
+			Command.expectExact(ListDiscordChannels({ organizationId, guildId: "918273645500120" })),
+			Command.resolve(
+				ListDiscordChannels,
+				Message.SucceededListDiscordChannels({ channels: [channel] }),
+			),
+			model((current) => expect(current.discordChannels).toEqual({ _tag: "Loaded", items: [channel] })),
+		)
+	})
+
+	test("a missing connection sends no channel query", () => {
+		const missing = run(
+			init(route, shared).model,
+			Message.SucceededListConnections({ organizationId, connections: [] }),
+		)
+		expect(missing.commands ?? []).toHaveLength(0)
 	})
 })
