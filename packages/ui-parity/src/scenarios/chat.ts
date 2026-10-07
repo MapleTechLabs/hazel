@@ -130,16 +130,7 @@ const richStates: ReadonlyArray<Scenario> = [
 		themes: ["light", "dark"],
 	}),
 	rich({ id: "chat-files-media", title: "All media gallery", path: `${richChat("media")}/files/media` }),
-	{ id: "chat-index", area: "chat", title: "All channels: public tab", path: `${org}/chat` },
-	{
-		id: "chat-index-dms",
-		area: "chat",
-		title: "All channels: direct messages tab",
-		path: `${org}/chat`,
-		steps: async (page) => {
-			await page.getByRole("tab", { name: /Direct messages/ }).click()
-		},
-	},
+	// The chat index (`/$orgSlug/chat`) is covered by the home area (chat-index*).
 ]
 
 export const chatArea: AreaModule = {
