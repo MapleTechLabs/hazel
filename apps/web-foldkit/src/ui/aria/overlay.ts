@@ -187,6 +187,73 @@ export const restoreFocusTo =
 		document.getElementById(triggerId)?.focus({ preventScroll: true })
 	}
 
+/** FocusScope `contain`: Tab and Shift+Tab cycle through the tabbable elements inside `root`. */
+export const containFocus = (root: HTMLElement | Element): (() => void) => {
+	const selector =
+		"a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]"
+	const onKeyDown = (event: Event) => {
+		if (
+			!(event instanceof KeyboardEvent) ||
+			event.key !== "Tab" ||
+			event.altKey ||
+			event.ctrlKey ||
+			event.metaKey
+		)
+			return
+		const tabbables = [...root.querySelectorAll<HTMLElement>(selector)].filter(
+			(element) =>
+				element.tabIndex >= 0 && !element.closest("[inert]") && element.getClientRects().length > 0,
+		)
+		event.preventDefault()
+		if (tabbables.length === 0) return
+		const index = tabbables.indexOf(document.activeElement as HTMLElement)
+		const next = event.shiftKey
+			? (tabbables[index <= 0 ? tabbables.length - 1 : index - 1] ?? tabbables[0])
+			: (tabbables[index === -1 || index === tabbables.length - 1 ? 0 : index + 1] ?? tabbables[0])
+		next?.focus()
+	}
+	root.addEventListener("keydown", onKeyDown)
+	return () => root.removeEventListener("keydown", onKeyDown)
+}
+
+// MODAL OVERLAY (useViewportSize, DialogHeader/DialogFooter resize observers)
+
+/** ModalOverlay's `--visual-viewport-height` and `--page-height`. */
+export const trackViewportHeight = (overlay: HTMLElement): (() => void) => {
+	const update = () => {
+		const scrolling = document.scrollingElement ?? document.documentElement
+		const pageHeight = scrolling.scrollHeight - (scrolling.getBoundingClientRect().height % 1)
+		overlay.style.setProperty(
+			"--visual-viewport-height",
+			`${window.visualViewport?.height ?? window.innerHeight}px`,
+		)
+		overlay.style.setProperty("--page-height", `${pageHeight}px`)
+	}
+	update()
+	window.visualViewport?.addEventListener("resize", update)
+	return () => window.visualViewport?.removeEventListener("resize", update)
+}
+
+/** DialogHeader and DialogFooter publish their heights on the dialog, which DialogBody's max height uses. */
+export const observeDialogParts = (root: Element): (() => void) => {
+	const parts = [
+		["dialog-header", "--dialog-header-height"],
+		["dialog-footer", "--dialog-footer-height"],
+	] as const
+	const observers = parts.flatMap(([slot, property]) => {
+		const part = root.querySelector<HTMLElement>(`[data-slot="${slot}"]`)
+		if (part === null) return []
+		const observer = new ResizeObserver(() =>
+			part.parentElement?.style.setProperty(property, `${part.clientHeight}px`),
+		)
+		observer.observe(part)
+		return [observer]
+	})
+	return () => {
+		for (const observer of observers) observer.disconnect()
+	}
+}
+
 // MARKUP
 
 /** React Aria's visually hidden `DismissButton`, rendered at both ends of a modal popover. */

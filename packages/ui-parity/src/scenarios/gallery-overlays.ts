@@ -22,6 +22,8 @@ const overlay = (
 	...options,
 })
 
+const both: ReadonlyArray<ViewportName> = ["desktop", "mobile"]
+
 const button = (page: Page, name: string) => page.getByRole("button", { name, exact: true })
 const menuItem = (page: Page, name: string) => page.getByRole("menuitem", { name })
 /** React Aria shows hover tooltips only once the last interaction was a pointer press. */
@@ -120,6 +122,51 @@ export const galleryOverlaysArea: AreaModule = {
 			steps: async (page) => {
 				await button(page, "More").click()
 				await page.getByRole("menu").waitFor()
+			},
+		}),
+		// DIALOG
+		overlay("dialog", "dialog", "Dialog: closed triggers"),
+		overlay("dialog", "dialog-open", "Dialog: opened by click", {
+			viewports: both,
+			steps: async (page) => {
+				await button(page, "Open dialog").click()
+				await page.getByRole("dialog").waitFor()
+			},
+		}),
+		overlay("dialog", "dialog-alert", "Dialog: alert dialog opened with the keyboard", {
+			viewports: both,
+			steps: async (page) => {
+				await focusByTab(page, "Delete channel")
+				await page.keyboard.press("Enter")
+				await page.getByRole("alertdialog").waitFor()
+			},
+		}),
+		overlay("dialog", "dialog-escape", "Dialog: Escape closes and returns focus", {
+			steps: async (page) => {
+				await focusByTab(page, "Open dialog")
+				await page.keyboard.press("Enter")
+				await page.getByRole("dialog").waitFor()
+				await page.keyboard.press("Escape")
+			},
+		}),
+		overlay("dialog", "dialog-tab", "Dialog: Tab moves focus inside the dialog and wraps", {
+			steps: async (page) => {
+				await button(page, "Open dialog").click()
+				await page.getByRole("dialog").waitFor()
+				for (const _ of [1, 2, 3, 4]) await page.keyboard.press("Tab")
+			},
+		}),
+		overlay("dialog", "dialog-outside", "Dialog: backdrop click closes", {
+			steps: async (page) => {
+				await button(page, "Open dialog").click()
+				await page.getByRole("dialog").waitFor()
+				await page.mouse.click(20, 880)
+			},
+		}),
+		overlay("dialog", "dialog-close-icon", "Dialog: the close icon closes", {
+			steps: async (page) => {
+				await button(page, "Open dialog").click()
+				await page.getByRole("button", { name: "Close" }).click()
 			},
 		}),
 		// TOOLTIP
