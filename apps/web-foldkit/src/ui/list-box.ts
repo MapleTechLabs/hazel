@@ -1,4 +1,4 @@
-import { Array, Duration, Effect, Option, Schema, Stream } from "effect"
+import { Array, Duration, Effect, Option, Schema } from "effect"
 import { Command, Subscription, type Update } from "foldkit"
 import * as Dom from "foldkit/dom"
 import { defineMessageUnion } from "foldkit/message"
@@ -319,21 +319,14 @@ export const update = (model: Model, message: Message): UpdateReturn =>
 
 // SUBSCRIPTION
 
-/** usePress ends a pointer press on pointerup anywhere in the document. */
-export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
-	pointerRelease: entry(
-		{ isPressed: Schema.Boolean },
-		{
-			modelToDependencies: (model) => ({ isPressed: Option.isSome(model.pressedKey) }),
-			dependenciesToStream: ({ isPressed }) =>
-				isPressed
-					? Subscription.fromEvent({
-							target: document,
-							type: "pointerup",
-							mapEvent: () => Message.ReleasedPointer(),
-							options: { capture: true },
-						})
-					: Stream.empty,
-		},
+/** usePress ends a pointer press on pointerup anywhere; always subscribed, so presses never restart it. */
+export const subscriptions = Subscription.make<Model, Message>()(() => ({
+	pointerRelease: Subscription.persistent(
+		Subscription.fromEvent({
+			target: document,
+			type: "pointerup",
+			mapEvent: () => Message.ReleasedPointer(),
+			options: { capture: true },
+		}),
 	),
 }))

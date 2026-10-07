@@ -127,13 +127,15 @@ export const update = (model: Model, message: Message): { model: Model } =>
 					? modifyFields(model, { press: () => null })
 					: model,
 		}),
-		// Programmatic focus (no key or pointer event first) switches to virtual modality.
+		// Programmatic focus (no key or pointer event first) switches to virtual modality. usePress
+		// focuses a pressed target on pointerdown, before the mousedown that re-arms the flag; here the
+		// native focus lands after mousedown, so a press's own focus leaves the flag armed.
 		FocusedTarget: ({ target, isTextInput }) => ({
 			model: modifyFields(model, {
 				focused: () => ({ target, isTextInput }),
 				modality: (modality) => (model.hasEventBeforeFocus ? modality : "virtual"),
 				isFocusVisible: (isFocusVisible) => (model.hasEventBeforeFocus ? isFocusVisible : true),
-				hasEventBeforeFocus: () => false,
+				hasEventBeforeFocus: () => model.press?.target === target && model.press.source === "pointer",
 			}),
 		}),
 		EnteredFocusWithin: ({ target }) => ({
@@ -178,7 +180,7 @@ const isModalityKey = (event: KeyboardEvent) =>
 		event.key === "Meta"
 	)
 
-export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
+export const subscriptions = Subscription.make<Model, Message>()(() => ({
 	modality: Subscription.persistent(
 		Stream.mergeAll(
 			[
@@ -210,21 +212,15 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
 			{ concurrency: "unbounded" },
 		),
 	),
-	// usePress ends a pointer press on pointerup anywhere in the document.
-	pointerRelease: entry(
-		{ isPointerPressed: Schema.Boolean },
-		{
-			modelToDependencies: (model) => ({ isPointerPressed: model.press?.source === "pointer" }),
-			dependenciesToStream: ({ isPointerPressed }) =>
-				isPointerPressed
-					? Subscription.fromEvent({
-							target: document,
-							type: "pointerup",
-							mapEvent: () => Message.ReleasedPointer(),
-							options: { capture: true },
-						})
-					: Stream.empty,
-		},
+	// usePress ends a pointer press on pointerup anywhere in the document. Always subscribed:
+	// restarting the stream per press would cost a fiber (and a seeded random draw) each time.
+	pointerRelease: Subscription.persistent(
+		Subscription.fromEvent({
+			target: document,
+			type: "pointerup",
+			mapEvent: () => Message.ReleasedPointer(),
+			options: { capture: true },
+		}),
 	),
 }))
 
