@@ -40,14 +40,19 @@ export const dialog = <Message>(
 		children,
 	)
 
-/** `DialogTitle` (React Aria Heading, level 2). */
+/** `DialogTitle` (React Aria Heading): level 2 with an id inside a Dialog, level 3 without one in a Popover. */
 export const dialogTitle = <Message>(
 	h: HtmlBuilder<Message>,
-	id: string,
+	options: Readonly<{ id?: string; className?: string }>,
 	text: string,
-	className?: string,
-): Html =>
-	h.h2([h.Class(twMerge(dialogTitleBase, className)), h.Id(id), h.Attribute("slot", "title")], [text])
+): Html => {
+	const attributes = [
+		h.Class(twMerge(dialogTitleBase, options.className)),
+		...(options.id ? [h.Id(options.id)] : []),
+		h.Attribute("slot", "title"),
+	]
+	return options.id ? h.h2(attributes, [text]) : h.h3(attributes, [text])
+}
 
 /** `DialogDescription`. */
 export const dialogDescription = <Message>(h: HtmlBuilder<Message>, text: string, className?: string): Html =>
@@ -58,7 +63,7 @@ export const dialogHeader = <Message>(
 	h: HtmlBuilder<Message>,
 	options: Readonly<{
 		className?: string
-		title?: Readonly<{ id: string; text: string }>
+		title?: Readonly<{ id?: string; text: string }>
 		description?: string
 	}>,
 	children: Children = [],
@@ -66,7 +71,7 @@ export const dialogHeader = <Message>(
 	h.div(
 		[h.Attribute("data-slot", "dialog-header"), h.Class(twMerge(dialogHeaderBase, options.className))],
 		[
-			...(options.title ? [dialogTitle(h, options.title.id, options.title.text)] : []),
+			...(options.title ? [dialogTitle(h, { id: options.title.id }, options.title.text)] : []),
 			...(options.description ? [dialogDescription(h, options.description)] : []),
 			...children,
 		],

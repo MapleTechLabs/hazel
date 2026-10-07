@@ -59,7 +59,7 @@ const view = (model: Model, h: HtmlBuilder<Message>) =>
 						button(h, { intent: "outline", attributes }, ["Open dialog", overlay]),
 					toContent: (closeAttributes) => [
 						dialogHeader(h, {}, [
-							dialogTitle(h, Modal.titleId("rename"), "Rename thread"),
+							dialogTitle(h, { id: Modal.titleId("rename") }, "Rename thread"),
 							dialogDescription(h, "Give this thread a name everyone will recognise."),
 						]),
 						dialogBody(h, [

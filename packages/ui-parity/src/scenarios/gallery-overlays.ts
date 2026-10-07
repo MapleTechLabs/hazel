@@ -235,5 +235,19 @@ export const galleryOverlaysArea: AreaModule = {
 				await page.getByRole("option", { name: "30 minutes" }).hover()
 			},
 		}),
+		// POPOVER
+		overlay("popover", "popover", "Popover: closed triggers"),
+		overlay("popover", "popover-open", "Popover: opened by click", {
+			steps: async (page) => {
+				await button(page, "Details").click()
+				await page.getByRole("dialog").waitFor()
+			},
+		}),
+		overlay("popover", "popover-arrow", "Popover: arrow, right placement", {
+			steps: async (page) => {
+				await button(page, "With arrow").click()
+				await page.getByRole("dialog").waitFor()
+			},
+		}),
 	],
 }
