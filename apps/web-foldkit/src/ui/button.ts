@@ -1,4 +1,4 @@
-import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
+import type { Attribute, ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import type { VariantProps } from "tailwind-variants"
 import { twMerge } from "tailwind-merge"
 import { buttonStyles } from "~/components/ui/button.styles"
@@ -30,7 +30,7 @@ export interface AriaButtonOptions<Message> {
 	 * button omits `data-rac`, so the shared variants fall back to native `:hover`/`:focus-visible`.
 	 */
 	readonly interaction?: { readonly wiring: Interaction.Wiring<Message>; readonly target: string }
-	readonly attributes?: ReadonlyArray<Attribute<Message>>
+	readonly attributes?: ReadonlyArray<Attribute<Message> | ChildAttribute>
 }
 
 export interface ButtonOptions<Message> extends ButtonVariants, AriaButtonOptions<Message> {}
@@ -47,9 +47,13 @@ export const ariaButton = <Message>(
 	const state = interaction
 		? Interaction.stateOf(interaction.wiring.model, interaction.target)
 		: Interaction.idleState
+	// Child attributes (Mount wiring) carry no event handlers, so pending never strips them.
 	const extra = (options.attributes ?? []).filter(
 		(attribute) =>
-			!isPending || !isEventAttribute(attribute) || preservedWhilePending.test(attribute._tag),
+			!isPending ||
+			!("_tag" in attribute) ||
+			!isEventAttribute(attribute) ||
+			preservedWhilePending.test(attribute._tag),
 	)
 	return h.button(
 		[
