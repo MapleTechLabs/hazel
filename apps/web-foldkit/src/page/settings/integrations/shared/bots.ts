@@ -20,7 +20,6 @@ export type Bot = typeof Bot.Type
 
 export const PublicBot = Schema.Struct({
 	...Bot.fields,
-	isInstalled: Schema.Boolean,
 	creatorName: Schema.String,
 })
 export type PublicBot = typeof PublicBot.Type
@@ -58,10 +57,9 @@ export const toBot = (row: BotRow): Bot => ({
 	installCount: row.installCount,
 })
 
-/** `usePublicBots`: `isInstalled` from the org's installations, `creatorName` from the creator. */
-export const toPublicBot = (row: PublicBotRow, installedBotIds: ReadonlySet<string>): PublicBot => ({
+/** `usePublicBots`' `creatorName`; `isInstalled` comes from the installations query in the view. */
+export const toPublicBot = (row: PublicBotRow): PublicBot => ({
 	...toBot(row),
-	isInstalled: installedBotIds.has(row.id),
 	creatorName: row.creator
 		? row.creator.firstName && row.creator.lastName
 			? `${row.creator.firstName} ${row.creator.lastName}`

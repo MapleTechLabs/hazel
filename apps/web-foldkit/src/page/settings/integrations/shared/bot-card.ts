@@ -190,7 +190,7 @@ export const botCard = <Message>(h: HtmlBuilder<Message>, bot: Bot, actions: Bot
 export const marketplaceBotCard = <Message>(
 	h: HtmlBuilder<Message>,
 	bot: PublicBot,
-	options: { readonly isInstalling: boolean; readonly onInstall: Message },
+	options: { readonly isInstalled: boolean; readonly isInstalling: boolean; readonly onInstall: Message },
 ): Html =>
 	h.keyed("div")(
 		bot.id,
@@ -226,7 +226,7 @@ export const marketplaceBotCard = <Message>(
 						[h.Class("flex items-center gap-1.5 text-muted-fg text-xs")],
 						[IconDownload(h, { className: "size-3.5" }), bot.installCount.toLocaleString()],
 					),
-					bot.isInstalled
+					options.isInstalled
 						? button(h, { intent: "outline", size: "sm", isDisabled: true, className: "gap-1.5" }, [
 								IconCheck(h, { className: "size-3.5" }),
 								"Installed",
