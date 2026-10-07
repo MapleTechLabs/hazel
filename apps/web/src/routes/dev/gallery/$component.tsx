@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
-import type { ComponentType } from "react"
+import { type ComponentType, lazy, Suspense } from "react"
 import { GalleryFrame } from "~/dev-gallery/frame"
 
 /**
@@ -11,10 +11,20 @@ interface GalleryModule {
 	readonly Gallery: ComponentType
 }
 
+// Lazy, so entries (and the React Aria modules they pull in) never load during normal app boot.
 const entries = new Map(
-	Object.entries(import.meta.glob<GalleryModule>("/src/dev-gallery/entries/*.tsx", { eager: true })).map(
-		([path, module]) => [path.replace(/^.*\/(.+)\.tsx$/, "$1"), module],
-	),
+	Object.entries(import.meta.glob<GalleryModule>("/src/dev-gallery/entries/*.tsx")).map(([path, load]) => [
+		path.replace(/^.*\/(.+)\.tsx$/, "$1"),
+		lazy(() =>
+			load().then((module) => ({
+				default: () => (
+					<GalleryFrame title={module.title}>
+						<module.Gallery />
+					</GalleryFrame>
+				),
+			})),
+		),
+	]),
 )
 
 export const Route = createFileRoute("/dev/gallery/$component")({
@@ -34,9 +44,10 @@ function RouteComponent() {
 				))}
 			</GalleryFrame>
 		)
+	const Entry = entry
 	return (
-		<GalleryFrame title={entry.title}>
-			<entry.Gallery />
-		</GalleryFrame>
+		<Suspense fallback={null}>
+			<Entry />
+		</Suspense>
 	)
 }
