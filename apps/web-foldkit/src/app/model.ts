@@ -1,7 +1,7 @@
 import { Schema } from "effect"
 import * as CommandPalette from "../overlay/command-palette"
 import * as Modal from "../overlay/modal"
-import * as Toasts from "../overlay/toasts"
+import * as Toasts from "../overlay/toaster"
 import type { PageHost, Shared } from "../page/contract"
 import { PageSlot } from "../page/registry"
 import { AppRoute, orgSectionOf, orgSlugOf } from "../route"
