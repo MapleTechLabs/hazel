@@ -64,11 +64,19 @@ const PortalSelect = Mount.defineStream("PortalSelect", {
 // VIEW
 
 export type ViewInputs = Readonly<{
-	/** The `Label` inside the Select. */
-	label: string
+	/** The `Label` inside the Select; omit it and pass `ariaLabel` for an unlabelled Select. */
+	label?: string
+	ariaLabel?: string
 	placeholder?: string
-	/** Select `className`. */
+	/** Select `className` and `style`. */
 	className?: string
+	style?: string
+	/** SelectTrigger `className`. */
+	triggerClassName?: string
+	/** SelectContent `className` (the ListBox). */
+	listBoxClassName?: string
+	/** HiddenSelect options carry text only for string items (React Aria's `textValue`). */
+	isHiddenOptionTextless?: boolean
 }>
 
 type Open = Extract<Model["popup"], { _tag: "Open" }>
@@ -94,12 +102,21 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, view
 			...flag("data-open", isOpen),
 			h.Attribute("data-rac", ""),
 			h.Attribute("data-slot", "control"),
+			...(viewInputs.style === undefined ? [] : [h.Attribute("style", viewInputs.style)]),
 		],
 		[
-			h.span(
-				[h.Class(labelStyles()), h.Attribute("data-slot", "label"), h.Id(labelId(model.id))],
-				[viewInputs.label],
-			),
+			...(viewInputs.label === undefined
+				? []
+				: [
+						h.span(
+							[
+								h.Class(labelStyles()),
+								h.Attribute("data-slot", "label"),
+								h.Id(labelId(model.id)),
+							],
+							[viewInputs.label],
+						),
+					]),
 			h.span(
 				[h.Attribute("data-slot", "control"), h.Class(selectTriggerWrapperClassName)],
 				[
@@ -108,8 +125,14 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, view
 							...(isOpen ? [h.Attribute("aria-controls", listboxId(model.id))] : []),
 							h.Attribute("aria-expanded", isOpen ? "true" : "false"),
 							h.Attribute("aria-haspopup", "listbox"),
-							h.Attribute("aria-labelledby", `${valueId(model.id)} ${labelId(model.id)}`),
-							h.Class(twMerge(twMerge(...selectTriggerBase), undefined)),
+							...(viewInputs.ariaLabel === undefined
+								? []
+								: [h.Attribute("aria-label", viewInputs.ariaLabel)]),
+							h.Attribute(
+								"aria-labelledby",
+								`${valueId(model.id)} ${viewInputs.label === undefined ? triggerId(model.id) : labelId(model.id)}`,
+							),
+							h.Class(twMerge(twMerge(...selectTriggerBase), viewInputs.triggerClassName)),
 							...flag("data-disabled", model.isDisabled),
 							...flag("data-pressed", isOpen),
 							h.Attribute("data-react-aria-pressable", "true"),
@@ -161,18 +184,20 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, view
 								className: selectChevronClassName,
 								attributes: { "data-slot": "chevron" },
 							}),
-							model.popup._tag === "Open" ? selectPopover(model, model.popup, h) : h.empty,
+							model.popup._tag === "Open"
+								? selectPopover(model, model.popup, viewInputs, h)
+								: h.empty,
 						],
 					),
 				],
 			),
-			hiddenSelect(model, h),
+			hiddenSelect(model, viewInputs, h),
 		],
 	)
 })
 
 /** HiddenSelect: the native select React Aria keeps for autofill and forms. */
-const hiddenSelect = (model: Model, h: HtmlBuilder<Message>): Html =>
+const hiddenSelect = (model: Model, viewInputs: ViewInputs, h: HtmlBuilder<Message>): Html =>
 	h.div(
 		[
 			h.Attribute("aria-hidden", "true"),
@@ -197,7 +222,10 @@ const hiddenSelect = (model: Model, h: HtmlBuilder<Message>): Html =>
 						[
 							h.option([], []),
 							...Array.map(model.items, (candidate) =>
-								h.option([h.Attribute("value", candidate.key)], [candidate.label]),
+								h.option(
+									[h.Attribute("value", candidate.key)],
+									viewInputs.isHiddenOptionTextless ? [] : [candidate.label],
+								),
 							),
 						],
 					),
@@ -206,7 +234,7 @@ const hiddenSelect = (model: Model, h: HtmlBuilder<Message>): Html =>
 		],
 	)
 
-const selectPopover = (model: Model, open: Open, h: HtmlBuilder<Message>): Html => {
+const selectPopover = (model: Model, open: Open, viewInputs: ViewInputs, h: HtmlBuilder<Message>): Html => {
 	const initialFocusId = Option.match(open.focusedKey, {
 		onNone: () => listboxId(model.id),
 		onSome: (key) => optionId(model.id, key),
@@ -266,7 +294,7 @@ const selectPopover = (model: Model, open: Open, h: HtmlBuilder<Message>): Html 
 								[h.Class(popoverInnerClassName), h.Attribute("data-slot", "popover-inner")],
 								[
 									focusScopeSentinel(h, "start"),
-									listbox(model, open, h),
+									listbox(model, open, viewInputs, h),
 									focusScopeSentinel(h, "end"),
 								],
 							),
@@ -284,11 +312,11 @@ const selectPopover = (model: Model, open: Open, h: HtmlBuilder<Message>): Html 
 	)
 }
 
-const listbox = (model: Model, open: Open, h: HtmlBuilder<Message>): Html =>
+const listbox = (model: Model, open: Open, viewInputs: ViewInputs, h: HtmlBuilder<Message>): Html =>
 	h.div(
 		[
 			h.Attribute("aria-labelledby", labelId(model.id)),
-			h.Class(twMerge(twMerge(selectListBoxBase), undefined)),
+			h.Class(twMerge(twMerge(selectListBoxBase), viewInputs.listBoxClassName)),
 			h.Attribute("data-layout", "stack"),
 			h.Attribute("data-orientation", "vertical"),
 			h.Attribute("data-rac", ""),
