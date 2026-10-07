@@ -84,4 +84,78 @@ export const toastScenarios: ReadonlyArray<Scenario> = [
 	}),
 ]
 
-export const galleryKitScenarios: ReadonlyArray<Scenario> = [...toastScenarios]
+const option = (page: Page, name: string) => page.getByRole("option", { name, exact: true })
+
+/** Tabs until focus lands inside the list box with this label. */
+const tabInto = async (page: Page, label: string) => {
+	const list = page.getByRole("listbox", { name: label, exact: true })
+	for (let presses = 0; presses < 10; presses++) {
+		await page.keyboard.press("Tab")
+		const inside = await list.evaluate((element) => element.contains(document.activeElement))
+		if (inside) return
+	}
+	throw new Error(`tabInto: "${label}" never received focus`)
+}
+
+export const listBoxScenarios: ReadonlyArray<Scenario> = [
+	kit("list-box", "list-box", "ListBox: single, multiple with descriptions, sections"),
+	kit("list-box", "list-box-hover", "ListBox: hovered option", {
+		steps: (page) => option(page, "Dark").hover(),
+	}),
+	kit("list-box", "list-box-select", "ListBox: clicking selects an option", {
+		steps: (page) => option(page, "Light").click(),
+	}),
+	kit("list-box", "list-box-multiple", "ListBox: clicking toggles in multiple selection", {
+		steps: async (page) => {
+			await option(page, "Replies").click()
+			await option(page, "Reactions").click()
+		},
+	}),
+	kit("list-box", "list-box-keyboard", "ListBox: Tab focuses the selected option, ArrowUp moves", {
+		steps: async (page) => {
+			await tabInto(page, "Theme")
+			await page.keyboard.press("ArrowUp")
+		},
+	}),
+	kit("list-box", "list-box-keyboard-select", "ListBox: Space selects, ArrowDown skips disabled", {
+		steps: async (page) => {
+			await tabInto(page, "Notify me about")
+			await page.keyboard.press("ArrowDown")
+			await page.keyboard.press("ArrowDown")
+			await page.keyboard.press("ArrowDown")
+			await page.keyboard.press(" ")
+		},
+	}),
+	kit("list-box", "list-box-sections-keyboard", "ListBox: arrows cross sections", {
+		steps: async (page) => {
+			await tabInto(page, "Jump to")
+			await page.keyboard.press("ArrowDown")
+			await page.keyboard.press("ArrowDown")
+		},
+	}),
+	kit("list-box", "list-box-typeahead", "ListBox: typeahead moves focus", {
+		steps: async (page) => {
+			await tabInto(page, "Jump to")
+			await page.keyboard.type("al")
+		},
+	}),
+]
+
+export const dropdownScenarios: ReadonlyArray<Scenario> = [
+	kit("dropdown", "dropdown", "Dropdown: items, sections, separator, intents"),
+	kit("dropdown", "dropdown-hover", "Dropdown: hovered danger item", {
+		steps: (page) => option(page, "Delete").hover(),
+	}),
+	kit("dropdown", "dropdown-keyboard", "Dropdown: keyboard focus on an item with a shortcut", {
+		steps: async (page) => {
+			await tabInto(page, "Message actions")
+			await page.keyboard.press("ArrowDown")
+		},
+	}),
+]
+
+export const galleryKitScenarios: ReadonlyArray<Scenario> = [
+	...toastScenarios,
+	...listBoxScenarios,
+	...dropdownScenarios,
+]
