@@ -63,4 +63,8 @@ export const update = (model: Model, message: Message): PageReturn<Model, Messag
 			}),
 		}),
 		FailedListWebhooks: () => ({ model }),
+		ClickedRequestIntegration: () => ({
+			model,
+			outMessage: PageOutMessage.RequestedModal({ modal: { _tag: "RequestIntegration" } }),
+		}),
 	})

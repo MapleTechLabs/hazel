@@ -31,5 +31,7 @@ export const Message = defineMessageUnion({
 	GotModalMessage: { message: Modal.Message },
 	GotCommandPaletteMessage: { message: CommandPalette.Message },
 	GotToastsMessage: { message: Toasts.Message },
+	/** A legacy `useAppHotkey` binding fired (`lib/hotkeys/hotkey-registry.ts` id). */
+	PressedHotkey: { actionId: Schema.String },
 })
 export type Message = typeof Message.Type

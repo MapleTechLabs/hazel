@@ -26,6 +26,7 @@ const MAX_DISCOVERABLE = 5
 interface SectionsContext<M> extends ItemContext {
 	readonly activeChannelId: string | undefined
 	readonly onActiveMount: Attribute<M>
+	readonly onBrowseChannels: Attribute<M>
 	/** The row's dots menu and a section's "+" action, built where the Messages are known. */
 	readonly rowMenu: (entry: ChannelEntry) => Html
 	readonly sectionAction: (sectionKey: string) => Html
@@ -95,7 +96,7 @@ const dmRow = <M>(
 			]
 		: []
 
-const gotoSection = <M>(h: HtmlBuilder<M>, context: ItemContext): Html => {
+const gotoSection = <M>(h: HtmlBuilder<M>, context: SectionsContext<M>): Html => {
 	const membersHref = `/${context.orgSlug}`
 	return h.div(
 		[
@@ -116,7 +117,7 @@ const gotoSection = <M>(h: HtmlBuilder<M>, context: ItemContext): Html => {
 					h.Class("grid grid-cols-[auto_1fr] gap-y-0.5 in-data-[state=collapsed]:gap-y-1.5"),
 				],
 				[
-					sidebarItem(h, {}, [
+					sidebarItem(h, { attributes: [context.onBrowseChannels] }, [
 						IconMagnifier3(h),
 						label(h, ["Browse channels"]),
 						h.kbd(
@@ -249,6 +250,7 @@ export const sectionGroupContent = <M>(
 	itemContext: Omit<ItemContext, "presenceByUser" | "nowMs" | "currentUserId"> & {
 		readonly activeChannelId: string | undefined
 		readonly onActiveMount: Attribute<M>
+		readonly onBrowseChannels: Attribute<M>
 		readonly onDismissCreateChannelHint: Attribute<M>
 		readonly rowMenu: (entry: ChannelEntry) => Html
 		readonly sectionAction: (sectionKey: string) => Html

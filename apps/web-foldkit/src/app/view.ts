@@ -40,6 +40,11 @@ const clickedMarkAllRead = toShellMessage(
 )
 const openedMobileSidebar = toShellMessage(Shell.Message.ToggledSidebar({ isOpen: true }))
 export const toPageMessage = (message: PageMessage): Message => ({ _tag: "GotPageMessage", message })
+const toModalMessage = (message: Modal.Message): Message => ({ _tag: "GotModalMessage", message })
+const toCommandPaletteMessage = (message: CommandPalette.Message): Message => ({
+	_tag: "GotCommandPaletteMessage",
+	message,
+})
 
 const shellContextOf = (model: Model, orgSlug: string): ShellContext => ({
 	orgSlug,
@@ -160,7 +165,16 @@ const body = (model: Model, h: HtmlBuilder<Message>): Html => {
 		// The bell reads `useUnreadNotificationCount`, which has no optimistic layer.
 		unreadNotificationCount: model.shell.notifications.unreadIds.length,
 		toaster: Toasts.view(h, model.toasts),
-		overlays: [Modal.view(h, model.modal), CommandPalette.view(h, model.commandPalette)],
+		overlays: [
+			Modal.view(h, model.modal, sharedOf(model), toModalMessage),
+			h.submodel({
+				slotId: "command-palette",
+				model: model.commandPalette,
+				view: CommandPalette.view,
+				viewInputs: { shared: sharedOf(model) },
+				toParentMessage: toCommandPaletteMessage,
+			}),
+		],
 		mobile: {
 			isMobile: model.shell.isMobile,
 			isSidebarOpen: model.shell.isSidebarOpen,

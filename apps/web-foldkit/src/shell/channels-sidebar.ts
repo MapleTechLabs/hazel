@@ -116,6 +116,11 @@ export const update = (model: Model, message: Message): SidebarReturn =>
 		GotRowMenuMessage: ({ channelId, orgSlug, message }) =>
 			updateRowMenu(model, channelId, orgSlug, message),
 		GotSectionMenuMessage: ({ sectionKey, message }) => updateSectionMenu(model, sectionKey, message),
+		// `openChannelsBrowser` passes `initialPage`, which the palette never reads: it opens home.
+		ClickedBrowseChannels: () => ({
+			model,
+			outMessage: PageOutMessage.RequestedCommandPalette({ page: "home" }),
+		}),
 		ClickedSectionAction: ({ action }) => requestedSectionAction(model, action),
 		SucceededSidebarAction: ({ toast }) => ({
 			model,
@@ -215,6 +220,7 @@ const sidebarBody = <ParentMessage>(
 					pathname,
 					activeChannelId,
 					onActiveMount: h.OnMount(Mount.mapMessage(ScrollActiveIntoView(), toParentMessage)),
+					onBrowseChannels: h.OnClick(toParentMessage(Message.ClickedBrowseChannels())),
 					onDismissCreateChannelHint: h.OnClick(
 						toParentMessage(Message.ClickedDismissCreateChannelHint()),
 					),

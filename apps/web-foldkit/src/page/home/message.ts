@@ -18,7 +18,6 @@ export const Message = defineMessageUnion({
 	FoundNoDm: { userId: UserId, name: Schema.String },
 	SucceededCreateDm: { channelId: ChannelId, name: Schema.String },
 	FailedCreateDm: { title: Schema.String, description: Schema.NullOr(Schema.String) },
-	ShowedCreatedDmToast: { channelId: ChannelId },
 	SucceededCopyEmail: { email: Schema.String },
 	FailedCopyEmail: {},
 })

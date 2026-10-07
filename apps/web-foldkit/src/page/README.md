@@ -39,9 +39,14 @@ memoized views and a `sharedChanged` hook. `page/root/` shows a page that only r
   builder, inside an `entry` whose dependencies come from `input.model` and `input.shared`. Return
   `Stream.empty` until the dependencies exist. Keys are prefixed with the page id automatically.
 - **Toasts, modals, navigation, palette.** Return an OutMessage from `update`:
-  `PageOutMessage.RequestedToast`, `RequestedModal` (one variant per legacy `useModal` id),
-  `RequestedNavigation({ href, replace })`, `RequestedCommandPalette`, `RequestedSignOut`
-  (`page/out-message.ts`). Plain links need nothing: an `<a href>` is followed by the app.
+  `PageOutMessage.RequestedToast`, `RequestedModal` (one variant per legacy modal, see
+  `overlay/modal.ts`), `RequestedNavigation({ href, replace, toast? })`, `RequestedCommandPalette`,
+  `RequestedSignOut` (`page/out-message.ts`). Plain links need nothing: an `<a href>` is followed by the app.
+  - A toast with an `id` replaces the toast with the same id (sonner's `id`): give a loading toast an
+    id and send the success or error toast with the same id.
+  - One `update` returns one OutMessage. Navigation and a toast together: `RequestedNavigation`'s
+    `toast`. A modal's own result (toast, navigation, closing) is the modal's job, not the page's: the
+    page only sends `RequestedModal` with the request fields the modal declares.
 - **Layout.** Render only what the legacy route's own component renders (its `<Outlet />` content). The
   root wraps it in the org shell and the route's section layout (`shell/layouts.ts`): `main` for
   settings, my-settings and notifications, the column for integrations and chat sync, the channel

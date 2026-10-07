@@ -65,6 +65,8 @@ export const Message = defineMessageUnion({
 	UpdatedOrganizations: { organizations: Schema.Array(PartnerOrg) },
 	UpdatedMemberChannelIds: { channelIds: Schema.Array(ChannelId) },
 	UpdatedDiscoverableChannels: { channels: Schema.Array(DiscoverableChannel) },
+	/** "Browse channels"; the sidebar answers with `RequestedCommandPalette`. */
+	ClickedBrowseChannels: {},
 	LoadedDismissedHints: { isCreateChannelHintDismissed: Schema.Boolean },
 	ClickedDismissCreateChannelHint: {},
 	CompletedPersistDismissedHint: {},

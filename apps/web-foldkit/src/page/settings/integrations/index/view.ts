@@ -172,11 +172,14 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 						sectionHeaderSubheading(h, {}, ["Connect your favorite tools to your workspace."]),
 					],
 				),
-				// The request modal is root-owned and has no ModalRequest variant yet.
-				button(h, { intent: "secondary", size: "md", className: "shrink-0" }, [
-					IconPlus(h, { attributes: { "data-slot": "icon" } }),
-					"Request integration",
-				]),
+				button(
+					h,
+					{ intent: "secondary", size: "md", className: "shrink-0", onPress: Message.ClickedRequestIntegration() },
+					[
+						IconPlus(h, { attributes: { "data-slot": "icon" } }),
+						"Request integration",
+					],
+				),
 			]),
 		]),
 		h.div(
