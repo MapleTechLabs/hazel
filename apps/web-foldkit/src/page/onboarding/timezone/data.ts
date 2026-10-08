@@ -1,9 +1,5 @@
-import {
-	getAllTimezoneCities,
-	getTimezoneOffsetNumber,
-	type TimezoneCity,
-	timezoneToCity,
-} from "~/utils/timezone"
+import { Option } from "effect"
+import { getAllTimezoneCities, type TimezoneCity } from "~/utils/timezone"
 
 /** The timezone step's data: curated cities (from `timezone-selection-step.tsx`) and the search. */
 
@@ -50,14 +46,51 @@ export const CITIES: ReadonlyArray<TimezoneCity> = [
 	{ name: "Auckland", timezone: "Pacific/Auckland", offset: 12, country: "New Zealand" },
 ]
 
-export const cityFor = (timezone: string): TimezoneCity =>
-	CITIES.find((city) => city.timezone === timezone) ?? timezoneToCity(timezone)
+const hourMinuteAt = Option.liftThrowable((timezone: string, nowMs: number) =>
+	new Intl.DateTimeFormat("en-US", {
+		timeZone: timezone,
+		hour: "numeric",
+		minute: "numeric",
+		hourCycle: "h23",
+	}).formatToParts(new Date(nowMs)),
+)
+
+/** `getTimezoneOffsetNumber` at `nowMs` instead of the wall clock, so the view stays pure. */
+export const offsetAt = (timezone: string, nowMs: number): number =>
+	Option.match(hourMinuteAt(timezone, nowMs), {
+		onNone: () => 0,
+		onSome: (parts) => {
+			const now = new Date(nowMs)
+			const part = (type: string) => Number.parseInt(parts.find((p) => p.type === type)?.value || "0")
+			const hourDiff = part("hour") - now.getUTCHours()
+			const wrapped = hourDiff > 12 ? hourDiff - 24 : hourDiff < -12 ? hourDiff + 24 : hourDiff
+			return wrapped + (part("minute") - now.getUTCMinutes()) / 60
+		},
+	})
+
+/** `timezoneToCity` with the offset at `nowMs`. */
+const zoneToCity = (timezone: string, nowMs: number): TimezoneCity => {
+	const parts = timezone.split("/")
+	return {
+		name: (parts[parts.length - 1] || timezone).replace(/_/g, " "),
+		timezone,
+		offset: offsetAt(timezone, nowMs),
+		country: parts[0]?.replace(/_/g, " ") || "",
+	}
+}
+
+export const cityFor = (timezone: string, nowMs: number): TimezoneCity =>
+	CITIES.find((city) => city.timezone === timezone) ?? zoneToCity(timezone, nowMs)
 
 /** `filteredCities`: curated cities (detected one first) or up to 30 matches across every zone. */
-export const filterCities = (query: string, detectedTimezone: string): ReadonlyArray<TimezoneCity> => {
+export const filterCities = (
+	query: string,
+	detectedTimezone: string,
+	nowMs: number,
+): ReadonlyArray<TimezoneCity> => {
 	const normalized = query.toLowerCase().trim()
 	if (!normalized) {
-		const detected = cityFor(detectedTimezone)
+		const detected = cityFor(detectedTimezone, nowMs)
 		return CITIES.some((city) => city.timezone === detected.timezone) ? CITIES : [detected, ...CITIES]
 	}
 	return getAllTimezoneCities()
@@ -73,5 +106,5 @@ export const filterCities = (query: string, detectedTimezone: string): ReadonlyA
 			return a.name.localeCompare(b.name)
 		})
 		.slice(0, 30)
-		.map((city) => ({ ...city, offset: getTimezoneOffsetNumber(city.timezone) }))
+		.map((city) => ({ ...city, offset: offsetAt(city.timezone, nowMs) }))
 }

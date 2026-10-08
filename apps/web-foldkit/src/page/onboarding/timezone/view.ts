@@ -22,7 +22,7 @@ export const timezoneStep = (
 	options: { readonly browserTimezone: string; readonly nowMs: number },
 ): Html => {
 	const detected = options.browserTimezone
-	const selectedCity = form.selected === null ? null : cityFor(form.selected)
+	const selectedCity = form.selected === null ? null : cityFor(form.selected, options.nowMs)
 	const isDetectedSelected = form.detectionAttempted && detected === form.selected
 	return h.div(
 		[
@@ -72,7 +72,7 @@ export const timezoneStep = (
 								[
 									IconMapPin(h, { className: "size-4" }),
 									isDetectedSelected
-										? `Detected: ${cityFor(detected).name}`
+										? `Detected: ${cityFor(detected, options.nowMs).name}`
 										: "Detect My Timezone",
 								],
 							),
@@ -87,7 +87,7 @@ export const timezoneStep = (
 										"grid grid-cols-1 @xs:grid-cols-2 @md:grid-cols-3 @lg:grid-cols-4 gap-3 max-h-[250px] sm:max-h-[400px] overflow-y-auto p-3 -m-3 pr-4",
 									),
 								],
-								filterCities(form.debouncedQuery, detected).map((city) =>
+								filterCities(form.debouncedQuery, detected, options.nowMs).map((city) =>
 									cityCard(h, {
 										city,
 										isSelected: form.selected === city.timezone,

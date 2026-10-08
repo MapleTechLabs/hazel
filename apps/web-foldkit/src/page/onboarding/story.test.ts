@@ -132,8 +132,8 @@ describe("profile step", () => {
 		)
 	})
 
-	// Bug: SubmittedProfile has no isSubmitting guard, so Enter while saving sends a second update.
-	test.fails("a submit while saving sends nothing", () => {
+	// SubmittedProfile is guarded on isSubmitting, so Enter while saving sends no second update.
+	test("a submit while saving sends nothing", () => {
 		story(
 			run,
 			given(withForm(profile, StepForm.Profile({ firstName: "Nora", lastName: "Newcomer", hasChanged: false, isSubmitting: true }))),
@@ -142,9 +142,22 @@ describe("profile step", () => {
 		)
 	})
 
-	// Bug: validation checks the raw value, so "   " passes and Clerk receives an empty first name.
-	test.fails("a whitespace-only name is not submitted", () => {
+	// Validation trims, so "   " is not sent to Clerk as a first name.
+	test("a whitespace-only name is not submitted", () => {
 		story(run, given(profile), message(Message.ChangedFirstName({ value: "   " })), message(Message.SubmittedProfile()), Command.expectNone())
+	})
+
+	test("a second profile success after the step moved on does not skip the timezone step", () => {
+		story(
+			run,
+			given(profile),
+			message(Message.SubmittedProfile()),
+			Command.resolve(UpdateProfile, Message.SucceededUpdateProfile()),
+			Command.resolve(ReplaceStepUrl, urlDone),
+			message(Message.SucceededUpdateProfile()),
+			Command.expectNone(),
+			model((current) => expect(current.step).toBe("timezoneSelection")),
+		)
 	})
 
 	test("user.me arriving late seeds an untouched empty form", () => {
@@ -209,8 +222,8 @@ describe("timezone step", () => {
 		)
 	})
 
-	// Bug: ClickedContinueTimezone has no isSubmitting guard, so a second press saves twice.
-	test.fails("Continue while saving sends nothing", () => {
+	// ClickedContinueTimezone is guarded on isSubmitting, so a second press does not save twice.
+	test("Continue while saving sends nothing", () => {
 		story(
 			run,
 			given(withForm(timezone, StepForm.Timezone({ selected: "UTC", query: "", debouncedQuery: "", hoveredOffset: null, detectionAttempted: false, isSubmitting: true }))),
@@ -221,6 +234,23 @@ describe("timezone step", () => {
 })
 
 describe("theme and choice steps", () => {
+	test("a timezone success or theme Continue off their step does nothing", () => {
+		story(
+			run,
+			given(onboardingAt("themeSelection")),
+			message(Message.SucceededUpdateTimezone({ timezone: "UTC" })),
+			Command.expectNone(),
+			model((current) => expect(current.step).toBe("themeSelection")),
+		)
+		story(
+			run,
+			given(onboardingAt("useCases")),
+			message(Message.ClickedContinueTheme()),
+			Command.expectNone(),
+			model((current) => expect(current.step).toBe("useCases")),
+		)
+	})
+
 	test("an invalid brand color is ignored", () => {
 		story(run, given(onboardingAt("themeSelection")), message(Message.SelectedBrandColor({ hex: "green" })), expectNoOutMessage())
 	})
@@ -275,7 +305,6 @@ describe("invite step and finalization", () => {
 			Command.resolveAll([ReplaceStepUrl, urlDone], [LoadHome, Message.CompletedLoadHome()]),
 			model((current) => {
 				expect(current.step).toBe("completed")
-				expect(current.isProcessing).toBe(false)
 			}),
 		)
 	})
@@ -304,8 +333,8 @@ describe("invite step and finalization", () => {
 		)
 	})
 
-	// Bug: Continue has no isLoading guard; a second press while sending invites everyone twice.
-	test.fails("Continue while sending sends nothing", () => {
+	// Continue is guarded on isLoading, so a second press while sending does not invite twice.
+	test("Continue while sending sends nothing", () => {
 		story(run, given(inviteForm(["grace@hazel.test"], true)), message(Message.ClickedContinueInvite()), Command.expectNone())
 	})
 
@@ -320,13 +349,27 @@ describe("invite step and finalization", () => {
 		)
 	})
 
-	// Bug: errors are keyed by position among filled rows but rendered by row index, so a blank first row shows the error.
-	test.fails("an invalid address is flagged on its own row", () => {
+	// Errors are keyed by row index, which is how the view reads them.
+	test("an invalid address is flagged on its own row", () => {
 		story(
 			run,
 			given(inviteForm(["", "grace@"])),
 			message(Message.ClickedContinueInvite()),
-			model((current) => expect(current.form).toMatchObject({ errors: { "1": "Please enter a valid email address" } })),
+			model((current) => expect("errors" in current.form && current.form.errors).toEqual({ "1": "Please enter a valid email address" })),
+		)
+	})
+
+	test("removing a row moves the errors of later rows up with them", () => {
+		story(
+			run,
+			given(inviteForm(["bad@", "ok@hazel.test", "worse@"])),
+			message(Message.ClickedContinueInvite()),
+			model((current) => expect(current.form).toMatchObject({ errors: { "0": "Please enter a valid email address", "2": "Please enter a valid email address" } })),
+			message(Message.ClickedRemoveEmail({ index: 0 })),
+			model((current) => {
+				expect(current.form).toMatchObject({ emails: ["ok@hazel.test", "worse@"] })
+				expect("errors" in current.form && current.form.errors).toEqual({ "1": "Please enter a valid email address" })
+			}),
 		)
 	})
 

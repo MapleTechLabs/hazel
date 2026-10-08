@@ -45,7 +45,6 @@ export const init = (route: RouteOf<"Onboarding">, shared: Shared): Return => {
 		userType: "creator",
 		data: { timezone: null, useCases: [], role: null, emails: [] },
 		form: StepForm.None(),
-		isProcessing: false,
 		error: null,
 		browserTimezone: undefined,
 		hasRedirected: false,
@@ -117,20 +116,18 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				model: setForm(model, StepForm.Profile({ ...form, lastName: value, hasChanged: true })),
 			})),
 		SubmittedProfile: () =>
-			withForm(model, "Profile", (form) =>
-				!form.firstName || !form.lastName
+			withForm(model, "Profile", (form) => {
+				if (form.isSubmitting) return { model }
+				const firstName = form.firstName.trim()
+				const lastName = form.lastName.trim()
+				return !firstName || !lastName
 					? { model: setForm(model, StepForm.Profile({ ...form, hasChanged: true })) }
 					: {
 							model: setForm(model, StepForm.Profile({ ...form, isSubmitting: true })),
-							commands: [
-								UpdateProfile({
-									firstName: form.firstName.trim(),
-									lastName: form.lastName.trim(),
-								}),
-							],
-						},
-			),
-		SucceededUpdateProfile: () => advance(model, shared),
+							commands: [UpdateProfile({ firstName, lastName })],
+						}
+			}),
+		SucceededUpdateProfile: () => withForm(model, "Profile", () => advance(model, shared)),
 		FailedUpdateProfile: () =>
 			withForm(model, "Profile", (form) => ({
 				model: setForm(model, StepForm.Profile({ ...form, isSubmitting: false })),
@@ -179,7 +176,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			})),
 		ClickedContinueTimezone: () =>
 			withForm(model, "Timezone", (form) =>
-				form.selected === null || shared.currentUser === null
+				form.isSubmitting || form.selected === null || shared.currentUser === null
 					? { model }
 					: {
 							model: setForm(model, StepForm.Timezone({ ...form, isSubmitting: true })),
@@ -188,7 +185,8 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 							],
 						},
 			),
-		SucceededUpdateTimezone: ({ timezone }) => advance(model, shared, { timezone }),
+		SucceededUpdateTimezone: ({ timezone }) =>
+			withForm(model, "Timezone", () => advance(model, shared, { timezone })),
 		FailedUpdateTimezone: ({ title, description }) =>
 			withForm(model, "Timezone", (form) => ({
 				model: setForm(model, StepForm.Timezone({ ...form, isSubmitting: false })),
@@ -205,7 +203,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			),
 		SelectedTheme: ({ theme }) =>
 			withForm(model, "Theme", () => requestTheme(model, theme, shared.theme.customization)),
-		ClickedContinueTheme: () => advance(model, shared),
+		ClickedContinueTheme: () => withForm(model, "Theme", () => advance(model, shared)),
 
 		GotChoiceBoxMessage: ({ message: boxMessage }) =>
 			withForm(model, "Choice", (form) => {
@@ -247,7 +245,13 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		ClickedRemoveEmail: ({ index }) =>
 			withForm(model, "Invite", (form) => {
 				const emails = form.emails.filter((_, i) => i !== index)
-				const { [String(index)]: _removed, ...errors } = form.errors
+				// Errors are keyed by row index, so rows after the removed one move up by one.
+				const errors = Object.fromEntries(
+					Object.entries(form.errors).flatMap(([key, error]) => {
+						const row = Number(key)
+						return row === index ? [] : [[String(row > index ? row - 1 : row), error]]
+					}),
+				)
 				return {
 					model: setForm(
 						model,
@@ -257,12 +261,13 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			}),
 		ClickedContinueInvite: () =>
 			withForm(model, "Invite", (form) => {
+				if (form.isLoading) return { model }
 				const filled = form.emails.filter((email) => email.trim().length > 0)
 				if (filled.length === 0) return finalize(model, shared, [])
-				// Keyed by position among the filled addresses, as legacy does.
+				// Keyed by row index, which is how the view reads them.
 				const errors = Object.fromEntries(
-					filled.flatMap((email, index) =>
-						EMAIL_PATTERN.test(email)
+					form.emails.flatMap((email, index) =>
+						email.trim().length === 0 || EMAIL_PATTERN.test(email)
 							? []
 							: [[String(index), "Please enter a valid email address"]],
 					),
@@ -274,20 +279,21 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 							commands: [SendInvites({ emails: filled })],
 						}
 			}),
-		SucceededSendInvites: ({ emails, failedCount }) => {
-			const plural = (count: number) => `${count} invitation${count > 1 ? "s" : ""}`
-			const next = finalize(model, shared, emails)
-			return {
-				...next,
-				outMessage:
-					failedCount === 0
-						? toast("success", `Sent ${plural(emails.length)}`)
-						: toast(
-								"warning",
-								`Sent ${plural(emails.length - failedCount)}, ${failedCount} failed`,
-							),
-			}
-		},
+		SucceededSendInvites: ({ emails, failedCount }) =>
+			withForm(model, "Invite", () => {
+				const plural = (count: number) => `${count} invitation${count > 1 ? "s" : ""}`
+				const next = finalize(model, shared, emails)
+				return {
+					...next,
+					outMessage:
+						failedCount === 0
+							? toast("success", `Sent ${plural(emails.length)}`)
+							: toast(
+									"warning",
+									`Sent ${plural(emails.length - failedCount)}, ${failedCount} failed`,
+								),
+				}
+			}),
 		FailedSendInvites: ({ reason }) =>
 			withForm(model, "Invite", (form) => ({
 				model: setForm(model, StepForm.Invite({ ...form, isLoading: false })),
@@ -302,12 +308,11 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			const completed = enterStep(model, "completed", { direction: "forward", shared, syncUrl: true })
 			return {
 				...completed,
-				model: modifyFields(completed.model, { isProcessing: () => false }),
 				commands: [...(completed.commands ?? []), LoadHome({ href: slug ? `/${slug}` : "/" })],
 			}
 		},
 		FailedCompleteOnboarding: ({ error }) => ({
-			model: modifyFields(model, { isProcessing: () => false, error: () => error }),
+			model: modifyFields(model, { error: () => error }),
 		}),
 		CompletedReplaceStepUrl: () => ({ model }),
 		CompletedLoadHome: () => ({ model }),

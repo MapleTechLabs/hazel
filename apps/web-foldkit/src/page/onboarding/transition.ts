@@ -72,7 +72,6 @@ export const enterStep = (
 		direction: () => options.direction,
 		animatesStep: () => options.syncUrl,
 		error: () => null,
-		isProcessing: () => step === "finalization",
 		form: () => formFor(model, step, options.shared),
 	})
 	return {

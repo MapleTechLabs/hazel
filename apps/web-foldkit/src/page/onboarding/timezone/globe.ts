@@ -58,25 +58,28 @@ export const TwinkleStar = Mount.define("TwinkleStar", {
 	args: { delay: Schema.Number, isVisible: Schema.Boolean },
 	messages: [Message.StartedGlobeAnimation],
 	execute: ({ element, delay, isVisible }) =>
-		Effect.sync(() => {
-			const keyframes = isVisible
-				? [
-						{ opacity: 0.4, transform: "scale(0.8)" },
-						{ opacity: 1, transform: "scale(1.3)" },
-						{ opacity: 0.4, transform: "scale(0.8)" },
-					]
-				: [
-						{ opacity: 0.4, transform: "scale(0.8)" },
-						{ opacity: 0, transform: "scale(0)" },
-					]
-			element.animate(keyframes, {
-				duration: 2500,
-				delay: delay * 1000,
-				iterations: Number.POSITIVE_INFINITY,
-				easing: "ease-in-out",
-			})
-			return Message.StartedGlobeAnimation()
-		}),
+		Effect.acquireRelease(
+			Effect.sync(() => {
+				const keyframes = isVisible
+					? [
+							{ opacity: 0.4, transform: "scale(0.8)" },
+							{ opacity: 1, transform: "scale(1.3)" },
+							{ opacity: 0.4, transform: "scale(0.8)" },
+						]
+					: [
+							{ opacity: 0.4, transform: "scale(0.8)" },
+							{ opacity: 0, transform: "scale(0)" },
+						]
+				return element.animate(keyframes, {
+					duration: 2500,
+					delay: delay * 1000,
+					iterations: Number.POSITIVE_INFINITY,
+					easing: "ease-in-out",
+				})
+			}),
+			// The animation repeats forever, so it is cancelled when the star leaves the DOM.
+			(animation) => Effect.sync(() => animation.cancel()),
+		).pipe(Effect.as(Message.StartedGlobeAnimation())),
 })
 
 const gridLine = (h: HtmlBuilder<Message>, isDaytime: boolean, delay: number) => [

@@ -71,15 +71,19 @@ export const SendInvites = Command.define("SendInvites", {
 	args: { emails: Schema.Array(Schema.String) },
 	messages: [Message.SucceededSendInvites, Message.FailedSendInvites],
 	execute: ({ emails }) =>
-		Effect.promise(async () => {
-			if (!clerkResource.hasOrganization())
-				return Message.FailedSendInvites({ reason: "NoOrganization" })
-			const results = await clerkResource.inviteMembers(emails)
-			const failedCount = results.filter((result) => result.status === "rejected").length
-			return failedCount === emails.length
-				? Message.FailedSendInvites({ reason: "AllFailed" })
-				: Message.SucceededSendInvites({ emails, failedCount })
-		}),
+		Effect.suspend(() =>
+			clerkResource.hasOrganization()
+				? Effect.tryPromise(() => clerkResource.inviteMembers(emails)).pipe(
+						Effect.map((results) => {
+							const failedCount = results.filter((result) => result.status === "rejected").length
+							return failedCount === emails.length
+								? Message.FailedSendInvites({ reason: "AllFailed" })
+								: Message.SucceededSendInvites({ emails, failedCount })
+						}),
+						Effect.catch(() => Effect.succeed(Message.FailedSendInvites({ reason: "AllFailed" }))),
+					)
+				: Effect.succeed(Message.FailedSendInvites({ reason: "NoOrganization" })),
+		),
 })
 
 /** `handleFinalization`: finalize first (critical), then the best-effort metadata and invites. */
@@ -103,7 +107,7 @@ export const CompleteOnboarding = Command.define("CompleteOnboarding", {
 					metadata: { ...(role === null ? {} : { role }), useCases },
 				}).pipe(Effect.ignore)
 			if (clerkResource.hasOrganization() && emails.length > 0)
-				yield* Effect.promise(() => clerkResource.inviteMembers(emails))
+				yield* Effect.tryPromise(() => clerkResource.inviteMembers(emails)).pipe(Effect.ignore)
 			return Message.SucceededCompleteOnboarding()
 		}),
 })

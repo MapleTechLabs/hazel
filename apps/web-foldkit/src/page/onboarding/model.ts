@@ -70,7 +70,6 @@ export const Model = Schema.Struct({
 	userType: UserType,
 	data: Data,
 	form: StepForm,
-	isProcessing: Schema.Boolean,
 	error: Schema.NullOr(Schema.String),
 	/** `undefined` until read; the flow starts once it is known. */
 	browserTimezone: Schema.UndefinedOr(Schema.String),
