@@ -35,10 +35,10 @@ const initial = init({ _tag: "ChannelSettingsIntegrations", orgSlug: "hazel", ch
 const ci = webhookOf(2, "CI notifications")
 const openStatus = webhookOf(3, "OpenStatus")
 const listed = (...webhooks: ReadonlyArray<typeof ci>) =>
-	[Message.SucceededListWebhooks({ webhooks }), Message.SucceededListRss({ feeds: [] })].reduce(
-		(current, next) => update(current, next, shared).model,
-		initial,
-	)
+	[
+		Message.SucceededListWebhooks({ version: 1, webhooks }),
+		Message.SucceededListRss({ version: 1, feeds: [] }),
+	].reduce((current, next) => update(current, next, shared).model, initial)
 const nameInput = Scene.label("Name")
 const createButton = Scene.role("button", { name: /Create webhook/ })
 const menuMounted = Scene.Mount.resolve(FocusTriggerOnPress, Menu.Message.CompletedFocusTriggerOnPress())
@@ -85,7 +85,10 @@ describe("create webhook", () => {
 				Scene.text("Make sure to copy your token now. You won't be able to see it again!"),
 			).toExist(),
 			Scene.expect(Scene.displayValue("secret")).toHaveAttr("type", "password"),
-			Scene.Command.resolve(ListWebhooks, Message.SucceededListWebhooks({ webhooks: [ci] })),
+			Scene.Command.resolve(
+				ListWebhooks,
+				Message.SucceededListWebhooks({ version: 2, webhooks: [ci] }),
+			),
 			menuMounted,
 			Scene.expect(Scene.text("CI notifications")).toExist(),
 			Scene.click(Scene.role("button", { name: "Show token" })),
@@ -149,7 +152,10 @@ describe("provider cards", () => {
 			Scene.expectOutMessage(
 				PageOutMessage.RequestedToast({ toast: successToast("OpenStatus connected") }),
 			),
-			Scene.Command.resolve(ListWebhooks, Message.SucceededListWebhooks({ webhooks: [openStatus] })),
+			Scene.Command.resolve(
+				ListWebhooks,
+				Message.SucceededListWebhooks({ version: 2, webhooks: [openStatus] }),
+			),
 			Scene.expect(Scene.text("Copy this URL now. The token won't be shown again.")).toExist(),
 			Scene.click(Scene.role("button", { name: "Done" })),
 			Scene.expect(Scene.text("Copy this URL now. The token won't be shown again.")).toBeAbsent(),
@@ -196,7 +202,7 @@ describe("provider cards", () => {
 			),
 			Scene.Command.resolve(
 				ListWebhooks,
-				Message.SucceededListWebhooks({ webhooks: [webhookOf(3, "OpenStatus", false)] }),
+				Message.SucceededListWebhooks({ version: 2, webhooks: [webhookOf(3, "OpenStatus", false)] }),
 			),
 			Scene.expect(Scene.role("button", { name: "Enable" })).toExist(),
 			Scene.expect(Scene.text("Disabled")).toExist(),
@@ -247,7 +253,7 @@ describe("row removal", () => {
 			Scene.expect(confirmDialog).toBeAbsent(),
 			Scene.Mount.expectEnded(Modal.PortalModal),
 			Scene.Mount.expectEnded(FocusTriggerOnPress),
-			Scene.Command.resolve(ListWebhooks, Message.SucceededListWebhooks({ webhooks: [] })),
+			Scene.Command.resolve(ListWebhooks, Message.SucceededListWebhooks({ version: 2, webhooks: [] })),
 			Scene.expect(Scene.text("No webhooks yet")).toExist(),
 		)
 	})
@@ -256,7 +262,11 @@ describe("row removal", () => {
 describe("rss feeds", () => {
 	test("Pause from a feed menu pauses it and the reload shows the Paused badge", () => {
 		const feed = feedOf(30, "Hazel blog")
-		const withFeed = update(listed(), Message.SucceededListRss({ feeds: [feed] }), shared).model
+		const withFeed = update(
+			listed(),
+			Message.SucceededListRss({ version: 1, feeds: [feed] }),
+			shared,
+		).model
 		Scene.scene(
 			config,
 			Scene.given(withFeed),
@@ -277,7 +287,7 @@ describe("rss feeds", () => {
 			Scene.Mount.expectEnded(FocusTriggerOnPress),
 			Scene.Command.resolve(
 				ListRss,
-				Message.SucceededListRss({ feeds: [{ ...feed, isEnabled: false }] }),
+				Message.SucceededListRss({ version: 2, feeds: [{ ...feed, isEnabled: false }] }),
 			),
 			menuMounted,
 			Scene.expect(Scene.text("Paused")).toExist(),

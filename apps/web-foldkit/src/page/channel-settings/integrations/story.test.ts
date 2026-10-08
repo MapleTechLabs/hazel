@@ -45,7 +45,10 @@ const run = (current: Parameters<typeof update>[0], next: Message) => update(cur
 const initial = init({ _tag: "ChannelSettingsIntegrations", orgSlug: "hazel", channelId })
 const ci = webhook(2, "CI notifications")
 const openStatus = webhook(3, "OpenStatus")
-const loaded = run(initial.model, Message.SucceededListWebhooks({ webhooks: [ci, openStatus] })).model
+const loaded = run(
+	initial.model,
+	Message.SucceededListWebhooks({ version: 1, webhooks: [ci, openStatus] }),
+).model
 
 describe("channel integrations", () => {
 	test("mount lists the webhooks and RSS feeds; menus exist for custom webhooks only", () => {
@@ -78,7 +81,7 @@ describe("channel integrations", () => {
 				}),
 			),
 			model((current) => expect(current.webhooks.isLoading).toBe(true)),
-			Command.resolve(ListWebhooks, Message.SucceededListWebhooks({ webhooks: [] })),
+			Command.resolve(ListWebhooks, Message.SucceededListWebhooks({ version: 2, webhooks: [] })),
 		)
 	})
 
@@ -109,7 +112,7 @@ describe("channel integrations", () => {
 					isDelete: true,
 				}),
 			),
-			Command.resolve(ListWebhooks, Message.SucceededListWebhooks({ webhooks: [ci] })),
+			Command.resolve(ListWebhooks, Message.SucceededListWebhooks({ version: 2, webhooks: [ci] })),
 			model((current) => expect(current.providers.openstatus.confirmDelete).toBe(false)),
 		)
 	})
@@ -127,7 +130,14 @@ describe("list failure", () => {
 		story(
 			run,
 			given(initial.model),
-			message(Message.FailedList({ list: "webhooks", title: "Channel not found", description: null })),
+			message(
+				Message.FailedList({
+					list: "webhooks",
+					version: 1,
+					title: "Channel not found",
+					description: null,
+				}),
+			),
 			expectOutMessage(
 				PageOutMessage.RequestedToast({
 					toast: { intent: "error", title: "Channel not found", description: null },
@@ -148,14 +158,14 @@ const confirming = [
 
 describe("row removal", () => {
 	test("Delete from the menu opens the confirm dialog, and confirming deletes and reloads", () => {
-		expect(confirming.confirmTarget).toEqual({ kind: "webhook", id: ci.id })
+		expect(confirming.confirm).toEqual({ _tag: "Confirming", target: { kind: "webhook", id: ci.id } })
 		expect(confirming.confirmModal.isOpen).toBe(true)
 		story(
 			run,
 			given(confirming),
 			message(Message.ClickedConfirmRemove()),
 			Command.expectExact(RunRowAction({ kind: "webhook", id: ci.id, isEnabled: null })),
-			model((current) => expect(current.isConfirmPending).toBe(true)),
+			model((current) => expect(current.confirm._tag).toBe("Removing")),
 			Command.resolve(
 				RunRowAction,
 				Message.SucceededRowAction({ kind: "webhook", id: ci.id, successMessage: "Webhook deleted" }),
@@ -167,10 +177,12 @@ describe("row removal", () => {
 			),
 			model((current) => {
 				expect(current.confirmModal.isOpen).toBe(false)
-				expect(current.isConfirmPending).toBe(false)
-				expect(current.confirmTarget).toBeNull()
+				expect(current.confirm).toEqual({ _tag: "Closed" })
 			}),
-			Command.resolve(ListWebhooks, Message.SucceededListWebhooks({ webhooks: [openStatus] })),
+			Command.resolve(
+				ListWebhooks,
+				Message.SucceededListWebhooks({ version: 2, webhooks: [openStatus] }),
+			),
 		)
 	})
 
@@ -203,8 +215,24 @@ describe("row removal", () => {
 		story(run, given(pending), message(Message.ClickedConfirmRemove()), Command.expectNone())
 	})
 
-	// Bug: dismissing the dialog mid-delete clears confirmTarget, so settleRowAction never resets isConfirmPending.
-	test.fails("Escape while a delete runs does not wedge the next removal", () => {
+	test("an older list response is dropped once a newer reload is out", () => {
+		const reloading = { ...loaded, webhooks: { ...loaded.webhooks, isLoading: true, version: 3 } }
+		const stale = run(reloading, Message.SucceededListWebhooks({ version: 2, webhooks: [] }))
+		expect(stale.model.webhooks).toMatchObject({ isLoading: true, items: [ci, openStatus] })
+		const staleFailure = run(
+			reloading,
+			Message.FailedList({
+				list: "webhooks",
+				version: 2,
+				title: "Channel not found",
+				description: null,
+			}),
+		)
+		expect(staleFailure.outMessage).toBeUndefined()
+		expect(staleFailure.model.webhooks.isLoading).toBe(true)
+	})
+
+	test("Escape while a delete runs does not wedge the next removal", () => {
 		const pending = run(confirming, Message.ClickedConfirmRemove()).model
 		const escaped = run(
 			pending,
@@ -241,7 +269,10 @@ describe("provider cards", () => {
 				expect(current.providers.railway).toMatchObject({ isCreating: false, createdToken: "tok" })
 				expect(current.webhooks.isLoading).toBe(true)
 			}),
-			Command.resolve(ListWebhooks, Message.SucceededListWebhooks({ webhooks: [ci, openStatus] })),
+			Command.resolve(
+				ListWebhooks,
+				Message.SucceededListWebhooks({ version: 2, webhooks: [ci, openStatus] }),
+			),
 			message(Message.ClickedDismissProviderToken({ provider: "railway" })),
 			model((current) => expect(current.providers.railway.createdToken).toBeNull()),
 		)
@@ -286,6 +317,7 @@ describe("provider cards", () => {
 				RunProviderAction,
 				Message.FailedProviderAction({
 					provider: "openstatus",
+					isDelete: false,
 					title: "Webhook not found",
 					description: null,
 				}),
@@ -298,12 +330,30 @@ describe("provider cards", () => {
 		)
 	})
 
-	// Bug: ClickedToggleProvider has no in-flight state, so a double click sends two updates.
-	test.fails("a second Disable click while the first runs sends nothing", () => {
+	test("a second Disable click while the first runs sends nothing", () => {
 		const toggling = run(loaded, Message.ClickedToggleProvider({ provider: "openstatus" }))
 		expect(toggling.commands).toHaveLength(1)
 		expect(
 			run(toggling.model, Message.ClickedToggleProvider({ provider: "openstatus" })).commands ?? [],
+		).toHaveLength(0)
+		const failed = run(
+			toggling.model,
+			Message.FailedProviderAction({
+				provider: "openstatus",
+				isDelete: false,
+				title: "Failed",
+				description: null,
+			}),
+		)
+		expect(failed.model.providers.openstatus.isToggling).toBe(false)
+	})
+
+	test("a second Delete click while deleting sends nothing", () => {
+		const armed = run(loaded, Message.ClickedDeleteProvider({ provider: "openstatus" })).model
+		const deleting = run(armed, Message.ClickedDeleteProvider({ provider: "openstatus" }))
+		expect(deleting.commands?.map((command) => command.name)).toEqual([RunProviderAction.name])
+		expect(
+			run(deleting.model, Message.ClickedDeleteProvider({ provider: "openstatus" })).commands ?? [],
 		).toHaveLength(0)
 	})
 
@@ -364,7 +414,10 @@ describe("create webhook form", () => {
 			model((current) =>
 				expect(current.createForm.created).toEqual({ token: "secret", webhookUrl: "https://hook" }),
 			),
-			Command.resolve(ListWebhooks, Message.SucceededListWebhooks({ webhooks: [ci, openStatus] })),
+			Command.resolve(
+				ListWebhooks,
+				Message.SucceededListWebhooks({ version: 2, webhooks: [ci, openStatus] }),
+			),
 			message(Message.ClickedDismissToken()),
 			model((current) => expect(current.createForm).toEqual(initial.model.createForm)),
 		)
@@ -453,9 +506,9 @@ describe("copy and GitHub", () => {
 			run,
 			given(loaded),
 			message(Message.UpdatedGitHubConnection({ isConnected: true })),
-			Command.expectExact(ListGitHub({ channelId })),
+			Command.expectExact(ListGitHub({ channelId, version: 1 })),
 			model((current) => expect(current.github.isLoading).toBe(true)),
-			Command.resolve(ListGitHub, Message.SucceededListGitHub({ repos: [] })),
+			Command.resolve(ListGitHub, Message.SucceededListGitHub({ version: 1, repos: [] })),
 			message(Message.UpdatedGitHubConnection({ isConnected: true })),
 			Command.expectNone(),
 			message(Message.ClickedConnectGitHub()),

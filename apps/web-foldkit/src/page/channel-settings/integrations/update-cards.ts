@@ -2,14 +2,9 @@ import { modifyFields } from "foldkit/struct"
 import { successToast } from "../../../ui/toast-exit"
 import type { PageReturn } from "../../contract"
 import { PageOutMessage } from "../../out-message"
-import {
-	ConnectProvider,
-	CreateWebhook,
-	ListWebhooks,
-	RunProviderAction,
-	WaitForConfirmReset,
-} from "./command"
+import { ConnectProvider, CreateWebhook, RunProviderAction, WaitForConfirmReset } from "./command"
 import type { Message } from "./message"
+import { reload } from "./rows"
 import {
 	type CreateForm,
 	INTEGRATION_CONFIG,
@@ -37,10 +32,7 @@ const withForm = (model: Model, f: (form: CreateForm) => CreateForm): Model =>
 export const providerWebhook = (model: Model, provider: Provider) =>
 	model.webhooks.items.find((webhook) => webhook.name === INTEGRATION_CONFIG[provider].name) ?? null
 
-const refetchWebhooks = (model: Model) => {
-	const next = modifyFields(model, { webhooks: (list) => ({ ...list, isLoading: true }) })
-	return { model: next, commands: [ListWebhooks({ channelId: model.channelId })] }
-}
+const refetchWebhooks = (model: Model) => reload(model, "webhook")
 
 const emptyForm: CreateForm = {
 	isExpanded: false,
@@ -106,10 +98,10 @@ export const updateCards = (
 	}),
 	ClickedToggleProvider: ({ provider }) => {
 		const webhook = providerWebhook(model, provider)
-		return webhook === null
+		return webhook === null || model.providers[provider].isToggling
 			? { model }
 			: {
-					model,
+					model: withCard(model, provider, (card) => ({ ...card, isToggling: true })),
 					commands: [
 						RunProviderAction({ provider, webhookId: webhook.id, isEnabled: !webhook.isEnabled }),
 					],
@@ -119,7 +111,7 @@ export const updateCards = (
 	ClickedDeleteProvider: ({ provider }) => {
 		const webhook = providerWebhook(model, provider)
 		const card = model.providers[provider]
-		if (webhook === null) return { model }
+		if (webhook === null || card.isDeleting) return { model }
 		if (!card.confirmDelete) {
 			const version = card.confirmVersion + 1
 			return {
@@ -143,15 +135,17 @@ export const updateCards = (
 	}),
 	SucceededProviderAction: ({ provider, successMessage, isDelete }) => {
 		const next = withCard(model, provider, (card) =>
-			isDelete ? { ...card, isDeleting: false, confirmDelete: false } : card,
+			isDelete ? { ...card, isDeleting: false, confirmDelete: false } : { ...card, isToggling: false },
 		)
 		return {
 			...refetchWebhooks(next),
 			outMessage: PageOutMessage.RequestedToast({ toast: successToast(successMessage) }),
 		}
 	},
-	FailedProviderAction: ({ provider, title, description }) => ({
-		model: withCard(model, provider, (card) => ({ ...card, isDeleting: false })),
+	FailedProviderAction: ({ provider, isDelete, title, description }) => ({
+		model: withCard(model, provider, (card) =>
+			isDelete ? { ...card, isDeleting: false } : { ...card, isToggling: false },
+		),
 		outMessage: errorToast(title, description),
 	}),
 	ClickedProviderUrlInfo: () => ({

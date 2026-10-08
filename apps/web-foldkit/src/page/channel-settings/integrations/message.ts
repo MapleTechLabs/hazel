@@ -8,11 +8,11 @@ const Failure = { title: Schema.String, description: Schema.NullOr(Schema.String
 
 export const Message = defineMessageUnion({
 	UpdatedGitHubConnection: { isConnected: Schema.Boolean },
-	SucceededListWebhooks: { webhooks: Schema.Array(Webhook) },
-	SucceededListRss: { feeds: Schema.Array(RssFeed) },
-	SucceededListGitHub: { repos: Schema.Array(GitHubRepo) },
+	SucceededListWebhooks: { version: Schema.Number, webhooks: Schema.Array(Webhook) },
+	SucceededListRss: { version: Schema.Number, feeds: Schema.Array(RssFeed) },
+	SucceededListGitHub: { version: Schema.Number, repos: Schema.Array(GitHubRepo) },
 	/** A list failed: legacy keeps the rows it had, stops loading, and toasts. */
-	FailedList: { list: Schema.Literals(["webhooks", "rss", "github"]), ...Failure },
+	FailedList: { list: Schema.Literals(["webhooks", "rss", "github"]), version: Schema.Number, ...Failure },
 	ClickedConnectGitHub: {},
 	ClickedAddRepo: {},
 	ClickedAddFeed: {},
@@ -37,7 +37,7 @@ export const Message = defineMessageUnion({
 	ClickedDeleteProvider: { provider: Provider },
 	ElapsedConfirmDelay: { provider: Provider, version: Schema.Number },
 	SucceededProviderAction: { provider: Provider, successMessage: Schema.String, isDelete: Schema.Boolean },
-	FailedProviderAction: { provider: Provider, ...Failure },
+	FailedProviderAction: { provider: Provider, isDelete: Schema.Boolean, ...Failure },
 	ClickedProviderUrlInfo: {},
 	ClickedDismissProviderToken: { provider: Provider },
 	ClickedExpandCreateForm: {},

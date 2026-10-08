@@ -1,6 +1,9 @@
 import { Array, Option } from "effect"
 import { modifyFields } from "foldkit/struct"
 import * as Menu from "../../../ui/menu"
+import type { PageReturn } from "../../contract"
+import { ListGitHub, ListRss, ListWebhooks } from "./command"
+import type { Message } from "./message"
 import { type Model, type RowKind, rowMenuId } from "./model"
 
 /** Each row's `<Menu>` entries; the toggle item is disabled while its request runs (`isToggling`). */
@@ -35,3 +38,27 @@ export const reflectRowMenus = (model: Model): Model =>
 				)
 			}),
 	})
+
+/** Each reload bumps the list's version, so only the latest response lands. */
+export const reload = (model: Model, kind: RowKind): PageReturn<Model, Message> => {
+	const { channelId } = model
+	if (kind === "webhook") {
+		const version = model.webhooks.version + 1
+		return {
+			model: modifyFields(model, { webhooks: (list) => ({ ...list, isLoading: true, version }) }),
+			commands: [ListWebhooks({ channelId, version })],
+		}
+	}
+	if (kind === "rss") {
+		const version = model.rss.version + 1
+		return {
+			model: modifyFields(model, { rss: (list) => ({ ...list, isLoading: true, version }) }),
+			commands: [ListRss({ channelId, version })],
+		}
+	}
+	const version = model.github.version + 1
+	return {
+		model: modifyFields(model, { github: (list) => ({ ...list, isLoading: true, version }) }),
+		commands: [ListGitHub({ channelId, version })],
+	}
+}

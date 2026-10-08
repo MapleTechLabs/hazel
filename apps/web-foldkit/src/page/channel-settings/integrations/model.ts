@@ -33,9 +33,9 @@ export const GitHubRepo = Schema.Struct({
 })
 export type GitHubRepo = typeof GitHubRepo.Type
 
-/** `useState(true)` loading plus the fetched rows, as each card keeps them. */
+/** `useState(true)` loading plus the fetched rows; `version` names the latest request, so older results drop. */
 const listOf = <S extends Schema.Top>(item: S) =>
-	Schema.Struct({ isLoading: Schema.Boolean, items: Schema.Array(item) })
+	Schema.Struct({ isLoading: Schema.Boolean, version: Schema.Number, items: Schema.Array(item) })
 
 export const Provider = Schema.Literals(["openstatus", "railway"])
 export type Provider = typeof Provider.Type
@@ -43,6 +43,8 @@ export type Provider = typeof Provider.Type
 /** `IntegrationCard` local state. */
 export const ProviderCard = Schema.Struct({
 	isCreating: Schema.Boolean,
+	/** Enable/Disable in flight; legacy keeps the button enabled, so update ignores repeats. */
+	isToggling: Schema.Boolean,
 	isDeleting: Schema.Boolean,
 	confirmDelete: Schema.Boolean,
 	/** Bumped per confirm, so only the latest 3 s timeout resets it. */
@@ -69,6 +71,15 @@ export type RowKind = typeof RowKind.Type
 
 /** The row whose delete confirmation is open (each legacy row owns an alertdialog). */
 export const ConfirmTarget = Schema.Struct({ kind: RowKind, id: Schema.String })
+export type ConfirmTarget = typeof ConfirmTarget.Type
+
+/** The delete confirmation: no target, asking, or removing (the dialog may be dismissed meanwhile). */
+export const Confirm = Schema.Union([
+	Schema.TaggedStruct("Closed", {}),
+	Schema.TaggedStruct("Confirming", { target: ConfirmTarget }),
+	Schema.TaggedStruct("Removing", { target: ConfirmTarget }),
+])
+export type Confirm = typeof Confirm.Type
 
 export const Model = Schema.Struct({
 	channelId: ChannelId,
@@ -80,9 +91,8 @@ export const Model = Schema.Struct({
 	togglingRowIds: Schema.Array(Schema.String),
 	/** Copy buttons showing their check for 2 s: webhook ids, `provider:<name>`, `token`, `url`. */
 	copiedIds: Schema.Array(Schema.String),
-	confirmTarget: Schema.NullOr(ConfirmTarget),
+	confirm: Confirm,
 	confirmModal: Modal.Model,
-	isConfirmPending: Schema.Boolean,
 	providers: Schema.Struct({ openstatus: ProviderCard, railway: ProviderCard }),
 	createForm: CreateForm,
 })

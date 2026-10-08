@@ -37,7 +37,7 @@ const CONFIRM_COPY: Readonly<Record<RowKind, { title: string; description: strin
 
 /** Each row's `<ModalContent role="alertdialog" size="xs">` delete confirmation. */
 const confirmModal = (h: HtmlBuilder<Message>, model: Model): Html => {
-	const copy = CONFIRM_COPY[model.confirmTarget?.kind ?? "webhook"]
+	const copy = CONFIRM_COPY[model.confirm._tag === "Closed" ? "webhook" : model.confirm.target.kind]
 	return h.submodel({
 		slotId: "integration-row-remove",
 		model: model.confirmModal,
@@ -57,7 +57,7 @@ const confirmModal = (h: HtmlBuilder<Message>, model: Model): Html => {
 						h,
 						{
 							intent: "danger",
-							isPending: model.isConfirmPending,
+							isPending: model.confirm._tag === "Removing",
 							onPress: Message.ClickedConfirmRemove(),
 						},
 						[copy.action],

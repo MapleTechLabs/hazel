@@ -25,15 +25,16 @@ const msOf = (date: Parameters<typeof toDate>[0] | null) => (date ? toDate(date)
 // LISTS (`listChannelWebhooksMutation`, `listRssSubscriptionsMutation`, `listGitHubSubscriptionsMutation`)
 
 export const ListWebhooks = Command.define("ListWebhooks", {
-	args: { channelId: ChannelId },
+	args: { channelId: ChannelId, version: Schema.Number },
 	messages: [Message.SucceededListWebhooks, Message.FailedList],
-	execute: ({ channelId }) =>
+	execute: ({ channelId, version }) =>
 		Effect.gen(function* () {
 			const client = yield* HazelRpc
 			const exit = yield* Effect.exit(client("channelWebhook.list", { channelId }))
 			return Exit.match(exit, {
 				onSuccess: (response) =>
 					Message.SucceededListWebhooks({
+						version,
 						webhooks: response.data.map((webhook) => ({
 							id: webhook.id,
 							name: webhook.name,
@@ -44,21 +45,22 @@ export const ListWebhooks = Command.define("ListWebhooks", {
 						})),
 					}),
 				onFailure: (cause) =>
-					Message.FailedList({ list: "webhooks", ...failure(cause, channelNotFound) }),
+					Message.FailedList({ list: "webhooks", version, ...failure(cause, channelNotFound) }),
 			})
 		}),
 })
 
 export const ListRss = Command.define("ListRss", {
-	args: { channelId: ChannelId },
+	args: { channelId: ChannelId, version: Schema.Number },
 	messages: [Message.SucceededListRss, Message.FailedList],
-	execute: ({ channelId }) =>
+	execute: ({ channelId, version }) =>
 		Effect.gen(function* () {
 			const client = yield* HazelRpc
 			const exit = yield* Effect.exit(client("rssSubscription.list", { channelId }))
 			return Exit.match(exit, {
 				onSuccess: (response) =>
 					Message.SucceededListRss({
+						version,
 						feeds: response.data.map((feed) => ({
 							id: feed.id,
 							feedUrl: feed.feedUrl,
@@ -69,21 +71,23 @@ export const ListRss = Command.define("ListRss", {
 							pollingIntervalMinutes: feed.pollingIntervalMinutes,
 						})),
 					}),
-				onFailure: (cause) => Message.FailedList({ list: "rss", ...failure(cause, channelNotFound) }),
+				onFailure: (cause) =>
+					Message.FailedList({ list: "rss", version, ...failure(cause, channelNotFound) }),
 			})
 		}),
 })
 
 export const ListGitHub = Command.define("ListGitHub", {
-	args: { channelId: ChannelId },
+	args: { channelId: ChannelId, version: Schema.Number },
 	messages: [Message.SucceededListGitHub, Message.FailedList],
-	execute: ({ channelId }) =>
+	execute: ({ channelId, version }) =>
 		Effect.gen(function* () {
 			const client = yield* HazelRpc
 			const exit = yield* Effect.exit(client("githubSubscription.list", { channelId }))
 			return Exit.match(exit, {
 				onSuccess: (response) =>
 					Message.SucceededListGitHub({
+						version,
 						repos: response.data.map((repo) => ({
 							id: repo.id,
 							repositoryFullName: repo.repositoryFullName,
@@ -93,7 +97,7 @@ export const ListGitHub = Command.define("ListGitHub", {
 						})),
 					}),
 				onFailure: (cause) =>
-					Message.FailedList({ list: "github", ...failure(cause, channelNotFound) }),
+					Message.FailedList({ list: "github", version, ...failure(cause, channelNotFound) }),
 			})
 		}),
 })
@@ -236,6 +240,7 @@ export const RunProviderAction = Command.define("RunProviderAction", {
 				onFailure: (cause) =>
 					Message.FailedProviderAction({
 						provider,
+						isDelete: isEnabled === null,
 						...failure(cause, {
 							ChannelWebhookNotFoundError: notFound(
 								"Webhook not found",
