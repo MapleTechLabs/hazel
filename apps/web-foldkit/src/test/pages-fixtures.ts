@@ -46,10 +46,10 @@ export const makeShared = (overrides: Partial<Shared> = {}): Shared => ({
 type PageUpdate<Model, Message> = (model: Model, message: Message, shared: Shared) => PageReturn<Model, Message>
 type PageView<Model, Message> = (model: Model, viewInputs: PageViewInputs, h: HtmlBuilder<Message>) => Html
 
-/** Binds a page's `update` to one `Shared` for Story. */
+/** Binds a page's `update` to one `Shared` for Story (generic over the return so inference stays exact). */
 export const storyUpdate =
-	<Model, Message>(update: PageUpdate<Model, Message>, shared: Shared) =>
-	(model: Model, message: Message) =>
+	<Model, Message, Return>(update: (model: Model, message: Message, shared: Shared) => Return, shared: Shared) =>
+	(model: Model, message: Message): Return =>
 		update(model, message, shared)
 
 /** A Scene config for a page: `update` and the page view, both reading the same `Shared`. */

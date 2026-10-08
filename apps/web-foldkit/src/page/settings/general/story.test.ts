@@ -29,8 +29,8 @@ const logo = new File(["png"], "logo.png", { type: "image/png" })
 
 describe("organization name", () => {
 	test("an unchanged or blank name is not saved", () => {
-		story(storyUpdate(update, owner), given(initial), message(Message.SubmittedName()), Command.expectNone())
-		story(
+		story<Model, Message, PageOutMessage>(storyUpdate(update, owner), given(initial), message(Message.SubmittedName()), Command.expectNone())
+		story<Model, Message, PageOutMessage>(
 			storyUpdate(update, owner),
 			given(initial),
 			message(Message.ChangedName({ value: "   " })),
@@ -40,7 +40,7 @@ describe("organization name", () => {
 	})
 
 	test("a changed name is trimmed, saved once, and a second submit while saving is ignored", () => {
-		story(
+		story<Model, Message, PageOutMessage>(
 			storyUpdate(update, owner),
 			given(initial),
 			message(Message.ChangedName({ value: " Hazel HQ " })),
@@ -59,7 +59,7 @@ describe("organization name", () => {
 	})
 
 	test("a failed save clears the saving flag and forwards the failure toast", () => {
-		story(
+		story<Model, Message, PageOutMessage>(
 			storyUpdate(update, owner),
 			given({ ...initial, name: "Hazel HQ" }),
 			message(Message.SubmittedName()),
@@ -78,7 +78,7 @@ describe("organization name", () => {
 
 describe("logo", () => {
 	test("clicking opens the picker; a picked file uploads and toasts", () => {
-		story(
+		story<Model, Message, PageOutMessage>(
 			storyUpdate(update, owner),
 			given(initial),
 			message(Message.ClickedLogo()),
@@ -96,7 +96,7 @@ describe("logo", () => {
 
 	test("a failed upload clears the uploading flag and toasts; an empty pick does nothing", () => {
 		const toast = errorToast("Upload failed", "Failed to update organization. Please try again.")
-		story(
+		story<Model, Message, PageOutMessage>(
 			storyUpdate(update, owner),
 			given(initial),
 			message(Message.SelectedLogo({ files: [] })),
@@ -111,7 +111,7 @@ describe("logo", () => {
 
 describe("public mode", () => {
 	test("a failed toggle clears the pending flag and leaves isPublic to the live row", () => {
-		story(
+		story<Model, Message, PageOutMessage>(
 			storyUpdate(update, owner),
 			given(initial),
 			message(Message.ToggledPublicMode({ isPublic: true })),
@@ -123,7 +123,7 @@ describe("public mode", () => {
 	})
 
 	test("nothing is sent before the organization is known", () => {
-		story(
+		story<Model, Message, PageOutMessage>(
 			storyUpdate(update, makeShared({ organization: null })),
 			given(initial),
 			message(Message.ToggledPublicMode({ isPublic: true })),
@@ -134,7 +134,7 @@ describe("public mode", () => {
 
 describe("delete workspace", () => {
 	test("confirming needs the exact organization name", () => {
-		story(
+		story<Model, Message, PageOutMessage>(
 			storyUpdate(update, owner),
 			given(initial),
 			message(Message.ClickedDeleteWorkspace()),
@@ -153,7 +153,7 @@ describe("delete workspace", () => {
 	})
 
 	test("closing the modal clears the confirmation", () => {
-		story(
+		story<Model, Message, PageOutMessage>(
 			storyUpdate(update, owner),
 			given(initial),
 			message(Message.ClickedDeleteWorkspace()),
