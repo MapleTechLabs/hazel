@@ -68,7 +68,10 @@ describe("chat sync connections", () => {
 				Message.SucceededListConnections({ organizationId, connections: [] }),
 			),
 			// The reloaded list remounts the add modal, so its guild query runs again.
-			Command.resolve(ListDiscordGuilds, Message.FailedListDiscordGuilds()),
+			Command.resolve(
+				ListDiscordGuilds,
+				Message.FailedListDiscordGuilds({ organizationId, version: 2 }),
+			),
 			model((current) => expect(current.connections).toEqual({ _tag: "Loaded", connections: [] })),
 		)
 	})
@@ -79,10 +82,32 @@ describe("chat sync connections", () => {
 			updateWithShared,
 			given(init(undefined, shared).model),
 			message(Message.SucceededListConnections({ organizationId, connections: [connection] })),
-			Command.expectExact(ListDiscordGuilds({ organizationId })),
-			Command.resolve(ListDiscordGuilds, Message.SucceededListDiscordGuilds({ guilds: [guild] })),
+			Command.expectExact(ListDiscordGuilds({ organizationId, version: 1 })),
+			Command.resolve(
+				ListDiscordGuilds,
+				Message.SucceededListDiscordGuilds({ organizationId, version: 1, guilds: [guild] }),
+			),
 			model((current) => expect(current.discordGuilds).toEqual({ _tag: "Loaded", items: [guild] })),
 		)
+	})
+
+	test("a guild list for an older request or another organization is dropped", () => {
+		const guild = { id: "918273645500120", name: "Hazel Community", icon: null, owner: true }
+		const listing = updateWithShared(
+			init(undefined, shared).model,
+			Message.SucceededListConnections({ organizationId, connections: [connection] }),
+		).model
+		const refetching = { ...listing, guildsVersion: 2 }
+		const stale = updateWithShared(
+			refetching,
+			Message.SucceededListDiscordGuilds({ organizationId, version: 1, guilds: [guild] }),
+		)
+		expect(stale.model.discordGuilds).toEqual({ _tag: "Loading" })
+		const staleFailure = updateWithShared(
+			refetching,
+			Message.FailedListDiscordGuilds({ organizationId, version: 1 }),
+		)
+		expect(staleFailure.model.discordGuilds).toEqual({ _tag: "Loading" })
 	})
 
 	test("a failed list renders no modal and sends no guild query", () => {
@@ -100,7 +125,7 @@ describe("chat sync connections", () => {
 				init(undefined, shared).model,
 				Message.SucceededListConnections({ organizationId, connections: [connection] }),
 			).model,
-			Message.SucceededListDiscordGuilds({ guilds: [guild] }),
+			Message.SucceededListDiscordGuilds({ organizationId, version: 1, guilds: [guild] }),
 		).model
 		story(
 			updateWithShared,
@@ -132,7 +157,10 @@ describe("chat sync connections", () => {
 				ListConnections,
 				Message.SucceededListConnections({ organizationId, connections: [connection] }),
 			),
-			Command.resolve(ListDiscordGuilds, Message.SucceededListDiscordGuilds({ guilds: [guild] })),
+			Command.resolve(
+				ListDiscordGuilds,
+				Message.SucceededListDiscordGuilds({ organizationId, version: 2, guilds: [guild] }),
+			),
 		)
 	})
 
@@ -162,7 +190,12 @@ describe("chat sync guards", () => {
 		story(
 			updateWithShared,
 			given(init(undefined, shared).model),
-			message(Message.SucceededListConnections({ organizationId: otherOrganizationId, connections: [connection] })),
+			message(
+				Message.SucceededListConnections({
+					organizationId: otherOrganizationId,
+					connections: [connection],
+				}),
+			),
 			Command.expectNone(),
 			model((current) => expect(current.connections._tag).toBe("Loading")),
 			message(Message.FailedListConnections({ organizationId: otherOrganizationId })),
@@ -174,7 +207,9 @@ describe("chat sync guards", () => {
 		story(
 			updateWithShared,
 			given({ ...loaded, discordGuilds: { _tag: "Failed" } }),
-			message(Message.ClickedDeleteConnection({ target: { id: connectionId, name: "Hazel Community" } })),
+			message(
+				Message.ClickedDeleteConnection({ target: { id: connectionId, name: "Hazel Community" } }),
+			),
 			message(Message.ClickedConfirmDelete()),
 			Command.expectExact(DeleteConnection({ syncConnectionId: connectionId })),
 			Command.resolve(
@@ -208,12 +243,20 @@ describe("chat sync guards", () => {
 			message(Message.ClickedConnect()),
 			Command.expectHas(CreateConnection),
 			model((current) => expect(current.isCreating).toBe(true)),
-			Command.resolve(CreateConnection, Message.FailedCreateConnection({ title: "Discord not connected", description: null })),
+			Command.resolve(
+				CreateConnection,
+				Message.FailedCreateConnection({ title: "Discord not connected", description: null }),
+			),
 			expectOutMessage(
-				PageOutMessage.RequestedToast({ toast: { intent: "error", title: "Discord not connected", description: null } }),
+				PageOutMessage.RequestedToast({
+					toast: { intent: "error", title: "Discord not connected", description: null },
+				}),
 			),
 		)
-		const creating = updateWithShared({ ...loaded, selectedGuild: guild, isCreating: true }, Message.ClickedConnect())
+		const creating = updateWithShared(
+			{ ...loaded, selectedGuild: guild, isCreating: true },
+			Message.ClickedConnect(),
+		)
 		expect(creating.commands ?? []).toHaveLength(0)
 	})
 
@@ -223,11 +266,17 @@ describe("chat sync guards", () => {
 			given(loaded),
 			message(Message.ClickedConnection({ connectionId })),
 			expectOutMessage(
-				PageOutMessage.RequestedNavigation({ href: `/hazel/settings/chat-sync/${connectionId}`, replace: false }),
+				PageOutMessage.RequestedNavigation({
+					href: `/hazel/settings/chat-sync/${connectionId}`,
+					replace: false,
+				}),
 			),
 			message(Message.ClickedOpenDiscordIntegration()),
 			expectOutMessage(
-				PageOutMessage.RequestedNavigation({ href: "/hazel/settings/integrations/discord", replace: false }),
+				PageOutMessage.RequestedNavigation({
+					href: "/hazel/settings/integrations/discord",
+					replace: false,
+				}),
 			),
 		)
 	})

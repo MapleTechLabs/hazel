@@ -22,7 +22,7 @@ const initial = init(undefined, shared).model
 const loadedWith = (connections: ReadonlyArray<typeof connection>) =>
 	step(
 		step(initial, Message.SucceededListConnections({ organizationId, connections })),
-		Message.SucceededListDiscordGuilds({ guilds: [guild, otherGuild] }),
+		Message.SucceededListDiscordGuilds({ organizationId, version: 1, guilds: [guild, otherGuild] }),
 	)
 const loaded = loadedWith([connection])
 const withAddModalOpen = { ...loaded, addModal: Modal.open(loaded.addModal).model }
@@ -35,7 +35,10 @@ const confirmDelete = Scene.within(dialog, Scene.role("button", { name: "Delete 
 const connect = Scene.within(dialog, Scene.role("button", { name: "Connect" }))
 const search = Scene.placeholder("Search servers...")
 /** The add menu trigger focuses itself on press; the add modal is a controlled (non-submodel) modal. */
-const addTriggerMounted = Scene.Mount.resolve(FocusTriggerOnPress, Menu.Message.CompletedFocusTriggerOnPress())
+const addTriggerMounted = Scene.Mount.resolve(
+	FocusTriggerOnPress,
+	Menu.Message.CompletedFocusTriggerOnPress(),
+)
 const addModalMounted = Scene.Mount.resolve(
 	{ name: "PortalModal" },
 	Message.GotAddModalMessage({ message: Modal.Message.CompletedPortalModal() }),
@@ -101,13 +104,21 @@ describe("delete a connection", () => {
 			Scene.Command.expectExact(DeleteConnection({ syncConnectionId })),
 			Scene.expect(Scene.within(dialog, Scene.role("button", { name: "Deleting..." }))).toBeDisabled(),
 			Scene.Command.resolve(DeleteConnection, Message.SucceededDeleteConnection()),
-			Scene.expectOutMessage(PageOutMessage.RequestedToast({ toast: successToast("Connection deleted") })),
+			Scene.expectOutMessage(
+				PageOutMessage.RequestedToast({ toast: successToast("Connection deleted") }),
+			),
 			Scene.expect(dialog).toBeAbsent(),
 			Scene.Mount.expectEnded(Modal.PortalModal),
 			Scene.expect(Scene.text("Loading connections...")).toExist(),
 			Scene.Mount.expectEnded(FocusTriggerOnPress),
-			Scene.Command.resolve(ListConnections, Message.SucceededListConnections({ organizationId, connections: [] })),
-			Scene.Command.resolve(ListDiscordGuilds, Message.FailedListDiscordGuilds()),
+			Scene.Command.resolve(
+				ListConnections,
+				Message.SucceededListConnections({ organizationId, connections: [] }),
+			),
+			Scene.Command.resolve(
+				ListDiscordGuilds,
+				Message.FailedListDiscordGuilds({ organizationId, version: 2 }),
+			),
 			Scene.expect(Scene.text("No sync connections yet")).toExist(),
 			addTriggerMounted,
 			addTriggerMounted,
@@ -172,7 +183,9 @@ describe("connect a Discord server", () => {
 					externalWorkspaceName: otherGuild.name,
 				}),
 			),
-			Scene.expect(Scene.within(dialog, Scene.role("button", { name: "Connecting..." }))).toBeDisabled(),
+			Scene.expect(
+				Scene.within(dialog, Scene.role("button", { name: "Connecting..." })),
+			).toBeDisabled(),
 			Scene.Command.resolve(CreateConnection, Message.SucceededCreateConnection()),
 			Scene.expectOutMessage(
 				PageOutMessage.RequestedToast({ toast: successToast("Discord connection created") }),
@@ -180,8 +193,14 @@ describe("connect a Discord server", () => {
 			Scene.expect(dialog).toBeAbsent(),
 			Scene.Mount.expectEnded(Modal.PortalModal),
 			Scene.Mount.expectEnded(FocusTriggerOnPress),
-			Scene.Command.resolve(ListConnections, Message.SucceededListConnections({ organizationId, connections: [connection] })),
-			Scene.Command.resolve(ListDiscordGuilds, Message.SucceededListDiscordGuilds({ guilds: [guild] })),
+			Scene.Command.resolve(
+				ListConnections,
+				Message.SucceededListConnections({ organizationId, connections: [connection] }),
+			),
+			Scene.Command.resolve(
+				ListDiscordGuilds,
+				Message.SucceededListDiscordGuilds({ organizationId, version: 2, guilds: [guild] }),
+			),
 			addTriggerMounted,
 			Scene.expect(Scene.text("Hazel Community")).toExist(),
 		)
@@ -217,7 +236,10 @@ describe("connect a Discord server", () => {
 			Scene.expect(connect).toBeDisabled(),
 			Scene.click(Scene.role("button", { name: "Open Discord Integration" })),
 			Scene.expectOutMessage(
-				PageOutMessage.RequestedNavigation({ href: "/hazel/settings/integrations/discord", replace: false }),
+				PageOutMessage.RequestedNavigation({
+					href: "/hazel/settings/integrations/discord",
+					replace: false,
+				}),
 			),
 		)
 	})

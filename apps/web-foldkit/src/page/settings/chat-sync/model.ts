@@ -39,6 +39,8 @@ export const Model = Schema.Struct({
 	/** `AddConnectionModal`: open state, its guild query (run whenever the modal mounts) and form. */
 	addModal: Modal.Model,
 	discordGuilds: DiscordResource(DiscordGuild),
+	/** Bumped per guild request; a list for an older request or another organization is dropped. */
+	guildsVersion: Schema.Number,
 	selectedGuild: Schema.NullOr(DiscordGuild),
 	guildSearch: Schema.String,
 	isGuildSearchFocused: Schema.Boolean,
@@ -54,8 +56,12 @@ export type Model = typeof Model.Type
 export const Message = defineMessageUnion({
 	SucceededListConnections: { organizationId: OrganizationId, connections: Schema.Array(Connection) },
 	FailedListConnections: { organizationId: OrganizationId },
-	SucceededListDiscordGuilds: { guilds: Schema.Array(DiscordGuild) },
-	FailedListDiscordGuilds: {},
+	SucceededListDiscordGuilds: {
+		organizationId: OrganizationId,
+		version: Schema.Number,
+		guilds: Schema.Array(DiscordGuild),
+	},
+	FailedListDiscordGuilds: { organizationId: OrganizationId, version: Schema.Number },
 	ClickedConnection: { connectionId: SyncConnectionId },
 	ClickedDeleteConnection: { target: DeleteTarget },
 	ClickedConfirmDelete: {},

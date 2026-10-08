@@ -1,5 +1,5 @@
 import { OrganizationId, SyncConnectionId } from "@hazel/schema"
-import { Effect, Exit, Option } from "effect"
+import { Effect, Exit, Option, Schema } from "effect"
 import { Command, Update } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import { HazelRpc } from "../../../rpc"
@@ -66,12 +66,12 @@ export const DeleteConnection = Command.define("DeleteConnection", {
 
 /** `AddConnectionModal`'s guild query; the modal mounts with the loaded list. */
 export const ListDiscordGuilds = Command.define("ListDiscordGuilds", {
-	args: { organizationId: OrganizationId },
+	args: { organizationId: OrganizationId, version: Schema.Number },
 	messages: [Message.SucceededListDiscordGuilds, Message.FailedListDiscordGuilds],
-	execute: ({ organizationId }) =>
+	execute: ({ organizationId, version }) =>
 		fetchDiscordGuilds(organizationId).pipe(
-			Effect.map((guilds) => Message.SucceededListDiscordGuilds({ guilds })),
-			Effect.catch(() => Effect.succeed(Message.FailedListDiscordGuilds())),
+			Effect.map((guilds) => Message.SucceededListDiscordGuilds({ organizationId, version, guilds })),
+			Effect.catch(() => Effect.succeed(Message.FailedListDiscordGuilds({ organizationId, version }))),
 		),
 })
 
@@ -103,6 +103,7 @@ export const init = (_route: unknown, shared: Shared): Return =>
 			}),
 			addModal: Modal.init(ADD_CONNECTION_MODAL_ID),
 			discordGuilds: { _tag: "Loading" },
+			guildsVersion: 0,
 			selectedGuild: null,
 			guildSearch: "",
 			isGuildSearchFocused: false,
@@ -119,24 +120,32 @@ export const sharedChanged = (model: Model, shared: Shared): Return => requestLi
 
 // UPDATE
 
-/** `handleClose`: clears the selection and the search, then closes. */
-const closedAddModal = (model: Model): Model =>
-	modifyFields(model, {
-		addModal: (modal) => Modal.close(modal).model,
-		selectedGuild: () => null,
-		guildSearch: () => "",
-		isGuildSearchFocused: () => false,
-	})
+/** `handleClose`: a closed add modal has no selection and no search. */
+const addModal = {
+	read: (model: Model) => Option.some(model.addModal),
+	write: (model: Model, modal: Modal.Model): Model =>
+		modal.isOpen
+			? modifyFields(model, { addModal: () => modal })
+			: modifyFields(model, {
+					addModal: () => modal,
+					selectedGuild: () => null,
+					guildSearch: () => "",
+					isGuildSearchFocused: () => false,
+				}),
+	toParentMessage: (message: Modal.Message) => Message.GotAddModalMessage({ message }),
+}
+const foldAddModalChild = Update.foldChild({ update: Modal.update, ...addModal })
+const openAddModal = Update.foldChildStep({ update: Modal.open, ...addModal })
+const closeAddModal = Update.foldChildStep({ update: Modal.close, ...addModal })
 
 /** `onOpenChange={(open) => !open && handleClose()}`; the search takes focus once the dialog has it. */
 const foldAddModal = (model: Model, message: Modal.Message): Return => {
-	const next = Modal.update(model.addModal, message)
-	const commands = Command.mapMessages(next.commands ?? [], (child) =>
-		Message.GotAddModalMessage({ message: child }),
-	)
-	if (!next.model.isOpen) return { model: closedAddModal(model), commands }
-	const focus = message._tag === "CompletedPortalModal" && hasGuildSearch(model) ? [FocusGuildSearch()] : []
-	return { model: modifyFields(model, { addModal: () => next.model }), commands: [...commands, ...focus] }
+	const result = foldAddModalChild(model, message)
+	const focus =
+		result.model.addModal.isOpen && message._tag === "CompletedPortalModal" && hasGuildSearch(model)
+			? [FocusGuildSearch()]
+			: []
+	return { model: result.model, commands: [...(result.commands ?? []), ...focus] }
 }
 
 /** The search Input is rendered while the guilds are listed and none is selected. */
@@ -165,12 +174,8 @@ const submitConnection = (model: Model): Return => {
 const foldAddMenuOutMessage = Menu.OutMessage.match<Step>({
 	SelectedItem:
 		({ key }) =>
-		(model) => ({
-			model:
-				key === "discord"
-					? modifyFields(model, { addModal: (modal) => Modal.open(modal).model })
-					: model,
-		}),
+		(model) =>
+			key === "discord" ? openAddModal(model) : { model },
 	ActivatedLink: () => (model) => ({ model }),
 })
 
@@ -191,18 +196,26 @@ const foldEmptyAddMenu = Update.foldChild({
 })
 
 /** `onOpenChange={(open) => !open && setDeleteTarget(null)}` */
-const foldDeleteModal = (model: Model, message: Modal.Message): Return => {
-	const next = Modal.update(model.deleteModal, message)
-	return {
-		model: modifyFields(model, {
-			deleteModal: () => next.model,
-			deleteTarget: (target) => (next.model.isOpen ? target : null),
+const deleteModal = {
+	read: (model: Model) => Option.some(model.deleteModal),
+	write: (model: Model, modal: Modal.Model): Model =>
+		modifyFields(model, {
+			deleteModal: () => modal,
+			deleteTarget: (target) => (modal.isOpen ? target : null),
 		}),
-		commands: Command.mapMessages(next.commands ?? [], (child) =>
-			Message.GotDeleteModalMessage({ message: child }),
-		),
-	}
+	toParentMessage: (message: Modal.Message) => Message.GotDeleteModalMessage({ message }),
 }
+const foldDeleteModal = Update.foldChild({ update: Modal.update, ...deleteModal })
+const openDeleteModal = Update.foldChildStep({ update: Modal.open, ...deleteModal })
+const closeDeleteModal = Update.foldChildStep({ update: Modal.close, ...deleteModal })
+
+const withCommands = (result: Return, commands: Return["commands"]): Return => ({
+	...result,
+	commands: [...(result.commands ?? []), ...(commands ?? [])],
+})
+
+const isCurrentGuildList = (model: Model, organizationId: OrganizationId, version: number) =>
+	organizationId === model.requestedOrganizationId && version === model.guildsVersion
 
 export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
@@ -213,12 +226,17 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			})
 			// The loading and error states return early, so a fresh list remounts the modal.
 			if (model.connections._tag === "Loaded") return { model: next }
+			const version = model.guildsVersion + 1
 			return {
-				model: modifyFields(next, { discordGuilds: () => ({ _tag: "Loading" as const }) }),
-				commands: [ListDiscordGuilds({ organizationId })],
+				model: modifyFields(next, {
+					discordGuilds: () => ({ _tag: "Loading" as const }),
+					guildsVersion: () => version,
+				}),
+				commands: [ListDiscordGuilds({ organizationId, version })],
 			}
 		},
-		SucceededListDiscordGuilds: ({ guilds }) => {
+		SucceededListDiscordGuilds: ({ organizationId, version, guilds }) => {
+			if (!isCurrentGuildList(model, organizationId, version)) return { model }
 			const next = modifyFields(model, {
 				discordGuilds: () => ({ _tag: "Loaded" as const, items: guilds }),
 			})
@@ -228,9 +246,10 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				commands: model.addModal.isOpen && hasGuildSearch(next) ? [FocusGuildSearch()] : [],
 			}
 		},
-		FailedListDiscordGuilds: () => ({
-			model: modifyFields(model, { discordGuilds: () => ({ _tag: "Failed" as const }) }),
-		}),
+		FailedListDiscordGuilds: ({ organizationId, version }) =>
+			isCurrentGuildList(model, organizationId, version)
+				? { model: modifyFields(model, { discordGuilds: () => ({ _tag: "Failed" as const }) }) }
+				: { model },
 		FailedListConnections: ({ organizationId }) =>
 			organizationId === model.requestedOrganizationId
 				? { model: modifyFields(model, { connections: () => ({ _tag: "Failed" as const }) }) }
@@ -242,12 +261,8 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				replace: false,
 			}),
 		}),
-		ClickedDeleteConnection: ({ target }) => ({
-			model: modifyFields(model, {
-				deleteTarget: () => target,
-				deleteModal: (modal) => Modal.open(modal).model,
-			}),
-		}),
+		ClickedDeleteConnection: ({ target }) =>
+			openDeleteModal(modifyFields(model, { deleteTarget: () => target })),
 		ClickedConfirmDelete: () =>
 			model.deleteTarget === null || model.isDeleting
 				? { model }
@@ -258,15 +273,15 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		// `setRefreshKey(k => k + 1)`: a new query key, so the list loads again.
 		SucceededDeleteConnection: () => {
 			const organizationId = model.requestedOrganizationId
-			return {
-				model: modifyFields(model, {
+			const closed = closeDeleteModal(
+				modifyFields(model, {
 					isDeleting: () => false,
-					deleteTarget: () => null,
-					deleteModal: (modal) => Modal.close(modal).model,
 					connections: (connections) =>
 						organizationId === null ? connections : { _tag: "Loading" as const },
 				}),
-				commands: organizationId === null ? [] : [ListConnections({ organizationId })],
+			)
+			return {
+				...withCommands(closed, organizationId === null ? [] : [ListConnections({ organizationId })]),
 				outMessage: PageOutMessage.RequestedToast({ toast: successToast("Connection deleted") }),
 			}
 		},
@@ -301,13 +316,15 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		// `onSuccess()` reloads the list (a new query key), then `handleClose()`.
 		SucceededCreateConnection: () => {
 			const organizationId = model.requestedOrganizationId
-			return {
-				model: modifyFields(closedAddModal(model), {
+			const closed = closeAddModal(
+				modifyFields(model, {
 					isCreating: () => false,
 					connections: (connections) =>
 						organizationId === null ? connections : { _tag: "Loading" as const },
 				}),
-				commands: organizationId === null ? [] : [ListConnections({ organizationId })],
+			)
+			return {
+				...withCommands(closed, organizationId === null ? [] : [ListConnections({ organizationId })]),
 				outMessage: PageOutMessage.RequestedToast({
 					toast: successToast("Discord connection created"),
 				}),
