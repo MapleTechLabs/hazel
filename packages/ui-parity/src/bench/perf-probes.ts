@@ -27,6 +27,8 @@ export interface ReadySpec {
 	readonly text?: string
 	/** For typing: the focused editor's text length reaches this. */
 	readonly editorLength?: number
+	/** With `selector`: at least this many visible matches (an overlay duplicating an element). */
+	readonly minCount?: number
 }
 
 export interface LoadMarks {
@@ -71,8 +73,13 @@ export const createPerfProbes = () => {
 		ids?: ReadonlyArray<string>
 		text?: string
 		editorLength?: number
+		minCount?: number
 	}) => {
-		if (spec.selector && !Array.from(document.querySelectorAll(spec.selector)).some(visible)) return false
+		if (
+			spec.selector &&
+			Array.from(document.querySelectorAll(spec.selector)).filter(visible).length < (spec.minCount ?? 1)
+		)
+			return false
 		if (spec.ids) {
 			const wanted = new Set(spec.ids)
 			const rows = Array.from(document.querySelectorAll("[data-id]"))

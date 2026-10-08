@@ -364,6 +364,8 @@ const measureSwitch = async (target: TargetName) => {
 }
 
 const LAUNCH_WINDOW = "Launch window confirmed"
+/** Ada's own message: only own messages offer Delete. */
+const CHECKLIST = "Launch checklist: please claim your items"
 
 const measureInteractions = async (target: TargetName) => {
 	const launch = busiestChannels(rich, 10).find((id) =>
@@ -398,13 +400,14 @@ const measureInteractions = async (target: TargetName) => {
 			await escape()
 		})
 		await attempt(`modal ${pass}`, async () => {
-			await page.getByText(LAUNCH_WINDOW).hover()
+			await page.getByText(CHECKLIST).hover()
 			await page.getByRole("toolbar", { name: "Message actions" }).waitFor()
 			const result = await timeInput(page, { selector: '[role="dialog"], [role="alertdialog"]' }, () =>
 				page.getByRole("button", { name: "Delete message" }).click(),
 			)
 			recordLatency(`modal open: delete message (${pass})`, target, result.ms)
-			await escape()
+			await page.getByRole("button", { name: "Cancel" }).click()
+			await settle(page, 300)
 		})
 		await attempt(`emoji ${pass}`, async () => {
 			await page.getByText(LAUNCH_WINDOW).hover()
@@ -429,7 +432,9 @@ const measureInteractions = async (target: TargetName) => {
 		await channelLink(page, mediaId).click()
 		await page.getByText("Moodboard for the launch page").scrollIntoViewIfNeeded()
 		await settle(page, 300)
-		const result = await timeInput(page, { text: "1 of 5" }, () =>
+		const selector = 'img[alt="moodboard-1.png"]'
+		const before = await page.locator(selector).count()
+		const result = await timeInput(page, { selector, minCount: before + 1 }, () =>
 			page.getByRole("img", { name: "moodboard-1.png" }).first().click(),
 		)
 		recordLatency("image viewer open", target, result.ms)
