@@ -1,6 +1,14 @@
 import { Command, expectNoOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
-import { CheckPasswordBadge, init, Message, ReadSelection, SetSelection, update } from "./input-otp"
+import {
+	CheckPasswordBadge,
+	init,
+	Message,
+	ReadSelection,
+	SetSelection,
+	subscriptions,
+	update,
+} from "./input-otp"
 
 /** input-otp state: one overlay input whose value, focus and selection drive the slots. */
 
@@ -133,5 +141,14 @@ describe("input-otp story: focus", () => {
 				expect(next.selection).toBeNull()
 			}),
 		)
+	})
+})
+
+describe("input-otp subscription gating", () => {
+	test("selectionchange is only observed while focused or while a stale selection waits to clear", () => {
+		const { modelToDependencies } = subscriptions.selection
+		expect(modelToDependencies(code).isTracking).toBe(false)
+		expect(modelToDependencies({ ...code, isFocused: true }).isTracking).toBe(true)
+		expect(modelToDependencies({ ...code, selection: { start: 1, end: 1 } }).isTracking).toBe(true)
 	})
 })

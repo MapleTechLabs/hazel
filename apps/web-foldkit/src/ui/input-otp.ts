@@ -1,4 +1,4 @@
-import { Duration, Effect, Equivalence, Option, Schema } from "effect"
+import { Duration, Effect, Equivalence, Option, Schema, Stream } from "effect"
 import { Command, Dom, Subscription, type Update } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
@@ -278,28 +278,42 @@ const selectionAfterChange = (
 	}
 }
 
+/**
+ * Listens while focused, or until a selectionchange clears a selection left after blur, so the
+ * rendered `data-input-otp-mss/mse` still match the library's always-on listener.
+ */
 export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
 	selection: entry(
-		{ id: Schema.String, maxLength: Schema.Number, selection: Schema.NullOr(Selection) },
+		{
+			id: Schema.String,
+			maxLength: Schema.Number,
+			selection: Schema.NullOr(Selection),
+			isTracking: Schema.Boolean,
+		},
 		{
 			modelToDependencies: (model) => ({
 				id: model.id,
 				maxLength: model.maxLength,
 				selection: model.selection,
+				isTracking: model.isFocused || model.selection !== null,
 			}),
-			keepAliveEquivalence: Equivalence.make((a, b) => a.id === b.id && a.maxLength === b.maxLength),
-			dependenciesToStream: (_dependencies, readDependencies) =>
-				Dom.streamFromEvent({
-					target: document,
-					type: "selectionchange",
-					mapEvent: () => {
-						const { id, maxLength, selection } = readDependencies()
-						return Message.ChangedSelection({
-							selection: selectionAfterChange(id, maxLength, selection),
-						})
-					},
-					options: { capture: true },
-				}),
+			keepAliveEquivalence: Equivalence.make(
+				(a, b) => a.id === b.id && a.maxLength === b.maxLength && a.isTracking === b.isTracking,
+			),
+			dependenciesToStream: ({ isTracking }, readDependencies) =>
+				!isTracking
+					? Stream.empty
+					: Dom.streamFromEvent({
+							target: document,
+							type: "selectionchange",
+							mapEvent: () => {
+								const { id, maxLength, selection } = readDependencies()
+								return Message.ChangedSelection({
+									selection: selectionAfterChange(id, maxLength, selection),
+								})
+							},
+							options: { capture: true },
+						}),
 		},
 	),
 }))

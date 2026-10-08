@@ -12,6 +12,7 @@ import {
 	PauseTimers,
 	show,
 	StartTimer,
+	subscriptions,
 	update,
 	WaitForLifetime,
 	WaitForRemoval,
@@ -234,5 +235,13 @@ describe("toast story: actions and removal", () => {
 				expect(toastAt(next, 0)).toMatchObject({ isMounted: true, initialHeight: 64 })
 			}),
 		)
+	})
+})
+
+describe("toast subscription gating", () => {
+	test("the hotkey and Escape listener only runs while there are toasts", () => {
+		const { modelToDependencies } = subscriptions.keys
+		expect(modelToDependencies(init()).hasToasts).toBe(false)
+		expect(modelToDependencies(one).hasToasts).toBe(true)
 	})
 })

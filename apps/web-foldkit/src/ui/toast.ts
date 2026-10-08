@@ -11,11 +11,13 @@ import { sonnerCss } from "~/components/ui/sonner.styles"
  * Not ported: swipe to dismiss and focus restoration when focus leaves the toaster.
  */
 
-// sonner injects its stylesheet into <head> when its module loads; so does this port.
-const sonnerStyle = document.createElement("style")
-sonnerStyle.type = "text/css"
-sonnerStyle.appendChild(document.createTextNode(sonnerCss))
-document.head.appendChild(sonnerStyle)
+// sonner injects its stylesheet into <head> when its module loads; so does this port (DOM only).
+if (typeof document !== "undefined") {
+	const sonnerStyle = document.createElement("style")
+	sonnerStyle.type = "text/css"
+	sonnerStyle.appendChild(document.createTextNode(sonnerCss))
+	document.head.appendChild(sonnerStyle)
+}
 
 // MODEL
 
@@ -421,24 +423,34 @@ export const dismiss = (model: Model, id: number): UpdateReturn => deleteToast(m
 
 const isInsideToaster = () => document.activeElement?.closest("[data-sonner-toaster]") != null
 
-export const subscriptions = Subscription.make<Model, Message>()(() => ({
-	keys: Subscription.persistentEntry(
-		Dom.streamFromEventFilterMap({
-			target: document,
-			type: "keydown",
-			filterMapEvent: (event) =>
-				event.altKey && event.code === "KeyT"
-					? Option.some(Message.PressedHotkey())
-					: event.code === "Escape" && isInsideToaster()
-						? Option.some(Message.PressedEscape())
-						: Option.none(),
-		}),
+export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
+	// The hotkey and Escape only act on a rendered stack, so keydown is observed while toasts exist.
+	keys: entry(
+		{ hasToasts: Schema.Boolean },
+		{
+			modelToDependencies: (model) => ({ hasToasts: model.toasts.length > 0 }),
+			dependenciesToStream: ({ hasToasts }) =>
+				!hasToasts
+					? Stream.empty
+					: Dom.streamFromEventFilterMap({
+							target: document,
+							type: "keydown",
+							filterMapEvent: (event) =>
+								event.altKey && event.code === "KeyT"
+									? Option.some(Message.PressedHotkey())
+									: event.code === "Escape" && isInsideToaster()
+										? Option.some(Message.PressedEscape())
+										: Option.none(),
+						}),
+		},
 	),
 	visibility: Subscription.persistentEntry(
-		Dom.streamFromEvent({
-			target: document,
-			type: "visibilitychange",
-			mapEvent: () => Message.ChangedVisibility({ isHidden: document.hidden }),
-		}),
+		Stream.suspend(() =>
+			Dom.streamFromEvent({
+				target: document,
+				type: "visibilitychange",
+				mapEvent: () => Message.ChangedVisibility({ isHidden: document.hidden }),
+			}),
+		),
 	),
 }))
