@@ -63,7 +63,7 @@ export type Message = typeof Message.Type
 const tabId = (model: Model, key: string) => `${model.id}-tab-${key}`
 const panelId = (model: Model, key: string) => `${model.id}-tabpanel-${key}`
 
-const FocusTab = Command.define("FocusTab", {
+export const FocusTab = Command.define("FocusTab", {
 	args: { elementId: Schema.String },
 	messages: [Message.CompletedFocusTab],
 	execute: ({ elementId }) =>
