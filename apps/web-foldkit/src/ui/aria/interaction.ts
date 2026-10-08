@@ -1,5 +1,5 @@
 import { Option, Schema, Stream } from "effect"
-import { Dom, Subscription } from "foldkit"
+import { Dom, Subscription, Update } from "foldkit"
 import type { HtmlBuilder, TextareaAttribute } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
@@ -309,6 +309,33 @@ export interface Wiring<ParentMessage> {
 	readonly model: Model
 	readonly toParentMessage: (message: Message) => ParentMessage
 }
+
+// EMBEDDING
+
+/**
+ * The wiring a parent with an `interaction` field repeats: fold, lifted Subscriptions and view
+ * wiring. `readModel` maps the parent's Subscription input (the Model, or a page input) to its Model.
+ */
+export const embed = <
+	ParentModel extends { readonly interaction: Model },
+	ParentMessage,
+	SubscriptionInput = ParentModel,
+>(
+	toParentMessage: (message: Message) => ParentMessage,
+	readModel: (input: SubscriptionInput) => ParentModel,
+) => ({
+	fold: Update.foldChild({
+		update,
+		read: (model: ParentModel) => Option.some(model.interaction),
+		write: (model: ParentModel, interaction: Model): ParentModel => ({ ...model, interaction }),
+		toParentMessage,
+	}),
+	subscriptions: Subscription.lift(subscriptions)<SubscriptionInput, ParentMessage>({
+		read: (input) => Option.some(readModel(input).interaction),
+		toParentMessage,
+	}),
+	wiring: (model: ParentModel): Wiring<ParentMessage> => ({ model: model.interaction, toParentMessage }),
+})
 
 export interface TargetOptions {
 	/** Turns hover and press off (React Aria: isDisabled, and isPending for Button). */
