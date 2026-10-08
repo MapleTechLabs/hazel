@@ -71,8 +71,10 @@ export const startFixtureBackend = (options: {
 				for (const [key, value] of Object.entries(corsHeaders(request))) headers.set(key, value)
 				return new Response(response.body, { status: response.status, headers })
 			}
-			// Not served (the HTTP API is outside the fixture), but still part of the behavior under test.
+			// Mostly not served (the HTTP API is outside the fixture), but still part of the behavior under test.
 			await calls.recordHttp(request, url)
+			const canned = dataset.http?.[`${request.method} ${url.pathname}`]
+			if (canned) return Response.json(canned(), { headers: corsHeaders(request) })
 			return new Response("not found", { status: 404, headers: corsHeaders(request) })
 		},
 	})

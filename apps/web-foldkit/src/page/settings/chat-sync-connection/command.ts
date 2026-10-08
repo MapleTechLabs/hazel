@@ -1,11 +1,12 @@
-import { OrganizationId, SyncChannelLinkId, SyncConnectionId } from "@hazel/schema"
+import { ChannelId, ExternalChannelId, OrganizationId, SyncChannelLinkId, SyncConnectionId } from "@hazel/schema"
 import { type Cause, Effect, Exit, Schema } from "effect"
 import { Command } from "foldkit"
+import * as Dom from "foldkit/dom"
 import { HazelRpc } from "../../../rpc"
 import { failureToast } from "../../../ui/toast-exit"
 import { fetchDiscordGuildChannels } from "../chat-sync/discord"
 import { fetchConnections } from "../chat-sync/rpc"
-import { type ChannelLink, DIRECTION_LABELS, Message, SyncDirection, WebhookPermission } from "./model"
+import { CHANNEL_SEARCH_ID, type ChannelLink, DIRECTION_LABELS, Message, SyncDirection, WebhookPermission } from "./model"
 
 const linkNotFound = {
 	ChatSyncChannelLinkNotFoundError: {
@@ -147,4 +148,52 @@ export const UpdateChannelLink = Command.define("UpdateChannelLink", {
 export const ScheduleReturnToList = Command.define("ScheduleReturnToList", {
 	messages: [Message.ReachedReturnToList],
 	execute: Effect.succeed(Message.ReachedReturnToList()),
+})
+
+/** `AddChannelLinkModal.handleSubmit` (`chatSync.channelLink.create`) with its `exitToast` handlers. */
+export const CreateChannelLink = Command.define("CreateChannelLink", {
+	args: {
+		syncConnectionId: SyncConnectionId,
+		hazelChannelId: ChannelId,
+		hazelChannelName: Schema.String,
+		externalChannelId: ExternalChannelId,
+		externalChannelName: Schema.String,
+		direction: SyncDirection,
+	},
+	messages: [Message.SucceededCreateLink, Message.FailedCreateLink],
+	execute: ({ hazelChannelName, ...payload }) =>
+		Effect.gen(function* () {
+			const client = yield* HazelRpc
+			const exit = yield* Effect.exit(client("chatSync.channelLink.create", payload))
+			return Exit.match(exit, {
+				onSuccess: () =>
+					Message.SucceededCreateLink({
+						successMessage: `Linked #${hazelChannelName} to #${payload.externalChannelName}`,
+					}),
+				onFailure: (cause) =>
+					Message.FailedCreateLink(
+						toastFields(cause, {
+							ChatSyncConnectionNotFoundError: {
+								title: "Connection not found",
+								description: "This sync connection may have been deleted.",
+								isRetryable: false,
+							},
+							ChatSyncChannelLinkExistsError: {
+								title: "Link already exists",
+								description: "This channel pair is already linked.",
+								isRetryable: false,
+							},
+						}),
+					),
+			})
+		}),
+})
+
+/** The Hazel channel search's `autoFocus`, once it is rendered. */
+export const FocusChannelSearch = Command.define("FocusChannelSearch", {
+	messages: [Message.CompletedFocusChannelSearch],
+	execute: Dom.focus(`#${CHANNEL_SEARCH_ID}`).pipe(
+		Effect.ignoreCause,
+		Effect.as(Message.CompletedFocusChannelSearch()),
+	),
 })

@@ -1,12 +1,12 @@
 import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { twJoin } from "tailwind-merge"
-import { ariaButton, button } from "../../ui/button"
+import * as EmojiDialog from "../../emoji-picker/dialog"
+import { button } from "../../ui/button"
 import { dateField } from "../../ui/date-field"
-import type * as Segments from "../../ui/date-segments"
+import type * as DatePicker from "../../ui/date-picker"
+import { datePickerHidden, view as datePickerView } from "../../ui/date-picker-view"
 import { dialogBody, dialogFooter, dialogHeader } from "../../ui/dialog"
 import { label } from "../../ui/field"
-import { inputGroup } from "../../ui/input"
 import type * as Select from "../../ui/select"
 import { view as selectView } from "../../ui/select-view"
 import { switchControl } from "../../ui/switch"
@@ -25,58 +25,20 @@ import {
 
 /** The set-status modal's view (legacy `SetStatusModal` markup). */
 
-/** `@heroicons/react/24/outline` CalendarDaysIcon, as legacy DatePickerTrigger renders it. */
-const calendarDaysIcon = (h: HtmlBuilder<Message>): Html =>
-	h.svg(
-		[
-			h.Attribute("xmlns", "http://www.w3.org/2000/svg"),
-			h.Attribute("fill", "none"),
-			h.Attribute("viewBox", "0 0 24 24"),
-			h.Attribute("stroke-width", "1.5"),
-			h.Attribute("stroke", "currentColor"),
-			h.Attribute("aria-hidden", "true"),
-			h.Attribute("data-slot", "icon"),
-		],
-		[
-			h.path([
-				h.Attribute("stroke-linecap", "round"),
-				h.Attribute("stroke-linejoin", "round"),
-				h.Attribute(
-					"d",
-					"M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5m-9-6h.008v.008H12v-.008ZM12 15h.008v.008H12V15Zm0 2.25h.008v.008H12v-.008ZM9.75 15h.008v.008H9.75V15Zm0 2.25h.008v.008H9.75v-.008ZM7.5 15h.008v.008H7.5V15Zm0 2.25h.008v.008H7.5v-.008Zm6.75-4.5h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V15Zm0 2.25h.008v.008h-.008v-.008Zm2.25-4.5h.008v.008H16.5v-.008Zm0 2.25h.008v.008H16.5V15Z",
-				),
-			]),
-		],
-	)
+const toCustomDateMessage = (message: DatePicker.Message): Message => Message.GotCustomDateMessage({ message })
+const toEmojiPickerMessage = (message: EmojiDialog.Message): Message => Message.GotEmojiPickerMessage({ message })
 
-/**
- * Legacy `<DatePicker><DatePickerTrigger /></DatePicker>`. The kit has no DatePicker, so this is a
- * DateField holding the trigger's InputGroup; the calendar popover is left out.
- */
-const datePicker = (h: HtmlBuilder<Message>, model: Segments.Model): ReadonlyArray<Html> =>
-	dateField(h, { model, toParentMessage: (message) => Message.GotCustomDateMessage({ message }) }, (field) => [
-		inputGroup(h, { className: "*:data-[slot=control]:w-full" }, [
-			field.dateInput(),
-			ariaButton(
-				h,
-				{
-					className: twJoin(
-						"touch-target grid place-content-center outline-hidden",
-						"pressed:text-fg text-muted-fg hover:text-fg focus-visible:text-fg",
-						"px-[calc(--spacing(3.5)-1px)] py-[calc(--spacing(2.5)-1px)] sm:px-[calc(--spacing(3)-1px)] sm:py-[calc(--spacing(1.5)-1px)] sm:text-sm/6",
-						"*:data-[slot=icon]:size-4.5 sm:*:data-[slot=icon]:size-4",
-					),
-					attributes: [
-						h.DataAttribute("slot", "date-picker-trigger"),
-						h.AriaLabel("Calendar"),
-						h.Attribute("aria-haspopup", "dialog"),
-						h.AriaExpanded(false),
-					],
-				},
-				[calendarDaysIcon(h)],
-			),
-		]),
-	])
+/** Legacy `<DatePicker value onChange minValue><DatePickerTrigger /></DatePicker>`. */
+const datePicker = (h: HtmlBuilder<Message>, model: DatePicker.Model): ReadonlyArray<Html> => [
+	h.submodel({
+		slotId: model.id,
+		model,
+		view: datePickerView,
+		viewInputs: {},
+		toParentMessage: toCustomDateMessage,
+	}),
+	...datePickerHidden(h, model),
+]
 
 const customDateTimeRow = (h: HtmlBuilder<Message>, model: Model): Html =>
 	model.customDate === null || model.customTime === null
@@ -134,8 +96,15 @@ const presetButtons = (h: HtmlBuilder<Message>, model: Model): Html =>
 
 const toExpirationMessage = (message: Select.Message): Message => Message.GotExpirationMessage({ message })
 
-export const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _inputs, h) =>
-	frameView(
+export const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _inputs, h) => {
+	const expirationSelect = h.submodel({
+		slotId: `${ID}-expiration-select`,
+		model: model.expiration,
+		view: selectView,
+		viewInputs: {},
+		toParentMessage: toExpirationMessage,
+	})
+	return frameView(
 		h,
 		model.frame,
 		{ size: "lg" },
@@ -155,17 +124,21 @@ export const view = Submodel.defineView<Model, Message, ModalViewInputs>((model,
 							h.div(
 								[h.Class("flex gap-2")],
 								[
-									// Legacy EmojiPickerDialog trigger; the picker popover is not ported.
-									button(
-										h,
-										{
-											intent: "outline",
-											size: "md",
-											className: "min-w-12 text-lg",
-											attributes: [h.AriaLabel("Pick an emoji"), h.AriaExpanded(false)],
-										},
-										[model.emoji || "😊"],
-									),
+									EmojiDialog.view(h, model.emojiPicker, {
+										toMessage: toEmojiPickerMessage,
+										customEmojis: model.customEmojis,
+										toTrigger: (attributes, overlay) =>
+											button(
+												h,
+												{
+													intent: "outline",
+													size: "md",
+													className: "min-w-12 text-lg",
+													attributes: [h.AriaLabel("Pick an emoji"), ...attributes],
+												},
+												[model.emoji || "😊", overlay],
+											),
+									}),
 									field.input({
 										className: "flex-1",
 										placeholder: "What's your status?",
@@ -175,15 +148,13 @@ export const view = Submodel.defineView<Model, Message, ModalViewInputs>((model,
 							),
 						],
 					),
+					// textField renders its children twice, so the Select is registered once outside it.
+					// React Aria's collection `<template>` sits between the Label and the Select, so the
+					// field's label + control margin does not apply.
 					textField(h, { id: `${ID}-expiration`, value: "" }, (field) => [
 						field.label(["Clear after"]),
-						h.submodel({
-							slotId: `${ID}-expiration-select`,
-							model: model.expiration,
-							view: selectView,
-							viewInputs: {},
-							toParentMessage: toExpirationMessage,
-						}),
+						h.template([], []),
+						expirationSelect,
 					]),
 					expirationOf(model) === "custom" ? customDateTimeRow(h, model) : h.empty,
 					h.div(
@@ -240,5 +211,5 @@ export const view = Submodel.defineView<Model, Message, ModalViewInputs>((model,
 			),
 		],
 		(message) => Message.GotFrameMessage({ message }),
-	),
-)
+	)
+})

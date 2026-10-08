@@ -27,6 +27,8 @@ export const init = (config: {
 	readonly id: string
 	readonly today: D.CalendarDate
 	readonly value?: D.CalendarDate
+	/** `minValue`: earlier days are disabled in the calendar. */
+	readonly minValue?: D.CalendarDate
 }): Model => ({
 	id: config.id,
 	segments: Segments.init({
@@ -38,6 +40,7 @@ export const init = (config: {
 		id: `${config.id}-calendar`,
 		today: config.today,
 		...(config.value === undefined ? {} : { value: config.value }),
+		...(config.minValue === undefined ? {} : { minValue: config.minValue }),
 	}),
 	isOpen: false,
 })

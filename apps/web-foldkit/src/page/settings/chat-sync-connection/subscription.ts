@@ -1,5 +1,5 @@
-import type { ChannelId } from "@hazel/schema"
-import { inArray } from "@tanstack/db"
+import { type ChannelId, OrganizationId } from "@hazel/schema"
+import { eq, inArray, or } from "@tanstack/db"
 import { Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
 import { channelCollection } from "~/db/collections"
@@ -36,6 +36,35 @@ export const subscriptions = Subscription.make<PageSubscriptionInput<Model>, Mes
 							(rows) =>
 								Message.UpdatedChannelNames({
 									names: Object.fromEntries(rows.map((row) => [row.id, row.name])),
+								}),
+						),
+		},
+	),
+	// `AddChannelLinkModal`'s public and private channels, once the connection is found.
+	hazelChannels: entry(
+		{ organizationId: Schema.NullOr(OrganizationId) },
+		{
+			modelToDependencies: ({ model }) => ({
+				organizationId:
+					model.connection._tag === "Loaded" && model.connection.connection !== null
+						? model.requestedOrganizationId
+						: null,
+			}),
+			dependenciesToStream: ({ organizationId }) =>
+				organizationId === null
+					? Stream.empty
+					: liveQueryStream<ChannelNameRow, Message>(
+							(q) =>
+								q
+									.from({ channel: channelCollection })
+									.where(({ channel }) => eq(channel.organizationId, organizationId))
+									.where(({ channel }) =>
+										or(eq(channel.type, "public"), eq(channel.type, "private")),
+									)
+									.select(({ channel }) => ({ ...channel })),
+							(rows) =>
+								Message.UpdatedHazelChannels({
+									channels: rows.map((row) => ({ id: row.id, name: row.name })),
 								}),
 						),
 		},

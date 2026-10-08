@@ -8,6 +8,7 @@ import type { PageViewInputs } from "../../contract"
 import { confirmDialog } from "../chat-sync/confirm-dialog"
 import type { Connection } from "../chat-sync/model"
 import { type ChannelLink, Message, type Model } from "./model"
+import { addLinkModal } from "./add-link-view"
 import { connectionCard, header } from "./connection-card"
 import { aboutCard, channelLinkRow, outlineIcon } from "./parts"
 
@@ -154,6 +155,7 @@ const detail = (h: HtmlBuilder<Message>, model: Model, connection: Connection): 
 					aboutCard(h),
 				],
 			),
+			addLinkModal(h, model),
 			confirmDialog(h, {
 				slotId: "remove-link",
 				modal: model.deleteLinkModal,

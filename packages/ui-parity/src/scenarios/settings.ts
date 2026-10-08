@@ -1,4 +1,6 @@
 import { ConnectInviteListResponse } from "@hazel/domain/rpc"
+import type { Page } from "playwright"
+import { chatSyncDiscordDataset } from "../fixtures/datasets/chat-sync-discord.ts"
 import { defaultIds } from "../fixtures/datasets/default.ts"
 import { errorsDataset } from "../fixtures/datasets/errors.ts"
 import { chatSyncIds } from "../fixtures/datasets/integrations-rpc.ts"
@@ -109,6 +111,206 @@ const chatSyncConnection: Scenario[] = [
 	}),
 ]
 
+const openAddConnection = async (page: Page) => {
+	await page.getByRole("button", { name: "Add Third Party Connection" }).first().click()
+	await page.getByRole("menuitem", { name: "Discord" }).click()
+	await page.getByRole("heading", { name: "Connect Discord Server" }).waitFor()
+}
+
+/** Picks a guild in the open modal and presses Connect. */
+const connectGuild = (guild: RegExp) => async (page: Page) => {
+	await openAddConnection(page)
+	const dialog = page.getByRole("dialog")
+	await dialog.getByRole("button", { name: guild }).click()
+	await dialog.getByRole("button", { name: "Connect", exact: true }).click()
+}
+
+const chatSyncAddConnection: Scenario[] = [
+	s({
+		id: "settings-chat-sync-add-connection",
+		title: "Chat sync, add connection modal lists Discord servers",
+		path: `${org}/settings/chat-sync`,
+		dataset: "chat-sync-discord",
+		themes: ["light", "dark"],
+		steps: async (page) => {
+			await openAddConnection(page)
+			await page.getByRole("button", { name: "Design Systems Guild" }).waitFor()
+		},
+	}),
+	s({
+		id: "settings-chat-sync-add-connection-unavailable",
+		title: "Chat sync, add connection modal before Discord is authorized",
+		path: `${org}/settings/chat-sync`,
+		steps: async (page) => {
+			await openAddConnection(page)
+			await page.getByText("Connect Discord first").waitFor()
+		},
+	}),
+	s({
+		id: "settings-chat-sync-add-connection-no-match",
+		title: "Chat sync, add connection search matches no server",
+		path: `${org}/settings/chat-sync`,
+		dataset: "chat-sync-discord",
+		steps: async (page) => {
+			await openAddConnection(page)
+			await page.getByRole("dialog").getByRole("textbox").fill("zzz")
+			await page.getByText("No Discord servers found").waitFor()
+		},
+	}),
+	s({
+		id: "settings-chat-sync-add-connection-selected",
+		title: "Chat sync, add connection with a server picked",
+		path: `${org}/settings/chat-sync`,
+		dataset: "chat-sync-discord",
+		steps: async (page) => {
+			await openAddConnection(page)
+			await page.getByRole("dialog").getByRole("textbox").fill("gam")
+			await page.getByRole("button", { name: "Weekend Gamers" }).click()
+			await page.getByRole("button", { name: "Change" }).waitFor()
+		},
+	}),
+	s({
+		id: "settings-chat-sync-add-connection-change",
+		title: "Chat sync, add connection after Change keeps the search",
+		path: `${org}/settings/chat-sync`,
+		dataset: "chat-sync-discord",
+		steps: async (page) => {
+			await openAddConnection(page)
+			await page.getByRole("dialog").getByRole("textbox").fill("gam")
+			await page.getByRole("button", { name: "Weekend Gamers" }).click()
+			await page.getByRole("button", { name: "Change" }).click()
+			await page.getByRole("dialog").getByRole("textbox").waitFor()
+		},
+	}),
+	s({
+		id: "settings-chat-sync-add-connection-submitting",
+		title: "Chat sync, add connection while connecting",
+		path: `${org}/settings/chat-sync`,
+		dataset: "chat-sync-discord",
+		steps: async (page) => {
+			await connectGuild(/^Weekend Gamers/)(page)
+			await page.getByRole("button", { name: "Connecting..." }).waitFor()
+		},
+	}),
+	s({
+		id: "settings-chat-sync-add-connection-created",
+		title: "Chat sync, add connection succeeds",
+		path: `${org}/settings/chat-sync`,
+		dataset: "chat-sync-discord",
+		steps: async (page) => {
+			await connectGuild(/^Design Systems Guild/)(page)
+			await page.getByText("Discord connection created").waitFor()
+		},
+	}),
+	s({
+		id: "settings-chat-sync-add-connection-exists",
+		title: "Chat sync, add connection to a server that is already connected",
+		path: `${org}/settings/chat-sync`,
+		dataset: "chat-sync-discord",
+		steps: async (page) => {
+			await connectGuild(/^Hazel Community/)(page)
+			await page.getByText("Connection already exists").waitFor()
+		},
+	}),
+]
+
+const openAddLink = async (page: Page) => {
+	await page.getByRole("button", { name: "Link Channel" }).first().click()
+	await page.getByRole("heading", { name: "Link Channel" }).waitFor()
+}
+
+/** Picks a Hazel channel and a Discord channel in the open modal, then presses Link Channel. */
+const linkChannels = (hazel: string, discord: string) => async (page: Page) => {
+	await openAddLink(page)
+	const dialog = page.getByRole("dialog")
+	await dialog.getByRole("button", { name: hazel, exact: true }).first().click()
+	await dialog.getByRole("button", { name: "Change" }).waitFor()
+	await dialog.getByRole("button", { name: discord, exact: true }).click()
+	await dialog.getByRole("button", { name: "Link Channel" }).click()
+}
+
+const chatSyncAddLink: Scenario[] = [
+	s({
+		id: "settings-chat-sync-link-channel",
+		title: "Chat sync connection, link channel modal",
+		path: connection("community"),
+		dataset: "chat-sync-discord",
+		themes: ["light", "dark"],
+		steps: async (page) => {
+			await openAddLink(page)
+			await page.getByRole("button", { name: "announcements" }).waitFor()
+		},
+	}),
+	s({
+		id: "settings-chat-sync-link-channel-unavailable",
+		title: "Chat sync connection, link channel modal when Discord channels fail to load",
+		path: connection("community"),
+		dataset: "integrations",
+		steps: async (page) => {
+			await openAddLink(page)
+			await page.getByText("Could not load Discord channels").waitFor()
+		},
+	}),
+	s({
+		id: "settings-chat-sync-link-channel-no-match",
+		title: "Chat sync connection, link channel searches match nothing",
+		path: connection("community"),
+		dataset: "chat-sync-discord",
+		steps: async (page) => {
+			await openAddLink(page)
+			const dialog = page.getByRole("dialog")
+			await dialog.getByRole("textbox").first().fill("zzz")
+			await dialog.getByRole("textbox").last().fill("zzz")
+			await page.getByText("No Discord channels found").waitFor()
+		},
+	}),
+	s({
+		id: "settings-chat-sync-link-channel-filled",
+		title: "Chat sync connection, link channel with both channels and a direction picked",
+		path: connection("community"),
+		dataset: "chat-sync-discord",
+		steps: async (page) => {
+			await openAddLink(page)
+			const dialog = page.getByRole("dialog")
+			await dialog.getByRole("textbox").first().fill("ran")
+			await dialog.getByRole("button", { name: "random", exact: true }).click()
+			await dialog.getByRole("button", { name: "announcements", exact: true }).click()
+			await dialog.getByRole("button", { name: /^Discord to Hazel/ }).click()
+			await dialog.getByRole("button", { name: "Change" }).nth(1).waitFor()
+		},
+	}),
+	s({
+		id: "settings-chat-sync-link-channel-submitting",
+		title: "Chat sync connection, link channel while linking",
+		path: connection("community"),
+		dataset: "chat-sync-discord",
+		steps: async (page) => {
+			await linkChannels("random", "voice-chat-text")(page)
+			await page.getByRole("button", { name: "Linking..." }).waitFor()
+		},
+	}),
+	s({
+		id: "settings-chat-sync-link-channel-created",
+		title: "Chat sync connection, link channel succeeds",
+		path: connection("community"),
+		dataset: "chat-sync-discord",
+		steps: async (page) => {
+			await linkChannels("random", "announcements")(page)
+			await page.getByText("Linked #random to #announcements").waitFor()
+		},
+	}),
+	s({
+		id: "settings-chat-sync-link-channel-exists",
+		title: "Chat sync connection, link channel pair that is already linked",
+		path: connection("community"),
+		dataset: "chat-sync-discord",
+		steps: async (page) => {
+			await linkChannels("general", "general")(page)
+			await page.getByText("Link already exists").waitFor()
+		},
+	}),
+]
+
 const channelOverview: Scenario[] = [
 	s({ id: "channel-settings-overview", title: "Channel settings overview", path: channelSettings(general, "overview"), themes: ["light", "dark"] }),
 	s({
@@ -186,10 +388,12 @@ export const settingsArea: AreaModule = {
 		...connectInvites,
 		...chatSync,
 		...chatSyncConnection,
+		...chatSyncAddConnection,
+		...chatSyncAddLink,
 		...channelOverview,
 		...channelConnect,
 	],
-	datasets: [integrationsDataset, memberDataset, memberEmptyDataset, errorsDataset],
+	datasets: [integrationsDataset, memberDataset, memberEmptyDataset, errorsDataset, chatSyncDiscordDataset],
 	rpc: () => ({
 		"connectShare.invite.listIncoming": () => new ConnectInviteListResponse({ data: [] }),
 		"connectShare.invite.listOutgoing": () => new ConnectInviteListResponse({ data: [] }),

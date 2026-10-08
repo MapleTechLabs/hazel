@@ -45,4 +45,9 @@ export interface Dataset {
 	readonly tables: Partial<Record<TableName, ReadonlyArray<Row>>>
 	/** Canned RPC successes keyed by RPC tag. Values are the decoded (Type-side) success value. */
 	readonly rpc: Readonly<Record<string, (payload: unknown) => unknown>>
+	/**
+	 * Canned HTTP API successes keyed by `METHOD /path` (`GET /integrations/resources/<org>/discord/guilds`),
+	 * returned as JSON. Every other HTTP API request still answers 404.
+	 */
+	readonly http?: Readonly<Record<string, () => unknown>>
 }

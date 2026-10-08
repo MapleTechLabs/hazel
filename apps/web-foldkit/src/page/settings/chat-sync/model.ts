@@ -35,10 +35,13 @@ export const Model = Schema.Struct({
 	connections: Connections,
 	addMenu: Menu.Model,
 	emptyAddMenu: Menu.Model,
-	/** `AddConnectionModal isOpen` (the modal itself is not ported yet). */
-	isAddModalOpen: Schema.Boolean,
-	/** The modal's guild query, which runs whenever the modal mounts (the list has loaded). */
+	/** `AddConnectionModal`: open state, its guild query (run whenever the modal mounts) and form. */
+	addModal: Modal.Model,
 	discordGuilds: DiscordResource(DiscordGuild),
+	selectedGuild: Schema.NullOr(DiscordGuild),
+	guildSearch: Schema.String,
+	isGuildSearchFocused: Schema.Boolean,
+	isCreating: Schema.Boolean,
 	deleteTarget: Schema.NullOr(DeleteTarget),
 	deleteModal: Modal.Model,
 	isDeleting: Schema.Boolean,
@@ -58,6 +61,17 @@ export const Message = defineMessageUnion({
 	GotAddMenuMessage: { message: Menu.Message },
 	GotEmptyAddMenuMessage: { message: Menu.Message },
 	GotDeleteModalMessage: { message: Modal.Message },
+	GotAddModalMessage: { message: Modal.Message },
+	ChangedGuildSearch: { value: Schema.String },
+	FocusedGuildSearch: {},
+	BlurredGuildSearch: {},
+	CompletedFocusGuildSearch: {},
+	ClickedGuild: { guild: DiscordGuild },
+	ClickedChangeGuild: {},
+	ClickedOpenDiscordIntegration: {},
+	ClickedConnect: {},
+	SucceededCreateConnection: {},
+	FailedCreateConnection: { title: Schema.String, description: Schema.NullOr(Schema.String) },
 })
 export type Message = typeof Message.Type
 
