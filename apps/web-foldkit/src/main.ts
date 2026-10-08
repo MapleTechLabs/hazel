@@ -109,6 +109,11 @@ const withModal = (model: Model, transition: Modal.Transition): Return => {
 	}
 }
 
+const withPlatform = (model: Model, result: Update.Return<Platform.Model, Platform.Message, Resources>): Return => ({
+	model: modifyFields(model, { platform: () => result.model }),
+	commands: Command.mapMessages(result.commands, (child) => Message.GotPlatformMessage({ message: child })),
+})
+
 const withCommandPalette = (model: Model, result: CommandPaletteReturn): Return => {
 	const next = modifyFields(model, { commandPalette: () => result.model })
 	const commands = Command.mapMessages(result.commands, (message) => Message.GotCommandPaletteMessage({ message }))
@@ -119,6 +124,7 @@ const withCommandPalette = (model: Model, result: CommandPaletteReturn): Return 
 			RequestedModal: ({ modal }) => withModal(next, Modal.open(next.modal, modal, sharedOf(next))),
 			RequestedToast: ({ toast }) => withToasts(next, Toasts.push(next.toasts, toast)),
 			RequestedTheme: ({ preference }) => requestTheme(next, preference),
+			RequestedPresenceStatus: ({ status }) => withPlatform(next, Platform.pickPresenceStatus(next.platform, status)),
 		}),
 	})
 	return { model: followed.model, commands: [...commands, ...(followed.commands ?? [])] }
@@ -396,11 +402,5 @@ export const update = (model: Model, message: Message): Return =>
 			withCommandPalette(model, CommandPalette.update(model.commandPalette, message, sharedOf(model))),
 		PressedHotkey: ({ actionId }) => pressedHotkey(model, actionId),
 		GotToastsMessage: ({ message }) => withToasts(model, Toasts.update(model.toasts, message)),
-		GotPlatformMessage: ({ message }) => {
-			const result = Platform.update(model.platform, message)
-			return {
-				model: modifyFields(model, { platform: () => result.model }),
-				commands: Command.mapMessages(result.commands, (child) => Message.GotPlatformMessage({ message: child })),
-			}
-		},
+		GotPlatformMessage: ({ message }) => withPlatform(model, Platform.update(model.platform, message)),
 	})

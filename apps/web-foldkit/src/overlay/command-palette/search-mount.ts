@@ -57,40 +57,40 @@ export const MountSearchEditor = Mount.defineStream("MountSearchEditor", {
 		),
 })
 
-const withEditor = (f: (view: NonNullable<ReturnType<typeof searchEditorById>>) => void) =>
+const withEditor = <A>(f: (view: NonNullable<ReturnType<typeof searchEditorById>>) => void, completed: A) =>
 	Effect.sync(() => {
 		const view = searchEditorById(SEARCH_EDITOR_ID)
 		if (view) f(view)
-	}).pipe(Effect.as(Message.CompletedEffect()))
+	}).pipe(Effect.as(completed))
 
 export const SetSearchText = Command.define("SetSearchText", {
 	args: { text: Schema.String },
-	messages: [Message.CompletedEffect],
-	execute: ({ text }) => withEditor((view) => setText(view, text)),
+	messages: [Message.CompletedSetSearchText],
+	execute: ({ text }) => withEditor((view) => setText(view, text), Message.CompletedSetSearchText()),
 })
 
 export const DeleteFilterText = Command.define("DeleteFilterText", {
 	args: { filterStartOffset: Schema.Number },
-	messages: [Message.CompletedEffect],
-	execute: ({ filterStartOffset }) => withEditor((view) => deleteFilterText(view, filterStartOffset)),
+	messages: [Message.CompletedDeleteFilterText],
+	execute: ({ filterStartOffset }) => withEditor((view) => deleteFilterText(view, filterStartOffset), Message.CompletedDeleteFilterText()),
 })
 
 export const SyncSuggestionCount = Command.define("SyncSuggestionCount", {
 	args: { count: Schema.Number },
-	messages: [Message.CompletedEffect],
-	execute: ({ count }) => withEditor((view) => syncOptionCount(view, count)),
+	messages: [Message.CompletedSyncSuggestionCount],
+	execute: ({ count }) => withEditor((view) => syncOptionCount(view, count), Message.CompletedSyncSuggestionCount()),
 })
 
 export const SetSearchPlaceholder = Command.define("SetSearchPlaceholder", {
 	args: { placeholder: Schema.String },
-	messages: [Message.CompletedEffect],
-	execute: ({ placeholder }) => withEditor((view) => setPlaceholder(view, placeholder)),
+	messages: [Message.CompletedSetSearchPlaceholder],
+	execute: ({ placeholder }) => withEditor((view) => setPlaceholder(view, placeholder), Message.CompletedSetSearchPlaceholder()),
 })
 
 export const FocusSearchEditor = Command.define("FocusSearchEditor", {
 	args: {},
-	messages: [Message.CompletedEffect],
-	execute: () => withEditor((view) => view.focus()),
+	messages: [Message.CompletedFocusSearchEditor],
+	execute: () => withEditor((view) => view.focus(), Message.CompletedFocusSearchEditor()),
 })
 
 const RECENT_SEARCHES_KEY = "recentSearches"
@@ -110,10 +110,10 @@ export const LoadRecentSearches = Command.define("LoadRecentSearches", {
 
 export const SaveRecentSearches = Command.define("SaveRecentSearches", {
 	args: { searches: Schema.Array(RecentSearch) },
-	messages: [Message.CompletedEffect],
+	messages: [Message.CompletedSaveRecentSearches],
 	execute: ({ searches }) =>
 		Effect.try(() => localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(searches))).pipe(
 			Effect.ignoreCause,
-			Effect.as(Message.CompletedEffect()),
+			Effect.as(Message.CompletedSaveRecentSearches()),
 		),
 })

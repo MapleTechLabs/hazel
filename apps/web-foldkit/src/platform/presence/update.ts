@@ -5,7 +5,7 @@ import { modifyFields } from "foldkit/struct"
 import { HazelRpc } from "../../rpc"
 import { broadcastActivity } from "./activity"
 import { Message } from "./message"
-import { ComputedStatus, computedStatusOf, isAfkAt, type Model, payloadOf } from "./model"
+import { computedStatusOf, isAfkAt, type Model, payloadOf, PresenceStatus } from "./model"
 
 export type Return = Update.Return<Model, Message, HazelRpc>
 
@@ -13,7 +13,7 @@ export type Return = Update.Return<Model, Message, HazelRpc>
 
 export const SendPresenceUpdate = Command.define("SendPresenceUpdate", {
 	args: {
-		status: Schema.optionalKey(ComputedStatus),
+		status: Schema.optionalKey(PresenceStatus),
 		activeChannelId: Schema.optionalKey(Schema.NullOr(ChannelId)),
 	},
 	messages: [Message.SucceededSendPresenceUpdate, Message.FailedSendPresenceUpdate],
@@ -65,6 +65,10 @@ const withActivity = (model: Model, atMs: number): Model =>
 	atMs <= model.lastActivityMs
 		? model
 		: modifyFields(model, { lastActivityMs: () => atMs, isAfk: () => isAfkAt(atMs, atMs) })
+
+/** `usePresence().setStatus`: the picked status wins over AFK until another is picked. */
+export const pickStatus = (model: Model, status: PresenceStatus): Return =>
+	scheduleSync(model, modifyFields(model, { manualStatus: () => status }))
 
 export const update = (model: Model, message: Message): Return =>
 	Message.match<Return>(message, {

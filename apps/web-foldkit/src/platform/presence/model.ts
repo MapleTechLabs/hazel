@@ -8,13 +8,13 @@ export const HEARTBEAT_INTERVAL = Duration.seconds(15)
 export const ACTIVITY_THROTTLE_MS = 1_000
 export const SYNC_DEBOUNCE = Duration.millis(300)
 
-/** The statuses the client computes itself (manual statuses are set by the status pages). */
-export const ComputedStatus = Schema.Literals(["online", "away"])
-export type ComputedStatus = typeof ComputedStatus.Type
+/** The statuses a user can pick (legacy `PresenceStatus` in the palette's `StatusView`). */
+export const PresenceStatus = Schema.Literals(["online", "away", "busy", "dnd"])
+export type PresenceStatus = typeof PresenceStatus.Type
 
 /** What was last written with `userPresenceStatus.update` (legacy `previousValuesRef`). */
 export const Sent = Schema.Struct({
-	status: ComputedStatus,
+	status: PresenceStatus,
 	activeChannelId: Schema.NullOr(ChannelId),
 })
 export type Sent = typeof Sent.Type
@@ -27,6 +27,8 @@ export const Model = Schema.Struct({
 	/** `lastActivityAtom`; 0 until the first context or activity arrives. */
 	lastActivityMs: Schema.Number,
 	isAfk: Schema.Boolean,
+	/** `manualStatusAtom`: a status picked in the palette, ahead of the AFK-derived one. */
+	manualStatus: Schema.NullOr(PresenceStatus),
 	/** Null until the initial update of this mount has been written. */
 	sent: Schema.NullOr(Sent),
 	/** Bumped on every change; the debounce Subscription restarts on each bump. */
@@ -41,14 +43,16 @@ export const init = (): Model => ({
 	activeChannelId: null,
 	lastActivityMs: 0,
 	isAfk: false,
+	manualStatus: null,
 	sent: null,
 	syncVersion: 0,
 	isSyncPending: false,
 	isHeartbeatInFlight: false,
 })
 
-/** `computedPresenceStatusAtom` without a manual status. */
-export const computedStatusOf = (model: Model): ComputedStatus => (model.isAfk ? "away" : "online")
+/** `computedPresenceStatusAtom`: a manual status overrides the AFK-derived away/online. */
+export const computedStatusOf = (model: Model): PresenceStatus =>
+	model.manualStatus ?? (model.isAfk ? "away" : "online")
 
 export const isAfkAt = (lastActivityMs: number, nowMs: number) => nowMs - lastActivityMs >= AFK_TIMEOUT_MS
 
@@ -63,7 +67,7 @@ export const channelIdOfPathname = (pathname: string): ChannelId | null => {
 }
 
 export type UpdatePayload = {
-	readonly status?: ComputedStatus
+	readonly status?: PresenceStatus
 	readonly activeChannelId?: ChannelId | null
 }
 

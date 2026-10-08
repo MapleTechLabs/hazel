@@ -42,7 +42,7 @@ const menusMounted = [
 
 const navItem = (name: string) => role("link", { name })
 const currentLink = selector('a[aria-current="page"]')
-const paletteDone = CommandPalette.Message.CompletedEffect()
+const paletteDone = CommandPalette.Message.CompletedFocusInput()
 const palette = role("dialog", { name: "Command Menu" })
 
 describe("nav rail", () => {

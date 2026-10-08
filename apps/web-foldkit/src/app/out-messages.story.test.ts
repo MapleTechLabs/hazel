@@ -9,7 +9,7 @@ import * as Shell from "../shell/model"
 import * as Platform from "../platform"
 import * as Presence from "../platform/presence/message"
 import { AFK_TIMEOUT_MS } from "../platform/presence/model"
-import { SendPresenceUpdate } from "../platform/presence/update"
+import { BroadcastActivity, SendPresenceUpdate } from "../platform/presence/update"
 import { ada, plainMember, signedIn } from "../test/root-fixtures"
 import * as CommandMenu from "../ui/command-menu"
 import { DEFAULT_SOUND_SETTINGS } from "../notification-sound"
@@ -25,7 +25,7 @@ const paletteItem = (key: string): Message =>
 	Message.GotCommandPaletteMessage({
 		message: CommandPalette.Message.GotMenuMessage({ message: CommandMenu.Message.ClickedItem({ key }) }),
 	})
-const focused = CommandPalette.Message.CompletedEffect()
+const focused = CommandPalette.Message.CompletedFocusInput()
 const presence = (inner: Presence.Message): Message =>
 	Message.GotPlatformMessage({ message: Platform.Message.GotPresenceMessage({ message: inner }) })
 
@@ -189,6 +189,8 @@ describe("hotkeys", () => {
 })
 
 describe("palette status and presence", () => {
+	const succeeded = CommandPalette.Message.SucceededSetPresenceStatus()
+
 	test("picking a status sends it", () => {
 		story(
 			update,
@@ -197,13 +199,13 @@ describe("palette status and presence", () => {
 			Command.resolve(FocusInput, focused),
 			message(paletteItem("status:dnd")),
 			Command.expectExact(SetPresenceStatus({ status: "dnd" })),
-			Command.resolve(SetPresenceStatus, focused),
+			Command.resolve(SetPresenceStatus, succeeded),
 		)
 	})
 
-	// BUG: legacy `setStatus` also sets `manualStatusAtom`, which overrides the AFK-derived status.
-	// The port has no manual status, so going AFK after picking Do Not Disturb sends "away".
-	test.fails("a picked status survives going AFK", () => {
+	// B3: legacy `setStatus` sets `manualStatusAtom`, which overrides the AFK-derived status, and
+	// its sync effect sends the new computed status once.
+	test("a picked status survives going AFK and coming back", () => {
 		story(
 			update,
 			given(signedIn("/hazel/chat")),
@@ -213,8 +215,18 @@ describe("palette status and presence", () => {
 			message(Message.PressedHotkey({ actionId: "commandPalette.open" })),
 			Command.resolve(FocusInput, focused),
 			message(paletteItem("status:dnd")),
-			Command.resolve(SetPresenceStatus, focused),
+			Command.resolve(SetPresenceStatus, succeeded),
+			model((m) => expect(m.platform.presence.manualStatus).toBe("dnd")),
+			message(presence(Presence.Message.ElapsedSyncDebounce({ version: 2 }))),
+			Command.expectExact(SendPresenceUpdate({ status: "dnd" })),
+			Command.resolve(SendPresenceUpdate, Presence.Message.SucceededSendPresenceUpdate()),
 			message(presence(Presence.Message.ReachedAfkTimeout({ nowMs: 1 + AFK_TIMEOUT_MS }))),
+			message(presence(Presence.Message.DetectedActivity({ atMs: 2 + AFK_TIMEOUT_MS }))),
+			Command.resolve(BroadcastActivity, Presence.Message.CompletedBroadcastActivity()),
+			model((m) => {
+				expect(m.platform.presence.syncVersion).toBe(2)
+				expect(m.platform.presence.isSyncPending).toBe(false)
+			}),
 			message(presence(Presence.Message.ElapsedSyncDebounce({ version: 2 }))),
 			Command.expectNone(),
 		)

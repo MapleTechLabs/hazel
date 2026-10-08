@@ -1,16 +1,15 @@
 import { ChannelId, OrganizationId, UserId } from "@hazel/schema"
-import { Effect, Option, Schema } from "effect"
+import { Cause, Effect, Option, Schema } from "effect"
 import { Command } from "foldkit"
 import * as Dom from "foldkit/dom"
 import { createChannelAction, joinChannelAction } from "~/db/actions"
+import { PresenceStatus } from "../../platform/presence/model"
 import { HazelRpc } from "../../rpc"
 import { runAction, toastForCause } from "../action"
 import { Message } from "./message"
 import { ChannelType } from "./model"
 
 /** Side effects of the palette pages, each the call legacy makes from the same handler. */
-
-const done = Effect.as(Message.CompletedEffect())
 
 /** `createChannelAction` from `CreateChannelView.handleSubmit`. */
 export const CreateChannel = Command.define("CreateChannel", {
@@ -53,15 +52,20 @@ export const JoinChannel = Command.define("JoinChannel", {
 		),
 })
 
-/** `usePresence().setStatus` (the RPC part; manual status tracking lives with presence). */
+/** `usePresence().setStatus` (the RPC part; the manual status itself lives with presence). */
 export const SetPresenceStatus = Command.define("SetPresenceStatus", {
-	args: { status: Schema.Literals(["online", "away", "busy", "dnd"]) },
-	messages: [Message.CompletedEffect],
+	args: { status: PresenceStatus },
+	messages: [Message.SucceededSetPresenceStatus, Message.FailedSetPresenceStatus],
 	execute: ({ status }) =>
 		Effect.gen(function* () {
 			const client = yield* HazelRpc
 			yield* client("userPresenceStatus.update", { status, customMessage: null })
-		}).pipe(Effect.ignoreCause, done),
+			return Message.SucceededSetPresenceStatus()
+		}).pipe(
+			Effect.catchCause((cause) =>
+				Effect.succeed(Message.FailedSetPresenceStatus({ reason: Cause.pretty(cause) })),
+			),
+		),
 })
 
 const RECENT_CHANNELS_KEY = "recentChannels"
@@ -80,7 +84,7 @@ const decodeRecent = Schema.decodeUnknownOption(RecentChannels)
 /** `recentChannelsAtom`: the palette's `trackChannel`, newest first, at most eight. */
 export const TrackRecentChannel = Command.define("TrackRecentChannel", {
 	args: { channelId: Schema.String },
-	messages: [Message.CompletedEffect],
+	messages: [Message.CompletedTrackRecentChannel],
 	execute: ({ channelId }) =>
 		readJson(RECENT_CHANNELS_KEY).pipe(
 			Effect.map((raw) => Option.getOrElse(decodeRecent(raw), () => [])),
@@ -92,7 +96,7 @@ export const TrackRecentChannel = Command.define("TrackRecentChannel", {
 			),
 			Effect.flatMap((channels) => Effect.sync(() => localStorage.setItem(RECENT_CHANNELS_KEY, JSON.stringify(channels)))),
 			Effect.ignoreCause,
-			done,
+			Effect.as(Message.CompletedTrackRecentChannel()),
 		),
 })
 
@@ -104,6 +108,6 @@ export const readRecentChannelIds = readJson(RECENT_CHANNELS_KEY).pipe(
 /** `autoFocus` on a form page's input, after the page renders. */
 export const FocusInput = Command.define("FocusInput", {
 	args: { selector: Schema.String },
-	messages: [Message.CompletedEffect],
-	execute: ({ selector }) => Dom.focus(selector).pipe(Effect.ignoreCause, done),
+	messages: [Message.CompletedFocusInput],
+	execute: ({ selector }) => Dom.focus(selector).pipe(Effect.ignoreCause, Effect.as(Message.CompletedFocusInput())),
 })

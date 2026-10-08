@@ -16,7 +16,7 @@ import { CREATE_CHANNEL_INPUT_ID, init, JOIN_CHANNEL_INPUT_ID, MENU_ID, open, up
 const shared = signedInShared()
 const run = (model: Model, message: Message) => update(model, message, shared)
 const opened = open(init(), "home", shared).model
-const done = Message.CompletedEffect()
+const done = Message.CompletedFocusInput()
 const item = (key: string) => Message.GotMenuMessage({ message: CommandMenu.Message.ClickedItem({ key }) })
 const searched = (value: string) => Message.GotMenuMessage({ message: CommandMenu.Message.ChangedSearch({ value }) })
 const escape = Message.GotMenuMessage({ message: CommandMenu.Message.PressedSearchKey({ key: "Escape" }) })
@@ -201,7 +201,7 @@ describe("home actions", () => {
 			message(item(`channel:${channelId}`)),
 			Command.expectExact(TrackRecentChannel({ channelId })),
 			expectOutMessage(OutMessage.Completed({ href: `/hazel/chat/${channelId}`, toast: null })),
-			Command.resolve(TrackRecentChannel, done),
+			Command.resolve(TrackRecentChannel, Message.CompletedTrackRecentChannel()),
 		)
 	})
 
@@ -226,14 +226,24 @@ describe("home actions", () => {
 		)
 	})
 
-	test("a status is sent without an OutMessage", () => {
+	test("a status is sent and handed to presence, which keeps it ahead of AFK", () => {
 		story(
 			run,
 			given(opened),
 			message(item("status:away")),
 			Command.expectExact(SetPresenceStatus({ status: "away" })),
-			Command.resolve(SetPresenceStatus, done),
-			expectNoOutMessage(),
+			expectOutMessage(OutMessage.RequestedPresenceStatus({ status: "away" })),
+			Command.resolve(SetPresenceStatus, Message.SucceededSetPresenceStatus()),
+			model((m) => expect(m.isOpen).toBe(false)),
+		)
+	})
+
+	test("a failed status update closes quietly, like legacy", () => {
+		story(
+			run,
+			given(opened),
+			message(item("status:dnd")),
+			Command.resolve(SetPresenceStatus, Message.FailedSetPresenceStatus({ reason: "offline" })),
 			model((m) => expect(m.isOpen).toBe(false)),
 		)
 	})

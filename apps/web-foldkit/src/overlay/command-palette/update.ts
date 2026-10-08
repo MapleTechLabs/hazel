@@ -141,7 +141,12 @@ const selectedItem = (model: Model, key: string, shared: Shared, current: PageSt
 	const link = [...NAVIGATION, ...SETTINGS].find((entry) => entry.key === key)
 	if (link !== undefined) return closedWith(model, `/${shared.orgSlug ?? ""}${link.path}`, null)
 	const status = STATUS_OPTIONS.find((option) => `status:${option.value}` === key)
-	if (status !== undefined) return { model: close(model), commands: [SetPresenceStatus({ status: status.value })] }
+	if (status !== undefined)
+		return {
+			model: close(model),
+			commands: [SetPresenceStatus({ status: status.value })],
+			outMessage: OutMessage.RequestedPresenceStatus({ status: status.value }),
+		}
 	const theme = THEME_OPTIONS.find((option) => `theme:${option.value}` === key)
 	if (theme !== undefined)
 		return {
@@ -240,7 +245,16 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			ClickedClearRecentSearches: (found) => updateSearch(model, found, shared),
 			UpdatedSearchData: ({ data }) => ({ model: modifyFields(model, { search: () => data }) }),
 			LoadedRecentSearches: ({ searches }) => ({ model: modifyFields(model, { recentSearches: () => searches }) }),
-			CompletedEffect: () => ({ model }),
+			CompletedFocusInput: () => ({ model }),
+			CompletedTrackRecentChannel: () => ({ model }),
+			SucceededSetPresenceStatus: () => ({ model }),
+			FailedSetPresenceStatus: () => ({ model }),
+			CompletedSetSearchText: () => ({ model }),
+			CompletedDeleteFilterText: () => ({ model }),
+			CompletedSyncSuggestionCount: () => ({ model }),
+			CompletedSetSearchPlaceholder: () => ({ model }),
+			CompletedFocusSearchEditor: () => ({ model }),
+			CompletedSaveRecentSearches: () => ({ model }),
 		}),
 		shared,
 	)

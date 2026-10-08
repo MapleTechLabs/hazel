@@ -29,17 +29,20 @@ export type Message = typeof Message.Type
 
 export const init = (): Model => ({ presence: PresenceModel.init(), rivet: "Connecting" })
 
-export const update = (model: Model, message: Message): Update.Return<Model, Message, HazelRpc> =>
-	Message.match<Update.Return<Model, Message, HazelRpc>>(message, {
-		GotPresenceMessage: ({ message: inner }) => {
-			const result = PresenceUpdate.update(model.presence, inner)
-			return {
-				model: modifyFields(model, { presence: () => result.model }),
-				commands: Command.mapMessages(result.commands, (child) =>
-					Message.GotPresenceMessage({ message: child }),
-				),
-			}
-		},
+type Return = Update.Return<Model, Message, HazelRpc>
+
+const withPresence = (model: Model, result: PresenceUpdate.Return): Return => ({
+	model: modifyFields(model, { presence: () => result.model }),
+	commands: Command.mapMessages(result.commands, (child) => Message.GotPresenceMessage({ message: child })),
+})
+
+/** The user picked a status in the command palette (`usePresence().setStatus`). */
+export const pickPresenceStatus = (model: Model, status: PresenceModel.PresenceStatus): Return =>
+	withPresence(model, PresenceUpdate.pickStatus(model.presence, status))
+
+export const update = (model: Model, message: Message): Return =>
+	Message.match<Return>(message, {
+		GotPresenceMessage: ({ message: inner }) => withPresence(model, PresenceUpdate.update(model.presence, inner)),
 		AcquiredRivetClient: () => ({ model: modifyFields(model, { rivet: () => "Ready" }) }),
 		ReleasedRivetClient: () => ({ model: modifyFields(model, { rivet: () => "Connecting" }) }),
 		FailedAcquireRivetClient: () => ({ model: modifyFields(model, { rivet: () => "Failed" }) }),

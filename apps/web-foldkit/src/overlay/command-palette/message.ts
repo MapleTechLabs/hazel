@@ -4,6 +4,7 @@ import { defineMessageUnion } from "foldkit/message"
 import * as CommandMenu from "../../ui/command-menu"
 import { ModalRequest } from "../modal"
 import { ToastRequest } from "../toasts"
+import { PresenceStatus } from "../../platform/presence/model"
 import { ThemePreference } from "../../theme"
 import { ChannelSummary, ChannelType, DmChannel } from "./model"
 import { RecentSearch, SearchAutocomplete, SearchData, Suggestion } from "./search-data"
@@ -42,7 +43,17 @@ export const Message = defineMessageUnion({
 	ClickedClearRecentSearches: {},
 	UpdatedSearchData: { data: SearchData },
 	LoadedRecentSearches: { searches: Schema.Array(RecentSearch) },
-	CompletedEffect: {},
+	CompletedFocusInput: {},
+	CompletedTrackRecentChannel: {},
+	SucceededSetPresenceStatus: {},
+	/** Legacy ignores the exit of `setStatus`, so a failure shows nothing. */
+	FailedSetPresenceStatus: { reason: Schema.String },
+	CompletedSetSearchText: {},
+	CompletedDeleteFilterText: {},
+	CompletedSyncSuggestionCount: {},
+	CompletedSetSearchPlaceholder: {},
+	CompletedFocusSearchEditor: {},
+	CompletedSaveRecentSearches: {},
 })
 export type Message = typeof Message.Type
 
@@ -53,5 +64,7 @@ export const OutMessage = defineMessageUnion({
 	RequestedToast: { toast: ToastRequest },
 	/** `setTheme(mode)`: the root applies and persists it. */
 	RequestedTheme: { preference: ThemePreference },
+	/** `setStatus(status)`: presence keeps it ahead of the AFK-derived status. */
+	RequestedPresenceStatus: { status: PresenceStatus },
 })
 export type OutMessage = typeof OutMessage.Type
