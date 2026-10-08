@@ -19,8 +19,15 @@ import {
 	RangeCalendarStateContext,
 	useLocale,
 } from "react-aria-components"
-import { twMerge } from "tailwind-merge"
 import { Button } from "./button"
+import {
+	calendarCellClassName,
+	calendarHeaderCellClassName,
+	calendarHeaderClassName,
+	calendarMonthSelectTriggerClassName,
+	calendarNavButtonClassName,
+	calendarYearSelectTriggerClassName,
+} from "./calendar.styles"
 import { Select, SelectContent, SelectItem, SelectLabel, SelectTrigger } from "./select"
 
 interface CalendarProps<T extends DateValue> extends Omit<CalendarPrimitiveProps<T>, "visibleDuration"> {
@@ -42,13 +49,8 @@ const Calendar = <T extends DateValue>({ className, ...props }: CalendarProps<T>
 							className={composeRenderProps(
 								className,
 								(className, { isSelected, isDisabled }) =>
-									twMerge(
-										"relative flex size-11 cursor-default items-center justify-center rounded-lg text-fg tabular-nums outline-hidden hover:bg-secondary-fg/15 sm:size-9 sm:text-sm/6 forced-colors:text-[ButtonText] forced-colors:outline-0",
-										isSelected &&
-											"bg-primary pressed:bg-primary text-primary-fg hover:bg-primary/90 data-invalid:bg-danger data-invalid:text-danger-fg forced-colors:bg-[Highlight] forced-colors:text-[Highlight] forced-colors:data-invalid:bg-[Mark]",
-										isDisabled && "text-muted-fg forced-colors:text-[GrayText]",
-										date.compare(now) === 0 &&
-											"after:pointer-events-none after:absolute after:start-1/2 after:bottom-1 after:z-10 after:size-0.75 after:-translate-x-1/2 after:rounded-full after:bg-primary selected:after:bg-primary-fg focus-visible:after:bg-primary-fg",
+									calendarCellClassName(
+										{ isSelected, isDisabled, isToday: date.compare(now) === 0 },
 										className,
 									),
 							)}
@@ -67,14 +69,7 @@ const CalendarHeader = ({
 }: React.ComponentProps<"header"> & { isRange?: boolean }) => {
 	const { direction } = useLocale()
 	return (
-		<header
-			data-slot="calendar-header"
-			className={twMerge(
-				"flex w-full justify-between gap-1.5 pt-1 pr-1 pb-5 pl-1.5 sm:pb-4",
-				className,
-			)}
-			{...props}
-		>
+		<header data-slot="calendar-header" className={calendarHeaderClassName(className)} {...props}>
 			<div className="flex items-center gap-1.5">
 				<SelectMonth />
 				<SelectYear />
@@ -83,7 +78,7 @@ const CalendarHeader = ({
 			<div className="flex items-center gap-1">
 				<Button
 					size="sq-sm"
-					className="size-8 **:data-[slot=icon]:text-fg sm:size-7"
+					className={calendarNavButtonClassName}
 					isCircle
 					intent="plain"
 					slot="previous"
@@ -92,7 +87,7 @@ const CalendarHeader = ({
 				</Button>
 				<Button
 					size="sq-sm"
-					className="size-8 **:data-[slot=icon]:text-fg sm:size-7"
+					className={calendarNavButtonClassName}
 					isCircle
 					intent="plain"
 					slot="next"
@@ -142,7 +137,7 @@ const SelectMonth = () => {
 				}
 			}}
 		>
-			<SelectTrigger className="w-22 text-sm/5 **:data-[slot=select-value]:inline-block **:data-[slot=select-value]:truncate sm:px-2.5 sm:py-1.5 sm:*:text-sm/5" />
+			<SelectTrigger className={calendarMonthSelectTriggerClassName} />
 			<SelectContent className="min-w-0" items={months}>
 				{(item) => (
 					<SelectItem>
@@ -182,7 +177,7 @@ const SelectYear = () => {
 				}
 			}}
 		>
-			<SelectTrigger className="text-sm/5 sm:px-2.5 sm:py-1.5 sm:*:text-sm/5" />
+			<SelectTrigger className={calendarYearSelectTriggerClassName} />
 			<SelectContent items={years}>
 				{(item) => (
 					<SelectItem>
@@ -197,11 +192,7 @@ const SelectYear = () => {
 const CalendarGridHeader = () => {
 	return (
 		<CalendarGridHeaderPrimitive>
-			{(day) => (
-				<CalendarHeaderCell className="pb-2 text-center font-semibold text-muted-fg text-sm/6 sm:px-0 sm:py-0.5 lg:text-xs">
-					{day}
-				</CalendarHeaderCell>
-			)}
+			{(day) => <CalendarHeaderCell className={calendarHeaderCellClassName}>{day}</CalendarHeaderCell>}
 		</CalendarGridHeaderPrimitive>
 	)
 }

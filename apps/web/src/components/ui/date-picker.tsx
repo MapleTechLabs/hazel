@@ -9,13 +9,17 @@ import type {
 	PopoverProps,
 } from "react-aria-components"
 import { Button, DatePicker as DatePickerPrimitive } from "react-aria-components"
-import { twJoin } from "tailwind-merge"
 import { DateInput } from "~/components/ui/date-field"
 import { fieldStyles } from "~/components/ui/field"
 import { InputGroup } from "~/components/ui/input"
 import { useIsMobile } from "~/hooks/use-mobile"
 import { cx } from "~/lib/primitive"
 import { Calendar } from "./calendar"
+import {
+	datePickerGroupClassName,
+	datePickerOverlayClassName,
+	datePickerTriggerClassName,
+} from "./date-picker.styles"
 import { ModalContent } from "./modal"
 import { PopoverContent } from "./popover"
 import { RangeCalendar } from "./range-calendar"
@@ -71,10 +75,7 @@ export function DatePickerOverlay({
 		<PopoverContent
 			placement={placement}
 			arrow={false}
-			className={twJoin(
-				"flex min-w-auto max-w-none snap-x justify-center p-4 sm:min-w-66 sm:p-2 sm:pt-3",
-				visibleDuration?.months === 1 ? "sm:max-w-2xs" : "sm:max-w-none",
-			)}
+			className={datePickerOverlayClassName(visibleDuration?.months)}
 			{...props}
 		>
 			{range ? (
@@ -88,17 +89,9 @@ export function DatePickerOverlay({
 
 export function DatePickerTrigger({ className, ...props }: GroupProps) {
 	return (
-		<InputGroup className={cx("*:data-[slot=control]:w-full", className)} {...props}>
+		<InputGroup className={cx(datePickerGroupClassName, className)} {...props}>
 			<DateInput />
-			<Button
-				data-slot="date-picker-trigger"
-				className={twJoin(
-					"touch-target grid place-content-center outline-hidden",
-					"pressed:text-fg text-muted-fg hover:text-fg focus-visible:text-fg",
-					"px-[calc(--spacing(3.5)-1px)] py-[calc(--spacing(2.5)-1px)] sm:px-[calc(--spacing(3)-1px)] sm:py-[calc(--spacing(1.5)-1px)] sm:text-sm/6",
-					"*:data-[slot=icon]:size-4.5 sm:*:data-[slot=icon]:size-4",
-				)}
-			>
+			<Button data-slot="date-picker-trigger" className={datePickerTriggerClassName}>
 				<CalendarDaysIcon />
 			</Button>
 		</InputGroup>

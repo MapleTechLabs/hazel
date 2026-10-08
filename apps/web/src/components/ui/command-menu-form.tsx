@@ -11,6 +11,26 @@ import {
 } from "react-aria-components"
 import { twMerge } from "tailwind-merge"
 import { cx } from "~/lib/primitive"
+import {
+	commandMenuFormBackClassName,
+	commandMenuFormBackIconClassName,
+	commandMenuFormBodyBase,
+	commandMenuFormContainerBase,
+	commandMenuFormErrorClassName,
+	commandMenuFormEscapeClassName,
+	commandMenuFormFieldBase,
+	commandMenuFormFooterBase,
+	commandMenuFormHeaderBase,
+	commandMenuFormLabelClassName,
+	commandMenuFormSubtitleClassName,
+	commandMenuFormTitleClassName,
+	commandMenuFormTitlesClassName,
+	commandMenuInputBase,
+	commandMenuInputIconClassName,
+	commandMenuInputWrapperClassName,
+	commandMenuToggleBase,
+	commandMenuToggleOptionClassName,
+} from "./command-menu-form.styles"
 
 function ChevronLeftIcon({ className }: { className?: string }) {
 	return (
@@ -34,7 +54,7 @@ export function CommandMenuFormContainer({
 	children: React.ReactNode
 	className?: string
 }) {
-	return <div className={twMerge("flex h-full flex-col overflow-hidden", className)}>{children}</div>
+	return <div className={twMerge(commandMenuFormContainerBase, className)}>{children}</div>
 }
 
 /**
@@ -55,23 +75,17 @@ export function CommandMenuFormHeader({
 	const state = use(OverlayTriggerStateContext)!
 
 	return (
-		<div className={twMerge("flex items-center gap-2 border-b px-3 py-2.5 sm:px-2.5 sm:py-2", className)}>
+		<div className={twMerge(commandMenuFormHeaderBase, className)}>
 			{onBack && (
-				<Button
-					onPress={onBack}
-					className="flex size-6 cursor-default items-center justify-center rounded text-muted-fg transition-colors hover:bg-muted hover:text-fg"
-				>
-					<ChevronLeftIcon className="size-4" />
+				<Button onPress={onBack} className={commandMenuFormBackClassName}>
+					<ChevronLeftIcon className={commandMenuFormBackIconClassName} />
 				</Button>
 			)}
-			<div className="min-w-0 flex-1">
-				<h2 className="truncate font-semibold text-fg text-sm">{title}</h2>
-				{subtitle && <p className="truncate text-muted-fg text-xs">{subtitle}</p>}
+			<div className={commandMenuFormTitlesClassName}>
+				<h2 className={commandMenuFormTitleClassName}>{title}</h2>
+				{subtitle && <p className={commandMenuFormSubtitleClassName}>{subtitle}</p>}
 			</div>
-			<Button
-				onPress={() => state?.close()}
-				className="hidden cursor-default rounded border px-1.5 py-0.5 text-muted-fg text-xs hover:bg-muted lg:inline"
-			>
+			<Button onPress={() => state?.close()} className={commandMenuFormEscapeClassName}>
 				Esc
 			</Button>
 		</div>
@@ -88,7 +102,7 @@ export function CommandMenuFormBody({
 	children: React.ReactNode
 	className?: string
 }) {
-	return <div className={twMerge("flex-1 overflow-y-auto p-3 sm:p-2.5", className)}>{children}</div>
+	return <div className={twMerge(commandMenuFormBodyBase, className)}>{children}</div>
 }
 
 /**
@@ -101,18 +115,7 @@ export function CommandMenuFormFooter({
 	children: React.ReactNode
 	className?: string
 }) {
-	return (
-		<div
-			className={twMerge(
-				"flex items-center justify-between gap-2 border-t px-3 py-2 sm:px-2.5 sm:py-1.5",
-				"text-muted-fg text-xs",
-				"*:[kbd]:inset-ring *:[kbd]:inset-ring-fg/10 *:[kbd]:mx-0.5 *:[kbd]:inline-grid *:[kbd]:h-4 *:[kbd]:min-w-4 *:[kbd]:place-content-center *:[kbd]:rounded-xs *:[kbd]:bg-secondary *:[kbd]:px-1",
-				className,
-			)}
-		>
-			{children}
-		</div>
-	)
+	return <div className={twMerge(...commandMenuFormFooterBase, className)}>{children}</div>
 }
 
 /**
@@ -130,11 +133,11 @@ export function CommandMenuFormField({
 	className?: string
 }) {
 	return (
-		<div className={twMerge("space-y-1.5", className)}>
-			{label && <label className="block font-medium text-fg text-xs">{label}</label>}
+		<div className={twMerge(commandMenuFormFieldBase, className)}>
+			{label && <label className={commandMenuFormLabelClassName}>{label}</label>}
 			{children}
 			{error && (
-				<p className="text-danger-subtle-fg text-xs" role="alert">
+				<p className={commandMenuFormErrorClassName} role="alert">
 					{error}
 				</p>
 			)}
@@ -152,21 +155,9 @@ interface CommandMenuInputProps extends Omit<InputProps, "className"> {
  */
 export function CommandMenuInput({ className, icon, ...props }: CommandMenuInputProps) {
 	return (
-		<div className="relative">
-			{icon && (
-				<div className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-fg">
-					{icon}
-				</div>
-			)}
-			<InputPrimitive
-				className={cx(
-					"w-full rounded-md border border-input bg-transparent px-2.5 py-1.5 text-fg text-sm placeholder:text-muted-fg",
-					"outline-none focus:border-ring focus:ring-2 focus:ring-ring/20",
-					icon && "pl-8",
-					className,
-				)}
-				{...props}
-			/>
+		<div className={commandMenuInputWrapperClassName}>
+			{icon && <div className={commandMenuInputIconClassName}>{icon}</div>}
+			<InputPrimitive className={cx(...commandMenuInputBase(!!icon), className)} {...props} />
 		</div>
 	)
 }
@@ -190,20 +181,13 @@ export function CommandMenuToggle({
 			value={value}
 			onChange={onChange}
 			orientation="horizontal"
-			className={twMerge("flex gap-2", className)}
+			className={twMerge(commandMenuToggleBase, className)}
 		>
 			{options.map((option) => (
 				<Radio
 					key={option.value}
 					value={option.value}
-					className={({ isSelected }) => {
-						const baseClasses =
-							"flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors"
-						const stateClasses = isSelected
-							? "border-primary bg-primary/10 text-primary"
-							: "border-border bg-transparent text-muted-fg hover:bg-muted hover:text-fg"
-						return `${baseClasses} ${stateClasses}`
-					}}
+					className={({ isSelected }) => commandMenuToggleOptionClassName(isSelected)}
 				>
 					{option.icon}
 					{option.label}
