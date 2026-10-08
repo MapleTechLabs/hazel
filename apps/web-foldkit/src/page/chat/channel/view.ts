@@ -83,7 +83,6 @@ const messageListView = <M>(
 				isStuck,
 				row._tag === "MessageRow" ? rowContextFor(h, model, row, toParentMessage, idle) : idle,
 			),
-		isStickyHeader: (row) => row._tag === "DateHeader",
 		toParentMessage: (message) => toParentMessage(Message.GotListMessage({ message })),
 	})
 	pruneRowSlots()
@@ -107,7 +106,7 @@ const messageListView = <M>(
 							`#message-${model.overlays.hoveredMessageId} { background-color: var(--color-secondary) !important; }`,
 						],
 					),
-			list,
+			...list,
 		],
 	)
 }
