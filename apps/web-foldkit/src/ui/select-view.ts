@@ -53,12 +53,52 @@ const PortalSelect = Mount.defineStream("PortalSelect", {
 						insideSelector: `[data-select-popover="${CSS.escape(id)}"]`,
 						onInteractOutside: () => Queue.offerUnsafe(queue, Message.PressedOutside()),
 					})
+					// usePress on an option prevents the mousedown, so the click moves no focus and
+					// the option keeps the `:focus-visible` its hover focus inherited.
+					const onMouseDown = (event: Event) => {
+						if (event.target instanceof Element && event.target.closest('[role="option"]'))
+							event.preventDefault()
+					}
+					element.addEventListener("mousedown", onMouseDown)
 					Queue.offerUnsafe(queue, Message.CompletedPortalSelect())
-					return release
+					return () => {
+						element.removeEventListener("mousedown", onMouseDown)
+						release()
+					}
 				}),
 				(release) => Effect.sync(release),
 			).pipe(Effect.flatMap(() => Effect.never)),
 		),
+})
+
+/**
+ * usePress focuses the trigger itself on pointerdown and prevents the native mousedown focus, so
+ * the trigger inherits `:focus-visible` from the element focused before it, as in React Aria.
+ */
+const FocusTriggerOnPress = Mount.define("FocusSelectTriggerOnPress", {
+	messages: [Message.CompletedPortalSelect],
+	execute: ({ element }) =>
+		Effect.acquireRelease(
+			Effect.sync(() => {
+				const onPointerDown = (event: Event) => {
+					if (
+						!(event instanceof PointerEvent) ||
+						event.button !== 0 ||
+						!(element instanceof HTMLElement)
+					)
+						return
+					if (document.activeElement !== element) element.focus({ preventScroll: true })
+				}
+				const onMouseDown = (event: Event) => event.preventDefault()
+				element.addEventListener("pointerdown", onPointerDown)
+				element.addEventListener("mousedown", onMouseDown)
+				return () => {
+					element.removeEventListener("pointerdown", onPointerDown)
+					element.removeEventListener("mousedown", onMouseDown)
+				}
+			}),
+			(release) => Effect.sync(release),
+		).pipe(Effect.as(Message.CompletedPortalSelect())),
 })
 
 // VIEW
@@ -153,6 +193,7 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, view
 							h.Attribute("type", "button"),
 							h.OnFocus(Message.FocusedTrigger()),
 							h.OnBlur(Message.BlurredTrigger()),
+							h.OnMount(FocusTriggerOnPress()),
 							h.OnPointerDown((pointerType, button) =>
 								button === 0
 									? Option.some(Message.PressedTrigger({ pointerType }))
