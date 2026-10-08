@@ -36,8 +36,6 @@ export const init = (): Model => ({
 	settingsChannel: null,
 	isMobile: false,
 	isSidebarOpen: false,
-	collapsedSectionIds: [],
-	panelWidths: {},
 })
 
 // UPDATE
@@ -219,15 +217,6 @@ export const update = (model: Model, message: Message, context: Context): ShellU
 				),
 			}
 		},
-		ToggledSection: ({ sectionId }) => ({
-			model: modifyFields(model, {
-				collapsedSectionIds: (ids) =>
-					ids.includes(sectionId) ? ids.filter((id) => id !== sectionId) : [...ids, sectionId],
-			}),
-		}),
-		ResizedPanel: ({ panel, width }) => ({
-			model: modifyFields(model, { panelWidths: (widths) => ({ ...widths, [panel]: width }) }),
-		}),
 	})
 	return { ...result, model: withMenuEntries(result.model, context) }
 }

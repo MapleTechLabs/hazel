@@ -68,7 +68,6 @@ const presenceStatuses = (model: Model, nowMs: number) =>
 
 export const update = (model: Model, message: Message): SidebarReturn =>
 	Message.match<SidebarReturn>(message, {
-		ChangedContext: () => ({ model }),
 		CompletedScrollActiveIntoView: () => ({ model }),
 		TickedPresenceClock: ({ nowMs }) => ({
 			model:

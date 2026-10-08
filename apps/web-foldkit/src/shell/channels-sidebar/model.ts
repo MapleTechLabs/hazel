@@ -50,7 +50,6 @@ export const SectionAction = Schema.Literals(["create-channel", "join-channel", 
 export type SectionAction = typeof SectionAction.Type
 
 export const Message = defineMessageUnion({
-	ChangedContext: {},
 	CompletedScrollActiveIntoView: {},
 	TickedPresenceClock: { nowMs: Schema.Number },
 	UpdatedMembership: { membership: Schema.NullOr(Membership) },

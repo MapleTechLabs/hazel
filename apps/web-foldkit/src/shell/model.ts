@@ -48,9 +48,6 @@ export const Model = Schema.Struct({
 	isMobile: Schema.Boolean,
 	/** `isOpenOnMobile`: the sidebar sheet opened from the header or the bottom nav. */
 	isSidebarOpen: Schema.Boolean,
-	// Hooks for resizable panels (wave 2).
-	collapsedSectionIds: Schema.Array(Schema.String),
-	panelWidths: Schema.Record(Schema.String, Schema.Number),
 })
 export type Model = typeof Model.Type
 
@@ -67,7 +64,5 @@ export const Message = defineMessageUnion({
 	ToggledSidebar: { isOpen: Schema.Boolean },
 	ChangedViewport: { isMobile: Schema.Boolean },
 	GotMobileSidebarMessage: { message: Modal.Message },
-	ToggledSection: { sectionId: Schema.String },
-	ResizedPanel: { panel: Schema.String, width: Schema.Number },
 })
 export type Message = typeof Message.Type
