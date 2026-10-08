@@ -9,7 +9,7 @@ export const Model = Schema.Struct({
 	integrationId: Schema.String,
 	/** The org-level connection for this provider (first row), if any. */
 	connection: Schema.NullOr(Connection),
-	/** Set by a successful OAuth callback until the connection syncs in (`isVerifying`). */
+	/** Set by a successful OAuth callback, cleared once the connection syncs in active (`isVerifying`). */
 	pendingVerification: Schema.Boolean,
 	isConnecting: Schema.Boolean,
 	isDisconnecting: Schema.Boolean,

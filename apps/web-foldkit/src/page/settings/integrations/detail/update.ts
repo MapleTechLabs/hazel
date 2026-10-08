@@ -4,14 +4,7 @@ import type { RouteOf } from "../../../../route"
 import type { PageReturn, Shared } from "../../../contract"
 import { PageOutMessage } from "../../../out-message"
 import { errorToast, successToast } from "../shared/exit-toast"
-import {
-	AcknowledgeOAuthCallback,
-	ConnectApiKey,
-	Disconnect,
-	GetOAuthUrl,
-	isProvider,
-	RedirectToProvider,
-} from "./command"
+import { ConnectApiKey, Disconnect, GetOAuthUrl, isProvider, RedirectToProvider } from "./command"
 import { Message } from "./message"
 import { CallbackStatus, type Model } from "./model"
 
@@ -61,20 +54,24 @@ const toast = (model: Model, request: Parameters<typeof PageOutMessage.Requested
 	outMessage: PageOutMessage.RequestedToast({ toast: request }),
 })
 
-/** The OAuth callback redirect's `connection_status` and `error_code`: toast, then clean the URL. */
+/** The OAuth callback redirect's `connection_status` and `error_code`: toast and clean the URL. */
 const oauthCallback = (model: Model, route: Route): Return => {
 	const status = Option.getOrNull(callbackStatus(Option.getOrNull(route.connectionStatus)))
 	const name = nameOf(model)
 	if (status === null || name === undefined) return { model }
-	const next = { ...model, pendingVerification: model.pendingVerification || status === "success" }
 	return {
-		...toast(
-			next,
-			status === "success"
-				? successToast(`Connected to ${name}`, "Your account has been successfully connected.")
-				: errorToast(`Failed to connect to ${name}`, errorMessageFromCode(Option.getOrNull(route.errorCode))),
-		),
-		commands: [AcknowledgeOAuthCallback({})],
+		model: { ...model, pendingVerification: model.pendingVerification || status === "success" },
+		outMessage: PageOutMessage.RequestedNavigation({
+			href: `/${model.orgSlug}/settings/integrations/${model.integrationId}`,
+			replace: true,
+			toast:
+				status === "success"
+					? successToast(`Connected to ${name}`, "Your account has been successfully connected.")
+					: errorToast(
+							`Failed to connect to ${name}`,
+							errorMessageFromCode(Option.getOrNull(route.errorCode)),
+						),
+		}),
 	}
 }
 
@@ -86,14 +83,14 @@ const targetOf = (model: Model, shared: Shared) =>
 
 export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
-		AcknowledgedOAuthCallback: () => ({
-			model,
-			outMessage: PageOutMessage.RequestedNavigation({
-				href: `/${model.orgSlug}/settings/integrations/${model.integrationId}`,
-				replace: true,
-			}),
+		UpdatedConnection: ({ connection }) => ({
+			model: {
+				...model,
+				connection,
+				// Verified: a later disconnect shows Connect again, not "Verifying connection...".
+				pendingVerification: model.pendingVerification && connection?.isActive !== true,
+			},
 		}),
-		UpdatedConnection: ({ connection }) => ({ model: { ...model, connection } }),
 		ClickedBack: () => ({
 			model,
 			outMessage: PageOutMessage.RequestedNavigation({
@@ -103,7 +100,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		}),
 		ClickedConnect: () => {
 			const target = targetOf(model, shared)
-			return target === null
+			return target === null || model.isConnecting
 				? { model }
 				: { model: { ...model, isConnecting: true }, commands: [GetOAuthUrl(target)] }
 		},
@@ -122,21 +119,19 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		CompletedRedirectToProvider: () => ({ model }),
 		ClickedDisconnect: () => {
 			const target = targetOf(model, shared)
-			return target === null
+			return target === null || model.isDisconnecting
 				? { model }
 				: { model: { ...model, isDisconnecting: true }, commands: [Disconnect(target)] }
 		},
-		CompletedDisconnect: ({ toast: request }) => {
-			const next = { ...model, isDisconnecting: false }
-			return request === null ? { model: next } : toast(next, request)
-		},
+		SucceededDisconnect: () => ({ model: { ...model, isDisconnecting: false } }),
+		FailedDisconnect: ({ toast: request }) => toast({ ...model, isDisconnecting: false }, request),
 		ChangedApiToken: ({ value }) => ({ model: { ...model, apiToken: value } }),
 		ChangedApiBaseUrl: ({ value }) => ({ model: { ...model, apiBaseUrl: value } }),
 		SubmittedApiKeyForm: () => {
 			const target = targetOf(model, shared)
 			const token = model.apiToken.trim()
 			const baseUrl = model.apiBaseUrl.trim()
-			return target === null || !token || !baseUrl
+			return target === null || !token || !baseUrl || model.isConnecting
 				? { model }
 				: {
 						model: { ...model, isConnecting: true },

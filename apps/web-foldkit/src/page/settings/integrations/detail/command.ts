@@ -9,13 +9,6 @@ import { Message } from "./message"
 
 const Provider = IntegrationConnection.IntegrationProvider
 
-/** The toast is out; clearing the search params is the second OutMessage of the callback effect. */
-export const AcknowledgeOAuthCallback = Command.define("IntegrationAcknowledgeOAuthCallback", {
-	args: {},
-	messages: [Message.AcknowledgedOAuthCallback],
-	execute: () => Effect.succeed(Message.AcknowledgedOAuthCallback()),
-})
-
 const target = { orgId: OrganizationId, provider: Provider }
 
 /** `getOAuthUrlMutation`, organization level. */
@@ -44,7 +37,7 @@ export const RedirectToProvider = Command.define("IntegrationRedirectToProvider"
 /** `disconnectMutation` with the `exitToast` of `handleDisconnect` (no success toast). */
 export const Disconnect = Command.define("IntegrationDisconnect", {
 	args: target,
-	messages: [Message.CompletedDisconnect],
+	messages: [Message.SucceededDisconnect, Message.FailedDisconnect],
 	execute: (params) =>
 		Effect.exit(
 			HazelApiClient.use((client) =>
@@ -52,10 +45,10 @@ export const Disconnect = Command.define("IntegrationDisconnect", {
 			),
 		).pipe(
 			Effect.map((exit) =>
-				Message.CompletedDisconnect({
-					toast: Exit.isSuccess(exit)
-						? null
-						: failureToast(exit.cause, {
+				Exit.isSuccess(exit)
+					? Message.SucceededDisconnect()
+					: Message.FailedDisconnect({
+							toast: failureToast(exit.cause, {
 								IntegrationNotConnectedError: () => ({
 									title: "Integration not connected",
 									description: "This integration is already disconnected.",
@@ -67,7 +60,7 @@ export const Disconnect = Command.define("IntegrationDisconnect", {
 									isRetryable: false,
 								}),
 							}),
-				}),
+						}),
 			),
 		),
 })

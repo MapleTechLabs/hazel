@@ -16,12 +16,11 @@ import {
 	text,
 	type as typeInto,
 } from "foldkit/scene"
-import * as Story from "foldkit/story"
 import { describe, expect, test } from "vitest"
 import type { Shared } from "../../../contract"
 import { PageOutMessage } from "../../../out-message"
 import { errorToast, successToast } from "../shared/exit-toast"
-import { AcknowledgeOAuthCallback, ConnectApiKey, Disconnect, GetOAuthUrl, RedirectToProvider } from "./command"
+import { ConnectApiKey, Disconnect, GetOAuthUrl, RedirectToProvider } from "./command"
 import { Message } from "./message"
 import type { Model } from "./model"
 import { init, update } from "./update"
@@ -54,28 +53,19 @@ const pageFor = (integrationId: string, callback?: { status: string; errorCode?:
 	})
 
 describe("integration detail page", () => {
-	test("a failed OAuth callback toasts the mapped error, then clears the search params", () => {
+	test("a failed OAuth callback toasts the mapped error with the navigation that clears the search params", () => {
 		const page = pageFor("linear", { status: "error", errorCode: "token_exchange_failed" })
 		expect(page.outMessage).toEqual(
-			PageOutMessage.RequestedToast({
+			PageOutMessage.RequestedNavigation({
+				href: "/hazel/settings/integrations/linear",
+				replace: true,
 				toast: errorToast(
 					"Failed to connect to Linear",
 					"Could not authenticate with the provider. Please try again.",
 				),
 			}),
 		)
-		expect(page.commands?.map((command) => command.name)).toEqual([AcknowledgeOAuthCallback.name])
-		Story.story(
-			config.update,
-			Story.given(page.model),
-			Story.message(Message.AcknowledgedOAuthCallback()),
-			Story.expectOutMessage(
-				PageOutMessage.RequestedNavigation({
-					href: "/hazel/settings/integrations/linear",
-					replace: true,
-				}),
-			),
-		)
+		expect(page.commands ?? []).toEqual([])
 	})
 
 	test("a successful callback verifies until the connection syncs in", () => {
@@ -97,8 +87,20 @@ describe("integration detail page", () => {
 			click(role("button", { name: "Disconnect" })),
 			Command.expectExact(Disconnect({ orgId, provider: "linear" })),
 			expectView(role("button", { name: "Disconnecting..." })).toBeDisabled(),
-			Command.resolve(Disconnect, Message.CompletedDisconnect({ toast: null })),
+			Command.resolve(Disconnect, Message.SucceededDisconnect()),
 			expectView(role("button", { name: "Disconnect" })).toBeEnabled(),
+			Subscription.emit(
+				Message.UpdatedConnection({
+					connection: {
+						provider: "linear",
+						isActive: false,
+						externalAccountName: "Hazel Labs",
+						hasInstallationId: false,
+					},
+				}),
+			),
+			// The verification ended when the connection went active; it does not come back.
+			expectView(text("Verifying connection...")).toBeAbsent(),
 		)
 	})
 
@@ -130,7 +132,9 @@ describe("integration detail page", () => {
 	test("a successful callback toasts the connection and verifies it", () => {
 		const page = pageFor("linear", { status: "success" })
 		expect(page.outMessage).toEqual(
-			PageOutMessage.RequestedToast({
+			PageOutMessage.RequestedNavigation({
+				href: "/hazel/settings/integrations/linear",
+				replace: true,
 				toast: successToast("Connected to Linear", "Your account has been successfully connected."),
 			}),
 		)
@@ -155,7 +159,12 @@ describe("integration detail page", () => {
 })
 
 describe("integration detail flows", () => {
-	const linear = { provider: "linear", isActive: true, externalAccountName: "Hazel Labs", hasInstallationId: false }
+	const linear = {
+		provider: "linear",
+		isActive: true,
+		externalAccountName: "Hazel Labs",
+		hasInstallationId: false,
+	}
 
 	test("Connect fetches the OAuth URL, then redirects to the provider", () => {
 		scene(
@@ -164,7 +173,10 @@ describe("integration detail flows", () => {
 			click(role("button", { name: /Connect with Linear$/ })),
 			Command.expectExact(GetOAuthUrl({ orgId, provider: "linear" })),
 			expectView(role("button", { name: /Connecting\.\.\.$/ })).toBeDisabled(),
-			Command.resolve(GetOAuthUrl, Message.SucceededGetOAuthUrl({ authorizationUrl: "https://linear.app/oauth" })),
+			Command.resolve(
+				GetOAuthUrl,
+				Message.SucceededGetOAuthUrl({ authorizationUrl: "https://linear.app/oauth" }),
+			),
 			Command.expectExact(RedirectToProvider({ authorizationUrl: "https://linear.app/oauth" })),
 			Command.resolve(RedirectToProvider, Message.CompletedRedirectToProvider()),
 		)
@@ -178,7 +190,10 @@ describe("integration detail flows", () => {
 			Command.resolve(GetOAuthUrl, Message.FailedGetOAuthUrl()),
 			expectOutMessage(
 				PageOutMessage.RequestedToast({
-					toast: errorToast("Failed to connect to Linear", "Could not initiate the connection. Please try again."),
+					toast: errorToast(
+						"Failed to connect to Linear",
+						"Could not initiate the connection. Please try again.",
+					),
 				}),
 			),
 			expectView(role("button", { name: /Connect with Linear$/ })).toBeEnabled(),
@@ -191,7 +206,7 @@ describe("integration detail flows", () => {
 			config,
 			given({ ...pageFor("linear").model, connection: linear }),
 			click(role("button", { name: "Disconnect" })),
-			Command.resolve(Disconnect, Message.CompletedDisconnect({ toast: failure })),
+			Command.resolve(Disconnect, Message.FailedDisconnect({ toast: failure })),
 			expectOutMessage(PageOutMessage.RequestedToast({ toast: failure })),
 			expectView(text("Hazel Labs")).toExist(),
 			expectView(role("button", { name: "Disconnect" })).toBeEnabled(),

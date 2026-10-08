@@ -4,7 +4,6 @@ import { ToastRequest } from "../../../../overlay/toasts"
 import { Connection } from "../shared/connections"
 
 export const Message = defineMessageUnion({
-	AcknowledgedOAuthCallback: {},
 	UpdatedConnection: { connection: Schema.NullOr(Connection) },
 	ClickedBack: {},
 	ClickedConnect: {},
@@ -12,7 +11,8 @@ export const Message = defineMessageUnion({
 	FailedGetOAuthUrl: {},
 	CompletedRedirectToProvider: {},
 	ClickedDisconnect: {},
-	CompletedDisconnect: { toast: Schema.NullOr(ToastRequest) },
+	SucceededDisconnect: {},
+	FailedDisconnect: { toast: ToastRequest },
 	ChangedApiToken: { value: Schema.String },
 	ChangedApiBaseUrl: { value: Schema.String },
 	SubmittedApiKeyForm: {},
