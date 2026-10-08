@@ -10,6 +10,7 @@ import {
 	type TargetName,
 } from "./config.ts"
 import { CALL_LOG_PATH, CAPTURE_HEADER, type RecordedCall } from "./backend/call-log.ts"
+import { NETWORK_FIXTURE_HOSTS, networkFixturePath } from "./backend/network.ts"
 import { clerkIdentityFor } from "./fixtures/identity.ts"
 import { BOX_STYLE_PROPS, collectSnapshot, serializeDom, TEXT_STYLE_PROPS } from "./runtime/snapshot.ts"
 import { installDeterminism, waitForVisualQuiet } from "./runtime/stabilize.ts"
@@ -149,6 +150,15 @@ export const captureTarget = async (options: {
 		}, clerkIdentityFor(dataset))
 		await page.route("**/*", (route) => {
 			const url = new URL(route.request().url())
+			// Link unfurls, GIF CDNs and the YouTube player: answered by the fixture backend.
+			if (NETWORK_FIXTURE_HOSTS.has(url.hostname)) {
+				return route
+					.fetch({
+						url: `${fixtureBackendUrl}${networkFixturePath(url)}`,
+						headers: { ...route.request().headers(), "x-parity-dataset": dataset.name },
+					})
+					.then((response) => route.fulfill({ response }))
+			}
 			if (!allowedOrigins.has(url.origin)) {
 				blockedRequests.push(`${url.origin}${url.pathname}`)
 				return route.abort("blockedbyclient")

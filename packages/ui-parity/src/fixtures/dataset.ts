@@ -45,4 +45,24 @@ export interface Dataset {
 	readonly tables: Partial<Record<TableName, ReadonlyArray<Row>>>
 	/** Canned RPC successes keyed by RPC tag. Values are the decoded (Type-side) success value. */
 	readonly rpc: Readonly<Record<string, (payload: unknown) => unknown>>
+	/** Third-party responses the fixture backend stands in for (`backend/network.ts`), keyed by request. */
+	readonly network?: NetworkFixtures
+	/** Rivet message actors (`backend/rivet.ts`) keyed by message id: the events each one streams. */
+	readonly actors?: Readonly<Record<string, ActorScript>>
+}
+
+export interface NetworkFixtures {
+	/** `link-preview.hazel.sh/link-preview?url=<key>`: the worker's `LinkPreviewData`. */
+	readonly linkPreviews?: Readonly<Record<string, unknown>>
+	/** `link-preview.hazel.sh/tweet?id=<key>`: the syndication API's tweet JSON. */
+	readonly tweets?: Readonly<Record<string, unknown>>
+}
+
+/**
+ * What a message actor sends after a client connects: its `getState` snapshot, then each event in
+ * order. A script that stops before `completed` leaves the message streaming.
+ */
+export interface ActorScript {
+	readonly state: Readonly<Record<string, unknown>>
+	readonly events: ReadonlyArray<{ readonly name: string; readonly payload: Readonly<Record<string, unknown>> }>
 }

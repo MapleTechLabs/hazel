@@ -57,7 +57,7 @@ export const corsHeaders = (request: Request): Record<string, string> => ({
 	"access-control-allow-origin": request.headers.get("origin") ?? "*",
 	"access-control-allow-credentials": "true",
 	"access-control-allow-headers": request.headers.get("access-control-request-headers") ?? "*",
-	"access-control-allow-methods": "GET, POST, OPTIONS",
+	"access-control-allow-methods": "GET, POST, PUT, OPTIONS",
 	"access-control-expose-headers":
 		"electric-handle, electric-offset, electric-schema, electric-cursor, electric-up-to-date",
 })
