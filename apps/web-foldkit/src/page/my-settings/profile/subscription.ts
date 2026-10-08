@@ -1,6 +1,6 @@
 import { UserId } from "@hazel/schema"
 import { Option, Schema, Stream } from "effect"
-import { Subscription } from "foldkit"
+import { Dom, Subscription } from "foldkit"
 import type { PageSubscriptionInput } from "../../contract"
 import { userRowStream } from "../user-stream"
 import { Message } from "./message"
@@ -30,7 +30,7 @@ const page = Subscription.make<PageSubscriptionInput<Model>, Message>()((entry) 
 			dependenciesToStream: ({ isDragging }) =>
 				isDragging
 					? Stream.merge(
-							Subscription.fromEvent({
+							Dom.streamFromEvent({
 								target: window,
 								type: "pointermove",
 								mapEvent: (event) =>
@@ -39,7 +39,7 @@ const page = Subscription.make<PageSubscriptionInput<Model>, Message>()((entry) 
 										clientY: event.clientY,
 									}),
 							}),
-							Subscription.fromEvent({
+							Dom.streamFromEvent({
 								target: window,
 								type: "pointerup",
 								mapEvent: () => Message.ReleasedCropPointer(),
@@ -49,10 +49,10 @@ const page = Subscription.make<PageSubscriptionInput<Model>, Message>()((entry) 
 		},
 	),
 	// `useDragDetection`: file drags anywhere on the page.
-	pageDrag: Subscription.persistent(
+	pageDrag: Subscription.persistentEntry(
 		Stream.mergeAll(
 			[
-				Subscription.fromEventFilterMap({
+				Dom.streamFromEventFilterMap({
 					target: document,
 					type: "dragenter",
 					filterMapEvent: (event) =>
@@ -60,17 +60,17 @@ const page = Subscription.make<PageSubscriptionInput<Model>, Message>()((entry) 
 							? Option.some(Message.DraggedFilesOverPage({ isEntering: true }))
 							: Option.none(),
 				}),
-				Subscription.fromEvent({
+				Dom.streamFromEvent({
 					target: document,
 					type: "dragleave",
 					mapEvent: () => Message.DraggedFilesOverPage({ isEntering: false }),
 				}),
-				Subscription.fromEvent({
+				Dom.streamFromEvent({
 					target: document,
 					type: "drop",
 					mapEvent: () => Message.EndedPageDrag(),
 				}),
-				Subscription.fromEvent({
+				Dom.streamFromEvent({
 					target: document,
 					type: "dragend",
 					mapEvent: () => Message.EndedPageDrag(),

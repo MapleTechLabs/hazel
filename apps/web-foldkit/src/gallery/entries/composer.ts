@@ -44,7 +44,11 @@ const FetchCurrentUser = Command.define("FetchCurrentUser", {
 			const client = yield* HazelRpc
 			const user = yield* client("user.me", undefined)
 			return Message.SucceededFetchCurrentUser({ organizationId: user.organizationId ?? null })
-		}).pipe(Effect.catch((error) => Effect.succeed(Message.FailedFetchCurrentUser({ reason: String(error) })))),
+		}).pipe(
+			Effect.catch((error) =>
+				Effect.succeed(Message.FailedFetchCurrentUser({ reason: String(error) })),
+			),
+		),
 })
 
 // UPDATE
@@ -84,7 +88,10 @@ const subscriptions = Subscription.make<Model, Message>()((entry) => ({
 								q
 									.from({ channel: channelCollection })
 									.where(({ channel }) =>
-										and(eq(channel.organizationId, organizationId), eq(channel.name, "general")),
+										and(
+											eq(channel.organizationId, organizationId),
+											eq(channel.name, "general"),
+										),
 									)
 									.findOne(),
 							(rows) => Message.UpdatedChannel({ channelId: rows[0]?.id ?? null }),
@@ -103,7 +110,7 @@ const subscriptions = Subscription.make<Model, Message>()((entry) => ({
 						),
 		},
 	),
-	presence: Subscription.persistent(
+	presence: Subscription.persistentEntry(
 		presenceStream((presence) => toComposer(Composer.Message.UpdatedPresence({ presence }))),
 	),
 }))

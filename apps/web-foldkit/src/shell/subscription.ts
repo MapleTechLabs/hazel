@@ -1,7 +1,7 @@
 import { ChannelId, NotificationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { and, eq, isNull } from "@tanstack/db"
 import { Option, Schema, Stream } from "effect"
-import { Subscription } from "foldkit"
+import { Dom, Subscription } from "foldkit"
 import {
 	channelCollection,
 	notificationCollection,
@@ -47,8 +47,8 @@ const settingsChannelId = (route: AppRoute) =>
 
 const own = Subscription.make<Input, Message>()((entry) => ({
 	// `useMediaQuery("(max-width: 767px)")` in `SidebarProvider`.
-	shellViewport: Subscription.persistent(
-		Subscription.fromMediaQuery({
+	shellViewport: Subscription.persistentEntry(
+		Dom.streamFromMediaQuery({
 			query: "(max-width: 767px)",
 			mapMatches: (isMobile) => Message.ChangedViewport({ isMobile }),
 		}),

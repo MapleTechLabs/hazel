@@ -181,7 +181,7 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
 			dependenciesToStream: (dependencies) =>
 				dependencies.isDragging
 					? Stream.merge(
-							Subscription.fromEventFilterMap({
+							Dom.streamFromEventFilterMap({
 								target: document,
 								type: "pointermove",
 								filterMapEvent: (event) =>
@@ -196,7 +196,7 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
 										}),
 									),
 							}),
-							Subscription.fromEvent({
+							Dom.streamFromEvent({
 								target: document,
 								type: "pointerup",
 								mapEvent: () => Message.ReleasedDragPointer(),

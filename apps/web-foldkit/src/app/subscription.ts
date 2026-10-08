@@ -1,8 +1,12 @@
 import { ChannelId, type NotificationId, OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { eq } from "@tanstack/db"
 import { Option, Schema, Stream } from "effect"
-import { ManagedResource, Subscription } from "foldkit"
-import { notificationCollection, organizationCollection, organizationMemberCollection } from "~/db/collections"
+import { Dom, ManagedResource, Subscription } from "foldkit"
+import {
+	notificationCollection,
+	organizationCollection,
+	organizationMemberCollection,
+} from "~/db/collections"
 import { liveQueryStream } from "../data/live-query"
 import { pageSubscriptions } from "../page/registry"
 import { SoundSettings } from "../notification-sound"
@@ -20,15 +24,17 @@ import { Message } from "./message"
 import { type Model, pageHostOf, sharedOf } from "./model"
 
 const rootSubscriptions = Subscription.make<Model, Message>()((entry) => ({
-	systemTheme: Subscription.persistent(
-		Subscription.fromMediaQuery({
+	systemTheme: Subscription.persistentEntry(
+		Dom.streamFromMediaQuery({
 			query: "(prefers-color-scheme: dark)",
 			mapMatches: (isDark) => Message.ChangedSystemTheme({ theme: isDark ? "dark" : "light" }),
 		}),
 	),
-	auth: Subscription.persistent(clerkAuthStream.pipe(Stream.map((auth) => Message.ChangedAuth({ auth })))),
+	auth: Subscription.persistentEntry(
+		clerkAuthStream.pipe(Stream.map((auth) => Message.ChangedAuth({ auth }))),
+	),
 	// Legacy `presenceNowSignal`: wall clock for deriving stale presence.
-	presenceClock: Subscription.persistent(
+	presenceClock: Subscription.persistentEntry(
 		Stream.concat(Stream.succeed(undefined), Stream.tick("30 seconds")).pipe(
 			Stream.map(() => Message.TickedPresenceClock({ nowMs: Date.now() })),
 		),
@@ -115,7 +121,9 @@ const notificationSubscriptions = Subscription.make<Model, Message>()((entry) =>
 				currentChannelId: currentChannelIdOf(model.route),
 			}),
 			dependenciesToStream: ({ userId, settings, currentChannelId }) =>
-				userId === null ? Stream.empty : wireNotificationSinks({ userId, settings, currentChannelId }),
+				userId === null
+					? Stream.empty
+					: wireNotificationSinks({ userId, settings, currentChannelId }),
 		},
 	),
 	// The provider's `recentNotifications` query, for the membership in the route's organization.

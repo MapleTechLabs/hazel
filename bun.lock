@@ -356,14 +356,14 @@
       "dependencies": {
         "@effect/platform-browser": "catalog:effect",
         "@electric-sql/client": "1.5.28",
-        "@foldkit/ui": "0.166.0",
+        "@foldkit/ui": "0.167.0",
         "@fontsource/inter": "^5.2.8",
         "@hazel/domain": "workspace:*",
         "@hazel/schema": "workspace:*",
         "@tanstack/db": "0.11.3",
         "effect": "catalog:effect",
         "embla-carousel": "8.6.0",
-        "foldkit": "0.166.0",
+        "foldkit": "0.167.0",
         "marked": "^17.0.4",
         "prosemirror-commands": "^1.7.2",
         "prosemirror-history": "^1.5.1",
@@ -377,8 +377,8 @@
         "tailwind-variants": "^3.2.2",
       },
       "devDependencies": {
-        "@foldkit/devtools": "0.166.0",
-        "@foldkit/vite-plugin": "0.26.1",
+        "@foldkit/devtools": "0.167.0",
+        "@foldkit/vite-plugin": "0.27.0",
         "@tailwindcss/vite": "^4.2.1",
         "tailwindcss": "^4.2.1",
         "tailwindcss-react-aria-components": "^2.0.1",
@@ -1180,11 +1180,11 @@
 
     "@floating-ui/utils": ["@floating-ui/utils@0.2.12", "", {}, "sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww=="],
 
-    "@foldkit/devtools": ["@foldkit/devtools@0.166.0", "", { "dependencies": { "clsx": "^2.1.1" }, "peerDependencies": { "@effect/platform-browser": "4.0.0", "@foldkit/ui": ">=0.165.0", "effect": "4.0.0", "foldkit": ">=0.166.0" } }, "sha512-exLMt5RYdLVziY3TDf1ydBk+ftoUbqFAcXDegqYgHTX1umTpK2e2yTWvBAaXYNG2Jsfd3UvZ+2nUnUR+29YOpw=="],
+    "@foldkit/devtools": ["@foldkit/devtools@0.167.0", "", { "dependencies": { "clsx": "^2.1.1" }, "peerDependencies": { "@effect/platform-browser": "4.0.0", "@foldkit/ui": ">=0.167.0", "effect": "4.0.0", "foldkit": ">=0.167.0" } }, "sha512-Yfy8uzZytstI6ixWj/QqYUX15CKI1eZMefMBkAD2VlipAQ/fbkxHqV54az4sRWzwb5rugyrvzOHRWDtPd8iD+A=="],
 
-    "@foldkit/ui": ["@foldkit/ui@0.166.0", "", { "dependencies": { "@floating-ui/dom": "^1.8.0" }, "peerDependencies": { "effect": "4.0.0", "foldkit": ">=0.165.0" } }, "sha512-w8HJNGS14LlkzY34NNGgEPgZteyZk9jcm6nGxzohapjnlRXwYtWUx2hNN6p1gZdkQDPxAru26tVrBYmwfX4HJA=="],
+    "@foldkit/ui": ["@foldkit/ui@0.167.0", "", { "dependencies": { "@floating-ui/dom": "^1.8.0" }, "peerDependencies": { "effect": "4.0.0", "foldkit": ">=0.167.0" } }, "sha512-4u87Gahg1dHBNqh4bJmB2JEBg8mDd5FUb4JEH5odUc9LP2w15cWAXssbIpcBR8HwUTow+LdTLLe6FoITTeenxQ=="],
 
-    "@foldkit/vite-plugin": ["@foldkit/vite-plugin@0.26.1", "", { "dependencies": { "@effect/platform-node": "4.0.0", "@effect/platform-node-shared": "4.0.0", "magic-string": "^1.4.2", "vitefu": "^1.1.3", "ws": "^8.21.3" }, "peerDependencies": { "effect": "4.0.0", "foldkit": ">=0.165.0", "vite": "^8.0.0" } }, "sha512-zM3N5uJdUA0Kk4mHlvx+p4EWoKBXkX/O/GAGEbX6f/Z3qm8eRENb0LwcMIsYZ7EW1bl2t40TGGZOAyCiquyEqA=="],
+    "@foldkit/vite-plugin": ["@foldkit/vite-plugin@0.27.0", "", { "dependencies": { "@effect/platform-node": "4.0.0", "@effect/platform-node-shared": "4.0.0", "magic-string": "^1.4.2", "vitefu": "^1.1.3", "ws": "^8.21.3" }, "peerDependencies": { "effect": "4.0.0", "foldkit": ">=0.167.0", "vite": "^8.0.0" } }, "sha512-VLZF5d78BN7Ppdx8nVBqExX6W73u/KIwayt+jIh/muC6PoVzpwIsuGTvsJ5+b2VezbaVBCidLWOiCZe7lymoOg=="],
 
     "@fontsource/geist-mono": ["@fontsource/geist-mono@5.2.7", "", {}, "sha512-xVPVFISJg/K0VVd+aQN0Y7X/sw9hUcJPyDWFJ5GpyU3bHELhoRsJkPSRSHXW32mOi0xZCUQDOaPj1sqIFJ1FGg=="],
 
@@ -2936,7 +2936,7 @@
 
     "flattie": ["flattie@1.1.1", "", {}, "sha512-9UbaD6XdAL97+k/n+N7JwX46K/M6Zc6KcFYskrYL8wbBV/Uyk0CTAMY0VT+qiK5PM7AIc9aTWYtq65U7T+aCNQ=="],
 
-    "foldkit": ["foldkit@0.166.0", "", { "dependencies": { "parse5": "^8.0.1" }, "peerDependencies": { "@effect/platform-browser": "4.0.0", "effect": "4.0.0" } }, "sha512-g/y+8/4NoRtJ6qDT3Lt6LWypjvCAl+aF1/8g2cwx5u71s/Fh8LJ10NuViolw+ewYpSklGT9SqnxZ/OLKWZV7sQ=="],
+    "foldkit": ["foldkit@0.167.0", "", { "dependencies": { "parse5": "^8.0.1" }, "peerDependencies": { "@effect/platform-browser": "4.0.0", "effect": "4.0.0" } }, "sha512-5F89USZZdUsdau0ecPDDfIIXS+LM0+rya03KSdXjNOJfmuoR/vtQbnMKR3XQJKvS3UV9X+1RoBrr2WdBu0PHjw=="],
 
     "fontace": ["fontace@0.4.1", "", { "dependencies": { "fontkitten": "^1.0.2" } }, "sha512-lDMvbAzSnHmbYMTEld5qdtvNH2/pWpICOqpean9IgC7vUbUJc3k+k5Dokp85CegamqQpFbXf0rAVkbzpyTA8aw=="],
 

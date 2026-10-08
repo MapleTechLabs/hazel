@@ -422,8 +422,8 @@ export const dismiss = (model: Model, id: number): UpdateReturn => deleteToast(m
 const isInsideToaster = () => document.activeElement?.closest("[data-sonner-toaster]") != null
 
 export const subscriptions = Subscription.make<Model, Message>()(() => ({
-	keys: Subscription.persistent(
-		Subscription.fromEventFilterMap({
+	keys: Subscription.persistentEntry(
+		Dom.streamFromEventFilterMap({
 			target: document,
 			type: "keydown",
 			filterMapEvent: (event) =>
@@ -434,8 +434,8 @@ export const subscriptions = Subscription.make<Model, Message>()(() => ({
 						: Option.none(),
 		}),
 	),
-	visibility: Subscription.persistent(
-		Subscription.fromEvent({
+	visibility: Subscription.persistentEntry(
+		Dom.streamFromEvent({
 			target: document,
 			type: "visibilitychange",
 			mapEvent: () => Message.ChangedVisibility({ isHidden: document.hidden }),

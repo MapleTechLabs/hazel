@@ -18,7 +18,7 @@ const data = Subscription.make<Model, Message>()((entry) => ({
 				),
 		},
 	),
-	filesBreakpoint: Subscription.persistent(
+	filesBreakpoint: Subscription.persistentEntry(
 		breakpointStream((breakpoint) => Message.ResizedViewport({ breakpoint })),
 	),
 }))
