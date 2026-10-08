@@ -194,7 +194,7 @@ export const menuLabel = <M>(
 	h: HtmlBuilder<M>,
 	id: string,
 	key: string,
-	text: string,
+	text: string | ReadonlyArray<Html | string>,
 	className?: string,
 ): Html =>
 	h.span(
@@ -203,7 +203,7 @@ export const menuLabel = <M>(
 			h.Id(labelId(id, key)),
 			h.Attribute("slot", "label"),
 		],
-		[text],
+		typeof text === "string" ? [text] : [...text],
 	)
 
 /** `MenuDescription` (DropdownDescription). */

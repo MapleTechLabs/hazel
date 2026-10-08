@@ -1,5 +1,11 @@
 import type { Page } from "playwright"
 import { seedEmojiPicker } from "../fixtures/datasets/rich/emoji.ts"
+import {
+	ADA_STATUS_EMOJI,
+	statusEmojiClearDataset,
+	statusEmojiDataset,
+	statusEmojiSaveDataset,
+} from "../fixtures/datasets/status-emoji.ts"
 import { statusSetDataset } from "../fixtures/datasets/status-set.ts"
 import { chat, type AreaModule, type Scenario } from "./types.ts"
 
@@ -107,7 +113,10 @@ const setStatusScenarios: ReadonlyArray<Scenario> = [
 		steps: async (page) => {
 			await chooseCustomExpiry(page)
 			await page.getByRole("button", { name: "Calendar" }).click()
-			await page.getByRole("button", { name: /\bMarch 20, 2026\b/ }).first().click()
+			await page
+				.getByRole("button", { name: /\bMarch 20, 2026\b/ })
+				.first()
+				.click()
 			await page.getByRole("grid").waitFor({ state: "detached" })
 		},
 	}),
@@ -148,6 +157,59 @@ const setStatusScenarios: ReadonlyArray<Scenario> = [
 			await openSetStatus(page)
 			await page.getByRole("button", { name: "Clear status" }).click()
 			await page.getByText("Status cleared").waitFor()
+		},
+	}),
+]
+
+/** The status emoji next to the user's name in the user menu trigger. */
+const triggerEmoji = (page: Page, emoji: string) =>
+	page.getByRole("button", { name: "Profile" }).getByText(emoji, { exact: true })
+
+const statusEmojiScenarios: ReadonlyArray<Scenario> = [
+	nav({
+		id: "nav-status-emoji-trigger",
+		title: "User menu trigger with an emoji status",
+		dataset: "status-emoji",
+		themes: ["light", "dark"],
+		steps: async (page) => {
+			await triggerEmoji(page, ADA_STATUS_EMOJI).waitFor()
+		},
+	}),
+	nav({
+		id: "nav-status-emoji-menu",
+		title: "User menu open with an emoji status",
+		dataset: "status-emoji",
+		steps: async (page) => {
+			await triggerEmoji(page, ADA_STATUS_EMOJI).waitFor()
+			await page.getByRole("button", { name: "Profile" }).click()
+			await page
+				.getByRole("menuitem", { name: /Set status/ })
+				.getByText(ADA_STATUS_EMOJI)
+				.waitFor()
+		},
+	}),
+	nav({
+		id: "nav-status-emoji-saved",
+		title: "User menu shows a newly saved emoji status",
+		dataset: "status-emoji-save",
+		steps: async (page) => {
+			await openSetStatus(page)
+			await page.getByRole("button", { name: /In a meeting/ }).click()
+			await page.getByRole("button", { name: "Save" }).click()
+			await page.getByText("Status updated").waitFor()
+			await triggerEmoji(page, "📅").waitFor()
+		},
+	}),
+	nav({
+		id: "nav-status-emoji-cleared",
+		title: "User menu drops the emoji after clearing the status",
+		dataset: "status-emoji-clear",
+		steps: async (page) => {
+			await triggerEmoji(page, ADA_STATUS_EMOJI).waitFor()
+			await openSetStatus(page)
+			await page.getByRole("button", { name: "Clear status" }).click()
+			await page.getByText("Status cleared").waitFor()
+			await triggerEmoji(page, ADA_STATUS_EMOJI).waitFor({ state: "detached" })
 		},
 	}),
 ]
@@ -277,6 +339,7 @@ export const navigationArea: AreaModule = {
 			},
 		}),
 		...setStatusScenarios,
+		...statusEmojiScenarios,
 	],
-	datasets: [statusSetDataset],
+	datasets: [statusSetDataset, statusEmojiDataset, statusEmojiSaveDataset, statusEmojiClearDataset],
 }

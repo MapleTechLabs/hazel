@@ -24,6 +24,14 @@ export const ChannelSummary = Schema.Struct({
 })
 export type ChannelSummary = typeof ChannelSummary.Type
 
+/** The current user's custom status (`useCurrentUserStatus`): the user menu shows its emoji. */
+export const UserStatus = Schema.Struct({
+	emoji: Schema.NullOr(Schema.String),
+	message: Schema.NullOr(Schema.String),
+	expiresAtMs: Schema.NullOr(Schema.Number),
+})
+export type UserStatus = typeof UserStatus.Type
+
 export const Model = Schema.Struct({
 	channelsSidebar: ChannelsSidebar.Model,
 	userMenu: Menu.Model,
@@ -31,6 +39,7 @@ export const Model = Schema.Struct({
 	/** The inputs the menus' entries were last built from; rebuilt only when this changes. */
 	menuSignature: Schema.String,
 	userOrganizations: Schema.Array(SwitcherOrg),
+	userStatus: Schema.NullOr(UserStatus),
 	/** Unread notification ids and the optimistic "Mark all as read" state. */
 	notifications: Notifications.Model,
 	/** `channels/$channelId/settings/layout.tsx` header (name and icon). */
@@ -52,6 +61,7 @@ export const Message = defineMessageUnion({
 	GotUserMenuMessage: { message: Menu.Message },
 	GotOrgSwitcherMessage: { message: Menu.Message },
 	UpdatedUserOrganizations: { organizations: Schema.Array(SwitcherOrg) },
+	UpdatedUserStatus: { status: Schema.NullOr(UserStatus) },
 	GotNotificationsMessage: { message: Notifications.Message },
 	UpdatedSettingsChannel: { channel: Schema.NullOr(ChannelSummary) },
 	ToggledSidebar: { isOpen: Schema.Boolean },

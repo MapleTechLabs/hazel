@@ -148,7 +148,7 @@ export const settingsSidebar = <Message>(
 				]),
 			]),
 		]),
-		userMenuFooter(h, chrome.userMenu, context, chrome.toUserMenuMessage),
+		userMenuFooter(h, chrome.userMenu, context, chrome.toUserMenuMessage, chrome.userStatus),
 	])
 }
 
@@ -188,7 +188,7 @@ export const mySettingsSidebar = <Message>(
 				]),
 			]),
 		]),
-		userMenuFooter(h, chrome.userMenu, context, chrome.toUserMenuMessage),
+		userMenuFooter(h, chrome.userMenu, context, chrome.toUserMenuMessage, chrome.userStatus),
 	])
 }
 
@@ -243,6 +243,6 @@ export const notificationsSidebar = <Message>(
 					: []),
 			]),
 		]),
-		userMenuFooter(h, chrome.userMenu, context, chrome.toUserMenuMessage),
+		userMenuFooter(h, chrome.userMenu, context, chrome.toUserMenuMessage, chrome.userStatus),
 	])
 }

@@ -41,6 +41,10 @@ export const pushChange = (datasetName: string, change: PushedChange) => {
 	return seq
 }
 
+/** The newest pushed seq as an offset: a fresh shape starts from the dataset, after earlier pushes. */
+export const latestOffset = (datasetName: string, table: string) =>
+	`${logs.get(logKey(datasetName, table))?.at(-1)?.seq ?? 0}_0`
+
 /** Changes after the client's offset (`<seq>_0`), plus the offset to report back. */
 export const changesAfter = (datasetName: string, table: string, offset: string | null) => {
 	const clientSeq = Math.max(0, Number.parseInt(offset?.split("_")[0] ?? "0", 10) || 0)

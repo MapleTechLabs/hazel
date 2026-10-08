@@ -118,6 +118,7 @@ const secondarySidebar = (model: Model, h: HtmlBuilder<Message>, context: ShellC
 		userMenu: shell.userMenu,
 		orgSwitcher: shell.orgSwitcher,
 		organizations: shell.userOrganizations,
+		userStatus: shell.userStatus,
 		toUserMenuMessage,
 		toOrgSwitcherMessage,
 	}
