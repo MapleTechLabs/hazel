@@ -34,6 +34,7 @@ export const init = (config: {
 	segments: Segments.init({
 		id: `${config.id}-input`,
 		kind: "date",
+		today: config.today,
 		...(config.value === undefined ? {} : { value: config.value }),
 	}),
 	calendar: Calendar.init({
@@ -157,7 +158,13 @@ export const update = (model: Model, message: Message): UpdateReturn =>
 			const date = result.outMessage.date
 			return {
 				model: modifyFields(closed(next), {
-					segments: (segments) => Segments.init({ id: segments.id, kind: "date", value: date }),
+					segments: (segments) =>
+						Segments.init({
+							id: segments.id,
+							kind: "date",
+							today: next.calendar.today,
+							value: date,
+						}),
 				}),
 				commands,
 				outMessage: OutMessage.ChangedValue({ date }),

@@ -30,7 +30,7 @@ describe("date field scene", () => {
 	test("renders month, day and year spinbuttons with their ranges and values", () => {
 		Scene.scene(
 			labelled,
-			Scene.given(init({ id: "due", kind: "date", value: "2026-10-07" })),
+			Scene.given(init({ id: "due", kind: "date", today: "2026-10-09", value: "2026-10-07" })),
 			Scene.expectAll(Scene.all.role("spinbutton")).toHaveCount(3),
 			Scene.expect(segment("month")).toHaveAttr("aria-valuenow", "10"),
 			Scene.expect(segment("month")).toHaveAttr("aria-valuemin", "1"),
@@ -47,7 +47,7 @@ describe("date field scene", () => {
 	test("the label names the group and every segment, and the description follows the selected date", () => {
 		Scene.scene(
 			labelled,
-			Scene.given(init({ id: "due", kind: "date", value: "2026-10-07" })),
+			Scene.given(init({ id: "due", kind: "date", today: "2026-10-09", value: "2026-10-07" })),
 			Scene.expect(Scene.role("group", { name: "Due date" })).toExist(),
 			Scene.expect(group).toHaveAttr("aria-describedby", "due-selected due-description"),
 			Scene.expect(group).toHaveAccessibleDescription(
@@ -62,7 +62,7 @@ describe("date field scene", () => {
 	test("without a label each segment is named by its field", () => {
 		Scene.scene(
 			unlabelled,
-			Scene.given(init({ id: "due", kind: "date" })),
+			Scene.given(init({ id: "due", kind: "date", today: "2026-10-09" })),
 			Scene.expect(Scene.role("spinbutton", { name: "month" })).toHaveText("mm"),
 			Scene.expect(Scene.role("spinbutton", { name: "day" })).toHaveAttr("aria-valuetext", "Empty"),
 			Scene.expect(Scene.role("spinbutton", { name: "year" })).not.toHaveAttr("aria-valuenow"),
@@ -74,7 +74,7 @@ describe("date field scene", () => {
 	test("ArrowUp on a segment steps it and announces the new value", () => {
 		Scene.scene(
 			labelled,
-			Scene.given(init({ id: "due", kind: "date", value: "2026-10-07" })),
+			Scene.given(init({ id: "due", kind: "date", today: "2026-10-09", value: "2026-10-07" })),
 			Scene.keydown(segment("day"), "ArrowUp"),
 			Scene.Command.expectExact(AnnounceValue({ valueText: "8" })),
 			Scene.Command.resolve(AnnounceValue, Message.CompletedAnnounceValue()),
@@ -86,7 +86,7 @@ describe("date field scene", () => {
 	test("typing a full month moves focus to the day segment", () => {
 		Scene.scene(
 			labelled,
-			Scene.given(init({ id: "due", kind: "date" })),
+			Scene.given(init({ id: "due", kind: "date", today: "2026-10-09" })),
 			Scene.keydown(segment("month"), "1"),
 			Scene.Command.resolve(AnnounceValue, Message.CompletedAnnounceValue()),
 			Scene.keydown(segment("month"), "1"),
@@ -100,7 +100,7 @@ describe("date field scene", () => {
 	test("Tab is left to the browser", () => {
 		Scene.scene(
 			labelled,
-			Scene.given(init({ id: "due", kind: "date", value: "2026-10-07" })),
+			Scene.given(init({ id: "due", kind: "date", today: "2026-10-09", value: "2026-10-07" })),
 			Scene.expect(segment("month")).toHaveHandler("keydown"),
 			Scene.keydown(segment("month"), "Tab"),
 			Scene.expectIgnored(),
@@ -110,7 +110,9 @@ describe("date field scene", () => {
 	test("a disabled field marks the group and segments disabled and takes no keys", () => {
 		Scene.scene(
 			labelled,
-			Scene.given(init({ id: "due", kind: "date", value: "2026-01-15", isDisabled: true })),
+			Scene.given(
+				init({ id: "due", kind: "date", today: "2026-10-09", value: "2026-01-15", isDisabled: true }),
+			),
 			Scene.expect(group).toHaveAttr("aria-disabled", "true"),
 			Scene.expect(segment("day")).toHaveAttr("aria-disabled", "true"),
 			Scene.expect(segment("day")).toHaveAttr("contenteditable", "false"),
@@ -125,7 +127,9 @@ describe("date field scene", () => {
 	test("an invalid field marks segments invalid and describes the group with its error", () => {
 		Scene.scene(
 			withError,
-			Scene.given(init({ id: "inv", kind: "date", value: "2026-02-28", isInvalid: true })),
+			Scene.given(
+				init({ id: "inv", kind: "date", today: "2026-10-09", value: "2026-02-28", isInvalid: true }),
+			),
 			Scene.expect(segment("day")).toHaveAttr("aria-invalid", "true"),
 			// T7: the day spinbutton ends at February's length.
 			Scene.expect(segment("day")).toHaveAttr("aria-valuemax", "28"),

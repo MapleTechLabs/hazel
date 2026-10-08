@@ -4,6 +4,7 @@ import type { HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
 import * as Interaction from "../../ui/aria/interaction"
 import { dateField } from "../../ui/date-field"
+import * as D from "../../ui/calendar-date"
 import * as Segments from "../../ui/date-segments"
 import { defineGallery } from "../define"
 import { galleryFrame, gallerySection } from "../frame"
@@ -82,15 +83,30 @@ const view = (model: Model, h: HtmlBuilder<Message>) => {
 
 export const gallery = defineGallery<Model, Message>("Date field", {
 	Model,
-	init: () => ({
-		model: {
-			start: Segments.init({ id: "start", kind: "date" }),
-			due: Segments.init({ id: "due", kind: "date", value: "2026-10-07" }),
-			disabled: Segments.init({ id: "disabled", kind: "date", value: "2026-01-15", isDisabled: true }),
-			invalid: Segments.init({ id: "invalid", kind: "date", value: "2026-02-28", isInvalid: true }),
-			interaction: Interaction.init(),
-		},
-	}),
+	init: () => {
+		const today = D.today()
+		return {
+			model: {
+				start: Segments.init({ id: "start", kind: "date", today }),
+				due: Segments.init({ id: "due", kind: "date", today, value: "2026-10-07" }),
+				disabled: Segments.init({
+					id: "disabled",
+					kind: "date",
+					today,
+					value: "2026-01-15",
+					isDisabled: true,
+				}),
+				invalid: Segments.init({
+					id: "invalid",
+					kind: "date",
+					today,
+					value: "2026-02-28",
+					isInvalid: true,
+				}),
+				interaction: Interaction.init(),
+			},
+		}
+	},
 	update,
 	view,
 	subscriptions: interaction.subscriptions,

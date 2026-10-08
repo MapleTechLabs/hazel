@@ -8,7 +8,7 @@ import { AnnounceValue, FocusSegment, init, Message, type Model, update } from "
  * every Command before the next Message, so the racing cases fold update directly.
  */
 
-const empty = init({ id: "start", kind: "date" })
+const empty = init({ id: "start", kind: "date", today: "2026-10-09" })
 
 /** Messages through update with no Command executed and nothing rendered in between. */
 const dispatch = (start: Model, messages: ReadonlyArray<Message>) =>
@@ -46,7 +46,7 @@ describe("date segments", () => {
 	test("once moves settle, the segment that had focus is the one typed into", () => {
 		story(
 			update,
-			given(init({ id: "due", kind: "date", value: "2026-10-07" })),
+			given(init({ id: "due", kind: "date", today: "2026-10-09", value: "2026-10-07" })),
 			message(Message.PressedSegmentKey({ segment: "year", key: "1" })),
 			Command.resolve(AnnounceValue, Message.CompletedAnnounceValue()),
 			message(Message.PressedSegmentKey({ segment: "day", key: "4" })),

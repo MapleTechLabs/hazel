@@ -53,15 +53,27 @@ export type Model = typeof Model.Type
 
 const pad = (value: number, length = 2) => String(value).padStart(length, "0")
 
-/** `value` is `YYYY-MM-DD` for a date and `HH:MM` for a time; the date placeholder is today. */
-export const init = (options: {
-	readonly id: string
-	readonly kind: Kind
-	readonly value?: string
-	readonly isDisabled?: boolean
-	readonly isInvalid?: boolean
-}): Model => {
-	const now = new Date()
+/** A time's placeholder date only fills the Intl formatting input, so a fixed day keeps init pure. */
+const TIME_PLACEHOLDER_DATE = "2000-01-01"
+
+/**
+ * `value` is `YYYY-MM-DD` for a date and `HH:MM` for a time. A date's placeholder is `today`
+ * (`YYYY-MM-DD`), passed in so init never reads the clock.
+ */
+export const init = (
+	options: {
+		readonly id: string
+		readonly value?: string
+		readonly isDisabled?: boolean
+		readonly isInvalid?: boolean
+	} & (
+		| { readonly kind: "date"; readonly today: string }
+		| { readonly kind: "time"; readonly today?: string }
+	),
+): Model => {
+	const [todayYear = 2000, todayMonth = 1, todayDay = 1] = (options.today ?? TIME_PLACEHOLDER_DATE)
+		.split("-")
+		.map(Number)
 	const parts = options.value?.split(/[-:]/).map(Number) ?? []
 	const [first, second, third] = parts
 	const isTime = options.kind === "time"
@@ -81,7 +93,7 @@ export const init = (options: {
 		isInvalid: options.isInvalid ?? false,
 		values,
 		committed: null,
-		placeholder: { year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate(), hour: 0 },
+		placeholder: { year: todayYear, month: todayMonth, day: todayDay, hour: 0 },
 		enteredKeys: "",
 		enteredSegment: null,
 		activeSegment: null,

@@ -1,16 +1,14 @@
 import { Command, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
-import { AnnounceValue, FocusSegment, init, Message, type Model, update } from "./date-segments"
+import { AnnounceValue, FocusSegment, init, Message, update } from "./date-segments"
 
 /** useDateSegment spin, typing, navigation and clearing rules, for date and time segments. */
 
-/** `init` reads the clock for the placeholder, so pin it for anything that spins an empty segment. */
-const pinned = (base: Model): Model => ({ ...base, placeholder: { year: 2026, month: 3, day: 12, hour: 0 } })
-
+/** The placeholder is the `today` passed to init, so spinning an empty segment is deterministic. */
+const today = "2026-03-12"
 const date = (value?: string) =>
-	pinned(init({ id: "due", kind: "date", ...(value === undefined ? {} : { value }) }))
-const time = (value?: string) =>
-	pinned(init({ id: "at", kind: "time", ...(value === undefined ? {} : { value }) }))
+	init({ id: "due", kind: "date", today, ...(value === undefined ? {} : { value }) })
+const time = (value?: string) => init({ id: "at", kind: "time", ...(value === undefined ? {} : { value }) })
 
 const press = (segment: string, key: string) => message(Message.PressedSegmentKey({ segment, key }))
 const announced = (valueText: string) => [
