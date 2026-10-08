@@ -113,6 +113,23 @@ Add an entry to the area file `src/scenarios/<area>.ts` (an `AreaModule`: scenar
 
 If a capture logs `unmocked RPCs: ...`, add a canned response to your area module's `rpc`, or to `dataset.rpc` if it is dataset-specific. `defaultHandlers` in `src/backend/rpc.ts` is for handlers every screen needs.
 
+### 9. Measure performance
+
+```bash
+bun run parity build legacy && bun run parity build foldkit
+PARITY_PORT_BASE=4900 bun run src/bench/perf.ts --runs 5 --name baseline       # from packages/ui-parity
+PARITY_PORT_BASE=4900 bun run src/bench/perf.ts --only switch,scroll --runs 5    # a subset
+```
+
+`src/bench/perf.ts` runs legacy and foldkit side by side against the fixture backend (static builds, no dev server) and writes `.parity/perf/<name>/report.{json,md}` with p50 / p95 / max per metric. Groups (`--only`):
+
+- `scroll`: real wheel input (CDP mouseWheel, pointer over the list) at 60, 200 and 600 px per event, a fling to the top (history prepend) and a jump to the bottom, on the heavy dataset's 10k #firehose and its 60-message #general. Headless Chromium keeps a 60 Hz rAF even with `--disable-frame-rate-limit`, so frame cost comes from a DevTools timeline trace (`perf-trace.ts`): main-thread task time between consecutive animation frames, which must stay under 8.33 ms for 120 fps, split into script, style, layout, paint and GC. The rAF wall interval and blank frames (no row under the probe) are reported too.
+- `switch`: sidebar click to the first visible row of the new channel painted, cold (first visit) and warm (revisit), on the heavy (500 channels, plus the 10k channel) and rich workspaces, with blank frames between click and content.
+- `interact`: composer key to paint, command palette, delete-message modal, emoji picker, thread panel and image viewer, input event to the frame that shows them.
+- `load`: first contentful paint, first message row, a TTI estimate and JS loaded; `sidebar`: wheel through 500 channels; `memory`: JS heap after the 10k channel and after 20 switches; `bundle`: all emitted JS, raw and gzip.
+
+In-page probes live in `perf-probes.ts` (`window.__perf`, injected before app code). `chat-list.ts` and `render-trace.ts` remain for list-specific digging.
+
 ## Output
 
 `.parity/` (gitignored):

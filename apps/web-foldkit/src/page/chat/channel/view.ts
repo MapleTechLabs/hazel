@@ -267,7 +267,10 @@ export const view = <M>(
 	toParentMessage: (message: Message) => M,
 	isMobile = false,
 ): Html =>
-	h.div(
+	// Keyed by channel like React's `key={id}`: Mounts start on insert only, so a patched-in-place
+	// page would keep the previous channel's list observer and never measure the new viewport.
+	h.keyed("div")(
+		model.channelId,
 		[h.Class(rootStyles({ className: "h-[calc(100dvh-4rem)] md:h-dvh" }))],
 		[
 			h.div(

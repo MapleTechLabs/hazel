@@ -20,7 +20,9 @@ export const sidebarProvider = <Message>(
 				twMerge(
 					"@container **:data-[slot=icon]:shrink-0",
 					"flex w-full text-sidebar-fg",
-					"group/sidebar-root peer/sidebar-root has-data-[intent=inset]:bg-sidebar dark:has-data-[intent=inset]:bg-bg",
+					// Legacy's `has-data-[intent=inset]:*` variants are dropped: no sidebar here is inset, and a
+					// `:has()` on the shell root restyles the whole page on every DOM insertion below it.
+					"group/sidebar-root peer/sidebar-root",
 					options.className,
 				),
 			),
@@ -320,13 +322,8 @@ export const sidebarInset = <Message>(h: HtmlBuilder<Message>, className: string
 			h.Attribute("data-slot", "sidebar-inset"),
 			h.Class(
 				twMerge(
+					// The inset-only `group-has-*` variants are dropped like on `sidebarProvider` (never inset).
 					"relative flex w-full flex-1 flex-col bg-bg lg:min-w-0",
-					"group-has-data-[intent=inset]/sidebar-root:border group-has-data-[intent=inset]/sidebar-root:border-sidebar-border group-has-data-[intent=inset]/sidebar-root:bg-overlay",
-					"md:group-has-data-[intent=inset]/sidebar-root:m-2",
-					"md:group-has-data-[side=left]:group-has-data-[intent=inset]/sidebar-root:ml-0",
-					"md:group-has-data-[side=right]:group-has-data-[intent=inset]/sidebar-root:mr-0",
-					"md:group-has-data-[intent=inset]/sidebar-root:rounded-2xl",
-					"md:group-has-data-[intent=inset]/sidebar-root:peer-data-[state=collapsed]:ml-2",
 					className,
 				),
 			),
