@@ -149,3 +149,86 @@ describe("chat sync connections", () => {
 		)
 	})
 })
+
+describe("chat sync guards", () => {
+	const otherOrganizationId = Schema.decodeSync(OrganizationId)("00000000-0000-4000-8000-000000000009")
+	const guild = { id: "918273645500901", name: "Design Systems Guild", icon: null, owner: true }
+	const loaded = updateWithShared(
+		init(undefined, shared).model,
+		Message.SucceededListConnections({ organizationId, connections: [connection] }),
+	).model
+
+	test("a list for a previous organization is ignored", () => {
+		story(
+			updateWithShared,
+			given(init(undefined, shared).model),
+			message(Message.SucceededListConnections({ organizationId: otherOrganizationId, connections: [connection] })),
+			Command.expectNone(),
+			model((current) => expect(current.connections._tag).toBe("Loading")),
+			message(Message.FailedListConnections({ organizationId: otherOrganizationId })),
+			model((current) => expect(current.connections._tag).toBe("Loading")),
+		)
+	})
+
+	test("a second confirm while deleting sends no second delete", () => {
+		story(
+			updateWithShared,
+			given({ ...loaded, discordGuilds: { _tag: "Failed" } }),
+			message(Message.ClickedDeleteConnection({ target: { id: connectionId, name: "Hazel Community" } })),
+			message(Message.ClickedConfirmDelete()),
+			Command.expectExact(DeleteConnection({ syncConnectionId: connectionId })),
+			Command.resolve(
+				DeleteConnection,
+				Message.FailedDeleteConnection({ title: "Connection not found", description: "Gone." }),
+			),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({
+					toast: { intent: "error", title: "Connection not found", description: "Gone." },
+				}),
+			),
+			model((current) => {
+				expect(current.isDeleting).toBe(false)
+				expect(current.deleteModal.isOpen).toBe(true)
+			}),
+		)
+		const deleting = updateWithShared(
+			{ ...loaded, deleteTarget: { id: connectionId, name: "Hazel Community" }, isDeleting: true },
+			Message.ClickedConfirmDelete(),
+		)
+		expect(deleting.commands ?? []).toHaveLength(0)
+	})
+
+	test("Connect without a picked server, or while creating, sends nothing", () => {
+		story(
+			updateWithShared,
+			given(loaded),
+			message(Message.ClickedConnect()),
+			Command.expectNone(),
+			message(Message.ClickedGuild({ guild })),
+			message(Message.ClickedConnect()),
+			Command.expectHas(CreateConnection),
+			model((current) => expect(current.isCreating).toBe(true)),
+			Command.resolve(CreateConnection, Message.FailedCreateConnection({ title: "Discord not connected", description: null })),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({ toast: { intent: "error", title: "Discord not connected", description: null } }),
+			),
+		)
+		const creating = updateWithShared({ ...loaded, selectedGuild: guild, isCreating: true }, Message.ClickedConnect())
+		expect(creating.commands ?? []).toHaveLength(0)
+	})
+
+	test("clicking a connection and the Discord link navigate inside the organization", () => {
+		story(
+			updateWithShared,
+			given(loaded),
+			message(Message.ClickedConnection({ connectionId })),
+			expectOutMessage(
+				PageOutMessage.RequestedNavigation({ href: `/hazel/settings/chat-sync/${connectionId}`, replace: false }),
+			),
+			message(Message.ClickedOpenDiscordIntegration()),
+			expectOutMessage(
+				PageOutMessage.RequestedNavigation({ href: "/hazel/settings/integrations/discord", replace: false }),
+			),
+		)
+	})
+})

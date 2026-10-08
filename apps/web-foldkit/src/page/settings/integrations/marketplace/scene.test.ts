@@ -10,6 +10,8 @@ import {
 	placeholder,
 	role,
 	scene,
+	Subscription,
+	text,
 	type as typeInto,
 } from "foldkit/scene"
 import { describe, test } from "vitest"
@@ -85,6 +87,40 @@ describe("marketplace page", () => {
 			typeInto(placeholder("Search applications..."), "no such app"),
 			expectView(role("heading", { name: "No applications found" })).toExist(),
 			expectView(role("heading", { name: "Deploy Bot" })).toBeAbsent(),
+		)
+	})
+})
+
+describe("marketplace live data", () => {
+	test("the list waits for the public bots, and an installed bot shows Installed", () => {
+		scene(
+			config,
+			given(init().model),
+			expectView(role("heading", { name: "Deploy Bot" })).toBeAbsent(),
+			Subscription.emit(Message.UpdatedPublicBots({ bots: [deployBot] })),
+			expectView(role("heading", { name: "Deploy Bot" })).toExist(),
+			expectView(role("button", { name: "Install" })).toBeEnabled(),
+			Subscription.emit(Message.UpdatedInstalledBotIds({ botIds: [botId] })),
+			expectView(role("button", { name: /Installed$/ })).toBeDisabled(),
+			expectView(role("button", { name: "Install" })).toBeAbsent(),
+		)
+	})
+
+	test("search matches the description, case-insensitively", () => {
+		scene(
+			config,
+			given(loaded),
+			typeInto(placeholder("Search applications..."), "DEPLOY STATUS"),
+			expectView(role("heading", { name: "Deploy Bot" })).toExist(),
+			expectView(text("Try a different search term")).toBeAbsent(),
+		)
+	})
+
+	test("an empty marketplace invites publishing, not searching", () => {
+		scene(
+			config,
+			given({ ...init().model, bots: [] }),
+			expectView(text("Be the first to publish an application to the marketplace!")).toExist(),
 		)
 	})
 })

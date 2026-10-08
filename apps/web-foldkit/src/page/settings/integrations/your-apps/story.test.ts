@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { BotId } from "@hazel/schema"
 import { Schema } from "effect"
-import { given, message, model, story } from "foldkit/story"
+import { expectNoOutMessage, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
 import * as Menu from "../../../../ui/menu"
 import type { Bot } from "../shared/bots"
+import { PageOutMessage } from "../../../out-message"
 import { Message } from "./message"
 import { init, update } from "./update"
 
@@ -43,6 +44,30 @@ describe("your apps page", () => {
 				])
 				expect(current.menus.map((menu) => menu.popup._tag)).toEqual(["Closed", "Open"])
 			}),
+		)
+	})
+})
+
+describe("your apps menu actions", () => {
+	test("Regenerate Token opens the regenerate modal for the bot", () => {
+		story(
+			update,
+			given(withOpenMenu),
+			message(Message.GotMenuMessage({ botId: deploy.id, message: Menu.Message.ClickedItem({ key: "regenerate" }) })),
+			expectOutMessage(
+				PageOutMessage.RequestedModal({ modal: { _tag: "RegenerateBotToken", botId: deploy.id, botName: "Deploy Bot" } }),
+			),
+			model((current) => expect(current.menus[0]?.popup._tag).toBe("Closed")),
+		)
+	})
+
+	test("a menu Message for a bot no longer listed is ignored", () => {
+		story(
+			update,
+			given(withOpenMenu),
+			message(Message.GotMenuMessage({ botId: triage.id, message: Menu.Message.ClickedItem({ key: "delete" }) })),
+			expectNoOutMessage(),
+			model((current) => expect(current).toEqual(withOpenMenu)),
 		)
 	})
 })
