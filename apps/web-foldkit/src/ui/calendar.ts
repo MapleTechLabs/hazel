@@ -58,6 +58,13 @@ const yearSelect = (id: string, focusedDate: D.CalendarDate) =>
 		selectedKey: String(YEAR_SPAN),
 	})
 
+/** useCalendarState's constrainValue: the focused date never precedes `minValue`. */
+const clampToMin = (minValue: Option.Option<D.CalendarDate>, date: D.CalendarDate): D.CalendarDate =>
+	Option.match(minValue, {
+		onNone: () => date,
+		onSome: (min) => (D.compare(date, min) < 0 ? min : date),
+	})
+
 export const init = (config: {
 	readonly id: string
 	readonly today: D.CalendarDate
@@ -66,7 +73,8 @@ export const init = (config: {
 	readonly range?: { readonly start: D.CalendarDate; readonly end: D.CalendarDate }
 	readonly minValue?: D.CalendarDate
 }): Model => {
-	const focusedDate = config.value ?? config.range?.start ?? config.today
+	const minValue = Option.fromNullishOr(config.minValue)
+	const focusedDate = clampToMin(minValue, config.value ?? config.range?.start ?? config.today)
 	return {
 		id: config.id,
 		mode: config.mode ?? "Single",
@@ -75,7 +83,7 @@ export const init = (config: {
 		value: Option.fromNullishOr(config.value),
 		range: Option.fromNullishOr(config.range),
 		anchor: Option.none(),
-		minValue: Option.fromNullishOr(config.minValue),
+		minValue,
 		month: monthSelect(config.id, focusedDate),
 		year: yearSelect(config.id, focusedDate),
 		interaction: Interaction.init(),
@@ -233,9 +241,10 @@ export const FocusCellOnPress = Mount.define("FocusCalendarCellOnPress", {
 
 type UpdateReturn = Update.ReturnWithOutMessage<Model, Message, OutMessage>
 
-/** Moves the focused date, rebuilding the header Selects around it as React Aria re-renders them. */
-const withFocusedDate = (model: Model, focusedDate: D.CalendarDate): Model =>
-	modifyFields(model, {
+/** Moves the focused date (clamped to `minValue`), rebuilding the header Selects around it. */
+const withFocusedDate = (model: Model, date: D.CalendarDate): Model => {
+	const focusedDate = clampToMin(model.minValue, date)
+	return modifyFields(model, {
 		focusedDate: () => focusedDate,
 		month: (month) => ({
 			...monthSelect(model.id, focusedDate),
@@ -248,6 +257,7 @@ const withFocusedDate = (model: Model, focusedDate: D.CalendarDate): Model =>
 			isTriggerFocused: year.isTriggerFocused,
 		}),
 	})
+}
 
 /** A picker reopening its calendar: the value, focused (or today when empty). */
 export const showValue = (model: Model, value: Option.Option<D.CalendarDate>): Model =>
@@ -262,10 +272,7 @@ export const showValue = (model: Model, value: Option.Option<D.CalendarDate>): M
 	)
 
 const focusDate = (model: Model, date: D.CalendarDate): UpdateReturn => {
-	const clamped = Option.match(model.minValue, {
-		onNone: () => date,
-		onSome: (min) => (D.compare(date, min) < 0 ? min : date),
-	})
+	const clamped = clampToMin(model.minValue, date)
 	return {
 		model: withFocusedDate(model, clamped),
 		commands: [FocusCell({ gridId: gridId(model.id), label: D.formatFull(clamped) })],

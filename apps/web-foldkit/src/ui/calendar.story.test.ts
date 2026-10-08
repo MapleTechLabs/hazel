@@ -132,8 +132,8 @@ describe("calendar story: minimum date", () => {
 		)
 	})
 
-	// Bug: ClickedPrevious does not clamp to minValue (React Aria constrains focusedDate), so no cell stays focusable.
-	test.fails("paging back into the minimum month keeps focus on the first available date", () => {
+	// T8: paging clamps the focused date to minValue, as React Aria constrains focusedDate.
+	test("paging back into the minimum month keeps focus on the first available date", () => {
 		story(
 			update,
 			given(init({ id: "deadline", today, value: "2026-04-05", minValue: "2026-03-10" })),
@@ -141,6 +141,11 @@ describe("calendar story: minimum date", () => {
 			resolveAnnounce,
 			model((next) => expect(next.focusedDate).toBe("2026-03-10")),
 		)
+	})
+
+	test("a calendar whose value precedes minValue starts focused on the minimum", () => {
+		const early = init({ id: "deadline", today, value: "2026-03-02", minValue: "2026-03-10" })
+		expect(early.focusedDate).toBe("2026-03-10")
 	})
 })
 
@@ -152,7 +157,11 @@ describe("calendar story: single selection", () => {
 			message(Message.ClickedCell({ date: "2026-03-20" })),
 			expectOutMessage(OutMessage.ChangedValue({ date: "2026-03-20" })),
 			Command.expectExact(
-				Announce({ message: "Selected Date: Friday, March 20, 2026", timeout: 4000, assertiveness: "polite" }),
+				Announce({
+					message: "Selected Date: Friday, March 20, 2026",
+					timeout: 4000,
+					assertiveness: "polite",
+				}),
 			),
 			resolveAnnounce,
 			model((next) => {
@@ -189,12 +198,16 @@ describe("calendar story: single selection", () => {
 			update,
 			given(event),
 			message(Message.ClickedNext()),
-			Command.expectExact(Announce({ message: "April 2026", timeout: 7000, assertiveness: "assertive" })),
+			Command.expectExact(
+				Announce({ message: "April 2026", timeout: 7000, assertiveness: "assertive" }),
+			),
 			resolveAnnounce,
 			message(Message.ClickedPrevious()),
 			resolveAnnounce,
 			message(Message.ClickedPrevious()),
-			Command.expectExact(Announce({ message: "February 2026", timeout: 7000, assertiveness: "assertive" })),
+			Command.expectExact(
+				Announce({ message: "February 2026", timeout: 7000, assertiveness: "assertive" }),
+			),
 			resolveAnnounce,
 			model((next) => {
 				expect(next.focusedDate).toBe("2026-02-18")
@@ -208,8 +221,12 @@ describe("calendar story: single selection", () => {
 		story(
 			update,
 			given(event),
-			message(Message.GotYearMessage({ message: Select.Message.PressedTriggerKey({ key: "ArrowRight" }) })),
-			Command.expectExact(Announce({ message: "March 2027", timeout: 7000, assertiveness: "assertive" })),
+			message(
+				Message.GotYearMessage({ message: Select.Message.PressedTriggerKey({ key: "ArrowRight" }) }),
+			),
+			Command.expectExact(
+				Announce({ message: "March 2027", timeout: 7000, assertiveness: "assertive" }),
+			),
 			resolveAnnounce,
 			model((next) => {
 				expect(next.focusedDate).toBe("2027-03-18")
@@ -229,7 +246,9 @@ describe("range calendar story", () => {
 			Command.expectNone(),
 			model((next) => {
 				expect(next.anchor).toEqual(Option.some("2026-03-16"))
-				expect(highlightedRange(next)).toEqual(Option.some({ start: "2026-03-16", end: "2026-03-16" }))
+				expect(highlightedRange(next)).toEqual(
+					Option.some({ start: "2026-03-16", end: "2026-03-16" }),
+				)
 			}),
 		)
 	})
@@ -239,10 +258,26 @@ describe("range calendar story", () => {
 			update,
 			given(trip),
 			message(Message.ClickedCell({ date: "2026-03-16" })),
-			message(Message.GotInteractionMessage({ message: Interaction.Message.EnteredTarget({ target: "cell-2026-03-11" }) })),
-			model((next) => expect(highlightedRange(next)).toEqual(Option.some({ start: "2026-03-11", end: "2026-03-16" }))),
-			message(Message.GotInteractionMessage({ message: Interaction.Message.LeftTarget({ target: "cell-2026-03-11" }) })),
-			model((next) => expect(highlightedRange(next)).toEqual(Option.some({ start: "2026-03-16", end: "2026-03-16" }))),
+			message(
+				Message.GotInteractionMessage({
+					message: Interaction.Message.EnteredTarget({ target: "cell-2026-03-11" }),
+				}),
+			),
+			model((next) =>
+				expect(highlightedRange(next)).toEqual(
+					Option.some({ start: "2026-03-11", end: "2026-03-16" }),
+				),
+			),
+			message(
+				Message.GotInteractionMessage({
+					message: Interaction.Message.LeftTarget({ target: "cell-2026-03-11" }),
+				}),
+			),
+			model((next) =>
+				expect(highlightedRange(next)).toEqual(
+					Option.some({ start: "2026-03-16", end: "2026-03-16" }),
+				),
+			),
 		)
 	})
 
@@ -276,7 +311,11 @@ describe("range calendar story", () => {
 			key("Enter"),
 			expectOutMessage(OutMessage.ChangedRange({ start: "2026-03-09", end: "2026-03-09" })),
 			Command.expectExact(
-				Announce({ message: "Selected Date: Monday, March 9, 2026", timeout: 4000, assertiveness: "polite" }),
+				Announce({
+					message: "Selected Date: Monday, March 9, 2026",
+					timeout: 4000,
+					assertiveness: "polite",
+				}),
 			),
 			resolveAnnounce,
 		)
@@ -290,7 +329,11 @@ describe("range calendar story", () => {
 			key("ArrowDown"),
 			Command.expectExact(focusCell("Monday, March 16, 2026", "trip-grid")),
 			resolveFocus,
-			model((next) => expect(highlightedRange(next)).toEqual(Option.some({ start: "2026-03-09", end: "2026-03-16" }))),
+			model((next) =>
+				expect(highlightedRange(next)).toEqual(
+					Option.some({ start: "2026-03-09", end: "2026-03-16" }),
+				),
+			),
 		)
 	})
 })
