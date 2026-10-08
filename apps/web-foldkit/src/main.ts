@@ -30,6 +30,7 @@ import { authRedirect, routeRedirect } from "./redirect"
 import { urlToAppRoute } from "./route"
 import type { Resources } from "./rpc"
 import { loadSoundSettings, SoundSettings } from "./notification-sound"
+import { Message as ShellMessage } from "./shell/model"
 import * as Shell from "./shell/update"
 import {
 	loadThemePreference,
@@ -202,11 +203,14 @@ const handleOutMessage = (outMessage: PageOutMessage): Step =>
 				const toasted = toast === undefined ? { model } : withToasts(model, Toasts.push(model.toasts, toast))
 				return { model: toasted.model, commands: [...(toasted.commands ?? []), FetchCurrentUser({})] }
 			},
-		RequestedMobileSidebar: () => (model) => ({
-			model: modifyFields(model, {
-				shell: (shell) => modifyFields(shell, { isSidebarOpen: () => true }),
-			}),
-		}),
+		// The shell owns its sheet: the root sends it the same Message as its header button.
+		RequestedMobileSidebar: () => (model) => {
+			const result = Shell.update(model.shell, ShellMessage.ToggledSidebar({ isOpen: true }), shellContextOf(model))
+			return {
+				model: modifyFields(model, { shell: () => result.model }),
+				commands: Command.mapMessages(result.commands, (child) => Message.GotShellMessage({ message: child })),
+			}
+		},
 	})
 
 const applyPage =
