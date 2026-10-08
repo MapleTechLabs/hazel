@@ -33,7 +33,9 @@ export const uploadFile = (
 		if (!allowed.includes(file.type)) {
 			return yield* fail(
 				"Invalid file type",
-				isEmoji ? "Please select a PNG, GIF, or WebP image" : "Please select a JPEG, PNG, or WebP image",
+				isEmoji
+					? "Please select a PNG, GIF, or WebP image"
+					: "Please select a JPEG, PNG, or WebP image",
 			)
 		}
 		const maxSize = isEmoji ? MAX_EMOJI_SIZE : MAX_AVATAR_SIZE
@@ -53,9 +55,12 @@ export const uploadFile = (
 				},
 			}),
 		).pipe(Effect.catch(() => fail("Upload failed", "Failed to get upload URL. Please try again.")))
-		const result = yield* Effect.promise(() =>
-			uploadToStorage(presigned.uploadUrl, file, { timeout: 60000 }),
-		)
+		// A rejection is a failed upload with the generic message, not a defect that leaves the spinner on.
+		const result = yield* Effect.tryPromise({
+			try: () => uploadToStorage(presigned.uploadUrl, file, { timeout: 60000 }),
+			catch: () =>
+				new UploadFailedError({ message: "Upload failed", description: uploadErrorMessages.server }),
+		})
 		if (!result.success) {
 			return yield* fail("Upload failed", uploadErrorMessages[result.errorType ?? "server"])
 		}
