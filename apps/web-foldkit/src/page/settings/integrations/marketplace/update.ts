@@ -69,13 +69,17 @@ export const update = (model: Model, message: Message): Return =>
 			model: modifyFields(model, { installedBotIds: () => botIds }),
 		}),
 		ChangedSearch: ({ search }) => ({ model: modifyFields(model, { search: () => search }) }),
-		ClickedInstall: ({ botId }) => ({
-			model: modifyFields(model, {
-				installingBotIds: (ids) => [...ids, botId],
-				interaction: (state) => Interaction.disabledTargets(state, [installTarget(botId)]),
-			}),
-			commands: [InstallBot({ botId })],
-		}),
+		ClickedInstall: ({ botId }) =>
+			model.installingBotIds.includes(botId)
+				? { model }
+				: {
+						model: modifyFields(model, {
+							installingBotIds: (ids) => [...ids, botId],
+							interaction: (state) =>
+								Interaction.disabledTargets(state, [installTarget(botId)]),
+						}),
+						commands: [InstallBot({ botId })],
+					},
 		SucceededInstallBot: ({ botId }) => ({
 			model: doneInstalling(model, botId),
 			outMessage: PageOutMessage.RequestedToast({

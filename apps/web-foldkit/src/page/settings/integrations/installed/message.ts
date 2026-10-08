@@ -7,8 +7,8 @@ import { Bot } from "../shared/bots"
 export const Message = defineMessageUnion({
 	UpdatedBots: { bots: Schema.Array(Bot) },
 	ClickedUninstall: { botId: BotId },
-	SucceededUninstallBot: {},
-	FailedUninstallBot: { toast: ToastRequest },
+	SucceededUninstallBot: { botId: BotId },
+	FailedUninstallBot: { botId: BotId, toast: ToastRequest },
 	ClickedBrowseMarketplace: {},
 	ClickedInstallById: {},
 })

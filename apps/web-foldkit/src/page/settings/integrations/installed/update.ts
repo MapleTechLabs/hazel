@@ -19,8 +19,9 @@ export const UninstallBot = Command.define("IntegrationsUninstallBot", {
 			const client = yield* HazelRpc
 			const exit = yield* Effect.exit(client("bot.uninstall", { botId }))
 			return Exit.isSuccess(exit)
-				? Message.SucceededUninstallBot()
+				? Message.SucceededUninstallBot({ botId })
 				: Message.FailedUninstallBot({
+						botId,
 						toast: failureToast(exit.cause, {
 							BotNotFoundError: () => ({
 								title: "Application not found",
@@ -36,20 +37,32 @@ export const UninstallBot = Command.define("IntegrationsUninstallBot", {
 type Return = PageReturn<Model, Message>
 
 export const init = (route: RouteOf<"SettingsIntegrationsInstalled">): Return => ({
-	model: { orgSlug: route.orgSlug, bots: null },
+	model: { orgSlug: route.orgSlug, bots: null, uninstallingBotIds: [] },
 })
+
+const settled = (model: Model, botId: BotId): Model =>
+	modifyFields(model, { uninstallingBotIds: (ids) => ids.filter((id) => id !== botId) })
 
 export const update = (model: Model, message: Message): Return =>
 	Message.match<Return>(message, {
 		UpdatedBots: ({ bots }) => ({ model: modifyFields(model, { bots: () => bots }) }),
-		ClickedUninstall: ({ botId }) => ({ model, commands: [UninstallBot({ botId })] }),
-		SucceededUninstallBot: () => ({
-			model,
+		ClickedUninstall: ({ botId }) =>
+			model.uninstallingBotIds.includes(botId)
+				? { model }
+				: {
+						model: modifyFields(model, { uninstallingBotIds: (ids) => [...ids, botId] }),
+						commands: [UninstallBot({ botId })],
+					},
+		SucceededUninstallBot: ({ botId }) => ({
+			model: settled(model, botId),
 			outMessage: PageOutMessage.RequestedToast({
 				toast: successToast("Application uninstalled successfully"),
 			}),
 		}),
-		FailedUninstallBot: ({ toast }) => ({ model, outMessage: PageOutMessage.RequestedToast({ toast }) }),
+		FailedUninstallBot: ({ botId, toast }) => ({
+			model: settled(model, botId),
+			outMessage: PageOutMessage.RequestedToast({ toast }),
+		}),
 		ClickedBrowseMarketplace: () => ({
 			model,
 			outMessage: PageOutMessage.RequestedNavigation({

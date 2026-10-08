@@ -24,7 +24,10 @@ describe("installed apps", () => {
 			Scene.expect(Scene.text("No installed applications")).toExist(),
 			Scene.click(Scene.role("button", { name: "Browse Marketplace" })),
 			Scene.expectOutMessage(
-				PageOutMessage.RequestedNavigation({ href: "/hazel/settings/integrations/marketplace", replace: false }),
+				PageOutMessage.RequestedNavigation({
+					href: "/hazel/settings/integrations/marketplace",
+					replace: false,
+				}),
 			),
 		)
 	})
@@ -45,9 +48,11 @@ describe("installed apps", () => {
 			Scene.expect(Scene.text("Deploy Bot")).toExist(),
 			Scene.click(Scene.role("button", { name: "Uninstall" })),
 			Scene.Command.expectExact(UninstallBot({ botId })),
-			Scene.Command.resolve(UninstallBot, Message.SucceededUninstallBot()),
+			Scene.Command.resolve(UninstallBot, Message.SucceededUninstallBot({ botId: bot.id })),
 			Scene.expectOutMessage(
-				PageOutMessage.RequestedToast({ toast: successToast("Application uninstalled successfully") }),
+				PageOutMessage.RequestedToast({
+					toast: successToast("Application uninstalled successfully"),
+				}),
 			),
 			Scene.Subscription.emit(Message.UpdatedBots({ bots: [] })),
 			Scene.expect(Scene.text("Deploy Bot")).toBeAbsent(),
@@ -59,20 +64,24 @@ describe("installed apps", () => {
 			config,
 			Scene.given({ ...initial, bots: [bot] }),
 			Scene.click(Scene.role("button", { name: "Uninstall" })),
-			Scene.Command.resolve(UninstallBot, Message.FailedUninstallBot({ toast: failureToastFixture })),
+			Scene.Command.resolve(
+				UninstallBot,
+				Message.FailedUninstallBot({ botId: bot.id, toast: failureToastFixture }),
+			),
 			Scene.expectOutMessage(PageOutMessage.RequestedToast({ toast: failureToastFixture })),
 			Scene.expect(Scene.text("Deploy Bot")).toExist(),
 		)
 	})
 
-	// Bug: Uninstall has no pending state or guard, so a second click while the first runs uninstalls again.
-	test.fails("Uninstall disables while the uninstall runs", () => {
+	// Legacy keeps the button enabled while uninstalling; update ignores a repeat (story.test.ts).
+	test("Uninstall stays enabled while the uninstall runs, as in legacy", () => {
 		Scene.scene(
 			config,
 			Scene.given({ ...initial, bots: [bot] }),
 			Scene.click(Scene.role("button", { name: "Uninstall" })),
-			Scene.expect(Scene.role("button", { name: /Uninstall/ })).toBeDisabled(),
-			Scene.Command.resolve(UninstallBot, Message.SucceededUninstallBot()),
+			Scene.Command.expectExact(UninstallBot({ botId: bot.id })),
+			Scene.expect(Scene.role("button", { name: "Uninstall" })).toBeEnabled(),
+			Scene.Command.resolve(UninstallBot, Message.SucceededUninstallBot({ botId: bot.id })),
 		)
 	})
 })

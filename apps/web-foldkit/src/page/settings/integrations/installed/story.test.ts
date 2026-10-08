@@ -21,7 +21,7 @@ describe("installed apps", () => {
 			given(initial),
 			message(Message.ClickedUninstall({ botId })),
 			Command.expectExact(UninstallBot({ botId })),
-			Command.resolve(UninstallBot, Message.FailedUninstallBot({ toast })),
+			Command.resolve(UninstallBot, Message.FailedUninstallBot({ botId, toast })),
 			expectOutMessage(PageOutMessage.RequestedToast({ toast })),
 		)
 	})
@@ -33,10 +33,14 @@ describe("installed apps outcomes", () => {
 			update,
 			given(initial),
 			message(Message.ClickedUninstall({ botId })),
-			Command.resolve(UninstallBot, Message.SucceededUninstallBot()),
+			Command.resolve(UninstallBot, Message.SucceededUninstallBot({ botId })),
 			expectOutMessage(
 				PageOutMessage.RequestedToast({
-					toast: { intent: "success", title: "Application uninstalled successfully", description: null },
+					toast: {
+						intent: "success",
+						title: "Application uninstalled successfully",
+						description: null,
+					},
 				}),
 			),
 		)
@@ -48,22 +52,21 @@ describe("installed apps outcomes", () => {
 			given(initial),
 			message(Message.ClickedBrowseMarketplace()),
 			expectOutMessage(
-				PageOutMessage.RequestedNavigation({ href: "/hazel/settings/integrations/marketplace", replace: false }),
+				PageOutMessage.RequestedNavigation({
+					href: "/hazel/settings/integrations/marketplace",
+					replace: false,
+				}),
 			),
 			message(Message.ClickedInstallById()),
 			expectOutMessage(PageOutMessage.RequestedModal({ modal: { _tag: "InstallBotById" } })),
 		)
 	})
 
-	// Bug: no pending state per bot, so a second Uninstall while one runs sends a second bot.uninstall.
-	test.fails("a second Uninstall while uninstalling sends nothing", () => {
-		story(
-			update,
-			given(initial),
-			message(Message.ClickedUninstall({ botId })),
-			Command.resolve(UninstallBot, Message.SucceededUninstallBot()),
-		)
-		const again = update(update(initial, Message.ClickedUninstall({ botId })).model, Message.ClickedUninstall({ botId }))
-		expect(again.commands ?? []).toHaveLength(0)
+	test("a second Uninstall while uninstalling sends nothing; a settled one can run again", () => {
+		const uninstalling = update(initial, Message.ClickedUninstall({ botId })).model
+		expect(update(uninstalling, Message.ClickedUninstall({ botId })).commands ?? []).toHaveLength(0)
+		const failed = update(uninstalling, Message.FailedUninstallBot({ botId, toast })).model
+		expect(failed.uninstallingBotIds).toEqual([])
+		expect(update(failed, Message.ClickedUninstall({ botId })).commands ?? []).toHaveLength(1)
 	})
 })

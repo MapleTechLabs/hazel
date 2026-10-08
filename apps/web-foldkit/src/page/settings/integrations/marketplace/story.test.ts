@@ -28,15 +28,17 @@ describe("marketplace installs", () => {
 		)
 	})
 
-	// Bug: ClickedInstall has no guard in update; only the disabled button stops a second install.
-	test.fails("a second Install while installing sends no second install", () => {
+	test("a second Install while installing sends no second install", () => {
 		story(
 			update,
 			given(init().model),
 			message(Message.ClickedInstall({ botId })),
 			Command.resolve(InstallBot, Message.SucceededInstallBot({ botId })),
 		)
-		const pending = update({ ...init().model, installingBotIds: [botId] }, Message.ClickedInstall({ botId }))
+		const pending = update(
+			{ ...init().model, installingBotIds: [botId] },
+			Message.ClickedInstall({ botId }),
+		)
 		expect(pending.commands ?? []).toHaveLength(0)
 	})
 })
