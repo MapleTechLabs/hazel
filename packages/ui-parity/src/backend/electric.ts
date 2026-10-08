@@ -1,5 +1,5 @@
 import type { Dataset, Row, TableName } from "../fixtures/dataset.ts"
-import { changesAfter, waitForChange } from "./live-events.ts"
+import { changesAfter, latestOffset, waitForChange } from "./live-events.ts"
 
 /**
  * Serves Electric shape requests (`GET /v1/shape?table=...`) from a fixture
@@ -133,5 +133,7 @@ export const handleShape = (request: Request, dataset: Dataset): Response | Prom
 			? respond()
 			: waitForChange(dataset.name, table ?? "", LIVE_POLL_DELAY_MS).then(respond)
 	}
-	return new Response(body, { headers: kind === "snapshot" ? base : upToDate })
+	// Scenarios that push from an RPC must not leak those writes into the next page load.
+	const initialOffset = { ...upToDate, "electric-offset": latestOffset(dataset.name, table ?? "") }
+	return new Response(body, { headers: kind === "snapshot" ? base : initialOffset })
 }
