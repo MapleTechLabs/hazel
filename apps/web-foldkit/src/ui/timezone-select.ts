@@ -1,5 +1,6 @@
 import { Array } from "effect"
 import { getTimezones } from "~/utils/timezone"
+import { isAppleDevice } from "./aria/announcer"
 import * as ComboBox from "./combo-box"
 import { view as comboBoxView, type ViewInputs as ComboBoxViewInputs } from "./combo-box-view"
 
@@ -13,6 +14,8 @@ export const init = (config: { readonly id: string; readonly value?: string }): 
 		id: config.id,
 		items: Array.map(getTimezones(), (zone) => ComboBox.item(zone.id, zone.label)),
 		selectedKey: config.value,
+		// Read once at init so update stays pure; a platform Flag from the page is the follow-up.
+		isAppleDevice: isAppleDevice(),
 	})
 
 export const viewInputs = (

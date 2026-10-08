@@ -3,6 +3,7 @@ import { Update } from "foldkit"
 import type { HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
+import { isAppleDevice } from "../../ui/aria/announcer"
 import * as ComboBox from "../../ui/combo-box"
 import { view as comboBoxView } from "../../ui/combo-box-view"
 import { defineGallery } from "../define"
@@ -76,8 +77,13 @@ export const gallery = defineGallery<Model, Message>("Combo box", {
 	init: () => ({
 		model: {
 			comboBoxes: [
-				ComboBox.init({ id: "channel", items: channels }),
-				ComboBox.init({ id: "selected", items: channels, selectedKey: "design" }),
+				ComboBox.init({ id: "channel", items: channels, isAppleDevice: isAppleDevice() }),
+				ComboBox.init({
+					id: "selected",
+					items: channels,
+					selectedKey: "design",
+					isAppleDevice: isAppleDevice(),
+				}),
 			],
 		},
 	}),

@@ -3,7 +3,7 @@ import { Command, type Update } from "foldkit"
 import * as Dom from "foldkit/dom"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
-import { announce, isAppleDevice } from "./aria/announcer"
+import { announce } from "./aria/announcer"
 
 /**
  * Port of `components/ui/combo-box.tsx` (React Aria ComboBox, menuTrigger "input") with string
@@ -36,6 +36,8 @@ export const Model = Schema.Struct({
 	inputValue: Schema.String,
 	isFocused: Schema.Boolean,
 	popup: Popup,
+	/** Resolved by the caller at init, so `update` never reads the host platform (VoiceOver extras). */
+	isAppleDevice: Schema.Boolean,
 })
 export type Model = typeof Model.Type
 
@@ -56,6 +58,7 @@ export const init = (config: {
 	readonly id: string
 	readonly items: ReadonlyArray<Item>
 	readonly selectedKey?: string
+	readonly isAppleDevice: boolean
 }): Model => {
 	const selectedKey = Option.fromNullishOr(config.selectedKey)
 	return {
@@ -65,6 +68,7 @@ export const init = (config: {
 		inputValue: labelOf(config.items, selectedKey),
 		isFocused: false,
 		popup: { _tag: "Closed" },
+		isAppleDevice: config.isAppleDevice,
 	}
 }
 
@@ -223,7 +227,7 @@ const announcementsFor = (previous: Model, next: Model): ReadonlyArray<string> =
 			next.selectedKey,
 			(key) => !Option.contains(previous.selectedKey, key),
 		)
-		return isAppleDevice() && next.isFocused && isSelectionNew
+		return next.isAppleDevice && next.isFocused && isSelectionNew
 			? [`${labelOf(next.items, next.selectedKey)}, selected`]
 			: []
 	}
@@ -231,11 +235,11 @@ const announcementsFor = (previous: Model, next: Model): ReadonlyArray<string> =
 	const count = visibleItems(next, open).length
 	const previousCount =
 		previous.popup._tag === "Open" ? visibleItems(previous, previous.popup).length : count
-	const didOpen = previous.popup._tag === "Closed" && (Option.isNone(open.focusedKey) || isAppleDevice())
+	const didOpen = previous.popup._tag === "Closed" && (Option.isNone(open.focusedKey) || next.isAppleDevice)
 	const previousFocus = previous.popup._tag === "Open" ? previous.popup.focusedKey : Option.none<string>()
 	const focusAnnouncement = Option.filter(
 		open.focusedKey,
-		(key) => isAppleDevice() && !Option.contains(previousFocus, key),
+		(key) => next.isAppleDevice && !Option.contains(previousFocus, key),
 	).pipe(
 		Option.map(
 			(key) =>
@@ -253,7 +257,7 @@ export const update = (model: Model, message: Message): UpdateReturn => {
 	// NOTE: pressing an option moves the virtual focus to it before the selection lands.
 	const pressedFocus =
 		message._tag === "ClickedOption" &&
-		isAppleDevice() &&
+		model.isAppleDevice &&
 		model.popup._tag === "Open" &&
 		!Option.contains(model.popup.focusedKey, message.key)
 			? [

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import * as Scene from "foldkit/scene"
-import { afterEach, beforeEach, describe, test, vi } from "vitest"
+import { describe, test } from "vitest"
 import { Announce, FocusInput, init, item, Message, OutMessage, update } from "./combo-box"
 import { view } from "./combo-box-view"
 
@@ -27,15 +27,11 @@ const portalled = Scene.Mount.resolve(portal, Message.CompletedPortalComboBox())
 const announced = (text: string) =>
 	Scene.Command.resolve(Announce({ message: text }), Message.CompletedAnnounce())
 
-// update reads the platform for VoiceOver announcements, so pin a non-Apple one.
-beforeEach(() => vi.stubGlobal("navigator", { platform: "Linux x86_64" }))
-afterEach(() => vi.unstubAllGlobals())
-
 describe("combo box scene", () => {
 	test("a closed combo box is a labelled, collapsed list autocomplete", () => {
 		Scene.scene(
 			config,
-			Scene.given(init({ id: "channel", items })),
+			Scene.given(init({ id: "channel", items, isAppleDevice: false })),
 			mounted,
 			Scene.expect(input).toHaveAttr("aria-labelledby", "channel-label"),
 			Scene.expect(input).toHaveAttr("aria-autocomplete", "list"),
@@ -49,7 +45,7 @@ describe("combo box scene", () => {
 	test("typing opens the list with only the matching options and no active option", () => {
 		Scene.scene(
 			config,
-			Scene.given(init({ id: "channel", items })),
+			Scene.given(init({ id: "channel", items, isAppleDevice: false })),
 			mounted,
 			Scene.type(input, "cafe"),
 			announced("1 option available."),
@@ -65,7 +61,7 @@ describe("combo box scene", () => {
 	test("ArrowDown moves the virtual focus with aria-activedescendant, past the disabled option", () => {
 		Scene.scene(
 			config,
-			Scene.given(init({ id: "channel", items })),
+			Scene.given(init({ id: "channel", items, isAppleDevice: false })),
 			mounted,
 			Scene.keydown(input, "ArrowDown"),
 			Scene.expectHandled(),
@@ -82,7 +78,7 @@ describe("combo box scene", () => {
 	test("Enter commits the active option into the input and closes the list", () => {
 		Scene.scene(
 			config,
-			Scene.given(init({ id: "channel", items })),
+			Scene.given(init({ id: "channel", items, isAppleDevice: false })),
 			mounted,
 			Scene.keydown(input, "ArrowDown"),
 			portalled,
@@ -98,7 +94,7 @@ describe("combo box scene", () => {
 	test("Escape throws away the typed text and restores the selected label", () => {
 		Scene.scene(
 			config,
-			Scene.given(init({ id: "channel", items, selectedKey: "design" })),
+			Scene.given(init({ id: "channel", items, selectedKey: "design", isAppleDevice: false })),
 			mounted,
 			Scene.expect(input).toHaveValue("Design"),
 			Scene.type(input, "gen"),
@@ -115,7 +111,7 @@ describe("combo box scene", () => {
 	test("the button opens every option on the selection and returns focus to the input", () => {
 		Scene.scene(
 			config,
-			Scene.given(init({ id: "channel", items, selectedKey: "design" })),
+			Scene.given(init({ id: "channel", items, selectedKey: "design", isAppleDevice: false })),
 			mounted,
 			Scene.expect(button).toHaveAttr("aria-haspopup", "listbox"),
 			Scene.pointerDown(button),
@@ -136,7 +132,7 @@ describe("combo box scene", () => {
 	test("a touch press on the button is left to the browser", () => {
 		Scene.scene(
 			config,
-			Scene.given(init({ id: "channel", items })),
+			Scene.given(init({ id: "channel", items, isAppleDevice: false })),
 			mounted,
 			Scene.pointerDown(button, { pointerType: "touch" }),
 			Scene.expectIgnored(),
@@ -147,7 +143,7 @@ describe("combo box scene", () => {
 	test("clicking an option commits it, clicking a disabled one does nothing", () => {
 		Scene.scene(
 			config,
-			Scene.given(init({ id: "channel", items })),
+			Scene.given(init({ id: "channel", items, isAppleDevice: false })),
 			mounted,
 			Scene.keydown(input, "ArrowDown"),
 			portalled,
@@ -164,7 +160,7 @@ describe("combo box scene", () => {
 	test("Tab and other keys in the input fall through to the browser", () => {
 		Scene.scene(
 			config,
-			Scene.given(init({ id: "channel", items })),
+			Scene.given(init({ id: "channel", items, isAppleDevice: false })),
 			mounted,
 			Scene.keydown(input, "Tab"),
 			Scene.expectIgnored(),
@@ -176,7 +172,7 @@ describe("combo box scene", () => {
 	test("without a label the listbox is named by the suggestions button", () => {
 		Scene.scene(
 			{ update, view: sceneView({ label: undefined }) },
-			Scene.given(init({ id: "channel", items })),
+			Scene.given(init({ id: "channel", items, isAppleDevice: false })),
 			mounted,
 			Scene.expect(input).not.toHaveAttr("aria-labelledby"),
 			Scene.keydown(input, "ArrowUp"),

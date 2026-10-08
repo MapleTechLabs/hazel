@@ -1,6 +1,6 @@
 import { Option } from "effect"
 import { Command, expectNoOutMessage, expectOutMessage, given, message, model, story } from "foldkit/story"
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
+import { describe, expect, test } from "vitest"
 import {
 	Announce,
 	FocusInput,
@@ -21,17 +21,12 @@ const items = [
 	item("engineering", "Engineering", true),
 	item("cafe", "Café"),
 ]
-const comboBox = init({ id: "channel", items })
+const comboBox = init({ id: "channel", items, isAppleDevice: false })
 const inputKey = (key: string) => message(Message.PressedInputKey({ key }))
 const focusOf = (next: Model) => (next.popup._tag === "Open" ? next.popup.focusedKey : Option.none())
 const visibleKeys = (next: Model) =>
 	next.popup._tag === "Open" ? visibleItems(next, next.popup).map((found) => found.key) : []
 const announced = (text: string) => Command.resolve(Announce({ message: text }), Message.CompletedAnnounce())
-
-// update reads the platform for VoiceOver announcements, so pin it per test.
-const onPlatform = (platform: string) => vi.stubGlobal("navigator", { platform })
-beforeEach(() => onPlatform("Linux x86_64"))
-afterEach(() => vi.unstubAllGlobals())
 
 describe("combo box story", () => {
 	test("typing filters the options ignoring accents, opens the list and announces the count", () => {
@@ -108,7 +103,7 @@ describe("combo box story", () => {
 	test("Enter with nothing focused closes the list and reverts the typed text", () => {
 		story(
 			update,
-			given(init({ id: "channel", items, selectedKey: "design" })),
+			given(init({ id: "channel", items, selectedKey: "design", isAppleDevice: false })),
 			message(Message.ChangedInput({ value: "gen" })),
 			announced("1 option available."),
 			inputKey("Enter"),
@@ -123,7 +118,7 @@ describe("combo box story", () => {
 	test("Escape and blur both close the list and restore the selected label", () => {
 		story(
 			update,
-			given(init({ id: "channel", items, selectedKey: "general" })),
+			given(init({ id: "channel", items, selectedKey: "general", isAppleDevice: false })),
 			message(Message.ChangedInput({ value: "des" })),
 			announced("1 option available."),
 			inputKey("Escape"),
@@ -143,7 +138,7 @@ describe("combo box story", () => {
 	test("the button toggles every option open on the selection and keeps focus in the input", () => {
 		story(
 			update,
-			given(init({ id: "channel", items, selectedKey: "design" })),
+			given(init({ id: "channel", items, selectedKey: "design", isAppleDevice: false })),
 			message(Message.ChangedInput({ value: "Des" })),
 			announced("1 option available."),
 			message(Message.BlurredInput()),
@@ -175,10 +170,9 @@ describe("combo box story", () => {
 	})
 
 	test("on Apple devices opening also announces the focused option for VoiceOver", () => {
-		onPlatform("MacIntel")
 		story(
 			update,
-			given(init({ id: "channel", items, selectedKey: "design" })),
+			given(init({ id: "channel", items, selectedKey: "design", isAppleDevice: true })),
 			inputKey("ArrowDown"),
 			Command.expectExact(
 				Announce({ message: "4 options available." }),
