@@ -27,21 +27,21 @@ const fromOtherTab = (envelope: Option.Option<typeof ActivityEnvelope.Type>) =>
 
 const hasBroadcastChannel = () => typeof BroadcastChannel !== "undefined"
 
-let sender: BroadcastChannel | undefined
-
-/** `broadcastActivity`: tell the other tabs this one saw input at `at`. */
+/**
+ * `broadcastActivity`: tell the other tabs this one saw input at `at`. A channel per post (at most
+ * one a second) keeps no handle alive between Commands; posted messages still arrive after `close`.
+ */
 export const broadcastActivity = (at: number): Effect.Effect<void> =>
-	Effect.sync(() => {
-		if (hasBroadcastChannel()) {
-			sender ??= new BroadcastChannel(CHANNEL_NAME)
-			sender.postMessage({ type: "activity", at, tabId })
-			return
-		}
-		localStorage.setItem(
-			STORAGE_KEY,
-			JSON.stringify({ type: "activity", at, tabId, nonce: Math.random() }),
-		)
-	}).pipe(Effect.ignore)
+	(hasBroadcastChannel()
+		? Effect.acquireUseRelease(
+				Effect.try(() => new BroadcastChannel(CHANNEL_NAME)),
+				(sender) => Effect.try(() => sender.postMessage({ type: "activity", at, tabId })),
+				(sender) => Effect.sync(() => sender.close()),
+			)
+		: Effect.try(() =>
+				localStorage.setItem(STORAGE_KEY, JSON.stringify({ type: "activity", at, tabId, nonce: Math.random() })),
+			)
+	).pipe(Effect.ignore)
 
 const ACTIVITY_EVENTS = ["mousemove", "keydown", "scroll", "click", "touchstart"] as const
 
