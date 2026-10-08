@@ -401,8 +401,9 @@ export const update = (model: Model, message: Message, facts: MessageFacts): Ove
 						}),
 					}
 		},
-		ClickedThreadPreview: ({ threadChannelId, messageId }) =>
-			set(model, { thread: { threadChannelId, messageId } }),
+		ClickedThreadPreview: ({ threadChannelId, messageId }) => ({
+			model: openThread(model, threadChannelId, messageId),
+		}),
 		ClosedThread: () => set(model, { thread: null }),
 	})
 
@@ -415,6 +416,16 @@ export const ownsRow = (model: Model, messageId: MessageId): boolean =>
 	(model.hoveredTriggerKey !== null && messageIdOfKey(model.hoveredTriggerKey) === messageId) ||
 	(model.contextMenu !== null && model.contextMenu.messageId === messageId) ||
 	(model.popover !== null && messageIdOfKey(model.popover.key) === messageId)
+
+/** The thread panel opens on a thread (a preview click, or a thread created from a message). */
+export const openThread = (model: Model, threadChannelId: ChannelId, messageId: MessageId): Model =>
+	model.thread?.threadChannelId === threadChannelId && model.thread.messageId === messageId
+		? model
+		: { ...model, thread: { threadChannelId, messageId } }
+
+/** The thread panel closes if it shows this thread (its creation failed). */
+export const closeThread = (model: Model, threadChannelId: ChannelId): Model =>
+	model.thread?.threadChannelId === threadChannelId ? { ...model, thread: null } : model
 
 /** The context menu's "Add Reaction" opens the picker modal, which loads its data. */
 export const openReactionModal = (model: Model, messageId: MessageId): OverlaysReturn => ({

@@ -5,6 +5,7 @@ import * as Composer from "../../../composer/composer"
 import * as Draft from "../../../composer/draft"
 import * as DraftUpdate from "../../../composer/draft-update"
 import * as EditorCommands from "../../../composer/editor-commands"
+import * as Typing from "../../../composer/typing"
 import * as MessageList from "../../../mount/message-list"
 import type { ToastRequest } from "../../../overlay/toasts"
 import type { HazelRpc } from "../../../rpc"
@@ -145,13 +146,8 @@ export const react = (model: Model, messageId: MessageId, emoji: string): PageRe
 }
 
 /** The thread panel opens on a thread; its draft and membership start fresh. */
-const openThread = (model: Model, threadChannelId: ChannelId, messageId: MessageId): Model => ({
-	...model,
-	overlays: { ...model.overlays, thread: { threadChannelId, messageId } },
-	threadDraft:
-		model.threadDraft?.channelId === threadChannelId ? model.threadDraft : newThreadDraft(model, threadChannelId),
-	threadMemberId: model.threadDraft?.channelId === threadChannelId ? model.threadMemberId : null,
-})
+const openThread = (model: Model, threadChannelId: ChannelId, messageId: MessageId): PageReturn =>
+	syncThreadDraft({ ...model, overlays: Overlays.openThread(model.overlays, threadChannelId, messageId) })
 
 export const newThreadDraft = (model: Model, threadChannelId: ChannelId): Draft.Model => {
 	const draft = Draft.init(threadChannelId, `thread-composer-${threadChannelId}`, "Reply in thread...")
@@ -164,7 +160,7 @@ const createThread = (model: Model, messageId: MessageId): PageReturn => {
 	if (model.channel?.type === "thread")
 		return { model, outMessage: toast({ intent: "error", title: "Cannot create threads within threads", description: null }) }
 	const message = findMessage(model, messageId)
-	if (message?.threadChannelId) return { model: openThread(model, message.threadChannelId, messageId) }
+	if (message?.threadChannelId) return openThread(model, message.threadChannelId, messageId)
 	if (model.currentUserId === null) return { model }
 	return { model, commands: actionCommands([GenerateThreadChannelId({ messageId })]) }
 }
@@ -247,34 +243,35 @@ export const handleActionMessage = (model: Model, message: ActionMessage): PageR
 		CompletedUnpinMessage: ({ toast: request }) => withToast(model, request),
 		CompletedDeleteMessage: ({ toast: request }) => withToast(model, request),
 		// The panel opens at once on the optimistic id; the composer waits for the RPC.
-		CompletedGenerateThreadChannelId: ({ messageId, threadChannelId }) =>
-			model.currentUserId === null || model.channel === null
-				? { model }
-				: {
-						model: { ...openThread(model, threadChannelId, messageId), pendingThreadChannelId: threadChannelId },
-						commands: actionCommands([
-							CreateThread({
-								threadChannelId,
-								messageId,
-								parentChannelId: model.channelId,
-								organizationId: model.channel.organizationId,
-								currentUserId: model.currentUserId,
-							}),
-						]),
-					},
+		CompletedGenerateThreadChannelId: ({ messageId, threadChannelId }) => {
+			if (model.currentUserId === null || model.channel === null) return { model }
+			const opened = openThread(model, threadChannelId, messageId)
+			return {
+				model: { ...opened.model, pendingThreadChannelId: threadChannelId },
+				commands: [
+					...(opened.commands ?? []),
+					...actionCommands([
+						CreateThread({
+							threadChannelId,
+							messageId,
+							parentChannelId: model.channelId,
+							organizationId: model.channel.organizationId,
+							currentUserId: model.currentUserId,
+						}),
+					]),
+				],
+			}
+		},
 		SucceededCreateThread: () => ({ model: { ...model, pendingThreadChannelId: null } }),
 		// Close the panel on failure.
-		FailedCreateThread: ({ threadChannelId, toast: request }) => ({
-			model: {
+		FailedCreateThread: ({ threadChannelId, toast: request }) => {
+			const closed = syncThreadDraft({
 				...model,
 				pendingThreadChannelId: null,
-				overlays:
-					model.overlays.thread?.threadChannelId === threadChannelId
-						? { ...model.overlays, thread: null }
-						: model.overlays,
-			},
-			outMessage: toast(request),
-		}),
+				overlays: Overlays.closeThread(model.overlays, threadChannelId),
+			})
+			return { ...closed, outMessage: toast(request) }
+		},
 		CompletedCopyText: () => ({ model }),
 		CompletedDownloadImage: () => ({ model }),
 		CompletedOpenUrl: () => ({ model }),
@@ -308,10 +305,19 @@ export const insertGlobalKey = (model: Model, key: string): PageReturn => {
 }
 
 /** The thread panel's draft follows the open thread (a new panel, a new `ChatProvider`). */
-export const syncThreadDraft = (model: Model): Model => {
+export const syncThreadDraft = (model: Model): PageReturn => {
 	const thread = model.overlays.thread
-	if (thread === null) return model.threadDraft === null ? model : { ...model, threadDraft: null, threadMemberId: null }
-	return model.threadDraft?.channelId === thread.threadChannelId
-		? model
-		: { ...model, threadDraft: newThreadDraft(model, thread.threadChannelId), threadMemberId: null }
+	if (model.threadDraft?.channelId === thread?.threadChannelId) return { model }
+	// `useTyping` deletes the indicator when the panel's composer unmounts.
+	const stopCommands = model.threadDraft === null ? [] : (Typing.stop(model.threadDraft.typing).commands ?? [])
+	return {
+		model: {
+			...model,
+			threadDraft: thread === null ? null : newThreadDraft(model, thread.threadChannelId),
+			threadMemberId: null,
+		},
+		commands: Command.mapMessages(stopCommands, (message) =>
+			Message.GotThreadDraftMessage({ message: Draft.Message.GotTypingMessage({ message }) }),
+		),
+	}
 }

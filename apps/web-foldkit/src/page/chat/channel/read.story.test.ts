@@ -341,9 +341,8 @@ describe("threads", () => {
 
 	const indicatorId = Schema.decodeSync(TypingIndicatorId)("00000000-0000-4000-8000-000000009999")
 
-	// BUG: `syncThreadDraft` drops the thread draft without `Typing.stop`, so the indicator stays up in
-	// the thread until the server expires it (legacy `useTyping` deletes it on unmount).
-	test.fails("closing the thread panel while typing deletes the thread's typing indicator", () => {
+	// Legacy `useTyping` deletes the indicator when the panel's composer unmounts.
+	test("closing the thread panel while typing deletes the thread's typing indicator", () => {
 		const opened = updateWithShared(
 			derived(),
 			overlays(Overlays.Message.ClickedThreadPreview({ threadChannelId, messageId: graceMessageId })),
@@ -353,8 +352,9 @@ describe("threads", () => {
 			updateWithShared,
 			given({ ...opened, threadDraft: opened.threadDraft === null || typing === null ? null : { ...opened.threadDraft, typing } }),
 			message(overlays(Overlays.Message.ClosedThread())),
-			Command.expectHas(Typing.DeleteTypingIndicator({ id: indicatorId })),
-			Command.resolveAll(),
+			Command.expectExact(Typing.DeleteTypingIndicator({ id: indicatorId })),
+			Command.resolve(Typing.DeleteTypingIndicator, Typing.Message.CompletedDeleteTypingIndicator()),
+			model((current) => expect(current.threadDraft).toBeNull()),
 		)
 	})
 
