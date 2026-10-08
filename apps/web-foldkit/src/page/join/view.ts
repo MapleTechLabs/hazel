@@ -211,6 +211,6 @@ const isAuthLoading = (shared: Shared) =>
 
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, { shared }, h) => {
 	if (model.lookup._tag === "Loading" || isAuthLoading(shared)) return loadingView(h, shared.nowMs)
-	const organization = model.lookup.organization
+	const organization = model.lookup._tag === "Loaded" ? model.lookup.organization : null
 	return organization ? inviteView(h, model, organization, shared) : notFoundView(h, shared.nowMs)
 })

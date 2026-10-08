@@ -47,6 +47,15 @@ describe("join page", () => {
 		)
 	})
 
+	test("a failed lookup renders exactly like not found", () => {
+		Scene.scene(
+			pageScene(update, view, signedIn),
+			Scene.given<Model>({ slug: "nope", lookup: Lookup.Failed(), isJoining: false }),
+			cardShown,
+			Scene.expect(Scene.role("heading", { name: "Workspace Not Found" })).toExist(),
+		)
+	})
+
 	test("a signed-out visitor is sent to sign in and back", () => {
 		Scene.scene(
 			pageScene(update, view, signedOut),

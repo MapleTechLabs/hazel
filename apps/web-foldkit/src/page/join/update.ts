@@ -2,7 +2,7 @@ import { modifyFields } from "foldkit/struct"
 import type { RouteOf } from "../../route"
 import type { PageReturn } from "../contract"
 import { PageOutMessage } from "../out-message"
-import { FetchOrganization, JoinWorkspace, NavigateToWorkspace, RedirectToSignIn } from "./command"
+import { FetchOrganization, JoinWorkspace, RedirectToSignIn } from "./command"
 import { Message } from "./message"
 import { Lookup, type Model } from "./model"
 
@@ -18,15 +18,20 @@ export const update = (model: Model, message: Message): Return =>
 		SucceededFetchOrganization: ({ organization }) => ({
 			model: modifyFields(model, { lookup: () => Lookup.Loaded({ organization }) }),
 		}),
+		FailedFetchOrganization: () => ({ model: modifyFields(model, { lookup: () => Lookup.Failed() }) }),
 		ClickedSignIn: () => ({ model, commands: [RedirectToSignIn({ returnTo: `/join/${model.slug}` })] }),
-		ClickedJoin: () => ({
-			model: modifyFields(model, { isJoining: () => true }),
-			commands: [JoinWorkspace({ slug: model.slug })],
-		}),
+		ClickedJoin: () =>
+			model.isJoining
+				? { model }
+				: {
+						model: modifyFields(model, { isJoining: () => true }),
+						commands: [JoinWorkspace({ slug: model.slug })],
+					},
 		SucceededJoinWorkspace: () => ({
 			model: modifyFields(model, { isJoining: () => false }),
-			commands: [NavigateToWorkspace({ slug: model.slug })],
-			outMessage: PageOutMessage.RequestedToast({
+			outMessage: PageOutMessage.RequestedNavigation({
+				href: `/${model.slug}`,
+				replace: false,
 				toast: { intent: "success", title: "Successfully joined workspace!", description: null },
 			}),
 		}),
@@ -35,6 +40,5 @@ export const update = (model: Model, message: Message): Return =>
 			outMessage: PageOutMessage.RequestedToast({ toast: { intent: "error", title, description } }),
 		}),
 		CompletedRedirectToSignIn: () => ({ model }),
-		CompletedNavigateToWorkspace: () => ({ model }),
 		CompletedEnterAnimation: () => ({ model }),
 	})

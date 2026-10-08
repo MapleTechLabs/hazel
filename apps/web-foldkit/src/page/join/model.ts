@@ -8,10 +8,11 @@ export const PublicOrganization = Schema.Struct({
 })
 export type PublicOrganization = typeof PublicOrganization.Type
 
-/** `organization.getBySlugPublic`; a failed lookup reads as not found, like `getOrElse(() => null)`. */
+/** `organization.getBySlugPublic`; `Failed` renders as not found, like legacy's `getOrElse(() => null)`. */
 export const Lookup = defineTaggedUnion({
 	Loading: {},
 	Loaded: { organization: Schema.NullOr(PublicOrganization) },
+	Failed: {},
 })
 export type Lookup = typeof Lookup.Type
 

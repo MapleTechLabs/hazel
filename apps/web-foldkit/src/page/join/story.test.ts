@@ -2,7 +2,7 @@ import { Command, expectNoOutMessage, expectOutMessage, given, message, model, s
 import { describe, expect, test } from "vitest"
 import { AppRoute } from "../../route"
 import { PageOutMessage } from "../out-message"
-import { FetchOrganization, JoinWorkspace, NavigateToWorkspace, RedirectToSignIn } from "./command"
+import { FetchOrganization, JoinWorkspace, RedirectToSignIn } from "./command"
 import { Message } from "./message"
 import { Lookup, type Model } from "./model"
 import { init, update } from "./update"
@@ -25,6 +25,15 @@ describe("join workspace", () => {
 		)
 	})
 
+	test("a failed lookup is recorded apart from a missing workspace", () => {
+		story(
+			update,
+			given(init(route).model),
+			message(Message.FailedFetchOrganization()),
+			model((current) => expect(current.lookup).toEqual(Lookup.Failed())),
+		)
+	})
+
 	test("signing in comes back to this invite link", () => {
 		story(
 			update,
@@ -36,7 +45,7 @@ describe("join workspace", () => {
 		)
 	})
 
-	test("joining toasts and opens the workspace", () => {
+	test("joining opens the workspace through the root, with the success toast", () => {
 		story(
 			update,
 			given(loaded),
@@ -45,12 +54,13 @@ describe("join workspace", () => {
 			model((current) => expect(current.isJoining).toBe(true)),
 			Command.resolve(JoinWorkspace, Message.SucceededJoinWorkspace()),
 			expectOutMessage(
-				PageOutMessage.RequestedToast({
+				PageOutMessage.RequestedNavigation({
+					href: "/hazel",
+					replace: false,
 					toast: { intent: "success", title: "Successfully joined workspace!", description: null },
 				}),
 			),
-			Command.expectExact(NavigateToWorkspace({ slug: "hazel" })),
-			Command.resolve(NavigateToWorkspace, Message.CompletedNavigateToWorkspace()),
+			Command.expectNone(),
 			model((current) => expect(current.isJoining).toBe(false)),
 		)
 	})
@@ -67,8 +77,8 @@ describe("join workspace", () => {
 		)
 	})
 
-	// Bug: ClickedJoin has no isJoining guard, so a second press sends a second join request.
-	test.fails("a press while joining sends nothing", () => {
+	// ClickedJoin is guarded on isJoining, so a second press sends no second join request.
+	test("a press while joining sends nothing", () => {
 		story(update, given({ ...loaded, isJoining: true }), message(Message.ClickedJoin()), Command.expectNone())
 	})
 })

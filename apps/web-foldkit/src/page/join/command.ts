@@ -1,13 +1,13 @@
 import { Cause, Effect, Exit, Option, Schema } from "effect"
 import { Command } from "foldkit"
-import { load, pushUrl } from "foldkit/navigation"
+import { load } from "foldkit/navigation"
 import { getUserFriendlyError } from "~/lib/error-messages"
 import { HazelRpc } from "../../rpc"
 import { Message } from "./message"
 
 export const FetchOrganization = Command.define("FetchPublicOrganization", {
 	args: { slug: Schema.String },
-	messages: [Message.SucceededFetchOrganization],
+	messages: [Message.SucceededFetchOrganization, Message.FailedFetchOrganization],
 	execute: ({ slug }) =>
 		Effect.gen(function* () {
 			const client = yield* HazelRpc
@@ -21,9 +21,7 @@ export const FetchOrganization = Command.define("FetchPublicOrganization", {
 						}
 					: null,
 			})
-		}).pipe(
-			Effect.catch(() => Effect.succeed(Message.SucceededFetchOrganization({ organization: null }))),
-		),
+		}).pipe(Effect.catch(() => Effect.succeed(Message.FailedFetchOrganization()))),
 })
 
 /** The toasts legacy's `exitToastAsync(...).onErrorTag(...)` chain shows. */
@@ -72,10 +70,4 @@ export const RedirectToSignIn = Command.define("RedirectToSignIn", {
 		load(`/sign-in?${new URLSearchParams({ redirect_url: returnTo })}`).pipe(
 			Effect.as(Message.CompletedRedirectToSignIn()),
 		),
-})
-
-export const NavigateToWorkspace = Command.define("NavigateToWorkspace", {
-	args: { slug: Schema.String },
-	messages: [Message.CompletedNavigateToWorkspace],
-	execute: ({ slug }) => pushUrl(`/${slug}`).pipe(Effect.as(Message.CompletedNavigateToWorkspace())),
 })
