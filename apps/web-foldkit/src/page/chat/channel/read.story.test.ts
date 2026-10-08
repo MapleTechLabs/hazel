@@ -10,7 +10,7 @@ import * as MessageList from "../../../mount/message-list"
 import type { ToastRequest } from "../../../overlay/toasts"
 import { chatMessageOf, imageAttachmentOf, liveEmbeds } from "../../../test/chat-messages"
 import { PageOutMessage } from "../../out-message"
-import { ActionMessage } from "../message-actions"
+import { ActionMessage, CopyText, OpenUrl } from "../message-actions"
 import * as Overlays from "../overlays"
 import { PAGE_SIZE } from "../queries"
 import type { DisplayRow, MessageRow } from "../rows"
@@ -396,6 +396,28 @@ describe("image viewer", () => {
 			model((current) => expect(current.overlays.imageViewer?.index).toBe(0)),
 			message(overlays(Overlays.Message.ClosedImageViewer())),
 			model((current) => expect(current.overlays.imageViewer).toBeNull()),
+		)
+	})
+
+	test("Copy URL copies the image URL with a toast; Open in browser opens it", () => {
+		const url = "https://cdn.hazel.sh/photo-1.png"
+		story(
+			updateWithShared,
+			given(withImages()),
+			message(overlays(Overlays.Message.ClickedAttachmentImage({ messageId: graceMessageId, index: 0 }))),
+			message(overlays(Overlays.Message.ClickedViewerAction({ action: "copyUrl", url, fileName: "photo-1.png" }))),
+			Command.expectExact(CopyText({ text: url })),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({
+					toast: { intent: "success", title: "URL copied", description: "Image URL has been copied to clipboard." },
+				}),
+			),
+			Command.resolve(CopyText, ActionMessage.CompletedCopyText()),
+			message(
+				overlays(Overlays.Message.ClickedViewerAction({ action: "openInBrowser", url, fileName: "photo-1.png" })),
+			),
+			Command.expectExact(OpenUrl({ url })),
+			Command.resolve(OpenUrl, ActionMessage.CompletedOpenUrl()),
 		)
 	})
 

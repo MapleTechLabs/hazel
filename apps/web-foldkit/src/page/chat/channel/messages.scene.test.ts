@@ -18,7 +18,7 @@ import type { EmojiData } from "../../../emoji-picker/data"
 import * as Overlays from "../overlays"
 import { imageAttachmentOf } from "../../../test/chat-messages"
 import { PageOutMessage } from "../../out-message"
-import { ActionMessage, CreateThread, GenerateThreadChannelId, ToggleReaction, TrackEmojiUsage } from "../message-actions"
+import { ActionMessage, CreateThread, DownloadImage, GenerateThreadChannelId, ToggleReaction, TrackEmojiUsage } from "../message-actions"
 import { ada, adaMessageId, channelId, graceMessageId, updateWithShared } from "./fixtures.test-support"
 
 /** The channel page through its view: reading, the hover toolbar's actions and the composer indicators. */
@@ -183,17 +183,23 @@ describe("image viewer", () => {
 		)
 	})
 
-	// BUG: the channel view never passes `toAction`, so Download, Copy URL and Open in browser render
-	// as unlabeled buttons without a handler (`chat/image-viewer.ts` `act`), and do nothing.
-	test.fails("the viewer's Download action is labeled and wired", () => {
+	// The toolbar buttons are named by their icon's <title>, as in legacy (no aria-label there).
+	test("the viewer's Download action downloads the image and toasts", () => {
 		Scene.scene(
 			channelScene,
 			Scene.given(withImages()),
 			mountedChannel(),
 			Scene.click(Scene.altText("photo-1.png")),
 			viewerMounted(0),
-			Scene.click(Scene.role("button", { name: "Download" })),
-			Scene.Command.expectHas({ name: "DownloadImage" }),
+			// Legacy nests the action Button inside its bare `TooltipTrigger` Button; the inner one acts.
+			Scene.click(Scene.within(Scene.role("button", { name: "download" }), Scene.selector("button button"))),
+			Scene.Command.expectExact(DownloadImage({ url: "https://cdn.hazel.sh/photo-1.png", fileName: "photo-1.png" })),
+			Scene.expectOutMessage(
+				PageOutMessage.RequestedToast({
+					toast: { intent: "success", title: "Image downloaded", description: "Your image has been downloaded." },
+				}),
+			),
+			Scene.Command.resolve(DownloadImage, ActionMessage.CompletedDownloadImage()),
 		)
 	})
 })

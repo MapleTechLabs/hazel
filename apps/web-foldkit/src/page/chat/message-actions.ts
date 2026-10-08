@@ -31,6 +31,8 @@ export const ActionMessage = defineMessageUnion({
 	SucceededCreateThread: { threadChannelId: ChannelId },
 	FailedCreateThread: { threadChannelId: ChannelId, toast: ToastRequest },
 	CompletedCopyText: {},
+	CompletedDownloadImage: {},
+	CompletedOpenUrl: {},
 	CompletedTrackEmojiUsage: {},
 	CompletedGenerateThreadName: { threadChannelId: ChannelId, toast: Schema.NullOr(ToastRequest) },
 })
@@ -139,6 +141,34 @@ export const CopyText = Command.define("CopyText", {
 			Effect.ignore,
 			Effect.as(ActionMessage.CompletedCopyText()),
 		),
+})
+
+/** The image viewer's `handleDownload`: a temporary `<a download target="_blank">` clicked and removed. */
+export const DownloadImage = Command.define("DownloadImage", {
+	args: { url: Schema.String, fileName: Schema.String },
+	messages: [ActionMessage.CompletedDownloadImage],
+	execute: ({ url, fileName }) =>
+		Effect.sync(() => {
+			const link = document.createElement("a")
+			link.href = url
+			link.download = fileName
+			link.target = "_blank"
+			document.body.appendChild(link)
+			link.click()
+			document.body.removeChild(link)
+			return ActionMessage.CompletedDownloadImage()
+		}),
+})
+
+/** The image viewer's `handleOpenInBrowser`: `window.open(url, "_blank")`. */
+export const OpenUrl = Command.define("OpenUrl", {
+	args: { url: Schema.String },
+	messages: [ActionMessage.CompletedOpenUrl],
+	execute: ({ url }) =>
+		Effect.sync(() => {
+			window.open(url, "_blank")
+			return ActionMessage.CompletedOpenUrl()
+		}),
 })
 
 /** `useEmojiStats().trackEmojiUsage`: counts the emoji in the persisted usage atom. */

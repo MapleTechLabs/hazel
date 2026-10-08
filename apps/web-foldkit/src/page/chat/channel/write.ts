@@ -1,5 +1,5 @@
 import { type ChannelId, type MessageId, PinnedMessageId } from "@hazel/schema"
-import { Option, Schema } from "effect"
+import { Match, Option, Schema } from "effect"
 import { Command } from "foldkit"
 import * as Composer from "../../../composer/composer"
 import * as Draft from "../../../composer/draft"
@@ -15,8 +15,10 @@ import {
 	ActionMessage,
 	CopyText,
 	CreateThread,
+	DownloadImage,
 	GenerateThreadChannelId,
 	GenerateThreadName,
+	OpenUrl,
 	PinMessage,
 	ToggleReaction,
 	TrackEmojiUsage,
@@ -189,10 +191,29 @@ const copy = (model: Model, text: string, description: string): PageReturn => ({
 	outMessage: toast(successToastOf("Copied!", description)),
 })
 
+/** `ImageViewerModal`'s toolbar: legacy toasts at once, without waiting for the effect. */
+const viewerAction = (model: Model, action: Overlays.ViewerAction, url: string, fileName: string): PageReturn =>
+	Match.value(action).pipe(
+		Match.withReturnType<PageReturn>(),
+		Match.when("download", () => ({
+			model,
+			commands: actionCommands([DownloadImage({ url, fileName })]),
+			outMessage: toast(successToastOf("Image downloaded", "Your image has been downloaded.")),
+		})),
+		Match.when("copyUrl", () => ({
+			model,
+			commands: actionCommands([CopyText({ text: url })]),
+			outMessage: toast(successToastOf("URL copied", "Image URL has been copied to clipboard.")),
+		})),
+		Match.when("openInBrowser", () => ({ model, commands: actionCommands([OpenUrl({ url })]) })),
+		Match.exhaustive,
+	)
+
 /** The toolbar, menus and context menu's actions (`useMessageActions`). */
 export const handleOverlaysOut = (model: Model, out: Overlays.OutMessage): PageReturn =>
 	Overlays.OutMessage.match<PageReturn>(out, {
 		RequestedReaction: ({ messageId, emoji }) => react(model, messageId, emoji),
+		RequestedViewerAction: ({ action, url, fileName }) => viewerAction(model, action, url, fileName),
 		RequestedMessageAction: ({ messageId, action }) => {
 			const message = findMessage(model, messageId)
 			if (action === "reply") return { model: { ...model, draft: DraftUpdate.setReply(model.draft, messageId) } }
@@ -255,6 +276,8 @@ export const handleActionMessage = (model: Model, message: ActionMessage): PageR
 			outMessage: toast(request),
 		}),
 		CompletedCopyText: () => ({ model }),
+		CompletedDownloadImage: () => ({ model }),
+		CompletedOpenUrl: () => ({ model }),
 		CompletedTrackEmojiUsage: () => ({ model }),
 		CompletedGenerateThreadName: ({ toast: request }) =>
 			withToast({ ...model, isGeneratingThreadName: false }, request),

@@ -21,6 +21,10 @@ export const MessagePopover = Schema.Struct({ key: Schema.String, popover: Popov
 export const ViewerUrlImage = Schema.Struct({ url: Schema.String, alt: Schema.String })
 export type ViewerUrlImage = typeof ViewerUrlImage.Type
 
+/** The image viewer's toolbar actions (`ImageViewerAction`). */
+export const ViewerAction = Schema.Literals(["download", "copyUrl", "openInBrowser"])
+export type ViewerAction = typeof ViewerAction.Type
+
 export const Model = Schema.Struct({
 	/** `MessageHoverProvider`: the message under the pointer, and whether the toolbar holds it. */
 	hoveredMessageId: Schema.NullOr(MessageId),
@@ -99,6 +103,7 @@ export const Message = defineMessageUnion({
 	ClickedEmbedImage: { messageId: MessageId, images: Schema.Array(ViewerUrlImage), index: Schema.Number },
 	ClosedImageViewer: {},
 	SelectedViewerImage: { index: Schema.Number },
+	ClickedViewerAction: { action: ViewerAction, url: Schema.String, fileName: Schema.String },
 	GotReactionPickerMessage: { messageId: MessageId, message: EmojiDialog.Message },
 	GotReactionModalMessage: { message: Modal.Message },
 	GotReactionModalPickerMessage: { message: Picker.Message },
@@ -123,6 +128,7 @@ export type MessageAction = typeof MessageAction.Type
 export const OutMessage = defineMessageUnion({
 	RequestedMessageAction: { messageId: MessageId, action: MessageAction },
 	RequestedReaction: { messageId: MessageId, emoji: Schema.String },
+	RequestedViewerAction: { action: ViewerAction, url: Schema.String, fileName: Schema.String },
 })
 export type OutMessage = typeof OutMessage.Type
 
@@ -335,6 +341,10 @@ export const update = (model: Model, message: Message, facts: MessageFacts): Ove
 			model.imageViewer === null
 				? { model }
 				: set(model, { imageViewer: { ...model.imageViewer, index } }),
+		ClickedViewerAction: ({ action, url, fileName }) =>
+			model.imageViewer === null
+				? { model }
+				: { model, outMessage: OutMessage.RequestedViewerAction({ action, url, fileName }) },
 		GotReactionPickerMessage: ({ messageId, message: dialogMessage }) => {
 			const current =
 				model.reactionPicker?.messageId === messageId

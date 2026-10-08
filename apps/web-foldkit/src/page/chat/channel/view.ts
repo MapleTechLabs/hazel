@@ -144,6 +144,8 @@ const imageViewerOverlay = <M>(
 		createdAtMs: row.message.createdAtMs,
 		toClose: () => overlays(Overlays.Message.ClosedImageViewer()),
 		toSelect: (index) => overlays(Overlays.Message.SelectedViewerImage({ index })),
+		toAction: (action, image) =>
+			overlays(Overlays.Message.ClickedViewerAction({ action, url: image.url, fileName: image.fileName })),
 	})
 }
 
