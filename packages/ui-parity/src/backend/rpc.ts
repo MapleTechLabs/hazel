@@ -111,6 +111,15 @@ const defaultHandlers = (dataset: Dataset): Record<string, (payload: unknown) =>
 			transactionId: FIXTURE_TRANSACTION_ID,
 		})
 	},
+	// Deleting echoes the indicator back; it was never synced, so nothing changes on screen.
+	"typingIndicator.delete": (payload) => {
+		const { id } = payload as { id: string }
+		const channelId = dataset.tables.channels?.[0]?.id ?? id
+		return new TypingIndicatorResponse({
+			data: TypingIndicator.Schema.make({ id, channelId, memberId: id, lastTyped: 0 } as never),
+			transactionId: FIXTURE_TRANSACTION_ID,
+		})
+	},
 	"organization.getBySlugPublic": () => null,
 	"chatSync.connection.list": () => new ChatSyncConnectionListResponse({ data: [] }),
 	// Per-area handlers (`src/scenarios/<area>.ts`), then the dataset's own overrides.

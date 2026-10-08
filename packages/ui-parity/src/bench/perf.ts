@@ -183,6 +183,7 @@ const timeInput = async (page: Page, spec: ReadySpec, input: () => Promise<void>
 	})
 	await input()
 	const result = await ready
+	if (result.timedOut && values.verbose) await page.screenshot({ path: "/tmp/perf-scripts/timeout.png" })
 	if (result.timedOut) throw new Error(`timed out waiting for ${JSON.stringify(spec).slice(0, 120)}`)
 	return result
 }
