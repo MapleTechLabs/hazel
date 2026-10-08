@@ -55,7 +55,7 @@ const Navigation = { keys: Schema.Array(Schema.String), columns: Schema.Number }
 export const Message = defineMessageUnion({
 	ClickedItem: { key: Schema.String },
 	ToggledSelectionCheckbox: { key: Schema.String },
-	PressedGridKey: { key: Schema.String, ...Navigation },
+	PressedGridKey: { key: Schema.String, ...Navigation, isReadOnly: Schema.Boolean },
 	FocusedGrid: { keys: Schema.Array(Schema.String) },
 	CompletedFocusItem: {},
 	CompletedAnnounceSelection: {},
@@ -144,10 +144,10 @@ const updateChoiceBox = (model: Model, message: Message): Update.Return<Model, M
 	Message.match<Update.Return<Model, Message>>(message, {
 		ClickedItem: ({ key }) => ({ model: modifyFields(toggle(model, key), { focusedKey: () => key }) }),
 		ToggledSelectionCheckbox: ({ key }) => ({ model: toggle(model, key) }),
-		PressedGridKey: ({ key, keys, columns }) => {
+		PressedGridKey: ({ key, keys, columns, isReadOnly }) => {
 			const focused = model.focusedKey
 			if (key === " " || key === "Enter")
-				return { model: focused === null ? model : toggle(model, focused) }
+				return { model: focused === null || isReadOnly ? model : toggle(model, focused) }
 			const current = focused === null ? -1 : keys.indexOf(focused)
 			return Option.match(keyFor(key, current, keys, columns), {
 				onNone: () => ({ model }),
@@ -251,7 +251,14 @@ export const choiceBox = <ParentMessage>(
 								ariaLabel: "Select",
 								labelledBy: `${id}-selection ${id}`,
 								className: twMerge(twMerge(checkboxStyles), choiceBoxCheckboxStyles),
-								onChange: () => send(Message.ToggledSelectionCheckbox({ key: item.key })),
+								// useGridListSelectionCheckbox: a row that cannot be selected disables its checkbox.
+								isDisabled,
+								...(isDisabled
+									? {}
+									: {
+											onChange: () =>
+												send(Message.ToggledSelectionCheckbox({ key: item.key })),
+										}),
 								stopsClickPropagation: true,
 								interaction,
 							},
@@ -331,7 +338,9 @@ export const choiceBox = <ParentMessage>(
 				h.OnFocus(send(Message.FocusedGrid({ keys: enabledKeys }))),
 				h.OnKeyDownPreventDefault((key) =>
 					navigationKeys.test(key)
-						? Option.some(send(Message.PressedGridKey({ key, keys: enabledKeys, columns })))
+						? Option.some(
+								send(Message.PressedGridKey({ key, keys: enabledKeys, columns, isReadOnly })),
+							)
 						: Option.none(),
 				),
 			],

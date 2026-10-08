@@ -26,7 +26,14 @@ const planItems: ReadonlyArray<ChoiceBoxItem> = [
 const viewWith =
 	(options: Partial<ChoiceBoxOptions<Message>> = {}) =>
 	(model: Model, h: HtmlBuilder<Message>) =>
-		h.div([], choiceBox(h, { model, toParentMessage: Function.identity, ariaLabel: "Plan", ...options }, planItems))
+		h.div(
+			[],
+			choiceBox(
+				h,
+				{ model, toParentMessage: Function.identity, ariaLabel: "Plan", ...options },
+				planItems,
+			),
+		)
 
 const config = { update, view: viewWith() }
 const grid = Scene.role("grid", { name: "Plan" })
@@ -102,8 +109,8 @@ describe("choice-box scene", () => {
 		)
 	})
 
-	// Bug: isReadOnly only drops the row click; the grid keydown still toggles with Space/Enter.
-	test.fails("a read-only choice box ignores Space on the focused row", () => {
+	// T3: read-only drops the keyboard toggle as well as the row click.
+	test("a read-only choice box ignores Space on the focused row", () => {
 		Scene.scene(
 			{ update, view: viewWith({ isReadOnly: true }) },
 			Scene.given({ ...plan, focusedKey: "free" }),
@@ -125,12 +132,14 @@ describe("choice-box scene", () => {
 		)
 	})
 
-	// Bug: choice-box.ts passes no isDisabled to the row checkbox, so a disabled row can still be selected.
-	test.fails("a disabled row's selection checkbox cannot select it", () => {
+	// T2: a disabled row's selection checkbox is disabled too.
+	test("a disabled row's selection checkbox cannot select it", () => {
 		Scene.scene(
 			config,
 			Scene.given(init({ id: "plan", selectionMode: "multiple" })),
-			Scene.click(Scene.selector("#plan-enterprise label")),
+			Scene.expect(Scene.selector("#plan-enterprise label")).not.toHaveHandler("click"),
+			Scene.expect(Scene.selector("#plan-enterprise-selection")).not.toHaveHandler("change"),
+			Scene.expect(Scene.selector("#plan-enterprise-selection")).toBeDisabled(),
 			Scene.expect(Scene.selector("#plan-enterprise-selection")).not.toBeChecked(),
 		)
 	})

@@ -10,7 +10,8 @@ import { AnnounceSelection, FocusItem, init, Message, update } from "./choice-bo
 const keys = ["free", "pro", "team", "custom"]
 const plan = init({ id: "plan", selectedKeys: ["pro"] })
 const focusedOn = (key: string) => ({ ...plan, focusedKey: key })
-const pressKey = (key: string, columns = 1) => message(Message.PressedGridKey({ key, keys, columns }))
+const pressKey = (key: string, columns = 1) =>
+	message(Message.PressedGridKey({ key, keys, columns, isReadOnly: false }))
 const focusOf = (key: string) => FocusItem({ elementId: `plan-${key}` })
 
 describe("choice-box story", () => {
