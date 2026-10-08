@@ -148,6 +148,12 @@ export const moveKey = (
 /** CSS id selector for a generated element id (ids here are built from safe keys). */
 export const idSelector = (id: string) => `#${CSS.escape(id)}`
 
+/**
+ * Attribute selector for an id that may hold CSS-significant characters (a `#hex` value). Pure, so
+ * views can build it without `CSS.escape`.
+ */
+export const idAttributeSelector = (id: string) => `[id="${id.replace(/["\\]/g, "\\$&")}"]`
+
 /** Selects the item at `index` inside a labelled composite, for widgets whose items carry no id. */
 export const labelledChildSelector = (label: string, index: number) =>
 	`[aria-label="${CSS.escape(label)}"] > :nth-child(${index + 1})`

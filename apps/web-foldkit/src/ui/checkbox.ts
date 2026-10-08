@@ -9,6 +9,7 @@ import {
 	checkboxStyles,
 } from "~/components/ui/checkbox.styles"
 import { IconCheck, IconMinus } from "../icons"
+import * as Collection from "./aria/collection"
 import * as Interaction from "./aria/interaction"
 import * as Field from "./field"
 
@@ -97,7 +98,7 @@ export const checkbox = <Message>(
 				: [
 						h.OnClick(toggle, {
 							defaultAction: "Prevent",
-							focusSelector: `#${options.id}`,
+							focusSelector: Collection.idAttributeSelector(options.id),
 							...(options.stopsClickPropagation ? { propagation: "Stop" as const } : {}),
 						}),
 					]),

@@ -1,6 +1,7 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twJoin, twMerge } from "tailwind-merge"
 import { switchIndicatorStyles, switchStyles, switchThumbStyles } from "~/components/ui/switch.styles"
+import * as Collection from "./aria/collection"
 import * as Interaction from "./aria/interaction"
 import { visuallyHiddenStyle } from "./checkbox"
 import * as Field from "./field"
@@ -59,7 +60,12 @@ export const switchControl = <Message>(
 				: []),
 			...(toggle === undefined || isDisabled
 				? []
-				: [h.OnClick(toggle, { defaultAction: "Prevent", focusSelector: `#${options.id}` })]),
+				: [
+						h.OnClick(toggle, {
+							defaultAction: "Prevent",
+							focusSelector: Collection.idAttributeSelector(options.id),
+						}),
+					]),
 		],
 		[
 			h.span(

@@ -1,4 +1,5 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
+import * as Collection from "./aria/collection"
 import * as Interaction from "./aria/interaction"
 import { visuallyHiddenStyle } from "./checkbox"
 
@@ -78,7 +79,12 @@ export const ariaRadioGroup = <Message>(
 					: []),
 				...(select === undefined || isDisabled
 					? []
-					: [h.OnClick(select, { defaultAction: "Prevent", focusSelector: `#${id}` })]),
+					: [
+							h.OnClick(select, {
+								defaultAction: "Prevent",
+								focusSelector: Collection.idAttributeSelector(id),
+							}),
+						]),
 			],
 			[
 				h.span(

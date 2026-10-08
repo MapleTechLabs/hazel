@@ -40,7 +40,7 @@ describe("appearance scene", () => {
 	})
 
 	// Bug: ui/aria-radio uses `#${groupId}-${value}` as focusSelector; a hex value makes it invalid CSS, so querySelector throws before dispatch.
-	test.fails("a brand color swatch changes only the primary color", () => {
+	test("a brand color swatch changes only the primary color", () => {
 		const green = Schema.decodeSync(Customization)({ ...customization, primary: "#099250" })
 		Scene.scene(
 			pageScene(update, view, shared),

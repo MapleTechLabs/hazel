@@ -6,6 +6,7 @@ import {
 	radioLayoutStyles,
 	radioStyles,
 } from "~/components/ui/radio.styles"
+import * as Collection from "./aria/collection"
 import * as Interaction from "./aria/interaction"
 import { visuallyHiddenStyle } from "./checkbox"
 import * as Field from "./field"
@@ -89,7 +90,12 @@ export const radioGroup = <Message>(
 						: []),
 					...(select === undefined || isDisabled
 						? []
-						: [h.OnClick(select, { defaultAction: "Prevent", focusSelector: `#${id}` })]),
+						: [
+								h.OnClick(select, {
+									defaultAction: "Prevent",
+									focusSelector: Collection.idAttributeSelector(id),
+								}),
+							]),
 				],
 				[
 					h.span(
