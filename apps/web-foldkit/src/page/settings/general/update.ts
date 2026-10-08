@@ -28,7 +28,7 @@ const organizationNotFound = {
 
 // COMMAND
 
-const UpdateOrganizationName = Command.define("UpdateOrganizationName", {
+export const UpdateOrganizationName = Command.define("UpdateOrganizationName", {
 	args: { organizationId: OrganizationId, name: Schema.String },
 	messages: [Message.SucceededUpdateName, Message.FailedUpdateName],
 	execute: ({ organizationId, name }) =>
@@ -48,7 +48,7 @@ const UpdateOrganizationName = Command.define("UpdateOrganizationName", {
 		),
 })
 
-const SetPublicMode = Command.define("SetPublicMode", {
+export const SetPublicMode = Command.define("SetPublicMode", {
 	args: { organizationId: OrganizationId, isPublic: Schema.Boolean },
 	messages: [Message.SucceededSetPublicMode, Message.FailedSetPublicMode],
 	execute: ({ organizationId, isPublic }) =>
@@ -59,7 +59,7 @@ const SetPublicMode = Command.define("SetPublicMode", {
 		),
 })
 
-const CopyText = Command.define("CopyText", {
+export const CopyText = Command.define("CopyText", {
 	args: { text: Schema.String, successTitle: Schema.String, failureTitle: Schema.String },
 	messages: [Message.CompletedCopy],
 	execute: ({ text, successTitle, failureTitle }) =>
@@ -80,7 +80,7 @@ const OpenLogoPicker = Command.define("OpenLogoPicker", {
 })
 
 /** Legacy toasts, then navigates home; the page reports one OutMessage per step. */
-const LeaveDeletedWorkspace = Command.define("LeaveDeletedWorkspace", {
+export const LeaveDeletedWorkspace = Command.define("LeaveDeletedWorkspace", {
 	args: {},
 	messages: [Message.CompletedLeaveDeletedWorkspace],
 	execute: () => Effect.succeed(Message.CompletedLeaveDeletedWorkspace()),
@@ -121,7 +121,7 @@ const UploadLogo = Command.define("UploadLogo", {
 		),
 })
 
-const DeleteOrganization = Command.define("DeleteOrganization", {
+export const DeleteOrganization = Command.define("DeleteOrganization", {
 	args: { organizationId: OrganizationId },
 	messages: [Message.SucceededDeleteWorkspace, Message.FailedDeleteWorkspace],
 	execute: ({ organizationId }) =>
