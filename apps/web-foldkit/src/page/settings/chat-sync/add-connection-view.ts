@@ -8,6 +8,7 @@ import { discordLogo } from "./brand-icons"
 import type { DiscordGuild } from "./discord"
 import { filterByName, scrollList, searchInput, selectedName, selectedRow, spinnerLine } from "./modal-parts"
 import { Message, type Model } from "./model"
+import { CONNECT_TARGET, GUILD_SEARCH_TARGET, interaction } from "./update"
 
 /** Port of `components/chat-sync/add-connection-modal.tsx`. */
 
@@ -27,7 +28,12 @@ const guildRow = (h: HtmlBuilder<Message>, guild: DiscordGuild): Html =>
 		[
 			h.span([h.Class("truncate text-fg")], [guild.name]),
 			...(guild.owner
-				? [h.span([h.Class("rounded bg-secondary px-1.5 py-0.5 text-[10px] text-muted-fg")], ["Owner"])]
+				? [
+						h.span(
+							[h.Class("rounded bg-secondary px-1.5 py-0.5 text-[10px] text-muted-fg")],
+							["Owner"],
+						),
+					]
 				: []),
 		],
 	)
@@ -47,6 +53,7 @@ const guildPicker = (h: HtmlBuilder<Message>, model: Model, guilds: ReadonlyArra
 							onInput: toGuildSearchMessage,
 							onFocus: Message.FocusedGuildSearch(),
 							onBlur: Message.BlurredGuildSearch(),
+							hover: { wiring: interaction.wiring(model), target: GUILD_SEARCH_TARGET },
 						}),
 						scrollList(
 							h,
@@ -126,6 +133,7 @@ const content = (
 				isDisabled:
 					model.selectedGuild === null || model.isCreating || model.discordGuilds._tag !== "Loaded",
 				isPending: model.isCreating,
+				interaction: { wiring: interaction.wiring(model), target: CONNECT_TARGET },
 			},
 			[model.isCreating ? "Connecting..." : "Connect"],
 		),

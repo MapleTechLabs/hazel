@@ -1,16 +1,13 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { input, inputGroup } from "../../../ui/input"
+import * as Interaction from "../../../ui/aria/interaction"
+import { input, inputGroup, type InteractionTarget } from "../../../ui/input"
 
 /** Markup the chat sync modals repeat: the picked row, the searchable list and the spinner. */
 
 type Children = ReadonlyArray<Html | string>
 
 /** The chosen item with its "Change" button. */
-export const selectedRow = <Message>(
-	h: HtmlBuilder<Message>,
-	content: Children,
-	onChange: Message,
-): Html =>
+export const selectedRow = <Message>(h: HtmlBuilder<Message>, content: Children, onChange: Message): Html =>
 	h.div(
 		[
 			h.Class(
@@ -44,6 +41,8 @@ export const searchInput = <Message>(
 		onInput: (value: string) => Message
 		onFocus?: Message
 		onBlur?: Message
+		/** The Input's useHover (focus stays on `isFocused`). */
+		hover?: InteractionTarget<Message>
 	}>,
 ): Html =>
 	inputGroup(h, { attributes: options.isFocused ? [h.Attribute("data-focus-within", "true")] : [] }, [
@@ -56,6 +55,18 @@ export const searchInput = <Message>(
 				h.OnInput(options.onInput),
 				...(options.onFocus === undefined ? [] : [h.OnFocus(options.onFocus)]),
 				...(options.onBlur === undefined ? [] : [h.OnBlur(options.onBlur)]),
+				...(options.hover === undefined
+					? []
+					: [
+							...Interaction.handlers(h, options.hover.wiring, options.hover.target, {
+								isPressDisabled: true,
+								isFocusDisabled: true,
+							}),
+							...(Interaction.stateOf(options.hover.wiring.model, options.hover.target)
+								.isHovered
+								? [h.DataAttribute("hovered", "true")]
+								: []),
+						]),
 			],
 		}),
 	])

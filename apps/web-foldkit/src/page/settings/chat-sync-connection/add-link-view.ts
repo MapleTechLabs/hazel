@@ -14,6 +14,7 @@ import {
 	spinnerLine,
 } from "../chat-sync/modal-parts"
 import { CHANNEL_SEARCH_ID, type HazelChannel, Message, type Model, type SyncDirection } from "./model"
+import { CREATE_LINK_TARGET, interaction } from "./update"
 
 /** Port of `components/chat-sync/add-channel-link-modal.tsx`. */
 
@@ -87,8 +88,14 @@ const hazelSection = (h: HtmlBuilder<Message>, model: Model): Html =>
 								h,
 								"max-h-48",
 								"No channels found",
-								filterByName(model.hazelChannels, model.channelSearch).map((channel: HazelChannel) =>
-									channelRow(h, channel.id, channel.name, Message.ClickedHazelChannel({ channel })),
+								filterByName(model.hazelChannels, model.channelSearch).map(
+									(channel: HazelChannel) =>
+										channelRow(
+											h,
+											channel.id,
+											channel.name,
+											Message.ClickedHazelChannel({ channel }),
+										),
 								),
 							),
 						],
@@ -119,7 +126,12 @@ const discordPicker = (
 						"max-h-48",
 						"No Discord channels found",
 						filterByName(channels, model.discordChannelSearch).map((channel) =>
-							channelRow(h, channel.id, channel.name, Message.ClickedDiscordChannel({ channel })),
+							channelRow(
+								h,
+								channel.id,
+								channel.name,
+								Message.ClickedDiscordChannel({ channel }),
+							),
 						),
 					),
 				],
@@ -143,7 +155,10 @@ const discordSection = (h: HtmlBuilder<Message>, model: Model): Html => {
 						h.div(
 							[h.Class("rounded-lg border border-border bg-bg-muted/20 p-4")],
 							[
-								h.p([h.Class("font-medium text-fg text-sm")], ["Could not load Discord channels"]),
+								h.p(
+									[h.Class("font-medium text-fg text-sm")],
+									["Could not load Discord channels"],
+								),
 								h.p(
 									[h.Class("mt-1 text-muted-fg text-sm")],
 									["Make sure the bot is installed in this server and has channel access."],
@@ -215,7 +230,9 @@ const directionSection = (h: HtmlBuilder<Message>, model: Model): Html =>
 			label(h, {}, ["Sync Direction"]),
 			h.div(
 				[h.Class("grid grid-cols-1 gap-2 sm:grid-cols-3")],
-				DIRECTION_OPTIONS.map((option) => directionButton(h, option, model.direction === option.value)),
+				DIRECTION_OPTIONS.map((option) =>
+					directionButton(h, option, model.direction === option.value),
+				),
 			),
 		],
 	)
@@ -242,6 +259,7 @@ const content = (
 					onPress: Message.ClickedCreateLink(),
 					isDisabled: !isValid || model.isCreatingLink || model.discordChannels._tag !== "Loaded",
 					isPending: model.isCreatingLink,
+					interaction: { wiring: interaction.wiring(model), target: CREATE_LINK_TARGET },
 				},
 				[model.isCreatingLink ? "Linking..." : "Link Channel"],
 			),
@@ -256,4 +274,6 @@ export const addLinkModal = (h: HtmlBuilder<Message>, model: Model): Html =>
 		toParentMessage: toAddLinkModalMessage,
 		toContent: (closeAttributes) => content(h, model, closeAttributes),
 		size: "lg",
+		autoFocusId: CHANNEL_SEARCH_ID,
+		restoresFocusToPrevious: true,
 	})

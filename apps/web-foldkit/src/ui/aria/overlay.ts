@@ -257,8 +257,29 @@ export const containFocus = (root: HTMLElement | Element): (() => void) => {
 			: (tabbables[index === -1 || index === tabbables.length - 1 ? 0 : index + 1] ?? tabbables[0])
 		next?.focus()
 	}
+	// useFocusContainment's onBlur: a frame later, focus that fell to the body (a pressed button that
+	// disabled itself) goes back to the element that lost it, which only takes it once enabled again.
+	let frame = 0
+	const onFocusOut = (event: Event) => {
+		const target = event.target
+		cancelAnimationFrame(frame)
+		frame = requestAnimationFrame(() => {
+			const active = document.activeElement
+			if (
+				(active === null || active === document.body) &&
+				target instanceof HTMLElement &&
+				target.isConnected
+			)
+				target.focus()
+		})
+	}
 	root.addEventListener("keydown", onKeyDown)
-	return () => root.removeEventListener("keydown", onKeyDown)
+	root.addEventListener("focusout", onFocusOut)
+	return () => {
+		cancelAnimationFrame(frame)
+		root.removeEventListener("keydown", onKeyDown)
+		root.removeEventListener("focusout", onFocusOut)
+	}
 }
 
 // MODAL OVERLAY (useViewportSize, DialogHeader/DialogFooter resize observers)

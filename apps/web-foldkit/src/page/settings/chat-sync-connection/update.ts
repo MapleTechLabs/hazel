@@ -3,11 +3,13 @@ import { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import type { ToastRequest } from "../../../overlay/toasts"
 import type { RouteOf } from "../../../route"
+import * as Interaction from "../../../ui/aria/interaction"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
 import { successToast } from "../../../ui/toast-exit"
 import type { PageReturn, Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
+import { embedInteraction } from "../integrations/shared/interaction"
 import {
 	CreateChannelLink,
 	DisconnectConnection,
@@ -30,6 +32,13 @@ import {
 } from "./model"
 
 type Return = PageReturn<Model, Message>
+
+export const interaction = embedInteraction<Model, Message>((message) =>
+	Message.GotInteractionMessage({ message }),
+)
+
+/** The link modal's Link Channel button. */
+export const CREATE_LINK_TARGET = "create-link"
 
 const requestConnections = (model: Model, shared: Shared): Return => {
 	const organizationId = shared.organization?.id ?? null
@@ -64,6 +73,7 @@ export const init = (route: RouteOf<"SettingsChatSyncConnection">, shared: Share
 			isDeletingLink: false,
 			disconnectModal: Modal.init("chat-sync-disconnect"),
 			isDisconnecting: false,
+			interaction: Interaction.init(),
 		},
 		shared,
 	)
@@ -176,19 +186,14 @@ const closedAddLinkModal = (model: Model): Model =>
 		focusedSearch: () => null,
 	})
 
-/** `onOpenChange={(open) => !open && handleClose()}`; the channel search takes focus once the dialog has it. */
+/** `onOpenChange={(open) => !open && handleClose()}`; the portal Mount focuses the channel search (`autoFocus`). */
 const foldAddLinkModal = (model: Model, message: Modal.Message): Return => {
 	const next = Modal.update(model.addLinkModal, message)
 	const commands = Command.mapMessages(next.commands ?? [], (child) =>
 		Message.GotAddLinkModalMessage({ message: child }),
 	)
 	if (!next.model.isOpen) return { model: closedAddLinkModal(model), commands }
-	const focus =
-		message._tag === "CompletedPortalModal" && model.selectedChannel === null ? [FocusChannelSearch()] : []
-	return {
-		model: modifyFields(model, { addLinkModal: () => next.model }),
-		commands: [...commands, ...focus],
-	}
+	return { model: modifyFields(model, { addLinkModal: () => next.model }), commands }
 }
 
 const submitLink = (model: Model): Return => {
@@ -196,7 +201,11 @@ const submitLink = (model: Model): Return => {
 	const discordChannel = model.selectedDiscordChannel
 	if (channel === null || discordChannel === null || model.isCreatingLink) return { model }
 	return {
-		model: modifyFields(model, { isCreatingLink: () => true }),
+		// Link Channel disables while it runs, which ends its hover (useHover).
+		model: modifyFields(model, {
+			isCreatingLink: () => true,
+			interaction: (state) => Interaction.disabledTargets(state, [CREATE_LINK_TARGET]),
+		}),
 		commands: [
 			CreateChannelLink({
 				syncConnectionId: model.connectionId,
@@ -325,6 +334,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				focusedSearch: () => null,
 			}),
 		}),
+		GotInteractionMessage: ({ message }) => interaction.fold(model, message),
 		ClickedChangeDiscordChannel: () => ({
 			model: modifyFields(model, { selectedDiscordChannel: () => null }),
 		}),

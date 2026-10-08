@@ -62,6 +62,7 @@ const sheetOverlay = (model: Model, viewInputs: ViewInputs, h: HtmlBuilder<Messa
 					id: model.id,
 					isDismissable,
 					restoresToPrevious: viewInputs.restoresFocusToPrevious ?? false,
+					autoFocusId: null,
 				}),
 			),
 			h.OnKeyDownPreventDefault((key) =>
