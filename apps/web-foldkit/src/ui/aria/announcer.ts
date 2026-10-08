@@ -10,6 +10,7 @@ const FIRST_ANNOUNCEMENT_DELAY = 100
 interface Announcer {
 	readonly node: HTMLElement
 	readonly assertiveLog: HTMLElement
+	readonly politeLog: HTMLElement
 }
 
 let announcer: Announcer | undefined
@@ -38,32 +39,40 @@ const createAnnouncer = (): Announcer => {
 		whiteSpace: "nowrap",
 	})
 	const assertiveLog = createLog("assertive")
-	node.append(assertiveLog, createLog("polite"))
+	const politeLog = createLog("polite")
+	node.append(assertiveLog, politeLog)
 	document.body.prepend(node)
-	return { node, assertiveLog }
+	return { node, assertiveLog, politeLog }
 }
 
 /** A string, or `{ labelledBy }`, which React Aria announces as an `img` named by those ids. */
 export type Announcement = string | { readonly labelledBy: string }
 
-const append = (target: Announcer, message: Announcement, timeout: number) => {
+export type Assertiveness = "assertive" | "polite"
+
+const append = (target: Announcer, message: Announcement, timeout: number, assertiveness: Assertiveness) => {
 	const entry = document.createElement("div")
 	if (typeof message === "string") entry.textContent = message
 	else {
 		entry.setAttribute("role", "img")
 		entry.setAttribute("aria-labelledby", message.labelledBy)
 	}
-	target.assertiveLog.appendChild(entry)
+	const log = assertiveness === "assertive" ? target.assertiveLog : target.politeLog
+	log.appendChild(entry)
 	if (message !== "") setTimeout(() => entry.remove(), timeout)
 }
 
-/** Assertive announcement; `timeout` is how long the message stays in the log. */
-export const announce = (message: Announcement, timeout: number = LIVE_REGION_TIMEOUT): void => {
-	if (announcer !== undefined) return append(announcer, message, timeout)
+/** `announce(message, timeout, assertiveness)`; `timeout` is how long the message stays in the log. */
+export const announce = (
+	message: Announcement,
+	timeout: number = LIVE_REGION_TIMEOUT,
+	assertiveness: Assertiveness = "assertive",
+): void => {
+	if (announcer !== undefined) return append(announcer, message, timeout, assertiveness)
 	const created = createAnnouncer()
 	announcer = created
 	setTimeout(() => {
-		if (created.node.isConnected) append(created, message, timeout)
+		if (created.node.isConnected) append(created, message, timeout, assertiveness)
 	}, FIRST_ANNOUNCEMENT_DELAY)
 }
 

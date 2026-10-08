@@ -17,6 +17,7 @@ import * as Interaction from "./aria/interaction"
 import { button } from "./button"
 import {
 	cellTarget,
+	FocusCellOnPress,
 	gridId,
 	highlightedRange,
 	isCellDisabled,
@@ -24,6 +25,7 @@ import {
 	isPreviousDisabled,
 	Message,
 	type Model,
+	selectedDateDescription,
 } from "./calendar"
 import * as D from "./calendar-date"
 import { view as selectView } from "./select-view"
@@ -125,15 +127,14 @@ const header = (h: HtmlBuilder<Message>, model: Model, monthYear: string): Html 
 	)
 }
 
+/** useCalendarCell's label: range description, today, selected, then the minimum date. */
 const cellLabel = (model: Model, date: D.CalendarDate, isSelected: boolean, isEdge: boolean) => {
-	const base = `${date === model.today ? "Today, " : ""}${D.formatFull(date)}`
-	const range = model.mode === "Range" && Option.isNone(model.anchor) ? model.range : Option.none()
-	const withRange = Option.match(range, {
-		onNone: () => base,
-		onSome: ({ start, end }) =>
-			isSelected && isEdge ? `Selected Range: ${D.formatRange(start, end)}, ${base}` : base,
-	})
-	return isSelected ? `${withRange} selected` : withRange
+	const isRangeEdge = model.mode === "Range" && isSelected && isEdge && Option.isNone(model.anchor)
+	const description = isRangeEdge ? selectedDateDescription(model) : ""
+	const dated = `${description === "" ? "" : `${description}, `}${D.formatFull(date)}`
+	const withToday = date === model.today ? `Today, ${dated}` : dated
+	const label = isSelected ? `${withToday} selected` : withToday
+	return Option.contains(model.minValue, date) ? `${label}, First available date` : label
 }
 
 const cell = (h: HtmlBuilder<Message>, model: Model, date: D.CalendarDate): Html => {
@@ -222,6 +223,7 @@ const grid = (h: HtmlBuilder<Message>, model: Model, label: string): Html =>
 			h.OnKeyDownPreventDefault((key) =>
 				key === "Tab" ? Option.none() : Option.some(Message.PressedGridKey({ key })),
 			),
+			...(model.mode === "Range" ? [h.OnMount(FocusCellOnPress())] : []),
 		],
 		[
 			h.thead(

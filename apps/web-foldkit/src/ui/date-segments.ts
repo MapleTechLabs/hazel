@@ -45,6 +45,9 @@ export const Model = Schema.Struct({
 	/** Digits typed so far, and the segment they belong to (React Aria resets them on focus). */
 	enteredKeys: Schema.String,
 	enteredSegment: Schema.NullOr(Schema.String),
+	/** The segment keystrokes apply to, and how many commanded focus moves have not run yet. */
+	activeSegment: Schema.NullOr(Schema.String),
+	pendingFocusMoves: Schema.Number,
 })
 export type Model = typeof Model.Type
 
@@ -81,6 +84,8 @@ export const init = (options: {
 		placeholder: { year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate(), hour: 0 },
 		enteredKeys: "",
 		enteredSegment: null,
+		activeSegment: null,
+		pendingFocusMoves: 0,
 	}
 	return modifyFields(model, { committed: () => completeValue(model) })
 }
@@ -218,10 +223,10 @@ export type Message = typeof Message.Type
 export const segmentId = (model: Model, type: SegmentType) => `${model.id}-${type}`
 
 /**
- * React Aria moves focus inside the key handler. Foldkit renders on animation frames, so waiting for
- * the commit (Dom.focus) lets fast typing land in the old segment; segments always exist, so focus now.
+ * React Aria moves focus inside the key handler; here the move runs after update, so a fast keystroke
+ * can still reach the old segment. `update` routes it to `activeSegment` until the move completes.
  */
-const FocusSegment = Command.define("FocusSegment", {
+export const FocusSegment = Command.define("FocusSegment", {
 	args: { elementId: Schema.String },
 	messages: [Message.CompletedFocusSegment],
 	execute: ({ elementId }) =>
@@ -232,7 +237,7 @@ const FocusSegment = Command.define("FocusSegment", {
 })
 
 /** useSpinButton: a focused segment clears the assertive log and announces its new value text. */
-const AnnounceValue = Command.define("AnnounceSegmentValue", {
+export const AnnounceValue = Command.define("AnnounceSegmentValue", {
 	args: { valueText: Schema.String },
 	messages: [Message.CompletedAnnounceValue],
 	execute: ({ valueText }) =>
@@ -379,20 +384,41 @@ export const isSegmentKey = (key: string) => key in keyActions || key.length ===
 const valueTextOf = (model: Model, type: SegmentType) =>
 	segmentsOf(model).find((segment) => segment.type === type)?.valueText
 
+const focusMovesOf = (result: Update.Return<Model, Message>) =>
+	(result.commands ?? []).filter((command) => command.name === FocusSegment.name)
+
 /** The segment holding focus after an update: a FocusSegment target, else the pressed one. */
 const focusedAfter = (model: Model, pressed: SegmentType, result: Update.Return<Model, Message>) => {
-	const target = result.commands?.find((command) => command.name === FocusSegment.name)?.args?.elementId
+	const target = focusMovesOf(result).at(-1)?.args?.elementId
 	return segmentOrder(model.kind).find((type) => segmentId(model, type) === target) ?? pressed
 }
 
+/**
+ * A keystroke names the segment that had DOM focus. While a commanded focus move is pending that is
+ * the segment focus is leaving, so the keystroke goes to `activeSegment` instead.
+ */
+const keySegment = (model: Model, pressed: string): SegmentType | undefined => {
+	const name = model.pendingFocusMoves > 0 && model.activeSegment !== null ? model.activeSegment : pressed
+	return segmentOrder(model.kind).find((type) => type === name)
+}
+
 export const update = (model: Model, message: Message): Update.Return<Model, Message> => {
-	const result = updateSegments(model, message)
-	if (message._tag !== "PressedSegmentKey") return result
-	const focused = focusedAfter(model, message.segment as SegmentType, result)
-	const valueText = valueTextOf(result.model, focused)
+	if (message._tag === "CompletedFocusSegment")
+		return { model: modifyFields(model, { pendingFocusMoves: (count) => Math.max(0, count - 1) }) }
+	if (message._tag !== "PressedSegmentKey") return updateSegments(model, message)
+	const pressed = keySegment(model, message.segment)
+	if (pressed === undefined) return { model }
+	const result = updateSegments(model, Message.PressedSegmentKey({ segment: pressed, key: message.key }))
+	const focused = focusedAfter(model, pressed, result)
+	const moves = focusMovesOf(result).length
+	const next = modifyFields(result.model, {
+		activeSegment: () => focused,
+		pendingFocusMoves: (count) => count + moves,
+	})
+	const valueText = valueTextOf(next, focused)
 	return valueText === undefined || valueText === valueTextOf(model, focused)
-		? result
-		: { ...result, commands: [...(result.commands ?? []), AnnounceValue({ valueText })] }
+		? { ...result, model: next }
+		: { ...result, model: next, commands: [...(result.commands ?? []), AnnounceValue({ valueText })] }
 }
 
 const updateSegments = (model: Model, message: Message): Update.Return<Model, Message> =>
