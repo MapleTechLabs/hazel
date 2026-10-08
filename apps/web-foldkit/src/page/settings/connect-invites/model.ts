@@ -16,6 +16,8 @@ export type HostOrganization = typeof HostOrganization.Type
 export const Model = Schema.Struct({
 	/** The organization the list was last requested for (the legacy query atom's key). */
 	requestedFor: Schema.NullOr(OrganizationId),
+	/** Bumped per list request; an older response is dropped. */
+	listVersion: Schema.Number,
 	invites: Schema.Array(Invite),
 	hostOrganizations: Schema.Array(HostOrganization),
 	acceptingIds: Schema.Array(ConnectInviteId),

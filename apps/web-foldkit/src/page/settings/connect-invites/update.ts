@@ -1,5 +1,5 @@
 import { ConnectInviteId, OrganizationId } from "@hazel/schema"
-import { Effect } from "effect"
+import { Effect, Schema } from "effect"
 import { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import { toDate } from "~/lib/utils"
@@ -36,9 +36,9 @@ const inviteNotFound = (description: string) => ({
 // COMMAND
 
 export const ListIncomingInvites = Command.define("ListIncomingInvites", {
-	args: { organizationId: OrganizationId },
+	args: { organizationId: OrganizationId, version: Schema.Number },
 	messages: [Message.SucceededListInvites, Message.FailedListInvites],
-	execute: ({ organizationId }) =>
+	execute: ({ organizationId, version }) =>
 		settle(
 			Effect.gen(function* () {
 				const client = yield* HazelRpc
@@ -46,6 +46,8 @@ export const ListIncomingInvites = Command.define("ListIncomingInvites", {
 			}),
 			(response) =>
 				Message.SucceededListInvites({
+					organizationId,
+					version,
 					invites: response.data.map((invite) => ({
 						id: invite.id,
 						hostOrganizationId: invite.hostOrganizationId,
@@ -53,7 +55,7 @@ export const ListIncomingInvites = Command.define("ListIncomingInvites", {
 						createdAtMs: toDate(invite.createdAt).getTime(),
 					})),
 				}),
-			() => Message.FailedListInvites(),
+			() => Message.FailedListInvites({ organizationId, version }),
 		),
 })
 
@@ -123,9 +125,14 @@ export const DeclineInvite = Command.define("DeclineInvite", {
 const requestFor = (model: Model, shared: Shared): Return => {
 	const organizationId = shared.organization?.id ?? null
 	if (organizationId === null || organizationId === model.requestedFor) return { model }
+	const version = model.listVersion + 1
 	return {
-		model: modifyFields(model, { requestedFor: () => organizationId, invites: () => [] }),
-		commands: [ListIncomingInvites({ organizationId })],
+		model: modifyFields(model, {
+			requestedFor: () => organizationId,
+			listVersion: () => version,
+			invites: () => [],
+		}),
+		commands: [ListIncomingInvites({ organizationId, version })],
 	}
 }
 
@@ -133,6 +140,7 @@ export const init = (_route: unknown, shared: Shared): Return =>
 	requestFor(
 		{
 			requestedFor: null,
+			listVersion: 0,
 			invites: [],
 			hostOrganizations: [],
 			acceptingIds: [],
@@ -150,18 +158,38 @@ const without = (ids: ReadonlyArray<ConnectInviteId>, id: ConnectInviteId) =>
 	ids.filter((other) => other !== id)
 
 /** Legacy invalidates the `connectInvites:incoming:<org>` reactivity key after a successful mutation. */
-const refetch = (model: Model): ReadonlyArray<Command.Command<Message, never, HazelRpc>> =>
-	model.requestedFor === null ? [] : [ListIncomingInvites({ organizationId: model.requestedFor })]
+const refetch = (model: Model, settled: Model): Return => {
+	if (model.requestedFor === null) return { model: settled }
+	const version = model.listVersion + 1
+	return {
+		model: modifyFields(settled, { listVersion: () => version }),
+		commands: [ListIncomingInvites({ organizationId: model.requestedFor, version })],
+	}
+}
+
+/** Only the response to the latest request for the current organization lands. */
+const isCurrentList = (model: Model, organizationId: OrganizationId, version: number) =>
+	organizationId === model.requestedFor && version === model.listVersion
+
+/** Either action on the row is already running. */
+const isBusy = (model: Model, inviteId: ConnectInviteId) =>
+	model.acceptingIds.includes(inviteId) || model.decliningIds.includes(inviteId)
 
 export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
-		SucceededListInvites: ({ invites }) => ({ model: modifyFields(model, { invites: () => invites }) }),
-		FailedListInvites: () => ({ model: modifyFields(model, { invites: () => [] }) }),
+		SucceededListInvites: ({ organizationId, version, invites }) =>
+			isCurrentList(model, organizationId, version)
+				? { model: modifyFields(model, { invites: () => invites }) }
+				: { model },
+		FailedListInvites: ({ organizationId, version }) =>
+			isCurrentList(model, organizationId, version)
+				? { model: modifyFields(model, { invites: () => [] }) }
+				: { model },
 		UpdatedHostOrganizations: ({ organizations }) => ({
 			model: modifyFields(model, { hostOrganizations: () => organizations }),
 		}),
 		ClickedAccept: ({ inviteId }) =>
-			shared.organization === null
+			shared.organization === null || isBusy(model, inviteId)
 				? { model }
 				: {
 						model: modifyFields(busy(model, inviteId), {
@@ -170,21 +198,24 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 						commands: [AcceptInvite({ inviteId, guestOrganizationId: shared.organization.id })],
 					},
 		SucceededAccept: ({ inviteId }) => ({
-			model: modifyFields(model, { acceptingIds: (ids) => without(ids, inviteId) }),
-			commands: refetch(model),
+			...refetch(model, modifyFields(model, { acceptingIds: (ids) => without(ids, inviteId) })),
 			outMessage: PageOutMessage.RequestedToast({ toast: successToast("Channel connected") }),
 		}),
 		FailedAccept: ({ inviteId, toast }) => ({
 			model: modifyFields(model, { acceptingIds: (ids) => without(ids, inviteId) }),
 			outMessage: PageOutMessage.RequestedToast({ toast }),
 		}),
-		ClickedDecline: ({ inviteId }) => ({
-			model: modifyFields(busy(model, inviteId), { decliningIds: (ids) => [...ids, inviteId] }),
-			commands: [DeclineInvite({ inviteId })],
-		}),
+		ClickedDecline: ({ inviteId }) =>
+			isBusy(model, inviteId)
+				? { model }
+				: {
+						model: modifyFields(busy(model, inviteId), {
+							decliningIds: (ids) => [...ids, inviteId],
+						}),
+						commands: [DeclineInvite({ inviteId })],
+					},
 		SucceededDecline: ({ inviteId }) => ({
-			model: modifyFields(model, { decliningIds: (ids) => without(ids, inviteId) }),
-			commands: refetch(model),
+			...refetch(model, modifyFields(model, { decliningIds: (ids) => without(ids, inviteId) })),
 			outMessage: PageOutMessage.RequestedToast({ toast: successToast("Invite declined") }),
 		}),
 		FailedDecline: ({ inviteId, toast }) => ({

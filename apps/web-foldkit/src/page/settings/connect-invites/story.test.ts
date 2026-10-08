@@ -85,17 +85,37 @@ describe("accept failure", () => {
 
 const run = (current: Parameters<typeof update>[0], next: Message) => update(current, next, shared(hazel))
 const pending = { id: inviteId, hostOrganizationId: hazel, status: "pending", createdAtMs: 0 }
-const listed = run(init(undefined, shared(hazel)).model, Message.SucceededListInvites({ invites: [pending] })).model
+const listed = run(
+	init(undefined, shared(hazel)).model,
+	Message.SucceededListInvites({ organizationId: hazel, version: 1, invites: [pending] }),
+).model
 
 describe("list", () => {
 	test("a failed list shows the empty list and toasts nothing", () => {
 		story(
 			run,
 			given(listed),
-			message(Message.FailedListInvites()),
+			message(Message.FailedListInvites({ organizationId: hazel, version: 1 })),
 			expectNoOutMessage(),
 			model((current) => expect(current.invites).toEqual([])),
 		)
+	})
+
+	test("an older list or one for another organization is dropped", () => {
+		const other = Schema.decodeSync(OrganizationId)(uuid(9))
+		const refetching = { ...listed, listVersion: 2 }
+		const stale = run(
+			refetching,
+			Message.SucceededListInvites({ organizationId: hazel, version: 1, invites: [] }),
+		)
+		expect(stale.model.invites).toEqual([pending])
+		const foreign = run(
+			refetching,
+			Message.SucceededListInvites({ organizationId: other, version: 2, invites: [] }),
+		)
+		expect(foreign.model.invites).toEqual([pending])
+		const staleFailure = run(refetching, Message.FailedListInvites({ organizationId: hazel, version: 1 }))
+		expect(staleFailure.model.invites).toEqual([pending])
 	})
 
 	test("a new organization drops the old list and requests its own", () => {
@@ -117,8 +137,11 @@ describe("decline", () => {
 			model((current) => expect(current.decliningIds).toEqual([inviteId])),
 			Command.resolve(DeclineInvite, Message.SucceededDecline({ inviteId })),
 			expectOutMessage(PageOutMessage.RequestedToast({ toast: successToast("Invite declined") })),
-			Command.expectExact(ListIncomingInvites({ organizationId: hazel })),
-			Command.resolve(ListIncomingInvites, Message.SucceededListInvites({ invites: [] })),
+			Command.expectExact(ListIncomingInvites({ organizationId: hazel, version: 2 })),
+			Command.resolve(
+				ListIncomingInvites,
+				Message.SucceededListInvites({ organizationId: hazel, version: 2, invites: [] }),
+			),
 			model((current) => {
 				expect(current.decliningIds).toEqual([])
 				expect(current.invites).toEqual([])
@@ -149,11 +172,18 @@ describe("double submit", () => {
 		)
 	})
 
-	// Bug: update has no in-flight guard; a second Accept/Decline for a busy row dispatches again.
-	test.fails("Accept or Decline on a row that is already accepting sends nothing", () => {
+	test("Accept or Decline on a row that is already accepting sends nothing", () => {
 		story(
 			run,
 			given({ ...listed, acceptingIds: [inviteId] }),
+			message(Message.ClickedAccept({ inviteId })),
+			Command.expectNone(),
+			message(Message.ClickedDecline({ inviteId })),
+			Command.expectNone(),
+		)
+		story(
+			run,
+			given({ ...listed, decliningIds: [inviteId] }),
 			message(Message.ClickedAccept({ inviteId })),
 			Command.expectNone(),
 		)

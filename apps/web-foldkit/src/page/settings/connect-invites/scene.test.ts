@@ -4,7 +4,13 @@ import { Schema } from "effect"
 import * as Scene from "foldkit/scene"
 import { describe, test } from "vitest"
 import { successToast } from "../../../data/actions"
-import { failureToastFixture, makeShared, organizationId, pageScene, uuid } from "../../../test/pages-fixtures"
+import {
+	failureToastFixture,
+	makeShared,
+	organizationId,
+	pageScene,
+	uuid,
+} from "../../../test/pages-fixtures"
 import { PageOutMessage } from "../../out-message"
 import { Message } from "./message"
 import type { Invite } from "./model"
@@ -21,8 +27,11 @@ const acceptedId = Schema.decodeSync(ConnectInviteId)(uuid(22))
 const pending: Invite = { id: inviteId, hostOrganizationId: hostId, status: "pending", createdAtMs: 0 }
 const accepted: Invite = { id: acceptedId, hostOrganizationId: hostId, status: "accepted", createdAtMs: 0 }
 const start = init(undefined, shared).model
-const listInvites = (invites: ReadonlyArray<Invite>) =>
-	Scene.Command.resolve(ListIncomingInvites({ organizationId }), Message.SucceededListInvites({ invites }))
+const listInvites = (version: number, invites: ReadonlyArray<Invite>) =>
+	Scene.Command.resolve(
+		ListIncomingInvites({ organizationId, version }),
+		Message.SucceededListInvites({ organizationId, version, invites }),
+	)
 
 const accept = Scene.role("button", { name: "Accept" })
 const decline = Scene.role("button", { name: "Decline" })
@@ -39,7 +48,9 @@ describe("list", () => {
 			Scene.given({ ...start, invites: [accepted, pending] }),
 			Scene.expect(Scene.text("1 pending", { exact: false })).toExist(),
 			Scene.expect(Scene.text(hostId)).toExist(),
-			Scene.Subscription.emit(Message.UpdatedHostOrganizations({ organizations: [{ id: hostId, name: "Acme" }] })),
+			Scene.Subscription.emit(
+				Message.UpdatedHostOrganizations({ organizations: [{ id: hostId, name: "Acme" }] }),
+			),
 			Scene.expect(Scene.text(hostId)).toBeAbsent(),
 			Scene.expect(Scene.text("Acme")).toExist(),
 			// Only the pending invite gets actions.
@@ -58,9 +69,11 @@ describe("accept and decline", () => {
 			Scene.expect(Scene.role("button", { name: "Accepting..." })).toBeDisabled(),
 			Scene.expect(decline).toBeDisabled(),
 			Scene.Command.resolve(AcceptInvite, Message.SucceededAccept({ inviteId })),
-			Scene.expectOutMessage(PageOutMessage.RequestedToast({ toast: successToast("Channel connected") })),
-			Scene.Command.expectExact(ListIncomingInvites({ organizationId })),
-			listInvites([{ ...pending, status: "accepted" }]),
+			Scene.expectOutMessage(
+				PageOutMessage.RequestedToast({ toast: successToast("Channel connected") }),
+			),
+			Scene.Command.expectExact(ListIncomingInvites({ organizationId, version: 2 })),
+			listInvites(2, [{ ...pending, status: "accepted" }]),
 			Scene.expect(accept).toBeAbsent(),
 			Scene.expect(Scene.text("1 pending", { exact: false })).toBeAbsent(),
 		)
@@ -73,7 +86,10 @@ describe("accept and decline", () => {
 			Scene.click(decline),
 			Scene.Command.expectExact(DeclineInvite({ inviteId })),
 			Scene.expect(Scene.role("button", { name: "Declining..." })).toBeDisabled(),
-			Scene.Command.resolve(DeclineInvite, Message.FailedDecline({ inviteId, toast: failureToastFixture })),
+			Scene.Command.resolve(
+				DeclineInvite,
+				Message.FailedDecline({ inviteId, toast: failureToastFixture }),
+			),
 			Scene.expectOutMessage(PageOutMessage.RequestedToast({ toast: failureToastFixture })),
 			Scene.expect(decline).toBeEnabled(),
 			Scene.expect(accept).toBeEnabled(),
