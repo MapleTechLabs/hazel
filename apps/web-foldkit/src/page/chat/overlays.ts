@@ -17,6 +17,10 @@ import * as Toolbar from "../../ui/toolbar"
 export const MessageMenu = Schema.Struct({ messageId: MessageId, menu: Menu.Model })
 export const MessagePopover = Schema.Struct({ key: Schema.String, popover: Popover.Model })
 
+/** An image the viewer shows by URL (legacy `ViewerImage` `{ type: "url", url, alt }`). */
+export const ViewerUrlImage = Schema.Struct({ url: Schema.String, alt: Schema.String })
+export type ViewerUrlImage = typeof ViewerUrlImage.Type
+
 export const Model = Schema.Struct({
 	/** `MessageHoverProvider`: the message under the pointer, and whether the toolbar holds it. */
 	hoveredMessageId: Schema.NullOr(MessageId),
@@ -34,7 +38,10 @@ export const Model = Schema.Struct({
 	/** The author popover open from an avatar (key `<messageId>:avatar`) or a pinned row. */
 	popover: Schema.NullOr(MessagePopover),
 	pinned: Popover.Model,
-	imageViewer: Schema.NullOr(Schema.Struct({ messageId: MessageId, index: Schema.Number })),
+	/** `urlImages` are a GIF or tweet photos (`ViewerImage` of type "url"); otherwise the attachments. */
+	imageViewer: Schema.NullOr(
+		Schema.Struct({ messageId: MessageId, index: Schema.Number, urlImages: Schema.NullOr(Schema.Array(ViewerUrlImage)) }),
+	),
 	/** The toolbar's "Add reaction" picker while it is open. */
 	reactionPicker: Schema.NullOr(Schema.Struct({ messageId: MessageId, dialog: EmojiDialog.Model })),
 	/** The context menu's "Add Reaction": a modal holding the picker. */
@@ -85,6 +92,7 @@ export const Message = defineMessageUnion({
 	ClickedEdit: { messageId: MessageId },
 	ClickedReaction: { messageId: MessageId, emoji: Schema.String },
 	ClickedAttachmentImage: { messageId: MessageId, index: Schema.Number },
+	ClickedEmbedImage: { messageId: MessageId, images: Schema.Array(ViewerUrlImage), index: Schema.Number },
 	ClosedImageViewer: {},
 	SelectedViewerImage: { index: Schema.Number },
 	GotReactionPickerMessage: { messageId: MessageId, message: EmojiDialog.Message },
@@ -311,7 +319,10 @@ export const update = (model: Model, message: Message, facts: MessageFacts): Ove
 			model,
 			outMessage: OutMessage.RequestedReaction({ messageId, emoji }),
 		}),
-		ClickedAttachmentImage: ({ messageId, index }) => set(model, { imageViewer: { messageId, index } }),
+		ClickedAttachmentImage: ({ messageId, index }) =>
+			set(model, { imageViewer: { messageId, index, urlImages: null } }),
+		ClickedEmbedImage: ({ messageId, images, index }) =>
+			set(model, { imageViewer: { messageId, index, urlImages: images } }),
 		ClosedImageViewer: () => set(model, { imageViewer: null }),
 		SelectedViewerImage: ({ index }) =>
 			model.imageViewer === null

@@ -1,6 +1,7 @@
 import { ChannelId, MessageId, OrganizationId } from "@hazel/schema"
 import { Option, Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
+import * as Live from "../../../chat/live-state"
 import * as FilesSubscriptions from "../files/subscriptions"
 import {
 	channelStream,
@@ -44,6 +45,16 @@ type Input = PageSubscriptionInput<Model>
 const byChannel = { channelId: ChannelId }
 const channelOf = ({ model }: Input) => ({ channelId: model.channelId })
 
+// Recomputed only when the loaded messages change, not on every scroll Message.
+const liveIdsCache = new WeakMap<object, ReadonlyArray<MessageId>>()
+const liveMessageIdsOf = (model: Model) => {
+	const cached = liveIdsCache.get(model.messages)
+	if (cached !== undefined) return cached
+	const ids = Live.connectedMessageIds(model.messages)
+	liveIdsCache.set(model.messages, ids)
+	return ids
+}
+
 const chat = Subscription.make<Input, Message>()((entry) => ({
 	chatChannel: entry(byChannel, {
 		modelToDependencies: channelOf,
@@ -71,6 +82,17 @@ const chat = Subscription.make<Input, Message>()((entry) => ({
 			dependenciesToStream: ({ channelId, limit, offset }) =>
 				messageChangesStream(channelId, limit, offset, ({ order, upserts }) =>
 					Message.ChangedMessages({ order, upserts }),
+				),
+		},
+	),
+	// `MessageLive.Provider` -> `useMessageActor`: one actor connection per live AI reply.
+	chatLiveReplies: entry(
+		{ messageIds: Schema.Array(MessageId) },
+		{
+			modelToDependencies: ({ model }) => ({ messageIds: liveMessageIdsOf(model) }),
+			dependenciesToStream: ({ messageIds }) =>
+				Stream.mergeAll(messageIds.map(Live.liveEventStream), { concurrency: "unbounded" }).pipe(
+					Stream.map((message) => Message.GotLiveMessage({ message })),
 				),
 		},
 	),

@@ -91,11 +91,15 @@ export const messageEmbedCardView = <M>(h: HtmlBuilder<M>, embed: EmbedType): Ht
 	])
 }
 
-/** `MessageEmbeds`; the live-state block (`MessageLive.*`) is not ported and renders nothing. */
-export const messageEmbedsView = <M>(h: HtmlBuilder<M>, embeds: ReadonlyArray<EmbedType> | null): Html =>
+/** `MessageEmbeds`: the visible cards, then the live-state block (`MessageLive.*`, see `live-view.ts`). */
+export const messageEmbedsView = <M>(
+	h: HtmlBuilder<M>,
+	embeds: ReadonlyArray<EmbedType> | null,
+	live: Html = h.empty,
+): Html =>
 	embeds?.length
 		? h.div(
 				[h.Class("mt-2 flex flex-col gap-2")],
-				embeds.filter(hasVisibleContent).map((embed) => messageEmbedCardView(h, embed)),
+				[...embeds.filter(hasVisibleContent).map((embed) => messageEmbedCardView(h, embed)), live],
 			)
 		: h.empty

@@ -2,6 +2,8 @@ import { ChannelId, ChannelMemberId, MessageId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import type { Update } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
+import * as Live from "../../../chat/live-state"
+import * as Unfurl from "../../../chat/unfurl"
 import * as Draft from "../../../composer/draft"
 import * as MessageList from "../../../mount/message-list"
 import type { HazelRpc } from "../../../rpc"
@@ -55,6 +57,10 @@ export const Model = Schema.Struct({
 	/** Ids the reply and thread lookups select, kept stable while the window does not change them. */
 	replyIds: Schema.Array(MessageId),
 	threadIds: Schema.Array(ChannelId),
+	/** Link previews and tweets fetched for the loaded messages, by `linkPreviewKey` / `tweetKey`. */
+	unfurls: Unfurl.Unfurls,
+	/** Streamed state of the AI replies with an open actor connection, by message id. */
+	liveStates: Live.LiveStates,
 	/** Oldest first, with date headers; what the list renders. */
 	rows: Schema.Array(DisplayRow),
 	limit: Schema.Number,
@@ -104,6 +110,8 @@ export const Message = defineMessageUnion({
 	UpdatedTyping: { typing: Schema.Array(TypingInfo) },
 	TickedTypingClock: { nowMs: Schema.Number },
 	GotListMessage: { message: MessageList.Message },
+	GotUnfurlMessage: { message: Unfurl.Message },
+	GotLiveMessage: { message: Live.Message },
 	GotOverlaysMessage: { message: Overlays.Message },
 	GotFilesMessage: { message: FilesPage.Message },
 	ClickedMobileMenu: {},
