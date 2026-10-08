@@ -12,7 +12,9 @@ import { AFK_TIMEOUT_MS } from "../platform/presence/model"
 import { SendPresenceUpdate } from "../platform/presence/update"
 import { ada, plainMember, signedIn } from "../test/root-fixtures"
 import * as CommandMenu from "../ui/command-menu"
-import { ApplyTheme, NavigateInternal, SaveThemePreference } from "./command"
+import { DEFAULT_SOUND_SETTINGS } from "../notification-sound"
+import * as Menu from "../ui/menu"
+import { ApplyTheme, NavigateInternal, SaveSoundSettings, SaveThemePreference, SignOut } from "./command"
 import { Message } from "./message"
 
 /** The facts children report (OutMessages) and what the root does with them. */
@@ -105,6 +107,52 @@ describe("Completed (palette navigation)", () => {
 			Command.expectExact(NavigateInternal({ url: "/hazel/settings/team" })),
 			Command.resolve(NavigateInternal, Message.CompletedNavigateInternal()),
 			model((m) => expect(m.commandPalette.isOpen).toBe(false)),
+		)
+	})
+})
+
+describe("RequestedSignOut", () => {
+	test("Log out in the user menu signs out through Clerk", () => {
+		const userMenu = (inner: Menu.Message): Message =>
+			Message.GotShellMessage({ message: Shell.Message.GotUserMenuMessage({ message: inner }) })
+		story(
+			update,
+			given(signedIn("/hazel/chat")),
+			message(userMenu(Menu.Message.PressedTrigger({ pointerType: "mouse" }))),
+			message(userMenu(Menu.Message.ClickedItem({ key: "logout" }))),
+			Command.expectExact(SignOut({})),
+			Command.resolve(SignOut, Message.CompletedSignOut()),
+		)
+	})
+})
+
+describe("RequestedMobileSidebar", () => {
+	test("the channel header's menu button opens the shell's sidebar sheet", () => {
+		const channelId = "00000000-0000-4000-8000-0000000000c1"
+		story(
+			update,
+			given(signedIn(`/hazel/chat/${channelId}`)),
+			message(Message.GotPageMessage({ message: { _tag: "ChatChannel", message: { _tag: "ClickedMobileMenu" } } })),
+			Command.expectNone(),
+			model((m) => expect(m.shell.isSidebarOpen).toBe(true)),
+		)
+	})
+})
+
+describe("RequestedSoundSettings", () => {
+	test("the notifications page's sound toggle is stored by the root and shared back", () => {
+		const off = { ...DEFAULT_SOUND_SETTINGS, enabled: false }
+		story(
+			update,
+			given(signedIn("/hazel/my-settings/notifications")),
+			message(
+				Message.GotPageMessage({
+					message: { _tag: "MySettingsNotifications", message: { _tag: "ToggledSounds", isSelected: false } },
+				}),
+			),
+			Command.expectHas(SaveSoundSettings({ settings: off })),
+			Command.resolveAll([SaveSoundSettings, Message.CompletedSaveSoundSettings()]),
+			model((m) => expect(m.soundSettings).toEqual(off)),
 		)
 	})
 })
