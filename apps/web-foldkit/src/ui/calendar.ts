@@ -1,8 +1,9 @@
 import { Array, Effect, Option, Schema } from "effect"
-import { Command, Subscription, type Update } from "foldkit"
+import { Command, Mount, Subscription, type Update } from "foldkit"
 import * as Dom from "foldkit/dom"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
+import { announce } from "./aria/announcer"
 import * as Interaction from "./aria/interaction"
 import * as D from "./calendar-date"
 import * as Select from "./select"
@@ -114,6 +115,23 @@ const hoveredDate = (model: Model): Option.Option<string> =>
 export const isPreviousDisabled = (model: Model) =>
 	isBeforeMin(model, D.addDays(D.startOfMonth(model.focusedDate), -1))
 
+/** useSelectedDateDescription: the committed date or range, "" while a range is being picked. */
+export const selectedDateDescription = (model: Model): string =>
+	model.mode === "Single"
+		? Option.match(model.value, {
+				onNone: () => "",
+				onSome: (date) => `Selected Date: ${D.formatFull(date)}`,
+			})
+		: Option.isSome(model.anchor)
+			? ""
+			: Option.match(model.range, {
+					onNone: () => "",
+					onSome: ({ start, end }) =>
+						start === end
+							? `Selected Date: ${D.formatFull(start)}`
+							: `Selected Range: ${D.formatRange(start, end)}`,
+				})
+
 // IDS
 
 export const gridId = (id: string) => `${id}-grid`
@@ -129,6 +147,8 @@ export const Message = defineMessageUnion({
 	GotYearMessage: { message: Select.Message },
 	GotInteractionMessage: { message: Interaction.Message },
 	CompletedFocusCell: {},
+	CompletedAnnounce: {},
+	CompletedFocusCellOnPress: {},
 })
 export type Message = typeof Message.Type
 
@@ -140,16 +160,33 @@ export type OutMessage = typeof OutMessage.Type
 
 // COMMAND
 
+/** React Aria's live announcer, from useCalendarBase. */
+const Announce = Command.define("AnnounceCalendar", {
+	args: {
+		message: Schema.String,
+		timeout: Schema.Number,
+		assertiveness: Schema.Literals(["assertive", "polite"]),
+	},
+	messages: [Message.CompletedAnnounce],
+	execute: ({ message, timeout, assertiveness }) =>
+		Effect.sync(() => announce(message, timeout, assertiveness)).pipe(
+			Effect.as(Message.CompletedAnnounce()),
+		),
+})
+
+const MINIMUM_DATE_SUFFIX = ", First available date"
+
 /** Focuses a day cell after the next render, which may show a different month. */
 const FocusCell = Command.define("FocusCalendarCell", {
 	args: { gridId: Schema.String, label: Schema.String },
 	messages: [Message.CompletedFocusCell],
 	execute: ({ gridId: grid, label }) =>
 		Effect.promise(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))).pipe(
-			// A cell's name ends with its full date, then " selected" when it is selected.
+			// A cell's name ends with its full date, then " selected", then the minimum date suffix.
 			Effect.andThen(
 				Dom.focus(
 					[label, `${label} selected`]
+						.flatMap((name) => [name, `${name}${MINIMUM_DATE_SUFFIX}`])
 						.map((suffix) => `#${CSS.escape(grid)} [role=button][aria-label$="${suffix}"]`)
 						.join(", "),
 					{ preventScroll: true },
@@ -158,6 +195,38 @@ const FocusCell = Command.define("FocusCalendarCell", {
 			Effect.ignore,
 			Effect.as(Message.CompletedFocusCell()),
 		),
+})
+
+// MOUNT
+
+/**
+ * A RangeCalendar day is focused by script when pressed (useCalendarCell's onPressStart, or
+ * preventFocus then onPressUp), never by the mouse, so Chrome gives it `:focus-visible`.
+ */
+export const FocusCellOnPress = Mount.define("FocusCalendarCellOnPress", {
+	messages: [Message.CompletedFocusCellOnPress],
+	execute: ({ element }) =>
+		Effect.acquireRelease(
+			Effect.sync(() => {
+				const onPointerDown = (event: Event) => {
+					if (
+						!(event instanceof PointerEvent) ||
+						event.button !== 0 ||
+						event.pointerType === "touch"
+					)
+						return
+					const cell =
+						event.target instanceof Element
+							? event.target.closest("[role=button][tabindex]")
+							: null
+					if (cell instanceof HTMLElement && element.contains(cell))
+						cell.focus({ preventScroll: true })
+				}
+				element.addEventListener("pointerdown", onPointerDown)
+				return () => element.removeEventListener("pointerdown", onPointerDown)
+			}),
+			(release) => Effect.sync(release),
+		).pipe(Effect.as(Message.CompletedFocusCellOnPress())),
 })
 
 // UPDATE
@@ -257,7 +326,41 @@ const foldSelect = (model: Model, slot: "month" | "year", message: Select.Messag
 	return { model: withFocusedDate(next, focusedDate), commands }
 }
 
-export const update = (model: Model, message: Message): UpdateReturn =>
+/** The announcement timeouts useCalendarBase passes: the visible month 7 s, the selection 4 s. */
+const VISIBLE_RANGE_TIMEOUT = 7000
+const SELECTION_TIMEOUT = 4000
+
+/**
+ * useCalendarBase's announcements: a new visible month while the grid is not focused (the page
+ * buttons and month/year pickers, not arrow keys), and every new selection description.
+ */
+const announcementsFor = (previous: Model, next: Model, message: Message) => {
+	const month = D.formatMonthYear(next.focusedDate)
+	const isMonthAnnounced =
+		message._tag !== "PressedGridKey" &&
+		message._tag !== "ClickedCell" &&
+		month !== D.formatMonthYear(previous.focusedDate)
+	const selection = selectedDateDescription(next)
+	const isSelectionAnnounced = selection !== "" && selection !== selectedDateDescription(previous)
+	return [
+		...(isMonthAnnounced
+			? [Announce({ message: month, timeout: VISIBLE_RANGE_TIMEOUT, assertiveness: "assertive" })]
+			: []),
+		...(isSelectionAnnounced
+			? [Announce({ message: selection, timeout: SELECTION_TIMEOUT, assertiveness: "polite" })]
+			: []),
+	]
+}
+
+export const update = (model: Model, message: Message): UpdateReturn => {
+	const result = updateCalendar(model, message)
+	const announcements = announcementsFor(model, result.model, message)
+	return announcements.length === 0
+		? result
+		: { ...result, commands: [...(result.commands ?? []), ...announcements] }
+}
+
+const updateCalendar = (model: Model, message: Message): UpdateReturn =>
 	Message.match<UpdateReturn>(message, {
 		ClickedCell: ({ date }) => (isCellDisabled(model, date) ? { model } : selectDate(model, date)),
 		PressedGridKey: ({ key }) => {
@@ -275,6 +378,8 @@ export const update = (model: Model, message: Message): UpdateReturn =>
 			}),
 		}),
 		CompletedFocusCell: () => ({ model }),
+		CompletedAnnounce: () => ({ model }),
+		CompletedFocusCellOnPress: () => ({ model }),
 	})
 
 // SUBSCRIPTION
