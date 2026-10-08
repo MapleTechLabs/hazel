@@ -16,6 +16,7 @@ import {
 } from "../../../ui/section-header"
 import type { PageViewInputs } from "../../contract"
 import { discordLogo, slackLogo } from "./brand-icons"
+import { addConnectionModal } from "./add-connection-view"
 import { confirmDialog } from "./confirm-dialog"
 import { formatSyncedAt } from "./rpc"
 import { type Connection, Message, type Model, STATUS_CONFIG } from "./model"
@@ -294,6 +295,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 	return fragment(h, [
 		header(h, [addConnectionDropdown(h, "add-connection", model.addMenu, toAddMenuMessage)]),
 		loadedBody(h, model, connections.connections),
+		addConnectionModal(h, model),
 		deleteModal(h, model),
 	])
 })

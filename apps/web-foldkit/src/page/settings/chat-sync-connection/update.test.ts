@@ -1,5 +1,5 @@
 import "../../channel-settings/document-stub"
-import { ChannelId, OrganizationId, SyncChannelLinkId, SyncConnectionId } from "@hazel/schema"
+import { ChannelId, ExternalChannelId, OrganizationId, SyncChannelLinkId, SyncConnectionId } from "@hazel/schema"
 import { Schema } from "effect"
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
@@ -7,6 +7,7 @@ import * as Menu from "../../../ui/menu"
 import type { Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
 import {
+	CreateChannelLink,
 	DisconnectConnection,
 	ListChannelLinks,
 	ListDiscordChannels,
@@ -109,7 +110,7 @@ describe("chat sync connection", () => {
 			errorMessage: null,
 			lastSyncedAtMs: null,
 		}
-		const channel = { id: "1", guildId: "918273645500120", name: "general", type: 0, parentId: null }
+		const channel = { id: Schema.decodeSync(ExternalChannelId)("1"), guildId: "918273645500120", name: "general", type: 0, parentId: null }
 		story(
 			run,
 			given(init(route, shared).model),
@@ -129,5 +130,51 @@ describe("chat sync connection", () => {
 			Message.SucceededListConnections({ organizationId, connections: [] }),
 		)
 		expect(missing.commands ?? []).toHaveLength(0)
+	})
+
+	test("linking a picked pair closes the modal, toasts, and reloads the links", () => {
+		const hazel = { id: link.hazelChannelId, name: "random" }
+		const discord = {
+			id: Schema.decodeSync(ExternalChannelId)("555000111222401"),
+			guildId: "918273645500120",
+			name: "announcements",
+			type: 0,
+			parentId: null,
+		}
+		story(
+			run,
+			given(loaded),
+			message(Message.ClickedLinkChannel()),
+			message(Message.ClickedHazelChannel({ channel: hazel })),
+			message(Message.ClickedDiscordChannel({ channel: discord })),
+			message(Message.ClickedDirection({ direction: "external_to_hazel" })),
+			message(Message.ClickedCreateLink()),
+			Command.expectExact(
+				CreateChannelLink({
+					syncConnectionId: connectionId,
+					hazelChannelId: hazel.id,
+					hazelChannelName: "random",
+					externalChannelId: discord.id,
+					externalChannelName: "announcements",
+					direction: "external_to_hazel",
+				}),
+			),
+			Command.resolve(
+				CreateChannelLink,
+				Message.SucceededCreateLink({ successMessage: "Linked #random to #announcements" }),
+			),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({
+					toast: { intent: "success", title: "Linked #random to #announcements", description: null },
+				}),
+			),
+			model((current) => {
+				expect(current.addLinkModal.isOpen).toBe(false)
+				expect(current.selectedChannel).toBeNull()
+				expect(current.direction).toBe("both")
+				expect(current.links._tag).toBe("Loading")
+			}),
+			Command.resolve(ListChannelLinks, Message.SucceededListChannelLinks({ links: [] })),
+		)
 	})
 })

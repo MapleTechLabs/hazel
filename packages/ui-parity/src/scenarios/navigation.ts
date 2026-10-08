@@ -1,4 +1,6 @@
 import type { Page } from "playwright"
+import { seedEmojiPicker } from "../fixtures/datasets/rich/emoji.ts"
+import { statusSetDataset } from "../fixtures/datasets/status-set.ts"
 import { chat, type AreaModule, type Scenario } from "./types.ts"
 
 const nav = (scenario: Omit<Scenario, "area" | "path"> & { path?: string }): Scenario => ({
@@ -24,6 +26,131 @@ const palettePage = (item: string) => async (page: Page) => {
  */
 const sectionAddButton = (page: Page, index: number) =>
 	page.getByRole("button", { name: "badge 13", exact: true }).nth(index)
+
+/** User menu > "Set status" opens the set-status modal. */
+const openSetStatus = async (page: Page) => {
+	await page.getByRole("button", { name: "Profile" }).click()
+	await page.getByRole("menuitem", { name: /Set status/ }).click()
+	await page.getByRole("heading", { name: "Set a status" }).waitFor()
+}
+
+const openEmojiPicker = async (page: Page) => {
+	await seedEmojiPicker(page)
+	await openSetStatus(page)
+	await page.getByRole("button", { name: "Pick an emoji" }).click()
+	await page.getByRole("dialog", { name: "Emoji picker" }).waitFor()
+}
+
+/** "Clear after" > "Choose date & time": today and the next full hour. */
+const chooseCustomExpiry = async (page: Page) => {
+	await openSetStatus(page)
+	await page.getByRole("button", { name: /Don't clear/ }).click()
+	await page.getByRole("option", { name: "Choose date & time" }).click()
+	await page.getByRole("button", { name: "Calendar" }).waitFor()
+}
+
+const setStatusScenarios: ReadonlyArray<Scenario> = [
+	nav({
+		id: "nav-set-status-modal",
+		title: "Set status modal, empty",
+		themes: ["light", "dark"],
+		steps: openSetStatus,
+	}),
+	nav({
+		id: "nav-set-status-emoji-picker",
+		title: "Set status modal, emoji picker open",
+		themes: ["light", "dark"],
+		steps: openEmojiPicker,
+	}),
+	nav({
+		id: "nav-set-status-emoji-picker-custom",
+		title: "Set status modal, emoji picker with custom emojis",
+		dataset: "integrations",
+		steps: openEmojiPicker,
+	}),
+	nav({
+		id: "nav-set-status-emoji-picked",
+		title: "Set status modal, an emoji picked enables Save",
+		steps: async (page) => {
+			await openEmojiPicker(page)
+			await page.getByRole("gridcell", { name: "Smileys & emotion 5" }).click()
+			await page.getByRole("dialog", { name: "Emoji picker" }).waitFor({ state: "detached" })
+		},
+	}),
+	nav({
+		id: "nav-set-status-preset",
+		title: "Set status modal, a preset picked",
+		steps: async (page) => {
+			await openSetStatus(page)
+			await page.getByRole("button", { name: /In a meeting/ }).click()
+			await page.getByRole("button", { name: /In a meeting/, pressed: true }).waitFor()
+		},
+	}),
+	nav({
+		id: "nav-set-status-custom-expiry",
+		title: "Set status modal, clearing at a chosen date and time",
+		steps: chooseCustomExpiry,
+	}),
+	nav({
+		id: "nav-set-status-calendar",
+		title: "Set status modal, expiry calendar open",
+		themes: ["light", "dark"],
+		steps: async (page) => {
+			await chooseCustomExpiry(page)
+			await page.getByRole("button", { name: "Calendar" }).click()
+			await page.getByRole("grid").waitFor()
+		},
+	}),
+	nav({
+		id: "nav-set-status-date-picked",
+		title: "Set status modal, a later day picked in the calendar",
+		steps: async (page) => {
+			await chooseCustomExpiry(page)
+			await page.getByRole("button", { name: "Calendar" }).click()
+			await page.getByRole("button", { name: /\bMarch 20, 2026\b/ }).first().click()
+			await page.getByRole("grid").waitFor({ state: "detached" })
+		},
+	}),
+	nav({
+		id: "nav-set-status-saved",
+		title: "Set status modal, saving a preset with an expiry",
+		steps: async (page) => {
+			await openSetStatus(page)
+			await page.getByRole("button", { name: /Commuting/ }).click()
+			await page.getByRole("button", { name: /Don't clear/ }).click()
+			await page.getByRole("option", { name: "1 hour" }).click()
+			await page.getByRole("button", { name: "Save" }).click()
+			await page.getByText("Status updated").waitFor()
+		},
+	}),
+	nav({
+		id: "nav-set-status-existing",
+		title: "Set status modal with a status already set",
+		dataset: "status-set",
+		steps: openSetStatus,
+	}),
+	nav({
+		id: "nav-set-status-submitting",
+		title: "Set status modal while saving",
+		dataset: "status-set",
+		steps: async (page) => {
+			await openSetStatus(page)
+			await page.getByRole("button", { name: /Out sick/ }).click()
+			await page.getByRole("button", { name: "Save" }).click()
+			await page.getByRole("button", { name: "Saving..." }).waitFor()
+		},
+	}),
+	nav({
+		id: "nav-set-status-cleared",
+		title: "Set status modal, clearing the status",
+		dataset: "status-set",
+		steps: async (page) => {
+			await openSetStatus(page)
+			await page.getByRole("button", { name: "Clear status" }).click()
+			await page.getByText("Status cleared").waitFor()
+		},
+	}),
+]
 
 export const navigationArea: AreaModule = {
 	scenarios: [
@@ -149,5 +276,7 @@ export const navigationArea: AreaModule = {
 				await page.getByRole("dialog").waitFor()
 			},
 		}),
+		...setStatusScenarios,
 	],
+	datasets: [statusSetDataset],
 }

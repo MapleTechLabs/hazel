@@ -9,7 +9,9 @@ import { successToast } from "../../../ui/toast-exit"
 import type { PageReturn, Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
 import {
+	CreateChannelLink,
 	DisconnectConnection,
+	FocusChannelSearch,
 	ListChannelLinks,
 	ListConnections,
 	ListDiscordChannels,
@@ -17,7 +19,15 @@ import {
 	ScheduleReturnToList,
 	UpdateChannelLink,
 } from "./command"
-import { type ChannelLink, linkMenuEntries, linkMenuId, Message, type Model, SyncDirection } from "./model"
+import {
+	ADD_LINK_MODAL_ID,
+	type ChannelLink,
+	linkMenuEntries,
+	linkMenuId,
+	Message,
+	type Model,
+	SyncDirection,
+} from "./model"
 
 type Return = PageReturn<Model, Message>
 
@@ -39,8 +49,16 @@ export const init = (route: RouteOf<"SettingsChatSyncConnection">, shared: Share
 			links: { _tag: "Loading" },
 			channelNames: {},
 			linkMenus: [],
-			isAddLinkModalOpen: false,
+			addLinkModal: Modal.init(ADD_LINK_MODAL_ID),
 			discordChannels: { _tag: "Loading" },
+			hazelChannels: [],
+			selectedChannel: null,
+			selectedDiscordChannel: null,
+			direction: "both",
+			channelSearch: "",
+			discordChannelSearch: "",
+			focusedSearch: null,
+			isCreatingLink: false,
 			deleteTarget: null,
 			deleteLinkModal: Modal.init("chat-sync-remove-link"),
 			isDeletingLink: false,
@@ -146,6 +164,52 @@ const foldLinkMenu = (model: Model, linkId: ChannelLink["id"], message: Menu.Mes
 	return { ...action, commands: [...commands, ...(action.commands ?? [])] }
 }
 
+/** `handleClose`: resets the form, then closes. */
+const closedAddLinkModal = (model: Model): Model =>
+	modifyFields(model, {
+		addLinkModal: (modal) => Modal.close(modal).model,
+		selectedChannel: () => null,
+		selectedDiscordChannel: () => null,
+		direction: () => "both" as const,
+		channelSearch: () => "",
+		discordChannelSearch: () => "",
+		focusedSearch: () => null,
+	})
+
+/** `onOpenChange={(open) => !open && handleClose()}`; the channel search takes focus once the dialog has it. */
+const foldAddLinkModal = (model: Model, message: Modal.Message): Return => {
+	const next = Modal.update(model.addLinkModal, message)
+	const commands = Command.mapMessages(next.commands ?? [], (child) =>
+		Message.GotAddLinkModalMessage({ message: child }),
+	)
+	if (!next.model.isOpen) return { model: closedAddLinkModal(model), commands }
+	const focus =
+		message._tag === "CompletedPortalModal" && model.selectedChannel === null ? [FocusChannelSearch()] : []
+	return {
+		model: modifyFields(model, { addLinkModal: () => next.model }),
+		commands: [...commands, ...focus],
+	}
+}
+
+const submitLink = (model: Model): Return => {
+	const channel = model.selectedChannel
+	const discordChannel = model.selectedDiscordChannel
+	if (channel === null || discordChannel === null || model.isCreatingLink) return { model }
+	return {
+		model: modifyFields(model, { isCreatingLink: () => true }),
+		commands: [
+			CreateChannelLink({
+				syncConnectionId: model.connectionId,
+				hazelChannelId: channel.id,
+				hazelChannelName: channel.name,
+				externalChannelId: discordChannel.id,
+				externalChannelName: discordChannel.name,
+				direction: model.direction,
+			}),
+		],
+	}
+}
+
 const listHref = (shared: Shared) => `/${shared.orgSlug ?? ""}/settings/chat-sync`
 
 export const update = (model: Model, message: Message, shared: Shared): Return =>
@@ -229,7 +293,52 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			}),
 			outMessage: toast({ intent: "error", title, description }),
 		}),
-		ClickedLinkChannel: () => ({ model: modifyFields(model, { isAddLinkModalOpen: () => true }) }),
+		ClickedLinkChannel: () => ({
+			model: modifyFields(model, { addLinkModal: (modal) => Modal.open(modal).model }),
+		}),
+		GotAddLinkModalMessage: ({ message: modalMessage }) => foldAddLinkModal(model, modalMessage),
+		UpdatedHazelChannels: ({ channels }) => ({
+			model: modifyFields(model, { hazelChannels: () => channels }),
+		}),
+		ChangedChannelSearch: ({ value }) => ({ model: modifyFields(model, { channelSearch: () => value }) }),
+		ChangedDiscordChannelSearch: ({ value }) => ({
+			model: modifyFields(model, { discordChannelSearch: () => value }),
+		}),
+		FocusedSearch: ({ search }) => ({ model: modifyFields(model, { focusedSearch: () => search }) }),
+		BlurredSearch: () => ({ model: modifyFields(model, { focusedSearch: () => null }) }),
+		CompletedFocusChannelSearch: () => ({ model }),
+		ClickedHazelChannel: ({ channel }) => ({
+			model: modifyFields(model, {
+				selectedChannel: () => channel,
+				channelSearch: () => "",
+				focusedSearch: () => null,
+			}),
+		}),
+		ClickedChangeHazelChannel: () => ({
+			model: modifyFields(model, { selectedChannel: () => null }),
+			commands: [FocusChannelSearch()],
+		}),
+		ClickedDiscordChannel: ({ channel }) => ({
+			model: modifyFields(model, {
+				selectedDiscordChannel: () => channel,
+				discordChannelSearch: () => "",
+				focusedSearch: () => null,
+			}),
+		}),
+		ClickedChangeDiscordChannel: () => ({
+			model: modifyFields(model, { selectedDiscordChannel: () => null }),
+		}),
+		ClickedDirection: ({ direction }) => ({ model: modifyFields(model, { direction: () => direction }) }),
+		ClickedCreateLink: () => submitLink(model),
+		// `onSuccess()` reloads the links (a new query key), then `handleClose()`.
+		SucceededCreateLink: ({ successMessage }) => ({
+			...reloadLinks(modifyFields(closedAddLinkModal(model), { isCreatingLink: () => false })),
+			outMessage: toast(successToast(successMessage)),
+		}),
+		FailedCreateLink: ({ title, description }) => ({
+			model: modifyFields(model, { isCreatingLink: () => false }),
+			outMessage: toast({ intent: "error", title, description }),
+		}),
 		ClickedConfirmRemoveLink: () =>
 			model.deleteTarget === null || model.isDeletingLink
 				? { model }

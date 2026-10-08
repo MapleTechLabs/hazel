@@ -1,5 +1,7 @@
 import { Option, Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
+import * as EmojiDialog from "../../emoji-picker/dialog"
+import * as DatePicker from "../../ui/date-picker"
 import * as Segments from "../../ui/date-segments"
 import * as Select from "../../ui/select"
 import { ToastRequest } from "../toasts"
@@ -16,15 +18,19 @@ export const Presence = Schema.Struct({
 })
 export type Presence = typeof Presence.Type
 
+export const CustomEmoji = Schema.Struct({ name: Schema.String, imageUrl: Schema.String })
+
 export const Model = Schema.Struct({
 	frame: Frame,
-	/** The user's presence row (`usePresence()`); the form is seeded from its first emission. */
+	/** The user's presence row (`usePresence()`). */
 	presence: Schema.NullOr(Presence),
-	hasSeeded: Schema.Boolean,
 	emoji: Schema.NullOr(Schema.String),
+	/** `EmojiPickerDialog` around the emoji button, with the organization's custom emojis. */
+	emojiPicker: EmojiDialog.Model,
+	customEmojis: Schema.Array(CustomEmoji),
 	message: Schema.String,
 	expiration: Select.Model,
-	customDate: Schema.NullOr(Segments.Model),
+	customDate: Schema.NullOr(DatePicker.Model),
 	customTime: Schema.NullOr(Segments.Model),
 	pauseNotifications: Schema.Boolean,
 	isSubmitting: Schema.Boolean,
@@ -34,7 +40,9 @@ export type Model = typeof Model.Type
 export const Message = defineMessageUnion({
 	GotFrameMessage: { message: FrameMessage },
 	GotExpirationMessage: { message: Select.Message },
-	GotCustomDateMessage: { message: Segments.Message },
+	GotCustomDateMessage: { message: DatePicker.Message },
+	GotEmojiPickerMessage: { message: EmojiDialog.Message },
+	UpdatedCustomEmojis: { emojis: Schema.Array(CustomEmoji) },
 	GotCustomTimeMessage: { message: Segments.Message },
 	UpdatedPresence: { presence: Schema.NullOr(Presence) },
 	ChangedMessage: { value: Schema.String },
@@ -106,10 +114,13 @@ export const expirationDate = (
 
 const committedOf = (segments: Segments.Model | null) => segments?.committed ?? null
 
+/** The picked custom date (`YYYY-MM-DD`), or null. */
+export const customDateOf = (model: Model) => committedOf(model.customDate?.segments ?? null)
+
 /** The custom option's label once both parts are set (legacy `customDateTimeLabel`). */
 const customLabel = (model: Model): string | null => {
 	if (expirationOf(model) !== "custom") return null
-	const date = customDateTime(committedOf(model.customDate), committedOf(model.customTime))
+	const date = customDateTime(customDateOf(model), committedOf(model.customTime))
 	return date === null
 		? null
 		: date.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
@@ -137,7 +148,7 @@ export const isSaveDisabled = (model: Model) =>
 	model.isSubmitting ||
 	(!model.emoji && model.message === "") ||
 	(expirationOf(model) === "custom" &&
-		(committedOf(model.customDate) === null || committedOf(model.customTime) === null))
+		(customDateOf(model) === null || committedOf(model.customTime) === null))
 
 export const hasExistingStatus = (model: Model) =>
 	model.presence !== null && (!!model.presence.statusEmoji || !!model.presence.customMessage)

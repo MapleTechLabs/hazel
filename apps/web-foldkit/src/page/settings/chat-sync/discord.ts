@@ -1,4 +1,4 @@
-import type { OrganizationId } from "@hazel/schema"
+import { ExternalChannelId, type OrganizationId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
 import { HazelApiClient } from "../../../rpc"
 
@@ -13,7 +13,7 @@ export type DiscordGuild = typeof DiscordGuild.Type
 
 /** A Discord channel as `AddChannelLinkModal` lists it. */
 export const DiscordChannel = Schema.Struct({
-	id: Schema.String,
+	id: ExternalChannelId,
 	guildId: Schema.String,
 	name: Schema.String,
 	type: Schema.Number,

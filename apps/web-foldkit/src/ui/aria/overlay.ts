@@ -101,11 +101,26 @@ export const portalOverlay = (element: Element, options: { readonly isModal: boo
 	document.body.appendChild(element)
 	const releaseInert = options.isModal ? hideOutside(element) : () => undefined
 	const releaseScroll = options.isModal ? preventScroll() : () => undefined
+	const releaseStack = options.isModal ? pushOverlay() : () => undefined
 	return () => {
+		releaseStack()
 		releaseInert()
 		releaseScroll()
 		element.remove()
 	}
+}
+
+/** React Aria's `visibleOverlays`: only the topmost modal overlay reacts to outside presses. */
+const overlayStack: Array<symbol> = []
+
+const pushOverlay = (): (() => void) & { readonly isTopmost: () => boolean } => {
+	const token = Symbol("overlay")
+	overlayStack.push(token)
+	const release = () => {
+		const index = overlayStack.lastIndexOf(token)
+		if (index !== -1) overlayStack.splice(index, 1)
+	}
+	return Object.assign(release, { isTopmost: () => overlayStack[overlayStack.length - 1] === token })
 }
 
 const inertCounts = new WeakMap<Element, number>()
@@ -186,10 +201,11 @@ export const ariaHideOutside = (visible: ReadonlyArray<Element>): (() => void) =
  */
 export const watchInteractOutside = (insideSelector: string, onInteractOutside: () => void): (() => void) => {
 	let isPressStartedOutside = false
+	const entry = pushOverlay()
 	const isOutside = (event: Event) =>
 		event.target instanceof Element ? event.target.closest(insideSelector) === null : true
 	const onPointerDown = (event: PointerEvent) => {
-		isPressStartedOutside = event.button === 0 && isOutside(event)
+		isPressStartedOutside = event.button === 0 && entry.isTopmost() && isOutside(event)
 		if (isPressStartedOutside) event.preventDefault()
 	}
 	const onPointerUp = (event: PointerEvent) => {
@@ -199,6 +215,7 @@ export const watchInteractOutside = (insideSelector: string, onInteractOutside: 
 	document.addEventListener("pointerdown", onPointerDown, true)
 	document.addEventListener("pointerup", onPointerUp, true)
 	return () => {
+		entry()
 		document.removeEventListener("pointerdown", onPointerDown, true)
 		document.removeEventListener("pointerup", onPointerUp, true)
 	}

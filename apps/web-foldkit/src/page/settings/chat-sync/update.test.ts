@@ -8,6 +8,7 @@ import { PageOutMessage } from "../../out-message"
 import { Message } from "./model"
 import { DeleteConnection, init, ListConnections, ListDiscordGuilds, sharedChanged, update } from "./update"
 import { sharedDefaults } from "../../test-shared"
+import { CreateConnection } from "./add-connection"
 
 const organizationId = Schema.decodeSync(OrganizationId)("00000000-0000-4000-8000-000000000001")
 const connectionId = Schema.decodeSync(SyncConnectionId)("00000000-0000-4000-8000-000000000002")
@@ -90,5 +91,61 @@ describe("chat sync connections", () => {
 			Message.FailedListConnections({ organizationId }),
 		)
 		expect(failed.commands ?? []).toHaveLength(0)
+	})
+
+	test("connecting a picked guild closes the modal, toasts, and reloads the list", () => {
+		const guild = { id: "918273645500901", name: "Design Systems Guild", icon: null, owner: true }
+		const loaded = updateWithShared(
+			updateWithShared(
+				init(undefined, shared).model,
+				Message.SucceededListConnections({ organizationId, connections: [connection] }),
+			).model,
+			Message.SucceededListDiscordGuilds({ guilds: [guild] }),
+		).model
+		story(
+			updateWithShared,
+			given({ ...loaded, addModal: { ...loaded.addModal, isOpen: true } }),
+			message(Message.ChangedGuildSearch({ value: "design" })),
+			message(Message.ClickedGuild({ guild })),
+			model((current) => expect(current.selectedGuild).toEqual(guild)),
+			message(Message.ClickedConnect()),
+			Command.expectExact(
+				CreateConnection({
+					organizationId,
+					externalWorkspaceId: guild.id,
+					externalWorkspaceName: guild.name,
+				}),
+			),
+			Command.resolve(CreateConnection, Message.SucceededCreateConnection()),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({
+					toast: { intent: "success", title: "Discord connection created", description: null },
+				}),
+			),
+			model((current) => {
+				expect(current.addModal.isOpen).toBe(false)
+				expect(current.selectedGuild).toBeNull()
+				expect(current.guildSearch).toBe("")
+				expect(current.connections._tag).toBe("Loading")
+			}),
+			Command.resolve(
+				ListConnections,
+				Message.SucceededListConnections({ organizationId, connections: [connection] }),
+			),
+			Command.resolve(ListDiscordGuilds, Message.SucceededListDiscordGuilds({ guilds: [guild] })),
+		)
+	})
+
+	test("a failed create keeps the modal open with an error toast", () => {
+		const failed = updateWithShared(
+			{ ...init(undefined, shared).model, isCreating: true },
+			Message.FailedCreateConnection({ title: "Connection already exists", description: null }),
+		)
+		expect(failed.model.isCreating).toBe(false)
+		expect(failed.outMessage).toEqual(
+			PageOutMessage.RequestedToast({
+				toast: { intent: "error", title: "Connection already exists", description: null },
+			}),
+		)
 	})
 })
