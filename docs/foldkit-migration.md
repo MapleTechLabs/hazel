@@ -1,6 +1,6 @@
 # Foldkit migration plan
 
-Status: draft · Branch: `experiment-2.0` · Last updated: 2026-10-07
+Status: draft · Branch: `experiment-2.0` · Last updated: 2026-10-08
 
 Goal: replace the React frontend (`apps/web`) with a Foldkit frontend (`apps/web-foldkit`) that looks pixel-identical to it. Users should notice nothing except speed and stability. Engineers should get a single Model, Messages as facts, and side effects that are testable.
 
@@ -8,15 +8,29 @@ The acceptance test is `packages/ui-parity` (see its README). A screen counts as
 
 ---
 
-## Status (2026-10-07, end of day)
+## Status (2026-10-08)
 
-Every legacy route is ported. The last full run before the final polish and a11y merges (`burndown-2`, foldkit vs the pinned legacy, 707 variants) had **0 failures**: 551 identical, 156 pass, every pass at 0 perceptual pixels, and **0 behavioral differences** (RPC and HTTP call logs). After it, a11y-parity cut variants with ARIA snapshot deltas from 454 to 105 (74 of those were gallery entries the old pin lacked; it has since been re-pinned) and final-polish removed the hidden structural deltas inside passes (post-click hover, focus outlines, chat row order, image viewer).
+Every legacy route is ported. Since 2026-10-07 the last unported pieces landed: the chat-sync add-connection and link-channel modals, the set-status emoji and expiry pickers, the current-user status in the shell, link previews, tweets, YouTube, GIFs, the embla carousel and the Rivet AI token stream (each with fixture-served network data in the harness).
 
-Open before the cutover gate (§7 Phase 7.2):
-- Re-run the full suite with `--strict-a11y` on the merged tree; expected leftovers are 5 chat variants where legacy measures rows before content loads (documented in the final-polish report) and 4 legacy timing quirks in table announcements.
-- onboarding-timezone keeps about 500 strict px from compositor layering of Foldkit's star animation (an opacity-only animation removes it but changes the twinkle).
-- Not ported, no scenario coverage: AddConnection/AddChannelLink modals, set-status pickers, the Rivet token stream for AI messages, link unfurls/tweets/YouTube/GIF content (network), Tauri-specific blocks, carousel (embla Mount).
-- Phase 6 (platform polish) and the manual QA checklist (§5 last item) remain.
+Certification runs (foldkit vs pin `639aa8d26`, `--strict-a11y`, port base 8000):
+
+| Run | Tree | Variants | Identical | Pass | Fail | Behavior diffs | Passes with perceptual px |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| burndown-3 | 4b3d8b2a0 | 707 | 535 | 146 | 26 | 0 | 0 |
+| burndown-4 | 1b35c0235 | 758 | 563 | 175 | 20 | 0 | 0 |
+
+burndown-3's calendar, date picker, date field and table sort failures are fixed (`fk/kit-a11y-final`). burndown-4's failures, being fixed on `fk/cert-fixes`:
+- New modal scenarios that were only verified without `--strict-a11y`: set-status date segment names, pending button colour, chat-sync modal success/exists states, link-channel search focus.
+- The GIF viewer drops the hovered message toolbar that legacy keeps behind it.
+- my-settings-profile-timezone is late under full-suite load (passes alone).
+
+Accepted legacy quirks (not imitated):
+- `gallery-table-cell-keys` (2): React Aria's click announcement races the arrow-key announcements, so legacy's order varies per run; Foldkit's is the intended one.
+- `chat-rich-channel` mobile, `chat-heavy-channel`, `chat-heavy-small-channel` (5): legacy measures rows before content loads, so its ARIA tree differs at capture time.
+
+onboarding-timezone keeps about 31k strict, 0 perceptual px from compositor layering of Foldkit's star animation.
+
+Not ported: video playback (needs a playable fixture video, which changes the legacy `chat-attachments` capture, so a deliberate re-pin), agent steps in AI replies (no fixture data), GitHub PR and Linear URL embeds, Tauri-specific blocks. Phase 6 (platform polish) and the manual QA checklist (§5 last item) remain.
 
 ## 1. Starting point
 
