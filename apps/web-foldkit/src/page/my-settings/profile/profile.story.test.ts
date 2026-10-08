@@ -1,11 +1,19 @@
 // @vitest-environment jsdom
 import { UserId } from "@hazel/schema"
 import { Schema } from "effect"
-import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
+import { Command, expectNoOutMessage, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
 import type { Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
-import { ResetAvatar, SaveProfile } from "./command"
+import {
+	CropAvatarImage,
+	LoadCropImage,
+	OpenFilePicker,
+	ResetAvatar,
+	RevokeCropImage,
+	SaveProfile,
+	UploadAvatar,
+} from "./command"
 import { dragTo } from "./crop"
 import { errorsOf, isSaveDisabled } from "./form"
 import { Message } from "./message"
@@ -133,5 +141,256 @@ describe("crop interaction", () => {
 	test("never shrinks below the 50px minimum", () => {
 		const drag = { mode: "resize-se" as const, startX: 0, startY: 0, startCrop: image.crop }
 		expect(dragTo(image, drag, -1000, -1000).size).toBe(50)
+	})
+})
+
+describe("profile save", () => {
+	test("Save sends the user id and the edited values", () => {
+		const start = initial()
+		story(
+			pageUpdate,
+			given(start),
+			message(Message.ChangedLastName({ value: "Byron" })),
+			message(Message.SubmittedProfile()),
+			Command.expectExact(SaveProfile({ userId: ada, values: { ...start.values, lastName: "Byron" } })),
+			Command.resolve(SaveProfile, Message.CompletedSaveProfile({ isSaved: true })),
+		)
+	})
+
+	test("a failed save re-enables the form, keeps the edit and toasts the error", () => {
+		story(
+			pageUpdate,
+			given(initial()),
+			message(Message.ChangedFirstName({ value: "Augusta Ada" })),
+			message(Message.SubmittedProfile()),
+			Command.resolve(SaveProfile, Message.CompletedSaveProfile({ isSaved: false })),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({
+					toast: { intent: "error", title: "Failed to update profile", description: null },
+				}),
+			),
+			model((current) => {
+				expect(current.isSubmitting).toBe(false)
+				expect(current.values.firstName).toBe("Augusta Ada")
+				expect(isSaveDisabled(current)).toBe(false)
+			}),
+		)
+	})
+
+	test("a second submit while saving is ignored", () => {
+		const saving = { ...initial(), isDirty: true, isSubmitting: true }
+		story(
+			pageUpdate,
+			given(saving),
+			message(Message.SubmittedProfile()),
+			Command.expectNone(),
+			expectNoOutMessage(),
+		)
+	})
+
+	test("an invalid form never saves", () => {
+		story(
+			pageUpdate,
+			given(initial()),
+			message(Message.ChangedFirstName({ value: "" })),
+			message(Message.SubmittedProfile()),
+			Command.expectNone(),
+			model((current) => expect(current.isSubmitting).toBe(false)),
+		)
+	})
+
+	test("a late timezone row does not overwrite an edit in progress", () => {
+		const row = {
+			firstName: "Ada",
+			lastName: "Lovelace",
+			email: "ada@hazel.test",
+			avatarUrl: null,
+			timezone: "Asia/Tokyo",
+			settings: null,
+		}
+		story(
+			pageUpdate,
+			given(initial()),
+			message(Message.ChangedFirstName({ value: "Augusta" })),
+			message(Message.UpdatedUserRow({ row })),
+			model((current) => {
+				expect(current.values.firstName).toBe("Augusta")
+				expect(current.values.timezone).not.toBe("Asia/Tokyo")
+			}),
+		)
+	})
+})
+
+describe("avatar upload", () => {
+	const png = new File(["png"], "me.png", { type: "image/png" })
+	const loaded = { src: "blob:me", width: 800, height: 600, crop: { x: 100, y: 0, size: 600 }, drag: null }
+	const blob = new Blob(["webp"], { type: "image/webp" })
+	const openCrop = () => [
+		message(Message.SelectedAvatarFiles({ files: [png] })),
+		// Definition matchers: hashing a jsdom File for structural equality throws.
+		Command.expectExact(LoadCropImage),
+		Command.resolve(LoadCropImage, Message.LoadedCropImage({ image: loaded })),
+	]
+
+	test("pick, crop and upload refreshes the current user and frees the object URL", () => {
+		story(
+			pageUpdate,
+			given(initial()),
+			...openCrop(),
+			model((current) => {
+				expect(current.cropModal.isOpen).toBe(true)
+				expect(current.crop._tag).toBe("Ready")
+			}),
+			message(Message.ClickedSaveCrop()),
+			Command.expectExact(CropAvatarImage({ src: "blob:me", crop: loaded.crop })),
+			Command.resolve(CropAvatarImage, Message.CompletedCropImage({ blob })),
+			model((current) => {
+				expect(current.cropModal.isOpen).toBe(false)
+				expect(current.isUploading).toBe(true)
+			}),
+			Command.expectExact(RevokeCropImage({ src: "blob:me" }), UploadAvatar),
+			Command.resolveAll(
+				[RevokeCropImage, Message.CompletedRevokeCropImage()],
+				[UploadAvatar, Message.CompletedUploadAvatar({ isUploaded: true })],
+			),
+			expectOutMessage(
+				PageOutMessage.RequestedCurrentUserRefresh({
+					toast: { intent: "success", title: "Profile picture updated", description: null },
+				}),
+			),
+			model((current) => expect(current.isUploading).toBe(false)),
+		)
+	})
+
+	test("a failed upload clears the spinner and toasts", () => {
+		story(
+			pageUpdate,
+			given({ ...initial(), isUploading: true }),
+			message(Message.CompletedUploadAvatar({ isUploaded: false })),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({
+					toast: {
+						intent: "error",
+						title: "Upload failed",
+						description: "Failed to update profile picture. Please try again.",
+					},
+				}),
+			),
+			model((current) => expect(current.isUploading).toBe(false)),
+		)
+	})
+
+	test("a failed crop returns to the editable image", () => {
+		story(
+			pageUpdate,
+			given(initial()),
+			...openCrop(),
+			message(Message.ClickedSaveCrop()),
+			Command.resolve(CropAvatarImage, Message.CompletedCropImage({ blob: null })),
+			Command.expectNone(),
+			model((current) => {
+				expect(current.crop._tag).toBe("Ready")
+				expect(current.cropModal.isOpen).toBe(true)
+			}),
+		)
+	})
+
+	test("an image that fails to load closes the dialog", () => {
+		story(
+			pageUpdate,
+			given(initial()),
+			message(Message.SelectedAvatarFiles({ files: [png] })),
+			Command.resolve(LoadCropImage, Message.FailedLoadCropImage()),
+			Command.expectNone(),
+			model((current) => {
+				expect(current.cropModal.isOpen).toBe(false)
+				expect(current.crop._tag).toBe("Idle")
+			}),
+		)
+	})
+
+	test("cancelling the crop frees the object URL", () => {
+		story(
+			pageUpdate,
+			given(initial()),
+			...openCrop(),
+			message(Message.ClickedCancelCrop()),
+			Command.expectExact(RevokeCropImage({ src: "blob:me" })),
+			Command.resolve(RevokeCropImage, Message.CompletedRevokeCropImage()),
+			model((current) => expect(current.cropModal.isOpen).toBe(false)),
+		)
+	})
+
+	test("an image that loads after the dialog closed is revoked, not shown", () => {
+		story(
+			pageUpdate,
+			given(initial()),
+			message(Message.LoadedCropImage({ image: loaded })),
+			Command.expectExact(RevokeCropImage({ src: "blob:me" })),
+			Command.resolve(RevokeCropImage, Message.CompletedRevokeCropImage()),
+			model((current) => expect(current.crop._tag).toBe("Idle")),
+		)
+	})
+
+	test("a file over 5MB is rejected with a toast", () => {
+		const huge = new File([new Uint8Array(5 * 1024 * 1024 + 1)], "big.png", { type: "image/png" })
+		story(
+			pageUpdate,
+			given(initial()),
+			message(Message.SelectedAvatarFiles({ files: [huge] })),
+			Command.expectNone(),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({
+					toast: {
+						intent: "error",
+						title: "File too large",
+						description: "Image must be less than 5MB",
+					},
+				}),
+			),
+		)
+	})
+
+	test("the avatar opens the file picker unless an upload is running", () => {
+		story(
+			pageUpdate,
+			given(initial()),
+			message(Message.ClickedAvatar()),
+			Command.expectExact(OpenFilePicker({})),
+			Command.resolve(OpenFilePicker, Message.CompletedOpenFilePicker()),
+		)
+		story(
+			pageUpdate,
+			given({ ...initial(), isUploading: true }),
+			message(Message.ClickedAvatar()),
+			Command.expectNone(),
+		)
+	})
+})
+
+describe("avatar reset", () => {
+	test("a failed reset clears the pending state and toasts", () => {
+		story(
+			pageUpdate,
+			given(initial()),
+			message(Message.ClickedResetAvatar()),
+			Command.resolve(ResetAvatar, Message.CompletedResetAvatar({ isReset: false })),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({
+					toast: { intent: "error", title: "Failed to reset profile picture", description: null },
+				}),
+			),
+			model((current) => expect(current.isResetting).toBe(false)),
+		)
+	})
+
+	// Bug: ClickedResetAvatar has no isResetting guard in update; only the view's disabled button prevents a second ResetAvatar.
+	test.fails("a second reset while one is pending is ignored", () => {
+		story(
+			pageUpdate,
+			given({ ...initial(), isResetting: true }),
+			message(Message.ClickedResetAvatar()),
+			Command.expectNone(),
+		)
 	})
 })

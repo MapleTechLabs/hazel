@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 import { UserId } from "@hazel/schema"
 import { Schema } from "effect"
-import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
+import { Command, expectNoOutMessage, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
 import type { Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
 import { UserRow } from "../user"
-import { UpdateUserSettings } from "./command"
+import { ExpireNotificationStatus, SendTestNotification, UpdateUserSettings } from "./command"
 import { Message } from "./message"
 import { settingsOf } from "./model"
 import { init, sharedChanged, update } from "./update"
@@ -85,7 +85,9 @@ describe("notification preferences", () => {
 			message(Message.ToggledSounds({ isSelected: false })),
 			model((current) => expect(current.volume.isDisabled).toBe(true)),
 			expectOutMessage(
-				PageOutMessage.RequestedSoundSettings({ settings: { ...shared.soundSettings, enabled: false } }),
+				PageOutMessage.RequestedSoundSettings({
+					settings: { ...shared.soundSettings, enabled: false },
+				}),
 			),
 		)
 	})
@@ -97,5 +99,58 @@ describe("notification preferences", () => {
 		}).model
 		expect(next.volume.values).toEqual([0.8])
 		expect(next.volume.isDisabled).toBe(true)
+	})
+})
+
+describe("user settings writes", () => {
+	test("a saved setting stays optimistic until the synced row replaces it", () => {
+		story(
+			pageUpdate,
+			given(init(undefined, shared).model),
+			message(Message.UpdatedUserRow({ row: Schema.decodeUnknownSync(UserRow)(row) })),
+			message(Message.ToggledShowQuietHours({ isSelected: true })),
+			Command.resolve(UpdateUserSettings, Message.SucceededUpdateUserSettings()),
+			expectNoOutMessage(),
+			model((current) => expect(settingsOf(current)?.showQuietHoursInStatus).toBe(true)),
+			message(
+				Message.UpdatedUserRow({
+					row: Schema.decodeUnknownSync(UserRow)({
+						...row,
+						settings: { ...row.settings, showQuietHoursInStatus: true },
+					}),
+				}),
+			),
+			model((current) => {
+				expect(current.optimisticSettings).toBeNull()
+				expect(current.settings?.showQuietHoursInStatus).toBe(true)
+			}),
+		)
+	})
+
+	test("without a signed-in user nothing is written", () => {
+		const signedOut = { ...shared, currentUser: null }
+		story(
+			(current: Parameters<typeof update>[0], next: Message) => update(current, next, signedOut),
+			given(init(undefined, signedOut).model),
+			message(Message.ToggledDoNotDisturb({ isSelected: true })),
+			Command.expectNone(),
+			model((current) => expect(current.optimisticSettings).toBeNull()),
+		)
+	})
+})
+
+describe("test notification", () => {
+	test("a sent notification shows the confirmation, then expires back to idle", () => {
+		story(
+			pageUpdate,
+			given(init(undefined, shared).model),
+			message(Message.ClickedTestNotification()),
+			Command.expectExact(SendTestNotification({})),
+			Command.resolve(SendTestNotification, Message.CompletedTestNotification({ isSent: true })),
+			model((current) => expect(current.notificationStatus).toBe("sent")),
+			Command.expectExact(ExpireNotificationStatus({})),
+			Command.resolve(ExpireNotificationStatus, Message.ExpiredNotificationStatus()),
+			model((current) => expect(current.notificationStatus).toBe("idle")),
+		)
 	})
 })
