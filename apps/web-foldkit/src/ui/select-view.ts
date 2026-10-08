@@ -294,6 +294,10 @@ const hiddenSelect = (model: Model, viewInputs: ViewInputs, h: HtmlBuilder<Messa
 		],
 	)
 
+/** useSelect's menuProps: the rendered label, or the trigger itself when only `aria-label` is set. */
+const popupLabelledBy = (id: string, viewInputs: ViewInputs) =>
+	viewInputs.ariaLabel === undefined ? labelId(id) : triggerId(id)
+
 const selectPopover = (model: Model, open: Open, viewInputs: ViewInputs, h: HtmlBuilder<Message>): Html => {
 	const initialFocusId = Option.match(open.focusedKey, {
 		onNone: () => listboxId(model.id),
@@ -320,7 +324,7 @@ const selectPopover = (model: Model, open: Open, viewInputs: ViewInputs, h: Html
 				[
 					h.div(
 						[
-							h.Attribute("aria-labelledby", labelId(model.id)),
+							h.Attribute("aria-labelledby", popupLabelledBy(model.id, viewInputs)),
 							h.Class(
 								twMerge(
 									twMerge(...popoverContentBase),
@@ -375,7 +379,7 @@ const selectPopover = (model: Model, open: Open, viewInputs: ViewInputs, h: Html
 const listbox = (model: Model, open: Open, viewInputs: ViewInputs, h: HtmlBuilder<Message>): Html =>
 	h.div(
 		[
-			h.Attribute("aria-labelledby", labelId(model.id)),
+			h.Attribute("aria-labelledby", popupLabelledBy(model.id, viewInputs)),
 			h.Class(twMerge(twMerge(selectListBoxBase), viewInputs.listBoxClassName)),
 			h.Attribute("data-layout", "stack"),
 			h.Attribute("data-orientation", "vertical"),

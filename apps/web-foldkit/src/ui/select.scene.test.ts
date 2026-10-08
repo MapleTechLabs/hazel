@@ -138,8 +138,8 @@ describe("select scene", () => {
 		)
 	})
 
-	// Bug: select-view.ts:323 and :378 label the popover and listbox by `labelId`, which is not rendered without a label.
-	test.fails("an aria-label-only select does not label its listbox by a missing element", () => {
+	// T6: with only an aria-label, the popover and listbox are labelled by the trigger, as in React Aria.
+	test("an aria-label-only select does not label its listbox by a missing element", () => {
 		Scene.scene(
 			{ update, view: sceneView({ label: undefined, ariaLabel: "Clear after" }) },
 			Scene.given(init({ id: "clear", items })),
@@ -148,6 +148,8 @@ describe("select scene", () => {
 			Scene.pointerDown(trigger),
 			portalled,
 			Scene.expect(Scene.role("listbox")).not.toHaveAttr("aria-labelledby", "clear-label"),
+			Scene.expect(Scene.role("listbox")).toHaveAttr("aria-labelledby", "clear-trigger"),
+			Scene.expect(Scene.role("dialog")).toHaveAttr("aria-labelledby", "clear-trigger"),
 		)
 	})
 })
