@@ -241,7 +241,9 @@ const withUrl = (model: Model, url: Url): Model => {
 	return modifyFields(model, {
 		route: () => route,
 		pathname: () => url.pathname,
-		currentUrl: () => `${url.pathname}${Option.getOrElse(url.search, () => "")}`,
+		// Foldkit's `Url.search` holds the query without its `?`.
+		currentUrl: () =>
+			Option.match(url.search, { onNone: () => url.pathname, onSome: (search) => `${url.pathname}?${search}` }),
 	})
 }
 

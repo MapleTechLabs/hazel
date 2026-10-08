@@ -45,9 +45,8 @@ describe("redirects", () => {
 		)
 	})
 
-	// BUG: `withUrl` (main.ts) joins `url.search` without its `?` (foldkit's Url.search omits it),
-	// so the return URL becomes `/hazel/settings/teamtab=roles`, a NotFound after sign-in.
-	test.fails("the return URL keeps the search params", () => {
+	// B1: foldkit's Url.search omits the `?`; `withUrl` must add it back.
+	test("the return URL keeps the search params", () => {
 		story(
 			update,
 			given(boot("/hazel/settings/team?tab=roles")),
