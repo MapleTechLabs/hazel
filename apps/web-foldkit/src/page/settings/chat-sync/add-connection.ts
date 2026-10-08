@@ -1,6 +1,6 @@
 import { OrganizationId } from "@hazel/schema"
 import { Effect, Exit, Schema } from "effect"
-import { Command } from "foldkit"
+import { Command, Render } from "foldkit"
 import * as Dom from "foldkit/dom"
 import { HazelRpc } from "../../../rpc"
 import { failureToast } from "../../../ui/toast-exit"
@@ -21,6 +21,8 @@ export const CreateConnection = Command.define("CreateConnection", {
 	messages: [Message.SucceededCreateConnection, Message.FailedCreateConnection],
 	execute: ({ organizationId, externalWorkspaceId, externalWorkspaceName }) =>
 		Effect.gen(function* () {
+			// React paints the pending button on the click, before any reply; wait for that commit.
+			yield* Render.afterCommit
 			const client = yield* HazelRpc
 			const exit = yield* Effect.exit(
 				client("chatSync.connection.create", {

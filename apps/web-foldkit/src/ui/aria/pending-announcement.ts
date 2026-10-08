@@ -8,11 +8,13 @@ import { announce } from "./announcer"
 let generatedIds = 0
 
 /**
- * Disabling a focused button drops its focus before the observer runs (with or without a blur
- * event); RAC reads the focus state of the render that set pending, so the last focused button
- * still counts while nothing else took focus and it did not blur on its own.
+ * Disabling a focused button drops its focus before the observer runs; RAC reads the focus state
+ * of the render that set pending. So the button last focused or pressed (usePress focuses it on
+ * pointerdown) still counts while focus has fallen to the body and nothing else took it.
  */
 let lastFocusedButton: HTMLButtonElement | null = null
+
+const buttonOf = (target: EventTarget | null) => (target instanceof Element ? target.closest("button") : null)
 
 const watchPendingButtons = () => {
 	document.addEventListener(
@@ -23,17 +25,16 @@ const watchPendingButtons = () => {
 		true,
 	)
 	document.addEventListener(
-		"focusout",
+		"pointerdown",
 		(event) => {
-			const button = event.target
-			if (button instanceof HTMLButtonElement && button === lastFocusedButton && !button.disabled)
-				lastFocusedButton = null
+			lastFocusedButton = buttonOf(event.target)
 		},
 		true,
 	)
 	const wasFocused = (element: HTMLButtonElement) =>
 		document.activeElement === element ||
-		(lastFocusedButton === element && document.activeElement === document.body)
+		(lastFocusedButton === element &&
+			(document.activeElement === null || document.activeElement === document.body))
 	const observer = new MutationObserver((records) => {
 		records.forEach((record) => {
 			const element = record.target
