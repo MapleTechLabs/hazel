@@ -76,9 +76,27 @@ export const thumbMin = (model: Model, index: number) => model.values[index - 1]
 export const thumbMax = (model: Model, index: number) => model.values[index + 1] ?? model.maxValue
 const pageSize = (model: Model) => Math.max((model.maxValue - model.minValue) / 10, model.step)
 
+/** @react-stately/utils roundToStepPrecision: drop float noise below the step's precision. */
+const roundToStepPrecision = (value: number, step: number) => {
+	const stepString = step.toString()
+	const eIndex = stepString.toLowerCase().indexOf("e-")
+	const pointIndex = stepString.indexOf(".")
+	const precision =
+		eIndex > 0
+			? Math.abs(Math.floor(Math.log10(Math.abs(step)))) + eIndex
+			: pointIndex >= 0
+				? stepString.length - pointIndex
+				: 0
+	const pow = 10 ** precision
+	return precision > 0 ? Math.round(value * pow) / pow : value
+}
+
 /** useSliderState: clamp to the thumb's neighbours and snap to the step. */
 const setThumbValue = (model: Model, index: number, value: number): Model => {
-	const snapped = Math.round((value - model.minValue) / model.step) * model.step + model.minValue
+	const snapped = roundToStepPrecision(
+		Math.round((value - model.minValue) / model.step) * model.step + model.minValue,
+		model.step,
+	)
 	const next = Num.clamp(snapped, { minimum: thumbMin(model, index), maximum: thumbMax(model, index) })
 	return modifyFields(model, {
 		values: (values) => values.map((current, i) => (i === index ? next : current)),
@@ -102,7 +120,7 @@ export const FocusThumb = Command.define("FocusThumb", {
 	args: { inputId: Schema.String },
 	messages: [Message.CompletedFocusThumb],
 	execute: ({ inputId }) =>
-		Dom.focus(`#${inputId}`, { preventScroll: true }).pipe(
+		Dom.focus(`#${CSS.escape(inputId)}`, { preventScroll: true }).pipe(
 			Effect.ignore,
 			Effect.as(Message.CompletedFocusThumb()),
 		),

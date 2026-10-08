@@ -87,13 +87,15 @@ describe("slider story", () => {
 		)
 	})
 
-	// Bug: setThumbValue snaps with float arithmetic and never rounds to the step's precision.
-	test.fails("a decimal step lands exactly on the step value", () => {
+	// T9: snapping rounds to the step's precision, as React Aria's roundToStepPrecision does.
+	test("a decimal step lands exactly on the step value", () => {
 		story(
 			update,
 			given(init({ id: "opacity", values: [0], minValue: 0, maxValue: 1, step: 0.1 })),
 			input("0.3"),
 			model((next) => expect(next.values).toEqual([0.3])),
+			input("0.7"),
+			model((next) => expect(next.values).toEqual([0.7])),
 		)
 	})
 })
