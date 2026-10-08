@@ -1,4 +1,10 @@
-import { ChannelId, ExternalChannelId, OrganizationId, SyncChannelLinkId, SyncConnectionId } from "@hazel/schema"
+import {
+	ChannelId,
+	ExternalChannelId,
+	OrganizationId,
+	SyncChannelLinkId,
+	SyncConnectionId,
+} from "@hazel/schema"
 import { type Cause, Effect, Exit, Schema } from "effect"
 import { Command, Render } from "foldkit"
 import * as Dom from "foldkit/dom"
@@ -6,7 +12,14 @@ import { HazelRpc } from "../../../rpc"
 import { failureToast } from "../../../ui/toast-exit"
 import { fetchDiscordGuildChannels } from "../chat-sync/discord"
 import { fetchConnections } from "../chat-sync/rpc"
-import { CHANNEL_SEARCH_ID, type ChannelLink, DIRECTION_LABELS, Message, SyncDirection, WebhookPermission } from "./model"
+import {
+	CHANNEL_SEARCH_ID,
+	type ChannelLink,
+	DIRECTION_LABELS,
+	Message,
+	SyncDirection,
+	WebhookPermission,
+} from "./model"
 
 const linkNotFound = {
 	ChatSyncChannelLinkNotFoundError: {
@@ -21,7 +34,7 @@ const toastFields = (cause: Cause.Cause<unknown>, handlers: Parameters<typeof fa
 	return { title: toast.title, description: toast.description }
 }
 
-export const ListConnections = Command.define("ListConnections", {
+export const ListConnections = Command.define("ListChatSyncConnectionsForConnection", {
 	args: { organizationId: OrganizationId },
 	messages: [Message.SucceededListConnections, Message.FailedListConnections],
 	execute: ({ organizationId }) =>
@@ -37,8 +50,8 @@ export const ListDiscordChannels = Command.define("ListDiscordChannels", {
 	messages: [Message.SucceededListDiscordChannels, Message.FailedListDiscordChannels],
 	execute: ({ organizationId, guildId }) =>
 		fetchDiscordGuildChannels(organizationId, guildId).pipe(
-			Effect.map((channels) => Message.SucceededListDiscordChannels({ channels })),
-			Effect.catch(() => Effect.succeed(Message.FailedListDiscordChannels())),
+			Effect.map((channels) => Message.SucceededListDiscordChannels({ guildId, channels })),
+			Effect.catch(() => Effect.succeed(Message.FailedListDiscordChannels({ guildId }))),
 		),
 })
 
@@ -55,9 +68,9 @@ const webhookPermissionOf = (settings: unknown): WebhookPermission => {
 }
 
 export const ListChannelLinks = Command.define("ListChannelLinks", {
-	args: { syncConnectionId: SyncConnectionId },
+	args: { syncConnectionId: SyncConnectionId, version: Schema.Number },
 	messages: [Message.SucceededListChannelLinks, Message.FailedListChannelLinks],
-	execute: ({ syncConnectionId }) =>
+	execute: ({ syncConnectionId, version }) =>
 		Effect.gen(function* () {
 			const client = yield* HazelRpc
 			const response = yield* client("chatSync.channelLink.list", { syncConnectionId })
@@ -71,8 +84,8 @@ export const ListChannelLinks = Command.define("ListChannelLinks", {
 					webhookPermission: webhookPermissionOf(link.settings),
 				}),
 			)
-			return Message.SucceededListChannelLinks({ links })
-		}).pipe(Effect.catch(() => Effect.succeed(Message.FailedListChannelLinks()))),
+			return Message.SucceededListChannelLinks({ version, links })
+		}).pipe(Effect.catch(() => Effect.succeed(Message.FailedListChannelLinks({ version })))),
 })
 
 export const DisconnectConnection = Command.define("DisconnectConnection", {
@@ -119,7 +132,7 @@ export const UpdateChannelLink = Command.define("UpdateChannelLink", {
 		isActive: Schema.optional(Schema.Boolean),
 		direction: Schema.optional(SyncDirection),
 	},
-	messages: [Message.SucceededUpdateLink, Message.FailedLinkAction],
+	messages: [Message.SucceededUpdateLink, Message.FailedUpdateLink],
 	execute: ({ syncChannelLinkId, isActive, direction }) =>
 		Effect.gen(function* () {
 			const client = yield* HazelRpc
@@ -138,16 +151,14 @@ export const UpdateChannelLink = Command.define("UpdateChannelLink", {
 						: "Channel link paused"
 					: `Sync direction updated to ${DIRECTION_LABELS[direction]}`
 			return Exit.match(exit, {
-				onSuccess: () => Message.SucceededUpdateLink({ successMessage }),
-				onFailure: (cause) => Message.FailedLinkAction(toastFields(cause, linkNotFound)),
+				onSuccess: () => Message.SucceededUpdateLink({ linkId: syncChannelLinkId, successMessage }),
+				onFailure: (cause) =>
+					Message.FailedUpdateLink({
+						linkId: syncChannelLinkId,
+						...toastFields(cause, linkNotFound),
+					}),
 			})
 		}),
-})
-
-/** Lets the success toast reach the root before the page navigates away. */
-export const ScheduleReturnToList = Command.define("ScheduleReturnToList", {
-	messages: [Message.ReachedReturnToList],
-	execute: Effect.succeed(Message.ReachedReturnToList()),
 })
 
 /** `AddChannelLinkModal.handleSubmit` (`chatSync.channelLink.create`) with its `exitToast` handlers. */

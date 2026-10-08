@@ -10,13 +10,7 @@ import { successToast } from "../../../ui/toast-exit"
 import { makeShared, organizationId, pageScene, portalModalMounted, uuid } from "../../../test/pages-fixtures"
 import { connection, syncConnectionId } from "../../../test/pages-integrations-fixtures"
 import { PageOutMessage } from "../../out-message"
-import {
-	CreateChannelLink,
-	DisconnectConnection,
-	ListChannelLinks,
-	RemoveChannelLink,
-	ScheduleReturnToList,
-} from "./command"
+import { CreateChannelLink, DisconnectConnection, ListChannelLinks, RemoveChannelLink } from "./command"
 import { Message, type Model } from "./model"
 import { init, update } from "./update"
 import { view } from "./view"
@@ -26,7 +20,11 @@ import { view } from "./view"
 const shared = makeShared()
 const config = pageScene(update, view, shared)
 const step = (model: Model, message: Message) => update(model, message, shared).model
-const route = { _tag: "SettingsChatSyncConnection", orgSlug: "hazel", connectionId: syncConnectionId } as const
+const route = {
+	_tag: "SettingsChatSyncConnection",
+	orgSlug: "hazel",
+	connectionId: syncConnectionId,
+} as const
 const linkId = Schema.decodeSync(SyncChannelLinkId)(uuid(40))
 const hazelChannel = { id: Schema.decodeSync(ChannelId)(uuid(41)), name: "engineering" }
 const discordChannel = {
@@ -47,12 +45,12 @@ const link = {
 const initial = init(route, shared).model
 const found = [
 	Message.SucceededListConnections({ organizationId, connections: [connection] }),
-	Message.SucceededListDiscordChannels({ channels: [discordChannel] }),
+	Message.SucceededListDiscordChannels({ guildId: "918273645500120", channels: [discordChannel] }),
 	Message.UpdatedHazelChannels({ channels: [hazelChannel] }),
 	Message.UpdatedChannelNames({ names: { [hazelChannel.id]: "engineering" } }),
 ].reduce(step, initial)
-const withLink = step(found, Message.SucceededListChannelLinks({ links: [link] }))
-const withoutLinks = step(found, Message.SucceededListChannelLinks({ links: [] }))
+const withLink = step(found, Message.SucceededListChannelLinks({ version: 1, links: [link] }))
+const withoutLinks = step(found, Message.SucceededListChannelLinks({ version: 1, links: [] }))
 
 const dialog = Scene.role("dialog")
 const inDialog = (name: string | RegExp) => Scene.within(dialog, Scene.role("button", { name }))
@@ -80,7 +78,9 @@ describe("connection states", () => {
 			Scene.given(step(initial, Message.SucceededListConnections({ organizationId, connections: [] }))),
 			Scene.expect(Scene.text("Connection not found")).toExist(),
 			Scene.click(Scene.role("button", { name: "Go back" })),
-			Scene.expectOutMessage(PageOutMessage.RequestedNavigation({ href: "/hazel/settings/chat-sync", replace: false })),
+			Scene.expectOutMessage(
+				PageOutMessage.RequestedNavigation({ href: "/hazel/settings/chat-sync", replace: false }),
+			),
 		)
 	})
 
@@ -109,11 +109,15 @@ describe("disconnect", () => {
 			Scene.Command.expectExact(DisconnectConnection({ syncConnectionId })),
 			Scene.expect(inDialog("Disconnecting...")).toBeDisabled(),
 			Scene.Command.resolve(DisconnectConnection, Message.SucceededDisconnect()),
-			Scene.expectOutMessage(PageOutMessage.RequestedToast({ toast: successToast("Connection deleted") })),
+			Scene.expectOutMessage(
+				PageOutMessage.RequestedNavigation({
+					href: "/hazel/settings/chat-sync",
+					replace: false,
+					toast: successToast("Connection deleted"),
+				}),
+			),
 			Scene.expect(dialog).toBeAbsent(),
 			Scene.Mount.expectEnded(Modal.PortalModal),
-			Scene.Command.resolve(ScheduleReturnToList, Message.ReachedReturnToList()),
-			Scene.expectOutMessage(PageOutMessage.RequestedNavigation({ href: "/hazel/settings/chat-sync", replace: false })),
 		)
 	})
 
@@ -124,9 +128,14 @@ describe("disconnect", () => {
 			Scene.click(Scene.role("button", { name: "Disconnect" })),
 			portalModalMounted,
 			Scene.click(inDialog("Disconnect")),
-			Scene.Command.resolve(DisconnectConnection, Message.FailedDisconnect({ title: "Request failed", description: null })),
+			Scene.Command.resolve(
+				DisconnectConnection,
+				Message.FailedDisconnect({ title: "Request failed", description: null }),
+			),
 			Scene.expectOutMessage(
-				PageOutMessage.RequestedToast({ toast: { intent: "error", title: "Request failed", description: null } }),
+				PageOutMessage.RequestedToast({
+					toast: { intent: "error", title: "Request failed", description: null },
+				}),
 			),
 			Scene.expect(dialog).toBeAbsent(),
 			Scene.Mount.expectEnded(Modal.PortalModal),
@@ -151,12 +160,17 @@ describe("remove a channel link", () => {
 			Scene.Command.expectExact(RemoveChannelLink({ syncChannelLinkId: linkId })),
 			Scene.expect(inDialog("Removing...")).toBeDisabled(),
 			Scene.Command.resolve(RemoveChannelLink, Message.SucceededRemoveLink()),
-			Scene.expectOutMessage(PageOutMessage.RequestedToast({ toast: successToast("Channel link removed") })),
+			Scene.expectOutMessage(
+				PageOutMessage.RequestedToast({ toast: successToast("Channel link removed") }),
+			),
 			Scene.expect(dialog).toBeAbsent(),
 			Scene.Mount.expectEnded(Modal.PortalModal),
 			Scene.expect(Scene.text("Loading channel links...")).toExist(),
 			Scene.Mount.expectEnded(FocusTriggerOnPress),
-			Scene.Command.resolve(ListChannelLinks, Message.SucceededListChannelLinks({ links: [] })),
+			Scene.Command.resolve(
+				ListChannelLinks,
+				Message.SucceededListChannelLinks({ version: 2, links: [] }),
+			),
 			Scene.expect(Scene.text("No channels linked")).toExist(),
 		)
 	})
@@ -168,9 +182,14 @@ describe("remove a channel link", () => {
 			linkMenuMounted,
 			portalModalMounted,
 			Scene.click(inDialog("Remove Link")),
-			Scene.Command.resolve(RemoveChannelLink, Message.FailedRemoveLink({ title: "Request failed", description: null })),
+			Scene.Command.resolve(
+				RemoveChannelLink,
+				Message.FailedRemoveLink({ title: "Request failed", description: null }),
+			),
 			Scene.expectOutMessage(
-				PageOutMessage.RequestedToast({ toast: { intent: "error", title: "Request failed", description: null } }),
+				PageOutMessage.RequestedToast({
+					toast: { intent: "error", title: "Request failed", description: null },
+				}),
 			),
 			Scene.expect(inDialog("Remove Link")).toBeEnabled(),
 		)
@@ -205,11 +224,17 @@ describe("link a channel", () => {
 				}),
 			),
 			Scene.expect(inDialog("Linking...")).toBeDisabled(),
-			Scene.Command.resolve(CreateChannelLink, Message.SucceededCreateLink({ successMessage: "Channel linked" })),
+			Scene.Command.resolve(
+				CreateChannelLink,
+				Message.SucceededCreateLink({ successMessage: "Channel linked" }),
+			),
 			Scene.expectOutMessage(PageOutMessage.RequestedToast({ toast: successToast("Channel linked") })),
 			Scene.expect(dialog).toBeAbsent(),
 			Scene.Mount.expectEnded(Modal.PortalModal),
-			Scene.Command.resolve(ListChannelLinks, Message.SucceededListChannelLinks({ links: [link] })),
+			Scene.Command.resolve(
+				ListChannelLinks,
+				Message.SucceededListChannelLinks({ version: 2, links: [link] }),
+			),
 			linkMenuMounted,
 			Scene.expect(Scene.text("general")).toExist(),
 		)
@@ -218,13 +243,22 @@ describe("link a channel", () => {
 	test("a failed link keeps the picks and re-enables Link Channel", () => {
 		Scene.scene(
 			config,
-			Scene.given({ ...withoutLinks, selectedChannel: hazelChannel, selectedDiscordChannel: discordChannel }),
+			Scene.given({
+				...withoutLinks,
+				selectedChannel: hazelChannel,
+				selectedDiscordChannel: discordChannel,
+			}),
 			Scene.click(Scene.role("button", { name: /Link Channel$/ })),
 			addLinkModalMounted,
 			Scene.click(linkButton),
-			Scene.Command.resolve(CreateChannelLink, Message.FailedCreateLink({ title: "Already linked", description: null })),
+			Scene.Command.resolve(
+				CreateChannelLink,
+				Message.FailedCreateLink({ title: "Already linked", description: null }),
+			),
 			Scene.expectOutMessage(
-				PageOutMessage.RequestedToast({ toast: { intent: "error", title: "Already linked", description: null } }),
+				PageOutMessage.RequestedToast({
+					toast: { intent: "error", title: "Already linked", description: null },
+				}),
 			),
 			Scene.expect(Scene.within(dialog, Scene.text("dev-chat"))).toExist(),
 			Scene.expect(linkButton).toBeEnabled(),
@@ -234,7 +268,11 @@ describe("link a channel", () => {
 	test("Discord channels that fail to load explain why and keep Link Channel disabled", () => {
 		Scene.scene(
 			config,
-			Scene.given({ ...withoutLinks, discordChannels: { _tag: "Failed" }, selectedChannel: hazelChannel }),
+			Scene.given({
+				...withoutLinks,
+				discordChannels: { _tag: "Failed" },
+				selectedChannel: hazelChannel,
+			}),
 			Scene.click(Scene.role("button", { name: /Link Channel$/ })),
 			addLinkModalMounted,
 			Scene.expect(Scene.text("Could not load Discord channels")).toExist(),

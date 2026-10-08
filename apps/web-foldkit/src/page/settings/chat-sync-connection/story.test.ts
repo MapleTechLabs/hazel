@@ -1,5 +1,11 @@
 import "../../channel-settings/document-stub"
-import { ChannelId, ExternalChannelId, OrganizationId, SyncChannelLinkId, SyncConnectionId } from "@hazel/schema"
+import {
+	ChannelId,
+	ExternalChannelId,
+	OrganizationId,
+	SyncChannelLinkId,
+	SyncConnectionId,
+} from "@hazel/schema"
 import { Schema } from "effect"
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
@@ -10,9 +16,9 @@ import {
 	CreateChannelLink,
 	DisconnectConnection,
 	ListChannelLinks,
+	ListConnections,
 	ListDiscordChannels,
 	RemoveChannelLink,
-	ScheduleReturnToList,
 	UpdateChannelLink,
 } from "./command"
 import { Message } from "./model"
@@ -42,13 +48,16 @@ const link = {
 }
 const run = (current: Parameters<typeof update>[0], next: Message) => update(current, next, shared)
 const route = { _tag: "SettingsChatSyncConnection" as const, orgSlug: "hazel", connectionId }
-const loaded = run(init(route, shared).model, Message.SucceededListChannelLinks({ links: [link] })).model
+const loaded = run(
+	init(route, shared).model,
+	Message.SucceededListChannelLinks({ version: 1, links: [link] }),
+).model
 
 describe("chat sync connection", () => {
 	test("init lists the connections and the channel links", () => {
 		expect(init(route, shared).commands?.map((command) => command.name)).toEqual([
-			"ListConnections",
-			"ListChannelLinks",
+			ListConnections.name,
+			ListChannelLinks.name,
 		])
 	})
 
@@ -79,11 +88,11 @@ describe("chat sync connection", () => {
 				}),
 			),
 			model((current) => expect(current.links._tag).toBe("Loading")),
-			Command.resolve(ListChannelLinks, Message.SucceededListChannelLinks({ links: [] })),
+			Command.resolve(ListChannelLinks, Message.SucceededListChannelLinks({ version: 2, links: [] })),
 		)
 	})
 
-	test("disconnecting toasts, then returns to the list", () => {
+	test("disconnecting returns to the list with the success toast", () => {
 		story(
 			run,
 			given(loaded),
@@ -91,15 +100,32 @@ describe("chat sync connection", () => {
 			message(Message.ClickedConfirmDisconnect()),
 			Command.resolve(DisconnectConnection, Message.SucceededDisconnect()),
 			expectOutMessage(
-				PageOutMessage.RequestedToast({
+				PageOutMessage.RequestedNavigation({
+					href: "/hazel/settings/chat-sync",
+					replace: false,
 					toast: { intent: "success", title: "Connection deleted", description: null },
 				}),
 			),
-			Command.resolve(ScheduleReturnToList, Message.ReachedReturnToList()),
-			expectOutMessage(
-				PageOutMessage.RequestedNavigation({ href: "/hazel/settings/chat-sync", replace: false }),
-			),
+			model((current) => expect(current.disconnectModal.isOpen).toBe(false)),
 		)
+	})
+
+	test("an older links list is dropped once a reload is out", () => {
+		const reloading = { ...loaded, linksVersion: 2, links: { _tag: "Loading" as const } }
+		expect(
+			run(reloading, Message.SucceededListChannelLinks({ version: 1, links: [] })).model.links,
+		).toEqual({
+			_tag: "Loading",
+		})
+		expect(run(reloading, Message.FailedListChannelLinks({ version: 1 })).model.links).toEqual({
+			_tag: "Loading",
+		})
+		expect(
+			run(reloading, Message.SucceededListChannelLinks({ version: 2, links: [link] })).model.links,
+		).toEqual({
+			_tag: "Loaded",
+			links: [link],
+		})
 	})
 
 	test("a found connection mounts the link modal, which lists its guild's Discord channels", () => {
@@ -111,7 +137,13 @@ describe("chat sync connection", () => {
 			errorMessage: null,
 			lastSyncedAtMs: null,
 		}
-		const channel = { id: Schema.decodeSync(ExternalChannelId)("1"), guildId: "918273645500120", name: "general", type: 0, parentId: null }
+		const channel = {
+			id: Schema.decodeSync(ExternalChannelId)("1"),
+			guildId: "918273645500120",
+			name: "general",
+			type: 0,
+			parentId: null,
+		}
 		story(
 			run,
 			given(init(route, shared).model),
@@ -119,10 +151,19 @@ describe("chat sync connection", () => {
 			Command.expectExact(ListDiscordChannels({ organizationId, guildId: "918273645500120" })),
 			Command.resolve(
 				ListDiscordChannels,
-				Message.SucceededListDiscordChannels({ channels: [channel] }),
+				Message.SucceededListDiscordChannels({ guildId: "918273645500120", channels: [channel] }),
 			),
 			model((current) => expect(current.discordChannels).toEqual({ _tag: "Loaded", items: [channel] })),
 		)
+		const listing = run(
+			init(route, shared).model,
+			Message.SucceededListConnections({ organizationId, connections: [connection] }),
+		)
+		const otherGuild = run(
+			listing.model,
+			Message.SucceededListDiscordChannels({ guildId: "1", channels: [channel] }),
+		)
+		expect(otherGuild.model.discordChannels).toEqual({ _tag: "Loading" })
 	})
 
 	test("a missing connection sends no channel query", () => {
@@ -166,7 +207,11 @@ describe("chat sync connection", () => {
 			),
 			expectOutMessage(
 				PageOutMessage.RequestedToast({
-					toast: { intent: "success", title: "Linked #random to #announcements", description: null },
+					toast: {
+						intent: "success",
+						title: "Linked #random to #announcements",
+						description: null,
+					},
 				}),
 			),
 			model((current) => {
@@ -175,14 +220,18 @@ describe("chat sync connection", () => {
 				expect(current.direction).toBe("both")
 				expect(current.links._tag).toBe("Loading")
 			}),
-			Command.resolve(ListChannelLinks, Message.SucceededListChannelLinks({ links: [] })),
+			Command.resolve(ListChannelLinks, Message.SucceededListChannelLinks({ version: 2, links: [] })),
 		)
 	})
 })
 
 describe("chat sync connection guards and link actions", () => {
-	const openMenu = Message.GotLinkMenuMessage({ linkId, message: Menu.Message.PressedTrigger({ pointerType: "mouse" }) })
-	const pick = (key: string) => Message.GotLinkMenuMessage({ linkId, message: Menu.Message.ClickedItem({ key }) })
+	const openMenu = Message.GotLinkMenuMessage({
+		linkId,
+		message: Menu.Message.PressedTrigger({ pointerType: "mouse" }),
+	})
+	const pick = (key: string) =>
+		Message.GotLinkMenuMessage({ linkId, message: Menu.Message.ClickedItem({ key }) })
 
 	test("Pause sync from the row menu pauses the link, toasts and reloads", () => {
 		story(
@@ -192,23 +241,46 @@ describe("chat sync connection guards and link actions", () => {
 			Command.resolveAll(),
 			message(pick("toggle")),
 			Command.expectHas(UpdateChannelLink({ syncChannelLinkId: linkId, isActive: false })),
-			Command.resolve(UpdateChannelLink, Message.SucceededUpdateLink({ successMessage: "Channel link paused" })),
-			expectOutMessage(
-				PageOutMessage.RequestedToast({ toast: { intent: "success", title: "Channel link paused", description: null } }),
+			Command.resolve(
+				UpdateChannelLink,
+				Message.SucceededUpdateLink({ linkId, successMessage: "Channel link paused" }),
 			),
-			Command.resolveAll([ListChannelLinks, Message.SucceededListChannelLinks({ links: [{ ...link, isActive: false }] })]),
-			model((current) => expect(current.links).toEqual({ _tag: "Loaded", links: [{ ...link, isActive: false }] })),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({
+					toast: { intent: "success", title: "Channel link paused", description: null },
+				}),
+			),
+			Command.resolveAll([
+				ListChannelLinks,
+				Message.SucceededListChannelLinks({ version: 2, links: [{ ...link, isActive: false }] }),
+			]),
+			model((current) =>
+				expect(current.links).toEqual({ _tag: "Loaded", links: [{ ...link, isActive: false }] }),
+			),
 		)
+	})
+
+	test("a second pause while one runs sends nothing, and a settled link can update again", () => {
+		const updating = run(run(loaded, openMenu).model, pick("toggle")).model
+		expect(updating.updatingLinkIds).toEqual([linkId])
+		const again = run(run(updating, openMenu).model, pick("toggle"))
+		expect(again.commands?.some((command) => command.name === UpdateChannelLink.name)).toBe(false)
+		const failed = run(updating, Message.FailedUpdateLink({ linkId, title: "Failed", description: null }))
+		expect(failed.model.updatingLinkIds).toEqual([])
+		const retried = run(run(failed.model, openMenu).model, pick("toggle"))
+		expect(retried.commands?.some((command) => command.name === UpdateChannelLink.name)).toBe(true)
 	})
 
 	test("a failed link action toasts and leaves the links loaded", () => {
 		story(
 			run,
 			given(loaded),
-			message(Message.FailedLinkAction({ title: "Channel link not found", description: null })),
+			message(Message.FailedUpdateLink({ linkId, title: "Channel link not found", description: null })),
 			Command.expectNone(),
 			expectOutMessage(
-				PageOutMessage.RequestedToast({ toast: { intent: "error", title: "Channel link not found", description: null } }),
+				PageOutMessage.RequestedToast({
+					toast: { intent: "error", title: "Channel link not found", description: null },
+				}),
 			),
 			model((current) => expect(current.links._tag).toBe("Loaded")),
 		)

@@ -1,5 +1,5 @@
 import { Array, Option } from "effect"
-import { Command } from "foldkit"
+import { Command, Update } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import type { ToastRequest } from "../../../overlay/toasts"
 import type { RouteOf } from "../../../route"
@@ -18,7 +18,6 @@ import {
 	ListConnections,
 	ListDiscordChannels,
 	RemoveChannelLink,
-	ScheduleReturnToList,
 	UpdateChannelLink,
 } from "./command"
 import {
@@ -56,6 +55,8 @@ export const init = (route: RouteOf<"SettingsChatSyncConnection">, shared: Share
 			requestedOrganizationId: null,
 			connection: { _tag: "Loading" },
 			links: { _tag: "Loading" },
+			linksVersion: 1,
+			updatingLinkIds: [],
 			channelNames: {},
 			linkMenus: [],
 			addLinkModal: Modal.init(ADD_LINK_MODAL_ID),
@@ -79,16 +80,33 @@ export const init = (route: RouteOf<"SettingsChatSyncConnection">, shared: Share
 	)
 	return {
 		...started,
-		commands: [...(started.commands ?? []), ListChannelLinks({ syncConnectionId: route.connectionId })],
+		commands: [
+			...(started.commands ?? []),
+			ListChannelLinks({ syncConnectionId: route.connectionId, version: 1 }),
+		],
 	}
 }
 
 export const sharedChanged = (model: Model, shared: Shared): Return => requestConnections(model, shared)
 
 /** `setRefreshKey(k => k + 1)`: a new query key, so the links load again. */
-const reloadLinks = (model: Model): Pick<Return, "model" | "commands"> => ({
-	model: modifyFields(model, { links: () => ({ _tag: "Loading" as const }) }),
-	commands: [ListChannelLinks({ syncConnectionId: model.connectionId })],
+const reloadLinks = (model: Model): Pick<Return, "model" | "commands"> => {
+	const version = model.linksVersion + 1
+	return {
+		model: modifyFields(model, {
+			links: () => ({ _tag: "Loading" as const }),
+			linksVersion: () => version,
+		}),
+		commands: [ListChannelLinks({ syncConnectionId: model.connectionId, version })],
+	}
+}
+
+const withCommands = (
+	result: Pick<Return, "model" | "commands">,
+	commands: Return["commands"],
+): Pick<Return, "model" | "commands"> => ({
+	model: result.model,
+	commands: [...(result.commands ?? []), ...(commands ?? [])],
 })
 
 const toast = (request: ToastRequest) => PageOutMessage.RequestedToast({ toast: request })
@@ -110,49 +128,53 @@ const reflectLinkMenus = (model: Model, links: ReadonlyArray<ChannelLink>): Mode
 			),
 	})
 
-const foldModal =
-	(key: "deleteLinkModal" | "disconnectModal", wrap: (message: Modal.Message) => Message) =>
-	(model: Model, message: Modal.Message): Return => {
-		const next = Modal.update(model[key], message)
-		const closed = !next.model.isOpen
-		return {
-			model: {
-				...model,
-				[key]: next.model,
-				...(key === "deleteLinkModal" && closed ? { deleteTarget: null } : {}),
-			},
-			commands: Command.mapMessages(next.commands ?? [], wrap),
-		}
-	}
+const deleteLinkModal = {
+	read: (model: Model) => Option.some(model.deleteLinkModal),
+	// A closed dialog forgets its target (`onOpenChange(false)`).
+	write: (model: Model, modal: Modal.Model): Model =>
+		modifyFields(model, {
+			deleteLinkModal: () => modal,
+			deleteTarget: (target) => (modal.isOpen ? target : null),
+		}),
+	toParentMessage: (message: Modal.Message) => Message.GotDeleteLinkModalMessage({ message }),
+}
+const foldDeleteLinkModal = Update.foldChild({ update: Modal.update, ...deleteLinkModal })
+const openDeleteLinkModal = Update.foldChildStep({ update: Modal.open, ...deleteLinkModal })
+const closeDeleteLinkModal = Update.foldChildStep({ update: Modal.close, ...deleteLinkModal })
 
-const foldDeleteLinkModal = foldModal("deleteLinkModal", (message) =>
-	Message.GotDeleteLinkModalMessage({ message }),
-)
-const foldDisconnectModal = foldModal("disconnectModal", (message) =>
-	Message.GotDisconnectModalMessage({ message }),
-)
+const disconnectModal = {
+	read: (model: Model) => Option.some(model.disconnectModal),
+	write: (model: Model, modal: Modal.Model): Model => modifyFields(model, { disconnectModal: () => modal }),
+	toParentMessage: (message: Modal.Message) => Message.GotDisconnectModalMessage({ message }),
+}
+const foldDisconnectModal = Update.foldChild({ update: Modal.update, ...disconnectModal })
+const openDisconnectModal = Update.foldChildStep({ update: Modal.open, ...disconnectModal })
+const closeDisconnectModal = Update.foldChildStep({ update: Modal.close, ...disconnectModal })
 
 const isDirection = (key: string): key is SyncDirection =>
 	SyncDirection.literals.some((literal) => literal === key)
 
 /** A link menu's `onAction`s. */
 const selectedLinkAction = (model: Model, link: ChannelLink, key: string): Return => {
-	if (key === "toggle")
-		return {
-			model,
-			commands: [UpdateChannelLink({ syncChannelLinkId: link.id, isActive: !link.isActive })],
-		}
 	if (key === "remove")
-		return {
-			model: modifyFields(model, {
-				deleteTarget: () => ({ id: link.id, name: link.externalName }),
-				deleteLinkModal: (modal) => Modal.open(modal).model,
-			}),
-		}
-	if (isDirection(key))
-		return { model, commands: [UpdateChannelLink({ syncChannelLinkId: link.id, direction: key })] }
-	return { model }
+		return openDeleteLinkModal(
+			modifyFields(model, { deleteTarget: () => ({ id: link.id, name: link.externalName }) }),
+		)
+	if (key !== "toggle" && !isDirection(key)) return { model }
+	// One update per link at a time; the menu stays enabled as in legacy.
+	if (model.updatingLinkIds.includes(link.id)) return { model }
+	return {
+		model: modifyFields(model, { updatingLinkIds: (ids) => [...ids, link.id] }),
+		commands: [
+			key === "toggle"
+				? UpdateChannelLink({ syncChannelLinkId: link.id, isActive: !link.isActive })
+				: UpdateChannelLink({ syncChannelLinkId: link.id, direction: key }),
+		],
+	}
 }
+
+const settledLink = (model: Model, linkId: ChannelLink["id"]): Model =>
+	modifyFields(model, { updatingLinkIds: (ids) => ids.filter((id) => id !== linkId) })
 
 const foldLinkMenu = (model: Model, linkId: ChannelLink["id"], message: Menu.Message): Return => {
 	const menu = Array.findFirst(model.linkMenus, (candidate) => candidate.id === linkMenuId(linkId))
@@ -174,27 +196,27 @@ const foldLinkMenu = (model: Model, linkId: ChannelLink["id"], message: Menu.Mes
 	return { ...action, commands: [...commands, ...(action.commands ?? [])] }
 }
 
-/** `handleClose`: resets the form, then closes. */
-const closedAddLinkModal = (model: Model): Model =>
-	modifyFields(model, {
-		addLinkModal: (modal) => Modal.close(modal).model,
-		selectedChannel: () => null,
-		selectedDiscordChannel: () => null,
-		direction: () => "both" as const,
-		channelSearch: () => "",
-		discordChannelSearch: () => "",
-		focusedSearch: () => null,
-	})
-
-/** `onOpenChange={(open) => !open && handleClose()}`; the portal Mount focuses the channel search (`autoFocus`). */
-const foldAddLinkModal = (model: Model, message: Modal.Message): Return => {
-	const next = Modal.update(model.addLinkModal, message)
-	const commands = Command.mapMessages(next.commands ?? [], (child) =>
-		Message.GotAddLinkModalMessage({ message: child }),
-	)
-	if (!next.model.isOpen) return { model: closedAddLinkModal(model), commands }
-	return { model: modifyFields(model, { addLinkModal: () => next.model }), commands }
+/** `handleClose`: a closed link modal has an empty form. */
+const addLinkModal = {
+	read: (model: Model) => Option.some(model.addLinkModal),
+	write: (model: Model, modal: Modal.Model): Model =>
+		modal.isOpen
+			? modifyFields(model, { addLinkModal: () => modal })
+			: modifyFields(model, {
+					addLinkModal: () => modal,
+					selectedChannel: () => null,
+					selectedDiscordChannel: () => null,
+					direction: () => "both" as const,
+					channelSearch: () => "",
+					discordChannelSearch: () => "",
+					focusedSearch: () => null,
+				}),
+	toParentMessage: (message: Modal.Message) => Message.GotAddLinkModalMessage({ message }),
 }
+/** `onOpenChange={(open) => !open && handleClose()}`; the portal Mount focuses the channel search (`autoFocus`). */
+const foldAddLinkModal = Update.foldChild({ update: Modal.update, ...addLinkModal })
+const openAddLinkModal = Update.foldChildStep({ update: Modal.open, ...addLinkModal })
+const closeAddLinkModal = Update.foldChildStep({ update: Modal.close, ...addLinkModal })
 
 const submitLink = (model: Model): Return => {
 	const channel = model.selectedChannel
@@ -219,6 +241,10 @@ const submitLink = (model: Model): Return => {
 	}
 }
 
+/** The Discord channel list belongs to the guild of the connection currently shown. */
+const isCurrentGuild = (model: Model, guildId: string) =>
+	model.connection._tag === "Loaded" && model.connection.connection?.externalWorkspaceId === guildId
+
 const listHref = (shared: Shared) => `/${shared.orgSlug ?? ""}/settings/chat-sync`
 
 export const update = (model: Model, message: Message, shared: Shared): Return =>
@@ -238,14 +264,18 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				commands: [ListDiscordChannels({ organizationId, guildId: connection.externalWorkspaceId })],
 			}
 		},
-		SucceededListDiscordChannels: ({ channels }) => ({
-			model: modifyFields(model, {
-				discordChannels: () => ({ _tag: "Loaded" as const, items: channels }),
-			}),
-		}),
-		FailedListDiscordChannels: () => ({
-			model: modifyFields(model, { discordChannels: () => ({ _tag: "Failed" as const }) }),
-		}),
+		SucceededListDiscordChannels: ({ guildId, channels }) =>
+			isCurrentGuild(model, guildId)
+				? {
+						model: modifyFields(model, {
+							discordChannels: () => ({ _tag: "Loaded" as const, items: channels }),
+						}),
+					}
+				: { model },
+		FailedListDiscordChannels: ({ guildId }) =>
+			isCurrentGuild(model, guildId)
+				? { model: modifyFields(model, { discordChannels: () => ({ _tag: "Failed" as const }) }) }
+				: { model },
 		// A failed query is not "initial", and no connection is found in it.
 		FailedListConnections: ({ organizationId }) =>
 			organizationId === model.requestedOrganizationId
@@ -255,26 +285,30 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 						}),
 					}
 				: { model },
-		SucceededListChannelLinks: ({ links }) => ({
-			model: reflectLinkMenus(
-				modifyFields(model, { links: () => ({ _tag: "Loaded" as const, links }) }),
-				links,
-			),
-		}),
-		FailedListChannelLinks: () => ({
-			model: reflectLinkMenus(
-				modifyFields(model, { links: () => ({ _tag: "Loaded" as const, links: [] }) }),
-				[],
-			),
-		}),
+		SucceededListChannelLinks: ({ version, links }) =>
+			version !== model.linksVersion
+				? { model }
+				: {
+						model: reflectLinkMenus(
+							modifyFields(model, { links: () => ({ _tag: "Loaded" as const, links }) }),
+							links,
+						),
+					},
+		FailedListChannelLinks: ({ version }) =>
+			version !== model.linksVersion
+				? { model }
+				: {
+						model: reflectLinkMenus(
+							modifyFields(model, { links: () => ({ _tag: "Loaded" as const, links: [] }) }),
+							[],
+						),
+					},
 		UpdatedChannelNames: ({ names }) => ({ model: modifyFields(model, { channelNames: () => names }) }),
 		ClickedBack: () => ({
 			model,
 			outMessage: PageOutMessage.RequestedNavigation({ href: listHref(shared), replace: false }),
 		}),
-		ClickedDisconnect: () => ({
-			model: modifyFields(model, { disconnectModal: (modal) => Modal.open(modal).model }),
-		}),
+		ClickedDisconnect: () => openDisconnectModal(model),
 		ClickedConfirmDisconnect: () =>
 			model.isDisconnecting
 				? { model }
@@ -282,29 +316,19 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 						model: modifyFields(model, { isDisconnecting: () => true }),
 						commands: [DisconnectConnection({ syncConnectionId: model.connectionId })],
 					},
-		// One OutMessage per update: the toast now, the navigation on the next Message.
 		SucceededDisconnect: () => ({
-			model: modifyFields(model, {
-				isDisconnecting: () => false,
-				disconnectModal: (modal) => Modal.close(modal).model,
+			...closeDisconnectModal(modifyFields(model, { isDisconnecting: () => false })),
+			outMessage: PageOutMessage.RequestedNavigation({
+				href: listHref(shared),
+				replace: false,
+				toast: successToast("Connection deleted"),
 			}),
-			commands: [ScheduleReturnToList()],
-			outMessage: toast(successToast("Connection deleted")),
-		}),
-		ReachedReturnToList: () => ({
-			model,
-			outMessage: PageOutMessage.RequestedNavigation({ href: listHref(shared), replace: false }),
 		}),
 		FailedDisconnect: ({ title, description }) => ({
-			model: modifyFields(model, {
-				isDisconnecting: () => false,
-				disconnectModal: (modal) => Modal.close(modal).model,
-			}),
+			...closeDisconnectModal(modifyFields(model, { isDisconnecting: () => false })),
 			outMessage: toast({ intent: "error", title, description }),
 		}),
-		ClickedLinkChannel: () => ({
-			model: modifyFields(model, { addLinkModal: (modal) => Modal.open(modal).model }),
-		}),
+		ClickedLinkChannel: () => openAddLinkModal(model),
 		GotAddLinkModalMessage: ({ message: modalMessage }) => foldAddLinkModal(model, modalMessage),
 		UpdatedHazelChannels: ({ channels }) => ({
 			model: modifyFields(model, { hazelChannels: () => channels }),
@@ -341,10 +365,13 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		ClickedDirection: ({ direction }) => ({ model: modifyFields(model, { direction: () => direction }) }),
 		ClickedCreateLink: () => submitLink(model),
 		// `onSuccess()` reloads the links (a new query key), then `handleClose()`.
-		SucceededCreateLink: ({ successMessage }) => ({
-			...reloadLinks(modifyFields(closedAddLinkModal(model), { isCreatingLink: () => false })),
-			outMessage: toast(successToast(successMessage)),
-		}),
+		SucceededCreateLink: ({ successMessage }) => {
+			const closed = closeAddLinkModal(modifyFields(model, { isCreatingLink: () => false }))
+			return {
+				...withCommands(reloadLinks(closed.model), closed.commands),
+				outMessage: toast(successToast(successMessage)),
+			}
+		},
 		FailedCreateLink: ({ title, description }) => ({
 			model: modifyFields(model, { isCreatingLink: () => false }),
 			outMessage: toast({ intent: "error", title, description }),
@@ -356,26 +383,23 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 						model: modifyFields(model, { isDeletingLink: () => true }),
 						commands: [RemoveChannelLink({ syncChannelLinkId: model.deleteTarget.id })],
 					},
-		SucceededRemoveLink: () => ({
-			...reloadLinks(
-				modifyFields(model, {
-					isDeletingLink: () => false,
-					deleteTarget: () => null,
-					deleteLinkModal: (modal) => Modal.close(modal).model,
-				}),
-			),
-			outMessage: toast(successToast("Channel link removed")),
-		}),
+		SucceededRemoveLink: () => {
+			const closed = closeDeleteLinkModal(modifyFields(model, { isDeletingLink: () => false }))
+			return {
+				...withCommands(reloadLinks(closed.model), closed.commands),
+				outMessage: toast(successToast("Channel link removed")),
+			}
+		},
 		FailedRemoveLink: ({ title, description }) => ({
 			model: modifyFields(model, { isDeletingLink: () => false }),
 			outMessage: toast({ intent: "error", title, description }),
 		}),
-		SucceededUpdateLink: ({ successMessage }) => ({
-			...reloadLinks(model),
+		SucceededUpdateLink: ({ linkId, successMessage }) => ({
+			...reloadLinks(settledLink(model, linkId)),
 			outMessage: toast(successToast(successMessage)),
 		}),
-		FailedLinkAction: ({ title, description }) => ({
-			model,
+		FailedUpdateLink: ({ linkId, title, description }) => ({
+			model: settledLink(model, linkId),
 			outMessage: toast({ intent: "error", title, description }),
 		}),
 		GotLinkMenuMessage: ({ linkId, message: menuMessage }) => foldLinkMenu(model, linkId, menuMessage),
