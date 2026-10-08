@@ -71,7 +71,7 @@ export const CopyText = Command.define("CopyText", {
 		),
 })
 
-const OpenLogoPicker = Command.define("OpenLogoPicker", {
+export const OpenLogoPicker = Command.define("OpenLogoPicker", {
 	args: {},
 	messages: [Message.CompletedOpenLogoPicker],
 	// The hidden input's change event reports the file (`SelectedLogo`).
@@ -86,7 +86,7 @@ export const LeaveDeletedWorkspace = Command.define("LeaveDeletedWorkspace", {
 	execute: () => Effect.succeed(Message.CompletedLeaveDeletedWorkspace()),
 })
 
-const UploadLogo = Command.define("UploadLogo", {
+export const UploadLogo = Command.define("UploadLogo", {
 	args: { organizationId: OrganizationId, file: Schema.instanceOf(File) },
 	messages: [Message.SucceededUploadLogo, Message.FailedUploadLogo],
 	execute: ({ organizationId, file }) =>
