@@ -76,7 +76,7 @@ const InstallInputOtpStyle = Command.define("InstallInputOtpStyle", {
 })
 
 /** The mount-time measurements: the input's height (`--root-height`) and room for a badge. */
-const MeasureInput = Command.define("MeasureInput", {
+const MeasureInput = Command.define("MeasureInputOtp", {
 	args: { id: Schema.String },
 	messages: [Message.CompletedMeasureInput],
 	execute: ({ id }) =>
@@ -108,7 +108,7 @@ const passwordManagerSelectors = [
 ].join(",")
 
 /** usePasswordManagerBadge: something other than the container at its right edge is a badge. */
-export const CheckPasswordBadge = Command.define("CheckPasswordBadge", {
+export const CheckPasswordBadge = Command.define("CheckInputOtpPasswordBadge", {
 	args: { id: Schema.String, delayMillis: Schema.Number },
 	messages: [Message.CompletedCheckPasswordBadge],
 	execute: ({ id, delayMillis }) =>

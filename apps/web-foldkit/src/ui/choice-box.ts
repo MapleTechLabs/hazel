@@ -66,7 +66,7 @@ export type Message = typeof Message.Type
 
 export const itemId = (model: Model, key: string) => `${model.id}-${key}`
 
-export const FocusItem = Command.define("FocusItem", {
+export const FocusItem = Command.define("FocusChoiceBoxItem", {
 	args: { elementId: Schema.String },
 	messages: [Message.CompletedFocusItem],
 	execute: ({ elementId }) =>

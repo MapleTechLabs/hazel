@@ -68,7 +68,7 @@ export const tooltipId = (id: string) => `${id}-tooltip`
 /** useTooltipTriggerState defaults. */
 const HIDE_DELAY = Duration.millis(500)
 
-export const WaitForShowDelay = Command.define("WaitForShowDelay", {
+export const WaitForShowDelay = Command.define("WaitForTooltipShowDelay", {
 	args: { version: Schema.Number, delayMs: Schema.Number },
 	messages: [Message.CompletedWaitForShowDelay],
 	execute: ({ version, delayMs }) =>
@@ -77,7 +77,7 @@ export const WaitForShowDelay = Command.define("WaitForShowDelay", {
 		),
 })
 
-export const WaitForHideDelay = Command.define("WaitForHideDelay", {
+export const WaitForHideDelay = Command.define("WaitForTooltipHideDelay", {
 	args: { version: Schema.Number },
 	messages: [Message.CompletedWaitForHideDelay],
 	execute: ({ version }) =>

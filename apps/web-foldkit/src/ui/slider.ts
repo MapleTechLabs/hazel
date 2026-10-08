@@ -116,7 +116,7 @@ const closestThumb = (model: Model, value: number) => {
 // COMMAND
 
 /** useSliderThumb focuses the thumb input when a track press selects it. */
-export const FocusThumb = Command.define("FocusThumb", {
+export const FocusThumb = Command.define("FocusSliderThumb", {
 	args: { inputId: Schema.String },
 	messages: [Message.CompletedFocusThumb],
 	execute: ({ inputId }) =>
