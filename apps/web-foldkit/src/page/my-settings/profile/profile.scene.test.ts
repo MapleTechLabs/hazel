@@ -159,7 +159,7 @@ describe("avatar crop dialog scene", () => {
 		cropModalMounted,
 		Scene.expect(dialog).toContainText("Crop profile picture"),
 		Scene.expect(saveCrop).toBeDisabled(),
-		Scene.Command.resolve(LoadCropImage, Message.LoadedCropImage({ image: loaded })),
+		Scene.Command.resolve(LoadCropImage, Message.LoadedCropImage({ loadId: 1, image: loaded })),
 		Scene.expect(saveCrop).toBeEnabled(),
 	]
 

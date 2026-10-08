@@ -16,7 +16,8 @@ export type FormValues = typeof FormValues.Type
 /** `AvatarCropModal`'s image state: loading, ready (with the crop) or processing (saving). */
 export const CropState = Schema.Union([
 	Schema.TaggedStruct("Idle", {}),
-	Schema.TaggedStruct("Loading", {}),
+	/** `loadId` tells this load's result apart from an earlier, cancelled pick's. */
+	Schema.TaggedStruct("Loading", { loadId: Schema.Number }),
 	Schema.TaggedStruct("Ready", { image: CropImage }),
 	Schema.TaggedStruct("Processing", { image: CropImage }),
 ])
@@ -29,6 +30,8 @@ export const Model = Schema.Struct({
 	values: FormValues,
 	/** TanStack Form: `isDirty` stays true once any field changed; validation starts on the first change. */
 	isDirty: Schema.Boolean,
+	/** Read once by a Command at init; `null` until then. The form falls back to it without a stored timezone. */
+	browserTimezone: Schema.NullOr(Schema.String),
 	isSubmitting: Schema.Boolean,
 	timezone: ComboBox.Model,
 	isUploading: Schema.Boolean,
@@ -36,6 +39,8 @@ export const Model = Schema.Struct({
 	isDropTarget: Schema.Boolean,
 	dragDepth: Schema.Number,
 	crop: CropState,
+	/** The last crop image load started; each pick takes the next id. */
+	cropLoadId: Schema.Number,
 	cropModal: Modal.Model,
 	interaction: Interaction.Model,
 })

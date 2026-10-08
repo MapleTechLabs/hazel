@@ -1,7 +1,6 @@
 import { Array, Option } from "effect"
 import { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
-import { detectBrowserTimezone } from "~/utils/timezone"
 import * as Interaction from "../../../ui/aria/interaction"
 import * as ComboBox from "../../../ui/combo-box"
 import * as Modal from "../../../ui/modal"
@@ -14,6 +13,7 @@ import {
 	CropAvatarImage,
 	LoadCropImage,
 	OpenFilePicker,
+	ReadBrowserTimezone,
 	ResetAvatar,
 	RevokeCropImage,
 	SaveProfile,
@@ -54,7 +54,7 @@ const formFor = (model: Model, shared: Shared, row: UserRow | null): Model => {
 	const defaults: FormValues = {
 		firstName: user?.firstName || "",
 		lastName: user?.lastName || "",
-		timezone: row?.timezone || detectBrowserTimezone(),
+		timezone: row?.timezone || model.browserTimezone,
 	}
 	return modifyFields(model, {
 		userId: () => user?.id ?? null,
@@ -93,12 +93,14 @@ const mapReadyImage = (model: Model, f: (image: CropImage) => CropImage): Model 
 }
 
 export const init = (_route: unknown, shared: Shared): Return => ({
+	commands: [ReadBrowserTimezone({})],
 	model: formFor(
 		{
 			userId: null,
 			defaults: { firstName: "", lastName: "", timezone: null },
 			values: { firstName: "", lastName: "", timezone: null },
 			isDirty: false,
+			browserTimezone: null,
 			isSubmitting: false,
 			timezone: TimezoneSelect.init({ id: "profile-timezone" }),
 			isUploading: false,
@@ -106,6 +108,7 @@ export const init = (_route: unknown, shared: Shared): Return => ({
 			isDropTarget: false,
 			dragDepth: 0,
 			crop: { _tag: "Idle" },
+			cropLoadId: 0,
 			cropModal: Modal.init("avatar-crop"),
 			interaction: Interaction.init(),
 		},
@@ -132,12 +135,14 @@ const selectFile = (model: Model, files: ReadonlyArray<File>): Return =>
 				}
 			if (file.size > MAX_FILE_SIZE)
 				return { model, outMessage: toast("error", "File too large", "Image must be less than 5MB") }
+			const loadId = model.cropLoadId + 1
 			return {
 				model: modifyFields(model, {
-					crop: () => ({ _tag: "Loading" }),
+					crop: () => ({ _tag: "Loading", loadId }),
+					cropLoadId: () => loadId,
 					cropModal: (modal) => ({ ...modal, isOpen: true }),
 				}),
-				commands: [LoadCropImage({ file })],
+				commands: [LoadCropImage({ file, loadId })],
 			}
 		},
 	})
@@ -165,6 +170,13 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			model.isDirty || row === null || !row.timezone || row.timezone === model.defaults.timezone
 				? { model }
 				: { model: formFor(model, shared, row) },
+		GotBrowserTimezone: ({ browserTimezone }) => {
+			const next = modifyFields(model, { browserTimezone: () => browserTimezone })
+			// Only an untouched form without a stored timezone falls back to the browser's.
+			return model.isDirty || model.defaults.timezone !== null
+				? { model: next }
+				: { model: formFor(next, shared, null) }
+		},
 		ChangedFirstName: ({ value }) => ({ model: changed(model, { firstName: value }) }),
 		ChangedLastName: ({ value }) => ({ model: changed(model, { lastName: value }) }),
 		GotTimezoneMessage: ({ message: child }) => foldTimezone(model, child),
@@ -189,11 +201,12 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			model,
 			outMessage: toast("error", title, description),
 		}),
-		LoadedCropImage: ({ image }) =>
-			model.crop._tag === "Loading"
+		LoadedCropImage: ({ loadId, image }) =>
+			model.crop._tag === "Loading" && model.crop.loadId === loadId
 				? { model: modifyFields(model, { crop: () => ({ _tag: "Ready", image }) }) }
 				: { model, commands: [RevokeCropImage({ src: image.src })] },
-		FailedLoadCropImage: () => closeCrop(model),
+		FailedLoadCropImage: ({ loadId }) =>
+			model.crop._tag === "Loading" && model.crop.loadId === loadId ? closeCrop(model) : { model },
 		CompletedRevokeCropImage: () => ({ model }),
 		EnteredDropZone: () => ({ model: modifyFields(model, { isDropTarget: () => true }) }),
 		LeftDropZone: () => ({ model: modifyFields(model, { isDropTarget: () => false }) }),
@@ -244,10 +257,10 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				? refreshUser("Profile picture updated")
 				: toast("error", "Upload failed", "Failed to update profile picture. Please try again."),
 		}),
-		ClickedResetAvatar: () => ({
-			model: modifyFields(model, { isResetting: () => true }),
-			commands: [ResetAvatar({})],
-		}),
+		ClickedResetAvatar: () =>
+			model.isResetting
+				? { model }
+				: { model: modifyFields(model, { isResetting: () => true }), commands: [ResetAvatar({})] },
 		CompletedResetAvatar: ({ isReset }) => ({
 			model: modifyFields(model, { isResetting: () => false }),
 			outMessage: isReset

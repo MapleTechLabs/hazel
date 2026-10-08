@@ -9,6 +9,7 @@ import { CropImage, DragMode } from "./crop"
 
 export const Message = defineMessageUnion({
 	UpdatedUserRow: { row: Schema.NullOr(UserRow) },
+	GotBrowserTimezone: { browserTimezone: Schema.String },
 	ChangedFirstName: { value: Schema.String },
 	ChangedLastName: { value: Schema.String },
 	GotTimezoneMessage: { message: ComboBox.Message },
@@ -18,8 +19,8 @@ export const Message = defineMessageUnion({
 	CompletedOpenFilePicker: {},
 	SelectedAvatarFiles: { files: Schema.Array(File) },
 	RejectedAvatarFile: { title: Schema.String, description: Schema.String },
-	LoadedCropImage: { image: CropImage },
-	FailedLoadCropImage: {},
+	LoadedCropImage: { loadId: Schema.Number, image: CropImage },
+	FailedLoadCropImage: { loadId: Schema.Number },
 	CompletedRevokeCropImage: {},
 	EnteredDropZone: {},
 	LeftDropZone: {},

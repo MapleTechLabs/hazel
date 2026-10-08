@@ -9,6 +9,7 @@ import {
 	CropAvatarImage,
 	LoadCropImage,
 	OpenFilePicker,
+	ReadBrowserTimezone,
 	ResetAvatar,
 	RevokeCropImage,
 	SaveProfile,
@@ -199,6 +200,28 @@ describe("profile save", () => {
 		)
 	})
 
+	test("the browser timezone is read by a Command and fills an untouched form without a stored one", () => {
+		const started = init(undefined, shared)
+		expect(started.commands?.map((command) => command.name)).toEqual([ReadBrowserTimezone.name])
+		expect(started.model.values.timezone).toBeNull()
+		story(
+			pageUpdate,
+			given(started.model),
+			message(Message.GotBrowserTimezone({ browserTimezone: "Europe/Vienna" })),
+			model((current) => {
+				expect(current.values.timezone).toBe("Europe/Vienna")
+				expect(current.isDirty).toBe(false)
+			}),
+		)
+		story(
+			pageUpdate,
+			given(started.model),
+			message(Message.ChangedFirstName({ value: "Augusta" })),
+			message(Message.GotBrowserTimezone({ browserTimezone: "Europe/Vienna" })),
+			model((current) => expect(current.values.timezone).toBeNull()),
+		)
+	})
+
 	test("a late timezone row does not overwrite an edit in progress", () => {
 		const row = {
 			firstName: "Ada",
@@ -229,7 +252,7 @@ describe("avatar upload", () => {
 		message(Message.SelectedAvatarFiles({ files: [png] })),
 		// Definition matchers: hashing a jsdom File for structural equality throws.
 		Command.expectExact(LoadCropImage),
-		Command.resolve(LoadCropImage, Message.LoadedCropImage({ image: loaded })),
+		Command.resolve(LoadCropImage, Message.LoadedCropImage({ loadId: 1, image: loaded })),
 	]
 
 	test("pick, crop and upload refreshes the current user and frees the object URL", () => {
@@ -300,7 +323,7 @@ describe("avatar upload", () => {
 			pageUpdate,
 			given(initial()),
 			message(Message.SelectedAvatarFiles({ files: [png] })),
-			Command.resolve(LoadCropImage, Message.FailedLoadCropImage()),
+			Command.resolve(LoadCropImage, Message.FailedLoadCropImage({ loadId: 1 })),
 			Command.expectNone(),
 			model((current) => {
 				expect(current.cropModal.isOpen).toBe(false)
@@ -325,11 +348,23 @@ describe("avatar upload", () => {
 		story(
 			pageUpdate,
 			given(initial()),
-			message(Message.LoadedCropImage({ image: loaded })),
+			message(Message.LoadedCropImage({ loadId: 1, image: loaded })),
 			Command.expectExact(RevokeCropImage({ src: "blob:me" })),
 			Command.resolve(RevokeCropImage, Message.CompletedRevokeCropImage()),
 			model((current) => expect(current.crop._tag).toBe("Idle")),
 		)
+	})
+
+	test("an earlier pick's image arriving after a newer pick is revoked, not shown", () => {
+		const second = new File(["png"], "second.png", { type: "image/png" })
+		const first = pageUpdate(initial(), Message.SelectedAvatarFiles({ files: [png] })).model
+		const cancelled = pageUpdate(first, Message.ClickedCancelCrop()).model
+		const repicked = pageUpdate(cancelled, Message.SelectedAvatarFiles({ files: [second] })).model
+		expect(repicked.crop).toEqual({ _tag: "Loading", loadId: 2 })
+		const stale = pageUpdate(repicked, Message.LoadedCropImage({ loadId: 1, image: loaded }))
+		expect(stale.model.crop).toEqual({ _tag: "Loading", loadId: 2 })
+		expect(stale.commands).toMatchObject([{ name: RevokeCropImage.name, args: { src: "blob:me" } }])
+		expect(pageUpdate(repicked, Message.FailedLoadCropImage({ loadId: 1 })).model.cropModal.isOpen).toBe(true)
 	})
 
 	test("a file over 5MB is rejected with a toast", () => {
@@ -384,8 +419,8 @@ describe("avatar reset", () => {
 		)
 	})
 
-	// Bug: ClickedResetAvatar has no isResetting guard in update; only the view's disabled button prevents a second ResetAvatar.
-	test.fails("a second reset while one is pending is ignored", () => {
+	// ClickedResetAvatar is guarded on isResetting in update, not only by the view's disabled button.
+	test("a second reset while one is pending is ignored", () => {
 		story(
 			pageUpdate,
 			given({ ...initial(), isResetting: true }),

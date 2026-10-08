@@ -3,6 +3,7 @@ import { Effect, Schema } from "effect"
 import { Command } from "foldkit"
 import { File } from "foldkit/file"
 import { calculateInitialCrop, cropImage } from "~/utils/image-crop"
+import { detectBrowserTimezone } from "~/utils/timezone"
 import { updateUser } from "../user"
 import { CropRect } from "./crop"
 import { Message } from "./message"
@@ -30,6 +31,14 @@ const clerkUser = (): ClerkUser | null => {
 
 const OUTPUT_SIZE = 512
 
+/** `detectBrowserTimezone()`, the form's fallback timezone, read outside `init` and `update`. */
+export const ReadBrowserTimezone = Command.define("ReadProfileBrowserTimezone", {
+	args: {},
+	messages: [Message.GotBrowserTimezone],
+	execute: () =>
+		Effect.sync(() => Message.GotBrowserTimezone({ browserTimezone: detectBrowserTimezone() })),
+})
+
 /** FileTrigger: pressing the button clicks the hidden file input. */
 export const OpenFilePicker = Command.define("OpenFilePicker", {
 	args: {},
@@ -51,13 +60,14 @@ const loadImage = (src: string) =>
 
 /** `AvatarCropModal`'s effect: an object URL for the file, then the largest centered square. */
 export const LoadCropImage = Command.define("LoadCropImage", {
-	args: { file: File },
+	args: { file: File, loadId: Schema.Number },
 	messages: [Message.LoadedCropImage, Message.FailedLoadCropImage],
-	execute: ({ file }) => {
+	execute: ({ file, loadId }) => {
 		const src = URL.createObjectURL(file)
 		return loadImage(src).pipe(
 			Effect.map((image) =>
 				Message.LoadedCropImage({
+					loadId,
 					image: {
 						src,
 						width: image.naturalWidth,
@@ -70,7 +80,7 @@ export const LoadCropImage = Command.define("LoadCropImage", {
 			Effect.catch(() =>
 				Effect.sync(() => {
 					URL.revokeObjectURL(src)
-					return Message.FailedLoadCropImage()
+					return Message.FailedLoadCropImage({ loadId })
 				}),
 			),
 		)
