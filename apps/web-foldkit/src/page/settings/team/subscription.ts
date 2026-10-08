@@ -1,4 +1,4 @@
-import { OrganizationId } from "@hazel/schema"
+import { OrganizationId, type OrganizationMemberId, type UserId } from "@hazel/schema"
 import { eq } from "@tanstack/db"
 import { Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
@@ -9,8 +9,8 @@ import { Message } from "./message"
 import type { Model, TeamMember } from "./model"
 
 interface TeamMemberRow {
-	readonly id: string
-	readonly userId: string
+	readonly id: OrganizationMemberId
+	readonly userId: UserId
 	readonly role: TeamMember["role"]
 	readonly user: {
 		readonly firstName: string

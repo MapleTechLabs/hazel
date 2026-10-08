@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import * as Scene from "foldkit/scene"
 import { describe, test } from "vitest"
-import { makeShared, pageScene, userId } from "../../../test/pages-fixtures"
+import { OrganizationMemberId, UserId } from "@hazel/schema"
+import { Schema } from "effect"
+import { makeShared, pageScene, userId, uuid } from "../../../test/pages-fixtures"
 import { PageOutMessage } from "../../out-message"
 import { Message } from "./message"
 import type { TeamMember } from "./model"
@@ -11,9 +13,14 @@ import { view } from "./view"
 /** The team table through its view: live rows, presence labels and role-gated row actions. */
 
 const nowMs = 1_000_000
-const person = (n: number, role: TeamMember["role"], firstName: string, overrides: Partial<TeamMember> = {}): TeamMember => ({
-	id: `member_${n}`,
-	userId: `user_${n}`,
+const person = (
+	n: number,
+	role: TeamMember["role"],
+	firstName: string,
+	overrides: Partial<TeamMember> = {},
+): TeamMember => ({
+	id: Schema.decodeSync(OrganizationMemberId)(uuid(100 + n)),
+	userId: Schema.decodeSync(UserId)(uuid(200 + n)),
 	role,
 	firstName,
 	lastName: "Test",
@@ -43,9 +50,13 @@ describe("live members", () => {
 			Scene.Subscription.emit(Message.UpdatedTeamMembers({ members: team("owner") })),
 			Scene.expect(Scene.text("4 users", { exact: false })).toExist(),
 			Scene.expect(Scene.text("Grace Test")).toExist(),
-			Scene.expect(Scene.within(rowOf("Grace Test"), Scene.text("Do Not Disturb", { exact: false }))).toExist(),
+			Scene.expect(
+				Scene.within(rowOf("Grace Test"), Scene.text("Do Not Disturb", { exact: false })),
+			).toExist(),
 			// Last seen a minute ago is past the 45 second threshold, so "online" reads as Offline.
-			Scene.expect(Scene.within(rowOf("Linus Test"), Scene.text("Offline", { exact: false }))).toExist(),
+			Scene.expect(
+				Scene.within(rowOf("Linus Test"), Scene.text("Offline", { exact: false })),
+			).toExist(),
 			Scene.expect(Scene.within(rowOf("Linus Test"), Scene.text("Member"))).toExist(),
 		)
 	})
@@ -57,7 +68,9 @@ describe("row actions", () => {
 			pageScene(update, view, shared),
 			Scene.given({ members: team("owner") }),
 			Scene.expectAll(actions).toHaveCount(3),
-			Scene.expect(Scene.within(rowOf("Ada Test"), Scene.role("button", { name: "Actions" }))).toBeAbsent(),
+			Scene.expect(
+				Scene.within(rowOf("Ada Test"), Scene.role("button", { name: "Actions" })),
+			).toBeAbsent(),
 		)
 	})
 
@@ -66,18 +79,23 @@ describe("row actions", () => {
 			pageScene(update, view, shared),
 			Scene.given({ members: team("admin") }),
 			Scene.expectAll(actions).toHaveCount(1),
-			Scene.expect(Scene.within(rowOf("Linus Test"), Scene.role("button", { name: "Actions" }))).toExist(),
+			Scene.expect(
+				Scene.within(rowOf("Linus Test"), Scene.role("button", { name: "Actions" })),
+			).toExist(),
 		)
 	})
 
 	test("a member sees no row actions", () => {
-		Scene.scene(pageScene(update, view, shared), Scene.given({ members: team("member") }), Scene.expectAll(actions).toBeEmpty())
+		Scene.scene(
+			pageScene(update, view, shared),
+			Scene.given({ members: team("member") }),
+			Scene.expectAll(actions).toBeEmpty(),
+		)
 	})
 })
 
 describe("invite", () => {
-	// Bug: the header "Invite user" button has no onPress, so it never requests the EmailInvite modal.
-	test.fails("Invite user requests the email invite modal", () => {
+	test("Invite user requests the email invite modal", () => {
 		Scene.scene(
 			pageScene(update, view, shared),
 			Scene.given({ members: team("owner") }),

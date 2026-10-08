@@ -8,7 +8,7 @@ import { badge } from "../../../ui/badge"
 import { button } from "../../../ui/button"
 import { card, cardHeader, cardHeaderGroup } from "../../../ui/card"
 import type { PageViewInputs } from "../../contract"
-import type { Message } from "./message"
+import { Message } from "./message"
 import type { Model, TeamMember } from "./model"
 
 /** Port of `routes/_app/$orgSlug/settings/team.tsx` (read path; menus and modals follow in Phase 5). */
@@ -39,6 +39,7 @@ const memberRow = <Message>(
 		readonly members: ReadonlyArray<TeamMember>
 		readonly currentUserId: string | undefined
 		readonly nowMs: number
+		readonly onInvite: Message
 	},
 ): Html => {
 	const fullName = `${member.firstName} ${member.lastName}`
@@ -137,6 +138,7 @@ export const teamPage = <Message>(
 		readonly members: ReadonlyArray<TeamMember>
 		readonly currentUserId: string | undefined
 		readonly nowMs: number
+		readonly onInvite: Message
 	},
 ): Html =>
 	h.div(
@@ -167,7 +169,7 @@ export const teamPage = <Message>(
 						h.div(
 							[h.Class("flex gap-3")],
 							[
-								button(h, { intent: "secondary", size: "md" }, [
+								button(h, { intent: "secondary", size: "md", onPress: props.onInvite }, [
 									IconPlus(h, { attributes: { "data-slot": "icon" } }),
 									"Invite user",
 								]),
@@ -208,5 +210,10 @@ export const teamPage = <Message>(
 	)
 
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, { shared }, h) =>
-	teamPage(h, { members: model.members, currentUserId: shared.currentUser?.id, nowMs: shared.nowMs }),
+	teamPage(h, {
+		members: model.members,
+		currentUserId: shared.currentUser?.id,
+		nowMs: shared.nowMs,
+		onInvite: Message.ClickedInviteUser(),
+	}),
 )

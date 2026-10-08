@@ -1,8 +1,9 @@
+import { OrganizationMemberId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 
 export const TeamMember = Schema.Struct({
-	id: Schema.String,
-	userId: Schema.String,
+	id: OrganizationMemberId,
+	userId: UserId,
 	role: Schema.Literals(["owner", "admin", "member"]),
 	firstName: Schema.String,
 	lastName: Schema.String,
