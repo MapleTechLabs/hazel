@@ -18,6 +18,7 @@ import { fieldStyles, labelStyles } from "~/components/ui/field.styles"
 import { inputStyles, inputControlStyles } from "~/components/ui/input.styles"
 import { popoverContentBase, popoverInnerClassName } from "~/components/ui/popover.styles"
 import { IconCheck, IconChevronUpDown } from "../icons"
+import { keepTypedValue } from "./aria/typed-value"
 import {
 	ariaHideOutside,
 	dismissButton,
@@ -94,6 +95,16 @@ const KeepInputFocus = Mount.define("KeepComboBoxInputFocus", {
 		).pipe(Effect.as(Message.CompletedPortalComboBox())),
 })
 
+/** The input keeps keystrokes a deferred render would otherwise write back over. */
+const KeepTypedValue = Mount.define("KeepComboBoxTypedValue", {
+	messages: [Message.CompletedPortalComboBox],
+	execute: ({ element }) =>
+		Effect.acquireRelease(
+			Effect.sync(() => keepTypedValue(element)),
+			(release) => Effect.sync(release),
+		).pipe(Effect.as(Message.CompletedPortalComboBox())),
+})
+
 // VIEW
 
 export type ViewInputs = Readonly<{
@@ -166,6 +177,7 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, view
 								h.Attribute("spellcheck", "false"),
 								h.Attribute("tabindex", "0"),
 								h.Attribute("type", "text"),
+								h.OnMount(KeepTypedValue()),
 								h.Value(model.inputValue),
 								h.OnInput((value) => Message.ChangedInput({ value })),
 								h.OnFocus(Message.FocusedInput()),
