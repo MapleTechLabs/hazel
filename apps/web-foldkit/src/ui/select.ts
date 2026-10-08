@@ -192,13 +192,20 @@ const pressedTriggerKey = (model: Model, key: string): UpdateReturn =>
 		Match.when(
 			(pressed) => pressed === "ArrowLeft" || pressed === "ArrowRight",
 			(pressed) =>
-				Option.match(stepKey(model, model.selectedKey, pressed === "ArrowRight" ? 1 : -1), {
-					onNone: () => ({ model }),
-					onSome: (next) => ({
-						model: modifyFields(model, { selectedKey: () => Option.some(next) }),
-						outMessage: OutMessage.ChangedSelection({ key: next }),
-					}),
-				}),
+				// stepKey stays on the last key at an end; that is no change, so nothing is reported.
+				Option.match(
+					Option.filter(
+						stepKey(model, model.selectedKey, pressed === "ArrowRight" ? 1 : -1),
+						(next) => !Option.contains(model.selectedKey, next),
+					),
+					{
+						onNone: () => ({ model }),
+						onSome: (next) => ({
+							model: modifyFields(model, { selectedKey: () => Option.some(next) }),
+							outMessage: OutMessage.ChangedSelection({ key: next }),
+						}),
+					},
+				),
 		),
 		Match.orElse(() => ({ model })),
 	)

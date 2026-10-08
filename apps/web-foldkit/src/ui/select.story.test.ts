@@ -100,8 +100,8 @@ describe("select story", () => {
 		)
 	})
 
-	// Bug: select.ts:106 falls back to the current key at the end, so a no-op still emits ChangedSelection.
-	test.fails("ArrowRight on the last option keeps the selection and reports nothing", () => {
+	// T5: an arrow at the end of the list is a no-op and reports nothing.
+	test("ArrowRight on the last option keeps the selection and reports nothing", () => {
 		story(
 			update,
 			given(init({ id: "clear", items, selectedKey: "week" })),
