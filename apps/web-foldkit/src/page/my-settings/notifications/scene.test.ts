@@ -98,7 +98,7 @@ describe("sounds", () => {
 			Scene.Command.expectExact(SendTestNotification),
 			Scene.Command.resolve(SendTestNotification, Message.CompletedTestNotification({ isSent: false })),
 			Scene.expect(note).toExist(),
-			Scene.Command.resolve(ExpireNotificationStatus, Message.ExpiredNotificationStatus()),
+			Scene.Command.resolve(ExpireNotificationStatus, Message.ExpiredNotificationStatus({ version: 1 })),
 			Scene.expect(note).toBeAbsent(),
 		)
 	})

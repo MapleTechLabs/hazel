@@ -1,5 +1,5 @@
-import type { User } from "@hazel/domain/models"
-import { Option } from "effect"
+import { User } from "@hazel/domain/models"
+import { Option, Schema } from "effect"
 import { Update } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import * as Interaction from "../../../ui/aria/interaction"
@@ -80,11 +80,40 @@ const withUserSettings = (model: Model, shared: Shared, patch: Partial<User.User
 	const userId = shared.currentUser?.id
 	if (userId === undefined) return { model }
 	const settings = { ...settingsOf(model), ...patch }
+	const next = syncQuietHours(modifyFields(model, { optimisticSettings: () => settings }))
+	return model.settingsWrite === "Idle"
+		? {
+				model: modifyFields(next, { settingsWrite: () => "Writing" }),
+				commands: [UpdateUserSettings({ userId, settings })],
+			}
+		: { model: modifyFields(next, { settingsWrite: () => "WritingWithQueued" }) }
+}
+
+/** A write settled: send the queued snapshot, or finish with `settled` as the settings. */
+const settleWrite = (
+	model: Model,
+	shared: Shared,
+	settled: (model: Model) => User.UserSettings | null,
+): Return => {
+	const userId = shared.currentUser?.id
+	const queued = model.optimisticSettings
+	if (model.settingsWrite === "WritingWithQueued" && queued !== null && userId !== undefined)
+		return {
+			model: modifyFields(model, { settingsWrite: () => "Writing" }),
+			commands: [UpdateUserSettings({ userId, settings: queued })],
+		}
 	return {
-		model: syncQuietHours(modifyFields(model, { optimisticSettings: () => settings })),
-		commands: [UpdateUserSettings({ userId, settings })],
+		model: syncQuietHours(
+			modifyFields(model, {
+				settings: () => settled(model),
+				optimisticSettings: () => null,
+				settingsWrite: () => "Idle",
+			}),
+		),
 	}
 }
+
+const decodeTimeString = Schema.decodeUnknownOption(User.TimeString)
 
 const foldQuietHours = (field: QuietHoursField) =>
 	Update.foldChild({
@@ -109,6 +138,7 @@ export const init = (_route: unknown, shared: Shared): Return => ({
 		{
 		settings: null,
 		optimisticSettings: null,
+		settingsWrite: "Idle",
 		volume: Slider.init({
 			id: "notification-volume",
 			values: [0.5],
@@ -119,6 +149,7 @@ export const init = (_route: unknown, shared: Shared): Return => ({
 		quietHoursStart: Segments.init({ id: "quiet-hours-start", kind: "time", value: DEFAULT_QUIET_START }),
 		quietHoursEnd: Segments.init({ id: "quiet-hours-end", kind: "time", value: DEFAULT_QUIET_END }),
 		notificationStatus: "idle",
+		notificationStatusVersion: 0,
 		interaction: Interaction.init(),
 		},
 		shared.soundSettings,
@@ -142,18 +173,28 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		ClickedTestSound: () => ({ model, commands: [PlayTestSound({})] }),
 		CompletedTestSound: () => ({ model }),
 		ClickedTestNotification: () => ({ model, commands: [SendTestNotification({})] }),
-		CompletedTestNotification: ({ isSent }) => ({
-			model: modifyFields(model, { notificationStatus: () => (isSent ? "sent" : "unavailable") }),
-			commands: [ExpireNotificationStatus({})],
+		CompletedTestNotification: ({ isSent }) => {
+			const version = model.notificationStatusVersion + 1
+			return {
+				model: modifyFields(model, {
+					notificationStatus: () => (isSent ? "sent" : "unavailable"),
+					notificationStatusVersion: () => version,
+				}),
+				commands: [ExpireNotificationStatus({ version })],
+			}
+		},
+		ExpiredNotificationStatus: ({ version }) => ({
+			model:
+				version === model.notificationStatusVersion
+					? modifyFields(model, { notificationStatus: () => "idle" })
+					: model,
 		}),
-		ExpiredNotificationStatus: () => ({
-			model: modifyFields(model, { notificationStatus: () => "idle" }),
-		}),
+		// The synced row replaces the optimistic settings only once no write is in flight.
 		UpdatedUserRow: ({ row }) => ({
 			model: syncQuietHours(
 				modifyFields(model, {
 					settings: () => row?.settings ?? null,
-					optimisticSettings: () => null,
+					optimisticSettings: (optimistic) => (model.settingsWrite === "Idle" ? null : optimistic),
 				}),
 			),
 		}),
@@ -165,18 +206,20 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			const result = foldQuietHours(field)(model, child)
 			const before = field === "start" ? model.quietHoursStart : model.quietHoursEnd
 			const after = field === "start" ? result.model.quietHoursStart : result.model.quietHoursEnd
-			const time = after.committed?.slice(0, 5)
-			if (time === undefined || after.committed === before.committed) return result
-			const patch = field === "start" ? { quietHoursStart: time } : { quietHoursEnd: time }
-			const written = withUserSettings(result.model, shared, patch as Partial<User.UserSettings>)
+			const time = Option.fromNullishOr(after.committed?.slice(0, 5)).pipe(Option.flatMap(decodeTimeString))
+			if (Option.isNone(time) || after.committed === before.committed) return result
+			const patch = field === "start" ? { quietHoursStart: time.value } : { quietHoursEnd: time.value }
+			const written = withUserSettings(result.model, shared, patch)
 			return {
 				model: written.model,
 				commands: [...(result.commands ?? []), ...(written.commands ?? [])],
 			}
 		},
-		SucceededUpdateUserSettings: () => ({ model }),
+		// The server now holds the written snapshot, so it stands until the synced row echoes it.
+		SucceededUpdateUserSettings: () =>
+			settleWrite(model, shared, (current) => current.optimisticSettings ?? current.settings),
 		FailedUpdateUserSettings: () => ({
-			model: syncQuietHours(modifyFields(model, { optimisticSettings: () => null })),
+			...settleWrite(model, shared, (current) => current.settings),
 			outMessage: PageOutMessage.RequestedToast({
 				toast: { intent: "error", title: "Failed to update setting", description: null },
 			}),

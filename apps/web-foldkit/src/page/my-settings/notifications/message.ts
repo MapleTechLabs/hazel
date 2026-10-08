@@ -14,7 +14,7 @@ export const Message = defineMessageUnion({
 	CompletedTestSound: {},
 	ClickedTestNotification: {},
 	CompletedTestNotification: { isSent: Schema.Boolean },
-	ExpiredNotificationStatus: {},
+	ExpiredNotificationStatus: { version: Schema.Number },
 	UpdatedUserRow: { row: Schema.NullOr(UserRow) },
 	ToggledDoNotDisturb: { isSelected: Schema.Boolean },
 	ToggledShowQuietHours: { isSelected: Schema.Boolean },

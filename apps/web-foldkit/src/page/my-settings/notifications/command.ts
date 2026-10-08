@@ -28,9 +28,10 @@ export const SendTestNotification = Command.define("SendTestNotification", {
 
 /** The legacy `setTimeout(() => setNotificationStatus("idle"), 3000)`. */
 export const ExpireNotificationStatus = Command.define("ExpireNotificationStatus", {
-	args: {},
+	args: { version: Schema.Number },
 	messages: [Message.ExpiredNotificationStatus],
-	execute: () => Effect.sleep("3 seconds").pipe(Effect.as(Message.ExpiredNotificationStatus())),
+	execute: ({ version }) =>
+		Effect.sleep("3 seconds").pipe(Effect.as(Message.ExpiredNotificationStatus({ version }))),
 })
 
 export const UpdateUserSettings = Command.define("UpdateUserSettings", {
