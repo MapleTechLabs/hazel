@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect"
+import { Duration, Effect, Option, Schema } from "effect"
 import { Mount } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
@@ -20,8 +20,7 @@ export const ClerkMountMessage = defineMessageUnion({
 })
 export type ClerkMountMessage = typeof ClerkMountMessage.Type
 
-type MountFn = (element: HTMLDivElement, props: ClerkProps) => void
-type UnmountFn = (element: HTMLDivElement) => void
+type ClerkFn = (...args: ReadonlyArray<unknown>) => unknown
 
 const methodsOf = (component: ClerkComponent) =>
 	({
@@ -30,26 +29,53 @@ const methodsOf = (component: ClerkComponent) =>
 		CreateOrganization: ["mountCreateOrganization", "unmountCreateOrganization"],
 	})[component]
 
-const clerkMethod = <Fn>(name: string): Fn | undefined => {
-	const clerk: object | undefined = window.Clerk
-	if (!clerk || !(name in clerk)) return undefined
+/** A loaded Clerk's method, bound to Clerk; `None` until `window.Clerk` has loaded. */
+const loadedClerkMethod = (name: string): Option.Option<ClerkFn> => {
+	const clerk = window.Clerk
+	if (!clerk?.loaded || !(name in clerk)) return Option.none()
 	const method: unknown = Reflect.get(clerk, name)
-	return typeof method === "function" ? (method.bind(clerk) as Fn) : undefined
+	return typeof method === "function"
+		? Option.some((...args) => Reflect.apply(method, clerk, args))
+		: Option.none()
 }
+
+const POLL_INTERVAL = Duration.millis(50)
+const MAX_POLLS = 200
+
+/** Clerk may load after the element mounts: poll for it (about 10s) instead of giving up at once. */
+const awaitClerkMethod = (name: string, pollsLeft = MAX_POLLS): Effect.Effect<Option.Option<ClerkFn>> =>
+	Effect.suspend(() => {
+		const method = loadedClerkMethod(name)
+		return Option.isSome(method) || pollsLeft <= 0
+			? Effect.succeed(method)
+			: Effect.sleep(POLL_INTERVAL).pipe(Effect.andThen(awaitClerkMethod(name, pollsLeft - 1)))
+	})
 
 export const MountClerkComponent = Mount.define("MountClerkComponent", {
 	args: { component: ClerkComponent, props: ClerkProps },
 	messages: [ClerkMountMessage.MountedClerkComponent, ClerkMountMessage.FailedMountClerkComponent],
 	execute: ({ element, component, props }) => {
 		const [mountName, unmountName] = methodsOf(component)
-		const mount = clerkMethod<MountFn>(mountName)
-		const unmount = clerkMethod<UnmountFn>(unmountName)
-		if (!mount || !(element instanceof HTMLDivElement))
-			return Effect.succeed(ClerkMountMessage.FailedMountClerkComponent({ component }))
-		return Effect.acquireRelease(
-			Effect.sync(() => mount(element, props)),
-			() => Effect.sync(() => unmount?.(element)),
-		).pipe(Effect.as(ClerkMountMessage.MountedClerkComponent({ component })))
+		const failed = ClerkMountMessage.FailedMountClerkComponent({ component })
+		if (!(element instanceof HTMLDivElement)) return Effect.succeed(failed)
+		return awaitClerkMethod(mountName).pipe(
+			Effect.flatMap(
+				Option.match({
+					onNone: () => Effect.succeed(failed),
+					onSome: (mount) =>
+						Effect.acquireRelease(
+							Effect.try({ try: () => mount(element, props), catch: () => failed }),
+							() =>
+								Effect.sync(() =>
+									Option.map(loadedClerkMethod(unmountName), (unmount) => unmount(element)),
+								),
+						).pipe(
+							Effect.as(ClerkMountMessage.MountedClerkComponent({ component })),
+							Effect.catch(Effect.succeed),
+						),
+				}),
+			),
+		)
 	},
 })
 
