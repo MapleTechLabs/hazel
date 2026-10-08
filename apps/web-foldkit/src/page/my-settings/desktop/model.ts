@@ -4,6 +4,8 @@ import * as Interaction from "../../../ui/aria/interaction"
 export const Model = Schema.Struct({
 	/** `null` until `isAutostartEnabled()` answers (the switch is disabled meanwhile). */
 	autostartEnabled: Schema.NullOr(Schema.Boolean),
+	/** A `SetAutostart` is running; further toggles wait for its result. */
+	isUpdating: Schema.Boolean,
 	interaction: Interaction.Model,
 })
 export type Model = typeof Model.Type

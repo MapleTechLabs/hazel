@@ -15,39 +15,47 @@ export const interaction = embedInteraction<Model, Message>((message) =>
 /** Reads the autostart state; a failure reads as off, as the legacy mount effect does. */
 const readAutostart = Effect.tryPromise(() => isAutostartEnabled()).pipe(
 	Effect.catch(() => Effect.succeed(false)),
-	Effect.map((isEnabled) => Message.CheckedAutostart({ isEnabled })),
 )
 
 export const CheckAutostart = Command.define("CheckAutostart", {
 	args: {},
 	messages: [Message.CheckedAutostart],
-	execute: () => readAutostart,
+	execute: () => readAutostart.pipe(Effect.map((isEnabled) => Message.CheckedAutostart({ isEnabled }))),
 })
 
 /** On failure the legacy handler re-reads the real state instead of keeping the toggle. */
 export const SetAutostart = Command.define("SetAutostart", {
 	args: { isEnabled: Schema.Boolean },
-	messages: [Message.CheckedAutostart],
+	messages: [Message.CompletedSetAutostart],
 	execute: ({ isEnabled }) =>
 		Effect.tryPromise(() => (isEnabled ? enableAutostart() : disableAutostart())).pipe(
-			Effect.as(Message.CheckedAutostart({ isEnabled })),
+			Effect.as(isEnabled),
 			Effect.catch(() => readAutostart),
+			Effect.map((isEnabled) => Message.CompletedSetAutostart({ isEnabled })),
 		),
 })
 
 export const init = (): PageReturn<Model, Message> => ({
-	model: { autostartEnabled: null, interaction: Interaction.init() },
+	model: { autostartEnabled: null, isUpdating: false, interaction: Interaction.init() },
 	commands: [CheckAutostart({})],
 })
 
 export const update = (model: Model, message: Message): PageReturn<Model, Message> =>
 	Message.match<PageReturn<Model, Message>>(message, {
+		// The initial read only fills an unknown state, so it can never undo a later write.
 		CheckedAutostart: ({ isEnabled }) => ({
-			model: modifyFields(model, { autostartEnabled: () => isEnabled }),
+			model:
+				model.autostartEnabled === null ? modifyFields(model, { autostartEnabled: () => isEnabled }) : model,
 		}),
-		ToggledAutostart: ({ isSelected }) => ({
-			model,
-			commands: [SetAutostart({ isEnabled: isSelected })],
+		ToggledAutostart: ({ isSelected }) =>
+			model.isUpdating || model.autostartEnabled === null
+				? { model }
+				: {
+						model: modifyFields(model, { isUpdating: () => true }),
+						commands: [SetAutostart({ isEnabled: isSelected })],
+					},
+		CompletedSetAutostart: ({ isEnabled }) => ({
+			model: modifyFields(model, { autostartEnabled: () => isEnabled, isUpdating: () => false }),
 		}),
 		GotInteractionMessage: ({ message: child }) => interaction.fold(model, child),
 	})

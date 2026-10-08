@@ -35,9 +35,18 @@ describe("launch at startup", () => {
 			Scene.click(openAtLogin),
 			Scene.Command.expectExact(SetAutostart({ isEnabled: true })),
 			Scene.expect(openAtLogin).not.toBeChecked(),
-			Scene.Command.resolve(SetAutostart, Message.CheckedAutostart({ isEnabled: true })),
+			Scene.Command.resolve(SetAutostart, Message.CompletedSetAutostart({ isEnabled: true })),
 			Scene.expect(openAtLogin).toBeChecked(),
 		)
+	})
+
+	test("a second toggle while a write runs is ignored, and a late initial read cannot undo the write", () => {
+		const writing = update({ ...init().model, autostartEnabled: false }, Message.ToggledAutostart({ isSelected: true }))
+		expect(writing.model.isUpdating).toBe(true)
+		expect(update(writing.model, Message.ToggledAutostart({ isSelected: false })).commands ?? []).toEqual([])
+		const written = update(writing.model, Message.CompletedSetAutostart({ isEnabled: true })).model
+		expect(written).toMatchObject({ autostartEnabled: true, isUpdating: false })
+		expect(update(written, Message.CheckedAutostart({ isEnabled: false })).model.autostartEnabled).toBe(true)
 	})
 
 	test("a failed write falls back to the re-read state without a toast", () => {
@@ -45,7 +54,7 @@ describe("launch at startup", () => {
 			pageScene(update, view, shared),
 			Scene.given({ ...init().model, autostartEnabled: false }),
 			Scene.click(openAtLogin),
-			Scene.Command.resolve(SetAutostart, Message.CheckedAutostart({ isEnabled: false })),
+			Scene.Command.resolve(SetAutostart, Message.CompletedSetAutostart({ isEnabled: false })),
 			Scene.expectNoOutMessage(),
 			Scene.expect(openAtLogin).not.toBeChecked(),
 		)
