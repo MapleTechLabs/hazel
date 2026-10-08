@@ -162,17 +162,41 @@ describe("message window", () => {
 		)
 	}
 
-	// BUG: the Files tab unmounts the list; back on Messages the new element starts at scrollTop 0, but
-	// the Model still holds the old scrollTop, so `reconcile` sees no change and never scrolls. The
-	// pool renders rows around the old offset while the viewport shows the top of the content.
-	test.fails("coming back from the Files tab restores the list's scroll position", () => {
+	// The Files tab unmounts the list; the new element reports that it starts at scrollTop 0, and the
+	// list scrolls it back to the anchor the reader left.
+	test("coming back from the Files tab restores the list's scroll position", () => {
 		const back = setTab(setTab(atEnd(), "files"), "messages")
 		story(
 			updateWithShared,
 			given(back),
-			message(list(MessageList.Message.ResizedViewport({ viewportHeight: VIEWPORT }))),
-			Command.expectHas(MessageList.ApplyScroll),
-			Command.resolveAll(),
+			message(list(MessageList.Message.MountedList({ scrollTop: 0, viewportHeight: VIEWPORT }))),
+			Command.expectExact(
+				MessageList.ApplyScroll({
+					id: back.list.id,
+					adjustment: MessageList.ScrollAdjustment.To({ scrollTop: endScrollTopFor(PAGE_SIZE) }),
+					version: back.list.scrollVersion + 1,
+				}),
+			),
+			model((current) => expect(current.list.scrollTop).toBe(endScrollTopFor(PAGE_SIZE))),
+			Command.resolve(
+				MessageList.ApplyScroll,
+				MessageList.Message.CompletedApplyScroll({
+					version: back.list.scrollVersion + 1,
+					scrollTop: endScrollTopFor(PAGE_SIZE),
+				}),
+			),
+		)
+	})
+
+	test("the first mount of a list already in place schedules no scroll", () => {
+		const current = atEnd()
+		story(
+			updateWithShared,
+			given(current),
+			message(
+				list(MessageList.Message.MountedList({ scrollTop: current.list.scrollTop, viewportHeight: VIEWPORT })),
+			),
+			Command.expectNone(),
 		)
 	})
 })

@@ -67,6 +67,8 @@ export type Model = typeof Model.Type
 // MESSAGE
 
 export const Message = defineMessageUnion({
+	/** A list element was (re)created: its real position, which the Model may no longer match. */
+	MountedList: { scrollTop: Schema.Number, viewportHeight: Schema.Number },
 	ScrolledList: { scrollTop: Schema.Number },
 	ResizedViewport: { viewportHeight: Schema.Number },
 	MeasuredRows: {
@@ -384,6 +386,12 @@ const updateScroll = (model: Model, message: Message): ListReturn =>
 				: { model, commands: [WaitForScrollSettle({ version: model.scrollEventVersion })] },
 		ResizedViewport: ({ viewportHeight }) =>
 			reconcile(modifyFields(model, { viewportHeight: () => viewportHeight })),
+		// A remounted element (the Files tab round-trip) starts at its own offset; the anchor is kept,
+		// so `reconcile` scrolls back to it.
+		MountedList: ({ scrollTop, viewportHeight }) =>
+			reconcile(
+				modifyFields(model, { scrollTop: () => scrollTop, viewportHeight: () => viewportHeight }),
+			),
 		MeasuredRows: ({ measurements }) => {
 			const changed = changedMeasurements(model, measurements)
 			if (changed.length === 0) return { model }
@@ -448,6 +456,7 @@ export const isNearStart = (model: Model) =>
 const ROW_KEY_ATTRIBUTE = "data-list-key"
 
 type ObservedMessage =
+	| typeof Message.MountedList.Type
 	| typeof Message.ScrolledList.Type
 	| typeof Message.ResizedViewport.Type
 	| typeof Message.MeasuredRows.Type
@@ -457,7 +466,10 @@ const observeList = (element: Element): Stream.Stream<ObservedMessage> =>
 		Effect.acquireRelease(
 			Effect.sync(() => {
 				if (!(element instanceof HTMLElement)) return () => undefined
-				Queue.offerUnsafe(queue, Message.ResizedViewport({ viewportHeight: element.clientHeight }))
+				Queue.offerUnsafe(
+					queue,
+					Message.MountedList({ scrollTop: element.scrollTop, viewportHeight: element.clientHeight }),
+				)
 
 				const onScroll = () =>
 					Queue.offerUnsafe(queue, Message.ScrolledList({ scrollTop: element.scrollTop }))
@@ -526,7 +538,7 @@ const roundSize = (size: number) => Math.round(size)
 /** Container-owned Mount: scroll position, viewport height and row heights, all from one element. */
 export const ObserveMessageList = Mount.defineStream("ObserveMessageList", {
 	args: { id: Schema.String },
-	messages: [Message.ScrolledList, Message.ResizedViewport, Message.MeasuredRows],
+	messages: [Message.MountedList, Message.ScrolledList, Message.ResizedViewport, Message.MeasuredRows],
 	execute: ({ element, viewStateChanges }) =>
 		viewStateChanges.pipe(
 			Stream.switchMap((viewState) => (viewState === "Live" ? observeList(element) : Stream.never)),
