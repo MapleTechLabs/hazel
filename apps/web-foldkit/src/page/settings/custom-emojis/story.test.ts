@@ -8,9 +8,15 @@ import type { Shared } from "../../contract"
 import { formatDistanceToNow } from "../format-distance"
 import { Message } from "./message"
 import { DeleteEmoji, generateEmojiName, init, update, validateEmojiName } from "./update"
-import { CreatePreview, FocusName, RestoreEmoji, RevokePreview, SaveEmoji } from "./update"
+import { CreatePreview, FocusName, RestoreEmoji, RevokePreview, CreateEmoji } from "./update"
 import { errorToast, successToast } from "../../../data/actions"
-import { failureToastFixture, makeShared, organizationId, storyUpdate, userId } from "../../../test/pages-fixtures"
+import {
+	failureToastFixture,
+	makeShared,
+	organizationId,
+	storyUpdate,
+	userId,
+} from "../../../test/pages-fixtures"
 import * as Modal from "../../../ui/modal"
 import { sharedDefaults } from "../../test-shared"
 
@@ -139,8 +145,17 @@ describe("delete failure", () => {
 
 const owner = storyUpdate(update, makeShared())
 const png = new File(["x"], "Ship It.png", { type: "image/png" })
-const drafted = update(init().model, Message.CreatedPreview({ file: png, previewUrl: "blob:1" }), makeShared()).model
-const restoreTarget = { id: shipit, name: "ship_it", imageUrl: "https://cdn/old.png", newImageUrl: "https://cdn/new.png" }
+const drafted = update(
+	init().model,
+	Message.CreatedPreview({ file: png, previewUrl: "blob:1" }),
+	makeShared(),
+).model
+const restoreTarget = {
+	id: shipit,
+	name: "ship_it",
+	imageUrl: "https://cdn/old.png",
+	newImageUrl: "https://cdn/new.png",
+}
 
 describe("upload draft", () => {
 	test("a picked file previews, focuses the name, and a second pick revokes the first preview", () => {
@@ -153,7 +168,10 @@ describe("upload draft", () => {
 			message(Message.SelectedFiles({ files: [png] })),
 			Command.resolve(CreatePreview, Message.CreatedPreview({ file: png, previewUrl: "blob:2" })),
 			Command.expectExact(RevokePreview({ previewUrl: "blob:1" }), FocusName({})),
-			Command.resolveAll([RevokePreview, Message.CompletedRevokePreview()], [FocusName, Message.CompletedFocusName()]),
+			Command.resolveAll(
+				[RevokePreview, Message.CompletedRevokePreview()],
+				[FocusName, Message.CompletedFocusName()],
+			),
 			model((current) => expect(current.draft?.previewUrl).toBe("blob:2")),
 		)
 	})
@@ -185,25 +203,64 @@ describe("save", () => {
 	test("saving uploads once, then toasts and clears the draft", () => {
 		// Command instances holding a jsdom File cannot be compared structurally, so check the args here.
 		expect(update(drafted, Message.ClickedSaveEmoji(), makeShared()).commands?.[0]).toMatchObject({
-			name: SaveEmoji.name,
-			args: { organizationId, name: "ship_it", file: png, createdBy: userId },
+			name: CreateEmoji.name,
+			args: { organizationId, name: "ship_it", file: png, previewUrl: "blob:1", createdBy: userId },
 		})
 		story(
 			owner,
 			given(drafted),
 			message(Message.ClickedSaveEmoji()),
-			Command.expectExact(SaveEmoji),
+			Command.expectExact(CreateEmoji),
 			model((current) => expect(current.isSaving).toBe(true)),
-			Command.resolve(SaveEmoji, Message.SucceededCreateEmoji({ name: "ship_it" })),
-			expectOutMessage(PageOutMessage.RequestedToast({ toast: successToast("Emoji :ship_it: created") })),
+			Command.resolve(
+				CreateEmoji,
+				Message.SucceededCreateEmoji({ name: "ship_it", previewUrl: "blob:1" }),
+			),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({ toast: successToast("Emoji :ship_it: created") }),
+			),
 			Command.resolve(RevokePreview({ previewUrl: "blob:1" }), Message.CompletedRevokePreview()),
 			model((current) => expect(current).toMatchObject({ isSaving: false, draft: null })),
 		)
 	})
 
 	test("Save while a save is in flight, or without a signed-in user, sends nothing", () => {
-		story(owner, given({ ...drafted, isSaving: true }), message(Message.ClickedSaveEmoji()), Command.expectNone())
-		story(storyUpdate(update, makeShared({ currentUser: null })), given(drafted), message(Message.ClickedSaveEmoji()), Command.expectNone())
+		story(
+			owner,
+			given({ ...drafted, isSaving: true }),
+			message(Message.ClickedSaveEmoji()),
+			Command.expectNone(),
+		)
+		story(
+			storyUpdate(update, makeShared({ currentUser: null })),
+			given(drafted),
+			message(Message.ClickedSaveEmoji()),
+			Command.expectNone(),
+		)
+	})
+
+	test("a file picked while saving is ignored, so the save's success clears the saved draft", () => {
+		const saving = update(drafted, Message.ClickedSaveEmoji(), makeShared()).model
+		const picked = update(saving, Message.SelectedFiles({ files: [png] }), makeShared())
+		expect(picked.commands ?? []).toHaveLength(0)
+		// A preview that was already being created when the save started is revoked, not adopted.
+		const late = update(saving, Message.CreatedPreview({ file: png, previewUrl: "blob:2" }), makeShared())
+		expect(late.model.draft?.previewUrl).toBe("blob:1")
+		expect(late.commands?.map((command) => command.name)).toEqual([RevokePreview.name])
+	})
+
+	test("a late success for an older draft keeps the newer draft", () => {
+		const newer = {
+			...drafted,
+			draft: drafted.draft === null ? null : { ...drafted.draft, previewUrl: "blob:2" },
+		}
+		const result = update(
+			newer,
+			Message.SucceededCreateEmoji({ name: "ship_it", previewUrl: "blob:1" }),
+			makeShared(),
+		)
+		expect(result.model.draft?.previewUrl).toBe("blob:2")
+		expect(result.commands ?? []).toHaveLength(0)
 	})
 
 	test("a failed save keeps the draft and toasts the failure", () => {
@@ -211,9 +268,11 @@ describe("save", () => {
 			owner,
 			given(drafted),
 			message(Message.ClickedSaveEmoji()),
-			Command.resolve(SaveEmoji, Message.FailedCreateEmoji({ toast: failureToastFixture })),
+			Command.resolve(CreateEmoji, Message.FailedCreateEmoji({ toast: failureToastFixture })),
 			expectOutMessage(PageOutMessage.RequestedToast({ toast: failureToastFixture })),
-			model((current) => expect(current).toMatchObject({ isSaving: false, draft: { name: "ship_it" } })),
+			model((current) =>
+				expect(current).toMatchObject({ isSaving: false, draft: { name: "ship_it" } }),
+			),
 		)
 	})
 })
@@ -224,18 +283,45 @@ describe("restore a deleted emoji", () => {
 			owner,
 			given(drafted),
 			message(Message.ClickedSaveEmoji()),
-			Command.resolve(SaveEmoji, Message.FoundDeletedEmoji({ target: restoreTarget })),
+			Command.resolve(CreateEmoji, Message.FoundDeletedEmoji({ target: restoreTarget })),
 			expectNoOutMessage(),
-			model((current) => expect(current).toMatchObject({ isSaving: false, restoreModal: { isOpen: true } })),
+			model((current) =>
+				expect(current).toMatchObject({ isSaving: false, restoreModal: { isOpen: true } }),
+			),
 			message(Message.ClickedConfirmRestore()),
 			Command.expectExact(
-				RestoreEmoji({ emojiId: shipit, organizationId, name: "ship_it", imageUrl: "https://cdn/new.png", createdBy: userId }),
+				RestoreEmoji({
+					emojiId: shipit,
+					organizationId,
+					name: "ship_it",
+					imageUrl: "https://cdn/new.png",
+					createdBy: userId,
+					previewUrl: "blob:1",
+				}),
 			),
-			model((current) => expect(current).toMatchObject({ isSaving: true, restoreTarget: null, restoreModal: { isOpen: false } })),
-			Command.resolve(RestoreEmoji, Message.SucceededRestoreEmoji({ name: "ship_it" })),
-			expectOutMessage(PageOutMessage.RequestedToast({ toast: successToast("Emoji :ship_it: restored") })),
+			model((current) =>
+				expect(current).toMatchObject({
+					isSaving: true,
+					restoreTarget: null,
+					restoreModal: { isOpen: false },
+				}),
+			),
+			Command.resolve(
+				RestoreEmoji,
+				Message.SucceededRestoreEmoji({ name: "ship_it", previewUrl: "blob:1" }),
+			),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({ toast: successToast("Emoji :ship_it: restored") }),
+			),
 			Command.resolve(RevokePreview, Message.CompletedRevokePreview()),
 			model((current) => expect(current.draft).toBeNull()),
+		)
+	})
+
+	test("a second confirm while a restore runs sends nothing", () => {
+		const restoring = { ...drafted, restoreTarget, isSaving: true }
+		expect(update(restoring, Message.ClickedConfirmRestore(), makeShared()).commands ?? []).toHaveLength(
+			0,
 		)
 	})
 
@@ -246,7 +332,9 @@ describe("restore a deleted emoji", () => {
 			message(Message.ClickedConfirmRestore()),
 			Command.resolve(RestoreEmoji, Message.FailedRestoreEmoji()),
 			expectOutMessage(PageOutMessage.RequestedToast({ toast: errorToast("Failed to restore emoji") })),
-			model((current) => expect(current).toMatchObject({ isSaving: false, draft: { previewUrl: "blob:1" } })),
+			model((current) =>
+				expect(current).toMatchObject({ isSaving: false, draft: { previewUrl: "blob:1" } }),
+			),
 		)
 	})
 

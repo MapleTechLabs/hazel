@@ -9,7 +9,16 @@ import * as Modal from "../../../ui/modal"
 import { PageOutMessage } from "../../out-message"
 import { Message } from "./message"
 import type { Emoji } from "./model"
-import { CreatePreview, DeleteEmoji, FocusName, init, OpenPicker, RevokePreview, SaveEmoji, update } from "./update"
+import {
+	CreatePreview,
+	DeleteEmoji,
+	FocusName,
+	init,
+	OpenPicker,
+	RevokePreview,
+	CreateEmoji,
+	update,
+} from "./update"
 import { view } from "./view"
 
 /** Custom emojis through the view: loading, the upload draft form, and the delete dialog. */
@@ -73,7 +82,10 @@ describe("upload", () => {
 			pageScene(update, view, owner),
 			Scene.given(withEmojis([])),
 			Scene.click(dropZone),
-			Scene.Command.resolve(OpenPicker({ inputId: "custom-emoji-drop-zone-input" }), Message.CompletedOpenPicker()),
+			Scene.Command.resolve(
+				OpenPicker({ inputId: "custom-emoji-drop-zone-input" }),
+				Message.CompletedOpenPicker(),
+			),
 			Scene.changeFiles(fileInput, [png]),
 			Scene.Command.resolve(CreatePreview, Message.CreatedPreview({ file: png, previewUrl: "blob:1" })),
 			Scene.Command.resolve(FocusName, Message.CompletedFocusName()),
@@ -84,11 +96,16 @@ describe("upload", () => {
 			Scene.type(nameInput, "Party-Parrot"),
 			Scene.expect(nameInput).toHaveValue("party-parrot"),
 			Scene.click(saveButton),
-			Scene.Command.expectExact(SaveEmoji),
+			Scene.Command.expectExact(CreateEmoji),
 			Scene.expect(Scene.role("button", { name: "Saving..." })).toBeDisabled(),
 			Scene.expect(nameInput).toBeDisabled(),
-			Scene.Command.resolve(SaveEmoji, Message.SucceededCreateEmoji({ name: "party-parrot" })),
-			Scene.expectOutMessage(PageOutMessage.RequestedToast({ toast: successToast("Emoji :party-parrot: created") })),
+			Scene.Command.resolve(
+				CreateEmoji,
+				Message.SucceededCreateEmoji({ name: "party-parrot", previewUrl: "blob:1" }),
+			),
+			Scene.expectOutMessage(
+				PageOutMessage.RequestedToast({ toast: successToast("Emoji :party-parrot: created") }),
+			),
 			Scene.Command.resolve(RevokePreview({ previewUrl: "blob:1" }), Message.CompletedRevokePreview()),
 			Scene.expect(dropZone).toExist(),
 		)
@@ -108,7 +125,9 @@ describe("delete", () => {
 			Scene.expect(deleteDialog).toBeAbsent(),
 			Scene.Mount.expectEnded(Modal.PortalModal),
 			Scene.Command.resolve(DeleteEmoji, Message.SucceededDeleteEmoji({ name: "shipit" })),
-			Scene.expectOutMessage(PageOutMessage.RequestedToast({ toast: successToast("Emoji :shipit: deleted") })),
+			Scene.expectOutMessage(
+				PageOutMessage.RequestedToast({ toast: successToast("Emoji :shipit: deleted") }),
+			),
 		)
 	})
 

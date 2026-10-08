@@ -1,7 +1,7 @@
 import { CustomEmojiDeletedExistsError } from "@hazel/domain/rpc"
 import { CustomEmojiId, OrganizationId, UserId } from "@hazel/schema"
 import { Array, Cause, Effect, Option, Schema } from "effect"
-import { Command } from "foldkit"
+import { Command, Update } from "foldkit"
 import * as Dom from "foldkit/dom"
 import { File } from "foldkit/file"
 import { modifyFields } from "foldkit/struct"
@@ -76,22 +76,32 @@ const deletedExistsErrorOf = (cause: Cause.Cause<unknown>) =>
 		(error): error is CustomEmojiDeletedExistsError => error instanceof CustomEmojiDeletedExistsError,
 	)
 
-export const SaveEmoji = Command.define("SaveCustomEmoji", {
-	args: { organizationId: OrganizationId, name: Schema.String, file: File, createdBy: UserId },
+/** Uploads the draft's file and creates the emoji; `previewUrl` names the draft the result belongs to. */
+export const CreateEmoji = Command.define("CreateCustomEmoji", {
+	args: {
+		organizationId: OrganizationId,
+		name: Schema.String,
+		file: File,
+		previewUrl: Schema.String,
+		createdBy: UserId,
+	},
 	messages: [Message.SucceededCreateEmoji, Message.FoundDeletedEmoji, Message.FailedCreateEmoji],
-	execute: ({ organizationId, name, file, createdBy }) =>
+	execute: ({ organizationId, name, file, previewUrl, createdBy }) =>
 		Effect.gen(function* () {
 			const key = yield* uploadFile({ type: "custom-emoji", organizationId }, file)
 			const imageUrl = publicUrlOf(key)
 			if (imageUrl === null) {
 				return Message.FailedCreateEmoji({
-					toast: errorToast("Configuration error", "Image upload is not configured. Please contact support."),
+					toast: errorToast(
+						"Configuration error",
+						"Image upload is not configured. Please contact support.",
+					),
 				})
 			}
 			const exit = yield* Effect.exit(
 				runAtomFn(createCustomEmojiAction, { organizationId, name, imageUrl, createdBy }),
 			)
-			if (exit._tag === "Success") return Message.SucceededCreateEmoji({ name })
+			if (exit._tag === "Success") return Message.SucceededCreateEmoji({ name, previewUrl })
 			return Option.match(deletedExistsErrorOf(exit.cause), {
 				onSome: (error) =>
 					Message.FoundDeletedEmoji({
@@ -112,7 +122,9 @@ export const SaveEmoji = Command.define("SaveCustomEmoji", {
 			})
 		}).pipe(
 			Effect.catchTag("UploadFailedError", (error) =>
-				Effect.succeed(Message.FailedCreateEmoji({ toast: errorToast(error.message, error.description) })),
+				Effect.succeed(
+					Message.FailedCreateEmoji({ toast: errorToast(error.message, error.description) }),
+				),
 			),
 		),
 })
@@ -124,12 +136,14 @@ export const RestoreEmoji = Command.define("RestoreCustomEmoji", {
 		name: Schema.String,
 		imageUrl: Schema.String,
 		createdBy: UserId,
+		/** The draft that hit the deleted name, cleared on success unless the user picked another. */
+		previewUrl: Schema.NullOr(Schema.String),
 	},
 	messages: [Message.SucceededRestoreEmoji, Message.FailedRestoreEmoji],
-	execute: (args) =>
+	execute: ({ previewUrl, ...args }) =>
 		runAtomFn(restoreCustomEmojiAction, args).pipe(
 			Effect.match({
-				onSuccess: () => Message.SucceededRestoreEmoji({ name: args.name }),
+				onSuccess: () => Message.SucceededRestoreEmoji({ name: args.name, previewUrl }),
 				onFailure: () => Message.FailedRestoreEmoji(),
 			}),
 		),
@@ -176,22 +190,41 @@ const clearDraft = (model: Model): { model: Model; commands: NonNullable<Return[
 	commands: model.draft === null ? [] : [RevokePreview({ previewUrl: model.draft.previewUrl })],
 })
 
-const closeModal = (modal: Modal.Model) => Modal.close(modal).model
-
-const foldModal = (
-	model: Model,
+const modalFold = (
 	key: "deleteModal" | "restoreModal",
-	message: Modal.Message,
-	toParent: (message: Modal.Message) => Message,
-): Return => {
-	const result = Modal.update(model[key], message)
-	const isClosed = !result.model.isOpen
+	toParentMessage: (message: Modal.Message) => Message,
+) => {
 	const target = key === "deleteModal" ? "deleteTarget" : "restoreTarget"
 	return {
-		model: { ...model, [key]: result.model, ...(isClosed ? { [target]: null } : {}) },
-		commands: Command.mapMessages(result.commands ?? [], toParent),
+		read: (model: Model) => Option.some(model[key]),
+		// A closed dialog forgets its target (legacy `onOpenChange(false)`).
+		write: (model: Model, modal: Modal.Model): Model => ({
+			...model,
+			[key]: modal,
+			...(modal.isOpen ? {} : { [target]: null }),
+		}),
+		toParentMessage,
 	}
 }
+const deleteModal = modalFold("deleteModal", (message) => Message.GotDeleteModalMessage({ message }))
+const restoreModal = modalFold("restoreModal", (message) => Message.GotRestoreModalMessage({ message }))
+const foldDeleteModal = Update.foldChild({ update: Modal.update, ...deleteModal })
+const openDeleteModal = Update.foldChildStep({ update: Modal.open, ...deleteModal })
+const closeDeleteModal = Update.foldChildStep({ update: Modal.close, ...deleteModal })
+const foldRestoreModal = Update.foldChild({ update: Modal.update, ...restoreModal })
+const openRestoreModal = Update.foldChildStep({ update: Modal.open, ...restoreModal })
+const closeRestoreModal = Update.foldChildStep({ update: Modal.close, ...restoreModal })
+
+/** Clears the draft only if it is still the one the result belongs to. */
+const clearDraftOf = (model: Model, previewUrl: string | null) =>
+	model.draft !== null && model.draft.previewUrl === previewUrl
+		? clearDraft(model)
+		: { model, commands: [] }
+
+const withCommands = (result: Return, commands: Return["commands"]): Return => ({
+	...result,
+	commands: [...(result.commands ?? []), ...(commands ?? [])],
+})
 
 const selectFile = (model: Model, file: globalThis.File): Return => {
 	if (!ALLOWED_EMOJI_TYPES.includes(file.type)) {
@@ -208,14 +241,16 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		UpdatedEmojis: ({ emojis }) => ({ model: modifyFields(model, { emojis: () => emojis }) }),
 		ClickedBrowse: ({ inputId }) => ({ model, commands: [OpenPicker({ inputId })] }),
 		CompletedOpenPicker: () => ({ model }),
+		// A file picked while a save runs would replace the draft being saved.
 		SelectedFiles: ({ files }) =>
-			Option.match(Array.head(files), {
+			Option.match(model.isSaving ? Option.none() : Array.head(files), {
 				onNone: () => ({ model: modifyFields(model, { isDropTarget: () => false }) }),
 				onSome: (file) => selectFile(modifyFields(model, { isDropTarget: () => false }), file),
 			}),
 		EnteredDropZone: () => ({ model: modifyFields(model, { isDropTarget: () => true }) }),
 		LeftDropZone: () => ({ model: modifyFields(model, { isDropTarget: () => false }) }),
 		CreatedPreview: ({ file, previewUrl }) => {
+			if (model.isSaving) return { model, commands: [RevokePreview({ previewUrl })] }
 			const name = generateEmojiName(file.name)
 			return {
 				model: modifyFields(model, {
@@ -232,7 +267,8 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			const name = value.toLowerCase()
 			return {
 				model: modifyFields(model, {
-					draft: (draft) => (draft === null ? null : { ...draft, name, nameError: validateEmojiName(name) }),
+					draft: (draft) =>
+						draft === null ? null : { ...draft, name, nameError: validateEmojiName(name) },
 				}),
 			}
 		},
@@ -242,79 +278,69 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			const draft = model.draft
 			if (draft === null) return { model }
 			const error = validateEmojiName(draft.name)
-			if (error) return { model: modifyFields(model, { draft: () => ({ ...draft, nameError: error }) }) }
-			if (shared.organization === null || shared.currentUser === null || model.isSaving) return { model }
+			if (error)
+				return { model: modifyFields(model, { draft: () => ({ ...draft, nameError: error }) }) }
+			if (shared.organization === null || shared.currentUser === null || model.isSaving)
+				return { model }
 			return {
 				model: modifyFields(model, { isSaving: () => true }),
 				commands: [
-					SaveEmoji({
+					CreateEmoji({
 						organizationId: shared.organization.id,
 						name: draft.name,
 						file: draft.file,
+						previewUrl: draft.previewUrl,
 						createdBy: shared.currentUser.id,
 					}),
 				],
 			}
 		},
-		SucceededCreateEmoji: ({ name }) => {
-			const cleared = clearDraft(modifyFields(model, { isSaving: () => false }))
+		SucceededCreateEmoji: ({ name, previewUrl }) => {
+			const cleared = clearDraftOf(modifyFields(model, { isSaving: () => false }), previewUrl)
 			return toast(cleared.model, successToast(`Emoji :${name}: created`), cleared.commands)
 		},
-		FoundDeletedEmoji: ({ target }) => ({
-			model: modifyFields(model, {
-				isSaving: () => false,
-				restoreTarget: () => target,
-				restoreModal: (modal) => Modal.open(modal).model,
-			}),
-		}),
-		FailedCreateEmoji: ({ toast: request }) => {
-			const next = modifyFields(model, { isSaving: () => false })
-			return request === null ? { model: next } : toast(next, request)
-		},
+		FoundDeletedEmoji: ({ target }) =>
+			openRestoreModal(modifyFields(model, { isSaving: () => false, restoreTarget: () => target })),
+		FailedCreateEmoji: ({ toast: request }) =>
+			toast(modifyFields(model, { isSaving: () => false }), request),
 		ClickedConfirmRestore: () => {
 			const target = model.restoreTarget
-			if (target === null || shared.organization === null || shared.currentUser === null) return { model }
-			return {
-				model: modifyFields(model, {
-					isSaving: () => true,
-					restoreTarget: () => null,
-					restoreModal: closeModal,
-				}),
-				commands: [
-					RestoreEmoji({
-						emojiId: target.id,
-						organizationId: shared.organization.id,
-						name: target.name,
-						imageUrl: target.newImageUrl,
-						createdBy: shared.currentUser.id,
-					}),
-				],
+			if (
+				target === null ||
+				shared.organization === null ||
+				shared.currentUser === null ||
+				model.isSaving
+			) {
+				return { model }
 			}
+			return withCommands(closeRestoreModal(modifyFields(model, { isSaving: () => true })), [
+				RestoreEmoji({
+					emojiId: target.id,
+					organizationId: shared.organization.id,
+					name: target.name,
+					imageUrl: target.newImageUrl,
+					createdBy: shared.currentUser.id,
+					previewUrl: model.draft?.previewUrl ?? null,
+				}),
+			])
 		},
-		SucceededRestoreEmoji: ({ name }) => {
-			const cleared = clearDraft(modifyFields(model, { isSaving: () => false }))
+		SucceededRestoreEmoji: ({ name, previewUrl }) => {
+			const cleared = clearDraftOf(modifyFields(model, { isSaving: () => false }), previewUrl)
 			return toast(cleared.model, successToast(`Emoji :${name}: restored`), cleared.commands)
 		},
 		FailedRestoreEmoji: () =>
 			toast(modifyFields(model, { isSaving: () => false }), errorToast("Failed to restore emoji")),
-		ClickedDeleteEmoji: ({ id, name }) => ({
-			model: modifyFields(model, {
-				deleteTarget: () => ({ id, name }),
-				deleteModal: (modal) => Modal.open(modal).model,
-			}),
-		}),
+		ClickedDeleteEmoji: ({ id, name }) =>
+			openDeleteModal(modifyFields(model, { deleteTarget: () => ({ id, name }) })),
 		ClickedConfirmDelete: () => {
 			const target = model.deleteTarget
 			if (target === null) return { model }
-			return {
-				model: modifyFields(model, { deleteTarget: () => null, deleteModal: closeModal }),
-				commands: [DeleteEmoji({ emojiId: target.id, name: target.name })],
-			}
+			return withCommands(closeDeleteModal(model), [
+				DeleteEmoji({ emojiId: target.id, name: target.name }),
+			])
 		},
 		SucceededDeleteEmoji: ({ name }) => toast(model, successToast(`Emoji :${name}: deleted`)),
 		FailedDeleteEmoji: () => toast(model, errorToast("Failed to delete emoji")),
-		GotDeleteModalMessage: ({ message: child }) =>
-			foldModal(model, "deleteModal", child, (next) => Message.GotDeleteModalMessage({ message: next })),
-		GotRestoreModalMessage: ({ message: child }) =>
-			foldModal(model, "restoreModal", child, (next) => Message.GotRestoreModalMessage({ message: next })),
+		GotDeleteModalMessage: ({ message: child }) => foldDeleteModal(model, child),
+		GotRestoreModalMessage: ({ message: child }) => foldRestoreModal(model, child),
 	})
