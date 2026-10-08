@@ -72,14 +72,17 @@ export const SendTypingHeartbeat = Command.define("SendTypingHeartbeat", {
 		}).pipe(Effect.catch(() => Effect.succeed(Message.FailedSendTypingHeartbeat()))),
 })
 
+/** `typingIndicator.delete`; a failure is ignored (the server expires the indicator anyway). */
+export const deleteIndicator = (id: TypingIndicatorId): Effect.Effect<void, never, HazelRpc> =>
+	Effect.gen(function* () {
+		const client = yield* HazelRpc
+		yield* client("typingIndicator.delete", { id })
+	}).pipe(Effect.ignore)
+
 export const DeleteTypingIndicator = Command.define("DeleteTypingIndicator", {
 	args: { id: TypingIndicatorId },
 	messages: [Message.CompletedDeleteTypingIndicator],
-	execute: ({ id }) =>
-		Effect.gen(function* () {
-			const client = yield* HazelRpc
-			yield* client("typingIndicator.delete", { id })
-		}).pipe(Effect.ignore, Effect.as(Message.CompletedDeleteTypingIndicator())),
+	execute: ({ id }) => deleteIndicator(id).pipe(Effect.as(Message.CompletedDeleteTypingIndicator())),
 })
 
 export const WaitForHeartbeatInterval = Command.define("WaitForHeartbeatInterval", {

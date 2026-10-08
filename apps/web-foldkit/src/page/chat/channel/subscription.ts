@@ -1,5 +1,5 @@
-import { ChannelId, MessageId, OrganizationId } from "@hazel/schema"
-import { Option, Schema, Stream } from "effect"
+import { ChannelId, MessageId, OrganizationId, TypingIndicatorId } from "@hazel/schema"
+import { Effect, Option, Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
 import * as Live from "../../../chat/live-state"
 import * as FilesSubscriptions from "../files/subscriptions"
@@ -33,6 +33,7 @@ import {
 	ownMembershipStream,
 } from "../../../composer/data"
 import * as Draft from "../../../composer/draft"
+import * as Typing from "../../../composer/typing"
 import { uploadStream } from "../../../composer/upload"
 import type { HazelRpc } from "../../../rpc"
 import { globalTypingStream, leftWindowStream } from "../../../composer/window-events"
@@ -239,6 +240,42 @@ const UploadDependencies = Schema.Struct({
 })
 type UploadDependencies = typeof UploadDependencies.Type
 
+export const TypingCleanup = Schema.Struct({ channelId: ChannelId, indicatorIds: Schema.Array(TypingIndicatorId) })
+export type TypingCleanup = typeof TypingCleanup.Type
+const isSameCleanup = Schema.toEquivalence(TypingCleanup)
+
+/** The indicators the page's drafts hold (channel, and the open thread's). */
+export const indicatorIdsOf = (model: Model): ReadonlyArray<TypingIndicatorId> =>
+	[model.draft.typing.indicatorId, model.threadDraft?.typing.indicatorId ?? null].filter(
+		(id): id is TypingIndicatorId => id !== null,
+	)
+
+/**
+ * `useTyping`'s unmount cleanup for a page that is left while typing. A restart inside the page is a
+ * stop that already deleted; once the page is gone (or is another channel's) the latest dependencies
+ * fall back to the stream's own, or name another channel, and the indicators are deleted.
+ */
+export const typingCleanupStream = <R>(
+	own: TypingCleanup,
+	readLatest: () => TypingCleanup,
+	deleteIndicator: (id: TypingIndicatorId) => Effect.Effect<void, never, R>,
+): Stream.Stream<never, never, R> =>
+	own.indicatorIds.length === 0
+		? Stream.empty
+		: Stream.fromEffect(
+				Effect.never.pipe(
+					Effect.ensuring(
+						Effect.suspend(() => {
+							const latest = readLatest()
+							const isPageLeft = latest.channelId !== own.channelId || isSameCleanup(latest, own)
+							return isPageLeft
+								? Effect.forEach(own.indicatorIds, deleteIndicator, { discard: true })
+								: Effect.void
+						}),
+					),
+				),
+			)
+
 /** The write path's streams: composer data, uploads, global typing and window blur. */
 const write = Subscription.make<Input, Message, HazelRpc>()((entry) => ({
 	composerMembers: entry(byChannel, {
@@ -285,6 +322,13 @@ const write = Subscription.make<Input, Message, HazelRpc>()((entry) => ({
 					: ownMembershipStream(threadChannelId, userId, (memberId) => Message.UpdatedThreadMember({ memberId })),
 		},
 	),
+	typingCleanup: entry(TypingCleanup.fields, {
+		modelToDependencies: ({ model }) => ({ channelId: model.channelId, indicatorIds: indicatorIdsOf(model) }),
+		// Restarts on every change like the default; the variant only adds `readDependencies`.
+		keepAliveEquivalence: isSameCleanup,
+		dependenciesToStream: (own, readDependencies) =>
+			typingCleanupStream(own, readDependencies, Typing.deleteIndicator),
+	}),
 	channelUpload: entry(UploadDependencies.fields, uploadEntry("channel")),
 	threadUpload: entry(UploadDependencies.fields, uploadEntry("thread")),
 	globalTyping: entry(

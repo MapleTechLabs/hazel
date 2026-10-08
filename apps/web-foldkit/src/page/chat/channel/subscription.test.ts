@@ -1,10 +1,10 @@
-import { ChannelId } from "@hazel/schema"
-import { Schema } from "effect"
+import { ChannelId, TypingIndicatorId } from "@hazel/schema"
+import { Effect, Fiber, Schema, Stream } from "effect"
 import { describe, expect, test, vi } from "vitest"
 import { chatMessageOf, liveEmbeds } from "../../../test/chat-messages"
 import { adaMemberId, adaMessageId, loadedModel, messages, shared, updateWithShared } from "./fixtures.test-support"
 import { Message, type Model } from "./model"
-import { subscriptions } from "./subscription"
+import { indicatorIdsOf, subscriptions, type TypingCleanup, typingCleanupStream } from "./subscription"
 
 /** Which Model slices gate the channel's Subscriptions (a changed dependency restarts the stream). */
 
@@ -64,5 +64,46 @@ describe("channel subscription gates", () => {
 		}
 		const model = updateWithShared(opened, Message.UpdatedThreadPanelMessages({ messages: [live] })).model
 		expect(subscriptions.chatLiveReplies.modelToDependencies(input(model)).messageIds).toContain(live.id)
+	})
+})
+
+describe("typing cleanup on leaving the page", () => {
+	const indicatorId = Schema.decodeSync(TypingIndicatorId)("00000000-0000-4000-8000-000000009999")
+	const otherChannel = Schema.decodeSync(ChannelId)("00000000-0000-4000-8000-000000005555")
+	const own: TypingCleanup = { channelId: loadedModel().channelId, indicatorIds: [indicatorId] }
+
+	/** Starts the cleanup stream, interrupts it as a restart or teardown would, and lists the deletes. */
+	const deletedOnInterrupt = (latest: TypingCleanup) =>
+		Effect.runPromise(
+			Effect.gen(function* () {
+				const deleted: Array<TypingIndicatorId> = []
+				const fiber = yield* typingCleanupStream(own, () => latest, (id) =>
+					Effect.sync(() => {
+						deleted.push(id)
+					}),
+				).pipe(Stream.runDrain, Effect.forkChild)
+				yield* Effect.yieldNow
+				yield* Fiber.interrupt(fiber)
+				return deleted
+			}),
+		)
+
+	test("the drafts' indicators are the dependencies", () => {
+		const model = loadedModel()
+		const typing: Model = { ...model, draft: { ...model.draft, typing: { ...model.draft.typing, indicatorId } } }
+		expect(indicatorIdsOf(model)).toEqual([])
+		expect(subscriptions.typingCleanup.modelToDependencies(input(typing))).toEqual(own)
+	})
+
+	test("switching to another channel while typing deletes the indicator", async () => {
+		expect(await deletedOnInterrupt({ channelId: otherChannel, indicatorIds: [] })).toEqual([indicatorId])
+	})
+
+	test("leaving the chat while typing deletes the indicator", async () => {
+		expect(await deletedOnInterrupt(own)).toEqual([indicatorId])
+	})
+
+	test("a stop inside the page already deleted it: no second delete", async () => {
+		expect(await deletedOnInterrupt({ channelId: own.channelId, indicatorIds: [] })).toEqual([])
 	})
 })
