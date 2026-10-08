@@ -114,13 +114,15 @@ const switcherModals: Readonly<Record<string, PageOutMessage>> = {
 	"create-server": PageOutMessage.RequestedModal({ modal: { _tag: "CreateOrganization" } }),
 }
 
-/** `SwitchServerMenu`: an org without a slug still has to finish setup (`getOrganizationRoute`). */
-const switchedOrganization = (model: Model, key: string): ShellReturn =>
+/**
+ * `SwitchServerMenu`: an org without a slug still has to finish setup (`getOrganizationRoute`).
+ * Compared with the shown org, since a "Single" menu has already selected the clicked key.
+ */
+const switchedOrganization = (model: Model, key: string, context: Context): ShellReturn =>
 	Option.match(
 		Option.fromNullishOr(
 			model.userOrganizations.find(
-				(organization) =>
-					`org:${organization.id}` === key && !model.orgSwitcher.selectedKeys.includes(key),
+				(organization) => `org:${organization.id}` === key && organization.id !== context.organizationId,
 			),
 		),
 		{
@@ -138,20 +140,19 @@ const switchedOrganization = (model: Model, key: string): ShellReturn =>
 		},
 	)
 
-const foldOrgSwitcherOutMessage = Menu.OutMessage.match<
-	Update.StepWithOutMessage<Model, Message, PageOutMessage>
->({
-	SelectedItem:
-		({ key }) =>
-		(model) => {
-			const modal = switcherModals[key]
-			return modal ? requested(model, modal) : switchedOrganization(model, key)
-		},
-	ActivatedLink:
-		({ href }) =>
-		(model) =>
-			requested(model, PageOutMessage.RequestedNavigation({ href, replace: false })),
-})
+const foldOrgSwitcherOutMessage = (context: Context) =>
+	Menu.OutMessage.match<Update.StepWithOutMessage<Model, Message, PageOutMessage>>({
+		SelectedItem:
+			({ key }) =>
+			(model) => {
+				const modal = switcherModals[key]
+				return modal ? requested(model, modal) : switchedOrganization(model, key, context)
+			},
+		ActivatedLink:
+			({ href }) =>
+			(model) =>
+				requested(model, PageOutMessage.RequestedNavigation({ href, replace: false })),
+	})
 
 const foldUserMenu = Update.foldChild({
 	update: Menu.update,
@@ -161,13 +162,14 @@ const foldUserMenu = Update.foldChild({
 	foldOutMessage: foldUserMenuOutMessage,
 })
 
-const foldOrgSwitcher = Update.foldChild({
-	update: Menu.update,
-	read: (model: Model) => Option.some(model.orgSwitcher),
-	write: (model, orgSwitcher) => modifyFields(model, { orgSwitcher: () => orgSwitcher }),
-	toParentMessage: (message) => Message.GotOrgSwitcherMessage({ message }),
-	foldOutMessage: foldOrgSwitcherOutMessage,
-})
+const foldOrgSwitcher = (context: Context) =>
+	Update.foldChild({
+		update: Menu.update,
+		read: (model: Model) => Option.some(model.orgSwitcher),
+		write: (model, orgSwitcher) => modifyFields(model, { orgSwitcher: () => orgSwitcher }),
+		toParentMessage: (message) => Message.GotOrgSwitcherMessage({ message }),
+		foldOutMessage: foldOrgSwitcherOutMessage(context),
+	})
 
 /** The sidebar's Commands, plus its OutMessage (modals, navigation, toasts) for the root. */
 const foldChannelsSidebar = (
@@ -189,7 +191,7 @@ export const update = (model: Model, message: Message, context: Context): ShellU
 		GotChannelsSidebarMessage: ({ message }) =>
 			foldChannelsSidebar(model, (sidebar) => ChannelsSidebar.update(sidebar, message)),
 		GotUserMenuMessage: ({ message }) => foldUserMenu(model, message),
-		GotOrgSwitcherMessage: ({ message }) => foldOrgSwitcher(model, message),
+		GotOrgSwitcherMessage: ({ message }) => foldOrgSwitcher(context)(model, message),
 		UpdatedUserOrganizations: ({ organizations }) => ({
 			model: modifyFields(model, { userOrganizations: () => organizations }),
 		}),

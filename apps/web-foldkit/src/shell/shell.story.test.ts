@@ -81,6 +81,17 @@ describe("org switcher", () => {
 		)
 	})
 
+	test("on desktop, the current organization in the submenu does nothing (legacy `SwitchServerMenu`)", () => {
+		story(
+			run,
+			given(run(ready, Message.UpdatedUserOrganizations({ organizations })).model),
+			message(orgSwitcher(opened)),
+			message(orgSwitcher(clicked("switch-server"))),
+			message(orgSwitcher(clicked(`org:${hazelOrg.id}`))),
+			expectNoOutMessage(),
+		)
+	})
+
 	describe("on mobile (a flat list of organizations)", () => {
 		const mobile = run(
 			run(ready, Message.ChangedViewport({ isMobile: true })).model,
@@ -92,9 +103,8 @@ describe("org switcher", () => {
 			expect(mobile.orgSwitcher.selectedKeys).toEqual([`org:${hazelOrg.id}`])
 		})
 
-		// BUG: in "Single" mode the kit Menu selects the clicked key before the shell folds its
-		// OutMessage, so `switchedOrganization` sees it as the current org and never navigates.
-		test.fails("another organization navigates to its slug", () => {
+		// B2: the "Single" menu selects the clicked key before the shell folds its OutMessage.
+		test("another organization navigates to its slug", () => {
 			story(
 				run,
 				given(mobile),
@@ -104,8 +114,7 @@ describe("org switcher", () => {
 			)
 		})
 
-		// BUG: same as above (shell/update.ts `switchedOrganization` reads the post-click selection).
-		test.fails("an organization without a slug goes back to setup", () => {
+		test("an organization without a slug goes back to setup", () => {
 			story(
 				run,
 				given(mobile),
