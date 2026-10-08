@@ -52,7 +52,7 @@ import { descriptionId, labelId } from "./menu"
 
 type PortalCommandMenuMessage = Extract<Message, { _tag: "CompletedPortalCommandMenu" | "PressedOutside" }>
 
-const PortalCommandMenu = Mount.defineStream("PortalCommandMenu", {
+export const PortalCommandMenu = Mount.defineStream("PortalCommandMenu", {
 	args: { id: Schema.String, isDismissable: Schema.Boolean },
 	messages: [Message.CompletedPortalCommandMenu, Message.PressedOutside],
 	execute: ({ element, id, isDismissable }) =>

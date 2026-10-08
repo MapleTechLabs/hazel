@@ -99,7 +99,7 @@ export type OutMessage = typeof OutMessage.Type
 
 // COMMAND
 
-const StartTimer = Command.define("StartToastTimer", {
+export const StartTimer = Command.define("StartToastTimer", {
 	args: { id: Schema.Number, version: Schema.Number },
 	messages: [Message.StartedTimer],
 	execute: ({ id, version }) => Effect.sync(() => Message.StartedTimer({ id, version, at: Date.now() })),
@@ -110,14 +110,14 @@ const PauseTimers = Command.define("PauseToastTimers", {
 	execute: Effect.sync(() => Message.PausedTimers({ at: Date.now() })),
 })
 
-const WaitForLifetime = Command.define("WaitForToastLifetime", {
+export const WaitForLifetime = Command.define("WaitForToastLifetime", {
 	args: { id: Schema.Number, version: Schema.Number, ms: Schema.Number },
 	messages: [Message.CompletedWaitForLifetime],
 	execute: ({ id, version, ms }) =>
 		Effect.sleep(Duration.millis(ms)).pipe(Effect.as(Message.CompletedWaitForLifetime({ id, version }))),
 })
 
-const WaitForRemoval = Command.define("WaitForToastRemoval", {
+export const WaitForRemoval = Command.define("WaitForToastRemoval", {
 	args: { id: Schema.Number },
 	messages: [Message.CompletedWaitForRemoval],
 	execute: ({ id }) =>
