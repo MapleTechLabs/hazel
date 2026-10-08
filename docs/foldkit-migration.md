@@ -31,6 +31,27 @@ onboarding-timezone keeps about 31k strict, 0 perceptual px from compositor laye
 
 Not ported: video playback (left for manual QA by decision on 2026-10-08; a fixture video would change the legacy `chat-attachments` capture), agent steps in AI replies (no fixture data), GitHub PR and Linear URL embeds, Tauri-specific blocks. Phase 6 (platform polish) and the manual QA checklist (§5 last item) remain.
 
+### Performance (2026-10-08, `src/bench/perf.ts`, 5 runs, p50 / p95 ms)
+
+Budgets: 120fps scrolling (main-thread work per frame under 8.33ms), warm channel switch under 50ms, cold under 100ms, everything else no slower than legacy. Foldkit 0.167; VirtualList was evaluated and rejected (`foldkit-decisions/s4b-virtual-list.md`).
+
+| Metric | Legacy | Foldkit | Met |
+| --- | --- | --- | --- |
+| 10k channel wheel scroll, frame work | 1.1 / 181-254 | 1-1.8 / 12.6-22 | no (row batch inserts) |
+| 10k channel fling to top | 0.3 / 1.3 | 1.7 / 33.7 | no |
+| #general scroll, medium/fast | up to 181 p95 | 0.4-2.8 p95 | yes |
+| Sidebar, 500 channels | 5.4 p95 | 3.3 p95 | yes |
+| Switch heavy workspace, cold / warm | 936 / 444 | 150 / 145 | no (no warm reuse) |
+| Switch normal workspace, cold / warm | 665 / 58 | 62 / 47.7 | cold yes, warm has 1-2 blank frames |
+| Load heavy, ready to use | 1846 | 980 | yes |
+| Composer key to paint | 1.6 / 50.7 | 2.5 / 35 | yes |
+| Thread panel / palette / image viewer | 120 / 57 / 33 | 42 / 55 / 33 | yes |
+| Delete modal / emoji picker | 27 / 33 | 38 / 45 | no |
+| JS heap after 20 switches (MB) | 254 | 65 | yes |
+| JS bundle gzip (KB) | 1536 | 987 | yes |
+
+Next: incremental row batches in `mount/message-list.ts`, a per-channel message window cache plus less sidebar re-patching for warm switches, and profiling the delete modal and emoji picker.
+
 ## 1. Starting point
 
 **Legacy app** (`apps/web`, inventoried 2026-10-07):
