@@ -7,7 +7,7 @@ import * as PresenceMessage from "./presence/message"
 import * as PresenceModel from "./presence/model"
 import * as PresenceSubscription from "./presence/subscription"
 import * as PresenceUpdate from "./presence/update"
-import { acquireRivetClient, RivetClient } from "./rivet"
+import { acquireRivetClient, RivetClient, RivetClientLoadError } from "./rivet"
 
 /** App-wide background work the legacy providers did: presence and the Rivet client. */
 
@@ -74,6 +74,9 @@ export const managedResources = ManagedResource.make<Model, Message>()((entry) =
 		release: () => Effect.void,
 		onAcquired: () => Message.AcquiredRivetClient(),
 		onReleased: () => Message.ReleasedRivetClient(),
-		onAcquireError: (error) => Message.FailedAcquireRivetClient({ reason: String(error) }),
+		onAcquireError: (error) =>
+			Message.FailedAcquireRivetClient({
+				reason: error instanceof RivetClientLoadError ? error.message : String(error),
+			}),
 	}),
 }))

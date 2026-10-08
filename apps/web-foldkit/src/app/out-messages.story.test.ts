@@ -14,6 +14,7 @@ import { ada, plainMember, signedIn } from "../test/root-fixtures"
 import * as CommandMenu from "../ui/command-menu"
 import { DEFAULT_SOUND_SETTINGS } from "../notification-sound"
 import * as Menu from "../ui/menu"
+import * as Toast from "../ui/toast"
 import { ApplyTheme, NavigateInternal, SaveSoundSettings, SaveThemePreference, SignOut } from "./command"
 import { Message } from "./message"
 
@@ -122,6 +123,18 @@ describe("RequestedSignOut", () => {
 			message(userMenu(Menu.Message.ClickedItem({ key: "logout" }))),
 			Command.expectExact(SignOut({})),
 			Command.resolve(SignOut, Message.CompletedSignOut()),
+		)
+	})
+
+	test("a failed sign-out keeps the app up and says so", () => {
+		story(
+			update,
+			given(signedIn("/hazel/chat")),
+			message(Message.FailedSignOut({ reason: "offline" })),
+			model((m) => expect(m.toasts.toaster.toasts.map((toast) => toast.title)).toEqual(["Failed to sign out"])),
+			Command.resolve(Toast.StartTimer, Toast.Message.StartedTimer({ id: 1, version: 1, at: 0 })),
+			Command.resolve(Toast.WaitForLifetime, Toast.Message.CompletedWaitForLifetime({ id: 1, version: 1 })),
+			Command.resolve(Toast.WaitForRemoval, Toast.Message.CompletedWaitForRemoval({ id: 1 })),
 		)
 	})
 })

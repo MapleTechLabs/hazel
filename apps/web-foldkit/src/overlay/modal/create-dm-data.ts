@@ -59,12 +59,17 @@ interface DmRow {
 	readonly member: { readonly userId: UserId }
 }
 
+/** The DM channels query could not be read (a failed sync). */
+export class DmLookupError extends Schema.TaggedError<DmLookupError>()("DmLookupError", {
+	message: Schema.String,
+}) {}
+
 /** `dmChannelsCollection` read once, then the legacy exact-participants match. */
 export const findExistingDmChannel = (
 	currentUserId: UserId,
 	targetUserIds: ReadonlyArray<UserId>,
 	organizationId: OrganizationId,
-): Effect.Effect<ChannelId | null> =>
+): Effect.Effect<ChannelId | null, DmLookupError> =>
 	Effect.acquireUseRelease(
 		Effect.sync(() =>
 			createLiveQueryCollection({
@@ -77,7 +82,10 @@ export const findExistingDmChannel = (
 			}),
 		),
 		(collection) =>
-			Effect.promise(() => collection.toArrayWhenReady()).pipe(
+			Effect.tryPromise({
+				try: () => collection.toArrayWhenReady(),
+				catch: (error) => new DmLookupError({ message: String(error) }),
+			}).pipe(
 				Effect.map((rows: ReadonlyArray<DmRow>) => {
 					const byChannel = new Map<string, { channel: DmRow["channel"]; memberIds: Array<string> }>()
 					for (const row of rows) {
@@ -98,5 +106,5 @@ export const findExistingDmChannel = (
 					return found?.channel.id ?? null
 				}),
 			),
-		(collection) => Effect.promise(() => collection.cleanup()),
+		(collection) => Effect.tryPromise(() => collection.cleanup()).pipe(Effect.ignore),
 	)

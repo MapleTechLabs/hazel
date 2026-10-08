@@ -1,4 +1,4 @@
-import { Effect, Queue, Stream } from "effect"
+import { Effect, Queue, Schema, Stream } from "effect"
 import type { Auth } from "../session"
 
 /**
@@ -24,31 +24,39 @@ const canSignOut = (clerk: object): clerk is SignOutClerk =>
 
 const POLL_MS = 50
 
+/** `window.Clerk` once it has loaded, polled until then. */
+const loadedClerk: Effect.Effect<ListenableClerk> = Effect.suspend(() => {
+	const clerk = window.Clerk
+	return clerk?.loaded && isListenable(clerk)
+		? Effect.succeed(clerk)
+		: Effect.sleep(POLL_MS).pipe(Effect.andThen(loadedClerk))
+})
+
 /** `useAuth({ treatPendingAsSignedOut: false }).isSignedIn`: any session counts. */
 export const clerkAuthStream: Stream.Stream<Auth> = Stream.callback<Auth>((queue) =>
-	Effect.acquireRelease(
-		Effect.sync(() => {
-			let unsubscribe: (() => void) | undefined
-			const attach = () => {
-				const clerk = window.Clerk
-				if (!clerk?.loaded || !isListenable(clerk)) return false
-				unsubscribe = clerk.addListener(({ session }) =>
-					Queue.offerUnsafe(queue, session ? "SignedIn" : "SignedOut"),
-				)
-				return true
-			}
-			const timer = attach() ? undefined : setInterval(() => attach() && clearInterval(timer), POLL_MS)
-			return () => {
-				clearInterval(timer)
-				unsubscribe?.()
-			}
-		}),
-		(release) => Effect.sync(release),
-	).pipe(Effect.flatMap(() => Effect.never)),
+	loadedClerk.pipe(
+		Effect.flatMap((clerk) =>
+			Effect.acquireRelease(
+				Effect.sync(() =>
+					clerk.addListener(({ session }) => Queue.offerUnsafe(queue, session ? "SignedIn" : "SignedOut")),
+				),
+				(unsubscribe) => Effect.sync(unsubscribe),
+			),
+		),
+		Effect.flatMap(() => Effect.never),
+	),
 )
 
+/** `clerk.signOut` rejected (offline); the user stays signed in. */
+export class SignOutError extends Schema.TaggedError<SignOutError>()("SignOutError", {
+	message: Schema.String,
+}) {}
+
 /** `useAuth().logout()`: Clerk signs out and sends the browser to `/`. */
-export const signOut = Effect.promise(async () => {
-	const clerk = window.Clerk
-	if (clerk && canSignOut(clerk)) await clerk.signOut({ redirectUrl: "/" })
+export const signOut: Effect.Effect<void, SignOutError> = Effect.tryPromise({
+	try: async () => {
+		const clerk = window.Clerk
+		if (clerk && canSignOut(clerk)) await clerk.signOut({ redirectUrl: "/" })
+	},
+	catch: (error) => new SignOutError({ message: String(error) }),
 })

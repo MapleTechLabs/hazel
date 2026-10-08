@@ -29,6 +29,7 @@ export const Message = defineMessageUnion({
 	SucceededFetchCurrentUser: { user: CurrentUser },
 	FailedFetchCurrentUser: { reason: Schema.String },
 	CompletedSignOut: {},
+	FailedSignOut: { reason: Schema.String },
 	/** The organization query for `orgSlug` answered (found or not). */
 	UpdatedOrganization: { orgSlug: Schema.String, organization: Schema.NullOr(Organization) },
 	UpdatedMember: { member: Schema.NullOr(Member) },

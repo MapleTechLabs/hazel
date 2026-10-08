@@ -24,7 +24,7 @@ import * as Platform from "./platform"
 import * as Toasts from "./overlay/toaster"
 import { can } from "./page/contract"
 import { PageOutMessage } from "./page/out-message"
-import { ModalOutMessage } from "./overlay/out-message"
+import { errorToast, ModalOutMessage } from "./overlay/out-message"
 import { enterRoute, informShared, type PageTransition, updatePage } from "./page/registry"
 import { authRedirect, routeRedirect } from "./redirect"
 import { urlToAppRoute } from "./route"
@@ -365,6 +365,7 @@ export const update = (model: Model, message: Message): Return =>
 			]),
 		FailedFetchCurrentUser: () => ({ model }),
 		CompletedSignOut: () => ({ model }),
+		FailedSignOut: () => withToasts(model, Toasts.push(model.toasts, errorToast("Failed to sign out", "Please try again."))),
 		UpdatedOrganization: ({ orgSlug, organization }) =>
 			Update.combine<Model, Message, Resources>(
 				modifyFields(model, { organization: () => organization, loadedOrgSlug: () => orgSlug }),

@@ -23,9 +23,10 @@ export const liveQueryStream = <Row, Message>(
 				return { collection, subscription }
 			}),
 			({ collection, subscription }) =>
-				Effect.promise(async () => {
+				// A failed cleanup must not take the app down; the query is gone either way.
+				Effect.tryPromise(async () => {
 					subscription.unsubscribe()
 					await collection.cleanup()
-				}),
+				}).pipe(Effect.ignore),
 		).pipe(Effect.flatMap(() => Effect.never)),
 	)
