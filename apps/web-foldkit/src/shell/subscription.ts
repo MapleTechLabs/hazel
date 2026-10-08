@@ -7,6 +7,7 @@ import {
 	notificationCollection,
 	organizationCollection,
 	organizationMemberCollection,
+	userPresenceStatusCollection,
 } from "~/db/collections"
 import { liveQueryStream } from "../data/live-query"
 import type { Shared } from "../page/contract"
@@ -29,6 +30,12 @@ interface OrgRow {
 		readonly slug?: string | null
 		readonly logoUrl?: string | null
 	}
+}
+
+interface PresenceRow {
+	readonly statusEmoji?: string | null
+	readonly customMessage?: string | null
+	readonly statusExpiresAt?: Date | null
 }
 
 const settingsChannelId = (route: AppRoute) =>
@@ -72,6 +79,37 @@ const own = Subscription.make<Input, Message>()((entry) => ({
 										logoUrl: org.logoUrl ?? null,
 									})),
 								}),
+						),
+		},
+	),
+	// `useCurrentUserStatus`: the user's newest presence row (`currentUserPresenceAtomFamily`).
+	shellUserStatus: entry(
+		{ userId: Schema.NullOr(UserId) },
+		{
+			modelToDependencies: ({ shared }) => ({ userId: shared.currentUser?.id ?? null }),
+			dependenciesToStream: ({ userId }) =>
+				userId === null
+					? Stream.empty
+					: liveQueryStream<PresenceRow, Message>(
+							(q) =>
+								q
+									.from({ presence: userPresenceStatusCollection })
+									.where(({ presence }) => eq(presence.userId, userId))
+									.orderBy(({ presence }) => presence.updatedAt, "desc")
+									.findOne(),
+							(rows) => {
+								const row = rows[0]
+								return Message.UpdatedUserStatus({
+									status:
+										row === undefined
+											? null
+											: {
+													emoji: row.statusEmoji ?? null,
+													message: row.customMessage ?? null,
+													expiresAtMs: row.statusExpiresAt?.getTime() ?? null,
+												},
+								})
+							},
 						),
 		},
 	),

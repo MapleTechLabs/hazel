@@ -8,6 +8,7 @@ import { modifyFields } from "foldkit/struct"
 import type * as Menu from "../ui/menu"
 import { sidebarContent, sidebarSectionGroup, sidebarStatic } from "../ui/sidebar"
 import type { ShellContext } from "./context"
+import type { UserStatus } from "./model"
 import { orgSwitcherHeader, type SwitcherOrg, userMenuFooter } from "./menus"
 import { emptyData, Message, type Model } from "./channels-sidebar/model"
 import { PageOutMessage } from "../page/out-message"
@@ -166,6 +167,7 @@ export interface SidebarChrome<ParentMessage> {
 	readonly userMenu: Menu.Model
 	readonly orgSwitcher: Menu.Model
 	readonly organizations: ReadonlyArray<SwitcherOrg>
+	readonly userStatus: UserStatus | null
 	readonly toUserMenuMessage: (message: Menu.Message) => ParentMessage
 	readonly toOrgSwitcherMessage: (message: Menu.Message) => ParentMessage
 }
@@ -196,6 +198,7 @@ const sidebarBody = <ParentMessage>(
 	userMenu: Menu.Model,
 	orgSwitcher: Menu.Model,
 	organizations: ReadonlyArray<SwitcherOrg>,
+	userStatus: UserStatus | null,
 	toUserMenuMessage: (message: Menu.Message) => ParentMessage,
 	toOrgSwitcherMessage: (message: Menu.Message) => ParentMessage,
 	...[orgSlug, pathname, orgName, orgLogoUrl, displayName, email, avatarUrl, appVersion]: ShellArgs
@@ -242,7 +245,7 @@ const sidebarBody = <ParentMessage>(
 				}),
 			),
 		]),
-		userMenuFooter(h, userMenu, shell, toUserMenuMessage),
+		userMenuFooter(h, userMenu, shell, toUserMenuMessage, userStatus),
 		dragDescription(h),
 	])
 }
@@ -286,6 +289,7 @@ export const view = <ParentMessage>(
 		chrome.userMenu,
 		chrome.orgSwitcher,
 		chrome.organizations,
+		chrome.userStatus,
 		chrome.toUserMenuMessage,
 		chrome.toOrgSwitcherMessage,
 		shell.orgSlug,

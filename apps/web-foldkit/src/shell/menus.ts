@@ -1,5 +1,6 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twJoin } from "tailwind-merge"
+import { formatStatusExpiration } from "~/utils/status"
 import {
 	IconChevronUpDown,
 	IconCirclePlus,
@@ -20,6 +21,7 @@ import * as Menu from "../ui/menu"
 import { menuLabel, menuTriggerClassName, view as menuView } from "../ui/menu-view"
 import { sidebarFooter, sidebarHeader, sidebarLabel } from "../ui/sidebar"
 import type { ShellContext } from "./context"
+import type { UserStatus } from "./model"
 
 /** The user menu (`sidebar/user-menu.tsx`) and the org switcher (`channels-sidebar.tsx` header). */
 
@@ -109,8 +111,23 @@ export const orgSwitcherEntries = (options: {
 
 const label = <M>(h: HtmlBuilder<M>, id: string, key: string, text: string) => menuLabel(h, id, key, text)
 
+/** `StatusEmojiWithTooltip` with `interactive={false}`: the emoji with a native title (no quiet hours). */
+const statusEmojiTitled = <M>(h: HtmlBuilder<M>, status: UserStatus | null): ReadonlyArray<Html> => {
+	if (!status?.emoji) return []
+	const { emoji, message } = status
+	const expiration = formatStatusExpiration(
+		status.expiresAtMs === null ? null : new Date(status.expiresAtMs),
+	)
+	const title = message
+		? `${emoji} ${message}${expiration ? ` • Until ${expiration}` : ""}`
+		: expiration
+			? `${emoji} • Until ${expiration}`
+			: emoji
+	return [h.span([h.Class("text-sm ml-1"), h.Attribute("title", title)], [emoji])]
+}
+
 const userMenuContent =
-	<M>(h: HtmlBuilder<M>, context: ShellContext) =>
+	<M>(h: HtmlBuilder<M>, context: ShellContext, status: UserStatus | null) =>
 	(key: string): ReadonlyArray<Html> => {
 		const displayName = context.currentUser?.displayName ?? "User"
 		const item = (icon: Html, text: string) => [icon, label(h, USER_MENU_ID, key, text)]
@@ -127,7 +144,14 @@ const userMenuContent =
 					: []),
 			]
 		if (key === "profile") return item(IconProfiles2(h), "Profile")
-		if (key === "status") return item(IconEmoji1(h), "Set status")
+		if (key === "status")
+			return [
+				IconEmoji1(h),
+				menuLabel(h, USER_MENU_ID, key, [
+					"Set status",
+					...(status?.emoji ? [h.span([h.Class("ml-1")], [status.emoji])] : []),
+				]),
+			]
 		if (key === "my-settings") return item(IconGear(h), "My Settings")
 		if (key === "feedback") return item(IconSupport(h), "Feedback")
 		if (key === "logout") return item(IconLogout(h), "Log out")
@@ -140,6 +164,7 @@ export const userMenuFooter = <M>(
 	menu: Menu.Model,
 	context: ShellContext,
 	toMenuMessage: (message: Menu.Message) => M,
+	status: UserStatus | null,
 ): Html => {
 	const displayName = context.currentUser?.displayName ?? "User"
 	return sidebarFooter(h, "flex flex-row justify-between gap-4 group-data-[state=collapsed]:flex-col", [
@@ -179,7 +204,7 @@ export const userMenuFooter = <M>(
 									h.div(
 										[h.Class("in-data-[collapsible=dock]:hidden min-w-0 text-sm")],
 										[
-											sidebarLabel(h, [displayName]),
+											sidebarLabel(h, [displayName, ...statusEmojiTitled(h, status)]),
 											...(context.currentUser?.email
 												? [
 														h.span(
@@ -203,7 +228,7 @@ export const userMenuFooter = <M>(
 							overlay,
 						],
 					),
-				content: userMenuContent(h, context),
+				content: userMenuContent(h, context, status),
 				className: "in-data-[collapsible=collapsed]:min-w-56 min-w-(--trigger-width)",
 			},
 			toParentMessage: toMenuMessage,

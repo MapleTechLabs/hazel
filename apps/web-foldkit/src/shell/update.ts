@@ -31,6 +31,7 @@ export const init = (): Model => ({
 	orgSwitcher: Menu.init({ id: ORG_SWITCHER_ID, entries: [] }),
 	menuSignature: "",
 	userOrganizations: [],
+	userStatus: null,
 	notifications: Notifications.init(),
 	settingsChannel: null,
 	isMobile: false,
@@ -192,6 +193,7 @@ export const update = (model: Model, message: Message, context: Context): ShellU
 		UpdatedUserOrganizations: ({ organizations }) => ({
 			model: modifyFields(model, { userOrganizations: () => organizations }),
 		}),
+		UpdatedUserStatus: ({ status }) => ({ model: modifyFields(model, { userStatus: () => status }) }),
 		GotNotificationsMessage: ({ message }) => {
 			const result = Notifications.update(model.notifications, message)
 			return {
