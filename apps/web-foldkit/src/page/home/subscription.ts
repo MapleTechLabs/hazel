@@ -7,7 +7,8 @@ import { liveQueryStream } from "../../data/live-query"
 import * as Interaction from "../../ui/aria/interaction"
 import type { PageSubscriptionInput } from "../contract"
 import { Message } from "./message"
-import type { DirectoryMember, Model } from "./model"
+import { dmChannelsQuery } from "./dm"
+import type { DirectoryMember, DmRow, Model } from "./model"
 
 interface MemberRow {
 	readonly id: UserId
@@ -59,6 +60,24 @@ const memberSubscriptions = Subscription.make<PageSubscriptionInput<Model>, Mess
 										presenceStatus: row.presence?.status || null,
 									})),
 								}),
+						),
+		},
+	),
+	// Live while the page is open, so pressing Message finds an existing DM without a lookup.
+	dmChannels: entry(
+		{ organizationId: Schema.NullOr(OrganizationId) },
+		{
+			modelToDependencies: ({ shared }) => ({ organizationId: shared.organization?.id ?? null }),
+			dependenciesToStream: ({ organizationId }) =>
+				organizationId === null
+					? Stream.empty
+					: liveQueryStream<DmRow, Message>(dmChannelsQuery, (rows) =>
+							Message.UpdatedDmChannels({
+								rows: rows.map(({ channel, member }) => ({
+									channel: { id: channel.id, type: channel.type, organizationId: channel.organizationId },
+									member: { userId: member.userId },
+								})),
+							}),
 						),
 		},
 	),

@@ -5,9 +5,9 @@ import * as Scene from "foldkit/scene"
 import { describe, test } from "vitest"
 import { channelId, makeShared, organizationId, pageScene, userId, uuid } from "../../test/pages-fixtures"
 import { PageOutMessage } from "../out-message"
-import { AutoFocusSearch, FindDm } from "./commands"
+import { AutoFocusSearch } from "./commands"
 import { Message } from "./message"
-import type { DirectoryMember } from "./model"
+import type { DirectoryMember, DmRow } from "./model"
 import { init, update } from "./update"
 import { view } from "./view"
 import * as Menu from "../../ui/menu"
@@ -27,6 +27,10 @@ const member = (id: UserId, firstName: string, lastName: string, role: Directory
 	presenceStatus: null,
 })
 const members = [member(userId, "Ada", "Lovelace", "owner"), member(grace, "Grace", "Hopper", "admin")]
+const dmWithGrace: ReadonlyArray<DmRow> = [userId, grace].map((memberId) => ({
+	channel: { id: channelId, type: "single", organizationId },
+	member: { userId: memberId },
+}))
 const search = Scene.placeholder("Search members...")
 const focused = Scene.Mount.resolve(AutoFocusSearch, Message.CompletedFocusSearch())
 const loadedMembers = [
@@ -83,9 +87,22 @@ describe("member directory", () => {
 			Scene.given(init().model),
 			focused,
 			...loadedMembers,
+			Scene.Subscription.emit(Message.UpdatedDmChannels({ rows: dmWithGrace })),
 			Scene.click(messageButton),
-			Scene.Command.expectExact(FindDm({ currentUserId: userId, userId: grace, name: "Grace Hopper", organizationId })),
-			Scene.Command.resolve(FindDm, Message.FoundExistingDm({ channelId })),
+			Scene.Command.expectNone(),
+			Scene.expectOutMessage(PageOutMessage.RequestedNavigation({ href: `/hazel/chat/${channelId}`, replace: false })),
+		)
+	})
+
+	test("Message pressed before the DM rows load opens the DM once they arrive", () => {
+		Scene.scene(
+			pageScene(update, view, shared),
+			Scene.given(init().model),
+			focused,
+			...loadedMembers,
+			Scene.click(messageButton),
+			Scene.expectNoOutMessage(),
+			Scene.Subscription.emit(Message.UpdatedDmChannels({ rows: dmWithGrace })),
 			Scene.expectOutMessage(PageOutMessage.RequestedNavigation({ href: `/hazel/chat/${channelId}`, replace: false })),
 		)
 	})

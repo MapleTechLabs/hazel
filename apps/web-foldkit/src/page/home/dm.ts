@@ -1,36 +1,14 @@
 import type { ChannelId, OrganizationId, UserId } from "@hazel/schema"
-import { createLiveQueryCollection, eq, or } from "@tanstack/db"
+import { eq, type InitialQueryBuilder, or } from "@tanstack/db"
 import { channelCollection, channelMemberCollection } from "~/db/collections"
+import type { DmRow } from "./model"
 
-/** `lib/channels.ts` on `@tanstack/db` core (no React), created on first use. */
-
-interface DmRow {
-	readonly channel: {
-		readonly id: ChannelId
-		readonly type: string
-		readonly organizationId: OrganizationId
-	}
-	readonly member: { readonly userId: UserId }
-}
-
-const makeDmChannelsCollection = () =>
-	createLiveQueryCollection({
-		startSync: true,
-		query: (q) =>
-			q
-				.from({ channel: channelCollection })
-				.innerJoin({ member: channelMemberCollection }, ({ channel, member }) =>
-					eq(member.channelId, channel.id),
-				)
-				.where(({ channel }) => or(eq(channel.type, "single"), eq(channel.type, "direct"))),
-	})
-
-let dmChannels: ReturnType<typeof makeDmChannelsCollection> | null = null
-
-export const dmChannelRows = async (): Promise<ReadonlyArray<DmRow>> => {
-	dmChannels ??= makeDmChannelsCollection()
-	return (await dmChannels.toArrayWhenReady()) as unknown as ReadonlyArray<DmRow>
-}
+/** `lib/channels.ts`'s DM query, run by the page's `dmChannels` subscription. */
+export const dmChannelsQuery = (q: InitialQueryBuilder) =>
+	q
+		.from({ channel: channelCollection })
+		.innerJoin({ member: channelMemberCollection }, ({ channel, member }) => eq(member.channelId, channel.id))
+		.where(({ channel }) => or(eq(channel.type, "single"), eq(channel.type, "direct")))
 
 /** `findExistingDmChannel`: a single DM with exactly the two users, or a group DM with exactly them all. */
 export const findExistingDmChannel = (

@@ -5,12 +5,22 @@ import * as Interaction from "../../ui/aria/interaction"
 import * as Menu from "../../ui/menu"
 import type { PageReturn, Shared } from "../contract"
 import { PageOutMessage } from "../out-message"
-import { CopyEmail, CreateDm, FindDm, FocusSearch } from "./commands"
+import { CopyEmail, CreateDm, FocusSearch } from "./commands"
+import { findExistingDmChannel } from "./dm"
 import { Message } from "./message"
-import { type DirectoryMember, menuEntries, menuIdOf, type Model } from "./model"
+import { type DirectoryMember, DmRequest, type DmRow, menuEntries, menuIdOf, type Model } from "./model"
 
-export const init = (): PageReturn<Model, Message> => ({
-	model: { members: null, searchQuery: "", menus: {}, interaction: Interaction.init() },
+type Return = PageReturn<Model, Message>
+
+export const init = (): Return => ({
+	model: {
+		members: null,
+		dmRows: null,
+		dmRequest: DmRequest.Idle(),
+		searchQuery: "",
+		menus: {},
+		interaction: Interaction.init(),
+	},
 })
 
 /** The DM flow's toasts share one id, so each replaces the previous (legacy `exitToast` loading). */
@@ -39,12 +49,30 @@ const reconcileMenus = (model: Model, members: ReadonlyArray<DirectoryMember>): 
 const memberByUserId = (model: Model, userId: string) =>
 	Option.fromNullishOr(model.members?.find((member) => member.id === userId))
 
-const openChat = (model: Model, shared: Shared, member: DirectoryMember): PageReturn<Model, Message> => {
+const withDmRequest = (model: Model, dmRequest: DmRequest): Model =>
+	modifyFields(model, { dmRequest: () => dmRequest })
+
+/** `handleOpenChat`: reuse an existing DM with the member, or create one. */
+const openDm = (model: Model, shared: Shared, member: DirectoryMember, rows: ReadonlyArray<DmRow>): Return => {
 	const organizationId = shared.organization?.id
 	const currentUserId = shared.currentUser?.id
-	if (!organizationId || !currentUserId) return { model }
+	if (!organizationId || !currentUserId) return { model: withDmRequest(model, DmRequest.Idle()) }
+	const existing = findExistingDmChannel(rows, currentUserId, [member.id], organizationId)
+	if (existing !== null)
+		return { model: withDmRequest(model, DmRequest.Idle()), outMessage: navigateToChannel(shared, existing) }
 	const name = `${member.firstName} ${member.lastName}`.trim()
-	return { model, commands: [FindDm({ currentUserId, userId: member.id, name, organizationId })] }
+	return {
+		model: withDmRequest(model, DmRequest.Creating({ userId: member.id })),
+		commands: [CreateDm({ organizationId, userId: member.id, name })],
+		outMessage: toast("loading", `Starting conversation with ${name}...`, null, DM_TOAST_ID),
+	}
+}
+
+/** A press while a DM is opening is ignored; before the DM rows load, the request waits for them. */
+const requestDm = (model: Model, shared: Shared, member: DirectoryMember): Return => {
+	if (model.dmRequest._tag !== "Idle" || !shared.organization || !shared.currentUser) return { model }
+	const awaiting = withDmRequest(model, DmRequest.AwaitingChannels({ userId: member.id }))
+	return model.dmRows === null ? { model: awaiting } : openDm(awaiting, shared, member, model.dmRows)
 }
 
 const updateMenu = (
@@ -52,7 +80,7 @@ const updateMenu = (
 	shared: Shared,
 	member: DirectoryMember,
 	message: Menu.Message,
-): PageReturn<Model, Message> => {
+): Return => {
 	const menu = model.menus[member.id]
 	if (menu === undefined) return { model }
 	const result = Menu.update(menu, message)
@@ -63,11 +91,11 @@ const updateMenu = (
 	const selected = Option.flatMap(Option.fromNullishOr(result.outMessage), (out) =>
 		out._tag === "SelectedItem" ? Option.some(out.key) : Option.none(),
 	)
-	const action: PageReturn<Model, Message> = Option.match(selected, {
+	const action: Return = Option.match(selected, {
 		onNone: () => ({ model: next }),
 		onSome: (key) =>
 			key === "message"
-				? openChat(next, shared, member)
+				? requestDm(next, shared, member)
 				: key === "copy-email"
 					? { model: next, commands: [CopyEmail({ email: member.email })] }
 					: { model: next },
@@ -75,8 +103,8 @@ const updateMenu = (
 	return { ...action, commands: [...menuCommands, ...(action.commands ?? [])] }
 }
 
-export const update = (model: Model, message: Message, shared: Shared): PageReturn<Model, Message> =>
-	Message.match<PageReturn<Model, Message>>(message, {
+export const update = (model: Model, message: Message, shared: Shared): Return =>
+	Message.match<Return>(message, {
 		UpdatedMembers: ({ members }) => ({
 			model: modifyFields(model, {
 				members: () => members,
@@ -90,7 +118,7 @@ export const update = (model: Model, message: Message, shared: Shared): PageRetu
 		PressedMessageMember: ({ userId }) =>
 			Option.match(memberByUserId(model, userId), {
 				onNone: () => ({ model }),
-				onSome: (member) => openChat(model, shared, member),
+				onSome: (member) => requestDm(model, shared, member),
 			}),
 		GotInteractionMessage: ({ message: interactionMessage }) => ({
 			model: modifyFields(model, {
@@ -102,19 +130,17 @@ export const update = (model: Model, message: Message, shared: Shared): PageRetu
 				onNone: () => ({ model }),
 				onSome: (member) => updateMenu(model, shared, member, menuMessage),
 			}),
-		FoundExistingDm: ({ channelId }) => ({ model, outMessage: navigateToChannel(shared, channelId) }),
-		FoundNoDm: ({ userId, name }) => {
-			const organizationId = shared.organization?.id
-			return organizationId
-				? {
-						model,
-						commands: [CreateDm({ organizationId, userId, name })],
-						outMessage: toast("loading", `Starting conversation with ${name}...`, null, DM_TOAST_ID),
-					}
-				: { model }
+		UpdatedDmChannels: ({ rows }) => {
+			const next = modifyFields(model, { dmRows: () => rows })
+			const { dmRequest } = model
+			if (dmRequest._tag !== "AwaitingChannels") return { model: next }
+			return Option.match(memberByUserId(model, dmRequest.userId), {
+				onNone: () => ({ model: withDmRequest(next, DmRequest.Idle()) }),
+				onSome: (member) => openDm(next, shared, member, rows),
+			})
 		},
 		SucceededCreateDm: ({ channelId, name }) => ({
-			model,
+			model: withDmRequest(model, DmRequest.Idle()),
 			outMessage: PageOutMessage.RequestedNavigation({
 				href: `/${shared.orgSlug ?? ""}/chat/${channelId}`,
 				replace: false,
@@ -122,7 +148,7 @@ export const update = (model: Model, message: Message, shared: Shared): PageRetu
 			}),
 		}),
 		FailedCreateDm: ({ toast: failure }) => ({
-			model,
+			model: withDmRequest(model, DmRequest.Idle()),
 			outMessage: PageOutMessage.RequestedToast({ toast: { ...failure, id: DM_TOAST_ID } }),
 		}),
 		SucceededCopyEmail: ({ email }) => ({

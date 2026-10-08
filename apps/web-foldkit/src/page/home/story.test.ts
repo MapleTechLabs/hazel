@@ -5,9 +5,9 @@ import { describe, expect, test, vi } from "vitest"
 import * as Menu from "../../ui/menu"
 import type { Shared } from "../contract"
 import { PageOutMessage } from "../out-message"
-import { CopyEmail, CreateDm, FindDm, FocusSearch } from "./commands"
+import { CopyEmail, CreateDm, FocusSearch } from "./commands"
 import { Message } from "./message"
-import { type DirectoryMember, filterMembers, type Model } from "./model"
+import { type DirectoryMember, DmRequest, type DmRow, filterMembers, type Model } from "./model"
 import { init, update } from "./update"
 import { sharedDefaults } from "../test-shared"
 import { failureToastFixture } from "../../test/pages-fixtures"
@@ -55,7 +55,14 @@ const member = (id: UserId, firstName: string, lastName: string): DirectoryMembe
 const members = [member(ada, "Ada", "Lovelace"), member(grace, "Grace", "Hopper")]
 
 const pageUpdate = (current: Model, next: Message) => update(current, next, shared)
-const loaded = (): Model => update(init().model, Message.UpdatedMembers({ members }), shared).model
+const dmWithGrace: ReadonlyArray<DmRow> = [ada, grace].map((userId) => ({
+	channel: { id: channelId, type: "single", organizationId },
+	member: { userId },
+}))
+const membersOnly = (): Model => update(init().model, Message.UpdatedMembers({ members }), shared).model
+/** Members and DM rows loaded; `dmRows` defaults to no DMs at all. */
+const loaded = (dmRows: ReadonlyArray<DmRow> = []): Model =>
+	update(membersOnly(), Message.UpdatedDmChannels({ rows: dmRows }), shared).model
 const withOpenMenu = (userId: UserId): Model => {
 	const current = loaded()
 	const menu = current.menus[userId]!
@@ -111,12 +118,13 @@ describe("org home directory", () => {
 	test("Message opens an existing DM", () => {
 		story(
 			pageUpdate,
-			given(loaded()),
+			given(loaded(dmWithGrace)),
 			message(Message.PressedMessageMember({ userId: grace, name: "Grace Hopper" })),
-			Command.resolve(FindDm, Message.FoundExistingDm({ channelId })),
+			Command.expectNone(),
 			expectOutMessage(
 				PageOutMessage.RequestedNavigation({ href: `/hazel/chat/${channelId}`, replace: false }),
 			),
+			model((current) => expect(current.dmRequest).toEqual(DmRequest.Idle())),
 		)
 	})
 
@@ -125,7 +133,7 @@ describe("org home directory", () => {
 			pageUpdate,
 			given(loaded()),
 			message(Message.PressedMessageMember({ userId: grace, name: "Grace Hopper" })),
-			Command.resolve(FindDm, Message.FoundNoDm({ userId: grace, name: "Grace Hopper" })),
+			Command.expectExact(CreateDm({ organizationId, userId: grace, name: "Grace Hopper" })),
 			expectOutMessage(
 				PageOutMessage.RequestedToast({
 					toast: {
@@ -159,9 +167,9 @@ describe("org home failures and guards", () => {
 			pageUpdate,
 			given(loaded()),
 			message(Message.PressedMessageMember({ userId: grace, name: "Grace Hopper" })),
-			Command.resolve(FindDm, Message.FoundNoDm({ userId: grace, name: "Grace Hopper" })),
 			Command.resolve(CreateDm, Message.FailedCreateDm({ toast: failureToastFixture })),
 			expectOutMessage(PageOutMessage.RequestedToast({ toast: { ...failureToastFixture, id: "home-create-dm" } })),
+			model((current) => expect(current.dmRequest).toEqual(DmRequest.Idle())),
 		)
 	})
 
@@ -177,21 +185,40 @@ describe("org home failures and guards", () => {
 		)
 	})
 
-	test("the menu's Message item looks the DM up with the member's full name", () => {
+	test("the menu's Message item creates the DM with the member's full name", () => {
 		story(
 			pageUpdate,
 			given(withOpenMenu(grace)),
 			message(menuMessage(grace, Menu.Message.ClickedItem({ key: "message" }))),
-			Command.expectExact(FindDm({ currentUserId: ada, userId: grace, name: "Grace Hopper", organizationId })),
-			Command.resolve(FindDm, Message.FoundExistingDm({ channelId })),
-			expectOutMessage(PageOutMessage.RequestedNavigation({ href: `/hazel/chat/${channelId}`, replace: false })),
+			Command.expectHas(CreateDm({ organizationId, userId: grace, name: "Grace Hopper" })),
+			Command.resolve(CreateDm, Message.SucceededCreateDm({ channelId, name: "Grace Hopper" })),
 		)
+	})
+
+	test("a press before the DM rows load waits for them, then opens the DM", () => {
+		story(
+			pageUpdate,
+			given(membersOnly()),
+			message(Message.PressedMessageMember({ userId: grace, name: "Grace Hopper" })),
+			Command.expectNone(),
+			expectNoOutMessage(),
+			model((current) => expect(current.dmRequest).toEqual(DmRequest.AwaitingChannels({ userId: grace }))),
+			message(Message.UpdatedDmChannels({ rows: dmWithGrace })),
+			expectOutMessage(PageOutMessage.RequestedNavigation({ href: `/hazel/chat/${channelId}`, replace: false })),
+			model((current) => expect(current.dmRequest).toEqual(DmRequest.Idle())),
+		)
+	})
+
+	test("a DM row update while the DM is being created does not open it a second time", () => {
+		const creating = pageUpdate(loaded(), Message.PressedMessageMember({ userId: grace, name: "Grace Hopper" })).model
+		const synced = pageUpdate(creating, Message.UpdatedDmChannels({ rows: dmWithGrace }))
+		expect(synced.outMessage).toBeUndefined()
+		expect(synced.model.dmRequest).toEqual(DmRequest.Creating({ userId: grace }))
 	})
 
 	test("without an organization, or for an unknown member, Message does nothing", () => {
 		const noOrg = (current: Model, next: Message) => update(current, next, { ...shared, organization: null })
 		story(noOrg, given(loaded()), message(Message.PressedMessageMember({ userId: grace, name: "Grace Hopper" })), Command.expectNone())
-		story(noOrg, given(loaded()), message(Message.FoundNoDm({ userId: grace, name: "Grace Hopper" })), Command.expectNone(), expectNoOutMessage())
 		story(pageUpdate, given(init().model), message(Message.PressedMessageMember({ userId: grace, name: "Grace Hopper" })), Command.expectNone())
 	})
 
@@ -207,8 +234,8 @@ describe("org home failures and guards", () => {
 		)
 	})
 
-	// Bug: nothing marks a DM as opening, so pressing Message again looks up (and may create) a second DM.
-	test.fails("a second Message press while a DM is opening sends nothing", () => {
+	// dmRequest marks a DM as opening, so pressing Message again cannot create a second DM.
+	test("a second Message press while a DM is opening sends nothing", () => {
 		const first = pageUpdate(loaded(), Message.PressedMessageMember({ userId: grace, name: "Grace Hopper" }))
 		const second = pageUpdate(first.model, Message.PressedMessageMember({ userId: grace, name: "Grace Hopper" }))
 		expect(second.commands ?? []).toEqual([])

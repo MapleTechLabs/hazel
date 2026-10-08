@@ -1,11 +1,10 @@
-import { ChannelId, OrganizationId, UserId } from "@hazel/schema"
+import { OrganizationId, UserId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
 import { Command, Mount } from "foldkit"
 import * as Dom from "foldkit/dom"
 import { failureToast, settle } from "../../data/actions"
 import { HazelRpc } from "../../rpc"
 import { searchFieldIds } from "../../ui/search-field"
-import { dmChannelRows, findExistingDmChannel } from "./dm"
 import { Message } from "./message"
 import { SEARCH_ID } from "./model"
 
@@ -27,21 +26,6 @@ export const FocusSearch = Command.define("FocusSearch", {
 	),
 })
 
-/** `handleOpenChat`, first half: reuse an existing DM with the member. */
-export const FindDm = Command.define("FindDm", {
-	args: { currentUserId: UserId, userId: UserId, name: Schema.String, organizationId: OrganizationId },
-	messages: [Message.FoundExistingDm, Message.FoundNoDm],
-	execute: ({ currentUserId, userId, name, organizationId }) =>
-		Effect.promise(dmChannelRows).pipe(
-			Effect.map((rows) => {
-				const channelId = findExistingDmChannel(rows, currentUserId, [userId], organizationId)
-				return channelId === null
-					? Message.FoundNoDm({ userId, name })
-					: Message.FoundExistingDm({ channelId })
-			}),
-		),
-})
-
 /** `createDmChannel({ payload: { organizationId, participantIds, type: "single" } })`. */
 export const CreateDm = Command.define("CreateDm", {
 	args: { organizationId: OrganizationId, userId: UserId, name: Schema.String },
@@ -57,7 +41,6 @@ export const CreateDm = Command.define("CreateDm", {
 		}),
 })
 
-/** The success toast goes out before navigating, which drops this page. */
 /** `handleCopyEmail`. */
 export const CopyEmail = Command.define("CopyEmail", {
 	args: { email: Schema.String },

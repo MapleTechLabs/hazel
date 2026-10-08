@@ -1,5 +1,6 @@
-import { UserId } from "@hazel/schema"
+import { ChannelId, OrganizationId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
+import { defineTaggedUnion } from "foldkit/schema"
 import * as Interaction from "../../ui/aria/interaction"
 import * as Menu from "../../ui/menu"
 
@@ -16,9 +17,27 @@ export const DirectoryMember = Schema.Struct({
 })
 export type DirectoryMember = typeof DirectoryMember.Type
 
+/** One channel and member pair of the DM query (`lib/channels.ts`). */
+export const DmRow = Schema.Struct({
+	channel: Schema.Struct({ id: ChannelId, type: Schema.String, organizationId: OrganizationId }),
+	member: Schema.Struct({ userId: UserId }),
+})
+export type DmRow = typeof DmRow.Type
+
+/** Opening a DM: waiting for the DM rows to load, or creating the channel. One at a time. */
+export const DmRequest = defineTaggedUnion({
+	Idle: {},
+	AwaitingChannels: { userId: UserId },
+	Creating: { userId: UserId },
+})
+export type DmRequest = typeof DmRequest.Type
+
 export const Model = Schema.Struct({
 	/** `null` until the live query is ready (the legacy loader). */
 	members: Schema.NullOr(Schema.Array(DirectoryMember)),
+	/** `null` until the DM live query is ready. */
+	dmRows: Schema.NullOr(Schema.Array(DmRow)),
+	dmRequest: DmRequest,
 	searchQuery: Schema.String,
 	/** One "Member actions" menu per member, keyed by user id. */
 	menus: Schema.Record(Schema.String, Menu.Model),
