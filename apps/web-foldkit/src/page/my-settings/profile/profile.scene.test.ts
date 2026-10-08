@@ -38,9 +38,13 @@ const config = {
 
 const save = Scene.role("button", { name: "Save" })
 
-/** The timezone ComboBox mounts its input-focus keeper on the first render (raw child Message). */
-const comboBoxMounted = Scene.Mount.resolve(
+/** The timezone ComboBox mounts its input-focus and typed-value keepers on the first render (raw child Messages). */
+const comboBoxFocusMounted = Scene.Mount.resolve(
 	{ name: "KeepComboBoxInputFocus" },
+	ComboBox.Message.CompletedPortalComboBox(),
+)
+const comboBoxTypedValueMounted = Scene.Mount.resolve(
+	{ name: "KeepComboBoxTypedValue" },
 	ComboBox.Message.CompletedPortalComboBox(),
 )
 
@@ -49,7 +53,8 @@ describe("profile form scene", () => {
 		Scene.scene(
 			config,
 			Scene.given(init(undefined, shared).model),
-			comboBoxMounted,
+			comboBoxFocusMounted,
+			comboBoxTypedValueMounted,
 			Scene.expect(save).toBeDisabled(),
 			Scene.type("#profile-first-name-input", "Augusta Ada"),
 			Scene.expect(save).toBeEnabled(),
@@ -60,7 +65,8 @@ describe("profile form scene", () => {
 		Scene.scene(
 			config,
 			Scene.given(init(undefined, shared).model),
-			comboBoxMounted,
+			comboBoxFocusMounted,
+			comboBoxTypedValueMounted,
 			Scene.type("#profile-last-name-input", ""),
 			Scene.expect(Scene.text("lastName must be non-empty")).toExist(),
 			Scene.expect(save).toBeDisabled(),
