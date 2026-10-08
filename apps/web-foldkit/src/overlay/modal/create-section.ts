@@ -26,7 +26,7 @@ const Model = Schema.Struct({
 })
 type Model = typeof Model.Type
 
-const Message = defineMessageUnion({
+export const Message = defineMessageUnion({
 	GotFrameMessage: { message: FrameMessage },
 	ChangedName: { value: Schema.String },
 	ClickedCancel: {},
@@ -36,7 +36,7 @@ const Message = defineMessageUnion({
 })
 type Message = typeof Message.Type
 
-const CreateSection = Command.define("CreateSection", {
+export const CreateSection = Command.define("CreateSection", {
 	args: { name: Schema.String, organizationId: OrganizationId },
 	messages: [Message.SucceededCreateSection, Message.FailedCreateSection],
 	execute: (args) =>
