@@ -2,7 +2,6 @@
 import { Option } from "effect"
 import { describe, expect, test } from "vitest"
 import { PageOutMessage } from "../../out-message"
-import { ShowLinkResult } from "./command"
 import { init, routeChanged } from "./update"
 
 /** The Discord link callback comes in through the route's typed search params. */
@@ -19,17 +18,21 @@ describe("linked accounts callback", () => {
 	test("a successful Discord link toasts, then cleans the URL", () => {
 		const page = init(routeWith({ status: "success", provider: "discord" }))
 		expect(page.outMessage).toEqual(
-			PageOutMessage.RequestedToast({
+			PageOutMessage.RequestedNavigation({
+				href: "/hazel/my-settings/linked-accounts",
+				replace: true,
 				toast: { intent: "success", title: "Discord account linked", description: null },
 			}),
 		)
-		expect(page.commands?.map((command) => command.name)).toEqual([ShowLinkResult.name])
+		expect(page.commands).toBeUndefined()
 	})
 
 	test("a failed link shows the error code", () => {
 		const page = init(routeWith({ status: "error", provider: "discord", errorCode: "db_error" }))
 		expect(page.outMessage).toEqual(
-			PageOutMessage.RequestedToast({
+			PageOutMessage.RequestedNavigation({
+				href: "/hazel/my-settings/linked-accounts",
+				replace: true,
 				toast: { intent: "error", title: "Failed to link Discord account", description: "db_error" },
 			}),
 		)

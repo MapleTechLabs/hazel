@@ -4,7 +4,6 @@ import * as Interaction from "../../../ui/aria/interaction"
 import { DiscordConnection } from "./model"
 
 export const Message = defineMessageUnion({
-	ShowedLinkResult: {},
 	UpdatedDiscordConnection: { connection: Schema.NullOr(DiscordConnection) },
 	ClickedLinkDiscord: {},
 	SucceededGetDiscordOAuthUrl: {},

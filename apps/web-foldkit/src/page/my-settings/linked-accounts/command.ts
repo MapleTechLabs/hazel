@@ -8,13 +8,6 @@ import { Message } from "./message"
 /** The legacy `HazelApiClient` (HTTP API, cookie or bearer auth through `authenticatedFetch`). */
 const integrations = HazelApiClient.useSync((client) => client.integrations)
 
-/** Sequences the clean-URL navigation after the result toast (one OutMessage per update). */
-export const ShowLinkResult = Command.define("ShowLinkResult", {
-	args: {},
-	messages: [Message.ShowedLinkResult],
-	execute: () => Effect.succeed(Message.ShowedLinkResult()),
-})
-
 /** `integrations.getOAuthUrl`, then a full-page redirect to the provider. */
 export const StartDiscordLink = Command.define("StartDiscordLink", {
 	args: { orgId: OrganizationId },

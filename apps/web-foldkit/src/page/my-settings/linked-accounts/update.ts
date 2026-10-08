@@ -4,7 +4,7 @@ import * as Interaction from "../../../ui/aria/interaction"
 import type { PageReturn, Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
 import { embedInteraction } from "../shared"
-import { DisconnectDiscord, ShowLinkResult, StartDiscordLink } from "./command"
+import { DisconnectDiscord, StartDiscordLink } from "./command"
 import { Message } from "./message"
 import type { Model } from "./model"
 import type { RouteOf } from "../../../route"
@@ -15,26 +15,34 @@ export const interaction = embedInteraction<Model, Message>((message) =>
 	Message.GotInteractionMessage({ message }),
 )
 
+const toastRequest = (intent: "success" | "error", title: string, description: string | null = null) => ({
+	intent,
+	title,
+	description,
+})
 const toast = (intent: "success" | "error", title: string, description: string | null = null) =>
-	PageOutMessage.RequestedToast({ toast: { intent, title, description } })
+	PageOutMessage.RequestedToast({ toast: toastRequest(intent, title, description) })
 
 type Route = RouteOf<"MySettingsLinkedAccounts">
 
-/** The OAuth callback's `?connection_status=&provider=&error_code=`: toast, then clean the URL. */
+/** The OAuth callback's `?connection_status=&provider=&error_code=`: clean the URL with the result toast. */
 const linkResult = (model: Model, route: Route): Return => {
 	const status = Option.getOrNull(route.connectionStatus)
 	if (status === null || Option.getOrNull(route.provider) !== "discord") return { model }
 	return {
 		model,
-		commands: [ShowLinkResult({})],
-		outMessage:
-			status === "success"
-				? toast("success", "Discord account linked")
-				: toast(
-						"error",
-						"Failed to link Discord account",
-						Option.getOrNull(route.errorCode) ?? "Please try again.",
-					),
+		outMessage: PageOutMessage.RequestedNavigation({
+			href: `/${model.orgSlug}/my-settings/linked-accounts`,
+			replace: true,
+			toast:
+				status === "success"
+					? toastRequest("success", "Discord account linked")
+					: toastRequest(
+							"error",
+							"Failed to link Discord account",
+							Option.getOrNull(route.errorCode) ?? "Please try again.",
+						),
+		}),
 	}
 }
 
@@ -56,18 +64,11 @@ export const routeChanged = (model: Model, route: Route): Return => linkResult(m
 export const update = (model: Model, message: Message, shared: Shared): Return => {
 	const orgId = shared.currentUser?.organizationId ?? null
 	return Message.match<Return>(message, {
-		ShowedLinkResult: () => ({
-			model,
-			outMessage: PageOutMessage.RequestedNavigation({
-				href: `/${model.orgSlug}/my-settings/linked-accounts`,
-				replace: true,
-			}),
-		}),
 		UpdatedDiscordConnection: ({ connection }) => ({
 			model: modifyFields(model, { connection: () => connection }),
 		}),
 		ClickedLinkDiscord: () =>
-			orgId === null
+			orgId === null || model.isConnecting
 				? { model }
 				: {
 						model: modifyFields(model, { isConnecting: () => true }),
@@ -79,7 +80,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			outMessage: toast("error", "Failed to start Discord linking flow"),
 		}),
 		ClickedUnlinkDiscord: () =>
-			orgId === null
+			orgId === null || model.isDisconnecting
 				? { model }
 				: {
 						model: modifyFields(model, { isDisconnecting: () => true }),

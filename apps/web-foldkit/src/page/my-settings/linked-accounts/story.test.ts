@@ -4,7 +4,7 @@ import { Command, expectNoOutMessage, expectOutMessage, given, message, model, s
 import { describe, expect, test } from "vitest"
 import { currentUser, makeShared, organizationId, storyUpdate } from "../../../test/pages-fixtures"
 import { PageOutMessage } from "../../out-message"
-import { DisconnectDiscord, ShowLinkResult, StartDiscordLink } from "./command"
+import { DisconnectDiscord, StartDiscordLink } from "./command"
 import { Message } from "./message"
 import type { Model } from "./model"
 import { init, update } from "./update"
@@ -59,8 +59,8 @@ describe("link discord", () => {
 		)
 	})
 
-	// Bug: ClickedLinkDiscord has no isConnecting guard; only the disabled button prevents a second redirect.
-	test.fails("a second link click while redirecting is ignored", () => {
+	// ClickedLinkDiscord is guarded on isConnecting in update, not only by the disabled button.
+	test("a second link click while redirecting is ignored", () => {
 		story<Model, Message, PageOutMessage>(
 			storyUpdate(update, shared),
 			given({ ...initial(), isConnecting: true }),
@@ -98,8 +98,8 @@ describe("unlink discord", () => {
 		)
 	})
 
-	// Bug: ClickedUnlinkDiscord has no isDisconnecting guard; only the disabled button prevents a second disconnect.
-	test.fails("a second unlink click while one is pending is ignored", () => {
+	// ClickedUnlinkDiscord is guarded on isDisconnecting in update, not only by the disabled button.
+	test("a second unlink click while one is pending is ignored", () => {
 		story<Model, Message, PageOutMessage>(
 			storyUpdate(update, shared),
 			given({ ...linked(), isDisconnecting: true }),
@@ -110,23 +110,19 @@ describe("unlink discord", () => {
 })
 
 describe("link callback", () => {
-	test("after the result toast the URL is replaced with the clean page path", () => {
+	test("the result toast rides the navigation that replaces the URL with the clean page path", () => {
 		const callback = init({
 			...route,
 			connectionStatus: Option.some("success"),
 			provider: Option.some("discord"),
 		})
-		expect(callback.commands?.map((command) => command.name)).toEqual([ShowLinkResult.name])
-		story<Model, Message, PageOutMessage>(
-			storyUpdate(update, shared),
-			given(callback.model),
-			message(Message.ShowedLinkResult()),
-			expectOutMessage(
-				PageOutMessage.RequestedNavigation({
-					href: "/hazel/my-settings/linked-accounts",
-					replace: true,
-				}),
-			),
+		expect(callback.commands).toBeUndefined()
+		expect(callback.outMessage).toEqual(
+			PageOutMessage.RequestedNavigation({
+				href: "/hazel/my-settings/linked-accounts",
+				replace: true,
+				toast: { intent: "success", title: "Discord account linked", description: null },
+			}),
 		)
 	})
 
@@ -136,14 +132,8 @@ describe("link callback", () => {
 			connectionStatus: Option.some("error"),
 			provider: Option.some("discord"),
 		})
-		expect(callback.outMessage).toEqual(
-			PageOutMessage.RequestedToast({
-				toast: {
-					intent: "error",
-					title: "Failed to link Discord account",
-					description: "Please try again.",
-				},
-			}),
-		)
+		expect(callback.outMessage).toMatchObject({
+			toast: { intent: "error", title: "Failed to link Discord account", description: "Please try again." },
+		})
 	})
 })
