@@ -8,6 +8,8 @@ import type { Model } from "../app/model"
 import { view } from "../app/view"
 import { init, update } from "../main"
 import { DEFAULT_SOUND_SETTINGS } from "../notification-sound"
+import type { Shared } from "../page/contract"
+import { sharedDefaults } from "../page/test-shared"
 import type { CurrentUser, Member, Organization } from "../session"
 import { defaultThemePreference, type ThemePreference } from "../theme"
 
@@ -81,3 +83,14 @@ export const rootScene = {
 	update,
 	view: (model: Model, h: HtmlBuilder<Message>) => view(model, h).body,
 }
+
+/** `Shared` as the root derives it for a signed-in owner of `hazel` (for overlay and shell tests). */
+export const signedInShared = (member: Member | null = owner): Shared => ({
+	auth: "SignedIn",
+	orgSlug: "hazel",
+	currentUser: ada,
+	organization: hazelOrg,
+	member,
+	nowMs: 0,
+	...sharedDefaults,
+})
