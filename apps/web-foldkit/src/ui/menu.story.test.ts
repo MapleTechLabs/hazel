@@ -250,8 +250,8 @@ describe("menu story", () => {
 		)
 	})
 
-	// Bug: menu.ts:386 matches " " as activation before the typeahead branch (select.ts:216 guards it).
-	test.fails("Space during a typeahead extends the search instead of activating", () => {
+	// T4: Space during a typeahead extends the search, as in select.
+	test("Space during a typeahead extends the search instead of activating", () => {
 		story(
 			update,
 			given(searching("o", "open")),

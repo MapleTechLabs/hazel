@@ -383,11 +383,14 @@ const pressedMenuKey = (model: Model, open: Open, key: string, isModified: boole
 				? withOpen(model, { ...keyboard, submenu: Option.none() }, true)
 				: { model },
 		),
-		Match.whenOr("Enter", " ", (_pressed) =>
-			Option.match(current, {
-				onNone: () => ({ model }),
-				onSome: (focusedKey) => activated(model, keyboard, focusedKey, "Keyboard"),
-			}),
+		// useTypeSelect: Space extends an active typeahead search instead of activating.
+		Match.when(
+			(pressed) => pressed === "Enter" || (pressed === " " && open.search === ""),
+			() =>
+				Option.match(current, {
+					onNone: () => ({ model }),
+					onSome: (focusedKey) => activated(model, keyboard, focusedKey, "Keyboard"),
+				}),
 		),
 		Match.when("ArrowRight", () => {
 			const submenuTrigger = Option.filter(
