@@ -93,9 +93,12 @@ export const close = (model: Model): Model =>
 const remember = (model: Model): PageState =>
 	"inputValue" in model.page ? { ...model.page, inputValue: model.menu.inputValue } : model.page
 
-/** `navigateTo(page)`: push the current page (with its search value) and show a fresh one. */
-export const navigateTo = (model: Model, page: Page, shared: Shared): Return =>
-	showPage(model, initialPageState(page), [...model.history, remember(model)], shared)
+/**
+ * `navigateTo(page)`: push the current page (with its search value) and show a fresh one. A menu
+ * selection passes `current` read before the menu reset its input.
+ */
+export const navigateTo = (model: Model, page: Page, shared: Shared, current: PageState = remember(model)): Return =>
+	showPage(model, initialPageState(page), [...model.history, current], shared)
 
 /** Escape: `goBack()` when there is history, otherwise close. */
 const goBackOrClose = (model: Model, shared: Shared): Return => {
@@ -124,9 +127,9 @@ const PAGE_ACTIONS: Readonly<Record<string, Page>> = {
 const chatHref = (shared: Shared, channelId: string) => `/${shared.orgSlug ?? ""}/chat/${channelId}`
 
 /** A menu item's `onAction`, as each legacy `CommandMenuItem` defines it. */
-const selectedItem = (model: Model, key: string, shared: Shared): Return => {
+const selectedItem = (model: Model, key: string, shared: Shared, current: PageState): Return => {
 	const page = PAGE_ACTIONS[key]
-	if (page !== undefined) return navigateTo(model, page, shared)
+	if (page !== undefined) return navigateTo(model, page, shared, current)
 	if (key === "action:start-dm")
 		return { model: close(model), outMessage: OutMessage.RequestedModal({ modal: { _tag: "CreateDm" } }) }
 	if (key === "action:invite")
@@ -157,6 +160,8 @@ const isPlainEscape = (model: Model, message: CommandMenu.Message) =>
 
 const gotMenuMessage = (model: Model, message: CommandMenu.Message, shared: Shared): Return => {
 	if (isPlainEscape(model, message)) return goBackOrClose(model, shared)
+	// Selecting an item resets the menu's input, so the page to return to is read first.
+	const current = remember(model)
 	const result = CommandMenu.update(model.menu, message)
 	const next = modifyFields(model, { menu: () => result.model })
 	const commands = Command.mapMessages(result.commands, (child) => Message.GotMenuMessage({ message: child }))
@@ -165,7 +170,7 @@ const gotMenuMessage = (model: Model, message: CommandMenu.Message, shared: Shar
 		onSome: CommandMenu.OutMessage.match<Return>({
 			Closed: () => ({ model: close(next), commands }),
 			SelectedItem: ({ key }) => {
-				const selected = selectedItem(next, key, shared)
+				const selected = selectedItem(next, key, shared, current)
 				return { ...selected, commands: [...commands, ...(selected.commands ?? [])] }
 			},
 		}),

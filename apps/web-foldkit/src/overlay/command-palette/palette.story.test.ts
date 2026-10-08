@@ -35,9 +35,8 @@ describe("opening", () => {
 })
 
 describe("back stack", () => {
-	// BUG (probable): legacy `navigateTo` pushes the page with its typed search. The port reads
-	// `menu.inputValue` after CommandMenu's `activated` reset it, so Back always restores "".
-	test.fails("a sub-page remembers the home search, and Back restores it", () => {
+	// B4: legacy `navigateTo` pushes the page with its typed search; the menu's `activated` resets it.
+	test("a sub-page remembers the home search, and Back restores it", () => {
 		story(
 			run,
 			given(opened),
