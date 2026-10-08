@@ -125,10 +125,8 @@ describe("urlToAppRoute", () => {
 })
 
 describe("redirects", () => {
-	it("forwards the channel settings index to overview", () => {
-		expect(routeRedirect(parse(`/hazel/channels/${channelId}/settings`), { isProd: true })).toEqual(
-			Option.some(`/hazel/channels/${channelId}/settings/overview`),
-		)
+	it("leaves the channel settings index to its redirect page", () => {
+		expect(routeRedirect(parse(`/hazel/channels/${channelId}/settings`), { isProd: true })).toEqual(Option.none())
 		expect(routeRedirect(parse("/hazel/settings/team"), { isProd: true })).toEqual(Option.none())
 	})
 

@@ -79,17 +79,17 @@ describe("redirects", () => {
 		)
 	})
 
-	// Both `routeRedirect` and the ChannelSettingsRedirect page replace the URL: one is redundant.
-	test("the channel settings index forwards to its overview tab", () => {
+	// A5: only the ChannelSettingsRedirect page forwards; `routeRedirect` no longer doubles it.
+	test("the channel settings index forwards to its overview tab once", () => {
 		const channelId = "00000000-0000-4000-8000-0000000000c1"
 		const overview = ReplaceUrl({ url: `/hazel/channels/${channelId}/settings/overview` })
 		story(
 			update,
 			given(signedIn("/hazel/settings/team")),
 			message(Message.ChangedUrl({ url: urlOf(`/hazel/channels/${channelId}/settings`) })),
-			Command.expectExact(overview, overview),
+			Command.expectExact(overview),
 			model((m) => expect(m.route._tag).toBe("ChannelSettings")),
-			Command.resolveAll([overview, Message.CompletedReplaceUrl()], [overview, Message.CompletedReplaceUrl()]),
+			Command.resolve(ReplaceUrl, Message.CompletedReplaceUrl()),
 		)
 	})
 })
