@@ -43,11 +43,14 @@ export const titleId = (id: string) => `${id}-title`
 
 // UPDATE
 
-const closed = (model: Model): Model => modifyFields(model, { isOpen: () => false })
+/** The open Model, for parents that set `isOpen` without folding Commands (prefer it to `open(m).model`). */
+export const opened = (model: Model): Model => modifyFields(model, { isOpen: () => true })
+/** The closed Model; `close(m).model` callers should use this, since `.model` drops Commands. */
+export const closed = (model: Model): Model => modifyFields(model, { isOpen: () => false })
 
 export const update = (model: Model, message: Message): Update.Return<Model, Message> =>
 	Message.match<Update.Return<Model, Message>>(message, {
-		ClickedTrigger: () => ({ model: modifyFields(model, { isOpen: () => true }) }),
+		ClickedTrigger: () => ({ model: opened(model) }),
 		ClickedClose: () => ({ model: closed(model) }),
 		PressedEscape: () => ({ model: closed(model) }),
 		PressedOutside: () => ({ model: closed(model) }),
@@ -55,9 +58,7 @@ export const update = (model: Model, message: Message): Update.Return<Model, Mes
 	})
 
 /** Opens the modal from the parent (controlled `isOpen`). */
-export const open = (model: Model): Update.Return<Model, Message> => ({
-	model: modifyFields(model, { isOpen: () => true }),
-})
+export const open = (model: Model): Update.Return<Model, Message> => ({ model: opened(model) })
 /** Closes the modal from the parent. */
 export const close = (model: Model): Update.Return<Model, Message> => ({ model: closed(model) })
 

@@ -130,20 +130,22 @@ const reset = (model: Model): Model =>
 		hoveredKey: () => Option.none(),
 	})
 
-const closed = (model: Model): UpdateReturn => ({
+/** A user dismissal: closed, and the parent hears `Closed`. */
+const dismissed = (model: Model): UpdateReturn => ({
 	model: modifyFields(reset(model), { isOpen: () => false }),
 	outMessage: OutMessage.Closed(),
 })
 
 /** Opens the command menu from the parent (controlled `isOpen`). */
-export const open = (model: Model): Update.Return<Model, Message> => ({
-	model: modifyFields(reset(model), { isOpen: () => true }),
-})
+export const open = (model: Model): Update.Return<Model, Message> => ({ model: opened(model) })
 
 /** Closes the command menu from the parent. */
-export const close = (model: Model): Update.Return<Model, Message> => ({
-	model: modifyFields(reset(model), { isOpen: () => false }),
-})
+export const close = (model: Model): Update.Return<Model, Message> => ({ model: closed(model) })
+
+/** The reset, open Model, for parents that do not fold Commands (prefer it to `open(m).model`). */
+export const opened = (model: Model): Model => modifyFields(reset(model), { isOpen: () => true })
+/** The reset, closed Model (prefer it to `close(m).model`, which drops Commands). */
+export const closed = (model: Model): Model => modifyFields(reset(model), { isOpen: () => false })
 
 const activated = (model: Model, key: string): UpdateReturn => ({
 	model: modifyFields(reset(model), { isOpen: () => false }),
@@ -166,7 +168,7 @@ const pressedSearchKey = (model: Model, key: string): UpdateReturn => {
 				onSome: (focusedKey) => activated(model, focusedKey),
 			}),
 		),
-		Match.when("Escape", () => (model.inputValue === "" ? closed(model) : { model: reset(model) })),
+		Match.when("Escape", () => (model.inputValue === "" ? dismissed(model) : { model: reset(model) })),
 		Match.orElse(() => ({ model })),
 	)
 }
@@ -196,8 +198,8 @@ export const update = (model: Model, message: Message): UpdateReturn =>
 			}),
 		}),
 		ClickedItem: ({ key }) => activated(model, key),
-		ClickedEscapeButton: () => closed(model),
-		PressedOutside: () => closed(model),
-		ClickedDismiss: () => closed(model),
+		ClickedEscapeButton: () => dismissed(model),
+		PressedOutside: () => dismissed(model),
+		ClickedDismiss: () => dismissed(model),
 		CompletedPortalCommandMenu: () => ({ model }),
 	})

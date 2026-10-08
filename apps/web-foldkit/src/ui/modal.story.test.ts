@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { Command, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
-import { close, init, Message, open, update } from "./modal"
+import { close, closed, init, Message, open, opened, update } from "./modal"
 
 /** React Aria DialogTrigger + Modal: the trigger opens, close, Escape and outside presses dismiss. */
 
@@ -77,5 +77,13 @@ describe("modal story", () => {
 		expect(open(closedModal).model.isOpen).toBe(true)
 		expect(close(openModal).model.isOpen).toBe(false)
 		expect(open(closedModal).commands).toBeUndefined()
+	})
+})
+
+describe("modal parent helpers", () => {
+	test("opened and closed return the Model that open and close carry, without Commands to drop", () => {
+		expect(opened(closedModal)).toEqual(open(closedModal).model)
+		expect(open(closedModal).commands ?? []).toEqual([])
+		expect(closed(opened(closedModal))).toEqual(close(opened(closedModal)).model)
 	})
 })
