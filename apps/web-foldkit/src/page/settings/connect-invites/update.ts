@@ -35,7 +35,7 @@ const inviteNotFound = (description: string) => ({
 
 // COMMAND
 
-const ListIncomingInvites = Command.define("ListIncomingInvites", {
+export const ListIncomingInvites = Command.define("ListIncomingInvites", {
 	args: { organizationId: OrganizationId },
 	messages: [Message.SucceededListInvites, Message.FailedListInvites],
 	execute: ({ organizationId }) =>
@@ -89,7 +89,7 @@ export const AcceptInvite = Command.define("AcceptInvite", {
 		),
 })
 
-const DeclineInvite = Command.define("DeclineInvite", {
+export const DeclineInvite = Command.define("DeclineInvite", {
 	args: { inviteId: ConnectInviteId },
 	messages: [Message.SucceededDecline, Message.FailedDecline],
 	execute: ({ inviteId }) =>

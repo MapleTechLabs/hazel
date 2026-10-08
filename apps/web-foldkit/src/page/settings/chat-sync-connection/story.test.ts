@@ -13,6 +13,7 @@ import {
 	ListDiscordChannels,
 	RemoveChannelLink,
 	ScheduleReturnToList,
+	UpdateChannelLink,
 } from "./command"
 import { Message } from "./model"
 import { init, update } from "./update"
@@ -175,6 +176,74 @@ describe("chat sync connection", () => {
 				expect(current.links._tag).toBe("Loading")
 			}),
 			Command.resolve(ListChannelLinks, Message.SucceededListChannelLinks({ links: [] })),
+		)
+	})
+})
+
+describe("chat sync connection guards and link actions", () => {
+	const openMenu = Message.GotLinkMenuMessage({ linkId, message: Menu.Message.PressedTrigger({ pointerType: "mouse" }) })
+	const pick = (key: string) => Message.GotLinkMenuMessage({ linkId, message: Menu.Message.ClickedItem({ key }) })
+
+	test("Pause sync from the row menu pauses the link, toasts and reloads", () => {
+		story(
+			run,
+			given(loaded),
+			message(openMenu),
+			Command.resolveAll(),
+			message(pick("toggle")),
+			Command.expectHas(UpdateChannelLink({ syncChannelLinkId: linkId, isActive: false })),
+			Command.resolve(UpdateChannelLink, Message.SucceededUpdateLink({ successMessage: "Channel link paused" })),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({ toast: { intent: "success", title: "Channel link paused", description: null } }),
+			),
+			Command.resolveAll([ListChannelLinks, Message.SucceededListChannelLinks({ links: [{ ...link, isActive: false }] })]),
+			model((current) => expect(current.links).toEqual({ _tag: "Loaded", links: [{ ...link, isActive: false }] })),
+		)
+	})
+
+	test("a failed link action toasts and leaves the links loaded", () => {
+		story(
+			run,
+			given(loaded),
+			message(Message.FailedLinkAction({ title: "Channel link not found", description: null })),
+			Command.expectNone(),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({ toast: { intent: "error", title: "Channel link not found", description: null } }),
+			),
+			model((current) => expect(current.links._tag).toBe("Loaded")),
+		)
+	})
+
+	test("a second confirm while disconnecting or removing sends nothing", () => {
+		const disconnecting = run({ ...loaded, isDisconnecting: true }, Message.ClickedConfirmDisconnect())
+		expect(disconnecting.commands ?? []).toHaveLength(0)
+		const removing = run(
+			{ ...loaded, deleteTarget: { id: linkId, name: "general" }, isDeletingLink: true },
+			Message.ClickedConfirmRemoveLink(),
+		)
+		expect(removing.commands ?? []).toHaveLength(0)
+		story(run, given(loaded), message(Message.ClickedConfirmRemoveLink()), Command.expectNone())
+	})
+
+	test("a connection list for another organization is ignored", () => {
+		const other = Schema.decodeSync(OrganizationId)(uuid(9))
+		story(
+			run,
+			given(init(route, shared).model),
+			message(Message.FailedListConnections({ organizationId: other })),
+			model((current) => expect(current.connection._tag).toBe("Loading")),
+		)
+	})
+
+	test("Link Channel needs both channels picked", () => {
+		const hazelChannel = { id: Schema.decodeSync(ChannelId)(uuid(5)), name: "engineering" }
+		story(
+			run,
+			given(loaded),
+			message(Message.ClickedHazelChannel({ channel: hazelChannel })),
+			message(Message.ClickedCreateLink()),
+			Command.expectNone(),
+			model((current) => expect(current.isCreatingLink).toBe(false)),
 		)
 	})
 })

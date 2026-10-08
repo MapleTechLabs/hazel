@@ -39,28 +39,28 @@ export const validateEmojiName = (name: string): string | null => {
 
 // COMMAND
 
-const OpenPicker = Command.define("OpenEmojiPicker", {
+export const OpenPicker = Command.define("OpenEmojiPicker", {
 	args: { inputId: Schema.String },
 	messages: [Message.CompletedOpenPicker],
 	execute: ({ inputId }) =>
 		Dom.clickElement(`#${inputId}`).pipe(Effect.ignore, Effect.as(Message.CompletedOpenPicker())),
 })
 
-const CreatePreview = Command.define("CreateEmojiPreview", {
+export const CreatePreview = Command.define("CreateEmojiPreview", {
 	args: { file: File },
 	messages: [Message.CreatedPreview],
 	execute: ({ file }) =>
 		Effect.sync(() => Message.CreatedPreview({ file, previewUrl: URL.createObjectURL(file) })),
 })
 
-const FocusName = Command.define("FocusEmojiName", {
+export const FocusName = Command.define("FocusEmojiName", {
 	args: {},
 	messages: [Message.CompletedFocusName],
 	execute: () =>
 		Dom.focus(`#${EMOJI_NAME_ID}-input`).pipe(Effect.ignore, Effect.as(Message.CompletedFocusName())),
 })
 
-const RevokePreview = Command.define("RevokeEmojiPreview", {
+export const RevokePreview = Command.define("RevokeEmojiPreview", {
 	args: { previewUrl: Schema.String },
 	messages: [Message.CompletedRevokePreview],
 	execute: ({ previewUrl }) =>
@@ -76,7 +76,7 @@ const deletedExistsErrorOf = (cause: Cause.Cause<unknown>) =>
 		(error): error is CustomEmojiDeletedExistsError => error instanceof CustomEmojiDeletedExistsError,
 	)
 
-const SaveEmoji = Command.define("SaveCustomEmoji", {
+export const SaveEmoji = Command.define("SaveCustomEmoji", {
 	args: { organizationId: OrganizationId, name: Schema.String, file: File, createdBy: UserId },
 	messages: [Message.SucceededCreateEmoji, Message.FoundDeletedEmoji, Message.FailedCreateEmoji],
 	execute: ({ organizationId, name, file, createdBy }) =>
@@ -117,7 +117,7 @@ const SaveEmoji = Command.define("SaveCustomEmoji", {
 		),
 })
 
-const RestoreEmoji = Command.define("RestoreCustomEmoji", {
+export const RestoreEmoji = Command.define("RestoreCustomEmoji", {
 	args: {
 		emojiId: CustomEmojiId,
 		organizationId: OrganizationId,

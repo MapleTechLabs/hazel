@@ -11,16 +11,16 @@ type Model = typeof Model.Type
 const Message = ClerkMountMessage
 type Message = ClerkMountMessage
 
-const init = (route: RouteOf<"SignIn" | "SignUp">): PageReturn<Model, Message> => ({
+export const init = (route: RouteOf<"SignIn" | "SignUp">): PageReturn<Model, Message> => ({
 	model: { redirectUrl: Option.getOrNull(route.redirectUrl) },
 })
 
 // Mount results need no state change: the form is Clerk's from here on.
-const update = (model: Model): PageReturn<Model, Message> => ({ model })
+export const update = (model: Model): PageReturn<Model, Message> => ({ model })
 
 const toMessage = (message: ClerkMountMessage): Message => message
 
-const signInView = Submodel.defineView<Model, Message, PageViewInputs>((model, _inputs, h) => {
+export const signInView = Submodel.defineView<Model, Message, PageViewInputs>((model, _inputs, h) => {
 	const redirect = model.redirectUrl ?? "/"
 	return clerkComponent(
 		h,
@@ -36,7 +36,7 @@ const signInView = Submodel.defineView<Model, Message, PageViewInputs>((model, _
 	)
 })
 
-const signUpView = Submodel.defineView<Model, Message, PageViewInputs>((model, _inputs, h) => {
+export const signUpView = Submodel.defineView<Model, Message, PageViewInputs>((model, _inputs, h) => {
 	const redirect = model.redirectUrl ?? "/"
 	return clerkComponent(
 		h,

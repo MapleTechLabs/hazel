@@ -85,3 +85,81 @@ describe("save failure", () => {
 		)
 	})
 })
+
+describe("validation and guards", () => {
+	test("names must be 2 to 100 characters once the field changed", () => {
+		const savable = (name: string) => {
+			const form = update(loaded, Message.ChangedName({ name })).model.form
+			return form !== null && canSave(form)
+		}
+		expect(savable("a")).toBe(false)
+		expect(savable("ab")).toBe(true)
+		expect(savable("x".repeat(100))).toBe(true)
+		expect(savable("x".repeat(101))).toBe(false)
+	})
+
+	test("an invalid name does not submit", () => {
+		story(
+			update,
+			given(loaded),
+			message(Message.ChangedName({ name: "a" })),
+			message(Message.SubmittedForm()),
+			Command.expectNone(),
+			model((current) => expect(current.form?.isSubmitting).toBe(false)),
+		)
+	})
+
+	test("a second submit while saving sends nothing", () => {
+		const submitting = update(
+			update(loaded, Message.ChangedName({ name: "renamed" })).model,
+			Message.SubmittedForm(),
+		).model
+		story(update, given(submitting), message(Message.SubmittedForm()), Command.expectNone())
+	})
+
+	test("clearing an icon that was never set leaves the form clean", () => {
+		const noIcon = update(
+			initial,
+			Message.UpdatedChannel({ channel: { id: channelId, name: "general", icon: null } }),
+		).model
+		story(
+			update,
+			given(noIcon),
+			message(Message.ClearedIcon()),
+			model((current) => expect(current.form?.isIconDirty).toBe(false)),
+			message(Message.SubmittedForm()),
+			Command.expectNone(),
+		)
+	})
+})
+
+describe("save success and channel removal", () => {
+	test("a cleared icon saves as null, then toasts and settles", () => {
+		story(
+			update,
+			given(loaded),
+			message(Message.ClearedIcon()),
+			message(Message.SubmittedForm()),
+			Command.expectExact(UpdateChannel({ id: channelId, name: "general", icon: null })),
+			Command.resolve(UpdateChannel, Message.SucceededUpdateChannel()),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({
+					toast: { intent: "success", title: "Channel updated successfully", description: null },
+				}),
+			),
+			model((current) => {
+				expect(current.form?.isSubmitting).toBe(false)
+				expect(current.form?.isIconDirty).toBe(false)
+			}),
+		)
+	})
+
+	test("a deleted channel unmounts the form", () => {
+		story(
+			update,
+			given(loaded),
+			message(Message.UpdatedChannel({ channel: null })),
+			model((current) => expect(current.form).toBeNull()),
+		)
+	})
+})

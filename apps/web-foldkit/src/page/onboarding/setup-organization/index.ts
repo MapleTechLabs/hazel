@@ -18,7 +18,7 @@ export const createOrganizationProps = {
 	afterCreateOrganizationUrl: "/",
 } as const
 
-const view = Submodel.defineView<Model, Message, PageViewInputs>((_model, _inputs, h) =>
+export const view = Submodel.defineView<Model, Message, PageViewInputs>((_model, _inputs, h) =>
 	h.div(
 		[h.Class("flex min-h-screen items-center justify-center bg-bg p-4")],
 		[clerkComponent(h, "CreateOrganization", createOrganizationProps, toMessage)],

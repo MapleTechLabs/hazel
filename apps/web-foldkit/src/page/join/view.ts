@@ -11,7 +11,7 @@ import { Message } from "./message"
 import type { Model, PublicOrganization } from "./model"
 
 /** `cardVariants`: the card fades, rises and unblurs in. */
-const CardEnterAnimation = Mount.define("JoinCardEnterAnimation", {
+export const CardEnterAnimation = Mount.define("JoinCardEnterAnimation", {
 	args: {},
 	messages: [Message.CompletedEnterAnimation],
 	execute: ({ element }) =>

@@ -15,7 +15,7 @@ export const REVOKE_KEY = "revoke"
 
 // COMMAND
 
-const FetchInvitations = Command.define("FetchInvitations", {
+export const FetchInvitations = Command.define("FetchInvitations", {
 	args: {},
 	messages: [Message.CompletedFetchInvitations],
 	execute: () =>
@@ -24,7 +24,7 @@ const FetchInvitations = Command.define("FetchInvitations", {
 		),
 })
 
-const RevokeInvitation = Command.define("RevokeInvitation", {
+export const RevokeInvitation = Command.define("RevokeInvitation", {
 	args: { invitationId: Schema.String },
 	messages: [Message.SucceededRevoke, Message.FailedRevoke],
 	execute: ({ invitationId }) =>

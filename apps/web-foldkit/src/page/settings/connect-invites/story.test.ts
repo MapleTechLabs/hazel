@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 import { ConnectInviteId, OrganizationId } from "@hazel/schema"
 import { Schema } from "effect"
-import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
+import { Command, expectNoOutMessage, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
 import { PageOutMessage } from "../../out-message"
 import type { Shared } from "../../contract"
 import { Message } from "./message"
-import { AcceptInvite, init, sharedChanged, update } from "./update"
+import { AcceptInvite, DeclineInvite, init, ListIncomingInvites, sharedChanged, update } from "./update"
+import { successToast } from "../../../data/actions"
+import { failureToastFixture } from "../../../test/pages-fixtures"
 import { sharedDefaults } from "../../test-shared"
 
 /** Update-loop tests for connect invitations: list requests and the accept/decline lifecycle. */
@@ -77,6 +79,83 @@ describe("accept failure", () => {
 			Command.resolve(AcceptInvite, Message.FailedAccept({ inviteId, toast })),
 			expectOutMessage(PageOutMessage.RequestedToast({ toast })),
 			model((current) => expect(current.acceptingIds).toEqual([])),
+		)
+	})
+})
+
+const run = (current: Parameters<typeof update>[0], next: Message) => update(current, next, shared(hazel))
+const pending = { id: inviteId, hostOrganizationId: hazel, status: "pending", createdAtMs: 0 }
+const listed = run(init(undefined, shared(hazel)).model, Message.SucceededListInvites({ invites: [pending] })).model
+
+describe("list", () => {
+	test("a failed list shows the empty list and toasts nothing", () => {
+		story(
+			run,
+			given(listed),
+			message(Message.FailedListInvites()),
+			expectNoOutMessage(),
+			model((current) => expect(current.invites).toEqual([])),
+		)
+	})
+
+	test("a new organization drops the old list and requests its own", () => {
+		const other = Schema.decodeSync(OrganizationId)(uuid(9))
+		const switched = sharedChanged(listed, shared(other))
+		expect(switched.model.invites).toEqual([])
+		expect(switched.model.requestedFor).toBe(other)
+		expect(switched.commands?.map((command) => command.name)).toEqual([ListIncomingInvites.name])
+	})
+})
+
+describe("decline", () => {
+	test("Decline disables the row, then toasts and refetches for this organization", () => {
+		story(
+			run,
+			given(listed),
+			message(Message.ClickedDecline({ inviteId })),
+			Command.expectExact(DeclineInvite({ inviteId })),
+			model((current) => expect(current.decliningIds).toEqual([inviteId])),
+			Command.resolve(DeclineInvite, Message.SucceededDecline({ inviteId })),
+			expectOutMessage(PageOutMessage.RequestedToast({ toast: successToast("Invite declined") })),
+			Command.expectExact(ListIncomingInvites({ organizationId: hazel })),
+			Command.resolve(ListIncomingInvites, Message.SucceededListInvites({ invites: [] })),
+			model((current) => {
+				expect(current.decliningIds).toEqual([])
+				expect(current.invites).toEqual([])
+			}),
+		)
+	})
+
+	test("a failed decline toasts and does not refetch", () => {
+		story(
+			run,
+			given(listed),
+			message(Message.ClickedDecline({ inviteId })),
+			Command.resolve(DeclineInvite, Message.FailedDecline({ inviteId, toast: failureToastFixture })),
+			expectOutMessage(PageOutMessage.RequestedToast({ toast: failureToastFixture })),
+			Command.expectNone(),
+		)
+	})
+})
+
+describe("double submit", () => {
+	test("Accept without an organization sends nothing", () => {
+		story(
+			(current: Parameters<typeof update>[0], next: Message) => update(current, next, shared(null)),
+			given(listed),
+			message(Message.ClickedAccept({ inviteId })),
+			Command.expectNone(),
+			model((current) => expect(current.acceptingIds).toEqual([])),
+		)
+	})
+
+	// Bug: update has no in-flight guard; a second Accept/Decline for a busy row dispatches again.
+	test.fails("Accept or Decline on a row that is already accepting sends nothing", () => {
+		story(
+			run,
+			given({ ...listed, acceptingIds: [inviteId] }),
+			message(Message.ClickedAccept({ inviteId })),
+			Command.expectNone(),
 		)
 	})
 })
