@@ -37,7 +37,7 @@ const clerkMethod = <Fn>(name: string): Fn | undefined => {
 	return typeof method === "function" ? (method.bind(clerk) as Fn) : undefined
 }
 
-const MountClerkComponent = Mount.define("MountClerkComponent", {
+export const MountClerkComponent = Mount.define("MountClerkComponent", {
 	args: { component: ClerkComponent, props: ClerkProps },
 	messages: [ClerkMountMessage.MountedClerkComponent, ClerkMountMessage.FailedMountClerkComponent],
 	execute: ({ element, component, props }) => {

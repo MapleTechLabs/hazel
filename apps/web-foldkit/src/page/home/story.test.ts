@@ -1,15 +1,16 @@
 import { ChannelId, OrganizationId, UserId } from "@hazel/schema"
 import { Option, Schema } from "effect"
-import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
+import { Command, expectNoOutMessage, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test, vi } from "vitest"
 import * as Menu from "../../ui/menu"
 import type { Shared } from "../contract"
 import { PageOutMessage } from "../out-message"
-import { CopyEmail, CreateDm, FindDm } from "./commands"
+import { CopyEmail, CreateDm, FindDm, FocusSearch } from "./commands"
 import { Message } from "./message"
 import { type DirectoryMember, filterMembers, type Model } from "./model"
 import { init, update } from "./update"
 import { sharedDefaults } from "../test-shared"
+import { failureToastFixture } from "../../test/pages-fixtures"
 
 // `ui/aria/interaction` names `document` when its module loads; the update loop never touches it.
 vi.hoisted(() => {
@@ -149,5 +150,67 @@ describe("org home directory", () => {
 				}),
 			),
 		)
+	})
+})
+
+describe("org home failures and guards", () => {
+	test("a failed DM creation replaces the loading toast with the error", () => {
+		story(
+			pageUpdate,
+			given(loaded()),
+			message(Message.PressedMessageMember({ userId: grace, name: "Grace Hopper" })),
+			Command.resolve(FindDm, Message.FoundNoDm({ userId: grace, name: "Grace Hopper" })),
+			Command.resolve(CreateDm, Message.FailedCreateDm({ toast: failureToastFixture })),
+			expectOutMessage(PageOutMessage.RequestedToast({ toast: { ...failureToastFixture, id: "home-create-dm" } })),
+		)
+	})
+
+	test("a failed copy toasts an error", () => {
+		story(
+			pageUpdate,
+			given(withOpenMenu(grace)),
+			message(menuMessage(grace, Menu.Message.ClickedItem({ key: "copy-email" }))),
+			Command.resolve(CopyEmail({ email: "grace@hazel.test" }), Message.FailedCopyEmail()),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({ toast: { intent: "error", title: "Failed to copy email", description: "Please try again" } }),
+			),
+		)
+	})
+
+	test("the menu's Message item looks the DM up with the member's full name", () => {
+		story(
+			pageUpdate,
+			given(withOpenMenu(grace)),
+			message(menuMessage(grace, Menu.Message.ClickedItem({ key: "message" }))),
+			Command.expectExact(FindDm({ currentUserId: ada, userId: grace, name: "Grace Hopper", organizationId })),
+			Command.resolve(FindDm, Message.FoundExistingDm({ channelId })),
+			expectOutMessage(PageOutMessage.RequestedNavigation({ href: `/hazel/chat/${channelId}`, replace: false })),
+		)
+	})
+
+	test("without an organization, or for an unknown member, Message does nothing", () => {
+		const noOrg = (current: Model, next: Message) => update(current, next, { ...shared, organization: null })
+		story(noOrg, given(loaded()), message(Message.PressedMessageMember({ userId: grace, name: "Grace Hopper" })), Command.expectNone())
+		story(noOrg, given(loaded()), message(Message.FoundNoDm({ userId: grace, name: "Grace Hopper" })), Command.expectNone(), expectNoOutMessage())
+		story(pageUpdate, given(init().model), message(Message.PressedMessageMember({ userId: grace, name: "Grace Hopper" })), Command.expectNone())
+	})
+
+	test("clearing the search empties it and refocuses the field", () => {
+		story(
+			pageUpdate,
+			given(loaded()),
+			message(Message.ChangedSearch({ value: "grace" })),
+			message(Message.PressedClearSearch()),
+			Command.resolve(FocusSearch, Message.CompletedFocusSearch()),
+			message(Message.ClearedSearch()),
+			model((current) => expect(current.searchQuery).toBe("")),
+		)
+	})
+
+	// Bug: nothing marks a DM as opening, so pressing Message again looks up (and may create) a second DM.
+	test.fails("a second Message press while a DM is opening sends nothing", () => {
+		const first = pageUpdate(loaded(), Message.PressedMessageMember({ userId: grace, name: "Grace Hopper" }))
+		const second = pageUpdate(first.model, Message.PressedMessageMember({ userId: grace, name: "Grace Hopper" }))
+		expect(second.commands ?? []).toEqual([])
 	})
 })

@@ -1,6 +1,6 @@
 import { OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { Option, Schema } from "effect"
-import { Command, Mount, click, expect, given, role, scene, text, type } from "foldkit/scene"
+import { Command, Mount, all, click, expect, expectAll, expectOutMessage, given, last, role, scene, selector, submit, text, type } from "foldkit/scene"
 import { describe, test, vi, expect as vitestExpect } from "vitest"
 import type { Shared } from "../contract"
 import { PageOutMessage } from "../out-message"
@@ -197,6 +197,109 @@ describe("onboarding flow", () => {
 			expect(role("heading", { name: "Welcome to Hazel!" })).toExist(),
 			Mount.expectEnded(AutoFocus),
 			Mount.resolve(EnterAnimation, settled),
+		)
+	})
+})
+
+const firstMounts = Mount.resolveAll([EnterAnimation, settled], [AutoFocus, focused])
+const errorToast = (title: string) => PageOutMessage.RequestedToast({ toast: { intent: "error", title, description: null } })
+
+describe("profile step validation", () => {
+	test("clearing a name marks only that input invalid, and Enter does not submit", () => {
+		scene(
+			config,
+			given(ready("profileInfo")),
+			firstMounts,
+			type(role("textbox", { name: "Last name" }), ""),
+			expect(role("textbox", { name: "Last name" })).toHaveAttr("aria-invalid", "true"),
+			expect(role("textbox", { name: "First name" })).toHaveAttr("aria-invalid", "false"),
+			expect(role("button", { name: /Continue/ })).toBeDisabled(),
+			// The form has no accessible name, so it is reached by tag.
+			submit(selector("form")),
+			Command.expectNone(),
+		)
+	})
+
+	test("a failed save shows a toast and lets the user try again", () => {
+		scene(
+			config,
+			given(ready("profileInfo")),
+			firstMounts,
+			click(role("button", { name: /Continue/ })),
+			expect(role("button", { name: /Continue/ })).toBeDisabled(),
+			expect(role("button", { name: /Back/ })).toBeDisabled(),
+			Command.resolve(UpdateProfile, Message.FailedUpdateProfile()),
+			expectOutMessage(errorToast("Failed to update profile")),
+			expect(role("heading", { name: "Set up your profile" })).toExist(),
+			expect(role("button", { name: /Continue/ })).toBeEnabled(),
+		)
+	})
+})
+
+describe("invite step", () => {
+	const removeButtons = all.role("button", { name: "Remove email" })
+
+	test("rows can be added and removed, and only extra rows have a remove button", () => {
+		scene(
+			config,
+			given(ready("teamInvitation")),
+			firstMounts,
+			expectAll(removeButtons).toHaveCount(0),
+			click(role("button", { name: /Add another email/ })),
+			expect(role("textbox", { name: "Email 2" })).toExist(),
+			expectAll(removeButtons).toHaveCount(2),
+			click(last(removeButtons)),
+			expect(role("textbox", { name: "Email 2" })).toBeAbsent(),
+			expectAll(removeButtons).toHaveCount(0),
+		)
+	})
+
+	test("at ten rows Add is disabled and the limit is explained", () => {
+		const addRow = click(role("button", { name: /Add another email/ }))
+		scene(
+			config,
+			given(ready("teamInvitation")),
+			firstMounts,
+			addRow, addRow, addRow, addRow, addRow, addRow, addRow, addRow, addRow,
+			expect(role("textbox", { name: "Email 10" })).toExist(),
+			expect(role("button", { name: /Add another email/ })).toBeDisabled(),
+			expect(text("Maximum of 10 invites at a time. You can invite more later.")).toExist(),
+		)
+	})
+
+	test("sending locks the step, then a full success toasts and finalizes", () => {
+		scene(
+			config,
+			given(ready("teamInvitation")),
+			firstMounts,
+			type(role("textbox", { name: "Email 1" }), "grace@hazel.test"),
+			click(role("button", { name: /Send invites/ })),
+			Command.expectExact(SendInvites({ emails: ["grace@hazel.test"] })),
+			expect(role("button", { name: /Send invites/ })).toBeDisabled(),
+			expect(role("button", { name: /Back/ })).toBeDisabled(),
+			Command.resolve(SendInvites, Message.SucceededSendInvites({ emails: ["grace@hazel.test"], failedCount: 0 })),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({ toast: { intent: "success", title: "Sent 1 invitation", description: null } }),
+			),
+			Command.resolve(ReplaceStepUrl, Message.CompletedReplaceStepUrl()),
+			expect(text("Setting up your workspace...")).toExist(),
+			Mount.expectEnded(AutoFocus),
+			Mount.resolve(EnterAnimation, settled),
+			Command.resolve(CompleteOnboarding, Message.FailedCompleteOnboarding({ error: "Failed to finalize onboarding" })),
+		)
+	})
+
+	test("when every invitation fails the address stays for another try", () => {
+		scene(
+			config,
+			given(ready("teamInvitation")),
+			firstMounts,
+			type(role("textbox", { name: "Email 1" }), "grace@hazel.test"),
+			click(role("button", { name: /Send invites/ })),
+			Command.resolve(SendInvites, Message.FailedSendInvites({ reason: "AllFailed" })),
+			expectOutMessage(errorToast("Failed to send invitations")),
+			expect(role("textbox", { name: "Email 1" })).toHaveValue("grace@hazel.test"),
+			expect(role("button", { name: /Send invites/ })).toBeEnabled(),
 		)
 	})
 })
