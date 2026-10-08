@@ -168,6 +168,8 @@ export interface SidebarChrome<ParentMessage> {
 	readonly orgSwitcher: Menu.Model
 	readonly organizations: ReadonlyArray<SwitcherOrg>
 	readonly userStatus: UserStatus | null
+	/** The status's "Until ..." label at the root's clock (a string, so the memo stays cheap). */
+	readonly statusExpiration: string | null
 	readonly toUserMenuMessage: (message: Menu.Message) => ParentMessage
 	readonly toOrgSwitcherMessage: (message: Menu.Message) => ParentMessage
 }
@@ -199,6 +201,7 @@ const sidebarBody = <ParentMessage>(
 	orgSwitcher: Menu.Model,
 	organizations: ReadonlyArray<SwitcherOrg>,
 	userStatus: UserStatus | null,
+	statusExpiration: string | null,
 	toUserMenuMessage: (message: Menu.Message) => ParentMessage,
 	toOrgSwitcherMessage: (message: Menu.Message) => ParentMessage,
 	...[orgSlug, pathname, orgName, orgLogoUrl, displayName, email, avatarUrl, appVersion]: ShellArgs
@@ -245,7 +248,7 @@ const sidebarBody = <ParentMessage>(
 				}),
 			),
 		]),
-		userMenuFooter(h, userMenu, shell, toUserMenuMessage, userStatus),
+		userMenuFooter(h, userMenu, shell, toUserMenuMessage, userStatus, statusExpiration),
 		dragDescription(h),
 	])
 }
@@ -290,6 +293,7 @@ export const view = <ParentMessage>(
 		chrome.orgSwitcher,
 		chrome.organizations,
 		chrome.userStatus,
+		chrome.statusExpiration,
 		chrome.toUserMenuMessage,
 		chrome.toOrgSwitcherMessage,
 		shell.orgSlug,

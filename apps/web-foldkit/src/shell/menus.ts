@@ -1,6 +1,5 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twJoin } from "tailwind-merge"
-import { formatStatusExpiration } from "~/utils/status"
 import {
 	IconChevronUpDown,
 	IconCirclePlus,
@@ -111,13 +110,29 @@ export const orgSwitcherEntries = (options: {
 
 const label = <M>(h: HtmlBuilder<M>, id: string, key: string, text: string) => menuLabel(h, id, key, text)
 
+/** Legacy `formatStatusExpiration` (`utils/status.ts`) at `nowMs` instead of `new Date()`. */
+export const formatStatusExpirationAt = (expiresAtMs: number | null, nowMs: number): string | null => {
+	if (expiresAtMs === null || expiresAtMs <= nowMs) return null
+	const expiry = new Date(expiresAtMs)
+	const diffMs = expiresAtMs - nowMs
+	const diffMins = Math.round(diffMs / (1000 * 60))
+	const diffHours = Math.round(diffMs / (1000 * 60 * 60))
+	if (diffMins < 60) return `${diffMins} min`
+	if (diffHours < 24) {
+		const timeStr = expiry.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+		return expiry.toDateString() === new Date(nowMs).toDateString() ? timeStr : `tomorrow ${timeStr}`
+	}
+	return expiry.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })
+}
+
 /** `StatusEmojiWithTooltip` with `interactive={false}`: the emoji with a native title (no quiet hours). */
-const statusEmojiTitled = <M>(h: HtmlBuilder<M>, status: UserStatus | null): ReadonlyArray<Html> => {
+const statusEmojiTitled = <M>(
+	h: HtmlBuilder<M>,
+	status: UserStatus | null,
+	expiration: string | null,
+): ReadonlyArray<Html> => {
 	if (!status?.emoji) return []
 	const { emoji, message } = status
-	const expiration = formatStatusExpiration(
-		status.expiresAtMs === null ? null : new Date(status.expiresAtMs),
-	)
 	const title = message
 		? `${emoji} ${message}${expiration ? ` • Until ${expiration}` : ""}`
 		: expiration
@@ -165,6 +180,8 @@ export const userMenuFooter = <M>(
 	context: ShellContext,
 	toMenuMessage: (message: Menu.Message) => M,
 	status: UserStatus | null,
+	/** `formatStatusExpirationAt` of the status, computed by the root from its clock. */
+	statusExpiration: string | null,
 ): Html => {
 	const displayName = context.currentUser?.displayName ?? "User"
 	return sidebarFooter(h, "flex flex-row justify-between gap-4 group-data-[state=collapsed]:flex-col", [
@@ -204,7 +221,7 @@ export const userMenuFooter = <M>(
 									h.div(
 										[h.Class("in-data-[collapsible=dock]:hidden min-w-0 text-sm")],
 										[
-											sidebarLabel(h, [displayName, ...statusEmojiTitled(h, status)]),
+											sidebarLabel(h, [displayName, ...statusEmojiTitled(h, status, statusExpiration)]),
 											...(context.currentUser?.email
 												? [
 														h.span(

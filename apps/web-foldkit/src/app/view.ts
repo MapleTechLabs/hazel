@@ -7,6 +7,7 @@ import { type AppRoute, isPublicRoute, orgSectionOf, orgSlugOf } from "../route"
 import { displayNameOf } from "../session"
 import { orgShell } from "../shell/app-shell"
 import * as ChannelsSidebar from "../shell/channels-sidebar"
+import { formatStatusExpirationAt } from "../shell/menus"
 import type { ShellContext } from "../shell/context"
 import {
 	appLoader,
@@ -119,6 +120,7 @@ const secondarySidebar = (model: Model, h: HtmlBuilder<Message>, context: ShellC
 		orgSwitcher: shell.orgSwitcher,
 		organizations: shell.userOrganizations,
 		userStatus: shell.userStatus,
+		statusExpiration: formatStatusExpirationAt(shell.userStatus?.expiresAtMs ?? null, model.nowMs),
 		toUserMenuMessage,
 		toOrgSwitcherMessage,
 	}

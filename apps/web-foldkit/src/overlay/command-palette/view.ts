@@ -179,7 +179,7 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, { sh
 								: page._tag === "JoinChannel"
 									? joinChannelPage(h, model, page)
 									: page._tag === "Search"
-										? searchPage(h, model, page)
+										? searchPage(h, model, page, shared.nowMs)
 										: h.empty,
 						],
 					}

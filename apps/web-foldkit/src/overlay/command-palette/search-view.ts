@@ -109,7 +109,7 @@ const autocompletePopover = (h: HtmlBuilder<Message>, model: Model): Html[] => {
 	]
 }
 
-const recentSearches = (h: HtmlBuilder<Message>, model: Model, page: SearchPage): Html =>
+const recentSearches = (h: HtmlBuilder<Message>, model: Model, page: SearchPage, nowMs: number): Html =>
 	h.div(
 		[h.Class("space-y-1")],
 		[
@@ -154,7 +154,7 @@ const recentSearches = (h: HtmlBuilder<Message>, model: Model, page: SearchPage)
 						),
 						h.span(
 							[h.Class("shrink-0 text-muted-fg text-xs")],
-							[formatDistanceToNow(search.timestamp, Date.now())],
+							[formatDistanceToNow(Math.min(search.timestamp, nowMs), nowMs)],
 						),
 					],
 				),
@@ -162,23 +162,24 @@ const recentSearches = (h: HtmlBuilder<Message>, model: Model, page: SearchPage)
 		],
 	)
 
-const content = (h: HtmlBuilder<Message>, model: Model, page: SearchPage): Html[] => {
+const content = (h: HtmlBuilder<Message>, model: Model, page: SearchPage, nowMs: number): Html[] => {
 	const { hasQuery, results } = model.search
 	if (hasQuery)
 		return results.length > 0
 			? [
 					h.div(
 						[h.Class("space-y-1")],
-						results.map((result, index) => searchResultItem(h, result, page.query, index === page.selectedIndex, index)),
+						results.map((result, index) => searchResultItem(h, result, page.query, index === page.selectedIndex, index, nowMs)),
 					),
 				]
 			: [emptyState(h, "No messages found matching your search")]
 	return model.recentSearches.length > 0
-		? [recentSearches(h, model, page)]
+		? [recentSearches(h, model, page, nowMs)]
 		: [emptyState(h, "Start typing to search messages across all channels")]
 }
 
-export const searchPage = (h: HtmlBuilder<Message>, model: Model, page: SearchPage): Html =>
+/** `nowMs` is the root's clock: relative times never read `Date.now()` in the view. */
+export const searchPage = (h: HtmlBuilder<Message>, model: Model, page: SearchPage, nowMs: number): Html =>
 	h.div(
 		[h.Class("flex max-h-[inherit] flex-col overflow-hidden")],
 		[
@@ -209,7 +210,7 @@ export const searchPage = (h: HtmlBuilder<Message>, model: Model, page: SearchPa
 						: []),
 				],
 			),
-			h.div([h.Class("flex-1 overflow-y-auto p-2")], content(h, model, page)),
+			h.div([h.Class("flex-1 overflow-y-auto p-2")], content(h, model, page, nowMs)),
 			footer(h),
 		],
 	)

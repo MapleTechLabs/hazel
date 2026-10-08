@@ -172,6 +172,7 @@ export const searchResultItem = (
 	query: string,
 	isSelected: boolean,
 	index: number,
+	nowMs: number,
 ): Html =>
 	h.keyed("button")(
 		result.messageId,
@@ -212,7 +213,7 @@ export const searchResultItem = (
 									]),
 							h.span(
 								[h.Class("ml-auto shrink-0 text-muted-fg text-xs")],
-								[formatDistanceToNow(result.createdAtMs, Date.now())],
+								[formatDistanceToNow(Math.min(result.createdAtMs, nowMs), nowMs)],
 							),
 						],
 					),

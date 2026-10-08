@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { ChannelId } from "@hazel/schema"
+import { ChannelId, MessageId } from "@hazel/schema"
 import { Schema } from "effect"
 import { Command, expectNoOutMessage, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
@@ -9,6 +9,7 @@ import { successToast } from "../out-message"
 import { CreateChannel, FocusInput, JoinChannel, SetPresenceStatus, TrackRecentChannel } from "./commands"
 import { Message, OutMessage } from "./message"
 import type { Model } from "./model"
+import { SaveRecentSearches } from "./search-mount"
 import { CREATE_CHANNEL_INPUT_ID, init, JOIN_CHANNEL_INPUT_ID, MENU_ID, open, update } from "./update"
 
 /** The palette's pages, back stack and actions (legacy `components/command-palette`). */
@@ -250,5 +251,45 @@ describe("home actions", () => {
 
 	test("an unknown key is ignored", () => {
 		story(run, given(opened), message(item("nope:1")), Command.expectNone(), expectNoOutMessage())
+	})
+})
+
+describe("search page", () => {
+	test("opening a result stamps the recent search with the root's clock", () => {
+		const nowMs = 1_700_000_000_000
+		const clocked = { ...shared, nowMs }
+		const messageId = Schema.decodeSync(MessageId)("00000000-0000-4000-8000-0000000000d1")
+		const searching: Model = {
+			...opened,
+			page: { _tag: "Search", query: "hello", rawInput: "hello", filters: [], selectedIndex: 0 },
+			search: {
+				isLoading: false,
+				hasQuery: true,
+				results: [
+					{
+						messageId,
+						channelId,
+						content: "hello there",
+						createdAtMs: nowMs - 60_000,
+						authorName: "Ada",
+						authorAvatarUrl: null,
+						channelName: "general",
+						attachmentCount: 0,
+					},
+				],
+			},
+		}
+		const recent = [{ query: "hello", filters: [], timestamp: nowMs }]
+		story(
+			(model: Model, msg: Message) => update(model, msg, clocked),
+			given(searching),
+			message(Message.ClickedSearchResult({ index: 0 })),
+			Command.expectExact(SaveRecentSearches({ searches: recent })),
+			expectOutMessage(
+				OutMessage.Completed({ href: `/hazel/chat/${channelId}?messageId=${messageId}`, toast: null }),
+			),
+			Command.resolve(SaveRecentSearches, Message.CompletedSaveRecentSearches()),
+			model((m) => expect(m.recentSearches).toEqual(recent)),
+		)
 	})
 })

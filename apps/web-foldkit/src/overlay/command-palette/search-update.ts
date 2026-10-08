@@ -67,7 +67,7 @@ const filterString = (filters: ReadonlyArray<SearchFilter>) =>
 const openResult = (model: Model, page: SearchPage, index: number, shared: Shared): Return => {
 	const result = model.search.results[index]
 	if (result === undefined) return { model }
-	const search = { query: page.query, filters: page.filters, timestamp: Date.now() }
+	const search = { query: page.query, filters: page.filters, timestamp: shared.nowMs }
 	const recent = model.search.hasQuery
 		? [
 				search,
