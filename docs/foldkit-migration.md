@@ -18,19 +18,18 @@ Certification runs (foldkit vs pin `639aa8d26`, `--strict-a11y`, port base 8000)
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | burndown-3 | 4b3d8b2a0 | 707 | 535 | 146 | 26 | 0 | 0 |
 | burndown-4 | 1b35c0235 | 758 | 563 | 175 | 20 | 0 | 0 |
+| burndown-5 | f8a0391a4 | 758 | 558 | 193 | 7 | 0 | 0 |
 
-burndown-3's calendar, date picker, date field and table sort failures are fixed (`fk/kit-a11y-final`). burndown-4's failures, being fixed on `fk/cert-fixes`:
-- New modal scenarios that were only verified without `--strict-a11y`: set-status date segment names, pending button colour, chat-sync modal success/exists states, link-channel search focus.
-- The GIF viewer drops the hovered message toolbar that legacy keeps behind it.
-- my-settings-profile-timezone is late under full-suite load (passes alone).
+burndown-5 is the certification result: the only failures are the 7 accepted legacy quirks below, every pass has 0 perceptual px and no structural deltas, and there are 0 behavioral differences. burndown-3's failures were fixed on `fk/kit-a11y-final`, burndown-4's on `fk/cert-fixes`.
 
 Accepted legacy quirks (not imitated):
 - `gallery-table-cell-keys` (2): React Aria's click announcement races the arrow-key announcements, so legacy's order varies per run; Foldkit's is the intended one.
 - `chat-rich-channel` mobile, `chat-heavy-channel`, `chat-heavy-small-channel` (5): legacy measures rows before content loads, so its ARIA tree differs at capture time.
+- `settings-chat-sync-add-connection-exists` and `-link-channel-exists` (pass at 0 px, outline delta in some runs): legacy refocuses the modal button after a failed submit only when the reply beats one animation frame (4 of 9 runs); Foldkit always refocuses.
 
 onboarding-timezone keeps about 31k strict, 0 perceptual px from compositor layering of Foldkit's star animation.
 
-Not ported: video playback (needs a playable fixture video, which changes the legacy `chat-attachments` capture, so a deliberate re-pin), agent steps in AI replies (no fixture data), GitHub PR and Linear URL embeds, Tauri-specific blocks. Phase 6 (platform polish) and the manual QA checklist (§5 last item) remain.
+Not ported: video playback (left for manual QA by decision on 2026-10-08; a fixture video would change the legacy `chat-attachments` capture), agent steps in AI replies (no fixture data), GitHub PR and Linear URL embeds, Tauri-specific blocks. Phase 6 (platform polish) and the manual QA checklist (§5 last item) remain.
 
 ## 1. Starting point
 
