@@ -15,7 +15,7 @@ export const Message = defineMessageUnion({
 	ClickedEscButton: {},
 	UpdatedChannels: { channels: Schema.Array(ChannelSummary) },
 	UpdatedDmChannels: { dmChannels: Schema.Array(DmChannel) },
-	UpdatedRecentChannelIds: { channelIds: Schema.Array(Schema.String) },
+	UpdatedRecentChannelIds: { channelIds: Schema.Array(ChannelId) },
 	UpdatedRecentChannels: { channels: Schema.Array(ChannelSummary) },
 	UpdatedMemberChannelIds: { channelIds: Schema.Array(ChannelId) },
 	UpdatedUnjoinedChannels: { channels: Schema.Array(ChannelSummary) },

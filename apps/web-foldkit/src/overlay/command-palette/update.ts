@@ -1,4 +1,5 @@
-import { Option } from "effect"
+import { ChannelId } from "@hazel/schema"
+import { Option, Schema } from "effect"
 import { Command, type Update } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import type { Shared } from "../../page/contract"
@@ -124,6 +125,8 @@ const PAGE_ACTIONS: Readonly<Record<string, Page>> = {
 	"pref:appearance": "appearance",
 }
 
+const decodeChannelId = Schema.decodeUnknownOption(ChannelId)
+
 const chatHref = (shared: Shared, channelId: string) => `/${shared.orgSlug ?? ""}/chat/${channelId}`
 
 /** A menu item's `onAction`, as each legacy `CommandMenuItem` defines it. */
@@ -137,7 +140,13 @@ const selectedItem = (model: Model, key: string, shared: Shared, current: PageSt
 	const { kind, value } = parseKey(key)
 	if (kind === "recent") return closedWith(model, chatHref(shared, value), null)
 	if (kind === "channel" || kind === "dm")
-		return { ...closedWith(model, chatHref(shared, value), null), commands: [TrackRecentChannel({ channelId: value })] }
+		return {
+			...closedWith(model, chatHref(shared, value), null),
+			commands: Option.match(decodeChannelId(value), {
+				onNone: () => [],
+				onSome: (channelId) => [TrackRecentChannel({ channelId })],
+			}),
+		}
 	const link = [...NAVIGATION, ...SETTINGS].find((entry) => entry.key === key)
 	if (link !== undefined) return closedWith(model, `/${shared.orgSlug ?? ""}${link.path}`, null)
 	const status = STATUS_OPTIONS.find((option) => `status:${option.value}` === key)

@@ -1,4 +1,4 @@
-import { Effect, Option, Schema } from "effect"
+import { Effect, Match, Option, Schema } from "effect"
 import { Command, type Runtime, Update } from "foldkit"
 import { UrlRequest } from "foldkit/navigation"
 import { modifyFields } from "foldkit/struct"
@@ -19,6 +19,7 @@ import { Model, resolvedThemeOf, sharedOf, shellContextOf } from "./app/model"
 import { toPageMessage } from "./app/view"
 import * as CommandPalette from "./overlay/command-palette"
 import type { Return as CommandPaletteReturn } from "./overlay/command-palette/update"
+import type { LayoutHotkeyActionId } from "./overlay/hotkeys"
 import * as Modal from "./overlay/modal"
 import * as Platform from "./platform"
 import * as Toasts from "./overlay/toaster"
@@ -132,17 +133,21 @@ const withCommandPalette = (model: Model, result: CommandPaletteReturn): Return 
 }
 
 /** `useAppHotkey` handlers in `$orgSlug/layout.tsx`. */
-const pressedHotkey = (model: Model, actionId: string): Return => {
+const pressedHotkey = (model: Model, actionId: LayoutHotkeyActionId): Return => {
 	const shared = sharedOf(model)
 	const openModal = (modal: Modal.ModalRequest) => withModal(model, Modal.open(model.modal, modal, shared))
-	if (actionId === "commandPalette.open" || actionId === "search.open")
-		// Legacy passes `initialPage`, but the palette shows its own (reset) page: always home.
-		return withCommandPalette(model, CommandPalette.open(model.commandPalette, "home", shared))
-	if (actionId === "channel.create")
-		return can(shared, "channel.create") ? openModal({ _tag: "NewChannel" }) : { model }
-	if (actionId === "dm.create") return openModal({ _tag: "CreateDm" })
-	if (actionId === "invite.email") return openModal({ _tag: "EmailInvite" })
-	return { model }
+	// Legacy passes `initialPage`, but the palette shows its own (reset) page: always home.
+	const openPalette = () => withCommandPalette(model, CommandPalette.open(model.commandPalette, "home", shared))
+	return Match.value(actionId).pipe(
+		Match.when("commandPalette.open", openPalette),
+		Match.when("search.open", openPalette),
+		Match.when("channel.create", () =>
+			can(shared, "channel.create") ? openModal({ _tag: "NewChannel" }) : { model },
+		),
+		Match.when("dm.create", () => openModal({ _tag: "CreateDm" })),
+		Match.when("invite.email", () => openModal({ _tag: "EmailInvite" })),
+		Match.exhaustive,
+	)
 }
 
 /** Runs the OutMessage's consequence after `result`, keeping both sets of Commands. */

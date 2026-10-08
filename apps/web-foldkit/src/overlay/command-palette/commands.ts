@@ -83,7 +83,7 @@ const decodeRecent = Schema.decodeUnknownOption(RecentChannels)
 
 /** `recentChannelsAtom`: the palette's `trackChannel`, newest first, at most eight. */
 export const TrackRecentChannel = Command.define("TrackRecentChannel", {
-	args: { channelId: Schema.String },
+	args: { channelId: ChannelId },
 	messages: [Message.CompletedTrackRecentChannel],
 	execute: ({ channelId }) =>
 		readJson(RECENT_CHANNELS_KEY).pipe(
@@ -100,9 +100,15 @@ export const TrackRecentChannel = Command.define("TrackRecentChannel", {
 		),
 })
 
-/** The recent channel ids, as `recentChannelsAtom` reads them. */
+const decodeChannelId = Schema.decodeUnknownOption(ChannelId)
+
+/** The recent channel ids, as `recentChannelsAtom` reads them, decoded at the storage boundary. */
 export const readRecentChannelIds = readJson(RECENT_CHANNELS_KEY).pipe(
-	Effect.map((raw) => Option.getOrElse(decodeRecent(raw), () => []).map((entry) => entry.channelId)),
+	Effect.map((raw) =>
+		Option.getOrElse(decodeRecent(raw), () => []).flatMap((entry) =>
+			Option.match(decodeChannelId(entry.channelId), { onNone: () => [], onSome: (id) => [id] }),
+		),
+	),
 )
 
 /** `autoFocus` on a form page's input, after the page renders. */

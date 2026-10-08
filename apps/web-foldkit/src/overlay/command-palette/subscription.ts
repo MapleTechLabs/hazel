@@ -130,7 +130,7 @@ const pageSubscriptions = Subscription.make<Input, Message>()((entry) => ({
 		},
 	),
 	recentChannels: entry(
-		{ organizationId: Schema.NullOr(OrganizationId), channelIds: Schema.Array(Schema.String) },
+		{ organizationId: Schema.NullOr(OrganizationId), channelIds: Schema.Array(ChannelId) },
 		{
 			modelToDependencies: (input) => ({
 				organizationId: contextOf(input, "Home").organizationId,

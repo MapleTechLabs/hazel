@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
+import { Option, Schema } from "effect"
 import { Command, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
 import { update } from "../main"
 import * as CommandPalette from "../overlay/command-palette"
 import { FocusInput, SetPresenceStatus } from "../overlay/command-palette/commands"
+import { LayoutHotkeyActionId } from "../overlay/hotkeys"
 import * as ChannelsSidebar from "../shell/channels-sidebar"
 import * as Shell from "../shell/model"
 import * as Platform from "../platform"
@@ -187,17 +189,10 @@ describe("hotkeys", () => {
 		)
 	})
 
-	test("an unknown action id does nothing", () => {
-		story(
-			update,
-			given(signedIn("/hazel/chat")),
-			message(Message.PressedHotkey({ actionId: "nope" })),
-			Command.expectNone(),
-			model((m) => {
-				expect(m.modal).toBeNull()
-				expect(m.commandPalette.isOpen).toBe(false)
-			}),
-		)
+	test("only the layout's action ids are a PressedHotkey", () => {
+		const decode = Schema.decodeUnknownOption(LayoutHotkeyActionId)
+		expect(Option.isSome(decode("dm.create"))).toBe(true)
+		expect(Option.isNone(decode("nope"))).toBe(true)
 	})
 })
 

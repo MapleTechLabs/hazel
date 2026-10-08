@@ -4,6 +4,7 @@ import { defineMessageUnion } from "foldkit/message"
 import { UrlRequest } from "foldkit/navigation"
 import { Url } from "foldkit/url"
 import * as CommandPalette from "../overlay/command-palette"
+import { LayoutHotkeyActionId } from "../overlay/hotkeys"
 import * as Modal from "../overlay/modal"
 import * as Toasts from "../overlay/toaster"
 import { PageMessage } from "../page/registry"
@@ -42,6 +43,6 @@ export const Message = defineMessageUnion({
 	GotToastsMessage: { message: Toasts.Message },
 	GotPlatformMessage: { message: Platform.Message },
 	/** A legacy `useAppHotkey` binding fired (`lib/hotkeys/hotkey-registry.ts` id). */
-	PressedHotkey: { actionId: Schema.String },
+	PressedHotkey: { actionId: LayoutHotkeyActionId },
 })
 export type Message = typeof Message.Type

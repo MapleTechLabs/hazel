@@ -86,7 +86,7 @@ export const Model = Schema.Struct({
 	menu: CommandMenu.Model,
 	channels: Schema.Array(ChannelSummary),
 	dmChannels: Schema.Array(DmChannel),
-	recentChannelIds: Schema.Array(Schema.String),
+	recentChannelIds: Schema.Array(ChannelId),
 	recentChannels: Schema.Array(ChannelSummary),
 	/** `userChannels` (every channel the user is a member of), the join page's first query. */
 	memberChannelIds: Schema.NullOr(Schema.Array(ChannelId)),
