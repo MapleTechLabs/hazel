@@ -128,15 +128,22 @@ export const segmentOrder = (kind: Kind): ReadonlyArray<SegmentType> =>
 			["year", "month", "day", "hour", "minute", "dayPeriod"].includes(type),
 		)
 
-export const segmentLimits = (type: SegmentType) =>
+/** useDateFieldState's getSegmentLimits: the day ends at the displayed month's length. */
+export const segmentLimits = (model: Model, type: SegmentType) =>
 	({
 		year: { min: 1, max: 9999 },
 		month: { min: 1, max: 12 },
-		day: { min: 1, max: 31 },
+		day: { min: 1, max: daysInDisplayedMonth(model) },
 		hour: { min: 1, max: 12 },
 		minute: { min: 0, max: 59 },
 		dayPeriod: { min: 0, max: 1 },
 	})[type]
+
+const daysInDisplayedMonth = (model: Model) => {
+	const year = model.values.year ?? model.placeholder.year
+	const month = model.values.month ?? model.placeholder.month
+	return new Date(Date.UTC(year, month, 0)).getUTCDate()
+}
 
 const completeValue = (model: Model): string | null => {
 	const isComplete = segmentOrder(model.kind).every((type) => model.values[type] !== null)
@@ -290,7 +297,7 @@ const setSegment = (model: Model, type: SegmentType, value: number): Model =>
 
 const cycle = (model: Model, type: SegmentType, amount: number): Model => {
 	const current = model.values[type]
-	const { min, max } = segmentLimits(type)
+	const { min, max } = segmentLimits(model, type)
 	if (current === null && type !== "dayPeriod") {
 		const placeholder = dateValueOf({
 			...model,
@@ -333,7 +340,7 @@ const typed = (model: Model, type: SegmentType, key: string): Update.Return<Mode
 	}
 	const entered = (model.enteredSegment === type ? model.enteredKeys : "") + key
 	if (!/^\d+$/.test(entered)) return { model }
-	const { max } = segmentLimits(type)
+	const { max } = segmentLimits(model, type)
 	const numberValue = Number(entered)
 	const segmentValue = numberValue > max ? Number(key) : numberValue
 	const next = setSegment(model, type, segmentValue)
@@ -370,8 +377,8 @@ const keyActions: Record<string, (model: Model, type: SegmentType) => Update.Ret
 	ArrowDown: (model, type) => ({ model: cycle(model, type, -1) }),
 	PageUp: (model, type) => ({ model: cycle(model, type, PAGE_STEP[type]) }),
 	PageDown: (model, type) => ({ model: cycle(model, type, -PAGE_STEP[type]) }),
-	Home: (model, type) => ({ model: setSegment(model, type, segmentLimits(type).min) }),
-	End: (model, type) => ({ model: setSegment(model, type, segmentLimits(type).max) }),
+	Home: (model, type) => ({ model: setSegment(model, type, segmentLimits(model, type).min) }),
+	End: (model, type) => ({ model: setSegment(model, type, segmentLimits(model, type).max) }),
 	ArrowLeft: (model, type) => focusNeighbour(model, type, -1),
 	ArrowRight: (model, type) => focusNeighbour(model, type, 1),
 	Backspace: (model, type) => backspace(model, type),

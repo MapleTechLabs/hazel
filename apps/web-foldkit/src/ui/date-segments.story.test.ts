@@ -46,8 +46,8 @@ describe("date segments story", () => {
 		)
 	})
 
-	// Bug: the day limit is always 31 (date-segments.ts:135), so February shows "31" while committing the 28th.
-	test.fails("ArrowDown below the first day of February wraps to the 28th", () => {
+	// T7: the day limit is the month's length, so February wraps to the 28th.
+	test("ArrowDown below the first day of February wraps to the 28th", () => {
 		story(
 			update,
 			given(date("2026-02-01")),
@@ -81,8 +81,11 @@ describe("date segments story", () => {
 			...announced("1"),
 			model((next) => expect(next.values.day).toBe(1)),
 			press("day", "End"),
-			...announced("31"),
-			model((next) => expect(next.committed).toBe("2026-06-30")),
+			...announced("30"),
+			model((next) => {
+				expect(next.values.day).toBe(30)
+				expect(next.committed).toBe("2026-06-30")
+			}),
 		)
 	})
 

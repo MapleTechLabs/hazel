@@ -87,7 +87,7 @@ export const dateSegments = <ParentMessage>(
 			)
 		const type = part.type
 		const id = Segments.segmentId(model, type)
-		const limits = Segments.segmentLimits(type)
+		const limits = Segments.segmentLimits(model, type)
 		const state = interaction ? Interaction.stateOf(interaction.model, id) : Interaction.idleState
 		return h.span(
 			[

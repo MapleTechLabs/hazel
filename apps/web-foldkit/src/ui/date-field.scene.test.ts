@@ -127,6 +127,8 @@ describe("date field scene", () => {
 			withError,
 			Scene.given(init({ id: "inv", kind: "date", value: "2026-02-28", isInvalid: true })),
 			Scene.expect(segment("day")).toHaveAttr("aria-invalid", "true"),
+			// T7: the day spinbutton ends at February's length.
+			Scene.expect(segment("day")).toHaveAttr("aria-valuemax", "28"),
 			Scene.expect(group).toHaveAttr("aria-describedby", "inv-selected inv-error"),
 			Scene.expect(Scene.text("Pick a weekday.")).toExist(),
 		)
