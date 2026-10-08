@@ -40,7 +40,11 @@ export const Model = Schema.Struct({
 	pinned: Popover.Model,
 	/** `urlImages` are a GIF or tweet photos (`ViewerImage` of type "url"); otherwise the attachments. */
 	imageViewer: Schema.NullOr(
-		Schema.Struct({ messageId: MessageId, index: Schema.Number, urlImages: Schema.NullOr(Schema.Array(ViewerUrlImage)) }),
+		Schema.Struct({
+			messageId: MessageId,
+			index: Schema.Number,
+			urlImages: Schema.NullOr(Schema.Array(ViewerUrlImage)),
+		}),
 	),
 	/** The toolbar's "Add reaction" picker while it is open. */
 	reactionPicker: Schema.NullOr(Schema.Struct({ messageId: MessageId, dialog: EmojiDialog.Model })),
@@ -206,8 +210,11 @@ export const update = (model: Model, message: Message, facts: MessageFacts): Ove
 			model.hoveredMessageId === messageId
 				? set(model, { hoverVersion: model.hoverVersion + 1 })
 				: set(model, { hoveredMessageId: messageId, hoverVersion: model.hoverVersion + 1 }),
+		// The viewer is a portal inside the list in legacy and covers the screen, so React sees no
+		// leave while it is open, even when the pointer moves before the viewer has rendered.
 		PointerLeftList: () => {
-			if (model.hoveredMessageId === null || model.isToolbarHovered) return { model }
+			if (model.hoveredMessageId === null || model.isToolbarHovered || model.imageViewer !== null)
+				return { model }
 			const version = model.hoverVersion + 1
 			return { model: { ...model, hoverVersion: version }, commands: [WaitForHideToolbar({ version })] }
 		},

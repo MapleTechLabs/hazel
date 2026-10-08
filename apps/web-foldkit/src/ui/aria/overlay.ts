@@ -257,8 +257,42 @@ export const containFocus = (root: HTMLElement | Element): (() => void) => {
 			: (tabbables[index === -1 || index === tabbables.length - 1 ? 0 : index + 1] ?? tabbables[0])
 		next?.focus()
 	}
+	// useFocusContainment's onBlur: a frame later, focus that fell to the body goes back to the
+	// element that lost it. React has already rendered a fast reply by then, while Foldkit renders
+	// it in that frame, so a pressed button that disabled itself takes focus once enabled again.
+	let frame = 0
+	let enabledObserver: MutationObserver | null = null
+	const stopWaiting = () => {
+		cancelAnimationFrame(frame)
+		enabledObserver?.disconnect()
+		enabledObserver = null
+	}
+	const isFocusLost = () => document.activeElement === null || document.activeElement === document.body
+	const onFocusOut = (event: Event) => {
+		const target = event.target
+		stopWaiting()
+		if (!(target instanceof HTMLElement)) return
+		frame = requestAnimationFrame(() => {
+			if (!isFocusLost() || !target.isConnected) return
+			if (!(target instanceof HTMLButtonElement && target.disabled)) return target.focus()
+			const observer = new MutationObserver(() => {
+				if (target.disabled) return
+				stopWaiting()
+				if (isFocusLost() && target.isConnected) target.focus()
+			})
+			observer.observe(target, { attributes: true, attributeFilter: ["disabled"] })
+			enabledObserver = observer
+		})
+	}
 	root.addEventListener("keydown", onKeyDown)
-	return () => root.removeEventListener("keydown", onKeyDown)
+	root.addEventListener("focusout", onFocusOut)
+	document.addEventListener("focusin", stopWaiting)
+	return () => {
+		stopWaiting()
+		root.removeEventListener("keydown", onKeyDown)
+		root.removeEventListener("focusout", onFocusOut)
+		document.removeEventListener("focusin", stopWaiting)
+	}
 }
 
 // MODAL OVERLAY (useViewportSize, DialogHeader/DialogFooter resize observers)

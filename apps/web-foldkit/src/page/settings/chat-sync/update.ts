@@ -3,6 +3,7 @@ import { Effect, Exit, Option } from "effect"
 import { Command, Update } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import { HazelRpc } from "../../../rpc"
+import * as Interaction from "../../../ui/aria/interaction"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
 import { failureToast, successToast } from "../../../ui/toast-exit"
@@ -12,9 +13,18 @@ import { addMenuEntries, Message, type Model } from "./model"
 import { fetchDiscordGuilds } from "./discord"
 import { fetchConnections } from "./rpc"
 import { ADD_CONNECTION_MODAL_ID, CreateConnection, FocusGuildSearch } from "./add-connection"
+import { embedInteraction } from "../integrations/shared/interaction"
 
 type Return = PageReturn<Model, Message>
 type Step = Update.StepWithOutMessage<Model, Message, PageOutMessage>
+
+export const interaction = embedInteraction<Model, Message>((message) =>
+	Message.GotInteractionMessage({ message }),
+)
+
+/** Interaction targets in the add connection modal. */
+export const GUILD_SEARCH_TARGET = "guild-search"
+export const CONNECT_TARGET = "connect"
 
 // COMMAND
 
@@ -100,6 +110,7 @@ export const init = (_route: unknown, shared: Shared): Return =>
 			deleteTarget: null,
 			deleteModal: Modal.init("chat-sync-delete"),
 			isDeleting: false,
+			interaction: Interaction.init(),
 		},
 		shared,
 	)
@@ -124,8 +135,7 @@ const foldAddModal = (model: Model, message: Modal.Message): Return => {
 		Message.GotAddModalMessage({ message: child }),
 	)
 	if (!next.model.isOpen) return { model: closedAddModal(model), commands }
-	const focus =
-		message._tag === "CompletedPortalModal" && hasGuildSearch(model) ? [FocusGuildSearch()] : []
+	const focus = message._tag === "CompletedPortalModal" && hasGuildSearch(model) ? [FocusGuildSearch()] : []
 	return { model: modifyFields(model, { addModal: () => next.model }), commands: [...commands, ...focus] }
 }
 
@@ -137,7 +147,11 @@ const submitConnection = (model: Model): Return => {
 	const guild = model.selectedGuild
 	if (organizationId === null || guild === null || model.isCreating) return { model }
 	return {
-		model: modifyFields(model, { isCreating: () => true }),
+		// The Connect button disables while it runs, which ends its hover (useHover).
+		model: modifyFields(model, {
+			isCreating: () => true,
+			interaction: (state) => Interaction.disabledTargets(state, [CONNECT_TARGET]),
+		}),
 		commands: [
 			CreateConnection({
 				organizationId,
@@ -152,7 +166,10 @@ const foldAddMenuOutMessage = Menu.OutMessage.match<Step>({
 	SelectedItem:
 		({ key }) =>
 		(model) => ({
-			model: key === "discord" ? modifyFields(model, { addModal: (modal) => Modal.open(modal).model }) : model,
+			model:
+				key === "discord"
+					? modifyFields(model, { addModal: (modal) => Modal.open(modal).model })
+					: model,
 		}),
 	ActivatedLink: () => (model) => ({ model }),
 })
@@ -280,6 +297,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			}),
 		}),
 		ClickedConnect: () => submitConnection(model),
+		GotInteractionMessage: ({ message }) => interaction.fold(model, message),
 		// `onSuccess()` reloads the list (a new query key), then `handleClose()`.
 		SucceededCreateConnection: () => {
 			const organizationId = model.requestedOrganizationId
@@ -290,7 +308,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 						organizationId === null ? connections : { _tag: "Loading" as const },
 				}),
 				commands: organizationId === null ? [] : [ListConnections({ organizationId })],
-				outMessage: PageOutMessage.RequestedToast({ toast: successToast("Discord connection created") }),
+				outMessage: PageOutMessage.RequestedToast({
+					toast: successToast("Discord connection created"),
+				}),
 			}
 		},
 		FailedCreateConnection: ({ title, description }) => ({

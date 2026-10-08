@@ -26,8 +26,8 @@ export interface AriaButtonOptions<Message> {
 	readonly preventFocusOnPress?: boolean
 	readonly onPress?: Message
 	/**
-	 * Hover, press and focus-visible state from the page's interaction Submodel. Without it the
-	 * button omits `data-rac`, so the shared variants fall back to native `:hover`/`:focus-visible`.
+	 * Hover, press and focus-visible state from the page's interaction Submodel. Without it an
+	 * enabled button omits `data-rac`, so the shared variants fall back to native `:hover`/`:focus-visible`.
 	 */
 	readonly interaction?: { readonly wiring: Interaction.Wiring<Message>; readonly target: string }
 	readonly attributes?: ReadonlyArray<Attribute<Message> | ChildAttribute>
@@ -78,7 +78,10 @@ export const ariaButton = <Message>(
 						}),
 						...Interaction.pressStyleAttributes(h, interaction.wiring.model, interaction.target),
 					]
-				: []),
+				: // RAC never hovers, presses or focuses a disabled button, unlike native `:hover`.
+					isDisabled
+					? [h.DataAttribute("rac", "")]
+					: []),
 			...(options.onPress !== undefined && !isDisabled && !isPending
 				? [h.OnClick(options.onPress)]
 				: []),

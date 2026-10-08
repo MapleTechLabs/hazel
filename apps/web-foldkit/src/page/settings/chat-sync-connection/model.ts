@@ -1,6 +1,7 @@
 import { ChannelId, OrganizationId, SyncChannelLinkId, SyncConnectionId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
+import * as Interaction from "../../../ui/aria/interaction"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
 import { DiscordChannel, DiscordResource } from "../chat-sync/discord"
@@ -64,6 +65,8 @@ export const Model = Schema.Struct({
 	isDeletingLink: Schema.Boolean,
 	disconnectModal: Modal.Model,
 	isDisconnecting: Schema.Boolean,
+	/** Hover, press and focus of the link modal's Link Channel button. */
+	interaction: Interaction.Model,
 })
 export type Model = typeof Model.Type
 
@@ -105,6 +108,7 @@ export const Message = defineMessageUnion({
 	ClickedCreateLink: {},
 	SucceededCreateLink: { successMessage: Schema.String },
 	FailedCreateLink: { title: Schema.String, description: Schema.NullOr(Schema.String) },
+	GotInteractionMessage: { message: Interaction.Message },
 })
 export type Message = typeof Message.Type
 

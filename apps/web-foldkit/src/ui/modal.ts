@@ -68,9 +68,15 @@ type PortalModalMessage = Extract<Message, { _tag: "CompletedPortalModal" | "Pre
 /** The Overlay + ModalOverlay + FocusScope behavior shared by Modal and Sheet. */
 export const PortalModal = Mount.defineStream("PortalModal", {
 	/** `restoresToPrevious`: a controlled overlay with no trigger returns focus to what had it before. */
-	args: { id: Schema.String, isDismissable: Schema.Boolean, restoresToPrevious: Schema.Boolean },
+	/** `autoFocusId`: an `autoFocus` element, focused on mount in place of the dialog (useDialog skips it then). */
+	args: {
+		id: Schema.String,
+		isDismissable: Schema.Boolean,
+		restoresToPrevious: Schema.Boolean,
+		autoFocusId: Schema.NullOr(Schema.String),
+	},
 	messages: [Message.CompletedPortalModal, Message.PressedOutside],
-	execute: ({ element, id, isDismissable, restoresToPrevious }) =>
+	execute: ({ element, id, isDismissable, restoresToPrevious, autoFocusId }) =>
 		Stream.callback<PortalModalMessage>((queue) =>
 			Effect.acquireRelease(
 				Effect.sync(() => {
@@ -81,7 +87,9 @@ export const PortalModal = Mount.defineStream("PortalModal", {
 					const overlay = element.querySelector<HTMLElement>("[data-modal-overlay]")
 					const releaseViewport = overlay ? trackViewportHeight(overlay) : () => undefined
 					const releaseParts = observeDialogParts(element)
-					document.getElementById(dialogId(id))?.focus({ preventScroll: true })
+					const autoFocus = autoFocusId === null ? null : document.getElementById(autoFocusId)
+					const initialFocus = autoFocus ?? document.getElementById(dialogId(id))
+					initialFocus?.focus({ preventScroll: true })
 					const releaseFocus = containFocus(element)
 					const releaseOutside = isDismissable
 						? watchInteractOutside(`[data-modal-content="${CSS.escape(id)}"]`, () =>
@@ -116,6 +124,10 @@ export type ViewInputs = Readonly<{
 	isBlurred?: boolean
 	closeButton?: boolean
 	className?: string
+	/** The id of the content's `autoFocus` element. */
+	autoFocusId?: string
+	/** A controlled Modal opened from an element outside DialogTrigger: FocusScope restores focus to it. */
+	restoresFocusToPrevious?: boolean
 }>
 
 export const view = Submodel.defineView<Model, Message, ViewInputs>((model, viewInputs, h) => {
@@ -159,7 +171,12 @@ const modalOverlay = <ParentMessage>(
 			h.Attribute("style", "display: contents;"),
 			h.OnMount(
 				Mount.mapMessage(
-					PortalModal({ id: model.id, isDismissable, restoresToPrevious: false }),
+					PortalModal({
+						id: model.id,
+						isDismissable,
+						restoresToPrevious: viewInputs.restoresFocusToPrevious ?? false,
+						autoFocusId: viewInputs.autoFocusId ?? null,
+					}),
 					send,
 				),
 			),

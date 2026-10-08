@@ -129,10 +129,13 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, view
 	const segments = model.segments
 	const selected = selectedDescription(segments)
 	const describedBy = selected === null ? undefined : descriptionId(model.id)
-	const nameAttributes =
-		viewInputs.ariaLabel === undefined
-			? [h.AriaLabelledBy(labelId(model.id))]
-			: [h.AriaLabel(viewInputs.ariaLabel), h.AriaLabelledBy(groupId(model.id))]
+	// Without a visible Label, React Aria names the group (and the trigger) by the group itself.
+	const isLabelled = viewInputs.ariaLabel === undefined && viewInputs.label !== undefined
+	const nameRef = isLabelled ? labelId(model.id) : groupId(model.id)
+	const nameAttributes = [
+		...(viewInputs.ariaLabel === undefined ? [] : [h.AriaLabel(viewInputs.ariaLabel)]),
+		h.AriaLabelledBy(nameRef),
+	]
 	const rootTarget = `${model.id}-root`
 	const triggerTarget = triggerId(model.id)
 	const trigger = h.button(
@@ -141,9 +144,7 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, view
 			h.Attribute("aria-expanded", model.isOpen ? "true" : "false"),
 			h.Attribute("aria-haspopup", "dialog"),
 			h.AriaLabel("Calendar"),
-			h.AriaLabelledBy(
-				`${triggerId(model.id)} ${viewInputs.ariaLabel === undefined ? labelId(model.id) : groupId(model.id)}`,
-			),
+			h.AriaLabelledBy(`${triggerId(model.id)} ${nameRef}`),
 			h.Class(datePickerTriggerClassName),
 			h.DataAttribute("rac", ""),
 			h.DataAttribute("react-aria-pressable", "true"),
@@ -190,7 +191,7 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, view
 							model: segments,
 							toParentMessage: (message) => Message.GotSegmentsMessage({ message }),
 							interaction: wiring,
-							labelledBy: viewInputs.ariaLabel === undefined ? labelId(model.id) : undefined,
+							labelledBy: isLabelled ? labelId(model.id) : undefined,
 							describedBy,
 							ariaLabel: viewInputs.ariaLabel,
 						}),
