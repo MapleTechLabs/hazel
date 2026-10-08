@@ -68,7 +68,7 @@ export const tooltipId = (id: string) => `${id}-tooltip`
 /** useTooltipTriggerState defaults. */
 const HIDE_DELAY = Duration.millis(500)
 
-const WaitForShowDelay = Command.define("WaitForShowDelay", {
+export const WaitForShowDelay = Command.define("WaitForShowDelay", {
 	args: { version: Schema.Number, delayMs: Schema.Number },
 	messages: [Message.CompletedWaitForShowDelay],
 	execute: ({ version, delayMs }) =>
@@ -77,7 +77,7 @@ const WaitForShowDelay = Command.define("WaitForShowDelay", {
 		),
 })
 
-const WaitForHideDelay = Command.define("WaitForHideDelay", {
+export const WaitForHideDelay = Command.define("WaitForHideDelay", {
 	args: { version: Schema.Number },
 	messages: [Message.CompletedWaitForHideDelay],
 	execute: ({ version }) =>
@@ -139,7 +139,7 @@ type TrackTriggerMessage = Exclude<
 	}
 >
 
-const TrackTrigger = Mount.defineStream("TrackTooltipTrigger", {
+export const TrackTrigger = Mount.defineStream("TrackTooltipTrigger", {
 	messages: [
 		Message.CompletedTrackTrigger,
 		Message.HoveredTrigger,
@@ -199,7 +199,7 @@ const TrackTrigger = Mount.defineStream("TrackTooltipTrigger", {
 
 type PortalTooltipMessage = Extract<Message, { _tag: "CompletedPortalTooltip" | "PressedEscape" }>
 
-const PortalTooltip = Mount.defineStream("PortalTooltip", {
+export const PortalTooltip = Mount.defineStream("PortalTooltip", {
 	args: { id: Schema.String, placement: Schema.String, offset: Schema.Number },
 	messages: [Message.CompletedPortalTooltip, Message.PressedEscape],
 	execute: ({ element, id, placement, offset }) =>

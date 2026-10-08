@@ -66,14 +66,14 @@ export type Message = typeof Message.Type
 
 export const itemId = (model: Model, key: string) => `${model.id}-${key}`
 
-const FocusItem = Command.define("FocusItem", {
+export const FocusItem = Command.define("FocusItem", {
 	args: { elementId: Schema.String },
 	messages: [Message.CompletedFocusItem],
 	execute: ({ elementId }) =>
 		Dom.focus(`#${CSS.escape(elementId)}`).pipe(Effect.ignore, Effect.as(Message.CompletedFocusItem())),
 })
 
-const AnnounceSelection = Command.define("AnnounceChoiceBoxSelection", {
+export const AnnounceSelection = Command.define("AnnounceChoiceBoxSelection", {
 	args: { message: Schema.String },
 	messages: [Message.CompletedAnnounceSelection],
 	execute: ({ message }) =>

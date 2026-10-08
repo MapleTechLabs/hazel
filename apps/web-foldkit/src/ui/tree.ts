@@ -52,7 +52,7 @@ export type Message = typeof Message.Type
 export const rowId = (model: Model, key: string) => `${model.id}-${key}`
 
 // NOTE: only moves focus when the tree element itself (or the chevron's row) still needs it.
-const FocusRow = Command.define("FocusRow", {
+export const FocusRow = Command.define("FocusRow", {
 	args: { rowElementId: Schema.String, onlyFromId: Schema.Option(Schema.String) },
 	messages: [Message.CompletedFocusRow],
 	execute: ({ rowElementId, onlyFromId }) =>

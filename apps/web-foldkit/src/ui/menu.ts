@@ -246,7 +246,7 @@ const searchKey = (
 
 // COMMAND
 
-const FocusElement = Command.define("FocusElement", {
+export const FocusElement = Command.define("FocusElement", {
 	args: { elementId: Schema.String },
 	messages: [Message.CompletedFocusElement],
 	execute: ({ elementId }) =>
@@ -258,7 +258,7 @@ const FocusElement = Command.define("FocusElement", {
 
 const TYPEAHEAD_RESET = Duration.millis(1000)
 
-const WaitForTypeaheadReset = Command.define("WaitForTypeaheadReset", {
+export const WaitForTypeaheadReset = Command.define("WaitForTypeaheadReset", {
 	args: { search: Schema.String },
 	messages: [Message.CompletedWaitForTypeaheadReset],
 	execute: ({ search }) =>

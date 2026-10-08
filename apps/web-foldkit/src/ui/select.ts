@@ -128,7 +128,7 @@ const searchKey = (model: Model, search: string, from: Option.Option<string>): O
 
 // COMMAND
 
-const FocusElement = Command.define("FocusSelectElement", {
+export const FocusElement = Command.define("FocusSelectElement", {
 	args: { elementId: Schema.String },
 	messages: [Message.CompletedFocusElement],
 	execute: ({ elementId }) =>
@@ -140,7 +140,7 @@ const FocusElement = Command.define("FocusSelectElement", {
 
 const TYPEAHEAD_RESET = Duration.millis(1000)
 
-const WaitForTypeaheadReset = Command.define("WaitForSelectTypeaheadReset", {
+export const WaitForTypeaheadReset = Command.define("WaitForSelectTypeaheadReset", {
 	args: { search: Schema.String },
 	messages: [Message.CompletedWaitForTypeaheadReset],
 	execute: ({ search }) =>

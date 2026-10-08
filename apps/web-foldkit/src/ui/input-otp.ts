@@ -108,7 +108,7 @@ const passwordManagerSelectors = [
 ].join(",")
 
 /** usePasswordManagerBadge: something other than the container at its right edge is a badge. */
-const CheckPasswordBadge = Command.define("CheckPasswordBadge", {
+export const CheckPasswordBadge = Command.define("CheckPasswordBadge", {
 	args: { id: Schema.String, delayMillis: Schema.Number },
 	messages: [Message.CompletedCheckPasswordBadge],
 	execute: ({ id, delayMillis }) =>
@@ -137,7 +137,7 @@ const CheckPasswordBadge = Command.define("CheckPasswordBadge", {
 })
 
 /** On focus the library selects from the last character (or the end). */
-const SetSelection = Command.define("SetSelection", {
+export const SetSelection = Command.define("SetSelection", {
 	args: { id: Schema.String, start: Schema.Number, end: Schema.Number },
 	messages: [Message.CompletedSetSelection],
 	execute: ({ id, start, end }) =>
@@ -149,7 +149,7 @@ const SetSelection = Command.define("SetSelection", {
 })
 
 /** After a value or focus change the library re-reads the input's selection (its 0/10/50ms timers). */
-const ReadSelection = Command.define("ReadSelection", {
+export const ReadSelection = Command.define("ReadSelection", {
 	args: { id: Schema.String },
 	messages: [Message.ChangedSelection],
 	execute: ({ id }) =>

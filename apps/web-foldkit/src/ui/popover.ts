@@ -54,7 +54,7 @@ export const update = (model: Model, message: Message): Update.Return<Model, Mes
 
 type PortalPopoverMessage = Extract<Message, { _tag: "CompletedPortalPopover" | "PressedOutside" }>
 
-const PortalPopover = Mount.defineStream("PortalPopover", {
+export const PortalPopover = Mount.defineStream("PortalPopover", {
 	args: { id: Schema.String, placement: Schema.String, offset: Schema.Number },
 	messages: [Message.CompletedPortalPopover, Message.PressedOutside],
 	execute: ({ element, id, placement, offset }) =>

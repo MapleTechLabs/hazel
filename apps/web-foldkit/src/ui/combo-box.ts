@@ -133,7 +133,7 @@ const stepKey = (items: ReadonlyArray<Item>, from: Option.Option<string>, direct
 
 // COMMAND
 
-const FocusInput = Command.define("FocusComboBoxInput", {
+export const FocusInput = Command.define("FocusComboBoxInput", {
 	args: { elementId: Schema.String },
 	messages: [Message.CompletedFocusInput],
 	execute: ({ elementId }) =>
@@ -207,7 +207,7 @@ const pressedInputKey = (model: Model, key: string): UpdateReturn => {
 	)
 }
 
-const Announce = Command.define("AnnounceComboBox", {
+export const Announce = Command.define("AnnounceComboBox", {
 	args: { message: Schema.String },
 	messages: [Message.CompletedAnnounce],
 	execute: ({ message }) =>

@@ -161,7 +161,7 @@ export type OutMessage = typeof OutMessage.Type
 // COMMAND
 
 /** React Aria's live announcer, from useCalendarBase. */
-const Announce = Command.define("AnnounceCalendar", {
+export const Announce = Command.define("AnnounceCalendar", {
 	args: {
 		message: Schema.String,
 		timeout: Schema.Number,
@@ -177,7 +177,7 @@ const Announce = Command.define("AnnounceCalendar", {
 const MINIMUM_DATE_SUFFIX = ", First available date"
 
 /** Focuses a day cell after the next render, which may show a different month. */
-const FocusCell = Command.define("FocusCalendarCell", {
+export const FocusCell = Command.define("FocusCalendarCell", {
 	args: { gridId: Schema.String, label: Schema.String },
 	messages: [Message.CompletedFocusCell],
 	execute: ({ gridId: grid, label }) =>

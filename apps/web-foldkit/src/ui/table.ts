@@ -97,7 +97,7 @@ export const cellId = (model: Model, row: string, column: string) => `${model.id
 export const columnId = (model: Model, column: string) => `${model.id}-${column}`
 
 // NOTE: a key press can move focus off the table before this runs; only redirect if it hasn't.
-const FocusRowFromTable = Command.define("FocusRowFromTable", {
+export const FocusRowFromTable = Command.define("FocusRowFromTable", {
 	args: { tableId: Schema.String, rowElementId: Schema.String },
 	messages: [Message.CompletedFocusRow],
 	execute: ({ tableId, rowElementId }) =>
@@ -109,7 +109,7 @@ const FocusRowFromTable = Command.define("FocusRowFromTable", {
 		}),
 })
 
-const Announce = Command.define("AnnounceTable", {
+export const Announce = Command.define("AnnounceTable", {
 	args: { message: Schema.String, timeout: Schema.Number },
 	messages: [Message.CompletedAnnounce],
 	execute: ({ message, timeout }) =>

@@ -43,7 +43,7 @@ const FOCUSABLE =
 	"button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]"
 
 // NOTE: reads document.activeElement when it runs, so queued presses each start from the latest focus.
-const FocusToolbarItem = Command.define("FocusToolbarItem", {
+export const FocusToolbarItem = Command.define("FocusToolbarItem", {
 	args: { label: Schema.String, direction: Schema.Literals(["Next", "Previous"]) },
 	messages: [Message.CompletedFocusToolbarItem],
 	execute: ({ label, direction }) =>

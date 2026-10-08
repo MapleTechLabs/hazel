@@ -181,7 +181,7 @@ export type OutMessage = typeof OutMessage.Type
 
 // COMMAND
 
-const FocusItem = Command.define("FocusListBoxItem", {
+export const FocusItem = Command.define("FocusListBoxItem", {
 	args: { elementId: Schema.String },
 	messages: [Message.CompletedFocusItem],
 	execute: ({ elementId }) =>
@@ -199,7 +199,7 @@ const FocusItem = Command.define("FocusListBoxItem", {
 		),
 })
 
-const WaitForTypeaheadReset = Command.define("WaitForListBoxTypeaheadReset", {
+export const WaitForTypeaheadReset = Command.define("WaitForListBoxTypeaheadReset", {
 	args: { search: Schema.String },
 	messages: [Message.CompletedWaitForTypeaheadReset],
 	execute: ({ search }) =>

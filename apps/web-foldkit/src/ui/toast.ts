@@ -105,7 +105,7 @@ export const StartTimer = Command.define("StartToastTimer", {
 	execute: ({ id, version }) => Effect.sync(() => Message.StartedTimer({ id, version, at: Date.now() })),
 })
 
-const PauseTimers = Command.define("PauseToastTimers", {
+export const PauseTimers = Command.define("PauseToastTimers", {
 	messages: [Message.PausedTimers],
 	execute: Effect.sync(() => Message.PausedTimers({ at: Date.now() })),
 })
@@ -124,7 +124,7 @@ export const WaitForRemoval = Command.define("WaitForToastRemoval", {
 		Effect.sleep(TIME_BEFORE_UNMOUNT).pipe(Effect.as(Message.CompletedWaitForRemoval({ id }))),
 })
 
-const FocusToaster = Command.define("FocusToaster", {
+export const FocusToaster = Command.define("FocusToaster", {
 	messages: [Message.CompletedFocusToaster],
 	execute: Dom.focus("[data-sonner-toaster]").pipe(
 		Effect.ignore,
