@@ -1,5 +1,3 @@
-// @vitest-environment jsdom
-// aria/interaction.ts reads `document` at import time (its subscriptions), so this needs a DOM.
 import { Command, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
 import { AnnounceSelection, FocusItem, init, Message, update } from "./choice-box"

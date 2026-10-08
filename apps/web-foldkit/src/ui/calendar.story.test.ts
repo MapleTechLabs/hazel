@@ -1,5 +1,3 @@
-// @vitest-environment jsdom
-// Interaction.subscriptions reads `document` at import time, so the Story needs a DOM environment.
 import { Option } from "effect"
 import { Command, expectNoOutMessage, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"

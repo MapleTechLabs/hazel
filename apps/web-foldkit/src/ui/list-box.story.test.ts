@@ -1,5 +1,3 @@
-// @vitest-environment jsdom
-// list-box.ts reads `document` at import time (its pointerup subscription), so this needs a DOM.
 import { Option } from "effect"
 import { Command, expectNoOutMessage, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"

@@ -1,5 +1,3 @@
-// @vitest-environment jsdom
-// aria/interaction.ts reads `document` at import time (its subscriptions), so this needs a DOM.
 import { Option } from "effect"
 import { Command, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
@@ -10,8 +8,10 @@ import { Announce, FocusRowFromTable, init, Message, sortOf, update } from "./ta
 const members = init({ id: "members", selectionMode: "single" })
 const invite = init({ id: "invite", selectionMode: "multiple", selectedKeys: ["grace"] })
 const selected = (text: string) => Announce({ message: text, timeout: 7000 })
-const sorted = (direction: string) => Announce({ message: `sorted by column  in ${direction} order`, timeout: 500 })
-const press = (row: string, rowText: string) => message(Message.PressedRow({ row, isSelectable: true, rowText }))
+const sorted = (direction: string) =>
+	Announce({ message: `sorted by column  in ${direction} order`, timeout: 500 })
+const press = (row: string, rowText: string) =>
+	message(Message.PressedRow({ row, isSelectable: true, rowText }))
 
 describe("table story", () => {
 	test("pressing a row in single mode replaces the selection and announces the row", () => {
@@ -102,11 +102,15 @@ describe("table story", () => {
 			message(Message.ClickedColumn({ column: "name" })),
 			Command.expectExact(sorted("ascending")),
 			Command.resolve(Announce, Message.CompletedAnnounce()),
-			model((next) => expect(sortOf(next)).toEqual(Option.some({ column: "name", direction: "ascending" }))),
+			model((next) =>
+				expect(sortOf(next)).toEqual(Option.some({ column: "name", direction: "ascending" })),
+			),
 			message(Message.ClickedColumn({ column: "name" })),
 			Command.expectExact(sorted("descending")),
 			Command.resolve(Announce, Message.CompletedAnnounce()),
-			model((next) => expect(sortOf(next)).toEqual(Option.some({ column: "name", direction: "descending" }))),
+			model((next) =>
+				expect(sortOf(next)).toEqual(Option.some({ column: "name", direction: "descending" })),
+			),
 		)
 	})
 
@@ -116,7 +120,9 @@ describe("table story", () => {
 			given(init({ id: "members", sort: { column: "name", direction: "ascending" } })),
 			message(Message.ClickedColumn({ column: "channels" })),
 			Command.expectNone(),
-			model((next) => expect(sortOf(next)).toEqual(Option.some({ column: "channels", direction: "ascending" }))),
+			model((next) =>
+				expect(sortOf(next)).toEqual(Option.some({ column: "channels", direction: "ascending" })),
+			),
 		)
 	})
 

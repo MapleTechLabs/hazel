@@ -1,5 +1,3 @@
-// @vitest-environment jsdom
-// jsdom only because ./aria/interaction reads `document` at import time.
 import { Command, expectNoOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
 import { FocusThumb, init, Message, update } from "./slider"

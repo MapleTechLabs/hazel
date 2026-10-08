@@ -196,47 +196,52 @@ const isModalityKey = (event: KeyboardEvent) =>
 		event.key === "Meta"
 	)
 
+// The streams are suspended so importing this module never touches `document` (B5).
 export const subscriptions = Subscription.make<Model, Message>()(() => ({
 	modality: Subscription.persistentEntry(
-		Stream.mergeAll(
-			[
-				Dom.streamFromEventFilterMap({
-					target: document,
-					type: "keydown",
-					filterMapEvent: (event) =>
-						isModalityKey(event)
-							? Option.some(Message.PressedDocumentKey({ key: event.key }))
-							: Option.none(),
-					options: { capture: true },
-				}),
-				Dom.streamFromEventFilterMap({
-					target: document,
-					type: "keyup",
-					filterMapEvent: (event) =>
-						isModalityKey(event)
-							? Option.some(Message.ReleasedDocumentKey({ key: event.key }))
-							: Option.none(),
-					options: { capture: true },
-				}),
-				Dom.streamFromEvent({
-					target: document,
-					type: "pointerdown",
-					mapEvent: () => Message.PressedDocumentPointer(),
-					options: { capture: true },
-				}),
-			],
-			{ concurrency: "unbounded" },
+		Stream.suspend(() =>
+			Stream.mergeAll(
+				[
+					Dom.streamFromEventFilterMap({
+						target: document,
+						type: "keydown",
+						filterMapEvent: (event) =>
+							isModalityKey(event)
+								? Option.some(Message.PressedDocumentKey({ key: event.key }))
+								: Option.none(),
+						options: { capture: true },
+					}),
+					Dom.streamFromEventFilterMap({
+						target: document,
+						type: "keyup",
+						filterMapEvent: (event) =>
+							isModalityKey(event)
+								? Option.some(Message.ReleasedDocumentKey({ key: event.key }))
+								: Option.none(),
+						options: { capture: true },
+					}),
+					Dom.streamFromEvent({
+						target: document,
+						type: "pointerdown",
+						mapEvent: () => Message.PressedDocumentPointer(),
+						options: { capture: true },
+					}),
+				],
+				{ concurrency: "unbounded" },
+			),
 		),
 	),
 	// usePress ends a pointer press on pointerup anywhere in the document. Always subscribed:
 	// restarting the stream per press would cost a fiber (and a seeded random draw) each time.
 	pointerRelease: Subscription.persistentEntry(
-		Dom.streamFromEvent({
-			target: document,
-			type: "pointerup",
-			mapEvent: () => Message.ReleasedPointer(),
-			options: { capture: true },
-		}),
+		Stream.suspend(() =>
+			Dom.streamFromEvent({
+				target: document,
+				type: "pointerup",
+				mapEvent: () => Message.ReleasedPointer(),
+				options: { capture: true },
+			}),
+		),
 	),
 }))
 
