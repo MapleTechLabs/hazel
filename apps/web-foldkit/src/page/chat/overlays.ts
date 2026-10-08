@@ -417,6 +417,22 @@ export const ownsRow = (model: Model, messageId: MessageId): boolean =>
 	(model.contextMenu !== null && model.contextMenu.messageId === messageId) ||
 	(model.popover !== null && messageIdOfKey(model.popover.key) === messageId)
 
+/**
+ * Rows left the window (deleted, or the window slid): a viewer on a gone message closes, and a
+ * toolbar on a gone message hides (the open viewer kept `PointerLeftList` from hiding it).
+ */
+export const forgetMissingMessages = (model: Model, isShown: (messageId: MessageId) => boolean): Model => {
+	const isViewerGone = model.imageViewer !== null && !isShown(model.imageViewer.messageId)
+	const isHoverGone = model.hoveredMessageId !== null && !isShown(model.hoveredMessageId)
+	if (!isViewerGone && !isHoverGone) return model
+	return {
+		...model,
+		imageViewer: isViewerGone ? null : model.imageViewer,
+		hoveredMessageId: isHoverGone ? null : model.hoveredMessageId,
+		hoverVersion: isHoverGone ? model.hoverVersion + 1 : model.hoverVersion,
+	}
+}
+
 /** The thread panel opens on a thread (a preview click, or a thread created from a message). */
 export const openThread = (model: Model, threadChannelId: ChannelId, messageId: MessageId): Model =>
 	model.thread?.threadChannelId === threadChannelId && model.thread.messageId === messageId

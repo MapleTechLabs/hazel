@@ -140,8 +140,10 @@ const deriveRows = (current: Model): PageReturn => {
 	const requested = requestUnfurls(current, [...current.messages, ...current.threadMessages])
 	const model = requested.model
 	const rows = toDisplayRows(model.messages, model.reactions, deriveContextOf(model), model.rows)
+	const isShown = (messageId: MessageId) => rows.some((row) => row.key === messageId)
 	const withRows = modifyFields(model, {
 		rows: () => rows,
+		overlays: (overlays) => Overlays.forgetMissingMessages(overlays, isShown),
 		replyIds: (previous) => shareIds(previous, replyIdsOf(model.messages)),
 		threadIds: (previous) => shareIds(previous, threadIdsOf(model.messages)),
 	})

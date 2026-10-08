@@ -433,16 +433,29 @@ describe("image viewer", () => {
 		)
 	})
 
-	// BUG: the viewer's message can leave the window (deleted, or the window slid). The view then
-	// renders nothing, but `imageViewer` stays set, so `PointerLeftList` is ignored for good and the
-	// hover toolbar never hides.
-	test.fails("the viewer closes when its message leaves the window", () => {
+	// The view renders nothing for a viewer whose message left the window, so the viewer closes; it
+	// would otherwise keep `PointerLeftList` from ever hiding the hover toolbar.
+	test("the viewer closes when its message leaves the window", () => {
 		story(
 			updateWithShared,
 			given(withImages()),
 			message(overlays(Overlays.Message.ClickedAttachmentImage({ messageId: graceMessageId, index: 0 }))),
 			message(Message.ChangedMessages({ order: [adaMessageId], upserts: [] })),
 			model((current) => expect(current.overlays.imageViewer).toBeNull()),
+		)
+	})
+
+	test("the hover toolbar of a message that left the window hides; another message's stays", () => {
+		story(
+			updateWithShared,
+			given(withImages()),
+			message(overlays(Overlays.Message.PointerEnteredMessage({ messageId: graceMessageId }))),
+			message(overlays(Overlays.Message.ClickedAttachmentImage({ messageId: graceMessageId, index: 0 }))),
+			message(Message.ChangedMessages({ order: [adaMessageId], upserts: [] })),
+			model((current) => expect(current.overlays.hoveredMessageId).toBeNull()),
+			message(overlays(Overlays.Message.PointerEnteredMessage({ messageId: adaMessageId }))),
+			message(Message.UpdatedReactions({ reactions: [] })),
+			model((current) => expect(current.overlays.hoveredMessageId).toBe(adaMessageId)),
 		)
 	})
 })
