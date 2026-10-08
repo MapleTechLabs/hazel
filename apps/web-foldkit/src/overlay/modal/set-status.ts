@@ -1,12 +1,15 @@
-import { UserId } from "@hazel/schema"
+import { OrganizationId, UserId } from "@hazel/schema"
 import { eq } from "@tanstack/db"
-import { Effect, Schema, Stream } from "effect"
+import { Effect, Option, Schema, Stream } from "effect"
 import { Command, Subscription } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import { userPresenceStatusCollection } from "~/db/collections"
 import { liveQueryStream } from "../../data/live-query"
+import * as EmojiDialog from "../../emoji-picker/dialog"
+import { customEmojisStream } from "../../page/chat/lookup-data"
 import type { Shared } from "../../page/contract"
 import { HazelRpc } from "../../rpc"
+import * as DatePicker from "../../ui/date-picker"
 import * as Segments from "../../ui/date-segments"
 import * as Select from "../../ui/select"
 import { toastForCause } from "../action"
@@ -15,6 +18,7 @@ import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalSubscriptionInput } from "./contract"
 import { initFrame, isFrameClosed } from "./frame"
 import {
+	customDateOf,
 	EXPIRATION_OPTIONS,
 	expirationDate,
 	expirationOf,
@@ -72,8 +76,10 @@ const expirationChanged = (model: Model, result: ReturnType<typeof Select.update
 	const isCustom = result.outMessage !== undefined && result.outMessage.key === "custom"
 	const withDefaults = isCustom
 		? modifyFields(next, {
-				customDate: (current) =>
-					current ?? Segments.init({ id: `${ID}-date`, kind: "date", value: todayValue(shared.nowMs) }),
+				customDate: (current) => {
+					const today = todayValue(shared.nowMs)
+					return current ?? DatePicker.init({ id: `${ID}-date`, today, value: today, minValue: today })
+				},
 				customTime: (current) =>
 					current ?? Segments.init({ id: `${ID}-time`, kind: "time", value: nextHourValue(shared.nowMs) }),
 			})
@@ -84,9 +90,34 @@ const expirationChanged = (model: Model, result: ReturnType<typeof Select.update
 	}
 }
 
+const customDateChanged = (model: Model, message: DatePicker.Message): Return => {
+	if (model.customDate === null) return { model }
+	const result = DatePicker.update(model.customDate, message)
+	return {
+		model: withExpirationItems({ ...model, customDate: result.model }),
+		commands: Command.mapMessages(result.commands ?? [], (child) =>
+			Message.GotCustomDateMessage({ message: child }),
+		),
+	}
+}
+
+/** `EmojiPickerDialog onEmojiSelect={(e) => setEmoji(e.emoji)}`; the dialog closes itself. */
+const emojiPickerChanged = (model: Model, message: EmojiDialog.Message): Return => {
+	const result = EmojiDialog.update(model.emojiPicker, message)
+	return {
+		model: modifyFields(model, {
+			emojiPicker: () => result.model,
+			emoji: (emoji) => (result.outMessage === undefined ? emoji : result.outMessage.emoji),
+		}),
+		commands: Command.mapMessages(result.commands ?? [], (child) =>
+			Message.GotEmojiPickerMessage({ message: child }),
+		),
+	}
+}
+
 const segmentsChanged = (
 	model: Model,
-	field: "customDate" | "customTime",
+	field: "customTime",
 	message: Segments.Message,
 	toMessage: (message: Segments.Message) => Message,
 ): Return => {
@@ -99,24 +130,22 @@ const segmentsChanged = (
 	}
 }
 
+/**
+ * Legacy seeds its `useState`s when `UserMenu` mounts, before the presence row has synced, and
+ * `handleOpenChange` never runs for a state-driven open: the form starts empty. Presence only
+ * decides "Clear status".
+ */
 const presenceUpdated = (model: Model, presence: Presence | null): Return => ({
-	model: model.hasSeeded
-		? modifyFields(model, { presence: () => presence })
-		: modifyFields(model, {
-				presence: () => presence,
-				hasSeeded: () => true,
-				emoji: () => presence?.statusEmoji ?? null,
-				message: () => presence?.customMessage ?? "",
-				pauseNotifications: () => presence?.suppressNotifications ?? false,
-			}),
+	model: modifyFields(model, { presence: () => presence }),
 })
 
 const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
 		GotFrameMessage: ({ message }) => (isFrameClosed(model.frame, message) ? { model, outMessage: closed } : { model }),
 		GotExpirationMessage: ({ message }) => expirationChanged(model, Select.update(model.expiration, message), shared),
-		GotCustomDateMessage: ({ message }) =>
-			segmentsChanged(model, "customDate", message, (child) => Message.GotCustomDateMessage({ message: child })),
+		GotCustomDateMessage: ({ message }) => customDateChanged(model, message),
+		GotEmojiPickerMessage: ({ message }) => emojiPickerChanged(model, message),
+		UpdatedCustomEmojis: ({ emojis }) => ({ model: modifyFields(model, { customEmojis: () => emojis }) }),
 		GotCustomTimeMessage: ({ message }) =>
 			segmentsChanged(model, "customTime", message, (child) => Message.GotCustomTimeMessage({ message: child })),
 		UpdatedPresence: ({ presence }) => presenceUpdated(model, presence),
@@ -139,7 +168,7 @@ const update = (model: Model, message: Message, shared: Shared): Return =>
 								statusEmoji: model.emoji,
 								customMessage: model.message || null,
 								expiration: expirationOf(model),
-								customDate: model.customDate?.committed ?? null,
+								customDate: customDateOf(model),
 								customTime: model.customTime?.committed ?? null,
 								suppressNotifications: model.pauseNotifications,
 							}),
@@ -168,7 +197,18 @@ interface PresenceRow {
 }
 
 /** `currentUserPresenceAtomFamily`: the user's newest presence row. */
-const subscriptions = Subscription.make<ModalSubscriptionInput<Model>, Message>()((entry) => ({
+const dataSubscriptions = Subscription.make<ModalSubscriptionInput<Model>, Message>()((entry) => ({
+	// `CustomEmojiSection`'s `customEmojisForOrgAtomFamily`.
+	customEmojis: entry(
+		{ organizationId: Schema.NullOr(OrganizationId) },
+		{
+			modelToDependencies: (input) => ({ organizationId: input.shared.organization?.id ?? null }),
+			dependenciesToStream: ({ organizationId }) =>
+				organizationId === null
+					? Stream.empty
+					: customEmojisStream(organizationId, (emojis) => Message.UpdatedCustomEmojis({ emojis })),
+		},
+	),
 	presence: entry(
 		{ userId: Schema.NullOr(UserId) },
 		{
@@ -201,6 +241,17 @@ const subscriptions = Subscription.make<ModalSubscriptionInput<Model>, Message>(
 	),
 }))
 
+/** The custom date's calendar (hover, press and focus modality) while "custom" is picked. */
+const datePickerSubscriptions = Subscription.lift(DatePicker.subscriptions)<ModalSubscriptionInput<Model>, Message>({
+	read: (input) => Option.fromNullishOr(input.model.customDate),
+	toParentMessage: (message) => Message.GotCustomDateMessage({ message }),
+})
+
+const subscriptions = Subscription.aggregate<ModalSubscriptionInput<Model>, Message>()(
+	dataSubscriptions,
+	datePickerSubscriptions,
+)
+
 export const modal = defineModal(
 	"SetStatus",
 	{ request: Requests.SetStatus, Model, Message },
@@ -209,8 +260,9 @@ export const modal = defineModal(
 			model: {
 				frame: initFrame(ID),
 				presence: null,
-				hasSeeded: false,
 				emoji: null,
+				emojiPicker: EmojiDialog.init(`${ID}-emoji-picker`),
+				customEmojis: [],
 				message: "",
 				expiration: Select.init({
 					id: `${ID}-expiration-select`,
