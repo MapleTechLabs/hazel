@@ -2,8 +2,8 @@ import { ChannelId } from "@hazel/schema"
 import { Schema } from "effect"
 import { describe, expect, test, vi } from "vitest"
 import { chatMessageOf, liveEmbeds } from "../../../test/chat-messages"
-import { adaMemberId, adaMessageId, loadedModel, messages, shared } from "./fixtures.test-support"
-import type { Model } from "./model"
+import { adaMemberId, adaMessageId, loadedModel, messages, shared, updateWithShared } from "./fixtures.test-support"
+import { Message, type Model } from "./model"
 import { subscriptions } from "./subscription"
 
 /** Which Model slices gate the channel's Subscriptions (a changed dependency restarts the stream). */
@@ -36,9 +36,18 @@ describe("channel subscription gates", () => {
 
 	test("an AI reply in the window opens its actor connection; finished ones never do", () => {
 		const live = chatMessageOf(10, { embeds: liveEmbeds, hasEmbeds: true })
-		const model = { ...loadedModel(), messages: [live, ...messages] }
+		const model = updateWithShared(loadedModel(), Message.UpdatedMessages({ messages: [live, ...messages] })).model
 		expect(subscriptions.chatLiveReplies.modelToDependencies(input(model))).toEqual({ messageIds: [live.id] })
-		expect(subscriptions.chatLiveReplies.modelToDependencies(input(loadedModel()))).toEqual({ messageIds: [] })
+		const idle = updateWithShared(loadedModel(), Message.UpdatedMessages({ messages })).model
+		expect(subscriptions.chatLiveReplies.modelToDependencies(input(idle))).toEqual({ messageIds: [] })
+	})
+
+	test("a new live reply keeps the running stream; only the last one leaving stops it", () => {
+		const { keepAliveEquivalence } = subscriptions.chatLiveReplies
+		const first = chatMessageOf(10, { embeds: liveEmbeds, hasEmbeds: true })
+		const second = chatMessageOf(11, { embeds: liveEmbeds, hasEmbeds: true })
+		expect(keepAliveEquivalence({ messageIds: [first.id] }, { messageIds: [first.id, second.id] })).toBe(true)
+		expect(keepAliveEquivalence({ messageIds: [first.id] }, { messageIds: [] })).toBe(false)
 	})
 
 	test("global typing is off on the Files tab", () => {
@@ -47,15 +56,13 @@ describe("channel subscription gates", () => {
 		expect(subscriptions.globalTyping.modelToDependencies(input(loadedModel()))).toEqual({ isActive: true })
 	})
 
-	// BUG: `chatLiveReplies` reads `model.messages` only. An AI reply streaming in the open thread panel
-	// (`threadMessages`) never connects, so it shows the idle "Thinking" block until the cached snapshot lands.
-	test.fails("an AI reply streaming in the open thread panel opens its actor connection", () => {
+	test("an AI reply streaming in the open thread panel opens its actor connection", () => {
 		const live = chatMessageOf(20, { channelId: threadChannelId, embeds: liveEmbeds, hasEmbeds: true })
-		const model: Model = {
+		const opened: Model = {
 			...loadedModel(),
 			overlays: { ...loadedModel().overlays, thread: { threadChannelId, messageId: adaMessageId } },
-			threadMessages: [live],
 		}
+		const model = updateWithShared(opened, Message.UpdatedThreadPanelMessages({ messages: [live] })).model
 		expect(subscriptions.chatLiveReplies.modelToDependencies(input(model)).messageIds).toContain(live.id)
 	})
 })

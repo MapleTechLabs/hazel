@@ -45,16 +45,6 @@ type Input = PageSubscriptionInput<Model>
 const byChannel = { channelId: ChannelId }
 const channelOf = ({ model }: Input) => ({ channelId: model.channelId })
 
-// Recomputed only when the loaded messages change, not on every scroll Message.
-const liveIdsCache = new WeakMap<object, ReadonlyArray<MessageId>>()
-const liveMessageIdsOf = (model: Model) => {
-	const cached = liveIdsCache.get(model.messages)
-	if (cached !== undefined) return cached
-	const ids = Live.connectedMessageIds(model.messages)
-	liveIdsCache.set(model.messages, ids)
-	return ids
-}
-
 const chat = Subscription.make<Input, Message>()((entry) => ({
 	chatChannel: entry(byChannel, {
 		modelToDependencies: channelOf,
@@ -85,15 +75,20 @@ const chat = Subscription.make<Input, Message>()((entry) => ({
 				),
 		},
 	),
-	// `MessageLive.Provider` -> `useMessageActor`: one actor connection per live AI reply.
+	// `MessageLive.Provider` -> `useMessageActor`: one actor connection per live AI reply. The stream
+	// stays up while any reply is live and connects or disposes replies by id, so the others keep theirs.
 	chatLiveReplies: entry(
 		{ messageIds: Schema.Array(MessageId) },
 		{
-			modelToDependencies: ({ model }) => ({ messageIds: liveMessageIdsOf(model) }),
-			dependenciesToStream: ({ messageIds }) =>
-				Stream.mergeAll(messageIds.map(Live.liveEventStream), { concurrency: "unbounded" }).pipe(
-					Stream.map((message) => Message.GotLiveMessage({ message })),
-				),
+			modelToDependencies: ({ model }) => ({ messageIds: model.liveIds }),
+			keepAliveEquivalence: (previous, next) =>
+				(previous.messageIds.length === 0) === (next.messageIds.length === 0),
+			dependenciesToStream: ({ messageIds }, readDependencies) =>
+				messageIds.length === 0
+					? Stream.empty
+					: Live.liveRepliesStream(() => readDependencies().messageIds).pipe(
+							Stream.map((message) => Message.GotLiveMessage({ message })),
+						),
 		},
 	),
 	chatReactions: entry(byChannel, {

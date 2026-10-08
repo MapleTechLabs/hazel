@@ -1,7 +1,7 @@
 import { ACTOR_SERVICE_ERROR_UI_MESSAGE, isTemporaryActorServiceError } from "@hazel/domain"
 import type { MessageEmbed } from "@hazel/domain/models"
 import { MessageId } from "@hazel/schema"
-import { Effect, Option, Queue, Schema, Stream } from "effect"
+import { Duration, Effect, FiberMap, Option, Queue, Ref, Schedule, Schema, Stream } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import { defineTaggedUnion } from "foldkit/schema"
 
@@ -183,28 +183,96 @@ const snapshotEvent = (state: unknown): Option.Option<LiveEvent> =>
 		),
 	)
 
+/** The token fetch, the connection, or the state fetch on open failed for one reply. */
+export class LiveConnectionError extends Schema.TaggedError<LiveConnectionError>()("LiveConnectionError", {
+	messageId: MessageId,
+	stage: Schema.Literals(["connect", "state"]),
+	cause: Schema.Defect(),
+}) {}
+
+/** `getOrCreate([messageId], { params: { token } }).connect()` with every actor event forwarded. */
+const openConnection = (
+	messageId: MessageId,
+	offer: (event: Option.Option<LiveEvent>) => void,
+	onOpen: () => void,
+) =>
+	Effect.tryPromise({
+		try: async () => {
+			const { rivetClient, getAccessToken } = await import("~/lib/rivet-client")
+			const token = await getAccessToken()
+			const connection = rivetClient.message.getOrCreate([messageId], { params: { token: token ?? "" } }).connect()
+			connection.onOpen(onOpen)
+			for (const [name, decode] of eventDecoders)
+				connection.on(name, (payload: unknown) => offer(decode(payload)))
+			return connection
+		},
+		catch: (cause) => new LiveConnectionError({ messageId, stage: "connect", cause }),
+	})
+
 /**
- * One message's actor connection: `getOrCreate([messageId], { params: { token } }).connect()`, the
- * state fetched on open, then every event. Disposed when the Stream ends (the row leaves the page).
+ * One message's actor connection: the state fetched on every open, then every event. Disposed when
+ * the Stream ends (the row leaves the page). A failure ends only this reply's connection (legacy
+ * leaves the row idle), it never reaches the other replies or the runtime.
  */
 export const liveEventStream = (messageId: MessageId): Stream.Stream<Message> =>
 	Stream.callback<Message>((queue) =>
-		Effect.acquireRelease(
-			Effect.promise(async () => {
-				const { rivetClient, getAccessToken } = await import("~/lib/rivet-client")
-				const token = await getAccessToken()
-				const offer = (event: Option.Option<LiveEvent>) => {
-					if (Option.isSome(event))
-						Queue.offerUnsafe(queue, Message.ReceivedLiveEvent({ messageId, event: event.value }))
-				}
-				const connection = rivetClient.message.getOrCreate([messageId], { params: { token: token ?? "" } }).connect()
-				connection.onOpen(() => {
-					void connection.getState().then((state: unknown) => offer(snapshotEvent(state)))
-				})
-				for (const [name, decode] of eventDecoders)
-					connection.on(name, (payload: unknown) => offer(decode(payload)))
-				return connection
-			}),
-			(connection) => Effect.promise(() => connection.dispose()),
-		).pipe(Effect.flatMap(() => Effect.never)),
+		Effect.gen(function* () {
+			const offer = (event: Option.Option<LiveEvent>) => {
+				if (Option.isSome(event))
+					Queue.offerUnsafe(queue, Message.ReceivedLiveEvent({ messageId, event: event.value }))
+			}
+			const opened = yield* Queue.unbounded<void>()
+			const connection = yield* Effect.acquireRelease(
+				openConnection(messageId, offer, () => Queue.offerUnsafe(opened, undefined)),
+				(connection) => Effect.tryPromise(() => connection.dispose()).pipe(Effect.ignore),
+			)
+			// Scoped to the stream: a late `getState` answer after release is interrupted, not offered.
+			yield* Queue.take(opened).pipe(
+				Effect.andThen(
+					Effect.tryPromise({
+						try: (): Promise<unknown> => connection.getState(),
+						catch: (cause) => new LiveConnectionError({ messageId, stage: "state", cause }),
+					}),
+				),
+				Effect.tap((state) => Effect.sync(() => offer(snapshotEvent(state)))),
+				Effect.catchTag("LiveConnectionError", (error) => Effect.logWarning(error)),
+				Effect.forever,
+			)
+		}).pipe(Effect.catchTag("LiveConnectionError", (error) => Effect.logWarning(error))),
+	)
+
+/** How often the live set is re-read; a new reply connects within this delay. */
+const RECONCILE_INTERVAL = Duration.millis(250)
+
+/**
+ * Every live reply's connection, keyed by message id: a reply that joins the set connects, one that
+ * leaves is disposed, and the others keep their connection (no reconnect, no snapshot re-fetch).
+ */
+export const liveRepliesStream = (readIds: () => ReadonlyArray<MessageId>): Stream.Stream<Message> =>
+	Stream.callback<Message>((queue) =>
+		Effect.gen(function* () {
+			const connections = yield* FiberMap.make<MessageId>()
+			const connected = yield* Ref.make<ReadonlySet<MessageId>>(new Set())
+			const reconcile = Effect.gen(function* () {
+				const wanted: ReadonlySet<MessageId> = new Set(readIds())
+				const current = yield* Ref.get(connected)
+				yield* Effect.forEach(
+					[...current].filter((id) => !wanted.has(id)),
+					(id) => FiberMap.remove(connections, id),
+					{ discard: true },
+				)
+				yield* Effect.forEach(
+					[...wanted].filter((id) => !current.has(id)),
+					(id) =>
+						FiberMap.run(
+							connections,
+							id,
+							Stream.runForEach(liveEventStream(id), (message) => Queue.offer(queue, message)),
+						),
+					{ discard: true },
+				)
+				yield* Ref.set(connected, wanted)
+			})
+			yield* reconcile.pipe(Effect.repeat(Schedule.spaced(RECONCILE_INTERVAL)))
+		}),
 	)

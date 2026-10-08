@@ -54,6 +54,7 @@ export const init = (
 	threadIds: [],
 	unfurls: {},
 	liveStates: {},
+	liveIds: [],
 	rows: [],
 	limit: PAGE_SIZE,
 	offset: 0,
@@ -155,6 +156,12 @@ const deriveRows = (current: Model): PageReturn => {
 	return { ...listed, commands: [...requested.commands, ...(listed.commands ?? [])] }
 }
 
+/** The live reply ids, re-read only when the window's or the thread panel's messages change. */
+const withLiveIds = (model: Model): Model => {
+	const liveIds = shareIds(model.liveIds, Live.connectedMessageIds([...model.messages, ...model.threadMessages]))
+	return liveIds === model.liveIds ? model : modifyFields(model, { liveIds: () => liveIds })
+}
+
 const withLookup = <K extends keyof Lookups>(model: Model, key: K, value: Lookups[K]): PageReturn =>
 	deriveRows(modifyFields(model, { lookups: (lookups) => ({ ...lookups, [key]: value }) }))
 
@@ -228,17 +235,21 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 		}),
 		UpdatedMessages: ({ messages }) =>
 			deriveRows(
-				modifyFields(model, {
-					hasLoadedMessages: () => true,
-					messages: (previous) => shareMessages(previous, messages),
-				}),
+				withLiveIds(
+					modifyFields(model, {
+						hasLoadedMessages: () => true,
+						messages: (previous) => shareMessages(previous, messages),
+					}),
+				),
 			),
 		ChangedMessages: ({ order, upserts }) =>
 			deriveRows(
-				modifyFields(model, {
-					hasLoadedMessages: () => true,
-					messages: (previous) => applyMessageChanges(previous, order, upserts),
-				}),
+				withLiveIds(
+					modifyFields(model, {
+						hasLoadedMessages: () => true,
+						messages: (previous) => applyMessageChanges(previous, order, upserts),
+					}),
+				),
 			),
 		UpdatedReactions: ({ reactions }) => deriveRows(modifyFields(model, { reactions: () => reactions })),
 		UpdatedUsers: ({ users }) => withLookup(model, "users", users),
@@ -262,7 +273,7 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 		UpdatedPinned: ({ pins }) => ({ model: modifyFields(model, { pinned: () => pins }) }),
 		UpdatedThreadPanelMessages: ({ messages }) =>
 			requestUnfurls(
-				modifyFields(model, { threadMessages: (previous) => shareMessages(previous, messages) }),
+				withLiveIds(modifyFields(model, { threadMessages: (previous) => shareMessages(previous, messages) })),
 				messages,
 			),
 		UpdatedTyping: ({ typing }) => ({ model: modifyFields(model, { typing: () => typing }) }),
