@@ -53,7 +53,8 @@ const refetchInvites = (model: Model) =>
 		? []
 		: [ListOutgoingInvites({ organizationId: model.requestedOrganizationId, channelId: model.channelId })]
 
-const without = (ids: ReadonlyArray<string>, id: string) => ids.filter((candidate) => candidate !== id)
+const without = <Id extends string>(ids: ReadonlyArray<Id>, id: Id): ReadonlyArray<Id> =>
+	ids.filter((candidate) => candidate !== id)
 
 const toastOut = (title: string, description: string | null) =>
 	PageOutMessage.RequestedToast({ toast: { intent: "error", title, description } })

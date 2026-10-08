@@ -36,7 +36,7 @@ export const Model = Schema.Struct({
 	requestedOrganizationId: Schema.NullOr(OrganizationId),
 	/** Outgoing invites hosted by this channel; empty until the query succeeds. */
 	invites: Schema.Array(Invite),
-	revokingInviteIds: Schema.Array(Schema.String),
+	revokingInviteIds: Schema.Array(ConnectInviteId),
 	disconnectingMountIds: Schema.Array(Schema.String),
 	share: ShareModal.Model,
 	interaction: Interaction.Model,
