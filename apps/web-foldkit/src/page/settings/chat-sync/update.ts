@@ -11,6 +11,7 @@ import { PageOutMessage } from "../../out-message"
 import { addMenuEntries, Message, type Model } from "./model"
 import { fetchDiscordGuilds } from "./discord"
 import { fetchConnections } from "./rpc"
+import { ADD_CONNECTION_MODAL_ID, CreateConnection, FocusGuildSearch } from "./add-connection"
 
 type Return = PageReturn<Model, Message>
 type Step = Update.StepWithOutMessage<Model, Message, PageOutMessage>
@@ -90,8 +91,12 @@ export const init = (_route: unknown, shared: Shared): Return =>
 				entries: addMenuEntries,
 				placement: "bottom end",
 			}),
-			isAddModalOpen: false,
+			addModal: Modal.init(ADD_CONNECTION_MODAL_ID),
 			discordGuilds: { _tag: "Loading" },
+			selectedGuild: null,
+			guildSearch: "",
+			isGuildSearchFocused: false,
+			isCreating: false,
 			deleteTarget: null,
 			deleteModal: Modal.init("chat-sync-delete"),
 			isDeleting: false,
@@ -103,11 +108,51 @@ export const sharedChanged = (model: Model, shared: Shared): Return => requestLi
 
 // UPDATE
 
+/** `handleClose`: clears the selection and the search, then closes. */
+const closedAddModal = (model: Model): Model =>
+	modifyFields(model, {
+		addModal: (modal) => Modal.close(modal).model,
+		selectedGuild: () => null,
+		guildSearch: () => "",
+		isGuildSearchFocused: () => false,
+	})
+
+/** `onOpenChange={(open) => !open && handleClose()}`; the search takes focus once the dialog has it. */
+const foldAddModal = (model: Model, message: Modal.Message): Return => {
+	const next = Modal.update(model.addModal, message)
+	const commands = Command.mapMessages(next.commands ?? [], (child) =>
+		Message.GotAddModalMessage({ message: child }),
+	)
+	if (!next.model.isOpen) return { model: closedAddModal(model), commands }
+	const focus =
+		message._tag === "CompletedPortalModal" && hasGuildSearch(model) ? [FocusGuildSearch()] : []
+	return { model: modifyFields(model, { addModal: () => next.model }), commands: [...commands, ...focus] }
+}
+
+/** The search Input is rendered while the guilds are listed and none is selected. */
+const hasGuildSearch = (model: Model) => model.discordGuilds._tag === "Loaded" && model.selectedGuild === null
+
+const submitConnection = (model: Model): Return => {
+	const organizationId = model.requestedOrganizationId
+	const guild = model.selectedGuild
+	if (organizationId === null || guild === null || model.isCreating) return { model }
+	return {
+		model: modifyFields(model, { isCreating: () => true }),
+		commands: [
+			CreateConnection({
+				organizationId,
+				externalWorkspaceId: guild.id,
+				externalWorkspaceName: guild.name,
+			}),
+		],
+	}
+}
+
 const foldAddMenuOutMessage = Menu.OutMessage.match<Step>({
 	SelectedItem:
 		({ key }) =>
 		(model) => ({
-			model: key === "discord" ? modifyFields(model, { isAddModalOpen: () => true }) : model,
+			model: key === "discord" ? modifyFields(model, { addModal: (modal) => Modal.open(modal).model }) : model,
 		}),
 	ActivatedLink: () => (model) => ({ model }),
 })
@@ -156,9 +201,16 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				commands: [ListDiscordGuilds({ organizationId })],
 			}
 		},
-		SucceededListDiscordGuilds: ({ guilds }) => ({
-			model: modifyFields(model, { discordGuilds: () => ({ _tag: "Loaded" as const, items: guilds }) }),
-		}),
+		SucceededListDiscordGuilds: ({ guilds }) => {
+			const next = modifyFields(model, {
+				discordGuilds: () => ({ _tag: "Loaded" as const, items: guilds }),
+			})
+			// The search mounts with `autoFocus` when the guilds arrive while the modal is open.
+			return {
+				model: next,
+				commands: model.addModal.isOpen && hasGuildSearch(next) ? [FocusGuildSearch()] : [],
+			}
+		},
 		FailedListDiscordGuilds: () => ({
 			model: modifyFields(model, { discordGuilds: () => ({ _tag: "Failed" as const }) }),
 		}),
@@ -208,4 +260,41 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		GotAddMenuMessage: ({ message: menuMessage }) => foldAddMenu(model, menuMessage),
 		GotEmptyAddMenuMessage: ({ message: menuMessage }) => foldEmptyAddMenu(model, menuMessage),
 		GotDeleteModalMessage: ({ message: modalMessage }) => foldDeleteModal(model, modalMessage),
+		GotAddModalMessage: ({ message: modalMessage }) => foldAddModal(model, modalMessage),
+		ChangedGuildSearch: ({ value }) => ({ model: modifyFields(model, { guildSearch: () => value }) }),
+		FocusedGuildSearch: () => ({ model: modifyFields(model, { isGuildSearchFocused: () => true }) }),
+		BlurredGuildSearch: () => ({ model: modifyFields(model, { isGuildSearchFocused: () => false }) }),
+		CompletedFocusGuildSearch: () => ({ model }),
+		ClickedGuild: ({ guild }) => ({
+			model: modifyFields(model, { selectedGuild: () => guild, isGuildSearchFocused: () => false }),
+		}),
+		ClickedChangeGuild: () => ({
+			model: modifyFields(model, { selectedGuild: () => null }),
+			commands: [FocusGuildSearch()],
+		}),
+		ClickedOpenDiscordIntegration: () => ({
+			model,
+			outMessage: PageOutMessage.RequestedNavigation({
+				href: `/${shared.orgSlug ?? ""}/settings/integrations/discord`,
+				replace: false,
+			}),
+		}),
+		ClickedConnect: () => submitConnection(model),
+		// `onSuccess()` reloads the list (a new query key), then `handleClose()`.
+		SucceededCreateConnection: () => {
+			const organizationId = model.requestedOrganizationId
+			return {
+				model: modifyFields(closedAddModal(model), {
+					isCreating: () => false,
+					connections: (connections) =>
+						organizationId === null ? connections : { _tag: "Loading" as const },
+				}),
+				commands: organizationId === null ? [] : [ListConnections({ organizationId })],
+				outMessage: PageOutMessage.RequestedToast({ toast: successToast("Discord connection created") }),
+			}
+		},
+		FailedCreateConnection: ({ title, description }) => ({
+			model: modifyFields(model, { isCreating: () => false }),
+			outMessage: PageOutMessage.RequestedToast({ toast: { intent: "error", title, description } }),
+		}),
 	})

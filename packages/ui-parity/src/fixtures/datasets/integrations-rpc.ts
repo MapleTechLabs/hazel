@@ -21,7 +21,7 @@ export const chatSyncIds = {
 
 export const LONG_GUILD_NAME = "Open Source Friends and Contributors Community Server With A Long Name"
 
-const connectionRows = (now: Date) => {
+export const connectionRows = (now: Date) => {
 	const daysAgo = (days: number) => new Date(now.getTime() - days * 24 * 60 * 60_000)
 	return [
 		{ key: "community", name: "Hazel Community", status: "active", synced: daysAgo(0.1), error: null },
@@ -54,7 +54,7 @@ const connectionRows = (now: Date) => {
 	)
 }
 
-const channelLinkRows = (now: Date) =>
+export const channelLinkRows = (now: Date) =>
 	[
 		{ key: "general", hazel: channel("general"), name: "general", direction: "both", active: true, webhook: "allowed" },
 		{ key: "design", hazel: channel("design"), name: "design-feedback", direction: "hazel_to_external", active: false, webhook: "denied" },

@@ -34,6 +34,10 @@ export const LinksState = Schema.Union([
 	Schema.TaggedStruct("Loaded", { links: Schema.Array(ChannelLink) }),
 ])
 
+/** A Hazel channel as `AddChannelLinkModal` lists it. */
+export const HazelChannel = Schema.Struct({ id: ChannelId, name: Schema.String })
+export type HazelChannel = typeof HazelChannel.Type
+
 export const LinkTarget = Schema.Struct({ id: SyncChannelLinkId, name: Schema.String })
 
 export const Model = Schema.Struct({
@@ -44,10 +48,17 @@ export const Model = Schema.Struct({
 	/** Hazel channel names for the linked channels (the per-row `channelCollection` lookup). */
 	channelNames: Schema.Record(Schema.String, Schema.String),
 	linkMenus: Schema.Array(Menu.Model),
-	/** `AddChannelLinkModal isOpen` (the modal itself is not ported yet). */
-	isAddLinkModalOpen: Schema.Boolean,
-	/** The modal's Discord channel query, which runs once the connection is found. */
+	/** `AddChannelLinkModal`: open state, its queries (run once the connection is found) and form. */
+	addLinkModal: Modal.Model,
 	discordChannels: DiscordResource(DiscordChannel),
+	hazelChannels: Schema.Array(HazelChannel),
+	selectedChannel: Schema.NullOr(HazelChannel),
+	selectedDiscordChannel: Schema.NullOr(DiscordChannel),
+	direction: SyncDirection,
+	channelSearch: Schema.String,
+	discordChannelSearch: Schema.String,
+	focusedSearch: Schema.NullOr(Schema.Literals(["hazel", "discord"])),
+	isCreatingLink: Schema.Boolean,
 	deleteTarget: Schema.NullOr(LinkTarget),
 	deleteLinkModal: Modal.Model,
 	isDeletingLink: Schema.Boolean,
@@ -79,6 +90,21 @@ export const Message = defineMessageUnion({
 	GotLinkMenuMessage: { linkId: SyncChannelLinkId, message: Menu.Message },
 	GotDeleteLinkModalMessage: { message: Modal.Message },
 	GotDisconnectModalMessage: { message: Modal.Message },
+	GotAddLinkModalMessage: { message: Modal.Message },
+	UpdatedHazelChannels: { channels: Schema.Array(HazelChannel) },
+	ChangedChannelSearch: { value: Schema.String },
+	ChangedDiscordChannelSearch: { value: Schema.String },
+	FocusedSearch: { search: Schema.Literals(["hazel", "discord"]) },
+	BlurredSearch: {},
+	CompletedFocusChannelSearch: {},
+	ClickedHazelChannel: { channel: HazelChannel },
+	ClickedChangeHazelChannel: {},
+	ClickedDiscordChannel: { channel: DiscordChannel },
+	ClickedChangeDiscordChannel: {},
+	ClickedDirection: { direction: SyncDirection },
+	ClickedCreateLink: {},
+	SucceededCreateLink: { successMessage: Schema.String },
+	FailedCreateLink: { title: Schema.String, description: Schema.NullOr(Schema.String) },
 })
 export type Message = typeof Message.Type
 
@@ -87,6 +113,9 @@ export const DIRECTION_LABELS: Readonly<Record<SyncDirection, string>> = {
 	hazel_to_external: "Hazel to Discord",
 	external_to_hazel: "Discord to Hazel",
 }
+
+export const ADD_LINK_MODAL_ID = "chat-sync-add-link"
+export const CHANNEL_SEARCH_ID = `${ADD_LINK_MODAL_ID}-search`
 
 export const linkMenuId = (linkId: string) => `chat-sync-link-${linkId}`
 
