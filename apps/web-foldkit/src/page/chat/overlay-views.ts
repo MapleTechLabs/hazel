@@ -35,7 +35,11 @@ export const trackHoverAttribute = <M>(h: HtmlBuilder<M>, toParentMessage: ToPar
 						Overlays.Message.PointerEnteredMessage({ messageId }),
 					PointerLeftList: () => Overlays.Message.PointerLeftList(),
 					RightClickedMessage: ({ messageId, offset, crossOffset }) =>
-						Overlays.Message.RightClickedMessage({ messageId, offset, crossOffset }),
+						Overlays.Message.RightClickedMessage({
+							messageId,
+							offset,
+							crossOffset,
+						}),
 				}),
 			),
 		),
@@ -87,70 +91,84 @@ export const messageToolbarOverlay = <M>(
 		},
 		toParentMessage: (message) => toOverlay(Overlays.Message.GotMoreMenuMessage({ messageId, message })),
 	})
+	// The keyed slot stays in the column while the toolbar inside it is portaled to <body>, so
+	// hovering another message replaces the slot instead of inserting before a node in <body>.
 	return h.keyed("div")(
 		`toolbar-${messageId}`,
-		[
-			h.Role("group"),
-			h.OnMount(
-				Mount.mapMessage(PlaceMessageToolbar({ messageId }), (event) =>
-					toOverlay(
-						ToolbarEvent.match(event, {
-							EnteredToolbar: () => Overlays.Message.EnteredToolbar(),
-							LeftToolbar: () => Overlays.Message.LeftToolbar(),
-						}),
-					),
-				),
-			),
-		],
+		[h.Style({ display: "contents" })],
 		[
 			h.div(
-				[h.Class("-m-3 p-3")],
 				[
-					h.submodel({
-						slotId: "message-toolbar",
-						model: overlays.toolbar,
-						view: Toolbar.view,
-						viewInputs: {
-							className: "rounded-lg border border-border bg-bg shadow-sm",
-							content: () =>
-								toolbarContent(h, {
-									messageId,
-									isOwnMessage: facts.isOwnMessage(messageId),
-									tooltip: overlays.tooltip,
-									hoveredKey: overlays.hoveredTriggerKey,
-									focusedKey: overlays.focusedTriggerKey,
-									toTooltipMessage: (tooltip) =>
-										toOverlay(Overlays.Message.GotTooltipMessage({ tooltip })),
-									onReact: (emoji) =>
-										toOverlay(Overlays.Message.ClickedReaction({ messageId, emoji })),
-									onCopy: toOverlay(Overlays.Message.ClickedCopy({ messageId })),
-									onEdit: toOverlay(Overlays.Message.ClickedEdit({ messageId })),
-									onReply: toOverlay(Overlays.Message.ClickedReply({ messageId })),
-									onDelete: toOverlay(Overlays.Message.ClickedDelete({ messageId })),
-									addReaction: (render) =>
-										EmojiDialog.view(
-											h,
-											overlays.reactionPicker?.messageId === messageId
-												? overlays.reactionPicker.dialog
-												: EmojiDialog.init(`reaction-picker-${messageId}`),
-											{
-												toMessage: (message) =>
-													toOverlay(
-														Overlays.Message.GotReactionPickerMessage({
-															messageId,
-															message,
-														}),
-													),
-												toTrigger: render,
-												customEmojis: model.lookups.customEmojis,
-											},
-										),
-									moreActions,
+					h.Role("group"),
+					h.OnMount(
+						Mount.mapMessage(PlaceMessageToolbar({ messageId }), (event) =>
+							toOverlay(
+								ToolbarEvent.match(event, {
+									EnteredToolbar: () => Overlays.Message.EnteredToolbar(),
+									LeftToolbar: () => Overlays.Message.LeftToolbar(),
 								}),
-						},
-						toParentMessage: (message) =>
-							toOverlay(Overlays.Message.GotToolbarMessage({ message })),
-					}),
+							),
+						),
+					),
+				],
+				[
+					h.div(
+						[h.Class("-m-3 p-3")],
+						[
+							h.submodel({
+								slotId: "message-toolbar",
+								model: overlays.toolbar,
+								view: Toolbar.view,
+								viewInputs: {
+									className: "rounded-lg border border-border bg-bg shadow-sm",
+									content: () =>
+										toolbarContent(h, {
+											messageId,
+											isOwnMessage: facts.isOwnMessage(messageId),
+											tooltip: overlays.tooltip,
+											hoveredKey: overlays.hoveredTriggerKey,
+											focusedKey: overlays.focusedTriggerKey,
+											toTooltipMessage: (tooltip) =>
+												toOverlay(Overlays.Message.GotTooltipMessage({ tooltip })),
+											onReact: (emoji) =>
+												toOverlay(
+													Overlays.Message.ClickedReaction({
+														messageId,
+														emoji,
+													}),
+												),
+											onCopy: toOverlay(Overlays.Message.ClickedCopy({ messageId })),
+											onEdit: toOverlay(Overlays.Message.ClickedEdit({ messageId })),
+											onReply: toOverlay(Overlays.Message.ClickedReply({ messageId })),
+											onDelete: toOverlay(
+												Overlays.Message.ClickedDelete({ messageId }),
+											),
+											addReaction: (render) =>
+												EmojiDialog.view(
+													h,
+													overlays.reactionPicker?.messageId === messageId
+														? overlays.reactionPicker.dialog
+														: EmojiDialog.init(`reaction-picker-${messageId}`),
+													{
+														toMessage: (message) =>
+															toOverlay(
+																Overlays.Message.GotReactionPickerMessage({
+																	messageId,
+																	message,
+																}),
+															),
+														toTrigger: render,
+														customEmojis: model.lookups.customEmojis,
+													},
+												),
+											moreActions,
+										}),
+								},
+								toParentMessage: (message) =>
+									toOverlay(Overlays.Message.GotToolbarMessage({ message })),
+							}),
+						],
+					),
 				],
 			),
 		],
