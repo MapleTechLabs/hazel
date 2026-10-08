@@ -138,12 +138,14 @@ export const update = (model: Model, message: Message): UpdateReturn =>
 		GotSegmentsMessage: ({ message }) => {
 			const result = Segments.update(model.segments, message)
 			const next = modifyFields(model, { segments: () => result.model })
-			return {
-				model: next,
-				commands: Command.mapMessages(result.commands, (child) =>
-					Message.GotSegmentsMessage({ message: child }),
-				),
-			}
+			const commands = Command.mapMessages(result.commands, (child) =>
+				Message.GotSegmentsMessage({ message: child }),
+			)
+			// A typed date that completes or changes the value reports it, as the calendar path does.
+			const date = result.model.committed
+			return date === null || date === model.segments.committed
+				? { model: next, commands }
+				: { model: next, commands, outMessage: OutMessage.ChangedValue({ date }) }
 		},
 		GotCalendarMessage: ({ message }) => {
 			const result = Calendar.update(model.calendar, message)

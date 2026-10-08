@@ -164,8 +164,8 @@ describe("date picker story", () => {
 		)
 	})
 
-	// Bug: completing a date by typing in the segments never emits OutMessage.ChangedValue (date-picker.ts:138).
-	test.fails("typing a complete date into the segments reports the new value to the parent", () => {
+	// T1: completing a date by typing in the segments reports it like the calendar path.
+	test("typing a complete date into the segments reports the new value to the parent", () => {
 		story(
 			update,
 			given(withValue),
