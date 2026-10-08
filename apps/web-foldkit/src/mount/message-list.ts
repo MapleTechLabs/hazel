@@ -117,19 +117,7 @@ export interface Layout {
 	readonly totalHeight: number
 }
 
-let lastLayoutInputs: readonly [unknown, unknown, number] | undefined
-let lastLayout: Layout | undefined
-
-/** Prefix sums over measured or estimated heights, memoized on the (frozen) inputs by reference. */
-export const layoutOf = (model: Model): Layout => {
-	if (
-		lastLayout !== undefined &&
-		lastLayoutInputs !== undefined &&
-		lastLayoutInputs[0] === model.keys &&
-		lastLayoutInputs[1] === model.measuredHeights &&
-		lastLayoutInputs[2] === model.estimatedRowHeightPx
-	)
-		return lastLayout
+const computeLayout = (model: Model): Layout => {
 	const { keys, measuredHeights, estimatedRowHeightPx } = model
 	const offsets = new Float64Array(keys.length + 1)
 	const indexByKey = new Map<string, number>()
@@ -137,9 +125,20 @@ export const layoutOf = (model: Model): Layout => {
 		indexByKey.set(key, index)
 		offsets[index + 1] = offsets[index]! + (measuredHeights[key] ?? estimatedRowHeightPx)
 	})
-	const layout = { offsets, indexByKey, totalHeight: offsets[keys.length]! }
-	lastLayoutInputs = [keys, measuredHeights, estimatedRowHeightPx]
-	lastLayout = layout
+	return { offsets, indexByKey, totalHeight: offsets[keys.length]! }
+}
+
+// Pure memos keyed by the frozen inputs, so lists never evict each other's entries.
+const layouts = new WeakMap<ReadonlyArray<string>, WeakMap<object, { readonly estimate: number; readonly layout: Layout }>>()
+
+/** Prefix sums over measured or estimated heights, memoized on the (frozen) inputs by reference. */
+export const layoutOf = (model: Model): Layout => {
+	const byHeights = layouts.get(model.keys) ?? new WeakMap()
+	const cached = byHeights.get(model.measuredHeights)
+	if (cached !== undefined && cached.estimate === model.estimatedRowHeightPx) return cached.layout
+	const layout = computeLayout(model)
+	byHeights.set(model.measuredHeights, { estimate: model.estimatedRowHeightPx, layout })
+	layouts.set(model.keys, byHeights)
 	return layout
 }
 
@@ -162,14 +161,13 @@ export const rowIndexAt = (layout: Layout, y: number): number => {
 	return Math.min(low, Math.max(0, count - 1))
 }
 
-let lastStickyKeys: ReadonlyArray<string> | undefined
-let lastStickySet: ReadonlySet<string> = new Set()
-const stickySetOf = (model: Model) => {
-	if (lastStickyKeys !== model.stickyKeys) {
-		lastStickyKeys = model.stickyKeys
-		lastStickySet = new Set(model.stickyKeys)
-	}
-	return lastStickySet
+const stickySets = new WeakMap<ReadonlyArray<string>, ReadonlySet<string>>()
+const stickySetOf = (model: Model): ReadonlySet<string> => {
+	const cached = stickySets.get(model.stickyKeys)
+	if (cached !== undefined) return cached
+	const set = new Set(model.stickyKeys)
+	stickySets.set(model.stickyKeys, set)
+	return set
 }
 
 /** The anchor that describes `scrollTop`: the end when within the follow threshold, else the top non-sticky row. */
@@ -296,19 +294,20 @@ const startedScrolling = (model: Model): ListReturn => {
 		: { model: scrolling, commands: [WaitForScrollSettle({ version })] }
 }
 
-let lastStickyIndexesInputs: readonly [unknown, unknown] | undefined
-let lastStickyIndexes: ReadonlyArray<number> = []
-const stickyIndexesOf = (model: Model, layout: Layout) => {
-	if (lastStickyIndexesInputs?.[0] !== model.stickyKeys || lastStickyIndexesInputs[1] !== layout) {
-		lastStickyIndexesInputs = [model.stickyKeys, layout]
-		lastStickyIndexes = model.stickyKeys
-			.flatMap((key) => {
-				const index = layout.indexByKey.get(key)
-				return index === undefined ? [] : [index]
-			})
-			.sort((a, b) => a - b)
-	}
-	return lastStickyIndexes
+const stickyIndexes = new WeakMap<ReadonlyArray<string>, WeakMap<Layout, ReadonlyArray<number>>>()
+const stickyIndexesOf = (model: Model, layout: Layout): ReadonlyArray<number> => {
+	const byLayout = stickyIndexes.get(model.stickyKeys) ?? new WeakMap<Layout, ReadonlyArray<number>>()
+	const cached = byLayout.get(layout)
+	if (cached !== undefined) return cached
+	const indexes = model.stickyKeys
+		.flatMap((key) => {
+			const index = layout.indexByKey.get(key)
+			return index === undefined ? [] : [index]
+		})
+		.sort((a, b) => a - b)
+	byLayout.set(layout, indexes)
+	stickyIndexes.set(model.stickyKeys, byLayout)
+	return indexes
 }
 
 /** What triggered a pass. After a scroll only newly assigned containers re-render (and re-read `stuckKey`). */
