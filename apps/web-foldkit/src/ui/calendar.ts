@@ -321,7 +321,10 @@ const foldSelect = (model: Model, slot: "month" | "year", message: Select.Messag
 		slot === "month"
 			? Message.GotMonthMessage({ message: child })
 			: Message.GotYearMessage({ message: child })
-	const next = modifyFields(model, { [slot]: () => result.model } as { month: () => Select.Model })
+	const next =
+		slot === "month"
+			? modifyFields(model, { month: () => result.model })
+			: modifyFields(model, { year: () => result.model })
 	const commands = Command.mapMessages(result.commands, toMessage)
 	if (result.outMessage === undefined) return { model: next, commands }
 	const key = Number(result.outMessage.key)

@@ -12,7 +12,7 @@ import {
 } from "~/components/ui/tooltip.styles"
 import { currentGlobalModality, trackGlobalModality } from "./aria/interaction"
 import { portalOverlay, positionOverlay } from "./aria/overlay"
-import type { Placement } from "./aria/position"
+import { Placement } from "./aria/placement"
 
 /** Port of `components/ui/tooltip.tsx` (React Aria TooltipTrigger + Tooltip). */
 
@@ -200,7 +200,7 @@ export const TrackTrigger = Mount.defineStream("TrackTooltipTrigger", {
 type PortalTooltipMessage = Extract<Message, { _tag: "CompletedPortalTooltip" | "PressedEscape" }>
 
 export const PortalTooltip = Mount.defineStream("PortalTooltip", {
-	args: { id: Schema.String, placement: Schema.String, offset: Schema.Number },
+	args: { id: Schema.String, placement: Placement, offset: Schema.Number },
 	messages: [Message.CompletedPortalTooltip, Message.PressedEscape],
 	execute: ({ element, id, placement, offset }) =>
 		Stream.callback<PortalTooltipMessage>((queue) =>
@@ -212,7 +212,7 @@ export const PortalTooltip = Mount.defineStream("PortalTooltip", {
 						tooltip instanceof HTMLElement
 							? positionOverlay(tooltip, {
 									triggerId: triggerId(id),
-									placement: placement as Placement,
+									placement,
 									offset,
 									arrowSelector: ":scope > .group",
 								})

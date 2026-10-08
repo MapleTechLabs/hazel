@@ -30,7 +30,7 @@ import {
 import { popoverContentBase, popoverInnerClassName } from "~/components/ui/popover.styles"
 import { IconCheck, IconChevronRight } from "../icons"
 import { dismissButton, focusScopeSentinel, openModalPopover, positionOverlay } from "./aria/overlay"
-import type { Placement } from "./aria/position"
+import { Placement } from "./aria/placement"
 import {
 	descriptionId,
 	type Entry,
@@ -59,7 +59,7 @@ type PortalMenuMessage = Extract<Message, { _tag: "CompletedPortalMenu" | "Press
 const PortalMenu = Mount.defineStream("PortalMenu", {
 	args: {
 		id: Schema.String,
-		placement: Schema.String,
+		placement: Placement,
 		offset: Schema.Number,
 		crossOffset: Schema.Number,
 		isTriggerWidthSet: Schema.Boolean,
@@ -72,7 +72,7 @@ const PortalMenu = Mount.defineStream("PortalMenu", {
 				Effect.sync(() => {
 					const release = openModalPopover(element, {
 						triggerId: triggerId(id),
-						placement: placement as Placement,
+						placement,
 						offset,
 						crossOffset,
 						isTriggerWidthSet,

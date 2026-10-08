@@ -23,6 +23,21 @@ export interface PositionConfig {
 	readonly containerPadding?: number
 }
 
+/** The overlay positions in LTR, so logical `start`/`end` resolve to `left`/`right`. */
+const logicalPlacements: Partial<Record<Placement, Placement>> = {
+	start: "left",
+	"start top": "left top",
+	"start bottom": "left bottom",
+	end: "right",
+	"end top": "right top",
+	"end bottom": "right bottom",
+	"top start": "top left",
+	"top end": "top right",
+	"bottom start": "bottom left",
+	"bottom end": "bottom right",
+}
+const physicalPlacement = (placement: Placement): Placement => logicalPlacements[placement] ?? placement
+
 const CONTAINER_PADDING = 12
 const OVERLAY_Z_INDEX = "100000"
 
@@ -41,7 +56,7 @@ export const positionOverlay = (overlay: HTMLElement, config: PositionConfig): (
 		overlay.style.bottom = ""
 		overlay.style.maxHeight = `${window.visualViewport?.height ?? window.innerHeight}px`
 		const result = calculatePosition({
-			placement: config.placement.replace("start", "left").replace("end", "right") as Placement,
+			placement: physicalPlacement(config.placement),
 			overlayNode: overlay,
 			targetNode: trigger,
 			scrollNode: overlay,
@@ -251,7 +266,7 @@ export const containFocus = (root: HTMLElement | Element): (() => void) => {
 		)
 		event.preventDefault()
 		if (tabbables.length === 0) return
-		const index = tabbables.indexOf(document.activeElement as HTMLElement)
+		const index = tabbables.findIndex((element) => element === document.activeElement)
 		const next = event.shiftKey
 			? (tabbables[index <= 0 ? tabbables.length - 1 : index - 1] ?? tabbables[0])
 			: (tabbables[index === -1 || index === tabbables.length - 1 ? 0 : index + 1] ?? tabbables[0])

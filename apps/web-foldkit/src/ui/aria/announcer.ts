@@ -127,9 +127,14 @@ export const gridSelectionMessage = (options: {
 
 /** @react-aria/utils isAppleDevice: VoiceOver gets extra announcements on Apple platforms. */
 export const isAppleDevice = (): boolean => {
+	const userAgentData: unknown = Reflect.get(navigator, "userAgentData")
 	const platform =
-		(navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ??
-		navigator.platform
+		typeof userAgentData === "object" &&
+		userAgentData !== null &&
+		"platform" in userAgentData &&
+		typeof userAgentData.platform === "string"
+			? userAgentData.platform
+			: navigator.platform
 	const isMac = /^Mac/i.test(platform)
 	return isMac || /^iPhone/i.test(platform) || /^iPad/i.test(platform)
 }

@@ -14,7 +14,9 @@ import { announce, clearAssertive } from "./aria/announcer"
 export const Kind = Schema.Literals(["date", "time"])
 export type Kind = typeof Kind.Type
 
-export type SegmentType = "year" | "month" | "day" | "hour" | "minute" | "dayPeriod"
+export const SegmentType = Schema.Literals(["year", "month", "day", "hour", "minute", "dayPeriod"])
+export type SegmentType = typeof SegmentType.Type
+const isSegmentType = Schema.is(SegmentType)
 
 const Values = Schema.Struct({
 	year: Schema.NullOr(Schema.Number),
@@ -136,9 +138,7 @@ export const segmentOrder = (kind: Kind): ReadonlyArray<SegmentType> =>
 	formatter(kind)
 		.formatToParts(new Date(Date.UTC(2000, 0, 1)))
 		.map((part) => part.type)
-		.filter((type): type is SegmentType =>
-			["year", "month", "day", "hour", "minute", "dayPeriod"].includes(type),
-		)
+		.filter(isSegmentType)
 
 /** useDateFieldState's getSegmentLimits: the day ends at the displayed month's length. */
 export const segmentLimits = (model: Model, type: SegmentType) =>
@@ -198,8 +198,8 @@ export const segmentsOf = (model: Model): ReadonlyArray<Segment> => {
 		.formatToParts(date)
 		.flatMap((part): ReadonlyArray<Segment> => {
 			if (part.type === "literal") return [literal(part.value)]
-			if (!["year", "month", "day", "hour", "minute", "dayPeriod"].includes(part.type)) return []
-			const type = part.type as SegmentType
+			const type = part.type
+			if (!isSegmentType(type)) return []
 			const value = model.values[type]
 			const isPlaceholder = value === null
 			const formatted = type === "minute" || type === "dayPeriod" ? part.value : String(value ?? 0)
@@ -323,7 +323,7 @@ const cycle = (model: Model, type: SegmentType, amount: number): Model => {
 				)
 			: type === "minute"
 				? withValues(model, { minute: 0 })
-				: withValues(model, { [type]: model.placeholder[type as "year" | "month" | "day"] })
+				: withValues(model, { [type]: model.placeholder[type] })
 	}
 	const base = current ?? 0
 	const next =
@@ -442,8 +442,8 @@ export const update = (model: Model, message: Message): Update.Return<Model, Mes
 
 const updateSegments = (model: Model, message: Message): Update.Return<Model, Message> =>
 	Message.match<Update.Return<Model, Message>>(message, {
-		PressedSegmentKey: ({ segment, key }) => {
-			const type = segment as SegmentType
+		PressedSegmentKey: ({ segment: type, key }) => {
+			if (!isSegmentType(type)) return { model }
 			const action = keyActions[key]
 			// Spinning and moving reset the typed digits (useSpinButton callbacks, segment focus).
 			return action === undefined

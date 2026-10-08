@@ -3,7 +3,7 @@ import { Command, type Update } from "foldkit"
 import * as Dom from "foldkit/dom"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
-import type { Placement } from "./aria/position"
+import { Placement } from "./aria/placement"
 
 /**
  * Port of `components/ui/menu.tsx` (React Aria MenuTrigger, Menu, SubmenuTrigger). The Model holds
@@ -67,7 +67,7 @@ export const Model = Schema.Struct({
 	entries: Schema.Array(Entry),
 	selectionMode: SelectionMode,
 	selectedKeys: Schema.Array(Schema.String),
-	placement: Schema.String,
+	placement: Placement,
 	anchor: Schema.Literals(["Trigger", "Pointer"]),
 	popup: Popup,
 })

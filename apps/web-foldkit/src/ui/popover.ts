@@ -11,7 +11,7 @@ import {
 	popoverInnerClassName,
 } from "~/components/ui/popover.styles"
 import { dismissButton, observeDialogParts, openModalPopover } from "./aria/overlay"
-import type { Placement } from "./aria/position"
+import { Placement } from "./aria/placement"
 import { dialogFooter } from "./dialog"
 
 /** Port of `components/ui/popover.tsx` (React Aria DialogTrigger + Popover). */
@@ -55,7 +55,7 @@ export const update = (model: Model, message: Message): Update.Return<Model, Mes
 type PortalPopoverMessage = Extract<Message, { _tag: "CompletedPortalPopover" | "PressedOutside" }>
 
 export const PortalPopover = Mount.defineStream("PortalPopover", {
-	args: { id: Schema.String, placement: Schema.String, offset: Schema.Number },
+	args: { id: Schema.String, placement: Placement, offset: Schema.Number },
 	messages: [Message.CompletedPortalPopover, Message.PressedOutside],
 	execute: ({ element, id, placement, offset }) =>
 		Stream.callback<PortalPopoverMessage>((queue) =>
@@ -63,7 +63,7 @@ export const PortalPopover = Mount.defineStream("PortalPopover", {
 				Effect.sync(() => {
 					const release = openModalPopover(element, {
 						triggerId: triggerId(id),
-						placement: placement as Placement,
+						placement,
 						offset,
 						arrowSelector: ":scope > .group",
 						isTriggerWidthSet: true,
