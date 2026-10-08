@@ -4,10 +4,10 @@ import * as Menu from "../../../ui/menu"
 import { Invitation } from "./model"
 
 export const Message = defineMessageUnion({
-	CompletedFetchInvitations: { invitations: Schema.Array(Invitation) },
+	CompletedFetchInvitations: { version: Schema.Number, invitations: Schema.Array(Invitation) },
 	ClickedInviteUser: {},
 	GotRowMenuMessage: { invitationId: Schema.String, message: Menu.Message },
-	SucceededRevoke: {},
-	FailedRevoke: {},
+	SucceededRevokeInvitation: {},
+	FailedRevokeInvitation: {},
 })
 export type Message = typeof Message.Type

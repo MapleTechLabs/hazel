@@ -15,7 +15,10 @@ import { view } from "./view"
 
 const config = pageScene(update, view, makeShared())
 const ada: Invitation = { id: "inv_1", emailAddress: "ada@hazel.test", role: "org:member", createdAtMs: 0 }
-const loaded = update(init().model, Message.CompletedFetchInvitations({ invitations: [ada] })).model
+const loaded = update(
+	init().model,
+	Message.CompletedFetchInvitations({ version: 1, invitations: [ada] }),
+).model
 
 // The row trigger is an icon-only button with no accessible name, so it is located by id.
 const trigger = Scene.selector("#invitation-inv_1-trigger")
@@ -56,9 +59,14 @@ describe("revoke from the row menu", () => {
 			Scene.Command.expectExact(RevokeInvitation({ invitationId: "inv_1" })),
 			Scene.Mount.expectEnded(portalMenu),
 			Scene.expect(trigger).toBeDisabled(),
-			Scene.Command.resolve(RevokeInvitation, Message.SucceededRevoke()),
-			Scene.expectOutMessage(PageOutMessage.RequestedToast({ toast: successToast("Invitation revoked successfully") })),
-			Scene.Command.resolve(FetchInvitations, Message.CompletedFetchInvitations({ invitations: [] })),
+			Scene.Command.resolve(RevokeInvitation, Message.SucceededRevokeInvitation()),
+			Scene.expectOutMessage(
+				PageOutMessage.RequestedToast({ toast: successToast("Invitation revoked successfully") }),
+			),
+			Scene.Command.resolve(
+				FetchInvitations,
+				Message.CompletedFetchInvitations({ version: 2, invitations: [] }),
+			),
 			Scene.Mount.expectEnded(FocusTriggerOnPress),
 			Scene.expect(Scene.text("ada@hazel.test")).toBeAbsent(),
 			Scene.expect(Scene.role("heading", { name: "No pending invitations" })).toExist(),
@@ -73,10 +81,15 @@ describe("revoke from the row menu", () => {
 			...openRowMenu,
 			Scene.click(revokeItem),
 			Scene.Mount.expectEnded(portalMenu),
-			Scene.Command.resolve(RevokeInvitation, Message.FailedRevoke()),
-			Scene.expectOutMessage(PageOutMessage.RequestedToast({ toast: errorToast("Failed to revoke invitation") })),
+			Scene.Command.resolve(RevokeInvitation, Message.FailedRevokeInvitation()),
+			Scene.expectOutMessage(
+				PageOutMessage.RequestedToast({ toast: errorToast("Failed to revoke invitation") }),
+			),
 			Scene.expect(trigger).toBeEnabled(),
-			Scene.Command.resolve(FetchInvitations, Message.CompletedFetchInvitations({ invitations: [ada] })),
+			Scene.Command.resolve(
+				FetchInvitations,
+				Message.CompletedFetchInvitations({ version: 2, invitations: [ada] }),
+			),
 			Scene.expect(Scene.text("ada@hazel.test")).toExist(),
 		)
 	})

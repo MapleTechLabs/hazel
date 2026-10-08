@@ -14,6 +14,8 @@ export type RowMenu = typeof RowMenu.Type
 
 export const Model = Schema.Struct({
 	invitations: Schema.Array(Invitation),
+	/** Bumped per fetch; an older result (initial fetch racing a post-revoke refetch) is dropped. */
+	fetchVersion: Schema.Number,
 	menus: Schema.Array(RowMenu),
 	revokingId: Schema.NullOr(Schema.String),
 })

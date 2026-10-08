@@ -16,20 +16,23 @@ export const REVOKE_KEY = "revoke"
 // COMMAND
 
 export const FetchInvitations = Command.define("FetchInvitations", {
-	args: {},
+	args: { version: Schema.Number },
 	messages: [Message.CompletedFetchInvitations],
-	execute: () =>
+	execute: ({ version }) =>
 		fetchPendingInvitations.pipe(
-			Effect.map((invitations) => Message.CompletedFetchInvitations({ invitations })),
+			Effect.map((invitations) => Message.CompletedFetchInvitations({ version, invitations })),
 		),
 })
 
 export const RevokeInvitation = Command.define("RevokeInvitation", {
 	args: { invitationId: Schema.String },
-	messages: [Message.SucceededRevoke, Message.FailedRevoke],
+	messages: [Message.SucceededRevokeInvitation, Message.FailedRevokeInvitation],
 	execute: ({ invitationId }) =>
 		revokeInvitation(invitationId).pipe(
-			Effect.match({ onSuccess: () => Message.SucceededRevoke(), onFailure: () => Message.FailedRevoke() }),
+			Effect.match({
+				onSuccess: () => Message.SucceededRevokeInvitation(),
+				onFailure: () => Message.FailedRevokeInvitation(),
+			}),
 		),
 })
 
@@ -54,7 +57,10 @@ const reflectMenus = (
 					invitationId: invitation.id,
 					menu: Menu.init({ id: `invitation-${invitation.id}`, entries, placement: "bottom end" }),
 				}),
-				onSome: (row) => ({ invitationId: row.invitationId, menu: Menu.reflectEntries(row.menu, entries) }),
+				onSome: (row) => ({
+					invitationId: row.invitationId,
+					menu: Menu.reflectEntries(row.menu, entries),
+				}),
 			},
 		)
 	})
@@ -68,8 +74,8 @@ const withRevokingId = (model: Model, revokingId: string | null): Model =>
 // INIT
 
 export const init = (): Return => ({
-	model: { invitations: [], menus: [], revokingId: null },
-	commands: [FetchInvitations({})],
+	model: { invitations: [], fetchVersion: 1, menus: [], revokingId: null },
+	commands: [FetchInvitations({ version: 1 })],
 })
 
 // UPDATE
@@ -103,28 +109,39 @@ const updateRowMenu = (model: Model, invitationId: string, message: Menu.Message
 		},
 	)
 
+const refetch = (model: Model): Return => {
+	const version = model.fetchVersion + 1
+	return {
+		model: modifyFields(model, { fetchVersion: () => version }),
+		commands: [FetchInvitations({ version })],
+	}
+}
+
 export const update = (model: Model, message: Message): Return =>
 	Message.match<Return>(message, {
-		CompletedFetchInvitations: ({ invitations }) => ({
-			model: modifyFields(model, {
-				invitations: () => invitations,
-				menus: (menus) => reflectMenus(menus, invitations, model.revokingId),
-			}),
-		}),
+		CompletedFetchInvitations: ({ version, invitations }) =>
+			version !== model.fetchVersion
+				? { model }
+				: {
+						model: modifyFields(model, {
+							invitations: () => invitations,
+							menus: (menus) => reflectMenus(menus, invitations, model.revokingId),
+						}),
+					},
 		ClickedInviteUser: () => ({
 			model,
 			outMessage: PageOutMessage.RequestedModal({ modal: { _tag: "EmailInvite" } }),
 		}),
 		GotRowMenuMessage: ({ invitationId, message: child }) => updateRowMenu(model, invitationId, child),
 		// Clerk's infinite query doesn't refetch after a mutation; legacy revalidates it.
-		SucceededRevoke: () => ({
-			model: withRevokingId(model, null),
-			commands: [FetchInvitations({})],
-			outMessage: PageOutMessage.RequestedToast({ toast: successToast("Invitation revoked successfully") }),
+		SucceededRevokeInvitation: () => ({
+			...refetch(withRevokingId(model, null)),
+			outMessage: PageOutMessage.RequestedToast({
+				toast: successToast("Invitation revoked successfully"),
+			}),
 		}),
-		FailedRevoke: () => ({
-			model: withRevokingId(model, null),
-			commands: [FetchInvitations({})],
+		FailedRevokeInvitation: () => ({
+			...refetch(withRevokingId(model, null)),
 			outMessage: PageOutMessage.RequestedToast({ toast: errorToast("Failed to revoke invitation") }),
 		}),
 	})
