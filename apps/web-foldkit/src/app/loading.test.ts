@@ -40,6 +40,7 @@ const boot = (path: string): Model =>
 					themePreference: defaultThemePreference(),
 					systemTheme: "light",
 					soundSettings: DEFAULT_SOUND_SETTINGS,
+					sessionStartMs: 0,
 				},
 				url,
 			).model,

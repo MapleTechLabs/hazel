@@ -56,6 +56,7 @@ export const bootReturn = (path: string, options: BootOptions = {}) =>
 			themePreference: options.themePreference ?? defaultThemePreference(),
 			systemTheme: options.systemTheme ?? "light",
 			soundSettings: DEFAULT_SOUND_SETTINGS,
+			sessionStartMs: 0,
 		},
 		urlOf(path),
 	)

@@ -49,7 +49,7 @@ describe("stored theme preference", () => {
 const boot = (themePreference = defaultThemePreference()) =>
 	Option.match(fromString("http://localhost/sign-in"), {
 		onNone: () => expect.unreachable("url"),
-		onSome: (url) => init({ themePreference, systemTheme: "light", soundSettings: DEFAULT_SOUND_SETTINGS }, url),
+		onSome: (url) => init({ themePreference, systemTheme: "light", soundSettings: DEFAULT_SOUND_SETTINGS, sessionStartMs: 0 }, url),
 	})
 
 describe("root theme", () => {

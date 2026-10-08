@@ -17,8 +17,6 @@ import type { SoundSettings } from "../notification-sound"
  * manager, orchestrator, sound and native sinks) and the recent notifications it feeds them.
  */
 
-/** `sessionStartTimeAtom`: notifications from before this load never play. */
-const sessionStartTime = new Date()
 const soundSink = new SoundNotificationSink({ notificationSoundManager })
 const nativeSink = new NativeNotificationSink()
 
@@ -26,16 +24,24 @@ export interface SinkContext {
 	readonly userId: UserId
 	readonly settings: SoundSettings
 	readonly currentChannelId: ChannelId | null
+	/** `sessionStartTimeAtom`: notifications from before this load never play. */
+	readonly sessionStartMs: number
 }
 
 /**
  * The provider's mount effect, re-run whenever its inputs change: audio priming plus the config and
  * context getters. Do not disturb and quiet hours are read from the synced user row at decision time.
  */
-export const wireNotificationSinks = ({ userId, settings, currentChannelId }: SinkContext): Stream.Stream<never> =>
+export const wireNotificationSinks = ({
+	userId,
+	settings,
+	currentChannelId,
+	sessionStartMs,
+}: SinkContext): Stream.Stream<never> =>
 	Stream.callback<never>(() =>
 		Effect.acquireRelease(
 			Effect.sync(() => {
+				const sessionStartTime = new Date(sessionStartMs)
 				const cleanupPriming = notificationSoundManager.initPriming()
 				notificationSoundManager.setDependencies({
 					getConfig: () => ({

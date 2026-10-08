@@ -113,17 +113,19 @@ const notificationSubscriptions = Subscription.make<Model, Message>()((entry) =>
 			userId: Schema.NullOr(UserId),
 			settings: SoundSettings,
 			currentChannelId: Schema.NullOr(ChannelId),
+			sessionStartMs: Schema.Number,
 		},
 		{
 			modelToDependencies: (model) => ({
 				userId: orgSlugOf(model.route) === undefined ? null : (model.currentUser?.id ?? null),
 				settings: model.soundSettings,
 				currentChannelId: currentChannelIdOf(model.route),
+				sessionStartMs: model.sessionStartMs,
 			}),
-			dependenciesToStream: ({ userId, settings, currentChannelId }) =>
+			dependenciesToStream: ({ userId, settings, currentChannelId, sessionStartMs }) =>
 				userId === null
 					? Stream.empty
-					: wireNotificationSinks({ userId, settings, currentChannelId }),
+					: wireNotificationSinks({ userId, settings, currentChannelId, sessionStartMs }),
 		},
 	),
 	// The provider's `recentNotifications` query, for the membership in the route's organization.

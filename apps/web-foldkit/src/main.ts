@@ -1,4 +1,4 @@
-import { Effect, Match, Option, Schema } from "effect"
+import { Clock, Effect, Match, Option, Schema } from "effect"
 import { Command, type Runtime, Update } from "foldkit"
 import { UrlRequest } from "foldkit/navigation"
 import { modifyFields } from "foldkit/struct"
@@ -51,6 +51,8 @@ export const Flags = Schema.Struct({
 	themePreference: ThemePreference,
 	systemTheme: ResolvedTheme,
 	soundSettings: SoundSettings,
+	/** `sessionStartTimeAtom`: notifications from before this load never play. */
+	sessionStartMs: Schema.Number,
 })
 export type Flags = typeof Flags.Type
 
@@ -58,6 +60,7 @@ export const flags: Effect.Effect<Flags> = Effect.all({
 	themePreference: loadThemePreference,
 	systemTheme: Effect.sync(resolveSystemTheme),
 	soundSettings: loadSoundSettings,
+	sessionStartMs: Clock.currentTimeMillis,
 })
 
 type Return = Update.Return<Model, Message, Resources>
@@ -314,6 +317,7 @@ export const init: Runtime.RoutingApplicationInit<Model, Message, Flags, Resourc
 			themePreference: flags.themePreference,
 			systemTheme: flags.systemTheme,
 			soundSettings: flags.soundSettings,
+			sessionStartMs: flags.sessionStartMs,
 			page: null,
 			shell: Shell.init(),
 			modal: null,
