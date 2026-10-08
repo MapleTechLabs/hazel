@@ -76,8 +76,6 @@ export type AutocompleteQuery = typeof AutocompleteQuery.Type
 export const Model = Schema.Struct({
 	editorId: Schema.String,
 	placeholder: Schema.String,
-	markdown: Schema.String,
-	isEmpty: Schema.Boolean,
 	autocomplete: Schema.NullOr(AutocompleteQuery),
 	activeIndex: Schema.Number,
 	members: Schema.Array(MentionMember),
@@ -92,8 +90,6 @@ export type Model = typeof Model.Type
 export const init = (editorId: string, placeholder = "Type a message..."): Model => ({
 	editorId,
 	placeholder,
-	markdown: "",
-	isEmpty: true,
 	autocomplete: null,
 	activeIndex: 0,
 	members: [],

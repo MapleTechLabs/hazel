@@ -68,7 +68,8 @@ export const cancelCommand = (model: Model): Return => ({
 
 export const update = (model: Model, message: Message): Return =>
 	Message.match<Return>(message, {
-		UpdatedDraft: ({ markdown, isEmpty }) => ({ model: { ...model, markdown, isEmpty } }),
+		// The editor owns its document; the draft reads the markdown for typing (`draft-update.ts`).
+		UpdatedDraft: () => ({ model }),
 		ChangedAutocomplete: ({ autocomplete }) =>
 			withOptionSync(model, { ...model, autocomplete, activeIndex: autocomplete === null ? 0 : model.activeIndex }),
 		PressedAutocompleteKey: ({ key }) => {
