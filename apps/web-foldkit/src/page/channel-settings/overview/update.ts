@@ -59,10 +59,9 @@ const submit = (model: Model): Return => {
 	const form = model.form
 	if (form === null || !canSave(form)) return { model }
 	// React Aria ends hover and focus on the button once it is disabled while submitting.
-	const settled = foldInteraction(
-		foldInteraction(model, Interaction.Message.LeftTarget({ target: saveButtonTarget })),
-		Interaction.Message.BlurredTarget({ target: saveButtonTarget }),
-	)
+	const settled = modifyFields(model, {
+		interaction: (interaction) => Interaction.disabledTargets(interaction, [saveButtonTarget]),
+	})
 	return {
 		model: withForm(settled, (current) => ({ ...current, isSubmitting: true })),
 		commands: [UpdateChannel({ id: model.channelId, name: form.name, icon: form.icon })],

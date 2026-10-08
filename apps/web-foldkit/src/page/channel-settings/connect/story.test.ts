@@ -5,7 +5,14 @@ import { Command, expectOutMessage, given, message, model, story } from "foldkit
 import { describe, expect, test } from "vitest"
 import type { Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
-import { globex, globexGuestMount, hostMount, slugless } from "../../../test/pages-channel-settings-fixtures"
+import {
+	globex,
+	globexGuestMount,
+	hostMount,
+	initechId,
+	mountOf,
+	slugless,
+} from "../../../test/pages-channel-settings-fixtures"
 import { DisconnectOrganization, ListOutgoingInvites, RevokeInvite } from "./command"
 import { Message } from "./model"
 import * as ShareModal from "./share-modal"
@@ -158,6 +165,20 @@ describe("disconnect", () => {
 				}),
 			),
 			model((current) => expect(current.disconnectingMountIds).toEqual([])),
+		)
+	})
+
+	test("a guest cannot disconnect another guest, even without the hidden button", () => {
+		const otherGuest = mountOf(3, initechId, "guest")
+		const asGuest = run(
+			initial.model,
+			Message.UpdatedMounts({ mounts: [mountOf(1, organizationId, "guest"), otherGuest] }),
+		).model
+		story(
+			run,
+			given(asGuest),
+			message(Message.ClickedDisconnect({ mountId: otherGuest.id })),
+			Command.expectNone(),
 		)
 	})
 

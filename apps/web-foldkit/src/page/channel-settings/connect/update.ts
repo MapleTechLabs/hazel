@@ -98,7 +98,8 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				(candidate) => candidate.organizationId === currentOrgId,
 			)?.role
 			const roles = rowRoles(mount, viewerRole, currentOrgId)
-			if (roles.targetOrganizationId === null) return { model }
+			// The view hides the button for a viewer who may not disconnect this row; update checks too.
+			if (!roles.canDisconnect || roles.targetOrganizationId === null) return { model }
 			return {
 				model: modifyFields(model, { disconnectingMountIds: (ids) => [...ids, mountId] }),
 				commands: [
