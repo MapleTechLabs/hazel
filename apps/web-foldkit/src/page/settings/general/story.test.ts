@@ -2,7 +2,13 @@
 import { Command, expectNoOutMessage, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
 import { errorToast, successToast } from "../../../data/actions"
-import { failureToastFixture, makeShared, organization, organizationId, storyUpdate } from "../../../test/pages-fixtures"
+import {
+	failureToastFixture,
+	makeShared,
+	organization,
+	organizationId,
+	storyUpdate,
+} from "../../../test/pages-fixtures"
 import type { Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
 import { Message } from "./message"
@@ -10,8 +16,8 @@ import type { Model } from "./model"
 import {
 	DeleteOrganization,
 	init,
-	LeaveDeletedWorkspace,
 	OpenLogoPicker,
+	ReadOrigin,
 	SetPublicMode,
 	sharedChanged,
 	update,
@@ -27,9 +33,24 @@ const withName = (name: string): Shared => makeShared({ organization: { ...organ
 const initial: Model = init(route, owner).model
 const logo = new File(["png"], "logo.png", { type: "image/png" })
 
+describe("init", () => {
+	test("reads the origin through a Command, not during init", () => {
+		const result = init(route, owner)
+		expect(result.model.origin).toBe("")
+		expect(result.commands?.map((command) => command.name)).toEqual([ReadOrigin.name])
+		const read = update(result.model, Message.GotOrigin({ origin: "http://localhost:3000" }), owner)
+		expect(read.model.origin).toBe("http://localhost:3000")
+	})
+})
+
 describe("organization name", () => {
 	test("an unchanged or blank name is not saved", () => {
-		story<Model, Message, PageOutMessage>(storyUpdate(update, owner), given(initial), message(Message.SubmittedName()), Command.expectNone())
+		story<Model, Message, PageOutMessage>(
+			storyUpdate(update, owner),
+			given(initial),
+			message(Message.SubmittedName()),
+			Command.expectNone(),
+		)
 		story<Model, Message, PageOutMessage>(
 			storyUpdate(update, owner),
 			given(initial),
@@ -47,7 +68,9 @@ describe("organization name", () => {
 			message(Message.SubmittedName()),
 			Command.expectExact(UpdateOrganizationName({ organizationId, name: "Hazel HQ" })),
 			Command.resolve(UpdateOrganizationName, Message.SucceededUpdateName()),
-			expectOutMessage(PageOutMessage.RequestedToast({ toast: successToast("Organization name updated") })),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({ toast: successToast("Organization name updated") }),
+			),
 			model((current) => expect(current.isSavingName).toBe(false)),
 		)
 		const saving = update(
@@ -71,7 +94,10 @@ describe("organization name", () => {
 
 	test("a new server name replaces the draft, an unchanged one keeps it", () => {
 		const draft: Model = { ...initial, name: "draft" }
-		expect(sharedChanged(draft, withName("Hazel HQ")).model).toMatchObject({ name: "Hazel HQ", syncedName: "Hazel HQ" })
+		expect(sharedChanged(draft, withName("Hazel HQ")).model).toMatchObject({
+			name: "Hazel HQ",
+			syncedName: "Hazel HQ",
+		})
 		expect(sharedChanged(draft, owner).model.name).toBe("draft")
 	})
 })
@@ -89,8 +115,17 @@ describe("logo", () => {
 			Command.expectExact(UploadLogo),
 			model((current) => expect(current.isUploading).toBe(true)),
 			Command.resolve(UploadLogo, Message.SucceededUploadLogo()),
-			expectOutMessage(PageOutMessage.RequestedToast({ toast: successToast("Organization logo updated") })),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({ toast: successToast("Organization logo updated") }),
+			),
 			model((current) => expect(current.isUploading).toBe(false)),
+		)
+	})
+
+	test("a file picked while an upload runs is ignored", () => {
+		const uploading: Model = { ...initial, isUploading: true }
+		expect(update(uploading, Message.SelectedLogo({ files: [logo] }), owner).commands ?? []).toHaveLength(
+			0,
 		)
 	})
 
@@ -122,6 +157,13 @@ describe("public mode", () => {
 		)
 	})
 
+	test("a second toggle while one runs sends nothing", () => {
+		const toggling: Model = { ...initial, isTogglingPublic: true }
+		expect(
+			update(toggling, Message.ToggledPublicMode({ isPublic: true }), owner).commands ?? [],
+		).toHaveLength(0)
+	})
+
 	test("nothing is sent before the organization is known", () => {
 		story<Model, Message, PageOutMessage>(
 			storyUpdate(update, makeShared({ organization: null })),
@@ -145,11 +187,27 @@ describe("delete workspace", () => {
 			message(Message.ClickedConfirmDelete()),
 			Command.expectExact(DeleteOrganization({ organizationId })),
 			Command.resolve(DeleteOrganization, Message.SucceededDeleteWorkspace()),
-			expectOutMessage(PageOutMessage.RequestedToast({ toast: successToast("Workspace deleted successfully") })),
-			model((current) => expect(current).toMatchObject({ confirmationText: "", deleteModal: { isOpen: false } })),
-			Command.resolve(LeaveDeletedWorkspace, Message.CompletedLeaveDeletedWorkspace()),
-			expectOutMessage(PageOutMessage.RequestedNavigation({ href: "/", replace: false })),
+			expectOutMessage(
+				PageOutMessage.RequestedNavigation({
+					href: "/",
+					replace: false,
+					toast: successToast("Workspace deleted successfully"),
+				}),
+			),
+			model((current) =>
+				expect(current).toMatchObject({ confirmationText: "", deleteModal: { isOpen: false } }),
+			),
 		)
+	})
+
+	test("a second confirm while deleting sends nothing", () => {
+		const deleting: Model = {
+			...initial,
+			deleteModal: { ...initial.deleteModal, isOpen: true },
+			confirmationText: "Hazel Labs",
+			isDeleting: true,
+		}
+		expect(update(deleting, Message.ClickedConfirmDelete(), owner).commands ?? []).toHaveLength(0)
 	})
 
 	test("closing the modal clears the confirmation", () => {
@@ -159,7 +217,9 @@ describe("delete workspace", () => {
 			message(Message.ClickedDeleteWorkspace()),
 			message(Message.ChangedConfirmation({ value: "Hazel" })),
 			message(Message.ClickedCancelDelete()),
-			model((current) => expect(current).toMatchObject({ confirmationText: "", deleteModal: { isOpen: false } })),
+			model((current) =>
+				expect(current).toMatchObject({ confirmationText: "", deleteModal: { isOpen: false } }),
+			),
 		)
 	})
 })

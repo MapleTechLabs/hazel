@@ -5,6 +5,7 @@ import { ToastRequest } from "../../../overlay/toasts"
 import * as Modal from "../../../ui/modal"
 
 export const Message = defineMessageUnion({
+	GotOrigin: { origin: Schema.String },
 	UpdatedIsPublic: { isPublic: Schema.Boolean },
 	ChangedName: { value: Schema.String },
 	SubmittedName: {},
@@ -27,7 +28,6 @@ export const Message = defineMessageUnion({
 	ClickedCancelDelete: {},
 	ClickedConfirmDelete: {},
 	SucceededDeleteWorkspace: {},
-	CompletedLeaveDeletedWorkspace: {},
 	FailedDeleteWorkspace: { toast: ToastRequest },
 })
 export type Message = typeof Message.Type

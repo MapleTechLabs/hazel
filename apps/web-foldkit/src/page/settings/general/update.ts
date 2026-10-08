@@ -1,6 +1,6 @@
 import { OrganizationId } from "@hazel/schema"
 import { Array, Effect, Option, Schema } from "effect"
-import { Command } from "foldkit"
+import { Command, Update } from "foldkit"
 import * as Dom from "foldkit/dom"
 import { modifyFields } from "foldkit/struct"
 import { setPublicModeAction, updateOrganizationAction } from "~/db/actions"
@@ -76,14 +76,16 @@ export const OpenLogoPicker = Command.define("OpenLogoPicker", {
 	messages: [Message.CompletedOpenLogoPicker],
 	// The hidden input's change event reports the file (`SelectedLogo`).
 	execute: () =>
-		Dom.clickElement(`#${LOGO_INPUT_ID}`).pipe(Effect.ignore, Effect.as(Message.CompletedOpenLogoPicker())),
+		Dom.clickElement(`#${LOGO_INPUT_ID}`).pipe(
+			Effect.ignore,
+			Effect.as(Message.CompletedOpenLogoPicker()),
+		),
 })
 
-/** Legacy toasts, then navigates home; the page reports one OutMessage per step. */
-export const LeaveDeletedWorkspace = Command.define("LeaveDeletedWorkspace", {
+export const ReadOrigin = Command.define("ReadOrigin", {
 	args: {},
-	messages: [Message.CompletedLeaveDeletedWorkspace],
-	execute: () => Effect.succeed(Message.CompletedLeaveDeletedWorkspace()),
+	messages: [Message.GotOrigin],
+	execute: () => Effect.sync(() => Message.GotOrigin({ origin: window.location.origin })),
 })
 
 export const UploadLogo = Command.define("UploadLogo", {
@@ -109,14 +111,19 @@ export const UploadLogo = Command.define("UploadLogo", {
 				Effect.catch(() =>
 					Effect.succeed(
 						Message.FailedUploadLogo({
-							toast: errorToast("Upload failed", "Failed to update organization. Please try again."),
+							toast: errorToast(
+								"Upload failed",
+								"Failed to update organization. Please try again.",
+							),
 						}),
 					),
 				),
 			)
 		}).pipe(
 			Effect.catchTag("UploadFailedError", (error) =>
-				Effect.succeed(Message.FailedUploadLogo({ toast: errorToast(error.message, error.description) })),
+				Effect.succeed(
+					Message.FailedUploadLogo({ toast: errorToast(error.message, error.description) }),
+				),
 			),
 		),
 })
@@ -152,7 +159,7 @@ export const DeleteOrganization = Command.define("DeleteOrganization", {
 export const init = (route: RouteOf<"SettingsGeneral">, shared: Shared): Return => ({
 	model: {
 		orgSlug: route.orgSlug,
-		origin: window.location.origin,
+		origin: "",
 		name: shared.organization?.name ?? "",
 		syncedName: shared.organization?.name ?? null,
 		isPublic: false,
@@ -163,6 +170,7 @@ export const init = (route: RouteOf<"SettingsGeneral">, shared: Shared): Return 
 		confirmationText: "",
 		isDeleting: false,
 	},
+	commands: [ReadOrigin({})],
 })
 
 /** Re-syncs the draft when the server name changes (legacy `prevOrgName` adjustment). */
@@ -179,62 +187,81 @@ export const sharedChanged = (model: Model, shared: Shared): Return => {
 
 // UPDATE
 
-export const isAdminOf = (shared: Shared) => shared.member?.role === "owner" || shared.member?.role === "admin"
+export const isAdminOf = (shared: Shared) =>
+	shared.member?.role === "owner" || shared.member?.role === "admin"
 
 const toast = (model: Model, request: ToastRequest): Return => ({
 	model,
 	outMessage: PageOutMessage.RequestedToast({ toast: request }),
 })
 
-const withDeleteModal = (model: Model, message: Modal.Message): Return => {
-	const result = Modal.update(model.deleteModal, message)
-	const isClosing = model.deleteModal.isOpen && !result.model.isOpen
-	return {
-		model: modifyFields(model, {
-			deleteModal: () => result.model,
-			confirmationText: (text) => (isClosing ? "" : text),
+const deleteModalFold = {
+	read: (model: Model) => Option.some(model.deleteModal),
+	write: (model: Model, deleteModal: Modal.Model): Model =>
+		modifyFields(model, {
+			deleteModal: () => deleteModal,
+			// Closing the dialog (any path) clears the typed confirmation.
+			confirmationText: (text) => (deleteModal.isOpen ? text : ""),
 		}),
-		commands: Command.mapMessages(result.commands ?? [], (child) =>
-			Message.GotDeleteModalMessage({ message: child }),
-		),
-	}
+	toParentMessage: (message: Modal.Message) => Message.GotDeleteModalMessage({ message }),
 }
+const foldDeleteModal = Update.foldChild({ update: Modal.update, ...deleteModalFold })
+const openDeleteModal = Update.foldChildStep({ update: Modal.open, ...deleteModalFold })
+const closeDeleteModal = Update.foldChildStep({ update: Modal.close, ...deleteModalFold })
 
 export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
+		GotOrigin: ({ origin }) => ({ model: modifyFields(model, { origin: () => origin }) }),
 		UpdatedIsPublic: ({ isPublic }) => ({ model: modifyFields(model, { isPublic: () => isPublic }) }),
 		ChangedName: ({ value }) => ({ model: modifyFields(model, { name: () => value }) }),
 		SubmittedName: () => {
 			const organization = shared.organization
-			if (!organization || !model.name.trim() || model.name === organization.name || model.isSavingName) {
+			if (
+				!organization ||
+				!model.name.trim() ||
+				model.name === organization.name ||
+				model.isSavingName
+			) {
 				return { model }
 			}
 			return {
 				model: modifyFields(model, { isSavingName: () => true }),
-				commands: [UpdateOrganizationName({ organizationId: organization.id, name: model.name.trim() })],
+				commands: [
+					UpdateOrganizationName({ organizationId: organization.id, name: model.name.trim() }),
+				],
 			}
 		},
 		ClickedCancelName: () => ({
 			model: modifyFields(model, { name: () => shared.organization?.name ?? "" }),
 		}),
 		SucceededUpdateName: () =>
-			toast(modifyFields(model, { isSavingName: () => false }), successToast("Organization name updated")),
-		FailedUpdateName: ({ toast: request }) => toast(modifyFields(model, { isSavingName: () => false }), request),
+			toast(
+				modifyFields(model, { isSavingName: () => false }),
+				successToast("Organization name updated"),
+			),
+		FailedUpdateName: ({ toast: request }) =>
+			toast(modifyFields(model, { isSavingName: () => false }), request),
 		ClickedLogo: () => ({ model, commands: [OpenLogoPicker({})] }),
 		CompletedOpenLogoPicker: () => ({ model }),
 		SelectedLogo: ({ files }) =>
-			Option.match(Option.all([Array.head(files), Option.fromNullishOr(shared.organization)]), {
-				onNone: () => ({ model }),
-				onSome: ([file, organization]) => ({
-					model: modifyFields(model, { isUploading: () => true }),
-					commands: [UploadLogo({ organizationId: organization.id, file })],
-				}),
-			}),
+			model.isUploading
+				? { model }
+				: Option.match(Option.all([Array.head(files), Option.fromNullishOr(shared.organization)]), {
+						onNone: () => ({ model }),
+						onSome: ([file, organization]) => ({
+							model: modifyFields(model, { isUploading: () => true }),
+							commands: [UploadLogo({ organizationId: organization.id, file })],
+						}),
+					}),
 		SucceededUploadLogo: () =>
-			toast(modifyFields(model, { isUploading: () => false }), successToast("Organization logo updated")),
-		FailedUploadLogo: ({ toast: request }) => toast(modifyFields(model, { isUploading: () => false }), request),
+			toast(
+				modifyFields(model, { isUploading: () => false }),
+				successToast("Organization logo updated"),
+			),
+		FailedUploadLogo: ({ toast: request }) =>
+			toast(modifyFields(model, { isUploading: () => false }), request),
 		ToggledPublicMode: ({ isPublic }) =>
-			shared.organization === null
+			shared.organization === null || model.isTogglingPublic
 				? { model }
 				: {
 						model: modifyFields(model, { isTogglingPublic: () => true }),
@@ -249,29 +276,32 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			toast(modifyFields(model, { isTogglingPublic: () => false }), request),
 		ClickedCopy: (args) => ({ model, commands: [CopyText(args)] }),
 		CompletedCopy: ({ toast: request }) => toast(model, request),
-		ClickedDeleteWorkspace: () => ({ model: modifyFields(model, { deleteModal: (modal) => Modal.open(modal).model }) }),
-		GotDeleteModalMessage: ({ message: child }) => withDeleteModal(model, child),
-		ChangedConfirmation: ({ value }) => ({ model: modifyFields(model, { confirmationText: () => value }) }),
-		ClickedCancelDelete: () => withDeleteModal(model, Modal.Message.ClickedClose()),
+		ClickedDeleteWorkspace: () => openDeleteModal(model),
+		GotDeleteModalMessage: ({ message: child }) => foldDeleteModal(model, child),
+		ChangedConfirmation: ({ value }) => ({
+			model: modifyFields(model, { confirmationText: () => value }),
+		}),
+		ClickedCancelDelete: () => closeDeleteModal(model),
 		ClickedConfirmDelete: () =>
-			shared.organization === null || model.confirmationText !== shared.organization.name
+			shared.organization === null ||
+			model.confirmationText !== shared.organization.name ||
+			model.isDeleting
 				? { model }
 				: {
 						model: modifyFields(model, { isDeleting: () => true }),
 						commands: [DeleteOrganization({ organizationId: shared.organization.id })],
 					},
-		SucceededDeleteWorkspace: () => ({
-			model: modifyFields(model, {
-				isDeleting: () => false,
-				confirmationText: () => "",
-				deleteModal: (modal) => Modal.close(modal).model,
-			}),
-			commands: [LeaveDeletedWorkspace({})],
-			outMessage: PageOutMessage.RequestedToast({ toast: successToast("Workspace deleted successfully") }),
-		}),
-		CompletedLeaveDeletedWorkspace: () => ({
-			model,
-			outMessage: PageOutMessage.RequestedNavigation({ href: "/", replace: false }),
-		}),
-		FailedDeleteWorkspace: ({ toast: request }) => toast(modifyFields(model, { isDeleting: () => false }), request),
+		SucceededDeleteWorkspace: () => {
+			const closed = closeDeleteModal(modifyFields(model, { isDeleting: () => false }))
+			return {
+				...closed,
+				outMessage: PageOutMessage.RequestedNavigation({
+					href: "/",
+					replace: false,
+					toast: successToast("Workspace deleted successfully"),
+				}),
+			}
+		},
+		FailedDeleteWorkspace: ({ toast: request }) =>
+			toast(modifyFields(model, { isDeleting: () => false }), request),
 	})
