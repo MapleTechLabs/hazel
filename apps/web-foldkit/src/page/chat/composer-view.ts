@@ -8,9 +8,7 @@ import type { Model } from "./channel/model"
 
 /** The channel's composer area (`$id/index.tsx` > `SlateMessageComposer`) and its reply preview. */
 
-let lastReply: ReplyPreview | null = null
-
-/** The reply a draft is composing, reusing the previous object while it shows the same text. */
+/** The reply a draft is composing. A fresh object each call: memoized views compare its fields. */
 export const replyPreviewOf = (model: Model, draft: Draft.Model): ReplyPreview | null => {
 	const replyTo = draft.replyToMessageId
 	const message =
@@ -18,12 +16,9 @@ export const replyPreviewOf = (model: Model, draft: Draft.Model): ReplyPreview |
 			? undefined
 			: (model.messages.find((candidate) => candidate.id === replyTo) ??
 				model.threadMessages.find((candidate) => candidate.id === replyTo))
-	if (message === undefined) return (lastReply = null)
+	if (message === undefined) return null
 	const author = identityOf(toDeriveContext(model.lookups, model.currentUserId ?? undefined), message.authorId)
-	const next = { authorName: author?.displayName ?? "", firstLine: message.content.split("\n")[0] ?? "" }
-	if (lastReply !== null && lastReply.authorName === next.authorName && lastReply.firstLine === next.firstLine)
-		return lastReply
-	return (lastReply = next)
+	return { authorName: author?.displayName ?? "", firstLine: message.content.split("\n")[0] ?? "" }
 }
 
 /** `useLiveQuery(attachmentCollection, inArray(id, attachmentIds))`, from the channel's attachments. */

@@ -45,7 +45,7 @@ export const page = definePage(
 					: update(model, message, shared),
 		routeChanged: (model, route) => ({ model: setTab(model, tabOf(route)) }),
 		view: Submodel.defineView<Model, Message, PageViewInputs>((model, inputs, h) =>
-			channelView(h, model, toSelf, inputs.shared.isMobile),
+			channelView(h, model, toSelf, inputs.shared.isMobile, inputs.shared.nowMs),
 		),
 		subscriptions,
 		sharedChanged: (model, shared) => {

@@ -13,7 +13,7 @@ import { pinnedPopoverView } from "../pinned"
 import { messageToolbarOverlay, reactionModalView, trackHoverAttribute } from "../overlay-views"
 import { attachmentInfoFrom, composerAreaView, replyPreviewOf } from "../composer-view"
 import type * as Draft from "../../../composer/draft"
-import { draftView, type ReplyPreview } from "../../../composer/draft-view"
+import { draftView } from "../../../composer/draft-view"
 import * as Overlays from "../overlays"
 import { deriveContextOf, isMemberOf, Message, type Model } from "./page"
 import { idleRowContext, rowContextFor } from "../row-context"
@@ -69,6 +69,7 @@ const messageListView = <M>(
 	h: HtmlBuilder<M>,
 	model: Model,
 	toParentMessage: (message: Message) => M,
+	nowMs: number,
 ): Html => {
 	if (!model.hasLoadedMessages) return h.div([], [])
 	if (model.messages.length === 0) return emptyStateView(h)
@@ -81,7 +82,7 @@ const messageListView = <M>(
 				h,
 				row,
 				isStuck,
-				row._tag === "MessageRow" ? rowContextFor(h, model, row, toParentMessage, idle) : idle,
+				row._tag === "MessageRow" ? rowContextFor(h, model, row, toParentMessage, idle, nowMs) : idle,
 			),
 		isStickyHeader: (row) => row._tag === "DateHeader",
 		toParentMessage: (message) => toParentMessage(Message.GotListMessage({ message })),
@@ -150,7 +151,12 @@ const imageViewerOverlay = <M>(
 }
 
 /** `$id/index.tsx`: the join banner for non-members, else the list and the composer. */
-const messagesOutlet = <M>(h: HtmlBuilder<M>, model: Model, toParentMessage: (message: Message) => M) => {
+const messagesOutlet = <M>(
+	h: HtmlBuilder<M>,
+	model: Model,
+	toParentMessage: (message: Message) => M,
+	nowMs: number,
+) => {
 	const isMember = isMemberOf(model)
 	if (isMember === false) return [joinBannerView(h, model.channel)]
 	const typingUsers = typingUsersOf(
@@ -160,15 +166,18 @@ const messagesOutlet = <M>(h: HtmlBuilder<M>, model: Model, toParentMessage: (me
 		model.currentUserId,
 		model.typingNowMs,
 	)
+	// Passed to the lazy composer as strings, so an unchanged reply keeps its memo.
+	const reply = replyPreviewOf(model, model.draft)
 	return [
 		h.div(
 			[h.Class("flex min-h-0 flex-1 flex-col overflow-hidden")],
-			[messageListView(h, model, toParentMessage)],
+			[messageListView(h, model, toParentMessage, nowMs)],
 		),
 		lazyComposer(composerView, [
 			typingUsers.length === 0 ? null : typingUsers.map((user) => user.firstName).join(),
 			model.draft,
-			replyPreviewOf(model, model.draft),
+			reply?.authorName ?? null,
+			reply?.firstLine ?? null,
 			model.lookups.attachments,
 			toParentMessage,
 			h,
@@ -182,7 +191,8 @@ const messagesOutlet = <M>(h: HtmlBuilder<M>, model: Model, toParentMessage: (me
 const composerView = <M>(
 	typingKey: string | null,
 	draft: Draft.Model,
-	reply: ReplyPreview | null,
+	replyAuthorName: string | null,
+	replyFirstLine: string | null,
 	attachments: Model["lookups"]["attachments"],
 	toParentMessage: (message: Message) => M,
 	h: HtmlBuilder<M>,
@@ -198,7 +208,10 @@ const composerView = <M>(
 		draft,
 		{
 			toMessage: toDraftMessage(toParentMessage),
-			replyPreview: reply,
+			replyPreview:
+				replyAuthorName === null || replyFirstLine === null
+					? null
+					: { authorName: replyAuthorName, firstLine: replyFirstLine },
 			attachmentInfo: attachmentInfoFrom(attachments),
 		},
 	)
@@ -268,6 +281,8 @@ export const view = <M>(
 	model: Model,
 	toParentMessage: (message: Message) => M,
 	isMobile = false,
+	/** `Shared.nowMs`, the presence clock the profile popover reads. */
+	nowMs = 0,
 ): Html =>
 	// Keyed by channel like React's `key={id}`: Mounts start on insert only, so a patched-in-place
 	// page would keep the previous channel's list observer and never measure the new viewport.
@@ -293,7 +308,7 @@ export const view = <M>(
 					]) ?? h.empty,
 					lazyTabBar(chatTabBarView, [model.tab, toParentMessage, h]) ?? h.empty,
 					...(model.tab === "messages" || model.files === null
-						? messagesOutlet(h, model, toParentMessage)
+						? messagesOutlet(h, model, toParentMessage, nowMs)
 						: [
 								FilesView.view(h, model.files, (message) =>
 									toParentMessage(Message.GotFilesMessage({ message })),

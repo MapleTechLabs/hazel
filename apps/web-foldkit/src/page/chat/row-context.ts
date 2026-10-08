@@ -82,6 +82,7 @@ const buildContext = <M>(
 	model: Model,
 	toParentMessage: ToParent<M>,
 	isIdle: boolean,
+	nowMs: number,
 ): RowContext<M> => {
 	const users = model.lookups.users
 	const names = new Map(users.map((user) => [user.id as string, `${user.firstName} ${user.lastName}`]))
@@ -149,7 +150,7 @@ const buildContext = <M>(
 						presence:
 							model.lookups.presence.find((presence) => presence.userId === user.id) ?? null,
 						isOwnProfile: model.currentUserId === user.id,
-						nowMs: Date.now(),
+						nowMs,
 					})
 				},
 			}),
@@ -179,7 +180,8 @@ export const idleRowContext = <M>(
 		cache.currentUserId === model.currentUserId
 	)
 		return cache.context
-	const context = buildContext(h, model, toParentMessage, true)
+	// Idle rows never open the profile popover, so they need no clock.
+	const context = buildContext(h, model, toParentMessage, true, 0)
 	const next: Cache<M> = {
 		toParentMessage,
 		users: model.lookups.users,
@@ -197,5 +199,6 @@ export const rowContextFor = <M>(
 	row: MessageRow,
 	toParentMessage: ToParent<M>,
 	idle: RowContext<M>,
+	nowMs: number,
 ): RowContext<M> =>
-	Overlays.ownsRow(model.overlays, row.message.id) ? buildContext(h, model, toParentMessage, false) : idle
+	Overlays.ownsRow(model.overlays, row.message.id) ? buildContext(h, model, toParentMessage, false, nowMs) : idle
