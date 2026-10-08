@@ -1,6 +1,7 @@
 import { OrganizationId, SyncConnectionId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
+import * as Interaction from "../../../ui/aria/interaction"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
 import { DiscordGuild, DiscordResource } from "./discord"
@@ -45,6 +46,8 @@ export const Model = Schema.Struct({
 	deleteTarget: Schema.NullOr(DeleteTarget),
 	deleteModal: Modal.Model,
 	isDeleting: Schema.Boolean,
+	/** Hover, press and focus of the add modal's search Input and Connect button. */
+	interaction: Interaction.Model,
 })
 export type Model = typeof Model.Type
 
@@ -72,6 +75,7 @@ export const Message = defineMessageUnion({
 	ClickedConnect: {},
 	SucceededCreateConnection: {},
 	FailedCreateConnection: { title: Schema.String, description: Schema.NullOr(Schema.String) },
+	GotInteractionMessage: { message: Interaction.Message },
 })
 export type Message = typeof Message.Type
 

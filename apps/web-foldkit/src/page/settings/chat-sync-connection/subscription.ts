@@ -6,6 +6,7 @@ import { channelCollection } from "~/db/collections"
 import { liveQueryStream } from "../../../data/live-query"
 import type { PageSubscriptionInput } from "../../contract"
 import { Message, type Model } from "./model"
+import { interaction } from "./update"
 
 interface ChannelNameRow {
 	readonly id: ChannelId
@@ -18,7 +19,7 @@ const linkedChannelIds = (model: Model) =>
 		? [...new Set(model.links.links.map((link) => link.hazelChannelId))].sort().join(",")
 		: ""
 
-export const subscriptions = Subscription.make<PageSubscriptionInput<Model>, Message>()((entry) => ({
+const dataSubscriptions = Subscription.make<PageSubscriptionInput<Model>, Message>()((entry) => ({
 	// `ChannelLinkRow`'s lookup of the Hazel channel name, once for every row.
 	channelNames: entry(
 		{ channelIds: Schema.String },
@@ -70,3 +71,5 @@ export const subscriptions = Subscription.make<PageSubscriptionInput<Model>, Mes
 		},
 	),
 }))
+
+export const subscriptions = { ...interaction.subscriptions, ...dataSubscriptions }

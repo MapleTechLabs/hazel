@@ -1,6 +1,6 @@
 import { ChannelId, ExternalChannelId, OrganizationId, SyncChannelLinkId, SyncConnectionId } from "@hazel/schema"
 import { type Cause, Effect, Exit, Schema } from "effect"
-import { Command } from "foldkit"
+import { Command, Render } from "foldkit"
 import * as Dom from "foldkit/dom"
 import { HazelRpc } from "../../../rpc"
 import { failureToast } from "../../../ui/toast-exit"
@@ -163,6 +163,8 @@ export const CreateChannelLink = Command.define("CreateChannelLink", {
 	messages: [Message.SucceededCreateLink, Message.FailedCreateLink],
 	execute: ({ hazelChannelName, ...payload }) =>
 		Effect.gen(function* () {
+			// React paints the pending button on the click, before any reply; wait for that commit.
+			yield* Render.afterCommit
 			const client = yield* HazelRpc
 			const exit = yield* Effect.exit(client("chatSync.channelLink.create", payload))
 			return Exit.match(exit, {
