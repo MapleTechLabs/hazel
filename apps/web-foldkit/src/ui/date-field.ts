@@ -39,6 +39,10 @@ const fieldName = (type: Segments.SegmentType) =>
 		type === "dayPeriod" ? "dayPeriod" : type,
 	) ?? type
 
+/** useDateSegment's name: the field's aria-label after a comma, a trailing comma when labelled by an element. */
+const segmentName = (name: string, ariaLabel: string | undefined, labelledBy: string | undefined) =>
+	`${name}${ariaLabel ? `, ${ariaLabel}` : ""}${labelledBy === undefined ? "" : ", "}`
+
 /** useDatePickerGroup's description of the committed value. */
 export const selectedDescription = (model: Segments.Model) => {
 	if (model.committed === null) return null
@@ -94,7 +98,7 @@ export const dateSegments = <ParentMessage>(
 				h.DataAttribute("type", type),
 				...statusAttributes,
 				...(part.isPlaceholder ? [h.DataAttribute("placeholder", "true")] : []),
-				h.AriaLabel(`${fieldName(type)}, ${options.ariaLabel ?? ""}`),
+				h.AriaLabel(segmentName(fieldName(type), options.ariaLabel, options.labelledBy)),
 				...(options.labelledBy === undefined
 					? []
 					: [h.AriaLabelledBy(`${id} ${options.labelledBy}`)]),
