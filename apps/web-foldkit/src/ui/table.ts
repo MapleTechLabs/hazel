@@ -125,6 +125,9 @@ const rowTextOf = (message: Message) =>
 		? Option.some({ row: message.row, text: message.rowText })
 		: Option.none()
 
+const sortDescription = (model: Model) =>
+	Option.map(model.maybeSort, (sort) => `sorted by column  in ${sort.direction} order`)
+
 /**
  * useTable's live announcements: useGridSelectionAnnouncement on a selection change and the sort
  * description. Legacy's columns render through a function, so the column name is always empty.
@@ -147,21 +150,14 @@ const announcementsFor = (previous: Model, next: Model, message: Message) => {
 							onSome: ({ row, text }) => (row === key ? text : ""),
 						}),
 				})
+	// useUpdateEffect on the description string: with no column name, only a direction change shows.
 	const sort = Option.filter(
-		next.maybeSort,
-		(sort) =>
-			!Option.exists(
-				previous.maybeSort,
-				(before) => before.column === sort.column && before.direction === sort.direction,
-			),
+		sortDescription(next),
+		(description) => !Option.contains(sortDescription(previous), description),
 	)
 	return [
 		...(selection === "" ? [] : [Announce({ message: selection, timeout: SELECTION_TIMEOUT })]),
-		...Option.toArray(
-			Option.map(sort, (sort) =>
-				Announce({ message: `sorted by column  in ${sort.direction} order`, timeout: SORT_TIMEOUT }),
-			),
-		),
+		...Option.toArray(Option.map(sort, (message) => Announce({ message, timeout: SORT_TIMEOUT }))),
 	]
 }
 
