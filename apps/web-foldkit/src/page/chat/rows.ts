@@ -2,6 +2,8 @@ import { ChannelId, MessageId, UserId } from "@hazel/schema"
 import { MessageEmbed } from "@hazel/domain/models"
 import { Schema } from "effect"
 import { defineTaggedUnion } from "foldkit/schema"
+import { LiveActorState } from "../../chat/live-state"
+import { Unfurl } from "../../chat/unfurl"
 import { AttachmentInfo } from "./lookups"
 
 /**
@@ -90,6 +92,22 @@ export const MarkdownRefs = Schema.Struct({
 })
 export type MarkdownRefs = typeof MarkdownRefs.Type
 
+/** `MessageContent.Embeds`' URL embeds, in render order; `unfurl` is null until requested. */
+export const UrlEmbed = defineTaggedUnion({
+	Tweet: { url: Schema.String, tweetId: Schema.String, unfurl: Schema.NullOr(Unfurl) },
+	Youtube: { url: Schema.String, embedUrl: Schema.String },
+	Gif: { url: Schema.String, mediaUrl: Schema.String, isKlipy: Schema.Boolean },
+	LinkPreview: { url: Schema.String, unfurl: Schema.NullOr(Unfurl) },
+})
+export type UrlEmbed = typeof UrlEmbed.Type
+
+/** The live-state block (`MessageLive.*`) of an AI reply: its state and loading copy. */
+export const LiveRow = Schema.Struct({
+	state: LiveActorState,
+	loading: Schema.Struct({ text: Schema.String, icon: Schema.Literals(["sparkle", "brain"]) }),
+})
+export type LiveRow = typeof LiveRow.Type
+
 export const GroupPosition = Schema.Literals(["start", "middle", "end", "standalone"])
 export type GroupPosition = typeof GroupPosition.Type
 
@@ -105,6 +123,8 @@ export const MessageRowData = Schema.Struct({
 	thread: Schema.NullOr(ThreadPreview),
 	attachments: Schema.Array(AttachmentInfo),
 	refs: MarkdownRefs,
+	urlEmbeds: Schema.Array(UrlEmbed),
+	live: Schema.NullOr(LiveRow),
 })
 export type MessageRowData = typeof MessageRowData.Type
 

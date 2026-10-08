@@ -1,12 +1,14 @@
 import type { ChannelId, ChannelMemberId, MessageId, UserId } from "@hazel/schema"
 import { Command } from "foldkit"
+import * as Live from "../../../chat/live-state"
+import * as Unfurl from "../../../chat/unfurl"
 import { modifyFields } from "foldkit/struct"
 import * as Composer from "../../../composer/composer"
 import * as Draft from "../../../composer/draft"
 import * as MessageList from "../../../mount/message-list"
 import type { Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
-import { replyIdsOf, threadIdsOf, toDeriveContext, toDisplayRows } from "../derive"
+import { replyIdsOf, threadIdsOf, toDeriveContext, toDisplayRows, unfurlRequestsOf } from "../derive"
 import { emptyLookups, type Lookups } from "../lookups"
 import * as FilesPage from "../files/page"
 import * as Overlays from "../overlays"
@@ -50,6 +52,8 @@ export const init = (
 	typingNowMs: 0,
 	replyIds: [],
 	threadIds: [],
+	unfurls: {},
+	liveStates: {},
 	rows: [],
 	limit: PAGE_SIZE,
 	offset: 0,
@@ -101,20 +105,46 @@ const liftList = (model: Model, result: MessageList.ListReturn): PageReturn => (
 	commands: Command.mapMessages(result.commands, (message) => Message.GotListMessage({ message })),
 })
 
+/** The derive context with the page's unfurls and live states. */
+export const deriveContextOf = (model: Model) =>
+	toDeriveContext(model.lookups, model.currentUserId ?? undefined, {
+		unfurls: model.unfurls,
+		liveStates: model.liveStates,
+	})
+
+/**
+ * Starts the unfurl fetches the loaded messages need and marks them loading (legacy runs one atom
+ * query per URL or tweet id, shared by every message that shows it).
+ */
+const requestUnfurls = (model: Model, messages: ReadonlyArray<Model["messages"][number]>) => {
+	const pending: Record<string, Unfurl.Unfurl> = {}
+	const commands: Array<Command.Command<Message>> = []
+	for (const message of messages)
+		for (const request of unfurlRequestsOf(message)) {
+			if (request.key in model.unfurls || request.key in pending) continue
+			pending[request.key] = Unfurl.Unfurl.Loading()
+			const command: Command.Command<Unfurl.Message> =
+				request.kind === "tweet"
+					? Unfurl.FetchTweet({ tweetId: request.value })
+					: Unfurl.FetchLinkPreview({ url: request.value })
+			commands.push(...Command.mapMessages([command], (message) => Message.GotUnfurlMessage({ message })))
+		}
+	return commands.length === 0
+		? { model, commands }
+		: { model: modifyFields(model, { unfurls: (unfurls) => ({ ...unfurls, ...pending }) }), commands }
+}
+
 /** Re-derives the rows, then tells the list about the new keys so it can keep its anchor. */
-const deriveRows = (model: Model): PageReturn => {
-	const rows = toDisplayRows(
-		model.messages,
-		model.reactions,
-		toDeriveContext(model.lookups, model.currentUserId ?? undefined),
-		model.rows,
-	)
+const deriveRows = (current: Model): PageReturn => {
+	const requested = requestUnfurls(current, [...current.messages, ...current.threadMessages])
+	const model = requested.model
+	const rows = toDisplayRows(model.messages, model.reactions, deriveContextOf(model), model.rows)
 	const withRows = modifyFields(model, {
 		rows: () => rows,
 		replyIds: (previous) => shareIds(previous, replyIdsOf(model.messages)),
 		threadIds: (previous) => shareIds(previous, threadIdsOf(model.messages)),
 	})
-	return liftList(
+	const listed = liftList(
 		withRows,
 		MessageList.setKeys(
 			withRows.list,
@@ -122,6 +152,7 @@ const deriveRows = (model: Model): PageReturn => {
 			shareStickyKeys(withRows.list.stickyKeys, rows),
 		),
 	)
+	return { ...listed, commands: [...requested.commands, ...(listed.commands ?? [])] }
 }
 
 const withLookup = <K extends keyof Lookups>(model: Model, key: K, value: Lookups[K]): PageReturn =>
@@ -229,11 +260,17 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 		UpdatedReplyTargets: ({ targets }) => withLookup(model, "replyTargets", targets),
 		UpdatedMembers: ({ members }) => ({ model: modifyFields(model, { members: () => members }) }),
 		UpdatedPinned: ({ pins }) => ({ model: modifyFields(model, { pinned: () => pins }) }),
-		UpdatedThreadPanelMessages: ({ messages }) => ({
-			model: modifyFields(model, { threadMessages: (previous) => shareMessages(previous, messages) }),
-		}),
+		UpdatedThreadPanelMessages: ({ messages }) =>
+			requestUnfurls(
+				modifyFields(model, { threadMessages: (previous) => shareMessages(previous, messages) }),
+				messages,
+			),
 		UpdatedTyping: ({ typing }) => ({ model: modifyFields(model, { typing: () => typing }) }),
 		TickedTypingClock: ({ nowMs }) => ({ model: modifyFields(model, { typingNowMs: () => nowMs }) }),
+		GotUnfurlMessage: ({ message: unfurlMessage }) =>
+			deriveRows(modifyFields(model, { unfurls: (unfurls) => Unfurl.applyMessage(unfurls, unfurlMessage) })),
+		GotLiveMessage: ({ message: liveMessage }) =>
+			deriveRows(modifyFields(model, { liveStates: (states) => Live.applyMessage(states, liveMessage) })),
 		GotListMessage: ({ message: listMessage }) =>
 			loadWhenNearEdge(liftList(model, MessageList.update(model.list, listMessage))),
 		GotOverlaysMessage: ({ message: overlaysMessage }) =>

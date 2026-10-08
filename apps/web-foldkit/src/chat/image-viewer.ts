@@ -1,3 +1,4 @@
+import EmblaCarousel from "embla-carousel"
 import { Effect, Queue, Schema, Stream } from "effect"
 import { Mount } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
@@ -37,13 +38,81 @@ export interface ImageViewerInputs<M> {
 	readonly toAction?: (action: ImageViewerAction, image: ChatAttachmentView) => M
 }
 
-// The thumbnail classes double as the selected-index marker the keyboard Mount reads back.
-const THUMB_MARKER = "flex-[0_0_80px]"
-
 const Intent = defineMessageUnion({ PressedClose: {}, PressedSelect: { index: Schema.Number } })
 type Intent = typeof Intent.Type
 
-/** Portal + the legacy hotkeys (Escape, ArrowLeft, ArrowRight) + backdrop click (`target === currentTarget`). */
+// The selected slide as the Model has it, which the carousels scroll to (embla owns their transforms).
+const SELECTED_ATTRIBUTE = "data-selected-index"
+
+const readSelected = (element: Element) => Number(element.getAttribute(SELECTED_ATTRIBUTE) ?? 0)
+
+const NO_RELEASE = () => {}
+
+/** Runs `follow(index)` whenever the view changes the selected index on `element`. */
+const observeSelected = (element: Element, follow: (index: number) => void) => {
+	const observer = new MutationObserver(() => follow(readSelected(element)))
+	observer.observe(element, { attributes: true, attributeFilter: [SELECTED_ATTRIBUTE] })
+	return observer
+}
+
+/**
+ * The main carousel: vanilla embla on the viewport (`useEmblaCarousel({ startIndex, loop: false })`).
+ * A swipe or drag selects a slide; a selection from the Model (arrows, thumbs, keys) scrolls to it.
+ */
+const MainCarousel = Mount.defineStream("ImageViewerMainCarousel", {
+	messages: [Intent.PressedClose, Intent.PressedSelect],
+	execute: ({ element }) =>
+		Stream.callback<Intent>((queue) =>
+			Effect.acquireRelease(
+				Effect.sync(() => {
+					if (!(element instanceof HTMLElement)) return NO_RELEASE
+					const embla = EmblaCarousel(element, { startIndex: readSelected(element), loop: false })
+					embla.on("select", () => {
+						const index = embla.selectedScrollSnap()
+						if (index !== readSelected(element)) Queue.offerUnsafe(queue, Intent.PressedSelect({ index }))
+					})
+					const observer = observeSelected(element, (index) => {
+						if (index !== embla.selectedScrollSnap()) embla.scrollTo(index)
+					})
+					// `imageViewer.prev` / `imageViewer.next`: embla moves at once, so fast repeats all count.
+					const onKeyDown = (event: KeyboardEvent) => {
+						if (event.key === "ArrowLeft") embla.scrollPrev()
+						if (event.key === "ArrowRight") embla.scrollNext()
+					}
+					document.addEventListener("keydown", onKeyDown)
+					return () => {
+						document.removeEventListener("keydown", onKeyDown)
+						observer.disconnect()
+						embla.destroy()
+					}
+				}),
+				(release) => Effect.sync(release),
+			).pipe(Effect.flatMap(() => Effect.never)),
+		),
+})
+
+/** The thumbnail strip (`containScroll: "keepSnaps"`, `dragFree`), kept on the selected slide. */
+const ThumbCarousel = Mount.defineStream("ImageViewerThumbCarousel", {
+	messages: [Intent.PressedClose, Intent.PressedSelect],
+	execute: ({ element }) =>
+		Stream.callback<Intent>(() =>
+			Effect.acquireRelease(
+				Effect.sync(() => {
+					if (!(element instanceof HTMLElement)) return NO_RELEASE
+					const embla = EmblaCarousel(element, { containScroll: "keepSnaps", dragFree: true })
+					embla.scrollTo(readSelected(element))
+					const observer = observeSelected(element, (index) => embla.scrollTo(index))
+					return () => {
+						observer.disconnect()
+						embla.destroy()
+					}
+				}),
+				(release) => Effect.sync(release),
+			).pipe(Effect.flatMap(() => Effect.never)),
+		),
+})
+
+/** Portal + the Escape hotkey + backdrop click (`target === currentTarget`); the carousel owns the arrows. */
 const ImageViewerPortal = Mount.defineStream("ImageViewerPortal", {
 	messages: [Intent.PressedClose, Intent.PressedSelect],
 	execute: ({ element }) =>
@@ -51,21 +120,8 @@ const ImageViewerPortal = Mount.defineStream("ImageViewerPortal", {
 			Effect.acquireRelease(
 				Effect.sync(() => {
 					const releasePortal = portalOverlay(element, { isModal: false })
-					const thumbs = () =>
-						[...element.querySelectorAll("button")].filter((node) =>
-							node.classList.contains(THUMB_MARKER),
-						)
-					const selected = () => {
-						const index = thumbs().findIndex((thumb) => thumb.classList.contains("border-white"))
-						return index === -1 ? 0 : index
-					}
 					const onKeyDown = (event: KeyboardEvent) => {
 						if (event.key === "Escape") Queue.offerUnsafe(queue, Intent.PressedClose())
-						const step = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0
-						const next = selected() + step
-						if (step !== 0 && next >= 0 && next < thumbs().length) {
-							Queue.offerUnsafe(queue, Intent.PressedSelect({ index: next }))
-						}
 					}
 					const onClick = (event: Event) => {
 						if (event.target === event.currentTarget)
@@ -133,9 +189,9 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 		[act("openInBrowser"), IconExternalLink(h, { className: "size-4" })],
 		[inputs.toClose(), IconClose(h, { className: "size-4" })],
 	]
-	const onMount = Mount.mapMessage(ImageViewerPortal(), (intent: Intent) =>
-		intent._tag === "PressedClose" ? inputs.toClose() : inputs.toSelect(intent.index),
-	)
+	const toMessage = (intent: Intent) =>
+		intent._tag === "PressedClose" ? inputs.toClose() : inputs.toSelect(intent.index)
+	const onMount = Mount.mapMessage(ImageViewerPortal(), toMessage)
 	return h.div(
 		[
 			h.Class(
@@ -176,17 +232,14 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 				[h.Class("relative mx-36 w-full max-w-[90vw]")],
 				[
 					h.div(
-						[h.Class("overflow-hidden")],
+						[
+							h.Class("overflow-hidden"),
+							h.Attribute(SELECTED_ATTRIBUTE, String(selectedIndex)),
+							h.OnMount(Mount.mapMessage(MainCarousel(), toMessage)),
+						],
 						[
 							h.div(
-								[
-									h.Class("flex"),
-									// Embla's translate in px; a percentage of the track is the same offset.
-									h.Attribute(
-										"style",
-										`transform: translate3d(${selectedIndex === 0 ? "0px" : `${-selectedIndex * 100}%`}, 0px, 0px);`,
-									),
-								],
+								[h.Class("flex")],
 								images.map((image) =>
 									h.keyed("div")(
 										image.id,
@@ -241,7 +294,11 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 							[h.Class("absolute bottom-5 left-1/2 w-full max-w-2xl -translate-x-1/2 px-8")],
 							[
 								h.div(
-									[h.Class("overflow-hidden rounded-md")],
+									[
+										h.Class("overflow-hidden rounded-md"),
+										h.Attribute(SELECTED_ATTRIBUTE, String(selectedIndex)),
+										h.OnMount(Mount.mapMessage(ThumbCarousel(), toMessage)),
+									],
 									[
 										h.div(
 											[h.Class("flex gap-2")],

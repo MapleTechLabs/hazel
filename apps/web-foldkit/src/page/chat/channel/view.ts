@@ -5,7 +5,7 @@ import { imageViewerView } from "../../../chat/image-viewer"
 import { dateDividerView, messageRowView, type RowContext } from "../../../chat/message/row"
 import * as MessageList from "../../../mount/message-list"
 import { joinBannerView, typingIndicatorView, typingUsersOf } from "../banners"
-import { authorIdentity, toDeriveContext } from "../derive"
+import { authorIdentity } from "../derive"
 import * as FilesView from "../files/view"
 import { mobileMenuButton } from "../../../shell/mobile"
 import { chatHeaderView } from "../header"
@@ -15,7 +15,7 @@ import { attachmentInfoFrom, composerAreaView, replyPreviewOf } from "../compose
 import type * as Draft from "../../../composer/draft"
 import { draftView, type ReplyPreview } from "../../../composer/draft-view"
 import * as Overlays from "../overlays"
-import { isMemberOf, Message, type Model } from "./page"
+import { deriveContextOf, isMemberOf, Message, type Model } from "./page"
 import { idleRowContext, rowContextFor } from "../row-context"
 import type { DisplayRow } from "../rows"
 import { chatTabBarView } from "../tab-bar"
@@ -124,7 +124,15 @@ const imageViewerOverlay = <M>(
 	if (row === undefined || row._tag !== "MessageRow") return h.empty
 	const overlays = (message: Overlays.Message) => toParentMessage(Message.GotOverlaysMessage({ message }))
 	return imageViewerView(h, {
-		images: row.attachments.filter(isImageAttachment),
+		images:
+			viewer.urlImages === null
+				? row.attachments.filter(isImageAttachment)
+				: viewer.urlImages.map((image, index) => ({
+						id: `${image.url}-${index}`,
+						fileName: image.alt,
+						fileSize: 0,
+						url: image.url,
+					})),
 		index: viewer.index,
 		author: row.message.author
 			? {
@@ -305,7 +313,7 @@ const threadPanelOverlay = <M>(
 		threadName: name || "Thread",
 		original: model.messages.find((message) => message.id === thread.messageId) ?? null,
 		messages: model.threadMessages,
-		context: toDeriveContext(model.lookups, model.currentUserId ?? undefined),
+		context: deriveContextOf(model),
 		rowContext: idleRowContext(h, model, toParentMessage),
 		onClose: toParentMessage(Message.GotOverlaysMessage({ message: Overlays.Message.ClosedThread() })),
 		onGenerateName: toParentMessage(Message.ClickedGenerateThreadName()),

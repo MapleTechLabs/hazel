@@ -3,6 +3,8 @@ import { handleAsset, isAssetRequest, warmAssets } from "./assets.ts"
 import { makeCallLog } from "./call-log.ts"
 import { corsHeaders, handleShape } from "./electric.ts"
 import { type PushedChange, pushChange } from "./live-events.ts"
+import { handleNetwork, isNetworkRequest } from "./network.ts"
+import { handleRivet, isRivetRequest, makeRivetSocketHandlers, type RivetSocketData } from "./rivet.ts"
 import { makeRpcWebHandler, type RpcLog } from "./rpc.ts"
 
 /**
@@ -51,10 +53,11 @@ export const startFixtureBackend = (options: {
 		},
 	})
 
-	const server = Bun.serve({
+	const server = Bun.serve<RivetSocketData>({
 		port: options.port,
 		idleTimeout: 0,
-		async fetch(request) {
+		websocket: makeRivetSocketHandlers(options.datasets),
+		async fetch(request, bunServer) {
 			const url = new URL(request.url)
 			if (request.method === "OPTIONS")
 				return new Response(null, { status: 204, headers: corsHeaders(request) })
@@ -63,6 +66,14 @@ export const startFixtureBackend = (options: {
 			if (callLog) return callLog
 
 			const dataset = resolveDataset(request)
+			// Third-party hosts, not the Hazel backend: never part of the call log.
+			if (isNetworkRequest(url)) return handleNetwork(request, url, dataset)
+			if (isRivetRequest(url)) {
+				await calls.recordHttp(request, url)
+				return handleRivet(request, url, dataset, (data) =>
+					bunServer.upgrade(request, { data, headers: { "sec-websocket-protocol": "rivet" } }),
+				)
+			}
 			if (url.pathname.startsWith("/rpc")) {
 				await calls.recordRpc(request)
 				const rpcRequest = new Request(new URL("/rpc", url), request)

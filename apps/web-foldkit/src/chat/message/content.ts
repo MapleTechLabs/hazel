@@ -10,24 +10,32 @@ import {
 	isYoutubeUrl,
 } from "~/components/link-preview.utils"
 import {
-	type CustomElement,
+	type CustomDescendant,
 	deserializeFromMarkdown,
-} from "~/components/chat/slate-editor/slate-message-viewer-model"
-import { isText, nodeString } from "../markdown/leaves"
+} from "~/components/chat/slate-editor/slate-markdown-serializer"
+
+// The serializer alone (no Prism, no DOM), so row derivation can run in `update` and in tests.
+const nodeString = (node: CustomDescendant): string =>
+	"text" in node ? node.text : "children" in node ? node.children.map(nodeString).join("") : ""
 
 /** `MessageContent.Provider`'s URL processing: which URLs embed, and the text left to display. */
 
 export interface ProcessedUrls {
+	readonly tweetUrls: ReadonlyArray<string>
+	readonly youtubeUrls: ReadonlyArray<string>
+	readonly gifUrls: ReadonlyArray<string>
 	readonly embedUrls: ReadonlyArray<string>
 	readonly otherUrls: ReadonlyArray<string>
 	readonly displayContent: string
 }
 
+const NONE: ReadonlyArray<string> = []
+
 /** URLs in paragraphs only (not code blocks, tables or quotes), deduped. */
 const extractUrlsFromParagraphs = (content: string): ReadonlyArray<string> => {
 	const urls: string[] = []
 	for (const node of deserializeFromMarkdown(content))
-		if (!isText(node) && (node as CustomElement).type === "paragraph")
+		if (!("text" in node) && node.type === "paragraph")
 			urls.push(...extractUrls(nodeString(node)))
 	return [...new Set(urls)]
 }
@@ -50,7 +58,14 @@ export const processUrls = (
 ): ProcessedUrls => {
 	const paragraphUrls = extractUrlsFromParagraphs(content)
 	if (!isLinkShareMessage(content, paragraphUrls))
-		return { embedUrls: [], otherUrls: [], displayContent: content }
+		return {
+			tweetUrls: NONE,
+			youtubeUrls: NONE,
+			gifUrls: NONE,
+			embedUrls: NONE,
+			otherUrls: NONE,
+			displayContent: content,
+		}
 
 	const existingUrls = new Set<string>()
 	const existingLinear = new Set<string>()
@@ -75,13 +90,10 @@ export const processUrls = (
 		const key = githubKey(url)
 		return key && !existingGitHub.has(key)
 	})
-	const embedUrls = [
-		...unique.filter(isTweetUrl),
-		...unique.filter(isYoutubeUrl),
-		...unique.filter(isGifUrl),
-		...linear,
-		...github,
-	]
+	const tweetUrls = unique.filter(isTweetUrl)
+	const youtubeUrls = unique.filter(isYoutubeUrl)
+	const gifUrls = unique.filter(isGifUrl)
+	const embedUrls = [...tweetUrls, ...youtubeUrls, ...gifUrls, ...linear, ...github]
 	const otherUrls = unique.filter(
 		(url) =>
 			!isTweetUrl(url) &&
@@ -92,5 +104,19 @@ export const processUrls = (
 	)
 	let displayContent = content
 	for (const url of embedUrls) displayContent = displayContent.replace(url, "")
-	return { embedUrls, otherUrls, displayContent: displayContent.trim() }
+	return { tweetUrls, youtubeUrls, gifUrls, embedUrls, otherUrls, displayContent: displayContent.trim() }
+}
+
+const processed = new WeakMap<object, ProcessedUrls>()
+
+/** `processUrls` once per message object (messages keep their identity while unchanged). */
+export const processMessageUrls = (message: {
+	readonly content: string
+	readonly embeds: ReadonlyArray<MessageEmbed.MessageEmbed> | null
+}): ProcessedUrls => {
+	const cached = processed.get(message)
+	if (cached !== undefined) return cached
+	const result = processUrls(message.content, message.embeds)
+	processed.set(message, result)
+	return result
 }

@@ -2,12 +2,14 @@ import type { ChannelId, MessageId } from "@hazel/schema"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { cn } from "~/lib/utils"
-import type { MessageRow } from "../../page/chat/rows"
+import { type MessageRow, UrlEmbed } from "../../page/chat/rows"
 import { avatar } from "../../ui/avatar"
 import { attachmentsView } from "../attachments"
 import { messageEmbedsView } from "../embeds"
+import { liveView } from "../embeds/live-view"
+import { gifView, linkPreviewView, tweetView, youtubeView } from "../embeds/url-embeds"
 import { markdownView } from "../markdown/markdown-view"
-import { processUrls } from "./content"
+import { processMessageUrls } from "./content"
 import { formatTime, headerView, replySectionView, threadPreviewView } from "./parts"
 import { reactionButton, statusEmojiView, type TooltipContext } from "./tooltips"
 
@@ -16,6 +18,12 @@ import { reactionButton, statusEmojiView, type TooltipContext } from "./tooltips
 export interface RowContext<M> {
 	readonly tooltip: TooltipContext<M>
 	readonly toOpenImage: (messageId: MessageId, index: number) => M
+	/** A GIF or tweet photo opens the viewer on its URL images. */
+	readonly toOpenEmbedImage: (
+		messageId: MessageId,
+		images: ReadonlyArray<{ readonly url: string; readonly alt: string }>,
+		index: number,
+	) => M
 	readonly toOpenThread: (threadChannelId: ChannelId, messageId: MessageId) => M
 	/** A reaction pill's press: toggle that emoji (legacy `handleReaction`). */
 	readonly toReact: (messageId: MessageId, emoji: string) => M
@@ -76,14 +84,32 @@ export const avatarButton = <M>(
 		],
 	)
 
-/** `MessageContent.Text` + `MessageContent.Embeds` (URL unfurls need the network; not rendered). */
-const contentView = <M>(h: HtmlBuilder<M>, row: MessageRow): ReadonlyArray<Html> => {
+/** One URL embed; tweet photos and GIFs open the image viewer. */
+const urlEmbedView = <M>(h: HtmlBuilder<M>, row: MessageRow, embed: UrlEmbed, context: RowContext<M>): Html => {
+	const messageId = row.message.id
+	return UrlEmbed.match<Html>(embed, {
+		Tweet: ({ unfurl }) => {
+			const tweet = unfurl?._tag === "LoadedTweet" ? unfurl.tweet : null
+			const photos = tweet?.photos?.map((photo) => ({ url: photo.url, alt: tweet.text || "Tweet image" })) ?? []
+			// Legacy only mounts the viewer for a message with an author.
+			const canOpen = photos.length > 0 && row.message.author !== null
+			return tweetView(h, unfurl, canOpen ? (index) => context.toOpenEmbedImage(messageId, photos, index) : null)
+		},
+		Youtube: ({ embedUrl }) => youtubeView(h, embedUrl),
+		Gif: ({ mediaUrl, isKlipy }) =>
+			gifView(h, mediaUrl, isKlipy, context.toOpenEmbedImage(messageId, [{ url: mediaUrl, alt: "GIF" }], 0)),
+		LinkPreview: ({ url, unfurl }) => linkPreviewView(h, url, unfurl),
+	})
+}
+
+/** `MessageContent.Text` + `MessageContent.Embeds`. */
+const contentView = <M>(h: HtmlBuilder<M>, row: MessageRow, context: RowContext<M>): ReadonlyArray<Html> => {
 	const { message } = row
-	const hasLiveState = message.embeds?.some((embed) => embed.liveState?.enabled === true) ?? false
-	const { displayContent } = processUrls(message.content, message.embeds)
+	const { displayContent } = processMessageUrls(message)
 	return [
-		!hasLiveState && displayContent ? markdownView(h, displayContent, row.refs) : h.empty,
-		messageEmbedsView(h, message.embeds),
+		row.live === null && displayContent ? markdownView(h, displayContent, row.refs) : h.empty,
+		...row.urlEmbeds.map((embed) => urlEmbedView(h, row, embed, context)),
+		messageEmbedsView(h, message.embeds, row.live === null ? h.empty : liveView(h, row.live.state, row.live.loading)),
 	]
 }
 
@@ -147,7 +173,7 @@ export const messageRowView = <M>(h: HtmlBuilder<M>, row: MessageRow, context: R
 													),
 												)
 											: h.empty,
-										...contentView(h, row),
+										...contentView(h, row, context),
 										attachmentsView(h, row.attachments, {
 											toOpenImage: (index) => context.toOpenImage(message.id, index),
 										}),

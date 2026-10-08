@@ -10,10 +10,10 @@ import { corsHeaders } from "./electric.ts"
 
 const cache = new Map<string, Buffer>()
 
-const renderPng = (path: string): Buffer => {
+const renderPng = (path: string, fallback: readonly [number, number] = [256, 256]): Buffer => {
 	const size = path.match(/-(\d{1,4})x(\d{1,4})\.\w+$/)
-	const width = Math.min(Number(size?.[1] ?? 256), 2048)
-	const height = Math.min(Number(size?.[2] ?? 256), 2048)
+	const width = Math.min(Number(size?.[1] ?? fallback[0]), 2048)
+	const height = Math.min(Number(size?.[2] ?? fallback[1]), 2048)
 	const hash = createHash("sha1").update(path).digest()
 	const png = new PNG({ width, height })
 	// One flat colour per path: any resampling of a flat image gives the same pixels, so scaled
@@ -54,6 +54,18 @@ export const handleAsset = (request: Request, url: URL): Response => {
 		cache.set(url.pathname, body)
 	}
 	// Always PNG bytes; browsers sniff the content, whatever the extension says.
+	return new Response(new Uint8Array(body), {
+		headers: { ...corsHeaders(request), "content-type": "image/png", "cache-control": "no-store" },
+	})
+}
+
+/** A flat-colour PNG for a third-party image URL (`backend/network.ts`), keyed by host and path. */
+export const fixtureImage = (request: Request, key: string, fallback: readonly [number, number]): Response => {
+	let body = cache.get(key)
+	if (!body) {
+		body = renderPng(key, fallback)
+		cache.set(key, body)
+	}
 	return new Response(new Uint8Array(body), {
 		headers: { ...corsHeaders(request), "content-type": "image/png", "cache-control": "no-store" },
 	})

@@ -1,4 +1,14 @@
 import type { ChannelId, MessageId, UserId } from "@hazel/schema"
+import {
+	extractGiphyMediaUrl,
+	extractTweetId,
+	extractYoutubeTimestamp,
+	extractYoutubeVideoId,
+	isKlipyUrl,
+} from "~/components/link-preview.utils"
+import { cachedLiveState, initialLiveState, liveEmbedOf, type LiveStates } from "../../chat/live-state"
+import { processMessageUrls } from "../../chat/message/content"
+import { linkPreviewKey, tweetKey, type Unfurls } from "../../chat/unfurl"
 import { type AttachmentInfo, byKey, type Lookups, type PresenceInfo, type UserInfo } from "./lookups"
 import {
 	type AggregatedReaction,
@@ -8,11 +18,13 @@ import {
 	deepEqual,
 	type DisplayRow,
 	type GroupPosition,
+	type LiveRow,
 	type MarkdownRefs,
 	type MessageRowData,
 	type ReplyPreview,
 	type StatusEmoji,
 	type ThreadPreview,
+	type UrlEmbed,
 } from "./rows"
 
 /** Row derivation: grouping, date dividers and every lookup a message row displays. */
@@ -36,7 +48,17 @@ export interface DeriveContext {
 	readonly threadNames: ReadonlyMap<string, string>
 	readonly threadMessages: ReadonlyMap<string, ReadonlyArray<Lookups["threadMessages"][number]>>
 	readonly replyTargets: ReadonlyMap<string, Lookups["replyTargets"][number]>
+	readonly unfurls: Unfurls
+	readonly liveStates: LiveStates
 }
+
+/** Fetched URL unfurls and streamed AI replies, kept by the page beside the lookups. */
+export interface EmbedState {
+	readonly unfurls: Unfurls
+	readonly liveStates: LiveStates
+}
+
+const NO_EMBED_STATE: EmbedState = { unfurls: {}, liveStates: {} }
 
 const groupBy = <A>(items: ReadonlyArray<A>, key: (item: A) => string | null) => {
 	const map = new Map<string, A[]>()
@@ -50,8 +72,14 @@ const groupBy = <A>(items: ReadonlyArray<A>, key: (item: A) => string | null) =>
 	return map
 }
 
-export const toDeriveContext = (lookups: Lookups, currentUserId: string | undefined): DeriveContext => ({
+export const toDeriveContext = (
+	lookups: Lookups,
+	currentUserId: string | undefined,
+	embedState: EmbedState = NO_EMBED_STATE,
+): DeriveContext => ({
 	currentUserId,
+	unfurls: embedState.unfurls,
+	liveStates: embedState.liveStates,
 	users: byKey(lookups.users, (user) => user.id),
 	presence: byKey(lookups.presence, (presence) => presence.userId),
 	botNames: new Map(lookups.bots.map((bot) => [bot.userId, bot.name])),
@@ -155,6 +183,64 @@ const refsOf = (context: DeriveContext, content: string): MarkdownRefs => ({
 	}),
 })
 
+/** `Embeds`: tweets, YouTube, GIFs, then the last other URL as a link preview (Linear and GitHub need the HTTP API). */
+const urlEmbedsOf = (context: DeriveContext, message: ChatMessage): ReadonlyArray<UrlEmbed> => {
+	const urls = processMessageUrls(message)
+	if (urls.embedUrls.length === 0 && urls.otherUrls.length === 0) return NO_URL_EMBEDS
+	const embeds: UrlEmbed[] = []
+	for (const url of urls.tweetUrls) {
+		const tweetId = extractTweetId(url)
+		if (tweetId) embeds.push({ _tag: "Tweet", url, tweetId, unfurl: context.unfurls[tweetKey(tweetId)] ?? null })
+	}
+	for (const url of urls.youtubeUrls) {
+		const videoId = extractYoutubeVideoId(url)
+		if (!videoId) continue
+		const embedUrl = new URL(`https://www.youtube.com/embed/${videoId}`)
+		const startTime = extractYoutubeTimestamp(url)
+		if (startTime) embedUrl.searchParams.set("start", startTime.toString())
+		embeds.push({ _tag: "Youtube", url, embedUrl: embedUrl.toString() })
+	}
+	for (const url of urls.gifUrls) {
+		const isKlipy = isKlipyUrl(url)
+		embeds.push({ _tag: "Gif", url, mediaUrl: isKlipy ? url : extractGiphyMediaUrl(url), isKlipy })
+	}
+	const previewUrl = urls.otherUrls[urls.otherUrls.length - 1]
+	if (previewUrl)
+		embeds.push({ _tag: "LinkPreview", url: previewUrl, unfurl: context.unfurls[linkPreviewKey(previewUrl)] ?? null })
+	return embeds
+}
+
+export interface UnfurlRequest {
+	readonly key: string
+	readonly kind: "tweet" | "preview"
+	/** The tweet id, or the URL to preview. */
+	readonly value: string
+}
+
+/** The unfurls a message's embeds fetch (`TweetEmbed`, `LinkPreview`). */
+export const unfurlRequestsOf = (message: ChatMessage): ReadonlyArray<UnfurlRequest> => {
+	const urls = processMessageUrls(message)
+	const requests: UnfurlRequest[] = []
+	for (const url of urls.tweetUrls) {
+		const tweetId = extractTweetId(url)
+		if (tweetId) requests.push({ key: tweetKey(tweetId), kind: "tweet", value: tweetId })
+	}
+	const previewUrl = urls.otherUrls[urls.otherUrls.length - 1]
+	if (previewUrl) requests.push({ key: linkPreviewKey(previewUrl), kind: "preview", value: previewUrl })
+	return requests
+}
+
+/** `MessageEmbeds`' live-state block: the cached snapshot, or the connection's state. */
+const liveOf = (context: DeriveContext, message: ChatMessage): LiveRow | null => {
+	const live = liveEmbedOf(message.embeds)
+	if (live === null) return null
+	return {
+		state: cachedLiveState(message.embeds) ?? context.liveStates[message.id] ?? initialLiveState,
+		loading: { text: live.loading?.text ?? "Thinking", icon: live.loading?.icon ?? "sparkle" },
+	}
+}
+
+const NO_URL_EMBEDS: ReadonlyArray<UrlEmbed> = []
 const NO_REACTIONS: ReadonlyArray<ChatReaction> = []
 const NO_ATTACHMENTS: ReadonlyArray<AttachmentInfo> = []
 
@@ -176,6 +262,8 @@ export const messageRowData = (
 	thread: threadOf(context, message.threadChannelId),
 	attachments: context.attachmentsByMessage.get(message.id) ?? NO_ATTACHMENTS,
 	refs: refsOf(context, message.content),
+	urlEmbeds: urlEmbedsOf(context, message),
+	live: liveOf(context, message),
 })
 
 /**
@@ -244,7 +332,9 @@ const sameData = (old: MessageRowData, data: MessageRowData) =>
 	deepEqual(old.reply, data.reply) &&
 	deepEqual(old.thread, data.thread) &&
 	deepEqual(old.attachments, data.attachments) &&
-	deepEqual(old.refs, data.refs)
+	deepEqual(old.refs, data.refs) &&
+	deepEqual(old.urlEmbeds, data.urlEmbeds) &&
+	deepEqual(old.live, data.live)
 
 /** Ids the reply and thread lookups need for this window. */
 export const replyIdsOf = (messages: ReadonlyArray<ChatMessage>): ReadonlyArray<MessageId> =>

@@ -5,6 +5,8 @@
  * - Math.random is seeded (generated avatars, IDs, jitter all repeat exactly)
  * - CSS animations/transitions are frozen at their end state, carets hidden
  * - scrollbars hidden (their rendering differs between headless runs)
+ * - intervals run at most once per frame: RivetKit's keep-alive is `setInterval(fn)` (0 ms), which the
+ *   frozen clock would run back to back, starving every other timer
  */
 export const installDeterminism = (seed: number) => {
 	let state = seed >>> 0
@@ -21,6 +23,11 @@ export const installDeterminism = (seed: number) => {
 		t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
 		return ((t ^ (t >>> 14)) >>> 0) / 4294967296
 	}
+
+	const setIntervalOf = window.setInterval.bind(window)
+	const clampedSetInterval = (handler: TimerHandler, timeout?: number, ...args: unknown[]) =>
+		setIntervalOf(handler, Math.max(Number(timeout) || 0, 16), ...args)
+	Reflect.set(window, "setInterval", clampedSetInterval)
 
 	const css = `
 		*, *::before, *::after {

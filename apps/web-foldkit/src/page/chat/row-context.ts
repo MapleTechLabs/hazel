@@ -101,6 +101,8 @@ const buildContext = <M>(
 		},
 		toOpenImage: (messageId, index) =>
 			overlaysMessage(toParentMessage, Overlays.Message.ClickedAttachmentImage({ messageId, index })),
+		toOpenEmbedImage: (messageId, images, index) =>
+			overlaysMessage(toParentMessage, Overlays.Message.ClickedEmbedImage({ messageId, images, index })),
 		toReact: (messageId, emoji) =>
 			overlaysMessage(toParentMessage, Overlays.Message.ClickedReaction({ messageId, emoji })),
 		toOpenThread: (threadChannelId, messageId) =>
