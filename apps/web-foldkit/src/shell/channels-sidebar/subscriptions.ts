@@ -41,7 +41,7 @@ const partnerUserIds = (model: Model): Array<UserId> =>
 	].sort()
 
 export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
-	sidebarDismissedHints: Subscription.persistent(dismissedHintStream),
+	sidebarDismissedHints: Subscription.persistentEntry(dismissedHintStream),
 	sidebarPresenceClock: entry(
 		{},
 		{

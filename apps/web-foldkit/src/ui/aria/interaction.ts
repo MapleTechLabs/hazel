@@ -1,5 +1,5 @@
 import { Option, Schema, Stream } from "effect"
-import { Subscription } from "foldkit"
+import { Dom, Subscription } from "foldkit"
 import type { HtmlBuilder, TextareaAttribute } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
@@ -197,10 +197,10 @@ const isModalityKey = (event: KeyboardEvent) =>
 	)
 
 export const subscriptions = Subscription.make<Model, Message>()(() => ({
-	modality: Subscription.persistent(
+	modality: Subscription.persistentEntry(
 		Stream.mergeAll(
 			[
-				Subscription.fromEventFilterMap({
+				Dom.streamFromEventFilterMap({
 					target: document,
 					type: "keydown",
 					filterMapEvent: (event) =>
@@ -209,7 +209,7 @@ export const subscriptions = Subscription.make<Model, Message>()(() => ({
 							: Option.none(),
 					options: { capture: true },
 				}),
-				Subscription.fromEventFilterMap({
+				Dom.streamFromEventFilterMap({
 					target: document,
 					type: "keyup",
 					filterMapEvent: (event) =>
@@ -218,7 +218,7 @@ export const subscriptions = Subscription.make<Model, Message>()(() => ({
 							: Option.none(),
 					options: { capture: true },
 				}),
-				Subscription.fromEvent({
+				Dom.streamFromEvent({
 					target: document,
 					type: "pointerdown",
 					mapEvent: () => Message.PressedDocumentPointer(),
@@ -230,8 +230,8 @@ export const subscriptions = Subscription.make<Model, Message>()(() => ({
 	),
 	// usePress ends a pointer press on pointerup anywhere in the document. Always subscribed:
 	// restarting the stream per press would cost a fiber (and a seeded random draw) each time.
-	pointerRelease: Subscription.persistent(
-		Subscription.fromEvent({
+	pointerRelease: Subscription.persistentEntry(
+		Dom.streamFromEvent({
 			target: document,
 			type: "pointerup",
 			mapEvent: () => Message.ReleasedPointer(),

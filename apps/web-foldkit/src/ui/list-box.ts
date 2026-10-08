@@ -321,8 +321,8 @@ export const update = (model: Model, message: Message): UpdateReturn =>
 
 /** usePress ends a pointer press on pointerup anywhere; always subscribed, so presses never restart it. */
 export const subscriptions = Subscription.make<Model, Message>()(() => ({
-	pointerRelease: Subscription.persistent(
-		Subscription.fromEvent({
+	pointerRelease: Subscription.persistentEntry(
+		Dom.streamFromEvent({
 			target: document,
 			type: "pointerup",
 			mapEvent: () => Message.ReleasedPointer(),

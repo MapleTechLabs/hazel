@@ -1,5 +1,5 @@
 import { Effect, Option, Queue, Schema, Stream } from "effect"
-import { Subscription } from "foldkit"
+import { Dom } from "foldkit"
 import { ACTIVITY_THROTTLE_MS } from "./model"
 
 /**
@@ -49,14 +49,14 @@ const ACTIVITY_EVENTS = ["mousemove", "keydown", "scroll", "click", "touchstart"
 export const localActivity: Stream.Stream<number> = Stream.suspend(() => {
 	let lastEmittedMs = Number.NEGATIVE_INFINITY
 	const inputs = ACTIVITY_EVENTS.map((type) =>
-		Subscription.fromEvent({
+		Dom.streamFromEvent({
 			target: window,
 			type,
 			mapEvent: () => undefined,
 			options: { passive: true },
 		}),
 	)
-	const visible = Subscription.fromEventFilterMap({
+	const visible = Dom.streamFromEventFilterMap({
 		target: document,
 		type: "visibilitychange",
 		filterMapEvent: () =>
@@ -89,7 +89,7 @@ export const remoteActivity: Stream.Stream<number> = Stream.suspend(() =>
 					(channel) => Effect.sync(() => channel.close()),
 				).pipe(Effect.flatMap(() => Effect.never)),
 			)
-		: Subscription.fromEventFilterMap({
+		: Dom.streamFromEventFilterMap({
 				target: window,
 				type: "storage",
 				filterMapEvent: (event) =>

@@ -1,5 +1,5 @@
 import { Duration, Effect, Equivalence, Option, Schema } from "effect"
-import { Command, Subscription, type Update } from "foldkit"
+import { Command, Dom, Subscription, type Update } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
@@ -289,7 +289,7 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
 			}),
 			keepAliveEquivalence: Equivalence.make((a, b) => a.id === b.id && a.maxLength === b.maxLength),
 			dependenciesToStream: (_dependencies, readDependencies) =>
-				Subscription.fromEvent({
+				Dom.streamFromEvent({
 					target: document,
 					type: "selectionchange",
 					mapEvent: () => {

@@ -1,4 +1,4 @@
-import { Subscription } from "foldkit"
+import { Dom } from "foldkit"
 import { HOTKEY_DEFINITIONS_BY_ID, type AppHotkeyActionId } from "~/lib/hotkeys/hotkey-registry"
 
 /**
@@ -14,7 +14,7 @@ const LAYOUT_ACTIONS: ReadonlyArray<AppHotkeyActionId> = [
 ]
 
 export const layoutHotkeys = <Message>(toMessage: (actionId: AppHotkeyActionId) => Message) =>
-	Subscription.keyBindings<Message>({
+	Dom.streamFromKeyBindings<Message>({
 		bindings: LAYOUT_ACTIONS.map((actionId) => ({
 			keys: HOTKEY_DEFINITIONS_BY_ID[actionId].defaultHotkey,
 			whileTyping: "Allow" as const,

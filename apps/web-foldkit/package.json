@@ -10,14 +10,14 @@
 	"dependencies": {
 		"@effect/platform-browser": "catalog:effect",
 		"@electric-sql/client": "1.5.28",
-		"@foldkit/ui": "0.166.0",
+		"@foldkit/ui": "0.167.0",
 		"@fontsource/inter": "^5.2.8",
 		"@hazel/domain": "workspace:*",
 		"@hazel/schema": "workspace:*",
 		"@tanstack/db": "0.11.3",
 		"effect": "catalog:effect",
 		"embla-carousel": "8.6.0",
-		"foldkit": "0.166.0",
+		"foldkit": "0.167.0",
 		"marked": "^17.0.4",
 		"prosemirror-commands": "^1.7.2",
 		"prosemirror-history": "^1.5.1",
@@ -31,8 +31,8 @@
 		"tailwind-variants": "^3.2.2"
 	},
 	"devDependencies": {
-		"@foldkit/devtools": "0.166.0",
-		"@foldkit/vite-plugin": "0.26.1",
+		"@foldkit/devtools": "0.167.0",
+		"@foldkit/vite-plugin": "0.27.0",
 		"@tailwindcss/vite": "^4.2.1",
 		"tailwindcss": "^4.2.1",
 		"tailwindcss-react-aria-components": "^2.0.1",
