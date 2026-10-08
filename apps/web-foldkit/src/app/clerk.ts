@@ -38,7 +38,9 @@ export const clerkAuthStream: Stream.Stream<Auth> = Stream.callback<Auth>((queue
 		Effect.flatMap((clerk) =>
 			Effect.acquireRelease(
 				Effect.sync(() =>
-					clerk.addListener(({ session }) => Queue.offerUnsafe(queue, session ? "SignedIn" : "SignedOut")),
+					clerk.addListener(({ session }) =>
+						Queue.offerUnsafe(queue, session ? "SignedIn" : "SignedOut"),
+					),
 				),
 				(unsubscribe) => Effect.sync(unsubscribe),
 			),

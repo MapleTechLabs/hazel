@@ -71,23 +71,21 @@ export const SetPresenceStatus = Command.define("SetPresenceStatus", {
 const RECENT_CHANNELS_KEY = "recentChannels"
 const MAX_RECENT_CHANNELS = 8
 
-const readJson = (key: string) =>
-	Effect.try(() => {
-		const raw = localStorage.getItem(key)
-		return raw === null ? null : (JSON.parse(raw) as unknown)
-	}).pipe(Effect.orElseSucceed(() => null))
-
-
 const RecentChannels = Schema.Array(Schema.Struct({ channelId: Schema.String, visitedAt: Schema.Number }))
-const decodeRecent = Schema.decodeUnknownOption(RecentChannels)
+const decodeRecentJson = Schema.decodeUnknownOption(Schema.fromJsonString(RecentChannels))
+
+/** The stored `recentChannels`, empty when missing or unreadable. */
+const readRecentChannels = Effect.try(() => localStorage.getItem(RECENT_CHANNELS_KEY)).pipe(
+	Effect.map((raw) => (raw === null ? [] : Option.getOrElse(decodeRecentJson(raw), () => []))),
+	Effect.orElseSucceed(() => []),
+)
 
 /** `recentChannelsAtom`: the palette's `trackChannel`, newest first, at most eight. */
 export const TrackRecentChannel = Command.define("TrackRecentChannel", {
 	args: { channelId: ChannelId },
 	messages: [Message.CompletedTrackRecentChannel],
 	execute: ({ channelId }) =>
-		readJson(RECENT_CHANNELS_KEY).pipe(
-			Effect.map((raw) => Option.getOrElse(decodeRecent(raw), () => [])),
+		readRecentChannels.pipe(
 			Effect.map((channels) =>
 				[{ channelId, visitedAt: Date.now() }, ...channels.filter((entry) => entry.channelId !== channelId)].slice(
 					0,
@@ -103,9 +101,9 @@ export const TrackRecentChannel = Command.define("TrackRecentChannel", {
 const decodeChannelId = Schema.decodeUnknownOption(ChannelId)
 
 /** The recent channel ids, as `recentChannelsAtom` reads them, decoded at the storage boundary. */
-export const readRecentChannelIds = readJson(RECENT_CHANNELS_KEY).pipe(
-	Effect.map((raw) =>
-		Option.getOrElse(decodeRecent(raw), () => []).flatMap((entry) =>
+export const readRecentChannelIds = readRecentChannels.pipe(
+	Effect.map((channels) =>
+		channels.flatMap((entry) =>
 			Option.match(decodeChannelId(entry.channelId), { onNone: () => [], onSome: (id) => [id] }),
 		),
 	),

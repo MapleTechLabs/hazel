@@ -120,7 +120,8 @@ const switchedOrganization = (model: Model, key: string, context: Context): Shel
 	Option.match(
 		Option.fromNullishOr(
 			model.userOrganizations.find(
-				(organization) => `org:${organization.id}` === key && organization.id !== context.organizationId,
+				(organization) =>
+					`org:${organization.id}` === key && organization.id !== context.organizationId,
 			),
 		),
 		{

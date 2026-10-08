@@ -29,7 +29,9 @@ describe("notification sinks", () => {
 
 		const settings = { ...DEFAULT_SOUND_SETTINGS, volume: 0.3, soundFile: "notification03" as const }
 		const fiber = Effect.runFork(
-			Stream.runDrain(wireNotificationSinks({ userId: ada, settings, currentChannelId: null, sessionStartMs: 0 })),
+			Stream.runDrain(
+				wireNotificationSinks({ userId: ada, settings, currentChannelId: null, sessionStartMs: 0 }),
+			),
 		)
 		await Effect.runPromise(Effect.yieldNow)
 		const result = await notificationSoundManager.testSound()

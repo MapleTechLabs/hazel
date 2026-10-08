@@ -42,7 +42,8 @@ export const pickPresenceStatus = (model: Model, status: PresenceModel.PresenceS
 
 export const update = (model: Model, message: Message): Return =>
 	Message.match<Return>(message, {
-		GotPresenceMessage: ({ message: inner }) => withPresence(model, PresenceUpdate.update(model.presence, inner)),
+		GotPresenceMessage: ({ message: inner }) =>
+			withPresence(model, PresenceUpdate.update(model.presence, inner)),
 		AcquiredRivetClient: () => ({ model: modifyFields(model, { rivet: () => "Ready" }) }),
 		ReleasedRivetClient: () => ({ model: modifyFields(model, { rivet: () => "Connecting" }) }),
 		FailedAcquireRivetClient: () => ({ model: modifyFields(model, { rivet: () => "Failed" }) }),

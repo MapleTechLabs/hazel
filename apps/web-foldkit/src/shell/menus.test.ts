@@ -25,7 +25,11 @@ describe("formatStatusExpirationAt", () => {
 		expect(formatStatusExpirationAt(inThreeHours, nowMs)).toBe(isSameDay ? time : `tomorrow ${time}`)
 		const inThreeDays = nowMs + 3 * 86_400_000
 		expect(formatStatusExpirationAt(inThreeDays, nowMs)).toBe(
-			new Date(inThreeDays).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }),
+			new Date(inThreeDays).toLocaleDateString([], {
+				weekday: "short",
+				month: "short",
+				day: "numeric",
+			}),
 		)
 	})
 })

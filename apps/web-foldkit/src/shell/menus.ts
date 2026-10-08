@@ -221,7 +221,10 @@ export const userMenuFooter = <M>(
 									h.div(
 										[h.Class("in-data-[collapsible=dock]:hidden min-w-0 text-sm")],
 										[
-											sidebarLabel(h, [displayName, ...statusEmojiTitled(h, status, statusExpiration)]),
+											sidebarLabel(h, [
+												displayName,
+												...statusEmojiTitled(h, status, statusExpiration),
+											]),
 											...(context.currentUser?.email
 												? [
 														h.span(

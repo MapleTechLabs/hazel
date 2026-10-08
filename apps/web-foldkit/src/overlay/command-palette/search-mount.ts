@@ -37,24 +37,27 @@ export const MountSearchEditor = Mount.defineStream("MountSearchEditor", {
 	args: { placeholder: Schema.String },
 	messages: [Message.EditedSearch, Message.PressedSearchKey, Message.PressedAutocompleteKey],
 	execute: ({ element, placeholder }) =>
-		Stream.callback<EditorMessage>((queue) =>
-			Effect.acquireRelease(
-				Effect.sync(() => {
-					const view = createSearchEditor(element as HTMLElement, {
-						placeholder,
-						emit: (event) => Queue.offerUnsafe(queue, toMessage(event)),
-					})
-					registerSearchEditor(SEARCH_EDITOR_ID, view)
-					view.focus()
-					return view
-				}),
-				(view) =>
-					Effect.sync(() => {
-						unregisterSearchEditor(SEARCH_EDITOR_ID, view)
-						view.destroy()
-					}),
-			).pipe(Effect.flatMap(() => Effect.never)),
-		),
+		// The keyed host is always a div; anything else has no editor to mount.
+		!(element instanceof HTMLElement)
+			? Stream.empty
+			: Stream.callback<EditorMessage>((queue) =>
+					Effect.acquireRelease(
+						Effect.sync(() => {
+							const view = createSearchEditor(element, {
+								placeholder,
+								emit: (event) => Queue.offerUnsafe(queue, toMessage(event)),
+							})
+							registerSearchEditor(SEARCH_EDITOR_ID, view)
+							view.focus()
+							return view
+						}),
+						(view) =>
+							Effect.sync(() => {
+								unregisterSearchEditor(SEARCH_EDITOR_ID, view)
+								view.destroy()
+							}),
+					).pipe(Effect.flatMap(() => Effect.never)),
+				),
 })
 
 const withEditor = <A>(f: (view: NonNullable<ReturnType<typeof searchEditorById>>) => void, completed: A) =>
@@ -72,19 +75,22 @@ export const SetSearchText = Command.define("SetSearchText", {
 export const DeleteFilterText = Command.define("DeleteFilterText", {
 	args: { filterStartOffset: Schema.Number },
 	messages: [Message.CompletedDeleteFilterText],
-	execute: ({ filterStartOffset }) => withEditor((view) => deleteFilterText(view, filterStartOffset), Message.CompletedDeleteFilterText()),
+	execute: ({ filterStartOffset }) =>
+		withEditor((view) => deleteFilterText(view, filterStartOffset), Message.CompletedDeleteFilterText()),
 })
 
 export const SyncSuggestionCount = Command.define("SyncSuggestionCount", {
 	args: { count: Schema.Number },
 	messages: [Message.CompletedSyncSuggestionCount],
-	execute: ({ count }) => withEditor((view) => syncOptionCount(view, count), Message.CompletedSyncSuggestionCount()),
+	execute: ({ count }) =>
+		withEditor((view) => syncOptionCount(view, count), Message.CompletedSyncSuggestionCount()),
 })
 
 export const SetSearchPlaceholder = Command.define("SetSearchPlaceholder", {
 	args: { placeholder: Schema.String },
 	messages: [Message.CompletedSetSearchPlaceholder],
-	execute: ({ placeholder }) => withEditor((view) => setPlaceholder(view, placeholder), Message.CompletedSetSearchPlaceholder()),
+	execute: ({ placeholder }) =>
+		withEditor((view) => setPlaceholder(view, placeholder), Message.CompletedSetSearchPlaceholder()),
 })
 
 export const FocusSearchEditor = Command.define("FocusSearchEditor", {

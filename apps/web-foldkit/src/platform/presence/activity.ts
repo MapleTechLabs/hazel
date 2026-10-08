@@ -39,7 +39,10 @@ export const broadcastActivity = (at: number): Effect.Effect<void> =>
 				(sender) => Effect.sync(() => sender.close()),
 			)
 		: Effect.try(() =>
-				localStorage.setItem(STORAGE_KEY, JSON.stringify({ type: "activity", at, tabId, nonce: Math.random() })),
+				localStorage.setItem(
+					STORAGE_KEY,
+					JSON.stringify({ type: "activity", at, tabId, nonce: Math.random() }),
+				),
 			)
 	).pipe(Effect.ignore)
 
