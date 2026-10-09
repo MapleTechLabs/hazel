@@ -2,6 +2,7 @@ import { Effect, Exit, Schema } from "effect"
 import { Command } from "foldkit"
 import { load } from "foldkit/navigation"
 import { type ErrorHandlers, failureToast } from "../../data/actions"
+import { signInHref } from "../../route"
 import { HazelRpc } from "../../rpc"
 import { Message } from "./message"
 
@@ -57,7 +58,5 @@ export const RedirectToSignIn = Command.define("RedirectToSignIn", {
 	args: { returnTo: Schema.String },
 	messages: [Message.CompletedRedirectToSignIn],
 	execute: ({ returnTo }) =>
-		load(`/sign-in?${new URLSearchParams({ redirect_url: returnTo })}`).pipe(
-			Effect.as(Message.CompletedRedirectToSignIn()),
-		),
+		load(signInHref(returnTo)).pipe(Effect.as(Message.CompletedRedirectToSignIn())),
 })

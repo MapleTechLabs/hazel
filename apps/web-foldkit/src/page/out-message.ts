@@ -2,6 +2,7 @@ import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import { Page as CommandPalettePage } from "../overlay/command-palette/model"
 import { ModalRequest } from "../overlay/modal/requests"
+import { type AppRoute, hrefOf } from "../route"
 import { ToastRequest } from "../overlay/toasts"
 import { SoundSettings } from "../notification-sound"
 import { ThemePreference } from "../theme"
@@ -24,3 +25,17 @@ export const PageOutMessage = defineMessageUnion({
 	RequestedMobileSidebar: {},
 })
 export type PageOutMessage = typeof PageOutMessage.Type
+
+/** `RequestedNavigation` to an org route; nothing outside an org, where org pages never update. */
+export const requestedOrgNavigation = (
+	orgSlug: string | null,
+	toRoute: (orgSlug: string) => AppRoute,
+	options: { readonly replace?: boolean; readonly toast?: ToastRequest } = {},
+): PageOutMessage | undefined =>
+	orgSlug === null
+		? undefined
+		: PageOutMessage.RequestedNavigation({
+				href: hrefOf(toRoute(orgSlug)),
+				replace: options.replace ?? false,
+				...(options.toast === undefined ? {} : { toast: options.toast }),
+			})

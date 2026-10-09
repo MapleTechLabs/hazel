@@ -1,9 +1,19 @@
-import { OrganizationId, UserId } from "@hazel/schema"
+import { ChannelId, OrganizationId, SyncConnectionId, UserId } from "@hazel/schema"
 import { Option, Schema } from "effect"
 import { fromString } from "foldkit/url"
 import { describe, expect, it } from "vitest"
 import { authRedirect, rootRedirect, routeRedirect } from "./redirect"
-import { type AppRoute, onboardingHref, orgSectionOf, urlToAppRoute } from "./route"
+import {
+	AppRoute,
+	chatMessageHref,
+	hrefOf,
+	onboardingHref,
+	organizationHref,
+	orgSectionOf,
+	type RouteTag,
+	signInHref,
+	urlToAppRoute,
+} from "./route"
 import type { CurrentUser } from "./session"
 
 const channelId = "0b5a1f7e-3c55-5d0e-9a51-0b7e6b2f0c11"
@@ -156,13 +166,197 @@ describe("redirects", () => {
 	})
 
 	it("resolves the root redirect like `_app/index.tsx`", () => {
-		const member = Option.some({ organizationId: orgId, slug: "hazel" })
+		const organizationId = Schema.decodeUnknownSync(OrganizationId)(orgId)
+		const member = Option.some({ organizationId, slug: "hazel" })
 		expect(rootRedirect(user(true), member)).toBe("/hazel")
 		expect(rootRedirect(user(true), Option.none())).toBe("/select-organization")
 		expect(rootRedirect(user(false), Option.none())).toBe("/onboarding")
 		expect(rootRedirect(user(false), member)).toBe(`/onboarding?orgId=${orgId}`)
-		expect(rootRedirect(user(true), Option.some({ organizationId: orgId, slug: null }))).toBe(
+		expect(rootRedirect(user(true), Option.some({ organizationId, slug: null }))).toBe(
 			`/onboarding/setup-organization?orgId=${orgId}`,
 		)
+	})
+})
+
+describe("hrefOf", () => {
+	const orgSlug = "hazel"
+	const channel = Schema.decodeUnknownSync(ChannelId)(channelId)
+	const user = Schema.decodeUnknownSync(UserId)(userId)
+	const connection = Schema.decodeUnknownSync(SyncConnectionId)(connectionId)
+	const organization = Schema.decodeUnknownSync(OrganizationId)(orgId)
+	const none = Option.none<string>()
+
+	/** One value per tag (the record keeps it exhaustive) and the exact URL it must print. */
+	const examples: { readonly [Tag in RouteTag]: ReadonlyArray<readonly [AppRoute, string]> } = {
+		Root: [[AppRoute.Root(), "/"]],
+		SignIn: [
+			[AppRoute.SignIn({ splat: "", redirectUrl: none }), "/sign-in"],
+			[
+				AppRoute.SignIn({ splat: "", redirectUrl: Option.some("/hazel/chat") }),
+				"/sign-in?redirect_url=%2Fhazel%2Fchat",
+			],
+			[
+				AppRoute.SignIn({ splat: "factor-one/sso", redirectUrl: Option.some("/hazel") }),
+				"/sign-in/factor-one/sso?redirect_url=%2Fhazel",
+			],
+		],
+		SignUp: [
+			[AppRoute.SignUp({ splat: "", redirectUrl: none }), "/sign-up"],
+			[AppRoute.SignUp({ splat: "verify", redirectUrl: none }), "/sign-up/verify"],
+		],
+		Join: [[AppRoute.Join({ slug: "hazel" }), "/join/hazel"]],
+		Onboarding: [
+			[AppRoute.Onboarding({ orgId: Option.none(), step: none }), "/onboarding"],
+			[
+				AppRoute.Onboarding({ orgId: Option.some(organization), step: Option.some("role") }),
+				`/onboarding?orgId=${orgId}&step=role`,
+			],
+		],
+		OnboardingSetupOrganization: [
+			[
+				AppRoute.OnboardingSetupOrganization({ orgId: Option.none() }),
+				"/onboarding/setup-organization",
+			],
+			[
+				AppRoute.OnboardingSetupOrganization({ orgId: Option.some(organization) }),
+				`/onboarding/setup-organization?orgId=${orgId}`,
+			],
+		],
+		SelectOrganization: [[AppRoute.SelectOrganization(), "/select-organization"]],
+		OrgHome: [[AppRoute.OrgHome({ orgSlug }), "/hazel"]],
+		ChatIndex: [[AppRoute.ChatIndex({ orgSlug }), "/hazel/chat"]],
+		ChatChannel: [[AppRoute.ChatChannel({ orgSlug, channelId: channel }), `/hazel/chat/${channelId}`]],
+		ChatFiles: [[AppRoute.ChatFiles({ orgSlug, channelId: channel }), `/hazel/chat/${channelId}/files`]],
+		ChatFilesMedia: [
+			[
+				AppRoute.ChatFilesMedia({ orgSlug, channelId: channel }),
+				`/hazel/chat/${channelId}/files/media`,
+			],
+		],
+		ChannelSettings: [
+			[
+				AppRoute.ChannelSettings({ orgSlug, channelId: channel }),
+				`/hazel/channels/${channelId}/settings`,
+			],
+		],
+		ChannelSettingsOverview: [
+			[
+				AppRoute.ChannelSettingsOverview({ orgSlug, channelId: channel }),
+				`/hazel/channels/${channelId}/settings/overview`,
+			],
+		],
+		ChannelSettingsIntegrations: [
+			[
+				AppRoute.ChannelSettingsIntegrations({ orgSlug, channelId: channel }),
+				`/hazel/channels/${channelId}/settings/integrations`,
+			],
+		],
+		ChannelSettingsConnect: [
+			[
+				AppRoute.ChannelSettingsConnect({ orgSlug, channelId: channel }),
+				`/hazel/channels/${channelId}/settings/connect`,
+			],
+		],
+		MySettingsAppearance: [[AppRoute.MySettingsAppearance({ orgSlug }), "/hazel/my-settings"]],
+		MySettingsProfile: [[AppRoute.MySettingsProfile({ orgSlug }), "/hazel/my-settings/profile"]],
+		MySettingsLinkedAccounts: [
+			[
+				AppRoute.MySettingsLinkedAccounts({
+					orgSlug,
+					connectionStatus: none,
+					provider: none,
+					errorCode: none,
+				}),
+				"/hazel/my-settings/linked-accounts",
+			],
+			[
+				AppRoute.MySettingsLinkedAccounts({
+					orgSlug,
+					connectionStatus: Option.some("error"),
+					provider: Option.some("discord"),
+					errorCode: Option.some("db_error"),
+				}),
+				"/hazel/my-settings/linked-accounts?connection_status=error&provider=discord&error_code=db_error",
+			],
+		],
+		MySettingsNotifications: [
+			[AppRoute.MySettingsNotifications({ orgSlug }), "/hazel/my-settings/notifications"],
+		],
+		MySettingsDesktop: [[AppRoute.MySettingsDesktop({ orgSlug }), "/hazel/my-settings/desktop"]],
+		NotificationsAll: [[AppRoute.NotificationsAll({ orgSlug }), "/hazel/notifications"]],
+		NotificationsGeneral: [[AppRoute.NotificationsGeneral({ orgSlug }), "/hazel/notifications/general"]],
+		NotificationsThreads: [[AppRoute.NotificationsThreads({ orgSlug }), "/hazel/notifications/threads"]],
+		NotificationsDms: [[AppRoute.NotificationsDms({ orgSlug }), "/hazel/notifications/dms"]],
+		Profile: [[AppRoute.Profile({ orgSlug, userId: user }), `/hazel/profile/${userId}`]],
+		SettingsGeneral: [[AppRoute.SettingsGeneral({ orgSlug }), "/hazel/settings"]],
+		TeamSettings: [[AppRoute.TeamSettings({ orgSlug }), "/hazel/settings/team"]],
+		SettingsInvitations: [[AppRoute.SettingsInvitations({ orgSlug }), "/hazel/settings/invitations"]],
+		SettingsCustomEmojis: [[AppRoute.SettingsCustomEmojis({ orgSlug }), "/hazel/settings/custom-emojis"]],
+		SettingsDebug: [[AppRoute.SettingsDebug({ orgSlug }), "/hazel/settings/debug"]],
+		SettingsConnectInvites: [
+			[AppRoute.SettingsConnectInvites({ orgSlug }), "/hazel/settings/connect-invites"],
+		],
+		SettingsChatSync: [[AppRoute.SettingsChatSync({ orgSlug }), "/hazel/settings/chat-sync"]],
+		SettingsChatSyncConnection: [
+			[
+				AppRoute.SettingsChatSyncConnection({ orgSlug, connectionId: connection }),
+				`/hazel/settings/chat-sync/${connectionId}`,
+			],
+		],
+		SettingsIntegrations: [[AppRoute.SettingsIntegrations({ orgSlug }), "/hazel/settings/integrations"]],
+		SettingsIntegrationsInstalled: [
+			[AppRoute.SettingsIntegrationsInstalled({ orgSlug }), "/hazel/settings/integrations/installed"],
+		],
+		SettingsIntegrationsMarketplace: [
+			[
+				AppRoute.SettingsIntegrationsMarketplace({ orgSlug }),
+				"/hazel/settings/integrations/marketplace",
+			],
+		],
+		SettingsIntegrationsYourApps: [
+			[AppRoute.SettingsIntegrationsYourApps({ orgSlug }), "/hazel/settings/integrations/your-apps"],
+		],
+		SettingsIntegration: [
+			[
+				AppRoute.SettingsIntegration({
+					orgSlug,
+					integrationId: "linear",
+					connectionStatus: none,
+					errorCode: none,
+				}),
+				"/hazel/settings/integrations/linear",
+			],
+			[
+				AppRoute.SettingsIntegration({
+					orgSlug,
+					integrationId: "github",
+					connectionStatus: Option.some("success"),
+					errorCode: Option.some("denied"),
+				}),
+				"/hazel/settings/integrations/github?connection_status=success&error_code=denied",
+			],
+		],
+		NotFound: [[AppRoute.NotFound({ path: "/hazel/settings/nope" }), "/hazel/settings/nope"]],
+	}
+	const cases = Object.values(examples).flat()
+
+	it.each(cases)("prints %o as %s and parses it back", (route, href) => {
+		expect(hrefOf(route)).toBe(href)
+		expect(parse(href)).toEqual(route)
+	})
+
+	it.each(legacyRoutes)("rebuilds %s from its parsed route", (path) => {
+		expect(hrefOf(parse(path))).toBe(path)
+	})
+
+	it("prints the helper URLs the pages navigate to", () => {
+		expect(signInHref("/hazel/chat?x=1")).toBe(
+			`/sign-in?${new URLSearchParams({ redirect_url: "/hazel/chat?x=1" })}`,
+		)
+		expect(organizationHref({ id: organization, slug: "hazel" })).toBe("/hazel")
+		expect(organizationHref({ id: organization, slug: null })).toBe(
+			`/onboarding/setup-organization?orgId=${orgId}`,
+		)
+		expect(chatMessageHref(orgSlug, channel, "m 1")).toBe(`/hazel/chat/${channelId}?messageId=m+1`)
 	})
 })

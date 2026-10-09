@@ -3,6 +3,7 @@ import { Option, Schema } from "effect"
 import { Command, type Update } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import type { Shared } from "../../page/contract"
+import { AppRoute, orgHrefOf } from "../../route"
 import type { HazelRpc } from "../../rpc"
 import * as CommandMenu from "../../ui/command-menu"
 import type { ToastRequest } from "../toasts"
@@ -127,7 +128,8 @@ const PAGE_ACTIONS: Readonly<Record<string, Page>> = {
 
 const decodeChannelId = Schema.decodeUnknownOption(ChannelId)
 
-const chatHref = (shared: Shared, channelId: string) => `/${shared.orgSlug ?? ""}/chat/${channelId}`
+const chatHref = (shared: Shared, channelId: ChannelId) =>
+	orgHrefOf(shared.orgSlug, (orgSlug) => AppRoute.ChatChannel({ orgSlug, channelId }))
 
 /** A menu item's `onAction`, as each legacy `CommandMenuItem` defines it. */
 const selectedItem = (model: Model, key: string, shared: Shared, current: PageState): Return => {
@@ -138,17 +140,22 @@ const selectedItem = (model: Model, key: string, shared: Shared, current: PageSt
 	if (key === "action:invite")
 		return { model: close(model), outMessage: OutMessage.RequestedModal({ modal: { _tag: "EmailInvite" } }) }
 	const { kind, value } = parseKey(key)
-	if (kind === "recent") return closedWith(model, chatHref(shared, value), null)
-	if (kind === "channel" || kind === "dm")
-		return {
-			...closedWith(model, chatHref(shared, value), null),
-			commands: Option.match(decodeChannelId(value), {
-				onNone: () => [],
-				onSome: (channelId) => [TrackRecentChannel({ channelId })],
+	// Channel keys always carry a channel id; an undecodable one just closes the palette.
+	if (kind === "recent" || kind === "channel" || kind === "dm")
+		return Option.match(decodeChannelId(value), {
+			onNone: () => closedWith(model, null, null),
+			onSome: (channelId) => ({
+				...closedWith(model, chatHref(shared, channelId), null),
+				commands: kind === "recent" ? [] : [TrackRecentChannel({ channelId })],
 			}),
-		}
+		})
 	const link = [...NAVIGATION, ...SETTINGS].find((entry) => entry.key === key)
-	if (link !== undefined) return closedWith(model, `/${shared.orgSlug ?? ""}${link.path}`, null)
+	if (link !== undefined)
+		return closedWith(
+			model,
+			orgHrefOf(shared.orgSlug, (orgSlug) => link.route({ orgSlug })),
+			null,
+		)
 	const status = STATUS_OPTIONS.find((option) => `status:${option.value}` === key)
 	if (status !== undefined)
 		return {
@@ -227,7 +234,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 					: { model },
 			SubmittedCreateChannel: () => submittedCreateChannel(model, shared),
 			SucceededCreateChannel: ({ channelId }) =>
-				closedWith(model, `/${shared.orgSlug ?? ""}/chat/${channelId}`, successToast("Channel created successfully")),
+				closedWith(model, chatHref(shared, channelId), successToast("Channel created successfully")),
 			FailedCreateChannel: ({ toast }) => ({
 				model:
 					model.page._tag === "CreateChannel" ? withPage(model, { ...model.page, isSubmitting: false }) : model,

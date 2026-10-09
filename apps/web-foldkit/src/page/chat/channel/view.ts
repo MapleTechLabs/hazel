@@ -247,7 +247,7 @@ const headerView = <M>(
 	return chatHeaderView(h, {
 		channel,
 		parentChannel,
-		orgSlug: orgSlug ?? "",
+		orgSlug,
 		isMember: currentMember !== undefined,
 		otherMembers: [...others].reverse().flatMap((member) => {
 			const user = users.get(member.userId)

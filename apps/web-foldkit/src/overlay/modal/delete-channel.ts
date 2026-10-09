@@ -4,6 +4,7 @@ import { Command, Submodel } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
 import { deleteChannelAction } from "~/db/actions"
 import type { Shared } from "../../page/contract"
+import { AppRoute, hrefOf } from "../../route"
 import { button } from "../../ui/button"
 import { dialogFooter, dialogHeader } from "../../ui/dialog"
 import { description } from "../../ui/field"
@@ -33,7 +34,7 @@ const isUnder = (pathname: string, base: string) =>
 	pathname === base || pathname === `${base}/` || pathname.startsWith(`${base}/`)
 
 const DeleteChannel = Command.define("DeleteChannel", {
-	args: { channelId: ChannelId, orgSlug: Schema.String },
+	args: { channelId: ChannelId, orgSlug: Schema.NullOr(Schema.String) },
 	messages: [Message.SucceededDeleteChannel, Message.FailedDeleteChannel],
 	execute: ({ channelId, orgSlug }) =>
 		runAtomFn(deleteChannelAction, { channelId }).pipe(
@@ -42,8 +43,9 @@ const DeleteChannel = Command.define("DeleteChannel", {
 					const pathname = window.location.pathname
 					return Message.SucceededDeleteChannel({
 						isOnDeletedChannel:
-							isUnder(pathname, `/${orgSlug}/chat/${channelId}`) ||
-							isUnder(pathname, `/${orgSlug}/channels/${channelId}/settings`),
+							orgSlug !== null &&
+							(isUnder(pathname, hrefOf(AppRoute.ChatChannel({ orgSlug, channelId }))) ||
+								isUnder(pathname, hrefOf(AppRoute.ChannelSettings({ orgSlug, channelId })))),
 					})
 				}),
 			),
@@ -72,12 +74,14 @@ const update = (model: Model, message: Message, shared: Shared): Return =>
 		ClickedCancel: () => ({ model, outMessage: closed }),
 		ClickedDelete: () => ({
 			model,
-			commands: [DeleteChannel({ channelId: model.channelId, orgSlug: shared.orgSlug ?? "" })],
+			commands: [DeleteChannel({ channelId: model.channelId, orgSlug: shared.orgSlug })],
 		}),
 		SucceededDeleteChannel: ({ isOnDeletedChannel }) => ({
 			model,
 			outMessage: completed({
-				...(isOnDeletedChannel ? { href: `/${shared.orgSlug ?? ""}/chat` } : {}),
+				...(isOnDeletedChannel && shared.orgSlug !== null
+					? { href: hrefOf(AppRoute.ChatIndex({ orgSlug: shared.orgSlug })) }
+					: {}),
 				toast: successToast("Channel deleted successfully"),
 			}),
 		}),

@@ -6,6 +6,7 @@ import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
 import { HazelRpc } from "../../rpc"
 import type { Shared } from "../../page/contract"
+import { AppRoute, orgHrefOf } from "../../route"
 import { closed, completed, ModalOutMessage } from "../out-message"
 import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalSubscriptionInput } from "./contract"
@@ -50,7 +51,8 @@ const StartConversation = Command.define("StartConversation", {
 
 type Return = ModalReturn<Model, Message>
 
-const chatHref = (shared: Shared, channelId: string) => `/${shared.orgSlug ?? ""}/chat/${channelId}`
+const chatHref = (shared: Shared, channelId: ChannelId) =>
+	orgHrefOf(shared.orgSlug, (orgSlug) => AppRoute.ChatChannel({ orgSlug, channelId })) ?? undefined
 
 const submitted = (model: Model, shared: Shared): Return => {
 	const ids = model.selectedUserIds

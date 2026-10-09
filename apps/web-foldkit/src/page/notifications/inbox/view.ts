@@ -1,8 +1,10 @@
-import { Option } from "effect"
+import { ChannelId } from "@hazel/schema"
+import { Option, Schema } from "effect"
 import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { IconBell, IconHashtag, IconMsgs } from "../../../icons"
+import { AppRoute, hrefOf } from "../../../route"
 import { avatar } from "../../../ui/avatar"
 import { emptyState } from "../../../ui/empty-state"
 import { loader } from "../../../ui/loader"
@@ -60,6 +62,8 @@ const leadingVisual = (h: HtmlBuilder<Message>, item: NotificationItem): Html =>
 		[(isChannel ? IconHashtag : IconMsgs)(h, { className: "size-5 text-muted-fg" })],
 	)
 }
+
+const decodeChannelId = Schema.decodeUnknownOption(ChannelId)
 
 /** `NotificationItem` (`components/notifications/notification-item.tsx`). */
 const notificationItem = (
@@ -124,10 +128,18 @@ const notificationItem = (
 			],
 		),
 	]
-	return hasValidTarget && orgSlug
+	const href =
+		hasValidTarget && orgSlug
+			? Option.getOrNull(
+					Option.map(decodeChannelId(item.targetedResourceId), (channelId) =>
+						hrefOf(AppRoute.ChatChannel({ orgSlug, channelId })),
+					),
+				)
+			: null
+	return href !== null
 		? h.keyed("a")(
 				item.id,
-				[h.Class("block"), h.Href(`/${orgSlug}/chat/${item.targetedResourceId}`), h.OnClick(clicked)],
+				[h.Class("block"), h.Href(href), h.OnClick(clicked)],
 				[h.div(attributes, children)],
 			)
 		: h.keyed("div")(item.id, attributes, children)

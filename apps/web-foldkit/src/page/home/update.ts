@@ -1,12 +1,14 @@
+import type { ChannelId } from "@hazel/schema"
 import { Option } from "effect"
 import { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import { errorToast, loadingToast, successToast } from "../../data/actions"
 import type { ToastRequest } from "../../overlay/toasts"
 import * as Interaction from "../../ui/aria/interaction"
+import { AppRoute } from "../../route"
 import * as Menu from "../../ui/menu"
 import type { PageReturn, Shared } from "../contract"
-import { PageOutMessage } from "../out-message"
+import { PageOutMessage, requestedOrgNavigation } from "../out-message"
 import { CopyEmail, CreateDm, FocusSearch } from "./commands"
 import { findExistingDmChannel } from "./dm"
 import { Message } from "./message"
@@ -30,8 +32,10 @@ const DM_TOAST_ID = "home-create-dm"
 
 const toast = (request: ToastRequest) => PageOutMessage.RequestedToast({ toast: request })
 
-const navigateToChannel = (shared: Shared, channelId: string) =>
-	PageOutMessage.RequestedNavigation({ href: `/${shared.orgSlug ?? ""}/chat/${channelId}`, replace: false })
+const navigateToChannel = (shared: Shared, channelId: ChannelId, toast?: ToastRequest) =>
+	requestedOrgNavigation(shared.orgSlug, (orgSlug) => AppRoute.ChatChannel({ orgSlug, channelId }), {
+		toast,
+	})
 
 /** Keeps each member's menu (and its open state) across live-query updates. */
 const reconcileMenus = (model: Model, members: ReadonlyArray<DirectoryMember>): Model["menus"] =>
@@ -138,10 +142,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		},
 		SucceededCreateDm: ({ channelId, name }) => ({
 			model: withDmRequest(model, DmRequest.Idle()),
-			outMessage: PageOutMessage.RequestedNavigation({
-				href: `/${shared.orgSlug ?? ""}/chat/${channelId}`,
-				replace: false,
-				toast: { ...successToast(`Started conversation with ${name}`), id: DM_TOAST_ID },
+			outMessage: navigateToChannel(shared, channelId, {
+				...successToast(`Started conversation with ${name}`),
+				id: DM_TOAST_ID,
 			}),
 		}),
 		FailedCreateDm: ({ toast: failure }) => ({

@@ -7,7 +7,7 @@ import { button } from "../../../ui/button"
 import { searchField } from "../../../ui/search-field"
 import { view as selectView } from "../../../ui/select-view"
 import { documentsOf, filterAttachments, formatRelativeTime, mediaOf, uploaderIdentity } from "./derive"
-import { type FilesContext, filesPath, mediaGalleryView, mediaGridView } from "./media-view"
+import { type FilesContext, filesHref, mediaGalleryView, mediaGridView } from "./media-view"
 import { Message, type Model, SEARCH_FIELD_ID } from "./page"
 import type { FileAttachment } from "./queries"
 
@@ -196,7 +196,7 @@ const mediaPageView = <M>(context: FilesContext<M>): Html => {
 							h.AriaCurrent("page"),
 							h.Class("active"),
 							h.DataAttribute("status", "active"),
-							h.Href(filesPath(context.model)),
+							h.Href(filesHref(context.model)),
 						],
 						[
 							button(

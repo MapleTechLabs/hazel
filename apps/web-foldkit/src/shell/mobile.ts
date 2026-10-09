@@ -1,6 +1,7 @@
 import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { IconBell, IconDashboard, IconGear, IconMenu, IconMsgs } from "../icons"
+import { AppRoute, hrefOf } from "../route"
 import { button } from "../ui/button"
 import type * as Modal from "../ui/modal"
 import * as Sheet from "../ui/sheet"
@@ -18,7 +19,11 @@ export const mobileNav = <Message>(
 	context: ShellContext,
 	onMenu: Attribute<Message>,
 ): Html => {
-	const org = `/${context.orgSlug}`
+	const { orgSlug } = context
+	const home = hrefOf(AppRoute.OrgHome({ orgSlug }))
+	const chat = hrefOf(AppRoute.ChatIndex({ orgSlug }))
+	const notifications = hrefOf(AppRoute.NotificationsAll({ orgSlug }))
+	const settings = hrefOf(AppRoute.SettingsGeneral({ orgSlug }))
 	const path = context.pathname
 	const link = (label: string, href: string, isActive: boolean, icon: Html) => {
 		// TanStack `Link` marks any fuzzy match active, independently of the colour rule above.
@@ -40,7 +45,7 @@ export const mobileNav = <Message>(
 			[icon, h.span([h.Class("font-medium text-[10px]")], [label])],
 		)
 	}
-	const chatPrefix = `${org}/chat/`
+	const chatPrefix = `${chat}/`
 	return h.nav(
 		[
 			h.Class(
@@ -62,23 +67,23 @@ export const mobileNav = <Message>(
 							h.span([h.Class("font-medium text-[10px]")], ["Menu"]),
 						],
 					),
-					link("Home", org, path === org, IconDashboard(h, { className: "size-6" })),
+					link("Home", home, path === home, IconDashboard(h, { className: "size-6" })),
 					link(
 						"Messages",
-						`${org}/chat`,
+						chat,
 						path.startsWith(chatPrefix) && path.length > chatPrefix.length,
 						IconMsgs(h, { className: "size-6" }),
 					),
 					link(
 						"Activity",
-						`${org}/notifications`,
-						isActiveFuzzy(path, `${org}/notifications`),
+						notifications,
+						isActiveFuzzy(path, notifications),
 						IconBell(h, { className: "size-6" }),
 					),
 					link(
 						"Settings",
-						`${org}/settings`,
-						isActiveFuzzy(path, `${org}/settings`),
+						settings,
+						isActiveFuzzy(path, settings),
 						IconGear(h, { className: "size-6" }),
 					),
 				],

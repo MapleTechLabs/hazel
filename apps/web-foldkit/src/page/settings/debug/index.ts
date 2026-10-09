@@ -1,5 +1,6 @@
 import { Schema } from "effect"
 import { Submodel } from "foldkit"
+import { AppRoute, hrefOf } from "../../../route"
 import { definePage, type PageReturn, type PageViewInputs } from "../../contract"
 import { PageOutMessage } from "../../out-message"
 
@@ -23,7 +24,7 @@ export const page = definePage(
 				? {
 						model: {},
 						outMessage: PageOutMessage.RequestedNavigation({
-							href: `/${route.orgSlug}/settings`,
+							href: hrefOf(AppRoute.SettingsGeneral({ orgSlug: route.orgSlug })),
 							replace: true,
 						}),
 					}

@@ -1,4 +1,4 @@
-import { ChannelId, NotificationId, OrganizationMemberId, UserId } from "@hazel/schema"
+import { ChannelId, NotificationId, OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { and, eq, isNull } from "@tanstack/db"
 import { Option, Schema, Stream } from "effect"
 import { Dom, Subscription } from "foldkit"
@@ -25,7 +25,7 @@ export interface Input {
 
 interface OrgRow {
 	readonly org: {
-		readonly id: string
+		readonly id: OrganizationId
 		readonly name: string
 		readonly slug?: string | null
 		readonly logoUrl?: string | null

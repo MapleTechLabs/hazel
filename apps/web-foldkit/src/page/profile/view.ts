@@ -4,6 +4,7 @@ import { cn } from "~/lib/utils"
 import { getEffectivePresenceStatus } from "~/utils/presence"
 import { getStatusBadgeColor, getStatusDotColor, getStatusLabel } from "~/utils/status"
 import { IconEdit, IconEnvelope } from "../../icons"
+import { AppRoute, hrefOf } from "../../route"
 import { avatar } from "../../ui/avatar"
 import { buttonClassName } from "../../ui/button"
 import { inputGroup } from "../../ui/input"
@@ -30,7 +31,7 @@ const notFound = (h: HtmlBuilder<Message>) =>
 const profile = (
 	h: HtmlBuilder<Message>,
 	user: ProfileUser,
-	options: { readonly isOwnProfile: boolean; readonly orgSlug: string; readonly nowMs: number },
+	options: { readonly isOwnProfile: boolean; readonly orgSlug: string | null; readonly nowMs: number },
 ) => {
 	const fullName = `${user.firstName} ${user.lastName}`
 	const effectiveStatus = getEffectivePresenceStatus(
@@ -55,11 +56,11 @@ const profile = (
 							]),
 						],
 					),
-					options.isOwnProfile
+					options.isOwnProfile && options.orgSlug !== null
 						? h.a(
 								[
 									h.Class(buttonClassName({ intent: "secondary" })),
-									h.Href(`/${options.orgSlug}/my-settings/profile`),
+									h.Href(hrefOf(AppRoute.MySettingsProfile({ orgSlug: options.orgSlug }))),
 								],
 								[IconEdit(h), "Edit Profile"],
 							)
@@ -143,7 +144,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 		? notFound(h)
 		: profile(h, model.user, {
 				isOwnProfile: shared.currentUser?.id === model.userId,
-				orgSlug: shared.orgSlug ?? "",
+				orgSlug: shared.orgSlug,
 				nowMs: shared.nowMs,
 			}),
 )

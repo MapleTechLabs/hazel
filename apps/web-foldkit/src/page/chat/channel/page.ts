@@ -6,6 +6,7 @@ import { modifyFields } from "foldkit/struct"
 import * as Composer from "../../../composer/composer"
 import * as Draft from "../../../composer/draft"
 import * as MessageList from "../../../mount/message-list"
+import { AppRoute, hrefOf } from "../../../route"
 import type { Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
 import { replyIdsOf, threadIdsOf, toDeriveContext, toDisplayRows, unfurlRequestsOf } from "../derive"
@@ -71,17 +72,18 @@ export const init = (
 
 export const composerEditorId = (channelId: string) => `composer-${channelId}`
 
-/** The Files Submodel for a tab: kept across `files` and `files/media`, dropped on Messages. */
+/** The Files Submodel for a tab: kept across `files` and `files/media`, dropped on Messages.
+ * It waits for the org slug, which its links need. */
 const filesFor = (
 	channelId: ChannelId,
 	orgSlug: string | null,
 	tab: ChatTab,
 	previous: FilesPage.Model | null,
 ): FilesPage.Model | null =>
-	tab === "messages"
+	tab === "messages" || orgSlug === null
 		? null
 		: previous === null
-			? FilesPage.init(channelId, orgSlug ?? "", tab)
+			? FilesPage.init(channelId, orgSlug, tab)
 			: FilesPage.setView(previous, tab)
 
 /** The route moved between this channel's tabs. */
@@ -95,8 +97,14 @@ export const setTab = (model: Model, tab: ChatTab): Model =>
 
 // ROUTES
 
+const tabRoutes = {
+	messages: AppRoute.ChatChannel,
+	files: AppRoute.ChatFiles,
+	media: AppRoute.ChatFilesMedia,
+} as const
+
 export const tabPath = (orgSlug: string, channelId: ChannelId, tab: ChatTab) =>
-	`/${orgSlug}/chat/${channelId}${tab === "messages" ? "" : tab === "files" ? "/files" : "/files/media"}`
+	hrefOf(tabRoutes[tab]({ orgSlug, channelId }))
 
 // UPDATE
 
@@ -233,7 +241,7 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 				: {
 						model: modifyFields(model, {
 							orgSlug: () => orgSlug,
-							files: (files) => (files === null ? null : { ...files, orgSlug }),
+							files: (files) => filesFor(model.channelId, orgSlug, model.tab, files),
 						}),
 					},
 		// Navigation is an OutMessage, raised by the page definition (`index.ts`).

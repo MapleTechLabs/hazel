@@ -1,9 +1,11 @@
+import type { ChannelId } from "@hazel/schema"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { cx } from "~/utils/cx"
 import { getEffectivePresenceStatus } from "~/utils/presence"
 import { getStatusDotColor } from "~/utils/status"
 import { IconHashtag } from "../../icons"
+import { AppRoute, hrefOf } from "../../route"
 import { avatar } from "../../ui/avatar"
 import { styles as avatarStyles } from "../../ui/avatar-styles"
 import { sidebarItem, sidebarLink } from "../../ui/sidebar"
@@ -25,7 +27,8 @@ export interface ItemContext {
 /** TanStack's default (non-exact) active match. */
 const isActiveFuzzy = (pathname: string, to: string) => pathname === to || pathname.startsWith(`${to}/`)
 
-const chatHref = (context: ItemContext, channelId: string) => `/${context.orgSlug}/chat/${channelId}`
+const chatHref = (context: ItemContext, channelId: ChannelId) =>
+	hrefOf(AppRoute.ChatChannel({ orgSlug: context.orgSlug, channelId }))
 
 /** `SidebarLabel` with a `className`. */
 export const label = <M>(h: HtmlBuilder<M>, children: Array<Html | string>, className?: string): Html =>

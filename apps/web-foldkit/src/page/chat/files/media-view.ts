@@ -1,6 +1,7 @@
 import { Option } from "effect"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { IconDownload, IconPlay } from "../../../icons"
+import { AppRoute, hrefOf } from "../../../route"
 import type * as Interaction from "../../../ui/aria/interaction"
 import { button } from "../../../ui/button"
 import { isVideo, isViewerImage, mediaOf, visibleCountFor } from "./derive"
@@ -16,7 +17,10 @@ export interface FilesContext<M> {
 	readonly wiring: Interaction.Wiring<M>
 }
 
-export const filesPath = (model: Model) => `/${model.orgSlug}/chat/${model.channelId}/files`
+export const filesHref = (model: Model) =>
+	hrefOf(AppRoute.ChatFiles({ orgSlug: model.orgSlug, channelId: model.channelId }))
+const mediaHref = (model: Model) =>
+	hrefOf(AppRoute.ChatFilesMedia({ orgSlug: model.orgSlug, channelId: model.channelId }))
 
 const OVERLAY =
 	"pointer-events-none absolute inset-0 flex items-end justify-end bg-gradient-to-t from-black/40 to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100"
@@ -132,7 +136,7 @@ const seeAllItem = <M>(
 		attachment.id,
 		[
 			h.Class("relative aspect-square overflow-hidden rounded-lg border border-border bg-secondary/30"),
-			h.Href(`${filesPath(context.model)}/media`),
+			h.Href(mediaHref(context.model)),
 		],
 		[
 			mediaElement(context, attachment, {

@@ -9,7 +9,7 @@ import { embedInteraction } from "../shared"
 import { DisconnectDiscord, StartDiscordLink } from "./command"
 import { Message } from "./message"
 import type { Model } from "./model"
-import type { RouteOf } from "../../../route"
+import { linkedAccountsHref, type RouteOf } from "../../../route"
 
 type Return = PageReturn<Model, Message>
 
@@ -28,7 +28,7 @@ const linkResult = (model: Model, route: Route): Return => {
 	return {
 		model,
 		outMessage: PageOutMessage.RequestedNavigation({
-			href: `/${model.orgSlug}/my-settings/linked-accounts`,
+			href: linkedAccountsHref(model.orgSlug),
 			replace: true,
 			toast:
 				status === "success"

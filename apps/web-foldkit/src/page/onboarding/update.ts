@@ -6,7 +6,7 @@ import { errorToast, successToast, warningToast } from "../../data/actions"
 import type { ToastRequest } from "../../overlay/toasts"
 import * as Interaction from "../../ui/aria/interaction"
 import * as ChoiceBox from "../../ui/choice-box"
-import type { RouteOf } from "../../route"
+import { AppRoute, hrefOf, type RouteOf } from "../../route"
 import type { ThemeCustomization, ThemeMode } from "../../theme"
 import type { Shared } from "../contract"
 import { PageOutMessage } from "../out-message"
@@ -311,7 +311,10 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			const completed = enterStep(model, "completed", { direction: "forward", shared, syncUrl: true })
 			return {
 				...completed,
-				commands: [...(completed.commands ?? []), LoadHome({ href: slug ? `/${slug}` : "/" })],
+				commands: [
+					...(completed.commands ?? []),
+					LoadHome({ href: hrefOf(slug ? AppRoute.OrgHome({ orgSlug: slug }) : AppRoute.Root()) }),
+				],
 			}
 		},
 		FailedCompleteOnboarding: ({ error }) => ({

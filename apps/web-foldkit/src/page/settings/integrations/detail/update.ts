@@ -1,6 +1,6 @@
 import { Option, Schema } from "effect"
 import { getIntegrationById } from "~/lib/integrations/__data"
-import type { RouteOf } from "../../../../route"
+import { AppRoute, hrefOf, integrationHref, type RouteOf } from "../../../../route"
 import type { PageReturn, Shared } from "../../../contract"
 import { PageOutMessage } from "../../../out-message"
 import { errorToast, successToast } from "../../../../data/actions"
@@ -62,7 +62,7 @@ const oauthCallback = (model: Model, route: Route): Return => {
 	return {
 		model: { ...model, pendingVerification: model.pendingVerification || status === "success" },
 		outMessage: PageOutMessage.RequestedNavigation({
-			href: `/${model.orgSlug}/settings/integrations/${model.integrationId}`,
+			href: integrationHref(model.orgSlug, model.integrationId),
 			replace: true,
 			toast:
 				status === "success"
@@ -94,7 +94,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		ClickedBack: () => ({
 			model,
 			outMessage: PageOutMessage.RequestedNavigation({
-				href: `/${model.orgSlug}/settings/integrations`,
+				href: hrefOf(AppRoute.SettingsIntegrations({ orgSlug: model.orgSlug })),
 				replace: false,
 			}),
 		}),

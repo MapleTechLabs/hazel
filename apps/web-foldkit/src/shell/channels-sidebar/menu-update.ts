@@ -6,6 +6,7 @@ import { Command, type Update } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import type { ModalRequest } from "../../overlay/modal"
 import { PageOutMessage } from "../../page/out-message"
+import { AppRoute, hrefOf } from "../../route"
 import type { HazelRpc } from "../../rpc"
 import * as Menu from "../../ui/menu"
 import { DeleteChannelSection, LeaveChannel, MoveChannelToSection, UpdateChannelMember } from "./actions"
@@ -139,7 +140,7 @@ const selectedRowItem =
 					return {
 						model,
 						outMessage: PageOutMessage.RequestedNavigation({
-							href: `/${orgSlug}/channels/${channel.id}/settings`,
+							href: hrefOf(AppRoute.ChannelSettings({ orgSlug, channelId: channel.id })),
 							replace: false,
 						}),
 					}

@@ -1,16 +1,12 @@
+import { Option } from "effect"
 import { modifyFields } from "foldkit/struct"
+import { AppRoute, hrefOf, organizationHref } from "../../route"
 import type { PageReturn } from "../contract"
 import { PageOutMessage } from "../out-message"
 import { Message } from "./message"
-import type { Model, UserOrganization } from "./model"
+import type { Model } from "./model"
 
 type Return = PageReturn<Model, Message>
-
-/** `getOrganizationRoute`: an organization without a slug still needs its setup. */
-export const organizationHref = (organization: Pick<UserOrganization, "id" | "slug">) =>
-	organization.slug
-		? `/${organization.slug}`
-		: `/onboarding/setup-organization?${new URLSearchParams({ orgId: organization.id })}`
 
 const navigate = (model: Model, href: string): Return => ({
 	model,
@@ -30,6 +26,7 @@ export const update = (model: Model, message: Message): Return =>
 				: { model: next }
 		},
 		ClickedOrganization: ({ organization }) => navigate(model, organizationHref(organization)),
-		ClickedCreateNew: () => navigate(model, "/onboarding"),
+		ClickedCreateNew: () =>
+			navigate(model, hrefOf(AppRoute.Onboarding({ orgId: Option.none(), step: Option.none() }))),
 		GotClerkMountMessage: () => ({ model }),
 	})

@@ -2,6 +2,7 @@ import { canPerform, RPC_SCOPE_MAP } from "@hazel/domain/scopes"
 import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { IconMagnifier3, IconUsers } from "../../icons"
+import { AppRoute, hrefOf } from "../../route"
 import { sidebarItem, sidebarLink } from "../../ui/sidebar"
 import type { Model } from "./model"
 import { createChannelHint } from "./create-channel-hint"
@@ -97,7 +98,7 @@ const dmRow = <M>(
 		: []
 
 const gotoSection = <M>(h: HtmlBuilder<M>, context: SectionsContext<M>): Html => {
-	const membersHref = `/${context.orgSlug}`
+	const membersHref = hrefOf(AppRoute.OrgHome({ orgSlug: context.orgSlug }))
 	return h.div(
 		[
 			h.Attribute("aria-label", "Goto"),
