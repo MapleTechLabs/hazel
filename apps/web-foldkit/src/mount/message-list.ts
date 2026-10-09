@@ -588,6 +588,25 @@ export const ObserveMessageList = Mount.defineStream("ObserveMessageList", {
 
 // VIEW
 
+/**
+ * Whether two Models render the same list. Scroll offset, anchor and scroll bookkeeping are left
+ * out: most scroll events change only those, and the rows sit at absolute offsets regardless.
+ */
+export const isViewEqual = (a: Model, b: Model): boolean =>
+	a === b ||
+	(a.id === b.id &&
+		a.keys === b.keys &&
+		a.stickyKeys === b.stickyKeys &&
+		a.measuredHeights === b.measuredHeights &&
+		a.estimatedRowHeightPx === b.estimatedRowHeightPx &&
+		a.viewportHeight === b.viewportHeight &&
+		a.isScrolling === b.isScrolling &&
+		a.pool === b.pool &&
+		a.renderedFromKey === b.renderedFromKey &&
+		a.renderedToKey === b.renderedToKey &&
+		a.activeStickyKey === b.activeStickyKey &&
+		a.stuckKey === b.stuckKey)
+
 export interface ViewInputs<Item, ParentMessage> {
 	/** Same order as `model.keys`, oldest first. */
 	readonly items: ReadonlyArray<Item>

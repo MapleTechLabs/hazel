@@ -31,6 +31,8 @@ export const Model = Schema.Struct({
 	isToolbarHovered: Schema.Boolean,
 	/** Bumped on every hover change so a stale hide delay never acts. */
 	hoverVersion: Schema.Number,
+	/** A hide delay is running: re-entering the hovered message has to cancel it. */
+	isHidePending: Schema.Boolean,
 	toolbar: Toolbar.Model,
 	tooltip: TooltipHost.Model,
 	/** The tooltip trigger under the pointer (`data-hovered`). */
@@ -65,6 +67,7 @@ export const init = (): Model => ({
 	hoveredMessageId: null,
 	isToolbarHovered: false,
 	hoverVersion: 0,
+	isHidePending: false,
 	toolbar: Toolbar.init({ label: "Message actions" }),
 	tooltip: null,
 	hoveredTriggerKey: null,
@@ -212,24 +215,35 @@ export const moreMenuFor = (model: Model, messageId: MessageId, facts: MessageFa
 
 export const update = (model: Model, message: Message, facts: MessageFacts): OverlaysReturn =>
 	Message.match<OverlaysReturn>(message, {
+		// `pointerover` fires for every child entered: within the hovered message only a pending hide changes.
 		PointerEnteredMessage: ({ messageId }) =>
-			model.hoveredMessageId === messageId
-				? set(model, { hoverVersion: model.hoverVersion + 1 })
-				: set(model, { hoveredMessageId: messageId, hoverVersion: model.hoverVersion + 1 }),
+			model.hoveredMessageId === messageId && !model.isHidePending
+				? { model }
+				: set(model, {
+						hoveredMessageId: messageId,
+						hoverVersion: model.hoverVersion + 1,
+						isHidePending: false,
+					}),
 		// The viewer is a portal inside the list in legacy and covers the screen, so React sees no
 		// leave while it is open, even when the pointer moves before the viewer has rendered.
 		PointerLeftList: () => {
 			if (model.hoveredMessageId === null || model.isToolbarHovered || model.imageViewer !== null)
 				return { model }
 			const version = model.hoverVersion + 1
-			return { model: { ...model, hoverVersion: version }, commands: [WaitForHideToolbar({ version })] }
+			return {
+				model: { ...model, hoverVersion: version, isHidePending: true },
+				commands: [WaitForHideToolbar({ version })],
+			}
 		},
 		// The toolbar stays while its emoji picker is open (the picker is inside it).
 		CompletedWaitForHideToolbar: ({ version }) =>
-			version === model.hoverVersion && !model.isToolbarHovered && model.reactionPicker === null
-				? set(model, { hoveredMessageId: null })
-				: { model },
-		EnteredToolbar: () => set(model, { isToolbarHovered: true, hoverVersion: model.hoverVersion + 1 }),
+			version !== model.hoverVersion
+				? { model }
+				: !model.isToolbarHovered && model.reactionPicker === null
+					? set(model, { hoveredMessageId: null, isHidePending: false })
+					: set(model, { isHidePending: false }),
+		EnteredToolbar: () =>
+			set(model, { isToolbarHovered: true, hoverVersion: model.hoverVersion + 1, isHidePending: false }),
 		LeftToolbar: () => set(model, { isToolbarHovered: false }),
 		GotToolbarMessage: ({ message: toolbarMessage }) =>
 			mapped(
@@ -430,6 +444,7 @@ export const forgetMissingMessages = (model: Model, isShown: (messageId: Message
 		imageViewer: isViewerGone ? null : model.imageViewer,
 		hoveredMessageId: isHoverGone ? null : model.hoveredMessageId,
 		hoverVersion: isHoverGone ? model.hoverVersion + 1 : model.hoverVersion,
+		isHidePending: isHoverGone ? false : model.isHidePending,
 	}
 }
 
