@@ -164,6 +164,8 @@ interface Cache<M> {
 	readonly context: RowContext<M>
 }
 
+// A view memo, not state: one shared context for idle rows keeps the row lazies hitting (see view.ts memoRow).
+// oxlint-disable-next-line foldkit/no-module-level-mutable-state
 let idleCache: Cache<never> | null = null
 
 /** The shared context for rows without an open overlay. */

@@ -33,6 +33,8 @@ const rowView = <M>(row: DisplayRow, isStuck: boolean, context: RowContext<M>, h
 
 const memoRow = <M>(h: HtmlBuilder<M>, row: DisplayRow, isStuck: boolean, context: RowContext<M>): Html => {
 	let slot = rowSlots.get(row.key)
+	// createKeyedLazy never evicts and message rows are unbounded, so slots live here and pruneRowSlots drops them.
+	// oxlint-disable-next-line foldkit/lazy-view-stable-references
 	if (slot === undefined) rowSlots.set(row.key, (slot = createLazy()))
 	renderedThisFrame.add(row.key)
 	return slot(rowView, [row, isStuck, context, h]) ?? h.div([])
