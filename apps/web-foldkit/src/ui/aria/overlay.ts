@@ -150,12 +150,20 @@ const hideOutside = (visible: Element): (() => void) => {
 	const hidden = [...document.body.children].filter(
 		(child) => child !== visible && !child.contains(visible) && !staysVisible(child),
 	)
-	for (const element of hidden) {
-		const count = inertCounts.get(element) ?? 0
-		if (count === 0) element.setAttribute("inert", "")
-		inertCounts.set(element, count + 1)
-	}
+	// `inert` restyles the whole app (about 2,200 elements, 8 to 10ms), so it lands in the next
+	// frame and the overlay paints in the frame that inserted it; the underlay already blocks pointers.
+	let isApplied = false
+	const frame = requestAnimationFrame(() => {
+		isApplied = true
+		for (const element of hidden) {
+			const count = inertCounts.get(element) ?? 0
+			if (count === 0) element.setAttribute("inert", "")
+			inertCounts.set(element, count + 1)
+		}
+	})
 	return () => {
+		cancelAnimationFrame(frame)
+		if (!isApplied) return
 		for (const element of hidden) {
 			const count = (inertCounts.get(element) ?? 1) - 1
 			inertCounts.set(element, count)
