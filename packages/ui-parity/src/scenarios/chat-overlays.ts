@@ -67,6 +67,21 @@ export const chatOverlayScenarios: ReadonlyArray<Scenario> = [
 		},
 	}),
 	overlay({
+		id: "chat-emoji-picker-reopen",
+		title: "Reaction emoji picker reopened after Escape (focus back on the trigger)",
+		steps: async (page) => {
+			await seedEmojiPicker(page)
+			await hoverToolbar(page, LAUNCH_WINDOW)
+			const picker = page.getByRole("dialog", { name: "Emoji picker" })
+			await page.getByRole("button", { name: "Add reaction" }).click()
+			await picker.waitFor()
+			await page.keyboard.press("Escape")
+			await picker.waitFor({ state: "hidden" })
+			await page.getByRole("button", { name: "Add reaction" }).click()
+			await picker.waitFor()
+		},
+	}),
+	overlay({
 		id: "chat-reaction-tooltip",
 		title: "Reaction tooltip listing who reacted",
 		steps: async (page) => {

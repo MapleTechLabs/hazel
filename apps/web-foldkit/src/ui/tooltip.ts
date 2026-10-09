@@ -252,9 +252,15 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, view
 		h.OnMount(TrackTrigger()),
 		...(model.isOpen ? [h.Attribute("aria-describedby", tooltipId(model.id))] : []),
 	])
+	// The keyed slot stays in the trigger while the overlay inside it is portaled to <body>, so a
+	// sibling overlay opening in the same patch (the emoji picker) inserts before a node that is there.
 	return viewInputs.toTrigger(
 		triggerAttributes,
-		model.isOpen ? tooltipOverlay(model, viewInputs, h) : h.empty,
+		model.isOpen
+			? h.keyed("div")(`tooltip-slot-${model.id}`, [h.Style({ display: "contents" })], [
+					tooltipOverlay(model, viewInputs, h),
+				])
+			: h.empty,
 	)
 })
 
