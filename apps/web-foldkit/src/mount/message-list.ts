@@ -85,6 +85,10 @@ export const init = (config: {
 	readonly id: string
 	readonly estimatedRowHeightPx: number
 	readonly followThresholdPx?: number
+	/** A previous list's viewport, so the first render already places rows (the Mount corrects it). */
+	readonly viewportHeight?: number
+	/** Heights measured on an earlier visit; rows re-measure as they render. */
+	readonly measuredHeights?: Readonly<Record<string, number>>
 }): Model => ({
 	id: config.id,
 	estimatedRowHeightPx: config.estimatedRowHeightPx,
@@ -92,8 +96,8 @@ export const init = (config: {
 	canFollowEnd: true,
 	keys: [],
 	stickyKeys: [],
-	measuredHeights: {},
-	viewportHeight: 0,
+	measuredHeights: config.measuredHeights ?? {},
+	viewportHeight: config.viewportHeight ?? 0,
 	scrollTop: 0,
 	anchor: ViewportAnchor.End(),
 	scrollVersion: 0,

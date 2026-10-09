@@ -83,6 +83,11 @@ export const Model = Schema.Struct({
 	isGeneratingThreadName: Schema.Boolean,
 	/** `channelMember.clearNotifications` was sent for this visit. */
 	hasClearedNotifications: Schema.Boolean,
+	/**
+	 * Row heights measured in channels visited earlier, by channel, least recent first. A revisit
+	 * lays its rows out at their real heights on the switch frame; rows re-measure as they render.
+	 */
+	heightsByChannel: Schema.Record(Schema.String, Schema.Record(Schema.String, Schema.Number)),
 })
 export type Model = typeof Model.Type
 
