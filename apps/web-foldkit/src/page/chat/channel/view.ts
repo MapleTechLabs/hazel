@@ -28,16 +28,30 @@ const rowSlots = new Map<string, ReturnType<typeof createLazy>>()
 const renderedThisFrame = new Set<string>()
 const MAX_IDLE_SLOTS = 200
 
-const rowView = <M>(row: DisplayRow, isStuck: boolean, context: RowContext<M>, h: HtmlBuilder<M>): Html =>
-	row._tag === "DateHeader" ? dateDividerView(h, row.label, isStuck) : messageRowView(h, row, context)
+const rowView = <M>(
+	row: DisplayRow,
+	isStuck: boolean,
+	isHovered: boolean,
+	context: RowContext<M>,
+	h: HtmlBuilder<M>,
+): Html =>
+	row._tag === "DateHeader"
+		? dateDividerView(h, row.label, isStuck)
+		: messageRowView(h, row, context, isHovered)
 
-const memoRow = <M>(h: HtmlBuilder<M>, row: DisplayRow, isStuck: boolean, context: RowContext<M>): Html => {
+const memoRow = <M>(
+	h: HtmlBuilder<M>,
+	row: DisplayRow,
+	isStuck: boolean,
+	isHovered: boolean,
+	context: RowContext<M>,
+): Html => {
 	let slot = rowSlots.get(row.key)
 	// createKeyedLazy never evicts and message rows are unbounded, so slots live here and pruneRowSlots drops them.
 	// oxlint-disable-next-line foldkit/lazy-view-stable-references
 	if (slot === undefined) rowSlots.set(row.key, (slot = createLazy()))
 	renderedThisFrame.add(row.key)
-	return slot(rowView, [row, isStuck, context, h]) ?? h.div([])
+	return slot(rowView, [row, isStuck, isHovered, context, h]) ?? h.div([])
 }
 
 const pruneRowSlots = () => {
@@ -84,6 +98,7 @@ const messageListView = <M>(
 				h,
 				row,
 				isStuck,
+				row.key === model.overlays.hoveredMessageId,
 				row._tag === "MessageRow" ? rowContextFor(h, model, row, toParentMessage, idle, nowMs) : idle,
 			),
 		isStickyHeader: (row) => row._tag === "DateHeader",
@@ -101,15 +116,8 @@ const messageListView = <M>(
 			trackHoverAttribute(h, toParentMessage),
 		],
 		[
-			// The legacy hover highlight is injected CSS, so it holds while the toolbar is hovered.
-			model.overlays.hoveredMessageId === null
-				? h.empty
-				: h.style(
-						[],
-						[
-							`#message-${model.overlays.hoveredMessageId} { background-color: var(--color-secondary) !important; }`,
-						],
-					),
+			// The legacy hover highlight (injected `#message-<id>` CSS) is a class on the hovered row:
+			// rewriting a <style> invalidates every element's style, on each hover change while scrolling.
 			list,
 		],
 	)
