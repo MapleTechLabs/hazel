@@ -1,6 +1,6 @@
 import type { ChannelId, MessageId } from "@hazel/schema"
 import { BasicIndex, coalesce, eq } from "@tanstack/db"
-import type { Stream } from "effect"
+import { Effect, PubSub, Stream } from "effect"
 import {
 	channelCollection,
 	messageCollection,
@@ -10,6 +10,7 @@ import {
 } from "~/db/collections"
 import { liveQueryStream } from "../../data/live-query"
 import { type LiveQueryWindow, liveQueryChangeSetStream } from "../../data/live-query-changes"
+import { MessageWindows } from "../../data/message-windows"
 import {
 	type ChannelInfo,
 	type ChannelQueryRow,
@@ -66,12 +67,31 @@ const loadsWholeChannel = (channelId: ChannelId) =>
 
 /**
  * The window of `messagesStream` as change sets: `offset` newest messages skipped, `limit` kept.
- * One query per channel follows `readWindow()`; only inserted and updated rows are converted.
+ * One query per channel follows the pages `MessageWindows` publishes; only changed rows are converted.
  */
 export const messageChangesStream = <Message>(
 	channelId: ChannelId,
 	window: LiveQueryWindow,
 	readWindow: () => LiveQueryWindow,
+	toMessage: (changes: { order: ReadonlyArray<MessageId>; upserts: ReadonlyArray<ChatMessage> }) => Message,
+): Stream.Stream<Message, never, MessageWindows> =>
+	Stream.unwrap(
+		Effect.gen(function* () {
+			// Subscribed before the query starts, so no page published from here on is missed.
+			const pages = yield* PubSub.subscribe(yield* MessageWindows)
+			const windows = Stream.fromSubscription(pages).pipe(
+				Stream.filter((change) => change.channelId === channelId),
+				Stream.map(({ offset, limit }) => ({ offset, limit })),
+			)
+			return messageQueryStream(channelId, window, readWindow, windows, toMessage)
+		}),
+	)
+
+const messageQueryStream = <Message>(
+	channelId: ChannelId,
+	window: LiveQueryWindow,
+	readWindow: () => LiveQueryWindow,
+	windows: Stream.Stream<LiveQueryWindow>,
 	toMessage: (changes: { order: ReadonlyArray<MessageId>; upserts: ReadonlyArray<ChatMessage> }) => Message,
 ): Stream.Stream<Message> =>
 	liveQueryChangeSetStream<MessageQueryRow, Message>(
@@ -96,6 +116,7 @@ export const messageChangesStream = <Message>(
 		},
 		window,
 		readWindow,
+		windows,
 		(row) => row.id,
 		({ order, upserts }) =>
 			toMessage({ order: order as ReadonlyArray<MessageId>, upserts: upserts.map(toChatMessage) }),

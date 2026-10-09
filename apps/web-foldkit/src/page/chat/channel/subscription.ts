@@ -1,5 +1,5 @@
 import { ChannelId, MessageId, OrganizationId, TypingIndicatorId } from "@hazel/schema"
-import { Effect, Option, Schema, Stream } from "effect"
+import { Effect, Option, PubSub, Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
 import * as Live from "../../../chat/live-state"
 import * as FilesSubscriptions from "../files/subscriptions"
@@ -35,6 +35,7 @@ import {
 import * as Draft from "../../../composer/draft"
 import * as Typing from "../../../composer/typing"
 import { uploadStream } from "../../../composer/upload"
+import { MessageWindows } from "../../../data/message-windows"
 import type { HazelRpc } from "../../../rpc"
 import { globalTypingStream, leftWindowStream } from "../../../composer/window-events"
 import { isMemberOf, Message, type Model } from "./page"
@@ -46,7 +47,7 @@ type Input = PageSubscriptionInput<Model>
 const byChannel = { channelId: ChannelId }
 const channelOf = ({ model }: Input) => ({ channelId: model.channelId })
 
-const chat = Subscription.make<Input, Message>()((entry) => ({
+const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 	chatChannel: entry(byChannel, {
 		modelToDependencies: channelOf,
 		dependenciesToStream: ({ channelId }) =>
@@ -76,6 +77,19 @@ const chat = Subscription.make<Input, Message>()((entry) => ({
 				messageChangesStream(channelId, { limit, offset }, readDependencies, ({ order, upserts }) =>
 					Message.ChangedMessages({ order, upserts }),
 				),
+		},
+	),
+	// Restarts on every page and publishes the window, so the messages query moves only when paged.
+	chatMessagesWindow: entry(
+		{ channelId: ChannelId, limit: Schema.Number, offset: Schema.Number },
+		{
+			modelToDependencies: ({ model }) => ({ channelId: model.channelId, limit: model.limit, offset: model.offset }),
+			dependenciesToStream: (change) =>
+				Stream.fromEffect(
+					Effect.gen(function* () {
+						yield* PubSub.publish(yield* MessageWindows, change)
+					}),
+				).pipe(Stream.drain),
 		},
 	),
 	// `MessageLive.Provider` -> `useMessageActor`: one actor connection per live AI reply. The stream
