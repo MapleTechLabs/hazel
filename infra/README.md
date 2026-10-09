@@ -72,3 +72,11 @@ Worker env (secrets are uploaded as Worker secrets, plain values as vars) is lis
    Railway backend in the same window: Discord allows one session per bot token.
 6. Keep Railway's backend running for a week as a rollback, then delete it (with Redis and the
    collector).
+
+## Cutover log (2026-10-10, local deploy via `bun run alchemy:deploy:prd:local`)
+
+- Secrets live in the Hazel Infisical project (`9e94bb4d-…`, env `prod`); copied from Railway `api`, `CLUSTER_API_SECRET` and `ELECTRIC_SECRET` generated.
+- Cluster: `CLUSTER_API_SECRET` set on Railway `api` and `cluster`; public domain `cluster-production-6155.up.railway.app` (port 3001) is `CLUSTER_URL`.
+- Moved to Cloudflare: `api.hazel.sh` (`hazel-api`), `electric.hazel.sh` (`hazel-electric-proxy` + `hazel-electric` container), `bot-gateway.hazel.sh`. `app.hazel.sh` serves `apps/web-foldkit`.
+- Rollback DNS (all unproxied CNAMEs, detach the Worker custom domain first): `api` → `j0tqzlof.up.railway.app`, `electric` → `2hg74iuk.up.railway.app`, `bot-gateway` → `s3t62x1p.up.railway.app` (was proxied).
+- Not done yet: Discord gateway flip (Worker `false`, Railway still runs it), Worker traces to Maple (`OTEL_BASE_URL`, `MAPLE_INGEST_KEY`), docs.hazel.sh stays on Vercel, GitHub `production` environment secrets for CI deploys. Link previews return `INVALID_URL` for every URL (already broken on the June build).
