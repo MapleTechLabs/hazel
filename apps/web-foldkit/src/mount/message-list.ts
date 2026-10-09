@@ -206,7 +206,25 @@ export const ScrollAdjustment = defineTaggedUnion({
 })
 export type ScrollAdjustment = typeof ScrollAdjustment.Type
 
-/** Adjusts `scrollTop` once the pending patch has committed, before the browser paints. */
+/**
+ * Resumes in the frame's ResizeObserver step: after layout, before paint, so touching `scrollTop`
+ * forces no layout of the freshly patched rows. A 0x0 element is never observed; the next frame
+ * stands in.
+ */
+const afterLayout = (element: Element) =>
+	Effect.raceFirst(
+		Effect.callback<void>((resume) => {
+			const observer = new ResizeObserver(() => {
+				observer.disconnect()
+				resume(Effect.void)
+			})
+			observer.observe(element)
+			return Effect.sync(() => observer.disconnect())
+		}),
+		Render.afterPaint,
+	)
+
+/** Adjusts `scrollTop` once the pending patch has committed and laid out, before the browser paints. */
 export const ApplyScroll = Command.define("ApplyScroll", {
 	args: { id: Schema.String, adjustment: ScrollAdjustment, version: Schema.Number },
 	messages: [Message.CompletedApplyScroll],
@@ -215,6 +233,7 @@ export const ApplyScroll = Command.define("ApplyScroll", {
 			yield* Render.afterCommit
 			const element = document.getElementById(id)
 			if (element === null) return Message.CompletedApplyScroll({ version, scrollTop: 0 })
+			yield* afterLayout(element)
 			element.scrollTop =
 				adjustment._tag === "To" ? adjustment.scrollTop : element.scrollTop + adjustment.deltaPx
 			return Message.CompletedApplyScroll({ version, scrollTop: element.scrollTop })
@@ -258,9 +277,15 @@ const changedMeasurements = (
 	measurements: ReadonlyArray<{ readonly key: string; readonly height: number }>,
 ) => measurements.filter(({ key, height }) => model.measuredHeights[key] !== height)
 
-/** The overscan window moves when the viewport comes within this margin of its edge, by this chunk. */
-const RENDER_MARGIN_PX = 200
-const RENDER_CHUNK_PX = 2400
+/**
+ * The overscan window always covers the viewport plus `RENDER_MARGIN_PX`, then grows toward
+ * `RENDER_LEAD_PX` by at most `RENDER_STEP_PX` per side and update, so a frame builds a few rows,
+ * never a 2400px chunk. Rows past the lead plus `RENDER_SLACK_PX` are dropped.
+ */
+const RENDER_MARGIN_PX = 300
+const RENDER_LEAD_PX = 2400
+const RENDER_STEP_PX = 320
+const RENDER_SLACK_PX = 600
 
 export const renderedIndexes = (model: Model, layout: Layout) => {
 	const from = model.renderedFromKey === null ? undefined : layout.indexByKey.get(model.renderedFromKey)
@@ -273,16 +298,29 @@ const keepOverscan = (model: Model): Model => {
 	const layout = layoutOf(model)
 	const top = model.scrollTop
 	const bottom = top + model.viewportHeight
+	const at = (y: number) => rowIndexAt(layout, Math.max(0, y))
+	const hardFrom = at(top - RENDER_MARGIN_PX)
+	const hardTo = at(bottom + RENDER_MARGIN_PX)
 	const current = renderedIndexes(model, layout)
-	if (
-		current !== undefined &&
-		layout.offsets[current.from]! <= Math.max(0, top - RENDER_MARGIN_PX) &&
-		layout.offsets[current.to + 1]! >= Math.min(layout.totalHeight, bottom + RENDER_MARGIN_PX)
+	// A jump past the window (fling, jump to a row) starts over from what the viewport needs.
+	const isDisjoint = current === undefined || current.to < hardFrom || current.from > hardTo
+	const coveredFrom = isDisjoint ? hardFrom : Math.min(current.from, hardFrom)
+	const coveredTo = isDisjoint ? hardTo : Math.max(current.to, hardTo)
+	const grownFrom = Math.max(
+		at(top - RENDER_LEAD_PX),
+		Math.min(coveredFrom, at(layout.offsets[coveredFrom]! - RENDER_STEP_PX)),
 	)
-		return model
-	const from = model.keys[rowIndexAt(layout, Math.max(0, top - RENDER_CHUNK_PX))]!
-	const to = model.keys[rowIndexAt(layout, bottom + RENDER_CHUNK_PX)]!
-	return modifyFields(model, { renderedFromKey: () => from, renderedToKey: () => to })
+	const grownTo = Math.min(
+		at(bottom + RENDER_LEAD_PX),
+		Math.max(coveredTo, at(layout.offsets[coveredTo + 1]! + RENDER_STEP_PX)),
+	)
+	const from = Math.max(
+		Math.min(coveredFrom, grownFrom),
+		at(top - RENDER_LEAD_PX - RENDER_SLACK_PX),
+	)
+	const to = Math.min(Math.max(coveredTo, grownTo), at(bottom + RENDER_LEAD_PX + RENDER_SLACK_PX))
+	if (current !== undefined && from === current.from && to === current.to) return model
+	return modifyFields(model, { renderedFromKey: () => model.keys[from]!, renderedToKey: () => model.keys[to]! })
 }
 
 /** A scroll event that is not the echo of our own `ApplyScroll`: the reader is scrolling. */

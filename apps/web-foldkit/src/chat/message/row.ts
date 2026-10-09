@@ -113,7 +113,13 @@ const contentView = <M>(h: HtmlBuilder<M>, row: MessageRow, context: RowContext<
 	]
 }
 
-export const messageRowView = <M>(h: HtmlBuilder<M>, row: MessageRow, context: RowContext<M>): Html => {
+/** `isHovered` is the list's injected `#message-<id> { background-color: ... !important }` hover rule. */
+export const messageRowView = <M>(
+	h: HtmlBuilder<M>,
+	row: MessageRow,
+	context: RowContext<M>,
+	isHovered = false,
+): Html => {
 	const { message } = row
 	const isGroupStart = isGroupStartOf(row)
 	const showAvatar = isGroupStart || message.replyToMessageId !== null || message.hasEmbeds
@@ -147,7 +153,7 @@ export const messageRowView = <M>(h: HtmlBuilder<M>, row: MessageRow, context: R
 								message.isPinned
 									? "rounded-l-none border-warning border-l-4 bg-warning/10 pl-2 shadow-sm hover:bg-warning/15"
 									: "",
-							),
+							) + (isHovered ? " bg-secondary!" : ""),
 						),
 						h.Attribute("data-id", message.id),
 						h.Id(`message-${message.id}`),
