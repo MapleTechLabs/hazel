@@ -85,7 +85,7 @@ const memberRow = <Message>(
 				[h.Class("px-4 py-4")],
 				[
 					badge(h, { intent: getStatusBadgeIntent(status) }, [
-						h.span([h.Class("size-1.5 rounded-full bg-current")], []),
+						h.span([h.Class("size-1.5 rounded-full bg-current")]),
 						getStatusLabel(status),
 					]),
 				],

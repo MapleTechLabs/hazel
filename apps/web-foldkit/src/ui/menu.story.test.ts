@@ -2,7 +2,7 @@ import { Option } from "effect"
 import { Command, expectNoOutMessage, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
 import {
-	FocusElement,
+	FocusMenuElement,
 	init,
 	item,
 	leaf,
@@ -10,7 +10,7 @@ import {
 	type Model,
 	OutMessage,
 	update,
-	WaitForTypeaheadReset,
+	WaitForMenuTypeaheadReset,
 } from "./menu"
 
 /** React Aria Menu: open strategies, wrapping navigation, typeahead, submenus and activation. */
@@ -42,7 +42,7 @@ const searching = (search: string, focusedKey: string): Model => ({
 		pointerOffset: Option.none(),
 	},
 })
-const resolveFocus = Command.resolve(FocusElement, Message.CompletedFocusElement())
+const resolveFocus = Command.resolve(FocusMenuElement, Message.CompletedFocusElement())
 
 describe("menu story", () => {
 	test("ArrowDown on the trigger opens the menu on the first item without a focus Command", () => {
@@ -98,7 +98,7 @@ describe("menu story", () => {
 			pressMenuKey("ArrowDown"),
 			resolveFocus,
 			pressMenuKey("ArrowDown"),
-			Command.expectExact(FocusElement({ elementId: "file-item-share" })),
+			Command.expectExact(FocusMenuElement({ elementId: "file-item-share" })),
 			resolveFocus,
 			model((next) => expect(focusOf(next)).toEqual(Option.some("share"))),
 			pressMenuKey("End"),
@@ -157,13 +157,13 @@ describe("menu story", () => {
 			pressMenuKey("ArrowDown"),
 			resolveFocus,
 			pressMenuKey("ArrowRight"),
-			Command.expectExact(FocusElement({ elementId: "file-item-email" })),
+			Command.expectExact(FocusMenuElement({ elementId: "file-item-email" })),
 			resolveFocus,
 			pressMenuKey("ArrowDown"),
-			Command.expectExact(FocusElement({ elementId: "file-item-slack" })),
+			Command.expectExact(FocusMenuElement({ elementId: "file-item-slack" })),
 			resolveFocus,
 			pressMenuKey("ArrowLeft"),
-			Command.expectExact(FocusElement({ elementId: "file-item-share" })),
+			Command.expectExact(FocusMenuElement({ elementId: "file-item-share" })),
 			resolveFocus,
 			model((next) => {
 				expect(submenuOf(next)).toEqual(Option.none())
@@ -215,12 +215,15 @@ describe("menu story", () => {
 			message(Message.PressedTriggerKey({ key: "ArrowDown" })),
 			pressMenuKey("s"),
 			Command.expectExact(
-				FocusElement({ elementId: "file-item-share" }),
-				WaitForTypeaheadReset({ search: "s" }),
+				FocusMenuElement({ elementId: "file-item-share" }),
+				WaitForMenuTypeaheadReset({ search: "s" }),
 			),
 			resolveFocus,
 			model((next) => expect(searchOf(next)).toBe("s")),
-			Command.resolve(WaitForTypeaheadReset, Message.CompletedWaitForTypeaheadReset({ search: "s" })),
+			Command.resolve(
+				WaitForMenuTypeaheadReset,
+				Message.CompletedWaitForTypeaheadReset({ search: "s" }),
+			),
 			model((next) => {
 				expect(searchOf(next)).toBe("")
 				expect(focusOf(next)).toEqual(Option.some("share"))
@@ -245,7 +248,10 @@ describe("menu story", () => {
 			pressMenuKey("o", true),
 			Command.expectNone(),
 			pressMenuKey("a"),
-			Command.resolve(WaitForTypeaheadReset, Message.CompletedWaitForTypeaheadReset({ search: "a" })),
+			Command.resolve(
+				WaitForMenuTypeaheadReset,
+				Message.CompletedWaitForTypeaheadReset({ search: "a" }),
+			),
 			model((next) => expect(focusOf(next)).toEqual(Option.some("new"))),
 		)
 	})
@@ -258,7 +264,10 @@ describe("menu story", () => {
 			pressMenuKey(" "),
 			expectNoOutMessage(),
 			model((next) => expect(searchOf(next)).toBe("o ")),
-			Command.resolve(WaitForTypeaheadReset, Message.CompletedWaitForTypeaheadReset({ search: "o " })),
+			Command.resolve(
+				WaitForMenuTypeaheadReset,
+				Message.CompletedWaitForTypeaheadReset({ search: "o " }),
+			),
 		)
 	})
 

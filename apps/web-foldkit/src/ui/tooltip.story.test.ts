@@ -1,7 +1,14 @@
 // @vitest-environment jsdom
 import { Command, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
-import { init, initWithDelay, Message, update, WaitForHideDelay, WaitForShowDelay } from "./tooltip"
+import {
+	init,
+	initWithDelay,
+	Message,
+	update,
+	WaitForTooltipHideDelay,
+	WaitForTooltipShowDelay,
+} from "./tooltip"
 
 /** React Aria TooltipTrigger: a 1500ms show delay on hover, immediate on keyboard focus, 500ms hide delay. */
 
@@ -15,9 +22,9 @@ describe("tooltip story", () => {
 			update,
 			given(closed),
 			hover,
-			Command.expectExact(WaitForShowDelay({ version: 1, delayMs: 1500 })),
+			Command.expectExact(WaitForTooltipShowDelay({ version: 1, delayMs: 1500 })),
 			model((next) => expect(next.isOpen).toBe(false)),
-			Command.resolve(WaitForShowDelay, Message.CompletedWaitForShowDelay({ version: 1 })),
+			Command.resolve(WaitForTooltipShowDelay, Message.CompletedWaitForShowDelay({ version: 1 })),
 			model((next) => expect(next.isOpen).toBe(true)),
 		)
 	})
@@ -27,8 +34,8 @@ describe("tooltip story", () => {
 			update,
 			given(initWithDelay("rename", 300)),
 			hover,
-			Command.expectExact(WaitForShowDelay({ version: 1, delayMs: 300 })),
-			Command.resolve(WaitForShowDelay, Message.CompletedWaitForShowDelay({ version: 1 })),
+			Command.expectExact(WaitForTooltipShowDelay({ version: 1, delayMs: 300 })),
+			Command.resolve(WaitForTooltipShowDelay, Message.CompletedWaitForShowDelay({ version: 1 })),
 			model((next) => expect(next.isOpen).toBe(true)),
 		)
 	})
@@ -61,7 +68,7 @@ describe("tooltip story", () => {
 			update,
 			given(closed),
 			message(Message.HoveredTrigger({ isPointerModality: false })),
-			Command.resolve(WaitForShowDelay, Message.CompletedWaitForShowDelay({ version: 1 })),
+			Command.resolve(WaitForTooltipShowDelay, Message.CompletedWaitForShowDelay({ version: 1 })),
 			model((next) => expect(next.isOpen).toBe(false)),
 		)
 	})
@@ -83,9 +90,9 @@ describe("tooltip story", () => {
 			update,
 			given(hoveredOpen),
 			message(Message.UnhoveredTrigger()),
-			Command.expectExact(WaitForHideDelay({ version: 2 })),
+			Command.expectExact(WaitForTooltipHideDelay({ version: 2 })),
 			model((next) => expect(next.isOpen).toBe(true)),
-			Command.resolve(WaitForHideDelay, Message.CompletedWaitForHideDelay({ version: 2 })),
+			Command.resolve(WaitForTooltipHideDelay, Message.CompletedWaitForHideDelay({ version: 2 })),
 			model((next) => expect(next.isOpen).toBe(false)),
 		)
 	})
@@ -139,7 +146,7 @@ describe("tooltip story: dismissal", () => {
 			update,
 			given({ ...hoveredOpen, isFocused: true }),
 			message(Message.UnhoveredTrigger()),
-			Command.resolve(WaitForHideDelay, Message.CompletedWaitForHideDelay({ version: 2 })),
+			Command.resolve(WaitForTooltipHideDelay, Message.CompletedWaitForHideDelay({ version: 2 })),
 			model((next) => expect(next).toMatchObject({ isOpen: false, isFocused: false })),
 		)
 	})

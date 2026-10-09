@@ -101,8 +101,8 @@ export const Message = defineMessageUnion({
 	SelectedFiles: { files: Schema.Array(File.File) },
 	ClickedRemoveAttachment: { attachmentId: AttachmentId },
 	CompletedGenerateUploadFileId: { fileId: Schema.String },
-	GotUploadEvent: { event: UploadEvent },
-	GotDropEvent: { event: DropEvent },
+	ReceivedUploadEvent: { event: UploadEvent },
+	ReceivedDropEvent: { event: DropEvent },
 	CompletedOpenFilePicker: {},
 	SucceededSendMessage: {},
 	FailedSendMessage: {

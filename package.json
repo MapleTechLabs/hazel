@@ -36,7 +36,7 @@
 		"setup:turbo": "turbo setup",
 		"typecheck": "turbo build typecheck",
 		"format": "oxfmt",
-		"lint": "oxlint",
+		"lint": "oxlint --disable-nested-config",
 		"test": "vitest",
 		"test:once": "vitest run",
 		"test:debug": "vitest --inspect-brk --no-file-parallelism",

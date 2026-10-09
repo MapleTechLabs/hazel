@@ -21,7 +21,7 @@ export const onboardingNavigation = (h: HtmlBuilder<Message>, options: Navigatio
 		[h.Class("sticky bottom-0 flex flex-wrap justify-between gap-2 pt-4 pb-2")],
 		[
 			options.showBack === false
-				? h.div([], [])
+				? h.div([])
 				: button(
 						h,
 						{
@@ -65,7 +65,6 @@ export const stepHeader = (
 	)
 
 export const AutoFocus = Mount.define("AutoFocusOnboardingInput", {
-	args: {},
 	messages: [Message.CompletedAutoFocus],
 	execute: ({ element }) =>
 		Effect.sync(() => {
@@ -75,4 +74,4 @@ export const AutoFocus = Mount.define("AutoFocusOnboardingInput", {
 })
 
 /** React's `autoFocus`. */
-export const autoFocus = (h: HtmlBuilder<Message>): Attribute<Message> => h.OnMount(AutoFocus({}))
+export const autoFocus = (h: HtmlBuilder<Message>): Attribute<Message> => h.OnMount(AutoFocus())

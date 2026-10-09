@@ -17,7 +17,7 @@ type Slot = keyof Model
 // MESSAGE
 
 const Message = defineMessageUnion({
-	GotToolbarMessage: { slot: Schema.Literals(["formatting", "tools"]), message: Toolbar.Message },
+	GotToolbarMessage: { slotId: Schema.Literals(["formatting", "tools"]), message: Toolbar.Message },
 })
 type Message = typeof Message.Type
 
@@ -28,12 +28,12 @@ const foldToolbar = (slot: Slot) =>
 		update: Toolbar.update,
 		read: (model: Model) => Option.some(model[slot]),
 		write: (model, nextToolbar) => ({ ...model, [slot]: nextToolbar }),
-		toParentMessage: (message) => Message.GotToolbarMessage({ slot, message }),
+		toParentMessage: (message) => Message.GotToolbarMessage({ slotId: slot, message }),
 	})
 
 const update = (model: Model, message: Message) =>
 	Message.match<Update.Return<Model, Message>>(message, {
-		GotToolbarMessage: ({ slot, message }) => foldToolbar(slot)(model, message),
+		GotToolbarMessage: ({ slotId: slot, message }) => foldToolbar(slot)(model, message),
 	})
 
 // VIEW
@@ -45,7 +45,7 @@ const view = (model: Model, h: HtmlBuilder<Message>) => {
 			model: model[slot],
 			view: Toolbar.view,
 			viewInputs,
-			toParentMessage: (message) => Message.GotToolbarMessage({ slot, message }),
+			toParentMessage: (message) => Message.GotToolbarMessage({ slotId: slot, message }),
 		})
 	return galleryFrame(h, "Toolbar", [
 		gallerySection(h, "Horizontal", [

@@ -49,9 +49,9 @@ describe("modal host", () => {
 			Mount.expectEnded(Modal.PortalModal),
 			sceneExpect(text("Section created successfully")).toExist(),
 			Mount.resolve(Toast.MeasureToast, Toast.Message.MeasuredToast({ id: 1, height: 52 })),
-			Command.resolve(Toast.StartTimer, Toast.Message.StartedTimer({ id: 1, version: 1, at: 0 })),
-			Command.resolve(Toast.WaitForLifetime, Toast.Message.CompletedWaitForLifetime({ id: 1, version: 1 })),
-			Command.resolve(Toast.WaitForRemoval, Toast.Message.CompletedWaitForRemoval({ id: 1 })),
+			Command.resolve(Toast.StartToastTimer, Toast.Message.StartedTimer({ id: 1, version: 1, at: 0 })),
+			Command.resolve(Toast.WaitForToastLifetime, Toast.Message.CompletedWaitForLifetime({ id: 1, version: 1 })),
+			Command.resolve(Toast.WaitForToastRemoval, Toast.Message.CompletedWaitForRemoval({ id: 1 })),
 			Mount.expectEnded(Toast.MeasureToast),
 		)
 	})
@@ -69,9 +69,9 @@ describe("modal host", () => {
 			sceneExpect(role("button", { name: "Create section" })).toBeEnabled(),
 			sceneExpect(text("Could not create the section")).toExist(),
 			Mount.resolve(Toast.MeasureToast, Toast.Message.MeasuredToast({ id: 1, height: 52 })),
-			Command.resolve(Toast.StartTimer, Toast.Message.StartedTimer({ id: 1, version: 1, at: 0 })),
-			Command.resolve(Toast.WaitForLifetime, Toast.Message.CompletedWaitForLifetime({ id: 1, version: 1 })),
-			Command.resolve(Toast.WaitForRemoval, Toast.Message.CompletedWaitForRemoval({ id: 1 })),
+			Command.resolve(Toast.StartToastTimer, Toast.Message.StartedTimer({ id: 1, version: 1, at: 0 })),
+			Command.resolve(Toast.WaitForToastLifetime, Toast.Message.CompletedWaitForLifetime({ id: 1, version: 1 })),
+			Command.resolve(Toast.WaitForToastRemoval, Toast.Message.CompletedWaitForRemoval({ id: 1 })),
 			Mount.expectEnded(Toast.MeasureToast),
 		)
 	})

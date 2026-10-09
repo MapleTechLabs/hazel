@@ -69,8 +69,10 @@ export const Message = defineMessageUnion({
 	LoadedDismissedHints: { isCreateChannelHintDismissed: Schema.Boolean },
 	ClickedDismissCreateChannelHint: {},
 	CompletedPersistDismissedHint: {},
+	// The row menu's items link into the org; update has no shell context, so the view passes the slug along.
+	// oxlint-disable-next-line foldkit/got-wrapper-carries-only-routing
 	GotRowMenuMessage: { channelId: ChannelId, orgSlug: Schema.String, message: Menu.Message },
-	GotSectionMenuMessage: { sectionKey: Schema.String, message: Menu.Message },
+	GotSectionMenuMessage: { sectionId: Schema.String, message: Menu.Message },
 	ClickedSectionAction: { action: SectionAction },
 	SucceededSidebarAction: { toast: ToastRequest },
 	FailedSidebarAction: { toast: ToastRequest },

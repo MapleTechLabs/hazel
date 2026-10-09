@@ -269,7 +269,7 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, view
 				: h.div([h.Class(rangeCalendarGridsClassName)], [grid(h, model, label)]),
 			h.div(
 				[h.Attribute("style", visuallyHidden)],
-				[h.button([h.AriaLabel("Next"), h.Tabindex(-1), h.OnClick(Message.ClickedNext())], [])],
+				[h.button([h.AriaLabel("Next"), h.Tabindex(-1), h.OnClick(Message.ClickedNext())])],
 			),
 		],
 	)

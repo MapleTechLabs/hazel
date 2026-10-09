@@ -8,11 +8,11 @@ import {
 	Message,
 	type Model,
 	OutMessage,
-	PauseTimers,
+	PauseToastTimers,
 	type ShowOptions,
 	show,
 	update,
-	WaitForRemoval,
+	WaitForToastRemoval,
 } from "./toast"
 import { view } from "./toast-view"
 
@@ -99,8 +99,8 @@ describe("toast scene", () => {
 				"false",
 			),
 			Scene.hover(toaster),
-			Scene.Command.expectExact(PauseTimers()),
-			Scene.Command.resolve(PauseTimers, Message.PausedTimers({ at: 0 })),
+			Scene.Command.expectExact(PauseToastTimers()),
+			Scene.Command.resolve(PauseToastTimers, Message.PausedTimers({ at: 0 })),
 			Scene.expect(Scene.first(Scene.all.selector("[data-sonner-toast]"))).toHaveAttr(
 				"data-expanded",
 				"true",
@@ -116,7 +116,7 @@ describe("toast scene", () => {
 			Scene.click(Scene.role("button", { name: "Undo" })),
 			Scene.expectOutMessage(OutMessage.ClickedAction({ id: 1 })),
 			Scene.expect(Scene.selector("[data-sonner-toast]")).toHaveAttr("data-removed", "true"),
-			Scene.Command.resolve(WaitForRemoval, Message.CompletedWaitForRemoval({ id: 1 })),
+			Scene.Command.resolve(WaitForToastRemoval, Message.CompletedWaitForRemoval({ id: 1 })),
 			Scene.Mount.expectEnded(MeasureToast),
 			Scene.expect(region).toBeEmpty(),
 		)
@@ -128,7 +128,7 @@ describe("toast scene", () => {
 			Scene.given(deleted),
 			measured(1, 48),
 			Scene.pointerDown(toaster),
-			Scene.Command.resolve(PauseTimers, Message.PausedTimers({ at: 0 })),
+			Scene.Command.resolve(PauseToastTimers, Message.PausedTimers({ at: 0 })),
 			Scene.pointerUp(toaster),
 			Scene.Command.expectNone(),
 			Scene.expect(Scene.text("Message deleted")).toExist(),
@@ -141,9 +141,9 @@ describe("toast scene", () => {
 			Scene.given(deleted),
 			measured(1, 48),
 			Scene.Subscription.emit(Message.PressedHotkey()),
-			Scene.Command.expectExact(PauseTimers(), FocusToaster()),
+			Scene.Command.expectExact(PauseToastTimers(), FocusToaster()),
 			Scene.Command.resolveAll(
-				[PauseTimers, Message.PausedTimers({ at: 0 })],
+				[PauseToastTimers, Message.PausedTimers({ at: 0 })],
 				[FocusToaster, Message.CompletedFocusToaster()],
 			),
 			Scene.expect(Scene.selector("[data-sonner-toast]")).toHaveAttr("data-expanded", "true"),

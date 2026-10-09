@@ -17,7 +17,7 @@ const segmentKey = (segment: string, key: string) =>
 	message(Message.GotSegmentsMessage({ message: Segments.Message.PressedSegmentKey({ segment, key }) }))
 
 const focused = Command.resolve(Segments.FocusSegment, Segments.Message.CompletedFocusSegment())
-const announced = Command.resolve(Segments.AnnounceValue, Segments.Message.CompletedAnnounceValue())
+const announced = Command.resolve(Segments.AnnounceSegmentValue, Segments.Message.CompletedAnnounceValue())
 
 /** The calendar's selection announcement; `Announce` is not exported from calendar.ts, so match the instance. */
 const selectionAnnouncement = (date: string) => {
@@ -176,7 +176,7 @@ describe("date picker story", () => {
 			expectOutMessage(OutMessage.ChangedValue({ date: "2026-03-25" })),
 			Command.resolveAll(
 				[Segments.FocusSegment, Segments.Message.CompletedFocusSegment()],
-				[Segments.AnnounceValue, Segments.Message.CompletedAnnounceValue()],
+				[Segments.AnnounceSegmentValue, Segments.Message.CompletedAnnounceValue()],
 			),
 		)
 	})

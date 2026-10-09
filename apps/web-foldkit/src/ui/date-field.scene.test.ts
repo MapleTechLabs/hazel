@@ -3,7 +3,7 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import * as Scene from "foldkit/scene"
 import { describe, test } from "vitest"
 import { type DateFieldParts, dateField } from "./date-field"
-import { AnnounceValue, FocusSegment, init, Message, type Model, update } from "./date-segments"
+import { AnnounceSegmentValue, FocusSegment, init, Message, type Model, update } from "./date-segments"
 
 /** DateField and TimeField through the view: spinbutton segments, labelling, keyboard and states. */
 
@@ -76,8 +76,8 @@ describe("date field scene", () => {
 			labelled,
 			Scene.given(init({ id: "due", kind: "date", today: "2026-10-09", value: "2026-10-07" })),
 			Scene.keydown(segment("day"), "ArrowUp"),
-			Scene.Command.expectExact(AnnounceValue({ valueText: "8" })),
-			Scene.Command.resolve(AnnounceValue, Message.CompletedAnnounceValue()),
+			Scene.Command.expectExact(AnnounceSegmentValue({ valueText: "8" })),
+			Scene.Command.resolve(AnnounceSegmentValue, Message.CompletedAnnounceValue()),
 			Scene.expect(segment("day")).toHaveAttr("aria-valuenow", "8"),
 			Scene.expect(Scene.selector('input[type="date"]')).toHaveValue("2026-10-08"),
 		)
@@ -88,7 +88,7 @@ describe("date field scene", () => {
 			labelled,
 			Scene.given(init({ id: "due", kind: "date", today: "2026-10-09" })),
 			Scene.keydown(segment("month"), "1"),
-			Scene.Command.resolve(AnnounceValue, Message.CompletedAnnounceValue()),
+			Scene.Command.resolve(AnnounceSegmentValue, Message.CompletedAnnounceValue()),
 			Scene.keydown(segment("month"), "1"),
 			Scene.Command.expectExact(FocusSegment({ elementId: "due-day" })),
 			Scene.Command.resolve(FocusSegment, Message.CompletedFocusSegment()),
@@ -150,7 +150,7 @@ describe("date field scene", () => {
 			Scene.expect(Scene.role("spinbutton", { name: "AM/PM" })).not.toHaveAttr("inputmode"),
 			Scene.expect(Scene.selector('input[type="date"]')).toBeAbsent(),
 			Scene.keydown(Scene.role("spinbutton", { name: "AM/PM" }), "a"),
-			Scene.Command.resolve(AnnounceValue, Message.CompletedAnnounceValue()),
+			Scene.Command.resolve(AnnounceSegmentValue, Message.CompletedAnnounceValue()),
 			Scene.expect(Scene.role("spinbutton", { name: "AM/PM" })).toHaveText("AM"),
 		)
 	})

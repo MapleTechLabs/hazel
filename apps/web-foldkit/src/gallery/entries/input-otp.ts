@@ -17,14 +17,14 @@ type Model = typeof Model.Type
 // MESSAGE
 
 const Message = defineMessageUnion({
-	GotInputOtpMessage: { otp: OtpKey, message: InputOtp.Message },
+	GotInputOtpMessage: { otpId: OtpKey, message: InputOtp.Message },
 })
 type Message = typeof Message.Type
 
 const toOtpMessage =
 	(otp: OtpKey) =>
 	(message: InputOtp.Message): Message =>
-		Message.GotInputOtpMessage({ otp, message })
+		Message.GotInputOtpMessage({ otpId: otp, message })
 
 // INIT
 
@@ -49,7 +49,7 @@ const init = (): Update.Return<Model, Message> =>
 
 const update = (model: Model, message: Message) =>
 	Message.match<Update.Return<Model, Message>>(message, {
-		GotInputOtpMessage: ({ otp, message }) =>
+		GotInputOtpMessage: ({ otpId: otp, message }) =>
 			Update.foldChild({
 				update: InputOtp.update,
 				read: (current: Model) => Option.some(current[otp]),

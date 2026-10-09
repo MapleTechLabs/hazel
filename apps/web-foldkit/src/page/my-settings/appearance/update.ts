@@ -87,7 +87,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			)
 			return {
 				model: modifyFields(unhovered.model, { isGenerating: () => true }),
-				commands: [...(unhovered.commands ?? []), GenerateRemixOptions({})],
+				commands: [...(unhovered.commands ?? []), GenerateRemixOptions()],
 			}
 		},
 		GeneratedRemixOptions: ({ options }) => ({

@@ -19,11 +19,12 @@ type Model = typeof Model.Type
 // MESSAGE
 
 const Message = defineMessageUnion({
-	GotPickerMessage: { slot: Slot, message: DatePicker.Message },
+	GotPickerMessage: { slotId: Slot, message: DatePicker.Message },
 })
 type Message = typeof Message.Type
 
-const toMessage = (slot: Slot) => (message: DatePicker.Message) => Message.GotPickerMessage({ slot, message })
+const toMessage = (slot: Slot) => (message: DatePicker.Message) =>
+	Message.GotPickerMessage({ slotId: slot, message })
 
 // UPDATE
 
@@ -79,7 +80,7 @@ export const gallery = defineGallery<Model, Message>("DatePicker", {
 	},
 	update: (model, message) =>
 		Message.match<Update.Return<Model, Message>>(message, {
-			GotPickerMessage: ({ slot, message }) => fold(slot)(model, message),
+			GotPickerMessage: ({ slotId: slot, message }) => fold(slot)(model, message),
 		}),
 	subscriptions,
 	view,

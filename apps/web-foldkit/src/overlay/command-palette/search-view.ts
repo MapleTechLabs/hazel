@@ -191,7 +191,7 @@ export const searchPage = (h: HtmlBuilder<Message>, model: Model, page: SearchPa
 					h.div(
 						[h.Class("relative min-w-0 flex-1")],
 						[
-							h.keyed("div")("search-editor", [h.OnMount(MountSearchEditor({ placeholder: searchPlaceholder(page) }))], []),
+							h.keyed("div")("search-editor", [h.OnMount(MountSearchEditor({ placeholder: searchPlaceholder(page) }))]),
 							...autocompletePopover(h, model),
 						],
 					),

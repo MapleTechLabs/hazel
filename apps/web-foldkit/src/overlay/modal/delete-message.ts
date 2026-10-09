@@ -9,7 +9,7 @@ import { dialogFooter, dialogHeader } from "../../ui/dialog"
 import { closed } from "../out-message"
 import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalViewInputs } from "./contract"
-import { Frame, FrameMessage, frameView, initFrame, isFrameClosed, modalDescription, modalTitle } from "./frame"
+import { Frame, Message as FrameMessage, frameView, initFrame, isFrameClosed, modalDescription, modalTitle } from "./frame"
 import { runAtomFn } from "../../data/actions"
 
 /** `components/chat/delete-message-modal.tsx`; confirming runs the toolbar's `deleteMessageAction`. */

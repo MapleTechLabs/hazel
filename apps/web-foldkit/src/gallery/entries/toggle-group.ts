@@ -15,7 +15,7 @@ type Model = typeof Model.Type
 // MESSAGE
 
 const Message = defineMessageUnion({
-	GotToggleGroupMessage: { label: Schema.String, message: ToggleGroup.Message },
+	GotToggleGroupMessage: { groupId: Schema.String, message: ToggleGroup.Message },
 })
 type Message = typeof Message.Type
 
@@ -26,12 +26,12 @@ const foldToggleGroup = (label: string) =>
 		update: ToggleGroup.update,
 		read: (model: Model) => Record.get(model, label),
 		write: (model, nextGroup) => ({ ...model, [label]: nextGroup }),
-		toParentMessage: (message) => Message.GotToggleGroupMessage({ label, message }),
+		toParentMessage: (message) => Message.GotToggleGroupMessage({ groupId: label, message }),
 	})
 
 const update = (model: Model, message: Message) =>
 	Message.match<Update.Return<Model, Message>>(message, {
-		GotToggleGroupMessage: ({ label, message }) => foldToggleGroup(label)(model, message),
+		GotToggleGroupMessage: ({ groupId: label, message }) => foldToggleGroup(label)(model, message),
 	})
 
 // VIEW
@@ -162,7 +162,7 @@ const view = (model: Model, h: HtmlBuilder<Message>) =>
 								view: ToggleGroup.view,
 								viewInputs: { ...viewInputs, items: items(h) },
 								toParentMessage: (message) =>
-									Message.GotToggleGroupMessage({ label, message }),
+									Message.GotToggleGroupMessage({ groupId: label, message }),
 							}),
 						],
 					}),

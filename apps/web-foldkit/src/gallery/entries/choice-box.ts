@@ -25,7 +25,7 @@ type Model = typeof Model.Type
 // MESSAGE
 
 const Message = defineMessageUnion({
-	GotChoiceBoxMessage: { box: BoxKey, message: ChoiceBox.Message },
+	GotChoiceBoxMessage: { boxId: BoxKey, message: ChoiceBox.Message },
 	GotInteractionMessage: { message: Interaction.Message },
 })
 type Message = typeof Message.Type
@@ -35,13 +35,13 @@ const interaction = embedInteraction<Model, Message>((message) => Message.GotInt
 const toBoxMessage =
 	(box: BoxKey) =>
 	(message: ChoiceBox.Message): Message =>
-		Message.GotChoiceBoxMessage({ box, message })
+		Message.GotChoiceBoxMessage({ boxId: box, message })
 
 // UPDATE
 
 const update = (model: Model, message: Message) =>
 	Message.match<Update.Return<Model, Message>>(message, {
-		GotChoiceBoxMessage: ({ box, message }) =>
+		GotChoiceBoxMessage: ({ boxId: box, message }) =>
 			Update.foldChild({
 				update: ChoiceBox.update,
 				read: (current: Model) => Option.some(current[box]),

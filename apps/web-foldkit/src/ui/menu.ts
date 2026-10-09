@@ -246,7 +246,7 @@ const searchKey = (
 
 // COMMAND
 
-export const FocusElement = Command.define("FocusMenuElement", {
+export const FocusMenuElement = Command.define("FocusMenuElement", {
 	args: { elementId: Schema.String },
 	messages: [Message.CompletedFocusElement],
 	execute: ({ elementId }) =>
@@ -258,7 +258,7 @@ export const FocusElement = Command.define("FocusMenuElement", {
 
 const TYPEAHEAD_RESET = Duration.millis(1000)
 
-export const WaitForTypeaheadReset = Command.define("WaitForMenuTypeaheadReset", {
+export const WaitForMenuTypeaheadReset = Command.define("WaitForMenuTypeaheadReset", {
 	args: { search: Schema.String },
 	messages: [Message.CompletedWaitForTypeaheadReset],
 	execute: ({ search }) =>
@@ -273,9 +273,9 @@ const focusFor = (model: Model, open: Open): Command.Command<Message> =>
 	Option.match(
 		Option.flatMap(open.submenu, (submenu) => submenu.focusedKey),
 		{
-			onSome: (key) => FocusElement({ elementId: itemId(model.id, key) }),
+			onSome: (key) => FocusMenuElement({ elementId: itemId(model.id, key) }),
 			onNone: () =>
-				FocusElement({
+				FocusMenuElement({
 					elementId: Option.match(open.focusedKey, {
 						onNone: () => menuId(model.id),
 						onSome: (key) => itemId(model.id, key),
@@ -415,7 +415,7 @@ const pressedMenuKey = (model: Model, open: Open, key: string, isModified: boole
 				model: modifyFields(searched.model, {
 					popup: (popup) => (popup._tag === "Open" ? { ...popup, search } : popup),
 				}),
-				commands: [...(searched.commands ?? []), WaitForTypeaheadReset({ search })],
+				commands: [...(searched.commands ?? []), WaitForMenuTypeaheadReset({ search })],
 			}
 		}),
 	)

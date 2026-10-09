@@ -216,7 +216,7 @@ const table = (h: HtmlBuilder<Message>, rows: ReadonlyArray<Html>): Html =>
 	)
 
 const pulse = (h: HtmlBuilder<Message>, className: string) =>
-	h.td([h.Class("px-4 py-4")], [h.div([h.Class(`${className} animate-pulse rounded-sm bg-secondary`)], [])])
+	h.td([h.Class("px-4 py-4")], [h.div([h.Class(`${className} animate-pulse rounded-sm bg-secondary`)])])
 
 const skeletonRow = (h: HtmlBuilder<Message>, index: number): Html =>
 	h.keyed("tr")(
@@ -227,7 +227,7 @@ const skeletonRow = (h: HtmlBuilder<Message>, index: number): Html =>
 			pulse(h, "h-4 w-24"),
 			pulse(h, "h-4 w-28"),
 			pulse(h, "h-4 w-20"),
-			h.td([h.Class("px-4 py-4 text-right")], [h.div([h.Class("size-8 animate-pulse rounded-sm bg-secondary")], [])]),
+			h.td([h.Class("px-4 py-4 text-right")], [h.div([h.Class("size-8 animate-pulse rounded-sm bg-secondary")])]),
 		],
 	)
 

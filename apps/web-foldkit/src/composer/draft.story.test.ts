@@ -106,14 +106,14 @@ describe("attachments", () => {
 				expect(Draft.isUploading(current)).toBe(true)
 			}),
 			message(
-				Message.GotUploadEvent({
+				Message.ReceivedUploadEvent({
 					event: UploadEvent.FinishedUpload({ fileId: "f1", attachmentId: firstAttachment, toast: null }),
 				}),
 			),
 			Command.expectExact(Draft.GenerateUploadFileId()),
 			Command.resolve(Draft.GenerateUploadFileId, Message.CompletedGenerateUploadFileId({ fileId: "f2" })),
 			message(
-				Message.GotUploadEvent({
+				Message.ReceivedUploadEvent({
 					event: UploadEvent.FinishedUpload({ fileId: "f2", attachmentId: secondAttachment, toast: null }),
 				}),
 			),
@@ -135,7 +135,7 @@ describe("attachments", () => {
 				currentUpload: { fileId: "f1", file: pngA },
 				uploadingFiles: [{ fileId: "f1", fileName: "a.png", fileSize: 1, progress: 30 }],
 			}),
-			message(Message.GotUploadEvent({ event: UploadEvent.FinishedUpload({ fileId: "f1", attachmentId: null, toast }) })),
+			message(Message.ReceivedUploadEvent({ event: UploadEvent.FinishedUpload({ fileId: "f1", attachmentId: null, toast }) })),
 			expectOutMessage(Draft.OutMessage.RequestedToast({ toast })),
 			model((current) => {
 				expect(current.attachmentIds).toEqual([])
@@ -169,9 +169,9 @@ describe("attachments", () => {
 		story(
 			update,
 			given(fresh()),
-			message(Message.GotDropEvent({ event: DropEvent.ChangedDragState({ isDraggingOnPage: true, isDropTarget: true }) })),
+			message(Message.ReceivedDropEvent({ event: DropEvent.ChangedDragState({ isDraggingOnPage: true, isDropTarget: true }) })),
 			model((current) => expect(current.isDropTarget).toBe(true)),
-			message(Message.GotDropEvent({ event: DropEvent.DroppedFiles({ files: [pngA] }) })),
+			message(Message.ReceivedDropEvent({ event: DropEvent.DroppedFiles({ files: [pngA] }) })),
 			Command.expectExact(Draft.GenerateUploadFileId()),
 			Command.resolve(Draft.GenerateUploadFileId, Message.CompletedGenerateUploadFileId({ fileId: "f1" })),
 		)

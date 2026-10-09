@@ -25,7 +25,7 @@ type Model = typeof Model.Type
 // MESSAGE
 
 const Message = defineMessageUnion({
-	GotSliderMessage: { slider: SliderKey, message: Slider.Message },
+	GotSliderMessage: { sliderId: SliderKey, message: Slider.Message },
 	GotInteractionMessage: { message: Interaction.Message },
 })
 type Message = typeof Message.Type
@@ -35,7 +35,7 @@ const interaction = embedInteraction<Model, Message>((message) => Message.GotInt
 const toSliderMessage =
 	(slider: SliderKey) =>
 	(message: Slider.Message): Message =>
-		Message.GotSliderMessage({ slider, message })
+		Message.GotSliderMessage({ sliderId: slider, message })
 
 const foldSlider = (slider: SliderKey) =>
 	Update.foldChild({
@@ -49,7 +49,7 @@ const foldSlider = (slider: SliderKey) =>
 
 const update = (model: Model, message: Message) =>
 	Message.match<Update.Return<Model, Message>>(message, {
-		GotSliderMessage: ({ slider, message }) => foldSlider(slider)(model, message),
+		GotSliderMessage: ({ sliderId: slider, message }) => foldSlider(slider)(model, message),
 		GotInteractionMessage: ({ message }) => interaction.fold(model, message),
 	})
 

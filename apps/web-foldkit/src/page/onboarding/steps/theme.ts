@@ -123,7 +123,6 @@ const brandColors = (h: HtmlBuilder<Message>, theme: ThemeState): Html =>
 									`background-color: ${rgbOf(swatch.hex)}; forced-color-adjust: none;`,
 								),
 							],
-							[],
 						),
 					],
 				)
@@ -168,7 +167,7 @@ const displayPreferences = (h: HtmlBuilder<Message>, theme: ThemeState): Html =>
 													"absolute bottom-2 left-2 flex size-5 items-center justify-center rounded-full border-2 border-fg bg-primary",
 												),
 											],
-											[h.div([h.Class("size-2.5 rounded-full bg-fg")], [])],
+											[h.div([h.Class("size-2.5 rounded-full bg-fg")])],
 										),
 									]
 								: []),

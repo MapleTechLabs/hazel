@@ -15,7 +15,7 @@ import { ToastRequest } from "../toasts"
 import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalViewInputs } from "./contract"
 import { type InviteRole, sendInvites } from "./email-invite-clerk"
-import { Frame, FrameMessage, frameView, initFrame, isFrameClosed, modalDescription, modalTitle } from "./frame"
+import { Frame, Message as FrameMessage, frameView, initFrame, isFrameClosed, modalDescription, modalTitle } from "./frame"
 import { errorToast, successToast, warningToast } from "../../data/actions"
 
 /** `components/modals/email-invite-modal.tsx` (legacy `useModal("email-invite")`). */

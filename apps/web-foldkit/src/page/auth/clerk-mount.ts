@@ -19,6 +19,8 @@ export const ClerkMountMessage = defineMessageUnion({
 	FailedMountClerkComponent: { component: ClerkComponent },
 })
 export type ClerkMountMessage = typeof ClerkMountMessage.Type
+/** `ClerkMountMessage` under the Submodel name, so a parent's Got wrapper imports it as `Message`. */
+export { ClerkMountMessage as Message }
 
 type ClerkFn = (...args: ReadonlyArray<unknown>) => unknown
 

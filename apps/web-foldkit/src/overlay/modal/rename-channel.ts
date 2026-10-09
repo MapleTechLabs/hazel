@@ -19,7 +19,7 @@ import { defineModal, type ModalReturn, type ModalSubscriptionInput, type ModalV
 import { failureToast, runAtomFn, successToast } from "../../data/actions"
 import {
 	Frame,
-	FrameMessage,
+	Message as FrameMessage,
 	frameView,
 	initFrame,
 	isFrameClosed,

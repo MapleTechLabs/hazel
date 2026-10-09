@@ -180,7 +180,7 @@ export const view = <M>(
 		id: model.id,
 		isOpen: model.isOpen,
 		ariaLabel: "GIF picker",
-		toMessage: (event) => inputs.toMessage(Message.GotPopoverEvent({ event })),
+		toMessage: (event) => inputs.toMessage(Message.ReceivedPopoverEvent({ event })),
 		toTrigger: inputs.toTrigger,
 		content: () => [content(h, model, inputs.toMessage)],
 	})

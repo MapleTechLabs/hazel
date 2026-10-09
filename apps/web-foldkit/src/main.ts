@@ -194,7 +194,7 @@ const handleOutMessage = (outMessage: PageOutMessage): Step =>
 			({ page }) =>
 			(model) =>
 				withCommandPalette(model, CommandPalette.open(model.commandPalette, page, sharedOf(model))),
-		RequestedSignOut: () => (model) => ({ model, commands: [SignOut({})] }),
+		RequestedSignOut: () => (model) => ({ model, commands: [SignOut()] }),
 		RequestedTheme:
 			({ preference }) =>
 			(model) =>
@@ -210,7 +210,7 @@ const handleOutMessage = (outMessage: PageOutMessage): Step =>
 			({ toast }) =>
 			(model) => {
 				const toasted = toast === undefined ? { model } : withToasts(model, Toasts.push(model.toasts, toast))
-				return { model: toasted.model, commands: [...(toasted.commands ?? []), FetchCurrentUser({})] }
+				return { model: toasted.model, commands: [...(toasted.commands ?? []), FetchCurrentUser()] }
 			},
 		// The shell owns its sheet: the root sends it the same Message as its header button.
 		RequestedMobileSidebar: () => (model) => {
@@ -365,7 +365,7 @@ export const update = (model: Model, message: Message): Return =>
 			const isUserQueried =
 				(auth === "SignedIn" && model.auth !== "SignedIn") ||
 				(auth === "SignedOut" && model.auth === "Loading" && model.route._tag === "Join")
-			const fetchUser = isUserQueried ? [FetchCurrentUser({})] : []
+			const fetchUser = isUserQueried ? [FetchCurrentUser()] : []
 			return Update.combine<Model, Message, Resources>(next, [
 				informPage,
 				redirect,

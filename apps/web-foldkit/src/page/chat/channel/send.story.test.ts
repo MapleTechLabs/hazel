@@ -207,11 +207,11 @@ describe("uploads", () => {
 			message(draft(Draft.Message.SelectedFiles({ files: [file] }))),
 			Command.resolve(Draft.GenerateUploadFileId, Draft.Message.CompletedGenerateUploadFileId({ fileId: "f1" })),
 			model((current) => expect(current.draft.uploadingFiles).toEqual([{ fileId: "f1", fileName: "diagram.png", fileSize: 3, progress: 0 }])),
-			message(draft(Draft.Message.GotUploadEvent({ event: UploadEvent.ProgressedUpload({ fileId: "f1", progress: 40 }) }))),
+			message(draft(Draft.Message.ReceivedUploadEvent({ event: UploadEvent.ProgressedUpload({ fileId: "f1", progress: 40 }) }))),
 			model((current) => expect(current.draft.uploadingFiles[0]?.progress).toBe(40)),
 			message(
 				draft(
-					Draft.Message.GotUploadEvent({
+					Draft.Message.ReceivedUploadEvent({
 						event: UploadEvent.FinishedUpload({ fileId: "f1", attachmentId, toast: null }),
 					}),
 				),

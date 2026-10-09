@@ -10,7 +10,7 @@ import { CropImage, DragMode } from "./crop"
 
 export const Message = defineMessageUnion({
 	UpdatedUserRow: { row: Schema.NullOr(UserRow) },
-	GotBrowserTimezone: { browserTimezone: Schema.String },
+	DetectedBrowserTimezone: { browserTimezone: Schema.String },
 	ChangedFirstName: { value: Schema.String },
 	ChangedLastName: { value: Schema.String },
 	GotTimezoneMessage: { message: ComboBox.Message },

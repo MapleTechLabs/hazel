@@ -48,7 +48,7 @@ const withFilters = (model: Model, page: SearchPage, filters: ReadonlyArray<Sear
 	const next = { ...page, filters, selectedIndex: 0 }
 	return {
 		model: withPage(model, next),
-		commands: [SetSearchPlaceholder({ placeholder: searchPlaceholder(next) }), FocusSearchEditor({})],
+		commands: [SetSearchPlaceholder({ placeholder: searchPlaceholder(next) }), FocusSearchEditor()],
 	}
 }
 

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import * as Scene from "foldkit/scene"
 import { describe, test } from "vitest"
-import { FocusElement, init, item, Message, OutMessage, update } from "./select"
+import { FocusSelectElement, init, item, Message, OutMessage, update } from "./select"
 import { view } from "./select-view"
 
 /** Select through the view: trigger ARIA, listbox options, keyboard and pointer selection. */
@@ -20,7 +20,7 @@ const option = (name: string) => Scene.within(listbox, Scene.role("option", { na
 const mounted = Scene.Mount.resolve({ name: "FocusSelectTriggerOnPress" }, Message.CompletedPortalSelect())
 const portal = { name: "PortalSelect" }
 const portalled = Scene.Mount.resolve(portal, Message.CompletedPortalSelect())
-const resolveFocus = Scene.Command.resolve(FocusElement, Message.CompletedFocusElement())
+const resolveFocus = Scene.Command.resolve(FocusSelectElement, Message.CompletedFocusElement())
 
 describe("select scene", () => {
 	test("a closed select shows its label, placeholder and a collapsed listbox trigger", () => {
@@ -64,7 +64,7 @@ describe("select scene", () => {
 			portalled,
 			Scene.expect(option("Don't clear")).toHaveAttr("data-focus-visible", "true"),
 			Scene.keydown(Scene.role("dialog"), "End"),
-			Scene.Command.expectExact(FocusElement({ elementId: "clear-listbox-option-today" })),
+			Scene.Command.expectExact(FocusSelectElement({ elementId: "clear-listbox-option-today" })),
 			resolveFocus,
 			Scene.expect(option("Today")).toHaveAttr("data-focused", "true"),
 			Scene.expect(option("Don't clear")).not.toHaveAttr("data-focused"),

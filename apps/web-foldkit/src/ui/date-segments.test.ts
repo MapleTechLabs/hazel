@@ -1,7 +1,7 @@
 import { Array } from "effect"
 import { Command, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
-import { AnnounceValue, FocusSegment, init, Message, type Model, update } from "./date-segments"
+import { AnnounceSegmentValue, FocusSegment, init, Message, type Model, update } from "./date-segments"
 
 /**
  * useDateSegment typing: auto-advance never depends on the focus move having run. Story resolves
@@ -48,9 +48,12 @@ describe("date segments", () => {
 			update,
 			given(init({ id: "due", kind: "date", today: "2026-10-09", value: "2026-10-07" })),
 			message(Message.PressedSegmentKey({ segment: "year", key: "1" })),
-			Command.resolve(AnnounceValue, Message.CompletedAnnounceValue()),
+			Command.resolve(AnnounceSegmentValue, Message.CompletedAnnounceValue()),
 			message(Message.PressedSegmentKey({ segment: "day", key: "4" })),
-			Command.resolveAll([FocusSegment, completed], [AnnounceValue, Message.CompletedAnnounceValue()]),
+			Command.resolveAll(
+				[FocusSegment, completed],
+				[AnnounceSegmentValue, Message.CompletedAnnounceValue()],
+			),
 			model((current) => {
 				expect([current.values.day, current.values.year]).toEqual([4, 1])
 				expect([current.activeSegment, current.pendingFocusMoves]).toEqual(["year", 0])

@@ -56,7 +56,7 @@ const codeBlockView = <M>(h: HtmlBuilder<M>, element: CustomElement, path: Path)
 					isLastText: index === children.length - 1,
 					isBlockEmpty: codeText === "",
 				})
-			: h.span([], []),
+			: h.span([]),
 	)
 	return h.div(
 		[h.Class("group relative my-2"), h.Attribute("data-slate-node", "element")],
@@ -184,13 +184,10 @@ const elementView = <M>(h: HtmlBuilder<M>, element: CustomElement, path: Path, r
 		return h.blockquote(
 			[node, h.Class("relative my-1 pl-4 italic")],
 			[
-				h.span(
-					[
-						h.Class("absolute top-0 left-0 h-full w-1 rounded-xs bg-primary"),
-						h.Attribute("aria-hidden", "true"),
-					],
-					[],
-				),
+				h.span([
+					h.Class("absolute top-0 left-0 h-full w-1 rounded-xs bg-primary"),
+					h.Attribute("aria-hidden", "true"),
+				]),
 				...children,
 			],
 		)

@@ -4,11 +4,11 @@ import type { HtmlBuilder } from "foldkit/html"
 import * as Scene from "foldkit/scene"
 import { describe, test } from "vitest"
 import {
-	AnnounceSelection,
+	AnnounceChoiceBoxSelection,
 	type ChoiceBoxItem,
 	type ChoiceBoxOptions,
 	choiceBox,
-	FocusItem,
+	FocusChoiceBoxItem,
 	init,
 	Message,
 	type Model,
@@ -71,8 +71,8 @@ describe("choice-box scene", () => {
 			config,
 			Scene.given(plan),
 			Scene.focus(grid),
-			Scene.Command.expectExact(FocusItem({ elementId: "plan-pro" })),
-			Scene.Command.resolve(FocusItem, Message.CompletedFocusItem()),
+			Scene.Command.expectExact(FocusChoiceBoxItem({ elementId: "plan-pro" })),
+			Scene.Command.resolve(FocusChoiceBoxItem, Message.CompletedFocusItem()),
 		)
 	})
 
@@ -81,8 +81,8 @@ describe("choice-box scene", () => {
 			config,
 			Scene.given({ ...plan, focusedKey: "pro" }),
 			Scene.keydown(grid, "ArrowUp"),
-			Scene.Command.expectExact(FocusItem({ elementId: "plan-free" })),
-			Scene.Command.resolve(FocusItem, Message.CompletedFocusItem()),
+			Scene.Command.expectExact(FocusChoiceBoxItem({ elementId: "plan-free" })),
+			Scene.Command.resolve(FocusChoiceBoxItem, Message.CompletedFocusItem()),
 			Scene.keydown(grid, " "),
 			Scene.expect(row("Free")).toHaveAttr("aria-selected", "true"),
 		)
@@ -125,8 +125,8 @@ describe("choice-box scene", () => {
 			Scene.given(init({ id: "plan", selectionMode: "multiple", selectedKeys: ["pro"] })),
 			Scene.expect(grid).toHaveAttr("aria-multiselectable", "true"),
 			Scene.click(Scene.selector("#plan-free label")),
-			Scene.Command.expectExact(AnnounceSelection({ message: "2 items selected." })),
-			Scene.Command.resolve(AnnounceSelection, Message.CompletedAnnounceSelection()),
+			Scene.Command.expectExact(AnnounceChoiceBoxSelection({ message: "2 items selected." })),
+			Scene.Command.resolve(AnnounceChoiceBoxSelection, Message.CompletedAnnounceSelection()),
 			Scene.expect(row("Free")).toHaveAttr("aria-selected", "true"),
 			Scene.expect(Scene.selector("#plan-free-selection")).toBeChecked(),
 		)

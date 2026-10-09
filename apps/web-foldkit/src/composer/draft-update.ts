@@ -211,8 +211,8 @@ export const update = (model: Model, message: Message, context: Context): Return
 				},
 			}
 		},
-		GotUploadEvent: ({ event }) => handleUploadEvent(model, event),
-		GotDropEvent: ({ event }) =>
+		ReceivedUploadEvent: ({ event }) => handleUploadEvent(model, event),
+		ReceivedDropEvent: ({ event }) =>
 			DropEvent.match<Return>(event, {
 				ChangedDragState: ({ isDraggingOnPage, isDropTarget }) => ({
 					model: { ...model, isDraggingOnPage, isDropTarget },

@@ -141,7 +141,7 @@ const itemContent = (
 	const status = STATUS_OPTIONS.find((option) => option.value === value)
 	if (kind === "status" && status)
 		return [
-			h.span([h.Class(cn("size-3 shrink-0 rounded-full", status.color)), h.Attribute("data-slot", "icon")], []),
+			h.span([h.Class(cn("size-3 shrink-0 rounded-full", status.color)), h.Attribute("data-slot", "icon")]),
 			label(h, key, [status.label, ...(model.presenceStatus === value ? [current(h)] : [])]),
 		]
 	if (kind === "theme")

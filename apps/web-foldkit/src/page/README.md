@@ -80,3 +80,21 @@ memoized views and a `sharedChanged` hook. `page/root/` shows a page that only r
 
 Port the legacy class composition (`*.styles.ts`, the UI kit in `src/ui`), then run
 `bun run parity build foldkit && bun run parity run --filter <scenario>` from `packages/ui-parity`.
+
+## Lint
+
+`bun run lint` (root) runs oxlint with `@foldkit/oxlint-plugin` (a devDependency of this app) on
+`apps/web-foldkit/src/**`, configured in an override in the root `.oxlintrc.json`. The recommended
+rules are on, with the plugin's own relaxations for `*.test.ts`. Off on purpose, each with its reason in
+the config:
+
+- `no-child-message-construction-in-root`: a Submodel's Message often lives in `model.ts` beside its
+  view and update files, which the rule reads as a parent building a child's Message.
+- `prefer-option-over-nullable-in-model`: Models use `Schema.NullOr` throughout; moving to `Option` is
+  its own migration.
+- `no-module-level-mutable-state` in `src/ui/aria/**`: the React Aria port keeps document-wide state
+  (modality, scroll locks, the announcer) as module state, like React Aria.
+
+A Got wrapper names the child Message it carries (`{ message: Child.Message }`, imported as `Message`)
+plus routing keys named `id` or `*Id`. Inline `oxlint-disable-next-line` comments are rare and carry a
+reason on the line above.

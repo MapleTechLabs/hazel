@@ -14,6 +14,8 @@ export const fromDate = (date: Date): CalendarDate =>
 	`${pad(date.getUTCFullYear(), 4)}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`
 
 /** `today(getLocalTimeZone())`. */
+// The default mirrors React Aria's today(); only the gallery entries rely on it, when seeding their init.
+// oxlint-disable-next-line foldkit/no-impure-call-at-decision-time
 export const today = (now: Date = new Date()): CalendarDate =>
 	`${pad(now.getFullYear(), 4)}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
 

@@ -11,7 +11,7 @@ export const attachmentsStream = <Message>(
 	channelId: ChannelId,
 	toMessage: (attachments: ReadonlyArray<FileAttachment>, nowMs: number) => Message,
 ): Stream.Stream<Message> =>
-	liveQueryStream<AttachmentQueryRow, Message>(
+	liveQueryStream<AttachmentQueryRow, ReadonlyArray<AttachmentQueryRow>>(
 		(q) =>
 			q
 				.from({ attachments: attachmentCollection })
@@ -26,8 +26,10 @@ export const attachmentsStream = <Message>(
 					),
 				)
 				.orderBy(({ attachments }) => attachments.uploadedAt, "desc"),
+		(rows) => rows,
+	).pipe(
 		// Legacy reads `new Date()` at render; the emit time is the closest pure equivalent.
-		(rows) => toMessage(rows.map(toFileAttachment), Date.now()),
+		Stream.map((rows) => toMessage(rows.map(toFileAttachment), Date.now())),
 	)
 
 const queries: ReadonlyArray<readonly [Breakpoint, string]> = [

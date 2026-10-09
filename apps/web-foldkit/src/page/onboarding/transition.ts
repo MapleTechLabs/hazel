@@ -5,7 +5,7 @@ import type { HazelRpc } from "../../rpc"
 import { onboardingHref } from "../../route"
 import * as ChoiceBox from "../../ui/choice-box"
 import type { PageReturn, Shared } from "../contract"
-import { CompleteOnboarding, ReplaceStepUrl } from "./command"
+import { CompleteOnboarding, ReplaceOnboardingStepUrl } from "./command"
 import { type Direction, nextStep, previousStep, type Step, stepFromUrl } from "./flow"
 import type { Message } from "./message"
 import { type Data, type Model, StepForm } from "./model"
@@ -77,23 +77,25 @@ export const enterStep = (
 	return {
 		model: next,
 		commands: [
-			...(options.syncUrl ? [ReplaceStepUrl({ href: onboardingHref(model.orgId, step) })] : []),
+			...(options.syncUrl ? [ReplaceOnboardingStepUrl({ href: onboardingHref(model.orgId, step) })] : []),
 			...stepCommands(next, step),
 		],
 	}
 }
 
+type DataTransform = Partial<{ readonly [K in keyof Data]: (value: Data[K]) => Data[K] }>
+
 /** `createStepHandler`: record the step's data and move forward. */
-export const advance = (model: Model, shared: Shared, patch: Partial<Data> = {}): Return =>
+export const advance = (model: Model, shared: Shared, transform: DataTransform = {}): Return =>
 	enterStep(
-		modifyFields(model, { data: (data) => ({ ...data, ...patch }) }),
+		modifyFields(model, { data: (data) => modifyFields(data, transform) }),
 		nextStep(model.step, model.userType),
 		{ direction: "forward", shared, syncUrl: true },
 	)
 
 /** The invite step skips straight to finalization (`handleTeamInviteContinue` / `Skip`). */
 export const finalize = (model: Model, shared: Shared, emails: ReadonlyArray<string>): Return =>
-	enterStep(modifyFields(model, { data: (data) => ({ ...data, emails }) }), "finalization", {
+	enterStep(modifyFields(model, { data: (data) => modifyFields(data, { emails: () => emails }) }), "finalization", {
 		direction: "forward",
 		shared,
 		syncUrl: true,

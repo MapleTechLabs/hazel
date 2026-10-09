@@ -13,12 +13,7 @@ import { rowMenu } from "./row-menu"
 export const spinner = (h: HtmlBuilder<Message>): Html =>
 	h.div(
 		[h.Class("flex items-center justify-center py-6")],
-		[
-			h.div(
-				[h.Class("size-5 animate-spin rounded-full border-2 border-muted-fg/30 border-t-primary")],
-				[],
-			),
-		],
+		[h.div([h.Class("size-5 animate-spin rounded-full border-2 border-muted-fg/30 border-t-primary")])],
 	)
 
 export const emptyList = (h: HtmlBuilder<Message>, title: string, hint: string): Html =>

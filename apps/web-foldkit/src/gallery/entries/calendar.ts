@@ -19,11 +19,12 @@ type Model = typeof Model.Type
 // MESSAGE
 
 const Message = defineMessageUnion({
-	GotCalendarMessage: { slot: Slot, message: Calendar.Message },
+	GotCalendarMessage: { slotId: Slot, message: Calendar.Message },
 })
 type Message = typeof Message.Type
 
-const toMessage = (slot: Slot) => (message: Calendar.Message) => Message.GotCalendarMessage({ slot, message })
+const toMessage = (slot: Slot) => (message: Calendar.Message) =>
+	Message.GotCalendarMessage({ slotId: slot, message })
 
 // UPDATE
 
@@ -77,7 +78,7 @@ export const gallery = defineGallery<Model, Message>("Calendar", {
 	},
 	update: (model, message) =>
 		Message.match<Update.Return<Model, Message>>(message, {
-			GotCalendarMessage: ({ slot, message }) => fold(slot)(model, message),
+			GotCalendarMessage: ({ slotId: slot, message }) => fold(slot)(model, message),
 		}),
 	subscriptions,
 	view,

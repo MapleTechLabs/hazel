@@ -1,7 +1,7 @@
 import { Command, expectNoOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
 import {
-	CheckPasswordBadge,
+	CheckInputOtpPasswordBadge,
 	init,
 	Message,
 	ReadSelection,
@@ -16,7 +16,9 @@ const code = init({ id: "otp-code", maxLength: 6 }).model
 const typed = (value: string) => message(Message.ChangedValue({ value }))
 const readSelection = (start: number, end: number) =>
 	Command.resolve(ReadSelection, Message.ChangedSelection({ selection: { start, end } }))
-const badgeChecks = [0, 2000, 5000].map((delayMillis) => CheckPasswordBadge({ id: "otp-code", delayMillis }))
+const badgeChecks = [0, 2000, 5000].map((delayMillis) =>
+	CheckInputOtpPasswordBadge({ id: "otp-code", delayMillis }),
+)
 
 describe("input-otp story", () => {
 	test("typing a digit stores it and re-reads the caret so the next slot becomes active", () => {
@@ -94,9 +96,9 @@ describe("input-otp story: focus", () => {
 			Command.resolveAll(
 				[SetSelection, Message.CompletedSetSelection()],
 				[ReadSelection, Message.ChangedSelection({ selection: { start: 0, end: 0 } })],
-				[CheckPasswordBadge, Message.CompletedCheckPasswordBadge({ hasBadge: false })],
-				[CheckPasswordBadge, Message.CompletedCheckPasswordBadge({ hasBadge: false })],
-				[CheckPasswordBadge, Message.CompletedCheckPasswordBadge({ hasBadge: false })],
+				[CheckInputOtpPasswordBadge, Message.CompletedCheckPasswordBadge({ hasBadge: false })],
+				[CheckInputOtpPasswordBadge, Message.CompletedCheckPasswordBadge({ hasBadge: false })],
+				[CheckInputOtpPasswordBadge, Message.CompletedCheckPasswordBadge({ hasBadge: false })],
 			),
 			model((next) => expect(next.hasPasswordBadge).toBe(false)),
 		)
@@ -111,9 +113,9 @@ describe("input-otp story: focus", () => {
 			Command.resolveAll(
 				[SetSelection, Message.CompletedSetSelection()],
 				[ReadSelection, Message.ChangedSelection({ selection: { start: 3, end: 4 } })],
-				[CheckPasswordBadge, Message.CompletedCheckPasswordBadge({ hasBadge: false })],
-				[CheckPasswordBadge, Message.CompletedCheckPasswordBadge({ hasBadge: false })],
-				[CheckPasswordBadge, Message.CompletedCheckPasswordBadge({ hasBadge: false })],
+				[CheckInputOtpPasswordBadge, Message.CompletedCheckPasswordBadge({ hasBadge: false })],
+				[CheckInputOtpPasswordBadge, Message.CompletedCheckPasswordBadge({ hasBadge: false })],
+				[CheckInputOtpPasswordBadge, Message.CompletedCheckPasswordBadge({ hasBadge: false })],
 			),
 			model((next) => expect(next.selection).toEqual({ start: 3, end: 4 })),
 		)

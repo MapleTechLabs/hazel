@@ -31,7 +31,7 @@ export const interaction = embedInteraction<Model, Message>((message) =>
 
 export const toVolumeMessage = (message: Slider.Message) => Message.GotVolumeMessage({ message })
 export const toQuietHoursMessage = (field: QuietHoursField) => (message: Segments.Message) =>
-	Message.GotQuietHoursMessage({ field, message })
+	Message.GotQuietHoursMessage({ fieldId: field, message })
 
 const DEFAULT_QUIET_START = "22:00"
 const DEFAULT_QUIET_END = "08:00"
@@ -171,9 +171,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			if (volume === undefined || volume === shared.soundSettings.volume) return result
 			return { ...withSound(result.model, shared, { volume }), commands: result.commands ?? [] }
 		},
-		ClickedTestSound: () => ({ model, commands: [PlayTestSound({})] }),
+		ClickedTestSound: () => ({ model, commands: [PlayTestSound()] }),
 		CompletedTestSound: () => ({ model }),
-		ClickedTestNotification: () => ({ model, commands: [SendTestNotification({})] }),
+		ClickedTestNotification: () => ({ model, commands: [SendTestNotification()] }),
 		CompletedTestNotification: ({ isSent }) => {
 			const version = model.notificationStatusVersion + 1
 			return {
@@ -203,7 +203,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			withUserSettings(model, shared, { doNotDisturb: isSelected }),
 		ToggledShowQuietHours: ({ isSelected }) =>
 			withUserSettings(model, shared, { showQuietHoursInStatus: isSelected }),
-		GotQuietHoursMessage: ({ field, message: child }) => {
+		GotQuietHoursMessage: ({ fieldId: field, message: child }) => {
 			const result = foldQuietHours(field)(model, child)
 			const before = field === "start" ? model.quietHoursStart : model.quietHoursEnd
 			const after = field === "start" ? result.model.quietHoursStart : result.model.quietHoursEnd

@@ -90,13 +90,13 @@ const buildContext = <M>(
 	const toPopoverMessage = (
 		key: string,
 		message: Parameters<typeof Overlays.Message.GotPopoverMessage>[0]["message"],
-	) => overlaysMessage(toParentMessage, Overlays.Message.GotPopoverMessage({ key, message }))
+	) => overlaysMessage(toParentMessage, Overlays.Message.GotPopoverMessage({ popoverId: key, message }))
 	return {
 		tooltip: {
 			active: isIdle ? null : overlays.tooltip,
 			hoveredKey: isIdle ? null : overlays.hoveredTriggerKey,
 			toMessage: (message) =>
-				overlaysMessage(toParentMessage, Overlays.Message.GotTooltipMessage({ tooltip: message })),
+				overlaysMessage(toParentMessage, Overlays.Message.GotTooltipMessage({ message })),
 			userName: (userId) => names.get(userId) ?? null,
 			currentUserId: model.currentUserId,
 		},
@@ -164,6 +164,8 @@ interface Cache<M> {
 	readonly context: RowContext<M>
 }
 
+// A view memo, not state: one shared context for idle rows keeps the row lazies hitting (see view.ts memoRow).
+// oxlint-disable-next-line foldkit/no-module-level-mutable-state
 let idleCache: Cache<never> | null = null
 
 /** The shared context for rows without an open overlay. */

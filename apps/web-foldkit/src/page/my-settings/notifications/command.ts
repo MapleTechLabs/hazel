@@ -8,22 +8,18 @@ import { updateUser } from "../user"
 import { Message } from "./message"
 
 export const PlayTestSound = Command.define("PlayTestSound", {
-	args: {},
 	messages: [Message.CompletedTestSound],
-	execute: () =>
-		Effect.promise(() => notificationSoundManager.testSound()).pipe(
-			Effect.as(Message.CompletedTestSound()),
-		),
+	execute: Effect.promise(() => notificationSoundManager.testSound()).pipe(
+		Effect.as(Message.CompletedTestSound()),
+	),
 })
 
 export const SendTestNotification = Command.define("SendTestNotification", {
-	args: {},
 	messages: [Message.CompletedTestNotification],
-	execute: () =>
-		Effect.tryPromise(() => testNativeNotification()).pipe(
-			Effect.catch(() => Effect.succeed(false)),
-			Effect.map((isSent) => Message.CompletedTestNotification({ isSent })),
-		),
+	execute: Effect.tryPromise(() => testNativeNotification()).pipe(
+		Effect.catch(() => Effect.succeed(false)),
+		Effect.map((isSent) => Message.CompletedTestNotification({ isSent })),
+	),
 })
 
 /** The legacy `setTimeout(() => setNotificationStatus("idle"), 3000)`. */

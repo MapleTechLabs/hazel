@@ -9,7 +9,7 @@ import {
 	CropAvatarImage,
 	LoadCropImage,
 	OpenFilePicker,
-	ReadBrowserTimezone,
+	ReadProfileBrowserTimezone,
 	ResetAvatar,
 	RevokeCropImage,
 	SaveProfile,
@@ -202,12 +202,12 @@ describe("profile save", () => {
 
 	test("the browser timezone is read by a Command and fills an untouched form without a stored one", () => {
 		const started = init(undefined, shared)
-		expect(started.commands?.map((command) => command.name)).toEqual([ReadBrowserTimezone.name])
+		expect(started.commands?.map((command) => command.name)).toEqual([ReadProfileBrowserTimezone.name])
 		expect(started.model.values.timezone).toBeNull()
 		story(
 			pageUpdate,
 			given(started.model),
-			message(Message.GotBrowserTimezone({ browserTimezone: "Europe/Vienna" })),
+			message(Message.DetectedBrowserTimezone({ browserTimezone: "Europe/Vienna" })),
 			model((current) => {
 				expect(current.values.timezone).toBe("Europe/Vienna")
 				expect(current.isDirty).toBe(false)
@@ -217,7 +217,7 @@ describe("profile save", () => {
 			pageUpdate,
 			given(started.model),
 			message(Message.ChangedFirstName({ value: "Augusta" })),
-			message(Message.GotBrowserTimezone({ browserTimezone: "Europe/Vienna" })),
+			message(Message.DetectedBrowserTimezone({ browserTimezone: "Europe/Vienna" })),
 			model((current) => expect(current.values.timezone).toBeNull()),
 		)
 	})
@@ -391,7 +391,7 @@ describe("avatar upload", () => {
 			pageUpdate,
 			given(initial()),
 			message(Message.ClickedAvatar()),
-			Command.expectExact(OpenFilePicker({})),
+			Command.expectExact(OpenFilePicker()),
 			Command.resolve(OpenFilePicker, Message.CompletedOpenFilePicker()),
 		)
 		story(

@@ -57,7 +57,7 @@ export const spinner = <Message>(h: HtmlBuilder<Message>, className: string): Ht
 export const listSpinner = <Message>(h: HtmlBuilder<Message>): Html =>
 	h.div(
 		[h.Class("flex items-center justify-center py-12")],
-		[h.div([h.Class("size-8 animate-spin rounded-full border-4 border-border border-t-primary")], [])],
+		[h.div([h.Class("size-8 animate-spin rounded-full border-4 border-border border-t-primary")])],
 	)
 
 export const CHEVRON_RIGHT = "M9 5l7 7-7 7"

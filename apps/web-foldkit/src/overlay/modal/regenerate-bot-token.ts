@@ -11,7 +11,7 @@ import { ToastRequest } from "../toasts"
 import { botTokenDisplay } from "./bot-token-display"
 import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalViewInputs } from "./contract"
-import { Frame, FrameMessage, frameView, initFrame, isFrameClosed, modalTitle } from "./frame"
+import { Frame, Message as FrameMessage, frameView, initFrame, isFrameClosed, modalTitle } from "./frame"
 import { errorToast, failureToast, successToast } from "../../data/actions"
 
 /** The regenerate-confirm modal of `components/bots/bot-card.tsx` (`bot.regenerateToken`). */

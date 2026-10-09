@@ -101,7 +101,7 @@ export const cropArea = <Message>(
 		size: image.crop.size * display.scale,
 	}
 	const shade = (className: string, style: Record<string, string>) =>
-		h.div([h.Class(className), h.Style(style)], [])
+		h.div([h.Class(className), h.Style(style)])
 	const pressed = (mode: DragMode) =>
 		h.OnPointerDown((_pointerType, button, _screenX, _screenY, _timeStamp, clientX, clientY) =>
 			button === 0 ? Option.some(onPointerDown(mode, clientX, clientY)) : Option.none(),
@@ -109,14 +109,11 @@ export const cropArea = <Message>(
 	const handle = (position: "nw" | "ne" | "sw" | "se") => {
 		const left = position === "nw" || position === "sw" ? crop.x - 6 : crop.x + crop.size - 6
 		const top = position === "nw" || position === "ne" ? crop.y - 6 : crop.y + crop.size - 6
-		return h.div(
-			[
-				h.Class("absolute size-3 rounded-sm bg-white shadow-md"),
-				h.Style({ left: px(left), top: px(top), cursor: handleCursor[position] }),
-				pressed(`resize-${position}`),
-			],
-			[],
-		)
+		return h.div([
+			h.Class("absolute size-3 rounded-sm bg-white shadow-md"),
+			h.Style({ left: px(left), top: px(top), cursor: handleCursor[position] }),
+			pressed(`resize-${position}`),
+		])
 	}
 	return h.div(
 		[
@@ -168,7 +165,7 @@ export const cropArea = <Message>(
 							"absolute top-2/3 right-0 left-0 h-px bg-white/30",
 							"absolute top-0 bottom-0 left-1/3 w-px bg-white/30",
 							"absolute top-0 bottom-0 left-2/3 w-px bg-white/30",
-						].map((className) => h.div([h.Class(className)], [])),
+						].map((className) => h.div([h.Class(className)])),
 					),
 				],
 			),

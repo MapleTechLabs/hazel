@@ -16,12 +16,12 @@ import { PageOutMessage } from "../out-message"
 import {
 	CompleteOnboarding,
 	DebounceTimezoneQuery,
-	LoadHome,
+	LoadOnboardingHome,
 	ReadBrowserTimezone,
-	ReplaceStepUrl,
+	ReplaceOnboardingStepUrl,
 	SendInvites,
-	UpdateProfile,
-	UpdateTimezone,
+	UpdateClerkProfile,
+	UpdateUserTimezone,
 } from "./command"
 import { Message } from "./message"
 import { StepForm } from "./model"
@@ -31,7 +31,7 @@ import { errorToast } from "../../data/actions"
 /** The onboarding update loop: start-up, each step's form, and finalization. */
 
 const run = storyUpdate(update, newcomer)
-const urlFor = (step: string) => ReplaceStepUrl({ href: onboardingHref(null, step) })
+const urlFor = (step: string) => ReplaceOnboardingStepUrl({ href: onboardingHref(null, step) })
 const urlDone = Message.CompletedReplaceStepUrl()
 const errorOut = (title: string, description: string | null = null) =>
 	PageOutMessage.RequestedToast({ toast: errorToast(title, description) })
@@ -49,7 +49,7 @@ describe("start-up", () => {
 		story(
 			run,
 			given(init(onboardingRoute(null), newcomer).model),
-			message(Message.GotBrowserTimezone({ browserTimezone: "Europe/Vienna" })),
+			message(Message.DetectedBrowserTimezone({ browserTimezone: "Europe/Vienna" })),
 			model((current) => expect(current.isInitialized).toBe(false)),
 			message(Message.UpdatedMembership({ membership: creatorMembership })),
 			Command.expectNone(),
@@ -97,11 +97,11 @@ describe("profile step", () => {
 			model((current) => expect(current.form).toMatchObject({ firstName: "Nora", lastName: "Newcomer" })),
 			message(Message.ChangedFirstName({ value: "  Ada " })),
 			message(Message.SubmittedProfile()),
-			Command.expectExact(UpdateProfile({ firstName: "Ada", lastName: "Newcomer" })),
+			Command.expectExact(UpdateClerkProfile({ firstName: "Ada", lastName: "Newcomer" })),
 			model((current) => expect(current.form).toMatchObject({ isSubmitting: true })),
-			Command.resolve(UpdateProfile, Message.SucceededUpdateProfile()),
+			Command.resolve(UpdateClerkProfile, Message.SucceededUpdateProfile()),
 			Command.expectExact(urlFor("timezoneSelection")),
-			Command.resolve(ReplaceStepUrl, urlDone),
+			Command.resolve(ReplaceOnboardingStepUrl, urlDone),
 			model((current) => {
 				expect(current.step).toBe("timezoneSelection")
 				expect(current.direction).toBe("forward")
@@ -124,7 +124,7 @@ describe("profile step", () => {
 			run,
 			given(profile),
 			message(Message.SubmittedProfile()),
-			Command.resolve(UpdateProfile, Message.FailedUpdateProfile()),
+			Command.resolve(UpdateClerkProfile, Message.FailedUpdateProfile()),
 			expectOutMessage(errorOut("Failed to update profile")),
 			model((current) => {
 				expect(current.step).toBe("profileInfo")
@@ -153,8 +153,8 @@ describe("profile step", () => {
 			run,
 			given(profile),
 			message(Message.SubmittedProfile()),
-			Command.resolve(UpdateProfile, Message.SucceededUpdateProfile()),
-			Command.resolve(ReplaceStepUrl, urlDone),
+			Command.resolve(UpdateClerkProfile, Message.SucceededUpdateProfile()),
+			Command.resolve(ReplaceOnboardingStepUrl, urlDone),
 			message(Message.SucceededUpdateProfile()),
 			Command.expectNone(),
 			model((current) => expect(current.step).toBe("timezoneSelection")),
@@ -202,8 +202,8 @@ describe("timezone step", () => {
 			given(timezone),
 			message(Message.ClickedCity({ timezone: "Europe/Vienna" })),
 			message(Message.ClickedContinueTimezone()),
-			Command.expectExact(UpdateTimezone({ userId, timezone: "Europe/Vienna" })),
-			Command.resolve(UpdateTimezone, Message.SucceededUpdateTimezone({ timezone: "Europe/Vienna" })),
+			Command.expectExact(UpdateUserTimezone({ userId, timezone: "Europe/Vienna" })),
+			Command.resolve(UpdateUserTimezone, Message.SucceededUpdateTimezone({ timezone: "Europe/Vienna" })),
 			Command.resolve(urlFor("themeSelection"), urlDone),
 			model((current) => {
 				expect(current.step).toBe("themeSelection")
@@ -217,7 +217,7 @@ describe("timezone step", () => {
 			run,
 			given(timezone),
 			message(Message.ClickedContinueTimezone()),
-			Command.resolve(UpdateTimezone, Message.FailedUpdateTimezone({ toast: errorToast("User not found", "Sign in again.") })),
+			Command.resolve(UpdateUserTimezone, Message.FailedUpdateTimezone({ toast: errorToast("User not found", "Sign in again.") })),
 			expectOutMessage(errorOut("User not found", "Sign in again.")),
 			model((current) => expect(current.form).toMatchObject({ isSubmitting: false })),
 		)
@@ -301,9 +301,9 @@ describe("invite step and finalization", () => {
 			Command.resolve(SendInvites, Message.SucceededSendInvites({ emails, failedCount: 0 })),
 			expectOutMessage(PageOutMessage.RequestedToast({ toast: { intent: "success", title: "Sent 2 invitations", description: null } })),
 			Command.expectExact(urlFor("finalization"), CompleteOnboarding),
-			Command.resolveAll([ReplaceStepUrl, urlDone], [CompleteOnboarding, Message.SucceededCompleteOnboarding()]),
-			Command.expectExact(urlFor("completed"), LoadHome({ href: "/" })),
-			Command.resolveAll([ReplaceStepUrl, urlDone], [LoadHome, Message.CompletedLoadHome()]),
+			Command.resolveAll([ReplaceOnboardingStepUrl, urlDone], [CompleteOnboarding, Message.SucceededCompleteOnboarding()]),
+			Command.expectExact(urlFor("completed"), LoadOnboardingHome({ href: "/" })),
+			Command.resolveAll([ReplaceOnboardingStepUrl, urlDone], [LoadOnboardingHome, Message.CompletedLoadHome()]),
 			model((current) => {
 				expect(current.step).toBe("completed")
 			}),
@@ -316,7 +316,7 @@ describe("invite step and finalization", () => {
 			given(inviteForm(["a@hazel.test", "b@hazel.test", "c@hazel.test"], true)),
 			message(Message.SucceededSendInvites({ emails: ["a@hazel.test", "b@hazel.test", "c@hazel.test"], failedCount: 2 })),
 			expectOutMessage(PageOutMessage.RequestedToast({ toast: { intent: "warning", title: "Sent 1 invitation, 2 failed", description: null } })),
-			Command.resolveAll([ReplaceStepUrl, urlDone], [CompleteOnboarding, Message.FailedCompleteOnboarding({ error: "Failed to finalize onboarding" })]),
+			Command.resolveAll([ReplaceOnboardingStepUrl, urlDone], [CompleteOnboarding, Message.FailedCompleteOnboarding({ error: "Failed to finalize onboarding" })]),
 			model((current) => {
 				expect(current.step).toBe("finalization")
 				expect(current.error).toBe("Failed to finalize onboarding")
@@ -346,7 +346,7 @@ describe("invite step and finalization", () => {
 			given(inviteForm(["grace@hazel.test"], true)),
 			message(Message.SucceededSendInvites({ emails: ["grace@hazel.test"], failedCount: 0 })),
 			Command.expectHas(CompleteOnboarding({ memberId: null, role: null, useCases: [], emails: [] })),
-			Command.resolveAll([ReplaceStepUrl, urlDone], [CompleteOnboarding, Message.FailedCompleteOnboarding({ error: "x" })]),
+			Command.resolveAll([ReplaceOnboardingStepUrl, urlDone], [CompleteOnboarding, Message.FailedCompleteOnboarding({ error: "x" })]),
 		)
 	})
 
@@ -381,9 +381,9 @@ describe("invite step and finalization", () => {
 			given(role),
 			message(Message.ClickedContinueChoice()),
 			Command.expectExact(urlFor("finalization"), CompleteOnboarding({ memberId: invitedMembership.memberId, role: "developer", useCases: [], emails: [] })),
-			Command.resolveAll([ReplaceStepUrl, urlDone], [CompleteOnboarding, Message.SucceededCompleteOnboarding()]),
-			Command.expectHas(LoadHome({ href: "/hazel" })),
-			Command.resolveAll([ReplaceStepUrl, urlDone], [LoadHome, Message.CompletedLoadHome()]),
+			Command.resolveAll([ReplaceOnboardingStepUrl, urlDone], [CompleteOnboarding, Message.SucceededCompleteOnboarding()]),
+			Command.expectHas(LoadOnboardingHome({ href: "/hazel" })),
+			Command.resolveAll([ReplaceOnboardingStepUrl, urlDone], [LoadOnboardingHome, Message.CompletedLoadHome()]),
 		)
 	})
 })

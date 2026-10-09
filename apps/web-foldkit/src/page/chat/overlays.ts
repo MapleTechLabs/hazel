@@ -88,11 +88,11 @@ export const Message = defineMessageUnion({
 	EnteredToolbar: {},
 	LeftToolbar: {},
 	GotToolbarMessage: { message: Toolbar.Message },
-	GotTooltipMessage: { tooltip: TooltipHost.Message },
+	GotTooltipMessage: { message: TooltipHost.Message },
 	GotMoreMenuMessage: { messageId: MessageId, message: Menu.Message },
 	RightClickedMessage: { messageId: MessageId, offset: Schema.Number, crossOffset: Schema.Number },
 	GotContextMenuMessage: { message: Menu.Message },
-	GotPopoverMessage: { key: Schema.String, message: Popover.Message },
+	GotPopoverMessage: { popoverId: Schema.String, message: Popover.Message },
 	GotPinnedMessage: { message: Popover.Message },
 	ClickedReply: { messageId: MessageId },
 	ClickedDelete: { messageId: MessageId },
@@ -238,9 +238,9 @@ export const update = (model: Model, message: Message, facts: MessageFacts): Ove
 				(toolbar) => ({ toolbar }),
 				(inner) => Message.GotToolbarMessage({ message: inner }),
 			),
-		GotTooltipMessage: ({ tooltip }) => {
+		GotTooltipMessage: ({ message: tooltip }) => {
 			const result = TooltipHost.update(model.tooltip, tooltip, (inner) =>
-				Message.GotTooltipMessage({ tooltip: inner }),
+				Message.GotTooltipMessage({ message: inner }),
 			)
 			const hoveredTriggerKey =
 				tooltip.message._tag === "HoveredTrigger"
@@ -305,7 +305,7 @@ export const update = (model: Model, message: Message, facts: MessageFacts): Ove
 				result.outMessage,
 			)
 		},
-		GotPopoverMessage: ({ key, message: popoverMessage }) => {
+		GotPopoverMessage: ({ popoverId: key, message: popoverMessage }) => {
 			const current =
 				model.popover !== null && model.popover.key === key
 					? model.popover.popover
@@ -314,7 +314,7 @@ export const update = (model: Model, message: Message, facts: MessageFacts): Ove
 				model,
 				Popover.update(current, popoverMessage),
 				(popover) => ({ popover: { key, popover } }),
-				(inner) => Message.GotPopoverMessage({ key, message: inner }),
+				(inner) => Message.GotPopoverMessage({ popoverId: key, message: inner }),
 			)
 		},
 		GotPinnedMessage: ({ message: popoverMessage }) =>

@@ -17,7 +17,7 @@ import { closed, completed, ModalOutMessage } from "../out-message"
 import { ToastRequest } from "../toasts"
 import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalSubscriptionInput, type ModalViewInputs } from "./contract"
-import { Frame, FrameMessage, frameView, initFrame, isFrameClosed, modalDescription, modalTitle } from "./frame"
+import { Frame, Message as FrameMessage, frameView, initFrame, isFrameClosed, modalDescription, modalTitle } from "./frame"
 import { failureToast, runAtomFn, successToast } from "../../data/actions"
 
 /** `components/modals/join-channel-modal.tsx` (legacy `useModal("join-channel")`). */
@@ -51,9 +51,8 @@ type Message = typeof Message.Type
 const SEARCH_ID = "join-channel-modal-search"
 
 const FocusSearch = Command.define("FocusSearch", {
-	args: {},
 	messages: [Message.CompletedFocusSearch],
-	execute: () => Dom.focus(`#${SEARCH_ID}`).pipe(Effect.ignoreCause, Effect.as(Message.CompletedFocusSearch())),
+	execute: Dom.focus(`#${SEARCH_ID}`).pipe(Effect.ignoreCause, Effect.as(Message.CompletedFocusSearch())),
 })
 
 const JoinChannel = Command.define("JoinChannel", {
@@ -87,7 +86,7 @@ const update = (model: Model, message: Message, shared: Shared): Return =>
 			isFrameClosed(model.frame, message)
 				? { model, outMessage: closed }
 				: message._tag === "CompletedPortalModal"
-					? { model, commands: [FocusSearch({})] }
+					? { model, commands: [FocusSearch()] }
 					: { model },
 		ChangedSearch: ({ value }) => ({ model: modifyFields(model, { searchQuery: () => value }) }),
 		FocusedSearch: () => ({ model: modifyFields(model, { isSearchFocused: () => true }) }),

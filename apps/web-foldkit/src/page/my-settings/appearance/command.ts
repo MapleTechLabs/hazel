@@ -8,16 +8,14 @@ import { Message } from "./message"
  * Generating before the delay keeps the draws independent of the fiber scheduling around it.
  */
 export const GenerateRemixOptions = Command.define("GenerateRemixOptions", {
-	args: {},
 	messages: [Message.GeneratedRemixOptions],
-	execute: () =>
-		Effect.sync(() =>
-			Message.GeneratedRemixOptions({
-				options: generateRemixOptions(4).map(({ primary, grayPalette, radius }) => ({
-					primary,
-					grayPalette,
-					radius,
-				})),
-			}),
-		).pipe(Effect.tap(() => Effect.sleep("150 millis"))),
+	execute: Effect.sync(() =>
+		Message.GeneratedRemixOptions({
+			options: generateRemixOptions(4).map(({ primary, grayPalette, radius }) => ({
+				primary,
+				grayPalette,
+				radius,
+			})),
+		}),
+	).pipe(Effect.tap(() => Effect.sleep("150 millis"))),
 })

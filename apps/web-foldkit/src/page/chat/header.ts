@@ -135,7 +135,7 @@ export const chatHeaderView = <M>(h: HtmlBuilder<M>, inputs: HeaderInputs): Html
 								h.h2([h.Class("font-semibold text-fg text-sm")], [channel.name]),
 							],
 						)
-					: h.div([h.Class("h-4 w-32 animate-pulse rounded-sm bg-secondary")], []),
+					: h.div([h.Class("h-4 w-32 animate-pulse rounded-sm bg-secondary")]),
 			],
 		)
 	const isDirectMessage = channel.type === "direct" || channel.type === "single"

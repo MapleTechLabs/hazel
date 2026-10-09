@@ -101,25 +101,25 @@ export type OutMessage = typeof OutMessage.Type
 
 // COMMAND
 
-export const StartTimer = Command.define("StartToastTimer", {
+export const StartToastTimer = Command.define("StartToastTimer", {
 	args: { id: Schema.Number, version: Schema.Number },
 	messages: [Message.StartedTimer],
 	execute: ({ id, version }) => Effect.sync(() => Message.StartedTimer({ id, version, at: Date.now() })),
 })
 
-export const PauseTimers = Command.define("PauseToastTimers", {
+export const PauseToastTimers = Command.define("PauseToastTimers", {
 	messages: [Message.PausedTimers],
 	execute: Effect.sync(() => Message.PausedTimers({ at: Date.now() })),
 })
 
-export const WaitForLifetime = Command.define("WaitForToastLifetime", {
+export const WaitForToastLifetime = Command.define("WaitForToastLifetime", {
 	args: { id: Schema.Number, version: Schema.Number, ms: Schema.Number },
 	messages: [Message.CompletedWaitForLifetime],
 	execute: ({ id, version, ms }) =>
 		Effect.sleep(Duration.millis(ms)).pipe(Effect.as(Message.CompletedWaitForLifetime({ id, version }))),
 })
 
-export const WaitForRemoval = Command.define("WaitForToastRemoval", {
+export const WaitForToastRemoval = Command.define("WaitForToastRemoval", {
 	args: { id: Schema.Number },
 	messages: [Message.CompletedWaitForRemoval],
 	execute: ({ id }) =>
@@ -199,7 +199,7 @@ const restartTimer = (model: Model, id: number): UpdateReturn => {
 	const version = item.value.timerVersion + 1
 	return {
 		model: mapItem(model, id, (current) => ({ ...current, timerVersion: version, timerStartedAt: null })),
-		commands: [StartTimer({ id, version })],
+		commands: [StartToastTimer({ id, version })],
 	}
 }
 
@@ -213,7 +213,7 @@ const syncPause = (before: Model, after: UpdateReturn): UpdateReturn => {
 			model: modifyFields(model, {
 				toasts: Array.map((item) => ({ ...item, timerVersion: item.timerVersion + 1 })),
 			}),
-			commands: [...commands, PauseTimers()],
+			commands: [...commands, PauseToastTimers()],
 		}
 	return model.toasts.reduce<UpdateReturn>(
 		(result, item) => {
@@ -239,7 +239,7 @@ const deleteToast = (model: Model, id: number): UpdateReturn => {
 				heights: Array.filter((height) => height.toastId !== id),
 			},
 		),
-		commands: [WaitForRemoval({ id })],
+		commands: [WaitForToastRemoval({ id })],
 	}
 }
 
@@ -286,7 +286,7 @@ export const update = (
 			if (Option.isNone(item) || item.value.timerVersion !== version) return { model }
 			return {
 				model: mapItem(model, id, (current) => ({ ...current, timerStartedAt: at })),
-				commands: [WaitForLifetime({ id, version, ms: item.value.remainingMs })],
+				commands: [WaitForToastLifetime({ id, version, ms: item.value.remainingMs })],
 			}
 		},
 		PausedTimers: ({ at }) => ({

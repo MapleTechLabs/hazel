@@ -139,24 +139,21 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 						COLOR_SWATCHES.map((swatch) => {
 							const name = SWATCH_COLOR_NAMES[swatch.hex] ?? swatch.name
 							return radio(swatch.hex, { ariaLabel: name }, ({ isSelected, isFocused }) => [
-								h.div(
-									[
-										h.AriaLabel(name),
-										h.Attribute("aria-roledescription", "color swatch"),
-										h.Class(
-											twMerge(
-												"size-7 cursor-pointer rounded-full outline-1 outline-black/10 -outline-offset-1",
-												(isSelected || isFocused) &&
-													"ring-2 ring-ring ring-offset-2 ring-offset-bg",
-											),
+								h.div([
+									h.AriaLabel(name),
+									h.Attribute("aria-roledescription", "color swatch"),
+									h.Class(
+										twMerge(
+											"size-7 cursor-pointer rounded-full outline-1 outline-black/10 -outline-offset-1",
+											(isSelected || isFocused) &&
+												"ring-2 ring-ring ring-offset-2 ring-offset-bg",
 										),
-										h.DataAttribute("rac", ""),
-										h.Id(`color-${swatch.hex}`),
-										h.Role("img"),
-										h.Style({ backgroundColor: swatch.hex, forcedColorAdjust: "none" }),
-									],
-									[],
-								),
+									),
+									h.DataAttribute("rac", ""),
+									h.Id(`color-${swatch.hex}`),
+									h.Role("img"),
+									h.Style({ backgroundColor: swatch.hex, forcedColorAdjust: "none" }),
+								]),
 							])
 						}),
 					),
@@ -236,7 +233,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 																),
 															),
 														],
-														[h.div([h.Class("size-2.5 rounded-full bg-fg")], [])],
+														[h.div([h.Class("size-2.5 rounded-full bg-fg")])],
 													),
 												]
 											: []),

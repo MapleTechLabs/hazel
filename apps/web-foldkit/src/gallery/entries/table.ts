@@ -24,7 +24,7 @@ type Model = typeof Model.Type
 // MESSAGE
 
 const Message = defineMessageUnion({
-	GotTableMessage: { slot: Slot, message: Table.Message },
+	GotTableMessage: { slotId: Slot, message: Table.Message },
 })
 type Message = typeof Message.Type
 
@@ -35,12 +35,12 @@ const foldTable = (slot: Slot) =>
 		update: Table.update,
 		read: (model: Model) => Option.some(model[slot]),
 		write: (model, nextTable) => ({ ...model, [slot]: nextTable }),
-		toParentMessage: (message) => Message.GotTableMessage({ slot, message }),
+		toParentMessage: (message) => Message.GotTableMessage({ slotId: slot, message }),
 	})
 
 const update = (model: Model, message: Message) =>
 	Message.match<Update.Return<Model, Message>>(message, {
-		GotTableMessage: ({ slot, message }) => foldTable(slot)(model, message),
+		GotTableMessage: ({ slotId: slot, message }) => foldTable(slot)(model, message),
 	})
 
 // VIEW
@@ -96,7 +96,7 @@ const view = (model: Model, h: HtmlBuilder<Message>) => {
 			model: model[slot],
 			view: TableView.view,
 			viewInputs,
-			toParentMessage: (message) => Message.GotTableMessage({ slot, message }),
+			toParentMessage: (message) => Message.GotTableMessage({ slotId: slot, message }),
 		})
 	return galleryFrame(h, "Table", [
 		gallerySection(h, "Selectable", [

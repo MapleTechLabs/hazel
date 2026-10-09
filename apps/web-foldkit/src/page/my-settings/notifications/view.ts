@@ -91,14 +91,11 @@ const soundSettings = (
 													],
 													isSelected
 														? [
-																h.div(
-																	[
-																		h.Class(
-																			"size-2 rounded-full bg-primary-fg",
-																		),
-																	],
-																	[],
-																),
+																h.div([
+																	h.Class(
+																		"size-2 rounded-full bg-primary-fg",
+																	),
+																]),
 															]
 														: [],
 												),

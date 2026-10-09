@@ -9,8 +9,8 @@ import {
 	TrackTrigger,
 	update,
 	view,
-	WaitForHideDelay,
-	WaitForShowDelay,
+	WaitForTooltipHideDelay,
+	WaitForTooltipShowDelay,
 } from "./tooltip"
 
 /** Tooltip through the view: hover and focus come from the TrackTrigger Mount's listeners. */
@@ -52,8 +52,8 @@ describe("tooltip scene", () => {
 			...tracked,
 			Scene.Subscription.emit(Message.HoveredTrigger({ isPointerModality: true })),
 			Scene.expect(tooltip).toBeAbsent(),
-			Scene.Command.expectExact(WaitForShowDelay({ version: 1, delayMs: 1500 })),
-			Scene.Command.resolve(WaitForShowDelay, Message.CompletedWaitForShowDelay({ version: 1 })),
+			Scene.Command.expectExact(WaitForTooltipShowDelay({ version: 1, delayMs: 1500 })),
+			Scene.Command.resolve(WaitForTooltipShowDelay, Message.CompletedWaitForShowDelay({ version: 1 })),
 			Scene.Mount.expectExact(PortalTooltip({ id: "react", placement: "top", offset: 10 })),
 			Scene.Mount.resolve(PortalTooltip, Message.CompletedPortalTooltip()),
 			Scene.expect(tooltip).toHaveText("React with an emoji"),
@@ -94,11 +94,11 @@ describe("tooltip scene", () => {
 			config,
 			...tracked,
 			Scene.Subscription.emit(Message.HoveredTrigger({ isPointerModality: true })),
-			Scene.Command.resolve(WaitForShowDelay, Message.CompletedWaitForShowDelay({ version: 1 })),
+			Scene.Command.resolve(WaitForTooltipShowDelay, Message.CompletedWaitForShowDelay({ version: 1 })),
 			Scene.Mount.resolve(PortalTooltip, Message.CompletedPortalTooltip()),
 			Scene.Subscription.emit(Message.UnhoveredTrigger()),
 			Scene.expect(tooltip).toExist(),
-			Scene.Command.resolve(WaitForHideDelay, Message.CompletedWaitForHideDelay({ version: 2 })),
+			Scene.Command.resolve(WaitForTooltipHideDelay, Message.CompletedWaitForHideDelay({ version: 2 })),
 			Scene.Mount.expectEnded(PortalTooltip),
 			Scene.expect(tooltip).toBeAbsent(),
 		)

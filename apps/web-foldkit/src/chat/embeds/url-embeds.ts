@@ -128,11 +128,11 @@ const tweetSkeleton = <M>(h: HtmlBuilder<M>): Html =>
 			h.div(
 				[h.Class("flex flex-row gap-2")],
 				[
-					h.div([h.Class("size-10 shrink-0 animate-pulse rounded-full bg-muted")], []),
-					h.div([h.Class("h-10 w-full animate-pulse rounded bg-muted")], []),
+					h.div([h.Class("size-10 shrink-0 animate-pulse rounded-full bg-muted")]),
+					h.div([h.Class("h-10 w-full animate-pulse rounded bg-muted")]),
 				],
 			),
-			h.div([h.Class("h-20 w-full animate-pulse rounded bg-muted")], []),
+			h.div([h.Class("h-20 w-full animate-pulse rounded bg-muted")]),
 		],
 	)
 
@@ -291,7 +291,7 @@ const tweetMedia = <M>(h: HtmlBuilder<M>, tweet: TweetView, toOpenPhoto: ((index
 				: h.div(
 						[h.Class("relative flex transform-gpu snap-x snap-mandatory gap-4 overflow-x-auto")],
 						[
-							h.div([h.Class("shrink-0 snap-center sm:w-2")], []),
+							h.div([h.Class("shrink-0 snap-center sm:w-2")]),
 							...tweet.photos.map((photo, index) =>
 								h.button(
 									[
@@ -312,7 +312,7 @@ const tweetMedia = <M>(h: HtmlBuilder<M>, tweet: TweetView, toOpenPhoto: ((index
 									],
 								),
 							),
-							h.div([h.Class("shrink-0 snap-center sm:w-2")], []),
+							h.div([h.Class("shrink-0 snap-center sm:w-2")]),
 						],
 					),
 		],

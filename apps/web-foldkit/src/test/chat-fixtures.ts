@@ -48,7 +48,7 @@ export const mountedChannel = (hovered: MessageId | null = null): Step =>
 		[{ name: "MountEditor" }, composer(Composer.Message.UpdatedDraft({ markdown: "", isEmpty: true }))],
 		[
 			{ name: "TrackFileDrop" },
-			draft(Draft.Message.GotDropEvent({ event: DropEvent.ChangedDragState({ isDraggingOnPage: false, isDropTarget: false }) })),
+			draft(Draft.Message.ReceivedDropEvent({ event: DropEvent.ChangedDragState({ isDraggingOnPage: false, isDropTarget: false }) })),
 		],
 		[
 			{ name: "TrackMessageHover" },

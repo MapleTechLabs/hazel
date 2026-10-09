@@ -123,7 +123,7 @@ describe("RequestedSignOut", () => {
 			given(signedIn("/hazel/chat")),
 			message(userMenu(Menu.Message.PressedTrigger({ pointerType: "mouse" }))),
 			message(userMenu(Menu.Message.ClickedItem({ key: "logout" }))),
-			Command.expectExact(SignOut({})),
+			Command.expectExact(SignOut()),
 			Command.resolve(SignOut, Message.CompletedSignOut()),
 		)
 	})
@@ -134,9 +134,9 @@ describe("RequestedSignOut", () => {
 			given(signedIn("/hazel/chat")),
 			message(Message.FailedSignOut({ reason: "offline" })),
 			model((m) => expect(m.toasts.toaster.toasts.map((toast) => toast.title)).toEqual(["Failed to sign out"])),
-			Command.resolve(Toast.StartTimer, Toast.Message.StartedTimer({ id: 1, version: 1, at: 0 })),
-			Command.resolve(Toast.WaitForLifetime, Toast.Message.CompletedWaitForLifetime({ id: 1, version: 1 })),
-			Command.resolve(Toast.WaitForRemoval, Toast.Message.CompletedWaitForRemoval({ id: 1 })),
+			Command.resolve(Toast.StartToastTimer, Toast.Message.StartedTimer({ id: 1, version: 1, at: 0 })),
+			Command.resolve(Toast.WaitForToastLifetime, Toast.Message.CompletedWaitForLifetime({ id: 1, version: 1 })),
+			Command.resolve(Toast.WaitForToastRemoval, Toast.Message.CompletedWaitForRemoval({ id: 1 })),
 		)
 	})
 })

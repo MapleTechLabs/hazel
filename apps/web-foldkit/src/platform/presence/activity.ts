@@ -9,6 +9,8 @@ import { ACTIVITY_THROTTLE_MS } from "./model"
 
 const CHANNEL_NAME = "hazel:presence-activity"
 const STORAGE_KEY = "hazel:presence-activity:last"
+// One id per tab for the page lifetime; module evaluation runs once per tab, outside any update.
+// oxlint-disable-next-line foldkit/no-impure-call-at-decision-time
 const tabId = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}`
 
 const ActivityEnvelope = Schema.Struct({

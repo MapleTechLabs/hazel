@@ -45,20 +45,26 @@ export const reload = (model: Model, kind: RowKind): PageReturn<Model, Message> 
 	if (kind === "webhook") {
 		const version = model.webhooks.version + 1
 		return {
-			model: modifyFields(model, { webhooks: (list) => ({ ...list, isLoading: true, version }) }),
+			model: modifyFields(model, {
+				webhooks: (list) => modifyFields(list, { isLoading: () => true, version: () => version }),
+			}),
 			commands: [ListWebhooks({ channelId, version })],
 		}
 	}
 	if (kind === "rss") {
 		const version = model.rss.version + 1
 		return {
-			model: modifyFields(model, { rss: (list) => ({ ...list, isLoading: true, version }) }),
+			model: modifyFields(model, {
+				rss: (list) => modifyFields(list, { isLoading: () => true, version: () => version }),
+			}),
 			commands: [ListRss({ channelId, version })],
 		}
 	}
 	const version = model.github.version + 1
 	return {
-		model: modifyFields(model, { github: (list) => ({ ...list, isLoading: true, version }) }),
+		model: modifyFields(model, {
+			github: (list) => modifyFields(list, { isLoading: () => true, version: () => version }),
+		}),
 		commands: [ListGitHub({ channelId, version })],
 	}
 }

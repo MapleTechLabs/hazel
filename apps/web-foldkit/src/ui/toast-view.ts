@@ -61,7 +61,7 @@ const loader = (h: HtmlBuilder<Message>, isVisible: boolean): Html =>
 		[
 			h.div(
 				[h.Class("sonner-spinner")],
-				Array.makeBy(12, () => h.div([h.Class("sonner-loading-bar")], [])),
+				Array.makeBy(12, () => h.div([h.Class("sonner-loading-bar")])),
 			),
 		],
 	)
@@ -156,7 +156,7 @@ const regionAttributes = <M>(h: HtmlBuilder<M>) => [
 ]
 
 /** sonner's region with no toast queued, for roots that host no toaster state (the gallery). */
-export const emptyRegion = <M>(h: HtmlBuilder<M>): Html => h.section(regionAttributes(h), [])
+export const emptyRegion = <M>(h: HtmlBuilder<M>): Html => h.section(regionAttributes(h))
 
 /** The `<section>` sonner always renders, with the toast list while any toast is queued. */
 export const view = Submodel.defineView<Model, Message, ViewInputs>((model, viewInputs, h) =>

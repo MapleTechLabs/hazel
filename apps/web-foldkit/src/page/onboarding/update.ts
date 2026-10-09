@@ -12,11 +12,11 @@ import type { Shared } from "../contract"
 import { PageOutMessage } from "../out-message"
 import {
 	DebounceTimezoneQuery,
-	LoadHome,
+	LoadOnboardingHome,
 	ReadBrowserTimezone,
 	SendInvites,
-	UpdateProfile,
-	UpdateTimezone,
+	UpdateClerkProfile,
+	UpdateUserTimezone,
 } from "./command"
 import { Message } from "./message"
 import { type Model, StepForm } from "./model"
@@ -52,7 +52,7 @@ export const init = (route: RouteOf<"Onboarding">, shared: Shared): Return => {
 		interaction: Interaction.init(),
 	}
 	const redirected = redirectIfOnboarded(model, shared)
-	return { ...redirected, commands: [ReadBrowserTimezone({})] }
+	return { ...redirected, commands: [ReadBrowserTimezone()] }
 }
 
 /** The profile defaults come from `user.me`, which may arrive after the step was entered. */
@@ -101,7 +101,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
-		GotBrowserTimezone: ({ browserTimezone }) =>
+		DetectedBrowserTimezone: ({ browserTimezone }) =>
 			initializeWhenReady(modifyFields(model, { browserTimezone: () => browserTimezone }), shared),
 		UpdatedMembership: ({ membership }) =>
 			initializeWhenReady(modifyFields(model, { membership: () => membership }), shared),
@@ -125,7 +125,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 					? { model: setForm(model, StepForm.Profile({ ...form, hasChanged: true })) }
 					: {
 							model: setForm(model, StepForm.Profile({ ...form, isSubmitting: true })),
-							commands: [UpdateProfile({ firstName, lastName })],
+							commands: [UpdateClerkProfile({ firstName, lastName })],
 						}
 			}),
 		SucceededUpdateProfile: () => withForm(model, "Profile", () => advance(model, shared)),
@@ -182,12 +182,15 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 					: {
 							model: setForm(model, StepForm.Timezone({ ...form, isSubmitting: true })),
 							commands: [
-								UpdateTimezone({ userId: shared.currentUser.id, timezone: form.selected }),
+								UpdateUserTimezone({
+									userId: shared.currentUser.id,
+									timezone: form.selected,
+								}),
 							],
 						},
 			),
 		SucceededUpdateTimezone: ({ timezone }) =>
-			withForm(model, "Timezone", () => advance(model, shared, { timezone })),
+			withForm(model, "Timezone", () => advance(model, shared, { timezone: () => timezone })),
 		FailedUpdateTimezone: ({ toast: request }) =>
 			withForm(model, "Timezone", (form) => ({
 				model: setForm(model, StepForm.Timezone({ ...form, isSubmitting: false })),
@@ -221,8 +224,8 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				const [selected] = form.box.selectedKeys
 				if (selected === undefined) return { model }
 				return model.step === "useCases"
-					? advance(model, shared, { useCases: [selected] })
-					: advance(model, shared, { role: selected })
+					? advance(model, shared, { useCases: () => [selected] })
+					: advance(model, shared, { role: () => selected })
 			}),
 
 		ChangedEmail: ({ index, value }) =>
@@ -313,7 +316,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				...completed,
 				commands: [
 					...(completed.commands ?? []),
-					LoadHome({ href: hrefOf(slug ? AppRoute.OrgHome({ orgSlug: slug }) : AppRoute.Root()) }),
+					LoadOnboardingHome({
+						href: hrefOf(slug ? AppRoute.OrgHome({ orgSlug: slug }) : AppRoute.Root()),
+					}),
 				],
 			}
 		},

@@ -127,19 +127,19 @@ describe("command palette", () => {
 			Command.resolve(CreateChannel, CommandPalette.Message.SucceededCreateChannel({ channelId })),
 			Command.expectExact(
 				NavigateInternal({ url: `/hazel/chat/${channelId}` }),
-				Toast.StartTimer({ id: 1, version: 1 }),
+				Toast.StartToastTimer({ id: 1, version: 1 }),
 			),
 			Command.resolveAll(
 				[NavigateInternal, Message.CompletedNavigateInternal()],
-				[Toast.StartTimer, Toast.Message.StartedTimer({ id: 1, version: 1, at: 0 })],
+				[Toast.StartToastTimer, Toast.Message.StartedTimer({ id: 1, version: 1, at: 0 })],
 			),
 			sceneExpect(palette).toBeAbsent(),
 			Mount.expectEnded(PortalCommandMenu),
 			sceneExpect(text("Channel created successfully")).toExist(),
 			Mount.resolve(Toast.MeasureToast, Toast.Message.MeasuredToast({ id: 1, height: 52 })),
 			// The toast's lifetime runs out (sonner's 4s), then it is removed after its exit animation.
-			Command.resolve(Toast.WaitForLifetime, Toast.Message.CompletedWaitForLifetime({ id: 1, version: 1 })),
-			Command.resolve(Toast.WaitForRemoval, Toast.Message.CompletedWaitForRemoval({ id: 1 })),
+			Command.resolve(Toast.WaitForToastLifetime, Toast.Message.CompletedWaitForLifetime({ id: 1, version: 1 })),
+			Command.resolve(Toast.WaitForToastRemoval, Toast.Message.CompletedWaitForRemoval({ id: 1 })),
 			sceneExpect(text("Channel created successfully")).toBeAbsent(),
 			Mount.expectEnded(Toast.MeasureToast),
 		)

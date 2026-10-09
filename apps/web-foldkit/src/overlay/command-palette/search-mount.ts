@@ -94,9 +94,8 @@ export const SetSearchPlaceholder = Command.define("SetSearchPlaceholder", {
 })
 
 export const FocusSearchEditor = Command.define("FocusSearchEditor", {
-	args: {},
 	messages: [Message.CompletedFocusSearchEditor],
-	execute: () => withEditor((view) => view.focus(), Message.CompletedFocusSearchEditor()),
+	execute: withEditor((view) => view.focus(), Message.CompletedFocusSearchEditor()),
 })
 
 const RECENT_SEARCHES_KEY = "recentSearches"
@@ -104,14 +103,12 @@ const decodeRecent = Schema.decodeUnknownOption(Schema.Array(RecentSearch))
 
 /** `recentSearchesAtom` (platform storage, JSON). */
 export const LoadRecentSearches = Command.define("LoadRecentSearches", {
-	args: {},
 	messages: [Message.LoadedRecentSearches],
-	execute: () =>
-		Effect.try(() => JSON.parse(localStorage.getItem(RECENT_SEARCHES_KEY) ?? "[]")).pipe(
-			Effect.map((raw) => Option.getOrElse(decodeRecent(raw), () => [])),
-			Effect.orElseSucceed(() => []),
-			Effect.map((searches) => Message.LoadedRecentSearches({ searches })),
-		),
+	execute: Effect.try(() => JSON.parse(localStorage.getItem(RECENT_SEARCHES_KEY) ?? "[]")).pipe(
+		Effect.map((raw) => Option.getOrElse(decodeRecent(raw), () => [])),
+		Effect.orElseSucceed(() => []),
+		Effect.map((searches) => Message.LoadedRecentSearches({ searches })),
+	),
 })
 
 export const SaveRecentSearches = Command.define("SaveRecentSearches", {

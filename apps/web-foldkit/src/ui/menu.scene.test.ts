@@ -2,7 +2,7 @@
 import * as Scene from "foldkit/scene"
 import { type ChildAttribute, type Html, inertHtml as ih } from "foldkit/html"
 import { describe, test } from "vitest"
-import { FocusElement, init, item, leaf, Message, OutMessage, update } from "./menu"
+import { FocusMenuElement, init, item, leaf, Message, OutMessage, update } from "./menu"
 import { contextMenuView, FocusTriggerOnPress, menuLabel, view } from "./menu-view"
 
 /** Menu through the view: trigger ARIA, open and close by pointer and keys, submenus, context menus. */
@@ -32,7 +32,7 @@ const menuItem = (name: string) => Scene.role("menuitem", { name })
 const portal = { name: "PortalMenu" }
 const mounted = Scene.Mount.resolve(FocusTriggerOnPress, Message.CompletedFocusTriggerOnPress())
 const portalled = Scene.Mount.resolve(portal, Message.CompletedPortalMenu())
-const resolveFocus = Scene.Command.resolve(FocusElement, Message.CompletedFocusElement())
+const resolveFocus = Scene.Command.resolve(FocusMenuElement, Message.CompletedFocusElement())
 
 describe("menu scene", () => {
 	test("a closed trigger advertises its popup and renders no menu", () => {
@@ -86,7 +86,7 @@ describe("menu scene", () => {
 			Scene.expect(menuItem("New file")).toHaveAttr("data-focused", "true"),
 			Scene.expect(menuItem("New file")).toHaveAttr("data-focus-visible", "true"),
 			Scene.keydown(Scene.role("dialog"), "ArrowDown"),
-			Scene.Command.expectExact(FocusElement({ elementId: "file-item-open" })),
+			Scene.Command.expectExact(FocusMenuElement({ elementId: "file-item-open" })),
 			resolveFocus,
 			Scene.expect(menuItem("Open file")).toHaveAttr("data-focused", "true"),
 			Scene.expect(menuItem("New file")).not.toHaveAttr("data-focused"),
@@ -170,7 +170,7 @@ describe("menu scene", () => {
 			Scene.expect(menuItem("Share")).toHaveAttr("aria-haspopup", "menu"),
 			Scene.expect(menuItem("Share")).toHaveAttr("aria-expanded", "false"),
 			Scene.keydown(Scene.role("dialog"), "ArrowRight"),
-			Scene.Command.expectExact(FocusElement({ elementId: "file-item-email" })),
+			Scene.Command.expectExact(FocusMenuElement({ elementId: "file-item-email" })),
 			resolveFocus,
 			Scene.Mount.resolve({ name: "PositionSubmenu" }, Message.CompletedPositionMenu()),
 			Scene.expect(menuItem("Share")).toHaveAttr("aria-expanded", "true"),
@@ -179,7 +179,7 @@ describe("menu scene", () => {
 			Scene.expect(Scene.selector("#file-submenu")).toHaveAttr("aria-labelledby", "file-item-share"),
 			Scene.expect(menuItem("Email")).toHaveAttr("data-focused", "true"),
 			Scene.keydown(Scene.first(Scene.all.role("dialog")), "Escape"),
-			Scene.Command.expectExact(FocusElement({ elementId: "file-item-share" })),
+			Scene.Command.expectExact(FocusMenuElement({ elementId: "file-item-share" })),
 			resolveFocus,
 			Scene.Mount.expectEnded({ name: "PositionSubmenu" }),
 			Scene.expect(menuItem("Share")).toHaveAttr("aria-expanded", "false"),
@@ -228,7 +228,7 @@ describe("context menu scene", () => {
 			Scene.keydown(Scene.role("dialog"), "ArrowDown"),
 			Scene.expectIgnored(),
 			Scene.keydown(Scene.role("menu"), "ArrowDown"),
-			Scene.Command.expectExact(FocusElement({ elementId: "file-item-new" })),
+			Scene.Command.expectExact(FocusMenuElement({ elementId: "file-item-new" })),
 			resolveFocus,
 			Scene.expect(menuItem("New file")).toHaveAttr("data-focused", "true"),
 			Scene.keydown(Scene.role("dialog"), "Escape"),

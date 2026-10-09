@@ -9,10 +9,10 @@ import { backgroundImage, logoContent, panelCard, panelFrame } from "../onboardi
 import { animateEnter, endStyleOf } from "../onboarding/motion"
 import { Message } from "./message"
 import type { Model, PublicOrganization } from "./model"
+import { AppRoute, hrefOf } from "../../route"
 
 /** `cardVariants`: the card fades, rises and unblurs in. */
 export const CardEnterAnimation = Mount.define("JoinCardEnterAnimation", {
-	args: {},
 	messages: [Message.CompletedEnterAnimation],
 	execute: ({ element }) =>
 		Effect.sync(() => {
@@ -22,7 +22,7 @@ export const CardEnterAnimation = Mount.define("JoinCardEnterAnimation", {
 })
 
 const homeLink = <M>(h: HtmlBuilder<M>, className: string, children: ReadonlyArray<Html>): Html =>
-	h.a([h.Class(className), h.Href("/")], [...children])
+	h.a([h.Class(className), h.Href(hrefOf(AppRoute.Root()))], [...children])
 
 const leftPanel = (h: HtmlBuilder<Message>, nowMs: number, card: ReadonlyArray<Html>): Html =>
 	panelFrame(h, [
@@ -55,7 +55,7 @@ const animatedCard = (h: HtmlBuilder<Message>, children: ReadonlyArray<Html>): H
 		[
 			h.Class("m-auto flex w-full max-w-sm flex-col items-center text-center"),
 			h.Attribute("style", endStyleOf("Card")),
-			h.OnMount(CardEnterAnimation({})),
+			h.OnMount(CardEnterAnimation()),
 		],
 		[...children],
 	)
@@ -118,7 +118,10 @@ const notFoundView = (h: HtmlBuilder<Message>, nowMs: number): Html =>
 						["This invite link is invalid or the workspace doesn't have public invites enabled."],
 					),
 					// `<Link to="/"><Button/></Link>`: a button nested in the anchor.
-					h.a([h.Href("/")], [button(h, { intent: "secondary" }, ["Go to Home"])]),
+					h.a(
+						[h.Href(hrefOf(AppRoute.Root()))],
+						[button(h, { intent: "secondary" }, ["Go to Home"])],
+					),
 				]),
 			],
 		),
@@ -152,7 +155,13 @@ const actions = (h: HtmlBuilder<Message>, model: Model, isSignedIn: boolean): Ht
 						[h.Class("text-muted-fg text-sm")],
 						[
 							"Wrong workspace? ",
-							h.a([h.Class("text-fg underline underline-offset-2"), h.Href("/")], ["Go home"]),
+							h.a(
+								[
+									h.Class("text-fg underline underline-offset-2"),
+									h.Href(hrefOf(AppRoute.Root())),
+								],
+								["Go home"],
+							),
 						],
 					),
 				]
@@ -164,7 +173,13 @@ const actions = (h: HtmlBuilder<Message>, model: Model, isSignedIn: boolean): Ht
 						[h.Class("text-muted-fg text-sm")],
 						[
 							"Already have an account? ",
-							h.a([h.Class("text-fg underline underline-offset-2"), h.Href("/")], ["Go home"]),
+							h.a(
+								[
+									h.Class("text-fg underline underline-offset-2"),
+									h.Href(hrefOf(AppRoute.Root())),
+								],
+								["Go home"],
+							),
 						],
 					),
 				],

@@ -37,7 +37,7 @@ const interaction = embedInteraction<Model, Message>((message) => Message.GotInt
 // COMMAND
 
 /** Stands in for `toast.promise(Promise.resolve(), ...)`, which settles after the loading toast paints. */
-const SaveChanges = Command.define("SaveGalleryChanges", {
+const SaveGalleryChanges = Command.define("SaveGalleryChanges", {
 	args: { id: Schema.Number },
 	messages: [Message.CompletedSaveChanges],
 	execute: ({ id }) =>
@@ -109,7 +109,11 @@ const update = (model: Model, message: Message): Update.Return<Model, Message> =
 			const example = examples.find((candidate) => candidate.label === label)
 			if (example === undefined) return { model }
 			const shown = Toast.show(model.toasts, example.options)
-			return withToasts(model, shown, example.options.isPromise ? [SaveChanges({ id: shown.id })] : [])
+			return withToasts(
+				model,
+				shown,
+				example.options.isPromise ? [SaveGalleryChanges({ id: shown.id })] : [],
+			)
 		},
 		CompletedSaveChanges: ({ id }) =>
 			withToasts(model, Toast.show(model.toasts, { id, kind: "success", title: "Changes saved" })),

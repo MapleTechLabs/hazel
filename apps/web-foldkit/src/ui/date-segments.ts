@@ -256,7 +256,7 @@ export const FocusSegment = Command.define("FocusSegment", {
 })
 
 /** useSpinButton: a focused segment clears the assertive log and announces its new value text. */
-export const AnnounceValue = Command.define("AnnounceSegmentValue", {
+export const AnnounceSegmentValue = Command.define("AnnounceSegmentValue", {
 	args: { valueText: Schema.String },
 	messages: [Message.CompletedAnnounceValue],
 	execute: ({ valueText }) =>
@@ -294,6 +294,8 @@ const cycleValue = (value: number, amount: number, min: number, max: number, rou
 }
 
 const withValues = (model: Model, values: Partial<Values>): Model => {
+	// The patch has dynamic segment keys (React Aria's IncompleteDate.set), so no static nested modifyFields fits.
+	// oxlint-disable-next-line foldkit/no-spread-in-modify-fields
 	const next = modifyFields(model, { values: (current) => ({ ...current, ...values }) })
 	return modifyFields(next, { committed: () => completeValue(next) })
 }
@@ -437,7 +439,11 @@ export const update = (model: Model, message: Message): Update.Return<Model, Mes
 	const valueText = valueTextOf(next, focused)
 	return valueText === undefined || valueText === valueTextOf(model, focused)
 		? { ...result, model: next }
-		: { ...result, model: next, commands: [...(result.commands ?? []), AnnounceValue({ valueText })] }
+		: {
+				...result,
+				model: next,
+				commands: [...(result.commands ?? []), AnnounceSegmentValue({ valueText })],
+			}
 }
 
 const updateSegments = (model: Model, message: Message): Update.Return<Model, Message> =>

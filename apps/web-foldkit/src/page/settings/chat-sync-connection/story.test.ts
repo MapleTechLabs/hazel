@@ -17,7 +17,7 @@ import {
 	CreateChannelLink,
 	DisconnectConnection,
 	ListChannelLinks,
-	ListConnections,
+	ListChatSyncConnectionsForConnection,
 	ListDiscordChannels,
 	RemoveChannelLink,
 	UpdateChannelLink,
@@ -57,7 +57,7 @@ const loaded = run(
 describe("chat sync connection", () => {
 	test("init lists the connections and the channel links", () => {
 		expect(init(route, shared).commands?.map((command) => command.name)).toEqual([
-			ListConnections.name,
+			ListChatSyncConnectionsForConnection.name,
 			ListChannelLinks.name,
 		])
 	})

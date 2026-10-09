@@ -2,7 +2,7 @@
 import * as Scene from "foldkit/scene"
 import { describe, test } from "vitest"
 import { installCssEscape } from "../test/kit-collections-fixtures"
-import { FocusRow, init, Message, update } from "./tree"
+import { FocusTreeRow, init, Message, update } from "./tree"
 import { type TreeNode, view } from "./tree-view"
 
 installCssEscape()
@@ -59,8 +59,8 @@ describe("tree scene", () => {
 			config,
 			Scene.given(channels),
 			Scene.click(Scene.selector("#tree-channels-design-chevron")),
-			Scene.Command.expectExact(FocusRow),
-			Scene.Command.resolve(FocusRow, Message.CompletedFocusRow()),
+			Scene.Command.expectExact(FocusTreeRow),
+			Scene.Command.resolve(FocusTreeRow, Message.CompletedFocusRow()),
 			Scene.expect(row("Design")).toHaveAttr("aria-expanded", "true"),
 			Scene.expect(row("research")).toHaveAttr("aria-level", "2"),
 		)

@@ -162,18 +162,15 @@ export const dmDisplayName = (channel: DmChannel, partners: ReadonlyArray<DmMemb
 
 /** `AvatarOnlineIndicator` at size xs. */
 const statusDot = <M>(h: HtmlBuilder<M>, status: string): Html =>
-	h.span(
-		[
-			h.Class(
-				cx(
-					"absolute right-0 bottom-0 rounded-full ring-[1.5px] ring-bg",
-					getStatusDotColor(status),
-					"size-1.5",
-				),
+	h.span([
+		h.Class(
+			cx(
+				"absolute right-0 bottom-0 rounded-full ring-[1.5px] ring-bg",
+				getStatusDotColor(status),
+				"size-1.5",
 			),
-		],
-		[],
-	)
+		),
+	])
 
 /** `DmUserStatusEmoji` (a tooltip trigger when the user set an emoji). */
 const statusEmoji = <M>(h: HtmlBuilder<M>, presence: Presence | undefined): Html[] =>

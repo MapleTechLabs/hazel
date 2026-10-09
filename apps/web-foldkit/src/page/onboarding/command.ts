@@ -8,23 +8,22 @@ import { clerkResource } from "./clerk"
 import { Message } from "./message"
 
 export const ReadBrowserTimezone = Command.define("ReadBrowserTimezone", {
-	args: {},
-	messages: [Message.GotBrowserTimezone],
-	execute: () =>
+	messages: [Message.DetectedBrowserTimezone],
+	execute:
 		Effect.sync(() =>
-			Message.GotBrowserTimezone({ browserTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+			Message.DetectedBrowserTimezone({ browserTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
 		),
 })
 
 /** `navigate({ search: (prev) => ({ ...prev, step }), replace: true })`, the href from `onboardingHref`. */
-export const ReplaceStepUrl = Command.define("ReplaceOnboardingStepUrl", {
+export const ReplaceOnboardingStepUrl = Command.define("ReplaceOnboardingStepUrl", {
 	args: { href: Schema.String },
 	messages: [Message.CompletedReplaceStepUrl],
 	execute: ({ href }) => replaceUrl(href).pipe(Effect.as(Message.CompletedReplaceStepUrl())),
 })
 
 /** `clerkUser.update({ firstName, lastName })` */
-export const UpdateProfile = Command.define("UpdateClerkProfile", {
+export const UpdateClerkProfile = Command.define("UpdateClerkProfile", {
 	args: { firstName: Schema.String, lastName: Schema.String },
 	messages: [Message.SucceededUpdateProfile, Message.FailedUpdateProfile],
 	execute: ({ firstName, lastName }) =>
@@ -41,7 +40,7 @@ export const DebounceTimezoneQuery = Command.define("DebounceTimezoneQuery", {
 		Effect.sleep(Duration.millis(150)).pipe(Effect.as(Message.ElapsedTimezoneDebounce({ query }))),
 })
 
-export const UpdateTimezone = Command.define("UpdateUserTimezone", {
+export const UpdateUserTimezone = Command.define("UpdateUserTimezone", {
 	args: { userId: UserId, timezone: Schema.String },
 	messages: [Message.SucceededUpdateTimezone, Message.FailedUpdateTimezone],
 	execute: ({ userId, timezone }) =>
@@ -107,7 +106,7 @@ export const CompleteOnboarding = Command.define("CompleteOnboarding", {
 })
 
 /** A full reload, so a cached `user.me` can't bounce the user back here. */
-export const LoadHome = Command.define("LoadOnboardingHome", {
+export const LoadOnboardingHome = Command.define("LoadOnboardingHome", {
 	args: { href: Schema.String },
 	messages: [Message.CompletedLoadHome],
 	execute: ({ href }) => load(href).pipe(Effect.as(Message.CompletedLoadHome())),

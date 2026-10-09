@@ -22,7 +22,7 @@ export const init = (id: string): Model => ({ id, isOpen: false, picker: Picker.
 // MESSAGE
 
 export const Message = defineMessageUnion({
-	GotPopoverEvent: { event: PopoverEvent },
+	ReceivedPopoverEvent: { event: PopoverEvent },
 	GotPickerMessage: { message: Picker.Message },
 })
 export type Message = typeof Message.Type
@@ -44,7 +44,7 @@ const open = (model: Model): Return => ({
 
 export const update = (model: Model, message: Message): Return =>
 	Message.match<Return>(message, {
-		GotPopoverEvent: ({ event }) =>
+		ReceivedPopoverEvent: ({ event }) =>
 			PopoverEvent.match<Return>(event, {
 				ClickedTrigger: () => (model.isOpen ? { model: closed(model) } : open(model)),
 				ClickedDismiss: () => ({ model: closed(model) }),
@@ -115,7 +115,7 @@ export const view = <M>(h: HtmlBuilder<M>, model: Model, inputs: DialogViewInput
 		id: model.id,
 		isOpen: model.isOpen,
 		ariaLabel: "Emoji picker",
-		toMessage: (event) => inputs.toMessage(Message.GotPopoverEvent({ event })),
+		toMessage: (event) => inputs.toMessage(Message.ReceivedPopoverEvent({ event })),
 		toTrigger: inputs.toTrigger,
 		content: () => [
 			h.div(

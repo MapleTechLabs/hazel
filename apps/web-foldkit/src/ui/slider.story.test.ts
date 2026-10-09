@@ -1,6 +1,6 @@
 import { Command, expectNoOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
-import { FocusThumb, init, Message, update } from "./slider"
+import { FocusSliderThumb, init, Message, update } from "./slider"
 
 /** React Aria Slider state: native input changes, Page/Home/End keys, track press and drag. */
 
@@ -104,8 +104,8 @@ describe("slider story: pointer", () => {
 			update,
 			given(price),
 			message(Message.PressedTrack({ value: 60, inputPrefix: "price-label" })),
-			Command.expectExact(FocusThumb({ inputId: "price-label-1" })),
-			Command.resolve(FocusThumb, Message.CompletedFocusThumb()),
+			Command.expectExact(FocusSliderThumb({ inputId: "price-label-1" })),
+			Command.resolve(FocusSliderThumb, Message.CompletedFocusThumb()),
 			model((next) => {
 				expect(next.values).toEqual([20, 60])
 				expect(next.dragging).toBe(1)
@@ -118,8 +118,8 @@ describe("slider story: pointer", () => {
 			update,
 			given(price),
 			message(Message.PressedTrack({ value: 5.4, inputPrefix: "price-label" })),
-			Command.expectExact(FocusThumb({ inputId: "price-label-0" })),
-			Command.resolve(FocusThumb, Message.CompletedFocusThumb()),
+			Command.expectExact(FocusSliderThumb({ inputId: "price-label-0" })),
+			Command.resolve(FocusSliderThumb, Message.CompletedFocusThumb()),
 			model((next) => expect(next.values).toEqual([5, 70])),
 		)
 	})
@@ -129,7 +129,7 @@ describe("slider story: pointer", () => {
 			update,
 			given(volume),
 			message(Message.PressedTrack({ value: 10, inputPrefix: "volume-label" })),
-			Command.resolve(FocusThumb, Message.CompletedFocusThumb()),
+			Command.resolve(FocusSliderThumb, Message.CompletedFocusThumb()),
 			message(Message.MovedDragPointer({ value: 72.6 })),
 			model((next) => expect(next.values).toEqual([73])),
 			message(Message.ReleasedDragPointer()),

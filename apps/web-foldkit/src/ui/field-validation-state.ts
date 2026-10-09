@@ -19,16 +19,13 @@ const invalidIcon = <Message>(h: HtmlBuilder<Message>): Html =>
 			h.Attribute("aria-hidden", "true"),
 		],
 		[
-			h.path(
-				[
-					h.Attribute("d", "M2.25 9.75L9.75 2.25M9.75 9.75L2.25 2.25"),
-					h.Attribute("stroke", "currentColor"),
-					h.Attribute("stroke-width", "1.5"),
-					h.Attribute("stroke-linecap", "round"),
-					h.Attribute("stroke-linejoin", "round"),
-				],
-				[],
-			),
+			h.path([
+				h.Attribute("d", "M2.25 9.75L9.75 2.25M9.75 9.75L2.25 2.25"),
+				h.Attribute("stroke", "currentColor"),
+				h.Attribute("stroke-width", "1.5"),
+				h.Attribute("stroke-linecap", "round"),
+				h.Attribute("stroke-linejoin", "round"),
+			]),
 		],
 	)
 

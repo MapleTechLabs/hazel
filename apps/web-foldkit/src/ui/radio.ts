@@ -130,21 +130,18 @@ export const radioGroup = <Message>(
 					h.div(
 						[h.Class(twMerge(...radioLayoutStyles))],
 						[
-							h.span(
-								[
-									h.DataAttribute("slot", "indicator"),
-									h.Class(
-										twMerge(
-											radioIndicatorStyles({
-												isSelected,
-												isFocusVisible: state.isFocusVisible,
-												isInvalid,
-											}),
-										),
+							h.span([
+								h.DataAttribute("slot", "indicator"),
+								h.Class(
+									twMerge(
+										radioIndicatorStyles({
+											isSelected,
+											isFocusVisible: state.isFocusVisible,
+											isInvalid,
+										}),
 									),
-								],
-								[],
-							),
+								),
+							]),
 							...content,
 						],
 					),

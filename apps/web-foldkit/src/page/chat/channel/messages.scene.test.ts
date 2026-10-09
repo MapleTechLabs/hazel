@@ -145,7 +145,7 @@ describe("threads", () => {
 				],
 				[
 					{ name: "TrackFileDrop" },
-					threadDraft(Draft.Message.GotDropEvent({ event: DropEvent.ChangedDragState({ isDraggingOnPage: false, isDropTarget: false }) })),
+					threadDraft(Draft.Message.ReceivedDropEvent({ event: DropEvent.ChangedDragState({ isDraggingOnPage: false, isDropTarget: false }) })),
 				],
 			),
 			Scene.click(Scene.role("button", { name: "Close thread" })),
@@ -228,7 +228,7 @@ describe("composer emoji picker", () => {
 			Scene.Command.expectExact(Picker.LoadEmojiData()),
 			Scene.Command.resolve(Picker.LoadEmojiData, Picker.Message.SucceededLoadEmojiData({ data })),
 			Scene.Mount.resolveAll(
-				[{ name: "PortalPickerPopover" }, emojiDialog(EmojiDialog.Message.GotPopoverEvent({ event: PopoverEvent.CompletedPortalPickerPopover() }))],
+				[{ name: "PortalPickerPopover" }, emojiDialog(EmojiDialog.Message.ReceivedPopoverEvent({ event: PopoverEvent.CompletedPortalPickerPopover() }))],
 				[{ name: "MeasurePicker" }, emojiDialog(EmojiDialog.Message.GotPickerMessage({ message: measured }))],
 				[{ name: "TrackPickerKeys" }, emojiDialog(EmojiDialog.Message.GotPickerMessage({ message: Picker.Message.PressedNavigationKey({ key: "ArrowRight" }) }))],
 			),

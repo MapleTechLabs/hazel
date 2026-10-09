@@ -72,7 +72,7 @@ describe("emoji picker", () => {
 		story(
 			Dialog.update,
 			given(Dialog.init("reaction")),
-			message(Dialog.Message.GotPopoverEvent({ event: PopoverEvent.ClickedTrigger() })),
+			message(Dialog.Message.ReceivedPopoverEvent({ event: PopoverEvent.ClickedTrigger() })),
 			Command.expectExact(LoadEmojiData()),
 			Command.resolve(LoadEmojiData, Message.SucceededLoadEmojiData({ data })),
 			message(Dialog.Message.GotPickerMessage({ message: Message.ClickedCustomEmoji({ name: "shipit", imageUrl: "/shipit.png" }) })),

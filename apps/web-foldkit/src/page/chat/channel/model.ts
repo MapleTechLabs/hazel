@@ -23,7 +23,7 @@ import {
 	UserInfo,
 } from "../lookups"
 import * as FilesPage from "../files/page"
-import { ActionMessage } from "../message-actions"
+import { Message as ActionMessage } from "../message-actions"
 import * as Overlays from "../overlays"
 import { ChannelInfo, ParentChannelInfo } from "../queries"
 import { ChatMessage, ChatReaction, DisplayRow } from "../rows"

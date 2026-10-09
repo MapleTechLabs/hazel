@@ -1,4 +1,4 @@
-import { Effect, Number as Num, Queue, Schema, Stream } from "effect"
+import { Effect, Number, Queue, Schema, Stream } from "effect"
 import { Command, Mount, Render } from "foldkit"
 import type { Update } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
@@ -238,7 +238,7 @@ const reconcile = (model: Model): ListReturn => {
 	if (model.viewportHeight === 0) return { model }
 	const target = scrollTopForAnchor(model, layoutOf(model), model.anchor)
 	if (Math.abs(target - model.scrollTop) < 0.5) return { model }
-	const version = Num.increment(model.scrollVersion)
+	const version = Number.increment(model.scrollVersion)
 	const adjustment =
 		model.anchor._tag === "End"
 			? ScrollAdjustment.To({ scrollTop: target })
@@ -283,7 +283,7 @@ const keepOverscan = (model: Model): Model => {
 
 /** A scroll event that is not the echo of our own `ApplyScroll`: the reader is scrolling. */
 const startedScrolling = (model: Model): ListReturn => {
-	const version = Num.increment(model.scrollEventVersion)
+	const version = Number.increment(model.scrollEventVersion)
 	const scrolling = modifyFields(model, {
 		isScrolling: () => true,
 		scrollEventVersion: () => version,
@@ -578,7 +578,6 @@ export const view = <Item, ParentMessage>(
 					top: `${OUT_OF_VIEW_PX}px`,
 				}),
 			],
-			[],
 		)
 	// Keyed by row, so switching between the overscan window and the containers moves nodes.
 	const row = (index: number) => {

@@ -153,7 +153,7 @@ export const view = Submodel.defineView<Model, Message, ModalViewInputs>((model,
 					// field's label + control margin does not apply.
 					textField(h, { id: `${ID}-expiration`, value: "" }, (field) => [
 						field.label(["Clear after"]),
-						h.template([], []),
+						h.template([]),
 						expirationSelect,
 					]),
 					expirationOf(model) === "custom" ? customDateTimeRow(h, model) : h.empty,

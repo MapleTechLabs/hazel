@@ -41,7 +41,7 @@ export const dateDividerView = <M>(h: HtmlBuilder<M>, label: string, isStuck: bo
 	h.div(
 		[h.Class("sticky top-0 z-0 my-2 flex items-center justify-center")],
 		[
-			...(isStuck ? [] : [h.div([h.Class("absolute inset-x-4 border-t border-border")], [])]),
+			...(isStuck ? [] : [h.div([h.Class("absolute inset-x-4 border-t border-border")])]),
 			h.span(
 				[
 					h.Class(

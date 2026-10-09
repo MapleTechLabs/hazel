@@ -47,21 +47,18 @@ export const sidebarDock = <Message>(
 			h.Class("group peer hidden text-sidebar-fg md:block"),
 		],
 		[
-			h.div(
-				[
-					h.Attribute("data-slot", "sidebar-gap"),
-					h.Attribute("aria-hidden", "true"),
-					h.Class(
-						twMerge([
-							"w-(--sidebar-width) group-data-[collapsible=hidden]:w-0",
-							"group-data-[side=right]:rotate-180",
-							"relative h-svh bg-transparent transition-[width] duration-200 ease-linear",
-							"group-data-[collapsible=dock]:w-(--sidebar-width-dock)",
-						]),
-					),
-				],
-				[],
-			),
+			h.div([
+				h.Attribute("data-slot", "sidebar-gap"),
+				h.Attribute("aria-hidden", "true"),
+				h.Class(
+					twMerge([
+						"w-(--sidebar-width) group-data-[collapsible=hidden]:w-0",
+						"group-data-[side=right]:rotate-180",
+						"relative h-svh bg-transparent transition-[width] duration-200 ease-linear",
+						"group-data-[collapsible=dock]:w-(--sidebar-width-dock)",
+					]),
+				),
+			]),
 			h.div(
 				[
 					h.Attribute("data-slot", "sidebar-container"),

@@ -27,7 +27,7 @@ type Model = typeof Model.Type
 // MESSAGE
 
 const Message = defineMessageUnion({
-	GotDateFieldMessage: { field: FieldKey, message: Segments.Message },
+	GotDateFieldMessage: { fieldId: FieldKey, message: Segments.Message },
 	GotInteractionMessage: { message: Interaction.Message },
 })
 type Message = typeof Message.Type
@@ -37,13 +37,13 @@ const interaction = embedInteraction<Model, Message>((message) => Message.GotInt
 const toFieldMessage =
 	(field: FieldKey) =>
 	(message: Segments.Message): Message =>
-		Message.GotDateFieldMessage({ field, message })
+		Message.GotDateFieldMessage({ fieldId: field, message })
 
 // UPDATE
 
 const update = (model: Model, message: Message) =>
 	Message.match<Update.Return<Model, Message>>(message, {
-		GotDateFieldMessage: ({ field, message }) =>
+		GotDateFieldMessage: ({ fieldId: field, message }) =>
 			Update.foldChild({
 				update: Segments.update,
 				read: (current: Model) => Option.some(current[field]),

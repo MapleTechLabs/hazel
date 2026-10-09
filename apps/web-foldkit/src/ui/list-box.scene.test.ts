@@ -2,7 +2,7 @@
 import { Option } from "effect"
 import * as Scene from "foldkit/scene"
 import { describe, test } from "vitest"
-import { entry, FocusItem, init, item, Message, section, update, WaitForTypeaheadReset } from "./list-box"
+import { entry, FocusListBoxItem, init, item, Message, section, update, WaitForListBoxTypeaheadReset } from "./list-box"
 import { view } from "./list-box-view"
 
 /** ListBox through the view: listbox and option roles, selection state, keyboard and pointer flows. */
@@ -42,8 +42,8 @@ describe("list-box scene", () => {
 			config,
 			Scene.given(themes),
 			Scene.pointerDown(option("Dim")),
-			Scene.Command.expectExact(FocusItem({ elementId: "theme-listbox-option-dim" })),
-			Scene.Command.resolve(FocusItem, Message.CompletedFocusItem()),
+			Scene.Command.expectExact(FocusListBoxItem({ elementId: "theme-listbox-option-dim" })),
+			Scene.Command.resolve(FocusListBoxItem, Message.CompletedFocusItem()),
 			Scene.expect(option("Dim")).toHaveAttr("aria-selected", "true"),
 			Scene.expect(option("Dim")).toHaveAttr("data-focused", "true"),
 			Scene.expect(option("Dim")).not.toHaveAttr("data-focus-visible"),
@@ -66,7 +66,7 @@ describe("list-box scene", () => {
 			config,
 			Scene.given(focusedOn("light")),
 			Scene.keydown(listbox, "ArrowDown"),
-			Scene.Command.resolve(FocusItem, Message.CompletedFocusItem()),
+			Scene.Command.resolve(FocusListBoxItem, Message.CompletedFocusItem()),
 			Scene.expect(option("Dim")).toHaveAttr("data-focus-visible", "true"),
 			Scene.expect(option("Light")).not.toHaveAttr("data-focused"),
 		)
@@ -91,8 +91,8 @@ describe("list-box scene", () => {
 			config,
 			Scene.given(focusedOn("light")),
 			Scene.keydown(listbox, "d"),
-			Scene.Command.resolve(FocusItem, Message.CompletedFocusItem()),
-			Scene.Command.resolve(WaitForTypeaheadReset, Message.CompletedWaitForTypeaheadReset({ search: "d" })),
+			Scene.Command.resolve(FocusListBoxItem, Message.CompletedFocusItem()),
+			Scene.Command.resolve(WaitForListBoxTypeaheadReset, Message.CompletedWaitForTypeaheadReset({ search: "d" })),
 			Scene.expect(option("Dim")).toHaveAttr("data-focused", "true"),
 		)
 	})
@@ -103,7 +103,7 @@ describe("list-box scene", () => {
 			Scene.given({ ...themes, selectionMode: "multiple" }),
 			Scene.expect(listbox).toHaveAttr("aria-multiselectable", "true"),
 			Scene.pointerDown(option("Dim")),
-			Scene.Command.resolve(FocusItem, Message.CompletedFocusItem()),
+			Scene.Command.resolve(FocusListBoxItem, Message.CompletedFocusItem()),
 			Scene.expect(option("Light")).toHaveAttr("aria-selected", "true"),
 			Scene.expect(option("Dim")).toHaveAttr("aria-selected", "true"),
 		)

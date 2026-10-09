@@ -3,7 +3,7 @@ import { successToast } from "../../data/actions"
 import { AppRoute, hrefOf, type RouteOf } from "../../route"
 import type { PageReturn } from "../contract"
 import { PageOutMessage } from "../out-message"
-import { FetchOrganization, JoinWorkspace, RedirectToSignIn } from "./command"
+import { FetchPublicOrganization, JoinWorkspace, RedirectToSignIn } from "./command"
 import { Message } from "./message"
 import { Lookup, type Model } from "./model"
 
@@ -11,7 +11,7 @@ type Return = PageReturn<Model, Message>
 
 export const init = (route: RouteOf<"Join">): Return => ({
 	model: { slug: route.slug, lookup: Lookup.Loading(), isJoining: false },
-	commands: [FetchOrganization({ slug: route.slug })],
+	commands: [FetchPublicOrganization({ slug: route.slug })],
 })
 
 export const update = (model: Model, message: Message): Return =>

@@ -2,8 +2,8 @@ import { Option } from "effect"
 import { Command, expectNoOutMessage, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
 import {
-	Announce,
-	FocusInput,
+	AnnounceComboBox,
+	FocusComboBoxInput,
 	init,
 	item,
 	Message,
@@ -26,7 +26,8 @@ const inputKey = (key: string) => message(Message.PressedInputKey({ key }))
 const focusOf = (next: Model) => (next.popup._tag === "Open" ? next.popup.focusedKey : Option.none())
 const visibleKeys = (next: Model) =>
 	next.popup._tag === "Open" ? visibleItems(next, next.popup).map((found) => found.key) : []
-const announced = (text: string) => Command.resolve(Announce({ message: text }), Message.CompletedAnnounce())
+const announced = (text: string) =>
+	Command.resolve(AnnounceComboBox({ message: text }), Message.CompletedAnnounce())
 
 describe("combo box story", () => {
 	test("typing filters the options ignoring accents, opens the list and announces the count", () => {
@@ -34,7 +35,7 @@ describe("combo box story", () => {
 			update,
 			given(comboBox),
 			message(Message.ChangedInput({ value: "cafe" })),
-			Command.expectExact(Announce({ message: "1 option available." })),
+			Command.expectExact(AnnounceComboBox({ message: "1 option available." })),
 			announced("1 option available."),
 			model((next) => {
 				expect(visibleKeys(next)).toEqual(["cafe"])
@@ -143,14 +144,14 @@ describe("combo box story", () => {
 			announced("1 option available."),
 			message(Message.BlurredInput()),
 			message(Message.PressedButton()),
-			Command.expectExact(FocusInput({ elementId: "channel-input" })),
-			Command.resolve(FocusInput, Message.CompletedFocusInput()),
+			Command.expectExact(FocusComboBoxInput({ elementId: "channel-input" })),
+			Command.resolve(FocusComboBoxInput, Message.CompletedFocusInput()),
 			model((next) => {
 				expect(visibleKeys(next)).toHaveLength(4)
 				expect(focusOf(next)).toEqual(Option.some("design"))
 			}),
 			message(Message.PressedButton()),
-			Command.resolve(FocusInput, Message.CompletedFocusInput()),
+			Command.resolve(FocusComboBoxInput, Message.CompletedFocusInput()),
 			model((next) => expect(next.popup._tag).toBe("Closed")),
 		)
 	})
@@ -175,13 +176,13 @@ describe("combo box story", () => {
 			given(init({ id: "channel", items, selectedKey: "design", isAppleDevice: true })),
 			inputKey("ArrowDown"),
 			Command.expectExact(
-				Announce({ message: "4 options available." }),
-				Announce({ message: "Design, selected" }),
+				AnnounceComboBox({ message: "4 options available." }),
+				AnnounceComboBox({ message: "Design, selected" }),
 			),
 			announced("4 options available."),
 			announced("Design, selected"),
 			inputKey("ArrowDown"),
-			Command.expectExact(Announce({ message: "Café" })),
+			Command.expectExact(AnnounceComboBox({ message: "Café" })),
 			announced("Café"),
 		)
 	})

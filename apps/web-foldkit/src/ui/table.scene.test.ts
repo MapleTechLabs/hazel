@@ -2,7 +2,7 @@
 import * as Scene from "foldkit/scene"
 import { describe, test } from "vitest"
 import { installCssEscape } from "../test/kit-collections-fixtures"
-import { Announce, init, Message, update } from "./table"
+import { AnnounceTable, init, Message, update } from "./table"
 import { view } from "./table-view"
 
 installCssEscape()
@@ -25,7 +25,7 @@ const sceneView = Scene.withViewInputs(view, {
 const config = { update, view: sceneView() }
 const row = (name: string) => Scene.role("row", { name })
 const column = (name: string) => Scene.role("columnheader", { name: new RegExp(`^${name}`) })
-const resolveAnnouncement = Scene.Command.resolve(Announce, Message.CompletedAnnounce())
+const resolveAnnouncement = Scene.Command.resolve(AnnounceTable, Message.CompletedAnnounce())
 
 describe("table scene", () => {
 	test("renders a labelled grid with sortable headers, row headers and disabled rows", () => {
@@ -64,7 +64,7 @@ describe("table scene", () => {
 			config,
 			Scene.given(init({ id: "members", selectionMode: "single" })),
 			Scene.pointerDown(row("Grace Hopper")),
-			Scene.Command.expectExact(Announce({ message: "Grace Hopper selected.", timeout: 7000 })),
+			Scene.Command.expectExact(AnnounceTable({ message: "Grace Hopper selected.", timeout: 7000 })),
 			resolveAnnouncement,
 			Scene.expect(row("Grace Hopper")).toHaveAttr("aria-selected", "true"),
 			Scene.expect(row("Ada Lovelace")).toHaveAttr("aria-selected", "false"),
@@ -77,7 +77,7 @@ describe("table scene", () => {
 			config,
 			Scene.given(init({ id: "members", selectionMode: "single", selectedKeys: ["grace"] })),
 			Scene.keydown(Scene.role("gridcell", { name: "Admin" }), "ArrowDown"),
-			Scene.Command.expectExact(Announce({ message: "Alan Turing selected.", timeout: 7000 })),
+			Scene.Command.expectExact(AnnounceTable({ message: "Alan Turing selected.", timeout: 7000 })),
 			resolveAnnouncement,
 			Scene.expect(row("Alan Turing")).toHaveAttr("aria-selected", "true"),
 			Scene.expect(row("Grace Hopper")).toHaveAttr("aria-selected", "false"),
@@ -101,7 +101,7 @@ describe("table scene", () => {
 			config,
 			Scene.given(init({ id: "invite", selectionMode: "multiple", selectedKeys: ["grace"] })),
 			Scene.click(Scene.selector("#invite-__selection label")),
-			Scene.Command.expectExact(Announce({ message: "All items selected.", timeout: 7000 })),
+			Scene.Command.expectExact(AnnounceTable({ message: "All items selected.", timeout: 7000 })),
 			resolveAnnouncement,
 			Scene.expect(Scene.role("checkbox", { name: "Select All" })).toBeChecked(),
 			Scene.expect(row("Ada Lovelace")).toHaveAttr("aria-selected", "true"),
@@ -115,7 +115,7 @@ describe("table scene", () => {
 			config,
 			Scene.given(init({ id: "invite", selectionMode: "multiple", selectedKeys: ["grace"] })),
 			Scene.pointerDown(row("Ada Lovelace")),
-			Scene.Command.expectExact(Announce({ message: "Ada Lovelace selected. 2 items selected.", timeout: 7000 })),
+			Scene.Command.expectExact(AnnounceTable({ message: "Ada Lovelace selected. 2 items selected.", timeout: 7000 })),
 			resolveAnnouncement,
 			Scene.expect(row("Ada Lovelace")).toHaveAttr("aria-selected", "true"),
 			Scene.expect(row("Grace Hopper")).toHaveAttr("aria-selected", "true"),

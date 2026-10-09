@@ -71,7 +71,7 @@ export const init = (id: string): Model => ({
 // MESSAGE
 
 export const Message = defineMessageUnion({
-	GotPopoverEvent: { event: PopoverEvent },
+	ReceivedPopoverEvent: { event: PopoverEvent },
 	UpdatedQuery: { query: Schema.String },
 	ClickedCategory: { category: Schema.String },
 	CompletedWaitForGifSearch: { version: Schema.Number },
@@ -186,7 +186,7 @@ const close = (model: Model): Return => ({ model: { ...model, isOpen: false } })
 
 export const update = (model: Model, message: Message): Return =>
 	Message.match<Return>(message, {
-		GotPopoverEvent: ({ event }) =>
+		ReceivedPopoverEvent: ({ event }) =>
 			PopoverEvent.match<Return>(event, {
 				ClickedTrigger: () => {
 					if (model.isOpen) return close(model)

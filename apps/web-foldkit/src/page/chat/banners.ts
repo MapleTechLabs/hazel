@@ -87,9 +87,9 @@ export const typingIndicatorView = <M>(
 					h.div(
 						[h.Class("flex gap-1")],
 						[
-							h.span([h.Class(`${DOT} [animation-delay:-0.3s]`)], []),
-							h.span([h.Class(`${DOT} [animation-delay:-0.15s]`)], []),
-							h.span([h.Class(DOT)], []),
+							h.span([h.Class(`${DOT} [animation-delay:-0.3s]`)]),
+							h.span([h.Class(`${DOT} [animation-delay:-0.15s]`)]),
+							h.span([h.Class(DOT)]),
 						],
 					),
 					h.span([], [text]),

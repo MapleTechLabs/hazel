@@ -4,7 +4,7 @@ import { Command, Mount, all, click, expect, expectAll, expectOutMessage, given,
 import { describe, test, vi, expect as vitestExpect } from "vitest"
 import type { Shared } from "../contract"
 import { PageOutMessage } from "../out-message"
-import { CompleteOnboarding, ReplaceStepUrl, SendInvites, UpdateProfile } from "./command"
+import { CompleteOnboarding, ReplaceOnboardingStepUrl, SendInvites, UpdateClerkProfile } from "./command"
 import { Message } from "./message"
 import type { Model } from "./model"
 import { EnterAnimation } from "./enter-animation"
@@ -66,7 +66,7 @@ const ready = (
 	extra: ReadonlyArray<Message> = [],
 ): Model => {
 	const steps = [
-		Message.GotBrowserTimezone({ browserTimezone: "UTC" }),
+		Message.DetectedBrowserTimezone({ browserTimezone: "UTC" }),
 		Message.UpdatedMembership({ membership: member }),
 		...extra,
 	]
@@ -94,8 +94,8 @@ describe("onboarding flow", () => {
 			expect(role("heading", { name: "Welcome to Hazel!" })).toExist(),
 			Mount.resolve(EnterAnimation, settled),
 			click(role("button", { name: /Get Started/ })),
-			Command.expectExact(ReplaceStepUrl),
-			Command.resolve(ReplaceStepUrl, Message.CompletedReplaceStepUrl()),
+			Command.expectExact(ReplaceOnboardingStepUrl),
+			Command.resolve(ReplaceOnboardingStepUrl, Message.CompletedReplaceStepUrl()),
 			expect(role("heading", { name: "Set up your profile" })).toExist(),
 			expect(role("textbox", { name: "First name" })).toHaveValue("Nora"),
 			Mount.resolveAll([EnterAnimation, settled], [AutoFocus, focused]),
@@ -112,9 +112,9 @@ describe("onboarding flow", () => {
 			type(role("textbox", { name: "First name" }), "Ada"),
 			expect(role("button", { name: /Continue/ })).toBeEnabled(),
 			click(role("button", { name: /Continue/ })),
-			Command.expectExact(UpdateProfile),
-			Command.resolve(UpdateProfile, Message.SucceededUpdateProfile()),
-			Command.resolve(ReplaceStepUrl, Message.CompletedReplaceStepUrl()),
+			Command.expectExact(UpdateClerkProfile),
+			Command.resolve(UpdateClerkProfile, Message.SucceededUpdateProfile()),
+			Command.resolve(ReplaceOnboardingStepUrl, Message.CompletedReplaceStepUrl()),
 			expect(role("heading", { name: "Where are you located?" })).toExist(),
 			expect(role("button", { name: /Detect My Timezone/ })).toExist(),
 			Mount.expectEnded(AutoFocus),
@@ -130,7 +130,7 @@ describe("onboarding flow", () => {
 			expect(role("radio", { name: "Dark mode" })).toBeChecked(),
 			Mount.resolve(EnterAnimation, settled),
 			click(role("button", { name: /Continue/ })),
-			Command.resolve(ReplaceStepUrl, Message.CompletedReplaceStepUrl()),
+			Command.resolve(ReplaceOnboardingStepUrl, Message.CompletedReplaceStepUrl()),
 			expect(role("heading", { name: "What's your role?" })).toExist(),
 			expect(text(/Step\s*5\s*of\s*5/)).toExist(),
 			Mount.resolve(EnterAnimation, settled),
@@ -155,8 +155,8 @@ describe("onboarding flow", () => {
 			given(ready("teamInvitation", null)),
 			Mount.resolveAll([EnterAnimation, settled], [AutoFocus, focused]),
 			click(role("button", { name: /Skip for now/ })),
-			Command.expectExact(ReplaceStepUrl, CompleteOnboarding),
-			Command.resolve(ReplaceStepUrl, Message.CompletedReplaceStepUrl()),
+			Command.expectExact(ReplaceOnboardingStepUrl, CompleteOnboarding),
+			Command.resolve(ReplaceOnboardingStepUrl, Message.CompletedReplaceStepUrl()),
 			expect(text("Setting up your workspace...")).toExist(),
 			Mount.expectEnded(AutoFocus),
 			Mount.resolve(EnterAnimation, settled),
@@ -194,7 +194,7 @@ describe("onboarding flow", () => {
 			given(ready("profileInfo")),
 			Mount.resolveAll([EnterAnimation, settled], [AutoFocus, focused]),
 			click(role("button", { name: /Back/ })),
-			Command.resolve(ReplaceStepUrl, Message.CompletedReplaceStepUrl()),
+			Command.resolve(ReplaceOnboardingStepUrl, Message.CompletedReplaceStepUrl()),
 			expect(role("heading", { name: "Welcome to Hazel!" })).toExist(),
 			Mount.expectEnded(AutoFocus),
 			Mount.resolve(EnterAnimation, settled),
@@ -229,7 +229,7 @@ describe("profile step validation", () => {
 			click(role("button", { name: /Continue/ })),
 			expect(role("button", { name: /Continue/ })).toBeDisabled(),
 			expect(role("button", { name: /Back/ })).toBeDisabled(),
-			Command.resolve(UpdateProfile, Message.FailedUpdateProfile()),
+			Command.resolve(UpdateClerkProfile, Message.FailedUpdateProfile()),
 			expectOutMessage(errorOut("Failed to update profile")),
 			expect(role("heading", { name: "Set up your profile" })).toExist(),
 			expect(role("button", { name: /Continue/ })).toBeEnabled(),
@@ -282,7 +282,7 @@ describe("invite step", () => {
 			expectOutMessage(
 				PageOutMessage.RequestedToast({ toast: { intent: "success", title: "Sent 1 invitation", description: null } }),
 			),
-			Command.resolve(ReplaceStepUrl, Message.CompletedReplaceStepUrl()),
+			Command.resolve(ReplaceOnboardingStepUrl, Message.CompletedReplaceStepUrl()),
 			expect(text("Setting up your workspace...")).toExist(),
 			Mount.expectEnded(AutoFocus),
 			Mount.resolve(EnterAnimation, settled),

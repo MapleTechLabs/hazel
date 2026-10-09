@@ -109,14 +109,11 @@ export const videoPlayerView = <M>(h: HtmlBuilder<M>, props: VideoPlayerProps<M>
 			h.div(
 				[h.Class(rootCls)],
 				[
-					h.video(
-						[
-							h.Class("block max-h-80 w-full"),
-							h.Attribute("playsinline", ""),
-							h.Attribute("src", props.src),
-						],
-						[],
-					),
+					h.video([
+						h.Class("block max-h-80 w-full"),
+						h.Attribute("playsinline", ""),
+						h.Attribute("src", props.src),
+					]),
 					h.div([h.Class(bufferingCls)], [icons.spinner(iconCls)]),
 					h.div(
 						[
@@ -166,26 +163,23 @@ export const videoPlayerView = <M>(h: HtmlBuilder<M>, props: VideoPlayerProps<M>
 											h.div(
 												[h.Class(sliderCls.track), horizontal],
 												[
-													h.div([h.Class(sliderCls.fill), horizontal], []),
-													h.div([h.Class(sliderCls.buffer), horizontal], []),
+													h.div([h.Class(sliderCls.fill), horizontal]),
+													h.div([h.Class(sliderCls.buffer), horizontal]),
 												],
 											),
-											h.div(
-												[
-													h.AriaLabel("Seek"),
-													h.Attribute("aria-orientation", "horizontal"),
-													h.Attribute("aria-valuemax", "0"),
-													h.Attribute("aria-valuemin", "0"),
-													h.Attribute("aria-valuenow", "0"),
-													h.Attribute("aria-valuetext", "0 seconds of 0 seconds"),
-													h.Attribute("autocomplete", "off"),
-													h.Class(sliderCls.thumb),
-													horizontal,
-													h.Role("slider"),
-													h.Tabindex(0),
-												],
-												[],
-											),
+											h.div([
+												h.AriaLabel("Seek"),
+												h.Attribute("aria-orientation", "horizontal"),
+												h.Attribute("aria-valuemax", "0"),
+												h.Attribute("aria-valuemin", "0"),
+												h.Attribute("aria-valuenow", "0"),
+												h.Attribute("aria-valuetext", "0 seconds of 0 seconds"),
+												h.Attribute("autocomplete", "off"),
+												h.Class(sliderCls.thumb),
+												horizontal,
+												h.Role("slider"),
+												h.Tabindex(0),
+											]),
 										],
 									),
 								],
@@ -236,7 +230,7 @@ export const videoPlayerView = <M>(h: HtmlBuilder<M>, props: VideoPlayerProps<M>
 							),
 						],
 					),
-					h.div([h.Class(overlayCls)], []),
+					h.div([h.Class(overlayCls)]),
 				],
 			),
 			h.div([h.Class("mt-1.5 truncate font-medium text-muted-fg text-xs")], [props.fileName]),

@@ -68,7 +68,7 @@ const shellContextOf = (model: Model, orgSlug: string): ShellContext => ({
 const pageBody = (model: Model, h: HtmlBuilder<Message>, isInsideMain: boolean): Html => {
 	if (model.page !== null) return viewPage(h, model.page, { shared: sharedOf(model) }, toPageMessage)
 	const placeholder = h.Attribute("data-page-placeholder", model.route._tag)
-	return isInsideMain ? h.div([placeholder], []) : h.main([placeholder], [])
+	return isInsideMain ? h.div([placeholder]) : h.main([placeholder])
 }
 
 const channelSettingsTabOf = (route: AppRoute): ChannelSettingsTab | undefined =>

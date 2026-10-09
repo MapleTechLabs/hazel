@@ -225,7 +225,7 @@ const uploadEntry = (which: "channel" | "thread") => ({
 			? Stream.empty
 			: uploadStream({ fileId: upload.fileId, file: upload.file, channelId, organizationId }).pipe(
 					Stream.map((event) => {
-						const message = Draft.Message.GotUploadEvent({ event })
+						const message = Draft.Message.ReceivedUploadEvent({ event })
 						return which === "channel"
 							? Message.GotDraftMessage({ message })
 							: Message.GotThreadDraftMessage({ message })

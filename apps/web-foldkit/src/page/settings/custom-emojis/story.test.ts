@@ -7,8 +7,14 @@ import { PageOutMessage } from "../../out-message"
 import type { Shared } from "../../contract"
 import { formatDistanceToNow } from "../format-distance"
 import { Message } from "./message"
-import { DeleteEmoji, generateEmojiName, init, update, validateEmojiName } from "./update"
-import { CreatePreview, FocusName, RestoreEmoji, RevokePreview, CreateEmoji } from "./update"
+import { DeleteCustomEmoji, generateEmojiName, init, update, validateEmojiName } from "./update"
+import {
+	CreateEmojiPreview,
+	FocusEmojiName,
+	RestoreCustomEmoji,
+	RevokeEmojiPreview,
+	CreateCustomEmoji,
+} from "./update"
 import { errorToast, successToast } from "../../../data/actions"
 import {
 	failureToastFixture,
@@ -132,8 +138,8 @@ describe("delete failure", () => {
 			given(init().model),
 			message(Message.ClickedDeleteEmoji({ id: shipit, name: "shipit" })),
 			message(Message.ClickedConfirmDelete()),
-			Command.expectExact(DeleteEmoji({ emojiId: shipit, name: "shipit" })),
-			Command.resolve(DeleteEmoji, Message.FailedDeleteEmoji()),
+			Command.expectExact(DeleteCustomEmoji({ emojiId: shipit, name: "shipit" })),
+			Command.resolve(DeleteCustomEmoji, Message.FailedDeleteEmoji()),
 			expectOutMessage(
 				PageOutMessage.RequestedToast({
 					toast: { intent: "error", title: "Failed to delete emoji", description: null },
@@ -163,14 +169,14 @@ describe("upload draft", () => {
 			owner,
 			given(init().model),
 			message(Message.SelectedFiles({ files: [png] })),
-			Command.resolve(CreatePreview, Message.CreatedPreview({ file: png, previewUrl: "blob:1" })),
-			Command.resolve(FocusName, Message.CompletedFocusName()),
+			Command.resolve(CreateEmojiPreview, Message.CreatedPreview({ file: png, previewUrl: "blob:1" })),
+			Command.resolve(FocusEmojiName, Message.CompletedFocusName()),
 			message(Message.SelectedFiles({ files: [png] })),
-			Command.resolve(CreatePreview, Message.CreatedPreview({ file: png, previewUrl: "blob:2" })),
-			Command.expectExact(RevokePreview({ previewUrl: "blob:1" }), FocusName({})),
+			Command.resolve(CreateEmojiPreview, Message.CreatedPreview({ file: png, previewUrl: "blob:2" })),
+			Command.expectExact(RevokeEmojiPreview({ previewUrl: "blob:1" }), FocusEmojiName()),
 			Command.resolveAll(
-				[RevokePreview, Message.CompletedRevokePreview()],
-				[FocusName, Message.CompletedFocusName()],
+				[RevokeEmojiPreview, Message.CompletedRevokePreview()],
+				[FocusEmojiName, Message.CompletedFocusName()],
 			),
 			model((current) => expect(current.draft?.previewUrl).toBe("blob:2")),
 		)
@@ -181,8 +187,8 @@ describe("upload draft", () => {
 			owner,
 			given(drafted),
 			message(Message.ClickedCancelUpload()),
-			Command.expectExact(RevokePreview({ previewUrl: "blob:1" })),
-			Command.resolve(RevokePreview, Message.CompletedRevokePreview()),
+			Command.expectExact(RevokeEmojiPreview({ previewUrl: "blob:1" })),
+			Command.resolve(RevokeEmojiPreview, Message.CompletedRevokePreview()),
 			model((current) => expect(current.draft).toBeNull()),
 		)
 	})
@@ -203,23 +209,23 @@ describe("save", () => {
 	test("saving uploads once, then toasts and clears the draft", () => {
 		// Command instances holding a jsdom File cannot be compared structurally, so check the args here.
 		expect(update(drafted, Message.ClickedSaveEmoji(), makeShared()).commands?.[0]).toMatchObject({
-			name: CreateEmoji.name,
+			name: CreateCustomEmoji.name,
 			args: { organizationId, name: "ship_it", file: png, previewUrl: "blob:1", createdBy: userId },
 		})
 		story(
 			owner,
 			given(drafted),
 			message(Message.ClickedSaveEmoji()),
-			Command.expectExact(CreateEmoji),
+			Command.expectExact(CreateCustomEmoji),
 			model((current) => expect(current.isSaving).toBe(true)),
 			Command.resolve(
-				CreateEmoji,
+				CreateCustomEmoji,
 				Message.SucceededCreateEmoji({ name: "ship_it", previewUrl: "blob:1" }),
 			),
 			expectOutMessage(
 				PageOutMessage.RequestedToast({ toast: successToast("Emoji :ship_it: created") }),
 			),
-			Command.resolve(RevokePreview({ previewUrl: "blob:1" }), Message.CompletedRevokePreview()),
+			Command.resolve(RevokeEmojiPreview({ previewUrl: "blob:1" }), Message.CompletedRevokePreview()),
 			model((current) => expect(current).toMatchObject({ isSaving: false, draft: null })),
 		)
 	})
@@ -246,7 +252,7 @@ describe("save", () => {
 		// A preview that was already being created when the save started is revoked, not adopted.
 		const late = update(saving, Message.CreatedPreview({ file: png, previewUrl: "blob:2" }), makeShared())
 		expect(late.model.draft?.previewUrl).toBe("blob:1")
-		expect(late.commands?.map((command) => command.name)).toEqual([RevokePreview.name])
+		expect(late.commands?.map((command) => command.name)).toEqual([RevokeEmojiPreview.name])
 	})
 
 	test("a late success for an older draft keeps the newer draft", () => {
@@ -268,7 +274,7 @@ describe("save", () => {
 			owner,
 			given(drafted),
 			message(Message.ClickedSaveEmoji()),
-			Command.resolve(CreateEmoji, Message.FailedCreateEmoji({ toast: failureToastFixture })),
+			Command.resolve(CreateCustomEmoji, Message.FailedCreateEmoji({ toast: failureToastFixture })),
 			expectOutMessage(PageOutMessage.RequestedToast({ toast: failureToastFixture })),
 			model((current) =>
 				expect(current).toMatchObject({ isSaving: false, draft: { name: "ship_it" } }),
@@ -283,14 +289,14 @@ describe("restore a deleted emoji", () => {
 			owner,
 			given(drafted),
 			message(Message.ClickedSaveEmoji()),
-			Command.resolve(CreateEmoji, Message.FoundDeletedEmoji({ target: restoreTarget })),
+			Command.resolve(CreateCustomEmoji, Message.FoundDeletedEmoji({ target: restoreTarget })),
 			expectNoOutMessage(),
 			model((current) =>
 				expect(current).toMatchObject({ isSaving: false, restoreModal: { isOpen: true } }),
 			),
 			message(Message.ClickedConfirmRestore()),
 			Command.expectExact(
-				RestoreEmoji({
+				RestoreCustomEmoji({
 					emojiId: shipit,
 					organizationId,
 					name: "ship_it",
@@ -307,13 +313,13 @@ describe("restore a deleted emoji", () => {
 				}),
 			),
 			Command.resolve(
-				RestoreEmoji,
+				RestoreCustomEmoji,
 				Message.SucceededRestoreEmoji({ name: "ship_it", previewUrl: "blob:1" }),
 			),
 			expectOutMessage(
 				PageOutMessage.RequestedToast({ toast: successToast("Emoji :ship_it: restored") }),
 			),
-			Command.resolve(RevokePreview, Message.CompletedRevokePreview()),
+			Command.resolve(RevokeEmojiPreview, Message.CompletedRevokePreview()),
 			model((current) => expect(current.draft).toBeNull()),
 		)
 	})
@@ -330,7 +336,7 @@ describe("restore a deleted emoji", () => {
 			owner,
 			given({ ...drafted, restoreTarget, restoreModal: Modal.open(drafted.restoreModal).model }),
 			message(Message.ClickedConfirmRestore()),
-			Command.resolve(RestoreEmoji, Message.FailedRestoreEmoji()),
+			Command.resolve(RestoreCustomEmoji, Message.FailedRestoreEmoji()),
 			expectOutMessage(PageOutMessage.RequestedToast({ toast: errorToast("Failed to restore emoji") })),
 			model((current) =>
 				expect(current).toMatchObject({ isSaving: false, draft: { previewUrl: "blob:1" } }),

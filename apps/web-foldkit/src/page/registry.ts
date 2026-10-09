@@ -86,17 +86,18 @@ export type PageSlot = typeof PageSlot.Type
 
 export const PageMessage = Schema.Union(pages.map((page) => page.Wrapped))
 export type PageMessage = typeof PageMessage.Type
+/** `PageMessage` under the Submodel name, so a parent's Got wrapper imports it as `Message`. */
+export { PageMessage as Message }
 
 /** The page slot after a transition, with the Commands and OutMessage that came with it. */
 export interface PageTransition {
 	readonly slot: PageSlot | null
-	readonly commands: ReadonlyArray<Command.Command<PageMessage, never, Resources>>
+	readonly commands?: ReadonlyArray<Command.Command<PageMessage, never, Resources>>
 	readonly outMessage: Option.Option<PageOutMessage>
 }
 
 const unchanged = (slot: PageSlot | null): PageTransition => ({
 	slot,
-	commands: [],
 	outMessage: Option.none(),
 })
 

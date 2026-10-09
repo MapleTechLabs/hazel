@@ -5,7 +5,7 @@ import { ToastRequest } from "../../../overlay/toasts"
 import * as Modal from "../../../ui/modal"
 
 export const Message = defineMessageUnion({
-	GotOrigin: { origin: Schema.String },
+	ResolvedOrigin: { origin: Schema.String },
 	UpdatedIsPublic: { isPublic: Schema.Boolean },
 	ChangedName: { value: Schema.String },
 	SubmittedName: {},

@@ -117,13 +117,10 @@ export const globeVisual = (
 	return h.div(
 		[h.Class("relative w-full max-w-md mx-auto aspect-[2/1] mb-6")],
 		[
-			h.div(
-				[
-					h.Class("absolute inset-0 rounded-full overflow-hidden"),
-					h.Attribute("style", `background: ${background};`),
-				],
-				[],
-			),
+			h.div([
+				h.Class("absolute inset-0 rounded-full overflow-hidden"),
+				h.Attribute("style", `background: ${background};`),
+			]),
 			h.div(
 				[h.Class("absolute inset-4 rounded-full border-2 border-border/50 overflow-hidden")],
 				[
@@ -185,20 +182,17 @@ export const globeVisual = (
 					),
 				],
 			),
-			...STARS.map((star, index) =>
-				h.div(
-					[
-						// Keyed by day/night: the twinkle restarts when the sky changes.
-						h.Key(`star-${index}-${isDaytime ? "day" : "night"}`),
-						h.Class("absolute rounded-full bg-white"),
-						h.Attribute(
-							"style",
-							`left: ${star.x}%; top: ${star.y}%; width: ${star.size * 2}px; height: ${star.size * 2}px; opacity: 0.4; transform: scale(0.8);`,
-						),
-						h.OnMount(TwinkleStar({ delay: star.delay, isVisible: !isDaytime })),
-					],
-					[],
-				),
+			...STARS.map((star) =>
+				h.div([
+					// Keyed by position and day/night: the twinkle restarts when the sky changes.
+					h.Key(`star-${star.x}-${star.y}-${isDaytime ? "day" : "night"}`),
+					h.Class("absolute rounded-full bg-white"),
+					h.Attribute(
+						"style",
+						`left: ${star.x}%; top: ${star.y}%; width: ${star.size * 2}px; height: ${star.size * 2}px; opacity: 0.4; transform: scale(0.8);`,
+					),
+					h.OnMount(TwinkleStar({ delay: star.delay, isVisible: !isDaytime })),
+				]),
 			),
 		],
 	)

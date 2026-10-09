@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import * as Scene from "foldkit/scene"
 import { describe, test } from "vitest"
-import { Announce, FocusInput, init, item, Message, OutMessage, update } from "./combo-box"
+import { AnnounceComboBox, FocusComboBoxInput, init, item, Message, OutMessage, update } from "./combo-box"
 import { view } from "./combo-box-view"
 
 /** ComboBox through the view: combobox ARIA, virtual focus via aria-activedescendant, commit and revert. */
@@ -25,7 +25,7 @@ const mounted = Scene.Mount.resolveAll(
 const portal = { name: "PortalComboBox" }
 const portalled = Scene.Mount.resolve(portal, Message.CompletedPortalComboBox())
 const announced = (text: string) =>
-	Scene.Command.resolve(Announce({ message: text }), Message.CompletedAnnounce())
+	Scene.Command.resolve(AnnounceComboBox({ message: text }), Message.CompletedAnnounce())
 
 describe("combo box scene", () => {
 	test("a closed combo box is a labelled, collapsed list autocomplete", () => {
@@ -115,15 +115,15 @@ describe("combo box scene", () => {
 			mounted,
 			Scene.expect(button).toHaveAttr("aria-haspopup", "listbox"),
 			Scene.pointerDown(button),
-			Scene.Command.expectExact(FocusInput({ elementId: "channel-input" })),
-			Scene.Command.resolve(FocusInput, Message.CompletedFocusInput()),
+			Scene.Command.expectExact(FocusComboBoxInput({ elementId: "channel-input" })),
+			Scene.Command.resolve(FocusComboBoxInput, Message.CompletedFocusInput()),
 			portalled,
 			Scene.expect(button).toHaveAttr("aria-expanded", "true"),
 			Scene.inside(listbox, Scene.expectAll(Scene.all.role("option")).toHaveCount(4)),
 			Scene.expect(option("Design")).toHaveAttr("aria-selected", "true"),
 			Scene.expect(option("General")).toHaveAttr("aria-selected", "false"),
 			Scene.pointerDown(button),
-			Scene.Command.resolve(FocusInput, Message.CompletedFocusInput()),
+			Scene.Command.resolve(FocusComboBoxInput, Message.CompletedFocusInput()),
 			Scene.Mount.expectEnded(portal),
 			Scene.expect(listbox).toBeAbsent(),
 		)

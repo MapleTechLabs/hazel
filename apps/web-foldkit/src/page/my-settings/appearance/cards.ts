@@ -14,7 +14,7 @@ const flexCenter = { display: "flex", alignItems: "center", justifyContent: "cen
 /** `ThemePreview`: a navbar, sidebar and button mockup in the preset's colors. */
 const themePreview = <M>(h: HtmlBuilder<M>, customization: Customization): Html => {
 	const radius = presetPreviewRadius[customization.radius]
-	const bar = (className: string) => h.div([h.Class(className)], [])
+	const bar = (className: string) => h.div([h.Class(className)])
 	return h.div(
 		[h.Class("flex h-full w-full flex-col")],
 		[
@@ -29,17 +29,14 @@ const themePreview = <M>(h: HtmlBuilder<M>, customization: Customization): Html 
 						[h.Class("flex w-5 flex-col gap-1 border-r border-border/50 bg-bg p-1")],
 						[
 							bar("h-1.5 w-full rounded-sm bg-muted-fg/20"),
-							h.div(
-								[
-									h.Class("h-1.5 w-full"),
-									h.Style({
-										backgroundColor: customization.primary,
-										borderRadius: radius,
-										opacity: "0.9",
-									}),
-								],
-								[],
-							),
+							h.div([
+								h.Class("h-1.5 w-full"),
+								h.Style({
+									backgroundColor: customization.primary,
+									borderRadius: radius,
+									opacity: "0.9",
+								}),
+							]),
 							bar("h-1.5 w-full rounded-sm bg-muted-fg/20"),
 						],
 					),
@@ -140,20 +137,17 @@ export const radiusOption = <M>(
 					),
 				],
 				[
-					h.div(
-						[
-							h.Class(
-								twMerge(
-									"size-6 border-2",
-									isSelected
-										? "border-primary bg-primary-subtle/50"
-										: "border-muted-fg/30 bg-muted",
-								),
+					h.div([
+						h.Class(
+							twMerge(
+								"size-6 border-2",
+								isSelected
+									? "border-primary bg-primary-subtle/50"
+									: "border-muted-fg/30 bg-muted",
 							),
-							h.Style({ borderRadius: radiusSelectorPreview[preset] }),
-						],
-						[],
-					),
+						),
+						h.Style({ borderRadius: radiusSelectorPreview[preset] }),
+					]),
 					h.span(
 						[h.Class(twMerge("text-sm", isSelected ? "font-medium text-fg" : "text-muted-fg"))],
 						[RADIUS_LABELS[preset]],
@@ -171,13 +165,10 @@ export const grayPalettePreview = <M>(h: HtmlBuilder<M>, palette: Theme.GrayPale
 			h.div(
 				[h.Class("flex -space-x-0.5"), h.DataAttribute("slot", "icon")],
 				["200", "400", "600", "800"].map((shade) =>
-					h.div(
-						[
-							h.Class("size-4 rounded-full ring-1 ring-bg"),
-							h.Style({ backgroundColor: `var(--color-${palette}-${shade})` }),
-						],
-						[],
-					),
+					h.div([
+						h.Class("size-4 rounded-full ring-1 ring-bg"),
+						h.Style({ backgroundColor: `var(--color-${palette}-${shade})` }),
+					]),
 				),
 			),
 			h.span([h.Class("text-fg text-sm")], [GRAY_PALETTE_LABELS[palette]]),
@@ -208,13 +199,10 @@ export const remixOptionCard = <M>(
 			h.div(
 				[h.Class("flex items-center gap-2")],
 				[
-					h.div(
-						[
-							h.Class("size-8 rounded-md shadow-sm"),
-							h.Style({ backgroundColor: customization.primary }),
-						],
-						[],
-					),
+					h.div([
+						h.Class("size-8 rounded-md shadow-sm"),
+						h.Style({ backgroundColor: customization.primary }),
+					]),
 					h.div(
 						[h.Class("flex flex-col")],
 						[
@@ -236,17 +224,14 @@ export const remixOptionCard = <M>(
 					h.div(
 						[h.Class("flex gap-0.5")],
 						[1, 2, 3].map((i) =>
-							h.div(
-								[
-									h.Class("size-2"),
-									h.Style({
-										backgroundColor: customization.primary,
-										borderRadius: remixDotRadius[customization.radius],
-										opacity: String(0.3 + i * 0.2),
-									}),
-								],
-								[],
-							),
+							h.div([
+								h.Class("size-2"),
+								h.Style({
+									backgroundColor: customization.primary,
+									borderRadius: remixDotRadius[customization.radius],
+									opacity: String(0.3 + i * 0.2),
+								}),
+							]),
 						),
 					),
 					h.span([h.Class("text-muted-fg text-xs")], [RADIUS_LABELS[customization.radius]]),

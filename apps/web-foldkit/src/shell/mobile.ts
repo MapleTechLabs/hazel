@@ -88,7 +88,7 @@ export const mobileNav = <Message>(
 					),
 				],
 			),
-			h.div([h.Class("h-safe-area-inset-bottom bg-sidebar")], []),
+			h.div([h.Class("h-safe-area-inset-bottom bg-sidebar")]),
 		],
 	)
 }
@@ -111,10 +111,7 @@ export const mobileMenuButton = <Message>(
 
 /** `<span className="sr-only" aria-hidden data-intent>`: what `<Sidebar>` leaves in place on mobile. */
 export const mobileSidebarPlaceholder = <Message>(h: HtmlBuilder<Message>): Html =>
-	h.span(
-		[h.Attribute("aria-hidden", "true"), h.Class("sr-only"), h.Attribute("data-intent", "default")],
-		[],
-	)
+	h.span([h.Attribute("aria-hidden", "true"), h.Class("sr-only"), h.Attribute("data-intent", "default")])
 
 /** `<Sidebar>` on mobile: a controlled left `SheetContent` labelled "Sidebar", without a close button. */
 export const mobileSidebarSheet = <Message>(

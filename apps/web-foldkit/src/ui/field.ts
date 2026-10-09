@@ -85,7 +85,7 @@ export const fieldErrors = <Message>(
 					h.li(
 						[h.Class(fieldErrorsStyles.item)],
 						[
-							h.span([h.Class(fieldErrorsStyles.bullet), h.AriaHidden(true)], []),
+							h.span([h.Class(fieldErrorsStyles.bullet), h.AriaHidden(true)]),
 							h.span([], [error.message ?? ""]),
 						],
 					),

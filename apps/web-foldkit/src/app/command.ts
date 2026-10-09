@@ -56,9 +56,8 @@ export const DeliverNotifications = Command.define("DeliverNotifications", {
 })
 
 export const SignOut = Command.define("SignOut", {
-	args: {},
 	messages: [Message.CompletedSignOut, Message.FailedSignOut],
-	execute: () =>
+	execute:
 		signOut.pipe(
 			Effect.as(Message.CompletedSignOut()),
 			Effect.catchTag("SignOutError", (error) => Effect.succeed(Message.FailedSignOut({ reason: error.message }))),
@@ -66,9 +65,8 @@ export const SignOut = Command.define("SignOut", {
 })
 
 export const FetchCurrentUser = Command.define("FetchCurrentUser", {
-	args: {},
 	messages: [Message.SucceededFetchCurrentUser, Message.FailedFetchCurrentUser],
-	execute: () =>
+	execute:
 		Effect.gen(function* () {
 			const client = yield* HazelRpc
 			const user = yield* client("user.me", undefined)

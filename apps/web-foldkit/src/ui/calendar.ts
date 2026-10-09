@@ -169,7 +169,7 @@ export type OutMessage = typeof OutMessage.Type
 // COMMAND
 
 /** React Aria's live announcer, from useCalendarBase. */
-export const Announce = Command.define("AnnounceCalendar", {
+export const AnnounceCalendar = Command.define("AnnounceCalendar", {
 	args: {
 		message: Schema.String,
 		timeout: Schema.Number,
@@ -185,7 +185,7 @@ export const Announce = Command.define("AnnounceCalendar", {
 const MINIMUM_DATE_SUFFIX = ", First available date"
 
 /** Focuses a day cell after the next render, which may show a different month. */
-export const FocusCell = Command.define("FocusCalendarCell", {
+export const FocusCalendarCell = Command.define("FocusCalendarCell", {
 	args: { gridId: Schema.String, label: Schema.String },
 	messages: [Message.CompletedFocusCell],
 	execute: ({ gridId: grid, label }) =>
@@ -246,16 +246,16 @@ const withFocusedDate = (model: Model, date: D.CalendarDate): Model => {
 	const focusedDate = clampToMin(model.minValue, date)
 	return modifyFields(model, {
 		focusedDate: () => focusedDate,
-		month: (month) => ({
-			...monthSelect(model.id, focusedDate),
-			popup: month.popup,
-			isTriggerFocused: month.isTriggerFocused,
-		}),
-		year: (year) => ({
-			...yearSelect(model.id, focusedDate),
-			popup: year.popup,
-			isTriggerFocused: year.isTriggerFocused,
-		}),
+		month: (month) =>
+			modifyFields(monthSelect(model.id, focusedDate), {
+				popup: () => month.popup,
+				isTriggerFocused: () => month.isTriggerFocused,
+			}),
+		year: (year) =>
+			modifyFields(yearSelect(model.id, focusedDate), {
+				popup: () => year.popup,
+				isTriggerFocused: () => year.isTriggerFocused,
+			}),
 	})
 }
 
@@ -275,7 +275,7 @@ const focusDate = (model: Model, date: D.CalendarDate): UpdateReturn => {
 	const clamped = clampToMin(model.minValue, date)
 	return {
 		model: withFocusedDate(model, clamped),
-		commands: [FocusCell({ gridId: gridId(model.id), label: D.formatFull(clamped) })],
+		commands: [FocusCalendarCell({ gridId: gridId(model.id), label: D.formatFull(clamped) })],
 	}
 }
 
@@ -354,10 +354,16 @@ const announcementsFor = (previous: Model, next: Model, message: Message) => {
 	const isSelectionAnnounced = selection !== "" && selection !== selectedDateDescription(previous)
 	return [
 		...(isMonthAnnounced
-			? [Announce({ message: month, timeout: VISIBLE_RANGE_TIMEOUT, assertiveness: "assertive" })]
+			? [
+					AnnounceCalendar({
+						message: month,
+						timeout: VISIBLE_RANGE_TIMEOUT,
+						assertiveness: "assertive",
+					}),
+				]
 			: []),
 		...(isSelectionAnnounced
-			? [Announce({ message: selection, timeout: SELECTION_TIMEOUT, assertiveness: "polite" })]
+			? [AnnounceCalendar({ message: selection, timeout: SELECTION_TIMEOUT, assertiveness: "polite" })]
 			: []),
 	]
 }

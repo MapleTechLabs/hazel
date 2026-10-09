@@ -15,7 +15,7 @@ import {
 	DisconnectConnection,
 	FocusChannelSearch,
 	ListChannelLinks,
-	ListConnections,
+	ListChatSyncConnectionsForConnection,
 	ListDiscordChannels,
 	RemoveChannelLink,
 	UpdateChannelLink,
@@ -44,7 +44,7 @@ const requestConnections = (model: Model, shared: Shared): Return => {
 	if (organizationId === null || organizationId === model.requestedOrganizationId) return { model }
 	return {
 		model: modifyFields(model, { requestedOrganizationId: () => organizationId }),
-		commands: [ListConnections({ organizationId })],
+		commands: [ListChatSyncConnectionsForConnection({ organizationId })],
 	}
 }
 

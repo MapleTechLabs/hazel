@@ -56,11 +56,11 @@ const inputValueOf = (page: PageState) => ("inputValue" in page ? page.inputValu
 /** The menu follows the page: its sections, and the page's own search value. */
 const withMenu = (model: Model, shared: Shared, inputValue: string): Model =>
 	modifyFields(model, {
-		menu: (menu) => ({
-			...CommandMenu.open(menu).model,
-			inputValue,
-			sections: menuSectionsOf(model, shared),
-		}),
+		menu: (menu) =>
+			modifyFields(CommandMenu.open(menu).model, {
+				inputValue: () => inputValue,
+				sections: () => menuSectionsOf(model, shared),
+			}),
 	})
 
 /** The new page's `autoFocus` input (the search editor focuses itself on mount). */
@@ -70,7 +70,7 @@ const focusCommandsOf = (page: PageState) =>
 		: page._tag === "JoinChannel"
 			? [FocusInput({ selector: `#${JOIN_CHANNEL_INPUT_ID}` })]
 			: page._tag === "Search"
-				? [LoadRecentSearches({})]
+				? [LoadRecentSearches()]
 				: [FocusInput({ selector: `#${CommandMenu.searchId(MENU_ID)}` })]
 
 const showPage = (model: Model, page: PageState, history: ReadonlyArray<PageState>, shared: Shared): Return => ({
@@ -200,7 +200,7 @@ const gotMenuMessage = (model: Model, message: CommandMenu.Message, shared: Shar
 
 const refreshMenu = (result: Return, shared: Shared): Return =>
 	result.model.isOpen && !isFormPage(result.model.page)
-		? { ...result, model: modifyFields(result.model, { menu: (menu) => ({ ...menu, sections: menuSectionsOf(result.model, shared) }) }) }
+		? { ...result, model: modifyFields(result.model, { menu: (menu) => modifyFields(menu, { sections: () => menuSectionsOf(result.model, shared) }) }) }
 		: result
 
 const withPage = (model: Model, page: PageState): Model => modifyFields(model, { page: () => page })

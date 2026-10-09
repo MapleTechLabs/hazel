@@ -29,7 +29,7 @@ const linkNotFound = {
 	},
 }
 
-export const ListConnections = Command.define("ListChatSyncConnectionsForConnection", {
+export const ListChatSyncConnectionsForConnection = Command.define("ListChatSyncConnectionsForConnection", {
 	args: { organizationId: OrganizationId },
 	messages: [Message.SucceededListConnections, Message.FailedListConnections],
 	execute: ({ organizationId }) =>

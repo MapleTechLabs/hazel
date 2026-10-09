@@ -1,4 +1,4 @@
-import { Effect, Number as Num, Option, Schema, Stream } from "effect"
+import { Effect, Number, Option, Schema, Stream } from "effect"
 import { Command, Subscription, type Update } from "foldkit"
 import * as Dom from "foldkit/dom"
 import type { Html, HtmlBuilder } from "foldkit/html"
@@ -97,7 +97,7 @@ const setThumbValue = (model: Model, index: number, value: number): Model => {
 		Math.round((value - model.minValue) / model.step) * model.step + model.minValue,
 		model.step,
 	)
-	const next = Num.clamp(snapped, { minimum: thumbMin(model, index), maximum: thumbMax(model, index) })
+	const next = Number.clamp(snapped, { minimum: thumbMin(model, index), maximum: thumbMax(model, index) })
 	return modifyFields(model, {
 		values: (values) => values.map((current, i) => (i === index ? next : current)),
 	})
@@ -116,7 +116,7 @@ const closestThumb = (model: Model, value: number) => {
 // COMMAND
 
 /** useSliderThumb focuses the thumb input when a track press selects it. */
-export const FocusThumb = Command.define("FocusSliderThumb", {
+export const FocusSliderThumb = Command.define("FocusSliderThumb", {
 	args: { inputId: Schema.String },
 	messages: [Message.CompletedFocusThumb],
 	execute: ({ inputId }) =>
@@ -129,7 +129,7 @@ export const FocusThumb = Command.define("FocusSliderThumb", {
 export const update = (model: Model, message: Message): Update.Return<Model, Message> =>
 	Message.match<Update.Return<Model, Message>>(message, {
 		ChangedThumbInput: ({ index, value }) => ({
-			model: setThumbValue(model, index, Number.parseFloat(value)),
+			model: setThumbValue(model, index, globalThis.Number.parseFloat(value)),
 		}),
 		PressedThumbKey: ({ index, key }) => {
 			const current = model.values[index] ?? model.minValue
@@ -147,7 +147,7 @@ export const update = (model: Model, message: Message): Update.Return<Model, Mes
 			const index = closestThumb(model, value)
 			return {
 				model: modifyFields(setThumbValue(model, index, value), { dragging: () => index }),
-				commands: [FocusThumb({ inputId: `${inputPrefix}-${index}` })],
+				commands: [FocusSliderThumb({ inputId: `${inputPrefix}-${index}` })],
 			}
 		},
 		MovedDragPointer: ({ value }) => ({
@@ -175,7 +175,7 @@ export const valueFromPointer = (model: Axis, track: Element, clientX: number, c
 			? (clientX - rect.left) / (rect.width || 1)
 			: (rect.bottom - clientY) / (rect.height || 1)
 	return (
-		model.minValue + Num.clamp(fraction, { minimum: 0, maximum: 1 }) * (model.maxValue - model.minValue)
+		model.minValue + Number.clamp(fraction, { minimum: 0, maximum: 1 }) * (model.maxValue - model.minValue)
 	)
 }
 
@@ -411,23 +411,20 @@ export const slider = <ParentMessage>(
 							]),
 				],
 				[
-					h.div(
-						[
-							h.Class(twMerge(sliderFillStyles)),
-							h.Attribute(
-								"style",
-								Object.entries(
-									sliderFillStyle(
-										model.orientation,
-										model.values.map((value) => percentOf(model, value)),
-									),
-								)
-									.map(([property, value]) => `${property}: ${value};`)
-									.join(" "),
-							),
-						],
-						[],
-					),
+					h.div([
+						h.Class(twMerge(sliderFillStyles)),
+						h.Attribute(
+							"style",
+							Object.entries(
+								sliderFillStyle(
+									model.orientation,
+									model.values.map((value) => percentOf(model, value)),
+								),
+							)
+								.map(([property, value]) => `${property}: ${value};`)
+								.join(" "),
+						),
+					]),
 					thumb(0),
 				],
 			)
