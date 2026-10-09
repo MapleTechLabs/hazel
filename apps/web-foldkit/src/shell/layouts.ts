@@ -1,5 +1,7 @@
+import type { ChannelId } from "@hazel/schema"
 import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import { IconHashtag } from "../icons"
+import { AppRoute, hrefOf } from "../route"
 import { progressBar, progressBarTrack } from "../ui/progress-bar"
 import { tabStrip, tabView } from "../ui/tab-strip"
 import type { ChannelSummary } from "./model"
@@ -40,7 +42,7 @@ export const channelSettingsLayout = <Message>(
 	h: HtmlBuilder<Message>,
 	options: Readonly<{
 		orgSlug: string
-		channelId: string
+		channelId: ChannelId
 		channel: ChannelSummary | null
 		selectedTab: ChannelSettingsTab
 		/** Tabs navigate on selection, as `onSelectionChange` does. */
@@ -50,8 +52,13 @@ export const channelSettingsLayout = <Message>(
 	}>,
 	page: Html,
 ): Html => {
-	const hrefOf = (tab: ChannelSettingsTab) =>
-		`/${options.orgSlug}/channels/${options.channelId}/settings/${tab}`
+	const { orgSlug, channelId } = options
+	const tabRoutes = {
+		overview: AppRoute.ChannelSettingsOverview,
+		integrations: AppRoute.ChannelSettingsIntegrations,
+		connect: AppRoute.ChannelSettingsConnect,
+	} as const
+	const tabHref = (tab: ChannelSettingsTab) => hrefOf(tabRoutes[tab]({ orgSlug, channelId }))
 	return h.main(
 		[h.Class("h-full w-full min-w-0 bg-bg")],
 		[
@@ -69,7 +76,7 @@ export const channelSettingsLayout = <Message>(
 											h.Class(
 												"flex items-center gap-2 text-muted-fg text-sm transition-colors hover:text-fg",
 											),
-											h.Href(`/${options.orgSlug}/chat/${options.channelId}`),
+											h.Href(hrefOf(AppRoute.ChatChannel({ orgSlug, channelId }))),
 										],
 										[
 											h.svg(
@@ -138,7 +145,9 @@ export const channelSettingsLayout = <Message>(
 											),
 											h.Value(options.selectedTab),
 											options.onChangeTab((tab) =>
-												hrefOf(isChannelSettingsTab(tab) ? tab : options.selectedTab),
+												tabHref(
+													isChannelSettingsTab(tab) ? tab : options.selectedTab,
+												),
 											),
 										],
 										ChannelSettingsTab.map((tab) =>
@@ -170,7 +179,7 @@ export const channelSettingsLayout = <Message>(
 												id: tab,
 												label: tabLabels[tab],
 												isSelected: tab === options.selectedTab,
-												attributes: [options.onSelectTab(hrefOf(tab))],
+												attributes: [options.onSelectTab(tabHref(tab))],
 											}),
 										),
 									),

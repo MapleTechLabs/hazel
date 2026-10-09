@@ -16,6 +16,7 @@ import {
 	IconUsers,
 	IconUsersPlus,
 } from "../icons"
+import { AppRoute, hrefOf, linkedAccountsHref } from "../route"
 import { button } from "../ui/button"
 import {
 	sidebarContent,
@@ -65,20 +66,27 @@ export const settingsSidebar = <Message>(
 	context: ShellContext,
 	chrome: SidebarChrome<Message>,
 ): Html => {
-	const base = `/${context.orgSlug}/settings`
+	const { orgSlug } = context
+	const general = hrefOf(AppRoute.SettingsGeneral({ orgSlug }))
+	const team = hrefOf(AppRoute.TeamSettings({ orgSlug }))
+	const invitations = hrefOf(AppRoute.SettingsInvitations({ orgSlug }))
+	const customEmojis = hrefOf(AppRoute.SettingsCustomEmojis({ orgSlug }))
+	const integrations = hrefOf(AppRoute.SettingsIntegrations({ orgSlug }))
+	const marketplace = hrefOf(AppRoute.SettingsIntegrationsMarketplace({ orgSlug }))
+	const installed = hrefOf(AppRoute.SettingsIntegrationsInstalled({ orgSlug }))
+	const yourApps = hrefOf(AppRoute.SettingsIntegrationsYourApps({ orgSlug }))
+	const connectInvites = hrefOf(AppRoute.SettingsConnectInvites({ orgSlug }))
+	const chatSync = hrefOf(AppRoute.SettingsChatSync({ orgSlug }))
 	const path = context.pathname
 	const item = navList(h)
 	const fuzzy = (to: string) => ({
 		isCurrent: isActiveFuzzy(path, to),
 		isLinkActive: isActiveFuzzy(path, to),
 	})
-	const integrationSubRoutes = ["marketplace", "installed", "your-apps"].map(
-		(sub) => `${base}/integrations/${sub}`,
-	)
+	const integrationSubRoutes = [marketplace, installed, yourApps]
 	const isBaseIntegrations =
-		path === `${base}/integrations` ||
-		(isActiveFuzzy(path, `${base}/integrations`) &&
-			!integrationSubRoutes.some((sub) => isActiveFuzzy(path, sub)))
+		path === integrations ||
+		(isActiveFuzzy(path, integrations) && !integrationSubRoutes.some((sub) => isActiveFuzzy(path, sub)))
 
 	return sidebarStatic(h, "flex flex-1", [
 		orgSwitcherHeader(h, chrome.orgSwitcher, context, chrome.organizations, chrome.toOrgSwitcherMessage),
@@ -88,63 +96,38 @@ export const settingsSidebar = <Message>(
 				sidebarSection(h, {}, [
 					item(
 						"General",
-						base,
-						{ isCurrent: path === base, isLinkActive: path === base },
+						general,
+						{ isCurrent: path === general, isLinkActive: path === general },
 						IconGear,
 					),
 					item(
 						"Team",
-						`${base}/team`,
+						team,
 						{
-							isCurrent: path === `${base}/team`,
-							isLinkActive: isActiveFuzzy(path, `${base}/team`),
+							isCurrent: path === team,
+							isLinkActive: isActiveFuzzy(path, team),
 						},
 						IconUsers,
 					),
-					item("Invitations", `${base}/invitations`, fuzzy(`${base}/invitations`), IconUsersPlus),
-					item(
-						"Custom Emoji",
-						`${base}/custom-emojis`,
-						fuzzy(`${base}/custom-emojis`),
-						IconEmojiAdd,
-					),
+					item("Invitations", invitations, fuzzy(invitations), IconUsersPlus),
+					item("Custom Emoji", customEmojis, fuzzy(customEmojis), IconEmojiAdd),
 				]),
 				sidebarSection(h, { label: "Apps & Integrations" }, [
 					item(
 						"Integrations",
-						`${base}/integrations`,
-						{ isCurrent: isBaseIntegrations, isLinkActive: path === `${base}/integrations` },
+						integrations,
+						{ isCurrent: isBaseIntegrations, isLinkActive: path === integrations },
 						IconIntegratio,
 					),
-					item(
-						"Marketplace",
-						`${base}/integrations/marketplace`,
-						fuzzy(`${base}/integrations/marketplace`),
-						IconShop,
-					),
-					item(
-						"Installed Apps",
-						`${base}/integrations/installed`,
-						fuzzy(`${base}/integrations/installed`),
-						IconGridCirclePlus,
-					),
-					item(
-						"Your Apps",
-						`${base}/integrations/your-apps`,
-						fuzzy(`${base}/integrations/your-apps`),
-						IconCode,
-					),
+					item("Marketplace", marketplace, fuzzy(marketplace), IconShop),
+					item("Installed Apps", installed, fuzzy(installed), IconGridCirclePlus),
+					item("Your Apps", yourApps, fuzzy(yourApps), IconCode),
 				]),
 				sidebarSection(h, { label: "Hazel Connect" }, [
-					item(
-						"Connect Invites",
-						`${base}/connect-invites`,
-						fuzzy(`${base}/connect-invites`),
-						IconArrowPath,
-					),
+					item("Connect Invites", connectInvites, fuzzy(connectInvites), IconArrowPath),
 				]),
 				sidebarSection(h, { label: "Chat Sync" }, [
-					item("Connections", `${base}/chat-sync`, fuzzy(`${base}/chat-sync`), IconArrowPath),
+					item("Connections", chatSync, fuzzy(chatSync), IconArrowPath),
 				]),
 			]),
 		]),
@@ -165,7 +148,11 @@ export const mySettingsSidebar = <Message>(
 	context: ShellContext,
 	chrome: SidebarChrome<Message>,
 ): Html => {
-	const base = `/${context.orgSlug}/my-settings`
+	const { orgSlug } = context
+	const appearance = hrefOf(AppRoute.MySettingsAppearance({ orgSlug }))
+	const profile = hrefOf(AppRoute.MySettingsProfile({ orgSlug }))
+	const linkedAccounts = linkedAccountsHref(orgSlug)
+	const notifications = hrefOf(AppRoute.MySettingsNotifications({ orgSlug }))
 	const path = context.pathname
 	const item = navList(h)
 	const fuzzy = (to: string) => ({
@@ -180,18 +167,13 @@ export const mySettingsSidebar = <Message>(
 				sidebarSection(h, {}, [
 					item(
 						"Appearance",
-						base,
-						{ isCurrent: path === base, isLinkActive: path === base },
+						appearance,
+						{ isCurrent: path === appearance, isLinkActive: path === appearance },
 						IconPaintbrush,
 					),
-					item("Profile", `${base}/profile`, fuzzy(`${base}/profile`), IconUser),
-					item(
-						"Linked Accounts",
-						`${base}/linked-accounts`,
-						fuzzy(`${base}/linked-accounts`),
-						IconArrowPath,
-					),
-					item("Notifications", `${base}/notifications`, fuzzy(`${base}/notifications`), IconBell),
+					item("Profile", profile, fuzzy(profile), IconUser),
+					item("Linked Accounts", linkedAccounts, fuzzy(linkedAccounts), IconArrowPath),
+					item("Notifications", notifications, fuzzy(notifications), IconBell),
 				]),
 			]),
 		]),
@@ -213,7 +195,11 @@ export const notificationsSidebar = <Message>(
 	chrome: SidebarChrome<Message>,
 	markAllRead: Readonly<{ unreadCount: number; isPending: boolean; onPress: Attribute<Message> }>,
 ): Html => {
-	const base = `/${context.orgSlug}/notifications`
+	const { orgSlug } = context
+	const all = hrefOf(AppRoute.NotificationsAll({ orgSlug }))
+	const general = hrefOf(AppRoute.NotificationsGeneral({ orgSlug }))
+	const threads = hrefOf(AppRoute.NotificationsThreads({ orgSlug }))
+	const dms = hrefOf(AppRoute.NotificationsDms({ orgSlug }))
 	const path = context.pathname
 	const item = navList(h)
 	const fuzzy = (to: string) => ({
@@ -230,13 +216,13 @@ export const notificationsSidebar = <Message>(
 					// Legacy also matches `/notifications/` fuzzily, so All Activity stays current on sub-pages.
 					item(
 						"All Activity",
-						base,
-						{ isCurrent: isActiveFuzzy(path, base), isLinkActive: path === base },
+						all,
+						{ isCurrent: isActiveFuzzy(path, all), isLinkActive: path === all },
 						IconBell,
 					),
-					item("Channels", `${base}/general`, fuzzy(`${base}/general`), IconHashtag),
-					item("Threads", `${base}/threads`, fuzzy(`${base}/threads`), IconThread),
-					item("Direct Messages", `${base}/dms`, fuzzy(`${base}/dms`), IconMsgs),
+					item("Channels", general, fuzzy(general), IconHashtag),
+					item("Threads", threads, fuzzy(threads), IconThread),
+					item("Direct Messages", dms, fuzzy(dms), IconMsgs),
 				]),
 				...(markAllRead.unreadCount > 0
 					? [

@@ -3,6 +3,7 @@ import { Option } from "effect"
 import { Command, Update } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import { PageOutMessage } from "../page/out-message"
+import { organizationHref } from "../route"
 import type { HazelRpc } from "../rpc"
 import * as Menu from "../ui/menu"
 import * as Modal from "../ui/modal"
@@ -46,7 +47,9 @@ export type ShellUpdateReturn = Update.ReturnWithOutMessage<Model, Message, Page
 
 /** Rebuilds the menus' entries when one of their inputs changed (cheap no-op otherwise). */
 const withMenuEntries = (model: Model, context: Context): Model => {
-	const orgSlug = context.orgSlug ?? ""
+	const { orgSlug, currentUserId } = context
+	// The menus only render inside the org shell, which waits for `user.me`.
+	if (orgSlug === null) return model
 	const signature = JSON.stringify([
 		orgSlug,
 		context.currentUserId,
@@ -59,7 +62,10 @@ const withMenuEntries = (model: Model, context: Context): Model => {
 	if (signature === model.menuSignature) return model
 	return modifyFields(model, {
 		menuSignature: () => signature,
-		userMenu: (menu) => Menu.reflectEntries(menu, userMenuEntries(orgSlug, context.currentUserId ?? "")),
+		userMenu: (menu) =>
+			currentUserId === null
+				? menu
+				: Menu.reflectEntries(menu, userMenuEntries(orgSlug, currentUserId)),
 		orgSwitcher: (menu) =>
 			modifyFields(
 				Menu.reflectEntries(
@@ -130,9 +136,7 @@ const switchedOrganization = (model: Model, key: string, context: Context): Shel
 				requested(
 					model,
 					PageOutMessage.RequestedNavigation({
-						href: organization.slug
-							? `/${organization.slug}`
-							: `/onboarding/setup-organization?${new URLSearchParams({ orgId: organization.id })}`,
+						href: organizationHref(organization),
 						replace: false,
 					}),
 				),

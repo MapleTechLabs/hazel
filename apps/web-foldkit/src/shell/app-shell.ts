@@ -1,5 +1,6 @@
 import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import { IconBell, IconDashboard, IconGear, IconMsgs, Logo } from "../icons"
+import { AppRoute, hrefOf } from "../route"
 import { linkClassName } from "../ui/link"
 import {
 	sidebarContent,
@@ -49,7 +50,11 @@ const bellIcon = <Message>(h: HtmlBuilder<Message>, unreadCount: number): Html =
 
 /** `NavSidebar` */
 const navRail = <Message>(h: HtmlBuilder<Message>, context: ShellContext, unreadCount: number): Html => {
-	const org = `/${context.orgSlug}`
+	const { orgSlug } = context
+	const home = hrefOf(AppRoute.OrgHome({ orgSlug }))
+	const chat = hrefOf(AppRoute.ChatIndex({ orgSlug }))
+	const notifications = hrefOf(AppRoute.NotificationsAll({ orgSlug }))
+	const settings = hrefOf(AppRoute.SettingsGeneral({ orgSlug }))
 	const navItem = (label: string, to: string, isActive: boolean, icon: Html) =>
 		sidebarItem(h, { ariaLabel: label, className: "size-9 justify-items-center" }, [
 			sidebarLink(h, { href: to, isActive, activeClassName: NAV_ACTIVE }, [icon]),
@@ -69,23 +74,28 @@ const navRail = <Message>(h: HtmlBuilder<Message>, context: ShellContext, unread
 		sidebarContent(h, { state: "expanded", className: "mask-none " }, [
 			sidebarSectionGroup(h, [
 				sidebarSection(h, { className: "p-2! *:data-[slot=sidebar-section-inner]:gap-y-2" }, [
-					navItem("Home", org, context.pathname === org, IconDashboard(h, { className: "size-5" })),
+					navItem(
+						"Home",
+						home,
+						context.pathname === home,
+						IconDashboard(h, { className: "size-5" }),
+					),
 					navItem(
 						"Chat",
-						`${org}/chat`,
-						isActiveFuzzy(context.pathname, `${org}/chat`),
+						chat,
+						isActiveFuzzy(context.pathname, chat),
 						IconMsgs(h, { className: "size-5" }),
 					),
 					navItem(
 						"Notifications",
-						`${org}/notifications`,
-						isActiveFuzzy(context.pathname, `${org}/notifications`),
+						notifications,
+						isActiveFuzzy(context.pathname, notifications),
 						bellIcon(h, unreadCount),
 					),
 					navItem(
 						"Settings",
-						`${org}/settings`,
-						isActiveFuzzy(context.pathname, `${org}/settings`),
+						settings,
+						isActiveFuzzy(context.pathname, settings),
 						IconGear(h, { className: "size-5" }),
 					),
 				]),

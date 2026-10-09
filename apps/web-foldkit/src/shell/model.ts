@@ -1,4 +1,4 @@
-import { ChannelId } from "@hazel/schema"
+import { ChannelId, OrganizationId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import * as Menu from "../ui/menu"
@@ -11,7 +11,7 @@ import * as Notifications from "./notifications"
 // MODEL
 
 export const SwitcherOrg = Schema.Struct({
-	id: Schema.String,
+	id: OrganizationId,
 	name: Schema.String,
 	slug: Schema.NullOr(Schema.String),
 	logoUrl: Schema.NullOr(Schema.String),

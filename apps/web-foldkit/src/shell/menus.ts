@@ -1,3 +1,4 @@
+import type { UserId } from "@hazel/schema"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twJoin } from "tailwind-merge"
 import {
@@ -15,6 +16,7 @@ import {
 	IconUsers,
 	IconUsersPlus,
 } from "../icons"
+import { AppRoute, hrefOf } from "../route"
 import { avatar } from "../ui/avatar"
 import * as Menu from "../ui/menu"
 import { menuLabel, menuTriggerClassName, view as menuView } from "../ui/menu-view"
@@ -36,11 +38,11 @@ export interface SwitcherOrg {
 
 // ENTRIES
 
-export const userMenuEntries = (orgSlug: string, userId: string): ReadonlyArray<Menu.Entry> => [
+export const userMenuEntries = (orgSlug: string, userId: UserId): ReadonlyArray<Menu.Entry> => [
 	Menu.section(undefined, [], { header: { key: "header", hasSeparator: true } }),
-	Menu.item("profile", { href: `/${orgSlug}/profile/${userId}` }),
+	Menu.item("profile", { href: hrefOf(AppRoute.Profile({ orgSlug, userId })) }),
 	Menu.item("status"),
-	Menu.item("my-settings", { href: `/${orgSlug}/my-settings` }),
+	Menu.item("my-settings", { href: hrefOf(AppRoute.MySettingsAppearance({ orgSlug })) }),
 	Menu.separator,
 	Menu.item("feedback"),
 	Menu.separator,
@@ -68,7 +70,7 @@ export const orgSwitcherEntries = (options: {
 	readonly organizations: ReadonlyArray<SwitcherOrg>
 }): ReadonlyArray<Menu.Entry> => {
 	if (options.isMobile) return switchServerEntries(options.organizations)
-	const org = `/${options.orgSlug}`
+	const { orgSlug } = options
 	// NOTE: legacy renders the orgs as a single-selection section plus a separator; the kit submenu takes leaves.
 	const switchServer = Menu.item("switch-server", {
 		submenu: [
@@ -80,14 +82,16 @@ export const orgSwitcherEntries = (options: {
 	})
 	const people = Menu.section(undefined, [
 		Menu.item("invite-people"),
-		Menu.item("manage-members", { href: `${org}/settings/team` }),
+		Menu.item("manage-members", { href: hrefOf(AppRoute.TeamSettings({ orgSlug })) }),
 	])
 	if (!options.isChat)
 		return [
 			people,
 			switchServer,
 			Menu.separator,
-			Menu.section(undefined, [Menu.item("server-settings", { href: `${org}/settings` })]),
+			Menu.section(undefined, [
+				Menu.item("server-settings", { href: hrefOf(AppRoute.SettingsGeneral({ orgSlug })) }),
+			]),
 		]
 	return [
 		people,
@@ -99,9 +103,9 @@ export const orgSwitcherEntries = (options: {
 		]),
 		Menu.separator,
 		Menu.section(undefined, [
-			Menu.item("server-settings", { href: `${org}/settings` }),
-			Menu.item("custom-emojis", { href: `${org}/settings/custom-emojis` }),
-			Menu.item("integrations", { href: `${org}/settings/integrations` }),
+			Menu.item("server-settings", { href: hrefOf(AppRoute.SettingsGeneral({ orgSlug })) }),
+			Menu.item("custom-emojis", { href: hrefOf(AppRoute.SettingsCustomEmojis({ orgSlug })) }),
+			Menu.item("integrations", { href: hrefOf(AppRoute.SettingsIntegrations({ orgSlug })) }),
 		]),
 	]
 }
