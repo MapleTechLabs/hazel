@@ -10,14 +10,7 @@ import { AppRoute, hrefOf } from "../../route"
 import type { HazelRpc } from "../../rpc"
 import * as Menu from "../../ui/menu"
 import { DeleteChannelSection, LeaveChannel, MoveChannelToSection, UpdateChannelMember } from "./actions"
-import {
-	closedMenu,
-	rowMenuEntries,
-	rowMenuId,
-	sectionIdOfKey,
-	sectionMenuEntries,
-	sectionMenuId,
-} from "./menus"
+import { closedMenu, closedRowMenu, sectionIdOfKey, sectionMenuEntries, sectionMenuId } from "./menus"
 import { Message, type Model, type SectionAction } from "./model"
 import type { ChannelEntry } from "./rows"
 
@@ -66,11 +59,7 @@ export const menuFor = (model: Model, target: string, build: () => Menu.Model): 
 
 export const rowMenuOf = (model: Model, channelId: ChannelId) =>
 	menuFor(model, `channel:${channelId}`, () =>
-		closedMenu(
-			rowMenuId(channelId),
-			rowMenuEntries(model.sections, canOn(model, "channel.delete")),
-			"right top",
-		),
+		closedRowMenu(channelId, model.sections, canOn(model, "channel.delete")),
 	)
 
 export const sectionMenuOf = (model: Model, sectionKey: string) =>

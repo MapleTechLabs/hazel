@@ -80,6 +80,10 @@ export const sectionMenuEntries = (
 export const closedMenu = (id: string, entries: ReadonlyArray<Menu.Entry>, placement?: "right top") =>
 	Menu.init({ id, entries, ...(placement ? { placement } : {}) })
 
+/** A channel row's dots menu while it is closed. */
+export const closedRowMenu = (channelId: string, sections: ReadonlyArray<Section>, canDelete: boolean) =>
+	closedMenu(rowMenuId(channelId), rowMenuEntries(sections, canDelete), "right top")
+
 // VIEW
 
 const rowMenuContent =

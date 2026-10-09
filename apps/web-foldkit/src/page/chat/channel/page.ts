@@ -1,5 +1,5 @@
 import type { ChannelId, ChannelMemberId, MessageId, UserId } from "@hazel/schema"
-import { Struct } from "effect"
+import { Record, Struct } from "effect"
 import { Command } from "foldkit"
 import * as Live from "../../../chat/live-state"
 import * as Unfurl from "../../../chat/unfurl"
@@ -30,6 +30,11 @@ export const listId = (channelId: string) => `message-list-${channelId}`
 export interface InitOptions {
 	readonly tab?: ChatTab
 	readonly orgSlug?: string
+	/** What the previous channel's page hands on (`switchChannel`). */
+	readonly carry?: {
+		readonly viewportHeight: number
+		readonly heightsByChannel: Model["heightsByChannel"]
+	}
 }
 
 export const init = (
@@ -60,7 +65,12 @@ export const init = (
 	rows: [],
 	limit: PAGE_SIZE,
 	offset: 0,
-	list: MessageList.init({ id: listId(channelId), estimatedRowHeightPx: 80 }),
+	list: MessageList.init({
+		id: listId(channelId),
+		estimatedRowHeightPx: 80,
+		viewportHeight: options.carry?.viewportHeight ?? 0,
+		measuredHeights: options.carry?.heightsByChannel[channelId] ?? {},
+	}),
 	overlays: Overlays.init(),
 	files: filesFor(channelId, options.orgSlug ?? null, options.tab ?? "messages", null),
 	draft: Draft.init(channelId, composerEditorId(channelId)),
@@ -69,7 +79,34 @@ export const init = (
 	pendingThreadChannelId: null,
 	isGeneratingThreadName: false,
 	hasClearedNotifications: false,
+	heightsByChannel: Record.remove(options.carry?.heightsByChannel ?? {}, channelId),
 })
+
+/** How many channels' row heights the page remembers. */
+export const REMEMBERED_CHANNELS = 20
+
+/**
+ * Another channel in the same org: a fresh page for it (nothing of the previous channel's state
+ * survives: draft, thread panel, typing, overlays), seeded with the list's viewport and the heights
+ * measured in this channel, so the switch frame already paints the new channel's rows.
+ */
+export const switchChannel = (
+	model: Model,
+	channelId: ChannelId,
+	options: Omit<InitOptions, "carry">,
+): Model => {
+	const remembered = Object.entries({
+		...Record.remove(model.heightsByChannel, model.channelId),
+		[model.channelId]: model.list.measuredHeights,
+	}).slice(-REMEMBERED_CHANNELS)
+	return init(channelId, model.currentUserId, {
+		...options,
+		carry: {
+			viewportHeight: model.list.viewportHeight,
+			heightsByChannel: Object.fromEntries(remembered),
+		},
+	})
+}
 
 export const composerEditorId = (channelId: string) => `composer-${channelId}`
 

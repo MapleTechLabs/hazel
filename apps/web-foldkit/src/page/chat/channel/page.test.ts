@@ -3,7 +3,7 @@ import { Schema } from "effect"
 import { Command, given, message, model, story } from "foldkit/story"
 import { describe, expect, test, vi } from "vitest"
 import * as MessageList from "../../../mount/message-list"
-import { init, Message, type Model, update } from "./page"
+import { init, Message, type Model, REMEMBERED_CHANNELS, switchChannel, update } from "./page"
 import type { ChatMessage } from "../rows"
 
 /** Update-loop tests for the channel page's list: prepend anchoring, following the end, paging. */
@@ -252,5 +252,45 @@ describe("channel page list", () => {
 			message(listMessage(MessageList.Message.ScrolledList({ scrollTop: 50 }))),
 			model((current) => expect(current.limit).toBe(before.limit + 30)),
 		)
+	})
+})
+
+describe("switching channels", () => {
+	const otherChannelId = Schema.decodeSync(ChannelId)(uuid(9))
+
+	test("starts the next channel fresh, with the viewport and this channel's heights handed on", () => {
+		const reading = readingHistory()
+		const next = switchChannel(reading, otherChannelId, { tab: "messages", orgSlug: "hazel" })
+		expect(next.channelId).toBe(otherChannelId)
+		expect(next.messages).toEqual([])
+		expect(next.hasLoadedMessages).toBe(false)
+		expect(next.draft.channelId).toBe(otherChannelId)
+		expect(next.list.keys).toEqual([])
+		expect(next.list.viewportHeight).toBe(VIEWPORT)
+		expect(next.list.measuredHeights).toEqual({})
+		expect(next.heightsByChannel).toEqual({ [channelId]: reading.list.measuredHeights })
+	})
+
+	test("lays a revisited channel out at the heights it measured", () => {
+		const reading = readingHistory()
+		const away = switchChannel(reading, otherChannelId, { tab: "messages", orgSlug: "hazel" })
+		const back = switchChannel(away, channelId, { tab: "messages", orgSlug: "hazel" })
+		expect(back.list.measuredHeights).toEqual(reading.list.measuredHeights)
+		expect(Object.keys(back.heightsByChannel)).toEqual([otherChannelId])
+		const loaded = update(back, Message.UpdatedMessages({ messages: page(70, 99) })).model
+		// Measured rows, not estimates: the first frame already ends where the last visit did.
+		expect(MessageList.layoutOf(loaded.list).totalHeight).toBe(
+			MessageList.layoutOf(reading.list).totalHeight,
+		)
+	})
+
+	test("remembers a bounded number of channels", () => {
+		const visited = Array.from({ length: REMEMBERED_CHANNELS + 5 }, (_, index) =>
+			Schema.decodeSync(ChannelId)(uuid(100 + index)),
+		).reduce(
+			(current, id) => switchChannel(current, id, { tab: "messages", orgSlug: "hazel" }),
+			readingHistory(),
+		)
+		expect(Object.keys(visited.heightsByChannel)).toHaveLength(REMEMBERED_CHANNELS)
 	})
 })

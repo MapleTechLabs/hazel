@@ -145,20 +145,19 @@ export interface TreeRowOptions<M> {
 	readonly setSize: number
 	readonly allowsDragging: boolean
 	readonly content: Html
-	/** The row of the open channel; its item scrolls into view when it mounts. */
-	readonly isActive: boolean
-	readonly onActiveMount: Attribute<M>
+	/** Set on the open channel's row only: scrolls the row into view when it becomes active. */
+	readonly onActiveMount: Attribute<M> | null
 }
 
 /**
- * `SidebarTreeItem` (a level-1 `TreeItem` without children). Keying by active state remounts
- * the row when it becomes active, like `useScrollIntoViewOnActive`'s ref callback.
+ * `SidebarTreeItem` (a level-1 `TreeItem` without children). Activation inserts a hidden marker
+ * whose Mount scrolls the row into view (`useScrollIntoViewOnActive`'s ref callback). The row
+ * itself stays: re-inserting any grid item re-lays out the whole 500-row subgrid.
  */
 export const treeRow = <M>(h: HtmlBuilder<M>, options: TreeRowOptions<M>): Html =>
 	h.keyed("div")(
-		options.isActive ? `${options.key}:active` : options.key,
+		options.key,
 		[
-			...(options.isActive ? [options.onActiveMount] : []),
 			h.Attribute("aria-label", options.label),
 			h.Attribute("aria-level", "1"),
 			h.Attribute("aria-posinset", String(options.position)),
@@ -184,7 +183,10 @@ export const treeRow = <M>(h: HtmlBuilder<M>, options: TreeRowOptions<M>): Html 
 				[
 					h.div(
 						[h.Class("col-span-full grid grid-cols-subgrid")],
-						[dragButton(h, options.label, options.allowsDragging), options.content],
+						[
+							dragButton(h, options.label, options.allowsDragging, options.onActiveMount),
+							options.content,
+						],
 					),
 				],
 			),
@@ -192,7 +194,12 @@ export const treeRow = <M>(h: HtmlBuilder<M>, options: TreeRowOptions<M>): Html 
 	)
 
 /** `<Trigger slot="drag" className="sr-only">`. Only draggable trees label and describe it. */
-const dragButton = <M>(h: HtmlBuilder<M>, label: string, allowsDragging: boolean): Html =>
+const dragButton = <M>(
+	h: HtmlBuilder<M>,
+	label: string,
+	allowsDragging: boolean,
+	onActiveMount: Attribute<M> | null,
+): Html =>
 	h.button(
 		[
 			...(allowsDragging
@@ -209,5 +216,6 @@ const dragButton = <M>(h: HtmlBuilder<M>, label: string, allowsDragging: boolean
 			h.Attribute("tabindex", "0"),
 			h.Attribute("type", "button"),
 		],
-		["Drag"],
+		// `display: none`, so inserting it creates no layout object (and no name or a11y node).
+		onActiveMount === null ? ["Drag"] : ["Drag", h.span([h.Attribute("hidden", ""), onActiveMount])],
 	)

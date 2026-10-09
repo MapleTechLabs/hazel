@@ -2,7 +2,17 @@ import { Submodel } from "foldkit"
 import type { RouteOf } from "../../../route"
 import { definePage, type PageViewInputs } from "../../contract"
 import { PageOutMessage } from "../../out-message"
-import { type ChatTab, init, Message, Model, setCurrentUserId, setTab, tabPath, update } from "./page"
+import {
+	type ChatTab,
+	init,
+	Message,
+	Model,
+	setCurrentUserId,
+	setTab,
+	switchChannel,
+	tabPath,
+	update,
+} from "./page"
 import { clearNotificationsOnMount } from "./clear-notifications"
 import { subscriptions } from "./subscription"
 import { view as channelView } from "./view"
@@ -21,8 +31,9 @@ export const page = definePage(
 	{ Model, Message },
 	{
 		routes: ["ChatChannel", "ChatFiles", "ChatFilesMedia"],
-		// A new channel is a new page (React remounted on `key={id}`); its tabs keep the instance.
-		key: (route) => route.channelId,
+		// A new channel starts a fresh page Model (React remounted on `key={id}`) that inherits only
+		// the list's viewport and measured heights; its tabs keep the instance.
+		key: (route) => route.orgSlug,
 		init: (route, shared) =>
 			clearNotificationsOnMount(
 				init(route.channelId, shared.currentUser?.id ?? null, {
@@ -43,7 +54,13 @@ export const page = definePage(
 							}),
 						}
 					: update(model, message, shared),
-		routeChanged: (model, route) => ({ model: setTab(model, tabOf(route)) }),
+		routeChanged: (model, route, shared) =>
+			route.channelId === model.channelId
+				? { model: setTab(model, tabOf(route)) }
+				: clearNotificationsOnMount(
+						switchChannel(model, route.channelId, { tab: tabOf(route), orgSlug: route.orgSlug }),
+						shared,
+					),
 		view: Submodel.defineView<Model, Message, PageViewInputs>((model, inputs, h) =>
 			channelView(h, model, toSelf, inputs.shared.isMobile, inputs.shared.nowMs),
 		),

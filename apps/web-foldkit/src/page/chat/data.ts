@@ -1,5 +1,5 @@
 import type { ChannelId, MessageId } from "@hazel/schema"
-import { eq } from "@tanstack/db"
+import { BasicIndex, coalesce, eq } from "@tanstack/db"
 import type { Stream } from "effect"
 import {
 	channelCollection,
@@ -53,6 +53,21 @@ export const messagesStream = <Message>(
  * The window of `messagesStream` as change sets: `offset` newest messages skipped, `limit` kept.
  * Only inserted and updated rows are converted per change (S2 condition 2).
  */
+/** Messages by channel, so a channel's share of the loaded messages is a lookup, not a scan. */
+const messagesByChannel = messageCollection.createIndex((row) => row.channelId, {
+	indexType: BasicIndex,
+	name: "messagesByChannel",
+})
+
+/**
+ * Whether the window loads the whole channel and orders it in the query. TanStack fills an ordered
+ * window by walking the `createdAt` index from the newest message of any channel, so a quiet
+ * channel next to a busy one walks all of the busy one's newer rows (24 ms in the heavy fixture).
+ * An expression as the order key (not a plain column) skips that walk; a busy channel keeps it.
+ */
+const loadsWholeChannel = (channelId: ChannelId) =>
+	messagesByChannel.equalityLookup(channelId).size * 5 <= messageCollection.size
+
 export const messageChangesStream = <Message>(
 	channelId: ChannelId,
 	limit: number,
@@ -60,8 +75,9 @@ export const messageChangesStream = <Message>(
 	toMessage: (changes: { order: ReadonlyArray<MessageId>; upserts: ReadonlyArray<ChatMessage> }) => Message,
 ): Stream.Stream<Message> =>
 	liveQueryChangeSetStream<MessageQueryRow, Message>(
-		(q) =>
-			q
+		(q) => {
+			const isWholeChannel = loadsWholeChannel(channelId)
+			return q
 				.from({ message: messageCollection })
 				.leftJoin({ pinned: pinnedMessageCollection }, ({ message, pinned }) =>
 					eq(message.id, pinned.messageId),
@@ -71,9 +87,13 @@ export const messageChangesStream = <Message>(
 				)
 				.where(({ message }) => eq(message.channelId, channelId))
 				.select(({ message, pinned, author }) => ({ ...message, pinnedMessage: pinned, author }))
-				.orderBy(({ message }) => message.createdAt, "desc")
+				.orderBy(
+					({ message }) => (isWholeChannel ? coalesce(message.createdAt) : message.createdAt),
+					"desc",
+				)
 				.limit(limit)
-				.offset(offset),
+				.offset(offset)
+		},
 		(row) => row.id,
 		({ order, upserts }) =>
 			toMessage({ order: order as ReadonlyArray<MessageId>, upserts: upserts.map(toChatMessage) }),

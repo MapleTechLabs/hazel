@@ -1,10 +1,13 @@
 import { canPerform, RPC_SCOPE_MAP } from "@hazel/domain/scopes"
-import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
+import { type Attribute, createKeyedLazy, type Html, type HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { IconMagnifier3, IconUsers } from "../../icons"
 import { AppRoute, hrefOf } from "../../route"
 import { sidebarItem, sidebarLink } from "../../ui/sidebar"
-import type { Model } from "./model"
+import type * as Menu from "../../ui/menu"
+import { canOn } from "./menu-update"
+import { closedRowMenu, rowMenuView } from "./menus"
+import { Message, type Model } from "./model"
 import { createChannelHint } from "./create-channel-hint"
 import { hotkeyLabel } from "./hotkey-label"
 import {
@@ -14,10 +17,17 @@ import {
 	dmDisplayName,
 	dmItem,
 	dmPartners,
+	isChannelLinkActive,
 	type ItemContext,
 	label,
 } from "./items"
-import { type ChannelEntry, type DmChannel, partnerOrgsByChannel } from "./rows"
+import {
+	type ChannelEntry,
+	type DmChannel,
+	type PartnerOrg,
+	partnerOrgsByChannel,
+	type Presence,
+} from "./rows"
 import { sectionGroupHeader, strong, treeRow, treeSection } from "./tree"
 
 /** `ChannelsSidebar`'s content: goto links, favorites, channel sections, discover, DMs. */
@@ -28,74 +38,185 @@ interface SectionsContext<M> extends ItemContext {
 	readonly activeChannelId: string | undefined
 	readonly onActiveMount: Attribute<M>
 	readonly onBrowseChannels: Attribute<M>
-	/** The row's dots menu and a section's "+" action, built where the Messages are known. */
-	readonly rowMenu: (entry: ChannelEntry) => Html
+	/** The row menus' inputs; each row builds its own menu inside its memo. */
+	readonly openMenu: Model["openMenu"]
+	readonly sections: Model["sections"]
+	readonly canDeleteChannels: boolean
+	readonly toParentMessage: (message: Message) => M
 	readonly sectionAction: (sectionKey: string) => Html
 	readonly unreadByChannel: ReadonlyMap<string, number>
 	readonly partnersByChannel: ReturnType<typeof partnerOrgsByChannel>
 }
 
-interface RowSpec {
-	readonly key: string
-	readonly label: string
-	readonly content: Html
+/** A row's position in its tree; part of every row memo. */
+interface RowPlace {
+	readonly treeId: string
+	readonly position: number
+	readonly setSize: number
+	readonly allowsDragging: boolean
 }
 
-const rowsOf = <M>(
+/**
+ * One memo slot per tree row, keyed like the row's DOM: a channel switch or an unread change
+ * re-renders only the rows whose inputs changed, not all 500. Keys are bounded by the channels.
+ */
+const rowSlots = createKeyedLazy()
+
+const NO_PARTNERS: ReadonlyArray<PartnerOrg> = []
+
+const channelRowView = <M>(
 	h: HtmlBuilder<M>,
-	context: SectionsContext<M>,
+	entry: ChannelEntry,
+	notificationCount: number,
+	partners: ReadonlyArray<PartnerOrg>,
+	isLinkActive: boolean,
+	orgSlug: string,
 	treeId: string,
+	position: number,
+	setSize: number,
 	allowsDragging: boolean,
-	specs: ReadonlyArray<RowSpec>,
-) =>
-	specs.map((spec, index) =>
-		treeRow(h, {
-			isActive: spec.key === context.activeChannelId,
-			onActiveMount: context.onActiveMount,
-			treeId,
-			key: spec.key,
-			label: spec.label,
-			position: index + 1,
-			setSize: specs.length,
-			allowsDragging,
-			content: spec.content,
-		}),
-	)
+	onActiveMount: Attribute<M> | null,
+	openMenu: Menu.Model | null,
+	sections: Model["sections"],
+	canDelete: boolean,
+	toParentMessage: (message: Message) => M,
+): Html =>
+	treeRow(h, {
+		onActiveMount,
+		treeId,
+		key: entry.channel.id,
+		label: entry.channel.name,
+		position,
+		setSize,
+		allowsDragging,
+		content: channelItem(
+			h,
+			entry,
+			notificationCount,
+			partners,
+			{ orgSlug, isActive: isLinkActive },
+			rowMenuView(h, {
+				menu: openMenu ?? closedRowMenu(entry.channel.id, sections, canDelete),
+				entry,
+				sections,
+				toMessage: (message) =>
+					toParentMessage(
+						Message.GotRowMenuMessage({ channelId: entry.channel.id, orgSlug, message }),
+					),
+			}),
+		),
+	})
+
+const openRowMenu = (openMenu: Model["openMenu"], channelId: string): Menu.Model | null =>
+	openMenu !== null && openMenu.target === `channel:${channelId}` ? openMenu.menu : null
 
 /** Favorites render `ChannelItem` without `partnerOrgs`, so they never show the shared-org badge. */
 const channelRow = <M>(
 	h: HtmlBuilder<M>,
 	entry: ChannelEntry,
 	context: SectionsContext<M>,
-	options: { readonly showsPartners: boolean } = { showsPartners: true },
-): RowSpec => ({
-	key: entry.channel.id,
-	label: entry.channel.name,
-	content: channelItem(
-		h,
-		entry,
-		context.unreadByChannel.get(entry.channel.id) ?? entry.member.notificationCount,
-		options.showsPartners ? (context.partnersByChannel.get(entry.channel.id) ?? []) : [],
-		context,
-		context.rowMenu(entry),
-	),
-})
+	place: RowPlace,
+	showsPartners: boolean,
+): Html => {
+	const id = entry.channel.id
+	return (
+		rowSlots(`${place.treeId}:${id}`, channelRowView<M>, [
+			h,
+			entry,
+			context.unreadByChannel.get(id) ?? entry.member.notificationCount,
+			showsPartners ? (context.partnersByChannel.get(id) ?? NO_PARTNERS) : NO_PARTNERS,
+			isChannelLinkActive(context.pathname, context.orgSlug, id),
+			context.orgSlug,
+			place.treeId,
+			place.position,
+			place.setSize,
+			place.allowsDragging,
+			id === context.activeChannelId ? context.onActiveMount : null,
+			openRowMenu(context.openMenu, id),
+			context.sections,
+			context.canDeleteChannels,
+			context.toParentMessage,
+		]) ?? h.empty
+	)
+}
+
+const dmRowView = <M>(
+	h: HtmlBuilder<M>,
+	channel: DmChannel,
+	notificationCount: number,
+	presence: Presence | undefined,
+	nowMs: number,
+	currentUserId: string | null,
+	isLinkActive: boolean,
+	orgSlug: string,
+	treeId: string,
+	position: number,
+	setSize: number,
+	allowsDragging: boolean,
+	onActiveMount: Attribute<M> | null,
+): Html =>
+	treeRow(h, {
+		onActiveMount,
+		treeId,
+		key: channel.id,
+		label: dmDisplayName(channel, dmPartners(channel, currentUserId)),
+		position,
+		setSize,
+		allowsDragging,
+		content: dmItem(h, channel, notificationCount, {
+			orgSlug,
+			isActive: isLinkActive,
+			currentUserId,
+			nowMs,
+			presence,
+		}),
+	})
 
 /** A `DmChannelItem` renders nothing until its channel and the user's membership load. */
 const dmRow = <M>(
 	h: HtmlBuilder<M>,
-	channel: DmChannel | null | undefined,
+	channel: DmChannel,
 	context: SectionsContext<M>,
-): RowSpec[] =>
-	channel
-		? [
-				{
-					key: channel.id,
-					label: dmDisplayName(channel, dmPartners(channel, context.currentUserId)),
-					content: dmItem(h, channel, context.unreadByChannel.get(channel.id) ?? 0, context),
-				},
-			]
-		: []
+	place: RowPlace,
+): Html => {
+	const partners = dmPartners(channel, context.currentUserId)
+	const only = channel.type === "single" && partners.length === 1 ? partners[0] : undefined
+	return (
+		rowSlots(`${place.treeId}:${channel.id}`, dmRowView<M>, [
+			h,
+			channel,
+			context.unreadByChannel.get(channel.id) ?? 0,
+			only === undefined ? undefined : context.presenceByUser.get(only.userId),
+			// Only a single DM's status dot reads the clock.
+			only === undefined ? 0 : context.nowMs,
+			context.currentUserId,
+			isChannelLinkActive(context.pathname, context.orgSlug, channel.id),
+			context.orgSlug,
+			place.treeId,
+			place.position,
+			place.setSize,
+			place.allowsDragging,
+			channel.id === context.activeChannelId ? context.onActiveMount : null,
+		]) ?? h.empty
+	)
+}
+
+/** A tree's rows in order: each knows its position and the tree's size (`aria-posinset`). */
+type RowOf = (place: RowPlace) => Html
+
+const rowsOf = (treeId: string, allowsDragging: boolean, rows: ReadonlyArray<RowOf>): Html[] =>
+	rows.map((row, index) => row({ treeId, position: index + 1, setSize: rows.length, allowsDragging }))
+
+const channelRowOf =
+	<M>(h: HtmlBuilder<M>, context: SectionsContext<M>, showsPartners: boolean) =>
+	(entry: ChannelEntry): RowOf =>
+	(place) =>
+		channelRow(h, entry, context, place, showsPartners)
+
+const dmRowOf =
+	<M>(h: HtmlBuilder<M>, context: SectionsContext<M>) =>
+	(channel: DmChannel | null | undefined): RowOf[] =>
+		channel ? [(place) => dmRow(h, channel, context, place)] : []
 
 const gotoSection = <M>(h: HtmlBuilder<M>, context: SectionsContext<M>): Html => {
 	const membersHref = hrefOf(AppRoute.OrgHome({ orgSlug: context.orgSlug }))
@@ -157,13 +278,11 @@ const favoritesSection = <M>(h: HtmlBuilder<M>, model: Model, context: SectionsC
 	const isPublicOrPrivate = (entry: ChannelEntry) =>
 		entry.channel.type === "public" || entry.channel.type === "private"
 	const isDm = (entry: ChannelEntry) => entry.channel.type === "direct" || entry.channel.type === "single"
-	const specs = [
-		...model.favorites
-			.filter(isPublicOrPrivate)
-			.map((entry) => channelRow(h, entry, context, { showsPartners: false })),
+	const rows = [
+		...model.favorites.filter(isPublicOrPrivate).map(channelRowOf(h, context, false)),
 		...model.favorites
 			.filter(isDm)
-			.flatMap((entry) => dmRow(h, model.dmChannels[entry.channel.id], context)),
+			.flatMap((entry) => dmRowOf(h, context)(model.dmChannels[entry.channel.id])),
 	]
 	return [
 		treeSection(h, {
@@ -178,7 +297,7 @@ const favoritesSection = <M>(h: HtmlBuilder<M>, model: Model, context: SectionsC
 				[strong(h, ["Favorites"])],
 			),
 			allowsDragging: false,
-			rows: rowsOf(h, context, "sidebar-tree-favorites", false, specs),
+			rows: rowsOf("sidebar-tree-favorites", false, rows),
 		}),
 	]
 }
@@ -202,13 +321,7 @@ const channelSection = <M>(
 			action: context.sectionAction(options.key),
 		}),
 		allowsDragging: true,
-		rows: rowsOf(
-			h,
-			context,
-			treeId,
-			true,
-			options.entries.map((entry) => channelRow(h, entry, context)),
-		),
+		rows: rowsOf(treeId, true, options.entries.map(channelRowOf(h, context, true))),
 	})
 }
 
@@ -245,6 +358,32 @@ const discoverSection = <M>(h: HtmlBuilder<M>, model: Model, context: ItemContex
 	]
 }
 
+// Pure memo on the frozen inputs, so the partner arrays (row memo args) keep their identity.
+const partnersMemo = new WeakMap<
+	Model["connectMounts"],
+	{
+		readonly organizations: Model["organizations"]
+		readonly organizationId: Model["organizationId"]
+		readonly result: ReturnType<typeof partnerOrgsByChannel>
+	}
+>()
+const partnersOf = (model: Model) => {
+	const cached = partnersMemo.get(model.connectMounts)
+	if (
+		cached &&
+		cached.organizations === model.organizations &&
+		cached.organizationId === model.organizationId
+	)
+		return cached.result
+	const result = partnerOrgsByChannel(model.connectMounts, model.organizations, model.organizationId)
+	partnersMemo.set(model.connectMounts, {
+		organizations: model.organizations,
+		organizationId: model.organizationId,
+		result,
+	})
+	return result
+}
+
 export const sectionGroupContent = <M>(
 	h: HtmlBuilder<M>,
 	model: Model,
@@ -253,7 +392,7 @@ export const sectionGroupContent = <M>(
 		readonly onActiveMount: Attribute<M>
 		readonly onBrowseChannels: Attribute<M>
 		readonly onDismissCreateChannelHint: Attribute<M>
-		readonly rowMenu: (entry: ChannelEntry) => Html
+		readonly toParentMessage: (message: Message) => M
 		readonly sectionAction: (sectionKey: string) => Html
 	},
 ): Html[] => {
@@ -263,11 +402,10 @@ export const sectionGroupContent = <M>(
 		nowMs: model.nowMs,
 		presenceByUser: new Map(model.presence.map((presence) => [presence.userId, presence])),
 		unreadByChannel: new Map(model.unreadCounts.map((unread) => [unread.channelId, unread.count])),
-		partnersByChannel: partnerOrgsByChannel(
-			model.connectMounts,
-			model.organizations,
-			model.organizationId,
-		),
+		partnersByChannel: partnersOf(model),
+		openMenu: model.openMenu,
+		sections: model.sections,
+		canDeleteChannels: canOn(model, "channel.delete"),
 	}
 	const role = model.membership?.role
 	const canCreateChannel = role !== undefined && canPerform(RPC_SCOPE_MAP, role, "channel.create")
@@ -312,12 +450,10 @@ export const sectionGroupContent = <M>(
 						}),
 						allowsDragging: false,
 						rows: rowsOf(
-							h,
-							context,
 							"sidebar-tree-dms",
 							false,
 							model.dmChannelIds.flatMap((channelId) =>
-								dmRow(h, model.dmChannels[channelId], context),
+								dmRowOf(h, context)(model.dmChannels[channelId]),
 							),
 						),
 					}),

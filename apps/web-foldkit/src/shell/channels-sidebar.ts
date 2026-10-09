@@ -15,14 +15,13 @@ import { PageOutMessage } from "../page/out-message"
 import { PersistDismissedHint } from "./channels-sidebar/hints"
 import {
 	requestedSectionAction,
-	rowMenuOf,
 	sectionActionsOf,
 	sectionMenuOf,
 	type SidebarReturn,
 	updateRowMenu,
 	updateSectionMenu,
 } from "./channels-sidebar/menu-update"
-import { rowMenuView, sectionMenuView } from "./channels-sidebar/menus"
+import { sectionMenuView } from "./channels-sidebar/menus"
 import { dragDescription, sectionPlusButton } from "./channels-sidebar/tree"
 import { sectionGroupContent } from "./channels-sidebar/view"
 
@@ -152,12 +151,16 @@ export { subscriptions } from "./channels-sidebar/subscriptions"
 
 // VIEW
 
-/** `useScrollIntoViewOnActive`: the open channel's row scrolls into view when it mounts. */
+/** `useScrollIntoViewOnActive`: the open channel's row scrolls into view when it becomes active. */
 const ScrollActiveIntoView = Mount.define("ScrollActiveIntoView", {
 	messages: [Message.CompletedScrollActiveIntoView],
 	execute: ({ element }) =>
 		Effect.sync(() => {
-			element.scrollIntoView({ block: "nearest", behavior: "instant" })
+			// Mounted on a hidden marker inside the row (`treeRow`), inserted on activation.
+			;(element.closest('[role="row"]') ?? element).scrollIntoView({
+				block: "nearest",
+				behavior: "instant",
+			})
 			return Message.CompletedScrollActiveIntoView()
 		}),
 })
@@ -230,20 +233,7 @@ const sidebarBody = <ParentMessage>(
 					onDismissCreateChannelHint: h.OnClick(
 						toParentMessage(Message.ClickedDismissCreateChannelHint()),
 					),
-					rowMenu: (entry) =>
-						rowMenuView(h, {
-							menu: rowMenuOf(model, entry.channel.id),
-							entry,
-							sections: model.sections,
-							toMessage: (message) =>
-								toParentMessage(
-									Message.GotRowMenuMessage({
-										channelId: entry.channel.id,
-										orgSlug,
-										message,
-									}),
-								),
-						}),
+					toParentMessage,
 					sectionAction: (sectionKey) => sectionActionView(h, model, sectionKey, toParentMessage),
 				}),
 			),
