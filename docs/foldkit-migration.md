@@ -33,14 +33,14 @@ onboarding-timezone keeps about 31k strict, 0 perceptual px from compositor laye
 
 Not ported: video playback (left for manual QA by decision on 2026-10-08; a fixture video would change the legacy `chat-attachments` capture), agent steps in AI replies (no fixture data), GitHub PR and Linear URL embeds, Tauri-specific blocks. Phase 6 (platform polish) and the manual QA checklist (§5 last item) remain.
 
-### Performance (2026-10-08, `src/bench/perf.ts`, 5 runs, p50 / p95 ms)
+### Performance (2026-10-09, main bd9ae6eb0, `src/bench/perf.ts`, 5 runs, p50 / p95 ms)
 
 Budgets: 120fps scrolling (main-thread work per frame under 8.33ms), warm channel switch under 50ms, cold under 100ms, everything else no slower than legacy. Foldkit 0.167; VirtualList was evaluated and rejected (`foldkit-decisions/s4b-virtual-list.md`).
 
 | Metric | Legacy | Foldkit | Met |
 | --- | --- | --- | --- |
-| 10k channel wheel scroll, frame work | 1.1 / 181-254 | 1-1.8 / 12.6-22 | no (row batch inserts) |
-| 10k channel fling to top | 0.3 / 1.3 | 1.7 / 33.7 | no |
+| 10k channel wheel scroll, frame work | 1.2 / 85-251 | 1.8-2 / 10.2-20.3 | no (hover toolbar remounts, per-scroll view render, sidebar hit tests) |
+| 10k channel fling to top | 0.2 / 0.9 | 1.5 / 36.2 | no (history pages recreate the live query) |
 | #general scroll, medium/fast | up to 181 p95 | 0.4-2.8 p95 | yes |
 | Sidebar, 500 channels | 5.4 p95 | 3.3 p95 | yes |
 | Switch heavy workspace, cold / warm | 936 / 444 | 40 / 37.5 | yes, 0 blank frames |
@@ -52,7 +52,7 @@ Budgets: 120fps scrolling (main-thread work per frame under 8.33ms), warm channe
 | JS heap after 20 switches (MB) | 254 | 65 | yes |
 | JS bundle gzip (KB) | 1536 | 987 | yes |
 
-Next: incremental row batches in `mount/message-list.ts`, a per-channel message window cache plus less sidebar re-patching for warm switches.
+Next (round 3 in progress): a persistent windowed live query for history pages, a persistent hover toolbar and no full view render per scroll event, fewer positioned sidebar elements.
 
 Overlay opens: Foldkit patches in its `requestAnimationFrame` callback, which runs after the probe's own callback in the same frame, so the input probe sees the overlay one frame after it painted. The bench now also reports a "commit frame" row (readiness also checked after each frame's paint). Modals, the palette and the emoji/GIF picker popover apply `inert` one frame after they paint (restyling the ~2,200 element app root cost 8-10ms inside the opening frame); overlays without a hit-testable underlay keep it synchronous so the hover leave still fires. What remains is the wait for the next frame after the click (about 14ms of the emoji picker's 25).
 
