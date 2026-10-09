@@ -9,7 +9,7 @@ import {
 	userCollection,
 } from "~/db/collections"
 import { liveQueryStream } from "../../data/live-query"
-import { liveQueryChangeSetStream } from "../../data/live-query-changes"
+import { type LiveQueryWindow, liveQueryChangeSetStream } from "../../data/live-query-changes"
 import {
 	type ChannelInfo,
 	type ChannelQueryRow,
@@ -49,10 +49,6 @@ export const messagesStream = <Message>(
 		(rows) => toMessage(rows.map(toChatMessage)),
 	)
 
-/**
- * The window of `messagesStream` as change sets: `offset` newest messages skipped, `limit` kept.
- * Only inserted and updated rows are converted per change (S2 condition 2).
- */
 /** Messages by channel, so a channel's share of the loaded messages is a lookup, not a scan. */
 const messagesByChannel = messageCollection.createIndex((row) => row.channelId, {
 	indexType: BasicIndex,
@@ -68,14 +64,18 @@ const messagesByChannel = messageCollection.createIndex((row) => row.channelId, 
 const loadsWholeChannel = (channelId: ChannelId) =>
 	messagesByChannel.equalityLookup(channelId).size * 5 <= messageCollection.size
 
+/**
+ * The window of `messagesStream` as change sets: `offset` newest messages skipped, `limit` kept.
+ * One query per channel follows `readWindow()`; only inserted and updated rows are converted.
+ */
 export const messageChangesStream = <Message>(
 	channelId: ChannelId,
-	limit: number,
-	offset: number,
+	window: LiveQueryWindow,
+	readWindow: () => LiveQueryWindow,
 	toMessage: (changes: { order: ReadonlyArray<MessageId>; upserts: ReadonlyArray<ChatMessage> }) => Message,
 ): Stream.Stream<Message> =>
 	liveQueryChangeSetStream<MessageQueryRow, Message>(
-		(q) => {
+		(q, { limit, offset }) => {
 			const isWholeChannel = loadsWholeChannel(channelId)
 			return q
 				.from({ message: messageCollection })
@@ -94,6 +94,8 @@ export const messageChangesStream = <Message>(
 				.limit(limit)
 				.offset(offset)
 		},
+		window,
+		readWindow,
 		(row) => row.id,
 		({ order, upserts }) =>
 			toMessage({ order: order as ReadonlyArray<MessageId>, upserts: upserts.map(toChatMessage) }),

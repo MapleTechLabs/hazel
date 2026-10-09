@@ -40,7 +40,7 @@ Budgets: 120fps scrolling (main-thread work per frame under 8.33ms), warm channe
 | Metric | Legacy | Foldkit | Met |
 | --- | --- | --- | --- |
 | 10k channel wheel scroll, frame work | 1.2 / 85-251 | 1.8-2 / 10.2-20.3 | no (hover toolbar remounts, per-scroll view render, sidebar hit tests) |
-| 10k channel fling to top | 0.2 / 0.9 | 1.5 / 36.2 | no (history pages recreate the live query) |
+| 10k channel fling to top | 0.2 / 0.9 | 0.8 / 20.2 (script 1.9 ms/frame) | no (view patch, layout, layerize) |
 | #general scroll, medium/fast | up to 181 p95 | 0.4-2.8 p95 | yes |
 | Sidebar, 500 channels | 5.4 p95 | 3.3 p95 | yes |
 | Switch heavy workspace, cold / warm | 936 / 444 | 40 / 37.5 | yes, 0 blank frames |

@@ -34,6 +34,13 @@ describe("channel subscription gates", () => {
 		})
 	})
 
+	test("paging keeps the channel's messages query; only another channel restarts it", () => {
+		const { keepAliveEquivalence } = subscriptions.chatMessages
+		const window = { channelId: loadedModel().channelId, limit: 50, offset: 0 }
+		expect(keepAliveEquivalence(window, { ...window, limit: 100, offset: 50 })).toBe(true)
+		expect(keepAliveEquivalence(window, { ...window, channelId: threadChannelId })).toBe(false)
+	})
+
 	test("an AI reply in the window opens its actor connection; finished ones never do", () => {
 		const live = chatMessageOf(10, { embeds: liveEmbeds, hasEmbeds: true })
 		const model = updateWithShared(loadedModel(), Message.UpdatedMessages({ messages: [live, ...messages] })).model
