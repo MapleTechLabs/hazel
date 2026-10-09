@@ -38,8 +38,9 @@ export const update = <Wrapped>(
 	const result = Tooltip.update(current, message)
 	return {
 		model: result.model,
-		commands: Command.mapMessages(result.commands ?? [], (inner) =>
-			wrap({ key, delayMs, message: inner }),
+		commands: Command.mapMessages(
+			Command.mapMessages(result.commands ?? [], (inner): Message => ({ key, delayMs, message: inner })),
+			wrap,
 		),
 	}
 }

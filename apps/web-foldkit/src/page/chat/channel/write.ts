@@ -298,8 +298,11 @@ export const insertGlobalKey = (model: Model, key: string): PageReturn => {
 	return {
 		model,
 		commands: Command.mapMessages(
-			[EditorCommands.InsertEditorText({ editorId: draft.composer.editorId, text: key })],
-			(message) => wrapDraft(which)(Draft.Message.GotComposerMessage({ message })),
+			Command.mapMessages(
+				[EditorCommands.InsertEditorText({ editorId: draft.composer.editorId, text: key })],
+				(message) => Draft.Message.GotComposerMessage({ message }),
+			),
+			wrapDraft(which),
 		),
 	}
 }
