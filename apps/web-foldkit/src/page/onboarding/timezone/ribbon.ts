@@ -41,15 +41,12 @@ export const timeRibbon = (h: HtmlBuilder<Message>, selectedOffset: number | nul
 							item.label,
 							...(isSelected
 								? [
-										h.div(
-											[
-												h.Class(
-													"absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary",
-												),
-												h.Attribute("style", "opacity: 1;"),
-											],
-											[],
-										),
+										h.div([
+											h.Class(
+												"absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary",
+											),
+											h.Attribute("style", "opacity: 1;"),
+										]),
 									]
 								: []),
 						],

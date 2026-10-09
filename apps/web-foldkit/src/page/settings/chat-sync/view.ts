@@ -132,14 +132,11 @@ const connectionCard = (h: HtmlBuilder<Message>, connection: Connection): Html =
 											h.div(
 												[h.Class("flex items-center gap-1.5")],
 												[
-													h.div(
-														[
-															h.Class(
-																`size-1.5 rounded-full ${statusConfig.dotClass}`,
-															),
-														],
-														[],
-													),
+													h.div([
+														h.Class(
+															`size-1.5 rounded-full ${statusConfig.dotClass}`,
+														),
+													]),
 													h.span(
 														[h.Class(`text-xs ${statusConfig.textClass}`)],
 														[statusConfig.label],

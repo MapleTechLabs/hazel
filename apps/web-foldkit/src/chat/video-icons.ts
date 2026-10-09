@@ -32,19 +32,16 @@ export const videoIcons = <M>(h: HtmlBuilder<M>) => {
 			],
 			children,
 		)
-	const path = (d: string) => h.path([h.Attribute("fill", "currentColor"), h.Attribute("d", d)], [])
+	const path = (d: string) => h.path([h.Attribute("fill", "currentColor"), h.Attribute("d", d)])
 	const rect = (x: number) =>
-		h.rect(
-			[
-				h.Attribute("width", "4"),
-				h.Attribute("height", "12"),
-				h.Attribute("x", String(x)),
-				h.Attribute("y", "3"),
-				h.Attribute("fill", "currentColor"),
-				h.Attribute("rx", "1.75"),
-			],
-			[],
-		)
+		h.rect([
+			h.Attribute("width", "4"),
+			h.Attribute("height", "12"),
+			h.Attribute("x", String(x)),
+			h.Attribute("y", "3"),
+			h.Attribute("fill", "currentColor"),
+			h.Attribute("rx", "1.75"),
+		])
 	return {
 		play: (className: string) =>
 			svg(className, [
@@ -111,17 +108,14 @@ export const videoIcons = <M>(h: HtmlBuilder<M>) => {
 							...(transform === undefined ? [] : [h.Attribute("transform", transform)]),
 						],
 						[
-							h.animate(
-								[
-									h.Attribute("attributeName", "opacity"),
-									h.Attribute("begin", `${index * 0.125}s`),
-									h.Attribute("calcMode", "linear"),
-									h.Attribute("dur", "1s"),
-									h.Attribute("repeatCount", "indefinite"),
-									h.Attribute("values", "1;0"),
-								],
-								[],
-							),
+							h.animate([
+								h.Attribute("attributeName", "opacity"),
+								h.Attribute("begin", `${index * 0.125}s`),
+								h.Attribute("calcMode", "linear"),
+								h.Attribute("dur", "1s"),
+								h.Attribute("repeatCount", "indefinite"),
+								h.Attribute("values", "1;0"),
+							]),
 						],
 					),
 				),

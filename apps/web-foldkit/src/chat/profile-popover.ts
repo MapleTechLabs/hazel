@@ -99,18 +99,15 @@ export const profilePopoverContent = <M>(h: HtmlBuilder<M>, inputs: ProfileInput
 			? formatStatusExpiration(new Date(presence.statusExpiresAtMs))
 			: null
 	return [
-		h.div(
-			[
-				h.Class(
-					cn(
-						"relative h-20 overflow-hidden rounded-t-xl",
-						"bg-gradient-to-br from-primary/20 via-accent/10 to-transparent",
-						"before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_30%_20%,var(--color-primary)/15_0%,transparent_50%)]",
-					),
+		h.div([
+			h.Class(
+				cn(
+					"relative h-20 overflow-hidden rounded-t-xl",
+					"bg-gradient-to-br from-primary/20 via-accent/10 to-transparent",
+					"before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_30%_20%,var(--color-primary)/15_0%,transparent_50%)]",
 				),
-			],
-			[],
-		),
+			),
+		]),
 		h.div(
 			[h.Class("relative rounded-t-xl border border-border bg-bg shadow-md")],
 			[
@@ -130,17 +127,14 @@ export const profilePopoverContent = <M>(h: HtmlBuilder<M>, inputs: ProfileInput
 								}),
 								isBot
 									? h.empty
-									: h.span(
-											[
-												h.Class(
-													cn(
-														"absolute right-1 bottom-1 size-4 rounded-full border-[3px] border-bg",
-														getStatusDotColor(status),
-													),
+									: h.span([
+											h.Class(
+												cn(
+													"absolute right-1 bottom-1 size-4 rounded-full border-[3px] border-bg",
+													getStatusDotColor(status),
 												),
-											],
-											[],
-										),
+											),
+										]),
 							],
 						),
 					],

@@ -31,7 +31,7 @@ export const page = definePage(
 				: { model: {} },
 		update: (model): PageReturn<Model, Message> => ({ model }),
 		view: Submodel.defineView<Model, Message, PageViewInputs>((_model, _inputs, h) =>
-			h.div([h.DataAttribute("page-placeholder", "SettingsDebug")], []),
+			h.div([h.DataAttribute("page-placeholder", "SettingsDebug")]),
 		),
 	},
 )

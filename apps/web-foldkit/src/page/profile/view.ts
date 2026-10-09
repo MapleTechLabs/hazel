@@ -82,17 +82,14 @@ const profile = (
 										src: user.avatarUrl,
 										fallbackIcon: true,
 									}),
-									h.span(
-										[
-											h.Class(
-												cn(
-													"absolute right-0 bottom-0 size-3 rounded-full border-2 border-bg",
-													getStatusDotColor(effectiveStatus),
-												),
+									h.span([
+										h.Class(
+											cn(
+												"absolute right-0 bottom-0 size-3 rounded-full border-2 border-bg",
+												getStatusDotColor(effectiveStatus),
 											),
-										],
-										[],
-									),
+										),
+									]),
 								],
 							),
 							h.div(
@@ -109,7 +106,7 @@ const profile = (
 											),
 										],
 										[
-											h.span([h.Class("size-1.5 rounded-full bg-current")], []),
+											h.span([h.Class("size-1.5 rounded-full bg-current")]),
 											getStatusLabel(effectiveStatus),
 										],
 									),

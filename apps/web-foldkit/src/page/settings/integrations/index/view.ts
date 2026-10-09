@@ -23,7 +23,7 @@ const connectionStatus = (h: HtmlBuilder<Message>, connected: boolean, comingSoo
 		? h.div(
 				[h.Class("flex items-center gap-1.5")],
 				[
-					h.div([h.Class("size-1.5 rounded-full bg-warning")], []),
+					h.div([h.Class("size-1.5 rounded-full bg-warning")]),
 					h.span([h.Class("text-warning text-xs")], ["Coming soon"]),
 				],
 			)
@@ -32,7 +32,6 @@ const connectionStatus = (h: HtmlBuilder<Message>, connected: boolean, comingSoo
 				[
 					h.div(
 						[h.Class(`size-1.5 rounded-full ${connected ? "bg-success" : "bg-secondary"}`)],
-						[],
 					),
 					h.span(
 						[h.Class(`text-xs ${connected ? "text-success" : "text-muted-fg"}`)],

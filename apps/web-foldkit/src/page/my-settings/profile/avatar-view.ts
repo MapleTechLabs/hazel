@@ -153,15 +153,12 @@ export const profilePictureUpload = (
 												),
 											],
 											[
-												h.div(
-													[
-														h.Class(
-															"h-full bg-white transition-[width] duration-150",
-														),
-														h.Style({ width: "50%" }),
-													],
-													[],
-												),
+												h.div([
+													h.Class(
+														"h-full bg-white transition-[width] duration-150",
+													),
+													h.Style({ width: "50%" }),
+												]),
 											],
 										),
 									]

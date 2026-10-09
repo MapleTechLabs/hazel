@@ -92,7 +92,7 @@ export const switchControl = <Message>(
 			),
 			h.span(
 				[h.DataAttribute("slot", "indicator"), h.Class(twMerge(...switchIndicatorStyles(values)))],
-				[h.span([h.AriaHidden(true), h.Class(twJoin(...switchThumbStyles(values)))], [])],
+				[h.span([h.AriaHidden(true), h.Class(twJoin(...switchThumbStyles(values)))])],
 			),
 			...content,
 		],

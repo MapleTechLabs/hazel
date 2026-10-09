@@ -24,7 +24,6 @@ const dot = <M>(h: HtmlBuilder<M>, delay: string | null): Html =>
 			h.Class("size-1 rounded-full bg-current animate-[ai-thinking-dot_1.4s_ease-in-out_infinite]"),
 			...(delay === null ? [] : [h.Attribute("style", `animation-delay: ${delay};`)]),
 		],
-		[],
 	)
 
 /** `MessageLiveLoading`. */
@@ -74,7 +73,6 @@ const progressView = <M>(h: HtmlBuilder<M>, value: number): Html => {
 														"absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent animate-[progress-shimmer_1.5s_ease-in-out_infinite]",
 													),
 												],
-												[],
 											),
 										],
 									),
@@ -118,7 +116,7 @@ const streamingView = <M>(h: HtmlBuilder<M>, text: string): Html =>
 	h.div(
 		[h.Class(streamingClass), h.Attribute("aria-live", "polite"), h.Attribute("aria-busy", "true")],
 		[
-			h.span([h.InnerHTML(streamingHtml(text))], []),
+			h.span([h.InnerHTML(streamingHtml(text))]),
 			h.span(
 				[
 					h.Class("ml-0.5 text-primary animate-[ai-cursor-blink_1s_ease-in-out_infinite]"),

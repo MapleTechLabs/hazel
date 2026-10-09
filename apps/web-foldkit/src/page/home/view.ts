@@ -114,17 +114,14 @@ const memberRow = (
 								className: "size-9",
 							}),
 							member.presenceStatus
-								? h.span(
-										[
-											h.Class(
-												cn(
-													"absolute right-0 bottom-0 size-2.5 rounded-full border-2 border-bg",
-													getStatusDotColor(member.presenceStatus),
-												),
+								? h.span([
+										h.Class(
+											cn(
+												"absolute right-0 bottom-0 size-2.5 rounded-full border-2 border-bg",
+												getStatusDotColor(member.presenceStatus),
 											),
-										],
-										[],
-									)
+										),
+									])
 								: h.empty,
 						],
 					),

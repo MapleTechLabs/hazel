@@ -21,7 +21,7 @@ export const onboardingNavigation = (h: HtmlBuilder<Message>, options: Navigatio
 		[h.Class("sticky bottom-0 flex flex-wrap justify-between gap-2 pt-4 pb-2")],
 		[
 			options.showBack === false
-				? h.div([], [])
+				? h.div([])
 				: button(
 						h,
 						{

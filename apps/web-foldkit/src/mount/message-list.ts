@@ -578,7 +578,6 @@ export const view = <Item, ParentMessage>(
 					top: `${OUT_OF_VIEW_PX}px`,
 				}),
 			],
-			[],
 		)
 	// Keyed by row, so switching between the overscan window and the containers moves nodes.
 	const row = (index: number) => {

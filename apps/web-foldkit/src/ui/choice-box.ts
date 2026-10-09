@@ -319,7 +319,7 @@ export const choiceBox = <ParentMessage>(
 	}
 
 	const focusScope = (edge: "start" | "end") =>
-		h.span([h.DataAttribute(`focus-scope-${edge}`, "true"), h.Hidden(true)], [])
+		h.span([h.DataAttribute(`focus-scope-${edge}`, "true"), h.Hidden(true)])
 
 	return [
 		focusScope("start"),

@@ -98,7 +98,7 @@ const notificationItem = (
 	const children = [
 		h.div(
 			[h.Class("flex h-10 w-2 shrink-0 items-center justify-center")],
-			item.isUnread ? [h.div([h.Class("size-2 rounded-full bg-primary")], [])] : [],
+			item.isUnread ? [h.div([h.Class("size-2 rounded-full bg-primary")])] : [],
 		),
 		h.div([h.Class("shrink-0")], [leadingVisual(h, item)]),
 		h.div(

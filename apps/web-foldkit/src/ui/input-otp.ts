@@ -392,7 +392,7 @@ export const inputOtp = <ParentMessage>(
 						? [
 								h.div(
 									[h.Class(inputOtpStyles.caret)],
-									[h.div([h.Class(inputOtpStyles.caretBar)], [])],
+									[h.div([h.Class(inputOtpStyles.caretBar)])],
 								),
 							]
 						: []),

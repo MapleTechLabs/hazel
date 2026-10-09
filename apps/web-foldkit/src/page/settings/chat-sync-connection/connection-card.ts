@@ -52,7 +52,7 @@ export const header = (h: HtmlBuilder<Message>, connection: Connection): Html =>
 											),
 										],
 										[
-											h.span([h.Class(`size-1.5 rounded-full ${status.dot}`)], []),
+											h.span([h.Class(`size-1.5 rounded-full ${status.dot}`)]),
 											status.label,
 										],
 									),

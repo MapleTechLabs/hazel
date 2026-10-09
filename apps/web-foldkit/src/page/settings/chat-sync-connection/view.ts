@@ -41,14 +41,9 @@ const spinner = (h: HtmlBuilder<Message>, size: string, text: string, padding: s
 			h.div(
 				[h.Class("flex items-center gap-3 text-muted-fg")],
 				[
-					h.div(
-						[
-							h.Class(
-								`${size} animate-spin rounded-full border-2 border-border border-t-primary`,
-							),
-						],
-						[],
-					),
+					h.div([
+						h.Class(`${size} animate-spin rounded-full border-2 border-border border-t-primary`),
+					]),
 					h.span([h.Class("text-sm")], [text]),
 				],
 			),

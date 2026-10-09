@@ -100,7 +100,7 @@ export const treeSection = <M>(h: HtmlBuilder<M>, options: TreeSectionOptions): 
 		],
 		[
 			options.header,
-			h.span([h.Attribute("data-focus-scope-start", "true"), h.Attribute("hidden", "")], []),
+			h.span([h.Attribute("data-focus-scope-start", "true"), h.Attribute("hidden", "")]),
 			h.div(
 				[
 					h.Attribute("aria-label", options.ariaLabel),
@@ -120,7 +120,7 @@ export const treeSection = <M>(h: HtmlBuilder<M>, options: TreeSectionOptions): 
 				],
 				isEmpty ? [treeEmptyState(h)] : [...options.rows],
 			),
-			h.span([h.Attribute("data-focus-scope-end", "true"), h.Attribute("hidden", "")], []),
+			h.span([h.Attribute("data-focus-scope-end", "true"), h.Attribute("hidden", "")]),
 		],
 	)
 }
@@ -132,7 +132,7 @@ const treeEmptyState = <M>(h: HtmlBuilder<M>): Html =>
 		[
 			h.div(
 				[h.Attribute("role", "gridcell"), h.Style({ display: "contents" })],
-				[h.div([h.Class(twMerge("col-span-full rounded-lg transition-all"))], [])],
+				[h.div([h.Class(twMerge("col-span-full rounded-lg transition-all"))])],
 			),
 		],
 	)

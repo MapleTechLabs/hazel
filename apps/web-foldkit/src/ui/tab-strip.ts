@@ -49,19 +49,16 @@ export const tabView = <M>(
 			options.label,
 			...(options.isSelected
 				? [
-						h.div(
-							[
-								h.Class(
-									twMerge(
-										"absolute bg-primary-subtle-fg transition-[translate,width,height] duration-200",
-										"right-(--tab-gutter-x) -bottom-[calc(var(--tab-gutter-y)+1px)] left-(--tab-gutter-x) h-[2px]",
-									),
+						h.div([
+							h.Class(
+								twMerge(
+									"absolute bg-primary-subtle-fg transition-[translate,width,height] duration-200",
+									"right-(--tab-gutter-x) -bottom-[calc(var(--tab-gutter-y)+1px)] left-(--tab-gutter-x) h-[2px]",
 								),
-								h.Attribute("data-rac", ""),
-								h.Attribute("data-slot", "selected-indicator"),
-							],
-							[],
-						),
+							),
+							h.Attribute("data-rac", ""),
+							h.Attribute("data-slot", "selected-indicator"),
+						]),
 					]
 				: []),
 		],

@@ -18,13 +18,10 @@ const stringHash = (value: string) => {
 type Face = <Message>(h: HtmlBuilder<Message>, style: Record<string, string>) => Html
 
 const rect = <Message>(h: HtmlBuilder<Message>, attrs: Record<string, string>) =>
-	h.rect(
-		[
-			h.Attribute("fill", "currentColor"),
-			...Object.entries(attrs).map(([key, value]) => h.Attribute(key, value)),
-		],
-		[],
-	)
+	h.rect([
+		h.Attribute("fill", "currentColor"),
+		...Object.entries(attrs).map(([key, value]) => h.Attribute(key, value)),
+	])
 
 const svg = <Message>(
 	h: HtmlBuilder<Message>,
@@ -197,20 +194,17 @@ export const facehash = <Message>(
 			}),
 		],
 		[
-			h.div(
-				[
-					h.Attribute("data-facehash-gradient", ""),
-					h.Style({
-						position: "absolute",
-						inset: "0px",
-						"pointer-events": "none",
-						"z-index": "1",
-						background:
-							"radial-gradient(ellipse 100% 100% at 50% 50%, rgba(255,255,255,0.15) 0%, transparent 60%)",
-					}),
-				],
-				[],
-			),
+			h.div([
+				h.Attribute("data-facehash-gradient", ""),
+				h.Style({
+					position: "absolute",
+					inset: "0px",
+					"pointer-events": "none",
+					"z-index": "1",
+					background:
+						"radial-gradient(ellipse 100% 100% at 50% 50%, rgba(255,255,255,0.15) 0%, transparent 60%)",
+				}),
+			]),
 			h.div(
 				[
 					h.Attribute("data-facehash-face", ""),

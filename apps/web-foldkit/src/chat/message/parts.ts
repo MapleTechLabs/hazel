@@ -134,15 +134,10 @@ export const threadPreviewView = <M>(h: HtmlBuilder<M>, thread: ThreadPreview, o
 								[h.Class("flex items-center -space-x-1.5")],
 								thread.authors.map((author, index) =>
 									author === null
-										? h.div(
-												[
-													h.Class(
-														"size-5 rounded-md bg-muted ring-[1.5px] ring-bg",
-													),
-													h.Attribute("style", `z-index: ${10 - index};`),
-												],
-												[],
-											)
+										? h.div([
+												h.Class("size-5 rounded-md bg-muted ring-[1.5px] ring-bg"),
+												h.Attribute("style", `z-index: ${10 - index};`),
+											])
 										: avatar(h, {
 												src: author.avatarUrl,
 												seed: author.displayName || undefined,

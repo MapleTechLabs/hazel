@@ -90,7 +90,7 @@ export const spinnerLine = <Message>(h: HtmlBuilder<Message>, text: string): Htm
 	h.div(
 		[h.Class("flex items-center gap-3 text-muted-fg")],
 		[
-			h.div([h.Class("size-5 animate-spin rounded-full border-2 border-border border-t-primary")], []),
+			h.div([h.Class("size-5 animate-spin rounded-full border-2 border-border border-t-primary")]),
 			h.span([h.Class("text-sm")], [text]),
 		],
 	)

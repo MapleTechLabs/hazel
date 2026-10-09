@@ -35,7 +35,7 @@ const memoRow = <M>(h: HtmlBuilder<M>, row: DisplayRow, isStuck: boolean, contex
 	let slot = rowSlots.get(row.key)
 	if (slot === undefined) rowSlots.set(row.key, (slot = createLazy()))
 	renderedThisFrame.add(row.key)
-	return slot(rowView, [row, isStuck, context, h]) ?? h.div([], [])
+	return slot(rowView, [row, isStuck, context, h]) ?? h.div([])
 }
 
 const pruneRowSlots = () => {
@@ -71,7 +71,7 @@ const messageListView = <M>(
 	toParentMessage: (message: Message) => M,
 	nowMs: number,
 ): Html => {
-	if (!model.hasLoadedMessages) return h.div([], [])
+	if (!model.hasLoadedMessages) return h.div([])
 	if (model.messages.length === 0) return emptyStateView(h)
 	const idle = idleRowContext(h, model, toParentMessage)
 	const list = MessageList.view(h, model.list, {

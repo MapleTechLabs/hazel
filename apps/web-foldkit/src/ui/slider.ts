@@ -411,23 +411,20 @@ export const slider = <ParentMessage>(
 							]),
 				],
 				[
-					h.div(
-						[
-							h.Class(twMerge(sliderFillStyles)),
-							h.Attribute(
-								"style",
-								Object.entries(
-									sliderFillStyle(
-										model.orientation,
-										model.values.map((value) => percentOf(model, value)),
-									),
-								)
-									.map(([property, value]) => `${property}: ${value};`)
-									.join(" "),
-							),
-						],
-						[],
-					),
+					h.div([
+						h.Class(twMerge(sliderFillStyles)),
+						h.Attribute(
+							"style",
+							Object.entries(
+								sliderFillStyle(
+									model.orientation,
+									model.values.map((value) => percentOf(model, value)),
+								),
+							)
+								.map(([property, value]) => `${property}: ${value};`)
+								.join(" "),
+						),
+					]),
 					thumb(0),
 				],
 			)

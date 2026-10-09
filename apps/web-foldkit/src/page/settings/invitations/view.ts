@@ -58,7 +58,7 @@ const invitationRow = (h: HtmlBuilder<Message>, model: Model, invitation: Invita
 			h.td([h.Class("px-4 py-4")], [h.p([h.Class("text-muted-fg text-sm")], [roleLabel(invitation.role)])]),
 			h.td(
 				[h.Class("px-4 py-4")],
-				[badge(h, { intent: "warning" }, [h.span([h.Class("size-1.5 rounded-full bg-current")], []), "Pending"])],
+				[badge(h, { intent: "warning" }, [h.span([h.Class("size-1.5 rounded-full bg-current")]), "Pending"])],
 			),
 			h.td([h.Class("px-4 py-4")], [h.p([h.Class("text-muted-fg text-sm")], [formatSent(invitation.createdAtMs)])]),
 			h.td(

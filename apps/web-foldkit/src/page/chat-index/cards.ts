@@ -108,17 +108,14 @@ const singleDmCard = <M>(
 					alt: `${member.firstName} ${member.lastName}`,
 					fallbackIcon: true,
 				}),
-				h.span(
-					[
-						h.Class(
-							cn(
-								"absolute right-0 bottom-0 size-3 rounded-full border-2 border-bg",
-								isOnline ? "bg-success" : "bg-muted",
-							),
+				h.span([
+					h.Class(
+						cn(
+							"absolute right-0 bottom-0 size-3 rounded-full border-2 border-bg",
+							isOnline ? "bg-success" : "bg-muted",
 						),
-					],
-					[],
-				),
+					),
+				]),
 			],
 		),
 		h.div(

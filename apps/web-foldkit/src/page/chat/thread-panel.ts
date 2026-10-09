@@ -141,7 +141,7 @@ export const threadPanelView = <M>(h: HtmlBuilder<M>, inputs: ThreadPanelInputs<
 					h.Role("separator"),
 					h.Attribute("tabindex", "0"),
 				],
-				[h.div([h.Class(indicatorStyles({ position: "right", isDragging: false }))], [])],
+				[h.div([h.Class(indicatorStyles({ position: "right", isDragging: false }))])],
 			),
 			h.div(
 				[h.Class("flex h-full min-h-0 flex-1 flex-col overflow-hidden")],

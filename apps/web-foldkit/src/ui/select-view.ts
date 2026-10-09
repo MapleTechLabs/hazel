@@ -276,7 +276,7 @@ const hiddenSelect = (model: Model, viewInputs: ViewInputs, h: HtmlBuilder<Messa
 							...(model.isDisabled ? [] : [h.Attribute("title", "")]),
 						],
 						[
-							h.option([], []),
+							h.option([]),
 							// Keyed by label so a relabelled option is replaced and Chrome re-measures the select, as React does on every commit.
 							...Array.map(model.items, (candidate) =>
 								h.option(
