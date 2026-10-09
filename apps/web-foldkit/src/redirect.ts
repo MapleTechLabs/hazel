@@ -1,5 +1,6 @@
+import type { OrganizationId } from "@hazel/schema"
 import { Match, Option } from "effect"
-import { type AppRoute, isPublicRoute } from "./route"
+import { AppRoute, hrefOf, isPublicRoute, organizationHref, signInHref } from "./route"
 import type { Auth, CurrentUser } from "./session"
 
 /** The redirects legacy does in `beforeLoad` and `<Navigate>`, as pure functions of the route. */
@@ -15,34 +16,33 @@ export const routeRedirect = (
 	Match.value(route).pipe(
 		// `settings/debug.tsx` is dev-only.
 		Match.tag("SettingsDebug", ({ orgSlug }) =>
-			options.isProd ? Option.some(`/${orgSlug}/settings`) : Option.none<string>(),
+			options.isProd
+				? Option.some(hrefOf(AppRoute.SettingsGeneral({ orgSlug })))
+				: Option.none<string>(),
 		),
 		Match.orElse(() => Option.none<string>()),
 	)
 
 /** `_app/layout.tsx` `Gate`: a signed-out visitor on an app route goes to sign-in, then back. */
 export const authRedirect = (route: AppRoute, auth: Auth, currentUrl: string): Option.Option<string> =>
-	auth === "SignedOut" && !isPublicRoute(route)
-		? Option.some(`/sign-in?${new URLSearchParams({ redirect_url: currentUrl })}`)
-		: Option.none()
+	auth === "SignedOut" && !isPublicRoute(route) ? Option.some(signInHref(currentUrl)) : Option.none()
 
 export interface RootMembership {
-	readonly organizationId: string
+	readonly organizationId: OrganizationId
 	readonly slug: string | null
 }
 
 /** `_app/index.tsx`: where `/` sends a signed-in user once their membership is known. */
 export const rootRedirect = (user: CurrentUser, membership: Option.Option<RootMembership>): string => {
 	if (!user.isOnboarded)
-		return Option.match(membership, {
-			onNone: () => "/onboarding",
-			onSome: ({ organizationId }) => `/onboarding?${new URLSearchParams({ orgId: organizationId })}`,
-		})
+		return hrefOf(
+			AppRoute.Onboarding({
+				orgId: Option.map(membership, ({ organizationId }) => organizationId),
+				step: Option.none(),
+			}),
+		)
 	return Option.match(membership, {
-		onNone: () => "/select-organization",
-		onSome: ({ organizationId, slug }) =>
-			slug
-				? `/${slug}`
-				: `/onboarding/setup-organization?${new URLSearchParams({ orgId: organizationId })}`,
+		onNone: () => hrefOf(AppRoute.SelectOrganization()),
+		onSome: ({ organizationId, slug }) => organizationHref({ id: organizationId, slug }),
 	})
 }
