@@ -6,6 +6,7 @@ import { modifyFields } from "foldkit/struct"
 import { createChannelAction } from "~/db/actions"
 import { IconHashtag } from "../../icons"
 import type { Shared } from "../../page/contract"
+import { AppRoute, orgHrefOf } from "../../route"
 import { button } from "../../ui/button"
 import { checkbox } from "../../ui/checkbox"
 import { dialogBody, dialogFooter, dialogHeader } from "../../ui/dialog"
@@ -110,7 +111,9 @@ const update = (model: Model, message: Message, shared: Shared): Return =>
 		SucceededCreateChannel: ({ channelId }) => ({
 			model,
 			outMessage: completed({
-				href: `/${shared.orgSlug ?? ""}/chat/${channelId}`,
+				href:
+					orgHrefOf(shared.orgSlug, (orgSlug) => AppRoute.ChatChannel({ orgSlug, channelId })) ??
+					undefined,
 				toast: successToast("Channel created successfully"),
 			}),
 		}),

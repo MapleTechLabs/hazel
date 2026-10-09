@@ -1,6 +1,7 @@
 import { modifyFields } from "foldkit/struct"
 import { parseSearchInput } from "~/lib/search-filter-parser"
 import type { Shared } from "../../page/contract"
+import { chatMessageHref } from "../../route"
 import type { Message } from "./message"
 import type { Model, PageState } from "./model"
 import type { SearchFilter, Suggestion } from "./search-data"
@@ -78,7 +79,7 @@ const openResult = (model: Model, page: SearchPage, index: number, shared: Share
 		: model.recentSearches
 	const closed = closedWith(
 		modifyFields(model, { recentSearches: () => recent }),
-		`/${shared.orgSlug ?? ""}/chat/${result.channelId}?${new URLSearchParams({ messageId: result.messageId })}`,
+		shared.orgSlug === null ? null : chatMessageHref(shared.orgSlug, result.channelId, result.messageId),
 		null,
 	)
 	return { ...closed, commands: model.search.hasQuery ? [SaveRecentSearches({ searches: recent })] : [] }

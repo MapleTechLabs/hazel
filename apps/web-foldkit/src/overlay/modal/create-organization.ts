@@ -1,11 +1,10 @@
-import type { OrganizationId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
 import { Command, Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
-import { getOrganizationRoute } from "~/utils/organization-navigation"
 import { IconServers } from "../../icons"
+import { organizationHref } from "../../route"
 import { HazelRpc } from "../../rpc"
 import { button } from "../../ui/button"
 import { dialogBody, dialogFooter, dialogHeader } from "../../ui/dialog"
@@ -43,12 +42,6 @@ const Message = defineMessageUnion({
 	FailedCreateOrganization: { toast: ToastRequest },
 })
 type Message = typeof Message.Type
-
-/** `getOrganizationRoute(result.data)` as the URL TanStack navigates to. */
-const organizationHref = (organization: { readonly id: OrganizationId; readonly slug: string | null }) => {
-	const route = getOrganizationRoute(organization)
-	return route.search === undefined ? route.to : `${route.to}?${new URLSearchParams(route.search).toString()}`
-}
 
 const CreateOrganization = Command.define("CreateOrganization", {
 	args: { name: Schema.String, slug: Schema.String },

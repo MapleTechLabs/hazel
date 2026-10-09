@@ -1,4 +1,5 @@
 import type { Shared } from "../../page/contract"
+import { AppRoute } from "../../route"
 import { hotkeyLabel } from "../../shell/channels-sidebar/hotkey-label"
 import * as CommandMenu from "../../ui/command-menu"
 import type { ChannelSummary, DmChannel, Model, Theme } from "./model"
@@ -16,19 +17,44 @@ export const HOTKEYS = {
 } as const
 
 export const NAVIGATION = [
-	{ key: "nav:dashboard", path: "", label: "Dashboard", textValue: "dashboard home" },
-	{ key: "nav:chat", path: "/chat", label: "Chat", textValue: "chat messages" },
-	{ key: "nav:notifications", path: "/notifications", label: "Notifications", textValue: "notifications" },
-	{ key: "nav:my-settings", path: "/my-settings", label: "My Settings", textValue: "my settings preferences" },
-	{ key: "nav:profile", path: "/my-settings/profile", label: "My Profile", textValue: "my profile" },
+	{ key: "nav:dashboard", route: AppRoute.OrgHome, label: "Dashboard", textValue: "dashboard home" },
+	{ key: "nav:chat", route: AppRoute.ChatIndex, label: "Chat", textValue: "chat messages" },
+	{
+		key: "nav:notifications",
+		route: AppRoute.NotificationsAll,
+		label: "Notifications",
+		textValue: "notifications",
+	},
+	{
+		key: "nav:my-settings",
+		route: AppRoute.MySettingsAppearance,
+		label: "My Settings",
+		textValue: "my settings preferences",
+	},
+	{ key: "nav:profile", route: AppRoute.MySettingsProfile, label: "My Profile", textValue: "my profile" },
 ] as const
 
 export const SETTINGS = [
-	{ key: "settings:general", path: "/settings", label: "General Settings", textValue: "general settings" },
-	{ key: "settings:team", path: "/settings/team", label: "Team", textValue: "team members" },
-	{ key: "settings:integrations", path: "/settings/integrations", label: "Integrations", textValue: "integrations" },
-	{ key: "settings:invitations", path: "/settings/invitations", label: "Invitations", textValue: "invitations" },
-	{ key: "settings:debug", path: "/settings/debug", label: "Debug", textValue: "debug" },
+	{
+		key: "settings:general",
+		route: AppRoute.SettingsGeneral,
+		label: "General Settings",
+		textValue: "general settings",
+	},
+	{ key: "settings:team", route: AppRoute.TeamSettings, label: "Team", textValue: "team members" },
+	{
+		key: "settings:integrations",
+		route: AppRoute.SettingsIntegrations,
+		label: "Integrations",
+		textValue: "integrations",
+	},
+	{
+		key: "settings:invitations",
+		route: AppRoute.SettingsInvitations,
+		label: "Invitations",
+		textValue: "invitations",
+	},
+	{ key: "settings:debug", route: AppRoute.SettingsDebug, label: "Debug", textValue: "debug" },
 ] as const
 
 export const STATUS_OPTIONS = [
