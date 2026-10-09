@@ -33,25 +33,27 @@ onboarding-timezone keeps about 31k strict, 0 perceptual px from compositor laye
 
 Not ported: video playback (left for manual QA by decision on 2026-10-08; a fixture video would change the legacy `chat-attachments` capture), agent steps in AI replies (no fixture data), GitHub PR and Linear URL embeds, Tauri-specific blocks. Phase 6 (platform polish) and the manual QA checklist (§5 last item) remain.
 
-### Performance (2026-10-09, main 48c2caf4e, `src/bench/perf.ts`, 5 runs, p50 / p95 ms)
+### Performance (2026-10-09, main after fk/perf3-window-push, `src/bench/perf.ts`, 5 runs, p50 / p95 ms)
 
 Budgets: 120fps scrolling (main-thread work per frame under 8.33ms), warm channel switch under 50ms, cold under 100ms, everything else no slower than legacy. Foldkit 0.167; VirtualList was evaluated and rejected (`foldkit-decisions/s4b-virtual-list.md`).
 
 | Metric | Legacy | Foldkit | Met |
 | --- | --- | --- | --- |
-| 10k channel wheel scroll, frame work (slow / medium / fast) | 1.1 / 84-259 | 0.3 / 5.1, 5.4, 7.8 | yes |
-| 10k channel fling to top | 0.3 / 1.4 | 0.6 / 15.5 | no (view patch, layout, layerize) |
+| 10k channel wheel scroll, frame work p95 (slow / medium / fast) | 84-259 | 5.5 / 6.8 / 14.4 | slow and medium yes, fast no |
+| 10k channel fling to top | 0.3 / 1.4 | 1.5 / 16 | no (view patch, layout, layerize) |
 | 10k channel jump to bottom | 0.1 / 3.7 | 0.1 / 8.3 | yes |
 | #general scroll, medium/fast | up to 181 p95 | 0.4-2.8 p95 | yes |
 | Sidebar, 500 channels | 5.2 p95 | 2.6 p95 | yes |
 | Switch heavy workspace, cold / warm | 943 / 443 | 44.6 / 40.6 | yes, 0 blank frames |
 | Switch normal workspace, cold / warm | 667 / 58 | 53.9 / 38.8 | yes, 0 blank frames |
 | Load heavy, ready to use | 1846 | 980 | yes |
-| Composer key to paint | 1.6 / 43.3 | 19.3 / 39.9 | no: regressed by the per-frame window poll in the history query (2.2 without it), fix in progress |
+| Composer key to paint | 1.6 / 43.3 | 2.2 / 38 | yes |
 | Thread panel / palette / image viewer, commit frame | 118 / 60 / 31 | 42 / 48 / 30 | yes |
 | Delete modal / emoji picker, commit frame | 26-28 / 26-29 | 23-25 / 27-28 | yes (input probe row is one frame late) |
 | JS heap after 20 switches (MB) | 254 | 65 | yes |
 | JS bundle gzip (KB) | 1536 | 987 | yes |
+
+Frame counting: the bench only counts frames with main-thread work, so any per-frame callback adds near-empty frames and lowers the percentiles without changing total work. The history query briefly polled its window every frame (which also cost one frame of composer input lag); its numbers read 0.3 / 5.1-7.8 for the same total busy time as the event-driven version above. Compare rows only between builds without per-frame callbacks.
 
 Sidebar hit testing (`src/bench/sidebar-diag.ts`): every hit test over the message list walks the sidebar's ~2,200 paint layers (0.245ms per `elementFromPoint`, 0.004ms with the sidebar hidden). Channel icons are now positioned only when they carry partner marks (0.215ms). The rest is needed as is: the sr-only drag buttons (the costliest, their containing block sits outside the scroller, which the snapshot geometry depends on), the opacity-0 menu triggers, badges and the item that contains them. `content-visibility: auto` on rows or items cut it to 0.10-0.15ms but was rejected: each row entering the viewport relays out the whole 500-row subgrid (sidebar wheel p95 3.2 to 10.1ms), and on rows it moves the drag buttons' containing block.
 
