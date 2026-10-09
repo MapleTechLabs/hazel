@@ -11,7 +11,7 @@ import type { ToastRequest } from "../../../overlay/toasts"
 import type { HazelRpc } from "../../../rpc"
 import type { Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
-import { successToastOf } from "../action-effects"
+import { errorToast, successToast } from "../../../data/actions"
 import {
 	ActionMessage,
 	CopyText,
@@ -158,7 +158,7 @@ export const newThreadDraft = (model: Model, threadChannelId: ChannelId): Draft.
 /** `createThread`: open an existing thread, or create one with a fresh id. */
 const createThread = (model: Model, messageId: MessageId): PageReturn => {
 	if (model.channel?.type === "thread")
-		return { model, outMessage: toast({ intent: "error", title: "Cannot create threads within threads", description: null }) }
+		return { model, outMessage: toast(errorToast("Cannot create threads within threads")) }
 	const message = findMessage(model, messageId)
 	if (message?.threadChannelId) return openThread(model, message.threadChannelId, messageId)
 	if (model.currentUserId === null) return { model }
@@ -184,7 +184,7 @@ const togglePin = (model: Model, messageId: MessageId): PageReturn => {
 const copy = (model: Model, text: string, description: string): PageReturn => ({
 	model,
 	commands: actionCommands([CopyText({ text })]),
-	outMessage: toast(successToastOf("Copied!", description)),
+	outMessage: toast(successToast("Copied!", description)),
 })
 
 /** `ImageViewerModal`'s toolbar: legacy toasts at once, without waiting for the effect. */
@@ -194,12 +194,12 @@ const viewerAction = (model: Model, action: Overlays.ViewerAction, url: string, 
 		Match.when("download", () => ({
 			model,
 			commands: actionCommands([DownloadImage({ url, fileName })]),
-			outMessage: toast(successToastOf("Image downloaded", "Your image has been downloaded.")),
+			outMessage: toast(successToast("Image downloaded", "Your image has been downloaded.")),
 		})),
 		Match.when("copyUrl", () => ({
 			model,
 			commands: actionCommands([CopyText({ text: url })]),
-			outMessage: toast(successToastOf("URL copied", "Image URL has been copied to clipboard.")),
+			outMessage: toast(successToast("URL copied", "Image URL has been copied to clipboard.")),
 		})),
 		Match.when("openInBrowser", () => ({ model, commands: actionCommands([OpenUrl({ url })]) })),
 		Match.exhaustive,

@@ -1,5 +1,6 @@
 import { Command, expectNoOutMessage, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
+import { errorToast } from "../../data/actions"
 import { AppRoute } from "../../route"
 import { PageOutMessage } from "../out-message"
 import { FetchOrganization, JoinWorkspace, RedirectToSignIn } from "./command"
@@ -66,13 +67,13 @@ describe("join workspace", () => {
 	})
 
 	test("a rejected join shows the server's reason and unlocks the button", () => {
-		const failure = { title: "Already a member", description: "You're already a member of this workspace." }
+		const failure = errorToast("Already a member", "You're already a member of this workspace.")
 		story(
 			update,
 			given(loaded),
 			message(Message.ClickedJoin()),
-			Command.resolve(JoinWorkspace, Message.FailedJoinWorkspace(failure)),
-			expectOutMessage(PageOutMessage.RequestedToast({ toast: { intent: "error", ...failure } })),
+			Command.resolve(JoinWorkspace, Message.FailedJoinWorkspace({ toast: failure })),
+			expectOutMessage(PageOutMessage.RequestedToast({ toast: failure })),
 			model((current) => expect(current.isJoining).toBe(false)),
 		)
 	})

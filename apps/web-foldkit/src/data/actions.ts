@@ -61,6 +61,21 @@ export const errorToast = (title: string, description: string | null = null): To
 	description,
 })
 
+export const warningToast = (title: string, description: string | null = null): ToastRequest => ({
+	intent: "warning",
+	title,
+	description,
+})
+
+export const infoToast = (title: string, description: string | null = null): ToastRequest => ({
+	intent: "info",
+	title,
+	description,
+})
+
+/** Give it an `id` and send the result toast with the same id to replace it. */
+export const loadingToast = (title: string): ToastRequest => ({ intent: "loading", title, description: null })
+
 const hasTag = (error: unknown): error is { readonly _tag: string } =>
 	typeof error === "object" && error !== null && "_tag" in error && typeof error._tag === "string"
 
@@ -89,6 +104,17 @@ export const failureToast = (
 	const message = messageOf(cause, handlers, fallback)
 	return errorToast(message.title, message.description ?? null)
 }
+
+/** Settles an action into a toast (or none), the way `exitToast(exit)...run()` reports it. */
+export const toastOfExit = <A, E, R>(
+	effect: Effect.Effect<A, E, R>,
+	fallback: Fallback,
+	options: { readonly success?: string; readonly handlers?: ErrorHandlers } = {},
+): Effect.Effect<ToastRequest | null, never, R> =>
+	Effect.matchCause(effect, {
+		onSuccess: () => (options.success === undefined ? null : successToast(options.success)),
+		onFailure: (cause) => failureToast(cause, fallback, options.handlers),
+	})
 
 /** Shared by the bot actions (`onErrorTag("RateLimitExceededError", ...)`). */
 export const rateLimitMessage: ErrorMessage = {

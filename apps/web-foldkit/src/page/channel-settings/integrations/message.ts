@@ -1,10 +1,11 @@
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
+import { ToastRequest } from "../../../overlay/toasts"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
 import { GitHubRepo, Provider, RssFeed, RowKind, Webhook } from "./model"
 
-const Failure = { title: Schema.String, description: Schema.NullOr(Schema.String) }
+const Failure = { toast: ToastRequest }
 
 export const Message = defineMessageUnion({
 	UpdatedGitHubConnection: { isConnected: Schema.Boolean },

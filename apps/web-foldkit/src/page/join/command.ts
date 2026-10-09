@@ -1,7 +1,7 @@
-import { Cause, Effect, Exit, Option, Schema } from "effect"
+import { Effect, Exit, Schema } from "effect"
 import { Command } from "foldkit"
 import { load } from "foldkit/navigation"
-import { getUserFriendlyError } from "~/lib/error-messages"
+import { type ErrorHandlers, failureToast } from "../../data/actions"
 import { HazelRpc } from "../../rpc"
 import { Message } from "./message"
 
@@ -25,7 +25,7 @@ export const FetchOrganization = Command.define("FetchPublicOrganization", {
 })
 
 /** The toasts legacy's `exitToastAsync(...).onErrorTag(...)` chain shows. */
-const knownFailures: Readonly<Record<string, { title: string; description: string }>> = {
+const knownFailures: ErrorHandlers = {
 	OrganizationNotFoundError: {
 		title: "Organization not found",
 		description: "This organization may have been deleted.",
@@ -48,17 +48,7 @@ export const JoinWorkspace = Command.define("JoinWorkspace", {
 			const client = yield* HazelRpc
 			const exit = yield* Effect.exit(client("organization.joinViaPublicInvite", { slug }))
 			if (Exit.isSuccess(exit)) return Message.SucceededJoinWorkspace()
-			const tag = Option.match(Cause.findErrorOption(exit.cause), {
-				onNone: () => "",
-				onSome: (error) => error._tag,
-			})
-			const known = knownFailures[tag]
-			if (known) return Message.FailedJoinWorkspace(known)
-			const friendly = getUserFriendlyError(exit.cause)
-			return Message.FailedJoinWorkspace({
-				title: friendly.title,
-				description: friendly.description ?? null,
-			})
+			return Message.FailedJoinWorkspace({ toast: failureToast(exit.cause, "friendly", knownFailures) })
 		}),
 })
 

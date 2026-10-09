@@ -13,14 +13,8 @@ import { defineMessageUnion } from "foldkit/message"
 import { editMessageAction, sendMessageAction } from "~/db/actions"
 import { HazelApiClient } from "~/lib/services/common/atom-client"
 import { ToastRequest } from "../overlay/toasts"
-import {
-	errorToastOf,
-	failureMessage,
-	notRetryable,
-	rateLimited,
-	runChatAction,
-	toastOfExit,
-} from "../page/chat/action-effects"
+import { errorToast, failureToast, runAtomFn, successToast, toastOfExit } from "../data/actions"
+import { notRetryable, rateLimited } from "../page/chat/action-effects"
 import * as Composer from "./composer"
 import * as Typing from "./typing"
 import { emojiUsageAtom } from "~/atoms/emoji-atoms"
@@ -163,7 +157,7 @@ export const SendMessage = Command.define("SendMessage", {
 	},
 	messages: [Message.SucceededSendMessage, Message.FailedSendMessage],
 	execute: ({ restoreContent, ...variables }) =>
-		Effect.matchCause(runChatAction(sendMessageAction, { ...variables, attachmentIds: [...variables.attachmentIds] }), {
+		Effect.matchCause(runAtomFn(sendMessageAction, { ...variables, attachmentIds: [...variables.attachmentIds] }), {
 			onSuccess: () => Message.SucceededSendMessage(),
 			onFailure: (cause) =>
 				Message.FailedSendMessage({
@@ -171,7 +165,7 @@ export const SendMessage = Command.define("SendMessage", {
 					restoreContent,
 					replyToMessageId: variables.replyToMessageId,
 					attachmentIds: variables.attachmentIds,
-					toast: errorToastOf(failureMessage(cause, sendHandlers)),
+					toast: failureToast(cause, "exitToast", sendHandlers),
 				}),
 		}),
 })
@@ -187,7 +181,7 @@ export const EditMessage = Command.define("EditMessage", {
 	args: { messageId: MessageId, content: Schema.String },
 	messages: [Message.CompletedEditMessage],
 	execute: (args) =>
-		toastOfExit(runChatAction(editMessageAction, args), {
+		toastOfExit(runAtomFn(editMessageAction, args), "exitToast", {
 			handlers: {
 				RateLimitExceededError: rateLimited("trying again"),
 				MessageNotFoundError: notRetryable("Message not found", "This message may have been deleted."),
@@ -227,7 +221,7 @@ export const ExecuteBotCommand = Command.define("ExecuteBotCommand", {
 	messages: [Message.CompletedExecuteBotCommand],
 	execute: ({ orgId, botId, commandName, botName, channelId, arguments: args }) =>
 		Effect.matchCause(
-			runChatAction(executeBotCommand, {
+			runAtomFn(executeBotCommand, {
 				params: { orgId, botId: BotId.make(botId), commandName },
 				payload: { channelId, arguments: [...args] },
 			}),
@@ -235,7 +229,7 @@ export const ExecuteBotCommand = Command.define("ExecuteBotCommand", {
 				onSuccess: () =>
 					Message.CompletedExecuteBotCommand({
 						succeeded: true,
-						toast: { intent: "success", title: `Executed /${commandName}`, description: null },
+						toast: successToast(`Executed /${commandName}`),
 					}),
 				onFailure: (cause) => {
 					const error = cause.reasons.find(Cause.isFailReason)?.error
@@ -252,7 +246,7 @@ export const ExecuteBotCommand = Command.define("ExecuteBotCommand", {
 										: "Command execution failed"
 					return Message.CompletedExecuteBotCommand({
 						succeeded: false,
-						toast: { intent: "error", title, description: null },
+						toast: errorToast(title),
 					})
 				},
 			},

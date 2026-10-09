@@ -47,7 +47,7 @@ export const CreateConnection = Command.define("CreateConnection", {
 							isRetryable: false,
 						},
 					})
-					return Message.FailedCreateConnection({ title: toast.title, description: toast.description })
+					return Message.FailedCreateConnection({ toast })
 				},
 			})
 		}),

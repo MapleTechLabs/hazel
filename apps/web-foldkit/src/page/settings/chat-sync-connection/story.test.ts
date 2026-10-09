@@ -9,6 +9,7 @@ import {
 import { Schema } from "effect"
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
+import { errorToast } from "../../../data/actions"
 import * as Menu from "../../../ui/menu"
 import type { Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
@@ -265,7 +266,7 @@ describe("chat sync connection guards and link actions", () => {
 		expect(updating.updatingLinkIds).toEqual([linkId])
 		const again = run(run(updating, openMenu).model, pick("toggle"))
 		expect(again.commands?.some((command) => command.name === UpdateChannelLink.name)).toBe(false)
-		const failed = run(updating, Message.FailedUpdateLink({ linkId, title: "Failed", description: null }))
+		const failed = run(updating, Message.FailedUpdateLink({ linkId, toast: errorToast("Failed") }))
 		expect(failed.model.updatingLinkIds).toEqual([])
 		const retried = run(run(failed.model, openMenu).model, pick("toggle"))
 		expect(retried.commands?.some((command) => command.name === UpdateChannelLink.name)).toBe(true)
@@ -275,7 +276,7 @@ describe("chat sync connection guards and link actions", () => {
 		story(
 			run,
 			given(loaded),
-			message(Message.FailedUpdateLink({ linkId, title: "Channel link not found", description: null })),
+			message(Message.FailedUpdateLink({ linkId, toast: errorToast("Channel link not found") })),
 			Command.expectNone(),
 			expectOutMessage(
 				PageOutMessage.RequestedToast({

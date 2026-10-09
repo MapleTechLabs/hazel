@@ -1,6 +1,8 @@
 import { Option } from "effect"
 import { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
+import { errorToast, loadingToast, successToast } from "../../data/actions"
+import type { ToastRequest } from "../../overlay/toasts"
 import * as Interaction from "../../ui/aria/interaction"
 import * as Menu from "../../ui/menu"
 import type { PageReturn, Shared } from "../contract"
@@ -26,12 +28,7 @@ export const init = (): Return => ({
 /** The DM flow's toasts share one id, so each replaces the previous (legacy `exitToast` loading). */
 const DM_TOAST_ID = "home-create-dm"
 
-const toast = (
-	intent: "success" | "error" | "loading",
-	title: string,
-	description: string | null,
-	id?: string,
-) => PageOutMessage.RequestedToast({ toast: { intent, title, description, ...(id === undefined ? {} : { id }) } })
+const toast = (request: ToastRequest) => PageOutMessage.RequestedToast({ toast: request })
 
 const navigateToChannel = (shared: Shared, channelId: string) =>
 	PageOutMessage.RequestedNavigation({ href: `/${shared.orgSlug ?? ""}/chat/${channelId}`, replace: false })
@@ -64,7 +61,7 @@ const openDm = (model: Model, shared: Shared, member: DirectoryMember, rows: Rea
 	return {
 		model: withDmRequest(model, DmRequest.Creating({ userId: member.id })),
 		commands: [CreateDm({ organizationId, userId: member.id, name })],
-		outMessage: toast("loading", `Starting conversation with ${name}...`, null, DM_TOAST_ID),
+		outMessage: toast({ ...loadingToast(`Starting conversation with ${name}...`), id: DM_TOAST_ID }),
 	}
 }
 
@@ -144,7 +141,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			outMessage: PageOutMessage.RequestedNavigation({
 				href: `/${shared.orgSlug ?? ""}/chat/${channelId}`,
 				replace: false,
-				toast: { intent: "success", title: `Started conversation with ${name}`, description: null, id: DM_TOAST_ID },
+				toast: { ...successToast(`Started conversation with ${name}`), id: DM_TOAST_ID },
 			}),
 		}),
 		FailedCreateDm: ({ toast: failure }) => ({
@@ -153,10 +150,10 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		}),
 		SucceededCopyEmail: ({ email }) => ({
 			model,
-			outMessage: toast("success", "Email copied", `${email} copied to clipboard`),
+			outMessage: toast(successToast("Email copied", `${email} copied to clipboard`)),
 		}),
 		FailedCopyEmail: () => ({
 			model,
-			outMessage: toast("error", "Failed to copy email", "Please try again"),
+			outMessage: toast(errorToast("Failed to copy email", "Please try again")),
 		}),
 	})

@@ -1,6 +1,7 @@
 import type { MessageId } from "@hazel/schema"
 import { Match } from "effect"
 import { Command, type Update } from "foldkit"
+import { errorToast } from "../data/actions"
 import type { HazelRpc } from "../rpc"
 import * as Composer from "./composer"
 import * as EditorCommands from "./editor-commands"
@@ -99,7 +100,7 @@ const submit = (model: Model, markdown: string, context: Context): Return => {
 const executeCommand = (model: Model, context: Context): Return => {
 	const input = model.composer.commandInput
 	if (input === null) return { model }
-	const error = (title: string) => toast(model, { intent: "error", title, description: null })
+	const error = (title: string) => toast(model, errorToast(title))
 	if (context.organizationId === null) return error("Cannot execute command without an organization")
 	const missing = input.command.arguments
 		.filter((arg) => arg.required && !input.values[arg.name])
@@ -192,11 +193,7 @@ export const update = (model: Model, message: Message, context: Context): Return
 		SelectedFiles: ({ files }) => {
 			if (files.length === 0) return { model }
 			if (context.currentUserId === null)
-				return toast(model, {
-					intent: "error",
-					title: "Authentication required",
-					description: "You must be logged in to upload files",
-				})
+				return toast(model, errorToast("Authentication required", "You must be logged in to upload files"))
 			return startNextUpload({ ...model, pendingFiles: [...model.pendingFiles, ...files] })
 		},
 		CompletedGenerateUploadFileId: ({ fileId }) => {

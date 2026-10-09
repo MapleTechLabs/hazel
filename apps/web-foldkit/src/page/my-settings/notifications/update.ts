@@ -2,6 +2,7 @@ import { User } from "@hazel/domain/models"
 import { Option, Schema } from "effect"
 import { Update } from "foldkit"
 import { modifyFields } from "foldkit/struct"
+import { errorToast } from "../../../data/actions"
 import * as Interaction from "../../../ui/aria/interaction"
 import * as Segments from "../../../ui/date-segments"
 import * as Slider from "../../../ui/slider"
@@ -220,9 +221,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			settleWrite(model, shared, (current) => current.optimisticSettings ?? current.settings),
 		FailedUpdateUserSettings: () => ({
 			...settleWrite(model, shared, (current) => current.settings),
-			outMessage: PageOutMessage.RequestedToast({
-				toast: { intent: "error", title: "Failed to update setting", description: null },
-			}),
+			outMessage: PageOutMessage.RequestedToast({ toast: errorToast("Failed to update setting") }),
 		}),
 		GotInteractionMessage: ({ message: child }) => interaction.fold(model, child),
 	})

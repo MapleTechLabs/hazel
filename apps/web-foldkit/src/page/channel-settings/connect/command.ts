@@ -50,11 +50,7 @@ export const RevokeInvite = Command.define("RevokeInvite", {
 							isRetryable: false,
 						},
 					})
-					return Message.FailedRevokeInvite({
-						inviteId,
-						title: toast.title,
-						description: toast.description,
-					})
+					return Message.FailedRevokeInvite({ inviteId, toast })
 				},
 			})
 		}),
@@ -82,11 +78,7 @@ export const DisconnectOrganization = Command.define("DisconnectOrganization", {
 					}),
 				onFailure: (cause) => {
 					const toast = failureToast(cause, "exitToast")
-					return Message.FailedDisconnect({
-						mountId,
-						title: toast.title,
-						description: toast.description,
-					})
+					return Message.FailedDisconnect({ mountId, toast })
 				},
 			})
 		}),

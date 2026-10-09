@@ -1,5 +1,6 @@
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
+import { ToastRequest } from "../../overlay/toasts"
 import { PublicOrganization } from "./model"
 
 export const Message = defineMessageUnion({
@@ -8,7 +9,7 @@ export const Message = defineMessageUnion({
 	ClickedSignIn: {},
 	ClickedJoin: {},
 	SucceededJoinWorkspace: {},
-	FailedJoinWorkspace: { title: Schema.String, description: Schema.NullOr(Schema.String) },
+	FailedJoinWorkspace: { toast: ToastRequest },
 	CompletedRedirectToSignIn: {},
 	CompletedEnterAnimation: {},
 })

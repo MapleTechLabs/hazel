@@ -5,11 +5,11 @@ import {
 	SyncChannelLinkId,
 	SyncConnectionId,
 } from "@hazel/schema"
-import { type Cause, Effect, Exit, Schema } from "effect"
+import { Effect, Exit, Schema } from "effect"
 import { Command, Render } from "foldkit"
 import * as Dom from "foldkit/dom"
 import { HazelRpc } from "../../../rpc"
-import { type ErrorHandlers, failureToast } from "../../../data/actions"
+import { failureToast } from "../../../data/actions"
 import { fetchDiscordGuildChannels } from "../chat-sync/discord"
 import { fetchConnections } from "../chat-sync/rpc"
 import {
@@ -27,11 +27,6 @@ const linkNotFound = {
 		description: "This channel link may have already been removed.",
 		isRetryable: false,
 	},
-}
-
-const toastFields = (cause: Cause.Cause<unknown>, handlers: ErrorHandlers) => {
-	const toast = failureToast(cause, "exitToast", handlers)
-	return { title: toast.title, description: toast.description }
 }
 
 export const ListConnections = Command.define("ListChatSyncConnectionsForConnection", {
@@ -98,15 +93,15 @@ export const DisconnectConnection = Command.define("DisconnectConnection", {
 			return Exit.match(exit, {
 				onSuccess: () => Message.SucceededDisconnect(),
 				onFailure: (cause) =>
-					Message.FailedDisconnect(
-						toastFields(cause, {
+					Message.FailedDisconnect({
+						toast: failureToast(cause, "exitToast", {
 							ChatSyncConnectionNotFoundError: {
 								title: "Connection not found",
 								description: "This connection may have already been deleted.",
 								isRetryable: false,
 							},
 						}),
-					),
+					}),
 			})
 		}),
 })
@@ -120,7 +115,8 @@ export const RemoveChannelLink = Command.define("RemoveChannelLink", {
 			const exit = yield* Effect.exit(client("chatSync.channelLink.delete", { syncChannelLinkId }))
 			return Exit.match(exit, {
 				onSuccess: () => Message.SucceededRemoveLink(),
-				onFailure: (cause) => Message.FailedRemoveLink(toastFields(cause, linkNotFound)),
+				onFailure: (cause) =>
+					Message.FailedRemoveLink({ toast: failureToast(cause, "exitToast", linkNotFound) }),
 			})
 		}),
 })
@@ -155,7 +151,7 @@ export const UpdateChannelLink = Command.define("UpdateChannelLink", {
 				onFailure: (cause) =>
 					Message.FailedUpdateLink({
 						linkId: syncChannelLinkId,
-						...toastFields(cause, linkNotFound),
+						toast: failureToast(cause, "exitToast", linkNotFound),
 					}),
 			})
 		}),
@@ -184,8 +180,8 @@ export const CreateChannelLink = Command.define("CreateChannelLink", {
 						successMessage: `Linked #${hazelChannelName} to #${payload.externalChannelName}`,
 					}),
 				onFailure: (cause) =>
-					Message.FailedCreateLink(
-						toastFields(cause, {
+					Message.FailedCreateLink({
+						toast: failureToast(cause, "exitToast", {
 							ChatSyncConnectionNotFoundError: {
 								title: "Connection not found",
 								description: "This sync connection may have been deleted.",
@@ -197,7 +193,7 @@ export const CreateChannelLink = Command.define("CreateChannelLink", {
 								isRetryable: false,
 							},
 						}),
-					),
+					}),
 			})
 		}),
 })

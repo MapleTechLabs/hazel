@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import * as Scene from "foldkit/scene"
 import { describe, test } from "vitest"
-import { successToast } from "../../../data/actions"
+import { errorToast, successToast } from "../../../data/actions"
 import {
 	globex,
 	globexGuestMount,
@@ -125,8 +125,7 @@ describe("invitations", () => {
 				RevokeInvite,
 				Message.FailedRevokeInvite({
 					inviteId,
-					title: failureToastFixture.title,
-					description: failureToastFixture.description,
+					toast: errorToast(failureToastFixture.title, failureToastFixture.description),
 				}),
 			),
 			Scene.expectOutMessage(PageOutMessage.RequestedToast({ toast: failureToastFixture })),
@@ -196,8 +195,7 @@ describe("active connections", () => {
 				DisconnectOrganization,
 				Message.FailedDisconnect({
 					mountId: "mount-1",
-					title: failureToastFixture.title,
-					description: failureToastFixture.description,
+					toast: errorToast(failureToastFixture.title, failureToastFixture.description),
 				}),
 			),
 			Scene.expectOutMessage(PageOutMessage.RequestedToast({ toast: failureToastFixture })),

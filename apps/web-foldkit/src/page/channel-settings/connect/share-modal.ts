@@ -3,6 +3,7 @@ import { Duration, Effect, Exit, Schema } from "effect"
 import { Command, type Update } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
+import { ToastRequest } from "../../../overlay/toasts"
 import { HazelRpc } from "../../../rpc"
 import * as Modal from "../../../ui/modal"
 import { failureToast, successToast } from "../../../data/actions"
@@ -57,7 +58,7 @@ export const Message = defineMessageUnion({
 	ClickedCancel: {},
 	ClickedSendInvite: {},
 	SucceededCreateInvite: {},
-	FailedCreateInvite: { title: Schema.String, description: Schema.NullOr(Schema.String) },
+	FailedCreateInvite: { toast: ToastRequest },
 	GotModalMessage: { message: Modal.Message },
 })
 export type Message = typeof Message.Type
@@ -122,7 +123,7 @@ export const CreateInvite = Command.define("CreateInvite", {
 							isRetryable: false,
 						},
 					})
-					return Message.FailedCreateInvite({ title: toast.title, description: toast.description })
+					return Message.FailedCreateInvite({ toast })
 				},
 			})
 		}),
@@ -206,9 +207,9 @@ export const update = (model: Model, message: Message, context: Context): Return
 			model: closed(model),
 			outMessage: PageOutMessage.RequestedToast({ toast: successToast("Invite sent") }),
 		}),
-		FailedCreateInvite: ({ title, description }) => ({
+		FailedCreateInvite: ({ toast }) => ({
 			model: modifyFields(model, { isSubmitting: () => false }),
-			outMessage: PageOutMessage.RequestedToast({ toast: { intent: "error", title, description } }),
+			outMessage: PageOutMessage.RequestedToast({ toast }),
 		}),
 		GotModalMessage: ({ message: modalMessage }) => {
 			const next = Modal.update(model.modal, modalMessage)

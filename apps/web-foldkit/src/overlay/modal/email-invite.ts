@@ -16,7 +16,7 @@ import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalViewInputs } from "./contract"
 import { type InviteRole, sendInvites } from "./email-invite-clerk"
 import { Frame, FrameMessage, frameView, initFrame, isFrameClosed, modalDescription, modalTitle } from "./frame"
-import { errorToast, successToast } from "../../data/actions"
+import { errorToast, successToast, warningToast } from "../../data/actions"
 
 /** `components/modals/email-invite-modal.tsx` (legacy `useModal("email-invite")`). */
 
@@ -106,11 +106,7 @@ const completedSendInvites = (model: Model, successCount: number, errorCount: nu
 		}
 	const toast: ToastRequest =
 		successCount > 0
-			? {
-					intent: "warning",
-					title: `Sent ${successCount} invitation${plural(successCount)}, ${errorCount} failed`,
-					description: null,
-				}
+			? warningToast(`Sent ${successCount} invitation${plural(successCount)}, ${errorCount} failed`)
 			: errorToast("Failed to send invitations")
 	return {
 		model: modifyFields(model, { isSubmitting: () => false }),

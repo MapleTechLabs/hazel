@@ -13,6 +13,7 @@ import { DrawGlobePath, TwinkleStar } from "./timezone/globe"
 import { init, update } from "./update"
 import { view } from "./view"
 import { sharedDefaults } from "../test-shared"
+import { errorToast } from "../../data/actions"
 
 /** The onboarding flow's update loop, driven through the rendered steps. */
 
@@ -202,7 +203,7 @@ describe("onboarding flow", () => {
 })
 
 const firstMounts = Mount.resolveAll([EnterAnimation, settled], [AutoFocus, focused])
-const errorToast = (title: string) => PageOutMessage.RequestedToast({ toast: { intent: "error", title, description: null } })
+const errorOut = (title: string) => PageOutMessage.RequestedToast({ toast: errorToast(title) })
 
 describe("profile step validation", () => {
 	test("clearing a name marks only that input invalid, and Enter does not submit", () => {
@@ -229,7 +230,7 @@ describe("profile step validation", () => {
 			expect(role("button", { name: /Continue/ })).toBeDisabled(),
 			expect(role("button", { name: /Back/ })).toBeDisabled(),
 			Command.resolve(UpdateProfile, Message.FailedUpdateProfile()),
-			expectOutMessage(errorToast("Failed to update profile")),
+			expectOutMessage(errorOut("Failed to update profile")),
 			expect(role("heading", { name: "Set up your profile" })).toExist(),
 			expect(role("button", { name: /Continue/ })).toBeEnabled(),
 		)
@@ -297,7 +298,7 @@ describe("invite step", () => {
 			type(role("textbox", { name: "Email 1" }), "grace@hazel.test"),
 			click(role("button", { name: /Send invites/ })),
 			Command.resolve(SendInvites, Message.FailedSendInvites({ reason: "AllFailed" })),
-			expectOutMessage(errorToast("Failed to send invitations")),
+			expectOutMessage(errorOut("Failed to send invitations")),
 			expect(role("textbox", { name: "Email 1" })).toHaveValue("grace@hazel.test"),
 			expect(role("button", { name: /Send invites/ })).toBeEnabled(),
 		)

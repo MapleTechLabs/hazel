@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import * as Scene from "foldkit/scene"
 import { describe, test } from "vitest"
-import { successToast } from "../../../data/actions"
+import { errorToast, successToast } from "../../../data/actions"
 import * as Menu from "../../../ui/menu"
 import { FocusTriggerOnPress } from "../../../ui/menu-view"
 import * as Modal from "../../../ui/modal"
@@ -135,7 +135,7 @@ describe("delete a connection", () => {
 			Scene.click(confirmDelete),
 			Scene.Command.resolve(
 				DeleteConnection,
-				Message.FailedDeleteConnection({ title: "Connection not found", description: null }),
+				Message.FailedDeleteConnection({ toast: errorToast("Connection not found") }),
 			),
 			Scene.expectOutMessage(
 				PageOutMessage.RequestedToast({
@@ -215,7 +215,7 @@ describe("connect a Discord server", () => {
 			Scene.click(connect),
 			Scene.Command.resolve(
 				CreateConnection,
-				Message.FailedCreateConnection({ title: "Connection already exists", description: null }),
+				Message.FailedCreateConnection({ toast: errorToast("Connection already exists") }),
 			),
 			Scene.expectOutMessage(
 				PageOutMessage.RequestedToast({

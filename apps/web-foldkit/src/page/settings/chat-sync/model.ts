@@ -1,6 +1,7 @@
 import { OrganizationId, SyncConnectionId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
+import { ToastRequest } from "../../../overlay/toasts"
 import * as Interaction from "../../../ui/aria/interaction"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
@@ -66,7 +67,7 @@ export const Message = defineMessageUnion({
 	ClickedDeleteConnection: { target: DeleteTarget },
 	ClickedConfirmDelete: {},
 	SucceededDeleteConnection: {},
-	FailedDeleteConnection: { title: Schema.String, description: Schema.NullOr(Schema.String) },
+	FailedDeleteConnection: { toast: ToastRequest },
 	GotAddMenuMessage: { message: Menu.Message },
 	GotEmptyAddMenuMessage: { message: Menu.Message },
 	GotDeleteModalMessage: { message: Modal.Message },
@@ -80,7 +81,7 @@ export const Message = defineMessageUnion({
 	ClickedOpenDiscordIntegration: {},
 	ClickedConnect: {},
 	SucceededCreateConnection: {},
-	FailedCreateConnection: { title: Schema.String, description: Schema.NullOr(Schema.String) },
+	FailedCreateConnection: { toast: ToastRequest },
 	GotInteractionMessage: { message: Interaction.Message },
 })
 export type Message = typeof Message.Type

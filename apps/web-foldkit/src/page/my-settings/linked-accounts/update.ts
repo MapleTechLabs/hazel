@@ -1,5 +1,7 @@
 import { Option } from "effect"
 import { modifyFields } from "foldkit/struct"
+import { errorToast, successToast } from "../../../data/actions"
+import type { ToastRequest } from "../../../overlay/toasts"
 import * as Interaction from "../../../ui/aria/interaction"
 import type { PageReturn, Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
@@ -15,13 +17,7 @@ export const interaction = embedInteraction<Model, Message>((message) =>
 	Message.GotInteractionMessage({ message }),
 )
 
-const toastRequest = (intent: "success" | "error", title: string, description: string | null = null) => ({
-	intent,
-	title,
-	description,
-})
-const toast = (intent: "success" | "error", title: string, description: string | null = null) =>
-	PageOutMessage.RequestedToast({ toast: toastRequest(intent, title, description) })
+const toast = (request: ToastRequest) => PageOutMessage.RequestedToast({ toast: request })
 
 type Route = RouteOf<"MySettingsLinkedAccounts">
 
@@ -36,9 +32,8 @@ const linkResult = (model: Model, route: Route): Return => {
 			replace: true,
 			toast:
 				status === "success"
-					? toastRequest("success", "Discord account linked")
-					: toastRequest(
-							"error",
+					? successToast("Discord account linked")
+					: errorToast(
 							"Failed to link Discord account",
 							Option.getOrNull(route.errorCode) ?? "Please try again.",
 						),
@@ -77,7 +72,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		SucceededGetDiscordOAuthUrl: () => ({ model }),
 		FailedGetDiscordOAuthUrl: () => ({
 			model: modifyFields(model, { isConnecting: () => false }),
-			outMessage: toast("error", "Failed to start Discord linking flow"),
+			outMessage: toast(errorToast("Failed to start Discord linking flow")),
 		}),
 		ClickedUnlinkDiscord: () =>
 			orgId === null || model.isDisconnecting
@@ -88,11 +83,11 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 					},
 		SucceededDisconnectDiscord: () => ({
 			model: modifyFields(model, { isDisconnecting: () => false }),
-			outMessage: toast("success", "Discord account unlinked"),
+			outMessage: toast(successToast("Discord account unlinked")),
 		}),
 		FailedDisconnectDiscord: () => ({
 			model: modifyFields(model, { isDisconnecting: () => false }),
-			outMessage: toast("error", "Failed to unlink Discord account"),
+			outMessage: toast(errorToast("Failed to unlink Discord account")),
 		}),
 		GotInteractionMessage: ({ message: child }) => interaction.fold(model, child),
 	})

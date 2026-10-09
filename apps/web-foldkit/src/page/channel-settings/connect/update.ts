@@ -56,9 +56,6 @@ const refetchInvites = (model: Model) =>
 const without = <Id extends string>(ids: ReadonlyArray<Id>, id: Id): ReadonlyArray<Id> =>
 	ids.filter((candidate) => candidate !== id)
 
-const toastOut = (title: string, description: string | null) =>
-	PageOutMessage.RequestedToast({ toast: { intent: "error", title, description } })
-
 export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
 		UpdatedChannelName: ({ name }) => ({ model: modifyFields(model, { channelName: () => name }) }),
@@ -86,9 +83,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			commands: refetchInvites(model),
 			outMessage: PageOutMessage.RequestedToast({ toast: successToast("Invite revoked") }),
 		}),
-		FailedRevokeInvite: ({ inviteId, title, description }) => ({
+		FailedRevokeInvite: ({ inviteId, toast }) => ({
 			model: modifyFields(model, { revokingInviteIds: (ids) => without(ids, inviteId) }),
-			outMessage: toastOut(title, description),
+			outMessage: PageOutMessage.RequestedToast({ toast }),
 		}),
 		GotInteractionMessage: ({ message }) => interaction.fold(model, message),
 		ClickedDisconnect: ({ mountId }) => {
@@ -117,9 +114,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			model: modifyFields(model, { disconnectingMountIds: (ids) => without(ids, mountId) }),
 			outMessage: PageOutMessage.RequestedToast({ toast: successToast(successMessage) }),
 		}),
-		FailedDisconnect: ({ mountId, title, description }) => ({
+		FailedDisconnect: ({ mountId, toast }) => ({
 			model: modifyFields(model, { disconnectingMountIds: (ids) => without(ids, mountId) }),
-			outMessage: toastOut(title, description),
+			outMessage: PageOutMessage.RequestedToast({ toast }),
 		}),
 		GotShareModalMessage: ({ message: shareMessage }) => {
 			const next = ShareModal.update(model.share, shareMessage, {

@@ -55,10 +55,7 @@ export const DeleteConnection = Command.define("DeleteConnection", {
 							isRetryable: false,
 						},
 					})
-					return Message.FailedDeleteConnection({
-						title: toast.title,
-						description: toast.description,
-					})
+					return Message.FailedDeleteConnection({ toast })
 				},
 			})
 		}),
@@ -285,9 +282,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				outMessage: PageOutMessage.RequestedToast({ toast: successToast("Connection deleted") }),
 			}
 		},
-		FailedDeleteConnection: ({ title, description }) => ({
+		FailedDeleteConnection: ({ toast }) => ({
 			model: modifyFields(model, { isDeleting: () => false }),
-			outMessage: PageOutMessage.RequestedToast({ toast: { intent: "error", title, description } }),
+			outMessage: PageOutMessage.RequestedToast({ toast }),
 		}),
 		GotAddMenuMessage: ({ message: menuMessage }) => foldAddMenu(model, menuMessage),
 		GotEmptyAddMenuMessage: ({ message: menuMessage }) => foldEmptyAddMenu(model, menuMessage),
@@ -330,8 +327,8 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				}),
 			}
 		},
-		FailedCreateConnection: ({ title, description }) => ({
+		FailedCreateConnection: ({ toast }) => ({
 			model: modifyFields(model, { isCreating: () => false }),
-			outMessage: PageOutMessage.RequestedToast({ toast: { intent: "error", title, description } }),
+			outMessage: PageOutMessage.RequestedToast({ toast }),
 		}),
 	})

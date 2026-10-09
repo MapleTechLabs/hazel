@@ -1,5 +1,5 @@
 import { ChannelId, ChannelWebhookId, GitHubSubscriptionId, RssSubscriptionId } from "@hazel/schema"
-import { type Cause, Duration, Effect, Exit, Schema } from "effect"
+import { Duration, Effect, Exit, Schema } from "effect"
 import { Command } from "foldkit"
 import { toDate } from "~/lib/utils"
 import { HazelRpc } from "../../../rpc"
@@ -13,11 +13,6 @@ const channelNotFound: ErrorHandlers = {
 		description: "This channel may have been deleted.",
 		isRetryable: false,
 	},
-}
-
-const failure = (cause: Cause.Cause<unknown>, handlers: ErrorHandlers) => {
-	const toast = failureToast(cause, "exitToast", handlers)
-	return { title: toast.title, description: toast.description }
 }
 
 const msOf = (date: Parameters<typeof toDate>[0] | null) => (date ? toDate(date).getTime() : null)
@@ -45,7 +40,11 @@ export const ListWebhooks = Command.define("ListWebhooks", {
 						})),
 					}),
 				onFailure: (cause) =>
-					Message.FailedList({ list: "webhooks", version, ...failure(cause, channelNotFound) }),
+					Message.FailedList({
+						list: "webhooks",
+						version,
+						toast: failureToast(cause, "exitToast", channelNotFound),
+					}),
 			})
 		}),
 })
@@ -72,7 +71,11 @@ export const ListRss = Command.define("ListRss", {
 						})),
 					}),
 				onFailure: (cause) =>
-					Message.FailedList({ list: "rss", version, ...failure(cause, channelNotFound) }),
+					Message.FailedList({
+						list: "rss",
+						version,
+						toast: failureToast(cause, "exitToast", channelNotFound),
+					}),
 			})
 		}),
 })
@@ -97,7 +100,11 @@ export const ListGitHub = Command.define("ListGitHub", {
 						})),
 					}),
 				onFailure: (cause) =>
-					Message.FailedList({ list: "github", version, ...failure(cause, channelNotFound) }),
+					Message.FailedList({
+						list: "github",
+						version,
+						toast: failureToast(cause, "exitToast", channelNotFound),
+					}),
 			})
 		}),
 })
@@ -178,7 +185,9 @@ export const RunRowAction = Command.define("RunRowAction", {
 					Message.FailedRowAction({
 						kind,
 						id,
-						...failure(cause, { [copy.tag]: notFound(copy.title, description) }),
+						toast: failureToast(cause, "exitToast", {
+							[copy.tag]: notFound(copy.title, description),
+						}),
 					}),
 			})
 		}),
@@ -214,7 +223,10 @@ export const ConnectProvider = Command.define("ConnectProvider", {
 			return Exit.match(exit, {
 				onSuccess: (result) => Message.SucceededConnectProvider({ provider, token: result.token }),
 				onFailure: (cause) =>
-					Message.FailedConnectProvider({ provider, ...failure(cause, channelNotFound) }),
+					Message.FailedConnectProvider({
+						provider,
+						toast: failureToast(cause, "exitToast", channelNotFound),
+					}),
 			})
 		}),
 })
@@ -241,7 +253,7 @@ export const RunProviderAction = Command.define("RunProviderAction", {
 					Message.FailedProviderAction({
 						provider,
 						isDelete: isEnabled === null,
-						...failure(cause, {
+						toast: failureToast(cause, "exitToast", {
 							ChannelWebhookNotFoundError: notFound(
 								"Webhook not found",
 								"This webhook may have been deleted.",
@@ -278,7 +290,8 @@ export const CreateWebhook = Command.define("CreateWebhook", {
 			return Exit.match(exit, {
 				onSuccess: (result) =>
 					Message.SucceededCreateWebhook({ token: result.token, webhookUrl: result.webhookUrl }),
-				onFailure: (cause) => Message.FailedCreateWebhook(failure(cause, channelNotFound)),
+				onFailure: (cause) =>
+					Message.FailedCreateWebhook({ toast: failureToast(cause, "exitToast", channelNotFound) }),
 			})
 		}),
 })

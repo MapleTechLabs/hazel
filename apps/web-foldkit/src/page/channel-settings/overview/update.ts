@@ -35,7 +35,7 @@ export const UpdateChannel = Command.define("UpdateChannel", {
 							isRetryable: false,
 						},
 					})
-					return Message.FailedUpdateChannel({ title: toast.title, description: toast.description })
+					return Message.FailedUpdateChannel({ toast })
 				},
 			})
 		}),
@@ -105,9 +105,9 @@ export const update = (model: Model, message: Message): Return =>
 				toast: successToast("Channel updated successfully"),
 			}),
 		}),
-		FailedUpdateChannel: ({ title, description }) => ({
+		FailedUpdateChannel: ({ toast }) => ({
 			model: withForm(model, (form) => ({ ...form, isSubmitting: false })),
-			outMessage: PageOutMessage.RequestedToast({ toast: { intent: "error", title, description } }),
+			outMessage: PageOutMessage.RequestedToast({ toast }),
 		}),
 		GotInteractionMessage: ({ message: interactionMessage }) => ({
 			model: foldInteraction(model, interactionMessage),

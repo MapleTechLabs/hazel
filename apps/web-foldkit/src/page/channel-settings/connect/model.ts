@@ -1,6 +1,7 @@
 import { ChannelId, ConnectConversationId, ConnectInviteId, OrganizationId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
+import { ToastRequest } from "../../../overlay/toasts"
 import * as Interaction from "../../../ui/aria/interaction"
 import * as ShareModal from "./share-modal"
 
@@ -53,18 +54,10 @@ export const Message = defineMessageUnion({
 	ClickedRevokeInvite: { inviteId: ConnectInviteId },
 	GotInteractionMessage: { message: Interaction.Message },
 	SucceededRevokeInvite: { inviteId: ConnectInviteId },
-	FailedRevokeInvite: {
-		inviteId: ConnectInviteId,
-		title: Schema.String,
-		description: Schema.NullOr(Schema.String),
-	},
+	FailedRevokeInvite: { inviteId: ConnectInviteId, toast: ToastRequest },
 	ClickedDisconnect: { mountId: Schema.String },
 	SucceededDisconnect: { mountId: Schema.String, successMessage: Schema.String },
-	FailedDisconnect: {
-		mountId: Schema.String,
-		title: Schema.String,
-		description: Schema.NullOr(Schema.String),
-	},
+	FailedDisconnect: { mountId: Schema.String, toast: ToastRequest },
 	GotShareModalMessage: { message: ShareModal.Message },
 })
 export type Message = typeof Message.Type

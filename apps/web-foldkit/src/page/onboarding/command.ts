@@ -1,8 +1,8 @@
 import { OrganizationMemberId, UserId } from "@hazel/schema"
-import { Cause, Duration, Effect, Exit, Option, Schema } from "effect"
+import { Duration, Effect, Exit, Schema } from "effect"
 import { Command } from "foldkit"
 import { load, replaceUrl } from "foldkit/navigation"
-import { getUserFriendlyError } from "~/lib/error-messages"
+import { failureToast } from "../../data/actions"
 import { HazelRpc } from "../../rpc"
 import { clerkResource } from "./clerk"
 import { Message } from "./message"
@@ -49,19 +49,13 @@ export const UpdateTimezone = Command.define("UpdateUserTimezone", {
 			const client = yield* HazelRpc
 			const exit = yield* Effect.exit(client("user.update", { id: userId, timezone }))
 			if (Exit.isSuccess(exit)) return Message.SucceededUpdateTimezone({ timezone })
-			const isUserNotFound = Option.exists(
-				Cause.findErrorOption(exit.cause),
-				(error) => error._tag === "UserNotFoundError",
-			)
-			if (isUserNotFound)
-				return Message.FailedUpdateTimezone({
-					title: "User not found",
-					description: "Your account could not be found. Please try signing in again.",
-				})
-			const friendly = getUserFriendlyError(exit.cause)
 			return Message.FailedUpdateTimezone({
-				title: friendly.title,
-				description: friendly.description ?? null,
+				toast: failureToast(exit.cause, "friendly", {
+					UserNotFoundError: {
+						title: "User not found",
+						description: "Your account could not be found. Please try signing in again.",
+					},
+				}),
 			})
 		}),
 })

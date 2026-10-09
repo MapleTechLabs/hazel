@@ -3,6 +3,7 @@ import { ChannelId, ConnectInviteId, OrganizationId } from "@hazel/schema"
 import { Schema } from "effect"
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
+import { errorToast } from "../../../data/actions"
 import type { Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
 import {
@@ -84,7 +85,7 @@ describe("revoke failure", () => {
 			Command.expectExact(RevokeInvite({ inviteId })),
 			Command.resolve(
 				RevokeInvite,
-				Message.FailedRevokeInvite({ inviteId, title: "Invite not found", description }),
+				Message.FailedRevokeInvite({ inviteId, toast: errorToast("Invite not found", description) }),
 			),
 			expectOutMessage(
 				PageOutMessage.RequestedToast({
@@ -155,8 +156,7 @@ describe("disconnect", () => {
 				DisconnectOrganization,
 				Message.FailedDisconnect({
 					mountId: hostMount.id,
-					title: "Something went wrong",
-					description: null,
+					toast: errorToast("Something went wrong"),
 				}),
 			),
 			expectOutMessage(
@@ -269,7 +269,7 @@ describe("share modal", () => {
 			message(share(ShareModal.Message.ClickedSendInvite())),
 			Command.resolve(
 				ShareModal.CreateInvite,
-				ShareModal.Message.FailedCreateInvite({ title: "Already shared", description: "Shared." }),
+				ShareModal.Message.FailedCreateInvite({ toast: errorToast("Already shared", "Shared.") }),
 			),
 			expectOutMessage(
 				PageOutMessage.RequestedToast({
