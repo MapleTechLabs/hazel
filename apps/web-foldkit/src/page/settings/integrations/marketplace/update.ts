@@ -12,7 +12,7 @@ import { Message } from "./message"
 import type { Model } from "./model"
 
 /** `installBotMutation` with the toasts of `handleInstall`. */
-export const InstallBot = Command.define("IntegrationsInstallBot", {
+export const InstallBot = Command.define("InstallBot", {
 	args: { botId: BotId },
 	messages: [Message.SucceededInstallBot, Message.FailedInstallBot],
 	execute: ({ botId }) =>

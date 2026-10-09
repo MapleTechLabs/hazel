@@ -1,6 +1,6 @@
 import { Command, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
-import { AnnounceValue, FocusSegment, init, Message, update } from "./date-segments"
+import { AnnounceSegmentValue, FocusSegment, init, Message, update } from "./date-segments"
 
 /** useDateSegment spin, typing, navigation and clearing rules, for date and time segments. */
 
@@ -12,8 +12,8 @@ const time = (value?: string) => init({ id: "at", kind: "time", ...(value === un
 
 const press = (segment: string, key: string) => message(Message.PressedSegmentKey({ segment, key }))
 const announced = (valueText: string) => [
-	Command.expectExact(AnnounceValue({ valueText })),
-	Command.resolve(AnnounceValue, Message.CompletedAnnounceValue()),
+	Command.expectExact(AnnounceSegmentValue({ valueText })),
+	Command.resolve(AnnounceSegmentValue, Message.CompletedAnnounceValue()),
 ]
 const movedTo = (elementId: string) => [
 	Command.expectExact(FocusSegment({ elementId })),
@@ -165,8 +165,8 @@ describe("date segments story", () => {
 			update,
 			given(time("00:30")),
 			press("hour", "ArrowUp"),
-			Command.expectHas(AnnounceValue),
-			Command.resolve(AnnounceValue, Message.CompletedAnnounceValue()),
+			Command.expectHas(AnnounceSegmentValue),
+			Command.resolve(AnnounceSegmentValue, Message.CompletedAnnounceValue()),
 			model((next) => {
 				expect([next.values.hour, next.values.dayPeriod]).toEqual([1, 0])
 				expect(next.committed).toBe("01:30:00")

@@ -4,7 +4,7 @@ import * as Scene from "foldkit/scene"
 import type { HtmlBuilder } from "foldkit/html"
 import { describe, test } from "vitest"
 import {
-	CheckPasswordBadge,
+	CheckInputOtpPasswordBadge,
 	init,
 	inputOtp,
 	Message,
@@ -91,9 +91,9 @@ describe("input-otp scene", () => {
 			Scene.Command.resolveAll(
 				[SetSelection, Message.CompletedSetSelection()],
 				[ReadSelection, Message.ChangedSelection({ selection: { start: 2, end: 2 } })],
-				[CheckPasswordBadge, Message.CompletedCheckPasswordBadge({ hasBadge: false })],
-				[CheckPasswordBadge, Message.CompletedCheckPasswordBadge({ hasBadge: false })],
-				[CheckPasswordBadge, Message.CompletedCheckPasswordBadge({ hasBadge: false })],
+				[CheckInputOtpPasswordBadge, Message.CompletedCheckPasswordBadge({ hasBadge: false })],
+				[CheckInputOtpPasswordBadge, Message.CompletedCheckPasswordBadge({ hasBadge: false })],
+				[CheckInputOtpPasswordBadge, Message.CompletedCheckPasswordBadge({ hasBadge: false })],
 			),
 			Scene.expect(slot(2)).toHaveAttr("data-active", "true"),
 			Scene.expect(slot(1)).toHaveAttr("data-active", "false"),

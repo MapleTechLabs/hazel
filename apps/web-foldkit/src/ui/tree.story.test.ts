@@ -1,7 +1,7 @@
 import { Option } from "effect"
 import { Command, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
-import { FocusRow, init, Message, update } from "./tree"
+import { FocusTreeRow, init, Message, update } from "./tree"
 
 /** React Aria Tree: expansion by chevron and arrow keys, roving row focus, input modality. */
 
@@ -14,9 +14,9 @@ describe("tree story", () => {
 			given(channels),
 			message(Message.FocusedTree({ targetKey: "engineering" })),
 			Command.expectExact(
-				FocusRow({ rowElementId: "tree-channels-engineering", onlyFromId: Option.some("tree-channels") }),
+				FocusTreeRow({ rowElementId: "tree-channels-engineering", onlyFromId: Option.some("tree-channels") }),
 			),
-			Command.resolve(FocusRow, Message.CompletedFocusRow()),
+			Command.resolve(FocusTreeRow, Message.CompletedFocusRow()),
 			model((next) => expect(next).toEqual(channels)),
 		)
 	})
@@ -26,8 +26,8 @@ describe("tree story", () => {
 			update,
 			given(channels),
 			message(Message.ClickedChevron({ key: "engineering" })),
-			Command.expectExact(FocusRow({ rowElementId: "tree-channels-engineering", onlyFromId: Option.none() })),
-			Command.resolve(FocusRow, Message.CompletedFocusRow()),
+			Command.expectExact(FocusTreeRow({ rowElementId: "tree-channels-engineering", onlyFromId: Option.none() })),
+			Command.resolve(FocusTreeRow, Message.CompletedFocusRow()),
 			model((next) => {
 				expect(next.expandedKeys).toEqual([])
 				expect(next.modality).toBe("Pointer")
@@ -40,7 +40,7 @@ describe("tree story", () => {
 			update,
 			given(channels),
 			message(Message.ClickedChevron({ key: "design" })),
-			Command.resolve(FocusRow, Message.CompletedFocusRow()),
+			Command.resolve(FocusTreeRow, Message.CompletedFocusRow()),
 			model((next) => expect(next.expandedKeys).toEqual(["engineering", "design"])),
 		)
 	})

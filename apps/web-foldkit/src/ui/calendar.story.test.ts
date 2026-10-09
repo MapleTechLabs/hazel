@@ -2,7 +2,15 @@ import { Option } from "effect"
 import { Command, expectNoOutMessage, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
 import * as Interaction from "./aria/interaction"
-import { Announce, FocusCell, highlightedRange, init, Message, OutMessage, update } from "./calendar"
+import {
+	AnnounceCalendar,
+	FocusCalendarCell,
+	highlightedRange,
+	init,
+	Message,
+	OutMessage,
+	update,
+} from "./calendar"
 import * as Select from "./select"
 
 /** Calendar and RangeCalendar update: grid keys, paging, minimum date, selection and announcements. */
@@ -14,9 +22,9 @@ const deadline = init({ id: "deadline", today, minValue: "2026-03-10" })
 const trip = init({ id: "trip", mode: "Range", today, range: { start: "2026-03-09", end: "2026-03-13" } })
 
 const key = (pressed: string) => message(Message.PressedGridKey({ key: pressed }))
-const focusCell = (label: string, grid = "event-grid") => FocusCell({ gridId: grid, label })
-const resolveFocus = Command.resolve(FocusCell, Message.CompletedFocusCell())
-const resolveAnnounce = Command.resolve(Announce, Message.CompletedAnnounce())
+const focusCell = (label: string, grid = "event-grid") => FocusCalendarCell({ gridId: grid, label })
+const resolveFocus = Command.resolve(FocusCalendarCell, Message.CompletedFocusCell())
+const resolveAnnounce = Command.resolve(AnnounceCalendar, Message.CompletedAnnounce())
 
 describe("calendar story: keyboard navigation", () => {
 	test("ArrowRight and ArrowLeft move focus one day and focus that cell", () => {
@@ -155,7 +163,7 @@ describe("calendar story: single selection", () => {
 			message(Message.ClickedCell({ date: "2026-03-20" })),
 			expectOutMessage(OutMessage.ChangedValue({ date: "2026-03-20" })),
 			Command.expectExact(
-				Announce({
+				AnnounceCalendar({
 					message: "Selected Date: Friday, March 20, 2026",
 					timeout: 4000,
 					assertiveness: "polite",
@@ -197,14 +205,14 @@ describe("calendar story: single selection", () => {
 			given(event),
 			message(Message.ClickedNext()),
 			Command.expectExact(
-				Announce({ message: "April 2026", timeout: 7000, assertiveness: "assertive" }),
+				AnnounceCalendar({ message: "April 2026", timeout: 7000, assertiveness: "assertive" }),
 			),
 			resolveAnnounce,
 			message(Message.ClickedPrevious()),
 			resolveAnnounce,
 			message(Message.ClickedPrevious()),
 			Command.expectExact(
-				Announce({ message: "February 2026", timeout: 7000, assertiveness: "assertive" }),
+				AnnounceCalendar({ message: "February 2026", timeout: 7000, assertiveness: "assertive" }),
 			),
 			resolveAnnounce,
 			model((next) => {
@@ -223,7 +231,7 @@ describe("calendar story: single selection", () => {
 				Message.GotYearMessage({ message: Select.Message.PressedTriggerKey({ key: "ArrowRight" }) }),
 			),
 			Command.expectExact(
-				Announce({ message: "March 2027", timeout: 7000, assertiveness: "assertive" }),
+				AnnounceCalendar({ message: "March 2027", timeout: 7000, assertiveness: "assertive" }),
 			),
 			resolveAnnounce,
 			model((next) => {
@@ -287,7 +295,7 @@ describe("range calendar story", () => {
 			message(Message.ClickedCell({ date: "2026-03-17" })),
 			expectOutMessage(OutMessage.ChangedRange({ start: "2026-03-17", end: "2026-03-20" })),
 			Command.expectExact(
-				Announce({
+				AnnounceCalendar({
 					message: "Selected Range: Tuesday, March 17 to Friday, March 20, 2026",
 					timeout: 4000,
 					assertiveness: "polite",
@@ -309,7 +317,7 @@ describe("range calendar story", () => {
 			key("Enter"),
 			expectOutMessage(OutMessage.ChangedRange({ start: "2026-03-09", end: "2026-03-09" })),
 			Command.expectExact(
-				Announce({
+				AnnounceCalendar({
 					message: "Selected Date: Monday, March 9, 2026",
 					timeout: 4000,
 					assertiveness: "polite",

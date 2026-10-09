@@ -1,7 +1,16 @@
 import { Option } from "effect"
 import { Command, expectNoOutMessage, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
-import { entry, FocusItem, init, item, Message, OutMessage, update, WaitForTypeaheadReset } from "./list-box"
+import {
+	entry,
+	FocusListBoxItem,
+	init,
+	item,
+	Message,
+	OutMessage,
+	update,
+	WaitForListBoxTypeaheadReset,
+} from "./list-box"
 
 /** React Aria ListBox: roving focus without wrapping, typeahead, and toggle selection. */
 
@@ -18,7 +27,7 @@ const themes = init({
 })
 const focusedOn = (key: string) => ({ ...themes, focusedKey: Option.some(key), isFocusWithin: true })
 const press = (key: string, isModified = false) => message(Message.PressedKey({ key, isModified }))
-const focusOf = (key: string) => FocusItem({ elementId: `theme-listbox-option-${key}` })
+const focusOf = (key: string) => FocusListBoxItem({ elementId: `theme-listbox-option-${key}` })
 
 describe("list-box story", () => {
 	test("tabbing into the list focuses the selected option", () => {
@@ -27,7 +36,7 @@ describe("list-box story", () => {
 			given(themes),
 			message(Message.FocusedList({ isFromAfter: false })),
 			Command.expectExact(focusOf("system")),
-			Command.resolve(FocusItem, Message.CompletedFocusItem()),
+			Command.resolve(FocusListBoxItem, Message.CompletedFocusItem()),
 			model((next) => {
 				expect(next.focusedKey).toEqual(Option.some("system"))
 				expect(next.isFocusWithin).toBe(true)
@@ -41,7 +50,7 @@ describe("list-box story", () => {
 			given(focusedOn("light")),
 			press("ArrowDown"),
 			Command.expectExact(focusOf("dim")),
-			Command.resolve(FocusItem, Message.CompletedFocusItem()),
+			Command.resolve(FocusListBoxItem, Message.CompletedFocusItem()),
 			model((next) => {
 				expect(next.focusedKey).toEqual(Option.some("dim"))
 				expect(next.modality).toBe("Keyboard")
@@ -54,7 +63,7 @@ describe("list-box story", () => {
 			update,
 			given(focusedOn("light")),
 			press("ArrowUp"),
-			Command.resolve(FocusItem, Message.CompletedFocusItem()),
+			Command.resolve(FocusListBoxItem, Message.CompletedFocusItem()),
 			model((next) => expect(next.focusedKey).toEqual(Option.some("light"))),
 		)
 	})
@@ -64,10 +73,10 @@ describe("list-box story", () => {
 			update,
 			given(focusedOn("dim")),
 			press("End"),
-			Command.resolve(FocusItem, Message.CompletedFocusItem()),
+			Command.resolve(FocusListBoxItem, Message.CompletedFocusItem()),
 			model((next) => expect(next.focusedKey).toEqual(Option.some("system"))),
 			press("Home"),
-			Command.resolve(FocusItem, Message.CompletedFocusItem()),
+			Command.resolve(FocusListBoxItem, Message.CompletedFocusItem()),
 			model((next) => expect(next.focusedKey).toEqual(Option.some("light"))),
 		)
 	})
@@ -95,7 +104,7 @@ describe("list-box story", () => {
 			message(Message.PressedItem({ key: "system", button: 0 })),
 			Command.expectExact(focusOf("system")),
 			expectOutMessage(OutMessage.ChangedSelection({ keys: [] })),
-			Command.resolve(FocusItem, Message.CompletedFocusItem()),
+			Command.resolve(FocusListBoxItem, Message.CompletedFocusItem()),
 			model((next) => expect(next.modality).toBe("Pointer")),
 		)
 	})
@@ -106,10 +115,10 @@ describe("list-box story", () => {
 			given(init({ ...themes, selectionMode: "multiple", selectedKeys: ["light"] })),
 			message(Message.PressedItem({ key: "dim", button: 0 })),
 			expectOutMessage(OutMessage.ChangedSelection({ keys: ["light", "dim"] })),
-			Command.resolve(FocusItem, Message.CompletedFocusItem()),
+			Command.resolve(FocusListBoxItem, Message.CompletedFocusItem()),
 			message(Message.PressedItem({ key: "light", button: 0 })),
 			expectOutMessage(OutMessage.ChangedSelection({ keys: ["dim"] })),
-			Command.resolve(FocusItem, Message.CompletedFocusItem()),
+			Command.resolve(FocusListBoxItem, Message.CompletedFocusItem()),
 		)
 	})
 
@@ -132,10 +141,13 @@ describe("list-box story", () => {
 			update,
 			given(focusedOn("light")),
 			press("s"),
-			Command.expectExact(focusOf("system"), WaitForTypeaheadReset({ search: "s" })),
-			Command.resolve(FocusItem, Message.CompletedFocusItem()),
+			Command.expectExact(focusOf("system"), WaitForListBoxTypeaheadReset({ search: "s" })),
+			Command.resolve(FocusListBoxItem, Message.CompletedFocusItem()),
 			model((next) => expect(next.search).toBe("s")),
-			Command.resolve(WaitForTypeaheadReset, Message.CompletedWaitForTypeaheadReset({ search: "s" })),
+			Command.resolve(
+				WaitForListBoxTypeaheadReset,
+				Message.CompletedWaitForTypeaheadReset({ search: "s" }),
+			),
 			model((next) => expect(next.search).toBe("")),
 		)
 	})
@@ -154,10 +166,13 @@ describe("list-box story", () => {
 			update,
 			given({ ...focusedOn("dim"), search: "d" }),
 			press(" "),
-			Command.expectExact(WaitForTypeaheadReset({ search: "d " })),
+			Command.expectExact(WaitForListBoxTypeaheadReset({ search: "d " })),
 			expectNoOutMessage(),
 			model((next) => expect(next.search).toBe("d ")),
-			Command.resolve(WaitForTypeaheadReset, Message.CompletedWaitForTypeaheadReset({ search: "d " })),
+			Command.resolve(
+				WaitForListBoxTypeaheadReset,
+				Message.CompletedWaitForTypeaheadReset({ search: "d " }),
+			),
 			model((next) => expect(next.search).toBe("")),
 		)
 	})

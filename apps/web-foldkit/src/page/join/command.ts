@@ -6,7 +6,7 @@ import { signInHref } from "../../route"
 import { HazelRpc } from "../../rpc"
 import { Message } from "./message"
 
-export const FetchOrganization = Command.define("FetchPublicOrganization", {
+export const FetchPublicOrganization = Command.define("FetchPublicOrganization", {
 	args: { slug: Schema.String },
 	messages: [Message.SucceededFetchOrganization, Message.FailedFetchOrganization],
 	execute: ({ slug }) =>

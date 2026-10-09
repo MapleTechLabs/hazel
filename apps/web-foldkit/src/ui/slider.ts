@@ -116,7 +116,7 @@ const closestThumb = (model: Model, value: number) => {
 // COMMAND
 
 /** useSliderThumb focuses the thumb input when a track press selects it. */
-export const FocusThumb = Command.define("FocusSliderThumb", {
+export const FocusSliderThumb = Command.define("FocusSliderThumb", {
 	args: { inputId: Schema.String },
 	messages: [Message.CompletedFocusThumb],
 	execute: ({ inputId }) =>
@@ -147,7 +147,7 @@ export const update = (model: Model, message: Message): Update.Return<Model, Mes
 			const index = closestThumb(model, value)
 			return {
 				model: modifyFields(setThumbValue(model, index, value), { dragging: () => index }),
-				commands: [FocusThumb({ inputId: `${inputPrefix}-${index}` })],
+				commands: [FocusSliderThumb({ inputId: `${inputPrefix}-${index}` })],
 			}
 		},
 		MovedDragPointer: ({ value }) => ({

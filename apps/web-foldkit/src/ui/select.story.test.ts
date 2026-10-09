@@ -2,14 +2,14 @@ import { Option } from "effect"
 import { Command, expectNoOutMessage, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
 import {
-	FocusElement,
+	FocusSelectElement,
 	init,
 	item,
 	Message,
 	type Model,
 	OutMessage,
 	update,
-	WaitForTypeaheadReset,
+	WaitForSelectTypeaheadReset,
 } from "./select"
 
 /** React Aria Select: open strategies, non-wrapping list navigation, typeahead and selection. */
@@ -26,7 +26,7 @@ const triggerKey = (key: string) => message(Message.PressedTriggerKey({ key }))
 const listKey = (key: string, isModified = false) => message(Message.PressedListKey({ key, isModified }))
 const focusOf = (next: Model) => (next.popup._tag === "Open" ? next.popup.focusedKey : Option.none())
 const searchOf = (next: Model) => (next.popup._tag === "Open" ? next.popup.search : "")
-const resolveFocus = Command.resolve(FocusElement, Message.CompletedFocusElement())
+const resolveFocus = Command.resolve(FocusSelectElement, Message.CompletedFocusElement())
 const openOn = (focusedKey: string, search = ""): Model => ({
 	...select,
 	popup: {
@@ -115,7 +115,7 @@ describe("select story", () => {
 			update,
 			given(openOn("30m")),
 			listKey("ArrowDown"),
-			Command.expectExact(FocusElement({ elementId: "clear-listbox-option-today" })),
+			Command.expectExact(FocusSelectElement({ elementId: "clear-listbox-option-today" })),
 			resolveFocus,
 			listKey("End"),
 			resolveFocus,
@@ -163,12 +163,15 @@ describe("select story", () => {
 			given(openOn("never")),
 			listKey("t"),
 			Command.expectExact(
-				FocusElement({ elementId: "clear-listbox-option-today" }),
-				WaitForTypeaheadReset({ search: "t" }),
+				FocusSelectElement({ elementId: "clear-listbox-option-today" }),
+				WaitForSelectTypeaheadReset({ search: "t" }),
 			),
 			resolveFocus,
 			model((next) => expect(searchOf(next)).toBe("t")),
-			Command.resolve(WaitForTypeaheadReset, Message.CompletedWaitForTypeaheadReset({ search: "t" })),
+			Command.resolve(
+				WaitForSelectTypeaheadReset,
+				Message.CompletedWaitForTypeaheadReset({ search: "t" }),
+			),
 			model((next) => {
 				expect(searchOf(next)).toBe("")
 				expect(focusOf(next)).toEqual(Option.some("today"))
@@ -185,7 +188,7 @@ describe("select story", () => {
 			resolveFocus,
 			model((next) => expect(searchOf(next)).toBe("this ")),
 			Command.resolve(
-				WaitForTypeaheadReset,
+				WaitForSelectTypeaheadReset,
 				Message.CompletedWaitForTypeaheadReset({ search: "this " }),
 			),
 		)

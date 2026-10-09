@@ -137,7 +137,7 @@ const stepKey = (items: ReadonlyArray<Item>, from: Option.Option<string>, direct
 
 // COMMAND
 
-export const FocusInput = Command.define("FocusComboBoxInput", {
+export const FocusComboBoxInput = Command.define("FocusComboBoxInput", {
 	args: { elementId: Schema.String },
 	messages: [Message.CompletedFocusInput],
 	execute: ({ elementId }) =>
@@ -211,7 +211,7 @@ const pressedInputKey = (model: Model, key: string): UpdateReturn => {
 	)
 }
 
-export const Announce = Command.define("AnnounceComboBox", {
+export const AnnounceComboBox = Command.define("AnnounceComboBox", {
 	args: { message: Schema.String },
 	messages: [Message.CompletedAnnounce],
 	execute: ({ message }) =>
@@ -265,7 +265,7 @@ export const update = (model: Model, message: Message): UpdateReturn => {
 				]
 			: []
 	const announcements = Array.map([...pressedFocus, ...announcementsFor(model, result.model)], (text) =>
-		Announce({ message: text }),
+		AnnounceComboBox({ message: text }),
 	)
 	return Array.isReadonlyArrayNonEmpty(announcements)
 		? { ...result, commands: [...(result.commands ?? []), ...announcements] }
@@ -294,7 +294,7 @@ const updateComboBox = (model: Model, message: Message): UpdateReturn =>
 		PressedInputKey: ({ key }) => pressedInputKey(model, key),
 		PressedButton: () => ({
 			model: model.popup._tag === "Open" ? closedAndReverted(model) : openedAll(model, "Selected"),
-			commands: [FocusInput({ elementId: inputId(model.id) })],
+			commands: [FocusComboBoxInput({ elementId: inputId(model.id) })],
 		}),
 		HoveredOption: ({ key }) =>
 			model.popup._tag === "Open"

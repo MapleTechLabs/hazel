@@ -32,7 +32,7 @@ const clerkUser = (): ClerkUser | null => {
 const OUTPUT_SIZE = 512
 
 /** `detectBrowserTimezone()`, the form's fallback timezone, read outside `init` and `update`. */
-export const ReadBrowserTimezone = Command.define("ReadProfileBrowserTimezone", {
+export const ReadProfileBrowserTimezone = Command.define("ReadProfileBrowserTimezone", {
 	messages: [Message.GotBrowserTimezone],
 	execute: Effect.sync(() => Message.GotBrowserTimezone({ browserTimezone: detectBrowserTimezone() })),
 })

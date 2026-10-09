@@ -9,7 +9,7 @@ import { Message } from "./message"
 import type { Model } from "./model"
 
 /** `listOrganizationWebhooksMutation({ payload: {} })`, once the user's organization is known. */
-export const ListOrganizationWebhooks = Command.define("IntegrationsListOrganizationWebhooks", {
+export const ListOrganizationWebhooks = Command.define("ListOrganizationWebhooks", {
 	messages: [Message.SucceededListWebhooks, Message.FailedListWebhooks],
 	execute: Effect.gen(function* () {
 		const client = yield* HazelRpc

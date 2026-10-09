@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import * as Scene from "foldkit/scene"
 import { describe, test } from "vitest"
-import { Announce, FocusCell, FocusCellOnPress, init, Message, OutMessage, update } from "./calendar"
+import { AnnounceCalendar, FocusCalendarCell, FocusCellOnPress, init, Message, OutMessage, update } from "./calendar"
 import { view } from "./calendar-view"
 import * as Select from "./select"
 
@@ -20,7 +20,7 @@ const mounted = [
 	Scene.Mount.resolve(triggerMount, Select.Message.CompletedPortalSelect()),
 	Scene.Mount.resolve(triggerMount, Select.Message.CompletedPortalSelect()),
 ]
-const resolveAnnounce = Scene.Command.resolve(Announce, Message.CompletedAnnounce())
+const resolveAnnounce = Scene.Command.resolve(AnnounceCalendar, Message.CompletedAnnounce())
 
 describe("calendar scene", () => {
 	test("renders a labelled grid with a month heading and the selected day", () => {
@@ -70,7 +70,7 @@ describe("calendar scene", () => {
 			Scene.given(init({ id: "event", today, value: "2026-03-18" })),
 			...mounted,
 			Scene.click(Scene.role("button", { name: "Next" })),
-			Scene.Command.expectExact(Announce({ message: "April 2026", timeout: 7000, assertiveness: "assertive" })),
+			Scene.Command.expectExact(AnnounceCalendar({ message: "April 2026", timeout: 7000, assertiveness: "assertive" })),
 			resolveAnnounce,
 			Scene.expect(Scene.role("grid", { name: "Event date, April 2026" })).toExist(),
 			Scene.click(Scene.role("button", { name: "Previous" })),
@@ -97,8 +97,8 @@ describe("calendar scene", () => {
 			Scene.given(init({ id: "event", today, value: "2026-03-18" })),
 			...mounted,
 			Scene.keydown(Scene.role("grid"), "ArrowRight"),
-			Scene.Command.expectExact(FocusCell({ gridId: "event-grid", label: "Thursday, March 19, 2026" })),
-			Scene.Command.resolve(FocusCell, Message.CompletedFocusCell()),
+			Scene.Command.expectExact(FocusCalendarCell({ gridId: "event-grid", label: "Thursday, March 19, 2026" })),
+			Scene.Command.resolve(FocusCalendarCell, Message.CompletedFocusCell()),
 			Scene.expect(selectedCell).toHaveText("18"),
 		)
 	})
@@ -108,7 +108,7 @@ describe("calendar scene", () => {
 			Scene.given(init({ id: "event", today, value: "2026-03-18" })),
 			...mounted,
 			Scene.keydown(Scene.role("grid"), "ArrowRight"),
-			Scene.Command.resolve(FocusCell, Message.CompletedFocusCell()),
+			Scene.Command.resolve(FocusCalendarCell, Message.CompletedFocusCell()),
 			Scene.keydown(Scene.role("grid"), "Enter"),
 			Scene.expectOutMessage(OutMessage.ChangedValue({ date: "2026-03-19" })),
 			resolveAnnounce,

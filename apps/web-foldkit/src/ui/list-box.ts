@@ -181,7 +181,7 @@ export type OutMessage = typeof OutMessage.Type
 
 // COMMAND
 
-export const FocusItem = Command.define("FocusListBoxItem", {
+export const FocusListBoxItem = Command.define("FocusListBoxItem", {
 	args: { elementId: Schema.String },
 	messages: [Message.CompletedFocusItem],
 	execute: ({ elementId }) =>
@@ -199,7 +199,7 @@ export const FocusItem = Command.define("FocusListBoxItem", {
 		),
 })
 
-export const WaitForTypeaheadReset = Command.define("WaitForListBoxTypeaheadReset", {
+export const WaitForListBoxTypeaheadReset = Command.define("WaitForListBoxTypeaheadReset", {
 	args: { search: Schema.String },
 	messages: [Message.CompletedWaitForTypeaheadReset],
 	execute: ({ search }) =>
@@ -217,7 +217,7 @@ const moveFocus = (model: Model, key: Option.Option<string>): UpdateReturn =>
 		onNone: () => ({ model }),
 		onSome: (found) => ({
 			model: modifyFields(model, { focusedKey: () => Option.some(found) }),
-			commands: [FocusItem({ elementId: optionId(model.id, found) })],
+			commands: [FocusListBoxItem({ elementId: optionId(model.id, found) })],
 		}),
 	})
 
@@ -282,7 +282,7 @@ export const update = (model: Model, message: Message): UpdateReturn =>
 				isFocusWithin: () => true,
 			})
 			const selected = toggle(pressed, key)
-			return { ...selected, commands: [FocusItem({ elementId: optionId(model.id, key) })] }
+			return { ...selected, commands: [FocusListBoxItem({ elementId: optionId(model.id, key) })] }
 		},
 		ReleasedPointer: () => ({ model: modifyFields(model, { pressedKey: () => Option.none() }) }),
 		PressedKey: ({ key, isModified }) => {
@@ -307,7 +307,7 @@ export const update = (model: Model, message: Message): UpdateReturn =>
 			)
 			return {
 				...searched,
-				commands: [...(searched.commands ?? []), WaitForTypeaheadReset({ search })],
+				commands: [...(searched.commands ?? []), WaitForListBoxTypeaheadReset({ search })],
 			}
 		},
 		ReleasedKey: ({ key }) =>

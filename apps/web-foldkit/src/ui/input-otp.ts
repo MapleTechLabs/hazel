@@ -74,7 +74,7 @@ const InstallInputOtpStyle = Command.define("InstallInputOtpStyle", {
 })
 
 /** The mount-time measurements: the input's height (`--root-height`) and room for a badge. */
-const MeasureInput = Command.define("MeasureInputOtp", {
+const MeasureInputOtp = Command.define("MeasureInputOtp", {
 	args: { id: Schema.String },
 	messages: [Message.CompletedMeasureInput],
 	execute: ({ id }) =>
@@ -106,7 +106,7 @@ const passwordManagerSelectors = [
 ].join(",")
 
 /** usePasswordManagerBadge: something other than the container at its right edge is a badge. */
-export const CheckPasswordBadge = Command.define("CheckInputOtpPasswordBadge", {
+export const CheckInputOtpPasswordBadge = Command.define("CheckInputOtpPasswordBadge", {
 	args: { id: Schema.String, delayMillis: Schema.Number },
 	messages: [Message.CompletedCheckPasswordBadge],
 	execute: ({ id, delayMillis }) =>
@@ -185,7 +185,11 @@ export const init = (options: {
 		hasBadgeSpace: false,
 		hasPasswordBadge: false,
 	},
-	commands: [InstallInputOtpStyle(), MeasureInput({ id: options.id }), ReadSelection({ id: options.id })],
+	commands: [
+		InstallInputOtpStyle(),
+		MeasureInputOtp({ id: options.id }),
+		ReadSelection({ id: options.id }),
+	],
 })
 
 // UPDATE
@@ -205,7 +209,7 @@ export const update = (model: Model, message: Message): Update.Return<Model, Mes
 					SetSelection({ id: model.id, start, end }),
 					ReadSelection({ id: model.id }),
 					...[0, 2000, 5000].map((delayMillis) =>
-						CheckPasswordBadge({ id: model.id, delayMillis }),
+						CheckInputOtpPasswordBadge({ id: model.id, delayMillis }),
 					),
 				],
 			}

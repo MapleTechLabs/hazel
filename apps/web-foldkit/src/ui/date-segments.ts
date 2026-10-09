@@ -256,7 +256,7 @@ export const FocusSegment = Command.define("FocusSegment", {
 })
 
 /** useSpinButton: a focused segment clears the assertive log and announces its new value text. */
-export const AnnounceValue = Command.define("AnnounceSegmentValue", {
+export const AnnounceSegmentValue = Command.define("AnnounceSegmentValue", {
 	args: { valueText: Schema.String },
 	messages: [Message.CompletedAnnounceValue],
 	execute: ({ valueText }) =>
@@ -437,7 +437,11 @@ export const update = (model: Model, message: Message): Update.Return<Model, Mes
 	const valueText = valueTextOf(next, focused)
 	return valueText === undefined || valueText === valueTextOf(model, focused)
 		? { ...result, model: next }
-		: { ...result, model: next, commands: [...(result.commands ?? []), AnnounceValue({ valueText })] }
+		: {
+				...result,
+				model: next,
+				commands: [...(result.commands ?? []), AnnounceSegmentValue({ valueText })],
+			}
 }
 
 const updateSegments = (model: Model, message: Message): Update.Return<Model, Message> =>

@@ -52,7 +52,7 @@ export type Message = typeof Message.Type
 export const rowId = (model: Model, key: string) => `${model.id}-${key}`
 
 // NOTE: only moves focus when the tree element itself (or the chevron's row) still needs it.
-export const FocusRow = Command.define("FocusTreeRow", {
+export const FocusTreeRow = Command.define("FocusTreeRow", {
 	args: { rowElementId: Schema.String, onlyFromId: Schema.Option(Schema.String) },
 	messages: [Message.CompletedFocusRow],
 	execute: ({ rowElementId, onlyFromId }) =>
@@ -86,7 +86,7 @@ export const update = (model: Model, message: Message) =>
 		FocusedTree: ({ targetKey }) => ({
 			model,
 			commands: [
-				FocusRow({ rowElementId: rowId(model, targetKey), onlyFromId: Option.some(model.id) }),
+				FocusTreeRow({ rowElementId: rowId(model, targetKey), onlyFromId: Option.some(model.id) }),
 			],
 		}),
 		FocusedRow: ({ key }) => ({
@@ -98,7 +98,7 @@ export const update = (model: Model, message: Message) =>
 		PressedRow: () => ({ model: withModality(model, "Pointer") }),
 		ClickedChevron: ({ key }) => ({
 			model: setExpanded(withModality(model, "Pointer"), key, !model.expandedKeys.includes(key)),
-			commands: [FocusRow({ rowElementId: rowId(model, key), onlyFromId: Option.none() })],
+			commands: [FocusTreeRow({ rowElementId: rowId(model, key), onlyFromId: Option.none() })],
 		}),
 		NavigatedToRow: () => ({ model: withModality(model, "Keyboard") }),
 		PressedExpandKey: ({ key }) => ({ model: setExpanded(withModality(model, "Keyboard"), key, true) }),

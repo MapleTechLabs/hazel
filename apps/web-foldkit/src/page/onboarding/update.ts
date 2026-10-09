@@ -12,11 +12,11 @@ import type { Shared } from "../contract"
 import { PageOutMessage } from "../out-message"
 import {
 	DebounceTimezoneQuery,
-	LoadHome,
+	LoadOnboardingHome,
 	ReadBrowserTimezone,
 	SendInvites,
-	UpdateProfile,
-	UpdateTimezone,
+	UpdateClerkProfile,
+	UpdateUserTimezone,
 } from "./command"
 import { Message } from "./message"
 import { type Model, StepForm } from "./model"
@@ -125,7 +125,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 					? { model: setForm(model, StepForm.Profile({ ...form, hasChanged: true })) }
 					: {
 							model: setForm(model, StepForm.Profile({ ...form, isSubmitting: true })),
-							commands: [UpdateProfile({ firstName, lastName })],
+							commands: [UpdateClerkProfile({ firstName, lastName })],
 						}
 			}),
 		SucceededUpdateProfile: () => withForm(model, "Profile", () => advance(model, shared)),
@@ -182,7 +182,10 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 					: {
 							model: setForm(model, StepForm.Timezone({ ...form, isSubmitting: true })),
 							commands: [
-								UpdateTimezone({ userId: shared.currentUser.id, timezone: form.selected }),
+								UpdateUserTimezone({
+									userId: shared.currentUser.id,
+									timezone: form.selected,
+								}),
 							],
 						},
 			),
@@ -313,7 +316,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				...completed,
 				commands: [
 					...(completed.commands ?? []),
-					LoadHome({ href: hrefOf(slug ? AppRoute.OrgHome({ orgSlug: slug }) : AppRoute.Root()) }),
+					LoadOnboardingHome({
+						href: hrefOf(slug ? AppRoute.OrgHome({ orgSlug: slug }) : AppRoute.Root()),
+					}),
 				],
 			}
 		},

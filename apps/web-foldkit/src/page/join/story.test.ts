@@ -3,7 +3,7 @@ import { describe, expect, test } from "vitest"
 import { errorToast } from "../../data/actions"
 import { AppRoute } from "../../route"
 import { PageOutMessage } from "../out-message"
-import { FetchOrganization, JoinWorkspace, RedirectToSignIn } from "./command"
+import { FetchPublicOrganization, JoinWorkspace, RedirectToSignIn } from "./command"
 import { Message } from "./message"
 import { Lookup, type Model } from "./model"
 import { init, update } from "./update"
@@ -17,7 +17,7 @@ const loaded: Model = { slug: "hazel", lookup: Lookup.Loaded({ organization }), 
 describe("join workspace", () => {
 	test("looks the slug up on load; a missing workspace reads as not found", () => {
 		const started = init(route)
-		expect(started.commands?.map((command) => command.name)).toEqual([FetchOrganization.name])
+		expect(started.commands?.map((command) => command.name)).toEqual([FetchPublicOrganization.name])
 		story(
 			update,
 			given(started.model),

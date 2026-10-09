@@ -68,7 +68,7 @@ export const tooltipId = (id: string) => `${id}-tooltip`
 /** useTooltipTriggerState defaults. */
 const HIDE_DELAY = Duration.millis(500)
 
-export const WaitForShowDelay = Command.define("WaitForTooltipShowDelay", {
+export const WaitForTooltipShowDelay = Command.define("WaitForTooltipShowDelay", {
 	args: { version: Schema.Number, delayMs: Schema.Number },
 	messages: [Message.CompletedWaitForShowDelay],
 	execute: ({ version, delayMs }) =>
@@ -77,7 +77,7 @@ export const WaitForShowDelay = Command.define("WaitForTooltipShowDelay", {
 		),
 })
 
-export const WaitForHideDelay = Command.define("WaitForTooltipHideDelay", {
+export const WaitForTooltipHideDelay = Command.define("WaitForTooltipHideDelay", {
 	args: { version: Schema.Number },
 	messages: [Message.CompletedWaitForHideDelay],
 	execute: ({ version }) =>
@@ -92,7 +92,7 @@ const requestShow = (model: Model, isFocus: boolean): UpdateReturn => {
 	const version = model.version + 1
 	const next = modifyFields(model, { version: () => version })
 	if (model.isOpen || isFocus) return { model: modifyFields(next, { isOpen: () => true }) }
-	return { model: next, commands: [WaitForShowDelay({ version, delayMs: model.delayMs })] }
+	return { model: next, commands: [WaitForTooltipShowDelay({ version, delayMs: model.delayMs })] }
 }
 
 const requestHide = (model: Model, isImmediate: boolean): UpdateReturn => {
@@ -100,7 +100,7 @@ const requestHide = (model: Model, isImmediate: boolean): UpdateReturn => {
 	const version = model.version + 1
 	const next = modifyFields(model, { version: () => version })
 	if (isImmediate || !model.isOpen) return { model: modifyFields(next, { isOpen: () => false }) }
-	return { model: next, commands: [WaitForHideDelay({ version })] }
+	return { model: next, commands: [WaitForTooltipHideDelay({ version })] }
 }
 
 const released = (model: Model): Model =>

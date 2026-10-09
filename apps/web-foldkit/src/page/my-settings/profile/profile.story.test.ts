@@ -9,7 +9,7 @@ import {
 	CropAvatarImage,
 	LoadCropImage,
 	OpenFilePicker,
-	ReadBrowserTimezone,
+	ReadProfileBrowserTimezone,
 	ResetAvatar,
 	RevokeCropImage,
 	SaveProfile,
@@ -202,7 +202,7 @@ describe("profile save", () => {
 
 	test("the browser timezone is read by a Command and fills an untouched form without a stored one", () => {
 		const started = init(undefined, shared)
-		expect(started.commands?.map((command) => command.name)).toEqual([ReadBrowserTimezone.name])
+		expect(started.commands?.map((command) => command.name)).toEqual([ReadProfileBrowserTimezone.name])
 		expect(started.model.values.timezone).toBeNull()
 		story(
 			pageUpdate,

@@ -9,13 +9,13 @@ import {
 	type Model,
 	offsetOf,
 	OutMessage,
-	PauseTimers,
+	PauseToastTimers,
 	show,
-	StartTimer,
+	StartToastTimer,
 	subscriptions,
 	update,
-	WaitForLifetime,
-	WaitForRemoval,
+	WaitForToastLifetime,
+	WaitForToastRemoval,
 } from "./toast"
 
 /** sonner's Toaster: newest-first stack, 4s lifetimes paused by hover, press and hidden tabs. */
@@ -36,7 +36,7 @@ describe("toast story: show and lifetime", () => {
 		expect(second.id).toBe(2)
 		expect(second.model.toasts.map((item) => item.title)).toEqual(["Retrying", "Couldn't send"])
 		expect(toastAt(second.model, 0)).toMatchObject({ kind: null, duration: 4000, remainingMs: 4000 })
-		expect(commandsOf(second)).toEqual([{ name: StartTimer.name, args: { id: 2, version: 1 } }])
+		expect(commandsOf(second)).toEqual([{ name: StartToastTimer.name, args: { id: 2, version: 1 } }])
 	})
 
 	test("loading and infinite toasts never start a timer", () => {
@@ -49,11 +49,11 @@ describe("toast story: show and lifetime", () => {
 			update,
 			given(one),
 			message(Message.StartedTimer({ id: 1, version: 1, at: 1000 })),
-			Command.expectExact(WaitForLifetime({ id: 1, version: 1, ms: 4000 })),
-			Command.resolve(WaitForLifetime, Message.CompletedWaitForLifetime({ id: 1, version: 1 })),
-			Command.expectExact(WaitForRemoval({ id: 1 })),
+			Command.expectExact(WaitForToastLifetime({ id: 1, version: 1, ms: 4000 })),
+			Command.resolve(WaitForToastLifetime, Message.CompletedWaitForLifetime({ id: 1, version: 1 })),
+			Command.expectExact(WaitForToastRemoval({ id: 1 })),
 			model((next) => expect(toastAt(next, 0)?.isRemoved).toBe(true)),
-			Command.resolve(WaitForRemoval, Message.CompletedWaitForRemoval({ id: 1 })),
+			Command.resolve(WaitForToastRemoval, Message.CompletedWaitForRemoval({ id: 1 })),
 			model((next) => expect(next.toasts).toEqual([])),
 		)
 	})
@@ -73,7 +73,7 @@ describe("toast story: show and lifetime", () => {
 		const saved = show(loading.model, { id: loading.id, kind: "success", title: "Saved" })
 		expect(saved.model.toasts).toHaveLength(1)
 		expect(toastAt(saved.model, 0)).toMatchObject({ kind: "success", title: "Saved", isPromise: true })
-		expect(commandsOf(saved)).toEqual([{ name: StartTimer.name, args: { id: 1, version: 1 } }])
+		expect(commandsOf(saved)).toEqual([{ name: StartToastTimer.name, args: { id: 1, version: 1 } }])
 	})
 
 	test("dismissing keeps the toast's offset for its exit animation, then drops it", () => {
@@ -84,7 +84,7 @@ describe("toast story: show and lifetime", () => {
 		const dismissed = dismiss(withHeights, 1)
 		expect(toastAt(dismissed.model, 1)).toMatchObject({ isRemoved: true, offsetBeforeRemove: 54 })
 		expect(dismissed.model.heights).toEqual([{ toastId: 2, height: 40 }])
-		expect(commandsOf(dismissed)).toEqual([{ name: WaitForRemoval.name, args: { id: 1 } }])
+		expect(commandsOf(dismissed)).toEqual([{ name: WaitForToastRemoval.name, args: { id: 1 } }])
 	})
 })
 
@@ -106,8 +106,8 @@ describe("toast story: pausing", () => {
 			update,
 			given(running),
 			message(Message.HoveredToaster()),
-			Command.expectExact(PauseTimers()),
-			Command.resolve(PauseTimers, Message.PausedTimers({ at: 2500 })),
+			Command.expectExact(PauseToastTimers()),
+			Command.resolve(PauseToastTimers, Message.PausedTimers({ at: 2500 })),
 			model((next) => {
 				expect(next.isExpanded).toBe(true)
 				expect(toastAt(next, 0)).toMatchObject({
@@ -124,11 +124,11 @@ describe("toast story: pausing", () => {
 			update,
 			given(paused),
 			message(Message.LeftToaster()),
-			Command.expectExact(StartTimer({ id: 1, version: 3 })),
-			Command.resolve(StartTimer, Message.StartedTimer({ id: 1, version: 3, at: 9000 })),
-			Command.expectExact(WaitForLifetime({ id: 1, version: 3, ms: 2500 })),
-			Command.resolve(WaitForLifetime, Message.CompletedWaitForLifetime({ id: 1, version: 3 })),
-			Command.resolve(WaitForRemoval, Message.CompletedWaitForRemoval({ id: 1 })),
+			Command.expectExact(StartToastTimer({ id: 1, version: 3 })),
+			Command.resolve(StartToastTimer, Message.StartedTimer({ id: 1, version: 3, at: 9000 })),
+			Command.expectExact(WaitForToastLifetime({ id: 1, version: 3, ms: 2500 })),
+			Command.resolve(WaitForToastLifetime, Message.CompletedWaitForLifetime({ id: 1, version: 3 })),
+			Command.resolve(WaitForToastRemoval, Message.CompletedWaitForRemoval({ id: 1 })),
 			model((next) => expect(next).toMatchObject({ isExpanded: false, toasts: [] })),
 		)
 	})
@@ -152,14 +152,14 @@ describe("toast story: pausing", () => {
 			update,
 			given(running),
 			message(Message.ChangedVisibility({ isHidden: true })),
-			Command.resolve(PauseTimers, Message.PausedTimers({ at: 4000 })),
+			Command.resolve(PauseToastTimers, Message.PausedTimers({ at: 4000 })),
 			model((next) => expect(toastAt(next, 0)?.remainingMs).toBe(1000)),
 			message(Message.ChangedVisibility({ isHidden: false })),
-			Command.expectExact(StartTimer({ id: 1, version: 3 })),
-			Command.resolve(StartTimer, Message.StartedTimer({ id: 1, version: 3, at: 5000 })),
-			Command.expectExact(WaitForLifetime({ id: 1, version: 3, ms: 1000 })),
-			Command.resolve(WaitForLifetime, Message.CompletedWaitForLifetime({ id: 1, version: 3 })),
-			Command.resolve(WaitForRemoval, Message.CompletedWaitForRemoval({ id: 1 })),
+			Command.expectExact(StartToastTimer({ id: 1, version: 3 })),
+			Command.resolve(StartToastTimer, Message.StartedTimer({ id: 1, version: 3, at: 5000 })),
+			Command.expectExact(WaitForToastLifetime({ id: 1, version: 3, ms: 1000 })),
+			Command.resolve(WaitForToastLifetime, Message.CompletedWaitForLifetime({ id: 1, version: 3 })),
+			Command.resolve(WaitForToastRemoval, Message.CompletedWaitForRemoval({ id: 1 })),
 		)
 	})
 
@@ -168,8 +168,8 @@ describe("toast story: pausing", () => {
 			update,
 			given(running),
 			message(Message.PressedHotkey()),
-			Command.expectExact(PauseTimers(), FocusToaster()),
-			Command.resolve(PauseTimers, Message.PausedTimers({ at: 1500 })),
+			Command.expectExact(PauseToastTimers(), FocusToaster()),
+			Command.resolve(PauseToastTimers, Message.PausedTimers({ at: 1500 })),
 			Command.resolve(FocusToaster, Message.CompletedFocusToaster()),
 			model((next) => expect(next.isExpanded).toBe(true)),
 		)
@@ -180,11 +180,11 @@ describe("toast story: pausing", () => {
 			update,
 			given(paused),
 			message(Message.PressedEscape()),
-			Command.expectExact(StartTimer({ id: 1, version: 3 })),
+			Command.expectExact(StartToastTimer({ id: 1, version: 3 })),
 			model((next) => expect(next.isExpanded).toBe(false)),
-			Command.resolve(StartTimer, Message.StartedTimer({ id: 1, version: 3, at: 0 })),
-			Command.resolve(WaitForLifetime, Message.CompletedWaitForLifetime({ id: 1, version: 3 })),
-			Command.resolve(WaitForRemoval, Message.CompletedWaitForRemoval({ id: 1 })),
+			Command.resolve(StartToastTimer, Message.StartedTimer({ id: 1, version: 3, at: 0 })),
+			Command.resolve(WaitForToastLifetime, Message.CompletedWaitForLifetime({ id: 1, version: 3 })),
+			Command.resolve(WaitForToastRemoval, Message.CompletedWaitForRemoval({ id: 1 })),
 		)
 	})
 })
@@ -196,8 +196,8 @@ describe("toast story: actions and removal", () => {
 			given(two),
 			message(Message.ClickedAction({ id: 2 })),
 			expectOutMessage(OutMessage.ClickedAction({ id: 2 })),
-			Command.expectExact(WaitForRemoval({ id: 2 })),
-			Command.resolve(WaitForRemoval, Message.CompletedWaitForRemoval({ id: 2 })),
+			Command.expectExact(WaitForToastRemoval({ id: 2 })),
+			Command.resolve(WaitForToastRemoval, Message.CompletedWaitForRemoval({ id: 2 })),
 			expectNoOutMessage(),
 			model((next) => expect(next.toasts.map((item) => item.id)).toEqual([1])),
 		)
@@ -209,12 +209,12 @@ describe("toast story: actions and removal", () => {
 			update,
 			given(expanded),
 			message(Message.ClickedAction({ id: 2 })),
-			Command.resolve(WaitForRemoval, Message.CompletedWaitForRemoval({ id: 2 })),
-			Command.expectExact(StartTimer({ id: 1, version: 2 })),
+			Command.resolve(WaitForToastRemoval, Message.CompletedWaitForRemoval({ id: 2 })),
+			Command.expectExact(StartToastTimer({ id: 1, version: 2 })),
 			model((next) => expect(next.isExpanded).toBe(false)),
-			Command.resolve(StartTimer, Message.StartedTimer({ id: 1, version: 2, at: 0 })),
-			Command.resolve(WaitForLifetime, Message.CompletedWaitForLifetime({ id: 1, version: 2 })),
-			Command.resolve(WaitForRemoval, Message.CompletedWaitForRemoval({ id: 1 })),
+			Command.resolve(StartToastTimer, Message.StartedTimer({ id: 1, version: 2, at: 0 })),
+			Command.resolve(WaitForToastLifetime, Message.CompletedWaitForLifetime({ id: 1, version: 2 })),
+			Command.resolve(WaitForToastRemoval, Message.CompletedWaitForRemoval({ id: 1 })),
 			model((next) => expect(next.toasts).toEqual([])),
 		)
 	})

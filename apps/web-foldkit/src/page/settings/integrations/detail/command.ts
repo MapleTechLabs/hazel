@@ -12,7 +12,7 @@ const Provider = IntegrationConnection.IntegrationProvider
 const target = { orgId: OrganizationId, provider: Provider }
 
 /** `getOAuthUrlMutation`, organization level. */
-export const GetOAuthUrl = Command.define("IntegrationGetOAuthUrl", {
+export const GetOAuthUrl = Command.define("GetOAuthUrl", {
 	args: target,
 	messages: [Message.SucceededGetOAuthUrl, Message.FailedGetOAuthUrl],
 	execute: (params) =>
@@ -27,7 +27,7 @@ export const GetOAuthUrl = Command.define("IntegrationGetOAuthUrl", {
 })
 
 /** `window.location.href = authorizationUrl` */
-export const RedirectToProvider = Command.define("IntegrationRedirectToProvider", {
+export const RedirectToProvider = Command.define("RedirectToProvider", {
 	args: { authorizationUrl: Schema.String },
 	messages: [Message.CompletedRedirectToProvider],
 	execute: ({ authorizationUrl }) =>
@@ -35,7 +35,7 @@ export const RedirectToProvider = Command.define("IntegrationRedirectToProvider"
 })
 
 /** `disconnectMutation` with the `exitToast` of `handleDisconnect` (no success toast). */
-export const Disconnect = Command.define("IntegrationDisconnect", {
+export const Disconnect = Command.define("Disconnect", {
 	args: target,
 	messages: [Message.SucceededDisconnect, Message.FailedDisconnect],
 	execute: (params) =>
@@ -69,7 +69,7 @@ const messageOf = (error: unknown) =>
 	typeof error === "object" && error !== null && "message" in error ? String(error.message) : undefined
 
 /** `connectApiKeyMutation` with the toasts of `handleConnectApiKey`. */
-export const ConnectApiKey = Command.define("IntegrationConnectApiKey", {
+export const ConnectApiKey = Command.define("ConnectApiKey", {
 	args: { ...target, token: Schema.String, baseUrl: Schema.String },
 	messages: [Message.SucceededConnectApiKey, Message.FailedConnectApiKey],
 	execute: ({ orgId, provider, token, baseUrl }) =>

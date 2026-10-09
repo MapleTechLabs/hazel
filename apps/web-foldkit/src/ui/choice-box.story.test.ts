@@ -1,6 +1,6 @@
 import { Command, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
-import { AnnounceSelection, FocusItem, init, Message, update } from "./choice-box"
+import { AnnounceChoiceBoxSelection, FocusChoiceBoxItem, init, Message, update } from "./choice-box"
 
 /** React Aria GridList as a ChoiceBox: roving focus by row and column, toggle selection, announcements. */
 
@@ -10,7 +10,7 @@ const plan = init({ id: "plan", selectedKeys: ["pro"] })
 const focusedOn = (key: string) => ({ ...plan, focusedKey: key })
 const pressKey = (key: string, columns = 1) =>
 	message(Message.PressedGridKey({ key, keys, columns, isReadOnly: false }))
-const focusOf = (key: string) => FocusItem({ elementId: `plan-${key}` })
+const focusOf = (key: string) => FocusChoiceBoxItem({ elementId: `plan-${key}` })
 
 describe("choice-box story", () => {
 	test("tabbing into the grid focuses the selected item", () => {
@@ -19,7 +19,7 @@ describe("choice-box story", () => {
 			given(plan),
 			message(Message.FocusedGrid({ keys })),
 			Command.expectExact(focusOf("pro")),
-			Command.resolve(FocusItem, Message.CompletedFocusItem()),
+			Command.resolve(FocusChoiceBoxItem, Message.CompletedFocusItem()),
 			model((next) => expect(next.focusedKey).toBe("pro")),
 		)
 	})
@@ -30,7 +30,7 @@ describe("choice-box story", () => {
 			given(init({ id: "plan" })),
 			message(Message.FocusedGrid({ keys })),
 			Command.expectExact(focusOf("free")),
-			Command.resolve(FocusItem, Message.CompletedFocusItem()),
+			Command.resolve(FocusChoiceBoxItem, Message.CompletedFocusItem()),
 		)
 	})
 
@@ -40,7 +40,7 @@ describe("choice-box story", () => {
 			given(focusedOn("free")),
 			pressKey("ArrowDown"),
 			Command.expectExact(focusOf("pro")),
-			Command.resolve(FocusItem, Message.CompletedFocusItem()),
+			Command.resolve(FocusChoiceBoxItem, Message.CompletedFocusItem()),
 			model((next) => expect(next.focusedKey).toBe("pro")),
 		)
 	})
@@ -51,10 +51,10 @@ describe("choice-box story", () => {
 			given(focusedOn("free")),
 			pressKey("ArrowDown", 2),
 			Command.expectExact(focusOf("team")),
-			Command.resolve(FocusItem, Message.CompletedFocusItem()),
+			Command.resolve(FocusChoiceBoxItem, Message.CompletedFocusItem()),
 			pressKey("ArrowRight", 2),
 			Command.expectExact(focusOf("custom")),
-			Command.resolve(FocusItem, Message.CompletedFocusItem()),
+			Command.resolve(FocusChoiceBoxItem, Message.CompletedFocusItem()),
 		)
 	})
 
@@ -74,10 +74,10 @@ describe("choice-box story", () => {
 			given(focusedOn("pro")),
 			pressKey("End"),
 			Command.expectExact(focusOf("custom")),
-			Command.resolve(FocusItem, Message.CompletedFocusItem()),
+			Command.resolve(FocusChoiceBoxItem, Message.CompletedFocusItem()),
 			pressKey("Home"),
 			Command.expectExact(focusOf("free")),
-			Command.resolve(FocusItem, Message.CompletedFocusItem()),
+			Command.resolve(FocusChoiceBoxItem, Message.CompletedFocusItem()),
 		)
 	})
 
@@ -108,15 +108,15 @@ describe("choice-box story", () => {
 			update,
 			given(init({ id: "channels", selectionMode: "multiple", selectedKeys: ["general"] })),
 			message(Message.ClickedItem({ key: "random" })),
-			Command.expectExact(AnnounceSelection({ message: "2 items selected." })),
-			Command.resolve(AnnounceSelection, Message.CompletedAnnounceSelection()),
+			Command.expectExact(AnnounceChoiceBoxSelection({ message: "2 items selected." })),
+			Command.resolve(AnnounceChoiceBoxSelection, Message.CompletedAnnounceSelection()),
 			model((next) => {
 				expect(next.selectedKeys).toEqual(["general", "random"])
 				expect(next.focusedKey).toBe("random")
 			}),
 			message(Message.ToggledSelectionCheckbox({ key: "general" })),
-			Command.expectExact(AnnounceSelection({ message: "1 item selected." })),
-			Command.resolve(AnnounceSelection, Message.CompletedAnnounceSelection()),
+			Command.expectExact(AnnounceChoiceBoxSelection({ message: "1 item selected." })),
+			Command.resolve(AnnounceChoiceBoxSelection, Message.CompletedAnnounceSelection()),
 			model((next) => expect(next.selectedKeys).toEqual(["random"])),
 		)
 	})

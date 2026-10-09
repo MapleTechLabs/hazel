@@ -15,7 +15,7 @@ import {
 	CropAvatarImage,
 	LoadCropImage,
 	OpenFilePicker,
-	ReadBrowserTimezone,
+	ReadProfileBrowserTimezone,
 	ResetAvatar,
 	RevokeCropImage,
 	SaveProfile,
@@ -94,7 +94,7 @@ const mapReadyImage = (model: Model, f: (image: CropImage) => CropImage): Model 
 }
 
 export const init = (_route: unknown, shared: Shared): Return => ({
-	commands: [ReadBrowserTimezone()],
+	commands: [ReadProfileBrowserTimezone()],
 	model: formFor(
 		{
 			userId: null,

@@ -1,15 +1,15 @@
 import { Option } from "effect"
 import { Command, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
-import { Announce, FocusRowFromTable, init, Message, sortOf, update } from "./table"
+import { AnnounceTable, FocusRowFromTable, init, Message, sortOf, update } from "./table"
 
 /** React Aria Table: replace vs toggle selection, select all, sorting, grid focus and announcements. */
 
 const members = init({ id: "members", selectionMode: "single" })
 const invite = init({ id: "invite", selectionMode: "multiple", selectedKeys: ["grace"] })
-const selected = (text: string) => Announce({ message: text, timeout: 7000 })
+const selected = (text: string) => AnnounceTable({ message: text, timeout: 7000 })
 const sorted = (direction: string) =>
-	Announce({ message: `sorted by column  in ${direction} order`, timeout: 500 })
+	AnnounceTable({ message: `sorted by column  in ${direction} order`, timeout: 500 })
 const press = (row: string, rowText: string) =>
 	message(Message.PressedRow({ row, isSelectable: true, rowText }))
 
@@ -20,7 +20,7 @@ describe("table story", () => {
 			given({ ...members, selectedKeys: ["grace"] }),
 			press("ada", "Ada Lovelace"),
 			Command.expectExact(selected("Ada Lovelace selected.")),
-			Command.resolve(Announce, Message.CompletedAnnounce()),
+			Command.resolve(AnnounceTable, Message.CompletedAnnounce()),
 			model((next) => {
 				expect(next.selectedKeys).toEqual(["ada"])
 				expect(next.modality).toBe("Pointer")
@@ -34,7 +34,7 @@ describe("table story", () => {
 			given(members),
 			message(Message.NavigatedToRow({ row: "alan", isSelectable: true, rowText: "Alan Turing" })),
 			Command.expectExact(selected("Alan Turing selected.")),
-			Command.resolve(Announce, Message.CompletedAnnounce()),
+			Command.resolve(AnnounceTable, Message.CompletedAnnounce()),
 			model((next) => {
 				expect(next.selectedKeys).toEqual(["alan"])
 				expect(next.modality).toBe("Keyboard")
@@ -51,7 +51,7 @@ describe("table story", () => {
 			model((next) => expect(next.selectedKeys).toEqual(["grace"])),
 			message(Message.PressedRowSpace({ row: "ada", rowText: "Ada Lovelace" })),
 			Command.expectExact(selected("Ada Lovelace selected. 2 items selected.")),
-			Command.resolve(Announce, Message.CompletedAnnounce()),
+			Command.resolve(AnnounceTable, Message.CompletedAnnounce()),
 			model((next) => expect(next.selectedKeys).toEqual(["grace", "ada"])),
 		)
 	})
@@ -62,7 +62,7 @@ describe("table story", () => {
 			given(invite),
 			press("grace", "Grace Hopper"),
 			Command.expectExact(selected("Grace Hopper not selected.")),
-			Command.resolve(Announce, Message.CompletedAnnounce()),
+			Command.resolve(AnnounceTable, Message.CompletedAnnounce()),
 			model((next) => expect(next.selectedKeys).toEqual([])),
 		)
 	})
@@ -74,11 +74,11 @@ describe("table story", () => {
 			given(invite),
 			message(Message.ToggledAll({ keys })),
 			Command.expectExact(selected("All items selected.")),
-			Command.resolve(Announce, Message.CompletedAnnounce()),
+			Command.resolve(AnnounceTable, Message.CompletedAnnounce()),
 			model((next) => expect(next.selectedKeys).toEqual(keys)),
 			message(Message.ToggledAll({ keys })),
 			Command.expectExact(selected("No items selected.")),
-			Command.resolve(Announce, Message.CompletedAnnounce()),
+			Command.resolve(AnnounceTable, Message.CompletedAnnounce()),
 			model((next) => expect(next.selectedKeys).toEqual([])),
 		)
 	})
@@ -101,13 +101,13 @@ describe("table story", () => {
 			given(members),
 			message(Message.ClickedColumn({ column: "name" })),
 			Command.expectExact(sorted("ascending")),
-			Command.resolve(Announce, Message.CompletedAnnounce()),
+			Command.resolve(AnnounceTable, Message.CompletedAnnounce()),
 			model((next) =>
 				expect(sortOf(next)).toEqual(Option.some({ column: "name", direction: "ascending" })),
 			),
 			message(Message.ClickedColumn({ column: "name" })),
 			Command.expectExact(sorted("descending")),
-			Command.resolve(Announce, Message.CompletedAnnounce()),
+			Command.resolve(AnnounceTable, Message.CompletedAnnounce()),
 			model((next) =>
 				expect(sortOf(next)).toEqual(Option.some({ column: "name", direction: "descending" })),
 			),

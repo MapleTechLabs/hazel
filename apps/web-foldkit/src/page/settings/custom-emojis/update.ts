@@ -39,21 +39,21 @@ export const validateEmojiName = (name: string): string | null => {
 
 // COMMAND
 
-export const OpenPicker = Command.define("OpenEmojiPicker", {
+export const OpenEmojiPicker = Command.define("OpenEmojiPicker", {
 	args: { inputId: Schema.String },
 	messages: [Message.CompletedOpenPicker],
 	execute: ({ inputId }) =>
 		Dom.clickElement(`#${inputId}`).pipe(Effect.ignore, Effect.as(Message.CompletedOpenPicker())),
 })
 
-export const CreatePreview = Command.define("CreateEmojiPreview", {
+export const CreateEmojiPreview = Command.define("CreateEmojiPreview", {
 	args: { file: File },
 	messages: [Message.CreatedPreview],
 	execute: ({ file }) =>
 		Effect.sync(() => Message.CreatedPreview({ file, previewUrl: URL.createObjectURL(file) })),
 })
 
-export const FocusName = Command.define("FocusEmojiName", {
+export const FocusEmojiName = Command.define("FocusEmojiName", {
 	messages: [Message.CompletedFocusName],
 	execute: Dom.focus(`#${EMOJI_NAME_ID}-input`).pipe(
 		Effect.ignore,
@@ -61,7 +61,7 @@ export const FocusName = Command.define("FocusEmojiName", {
 	),
 })
 
-export const RevokePreview = Command.define("RevokeEmojiPreview", {
+export const RevokeEmojiPreview = Command.define("RevokeEmojiPreview", {
 	args: { previewUrl: Schema.String },
 	messages: [Message.CompletedRevokePreview],
 	execute: ({ previewUrl }) =>
@@ -78,7 +78,7 @@ const deletedExistsErrorOf = (cause: Cause.Cause<unknown>) =>
 	)
 
 /** Uploads the draft's file and creates the emoji; `previewUrl` names the draft the result belongs to. */
-export const CreateEmoji = Command.define("CreateCustomEmoji", {
+export const CreateCustomEmoji = Command.define("CreateCustomEmoji", {
 	args: {
 		organizationId: OrganizationId,
 		name: Schema.String,
@@ -130,7 +130,7 @@ export const CreateEmoji = Command.define("CreateCustomEmoji", {
 		),
 })
 
-export const RestoreEmoji = Command.define("RestoreCustomEmoji", {
+export const RestoreCustomEmoji = Command.define("RestoreCustomEmoji", {
 	args: {
 		emojiId: CustomEmojiId,
 		organizationId: OrganizationId,
@@ -150,7 +150,7 @@ export const RestoreEmoji = Command.define("RestoreCustomEmoji", {
 		),
 })
 
-export const DeleteEmoji = Command.define("DeleteCustomEmoji", {
+export const DeleteCustomEmoji = Command.define("DeleteCustomEmoji", {
 	args: { emojiId: CustomEmojiId, name: Schema.String },
 	messages: [Message.SucceededDeleteEmoji, Message.FailedDeleteEmoji],
 	execute: ({ emojiId, name }) =>
@@ -188,7 +188,7 @@ const toast = (model: Model, request: ToastRequest, commands: Return["commands"]
 /** `handleCancel`: drop the draft and revoke its preview URL. */
 const clearDraft = (model: Model): { model: Model; commands: NonNullable<Return["commands"]> } => ({
 	model: modifyFields(model, { draft: () => null }),
-	commands: model.draft === null ? [] : [RevokePreview({ previewUrl: model.draft.previewUrl })],
+	commands: model.draft === null ? [] : [RevokeEmojiPreview({ previewUrl: model.draft.previewUrl })],
 })
 
 const modalFold = (
@@ -234,13 +234,13 @@ const selectFile = (model: Model, file: globalThis.File): Return => {
 	if (file.size > MAX_EMOJI_SIZE) {
 		return toast(model, errorToast("File too large", "Emoji images must be under 256KB"))
 	}
-	return { model, commands: [CreatePreview({ file })] }
+	return { model, commands: [CreateEmojiPreview({ file })] }
 }
 
 export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
 		UpdatedEmojis: ({ emojis }) => ({ model: modifyFields(model, { emojis: () => emojis }) }),
-		ClickedBrowse: ({ inputId }) => ({ model, commands: [OpenPicker({ inputId })] }),
+		ClickedBrowse: ({ inputId }) => ({ model, commands: [OpenEmojiPicker({ inputId })] }),
 		CompletedOpenPicker: () => ({ model }),
 		// A file picked while a save runs would replace the draft being saved.
 		SelectedFiles: ({ files }) =>
@@ -251,15 +251,17 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		EnteredDropZone: () => ({ model: modifyFields(model, { isDropTarget: () => true }) }),
 		LeftDropZone: () => ({ model: modifyFields(model, { isDropTarget: () => false }) }),
 		CreatedPreview: ({ file, previewUrl }) => {
-			if (model.isSaving) return { model, commands: [RevokePreview({ previewUrl })] }
+			if (model.isSaving) return { model, commands: [RevokeEmojiPreview({ previewUrl })] }
 			const name = generateEmojiName(file.name)
 			return {
 				model: modifyFields(model, {
 					draft: () => ({ file, previewUrl, name, nameError: name ? null : "Name is required" }),
 				}),
 				commands: [
-					...(model.draft === null ? [] : [RevokePreview({ previewUrl: model.draft.previewUrl })]),
-					FocusName(),
+					...(model.draft === null
+						? []
+						: [RevokeEmojiPreview({ previewUrl: model.draft.previewUrl })]),
+					FocusEmojiName(),
 				],
 			}
 		},
@@ -286,7 +288,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			return {
 				model: modifyFields(model, { isSaving: () => true }),
 				commands: [
-					CreateEmoji({
+					CreateCustomEmoji({
 						organizationId: shared.organization.id,
 						name: draft.name,
 						file: draft.file,
@@ -315,7 +317,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				return { model }
 			}
 			return withCommands(closeRestoreModal(modifyFields(model, { isSaving: () => true })), [
-				RestoreEmoji({
+				RestoreCustomEmoji({
 					emojiId: target.id,
 					organizationId: shared.organization.id,
 					name: target.name,
@@ -337,7 +339,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			const target = model.deleteTarget
 			if (target === null) return { model }
 			return withCommands(closeDeleteModal(model), [
-				DeleteEmoji({ emojiId: target.id, name: target.name }),
+				DeleteCustomEmoji({ emojiId: target.id, name: target.name }),
 			])
 		},
 		SucceededDeleteEmoji: ({ name }) => toast(model, successToast(`Emoji :${name}: deleted`)),

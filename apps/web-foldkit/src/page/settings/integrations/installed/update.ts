@@ -11,7 +11,7 @@ import { Message } from "./message"
 import type { Model } from "./model"
 
 /** `uninstallBotMutation` with the toasts of `handleUninstall`. */
-export const UninstallBot = Command.define("IntegrationsUninstallBot", {
+export const UninstallBot = Command.define("UninstallBot", {
 	args: { botId: BotId },
 	messages: [Message.SucceededUninstallBot, Message.FailedUninstallBot],
 	execute: ({ botId }) =>

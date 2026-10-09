@@ -5,7 +5,7 @@ import type { HazelRpc } from "../../rpc"
 import { onboardingHref } from "../../route"
 import * as ChoiceBox from "../../ui/choice-box"
 import type { PageReturn, Shared } from "../contract"
-import { CompleteOnboarding, ReplaceStepUrl } from "./command"
+import { CompleteOnboarding, ReplaceOnboardingStepUrl } from "./command"
 import { type Direction, nextStep, previousStep, type Step, stepFromUrl } from "./flow"
 import type { Message } from "./message"
 import { type Data, type Model, StepForm } from "./model"
@@ -77,7 +77,7 @@ export const enterStep = (
 	return {
 		model: next,
 		commands: [
-			...(options.syncUrl ? [ReplaceStepUrl({ href: onboardingHref(model.orgId, step) })] : []),
+			...(options.syncUrl ? [ReplaceOnboardingStepUrl({ href: onboardingHref(model.orgId, step) })] : []),
 			...stepCommands(next, step),
 		],
 	}

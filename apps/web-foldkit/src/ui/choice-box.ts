@@ -66,14 +66,14 @@ export type Message = typeof Message.Type
 
 export const itemId = (model: Model, key: string) => `${model.id}-${key}`
 
-export const FocusItem = Command.define("FocusChoiceBoxItem", {
+export const FocusChoiceBoxItem = Command.define("FocusChoiceBoxItem", {
 	args: { elementId: Schema.String },
 	messages: [Message.CompletedFocusItem],
 	execute: ({ elementId }) =>
 		Dom.focus(`#${CSS.escape(elementId)}`).pipe(Effect.ignore, Effect.as(Message.CompletedFocusItem())),
 })
 
-export const AnnounceSelection = Command.define("AnnounceChoiceBoxSelection", {
+export const AnnounceChoiceBoxSelection = Command.define("AnnounceChoiceBoxSelection", {
 	args: { message: Schema.String },
 	messages: [Message.CompletedAnnounceSelection],
 	execute: ({ message }) =>
@@ -108,7 +108,7 @@ const toggle = (model: Model, key: string): Model =>
 
 const focusKey = (model: Model, key: string): Update.Return<Model, Message> => ({
 	model: modifyFields(model, { focusedKey: () => key }),
-	commands: [FocusItem({ elementId: itemId(model, key) })],
+	commands: [FocusChoiceBoxItem({ elementId: itemId(model, key) })],
 })
 
 /** ListKeyboardDelegate: next/previous, a row down/up in a grid, first/last. */
@@ -135,7 +135,7 @@ export const update = (model: Model, message: Message): Update.Return<Model, Mes
 		onNone: () => result,
 		onSome: (text) => ({
 			...result,
-			commands: [...(result.commands ?? []), AnnounceSelection({ message: text })],
+			commands: [...(result.commands ?? []), AnnounceChoiceBoxSelection({ message: text })],
 		}),
 	})
 }

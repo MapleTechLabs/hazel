@@ -128,7 +128,7 @@ const searchKey = (model: Model, search: string, from: Option.Option<string>): O
 
 // COMMAND
 
-export const FocusElement = Command.define("FocusSelectElement", {
+export const FocusSelectElement = Command.define("FocusSelectElement", {
 	args: { elementId: Schema.String },
 	messages: [Message.CompletedFocusElement],
 	execute: ({ elementId }) =>
@@ -140,7 +140,7 @@ export const FocusElement = Command.define("FocusSelectElement", {
 
 const TYPEAHEAD_RESET = Duration.millis(1000)
 
-export const WaitForTypeaheadReset = Command.define("WaitForSelectTypeaheadReset", {
+export const WaitForSelectTypeaheadReset = Command.define("WaitForSelectTypeaheadReset", {
 	args: { search: Schema.String },
 	messages: [Message.CompletedWaitForTypeaheadReset],
 	execute: ({ search }) =>
@@ -155,7 +155,7 @@ const withOpen = (model: Model, open: Open, isFocusMoved: boolean): UpdateReturn
 	const nextModel = modifyFields(model, { popup: () => open })
 	const commands = Option.match(open.focusedKey, {
 		onNone: () => [],
-		onSome: (key) => [FocusElement({ elementId: optionId(model.id, key) })],
+		onSome: (key) => [FocusSelectElement({ elementId: optionId(model.id, key) })],
 	})
 	return isFocusMoved ? { model: nextModel, commands } : { model: nextModel }
 }
@@ -244,7 +244,7 @@ const pressedListKey = (model: Model, open: Open, key: string, isModified: boole
 			)
 			return {
 				model: searched.model,
-				commands: [...(searched.commands ?? []), WaitForTypeaheadReset({ search })],
+				commands: [...(searched.commands ?? []), WaitForSelectTypeaheadReset({ search })],
 			}
 		}),
 	)

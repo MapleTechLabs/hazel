@@ -10,13 +10,13 @@ import { PageOutMessage } from "../../out-message"
 import { Message } from "./message"
 import type { Emoji } from "./model"
 import {
-	CreatePreview,
-	DeleteEmoji,
-	FocusName,
+	CreateEmojiPreview,
+	DeleteCustomEmoji,
+	FocusEmojiName,
 	init,
-	OpenPicker,
-	RevokePreview,
-	CreateEmoji,
+	OpenEmojiPicker,
+	RevokeEmojiPreview,
+	CreateCustomEmoji,
 	update,
 } from "./update"
 import { view } from "./view"
@@ -55,8 +55,8 @@ describe("list", () => {
 			Scene.Subscription.emit(Message.UpdatedEmojis({ emojis: [] })),
 			Scene.expect(Scene.text("No custom emojis yet")).toExist(),
 			Scene.click(Scene.role("button", { name: "Upload emoji" })),
-			Scene.Command.expectExact(OpenPicker({ inputId: "custom-emoji-empty-state-input" })),
-			Scene.Command.resolve(OpenPicker, Message.CompletedOpenPicker()),
+			Scene.Command.expectExact(OpenEmojiPicker({ inputId: "custom-emoji-empty-state-input" })),
+			Scene.Command.resolve(OpenEmojiPicker, Message.CompletedOpenPicker()),
 		)
 		Scene.scene(
 			pageScene(update, view, member),
@@ -83,12 +83,15 @@ describe("upload", () => {
 			Scene.given(withEmojis([])),
 			Scene.click(dropZone),
 			Scene.Command.resolve(
-				OpenPicker({ inputId: "custom-emoji-drop-zone-input" }),
+				OpenEmojiPicker({ inputId: "custom-emoji-drop-zone-input" }),
 				Message.CompletedOpenPicker(),
 			),
 			Scene.changeFiles(fileInput, [png]),
-			Scene.Command.resolve(CreatePreview, Message.CreatedPreview({ file: png, previewUrl: "blob:1" })),
-			Scene.Command.resolve(FocusName, Message.CompletedFocusName()),
+			Scene.Command.resolve(
+				CreateEmojiPreview,
+				Message.CreatedPreview({ file: png, previewUrl: "blob:1" }),
+			),
+			Scene.Command.resolve(FocusEmojiName, Message.CompletedFocusName()),
 			Scene.expect(nameInput).toHaveValue("ship_it"),
 			Scene.type(nameInput, "Ship It!"),
 			Scene.expect(Scene.text("Only lowercase letters, numbers, hyphens, and underscores")).toExist(),
@@ -96,17 +99,20 @@ describe("upload", () => {
 			Scene.type(nameInput, "Party-Parrot"),
 			Scene.expect(nameInput).toHaveValue("party-parrot"),
 			Scene.click(saveButton),
-			Scene.Command.expectExact(CreateEmoji),
+			Scene.Command.expectExact(CreateCustomEmoji),
 			Scene.expect(Scene.role("button", { name: "Saving..." })).toBeDisabled(),
 			Scene.expect(nameInput).toBeDisabled(),
 			Scene.Command.resolve(
-				CreateEmoji,
+				CreateCustomEmoji,
 				Message.SucceededCreateEmoji({ name: "party-parrot", previewUrl: "blob:1" }),
 			),
 			Scene.expectOutMessage(
 				PageOutMessage.RequestedToast({ toast: successToast("Emoji :party-parrot: created") }),
 			),
-			Scene.Command.resolve(RevokePreview({ previewUrl: "blob:1" }), Message.CompletedRevokePreview()),
+			Scene.Command.resolve(
+				RevokeEmojiPreview({ previewUrl: "blob:1" }),
+				Message.CompletedRevokePreview(),
+			),
 			Scene.expect(dropZone).toExist(),
 		)
 	})
@@ -121,10 +127,10 @@ describe("delete", () => {
 			portalModalMounted,
 			Scene.expect(Scene.within(deleteDialog, Scene.text(":shipit:"))).toExist(),
 			Scene.click(Scene.role("button", { name: "Delete emoji" })),
-			Scene.Command.expectExact(DeleteEmoji({ emojiId: shipit.id, name: "shipit" })),
+			Scene.Command.expectExact(DeleteCustomEmoji({ emojiId: shipit.id, name: "shipit" })),
 			Scene.expect(deleteDialog).toBeAbsent(),
 			Scene.Mount.expectEnded(Modal.PortalModal),
-			Scene.Command.resolve(DeleteEmoji, Message.SucceededDeleteEmoji({ name: "shipit" })),
+			Scene.Command.resolve(DeleteCustomEmoji, Message.SucceededDeleteEmoji({ name: "shipit" })),
 			Scene.expectOutMessage(
 				PageOutMessage.RequestedToast({ toast: successToast("Emoji :shipit: deleted") }),
 			),

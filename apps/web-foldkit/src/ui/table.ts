@@ -109,7 +109,7 @@ export const FocusRowFromTable = Command.define("FocusRowFromTable", {
 		}),
 })
 
-export const Announce = Command.define("AnnounceTable", {
+export const AnnounceTable = Command.define("AnnounceTable", {
 	args: { message: Schema.String, timeout: Schema.Number },
 	messages: [Message.CompletedAnnounce],
 	execute: ({ message, timeout }) =>
@@ -156,8 +156,8 @@ const announcementsFor = (previous: Model, next: Model, message: Message) => {
 		(description) => !Option.contains(sortDescription(previous), description),
 	)
 	return [
-		...(selection === "" ? [] : [Announce({ message: selection, timeout: SELECTION_TIMEOUT })]),
-		...Option.toArray(Option.map(sort, (message) => Announce({ message, timeout: SORT_TIMEOUT }))),
+		...(selection === "" ? [] : [AnnounceTable({ message: selection, timeout: SELECTION_TIMEOUT })]),
+		...Option.toArray(Option.map(sort, (message) => AnnounceTable({ message, timeout: SORT_TIMEOUT }))),
 	]
 }
 
