@@ -32,6 +32,7 @@
 	},
 	"devDependencies": {
 		"@foldkit/devtools": "0.167.0",
+		"@foldkit/oxlint-plugin": "0.15.3",
 		"@foldkit/vite-plugin": "0.27.0",
 		"@tailwindcss/vite": "^4.2.1",
 		"tailwindcss": "^4.2.1",

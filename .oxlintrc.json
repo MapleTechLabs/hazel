@@ -23,7 +23,106 @@
 			"rules": {
 				"no-restricted-imports": "off"
 			}
+		},
+		{
+			// Foldkit's own lint rules, scoped to the Foldkit app's source. The plugin is a devDependency
+			// of apps/web-foldkit (isolated linker), so it is loaded by path.
+			"files": ["apps/web-foldkit/src/**"],
+			"jsPlugins": [
+				{ "name": "foldkit", "specifier": "./apps/web-foldkit/node_modules/@foldkit/oxlint-plugin" }
+			],
+			"rules": {
+				"foldkit/acquire-release-constructs-in-acquire-body": "error",
+				"foldkit/command-binding-matches-name": "error",
+				"foldkit/command-define-pascal-const": "error",
+				"foldkit/got-prefix-requires-submodel-payload": "error",
+				"foldkit/got-submodel-message-name": "error",
+				"foldkit/got-wrapper-carries-only-routing": "error",
+				"foldkit/keyed-required-for-mapped-rows": "error",
+				"foldkit/lazy-view-stable-references": "error",
+				"foldkit/mount-factory-must-use-element": "error",
+				"foldkit/no-array-index-view-keys": "error",
+				// Submodels split Message into model.ts / composer.ts beside their view and update files, which the rule reads as a parent building a child's Message (about 300 of 333 hits).
+				"foldkit/no-child-message-construction-in-root": "off",
+				"foldkit/no-direct-submodel-state-update": "error",
+				"foldkit/no-disabling-dev-guardrails": "error",
+				"foldkit/no-duplicate-onmount-per-element": "error",
+				"foldkit/no-empty-children-array": "error",
+				"foldkit/no-empty-commands-array": "error",
+				"foldkit/no-empty-to-parent-out-message": "error",
+				"foldkit/no-empty-object-tagged-call": "error",
+				"foldkit/no-hand-rolled-command-struct": "error",
+				"foldkit/no-hardcoded-route-strings": "error",
+				"foldkit/no-impure-call-at-decision-time": "error",
+				"foldkit/no-module-level-mutable-state": "error",
+				"foldkit/no-nonportable-server-globals": "off",
+				"foldkit/no-noop-message": "error",
+				"foldkit/no-prevent-default-in-stream-operator": "error",
+				"foldkit/no-raw-dom-event-attributes": "error",
+				"foldkit/no-route-query-constructor-default": "error",
+				"foldkit/no-spread-in-modify-fields": "error",
+				"foldkit/no-switch-on-message-tag": "error",
+				"foldkit/prefer-callable-message-constructor": "error",
+				"foldkit/prefer-command-mapmessage": "error",
+				"foldkit/prefer-effect-module-names": "error",
+				// Models use Schema.NullOr throughout (about 450 fields, mirroring the legacy nullable rows); moving to Option is its own migration, not a lint fix.
+				"foldkit/prefer-option-over-nullable-in-model": "off",
+				"foldkit/require-fold-for-child-update-result": "error",
+				"foldkit/require-rel-for-external-link": "error",
+				"foldkit/selection-submodel-factory-at-module-scope": "error",
+				"foldkit/wrap-child-output-in-got-message": "error"
+			}
+		},
+		{
+			// The plugin's recommended.json relaxes these for tests (Story and Scene files build Messages directly).
+			"files": ["apps/web-foldkit/src/**/*.test.ts"],
+			"rules": {
+				"foldkit/command-binding-matches-name": "off",
+				"foldkit/command-define-pascal-const": "off",
+				"foldkit/got-prefix-requires-submodel-payload": "off",
+				"foldkit/got-submodel-message-name": "off",
+				"foldkit/got-wrapper-carries-only-routing": "off",
+				"foldkit/keyed-required-for-mapped-rows": "off",
+				"foldkit/lazy-view-stable-references": "off",
+				"foldkit/mount-factory-must-use-element": "off",
+				"foldkit/no-array-index-view-keys": "off",
+				"foldkit/no-direct-submodel-state-update": "off",
+				"foldkit/no-disabling-dev-guardrails": "off",
+				"foldkit/no-duplicate-onmount-per-element": "off",
+				"foldkit/no-empty-children-array": "off",
+				"foldkit/no-empty-commands-array": "off",
+				"foldkit/no-empty-to-parent-out-message": "off",
+				"foldkit/no-empty-object-tagged-call": "off",
+				"foldkit/no-hand-rolled-command-struct": "off",
+				"foldkit/no-hardcoded-route-strings": "off",
+				"foldkit/no-impure-call-at-decision-time": "off",
+				"foldkit/no-module-level-mutable-state": "off",
+				"foldkit/no-nonportable-server-globals": "off",
+				"foldkit/no-noop-message": "off",
+				"foldkit/no-prevent-default-in-stream-operator": "off",
+				"foldkit/no-raw-dom-event-attributes": "off",
+				"foldkit/no-route-query-constructor-default": "off",
+				"foldkit/no-spread-in-modify-fields": "off",
+				"foldkit/prefer-callable-message-constructor": "off",
+				"foldkit/prefer-command-mapmessage": "off",
+				"foldkit/require-fold-for-child-update-result": "off",
+				"foldkit/require-rel-for-external-link": "off",
+				"foldkit/selection-submodel-factory-at-module-scope": "off",
+				"foldkit/wrap-child-output-in-got-message": "off"
+			}
+		},
+		{
+			// ui/aria ports React Aria's document-wide state (global input modality, scroll locks, the live
+			// announcer) as module state on purpose; see docs/foldkit-decisions/s5-primitives.md.
+			"files": ["apps/web-foldkit/src/ui/aria/**"],
+			"rules": {
+				"foldkit/no-module-level-mutable-state": "off"
+			}
 		}
 	],
-	"ignorePatterns": [".context"]
+	"ignorePatterns": [
+		".context",
+		// oxlint cannot parse the JSON-LD template expression in this layout's inline <script>.
+		"apps/landing/src/layouts/Layout.astro"
+	]
 }
