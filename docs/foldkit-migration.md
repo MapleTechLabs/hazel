@@ -48,11 +48,13 @@ Budgets: 120fps scrolling (main-thread work per frame under 8.33ms), warm channe
 | Load heavy, ready to use | 1846 | 980 | yes |
 | Composer key to paint | 1.6 / 50.7 | 2.5 / 35 | yes |
 | Thread panel / palette / image viewer | 120 / 57 / 33 | 42 / 55 / 33 | yes |
-| Delete modal / emoji picker | 27 / 33 | 38 / 45 | no |
+| Delete modal / emoji picker, commit frame | 22 / 19-23 | 22-24 / 25 | delete yes, emoji within 3ms (input probe row: 37-39 / 39-41, one frame late) |
 | JS heap after 20 switches (MB) | 254 | 65 | yes |
 | JS bundle gzip (KB) | 1536 | 987 | yes |
 
-Next: incremental row batches in `mount/message-list.ts`, a per-channel message window cache plus less sidebar re-patching for warm switches, and profiling the delete modal and emoji picker.
+Next: incremental row batches in `mount/message-list.ts`, a per-channel message window cache plus less sidebar re-patching for warm switches.
+
+Overlay opens: Foldkit patches in its `requestAnimationFrame` callback, which runs after the probe's own callback in the same frame, so the input probe sees the overlay one frame after it painted. The bench now also reports a "commit frame" row (readiness also checked after each frame's paint). Modals, the palette and the emoji/GIF picker popover apply `inert` one frame after they paint (restyling the ~2,200 element app root cost 8-10ms inside the opening frame); overlays without a hit-testable underlay keep it synchronous so the hover leave still fires. What remains is the wait for the next frame after the click (about 14ms of the emoji picker's 25).
 
 ## 1. Starting point
 

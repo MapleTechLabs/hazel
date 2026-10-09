@@ -363,6 +363,12 @@ const measureSwitch = async (target: TargetName) => {
 	}
 }
 
+/** An overlay open: `ms`, plus `commitMs` (the frame its patch painted in, see `ReadyResult`). */
+const recordOpen = (metric: string, target: TargetName, result: { ms: number; commitMs: number }) => {
+	recordLatency(metric, target, result.ms)
+	recordLatency(`${metric}, commit frame`, target, result.commitMs)
+}
+
 const LAUNCH_WINDOW = "Launch window confirmed"
 /** Ada's own message: only own messages offer Delete. */
 const CHECKLIST = "Launch checklist: please claim your items"
@@ -396,7 +402,7 @@ const measureInteractions = async (target: TargetName) => {
 			const result = await timeInput(page, { selector: '[role="dialog"]' }, () =>
 				page.getByText("Browse channels").first().click(),
 			)
-			recordLatency(`command palette open (${pass})`, target, result.ms)
+			recordOpen(`command palette open (${pass})`, target, result)
 			await escape()
 		})
 		await attempt(`modal ${pass}`, async () => {
@@ -405,7 +411,7 @@ const measureInteractions = async (target: TargetName) => {
 			const result = await timeInput(page, { selector: '[role="dialog"], [role="alertdialog"]' }, () =>
 				page.getByRole("button", { name: "Delete message" }).click(),
 			)
-			recordLatency(`modal open: delete message (${pass})`, target, result.ms)
+			recordOpen(`modal open: delete message (${pass})`, target, result)
 			await page.getByRole("button", { name: "Cancel" }).click()
 			await settle(page, 300)
 		})
@@ -417,7 +423,7 @@ const measureInteractions = async (target: TargetName) => {
 				{ selector: '[role="dialog"][aria-label="Emoji picker"]' },
 				() => page.getByRole("button", { name: "Add reaction" }).click(),
 			)
-			recordLatency(`emoji picker open (${pass})`, target, result.ms)
+			recordOpen(`emoji picker open (${pass})`, target, result)
 			await escape()
 		})
 	}
@@ -425,7 +431,7 @@ const measureInteractions = async (target: TargetName) => {
 		const result = await timeInput(page, { text: "CI freeze and release tagging are mine." }, () =>
 			page.getByRole("button", { name: /3 replies/ }).click(),
 		)
-		recordLatency("thread panel open", target, result.ms)
+		recordOpen("thread panel open", target, result)
 		await escape()
 	})
 	await attempt("image viewer", async () => {
@@ -437,7 +443,7 @@ const measureInteractions = async (target: TargetName) => {
 		const result = await timeInput(page, { selector, minCount: before + 1 }, () =>
 			page.getByRole("img", { name: "moodboard-1.png" }).first().click(),
 		)
-		recordLatency("image viewer open", target, result.ms)
+		recordOpen("image viewer open", target, result)
 	})
 	await page.context().close()
 }

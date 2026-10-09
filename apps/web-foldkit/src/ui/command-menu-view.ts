@@ -60,7 +60,7 @@ export const PortalCommandMenu = Mount.defineStream("PortalCommandMenu", {
 			Effect.acquireRelease(
 				Effect.sync(() => {
 					const restoreFocus = restoreFocusToPrevious(element)
-					const releasePortal = portalOverlay(element, { isModal: true })
+					const releasePortal = portalOverlay(element, { isModal: true, inertAfterPaint: true })
 					const overlay = element.querySelector<HTMLElement>("[data-modal-overlay]")
 					const releaseViewport = overlay ? trackViewportHeight(overlay) : () => undefined
 					;(document.getElementById(searchId(id)) ?? document.getElementById(dialogId(id)))?.focus({

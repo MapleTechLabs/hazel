@@ -22,7 +22,9 @@ export const PopoverEvent = defineMessageUnion({
 })
 export type PopoverEvent = typeof PopoverEvent.Type
 
-type PortalEvent = typeof PopoverEvent.CompletedPortalPickerPopover.Type | typeof PopoverEvent.PressedOutside.Type
+type PortalEvent =
+	| typeof PopoverEvent.CompletedPortalPickerPopover.Type
+	| typeof PopoverEvent.PressedOutside.Type
 
 /** Portals the popover, positions it under (or above) the trigger and watches outside presses. */
 const PortalPickerPopover = Mount.defineStream("PortalPickerPopover", {
@@ -39,6 +41,7 @@ const PortalPickerPopover = Mount.defineStream("PortalPickerPopover", {
 						initialFocusId: dialogId(id),
 						insideSelector: `#${CSS.escape(popoverId(id))}`,
 						onInteractOutside: () => Queue.offerUnsafe(queue, PopoverEvent.PressedOutside()),
+						inertAfterPaint: true,
 					})
 					Queue.offerUnsafe(queue, PopoverEvent.CompletedPortalPickerPopover())
 					return release
@@ -81,7 +84,9 @@ const overlay = <M>(h: HtmlBuilder<M>, inputs: PopoverInputs<M>): Html => {
 							h.Attribute("dir", "ltr"),
 							h.Id(popoverId(id)),
 							h.OnKeyDownPreventDefault((key) =>
-								key === "Escape" ? Option.some(toMessage(PopoverEvent.PressedEscape())) : Option.none(),
+								key === "Escape"
+									? Option.some(toMessage(PopoverEvent.PressedEscape()))
+									: Option.none(),
 							),
 						],
 						[

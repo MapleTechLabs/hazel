@@ -112,9 +112,14 @@ export const positionOverlay = (overlay: HTMLElement, config: PositionConfig): (
  * Moves `element` to the end of `<body>` like React Aria's portal. A modal overlay also makes the
  * other body children inert and locks page scroll; non-modal ones (submenus, tooltips) only move.
  */
-export const portalOverlay = (element: Element, options: { readonly isModal: boolean }): (() => void) => {
+export const portalOverlay = (
+	element: Element,
+	options: { readonly isModal: boolean; readonly inertAfterPaint?: boolean },
+): (() => void) => {
 	document.body.appendChild(element)
-	const releaseInert = options.isModal ? hideOutside(element) : () => undefined
+	const releaseInert = options.isModal
+		? hideOutside(element, options.inertAfterPaint ?? false)
+		: () => undefined
 	const releaseScroll = options.isModal ? preventScroll() : () => undefined
 	const releaseStack = options.isModal ? pushOverlay() : () => undefined
 	return () => {
@@ -146,16 +151,29 @@ const staysVisible = (element: Element) =>
 	element.hasAttribute("data-live-announcer") ||
 	element.hasAttribute("data-react-aria-top-layer")
 
-const hideOutside = (visible: Element): (() => void) => {
+/**
+ * `inert` restyles the whole app (about 2,200 elements, 8 to 10ms). With `afterPaint` it lands in
+ * the next frame, so the overlay paints in the frame that inserted it. Only for overlays whose own
+ * hit-testable underlay takes the pointer at once; otherwise the hover leave would be missed.
+ */
+const hideOutside = (visible: Element, afterPaint: boolean): (() => void) => {
 	const hidden = [...document.body.children].filter(
 		(child) => child !== visible && !child.contains(visible) && !staysVisible(child),
 	)
-	for (const element of hidden) {
-		const count = inertCounts.get(element) ?? 0
-		if (count === 0) element.setAttribute("inert", "")
-		inertCounts.set(element, count + 1)
+	let isApplied = false
+	const apply = () => {
+		isApplied = true
+		for (const element of hidden) {
+			const count = inertCounts.get(element) ?? 0
+			if (count === 0) element.setAttribute("inert", "")
+			inertCounts.set(element, count + 1)
+		}
 	}
+	const frame = afterPaint ? requestAnimationFrame(apply) : null
+	if (frame === null) apply()
 	return () => {
+		if (frame !== null) cancelAnimationFrame(frame)
+		if (!isApplied) return
 		for (const element of hidden) {
 			const count = (inertCounts.get(element) ?? 1) - 1
 			inertCounts.set(element, count)
@@ -358,10 +376,18 @@ export const observeDialogParts = (root: Element): (() => void) => {
 export const openModalPopover = (
 	root: Element,
 	config: PositionConfig &
-		Readonly<{ initialFocusId: string; insideSelector: string; onInteractOutside: () => void }>,
+		Readonly<{
+			initialFocusId: string
+			insideSelector: string
+			onInteractOutside: () => void
+			inertAfterPaint?: boolean
+		}>,
 ): (() => void) => {
 	const restoreFocus = restoreFocusTo(config.triggerId, root)
-	const releasePortal = portalOverlay(root, { isModal: true })
+	const releasePortal = portalOverlay(root, {
+		isModal: true,
+		inertAfterPaint: config.inertAfterPaint ?? false,
+	})
 	const popover = root.querySelector<HTMLElement>("[data-popover]")
 	const releasePosition = popover ? positionOverlay(popover, config) : () => undefined
 	document.getElementById(config.initialFocusId)?.focus({ preventScroll: true })
