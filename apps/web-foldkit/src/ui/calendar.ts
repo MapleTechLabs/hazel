@@ -246,16 +246,16 @@ const withFocusedDate = (model: Model, date: D.CalendarDate): Model => {
 	const focusedDate = clampToMin(model.minValue, date)
 	return modifyFields(model, {
 		focusedDate: () => focusedDate,
-		month: (month) => ({
-			...monthSelect(model.id, focusedDate),
-			popup: month.popup,
-			isTriggerFocused: month.isTriggerFocused,
-		}),
-		year: (year) => ({
-			...yearSelect(model.id, focusedDate),
-			popup: year.popup,
-			isTriggerFocused: year.isTriggerFocused,
-		}),
+		month: (month) =>
+			modifyFields(monthSelect(model.id, focusedDate), {
+				popup: () => month.popup,
+				isTriggerFocused: () => month.isTriggerFocused,
+			}),
+		year: (year) =>
+			modifyFields(yearSelect(model.id, focusedDate), {
+				popup: () => year.popup,
+				isTriggerFocused: () => year.isTriggerFocused,
+			}),
 	})
 }
 

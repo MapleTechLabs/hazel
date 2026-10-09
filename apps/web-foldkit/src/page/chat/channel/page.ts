@@ -1,4 +1,5 @@
 import type { ChannelId, ChannelMemberId, MessageId, UserId } from "@hazel/schema"
+import { Struct } from "effect"
 import { Command } from "foldkit"
 import * as Live from "../../../chat/live-state"
 import * as Unfurl from "../../../chat/unfurl"
@@ -140,7 +141,7 @@ const requestUnfurls = (model: Model, messages: ReadonlyArray<Model["messages"][
 		}
 	return commands.length === 0
 		? { model, commands }
-		: { model: modifyFields(model, { unfurls: (unfurls) => ({ ...unfurls, ...pending }) }), commands }
+		: { model: modifyFields(model, { unfurls: Struct.assign(pending) }), commands }
 }
 
 /** Re-derives the rows, then tells the list about the new keys so it can keep its anchor. */

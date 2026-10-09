@@ -282,7 +282,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			if (draft === null) return { model }
 			const error = validateEmojiName(draft.name)
 			if (error)
-				return { model: modifyFields(model, { draft: () => ({ ...draft, nameError: error }) }) }
+				return { model: modifyFields(model, { draft: () => modifyFields(draft, { nameError: () => error }) }) }
 			if (shared.organization === null || shared.currentUser === null || model.isSaving)
 				return { model }
 			return {

@@ -143,7 +143,11 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			const next = modifyFields(model, { isGitHubConnected: () => isConnected })
 			return isConnected
 				? reload(next, "github")
-				: { model: modifyFields(next, { github: (list) => ({ ...list, isLoading: false }) }) }
+				: {
+						model: modifyFields(next, {
+							github: (list) => modifyFields(list, { isLoading: () => false }),
+						}),
+					}
 		},
 		SucceededListWebhooks: ({ version, webhooks }) =>
 			isCurrent(model.webhooks, version)

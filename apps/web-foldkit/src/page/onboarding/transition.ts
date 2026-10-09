@@ -83,17 +83,19 @@ export const enterStep = (
 	}
 }
 
+type DataTransform = Partial<{ readonly [K in keyof Data]: (value: Data[K]) => Data[K] }>
+
 /** `createStepHandler`: record the step's data and move forward. */
-export const advance = (model: Model, shared: Shared, patch: Partial<Data> = {}): Return =>
+export const advance = (model: Model, shared: Shared, transform: DataTransform = {}): Return =>
 	enterStep(
-		modifyFields(model, { data: (data) => ({ ...data, ...patch }) }),
+		modifyFields(model, { data: (data) => modifyFields(data, transform) }),
 		nextStep(model.step, model.userType),
 		{ direction: "forward", shared, syncUrl: true },
 	)
 
 /** The invite step skips straight to finalization (`handleTeamInviteContinue` / `Skip`). */
 export const finalize = (model: Model, shared: Shared, emails: ReadonlyArray<string>): Return =>
-	enterStep(modifyFields(model, { data: (data) => ({ ...data, emails }) }), "finalization", {
+	enterStep(modifyFields(model, { data: (data) => modifyFields(data, { emails: () => emails }) }), "finalization", {
 		direction: "forward",
 		shared,
 		syncUrl: true,

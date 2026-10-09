@@ -294,6 +294,8 @@ const cycleValue = (value: number, amount: number, min: number, max: number, rou
 }
 
 const withValues = (model: Model, values: Partial<Values>): Model => {
+	// The patch has dynamic segment keys (React Aria's IncompleteDate.set), so no static nested modifyFields fits.
+	// oxlint-disable-next-line foldkit/no-spread-in-modify-fields
 	const next = modifyFields(model, { values: (current) => ({ ...current, ...values }) })
 	return modifyFields(next, { committed: () => completeValue(next) })
 }

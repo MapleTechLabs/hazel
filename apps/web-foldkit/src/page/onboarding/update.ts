@@ -190,7 +190,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 						},
 			),
 		SucceededUpdateTimezone: ({ timezone }) =>
-			withForm(model, "Timezone", () => advance(model, shared, { timezone })),
+			withForm(model, "Timezone", () => advance(model, shared, { timezone: () => timezone })),
 		FailedUpdateTimezone: ({ toast: request }) =>
 			withForm(model, "Timezone", (form) => ({
 				model: setForm(model, StepForm.Timezone({ ...form, isSubmitting: false })),
@@ -224,8 +224,8 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				const [selected] = form.box.selectedKeys
 				if (selected === undefined) return { model }
 				return model.step === "useCases"
-					? advance(model, shared, { useCases: [selected] })
-					: advance(model, shared, { role: selected })
+					? advance(model, shared, { useCases: () => [selected] })
+					: advance(model, shared, { role: () => selected })
 			}),
 
 		ChangedEmail: ({ index, value }) =>

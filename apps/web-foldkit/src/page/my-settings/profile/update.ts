@@ -67,8 +67,12 @@ const formFor = (model: Model, shared: Shared, row: UserRow | null): Model => {
 	})
 }
 
-const changed = (model: Model, patch: Partial<FormValues>): Model =>
-	modifyFields(model, { values: (values) => ({ ...values, ...patch }), isDirty: () => true })
+type FormValuesTransform = Partial<{
+	readonly [K in keyof FormValues]: (value: FormValues[K]) => FormValues[K]
+}>
+
+const changed = (model: Model, transform: FormValuesTransform): Model =>
+	modifyFields(model, { values: (values) => modifyFields(values, transform), isDirty: () => true })
 
 const cropSrc = (crop: CropState) =>
 	crop._tag === "Ready" || crop._tag === "Processing" ? crop.image.src : null
@@ -79,7 +83,7 @@ const closeCrop = (model: Model): Return => {
 	return {
 		model: modifyFields(model, {
 			crop: () => ({ _tag: "Idle" }),
-			cropModal: (modal) => ({ ...modal, isOpen: false }),
+			cropModal: (modal) => modifyFields(modal, { isOpen: () => false }),
 		}),
 		commands: src === null ? [] : [RevokeCropImage({ src })],
 	}
@@ -142,7 +146,7 @@ const selectFile = (model: Model, files: ReadonlyArray<File>): Return =>
 				model: modifyFields(model, {
 					crop: () => ({ _tag: "Loading", loadId }),
 					cropLoadId: () => loadId,
-					cropModal: (modal) => ({ ...modal, isOpen: true }),
+					cropModal: (modal) => modifyFields(modal, { isOpen: () => true }),
 				}),
 				commands: [LoadCropImage({ file, loadId })],
 			}
@@ -163,7 +167,7 @@ const foldTimezone = (model: Model, message: ComboBox.Message): Return => {
 	const next = modifyFields(model, { timezone: () => result.model })
 	const commands = Command.mapMessages(result.commands ?? [], toTimezoneMessage)
 	const key = result.outMessage?.key
-	return { model: key === undefined ? next : changed(next, { timezone: key }), commands }
+	return { model: key === undefined ? next : changed(next, { timezone: () => key }), commands }
 }
 
 export const update = (model: Model, message: Message, shared: Shared): Return =>
@@ -179,8 +183,8 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				? { model: next }
 				: { model: formFor(next, shared, null) }
 		},
-		ChangedFirstName: ({ value }) => ({ model: changed(model, { firstName: value }) }),
-		ChangedLastName: ({ value }) => ({ model: changed(model, { lastName: value }) }),
+		ChangedFirstName: ({ value }) => ({ model: changed(model, { firstName: () => value }) }),
+		ChangedLastName: ({ value }) => ({ model: changed(model, { lastName: () => value }) }),
 		GotTimezoneMessage: ({ message: child }) => foldTimezone(model, child),
 		SubmittedProfile: () =>
 			model.userId === null || isSaveDisabled(model)
