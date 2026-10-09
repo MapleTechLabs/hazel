@@ -125,7 +125,8 @@ export const channelItem = <M>(
 	return sidebarItem(h, {}, [
 		sidebarLink(h, { href, isActive: context.isActive, activeClassName: CHANNEL_ACTIVE }, [
 			h.span(
-				[h.Class("relative shrink-0")],
+				// Positioned only for the partner marks: needless positioned spans slow every hit test.
+				[h.Class(partners.length > 0 ? "relative shrink-0" : "shrink-0")],
 				[channelIcon(h, entry.channel.icon), ...partnerOrgMarks(h, partners)],
 			),
 			label(h, [entry.channel.name]),
