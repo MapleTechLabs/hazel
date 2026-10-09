@@ -433,6 +433,27 @@ describe("image viewer", () => {
 		)
 	})
 
+	test("re-entering the hovered message cancels a pending hide; moving within it changes nothing", () => {
+		const facts = { isOwnMessage: () => false, isPinned: () => false, isThreadChannel: false }
+		const entered = Overlays.update(
+			Overlays.init(),
+			Overlays.Message.PointerEnteredMessage({ messageId: graceMessageId }),
+			facts,
+		).model
+		const within = Overlays.update(entered, Overlays.Message.PointerEnteredMessage({ messageId: graceMessageId }), facts)
+		expect(within.model).toBe(entered)
+		const left = Overlays.update(entered, Overlays.Message.PointerLeftList(), facts).model
+		expect(left.isHidePending).toBe(true)
+		const back = Overlays.update(left, Overlays.Message.PointerEnteredMessage({ messageId: graceMessageId }), facts).model
+		expect(back.isHidePending).toBe(false)
+		const stale = Overlays.update(
+			back,
+			Overlays.Message.CompletedWaitForHideToolbar({ version: left.hoverVersion }),
+			facts,
+		).model
+		expect(stale.hoveredMessageId).toBe(graceMessageId)
+	})
+
 	// The view renders nothing for a viewer whose message left the window, so the viewer closes; it
 	// would otherwise keep `PointerLeftList` from ever hiding the hover toolbar.
 	test("the viewer closes when its message leaves the window", () => {
