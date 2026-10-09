@@ -1,6 +1,6 @@
 # Foldkit migration plan
 
-Status: draft · Branch: `experiment-2.0` · Last updated: 2026-10-08
+Status: draft · Branch: `experiment-2.0` · Last updated: 2026-10-09
 
 Goal: replace the React frontend (`apps/web`) with a Foldkit frontend (`apps/web-foldkit`) that looks pixel-identical to it. Users should notice nothing except speed and stability. Engineers should get a single Model, Messages as facts, and side effects that are testable.
 
@@ -19,8 +19,9 @@ Certification runs (foldkit vs pin `639aa8d26`, `--strict-a11y`, port base 8000)
 | burndown-3 | 4b3d8b2a0 | 707 | 535 | 146 | 26 | 0 | 0 |
 | burndown-4 | 1b35c0235 | 758 | 563 | 175 | 20 | 0 | 0 |
 | burndown-5 | f8a0391a4 | 758 | 558 | 193 | 7 | 0 | 0 |
+| burndown-6 | 272eb5530 (main) | 758 | 565 | 186 | 7 | 0 | 0 |
 
-burndown-5 is the certification result: the only failures are the 7 accepted legacy quirks below, every pass has 0 perceptual px and no structural deltas, and there are 0 behavioral differences. burndown-3's failures were fixed on `fk/kit-a11y-final`, burndown-4's on `fk/cert-fixes`.
+burndown-6 (main, after the Foldkit 0.167 upgrade, the perf fixes and the review fixes in `docs/foldkit-review/`) is the current certification result, same as burndown-5: the only failures are the 7 accepted legacy quirks below, every pass has 0 perceptual px and no structural deltas, and there are 0 behavioral differences. burndown-3's failures were fixed on `fk/kit-a11y-final`, burndown-4's on `fk/cert-fixes`.
 
 Accepted legacy quirks (not imitated):
 - `gallery-table-cell-keys` (2): React Aria's click announcement races the arrow-key announcements, so legacy's order varies per run; Foldkit's is the intended one.
