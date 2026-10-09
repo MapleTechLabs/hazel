@@ -77,6 +77,7 @@ Worker env (secrets are uploaded as Worker secrets, plain values as vars) is lis
 
 - Secrets live in the Hazel Infisical project (`9e94bb4d-…`, env `prod`); copied from Railway `api`, `CLUSTER_API_SECRET` and `ELECTRIC_SECRET` generated.
 - Cluster: `CLUSTER_API_SECRET` set on Railway `api` and `cluster`; public domain `cluster-production-6155.up.railway.app` (port 3001) is `CLUSTER_URL`.
-- Moved to Cloudflare: `api.hazel.sh` (`hazel-api`), `electric.hazel.sh` (`hazel-electric-proxy` + `hazel-electric` container), `bot-gateway.hazel.sh`. `app.hazel.sh` serves `apps/web-foldkit`.
+- Moved to Cloudflare: `api.hazel.sh` (`hazel-api`), `electric.hazel.sh` (`hazel-electric-proxy`), `bot-gateway.hazel.sh`.
+- Electric itself runs on Railway (service `electric`, volume at `/app/persistent`, PlanetScale role `electric-railway` with replication); `ELECTRIC_URL` = `electric-production-0d89.up.railway.app`. The Cloudflare Container was removed: always-on it cost several times more and lost its disk on every restart. `app.hazel.sh` serves `apps/web-foldkit`.
 - Rollback DNS (all unproxied CNAMEs, detach the Worker custom domain first): `api` → `j0tqzlof.up.railway.app`, `electric` → `2hg74iuk.up.railway.app`, `bot-gateway` → `s3t62x1p.up.railway.app` (was proxied).
 - Not done yet: Discord gateway flip (Worker `false`, Railway still runs it), Worker traces to Maple (`OTEL_BASE_URL`, `MAPLE_INGEST_KEY`), docs.hazel.sh stays on Vercel, GitHub `production` environment secrets for CI deploys. Link previews return `INVALID_URL` for every URL (already broken on the June build).
