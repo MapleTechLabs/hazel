@@ -37,7 +37,8 @@ export const requestPlatformLive = (env: Record<string, unknown>, botGateways: B
 	Layer.mergeAll(
 		Database.layerRequestScoped,
 		BotGatewayTransport.layerDurableObject(botGateways),
-		layerKvResultPersistence(cacheNamespace(env)),
+		// Suspended: init also runs at plan time, where the KV binding does not exist yet.
+		Layer.suspend(() => layerKvResultPersistence(cacheNamespace(env))),
 		workerEnvLayer(env),
 	)
 
