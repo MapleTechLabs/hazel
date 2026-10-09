@@ -64,7 +64,7 @@ const navRail = <Message>(h: HtmlBuilder<Message>, context: ShellContext, unread
 			h.a(
 				[
 					h.Class(linkClassName({ hasHref: true, className: "flex items-center justify-center" })),
-					h.Href("/"),
+					h.Href(hrefOf(AppRoute.Root())),
 					h.Attribute("tabindex", "0"),
 					h.Attribute("data-react-aria-pressable", "true"),
 				],
