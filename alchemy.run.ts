@@ -21,7 +21,6 @@ import { plainWithDefault } from "@hazel/infra/env"
 import Actors from "./apps/actors/alchemy.run.ts"
 import ApiLive, { Api } from "./apps/backend/src/worker.ts"
 import BotGateway from "./apps/bot-gateway/alchemy.run.ts"
-import Docs from "./apps/docs/alchemy.run.ts"
 import ElectricProxy from "./apps/electric-proxy/alchemy.run.ts"
 import Landing from "./apps/landing/alchemy.run.ts"
 import LinkPreview from "./apps/link-preview-worker/alchemy.run.ts"
@@ -99,9 +98,9 @@ export default Alchemy.Stack(
 		const linkPreview = yield* LinkPreview
 		const actors = yield* Actors
 		const web = yield* Web
-		// Shared marketing/docs sites: prd only (previews and dev run their own dev servers).
+		// Shared marketing site: prd only (previews and dev run their own dev servers). docs.hazel.sh
+		// stays on Vercel until its DNS record is moved, so the docs site is not deployed here yet.
 		const landing = stage.kind === "prd" ? yield* Landing : undefined
-		const docs = stage.kind === "prd" ? yield* Docs : undefined
 
 		const summary = {
 			stage: formatHazelStage(stage),
@@ -122,7 +121,6 @@ export default Alchemy.Stack(
 			linkPreviewWorker: linkPreview.workerName,
 			actorsWorker: actors.workerName,
 			landingWorker: landing?.workerName,
-			docsWorker: docs?.workerName,
 		}
 	}).pipe(
 		// The stack IS the entry point: the one place `HazelStack` is provided.

@@ -17,6 +17,8 @@ export default Effect.gen(function* () {
 	return yield* Cloudflare.Worker("link-preview", {
 		...hazelWorkerProps("link-preview", stack),
 		main: new URL("./src/index.ts", import.meta.url).pathname,
+		// url-regex-safe (via metascraper) tries the native `re2` and falls back when it is missing.
+		build: { input: { external: ["re2"] } },
 		observability: { enabled: true },
 		workersDev: stack.stage.kind !== "prd",
 		domain: stack.domains.linkPreview,
