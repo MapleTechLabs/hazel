@@ -188,11 +188,13 @@ export const MountEditor = Mount.defineStream("MountEditor", {
 						registerEditor(editorId, editor)
 						return editor
 					}),
+					// The editor is destroyed once its element has left the document: tearing it down
+					// while still attached forces a synchronous layout of the whole page.
 					(editor) =>
-						Effect.sync(() => {
-							unregisterEditor(editorId, editor)
-							editor.destroy()
-						}),
+						Effect.sync(() => unregisterEditor(editorId, editor)).pipe(
+							Effect.andThen(Effect.yieldNow),
+							Effect.andThen(Effect.sync(() => editor.destroy())),
+						),
 				)
 				// Read-only while DevTools shows a historical view.
 				yield* viewStateChanges.pipe(
