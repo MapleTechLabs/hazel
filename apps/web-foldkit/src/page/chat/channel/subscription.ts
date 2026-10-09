@@ -70,8 +70,10 @@ const chat = Subscription.make<Input, Message>()((entry) => ({
 		{ channelId: ChannelId, limit: Schema.Number, offset: Schema.Number },
 		{
 			modelToDependencies: ({ model }) => ({ channelId: model.channelId, limit: model.limit, offset: model.offset }),
-			dependenciesToStream: ({ channelId, limit, offset }) =>
-				messageChangesStream(channelId, limit, offset, ({ order, upserts }) =>
+			// One live query per channel; paging moves its window instead of rebuilding it.
+			keepAliveEquivalence: (previous, next) => previous.channelId === next.channelId,
+			dependenciesToStream: ({ channelId, limit, offset }, readDependencies) =>
+				messageChangesStream(channelId, { limit, offset }, readDependencies, ({ order, upserts }) =>
 					Message.ChangedMessages({ order, upserts }),
 				),
 		},
