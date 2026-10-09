@@ -18,7 +18,7 @@ export const Message = defineMessageUnion({
 	UpdatedUserRow: { row: Schema.NullOr(UserRow) },
 	ToggledDoNotDisturb: { isSelected: Schema.Boolean },
 	ToggledShowQuietHours: { isSelected: Schema.Boolean },
-	GotQuietHoursMessage: { field: QuietHoursField, message: Segments.Message },
+	GotQuietHoursMessage: { fieldId: QuietHoursField, message: Segments.Message },
 	SucceededUpdateUserSettings: {},
 	FailedUpdateUserSettings: {},
 	GotInteractionMessage: { message: Interaction.Message },

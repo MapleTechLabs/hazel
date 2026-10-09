@@ -7,6 +7,9 @@ import { GitHubRepo, Provider, RssFeed, RowKind, Webhook } from "./model"
 
 const Failure = { toast: ToastRequest }
 
+/** A row menu's identity: the list it sits in and the row id. */
+const RowMenuId = Schema.Struct({ kind: RowKind, id: Schema.String })
+
 export const Message = defineMessageUnion({
 	UpdatedGitHubConnection: { isConnected: Schema.Boolean },
 	SucceededListWebhooks: { version: Schema.Number, webhooks: Schema.Array(Webhook) },
@@ -17,7 +20,7 @@ export const Message = defineMessageUnion({
 	ClickedConnectGitHub: {},
 	ClickedAddRepo: {},
 	ClickedAddFeed: {},
-	GotRowMenuMessage: { kind: RowKind, id: Schema.String, message: Menu.Message },
+	GotRowMenuMessage: { rowMenuId: RowMenuId, message: Menu.Message },
 	SucceededRowAction: { kind: RowKind, id: Schema.String, successMessage: Schema.String },
 	FailedRowAction: { kind: RowKind, id: Schema.String, ...Failure },
 	ClickedConfirmRemove: {},

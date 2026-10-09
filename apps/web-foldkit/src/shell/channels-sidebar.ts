@@ -115,7 +115,8 @@ export const update = (model: Model, message: Message): SidebarReturn =>
 		CompletedPersistDismissedHint: () => ({ model }),
 		GotRowMenuMessage: ({ channelId, orgSlug, message }) =>
 			updateRowMenu(model, channelId, orgSlug, message),
-		GotSectionMenuMessage: ({ sectionKey, message }) => updateSectionMenu(model, sectionKey, message),
+		GotSectionMenuMessage: ({ sectionId: sectionKey, message }) =>
+			updateSectionMenu(model, sectionKey, message),
 		// `openChannelsBrowser` passes `initialPage`, which the palette never reads: it opens home.
 		ClickedBrowseChannels: () => ({
 			model,
@@ -266,7 +267,7 @@ const sectionActionView = <ParentMessage>(
 		: sectionMenuView(h, {
 				menu: sectionMenuOf(model, sectionKey),
 				toMessage: (message) =>
-					toParentMessage(Message.GotSectionMenuMessage({ sectionKey, message })),
+					toParentMessage(Message.GotSectionMenuMessage({ sectionId: sectionKey, message })),
 			})
 }
 

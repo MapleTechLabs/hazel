@@ -111,7 +111,7 @@ const foldRowMenu = (model: Model, kind: RowKind, id: string, message: Menu.Mess
 		rowMenus: Array.map((candidate) => (candidate.id === menuId ? next.model : candidate)),
 	})
 	const commands = Command.mapMessages(next.commands ?? [], (child) =>
-		Message.GotRowMenuMessage({ kind, id, message: child }),
+		Message.GotRowMenuMessage({ rowMenuId: { kind, id }, message: child }),
 	)
 	const out = next.outMessage
 	if (out === undefined || out._tag !== "SelectedItem") return { model: withMenu, commands }
@@ -199,7 +199,8 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		// AddGitHubRepoModal and AddRssFeedModal are not ported yet.
 		ClickedAddRepo: () => ({ model }),
 		ClickedAddFeed: () => ({ model }),
-		GotRowMenuMessage: ({ kind, id, message: menuMessage }) => foldRowMenu(model, kind, id, menuMessage),
+		GotRowMenuMessage: ({ rowMenuId: { kind, id }, message: menuMessage }) =>
+			foldRowMenu(model, kind, id, menuMessage),
 		SucceededRowAction: ({ kind, id, successMessage }) => {
 			const settled = settleRowAction(model, kind, id)
 			return {

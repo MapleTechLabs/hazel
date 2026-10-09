@@ -59,7 +59,7 @@ describe("channel integrations", () => {
 
 	test("Disable from a webhook menu updates it, toasts, and reloads the list", () => {
 		const menu = (menuMessage: Menu.Message) =>
-			Message.GotRowMenuMessage({ kind: "webhook", id: ci.id, message: menuMessage })
+			Message.GotRowMenuMessage({ rowMenuId: { kind: "webhook", id: ci.id }, message: menuMessage })
 		story(
 			run,
 			given(loaded),
@@ -149,7 +149,7 @@ describe("list failure", () => {
 })
 
 const rowMenu = (menuMessage: Menu.Message) =>
-	Message.GotRowMenuMessage({ kind: "webhook", id: ci.id, message: menuMessage })
+	Message.GotRowMenuMessage({ rowMenuId: { kind: "webhook", id: ci.id }, message: menuMessage })
 /** The custom webhook's menu opened and "Delete" picked: the confirm dialog is open. */
 const confirming = [
 	Menu.Message.PressedTrigger({ pointerType: "mouse" }),

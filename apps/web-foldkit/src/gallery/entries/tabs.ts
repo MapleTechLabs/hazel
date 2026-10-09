@@ -22,7 +22,7 @@ type Slot = keyof Model
 
 const Message = defineMessageUnion({
 	GotTabsMessage: {
-		slot: Schema.Literals(["horizontal", "vertical", "icons", "long"]),
+		slotId: Schema.Literals(["horizontal", "vertical", "icons", "long"]),
 		message: Tabs.Message,
 	},
 })
@@ -35,12 +35,12 @@ const foldTabs = (slot: Slot) =>
 		update: Tabs.update,
 		read: (model: Model) => Option.some(model[slot]),
 		write: (model, nextTabs) => ({ ...model, [slot]: nextTabs }),
-		toParentMessage: (message) => Message.GotTabsMessage({ slot, message }),
+		toParentMessage: (message) => Message.GotTabsMessage({ slotId: slot, message }),
 	})
 
 const update = (model: Model, message: Message) =>
 	Message.match<Update.Return<Model, Message>>(message, {
-		GotTabsMessage: ({ slot, message }) => foldTabs(slot)(model, message),
+		GotTabsMessage: ({ slotId: slot, message }) => foldTabs(slot)(model, message),
 	})
 
 // VIEW
@@ -52,7 +52,7 @@ const view = (model: Model, h: HtmlBuilder<Message>) => {
 			model: model[slot],
 			view: Tabs.view,
 			viewInputs,
-			toParentMessage: (message) => Message.GotTabsMessage({ slot, message }),
+			toParentMessage: (message) => Message.GotTabsMessage({ slotId: slot, message }),
 		})
 	const simple = (labels: ReadonlyArray<readonly [string, string]>, disabledKey?: string) => ({
 		tabs: labels.map(([key, label]) => ({ key, content: [label], isDisabled: key === disabledKey })),

@@ -60,7 +60,7 @@ const init = (): Model => ({
 // MESSAGE
 
 const Message = defineMessageUnion({
-	GotListBoxMessage: { slot: Slot, message: ListBox.Message },
+	GotListBoxMessage: { slotId: Slot, message: ListBox.Message },
 })
 type Message = typeof Message.Type
 
@@ -71,14 +71,14 @@ const fold = (slot: Slot) =>
 		update: ListBox.update,
 		read: (model: Model) => Option.some(model[slot]),
 		write: (model: Model, next: ListBox.Model): Model => ({ ...model, [slot]: next }),
-		toParentMessage: (message: ListBox.Message) => Message.GotListBoxMessage({ slot, message }),
+		toParentMessage: (message: ListBox.Message) => Message.GotListBoxMessage({ slotId: slot, message }),
 		foldOutMessage: () => (model: Model) => ({ model }),
 	})
 
 const lift = (slot: Slot) =>
 	Subscription.lift(ListBox.subscriptions)<Model, Message>({
 		read: (model) => Option.some(model[slot]),
-		toParentMessage: (message) => Message.GotListBoxMessage({ slot, message }),
+		toParentMessage: (message) => Message.GotListBoxMessage({ slotId: slot, message }),
 	}).pointerRelease
 
 const subscriptions = Subscription.aggregate<Model, Message>()(
@@ -98,7 +98,7 @@ const view = (model: Model, h: HtmlBuilder<Message>) => {
 				model: model[slot],
 				view: listBoxView,
 				viewInputs,
-				toParentMessage: (message) => Message.GotListBoxMessage({ slot, message }),
+				toParentMessage: (message) => Message.GotListBoxMessage({ slotId: slot, message }),
 			}),
 		)
 	const notifyContent = (key: string): ReadonlyArray<Html> => {
@@ -121,7 +121,7 @@ export const gallery = defineGallery<Model, Message>("ListBox", {
 	init: () => ({ model: init() }),
 	update: (model, message) =>
 		Message.match<Update.Return<Model, Message>>(message, {
-			GotListBoxMessage: ({ slot, message }) => fold(slot)(model, message),
+			GotListBoxMessage: ({ slotId: slot, message }) => fold(slot)(model, message),
 		}),
 	subscriptions,
 	view,

@@ -210,6 +210,6 @@ export const updateSectionMenu = (model: Model, sectionKey: string, message: Men
 		`section:${sectionKey}`,
 		"",
 		Menu.update(sectionMenuOf(model, sectionKey), message),
-		(child) => Message.GotSectionMenuMessage({ sectionKey, message: child }),
+		(child) => Message.GotSectionMenuMessage({ sectionId: sectionKey, message: child }),
 		selectedSectionItem(sectionKey),
 	)

@@ -90,7 +90,7 @@ const buildContext = <M>(
 	const toPopoverMessage = (
 		key: string,
 		message: Parameters<typeof Overlays.Message.GotPopoverMessage>[0]["message"],
-	) => overlaysMessage(toParentMessage, Overlays.Message.GotPopoverMessage({ key, message }))
+	) => overlaysMessage(toParentMessage, Overlays.Message.GotPopoverMessage({ popoverId: key, message }))
 	return {
 		tooltip: {
 			active: isIdle ? null : overlays.tooltip,

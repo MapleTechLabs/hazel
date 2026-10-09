@@ -92,7 +92,7 @@ export const Message = defineMessageUnion({
 	GotMoreMenuMessage: { messageId: MessageId, message: Menu.Message },
 	RightClickedMessage: { messageId: MessageId, offset: Schema.Number, crossOffset: Schema.Number },
 	GotContextMenuMessage: { message: Menu.Message },
-	GotPopoverMessage: { key: Schema.String, message: Popover.Message },
+	GotPopoverMessage: { popoverId: Schema.String, message: Popover.Message },
 	GotPinnedMessage: { message: Popover.Message },
 	ClickedReply: { messageId: MessageId },
 	ClickedDelete: { messageId: MessageId },
@@ -305,7 +305,7 @@ export const update = (model: Model, message: Message, facts: MessageFacts): Ove
 				result.outMessage,
 			)
 		},
-		GotPopoverMessage: ({ key, message: popoverMessage }) => {
+		GotPopoverMessage: ({ popoverId: key, message: popoverMessage }) => {
 			const current =
 				model.popover !== null && model.popover.key === key
 					? model.popover.popover
@@ -314,7 +314,7 @@ export const update = (model: Model, message: Message, facts: MessageFacts): Ove
 				model,
 				Popover.update(current, popoverMessage),
 				(popover) => ({ popover: { key, popover } }),
-				(inner) => Message.GotPopoverMessage({ key, message: inner }),
+				(inner) => Message.GotPopoverMessage({ popoverId: key, message: inner }),
 			)
 		},
 		GotPinnedMessage: ({ message: popoverMessage }) =>

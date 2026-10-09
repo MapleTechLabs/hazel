@@ -48,6 +48,6 @@ export const rowMenu = (
 			content,
 		},
 		toParentMessage: (message: Menu.Message) =>
-			Message.GotRowMenuMessage({ kind: options.kind, id: options.id, message }),
+			Message.GotRowMenuMessage({ rowMenuId: { kind: options.kind, id: options.id }, message }),
 	})
 }
