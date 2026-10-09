@@ -217,10 +217,10 @@ const openRestoreModal = Update.foldChildStep({ update: Modal.open, ...restoreMo
 const closeRestoreModal = Update.foldChildStep({ update: Modal.close, ...restoreModal })
 
 /** Clears the draft only if it is still the one the result belongs to. */
-const clearDraftOf = (model: Model, previewUrl: string | null) =>
+const clearDraftOf = (model: Model, previewUrl: string | null): Return =>
 	model.draft !== null && model.draft.previewUrl === previewUrl
 		? clearDraft(model)
-		: { model, commands: [] }
+		: { model }
 
 const withCommands = (result: Return, commands: Return["commands"]): Return => ({
 	...result,

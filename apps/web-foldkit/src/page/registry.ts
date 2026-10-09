@@ -90,13 +90,12 @@ export type PageMessage = typeof PageMessage.Type
 /** The page slot after a transition, with the Commands and OutMessage that came with it. */
 export interface PageTransition {
 	readonly slot: PageSlot | null
-	readonly commands: ReadonlyArray<Command.Command<PageMessage, never, Resources>>
+	readonly commands?: ReadonlyArray<Command.Command<PageMessage, never, Resources>>
 	readonly outMessage: Option.Option<PageOutMessage>
 }
 
 const unchanged = (slot: PageSlot | null): PageTransition => ({
 	slot,
-	commands: [],
 	outMessage: Option.none(),
 })
 

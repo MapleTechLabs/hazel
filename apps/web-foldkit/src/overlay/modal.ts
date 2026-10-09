@@ -66,13 +66,13 @@ export type Message = typeof Message.Type
 
 export interface Transition {
 	readonly model: Model
-	readonly commands: ReadonlyArray<Command.Command<Message, never, HazelRpc>>
+	readonly commands?: ReadonlyArray<Command.Command<Message, never, HazelRpc>>
 	readonly outMessage: Option.Option<ModalOutMessage>
 }
 
 type Slot = NonNullable<Model>
 
-const settled = (model: Model): Transition => ({ model, commands: [], outMessage: Option.none() })
+const settled = (model: Model): Transition => ({ model, outMessage: Option.none() })
 
 /** A closing OutMessage drops the slot; the root still sees it for the toast and navigation. */
 const toTransition = (found: Option.Option<ModalStep<Slot, Message>>, fallback: Model): Transition =>
