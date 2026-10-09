@@ -911,41 +911,50 @@ export const siteConfig = {
 		},
 		subtext: "Open-source, lightning-fast, and designed for modern collaboration.",
 	},
-	footerLinks: [
-		{
-			title: "Product",
-			links: [
-				{ id: 1, title: "Features", url: "/features" },
-				{ id: 2, title: "Pricing", url: "/pricing" },
-				{ id: 3, title: "Desktop App", url: "/desktop" },
-				{ id: 4, title: "Integrations", url: "/integrations" },
-			],
-		},
-		{
-			title: "Resources",
-			links: [
-				{ id: 5, title: "GitHub Repository", url: "https://github.com/hazelchat/hazel" },
-				{ id: 6, title: "API Reference", url: "/api-reference" },
-				{ id: 7, title: "Changelog", url: "/changelog" },
-			],
-		},
-		{
-			title: "Compare",
-			links: [
-				{ id: 8, title: "Hazel vs Slack", url: "/vs/slack" },
-				{ id: 9, title: "Hazel vs Discord", url: "/vs/discord" },
-			],
-		},
-		{
-			title: "Company",
-			links: [
-				{ id: 10, title: "About", url: "/about" },
-				{ id: 11, title: "Contact", url: "mailto:support@hazel.sh" },
-				{ id: 12, title: "Privacy Policy", url: "/privacy" },
-				{ id: 13, title: "Terms of Service", url: "/terms" },
-			],
-		},
-	],
+	footerSection: {
+		id: "footer",
+		description:
+			"Open-source, lightning-fast, and designed for modern collaboration.",
+		socialLinks: [
+			{ id: 1, title: "GitHub", url: "https://github.com/hazelchat/hazel", icon: "github" },
+		],
+		footerLinks: [
+			{
+				title: "Product",
+				links: [
+					{ id: 1, title: "Features", url: "/features" },
+					{ id: 2, title: "Pricing", url: "/pricing" },
+					{ id: 3, title: "Desktop App", url: "/desktop" },
+					{ id: 4, title: "Integrations", url: "/integrations" },
+				],
+			},
+			{
+				title: "Resources",
+				links: [
+					{ id: 5, title: "GitHub Repository", url: "https://github.com/hazelchat/hazel" },
+					{ id: 6, title: "API Reference", url: "/api-reference" },
+					{ id: 7, title: "Changelog", url: "/changelog" },
+				],
+			},
+			{
+				title: "Compare",
+				links: [
+					{ id: 8, title: "Hazel vs Slack", url: "/vs/slack" },
+					{ id: 9, title: "Hazel vs Discord", url: "/vs/discord" },
+				],
+			},
+			{
+				title: "Company",
+				links: [
+					{ id: 10, title: "About", url: "/about" },
+					{ id: 11, title: "Contact", url: "mailto:support@hazel.sh" },
+					{ id: 12, title: "Privacy Policy", url: "/privacy" },
+					{ id: 13, title: "Terms of Service", url: "/terms" },
+				],
+			},
+		],
+	},
+	
 }
 
 export type SiteConfig = typeof siteConfig
