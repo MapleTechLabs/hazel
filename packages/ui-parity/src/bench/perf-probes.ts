@@ -14,6 +14,11 @@ export interface FrameRun {
 export interface ReadyResult {
 	/** Input event timestamp to the first frame where the condition held, plus a post-paint task. */
 	readonly ms: number
+	/**
+	 * Like `ms`, but also checked after each frame's paint, so a DOM patch made in an rAF callback
+	 * that runs after this probe's own (a rAF-batched renderer) counts in the frame that painted it.
+	 */
+	readonly commitMs: number
 	readonly frames: number
 	/** Frames between input and ready where no message row was in the DOM (blank or spinner). */
 	readonly blankFrames: number
@@ -187,17 +192,28 @@ export const createPerfProbes = () => {
 			const armedAt = performance.now()
 			let frames = 0
 			let blankFrames = 0
-			while (!ready(spec)) {
+			let committedAt = Number.NaN
+			let committedFrame = -1
+			let rafs = 0
+			while (!ready(spec) || (!Number.isNaN(committedAt) && rafs === committedFrame)) {
 				if (performance.now() - armedAt > timeoutMs)
-					return { ms: Number.NaN, frames, blankFrames, timedOut: true }
+					return { ms: Number.NaN, commitMs: Number.NaN, frames, blankFrames, timedOut: true }
 				await nextFrame()
+				rafs++
 				if (lastInputAt > armedAt) {
 					frames++
 					if (!document.querySelector("[data-id]")) blankFrames++
 				}
+				// `commitMs`: a patch made in a later rAF callback of this frame is caught after its paint;
+				// `ms` keeps waiting for the next frame as before.
+				if (Number.isNaN(committedAt) && !ready(spec)) {
+					const postFrameAt = await afterPaint()
+					if (ready(spec)) [committedAt, committedFrame] = [postFrameAt, rafs]
+				}
 			}
 			const paintedAt = await afterPaint()
-			return { ms: paintedAt - lastInputAt, frames, blankFrames, timedOut: false }
+			const commitMs = (Number.isNaN(committedAt) ? paintedAt : committedAt) - lastInputAt
+			return { ms: paintedAt - lastInputAt, commitMs, frames, blankFrames, timedOut: false }
 		},
 		/** FCP, first message row, and a TTI estimate: end of the last long task before a 2 s quiet window. */
 		loadMarks: async () => {
