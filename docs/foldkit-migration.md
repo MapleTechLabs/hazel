@@ -33,22 +33,23 @@ onboarding-timezone keeps about 31k strict, 0 perceptual px from compositor laye
 
 Not ported: video playback (left for manual QA by decision on 2026-10-08; a fixture video would change the legacy `chat-attachments` capture), agent steps in AI replies (no fixture data), GitHub PR and Linear URL embeds, Tauri-specific blocks. Phase 6 (platform polish) and the manual QA checklist (§5 last item) remain.
 
-### Performance (2026-10-09, main bd9ae6eb0, `src/bench/perf.ts`, 5 runs, p50 / p95 ms)
+### Performance (2026-10-09, main 48c2caf4e, `src/bench/perf.ts`, 5 runs, p50 / p95 ms)
 
 Budgets: 120fps scrolling (main-thread work per frame under 8.33ms), warm channel switch under 50ms, cold under 100ms, everything else no slower than legacy. Foldkit 0.167; VirtualList was evaluated and rejected (`foldkit-decisions/s4b-virtual-list.md`).
 
 | Metric | Legacy | Foldkit | Met |
 | --- | --- | --- | --- |
-| 10k channel wheel scroll, frame work | 1.2 / 85-251 | 1.8-2 / 10.2-20.3 | no (hover toolbar remounts, per-scroll view render, sidebar hit tests) |
-| 10k channel fling to top | 0.2 / 0.9 | 0.8 / 20.2 (script 1.9 ms/frame) | no (view patch, layout, layerize) |
+| 10k channel wheel scroll, frame work (slow / medium / fast) | 1.1 / 84-259 | 0.3 / 5.1, 5.4, 7.8 | yes |
+| 10k channel fling to top | 0.3 / 1.4 | 0.6 / 15.5 | no (view patch, layout, layerize) |
+| 10k channel jump to bottom | 0.1 / 3.7 | 0.1 / 8.3 | yes |
 | #general scroll, medium/fast | up to 181 p95 | 0.4-2.8 p95 | yes |
-| Sidebar, 500 channels | 5.4 p95 | 3.3 p95 | yes |
-| Switch heavy workspace, cold / warm | 936 / 444 | 40 / 37.5 | yes, 0 blank frames |
-| Switch normal workspace, cold / warm | 665 / 58 | 49 / 31.9 | yes, 0 blank frames |
+| Sidebar, 500 channels | 5.2 p95 | 2.6 p95 | yes |
+| Switch heavy workspace, cold / warm | 943 / 443 | 44.6 / 40.6 | yes, 0 blank frames |
+| Switch normal workspace, cold / warm | 667 / 58 | 53.9 / 38.8 | yes, 0 blank frames |
 | Load heavy, ready to use | 1846 | 980 | yes |
-| Composer key to paint | 1.6 / 50.7 | 2.5 / 35 | yes |
-| Thread panel / palette / image viewer | 120 / 57 / 33 | 42 / 55 / 33 | yes |
-| Delete modal / emoji picker, commit frame | 22 / 19-23 | 22-24 / 25 | delete yes, emoji within 3ms (input probe row: 37-39 / 39-41, one frame late) |
+| Composer key to paint | 1.6 / 43.3 | 19.3 / 39.9 | no: regressed by the per-frame window poll in the history query (2.2 without it), fix in progress |
+| Thread panel / palette / image viewer, commit frame | 118 / 60 / 31 | 42 / 48 / 30 | yes |
+| Delete modal / emoji picker, commit frame | 26-28 / 26-29 | 23-25 / 27-28 | yes (input probe row is one frame late) |
 | JS heap after 20 switches (MB) | 254 | 65 | yes |
 | JS bundle gzip (KB) | 1536 | 987 | yes |
 
