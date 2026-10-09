@@ -43,8 +43,8 @@ Budgets: 120fps scrolling (main-thread work per frame under 8.33ms), warm channe
 | 10k channel fling to top | 0.3 / 1.3 | 1.7 / 33.7 | no |
 | #general scroll, medium/fast | up to 181 p95 | 0.4-2.8 p95 | yes |
 | Sidebar, 500 channels | 5.4 p95 | 3.3 p95 | yes |
-| Switch heavy workspace, cold / warm | 936 / 444 | 150 / 145 | no (no warm reuse) |
-| Switch normal workspace, cold / warm | 665 / 58 | 62 / 47.7 | cold yes, warm has 1-2 blank frames |
+| Switch heavy workspace, cold / warm | 936 / 444 | 40 / 37.5 | yes, 0 blank frames |
+| Switch normal workspace, cold / warm | 665 / 58 | 49 / 31.9 | yes, 0 blank frames |
 | Load heavy, ready to use | 1846 | 980 | yes |
 | Composer key to paint | 1.6 / 50.7 | 2.5 / 35 | yes |
 | Thread panel / palette / image viewer | 120 / 57 / 33 | 42 / 55 / 33 | yes |
