@@ -78,11 +78,10 @@ export const ElectricHost = Effect.gen(function* () {
 })
 
 /**
- * Whether this deploy runs its own Electric container: not under `alchemy dev` (docker-compose
- * Electric via `ELECTRIC_URL`), and not for PR previews (no Electric; shape requests answer 503).
+ * Whether this deploy runs its own Electric container. Off everywhere: prd Electric runs on Railway
+ * (an always-on container cost far more), reached through `ELECTRIC_URL` + `ELECTRIC_SECRET`.
  */
-export const usesElectricContainer = ({ stage, isDevServer }: HazelStackContext): boolean =>
-	!isDevServer && stage.kind !== "pr"
+export const usesElectricContainer = (_stack: HazelStackContext): boolean => false
 
 /** electric-proxy's Electric env: the container's namespace, or the `ELECTRIC_URL` fallback. */
 export const electricProxyEnv = (stack: HazelStackContext) =>
