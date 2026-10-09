@@ -84,7 +84,7 @@ export const PortalModal = Mount.defineStream("PortalModal", {
 					const restoreFocus = restoresToPrevious
 						? restoreFocusToPrevious(element)
 						: restoreFocusTo(triggerId(id), element)
-					const releasePortal = portalOverlay(element, { isModal: true })
+					const releasePortal = portalOverlay(element, { isModal: true, inertAfterPaint: true })
 					const overlay = element.querySelector<HTMLElement>("[data-modal-overlay]")
 					const releaseViewport = overlay ? trackViewportHeight(overlay) : () => undefined
 					const releaseParts = observeDialogParts(element)

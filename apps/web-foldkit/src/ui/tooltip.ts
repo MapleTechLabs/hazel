@@ -257,9 +257,11 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, view
 	return viewInputs.toTrigger(
 		triggerAttributes,
 		model.isOpen
-			? h.keyed("div")(`tooltip-slot-${model.id}`, [h.Style({ display: "contents" })], [
-					tooltipOverlay(model, viewInputs, h),
-				])
+			? h.keyed("div")(
+					`tooltip-slot-${model.id}`,
+					[h.Style({ display: "contents" })],
+					[tooltipOverlay(model, viewInputs, h)],
+				)
 			: h.empty,
 	)
 })
