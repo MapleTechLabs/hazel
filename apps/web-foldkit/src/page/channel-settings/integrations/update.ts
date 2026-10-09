@@ -2,12 +2,12 @@ import { Array, Option } from "effect"
 import { Command, Update } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import type { ToastRequest } from "../../../overlay/toasts"
-import type { RouteOf } from "../../../route"
+import { AppRoute, type RouteOf } from "../../../route"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
 import { successToast } from "../../../ui/toast-exit"
 import type { PageReturn, Shared } from "../../contract"
-import { PageOutMessage } from "../../out-message"
+import { PageOutMessage, requestedOrgNavigation } from "../../out-message"
 import { CopyText, ListRss, ListWebhooks, RunRowAction, WaitForCopiedReset } from "./command"
 import { Message } from "./message"
 import { type ConfirmTarget, type Model, type ProviderCard, type RowKind, rowMenuId } from "./model"
@@ -185,10 +185,14 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		// `window.location.href = /$orgSlug/settings/integrations/github`
 		ClickedConnectGitHub: () => ({
 			model,
-			outMessage: PageOutMessage.RequestedNavigation({
-				href: `/${shared.orgSlug ?? ""}/settings/integrations/github`,
-				replace: false,
-			}),
+			outMessage: requestedOrgNavigation(shared.orgSlug, (orgSlug) =>
+				AppRoute.SettingsIntegration({
+					orgSlug,
+					integrationId: "github",
+					connectionStatus: Option.none(),
+					errorCode: Option.none(),
+				}),
+			),
 		}),
 		// AddGitHubRepoModal and AddRssFeedModal are not ported yet.
 		ClickedAddRepo: () => ({ model }),

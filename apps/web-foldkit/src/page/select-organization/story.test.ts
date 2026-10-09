@@ -7,7 +7,8 @@ import { uuid } from "../../test/pages-fixtures"
 import { PageOutMessage } from "../out-message"
 import { Message } from "./message"
 import type { UserOrganization } from "./model"
-import { init, organizationHref, update } from "./update"
+import { organizationHref } from "../../route"
+import { init, update } from "./update"
 
 /** `/select-organization`: a single organization redirects once; otherwise the user picks. */
 

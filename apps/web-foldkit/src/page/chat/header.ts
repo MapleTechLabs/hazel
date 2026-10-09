@@ -1,5 +1,6 @@
 import type { Attribute, ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { IconChevronRight, IconEye, IconHashtag, IconPin, IconThread } from "../../icons"
+import { AppRoute, hrefOf } from "../../route"
 import { avatar } from "../../ui/avatar"
 import { button } from "../../ui/button"
 import { type AuthorIdentity } from "./rows"
@@ -16,7 +17,8 @@ export const channelIcon = <M>(h: HtmlBuilder<M>, icon: string | null, className
 export interface HeaderInputs {
 	readonly channel: ChannelInfo | null
 	readonly parentChannel: ParentChannelInfo | null
-	readonly orgSlug: string
+	/** Null only before the org is known; the parent breadcrumb needs it for its link. */
+	readonly orgSlug: string | null
 	/** False renders the fallback header (no members row for the signed-in user). */
 	readonly isMember: boolean
 	/** DM participants other than the signed-in user, in member order. */
@@ -49,13 +51,20 @@ const threadTitle = <M>(h: HtmlBuilder<M>, inputs: HeaderInputs, channel: Channe
 	h.div(
 		[h.Class("flex items-center gap-2")],
 		[
-			inputs.parentChannel && channel.parentChannelId
+			inputs.parentChannel && channel.parentChannelId && inputs.orgSlug !== null
 				? h.a(
 						[
 							h.Class(
 								"flex items-center gap-1.5 text-muted-fg transition-colors hover:text-fg",
 							),
-							h.Href(`/${inputs.orgSlug}/chat/${channel.parentChannelId}`),
+							h.Href(
+								hrefOf(
+									AppRoute.ChatChannel({
+										orgSlug: inputs.orgSlug,
+										channelId: channel.parentChannelId,
+									}),
+								),
+							),
 						],
 						[
 							channelIcon(h, inputs.parentChannel.icon, "size-4"),

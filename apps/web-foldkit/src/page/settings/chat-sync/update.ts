@@ -2,13 +2,14 @@ import { OrganizationId, SyncConnectionId } from "@hazel/schema"
 import { Effect, Exit, Option, Schema } from "effect"
 import { Command, Update } from "foldkit"
 import { modifyFields } from "foldkit/struct"
+import { AppRoute } from "../../../route"
 import { HazelRpc } from "../../../rpc"
 import * as Interaction from "../../../ui/aria/interaction"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
 import { failureToast, successToast } from "../../../ui/toast-exit"
 import type { PageReturn, Shared } from "../../contract"
-import { PageOutMessage } from "../../out-message"
+import { PageOutMessage, requestedOrgNavigation } from "../../out-message"
 import { addMenuEntries, Message, type Model } from "./model"
 import { fetchDiscordGuilds } from "./discord"
 import { fetchConnections } from "./rpc"
@@ -256,10 +257,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				: { model },
 		ClickedConnection: ({ connectionId }) => ({
 			model,
-			outMessage: PageOutMessage.RequestedNavigation({
-				href: `/${shared.orgSlug ?? ""}/settings/chat-sync/${connectionId}`,
-				replace: false,
-			}),
+			outMessage: requestedOrgNavigation(shared.orgSlug, (orgSlug) =>
+				AppRoute.SettingsChatSyncConnection({ orgSlug, connectionId }),
+			),
 		}),
 		ClickedDeleteConnection: ({ target }) =>
 			openDeleteModal(modifyFields(model, { deleteTarget: () => target })),
@@ -306,10 +306,14 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		}),
 		ClickedOpenDiscordIntegration: () => ({
 			model,
-			outMessage: PageOutMessage.RequestedNavigation({
-				href: `/${shared.orgSlug ?? ""}/settings/integrations/discord`,
-				replace: false,
-			}),
+			outMessage: requestedOrgNavigation(shared.orgSlug, (orgSlug) =>
+				AppRoute.SettingsIntegration({
+					orgSlug,
+					integrationId: "discord",
+					connectionStatus: Option.none(),
+					errorCode: Option.none(),
+				}),
+			),
 		}),
 		ClickedConnect: () => submitConnection(model),
 		GotInteractionMessage: ({ message }) => interaction.fold(model, message),

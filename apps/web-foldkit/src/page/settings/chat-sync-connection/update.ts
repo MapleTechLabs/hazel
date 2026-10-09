@@ -2,13 +2,13 @@ import { Array, Option } from "effect"
 import { Command, Update } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import type { ToastRequest } from "../../../overlay/toasts"
-import type { RouteOf } from "../../../route"
+import { AppRoute, type RouteOf } from "../../../route"
 import * as Interaction from "../../../ui/aria/interaction"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
 import { successToast } from "../../../ui/toast-exit"
 import type { PageReturn, Shared } from "../../contract"
-import { PageOutMessage } from "../../out-message"
+import { PageOutMessage, requestedOrgNavigation } from "../../out-message"
 import { embedInteraction } from "../integrations/shared/interaction"
 import {
 	CreateChannelLink,
@@ -245,7 +245,8 @@ const submitLink = (model: Model): Return => {
 const isCurrentGuild = (model: Model, guildId: string) =>
 	model.connection._tag === "Loaded" && model.connection.connection?.externalWorkspaceId === guildId
 
-const listHref = (shared: Shared) => `/${shared.orgSlug ?? ""}/settings/chat-sync`
+const toList = (shared: Shared, toast?: ToastRequest) =>
+	requestedOrgNavigation(shared.orgSlug, (orgSlug) => AppRoute.SettingsChatSync({ orgSlug }), { toast })
 
 export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
@@ -306,7 +307,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		UpdatedChannelNames: ({ names }) => ({ model: modifyFields(model, { channelNames: () => names }) }),
 		ClickedBack: () => ({
 			model,
-			outMessage: PageOutMessage.RequestedNavigation({ href: listHref(shared), replace: false }),
+			outMessage: toList(shared),
 		}),
 		ClickedDisconnect: () => openDisconnectModal(model),
 		ClickedConfirmDisconnect: () =>
@@ -318,11 +319,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 					},
 		SucceededDisconnect: () => ({
 			...closeDisconnectModal(modifyFields(model, { isDisconnecting: () => false })),
-			outMessage: PageOutMessage.RequestedNavigation({
-				href: listHref(shared),
-				replace: false,
-				toast: successToast("Connection deleted"),
-			}),
+			outMessage: toList(shared, successToast("Connection deleted")),
 		}),
 		FailedDisconnect: ({ title, description }) => ({
 			...closeDisconnectModal(modifyFields(model, { isDisconnecting: () => false })),

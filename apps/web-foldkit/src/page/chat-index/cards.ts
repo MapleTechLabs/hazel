@@ -2,6 +2,7 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { cn } from "~/lib/utils"
 import { getEffectivePresenceStatus } from "~/utils/presence"
 import { IconHashtag, IconLock, IconUsers, IconVolumeMute } from "../../icons"
+import { AppRoute, hrefOf } from "../../route"
 import { avatar } from "../../ui/avatar"
 import { badge } from "../../ui/badge"
 import { type ChannelSummary, type DmParticipant, otherMembers, type Presence } from "./model"
@@ -24,7 +25,7 @@ const notificationBadge = <M>(h: HtmlBuilder<M>, count: number): Html =>
 const cardLink = <M>(h: HtmlBuilder<M>, orgSlug: string, channel: ChannelSummary, left: Array<Html>): Html =>
 	h.keyed("a")(
 		channel.id,
-		[h.Class(cardLinkClass), h.Href(`/${orgSlug}/chat/${channel.id}`)],
+		[h.Class(cardLinkClass), h.Href(hrefOf(AppRoute.ChatChannel({ orgSlug, channelId: channel.id })))],
 		[
 			h.div([h.Class("flex min-w-0 items-center gap-3")], left),
 			notificationBadge(h, channel.notificationCount),

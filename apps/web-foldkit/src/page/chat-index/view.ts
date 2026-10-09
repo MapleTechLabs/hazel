@@ -40,8 +40,13 @@ const createButton = (h: HtmlBuilder<Message>, label: string, onPress: Message):
 		label,
 	])
 
-const panels = (h: HtmlBuilder<Message>, model: Model, groups: ChannelGroups, shared: Shared) => {
-	const orgSlug = shared.orgSlug ?? ""
+const panels = (
+	h: HtmlBuilder<Message>,
+	model: Model,
+	groups: ChannelGroups,
+	shared: Shared,
+	orgSlug: string,
+) => {
 	const canCreate = can(shared, "channel.create")
 	const listOrEmpty = (
 		channels: ReadonlyArray<ChannelSummary>,
@@ -169,8 +174,13 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 						{ key: "private", content: [] },
 						{ key: "dms", content: [] },
 					],
+					// The cards link into the org, so the panels wait for its slug.
 					renderPanel: (key: string) =>
-						panels(h, model, groups, shared).find((panel) => panel.key === key)?.content ?? [],
+						shared.orgSlug === null
+							? []
+							: (panels(h, model, groups, shared, shared.orgSlug).find(
+									(panel) => panel.key === key,
+								)?.content ?? []),
 				},
 				toParentMessage: toTabsMessage,
 			}),
