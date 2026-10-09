@@ -56,10 +56,12 @@ export const PlaceMessageToolbar = Mount.defineStream("PlaceMessageToolbar", {
 				Effect.sync(() => {
 					const target = document.getElementById(`message-${messageId}`)
 					if (!(element instanceof HTMLElement) || target === null) return () => undefined
+					element.style.position = "absolute"
+					element.style.top = "0px"
 					document.body.appendChild(element)
-					const update = () => placeToolbar(element, target)
-					update()
-					const observer = new ResizeObserver(update)
+					// The observer's first callback runs after this frame's layout and before its paint, so the
+					// toolbar is placed without forcing a layout of the freshly patched list.
+					const observer = new ResizeObserver(() => placeToolbar(element, target))
 					observer.observe(element)
 					observer.observe(target)
 					const onEnter = () => Queue.offerUnsafe(queue, ToolbarEvent.EnteredToolbar())
