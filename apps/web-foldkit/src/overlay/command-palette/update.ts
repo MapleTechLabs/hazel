@@ -70,7 +70,7 @@ const focusCommandsOf = (page: PageState) =>
 		: page._tag === "JoinChannel"
 			? [FocusInput({ selector: `#${JOIN_CHANNEL_INPUT_ID}` })]
 			: page._tag === "Search"
-				? [LoadRecentSearches({})]
+				? [LoadRecentSearches()]
 				: [FocusInput({ selector: `#${CommandMenu.searchId(MENU_ID)}` })]
 
 const showPage = (model: Model, page: PageState, history: ReadonlyArray<PageState>, shared: Shared): Return => ({

@@ -52,7 +52,7 @@ export const init = (route: RouteOf<"Onboarding">, shared: Shared): Return => {
 		interaction: Interaction.init(),
 	}
 	const redirected = redirectIfOnboarded(model, shared)
-	return { ...redirected, commands: [ReadBrowserTimezone({})] }
+	return { ...redirected, commands: [ReadBrowserTimezone()] }
 }
 
 /** The profile defaults come from `user.me`, which may arrive after the step was entered. */

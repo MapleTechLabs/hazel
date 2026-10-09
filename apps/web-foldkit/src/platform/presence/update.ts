@@ -30,16 +30,12 @@ export const SendPresenceUpdate = Command.define("SendPresenceUpdate", {
 })
 
 export const SendHeartbeat = Command.define("SendHeartbeat", {
-	args: {},
 	messages: [Message.SucceededSendHeartbeat, Message.FailedSendHeartbeat],
-	execute: () =>
-		Effect.gen(function* () {
-			const client = yield* HazelRpc
-			yield* client("userPresenceStatus.heartbeat", {})
-			return Message.SucceededSendHeartbeat()
-		}).pipe(
-			Effect.catch((error) => Effect.succeed(Message.FailedSendHeartbeat({ reason: String(error) }))),
-		),
+	execute: Effect.gen(function* () {
+		const client = yield* HazelRpc
+		yield* client("userPresenceStatus.heartbeat", {})
+		return Message.SucceededSendHeartbeat()
+	}).pipe(Effect.catch((error) => Effect.succeed(Message.FailedSendHeartbeat({ reason: String(error) })))),
 })
 
 export const BroadcastActivity = Command.define("BroadcastActivity", {
@@ -116,7 +112,7 @@ export const update = (model: Model, message: Message): Return =>
 				? { model }
 				: {
 						model: modifyFields(model, { isHeartbeatInFlight: () => true }),
-						commands: [SendHeartbeat({})],
+						commands: [SendHeartbeat()],
 					},
 		SucceededSendHeartbeat: () => ({ model: modifyFields(model, { isHeartbeatInFlight: () => false }) }),
 		FailedSendHeartbeat: () => ({ model: modifyFields(model, { isHeartbeatInFlight: () => false }) }),

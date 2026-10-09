@@ -171,9 +171,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			if (volume === undefined || volume === shared.soundSettings.volume) return result
 			return { ...withSound(result.model, shared, { volume }), commands: result.commands ?? [] }
 		},
-		ClickedTestSound: () => ({ model, commands: [PlayTestSound({})] }),
+		ClickedTestSound: () => ({ model, commands: [PlayTestSound()] }),
 		CompletedTestSound: () => ({ model }),
-		ClickedTestNotification: () => ({ model, commands: [SendTestNotification({})] }),
+		ClickedTestNotification: () => ({ model, commands: [SendTestNotification()] }),
 		CompletedTestNotification: ({ isSent }) => {
 			const version = model.notificationStatusVersion + 1
 			return {

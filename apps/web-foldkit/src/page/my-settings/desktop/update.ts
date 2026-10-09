@@ -18,9 +18,8 @@ const readAutostart = Effect.tryPromise(() => isAutostartEnabled()).pipe(
 )
 
 export const CheckAutostart = Command.define("CheckAutostart", {
-	args: {},
 	messages: [Message.CheckedAutostart],
-	execute: () => readAutostart.pipe(Effect.map((isEnabled) => Message.CheckedAutostart({ isEnabled }))),
+	execute: readAutostart.pipe(Effect.map((isEnabled) => Message.CheckedAutostart({ isEnabled }))),
 })
 
 /** On failure the legacy handler re-reads the real state instead of keeping the toggle. */
@@ -37,7 +36,7 @@ export const SetAutostart = Command.define("SetAutostart", {
 
 export const init = (): PageReturn<Model, Message> => ({
 	model: { autostartEnabled: null, isUpdating: false, interaction: Interaction.init() },
-	commands: [CheckAutostart({})],
+	commands: [CheckAutostart()],
 })
 
 export const update = (model: Model, message: Message): PageReturn<Model, Message> =>

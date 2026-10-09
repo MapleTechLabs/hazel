@@ -19,9 +19,8 @@ import { failureToast, successToast } from "../../data/actions"
 /** `components/modals/create-dm-modal.tsx` (legacy `useModal("create-dm")`). */
 
 const FocusSearch = Command.define("FocusSearch", {
-	args: {},
 	messages: [Message.CompletedFocusSearch],
-	execute: () => Dom.focus(`#${SEARCH_ID}`).pipe(Effect.ignoreCause, Effect.as(Message.CompletedFocusSearch())),
+	execute: Dom.focus(`#${SEARCH_ID}`).pipe(Effect.ignoreCause, Effect.as(Message.CompletedFocusSearch())),
 })
 
 /** Legacy `onSubmit`: reuse an existing DM with exactly these people, else `channel.createDm`. */
@@ -92,7 +91,7 @@ const update = (model: Model, message: Message, shared: Shared): Return =>
 			isFrameClosed(model.frame, message)
 				? { model, outMessage: closed }
 				: message._tag === "CompletedPortalModal"
-					? { model, commands: [FocusSearch({})] }
+					? { model, commands: [FocusSearch()] }
 					: { model },
 		ChangedSearch: ({ value }) => ({ model: modifyFields(model, { searchQuery: () => value }) }),
 		FocusedSearch: () => ({ model: modifyFields(model, { isSearchFocused: () => true }) }),

@@ -94,7 +94,7 @@ const mapReadyImage = (model: Model, f: (image: CropImage) => CropImage): Model 
 }
 
 export const init = (_route: unknown, shared: Shared): Return => ({
-	commands: [ReadBrowserTimezone({})],
+	commands: [ReadBrowserTimezone()],
 	model: formFor(
 		{
 			userId: null,
@@ -195,7 +195,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				? toast(successToast("Profile updated successfully"))
 				: toast(errorToast("Failed to update profile")),
 		}),
-		ClickedAvatar: () => (model.isUploading ? { model } : { model, commands: [OpenFilePicker({})] }),
+		ClickedAvatar: () => (model.isUploading ? { model } : { model, commands: [OpenFilePicker()] }),
 		CompletedOpenFilePicker: () => ({ model }),
 		SelectedAvatarFiles: ({ files }) =>
 			selectFile(modifyFields(model, { isDropTarget: () => false, dragDepth: () => 0 }), files),
@@ -262,7 +262,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		ClickedResetAvatar: () =>
 			model.isResetting
 				? { model }
-				: { model: modifyFields(model, { isResetting: () => true }), commands: [ResetAvatar({})] },
+				: { model: modifyFields(model, { isResetting: () => true }), commands: [ResetAvatar()] },
 		CompletedResetAvatar: ({ isReset }) => ({
 			model: modifyFields(model, { isResetting: () => false }),
 			outMessage: isReset

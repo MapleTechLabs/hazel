@@ -37,18 +37,14 @@ type Message = typeof Message.Type
 // COMMAND
 
 const FetchCurrentUser = Command.define("FetchCurrentUser", {
-	args: {},
 	messages: [Message.SucceededFetchCurrentUser, Message.FailedFetchCurrentUser],
-	execute: () =>
-		Effect.gen(function* () {
-			const client = yield* HazelRpc
-			const user = yield* client("user.me", undefined)
-			return Message.SucceededFetchCurrentUser({ organizationId: user.organizationId ?? null })
-		}).pipe(
-			Effect.catch((error) =>
-				Effect.succeed(Message.FailedFetchCurrentUser({ reason: String(error) })),
-			),
-		),
+	execute: Effect.gen(function* () {
+		const client = yield* HazelRpc
+		const user = yield* client("user.me", undefined)
+		return Message.SucceededFetchCurrentUser({ organizationId: user.organizationId ?? null })
+	}).pipe(
+		Effect.catch((error) => Effect.succeed(Message.FailedFetchCurrentUser({ reason: String(error) }))),
+	),
 })
 
 // UPDATE
@@ -140,7 +136,7 @@ export const gallery = defineGallery<Model, Message>("Composer", {
 	Model,
 	init: () => ({
 		model: { organizationId: null, channelId: null, composer: Composer.init("gallery-composer") },
-		commands: [FetchCurrentUser({})],
+		commands: [FetchCurrentUser()],
 	}),
 	update,
 	view,

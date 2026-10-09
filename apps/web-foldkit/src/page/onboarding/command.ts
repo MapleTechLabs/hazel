@@ -8,9 +8,8 @@ import { clerkResource } from "./clerk"
 import { Message } from "./message"
 
 export const ReadBrowserTimezone = Command.define("ReadBrowserTimezone", {
-	args: {},
 	messages: [Message.GotBrowserTimezone],
-	execute: () =>
+	execute:
 		Effect.sync(() =>
 			Message.GotBrowserTimezone({ browserTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
 		),

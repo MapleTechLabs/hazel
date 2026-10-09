@@ -189,7 +189,7 @@ describe("test notification", () => {
 			pageUpdate,
 			given(init(undefined, shared).model),
 			message(Message.ClickedTestNotification()),
-			Command.expectExact(SendTestNotification({})),
+			Command.expectExact(SendTestNotification()),
 			Command.resolve(SendTestNotification, Message.CompletedTestNotification({ isSent: true })),
 			model((current) => expect(current.notificationStatus).toBe("sent")),
 			Command.expectExact(ExpireNotificationStatus({ version: 1 })),

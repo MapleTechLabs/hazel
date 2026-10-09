@@ -144,7 +144,7 @@ describe("heartbeat", () => {
 			update,
 			given(synced()),
 			message(Message.TickedHeartbeat()),
-			Command.expectExact(SendHeartbeat({})),
+			Command.expectExact(SendHeartbeat()),
 			Command.resolve(SendHeartbeat, Message.FailedSendHeartbeat({ reason: "offline" })),
 			model((m) => expect(m.isHeartbeatInFlight).toBe(false)),
 		)

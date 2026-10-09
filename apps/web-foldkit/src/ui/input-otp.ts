@@ -52,27 +52,25 @@ const containerOf = (input: Element) => Option.fromNullishOr(input.closest("[dat
 
 /** The library's injected stylesheet: transparent selection and autofill on the overlay input. */
 const InstallInputOtpStyle = Command.define("InstallInputOtpStyle", {
-	args: {},
 	messages: [Message.CompletedInstallInputOtpStyle],
-	execute: () =>
-		Effect.sync(() => {
-			if (document.getElementById("input-otp-style") === null) {
-				const style = document.createElement("style")
-				style.id = "input-otp-style"
-				document.head.appendChild(style)
-				const hidden =
-					"background: transparent !important; color: transparent !important; border-color: transparent !important; opacity: 0 !important; box-shadow: none !important; -webkit-box-shadow: none !important; -webkit-text-fill-color: transparent !important;"
-				for (const rule of [
-					"[data-input-otp]::selection { background: transparent !important; color: transparent !important; }",
-					`[data-input-otp]:autofill { ${hidden} }`,
-					`[data-input-otp]:-webkit-autofill { ${hidden} }`,
-					"@supports (-webkit-touch-callout: none) { [data-input-otp] { letter-spacing: -.6em !important; font-weight: 100 !important; font-stretch: ultra-condensed; font-optical-sizing: none !important; left: -1px !important; right: 1px !important; } }",
-					"[data-input-otp] + * { pointer-events: all !important; }",
-				])
-					style.sheet?.insertRule(rule)
-			}
-			return Message.CompletedInstallInputOtpStyle()
-		}),
+	execute: Effect.sync(() => {
+		if (document.getElementById("input-otp-style") === null) {
+			const style = document.createElement("style")
+			style.id = "input-otp-style"
+			document.head.appendChild(style)
+			const hidden =
+				"background: transparent !important; color: transparent !important; border-color: transparent !important; opacity: 0 !important; box-shadow: none !important; -webkit-box-shadow: none !important; -webkit-text-fill-color: transparent !important;"
+			for (const rule of [
+				"[data-input-otp]::selection { background: transparent !important; color: transparent !important; }",
+				`[data-input-otp]:autofill { ${hidden} }`,
+				`[data-input-otp]:-webkit-autofill { ${hidden} }`,
+				"@supports (-webkit-touch-callout: none) { [data-input-otp] { letter-spacing: -.6em !important; font-weight: 100 !important; font-stretch: ultra-condensed; font-optical-sizing: none !important; left: -1px !important; right: 1px !important; } }",
+				"[data-input-otp] + * { pointer-events: all !important; }",
+			])
+				style.sheet?.insertRule(rule)
+		}
+		return Message.CompletedInstallInputOtpStyle()
+	}),
 })
 
 /** The mount-time measurements: the input's height (`--root-height`) and room for a badge. */
@@ -187,7 +185,7 @@ export const init = (options: {
 		hasBadgeSpace: false,
 		hasPasswordBadge: false,
 	},
-	commands: [InstallInputOtpStyle({}), MeasureInput({ id: options.id }), ReadSelection({ id: options.id })],
+	commands: [InstallInputOtpStyle(), MeasureInput({ id: options.id }), ReadSelection({ id: options.id })],
 })
 
 // UPDATE

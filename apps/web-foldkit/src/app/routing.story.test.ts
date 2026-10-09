@@ -61,7 +61,7 @@ describe("redirects", () => {
 			update,
 			given(boot("/join/hazel")),
 			message(Message.ChangedAuth({ auth: "SignedOut" })),
-			Command.expectExact(FetchCurrentUser({})),
+			Command.expectExact(FetchCurrentUser()),
 			Command.resolve(FetchCurrentUser, Message.FailedFetchCurrentUser({ reason: "Unauthorized" })),
 			model((m) => expect(m.currentUser).toBeNull()),
 		)
@@ -72,7 +72,7 @@ describe("redirects", () => {
 			update,
 			given(boot("/hazel/settings/team")),
 			message(Message.ChangedAuth({ auth: "SignedIn" })),
-			Command.expectExact(FetchCurrentUser({})),
+			Command.expectExact(FetchCurrentUser()),
 			Command.resolve(FetchCurrentUser, Message.FailedFetchCurrentUser({ reason: "offline" })),
 			message(Message.ChangedAuth({ auth: "SignedIn" })),
 			Command.expectNone(),

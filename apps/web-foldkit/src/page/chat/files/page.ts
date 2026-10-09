@@ -94,13 +94,11 @@ export const setView = (model: Model, view: FilesView): Model =>
 // COMMAND
 
 const FocusSearchInput = Command.define("FocusFilesSearchInput", {
-	args: {},
 	messages: [Message.CompletedFocusSearchInput],
-	execute: () =>
-		Dom.focus(`#${searchFieldIds(SEARCH_FIELD_ID).input}`).pipe(
-			Effect.ignore,
-			Effect.as(Message.CompletedFocusSearchInput()),
-		),
+	execute: Dom.focus(`#${searchFieldIds(SEARCH_FIELD_ID).input}`).pipe(
+		Effect.ignore,
+		Effect.as(Message.CompletedFocusSearchInput()),
+	),
 })
 
 /** `handleDownload`: a temporary `<a download target="_blank">` clicked and removed. */
@@ -180,7 +178,7 @@ export const update = (model: Model, message: Message): FilesReturn =>
 		}),
 		UpdatedSearch: ({ value }) => ({ model: modifyFields(model, { searchQuery: () => value }) }),
 		ClearedSearch: () => ({ model: modifyFields(model, { searchQuery: () => "" }) }),
-		PressedSearchClear: () => ({ model, commands: [FocusSearchInput({})] }),
+		PressedSearchClear: () => ({ model, commands: [FocusSearchInput()] }),
 		CompletedFocusSearchInput: () => ({ model }),
 		GotFilterSelectMessage: ({ message: selectMessage }) => foldFilter(model, selectMessage),
 		GotInteractionMessage: ({ message: interactionMessage }) =>

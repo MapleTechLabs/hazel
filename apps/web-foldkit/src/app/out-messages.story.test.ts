@@ -123,7 +123,7 @@ describe("RequestedSignOut", () => {
 			given(signedIn("/hazel/chat")),
 			message(userMenu(Menu.Message.PressedTrigger({ pointerType: "mouse" }))),
 			message(userMenu(Menu.Message.ClickedItem({ key: "logout" }))),
-			Command.expectExact(SignOut({})),
+			Command.expectExact(SignOut()),
 			Command.resolve(SignOut, Message.CompletedSignOut()),
 		)
 	})

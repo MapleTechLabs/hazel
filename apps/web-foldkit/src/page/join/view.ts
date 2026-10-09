@@ -12,7 +12,6 @@ import type { Model, PublicOrganization } from "./model"
 
 /** `cardVariants`: the card fades, rises and unblurs in. */
 export const CardEnterAnimation = Mount.define("JoinCardEnterAnimation", {
-	args: {},
 	messages: [Message.CompletedEnterAnimation],
 	execute: ({ element }) =>
 		Effect.sync(() => {
@@ -55,7 +54,7 @@ const animatedCard = (h: HtmlBuilder<Message>, children: ReadonlyArray<Html>): H
 		[
 			h.Class("m-auto flex w-full max-w-sm flex-col items-center text-center"),
 			h.Attribute("style", endStyleOf("Card")),
-			h.OnMount(CardEnterAnimation({})),
+			h.OnMount(CardEnterAnimation()),
 		],
 		[...children],
 	)

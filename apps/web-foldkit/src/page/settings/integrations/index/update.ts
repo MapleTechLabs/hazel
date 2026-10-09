@@ -10,14 +10,12 @@ import type { Model } from "./model"
 
 /** `listOrganizationWebhooksMutation({ payload: {} })`, once the user's organization is known. */
 export const ListOrganizationWebhooks = Command.define("IntegrationsListOrganizationWebhooks", {
-	args: {},
 	messages: [Message.SucceededListWebhooks, Message.FailedListWebhooks],
-	execute: () =>
-		Effect.gen(function* () {
-			const client = yield* HazelRpc
-			const result = yield* client("channelWebhook.listByOrganization", {})
-			return Message.SucceededListWebhooks({ names: result.data.map((webhook) => webhook.name) })
-		}).pipe(Effect.catch(() => Effect.succeed(Message.FailedListWebhooks()))),
+	execute: Effect.gen(function* () {
+		const client = yield* HazelRpc
+		const result = yield* client("channelWebhook.listByOrganization", {})
+		return Message.SucceededListWebhooks({ names: result.data.map((webhook) => webhook.name) })
+	}).pipe(Effect.catch(() => Effect.succeed(Message.FailedListWebhooks()))),
 })
 
 const requestWebhooksOnce = (model: Model, shared: Shared): PageReturn<Model, Message> =>
@@ -25,7 +23,7 @@ const requestWebhooksOnce = (model: Model, shared: Shared): PageReturn<Model, Me
 		? { model }
 		: {
 				model: modifyFields(model, { hasRequestedWebhooks: () => true }),
-				commands: [ListOrganizationWebhooks({})],
+				commands: [ListOrganizationWebhooks()],
 			}
 
 export const init = (route: RouteOf<"SettingsIntegrations">, shared: Shared): PageReturn<Model, Message> =>

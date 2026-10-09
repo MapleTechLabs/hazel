@@ -167,7 +167,7 @@ describe("upload draft", () => {
 			Command.resolve(FocusName, Message.CompletedFocusName()),
 			message(Message.SelectedFiles({ files: [png] })),
 			Command.resolve(CreatePreview, Message.CreatedPreview({ file: png, previewUrl: "blob:2" })),
-			Command.expectExact(RevokePreview({ previewUrl: "blob:1" }), FocusName({})),
+			Command.expectExact(RevokePreview({ previewUrl: "blob:1" }), FocusName()),
 			Command.resolveAll(
 				[RevokePreview, Message.CompletedRevokePreview()],
 				[FocusName, Message.CompletedFocusName()],

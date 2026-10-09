@@ -391,7 +391,7 @@ describe("avatar upload", () => {
 			pageUpdate,
 			given(initial()),
 			message(Message.ClickedAvatar()),
-			Command.expectExact(OpenFilePicker({})),
+			Command.expectExact(OpenFilePicker()),
 			Command.resolve(OpenFilePicker, Message.CompletedOpenFilePicker()),
 		)
 		story(

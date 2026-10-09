@@ -33,21 +33,17 @@ const OUTPUT_SIZE = 512
 
 /** `detectBrowserTimezone()`, the form's fallback timezone, read outside `init` and `update`. */
 export const ReadBrowserTimezone = Command.define("ReadProfileBrowserTimezone", {
-	args: {},
 	messages: [Message.GotBrowserTimezone],
-	execute: () =>
-		Effect.sync(() => Message.GotBrowserTimezone({ browserTimezone: detectBrowserTimezone() })),
+	execute: Effect.sync(() => Message.GotBrowserTimezone({ browserTimezone: detectBrowserTimezone() })),
 })
 
 /** FileTrigger: pressing the button clicks the hidden file input. */
 export const OpenFilePicker = Command.define("OpenFilePicker", {
-	args: {},
 	messages: [Message.CompletedOpenFilePicker],
-	execute: () =>
-		Effect.sync(() => {
-			document.getElementById(FILE_INPUT_ID)?.click()
-			return Message.CompletedOpenFilePicker()
-		}),
+	execute: Effect.sync(() => {
+		document.getElementById(FILE_INPUT_ID)?.click()
+		return Message.CompletedOpenFilePicker()
+	}),
 })
 
 const loadImage = (src: string) =>
@@ -127,18 +123,16 @@ export const UploadAvatar = Command.define("UploadAvatar", {
 })
 
 export const ResetAvatar = Command.define("ResetAvatar", {
-	args: {},
 	messages: [Message.CompletedResetAvatar],
-	execute: () =>
-		Effect.tryPromise(async () => {
-			const user = clerkUser()
-			if (user === null) return false
-			await user.setProfileImage({ file: null })
-			return true
-		}).pipe(
-			Effect.catch(() => Effect.succeed(false)),
-			Effect.map((isReset) => Message.CompletedResetAvatar({ isReset })),
-		),
+	execute: Effect.tryPromise(async () => {
+		const user = clerkUser()
+		if (user === null) return false
+		await user.setProfileImage({ file: null })
+		return true
+	}).pipe(
+		Effect.catch(() => Effect.succeed(false)),
+		Effect.map((isReset) => Message.CompletedResetAvatar({ isReset })),
+	),
 })
 
 /** The legacy `onSubmit`: the name goes to Clerk, the timezone to `user.update`, both settled. */

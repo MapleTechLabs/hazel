@@ -54,10 +54,11 @@ export const CreatePreview = Command.define("CreateEmojiPreview", {
 })
 
 export const FocusName = Command.define("FocusEmojiName", {
-	args: {},
 	messages: [Message.CompletedFocusName],
-	execute: () =>
-		Dom.focus(`#${EMOJI_NAME_ID}-input`).pipe(Effect.ignore, Effect.as(Message.CompletedFocusName())),
+	execute: Dom.focus(`#${EMOJI_NAME_ID}-input`).pipe(
+		Effect.ignore,
+		Effect.as(Message.CompletedFocusName()),
+	),
 })
 
 export const RevokePreview = Command.define("RevokeEmojiPreview", {
@@ -258,7 +259,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				}),
 				commands: [
 					...(model.draft === null ? [] : [RevokePreview({ previewUrl: model.draft.previewUrl })]),
-					FocusName({}),
+					FocusName(),
 				],
 			}
 		},

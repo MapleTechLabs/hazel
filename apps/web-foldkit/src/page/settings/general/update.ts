@@ -73,20 +73,17 @@ export const CopyText = Command.define("CopyText", {
 })
 
 export const OpenLogoPicker = Command.define("OpenLogoPicker", {
-	args: {},
 	messages: [Message.CompletedOpenLogoPicker],
 	// The hidden input's change event reports the file (`SelectedLogo`).
-	execute: () =>
-		Dom.clickElement(`#${LOGO_INPUT_ID}`).pipe(
-			Effect.ignore,
-			Effect.as(Message.CompletedOpenLogoPicker()),
-		),
+	execute: Dom.clickElement(`#${LOGO_INPUT_ID}`).pipe(
+		Effect.ignore,
+		Effect.as(Message.CompletedOpenLogoPicker()),
+	),
 })
 
 export const ReadOrigin = Command.define("ReadOrigin", {
-	args: {},
 	messages: [Message.GotOrigin],
-	execute: () => Effect.sync(() => Message.GotOrigin({ origin: window.location.origin })),
+	execute: Effect.sync(() => Message.GotOrigin({ origin: window.location.origin })),
 })
 
 export const UploadLogo = Command.define("UploadLogo", {
@@ -171,7 +168,7 @@ export const init = (route: RouteOf<"SettingsGeneral">, shared: Shared): Return 
 		confirmationText: "",
 		isDeleting: false,
 	},
-	commands: [ReadOrigin({})],
+	commands: [ReadOrigin()],
 })
 
 /** Re-syncs the draft when the server name changes (legacy `prevOrgName` adjustment). */
@@ -242,7 +239,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			),
 		FailedUpdateName: ({ toast: request }) =>
 			toast(modifyFields(model, { isSavingName: () => false }), request),
-		ClickedLogo: () => ({ model, commands: [OpenLogoPicker({})] }),
+		ClickedLogo: () => ({ model, commands: [OpenLogoPicker()] }),
 		CompletedOpenLogoPicker: () => ({ model }),
 		SelectedLogo: ({ files }) =>
 			model.isUploading

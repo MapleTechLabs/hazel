@@ -65,7 +65,6 @@ export const stepHeader = (
 	)
 
 export const AutoFocus = Mount.define("AutoFocusOnboardingInput", {
-	args: {},
 	messages: [Message.CompletedAutoFocus],
 	execute: ({ element }) =>
 		Effect.sync(() => {
@@ -75,4 +74,4 @@ export const AutoFocus = Mount.define("AutoFocusOnboardingInput", {
 })
 
 /** React's `autoFocus`. */
-export const autoFocus = (h: HtmlBuilder<Message>): Attribute<Message> => h.OnMount(AutoFocus({}))
+export const autoFocus = (h: HtmlBuilder<Message>): Attribute<Message> => h.OnMount(AutoFocus())
