@@ -4,7 +4,7 @@ import { Effect, Exit, Schema } from "effect"
 import { Command } from "foldkit"
 import { load } from "foldkit/navigation"
 import { HazelApiClient } from "../../../../rpc"
-import { failureToast } from "../shared/exit-toast"
+import { failureToast } from "../../../../data/actions"
 import { Message } from "./message"
 
 const Provider = IntegrationConnection.IntegrationProvider
@@ -48,7 +48,7 @@ export const Disconnect = Command.define("IntegrationDisconnect", {
 				Exit.isSuccess(exit)
 					? Message.SucceededDisconnect()
 					: Message.FailedDisconnect({
-							toast: failureToast(exit.cause, {
+							toast: failureToast(exit.cause, "exitToast", {
 								IntegrationNotConnectedError: () => ({
 									title: "Integration not connected",
 									description: "This integration is already disconnected.",
@@ -85,7 +85,7 @@ export const ConnectApiKey = Command.define("IntegrationConnectApiKey", {
 				Exit.isSuccess(exit)
 					? Message.SucceededConnectApiKey({ externalAccountName: exit.value.externalAccountName })
 					: Message.FailedConnectApiKey({
-							toast: failureToast(exit.cause, {
+							toast: failureToast(exit.cause, "exitToast", {
 								InvalidApiKeyError: (error) => ({
 									title: "Invalid credentials",
 									description: messageOf(error),

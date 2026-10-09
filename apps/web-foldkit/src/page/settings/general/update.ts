@@ -37,7 +37,7 @@ export const UpdateOrganizationName = Command.define("UpdateOrganizationName", {
 			() => Message.SucceededUpdateName(),
 			(cause) =>
 				Message.FailedUpdateName({
-					toast: failureToast(cause, {
+					toast: failureToast(cause, "friendly", {
 						...organizationNotFound,
 						OrganizationSlugAlreadyExistsError: {
 							title: "Slug already exists",
@@ -55,7 +55,8 @@ export const SetPublicMode = Command.define("SetPublicMode", {
 		settle(
 			runAtomFn(setPublicModeAction, { organizationId, isPublic }),
 			() => Message.SucceededSetPublicMode({ isPublic }),
-			(cause) => Message.FailedSetPublicMode({ toast: failureToast(cause, organizationNotFound) }),
+			(cause) =>
+				Message.FailedSetPublicMode({ toast: failureToast(cause, "friendly", organizationNotFound) }),
 		),
 })
 
@@ -140,7 +141,7 @@ export const DeleteOrganization = Command.define("DeleteOrganization", {
 			() => Message.SucceededDeleteWorkspace(),
 			(cause) =>
 				Message.FailedDeleteWorkspace({
-					toast: failureToast(cause, {
+					toast: failureToast(cause, "friendly", {
 						OrganizationNotFoundError: {
 							title: "Workspace not found",
 							description: "This workspace may have already been deleted.",

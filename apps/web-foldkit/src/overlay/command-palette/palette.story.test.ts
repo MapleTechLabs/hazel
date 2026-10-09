@@ -5,12 +5,12 @@ import { Command, expectNoOutMessage, expectOutMessage, given, message, model, s
 import { describe, expect, test } from "vitest"
 import { ada, hazelOrg, signedInShared } from "../../test/root-fixtures"
 import * as CommandMenu from "../../ui/command-menu"
-import { successToast } from "../out-message"
 import { CreateChannel, FocusInput, JoinChannel, SetPresenceStatus, TrackRecentChannel } from "./commands"
 import { Message, OutMessage } from "./message"
 import type { Model } from "./model"
 import { SaveRecentSearches } from "./search-mount"
 import { CREATE_CHANNEL_INPUT_ID, init, JOIN_CHANNEL_INPUT_ID, MENU_ID, open, update } from "./update"
+import { successToast } from "../../data/actions"
 
 /** The palette's pages, back stack and actions (legacy `components/command-palette`). */
 

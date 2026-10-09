@@ -9,10 +9,11 @@ import { HazelRpc } from "../../rpc"
 import { button } from "../../ui/button"
 import { dialogBody, dialogFooter, dialogHeader } from "../../ui/dialog"
 import { textField } from "../../ui/text-field"
-import { closed, completed, errorToast, ModalOutMessage } from "../out-message"
+import { closed, completed, ModalOutMessage } from "../out-message"
 import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalViewInputs } from "./contract"
 import { Frame, FrameMessage, frameView, initFrame, isFrameClosed, modalDescription, modalTitle } from "./frame"
+import { errorToast } from "../../data/actions"
 
 /** `components/modals/request-integration-modal.tsx` (`integrationRequest.create`). */
 

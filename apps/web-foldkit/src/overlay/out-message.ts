@@ -17,11 +17,3 @@ export const closed = ModalOutMessage.Closed()
 
 export const completed = (options: { readonly href?: string; readonly toast?: ToastRequest }) =>
 	ModalOutMessage.Completed({ href: options.href ?? null, toast: options.toast ?? null })
-
-export const successToast = (title: string): ToastRequest => ({ intent: "success", title, description: null })
-
-export const errorToast = (title: string, description?: string): ToastRequest => ({
-	intent: "error",
-	title,
-	description: description ?? null,
-})

@@ -6,7 +6,7 @@ import { HazelRpc } from "../../../rpc"
 import * as Interaction from "../../../ui/aria/interaction"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
-import { failureToast, successToast } from "../../../ui/toast-exit"
+import { failureToast, successToast } from "../../../data/actions"
 import type { PageReturn, Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
 import { addMenuEntries, Message, type Model } from "./model"
@@ -48,7 +48,7 @@ export const DeleteConnection = Command.define("DeleteConnection", {
 			return Exit.match(exit, {
 				onSuccess: () => Message.SucceededDeleteConnection(),
 				onFailure: (cause) => {
-					const toast = failureToast(cause, {
+					const toast = failureToast(cause, "exitToast", {
 						ChatSyncConnectionNotFoundError: {
 							title: "Connection not found",
 							description: "This connection may have already been deleted.",

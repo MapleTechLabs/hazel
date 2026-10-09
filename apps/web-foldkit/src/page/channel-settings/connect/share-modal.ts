@@ -5,7 +5,7 @@ import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
 import { HazelRpc } from "../../../rpc"
 import * as Modal from "../../../ui/modal"
-import { failureToast, successToast } from "../../../ui/toast-exit"
+import { failureToast, successToast } from "../../../data/actions"
 import { PageOutMessage } from "../../out-message"
 
 /** Port of `components/connect/share-channel-modal.tsx`. */
@@ -110,7 +110,7 @@ export const CreateInvite = Command.define("CreateInvite", {
 			return Exit.match(exit, {
 				onSuccess: () => Message.SucceededCreateInvite(),
 				onFailure: (cause) => {
-					const toast = failureToast(cause, {
+					const toast = failureToast(cause, "exitToast", {
 						ConnectWorkspaceNotFoundError: {
 							title: "Workspace not found",
 							description: "No workspace matches that name or slug.",

@@ -6,13 +6,13 @@ import { modifyFields } from "foldkit/struct"
 import { HazelRpc } from "../../rpc"
 import { button } from "../../ui/button"
 import { dialogBody, dialogDescription, dialogFooter, dialogHeader } from "../../ui/dialog"
-import { toastForCause } from "../action"
-import { closed, errorToast, ModalOutMessage, successToast } from "../out-message"
+import { closed, ModalOutMessage } from "../out-message"
 import { ToastRequest } from "../toasts"
 import { botTokenDisplay } from "./bot-token-display"
 import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalViewInputs } from "./contract"
 import { Frame, FrameMessage, frameView, initFrame, isFrameClosed, modalTitle } from "./frame"
+import { errorToast, failureToast, successToast } from "../../data/actions"
 
 /** The regenerate-confirm modal of `components/bots/bot-card.tsx` (`bot.regenerateToken`). */
 
@@ -63,7 +63,7 @@ const RegenerateToken = Command.define("RegenerateToken", {
 			return Message.SucceededRegenerateToken({ token: result.token })
 		}).pipe(
 			Effect.catchCause((cause) =>
-				Effect.succeed(Message.FailedRegenerateToken({ toast: toastForCause(cause, errorOverrides) })),
+				Effect.succeed(Message.FailedRegenerateToken({ toast: failureToast(cause, "friendly", errorOverrides) })),
 			),
 		),
 })

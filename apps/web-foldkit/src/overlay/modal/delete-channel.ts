@@ -7,12 +7,12 @@ import type { Shared } from "../../page/contract"
 import { button } from "../../ui/button"
 import { dialogFooter, dialogHeader } from "../../ui/dialog"
 import { description } from "../../ui/field"
-import { runAction, toastForCause } from "../action"
-import { closed, completed, ModalOutMessage, successToast } from "../out-message"
+import { closed, completed, ModalOutMessage } from "../out-message"
 import { ToastRequest } from "../toasts"
 import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalViewInputs } from "./contract"
 import { Frame, FrameMessage, frameView, initFrame, isFrameClosed, modalTitle } from "./frame"
+import { failureToast, runAtomFn, successToast } from "../../data/actions"
 
 /** `components/modals/delete-channel-modal.tsx`; confirming runs `deleteChannelAction`. */
 
@@ -36,7 +36,7 @@ const DeleteChannel = Command.define("DeleteChannel", {
 	args: { channelId: ChannelId, orgSlug: Schema.String },
 	messages: [Message.SucceededDeleteChannel, Message.FailedDeleteChannel],
 	execute: ({ channelId, orgSlug }) =>
-		runAction(deleteChannelAction, { channelId }).pipe(
+		runAtomFn(deleteChannelAction, { channelId }).pipe(
 			Effect.andThen(() =>
 				Effect.sync(() => {
 					const pathname = window.location.pathname
@@ -50,7 +50,7 @@ const DeleteChannel = Command.define("DeleteChannel", {
 			Effect.catchCause((cause) =>
 				Effect.succeed(
 					Message.FailedDeleteChannel({
-						toast: toastForCause(cause, {
+						toast: failureToast(cause, "friendly", {
 							ChannelNotFoundError: {
 								title: "Channel not found",
 								description: "This channel may have already been deleted.",

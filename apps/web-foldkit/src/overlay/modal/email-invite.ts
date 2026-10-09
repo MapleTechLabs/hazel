@@ -10,12 +10,13 @@ import { label } from "../../ui/field"
 import { input, inputGroup } from "../../ui/input"
 import * as Select from "../../ui/select"
 import { view as selectView } from "../../ui/select-view"
-import { closed, completed, errorToast, ModalOutMessage, successToast } from "../out-message"
+import { closed, completed, ModalOutMessage } from "../out-message"
 import { ToastRequest } from "../toasts"
 import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalViewInputs } from "./contract"
 import { type InviteRole, sendInvites } from "./email-invite-clerk"
 import { Frame, FrameMessage, frameView, initFrame, isFrameClosed, modalDescription, modalTitle } from "./frame"
+import { errorToast, successToast } from "../../data/actions"
 
 /** `components/modals/email-invite-modal.tsx` (legacy `useModal("email-invite")`). */
 

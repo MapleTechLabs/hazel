@@ -14,12 +14,12 @@ import { inputGroup } from "../../ui/input"
 import * as Select from "../../ui/select"
 import { view as selectView } from "../../ui/select-view"
 import { textField } from "../../ui/text-field"
-import { runAction, toastForCause } from "../action"
-import { closed, completed, ModalOutMessage, successToast } from "../out-message"
+import { closed, completed, ModalOutMessage } from "../out-message"
 import { ToastRequest } from "../toasts"
 import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalViewInputs } from "./contract"
 import { Frame, FrameMessage, frameView, initFrame, isFrameClosed, modalDescription, modalTitle } from "./frame"
+import { failureToast, runAtomFn, successToast } from "../../data/actions"
 
 /** `components/modals/create-channel-modal.tsx` (legacy `useModal("new-channel")`). */
 
@@ -58,9 +58,9 @@ const CreateChannel = Command.define("CreateChannel", {
 	},
 	messages: [Message.SucceededCreateChannel, Message.FailedCreateChannel],
 	execute: (args) =>
-		runAction(createChannelAction, { ...args, icon: null, parentChannelId: null }).pipe(
+		runAtomFn(createChannelAction, { ...args, icon: null, parentChannelId: null }).pipe(
 			Effect.map((result) => Message.SucceededCreateChannel({ channelId: result.data.channelId })),
-			Effect.catchCause((cause) => Effect.succeed(Message.FailedCreateChannel({ toast: toastForCause(cause) }))),
+			Effect.catchCause((cause) => Effect.succeed(Message.FailedCreateChannel({ toast: failureToast(cause, "friendly") }))),
 		),
 })
 

@@ -7,10 +7,11 @@ import { dialogBody, dialogFooter, dialogHeader } from "../../ui/dialog"
 import * as Select from "../../ui/select"
 import { view as selectView } from "../../ui/select-view"
 import { textField } from "../../ui/text-field"
-import { closed, completed, successToast } from "../out-message"
+import { closed, completed } from "../out-message"
 import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalViewInputs } from "./contract"
 import { Frame, FrameMessage, frameView, initFrame, isFrameClosed, modalDescription, modalTitle } from "./frame"
+import { successToast } from "../../data/actions"
 
 /**
  * `components/modals/feedback-modal.tsx` (user menu). Legacy submits to posthog only, which is

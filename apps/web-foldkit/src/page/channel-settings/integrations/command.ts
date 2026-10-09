@@ -3,7 +3,7 @@ import { type Cause, Duration, Effect, Exit, Schema } from "effect"
 import { Command } from "foldkit"
 import { toDate } from "~/lib/utils"
 import { HazelRpc } from "../../../rpc"
-import { type ErrorHandlers, failureToast } from "../../../ui/toast-exit"
+import { type ErrorHandlers, failureToast } from "../../../data/actions"
 import { Message } from "./message"
 import { INTEGRATION_CONFIG, Provider, RowKind } from "./model"
 
@@ -16,7 +16,7 @@ const channelNotFound: ErrorHandlers = {
 }
 
 const failure = (cause: Cause.Cause<unknown>, handlers: ErrorHandlers) => {
-	const toast = failureToast(cause, handlers)
+	const toast = failureToast(cause, "exitToast", handlers)
 	return { title: toast.title, description: toast.description }
 }
 

@@ -72,7 +72,7 @@ export const AcceptInvite = Command.define("AcceptInvite", {
 			(cause) =>
 				Message.FailedAccept({
 					inviteId,
-					toast: failureToast(cause, {
+					toast: failureToast(cause, "friendly", {
 						...inviteNotFound("This invite may have been revoked or expired."),
 						ConnectInviteInvalidStateError: {
 							title: "Cannot accept",
@@ -104,7 +104,7 @@ export const DeclineInvite = Command.define("DeclineInvite", {
 			(cause) =>
 				Message.FailedDecline({
 					inviteId,
-					toast: failureToast(cause, {
+					toast: failureToast(cause, "friendly", {
 						...inviteNotFound("This invite may have already been revoked or expired."),
 						ConnectInviteInvalidStateError: {
 							title: "Cannot decline",

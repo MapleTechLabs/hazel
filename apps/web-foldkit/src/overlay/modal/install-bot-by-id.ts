@@ -9,12 +9,12 @@ import * as Interaction from "../../ui/aria/interaction"
 import { button } from "../../ui/button"
 import { dialogBody, dialogDescription, dialogFooter, dialogHeader } from "../../ui/dialog"
 import { textField } from "../../ui/text-field"
-import { toastForCause } from "../action"
-import { closed, completed, ModalOutMessage, successToast } from "../out-message"
+import { closed, completed, ModalOutMessage } from "../out-message"
 import { ToastRequest } from "../toasts"
 import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalViewInputs } from "./contract"
 import { Frame, FrameMessage, frameView, initFrame, isFrameClosed, modalTitle } from "./frame"
+import { failureToast, successToast } from "../../data/actions"
 
 /** The "Install by ID" modal of `routes/_app/$orgSlug/settings/integrations/installed.tsx`. */
 
@@ -77,7 +77,7 @@ export const InstallBotById = Command.define("InstallBotById", {
 			Effect.catchCause((cause) =>
 				Effect.succeed(
 					Message.FailedInstallBot({
-						toast: toastForCause(cause, errorOverrides),
+						toast: failureToast(cause, "friendly", errorOverrides),
 						installError: installErrorFor(cause),
 					}),
 				),

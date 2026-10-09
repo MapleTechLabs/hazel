@@ -6,7 +6,7 @@ import { HazelRpc } from "../../../../rpc"
 import type { RouteOf } from "../../../../route"
 import type { PageReturn } from "../../../contract"
 import { PageOutMessage } from "../../../out-message"
-import { failureToast, rateLimitHandler, successToast } from "../shared/exit-toast"
+import { failureToast, rateLimitMessage, successToast } from "../../../../data/actions"
 import { Message } from "./message"
 import type { Model } from "./model"
 
@@ -22,13 +22,13 @@ export const UninstallBot = Command.define("IntegrationsUninstallBot", {
 				? Message.SucceededUninstallBot({ botId })
 				: Message.FailedUninstallBot({
 						botId,
-						toast: failureToast(exit.cause, {
+						toast: failureToast(exit.cause, "exitToast", {
 							BotNotFoundError: () => ({
 								title: "Application not found",
 								description: "This application may have already been uninstalled.",
 								isRetryable: false,
 							}),
-							RateLimitExceededError: rateLimitHandler,
+							RateLimitExceededError: rateLimitMessage,
 						}),
 					})
 		}),

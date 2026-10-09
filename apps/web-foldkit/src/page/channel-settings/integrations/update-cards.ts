@@ -1,5 +1,5 @@
 import { modifyFields } from "foldkit/struct"
-import { successToast } from "../../../ui/toast-exit"
+import { successToast } from "../../../data/actions"
 import type { PageReturn } from "../../contract"
 import { PageOutMessage } from "../../out-message"
 import { ConnectProvider, CreateWebhook, RunProviderAction, WaitForConfirmReset } from "./command"

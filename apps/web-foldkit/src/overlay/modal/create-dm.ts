@@ -6,14 +6,14 @@ import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
 import { HazelRpc } from "../../rpc"
 import type { Shared } from "../../page/contract"
-import { toastForCause } from "../action"
-import { closed, completed, ModalOutMessage, successToast } from "../out-message"
+import { closed, completed, ModalOutMessage } from "../out-message"
 import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalSubscriptionInput } from "./contract"
 import { findExistingDmChannel, organizationUsersStream } from "./create-dm-data"
 import { Message, Model, SEARCH_ID } from "./create-dm-model"
 import { view } from "./create-dm-view"
 import { initFrame, isFrameClosed } from "./frame"
+import { failureToast, successToast } from "../../data/actions"
 
 /** `components/modals/create-dm-modal.tsx` (legacy `useModal("create-dm")`). */
 
@@ -45,7 +45,7 @@ const StartConversation = Command.define("StartConversation", {
 				name: name ?? undefined,
 			})
 			return Message.SucceededCreateDm({ channelId: result.data.id })
-		}).pipe(Effect.catchCause((cause) => Effect.succeed(Message.FailedCreateDm({ toast: toastForCause(cause) })))),
+		}).pipe(Effect.catchCause((cause) => Effect.succeed(Message.FailedCreateDm({ toast: failureToast(cause, "friendly") })))),
 })
 
 type Return = ModalReturn<Model, Message>

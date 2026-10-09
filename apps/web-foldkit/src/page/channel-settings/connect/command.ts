@@ -3,7 +3,7 @@ import { Effect, Exit, Schema } from "effect"
 import { Command } from "foldkit"
 import { toDate } from "~/lib/utils"
 import { HazelRpc } from "../../../rpc"
-import { failureToast } from "../../../ui/toast-exit"
+import { failureToast } from "../../../data/actions"
 import { type Invite, Message } from "./model"
 
 /** `listOutgoingInvitesQuery`, filtered to the invites this channel hosts. */
@@ -38,7 +38,7 @@ export const RevokeInvite = Command.define("RevokeInvite", {
 			return Exit.match(exit, {
 				onSuccess: () => Message.SucceededRevokeInvite({ inviteId }),
 				onFailure: (cause) => {
-					const toast = failureToast(cause, {
+					const toast = failureToast(cause, "exitToast", {
 						ConnectInviteNotFoundError: {
 							title: "Invite not found",
 							description: "This invite may have already been revoked or expired.",
@@ -81,7 +81,7 @@ export const DisconnectOrganization = Command.define("DisconnectOrganization", {
 						successMessage: isLeaving ? "Left shared channel" : "Organization disconnected",
 					}),
 				onFailure: (cause) => {
-					const toast = failureToast(cause)
+					const toast = failureToast(cause, "exitToast")
 					return Message.FailedDisconnect({
 						mountId,
 						title: toast.title,

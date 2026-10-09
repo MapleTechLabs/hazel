@@ -5,9 +5,9 @@ import * as Dom from "foldkit/dom"
 import { createChannelAction, joinChannelAction } from "~/db/actions"
 import { PresenceStatus } from "../../platform/presence/model"
 import { HazelRpc } from "../../rpc"
-import { runAction, toastForCause } from "../action"
 import { Message } from "./message"
 import { ChannelType } from "./model"
+import { failureToast, runAtomFn } from "../../data/actions"
 
 /** Side effects of the palette pages, each the call legacy makes from the same handler. */
 
@@ -16,7 +16,7 @@ export const CreateChannel = Command.define("CreateChannel", {
 	args: { name: Schema.String, type: ChannelType, organizationId: OrganizationId, currentUserId: UserId },
 	messages: [Message.SucceededCreateChannel, Message.FailedCreateChannel],
 	execute: ({ name, type, organizationId, currentUserId }) =>
-		runAction(createChannelAction, {
+		runAtomFn(createChannelAction, {
 			name,
 			icon: null,
 			type,
@@ -25,7 +25,7 @@ export const CreateChannel = Command.define("CreateChannel", {
 			currentUserId,
 		}).pipe(
 			Effect.map((result) => Message.SucceededCreateChannel({ channelId: result.data.channelId })),
-			Effect.catchCause((cause) => Effect.succeed(Message.FailedCreateChannel({ toast: toastForCause(cause) }))),
+			Effect.catchCause((cause) => Effect.succeed(Message.FailedCreateChannel({ toast: failureToast(cause, "friendly") }))),
 		),
 })
 
@@ -34,12 +34,12 @@ export const JoinChannel = Command.define("JoinChannel", {
 	args: { channelId: ChannelId, userId: UserId },
 	messages: [Message.SucceededJoinChannel, Message.FailedJoinChannel],
 	execute: ({ channelId, userId }) =>
-		runAction(joinChannelAction, { channelId, userId }).pipe(
+		runAtomFn(joinChannelAction, { channelId, userId }).pipe(
 			Effect.as(Message.SucceededJoinChannel()),
 			Effect.catchCause((cause) =>
 				Effect.succeed(
 					Message.FailedJoinChannel({
-						toast: toastForCause(cause, {
+						toast: failureToast(cause, "friendly", {
 							ChannelNotFoundError: {
 								title: "Channel not found",
 								description: "This channel may have been deleted.",

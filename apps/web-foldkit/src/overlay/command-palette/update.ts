@@ -5,7 +5,6 @@ import { modifyFields } from "foldkit/struct"
 import type { Shared } from "../../page/contract"
 import type { HazelRpc } from "../../rpc"
 import * as CommandMenu from "../../ui/command-menu"
-import { successToast } from "../out-message"
 import type { ToastRequest } from "../toasts"
 import {
 	CreateChannel,
@@ -20,6 +19,7 @@ import { emptySearchData } from "./search-data"
 import { menuSectionsOf, NAVIGATION, parseKey, SETTINGS, STATUS_OPTIONS, THEME_OPTIONS } from "./menu"
 import { LoadRecentSearches } from "./search-mount"
 import { updateSearch } from "./search-update"
+import { successToast } from "../../data/actions"
 
 export type Return = Update.ReturnWithOutMessage<Model, Message, OutMessage, HazelRpc>
 

@@ -12,8 +12,7 @@ import { HazelRpc } from "../../rpc"
 import * as DatePicker from "../../ui/date-picker"
 import * as Segments from "../../ui/date-segments"
 import * as Select from "../../ui/select"
-import { toastForCause } from "../action"
-import { closed, completed, ModalOutMessage, successToast } from "../out-message"
+import { closed, completed, ModalOutMessage } from "../out-message"
 import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalSubscriptionInput } from "./contract"
 import { initFrame, isFrameClosed } from "./frame"
@@ -32,6 +31,7 @@ import {
 	withExpirationItems,
 } from "./set-status-model"
 import { view } from "./set-status-view"
+import { failureToast, successToast } from "../../data/actions"
 
 /**
  * `components/modals/set-status-modal.tsx` (user menu). Reads the presence row like `usePresence()`
@@ -56,7 +56,7 @@ const SaveStatus = Command.define("SaveStatus", {
 			const client = yield* HazelRpc
 			yield* client("userPresenceStatus.update", { ...fields, statusExpiresAt })
 			return Message.SucceededSaveStatus()
-		}).pipe(Effect.catchCause((cause) => Effect.succeed(Message.FailedSaveStatus({ toast: toastForCause(cause) })))),
+		}).pipe(Effect.catchCause((cause) => Effect.succeed(Message.FailedSaveStatus({ toast: failureToast(cause, "friendly") })))),
 })
 
 const ClearStatus = Command.define("ClearStatus", {
@@ -65,7 +65,7 @@ const ClearStatus = Command.define("ClearStatus", {
 		const client = yield* HazelRpc
 		yield* client("userPresenceStatus.clearStatus", {})
 		return Message.SucceededClearStatus()
-	}).pipe(Effect.catchCause((cause) => Effect.succeed(Message.FailedClearStatus({ toast: toastForCause(cause) })))),
+	}).pipe(Effect.catchCause((cause) => Effect.succeed(Message.FailedClearStatus({ toast: failureToast(cause, "friendly") })))),
 })
 
 type Return = ModalReturn<Model, Message>

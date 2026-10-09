@@ -9,7 +9,7 @@ import { type Cause, Effect, Exit, Schema } from "effect"
 import { Command, Render } from "foldkit"
 import * as Dom from "foldkit/dom"
 import { HazelRpc } from "../../../rpc"
-import { failureToast } from "../../../ui/toast-exit"
+import { type ErrorHandlers, failureToast } from "../../../data/actions"
 import { fetchDiscordGuildChannels } from "../chat-sync/discord"
 import { fetchConnections } from "../chat-sync/rpc"
 import {
@@ -29,8 +29,8 @@ const linkNotFound = {
 	},
 }
 
-const toastFields = (cause: Cause.Cause<unknown>, handlers: Parameters<typeof failureToast>[1]) => {
-	const toast = failureToast(cause, handlers)
+const toastFields = (cause: Cause.Cause<unknown>, handlers: ErrorHandlers) => {
+	const toast = failureToast(cause, "exitToast", handlers)
 	return { title: toast.title, description: toast.description }
 }
 
