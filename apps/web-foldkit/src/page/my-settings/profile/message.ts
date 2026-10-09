@@ -1,6 +1,7 @@
 import { Schema } from "effect"
 import { File } from "foldkit/file"
 import { defineMessageUnion } from "foldkit/message"
+import { ToastRequest } from "../../../overlay/toasts"
 import * as Interaction from "../../../ui/aria/interaction"
 import * as ComboBox from "../../../ui/combo-box"
 import * as Modal from "../../../ui/modal"
@@ -18,7 +19,7 @@ export const Message = defineMessageUnion({
 	ClickedAvatar: {},
 	CompletedOpenFilePicker: {},
 	SelectedAvatarFiles: { files: Schema.Array(File) },
-	RejectedAvatarFile: { title: Schema.String, description: Schema.String },
+	RejectedAvatarFile: { toast: ToastRequest },
 	LoadedCropImage: { loadId: Schema.Number, image: CropImage },
 	FailedLoadCropImage: { loadId: Schema.Number },
 	CompletedRevokeCropImage: {},

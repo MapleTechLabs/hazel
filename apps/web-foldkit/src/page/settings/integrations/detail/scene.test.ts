@@ -19,7 +19,7 @@ import {
 import { describe, expect, test } from "vitest"
 import type { Shared } from "../../../contract"
 import { PageOutMessage } from "../../../out-message"
-import { errorToast, successToast } from "../shared/exit-toast"
+import { errorToast, successToast } from "../../../../data/actions"
 import { ConnectApiKey, Disconnect, GetOAuthUrl, RedirectToProvider } from "./command"
 import { Message } from "./message"
 import type { Model } from "./model"

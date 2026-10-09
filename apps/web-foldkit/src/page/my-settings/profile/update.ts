@@ -1,6 +1,8 @@
 import { Array, Option } from "effect"
 import { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
+import { errorToast, successToast } from "../../../data/actions"
+import type { ToastRequest } from "../../../overlay/toasts"
 import * as Interaction from "../../../ui/aria/interaction"
 import * as ComboBox from "../../../ui/combo-box"
 import * as Modal from "../../../ui/modal"
@@ -35,12 +37,11 @@ export const toCropModalMessage = (message: Modal.Message) => Message.GotCropMod
 const MAX_FILE_SIZE = 5 * 1024 * 1024
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"]
 
-const toast = (intent: "success" | "error", title: string, description: string | null = null) =>
-	PageOutMessage.RequestedToast({ toast: { intent, title, description } })
+const toast = (request: ToastRequest) => PageOutMessage.RequestedToast({ toast: request })
 
 /** The avatar changed in Clerk: `refreshCurrentUser()` re-reads `user.me`, then the success toast. */
 const refreshUser = (title: string) =>
-	PageOutMessage.RequestedCurrentUserRefresh({ toast: { intent: "success", title, description: null } })
+	PageOutMessage.RequestedCurrentUserRefresh({ toast: successToast(title) })
 
 const merge = (first: Return, second: Return): Return => ({
 	model: second.model,
@@ -128,13 +129,14 @@ const selectFile = (model: Model, files: ReadonlyArray<File>): Return =>
 				return {
 					model,
 					outMessage: toast(
-						"error",
-						"Invalid file type",
-						"Please select a JPEG, PNG, or WebP image",
+						errorToast("Invalid file type", "Please select a JPEG, PNG, or WebP image"),
 					),
 				}
 			if (file.size > MAX_FILE_SIZE)
-				return { model, outMessage: toast("error", "File too large", "Image must be less than 5MB") }
+				return {
+					model,
+					outMessage: toast(errorToast("File too large", "Image must be less than 5MB")),
+				}
 			const loadId = model.cropLoadId + 1
 			return {
 				model: modifyFields(model, {
@@ -190,16 +192,16 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		CompletedSaveProfile: ({ isSaved }) => ({
 			model: modifyFields(model, { isSubmitting: () => false }),
 			outMessage: isSaved
-				? toast("success", "Profile updated successfully")
-				: toast("error", "Failed to update profile"),
+				? toast(successToast("Profile updated successfully"))
+				: toast(errorToast("Failed to update profile")),
 		}),
 		ClickedAvatar: () => (model.isUploading ? { model } : { model, commands: [OpenFilePicker({})] }),
 		CompletedOpenFilePicker: () => ({ model }),
 		SelectedAvatarFiles: ({ files }) =>
 			selectFile(modifyFields(model, { isDropTarget: () => false, dragDepth: () => 0 }), files),
-		RejectedAvatarFile: ({ title, description }) => ({
+		RejectedAvatarFile: ({ toast: request }) => ({
 			model,
-			outMessage: toast("error", title, description),
+			outMessage: toast(request),
 		}),
 		LoadedCropImage: ({ loadId, image }) =>
 			model.crop._tag === "Loading" && model.crop.loadId === loadId
@@ -255,7 +257,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			model: modifyFields(model, { isUploading: () => false }),
 			outMessage: isUploaded
 				? refreshUser("Profile picture updated")
-				: toast("error", "Upload failed", "Failed to update profile picture. Please try again."),
+				: toast(errorToast("Upload failed", "Failed to update profile picture. Please try again.")),
 		}),
 		ClickedResetAvatar: () =>
 			model.isResetting
@@ -265,7 +267,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			model: modifyFields(model, { isResetting: () => false }),
 			outMessage: isReset
 				? refreshUser("Profile picture reset to account photo")
-				: toast("error", "Failed to reset profile picture"),
+				: toast(errorToast("Failed to reset profile picture")),
 		}),
 		GotCropModalMessage: ({ message: child }) => foldCropModal(model, child),
 		GotInteractionMessage: ({ message: child }) => interaction.fold(model, child),

@@ -1,5 +1,5 @@
 import { modifyFields } from "foldkit/struct"
-import { successToast } from "../../../ui/toast-exit"
+import { infoToast, successToast } from "../../../data/actions"
 import type { PageReturn } from "../../contract"
 import { PageOutMessage } from "../../out-message"
 import { ConnectProvider, CreateWebhook, RunProviderAction, WaitForConfirmReset } from "./command"
@@ -18,9 +18,6 @@ import {
 
 type Return = PageReturn<Model, Message>
 type Handlers = { readonly [T in Message["_tag"]]: (message: Extract<Message, { _tag: T }>) => Return }
-
-const errorToast = (title: string, description: string | null) =>
-	PageOutMessage.RequestedToast({ toast: { intent: "error", title, description } })
 
 const withCard = (model: Model, provider: Provider, f: (card: ProviderCard) => ProviderCard): Model =>
 	modifyFields(model, { providers: (providers) => ({ ...providers, [provider]: f(providers[provider]) }) })
@@ -92,9 +89,9 @@ export const updateCards = (
 			}),
 		}
 	},
-	FailedConnectProvider: ({ provider, title, description }) => ({
+	FailedConnectProvider: ({ provider, toast }) => ({
 		model: withCard(model, provider, (card) => ({ ...card, isCreating: false })),
-		outMessage: errorToast(title, description),
+		outMessage: PageOutMessage.RequestedToast({ toast }),
 	}),
 	ClickedToggleProvider: ({ provider }) => {
 		const webhook = providerWebhook(model, provider)
@@ -142,16 +139,16 @@ export const updateCards = (
 			outMessage: PageOutMessage.RequestedToast({ toast: successToast(successMessage) }),
 		}
 	},
-	FailedProviderAction: ({ provider, isDelete, title, description }) => ({
+	FailedProviderAction: ({ provider, isDelete, toast }) => ({
 		model: withCard(model, provider, (card) =>
 			isDelete ? { ...card, isDeleting: false } : { ...card, isToggling: false },
 		),
-		outMessage: errorToast(title, description),
+		outMessage: PageOutMessage.RequestedToast({ toast }),
 	}),
 	ClickedProviderUrlInfo: () => ({
 		model,
 		outMessage: PageOutMessage.RequestedToast({
-			toast: { intent: "info", title: "Delete and reconnect to get a new URL", description: null },
+			toast: infoToast("Delete and reconnect to get a new URL"),
 		}),
 	}),
 	ClickedDismissProviderToken: ({ provider }) => ({
@@ -194,9 +191,9 @@ export const updateCards = (
 			}),
 		}
 	},
-	FailedCreateWebhook: ({ title, description }) => ({
+	FailedCreateWebhook: ({ toast }) => ({
 		model: withForm(model, (form) => ({ ...form, isSubmitting: false })),
-		outMessage: errorToast(title, description),
+		outMessage: PageOutMessage.RequestedToast({ toast }),
 	}),
 	ClickedToggleTokenVisible: () => ({
 		model: withForm(model, (form) => ({ ...form, isTokenVisible: !form.isTokenVisible })),

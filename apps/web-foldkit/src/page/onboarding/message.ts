@@ -1,5 +1,6 @@
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
+import { ToastRequest } from "../../overlay/toasts"
 import * as Interaction from "../../ui/aria/interaction"
 import * as ChoiceBox from "../../ui/choice-box"
 import { Membership, Theme } from "./model"
@@ -24,7 +25,7 @@ export const Message = defineMessageUnion({
 	ClickedDetectTimezone: {},
 	ClickedContinueTimezone: {},
 	SucceededUpdateTimezone: { timezone: Schema.String },
-	FailedUpdateTimezone: { title: Schema.String, description: Schema.NullOr(Schema.String) },
+	FailedUpdateTimezone: { toast: ToastRequest },
 	// Theme
 	SelectedBrandColor: { hex: Schema.String },
 	SelectedTheme: { theme: Theme },

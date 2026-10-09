@@ -5,7 +5,7 @@ import { HazelApiClient } from "~/lib/services/common/atom-client"
 import { type UploadErrorType, uploadErrorMessages, uploadToStorage } from "~/lib/upload-to-storage"
 import { ToastRequest } from "../overlay/toasts"
 import { HazelRpc } from "../rpc"
-import { runAtomFn } from "../data/actions"
+import { errorToast, runAtomFn } from "../data/actions"
 
 /**
  * Port of `useFileUpload().uploadFile`: presign (`uploads.presign`), PUT with progress, then
@@ -34,8 +34,6 @@ export interface UploadArgs {
 
 const presign = HazelApiClient.mutation("uploads", "presign")
 
-const failed = (title: string, description: string) => ({ intent: "error" as const, title, description })
-
 const markFailed = (id: AttachmentId, reason: string) =>
 	Effect.gen(function* () {
 		const client = yield* HazelRpc
@@ -46,7 +44,7 @@ const upload = (args: UploadArgs, onProgress: (percent: number) => void) =>
 	Effect.gen(function* () {
 		const { file } = args
 		if (file.size > MAX_FILE_SIZE) {
-			return { attachmentId: null, toast: failed("File too large", `File size exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit`) }
+			return { attachmentId: null, toast: errorToast("File too large", `File size exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit`) }
 		}
 		const presigned = yield* Effect.exit(
 			runAtomFn(presign, {
@@ -61,13 +59,13 @@ const upload = (args: UploadArgs, onProgress: (percent: number) => void) =>
 			}),
 		)
 		if (Exit.isFailure(presigned)) {
-			return { attachmentId: null, toast: failed("Upload failed", "Failed to get upload URL. Please try again.") }
+			return { attachmentId: null, toast: errorToast("Upload failed", "Failed to get upload URL. Please try again.") }
 		}
 		const { uploadUrl, resourceId } = presigned.value
 		if (!resourceId) {
 			return {
 				attachmentId: null,
-				toast: failed("Upload failed", "Failed to create attachment record. Please try again."),
+				toast: errorToast("Upload failed", "Failed to create attachment record. Please try again."),
 			}
 		}
 		const attachmentId = AttachmentId.make(resourceId)
@@ -79,7 +77,7 @@ const upload = (args: UploadArgs, onProgress: (percent: number) => void) =>
 				return { attachmentId: null, toast: null }
 			}
 			yield* markFailed(attachmentId, `Storage upload failed: ${stored.errorType}`)
-			return { attachmentId: null, toast: failed("Upload failed", uploadErrorMessages[errorType]) }
+			return { attachmentId: null, toast: errorToast("Upload failed", uploadErrorMessages[errorType]) }
 		}
 		const completed = yield* Effect.exit(
 			Effect.gen(function* () {
@@ -89,7 +87,7 @@ const upload = (args: UploadArgs, onProgress: (percent: number) => void) =>
 		)
 		if (Exit.isFailure(completed)) {
 			yield* markFailed(attachmentId, "Failed to finalize upload")
-			return { attachmentId: null, toast: failed("Upload failed", "Failed to finalize upload. Please try again.") }
+			return { attachmentId: null, toast: errorToast("Upload failed", "Failed to finalize upload. Please try again.") }
 		}
 		return { attachmentId, toast: null }
 	})
@@ -101,7 +99,7 @@ export const uploadStream = (args: UploadArgs): Stream.Stream<UploadEvent, never
 			Effect.catchCause(() =>
 				Effect.succeed({
 					attachmentId: null,
-					toast: failed("Upload failed", "An unexpected error occurred. Please try again."),
+					toast: errorToast("Upload failed", "An unexpected error occurred. Please try again."),
 				}),
 			),
 			Effect.flatMap((result) =>

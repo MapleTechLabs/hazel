@@ -13,12 +13,12 @@ import type { Shared } from "../../page/contract"
 import { button } from "../../ui/button"
 import { dialogBody, dialogFooter, dialogHeader } from "../../ui/dialog"
 import { input } from "../../ui/input"
-import { runAction, toastForCause } from "../action"
-import { closed, completed, ModalOutMessage, successToast } from "../out-message"
+import { closed, completed, ModalOutMessage } from "../out-message"
 import { ToastRequest } from "../toasts"
 import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalSubscriptionInput, type ModalViewInputs } from "./contract"
 import { Frame, FrameMessage, frameView, initFrame, isFrameClosed, modalDescription, modalTitle } from "./frame"
+import { failureToast, runAtomFn, successToast } from "../../data/actions"
 
 /** `components/modals/join-channel-modal.tsx` (legacy `useModal("join-channel")`). */
 
@@ -60,12 +60,12 @@ const JoinChannel = Command.define("JoinChannel", {
 	args: { channelId: ChannelId, userId: UserId },
 	messages: [Message.SucceededJoinChannel, Message.FailedJoinChannel],
 	execute: ({ channelId, userId }) =>
-		runAction(joinChannelAction, { channelId, userId }).pipe(
+		runAtomFn(joinChannelAction, { channelId, userId }).pipe(
 			Effect.as(Message.SucceededJoinChannel()),
 			Effect.catchCause((cause) =>
 				Effect.succeed(
 					Message.FailedJoinChannel({
-						toast: toastForCause(cause, {
+						toast: failureToast(cause, "friendly", {
 							ChannelNotFoundError: {
 								title: "Channel not found",
 								description: "This channel may have been deleted.",

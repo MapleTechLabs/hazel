@@ -3,6 +3,7 @@ import { ChannelId } from "@hazel/schema"
 import { Schema } from "effect"
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
+import { errorToast } from "../../../data/actions"
 import { PageOutMessage } from "../../out-message"
 import { Message } from "./message"
 import { canSave } from "./model"
@@ -37,7 +38,7 @@ describe("channel settings overview", () => {
 			model((current) => expect(current.form?.isSubmitting).toBe(true)),
 			Command.resolve(
 				UpdateChannel,
-				Message.FailedUpdateChannel({ title: "Channel not found", description: "Gone." }),
+				Message.FailedUpdateChannel({ toast: errorToast("Channel not found", "Gone.") }),
 			),
 			model((current) => expect(current.form?.isSubmitting).toBe(false)),
 			expectOutMessage(
@@ -69,8 +70,7 @@ describe("save failure", () => {
 			Command.resolve(
 				UpdateChannel,
 				Message.FailedUpdateChannel({
-					title: "Channel not found",
-					description: "This channel may have been deleted.",
+					toast: errorToast("Channel not found", "This channel may have been deleted."),
 				}),
 			),
 			expectOutMessage(

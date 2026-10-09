@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import * as Scene from "foldkit/scene"
 import { describe, test } from "vitest"
-import { successToast } from "../../../data/actions"
+import { errorToast, successToast } from "../../../data/actions"
 import { feedOf, webhookOf } from "../../../test/pages-channel-settings-fixtures"
 import {
 	channelId,
@@ -124,8 +124,7 @@ describe("create webhook", () => {
 			Scene.Command.resolve(
 				CreateWebhook,
 				Message.FailedCreateWebhook({
-					title: failureToastFixture.title,
-					description: failureToastFixture.description,
+					toast: errorToast(failureToastFixture.title, failureToastFixture.description),
 				}),
 			),
 			Scene.expectOutMessage(PageOutMessage.RequestedToast({ toast: failureToastFixture })),
@@ -172,8 +171,7 @@ describe("provider cards", () => {
 				ConnectProvider,
 				Message.FailedConnectProvider({
 					provider: "openstatus",
-					title: failureToastFixture.title,
-					description: failureToastFixture.description,
+					toast: errorToast(failureToastFixture.title, failureToastFixture.description),
 				}),
 			),
 			Scene.expectOutMessage(PageOutMessage.RequestedToast({ toast: failureToastFixture })),

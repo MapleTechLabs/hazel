@@ -79,7 +79,7 @@ describe("join page", () => {
 			Scene.click(joinButton),
 			Scene.Command.expectExact(JoinWorkspace({ slug: "hazel" })),
 			Scene.expect(Scene.role("button", { name: "Joining..." })).toBeDisabled(),
-			Scene.Command.resolve(JoinWorkspace, Message.FailedJoinWorkspace(failureToastFixture)),
+			Scene.Command.resolve(JoinWorkspace, Message.FailedJoinWorkspace({ toast: failureToastFixture })),
 			Scene.expectOutMessage(PageOutMessage.RequestedToast({ toast: failureToastFixture })),
 			Scene.expect(joinButton).toBeEnabled(),
 		)

@@ -1,6 +1,7 @@
 import { ChannelId, OrganizationId, SyncChannelLinkId, SyncConnectionId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
+import { ToastRequest } from "../../../overlay/toasts"
 import * as Interaction from "../../../ui/aria/interaction"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
@@ -86,17 +87,13 @@ export const Message = defineMessageUnion({
 	ClickedDisconnect: {},
 	ClickedConfirmDisconnect: {},
 	SucceededDisconnect: {},
-	FailedDisconnect: { title: Schema.String, description: Schema.NullOr(Schema.String) },
+	FailedDisconnect: { toast: ToastRequest },
 	ClickedLinkChannel: {},
 	ClickedConfirmRemoveLink: {},
 	SucceededRemoveLink: {},
 	SucceededUpdateLink: { linkId: SyncChannelLinkId, successMessage: Schema.String },
-	FailedUpdateLink: {
-		linkId: SyncChannelLinkId,
-		title: Schema.String,
-		description: Schema.NullOr(Schema.String),
-	},
-	FailedRemoveLink: { title: Schema.String, description: Schema.NullOr(Schema.String) },
+	FailedUpdateLink: { linkId: SyncChannelLinkId, toast: ToastRequest },
+	FailedRemoveLink: { toast: ToastRequest },
 	GotLinkMenuMessage: { linkId: SyncChannelLinkId, message: Menu.Message },
 	GotDeleteLinkModalMessage: { message: Modal.Message },
 	GotDisconnectModalMessage: { message: Modal.Message },
@@ -114,7 +111,7 @@ export const Message = defineMessageUnion({
 	ClickedDirection: { direction: SyncDirection },
 	ClickedCreateLink: {},
 	SucceededCreateLink: { successMessage: Schema.String },
-	FailedCreateLink: { title: Schema.String, description: Schema.NullOr(Schema.String) },
+	FailedCreateLink: { toast: ToastRequest },
 	GotInteractionMessage: { message: Interaction.Message },
 })
 export type Message = typeof Message.Type

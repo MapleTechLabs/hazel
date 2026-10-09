@@ -2,6 +2,8 @@ import { Theme } from "@hazel/domain/models"
 import { Option, Schema } from "effect"
 import { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
+import { errorToast, successToast, warningToast } from "../../data/actions"
+import type { ToastRequest } from "../../overlay/toasts"
 import * as Interaction from "../../ui/aria/interaction"
 import * as ChoiceBox from "../../ui/choice-box"
 import { AppRoute, hrefOf, type RouteOf } from "../../route"
@@ -21,8 +23,7 @@ import { type Model, StepForm } from "./model"
 import { CITIES } from "./timezone/data"
 import { advance, enterStep, finalize, goBack, initializeWhenReady, type Return } from "./transition"
 
-const toast = (intent: "success" | "error" | "warning", title: string, description: string | null = null) =>
-	PageOutMessage.RequestedToast({ toast: { intent, title, description } })
+const toast = (request: ToastRequest) => PageOutMessage.RequestedToast({ toast: request })
 
 /** The reverse guard: an onboarded user who lands here goes to the app root. */
 const redirectIfOnboarded = (model: Model, shared: Shared): Return =>
@@ -131,7 +132,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		FailedUpdateProfile: () =>
 			withForm(model, "Profile", (form) => ({
 				model: setForm(model, StepForm.Profile({ ...form, isSubmitting: false })),
-				outMessage: toast("error", "Failed to update profile"),
+				outMessage: toast(errorToast("Failed to update profile")),
 			})),
 
 		ChangedTimezoneQuery: ({ value }) =>
@@ -187,10 +188,10 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			),
 		SucceededUpdateTimezone: ({ timezone }) =>
 			withForm(model, "Timezone", () => advance(model, shared, { timezone })),
-		FailedUpdateTimezone: ({ title, description }) =>
+		FailedUpdateTimezone: ({ toast: request }) =>
 			withForm(model, "Timezone", (form) => ({
 				model: setForm(model, StepForm.Timezone({ ...form, isSubmitting: false })),
-				outMessage: toast("error", title, description),
+				outMessage: toast(request),
 			})),
 
 		SelectedBrandColor: ({ hex }) =>
@@ -287,10 +288,11 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 					...next,
 					outMessage:
 						failedCount === 0
-							? toast("success", `Sent ${plural(emails.length)}`)
+							? toast(successToast(`Sent ${plural(emails.length)}`))
 							: toast(
-									"warning",
-									`Sent ${plural(emails.length - failedCount)}, ${failedCount} failed`,
+									warningToast(
+										`Sent ${plural(emails.length - failedCount)}, ${failedCount} failed`,
+									),
 								),
 				}
 			}),
@@ -298,8 +300,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			withForm(model, "Invite", (form) => ({
 				model: setForm(model, StepForm.Invite({ ...form, isLoading: false })),
 				outMessage: toast(
-					"error",
-					reason === "NoOrganization" ? "No active organization" : "Failed to send invitations",
+					errorToast(
+						reason === "NoOrganization" ? "No active organization" : "Failed to send invitations",
+					),
 				),
 			})),
 

@@ -12,11 +12,11 @@ import { liveQueryStream } from "../../data/live-query"
 import { button } from "../../ui/button"
 import { dialogBody, dialogFooter, dialogHeader } from "../../ui/dialog"
 import { textField, textFieldIds } from "../../ui/text-field"
-import { runAction, toastForCause } from "../action"
-import { closed, completed, ModalOutMessage, successToast } from "../out-message"
+import { closed, completed, ModalOutMessage } from "../out-message"
 import { ToastRequest } from "../toasts"
 import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalSubscriptionInput, type ModalViewInputs } from "./contract"
+import { failureToast, runAtomFn, successToast } from "../../data/actions"
 import {
 	Frame,
 	FrameMessage,
@@ -77,12 +77,12 @@ const RenameChannel = Command.define("RenameChannel", {
 	},
 	messages: [Message.SucceededRenameChannel, Message.FailedRenameChannel],
 	execute: ({ channelId, name, notFoundTitle, notFoundDescription }) =>
-		runAction(updateChannelAction, { channelId, name }).pipe(
+		runAtomFn(updateChannelAction, { channelId, name }).pipe(
 			Effect.as(Message.SucceededRenameChannel()),
 			Effect.catchCause((cause) =>
 				Effect.succeed(
 					Message.FailedRenameChannel({
-						toast: toastForCause(cause, {
+						toast: failureToast(cause, "friendly", {
 							ChannelNotFoundError: {
 								title: notFoundTitle,
 								description: notFoundDescription,

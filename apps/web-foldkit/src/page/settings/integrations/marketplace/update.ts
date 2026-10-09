@@ -7,7 +7,7 @@ import { HazelRpc } from "../../../../rpc"
 import type { PageReturn } from "../../../contract"
 import { PageOutMessage } from "../../../out-message"
 import { embedInteraction } from "../shared/interaction"
-import { failureToast, rateLimitHandler, successToast } from "../shared/exit-toast"
+import { failureToast, rateLimitMessage, successToast } from "../../../../data/actions"
 import { Message } from "./message"
 import type { Model } from "./model"
 
@@ -23,7 +23,7 @@ export const InstallBot = Command.define("IntegrationsInstallBot", {
 				? Message.SucceededInstallBot({ botId })
 				: Message.FailedInstallBot({
 						botId,
-						toast: failureToast(exit.cause, {
+						toast: failureToast(exit.cause, "exitToast", {
 							BotNotFoundError: () => ({
 								title: "Application not found",
 								description: "This application may no longer be available.",
@@ -34,7 +34,7 @@ export const InstallBot = Command.define("IntegrationsInstallBot", {
 								description: "This application is already installed in your workspace.",
 								isRetryable: false,
 							}),
-							RateLimitExceededError: rateLimitHandler,
+							RateLimitExceededError: rateLimitMessage,
 						}),
 					})
 		}),

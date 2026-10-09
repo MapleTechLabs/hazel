@@ -34,7 +34,8 @@ export const UpdateChannelMember = Command.define("UpdateChannelMember", {
 		settle(
 			runAtomFn(updateChannelMemberAction, { memberId, [field]: value }),
 			succeeded(successTitle),
-			(cause) => Message.FailedSidebarAction({ toast: failureToast(cause, memberNotFound) }),
+			(cause) =>
+				Message.FailedSidebarAction({ toast: failureToast(cause, "friendly", memberNotFound) }),
 		),
 })
 
@@ -49,7 +50,8 @@ export const LeaveChannel = Command.define("LeaveChannel", {
 				return yield* client("channelMember.delete", { id: memberId })
 			}),
 			succeeded("Left channel successfully"),
-			(cause) => Message.FailedSidebarAction({ toast: failureToast(cause, memberNotFound) }),
+			(cause) =>
+				Message.FailedSidebarAction({ toast: failureToast(cause, "friendly", memberNotFound) }),
 		),
 })
 
@@ -62,7 +64,7 @@ export const MoveChannelToSection = Command.define("MoveChannelToSection", {
 			succeeded(sectionId ? "Channel moved to section" : "Channel moved to default"),
 			(cause) =>
 				Message.FailedSidebarAction({
-					toast: failureToast(cause, {
+					toast: failureToast(cause, "friendly", {
 						ChannelNotFoundError: {
 							title: "Channel not found",
 							description: "This channel may have been deleted.",
@@ -82,7 +84,7 @@ export const DeleteChannelSection = Command.define("DeleteChannelSection", {
 	execute: ({ sectionId }) =>
 		settle(runAtomFn(deleteChannelSectionAction, { sectionId }), succeeded("Section deleted"), (cause) =>
 			Message.FailedSidebarAction({
-				toast: failureToast(cause, {
+				toast: failureToast(cause, "friendly", {
 					ChannelSectionNotFoundError: {
 						title: "Section not found",
 						description: "This section may have already been deleted.",

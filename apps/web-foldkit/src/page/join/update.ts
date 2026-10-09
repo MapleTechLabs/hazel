@@ -1,4 +1,5 @@
 import { modifyFields } from "foldkit/struct"
+import { successToast } from "../../data/actions"
 import { AppRoute, hrefOf, type RouteOf } from "../../route"
 import type { PageReturn } from "../contract"
 import { PageOutMessage } from "../out-message"
@@ -35,12 +36,12 @@ export const update = (model: Model, message: Message): Return =>
 			outMessage: PageOutMessage.RequestedNavigation({
 				href: hrefOf(AppRoute.OrgHome({ orgSlug: model.slug })),
 				replace: false,
-				toast: { intent: "success", title: "Successfully joined workspace!", description: null },
+				toast: successToast("Successfully joined workspace!"),
 			}),
 		}),
-		FailedJoinWorkspace: ({ title, description }) => ({
+		FailedJoinWorkspace: ({ toast }) => ({
 			model: modifyFields(model, { isJoining: () => false }),
-			outMessage: PageOutMessage.RequestedToast({ toast: { intent: "error", title, description } }),
+			outMessage: PageOutMessage.RequestedToast({ toast }),
 		}),
 		CompletedRedirectToSignIn: () => ({ model }),
 		CompletedEnterAnimation: () => ({ model }),

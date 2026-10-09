@@ -42,8 +42,15 @@ memoized views and a `sharedChanged` hook. `page/root/` shows a page that only r
   `HazelApiClient`: base URL and authenticated fetch). Both are the app's `resources` (`src/rpc.ts`).
   Map every `Exit` to a Message (`SucceededX` / `FailedX`).
 - **Optimistic mutations.** Run the legacy `db/actions` atoms with `runAtomFn` (`src/data/actions.ts`, one
-  registry for the app) and map the result with `settle`, `successToast` and `failureToast` (legacy
-  `exitToast`, with per-tag handlers).
+  registry for the app) and map the result with `settle`, `successToast` and `failureToast`.
+- **Toast helpers.** `src/data/actions.ts` is the only toast module (pages, modals, palette, shell):
+  `successToast` / `errorToast` / `warningToast` / `infoToast` / `loadingToast` build a `ToastRequest`;
+  `failureToast(cause, fallback, handlers?)` is legacy `exitToast`'s error branch and `toastOfExit` its
+  whole `run()`. Handlers are `onErrorTag` messages by tag (a fixed message or a function of the error).
+  `fallback` keeps legacy's wording for unhandled errors: `"exitToast"` (common-error map, else "An error
+  occurred") or `"friendly"` (`getUserFriendlyError`: network, timeout, the error's `message`). Pick the
+  one the legacy call site uses; where legacy shows a fixed string, use `errorToast` and drop the cause.
+  A failure Message carries `{ toast: ToastRequest }`, built in the Command, never `{ title, description }`.
 - **Live queries.** Use `liveQueryStream` (`src/data/live-query.ts`) with the legacy `useLiveQuery`
   builder, inside an `entry` whose dependencies come from `input.model` and `input.shared`. Return
   `Stream.empty` until the dependencies exist. Keys are prefixed with the page id automatically.

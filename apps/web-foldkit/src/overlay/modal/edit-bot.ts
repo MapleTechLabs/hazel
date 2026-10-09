@@ -8,8 +8,7 @@ import { BOT_SCOPES } from "~/lib/bot-scopes"
 import { HazelRpc } from "../../rpc"
 import { button } from "../../ui/button"
 import { dialogBody, dialogDescription, dialogFooter, dialogHeader } from "../../ui/dialog"
-import { toastForCause } from "../action"
-import { closed, completed, ModalOutMessage, successToast } from "../out-message"
+import { closed, completed, ModalOutMessage } from "../out-message"
 import { ToastRequest } from "../toasts"
 import { botAvatarUpload } from "./bot-avatar-upload"
 import {
@@ -26,6 +25,7 @@ import {
 import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalViewInputs } from "./contract"
 import { Frame, FrameMessage, frameView, initFrame, isFrameClosed, modalTitle } from "./frame"
+import { failureToast, successToast } from "../../data/actions"
 
 /**
  * `components/modals/edit-bot-modal.tsx`. The request is the settings pages' `Bot` shape (minus
@@ -84,7 +84,7 @@ const UpdateBot = Command.define("UpdateBot", {
 			return Message.SucceededUpdateBot({ name: payload.name })
 		}).pipe(
 			Effect.catchCause((cause) =>
-				Effect.succeed(Message.FailedUpdateBot({ toast: toastForCause(cause, errorOverrides) })),
+				Effect.succeed(Message.FailedUpdateBot({ toast: failureToast(cause, "friendly", errorOverrides) })),
 			),
 		),
 })

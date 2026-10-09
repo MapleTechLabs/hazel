@@ -5,7 +5,7 @@ import type { ToastRequest } from "../../../overlay/toasts"
 import { AppRoute, type RouteOf } from "../../../route"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
-import { successToast } from "../../../ui/toast-exit"
+import { errorToast, successToast } from "../../../data/actions"
 import type { PageReturn, Shared } from "../../contract"
 import { PageOutMessage, requestedOrgNavigation } from "../../out-message"
 import { CopyText, ListRss, ListWebhooks, RunRowAction, WaitForCopiedReset } from "./command"
@@ -58,8 +58,6 @@ export const init = (route: RouteOf<"ChannelSettingsIntegrations">): Return => (
 })
 
 export const toast = (request: ToastRequest) => PageOutMessage.RequestedToast({ toast: request })
-export const errorToast = (title: string, description: string | null) =>
-	toast({ intent: "error", title, description })
 
 /** The list a row belongs to reloads with its spinner, like `onUpdate` / `onDelete` refetches. */
 const confirmModal = {
@@ -175,11 +173,11 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 						),
 					}
 				: { model },
-		FailedList: ({ list, version, title, description }) =>
+		FailedList: ({ list, version, toast: request }) =>
 			isCurrent(model[list], version)
 				? {
 						model: { ...model, [list]: { ...model[list], isLoading: false } },
-						outMessage: errorToast(title, description),
+						outMessage: toast(request),
 					}
 				: { model },
 		// `window.location.href = /$orgSlug/settings/integrations/github`
@@ -205,9 +203,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				outMessage: toast(successToast(successMessage)),
 			}
 		},
-		FailedRowAction: ({ kind, id, title, description }) => ({
+		FailedRowAction: ({ kind, id, toast: request }) => ({
 			...settleRowAction(model, kind, id),
-			outMessage: errorToast(title, description),
+			outMessage: toast(request),
 		}),
 		ClickedConfirmRemove: () => {
 			const confirm = model.confirm
@@ -230,7 +228,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 						commands: [WaitForCopiedReset({ id })],
 						outMessage: toast(successToast(toastTitle)),
 					}
-				: { model, outMessage: errorToast(toastTitle, null) },
+				: { model, outMessage: toast(errorToast(toastTitle)) },
 		ElapsedCopiedDelay: ({ id }) => ({
 			model: modifyFields(model, { copiedIds: (ids) => ids.filter((found) => found !== id) }),
 		}),

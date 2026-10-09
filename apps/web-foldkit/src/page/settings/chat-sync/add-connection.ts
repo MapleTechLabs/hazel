@@ -3,7 +3,7 @@ import { Effect, Exit, Schema } from "effect"
 import { Command, Render } from "foldkit"
 import * as Dom from "foldkit/dom"
 import { HazelRpc } from "../../../rpc"
-import { failureToast } from "../../../ui/toast-exit"
+import { failureToast } from "../../../data/actions"
 import { Message } from "./model"
 
 /** `AddConnectionModal`'s commands (`components/chat-sync/add-connection-modal.tsx`). */
@@ -35,7 +35,7 @@ export const CreateConnection = Command.define("CreateConnection", {
 			return Exit.match(exit, {
 				onSuccess: () => Message.SucceededCreateConnection(),
 				onFailure: (cause) => {
-					const toast = failureToast(cause, {
+					const toast = failureToast(cause, "exitToast", {
 						ChatSyncConnectionExistsError: {
 							title: "Connection already exists",
 							description: "A connection to this Discord server already exists in your workspace.",
@@ -47,7 +47,7 @@ export const CreateConnection = Command.define("CreateConnection", {
 							isRetryable: false,
 						},
 					})
-					return Message.FailedCreateConnection({ title: toast.title, description: toast.description })
+					return Message.FailedCreateConnection({ toast })
 				},
 			})
 		}),

@@ -10,12 +10,12 @@ import { button } from "../../ui/button"
 import { dialogBody, dialogFooter, dialogHeader } from "../../ui/dialog"
 import { inputGroup } from "../../ui/input"
 import { textField, type TextFieldParts } from "../../ui/text-field"
-import { toastForCause } from "../action"
-import { closed, completed, ModalOutMessage, successToast } from "../out-message"
+import { closed, completed, ModalOutMessage } from "../out-message"
 import { ToastRequest } from "../toasts"
 import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalViewInputs } from "./contract"
 import { Frame, FrameMessage, frameView, initFrame, isFrameClosed, modalDescription, modalTitle } from "./frame"
+import { failureToast, successToast } from "../../data/actions"
 
 /** `components/modals/create-organization-modal.tsx` (legacy `useModal("create-organization")`). */
 
@@ -61,7 +61,7 @@ const CreateOrganization = Command.define("CreateOrganization", {
 			Effect.catchCause((cause) =>
 				Effect.succeed(
 					Message.FailedCreateOrganization({
-						toast: toastForCause(cause, {
+						toast: failureToast(cause, "friendly", {
 							OrganizationSlugAlreadyExistsError: {
 								title: "Slug already taken",
 								description: "That workspace URL is already in use. Please choose a different one.",

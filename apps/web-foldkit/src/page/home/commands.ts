@@ -36,7 +36,7 @@ export const CreateDm = Command.define("CreateDm", {
 			return yield* settle(
 				rpc("channel.createDm", { organizationId, participantIds: [userId], type: "single" }),
 				(result) => Message.SucceededCreateDm({ channelId: result.data.id, name }),
-				(cause) => Message.FailedCreateDm({ toast: failureToast(cause) }),
+				(cause) => Message.FailedCreateDm({ toast: failureToast(cause, "friendly") }),
 			)
 		}),
 })

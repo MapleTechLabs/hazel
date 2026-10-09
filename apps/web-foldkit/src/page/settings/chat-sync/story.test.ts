@@ -9,6 +9,7 @@ import { Message } from "./model"
 import { DeleteConnection, init, ListConnections, ListDiscordGuilds, sharedChanged, update } from "./update"
 import { sharedDefaults } from "../../test-shared"
 import { CreateConnection } from "./add-connection"
+import { errorToast } from "../../../data/actions"
 
 const organizationId = Schema.decodeSync(OrganizationId)("00000000-0000-4000-8000-000000000001")
 const connectionId = Schema.decodeSync(SyncConnectionId)("00000000-0000-4000-8000-000000000002")
@@ -167,7 +168,7 @@ describe("chat sync connections", () => {
 	test("a failed create keeps the modal open with an error toast", () => {
 		const failed = updateWithShared(
 			{ ...init(undefined, shared).model, isCreating: true },
-			Message.FailedCreateConnection({ title: "Connection already exists", description: null }),
+			Message.FailedCreateConnection({ toast: errorToast("Connection already exists") }),
 		)
 		expect(failed.model.isCreating).toBe(false)
 		expect(failed.outMessage).toEqual(
@@ -214,7 +215,7 @@ describe("chat sync guards", () => {
 			Command.expectExact(DeleteConnection({ syncConnectionId: connectionId })),
 			Command.resolve(
 				DeleteConnection,
-				Message.FailedDeleteConnection({ title: "Connection not found", description: "Gone." }),
+				Message.FailedDeleteConnection({ toast: errorToast("Connection not found", "Gone.") }),
 			),
 			expectOutMessage(
 				PageOutMessage.RequestedToast({
@@ -245,7 +246,7 @@ describe("chat sync guards", () => {
 			model((current) => expect(current.isCreating).toBe(true)),
 			Command.resolve(
 				CreateConnection,
-				Message.FailedCreateConnection({ title: "Discord not connected", description: null }),
+				Message.FailedCreateConnection({ toast: errorToast("Discord not connected") }),
 			),
 			expectOutMessage(
 				PageOutMessage.RequestedToast({

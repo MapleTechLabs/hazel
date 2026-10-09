@@ -9,10 +9,11 @@ import { HazelRpc } from "../../rpc"
 import { button } from "../../ui/button"
 import { dialogBody, dialogFooter, dialogHeader } from "../../ui/dialog"
 import { textField } from "../../ui/text-field"
-import { closed, completed, errorToast, ModalOutMessage } from "../out-message"
+import { closed, completed, ModalOutMessage } from "../out-message"
 import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalViewInputs } from "./contract"
 import { Frame, FrameMessage, frameView, initFrame, isFrameClosed, modalDescription, modalTitle } from "./frame"
+import { errorToast, successToast } from "../../data/actions"
 
 /** `components/modals/request-integration-modal.tsx` (`integrationRequest.create`). */
 
@@ -105,11 +106,10 @@ const update = (model: Model, message: Message, shared: Shared): Return =>
 		SucceededCreateRequest: () => ({
 			model,
 			outMessage: completed({
-				toast: {
-					intent: "success",
-					title: "Integration request submitted",
-					description: `We've received your request for ${model.integrationName}.`,
-				},
+				toast: successToast(
+					"Integration request submitted",
+					`We've received your request for ${model.integrationName}.`,
+				),
 			}),
 		}),
 		FailedCreateRequest: () => ({

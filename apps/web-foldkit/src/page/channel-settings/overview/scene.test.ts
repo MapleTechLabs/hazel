@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import * as Scene from "foldkit/scene"
 import { describe, test } from "vitest"
-import { successToast } from "../../../data/actions"
+import { errorToast, successToast } from "../../../data/actions"
 import { channelId, failureToastFixture, makeShared, pageScene } from "../../../test/pages-fixtures"
 import { PageOutMessage } from "../../out-message"
 import { Message } from "./message"
@@ -58,8 +58,7 @@ describe("channel overview scene", () => {
 			Scene.Command.resolve(
 				UpdateChannel,
 				Message.FailedUpdateChannel({
-					title: failureToastFixture.title,
-					description: failureToastFixture.description,
+					toast: errorToast(failureToastFixture.title, failureToastFixture.description),
 				}),
 			),
 			Scene.expectOutMessage(PageOutMessage.RequestedToast({ toast: failureToastFixture })),

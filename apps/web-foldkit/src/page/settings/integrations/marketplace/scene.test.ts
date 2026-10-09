@@ -17,7 +17,7 @@ import {
 import { describe, test } from "vitest"
 import type { Shared } from "../../../contract"
 import { PageOutMessage } from "../../../out-message"
-import { errorToast, successToast } from "../shared/exit-toast"
+import { errorToast, successToast } from "../../../../data/actions"
 import { Message } from "./message"
 import type { Model } from "./model"
 import { InstallBot, init, update } from "./update"

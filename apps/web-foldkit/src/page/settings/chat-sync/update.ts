@@ -7,7 +7,7 @@ import { HazelRpc } from "../../../rpc"
 import * as Interaction from "../../../ui/aria/interaction"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
-import { failureToast, successToast } from "../../../ui/toast-exit"
+import { failureToast, successToast } from "../../../data/actions"
 import type { PageReturn, Shared } from "../../contract"
 import { PageOutMessage, requestedOrgNavigation } from "../../out-message"
 import { addMenuEntries, Message, type Model } from "./model"
@@ -49,17 +49,14 @@ export const DeleteConnection = Command.define("DeleteConnection", {
 			return Exit.match(exit, {
 				onSuccess: () => Message.SucceededDeleteConnection(),
 				onFailure: (cause) => {
-					const toast = failureToast(cause, {
+					const toast = failureToast(cause, "exitToast", {
 						ChatSyncConnectionNotFoundError: {
 							title: "Connection not found",
 							description: "This connection may have already been deleted.",
 							isRetryable: false,
 						},
 					})
-					return Message.FailedDeleteConnection({
-						title: toast.title,
-						description: toast.description,
-					})
+					return Message.FailedDeleteConnection({ toast })
 				},
 			})
 		}),
@@ -285,9 +282,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				outMessage: PageOutMessage.RequestedToast({ toast: successToast("Connection deleted") }),
 			}
 		},
-		FailedDeleteConnection: ({ title, description }) => ({
+		FailedDeleteConnection: ({ toast }) => ({
 			model: modifyFields(model, { isDeleting: () => false }),
-			outMessage: PageOutMessage.RequestedToast({ toast: { intent: "error", title, description } }),
+			outMessage: PageOutMessage.RequestedToast({ toast }),
 		}),
 		GotAddMenuMessage: ({ message: menuMessage }) => foldAddMenu(model, menuMessage),
 		GotEmptyAddMenuMessage: ({ message: menuMessage }) => foldEmptyAddMenu(model, menuMessage),
@@ -334,8 +331,8 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				}),
 			}
 		},
-		FailedCreateConnection: ({ title, description }) => ({
+		FailedCreateConnection: ({ toast }) => ({
 			model: modifyFields(model, { isCreating: () => false }),
-			outMessage: PageOutMessage.RequestedToast({ toast: { intent: "error", title, description } }),
+			outMessage: PageOutMessage.RequestedToast({ toast }),
 		}),
 	})

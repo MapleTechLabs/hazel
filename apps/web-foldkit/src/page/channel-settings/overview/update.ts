@@ -5,7 +5,7 @@ import { modifyFields } from "foldkit/struct"
 import { HazelRpc } from "../../../rpc"
 import type { RouteOf } from "../../../route"
 import * as Interaction from "../../../ui/aria/interaction"
-import { failureToast, successToast } from "../../../ui/toast-exit"
+import { failureToast, successToast } from "../../../data/actions"
 import type { PageReturn } from "../../contract"
 import { PageOutMessage } from "../../out-message"
 import { Message } from "./message"
@@ -28,14 +28,14 @@ export const UpdateChannel = Command.define("UpdateChannel", {
 			return Exit.match(exit, {
 				onSuccess: () => Message.SucceededUpdateChannel(),
 				onFailure: (cause) => {
-					const toast = failureToast(cause, {
+					const toast = failureToast(cause, "exitToast", {
 						ChannelNotFoundError: {
 							title: "Channel not found",
 							description: "This channel may have been deleted.",
 							isRetryable: false,
 						},
 					})
-					return Message.FailedUpdateChannel({ title: toast.title, description: toast.description })
+					return Message.FailedUpdateChannel({ toast })
 				},
 			})
 		}),
@@ -105,9 +105,9 @@ export const update = (model: Model, message: Message): Return =>
 				toast: successToast("Channel updated successfully"),
 			}),
 		}),
-		FailedUpdateChannel: ({ title, description }) => ({
+		FailedUpdateChannel: ({ toast }) => ({
 			model: withForm(model, (form) => ({ ...form, isSubmitting: false })),
-			outMessage: PageOutMessage.RequestedToast({ toast: { intent: "error", title, description } }),
+			outMessage: PageOutMessage.RequestedToast({ toast }),
 		}),
 		GotInteractionMessage: ({ message: interactionMessage }) => ({
 			model: foldInteraction(model, interactionMessage),

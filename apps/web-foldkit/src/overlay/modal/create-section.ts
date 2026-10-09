@@ -8,12 +8,12 @@ import type { Shared } from "../../page/contract"
 import { button } from "../../ui/button"
 import { dialogBody, dialogFooter, dialogHeader } from "../../ui/dialog"
 import { textField } from "../../ui/text-field"
-import { runAction, toastForCause } from "../action"
-import { closed, completed, ModalOutMessage, successToast } from "../out-message"
+import { closed, completed, ModalOutMessage } from "../out-message"
 import { ToastRequest } from "../toasts"
 import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalViewInputs } from "./contract"
 import { Frame, FrameMessage, frameView, initFrame, isFrameClosed, modalTitle } from "./frame"
+import { failureToast, runAtomFn, successToast } from "../../data/actions"
 
 /** `components/modals/create-section-modal.tsx` (legacy `useModal("create-section")`). */
 
@@ -40,9 +40,9 @@ export const CreateSection = Command.define("CreateSection", {
 	args: { name: Schema.String, organizationId: OrganizationId },
 	messages: [Message.SucceededCreateSection, Message.FailedCreateSection],
 	execute: (args) =>
-		runAction(createChannelSectionAction, args).pipe(
+		runAtomFn(createChannelSectionAction, args).pipe(
 			Effect.as(Message.SucceededCreateSection()),
-			Effect.catchCause((cause) => Effect.succeed(Message.FailedCreateSection({ toast: toastForCause(cause) }))),
+			Effect.catchCause((cause) => Effect.succeed(Message.FailedCreateSection({ toast: failureToast(cause, "friendly") }))),
 		),
 })
 

@@ -12,7 +12,8 @@ import {
 } from "~/db/actions"
 import { ToastRequest } from "../../overlay/toasts"
 import { HazelRpc } from "../../rpc"
-import { notRetryable, rateLimited, runChatAction, toastOfExit } from "./action-effects"
+import { runAtomFn, toastOfExit } from "../../data/actions"
+import { notRetryable, rateLimited } from "./action-effects"
 import { trackEmojiUsage } from "../../emoji-picker/usage"
 
 /**
@@ -47,7 +48,7 @@ export const ToggleReaction = Command.define("ToggleReaction", {
 	args: { messageId: MessageId, channelId: ChannelId, emoji: Schema.String, userId: UserId },
 	messages: [ActionMessage.CompletedToggleReaction],
 	execute: (args) =>
-		toastOfExit(runChatAction(toggleReactionAction, args), {
+		toastOfExit(runAtomFn(toggleReactionAction, args), "exitToast", {
 			handlers: { MessageNotFoundError: messageNotFound },
 		}).pipe(Effect.map((toast) => ActionMessage.CompletedToggleReaction({ toast }))),
 })
@@ -56,7 +57,7 @@ export const PinMessage = Command.define("PinMessage", {
 	args: { messageId: MessageId, channelId: ChannelId, userId: UserId },
 	messages: [ActionMessage.CompletedPinMessage],
 	execute: (args) =>
-		toastOfExit(runChatAction(pinMessageAction, args), {
+		toastOfExit(runAtomFn(pinMessageAction, args), "exitToast", {
 			success: "Message pinned",
 			handlers: { MessageNotFoundError: messageNotFound },
 		}).pipe(Effect.map((toast) => ActionMessage.CompletedPinMessage({ toast }))),
@@ -66,7 +67,7 @@ export const UnpinMessage = Command.define("UnpinMessage", {
 	args: { pinnedMessageId: PinnedMessageId },
 	messages: [ActionMessage.CompletedUnpinMessage],
 	execute: (args) =>
-		toastOfExit(runChatAction(unpinMessageAction, args), {
+		toastOfExit(runAtomFn(unpinMessageAction, args), "exitToast", {
 			success: "Message unpinned",
 			handlers: {
 				PinnedMessageNotFoundError: notRetryable(
@@ -81,7 +82,7 @@ export const DeleteMessage = Command.define("DeleteMessage", {
 	args: { messageId: MessageId },
 	messages: [ActionMessage.CompletedDeleteMessage],
 	execute: (args) =>
-		toastOfExit(runChatAction(deleteMessageAction, args), {
+		toastOfExit(runAtomFn(deleteMessageAction, args), "exitToast", {
 			handlers: {
 				RateLimitExceededError: rateLimited("trying again"),
 				MessageNotFoundError: notRetryable(
@@ -115,7 +116,7 @@ export const CreateThread = Command.define("CreateThread", {
 	},
 	messages: [ActionMessage.SucceededCreateThread, ActionMessage.FailedCreateThread],
 	execute: (args) =>
-		toastOfExit(runChatAction(createThreadAction, args), {
+		toastOfExit(runAtomFn(createThreadAction, args), "exitToast", {
 			handlers: {
 				MessageNotFoundError: notRetryable("Message not found", "The message no longer exists"),
 				NestedThreadError: notRetryable(
@@ -191,6 +192,7 @@ export const GenerateThreadName = Command.define("GenerateThreadName", {
 				const client = yield* HazelRpc
 				return yield* client("channel.generateName", { channelId })
 			}),
+			"exitToast",
 			{ handlers: generateNameHandlers },
 		).pipe(
 			Effect.map((toast) => ActionMessage.CompletedGenerateThreadName({ threadChannelId: channelId, toast })),

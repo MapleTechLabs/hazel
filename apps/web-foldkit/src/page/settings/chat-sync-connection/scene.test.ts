@@ -6,7 +6,7 @@ import { describe, test } from "vitest"
 import * as Menu from "../../../ui/menu"
 import { FocusTriggerOnPress } from "../../../ui/menu-view"
 import * as Modal from "../../../ui/modal"
-import { successToast } from "../../../ui/toast-exit"
+import { errorToast, successToast } from "../../../data/actions"
 import { makeShared, organizationId, pageScene, portalModalMounted, uuid } from "../../../test/pages-fixtures"
 import { connection, syncConnectionId } from "../../../test/pages-integrations-fixtures"
 import { PageOutMessage } from "../../out-message"
@@ -130,7 +130,7 @@ describe("disconnect", () => {
 			Scene.click(inDialog("Disconnect")),
 			Scene.Command.resolve(
 				DisconnectConnection,
-				Message.FailedDisconnect({ title: "Request failed", description: null }),
+				Message.FailedDisconnect({ toast: errorToast("Request failed") }),
 			),
 			Scene.expectOutMessage(
 				PageOutMessage.RequestedToast({
@@ -184,7 +184,7 @@ describe("remove a channel link", () => {
 			Scene.click(inDialog("Remove Link")),
 			Scene.Command.resolve(
 				RemoveChannelLink,
-				Message.FailedRemoveLink({ title: "Request failed", description: null }),
+				Message.FailedRemoveLink({ toast: errorToast("Request failed") }),
 			),
 			Scene.expectOutMessage(
 				PageOutMessage.RequestedToast({
@@ -253,7 +253,7 @@ describe("link a channel", () => {
 			Scene.click(linkButton),
 			Scene.Command.resolve(
 				CreateChannelLink,
-				Message.FailedCreateLink({ title: "Already linked", description: null }),
+				Message.FailedCreateLink({ toast: errorToast("Already linked") }),
 			),
 			Scene.expectOutMessage(
 				PageOutMessage.RequestedToast({

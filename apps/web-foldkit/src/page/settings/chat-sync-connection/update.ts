@@ -6,7 +6,7 @@ import { AppRoute, type RouteOf } from "../../../route"
 import * as Interaction from "../../../ui/aria/interaction"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
-import { successToast } from "../../../ui/toast-exit"
+import { successToast } from "../../../data/actions"
 import type { PageReturn, Shared } from "../../contract"
 import { PageOutMessage, requestedOrgNavigation } from "../../out-message"
 import { embedInteraction } from "../integrations/shared/interaction"
@@ -321,9 +321,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			...closeDisconnectModal(modifyFields(model, { isDisconnecting: () => false })),
 			outMessage: toList(shared, successToast("Connection deleted")),
 		}),
-		FailedDisconnect: ({ title, description }) => ({
+		FailedDisconnect: ({ toast: request }) => ({
 			...closeDisconnectModal(modifyFields(model, { isDisconnecting: () => false })),
-			outMessage: toast({ intent: "error", title, description }),
+			outMessage: toast(request),
 		}),
 		ClickedLinkChannel: () => openAddLinkModal(model),
 		GotAddLinkModalMessage: ({ message: modalMessage }) => foldAddLinkModal(model, modalMessage),
@@ -369,9 +369,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				outMessage: toast(successToast(successMessage)),
 			}
 		},
-		FailedCreateLink: ({ title, description }) => ({
+		FailedCreateLink: ({ toast: request }) => ({
 			model: modifyFields(model, { isCreatingLink: () => false }),
-			outMessage: toast({ intent: "error", title, description }),
+			outMessage: toast(request),
 		}),
 		ClickedConfirmRemoveLink: () =>
 			model.deleteTarget === null || model.isDeletingLink
@@ -387,17 +387,17 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				outMessage: toast(successToast("Channel link removed")),
 			}
 		},
-		FailedRemoveLink: ({ title, description }) => ({
+		FailedRemoveLink: ({ toast: request }) => ({
 			model: modifyFields(model, { isDeletingLink: () => false }),
-			outMessage: toast({ intent: "error", title, description }),
+			outMessage: toast(request),
 		}),
 		SucceededUpdateLink: ({ linkId, successMessage }) => ({
 			...reloadLinks(settledLink(model, linkId)),
 			outMessage: toast(successToast(successMessage)),
 		}),
-		FailedUpdateLink: ({ linkId, title, description }) => ({
+		FailedUpdateLink: ({ linkId, toast: request }) => ({
 			model: settledLink(model, linkId),
-			outMessage: toast({ intent: "error", title, description }),
+			outMessage: toast(request),
 		}),
 		GotLinkMenuMessage: ({ linkId, message: menuMessage }) => foldLinkMenu(model, linkId, menuMessage),
 		GotDeleteLinkModalMessage: ({ message: modalMessage }) => foldDeleteLinkModal(model, modalMessage),

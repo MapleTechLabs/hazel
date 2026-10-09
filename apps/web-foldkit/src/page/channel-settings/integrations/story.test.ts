@@ -3,6 +3,7 @@ import { ChannelId, ChannelWebhookId } from "@hazel/schema"
 import { Schema } from "effect"
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
+import { errorToast } from "../../../data/actions"
 import * as Menu from "../../../ui/menu"
 import type { Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
@@ -134,8 +135,7 @@ describe("list failure", () => {
 				Message.FailedList({
 					list: "webhooks",
 					version: 1,
-					title: "Channel not found",
-					description: null,
+					toast: errorToast("Channel not found"),
 				}),
 			),
 			expectOutMessage(
@@ -196,8 +196,7 @@ describe("row removal", () => {
 				Message.FailedRowAction({
 					kind: "webhook",
 					id: ci.id,
-					title: "Webhook not found",
-					description: null,
+					toast: errorToast("Webhook not found"),
 				}),
 			),
 			Command.expectNone(),
@@ -224,8 +223,7 @@ describe("row removal", () => {
 			Message.FailedList({
 				list: "webhooks",
 				version: 2,
-				title: "Channel not found",
-				description: null,
+				toast: errorToast("Channel not found"),
 			}),
 		)
 		expect(staleFailure.outMessage).toBeUndefined()
@@ -292,8 +290,7 @@ describe("provider cards", () => {
 			message(
 				Message.FailedConnectProvider({
 					provider: "railway",
-					title: "Channel not found",
-					description: null,
+					toast: errorToast("Channel not found"),
 				}),
 			),
 			expectOutMessage(
@@ -318,8 +315,7 @@ describe("provider cards", () => {
 				Message.FailedProviderAction({
 					provider: "openstatus",
 					isDelete: false,
-					title: "Webhook not found",
-					description: null,
+					toast: errorToast("Webhook not found"),
 				}),
 			),
 			expectOutMessage(
@@ -341,8 +337,7 @@ describe("provider cards", () => {
 			Message.FailedProviderAction({
 				provider: "openstatus",
 				isDelete: false,
-				title: "Failed",
-				description: null,
+				toast: errorToast("Failed"),
 			}),
 		)
 		expect(failed.model.providers.openstatus.isToggling).toBe(false)
@@ -444,7 +439,7 @@ describe("create webhook form", () => {
 		story(
 			run,
 			given(submitting),
-			message(Message.FailedCreateWebhook({ title: "Channel not found", description: null })),
+			message(Message.FailedCreateWebhook({ toast: errorToast("Channel not found") })),
 			expectOutMessage(
 				PageOutMessage.RequestedToast({
 					toast: { intent: "error", title: "Channel not found", description: null },

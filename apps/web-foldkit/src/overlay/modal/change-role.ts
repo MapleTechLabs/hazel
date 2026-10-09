@@ -8,10 +8,11 @@ import { button } from "../../ui/button"
 import { dialogBody, dialogFooter, dialogHeader } from "../../ui/dialog"
 import { label } from "../../ui/field"
 import { radioGroup } from "../../ui/radio"
-import { closed, completed, errorToast, ModalOutMessage, successToast } from "../out-message"
+import { closed, completed, ModalOutMessage } from "../out-message"
 import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalViewInputs } from "./contract"
 import { Frame, FrameMessage, frameView, initFrame, isFrameClosed, modalDescription, modalTitle } from "./frame"
+import { errorToast, successToast } from "../../data/actions"
 
 /** `components/modals/change-role-modal.tsx` (legacy `useModal("change-role")`). */
 

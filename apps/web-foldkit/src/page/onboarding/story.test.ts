@@ -26,14 +26,15 @@ import {
 import { Message } from "./message"
 import { StepForm } from "./model"
 import { init, sharedChanged, update } from "./update"
+import { errorToast } from "../../data/actions"
 
 /** The onboarding update loop: start-up, each step's form, and finalization. */
 
 const run = storyUpdate(update, newcomer)
 const urlFor = (step: string) => ReplaceStepUrl({ href: onboardingHref(null, step) })
 const urlDone = Message.CompletedReplaceStepUrl()
-const errorToast = (title: string, description: string | null = null) =>
-	PageOutMessage.RequestedToast({ toast: { intent: "error", title, description } })
+const errorOut = (title: string, description: string | null = null) =>
+	PageOutMessage.RequestedToast({ toast: errorToast(title, description) })
 
 describe("start-up", () => {
 	test("an onboarded user is sent home once, and later shared changes do not redirect again", () => {
@@ -124,7 +125,7 @@ describe("profile step", () => {
 			given(profile),
 			message(Message.SubmittedProfile()),
 			Command.resolve(UpdateProfile, Message.FailedUpdateProfile()),
-			expectOutMessage(errorToast("Failed to update profile")),
+			expectOutMessage(errorOut("Failed to update profile")),
 			model((current) => {
 				expect(current.step).toBe("profileInfo")
 				expect(current.form).toMatchObject({ isSubmitting: false })
@@ -216,8 +217,8 @@ describe("timezone step", () => {
 			run,
 			given(timezone),
 			message(Message.ClickedContinueTimezone()),
-			Command.resolve(UpdateTimezone, Message.FailedUpdateTimezone({ title: "User not found", description: "Sign in again." })),
-			expectOutMessage(errorToast("User not found", "Sign in again.")),
+			Command.resolve(UpdateTimezone, Message.FailedUpdateTimezone({ toast: errorToast("User not found", "Sign in again.") })),
+			expectOutMessage(errorOut("User not found", "Sign in again.")),
 			model((current) => expect(current.form).toMatchObject({ isSubmitting: false })),
 		)
 	})
@@ -328,7 +329,7 @@ describe("invite step and finalization", () => {
 			run,
 			given(inviteForm(["grace@hazel.test"], true)),
 			message(Message.FailedSendInvites({ reason: "NoOrganization" })),
-			expectOutMessage(errorToast("No active organization")),
+			expectOutMessage(errorOut("No active organization")),
 			model((current) => expect(current.form).toMatchObject({ isLoading: false })),
 		)
 	})
