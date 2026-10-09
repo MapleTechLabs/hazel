@@ -354,6 +354,7 @@
     "apps/web-foldkit": {
       "name": "web-foldkit",
       "dependencies": {
+        "@clerk/shared": "4.8.3",
         "@effect/platform-browser": "catalog:effect",
         "@electric-sql/client": "1.5.28",
         "@foldkit/ui": "0.167.0",

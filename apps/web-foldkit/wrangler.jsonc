@@ -1,0 +1,10 @@
+// Local publish of the Foldkit SPA to the Worker behind app.hazel.sh (`bun run deploy`).
+{
+	"name": "hazel-app",
+	"account_id": "189f0e30f67d42ffb26513efbc104cf1",
+	"compatibility_date": "2026-10-01",
+	"assets": {
+		"directory": "./dist",
+		"not_found_handling": "single-page-application"
+	}
+}
