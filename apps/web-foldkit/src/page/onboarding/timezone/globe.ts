@@ -182,10 +182,10 @@ export const globeVisual = (
 					),
 				],
 			),
-			...STARS.map((star, index) =>
+			...STARS.map((star) =>
 				h.div([
-					// Keyed by day/night: the twinkle restarts when the sky changes.
-					h.Key(`star-${index}-${isDaytime ? "day" : "night"}`),
+					// Keyed by position and day/night: the twinkle restarts when the sky changes.
+					h.Key(`star-${star.x}-${star.y}-${isDaytime ? "day" : "night"}`),
 					h.Class("absolute rounded-full bg-white"),
 					h.Attribute(
 						"style",
