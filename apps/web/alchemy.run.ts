@@ -1,5 +1,6 @@
 /**
- * The web SPA: `vite build` output served as Worker static assets (no Worker code).
+ * The web SPA, now the Foldkit app (`apps/web-foldkit`): `vite build` output served as Worker
+ * static assets (no Worker code).
  * `VITE_*` keys in `env` are build inputs: they reach `vite build` via the process env and are
  * folded into the memo hash, so changing one rebuilds with no source change.
  */
@@ -12,7 +13,7 @@ const props = Effect.gen(function* () {
 	const { stage, domains, urls } = yield* HazelStack
 	return {
 		name: resolveWorkerName("web", stage),
-		cwd: new URL(".", import.meta.url).pathname,
+		cwd: new URL("../web-foldkit/", import.meta.url).pathname,
 		// `bun run build` also runs `tsc`; CI typechecks separately.
 		command: "bunx vite build",
 		outdir: "dist",
@@ -23,7 +24,13 @@ const props = Effect.gen(function* () {
 		},
 		// Also hash the workspace sources the SPA bundles.
 		memo: {
-			include: ["**/*", "../../packages/*/src/**", "../../libs/*/src/**"],
+			include: [
+				"**/*",
+				"../web/src/**",
+				"../web/public/**",
+				"../../packages/*/src/**",
+				"../../libs/*/src/**",
+			],
 			lockfile: true,
 		},
 		compatibility: { date: "2026-10-01" },
