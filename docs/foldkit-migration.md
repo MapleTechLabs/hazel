@@ -52,7 +52,7 @@ Budgets: 120fps scrolling (main-thread work per frame under 8.33ms), warm channe
 | JS heap after 20 switches (MB) | 254 | 65 | yes |
 | JS bundle gzip (KB) | 1536 | 987 | yes |
 
-Next (round 3 in progress): a persistent windowed live query for history pages, a persistent hover toolbar and no full view render per scroll event, fewer positioned sidebar elements.
+Sidebar hit testing (`src/bench/sidebar-diag.ts`): every hit test over the message list walks the sidebar's ~2,200 paint layers (0.245ms per `elementFromPoint`, 0.004ms with the sidebar hidden). Channel icons are now positioned only when they carry partner marks (0.215ms). The rest is needed as is: the sr-only drag buttons (the costliest, their containing block sits outside the scroller, which the snapshot geometry depends on), the opacity-0 menu triggers, badges and the item that contains them. `content-visibility: auto` on rows or items cut it to 0.10-0.15ms but was rejected: each row entering the viewport relays out the whole 500-row subgrid (sidebar wheel p95 3.2 to 10.1ms), and on rows it moves the drag buttons' containing block.
 
 Overlay opens: Foldkit patches in its `requestAnimationFrame` callback, which runs after the probe's own callback in the same frame, so the input probe sees the overlay one frame after it painted. The bench now also reports a "commit frame" row (readiness also checked after each frame's paint). Modals, the palette and the emoji/GIF picker popover apply `inert` one frame after they paint (restyling the ~2,200 element app root cost 8-10ms inside the opening frame); overlays without a hit-testable underlay keep it synchronous so the hover leave still fires. What remains is the wait for the next frame after the click (about 14ms of the emoji picker's 25).
 
