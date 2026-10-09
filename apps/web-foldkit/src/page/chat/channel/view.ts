@@ -81,11 +81,46 @@ const emptyStateView = <M>(h: HtmlBuilder<M>): Html =>
 		],
 	)
 
+/** Everything `listView` reads from the page, so a page that differs elsewhere keeps the list memo. */
+const isListInputEqual = (a: Model, b: Model) =>
+	a.hasLoadedMessages === b.hasLoadedMessages &&
+	a.messages === b.messages &&
+	a.rows === b.rows &&
+	a.overlays === b.overlays &&
+	a.lookups === b.lookups &&
+	a.currentUserId === b.currentUserId &&
+	a.channel === b.channel &&
+	MessageList.isViewEqual(a.list, b.list)
+
+/**
+ * A view memo, not state: hands back the last page given while `isEqual` holds, so a lazy view
+ * keyed on it keeps its memo when the page changed only in fields that view never reads.
+ */
+const stableInput = (isEqual: (a: Model, b: Model) => boolean) => {
+	const last: { model: Model | null } = { model: null }
+	return (model: Model): Model => {
+		if (last.model !== null && isEqual(last.model, model)) return last.model
+		last.model = model
+		return model
+	}
+}
+
+// Scroll events change only the list's offset, so they no longer rebuild the list.
+const listInputOf = stableInput(isListInputEqual)
+const lazyList = createLazy()
+
 const messageListView = <M>(
 	h: HtmlBuilder<M>,
 	model: Model,
 	toParentMessage: (message: Message) => M,
 	nowMs: number,
+): Html => lazyList(listView, [listInputOf(model), toParentMessage, nowMs, h]) ?? h.empty
+
+const listView = <M>(
+	model: Model,
+	toParentMessage: (message: Message) => M,
+	nowMs: number,
+	h: HtmlBuilder<M>,
 ): Html => {
 	if (!model.hasLoadedMessages) return h.div([])
 	if (model.messages.length === 0) return emptyStateView(h)
@@ -193,7 +228,7 @@ const messagesOutlet = <M>(
 			h,
 		]) ?? h.empty,
 		imageViewerOverlay(h, model, toParentMessage),
-		messageToolbarOverlay(h, model, toParentMessage),
+		lazyToolbar(messageToolbarOverlay, [h, toolbarInputOf(model), toParentMessage]) ?? h.empty,
 		reactionModalView(h, model, toParentMessage),
 	]
 }
@@ -279,6 +314,17 @@ const headerView = <M>(
 		),
 	})
 }
+
+/** Everything `messageToolbarOverlay` reads from the page. */
+const isToolbarInputEqual = (a: Model, b: Model) =>
+	a.overlays === b.overlays &&
+	a.rows === b.rows &&
+	a.messages === b.messages &&
+	a.currentUserId === b.currentUserId &&
+	a.channel === b.channel &&
+	a.lookups.customEmojis === b.lookups.customEmojis
+const toolbarInputOf = stableInput(isToolbarInputEqual)
+const lazyToolbar = createLazy()
 
 // The chrome around the list only changes with the channel, not on every scroll frame.
 const lazyHeader = createLazy()

@@ -7,6 +7,7 @@ import { IconDotsVertical, IconStar, IconThread } from "../../icons"
 import {
 	HoverEvent,
 	PlaceMessageToolbar,
+	TOOLBAR_TARGET_ATTRIBUTE,
 	ToolbarEvent,
 	TrackMessageHover,
 	toolbarContent,
@@ -91,17 +92,18 @@ export const messageToolbarOverlay = <M>(
 		},
 		toParentMessage: (message) => toOverlay(Overlays.Message.GotMoreMenuMessage({ messageId, message })),
 	})
-	// The keyed slot stays in the column while the toolbar inside it is portaled to <body>, so
-	// hovering another message replaces the slot instead of inserting before a node in <body>.
+	// The slot stays in the column while the toolbar inside it is portaled to <body>. One slot for
+	// every message: a hover change patches and retargets the toolbar instead of remounting it.
 	return h.keyed("div")(
-		`toolbar-${messageId}`,
+		"message-toolbar",
 		[h.Style({ display: "contents" })],
 		[
 			h.div(
 				[
 					h.Role("group"),
+					h.Attribute(TOOLBAR_TARGET_ATTRIBUTE, messageId),
 					h.OnMount(
-						Mount.mapMessage(PlaceMessageToolbar({ messageId }), (event) =>
+						Mount.mapMessage(PlaceMessageToolbar(), (event) =>
 							toOverlay(
 								ToolbarEvent.match(event, {
 									EnteredToolbar: () => Overlays.Message.EnteredToolbar(),
@@ -112,7 +114,9 @@ export const messageToolbarOverlay = <M>(
 					),
 				],
 				[
-					h.div(
+					// Keyed by message: the buttons' Mounts and Submodel boundaries carry the message id.
+					h.keyed("div")(
+						messageId,
 						[h.Class("-m-3 p-3")],
 						[
 							h.submodel({

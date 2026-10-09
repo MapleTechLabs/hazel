@@ -46,29 +46,49 @@ const placeToolbar = (overlay: HTMLElement, target: HTMLElement) => {
 export const ToolbarEvent = defineMessageUnion({ EnteredToolbar: {}, LeftToolbar: {} })
 export type ToolbarEvent = typeof ToolbarEvent.Type
 
-/** Portals the toolbar to `<body>`, keeps it on its message and reports pointer enter and leave. */
+/** The attribute naming the message the toolbar sits on; the view patches it as the hover moves. */
+export const TOOLBAR_TARGET_ATTRIBUTE = "data-toolbar-message-id"
+
+/**
+ * Portals the toolbar to `<body>`, keeps it on its message and reports pointer enter and leave.
+ * One toolbar element serves every message: a hover change retargets it instead of remounting it.
+ */
 export const PlaceMessageToolbar = Mount.defineStream("PlaceMessageToolbar", {
-	args: { messageId: Schema.String },
 	messages: [ToolbarEvent.EnteredToolbar, ToolbarEvent.LeftToolbar],
-	execute: ({ element, messageId }) =>
+	execute: ({ element }) =>
 		Stream.callback<ToolbarEvent>((queue) =>
 			Effect.acquireRelease(
 				Effect.sync(() => {
-					const target = document.getElementById(`message-${messageId}`)
-					if (!(element instanceof HTMLElement) || target === null) return () => undefined
+					if (!(element instanceof HTMLElement)) return () => undefined
 					element.style.position = "absolute"
 					element.style.top = "0px"
 					document.body.appendChild(element)
-					// The observer's first callback runs after this frame's layout and before its paint, so the
-					// toolbar is placed without forcing a layout of the freshly patched list.
-					const observer = new ResizeObserver(() => placeToolbar(element, target))
-					observer.observe(element)
-					observer.observe(target)
+					const targetOf = () =>
+						document.getElementById(`message-${element.getAttribute(TOOLBAR_TARGET_ATTRIBUTE)}`)
+					// Observer callbacks run after the frame's layout and before its paint (a newly observed
+					// element always reports once), so placement never forces a layout of the patched list.
+					const observer = new ResizeObserver(() => {
+						const target = targetOf()
+						if (target !== null) placeToolbar(element, target)
+					})
+					const observeTarget = () => {
+						observer.disconnect()
+						observer.observe(element)
+						const target = targetOf()
+						if (target !== null) observer.observe(target)
+					}
+					observeTarget()
+					const attributeObserver = new MutationObserver(observeTarget)
+					attributeObserver.observe(element, {
+						attributes: true,
+						attributeFilter: [TOOLBAR_TARGET_ATTRIBUTE],
+					})
 					const onEnter = () => Queue.offerUnsafe(queue, ToolbarEvent.EnteredToolbar())
 					const onLeave = () => Queue.offerUnsafe(queue, ToolbarEvent.LeftToolbar())
 					element.addEventListener("mouseenter", onEnter)
 					element.addEventListener("mouseleave", onLeave)
 					return () => {
+						attributeObserver.disconnect()
 						observer.disconnect()
 						element.removeEventListener("mouseenter", onEnter)
 						element.removeEventListener("mouseleave", onLeave)
@@ -89,28 +109,52 @@ export const HoverEvent = defineMessageUnion({
 })
 export type HoverEvent = typeof HoverEvent.Type
 
-/** `MessageListContent`'s delegated `onPointerOver` / `onPointerLeave`. */
+/**
+ * How long after the last scroll event a hover change waits. Chromium groups wheel ticks into one
+ * scroll and moves hover to the content under a resting pointer once it pauses, not per frame.
+ */
+const HOVER_AFTER_SCROLL_MS = 100
+
+/**
+ * `MessageListContent`'s delegated `onPointerOver` / `onPointerLeave`. While the list scrolls under a
+ * resting pointer the hover holds still; the message under the pointer takes it once scrolling pauses.
+ */
 export const TrackMessageHover = Mount.defineStream("TrackMessageHover", {
 	messages: [HoverEvent.PointerEnteredMessage, HoverEvent.PointerLeftList, HoverEvent.RightClickedMessage],
 	execute: ({ element }) =>
 		Stream.callback<HoverEvent>((queue) =>
 			Effect.acquireRelease(
 				Effect.sync(() => {
+					// DOM-side debounce: the timer of the scroll in progress and the message under the pointer.
+					const scroll: { timer: number | undefined; pending: Option.Option<MessageId> } = {
+						timer: undefined,
+						pending: Option.none(),
+					}
+					const enter = (messageId: MessageId) =>
+						Queue.offerUnsafe(queue, HoverEvent.PointerEnteredMessage({ messageId }))
+					const onScrollPaused = () => {
+						scroll.timer = undefined
+						Option.map(scroll.pending, enter)
+						scroll.pending = Option.none()
+					}
+					const onScroll = () => {
+						window.clearTimeout(scroll.timer)
+						scroll.timer = window.setTimeout(onScrollPaused, HOVER_AFTER_SCROLL_MS)
+					}
 					const onOver = (event: Event) => {
 						const target =
 							event.target instanceof Element ? event.target.closest("[data-id]") : null
 						const messageId = decodeMessageId(target?.getAttribute("data-id"))
-						if (Option.isSome(messageId))
-							Queue.offerUnsafe(
-								queue,
-								HoverEvent.PointerEnteredMessage({ messageId: messageId.value }),
-							)
+						if (Option.isNone(messageId)) return
+						if (scroll.timer === undefined) enter(messageId.value)
+						else scroll.pending = messageId
 					}
 					// React's onPointerLeave follows the React tree: moving into a portal the list rendered is no leave.
 					const onLeave = (event: Event) => {
 						const entered = event instanceof PointerEvent ? event.relatedTarget : null
 						if (entered instanceof Element && entered.closest(`[data-${LIST_PORTAL_ATTRIBUTE}]`))
 							return
+						scroll.pending = Option.none()
 						Queue.offerUnsafe(queue, HoverEvent.PointerLeftList())
 					}
 					// ContextMenuTrigger's `onContextMenu`, delegated; the open row handles its own.
@@ -138,7 +182,11 @@ export const TrackMessageHover = Mount.defineStream("TrackMessageHover", {
 					element.addEventListener("pointerover", onOver)
 					element.addEventListener("pointerleave", onLeave)
 					element.addEventListener("contextmenu", onContextMenu)
+					// Scroll events do not bubble: the list's scroller is a descendant.
+					element.addEventListener("scroll", onScroll, { capture: true, passive: true })
 					return () => {
+						window.clearTimeout(scroll.timer)
+						element.removeEventListener("scroll", onScroll, { capture: true })
 						element.removeEventListener("contextmenu", onContextMenu)
 						element.removeEventListener("pointerover", onOver)
 						element.removeEventListener("pointerleave", onLeave)
