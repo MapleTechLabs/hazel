@@ -27,8 +27,18 @@ export interface ItemContext {
 /** TanStack's default (non-exact) active match. */
 const isActiveFuzzy = (pathname: string, to: string) => pathname === to || pathname.startsWith(`${to}/`)
 
-const chatHref = (context: ItemContext, channelId: ChannelId) =>
+const chatHref = (context: { readonly orgSlug: string }, channelId: ChannelId) =>
 	hrefOf(AppRoute.ChatChannel({ orgSlug: context.orgSlug, channelId }))
+
+/** Whether a channel's sidebar link is active at `pathname`, read before the row's memo. */
+export const isChannelLinkActive = (pathname: string, orgSlug: string, channelId: ChannelId) =>
+	isActiveFuzzy(pathname, chatHref({ orgSlug }, channelId))
+
+/** What one memoized row reads instead of the whole `ItemContext`. */
+export interface RowLinkContext {
+	readonly orgSlug: string
+	readonly isActive: boolean
+}
 
 /** `SidebarLabel` with a `className`. */
 export const label = <M>(h: HtmlBuilder<M>, children: Array<Html | string>, className?: string): Html =>
@@ -108,22 +118,18 @@ export const channelItem = <M>(
 	entry: ChannelEntry,
 	notificationCount: number,
 	partners: ReadonlyArray<PartnerOrg>,
-	context: ItemContext,
+	context: RowLinkContext,
 	menu: Html = dotsMenuTrigger(h),
 ): Html => {
 	const href = chatHref(context, entry.channel.id)
 	return sidebarItem(h, {}, [
-		sidebarLink(
-			h,
-			{ href, isActive: isActiveFuzzy(context.pathname, href), activeClassName: CHANNEL_ACTIVE },
-			[
-				h.span(
-					[h.Class("relative shrink-0")],
-					[channelIcon(h, entry.channel.icon), ...partnerOrgMarks(h, partners)],
-				),
-				label(h, [entry.channel.name]),
-			],
-		),
+		sidebarLink(h, { href, isActive: context.isActive, activeClassName: CHANNEL_ACTIVE }, [
+			h.span(
+				[h.Class("relative shrink-0")],
+				[channelIcon(h, entry.channel.icon), ...partnerOrgMarks(h, partners)],
+			),
+			label(h, [entry.channel.name]),
+		]),
 		menu,
 		...badgeIf(h, notificationCount),
 	])
@@ -198,10 +204,10 @@ const singleDmContent = <M>(
 	h: HtmlBuilder<M>,
 	channel: DmChannel,
 	partner: DmMember,
-	context: ItemContext,
+	context: DmRowContext,
 ) => {
 	const fullName = `${partner.firstName} ${partner.lastName}`
-	const presence = context.presenceByUser.get(partner.userId)
+	const presence = context.presence
 	const status = getEffectivePresenceStatus(
 		presence
 			? {
@@ -274,11 +280,18 @@ const groupDmContent = <M>(h: HtmlBuilder<M>, channel: DmChannel, partners: Read
 	),
 ]
 
+/** A DM row's inputs: the single partner's presence is looked up before the row's memo. */
+export interface DmRowContext extends RowLinkContext {
+	readonly currentUserId: string | null
+	readonly nowMs: number
+	readonly presence: Presence | undefined
+}
+
 export const dmItem = <M>(
 	h: HtmlBuilder<M>,
 	channel: DmChannel,
 	notificationCount: number,
-	context: ItemContext,
+	context: DmRowContext,
 ): Html => {
 	const href = chatHref(context, channel.id)
 	const partners = dmPartners(channel, context.currentUserId)
@@ -286,7 +299,7 @@ export const dmItem = <M>(
 	return sidebarItem(h, {}, [
 		sidebarLink(
 			h,
-			{ href, isActive: isActiveFuzzy(context.pathname, href), activeClassName: CHANNEL_ACTIVE },
+			{ href, isActive: context.isActive, activeClassName: CHANNEL_ACTIVE },
 			channel.type === "single" && partners.length === 1 && only
 				? singleDmContent(h, channel, only, context)
 				: groupDmContent(h, channel, partners),
