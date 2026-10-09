@@ -86,6 +86,8 @@ export type PageSlot = typeof PageSlot.Type
 
 export const PageMessage = Schema.Union(pages.map((page) => page.Wrapped))
 export type PageMessage = typeof PageMessage.Type
+/** `PageMessage` under the Submodel name, so a parent's Got wrapper imports it as `Message`. */
+export { PageMessage as Message }
 
 /** The page slot after a transition, with the Commands and OutMessage that came with it. */
 export interface PageTransition {

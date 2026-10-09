@@ -20,7 +20,7 @@ describe("GIF picker", () => {
 		story(
 			update,
 			given(init("gif")),
-			message(Message.GotPopoverEvent({ event: PopoverEvent.ClickedTrigger() })),
+			message(Message.ReceivedPopoverEvent({ event: PopoverEvent.ClickedTrigger() })),
 			Command.expectExact(FetchGifs({ query: "", page: 1, append: false, requestId: 1 }), FetchCategories()),
 			Command.resolve(
 				FetchGifs,

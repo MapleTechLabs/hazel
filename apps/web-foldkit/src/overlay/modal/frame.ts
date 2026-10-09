@@ -11,8 +11,10 @@ import * as KitModal from "../../ui/modal"
 
 export const Frame = KitModal.Model
 export type Frame = KitModal.Model
-export const FrameMessage = KitModal.Message
-export type FrameMessage = KitModal.Message
+/** The frame's Message; modals import it `as FrameMessage` so their Got wrapper names the child Message. */
+export const Message = KitModal.Message
+export type Message = KitModal.Message
+type FrameMessage = KitModal.Message
 
 export const initFrame = (id: string): Frame => ({ id, isOpen: true })
 

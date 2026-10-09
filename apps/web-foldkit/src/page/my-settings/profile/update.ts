@@ -176,7 +176,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			model.isDirty || row === null || !row.timezone || row.timezone === model.defaults.timezone
 				? { model }
 				: { model: formFor(model, shared, row) },
-		GotBrowserTimezone: ({ browserTimezone }) => {
+		DetectedBrowserTimezone: ({ browserTimezone }) => {
 			const next = modifyFields(model, { browserTimezone: () => browserTimezone })
 			// Only an untouched form without a stored timezone falls back to the browser's.
 			return model.isDirty || model.defaults.timezone !== null

@@ -40,7 +40,7 @@ export const onboardingAt = (
 	shared: Shared = newcomer,
 ): Model =>
 	[
-		Message.GotBrowserTimezone({ browserTimezone: "UTC" }),
+		Message.DetectedBrowserTimezone({ browserTimezone: "UTC" }),
 		Message.UpdatedMembership({ membership }),
 	].reduce((model, message) => update(model, message, shared).model, init(onboardingRoute(urlStep), shared).model)
 

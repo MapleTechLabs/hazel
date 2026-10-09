@@ -190,7 +190,7 @@ export const draftView = <M>(h: HtmlBuilder<M>, model: Model, inputs: DraftViewI
 		dropZoneAttributes: [
 			h.OnMount(
 				Mount.mapMessage(TrackFileDrop({ isDisabled: uploading }), (event) =>
-					toMessage(Message.GotDropEvent({ event })),
+					toMessage(Message.ReceivedDropEvent({ event })),
 				),
 			),
 		],

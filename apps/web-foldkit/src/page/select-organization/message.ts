@@ -1,6 +1,6 @@
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
-import { ClerkMountMessage } from "../auth/clerk-mount"
+import { Message as ClerkMountMessage } from "../auth/clerk-mount"
 import { UserOrganization } from "./model"
 
 export const Message = defineMessageUnion({

@@ -101,7 +101,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
-		GotBrowserTimezone: ({ browserTimezone }) =>
+		DetectedBrowserTimezone: ({ browserTimezone }) =>
 			initializeWhenReady(modifyFields(model, { browserTimezone: () => browserTimezone }), shared),
 		UpdatedMembership: ({ membership }) =>
 			initializeWhenReady(modifyFields(model, { membership: () => membership }), shared),

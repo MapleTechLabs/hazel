@@ -24,7 +24,7 @@ import {
 } from "./bot-form"
 import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalViewInputs } from "./contract"
-import { Frame, FrameMessage, frameView, initFrame, isFrameClosed, modalTitle } from "./frame"
+import { Frame, Message as FrameMessage, frameView, initFrame, isFrameClosed, modalTitle } from "./frame"
 import { failureToast, successToast } from "../../data/actions"
 
 /**

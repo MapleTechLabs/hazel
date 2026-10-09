@@ -88,7 +88,7 @@ export const Message = defineMessageUnion({
 	EnteredToolbar: {},
 	LeftToolbar: {},
 	GotToolbarMessage: { message: Toolbar.Message },
-	GotTooltipMessage: { tooltip: TooltipHost.Message },
+	GotTooltipMessage: { message: TooltipHost.Message },
 	GotMoreMenuMessage: { messageId: MessageId, message: Menu.Message },
 	RightClickedMessage: { messageId: MessageId, offset: Schema.Number, crossOffset: Schema.Number },
 	GotContextMenuMessage: { message: Menu.Message },
@@ -238,9 +238,9 @@ export const update = (model: Model, message: Message, facts: MessageFacts): Ove
 				(toolbar) => ({ toolbar }),
 				(inner) => Message.GotToolbarMessage({ message: inner }),
 			),
-		GotTooltipMessage: ({ tooltip }) => {
+		GotTooltipMessage: ({ message: tooltip }) => {
 			const result = TooltipHost.update(model.tooltip, tooltip, (inner) =>
-				Message.GotTooltipMessage({ tooltip: inner }),
+				Message.GotTooltipMessage({ message: inner }),
 			)
 			const hoveredTriggerKey =
 				tooltip.message._tag === "HoveredTrigger"

@@ -3,7 +3,7 @@ import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import { ToastRequest } from "../toasts"
 import { OrgUser } from "./create-dm-data"
-import { Frame, FrameMessage } from "./frame"
+import { Frame, Message as FrameMessage } from "./frame"
 
 /** The create DM modal's state: search, selection and the org's users. */
 

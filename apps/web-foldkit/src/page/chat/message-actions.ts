@@ -38,6 +38,9 @@ export const ActionMessage = defineMessageUnion({
 	CompletedGenerateThreadName: { threadChannelId: ChannelId, toast: Schema.NullOr(ToastRequest) },
 })
 export type ActionMessage = typeof ActionMessage.Type
+/** `ActionMessage` under the Submodel name, so a parent's Got wrapper imports it as `Message`. */
+export { ActionMessage as Message }
+
 
 const messageNotFound = notRetryable("Message not found", "This message may have been deleted.")
 

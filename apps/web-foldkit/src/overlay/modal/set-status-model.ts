@@ -5,7 +5,7 @@ import * as DatePicker from "../../ui/date-picker"
 import * as Segments from "../../ui/date-segments"
 import * as Select from "../../ui/select"
 import { ToastRequest } from "../toasts"
-import { Frame, FrameMessage } from "./frame"
+import { Frame, Message as FrameMessage } from "./frame"
 
 /** Model, Messages and the pure helpers of the set-status modal (`set-status.ts`). */
 

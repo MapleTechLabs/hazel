@@ -12,7 +12,7 @@ import { textField } from "../../ui/text-field"
 import { closed, completed, ModalOutMessage } from "../out-message"
 import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalViewInputs } from "./contract"
-import { Frame, FrameMessage, frameView, initFrame, isFrameClosed, modalDescription, modalTitle } from "./frame"
+import { Frame, Message as FrameMessage, frameView, initFrame, isFrameClosed, modalDescription, modalTitle } from "./frame"
 import { errorToast, successToast } from "../../data/actions"
 
 /** `components/modals/request-integration-modal.tsx` (`integrationRequest.create`). */

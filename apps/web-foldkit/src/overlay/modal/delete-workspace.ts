@@ -13,7 +13,7 @@ import { closed, completed, ModalOutMessage } from "../out-message"
 import { ToastRequest } from "../toasts"
 import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalViewInputs } from "./contract"
-import { Frame, FrameMessage, frameView, initFrame, isFrameClosed, modalTitle } from "./frame"
+import { Frame, Message as FrameMessage, frameView, initFrame, isFrameClosed, modalTitle } from "./frame"
 import { failureToast, successToast } from "../../data/actions"
 
 /** `components/modals/delete-workspace-modal.tsx`; on success the settings page navigated to `/`. */

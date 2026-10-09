@@ -207,7 +207,7 @@ describe("profile save", () => {
 		story(
 			pageUpdate,
 			given(started.model),
-			message(Message.GotBrowserTimezone({ browserTimezone: "Europe/Vienna" })),
+			message(Message.DetectedBrowserTimezone({ browserTimezone: "Europe/Vienna" })),
 			model((current) => {
 				expect(current.values.timezone).toBe("Europe/Vienna")
 				expect(current.isDirty).toBe(false)
@@ -217,7 +217,7 @@ describe("profile save", () => {
 			pageUpdate,
 			given(started.model),
 			message(Message.ChangedFirstName({ value: "Augusta" })),
-			message(Message.GotBrowserTimezone({ browserTimezone: "Europe/Vienna" })),
+			message(Message.DetectedBrowserTimezone({ browserTimezone: "Europe/Vienna" })),
 			model((current) => expect(current.values.timezone).toBeNull()),
 		)
 	})

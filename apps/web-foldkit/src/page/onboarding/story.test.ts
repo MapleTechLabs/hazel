@@ -49,7 +49,7 @@ describe("start-up", () => {
 		story(
 			run,
 			given(init(onboardingRoute(null), newcomer).model),
-			message(Message.GotBrowserTimezone({ browserTimezone: "Europe/Vienna" })),
+			message(Message.DetectedBrowserTimezone({ browserTimezone: "Europe/Vienna" })),
 			model((current) => expect(current.isInitialized).toBe(false)),
 			message(Message.UpdatedMembership({ membership: creatorMembership })),
 			Command.expectNone(),

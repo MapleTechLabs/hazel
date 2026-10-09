@@ -66,7 +66,7 @@ const ready = (
 	extra: ReadonlyArray<Message> = [],
 ): Model => {
 	const steps = [
-		Message.GotBrowserTimezone({ browserTimezone: "UTC" }),
+		Message.DetectedBrowserTimezone({ browserTimezone: "UTC" }),
 		Message.UpdatedMembership({ membership: member }),
 		...extra,
 	]

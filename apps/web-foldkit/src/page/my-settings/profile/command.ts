@@ -33,8 +33,8 @@ const OUTPUT_SIZE = 512
 
 /** `detectBrowserTimezone()`, the form's fallback timezone, read outside `init` and `update`. */
 export const ReadProfileBrowserTimezone = Command.define("ReadProfileBrowserTimezone", {
-	messages: [Message.GotBrowserTimezone],
-	execute: Effect.sync(() => Message.GotBrowserTimezone({ browserTimezone: detectBrowserTimezone() })),
+	messages: [Message.DetectedBrowserTimezone],
+	execute: Effect.sync(() => Message.DetectedBrowserTimezone({ browserTimezone: detectBrowserTimezone() })),
 })
 
 /** FileTrigger: pressing the button clicks the hidden file input. */

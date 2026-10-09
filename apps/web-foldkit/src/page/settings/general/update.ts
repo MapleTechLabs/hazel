@@ -82,8 +82,8 @@ export const OpenLogoPicker = Command.define("OpenLogoPicker", {
 })
 
 export const ReadOrigin = Command.define("ReadOrigin", {
-	messages: [Message.GotOrigin],
-	execute: Effect.sync(() => Message.GotOrigin({ origin: window.location.origin })),
+	messages: [Message.ResolvedOrigin],
+	execute: Effect.sync(() => Message.ResolvedOrigin({ origin: window.location.origin })),
 })
 
 export const UploadLogo = Command.define("UploadLogo", {
@@ -209,7 +209,7 @@ const closeDeleteModal = Update.foldChildStep({ update: Modal.close, ...deleteMo
 
 export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
-		GotOrigin: ({ origin }) => ({ model: modifyFields(model, { origin: () => origin }) }),
+		ResolvedOrigin: ({ origin }) => ({ model: modifyFields(model, { origin: () => origin }) }),
 		UpdatedIsPublic: ({ isPublic }) => ({ model: modifyFields(model, { isPublic: () => isPublic }) }),
 		ChangedName: ({ value }) => ({ model: modifyFields(model, { name: () => value }) }),
 		SubmittedName: () => {

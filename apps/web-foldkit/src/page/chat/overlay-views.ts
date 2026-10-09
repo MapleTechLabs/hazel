@@ -129,7 +129,9 @@ export const messageToolbarOverlay = <M>(
 											hoveredKey: overlays.hoveredTriggerKey,
 											focusedKey: overlays.focusedTriggerKey,
 											toTooltipMessage: (tooltip) =>
-												toOverlay(Overlays.Message.GotTooltipMessage({ tooltip })),
+												toOverlay(
+													Overlays.Message.GotTooltipMessage({ message: tooltip }),
+												),
 											onReact: (emoji) =>
 												toOverlay(
 													Overlays.Message.ClickedReaction({

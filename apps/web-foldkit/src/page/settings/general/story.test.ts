@@ -38,7 +38,7 @@ describe("init", () => {
 		const result = init(route, owner)
 		expect(result.model.origin).toBe("")
 		expect(result.commands?.map((command) => command.name)).toEqual([ReadOrigin.name])
-		const read = update(result.model, Message.GotOrigin({ origin: "http://localhost:3000" }), owner)
+		const read = update(result.model, Message.ResolvedOrigin({ origin: "http://localhost:3000" }), owner)
 		expect(read.model.origin).toBe("http://localhost:3000")
 	})
 })
