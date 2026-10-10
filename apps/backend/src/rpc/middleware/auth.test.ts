@@ -6,6 +6,7 @@ import { CurrentUser, type CurrentUser as CurrentUserNamespace } from "@hazel/do
 import type { UserId } from "@hazel/schema"
 import { Effect, Layer, Option, Ref, Result, Context } from "effect"
 import { AuthMiddleware, AuthMiddlewareLive } from "./auth.ts"
+import { HazelSession } from "../../services/hazel-session.ts"
 import { SessionManager } from "../../services/session-manager.ts"
 import { serviceShape } from "../../test/effect-helpers"
 
@@ -73,6 +74,19 @@ const makeSessionManagerLayer = (currentUser: CurrentUserNamespace.Schema) =>
 		}),
 	)
 
+type HazelSessionShape = Context.Service.Shape<typeof HazelSession>
+
+const makeHazelSessionLayer = (overrides: Partial<HazelSessionShape> = {}) =>
+	Layer.succeed(
+		HazelSession,
+		serviceShape<typeof HazelSession>({
+			enabled: false,
+			verify: () => Effect.succeedNone,
+			fromCookie: () => Effect.succeedNone,
+			...overrides,
+		}),
+	)
+
 const makeBotRepoLayer = (findByTokenHash: BotRepoShape["findByTokenHash"]) =>
 	Layer.succeed(
 		BotRepo,
@@ -119,6 +133,8 @@ const USER_RECORD: UserRecord = {
 	settings: null,
 	isOnboarded: true,
 	timezone: "UTC",
+	authActive: true,
+	securityRevision: "initial",
 	createdAt: new Date("2026-01-01T00:00:00.000Z"),
 	updatedAt: new Date("2026-01-01T00:00:00.000Z"),
 	deletedAt: null,
@@ -128,6 +144,7 @@ const runAuth = (
 	headers: Headers.Headers,
 	overrides: {
 		sessionManager?: ReturnType<typeof makeSessionManagerLayer>
+		hazelSession?: ReturnType<typeof makeHazelSessionLayer>
 		botRepo?: ReturnType<typeof makeBotRepoLayer>
 		userRepo?: ReturnType<typeof makeUserRepoLayer>
 	} = {},
@@ -137,6 +154,7 @@ const runAuth = (
 			invokeMiddleware(headers).pipe(
 				Effect.provide(AuthMiddlewareLive),
 				Effect.provide(overrides.sessionManager ?? makeSessionManagerLayer(makeCurrentUser())),
+				Effect.provide(overrides.hazelSession ?? makeHazelSessionLayer()),
 				Effect.provide(
 					overrides.botRepo ?? makeBotRepoLayer(() => Effect.succeed(Option.none<BotRecord>())),
 				),
@@ -214,5 +232,48 @@ describe("AuthMiddlewareLive", () => {
 					: "unhandled"
 			expect(failureTag).toBe("InvalidBearerTokenError")
 		}
+	})
+
+	it("authenticates a Hazel session cookie before any bearer token", async () => {
+		const currentUser = makeCurrentUser({ email: "cookie@example.com" })
+		const result = await runAuth(Headers.fromInput({ authorization: "Bearer a.b.c" }), {
+			hazelSession: makeHazelSessionLayer({
+				enabled: true,
+				fromCookie: () => Effect.succeed(Option.some(currentUser)),
+			}),
+		})
+
+		expect(Result.isSuccess(result) && Option.getOrNull(result.success)?.email).toBe("cookie@example.com")
+	})
+
+	it("authenticates a Hazel session credential sent as a bearer token", async () => {
+		const currentUser = makeCurrentUser({ email: "native@example.com" })
+		const result = await runAuth(Headers.fromInput({ authorization: "Bearer session-credential" }), {
+			hazelSession: makeHazelSessionLayer({
+				enabled: true,
+				verify: (credential) =>
+					Effect.succeed(
+						credential === "session-credential" ? Option.some(currentUser) : Option.none(),
+					),
+			}),
+		})
+
+		expect(Result.isSuccess(result) && Option.getOrNull(result.success)?.email).toBe("native@example.com")
+	})
+
+	it("never checks bot tokens as Hazel sessions", async () => {
+		let checked = false
+		const result = await runAuth(Headers.fromInput({ authorization: "Bearer hzl_bot_abc" }), {
+			hazelSession: makeHazelSessionLayer({
+				enabled: true,
+				verify: () => {
+					checked = true
+					return Effect.succeedNone
+				},
+			}),
+		})
+
+		expect(checked).toBe(false)
+		expect(Result.isFailure(result)).toBe(true)
 	})
 })

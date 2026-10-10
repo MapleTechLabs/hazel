@@ -62,12 +62,14 @@ export const layerRouted: Layer.Layer<SqlClient.SqlClient> = Layer.effect(
 ).pipe(Layer.provide(Reactivity.layer))
 
 /** One pooled client for a long-running process (Bun). */
-export const layerPool = (url: Redacted.Redacted) =>
+export const layerPool = (url: Redacted.Redacted, options: { readonly ssl?: boolean } = {}) =>
 	Layer.effect(
 		AuthSqlConnection,
-		PgClient.make({ url, maxConnections: 5 }).pipe(
-			Effect.map((client) => ({ client: Effect.succeed<SqlClient.SqlClient>(client) })),
-		),
+		PgClient.make({
+			url,
+			maxConnections: 5,
+			...(options.ssl === undefined ? {} : { ssl: options.ssl }),
+		}).pipe(Effect.map((client) => ({ client: Effect.succeed<SqlClient.SqlClient>(client) }))),
 	).pipe(Layer.provide(Reactivity.layer))
 
 const connect = (url: Redacted.Redacted) =>

@@ -33,7 +33,9 @@ export interface Keyring {
 export interface HazelAuthConfig {
 	/** The backend origin that serves /auth/* (api.hazel.sh; localhost:3003 in dev). */
 	readonly origin: string
-	/** The web app origin(s) calling the API with credentials (app.hazel.sh). */
+	/** The web app (app.hazel.sh); sign-in redirects land here. */
+	readonly appOrigin: string
+	/** Origins allowed to call the auth routes with credentials, besides `origin`. */
 	readonly trustedOrigins?: ReadonlyArray<string>
 	readonly github: { readonly clientId: string; readonly clientSecret: Redacted.Redacted<string> }
 	readonly google?: { readonly clientId: string; readonly clientSecret: Redacted.Redacted<string> }
@@ -42,9 +44,9 @@ export interface HazelAuthConfig {
 		readonly binding: Keyring
 		readonly transaction: Keyring
 	}
-	/** Paths the OAuth callback may return to after sign-in. */
+	/** Paths on the web app the OAuth callback may return to after sign-in. */
 	readonly returnTargets: ReadonlyArray<string>
-	/** Where the callback sends a first-time user to pick their name. */
+	/** Path on the web app where the callback sends a first-time user to pick their name. */
 	readonly registrationPath: string
 }
 
@@ -81,12 +83,16 @@ export const makeHazelAuthHttp = (config: HazelAuthConfig) => {
 						HazelAuthApi.actions.completeSignIn.route.operation.rpc.successSchema,
 					)(value).pipe(Effect.orDie)
 
+					// Targets are paths on the web app, which is a different origin from the API.
 					const target =
 						"_tag" in result && result._tag === "RegistrationRequired"
 							? `${config.registrationPath}?${new URLSearchParams({ flowId, reference: result.reference })}`
 							: result.returnTarget
 
-					return new Response(null, { status: 303, headers: { location: target } })
+					return new Response(null, {
+						status: 303,
+						headers: { location: new URL(target, config.appOrigin).href },
+					})
 				}),
 		},
 	})

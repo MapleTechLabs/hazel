@@ -80,6 +80,7 @@ describe.skipIf(DATABASE_URL === undefined)("Hazel auth on Postgres", () => {
 
 	const { http, Services, sessionCookieName } = makeHazelAuthLive({
 		origin,
+		appOrigin: webOrigin,
 		trustedOrigins: [webOrigin],
 		github: { clientId: "Iv1.test", clientSecret: Redacted.make("test-secret") },
 		passkey: { rpId: "localhost", origins: [webOrigin] },
@@ -244,7 +245,9 @@ describe.skipIf(DATABASE_URL === undefined)("Hazel auth on Postgres", () => {
 		)
 		cookies.store(callback)
 		expect(callback.status).toBe(303)
-		return new URL(callback.headers.get("location")!, origin)
+		const location = new URL(callback.headers.get("location")!)
+		expect(location.origin).toBe(webOrigin)
+		return location
 	}
 
 	const register = (cookies: Jar, location: URL) =>
@@ -353,22 +356,34 @@ describe.skipIf(DATABASE_URL === undefined)("Hazel auth on Postgres", () => {
 		const pair = await Effect.runPromise(
 			AccessToken.generateSigningKey("k1").pipe(Effect.provide(CryptoLive)),
 		)
+		const key = { kid: "k1", privateJwk: pair.privateKey }
 		const issuer = await Effect.runPromise(
-			AccessToken.makeIssuer({ kid: "k1", privateJwk: pair.privateKey }).pipe(
-				Effect.provide(CryptoLive),
-			),
+			AccessToken.makeIssuer(origin, key).pipe(Effect.provide(CryptoLive)),
 		)
+		// The JWKS publishes the key derived from the private JWK alone.
+		const published = await Effect.runPromise(AccessToken.publicJwk(key).pipe(Effect.provide(CryptoLive)))
+		expect(published).not.toHaveProperty("d")
 		const token = await Effect.runPromise(
 			issuer
 				.mint({ subjectId: "00000000-0000-4000-8000-000000000001", sessionId: "s1" })
 				.pipe(Effect.provide(CryptoLive)),
 		)
 		const verified = await Effect.runPromise(
-			AccessToken.verifyAccessToken(Redacted.value(token)).pipe(
-				Effect.provide(AccessToken.Jwks.layerLocal({ keys: [pair.publicKey] })),
+			AccessToken.verifyAccessToken(origin, Redacted.value(token)).pipe(
+				Effect.provide(AccessToken.Jwks.layerLocal({ keys: [published] })),
 				Effect.provide(CryptoLive),
 			),
 		)
 		expect(verified.claims.sub).toBe("00000000-0000-4000-8000-000000000001")
+
+		// Another stage's issuer does not verify.
+		const foreign = await Effect.runPromise(
+			AccessToken.verifyAccessToken("https://api.hazel.sh", Redacted.value(token)).pipe(
+				Effect.provide(AccessToken.Jwks.layerLocal({ keys: [published] })),
+				Effect.provide(CryptoLive),
+				Effect.result,
+			),
+		)
+		expect(foreign._tag).toBe("Failure")
 	})
 })

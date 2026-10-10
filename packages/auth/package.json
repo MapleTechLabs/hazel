@@ -12,6 +12,10 @@
 		"./contract": "./src/yielded/contract.ts",
 		"./server": "./src/yielded/index.ts"
 	},
+	"scripts": {
+		"test:integration": "vitest run src/yielded",
+		"generate-keys": "bun scripts/generate-keys.ts"
+	},
 	"dependencies": {
 		"@clerk/backend": "^3.3.0",
 		"@effect/sql-pg": "catalog:effect",
@@ -33,8 +37,5 @@
 		"@effect/platform-node": "catalog:effect",
 		"@types/bun": "1.3.9",
 		"typescript": "^5.9.3"
-	},
-	"scripts": {
-		"test:integration": "vitest run src/yielded"
 	}
 }

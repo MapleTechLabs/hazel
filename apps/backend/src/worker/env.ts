@@ -28,6 +28,19 @@ export const apiEnv = ({ stage, urls }: HazelStackContext) =>
 		requirePlainEntry("CLERK_PUBLISHABLE_KEY"),
 		optionalSecret("CLERK_WEBHOOK_SECRET"),
 
+		// Auth (Hazel, replacing Clerk): off until AUTH_GITHUB_CLIENT_ID is set. Keys come from
+		// `bun run --cwd packages/auth generate-keys`.
+		optionalPlain("AUTH_GITHUB_CLIENT_ID"),
+		optionalSecret("AUTH_GITHUB_CLIENT_SECRET"),
+		optionalPlain("AUTH_GOOGLE_CLIENT_ID"),
+		optionalSecret("AUTH_GOOGLE_CLIENT_SECRET"),
+		optionalSecret("AUTH_BINDING_KEY"),
+		optionalSecret("AUTH_TRANSACTION_KEY"),
+		optionalPlain("AUTH_ACCESS_TOKEN_KID"),
+		optionalSecret("AUTH_ACCESS_TOKEN_PRIVATE_JWK"),
+		optionalPlain("AUTH_PASSKEY_RP_ID"),
+		optionalPlain("AUTH_TRUSTED_ORIGINS"),
+
 		// Uploads: presigned against the bucket's S3 API (R2)
 		requirePlainEntry("S3_BUCKET"),
 		requirePlainEntry("S3_ENDPOINT"),
