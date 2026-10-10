@@ -38,6 +38,7 @@
 		"@hazel/infra": "workspace:*",
 		"@hazel/integrations": "workspace:*",
 		"@hazel/schema": "workspace:*",
+		"@yielded/auth": "0.1.0-beta.32",
 		"alchemy": "catalog:alchemy",
 		"aws4fetch": "^1.0.20",
 		"dfx": "^1.1.0",

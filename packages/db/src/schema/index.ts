@@ -2,6 +2,7 @@
 
 export * from "@hazel/schema"
 export * from "./attachments"
+export * from "./auth"
 export * from "./bot-commands"
 export * from "./bot-installations"
 export * from "./bots"

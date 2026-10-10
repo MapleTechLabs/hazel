@@ -76,6 +76,8 @@ import { MockDataGenerator } from "./services/mock-data-generator"
 import { OAuthBearerAuth } from "./services/oauth-bearer-auth"
 import { ObjectStorage } from "./services/object-storage"
 import { OAuthProviderRegistry } from "./services/oauth"
+import { HazelAuthInstance, HazelAuthRoutes, HazelAuthServicesLive } from "./services/hazel-auth"
+import { HazelSession } from "./services/hazel-session"
 import { SessionManager } from "./services/session-manager"
 import { WebhookBotService } from "./services/webhook-bot-service"
 import { BotGatewayService } from "./services/bot-gateway-service"
@@ -103,7 +105,13 @@ const RpcRoute = RpcServer.layerHttp({
 	protocol: "http",
 }).pipe(Layer.provide(RpcSerialization.layerNdjson), Layer.provide(RpcServerLive))
 
-export const AllRoutes = Layer.mergeAll(HttpApiRoutes, HealthRouter, DocsRoute, RpcRoute).pipe(
+export const AllRoutes = Layer.mergeAll(
+	HttpApiRoutes,
+	HealthRouter,
+	DocsRoute,
+	RpcRoute,
+	HazelAuthRoutes,
+).pipe(
 	Layer.provide(
 		HttpRouter.cors({
 			allowedOrigins: [
@@ -117,6 +125,16 @@ export const AllRoutes = Layer.mergeAll(HttpApiRoutes, HealthRouter, DocsRoute, 
 			credentials: true,
 		}),
 	),
+)
+
+/**
+ * Hazel's own sign-in: the configured instance, its auth services, and the session lookup
+ * the RPC and HttpApi middleware use. Inert until `AUTH_GITHUB_CLIENT_ID` is set. Needs
+ * `AuthSqlConnection` (and `AuthSqlDirect` on Workers) from the entry point.
+ */
+export const HazelAuthLive = HazelSession.layer.pipe(
+	Layer.provideMerge(HazelAuthServicesLive),
+	Layer.provideMerge(HazelAuthInstance.layer),
 )
 
 export const RepoLive = Layer.mergeAll(
@@ -204,5 +222,12 @@ export const AppServicesLive = Layer.mergeAll(
 	OAuthBearerAuth.layer,
 ).pipe(Layer.provideMerge(FetchHttpClient.layer))
 
-/** `CurrentUser` resolution for authenticated routes. Requires `Database` from the platform. */
-export const AppAuthorizationLive = AuthorizationLive.pipe(Layer.provideMerge(SessionManager.layer))
+/**
+ * `CurrentUser` resolution for authenticated routes, and Hazel's sign-in services. Only the
+ * HTTP entry points build this; the Durable Objects never authenticate. Requires `Database`
+ * and the auth SQL connection from the platform.
+ */
+export const AppAuthorizationLive = AuthorizationLive.pipe(
+	Layer.provideMerge(SessionManager.layer),
+	Layer.provideMerge(HazelAuthLive),
+)

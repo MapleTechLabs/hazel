@@ -3,6 +3,7 @@
  * caches, `ConfigProvider.fromEnv`), rebuilt over Cloudflare bindings.
  */
 import type { KVNamespace } from "@cloudflare/workers-types"
+import { AuthSqlConnection, layerDirect as authSqlDirect, makeRequestConnection } from "@hazel/auth/server"
 import { Database } from "@hazel/db"
 import { layerKvResultPersistence } from "@hazel/effect-cloudflare"
 import { readHazelDbBinding } from "@hazel/infra/cloudflare"
@@ -39,6 +40,8 @@ export const requestPlatformLive = (env: Record<string, unknown>, botGateways: B
 		BotGatewayTransport.layerDurableObject(botGateways),
 		// Suspended: init also runs at plan time, where the KV binding does not exist yet.
 		Layer.suspend(() => layerKvResultPersistence(cacheNamespace(env))),
+		// Auth storage's startup schema checks run outside any request's connection.
+		Layer.suspend(() => authSqlDirect(Redacted.make(hazelDbConnectionString(env)))),
 		workerEnvLayer(env),
 	)
 
@@ -58,12 +61,25 @@ export const objectPlatformLive = (env: Record<string, unknown>, botGateways: Bo
 		workerEnvLayer(env),
 	)
 
-/** Opens the request's Postgres client; it connects lazily and is closed with the request scope. */
-export const provideRequestDatabase = (env: Record<string, unknown>) =>
-	Effect.provideServiceEffect(
-		Database.DatabaseConnection,
-		Effect.acquireRelease(
-			Effect.sync(() => Database.makeRequestConnection(hazelDbConnectionString(env))),
-			(connection) => Effect.promise(() => connection.end()).pipe(Effect.ignore),
-		),
-	)
+/**
+ * Opens the request's Postgres clients (Drizzle, and Effect SQL for auth storage); both
+ * connect lazily and are closed with the request scope.
+ */
+export const provideRequestDatabase =
+	(env: Record<string, unknown>) =>
+	<A, E, R>(effect: Effect.Effect<A, E, R>) =>
+		effect.pipe(
+			Effect.provideServiceEffect(
+				AuthSqlConnection,
+				Effect.flatMap(Effect.scope, (scope) =>
+					makeRequestConnection(Redacted.make(hazelDbConnectionString(env)), scope),
+				),
+			),
+			Effect.provideServiceEffect(
+				Database.DatabaseConnection,
+				Effect.acquireRelease(
+					Effect.sync(() => Database.makeRequestConnection(hazelDbConnectionString(env))),
+					(connection) => Effect.promise(() => connection.end()).pipe(Effect.ignore),
+				),
+			),
+		)
