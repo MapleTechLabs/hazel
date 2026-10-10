@@ -8,9 +8,10 @@
  * bot's object (`gateway/relay.ts`). The wire protocol is the Bun gateway's, unchanged.
  */
 import { HAZEL_DB_BINDING, HazelStack, hazelWorkerProps, readHazelDbBinding } from "@hazel/infra/cloudflare"
-import { merge, optionalPlain } from "@hazel/infra/env"
+import { merge, optionalPlain, telemetryEnv } from "@hazel/infra/env"
+import { hazelTelemetry } from "@hazel/infra/maple"
 import * as Cloudflare from "alchemy/Cloudflare"
-import { Effect, Option } from "effect"
+import { Effect, Layer, Option } from "effect"
 import { HttpServerRequest, HttpServerResponse } from "effect/http"
 import * as HttpBody from "effect/http/HttpBody"
 import { authenticateBotToken } from "./gateway/auth.ts"
@@ -33,7 +34,7 @@ const props = Effect.gen(function* () {
 	if (globalThis.__ALCHEMY_RUNTIME__) return { main: import.meta.url }
 	const stack = yield* HazelStack
 	// The Bun gateway's tuning knobs; unset keeps its defaults (gateway/settings.ts).
-	const env = yield* merge(...GATEWAY_ENV_KEYS.map((key) => optionalPlain(key)))
+	const env = yield* merge(telemetryEnv(stack.stage), ...GATEWAY_ENV_KEYS.map((key) => optionalPlain(key)))
 	return {
 		main: import.meta.url,
 		...hazelWorkerProps(BOT_GATEWAY_APP, stack),
@@ -50,7 +51,8 @@ const props = Effect.gen(function* () {
 				invocationLogs: true,
 				destinations: ["maple-logs"],
 			},
-			traces: { enabled: true, persist: true, headSamplingRate: 1, destinations: ["maple-traces"] },
+			// Traces reach Maple through the SDK (`hazelTelemetry`), not the Cloudflare destination.
+			traces: { enabled: true, persist: true, headSamplingRate: 1 },
 		},
 	}
 })
@@ -115,5 +117,5 @@ export default BotGatewayWorker.make(
 				return HttpServerResponse.text("Not found", { status: 404 })
 			}),
 		}
-	}).pipe(Effect.provide(BotGatewayObjectLive)),
+	}).pipe(Effect.provide(Layer.mergeAll(BotGatewayObjectLive, hazelTelemetry(BOT_GATEWAY_APP)))),
 )
