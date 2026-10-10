@@ -8,19 +8,33 @@
 		".": "./src/index.ts",
 		"./backend": "./src/consumers/backend-auth.ts",
 		"./proxy": "./src/consumers/proxy-auth.ts",
-		"./errors": "./src/errors.ts"
+		"./errors": "./src/errors.ts",
+		"./contract": "./src/yielded/contract.ts",
+		"./server": "./src/yielded/index.ts"
 	},
 	"dependencies": {
 		"@clerk/backend": "^3.3.0",
+		"@effect/sql-pg": "catalog:effect",
 		"@hazel/db": "workspace:*",
 		"@hazel/domain": "workspace:*",
 		"@hazel/effect-bun": "workspace:*",
 		"@hazel/schema": "workspace:*",
+		"@simplewebauthn/server": "^14.0.1",
+		"@yielded/auth": "0.1.0-beta.32",
+		"@yielded/auth-persistence": "0.1.0-beta.32",
+		"@yielded/auth-simplewebauthn": "0.1.0-beta.32",
+		"@yielded/crypto": "0.1.0-beta.32",
+		"@yielded/jose": "0.1.0-beta.32",
 		"effect": "catalog:effect",
-		"jose": "^6.1.3"
+		"jose": "^6.1.3",
+		"tldts": "^7.4.11"
 	},
 	"devDependencies": {
+		"@effect/platform-node": "catalog:effect",
 		"@types/bun": "1.3.9",
 		"typescript": "^5.9.3"
+	},
+	"scripts": {
+		"test:integration": "vitest run src/yielded"
 	}
 }

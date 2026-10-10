@@ -19,6 +19,10 @@ export const usersTable = pgTable(
 		createdAt: timestamp({ mode: "date", withTimezone: true }).notNull().defaultNow(),
 		updatedAt: timestamp({ mode: "date", withTimezone: true }).notNull().defaultNow(),
 		deletedAt: timestamp({ mode: "date", withTimezone: true }),
+		// Hazel auth subject state (see auth.ts). `authActive` false blocks sign-in and ends
+		// sessions; `securityRevision` changes when the user's sign-in methods change.
+		authActive: boolean().notNull().default(true),
+		securityRevision: text().notNull().default("initial"),
 	},
 	(table) => [
 		index("users_external_id_idx").on(table.externalId),
