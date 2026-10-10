@@ -9,6 +9,7 @@ import { layerKvResultPersistence } from "@hazel/effect-cloudflare/KvPersistence
 import { cachedRecoverable } from "@hazel/infra/cached-recoverable"
 import { HAZEL_DB_BINDING, HazelStack, hazelWorkerProps, readHazelDbBinding } from "@hazel/infra/cloudflare"
 import { merge, requireSecretEntry, telemetryEnv } from "@hazel/infra/env"
+import { hazelTelemetry } from "@hazel/infra/maple"
 import { forIsolate, isolateContext } from "@hazel/infra/worker-http"
 import { workerEnvLayer } from "@hazel/infra/worker-runtime"
 import type { KVNamespace } from "@cloudflare/workers-types"
@@ -36,7 +37,11 @@ const props = Effect.gen(function* () {
 		workersDev: stage.kind !== "prd",
 		// Same hostname as the Railway deployment, so the web app's VITE_ELECTRIC_URL is unchanged.
 		domain: domains.electric,
-		observability: mapleObservability,
+		// Traces reach Maple through the SDK (`hazelTelemetry`), not the Cloudflare destination.
+		observability: {
+			...mapleObservability,
+			traces: { enabled: true, persist: true, headSamplingRate: 1 },
+		},
 		env: {
 			[HAZEL_DB_BINDING]: stack.db.hyperdrive,
 			[PROXY_CACHE_BINDING]: yield* ProxyCache,
@@ -158,5 +163,5 @@ export default class ElectricProxy extends Cloudflare.Worker<ElectricProxy>()(
 				return HttpServerResponse.raw(response, { status: response.status })
 			}).pipe(Effect.orDie),
 		}
-	}),
+	}).pipe(Effect.provide(hazelTelemetry("electric-proxy"))),
 ) {}

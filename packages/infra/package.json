@@ -8,6 +8,7 @@
 		".": "./src/index.ts",
 		"./cloudflare": "./src/cloudflare/index.ts",
 		"./env": "./src/env.ts",
+		"./maple": "./src/cloudflare/maple.ts",
 		"./worker-http": "./src/cloudflare/worker-http.ts",
 		"./worker-runtime": "./src/cloudflare/worker-runtime.ts",
 		"./cached-recoverable": "./src/cloudflare/cached-recoverable.ts"
@@ -17,6 +18,7 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@maple-dev/alchemy": "catalog:alchemy",
 		"alchemy": "catalog:alchemy",
 		"effect": "catalog:effect"
 	},

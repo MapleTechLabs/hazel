@@ -8,6 +8,7 @@
         "@cloudflare/workers-types": "catalog:alchemy",
         "@effect/vitest": "catalog:effect",
         "@hazel/infra": "workspace:*",
+        "@maple-dev/alchemy": "catalog:alchemy",
         "@rolldown/plugin-babel": "^0.2.1",
         "@types/node": "^24",
         "@vitest/coverage-v8": "^4.1.0",
@@ -595,6 +596,7 @@
       "name": "@hazel/infra",
       "version": "0.0.0",
       "dependencies": {
+        "@maple-dev/alchemy": "catalog:alchemy",
         "alchemy": "catalog:alchemy",
         "effect": "catalog:effect",
       },
@@ -697,6 +699,7 @@
   "catalogs": {
     "alchemy": {
       "@cloudflare/workers-types": "4.20260603.1",
+      "@maple-dev/alchemy": "0.2.0",
       "alchemy": "2.0.0-beta.80",
     },
     "effect": {
@@ -1399,6 +1402,10 @@
     "@libsql/win32-x64-msvc": ["@libsql/win32-x64-msvc@0.5.29", "", { "os": "win32", "cpu": "x64" }, "sha512-4/0CvEdhi6+KjMxMaVbFM2n2Z44escBRoEYpR+gZg64DdetzGnYm8mcNLcoySaDJZNaBd6wz5DNdgRmcI4hXcg=="],
 
     "@linear/sdk": ["@linear/sdk@73.0.0", "", { "dependencies": { "@graphql-typed-document-node/core": "^3.2.0" } }, "sha512-+7bMcDsDafS+468dd0JE0a0tbiBJtL253wKdKUIjGqkG6zm6Mr+WW+cvjo2Bl7T8Lldldq2cIA2tUT9ZjzJDkQ=="],
+
+    "@maple-dev/alchemy": ["@maple-dev/alchemy@0.2.0", "", { "dependencies": { "@maple-dev/effect-sdk": "0.10.0" }, "peerDependencies": { "alchemy": ">=2.0.0-beta.80 <3", "effect": "^4.0.0" } }, "sha512-lGjw1u0eAfNBKzp+IfcZHOJyqn2N3ivT0uGvrj8alK5vJsYwP1lI3y9A7rgTIyrgIsEswodTyUFduaZa9YjGkw=="],
+
+    "@maple-dev/effect-sdk": ["@maple-dev/effect-sdk@0.10.0", "", { "dependencies": { "std-env": "^4.0.0" }, "peerDependencies": { "effect": "^4.0.0" } }, "sha512-3MWyBqWPyiizAZItDk7Uk+vi69csziIJxCcaqW10aowVV1Tlcwao1EW6xLccAzvfkz43Y8WAiLzhf/Kr4oRkdQ=="],
 
     "@mdx-js/mdx": ["@mdx-js/mdx@3.1.1", "", { "dependencies": { "@types/estree": "^1.0.0", "@types/estree-jsx": "^1.0.0", "@types/hast": "^3.0.0", "@types/mdx": "^2.0.0", "acorn": "^8.0.0", "collapse-white-space": "^2.0.0", "devlop": "^1.0.0", "estree-util-is-identifier-name": "^3.0.0", "estree-util-scope": "^1.0.0", "estree-walker": "^3.0.0", "hast-util-to-jsx-runtime": "^2.0.0", "markdown-extensions": "^2.0.0", "recma-build-jsx": "^1.0.0", "recma-jsx": "^1.0.0", "recma-stringify": "^1.0.0", "rehype-recma": "^1.0.0", "remark-mdx": "^3.0.0", "remark-parse": "^11.0.0", "remark-rehype": "^11.0.0", "source-map": "^0.7.0", "unified": "^11.0.0", "unist-util-position-from-estree": "^2.0.0", "unist-util-stringify-position": "^4.0.0", "unist-util-visit": "^5.0.0", "vfile": "^6.0.0" } }, "sha512-f6ZO2ifpwAQIpzGWaBQT2TXxPv6z3RBzQKpVftEWN78Vl/YweF1uwussDx8ECAXVtr3Rs89fKyG9YlzUs9DyGQ=="],
 

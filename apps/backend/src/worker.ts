@@ -6,6 +6,7 @@
 import { bindBotGateways } from "@hazel/bot-gateway/object"
 import { HazelStack, hazelWorkerProps, stageProps } from "@hazel/infra/cloudflare"
 import { cachedRecoverable } from "@hazel/infra/cached-recoverable"
+import { hazelTelemetry } from "@hazel/infra/maple"
 import { isolateContext } from "@hazel/infra/worker-http"
 import * as Cloudflare from "alchemy/Cloudflare"
 import { Effect, Layer } from "effect"
@@ -43,7 +44,8 @@ const props = Effect.gen(function* () {
 		observability: {
 			enabled: true,
 			logs: { enabled: true, invocationLogs: true, destinations: ["maple-logs"] },
-			traces: { enabled: true, destinations: ["maple-traces"] },
+			// Traces reach Maple through the SDK (`hazelTelemetry`), not the Cloudflare destination.
+			traces: { enabled: true },
 		},
 		env: {
 			HAZEL_DB: stack.db.hyperdrive,
@@ -96,6 +98,7 @@ export default Api.make(
 				OutboxDispatcherObjectLive,
 				DiscordGatewayObjectLive,
 				Cloudflare.Workers.CronEventSourceLive,
+				hazelTelemetry("api"),
 			),
 		),
 	),

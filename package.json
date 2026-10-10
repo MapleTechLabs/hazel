@@ -22,6 +22,7 @@
 			},
 			"alchemy": {
 				"@cloudflare/workers-types": "4.20260603.1",
+				"@maple-dev/alchemy": "0.2.0",
 				"alchemy": "2.0.0-beta.80"
 			}
 		}
@@ -54,6 +55,7 @@
 		"@cloudflare/workers-types": "catalog:alchemy",
 		"@effect/vitest": "catalog:effect",
 		"@hazel/infra": "workspace:*",
+		"@maple-dev/alchemy": "catalog:alchemy",
 		"@rolldown/plugin-babel": "^0.2.1",
 		"@types/node": "^24",
 		"@vitest/coverage-v8": "^4.1.0",

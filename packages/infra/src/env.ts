@@ -79,13 +79,13 @@ export const plainWithDefault = (key: string, fallback: string): Config.Config<P
 export const derived = (key: string, value: string): Config.Config<PlainEnv> =>
 	Config.succeed({ [key]: value })
 
-/** OTLP export + environment stamping shared by every Effect Worker. */
+/** Environment and revision stamping shared by every Effect Worker. */
 export const telemetryEnv = (stage: HazelStage): Config.Config<WorkerEnv> =>
 	merge(
 		derived("OTEL_ENVIRONMENT", resolveDeploymentEnvironment(stage)),
+		// Read by the Maple SDK (`@hazel/infra/maple`), which binds the ingest key itself.
+		derived("MAPLE_ENVIRONMENT", resolveDeploymentEnvironment(stage)),
 		derived("NODE_ENV", stage.kind === "dev" ? "development" : "production"),
-		optionalPlain("OTEL_BASE_URL"),
-		optionalSecret("MAPLE_INGEST_KEY"),
 		merge(optionalPlain("COMMIT_SHA"), optionalPlain("GITHUB_SHA")).pipe(
 			Config.map((record): PlainEnv => {
 				const sha = record.COMMIT_SHA ?? record.GITHUB_SHA

@@ -70,8 +70,8 @@ jobs:
             KLIPY_API_KEY: ${{ secrets.KLIPY_API_KEY }}
             # electric-proxy + self-hosted Electric (DATABASE_URL comes from the stack's replication role)
             ELECTRIC_SECRET: ${{ secrets.ELECTRIC_SECRET }}
-            OTEL_BASE_URL: ${{ vars.OTEL_BASE_URL }}
-            MAPLE_INGEST_KEY: ${{ secrets.MAPLE_INGEST_KEY }}
+            # Maple: an org-admin API key with `ingest_keys:read`; the deploy binds the ingest key onto the Workers
+            MAPLE_API_KEY: ${{ secrets.MAPLE_API_KEY }}
         steps:
             - name: Checkout
               uses: actions/checkout@v4
