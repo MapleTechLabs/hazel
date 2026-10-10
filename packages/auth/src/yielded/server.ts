@@ -48,13 +48,54 @@ export interface HazelAuthConfig {
 	readonly returnTargets: ReadonlyArray<string>
 	/** Path on the web app where the callback sends a first-time user to pick their name. */
 	readonly registrationPath: string
+	/**
+	 * Path on the web app that starts sign-in again with `?provider=`. The callback sends
+	 * users there when their provider account was just linked to an existing Hazel account
+	 * by verified email, so the next sign-in lands in that account.
+	 */
+	readonly continuePath: string
 }
+
+/** The provider of a registration intent whose identity now has an owner, if any. */
+const linkedProvider = (sql: SqlClient.SqlClient, reference: string) =>
+	Effect.gen(function* () {
+		const rows = yield* sql<{ provider: string }>`
+			select i.provider from auth_oauth_registrations r
+			join auth_oauth_identities i on i."identityKey" = r."identityKey"
+			where r.reference = ${reference}
+			limit 1`
+		return rows[0]?.provider
+	}).pipe(
+		Effect.catchTag("SqlError", (error) =>
+			Effect.as(Effect.logWarning("[auth] could not check for a linked account", error), undefined),
+		),
+	)
 
 /** The browser session cookie: `__Host-` prefixed whenever the API is served over HTTPS. */
 export const sessionCookieName = (origin: string) =>
 	new URL(origin).protocol === "https:" ? "__Host-effect-auth-session" : "effect-auth-session"
 
-export const makeHazelAuthHttp = (config: HazelAuthConfig) => {
+/**
+ * The auth services' own SQL client, held for the OAuth callback's redirect hook. The
+ * library runs that hook under its request handling context, which need not include
+ * application services; this keeps it independent of how the routes are composed.
+ */
+const makeSqlHandle = () => {
+	let client: SqlClient.SqlClient | undefined
+	return {
+		layer: Layer.effectDiscard(
+			Effect.map(Effect.service(SqlClient.SqlClient), (sql) => {
+				client = sql
+			}),
+		),
+		get: () => client,
+	}
+}
+
+export const makeHazelAuthHttp = (
+	config: HazelAuthConfig,
+	sqlHandle: { readonly get: () => SqlClient.SqlClient | undefined } = { get: () => undefined },
+) => {
 	const secure = new URL(config.origin).protocol === "https:"
 
 	const github = GitHub.provider({
@@ -84,10 +125,16 @@ export const makeHazelAuthHttp = (config: HazelAuthConfig) => {
 					)(value).pipe(Effect.orDie)
 
 					// Targets are paths on the web app, which is a different origin from the API.
-					const target =
-						"_tag" in result && result._tag === "RegistrationRequired"
-							? `${config.registrationPath}?${new URLSearchParams({ flowId, reference: result.reference })}`
-							: result.returnTarget
+					let target = result.returnTarget as string
+					if ("_tag" in result && result._tag === "RegistrationRequired") {
+						const sql = sqlHandle.get()
+						const provider =
+							sql === undefined ? undefined : yield* linkedProvider(sql, result.reference)
+						target =
+							provider === undefined
+								? `${config.registrationPath}?${new URLSearchParams({ flowId, reference: result.reference })}`
+								: `${config.continuePath}?${new URLSearchParams({ provider })}`
+					}
 
 					return new Response(null, {
 						status: 303,
@@ -152,7 +199,8 @@ const PasskeyClaimsLive = Layer.effect(
 )
 
 export const makeHazelAuthLive = (config: HazelAuthConfig) => {
-	const { http } = makeHazelAuthHttp(config)
+	const sqlHandle = makeSqlHandle()
+	const { http } = makeHazelAuthHttp(config, sqlHandle)
 
 	// One "default" profile; validated by the library at layer build.
 	const passkeyConfig = Passkey.PasskeyConfig.layer({
@@ -181,6 +229,7 @@ export const makeHazelAuthLive = (config: HazelAuthConfig) => {
 		OAuth.OAuthReturnTargets.exactRoutes(config.returnTargets),
 		SimpleWebAuthn.layer,
 		ActionPoliciesLive,
+		sqlHandle.layer,
 	).pipe(
 		Layer.provideMerge(Storage),
 		// Postgres stamps session times with its own clock; tolerate it running slightly

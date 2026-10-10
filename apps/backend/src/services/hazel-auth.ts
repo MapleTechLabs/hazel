@@ -80,6 +80,7 @@ const make = Effect.gen(function* () {
 		},
 		returnTargets: ["/"],
 		registrationPath: "/auth/register",
+		continuePath: "/auth/continue",
 	}
 
 	const accessTokens = Option.map(

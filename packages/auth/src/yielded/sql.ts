@@ -34,9 +34,13 @@ export class AuthSqlDirect extends Context.Service<
 export const layerRouted: Layer.Layer<SqlClient.SqlClient> = Layer.effect(
 	SqlClient.SqlClient,
 	Effect.gen(function* () {
+		// A process-wide connection (Bun's pool) provided at construction, if any.
+		const ambient = yield* Effect.serviceOption(AuthSqlConnection)
 		const direct = yield* Effect.serviceOption(AuthSqlDirect)
 
+		// The request's connection, else the process-wide one, else a dedicated connection.
 		const acquirer = Effect.serviceOption(AuthSqlConnection).pipe(
+			Effect.map((current) => Option.orElse(current, () => ambient)),
 			Effect.flatMap(
 				Option.match({
 					onSome: (connection) => connection.client,

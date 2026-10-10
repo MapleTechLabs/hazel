@@ -5,6 +5,16 @@
  */
 export * as AccessToken from "./access-token.ts"
 export { HazelAuth, requirement } from "./auth.ts"
+export {
+	type ExternalIdentity,
+	findUserByEmail,
+	identityKey,
+	isProvider,
+	type LinkResult,
+	linkIdentity,
+	type Provider,
+	providerIssuers,
+} from "./identities.ts"
 export { Claims, HazelAuthApi, Registration } from "./contract.ts"
 export {
 	CryptoLive,

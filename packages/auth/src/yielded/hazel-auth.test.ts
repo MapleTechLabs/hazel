@@ -29,6 +29,7 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest"
 import * as AccessToken from "./access-token.ts"
 import { HazelAuth } from "./auth.ts"
 import { CryptoLive, makeHazelAuthLive } from "./server.ts"
+import { identityKey, linkIdentity } from "./identities.ts"
 import { AuthSqlConnection, AuthSqlDirect, layerDirect, makeRequestConnection } from "./sql.ts"
 
 const DATABASE_URL = process.env.AUTH_TEST_DATABASE_URL
@@ -87,6 +88,7 @@ describe.skipIf(DATABASE_URL === undefined)("Hazel auth on Postgres", () => {
 		keys: { binding: keyring(1), transaction: keyring(2) },
 		returnTargets: ["/"],
 		registrationPath: "/auth/register-profile",
+		continuePath: "/auth/continue",
 	})
 
 	const MeRoute = HttpRouter.add(
@@ -386,4 +388,91 @@ describe.skipIf(DATABASE_URL === undefined)("Hazel auth on Postgres", () => {
 		)
 		expect(foreign._tag).toBe("Failure")
 	})
+
+	// ---- Carrying users over from Clerk ----
+
+	/** A user who signed up through Clerk: a users row with a Clerk id and nothing else. */
+	const insertClerkUser = (email: string) =>
+		query(
+			Effect.gen(function* () {
+				const sql = yield* SqlClient.SqlClient
+				const [row] = yield* sql<{ id: string }>`
+					insert into users ("externalId", email, "firstName", "lastName", "isOnboarded")
+					values (${`user_${crypto.randomUUID()}`}, ${email}, 'Clerk', 'User', true)
+					returning id::text as id`
+				return row!.id
+			}),
+		)
+
+	const usersWithEmail = (email: string) =>
+		query(
+			Effect.gen(function* () {
+				const sql = yield* SqlClient.SqlClient
+				return (yield* sql`select id from users where lower(email) = lower(${email})`).length
+			}),
+		)
+
+	test("the identity key matches the one the library writes", async () => {
+		const [row] = await query(
+			Effect.gen(function* () {
+				const sql = yield* SqlClient.SqlClient
+				return yield* sql<{ identityKey: string }>`
+					select "identityKey" from auth_oauth_identities where "externalSubject" = '4242'`
+			}),
+		)
+		const computed = await Effect.runPromise(
+			identityKey({ provider: "github", subject: "4242" }).pipe(Effect.provide(CryptoLive)),
+		)
+		expect(computed).toBe(row!.identityKey)
+	})
+
+	test("an imported GitHub account signs straight into the existing account", async () => {
+		const userId = await insertClerkUser("imported@example.com")
+		const link = (subject: string) =>
+			query(linkIdentity({ provider: "github", subject, userId }).pipe(Effect.provide(CryptoLive)))
+		expect(await link("9001")).toEqual({ _tag: "Linked" })
+		expect(await link("9001")).toEqual({ _tag: "AlreadyLinked" })
+
+		githubUserId = 9001
+		const browser = jar()
+		expect((await signInWithGitHub(browser)).pathname).toBe("/")
+		const me = await (await call(browser, "GET", "/me")).json()
+		expect(me.userId).toBe(userId)
+		expect(me.displayName).toBe("Clerk User")
+	}, 60_000)
+
+	test("an account linked to someone else is reported, not reassigned", async () => {
+		const other = await insertClerkUser("other@example.com")
+		const result = await query(
+			linkIdentity({ provider: "github", subject: "9001", userId: other }).pipe(
+				Effect.provide(CryptoLive),
+			),
+		)
+		expect(result._tag).toBe("Conflict")
+	})
+
+	test("a verified email match continues into the existing account, with no duplicate", async () => {
+		// The fake GitHub reports octo<id>@example.com as the verified primary email.
+		const userId = await insertClerkUser("Octo5555@Example.com")
+		githubUserId = 5555
+		const browser = jar()
+
+		const first = await signInWithGitHub(browser)
+		expect(first.pathname).toBe("/auth/continue")
+		expect(first.searchParams.get("provider")).toBe("github")
+
+		// The web app's continue page starts sign-in again; it now resolves to the user.
+		expect((await signInWithGitHub(browser)).pathname).toBe("/")
+		const me = await (await call(browser, "GET", "/me")).json()
+		expect(me.userId).toBe(userId)
+		expect(await usersWithEmail("octo5555@example.com")).toBe(1)
+	}, 60_000)
+
+	test("an ambiguous email never links", async () => {
+		await insertClerkUser("octo6666@example.com")
+		await insertClerkUser("octo6666@example.com")
+		githubUserId = 6666
+		const browser = jar()
+		expect((await signInWithGitHub(browser)).pathname).toBe("/auth/register-profile")
+	}, 60_000)
 })

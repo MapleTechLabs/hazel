@@ -3,8 +3,10 @@ import { AuthPersistence, PersistenceMappingError } from "@yielded/auth-persiste
 import type { SubjectIdCodec } from "@yielded/auth-persistence/Adapter"
 import * as Mapping from "@yielded/auth-persistence/OAuthPersistence"
 import { Context, Crypto, Effect, Layer, Schema } from "effect"
+import { SqlClient } from "effect/sql"
 
 import { HazelAuth, requirement } from "./auth.ts"
+import { findUserByEmail, isProvider, linkIdentity, providerIssuers } from "./identities.ts"
 import { Registration } from "./contract.ts"
 import * as T from "./tables.ts"
 
@@ -141,9 +143,39 @@ const registrationJson = Schema.fromJsonString(Registration)
 const emailFromIntent = (intent: OAuth.OAuthRegistrationIntent) =>
 	intent.profile?.email ?? `${intent.identity.subject}@${intent.identity.provider}.invalid`
 
+/**
+ * A first-time GitHub or Google sign-in whose provider-verified email belongs to exactly
+ * one existing user is linked to that user (users who signed up through Clerk with
+ * email). The registration intent is still issued; the callback then sees the link and
+ * restarts sign-in, which resolves to the existing account. Matching failures only log:
+ * the user falls back to registering.
+ */
+const linkByVerifiedEmail = (intent: OAuth.OAuthRegistrationIntent) =>
+	Effect.gen(function* () {
+		const { issuer, subject } = intent.identity
+		const provider: string = intent.identity.provider
+		const email = intent.profile?.email
+		if (!isProvider(provider) || issuer !== providerIssuers[provider]) return
+		if (intent.profile?.emailVerified !== true || email === undefined) return
+
+		const userId = yield* findUserByEmail(email)
+		if (userId === undefined) return
+		const linked = yield* linkIdentity({ provider, subject, userId })
+		yield* Effect.logInfo("[auth] linked a provider account by verified email", {
+			provider,
+			userId,
+			result: linked._tag,
+		})
+	}).pipe(
+		Effect.catchCause((cause) =>
+			Effect.logWarning("[auth] verified-email linking failed; continuing to registration", cause),
+		),
+	)
+
 export const OAuthStorageLive = Layer.effectContext(
 	Effect.gen(function* () {
 		const crypto = yield* Crypto.Crypto
+		const sqlClient = yield* SqlClient.SqlClient
 
 		const uuid = crypto.randomUUIDv4.pipe(
 			Effect.mapError((cause) => PersistenceMappingError.make({ operation: "hazel.allocate", cause })),
@@ -240,7 +272,20 @@ export const OAuthStorageLive = Layer.effectContext(
 		})
 
 		return Context.make(OAuth.OAuthSignInPersistence, signIn.oauthSignInPersistence).pipe(
-			Context.add(OAuth.OAuthRegistrationIntents, intents.oauthRegistrationIntents),
+			Context.add(OAuth.OAuthRegistrationIntents, {
+				...intents.oauthRegistrationIntents,
+				issue: (input, prepare) =>
+					intents.oauthRegistrationIntents
+						.issue(input, prepare)
+						.pipe(
+							Effect.tap(() =>
+								linkByVerifiedEmail(input.intent).pipe(
+									Effect.provideService(SqlClient.SqlClient, sqlClient),
+									Effect.provideService(Crypto.Crypto, crypto),
+								),
+							),
+						),
+			}),
 			Context.add(OAuth.OAuthAccountsPersistence, accounts.oauthAccountsPersistence),
 			Context.add(
 				HazelAuth.strategies.social.registration.RegistrationAuthority,

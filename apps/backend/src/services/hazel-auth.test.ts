@@ -8,6 +8,7 @@ import * as NodeHttpPlatform from "@effect/platform-node/NodeHttpPlatform"
 import * as NodeServices from "@effect/platform-node/NodeServices"
 import { AccessToken, CryptoLive, layerPool } from "@hazel/auth/server"
 import { BotRepo, UserRepo } from "@hazel/backend-core"
+import { Database, schema } from "@hazel/db"
 import { CurrentUser } from "@hazel/domain"
 import { AuthMiddleware } from "@hazel/domain/rpc"
 import { ConfigProvider, Effect, Layer, Redacted } from "effect"
@@ -34,6 +35,9 @@ const api = "http://localhost:3003"
 const app = "http://localhost:3000"
 const key = Base64Url.encode(new Uint8Array(32).fill(7))
 
+/** The GitHub account the fake signs in as. */
+let github = { id: 777, email: "octo@example.com" }
+
 const FakeGitHub = Layer.succeed(
 	HttpClient.HttpClient,
 	HttpClient.make((request, url) =>
@@ -47,14 +51,14 @@ const FakeGitHub = Layer.succeed(
 				return json({ access_token: "gho_1", token_type: "bearer", scope: "read:user,user:email" })
 			if (url.href === "https://api.github.com/user")
 				return json({
-					id: 777,
-					login: "octo",
+					id: github.id,
+					login: `octo${github.id}`,
 					name: "Octo Cat",
 					email: null,
-					avatar_url: "https://avatars.githubusercontent.com/u/777",
+					avatar_url: `https://avatars.githubusercontent.com/u/${github.id}`,
 				})
 			if (url.href.startsWith("https://api.github.com/user/emails"))
-				return json([{ email: "octo@example.com", primary: true, verified: true }])
+				return json([{ email: github.email, primary: true, verified: true }])
 			return HttpClientResponse.fromWeb(request, new Response("not found", { status: 404 }))
 		}),
 	),
@@ -275,4 +279,45 @@ describe("Hazel sign-in in the backend", () => {
 		expect(response.status).toBe(401)
 		expect(cookies.has("effect-auth-session")).toBe(false)
 	})
+
+	it("a Clerk user's first GitHub sign-in lands in their existing account by verified email", async () => {
+		// Signed up through Clerk with email: a users row and no linked accounts.
+		const [existing] = await harness.run(
+			Effect.gen(function* () {
+				const db = yield* Database.Database
+				return yield* db.execute((client) =>
+					client
+						.insert(schema.usersTable)
+						.values({
+							externalId: "user_clerk_email_only",
+							email: "Clerk.User@Example.com",
+							firstName: "Clerk",
+							lastName: "User",
+							isOnboarded: true,
+						})
+						.returning({ id: schema.usersTable.id }),
+				)
+			}),
+		)
+		github = { id: 888, email: "clerk.user@example.com" }
+
+		const signIn = async () => {
+			const begin = await post("/auth/signIn", { provider: "github", returnTarget: "/" })
+			const state = new URL((await begin.json()).value.authorizationUrl).searchParams.get("state")!
+			const callback = await send(
+				`/auth/github/callback?${new URLSearchParams({ code: "c", state, iss: "https://github.com/login/oauth" })}`,
+				{ origin: null },
+			)
+			return new URL(callback.headers.get("location")!)
+		}
+
+		const first = await signIn()
+		expect(`${first.origin}${first.pathname}`).toBe(`${app}/auth/continue`)
+		expect(first.searchParams.get("provider")).toBe("github")
+
+		expect((await signIn()).href).toBe(`${app}/`)
+		const rpc = await send("/probe/rpc", { method: "POST" })
+		expect(await rpc.json()).toEqual({ email: "Clerk.User@Example.com" })
+		expect(existing).toBeDefined()
+	}, 60_000)
 })
