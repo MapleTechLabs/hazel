@@ -331,7 +331,7 @@ describe("rows by id", () => {
 
 		const history = messages.utils.retainHistory("c1", 5)
 		const byIds = messages.utils.loadByIds("c1", [message(2).id])
-		const refuse = (frame: { readonly requestId: number }) =>
+		const refuse = (frame: { readonly [key: string]: unknown }) =>
 			socket.receive({
 				_tag: "Error",
 				code: "rate_limited",
