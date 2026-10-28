@@ -1,3 +1,9 @@
+/**
+ * TODO(do-sync): runs in the OrgObject (`rpc/routing.ts`); not ported yet. To port: touch only that
+ * store's tables and send everything else through the outbox (`worker/objects/effects`).
+ * - write `webhook_index` in the directory through `DirectoryEffects` (add a kind)
+ * - `listByOrganization` gets `organizationId` from the routing hint
+ */
 import { createHash, randomBytes } from "node:crypto"
 import { ChannelRepo, ChannelWebhookRepo } from "@hazel/backend-core"
 import { Database } from "@hazel/db"
@@ -128,7 +134,7 @@ export const ChannelWebhookRpcLive = ChannelWebhookRpcs.toLayer(
 					return new ChannelWebhookListResponse({ data: webhooks })
 				}).pipe(withRemapDbErrors("ChannelWebhook", "select")),
 
-			"channelWebhook.update": ({ id, ...payload }) =>
+			"channelWebhook.update": ({ id, organizationId: _route, ...payload }) =>
 				db
 					.transaction(
 						Effect.gen(function* () {

@@ -8,11 +8,26 @@ import type * as Cloudflare from "alchemy/Cloudflare"
 import type { HttpEffect } from "alchemy/Http"
 import { type Context, Effect, Layer } from "effect"
 import { FetchHttpClient, HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
-import { AllRoutes, AppAuthorizationLive, AppServicesLive } from "../app"
+import { AppAuthorizationLive, AppServicesLive, makeRoutes } from "../app"
+import { LocalRpcDispatcher, RoutedRpcServerLive } from "../rpc/routed-server"
+import { Directory } from "../services/directory"
+import { workerObjectStubs } from "./objects/stubs"
+import { makeSyncRoute } from "./sync-route"
 import type { BotGatewayNamespace } from "../services/bot-gateway-transport"
 import { OUTBOX_DISPATCHER_NAME, type OutboxDispatcherObject } from "./outbox-dispatcher-object"
-import { requestPlatformLive } from "./platform"
+import { directoryBinding, requestPlatformLive } from "./platform"
 import { type RateLimiterObject, rateLimiterLive } from "./rate-limiter-object"
+
+/**
+ * HazelRpc on the Worker: routed to the objects, or run here over D1 for `directory` methods
+ * (`rpc/routing.ts`).
+ */
+const workerRpcServer = (env: Record<string, unknown>) =>
+	RoutedRpcServerLive.pipe(
+		Layer.provide(LocalRpcDispatcher.layer),
+		Layer.provide(workerObjectStubs(env)),
+		Layer.provide(Layer.suspend(() => Directory.layerD1(directoryBinding(env)))),
+	)
 
 /** The route graph as one request handler, built under the isolate's context (never a request's). */
 export const buildApp = (
@@ -25,7 +40,7 @@ export const buildApp = (
 		HttpRouter.toHttpEffect(
 			// The cast restores the layer's type: the circular `DiscordSyncWorker` typing collapses
 			// `AppServicesLive`'s error and requirement channels to `unknown` (see index.ts).
-			AllRoutes.pipe(
+			makeRoutes(workerRpcServer(env), makeSyncRoute(env)).pipe(
 				Layer.provide(AppAuthorizationLive),
 				Layer.provide(AppServicesLive),
 				Layer.provideMerge(rateLimiterLive(rateLimiters)),

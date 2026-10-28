@@ -1,3 +1,8 @@
+/**
+ * TODO(do-sync): runs in the caller's UserObject (`rpc/routing.ts`); not ported yet. To port: touch only
+ * that store's tables and send everything else through the outbox (`worker/objects/effects`).
+ * - authoritative in the UserObject; project to each OrgObject (`membership_index`) through an org effect
+ */
 import { UserPresenceStatusRepo } from "@hazel/backend-core"
 import { Database } from "@hazel/db"
 import { CurrentUser, withRemapDbErrors } from "@hazel/domain"

@@ -7,6 +7,7 @@ import { TransactionId } from "@hazel/schema"
 import { MessageNotFoundError } from "./messages"
 import { AuthMiddleware } from "./middleware"
 import { RequiredScopes } from "../scopes/required-scopes"
+import { RouteChannelId } from "./routing-fields"
 
 /**
  * Response schema for successful message reaction operations.
@@ -94,6 +95,7 @@ export class MessageReactionRpcs extends RpcGroup.make(
 	 */
 	Rpc.make("messageReaction.update", {
 		payload: Schema.Struct({
+			channelId: RouteChannelId,
 			id: MessageReactionId,
 		}).pipe(Schema.fieldsAssign(MessageReaction.PatchPartial.fields)),
 		success: MessageReactionResponse,
@@ -115,7 +117,7 @@ export class MessageReactionRpcs extends RpcGroup.make(
 	 * @throws InternalServerError for unexpected errors
 	 */
 	Rpc.make("messageReaction.delete", {
-		payload: Schema.Struct({ id: MessageReactionId }),
+		payload: Schema.Struct({ id: MessageReactionId, channelId: RouteChannelId }),
 		success: Schema.Struct({ transactionId: TransactionId }),
 		error: Schema.Union([MessageReactionNotFoundError, UnauthorizedError, InternalServerError]),
 	})

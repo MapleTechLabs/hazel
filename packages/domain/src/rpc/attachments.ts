@@ -6,6 +6,7 @@ import { Attachment } from "../models"
 import { TransactionId } from "@hazel/schema"
 import { AuthMiddleware } from "./middleware"
 import { RequiredScopes } from "../scopes/required-scopes"
+import { RouteChannelId } from "./routing-fields"
 
 /**
  * Error thrown when an attachment is not found.
@@ -48,7 +49,7 @@ export class AttachmentRpcs extends RpcGroup.make(
 	 * @throws InternalServerError for unexpected errors
 	 */
 	Rpc.make("attachment.delete", {
-		payload: Schema.Struct({ id: AttachmentId }),
+		payload: Schema.Struct({ id: AttachmentId, channelId: RouteChannelId }),
 		success: Schema.Struct({ transactionId: TransactionId }),
 		error: Schema.Union([AttachmentNotFoundError, UnauthorizedError, InternalServerError]),
 	})
@@ -68,7 +69,7 @@ export class AttachmentRpcs extends RpcGroup.make(
 	 * @throws InternalServerError for unexpected errors
 	 */
 	Rpc.make("attachment.complete", {
-		payload: Schema.Struct({ id: AttachmentId }),
+		payload: Schema.Struct({ id: AttachmentId, channelId: RouteChannelId }),
 		success: Attachment.Schema,
 		error: Schema.Union([AttachmentNotFoundError, UnauthorizedError, InternalServerError]),
 	})
@@ -89,6 +90,7 @@ export class AttachmentRpcs extends RpcGroup.make(
 	 */
 	Rpc.make("attachment.fail", {
 		payload: Schema.Struct({
+			channelId: RouteChannelId,
 			id: AttachmentId,
 			reason: Schema.optional(Schema.String),
 		}),

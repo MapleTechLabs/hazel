@@ -1,3 +1,9 @@
+/**
+ * TODO(do-sync): runs in the caller's UserObject (`rpc/routing.ts`); not ported yet. To port: touch only
+ * that store's tables and send everything else through the outbox (`worker/objects/effects`).
+ * - NotificationPolicy reads org members: in the UserObject every notification is the owner's
+ * - `deleteByMessageIds` is called by ChannelObjects as an effect, not by clients
+ */
 import { ChannelRepo, NotificationRepo, OrganizationMemberRepo } from "@hazel/backend-core"
 import { Database } from "@hazel/db"
 import { CurrentUser, UnauthorizedError, withRemapDbErrors } from "@hazel/domain"

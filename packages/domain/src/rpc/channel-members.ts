@@ -7,6 +7,7 @@ import { TransactionId } from "@hazel/schema"
 import { ChannelNotFoundError } from "./channels"
 import { AuthMiddleware } from "./middleware"
 import { RequiredScopes } from "../scopes/required-scopes"
+import { RouteOrganizationId } from "./routing-fields"
 
 /**
  * Response schema for successful channel member operations.
@@ -101,6 +102,7 @@ export class ChannelMemberRpcs extends RpcGroup.make(
 	 */
 	Rpc.make("channelMember.update", {
 		payload: Schema.Struct({
+			organizationId: RouteOrganizationId,
 			id: ChannelMemberId,
 		}).pipe(Schema.fieldsAssign(ChannelMember.PatchPartial.fields)),
 		success: ChannelMemberResponse,
@@ -123,7 +125,7 @@ export class ChannelMemberRpcs extends RpcGroup.make(
 	 * @throws InternalServerError for unexpected errors
 	 */
 	Rpc.make("channelMember.delete", {
-		payload: Schema.Struct({ id: ChannelMemberId }),
+		payload: Schema.Struct({ id: ChannelMemberId, organizationId: RouteOrganizationId }),
 		success: Schema.Struct({ transactionId: TransactionId }),
 		error: Schema.Union([ChannelMemberNotFoundError, UnauthorizedError, InternalServerError]),
 	})

@@ -17,6 +17,28 @@ const toEpochMs = (d: Date | DateTime.Utc): number =>
 
 const createDeliveryId = (): string => crypto.randomUUID()
 
+/** The bot gateway envelope for a message event (the same for every receiving bot). */
+export const messageEventEnvelope = (
+	organizationId: OrganizationId,
+	eventType: "message.create" | "message.update" | "message.delete",
+	message: Schema.Schema.Type<typeof Message.Schema>,
+): BotGatewayEnvelope => {
+	const eventTimestamp = message.updatedAt
+		? toEpochMs(message.updatedAt)
+		: message.createdAt
+			? toEpochMs(message.createdAt)
+			: Date.now()
+	return {
+		schemaVersion: 1,
+		deliveryId: createDeliveryId(),
+		partitionKey: createBotGatewayPartitionKey({ organizationId, channelId: message.channelId }),
+		occurredAt: eventTimestamp,
+		idempotencyKey: `${eventType}:${message.id}:${eventTimestamp}`,
+		eventType,
+		payload: message,
+	}
+}
+
 export class BotGatewayService extends Context.Service<BotGatewayService>()("BotGatewayService", {
 	make: Effect.gen(function* () {
 		const installationRepo = yield* BotInstallationRepo
@@ -95,24 +117,9 @@ export class BotGatewayService extends Context.Service<BotGatewayService>()("Bot
 				return
 			}
 
-			const eventTimestamp = message.updatedAt
-				? toEpochMs(message.updatedAt)
-				: message.createdAt
-					? toEpochMs(message.createdAt)
-					: Date.now()
-
-			yield* publishToInstalledBots(organizationId, () => ({
-				schemaVersion: 1,
-				deliveryId: createDeliveryId(),
-				partitionKey: createBotGatewayPartitionKey({
-					organizationId,
-					channelId: message.channelId,
-				}),
-				occurredAt: eventTimestamp,
-				idempotencyKey: `${eventType}:${message.id}:${eventTimestamp}`,
-				eventType,
-				payload: message,
-			}))
+			yield* publishToInstalledBots(organizationId, () =>
+				messageEventEnvelope(organizationId, eventType, message),
+			)
 		})
 
 		const publishChannelEvent = Effect.fn("BotGatewayService.publishChannelEvent")(function* (

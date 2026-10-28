@@ -1,3 +1,9 @@
+/**
+ * TODO(do-sync): runs in the OrgObject (`rpc/routing.ts`); not ported yet. To port: touch only that
+ * store's tables and send everything else through the outbox (`worker/objects/effects`).
+ * - connections/links are org rows; message links live in the ChannelObject (effects)
+ * - write `chat_sync_index` through a directory effect
+ */
 import {
 	ChatSyncChannelLinkRepo,
 	ChatSyncConnectionRepo,

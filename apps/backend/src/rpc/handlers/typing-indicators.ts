@@ -1,3 +1,9 @@
+/**
+ * TODO(do-sync): runs in the ChannelObject (`rpc/routing.ts`); not ported yet. To port: touch only that
+ * store's tables and send everything else through the outbox (`worker/objects/effects`).
+ * - authorize with `ChannelViewers`; memberId is an OrgObject row: trust the viewer instead
+ * - expiry is the ChannelObject alarm (`worker/objects/channel/typing.ts`)
+ */
 import { TypingIndicatorRepo } from "@hazel/backend-core"
 import { Database } from "@hazel/db"
 import { withRemapDbErrors } from "@hazel/domain"
@@ -65,7 +71,7 @@ export const TypingIndicatorRpcLive = TypingIndicatorRpcs.toLayer(
 					)
 					.pipe(withRemapDbErrors("TypingIndicator", "create")),
 
-			"typingIndicator.update": ({ id, ...payload }) =>
+			"typingIndicator.update": ({ id, channelId: _route, ...payload }) =>
 				db
 					.transaction(
 						Effect.gen(function* () {

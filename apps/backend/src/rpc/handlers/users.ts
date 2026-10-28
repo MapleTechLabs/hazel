@@ -1,3 +1,9 @@
+/**
+ * TODO(do-sync): runs in the directory (D1) (`rpc/routing.ts`); not ported yet. To port: touch only that
+ * store's tables and send everything else through the outbox (`worker/objects/effects`).
+ * - no transactions; profile updates project to each OrgObject's `users` (org effect per
+ *   `membership_index` row)
+ */
 import { UserRepo } from "@hazel/backend-core"
 import { Database } from "@hazel/db"
 import { CurrentUser, UnauthorizedError, withRemapDbErrors } from "@hazel/domain"

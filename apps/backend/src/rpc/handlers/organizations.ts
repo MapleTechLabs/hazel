@@ -1,3 +1,11 @@
+/**
+ * TODO(do-sync): runs in the OrgObject (create/getBySlug/join: directory) (`rpc/routing.ts`); not ported
+ * yet. To port: touch only that store's tables and send everything else through the outbox
+ * (`worker/objects/effects`).
+ * - `organization.create` must seed the new OrgObject (invoke it) and write `org_index`; slug lookups read
+ *   `org_index`
+ * - update/delete: `DirectoryEffects.upsertOrgIndex`
+ */
 import type { OrganizationId } from "@hazel/schema"
 import { ChannelMemberRepo, ChannelRepo, OrganizationMemberRepo, OrganizationRepo } from "@hazel/backend-core"
 import { Database } from "@hazel/db"

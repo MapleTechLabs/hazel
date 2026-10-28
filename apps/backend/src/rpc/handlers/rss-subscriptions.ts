@@ -1,3 +1,8 @@
+/**
+ * TODO(do-sync): runs in the OrgObject (`rpc/routing.ts`); not ported yet. To port: touch only that
+ * store's tables and send everything else through the outbox (`worker/objects/effects`).
+ * - polling moves to an OrgObject alarm; posts reach the ChannelObject as effects
+ */
 import { ChannelRepo, RssSubscriptionRepo } from "@hazel/backend-core"
 import { Database } from "@hazel/db"
 import { CurrentUser, withRemapDbErrors } from "@hazel/domain"
@@ -120,7 +125,7 @@ export const RssSubscriptionRpcLive = RssSubscriptionRpcs.toLayer(
 					return new RssSubscriptionListResponse({ data: subscriptions })
 				}).pipe(withRemapDbErrors("RssSubscription", "select")),
 
-			"rssSubscription.update": ({ id, ...payload }) =>
+			"rssSubscription.update": ({ id, organizationId: _route, ...payload }) =>
 				db
 					.transaction(
 						Effect.gen(function* () {

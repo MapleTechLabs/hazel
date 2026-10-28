@@ -7,6 +7,7 @@ import { TransactionId } from "@hazel/schema"
 import { ChannelNotFoundError } from "./channels"
 import { AuthMiddleware } from "./middleware"
 import { RequiredScopes } from "../scopes/required-scopes"
+import { RouteOrganizationId } from "./routing-fields"
 
 export class RssSubscriptionResponse extends Schema.Class<RssSubscriptionResponse>("RssSubscriptionResponse")(
 	{
@@ -72,7 +73,7 @@ export class RssSubscriptionRpcs extends RpcGroup.make(
 		.middleware(AuthMiddleware),
 
 	Rpc.make("rssSubscription.listByOrganization", {
-		payload: Schema.Struct({}),
+		payload: Schema.Struct({ organizationId: RouteOrganizationId }),
 		success: RssSubscriptionListResponse,
 		error: Schema.Union([UnauthorizedError, InternalServerError]),
 	})
@@ -81,6 +82,7 @@ export class RssSubscriptionRpcs extends RpcGroup.make(
 
 	Rpc.make("rssSubscription.update", {
 		payload: Schema.Struct({
+			organizationId: RouteOrganizationId,
 			id: RssSubscriptionId,
 			isEnabled: Schema.optional(Schema.Boolean),
 			pollingIntervalMinutes: Schema.optional(Schema.Number),
@@ -92,7 +94,7 @@ export class RssSubscriptionRpcs extends RpcGroup.make(
 		.middleware(AuthMiddleware),
 
 	Rpc.make("rssSubscription.delete", {
-		payload: Schema.Struct({ id: RssSubscriptionId }),
+		payload: Schema.Struct({ id: RssSubscriptionId, organizationId: RouteOrganizationId }),
 		success: Schema.Struct({ transactionId: TransactionId }),
 		error: Schema.Union([RssSubscriptionNotFoundError, UnauthorizedError, InternalServerError]),
 	})

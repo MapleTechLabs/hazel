@@ -38,12 +38,17 @@ interface NormalizedCollection {
 }
 
 /**
- * Result returned from mutation function
+ * Result returned from mutation function. The server now answers with a write position
+ * (`<kind>:<id>:<seq>`, a string); Electric still waits on a number, its seq part.
  */
 export interface MutationResultWithTxId<TSuccess> {
 	data: TSuccess
-	transactionId: Txid
+	transactionId: Txid | string
 }
+
+/** Electric's txid for a write position: its trailing seq (or the number itself). */
+const toTxid = (transactionId: Txid | string): Txid =>
+	typeof transactionId === "number" ? transactionId : Number(transactionId.split(":").pop())
 
 /**
  * Context passed to mutation function
@@ -59,7 +64,7 @@ export interface MutationContext<TMutateResult> {
 export interface OptimisticActionResult<TSuccess, TMutateResult> {
 	data: TSuccess
 	mutateResult: TMutateResult
-	transactionId: Txid
+	transactionId: Txid | string
 }
 
 /**
@@ -212,7 +217,7 @@ export function optimisticAction<
 							})
 							yield* syncAllCollections(
 								normalizedCollections,
-								mutationResult.transactionId,
+								toTxid(mutationResult.transactionId),
 								syncTimeout,
 							)
 							return mutationResult.data

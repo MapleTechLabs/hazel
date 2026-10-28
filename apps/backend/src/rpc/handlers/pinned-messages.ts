@@ -1,3 +1,8 @@
+/**
+ * TODO(do-sync): runs in the ChannelObject (`rpc/routing.ts`); not ported yet. To port: touch only that
+ * store's tables and send everything else through the outbox (`worker/objects/effects`).
+ * - authorize with `ChannelViewers` (PinnedMessagePolicy reads org tables)
+ */
 import { MessageRepo, PinnedMessageRepo } from "@hazel/backend-core"
 import { Database } from "@hazel/db"
 import { CurrentUser, withRemapDbErrors } from "@hazel/domain"
@@ -55,7 +60,7 @@ export const PinnedMessageRpcLive = PinnedMessageRpcs.toLayer(
 					)
 					.pipe(withRemapDbErrors("PinnedMessage", "create")),
 
-			"pinnedMessage.update": ({ id, ...payload }) =>
+			"pinnedMessage.update": ({ id, channelId: _route, ...payload }) =>
 				db
 					.transaction(
 						Effect.gen(function* () {

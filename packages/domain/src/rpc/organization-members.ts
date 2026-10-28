@@ -7,6 +7,7 @@ import { TransactionId } from "@hazel/schema"
 import { AuthMiddleware } from "./middleware"
 import { RequiredScopes } from "../scopes/required-scopes"
 import { OrganizationNotFoundError } from "./organizations"
+import { RouteOrganizationId } from "./routing-fields"
 
 /**
  * Response schema for successful organization member operations.
@@ -96,6 +97,7 @@ export class OrganizationMemberRpcs extends RpcGroup.make(
 	 */
 	Rpc.make("organizationMember.update", {
 		payload: Schema.Struct({
+			organizationId: RouteOrganizationId,
 			id: OrganizationMemberId,
 		}).pipe(Schema.fieldsAssign(OrganizationMember.PatchPartial.fields)),
 		success: OrganizationMemberResponse,
@@ -118,6 +120,7 @@ export class OrganizationMemberRpcs extends RpcGroup.make(
 	 */
 	Rpc.make("organizationMember.updateMetadata", {
 		payload: Schema.Struct({
+			organizationId: RouteOrganizationId,
 			id: OrganizationMemberId,
 			metadata: Schema.Struct({
 				role: Schema.optional(Schema.String),
@@ -143,7 +146,7 @@ export class OrganizationMemberRpcs extends RpcGroup.make(
 	 * @throws InternalServerError for unexpected errors
 	 */
 	Rpc.make("organizationMember.delete", {
-		payload: Schema.Struct({ id: OrganizationMemberId }),
+		payload: Schema.Struct({ id: OrganizationMemberId, organizationId: RouteOrganizationId }),
 		success: Schema.Struct({ transactionId: TransactionId }),
 		error: Schema.Union([OrganizationMemberNotFoundError, UnauthorizedError, InternalServerError]),
 	})

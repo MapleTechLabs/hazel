@@ -1,3 +1,8 @@
+/**
+ * TODO(do-sync): runs in the OrgObject (`rpc/routing.ts`); not ported yet. To port: touch only that
+ * store's tables and send everything else through the outbox (`worker/objects/effects`).
+ * - org-local; webhooks arrive via `integration_index` → OrgObject → ChannelObject effect
+ */
 import { ChannelRepo, GitHubSubscriptionRepo, IntegrationConnectionRepo } from "@hazel/backend-core"
 import { Database } from "@hazel/db"
 import { CurrentUser, withRemapDbErrors } from "@hazel/domain"
@@ -120,7 +125,7 @@ export const GitHubSubscriptionRpcLive = GitHubSubscriptionRpcs.toLayer(
 					return new GitHubSubscriptionListResponse({ data: subscriptions })
 				}).pipe(withRemapDbErrors("GitHubSubscription", "select")),
 
-			"githubSubscription.update": ({ id, ...payload }) =>
+			"githubSubscription.update": ({ id, organizationId: _route, ...payload }) =>
 				db
 					.transaction(
 						Effect.gen(function* () {

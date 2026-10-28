@@ -1,3 +1,11 @@
+/**
+ * TODO(do-sync): runs in the host OrgObject (directory for invites) (`rpc/routing.ts`); not ported yet. To
+ * port: touch only that store's tables and send everything else through the outbox
+ * (`worker/objects/effects`).
+ * - invites are directory rows (no transactions); accept fans out: guest mount in the guest OrgObject,
+ *   participants in the host OrgObject, `channel_index.hostChannelId` for the mount
+ * - `ChannelViewers.require` must accept guest mounts routed to the host channel
+ */
 import {
 	ChannelMemberRepo,
 	ChannelRepo,

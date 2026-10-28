@@ -1,3 +1,11 @@
+/**
+ * TODO(do-sync): runs in the ChannelObject (`rpc/routing.ts`); not ported yet. To port: touch only that
+ * store's tables and send everything else through the outbox (`worker/objects/effects`).
+ * - route by the payload's `channelId` hint (`rpc/routing.ts`); the upload HTTP route must create the row
+ *   in the same ChannelObject
+ * - AttachmentPolicy reads messages/channels/org members: authorize with `ChannelViewers` (as
+ *   `MessagePolicy` does)
+ */
 import { AttachmentRepo } from "@hazel/backend-core"
 import { Database } from "@hazel/db"
 import { withRemapDbErrors } from "@hazel/domain"

@@ -22,7 +22,10 @@ import {
 	OutboxDispatcherObject,
 	OutboxDispatcherObjectLive,
 } from "./worker/outbox-dispatcher-object"
-import { CACHE_BINDING, EMAIL_BINDING } from "./worker/platform"
+import { ChannelObject, ChannelObjectLive } from "./worker/objects/channel-object"
+import { OrgObject, OrgObjectLive } from "./worker/objects/org-object"
+import { UserObject, UserObjectLive } from "./worker/objects/user-object"
+import { CACHE_BINDING, DIRECTORY_DB_BINDING, EMAIL_BINDING } from "./worker/platform"
 import { RateLimiterObject, RateLimiterObjectLive } from "./worker/rate-limiter-object"
 
 /** Session and user-lookup caches (Redis on Bun). */
@@ -31,11 +34,24 @@ export const ApiCache = Cloudflare.KV.Namespace(
 	stageProps("api-cache", (title) => ({ title })),
 )
 
+/**
+ * The directory (`infra/durable-object-sync-plan.md` §1): users, auth, bots, invitations and the
+ * routing indexes. Migrations: `packages/db/migrations/directory` (rendered from `stores.ts`).
+ */
+export const DirectoryDb = Cloudflare.D1.Database(
+	"directory",
+	stageProps("directory", (name) => ({
+		name,
+		migrations: new URL("../../../packages/db/migrations/directory", import.meta.url).pathname,
+	})),
+)
+
 /** `__ALCHEMY_RUNTIME__` folds to `true` in the bundle, so the stack-side branch is tree-shaken. */
 const props = Effect.gen(function* () {
 	if (globalThis.__ALCHEMY_RUNTIME__) return { main: import.meta.url }
 	const stack = yield* HazelStack
 	const cache = yield* ApiCache
+	const directory = yield* DirectoryDb
 	const email = yield* Cloudflare.Email.SendEmail(EMAIL_BINDING)
 	return {
 		main: import.meta.url,
@@ -49,7 +65,7 @@ const props = Effect.gen(function* () {
 			traces: { enabled: true },
 		},
 		env: {
-			HAZEL_DB: stack.db.hyperdrive,
+			[DIRECTORY_DB_BINDING]: directory,
 			[CACHE_BINDING]: cache,
 			[EMAIL_BINDING]: email,
 			...(yield* apiEnv(stack)),
@@ -60,7 +76,7 @@ const props = Effect.gen(function* () {
 export class Api extends Cloudflare.Worker<
 	Api,
 	Cloudflare.WorkerShape,
-	RateLimiterObject | OutboxDispatcherObject | DiscordGatewayObject
+	RateLimiterObject | OutboxDispatcherObject | DiscordGatewayObject | OrgObject | ChannelObject | UserObject
 >()("api") {}
 
 export default Api.make(
@@ -70,6 +86,10 @@ export default Api.make(
 		const rateLimiters = yield* RateLimiterObject
 		const outbox = yield* OutboxDispatcherObject
 		const discordGateway = yield* DiscordGatewayObject
+		// The sync objects (`worker/objects/`): bound here, reached through the env (`stubs.ts`).
+		yield* OrgObject
+		yield* ChannelObject
+		yield* UserObject
 		// Hosted by the bot-gateway Worker; BotGatewayService publishes bot events into it.
 		const botGateways = yield* bindBotGateways
 		const env = yield* Cloudflare.WorkerEnvironment
@@ -99,6 +119,9 @@ export default Api.make(
 				RateLimiterObjectLive,
 				OutboxDispatcherObjectLive,
 				DiscordGatewayObjectLive,
+				OrgObjectLive,
+				ChannelObjectLive,
+				UserObjectLive,
 				Cloudflare.Workers.CronEventSourceLive,
 				hazelTelemetry("api"),
 			),

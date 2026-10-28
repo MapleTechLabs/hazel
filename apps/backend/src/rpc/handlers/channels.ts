@@ -23,7 +23,22 @@ import { UserPolicy } from "../../policies/user-policy"
 import { BotGatewayService } from "../../services/bot-gateway-service"
 import { ChannelAccessSyncService } from "../../services/channel-access-sync"
 import { makeClusterClient } from "../../lib/cluster-client"
+import { syncChannelAccess } from "../../worker/objects/org/channel-access"
 
+/**
+ * Channel RPC handlers. Run in the channel's `OrgObject` (`rpc/routing.ts`).
+ *
+ * Ported: `channel.create` (access recomputed org-locally and projected with
+ * `syncChannelAccess`: `setViewers` to the new `ChannelObject`, its `channel_index` row).
+ * TODO(do-sync):
+ * - `channel.update` / `channel.delete`: replace `channelAccessSync.syncChannel` /
+ *   `syncChildThreads` / `removeChannel` with `syncChannelAccess` (per thread too).
+ * - `channel.createDm`, `channel.createThread`: same; a thread's first message lives in the
+ *   parent's `ChannelObject` (read it through an effect or the payload, not `messageRepo`).
+ * - `channel.generateName`: reads messages (the `ChannelObject`) and calls the cluster; move to a
+ *   `ChannelObject` effect that fetches OpenRouter itself.
+ * - bot gateway channel events: publish from the outbox (`BotGatewayEffects`), not inline.
+ */
 export const ChannelRpcLive = ChannelRpcs.toLayer(
 	Effect.gen(function* () {
 		const db = yield* Database.Database
@@ -88,7 +103,9 @@ export const ChannelRpcLive = ChannelRpcs.toLayer(
 								)
 							}
 
-							yield* channelAccessSync.syncChannel(createdChannel.id)
+							// Recompute access, then project it to the new ChannelObject and the
+							// directory's channel_index (outbox; delivered right after the commit).
+							yield* syncChannelAccess(createdChannel.id)
 
 							const txid = yield* generateTransactionId()
 
@@ -274,7 +291,9 @@ export const ChannelRpcLive = ChannelRpcs.toLayer(
 								})
 							}
 
-							yield* channelAccessSync.syncChannel(createdChannel.id)
+							// Recompute access, then project it to the new ChannelObject and the
+							// directory's channel_index (outbox; delivered right after the commit).
+							yield* syncChannelAccess(createdChannel.id)
 
 							const txid = yield* generateTransactionId()
 

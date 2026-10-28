@@ -85,6 +85,7 @@ import { BotGatewayService } from "./services/bot-gateway-service"
 import { ChannelAccessSyncService } from "./services/channel-access-sync"
 import { ConnectConversationService } from "./services/connect-conversation-service"
 import { OrgResolver } from "./services/org-resolver"
+import { ChannelViewers } from "./services/channel-viewers"
 
 export { HazelApi }
 
@@ -99,37 +100,46 @@ const DocsRoute = HttpApiScalar.layer(HazelApi, {
 	path: "/docs",
 })
 
-// HTTP RPC endpoint
-const RpcRoute = RpcServer.layerHttp({
-	group: AllRpcs,
-	path: "/rpc",
-	protocol: "http",
-}).pipe(Layer.provide(RpcSerialization.layerNdjson), Layer.provide(RpcServerLive))
+/**
+ * The routes, with the RPC endpoint served by `rpcServer`: the handlers themselves (`RpcServerLive`,
+ * Bun), or the api Worker's router into the objects (`RoutedRpcServerLive`). `extra` routes join
+ * the same CORS and failure reporting (the Worker's `/sync` upgrade).
+ */
+export const makeRoutes = <E, R, EX = never, RX = never>(
+	rpcServer: Layer.Layer<Layer.Success<typeof RpcServerLive>, E, R>,
+	extra: Layer.Layer<never, EX, RX> = Layer.empty as Layer.Layer<never, EX, RX>,
+) =>
+	Layer.mergeAll(
+		HttpApiRoutes,
+		HealthRouter,
+		DocsRoute,
+		RpcServer.layerHttp({
+			group: AllRpcs,
+			path: "/rpc",
+			protocol: "http",
+		}).pipe(Layer.provide(RpcSerialization.layerNdjson), Layer.provide(rpcServer)),
+		HazelAuthRoutes,
+		extra,
+	).pipe(
+		Layer.provide(
+			HttpRouter.cors({
+				allowedOrigins: [
+					"http://localhost:3000",
+					"http://localhost:3100",
+					"http://localhost:5173",
+					"https://app.hazel.sh",
+					"tauri://localhost",
+					"http://tauri.localhost",
+				],
+				allowedMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+				credentials: true,
+			}),
+		),
+		// RpcServer and HttpApiBuilder report failed requests here; server failures get logged.
+		Layer.provide(ServerFailureReporterLive),
+	)
 
-export const AllRoutes = Layer.mergeAll(
-	HttpApiRoutes,
-	HealthRouter,
-	DocsRoute,
-	RpcRoute,
-	HazelAuthRoutes,
-).pipe(
-	Layer.provide(
-		HttpRouter.cors({
-			allowedOrigins: [
-				"http://localhost:3000",
-				"http://localhost:3100",
-				"http://localhost:5173",
-				"https://app.hazel.sh",
-				"tauri://localhost",
-				"http://tauri.localhost",
-			],
-			allowedMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-			credentials: true,
-		}),
-	),
-	// RpcServer and HttpApiBuilder report failed requests here; server failures get logged.
-	Layer.provide(ServerFailureReporterLive),
-)
+export const AllRoutes = makeRoutes(RpcServerLive)
 
 /**
  * Hazel's own sign-in: the configured instance, its auth services, and the session lookup
@@ -178,6 +188,7 @@ export const RepoLive = Layer.mergeAll(
 
 export const PolicyLive = Layer.mergeAll(
 	OrgResolver.layer,
+	ChannelViewers.layer,
 	OrganizationPolicy.layer,
 	ChannelPolicy.layer,
 	ChannelSectionPolicy.layer,

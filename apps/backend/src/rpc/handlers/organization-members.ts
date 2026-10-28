@@ -1,3 +1,9 @@
+/**
+ * TODO(do-sync): runs in the OrgObject (`rpc/routing.ts`); not ported yet. To port: touch only that
+ * store's tables and send everything else through the outbox (`worker/objects/effects`).
+ * - after membership writes: `syncUserInOrganization` then `publishChannelAccess` per affected channel,
+ *   `DirectoryEffects.upsertMembershipIndex`, `UserEffects.setOrganization` to the member's UserObject
+ */
 import { OrganizationMemberRepo } from "@hazel/backend-core"
 import { Database } from "@hazel/db"
 import { CurrentUser, withRemapDbErrors } from "@hazel/domain"
@@ -62,7 +68,7 @@ export const OrganizationMemberRpcLive = OrganizationMemberRpcs.toLayer(
 					)
 					.pipe(withRemapDbErrors("OrganizationMember", "create")),
 
-			"organizationMember.update": ({ id, ...payload }) =>
+			"organizationMember.update": ({ id, organizationId: _route, ...payload }) =>
 				db
 					.transaction(
 						Effect.gen(function* () {

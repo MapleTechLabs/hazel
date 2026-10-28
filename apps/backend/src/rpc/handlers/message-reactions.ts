@@ -1,3 +1,10 @@
+/**
+ * TODO(do-sync): runs in the ChannelObject (`rpc/routing.ts`); not ported yet. To port: touch only that
+ * store's tables and send everything else through the outbox (`worker/objects/effects`).
+ * - authorize with `ChannelViewers` (see `MessagePolicy`)
+ * - `conversationId` from `channelViewers.conversationId`, not ConnectConversationService
+ * - bot events through `BotGatewayEffects` if wanted
+ */
 import { MessageOutboxRepo, MessageReactionRepo } from "@hazel/backend-core"
 import { Database } from "@hazel/db"
 import { CurrentUser, withRemapDbErrors } from "@hazel/domain"
@@ -147,7 +154,7 @@ export const MessageReactionRpcLive = MessageReactionRpcs.toLayer(
 					return result
 				}),
 
-			"messageReaction.update": ({ id, ...payload }) =>
+			"messageReaction.update": ({ id, channelId: _route, ...payload }) =>
 				db
 					.transaction(
 						Effect.gen(function* () {

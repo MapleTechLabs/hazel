@@ -88,3 +88,15 @@ export const RateLimiterMemoryLive = Layer.succeed(
 			}),
 	}),
 )
+
+/**
+ * Admits everything: for handlers running in an object or on the api Worker's directory path,
+ * behind the api Worker's routing, which already applied the limit (`rpc/routing.ts`).
+ */
+export const RateLimiterAllowAll = Layer.succeed(
+	RateLimiter,
+	RateLimiter.of({
+		consume: (_key, limit, windowMs) =>
+			Effect.succeed({ allowed: true, remaining: limit, resetAfterMs: windowMs, limit }),
+	}),
+)

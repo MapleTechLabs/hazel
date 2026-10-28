@@ -125,7 +125,11 @@ for (const [name, group] of rpcGroups) {
 	}
 }
 
-export const RpcServerLive = Layer.empty
+/**
+ * Every group's handlers, without the api middleware: what the objects and the api Worker's
+ * directory path run in process (`./dispatch.ts`). Still requires the app services.
+ */
+export const RpcHandlersLive = Layer.empty
 	.pipe(
 		Layer.provideMerge(MessageRpcLive),
 		Layer.provideMerge(MessageReactionRpcLive),
@@ -152,4 +156,9 @@ export const RpcServerLive = Layer.empty
 		Layer.provideMerge(CustomEmojiRpcLive),
 		Layer.provideMerge(InvitationRpcLive),
 	)
-	.pipe(Layer.provideMerge(AuthMiddlewareLive), Layer.provideMerge(ScopeInjectionMiddlewareLive))
+
+/** The handlers behind the api's own middleware (the Bun runtime serves them directly). */
+export const RpcServerLive = RpcHandlersLive.pipe(
+	Layer.provideMerge(AuthMiddlewareLive),
+	Layer.provideMerge(ScopeInjectionMiddlewareLive),
+)

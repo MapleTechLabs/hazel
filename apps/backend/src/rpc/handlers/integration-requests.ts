@@ -1,3 +1,8 @@
+/**
+ * TODO(do-sync): runs in the OrgObject (`rpc/routing.ts`); not ported yet. To port: touch only that
+ * store's tables and send everything else through the outbox (`worker/objects/effects`).
+ * - org-local already
+ */
 import { Database, SQLite, schema } from "@hazel/db"
 import { CurrentUser, ErrorUtils, withRemapDbErrors } from "@hazel/domain"
 import { IntegrationRequestResponse, IntegrationRequestRpcs } from "@hazel/domain/rpc"

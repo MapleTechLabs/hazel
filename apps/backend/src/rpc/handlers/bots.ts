@@ -1,3 +1,13 @@
+/**
+ * TODO(do-sync): runs in the directory (D1), install/uninstall in the OrgObject (`rpc/routing.ts`); not
+ * ported yet. To port: touch only that store's tables and send everything else through the outbox
+ * (`worker/objects/effects`).
+ * - no `db.transaction` on the directory path (D1)
+ * - install/uninstall/installById/listInstalled need `organizationId` and belong in the OrgObject: write
+ *   `bot_installations` there, project `bots`/`bot_commands`, and re-run `publishChannelAccess` for the
+ *   org's channels so `channel_bots` follow
+ * - drop `checkBot*RateLimit` calls (the api Worker applies them, `rateLimits` in `rpc/routing.ts`)
+ */
 import { createHash, randomUUID } from "node:crypto"
 import { BotCommandRepo, BotInstallationRepo, BotRepo, UserRepo } from "@hazel/backend-core"
 import { Database, SQLite, schema } from "@hazel/db"
