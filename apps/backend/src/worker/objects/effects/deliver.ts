@@ -19,6 +19,7 @@ import { aiReceivers, AiEffects } from "./ai-effects"
 import { botGatewayReceivers, BotGatewayEffects } from "./bot-gateway-effects"
 import { channelReceivers, ChannelEffects, channelSenderRefusal } from "./channel-effects"
 import { directoryReceivers, DirectoryEffects } from "./directory-effects"
+import { searchSenderRefusal } from "../org/message-search"
 import { orgReceivers, OrgEffects } from "./org-effects"
 import {
 	type AnyEffectKind,
@@ -78,7 +79,10 @@ type SenderGuard = (
 	sender: EffectSender,
 ) => Effect.Effect<Option.Option<string>, unknown, Database.Database | SqlClient>
 
-const senderGuards: Partial<Record<ObjectKind, SenderGuard>> = { channel: channelSenderRefusal }
+const senderGuards: Partial<Record<ObjectKind, SenderGuard>> = {
+	channel: channelSenderRefusal,
+	org: (kind, payload, sender) => searchSenderRefusal(kind, payload, sender),
+}
 
 /** Run a sender-side effect (directory, bot gateway). */
 const runLocal = <R>(sideOf: Side<R>, row: OutboxRow, sender: EffectSender) =>

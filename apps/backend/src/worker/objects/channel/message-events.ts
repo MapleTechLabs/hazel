@@ -7,6 +7,7 @@
  * - bots: `botGateway.messageEvent` (message create, update, delete);
  * - notifications: `org.messageCreated` to the channel's `OrgObject` (`../org/message-notifications.ts`);
  * - thread naming: `ai.nameThread` once a thread still called "Thread" has more than 3 replies.
+ * - search: `org.indexMessages` (message create, update, delete), `./search-index.ts`.
  *
  * - chat sync: `chatSync.outbound` per outbound link (`services/chat-sync/chat-sync-outbound.ts`),
  *   except for writes that came from the provider.
@@ -22,6 +23,8 @@ import { BotGatewayEffects } from "../effects/bot-gateway-effects"
 import { enqueueEffect } from "../effects/registry"
 import { MessageNotificationOrgEffects } from "../org/message-notifications"
 import { chatSyncOutboundHook } from "../../../services/chat-sync/chat-sync-outbound"
+import { SearchOrgEffects } from "../search-wire"
+import { toIndexedMessage } from "./search-index"
 import { claimThreadNaming, readThreadOrigin } from "./thread"
 
 export type MessageRow = Schema.Schema.Type<typeof Message.Schema>
@@ -121,6 +124,23 @@ const threadNamingHook: MessageEventHook = (event) =>
 		yield* requestThreadName(organizationId.value, message.channelId, DEFAULT_THREAD_NAME)
 	})
 
+/** The org's search index follows every message write (`../org/message-search.ts`). */
+const searchIndexHook: MessageEventHook = (event) =>
+	Effect.gen(function* () {
+		if (!("message" in event)) return
+		const organizationId = yield* channelOrganization
+		if (Option.isNone(organizationId)) return
+		const { message } = event
+		const removed = event._tag === "MessageDeleted" || message.deletedAt !== null
+		yield* enqueueEffect(
+			SearchOrgEffects.indexMessages,
+			{ kind: "org", id: organizationId.value },
+			removed
+				? { upsert: [], remove: [message.id] }
+				: { upsert: [toIndexedMessage(message)], remove: [] },
+		)
+	})
+
 /** Enqueue `ai.nameThread` for the alarm; `onlyIfName` null renames whatever the name is. */
 export const requestThreadName = (
 	organizationId: OrganizationId,
@@ -139,6 +159,7 @@ export const onMessageEvent: ReadonlyArray<MessageEventHook> = [
 	botGatewayHook,
 	notificationsHook,
 	threadNamingHook,
+	searchIndexHook,
 	// Lazy: the chat-sync module imports this one back.
 	(event) => chatSyncOutboundHook(event),
 ]

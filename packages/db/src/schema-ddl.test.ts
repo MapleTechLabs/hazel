@@ -4,7 +4,7 @@ import { Effect } from "effect"
 import * as SqlClient from "effect/sql/SqlClient"
 import { describe, expect, it } from "vitest"
 import { initialStatements } from "./migrations.generated"
-import { applyMigrations, renderStoreSchema, storeMigrations } from "./schema-ddl"
+import { applyMigrations, renderStoreSchema, storeMigrations, unmodeledStatements } from "./schema-ddl"
 import { storeNames, storeTables } from "./stores"
 
 const withSqlite = <A, E>(effect: Effect.Effect<A, E, SqlClient.SqlClient>) =>
@@ -41,6 +41,7 @@ describe.each(storeNames)("the %s store", (store) => {
 				const sql = yield* SqlClient.SqlClient
 				for (const statement of yield* renderStoreSchema(storeTables[store]))
 					yield* sql.unsafe(statement)
+				for (const statement of unmodeledStatements[store]) yield* sql.unsafe(statement)
 				return yield* schemaOf
 			}),
 		)

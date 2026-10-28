@@ -33,7 +33,8 @@ export const createChatSyncDbHarness = async (): Promise<ChatSyncDbHarness> => {
 				const sql = Context.get(context, SqlClient.SqlClient)
 				const tables = yield* sql<{ readonly name: string }>`
 					SELECT name FROM sqlite_master
-					WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name != '_migrations'`
+					WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name != '_migrations'
+						AND name NOT LIKE 'message_search_fts%'`
 				for (const { name } of tables) yield* sql`DELETE FROM ${sql(name)}`
 			}),
 		)

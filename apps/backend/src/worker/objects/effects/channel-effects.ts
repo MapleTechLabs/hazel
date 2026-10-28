@@ -13,6 +13,8 @@ import { AttachmentEffects, attachmentReceivers } from "../channel/attachments"
 import { deleteObjectMeta, readObjectMeta, writeObjectMeta } from "../meta"
 import { chatSyncChannelReceivers } from "../../../services/chat-sync/chat-sync-channel"
 import { ChatSyncChannelEffects } from "../../../services/chat-sync/chat-sync-effects"
+import { exportSearchMessages } from "../channel/search-index"
+import { SearchChannelEffects } from "../search-wire"
 import { defineEffect, type EffectReceivers, type EffectSender, isOrgSender } from "./registry"
 
 export const ViewerRole = Schema.Literals(["owner", "admin", "member", "guest"])
@@ -51,6 +53,8 @@ export const ChannelEffects = {
 	...AttachmentEffects,
 	/** Chat sync, from the `OrgObject` (`services/chat-sync/chat-sync-channel.ts`). */
 	...ChatSyncChannelEffects,
+	/** The org's search backfill (`../channel/search-index.ts`). */
+	...SearchChannelEffects,
 }
 
 /** Meta keys the channel's handlers read (see `../channel/channel-scope.ts`). */
@@ -169,7 +173,11 @@ export const channelSenderRefusal = Effect.fn("ChannelEffects.senderRefusal")(fu
 		}
 		return Option.none()
 	}
-	if (Option.isNone(pinned)) return Option.some(`${kind} before the channel's first setViewers`)
+	if (Option.isNone(pinned)) {
+		// The receiver answers an unclaimed channel with an empty page (it sends no messages).
+		if (kind === SearchChannelEffects.exportSearchMessages.name) return Option.none()
+		return Option.some(`${kind} before the channel's first setViewers`)
+	}
 	return pinned.value === sender.id
 		? Option.none()
 		: Option.some(`Channel belongs to org ${pinned.value}, not ${sender.id}`)
@@ -186,4 +194,5 @@ export const channelReceivers = {
 	"channel.chatSyncIngest": (payload) => chatSyncChannelReceivers["channel.chatSyncIngest"](payload),
 	"channel.chatSyncReassignAuthors": (payload) =>
 		chatSyncChannelReceivers["channel.chatSyncReassignAuthors"](payload),
+	"channel.exportSearchMessages": (payload) => exportSearchMessages(payload),
 } satisfies EffectReceivers<typeof ChannelEffects, Database.Database | SqlClient>

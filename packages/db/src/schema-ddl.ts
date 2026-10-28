@@ -43,9 +43,56 @@ export interface StoreMigration {
 	readonly statements: ReadonlyArray<string>
 }
 
+/**
+ * `OrgObject` message search: `message_search` (one row per indexed message, `createdAt` in epoch
+ * ms) with an external-content FTS5 index kept in step by triggers, and the backfill's progress
+ * per channel. Raw SQL: effect-orm does not model virtual tables or triggers.
+ */
+export const messageSearchStatements: ReadonlyArray<string> = [
+	`CREATE TABLE IF NOT EXISTS "message_search" (
+	"id" integer PRIMARY KEY,
+	"messageId" text NOT NULL UNIQUE,
+	"channelId" text NOT NULL,
+	"authorId" text NOT NULL,
+	"conversationId" text,
+	"createdAt" integer NOT NULL,
+	"content" text NOT NULL
+)`,
+	`CREATE INDEX IF NOT EXISTS "message_search_channel_created_idx" ON "message_search" ("channelId", "createdAt")`,
+	`CREATE INDEX IF NOT EXISTS "message_search_created_idx" ON "message_search" ("createdAt", "messageId")`,
+	`CREATE INDEX IF NOT EXISTS "message_search_author_idx" ON "message_search" ("authorId", "createdAt")`,
+	`CREATE VIRTUAL TABLE IF NOT EXISTS "message_search_fts" USING fts5(content, content='message_search', content_rowid='id', tokenize='unicode61 remove_diacritics 2')`,
+	`CREATE TRIGGER IF NOT EXISTS "message_search_ai" AFTER INSERT ON "message_search" BEGIN
+	INSERT INTO "message_search_fts" (rowid, content) VALUES (new."id", new."content");
+END`,
+	`CREATE TRIGGER IF NOT EXISTS "message_search_ad" AFTER DELETE ON "message_search" BEGIN
+	INSERT INTO "message_search_fts" ("message_search_fts", rowid, content) VALUES ('delete', old."id", old."content");
+END`,
+	`CREATE TRIGGER IF NOT EXISTS "message_search_au" AFTER UPDATE ON "message_search" BEGIN
+	INSERT INTO "message_search_fts" ("message_search_fts", rowid, content) VALUES ('delete', old."id", old."content");
+	INSERT INTO "message_search_fts" (rowid, content) VALUES (new."id", new."content");
+END`,
+	`CREATE TABLE IF NOT EXISTS "message_search_backfill" (
+	"channelId" text PRIMARY KEY NOT NULL,
+	"generation" integer NOT NULL,
+	"done" integer NOT NULL DEFAULT 0
+)`,
+]
+
+/** What a store's later migrations create beyond its tables' DDL (`renderStoreSchema`). */
+export const unmodeledStatements: Record<StoreName, ReadonlyArray<string>> = {
+	directory: [],
+	org: messageSearchStatements,
+	channel: [],
+	user: [],
+}
+
 export const storeMigrations: Record<StoreName, ReadonlyArray<StoreMigration>> = {
 	directory: [{ id: "0001_initial", statements: initialStatements.directory }],
-	org: [{ id: "0001_initial", statements: initialStatements.org }],
+	org: [
+		{ id: "0001_initial", statements: initialStatements.org },
+		{ id: "0002_message_search", statements: messageSearchStatements },
+	],
 	channel: [{ id: "0001_initial", statements: initialStatements.channel }],
 	user: [{ id: "0001_initial", statements: initialStatements.user }],
 }

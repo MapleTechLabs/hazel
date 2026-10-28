@@ -201,8 +201,10 @@ the client.
 
 ## 6. Known regressions (follow-ups)
 
-- **Message search** in the command palette only covers channels that are loaded. Follow-up: per-org
-  FTS5.
+- **Message search** runs on a per-org FTS5 index (`worker/objects/org/message-search.ts`,
+  `message.search`), backfilled on each org's first activation after the `0002_message_search`
+  migration. Not yet: `has:` filters (local results only), and the chat page ignores `?messageId=`,
+  so a result opens its channel without scrolling to the message.
 - **Messages load a whole channel** once its socket is open; there's no paging from the server yet.
   Every `Hello` reset (first connect, a catch-up past `catchUpMaxChanges`, a dependency
   resnapshot) runs `load(principal, "all")` for `messages`, `message_reactions`,
