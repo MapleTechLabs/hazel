@@ -224,4 +224,40 @@ describe("sync runtime paging", () => {
 			expect(frames(old).at(-1)).toEqual(frames(paged).at(-1))
 		}).pipe(Effect.provide(t.layer))
 	})
+
+	it.effect("Ready advertises paging; LoadByIds answers rows past the window with their dependents", () => {
+		const t = setup(3)
+		return Effect.gen(function* () {
+			t.storage.db.exec(SEED)
+			const socket = yield* t.connect()
+			yield* t.send(socket, { _tag: "Hello", since: null, paging: true })
+			expect(frames(socket).at(-1)).toEqual({ _tag: "Ready", paging: true })
+			const seq = frames(socket).find((frame) => frame._tag === "Commit")!.seq
+			socket.clear()
+
+			yield* t.send(socket, {
+				_tag: "LoadByIds",
+				requestId: 7,
+				table: "notes",
+				ids: ["n1", "n2", "n1", "missing"],
+			})
+			expect(frames(socket)[0]).toEqual({ _tag: "Begin", reset: false, request: 7 })
+			expect(frames(socket).at(-1)).toEqual({ _tag: "Commit", seq })
+			expect(upsertIds(socket, "notes")).toEqual(["n1", "n2"])
+			expect(upsertIds(socket, "likes")).toEqual(["l1"])
+
+			// A table without `byIds` falls back to its `load`.
+			socket.clear()
+			yield* t.send(socket, { _tag: "LoadByIds", requestId: 8, table: "likes", ids: ["l6"] })
+			expect(upsertIds(socket, "likes")).toEqual(["l6"])
+
+			// More than 50 ids is a bad frame.
+			socket.clear()
+			const ids = Array.from({ length: 51 }, (_, i) => `x${i}`)
+			yield* t.send(socket, { _tag: "LoadByIds", requestId: 9, table: "notes", ids })
+			expect(frames(socket)).toEqual([
+				{ _tag: "Error", code: "bad_frame", message: "Failed to decode sync frame" },
+			])
+		}).pipe(Effect.provide(t.layer))
+	})
 })

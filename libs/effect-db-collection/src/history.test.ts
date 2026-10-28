@@ -67,7 +67,17 @@ const snapshot = (socket: FakeSocket, seq: number, rows: ReadonlyArray<Message>,
 	})
 	socket.receive({ _tag: "Rows", table: "messages", upserts: rows, deletes: [] })
 	socket.receive({ _tag: "Commit", seq })
-	socket.receive({ _tag: "Ready" })
+	socket.receive({ _tag: "Ready", paging: true })
+}
+
+const loadByIdsFrames = (socket: FakeSocket) => socket.sent.filter((frame) => frame._tag === "LoadByIds")
+
+/** Answers the last `LoadByIds` with `rows`. */
+const answerByIds = (socket: FakeSocket, seq: number, rows: ReadonlyArray<Message>) => {
+	const request = loadByIdsFrames(socket).at(-1)!
+	socket.receive({ _tag: "Begin", reset: false, request: request.requestId })
+	socket.receive({ _tag: "Rows", table: "messages", upserts: rows, deletes: [] })
+	socket.receive({ _tag: "Commit", seq })
 }
 
 const loadOlderFrames = (socket: FakeSocket) => socket.sent.filter((frame) => frame._tag === "LoadOlder")
@@ -245,6 +255,69 @@ describe("paged history", () => {
 		await vi.waitFor(() =>
 			expect(live.toArray.map((row) => row.id)).toEqual(range(10, 6).map((row) => row.id)),
 		)
+		await live.cleanup()
+	})
+})
+
+describe("rows by id", () => {
+	it("loadByIds holds rows past the window, keeps them fresh, and re-asks after a reset", async () => {
+		const { sockets, messages } = setup()
+		const live = channelQuery(messages)
+		const ready = live.preload()
+		const socket = await socketFor(sockets)
+		snapshot(socket, 5, range(10, 8), true)
+		await ready
+
+		const ids = [message(2).id, message(9).id, "gone"]
+		const demand = messages.utils.loadByIds("c1", ids)
+		// The held row is not asked for.
+		expect(loadByIdsFrames(socket)).toEqual([
+			{ _tag: "LoadByIds", requestId: 1, table: "messages", ids: [message(2).id, "gone"] },
+		])
+		answerByIds(socket, 5, [message(2)])
+		await demand.settled
+		expect(messages.get(message(2).id)?.content).toBe("m2")
+		// Below the window, but held: it takes edits; the window is unchanged.
+		socket.commit(6, { messages: { upserts: [message(2, "edited")] } })
+		expect(messages.get(message(2).id)?.content).toBe("edited")
+		expect(messages.utils.historyOf("c1")).toEqual({ loaded: 3, hasMore: true })
+		// "gone" came back missing: a later run does not ask again.
+		socket.commit(7, {})
+		expect(loadByIdsFrames(socket)).toHaveLength(1)
+
+		// A reset drops the row; the held demand asks again.
+		snapshot(socket, 9, range(10, 8), true)
+		expect(messages.has(message(2).id)).toBe(false)
+		await vi.waitFor(() => expect(loadByIdsFrames(socket)).toHaveLength(2))
+		expect(loadByIdsFrames(socket)[1]!.ids).toEqual([message(2).id, "gone"])
+		answerByIds(socket, 9, [message(2)])
+		expect(messages.has(message(2).id)).toBe(true)
+
+		demand.release()
+		snapshot(socket, 10, range(10, 8), true)
+		await new Promise((resolve) => setTimeout(resolve, 5))
+		expect(loadByIdsFrames(socket)).toHaveLength(2)
+		await live.cleanup()
+	})
+
+	it("sends nothing to a source that did not advertise paging", async () => {
+		const { sockets, messages } = setup()
+		const live = channelQuery(messages)
+		const ready = live.preload()
+		const socket = await socketFor(sockets)
+		socket.open()
+		// An older source: a whole snapshot, no windows, `Ready` without `paging`.
+		socket.receive({ _tag: "Begin", reset: true })
+		socket.receive({ _tag: "Rows", table: "messages", upserts: range(3, 1), deletes: [] })
+		socket.receive({ _tag: "Commit", seq: 1 })
+		socket.receive({ _tag: "Ready" })
+		await ready
+
+		const demand = messages.utils.loadByIds("c1", ["m-old"])
+		await demand.settled
+		socket.commit(2, {})
+		expect(loadByIdsFrames(socket)).toEqual([])
+		demand.release()
 		await live.cleanup()
 	})
 })

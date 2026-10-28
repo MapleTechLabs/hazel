@@ -5,7 +5,8 @@
  *
  * Messages are paged: a snapshot sends the newest {@link MESSAGE_SNAPSHOT_LIMIT} messages (plus
  * older pinned ones, so the pins list is whole) and only their reactions, pins, attachments and
- * chat-sync links; `LoadOlder` pages further back. Deltas go out for any row by key.
+ * chat-sync links; `LoadOlder` pages further back and `LoadByIds` fetches single messages (reply
+ * targets). Deltas go out for any row by key.
  */
 import type { SyncPageCursor } from "@hazel/domain/sync"
 import { Database, SQLite, schema } from "@hazel/db"
@@ -75,6 +76,31 @@ const chunk = <A>(items: ReadonlyArray<A>, size: number): Array<ReadonlyArray<A>
 	return chunks
 }
 
+/** `sent` messages and their dependents' rows, by table name. */
+const withDependents = (principal: SyncPrincipal, sent: ReadonlyArray<SyncRow>) =>
+	Effect.gen(function* () {
+		const ids = sent.map((row) => row.key)
+		const rows = new Map<string, ReadonlyArray<SyncRow>>([[messages.table.name, sent]])
+		for (const { spec, column } of dependents) {
+			const batches = yield* Effect.forEach(chunk(ids, ID_BATCH), (batch) =>
+				selectVisible(spec, principal, ($) => $[column]!.in_(...batch)),
+			)
+			rows.set(spec.table.name, batches.flat())
+		}
+		return rows
+	})
+
+/** `LoadByIds`: the visible messages among `ids` (e.g. reply targets past the window) and their dependents. */
+export const messagesByIds = (principal: SyncPrincipal, ids: ReadonlyArray<string>) =>
+	Effect.gen(function* () {
+		const batches = yield* Effect.forEach(chunk(ids, ID_BATCH), (batch) =>
+			selectVisible(messages, principal, ($) => $.id!.in_(...batch)),
+		)
+		const found = batches.flat()
+		yield* Effect.annotateCurrentSpan({ "sync.found": found.length })
+		return yield* withDependents(principal, found)
+	}).pipe(Effect.withSpan("ChannelSource.messagesByIds", { attributes: { "sync.ids": ids.length } }))
+
 /** Up to `limit` visible messages older than `before` (newest first) and their dependents. */
 export const pageMessages = (principal: SyncPrincipal, before: SyncPageCursor | null, limit: number) =>
 	Effect.gen(function* () {
@@ -101,15 +127,7 @@ export const pageMessages = (principal: SyncPrincipal, before: SyncPageCursor | 
 						SQLite.and(isPinned($), olderThan($, oldest)),
 					)
 				: []
-		const sent = [...window, ...pinnedOlder]
-		const ids = sent.map((row) => row.key)
-		const rows = new Map<string, ReadonlyArray<SyncRow>>([[messages.table.name, sent]])
-		for (const { spec, column } of dependents) {
-			const batches = yield* Effect.forEach(chunk(ids, ID_BATCH), (batch) =>
-				selectVisible(spec, principal, ($) => $[column]!.in_(...batch)),
-			)
-			rows.set(spec.table.name, batches.flat())
-		}
+		const rows = yield* withDependents(principal, [...window, ...pinnedOlder])
 		// Uploads not attached to a message yet belong to no page: the snapshot sends them.
 		if (before === null) {
 			const pending = yield* selectVisible(attachments, principal, ($) => $.messageId!.isNull())
@@ -128,6 +146,7 @@ const messagePaging: SyncPaging<SyncPrincipal, never, Database.Database> = {
 	maxLimit: MESSAGE_PAGE_MAX,
 	dependents: dependents.map(({ spec }) => spec.table.name),
 	page: pageMessages,
+	byIds: messagesByIds,
 }
 
 /** A viewer of the channel; `not_found` before the `OrgObject` delivered any viewers. */

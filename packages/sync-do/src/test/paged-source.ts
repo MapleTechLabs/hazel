@@ -66,6 +66,27 @@ export const makePagedSource = (options: {
 			} satisfies SyncPage
 		}).pipe(Effect.orDie)
 
+	const byIds = (ids: ReadonlyArray<string>) =>
+		Effect.gen(function* () {
+			const sql = yield* SqlClient
+			const notes = yield* sql.unsafe<NoteRow>(
+				`SELECT id, created_at, body FROM notes WHERE id IN (${placeholders(ids)}) ORDER BY id`,
+				ids,
+			)
+			const found = notes.map((note) => note.id)
+			const likes =
+				found.length === 0
+					? []
+					: yield* sql.unsafe<{ id: string; note_id: string }>(
+							`SELECT id, note_id FROM likes WHERE note_id IN (${placeholders(found)}) ORDER BY id`,
+							found,
+						)
+			return new Map<string, ReadonlyArray<SyncRow>>([
+				["notes", notes.map(noteRow)],
+				["likes", likes.map((row) => ({ key: row.id, row }))],
+			])
+		}).pipe(Effect.orDie)
+
 	const byKeys = <A extends object>(table: string, columns: string, keys: ReadonlyArray<string> | "all") =>
 		Effect.gen(function* () {
 			const sql = yield* SqlClient
@@ -91,6 +112,7 @@ export const makePagedSource = (options: {
 					maxLimit: options.maxLimit ?? 100,
 					dependents: ["likes"],
 					page: (_principal, before, limit) => page(before, limit),
+					byIds: (_principal, ids) => byIds(ids),
 				},
 			},
 			{

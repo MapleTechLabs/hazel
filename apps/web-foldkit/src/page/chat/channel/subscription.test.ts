@@ -14,6 +14,7 @@ import {
 } from "./fixtures.test-support"
 import { messageCollection } from "~/db/collections"
 import { messageHistoryStream, threadHistoryStream } from "../data"
+import { replyTargetLoadStream } from "../lookup-data"
 import { PAGE_SIZE } from "../queries"
 import { setTab } from "./page"
 import { Message, type Model } from "./model"
@@ -192,5 +193,18 @@ describe("message history paging", () => {
 		await Effect.runPromise(Fiber.interrupt(fiber))
 		expect(release).toHaveBeenCalledOnce()
 		retain.mockRestore()
+	})
+
+	test("reply previews keep their targets loaded by id while shown", async () => {
+		const release = vi.fn()
+		const load = vi
+			.spyOn(messageCollection.utils, "loadByIds")
+			.mockReturnValue({ settled: Promise.resolve(), release })
+		const channelId = loadedModel().channelId
+		const fiber = Effect.runFork(Stream.runDrain(replyTargetLoadStream(channelId, [adaMessageId])))
+		await vi.waitFor(() => expect(load).toHaveBeenCalledWith(channelId, [adaMessageId]))
+		await Effect.runPromise(Fiber.interrupt(fiber))
+		expect(release).toHaveBeenCalledOnce()
+		load.mockRestore()
 	})
 })

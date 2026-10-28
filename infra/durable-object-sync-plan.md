@@ -107,13 +107,15 @@ Once any request or RPC method has committed, the object calls `flush()`:
 ### Frames (`packages/domain/src/sync/protocol.ts`, JSON text)
 
 - **Client → object:** `Hello { since: number | null, paging?: boolean }`, `Ping`, `Reauth { token }`,
-  `LoadOlder { requestId, table, before: { createdAt, id }, limit }` (see Paged history).
+  `LoadOlder { requestId, table, before: { createdAt, id }, limit }`,
+  `LoadByIds { requestId, table, ids }` (≤ 50 ids; see Paged history).
 - **Object → client:**
     - `Begin { reset: boolean, request?: number, windows?: [{ table, oldest, hasMore }] }`: on
       reset, the client truncates the collections this source feeds.
     - `Rows { table, upserts: unknown[], deletes: string[] }`
     - `Commit { seq }`
-    - `Ready { expiresInMs? }` (sent after the first Commit; when the socket expires)
+    - `Ready { expiresInMs?, paging? }` (sent after the first Commit; when the socket expires;
+      `paging: true` when the source answers `LoadOlder` and `LoadByIds`)
     - `Reauthed { expiresInMs }` (a `Reauth` moved the expiry)
     - `Ephemeral { ... }`
     - `Pong`
@@ -139,6 +141,9 @@ A `ChannelObject` pages `messages` instead of sending the whole channel (`SyncTa
 - **Paging:** `LoadOlder` is answered, under the flush permit, by
   `Begin { reset: false, request, windows: [lowered window] }`, `Rows…`, and a `Commit` at the
   socket's current `seq` (the page never moves the stream). `limit` is clamped to 200.
+- **By id:** `LoadByIds` (≤ 50 ids) is answered the same way, `Begin { reset: false, request }`
+  without `windows`: the visible messages among the ids and their dependents (`SyncPaging.byIds`,
+  `messagesByIds`; a table without `byIds` answers from its `load`). Missing ids are left out.
 - **Deltas** are unchanged: a change to any row goes out by key, paged in or not. The object keeps
   no per-socket horizon.
 - **Client** (`libs/effect-db-collection`): the mirror records each source's window. A live upsert
@@ -149,9 +154,14 @@ A `ChannelObject` pages `messages` instead of sending the whole channel (`SyncTa
     - **Reset** drops the pages with everything else. Demands (`utils.retainHistory`, or a
       `loadSubset` with `limit`/`offset`) outlive it and re-request pages from the new window.
     - A page answer to a request sent before a reset arrived is dropped, so no gap opens.
+    - `utils.loadByIds(channelId, ids)` holds rows by key (they are held, so they take edits); a
+      reset drops them and the demand asks again. Held ids, and ids that came back missing since the
+      last reset, are not re-asked. It is sent only once the source advertised paging (`Ready.paging`,
+      or a snapshot with `windows`), never to an older object.
 - **Web:** the channel page's window subscription holds `retainHistory(offset + limit + PAGE_SIZE)`,
   so scrolling back pages older messages in before the window reaches them.
-  The open thread panel holds `retainHistory(thread, Infinity)`: it shows the whole thread.
+  The open thread panel holds `retainHistory(thread, Infinity)`: it shows the whole thread. Reply
+  previews hold `loadByIds(channel, replyIds)`, so a reply to a message past the window shows it.
 
 ### Auth
 

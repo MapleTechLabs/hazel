@@ -8,6 +8,7 @@ import {
 	SYNC_SUBPROTOCOL,
 	SyncCloseCode,
 	type SyncClientFrame,
+	SYNC_LOAD_BY_IDS_MAX,
 	type SyncPageCursor,
 	type SyncSeq,
 	SyncServerFrame,
@@ -104,7 +105,8 @@ interface OpenRun {
 }
 
 interface PageRequest {
-	readonly resolve: (window: SyncWindow | undefined) => void
+	/** `undefined`: not applied (overtaken, socket gone); else the run's window, if it had one. */
+	readonly resolve: (answer: { readonly window: SyncWindow | undefined } | undefined) => void
 	/** A reset arrived after it was sent: settle it with `undefined` once the reset commits. */
 	stale: boolean
 }
@@ -141,6 +143,11 @@ export class SyncConnection {
 	private run: OpenRun | null = null
 	/** A `Commit` arrived on the current socket: the source accepts `LoadOlder`. */
 	private socketSynced = false
+	/**
+	 * The source answers `LoadByIds`: its last `Ready` said `paging`, or a snapshot carried windows.
+	 * Kept across sockets (a catch-up's `Ready` comes after its first `Commit`).
+	 */
+	private serverPages = false
 	private nextRequestId = 0
 	private readonly pageRequests = new Map<number, PageRequest>()
 	private pingOutstanding = false
@@ -264,8 +271,29 @@ export class SyncConnection {
 		if (!this.canPage) return Promise.resolve(undefined)
 		const requestId = ++this.nextRequestId
 		return new Promise((resolve) => {
-			this.pageRequests.set(requestId, { resolve, stale: false })
+			this.pageRequests.set(requestId, { resolve: (answer) => resolve(answer?.window), stale: false })
 			this.send({ _tag: "LoadOlder", requestId, table, before, limit })
+		})
+	}
+
+	/** {@link canPage}, and the source said it answers `LoadByIds` (older sources do not). */
+	get canLoadByIds(): boolean {
+		return this.canPage && this.serverPages
+	}
+
+	/**
+	 * Asks for the rows of `table` among `ids` (at most {@link SYNC_LOAD_BY_IDS_MAX}). Resolves `true`
+	 * once they are applied, `false` when it cannot be asked now or was overtaken.
+	 */
+	loadByIds(table: string, ids: ReadonlyArray<string>): Promise<boolean> {
+		if (!this.canLoadByIds || ids.length === 0) return Promise.resolve(false)
+		const requestId = ++this.nextRequestId
+		return new Promise((resolve) => {
+			this.pageRequests.set(requestId, {
+				resolve: (answer) => resolve(answer !== undefined),
+				stale: false,
+			})
+			this.send({ _tag: "LoadByIds", requestId, table, ids: ids.slice(0, SYNC_LOAD_BY_IDS_MAX) })
 		})
 	}
 
@@ -450,6 +478,7 @@ export class SyncConnection {
 				const request = frame.request
 				if (frame.reset) {
 					for (const pending of this.pageRequests.values()) pending.stale = true
+					if (frame.windows !== undefined) this.serverPages = true
 				}
 				const pending = request === undefined ? undefined : this.pageRequests.get(request)
 				this.run = {
@@ -516,7 +545,7 @@ export class SyncConnection {
 				if (open.request !== undefined) {
 					const pending = this.pageRequests.get(open.request)
 					this.pageRequests.delete(open.request)
-					pending?.resolve(stale ? undefined : open.windows.values().next().value)
+					pending?.resolve(stale ? undefined : { window: open.windows.values().next().value })
 				}
 				// Requests a reset overtook: settled now that the reset's window is applied.
 				if (open.reset) this.settlePages((pending) => pending.stale)
@@ -526,6 +555,7 @@ export class SyncConnection {
 				this.attempt = 0
 				this.reauthStreak = 0
 				this.hasSnapshot = true
+				this.serverPages = frame.paging === true
 				this.setStatus({ state: "ready" })
 				this.scheduleReauth(frame.expiresInMs)
 				return

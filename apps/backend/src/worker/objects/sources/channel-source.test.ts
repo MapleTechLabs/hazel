@@ -72,6 +72,7 @@ describe("channel source paging", () => {
 				)
 				yield* channel.onMessage(socket, JSON.stringify({ _tag: "Hello", since: null, paging: true }))
 
+				expect(socket.frames().at(-1)).toMatchObject({ _tag: "Ready", paging: true })
 				const begin = socket.frames()[0] as Frame
 				const oldest = { createdAt: new Date(`${at(5)}Z`).toISOString(), id: ids[5] }
 				expect(begin).toMatchObject({
@@ -117,6 +118,21 @@ describe("channel source paging", () => {
 				expect(rowsOf(socket, "message_reactions").map((row) => row.id)).toEqual(["r-old"])
 				expect(rowsOf(socket, "attachments").map((row) => row.id)).toEqual(["a-old"])
 				expect(rowsOf(socket, "pinned_messages").map((row) => row.id)).toEqual(["p-old"])
+
+				// A reply target past the window, by id, with its dependents; Ready advertised it.
+				socket.clear()
+				yield* channel.onMessage(
+					socket,
+					JSON.stringify({
+						_tag: "LoadByIds",
+						requestId: 2,
+						table: "messages",
+						ids: [ids[2], uuid()],
+					}),
+				)
+				expect(socket.frames()[0]).toEqual({ _tag: "Begin", reset: false, request: 2 })
+				expect(rowsOf(socket, "messages").map((row) => row.id)).toEqual([ids[2]])
+				expect(rowsOf(socket, "attachments").map((row) => row.id)).toEqual(["a-old"])
 			}),
 		))
 })

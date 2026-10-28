@@ -72,7 +72,23 @@ export const SyncLoadOlder = Schema.TaggedStruct("LoadOlder", {
 })
 export type SyncLoadOlder = typeof SyncLoadOlder.Type
 
-export const SyncClientFrame = Schema.Union([SyncHello, SyncPing, SyncReauth, SyncLoadOlder])
+/** The most ids one `LoadByIds` may ask for. */
+export const SYNC_LOAD_BY_IDS_MAX = 50
+
+/**
+ * Asks for rows of a paged table by key (e.g. a reply's target older than the window), plus their
+ * dependent rows. Answered like a `LoadOlder` (a `Begin{reset:false, request}` run, no `windows`);
+ * the rows stay held and deltas keep them fresh. Ids that are missing or invisible are left out.
+ * Send it only to a source whose `Ready` said `paging: true`.
+ */
+export const SyncLoadByIds = Schema.TaggedStruct("LoadByIds", {
+	requestId: Schema.Int,
+	table: Schema.String,
+	ids: Schema.Array(Schema.String).check(Schema.isMaxLength(SYNC_LOAD_BY_IDS_MAX)),
+})
+export type SyncLoadByIds = typeof SyncLoadByIds.Type
+
+export const SyncClientFrame = Schema.Union([SyncHello, SyncPing, SyncReauth, SyncLoadOlder, SyncLoadByIds])
 export type SyncClientFrame = typeof SyncClientFrame.Type
 
 // ---------------------------------------------------------------------------
@@ -98,7 +114,7 @@ export type SyncWindow = typeof SyncWindow.Type
  *
  * Paged tables (a channel's `messages`): a snapshot sends only the newest rows and their dependents,
  * and `windows` says where each paged table's history starts. `request` marks the answer to a
- * `LoadOlder`; its `windows` entry is the lowered start. The page closes with a `Commit` at the
+ * `LoadOlder` or `LoadByIds`; a `LoadOlder`'s `windows` entry is the lowered start. The page closes with a `Commit` at the
  * socket's current `seq`, so it never moves the stream. Paging state lives only on the client:
  * a catch-up (`Hello{since}`) keeps paged rows, a reset drops them (re-request what is still
  * needed), and deltas carry changes to any row by key, paged in or not.
@@ -134,9 +150,13 @@ export const SyncCommit = Schema.TaggedStruct("Commit", {
  */
 const ExpiresInMs = Schema.optionalKey(Schema.NullOr(Schema.Number))
 
-/** Sent once, after the first `Commit` on a socket: the initial snapshot is complete. */
+/**
+ * Sent once, after the first `Commit` on a socket: the initial snapshot is complete. `paging: true`
+ * says the source pages a table and answers `LoadOlder` and `LoadByIds`.
+ */
 export const SyncReady = Schema.TaggedStruct("Ready", {
 	expiresInMs: ExpiresInMs,
+	paging: Schema.optionalKey(Schema.Boolean),
 })
 
 /** A `Reauth` was accepted: the socket's new expiry. */

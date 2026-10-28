@@ -137,7 +137,7 @@ class SourceMirror<T extends object, TKey extends string | number> implements Sy
 	/** Each source's history window of this table, when the source pages it. */
 	readonly windows = new Map<SourceKey, SyncWindow>()
 	/** Called after every run a source applied. */
-	onRun: ((source: SourceKey) => void) | undefined
+	onRun: ((source: SourceKey, reset: boolean) => void) | undefined
 	private target: SyncParams<T, TKey> | null = null
 	private pendingReceipt: Promise<void> | undefined
 
@@ -161,7 +161,11 @@ class SourceMirror<T extends object, TKey extends string | number> implements Sy
 
 	applyRun(source: SourceKey, reset: boolean, rows: SyncRunTable | undefined, info?: SyncRunInfo): void {
 		this.applyRows(source, reset, rows, info)
-		this.onRun?.(source)
+		this.onRun?.(source, reset)
+	}
+
+	holds(source: SourceKey, key: string): boolean {
+		return this.rows.get(key as TKey)?.sources.has(source) === true
 	}
 
 	private applyRows(
@@ -337,6 +341,12 @@ export interface EffectDbCollectionUtils extends UtilsRecord {
 	 * `Infinity` holds the whole history.
 	 */
 	readonly retainHistory: (channelId: string, count: number) => HistoryDemand
+	/**
+	 * Loads the channel's rows with `ids` (e.g. reply targets older than the window) and keeps them
+	 * loaded, re-asking after a reset, until released. Held or missing ids are not re-asked; a source
+	 * that does not answer `LoadByIds` gets nothing. It does not open the source.
+	 */
+	readonly loadByIds: (channelId: string, ids: ReadonlyArray<string>) => HistoryDemand
 	/** How much of the channel's history is held; `undefined` when the source does not page it. */
 	readonly historyOf: (channelId: string) => HistoryState | undefined
 	readonly hub: SyncHub
@@ -422,7 +432,11 @@ export function doCollectionOptions<
 		: decodeSchema
 	const mirror = new SourceMirror<T, TKey>(table, id, decode, config.getKey, log)
 	const history = new HistoryPager(hub, mirror)
-	mirror.onRun = (source) => history.pump(source)
+	mirror.onRun = (source, reset) => history.onRun(source, reset)
+	// `Ready` says whether the source answers `LoadByIds`; it comes after the run it closes.
+	hub.subscribeStatus((source, status) => {
+		if (status.state === "ready") history.pump(source)
+	})
 	// Registered now, not when TanStack starts syncing, so rows from sources other collections
 	// opened are already held when this collection's sync starts.
 	hub.registerSink(mirror)
@@ -475,6 +489,7 @@ export function doCollectionOptions<
 		loadOlder: (channelId, limit) => history.loadOlder(sourceKey("channel", channelId), limit),
 		retainHistory: (channelId, count) => history.demand(sourceKey("channel", channelId), count),
 		historyOf: (channelId) => history.state(sourceKey("channel", channelId)),
+		loadByIds: (channelId, ids) => history.demandIds(sourceKey("channel", channelId), ids),
 		hub,
 	}
 

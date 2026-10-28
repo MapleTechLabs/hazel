@@ -25,8 +25,8 @@ export interface SyncPage {
 
 /**
  * Windowed history for one table. Snapshots call `page(principal, null, snapshotLimit)` instead
- * of `load("all")` for the table and its dependents; `LoadOlder` calls `page` with the client's
- * cursor. Deltas are unaffected: changes to any row, paged in or not, go out by key.
+ * of `load("all")` for the table and its dependents (for sockets that said `Hello{paging}`);
+ * `LoadOlder` calls `page` with the client's cursor, `LoadByIds` calls `byIds`. Deltas are unaffected: changes to any row, paged in or not, go out by key.
  */
 export interface SyncPaging<P, E = never, R = never> {
 	/** Rows of the paged table in a snapshot. */
@@ -41,6 +41,14 @@ export interface SyncPaging<P, E = never, R = never> {
 		before: SyncPageCursor | null,
 		limit: number,
 	) => Effect.Effect<SyncPage, E, R>
+	/**
+	 * `LoadByIds`: the visible rows among `ids` (at most `SYNC_LOAD_BY_IDS_MAX`) and their dependents'
+	 * rows, by table name. Omitted: the table's `load(principal, ids)`, without dependents.
+	 */
+	readonly byIds?: (
+		principal: P,
+		ids: ReadonlyArray<string>,
+	) => Effect.Effect<ReadonlyMap<string, ReadonlyArray<SyncRow>>, E, R>
 }
 
 export interface SyncTable<P, E = never, R = never> {

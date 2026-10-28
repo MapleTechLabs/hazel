@@ -186,11 +186,13 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 		},
 	),
 	chatReplyTargets: entry(
-		{ replyIds: Schema.Array(MessageId) },
+		{ channelId: ChannelId, replyIds: Schema.Array(MessageId) },
 		{
-			modelToDependencies: ({ model }) => ({ replyIds: model.replyIds }),
-			dependenciesToStream: ({ replyIds }) =>
-				replyTargetsStream(replyIds, (targets) => Message.UpdatedReplyTargets({ targets })),
+			modelToDependencies: ({ model }) => ({ channelId: model.channelId, replyIds: model.replyIds }),
+			dependenciesToStream: ({ channelId, replyIds }) =>
+				replyTargetsStream(channelId, replyIds, (targets) =>
+					Message.UpdatedReplyTargets({ targets }),
+				),
 		},
 	),
 	chatThreadPanel: entry(
