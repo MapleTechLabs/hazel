@@ -8,9 +8,11 @@ import {
 	SYNC_SUBPROTOCOL,
 	SyncCloseCode,
 	type SyncClientFrame,
+	type SyncPageCursor,
 	type SyncSeq,
 	SyncServerFrame,
 	type SyncSourceKind,
+	type SyncWindow,
 } from "@hazel/domain/sync"
 import { Result, Schema } from "effect"
 import {
@@ -58,6 +60,10 @@ export interface SyncRun {
 	readonly reset: boolean
 	readonly seq: SyncSeq
 	readonly tables: ReadonlyMap<string, SyncRunTable>
+	/** Where each paged table's history now starts (a snapshot's, or a page's lowered start). */
+	readonly windows: ReadonlyMap<string, SyncWindow>
+	/** The run answers a `LoadOlder`: its rows are history, not changes. */
+	readonly page: boolean
 }
 
 export interface SyncConnectionOptions {
@@ -85,6 +91,17 @@ interface SeqWaiter {
 interface OpenRun {
 	readonly reset: boolean
 	readonly tables: Map<string, { upserts: Array<unknown>; deletes: Array<string> }>
+	readonly windows: Map<string, SyncWindow>
+	/** The `LoadOlder` this run answers, if any. */
+	readonly request: number | undefined
+	/** Answers a request made before a reset: its rows would leave a gap, so they are dropped. */
+	readonly stale: boolean
+}
+
+interface PageRequest {
+	readonly resolve: (window: SyncWindow | undefined) => void
+	/** A reset arrived after it was sent: settle it with `undefined` once the reset commits. */
+	stale: boolean
 }
 
 const decodeFrame = Schema.decodeUnknownResult(SyncServerFrame)
@@ -117,6 +134,10 @@ export class SyncConnection {
 	private attempt = 0
 	private reauthStreak = 0
 	private run: OpenRun | null = null
+	/** A `Commit` arrived on the current socket: the source accepts `LoadOlder`. */
+	private socketSynced = false
+	private nextRequestId = 0
+	private readonly pageRequests = new Map<number, PageRequest>()
 	private pingOutstanding = false
 	private reconnectTimer: ReturnType<typeof setTimeout> | undefined
 	private heartbeatTimer: ReturnType<typeof setInterval> | undefined
@@ -223,6 +244,25 @@ export class SyncConnection {
 		})
 	}
 
+	/** The socket is synced and no reset is being received: a `LoadOlder` now would be answered. */
+	get canPage(): boolean {
+		return this.socket !== null && this.socketSynced && this.run?.reset !== true
+	}
+
+	/**
+	 * Asks for up to `limit` rows of `table` older than `before`. Resolves with the table's new
+	 * window once the page is applied, or `undefined` when it cannot be asked now (no synced socket,
+	 * a reset in flight) or was overtaken by a reset or a reconnect; the caller re-evaluates then.
+	 */
+	loadOlder(table: string, before: SyncPageCursor, limit: number): Promise<SyncWindow | undefined> {
+		if (!this.canPage) return Promise.resolve(undefined)
+		const requestId = ++this.nextRequestId
+		return new Promise((resolve) => {
+			this.pageRequests.set(requestId, { resolve, stale: false })
+			this.send({ _tag: "LoadOlder", requestId, table, before, limit })
+		})
+	}
+
 	/** Resolves once settled: `undefined` when ready (or closed), the error when stopped for good. */
 	whenSettled(): Promise<SyncSourceTerminalError | undefined> {
 		if (this.isSettled) return Promise.resolve(this.terminalError)
@@ -303,6 +343,7 @@ export class SyncConnection {
 		this.socket = ws
 		this.socketToken = token
 		this.run = null
+		this.socketSynced = false
 
 		ws.onopen = () => {
 			if (this.socket !== ws) return
@@ -326,6 +367,8 @@ export class SyncConnection {
 		this.socket = null
 		this.socketToken = null
 		this.run = null
+		this.socketSynced = false
+		this.settlePages()
 		this.stopHeartbeat()
 		if (this.stopped) return
 
@@ -397,7 +440,18 @@ export class SyncConnection {
 				if (this.run !== null) {
 					this.log("warning", "Sync Begin inside an open run; dropping it", { source: this.source })
 				}
-				this.run = { reset: frame.reset, tables: new Map() }
+				const request = frame.request
+				if (frame.reset) {
+					for (const pending of this.pageRequests.values()) pending.stale = true
+				}
+				const pending = request === undefined ? undefined : this.pageRequests.get(request)
+				this.run = {
+					reset: frame.reset,
+					tables: new Map(),
+					windows: new Map((frame.windows ?? []).map((window) => [window.table, window])),
+					request,
+					stale: request !== undefined && (pending === undefined || pending.stale),
+				}
 				return
 			}
 			case "Rows": {
@@ -418,15 +472,25 @@ export class SyncConnection {
 				return
 			}
 			case "Commit": {
-				const open = this.run ?? { reset: false, tables: new Map() }
+				const open: OpenRun = this.run ?? {
+					reset: false,
+					tables: new Map(),
+					windows: new Map(),
+					request: undefined,
+					stale: false,
+				}
 				this.run = null
 				this.lastSeq = frame.seq
-				for (const table of open.tables.keys()) this.tablesSeen.add(table)
+				this.socketSynced = true
+				const stale = open.stale
+				if (!stale) for (const table of open.tables.keys()) this.tablesSeen.add(table)
 				const run: SyncRun = {
 					source: this.source,
 					reset: open.reset,
 					seq: frame.seq,
-					tables: open.tables,
+					tables: stale ? new Map() : open.tables,
+					windows: stale ? new Map() : open.windows,
+					page: open.request !== undefined,
 				}
 				// Rows first, so a write is visible by the time its `awaitSeq` resolves.
 				for (const listener of this.runListeners) {
@@ -442,6 +506,13 @@ export class SyncConnection {
 					this.waiters.delete(waiter)
 					waiter.resolve()
 				}
+				if (open.request !== undefined) {
+					const pending = this.pageRequests.get(open.request)
+					this.pageRequests.delete(open.request)
+					pending?.resolve(stale ? undefined : open.windows.values().next().value)
+				}
+				// Requests a reset overtook: settled now that the reset's window is applied.
+				if (open.reset) this.settlePages((pending) => pending.stale)
 				return
 			}
 			case "Ready": {
@@ -502,11 +573,22 @@ export class SyncConnection {
 		this.setStatus({ state: "error", error, terminal: true })
 	}
 
+	/** Settles page requests (all, or those `which` picks) with `undefined`. */
+	private settlePages(which: (pending: PageRequest) => boolean = () => true): void {
+		for (const [requestId, pending] of this.pageRequests) {
+			if (!which(pending)) continue
+			this.pageRequests.delete(requestId)
+			pending.resolve(undefined)
+		}
+	}
+
 	private detach(code: number, reason: string): void {
 		const ws = this.socket
 		this.socket = null
 		this.socketToken = null
 		this.run = null
+		this.socketSynced = false
+		this.settlePages()
 		this.stopHeartbeat()
 		this.generation++
 		if (ws === null) return

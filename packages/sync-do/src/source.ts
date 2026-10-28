@@ -2,6 +2,7 @@
  * What a synced object supplies to the runtime: its tables, how to load the rows a principal may
  * see, and who may connect. The runtime never builds domain SQL; `load` applies visibility.
  */
+import type { SyncPageCursor } from "@hazel/domain/sync"
 import type { Effect } from "effect"
 import type { Change, TrackedTable } from "./changes.ts"
 
@@ -10,6 +11,36 @@ export interface SyncRow {
 	readonly key: string
 	/** The row in its JSON encoding (the client's domain model decodes it). */
 	readonly row: unknown
+}
+
+/** One page of a paged table: its rows, its dependents' rows, and where the history now starts. */
+export interface SyncPage {
+	/** Rows by table name: the paged table's and those of each `dependents` table. */
+	readonly rows: ReadonlyMap<string, ReadonlyArray<SyncRow>>
+	/** The oldest row of the contiguous history sent so far (`null` when there is none). */
+	readonly oldest: SyncPageCursor | null
+	/** Rows older than `oldest` exist. */
+	readonly hasMore: boolean
+}
+
+/**
+ * Windowed history for one table. Snapshots call `page(principal, null, snapshotLimit)` instead
+ * of `load("all")` for the table and its dependents; `LoadOlder` calls `page` with the client's
+ * cursor. Deltas are unaffected: changes to any row, paged in or not, go out by key.
+ */
+export interface SyncPaging<P, E = never, R = never> {
+	/** Rows of the paged table in a snapshot. */
+	readonly snapshotLimit: number
+	/** The largest `limit` a `LoadOlder` gets (bigger ones are clamped). */
+	readonly maxLimit: number
+	/** Tables whose rows a page carries; their `load("all")` is not used in snapshots. */
+	readonly dependents: ReadonlyArray<string>
+	/** Up to `limit` rows older than `before` (`null`: the newest), ordered `(createdAt, id)` desc. */
+	readonly page: (
+		principal: P,
+		before: SyncPageCursor | null,
+		limit: number,
+	) => Effect.Effect<SyncPage, E, R>
 }
 
 export interface SyncTable<P, E = never, R = never> {
@@ -33,6 +64,8 @@ export interface SyncTable<P, E = never, R = never> {
 	 * Omitted or `"all"`: every socket resnapshots.
 	 */
 	readonly affectedPrincipals?: (changes: ReadonlyArray<Change>) => ReadonlyArray<string> | "all"
+	/** Windowed history (see {@link SyncPaging}). */
+	readonly paging?: SyncPaging<P, E, R>
 }
 
 export interface SyncSource<P, E = never, R = never> {
@@ -60,6 +93,13 @@ export const trackedTables = <P, E, R>(source: SyncSource<P, E, R>): ReadonlyArr
 				throw new Error(
 					`Sync table ${table.name} depends on ${dependency}, which is neither synced nor a declared dependency`,
 				)
+			}
+		}
+	}
+	for (const table of source.tables) {
+		for (const dependent of table.paging?.dependents ?? []) {
+			if (!source.tables.some((other) => other.name === dependent)) {
+				throw new Error(`Sync table ${table.name} pages ${dependent}, which is not a synced table`)
 			}
 		}
 	}

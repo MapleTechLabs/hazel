@@ -12,6 +12,9 @@ import {
 	shared,
 	updateWithShared,
 } from "./fixtures.test-support"
+import { messageCollection } from "~/db/collections"
+import { messageHistoryStream } from "../data"
+import { PAGE_SIZE } from "../queries"
 import { setTab } from "./page"
 import { Message, type Model } from "./model"
 import { indicatorsOf, subscriptions, type TypingCleanup, typingCleanupStream } from "./subscription"
@@ -154,5 +157,23 @@ describe("typing cleanup on leaving the page", () => {
 
 	test("a stop inside the page already deleted it: no second delete", async () => {
 		expect(await deletedOnInterrupt({ channelId: own.channelId, indicators: [] })).toEqual([])
+	})
+})
+
+describe("message history paging", () => {
+	test("the window holds the channel's history a page past it until the window moves", async () => {
+		const release = vi.fn()
+		const retain = vi
+			.spyOn(messageCollection.utils, "retainHistory")
+			.mockReturnValue({ settled: Promise.resolve(), release })
+		const channelId = loadedModel().channelId
+		const fiber = Effect.runFork(
+			Stream.runDrain(messageHistoryStream(channelId, { offset: 30, limit: 60 })),
+		)
+		await vi.waitFor(() => expect(retain).toHaveBeenCalledWith(channelId, 30 + 60 + PAGE_SIZE))
+		expect(release).not.toHaveBeenCalled()
+		await Effect.runPromise(Fiber.interrupt(fiber))
+		expect(release).toHaveBeenCalledOnce()
+		retain.mockRestore()
 	})
 })

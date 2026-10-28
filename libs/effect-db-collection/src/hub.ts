@@ -2,7 +2,7 @@
  * The registry of source connections: refcounted leases with a grace period on release, and the
  * router from each connection's runs to the collections registered for the run's tables.
  */
-import type { SyncSourceKind, SyncWritePosition } from "@hazel/domain/sync"
+import type { SyncSourceKind, SyncWindow, SyncWritePosition } from "@hazel/domain/sync"
 import { Effect, type Scope } from "effect"
 import { SyncConnection, type SyncConnectionStatus, type SyncRunTable } from "./connection"
 import type { SyncSourceTerminalError } from "./errors"
@@ -39,10 +39,18 @@ export interface SyncHubConfig {
  * A collection's view of one table: the hub feeds it every run that touches the table, from any
  * open source, and tells it when a source's rows are gone.
  */
+/** What a run says about a paged table besides its rows. */
+export interface SyncRunInfo {
+	/** The table's history window after this run (snapshots and pages of a paged table). */
+	readonly window?: SyncWindow | undefined
+	/** The run answers a `LoadOlder`. */
+	readonly page?: boolean
+}
+
 export interface SyncTableSink {
 	readonly table: string
 	/** `reset`: drop every row `source` delivered before applying `rows`. */
-	applyRun(source: SourceKey, reset: boolean, rows: SyncRunTable | undefined): void
+	applyRun(source: SourceKey, reset: boolean, rows: SyncRunTable | undefined, info?: SyncRunInfo): void
 	/** The source's connection closed for good: drop every row it delivered. */
 	dropSource(source: SourceKey): void
 }
@@ -211,16 +219,21 @@ export class SyncHub {
 		})
 		let wasError = false
 		const unsubscribeRuns = connection.subscribeRuns((run) => {
+			const info = (table: string): SyncRunInfo => ({ window: run.windows.get(table), page: run.page })
 			if (run.reset) {
 				for (const set of this.sinks.values()) {
-					for (const sink of set) this.applyToSink(sink, source, true, run.tables.get(sink.table))
+					for (const sink of set) {
+						this.applyToSink(sink, source, true, run.tables.get(sink.table), info(sink.table))
+					}
 				}
 				return
 			}
-			for (const [table, rows] of run.tables) {
+			// A page's window moves even when the page brought no rows.
+			for (const table of new Set([...run.tables.keys(), ...run.windows.keys()])) {
 				const set = this.sinks.get(table)
 				if (set === undefined) continue
-				for (const sink of set) this.applyToSink(sink, source, false, rows)
+				for (const sink of set)
+					this.applyToSink(sink, source, false, run.tables.get(table), info(table))
 			}
 		})
 		const unsubscribeStatus = connection.subscribeStatus((status) => {
@@ -299,9 +312,10 @@ export class SyncHub {
 		source: SourceKey,
 		reset: boolean,
 		rows: SyncRunTable | undefined,
+		info: SyncRunInfo,
 	): void {
 		try {
-			sink.applyRun(source, reset, rows)
+			sink.applyRun(source, reset, rows, info)
 		} catch (cause) {
 			this.log("error", "Sync sink failed to apply a run", { source, table: sink.table, cause })
 		}
