@@ -237,12 +237,14 @@ the client.
 
 ## 6. Known regressions (follow-ups)
 
-- **Message search** in the command palette only covers channels that are loaded. Follow-up: per-org
-  FTS5.
+- **Message search** runs on a per-org FTS5 index (`worker/objects/org/message-search.ts`,
+  `message.search`), backfilled on each org's first activation after the `0002_message_search`
+  migration. Not yet: `has:` filters (local results only), and the chat page ignores `?messageId=`,
+  so a result opens its channel without scrolling to the message.
 - **Only loaded history is visible outside the channel view** (see §3 Paged history): the thread
-  panel shows a thread's newest 200 messages, and the notifications inbox and message search
-  see only the messages their channels' windows hold. Pinning a message older than the window
-  shows it in the pins list only after the next reset.
+  panel shows a thread's newest 200 messages, and the notifications inbox sees only the messages
+  its channels' windows hold. Pinning a message older than the window shows it in the pins list
+  only after the next reset.
 - **Auth checks call D1** on every api request; add a short KV cache if latency shows it's needed.
 - **Bot creation from the CLI is gone:** `hazel-setup bots` wrote the Bun runtime's SQLite file.
   Create bots in the app.

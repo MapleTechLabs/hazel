@@ -20,6 +20,7 @@ import { botGatewayReceivers, BotGatewayEffects } from "./bot-gateway-effects"
 import { channelReceivers, ChannelEffects, channelSenderRefusal } from "./channel-effects"
 import { directoryReceivers, DirectoryEffects } from "./directory-effects"
 import { connectSenderRefusal } from "../org/connect"
+import { searchSenderRefusal } from "../org/message-search"
 import { orgReceivers, OrgEffects } from "./org-effects"
 import {
 	type AnyEffectKind,
@@ -81,7 +82,13 @@ type SenderGuard = (
 
 const senderGuards: Partial<Record<ObjectKind, SenderGuard>> = {
 	channel: channelSenderRefusal,
-	org: connectSenderRefusal,
+	// Each check refuses only the kinds it owns; the first refusal wins.
+	org: (kind, payload, sender) =>
+		connectSenderRefusal(kind, payload, sender).pipe(
+			Effect.flatMap((refusal) =>
+				Option.isSome(refusal) ? Effect.succeed(refusal) : searchSenderRefusal(kind, payload, sender),
+			),
+		),
 }
 
 /** Run a sender-side effect (directory, bot gateway). */

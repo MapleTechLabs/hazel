@@ -1,5 +1,5 @@
 {
-	"migration": "0001_initial",
+	"migration": "0002_message_search",
 	"entities": [
 		{
 			"kind": "table",

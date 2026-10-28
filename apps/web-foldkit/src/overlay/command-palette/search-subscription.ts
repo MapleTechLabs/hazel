@@ -15,7 +15,9 @@ import { HAS_FILTER_VALUES, parseDateFilter } from "~/lib/search-filter-parser"
 import { getFileCategory } from "~/utils/file-utils"
 import { liveQueryStream } from "../../data/live-query"
 import { Message } from "./message"
-import { SearchFilter, type SearchResult, type Suggestion } from "./search-data"
+import type { HazelRpc } from "../../rpc"
+import { emptySearchData, SearchFilter, type SearchResult, type Suggestion } from "./search-data"
+import { type HitLookup, mergeSearchResults, serverSearchStream, toSearchRequest } from "./server-search"
 import type { Input } from "./subscription"
 
 /** `useSearchQuery`, `useUserSuggestions` and `useChannelSuggestions`, while the search page shows. */
@@ -64,28 +66,65 @@ const accessibleChannels = (organizationId: OrganizationId, userId: UserId) =>
 		(rows) => rows.map((row) => row.id),
 	)
 
-/** The results query plus its attachments, with the `has:` filter applied as legacy does. */
+const hitLookup: HitLookup = {
+	authorOf: (hit) => {
+		const user = userCollection.get(hit.authorId)
+		return user === undefined
+			? null
+			: {
+					name: `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim(),
+					avatarUrl: user.avatarUrl ?? null,
+				}
+	},
+	channelNameOf: (channelId) => channelCollection.get(channelId)?.name ?? null,
+}
+
+/**
+ * Instant results from the loaded channels, merged with the org's server index (`message.search`,
+ * debounced) once it answers; `isLoading` until then.
+ */
 const resultsStream = (
+	organizationId: OrganizationId,
 	channelIds: ReadonlyArray<ChannelId>,
 	query: string,
 	filters: ReadonlyArray<SearchFilter>,
-) => {
+): Stream.Stream<Message, never, HazelRpc> => {
+	if (query.trim().length === 0 && filters.length === 0)
+		return Stream.succeed(Message.UpdatedSearchData({ data: emptySearchData }))
+	return Stream.zipLatest(
+		localResultsStream(channelIds, query, filters),
+		serverSearchStream(toSearchRequest(organizationId, query, filters)),
+	).pipe(
+		Stream.map(([local, hits]) =>
+			Message.UpdatedSearchData({
+				data: {
+					results: mergeSearchResults(local, hits ?? [], hitLookup),
+					isLoading: hits === null,
+					hasQuery: true,
+				},
+			}),
+		),
+	)
+}
+
+/** The results query over loaded messages plus their attachments, `has:` applied as legacy does. */
+const localResultsStream = (
+	channelIds: ReadonlyArray<ChannelId>,
+	query: string,
+	filters: ReadonlyArray<SearchFilter>,
+): Stream.Stream<ReadonlyArray<SearchResult>> => {
 	const find = (type: SearchFilter["type"]) => filters.find((filter) => filter.type === type)
 	const from = find("from")
 	const inChannel = find("in")
 	const has = find("has")
 	const before = dateOf(find("before"))
 	const after = dateOf(find("after"))
-	// Messages sync per open channel, so search covers the channels loaded in this session.
+	// Messages sync per open channel: these cover the channels loaded in this session.
 	const loaded = openChannelIds()
 	const searchIds = (inChannel ? channelIds.filter((id) => id === inChannel.id) : channelIds).filter((id) =>
 		loaded.has(id),
 	)
-	const shouldSearch = (query.trim().length > 0 || filters.length > 0) && searchIds.length > 0
-	if (!shouldSearch)
-		return Stream.succeed(
-			Message.UpdatedSearchData({ data: { results: [], isLoading: false, hasQuery: false } }),
-		)
+	if (searchIds.length === 0) return Stream.succeed([])
 	return liveQueryStream<ResultRow, ReadonlyArray<ResultRow>>(
 		(q) => {
 			let builder = q
@@ -131,22 +170,18 @@ const resultsStream = (
 								})),
 						(attachments) => attachments,
 					)
-			).pipe(
-				Stream.map((attachments) =>
-					Message.UpdatedSearchData({ data: toData(rows, attachments, has) }),
-				),
-			),
+			).pipe(Stream.map((attachments) => toResults(rows, attachments, has))),
 		),
 	)
 }
 
 const dateOf = (filter: SearchFilter | undefined) => (filter ? parseDateFilter(filter.value) : null)
 
-const toData = (
+const toResults = (
 	rows: ReadonlyArray<ResultRow>,
 	attachments: ReadonlyArray<AttachmentRow>,
 	has: SearchFilter | undefined,
-) => {
+): ReadonlyArray<SearchResult> => {
 	const counts = new Map<string, number>()
 	const types = new Map<string, Set<string>>()
 	for (const attachment of attachments) {
@@ -169,8 +204,8 @@ const toData = (
 						Object.keys(row.message.embeds).length > 0
 					: true,
 	)
-	return {
-		results: kept.map((row) => ({
+	return kept.map(
+		(row): SearchResult => ({
 			messageId: row.message.id,
 			channelId: row.message.channelId,
 			content: row.message.content,
@@ -181,10 +216,8 @@ const toData = (
 			authorAvatarUrl: row.author?.avatarUrl ?? null,
 			channelName: row.channel?.name ?? null,
 			attachmentCount: counts.get(row.message.id) ?? 0,
-		})),
-		isLoading: false,
-		hasQuery: true,
-	}
+		}),
+	)
 }
 
 interface UserRow {
@@ -264,7 +297,7 @@ const channelSuggestions = (organizationId: OrganizationId, userId: UserId, part
 
 const Context = { organizationId: Schema.NullOr(OrganizationId), userId: Schema.NullOr(UserId) }
 
-export const searchSubscriptions = Subscription.make<Input, Message>()((entry) => ({
+export const searchSubscriptions = Subscription.make<Input, Message, HazelRpc>()((entry) => ({
 	searchResults: entry(
 		{ ...Context, query: Schema.String, filters: Schema.Array(SearchFilter) },
 		{
@@ -280,7 +313,9 @@ export const searchSubscriptions = Subscription.make<Input, Message>()((entry) =
 				organizationId === null || userId === null
 					? Stream.empty
 					: accessibleChannels(organizationId, userId).pipe(
-							Stream.switchMap((channelIds) => resultsStream(channelIds, query, filters)),
+							Stream.switchMap((channelIds) =>
+								resultsStream(organizationId, channelIds, query, filters),
+							),
 						),
 		},
 	),

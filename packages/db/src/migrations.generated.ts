@@ -215,6 +215,21 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE UNIQUE INDEX IF NOT EXISTS "rss_subscriptions_channel_feed_unique" ON "rss_subscriptions" ("channelId", "feedUrl") WHERE "deletedAt" IS NULL',
 			],
 		},
+		{
+			// Hand-written: FTS5 tables and triggers that effect-orm does not model (schema-ddl.ts).
+			id: "0002_message_search",
+			statements: [
+				'CREATE TABLE IF NOT EXISTS "message_search" (\n\t"id" integer PRIMARY KEY,\n\t"messageId" text NOT NULL UNIQUE,\n\t"channelId" text NOT NULL,\n\t"authorId" text NOT NULL,\n\t"conversationId" text,\n\t"createdAt" integer NOT NULL,\n\t"content" text NOT NULL\n)',
+				'CREATE INDEX IF NOT EXISTS "message_search_channel_created_idx" ON "message_search" ("channelId", "createdAt")',
+				'CREATE INDEX IF NOT EXISTS "message_search_created_idx" ON "message_search" ("createdAt", "messageId")',
+				'CREATE INDEX IF NOT EXISTS "message_search_author_idx" ON "message_search" ("authorId", "createdAt")',
+				"CREATE VIRTUAL TABLE IF NOT EXISTS \"message_search_fts\" USING fts5(content, content='message_search', content_rowid='id', tokenize='unicode61 remove_diacritics 2')",
+				'CREATE TRIGGER IF NOT EXISTS "message_search_ai" AFTER INSERT ON "message_search" BEGIN\n\tINSERT INTO "message_search_fts" (rowid, content) VALUES (new."id", new."content");\nEND',
+				'CREATE TRIGGER IF NOT EXISTS "message_search_ad" AFTER DELETE ON "message_search" BEGIN\n\tINSERT INTO "message_search_fts" ("message_search_fts", rowid, content) VALUES (\'delete\', old."id", old."content");\nEND',
+				'CREATE TRIGGER IF NOT EXISTS "message_search_au" AFTER UPDATE ON "message_search" BEGIN\n\tINSERT INTO "message_search_fts" ("message_search_fts", rowid, content) VALUES (\'delete\', old."id", old."content");\n\tINSERT INTO "message_search_fts" (rowid, content) VALUES (new."id", new."content");\nEND',
+				'CREATE TABLE IF NOT EXISTS "message_search_backfill" (\n\t"channelId" text PRIMARY KEY NOT NULL,\n\t"generation" integer NOT NULL,\n\t"done" integer NOT NULL DEFAULT 0\n)',
+			],
+		},
 	],
 	channel: [
 		{

@@ -4,7 +4,7 @@ import { Effect } from "effect"
 import * as SqlClient from "effect/sql/SqlClient"
 import { describe, expect, it } from "vitest"
 import { planMigration, renderD1Migration, storeSchemaOf, type StoreSnapshot } from "./migration-plan"
-import { applyMigrations, renderStoreSchema, storeMigrations } from "./schema-ddl"
+import { applyMigrations, renderStoreSchema, storeMigrations, unmodeledStatements } from "./schema-ddl"
 import { storeNames, storeTables } from "./stores"
 import { structuralSchema } from "./test-schema"
 
@@ -43,6 +43,7 @@ describe.each(storeNames)("the %s store", (store) => {
 				const sql = yield* SqlClient.SqlClient
 				for (const statement of yield* renderStoreSchema(storeTables[store]))
 					yield* sql.unsafe(statement)
+				for (const statement of unmodeledStatements[store]) yield* sql.unsafe(statement)
 				return yield* structuralSchema
 			}),
 		)

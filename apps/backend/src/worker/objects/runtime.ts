@@ -50,6 +50,7 @@ import { makeChannelSource } from "./sources/channel-source"
 import { makeOrgSource } from "./sources/org-source"
 import { makeUserSource } from "./sources/user-source"
 import { pollDueRssFeeds, rssDeadlines } from "./org/rss"
+import { prepareMessageSearch } from "./org/message-search"
 import { channelDeadlines, runChannelTimers } from "./channel/timers"
 import { makePresenceHooks } from "./user/presence"
 import { reauthenticateWith, refuseAllTokens, type SocketTokenVerifier } from "./socket-token"
@@ -103,8 +104,30 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 		) => Effect.provideContext(effect, base as Context.Context<R>)
 
 		const sql = Context.get(base, SqlClient)
-		yield* run(applyMigrations(sql, storeOf[kind]).pipe(Effect.andThen(installObjectMeta), Effect.orDie))
+		const migrated = yield* run(
+			applyMigrations(sql, storeOf[kind]).pipe(
+				Effect.tap(() => installObjectMeta),
+				Effect.orDie,
+			),
+		)
 		const identity = yield* run(makeObjectIdentity.pipe(Effect.orDie))
+		// OrgObject: start the search backfill if its index predates the current version. A failure
+		// only delays it to the next activation.
+		if (kind === "org") {
+			yield* run(
+				prepareMessageSearch({
+					fresh: migrated.includes("0001_initial"),
+					objectId: identity.current(),
+				}).pipe(
+					Effect.catchTags({
+						SqlError: (error) => Effect.logError("Message search backfill not started", error),
+						DatabaseError: (error) =>
+							Effect.logError("Message search backfill not started", error),
+						SchemaError: (error) => Effect.logError("Message search backfill not started", error),
+					}),
+				),
+			)
+		}
 
 		// UserObject presence: online while a sync socket is open, expiry on the alarm.
 		const presence = kind === "user" ? makePresenceHooks(options.state, identity.current) : undefined
