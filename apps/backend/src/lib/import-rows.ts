@@ -59,8 +59,6 @@ const fallbackOf = (value: unknown): unknown => {
 	return undefined
 }
 
-const nullish = (value: unknown) => value === undefined || value === null
-
 /**
  * A source row (decoded values: `Date`, objects, booleans) in the table's encoded form. Columns
  * the source lacks are left to their default, or null; unknown source columns are dropped.
@@ -94,7 +92,8 @@ export const canonicalRow = (
 		const out: Record<string, unknown> = {}
 		for (const [name, column] of Object.entries(table.columns)) {
 			const value = row[name]
-			if (nullish(value) && table.defaults.includes(name)) continue
+			// A source NULL stays NULL; only a column the row leaves out takes its default.
+			if (value === undefined && table.defaults.includes(name)) continue
 			const decoded = yield* Schema.decodeUnknownEffect(column.schema)(value ?? null)
 			out[name] = yield* Schema.encodeUnknownEffect(column.schema)(decoded)
 		}

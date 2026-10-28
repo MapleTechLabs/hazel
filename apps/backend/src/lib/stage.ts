@@ -11,10 +11,13 @@ export interface StageEnv {
 	readonly IS_DEV?: unknown
 }
 
+/** Stages that may run the dev-only routes; any other `HAZEL_STAGE` value counts as prd. */
+const NON_PRODUCTION_STAGES: ReadonlySet<unknown> = new Set(["dev", "pr"])
+
 /** True on a dev or PR-preview stage (or a local dev process). */
 export const isNonProductionStage = (env: StageEnv): boolean =>
 	typeof env.HAZEL_STAGE === "string" && env.HAZEL_STAGE !== ""
-		? env.HAZEL_STAGE !== "prd"
+		? NON_PRODUCTION_STAGES.has(env.HAZEL_STAGE)
 		: env.IS_DEV === "true" || env.IS_DEV === true
 
 /** `isNonProductionStage` over `Config`. */

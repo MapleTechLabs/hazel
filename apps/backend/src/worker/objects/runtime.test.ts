@@ -155,8 +155,9 @@ describe("object runtime", () => {
 				const exit = yield* decodeExit(rpc, response.exit)
 				expect(Exit.isFailure(exit)).toBe(true)
 				const pretty = Exit.isFailure(exit) ? Cause.pretty(exit.cause) : ""
-				expect(pretty).toContain("Undecodable message.create request: ")
-				expect(pretty).toContain("channelId")
+				expect(pretty).toContain("Undecodable message.create request")
+				// The request's values never reach the message (it is logged).
+				expect(pretty).not.toContain("42")
 			}),
 		))
 })

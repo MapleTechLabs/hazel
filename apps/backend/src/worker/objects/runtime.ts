@@ -131,12 +131,12 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 					decodePayload(rpc, request.payload),
 				]).pipe(
 					Effect.map(Result.succeed),
-					Effect.catchTag("SchemaError", (error) => Effect.succeed(Result.fail(error.message))),
+					// The schema message quotes the request's values, so it stays out of logs and spans.
+					Effect.catchTag("SchemaError", () => Effect.succeed(Result.fail("undecodable"))),
 				)
 				if (Result.isFailure(decoded)) {
-					const message = `Undecodable ${request.tag} request: ${decoded.failure}`
-					yield* Effect.annotateCurrentSpan({ "rpc.decode_error": decoded.failure })
-					return { exit: yield* encodeExit(rpc, Exit.die(message)) }
+					yield* Effect.annotateCurrentSpan({ "rpc.decode_error": true })
+					return { exit: yield* encodeExit(rpc, Exit.die(`Undecodable ${request.tag} request`)) }
 				}
 				const [principal, payload] = decoded.success
 				const exit = yield* dispatcher
