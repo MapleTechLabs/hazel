@@ -282,14 +282,25 @@ export const pinnedStream = <M>(
 
 /** Keeps the messages of the channel's pins loaded while it runs. */
 const pinnedLoadStream = (channelId: ChannelId): Stream.Stream<never> =>
-	liveQueryStream<{ messageId: MessageId }, ReadonlyArray<MessageId>>(
-		(q) =>
-			q
-				.from({ pinned: pinnedMessageCollection })
-				.where(({ pinned }) => eq(pinned.channelId, channelId))
-				.select(({ pinned }) => ({ messageId: pinned.messageId })),
-		(rows) => rows.map((row) => row.messageId).sort(),
-	).pipe(
+	keepMessagesLoaded(
+		channelId,
+		liveQueryStream<{ messageId: MessageId }, ReadonlyArray<MessageId>>(
+			(q) =>
+				q
+					.from({ pinned: pinnedMessageCollection })
+					.where(({ pinned }) => eq(pinned.channelId, channelId))
+					.select(({ pinned }) => ({ messageId: pinned.messageId })),
+			(rows) => rows.map((row) => row.messageId),
+		),
+	)
+
+/** Keeps the latest of `idSets` loaded by id; the same set again (in any order) asks for nothing. */
+export const keepMessagesLoaded = (
+	channelId: ChannelId,
+	idSets: Stream.Stream<ReadonlyArray<MessageId>>,
+): Stream.Stream<never> =>
+	idSets.pipe(
+		Stream.map((ids) => [...new Set(ids)].sort()),
 		Stream.changesWith((a, b) => a.length === b.length && a.every((id, i) => id === b[i])),
 		Stream.switchMap((ids) => (ids.length === 0 ? Stream.empty : replyTargetLoadStream(channelId, ids))),
 	)

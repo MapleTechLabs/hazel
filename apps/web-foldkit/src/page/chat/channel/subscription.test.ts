@@ -1,5 +1,5 @@
-import { ChannelId, TypingIndicatorId } from "@hazel/schema"
-import { Effect, Fiber, Schema, Stream } from "effect"
+import { ChannelId, MessageId, TypingIndicatorId } from "@hazel/schema"
+import { Effect, Fiber, Queue, Schema, Stream } from "effect"
 import { describe, expect, test, vi } from "vitest"
 import type * as Typing from "../../../composer/typing"
 import { chatMessageOf, liveEmbeds } from "../../../test/chat-messages"
@@ -14,7 +14,7 @@ import {
 } from "./fixtures.test-support"
 import { messageCollection } from "~/db/collections"
 import { messageHistoryStream, threadHistoryStream } from "../data"
-import { replyTargetLoadStream } from "../lookup-data"
+import { keepMessagesLoaded, replyTargetLoadStream } from "../lookup-data"
 import { PAGE_SIZE } from "../queries"
 import { setTab } from "./page"
 import { Message, type Model } from "./model"
@@ -205,6 +205,31 @@ describe("message history paging", () => {
 		await vi.waitFor(() => expect(load).toHaveBeenCalledWith(channelId, [adaMessageId]))
 		await Effect.runPromise(Fiber.interrupt(fiber))
 		expect(release).toHaveBeenCalledOnce()
+		load.mockRestore()
+	})
+
+	test("pins keep their messages loaded by id, asking again only when the set changes", async () => {
+		const releases: Array<ReturnType<typeof vi.fn>> = []
+		const load = vi.spyOn(messageCollection.utils, "loadByIds").mockImplementation(() => {
+			const release = vi.fn()
+			releases.push(release)
+			return { settled: Promise.resolve(), release }
+		})
+		const channelId = loadedModel().channelId
+		const other = Schema.decodeSync(MessageId)("00000000-0000-4000-8000-000000005555")
+		const queue = await Effect.runPromise(Queue.unbounded<ReadonlyArray<MessageId>>())
+		const fiber = Effect.runFork(Stream.runDrain(keepMessagesLoaded(channelId, Stream.fromQueue(queue))))
+		Queue.offerUnsafe(queue, [other, adaMessageId])
+		await vi.waitFor(() => expect(load).toHaveBeenCalledTimes(1))
+		expect(load).toHaveBeenLastCalledWith(channelId, [adaMessageId, other].sort())
+		// The same pins in another order: nothing new to ask for.
+		Queue.offerUnsafe(queue, [adaMessageId, other, adaMessageId])
+		Queue.offerUnsafe(queue, [other])
+		await vi.waitFor(() => expect(load).toHaveBeenCalledTimes(2))
+		expect(load).toHaveBeenLastCalledWith(channelId, [other])
+		expect(releases[0]).toHaveBeenCalledOnce()
+		await Effect.runPromise(Fiber.interrupt(fiber))
+		expect(releases[1]).toHaveBeenCalledOnce()
 		load.mockRestore()
 	})
 })
