@@ -217,7 +217,9 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 		},
 		{
 			// Hand-written: FTS5 tables and triggers that effect-orm does not model (schema-ddl.ts).
+			// Optional: an org serves without search if it fails, and retries it next activation.
 			id: "0002_message_search",
+			optional: true,
 			statements: [
 				'CREATE TABLE IF NOT EXISTS "message_search" (\n\t"id" integer PRIMARY KEY,\n\t"messageId" text NOT NULL UNIQUE,\n\t"channelId" text NOT NULL,\n\t"authorId" text NOT NULL,\n\t"conversationId" text,\n\t"createdAt" integer NOT NULL,\n\t"content" text NOT NULL\n)',
 				'CREATE INDEX IF NOT EXISTS "message_search_channel_created_idx" ON "message_search" ("channelId", "createdAt")',

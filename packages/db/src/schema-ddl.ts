@@ -41,6 +41,17 @@ const dedupe = <T extends { readonly name: string }>(tables: ReadonlyArray<T>): 
 export interface StoreMigration {
 	readonly id: string
 	readonly statements: ReadonlyArray<string>
+	/**
+	 * A failure is reported (`MigrationReport.failed`), not fatal: the store serves without it and
+	 * retries it on the next run. Only for migrations nothing later depends on.
+	 */
+	readonly optional?: true
+}
+
+/** What `applyMigrations` did: the ids it applied, and the optional ones that failed (not recorded). */
+export interface MigrationReport {
+	readonly applied: ReadonlyArray<string>
+	readonly failed: ReadonlyArray<{ readonly id: string; readonly error: SqlError }>
 }
 
 /**
@@ -97,15 +108,16 @@ export const storeMigrations: Record<StoreName, ReadonlyArray<StoreMigration>> =
 export const MIGRATIONS_TABLE = "_migrations"
 
 /**
- * Applies `store`'s pending migrations, each in its own transaction with its ledger row, and
- * returns the ids it applied. For DO SQLite and node SQLite; D1's are applied by Alchemy from
- * `migrations/directory`.
+ * Applies `store`'s pending migrations, each in its own transaction with its ledger row. A failing
+ * migration fails the run, unless it is `optional`: then it is rolled back, reported in `failed`
+ * and left pending, and the later ones still run. For DO SQLite and node SQLite; D1's are applied
+ * by Alchemy from `migrations/directory`.
  */
 export const applyMigrations = (
 	sql: SqlClient.SqlClient,
 	store: StoreName,
 	migrations: ReadonlyArray<StoreMigration> = storeMigrations[store],
-): Effect.Effect<ReadonlyArray<string>, SqlError> =>
+): Effect.Effect<MigrationReport, SqlError> =>
 	Effect.gen(function* () {
 		yield* sql.unsafe(
 			`CREATE TABLE IF NOT EXISTS "${MIGRATIONS_TABLE}" ("store" text NOT NULL, "id" text NOT NULL, "appliedAt" text NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')), PRIMARY KEY ("store", "id"))`,
@@ -113,15 +125,28 @@ export const applyMigrations = (
 		const rows = yield* sql<{
 			readonly id: string
 		}>`SELECT "id" FROM ${sql(MIGRATIONS_TABLE)} WHERE "store" = ${store}`
-		const applied = new Set(rows.map((row) => row.id))
-		const pending = migrations.filter((migration) => !applied.has(migration.id))
-		for (const migration of pending) {
-			yield* sql.withTransaction(
+		const done = new Set(rows.map((row) => row.id))
+		const applied: Array<string> = []
+		const failed: Array<{ readonly id: string; readonly error: SqlError }> = []
+		for (const migration of migrations.filter((migration) => !done.has(migration.id))) {
+			const run = sql.withTransaction(
 				Effect.gen(function* () {
 					for (const statement of migration.statements) yield* sql.unsafe(statement)
 					yield* sql`INSERT INTO ${sql(MIGRATIONS_TABLE)} ("store", "id") VALUES (${store}, ${migration.id})`
 				}),
 			)
+			if (migration.optional !== true) {
+				yield* run
+				applied.push(migration.id)
+				continue
+			}
+			const outcome = yield* Effect.result(run)
+			if (outcome._tag === "Success") applied.push(migration.id)
+			else failed.push({ id: migration.id, error: outcome.failure })
 		}
-		return pending.map((migration) => migration.id)
+		yield* Effect.annotateCurrentSpan({
+			"db.migrations.applied": applied.length,
+			"db.migrations.failed": failed.length,
+		})
+		return { applied, failed }
 	}).pipe(Effect.withSpan("Database.applyMigrations", { attributes: { store } }))

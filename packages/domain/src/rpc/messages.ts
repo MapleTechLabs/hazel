@@ -57,6 +57,8 @@ export class MessageSearchResponse extends Schema.Class<MessageSearchResponse>("
 	nextCursor: Schema.NullOr(Schema.String),
 	/** The org's index is still being built from existing messages: results may be incomplete. */
 	indexing: Schema.Boolean,
+	/** Search is down for this org (its index could not be created): no results, try later. */
+	unavailable: Schema.optionalKey(Schema.Boolean),
 }) {}
 
 /**

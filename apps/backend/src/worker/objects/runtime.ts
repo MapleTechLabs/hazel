@@ -14,7 +14,7 @@
  * - `connect` / `onMessage` / `onClose`: the sync sockets.
  * - `alarm`: socket expiry, outbox retries, pruning, and the kind's own timers.
  */
-import { Database, type StoreName, applyMigrations } from "@hazel/db"
+import { Database, type StoreMigration, type StoreName, applyMigrations } from "@hazel/db"
 import { makeSyncedObject, type SyncObjectState, type SyncSocket, type SyncSource } from "@hazel/sync-do"
 import type { AlarmStorageLike, SqlStorageLike } from "@hazel/sync-do"
 import { Context, Effect, Exit, Layer, Option, Result, type Scope } from "effect"
@@ -37,7 +37,7 @@ import { ChannelEffects } from "./effects/channel-effects"
 import { applyReceivedEffect, deliverOutboxRowFrom } from "./effects/deliver"
 import type { ApplyEffectRequest, ApplyEffectResult } from "./effects/registry"
 import type { ObjectKind } from "./kinds"
-import { installObjectMeta, makeObjectIdentity } from "./meta"
+import { deleteObjectMeta, installObjectMeta, makeObjectIdentity, writeObjectMeta } from "./meta"
 import {
 	decodeInvokePrincipal,
 	decodeSyncPrincipal,
@@ -50,7 +50,7 @@ import { makeChannelSource } from "./sources/channel-source"
 import { makeOrgSource } from "./sources/org-source"
 import { makeUserSource } from "./sources/user-source"
 import { pollDueRssFeeds, rssDeadlines } from "./org/rss"
-import { prepareMessageSearch } from "./org/message-search"
+import { prepareMessageSearch, SEARCH_MIGRATION_ID } from "./org/message-search"
 import { channelDeadlines, runChannelTimers } from "./channel/timers"
 import { makePresenceHooks } from "./user/presence"
 import { reauthenticateWith, refuseAllTokens, type SocketTokenVerifier } from "./socket-token"
@@ -74,6 +74,8 @@ export interface ObjectRuntimeOptions {
 	readonly platform: Layer.Layer<ObjectPlatform>
 	/** Verifies `Reauth` tokens (lazily built); omitted: every `Reauth` is refused (4001). */
 	readonly socketTokens?: Effect.Effect<SocketTokenVerifier>
+	/** The store's migrations (tests); default `storeMigrations[store]`. */
+	readonly migrations?: ReadonlyArray<StoreMigration>
 }
 
 const storeOf: Record<ObjectKind, StoreName> = { org: "org", channel: "channel", user: "user" }
@@ -104,19 +106,39 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 		) => Effect.provideContext(effect, base as Context.Context<R>)
 
 		const sql = Context.get(base, SqlClient)
+		// A required migration failing is fatal (the object cannot serve its tables); an optional
+		// one (`0002_message_search`) is logged and retried on the next activation.
 		const migrated = yield* run(
-			applyMigrations(sql, storeOf[kind]).pipe(
+			applyMigrations(sql, storeOf[kind], options.migrations).pipe(
 				Effect.tap(() => installObjectMeta),
 				Effect.orDie,
 			),
 		)
+		// Recorded in the object's meta (`migrationFailed.<id>`) until a later activation applies it.
+		for (const failure of migrated.failed) {
+			const { reason } = failure.error
+			const error =
+				reason.cause instanceof Error ? `${reason._tag}: ${reason.cause.message}` : reason._tag
+			yield* Effect.logError("Optional migration failed; serving without it", {
+				store: storeOf[kind],
+				migration: failure.id,
+				error,
+			})
+			yield* run(writeObjectMeta(`migrationFailed.${failure.id}`, error.slice(0, 500))).pipe(
+				Effect.orDie,
+			)
+		}
+		for (const id of migrated.applied) {
+			yield* run(deleteObjectMeta(`migrationFailed.${id}`)).pipe(Effect.orDie)
+		}
 		const identity = yield* run(makeObjectIdentity.pipe(Effect.orDie))
 		// OrgObject: start the search backfill if its index predates the current version. A failure
-		// only delays it to the next activation.
-		if (kind === "org") {
+		// only delays it to the next activation; without the index (its migration failed) it waits
+		// for the activation that applies it.
+		if (kind === "org" && !migrated.failed.some((failure) => failure.id === SEARCH_MIGRATION_ID)) {
 			yield* run(
 				prepareMessageSearch({
-					fresh: migrated.includes("0001_initial"),
+					fresh: migrated.applied.includes("0001_initial"),
 					objectId: identity.current(),
 				}).pipe(
 					Effect.catchTags({

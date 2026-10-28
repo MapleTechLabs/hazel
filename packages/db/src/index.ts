@@ -11,6 +11,7 @@ export * from "./stores"
 export {
 	applyMigrations,
 	MIGRATIONS_TABLE,
+	type MigrationReport,
 	renderStoreSchema,
 	storeMigrations,
 	type StoreMigration,

@@ -5,6 +5,7 @@
  * records what it was sent.
  */
 import type { BotGatewayEnvelope } from "@hazel/domain"
+import type { StoreMigration } from "@hazel/db"
 import { layerMemory } from "@hazel/db/node"
 import type { BotId } from "@hazel/schema"
 import { type FakeStorage, makeFakeState, makeFakeStorage, sqliteClientLayer } from "@hazel/sync-do/testing"
@@ -82,169 +83,190 @@ export interface TestObjects {
 	) => Effect.Effect<Exit.Exit<unknown, unknown>>
 }
 
-export const makeTestObjects = Effect.gen(function* () {
-	const scope = yield* Scope.Scope
-	const directoryDatabase = yield* Layer.build(layerMemory)
-	const directory = yield* Layer.build(
-		Directory.layerDatabase.pipe(Layer.provide(Layer.succeedContext(directoryDatabase))),
-	)
-	const published: TestObjects["published"] = []
-	const deliveries: Array<string> = []
-	const unreachable = new Set<string>()
-	const held = new Map<string, { reached: Deferred.Deferred<void>; gate: Deferred.Deferred<void> }>()
-	const objects = new Map<string, TestObject>()
-	const namingRequests: Array<ThreadNamingContext> = []
-	let threadName = "Generated name"
+export interface TestObjectsOptions {
+	/** Each kind's migrations, in place of its store's (`storeMigrations`). */
+	readonly migrations?: Partial<Record<ObjectTarget["kind"], ReadonlyArray<StoreMigration>>>
+}
 
-	const transport = Layer.succeed(
-		BotGatewayTransport,
-		BotGatewayTransport.of({
-			append: (botId, envelope) => Effect.sync(() => void published.push({ botId, envelope })),
-		}),
-	)
-
-	/** A DO call starts from a clean context, as a real one (another isolate) would. */
-	const isolated = <A, E>(effect: Effect.Effect<A, E>): Effect.Effect<A, E> =>
-		effect.pipe(Effect.updateContext(() => Context.empty())) as Effect.Effect<A, E>
-
-	const stubs: Context.Service.Shape<typeof ObjectStubs> = {
-		get: (target) => ({
-			invoke: (request) => isolated(Effect.flatMap(get(target), (object) => object.invoke(request))),
-			call: (request) =>
-				isolated(Effect.flatMap(get(target), (object) => object.call(structuredClone(request)))).pipe(
-					Effect.map((response) => structuredClone(response)),
-				),
-			applyEffect: (request) =>
-				Effect.suspend(() => {
-					if (unreachable.has(formatTarget(target))) {
-						return Effect.fail(new Error(`${formatTarget(target)} is unreachable`))
-					}
-					const hold = held.get(formatTarget(target))
-					const wait =
-						hold === undefined
-							? Effect.void
-							: Effect.andThen(
-									Deferred.succeed(hold.reached, undefined),
-									Deferred.await(hold.gate),
-								)
-					return wait.pipe(
-						Effect.andThen(
-							Effect.sync(() =>
-								deliveries.push(`${formatTarget(target)} ${request.kind} ${request.key}`),
-							),
-						),
-						Effect.andThen(
-							isolated(Effect.flatMap(get(target), (object) => object.applyEffect(request))),
-						),
-					)
-				}),
-		}),
-	}
-
-	const threadNamer = Layer.succeed(
-		ThreadNamer,
-		ThreadNamer.of({
-			name: (context) =>
-				Effect.sync(() => {
-					namingRequests.push(context)
-					return Option.some(threadName)
-				}),
-		}),
-	)
-
-	const chatSync = makeRecordingChatSyncTransport({ attachmentPublicUrlBase: "https://files.test" })
-	const platform = Layer.mergeAll(
-		Layer.succeedContext(directory),
-		Layer.succeed(ObjectStubs, stubs),
-		transport,
-		threadNamer,
-		chatSync.layer,
-	)
-
-	const appPlatform = Layer.mergeAll(
-		Persistence.layerMemory,
-		// Logs links (IS_DEV) instead of sending.
-		InviteMailer.layerLog.pipe(
-			Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(TEST_CONFIG))),
-		),
-		ConfigProvider.layer(ConfigProvider.fromUnknown(TEST_CONFIG)),
-	)
-
-	const create = (target: ObjectTarget) => {
-		const storage = makeFakeStorage()
-		const state = makeFakeState()
-		return makeObjectRuntime({
-			kind: target.kind,
-			storage,
-			state,
-			sql: sqliteClientLayer(storage),
-			handlers: objectHandlersLive.pipe(Layer.provide(appPlatform), Layer.orDie),
-			platform,
-		}).pipe(
-			Effect.map((object): TestObject => ({ ...object, storage, state })),
-			Effect.provideService(Scope.Scope, scope),
+export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
+	Effect.gen(function* () {
+		const scope = yield* Scope.Scope
+		const directoryDatabase = yield* Layer.build(layerMemory)
+		const directory = yield* Layer.build(
+			Directory.layerDatabase.pipe(Layer.provide(Layer.succeedContext(directoryDatabase))),
 		)
-	}
+		const published: TestObjects["published"] = []
+		const deliveries: Array<string> = []
+		const unreachable = new Set<string>()
+		const held = new Map<string, { reached: Deferred.Deferred<void>; gate: Deferred.Deferred<void> }>()
+		const objects = new Map<string, TestObject>()
+		const namingRequests: Array<ThreadNamingContext> = []
+		let threadName = "Generated name"
 
-	const get = (target: ObjectTarget): Effect.Effect<TestObject> =>
-		Effect.suspend(() => {
-			const key = formatTarget(target)
-			const existing = objects.get(key)
-			if (existing !== undefined) return Effect.succeed(existing)
-			return create(target).pipe(Effect.tap((object) => Effect.sync(() => objects.set(key, object))))
-		})
+		const transport = Layer.succeed(
+			BotGatewayTransport,
+			BotGatewayTransport.of({
+				append: (botId, envelope) => Effect.sync(() => void published.push({ botId, envelope })),
+			}),
+		)
 
-	/** The api Worker's directory path: the handlers in process over the directory database. */
-	let directoryDispatcher: RpcDispatcherShape | undefined
-	const directoryPath = Effect.suspend(() =>
-		directoryDispatcher !== undefined
-			? Effect.succeed(directoryDispatcher)
-			: Layer.build(
-					objectHandlersLive.pipe(
-						Layer.provide(appPlatform),
-						Layer.provide(platform),
-						Layer.provide(Layer.succeedContext(directoryDatabase)),
-						Layer.orDie,
-					),
-				).pipe(
-					Effect.flatMap((handlers) => makeRpcDispatcher.pipe(Effect.provideContext(handlers))),
-					Effect.tap((dispatcher) => Effect.sync(() => void (directoryDispatcher = dispatcher))),
-					Effect.provideService(Scope.Scope, scope),
-				),
-	)
+		/** A DO call starts from a clean context, as a real one (another isolate) would. */
+		const isolated = <A, E>(effect: Effect.Effect<A, E>): Effect.Effect<A, E> =>
+			effect.pipe(Effect.updateContext(() => Context.empty())) as Effect.Effect<A, E>
 
-	return {
-		get,
-		invokeDirectory: (tag, payload, principal) =>
-			isolated(
-				Effect.flatMap(directoryPath, (dispatcher) => dispatcher.dispatch(tag, payload, principal)),
+		const stubs: Context.Service.Shape<typeof ObjectStubs> = {
+			get: (target) => ({
+				invoke: (request) =>
+					isolated(Effect.flatMap(get(target), (object) => object.invoke(request))),
+				call: (request) =>
+					isolated(
+						Effect.flatMap(get(target), (object) => object.call(structuredClone(request))),
+					).pipe(Effect.map((response) => structuredClone(response))),
+				applyEffect: (request) =>
+					Effect.suspend(() => {
+						if (unreachable.has(formatTarget(target))) {
+							return Effect.fail(new Error(`${formatTarget(target)} is unreachable`))
+						}
+						const hold = held.get(formatTarget(target))
+						const wait =
+							hold === undefined
+								? Effect.void
+								: Effect.andThen(
+										Deferred.succeed(hold.reached, undefined),
+										Deferred.await(hold.gate),
+									)
+						return wait.pipe(
+							Effect.andThen(
+								Effect.sync(() =>
+									deliveries.push(`${formatTarget(target)} ${request.kind} ${request.key}`),
+								),
+							),
+							Effect.andThen(
+								isolated(
+									Effect.flatMap(get(target), (object) => object.applyEffect(request)),
+								),
+							),
+						)
+					}),
+			}),
+		}
+
+		const threadNamer = Layer.succeed(
+			ThreadNamer,
+			ThreadNamer.of({
+				name: (context) =>
+					Effect.sync(() => {
+						namingRequests.push(context)
+						return Option.some(threadName)
+					}),
+			}),
+		)
+
+		const chatSync = makeRecordingChatSyncTransport({ attachmentPublicUrlBase: "https://files.test" })
+		const platform = Layer.mergeAll(
+			Layer.succeedContext(directory),
+			Layer.succeed(ObjectStubs, stubs),
+			transport,
+			threadNamer,
+			chatSync.layer,
+		)
+
+		const appPlatform = Layer.mergeAll(
+			Persistence.layerMemory,
+			// Logs links (IS_DEV) instead of sending.
+			InviteMailer.layerLog.pipe(
+				Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(TEST_CONFIG))),
 			),
-		directory,
-		published,
-		deliveries,
-		setUnreachable: (target, value) => {
-			if (value) unreachable.add(formatTarget(target))
-			else unreachable.delete(formatTarget(target))
-		},
-		hold: (target) => {
-			const entry = { reached: Deferred.makeUnsafe<void>(), gate: Deferred.makeUnsafe<void>() }
-			held.set(formatTarget(target), entry)
-			return {
-				reached: Deferred.await(entry.reached),
-				release: Effect.andThen(
-					Effect.sync(() => held.delete(formatTarget(target))),
-					Deferred.succeed(entry.gate, undefined),
-				).pipe(Effect.asVoid),
-			}
-		},
-		stubs,
-		chatSyncCalls: chatSync.calls,
-		setChatSyncFailure: (status) => {
-			chatSync.control.fail = status
-		},
-		namingRequests,
-		setThreadName: (name) => {
-			threadName = name
-		},
-	} satisfies TestObjects
-})
+			ConfigProvider.layer(ConfigProvider.fromUnknown(TEST_CONFIG)),
+		)
+
+		const create = (target: ObjectTarget) => {
+			const storage = makeFakeStorage()
+			const state = makeFakeState()
+			return makeObjectRuntime({
+				kind: target.kind,
+				storage,
+				state,
+				sql: sqliteClientLayer(storage),
+				handlers: objectHandlersLive.pipe(Layer.provide(appPlatform), Layer.orDie),
+				platform,
+				...(options.migrations?.[target.kind] === undefined
+					? {}
+					: { migrations: options.migrations[target.kind] }),
+			}).pipe(
+				Effect.map((object): TestObject => ({ ...object, storage, state })),
+				Effect.provideService(Scope.Scope, scope),
+			)
+		}
+
+		const get = (target: ObjectTarget): Effect.Effect<TestObject> =>
+			Effect.suspend(() => {
+				const key = formatTarget(target)
+				const existing = objects.get(key)
+				if (existing !== undefined) return Effect.succeed(existing)
+				return create(target).pipe(
+					Effect.tap((object) => Effect.sync(() => objects.set(key, object))),
+				)
+			})
+
+		/** The api Worker's directory path: the handlers in process over the directory database. */
+		let directoryDispatcher: RpcDispatcherShape | undefined
+		const directoryPath = Effect.suspend(() =>
+			directoryDispatcher !== undefined
+				? Effect.succeed(directoryDispatcher)
+				: Layer.build(
+						objectHandlersLive.pipe(
+							Layer.provide(appPlatform),
+							Layer.provide(platform),
+							Layer.provide(Layer.succeedContext(directoryDatabase)),
+							Layer.orDie,
+						),
+					).pipe(
+						Effect.flatMap((handlers) => makeRpcDispatcher.pipe(Effect.provideContext(handlers))),
+						Effect.tap((dispatcher) =>
+							Effect.sync(() => void (directoryDispatcher = dispatcher)),
+						),
+						Effect.provideService(Scope.Scope, scope),
+					),
+		)
+
+		return {
+			get,
+			invokeDirectory: (tag, payload, principal) =>
+				isolated(
+					Effect.flatMap(directoryPath, (dispatcher) =>
+						dispatcher.dispatch(tag, payload, principal),
+					),
+				),
+			directory,
+			published,
+			deliveries,
+			setUnreachable: (target, value) => {
+				if (value) unreachable.add(formatTarget(target))
+				else unreachable.delete(formatTarget(target))
+			},
+			hold: (target) => {
+				const entry = { reached: Deferred.makeUnsafe<void>(), gate: Deferred.makeUnsafe<void>() }
+				held.set(formatTarget(target), entry)
+				return {
+					reached: Deferred.await(entry.reached),
+					release: Effect.andThen(
+						Effect.sync(() => held.delete(formatTarget(target))),
+						Deferred.succeed(entry.gate, undefined),
+					).pipe(Effect.asVoid),
+				}
+			},
+			stubs,
+			chatSyncCalls: chatSync.calls,
+			setChatSyncFailure: (status) => {
+				chatSync.control.fail = status
+			},
+			namingRequests,
+			setThreadName: (name) => {
+				threadName = name
+			},
+		} satisfies TestObjects
+	})
+
+/** Objects over the stores' own migrations. */
+export const makeTestObjects = makeTestObjectsWith()

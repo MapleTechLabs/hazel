@@ -122,7 +122,7 @@ export const renderGeneratedModule = (migrations: Record<StoreName, ReadonlyArra
 				`\t${store}: [\n${migrations[store]
 					.map(
 						(migration) =>
-							`\t\t{\n\t\t\tid: ${JSON.stringify(migration.id)},\n\t\t\tstatements: [\n${migration.statements
+							`\t\t{\n\t\t\tid: ${JSON.stringify(migration.id)},\n${migration.optional === true ? "\t\t\toptional: true,\n" : ""}\t\t\tstatements: [\n${migration.statements
 								.map((statement) => `\t\t\t\t${JSON.stringify(statement)},\n`)
 								.join("")}\t\t\t],\n\t\t},\n`,
 					)

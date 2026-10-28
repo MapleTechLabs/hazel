@@ -37,6 +37,20 @@ import {
 export const SEARCH_INDEX_VERSION = "1"
 const VERSION_KEY = "messageSearchVersion"
 
+/** The org migration that creates the index; optional, so an org serves without it. */
+export const SEARCH_MIGRATION_ID = "0002_message_search"
+
+/**
+ * Whether the index exists: its migration may have failed on this activation (and retries on the
+ * next). Without it, index writes are dropped (the activation that creates it backfills).
+ */
+export const searchAvailable = Effect.gen(function* () {
+	const sql = yield* SqlClient
+	const rows = yield* sql`SELECT 1 AS present FROM sqlite_master
+		WHERE type = 'table' AND name IN ('message_search', 'message_search_fts', 'message_search_backfill')`
+	return rows.length === 3
+})
+
 const DEFAULT_LIMIT = 50
 const SNIPPET_TOKENS = 24
 const PREVIEW_CHARS = 240
@@ -101,6 +115,7 @@ const applyIndex = Effect.fn("OrgObject.applySearchIndex")(function* (
 		readonly replace: boolean
 	},
 ) {
+	if (!(yield* searchAvailable)) return
 	const sql = yield* SqlClient
 	if (change.replace) yield* sql`DELETE FROM message_search WHERE "channelId" = ${channelId}`
 	if (change.remove.length > 0) {
@@ -174,6 +189,7 @@ const forwardToGuests = Effect.fn("OrgObject.forwardSearchToGuests")(function* (
 export const indexMessages = Effect.fn("OrgObject.indexMessages")(function* (payload: IndexMessagesPayload) {
 	const sender = yield* Effect.serviceOption(CurrentEffectSender)
 	if (Option.isNone(sender) || sender.value.kind !== "channel") return
+	if (!(yield* searchAvailable)) return
 	const channelId = ChannelId.make(sender.value.id)
 	const channel = yield* localChannel(channelId)
 	if (Option.isNone(channel) || channel.value.deletedAt !== null) return
@@ -268,6 +284,7 @@ export const searchSenderRefusal = Effect.fn("OrgObject.searchSenderRefusal")(fu
  * idempotent, a later run supersedes an earlier one's progress. Joins the caller's transaction.
  */
 export const reindexMessageSearch = Effect.fn("OrgObject.reindexMessageSearch")(function* () {
+	if (!(yield* searchAvailable)) return 0
 	const db = yield* Database.Database
 	const sql = yield* SqlClient
 	const generation = yield* Clock.currentTimeMillis
@@ -308,6 +325,7 @@ export const prepareMessageSearch = Effect.fn("OrgObject.prepareMessageSearch")(
 	readonly fresh: boolean
 	readonly objectId: string | undefined
 }) {
+	if (!(yield* searchAvailable)) return
 	const version = yield* readObjectMeta(VERSION_KEY)
 	if (Option.getOrUndefined(version) === SEARCH_INDEX_VERSION) return
 	if (options.fresh) return yield* writeObjectMeta(VERSION_KEY, SEARCH_INDEX_VERSION)
@@ -368,6 +386,15 @@ export const searchMessages = Effect.fn("OrgObject.searchMessages")(
 			return yield* new UnauthorizedError({
 				message: "Search runs in the organization's object",
 				detail: `Routed to ${Option.match(object, { onNone: () => "directory", onSome: (o) => o.kind })}`,
+			})
+		}
+		if (!(yield* searchAvailable)) {
+			yield* Effect.annotateCurrentSpan({ "search.unavailable": true })
+			return new MessageSearchResponse({
+				results: [],
+				nextCursor: null,
+				indexing: false,
+				unavailable: true,
 			})
 		}
 		const sql = yield* SqlClient

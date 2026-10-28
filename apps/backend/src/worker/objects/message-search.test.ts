@@ -3,7 +3,7 @@
  * channels' writes, answers only from channels the caller can read, reaches Connect guests
  * through their mounts, and backfills from existing messages.
  */
-import { SQLite, schema } from "@hazel/db"
+import { SQLite, schema, storeMigrations } from "@hazel/db"
 import { CurrentUser, UnauthorizedError } from "@hazel/domain"
 import { CreateDmChannelRequest, CreateThreadRequest, type MessageSearchResponse } from "@hazel/domain/rpc"
 import type { ChannelId, ConnectInviteId, MessageId, OrganizationId, UserId } from "@hazel/schema"
@@ -13,9 +13,15 @@ import { decodeExit, encodePayload, type HazelRpcTag, rpcFor } from "../../rpc/d
 import { resolveTarget } from "../../rpc/routing"
 import { Directory } from "../../services/directory"
 import { channelTarget, formatTarget, orgTarget } from "./kinds"
-import { parseSnippet, prepareMessageSearch, toFtsQuery, toSearchText } from "./org/message-search"
+import {
+	parseSnippet,
+	prepareMessageSearch,
+	SEARCH_MIGRATION_ID,
+	toFtsQuery,
+	toSearchText,
+} from "./org/message-search"
 import { encodeInvokePrincipal } from "./principal"
-import { makeTestObjects, type TestObject, type TestObjects } from "./testing"
+import { makeTestObjects, makeTestObjectsWith, type TestObject, type TestObjects } from "./testing"
 
 const uuid = () => crypto.randomUUID()
 
@@ -117,17 +123,19 @@ const makeChannel = (org: Org, as: UserId, type: "public" | "private", name: str
 	})
 
 /** Org A: a1 (owner), a2 (member); org B: b1, b2; `outsider` belongs to neither. */
-const makeWorld = Effect.gen(function* () {
-	const objects = yield* makeTestObjects
-	const [a1, a2, b1, b2, outsider] = [uuid(), uuid(), uuid(), uuid(), uuid()] as Array<UserId>
-	yield* directoryUser(objects, a1, "Ada")
-	yield* directoryUser(objects, a2, "Abe")
-	yield* directoryUser(objects, b1, "Bea")
-	yield* directoryUser(objects, b2, "Bob")
-	const a = yield* makeOrg(objects, "Acme", "acme", a1, a2)
-	const b = yield* makeOrg(objects, "Beta", "beta", b1, b2)
-	return { objects, a, b, a1, a2, b1, b2, outsider }
-})
+const worldOf = (objects: TestObjects) =>
+	Effect.gen(function* () {
+		const [a1, a2, b1, b2, outsider] = [uuid(), uuid(), uuid(), uuid(), uuid()] as Array<UserId>
+		yield* directoryUser(objects, a1, "Ada")
+		yield* directoryUser(objects, a2, "Abe")
+		yield* directoryUser(objects, b1, "Bea")
+		yield* directoryUser(objects, b2, "Bob")
+		const a = yield* makeOrg(objects, "Acme", "acme", a1, a2)
+		const b = yield* makeOrg(objects, "Beta", "beta", b1, b2)
+		return { objects, a, b, a1, a2, b1, b2, outsider }
+	})
+
+const makeWorld = Effect.flatMap(makeTestObjects, worldOf)
 
 type World = Effect.Success<typeof makeWorld>
 
@@ -473,6 +481,42 @@ describe("message search", () => {
 				expect(done.results.length).toBe(100)
 				expect(done.results[0]!.snippet).toBe("archived note 449")
 				expect(ids(yield* search(a, a2, { query: "deleted" }))).toEqual([])
+			}),
+		))
+
+	it("serves an org whose search migration failed: search answers unavailable, writes go on", () =>
+		run(
+			Effect.gen(function* () {
+				const broken = storeMigrations.org.map((migration) =>
+					migration.id === SEARCH_MIGRATION_ID
+						? { ...migration, statements: [...migration.statements, "NOT SQL"] }
+						: migration,
+				)
+				const world = yield* Effect.flatMap(
+					makeTestObjectsWith({ migrations: { org: broken } }),
+					worldOf,
+				)
+				const { a, a1, a2 } = world
+				const general = yield* makeChannel(a, a1, "public", "general")
+				yield* send(world, general, a1, "still talking")
+				const channel = yield* world.objects.get(channelTarget(general))
+				yield* settle([a.object, channel])
+
+				const answer = yield* search(a, a2, { query: "talking" })
+				expect(answer.unavailable).toBe(true)
+				expect(answer.results).toEqual([])
+				// The index changes were dropped, not left to retry or die.
+				expect(a.object.storage.db.prepare(`SELECT kind, status FROM _outbox`).all()).toEqual([])
+				const failure = a.object.storage.db
+					.prepare(`SELECT value FROM _object_meta WHERE key = ?`)
+					.get(`migrationFailed.${SEARCH_MIGRATION_ID}`) as { value: string } | undefined
+				expect(failure?.value).toMatch(/syntax error/)
+				// The FTS tables were rolled back with the rest of the migration.
+				expect(
+					a.object.storage.db
+						.prepare(`SELECT name FROM sqlite_master WHERE name LIKE 'message_search%'`)
+						.all(),
+				).toEqual([])
 			}),
 		))
 

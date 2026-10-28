@@ -32,9 +32,12 @@ describe.each(storeNames)("the %s store", (store) => {
 		const migrated = await withSqlite(
 			Effect.gen(function* () {
 				const sql = yield* SqlClient.SqlClient
-				const applied = yield* applyMigrations(sql, store)
-				expect(applied).toEqual(storeMigrations[store].map((migration) => migration.id))
-				expect(yield* applyMigrations(sql, store)).toEqual([])
+				const report = yield* applyMigrations(sql, store)
+				expect(report).toEqual({
+					applied: storeMigrations[store].map((migration) => migration.id),
+					failed: [],
+				})
+				expect(yield* applyMigrations(sql, store)).toEqual({ applied: [], failed: [] })
 				return yield* structuralSchema
 			}),
 		)
@@ -76,5 +79,48 @@ describe("table defaults", () => {
 		)
 		expect(row.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
 		expect(row.createdAt).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}$/)
+	})
+})
+
+describe("optional migrations", () => {
+	const migrations = [
+		{ id: "0001_initial", statements: [`CREATE TABLE "a" ("id" text)`] },
+		{
+			id: "0002_broken",
+			optional: true as const,
+			statements: [`CREATE TABLE "b" ("id" text)`, `NOT SQL`],
+		},
+		{ id: "0003_later", statements: [`CREATE TABLE "c" ("id" text)`] },
+	]
+
+	it("reports a failing optional migration, rolls it back, runs the rest and retries it next time", async () => {
+		const outcome = await withSqlite(
+			Effect.gen(function* () {
+				const sql = yield* SqlClient.SqlClient
+				const first = yield* applyMigrations(sql, "org", migrations)
+				const tables = yield* sql<{ readonly name: string }>`
+					SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('a', 'b', 'c') ORDER BY name`
+				const retried = yield* applyMigrations(sql, "org", [
+					...migrations.slice(0, 1),
+					{ ...migrations[1]!, statements: [`CREATE TABLE "b" ("id" text)`] },
+					...migrations.slice(2),
+				])
+				return { first, tables: tables.map((row) => row.name), retried }
+			}),
+		)
+		expect(outcome.first.applied).toEqual(["0001_initial", "0003_later"])
+		expect(outcome.first.failed.map((failure) => failure.id)).toEqual(["0002_broken"])
+		expect(outcome.tables).toEqual(["a", "c"])
+		expect(outcome.retried).toEqual({ applied: ["0002_broken"], failed: [] })
+	})
+
+	it("fails the run when a required migration fails", async () => {
+		const exit = await Effect.runPromiseExit(
+			Effect.gen(function* () {
+				const sql = yield* SqlClient.SqlClient
+				return yield* applyMigrations(sql, "org", [{ id: "0001_initial", statements: ["NOT SQL"] }])
+			}).pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:" }))),
+		)
+		expect(exit._tag).toBe("Failure")
 	})
 })

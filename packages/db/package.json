@@ -13,8 +13,9 @@
 	},
 	"scripts": {
 		"db:generate-sqlite": "bun scripts/generate-sqlite.ts",
-		"test": "vitest run",
-		"typecheck": "tsc --noEmit"
+		"test": "vitest run && vitest run --config vitest.workerd.config.ts",
+		"typecheck": "tsc --noEmit && tsc --noEmit -p test/workerd",
+		"test:workerd": "vitest run --config vitest.workerd.config.ts"
 	},
 	"dependencies": {
 		"@effect/sql-d1": "catalog:effect",
@@ -25,8 +26,12 @@
 		"effect": "catalog:effect"
 	},
 	"devDependencies": {
+		"@cloudflare/vitest-plugin": "^1.4.9",
+		"@cloudflare/workers-types": "catalog:alchemy",
+		"@effect/sql-sqlite-do": "catalog:effect",
 		"@types/bun": "1.3.9",
 		"@types/node": "^24",
-		"typescript": "catalog:tooling"
+		"typescript": "catalog:tooling",
+		"vitest": "^4.1.0"
 	}
 }
