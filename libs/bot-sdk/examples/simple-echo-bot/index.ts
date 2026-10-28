@@ -65,7 +65,6 @@ const runtime = createHazelBot({
 	// For local development, override the URLs:
 	backendUrl: process.env.BACKEND_URL ?? "http://localhost:3003",
 	gatewayUrl: process.env.GATEWAY_URL ?? "http://localhost:3034",
-	actorsEndpoint: process.env.ACTORS_URL ?? "http://localhost:6420",
 	// Pass the typesafe command group
 	commands,
 })

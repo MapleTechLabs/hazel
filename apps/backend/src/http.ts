@@ -8,7 +8,6 @@ import { HttpIncomingWebhookLive } from "./routes/incoming-webhooks.http"
 import { HttpIntegrationCommandLive } from "./routes/integration-commands.http"
 import { HttpIntegrationResourceLive } from "./routes/integration-resources.http"
 import { HttpIntegrationLive } from "./routes/integrations.http"
-import { HttpInternalLive } from "./routes/internal.http"
 import { HttpPresencePublicLive } from "./routes/presence.http"
 import { HttpRootLive } from "./routes/root.http"
 import { HttpUploadsLive } from "./routes/uploads.http"
@@ -23,7 +22,6 @@ export const HttpApiRoutes = HttpApiBuilder.layer(HazelApi).pipe(
 	Layer.provide(HttpIntegrationCommandLive),
 	Layer.provide(HttpIntegrationResourceLive),
 	Layer.provide(HttpIncomingWebhookLive),
-	Layer.provide(HttpInternalLive),
 	Layer.provide(HttpPresencePublicLive),
 	Layer.provide(HttpUploadsLive),
 	Layer.provide(HttpWebhookLive),

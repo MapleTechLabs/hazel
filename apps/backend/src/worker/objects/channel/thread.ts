@@ -12,6 +12,8 @@ import { ChannelId, MessageId, UserId } from "@hazel/schema"
 import { Effect, Option, Schema } from "effect"
 import { enqueueEffect, defineEffect } from "../effects/registry"
 import { writeObjectMeta } from "../meta"
+import { InboundChatSyncWrite } from "../../../services/chat-sync/chat-sync-effects"
+import { ChatSyncOutbound, enqueueChatSyncOutbound } from "../../../services/chat-sync/chat-sync-outbound"
 
 export const SetThreadChannelPayload = Schema.Struct({
 	messageId: MessageId,
@@ -67,6 +69,10 @@ export const setThreadChannel = Effect.fn("ChannelEffects.setThreadChannel")(fun
 	yield* Effect.annotateCurrentSpan({ "thread.linked": message !== undefined })
 	if (message === undefined) {
 		return yield* Effect.logWarning("Thread link skipped: message missing or already linked", payload)
+	}
+	// Mirror the thread on the channel's outbound chat-sync links (a provider thread on the message).
+	if (!(yield* InboundChatSyncWrite)) {
+		yield* enqueueChatSyncOutbound(ChatSyncOutbound.threadCreated(message.id, payload.threadChannelId))
 	}
 	yield* enqueueEffect(
 		ThreadEffects.setThreadOrigin,

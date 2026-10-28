@@ -5,12 +5,14 @@
  * reactions); outbound `chatSync.outbound` for Hazel writes and none for inbound ones.
  */
 import { CurrentUser } from "@hazel/domain"
+import { CreateThreadRequest } from "@hazel/domain/rpc"
 import { SQLite, schema } from "@hazel/db"
 import type {
 	ChannelId,
 	ExternalChannelId,
 	ExternalMessageId,
 	ExternalUserId,
+	MessageId,
 	OrganizationId,
 	SyncChannelLinkId,
 	SyncConnectionId,
@@ -19,14 +21,16 @@ import type {
 import { Cause, Effect, Exit, Layer, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { decodeExit, encodePayload, type HazelRpcTag, rpcFor } from "../../rpc/dispatch"
+import { callObject } from "../../worker/objects/calls"
 import { channelTarget, orgTarget } from "../../worker/objects/kinds"
+import { ConnectIntegrationCall, DisconnectIntegrationCall } from "../../worker/objects/org/integrations"
 import { encodeInvokePrincipal } from "../../worker/objects/principal"
 import { ObjectStubs } from "../../worker/objects/protocol"
 import { makeTestObjects, type TestObject, type TestObjects } from "../../worker/objects/testing"
 import { Directory } from "../directory"
 import { readChatSyncLinks } from "./chat-sync-channel"
 import { routeDiscordInbound } from "./discord-gateway-service"
-import type { DiscordInbound } from "./discord-gateway-shared"
+import { createDiscordGatewayDispatchHandlers, type DiscordInbound } from "./discord-gateway-shared"
 
 const uuid = () => crypto.randomUUID()
 const GUILD = "111111111111111111"
@@ -437,6 +441,222 @@ describe("chat sync on the objects", () => {
 				yield* world.channel.alarm
 				expect(chatSyncOutbox(world.channel)).toBe(0)
 				expect(world.objects.chatSyncCalls.map((c) => c.op)).toEqual(["createMessage"])
+			}),
+		))
+
+	it("the message link a delivery writes reaches the channel's sockets in the same request", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				yield* ok(
+					yield* call(
+						world.channel,
+						world.channelId,
+						"message.create",
+						{
+							channelId: world.channelId,
+							content: "broadcast my link",
+							embeds: null,
+							replyToMessageId: null,
+							threadChannelId: null,
+							authorId: world.owner,
+							deletedAt: null,
+						},
+						world.owner,
+					),
+				)
+				// The link row (written by the outbound delivery, after the write's flush) is flushed too.
+				expect(world.channel.synced.sync.flushedSeq()).toBe(world.channel.synced.sync.headSeq())
+				expect(rows(world.channel, `SELECT id FROM chat_sync_message_links`)).toHaveLength(1)
+			}),
+		))
+
+	it("a Hazel thread on a synced message becomes a Discord thread, linked like its parent", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const sent = (yield* ok(
+					yield* call(
+						world.channel,
+						world.channelId,
+						"message.create",
+						{
+							channelId: world.channelId,
+							content: "Shall we ship Friday?\nmore detail",
+							embeds: null,
+							replyToMessageId: null,
+							threadChannelId: null,
+							authorId: world.owner,
+							deletedAt: null,
+						},
+						world.owner,
+					),
+				)) as { data: { id: MessageId } }
+				const externalMessageId = rows<{ externalMessageId: string }>(
+					world.channel,
+					`SELECT externalMessageId FROM chat_sync_message_links WHERE hazelMessageId = ?`,
+					sent.data.id,
+				)[0]!.externalMessageId
+
+				const threadId = uuid() as ChannelId
+				yield* ok(
+					yield* call(
+						world.org,
+						world.orgId,
+						"channel.createThread",
+						new CreateThreadRequest({
+							id: threadId,
+							messageId: sent.data.id,
+							organizationId: world.orgId,
+							channelId: world.channelId,
+						}),
+						world.owner,
+					),
+				)
+				const created = world.objects.chatSyncCalls.find((c) => c.op === "createThread")
+				expect(created).toEqual({
+					op: "createThread",
+					externalChannelId: DISCORD_CHANNEL,
+					externalMessageId,
+					content: "Shall we ship Friday?",
+				})
+				// The org link is delivered by the parent's outbox (its alarm, here).
+				yield* world.channel.alarm
+				const externalThreadId = rows<{ externalThreadId: string }>(
+					world.channel,
+					`SELECT externalThreadId FROM chat_sync_message_links WHERE hazelMessageId = ?`,
+					sent.data.id,
+				)[0]!.externalThreadId
+				expect(externalThreadId).not.toBeNull()
+				expect(
+					rows(
+						world.org,
+						`SELECT direction FROM chat_sync_channel_links WHERE hazelChannelId = ? AND externalChannelId = ?`,
+						threadId,
+						externalThreadId,
+					),
+				).toEqual([{ direction: "both" }])
+				expect(
+					(yield* world.index()).find((row) => row.channelId === threadId)?.externalChannelId,
+				).toBe(externalThreadId)
+
+				// Replies in the thread go to the Discord thread.
+				const thread = yield* world.objects.get(channelTarget(threadId))
+				expect((yield* thread.run(readChatSyncLinks)).links.map((l) => l.externalChannelId)).toEqual([
+					externalThreadId,
+				])
+				yield* ok(
+					yield* call(
+						thread,
+						threadId,
+						"message.create",
+						{
+							channelId: threadId,
+							content: "yes",
+							embeds: null,
+							replyToMessageId: null,
+							threadChannelId: null,
+							authorId: world.owner,
+							deletedAt: null,
+						},
+						world.owner,
+					),
+				)
+				expect(world.objects.chatSyncCalls.at(-1)).toEqual({
+					op: "createMessage",
+					externalChannelId: externalThreadId,
+					content: "yes",
+				})
+
+				// Our own THREAD_CREATE echo from the gateway is dropped (bot-owned).
+				const ingested: Array<unknown> = []
+				const handlers = createDiscordGatewayDispatchHandlers({
+					ingest: (inbound) => Effect.sync(() => void ingested.push(inbound)),
+					isCurrentBotAuthor: (id) => Effect.succeed(id === "777777777777777777"),
+				})
+				yield* handlers.ingestThreadCreateEvent({
+					id: externalThreadId,
+					parent_id: DISCORD_CHANNEL,
+					name: "Shall we ship Friday?",
+					type: 11,
+					owner_id: "777777777777777777",
+				})
+				expect(ingested).toEqual([])
+			}),
+		))
+
+	it("a refused sender cannot link a thread at the org", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const result = yield* world.org.applyEffect({
+					objectId: world.orgId,
+					kind: "org.chatSyncLinkThread",
+					payload: {
+						channelLinkId: world.channelLinkId,
+						threadChannelId: uuid(),
+						externalThreadId: "888888888888888888",
+						externalThreadName: "x",
+					},
+					key: uuid(),
+					sender: { kind: "channel", id: uuid() },
+				})
+				expect(result._tag).toBe("Applied")
+				expect(rows(world.org, `SELECT id FROM chat_sync_channel_links`)).toHaveLength(1)
+			}),
+		))
+
+	it("linking and unlinking a Discord account re-projects the linked channels' accounts", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const worker = <A, E>(effect: Effect.Effect<A, E, ObjectStubs>) =>
+					effect.pipe(Effect.provide(Layer.succeed(ObjectStubs, world.objects.stubs)), Effect.orDie)
+				expect((yield* world.channel.run(readChatSyncLinks)).accounts).toEqual([])
+
+				yield* worker(
+					callObject(ConnectIntegrationCall, orgTarget(world.orgId), {
+						provider: "discord",
+						userId: world.owner,
+						connectedBy: world.owner,
+						externalAccountId: "666666666666666666",
+						externalAccountName: "olive",
+						settings: null,
+						metadata: null,
+						tokens: { accessToken: "token", refreshToken: null, expiresAt: null, scope: null },
+					}),
+				)
+				expect((yield* world.channel.run(readChatSyncLinks)).accounts).toEqual([
+					{ userId: world.owner, provider: "discord", externalAccountId: "666666666666666666" },
+				])
+
+				// Outbound mentions now resolve to the Discord user.
+				yield* ok(
+					yield* call(
+						world.channel,
+						world.channelId,
+						"message.create",
+						{
+							channelId: world.channelId,
+							content: `hi @[userId:${world.owner}]`,
+							embeds: null,
+							replyToMessageId: null,
+							threadChannelId: null,
+							authorId: world.owner,
+							deletedAt: null,
+						},
+						world.owner,
+					),
+				)
+				expect(world.objects.chatSyncCalls.at(-1)?.content).toBe("hi <@666666666666666666>")
+
+				yield* worker(
+					callObject(DisconnectIntegrationCall, orgTarget(world.orgId), {
+						provider: "discord",
+						userId: world.owner,
+					}),
+				)
+				expect((yield* world.channel.run(readChatSyncLinks)).accounts).toEqual([])
 			}),
 		))
 })

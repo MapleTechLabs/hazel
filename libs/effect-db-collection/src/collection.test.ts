@@ -86,7 +86,7 @@ describe("sourced collections", () => {
 
 		const second = await socketFor(sockets, "/sync/org/a", 2)
 		second.open()
-		expect(second.sent[0]).toEqual({ _tag: "Hello", since: 4 })
+		expect(second.sent[0]).toEqual({ _tag: "Hello", since: 4, paging: true })
 		second.commit(6, {
 			channels: {
 				upserts: [
@@ -285,7 +285,7 @@ describe("late collections", () => {
 		const second = await socketFor(sockets, "/sync/org/a", 2)
 		expect(first.isClosed).toBe(true)
 		second.open()
-		expect(second.sent[0]).toEqual({ _tag: "Hello", since: null })
+		expect(second.sent[0]).toEqual({ _tag: "Hello", since: null, paging: true })
 		second.snapshot(5, { channels: [{ id: "c1", name: "general" }], users: [{ id: "u1", name: "x" }] })
 		await users.preload()
 		expect(ids(users)).toEqual(["u1"])

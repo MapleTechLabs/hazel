@@ -8,7 +8,15 @@
  * - A failing `load` or `authorize` closes the affected sockets with 1011 (the client reconnects
  *   and resnapshots) and never fails the caller, whose write has already committed.
  */
-import { SYNC_SUBPROTOCOL, SyncClientFrame, SyncCloseCode, type SyncServerFrame } from "@hazel/domain/sync"
+import {
+	SYNC_SUBPROTOCOL,
+	SyncClientFrame,
+	SyncCloseCode,
+	type SyncLoadByIds,
+	type SyncLoadOlder,
+	type SyncServerFrame,
+	type SyncWindow,
+} from "@hazel/domain/sync"
 import { Cause, Clock, Effect, Option, Schema, Semaphore } from "effect"
 import {
 	type Change,
@@ -22,7 +30,7 @@ import {
 	type RetentionPolicy,
 } from "./changes.ts"
 import { SyncAttachmentTooLargeError } from "./errors.ts"
-import { type SyncRow, type SyncSource, type SyncTable, trackedTables } from "./source.ts"
+import { type SyncPage, type SyncRow, type SyncSource, type SyncTable, trackedTables } from "./source.ts"
 import { readMetaNumber, type SqlStorageLike, writeMeta } from "./sql-storage.ts"
 
 /** The workerd socket calls the runtime makes (a subset of `WebSocket`). */
@@ -50,6 +58,8 @@ export interface SyncAttachment<P> {
 	/** The socket said `Hello` and got its initial snapshot or catch-up. */
 	readonly ready: boolean
 	readonly expiresAt: number | null
+	/** `Hello.paging`: snapshots window paged tables. Absent (older clients): they go whole. */
+	readonly paging?: boolean
 }
 
 export interface SyncRuntimeOptions {
@@ -62,6 +72,10 @@ export interface SyncRuntimeOptions {
 	/** A catch-up spanning more raw changes than this resnapshots instead. */
 	readonly catchUpMaxChanges?: number
 	readonly retention?: Partial<RetentionPolicy>
+	/** `LoadOlder`/`LoadByIds` a socket may send at once (a token bucket, in memory). @default 20 */
+	readonly requestBurst?: number
+	/** Tokens the bucket regains per second. @default 4 */
+	readonly requestsPerSecond?: number
 }
 
 export type AdoptResult = "accepted" | "forbidden" | "not_found" | "expired" | "error"
@@ -145,6 +159,12 @@ const close = (socket: SyncSocket, code: number, reason: string) => {
 	}
 }
 
+/** What a `LoadOlder` or `LoadByIds` run carries. */
+interface RequestAnswer {
+	readonly rows: ReadonlyMap<string, ReadonlyArray<SyncRow>>
+	readonly windows: ReadonlyArray<SyncWindow>
+}
+
 interface LiveSocket<P> {
 	readonly socket: SyncSocket
 	readonly attachment: SyncAttachment<P>
@@ -190,11 +210,56 @@ export const makeSyncRuntime = <P, E, R>(options: {
 	const flushBatchSize = options.options?.flushBatchSize ?? 5_000
 	const catchUpMaxChanges = options.options?.catchUpMaxChanges ?? 10_000
 	const retention: RetentionPolicy = { ...DEFAULT_RETENTION, ...options.options?.retention }
+	const requestBurst = options.options?.requestBurst ?? 20
+	const requestsPerSecond = options.options?.requestsPerSecond ?? 4
+	// Per socket and in memory: hibernation refills it, which only forgives.
+	const buckets = new WeakMap<SyncSocket, { tokens: number; at: number }>()
+
+	/** Takes a request token; `0` when granted, else the ms until one is free. */
+	const takeToken = (socket: SyncSocket, now: number): number => {
+		const bucket = buckets.get(socket) ?? { tokens: requestBurst, at: now }
+		bucket.tokens = Math.min(requestBurst, bucket.tokens + ((now - bucket.at) / 1000) * requestsPerSecond)
+		bucket.at = now
+		buckets.set(socket, bucket)
+		if (bucket.tokens >= 1) {
+			bucket.tokens -= 1
+			return 0
+		}
+		return Math.ceil(((1 - bucket.tokens) / requestsPerSecond) * 1000)
+	}
+
+	/** `true` when the request may run; else refuses it with `rate_limited`. */
+	const admitRequest = (socket: SyncSocket, frame: SyncLoadOlder | SyncLoadByIds, pid: string) =>
+		Effect.gen(function* () {
+			const retryInMs = takeToken(socket, yield* Clock.currentTimeMillis)
+			if (retryInMs === 0) return true
+			yield* Effect.logWarning("Sync request over the socket's rate limit", {
+				principal: pid,
+				frame: frame._tag,
+				table: frame.table,
+				retryInMs,
+			})
+			send(
+				socket,
+				encode({
+					_tag: "Error",
+					code: "rate_limited",
+					message: `${frame._tag} rate limited`,
+					request: frame.requestId,
+					retryInMs,
+				}),
+			)
+			return false
+		})
 
 	installChangeTracking(sql, trackedTables(source))
 	const tablesByName = new Map<string, SyncTable<P, E, R>>(
 		source.tables.map((table) => [table.name, table]),
 	)
+	// Their snapshot rows come with the paged table's page.
+	const pagedDependents = new Set(source.tables.flatMap((table) => table.paging?.dependents ?? []))
+	// Advertised in `Ready`: the source answers `LoadOlder` and `LoadByIds`.
+	const pagesAny = source.tables.some((table) => table.paging !== undefined)
 	const permit = Semaphore.makeUnsafe(1)
 
 	const liveSockets = (): Array<LiveSocket<P>> =>
@@ -270,12 +335,43 @@ export const makeSyncRuntime = <P, E, R>(options: {
 			Effect.map((batches): ReadonlyArray<SyncRow> => batches.flat()),
 		)
 
-	/** Every table's visible rows, as `Rows` frames (after a `Begin{reset:true}`). */
-	const snapshotFrames = (principal: P) =>
+	/** Frames for a page's tables. */
+	const pageFrames = (pageRows: ReadonlyMap<string, ReadonlyArray<SyncRow>>) => {
+		const frames: Array<string> = []
+		let rows = 0
+		for (const [name, loaded] of pageRows) {
+			rows += loaded.length
+			frames.push(
+				...rowsFrames(
+					name,
+					loaded.map((row) => row.row),
+					[],
+				),
+			)
+		}
+		return { frames, rows }
+	}
+
+	/**
+	 * Every table's visible rows, as `Rows` frames (after a `Begin{reset:true}`). For a socket that
+	 * pages, a paged table and its dependents send their newest page instead, and report its
+	 * window; one that does not (a client from before paging) gets them whole.
+	 */
+	const snapshotFrames = (principal: P, paging: boolean) =>
 		Effect.gen(function* () {
 			const frames: Array<string> = []
+			const windows: Array<SyncWindow> = []
 			let rows = 0
 			for (const table of source.tables) {
+				if (paging && pagedDependents.has(table.name)) continue
+				if (paging && table.paging !== undefined) {
+					const page = yield* table.paging.page(principal, null, table.paging.snapshotLimit)
+					const sent = pageFrames(page.rows)
+					rows += sent.rows
+					frames.push(...sent.frames)
+					windows.push({ table: table.name, oldest: page.oldest, hasMore: page.hasMore })
+					continue
+				}
 				const loaded = yield* table.load(principal, "all")
 				rows += loaded.length
 				frames.push(
@@ -286,7 +382,15 @@ export const makeSyncRuntime = <P, E, R>(options: {
 					),
 				)
 			}
-			return { frames, rows }
+			return { frames, rows, windows }
+		})
+
+	const beginFrame = (reset: boolean, windows: ReadonlyArray<SyncWindow>, request?: number) =>
+		encode({
+			_tag: "Begin",
+			reset,
+			...(request === undefined ? {} : { request }),
+			...(windows.length === 0 ? {} : { windows }),
 		})
 
 	/** The changed rows `principal` may see; changed keys that come back missing become deletes. */
@@ -313,7 +417,7 @@ export const makeSyncRuntime = <P, E, R>(options: {
 					),
 				)
 			}
-			return { frames, rows }
+			return { frames, rows, windows: [] as ReadonlyArray<SyncWindow> }
 		})
 
 	/** Principals whose visibility a dependency change may have changed. */
@@ -383,24 +487,37 @@ export const makeSyncRuntime = <P, E, R>(options: {
 			let resnapshots = 0
 			for (const group of groupByPrincipal(sockets)) {
 				const resnapshot = isAffected(affected, group.pid)
+				// A resnapshot differs for sockets that page and those that do not.
+				const modes = resnapshot
+					? [...new Set(group.sockets.map((live) => live.attachment.paging === true))]
+					: [false]
 				const result = yield* guarded(
 					group,
 					resnapshot
 						? Effect.flatMap(reauthorize(group), (allowed) =>
 								allowed
-									? Effect.map(snapshotFrames(group.principal), Option.some)
+									? Effect.map(
+											Effect.forEach(modes, (paging) =>
+												snapshotFrames(group.principal, paging),
+											),
+											Option.some,
+										)
 									: Effect.succeed(Option.none()),
 							)
-						: Effect.map(deltaFrames(group.principal, changes), Option.some),
+						: Effect.map(deltaFrames(group.principal, changes), (delta) => Option.some([delta])),
 					resnapshot ? "resnapshot" : "flush",
 				)
-				const frames = Option.flatten(result)
-				if (Option.isNone(frames)) continue
+				const byMode = Option.flatten(result)
+				if (Option.isNone(byMode)) continue
 				if (resnapshot) resnapshots++
-				rows += frames.value.rows
-				const begin = encode({ _tag: "Begin", reset: resnapshot })
-				const all = [begin, ...frames.value.frames, commit]
-				for (const live of group.sockets) commitTo(live, all, through, now)
+				const runs = byMode.value.map((frames) => {
+					rows += frames.rows
+					return [beginFrame(resnapshot, frames.windows), ...frames.frames, commit]
+				})
+				for (const live of group.sockets) {
+					const mode = resnapshot ? modes.indexOf(live.attachment.paging === true) : 0
+					commitTo(live, runs[mode]!, through, now)
+				}
 			}
 			return { rows, resnapshots }
 		})
@@ -448,7 +565,7 @@ export const makeSyncRuntime = <P, E, R>(options: {
 		)
 	})
 
-	const hello = (live: LiveSocket<P>, since: number | null) =>
+	const hello = (live: LiveSocket<P>, since: number | null, paging: boolean) =>
 		permit.withPermit(
 			Effect.gen(function* () {
 				const group: PrincipalGroup<P> = {
@@ -467,8 +584,10 @@ export const makeSyncRuntime = <P, E, R>(options: {
 				const result = yield* guarded(
 					group,
 					reset
-						? snapshotFrames(group.principal).pipe(
-								Effect.withSpan("SyncDO.snapshot", { attributes: { "sync.seq": head } }),
+						? snapshotFrames(group.principal, paging).pipe(
+								Effect.withSpan("SyncDO.snapshot", {
+									attributes: { "sync.seq": head, "sync.paging": paging },
+								}),
 							)
 						: deltaFrames(group.principal, catchUp).pipe(
 								Effect.withSpan("SyncDO.catchUp", {
@@ -483,17 +602,162 @@ export const makeSyncRuntime = <P, E, R>(options: {
 				)
 				if (Option.isNone(result)) return
 				const now = yield* Clock.currentTimeMillis
+				const expiresAt = live.attachment.expiresAt
 				const frames = [
-					encode({ _tag: "Begin", reset }),
+					beginFrame(reset, result.value.windows),
 					...result.value.frames,
 					encode({ _tag: "Commit", seq: head } as SyncServerFrame),
-					encode({ _tag: "Ready" }),
+					// The client sends `Reauth` before this runs out.
+					encode({
+						_tag: "Ready",
+						...(expiresAt === null ? {} : { expiresInMs: Math.max(0, expiresAt - now) }),
+						...(pagesAny ? { paging: true } : {}),
+					}),
 				]
-				if (sendAll(live, frames, now))
-					setAttachment(live, { ...live.attachment, cursor: head, ready: true })
+				if (sendAll(live, frames, now)) {
+					const { paging: _previous, ...attachment } = live.attachment
+					setAttachment(live, {
+						...attachment,
+						cursor: head,
+						ready: true,
+						...(paging ? { paging: true } : {}),
+					})
+				}
 				yield* Effect.annotateCurrentSpan({ "sync.reset": reset, "sync.rows": result.value.rows })
 			}).pipe(Effect.withSpan("SyncDO.hello")),
 		)
+
+	/**
+	 * Move a socket's expiry with a fresh token for the same principal. Under the permit, so a
+	 * flush's attachment write (its cursor) never puts the old expiry back. A refused token closes
+	 * with `Reauth`; a failing check leaves the socket on its old expiry.
+	 */
+	const reauth = (socket: SyncSocket, token: string) =>
+		permit
+			.withPermit(
+				Effect.gen(function* () {
+					const reauthenticate = source.reauthenticate
+					if (reauthenticate === undefined) {
+						send(
+							socket,
+							encode({ _tag: "Error", code: "bad_frame", message: "Reauth is unsupported" }),
+						)
+						return
+					}
+					const current = socket.deserializeAttachment()
+					if (!isAttachment<P>(current)) return
+					const next = yield* reauthenticate(current.principal, token).pipe(
+						Effect.catchCause((cause) =>
+							Cause.hasInterruptsOnly(cause)
+								? Effect.interrupt
+								: Effect.logWarning("Sync reauth check failed; keeping the old expiry", {
+										principal: current.pid,
+										cause: Cause.pretty(cause),
+									}).pipe(Effect.as("unavailable" as const)),
+						),
+					)
+					if (next === "unavailable") {
+						yield* Effect.annotateCurrentSpan({ "sync.reauth": "unavailable" })
+						return
+					}
+					const principal = next
+					if (principal === null || source.principalId(principal) !== current.pid) {
+						yield* Effect.annotateCurrentSpan({ "sync.reauth": "refused" })
+						close(socket, SyncCloseCode.Reauth, "invalid_token")
+						return
+					}
+					const expiresAt = source.expiresAt?.(principal) ?? null
+					setAttachment({ socket, attachment: current }, { ...current, principal, expiresAt })
+					const now = yield* Clock.currentTimeMillis
+					send(
+						socket,
+						encode({
+							_tag: "Reauthed",
+							expiresInMs: expiresAt === null ? null : Math.max(0, expiresAt - now),
+						}),
+					)
+					yield* Effect.annotateCurrentSpan({ "sync.reauth": "accepted" })
+				}),
+			)
+			.pipe(Effect.withSpan("SyncDO.reauth"))
+
+	/**
+	 * Answers a `LoadOlder` or `LoadByIds` with a `Begin{request}` run of what `load` returns, closed
+	 * at the socket's current `seq`. Runs under the permit, so a page never splits a flush's run and
+	 * reflects at least what was sent.
+	 */
+	const answerRequest = (
+		socket: SyncSocket,
+		frame: SyncLoadOlder | SyncLoadByIds,
+		load: (principal: P) => Effect.Effect<RequestAnswer, E, R>,
+	) =>
+		permit.withPermit(
+			Effect.gen(function* () {
+				const attachment = socket.deserializeAttachment()
+				if (!isAttachment<P>(attachment)) return
+				if (!attachment.ready || attachment.cursor === null) {
+					send(
+						socket,
+						encode({ _tag: "Error", code: "bad_frame", message: `${frame._tag} before Hello` }),
+					)
+					return
+				}
+				const live: LiveSocket<P> = { socket, attachment }
+				const group: PrincipalGroup<P> = {
+					pid: attachment.pid,
+					principal: attachment.principal,
+					sockets: [live],
+				}
+				const result = yield* guarded(group, load(attachment.principal), "page")
+				if (Option.isNone(result)) return
+				const sent = pageFrames(result.value.rows)
+				const now = yield* Clock.currentTimeMillis
+				sendAll(
+					live,
+					[
+						beginFrame(false, result.value.windows, frame.requestId),
+						...sent.frames,
+						encode({ _tag: "Commit", seq: attachment.cursor } as SyncServerFrame),
+					],
+					now,
+				)
+				yield* Effect.annotateCurrentSpan({ "sync.table": frame.table, "sync.rows": sent.rows })
+			}),
+		)
+
+	const loadOlder = (socket: SyncSocket, frame: SyncLoadOlder) => {
+		const paging = tablesByName.get(frame.table)?.paging
+		const limit = Math.max(1, Math.min(frame.limit, paging?.maxLimit ?? 0))
+		return answerRequest(socket, frame, (principal) =>
+			// Not a paged table: an empty, final page.
+			(paging === undefined
+				? Effect.succeed<SyncPage>({ rows: new Map(), oldest: frame.before, hasMore: false })
+				: paging.page(principal, frame.before, limit)
+			).pipe(
+				Effect.tap((page) =>
+					Effect.annotateCurrentSpan({ "sync.limit": limit, "sync.hasMore": page.hasMore }),
+				),
+				Effect.map((page) => ({
+					rows: page.rows,
+					windows: [{ table: frame.table, oldest: page.oldest, hasMore: page.hasMore }],
+				})),
+			),
+		).pipe(Effect.withSpan("SyncDO.loadOlder"))
+	}
+
+	/** Answers `LoadByIds`: the table's `paging.byIds`, or its `load` (no dependents). */
+	const loadByIds = (socket: SyncSocket, frame: SyncLoadByIds) => {
+		const table = tablesByName.get(frame.table)
+		const ids = [...new Set(frame.ids)]
+		return answerRequest(socket, frame, (principal) =>
+			(table === undefined || ids.length === 0
+				? Effect.succeed<ReadonlyMap<string, ReadonlyArray<SyncRow>>>(new Map())
+				: table.paging?.byIds !== undefined
+					? table.paging.byIds(principal, ids)
+					: Effect.map(loadKeys(table, principal, ids), (rows) => new Map([[table.name, rows]]))
+			).pipe(Effect.map((rows) => ({ rows, windows: [] }))),
+		).pipe(Effect.withSpan("SyncDO.loadByIds", { attributes: { "sync.ids": ids.length } }))
+	}
 
 	const onMessage = (socket: SyncSocket, message: string | ArrayBuffer) =>
 		Effect.gen(function* () {
@@ -516,7 +780,15 @@ export const makeSyncRuntime = <P, E, R>(options: {
 					send(socket, encode({ _tag: "Pong" }))
 					return
 				case "Hello":
-					return yield* hello({ socket, attachment }, frame.since)
+					return yield* hello({ socket, attachment }, frame.since, frame.paging === true)
+				case "Reauth":
+					return yield* reauth(socket, frame.token)
+				case "LoadOlder":
+					if (!(yield* admitRequest(socket, frame, attachment.pid))) return
+					return yield* loadOlder(socket, frame)
+				case "LoadByIds":
+					if (!(yield* admitRequest(socket, frame, attachment.pid))) return
+					return yield* loadByIds(socket, frame)
 			}
 		})
 

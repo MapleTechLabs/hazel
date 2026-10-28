@@ -1,14 +1,16 @@
 /**
  * The wiring most objects want: the broadcaster, the outbox and one alarm over them.
  *
- * - `afterCommit` after every committed write: flush to sockets, deliver the outbox, rearm.
- * - `alarm` from the object's `alarm()`: expire sockets, retry the outbox, prune, rearm.
+ * - `afterCommit` after every committed write: flush to sockets, deliver the urgent kinds, then the
+ *   outbox, flush what the deliveries wrote (sender-side effects write locally), rearm.
+ * - `alarm` from the object's `alarm()`: expire sockets, retry the outbox, flush, prune, rearm.
  */
 import { Cause, Clock, Effect } from "effect"
 import type { SqlError } from "effect/sql/SqlError"
 import { type AlarmStorageLike, scheduleAlarm } from "./alarm.ts"
 import type { OutboxDeliveryError } from "./errors.ts"
 import {
+	deliverKindsNow,
 	type DrainOptions,
 	installOutbox,
 	makeOutbox,
@@ -30,6 +32,13 @@ export interface SyncedObjectOptions<P, E, R, RD, RX> {
 	readonly deadlines?: Effect.Effect<ReadonlyArray<number | null | undefined>, never, RX>
 	readonly runtime?: SyncRuntimeOptions
 	readonly drain?: DrainOptions
+	/**
+	 * Outbox kinds `afterCommit` delivers before it answers even while a drain runs (e.g. access
+	 * revocations); their receivers must order payloads themselves (`deliverKindsNow`).
+	 */
+	readonly urgentKinds?: ReadonlyArray<string>
+	/** What `afterCommit` spends on urgent kinds per call (default 25 rows, 5 s); the rest go to the alarm. */
+	readonly urgentBudget?: { readonly rows?: number; readonly ms?: number }
 }
 
 export const makeSyncedObject = <P, E, R, RD = never, RX = never>(
@@ -44,6 +53,13 @@ export const makeSyncedObject = <P, E, R, RD = never, RX = never>(
 	})
 	const outbox = makeOutbox(options.deliver, options.drain)
 	const extra = options.deadlines ?? Effect.succeed([])
+	const urgentKinds = options.urgentKinds ?? []
+	// Bounded so the request answering after them stays well inside its time limit; a delivery
+	// the timeout cuts off stays pending and is retried (receivers dedupe by key).
+	const urgentNow = deliverKindsNow(options.deliver, urgentKinds, {
+		...options.drain,
+		limit: options.urgentBudget?.rows ?? 25,
+	}).pipe(Effect.timeoutOption(options.urgentBudget?.ms ?? 5_000))
 
 	const logSqlError =
 		(message: string) =>
@@ -97,6 +113,10 @@ export const makeSyncedObject = <P, E, R, RD = never, RX = never>(
 	)
 
 	const flush = sync.flush.pipe(total("flush", () => sync.headSeq()))
+	/** Flush again if a delivery wrote here (a sender-side effect's rows), so they go out now. */
+	const flushIfDirty = Effect.suspend(() =>
+		sync.headSeq() > sync.flushedSeq() ? flush : Effect.succeed(sync.flushedSeq()),
+	)
 
 	/**
 	 * Returns the flushed seq (the write position to hand back to the client); total, so a failure
@@ -104,12 +124,19 @@ export const makeSyncedObject = <P, E, R, RD = never, RX = never>(
 	 */
 	const afterCommit = Effect.gen(function* () {
 		const seq = yield* flush
+		if (urgentKinds.length > 0) {
+			yield* urgentNow.pipe(
+				logSqlError("Outbox urgent delivery failed"),
+				total("outbox urgent delivery", () => {}),
+			)
+		}
 		yield* outbox.drainIfIdle.pipe(
 			logSqlError("Outbox drain failed"),
 			total("outbox drain", () => {}),
 		)
+		const after = yield* flushIfDirty
 		yield* schedule
-		return seq
+		return Math.max(seq, after)
 	}).pipe(Effect.withSpan("SyncDO.afterCommit"))
 
 	const alarm = Effect.gen(function* () {
@@ -119,6 +146,7 @@ export const makeSyncedObject = <P, E, R, RD = never, RX = never>(
 			logSqlError("Outbox drain failed"),
 			total("outbox drain", () => {}),
 		)
+		yield* flushIfDirty
 		yield* sync.pruneChanges
 		yield* pruneInbox().pipe(logSqlError("Inbox prune failed"))
 		yield* schedule

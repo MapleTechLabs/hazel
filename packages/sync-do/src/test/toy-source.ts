@@ -100,5 +100,16 @@ export const makeToySource = (controls: ToyControls): SyncSource<ToyPrincipal, E
 			),
 		principalId: (principal) => principal.userId,
 		expiresAt: (principal) => principal.expiresAt,
+		// `<userId>:<expiresAt>` is valid; `down` cannot be checked; `broken` fails; others are invalid.
+		reauthenticate: (_principal, token) => {
+			if (token === "broken") return Effect.fail(new Error("verifier failed"))
+			if (token === "down") return Effect.succeed("unavailable" as const)
+			const [userId, expiresAt] = token.split(":")
+			return Effect.succeed(
+				userId === undefined || expiresAt === undefined
+					? null
+					: { userId, expiresAt: Number(expiresAt) },
+			)
+		},
 	}
 }

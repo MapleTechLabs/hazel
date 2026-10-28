@@ -79,7 +79,7 @@ export const init = (
 	threadIds: [],
 	unfurls: {},
 	liveStates: {},
-	liveIds: [],
+	liveReplies: [],
 	rows: [],
 	limit: PAGE_SIZE,
 	offset: 0,
@@ -234,13 +234,13 @@ const deriveRows = (current: Model): PageReturn => {
 	return { ...listed, commands: [...(requested.commands ?? []), ...(listed.commands ?? [])] }
 }
 
-/** The live reply ids, re-read only when the window's or the thread panel's messages change. */
-const withLiveIds = (model: Model): Model => {
-	const liveIds = shareIds(
-		model.liveIds,
-		Live.connectedMessageIds([...model.messages, ...threadMessagesOf(model)]),
+/** The live replies, re-read only when the window's or the thread panel's messages change. */
+const withLiveReplies = (model: Model): Model => {
+	const liveReplies = Live.shareReplies(
+		model.liveReplies,
+		Live.connectedReplies([...model.messages, ...threadMessagesOf(model)]),
 	)
-	return liveIds === model.liveIds ? model : modifyFields(model, { liveIds: () => liveIds })
+	return liveReplies === model.liveReplies ? model : modifyFields(model, { liveReplies: () => liveReplies })
 }
 
 /** Who is typing, re-read when the indicators, members, users or the clock change. */
@@ -322,7 +322,7 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 		}),
 		ChangedMessages: ({ order, upserts }) =>
 			deriveRows(
-				withLiveIds(
+				withLiveReplies(
 					modifyFields(model, {
 						hasLoadedMessages: () => true,
 						messages: (previous) => applyMessageChanges(previous, order, upserts),
@@ -362,7 +362,7 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 		UpdatedThreadPanelMessages: ({ threadChannelId, messages }) => {
 			const panel = model.threadPanel
 			if (panel === null || panel.threadChannelId !== threadChannelId) return { model }
-			const withMessages = withLiveIds(
+			const withMessages = withLiveReplies(
 				modifyFields(model, {
 					threadPanel: () =>
 						modifyFields(panel, { messages: (previous) => shareMessages(previous, messages) }),

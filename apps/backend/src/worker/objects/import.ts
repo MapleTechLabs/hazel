@@ -25,6 +25,7 @@ import { enqueueEffect } from "./effects/registry"
 import type { ObjectKind } from "./kinds"
 import { publishMembership, syncChannelAccess } from "./org/channel-access"
 import { indexInstallation, requireOrganizationId } from "./org/integrations"
+import { reindexMessageSearch } from "./org/message-search"
 import { publishOrgIndex } from "./org/organization"
 
 const RowsPayload = Schema.Struct({ table: Schema.String, rows: Schema.Array(ImportRow) })
@@ -175,6 +176,8 @@ export const finalizeOrgImport = Effect.fn("OrgObject.importFinalize")(function*
 					(channelId) => publishChatSyncLinks(channelId),
 					{ discard: true },
 				)
+				// After each channel's `setViewers` (same outbox target, so delivered first).
+				yield* reindexMessageSearch()
 			}),
 		)
 		.pipe(Effect.orDie)

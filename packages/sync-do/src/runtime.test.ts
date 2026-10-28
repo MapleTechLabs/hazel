@@ -364,6 +364,45 @@ describe("sync runtime", () => {
 		}).pipe(Effect.provide(t.layer))
 	})
 
+	it.effect("Reauth moves the socket's expiry, or closes it with Reauth", () => {
+		const t = setup()
+		const reauth = (socket: FakeSocket, token: string) =>
+			t.runtime.onMessage(socket, JSON.stringify({ _tag: "Reauth", token }))
+		return Effect.gen(function* () {
+			const { socket: alice } = yield* t.connect({ userId: "alice", expiresAt: 1_000 })
+			yield* t.hello(alice, null)
+			expect(alice.frames().at(-1)).toEqual({ _tag: "Ready", expiresInMs: 1_000 })
+
+			yield* TestClock.adjust(500)
+			yield* reauth(alice, "alice:10000")
+			expect(alice.frames().at(-1)).toEqual({ _tag: "Reauthed", expiresInMs: 9_500 })
+			expect(t.runtime.deadlines()[1]).toBe(10_000)
+
+			// Past the old expiry: the socket stays and keeps receiving.
+			yield* TestClock.adjust(1_000)
+			expect(yield* t.runtime.closeExpired).toBe(0)
+			yield* t.exec(`INSERT INTO projects (id, name) VALUES ('a', 'n')`)
+			yield* t.runtime.flush
+			expect(alice.closed).toBeUndefined()
+			expect(alice.frames().at(-1)).toEqual({ _tag: "Commit", seq: 1 })
+			// The flush's cursor write kept the new expiry.
+			expect(t.runtime.deadlines()[1]).toBe(10_000)
+
+			// A failing check keeps the socket on its current expiry.
+			yield* reauth(alice, "broken")
+			yield* reauth(alice, "down")
+			expect(alice.closed).toBeUndefined()
+			expect(t.runtime.deadlines()[1]).toBe(10_000)
+
+			// Another user's token, or an invalid one, closes with 4001.
+			yield* reauth(alice, "bob:20000")
+			expect(alice.closed).toEqual({ code: 4001, reason: "invalid_token" })
+			const { socket: carol } = yield* t.connect({ userId: "carol", expiresAt: 5_000 })
+			yield* reauth(carol, "garbage")
+			expect(carol.closed).toEqual({ code: 4001, reason: "invalid_token" })
+		}).pipe(Effect.provide(t.layer))
+	})
+
 	it.effect("refuses and revalidates principals", () => {
 		const t = setup()
 		return Effect.gen(function* () {

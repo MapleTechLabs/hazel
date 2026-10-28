@@ -15,8 +15,10 @@ import {
 	DeleteMessageResponse,
 	InvalidPaginationError,
 	ListMessagesResponse,
+	LiveStateResponse,
 	MessageResponse,
 	ToggleReactionResponse,
+	WriteLiveStateResponse,
 } from "@hazel/domain/http"
 import type { MessageResponse as RpcMessageResponse } from "@hazel/domain/rpc"
 import type { MessageReaction } from "@hazel/domain/models"
@@ -27,6 +29,7 @@ import { Directory } from "../../services/directory"
 import { checkMessageRateLimit } from "../../services/rate-limit-helpers"
 import { callObject } from "../../worker/objects/calls"
 import { ListMessagesCall } from "../../worker/objects/channel/api-messages"
+import { readLive, writeLive } from "../../worker/live/client"
 import { forwardRpc } from "../../worker/objects/forward"
 import { channelTarget } from "../../worker/objects/kinds"
 import { providePrincipal } from "../../worker/objects/principal"
@@ -187,6 +190,39 @@ export const HttpMessagesApiLive = HttpApiBuilder.group(HazelApi, "api-v1-messag
 				}).pipe(
 					Effect.catchTag("DatabaseError", internal("Database error while deleting message")),
 					Effect.withSpan("ApiV1.deleteMessage"),
+				),
+			)
+			.handle("writeLiveState", ({ params, payload }) =>
+				Effect.gen(function* () {
+					const bot = yield* authenticateBotFromToken
+					const host = yield* hostOf(payload.channelId)
+					const result = yield* writeLive({
+						messageId: params.id,
+						channelId: host.id as ChannelId,
+						principal: botPrincipal(bot),
+						action: payload.action,
+					})
+					return new WriteLiveStateResponse({ data: result })
+				}).pipe(
+					Effect.catchTag("DatabaseError", internal("Database error while writing live state")),
+					Effect.withSpan("ApiV1.writeLiveState", {
+						attributes: { "message.id": params.id, "live.action": payload.action._tag },
+					}),
+				),
+			)
+			.handle("getLiveState", ({ params, query }) =>
+				Effect.gen(function* () {
+					const bot = yield* authenticateBotFromToken
+					const host = yield* hostOf(query.channel_id)
+					const state = yield* readLive({
+						messageId: params.id,
+						channelId: host.id as ChannelId,
+						userId: bot.userId,
+					})
+					return new LiveStateResponse({ data: state })
+				}).pipe(
+					Effect.catchTag("DatabaseError", internal("Database error while reading live state")),
+					Effect.withSpan("ApiV1.getLiveState", { attributes: { "message.id": params.id } }),
 				),
 			)
 			.handle("toggleReaction", ({ params, payload }) =>

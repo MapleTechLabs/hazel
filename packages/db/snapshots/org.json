@@ -1,0 +1,3276 @@
+{
+	"migration": "0002_message_search",
+	"entities": [
+		{
+			"kind": "table",
+			"name": "bot_commands",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "bot_installations",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "bots",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "channel_access",
+			"primaryKey": {
+				"columns": ["userId", "channelId"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "channel_members",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "channel_sections",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "channel_webhooks",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "channels",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "chat_sync_channel_links",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "chat_sync_connections",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "connect_conversation_channels",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "connect_conversations",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "connect_participants",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "custom_emojis",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "github_subscriptions",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "integration_connections",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "integration_requests",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "integration_tokens",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "organization_members",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "organizations",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "rss_posted_items",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "rss_subscriptions",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "user_presence_status",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "users",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "column",
+			"table": "bot_commands",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "bot_commands",
+			"name": "botId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bot_commands",
+			"name": "name",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bot_commands",
+			"name": "description",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bot_commands",
+			"name": "arguments",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": "'[]'"
+		},
+		{
+			"kind": "column",
+			"table": "bot_commands",
+			"name": "usageExample",
+			"position": 5,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bot_commands",
+			"name": "isEnabled",
+			"position": 6,
+			"type": "integer",
+			"notNull": true,
+			"default": "true"
+		},
+		{
+			"kind": "column",
+			"table": "bot_commands",
+			"name": "createdAt",
+			"position": 7,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "bot_commands",
+			"name": "updatedAt",
+			"position": 8,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "bot_installations",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "bot_installations",
+			"name": "botId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bot_installations",
+			"name": "organizationId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bot_installations",
+			"name": "installedBy",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bot_installations",
+			"name": "installedAt",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "userId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "createdBy",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "name",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "description",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "webhookUrl",
+			"position": 5,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "apiTokenHash",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "scopes",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "metadata",
+			"position": 8,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "isPublic",
+			"position": 9,
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "installCount",
+			"position": 10,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "mentionable",
+			"position": 11,
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "allowedIntegrations",
+			"position": 12,
+			"type": "text",
+			"notNull": false,
+			"default": "'[]'"
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "createdAt",
+			"position": 13,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "updatedAt",
+			"position": 14,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "deletedAt",
+			"position": 15,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_access",
+			"name": "userId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_access",
+			"name": "channelId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_access",
+			"name": "organizationId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_access",
+			"name": "createdAt",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "channel_access",
+			"name": "updatedAt",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "channel_members",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "channel_members",
+			"name": "channelId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_members",
+			"name": "userId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_members",
+			"name": "isHidden",
+			"position": 3,
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "channel_members",
+			"name": "isMuted",
+			"position": 4,
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "channel_members",
+			"name": "isFavorite",
+			"position": 5,
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "channel_members",
+			"name": "lastSeenMessageId",
+			"position": 6,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_members",
+			"name": "notificationCount",
+			"position": 7,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "channel_members",
+			"name": "joinedAt",
+			"position": 8,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "channel_members",
+			"name": "createdAt",
+			"position": 9,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "channel_members",
+			"name": "deletedAt",
+			"position": 10,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_sections",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "channel_sections",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_sections",
+			"name": "name",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_sections",
+			"name": "order",
+			"position": 3,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "channel_sections",
+			"name": "createdAt",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "channel_sections",
+			"name": "updatedAt",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "channel_sections",
+			"name": "deletedAt",
+			"position": 6,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_webhooks",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "channel_webhooks",
+			"name": "channelId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_webhooks",
+			"name": "organizationId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_webhooks",
+			"name": "botUserId",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_webhooks",
+			"name": "name",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_webhooks",
+			"name": "description",
+			"position": 5,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_webhooks",
+			"name": "avatarUrl",
+			"position": 6,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_webhooks",
+			"name": "tokenHash",
+			"position": 7,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_webhooks",
+			"name": "tokenSuffix",
+			"position": 8,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_webhooks",
+			"name": "isEnabled",
+			"position": 9,
+			"type": "integer",
+			"notNull": true,
+			"default": "true"
+		},
+		{
+			"kind": "column",
+			"table": "channel_webhooks",
+			"name": "createdBy",
+			"position": 10,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_webhooks",
+			"name": "lastUsedAt",
+			"position": 11,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_webhooks",
+			"name": "createdAt",
+			"position": 12,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "channel_webhooks",
+			"name": "updatedAt",
+			"position": 13,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "channel_webhooks",
+			"name": "deletedAt",
+			"position": 14,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channels",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "channels",
+			"name": "name",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channels",
+			"name": "icon",
+			"position": 2,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channels",
+			"name": "type",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channels",
+			"name": "organizationId",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channels",
+			"name": "parentChannelId",
+			"position": 5,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channels",
+			"name": "sectionId",
+			"position": 6,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channels",
+			"name": "createdAt",
+			"position": 7,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "channels",
+			"name": "updatedAt",
+			"position": 8,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "channels",
+			"name": "deletedAt",
+			"position": 9,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_channel_links",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_channel_links",
+			"name": "syncConnectionId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_channel_links",
+			"name": "hazelChannelId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_channel_links",
+			"name": "externalChannelId",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_channel_links",
+			"name": "externalChannelName",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_channel_links",
+			"name": "direction",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": "'both'"
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_channel_links",
+			"name": "isActive",
+			"position": 6,
+			"type": "integer",
+			"notNull": true,
+			"default": "true"
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_channel_links",
+			"name": "settings",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_channel_links",
+			"name": "lastSyncedAt",
+			"position": 8,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_channel_links",
+			"name": "createdAt",
+			"position": 9,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_channel_links",
+			"name": "updatedAt",
+			"position": 10,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_channel_links",
+			"name": "deletedAt",
+			"position": 11,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_connections",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_connections",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_connections",
+			"name": "integrationConnectionId",
+			"position": 2,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_connections",
+			"name": "provider",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_connections",
+			"name": "externalWorkspaceId",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_connections",
+			"name": "externalWorkspaceName",
+			"position": 5,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_connections",
+			"name": "status",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": "'active'"
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_connections",
+			"name": "settings",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_connections",
+			"name": "metadata",
+			"position": 8,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_connections",
+			"name": "errorMessage",
+			"position": 9,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_connections",
+			"name": "lastSyncedAt",
+			"position": 10,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_connections",
+			"name": "createdBy",
+			"position": 11,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_connections",
+			"name": "createdAt",
+			"position": 12,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_connections",
+			"name": "updatedAt",
+			"position": 13,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_connections",
+			"name": "deletedAt",
+			"position": 14,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "connect_conversation_channels",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "connect_conversation_channels",
+			"name": "conversationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "connect_conversation_channels",
+			"name": "organizationId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "connect_conversation_channels",
+			"name": "channelId",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "connect_conversation_channels",
+			"name": "role",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "connect_conversation_channels",
+			"name": "allowGuestMemberAdds",
+			"position": 5,
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "connect_conversation_channels",
+			"name": "isActive",
+			"position": 6,
+			"type": "integer",
+			"notNull": true,
+			"default": "true"
+		},
+		{
+			"kind": "column",
+			"table": "connect_conversation_channels",
+			"name": "createdAt",
+			"position": 7,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "connect_conversation_channels",
+			"name": "updatedAt",
+			"position": 8,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "connect_conversation_channels",
+			"name": "deletedAt",
+			"position": 9,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "connect_conversations",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "connect_conversations",
+			"name": "hostOrganizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "connect_conversations",
+			"name": "hostChannelId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "connect_conversations",
+			"name": "status",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": "'active'"
+		},
+		{
+			"kind": "column",
+			"table": "connect_conversations",
+			"name": "settings",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "connect_conversations",
+			"name": "createdBy",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "connect_conversations",
+			"name": "createdAt",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "connect_conversations",
+			"name": "updatedAt",
+			"position": 7,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "connect_conversations",
+			"name": "deletedAt",
+			"position": 8,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "connect_participants",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "connect_participants",
+			"name": "conversationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "connect_participants",
+			"name": "channelId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "connect_participants",
+			"name": "userId",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "connect_participants",
+			"name": "homeOrganizationId",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "connect_participants",
+			"name": "isExternal",
+			"position": 5,
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "connect_participants",
+			"name": "addedBy",
+			"position": 6,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "connect_participants",
+			"name": "createdAt",
+			"position": 7,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "connect_participants",
+			"name": "updatedAt",
+			"position": 8,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "connect_participants",
+			"name": "deletedAt",
+			"position": 9,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "custom_emojis",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "custom_emojis",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "custom_emojis",
+			"name": "name",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "custom_emojis",
+			"name": "imageUrl",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "custom_emojis",
+			"name": "createdBy",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "custom_emojis",
+			"name": "createdAt",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "custom_emojis",
+			"name": "updatedAt",
+			"position": 6,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "custom_emojis",
+			"name": "deletedAt",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "github_subscriptions",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "github_subscriptions",
+			"name": "channelId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "github_subscriptions",
+			"name": "organizationId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "github_subscriptions",
+			"name": "repositoryId",
+			"position": 3,
+			"type": "integer",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "github_subscriptions",
+			"name": "repositoryFullName",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "github_subscriptions",
+			"name": "repositoryOwner",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "github_subscriptions",
+			"name": "repositoryName",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "github_subscriptions",
+			"name": "enabledEvents",
+			"position": 7,
+			"type": "text",
+			"notNull": true,
+			"default": "'[\"push\",\"pull_request\",\"issues\"]'"
+		},
+		{
+			"kind": "column",
+			"table": "github_subscriptions",
+			"name": "branchFilter",
+			"position": 8,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "github_subscriptions",
+			"name": "isEnabled",
+			"position": 9,
+			"type": "integer",
+			"notNull": true,
+			"default": "true"
+		},
+		{
+			"kind": "column",
+			"table": "github_subscriptions",
+			"name": "createdBy",
+			"position": 10,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "github_subscriptions",
+			"name": "createdAt",
+			"position": 11,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "github_subscriptions",
+			"name": "updatedAt",
+			"position": 12,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "github_subscriptions",
+			"name": "deletedAt",
+			"position": 13,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "integration_connections",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "integration_connections",
+			"name": "provider",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "integration_connections",
+			"name": "organizationId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "integration_connections",
+			"name": "userId",
+			"position": 3,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "integration_connections",
+			"name": "level",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "integration_connections",
+			"name": "status",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": "'active'"
+		},
+		{
+			"kind": "column",
+			"table": "integration_connections",
+			"name": "externalAccountId",
+			"position": 6,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "integration_connections",
+			"name": "externalAccountName",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "integration_connections",
+			"name": "connectedBy",
+			"position": 8,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "integration_connections",
+			"name": "settings",
+			"position": 9,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "integration_connections",
+			"name": "metadata",
+			"position": 10,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "integration_connections",
+			"name": "errorMessage",
+			"position": 11,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "integration_connections",
+			"name": "lastUsedAt",
+			"position": 12,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "integration_connections",
+			"name": "createdAt",
+			"position": 13,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "integration_connections",
+			"name": "updatedAt",
+			"position": 14,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "integration_connections",
+			"name": "deletedAt",
+			"position": 15,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "integration_requests",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "integration_requests",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "integration_requests",
+			"name": "requestedBy",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "integration_requests",
+			"name": "integrationName",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "integration_requests",
+			"name": "integrationUrl",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "integration_requests",
+			"name": "description",
+			"position": 5,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "integration_requests",
+			"name": "status",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": "'pending'"
+		},
+		{
+			"kind": "column",
+			"table": "integration_requests",
+			"name": "createdAt",
+			"position": 7,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "integration_requests",
+			"name": "updatedAt",
+			"position": 8,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "integration_tokens",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "integration_tokens",
+			"name": "connectionId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "integration_tokens",
+			"name": "encryptedAccessToken",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "integration_tokens",
+			"name": "encryptedRefreshToken",
+			"position": 3,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "integration_tokens",
+			"name": "iv",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "integration_tokens",
+			"name": "refreshTokenIv",
+			"position": 5,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "integration_tokens",
+			"name": "encryptionKeyVersion",
+			"position": 6,
+			"type": "integer",
+			"notNull": true,
+			"default": "1"
+		},
+		{
+			"kind": "column",
+			"table": "integration_tokens",
+			"name": "tokenType",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": "'Bearer'"
+		},
+		{
+			"kind": "column",
+			"table": "integration_tokens",
+			"name": "scope",
+			"position": 8,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "integration_tokens",
+			"name": "expiresAt",
+			"position": 9,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "integration_tokens",
+			"name": "refreshTokenExpiresAt",
+			"position": 10,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "integration_tokens",
+			"name": "lastRefreshedAt",
+			"position": 11,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "integration_tokens",
+			"name": "createdAt",
+			"position": 12,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "integration_tokens",
+			"name": "updatedAt",
+			"position": 13,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "organization_members",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "organization_members",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "organization_members",
+			"name": "userId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "organization_members",
+			"name": "role",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": "'member'"
+		},
+		{
+			"kind": "column",
+			"table": "organization_members",
+			"name": "nickname",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "organization_members",
+			"name": "joinedAt",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "organization_members",
+			"name": "invitedBy",
+			"position": 6,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "organization_members",
+			"name": "metadata",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "organization_members",
+			"name": "createdAt",
+			"position": 8,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "organization_members",
+			"name": "deletedAt",
+			"position": 9,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "organizations",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "organizations",
+			"name": "name",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "organizations",
+			"name": "slug",
+			"position": 2,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "organizations",
+			"name": "logoUrl",
+			"position": 3,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "organizations",
+			"name": "settings",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "organizations",
+			"name": "isPublic",
+			"position": 5,
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "organizations",
+			"name": "createdAt",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "organizations",
+			"name": "updatedAt",
+			"position": 7,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "organizations",
+			"name": "deletedAt",
+			"position": 8,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "rss_posted_items",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "rss_posted_items",
+			"name": "subscriptionId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "rss_posted_items",
+			"name": "itemGuid",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "rss_posted_items",
+			"name": "itemUrl",
+			"position": 3,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "rss_posted_items",
+			"name": "messageId",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "rss_posted_items",
+			"name": "postedAt",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "rss_subscriptions",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "rss_subscriptions",
+			"name": "channelId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "rss_subscriptions",
+			"name": "organizationId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "rss_subscriptions",
+			"name": "feedUrl",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "rss_subscriptions",
+			"name": "feedTitle",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "rss_subscriptions",
+			"name": "feedIconUrl",
+			"position": 5,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "rss_subscriptions",
+			"name": "lastFetchedAt",
+			"position": 6,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "rss_subscriptions",
+			"name": "lastItemPublishedAt",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "rss_subscriptions",
+			"name": "lastItemGuid",
+			"position": 8,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "rss_subscriptions",
+			"name": "consecutiveErrors",
+			"position": 9,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "rss_subscriptions",
+			"name": "lastErrorMessage",
+			"position": 10,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "rss_subscriptions",
+			"name": "lastErrorAt",
+			"position": 11,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "rss_subscriptions",
+			"name": "isEnabled",
+			"position": 12,
+			"type": "integer",
+			"notNull": true,
+			"default": "true"
+		},
+		{
+			"kind": "column",
+			"table": "rss_subscriptions",
+			"name": "pollingIntervalMinutes",
+			"position": 13,
+			"type": "integer",
+			"notNull": true,
+			"default": "15"
+		},
+		{
+			"kind": "column",
+			"table": "rss_subscriptions",
+			"name": "createdBy",
+			"position": 14,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "rss_subscriptions",
+			"name": "createdAt",
+			"position": 15,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "rss_subscriptions",
+			"name": "updatedAt",
+			"position": 16,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "rss_subscriptions",
+			"name": "deletedAt",
+			"position": 17,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_status",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_status",
+			"name": "userId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_status",
+			"name": "status",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": "'online'"
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_status",
+			"name": "customMessage",
+			"position": 3,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_status",
+			"name": "statusEmoji",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_status",
+			"name": "statusExpiresAt",
+			"position": 5,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_status",
+			"name": "activeChannelId",
+			"position": 6,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_status",
+			"name": "suppressNotifications",
+			"position": 7,
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_status",
+			"name": "updatedAt",
+			"position": 8,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_status",
+			"name": "lastSeenAt",
+			"position": 9,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "users",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "users",
+			"name": "externalId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "users",
+			"name": "authActive",
+			"position": 2,
+			"type": "integer",
+			"notNull": true,
+			"default": "true"
+		},
+		{
+			"kind": "column",
+			"table": "users",
+			"name": "securityRevision",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": "'initial'"
+		},
+		{
+			"kind": "column",
+			"table": "users",
+			"name": "email",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "users",
+			"name": "firstName",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "users",
+			"name": "lastName",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "users",
+			"name": "avatarUrl",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "users",
+			"name": "userType",
+			"position": 8,
+			"type": "text",
+			"notNull": true,
+			"default": "'user'"
+		},
+		{
+			"kind": "column",
+			"table": "users",
+			"name": "settings",
+			"position": 9,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "users",
+			"name": "isOnboarded",
+			"position": 10,
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "users",
+			"name": "timezone",
+			"position": 11,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "users",
+			"name": "createdAt",
+			"position": 12,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "users",
+			"name": "updatedAt",
+			"position": 13,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "users",
+			"name": "deletedAt",
+			"position": 14,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "index",
+			"table": "bot_commands",
+			"name": "bot_commands_bot_id_idx",
+			"unique": false,
+			"columns": ["\"botId\""]
+		},
+		{
+			"kind": "index",
+			"table": "bot_commands",
+			"name": "bot_commands_bot_id_name_idx",
+			"unique": true,
+			"columns": ["\"botId\"", "\"name\""]
+		},
+		{
+			"kind": "index",
+			"table": "bot_installations",
+			"name": "bot_installations_bot_idx",
+			"unique": false,
+			"columns": ["\"botId\""]
+		},
+		{
+			"kind": "index",
+			"table": "bot_installations",
+			"name": "bot_installations_bot_org_unique",
+			"unique": true,
+			"columns": ["\"botId\"", "\"organizationId\""]
+		},
+		{
+			"kind": "index",
+			"table": "bot_installations",
+			"name": "bot_installations_org_idx",
+			"unique": false,
+			"columns": ["\"organizationId\""]
+		},
+		{
+			"kind": "index",
+			"table": "bots",
+			"name": "bots_created_by_idx",
+			"unique": false,
+			"columns": ["\"createdBy\""]
+		},
+		{
+			"kind": "index",
+			"table": "bots",
+			"name": "bots_deleted_at_idx",
+			"unique": false,
+			"columns": ["\"deletedAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "bots",
+			"name": "bots_is_public_idx",
+			"unique": false,
+			"columns": ["\"isPublic\""]
+		},
+		{
+			"kind": "index",
+			"table": "bots",
+			"name": "bots_userId_unique",
+			"unique": true,
+			"columns": ["\"userId\""]
+		},
+		{
+			"kind": "index",
+			"table": "bots",
+			"name": "bots_user_id_idx",
+			"unique": false,
+			"columns": ["\"userId\""]
+		},
+		{
+			"kind": "index",
+			"table": "channel_access",
+			"name": "channel_access_channel_id_idx",
+			"unique": false,
+			"columns": ["\"channelId\""]
+		},
+		{
+			"kind": "index",
+			"table": "channel_access",
+			"name": "channel_access_org_user_idx",
+			"unique": false,
+			"columns": ["\"organizationId\"", "\"userId\""]
+		},
+		{
+			"kind": "index",
+			"table": "channel_access",
+			"name": "channel_access_organization_id_idx",
+			"unique": false,
+			"columns": ["\"organizationId\""]
+		},
+		{
+			"kind": "index",
+			"table": "channel_access",
+			"name": "channel_access_user_id_idx",
+			"unique": false,
+			"columns": ["\"userId\""]
+		},
+		{
+			"kind": "index",
+			"table": "channel_members",
+			"name": "channel_members_channel_id_idx",
+			"unique": false,
+			"columns": ["\"channelId\""]
+		},
+		{
+			"kind": "index",
+			"table": "channel_members",
+			"name": "channel_members_channel_user_idx",
+			"unique": false,
+			"columns": ["\"channelId\"", "\"userId\""]
+		},
+		{
+			"kind": "index",
+			"table": "channel_members",
+			"name": "channel_members_user_id_idx",
+			"unique": false,
+			"columns": ["\"userId\""]
+		},
+		{
+			"kind": "index",
+			"table": "channel_sections",
+			"name": "channel_sections_deleted_at_idx",
+			"unique": false,
+			"columns": ["\"deletedAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "channel_sections",
+			"name": "channel_sections_order_idx",
+			"unique": false,
+			"columns": ["\"organizationId\"", "\"order\""]
+		},
+		{
+			"kind": "index",
+			"table": "channel_sections",
+			"name": "channel_sections_organization_id_idx",
+			"unique": false,
+			"columns": ["\"organizationId\""]
+		},
+		{
+			"kind": "index",
+			"table": "channel_webhooks",
+			"name": "channel_webhooks_bot_user_id_idx",
+			"unique": false,
+			"columns": ["\"botUserId\""]
+		},
+		{
+			"kind": "index",
+			"table": "channel_webhooks",
+			"name": "channel_webhooks_channel_id_idx",
+			"unique": false,
+			"columns": ["\"channelId\""]
+		},
+		{
+			"kind": "index",
+			"table": "channel_webhooks",
+			"name": "channel_webhooks_deleted_at_idx",
+			"unique": false,
+			"columns": ["\"deletedAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "channel_webhooks",
+			"name": "channel_webhooks_organization_id_idx",
+			"unique": false,
+			"columns": ["\"organizationId\""]
+		},
+		{
+			"kind": "index",
+			"table": "channel_webhooks",
+			"name": "channel_webhooks_token_hash_idx",
+			"unique": false,
+			"columns": ["\"tokenHash\""]
+		},
+		{
+			"kind": "index",
+			"table": "channels",
+			"name": "channels_deleted_at_idx",
+			"unique": false,
+			"columns": ["\"deletedAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "channels",
+			"name": "channels_organization_id_idx",
+			"unique": false,
+			"columns": ["\"organizationId\""]
+		},
+		{
+			"kind": "index",
+			"table": "channels",
+			"name": "channels_parent_channel_id_idx",
+			"unique": false,
+			"columns": ["\"parentChannelId\""]
+		},
+		{
+			"kind": "index",
+			"table": "channels",
+			"name": "channels_section_id_idx",
+			"unique": false,
+			"columns": ["\"sectionId\""]
+		},
+		{
+			"kind": "index",
+			"table": "channels",
+			"name": "channels_type_idx",
+			"unique": false,
+			"columns": ["\"type\""]
+		},
+		{
+			"kind": "index",
+			"table": "chat_sync_channel_links",
+			"name": "chat_sync_link_connection_idx",
+			"unique": false,
+			"columns": ["\"syncConnectionId\""]
+		},
+		{
+			"kind": "index",
+			"table": "chat_sync_channel_links",
+			"name": "chat_sync_link_deleted_at_idx",
+			"unique": false,
+			"columns": ["\"deletedAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "chat_sync_channel_links",
+			"name": "chat_sync_link_external_channel_idx",
+			"unique": false,
+			"columns": ["\"externalChannelId\""]
+		},
+		{
+			"kind": "index",
+			"table": "chat_sync_channel_links",
+			"name": "chat_sync_link_hazel_channel_idx",
+			"unique": false,
+			"columns": ["\"hazelChannelId\""]
+		},
+		{
+			"kind": "index",
+			"table": "chat_sync_connections",
+			"name": "chat_sync_conn_deleted_at_idx",
+			"unique": false,
+			"columns": ["\"deletedAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "chat_sync_connections",
+			"name": "chat_sync_conn_integration_idx",
+			"unique": false,
+			"columns": ["\"integrationConnectionId\""]
+		},
+		{
+			"kind": "index",
+			"table": "chat_sync_connections",
+			"name": "chat_sync_conn_org_idx",
+			"unique": false,
+			"columns": ["\"organizationId\""]
+		},
+		{
+			"kind": "index",
+			"table": "chat_sync_connections",
+			"name": "chat_sync_conn_provider_idx",
+			"unique": false,
+			"columns": ["\"provider\""]
+		},
+		{
+			"kind": "index",
+			"table": "chat_sync_connections",
+			"name": "chat_sync_conn_status_idx",
+			"unique": false,
+			"columns": ["\"status\""]
+		},
+		{
+			"kind": "index",
+			"table": "connect_conversation_channels",
+			"name": "connect_conv_channels_channel_idx",
+			"unique": false,
+			"columns": ["\"channelId\""]
+		},
+		{
+			"kind": "index",
+			"table": "connect_conversation_channels",
+			"name": "connect_conv_channels_conversation_idx",
+			"unique": false,
+			"columns": ["\"conversationId\""]
+		},
+		{
+			"kind": "index",
+			"table": "connect_conversation_channels",
+			"name": "connect_conv_channels_deleted_at_idx",
+			"unique": false,
+			"columns": ["\"deletedAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "connect_conversation_channels",
+			"name": "connect_conv_channels_org_idx",
+			"unique": false,
+			"columns": ["\"organizationId\""]
+		},
+		{
+			"kind": "index",
+			"table": "connect_conversations",
+			"name": "connect_conversations_deleted_at_idx",
+			"unique": false,
+			"columns": ["\"deletedAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "connect_conversations",
+			"name": "connect_conversations_host_channel_idx",
+			"unique": false,
+			"columns": ["\"hostChannelId\""]
+		},
+		{
+			"kind": "index",
+			"table": "connect_conversations",
+			"name": "connect_conversations_host_org_idx",
+			"unique": false,
+			"columns": ["\"hostOrganizationId\""]
+		},
+		{
+			"kind": "index",
+			"table": "connect_conversations",
+			"name": "connect_conversations_status_idx",
+			"unique": false,
+			"columns": ["\"status\""]
+		},
+		{
+			"kind": "index",
+			"table": "connect_participants",
+			"name": "connect_participants_channel_idx",
+			"unique": false,
+			"columns": ["\"channelId\""]
+		},
+		{
+			"kind": "index",
+			"table": "connect_participants",
+			"name": "connect_participants_conversation_idx",
+			"unique": false,
+			"columns": ["\"conversationId\""]
+		},
+		{
+			"kind": "index",
+			"table": "connect_participants",
+			"name": "connect_participants_deleted_at_idx",
+			"unique": false,
+			"columns": ["\"deletedAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "connect_participants",
+			"name": "connect_participants_user_idx",
+			"unique": false,
+			"columns": ["\"userId\""]
+		},
+		{
+			"kind": "index",
+			"table": "custom_emojis",
+			"name": "custom_emojis_deleted_at_idx",
+			"unique": false,
+			"columns": ["\"deletedAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "custom_emojis",
+			"name": "custom_emojis_name_idx",
+			"unique": false,
+			"columns": ["\"name\""]
+		},
+		{
+			"kind": "index",
+			"table": "custom_emojis",
+			"name": "custom_emojis_organization_id_idx",
+			"unique": false,
+			"columns": ["\"organizationId\""]
+		},
+		{
+			"kind": "index",
+			"table": "github_subscriptions",
+			"name": "github_subscriptions_channel_id_idx",
+			"unique": false,
+			"columns": ["\"channelId\""]
+		},
+		{
+			"kind": "index",
+			"table": "github_subscriptions",
+			"name": "github_subscriptions_deleted_at_idx",
+			"unique": false,
+			"columns": ["\"deletedAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "github_subscriptions",
+			"name": "github_subscriptions_organization_id_idx",
+			"unique": false,
+			"columns": ["\"organizationId\""]
+		},
+		{
+			"kind": "index",
+			"table": "github_subscriptions",
+			"name": "github_subscriptions_repository_id_idx",
+			"unique": false,
+			"columns": ["\"repositoryId\""]
+		},
+		{
+			"kind": "index",
+			"table": "integration_connections",
+			"name": "int_conn_deleted_at_idx",
+			"unique": false,
+			"columns": ["\"deletedAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "integration_connections",
+			"name": "int_conn_org_idx",
+			"unique": false,
+			"columns": ["\"organizationId\""]
+		},
+		{
+			"kind": "index",
+			"table": "integration_connections",
+			"name": "int_conn_org_user_provider_unique",
+			"unique": true,
+			"columns": ["\"organizationId\"", "\"userId\"", "\"provider\""]
+		},
+		{
+			"kind": "index",
+			"table": "integration_connections",
+			"name": "int_conn_provider_idx",
+			"unique": false,
+			"columns": ["\"provider\""]
+		},
+		{
+			"kind": "index",
+			"table": "integration_connections",
+			"name": "int_conn_status_idx",
+			"unique": false,
+			"columns": ["\"status\""]
+		},
+		{
+			"kind": "index",
+			"table": "integration_requests",
+			"name": "integration_requests_created_at_idx",
+			"unique": false,
+			"columns": ["\"createdAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "integration_requests",
+			"name": "integration_requests_organization_id_idx",
+			"unique": false,
+			"columns": ["\"organizationId\""]
+		},
+		{
+			"kind": "index",
+			"table": "integration_requests",
+			"name": "integration_requests_status_idx",
+			"unique": false,
+			"columns": ["\"status\""]
+		},
+		{
+			"kind": "index",
+			"table": "integration_tokens",
+			"name": "int_tokens_connection_id_idx",
+			"unique": false,
+			"columns": ["\"connectionId\""]
+		},
+		{
+			"kind": "index",
+			"table": "integration_tokens",
+			"name": "int_tokens_expires_at_idx",
+			"unique": false,
+			"columns": ["\"expiresAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "integration_tokens",
+			"name": "int_tokens_key_version_idx",
+			"unique": false,
+			"columns": ["\"encryptionKeyVersion\""]
+		},
+		{
+			"kind": "index",
+			"table": "integration_tokens",
+			"name": "integration_tokens_connectionId_unique",
+			"unique": true,
+			"columns": ["\"connectionId\""]
+		},
+		{
+			"kind": "index",
+			"table": "organization_members",
+			"name": "org_members_org_user_unique",
+			"unique": true,
+			"columns": ["\"organizationId\"", "\"userId\""]
+		},
+		{
+			"kind": "index",
+			"table": "organization_members",
+			"name": "org_members_organization_id_idx",
+			"unique": false,
+			"columns": ["\"organizationId\""]
+		},
+		{
+			"kind": "index",
+			"table": "organization_members",
+			"name": "org_members_user_id_idx",
+			"unique": false,
+			"columns": ["\"userId\""]
+		},
+		{
+			"kind": "index",
+			"table": "organizations",
+			"name": "organizations_deleted_at_idx",
+			"unique": false,
+			"columns": ["\"deletedAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "organizations",
+			"name": "organizations_slug_idx",
+			"unique": false,
+			"columns": ["\"slug\""]
+		},
+		{
+			"kind": "index",
+			"table": "organizations",
+			"name": "organizations_slug_unique",
+			"unique": true,
+			"columns": ["\"slug\""]
+		},
+		{
+			"kind": "index",
+			"table": "rss_posted_items",
+			"name": "rss_posted_items_sub_guid_unique",
+			"unique": true,
+			"columns": ["\"subscriptionId\"", "\"itemGuid\""]
+		},
+		{
+			"kind": "index",
+			"table": "rss_posted_items",
+			"name": "rss_posted_items_subscription_id_idx",
+			"unique": false,
+			"columns": ["\"subscriptionId\""]
+		},
+		{
+			"kind": "index",
+			"table": "rss_subscriptions",
+			"name": "rss_subscriptions_channel_id_idx",
+			"unique": false,
+			"columns": ["\"channelId\""]
+		},
+		{
+			"kind": "index",
+			"table": "rss_subscriptions",
+			"name": "rss_subscriptions_deleted_at_idx",
+			"unique": false,
+			"columns": ["\"deletedAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "rss_subscriptions",
+			"name": "rss_subscriptions_organization_id_idx",
+			"unique": false,
+			"columns": ["\"organizationId\""]
+		},
+		{
+			"kind": "index",
+			"table": "rss_subscriptions",
+			"name": "rss_subscriptions_poll_idx",
+			"unique": false,
+			"columns": ["\"isEnabled\"", "\"lastFetchedAt\"", "\"deletedAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "user_presence_status",
+			"name": "user_presence_status_active_channel_idx",
+			"unique": false,
+			"columns": ["\"activeChannelId\""]
+		},
+		{
+			"kind": "index",
+			"table": "user_presence_status",
+			"name": "user_presence_status_last_seen_idx",
+			"unique": false,
+			"columns": ["\"lastSeenAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "user_presence_status",
+			"name": "user_presence_status_userId_unique",
+			"unique": true,
+			"columns": ["\"userId\""]
+		},
+		{
+			"kind": "index",
+			"table": "user_presence_status",
+			"name": "user_presence_status_user_id_idx",
+			"unique": false,
+			"columns": ["\"userId\""]
+		},
+		{
+			"kind": "index",
+			"table": "users",
+			"name": "users_deleted_at_idx",
+			"unique": false,
+			"columns": ["\"deletedAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "users",
+			"name": "users_email_idx",
+			"unique": false,
+			"columns": ["\"email\""]
+		},
+		{
+			"kind": "index",
+			"table": "users",
+			"name": "users_externalId_unique",
+			"unique": true,
+			"columns": ["\"externalId\""]
+		},
+		{
+			"kind": "index",
+			"table": "users",
+			"name": "users_external_id_idx",
+			"unique": false,
+			"columns": ["\"externalId\""]
+		},
+		{
+			"kind": "index",
+			"table": "users",
+			"name": "users_user_type_idx",
+			"unique": false,
+			"columns": ["\"userType\""]
+		}
+	],
+	"extraIndexes": [
+		{
+			"name": "chat_sync_conn_integration_unique",
+			"table": "chat_sync_connections",
+			"unique": true,
+			"on": ["integrationConnectionId"],
+			"where": "\"deletedAt\" IS NULL AND \"integrationConnectionId\" IS NOT NULL"
+		},
+		{
+			"name": "chat_sync_conn_org_provider_workspace_unique",
+			"table": "chat_sync_connections",
+			"unique": true,
+			"on": ["organizationId", "provider", "externalWorkspaceId"],
+			"where": "\"deletedAt\" IS NULL"
+		},
+		{
+			"name": "chat_sync_link_connection_external_unique",
+			"table": "chat_sync_channel_links",
+			"unique": true,
+			"on": ["syncConnectionId", "externalChannelId"],
+			"where": "\"deletedAt\" IS NULL"
+		},
+		{
+			"name": "chat_sync_link_connection_hazel_unique",
+			"table": "chat_sync_channel_links",
+			"unique": true,
+			"on": ["syncConnectionId", "hazelChannelId"],
+			"where": "\"deletedAt\" IS NULL"
+		},
+		{
+			"name": "connect_conv_channels_channel_unique",
+			"table": "connect_conversation_channels",
+			"unique": true,
+			"on": ["channelId"],
+			"where": "\"deletedAt\" IS NULL"
+		},
+		{
+			"name": "connect_conv_channels_conversation_org_unique",
+			"table": "connect_conversation_channels",
+			"unique": true,
+			"on": ["conversationId", "organizationId"],
+			"where": "\"deletedAt\" IS NULL"
+		},
+		{
+			"name": "connect_conversations_host_channel_unique",
+			"table": "connect_conversations",
+			"unique": true,
+			"on": ["hostChannelId"],
+			"where": "\"deletedAt\" IS NULL"
+		},
+		{
+			"name": "connect_participants_channel_user_unique",
+			"table": "connect_participants",
+			"unique": true,
+			"on": ["channelId", "userId"],
+			"where": "\"deletedAt\" IS NULL"
+		},
+		{
+			"name": "custom_emojis_org_name_unique_idx",
+			"table": "custom_emojis",
+			"unique": true,
+			"on": ["organizationId", "name"],
+			"where": "\"deletedAt\" IS NULL"
+		},
+		{
+			"name": "github_subscriptions_channel_repo_unique",
+			"table": "github_subscriptions",
+			"unique": true,
+			"on": ["channelId", "repositoryId"],
+			"where": "\"deletedAt\" IS NULL"
+		},
+		{
+			"name": "int_conn_github_installation_idx",
+			"table": "integration_connections",
+			"unique": false,
+			"on": ["CAST(json_extract(\"metadata\", '$.installationId') AS TEXT)"]
+		},
+		{
+			"name": "int_conn_org_provider_external_user_unique",
+			"table": "integration_connections",
+			"unique": true,
+			"on": ["organizationId", "provider", "externalAccountId"],
+			"where": "\"deletedAt\" IS NULL AND \"level\" = 'user' AND \"externalAccountId\" IS NOT NULL"
+		},
+		{
+			"name": "organizations_clerk_org_id_unique",
+			"table": "organizations",
+			"unique": true,
+			"on": ["CAST(json_extract(\"settings\", '$.clerkOrganizationId') AS TEXT)"],
+			"where": "\"deletedAt\" IS NULL AND json_extract(\"settings\", '$.clerkOrganizationId') IS NOT NULL"
+		},
+		{
+			"name": "rss_subscriptions_channel_feed_unique",
+			"table": "rss_subscriptions",
+			"unique": true,
+			"on": ["channelId", "feedUrl"],
+			"where": "\"deletedAt\" IS NULL"
+		}
+	]
+}

@@ -641,3 +641,122 @@ describe("Hazel Connect", () => {
 			}),
 		))
 })
+
+describe("Hazel Connect: host channel changes and senders", () => {
+	it("a host channel rename or icon change reaches the guests' mounts", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const { a, b, a1, hostChannelId } = world
+				const { guestChannelId } = yield* share(world)
+				ok(
+					yield* call(
+						a.object,
+						a.id,
+						"channel.update",
+						{ id: hostChannelId, name: "renamed", icon: "🤝" },
+						a1,
+					),
+				)
+				expect(
+					rows<{ name: string; icon: string | null }>(
+						b.object,
+						`SELECT name, icon FROM channels WHERE id = ?`,
+						guestChannelId,
+					),
+				).toEqual([{ name: "renamed", icon: "🤝" }])
+			}),
+		))
+
+	it("setParticipants is accepted only from the guest org it names", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const { a, b, b1, host } = world
+				const { guestChannelId } = yield* share(world)
+				const [conversation] = rows<{ id: string }>(a.object, `SELECT id FROM connect_conversations`)
+				expect(viewerIds(host)).toContain(b1)
+				const payload = {
+					conversationId: conversation!.id,
+					organizationId: b.id,
+					channelId: guestChannelId,
+					users: [],
+					addedBy: null,
+				}
+				const send = (senderId: string) =>
+					a.object.applyEffect({
+						objectId: a.id,
+						kind: "org.connectSetParticipants",
+						payload,
+						key: uuid(),
+						sender: { kind: "org", id: senderId },
+					})
+				const forged = yield* send(uuid())
+				expect(forged).toMatchObject({ _tag: "Rejected", retryable: false })
+				expect(viewerIds(host)).toContain(b1)
+				expect((yield* send(b.id))._tag).toBe("Applied")
+				expect(viewerIds(host)).not.toContain(b1)
+			}),
+		))
+
+	it("conversationSnapshot is accepted only from the conversation's host", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const { a, b, a1, hostChannelId } = world
+				const { guestChannelId } = yield* share(world)
+				const [conversation] = rows<{ id: string }>(b.object, `SELECT id FROM connect_conversations`)
+				const [mount] = rows<{ id: string }>(
+					b.object,
+					`SELECT id FROM connect_conversation_channels WHERE channelId = ?`,
+					guestChannelId,
+				)
+				const now = new Date().toISOString()
+				const snapshot = (hostOrganizationId: string) => ({
+					conversation: {
+						id: conversation!.id,
+						hostOrganizationId,
+						hostChannelId,
+						status: "active",
+						settings: null,
+						createdBy: a1,
+						createdAt: now,
+						updatedAt: now,
+						deletedAt: null,
+					},
+					mounts: [
+						{
+							id: mount!.id,
+							conversationId: conversation!.id,
+							organizationId: b.id,
+							channelId: guestChannelId,
+							role: "guest",
+							allowGuestMemberAdds: true,
+							isActive: true,
+							createdAt: now,
+							updatedAt: now,
+							deletedAt: null,
+						},
+					],
+					hostChannel: { name: "hijacked", icon: null, type: "private" },
+				})
+				const send = (hostOrganizationId: string, senderId: string) =>
+					b.object.applyEffect({
+						objectId: b.id,
+						kind: "org.connectConversationSnapshot",
+						payload: snapshot(hostOrganizationId),
+						key: uuid(),
+						sender: { kind: "org", id: senderId },
+					})
+				const other = uuid()
+				const name = () =>
+					rows<{ name: string }>(b.object, `SELECT name FROM channels WHERE id = ?`, guestChannelId)
+				// Not from the host it names, or claiming to host a conversation A hosts here.
+				expect((yield* send(a.id, other))._tag).toBe("Rejected")
+				expect((yield* send(other, other))._tag).toBe("Rejected")
+				expect(name()).toEqual([{ name: "partners" }])
+				expect((yield* send(a.id, a.id))._tag).toBe("Applied")
+				expect(name()).toEqual([{ name: "hijacked" }])
+			}),
+		))
+})

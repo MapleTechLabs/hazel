@@ -28,10 +28,14 @@ const channel =
 
 ## Schema changes
 
-Edit `src/tables`, then run `bun run db:generate-sqlite`: it rewrites each store's `0001_initial`
-(`src/migrations.generated.ts`) and the D1 copy in `migrations/directory/`. `schema-ddl.test.ts`
-fails while they are out of date. Once a store is deployed, append a migration to
-`storeMigrations` instead of editing `0001_initial`.
+Edit `src/tables`, then run `bun run db:generate-sqlite --name <name>`. Each store's last schema is
+committed in `snapshots/<store>.json`; the script diffs the tables against it (`src/migration-plan.ts`,
+effect-orm's SQLite diff plus the extra indexes), appends `<NNNN>_<name>` to
+`src/migrations.generated.ts`, rewrites the snapshot and, for the directory store, writes
+`migrations/directory/<NNNN>_<name>/migration.sql` for Alchemy. With no change it writes nothing.
+A drop or rename needs hints: `--hints <file.json>`. Committed migrations are never edited.
+Objects apply theirs when they next activate. `schema-ddl.test.ts` fails while the tables differ from
+a snapshot.
 
 Partial and JSON-expression indexes, which effect-orm cannot declare yet, are in
 `src/tables/extra-indexes.ts`.

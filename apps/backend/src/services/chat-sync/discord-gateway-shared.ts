@@ -94,6 +94,8 @@ export interface DiscordThreadCreateEvent {
 	parent_id?: string
 	name?: string
 	type?: number
+	/** Who started it; our bot for a thread mirrored from Hazel. */
+	owner_id?: string
 }
 
 const formatDiscordDisplayName = (author?: DiscordMessageAuthor): string => {
@@ -414,6 +416,8 @@ export const createDiscordGatewayDispatchHandlers = <E, R>(deps: {
 		if (!event.id || !event.parent_id) return
 		// 11: public thread, 12: private thread.
 		if (event.type !== undefined && event.type !== 11 && event.type !== 12) return
+		// Our own thread (mirrored from Hazel): the org links it when the creating delivery reports.
+		if (yield* deps.isCurrentBotAuthor(event.owner_id)) return
 		const parentId = yield* required(
 			"THREAD_CREATE",
 			"parent_id",

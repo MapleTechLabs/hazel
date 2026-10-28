@@ -7,13 +7,14 @@
 import { SQLite, schema } from "@hazel/db"
 import { CurrentUser, UnauthorizedError } from "@hazel/domain"
 import type { ChannelId, OrganizationId, UserId } from "@hazel/schema"
-import { Cause, Effect, Exit, Option, type Scope } from "effect"
+import { Cause, Effect, Exit, Fiber, Option, type Scope } from "effect"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { CreateDmChannelRequest, CreateThreadRequest } from "@hazel/domain/rpc"
 import { decodeExit, encodePayload, type HazelRpcTag, rpcFor } from "../../rpc/dispatch"
 import { Directory } from "../../services/directory"
 import { channelTarget, orgTarget, userTarget } from "./kinds"
 import { encodeInvokePrincipal } from "./principal"
+import { makeFakeSocket } from "@hazel/sync-do/testing"
 import { makeTestObjects, type TestObject, type TestObjects } from "./testing"
 
 const uuid = () => crypto.randomUUID()
@@ -267,6 +268,82 @@ describe("OrgObject: organizations and members", () => {
 			}),
 		))
 
+	it("a removal cuts the channel's viewers before it answers, even while another drain runs", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const { objects, org, orgId, owner, member, outsider } = world
+				const general = yield* objects.get(channelTarget(world.general))
+				// The outsider's join drains towards their (slow) UserObject and holds the drain.
+				const slow = objects.hold(userTarget(outsider))
+				const join = yield* Effect.forkChild(
+					call(org, orgId, "organization.joinViaPublicInvite", { slug: "acme" }, outsider),
+				)
+				yield* slow.reached
+
+				const [membership] = rows<{ id: string }>(
+					org,
+					`SELECT id FROM organization_members WHERE userId = ?`,
+					member,
+				)
+				ok(
+					yield* call(
+						org,
+						orgId,
+						"organizationMember.delete",
+						{ id: membership!.id, organizationId: orgId },
+						member,
+					),
+				)
+				// Not left to the alarm the held drain would schedule.
+				expect(viewersOf(general).map((viewer) => viewer.userId)).not.toContain(member)
+				expect(viewersOf(general).map((viewer) => viewer.userId)).toContain(owner)
+
+				yield* slow.release
+				ok(yield* Fiber.join(join))
+				expect(
+					viewersOf(general)
+						.map((viewer) => viewer.userId)
+						.sort(),
+				).toEqual([owner, outsider].sort())
+			}),
+		))
+
+	it("a channel drops a setViewers older than the one it applied", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const { objects, orgId, owner } = world
+				const general = yield* objects.get(channelTarget(world.general))
+				const [applied] = rows<{ value: string }>(
+					general,
+					`SELECT value FROM _object_meta WHERE key = 'viewersVersion'`,
+				)
+				const version = Number(applied!.value)
+				const stale = (key: string, payloadVersion: number | undefined) =>
+					general.applyEffect({
+						objectId: world.general,
+						kind: "channel.setViewers",
+						payload: {
+							organizationId: orgId,
+							conversationId: null,
+							viewers: [{ userId: owner, organizationId: orgId, role: "owner" }],
+							bots: [],
+							...(payloadVersion === undefined ? {} : { version: payloadVersion }),
+						},
+						key,
+						sender: { kind: "org", id: orgId },
+					})
+				// An older versioned payload, and one queued before versions existed.
+				yield* stale(uuid(), version - 1)
+				yield* stale(uuid(), undefined)
+				expect(viewersOf(general)).toHaveLength(2)
+				// A newer one applies.
+				yield* stale(uuid(), version + 1)
+				expect(viewersOf(general).map((viewer) => viewer.userId)).toEqual([owner])
+			}),
+		))
+
 	it("organization.delete marks the org and its memberships gone", () =>
 		run(
 			Effect.gen(function* () {
@@ -282,6 +359,86 @@ describe("OrgObject: organizations and members", () => {
 				expect(Option.map(index, (row) => row.deletedAt !== null)).toEqual(Option.some(true))
 				const ownerObject = yield* objects.get(userTarget(owner))
 				expect(rows(ownerObject, `SELECT organizationId FROM user_organizations`)).toEqual([])
+			}),
+		))
+
+	it("organization.delete empties its channels' and threads' viewers and closes their sockets", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const { objects, org, orgId, owner, member } = world
+				const general = yield* objects.get(channelTarget(world.general))
+				const message = ok(
+					yield* call(
+						general,
+						world.general,
+						"message.create",
+						{
+							channelId: world.general,
+							content: "start a thread",
+							embeds: null,
+							replyToMessageId: null,
+							threadChannelId: null,
+							authorId: member,
+							deletedAt: null,
+						},
+						member,
+					),
+				)
+				const threadId = uuid() as ChannelId
+				ok(
+					yield* call(
+						org,
+						orgId,
+						"channel.createThread",
+						new CreateThreadRequest({
+							id: threadId,
+							messageId: message.data.id,
+							organizationId: orgId,
+							channelId: world.general,
+						}),
+						owner,
+					),
+				)
+				const thread = yield* objects.get(channelTarget(threadId))
+				const sockets = [makeFakeSocket(), makeFakeSocket()]
+				expect(yield* general.adopt(sockets[0]!, { userId: member, expiresAt: null })).toBe(
+					"accepted",
+				)
+				expect(yield* thread.adopt(sockets[1]!, { userId: member, expiresAt: null })).toBe("accepted")
+				const hello = JSON.stringify({ _tag: "Hello", since: null })
+				yield* general.onMessage(sockets[0]!, hello)
+				yield* thread.onMessage(sockets[1]!, hello)
+
+				ok(yield* call(org, orgId, "organization.delete", { id: orgId }, owner))
+				expect(viewersOf(general)).toEqual([])
+				expect(viewersOf(thread)).toEqual([])
+				for (const socket of sockets) expect(socket.closed).toBeDefined()
+				// Routing refuses them too.
+				for (const id of [world.general, threadId]) {
+					const indexed = yield* inDirectory(
+						objects,
+						Effect.flatMap(Directory, (directory) => directory.channel(id)),
+					)
+					expect(Option.map(indexed, (row) => row.deletedAt !== null)).toEqual(Option.some(true))
+				}
+				// And the member can't write there any more.
+				const denied = yield* call(
+					general,
+					world.general,
+					"message.create",
+					{
+						channelId: world.general,
+						content: "still here?",
+						embeds: null,
+						replyToMessageId: null,
+						threadChannelId: null,
+						authorId: member,
+						deletedAt: null,
+					},
+					member,
+				)
+				expect(unauthorized(denied)).toBe(true)
 			}),
 		))
 })

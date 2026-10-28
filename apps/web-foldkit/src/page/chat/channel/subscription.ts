@@ -6,6 +6,7 @@ import * as FilesSubscriptions from "../files/subscriptions"
 import {
 	channelStream,
 	messageChangesStream,
+	messageHistoryStream,
 	parentChannelStream,
 	reactionsStream,
 	threadPanelStream,
@@ -83,7 +84,8 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 				),
 		},
 	),
-	// Restarts on every page and publishes the window, so the messages query moves only when paged.
+	// Restarts on every page and publishes the window, so the messages query moves only when paged;
+	// holds the history the window needs, so scrolling back pages older messages in.
 	chatMessagesWindow: entry(
 		{ channelId: ChannelId, limit: Schema.Number, offset: Schema.Number },
 		{
@@ -93,25 +95,28 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 				offset: model.offset,
 			}),
 			dependenciesToStream: (change) =>
-				Stream.fromEffect(
-					Effect.gen(function* () {
-						yield* PubSub.publish(yield* MessageWindows, change)
-					}),
-				).pipe(Stream.drain),
+				Stream.merge(
+					Stream.fromEffect(
+						Effect.gen(function* () {
+							yield* PubSub.publish(yield* MessageWindows, change)
+						}),
+					).pipe(Stream.drain),
+					messageHistoryStream(change.channelId, change),
+				),
 		},
 	),
-	// `MessageLive.Provider` -> `useMessageActor`: one actor connection per live AI reply. The stream
-	// stays up while any reply is live and connects or disposes replies by id, so the others keep theirs.
+	// One live socket per streaming AI reply. The stream stays up while any reply is live and
+	// connects or closes replies by id, so the others keep theirs.
 	chatLiveReplies: entry(
-		{ messageIds: Schema.Array(MessageId) },
+		{ replies: Schema.Array(Live.LiveReply) },
 		{
-			modelToDependencies: ({ model }) => ({ messageIds: model.liveIds }),
+			modelToDependencies: ({ model }) => ({ replies: model.liveReplies }),
 			keepAliveEquivalence: (previous, next) =>
-				(previous.messageIds.length === 0) === (next.messageIds.length === 0),
-			dependenciesToStream: ({ messageIds }, readDependencies) =>
-				messageIds.length === 0
+				(previous.replies.length === 0) === (next.replies.length === 0),
+			dependenciesToStream: ({ replies }, readDependencies) =>
+				replies.length === 0
 					? Stream.empty
-					: Live.liveRepliesStream(() => readDependencies().messageIds).pipe(
+					: Live.liveRepliesStream(() => readDependencies().replies).pipe(
 							Stream.map((message) => Message.GotLiveMessage({ message })),
 						),
 		},
@@ -181,11 +186,13 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 		},
 	),
 	chatReplyTargets: entry(
-		{ replyIds: Schema.Array(MessageId) },
+		{ channelId: ChannelId, replyIds: Schema.Array(MessageId) },
 		{
-			modelToDependencies: ({ model }) => ({ replyIds: model.replyIds }),
-			dependenciesToStream: ({ replyIds }) =>
-				replyTargetsStream(replyIds, (targets) => Message.UpdatedReplyTargets({ targets })),
+			modelToDependencies: ({ model }) => ({ channelId: model.channelId, replyIds: model.replyIds }),
+			dependenciesToStream: ({ channelId, replyIds }) =>
+				replyTargetsStream(channelId, replyIds, (targets) =>
+					Message.UpdatedReplyTargets({ targets }),
+				),
 		},
 	),
 	chatThreadPanel: entry(

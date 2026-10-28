@@ -21,7 +21,6 @@ export interface HazelDomains {
 	readonly docs?: string
 	readonly api?: string
 	readonly linkPreview?: string
-	readonly rivet?: string
 	readonly botGateway?: string
 }
 
@@ -33,7 +32,6 @@ const PRD_DOMAINS: HazelDomains = {
 	docs: "docs.hazel.sh",
 	api: "api.hazel.sh",
 	linkPreview: "link-preview.hazel.sh",
-	rivet: "rivet.hazel.sh",
 	botGateway: "bot-gateway.hazel.sh",
 }
 

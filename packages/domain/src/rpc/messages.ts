@@ -1,7 +1,7 @@
 import { Rpc, RpcGroup } from "effect/rpc"
 import { Schema } from "effect"
 import { InternalServerError, MessageNotFoundError, UnauthorizedError } from "../errors"
-import { MessageId } from "@hazel/schema"
+import { ChannelId, MessageId, OrganizationId, UserId } from "@hazel/schema"
 import { Message } from "../models"
 import { RateLimitExceededError } from "../rate-limit-errors"
 import { TransactionId } from "@hazel/schema"
@@ -20,6 +20,45 @@ export { MessageNotFoundError } from "../errors"
 export class MessageResponse extends Schema.Class<MessageResponse>("MessageResponse")({
 	data: Message.Schema,
 	transactionId: TransactionId,
+}) {}
+
+/** `message.search`: the org's messages the caller can read, newest first. */
+export const MessageSearchPayload = Schema.Struct({
+	organizationId: OrganizationId,
+	/** Words to match (prefix match, all must appear); empty searches by the filters alone. */
+	query: Schema.String.check(Schema.isMaxLength(500)),
+	channelId: Schema.optional(ChannelId),
+	authorId: Schema.optional(UserId),
+	/** Only messages created before / after this instant. */
+	before: Schema.optional(Schema.Date),
+	after: Schema.optional(Schema.Date),
+	limit: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100 }))),
+	/** `nextCursor` of the previous page. */
+	cursor: Schema.optional(Schema.String),
+})
+export type MessageSearchPayload = typeof MessageSearchPayload.Type
+
+/** A matched range in `snippet`, `[start, end)` in UTF-16 code units. */
+export const MessageSearchHighlight = Schema.Struct({ start: Schema.Number, end: Schema.Number })
+
+export const MessageSearchHit = Schema.Struct({
+	messageId: MessageId,
+	channelId: ChannelId,
+	authorId: UserId,
+	createdAt: Schema.Date,
+	/** The message as plain text, cut around the match. */
+	snippet: Schema.String,
+	highlights: Schema.Array(MessageSearchHighlight),
+})
+export type MessageSearchHit = typeof MessageSearchHit.Type
+
+export class MessageSearchResponse extends Schema.Class<MessageSearchResponse>("MessageSearchResponse")({
+	results: Schema.Array(MessageSearchHit),
+	nextCursor: Schema.NullOr(Schema.String),
+	/** The org's index is still being built from existing messages: results may be incomplete. */
+	indexing: Schema.Boolean,
+	/** Search is down for this org (its index could not be created): no results, try later. */
+	unavailable: Schema.optionalKey(Schema.Boolean),
 }) {}
 
 /**
@@ -135,5 +174,19 @@ export class MessageRpcs extends RpcGroup.make(
 		]),
 	})
 		.annotate(RequiredScopes, ["messages:write"])
+		.middleware(AuthMiddleware),
+
+	/**
+	 * MessageSearch
+	 *
+	 * Full-text search over the organization's messages (its `OrgObject`'s index), limited to the
+	 * channels the caller can read.
+	 */
+	Rpc.make("message.search", {
+		payload: MessageSearchPayload,
+		success: MessageSearchResponse,
+		error: Schema.Union([UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["messages:read"])
 		.middleware(AuthMiddleware),
 ) {}

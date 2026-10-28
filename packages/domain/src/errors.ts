@@ -162,6 +162,21 @@ export class MessageNotFoundError extends Schema.TaggedError<MessageNotFoundErro
 ) {}
 
 /**
+ * A live-state write would grow the message's live state past what one reply may hold. Nothing was
+ * applied; finish the reply (or replace its text) instead of appending more.
+ */
+export class LiveStateTooLargeError extends Schema.TaggedError<LiveStateTooLargeError>(
+	"LiveStateTooLargeError",
+)(
+	"LiveStateTooLargeError",
+	{
+		messageId: MessageId,
+		limitBytes: Schema.Number,
+	},
+	{ httpApiStatus: 413 },
+) {}
+
+/**
  * Error thrown when attempting to create a thread within a thread.
  * Nested threads are not supported.
  */

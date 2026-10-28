@@ -8,10 +8,13 @@ import { AttachmentPolicy } from "../../policies/attachment-policy"
 import { MessagePolicy } from "../../policies/message-policy"
 import { ChannelViewers } from "../../services/channel-viewers"
 import { checkMessageRateLimit } from "../../services/rate-limit-helpers"
+import { SqlClient } from "effect/sql/SqlClient"
 import { emitMessageEvent } from "../../worker/objects/channel/message-events"
+import { searchMessages } from "../../worker/objects/org/message-search"
 
 /**
- * Message RPC handlers. Run in the message's `ChannelObject` (`rpc/routing.ts`): authorization
+ * Message RPC handlers. Writes run in the message's `ChannelObject` (`rpc/routing.ts`), search in
+ * the org's `OrgObject`. Writes: authorization
  * against its `channel_viewers`, and every side effect (bots, notifications, thread naming,
  * chat-sync) enqueued by `emitMessageEvent` in the write's transaction.
  *
@@ -25,6 +28,7 @@ export const MessageRpcLive = MessageRpcs.toLayer(
 		const messageRepo = yield* MessageRepo
 		const attachmentPolicy = yield* AttachmentPolicy
 		const attachmentRepo = yield* AttachmentRepo
+		const sql = yield* SqlClient
 
 		return {
 			"message.create": ({ attachmentIds, ...messageData }) =>
@@ -123,6 +127,10 @@ export const MessageRpcLive = MessageRpcs.toLayer(
 						)
 						.pipe(withRemapDbErrors("Message", "delete"))
 				}),
+
+			// Runs in the org's `OrgObject` (`message-search.ts`), not a channel's.
+			"message.search": (payload) =>
+				searchMessages(payload).pipe(Effect.provideService(SqlClient, sql)),
 		}
 	}),
 )

@@ -30,14 +30,65 @@ export const SyncCloseCode = {
 // Client → object
 // ---------------------------------------------------------------------------
 
-/** First frame on a socket: resume after `since`, or `null` for a full snapshot. */
+/**
+ * First frame on a socket: resume after `since`, or `null` for a full snapshot. `paging: true`
+ * says the client pages history (`LoadOlder`); without it a snapshot sends paged tables whole, as
+ * clients from before paging expect.
+ */
 export const SyncHello = Schema.TaggedStruct("Hello", {
 	since: Schema.NullOr(SyncSeq),
+	paging: Schema.optionalKey(Schema.Boolean),
 })
 
 export const SyncPing = Schema.TaggedStruct("Ping", {})
 
-export const SyncClientFrame = Schema.Union([SyncHello, SyncPing])
+/**
+ * A fresh token for the same user, sent before the socket expires (`Ready.expiresInMs`). The
+ * object verifies it and moves the socket's expiry (`Reauthed`), or closes the socket with 4001.
+ */
+export const SyncReauth = Schema.TaggedStruct("Reauth", {
+	token: Schema.String,
+})
+
+/**
+ * A position in a paged table's history: rows order by `(createdAt, id)` descending, so ties on
+ * `createdAt` break on `id`. `createdAt` is the row's ISO timestamp.
+ */
+export const SyncPageCursor = Schema.Struct({
+	createdAt: Schema.String,
+	id: Schema.String,
+})
+export type SyncPageCursor = typeof SyncPageCursor.Type
+
+/**
+ * Asks for up to `limit` rows of a paged table older than `before`, plus their dependent rows. The
+ * answer is a `Begin{reset:false, request}` run (see {@link SyncBegin}).
+ */
+export const SyncLoadOlder = Schema.TaggedStruct("LoadOlder", {
+	requestId: Schema.Int,
+	table: Schema.String,
+	before: SyncPageCursor,
+	limit: Schema.Int,
+})
+export type SyncLoadOlder = typeof SyncLoadOlder.Type
+
+/** The most ids one `LoadByIds` may ask for. */
+export const SYNC_LOAD_BY_IDS_MAX = 50
+
+/**
+ * Asks for rows of a paged table by key (e.g. a reply's target older than the window), plus their
+ * dependent rows. Answered like a `LoadOlder` (a `Begin{reset:false, request}` run, no `windows`);
+ * the rows stay held and deltas keep them fresh. Ids that are missing or invisible are left out.
+ * Send it only to a source whose `Ready` said `paging: true`.
+ */
+export const SyncLoadByIds = Schema.TaggedStruct("LoadByIds", {
+	requestId: Schema.Int,
+	table: Schema.String,
+	ids: Schema.Array(Schema.String).check(Schema.isMaxLength(SYNC_LOAD_BY_IDS_MAX)),
+})
+export type SyncLoadByIds = typeof SyncLoadByIds.Type
+
+export const SyncClientFrame = Schema.Union([SyncHello, SyncPing, SyncReauth, SyncLoadOlder, SyncLoadByIds])
 export type SyncClientFrame = typeof SyncClientFrame.Type
 
 // ---------------------------------------------------------------------------
@@ -45,12 +96,33 @@ export type SyncClientFrame = typeof SyncClientFrame.Type
 // ---------------------------------------------------------------------------
 
 /**
+ * How much of a paged table's history the client holds: everything from `oldest` (inclusive) to
+ * the newest row. `hasMore: false` means nothing older exists; `oldest` is `null` when the table
+ * is empty for this principal.
+ */
+export const SyncWindow = Schema.Struct({
+	table: Schema.String,
+	oldest: Schema.NullOr(SyncPageCursor),
+	hasMore: Schema.Boolean,
+})
+export type SyncWindow = typeof SyncWindow.Type
+
+/**
  * Opens a sync transaction. `reset: true` means the client's state for this source is stale (first
  * snapshot, retention passed `since`, or visibility changed): drop every row this source fed before
  * applying the rows that follow.
+ *
+ * Paged tables (a channel's `messages`): a snapshot sends only the newest rows and their dependents,
+ * and `windows` says where each paged table's history starts. `request` marks the answer to a
+ * `LoadOlder` or `LoadByIds`; a `LoadOlder`'s `windows` entry is the lowered start. The page closes with a `Commit` at the
+ * socket's current `seq`, so it never moves the stream. Paging state lives only on the client:
+ * a catch-up (`Hello{since}`) keeps paged rows, a reset drops them (re-request what is still
+ * needed), and deltas carry changes to any row by key, paged in or not.
  */
 export const SyncBegin = Schema.TaggedStruct("Begin", {
 	reset: Schema.Boolean,
+	request: Schema.optionalKey(Schema.Int),
+	windows: Schema.optionalKey(Schema.Array(SyncWindow)),
 })
 
 /**
@@ -72,8 +144,25 @@ export const SyncCommit = Schema.TaggedStruct("Commit", {
 	seq: SyncSeq,
 })
 
-/** Sent once, after the first `Commit` on a socket: the initial snapshot is complete. */
-export const SyncReady = Schema.TaggedStruct("Ready", {})
+/**
+ * Milliseconds until the object closes the socket with 4001 unless a `Reauth` moves it. Absent or
+ * `null` when the credential does not expire (or the object predates `Reauth`).
+ */
+const ExpiresInMs = Schema.optionalKey(Schema.NullOr(Schema.Number))
+
+/**
+ * Sent once, after the first `Commit` on a socket: the initial snapshot is complete. `paging: true`
+ * says the source pages a table and answers `LoadOlder` and `LoadByIds`.
+ */
+export const SyncReady = Schema.TaggedStruct("Ready", {
+	expiresInMs: ExpiresInMs,
+	paging: Schema.optionalKey(Schema.Boolean),
+})
+
+/** A `Reauth` was accepted: the socket's new expiry. */
+export const SyncReauthed = Schema.TaggedStruct("Reauthed", {
+	expiresInMs: Schema.NullOr(Schema.Number),
+})
 
 /** Ephemeral, unstored broadcasts (reserved; typing and presence currently sync as rows). */
 export const SyncEphemeral = Schema.TaggedStruct("Ephemeral", {
@@ -83,11 +172,24 @@ export const SyncEphemeral = Schema.TaggedStruct("Ephemeral", {
 
 export const SyncPong = Schema.TaggedStruct("Pong", {})
 
-export const SyncErrorCode = Schema.Literals(["bad_frame", "forbidden", "not_found", "internal"])
+export const SyncErrorCode = Schema.Literals([
+	"bad_frame",
+	"forbidden",
+	"not_found",
+	"internal",
+	"rate_limited",
+])
 
+/**
+ * `request` names the `LoadOlder` or `LoadByIds` the error answers (it gets no run). `rate_limited`
+ * refuses a request over the socket's budget: retry after `retryInMs`. Only clients that page get
+ * these, so older clients never see the new code.
+ */
 export const SyncError = Schema.TaggedStruct("Error", {
 	code: SyncErrorCode,
 	message: Schema.String,
+	request: Schema.optionalKey(Schema.Int),
+	retryInMs: Schema.optionalKey(Schema.Number),
 })
 
 export const SyncServerFrame = Schema.Union([
@@ -95,6 +197,7 @@ export const SyncServerFrame = Schema.Union([
 	SyncRows,
 	SyncCommit,
 	SyncReady,
+	SyncReauthed,
 	SyncEphemeral,
 	SyncPong,
 	SyncError,

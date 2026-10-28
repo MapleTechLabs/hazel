@@ -95,7 +95,7 @@ Local dev is `bun run alchemy:dev` (alias `bun run dev`): it runs every Worker i
 
 ### Database (packages/db)
 
-- `bun run db:generate-sqlite` - Regenerate every store's `0001_initial` (`src/migrations.generated.ts`) and the D1 copy in `migrations/directory/` from `src/tables`
+- `bun run db:generate-sqlite --name <name> [--hints <file.json>]` - Diff each store's tables against its snapshot (`snapshots/<store>.json`) and append the next migration (`src/migrations.generated.ts`, plus `migrations/directory/<NNNN>_<name>/migration.sql` for the directory store); writes nothing when no schema changed
 
 ## Tech Stack
 
@@ -199,7 +199,11 @@ const channel =
 
 - Inside an object, `Database` is the object's own SQLite; on the api Worker it is D1. A handler touches only its own store and sends everything else through the outbox (`apps/backend/src/worker/objects/effects/`); a projection is written only by its owner's outbox deliveries.
 - `db.transaction(effect)` works on Durable Object SQLite; **D1 has no transactions** (it refuses), so directory writes are single statements or batches, and idempotent.
-- Schema changes: edit `src/tables`, then `bun run db:generate-sqlite`. Each object applies its store's migrations (`storeMigrations` in `schema-ddl.ts`) when it starts; alchemy applies the D1 migrations in `migrations/directory/` on deploy and under `alchemy dev`. `schema-ddl.test.ts` fails while the generated files are out of date. Once a store is deployed, append a migration instead of editing `0001_initial`.
+- Schema changes (every store is live with production data, so migrations are append-only; never edit a committed one, `0001_initial` included):
+    1. Edit `src/tables` (and `src/tables/extra-indexes.ts` for partial/expression indexes, `src/stores.ts` for a new table).
+    2. `cd packages/db && bun run db:generate-sqlite --name <snake_case_name>`. For each store whose tables differ from `snapshots/<store>.json` it appends `<NNNN>_<name>` (effect-orm's SQLite diff: `ADD COLUMN`, `CREATE TABLE`/`INDEX`, or a table rebuild) to `src/migrations.generated.ts`, rewrites the snapshot, and for the directory store writes `migrations/directory/<NNNN>_<name>/migration.sql`. A drop or rename stops with the hints it needs (`confirm_data_loss` / `confirm_rename`, see effect-orm's `docs/migrations.md#sqlite`); put them in a JSON array and pass `--hints <file>`.
+    3. Commit the generated files and snapshots together. `schema-ddl.test.ts` fails while a store's tables differ from its snapshot.
+- Applying: object stores (org, channel, user) migrate **lazily**: each Durable Object instance runs its pending `storeMigrations` when it activates (`makeObjectRuntime` → `applyMigrations`, ledger in `_migrations`), so an object idle since the deploy keeps the old schema until its next request. Code must not assume every object has migrated, and a new column must be nullable or have a default. Alchemy applies the D1 migrations in `migrations/directory/` on deploy and under `alchemy dev`.
 
 ## Architecture Notes
 
@@ -219,7 +223,7 @@ const channel =
 
 A table the client syncs needs all of:
 
-1. **The store**: add the table to its store's list in `packages/db/src/stores.ts` (and a projection's to each store it is copied into), then run `bun run db:generate-sqlite`.
+1. **The store**: add the table to its store's list in `packages/db/src/stores.ts` (and a projection's to each store it is copied into), then run `bun run db:generate-sqlite --name <name>`.
 2. **The sync source**: add a `SyncTableSpec` (the table, its per-principal `visible` condition, `dependsOn`) to the object's source in `apps/backend/src/worker/objects/sources/` (`org-source.ts`, `channel-source.ts`, `user-source.ts`). A table that is not listed there is never streamed.
 3. **The collection**: add it in `apps/web-foldkit/src/core/db/collections.ts` (`orgCollection`, `channelCollectionOf`, or a `userSources` collection).
 

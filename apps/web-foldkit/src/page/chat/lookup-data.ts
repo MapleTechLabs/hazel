@@ -1,6 +1,6 @@
 import type { ChannelId, MessageId, OrganizationId, UserId } from "@hazel/schema"
 import { and, eq, inArray, isNull } from "@tanstack/db"
-import { Stream } from "effect"
+import { Effect, Stream } from "effect"
 import {
 	attachmentCollection,
 	botCollection,
@@ -170,31 +170,54 @@ export const threadMessagesStream = <M>(
 					),
 			)
 
-/** `messageWithAuthorAtomFamily` for every replied-to message (inner join: no author, no row). */
+/**
+ * `messageWithAuthorAtomFamily` for every replied-to message (inner join: no author, no row). A
+ * target older than the channel's loaded window is fetched by id ({@link replyTargetLoadStream}).
+ */
 export const replyTargetsStream = <M>(
+	channelId: ChannelId,
+	messageIds: ReadonlyArray<MessageId>,
+	toMessage: (targets: ReadonlyArray<ReplyTarget>) => M,
+): Stream.Stream<M> =>
+	messageIds.length === 0
+		? Stream.make(toMessage([]))
+		: Stream.merge(
+				replyTargetQueryStream(messageIds, toMessage),
+				replyTargetLoadStream(channelId, messageIds),
+			)
+
+/** Keeps the channel's `messageIds` loaded while it runs; held ones are not asked for. */
+export const replyTargetLoadStream = (
+	channelId: ChannelId,
+	messageIds: ReadonlyArray<MessageId>,
+): Stream.Stream<never> =>
+	Stream.callback<never>(() =>
+		Effect.acquireRelease(
+			Effect.sync(() => messageCollection.utils.loadByIds(channelId, messageIds)),
+			(demand) => Effect.sync(() => demand.release()),
+		).pipe(Effect.flatMap(() => Effect.never)),
+	)
+
+const replyTargetQueryStream = <M>(
 	messageIds: ReadonlyArray<MessageId>,
 	toMessage: (targets: ReadonlyArray<ReplyTarget>) => M,
 ) =>
-	messageIds.length === 0
-		? Stream.make(toMessage([]))
-		: liveQueryStream<{ id: MessageId; authorId: UserId; content: string }, M>(
-				(q) =>
-					q
-						.from({ message: messageCollection })
-						.innerJoin({ author: userCollection }, ({ message, author }) =>
-							eq(message.authorId, author.id),
-						)
-						.where(({ message }) => inArray(message.id, [...messageIds]))
-						.select(({ message }) => ({
-							id: message.id,
-							authorId: message.authorId,
-							content: message.content,
-						})),
-				(rows) =>
-					toMessage(
-						rows.map((row) => ({ id: row.id, authorId: row.authorId, content: row.content })),
-					),
-			)
+	liveQueryStream<{ id: MessageId; authorId: UserId; content: string }, M>(
+		(q) =>
+			q
+				.from({ message: messageCollection })
+				.innerJoin({ author: userCollection }, ({ message, author }) =>
+					eq(message.authorId, author.id),
+				)
+				.where(({ message }) => inArray(message.id, [...messageIds]))
+				.select(({ message }) => ({
+					id: message.id,
+					authorId: message.authorId,
+					content: message.content,
+				})),
+		(rows) =>
+			toMessage(rows.map((row) => ({ id: row.id, authorId: row.authorId, content: row.content }))),
+	)
 
 /** The channel's members (`useIsChannelMember`, typing names, DM header). */
 export const membersStream = <M>(
@@ -248,8 +271,41 @@ interface PinnedRow {
 	}
 }
 
-/** `PinnedMessagesModal`'s query, sorted by pin time like its `sortedPins`. */
-export const pinnedStream = <M>(channelId: ChannelId, toMessage: (pins: ReadonlyArray<PinnedInfo>) => M) =>
+/**
+ * `PinnedMessagesModal`'s query, sorted by pin time like its `sortedPins`. The snapshot sends every
+ * pin but only the newest pinned messages past the window, so the rest are fetched by id.
+ */
+export const pinnedStream = <M>(
+	channelId: ChannelId,
+	toMessage: (pins: ReadonlyArray<PinnedInfo>) => M,
+): Stream.Stream<M> => Stream.merge(pinnedQueryStream(channelId, toMessage), pinnedLoadStream(channelId))
+
+/** Keeps the messages of the channel's pins loaded while it runs. */
+const pinnedLoadStream = (channelId: ChannelId): Stream.Stream<never> =>
+	keepMessagesLoaded(
+		channelId,
+		liveQueryStream<{ messageId: MessageId }, ReadonlyArray<MessageId>>(
+			(q) =>
+				q
+					.from({ pinned: pinnedMessageCollection })
+					.where(({ pinned }) => eq(pinned.channelId, channelId))
+					.select(({ pinned }) => ({ messageId: pinned.messageId })),
+			(rows) => rows.map((row) => row.messageId),
+		),
+	)
+
+/** Keeps the latest of `idSets` loaded by id; the same set again (in any order) asks for nothing. */
+export const keepMessagesLoaded = (
+	channelId: ChannelId,
+	idSets: Stream.Stream<ReadonlyArray<MessageId>>,
+): Stream.Stream<never> =>
+	idSets.pipe(
+		Stream.map((ids) => [...new Set(ids)].sort()),
+		Stream.changesWith((a, b) => a.length === b.length && a.every((id, i) => id === b[i])),
+		Stream.switchMap((ids) => (ids.length === 0 ? Stream.empty : replyTargetLoadStream(channelId, ids))),
+	)
+
+const pinnedQueryStream = <M>(channelId: ChannelId, toMessage: (pins: ReadonlyArray<PinnedInfo>) => M) =>
 	liveQueryStream<PinnedRow, M>(
 		(q) =>
 			q

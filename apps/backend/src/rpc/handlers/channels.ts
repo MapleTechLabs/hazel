@@ -25,6 +25,7 @@ import { ChannelEffects } from "../../worker/objects/effects/channel-effects"
 import { enqueueEffect } from "../../worker/objects/effects/registry"
 import { channelTarget } from "../../worker/objects/kinds"
 import { syncChannelAccess, syncChannelTree } from "../../worker/objects/org/channel-access"
+import { publishHostChannel } from "../../worker/objects/org/connect"
 import { ChannelViewers } from "../../services/channel-viewers"
 import { Directory } from "../../services/directory"
 import { requestThreadName } from "../../worker/objects/channel/message-events"
@@ -140,6 +141,8 @@ export const ChannelRpcLive = ChannelRpcs.toLayer(
 
 							// A type change moves its readers, and its threads' with it.
 							yield* syncChannelTree(id)
+							// A shared channel: the guests' mounts follow its name, icon and type.
+							yield* publishHostChannel(id)
 							yield* channelEvent("channel.update", updatedChannel)
 
 							const txid = yield* generateTransactionId()

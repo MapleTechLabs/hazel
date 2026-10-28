@@ -8,6 +8,8 @@
  *   (`../org/message-notifications.ts`), thread renames (`../org/channel-rename.ts`);
  * - Connect: a guest org's mount and participants (host side), the host's conversation snapshot
  *   (guest side), `../org/connect.ts`;
+ * - message search: index changes from the org's channels, and from a Connect host org
+ *   (`../org/message-search.ts`);
  * - TODO(do-sync): chat-sync.
  */
 import type { Database } from "@hazel/db"
@@ -31,6 +33,8 @@ import { ConnectOrgEffects } from "../connect-wire"
 import { connectOrgReceivers } from "../org/connect"
 import { ChatSyncOrgEffects } from "../../../services/chat-sync/chat-sync-effects"
 import { chatSyncOrgReceivers } from "../../../services/chat-sync/chat-sync-org"
+import { messageSearchOrgReceivers } from "../org/message-search"
+import { SearchOrgEffects } from "../search-wire"
 import { defineEffect, type EffectReceivers } from "./registry"
 
 export const OrgEffects = {
@@ -47,6 +51,8 @@ export const OrgEffects = {
 	...ChatSyncOrgEffects,
 	/** Hazel Connect (`../connect-wire.ts`). */
 	...ConnectOrgEffects,
+	/** Message search (`../org/message-search.ts`). */
+	...SearchOrgEffects,
 }
 
 export const orgReceivers = {
@@ -61,6 +67,7 @@ export const orgReceivers = {
 		acceptInvitation(payload).pipe(Effect.provide(ChannelAccessSyncService.layer)),
 	"org.chatSyncIngest": (payload) => chatSyncOrgReceivers["org.chatSyncIngest"](payload),
 	"org.chatSyncLinkSettings": (payload) => chatSyncOrgReceivers["org.chatSyncLinkSettings"](payload),
+	"org.chatSyncLinkThread": (payload) => chatSyncOrgReceivers["org.chatSyncLinkThread"](payload),
 	// Connect receivers recompute channel access, which needs the sync service.
 	"org.connectMountAdded": (payload) =>
 		connectOrgReceivers["org.connectMountAdded"](payload).pipe(
@@ -74,6 +81,8 @@ export const orgReceivers = {
 		connectOrgReceivers["org.connectMountRemoved"](payload).pipe(
 			Effect.provide(ChannelAccessSyncService.layer),
 		),
+	"org.indexMessages": (payload) => messageSearchOrgReceivers["org.indexMessages"](payload),
+	"org.indexConnectMessages": (payload) => messageSearchOrgReceivers["org.indexConnectMessages"](payload),
 	"org.connectConversationSnapshot": (payload) =>
 		connectOrgReceivers["org.connectConversationSnapshot"](payload).pipe(
 			Effect.provide(ChannelAccessSyncService.layer),

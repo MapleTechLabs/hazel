@@ -1,5 +1,5 @@
 import { FetchHttpClient, HttpBody, HttpClient, HttpClientRequest } from "effect/http"
-import { Context, Duration, Effect, Layer, Result, Schema } from "effect"
+import { Context, Duration, Effect, Layer, Option, Result, Schema } from "effect"
 
 export const DiscordAccountInfo = Schema.Struct({
 	externalAccountId: Schema.String,
@@ -60,13 +60,19 @@ const DiscordMessageCreateResponse = Schema.Struct({
 
 const DiscordErrorApiResponse = Schema.Struct({
 	message: Schema.String.pipe(Schema.withDecodingDefaultKey(Effect.succeed("Unknown Discord error"))),
+	code: Schema.optional(Schema.Number),
 })
 
 export class DiscordApiError extends Schema.TaggedError<DiscordApiError>()("DiscordApiError", {
 	message: Schema.String,
 	status: Schema.optional(Schema.Number),
+	/** Discord's JSON error code (e.g. 160004), when the body had one. */
+	code: Schema.optional(Schema.Number),
 	cause: Schema.optional(Schema.Unknown),
 }) {}
+
+/** "A thread has already been created for this message". */
+export const DISCORD_THREAD_ALREADY_CREATED = 160004
 
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10"
 const DEFAULT_TIMEOUT = Duration.seconds(30)
@@ -116,20 +122,22 @@ export class DiscordApiClient extends Context.Service<DiscordApiClient>()("Disco
 			json: Effect.Effect<unknown, unknown, never>
 		}) {
 			const bodyResult = yield* response.json.pipe(Effect.result)
-			const message = Result.isSuccess(bodyResult)
-				? (() => {
-						const decoded = Schema.decodeUnknownSync(DiscordErrorApiResponse)(bodyResult.success)
-						return parseDiscordErrorMessage(
-							response.status,
-							decoded.message ?? "Unknown Discord error",
-						)
-					})()
-				: `Discord API request failed with status ${response.status}`
+			const decoded = Result.isSuccess(bodyResult)
+				? Schema.decodeUnknownOption(DiscordErrorApiResponse)(bodyResult.success)
+				: Option.none()
+			const message = Option.match(decoded, {
+				onNone: () => `Discord API request failed with status ${response.status}`,
+				onSome: (body) => parseDiscordErrorMessage(response.status, body.message),
+			})
+			const code = Option.getOrUndefined(
+				Option.flatMap(decoded, (body) => Option.fromNullishOr(body.code)),
+			)
 
 			return yield* Effect.fail(
 				new DiscordApiError({
 					message,
 					status: response.status,
+					...(code === undefined ? {} : { code }),
 				}),
 			)
 		})

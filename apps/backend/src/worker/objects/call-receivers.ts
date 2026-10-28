@@ -18,6 +18,7 @@ import type { IntegrationBotService } from "../../services/integrations/integrat
 import type { WebhookBotService } from "../../services/webhook-bot-service"
 import { type AnyObjectCall, type CallRequest, type CallResponse, exitCodec, payloadCodec } from "./calls"
 import { listMessages, ListMessagesCall } from "./channel/api-messages"
+import { liveAccess, LiveAccessCall } from "./channel/live-access"
 import { finalizeNothing, finalizeOrgImport, ImportCalls, importRows } from "./import"
 import type { ObjectKind } from "./kinds"
 import {
@@ -98,6 +99,7 @@ export const callReceivers: Record<ObjectKind, ReadonlyMap<string, Receiver>> = 
 	]),
 	channel: byName([
 		receiver(ListMessagesCall, listMessages),
+		receiver(LiveAccessCall, liveAccess),
 		receiver(ImportCalls.channel.rows, importRows("channel")),
 		receiver(ImportCalls.channel.finalize, finalizeNothing),
 	]),

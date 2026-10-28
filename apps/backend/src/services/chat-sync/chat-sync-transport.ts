@@ -208,7 +208,12 @@ export const makeRecordingChatSyncTransport = (options?: { readonly attachmentPu
 			),
 		createThread: (params) =>
 			record(
-				{ op: "createThread", externalChannelId: params.externalChannelId },
+				{
+					op: "createThread",
+					externalChannelId: params.externalChannelId,
+					externalMessageId: params.externalMessageId,
+					content: params.name,
+				},
 				() => nextId() as never,
 			),
 	}

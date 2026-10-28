@@ -13,7 +13,11 @@ import { storeNames } from "./stores"
 const migrateAll = Layer.effectDiscard(
 	Effect.gen(function* () {
 		const sql = yield* SqlClient.SqlClient
-		for (const store of storeNames) yield* applyMigrations(sql, store)
+		for (const store of storeNames) {
+			const { failed } = yield* applyMigrations(sql, store)
+			// Local databases have no reason to tolerate one.
+			if (failed.length > 0) return yield* Effect.die(failed[0]!.error)
+		}
 	}),
 )
 

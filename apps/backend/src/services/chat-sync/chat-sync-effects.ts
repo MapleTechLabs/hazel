@@ -156,6 +156,8 @@ export const ChatSyncOutboundEvent = Schema.TaggedUnion({
 	MessageDelete: { messageId: MessageId },
 	ReactionCreate: { reactionId: MessageReactionId, messageId: MessageId, emoji: Schema.String },
 	ReactionDelete: { messageId: MessageId, emoji: Schema.String, userId: UserId },
+	/** A Hazel thread started on `messageId` (`channel.setThreadChannel` in the parent). */
+	ThreadCreate: { messageId: MessageId, threadChannelId: ChannelId },
 })
 export type ChatSyncOutboundEvent = typeof ChatSyncOutboundEvent.Type
 
@@ -164,6 +166,16 @@ export const ChatSyncOutboundPayload = Schema.Struct({
 	event: ChatSyncOutboundEvent,
 })
 export type ChatSyncOutboundPayload = typeof ChatSyncOutboundPayload.Type
+
+/** A provider thread was created for a Hazel thread: link it like its parent (from the parent channel). */
+export const LinkThreadPayload = Schema.Struct({
+	/** The parent channel's link the thread was created under. */
+	channelLinkId: SyncChannelLinkId,
+	threadChannelId: ChannelId,
+	externalThreadId: ExternalThreadId,
+	externalThreadName: Schema.String,
+})
+export type LinkThreadPayload = typeof LinkThreadPayload.Type
 
 /** A `chat_sync_index` row: a connection (`externalChannelId: null`) or one of its links. */
 export const ChatSyncIndexPayload = Schema.Struct({
@@ -188,6 +200,7 @@ export const ChatSyncChannelEffects = {
 export const ChatSyncOrgEffects = {
 	chatSyncIngest: defineEffect("org.chatSyncIngest", "org", OrgChatSyncIngestPayload),
 	chatSyncLinkSettings: defineEffect("org.chatSyncLinkSettings", "org", LinkSettingsPayload),
+	chatSyncLinkThread: defineEffect("org.chatSyncLinkThread", "org", LinkThreadPayload),
 }
 
 export const ChatSyncDirectoryEffects = {

@@ -14,7 +14,7 @@
  * - `connect` / `onMessage` / `onClose`: the sync sockets.
  * - `alarm`: socket expiry, outbox retries, pruning, and the kind's own timers.
  */
-import { Database, type StoreName, applyMigrations } from "@hazel/db"
+import { Database, type StoreMigration, type StoreName, applyMigrations } from "@hazel/db"
 import { makeSyncedObject, type SyncObjectState, type SyncSocket, type SyncSource } from "@hazel/sync-do"
 import type { AlarmStorageLike, SqlStorageLike } from "@hazel/sync-do"
 import { Context, Effect, Exit, Layer, Option, Result, type Scope } from "effect"
@@ -33,10 +33,11 @@ import type { ThreadNamer } from "../../services/thread-namer"
 import type { ChatSyncTransport } from "../../services/chat-sync/chat-sync-transport"
 import { ObjectCalls } from "./call-receivers"
 import type { CallRequest, CallResponse } from "./calls"
+import { ChannelEffects } from "./effects/channel-effects"
 import { applyReceivedEffect, deliverOutboxRowFrom } from "./effects/deliver"
 import type { ApplyEffectRequest, ApplyEffectResult } from "./effects/registry"
 import type { ObjectKind } from "./kinds"
-import { installObjectMeta, makeObjectIdentity } from "./meta"
+import { deleteObjectMeta, installObjectMeta, makeObjectIdentity, writeObjectMeta } from "./meta"
 import {
 	decodeInvokePrincipal,
 	decodeSyncPrincipal,
@@ -49,8 +50,15 @@ import { makeChannelSource } from "./sources/channel-source"
 import { makeOrgSource } from "./sources/org-source"
 import { makeUserSource } from "./sources/user-source"
 import { pollDueRssFeeds, rssDeadlines } from "./org/rss"
+import { prepareMessageSearch, SEARCH_MIGRATION_ID } from "./org/message-search"
 import { channelDeadlines, runChannelTimers } from "./channel/timers"
 import { makePresenceHooks } from "./user/presence"
+import {
+	directoryUserActive,
+	reauthenticateWith,
+	refuseAllTokens,
+	type SocketTokenVerifier,
+} from "./socket-token"
 
 /** What every object reaches beyond its own storage. */
 export type ObjectPlatform = ObjectStubs | Directory | BotGatewayTransport | ThreadNamer | ChatSyncTransport
@@ -69,6 +77,10 @@ export interface ObjectRuntimeOptions {
 		Database.Database | SqlClient | ObjectPlatform
 	>
 	readonly platform: Layer.Layer<ObjectPlatform>
+	/** Verifies `Reauth` tokens (lazily built); omitted: every `Reauth` is refused (4001). */
+	readonly socketTokens?: Effect.Effect<SocketTokenVerifier>
+	/** The store's migrations (tests); default `storeMigrations[store]`. */
+	readonly migrations?: ReadonlyArray<StoreMigration>
 }
 
 const storeOf: Record<ObjectKind, StoreName> = { org: "org", channel: "channel", user: "user" }
@@ -99,8 +111,50 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 		) => Effect.provideContext(effect, base as Context.Context<R>)
 
 		const sql = Context.get(base, SqlClient)
-		yield* run(applyMigrations(sql, storeOf[kind]).pipe(Effect.andThen(installObjectMeta), Effect.orDie))
+		// A required migration failing is fatal (the object cannot serve its tables); an optional
+		// one (`0002_message_search`) is logged and retried on the next activation.
+		const migrated = yield* run(
+			applyMigrations(sql, storeOf[kind], options.migrations).pipe(
+				Effect.tap(() => installObjectMeta),
+				Effect.orDie,
+			),
+		)
+		// Recorded in the object's meta (`migrationFailed.<id>`) until a later activation applies it.
+		for (const failure of migrated.failed) {
+			const { reason } = failure.error
+			const error =
+				reason.cause instanceof Error ? `${reason._tag}: ${reason.cause.message}` : reason._tag
+			yield* Effect.logError("Optional migration failed; serving without it", {
+				store: storeOf[kind],
+				migration: failure.id,
+				error,
+			})
+			yield* run(writeObjectMeta(`migrationFailed.${failure.id}`, error.slice(0, 500))).pipe(
+				Effect.orDie,
+			)
+		}
+		for (const id of migrated.applied) {
+			yield* run(deleteObjectMeta(`migrationFailed.${id}`)).pipe(Effect.orDie)
+		}
 		const identity = yield* run(makeObjectIdentity.pipe(Effect.orDie))
+		// OrgObject: start the search backfill if its index predates the current version. A failure
+		// only delays it to the next activation; without the index (its migration failed) it waits
+		// for the activation that applies it.
+		if (kind === "org" && !migrated.failed.some((failure) => failure.id === SEARCH_MIGRATION_ID)) {
+			yield* run(
+				prepareMessageSearch({
+					fresh: migrated.applied.includes("0001_initial"),
+					objectId: identity.current(),
+				}).pipe(
+					Effect.catchTags({
+						SqlError: (error) => Effect.logError("Message search backfill not started", error),
+						DatabaseError: (error) =>
+							Effect.logError("Message search backfill not started", error),
+						SchemaError: (error) => Effect.logError("Message search backfill not started", error),
+					}),
+				),
+			)
+		}
 
 		// UserObject presence: online while a sync socket is open, expiry on the alarm.
 		const presence = kind === "user" ? makePresenceHooks(options.state, identity.current) : undefined
@@ -108,11 +162,19 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 		const synced = makeSyncedObject({
 			storage: options.storage,
 			state: options.state,
-			source: sourceOf(kind, options.storage.sql, identity.current),
+			source: {
+				...sourceOf(kind, options.storage.sql, identity.current),
+				reauthenticate: reauthenticateWith(
+					options.socketTokens ?? Effect.succeed(refuseAllTokens),
+					(userId) => run(directoryUserActive(userId)),
+				),
+			},
 			deliver: deliverOutboxRowFrom(kind, identity.current),
 			...(kind === "channel" ? { deadlines: channelDeadlines } : {}),
 			...(kind === "org" ? { deadlines: rssDeadlines } : {}),
 			...(presence === undefined ? {} : { deadlines: presence.deadlines }),
+			// Revocations land before the org answers (versioned, so out of order is safe).
+			...(kind === "org" ? { urgentKinds: [ChannelEffects.setViewers.name] } : {}),
 		})
 
 		const handlers = yield* Layer.build(options.handlers.pipe(Layer.provide(Layer.succeedContext(base))))

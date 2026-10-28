@@ -95,8 +95,8 @@ export const Model = Schema.Struct({
 	unfurls: Unfurl.Unfurls,
 	/** Streamed state of the AI replies with an open actor connection, by message id. */
 	liveStates: Live.LiveStates,
-	/** AI replies that hold an actor connection, in the window or the open thread panel. */
-	liveIds: Schema.Array(MessageId),
+	/** AI replies that hold a live socket, in the window or the open thread panel. */
+	liveReplies: Schema.Array(Live.LiveReply),
 	/** Oldest first, with date headers; what the list renders. */
 	rows: Schema.Array(DisplayRow),
 	limit: Schema.Number,
@@ -177,4 +177,3 @@ export type PageReturn = Update.ReturnWithOutMessage<
 	PageOutMessage,
 	HazelRpc | HazelApiClient | EditorRegistry
 >
-

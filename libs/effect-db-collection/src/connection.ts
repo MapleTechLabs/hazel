@@ -8,9 +8,12 @@ import {
 	SYNC_SUBPROTOCOL,
 	SyncCloseCode,
 	type SyncClientFrame,
+	SYNC_LOAD_BY_IDS_MAX,
+	type SyncPageCursor,
 	type SyncSeq,
 	SyncServerFrame,
 	type SyncSourceKind,
+	type SyncWindow,
 } from "@hazel/domain/sync"
 import { Result, Schema } from "effect"
 import {
@@ -58,6 +61,10 @@ export interface SyncRun {
 	readonly reset: boolean
 	readonly seq: SyncSeq
 	readonly tables: ReadonlyMap<string, SyncRunTable>
+	/** Where each paged table's history now starts (a snapshot's, or a page's lowered start). */
+	readonly windows: ReadonlyMap<string, SyncWindow>
+	/** The run answers a `LoadOlder`: its rows are history, not changes. */
+	readonly page: boolean
 }
 
 export interface SyncConnectionOptions {
@@ -72,6 +79,11 @@ export interface SyncConnectionOptions {
 	readonly backoff?: BackoffConfig
 	/** @default 25000 */
 	readonly heartbeatIntervalMs?: number
+	/**
+	 * How long before the socket's expiry (`Ready.expiresInMs`) to send `Reauth` with a fresh token, so
+	 * the socket stays open instead of closing with 4001. @default 30000
+	 */
+	readonly reauthLeadMs?: number
 	readonly log?: SyncLogger
 }
 
@@ -85,6 +97,18 @@ interface SeqWaiter {
 interface OpenRun {
 	readonly reset: boolean
 	readonly tables: Map<string, { upserts: Array<unknown>; deletes: Array<string> }>
+	readonly windows: Map<string, SyncWindow>
+	/** The `LoadOlder` this run answers, if any. */
+	readonly request: number | undefined
+	/** Answers a request made before a reset: its rows would leave a gap, so they are dropped. */
+	readonly stale: boolean
+}
+
+interface PageRequest {
+	/** `undefined`: not applied (overtaken, socket gone); else the run's window, if it had one. */
+	readonly resolve: (answer: { readonly window: SyncWindow | undefined } | undefined) => void
+	/** A reset arrived after it was sent: settle it with `undefined` once the reset commits. */
+	stale: boolean
 }
 
 const decodeFrame = Schema.decodeUnknownResult(SyncServerFrame)
@@ -117,9 +141,21 @@ export class SyncConnection {
 	private attempt = 0
 	private reauthStreak = 0
 	private run: OpenRun | null = null
+	/** A `Commit` arrived on the current socket: the source accepts `LoadOlder`. */
+	private socketSynced = false
+	/**
+	 * The source answers `LoadByIds`: its last `Ready` said `paging`, or a snapshot carried windows.
+	 * Kept across sockets (a catch-up's `Ready` comes after its first `Commit`).
+	 */
+	private serverPages = false
+	/** A `rate_limited` answer: no `LoadOlder`/`LoadByIds` before this (epoch ms). */
+	private pagingBlockedUntil = 0
+	private nextRequestId = 0
+	private readonly pageRequests = new Map<number, PageRequest>()
 	private pingOutstanding = false
 	private reconnectTimer: ReturnType<typeof setTimeout> | undefined
 	private heartbeatTimer: ReturnType<typeof setInterval> | undefined
+	private reauthTimer: ReturnType<typeof setTimeout> | undefined
 	private readonly waiters = new Set<SeqWaiter>()
 	private readonly statusListeners = new Set<(status: SyncConnectionStatus) => void>()
 	private readonly runListeners = new Set<(run: SyncRun) => void>()
@@ -223,6 +259,59 @@ export class SyncConnection {
 		})
 	}
 
+	/**
+	 * The socket is synced, no reset is being received, and the source is not rate limiting us: a
+	 * `LoadOlder` now would be answered.
+	 */
+	get canPage(): boolean {
+		return (
+			this.socket !== null &&
+			this.socketSynced &&
+			this.run?.reset !== true &&
+			this.pagingRetryInMs === 0
+		)
+	}
+
+	/** Ms until the source takes requests again after a `rate_limited` answer (`0`: now). */
+	get pagingRetryInMs(): number {
+		return Math.max(0, this.pagingBlockedUntil - Date.now())
+	}
+
+	/**
+	 * Asks for up to `limit` rows of `table` older than `before`. Resolves with the table's new
+	 * window once the page is applied, or `undefined` when it cannot be asked now (no synced socket,
+	 * a reset in flight) or was overtaken by a reset or a reconnect; the caller re-evaluates then.
+	 */
+	loadOlder(table: string, before: SyncPageCursor, limit: number): Promise<SyncWindow | undefined> {
+		if (!this.canPage) return Promise.resolve(undefined)
+		const requestId = ++this.nextRequestId
+		return new Promise((resolve) => {
+			this.pageRequests.set(requestId, { resolve: (answer) => resolve(answer?.window), stale: false })
+			this.send({ _tag: "LoadOlder", requestId, table, before, limit })
+		})
+	}
+
+	/** {@link canPage}, and the source said it answers `LoadByIds` (older sources do not). */
+	get canLoadByIds(): boolean {
+		return this.canPage && this.serverPages
+	}
+
+	/**
+	 * Asks for the rows of `table` among `ids` (at most {@link SYNC_LOAD_BY_IDS_MAX}). Resolves `true`
+	 * once they are applied, `false` when it cannot be asked now or was overtaken.
+	 */
+	loadByIds(table: string, ids: ReadonlyArray<string>): Promise<boolean> {
+		if (!this.canLoadByIds || ids.length === 0) return Promise.resolve(false)
+		const requestId = ++this.nextRequestId
+		return new Promise((resolve) => {
+			this.pageRequests.set(requestId, {
+				resolve: (answer) => resolve(answer !== undefined),
+				stale: false,
+			})
+			this.send({ _tag: "LoadByIds", requestId, table, ids: ids.slice(0, SYNC_LOAD_BY_IDS_MAX) })
+		})
+	}
+
 	/** Resolves once settled: `undefined` when ready (or closed), the error when stopped for good. */
 	whenSettled(): Promise<SyncSourceTerminalError | undefined> {
 		if (this.isSettled) return Promise.resolve(this.terminalError)
@@ -303,10 +392,11 @@ export class SyncConnection {
 		this.socket = ws
 		this.socketToken = token
 		this.run = null
+		this.socketSynced = false
 
 		ws.onopen = () => {
 			if (this.socket !== ws) return
-			this.send({ _tag: "Hello", since: this.lastSeq })
+			this.send({ _tag: "Hello", since: this.lastSeq, paging: true })
 			this.startHeartbeat()
 		}
 		ws.onmessage = (event) => {
@@ -326,7 +416,10 @@ export class SyncConnection {
 		this.socket = null
 		this.socketToken = null
 		this.run = null
+		this.socketSynced = false
+		this.settlePages()
 		this.stopHeartbeat()
+		this.clearReauthTimer()
 		if (this.stopped) return
 
 		switch (code) {
@@ -397,7 +490,19 @@ export class SyncConnection {
 				if (this.run !== null) {
 					this.log("warning", "Sync Begin inside an open run; dropping it", { source: this.source })
 				}
-				this.run = { reset: frame.reset, tables: new Map() }
+				const request = frame.request
+				if (frame.reset) {
+					for (const pending of this.pageRequests.values()) pending.stale = true
+					if (frame.windows !== undefined) this.serverPages = true
+				}
+				const pending = request === undefined ? undefined : this.pageRequests.get(request)
+				this.run = {
+					reset: frame.reset,
+					tables: new Map(),
+					windows: new Map((frame.windows ?? []).map((window) => [window.table, window])),
+					request,
+					stale: request !== undefined && (pending === undefined || pending.stale),
+				}
 				return
 			}
 			case "Rows": {
@@ -418,15 +523,25 @@ export class SyncConnection {
 				return
 			}
 			case "Commit": {
-				const open = this.run ?? { reset: false, tables: new Map() }
+				const open: OpenRun = this.run ?? {
+					reset: false,
+					tables: new Map(),
+					windows: new Map(),
+					request: undefined,
+					stale: false,
+				}
 				this.run = null
 				this.lastSeq = frame.seq
-				for (const table of open.tables.keys()) this.tablesSeen.add(table)
+				this.socketSynced = true
+				const stale = open.stale
+				if (!stale) for (const table of open.tables.keys()) this.tablesSeen.add(table)
 				const run: SyncRun = {
 					source: this.source,
 					reset: open.reset,
 					seq: frame.seq,
-					tables: open.tables,
+					tables: stale ? new Map() : open.tables,
+					windows: stale ? new Map() : open.windows,
+					page: open.request !== undefined,
 				}
 				// Rows first, so a write is visible by the time its `awaitSeq` resolves.
 				for (const listener of this.runListeners) {
@@ -442,15 +557,27 @@ export class SyncConnection {
 					this.waiters.delete(waiter)
 					waiter.resolve()
 				}
+				if (open.request !== undefined) {
+					const pending = this.pageRequests.get(open.request)
+					this.pageRequests.delete(open.request)
+					pending?.resolve(stale ? undefined : { window: open.windows.values().next().value })
+				}
+				// Requests a reset overtook: settled now that the reset's window is applied.
+				if (open.reset) this.settlePages((pending) => pending.stale)
 				return
 			}
 			case "Ready": {
 				this.attempt = 0
 				this.reauthStreak = 0
 				this.hasSnapshot = true
+				this.serverPages = frame.paging === true
 				this.setStatus({ state: "ready" })
+				this.scheduleReauth(frame.expiresInMs)
 				return
 			}
+			case "Reauthed":
+				this.scheduleReauth(frame.expiresInMs)
+				return
 			case "Pong":
 				return
 			case "Ephemeral": {
@@ -463,6 +590,15 @@ export class SyncConnection {
 					code: frame.code,
 					message: frame.message,
 				})
+				// A refused request gets no run: settle it, and hold off when rate limited.
+				if (frame.request !== undefined) {
+					if (frame.code === "rate_limited") {
+						this.pagingBlockedUntil = Date.now() + (frame.retryInMs ?? 1_000)
+					}
+					const pending = this.pageRequests.get(frame.request)
+					this.pageRequests.delete(frame.request)
+					pending?.resolve(undefined)
+				}
 				if (frame.code === "forbidden") {
 					this.fail(new SyncSourceForbiddenError({ message: frame.message, source: this.source }))
 				} else if (frame.code === "not_found") {
@@ -502,12 +638,24 @@ export class SyncConnection {
 		this.setStatus({ state: "error", error, terminal: true })
 	}
 
+	/** Settles page requests (all, or those `which` picks) with `undefined`. */
+	private settlePages(which: (pending: PageRequest) => boolean = () => true): void {
+		for (const [requestId, pending] of this.pageRequests) {
+			if (!which(pending)) continue
+			this.pageRequests.delete(requestId)
+			pending.resolve(undefined)
+		}
+	}
+
 	private detach(code: number, reason: string): void {
 		const ws = this.socket
 		this.socket = null
 		this.socketToken = null
 		this.run = null
+		this.socketSynced = false
+		this.settlePages()
 		this.stopHeartbeat()
+		this.clearReauthTimer()
 		this.generation++
 		if (ws === null) return
 		ws.onopen = null
@@ -554,6 +702,53 @@ export class SyncConnection {
 	private stopHeartbeat(): void {
 		if (this.heartbeatTimer !== undefined) clearInterval(this.heartbeatTimer)
 		this.heartbeatTimer = undefined
+	}
+
+	/**
+	 * Sends `Reauth` with a fresh token `reauthLeadMs` before the socket expires (at the latest
+	 * halfway there). Nothing to schedule when it does not expire.
+	 */
+	private scheduleReauth(expiresInMs: number | null | undefined): void {
+		this.clearReauthTimer()
+		if (expiresInMs === null || expiresInMs === undefined || expiresInMs <= 0) return
+		const lead = this.options.reauthLeadMs ?? 30_000
+		// setTimeout overflows past 2^31 - 1 ms; a later run reschedules.
+		const delay = Math.min(Math.max(expiresInMs - lead, expiresInMs / 2), 2 ** 31 - 1)
+		const generation = this.generation
+		this.reauthTimer = setTimeout(() => {
+			this.reauthTimer = undefined
+			void this.reauth(generation)
+		}, delay)
+	}
+
+	/** A failed refresh changes nothing: the source closes with 4001 at expiry and we reconnect. */
+	private async reauth(generation: number): Promise<void> {
+		const current = this.socketToken
+		const read = async (): Promise<string | undefined> => {
+			try {
+				const token = await this.options.getToken()
+				return typeof token === "string" && token !== "unavailable" ? token : undefined
+			} catch (cause) {
+				this.log("warning", "Sync token read failed", { source: this.source, cause })
+				return undefined
+			}
+		}
+		let token = await read()
+		// A cached token is the one the socket already has: drop it and exchange once more.
+		if (token !== undefined && token === current) {
+			this.options.invalidateToken?.(token)
+			token = await read()
+		}
+		if (generation !== this.generation || this.stopped || this.socket === null) return
+		if (token === undefined || token === current) return
+		this.socketToken = token
+		this.log("debug", "Sync token refreshed in band", { source: this.source })
+		this.send({ _tag: "Reauth", token })
+	}
+
+	private clearReauthTimer(): void {
+		if (this.reauthTimer !== undefined) clearTimeout(this.reauthTimer)
+		this.reauthTimer = undefined
 	}
 
 	private clearReconnectTimer(): void {

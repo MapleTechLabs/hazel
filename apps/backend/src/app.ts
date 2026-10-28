@@ -5,7 +5,7 @@
  */
 import { HttpApiScalar } from "effect/http-api"
 import { FetchHttpClient, HttpRouter, HttpServerResponse } from "effect/http"
-import { RpcSerialization, RpcServer } from "effect/rpc"
+import { RpcSerialization } from "effect/rpc"
 import {
 	AttachmentRepo,
 	BotCommandRepo,
@@ -65,7 +65,8 @@ import { PinnedMessagePolicy } from "./policies/pinned-message-policy"
 import { TypingIndicatorPolicy } from "./policies/typing-indicator-policy"
 import { UserPolicy } from "./policies/user-policy"
 import { UserPresenceStatusPolicy } from "./policies/user-presence-status-policy"
-import { AllRpcs, RpcServerLive } from "./rpc/server"
+import { layerRpcHttpPerRequest } from "./rpc/per-request"
+import { RpcServerLive } from "./rpc/server"
 import { AuthorizationLive } from "./services/auth"
 import { IntegrationTokenService } from "./services/integration-token-service"
 import { IntegrationBotService } from "./services/integrations/integration-bot-service"
@@ -108,11 +109,11 @@ export const makeRoutes = <E, R, EX = never, RX = never>(
 		HttpApiRoutes,
 		HealthRouter,
 		DocsRoute,
-		RpcServer.layerHttp({
-			group: AllRpcs,
-			path: "/rpc",
-			protocol: "http",
-		}).pipe(Layer.provide(RpcSerialization.layerNdjson), Layer.provide(rpcServer)),
+		// A server per request, never one shared across requests (`./rpc/per-request.ts`).
+		layerRpcHttpPerRequest("/rpc").pipe(
+			Layer.provide(RpcSerialization.layerNdjson),
+			Layer.provide(rpcServer),
+		),
 		HazelAuthRoutes,
 		DevSignInRoutes,
 		extra,

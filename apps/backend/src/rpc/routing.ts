@@ -184,6 +184,8 @@ export const routes: RouteTable = {
 	"userPresenceStatus.clearStatus": user,
 
 	// OrgObject
+	// The org's search index, filtered by the caller's `channel_access` there.
+	"message.search": byOrg,
 	"integrationRequest.create": byOrg,
 	"organization.update": (payload) => org(payload.id),
 	"organization.delete": (payload) => org(payload.id),

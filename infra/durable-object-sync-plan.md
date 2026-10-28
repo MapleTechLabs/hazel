@@ -34,7 +34,7 @@ Removed by this work:
 | `OrgObject`         | `organizationId`          | `organizations`, `organization_members`, `channels`, `channel_members`, `channel_sections`, `channel_access`, `custom_emojis`, `bot_installations`, `integration_connections`, `integration_tokens`, `integration_requests`, `chat_sync_connections`, `chat_sync_channel_links`, `channel_webhooks`, `github_subscriptions`, `rss_subscriptions`, `rss_posted_items`, `connect_conversations`, `connect_conversation_channels`, `connect_participants`. **Read-only projections:** `users` (members and Connect participants), `user_presence_status` (same users), `bots` and `bot_commands` (installed bots). |
 | `ChannelObject`     | `channelId` (threads too) | `messages`, `message_reactions`, `pinned_messages`, `attachments`, `chat_sync_message_links`, `chat_sync_event_receipts`, `typing_indicators`. **Projections:** `channel_viewers` (userId, organizationId, role; the channel's computed access) and `channel_bots` (botId, botUserId; bots that receive events).                                                                                                                                                                                                                                                                                                |
 | `UserObject`        | `userId`                  | `notifications`, `user_presence_status` (authoritative), `user_organizations` (organizationId; tells the client which `OrgObject`s to open).                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `MessageLiveObject` | `messageId`               | Live AI or progress state for one message. Replaces the RivetKit `message` actor (**last PR**).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `MessageLiveObject` | `messageId`               | Live AI or progress state for one message. Replaced the RivetKit `message` actor (`worker/live/`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
 Rules:
 
@@ -106,17 +106,67 @@ Once any request or RPC method has committed, the object calls `flush()`:
 
 ### Frames (`packages/domain/src/sync/protocol.ts`, JSON text)
 
-- **Client → object:** `Hello { since: number | null }`, `Ping`.
+- **Client → object:** `Hello { since: number | null, paging?: boolean }`, `Ping`, `Reauth { token }`,
+  `LoadOlder { requestId, table, before: { createdAt, id }, limit }`,
+  `LoadByIds { requestId, table, ids }` (≤ 50 ids; see Paged history).
 - **Object → client:**
-    - `Begin { reset: boolean }`: on reset, the client truncates the collections this source feeds.
+    - `Begin { reset: boolean, request?: number, windows?: [{ table, oldest, hasMore }] }`: on
+      reset, the client truncates the collections this source feeds.
     - `Rows { table, upserts: unknown[], deletes: string[] }`
     - `Commit { seq }`
-    - `Ready` (sent after the first Commit)
+    - `Ready { expiresInMs?, paging? }` (sent after the first Commit; when the socket expires;
+      `paging: true` when the source answers `LoadOlder` and `LoadByIds`)
+    - `Reauthed { expiresInMs }` (a `Reauth` moved the expiry)
     - `Ephemeral { ... }`
     - `Pong`
-    - `Error { code, message }`
+    - `Error { code, message, request?, retryInMs? }` (`request`: the `LoadOlder`/`LoadByIds` it
+      refuses; `rate_limited` carries `retryInMs`)
 - Rows are encoded with the table's schema as JSON. Timestamps are ISO strings; the client models
   already accept them.
+
+### Paged history
+
+A `ChannelObject` pages `messages` instead of sending the whole channel (`SyncTable.paging` in
+`packages/sync-do`, `pageMessages` in `channel-source.ts`).
+
+- **Order:** `(createdAt, id)` descending; a cursor is the oldest row's `{ createdAt, id }`, so rows
+  sharing a `createdAt` split across pages without loss or repeats.
+- **Snapshot** (every reset: first connect, retention or catch-up overflow, a `channel_viewers`
+  resnapshot): the newest 200 visible messages, plus older pinned ones (the pins list joins on
+  them), and only those messages' `message_reactions`, `pinned_messages`, `attachments` and
+  `chat_sync_message_links` (plus uploads with no message yet). `Begin.windows` carries the
+  window: `oldest` (the cursor of the 200th message) and `hasMore`. Typing indicators are whole.
+  Only for a socket whose `Hello` said `paging: true` (the current client always does): a client
+  from before paging cannot send `LoadOlder`, so its snapshots (and resnapshots) carry the whole
+  channel. The flag rides in the socket's attachment.
+- **Paging:** `LoadOlder` is answered, under the flush permit, by
+  `Begin { reset: false, request, windows: [lowered window] }`, `Rows…`, and a `Commit` at the
+  socket's current `seq` (the page never moves the stream). `limit` is clamped to 200.
+- **By id:** `LoadByIds` (≤ 50 ids) is answered the same way, `Begin { reset: false, request }`
+  without `windows`: the visible messages among the ids and their dependents (`SyncPaging.byIds`,
+  `messagesByIds`; a table without `byIds` answers from its `load`). Missing ids are left out.
+- **Rate limit:** `LoadOlder` and `LoadByIds` share a per-socket token bucket in memory (burst 20,
+  4 per second; `requestBurst`/`requestsPerSecond`). An excess one gets
+  `Error { code: "rate_limited", request, retryInMs }` and a warning log; the client settles it and
+  pages again after `retryInMs`.
+- **Deltas** are unchanged: a change to any row goes out by key, paged in or not. The object keeps
+  no per-socket horizon.
+- **Client** (`libs/effect-db-collection`): the mirror records each source's window. A live upsert
+  of a row it does not hold that is older than the window's start is dropped (it would sit next to
+  the window with the rows between missing); paging brings it in. A held row (paged in, or a
+  pinned one) takes every edit and delete.
+    - **Catch-up** (`Hello{since}`) carries no `windows`: the client keeps its pages and window.
+    - **Reset** drops the pages with everything else. Demands (`utils.retainHistory`, or a
+      `loadSubset` with `limit`/`offset`) outlive it and re-request pages from the new window.
+    - A page answer to a request sent before a reset arrived is dropped, so no gap opens.
+    - `utils.loadByIds(channelId, ids)` holds rows by key (they are held, so they take edits); a
+      reset drops them and the demand asks again. Held ids, and ids that came back missing since the
+      last reset, are not re-asked. It is sent only once the source advertised paging (`Ready.paging`,
+      or a snapshot with `windows`), never to an older object.
+- **Web:** the channel page's window subscription holds `retainHistory(offset + limit + PAGE_SIZE)`,
+  so scrolling back pages older messages in before the window reaches them.
+  The open thread panel holds `retainHistory(thread, Infinity)`: it shows the whole thread. Reply
+  previews hold `loadByIds(channel, replyIds)`, so a reply to a message past the window shows it.
 
 ### Auth
 
@@ -127,7 +177,11 @@ Once any request or RPC method has committed, the object calls `flush()`:
 - The object authorizes the principal against its own tables, and checks again on every
   re-snapshot.
 - When the token expires, the object closes the socket with code `4001`, and the client reconnects
-  with a fresh token.
+  with a fresh token. Before that (30 s ahead of `Ready.expiresInMs`), the client sends `Reauth` with
+  a fresh access token; the object verifies it locally with the api's signing key (it runs in the
+  api Worker and shares its env), requires the same user, and moves the socket's expiry. A refused
+  token closes with `4001`; an uncheckable one keeps the old expiry. Revocation is unchanged: an
+  ended session cannot mint a new token, so its sockets still close within one token lifetime.
 
 ### Write confirmation
 
@@ -161,8 +215,9 @@ deletes rows older than 10 s, and the cron goes away.
       `notificationCount` increments, mention resolution), `UserObject`s (notifications),
       BotGateway, Discord sync, thread naming (OpenRouter fetch from the object).
     - **Channel create, update or delete; membership; org member changes** (`OrgObject`) → recompute
-      `channel_access` locally → `ChannelObject.setViewers` (synchronous after the commit, the outbox
-      as fallback) → directory `channel_index` and `membership_index` → `UserObject.user_organizations`.
+      `channel_access` locally → `ChannelObject.setViewers` (delivered after the commit and before the
+      answer even while another drain runs, `urgentKinds`; versioned so an older one is dropped; the
+      outbox retries a failure) → directory `channel_index` and `membership_index` → `UserObject.user_organizations`.
     - **Profile update** (directory `users`) → each `OrgObject` in `membership_index` (projection).
     - **Presence** (`UserObject`) → each `OrgObject` (projection). Expiry is an alarm.
     - **Bot install or uninstall** (`OrgObject`) → `channel_bots` on the affected channels, the bot
@@ -201,28 +256,14 @@ the client.
 
 ## 6. Known regressions (follow-ups)
 
-- **Message search** in the command palette only covers channels that are loaded. Follow-up: per-org
-  FTS5.
-- **Messages load a whole channel** once its socket is open; there's no paging from the server yet.
-  Every `Hello` reset (first connect, a catch-up past `catchUpMaxChanges`, a dependency
-  resnapshot) runs `load(principal, "all")` for `messages`, `message_reactions`,
-  `pinned_messages`, `attachments` and `chat_sync_message_links`, so the ChannelObject reads the
-  whole history into memory and sends it. A bounded snapshot (newest N messages and their
-  dependents) is not safe today: the client pages purely locally (`page/chat/data.ts` runs
-  `offset`/`limit` windows over `messageCollection`; `loadSubset` in
-  `libs/effect-db-collection/src/collection.ts` ignores `limit`/`cursor` and only opens
-  `channel:<id>`), and the only client frame is `Hello { since }`, so messages older than the
-  snapshot could never be fetched. Proposed extension:
-    - Snapshot: `Begin { reset, horizon?: { createdAt, id } }`, the oldest message sent; the
-      object sends the newest N (e.g. 500) messages and only the dependents of those.
-    - Deltas: a change to a message older than the socket's horizon (edit, reaction, pin) is
-      dropped for that socket; the horizon lives in the socket attachment.
-    - Paging: client `LoadBefore { requestId, before: { createdAt, id }, limit }`, answered with
-      `Rows` frames and `PageDone { requestId, horizon, exhausted }`; the object lowers the
-      socket's horizon so the page's rows keep receiving deltas.
-    - Client: `loadSubset` forwards `limit`/`cursor` for the messages collection and sends
-      `LoadBefore` when the window's `offset + limit` passes the loaded count; a reset drops the
-      older pages (the visible window re-requests them).
+- **Message search** runs on a per-org FTS5 index (`worker/objects/org/message-search.ts`,
+  `message.search`), backfilled on each org's first activation after the `0002_message_search`
+  migration. Not yet: `has:` filters (local results only), and the chat page ignores `?messageId=`,
+  so a result opens its channel without scrolling to the message.
+- **Only loaded history is visible outside the channel view** (see §3 Paged history): the
+  notifications inbox sees only the messages its channels' windows hold (the thread panel holds
+  `retainHistory(thread, Infinity)`, so it pages a long thread in whole). Pinning a message older than the window shows it in the pins list
+  only after the next reset.
 - **Auth checks call D1** on every api request; add a short KV cache if latency shows it's needed.
 - **Bot creation from the CLI is gone:** `hazel-setup bots` wrote the Bun runtime's SQLite file.
   Create bots in the app.
@@ -246,6 +287,16 @@ the client.
           `declareDirectoryDb`) and bound by the api Worker and the bot gateway.
     - `OutboxDispatcher` needs no code: alchemy derives the `deleted_classes` migration from the
       previous deploy's class tags.
+    - `MessageLiveObject` (`apps/backend/src/worker/live/`), hosted by the api Worker:
+        - Writes: `POST /api/v1/messages/:id/live` (bot token; the message's author only).
+          Reads: `GET /api/v1/messages/:id/live` and the `/live/:messageId?channelId=` socket
+          (token as for `/sync`; viewers of the channel, asked of the `ChannelObject` through
+          `channel.liveAccess`).
+        - `Complete`/`Fail` write the snapshot into `embeds[].liveState.cached` via
+          `message.update` in the `ChannelObject`, retried from the alarm.
+        - RivetKit (`apps/actors`, `packages/actors`, `packages/rivet-effect`, `rivet.hazel.sh`)
+          is deleted. Its Worker, KV namespace and domain left the stack: check the next deploy
+          of each stage removed them.
 - **Local dev:** `bun run alchemy:dev` with `.env.local` (`.env.local.example`).
 - **Import:** `apps/backend/src/scripts/import-postgres.ts`, through
   `POST /internal/import/:store/:id`. The route answers only while the api Worker has
@@ -256,6 +307,5 @@ the client.
 - **Not done yet:**
     - The PR 6 verification: a `pr-<n>` preview deploy, the import against a staging copy, and a
       full browser pass.
-    - `MessageLiveObject` (the RivetKit `apps/actors` stays until then).
     - Dropping `WorkflowServiceUnavailableError` / `WorkflowInitializationError` from the RPC and
       webhook contracts.

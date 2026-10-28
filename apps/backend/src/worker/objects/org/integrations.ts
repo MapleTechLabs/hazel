@@ -13,6 +13,7 @@ import { IntegrationConnectionId, OrganizationId, UserId } from "@hazel/schema"
 import { Effect, Option, Schema } from "effect"
 import type { SqlClient } from "effect/sql/SqlClient"
 import { ChatSyncAttributionReconciler } from "../../../services/chat-sync/chat-sync-attribution-reconciler"
+import { publishChatSyncAccounts } from "../../../services/chat-sync/chat-sync-org"
 import { IntegrationTokenService } from "../../../services/integration-token-service"
 import { IntegrationBotService } from "../../../services/integrations/integration-bot-service"
 import { CurrentObject } from "../../../lib/current-object"
@@ -217,6 +218,15 @@ export const connectIntegration = Effect.fn("OrgObject.connectIntegration")(
 				yield* indexInstallation(saved, false).pipe(
 					Effect.catchTags({ DatabaseError: failed("db_error"), SchemaError: failed("db_error") }),
 				)
+				// A user's provider account: re-project the linked channels (mentions resolve to it).
+				if (payload.userId !== null && ATTRIBUTION_PROVIDERS.has(payload.provider)) {
+					yield* publishChatSyncAccounts(payload.provider).pipe(
+						Effect.catchTags({
+							DatabaseError: failed("db_error"),
+							SchemaError: failed("db_error"),
+						}),
+					)
+				}
 				return saved
 			}),
 		)
@@ -330,6 +340,9 @@ export const disconnectIntegration = Effect.fn("OrgObject.disconnectIntegration"
 				yield* tokens.deleteTokens(connection.id)
 				yield* repo.softDelete(connection.id)
 				yield* indexInstallation(connection, true)
+				if (payload.userId !== null && ATTRIBUTION_PROVIDERS.has(payload.provider)) {
+					yield* publishChatSyncAccounts(payload.provider)
+				}
 			}),
 		)
 		.pipe(Effect.orDie)

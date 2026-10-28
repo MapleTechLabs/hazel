@@ -30,7 +30,6 @@ const props = Effect.gen(function* () {
 		domain: domains.web,
 		env: {
 			VITE_BACKEND_URL: yield* plainFrom(["VITE_BACKEND_URL"], urls.api),
-			VITE_RIVET_URL: yield* plainFrom(["VITE_RIVET_URL"], urls.rivet),
 			VITE_R2_PUBLIC_URL: yield* plainFrom(["VITE_R2_PUBLIC_URL"], "https://cdn.hazel.sh"),
 			VITE_CLERK_PUBLISHABLE_KEY: yield* plainFrom(
 				["VITE_CLERK_PUBLISHABLE_KEY", "CLERK_PUBLISHABLE_KEY"],

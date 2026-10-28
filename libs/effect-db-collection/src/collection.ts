@@ -5,7 +5,7 @@
  * `users` row arrives from every org the user shares), so a source's reset or close removes only
  * the rows no other source still holds.
  */
-import { parseWritePosition } from "@hazel/domain/sync"
+import { parseWritePosition, type SyncPageCursor, type SyncWindow } from "@hazel/domain/sync"
 import type {
 	ChangeMessageOrDeleteKeyMessage,
 	Collection,
@@ -20,7 +20,8 @@ import type { SyncRunTable } from "./connection"
 import { AwaitTxIdError, InvalidTxIdError, type SyncSourceTerminalError, TxIdTimeoutError } from "./errors"
 import { dispatchSchemaError } from "./events"
 import { convertDeleteHandler, convertInsertHandler, convertUpdateHandler } from "./handlers"
-import { ensureSources, type SyncHub, type SyncRetention, type SyncTableSink } from "./hub"
+import { type HistoryDemand, HistoryPager, type HistoryState } from "./history"
+import { ensureSources, type SyncHub, type SyncRetention, type SyncRunInfo, type SyncTableSink } from "./hub"
 import { extractPartitionValues } from "./subset"
 import {
 	type EffectDeleteHandler,
@@ -108,10 +109,35 @@ type SyncParams<T extends object, TKey extends string | number> = Parameters<Syn
 interface MirrorRow<T> {
 	value: T
 	readonly sources: Set<SourceKey>
+	/** The row's place in a paged table's history (from its wire `createdAt` and `id`). */
+	cursor: SyncPageCursor | undefined
 }
+
+/** A wire row's `(createdAt, id)`, when it has both as strings. */
+const cursorOfWire = (raw: unknown): SyncPageCursor | undefined => {
+	if (typeof raw !== "object" || raw === null) return undefined
+	const { createdAt, id } = raw as { readonly createdAt?: unknown; readonly id?: unknown }
+	return typeof createdAt === "string" && typeof id === "string" ? { createdAt, id } : undefined
+}
+
+/** `(createdAt, id)` order; ISO timestamps compare as strings. */
+const compareCursor = (a: SyncPageCursor, b: SyncPageCursor): number =>
+	a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+
+/** Rows older than the window's start leave a gap below it: only paging brings them in. */
+const isBelowWindow = (window: SyncWindow | undefined, cursor: SyncPageCursor | undefined): boolean =>
+	window !== undefined &&
+	window.hasMore &&
+	window.oldest !== null &&
+	cursor !== undefined &&
+	compareCursor(cursor, window.oldest) < 0
 
 class SourceMirror<T extends object, TKey extends string | number> implements SyncTableSink {
 	readonly rows = new Map<TKey, MirrorRow<T>>()
+	/** Each source's history window of this table, when the source pages it. */
+	readonly windows = new Map<SourceKey, SyncWindow>()
+	/** Called after every run a source applied. */
+	onRun: ((source: SourceKey, reset: boolean) => void) | undefined
 	private target: SyncParams<T, TKey> | null = null
 	private pendingReceipt: Promise<void> | undefined
 
@@ -123,7 +149,31 @@ class SourceMirror<T extends object, TKey extends string | number> implements Sy
 		private readonly log: SyncLogger,
 	) {}
 
-	applyRun(source: SourceKey, reset: boolean, rows: SyncRunTable | undefined): void {
+	/** Rows `source` holds from the newest down to its window's start (all of them when unpaged). */
+	loadedCount(source: SourceKey): number {
+		const window = this.windows.get(source)
+		let count = 0
+		for (const row of this.rows.values()) {
+			if (row.sources.has(source) && !isBelowWindow(window, row.cursor)) count++
+		}
+		return count
+	}
+
+	applyRun(source: SourceKey, reset: boolean, rows: SyncRunTable | undefined, info?: SyncRunInfo): void {
+		this.applyRows(source, reset, rows, info)
+		this.onRun?.(source, reset)
+	}
+
+	holds(source: SourceKey, key: string): boolean {
+		return this.rows.get(key as TKey)?.sources.has(source) === true
+	}
+
+	private applyRows(
+		source: SourceKey,
+		reset: boolean,
+		rows: SyncRunTable | undefined,
+		info: SyncRunInfo | undefined,
+	): void {
 		/** Whether each touched key was present before this run. */
 		const touched = new Map<TKey, boolean>()
 		const changed = new Set<TKey>()
@@ -132,13 +182,19 @@ class SourceMirror<T extends object, TKey extends string | number> implements Sy
 		}
 
 		if (reset) {
+			this.windows.delete(source)
 			for (const [key, row] of this.rows) {
 				if (!row.sources.has(source)) continue
 				touch(key)
 				row.sources.delete(source)
 			}
 		}
+		if (info?.window !== undefined) this.windows.set(source, info.window)
+		// A live change to a row past the window (an edit of an old message) is not held: it
+		// would sit next to the window with the rows between them missing.
+		const window = reset || info?.page === true ? undefined : this.windows.get(source)
 		for (const raw of rows?.upserts ?? []) {
+			const cursor = cursorOfWire(raw)
 			const decoded = this.decode(raw)
 			if (Result.isFailure(decoded)) {
 				const message = decoded.failure.message
@@ -159,12 +215,14 @@ class SourceMirror<T extends object, TKey extends string | number> implements Sy
 			}
 			const value = decoded.success
 			const key = this.getKey(value)
+			const row = this.rows.get(key)
+			if (row?.sources.has(source) !== true && isBelowWindow(window, cursor)) continue
 			touch(key)
 			changed.add(key)
-			const row = this.rows.get(key)
-			if (row === undefined) this.rows.set(key, { value, sources: new Set([source]) })
+			if (row === undefined) this.rows.set(key, { value, sources: new Set([source]), cursor })
 			else {
 				row.value = value
+				row.cursor = cursor
 				row.sources.add(source)
 			}
 		}
@@ -189,7 +247,7 @@ class SourceMirror<T extends object, TKey extends string | number> implements Sy
 	}
 
 	dropSource(source: SourceKey): void {
-		this.applyRun(source, true, undefined)
+		this.applyRows(source, true, undefined, undefined)
 	}
 
 	/** TanStack started syncing: hand it every row held so far. */
@@ -272,6 +330,25 @@ export interface EffectDbCollectionUtils extends UtilsRecord {
 	) => Effect.Effect<void, SyncSourceTerminalError, Scope.Scope>
 	/** Promise version of {@link ensureChannels}: call `release` when done. */
 	readonly retainChannels: (channelIds: Iterable<string>) => SyncRetention
+	/**
+	 * Loads one page of the channel's history older than what is held (a paged table, e.g.
+	 * `messages`). Resolves `true` while older rows remain.
+	 */
+	readonly loadOlder: (channelId: string, limit?: number) => Promise<boolean>
+	/**
+	 * Keeps at least `count` of the channel's newest rows loaded, paging as needed, until released;
+	 * a reset re-requests the pages. It does not open the source: it applies once a snapshot is in.
+	 * `Infinity` holds the whole history.
+	 */
+	readonly retainHistory: (channelId: string, count: number) => HistoryDemand
+	/**
+	 * Loads the channel's rows with `ids` (e.g. reply targets older than the window) and keeps them
+	 * loaded, re-asking after a reset, until released. Held or missing ids are not re-asked; a source
+	 * that does not answer `LoadByIds` gets nothing. It does not open the source.
+	 */
+	readonly loadByIds: (channelId: string, ids: ReadonlyArray<string>) => HistoryDemand
+	/** How much of the channel's history is held; `undefined` when the source does not page it. */
+	readonly historyOf: (channelId: string) => HistoryState | undefined
 	readonly hub: SyncHub
 }
 
@@ -354,6 +431,12 @@ export function doCollectionOptions<
 		? (row, options) => decodeSchema(parseRow(row), options)
 		: decodeSchema
 	const mirror = new SourceMirror<T, TKey>(table, id, decode, config.getKey, log)
+	const history = new HistoryPager(hub, mirror)
+	mirror.onRun = (source, reset) => history.onRun(source, reset)
+	// `Ready` says whether the source answers `LoadByIds`; it comes after the run it closes.
+	hub.subscribeStatus((source, status) => {
+		if (status.state === "ready") history.pump(source)
+	})
 	// Registered now, not when TanStack starts syncing, so rows from sources other collections
 	// opened are already held when this collection's sync starts.
 	hub.registerSink(mirror)
@@ -403,6 +486,10 @@ export function doCollectionOptions<
 		awaitSeq,
 		ensureChannels: (channelIds) => ensureSources(hub, channelSources(channelIds)),
 		retainChannels: (channelIds) => hub.retain(channelSources(channelIds)),
+		loadOlder: (channelId, limit) => history.loadOlder(sourceKey("channel", channelId), limit),
+		retainHistory: (channelId, count) => history.demand(sourceKey("channel", channelId), count),
+		historyOf: (channelId) => history.state(sourceKey("channel", channelId)),
+		loadByIds: (channelId, ids) => history.demandIds(sourceKey("channel", channelId), ids),
 		hub,
 	}
 
@@ -410,7 +497,7 @@ export function doCollectionOptions<
 		Promise.all(txids.map((txid) => awaitSeq(txid, syncTimeout))).then(() => undefined)
 
 	const sync: SyncConfig<T, TKey>["sync"] = isChannelPartition(sources)
-		? (params) => syncPartitioned(params, sources, hub, mirror)
+		? (params) => syncPartitioned(params, sources, hub, mirror, history)
 		: (params) => syncSourced(params, sources, hub, mirror)
 
 	return {
@@ -491,11 +578,16 @@ function syncPartitioned<T extends object, TKey extends string | number>(
 	partition: ChannelPartition,
 	hub: SyncHub,
 	mirror: SourceMirror<T, TKey>,
+	history: HistoryPager,
 ) {
-	const subsets = new Map<LoadSubsetOptions, SyncRetention>()
+	const subsets = new Map<LoadSubsetOptions, { release(): void }>()
 	const unload = (options: LoadSubsetOptions) => {
 		subsets.get(options)?.release()
 		subsets.delete(options)
+	}
+	const visible = () => {
+		const receipt = mirror.visible()
+		return receipt === true ? undefined : receipt
 	}
 
 	mirror.attach(params)
@@ -509,14 +601,26 @@ function syncPartitioned<T extends object, TKey extends string | number>(
 			if (channelIds === undefined || channelIds.length === 0) return true
 			if (options.signal?.aborted) return true
 			unload(options)
-			const retention = hub.retain(channelIds.map((channelId) => sourceKey("channel", channelId)))
-			subsets.set(options, retention)
+			const sources = channelIds.map((channelId) => sourceKey("channel", channelId))
+			const retention = hub.retain(sources)
+			const demands: Array<HistoryDemand> = []
+			let released = false
+			subsets.set(options, {
+				release: () => {
+					released = true
+					retention.release()
+					for (const demand of demands) demand.release()
+				},
+			})
 			options.signal?.addEventListener("abort", () => unload(options), { once: true })
-			if (retention.isSettled()) return mirror.visible()
+			// An ordered window (`limit` rows after `offset`) past the snapshot pages older history in.
+			const wanted = options.limit === undefined ? undefined : (options.offset ?? 0) + options.limit
+			if (wanted === undefined && retention.isSettled()) return mirror.visible()
 			// A refused channel resolves too: it simply has no rows for this principal.
 			return retention.settled.then(() => {
-				const visible = mirror.visible()
-				return visible === true ? undefined : visible
+				if (wanted === undefined || released) return visible()
+				for (const source of sources) demands.push(history.demand(source, wanted))
+				return Promise.all(demands.map((demand) => demand.settled)).then(visible)
 			})
 		},
 		unloadSubset: unload,

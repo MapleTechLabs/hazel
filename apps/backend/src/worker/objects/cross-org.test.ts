@@ -220,7 +220,13 @@ describe("cross-org channel isolation", () => {
 				// The owning org still gets through (an empty viewer list: the channel was deleted).
 				const fromA = yield* apply(
 					"channel.setViewers",
-					{ organizationId: world.a.id, conversationId: null, viewers: [], bots: [] },
+					{
+						organizationId: world.a.id,
+						conversationId: null,
+						viewers: [],
+						bots: [],
+						version: Date.now() + 1,
+					},
 					{ kind: "org", id: world.a.id },
 				)
 				expect(fromA._tag).toBe("Applied")

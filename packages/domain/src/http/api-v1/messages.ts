@@ -1,9 +1,15 @@
 import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/http-api"
 import { Schema } from "effect"
-import { InternalServerError, MessageNotFoundError, UnauthorizedError } from "../../errors"
+import {
+	InternalServerError,
+	LiveStateTooLargeError,
+	MessageNotFoundError,
+	UnauthorizedError,
+} from "../../errors"
 import { AttachmentId, ChannelId, MessageId } from "@hazel/schema"
 import { Message, MessageReaction } from "../../models"
 import { MessageEmbeds } from "../../models/message-embed-schema"
+import { LiveAction, LiveState, LiveWriteResult } from "../../live/protocol"
 import { RateLimitExceededError } from "../../rate-limit-errors"
 import { RequiredScopes } from "../../scopes/required-scopes"
 import { TransactionId } from "@hazel/schema"
@@ -58,6 +64,16 @@ export class ToggleReactionRequest extends Schema.Class<ToggleReactionRequest>("
 	channelId: ChannelId,
 }) {}
 
+export class WriteLiveStateRequest extends Schema.Class<WriteLiveStateRequest>("WriteLiveStateRequest")({
+	/** The message's channel: the live object checks the message against it. */
+	channelId: ChannelId,
+	action: LiveAction,
+}) {}
+
+export class GetLiveStateQuery extends Schema.Class<GetLiveStateQuery>("GetLiveStateQuery")({
+	channel_id: ChannelId,
+}) {}
+
 // ============ RESPONSE SCHEMAS ============
 
 export class MessageResponse extends Schema.Class<MessageResponse>("MessageResponse")({
@@ -73,6 +89,14 @@ export class ToggleReactionResponse extends Schema.Class<ToggleReactionResponse>
 	wasCreated: Schema.Boolean,
 	data: Schema.optional(MessageReaction.Schema as any),
 	transactionId: TransactionId,
+}) {}
+
+export class WriteLiveStateResponse extends Schema.Class<WriteLiveStateResponse>("WriteLiveStateResponse")({
+	data: LiveWriteResult,
+}) {}
+
+export class LiveStateResponse extends Schema.Class<LiveStateResponse>("LiveStateResponse")({
+	data: LiveState,
 }) {}
 
 // ============ ERROR TYPES ============
@@ -180,5 +204,39 @@ export class MessagesApiGroup extends HttpApiGroup.make("api-v1-messages")
 				}),
 			)
 			.annotate(RequiredScopes, ["message-reactions:write"]),
+	)
+	// Live state (streamed replies): written by the message's author, read over `/live/:id` too
+	.add(
+		HttpApiEndpoint.post("writeLiveState", `/messages/:id/live`, {
+			params: { id: MessageId },
+			payload: WriteLiveStateRequest,
+			success: WriteLiveStateResponse,
+			error: [MessageNotFoundError, UnauthorizedError, LiveStateTooLargeError, InternalServerError],
+		})
+			.annotateMerge(
+				OpenApi.annotations({
+					title: "Write Live State",
+					description:
+						"Apply one change (text, progress, agent step, completion) to a message's live state. Only the message's author may write.",
+					summary: "Write live state",
+				}),
+			)
+			.annotate(RequiredScopes, ["messages:write"]),
+	)
+	.add(
+		HttpApiEndpoint.get("getLiveState", `/messages/:id/live`, {
+			params: { id: MessageId },
+			query: GetLiveStateQuery,
+			success: LiveStateResponse,
+			error: [MessageNotFoundError, UnauthorizedError, InternalServerError],
+		})
+			.annotateMerge(
+				OpenApi.annotations({
+					title: "Get Live State",
+					description: "Read a message's live state",
+					summary: "Get live state",
+				}),
+			)
+			.annotate(RequiredScopes, ["messages:read"]),
 	)
 	.prefix("/api/v1") {}

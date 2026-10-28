@@ -17,7 +17,6 @@ bot's event log (a `BotGateway` Durable Object).
 Optional peer dependencies:
 
 - `@effect/opentelemetry` for tracing
-- `rivetkit` and `jose` for actors and AI/live-state streaming
 
 ## Installation
 
@@ -58,6 +57,15 @@ createHazelBot({
 - Message send, reply, update, delete, and react helpers
 - AI and live-state streaming helpers
 - Bot-local state and session offset stores
+
+## Live-state streaming
+
+`bot.stream.create(channelId)` and `bot.ai.stream(...)` write a message's live state through
+the Hazel API (`POST /api/v1/messages/:id/live`, authenticated with the bot token). The message's
+live object streams every write to the channel's viewers and saves the final snapshot into the
+message on `complete` or `fail`. There is no separate actors service to configure.
+
+Upgrading from 0.1.x: see [CHANGELOG.md](./CHANGELOG.md#020).
 
 ## Error handling
 

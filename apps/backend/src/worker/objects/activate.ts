@@ -25,6 +25,7 @@ import type { CallRequest } from "./calls"
 import type { ApplyEffectRequest } from "./effects/registry"
 import type { InvokeRequest } from "./protocol"
 import { makeObjectRuntime } from "./runtime"
+import { makeSocketTokenVerifier } from "./socket-token"
 import { workerObjectStubs } from "./stubs"
 
 export const activateObject = (kind: ObjectKind) =>
@@ -35,6 +36,10 @@ export const activateObject = (kind: ObjectKind) =>
 		const botGateways = yield* bindBotGateways
 
 		return Effect.gen(function* () {
+			// Built on the first `Reauth`, then reused by the instance.
+			const socketTokens = yield* Effect.cached(
+				makeSocketTokenVerifier.pipe(Effect.provide(workerEnvLayer(env))),
+			)
 			const raw = state.raw
 			const storage = raw.storage
 			const services = servicesPlatformLive(env, botGateways)
@@ -52,6 +57,7 @@ export const activateObject = (kind: ObjectKind) =>
 					Layer.provide(Layer.mergeAll(services, FetchHttpClient.layer)),
 					Layer.orDie,
 				),
+				socketTokens,
 				platform: Layer.mergeAll(
 					workerObjectStubs(env),
 					Layer.suspend(() => Directory.layerD1(directoryBinding(env))),

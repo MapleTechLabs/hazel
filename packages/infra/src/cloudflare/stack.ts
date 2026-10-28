@@ -8,7 +8,6 @@ import { type HazelDomains, type HazelStage, parseHazelStage, resolveWorkerName 
 export interface HazelUrls {
 	readonly web: string
 	readonly api: string
-	readonly rivet: string
 	readonly linkPreview: string
 }
 
@@ -56,7 +55,12 @@ export const WORKER_COMPATIBILITY_DATE = "2026-09-25"
  * Fixed `alchemy dev` ports, matching the dev URLs in the root stack (`HAZEL_API_URL` and friends),
  * so the apps find each other without per-run env.
  */
-const DEV_PORTS: Record<string, number> = { api: 3003, "bot-gateway": 3004, "link-preview": 5471, actors: 6420 }
+const DEV_PORTS: Record<string, number> = {
+	api: 3003,
+	"bot-gateway": 3004,
+	"link-preview": 5471,
+	actors: 6420,
+}
 
 export const hazelWorkerProps = (app: string, { stage }: HazelStackContext) => ({
 	name: resolveWorkerName(app, stage),

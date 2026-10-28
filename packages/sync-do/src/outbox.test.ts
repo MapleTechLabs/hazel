@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest"
-import { Effect, Fiber, Option } from "effect"
+import { Deferred, Effect, Fiber, Option } from "effect"
 import { SqlClient } from "effect/sql/SqlClient"
 import { TestClock } from "effect/testing"
 import { earliest, scheduleAlarm } from "./alarm.ts"
@@ -10,6 +10,7 @@ import {
 	drainOutbox,
 	enqueue,
 	installOutbox,
+	makeOutbox,
 	nextInboxPruneAt,
 	nextOutboxAlarm,
 	type OutboxRow,
@@ -213,6 +214,46 @@ describe("outbox", () => {
 		}).pipe(Effect.provide(t.layer))
 	})
 
+	it.effect("deliverNow sends urgent kinds past a held drain and backs off a failure once", () => {
+		const t = setup()
+		return Effect.gen(function* () {
+			const gate = yield* Deferred.make<void>()
+			const reached = yield* Deferred.make<void>()
+			const r = recorder()
+			const deliver = (row: OutboxRow) =>
+				row.target === "slow"
+					? Effect.andThen(Deferred.succeed(reached, undefined), Deferred.await(gate))
+					: r.deliver(row)
+			const outbox = makeOutbox(deliver)
+			yield* enqueue({ id: "s1", target: "slow", kind: "k", payload: null })
+			const drain = yield* Effect.forkChild(outbox.drain)
+			yield* Deferred.await(reached)
+
+			// Behind a non-urgent head of their own target, and while the drain holds the permit.
+			yield* enqueue({ id: "c0", target: "C", kind: "k", payload: null })
+			yield* enqueue({ id: "c1", target: "C", kind: "urgent", payload: null })
+			yield* enqueue({ id: "d1", target: "D", kind: "urgent", payload: null })
+			r.failing.set("D", new OutboxDeliveryError({ message: "D is down" }))
+			yield* outbox.drainIfIdle
+			expect(r.delivered).toEqual([])
+			const result = yield* outbox.deliverNow(["urgent"])
+			expect(result).toMatchObject({ delivered: 1, retried: 1 })
+			expect(r.delivered).toEqual(["c1"])
+			// The failed row waits for the drain's backoff, not the next write's deliverNow.
+			expect(outboxRows(t.storage)).toMatchObject([
+				{ id: "s1", attempts: 0 },
+				{ id: "c0", attempts: 0 },
+				{ id: "d1", attempts: 1, last_error: "D is down" },
+			])
+			r.failing.delete("D")
+			yield* outbox.deliverNow(["urgent"])
+			expect(r.delivered).toEqual(["c1"])
+
+			yield* Deferred.succeed(gate, undefined)
+			yield* Fiber.join(drain)
+		}).pipe(Effect.provide(t.layer))
+	})
+
 	it("backoff grows exponentially with jitter, capped", () => {
 		expect(backoffDelayMs(1, 0.5)).toBe(5_000)
 		expect(backoffDelayMs(2, 0.5)).toBe(10_000)
@@ -328,6 +369,76 @@ describe("synced object", () => {
 			yield* TestClock.adjust(10_000)
 			yield* object.alarm
 			expect(r.delivered).toEqual(["evt-1", "evt-2"])
+		}).pipe(Effect.provide(sqliteClientLayer(storage)))
+	})
+
+	it.effect("afterCommit delivers urgent kinds within its budget, leaving the rest pending", () => {
+		const storage = makeFakeStorage()
+		storage.db.exec(TOY_DDL)
+		const r = recorder()
+		return Effect.gen(function* () {
+			const gate = yield* Deferred.make<void>()
+			const reached = yield* Deferred.make<void>()
+			const object = makeSyncedObject({
+				storage,
+				state: makeFakeState(),
+				source: makeToySource(makeToyControls()),
+				deliver: (row) =>
+					row.target === "slow"
+						? Effect.andThen(Deferred.succeed(reached, undefined), Deferred.await(gate))
+						: r.deliver(row),
+				urgentKinds: ["urgent"],
+				urgentBudget: { rows: 2 },
+			})
+			// A drain holds the permit (another request's), so only the urgent path runs here.
+			yield* enqueue({ id: "s1", target: "slow", kind: "k", payload: null })
+			const drain = yield* Effect.forkChild(object.outbox.drain)
+			yield* Deferred.await(reached)
+			for (const id of ["u1", "u2", "u3", "u4"]) {
+				yield* enqueue({ id, target: `T-${id}`, kind: "urgent", payload: null })
+			}
+			yield* object.afterCommit
+			expect(r.delivered.length).toBe(2)
+			yield* object.afterCommit
+			expect(r.delivered.sort()).toEqual(["u1", "u2", "u3", "u4"])
+			yield* Deferred.succeed(gate, undefined)
+			yield* Fiber.join(drain)
+		}).pipe(Effect.provide(sqliteClientLayer(storage)))
+	})
+
+	it.effect("afterCommit flushes rows a delivery wrote locally", () => {
+		const storage = makeFakeStorage()
+		storage.db.exec(TOY_DDL)
+		const state = makeFakeState()
+		// A sender-side effect: delivering the row writes to this object's own tables.
+		const deliver = (row: OutboxRow) =>
+			Effect.gen(function* () {
+				const sql = yield* SqlClient
+				yield* sql`INSERT INTO projects (id, name) VALUES (${row.id}, 'Linked')`
+			}).pipe(Effect.orDie)
+		const object = makeSyncedObject({
+			storage,
+			state,
+			source: makeToySource(makeToyControls()),
+			deliver,
+		})
+		return Effect.gen(function* () {
+			const socket = makeFakeSocket()
+			yield* object.sync.adoptSocket(socket, { userId: "bob" })
+			yield* object.sync.onMessage(socket, JSON.stringify({ _tag: "Hello", since: null }))
+			socket.clear()
+
+			const sql = yield* SqlClient
+			yield* sql.withTransaction(
+				Effect.gen(function* () {
+					yield* sql`INSERT INTO projects (id, name) VALUES ('p1', 'One')`
+					yield* enqueue({ id: "p2", target: "local", kind: "k", payload: null })
+				}),
+			)
+			expect(yield* object.afterCommit).toBe(2)
+			expect(object.sync.flushedSeq()).toBe(2)
+			const commits = socket.frames().filter((frame) => frame._tag === "Commit")
+			expect(commits.map((frame) => (frame as unknown as { seq: number }).seq)).toEqual([1, 2])
 		}).pipe(Effect.provide(sqliteClientLayer(storage)))
 	})
 
