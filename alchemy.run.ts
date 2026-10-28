@@ -21,7 +21,6 @@ import {
 import { plainWithDefault } from "@hazel/infra/env"
 import { isMapleDeploy } from "@hazel/infra/maple"
 import { HazelMonitoring } from "@hazel/infra/maple-monitoring"
-import Actors from "./apps/actors/alchemy.run.ts"
 import ApiLive, { Api } from "./apps/backend/src/worker.ts"
 import BotGateway from "./apps/bot-gateway/alchemy.run.ts"
 import Landing from "./apps/landing/alchemy.run.ts"
@@ -65,7 +64,6 @@ const HazelStackLive = Layer.effect(
 			urls: {
 				web: yield* resolveUrl(domains.web, "HAZEL_WEB_URL", "http://localhost:3100"),
 				api: yield* resolveUrl(domains.api, "HAZEL_API_URL", "http://localhost:3003"),
-				rivet: yield* resolveUrl(domains.rivet, "HAZEL_RIVET_URL", "http://localhost:6420"),
 				linkPreview: yield* resolveUrl(
 					domains.linkPreview,
 					"HAZEL_LINK_PREVIEW_URL",
@@ -101,7 +99,6 @@ export default Alchemy.Stack(
 		// The Live layer registers the api Worker's Durable Object classes in its bundle.
 		const api = yield* Effect.provide(Api, ApiLive)
 		const linkPreview = yield* LinkPreview
-		const actors = yield* Actors
 		const web = yield* Web
 		// Shared marketing site: prd only (previews and dev run their own dev servers). docs.hazel.sh
 		// stays on Vercel until its DNS record is moved, so the docs site is not deployed here yet.
@@ -124,7 +121,6 @@ export default Alchemy.Stack(
 			botGatewayWorker: botGateway.workerName,
 			webWorker: web.workerName,
 			linkPreviewWorker: linkPreview.workerName,
-			actorsWorker: actors.workerName,
 			landingWorker: landing?.workerName,
 			mapleDashboard: monitoring?.dashboardId,
 			mapleAlertRules: monitoring?.alertRules,

@@ -1,11 +1,11 @@
 /**
  * Short-lived access token for what cannot carry the API's session cookie: the sync sockets
- * (`Sec-WebSocket-Protocol`) and the Rivet actors. The backend exchanges the HttpOnly session
+ * and the live message sockets (`Sec-WebSocket-Protocol`). The backend exchanges the HttpOnly session
  * cookie for an ES256 JWT at `POST /auth/token`. Requests to the API itself authenticate with
  * the cookie and need no token.
  *
  * The exchange is an Effect; the exports stay Promise functions because their callers live outside
- * any runtime (the sync hub, the Rivet connection).
+ * any runtime (the sync hub, the live sockets).
  */
 
 import { Duration, Effect, Schedule, Schema } from "effect"

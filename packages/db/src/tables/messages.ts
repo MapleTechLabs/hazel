@@ -27,7 +27,7 @@ export interface MessageEmbedBadge {
 
 /**
  * Cached snapshot of live state for non-realtime clients.
- * Synced on finalize when the actor completes.
+ * Written into the message when its live state completes or fails.
  */
 export interface MessageEmbedLiveStateCached {
 	status: "idle" | "active" | "completed" | "failed"
@@ -38,11 +38,11 @@ export interface MessageEmbedLiveStateCached {
 }
 
 /**
- * Live state configuration for messages with attached RivetKit actors.
+ * Live state configuration for messages with a `MessageLiveObject` (streamed replies).
  * Used for real-time updates like deployment status or AI streaming.
  */
 export interface MessageEmbedLiveState {
-	// Whether this message has an attached actor
+	// Whether this message streams live state
 	enabled: true
 	// Cached snapshot for non-realtime clients (synced on finalize)
 	cached?: MessageEmbedLiveStateCached

@@ -151,7 +151,6 @@ const makeHazelBotLayer = (options: {
 				botToken: BOT_TOKEN,
 				commands: options.commands ?? EmptyCommandGroup,
 				mentionable: false,
-				actorsEndpoint: "http://localhost:6420",
 				resumeOffset: "now",
 				maxConcurrentPartitions: 2,
 			}),

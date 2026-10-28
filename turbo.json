@@ -31,8 +31,7 @@
 		"OTEL_SERVICE_NAME",
 		"MAPLE_INGEST_KEY",
 		"COMMIT_SHA",
-		"OPENROUTER_API_KEY",
-		"RIVET_URL"
+		"OPENROUTER_API_KEY"
 	],
 	"globalPassThroughEnv": ["*"],
 	"ui": "tui",

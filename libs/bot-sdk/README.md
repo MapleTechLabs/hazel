@@ -17,7 +17,6 @@ bot's event log (a `BotGateway` Durable Object).
 Optional peer dependencies:
 
 - `@effect/opentelemetry` for tracing
-- `rivetkit` and `jose` for actors and AI/live-state streaming
 
 ## Installation
 

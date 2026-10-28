@@ -8,7 +8,7 @@ import { Config, Context, DateTime, Effect, Layer, Option, Redacted, Schema } fr
 import { FetchHttpClient } from "effect/http"
 
 /**
- * Short-lived access token for services on other hosts (rivet.hazel.sh).
+ * Short-lived access token for what cannot carry the session cookie (WebSockets, other hosts).
  * The browser's session cookie is host-only on api.hazel.sh, so those services can't see
  * it. The backend exchanges a valid session for this ES256 JWT; the services verify it
  * locally against the published JWKS, without a database or network call.

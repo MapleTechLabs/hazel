@@ -105,18 +105,18 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 				),
 		},
 	),
-	// `MessageLive.Provider` -> `useMessageActor`: one actor connection per live AI reply. The stream
-	// stays up while any reply is live and connects or disposes replies by id, so the others keep theirs.
+	// One live socket per streaming AI reply. The stream stays up while any reply is live and
+	// connects or closes replies by id, so the others keep theirs.
 	chatLiveReplies: entry(
-		{ messageIds: Schema.Array(MessageId) },
+		{ replies: Schema.Array(Live.LiveReply) },
 		{
-			modelToDependencies: ({ model }) => ({ messageIds: model.liveIds }),
+			modelToDependencies: ({ model }) => ({ replies: model.liveReplies }),
 			keepAliveEquivalence: (previous, next) =>
-				(previous.messageIds.length === 0) === (next.messageIds.length === 0),
-			dependenciesToStream: ({ messageIds }, readDependencies) =>
-				messageIds.length === 0
+				(previous.replies.length === 0) === (next.replies.length === 0),
+			dependenciesToStream: ({ replies }, readDependencies) =>
+				replies.length === 0
 					? Stream.empty
-					: Live.liveRepliesStream(() => readDependencies().messageIds).pipe(
+					: Live.liveRepliesStream(() => readDependencies().replies).pipe(
 							Stream.map((message) => Message.GotLiveMessage({ message })),
 						),
 		},

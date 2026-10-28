@@ -1,5 +1,5 @@
 import type { MessageEmbed } from "@hazel/domain/models"
-import { MessageId } from "@hazel/schema"
+import { ChannelId, MessageId } from "@hazel/schema"
 import { Option, Schema } from "effect"
 import { describe, expect, test } from "vitest"
 import * as Live from "./live-state"
@@ -38,10 +38,21 @@ describe("tweetViewOf", () => {
 		entities: {
 			hashtags: [{ indices: span("#world"), text: "world" }],
 			user_mentions: [{ indices: span("@hazel"), screen_name: "hazel" }],
-			urls: [{ indices: span("https://t.co/x"), display_url: "hazel.sh", expanded_url: "https://hazel.sh" }],
+			urls: [
+				{
+					indices: span("https://t.co/x"),
+					display_url: "hazel.sh",
+					expanded_url: "https://hazel.sh",
+				},
+			],
 			symbols: [],
 		},
-		user: { name: "Hazel", screen_name: "hazelchat", profile_image_url_https: "https://img", is_blue_verified: true },
+		user: {
+			name: "Hazel",
+			screen_name: "hazelchat",
+			profile_image_url_https: "https://img",
+			is_blue_verified: true,
+		},
 		favorite_count: 3,
 	}
 
@@ -69,7 +80,8 @@ describe("live state", () => {
 	const none: Live.LiveStates = {}
 	const apply = (events: ReadonlyArray<Live.LiveEvent>) =>
 		events.reduce(
-			(states, event) => Live.applyMessage(states, Live.Message.ReceivedLiveEvent({ messageId, event })),
+			(states, event) =>
+				Live.applyMessage(states, Live.Message.ReceivedLiveEvent({ messageId, event })),
 			none,
 		)[messageId]
 
@@ -90,11 +102,20 @@ describe("live state", () => {
 		const cached: ReadonlyArray<MessageEmbed.MessageEmbed> = [
 			{ liveState: { enabled: true, cached: { status: "completed", data: {}, text: "done" } } },
 		]
+		const channelId = Schema.decodeSync(ChannelId)("00000000-0000-4000-8000-000000000010")
 		const messages = [
-			{ id: messageId, embeds: streamed },
-			{ id: Schema.decodeSync(MessageId)("00000000-0000-4000-8000-000000000002"), embeds: cached },
+			{ id: messageId, channelId, embeds: streamed },
+			{
+				id: Schema.decodeSync(MessageId)("00000000-0000-4000-8000-000000000002"),
+				channelId,
+				embeds: cached,
+			},
 		]
-		expect(Live.connectedMessageIds(messages)).toEqual([messageId])
-		expect(Live.cachedLiveState(cached)).toMatchObject({ status: "completed", text: "done", progress: 100 })
+		expect(Live.connectedReplies(messages)).toEqual([{ messageId, channelId }])
+		expect(Live.cachedLiveState(cached)).toMatchObject({
+			status: "completed",
+			text: "done",
+			progress: 100,
+		})
 	})
 })
