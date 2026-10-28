@@ -5,7 +5,7 @@ import {
 	OrganizationMemberRepo,
 	OrganizationRepo,
 } from "@hazel/backend-core"
-import { Database, type PG, type schema } from "@hazel/db"
+import { Database, type SQLite, type schema } from "@hazel/db"
 import { CurrentUser, withRemapDbErrors } from "@hazel/domain"
 import {
 	Invitation,
@@ -29,7 +29,7 @@ import { InviteMailer } from "./invite-mailer"
 /** How long an invite link works. */
 const INVITATION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000
 
-type InvitationRow = PG.SelectRowOf<typeof schema.organizationInvitationsTable>
+type InvitationRow = SQLite.SelectRowOf<typeof schema.organizationInvitationsTable>
 
 const newToken = () => Base64Url.encode(crypto.getRandomValues(new Uint8Array(32)))
 

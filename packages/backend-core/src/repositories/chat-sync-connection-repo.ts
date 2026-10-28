@@ -1,4 +1,4 @@
-import { Database, PG, Repository, schema } from "@hazel/db"
+import { Database, SQLite, Repository, schema } from "@hazel/db"
 
 import { ChatSyncConnection } from "@hazel/domain/models"
 import type { IntegrationConnectionId, OrganizationId, SyncConnectionId } from "@hazel/schema"
@@ -20,7 +20,7 @@ export class ChatSyncConnectionRepo extends Context.Service<ChatSyncConnectionRe
 
 			const findByOrganization = (organizationId: OrganizationId) =>
 				db.run(
-					PG.from(schema.chatSyncConnectionsTable)
+					SQLite.from(schema.chatSyncConnectionsTable)
 						.select()
 						.where(($) => [$.organizationId.eq(organizationId), $.deletedAt.isNull()]),
 				)
@@ -31,7 +31,7 @@ export class ChatSyncConnectionRepo extends Context.Service<ChatSyncConnectionRe
 				externalWorkspaceId: string,
 			) =>
 				db.first(
-					PG.from(schema.chatSyncConnectionsTable)
+					SQLite.from(schema.chatSyncConnectionsTable)
 						.select()
 						.where(($) => [
 							$.organizationId.eq(organizationId),
@@ -44,14 +44,14 @@ export class ChatSyncConnectionRepo extends Context.Service<ChatSyncConnectionRe
 
 			const findActiveByProvider = (provider: string) =>
 				db.run(
-					PG.from(schema.chatSyncConnectionsTable)
+					SQLite.from(schema.chatSyncConnectionsTable)
 						.select()
 						.where(($) => [$.provider.eq(provider), $.status.eq("active"), $.deletedAt.isNull()]),
 				)
 
 			const findByIntegrationConnectionId = (integrationConnectionId: IntegrationConnectionId) =>
 				db.first(
-					PG.from(schema.chatSyncConnectionsTable)
+					SQLite.from(schema.chatSyncConnectionsTable)
 						.select()
 						.where(($) => [
 							$.integrationConnectionId.eq(integrationConnectionId),
@@ -66,7 +66,7 @@ export class ChatSyncConnectionRepo extends Context.Service<ChatSyncConnectionRe
 				errorMessage?: string,
 			) =>
 				db.run(
-					PG.update(schema.chatSyncConnectionsTable)
+					SQLite.update(schema.chatSyncConnectionsTable)
 						.set({
 							status,
 							errorMessage: errorMessage ?? null,
@@ -78,7 +78,7 @@ export class ChatSyncConnectionRepo extends Context.Service<ChatSyncConnectionRe
 
 			const updateLastSyncedAt = (id: SyncConnectionId) =>
 				db.run(
-					PG.update(schema.chatSyncConnectionsTable)
+					SQLite.update(schema.chatSyncConnectionsTable)
 						.set({
 							lastSyncedAt: new Date(),
 							updatedAt: new Date(),
@@ -89,7 +89,7 @@ export class ChatSyncConnectionRepo extends Context.Service<ChatSyncConnectionRe
 
 			const softDelete = (id: SyncConnectionId) =>
 				db.run(
-					PG.update(schema.chatSyncConnectionsTable)
+					SQLite.update(schema.chatSyncConnectionsTable)
 						.set({
 							deletedAt: new Date(),
 							status: "disabled",

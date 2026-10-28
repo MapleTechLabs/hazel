@@ -8,7 +8,7 @@ import {
 	OrganizationMemberRepo,
 	OrganizationRepo,
 } from "@hazel/backend-core"
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import {
 	CurrentUser,
 	InternalServerError,
@@ -167,13 +167,16 @@ export const remapGuestMountInsertConflict = <E, R>({
 function remapPermissionError<A, E, R>(
 	make: Effect.Effect<A, E, R>,
 ): Effect.Effect<A, Exclude<E, PermissionError> | UnauthorizedError, R> {
-	return Effect.catchIf(make, PermissionError.is, (err) =>
-		Effect.fail(
-			new UnauthorizedError({
-				message: err.message,
-				detail: err.requiredScope ?? "",
-			}),
-		),
+	return Effect.catchIf(
+		make,
+		(error): error is E & PermissionError => PermissionError.is(error),
+		(err) =>
+			Effect.fail(
+				new UnauthorizedError({
+					message: err.message,
+					detail: err.requiredScope ?? "",
+				}),
+			),
 	) as Effect.Effect<A, Exclude<E, PermissionError> | UnauthorizedError, R>
 }
 
@@ -220,12 +223,12 @@ export const ConnectShareRpcLive = ConnectShareRpcs.toLayer(
 						"workspace.search",
 					)
 					const results = yield* db.run(
-						PG.from(schema.organizationsTable)
+						SQLite.from(schema.organizationsTable)
 							.select("id", "name", "slug", "logoUrl")
 							.where(($) => [
 								$.deletedAt.isNull(),
 								$.isPublic.eq(true),
-								$.name.ilike(`%${query}%`).or($.slug.ilike(`%${query}%`)),
+								$.name.like(`%${query}%`).or($.slug.like(`%${query}%`)),
 							])
 							.limit(10),
 					)

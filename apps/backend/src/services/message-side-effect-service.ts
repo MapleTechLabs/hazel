@@ -1,4 +1,4 @@
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import { WorkflowInitializationError, WorkflowServiceUnavailableError } from "@hazel/domain"
 import { Array, Cause, Config, Context, Effect, Exit, Layer, Option } from "effect"
 import type {
@@ -31,7 +31,7 @@ export class MessageSideEffectService extends Context.Service<MessageSideEffectS
 				"MessageSideEffectService.resolveIntegrationBotUserId",
 			)(function* () {
 				const integrationBot = yield* db.first(
-					PG.from(schema.usersTable)
+					SQLite.from(schema.usersTable)
 						.select("id")
 						.where(($) => [$.externalId.eq("integration-bot-discord"), $.deletedAt.isNull()])
 						.limit(1),
@@ -52,7 +52,7 @@ export class MessageSideEffectService extends Context.Service<MessageSideEffectS
 									.pipe(Effect.asVoid, Effect.exit)
 
 					const channelResult = yield* db.run(
-						PG.from(schema.channelsTable)
+						SQLite.from(schema.channelsTable)
 							.select("type", "name")
 							.where(($) => [$.id.eq(payload.channelId)])
 							.limit(1),
@@ -112,8 +112,8 @@ export class MessageSideEffectService extends Context.Service<MessageSideEffectS
 				channel: Option.Option<{ name: string }>,
 			) {
 				const messageCountResult = yield* db.run(
-					PG.from(schema.messagesTable)
-						.select(() => ({ count: PG.count() }))
+					SQLite.from(schema.messagesTable)
+						.select(() => ({ count: SQLite.count() }))
 						.where(($) => [$.channelId.eq(payload.channelId), $.deletedAt.isNull()]),
 				)
 
@@ -127,7 +127,7 @@ export class MessageSideEffectService extends Context.Service<MessageSideEffectS
 				}
 
 				const originalMessage = yield* db.first(
-					PG.from(schema.messagesTable)
+					SQLite.from(schema.messagesTable)
 						.select("id")
 						.where(($) => [$.threadChannelId.eq(payload.channelId)])
 						.limit(1),

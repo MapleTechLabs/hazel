@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import { Effect, Layer, References } from "effect"
 import { ChannelAccessSyncService } from "../src/services/channel-access-sync"
 import { DatabaseLive } from "../src/services/database"
@@ -10,10 +10,10 @@ const rebuildChannelAccess = Effect.gen(function* () {
 
 	yield* Effect.logInfo("Rebuilding channel_access table")
 
-	yield* db.run(PG.deleteFrom(schema.channelAccessTable).allRows())
+	yield* db.run(SQLite.deleteFrom(schema.channelAccessTable).allRows())
 
 	const activeNonThreadChannels = yield* db.run(
-		PG.from(schema.channelsTable)
+		SQLite.from(schema.channelsTable)
 			.select("id")
 			.where(($) => [$.deletedAt.isNull(), $.type.neq("thread")]),
 	)
@@ -25,7 +25,7 @@ const rebuildChannelAccess = Effect.gen(function* () {
 	)
 
 	const threadChannels = yield* db.run(
-		PG.from(schema.channelsTable)
+		SQLite.from(schema.channelsTable)
 			.select("id")
 			.where(($) => [$.deletedAt.isNull(), $.type.eq("thread")]),
 	)
@@ -39,7 +39,7 @@ const rebuildChannelAccess = Effect.gen(function* () {
 	)
 
 	const countResult = yield* db.run(
-		PG.from(schema.channelAccessTable).select(() => ({ count: PG.count() })),
+		SQLite.from(schema.channelAccessTable).select(() => ({ count: SQLite.count() })),
 	)
 	const count = countResult[0]?.count ?? 0
 

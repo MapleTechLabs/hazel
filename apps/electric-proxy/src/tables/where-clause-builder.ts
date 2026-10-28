@@ -1,7 +1,7 @@
-import { type PG, schema } from "@hazel/db"
+import { type SQLite, schema } from "@hazel/db"
 import type { UserId } from "@hazel/schema"
 
-type AnyTable = PG.Table<string, any, any, any>
+type AnyTable = SQLite.Table<string, any, any, any>
 
 /**
  * Result of building a WHERE clause with parameterized values

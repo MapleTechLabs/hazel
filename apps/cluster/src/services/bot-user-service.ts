@@ -1,4 +1,4 @@
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import { Cluster, Integrations } from "@hazel/domain"
 import type { UserId } from "@hazel/schema"
 import { Context, Array, Effect, Layer, Option } from "effect"
@@ -41,7 +41,7 @@ export class BotUserService extends Context.Service<BotUserService>()("BotUserSe
 				// Query database
 				const results = yield* db
 					.run(
-						PG.from(schema.usersTable)
+						SQLite.from(schema.usersTable)
 							.select("id")
 							.where(($) => [$.externalId.eq(externalId)])
 							.limit(1),

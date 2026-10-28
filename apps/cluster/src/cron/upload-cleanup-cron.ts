@@ -1,5 +1,5 @@
 import * as ClusterCron from "effect/cluster/ClusterCron"
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import * as Cron from "effect/Cron"
 import * as Duration from "effect/Duration"
 import * as Effect from "effect/Effect"
@@ -25,7 +25,7 @@ export const UploadCleanupCronLayer = ClusterCron.make({
 
 		// Find and mark stale uploads as failed
 		const result = yield* db.run(
-			PG.update(schema.attachmentsTable)
+			SQLite.update(schema.attachmentsTable)
 				.set({ status: "failed" })
 				.where(($) => [$.status.eq("uploading"), $.uploadedAt.lt(cutoffTime), $.deletedAt.isNull()])
 				.returning("id"),

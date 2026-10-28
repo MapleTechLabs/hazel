@@ -75,13 +75,13 @@ export const linkIdentity = (input: ExternalIdentity & { readonly userId: string
 			Effect.gen(function* () {
 				const inserted = yield* sql<{ identityKey: string }>`
 					insert into auth_oauth_identities ("identityKey", provider, issuer, "externalSubject", "subjectId")
-					values (${key}, ${input.provider}, ${providerIssuers[input.provider]}, ${input.subject}, ${input.userId}::uuid)
+					values (${key}, ${input.provider}, ${providerIssuers[input.provider]}, ${input.subject}, ${input.userId})
 					on conflict ("identityKey") do nothing
 					returning "identityKey"`
 
 				if (inserted.length === 0) {
 					const [owner] = yield* sql<{ subjectId: string }>`
-						select "subjectId"::text as "subjectId" from auth_oauth_identities where "identityKey" = ${key}`
+						select "subjectId" from auth_oauth_identities where "identityKey" = ${key}`
 					return owner?.subjectId === input.userId
 						? ({ _tag: "AlreadyLinked" } as const)
 						: ({ _tag: "Conflict", ownerId: owner?.subjectId ?? "" } as const)
@@ -89,10 +89,10 @@ export const linkIdentity = (input: ExternalIdentity & { readonly userId: string
 
 				yield* sql`
 					insert into auth_credentials ("credentialId", "subjectId", revision, active)
-					values (${credentialId}, ${input.userId}::uuid, 'initial', true)`
+					values (${credentialId}, ${input.userId}, 'initial', true)`
 				yield* sql`
 					insert into auth_oauth_logins ("moduleId", "credentialId", "subjectId", "identityKey", "credentialRevision", status)
-					values (${oauthNamespace}, ${credentialId}, ${input.userId}::uuid, ${key}, 'initial', 'active')`
+					values (${oauthNamespace}, ${credentialId}, ${input.userId}, ${key}, 'initial', 'active')`
 				return { _tag: "Linked" } as const
 			}),
 		)
@@ -106,7 +106,7 @@ export const findUserByEmail = (email: string) =>
 	Effect.gen(function* () {
 		const sql = yield* SqlClient.SqlClient
 		const rows = yield* sql<{ id: string }>`
-			select id::text as id from users
+			select id from users
 			where lower(email) = lower(${email}) and "deletedAt" is null and "userType" = 'user'
 			limit 2`
 		return rows.length === 1 ? rows[0]!.id : undefined

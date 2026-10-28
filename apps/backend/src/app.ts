@@ -133,8 +133,8 @@ export const AllRoutes = Layer.mergeAll(
 
 /**
  * Hazel's own sign-in: the configured instance, its auth services, and the session lookup
- * the RPC and HttpApi middleware use. Inert until `AUTH_GITHUB_CLIENT_ID` is set. Needs
- * `AuthSqlConnection` (and `AuthSqlDirect` on Workers) from the entry point.
+ * the RPC and HttpApi middleware use. Inert until `AUTH_GITHUB_CLIENT_ID` is set. Needs the
+ * directory's `SqlClient` from the entry point.
  */
 export const HazelAuthLive = HazelSession.layer.pipe(
 	Layer.provideMerge(HazelAuthServicesLive),

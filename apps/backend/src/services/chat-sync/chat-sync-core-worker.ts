@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import {
 	ChannelRepo,
 	ChatSyncChannelLinkRepo,
@@ -312,7 +312,7 @@ export const ChatSyncCoreWorkerMake: Effect.Effect<Record<string, Function>, unk
 			"discordSyncWorker.listMessageAttachmentsForOutboundSync",
 		)(function* (hazelMessageId: MessageId) {
 			const rows = yield* db.run(
-				PG.from(schema.attachmentsTable)
+				SQLite.from(schema.attachmentsTable)
 					.select("id", "fileName", "fileSize")
 					.where(($) => [
 						$.messageId.eq(hazelMessageId),
@@ -918,12 +918,12 @@ export const ChatSyncCoreWorkerMake: Effect.Effect<Record<string, Function>, unk
 				}
 
 				const links = yield* db.run(
-					PG.from(schema.chatSyncMessageLinksTable, "message_link")
+					SQLite.from(schema.chatSyncMessageLinksTable, "message_link")
 						.innerJoin(
 							schema.chatSyncChannelLinksTable,
 							"channel_link",
 							(messageLink, channelLink) =>
-								PG.and(
+								SQLite.and(
 									channelLink.id.eq(messageLink.channelLinkId),
 									channelLink.syncConnectionId.eq(params.syncConnectionId),
 									channelLink.deletedAt.isNull(),
@@ -955,12 +955,12 @@ export const ChatSyncCoreWorkerMake: Effect.Effect<Record<string, Function>, unk
 				}
 
 				const links = yield* db.run(
-					PG.from(schema.chatSyncMessageLinksTable, "message_link")
+					SQLite.from(schema.chatSyncMessageLinksTable, "message_link")
 						.innerJoin(
 							schema.chatSyncChannelLinksTable,
 							"channel_link",
 							(messageLink, channelLink) =>
-								PG.and(
+								SQLite.and(
 									channelLink.id.eq(messageLink.channelLinkId),
 									channelLink.syncConnectionId.eq(params.syncConnectionId),
 									channelLink.deletedAt.isNull(),
@@ -1026,7 +1026,7 @@ export const ChatSyncCoreWorkerMake: Effect.Effect<Record<string, Function>, unk
 			const parentLink = parentLinkOption.value
 
 			const rootMessages = yield* db.run(
-				PG.from(schema.messagesTable)
+				SQLite.from(schema.messagesTable)
 					.select("id")
 					.where(($) => [$.threadChannelId.eq(params.hazelChannelId), $.deletedAt.isNull()])
 					.orderBy(($) => [
@@ -1278,9 +1278,9 @@ export const ChatSyncCoreWorkerMake: Effect.Effect<Record<string, Function>, unk
 
 			for (const link of links) {
 				const unsyncedMessages = yield* db.run(
-					PG.from(schema.messagesTable, "message")
+					SQLite.from(schema.messagesTable, "message")
 						.leftJoin(schema.chatSyncMessageLinksTable, "message_link", (message, messageLink) =>
-							PG.and(
+							SQLite.and(
 								messageLink.channelLinkId.eq(link.id),
 								messageLink.hazelMessageId.eq(message.id),
 								messageLink.deletedAt.isNull(),
@@ -1714,7 +1714,7 @@ export const ChatSyncCoreWorkerMake: Effect.Effect<Record<string, Function>, unk
 				const normalizedMessageLink = normalizeMessageLinkExternalId(messageLink)
 
 				const remainingReactions = yield* db.run(
-					PG.from(schema.messageReactionsTable)
+					SQLite.from(schema.messageReactionsTable)
 						.select("id")
 						.where(($) => [$.messageId.eq(payload.hazelMessageId), $.emoji.eq(payload.emoji)])
 						.limit(1),
@@ -1775,7 +1775,7 @@ export const ChatSyncCoreWorkerMake: Effect.Effect<Record<string, Function>, unk
 			provider: ChatSyncProvider,
 		) {
 			const targets = yield* db.run(
-				PG.from(schema.chatSyncChannelLinksTable, "channel_link")
+				SQLite.from(schema.chatSyncChannelLinksTable, "channel_link")
 					.innerJoin(schema.chatSyncConnectionsTable, "connection", (link, connection) =>
 						connection.id.eq(link.syncConnectionId),
 					)
@@ -2203,7 +2203,7 @@ export const ChatSyncCoreWorkerMake: Effect.Effect<Record<string, Function>, unk
 					if (normalizedExternalAttachments.length > 0) {
 						const uploadedAtBase = Date.now()
 						yield* db.run(
-							PG.insertInto(schema.attachmentsTable).values(
+							SQLite.insertInto(schema.attachmentsTable).values(
 								normalizedExternalAttachments.map((attachment, index) => ({
 									organizationId: connection.organizationId,
 									channelId: link.hazelChannelId,

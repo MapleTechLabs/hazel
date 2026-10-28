@@ -1,6 +1,6 @@
 import { FetchHttpClient, HttpClient, HttpClientResponse } from "effect/http"
 import { randomUUID } from "node:crypto"
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import type { ChannelId, MessageId, MessageReactionId, OrganizationId, UserId } from "@hazel/schema"
 import { Context, Effect, Layer, Result } from "effect"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
@@ -111,7 +111,7 @@ const seedMessageSideEffectState = (harness: ChatSyncDbHarness) =>
 			const db = yield* Database.Database
 
 			yield* db.run(
-				PG.insertInto(schema.organizationsTable).values({
+				SQLite.insertInto(schema.organizationsTable).values({
 					id: ORG_ID,
 					name: "Outbox Org",
 					slug: "outbox-org",
@@ -123,7 +123,7 @@ const seedMessageSideEffectState = (harness: ChatSyncDbHarness) =>
 			)
 
 			yield* db.run(
-				PG.insertInto(schema.usersTable).values([
+				SQLite.insertInto(schema.usersTable).values([
 					{
 						id: AUTHOR_ID,
 						externalId: `user-${AUTHOR_ID}`,
@@ -154,7 +154,7 @@ const seedMessageSideEffectState = (harness: ChatSyncDbHarness) =>
 			)
 
 			yield* db.run(
-				PG.insertInto(schema.channelsTable).values([
+				SQLite.insertInto(schema.channelsTable).values([
 					{
 						id: CHANNEL_ID,
 						name: "general",
@@ -208,7 +208,7 @@ const seedMessageSideEffectState = (harness: ChatSyncDbHarness) =>
 				},
 			]
 
-			yield* db.run(PG.insertInto(schema.messagesTable).values(messagesToInsert))
+			yield* db.run(SQLite.insertInto(schema.messagesTable).values(messagesToInsert))
 		}),
 	)
 

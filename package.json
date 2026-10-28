@@ -10,15 +10,18 @@
 		],
 		"catalogs": {
 			"effect": {
-				"effect": "4.0.4",
-				"@effect/platform-bun": "4.0.4",
-				"@effect/platform-browser": "4.0.4",
-				"@effect/platform-node": "4.0.4",
-				"@effect/sql-pg": "4.0.4",
-				"@effect/opentelemetry": "4.0.4",
-				"@effect/atom-react": "4.0.4",
-				"@effect/ai-openrouter": "4.0.4",
-				"@effect/vitest": "4.0.4"
+				"effect": "4.0.6",
+				"@effect/platform-bun": "4.0.6",
+				"@effect/platform-browser": "4.0.6",
+				"@effect/platform-node": "4.0.6",
+				"@effect/sql-pg": "4.0.6",
+				"@effect/sql-sqlite-node": "4.0.6",
+				"@effect/sql-sqlite-do": "4.0.6",
+				"@effect/sql-d1": "4.0.6",
+				"@effect/opentelemetry": "4.0.6",
+				"@effect/atom-react": "4.0.6",
+				"@effect/ai-openrouter": "4.0.6",
+				"@effect/vitest": "4.0.6"
 			},
 			"alchemy": {
 				"@cloudflare/workers-types": "4.20260603.1",

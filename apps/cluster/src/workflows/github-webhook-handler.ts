@@ -1,5 +1,5 @@
 import { Activity } from "effect/workflow"
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import { Cluster } from "@hazel/domain"
 import type { MessageId } from "@hazel/schema"
 import { GitHub } from "@hazel/integrations"
@@ -39,7 +39,7 @@ export const GitHubWebhookWorkflowLayer = Cluster.GitHubWebhookWorkflow.toLayer(
 
 					const subscriptions = yield* db
 						.run(
-							PG.from(schema.githubSubscriptionsTable)
+							SQLite.from(schema.githubSubscriptionsTable)
 								.select("id", "channelId", "enabledEvents", "branchFilter")
 								.where(($) => [
 									$.repositoryId.eq(payload.repositoryId),
@@ -149,7 +149,7 @@ export const GitHubWebhookWorkflowLayer = Cluster.GitHubWebhookWorkflow.toLayer(
 					for (const subscription of eligibleSubscriptions) {
 						const messageResult = yield* db
 							.run(
-								PG.insertInto(schema.messagesTable)
+								SQLite.insertInto(schema.messagesTable)
 									.values({
 										channelId: subscription.channelId,
 										authorId: botUserId,

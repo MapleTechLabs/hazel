@@ -7,14 +7,14 @@ import { ProxyAuth } from "@hazel/auth/proxy"
 import { Database } from "@hazel/db"
 import { layerKvResultPersistence } from "@hazel/effect-cloudflare/KvPersistence"
 import { cachedRecoverable } from "@hazel/infra/cached-recoverable"
-import { HAZEL_DB_BINDING, HazelStack, hazelWorkerProps, readHazelDbBinding } from "@hazel/infra/cloudflare"
+import { HAZEL_DB_BINDING, HazelStack, hazelWorkerProps } from "@hazel/infra/cloudflare"
 import { derived, merge, optionalPlain, telemetryEnv } from "@hazel/infra/env"
 import { hazelTelemetry } from "@hazel/infra/maple"
 import { forIsolate, isolateContext } from "@hazel/infra/worker-http"
 import { workerEnvLayer } from "@hazel/infra/worker-runtime"
-import type { KVNamespace } from "@cloudflare/workers-types"
+import type { D1Database, KVNamespace } from "@cloudflare/workers-types"
 import * as Cloudflare from "alchemy/Cloudflare"
-import { Config, Effect, Layer, Logger, Option, Redacted, Schema, Scope } from "effect"
+import { Config, Effect, Layer, Logger, Option, Redacted, Schema } from "effect"
 import { HttpServerRequest, HttpServerResponse } from "effect/http"
 import { electricProxyEnv, mapleObservability, ProxyCache } from "../resources.ts"
 import { AccessContextCacheService } from "./cache"
@@ -95,10 +95,12 @@ const electricUpstreamLayer = (env: Record<string, unknown>) =>
 		}),
 	)
 
+/** The directory D1 database. The proxy is removed with Electric; it reads no other store. */
+const DIRECTORY_DB_BINDING = "DIRECTORY_DB"
+
 /**
- * The per-isolate services. The database is request-scoped (`Database.layerRequestScoped` reads
- * the request's `DatabaseConnection`); the bot access-context cache is built per request too,
- * since its in-flight lookups would otherwise be shared across requests' I/O contexts.
+ * The per-isolate services. The bot access-context cache is built per request, since its
+ * in-flight lookups would otherwise be shared across requests' I/O contexts.
  */
 const isolateLayer = (env: Record<string, unknown>) =>
 	Layer.unwrap(
@@ -110,8 +112,15 @@ const isolateLayer = (env: Record<string, unknown>) =>
 					binding: PROXY_CACHE_BINDING,
 				})
 			}
+			const directory = env[DIRECTORY_DB_BINDING]
+			if (directory === undefined) {
+				return yield* new ProxyBindingError({
+					message: "The directory D1 database is not bound",
+					binding: DIRECTORY_DB_BINDING,
+				})
+			}
 			return Layer.mergeAll(ProxyAuth.layer, electricUpstreamLayer(env)).pipe(
-				Layer.provideMerge(Database.layerRequestScoped),
+				Layer.provideMerge(Database.layerD1(directory as D1Database)),
 				Layer.provideMerge(layerKvResultPersistence(kv)),
 			)
 		}),
@@ -125,7 +134,6 @@ export default class ElectricProxy extends Cloudflare.Worker<ElectricProxy>()(
 	props,
 	Effect.gen(function* () {
 		const env: Record<string, unknown> = yield* Cloudflare.WorkerEnvironment
-		const exec = yield* Cloudflare.WorkerExecutionContext
 		const isolate = isolateContext(yield* Effect.context<never>())
 
 		// Built on the first request, not in init (init also runs at plan time, where every
@@ -134,35 +142,12 @@ export default class ElectricProxy extends Cloudflare.Worker<ElectricProxy>()(
 			forIsolate(isolate)(Layer.build(isolateLayer(env))).pipe(Effect.orDie),
 		)
 
-		/** One lazily-dialed Postgres client per request, via Hyperdrive; closed after the response. */
-		const withRequestDatabase = <A, E, R>(effect: Effect.Effect<A, E, R>) => {
-			const binding = readHazelDbBinding(env)
-			// No binding: `Database.layerRequestScoped` names the missing connection on first use.
-			if (Option.isNone(binding)) return effect
-			return Effect.acquireUseRelease(
-				Scope.make(),
-				(scope) =>
-					Effect.provideServiceEffect(
-						effect,
-						Database.DatabaseConnection,
-						Database.makeRequestConnection(binding.value.connectionString).pipe(
-							Scope.provide(scope),
-							Effect.orDie,
-						),
-					),
-				// Only auth and where-clauses touch the database, so the socket closes before the
-				// (possibly long-polling) body streams; `waitUntil` keeps the close off the response.
-				(scope, exit) => exec.waitUntil(Scope.close(scope, exit)),
-			)
-		}
-
 		return {
 			fetch: Effect.gen(function* () {
 				const context = yield* services
 				const request = yield* HttpServerRequest.toWeb(yield* HttpServerRequest.HttpServerRequest)
 				const response = yield* handleRequest(request).pipe(
 					Effect.provide(AccessContextCacheService.layer, { local: true }),
-					withRequestDatabase,
 					Effect.provideContext(context),
 				)
 				// Raw passthrough: the bridge returns this Response as-is, so the body streams unbuffered.

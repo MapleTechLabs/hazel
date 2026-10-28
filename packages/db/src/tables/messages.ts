@@ -1,6 +1,6 @@
 import { ChannelId, ConnectConversationId, MessageId, MessageReactionId, UserId } from "@hazel/schema"
-import * as PG from "@maple-dev/effect-orm/postgres"
-import { jsonb, now, timestamptz, uuid, varchar } from "./columns"
+import * as SQLite from "@maple-dev/effect-orm/sqlite"
+import { jsonb, randomUuid, timestamptz, uuid, varchar } from "./columns"
 
 // Embed types for JSONB column
 export interface MessageEmbedAuthor {
@@ -63,53 +63,53 @@ export interface MessageEmbed {
 	liveState?: MessageEmbedLiveState // Live state for real-time updates
 }
 
-export const messageReactionsTable = PG.table("message_reactions", {
+export const messageReactionsTable = SQLite.table("message_reactions", {
 	columns: {
-		id: PG.column(uuid(MessageReactionId), { defaultExpr: "gen_random_uuid()" }),
+		id: SQLite.column(uuid(MessageReactionId), { defaultExpr: randomUuid }),
 		messageId: uuid(MessageId),
 		channelId: uuid(ChannelId),
-		conversationId: PG.nullable(uuid(ConnectConversationId)),
+		conversationId: SQLite.nullable(uuid(ConnectConversationId)),
 		userId: uuid(UserId),
 		emoji: varchar(50),
-		createdAt: PG.column(timestamptz, { defaultExpr: "now()" }),
+		createdAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
 	},
 	primaryKey: ["id"],
-	uniqueConstraints: [PG.unique("reactions_message_user_emoji_unique", ["messageId", "userId", "emoji"])],
 	indexes: [
-		PG.index("reactions_channel_id_idx", ["channelId"]),
-		PG.index("reactions_conversation_id_idx", ["conversationId"]),
-		PG.index("reactions_message_id_idx", ["messageId"]),
-		PG.index("reactions_user_id_idx", ["userId"]),
-		PG.index("reactions_message_user_emoji_idx", ["messageId", "userId", "emoji"]),
+		SQLite.uniqueIndex("reactions_message_user_emoji_unique", ["messageId", "userId", "emoji"]),
+		SQLite.index("reactions_channel_id_idx", ["channelId"]),
+		SQLite.index("reactions_conversation_id_idx", ["conversationId"]),
+		SQLite.index("reactions_message_id_idx", ["messageId"]),
+		SQLite.index("reactions_user_id_idx", ["userId"]),
+		SQLite.index("reactions_message_user_emoji_idx", ["messageId", "userId", "emoji"]),
 	],
 })
-export type MessageReaction = PG.SelectRowOf<typeof messageReactionsTable>
-export type NewMessageReaction = PG.InsertRowOf<typeof messageReactionsTable>
+export type MessageReaction = SQLite.SelectRowOf<typeof messageReactionsTable>
+export type NewMessageReaction = SQLite.InsertRowOf<typeof messageReactionsTable>
 
-export const messagesTable = PG.table("messages", {
+export const messagesTable = SQLite.table("messages", {
 	columns: {
-		id: PG.column(uuid(MessageId), { defaultExpr: "gen_random_uuid()" }),
+		id: SQLite.column(uuid(MessageId), { defaultExpr: randomUuid }),
 		channelId: uuid(ChannelId),
-		conversationId: PG.nullable(uuid(ConnectConversationId)),
+		conversationId: SQLite.nullable(uuid(ConnectConversationId)),
 		authorId: uuid(UserId),
-		content: PG.text,
-		embeds: PG.nullable(jsonb<MessageEmbed[]>()),
-		replyToMessageId: PG.nullable(uuid(MessageId)),
-		threadChannelId: PG.nullable(uuid(ChannelId)),
-		createdAt: PG.column(timestamptz, { defaultExpr: "now()" }),
-		updatedAt: PG.nullable(timestamptz),
-		deletedAt: PG.nullable(timestamptz),
+		content: SQLite.text,
+		embeds: SQLite.nullable(jsonb<MessageEmbed[]>()),
+		replyToMessageId: SQLite.nullable(uuid(MessageId)),
+		threadChannelId: SQLite.nullable(uuid(ChannelId)),
+		createdAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		updatedAt: SQLite.nullable(timestamptz),
+		deletedAt: SQLite.nullable(timestamptz),
 	},
 	primaryKey: ["id"],
 	indexes: [
-		PG.index("messages_channel_id_idx", ["channelId"]),
-		PG.index("messages_conversation_id_idx", ["conversationId"]),
-		PG.index("messages_author_id_idx", ["authorId"]),
-		PG.index("messages_reply_to_idx", ["replyToMessageId"]),
-		PG.index("messages_thread_channel_idx", ["threadChannelId"]),
-		PG.index("messages_created_at_idx", ["createdAt"]),
-		PG.index("messages_deleted_at_idx", ["deletedAt"]),
+		SQLite.index("messages_channel_id_idx", ["channelId"]),
+		SQLite.index("messages_conversation_id_idx", ["conversationId"]),
+		SQLite.index("messages_author_id_idx", ["authorId"]),
+		SQLite.index("messages_reply_to_idx", ["replyToMessageId"]),
+		SQLite.index("messages_thread_channel_idx", ["threadChannelId"]),
+		SQLite.index("messages_created_at_idx", ["createdAt"]),
+		SQLite.index("messages_deleted_at_idx", ["deletedAt"]),
 	],
 })
-export type Message = PG.SelectRowOf<typeof messagesTable>
-export type NewMessage = PG.InsertRowOf<typeof messagesTable>
+export type Message = SQLite.SelectRowOf<typeof messagesTable>
+export type NewMessage = SQLite.InsertRowOf<typeof messagesTable>

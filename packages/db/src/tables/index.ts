@@ -1,5 +1,5 @@
-// Every Hazel table as an effect-orm definition: the query builder reads them, and `effect-orm generate`
-// diffs them into migrations.
+// Every Hazel table as an effect-orm SQLite definition: the query builder reads them, and
+// `renderStoreSchema` (`../schema-ddl.ts`) writes their DDL.
 
 export * from "./attachments"
 export * from "./auth"
@@ -7,12 +7,14 @@ export * from "./bot-commands"
 export * from "./bot-installations"
 export * from "./bots"
 export * from "./channel-access"
+export * from "./channel-projections"
 export * from "./channel-sections"
 export * from "./channel-webhooks"
 export * from "./channels"
 export * from "./chat-sync"
 export * from "./connect"
 export * from "./custom-emojis"
+export * from "./directory-index"
 export * from "./github-subscriptions"
 export * from "./integration-connections"
 export * from "./invitations"
@@ -26,5 +28,7 @@ export * from "./pinned-messages"
 export * from "./rss-subscriptions"
 export * from "./typing-indicators"
 export * from "./user-presence-status"
+export * from "./user-organizations"
 export * from "./users"
-export { jsonb, now, timestamptz, typed, uuid, varchar } from "./columns"
+export { jsonb, now, randomUuid, textEnum, timestamptz, typed, uuid, varchar } from "./columns"
+export { extraIndexes, type ExtraIndex } from "./extra-indexes"

@@ -1,4 +1,4 @@
-import { Database, PG, Repository, schema } from "@hazel/db"
+import { Database, SQLite, Repository, schema } from "@hazel/db"
 
 import type { ChannelId, GitHubSubscriptionId, OrganizationId } from "@hazel/schema"
 import { GitHubSubscription } from "@hazel/domain/models"
@@ -21,7 +21,7 @@ export class GitHubSubscriptionRepo extends Context.Service<GitHubSubscriptionRe
 			// Find all subscriptions for a channel
 			const findByChannel = (channelId: ChannelId) =>
 				db.run(
-					PG.from(schema.githubSubscriptionsTable)
+					SQLite.from(schema.githubSubscriptionsTable)
 						.select()
 						.where(($) => [$.channelId.eq(channelId), $.deletedAt.isNull()]),
 				)
@@ -29,7 +29,7 @@ export class GitHubSubscriptionRepo extends Context.Service<GitHubSubscriptionRe
 			// Find all subscriptions for an organization
 			const findByOrganization = (organizationId: OrganizationId) =>
 				db.run(
-					PG.from(schema.githubSubscriptionsTable)
+					SQLite.from(schema.githubSubscriptionsTable)
 						.select()
 						.where(($) => [$.organizationId.eq(organizationId), $.deletedAt.isNull()]),
 				)
@@ -37,7 +37,7 @@ export class GitHubSubscriptionRepo extends Context.Service<GitHubSubscriptionRe
 			// Find subscription by channel and repository (for uniqueness check)
 			const findByChannelAndRepo = (channelId: ChannelId, repositoryId: number) =>
 				db.first(
-					PG.from(schema.githubSubscriptionsTable)
+					SQLite.from(schema.githubSubscriptionsTable)
 						.select()
 						.where(($) => [
 							$.channelId.eq(channelId),
@@ -57,7 +57,7 @@ export class GitHubSubscriptionRepo extends Context.Service<GitHubSubscriptionRe
 				},
 			) =>
 				db.run(
-					PG.update(schema.githubSubscriptionsTable)
+					SQLite.update(schema.githubSubscriptionsTable)
 						.set({
 							...(settings.enabledEvents !== undefined && {
 								enabledEvents: settings.enabledEvents,
@@ -75,7 +75,7 @@ export class GitHubSubscriptionRepo extends Context.Service<GitHubSubscriptionRe
 			// Soft delete subscription
 			const softDelete = (id: GitHubSubscriptionId) =>
 				db.run(
-					PG.update(schema.githubSubscriptionsTable)
+					SQLite.update(schema.githubSubscriptionsTable)
 						.set({
 							deletedAt: new Date(),
 							updatedAt: new Date(),

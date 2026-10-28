@@ -7,7 +7,8 @@ export class EnvVars extends Context.Service<EnvVars>()("EnvVars", {
 	make: Effect.gen(function* () {
 		return {
 			IS_DEV: yield* Config.Boolean("IS_DEV").pipe(Config.withDefault(false)),
-			DATABASE_URL: yield* Config.Redacted("DATABASE_URL"),
+			/** The local SQLite file the Bun runtime keeps every store's tables in. */
+			DATABASE_FILE: yield* Config.String("DATABASE_FILE").pipe(Config.withDefault("hazel.sqlite")),
 		} as const
 	}),
 }) {

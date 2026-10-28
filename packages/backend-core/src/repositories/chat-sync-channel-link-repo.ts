@@ -1,4 +1,4 @@
-import { Database, PG, Repository, schema } from "@hazel/db"
+import { Database, SQLite, Repository, schema } from "@hazel/db"
 
 import { ChatSyncChannelLink } from "@hazel/domain/models"
 import type { ChannelId, ExternalChannelId, SyncChannelLinkId, SyncConnectionId } from "@hazel/schema"
@@ -31,7 +31,7 @@ export class ChatSyncChannelLinkRepo extends Context.Service<ChatSyncChannelLink
 			const findById = (id: SyncChannelLinkId) =>
 				db
 					.first(
-						PG.from(schema.chatSyncChannelLinksTable)
+						SQLite.from(schema.chatSyncChannelLinksTable)
 							.select()
 							.where(($) => [$.id.eq(id), $.deletedAt.isNull()])
 							.limit(1),
@@ -41,7 +41,7 @@ export class ChatSyncChannelLinkRepo extends Context.Service<ChatSyncChannelLink
 			const findBySyncConnection = (syncConnectionId: SyncConnectionId) =>
 				db
 					.run(
-						PG.from(schema.chatSyncChannelLinksTable)
+						SQLite.from(schema.chatSyncChannelLinksTable)
 							.select()
 							.where(($) => [$.syncConnectionId.eq(syncConnectionId), $.deletedAt.isNull()]),
 					)
@@ -50,7 +50,7 @@ export class ChatSyncChannelLinkRepo extends Context.Service<ChatSyncChannelLink
 			const findActiveBySyncConnection = (syncConnectionId: SyncConnectionId) =>
 				db
 					.run(
-						PG.from(schema.chatSyncChannelLinksTable)
+						SQLite.from(schema.chatSyncChannelLinksTable)
 							.select()
 							.where(($) => [
 								$.syncConnectionId.eq(syncConnectionId),
@@ -63,7 +63,7 @@ export class ChatSyncChannelLinkRepo extends Context.Service<ChatSyncChannelLink
 			const findByHazelChannel = (syncConnectionId: SyncConnectionId, hazelChannelId: ChannelId) =>
 				db
 					.first(
-						PG.from(schema.chatSyncChannelLinksTable)
+						SQLite.from(schema.chatSyncChannelLinksTable)
 							.select()
 							.where(($) => [
 								$.syncConnectionId.eq(syncConnectionId),
@@ -80,7 +80,7 @@ export class ChatSyncChannelLinkRepo extends Context.Service<ChatSyncChannelLink
 			) =>
 				db
 					.first(
-						PG.from(schema.chatSyncChannelLinksTable)
+						SQLite.from(schema.chatSyncChannelLinksTable)
 							.select()
 							.where(($) => [
 								$.syncConnectionId.eq(syncConnectionId),
@@ -94,7 +94,7 @@ export class ChatSyncChannelLinkRepo extends Context.Service<ChatSyncChannelLink
 			const findActiveByExternalChannel = (externalChannelId: ExternalChannelId) =>
 				db
 					.run(
-						PG.from(schema.chatSyncChannelLinksTable)
+						SQLite.from(schema.chatSyncChannelLinksTable)
 							.select()
 							.where(($) => [
 								$.externalChannelId.eq(externalChannelId),
@@ -106,7 +106,7 @@ export class ChatSyncChannelLinkRepo extends Context.Service<ChatSyncChannelLink
 
 			const setActive = (id: SyncChannelLinkId, isActive: boolean) =>
 				db.run(
-					PG.update(schema.chatSyncChannelLinksTable)
+					SQLite.update(schema.chatSyncChannelLinksTable)
 						.set({
 							isActive,
 							updatedAt: new Date(),
@@ -117,7 +117,7 @@ export class ChatSyncChannelLinkRepo extends Context.Service<ChatSyncChannelLink
 
 			const updateLastSyncedAt = (id: SyncChannelLinkId) =>
 				db.run(
-					PG.update(schema.chatSyncChannelLinksTable)
+					SQLite.update(schema.chatSyncChannelLinksTable)
 						.set({
 							lastSyncedAt: new Date(),
 							updatedAt: new Date(),
@@ -131,7 +131,7 @@ export class ChatSyncChannelLinkRepo extends Context.Service<ChatSyncChannelLink
 				direction: ChatSyncChannelLink.ChatSyncDirection,
 			) =>
 				db.run(
-					PG.update(schema.chatSyncChannelLinksTable)
+					SQLite.update(schema.chatSyncChannelLinksTable)
 						.set({
 							direction,
 							updatedAt: new Date(),
@@ -142,7 +142,7 @@ export class ChatSyncChannelLinkRepo extends Context.Service<ChatSyncChannelLink
 
 			const softDelete = (id: SyncChannelLinkId) =>
 				db.run(
-					PG.update(schema.chatSyncChannelLinksTable)
+					SQLite.update(schema.chatSyncChannelLinksTable)
 						.set({
 							deletedAt: new Date(),
 							isActive: false,
@@ -154,7 +154,7 @@ export class ChatSyncChannelLinkRepo extends Context.Service<ChatSyncChannelLink
 
 			const updateSettings = (id: SyncChannelLinkId, settings: Record<string, unknown> | null) =>
 				db.run(
-					PG.update(schema.chatSyncChannelLinksTable)
+					SQLite.update(schema.chatSyncChannelLinksTable)
 						.set({
 							settings,
 							updatedAt: new Date(),

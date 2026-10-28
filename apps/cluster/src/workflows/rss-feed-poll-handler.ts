@@ -1,5 +1,5 @@
 import { Activity } from "effect/workflow"
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import { Cluster } from "@hazel/domain"
 import type { MessageId } from "@hazel/schema"
 import { Rss } from "@hazel/integrations"
@@ -78,7 +78,7 @@ export const RssFeedPollWorkflowLayer = Cluster.RssFeedPollWorkflow.toLayer(
 
 					yield* db
 						.run(
-							PG.update(schema.rssSubscriptionsTable)
+							SQLite.update(schema.rssSubscriptionsTable)
 								.set({
 									lastFetchedAt: new Date(),
 									consecutiveErrors: 0,
@@ -132,7 +132,7 @@ export const RssFeedPollWorkflowLayer = Cluster.RssFeedPollWorkflow.toLayer(
 					// Get already posted items for deduplication
 					const postedItems = yield* db
 						.run(
-							PG.from(schema.rssPostedItemsTable)
+							SQLite.from(schema.rssPostedItemsTable)
 								.select("itemGuid")
 								.where(($) => [$.subscriptionId.eq(payload.subscriptionId)]),
 						)
@@ -166,7 +166,7 @@ export const RssFeedPollWorkflowLayer = Cluster.RssFeedPollWorkflow.toLayer(
 						// Still update last fetched time (non-critical, use orDie)
 						yield* db
 							.run(
-								PG.update(schema.rssSubscriptionsTable)
+								SQLite.update(schema.rssSubscriptionsTable)
 									.set({
 										lastFetchedAt: new Date(),
 										consecutiveErrors: 0,
@@ -201,7 +201,7 @@ export const RssFeedPollWorkflowLayer = Cluster.RssFeedPollWorkflow.toLayer(
 
 						const messageResult = yield* db
 							.run(
-								PG.insertInto(schema.messagesTable)
+								SQLite.insertInto(schema.messagesTable)
 									.values({
 										channelId: payload.channelId,
 										authorId: botUserId,
@@ -234,7 +234,7 @@ export const RssFeedPollWorkflowLayer = Cluster.RssFeedPollWorkflow.toLayer(
 							// Record posted item for deduplication (non-critical)
 							yield* db
 								.run(
-									PG.insertInto(schema.rssPostedItemsTable).values({
+									SQLite.insertInto(schema.rssPostedItemsTable).values({
 										subscriptionId: payload.subscriptionId,
 										itemGuid: item.guid,
 										itemUrl: item.link || null,
@@ -258,7 +258,7 @@ export const RssFeedPollWorkflowLayer = Cluster.RssFeedPollWorkflow.toLayer(
 					const lastItem = itemsToPost[0]
 					yield* db
 						.run(
-							PG.update(schema.rssSubscriptionsTable)
+							SQLite.update(schema.rssSubscriptionsTable)
 								.set({
 									lastFetchedAt: new Date(),
 									lastItemGuid: lastItem?.guid ?? null,

@@ -1,4 +1,4 @@
-import { Database, PG, Repository, schema } from "@hazel/db"
+import { Database, SQLite, Repository, schema } from "@hazel/db"
 
 import type { OrganizationId } from "@hazel/schema"
 import { Channel } from "@hazel/domain/models"
@@ -18,7 +18,7 @@ export class ChannelRepo extends Context.Service<ChannelRepo>()("ChannelRepo", {
 
 		const findByOrgAndName = (organizationId: OrganizationId, name: string) =>
 			db.first(
-				PG.from(schema.channelsTable)
+				SQLite.from(schema.channelsTable)
 					.select()
 					.where(($) => [
 						$.organizationId.eq(organizationId),

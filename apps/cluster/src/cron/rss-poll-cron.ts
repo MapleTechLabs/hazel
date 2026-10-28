@@ -1,6 +1,6 @@
 import * as ClusterCron from "effect/cluster/ClusterCron"
 import { WorkflowEngine } from "effect/workflow"
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import { Cluster } from "@hazel/domain"
 import * as Cron from "effect/Cron"
 import * as DateTime from "effect/DateTime"
@@ -29,7 +29,7 @@ export const RssPollCronLayer = ClusterCron.make({
 		// - last fetched + polling interval <= now (or never fetched)
 		// - consecutive errors < 10 (circuit breaker)
 		const dueSubscriptions = yield* db.run(
-			PG.from(schema.rssSubscriptionsTable)
+			SQLite.from(schema.rssSubscriptionsTable)
 				.select("id", "channelId", "organizationId", "feedUrl", "pollingIntervalMinutes", "createdAt")
 				.where(($) => [
 					$.isEnabled.eq(true),
@@ -38,8 +38,8 @@ export const RssPollCronLayer = ClusterCron.make({
 					$.lastFetchedAt
 						.isNull()
 						.or(
-							PG.sql
-								.cond`${$.lastFetchedAt} + (${$.pollingIntervalMinutes} || ' minutes')::interval <= ${nowIso}`,
+							SQLite.sql
+								.cond`strftime('%Y-%m-%d %H:%M:%f', ${$.lastFetchedAt}, '+' || ${$.pollingIntervalMinutes} || ' minutes') <= strftime('%Y-%m-%d %H:%M:%f', ${nowIso})`,
 						),
 				]),
 		)
@@ -83,7 +83,7 @@ export const RssPollCronLayer = ClusterCron.make({
 								// Increment error counter
 								yield* db
 									.run(
-										PG.update(schema.rssSubscriptionsTable)
+										SQLite.update(schema.rssSubscriptionsTable)
 											.set(($) => ({
 												consecutiveErrors: $.consecutiveErrors.add(1),
 												lastErrorMessage:

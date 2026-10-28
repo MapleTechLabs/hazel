@@ -1,16 +1,11 @@
 /**
- * End-to-end over real HTTP routes and a real Postgres whose schema is pushed from
- * packages/db (effect-orm), so the library's mappings are checked against Hazel's actual
- * tables. Only GitHub's network endpoints are simulated.
- *
- * Auth storage gets a fresh, lazily-connecting client per request, exactly as on the
- * Cloudflare Worker. Set AUTH_TEST_DATABASE_URL to a disposable database to run; the
- * test drops and recreates its public schema.
+ * End-to-end over real HTTP routes and an in-memory SQLite database migrated from
+ * packages/db, so the library's mappings are checked against Hazel's actual tables. Only
+ * GitHub's network endpoints are simulated.
  */
-import { migrateUrl } from "@hazel/db/migrate"
 import * as NodeHttpPlatform from "@effect/platform-node/NodeHttpPlatform"
 import * as NodeServices from "@effect/platform-node/NodeServices"
-import { PgClient } from "@effect/sql-pg"
+import { layerMemory } from "@hazel/db/node"
 import { BrowserLogin, Hooks } from "@yielded/auth"
 import { Context, Effect, Exit, Layer, Redacted, References, Scope } from "effect"
 import { Base64Url } from "effect/encoding"
@@ -32,9 +27,7 @@ import { layerVault, makeDesktopAuth } from "./desktop-client.ts"
 import { makeDesktopLoginRoutes } from "./desktop-login.ts"
 import { CryptoLive, type HazelAuthConfig, makeHazelAuthLive } from "./server.ts"
 import { identityKey, linkIdentity } from "./identities.ts"
-import { AuthSqlConnection, makeRequestConnection } from "./sql.ts"
 
-const DATABASE_URL = process.env.AUTH_TEST_DATABASE_URL
 const origin = "http://localhost:3003"
 const webOrigin = "http://localhost:3000"
 
@@ -75,11 +68,13 @@ const FakeGitHub = Layer.succeed(
 	),
 )
 
-describe.skipIf(DATABASE_URL === undefined)("Hazel auth on Postgres", () => {
-	const url = Redacted.make(DATABASE_URL ?? "")
-	const TestSql = PgClient.layer({ url })
+describe("Hazel auth on SQLite", () => {
+	// One database for the whole suite: the routes and the assertions share it.
+	const databaseScope = Effect.runSync(Scope.make())
+	const database = Effect.runSync(Layer.buildWithScope(layerMemory, databaseScope))
+	const TestSql = Layer.succeedContext(database)
 	const query = <A>(effect: Effect.Effect<A, unknown, SqlClient.SqlClient>) =>
-		Effect.runPromise(effect.pipe(Effect.provide(TestSql)))
+		Effect.runPromise(effect.pipe(Effect.provideContext(database)))
 
 	const config = {
 		origin,
@@ -140,55 +135,34 @@ describe.skipIf(DATABASE_URL === undefined)("Hazel auth on Postgres", () => {
 		Layer.provide(FakeGitHub),
 		Layer.provide(Hooks.LifecycleHooks.empty),
 		Layer.provide([NodeServices.layer, NodeHttpPlatform.layer, Etag.layer]),
+		Layer.provide(TestSql),
 	)
 
 	let web: ReturnType<typeof HttpRouter.toWebHandler>
-	let connectionsOpened = 0
 
-	/** Each request gets its own lazily-connecting auth client, closed after the response. */
 	const send = async (request: Request): Promise<Response> => {
-		const scope = Effect.runSync(Scope.make())
-		const connection = await Effect.runPromise(
-			makeRequestConnection(url, scope).pipe(
-				Effect.map((connection) => ({
-					client: connection.client.pipe(Effect.tap(() => Effect.sync(() => connectionsOpened++))),
-				})),
-			),
+		const handler = web.handler as (
+			request: Request,
+			context: Context.Context<never>,
+		) => Promise<Response>
+		const response = await handler(
+			request,
+			Context.make(
+				References.MinimumLogLevel,
+				process.env.DEBUG_AUTH ? "Debug" : "Info",
+			) as Context.Context<never>,
 		)
-		try {
-			const handler = web.handler as (
-				request: Request,
-				context: Context.Context<never>,
-			) => Promise<Response>
-			const response = await handler(
-				request,
-				Context.make(AuthSqlConnection, connection).pipe(
-					Context.add(References.MinimumLogLevel, process.env.DEBUG_AUTH ? "Debug" : "Info"),
-				) as Context.Context<never>,
-			)
-			// Buffer the body so the request's connection can close.
-			const body = await response.arrayBuffer()
-			return new Response(response.status === 204 || response.status === 303 ? null : body, response)
-		} finally {
-			await Effect.runPromise(Scope.close(scope, Exit.void))
-		}
+		const body = await response.arrayBuffer()
+		return new Response(response.status === 204 || response.status === 303 ? null : body, response)
 	}
 
-	beforeAll(async () => {
-		await query(
-			Effect.gen(function* () {
-				const sql = yield* SqlClient.SqlClient
-				yield* sql.unsafe(`DROP SCHEMA public CASCADE`)
-				yield* sql.unsafe(`CREATE SCHEMA public`)
-			}),
-		)
-		// The real schema, exactly as deployed.
-		await Effect.runPromise(migrateUrl(DATABASE_URL!))
+	beforeAll(() => {
 		web = HttpRouter.toWebHandler(App, { disableLogger: true })
-	}, 120_000)
+	})
 
 	afterAll(async () => {
 		await web?.dispose()
+		await Effect.runPromise(Scope.close(databaseScope, Exit.void))
 	})
 
 	const jar = () => {
@@ -274,15 +248,15 @@ describe.skipIf(DATABASE_URL === undefined)("Hazel auth on Postgres", () => {
 					externalId: string
 					email: string
 					userType: string
-					isOnboarded: boolean
-				}>`select "externalId", email, "userType", "isOnboarded" from users where id = ${me.userId}::uuid`
+					isOnboarded: number
+				}>`select "externalId", email, "userType", "isOnboarded" from users where id = ${me.userId}`
 			}),
 		)
 		expect(user).toEqual({
 			externalId: `hazel:${me.userId}`,
 			email: "octo4242@example.com",
 			userType: "user",
-			isOnboarded: false,
+			isOnboarded: 0,
 		})
 	}, 60_000)
 
@@ -314,22 +288,6 @@ describe.skipIf(DATABASE_URL === undefined)("Hazel auth on Postgres", () => {
 		const ok = await verify(browser.cookies.get(sessionCookieName)!)
 		expect(ok.status).toBe(200)
 		expect((await verify("nope")).status).toBe(401)
-	}, 60_000)
-
-	test("storage only uses the request's connection", async () => {
-		githubUserId = 4242
-		const opened = connectionsOpened
-		const browser = jar()
-		await signInWithGitHub(browser)
-		expect((await call(browser, "GET", "/me")).status).toBe(200)
-		expect(connectionsOpened).toBeGreaterThan(opened)
-	}, 60_000)
-
-	test("requests that never touch auth storage open no database connection", async () => {
-		const opened = connectionsOpened
-		const response = await send(new Request(`${origin}/me`, { headers: { origin: webOrigin } }))
-		expect(response.status).toBe(401)
-		expect(connectionsOpened).toBe(opened)
 	}, 60_000)
 
 	test("signed-in user can begin passkey enrollment", async () => {
@@ -391,7 +349,7 @@ describe.skipIf(DATABASE_URL === undefined)("Hazel auth on Postgres", () => {
 				const [row] = yield* sql<{ id: string }>`
 					insert into users ("externalId", email, "firstName", "lastName", "isOnboarded")
 					values (${`user_${crypto.randomUUID()}`}, ${email}, 'Clerk', 'User', true)
-					returning id::text as id`
+					returning id`
 				return row!.id
 			}),
 		)

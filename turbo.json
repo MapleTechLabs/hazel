@@ -58,9 +58,6 @@
 			"cache": false,
 			"dependsOn": ["^setup"]
 		},
-		"db:migrate": {
-			"cache": false
-		},
 		"dev": {
 			"persistent": true,
 			"cache": false

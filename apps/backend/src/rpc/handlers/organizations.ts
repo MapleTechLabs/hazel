@@ -23,23 +23,21 @@ const isSlugTaken = (error: unknown): error is Database.DatabaseError =>
 	error.type === "unique_violation" &&
 	error.constraint === "organizations_slug_unique"
 
-const slugTaken = (error: Database.DatabaseError) => {
-	const slug = error.detail?.match(/Key \(slug\)=\(([^)]+)\)/)?.[1] ?? "unknown"
-	return new OrganizationSlugAlreadyExistsError({
+const slugTaken = (slug: string) =>
+	new OrganizationSlugAlreadyExistsError({
 		message: `Organization slug '${slug}' is already taken`,
 		slug,
 	})
-}
 
 /**
  * `withRemapDbErrors` for organization writes, except that a duplicate slug becomes
  * `OrganizationSlugAlreadyExistsError`.
  */
 const handleOrganizationDbErrors =
-	(entityType: string, action: "update" | "create") =>
+	(entityType: string, action: "update" | "create", slug: string | null | undefined) =>
 	<A, E, R>(effect: Effect.Effect<A, E, R>) =>
 		effect.pipe(
-			Effect.mapError((error) => (isSlugTaken(error) ? slugTaken(error) : error)),
+			Effect.mapError((error) => (isSlugTaken(error) ? slugTaken(slug ?? "unknown") : error)),
 			withRemapDbErrors(entityType, action),
 		)
 
@@ -133,7 +131,7 @@ export const OrganizationRpcLive = OrganizationRpcs.toLayer(
 							})
 						}),
 					)
-				}).pipe(handleOrganizationDbErrors("Organization", "create")),
+				}).pipe(handleOrganizationDbErrors("Organization", "create", payload.slug)),
 
 			"organization.update": ({ id, ...payload }) =>
 				db
@@ -159,7 +157,7 @@ export const OrganizationRpcLive = OrganizationRpcs.toLayer(
 							})
 						}),
 					)
-					.pipe(handleOrganizationDbErrors("Organization", "update")),
+					.pipe(handleOrganizationDbErrors("Organization", "update", payload.slug)),
 
 			"organization.delete": ({ id }) =>
 				db
@@ -198,7 +196,7 @@ export const OrganizationRpcLive = OrganizationRpcs.toLayer(
 							})
 						}),
 					)
-					.pipe(handleOrganizationDbErrors("Organization", "update")),
+					.pipe(handleOrganizationDbErrors("Organization", "update", slug)),
 
 			"organization.setPublicMode": ({ id, isPublic }) =>
 				db

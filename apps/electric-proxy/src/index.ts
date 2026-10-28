@@ -1,11 +1,12 @@
 /**
- * The Bun entry: a long-running server with a Postgres pool and Redis-backed caches. Kept for
+ * The Bun entry: a long-running server with a local SQLite file and Redis-backed caches. Kept for
  * local `bun run dev`, the e2e suite and the legacy Railway deployment until the DNS cutover to
  * the Cloudflare Worker (`worker.ts`), which serves the same {@link handleRequest}.
  */
 import { BunRuntime } from "@effect/platform-bun"
 import { ProxyAuth } from "@hazel/auth/proxy"
 import { Database } from "@hazel/db"
+import { layerFile } from "@hazel/db/node"
 import { ConfigProvider, Effect, Layer, Logger, Redacted } from "effect"
 import { type AccessContextCacheService, AccessContextCacheService as AccessContextCache } from "./cache"
 import { RedisPersistenceLive } from "./cache/redis-persistence"
@@ -22,10 +23,7 @@ const DatabaseLive = Layer.unwrap(
 	Effect.gen(function* () {
 		const config = yield* ProxyConfigService
 		yield* Effect.log("Connecting to database", { isDev: config.isDev })
-		return Database.layer({
-			url: config.databaseUrl,
-			ssl: !config.isDev,
-		})
+		return layerFile(config.databaseFile)
 	}),
 )
 

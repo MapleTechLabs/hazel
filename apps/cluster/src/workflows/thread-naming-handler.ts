@@ -1,6 +1,6 @@
 import { AiError, LanguageModel } from "effect/ai"
 import { Activity } from "effect/workflow"
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import { Cluster } from "@hazel/domain"
 import { Effect } from "effect"
 
@@ -40,7 +40,7 @@ export const ThreadNamingWorkflowLayer = Cluster.ThreadNamingWorkflow.toLayer(
 
 					const threadChannel = yield* db
 						.run(
-							PG.from(schema.channelsTable)
+							SQLite.from(schema.channelsTable)
 								.select("id", "name", "parentChannelId")
 								.where(($) => [$.id.eq(payload.threadChannelId)])
 								.limit(1),
@@ -70,7 +70,7 @@ export const ThreadNamingWorkflowLayer = Cluster.ThreadNamingWorkflow.toLayer(
 					// Get original message (the one with threadChannelId pointing to this thread)
 					const originalMessage = yield* db
 						.run(
-							PG.from(schema.messagesTable, "m")
+							SQLite.from(schema.messagesTable, "m")
 								.innerJoin(schema.usersTable, "u", (m, u) => m.authorId.eq(u.id))
 								.select(($) => ({
 									id: $.id,
@@ -109,7 +109,7 @@ export const ThreadNamingWorkflowLayer = Cluster.ThreadNamingWorkflow.toLayer(
 					// Get thread messages (messages in the thread channel)
 					const threadMessages = yield* db
 						.run(
-							PG.from(schema.messagesTable, "m")
+							SQLite.from(schema.messagesTable, "m")
 								.innerJoin(schema.usersTable, "u", (m, u) => m.authorId.eq(u.id))
 								.select(($) => ({
 									id: $.id,
@@ -271,7 +271,7 @@ export const ThreadNamingWorkflowLayer = Cluster.ThreadNamingWorkflow.toLayer(
 
 					yield* db
 						.run(
-							PG.update(schema.channelsTable)
+							SQLite.update(schema.channelsTable)
 								.set({
 									name: nameResult.threadName,
 									updatedAt: new Date(),

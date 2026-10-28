@@ -1,8 +1,8 @@
 /**
  * Bot token authentication for the gateway Worker: the same SHA-256 token-hash lookup the Bun
- * gateway did, through Hyperdrive with a connection opened for this one lookup (a Worker's TCP
- * socket belongs to the invocation that opened it).
+ * gateway did, against the directory D1 database (where `bots` lives).
  */
+import type { D1Database } from "@cloudflare/workers-types"
 import { BotRepo } from "@hazel/backend-core/repositories"
 import { Database } from "@hazel/db"
 import { Effect, Layer, Option } from "effect"
@@ -13,8 +13,8 @@ export const hashBotToken = async (token: string): Promise<string> => {
 	return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")
 }
 
-/** Look a bot up by token; `connectionString` is the Hyperdrive binding's. */
-export const authenticateBotToken = (token: string, connectionString: string): Effect.Effect<AuthResult> =>
+/** Look a bot up by token in the directory database. */
+export const authenticateBotToken = (token: string, directory: D1Database): Effect.Effect<AuthResult> =>
 	Effect.gen(function* () {
 		const tokenHash = yield* Effect.promise(() => hashBotToken(token))
 		const repo = yield* BotRepo
@@ -27,12 +27,6 @@ export const authenticateBotToken = (token: string, connectionString: string): E
 		Effect.catchTag("DatabaseError", (error) =>
 			Effect.succeed<AuthResult>({ _tag: "Unavailable", reason: `bot lookup failed: ${error.type}` }),
 		),
-		Effect.provide(BotRepo.layer.pipe(Layer.provide(Database.layerRequestScoped))),
-		Effect.provide(
-			Layer.effect(
-				Database.DatabaseConnection,
-				Database.makeRequestConnection(connectionString).pipe(Effect.orDie),
-			),
-		),
+		Effect.provide(BotRepo.layer.pipe(Layer.provide(Database.layerD1(directory)))),
 		Effect.withSpan("BotGateway.authenticate"),
 	)

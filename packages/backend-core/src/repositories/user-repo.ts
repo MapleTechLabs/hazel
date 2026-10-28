@@ -1,4 +1,4 @@
-import { Database, PG, Repository, schema } from "@hazel/db"
+import { Database, SQLite, Repository, schema } from "@hazel/db"
 
 import type { UserId } from "@hazel/schema"
 import { User } from "@hazel/domain/models"
@@ -22,7 +22,7 @@ export class UserRepo extends Context.Service<UserRepo>()("UserRepo", {
 
 		const findByExternalId = (externalId: string) =>
 			db.first(
-				PG.from(schema.usersTable)
+				SQLite.from(schema.usersTable)
 					.select()
 					.where(($) => [$.externalId.eq(externalId)])
 					.limit(1),
@@ -39,7 +39,7 @@ export class UserRepo extends Context.Service<UserRepo>()("UserRepo", {
 		) =>
 			db
 				.run(
-					PG.insertInto(schema.usersTable)
+					SQLite.insertInto(schema.usersTable)
 						.values({
 							externalId: data.externalId,
 							email: data.email,
@@ -68,14 +68,14 @@ export class UserRepo extends Context.Service<UserRepo>()("UserRepo", {
 
 		const findAllActive = () =>
 			db.run(
-				PG.from(schema.usersTable)
+				SQLite.from(schema.usersTable)
 					.select()
 					.where(($) => [$.deletedAt.isNull()]),
 			)
 
 		const softDelete = (id: UserId) =>
 			db.run(
-				PG.update(schema.usersTable)
+				SQLite.update(schema.usersTable)
 					.set({ deletedAt: new Date() })
 					.where(($) => [$.id.eq(id), $.deletedAt.isNull()]),
 			)

@@ -5,7 +5,7 @@ import {
 	OrganizationMemberRepo,
 	UserRepo,
 } from "@hazel/backend-core"
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import {
 	CurrentUser,
 	DmChannelAlreadyExistsError,
@@ -409,7 +409,7 @@ export const ChannelRpcLive = ChannelRpcs.toLayer(
 
 							// 4. Link message to thread (direct SQL update to bypass schema restrictions)
 							yield* db.run(
-								PG.update(schema.messagesTable)
+								SQLite.update(schema.messagesTable)
 									.set({ threadChannelId: createdChannel.id })
 									.where(($) => [$.id.eq(messageId)]),
 							)
@@ -446,7 +446,7 @@ export const ChannelRpcLive = ChannelRpcs.toLayer(
 
 					const originalMessage = yield* db
 						.first(
-							PG.from(schema.messagesTable)
+							SQLite.from(schema.messagesTable)
 								.select("id")
 								.where(($) => [$.threadChannelId.eq(channelId)])
 								.limit(1),

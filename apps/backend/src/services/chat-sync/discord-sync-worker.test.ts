@@ -126,7 +126,7 @@ type WorkerLayerDeps = {
 	databaseRun?: (query: unknown) => Effect.Effect<unknown, unknown, never>
 }
 
-/** The rows of a `PG.insertInto(...).values(rows)` the worker handed to `db.run`, if it was an insert. */
+/** The rows of a `SQLite.insertInto(...).values(rows)` the worker handed to `db.run`, if it was an insert. */
 const insertedRows = (query: unknown): Array<any> | undefined =>
 	typeof query === "object" &&
 	query !== null &&

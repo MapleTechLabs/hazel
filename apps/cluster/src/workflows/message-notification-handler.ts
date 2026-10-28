@@ -1,5 +1,5 @@
 import { Activity } from "effect/workflow"
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import { Cluster } from "@hazel/domain"
 import type { ChannelMemberId, NotificationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { Array, Effect, Option, Result } from "effect"
@@ -99,7 +99,7 @@ export const MessageNotificationWorkflowLayer = Cluster.MessageNotificationWorkf
 
 						const channelMembers = yield* db
 							.run(
-								PG.from(schema.channelMembersTable)
+								SQLite.from(schema.channelMembersTable)
 									.leftJoin(schema.userPresenceStatusTable, "presence", (cm, presence) =>
 										presence.userId.eq(cm.userId),
 									)
@@ -109,13 +109,13 @@ export const MessageNotificationWorkflowLayer = Cluster.MessageNotificationWorkf
 										$.isMuted.eq(false),
 										$.userId.neq(payload.authorId),
 										$.deletedAt.isNull(),
-										PG.or(
+										SQLite.or(
 											// No presence record - send notification
 											$.presence.userId.isNull(),
 											// Has presence record - check suppressNotifications and activeChannel/status
-											PG.and(
+											SQLite.and(
 												$.presence.suppressNotifications.eq(false),
-												PG.or(
+												SQLite.or(
 													$.presence.activeChannelId.isNull(),
 													$.presence.activeChannelId.neq(payload.channelId),
 													$.presence.status.neq("online"),
@@ -160,7 +160,7 @@ export const MessageNotificationWorkflowLayer = Cluster.MessageNotificationWorkf
 					if (payload.replyToMessageId) {
 						const replyToMessage = yield* db
 							.run(
-								PG.from(schema.messagesTable)
+								SQLite.from(schema.messagesTable)
 									.select("authorId")
 									.where(($) => [$.id.eq(payload.replyToMessageId!)])
 									.limit(1),
@@ -205,7 +205,7 @@ export const MessageNotificationWorkflowLayer = Cluster.MessageNotificationWorkf
 					// Query only the members who should be notified
 					const channelMembers = yield* db
 						.run(
-							PG.from(schema.channelMembersTable)
+							SQLite.from(schema.channelMembersTable)
 								.leftJoin(schema.userPresenceStatusTable, "presence", (cm, presence) =>
 									presence.userId.eq(cm.userId),
 								)
@@ -215,13 +215,13 @@ export const MessageNotificationWorkflowLayer = Cluster.MessageNotificationWorkf
 									$.userId.in_(...uniqueUsersToNotify),
 									$.isMuted.eq(false),
 									$.deletedAt.isNull(),
-									PG.or(
+									SQLite.or(
 										// No presence record - send notification
 										$.presence.userId.isNull(),
 										// Has presence record - check suppressNotifications and activeChannel/status
-										PG.and(
+										SQLite.and(
 											$.presence.suppressNotifications.eq(false),
-											PG.or(
+											SQLite.or(
 												$.presence.activeChannelId.isNull(),
 												$.presence.activeChannelId.neq(payload.channelId),
 												$.presence.status.neq("online"),
@@ -290,7 +290,7 @@ export const MessageNotificationWorkflowLayer = Cluster.MessageNotificationWorkf
 					)
 					const orgMembers = yield* db
 						.run(
-							PG.from(schema.organizationMembersTable)
+							SQLite.from(schema.organizationMembersTable)
 								.innerJoin(schema.channelsTable, "c", (om, c) =>
 									c.organizationId.eq(om.organizationId),
 								)
@@ -328,7 +328,7 @@ export const MessageNotificationWorkflowLayer = Cluster.MessageNotificationWorkf
 
 					const insertedNotifications = yield* db
 						.run(
-							PG.insertInto(schema.notificationsTable)
+							SQLite.insertInto(schema.notificationsTable)
 								.values(values)
 								.onConflictDoNothing()
 								.returning("id", "memberId"),
@@ -354,7 +354,7 @@ export const MessageNotificationWorkflowLayer = Cluster.MessageNotificationWorkf
 					if (insertedChannelMemberIds.length > 0) {
 						yield* db
 							.run(
-								PG.update(schema.channelMembersTable)
+								SQLite.update(schema.channelMembersTable)
 									.set(($) => ({
 										notificationCount: $.notificationCount.add(1),
 									}))

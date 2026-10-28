@@ -1,4 +1,4 @@
-import { Database, PG, Repository, schema } from "@hazel/db"
+import { Database, SQLite, Repository, schema } from "@hazel/db"
 
 import type { OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { OrganizationMember } from "@hazel/domain/models"
@@ -26,7 +26,7 @@ export class OrganizationMemberRepo extends Context.Service<OrganizationMemberRe
 
 			const findByOrgAndUser = (organizationId: OrganizationId, userId: UserId) =>
 				db.first(
-					PG.from(schema.organizationMembersTable)
+					SQLite.from(schema.organizationMembersTable)
 						.select()
 						.where(($) => [
 							$.organizationId.eq(organizationId),
@@ -40,7 +40,7 @@ export class OrganizationMemberRepo extends Context.Service<OrganizationMemberRe
 				// Atomic upsert using onConflictDoUpdate to avoid race conditions
 				db
 					.run(
-						PG.insertInto(schema.organizationMembersTable)
+						SQLite.insertInto(schema.organizationMembersTable)
 							.values({
 								organizationId: data.organizationId,
 								userId: data.userId,
@@ -63,7 +63,7 @@ export class OrganizationMemberRepo extends Context.Service<OrganizationMemberRe
 
 			const findAllByOrganization = (organizationId: OrganizationId) =>
 				db.run(
-					PG.from(schema.organizationMembersTable)
+					SQLite.from(schema.organizationMembersTable)
 						.select()
 						.where(($) => [$.organizationId.eq(organizationId), $.deletedAt.isNull()]),
 				)
@@ -71,29 +71,29 @@ export class OrganizationMemberRepo extends Context.Service<OrganizationMemberRe
 			const countByOrganization = (organizationId: OrganizationId) =>
 				db
 					.run(
-						PG.from(schema.organizationMembersTable)
-							.select(() => ({ count: PG.count() }))
+						SQLite.from(schema.organizationMembersTable)
+							.select(() => ({ count: SQLite.count() }))
 							.where(($) => [$.organizationId.eq(organizationId), $.deletedAt.isNull()]),
 					)
 					.pipe(Effect.map((results) => results[0]?.count ?? 0))
 
 			const findAllActive = () =>
 				db.run(
-					PG.from(schema.organizationMembersTable)
+					SQLite.from(schema.organizationMembersTable)
 						.select()
 						.where(($) => [$.deletedAt.isNull()]),
 				)
 
 			const softDelete = (id: OrganizationMemberId) =>
 				db.run(
-					PG.update(schema.organizationMembersTable)
+					SQLite.update(schema.organizationMembersTable)
 						.set({ deletedAt: new Date() })
 						.where(($) => [$.id.eq(id), $.deletedAt.isNull()]),
 				)
 
 			const softDeleteByOrgAndUser = (organizationId: OrganizationId, userId: UserId) =>
 				db.run(
-					PG.update(schema.organizationMembersTable)
+					SQLite.update(schema.organizationMembersTable)
 						.set({ deletedAt: new Date() })
 						.where(($) => [
 							$.organizationId.eq(organizationId),
@@ -104,7 +104,7 @@ export class OrganizationMemberRepo extends Context.Service<OrganizationMemberRe
 
 			const updateMetadata = (id: OrganizationMemberId, metadata: Record<string, any>) =>
 				db.first(
-					PG.update(schema.organizationMembersTable)
+					SQLite.update(schema.organizationMembersTable)
 						.set({ metadata })
 						.where(($) => [$.id.eq(id), $.deletedAt.isNull()])
 						.returning(),

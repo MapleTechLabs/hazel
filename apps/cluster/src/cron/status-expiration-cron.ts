@@ -1,5 +1,5 @@
 import * as ClusterCron from "effect/cluster/ClusterCron"
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import * as Cron from "effect/Cron"
 import * as Duration from "effect/Duration"
 import * as Effect from "effect/Effect"
@@ -21,7 +21,7 @@ export const StatusExpirationCronLayer = ClusterCron.make({
 
 		// Find users with expired statuses
 		const expiredStatuses = yield* db.run(
-			PG.from(schema.userPresenceStatusTable)
+			SQLite.from(schema.userPresenceStatusTable)
 				.select("userId", "statusEmoji", "customMessage", "statusExpiresAt")
 				.where(($) => [$.statusExpiresAt.isNotNull(), $.statusExpiresAt.lt(now)]),
 		)
@@ -37,7 +37,7 @@ export const StatusExpirationCronLayer = ClusterCron.make({
 		// Clear expired statuses by setting emoji, message, and expiration to null
 		const userIds = expiredStatuses.map((s) => s.userId)
 		yield* db.run(
-			PG.update(schema.userPresenceStatusTable)
+			SQLite.update(schema.userPresenceStatusTable)
 				.set({
 					statusEmoji: null,
 					customMessage: null,

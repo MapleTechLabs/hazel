@@ -3,7 +3,6 @@
  * `worker.ts`. See infra/cloudflare-migration-plan.md.
  */
 import { BunHttpServer, BunRuntime, BunSocket } from "@effect/platform-bun"
-import { layerPool as authSqlPool } from "@hazel/auth/server"
 import { Redis, RedisResultPersistenceLive } from "@hazel/effect-bun"
 import { createTracingLayer } from "@hazel/effect-bun/Telemetry"
 import { Config, ConfigProvider, Effect, Layer } from "effect"
@@ -14,7 +13,6 @@ import { BotGatewayTransport } from "./services/bot-gateway-transport"
 import { DiscordGatewayBackgroundLive } from "./services/chat-sync/discord-gateway-service"
 import { EnvVars } from "./lib/env-vars"
 import { DatabaseLive } from "./services/database"
-import { MessageOutboxDispatcher } from "./services/message-outbox-dispatcher"
 import { RateLimiterRedisLive } from "./services/rate-limiter-redis"
 
 export { HazelApi }
@@ -27,18 +25,12 @@ const TracerLive = createTracingLayer("api")
 // ResultPersistence layer for session caching (uses Redis backing)
 const PersistenceLive = RedisResultPersistenceLive.pipe(Layer.provide(Redis.Default))
 
-/** Auth storage's own Postgres pool (Effect SQL; the rest of the backend uses Drizzle). */
-const AuthSqlLive = Layer.unwrap(
-	Effect.map(Effect.service(EnvVars), (env) => authSqlPool(env.DATABASE_URL, { ssl: !env.IS_DEV })),
-).pipe(Layer.provide(EnvVars.layer))
-
 /**
- * Bun's platform services: a pooled database, Redis-backed caches and rate limits, and bot gateway
+ * Bun's platform services: a SQLite file (whose `SqlClient` auth storage uses), Redis-backed caches and rate limits, and bot gateway
  * events appended to the Durable Streams server the Bun bot gateway reads.
  */
 const PlatformLive = Layer.mergeAll(
 	DatabaseLive,
-	AuthSqlLive,
 	PersistenceLive,
 	Redis.Default,
 	RateLimiterRedisLive,
@@ -48,10 +40,7 @@ const PlatformLive = Layer.mergeAll(
 )
 
 /** Long-running loops; on Cloudflare these are Durable Objects driven by crons. */
-const BackgroundLive = Layer.mergeAll(
-	DiscordGatewayBackgroundLive.pipe(Layer.provide(BunSocket.layerWebSocketConstructor)),
-	MessageOutboxDispatcher.layer,
-)
+const BackgroundLive = DiscordGatewayBackgroundLive.pipe(Layer.provide(BunSocket.layerWebSocketConstructor))
 
 const MainLive = Layer.mergeAll(AppServicesLive, BackgroundLive).pipe(
 	Layer.provideMerge(PlatformLive),

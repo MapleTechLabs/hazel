@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "node:crypto"
 import { HttpApiBuilder } from "effect/http-api"
 import { HttpServerRequest } from "effect/http"
 import { ChannelRepo, ChannelWebhookRepo, OrganizationMemberRepo } from "@hazel/backend-core"
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import { CurrentUser, InternalServerError, UnauthorizedError } from "@hazel/domain"
 import {
 	ApiV1ChannelNotFoundError,
@@ -72,7 +72,7 @@ export const HttpApiV1IntegrationsLive = HttpApiBuilder.group(HazelApi, "api-v1-
 
 					const rows = yield* db
 						.run(
-							PG.from(schema.organizationMembersTable)
+							SQLite.from(schema.organizationMembersTable)
 								.innerJoin(schema.organizationsTable, "o", (om, o) =>
 									o.id.eq(om.organizationId),
 								)
@@ -137,7 +137,7 @@ export const HttpApiV1IntegrationsLive = HttpApiBuilder.group(HazelApi, "api-v1-
 
 					const rows = yield* db
 						.run(
-							PG.from(schema.channelsTable)
+							SQLite.from(schema.channelsTable)
 								.select("id", "name", "type", "organizationId")
 								.where(($) => [
 									$.organizationId.eq(params.organizationId),

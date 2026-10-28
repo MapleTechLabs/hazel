@@ -357,13 +357,10 @@ export const envCommand = Command.make(
 				yield* Console.log(pc.bold("Next steps:"))
 				yield* Console.log(`  1. Run ${pc.cyan("`docker compose up -d`")} to start local services`)
 				yield* Console.log(
-					`  2. Run ${pc.cyan("`bun run --cwd packages/db db:migrate`")} to initialize the database`,
+					`  2. Run ${pc.cyan("`bun run dev`")} to start the core apps and bot gateway`,
 				)
 				yield* Console.log(
-					`  3. Run ${pc.cyan("`bun run dev`")} to start the core apps and bot gateway`,
-				)
-				yield* Console.log(
-					`  4. Optional: Run ${pc.cyan("`bun run dev:bots`")} to start local bot apps\n`,
+					`  3. Optional: Run ${pc.cyan("`bun run dev:bots`")} to start local bot apps\n`,
 				)
 			}
 		}),

@@ -1,4 +1,4 @@
-import * as PG from "@maple-dev/effect-orm/postgres"
+import * as SQLite from "../sqlite"
 import { DateTime, pipe, Struct } from "effect"
 import * as Effect from "effect/Effect"
 import * as Option from "effect/Option"
@@ -23,7 +23,7 @@ export interface RepositorySchemas<InsertSchema extends Schema.Top, UpdateSchema
 }
 
 /** Any table the repository can serve. */
-export type AnyTable = PG.Table<string, any, any, any>
+export type AnyTable = SQLite.Table<string, any, any, any>
 
 export interface Repository<
 	RecordType,
@@ -74,10 +74,10 @@ export function makeRepository<
 	T extends AnyTable,
 	InsertSchema extends Schema.Top,
 	UpdateSchema extends Schema.Struct<any>,
-	Col extends keyof PG.SelectRowOf<T> & keyof UpdateSchema["Type"] & string,
+	Col extends keyof SQLite.SelectRowOf<T> & keyof UpdateSchema["Type"] & string,
 	Name extends string,
-	RecordType extends PG.SelectRowOf<T>,
-	Id extends PG.SelectRowOf<T>[Col],
+	RecordType extends SQLite.SelectRowOf<T>,
+	Id extends SQLite.SelectRowOf<T>[Col],
 >(
 	table: T,
 	schemas: RepositorySchemas<InsertSchema, UpdateSchema>,
@@ -109,14 +109,16 @@ export function makeRepository<
 		const insert = (data: InsertSchema["Type"]) =>
 			decodeInsert(data).pipe(
 				Effect.flatMap((input) =>
-					db.run(PG.insertInto(anyTable).values(toRow(table, input)).returning() as any),
+					db.run(SQLite.insertInto(anyTable).values(toRow(table, input)).returning() as any),
 				),
 				Effect.withSpan(`${options.name}.insert`),
 			) as unknown as Effect.Effect<RecordType[], DatabaseError | Schema.SchemaError>
 
 		const insertVoid = (data: InsertSchema["Type"]) =>
 			decodeInsert(data).pipe(
-				Effect.flatMap((input) => db.run(PG.insertInto(anyTable).values(toRow(table, input)) as any)),
+				Effect.flatMap((input) =>
+					db.run(SQLite.insertInto(anyTable).values(toRow(table, input)) as any),
+				),
 				Effect.asVoid,
 				Effect.withSpan(`${options.name}.insertVoid`),
 			)
@@ -127,7 +129,7 @@ export function makeRepository<
 					const { [idColumn]: id, ...rest } = toRow(table, input)
 					const set = Object.keys(rest).length > 0 ? rest : { [idColumn]: id }
 					return db.run(
-						PG.update(anyTable)
+						SQLite.update(anyTable)
 							.set(set as any)
 							.where(($: any) => byId($, input[idColumn]))
 							.returning() as any,
@@ -156,7 +158,7 @@ export function makeRepository<
 		const findById = (id: Id) =>
 			db
 				.first(
-					PG.from(anyTable)
+					SQLite.from(anyTable)
 						.select()
 						.where(($: any) => byId($, id))
 						.limit(1) as any,
@@ -168,7 +170,7 @@ export function makeRepository<
 
 		const deleteById = (id: Id) =>
 			db
-				.run(PG.deleteFrom(anyTable).where(($: any) => byId($, id)) as any)
+				.run(SQLite.deleteFrom(anyTable).where(($: any) => byId($, id)) as any)
 				.pipe(Effect.asVoid, Effect.withSpan(`${options.name}.deleteById`))
 
 		const with_ = <A, E, R>(

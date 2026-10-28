@@ -21,3 +21,5 @@ export * from "./rate-limit-errors"
 // RPC contracts
 export * as Rpc from "./rpc"
 export * from "./session-errors"
+// Durable Object sync protocol
+export * as Sync from "./sync"

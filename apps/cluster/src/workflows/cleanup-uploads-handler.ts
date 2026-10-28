@@ -1,5 +1,5 @@
 import { Activity } from "effect/workflow"
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import { Cluster } from "@hazel/domain"
 import type { AttachmentId } from "@hazel/schema"
 import { Effect } from "effect"
@@ -33,7 +33,7 @@ export const CleanupUploadsWorkflowLayer = Cluster.CleanupUploadsWorkflow.toLaye
 
 					const staleUploads = yield* db
 						.run(
-							PG.from(schema.attachmentsTable)
+							SQLite.from(schema.attachmentsTable)
 								.select("id", "fileName", "uploadedAt")
 								.where(($) => [
 									$.status.eq("uploading"),
@@ -98,7 +98,7 @@ export const CleanupUploadsWorkflowLayer = Cluster.CleanupUploadsWorkflow.toLaye
 					for (const upload of staleUploadsResult.uploads) {
 						yield* db
 							.run(
-								PG.update(schema.attachmentsTable)
+								SQLite.update(schema.attachmentsTable)
 									.set({ status: "failed" })
 									.where(($) => [$.id.eq(upload.id), $.status.eq("uploading")]),
 							)

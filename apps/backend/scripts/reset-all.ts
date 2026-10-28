@@ -55,7 +55,7 @@ const clearDatabase = Effect.gen(function* () {
 	for (const table of allTables) {
 		const countResult = yield* db
 			.query(
-				Database.sql`SELECT COUNT(*)::int as count FROM ${Database.sql.identifier(table)}`,
+				Database.sql`SELECT COUNT(*) as count FROM ${Database.sql.identifier(table)}`,
 				Schema.Struct({ count: Schema.Number }),
 			)
 			.pipe(Effect.orDie)
@@ -70,9 +70,7 @@ const clearDatabase = Effect.gen(function* () {
 		if (isDryRun) {
 			log("yellow", `  [DRY RUN] Would delete ${count} rows from ${table}`)
 		} else {
-			yield* db
-				.execute(Database.sql`TRUNCATE TABLE ${Database.sql.identifier(table)} CASCADE`)
-				.pipe(Effect.orDie)
+			yield* db.execute(Database.sql`DELETE FROM ${Database.sql.identifier(table)}`).pipe(Effect.orDie)
 			log("green", `  ✓ Cleared ${count} rows from ${table}`)
 		}
 	}

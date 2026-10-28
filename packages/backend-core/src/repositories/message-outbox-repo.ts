@@ -1,4 +1,4 @@
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import { ChannelId, MessageId, MessageOutboxEventId, MessageReactionId, UserId } from "@hazel/schema"
 import { Context, Effect, Layer, Schema } from "effect"
 
@@ -112,7 +112,7 @@ export class MessageOutboxRepo extends Context.Service<MessageOutboxRepo>()("Mes
 			Effect.gen(function* () {
 				const input = yield* Schema.decodeUnknownEffect(InsertMessageOutboxEventSchema)(data)
 				return yield* db.run(
-					PG.insertInto(schema.messageOutboxEventsTable)
+					SQLite.insertInto(schema.messageOutboxEventsTable)
 						.values({
 							eventType: input.eventType,
 							aggregateId: input.aggregateId,
@@ -127,7 +127,7 @@ export class MessageOutboxRepo extends Context.Service<MessageOutboxRepo>()("Mes
 			Effect.gen(function* () {
 				const input = yield* Schema.decodeUnknownEffect(InsertMessageOutboxEventArraySchema)(data)
 				return yield* db.run(
-					PG.insertInto(schema.messageOutboxEventsTable)
+					SQLite.insertInto(schema.messageOutboxEventsTable)
 						.values(
 							input.map((event) => ({
 								eventType: event.eventType,
@@ -142,13 +142,8 @@ export class MessageOutboxRepo extends Context.Service<MessageOutboxRepo>()("Mes
 
 		/**
 		 * Claims up to `limit` events: pending events that are due, plus processing events whose lock
-		 * went stale. Candidates are locked with FOR UPDATE SKIP LOCKED so concurrent workers never
-		 * claim the same event.
-		 */
-		/**
-		 * Claims up to `limit` due events. The candidates are locked first (`FOR UPDATE SKIP LOCKED`)
-		 * and exactly those ids are updated, in one transaction: an `UPDATE ... WHERE id IN (subquery
-		 * ... LIMIT)` may re-evaluate its subquery and claim more rows, or rows another worker locked.
+		 * went stale. SQLite has one writer, so selecting the candidates and updating exactly those
+		 * ids in one transaction is enough to keep two workers from claiming the same event.
 		 */
 		const claimNextBatch = (params: ClaimNextBatchParams) =>
 			db.transaction(
@@ -157,22 +152,21 @@ export class MessageOutboxRepo extends Context.Service<MessageOutboxRepo>()("Mes
 					const lockedAt = new Date()
 
 					const candidates = yield* db.run(
-						PG.from(schema.messageOutboxEventsTable)
+						SQLite.from(schema.messageOutboxEventsTable)
 							.select("id")
 							.where(($) => [
-								PG.or(
+								SQLite.or(
 									$.status.eq("pending").and($.availableAt.lte(schema.now())),
 									$.status.eq("processing").and($.lockedAt.lt(staleBefore)),
 								),
 							])
 							.orderBy(($) => [[$.sequence, "asc"]])
-							.limit(params.limit)
-							.forUpdate({ skipLocked: true }),
+							.limit(params.limit),
 					)
 					if (candidates.length === 0) return []
 
 					const rows = yield* db.run(
-						PG.update(schema.messageOutboxEventsTable)
+						SQLite.update(schema.messageOutboxEventsTable)
 							.set({
 								status: "processing",
 								lockedAt,
@@ -188,7 +182,7 @@ export class MessageOutboxRepo extends Context.Service<MessageOutboxRepo>()("Mes
 
 		const markProcessed = (id: MessageOutboxEventId) =>
 			db.first(
-				PG.update(schema.messageOutboxEventsTable)
+				SQLite.update(schema.messageOutboxEventsTable)
 					.set({
 						status: "processed",
 						processedAt: new Date(),
@@ -202,7 +196,7 @@ export class MessageOutboxRepo extends Context.Service<MessageOutboxRepo>()("Mes
 
 		const markRetry = (id: MessageOutboxEventId, params: RetryMessageOutboxEventParams) =>
 			db.first(
-				PG.update(schema.messageOutboxEventsTable)
+				SQLite.update(schema.messageOutboxEventsTable)
 					.set(($) => ({
 						status: "pending" as const,
 						availableAt: params.availableAt,
@@ -217,7 +211,7 @@ export class MessageOutboxRepo extends Context.Service<MessageOutboxRepo>()("Mes
 
 		const markFailed = (id: MessageOutboxEventId, params: FailMessageOutboxEventParams) =>
 			db.first(
-				PG.update(schema.messageOutboxEventsTable)
+				SQLite.update(schema.messageOutboxEventsTable)
 					.set(($) => ({
 						status: "failed" as const,
 						lastError: params.lastError,

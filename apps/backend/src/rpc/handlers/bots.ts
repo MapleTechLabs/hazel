@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto"
 import { BotCommandRepo, BotInstallationRepo, BotRepo, UserRepo } from "@hazel/backend-core"
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import { ActiveOrganizationRequiredError, CurrentUser, withRemapDbErrors } from "@hazel/domain"
 import type { BotId, BotInstallationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import {
@@ -77,7 +77,7 @@ export const BotRpcLive = BotRpcs.toLayer(
 
 								// 1. Create a machine user for the bot
 								yield* db.run(
-									PG.insertInto(schema.usersTable).values({
+									SQLite.insertInto(schema.usersTable).values({
 										id: botUserId,
 										externalId,
 										email: botEmail,
@@ -90,7 +90,7 @@ export const BotRpcLive = BotRpcs.toLayer(
 
 								// 2. Create the bot record
 								const [bot] = yield* db.run(
-									PG.insertInto(schema.botsTable)
+									SQLite.insertInto(schema.botsTable)
 										.values({
 											id: botId,
 											userId: botUserId,
@@ -110,7 +110,7 @@ export const BotRpcLive = BotRpcs.toLayer(
 
 								// 3. Install the bot in the creator's organization
 								yield* db.run(
-									PG.insertInto(schema.botInstallationsTable).values({
+									SQLite.insertInto(schema.botInstallationsTable).values({
 										id: installationId,
 										botId,
 										organizationId,
@@ -120,7 +120,7 @@ export const BotRpcLive = BotRpcs.toLayer(
 
 								// 4. Add bot user to the organization as a member
 								yield* db.run(
-									PG.insertInto(schema.organizationMembersTable).values({
+									SQLite.insertInto(schema.organizationMembersTable).values({
 										id: membershipId,
 										organizationId,
 										userId: botUserId,
@@ -204,7 +204,7 @@ export const BotRpcLive = BotRpcs.toLayer(
 								if (payload.name) {
 									const bot = botOption.value
 									yield* db.run(
-										PG.update(schema.usersTable)
+										SQLite.update(schema.usersTable)
 											.set({ firstName: payload.name, updatedAt: new Date() })
 											.where(($) => [$.id.eq(bot.userId)]),
 									)
@@ -418,7 +418,7 @@ export const BotRpcLive = BotRpcs.toLayer(
 								// Create installation
 								const installationId = randomUUID() as BotInstallationId
 								yield* db.run(
-									PG.insertInto(schema.botInstallationsTable).values({
+									SQLite.insertInto(schema.botInstallationsTable).values({
 										id: installationId,
 										botId,
 										organizationId,
@@ -429,7 +429,7 @@ export const BotRpcLive = BotRpcs.toLayer(
 								// Add bot user to the organization as a member (reactivate if soft-deleted)
 								const membershipId = randomUUID() as OrganizationMemberId
 								yield* db.run(
-									PG.insertInto(schema.organizationMembersTable)
+									SQLite.insertInto(schema.organizationMembersTable)
 										.values({
 											id: membershipId,
 											organizationId,
@@ -489,7 +489,7 @@ export const BotRpcLive = BotRpcs.toLayer(
 
 								// Delete the installation
 								yield* db.run(
-									PG.deleteFrom(schema.botInstallationsTable).where(($) => [
+									SQLite.deleteFrom(schema.botInstallationsTable).where(($) => [
 										$.id.eq(installationOption.value.id),
 									]),
 								)
@@ -499,7 +499,7 @@ export const BotRpcLive = BotRpcs.toLayer(
 								if (Option.isSome(botOption)) {
 									// Remove bot user from organization (soft delete)
 									yield* db.run(
-										PG.update(schema.organizationMembersTable)
+										SQLite.update(schema.organizationMembersTable)
 											.set({ deletedAt: new Date() })
 											.where(($) => [
 												$.organizationId.eq(organizationId),
@@ -564,7 +564,7 @@ export const BotRpcLive = BotRpcs.toLayer(
 								// Create installation
 								const installationId = randomUUID() as BotInstallationId
 								yield* db.run(
-									PG.insertInto(schema.botInstallationsTable).values({
+									SQLite.insertInto(schema.botInstallationsTable).values({
 										id: installationId,
 										botId,
 										organizationId,
@@ -575,7 +575,7 @@ export const BotRpcLive = BotRpcs.toLayer(
 								// Add bot user to the organization as a member (reactivate if soft-deleted)
 								const membershipId = randomUUID() as OrganizationMemberId
 								yield* db.run(
-									PG.insertInto(schema.organizationMembersTable)
+									SQLite.insertInto(schema.organizationMembersTable)
 										.values({
 											id: membershipId,
 											organizationId,
@@ -618,7 +618,7 @@ export const BotRpcLive = BotRpcs.toLayer(
 
 							// Update the machine user's avatar URL
 							yield* db.run(
-								PG.update(schema.usersTable)
+								SQLite.update(schema.usersTable)
 									.set({ avatarUrl, updatedAt: new Date() })
 									.where(($) => [$.id.eq(bot.userId)]),
 							)

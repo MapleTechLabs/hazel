@@ -13,7 +13,7 @@
  * 4. Print the bot token (save it - you can't retrieve it later!)
  */
 
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import type { BotId, BotInstallationId, OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { Effect, References } from "effect"
 import { randomUUID } from "crypto"
@@ -68,7 +68,7 @@ const createBotScript = Effect.gen(function* () {
 	// 1. Create a user for the bot (userType = 'machine')
 	console.log("  → Creating bot user...")
 	yield* db.run(
-		PG.insertInto(schema.usersTable).values({
+		SQLite.insertInto(schema.usersTable).values({
 			id: botUserId,
 			externalId,
 			email: botEmail,
@@ -83,7 +83,7 @@ const createBotScript = Effect.gen(function* () {
 	// 2. Create the bot
 	console.log("  → Creating bot record...")
 	yield* db.run(
-		PG.insertInto(schema.botsTable).values({
+		SQLite.insertInto(schema.botsTable).values({
 			id: botId,
 			userId: botUserId,
 			createdBy: botUserId,
@@ -98,7 +98,7 @@ const createBotScript = Effect.gen(function* () {
 	// 3. Install the bot in the organization
 	console.log("  → Installing bot in organization...")
 	yield* db.run(
-		PG.insertInto(schema.botInstallationsTable).values({
+		SQLite.insertInto(schema.botInstallationsTable).values({
 			id: installationId,
 			botId,
 			organizationId: orgId,
@@ -110,7 +110,7 @@ const createBotScript = Effect.gen(function* () {
 	// 4. Add bot user to the organization as a member
 	console.log("  → Adding bot user to organization...")
 	yield* db.run(
-		PG.insertInto(schema.organizationMembersTable).values({
+		SQLite.insertInto(schema.organizationMembersTable).values({
 			id: membershipId,
 			organizationId: orgId,
 			userId: botUserId,

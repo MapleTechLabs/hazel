@@ -1,4 +1,4 @@
-import { Database, PG, Repository, schema } from "@hazel/db"
+import { Database, SQLite, Repository, schema } from "@hazel/db"
 
 import type { ChannelId, MessageId, OrganizationMemberId } from "@hazel/schema"
 import { Notification } from "@hazel/domain/models"
@@ -27,7 +27,7 @@ export class NotificationRepo extends Context.Service<NotificationRepo>()("Notif
 		 */
 		const deleteByMessageIds = (messageIds: readonly MessageId[], memberId: OrganizationMemberId) =>
 			db.run(
-				PG.deleteFrom(schema.notificationsTable)
+				SQLite.deleteFrom(schema.notificationsTable)
 					.where(($) => [
 						$.resourceId.in_(...messageIds),
 						$.resourceType.eq("message"),
@@ -47,7 +47,7 @@ export class NotificationRepo extends Context.Service<NotificationRepo>()("Notif
 		 */
 		const deleteByChannelId = (channelId: ChannelId, memberId: OrganizationMemberId) =>
 			db.run(
-				PG.deleteFrom(schema.notificationsTable)
+				SQLite.deleteFrom(schema.notificationsTable)
 					.where(($) => [
 						$.targetedResourceId.eq(channelId),
 						$.targetedResourceType.eq("channel"),

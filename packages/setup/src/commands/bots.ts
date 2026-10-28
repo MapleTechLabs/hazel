@@ -1,7 +1,8 @@
 import { Command, Flag, Prompt } from "effect/cli"
-import { Database, PG, schema } from "@hazel/db"
+import { layerFile } from "@hazel/db/node"
+import { Database, SQLite, schema } from "@hazel/db"
 import type { BotId, BotInstallationId, OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
-import { Console, Effect, Option, Redacted } from "effect"
+import { Console, Effect, Option } from "effect"
 import { randomUUID } from "crypto"
 import pc from "picocolors"
 
@@ -51,7 +52,7 @@ export const botsCommand = Command.make("bots", { name: nameOption, org: orgOpti
 
 		// Step 2: List available organizations and let user choose
 		const orgs = yield* db.run(
-			PG.from(schema.organizationsTable)
+			SQLite.from(schema.organizationsTable)
 				.select("id", "name")
 				.where(($) => [$.deletedAt.isNull()]),
 		)
@@ -85,7 +86,7 @@ export const botsCommand = Command.make("bots", { name: nameOption, org: orgOpti
 
 		// Step 5: Create bot user (machine user)
 		yield* db.run(
-			PG.insertInto(schema.usersTable).values({
+			SQLite.insertInto(schema.usersTable).values({
 				id: botUserId,
 				externalId,
 				email: botEmail,
@@ -99,7 +100,7 @@ export const botsCommand = Command.make("bots", { name: nameOption, org: orgOpti
 
 		// Step 6: Create bot record
 		yield* db.run(
-			PG.insertInto(schema.botsTable).values({
+			SQLite.insertInto(schema.botsTable).values({
 				id: botId,
 				userId: botUserId,
 				createdBy: botUserId,
@@ -113,7 +114,7 @@ export const botsCommand = Command.make("bots", { name: nameOption, org: orgOpti
 
 		// Step 7: Install bot in organization
 		yield* db.run(
-			PG.insertInto(schema.botInstallationsTable).values({
+			SQLite.insertInto(schema.botInstallationsTable).values({
 				id: installationId,
 				botId,
 				organizationId: orgId,
@@ -124,7 +125,7 @@ export const botsCommand = Command.make("bots", { name: nameOption, org: orgOpti
 
 		// Step 8: Add bot user to organization
 		yield* db.run(
-			PG.insertInto(schema.organizationMembersTable).values({
+			SQLite.insertInto(schema.organizationMembersTable).values({
 				id: membershipId,
 				organizationId: orgId,
 				userId: botUserId,
@@ -158,11 +159,6 @@ export const botsCommand = Command.make("bots", { name: nameOption, org: orgOpti
 		Effect.catchTag("DatabaseError", (error: Database.DatabaseError) =>
 			Console.log(pc.red(`\nDatabase error: ${error.message}`)),
 		),
-		Effect.provide(
-			Database.layer({
-				url: Redacted.make(process.env.DATABASE_URL ?? ""),
-				ssl: !(process.env.DATABASE_URL ?? "").includes("localhost"),
-			}),
-		),
+		Effect.provide(layerFile(process.env.DATABASE_FILE ?? "hazel.sqlite")),
 	),
 )

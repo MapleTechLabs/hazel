@@ -11,7 +11,8 @@ export interface ProxyConfig {
 	readonly electricSourceId: string | undefined
 	readonly electricSourceSecret: string | undefined
 	readonly allowedOrigin: string
-	readonly databaseUrl: Redacted.Redacted<string>
+	/** The local SQLite file holding every store's tables. */
+	readonly databaseFile: string
 	readonly isDev: boolean
 	readonly port: number
 	readonly otlpEndpoint: string | undefined
@@ -40,7 +41,7 @@ export class ProxyConfigService extends Context.Service<ProxyConfigService>()("P
 		const allowedOrigin = yield* Config.String("ALLOWED_ORIGIN").pipe(
 			Config.withDefault("http://localhost:3000"),
 		)
-		const databaseUrl = yield* Config.Redacted("DATABASE_URL")
+		const databaseFile = yield* Config.String("DATABASE_FILE").pipe(Config.withDefault("hazel.sqlite"))
 		const isDev = yield* Config.Boolean("IS_DEV").pipe(Config.withDefault(false))
 		const port = yield* Config.Number("PORT").pipe(Config.withDefault(8184))
 		const otlpEndpoint = yield* Config.String("OTLP_ENDPOINT").pipe(
@@ -57,7 +58,7 @@ export class ProxyConfigService extends Context.Service<ProxyConfigService>()("P
 			electricSourceId,
 			electricSourceSecret,
 			allowedOrigin,
-			databaseUrl,
+			databaseFile,
 			isDev,
 			port,
 			otlpEndpoint,

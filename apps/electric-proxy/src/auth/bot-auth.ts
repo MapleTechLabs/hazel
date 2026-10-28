@@ -1,4 +1,4 @@
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import type { BotId, UserId } from "@hazel/schema"
 import { Effect, Option, Schema } from "effect"
 import { AccessContextCacheService, type BotAccessContext } from "../cache"
@@ -69,7 +69,7 @@ export const validateBotToken = Effect.fn("ElectricProxy.validateBotToken")(func
 	// Query bot by token hash
 	const db = yield* Database.Database
 	const botOption = yield* db.first(
-		PG.from(schema.botsTable)
+		SQLite.from(schema.botsTable)
 			.select("id", "userId")
 			.where(($) => [$.apiTokenHash.eq(tokenHash), $.deletedAt.isNull()])
 			.limit(1),

@@ -1,5 +1,5 @@
 import { Activity } from "effect/workflow"
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import { Cluster } from "@hazel/domain"
 import { Effect } from "effect"
 
@@ -40,11 +40,11 @@ export const GitHubInstallationWorkflowLayer = Cluster.GitHubInstallationWorkflo
 					// Query for a connection with matching installationId in metadata
 					const connections = yield* db
 						.run(
-							PG.from(schema.integrationConnectionsTable)
+							SQLite.from(schema.integrationConnectionsTable)
 								.select("id", "organizationId", "status", "externalAccountName")
 								.where(($) => [
 									$.provider.eq("github"),
-									PG.jsonText($.metadata, "installationId").eq(
+									SQLite.jsonText($.metadata, "installationId").eq(
 										String(payload.installationId),
 									),
 									$.deletedAt.isNull(),
@@ -140,11 +140,11 @@ export const GitHubInstallationWorkflowLayer = Cluster.GitHubInstallationWorkflo
 
 					const updated = yield* db
 						.run(
-							PG.update(schema.integrationConnectionsTable)
+							SQLite.update(schema.integrationConnectionsTable)
 								.set(updateValues)
 								.where(($) => [
 									$.provider.eq("github"),
-									PG.jsonText($.metadata, "installationId").eq(
+									SQLite.jsonText($.metadata, "installationId").eq(
 										String(payload.installationId),
 									),
 									$.deletedAt.isNull(),

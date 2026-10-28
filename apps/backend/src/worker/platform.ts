@@ -1,14 +1,12 @@
 /**
- * The api Worker's platform services: what `index.ts` supplies on Bun (pooled Postgres, Redis
+ * The api Worker's platform services: what `index.ts` supplies on Bun (a SQLite file, Redis
  * caches, `ConfigProvider.fromEnv`), rebuilt over Cloudflare bindings.
  */
-import type { KVNamespace } from "@cloudflare/workers-types"
-import { AuthSqlConnection, makeRequestConnection } from "@hazel/auth/server"
+import type { D1Database, KVNamespace } from "@cloudflare/workers-types"
 import { Database } from "@hazel/db"
 import { layerKvResultPersistence } from "@hazel/effect-cloudflare"
-import { readHazelDbBinding } from "@hazel/infra/cloudflare"
 import { workerEnvLayer } from "@hazel/infra/worker-runtime"
-import { Effect, Layer, Option, Redacted } from "effect"
+import { Layer } from "effect"
 import { type BotGatewayNamespace, BotGatewayTransport } from "../services/bot-gateway-transport"
 import { InviteMailer, isEmailBinding } from "../services/invite-mailer"
 
@@ -25,13 +23,17 @@ const inviteMailerLive = (env: Record<string, unknown>) =>
 		return isEmailBinding(binding) ? InviteMailer.layerBinding(binding) : InviteMailer.layerLog
 	})
 
-/** The Hyperdrive connection string, a defect when the binding is missing. */
-export const hazelDbConnectionString = (env: Record<string, unknown>): string =>
-	Option.match(readHazelDbBinding(env), {
-		onNone: () => {
-			throw new Error("HAZEL_DB Hyperdrive binding is missing from the Worker env")
-		},
-		onSome: (binding) => binding.connectionString,
+/** The directory D1 database (users, auth, bots, routing indexes). */
+export const DIRECTORY_DB_BINDING = "DIRECTORY_DB"
+
+/** The directory database and the auth storage's `SqlClient` over it; suspended like the KV. */
+const directoryDatabaseLive = (env: Record<string, unknown>) =>
+	Layer.suspend(() => {
+		const db = env[DIRECTORY_DB_BINDING]
+		if (db === undefined) {
+			throw new Error(`${DIRECTORY_DB_BINDING} D1 binding is missing from the Worker env`)
+		}
+		return Database.layerD1(db as D1Database)
 	})
 
 const cacheNamespace = (env: Record<string, unknown>): KVNamespace => {
@@ -40,14 +42,10 @@ const cacheNamespace = (env: Record<string, unknown>): KVNamespace => {
 	return kv as KVNamespace
 }
 
-/**
- * Platform services for an api request graph. `Database` reads the per-request
- * `DatabaseConnection` the fetch handler provides (sockets are bound to the request that opened
- * them).
- */
+/** Platform services for an api request graph. */
 export const requestPlatformLive = (env: Record<string, unknown>, botGateways: BotGatewayNamespace) =>
 	Layer.mergeAll(
-		Database.layerRequestScoped,
+		directoryDatabaseLive(env),
 		BotGatewayTransport.layerDurableObject(botGateways),
 		// Suspended: init also runs at plan time, where the KV binding does not exist yet.
 		Layer.suspend(() => layerKvResultPersistence(cacheNamespace(env))),
@@ -55,35 +53,11 @@ export const requestPlatformLive = (env: Record<string, unknown>, botGateways: B
 		workerEnvLayer(env),
 	)
 
-/**
- * Platform services for a Durable Object. A Durable Object may keep connections across the
- * calls it serves, so it holds one pooled client (through Hyperdrive) for its in-memory lifetime.
- */
+/** Platform services for a Durable Object. */
 export const objectPlatformLive = (env: Record<string, unknown>, botGateways: BotGatewayNamespace) =>
 	Layer.mergeAll(
 		BotGatewayTransport.layerDurableObject(botGateways),
-		Layer.unwrap(
-			Effect.sync(() =>
-				Database.layer({ url: Redacted.make(hazelDbConnectionString(env)), ssl: false }),
-			),
-		),
+		directoryDatabaseLive(env),
 		layerKvResultPersistence(cacheNamespace(env)),
 		workerEnvLayer(env),
 	)
-
-/** Both ORM and auth SQL clients connect lazily and close with the request scope. */
-export const provideRequestDatabase =
-	(env: Record<string, unknown>) =>
-	<A, E, R>(effect: Effect.Effect<A, E, R>) =>
-		effect.pipe(
-			Effect.provideServiceEffect(
-				AuthSqlConnection,
-				Effect.flatMap(Effect.scope, (scope) =>
-					makeRequestConnection(Redacted.make(hazelDbConnectionString(env)), scope),
-				),
-			),
-			Effect.provideServiceEffect(
-				Database.DatabaseConnection,
-				Database.makeRequestConnection(hazelDbConnectionString(env)).pipe(Effect.orDie),
-			),
-		)

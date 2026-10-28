@@ -1,5 +1,5 @@
 import * as ClusterCron from "effect/cluster/ClusterCron"
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import * as Cron from "effect/Cron"
 import * as Duration from "effect/Duration"
 import * as Effect from "effect/Effect"
@@ -24,7 +24,7 @@ export const PresenceCleanupCronLayer = ClusterCron.make({
 
 		// Find users with stale heartbeats who aren't already offline
 		const staleUsers = yield* db.run(
-			PG.from(schema.userPresenceStatusTable)
+			SQLite.from(schema.userPresenceStatusTable)
 				.select("userId", "status", "lastSeenAt")
 				.where(($) => [$.lastSeenAt.lt(timeoutThreshold), $.status.neq("offline")]),
 		)
@@ -40,7 +40,7 @@ export const PresenceCleanupCronLayer = ClusterCron.make({
 		// Batch update all stale users to offline
 		const userIds = staleUsers.map((u) => u.userId)
 		yield* db.run(
-			PG.update(schema.userPresenceStatusTable)
+			SQLite.update(schema.userPresenceStatusTable)
 				.set({
 					status: "offline",
 					updatedAt: new Date(),

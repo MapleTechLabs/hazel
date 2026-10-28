@@ -18,7 +18,6 @@
 		"generate-keys": "bun scripts/generate-keys.ts"
 	},
 	"dependencies": {
-		"@effect/sql-pg": "catalog:effect",
 		"@hazel/db": "workspace:*",
 		"@hazel/domain": "workspace:*",
 		"@hazel/effect-bun": "workspace:*",

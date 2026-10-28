@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { MessageOutboxRepo } from "@hazel/backend-core"
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import type { ChannelId, MessageId, MessageReactionId, UserId } from "@hazel/schema"
 import { Effect } from "effect"
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
@@ -109,7 +109,7 @@ describe("MessageOutboxRepo", () => {
 				})
 
 				yield* db.run(
-					PG.update(schema.messageOutboxEventsTable)
+					SQLite.update(schema.messageOutboxEventsTable)
 						.set({
 							availableAt: new Date(Date.now() + 60_000),
 						})
@@ -164,7 +164,7 @@ describe("MessageOutboxRepo", () => {
 				})
 
 				yield* db.run(
-					PG.update(schema.messageOutboxEventsTable)
+					SQLite.update(schema.messageOutboxEventsTable)
 						.set({
 							status: "processing",
 							lockedAt: new Date(Date.now() - 180_000),

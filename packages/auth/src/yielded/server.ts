@@ -10,7 +10,6 @@ import { SqlClient } from "effect/sql"
 import { HazelAuth } from "./auth.ts"
 import { HazelAuthApi } from "./contract.ts"
 import { ActionPoliciesLive } from "./policy.ts"
-import { layerRouted } from "./sql.ts"
 import { OAuthStorageLive, Persistence, storage } from "./storage.ts"
 
 /**
@@ -153,7 +152,7 @@ const claimsFor = (subjectId: string) =>
 	Effect.gen(function* () {
 		const sql = yield* SqlClient.SqlClient
 		const rows = yield* sql<{ firstName: string; lastName: string }>`
-			select "firstName", "lastName" from users where id = ${subjectId}::uuid and "deletedAt" is null`
+			select "firstName", "lastName" from users where id = ${subjectId} and "deletedAt" is null`
 		const row = rows[0]
 		if (row === undefined) return Option.none()
 		return Option.some({ displayName: `${row.firstName} ${row.lastName}`.trim() })
@@ -233,12 +232,11 @@ export const makeHazelAuthLive = (config: HazelAuthConfig) => {
 		sqlHandle.layer,
 	).pipe(
 		Layer.provideMerge(Storage),
-		// Postgres stamps session times with its own clock; tolerate it running ahead of this
-		// process. A session issued "in the future" is rejected, so with too small a window the
+		// The database may stamp session times with its own clock; tolerate it running ahead of
+		// this process. A session issued "in the future" is rejected, so with too small a window the
 		// first requests after sign-in fail until the clocks agree. Shared by Auth and
 		// persistence, so provided beneath both.
 		Layer.provideMerge(Operations.AuthenticationClock.layer({ futureToleranceMillis: 30_000 })),
-		Layer.provideMerge(layerRouted),
 		Layer.provideMerge(CryptoLive),
 	)
 

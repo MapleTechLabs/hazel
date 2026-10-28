@@ -1,6 +1,6 @@
 import { BunRuntime } from "@effect/platform-bun"
 import { BotRepo } from "@hazel/backend-core"
-import { Database } from "@hazel/db"
+import { layerFile } from "@hazel/db/node"
 import {
 	BotGatewayClientFrame,
 	BotGatewayEnvelope,
@@ -113,7 +113,7 @@ export class GatewayConfig extends Context.Service<GatewayConfig>()("GatewayConf
 		const config = {
 			port: yield* Config.Int("PORT").pipe(Config.withDefault(DEFAULT_PORT)),
 			isDev: yield* Config.Boolean("IS_DEV").pipe(Config.withDefault(false)),
-			databaseUrl: yield* Config.Redacted("DATABASE_URL"),
+			databaseFile: yield* Config.String("DATABASE_FILE").pipe(Config.withDefault("hazel.sqlite")),
 			durableStreamsUrl: yield* Config.String("DURABLE_STREAMS_URL").pipe(
 				Config.withDefault(DEFAULT_DURABLE_STREAMS_URL),
 			),
@@ -757,13 +757,7 @@ class BotGatewayHub extends Context.Service<BotGatewayHub>()("BotGatewayHub", {
 }
 
 const DatabaseLive = Layer.unwrap(
-	Effect.gen(function* () {
-		const config = yield* GatewayConfig
-		return Database.layer({
-			url: config.databaseUrl,
-			ssl: !config.isDev,
-		})
-	}),
+	Effect.map(Effect.service(GatewayConfig), (config) => layerFile(config.databaseFile)),
 )
 
 const ConfigProviderLive = ConfigProvider.layer(ConfigProvider.fromEnv({ preserveEmptyStrings: true }))

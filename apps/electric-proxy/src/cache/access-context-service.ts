@@ -1,5 +1,5 @@
 import { PersistedCache, Persistence } from "effect/persistence"
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import type { BotId, ChannelId, UserId } from "@hazel/schema"
 import { Context, Effect, Layer, Schema } from "effect"
 import {
@@ -55,7 +55,7 @@ export class AccessContextCacheService extends Context.Service<AccessContextCach
 						// bot_installations → channels by organizationId.
 						const channels = yield* db
 							.run(
-								PG.from(schema.botInstallationsTable, "bi")
+								SQLite.from(schema.botInstallationsTable, "bi")
 									.innerJoin(schema.channelsTable, "c", (bi, c) =>
 										c.organizationId.eq(bi.organizationId).and(c.deletedAt.isNull()),
 									)

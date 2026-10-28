@@ -4,10 +4,10 @@ import { HttpMiddleware, HttpRouter, HttpServer } from "effect/http"
 import { BunClusterSocket, BunHttpServer, BunRuntime } from "@effect/platform-bun"
 import { PgClient } from "@effect/sql-pg"
 import { WorkflowProxyServer } from "effect/workflow"
-import { Database } from "@hazel/db"
+import { layerFile } from "@hazel/db/node"
 import { Cluster } from "@hazel/domain"
 import { createTracingLayer } from "@hazel/effect-bun/Telemetry"
-import { Config, ConfigProvider, Effect, Layer, Logger, Redacted } from "effect"
+import { Config, ConfigProvider, Effect, Layer, Logger } from "effect"
 import { PresenceCleanupCronLayer } from "./cron/presence-cleanup-cron.ts"
 import { StatusExpirationCronLayer } from "./cron/status-expiration-cron.ts"
 import { TypingIndicatorCleanupCronLayer } from "./cron/typing-indicator-cleanup-cron.ts"
@@ -35,11 +35,9 @@ const WorkflowEngineLayer = ClusterWorkflowEngine.layer.pipe(
 	),
 )
 
-// Database layer (uses same credentials as PgClient)
-const DatabaseLayer = Database.layer({
-	url: Redacted.make(process.env.DATABASE_URL as string)!,
-	ssl: !process.env.IS_DEV,
-})
+// Hazel's tables: the same local SQLite file the Bun backend uses. The workflow engine keeps its
+// own Postgres above until the cluster is removed.
+const DatabaseLayer = layerFile(process.env.DATABASE_FILE ?? "hazel.sqlite")
 
 // OpenTelemetry tracing layer
 const TracerLive = createTracingLayer("cluster")

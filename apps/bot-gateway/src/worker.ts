@@ -4,14 +4,15 @@
  * the object cross-script (`bindBotGateways` in `./object.ts`) to publish events.
  *
  * A bot connection: the Worker accepts the socket and sends HELLO, authenticates the bot token in
- * the first IDENTIFY/RESUME frame against Postgres (Hyperdrive), then relays the session to the
+ * the first IDENTIFY/RESUME frame against the directory D1 database, then relays the session to the
  * bot's object (`gateway/relay.ts`). The wire protocol is the Bun gateway's, unchanged.
  */
-import { HAZEL_DB_BINDING, HazelStack, hazelWorkerProps, readHazelDbBinding } from "@hazel/infra/cloudflare"
+import type { D1Database } from "@cloudflare/workers-types"
+import { HAZEL_DB_BINDING, HazelStack, hazelWorkerProps } from "@hazel/infra/cloudflare"
 import { merge, optionalPlain, telemetryEnv } from "@hazel/infra/env"
 import { hazelTelemetry } from "@hazel/infra/maple"
 import * as Cloudflare from "alchemy/Cloudflare"
-import { Effect, Layer, Option } from "effect"
+import { Effect, Layer } from "effect"
 import { HttpServerRequest, HttpServerResponse } from "effect/http"
 import * as HttpBody from "effect/http/HttpBody"
 import { authenticateBotToken } from "./gateway/auth.ts"
@@ -28,6 +29,9 @@ import {
 import { BOT_GATEWAY_APP, BOT_GATEWAY_NAMESPACE, BotGatewayObject } from "./object.ts"
 
 export const BOT_GATEWAY_WS_PATH = "/bot-gateway/ws"
+
+/** The directory D1 database, where bot tokens are looked up. */
+export const DIRECTORY_DB_BINDING = "DIRECTORY_DB"
 
 /** `__ALCHEMY_RUNTIME__` folds to `true` in the bundle, so the stack-side branch is tree-shaken. */
 const props = Effect.gen(function* () {
@@ -83,12 +87,10 @@ export default BotGatewayWorker.make(
 			if (request.headers.upgrade?.toLowerCase() !== "websocket") {
 				return HttpServerResponse.text("Expected a WebSocket upgrade", { status: 426 })
 			}
-			// Valid for this invocation, which lives as long as the socket.
-			const binding = readHazelDbBinding(env)
-			if (Option.isNone(binding)) {
-				return HttpServerResponse.text("HAZEL_DB binding is missing", { status: 500 })
+			const directory = env[DIRECTORY_DB_BINDING] as D1Database | undefined
+			if (directory === undefined) {
+				return HttpServerResponse.text(`${DIRECTORY_DB_BINDING} binding is missing`, { status: 500 })
 			}
-			const connectionString = binding.value.connectionString
 			const namespace = env[BOT_GATEWAY_NAMESPACE] as WorkerdNamespace
 
 			const [client, server] = newWebSocketPair()
@@ -97,8 +99,7 @@ export default BotGatewayWorker.make(
 				client: relaySocket(server),
 				heartbeatIntervalMs: settings.heartbeatIntervalMs,
 				leaseTtlMs: settings.leaseTtlMs,
-				authenticate: (botToken) =>
-					Effect.runPromise(authenticateBotToken(botToken, connectionString)),
+				authenticate: (botToken) => Effect.runPromise(authenticateBotToken(botToken, directory)),
 				connect: (handshake) => connectToObject(namespace, handshake),
 				log: (message, fields) => console.warn(message, fields ?? {}),
 			})

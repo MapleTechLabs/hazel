@@ -1,10 +1,10 @@
 /**
- * Email invitations end to end against a disposable Postgres: inviting (admins only, members
+ * Email invitations end to end against an in-memory SQLite database: inviting (admins only, members
  * skipped, one email per address), the public preview, accepting with the invited account, and
  * revoking. Emails are captured instead of sent.
  */
 import { InvitationRepo } from "@hazel/backend-core"
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import { CurrentUser } from "@hazel/domain"
 import { CurrentRpcScopes } from "@hazel/domain/scopes"
 import type { ApiScope } from "@hazel/domain/scopes"
@@ -85,7 +85,7 @@ const failureTag = (exit: Exit.Exit<unknown, unknown>) =>
 
 describe("invitations", () => {
 	beforeAll(async () => {
-		harness = await createChatSyncDbHarness(process.env.AUTH_TEST_DATABASE_URL)
+		harness = await createChatSyncDbHarness()
 		await harness.reset()
 		await harness.run(
 			Effect.gen(function* () {
@@ -93,15 +93,15 @@ describe("invitations", () => {
 				const setupSql = `
 						INSERT INTO users (id, "externalId", email, "firstName", "lastName", "userType", "isOnboarded", "createdAt", "updatedAt")
 						VALUES
-							('${owner}', 'owner', '${users[owner]}', 'Olive', 'Owner', 'user', true, NOW(), NOW()),
-							('${member}', 'member', '${users[member]}', 'Max', 'Member', 'user', true, NOW(), NOW()),
-							('${invitee}', 'invitee', '${users[invitee]}', 'Ivy', 'Invitee', 'user', true, NOW(), NOW());
+							('${owner}', 'owner', '${users[owner]}', 'Olive', 'Owner', 'user', true, strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now')),
+							('${member}', 'member', '${users[member]}', 'Max', 'Member', 'user', true, strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now')),
+							('${invitee}', 'invitee', '${users[invitee]}', 'Ivy', 'Invitee', 'user', true, strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'));
 						INSERT INTO organizations (id, name, slug, "isPublic", "createdAt", "updatedAt")
-						VALUES ('${orgId}', 'Hazel Labs', 'hazel-labs', false, NOW(), NOW());
+						VALUES ('${orgId}', 'Hazel Labs', 'hazel-labs', false, strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'));
 						INSERT INTO organization_members (id, "organizationId", "userId", role, "joinedAt", "createdAt")
 						VALUES
-							('${id(20)}', '${orgId}', '${owner}', 'owner', NOW(), NOW()),
-							('${id(21)}', '${orgId}', '${member}', 'member', NOW(), NOW());
+							('${id(20)}', '${orgId}', '${owner}', 'owner', strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now')),
+							('${id(21)}', '${orgId}', '${member}', 'member', strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'));
 					`
 				yield* Effect.forEach(
 					setupSql.split(";").filter((statement) => statement.trim() !== ""),
@@ -165,7 +165,7 @@ describe("invitations", () => {
 			Effect.gen(function* () {
 				const db = yield* Database.Database
 				return yield* db.run(
-					PG.from(schema.organizationMembersTable)
+					SQLite.from(schema.organizationMembersTable)
 						.select("role")
 						.where(($) => [$.organizationId.eq(orgId), $.userId.eq(invitee)]),
 				)
@@ -237,13 +237,13 @@ describe("invitations", () => {
 				yield* db.execute(
 					Database.sql.raw(
 						`INSERT INTO organizations (id, name, slug, "isPublic", "createdAt", "updatedAt", "deletedAt")
-						VALUES ('${deletedOrgId}', 'Gone Labs', 'gone-labs', false, NOW(), NOW(), NOW())`,
+						VALUES ('${deletedOrgId}', 'Gone Labs', 'gone-labs', false, strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'))`,
 					),
 				)
 				yield* db.execute(
 					Database.sql.raw(
 						`INSERT INTO organization_members (id, "organizationId", "userId", role, "joinedAt", "createdAt")
-						VALUES ('${id(22)}', '${deletedOrgId}', '${owner}', 'owner', NOW(), NOW())`,
+						VALUES ('${id(22)}', '${deletedOrgId}', '${owner}', 'owner', strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'))`,
 					),
 				)
 			}),

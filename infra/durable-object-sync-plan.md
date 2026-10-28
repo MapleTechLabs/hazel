@@ -1,0 +1,200 @@
+# Durable Object sync: implementation spec
+
+Replace Postgres + Electric with Durable Objects (DOs) as the system of record and the sync
+transport. TanStack DB stays the client store. **Instant cutover**: there is no dual-running and no
+per-org flags. A best-effort import script copies the Postgres data once, and some loss is accepted.
+
+This doc is the single brief for everyone working on the change. If the code and this doc
+disagree, fix one of them.
+
+Removed by this work:
+
+- Postgres (PlanetScale, Hyperdrive, `@effect/sql-pg`)
+- Electric and `apps/electric-proxy`
+- `apps/cluster`, both its workflows and its crons
+- the RivetKit `apps/actors`
+- the global `message_outbox_events` and `OutboxDispatcherObject`
+- `channel_access-sync.ts`, which becomes a function inside `OrgObject`
+- the Bun runtime of `apps/backend`; local dev becomes `bun run alchemy:dev` (workerd)
+
+---
+
+## 1. Stores
+
+| Store               | Instance key              | Tables (current names kept)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1 `directory`      | global                    | `users`; all `auth_*`; `bots`; `bot_commands`; `organization_invitations`; `connect_invites`; index tables: `org_index` (id, slug, name, deletedAt), `membership_index` (userId, organizationId, deletedAt), `channel_index` (channelId, organizationId, hostChannelId, deletedAt), `webhook_index` (webhookId, organizationId, channelId, tokenHash), `integration_index` (provider, externalId, organizationId), `chat_sync_index` (provider, externalWorkspaceId, externalChannelId?, organizationId, channelId?)                                                                                            |
+| `OrgObject`         | `organizationId`          | `organizations`, `organization_members`, `channels`, `channel_members`, `channel_sections`, `channel_access`, `custom_emojis`, `bot_installations`, `integration_connections`, `integration_tokens`, `integration_requests`, `chat_sync_connections`, `chat_sync_channel_links`, `channel_webhooks`, `github_subscriptions`, `rss_subscriptions`, `rss_posted_items`, `connect_conversations`, `connect_conversation_channels`, `connect_participants`. **Read-only projections:** `users` (members and Connect participants), `user_presence_status` (same users), `bots` and `bot_commands` (installed bots). |
+| `ChannelObject`     | `channelId` (threads too) | `messages`, `message_reactions`, `pinned_messages`, `attachments`, `chat_sync_message_links`, `chat_sync_event_receipts`, `typing_indicators`. **Projections:** `channel_viewers` (userId, organizationId, role; the channel's computed access) and `channel_bots` (botId, botUserId; bots that receive events).                                                                                                                                                                                                                                                                                                |
+| `UserObject`        | `userId`                  | `notifications`, `user_presence_status` (authoritative), `user_organizations` (organizationId; tells the client which `OrgObject`s to open).                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `MessageLiveObject` | `messageId`               | Live AI or progress state for one message. Replaces the RivetKit `message` actor (**last PR**).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+
+Rules:
+
+- Table and column names stay the same, so the client models (`@hazel/domain/models`) don't change.
+  Projection tables use the same schema as their source.
+- **One owner per row.** Projections are written only through outbox deliveries from the owner.
+- **D1 has no transactions** (effect-orm `Database.transaction` refuses on D1). Every directory write
+  is a single statement or a `batch`, and it's idempotent.
+- **`channel_members` stays whole in `OrgObject`**, including per-user fields (`isMuted`,
+  `isFavorite`, `lastSeenMessageId`, `notificationCount`). This keeps the client's `channel_members`
+  collection unchanged.
+- **Connect** (shared channels across orgs):
+    - The host org's `OrgObject` owns the conversation, and the host channel's `ChannelObject` holds
+      every message of the conversation.
+    - The guest org's mounted channel has its own `channel_index` row with
+      `hostChannelId = <host channel>`. Every read and write for it goes to the host
+      `ChannelObject`.
+    - Guest users get a filtered socket to the host `OrgObject` (the conversation rows only).
+
+## 2. Packages and layout
+
+| Path                                       | Contents                                                                                                                                                                                                                                    |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/db/src/tables/*`                 | Tables become `SQLite.table` (`@maple-dev/effect-orm/sqlite`). Shared column helpers in `columns.ts`: branded `uuid` → `text`, `timestamptz` → `timestamp`, `jsonb` → `json`, enums → `text` with a literal schema.                         |
+| `packages/db/src/stores.ts`                | `directoryTables`, `orgTables`, `channelTables`, `userTables`: the table lists per store.                                                                                                                                                   |
+| `packages/db/src/services/database.ts`     | `Database` over the SQLite dialect: `layerSqlite` (`@effect/sql-sqlite-do`, `@effect/sql-sqlite-node` for tests) and `layerD1`. `DatabaseError` classified from SQLite errors (`SQLITE_CONSTRAINT_UNIQUE` → `unique_violation`, and so on). |
+| `packages/db/src/schema-ddl.ts`            | `renderStoreSchema(tables)` → DDL statements, plus a versioned migration list per store.                                                                                                                                                    |
+| `packages/sync-do/` (new)                  | Sync runtime: change triggers, `_changes` log, broadcaster, hibernatable socket handling, outbox and inbox, `SyncedObject` helpers. Generic over effect-orm tables. No Hazel domain logic.                                                  |
+| `packages/domain/src/sync/`                | Protocol frames (Effect Schema) and `SyncSeq`. Shared by the client and the objects.                                                                                                                                                        |
+| `apps/sync/` (new Worker)                  | Hosts `OrgObject`, `ChannelObject`, `UserObject` and later `MessageLiveObject`; serves `GET /sync/:kind/:id` (WebSocket).                                                                                                                   |
+| `packages/backend-core/src/objects/` (new) | Domain logic per object (ported from `apps/backend/src/rpc/handlers`, `services`, `policies` and `apps/cluster/src/workflows`). Plain Effect services over `Database` plus an `ObjectContext`, so it's testable on node SQLite.             |
+| `libs/effect-db-collection`                | Renamed from `libs/effect-electric-db-collection`. `createEffectCollection` over the DO protocol, plus `optimisticAction` with `awaitSeqEffect`.                                                                                            |
+| `apps/web-foldkit/src/core/db/`            | Collections pointed at sources, plus a connection manager.                                                                                                                                                                                  |
+
+## 3. Change tracking and the sync protocol
+
+### Triggers (`packages/sync-do`)
+
+- Each synced table gets `AFTER INSERT/UPDATE/DELETE` triggers that insert
+  `(_changes.tbl, pk, op)`.
+- `_changes(seq INTEGER PRIMARY KEY AUTOINCREMENT, tbl TEXT NOT NULL, pk TEXT NOT NULL, op TEXT NOT NULL)`.
+  `pk` is the row's `id`. Tables without one (`channel_access`, `channel_viewers`) use their key
+  columns joined with `:`.
+- Triggers mean repository code needs no changes to be tracked, the same way Electric reads the WAL.
+- **Retention:** keep the newest 50k changes or 7 days. A client whose `since` is below the oldest
+  retained `seq` gets a reset.
+
+### Broadcast
+
+Once any request or RPC method has committed, the object calls `flush()`:
+
+1. Read `_changes WHERE seq > lastFlushed`.
+2. For each socket and each changed table, select the current rows `WHERE id IN (…) AND <visible(principal)>`.
+3. Send the upserts. A changed key that came back missing becomes a delete.
+4. Every flush sends `Commit { seq }` to every socket, even when nothing was visible to it, so
+   `awaitSeq` always resolves.
+
+### Visibility per object
+
+- **`OrgObject`:** per table, the `WHERE` clauses from `apps/electric-proxy/src/tables/user-tables.ts`,
+  ported to local SQL. `channel_access` is local.
+    - A socket's principal is either a member of the org or a Connect guest; a guest sees only the
+      conversation rows.
+    - Tables declare `dependsOn` (`channel_access`, `organization_members`, `connect_participants`).
+      A change in a dependency for a user re-snapshots that user's sockets.
+- **`ChannelObject`:** a viewer sees everything; a non-viewer is refused, and sockets whose access is
+  removed are closed.
+- **`UserObject`:** the owner only.
+
+### Frames (`packages/domain/src/sync/protocol.ts`, JSON text)
+
+- **Client → object:** `Hello { since: number | null }`, `Ping`.
+- **Object → client:**
+    - `Begin { reset: boolean }`: on reset, the client truncates the collections this source feeds.
+    - `Rows { table, upserts: unknown[], deletes: string[] }`
+    - `Commit { seq }`
+    - `Ready` (sent after the first Commit)
+    - `Ephemeral { ... }`
+    - `Pong`
+    - `Error { code, message }`
+- Rows are encoded with the table's schema as JSON. Timestamps are ISO strings; the client models
+  already accept them.
+
+### Auth
+
+- The `apps/sync` Worker reads the session token from `Sec-WebSocket-Protocol` (`hazel.v1, <token>`),
+  verifies it the way `api` does, and forwards the upgrade to the object with
+  `x-hazel-principal: {userId, ...}` JSON.
+- Objects are reachable only through bindings, so the header is trusted.
+- The object authorizes the principal against its own tables, and checks again on every
+  re-snapshot.
+- When the token expires, the object closes the socket with code `4001`, and the client reconnects
+  with a fresh token.
+
+### Write confirmation
+
+- Each object method returns `seq` (the `_changes` head after its commit, once flushed).
+- RPC results carry `transactionId: "<kind>:<id>:<seq>"`. `TransactionId` becomes a branded string.
+- The client's `awaitSeqEffect(txid)` resolves once that source's stream has passed `Commit.seq`.
+
+### Ephemeral
+
+Typing stays the `typing_indicators` table in `ChannelObject`, so the client is unchanged. An alarm
+deletes rows older than 10 s, and the cron goes away.
+
+## 4. Writes and side effects
+
+- **The api Worker stays the RPC and HTTP surface.** Handlers authenticate (`CurrentUser`), resolve
+  the target object and call its typed DO RPC method with the principal. **Authorization runs inside
+  the object** (ported policies).
+- **Routing:**
+    - `organizationId` in the payload → `OrgObject`.
+    - `channelId` → `channel_index` → `OrgObject` or `ChannelObject` (a mounted Connect channel goes to
+      its host).
+    - RPCs that have only a message, reaction or pin id gain a `channelId` field in their payload; the
+      client knows it.
+    - User-scoped calls → `UserObject(CurrentUser)`.
+- **Outbox and inbox** (`packages/sync-do`):
+    - The `_outbox` row is written in the same SQLite transaction as the change.
+    - Delivery is attempted right after the commit, and the alarm retries with backoff.
+    - Receivers dedupe on `_inbox(key)`.
+- **Flows:**
+    - **Message create, update or delete** (`ChannelObject`) → `OrgObject` (channel `lastMessageAt`,
+      `notificationCount` increments, mention resolution), `UserObject`s (notifications),
+      BotGateway, Discord sync, thread naming (OpenRouter fetch from the object).
+    - **Channel create, update or delete; membership; org member changes** (`OrgObject`) → recompute
+      `channel_access` locally → `ChannelObject.setViewers` (synchronous after the commit, the outbox
+      as fallback) → directory `channel_index` and `membership_index` → `UserObject.user_organizations`.
+    - **Profile update** (directory `users`) → each `OrgObject` in `membership_index` (projection).
+    - **Presence** (`UserObject`) → each `OrgObject` (projection). Expiry is an alarm.
+    - **Bot install or uninstall** (`OrgObject`) → `channel_bots` on the affected channels, the bot
+      projection, the directory.
+    - **RSS:** an `OrgObject` alarm polls its subscriptions. **GitHub webhooks:** api →
+      `integration_index` → `OrgObject` → `ChannelObject`. **Upload cleanup:** a daily alarm in
+      `ChannelObject`.
+    - **Discord gateway DO:** resolves the link via `chat_sync_index`, then the `ChannelObject` ingest
+      methods. The chat-sync core logic moves into `ChannelObject` and `OrgObject`.
+    - **Bots** still publish through `bindBotGateways`, now called from `ChannelObject`.
+
+## 5. PR stack (`gh stack`)
+
+Each PR typechecks and its tests pass. The app keeps running on the old stack until PR 5 switches
+the client.
+
+1. **`do-sync/storage`:** SQLite tables, the `Database` layer, DDL and migrations, `stores.ts`, the
+   protocol schema, and the import script's reader half.
+   _Verify:_ store DDL applies on node SQLite; the repo tests in `packages/backend-core` run on SQLite.
+2. **`do-sync/runtime`:** `packages/sync-do` (triggers, broadcaster, sockets, outbox).
+   _Verify:_ unit tests on node SQLite, and workerd tests of a toy object (catch-up, reset,
+   visibility, outbox retry, token expiry).
+3. **`do-sync/objects`:** `apps/sync` and the domain logic per object, including the cluster
+   workflows rehomed.
+   _Verify:_ object logic tests on node SQLite, ported from the backend's current tests.
+4. **`do-sync/api`:** api handlers and routes routed to objects, auth on D1, the Discord gateway,
+   webhooks, the API (v1); the Bun runtime removed.
+   _Verify:_ backend tests and typecheck.
+5. **`do-sync/client`:** `libs/effect-db-collection`, collections, the connection manager, actions.
+   _Verify:_ lib tests, a browser run on `alchemy:dev` (sign in, send, react, thread, DM, unread,
+   reconnect), screenshots.
+6. **`do-sync/cutover`:** delete Postgres, Electric, the proxy, the cluster and Rivet; the alchemy
+   stack; the import script; docs and `CLAUDE.md`.
+   _Verify:_ deploy a `pr-<n>` preview, run the import against a staging copy, and do a full
+   browser pass.
+
+## 6. Known regressions (follow-ups)
+
+- **Message search** in the command palette only covers channels that are loaded. Follow-up: per-org
+  FTS5.
+- **Messages load a whole channel** once its socket is open; there's no paging from the server yet.
+- **Auth checks call D1** on every api request; add a short KV cache if latency shows it's needed.

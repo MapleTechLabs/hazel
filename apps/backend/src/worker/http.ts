@@ -1,6 +1,6 @@
 /**
  * The api Worker's request path: the route graph built once per isolate on the first request,
- * and the fetch handler that runs it under a per-request Postgres connection.
+ * and the fetch handler that runs it.
  */
 import { OutboxWrites } from "@hazel/backend-core"
 import { bridgeHandler, forIsolate, WorkerPlatformLive } from "@hazel/infra/worker-http"
@@ -11,7 +11,7 @@ import { FetchHttpClient, HttpRouter, HttpServerRequest, HttpServerResponse } fr
 import { AllRoutes, AppAuthorizationLive, AppServicesLive } from "../app"
 import type { BotGatewayNamespace } from "../services/bot-gateway-transport"
 import { OUTBOX_DISPATCHER_NAME, type OutboxDispatcherObject } from "./outbox-dispatcher-object"
-import { provideRequestDatabase, requestPlatformLive } from "./platform"
+import { requestPlatformLive } from "./platform"
 import { type RateLimiterObject, rateLimiterLive } from "./rate-limiter-object"
 
 /** The route graph as one request handler, built under the isolate's context (never a request's). */
@@ -43,9 +43,7 @@ const pathOf = (url: string): string => {
 
 /**
  * The fetch handler. `/health` answers before the route graph exists. Every other request runs
- * the router with its own lazily-connecting Postgres client (closed with the request scope, which
- * a streaming response carries until the stream ends), and wakes the outbox dispatcher when the
- * request wrote outbox events.
+ * the router, and wakes the outbox dispatcher when the request wrote outbox events.
  */
 export const makeFetch = (
 	app: Effect.Effect<HttpEffect, unknown>,
@@ -62,7 +60,6 @@ export const makeFetch = (
 		const handler = yield* app.pipe(Effect.orDie)
 		let wroteOutbox = false
 		const response = yield* handler.pipe(
-			provideRequestDatabase(env),
 			Effect.provideService(OutboxWrites, {
 				mark: () => {
 					wroteOutbox = true

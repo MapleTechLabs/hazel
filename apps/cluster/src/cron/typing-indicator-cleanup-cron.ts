@@ -1,5 +1,5 @@
 import * as ClusterCron from "effect/cluster/ClusterCron"
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import * as Cron from "effect/Cron"
 import * as Duration from "effect/Duration"
 import * as Effect from "effect/Effect"
@@ -19,7 +19,7 @@ export const TypingIndicatorCleanupCronLayer = ClusterCron.make({
 		const staleThreshold = Date.now() - TYPING_INDICATOR_STALE_MS
 
 		const deleted = yield* db.run(
-			PG.deleteFrom(schema.typingIndicatorsTable)
+			SQLite.deleteFrom(schema.typingIndicatorsTable)
 				.where(($) => [$.lastTyped.lt(staleThreshold)])
 				.returning("id"),
 		)

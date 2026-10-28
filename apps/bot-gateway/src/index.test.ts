@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test"
-import { ConfigProvider, Effect, Layer, Option, Redacted, Result, Context } from "effect"
+import { ConfigProvider, Effect, Layer, Option, Result, Context } from "effect"
 import {
 	createGatewayServer,
 	GatewayStartupError,
@@ -10,7 +10,7 @@ import {
 const TEST_CONFIG = {
 	port: 8080,
 	isDev: false,
-	databaseUrl: Redacted.make("postgresql://user:password@db.internal:5432/app"),
+	databaseFile: ":memory:",
 	durableStreamsUrl: "http://durable.test/v1/stream",
 	durableStreamsToken: Option.none(),
 	heartbeatIntervalMs: 25_000,

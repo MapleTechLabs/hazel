@@ -11,7 +11,7 @@
  * If a bot already exists, it will be skipped and no new token will be generated.
  */
 
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import type { BotId, UserId } from "@hazel/schema"
 import { createHash, randomUUID } from "crypto"
 import { Effect, References } from "effect"
@@ -96,7 +96,7 @@ const seedBot = Effect.fn("seedInternalBots.seedBot")(function* (provider: Inter
 
 	// Check if bot user already exists
 	const existingUser = yield* db.run(
-		PG.from(schema.usersTable)
+		SQLite.from(schema.usersTable)
 			.select()
 			.where(($) => [$.externalId.eq(externalId)])
 			.limit(1),
@@ -108,7 +108,7 @@ const seedBot = Effect.fn("seedInternalBots.seedBot")(function* (provider: Inter
 
 		// Get the bot record to show bot ID
 		const existingBot = yield* db.run(
-			PG.from(schema.botsTable)
+			SQLite.from(schema.botsTable)
 				.select()
 				.where(($) => [$.userId.eq(existingUser[0]!.id)])
 				.limit(1),
@@ -130,7 +130,7 @@ const seedBot = Effect.fn("seedInternalBots.seedBot")(function* (provider: Inter
 	// Create bot user
 	console.log("  -> Creating bot user...")
 	yield* db.run(
-		PG.insertInto(schema.usersTable).values({
+		SQLite.insertInto(schema.usersTable).values({
 			id: botUserId,
 			externalId,
 			email: botEmail,
@@ -145,7 +145,7 @@ const seedBot = Effect.fn("seedInternalBots.seedBot")(function* (provider: Inter
 	// Create bot record
 	console.log("  -> Creating bot record...")
 	yield* db.run(
-		PG.insertInto(schema.botsTable).values({
+		SQLite.insertInto(schema.botsTable).values({
 			id: botId,
 			userId: botUserId,
 			createdBy: botUserId,
