@@ -10,6 +10,7 @@ import type { SqlError } from "effect/sql/SqlError"
 import { type AlarmStorageLike, scheduleAlarm } from "./alarm.ts"
 import type { OutboxDeliveryError } from "./errors.ts"
 import {
+	deliverKindsNow,
 	type DrainOptions,
 	installOutbox,
 	makeOutbox,
@@ -36,6 +37,8 @@ export interface SyncedObjectOptions<P, E, R, RD, RX> {
 	 * revocations); their receivers must order payloads themselves (`deliverKindsNow`).
 	 */
 	readonly urgentKinds?: ReadonlyArray<string>
+	/** What `afterCommit` spends on urgent kinds per call (default 25 rows, 5 s); the rest go to the alarm. */
+	readonly urgentBudget?: { readonly rows?: number; readonly ms?: number }
 }
 
 export const makeSyncedObject = <P, E, R, RD = never, RX = never>(
@@ -51,6 +54,12 @@ export const makeSyncedObject = <P, E, R, RD = never, RX = never>(
 	const outbox = makeOutbox(options.deliver, options.drain)
 	const extra = options.deadlines ?? Effect.succeed([])
 	const urgentKinds = options.urgentKinds ?? []
+	// Bounded so the request answering after them stays well inside its time limit; a delivery
+	// the timeout cuts off stays pending and is retried (receivers dedupe by key).
+	const urgentNow = deliverKindsNow(options.deliver, urgentKinds, {
+		...options.drain,
+		limit: options.urgentBudget?.rows ?? 25,
+	}).pipe(Effect.timeoutOption(options.urgentBudget?.ms ?? 5_000))
 
 	const logSqlError =
 		(message: string) =>
@@ -116,7 +125,7 @@ export const makeSyncedObject = <P, E, R, RD = never, RX = never>(
 	const afterCommit = Effect.gen(function* () {
 		const seq = yield* flush
 		if (urgentKinds.length > 0) {
-			yield* outbox.deliverNow(urgentKinds).pipe(
+			yield* urgentNow.pipe(
 				logSqlError("Outbox urgent delivery failed"),
 				total("outbox urgent delivery", () => {}),
 			)

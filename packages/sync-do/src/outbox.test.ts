@@ -372,6 +372,40 @@ describe("synced object", () => {
 		}).pipe(Effect.provide(sqliteClientLayer(storage)))
 	})
 
+	it.effect("afterCommit delivers urgent kinds within its budget, leaving the rest pending", () => {
+		const storage = makeFakeStorage()
+		storage.db.exec(TOY_DDL)
+		const r = recorder()
+		return Effect.gen(function* () {
+			const gate = yield* Deferred.make<void>()
+			const reached = yield* Deferred.make<void>()
+			const object = makeSyncedObject({
+				storage,
+				state: makeFakeState(),
+				source: makeToySource(makeToyControls()),
+				deliver: (row) =>
+					row.target === "slow"
+						? Effect.andThen(Deferred.succeed(reached, undefined), Deferred.await(gate))
+						: r.deliver(row),
+				urgentKinds: ["urgent"],
+				urgentBudget: { rows: 2 },
+			})
+			// A drain holds the permit (another request's), so only the urgent path runs here.
+			yield* enqueue({ id: "s1", target: "slow", kind: "k", payload: null })
+			const drain = yield* Effect.forkChild(object.outbox.drain)
+			yield* Deferred.await(reached)
+			for (const id of ["u1", "u2", "u3", "u4"]) {
+				yield* enqueue({ id, target: `T-${id}`, kind: "urgent", payload: null })
+			}
+			yield* object.afterCommit
+			expect(r.delivered.length).toBe(2)
+			yield* object.afterCommit
+			expect(r.delivered.sort()).toEqual(["u1", "u2", "u3", "u4"])
+			yield* Deferred.succeed(gate, undefined)
+			yield* Fiber.join(drain)
+		}).pipe(Effect.provide(sqliteClientLayer(storage)))
+	})
+
 	it.effect("afterCommit flushes rows a delivery wrote locally", () => {
 		const storage = makeFakeStorage()
 		storage.db.exec(TOY_DDL)
