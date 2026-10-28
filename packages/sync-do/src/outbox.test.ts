@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest"
-import { Effect, Fiber, Option } from "effect"
+import { Deferred, Effect, Fiber, Option } from "effect"
 import { SqlClient } from "effect/sql/SqlClient"
 import { TestClock } from "effect/testing"
 import { earliest, scheduleAlarm } from "./alarm.ts"
@@ -10,6 +10,7 @@ import {
 	drainOutbox,
 	enqueue,
 	installOutbox,
+	makeOutbox,
 	nextInboxPruneAt,
 	nextOutboxAlarm,
 	type OutboxRow,
@@ -210,6 +211,46 @@ describe("outbox", () => {
 				{ id: "x2", status: "dead", attempts: 1 },
 			])
 			expect((outboxRows(t.storage)[1] as { last_error: string }).last_error).toContain("kaput")
+		}).pipe(Effect.provide(t.layer))
+	})
+
+	it.effect("deliverNow sends urgent kinds past a held drain and backs off a failure once", () => {
+		const t = setup()
+		return Effect.gen(function* () {
+			const gate = yield* Deferred.make<void>()
+			const reached = yield* Deferred.make<void>()
+			const r = recorder()
+			const deliver = (row: OutboxRow) =>
+				row.target === "slow"
+					? Effect.andThen(Deferred.succeed(reached, undefined), Deferred.await(gate))
+					: r.deliver(row)
+			const outbox = makeOutbox(deliver)
+			yield* enqueue({ id: "s1", target: "slow", kind: "k", payload: null })
+			const drain = yield* Effect.forkChild(outbox.drain)
+			yield* Deferred.await(reached)
+
+			// Behind a non-urgent head of their own target, and while the drain holds the permit.
+			yield* enqueue({ id: "c0", target: "C", kind: "k", payload: null })
+			yield* enqueue({ id: "c1", target: "C", kind: "urgent", payload: null })
+			yield* enqueue({ id: "d1", target: "D", kind: "urgent", payload: null })
+			r.failing.set("D", new OutboxDeliveryError({ message: "D is down" }))
+			yield* outbox.drainIfIdle
+			expect(r.delivered).toEqual([])
+			const result = yield* outbox.deliverNow(["urgent"])
+			expect(result).toMatchObject({ delivered: 1, retried: 1 })
+			expect(r.delivered).toEqual(["c1"])
+			// The failed row waits for the drain's backoff, not the next write's deliverNow.
+			expect(outboxRows(t.storage)).toMatchObject([
+				{ id: "s1", attempts: 0 },
+				{ id: "c0", attempts: 0 },
+				{ id: "d1", attempts: 1, last_error: "D is down" },
+			])
+			r.failing.delete("D")
+			yield* outbox.deliverNow(["urgent"])
+			expect(r.delivered).toEqual(["c1"])
+
+			yield* Deferred.succeed(gate, undefined)
+			yield* Fiber.join(drain)
 		}).pipe(Effect.provide(t.layer))
 	})
 

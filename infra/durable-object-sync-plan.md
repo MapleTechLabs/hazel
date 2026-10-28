@@ -161,8 +161,9 @@ deletes rows older than 10 s, and the cron goes away.
       `notificationCount` increments, mention resolution), `UserObject`s (notifications),
       BotGateway, Discord sync, thread naming (OpenRouter fetch from the object).
     - **Channel create, update or delete; membership; org member changes** (`OrgObject`) → recompute
-      `channel_access` locally → `ChannelObject.setViewers` (synchronous after the commit, the outbox
-      as fallback) → directory `channel_index` and `membership_index` → `UserObject.user_organizations`.
+      `channel_access` locally → `ChannelObject.setViewers` (delivered after the commit and before the
+      answer even while another drain runs, `urgentKinds`; versioned so an older one is dropped; the
+      outbox retries a failure) → directory `channel_index` and `membership_index` → `UserObject.user_organizations`.
     - **Profile update** (directory `users`) → each `OrgObject` in `membership_index` (projection).
     - **Presence** (`UserObject`) → each `OrgObject` (projection). Expiry is an alarm.
     - **Bot install or uninstall** (`OrgObject`) → `channel_bots` on the affected channels, the bot

@@ -129,6 +129,71 @@ export const nextOutboxAlarm: Effect.Effect<number | undefined, SqlError, SqlCli
 	},
 )
 
+const decodeRow = (row: RawOutboxRow): OutboxRow => ({
+	id: row.id,
+	target: row.target,
+	kind: row.kind,
+	payload: JSON.parse(row.payload),
+	attempts: Number(row.attempts),
+	createdAt: Number(row.created_at),
+})
+
+type AttemptOutcome = "delivered" | "retried" | "dead"
+
+/**
+ * One delivery attempt of `raw`: deletes it on success, marks it `dead` on a non-retryable
+ * failure, else backs it off. Interrupts propagate.
+ */
+const attemptRow = <R>(
+	deliver: (row: OutboxRow) => Effect.Effect<void, OutboxDeliveryError, R>,
+	raw: RawOutboxRow,
+	now: number,
+	policy: BackoffPolicy,
+	timeoutMs: number,
+): Effect.Effect<AttemptOutcome, SqlError, SqlClient | R> =>
+	Effect.gen(function* () {
+		const sql = yield* SqlClient
+		const row = decodeRow(raw)
+		const exit = yield* deliver(row).pipe(
+			Effect.timeoutOrElse({
+				duration: timeoutMs,
+				orElse: () =>
+					Effect.fail(
+						new OutboxDeliveryError({ message: `Delivery timed out after ${timeoutMs}ms` }),
+					),
+			}),
+			Effect.exit,
+		)
+		if (Exit.isSuccess(exit)) {
+			yield* sql`DELETE FROM _outbox WHERE id = ${row.id}`
+			return "delivered" as const
+		}
+		if (Cause.hasInterruptsOnly(exit.cause)) return yield* Effect.interrupt
+		// Defects count as failed attempts too: the row must not be lost or retried hot.
+		const error = Cause.findErrorOption(exit.cause)
+		const message = Option.match(error, {
+			onNone: () => Cause.pretty(exit.cause),
+			onSome: (e) => e.message,
+		}).slice(0, 2_000)
+		const attempts = row.attempts + 1
+		const retryable = Option.match(error, {
+			onNone: () => true,
+			onSome: (e) => e.retryable !== false,
+		})
+		const fields = { id: row.id, target: row.target, kind: row.kind, attempts, message }
+		if (!retryable) {
+			yield* sql`UPDATE _outbox SET status = 'dead', attempts = ${attempts}, last_error = ${message}
+				WHERE id = ${row.id}`
+			yield* Effect.logError("Outbox row is dead (non-retryable)", fields)
+			return "dead" as const
+		}
+		const delay = backoffDelayMs(attempts, yield* Random.next, policy)
+		yield* sql`UPDATE _outbox SET attempts = ${attempts}, next_at = ${now + delay}, last_error = ${message}
+			WHERE id = ${row.id}`
+		yield* Effect.logWarning("Outbox delivery failed; retrying", { ...fields, delayMs: delay })
+		return "retried" as const
+	})
+
 /**
  * Deliver due rows in order per target: only each target's head is considered, and a target keeps
  * going while its next row is due and delivery succeeds. A retryable failure (or a defect or
@@ -154,78 +219,65 @@ export const drainOutbox = <R>(
 					WHERE o.status = 'pending' AND o.target = ${target} ORDER BY o.rowid LIMIT 1`,
 				(rows) => rows[0],
 			)
-		const attempt = (outboxRow: OutboxRow) =>
-			deliver(outboxRow).pipe(
-				Effect.timeoutOrElse({
-					duration: timeoutMs,
-					orElse: () =>
-						Effect.fail(
-							new OutboxDeliveryError({ message: `Delivery timed out after ${timeoutMs}ms` }),
-						),
-				}),
-				Effect.exit,
-			)
-		let delivered = 0
-		let retried = 0
-		let dead = 0
+		const counts = { delivered: 0, retried: 0, dead: 0 }
 		for (const head of heads) {
 			let row: RawOutboxRow | undefined = head
 			// Walk this target's queue while rows are due and deliveries succeed (or go dead).
 			while (row !== undefined && Number(row.next_at) <= now && budget > 0) {
 				budget--
-				const outboxRow: OutboxRow = {
-					id: row.id,
-					target: row.target,
-					kind: row.kind,
-					payload: JSON.parse(row.payload),
-					attempts: Number(row.attempts),
-					createdAt: Number(row.created_at),
-				}
-				const exit = yield* attempt(outboxRow)
-				if (Exit.isSuccess(exit)) {
-					yield* sql`DELETE FROM _outbox WHERE id = ${row.id}`
-					delivered++
-					row = yield* nextOf(row.target)
-					continue
-				}
-				if (Cause.hasInterruptsOnly(exit.cause)) return yield* Effect.interrupt
-				// Defects count as failed attempts too: the row must not be lost or retried hot.
-				const error = Cause.findErrorOption(exit.cause)
-				const message = Option.match(error, {
-					onNone: () => Cause.pretty(exit.cause),
-					onSome: (e) => e.message,
-				}).slice(0, 2_000)
-				const attempts = outboxRow.attempts + 1
-				const retryable = Option.match(error, {
-					onNone: () => true,
-					onSome: (e) => e.retryable !== false,
-				})
-				const fields = { id: row.id, target: row.target, kind: row.kind, attempts, message }
-				if (!retryable) {
-					yield* sql`UPDATE _outbox SET status = 'dead', attempts = ${attempts}, last_error = ${message}
-						WHERE id = ${row.id}`
-					yield* Effect.logError("Outbox row is dead (non-retryable)", fields)
-					dead++
-					row = yield* nextOf(row.target)
-					continue
-				}
-				const delay = backoffDelayMs(attempts, yield* Random.next, policy)
-				yield* sql`UPDATE _outbox SET attempts = ${attempts}, next_at = ${now + delay}, last_error = ${message}
-					WHERE id = ${row.id}`
-				yield* Effect.logWarning("Outbox delivery failed; retrying", { ...fields, delayMs: delay })
-				retried++
-				row = undefined
+				const outcome: AttemptOutcome = yield* attemptRow(deliver, row, now, policy, timeoutMs)
+				counts[outcome]++
+				row = outcome === "retried" ? undefined : yield* nextOf(row.target)
 			}
 		}
 		const nextAt = yield* nextOutboxAlarm
 		yield* Effect.annotateCurrentSpan({
 			"outbox.heads": heads.length,
-			"outbox.delivered": delivered,
-			"outbox.retried": retried,
-			"outbox.dead": dead,
+			"outbox.delivered": counts.delivered,
+			"outbox.retried": counts.retried,
+			"outbox.dead": counts.dead,
 		})
-		return { delivered, retried, dead, nextAt }
+		return { ...counts, nextAt }
 	}).pipe(Effect.withSpan("SyncDO.drainOutbox"))
+
+/**
+ * Deliver the never-attempted pending rows of `kinds` now, out of their target's FIFO and outside
+ * the drain's permit, so a running drain can't defer them and a delivery calling back into this
+ * object can't deadlock. Only for kinds whose receivers order payloads themselves (a version),
+ * since an older row may land after a newer one. A failure backs the row off for the drain.
+ */
+export const deliverKindsNow = <R>(
+	deliver: (row: OutboxRow) => Effect.Effect<void, OutboxDeliveryError, R>,
+	kinds: ReadonlyArray<string>,
+	options?: DrainOptions,
+): Effect.Effect<DrainResult, SqlError, SqlClient | R> =>
+	Effect.gen(function* () {
+		const sql = yield* SqlClient
+		const policy: BackoffPolicy = { ...DEFAULT_BACKOFF, ...options?.backoff }
+		const timeoutMs = options?.deliveryTimeoutMs ?? DEFAULT_DELIVERY_TIMEOUT_MS
+		const now = yield* Clock.currentTimeMillis
+		const rows =
+			kinds.length === 0
+				? []
+				: yield* sql<RawOutboxRow>`SELECT ${sql.literal(COLUMNS)} FROM _outbox o
+					WHERE o.status = 'pending' AND o.attempts = 0 AND o.next_at <= ${now}
+						AND ${sql.in("o.kind", kinds)}
+					ORDER BY o.rowid LIMIT ${options?.limit ?? 100}`
+		// Concurrently: each row is its own target object, and one slow one must not hold the rest.
+		const outcomes = yield* Effect.forEach(
+			rows,
+			(row) => attemptRow(deliver, row, now, policy, timeoutMs),
+			{ concurrency: 8 },
+		)
+		const counts = { delivered: 0, retried: 0, dead: 0 }
+		for (const outcome of outcomes) counts[outcome]++
+		yield* Effect.annotateCurrentSpan({
+			"outbox.urgent": rows.length,
+			"outbox.delivered": counts.delivered,
+			"outbox.retried": counts.retried,
+		})
+		return { ...counts, nextAt: yield* nextOutboxAlarm }
+	}).pipe(Effect.withSpan("SyncDO.deliverKindsNow"))
 
 /** A drainer bound to one object's delivery function; concurrent drains run one after another. */
 export const makeOutbox = <R>(
@@ -242,6 +294,8 @@ export const makeOutbox = <R>(
 		 * rows it adds are left to the alarm the running drain schedules.
 		 */
 		drainIfIdle: Effect.asVoid(permit.withPermitsIfAvailable(1)(drainOutbox(deliver, options))),
+		/** `deliverKindsNow`: runs even while a drain is. */
+		deliverNow: (kinds: ReadonlyArray<string>) => deliverKindsNow(deliver, kinds, options),
 		nextAlarm: nextOutboxAlarm,
 	}
 }

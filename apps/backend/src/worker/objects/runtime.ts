@@ -33,6 +33,7 @@ import type { ThreadNamer } from "../../services/thread-namer"
 import type { ChatSyncTransport } from "../../services/chat-sync/chat-sync-transport"
 import { ObjectCalls } from "./call-receivers"
 import type { CallRequest, CallResponse } from "./calls"
+import { ChannelEffects } from "./effects/channel-effects"
 import { applyReceivedEffect, deliverOutboxRowFrom } from "./effects/deliver"
 import type { ApplyEffectRequest, ApplyEffectResult } from "./effects/registry"
 import type { ObjectKind } from "./kinds"
@@ -113,6 +114,8 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 			...(kind === "channel" ? { deadlines: channelDeadlines } : {}),
 			...(kind === "org" ? { deadlines: rssDeadlines } : {}),
 			...(presence === undefined ? {} : { deadlines: presence.deadlines }),
+			// Revocations land before the org answers (versioned, so out of order is safe).
+			...(kind === "org" ? { urgentKinds: [ChannelEffects.setViewers.name] } : {}),
 		})
 
 		const handlers = yield* Layer.build(options.handlers.pipe(Layer.provide(Layer.succeedContext(base))))

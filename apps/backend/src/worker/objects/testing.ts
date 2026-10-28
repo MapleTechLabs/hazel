@@ -8,7 +8,7 @@ import type { BotGatewayEnvelope } from "@hazel/domain"
 import { layerMemory } from "@hazel/db/node"
 import type { BotId } from "@hazel/schema"
 import { type FakeStorage, makeFakeState, makeFakeStorage, sqliteClientLayer } from "@hazel/sync-do/testing"
-import { ConfigProvider, Context, Effect, type Exit, Layer, Option, Scope } from "effect"
+import { ConfigProvider, Context, Deferred, Effect, type Exit, Layer, Option, Scope } from "effect"
 import { Persistence } from "effect/persistence"
 import { BotGatewayTransport } from "../../services/bot-gateway-transport"
 import { Directory } from "../../services/directory"
@@ -56,6 +56,14 @@ export interface TestObjects {
 	readonly deliveries: Array<string>
 	/** Make deliveries to `target` fail (outbox retry), or succeed again. */
 	readonly setUnreachable: (target: ObjectTarget, unreachable: boolean) => void
+	/**
+	 * Hold deliveries to `target` until `release`; `reached` completes when one is waiting (a
+	 * drain that can't finish, as a slow object would make it).
+	 */
+	readonly hold: (target: ObjectTarget) => {
+		readonly reached: Effect.Effect<void>
+		readonly release: Effect.Effect<void>
+	}
 	/** The stubs the objects reach each other through (for callers outside the objects). */
 	readonly stubs: Context.Service.Shape<typeof ObjectStubs>
 	/** Provider calls chat-sync deliveries made (`chatSync.outbound`), in order. */
@@ -83,6 +91,7 @@ export const makeTestObjects = Effect.gen(function* () {
 	const published: TestObjects["published"] = []
 	const deliveries: Array<string> = []
 	const unreachable = new Set<string>()
+	const held = new Map<string, { reached: Deferred.Deferred<void>; gate: Deferred.Deferred<void> }>()
 	const objects = new Map<string, TestObject>()
 	const namingRequests: Array<ThreadNamingContext> = []
 	let threadName = "Generated name"
@@ -110,8 +119,24 @@ export const makeTestObjects = Effect.gen(function* () {
 					if (unreachable.has(formatTarget(target))) {
 						return Effect.fail(new Error(`${formatTarget(target)} is unreachable`))
 					}
-					deliveries.push(`${formatTarget(target)} ${request.kind} ${request.key}`)
-					return isolated(Effect.flatMap(get(target), (object) => object.applyEffect(request)))
+					const hold = held.get(formatTarget(target))
+					const wait =
+						hold === undefined
+							? Effect.void
+							: Effect.andThen(
+									Deferred.succeed(hold.reached, undefined),
+									Deferred.await(hold.gate),
+								)
+					return wait.pipe(
+						Effect.andThen(
+							Effect.sync(() =>
+								deliveries.push(`${formatTarget(target)} ${request.kind} ${request.key}`),
+							),
+						),
+						Effect.andThen(
+							isolated(Effect.flatMap(get(target), (object) => object.applyEffect(request))),
+						),
+					)
 				}),
 		}),
 	}
@@ -200,6 +225,17 @@ export const makeTestObjects = Effect.gen(function* () {
 		setUnreachable: (target, value) => {
 			if (value) unreachable.add(formatTarget(target))
 			else unreachable.delete(formatTarget(target))
+		},
+		hold: (target) => {
+			const entry = { reached: Deferred.makeUnsafe<void>(), gate: Deferred.makeUnsafe<void>() }
+			held.set(formatTarget(target), entry)
+			return {
+				reached: Deferred.await(entry.reached),
+				release: Effect.andThen(
+					Effect.sync(() => held.delete(formatTarget(target))),
+					Deferred.succeed(entry.gate, undefined),
+				).pipe(Effect.asVoid),
+			}
 		},
 		stubs,
 		chatSyncCalls: chatSync.calls,

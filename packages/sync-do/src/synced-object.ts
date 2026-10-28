@@ -1,7 +1,8 @@
 /**
  * The wiring most objects want: the broadcaster, the outbox and one alarm over them.
  *
- * - `afterCommit` after every committed write: flush to sockets, deliver the outbox, rearm.
+ * - `afterCommit` after every committed write: flush to sockets, deliver the urgent kinds, then the
+ *   outbox, rearm.
  * - `alarm` from the object's `alarm()`: expire sockets, retry the outbox, prune, rearm.
  */
 import { Cause, Clock, Effect } from "effect"
@@ -30,6 +31,11 @@ export interface SyncedObjectOptions<P, E, R, RD, RX> {
 	readonly deadlines?: Effect.Effect<ReadonlyArray<number | null | undefined>, never, RX>
 	readonly runtime?: SyncRuntimeOptions
 	readonly drain?: DrainOptions
+	/**
+	 * Outbox kinds `afterCommit` delivers before it answers even while a drain runs (e.g. access
+	 * revocations); their receivers must order payloads themselves (`deliverKindsNow`).
+	 */
+	readonly urgentKinds?: ReadonlyArray<string>
 }
 
 export const makeSyncedObject = <P, E, R, RD = never, RX = never>(
@@ -44,6 +50,7 @@ export const makeSyncedObject = <P, E, R, RD = never, RX = never>(
 	})
 	const outbox = makeOutbox(options.deliver, options.drain)
 	const extra = options.deadlines ?? Effect.succeed([])
+	const urgentKinds = options.urgentKinds ?? []
 
 	const logSqlError =
 		(message: string) =>
@@ -104,6 +111,12 @@ export const makeSyncedObject = <P, E, R, RD = never, RX = never>(
 	 */
 	const afterCommit = Effect.gen(function* () {
 		const seq = yield* flush
+		if (urgentKinds.length > 0) {
+			yield* outbox.deliverNow(urgentKinds).pipe(
+				logSqlError("Outbox urgent delivery failed"),
+				total("outbox urgent delivery", () => {}),
+			)
+		}
 		yield* outbox.drainIfIdle.pipe(
 			logSqlError("Outbox drain failed"),
 			total("outbox drain", () => {}),

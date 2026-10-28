@@ -7,7 +7,7 @@
 import { SQLite, schema } from "@hazel/db"
 import { CurrentUser, UnauthorizedError } from "@hazel/domain"
 import type { ChannelId, OrganizationId, UserId } from "@hazel/schema"
-import { Cause, Effect, Exit, Option, type Scope } from "effect"
+import { Cause, Effect, Exit, Fiber, Option, type Scope } from "effect"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { CreateDmChannelRequest, CreateThreadRequest } from "@hazel/domain/rpc"
 import { decodeExit, encodePayload, type HazelRpcTag, rpcFor } from "../../rpc/dispatch"
@@ -264,6 +264,82 @@ describe("OrgObject: organizations and members", () => {
 				expect(Option.map(index, (row) => row.deletedAt !== null)).toEqual(Option.some(true))
 				const memberObject = yield* objects.get(userTarget(member))
 				expect(rows(memberObject, `SELECT organizationId FROM user_organizations`)).toEqual([])
+			}),
+		))
+
+	it("a removal cuts the channel's viewers before it answers, even while another drain runs", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const { objects, org, orgId, owner, member, outsider } = world
+				const general = yield* objects.get(channelTarget(world.general))
+				// The outsider's join drains towards their (slow) UserObject and holds the drain.
+				const slow = objects.hold(userTarget(outsider))
+				const join = yield* Effect.forkChild(
+					call(org, orgId, "organization.joinViaPublicInvite", { slug: "acme" }, outsider),
+				)
+				yield* slow.reached
+
+				const [membership] = rows<{ id: string }>(
+					org,
+					`SELECT id FROM organization_members WHERE userId = ?`,
+					member,
+				)
+				ok(
+					yield* call(
+						org,
+						orgId,
+						"organizationMember.delete",
+						{ id: membership!.id, organizationId: orgId },
+						member,
+					),
+				)
+				// Not left to the alarm the held drain would schedule.
+				expect(viewersOf(general).map((viewer) => viewer.userId)).not.toContain(member)
+				expect(viewersOf(general).map((viewer) => viewer.userId)).toContain(owner)
+
+				yield* slow.release
+				ok(yield* Fiber.join(join))
+				expect(
+					viewersOf(general)
+						.map((viewer) => viewer.userId)
+						.sort(),
+				).toEqual([owner, outsider].sort())
+			}),
+		))
+
+	it("a channel drops a setViewers older than the one it applied", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const { objects, orgId, owner } = world
+				const general = yield* objects.get(channelTarget(world.general))
+				const [applied] = rows<{ value: string }>(
+					general,
+					`SELECT value FROM _object_meta WHERE key = 'viewersVersion'`,
+				)
+				const version = Number(applied!.value)
+				const stale = (key: string, payloadVersion: number | undefined) =>
+					general.applyEffect({
+						objectId: world.general,
+						kind: "channel.setViewers",
+						payload: {
+							organizationId: orgId,
+							conversationId: null,
+							viewers: [{ userId: owner, organizationId: orgId, role: "owner" }],
+							bots: [],
+							...(payloadVersion === undefined ? {} : { version: payloadVersion }),
+						},
+						key,
+						sender: { kind: "org", id: orgId },
+					})
+				// An older versioned payload, and one queued before versions existed.
+				yield* stale(uuid(), version - 1)
+				yield* stale(uuid(), undefined)
+				expect(viewersOf(general)).toHaveLength(2)
+				// A newer one applies.
+				yield* stale(uuid(), version + 1)
+				expect(viewersOf(general).map((viewer) => viewer.userId)).toEqual([owner])
 			}),
 		))
 

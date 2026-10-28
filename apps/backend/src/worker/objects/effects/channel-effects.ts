@@ -36,6 +36,11 @@ export const SetViewersPayload = Schema.Struct({
 	bots: Schema.Array(Schema.Struct({ botId: StoredBotId, botUserId: UserId })),
 	/** A Connect host channel's guest mounts: their ids are routed here (`ChannelViewers.require`). */
 	mountChannelIds: Schema.optionalKey(Schema.Array(ChannelId)),
+	/**
+	 * Increases with every `setViewers` the org sends (`publishChannelAccess`). The org delivers
+	 * them out of order (right after its commit, retries later), so an older one is dropped.
+	 */
+	version: Schema.optionalKey(Schema.Number),
 })
 export type SetViewersPayload = typeof SetViewersPayload.Type
 
@@ -58,6 +63,8 @@ export const CHANNEL_ORG_KEY = "organizationId"
 export const CHANNEL_CONVERSATION_KEY = "conversationId"
 /** JSON array of the guest mount channel ids served by this (host) channel's object. */
 export const CHANNEL_MOUNTS_KEY = "mountChannelIds"
+/** The `version` of the last applied `setViewers`. */
+export const CHANNEL_VIEWERS_VERSION_KEY = "viewersVersion"
 
 /** Set `conversationId` on the messages and reactions written before the channel was shared. */
 const tagConversation = Effect.fn("ChannelEffects.tagConversation")(function* (
@@ -79,6 +86,15 @@ const tagConversation = Effect.fn("ChannelEffects.tagConversation")(function* (
 /** Writes only what changed, so an unchanged viewer's sockets are not resnapshotted. */
 const setViewers = Effect.fn("ChannelEffects.setViewers")(function* (payload: SetViewersPayload) {
 	const db = yield* Database.Database
+	const applied = Option.map(yield* readObjectMeta(CHANNEL_VIEWERS_VERSION_KEY), Number)
+	// Unversioned payloads predate versions, so any versioned one applied is newer.
+	if (Option.isSome(applied) && (payload.version ?? -1) < applied.value) {
+		yield* Effect.annotateCurrentSpan({ "channel.viewers_stale": true })
+		return
+	}
+	if (payload.version !== undefined) {
+		yield* writeObjectMeta(CHANNEL_VIEWERS_VERSION_KEY, String(payload.version))
+	}
 	const current = yield* db.run(SQLite.from(schema.channelViewersTable).select())
 	const next = new Map(payload.viewers.map((viewer) => [viewer.userId, viewer]))
 	const removed = current.filter((viewer) => !next.has(viewer.userId)).map((viewer) => viewer.userId)

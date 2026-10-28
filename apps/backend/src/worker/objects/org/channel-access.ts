@@ -10,18 +10,19 @@
  * A Connect guest mount instead reports its readers to the host org (`./connect.ts`), and its
  * index row points at the host channel.
  *
- * The object drains its outbox right after the commit, so both land before the RPC answers; the
- * alarm retries whatever failed. Call `syncChannelAccess` (or `syncChannelTree` for a channel and
+ * The object delivers `setViewers` right after the commit, before the RPC answers, even while
+ * another request's drain runs; the alarm retries whatever failed. Call `syncChannelAccess` (or `syncChannelTree` for a channel and
  * its threads) wherever a handler called `channelAccessSync.syncChannel`, and `syncMemberAccess`
  * where it called `syncUserInOrganization` (membership and org member changes).
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import type { ChannelId, OrganizationId, UserId } from "@hazel/schema"
-import { Effect, Option } from "effect"
+import { Clock, Effect, Option } from "effect"
 import { ChannelAccessSyncService } from "../../../services/channel-access-sync"
 import { ChannelEffects, type SetViewersPayload } from "../effects/channel-effects"
 import { DirectoryEffects } from "../effects/directory-effects"
 import { enqueueEffect } from "../effects/registry"
+import { readObjectMeta, writeObjectMeta } from "../meta"
 import { UserEffects } from "../effects/user-effects"
 import { ConnectOrgEffects } from "../connect-wire"
 import { channelTarget, orgTarget, userTarget } from "../kinds"
@@ -116,7 +117,24 @@ export const channelViewersPayload = Effect.fn("OrgObject.channelViewersPayload"
 	})
 })
 
-/** Project the channel's current access: `setViewers` and its directory index row (outbox). */
+const VIEWERS_VERSION_KEY = "viewersVersion"
+
+/**
+ * The next `setViewers` version: past the last one and at least the clock, so it keeps increasing
+ * even if the org's meta were lost. Inside the write's transaction, so writes can't share one.
+ */
+const nextViewersVersion = Effect.gen(function* () {
+	const last = Option.getOrElse(Option.map(yield* readObjectMeta(VIEWERS_VERSION_KEY), Number), () => 0)
+	const version = Math.max(last + 1, yield* Clock.currentTimeMillis)
+	yield* writeObjectMeta(VIEWERS_VERSION_KEY, String(version))
+	return version
+}).pipe(Effect.mapError(Database.toDatabaseError))
+
+/**
+ * Project the channel's current access: `setViewers` and its directory index row (outbox). The
+ * object delivers `setViewers` right after the commit, before it answers, even while a drain is
+ * running (`urgentKinds` in `../runtime.ts`), so a removed member loses access in the request.
+ */
 export const publishChannelAccess = Effect.fn("OrgObject.publishChannelAccess")(function* (
 	channelId: ChannelId,
 ) {
@@ -126,7 +144,8 @@ export const publishChannelAccess = Effect.fn("OrgObject.publishChannelAccess")(
 	const hostChannelId = role === "guest" ? yield* publishGuestMount(channelId, payload) : null
 	// A guest mount's messages live in the host channel's object; its own object stays unused.
 	if (hostChannelId === null) {
-		yield* enqueueEffect(ChannelEffects.setViewers, channelTarget(channelId), payload)
+		const version = yield* nextViewersVersion
+		yield* enqueueEffect(ChannelEffects.setViewers, channelTarget(channelId), { ...payload, version })
 	}
 	yield* enqueueEffect(
 		DirectoryEffects.upsertChannelIndex,
