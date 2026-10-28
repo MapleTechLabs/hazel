@@ -11,7 +11,8 @@
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import { IntegrationConnection } from "@hazel/domain/models"
-import { BotCommandId, BotId, InvitationId, OrganizationId, UserId } from "@hazel/schema"
+import { BotCommandId, type BotId, InvitationId, OrganizationId, UserId } from "@hazel/schema"
+import { StoredBotId } from "./wire-ids"
 import { Effect, Option, Schema } from "effect"
 import { Directory } from "../../services/directory"
 import { defineEffect } from "./effects/registry"
@@ -24,7 +25,7 @@ const toIso = (value: Date | null) => (value === null ? null : value.toISOString
 
 /** A `bots` row as it crosses the outbox (timestamps as ISO text). */
 export const BotWire = Schema.Struct({
-	id: BotId,
+	id: StoredBotId,
 	userId: UserId,
 	createdBy: UserId,
 	name: Schema.String,
@@ -54,7 +55,7 @@ const BotCommandArgumentWire = Schema.Struct({
 /** A `bot_commands` row as it crosses the outbox. */
 export const BotCommandWire = Schema.Struct({
 	id: BotCommandId,
-	botId: BotId,
+	botId: StoredBotId,
 	name: Schema.String,
 	description: Schema.String,
 	arguments: Schema.NullOr(Schema.Array(BotCommandArgumentWire)),
@@ -71,7 +72,7 @@ export const BotProjectionPayload = Schema.Struct({
 })
 export type BotProjectionPayload = typeof BotProjectionPayload.Type
 
-export const RefreshBotInstallCountPayload = Schema.Struct({ botId: BotId })
+export const RefreshBotInstallCountPayload = Schema.Struct({ botId: StoredBotId })
 
 export const toBotWire = (row: schema.Bot): BotWire => ({
 	...row,

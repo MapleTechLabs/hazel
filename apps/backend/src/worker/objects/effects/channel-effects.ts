@@ -4,6 +4,7 @@
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import { BotId, ChannelId, ConnectConversationId, OrganizationId, UserId } from "@hazel/schema"
+import { StoredBotId } from "../wire-ids"
 import { Effect, Option, Schema } from "effect"
 import type { SqlClient } from "effect/sql/SqlClient"
 import { postSystemMessage, PostSystemMessagePayload } from "../channel/system-messages"
@@ -32,7 +33,7 @@ export const SetViewersPayload = Schema.Struct({
 	organizationId: OrganizationId,
 	conversationId: Schema.NullOr(ConnectConversationId),
 	viewers: Schema.Array(ChannelViewer),
-	bots: Schema.Array(Schema.Struct({ botId: BotId, botUserId: UserId })),
+	bots: Schema.Array(Schema.Struct({ botId: StoredBotId, botUserId: UserId })),
 	/** A Connect host channel's guest mounts: their ids are routed here (`ChannelViewers.require`). */
 	mountChannelIds: Schema.optionalKey(Schema.Array(ChannelId)),
 })

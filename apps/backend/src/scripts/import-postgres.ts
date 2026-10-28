@@ -139,7 +139,10 @@ export const main = Effect.gen(function* () {
 			totals.skipped += result.skipped
 		})
 
-	const flushAll = Effect.suspend(() => Effect.forEach([...pending.keys()], send, { discard: true }))
+	// Batches for different objects are independent; a cold object's first call dominates, so overlap them.
+	const flushAll = Effect.suspend(() =>
+		Effect.forEach([...pending.keys()], send, { concurrency: 16, discard: true }),
+	)
 
 	const add = (row: SourceRow, table: string) =>
 		Effect.forEach(
@@ -202,7 +205,7 @@ export const main = Effect.gen(function* () {
 						),
 					),
 				),
-			{ concurrency: 4, discard: true },
+			{ concurrency: 16, discard: true },
 		)
 	}
 
