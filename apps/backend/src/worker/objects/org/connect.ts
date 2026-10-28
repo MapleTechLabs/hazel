@@ -29,7 +29,7 @@ import {
 	toConversationWire,
 	toMountWire,
 } from "../connect-wire"
-import { enqueueEffect } from "../effects/registry"
+import { type EffectSender, enqueueEffect, isOrgSender } from "../effects/registry"
 import { orgTarget } from "../kinds"
 import { syncChannelAccess } from "./channel-access"
 import { removeUserProjection, upsertUserProjection } from "./projections"
@@ -410,6 +410,62 @@ export const conversationSnapshot = Effect.fn("OrgObject.connectConversationSnap
 	}
 	const activeNow = own.isActive && own.deletedAt === null && payload.conversation.deletedAt === null
 	if (retyped || Option.isSome(before) !== activeNow) yield* syncHostChannel(own.channelId)
+})
+
+/** Host: the host channel's name, icon or type changed; guests' mounts mirror it. */
+export const publishHostChannel = Effect.fn("OrgObject.connectPublishHostChannel")(function* (
+	channelId: ChannelId,
+) {
+	const mount = yield* activeMountOf(channelId)
+	if (Option.isNone(mount) || mount.value.role !== "host") return
+	yield* publishConversation(mount.value.conversationId)
+})
+
+/**
+ * Who may send a Connect effect here (`../effects/deliver.ts` runs it in the receiving
+ * transaction): a guest org only about its own mount and readers, the host org only about a
+ * conversation it hosts (and never one this org already knows under another host). Other kinds
+ * pass. `Some(reason)` refuses.
+ */
+export const connectSenderRefusal = Effect.fn("OrgObject.connectSenderRefusal")(function* (
+	kind: string,
+	payload: unknown,
+	sender: EffectSender,
+) {
+	const fromOrg = (organizationId: string, what: string) =>
+		isOrgSender(sender, organizationId)
+			? Option.none<string>()
+			: Option.some(
+					`${kind} ${what} ${organizationId} sent by ${sender.kind}${"id" in sender ? `:${sender.id}` : ""}`,
+				)
+	switch (kind) {
+		case ConnectOrgEffects.mountAdded.name: {
+			const { mount } = payload as typeof ConnectOrgEffects.mountAdded.payload.Type
+			if (mount.role !== "guest") return Option.some(`${kind} must add a guest mount`)
+			return fromOrg(mount.organizationId, "for org")
+		}
+		case ConnectOrgEffects.setParticipants.name:
+		case ConnectOrgEffects.mountRemoved.name: {
+			const { organizationId } = payload as { readonly organizationId: OrganizationId }
+			return fromOrg(organizationId, "for org")
+		}
+		case ConnectOrgEffects.conversationSnapshot.name: {
+			const { conversation } = payload as ConversationSnapshotPayload
+			const refused = fromOrg(conversation.hostOrganizationId, "hosted by")
+			if (Option.isSome(refused)) return refused
+			const known = yield* conversationOf(conversation.id)
+			if (
+				Option.isSome(known) &&
+				(known.value.hostOrganizationId !== conversation.hostOrganizationId ||
+					known.value.hostChannelId !== conversation.hostChannelId)
+			) {
+				return Option.some(`${kind}: conversation ${conversation.id} has another host here`)
+			}
+			return Option.none()
+		}
+		default:
+			return Option.none()
+	}
 })
 
 export const connectOrgReceivers = {
