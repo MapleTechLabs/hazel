@@ -57,8 +57,8 @@ Rules:
 | `packages/db/src/schema-ddl.ts`            | `renderStoreSchema(tables)` → DDL statements, plus a versioned migration list per store.                                                                                                                                                    |
 | `packages/sync-do/` (new)                  | Sync runtime: change triggers, `_changes` log, broadcaster, hibernatable socket handling, outbox and inbox, `SyncedObject` helpers. Generic over effect-orm tables. No Hazel domain logic.                                                  |
 | `packages/domain/src/sync/`                | Protocol frames (Effect Schema) and `SyncSeq`. Shared by the client and the objects.                                                                                                                                                        |
-| `apps/sync/` (new Worker)                  | Hosts `OrgObject`, `ChannelObject`, `UserObject` and later `MessageLiveObject`; serves `GET /sync/:kind/:id` (WebSocket).                                                                                                                   |
-| `packages/backend-core/src/objects/` (new) | Domain logic per object (ported from `apps/backend/src/rpc/handlers`, `services`, `policies` and `apps/cluster/src/workflows`). Plain Effect services over `Database` plus an `ObjectContext`, so it's testable on node SQLite.             |
+| `apps/backend/src/worker/objects/` | `OrgObject`, `ChannelObject` and `UserObject`, hosted by the backend Worker beside the existing DOs (an api deploy restarts them, and clients catch up from `since`). The Worker also serves `GET /sync/:kind/:id` (WebSocket). |
+| `apps/backend/src/rpc/handlers`, `policies`, `services` | **The existing RPC handlers run inside the objects.** Each object hosts the HazelRpc groups in-process, with `Database` set to its own SQLite and `CurrentUser` set from the principal. The api Worker routes each RPC to its target (`org`, `channel`, `user`, or `directory` = run in the Worker against D1) and forwards the encoded request. Porting a handler means making it touch only its own store and send everything else through the outbox. |
 | `libs/effect-db-collection`                | Renamed from `libs/effect-electric-db-collection`. `createEffectCollection` over the DO protocol, plus `optimisticAction` with `awaitSeqEffect`.                                                                                            |
 | `apps/web-foldkit/src/core/db/`            | Collections pointed at sources, plus a connection manager.                                                                                                                                                                                  |
 
@@ -113,7 +113,7 @@ Once any request or RPC method has committed, the object calls `flush()`:
 
 ### Auth
 
-- The `apps/sync` Worker reads the session token from `Sec-WebSocket-Protocol` (`hazel.v1, <token>`),
+- The backend Worker's `/sync` route reads the session token from `Sec-WebSocket-Protocol` (`hazel.v1, <token>`),
   verifies it the way `api` does, and forwards the upgrade to the object with
   `x-hazel-principal: {userId, ...}` JSON.
 - Objects are reachable only through bindings, so the header is trusted.
@@ -178,7 +178,7 @@ the client.
 2. **`do-sync/runtime`:** `packages/sync-do` (triggers, broadcaster, sockets, outbox).
    _Verify:_ unit tests on node SQLite, and workerd tests of a toy object (catch-up, reset,
    visibility, outbox retry, token expiry).
-3. **`do-sync/objects`:** `apps/sync` and the domain logic per object, including the cluster
+3. **`do-sync/objects`:** the object shells, RPC invoke and routing, and the handlers ported per object, including the cluster
    workflows rehomed.
    _Verify:_ object logic tests on node SQLite, ported from the backend's current tests.
 4. **`do-sync/api`:** api handlers and routes routed to objects, auth on D1, the Discord gateway,
