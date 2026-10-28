@@ -1,6 +1,6 @@
 {
 	"name": "@hazel-chat/bot-sdk",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "Official SDK for building bots for Hazel Chat. Built with Effect-TS.",
 	"keywords": [
 		"bot",
@@ -13,7 +13,8 @@
 	"files": [
 		"dist",
 		"src",
-		"README.md"
+		"README.md",
+		"CHANGELOG.md"
 	],
 	"type": "module",
 	"main": "./src/index.ts",
