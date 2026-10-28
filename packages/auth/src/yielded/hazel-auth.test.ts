@@ -1,7 +1,8 @@
 /**
  * End-to-end over real HTTP routes and an in-memory SQLite database migrated from
- * packages/db, so the library's mappings are checked against Hazel's actual tables. Only
- * GitHub's network endpoints are simulated.
+ * packages/db, so the library's mappings are checked against Hazel's actual tables. The
+ * database is dressed as D1 (`asD1`): batches commit, `BEGIN` is refused. Only GitHub's
+ * network endpoints are simulated.
  */
 import * as NodeHttpPlatform from "@effect/platform-node/NodeHttpPlatform"
 import * as NodeServices from "@effect/platform-node/NodeServices"
@@ -17,7 +18,7 @@ import {
 	HttpServerRequest,
 	HttpServerResponse,
 } from "effect/http"
-import { SqlClient } from "effect/sql"
+import { SqlClient, type Statement } from "effect/sql"
 import { afterAll, beforeAll, describe, expect, test } from "vitest"
 
 import * as AccessToken from "./access-token.ts"
@@ -68,10 +69,28 @@ const FakeGitHub = Layer.succeed(
 	),
 )
 
-describe("Hazel auth on SQLite", () => {
+const D1ClientTypeId = "~@effect/sql-d1/D1Client"
+
+/** node SQLite as the auth storage sees D1: an atomic `batch`, and no interactive transactions. */
+const asD1 = (sql: SqlClient.SqlClient): SqlClient.SqlClient =>
+	new Proxy(sql, {
+		has: (target, property) => property === D1ClientTypeId || Reflect.has(target, property),
+		get: (target, property, receiver) => {
+			if (property === D1ClientTypeId) return D1ClientTypeId
+			if (property === "batch")
+				return (statements: ReadonlyArray<Statement.Statement<unknown>>) =>
+					target.withTransaction(Effect.forEach(statements, (statement) => statement))
+			if (property === "withTransaction")
+				return () => Effect.die(new Error("D1 has no transactions: BEGIN refused"))
+			return Reflect.get(target, property, receiver)
+		},
+	})
+
+describe("Hazel auth on D1 (node SQLite)", () => {
 	// One database for the whole suite: the routes and the assertions share it.
 	const databaseScope = Effect.runSync(Scope.make())
-	const database = Effect.runSync(Layer.buildWithScope(layerMemory, databaseScope))
+	const memory = Effect.runSync(Layer.buildWithScope(layerMemory, databaseScope))
+	const database = Context.add(memory, SqlClient.SqlClient, asD1(Context.get(memory, SqlClient.SqlClient)))
 	const TestSql = Layer.succeedContext(database)
 	const query = <A>(effect: Effect.Effect<A, unknown, SqlClient.SqlClient>) =>
 		Effect.runPromise(effect.pipe(Effect.provideContext(database)))

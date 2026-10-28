@@ -91,9 +91,3 @@ export const storeTables = {
 } as const satisfies Record<StoreName, ReadonlyArray<unknown>>
 
 export const storeNames: ReadonlyArray<StoreName> = ["directory", "org", "channel", "user"]
-
-/**
- * Tables in no store, kept while the code using them lives: the global message outbox, replaced by
- * per-object outboxes (`packages/sync-do`). Test and local databases create them.
- */
-export const legacyTables = [schema.messageOutboxEventsTable] as const

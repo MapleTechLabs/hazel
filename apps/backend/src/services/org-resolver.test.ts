@@ -1,9 +1,10 @@
 import { describe, expect, it } from "@effect/vitest"
-import { ChannelMemberRepo, ChannelRepo, MessageRepo, OrganizationMemberRepo } from "@hazel/backend-core"
+import { ChannelMemberRepo, ChannelRepo, OrganizationMemberRepo } from "@hazel/backend-core"
 import { Database } from "@hazel/db"
 import { PermissionError } from "@hazel/domain"
-import type { ChannelId, ChannelMemberId, MessageId, OrganizationId, UserId } from "@hazel/schema"
+import type { ChannelId, ChannelMemberId, OrganizationId, UserId } from "@hazel/schema"
 import { Effect, Result, Layer, Option, Context } from "effect"
+import { CurrentObject } from "../lib/current-object"
 import { OrgResolver } from "./org-resolver"
 import { makeActor, TEST_ORG_ID } from "../policies/policy-test-helpers"
 import { CurrentUser } from "@hazel/domain"
@@ -12,7 +13,6 @@ import { serviceShape } from "../test/effect-helpers"
 type Role = "admin" | "member" | "owner"
 
 const CHANNEL_ID = "00000000-0000-4000-8000-000000000501" as ChannelId
-const MESSAGE_ID = "00000000-0000-4000-8000-000000000601" as MessageId
 const CHANNEL_MEMBER_ID = "00000000-0000-4000-8000-000000000701" as ChannelMemberId
 
 const makeOrgMemberRepoLayer = (members: Record<string, Role>) =>
@@ -57,17 +57,6 @@ const makeChannelMemberRepoLayer = (memberships: Record<string, boolean>) =>
 		}),
 	)
 
-const makeMessageRepoLayer = (messages: Record<string, { channelId: ChannelId }>) =>
-	Layer.succeed(
-		MessageRepo,
-		serviceShape<typeof MessageRepo>({
-			findById: (id: MessageId) => {
-				const message = messages[id]
-				return Effect.succeed(message ? Option.some(message) : Option.none())
-			},
-		}),
-	)
-
 const makeResolverLayer = (opts: {
 	members?: Record<string, Role>
 	channels?: Record<
@@ -75,13 +64,11 @@ const makeResolverLayer = (opts: {
 		{ organizationId: OrganizationId; type: string; parentChannelId?: string | null; id: string }
 	>
 	channelMembers?: Record<string, boolean>
-	messages?: Record<string, { channelId: ChannelId }>
 }) =>
 	Layer.effect(OrgResolver, OrgResolver.make).pipe(
 		Layer.provide(makeOrgMemberRepoLayer(opts.members ?? {})),
 		Layer.provide(makeChannelRepoLayer(opts.channels ?? {})),
 		Layer.provide(makeChannelMemberRepoLayer(opts.channelMembers ?? {})),
-		Layer.provide(makeMessageRepoLayer(opts.messages ?? {})),
 	)
 
 const runEither = <A, E>(
@@ -152,7 +139,6 @@ describe("OrgResolver", () => {
 				),
 				Layer.provide(makeChannelRepoLayer({})),
 				Layer.provide(makeChannelMemberRepoLayer({})),
-				Layer.provide(makeMessageRepoLayer({})),
 			)
 
 			const result = await runEither(
@@ -436,44 +422,29 @@ describe("OrgResolver", () => {
 		})
 	})
 
-	describe("fromMessage", () => {
-		it("resolves message -> channel -> org chain", async () => {
+	describe("inside an OrgObject", () => {
+		it("refuses another organization than the object's own", async () => {
 			const actor = makeActor()
 			const layer = makeResolverLayer({
-				members: { [`${TEST_ORG_ID}:${actor.id}`]: "member" },
-				channels: {
-					[CHANNEL_ID]: {
-						organizationId: TEST_ORG_ID,
-						type: "public",
-						id: CHANNEL_ID,
-					},
-				},
-				messages: {
-					[MESSAGE_ID]: { channelId: CHANNEL_ID },
-				},
+				members: { [`${TEST_ORG_ID}:${actor.id}`]: "owner" },
 			})
+			const check = use((r) =>
+				r.requireScope(TEST_ORG_ID, "organizations:read", "Organization", "read"),
+			)
 
-			const result = await runEither(
-				use((r) => r.fromMessage(MESSAGE_ID, "messages:read", "Message", "read")),
+			const own = await runEither(
+				check.pipe(Effect.provideService(CurrentObject, { kind: "org", id: TEST_ORG_ID })),
 				layer,
 				actor,
 			)
-			expect(Result.isSuccess(result)).toBe(true)
-		})
+			expect(Result.isSuccess(own)).toBe(true)
 
-		it("fails for missing message", async () => {
-			const actor = makeActor()
-			const layer = makeResolverLayer({
-				members: { [`${TEST_ORG_ID}:${actor.id}`]: "member" },
-			})
-
-			const missingId = "00000000-0000-4000-8000-000000000699" as MessageId
-			const result = await runEither(
-				use((r) => r.fromMessage(missingId, "messages:read", "Message", "read")),
+			const other = await runEither(
+				check.pipe(Effect.provideService(CurrentObject, { kind: "org", id: crypto.randomUUID() })),
 				layer,
 				actor,
 			)
-			expect(Result.isFailure(result)).toBe(true)
+			expect(Result.isFailure(other) && PermissionError.is(other.failure)).toBe(true)
 		})
 	})
 })

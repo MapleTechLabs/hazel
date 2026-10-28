@@ -1,8 +1,3 @@
-/**
- * TODO(do-sync): runs in the OrgObject (`rpc/routing.ts`); not ported yet. To port: touch only that
- * store's tables and send everything else through the outbox (`worker/objects/effects`).
- * - org-local; webhooks arrive via `integration_index` → OrgObject → ChannelObject effect
- */
 import { ChannelRepo, GitHubSubscriptionRepo, IntegrationConnectionRepo } from "@hazel/backend-core"
 import { Database } from "@hazel/db"
 import { CurrentUser, withRemapDbErrors } from "@hazel/domain"
@@ -17,13 +12,15 @@ import {
 } from "@hazel/domain/rpc"
 import { Effect, Option } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
+import { requestOrganizationId } from "../../worker/objects/org/organization"
 import { GitHubSubscriptionPolicy } from "../../policies/github-subscription-policy"
 
 /**
  * GitHub Subscription RPC Handlers
  *
  * Implements the business logic for all GitHub subscription-related RPC methods.
- * Only organization admins can manage subscriptions.
+ * Only organization admins can manage subscriptions. Run in the `OrgObject` (`rpc/routing.ts`).
+ * GitHub deliveries reach the subscriptions through `worker/objects/org/github-webhooks.ts`.
  */
 export const GitHubSubscriptionRpcLive = GitHubSubscriptionRpcs.toLayer(
 	Effect.gen(function* () {
@@ -110,14 +107,11 @@ export const GitHubSubscriptionRpcLive = GitHubSubscriptionRpcs.toLayer(
 
 			"githubSubscription.listByOrganization": () =>
 				Effect.gen(function* () {
-					const user = yield* CurrentUser.Context
-
-					// If no organization, return empty list
-					if (!user.organizationId) {
+					const requested = yield* requestOrganizationId
+					if (Option.isNone(requested)) {
 						return new GitHubSubscriptionListResponse({ data: [] })
 					}
-
-					const organizationId = user.organizationId
+					const organizationId = requested.value
 
 					yield* gitHubSubscriptionPolicy.canReadByOrganization(organizationId)
 					const subscriptions = yield* subscriptionRepo.findByOrganization(organizationId)

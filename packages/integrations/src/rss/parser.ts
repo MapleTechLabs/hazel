@@ -34,9 +34,23 @@ const parser = new RssParser({
  * Fetches and parses an RSS or Atom feed URL.
  * Returns normalized feed metadata and items.
  */
-export const fetchAndParseFeed = async (feedUrl: string): Promise<ParsedRssFeed> => {
-	const feed = await parser.parseURL(feedUrl)
+export const fetchAndParseFeed = async (feedUrl: string): Promise<ParsedRssFeed> =>
+	normalizeFeed(await parser.parseURL(feedUrl))
 
+/**
+ * Parses a feed document already fetched (with `fetch`, where `parseURL`'s node http is not
+ * available, e.g. a Worker).
+ */
+export const parseFeed = async (xml: string): Promise<ParsedRssFeed> =>
+	normalizeFeed(await parser.parseString(xml))
+
+/** The request headers a feed fetch sends. */
+export const FEED_REQUEST_HEADERS = {
+	"User-Agent": "HazelChat RSS Bot/1.0",
+	Accept: "application/rss+xml, application/xml, text/xml, application/atom+xml",
+} as const
+
+const normalizeFeed = (feed: Awaited<ReturnType<typeof parser.parseURL>>): ParsedRssFeed => {
 	// Try to extract a favicon from the feed link
 	let iconUrl: string | null = null
 	if (feed.link) {

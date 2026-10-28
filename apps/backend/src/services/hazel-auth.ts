@@ -122,7 +122,11 @@ export class HazelAuthInstance extends Context.Service<HazelAuthInstance>()(
 	static readonly layer = Layer.effect(this, this.make)
 }
 
-/** `HazelAuth` and its storage, for the RPC and HttpApi auth middleware. Empty when disabled. */
+/**
+ * `HazelAuth` and its storage, for the RPC and HttpApi auth middleware. Empty when disabled.
+ * Storage runs over the ambient `SqlClient`: the directory D1 (`DIRECTORY_DB`) on the Worker,
+ * committing in D1 batches; the SQLite file on Bun.
+ */
 export const HazelAuthServicesLive = Layer.unwrap(
 	Effect.map(Effect.service(HazelAuthInstance), (instance) =>
 		Option.match(instance, {

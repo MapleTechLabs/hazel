@@ -30,7 +30,6 @@ import {
 	IntegrationConnectionRepo,
 	IntegrationTokenRepo,
 	MessageReactionRepo,
-	MessageOutboxRepo,
 	MessageRepo,
 	NotificationRepo,
 	OrganizationMemberRepo,
@@ -72,9 +71,6 @@ import { AuthorizationLive } from "./services/auth"
 import { IntegrationTokenService } from "./services/integration-token-service"
 import { IntegrationBotService } from "./services/integrations/integration-bot-service"
 import { ChatSyncAttributionReconciler } from "./services/chat-sync/chat-sync-attribution-reconciler"
-import { DiscordSyncWorkerLayer } from "./services/chat-sync/discord-sync-worker"
-import { MessageSideEffectService } from "./services/message-side-effect-service"
-import { MockDataGenerator } from "./services/mock-data-generator"
 import { OAuthBearerAuth } from "./services/oauth-bearer-auth"
 import { ObjectStorage } from "./services/object-storage"
 import { OAuthProviderRegistry } from "./services/oauth"
@@ -83,7 +79,6 @@ import { HazelSession } from "./services/hazel-session"
 import { WebhookBotService } from "./services/webhook-bot-service"
 import { BotGatewayService } from "./services/bot-gateway-service"
 import { ChannelAccessSyncService } from "./services/channel-access-sync"
-import { ConnectConversationService } from "./services/connect-conversation-service"
 import { OrgResolver } from "./services/org-resolver"
 import { ChannelViewers } from "./services/channel-viewers"
 
@@ -172,7 +167,6 @@ export const RepoLive = Layer.mergeAll(
 	NotificationRepo.layer,
 	TypingIndicatorRepo.layer,
 	MessageReactionRepo.layer,
-	MessageOutboxRepo.layer,
 	UserPresenceStatusRepo.layer,
 	IntegrationConnectionRepo.layer,
 	IntegrationTokenRepo.layer,
@@ -218,7 +212,6 @@ export const PolicyLive = Layer.mergeAll(
 export const AppServicesLive = Layer.mergeAll(
 	RepoLive,
 	PolicyLive,
-	MockDataGenerator.layer,
 	ObjectStorage.layer,
 	GitHub.GitHubAppJWTService.layer,
 	GitHub.GitHubApiClient.layer,
@@ -226,12 +219,9 @@ export const AppServicesLive = Layer.mergeAll(
 	OAuthProviderRegistry.layer,
 	IntegrationBotService.layer,
 	ChatSyncAttributionReconciler.layer,
-	DiscordSyncWorkerLayer,
-	MessageSideEffectService.layer,
 	BotGatewayService.layer,
 	WebhookBotService.layer,
 	ChannelAccessSyncService.layer,
-	ConnectConversationService.layer,
 	Invitations.layer,
 	OAuthBearerAuth.layer,
 ).pipe(Layer.provideMerge(FetchHttpClient.layer))

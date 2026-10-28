@@ -8,12 +8,19 @@ import type { BotGatewayEnvelope } from "@hazel/domain"
 import { layerMemory } from "@hazel/db/node"
 import type { BotId } from "@hazel/schema"
 import { type FakeStorage, makeFakeState, makeFakeStorage, sqliteClientLayer } from "@hazel/sync-do/testing"
-import { ConfigProvider, Context, Effect, Layer, Scope } from "effect"
+import { ConfigProvider, Context, Effect, type Exit, Layer, Option, Scope } from "effect"
 import { Persistence } from "effect/persistence"
 import { BotGatewayTransport } from "../../services/bot-gateway-transport"
 import { Directory } from "../../services/directory"
 import { InviteMailer } from "../../services/invite-mailer"
+import { ThreadNamer, type ThreadNamingContext } from "../../services/thread-namer"
+import {
+	type ChatSyncCall,
+	makeRecordingChatSyncTransport,
+} from "../../services/chat-sync/chat-sync-transport"
+import { makeRpcDispatcher, type RpcDispatcherShape } from "../../rpc/dispatch"
 import { objectHandlersLive } from "./handlers"
+import type { InvokePrincipal } from "./principal"
 import { formatTarget, type ObjectTarget } from "./kinds"
 import { ObjectStubs } from "./protocol"
 import { makeObjectRuntime, type ObjectRuntime } from "./runtime"
@@ -24,8 +31,8 @@ const TEST_CONFIG = {
 	S3_ENDPOINT: "http://localhost:9000",
 	S3_ACCESS_KEY_ID: "test",
 	S3_SECRET_ACCESS_KEY: "test",
-	INTEGRATION_ENCRYPTION_KEY: "0".repeat(64),
-	CLUSTER_URL: "http://localhost:3020",
+	// 32 bytes, base64 (AES-256).
+	INTEGRATION_ENCRYPTION_KEY: Buffer.alloc(32).toString("base64"),
 	API_BASE_URL: "http://localhost:3003",
 	FRONTEND_URL: "http://localhost:3100",
 	IS_DEV: "true",
@@ -49,15 +56,36 @@ export interface TestObjects {
 	readonly deliveries: Array<string>
 	/** Make deliveries to `target` fail (outbox retry), or succeed again. */
 	readonly setUnreachable: (target: ObjectTarget, unreachable: boolean) => void
+	/** The stubs the objects reach each other through (for callers outside the objects). */
+	readonly stubs: Context.Service.Shape<typeof ObjectStubs>
+	/** Provider calls chat-sync deliveries made (`chatSync.outbound`), in order. */
+	readonly chatSyncCalls: Array<ChatSyncCall>
+	/** Make provider calls fail with `status` (retryable for 429/5xx), or succeed again (undefined). */
+	readonly setChatSyncFailure: (status: number | undefined) => void
+	/** What `ThreadNamer` was asked to name, in order. */
+	readonly namingRequests: Array<ThreadNamingContext>
+	/** The name `ThreadNamer` answers (default `"Generated name"`). */
+	readonly setThreadName: (name: string) => void
+	/** Run `tag` (decoded payload) on the directory path, as the api Worker does for D1 methods. */
+	readonly invokeDirectory: (
+		tag: string,
+		payload: unknown,
+		principal: InvokePrincipal,
+	) => Effect.Effect<Exit.Exit<unknown, unknown>>
 }
 
 export const makeTestObjects = Effect.gen(function* () {
 	const scope = yield* Scope.Scope
-	const directory = yield* Layer.build(Directory.layerDatabase.pipe(Layer.provide(layerMemory)))
+	const directoryDatabase = yield* Layer.build(layerMemory)
+	const directory = yield* Layer.build(
+		Directory.layerDatabase.pipe(Layer.provide(Layer.succeedContext(directoryDatabase))),
+	)
 	const published: TestObjects["published"] = []
 	const deliveries: Array<string> = []
 	const unreachable = new Set<string>()
 	const objects = new Map<string, TestObject>()
+	const namingRequests: Array<ThreadNamingContext> = []
+	let threadName = "Generated name"
 
 	const transport = Layer.succeed(
 		BotGatewayTransport,
@@ -73,6 +101,10 @@ export const makeTestObjects = Effect.gen(function* () {
 	const stubs: Context.Service.Shape<typeof ObjectStubs> = {
 		get: (target) => ({
 			invoke: (request) => isolated(Effect.flatMap(get(target), (object) => object.invoke(request))),
+			call: (request) =>
+				isolated(Effect.flatMap(get(target), (object) => object.call(structuredClone(request)))).pipe(
+					Effect.map((response) => structuredClone(response)),
+				),
 			applyEffect: (request) =>
 				Effect.suspend(() => {
 					if (unreachable.has(formatTarget(target))) {
@@ -84,15 +116,32 @@ export const makeTestObjects = Effect.gen(function* () {
 		}),
 	}
 
+	const threadNamer = Layer.succeed(
+		ThreadNamer,
+		ThreadNamer.of({
+			name: (context) =>
+				Effect.sync(() => {
+					namingRequests.push(context)
+					return Option.some(threadName)
+				}),
+		}),
+	)
+
+	const chatSync = makeRecordingChatSyncTransport({ attachmentPublicUrlBase: "https://files.test" })
 	const platform = Layer.mergeAll(
 		Layer.succeedContext(directory),
 		Layer.succeed(ObjectStubs, stubs),
 		transport,
+		threadNamer,
+		chatSync.layer,
 	)
 
 	const appPlatform = Layer.mergeAll(
 		Persistence.layerMemory,
-		InviteMailer.layerLog,
+		// Logs links (IS_DEV) instead of sending.
+		InviteMailer.layerLog.pipe(
+			Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(TEST_CONFIG))),
+		),
 		ConfigProvider.layer(ConfigProvider.fromUnknown(TEST_CONFIG)),
 	)
 
@@ -120,14 +169,46 @@ export const makeTestObjects = Effect.gen(function* () {
 			return create(target).pipe(Effect.tap((object) => Effect.sync(() => objects.set(key, object))))
 		})
 
+	/** The api Worker's directory path: the handlers in process over the directory database. */
+	let directoryDispatcher: RpcDispatcherShape | undefined
+	const directoryPath = Effect.suspend(() =>
+		directoryDispatcher !== undefined
+			? Effect.succeed(directoryDispatcher)
+			: Layer.build(
+					objectHandlersLive.pipe(
+						Layer.provide(appPlatform),
+						Layer.provide(platform),
+						Layer.provide(Layer.succeedContext(directoryDatabase)),
+						Layer.orDie,
+					),
+				).pipe(
+					Effect.flatMap((handlers) => makeRpcDispatcher.pipe(Effect.provideContext(handlers))),
+					Effect.tap((dispatcher) => Effect.sync(() => void (directoryDispatcher = dispatcher))),
+					Effect.provideService(Scope.Scope, scope),
+				),
+	)
+
 	return {
 		get,
+		invokeDirectory: (tag, payload, principal) =>
+			isolated(
+				Effect.flatMap(directoryPath, (dispatcher) => dispatcher.dispatch(tag, payload, principal)),
+			),
 		directory,
 		published,
 		deliveries,
 		setUnreachable: (target, value) => {
 			if (value) unreachable.add(formatTarget(target))
 			else unreachable.delete(formatTarget(target))
+		},
+		stubs,
+		chatSyncCalls: chatSync.calls,
+		setChatSyncFailure: (status) => {
+			chatSync.control.fail = status
+		},
+		namingRequests,
+		setThreadName: (name) => {
+			threadName = name
 		},
 	} satisfies TestObjects
 })

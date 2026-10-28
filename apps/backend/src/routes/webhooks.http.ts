@@ -1,11 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto"
 import { HttpApiBuilder } from "effect/http-api"
 import { HttpServerRequest } from "effect/http"
-import {
-	InternalServerError,
-	WorkflowInitializationError,
-	WorkflowServiceUnavailableError,
-} from "@hazel/domain"
+import { InternalServerError } from "@hazel/domain"
 import {
 	GitHubWebhookResponse,
 	InvalidGitHubWebhookPayload,
@@ -13,9 +9,12 @@ import {
 } from "@hazel/domain/http"
 import { Config, Effect, Option, pipe, Redacted, Schema } from "effect"
 import { HazelApi } from "../api"
-import { makeClusterClient } from "../lib/cluster-client"
+import { Directory } from "../services/directory"
+import { callObject } from "../worker/objects/calls"
+import { orgTarget } from "../worker/objects/kinds"
+import { GitHubEventCall, GitHubInstallationCall } from "../worker/objects/org/github-webhooks"
 
-/** Installation lifecycle actions the installation workflow handles; others are acknowledged and skipped. */
+/** Installation lifecycle actions the org handles; others are acknowledged and skipped. */
 const InstallationAction = Schema.Literals(["created", "deleted", "suspend", "unsuspend"])
 
 const InstallationEvent = Schema.Struct({
@@ -30,7 +29,7 @@ const InstallationEvent = Schema.Struct({
 	sender: Schema.optional(Schema.Struct({ login: Schema.String })),
 })
 
-/** The fields every repository event the webhook workflow handles carries. */
+/** The fields every repository event the org handles carries. */
 const RepositoryEvent = Schema.Struct({
 	installation: Schema.Struct({ id: Schema.Number }),
 	repository: Schema.Struct({ id: Schema.Number, full_name: Schema.String }),
@@ -46,6 +45,87 @@ const decodeInstallationAction = Schema.decodeUnknownOption(Schema.Struct({ acti
 const decodeInstallationEvent = Schema.decodeUnknownEffect(InstallationEvent)
 const decodeRepositoryEvent = Schema.decodeUnknownOption(RepositoryEvent)
 const decodeLoggedFields = Schema.decodeUnknownOption(LoggedFields)
+
+const skipped = new GitHubWebhookResponse({ processed: false, messagesCreated: 0 })
+
+/**
+ * A verified delivery: find the installation's org in the directory (`integration_index`) and
+ * hand the event to its `OrgObject` (`worker/objects/org/github-webhooks.ts`).
+ */
+export const dispatchGitHubEvent = Effect.fn("GitHubWebhook.dispatch")(
+	function* (input: {
+		readonly eventType: string
+		readonly deliveryId: string
+		readonly payload: unknown
+	}) {
+		const { eventType, deliveryId, payload } = input
+		const directory = yield* Directory
+		const orgOf = (installationId: number) =>
+			directory
+				.integration("github", String(installationId))
+				.pipe(
+					Effect.tap((row) =>
+						Option.isNone(row)
+							? Effect.logInfo("GitHub webhook for an unknown installation", {
+									deliveryId,
+									installationId,
+								})
+							: Effect.annotateCurrentSpan({ "organization.id": row.value.organizationId }),
+					),
+				)
+		yield* Effect.annotateCurrentSpan({
+			"github.event_type": eventType,
+			"github.delivery_id": deliveryId,
+		})
+
+		if (eventType === "installation") {
+			if (Option.isNone(decodeInstallationAction(payload))) {
+				yield* Effect.logDebug("Skipping installation webhook - unsupported action", { deliveryId })
+				return skipped
+			}
+			const event = yield* decodeInstallationEvent(payload).pipe(
+				Effect.mapError(
+					() =>
+						new InvalidGitHubWebhookPayload({
+							message: "Installation event is missing its installation or account",
+						}),
+				),
+			)
+			const org = yield* orgOf(event.installation.id)
+			if (Option.isNone(org)) return skipped
+			yield* callObject(GitHubInstallationCall, orgTarget(org.value.organizationId), {
+				action: event.action,
+				installationId: String(event.installation.id),
+			})
+			return new GitHubWebhookResponse({ processed: true, messagesCreated: 0 })
+		}
+
+		const repositoryEvent = decodeRepositoryEvent(payload)
+		if (Option.isNone(repositoryEvent)) {
+			yield* Effect.logDebug("Skipping GitHub webhook - no installation or repository", {
+				deliveryId,
+				eventType,
+			})
+			return skipped
+		}
+		const { installation, repository } = repositoryEvent.value
+		const org = yield* orgOf(installation.id)
+		if (Option.isNone(org)) return skipped
+		const result = yield* callObject(GitHubEventCall, orgTarget(org.value.organizationId), {
+			deliveryId,
+			eventType,
+			repositoryId: repository.id,
+			eventPayload: payload,
+		})
+		return new GitHubWebhookResponse({ processed: true, messagesCreated: result.messagesCreated })
+	},
+	Effect.catchTags({
+		DatabaseError: (cause) =>
+			Effect.fail(new InternalServerError({ message: "Directory lookup failed", cause })),
+		ObjectCallError: (cause) =>
+			Effect.fail(new InternalServerError({ message: "The organization is unavailable", cause })),
+	}),
+)
 
 export const HttpWebhookLive = HttpApiBuilder.group(HazelApi, "webhooks", (handlers) =>
 	handlers.handle("github", (_args) =>
@@ -141,104 +221,7 @@ export const HttpWebhookLive = HttpApiBuilder.group(HazelApi, "webhooks", (handl
 				action: Option.getOrUndefined(logged)?.action,
 			})
 
-			const clusterUrl = yield* Config.String("CLUSTER_URL")
-			const client = yield* makeClusterClient(clusterUrl)
-
-			if (eventType === "installation") {
-				if (Option.isNone(decodeInstallationAction(payload))) {
-					yield* Effect.logDebug("Skipping installation webhook - unsupported action", {
-						deliveryId,
-					})
-					return new GitHubWebhookResponse({ processed: false, messagesCreated: 0 })
-				}
-
-				const event = yield* decodeInstallationEvent(payload).pipe(
-					Effect.mapError(
-						() =>
-							new InvalidGitHubWebhookPayload({
-								message: "Installation event is missing its installation or account",
-							}),
-					),
-				)
-
-				yield* client.workflows
-					.GitHubInstallationWorkflow({
-						payload: {
-							deliveryId,
-							action: event.action,
-							installationId: event.installation.id,
-							accountLogin: event.installation.account.login,
-							accountType: event.installation.account.type,
-							senderLogin: event.sender?.login ?? "unknown",
-						},
-					})
-					.pipe(
-						Effect.catchTags({
-							HttpClientError: (cause) =>
-								Effect.fail(
-									new WorkflowServiceUnavailableError({
-										message: "Failed to execute GitHub installation workflow",
-										cause,
-									}),
-								),
-						}),
-						// What is left is the workflow's own failure union (one tag per activity).
-						Effect.mapError((cause) =>
-							WorkflowServiceUnavailableError.is(cause)
-								? cause
-								: new WorkflowInitializationError({
-										message: "Failed to execute GitHub installation workflow",
-										cause,
-									}),
-						),
-					)
-
-				return new GitHubWebhookResponse({ processed: true, messagesCreated: 0 })
-			}
-
-			const repositoryEvent = decodeRepositoryEvent(payload)
-			if (Option.isNone(repositoryEvent)) {
-				yield* Effect.logDebug("Skipping GitHub webhook - no installation or repository", {
-					deliveryId,
-					eventType,
-				})
-				return new GitHubWebhookResponse({ processed: false, messagesCreated: 0 })
-			}
-			const { installation, repository } = repositoryEvent.value
-
-			yield* client.workflows
-				.GitHubWebhookWorkflow({
-					payload: {
-						deliveryId,
-						eventType,
-						installationId: installation.id,
-						repositoryId: repository.id,
-						repositoryFullName: repository.full_name,
-						eventPayload: payload,
-					},
-				})
-				.pipe(
-					Effect.catchTags({
-						HttpClientError: (cause) =>
-							Effect.fail(
-								new WorkflowServiceUnavailableError({
-									message: "Failed to execute GitHub webhook workflow",
-									cause,
-								}),
-							),
-					}),
-					// What is left is the workflow's own failure union (one tag per activity).
-					Effect.mapError((cause) =>
-						WorkflowServiceUnavailableError.is(cause)
-							? cause
-							: new WorkflowInitializationError({
-									message: "Failed to execute GitHub webhook workflow",
-									cause,
-								}),
-					),
-				)
-
-			return new GitHubWebhookResponse({ processed: true, messagesCreated: 0 })
+			return yield* dispatchGitHubEvent({ eventType, deliveryId, payload })
 		}).pipe(
 			Effect.catchTag("ConfigError", (cause) =>
 				Effect.fail(new InternalServerError({ message: "Missing configuration", cause })),

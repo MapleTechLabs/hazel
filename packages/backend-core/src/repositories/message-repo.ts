@@ -81,23 +81,6 @@ export class MessageRepo extends Context.Service<MessageRepo>()("MessageRepo", {
 					.limit(1),
 			)
 
-		const backfillConversationIdForChannel = (
-			channelId: ChannelId,
-			conversationId: ConnectConversationId,
-		) =>
-			db.run(
-				SQLite.update(schema.messagesTable)
-					.set(($) => ({
-						conversationId,
-						updatedAt: SQLite.coalesce($.updatedAt, schema.now()),
-					}))
-					.where(($) => [
-						$.channelId.eq(channelId),
-						$.deletedAt.isNull(),
-						$.conversationId.isNull(),
-					]),
-			)
-
 		/**
 		 * Reassign message authors for external chat-synced messages scoped to a provider + org.
 		 * Used when a user links/unlinks their external account and historical messages need re-attribution.
@@ -148,7 +131,6 @@ export class MessageRepo extends Context.Service<MessageRepo>()("MessageRepo", {
 			listByChannel,
 			findByIdForCursor,
 			reassignExternalSyncedAuthors,
-			backfillConversationIdForChannel,
 		}
 	}),
 }) {

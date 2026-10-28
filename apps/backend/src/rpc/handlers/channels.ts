@@ -9,40 +9,38 @@ import { Database, SQLite, schema } from "@hazel/db"
 import {
 	CurrentUser,
 	DmChannelAlreadyExistsError,
+	ErrorUtils,
 	InternalServerError,
 	InvalidChannelRequestError,
 	withRemapDbErrors,
-	WorkflowServiceUnavailableError,
 } from "@hazel/domain"
-import { OrganizationId } from "@hazel/schema"
+import { type ChannelId, OrganizationId, type UserId } from "@hazel/schema"
 import { ChannelNotFoundError, ChannelResponse, ChannelRpcs, MessageNotFoundError } from "@hazel/domain/rpc"
-import { Config, Effect, Option } from "effect"
+import { Effect, Option } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
 import { ChannelPolicy } from "../../policies/channel-policy"
 import { UserPolicy } from "../../policies/user-policy"
-import { BotGatewayService } from "../../services/bot-gateway-service"
-import { ChannelAccessSyncService } from "../../services/channel-access-sync"
-import { makeClusterClient } from "../../lib/cluster-client"
-import { syncChannelAccess } from "../../worker/objects/org/channel-access"
+import { BotGatewayEffects } from "../../worker/objects/effects/bot-gateway-effects"
+import { ChannelEffects } from "../../worker/objects/effects/channel-effects"
+import { enqueueEffect } from "../../worker/objects/effects/registry"
+import { channelTarget } from "../../worker/objects/kinds"
+import { syncChannelAccess, syncChannelTree } from "../../worker/objects/org/channel-access"
+import { ChannelViewers } from "../../services/channel-viewers"
+import { requestThreadName } from "../../worker/objects/channel/message-events"
+import { readThreadOrigin } from "../../worker/objects/channel/thread"
 
 /**
- * Channel RPC handlers. Run in the channel's `OrgObject` (`rpc/routing.ts`).
+ * Channel RPC handlers. Run in the channel's `OrgObject` (`rpc/routing.ts`), except
+ * `channel.generateName` (the thread's `ChannelObject`).
  *
- * Ported: `channel.create` (access recomputed org-locally and projected with
- * `syncChannelAccess`: `setViewers` to the new `ChannelObject`, its `channel_index` row).
- * TODO(do-sync):
- * - `channel.update` / `channel.delete`: replace `channelAccessSync.syncChannel` /
- *   `syncChildThreads` / `removeChannel` with `syncChannelAccess` (per thread too).
- * - `channel.createDm`, `channel.createThread`: same; a thread's first message lives in the
- *   parent's `ChannelObject` (read it through an effect or the payload, not `messageRepo`).
- * - `channel.generateName`: reads messages (the `ChannelObject`) and calls the cluster; move to a
- *   `ChannelObject` effect that fetches OpenRouter itself.
- * - bot gateway channel events: publish from the outbox (`BotGatewayEffects`), not inline.
+ * Every write recomputes `channel_access` org-locally and projects it (`syncChannelAccess` /
+ * `syncChannelTree`: `setViewers` to the channel's `ChannelObject`, its `channel_index` row);
+ * bots get `channel.*` events from the outbox. `channel.createThread` links the parent message in
+ * the parent's `ChannelObject` (`channel.setThreadChannel`).
  */
 export const ChannelRpcLive = ChannelRpcs.toLayer(
 	Effect.gen(function* () {
 		const db = yield* Database.Database
-		const botGateway = yield* BotGatewayService
 		const channelMemberRepo = yield* ChannelMemberRepo
 		const channelPolicy = yield* ChannelPolicy
 		const userPolicy = yield* UserPolicy
@@ -50,7 +48,25 @@ export const ChannelRpcLive = ChannelRpcs.toLayer(
 		const channelRepo = yield* ChannelRepo
 		const organizationMemberRepo = yield* OrganizationMemberRepo
 		const userRepo = yield* UserRepo
-		const channelAccessSync = yield* ChannelAccessSyncService
+
+		/** The installed bots hear about it after the commit (outbox). */
+		const channelEvent = (
+			eventType: "channel.create" | "channel.update" | "channel.delete",
+			channel: ChannelResponse["data"],
+		) => enqueueEffect(BotGatewayEffects.channelEvent, { kind: "bot-gateway" }, { eventType, channel })
+
+		const addMember = (channelId: ChannelId, userId: UserId) =>
+			channelMemberRepo.insert({
+				channelId,
+				userId,
+				isHidden: false,
+				isMuted: false,
+				isFavorite: false,
+				lastSeenMessageId: null,
+				notificationCount: 0,
+				joinedAt: new Date(),
+				deletedAt: null,
+			})
 
 		return {
 			"channel.create": ({ id, addAllMembers, ...payload }) =>
@@ -68,44 +84,23 @@ export const ChannelRpcLive = ChannelRpcs.toLayer(
 								.insert(insertData as typeof payload & { deletedAt: null })
 								.pipe(Effect.map((res) => res[0]!))
 
-							yield* channelMemberRepo.insert({
-								channelId: createdChannel.id,
-								userId: user.id,
-								isHidden: false,
-								isMuted: false,
-								isFavorite: false,
-								lastSeenMessageId: null,
-								notificationCount: 0,
-								joinedAt: new Date(),
-								deletedAt: null,
-							})
+							yield* addMember(createdChannel.id, user.id)
 
 							if (addAllMembers) {
 								const orgMembers = yield* organizationMemberRepo.findAllByOrganization(
 									payload.organizationId,
 								)
-
 								yield* Effect.forEach(
 									orgMembers.filter((m) => m.userId !== user.id),
-									(member) =>
-										channelMemberRepo.insert({
-											channelId: createdChannel.id,
-											userId: member.userId,
-											isHidden: false,
-											isMuted: false,
-											isFavorite: false,
-											lastSeenMessageId: null,
-											notificationCount: 0,
-											joinedAt: new Date(),
-											deletedAt: null,
-										}),
-									{ concurrency: 10 },
+									(member) => addMember(createdChannel.id, member.userId),
+									{ discard: true },
 								)
 							}
 
 							// Recompute access, then project it to the new ChannelObject and the
 							// directory's channel_index (outbox; delivered right after the commit).
 							yield* syncChannelAccess(createdChannel.id)
+							yield* channelEvent("channel.create", createdChannel)
 
 							const txid = yield* generateTransactionId()
 
@@ -115,19 +110,7 @@ export const ChannelRpcLive = ChannelRpcs.toLayer(
 							})
 						}),
 					)
-					.pipe(
-						withRemapDbErrors("Channel", "create"),
-						Effect.tap((response) =>
-							botGateway.publishChannelEvent("channel.create", response.data).pipe(
-								Effect.catchTag("DurableStreamRequestError", (error) =>
-									Effect.logWarning("Failed to publish channel.create to bot gateway", {
-										error,
-										channelId: response.data.id,
-									}),
-								),
-							),
-						),
-					),
+					.pipe(withRemapDbErrors("Channel", "create")),
 
 			"channel.update": ({ id, ...payload }) =>
 				db
@@ -139,8 +122,9 @@ export const ChannelRpcLive = ChannelRpcs.toLayer(
 								...payload,
 							})
 
-							yield* channelAccessSync.syncChannel(id)
-							yield* channelAccessSync.syncChildThreads(id)
+							// A type change moves its readers, and its threads' with it.
+							yield* syncChannelTree(id)
+							yield* channelEvent("channel.update", updatedChannel)
 
 							const txid = yield* generateTransactionId()
 
@@ -150,150 +134,94 @@ export const ChannelRpcLive = ChannelRpcs.toLayer(
 							})
 						}),
 					)
-					.pipe(
-						withRemapDbErrors("Channel", "update"),
-						Effect.tap((response) =>
-							botGateway.publishChannelEvent("channel.update", response.data).pipe(
-								Effect.catchTag("DurableStreamRequestError", (error) =>
-									Effect.logWarning("Failed to publish channel.update to bot gateway", {
-										error,
-										channelId: response.data.id,
-									}),
-								),
-							),
-						),
-					),
+					.pipe(withRemapDbErrors("Channel", "update")),
 
 			"channel.delete": ({ id }) =>
-				Effect.gen(function* () {
-					const existingChannel = yield* channelRepo
-						.findById(id)
-						.pipe(withRemapDbErrors("Channel", "select"))
-					const response = yield* db
-						.transaction(
-							Effect.gen(function* () {
-								yield* channelPolicy.canDelete(id)
-								yield* channelRepo.deleteById(id)
-								yield* channelAccessSync.removeChannel(id)
-								yield* channelAccessSync.syncChildThreads(id)
+				db
+					.transaction(
+						Effect.gen(function* () {
+							yield* channelPolicy.canDelete(id)
+							const existing = yield* channelRepo.findById(id)
+							// Soft delete: the row stays so its projection (no viewers, an index row
+							// marked deleted) can say so; its threads lose their readers with it.
+							yield* db.run(
+								SQLite.update(schema.channelsTable)
+									.set({ deletedAt: new Date() })
+									.where(($) => [$.id.eq(id), $.deletedAt.isNull()]),
+							)
+							yield* syncChannelTree(id)
+							if (Option.isSome(existing)) yield* channelEvent("channel.delete", existing.value)
 
-								const txid = yield* generateTransactionId()
+							const txid = yield* generateTransactionId()
 
-								return { transactionId: txid }
-							}),
-						)
-						.pipe(withRemapDbErrors("Channel", "delete"))
-
-					if (Option.isSome(existingChannel)) {
-						yield* botGateway.publishChannelEvent("channel.delete", existingChannel.value).pipe(
-							Effect.catchTag("DurableStreamRequestError", (error) =>
-								Effect.logWarning("Failed to publish channel.delete to bot gateway", {
-									error,
-									channelId: existingChannel.value.id,
-								}),
-							),
-						)
-					}
-
-					return response
-				}),
+							return { transactionId: txid }
+						}),
+					)
+					.pipe(withRemapDbErrors("Channel", "delete")),
 
 			"channel.createDm": (payload) =>
 				db
 					.transaction(
 						Effect.gen(function* () {
 							const user = yield* CurrentUser.Context
+							const organizationId = OrganizationId.make(payload.organizationId)
 
-							// Validate participant count for single DMs
 							if (payload.type === "single" && payload.participantIds.length !== 1) {
-								return yield* Effect.fail(
-									new InvalidChannelRequestError({
-										message: "DM channels must have exactly one other participant",
-									}),
-								)
+								return yield* new InvalidChannelRequestError({
+									message: "DM channels must have exactly one other participant",
+								})
 							}
 
-							// Check for existing DM channel
 							if (payload.type === "single") {
 								const existingChannel = yield* channelMemberRepo.findExistingSingleDmChannel(
 									user.id,
 									payload.participantIds[0],
-									OrganizationId.make(payload.organizationId),
+									organizationId,
 								)
-
 								if (Option.isSome(existingChannel)) {
-									return yield* Effect.fail(
-										new DmChannelAlreadyExistsError({
-											message: "A direct message channel already exists with this user",
-											detail: `Channel ID: ${existingChannel.value.id}`,
-										}),
-									)
+									return yield* new DmChannelAlreadyExistsError({
+										message: "A direct message channel already exists with this user",
+										detail: `Channel ID: ${existingChannel.value.id}`,
+									})
 								}
 							}
 
-							// Generate channel name for DMs
+							// Name single DMs after both people (the org's `users` projection).
 							let channelName = payload.name
 							if (payload.type === "single") {
 								yield* userPolicy.canRead(payload.participantIds[0]!)
 								const otherUser = yield* userRepo.findById(payload.participantIds[0])
 								const currentUser = yield* userRepo.findById(user.id)
-
 								if (Option.isSome(otherUser) && Option.isSome(currentUser)) {
-									// Create a consistent name for DMs using first and last name
-									const currentUserName =
-										`${currentUser.value.firstName} ${currentUser.value.lastName}`.trim()
-									const otherUserName =
-										`${otherUser.value.firstName} ${otherUser.value.lastName}`.trim()
-									const names = [currentUserName, otherUserName].sort()
+									const names = [
+										`${currentUser.value.firstName} ${currentUser.value.lastName}`.trim(),
+										`${otherUser.value.firstName} ${otherUser.value.lastName}`.trim(),
+									].sort()
 									channelName = names.join(", ")
 								}
 							}
 
-							// Create channel
-							yield* channelPolicy.canCreate(OrganizationId.make(payload.organizationId))
+							yield* channelPolicy.canCreate(organizationId)
 							const createdChannel = yield* channelRepo
 								.insert({
 									name: channelName || "Group Channel",
 									icon: null,
 									type: payload.type,
-									organizationId: OrganizationId.make(payload.organizationId),
+									organizationId,
 									parentChannelId: null,
 									sectionId: null,
 									deletedAt: null,
 								})
 								.pipe(Effect.map((res) => res[0]!))
 
-							// Add creator as member
-							yield* channelMemberRepo.insert({
-								channelId: createdChannel.id,
-								userId: user.id,
-								isHidden: false,
-								isMuted: false,
-								isFavorite: false,
-								lastSeenMessageId: null,
-								notificationCount: 0,
-								joinedAt: new Date(),
-								deletedAt: null,
-							})
-
-							// Add all participants as members
-							for (const participantId of payload.participantIds) {
-								yield* channelMemberRepo.insert({
-									channelId: createdChannel.id,
-									userId: participantId,
-									isHidden: false,
-									isMuted: false,
-									isFavorite: false,
-									lastSeenMessageId: null,
-									notificationCount: 0,
-									joinedAt: new Date(),
-									deletedAt: null,
-								})
+							yield* addMember(createdChannel.id, user.id)
+							for (const participantId of new Set(payload.participantIds)) {
+								if (participantId !== user.id)
+									yield* addMember(createdChannel.id, participantId)
 							}
 
-							// Recompute access, then project it to the new ChannelObject and the
-							// directory's channel_index (outbox; delivered right after the commit).
 							yield* syncChannelAccess(createdChannel.id)
+							yield* channelEvent("channel.create", createdChannel)
 
 							const txid = yield* generateTransactionId()
 
@@ -303,137 +231,95 @@ export const ChannelRpcLive = ChannelRpcs.toLayer(
 							})
 						}),
 					)
-					.pipe(
-						withRemapDbErrors("Channel", "create"),
-						Effect.tap((response) =>
-							botGateway.publishChannelEvent("channel.create", response.data).pipe(
-								Effect.catchTag("DurableStreamRequestError", (error) =>
-									Effect.logWarning("Failed to publish channel.create DM to bot gateway", {
-										error,
-										channelId: response.data.id,
-									}),
-								),
-							),
-						),
-					),
+					.pipe(withRemapDbErrors("Channel", "create")),
 
-			"channel.createThread": ({ id, messageId, organizationId: requestedOrganizationId }) =>
+			"channel.createThread": ({
+				id,
+				messageId,
+				organizationId: requestedOrganizationId,
+				channelId: parentChannelId,
+			}) =>
 				db
 					.transaction(
 						Effect.gen(function* () {
 							const user = yield* CurrentUser.Context
 
-							// 1. Find the message and resolve thread context from authoritative DB data
-							const message = yield* messageRepo.findById(messageId)
-
-							if (Option.isNone(message)) {
-								return yield* Effect.fail(new MessageNotFoundError({ messageId }))
+							// The message lives in the parent's ChannelObject; the client names its
+							// channel. The parent's link is set there, through the outbox.
+							if (parentChannelId === undefined) {
+								return yield* new InvalidChannelRequestError({
+									message: "channel.createThread needs the message's `channelId`",
+								})
 							}
-
-							// If the message already points to a thread, return that thread.
-							if (message.value.threadChannelId) {
-								const existingThread = yield* channelRepo.findById(
-									message.value.threadChannelId,
-								)
-								if (Option.isNone(existingThread)) {
-									return yield* Effect.fail(
-										new InternalServerError({
-											message: "Thread channel linked to message was not found",
-											detail: `messageId=${messageId} threadChannelId=${message.value.threadChannelId}`,
-										}),
-									)
-								}
-
-								yield* channelAccessSync.syncChannel(existingThread.value.id)
-
-								const txid = yield* generateTransactionId()
-								return new ChannelResponse({
-									data: existingThread.value,
-									transactionId: txid,
+							const parentChannel = yield* channelRepo.findById(parentChannelId)
+							if (Option.isNone(parentChannel) || parentChannel.value.deletedAt !== null) {
+								return yield* new InternalServerError({
+									message: "Parent channel for message was not found",
+									detail: `messageId=${messageId} parentChannelId=${parentChannelId}`,
 								})
 							}
 
-							const parentChannel = yield* channelRepo.findById(message.value.channelId)
-							if (Option.isNone(parentChannel)) {
-								return yield* Effect.fail(
-									new InternalServerError({
-										message: "Parent channel for message was not found",
-										detail: `messageId=${messageId} parentChannelId=${message.value.channelId}`,
-									}),
-								)
-							}
-
-							// If the message is already in a thread channel, return that thread.
+							// A message inside a thread replies in that thread.
 							if (parentChannel.value.type === "thread") {
-								yield* channelAccessSync.syncChannel(parentChannel.value.id)
-
-								const txid = yield* generateTransactionId()
+								yield* channelPolicy.canCreate(parentChannel.value.organizationId)
 								return new ChannelResponse({
 									data: parentChannel.value,
-									transactionId: txid,
+									transactionId: yield* generateTransactionId(),
 								})
 							}
 
-							// Derive organization from parent channel (source of truth).
 							const organizationId = parentChannel.value.organizationId
-
-							// Optional client org must match the derived parent channel org.
 							if (requestedOrganizationId && requestedOrganizationId !== organizationId) {
-								return yield* Effect.fail(
-									new InvalidChannelRequestError({
-										message: "The thread's organization does not match the message's",
-									}),
-								)
+								return yield* new InvalidChannelRequestError({
+									message: "The thread's organization does not match the message's",
+								})
 							}
 
-							// 2. Create thread channel only when no existing thread was resolved
-							const insertData = id
-								? {
-										id,
-										name: "Thread",
-										icon: null,
-										type: "thread" as const,
-										organizationId,
-										parentChannelId: parentChannel.value.id,
-										sectionId: null,
-										deletedAt: null,
-									}
-								: {
-										name: "Thread",
-										icon: null,
-										type: "thread" as const,
-										organizationId,
-										parentChannelId: parentChannel.value.id,
-										sectionId: null,
-										deletedAt: null,
-									}
-
 							yield* channelPolicy.canCreate(organizationId)
+
+							// A retried create (same client-chosen id) returns the thread it made.
+							if (id !== undefined) {
+								const existing = yield* channelRepo.findById(id)
+								if (Option.isSome(existing)) {
+									if (
+										existing.value.type !== "thread" ||
+										existing.value.parentChannelId !== parentChannelId
+									) {
+										return yield* new InvalidChannelRequestError({
+											message: "The thread id is taken by another channel",
+										})
+									}
+									return new ChannelResponse({
+										data: existing.value,
+										transactionId: yield* generateTransactionId(),
+									})
+								}
+							}
+
 							const createdChannel = yield* channelRepo
-								.insert(insertData)
+								.insert({
+									...(id === undefined ? {} : { id }),
+									name: "Thread",
+									icon: null,
+									type: "thread" as const,
+									organizationId,
+									parentChannelId,
+									sectionId: null,
+									deletedAt: null,
+								} as never)
 								.pipe(Effect.map((res) => res[0]!))
 
-							// 3. Add creator as member
-							yield* channelMemberRepo.insert({
-								channelId: createdChannel.id,
-								userId: user.id,
-								isHidden: false,
-								isMuted: false,
-								isFavorite: false,
-								lastSeenMessageId: null,
-								notificationCount: 0,
-								joinedAt: new Date(),
-								deletedAt: null,
-							})
-
-							// 4. Link message to thread (direct SQL update to bypass schema restrictions)
-							yield* db.run(
-								SQLite.update(schema.messagesTable)
-									.set({ threadChannelId: createdChannel.id })
-									.where(($) => [$.id.eq(messageId)]),
+							yield* addMember(createdChannel.id, user.id)
+							yield* syncChannelAccess(createdChannel.id)
+							// First link wins in the parent (two racing creates leave one orphan).
+							yield* enqueueEffect(
+								ChannelEffects.setThreadChannel,
+								channelTarget(parentChannelId),
+								{
+									messageId,
+									threadChannelId: createdChannel.id,
+								},
 							)
-
-							yield* channelAccessSync.syncChannel(createdChannel.id)
 
 							const txid = yield* generateTransactionId()
 
@@ -447,88 +333,33 @@ export const ChannelRpcLive = ChannelRpcs.toLayer(
 
 			"channel.generateName": ({ channelId }) =>
 				Effect.gen(function* () {
-					yield* channelPolicy.canUpdate(channelId)
-
-					const channel = yield* channelRepo
-						.findById(channelId)
-						.pipe(withRemapDbErrors("Channel", "select", channelId))
-
-					if (Option.isNone(channel)) {
-						return yield* Effect.fail(new ChannelNotFoundError({ channelId }))
-					}
-
-					if (channel.value.type !== "thread") {
-						return yield* Effect.fail(
-							new InvalidChannelRequestError({ message: "Only threads can be named" }),
-						)
-					}
-
-					const originalMessage = yield* db
-						.first(
-							SQLite.from(schema.messagesTable)
-								.select("id")
-								.where(($) => [$.threadChannelId.eq(channelId)])
-								.limit(1),
-						)
-						.pipe(withRemapDbErrors("Message", "select"))
-
-					if (Option.isNone(originalMessage)) {
-						return yield* Effect.fail(
-							new InvalidChannelRequestError({
-								message: "This thread has no original message",
-							}),
-						)
-					}
-
-					const originalMessageId = originalMessage.value.id
-
-					const clusterUrl = yield* Config.String("CLUSTER_URL").pipe(
-						Effect.mapError(
-							() =>
-								new WorkflowServiceUnavailableError({
-									message: "CLUSTER_URL not configured",
-								}),
-						),
+					// Runs in the thread's `ChannelObject`: authorized by its viewers, the original
+					// message from its thread origin; the alarm names it (`ai.nameThread`).
+					const viewers = yield* ChannelViewers.make
+					yield* ErrorUtils.refailUnauthorized(
+						"Channel",
+						"update",
+					)(viewers.require(channelId, "channels:write"))
+					const origin = yield* readThreadOrigin.pipe(
+						withRemapDbErrors("Channel", "select", channelId),
 					)
-					const client = yield* makeClusterClient(clusterUrl)
-
-					yield* client.workflows
-						.ThreadNamingWorkflow({
-							payload: {
-								threadChannelId: channelId,
-								originalMessageId,
-							},
+					if (Option.isNone(origin)) {
+						return yield* new InvalidChannelRequestError({
+							message: "Only threads with an original message can be named",
 						})
-						.pipe(
-							// Workflow errors (ThreadChannelNotFoundError, AIProviderUnavailableError, etc.)
-							// pass through directly since they're in the RPC union - only handle HTTP client errors
-							Effect.catchTag("HttpClientError", (err) =>
-								Effect.fail(
-									new WorkflowServiceUnavailableError({
-										message: "Cannot connect to workflow service",
-										cause: err,
-									}),
-								),
-							),
-							Effect.catchTag("SchemaError", (err) =>
-								Effect.fail(
-									new InternalServerError({
-										message: "Failed to parse workflow response",
-										cause: err,
-									}),
-								),
-							),
-						)
-
-					yield* Effect.logDebug("Triggered thread naming workflow", {
-						threadChannelId: channelId,
-						originalMessageId,
-					})
-
-					return {
-						success: true,
 					}
-				}),
+					const organizationId = yield* viewers.organizationId.pipe(
+						withRemapDbErrors("Channel", "select", channelId),
+					)
+					if (Option.isNone(organizationId)) {
+						return yield* new ChannelNotFoundError({ channelId })
+					}
+					yield* db.transaction(requestThreadName(organizationId.value, channelId, null)).pipe(
+						Effect.catchTag("SchemaError", (error) => Effect.die(error)),
+						withRemapDbErrors("Channel", "update", channelId),
+					)
+					return { success: true }
+				}).pipe(Effect.withSpan("Channel.generateName", { attributes: { "channel.id": channelId } })),
 		}
 	}),
 )

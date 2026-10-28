@@ -7,8 +7,8 @@ import { Clock, Effect } from "effect"
 
 export const TYPING_TTL_MS = 10_000
 
-/** When the oldest indicator expires, for the object's one alarm. */
-export const channelDeadlines = Effect.gen(function* () {
+/** When the oldest indicator expires, for the object's one alarm (`./timers.ts`). */
+export const typingDeadlines = Effect.gen(function* () {
 	const db = yield* Database.Database
 	const oldest = yield* db.first(
 		SQLite.from(schema.typingIndicatorsTable)
@@ -23,13 +23,13 @@ export const channelDeadlines = Effect.gen(function* () {
 	),
 )
 
-/** Delete expired indicators; returns how many. */
+/** Delete expired indicators (due at their deadline, inclusive); returns how many. */
 export const expireTypingIndicators = Effect.gen(function* () {
 	const db = yield* Database.Database
 	const now = yield* Clock.currentTimeMillis
 	const deleted = yield* db.run(
 		SQLite.deleteFrom(schema.typingIndicatorsTable)
-			.where(($) => [$.lastTyped.lt(now - TYPING_TTL_MS)])
+			.where(($) => [$.lastTyped.lte(now - TYPING_TTL_MS)])
 			.returning("id"),
 	)
 	return deleted.length

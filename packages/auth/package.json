@@ -14,6 +14,7 @@
 		"./server": "./src/yielded/index.ts"
 	},
 	"scripts": {
+		"test": "vitest run",
 		"test:integration": "vitest run src/yielded",
 		"generate-keys": "bun scripts/generate-keys.ts"
 	},

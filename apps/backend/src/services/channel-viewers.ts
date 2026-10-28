@@ -4,7 +4,9 @@
  * role. Replaces `OrgResolver.fromChannelWithAccess` for handlers that run in the channel's object,
  * which holds no `channels` or `organization_members` rows.
  *
- * Also the channel's own facts from that delivery: its organization and Connect conversation.
+ * Also the channel's own facts from that delivery: its organization and Connect conversation. A
+ * Connect host channel's object also serves its guest mounts' ids (the api Worker routes them
+ * here), so a guest's write names its own mounted channel.
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import { CurrentUser } from "@hazel/domain"
@@ -18,6 +20,7 @@ export type ChannelViewerRow = schema.ChannelViewer
 /** `_object_meta` keys `channel.setViewers` writes (see `worker/objects/effects/channel-effects.ts`). */
 const META_ORG = "organizationId"
 const META_CONVERSATION = "conversationId"
+const META_MOUNTS = "mountChannelIds"
 
 export class ChannelViewers extends Context.Service<ChannelViewers>()("@hazel/backend/ChannelViewers", {
 	make: Effect.gen(function* () {
@@ -38,18 +41,35 @@ export class ChannelViewers extends Context.Service<ChannelViewers>()("@hazel/ba
 				.query(Database.sql`SELECT value FROM _object_meta WHERE key = ${key}`)
 				.pipe(Effect.map((rows) => Option.fromNullishOr(rows[0]?.value as string | undefined)))
 
+		/** The Connect guest mounts this host channel's object serves (routed here by `channel_index`). */
+		const mountChannelIds = meta(META_MOUNTS).pipe(
+			Effect.map((value) =>
+				Option.match(value, {
+					onNone: () => [] as ReadonlyArray<string>,
+					onSome: (json) => JSON.parse(json) as ReadonlyArray<string>,
+				}),
+			),
+		)
+
+		/** `channelId` is this object's channel, or a Connect mount of it. */
+		const serves = (channelId: ChannelId) =>
+			Effect.gen(function* () {
+				const object = yield* Effect.serviceOption(CurrentObject)
+				if (Option.isNone(object) || object.value.kind !== "channel") return false
+				if (object.value.id === channelId) return true
+				return (yield* mountChannelIds).includes(channelId)
+			})
+
 		/**
-		 * The actor may act on `channelId` with `scope`: this is that channel's object, the actor is
-		 * a viewer, and its role (or a bot's granted scopes) includes `scope`. Fails with
-		 * `PermissionError`; policies turn it into `UnauthorizedError`.
+		 * The actor may act on `channelId` with `scope`: this is that channel's object (or its
+		 * Connect host's), the actor is a viewer, and its role (or a bot's granted scopes) includes
+		 * `scope`. Fails with `PermissionError`; policies turn it into `UnauthorizedError`.
 		 */
 		const require = Effect.fn("ChannelViewers.require")(function* (
 			channelId: ChannelId,
 			scope: ApiScope,
 		) {
-			const object = yield* Effect.serviceOption(CurrentObject)
-			if (Option.isNone(object) || object.value.kind !== "channel" || object.value.id !== channelId) {
-				// TODO(do-sync): a Connect guest mount routes to its host channel; accept its mounts here.
+			if (!(yield* serves(channelId))) {
 				return yield* new PermissionError({
 					message: `Channel ${channelId} is not served by this object`,
 					requiredScope: scope,
@@ -80,7 +100,7 @@ export class ChannelViewers extends Context.Service<ChannelViewers>()("@hazel/ba
 			),
 		)
 
-		return { viewerOf, require, organizationId, conversationId } as const
+		return { viewerOf, require, serves, organizationId, conversationId } as const
 	}),
 }) {
 	static readonly layer = Layer.effect(this, this.make)

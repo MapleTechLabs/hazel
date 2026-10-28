@@ -62,7 +62,7 @@ export const makeSyncedObject = <P, E, R, RD = never, RX = never>(
 	/** Returns the flushed seq (the write position to hand back to the client). */
 	const afterCommit = Effect.gen(function* () {
 		const seq = yield* sync.flush
-		yield* outbox.drain.pipe(logSqlError("Outbox drain failed"))
+		yield* outbox.drainIfIdle.pipe(logSqlError("Outbox drain failed"))
 		yield* schedule
 		return seq
 	})

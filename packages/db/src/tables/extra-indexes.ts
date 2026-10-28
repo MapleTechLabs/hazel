@@ -121,13 +121,6 @@ export const extraIndexes: ReadonlyArray<ExtraIndex> = [
 		where: `"status" = 'pending'`,
 	},
 	{
-		name: "message_outbox_events_locked_at_idx",
-		table: "message_outbox_events",
-		unique: false,
-		on: ["lockedAt"],
-		where: `"status" = 'processing'`,
-	},
-	{
 		name: "notifications_message_channel_dedupe_idx",
 		table: "notifications",
 		unique: true,

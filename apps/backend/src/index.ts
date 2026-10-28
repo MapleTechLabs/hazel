@@ -2,7 +2,7 @@
  * Bun entry point (Railway). Kept runnable during the Cloudflare cutover; the Worker entry is
  * `worker.ts`. See infra/cloudflare-migration-plan.md.
  */
-import { BunHttpServer, BunRuntime, BunSocket } from "@effect/platform-bun"
+import { BunHttpServer, BunRuntime } from "@effect/platform-bun"
 import { Redis, RedisResultPersistenceLive } from "@hazel/effect-bun"
 import { createTracingLayer } from "@hazel/effect-bun/Telemetry"
 import { Config, ConfigProvider, Effect, Layer } from "effect"
@@ -10,7 +10,6 @@ import { HttpMiddleware, HttpRouter } from "effect/http"
 import { AllRoutes, AppAuthorizationLive, AppServicesLive, HazelApi } from "./app"
 import { InviteMailer } from "./services/invite-mailer"
 import { BotGatewayTransport } from "./services/bot-gateway-transport"
-import { DiscordGatewayBackgroundLive } from "./services/chat-sync/discord-gateway-service"
 import { EnvVars } from "./lib/env-vars"
 import { DatabaseLive } from "./services/database"
 import { RateLimiterRedisLive } from "./services/rate-limiter-redis"
@@ -39,10 +38,9 @@ const PlatformLive = Layer.mergeAll(
 	InviteMailer.layerLog,
 )
 
-/** Long-running loops; on Cloudflare these are Durable Objects driven by crons. */
-const BackgroundLive = DiscordGatewayBackgroundLive.pipe(Layer.provide(BunSocket.layerWebSocketConstructor))
-
-const MainLive = Layer.mergeAll(AppServicesLive, BackgroundLive).pipe(
+// The Discord gateway runs only on Cloudflare (`worker/discord-gateway-object.ts`): it routes into
+// the sync objects, which Bun does not host.
+const MainLive = AppServicesLive.pipe(
 	Layer.provideMerge(PlatformLive),
 	Layer.provideMerge(ConfigProvider.layer(ConfigProvider.fromEnv({ preserveEmptyStrings: true }))),
 )
@@ -67,9 +65,5 @@ const ServerLayer = HttpRouter.serve(AllRoutes).pipe(
 	),
 )
 
-// The `as never` cast is required because ChatSyncCoreWorkerMake (in chat-sync-core-worker.ts)
-// is explicitly typed as Effect<..., unknown, unknown> to break a circular type dependency.
-// Those `unknown` types propagate through DiscordSyncWorkerLayer -> ServiceLive -> MainLive -> ServerLayer,
-// causing TypeScript to collapse the layer's type parameters to `unknown`.
-// All actual dependencies are wired correctly at runtime.
+// The `as never` cast keeps the launch untyped: the layer's requirements are wired at runtime.
 ServerLayer.pipe(Layer.launch as never, BunRuntime.runMain)

@@ -50,11 +50,6 @@ export const apiEnv = ({ stage, urls }: HazelStackContext) =>
 		requireSecretEntry("S3_ACCESS_KEY_ID"),
 		requireSecretEntry("S3_SECRET_ACCESS_KEY"),
 
-		// Workflows run on the Railway-hosted cluster (infra/cloudflare-migration-plan.md, Phase 5)
-		requirePlainEntry("CLUSTER_URL"),
-		// Sent by `makeClusterClient`; the cluster rejects workflow calls without it once set.
-		optionalSecret("CLUSTER_API_SECRET"),
-
 		// Integrations
 		requireSecretEntry("INTEGRATION_ENCRYPTION_KEY"),
 		optionalPlain("INTEGRATION_ENCRYPTION_KEY_VERSION"),

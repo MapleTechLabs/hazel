@@ -9,15 +9,19 @@ import * as SqliteDo from "@effect/sql-sqlite-do/SqliteClient"
 import { bindBotGateways } from "@hazel/bot-gateway/object"
 import type { SyncObjectState, SyncSocket } from "@hazel/sync-do"
 import { toHttpServerResponse } from "@hazel/sync-do"
+import { workerEnvLayer } from "@hazel/infra/worker-runtime"
 import * as Cloudflare from "alchemy/Cloudflare"
 import { RuntimeContext } from "alchemy/RuntimeContext"
 import { Effect, Layer } from "effect"
 import { FetchHttpClient, HttpServerRequest, HttpServerResponse } from "effect/http"
 import { BotGatewayTransport } from "../../services/bot-gateway-transport"
 import { Directory } from "../../services/directory"
+import { ThreadNamer } from "../../services/thread-namer"
+import { ChatSyncTransport } from "../../services/chat-sync/chat-sync-transport"
 import { directoryBinding, servicesPlatformLive } from "../platform"
 import { objectHandlersLive } from "./handlers"
 import type { ObjectKind } from "./kinds"
+import type { CallRequest } from "./calls"
 import type { ApplyEffectRequest } from "./effects/registry"
 import type { InvokeRequest } from "./protocol"
 import { makeObjectRuntime } from "./runtime"
@@ -48,6 +52,10 @@ export const activateObject = (kind: ObjectKind) =>
 					workerObjectStubs(env),
 					Layer.suspend(() => Directory.layerD1(directoryBinding(env))),
 					BotGatewayTransport.layerDurableObject(botGateways),
+					ThreadNamer.layer.pipe(
+						Layer.provide(Layer.mergeAll(FetchHttpClient.layer, workerEnvLayer(env))),
+					),
+					ChatSyncTransport.layer.pipe(Layer.provide(workerEnvLayer(env)), Layer.orDie),
 				),
 			})
 
@@ -63,6 +71,7 @@ export const activateObject = (kind: ObjectKind) =>
 			return {
 				invoke: (request: InvokeRequest) => object.invoke(request),
 				applyEffect: (request: ApplyEffectRequest) => object.applyEffect(request),
+				call: (request: CallRequest) => object.call(request),
 				fetch,
 				webSocketMessage: (socket: Cloudflare.WebSocket, message: string | ArrayBuffer) =>
 					object.onMessage(socket.ws as unknown as SyncSocket, message),

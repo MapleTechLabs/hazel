@@ -42,6 +42,8 @@ export interface OutboxMessage {
 	readonly kind: string
 	/** JSON-serializable. */
 	readonly payload: unknown
+	/** Not delivered before this time (epoch ms): the alarm sends it, not the write's own drain. */
+	readonly notBefore?: number
 }
 
 export interface OutboxRow {
@@ -61,8 +63,9 @@ export const enqueue = (message: OutboxMessage): Effect.Effect<string, SqlError,
 		const now = yield* Clock.currentTimeMillis
 		const id = message.id ?? crypto.randomUUID()
 		const payload = JSON.stringify(message.payload ?? null)
+		const nextAt = Math.max(now, message.notBefore ?? now)
 		yield* sql`INSERT INTO _outbox (id, target, kind, payload, attempts, next_at, created_at, status)
-			VALUES (${id}, ${message.target}, ${message.kind}, ${payload}, 0, ${now}, ${now}, 'pending')
+			VALUES (${id}, ${message.target}, ${message.kind}, ${payload}, 0, ${nextAt}, ${now}, 'pending')
 			ON CONFLICT (id) DO NOTHING`
 		return id
 	})
@@ -206,6 +209,12 @@ export const makeOutbox = <R>(
 	return {
 		enqueue,
 		drain: permit.withPermit(drainOutbox(deliver, options)),
+		/**
+		 * Drain unless one is already running. A delivery that calls back into this object (A
+		 * delivers to B, B's write delivers to A) would otherwise wait on the drain waiting on it;
+		 * rows it adds are left to the alarm the running drain schedules.
+		 */
+		drainIfIdle: Effect.asVoid(permit.withPermitsIfAvailable(1)(drainOutbox(deliver, options))),
 		nextAlarm: nextOutboxAlarm,
 	}
 }

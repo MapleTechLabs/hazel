@@ -4,7 +4,8 @@
  * - `id`: the object's DO name (organization, channel or user id). workerd does not reliably
  *   expose it, so every entry point carries it (`invoke`/`applyEffect` take `objectId`, the sync
  *   upgrade an `x-hazel-object-id` header) and the first one stores it. The alarm reads it back.
- * - `ChannelObject`: `organizationId` and `conversationId` from the last `setViewers`.
+ * - `ChannelObject`: `organizationId`, `conversationId` and `mountChannelIds` (a Connect host
+ *   channel's guest mounts) from the last `setViewers`.
  */
 import { Effect, Option } from "effect"
 import { SqlClient } from "effect/sql/SqlClient"

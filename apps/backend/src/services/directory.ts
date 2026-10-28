@@ -9,12 +9,13 @@
  */
 import type { D1Database } from "@cloudflare/workers-types"
 import { Database, type DatabaseError, SQLite, schema } from "@hazel/db"
-import type { ChannelId, OrganizationId, UserId } from "@hazel/schema"
+import type { ChannelId, ChannelWebhookId, OrganizationId, UserId } from "@hazel/schema"
 import { Context, Effect, Layer, type Option } from "effect"
 
 export type ChannelIndexRow = schema.ChannelIndex
 export type OrgIndexRow = schema.OrgIndex
 export type MembershipIndexRow = schema.MembershipIndex
+export type IntegrationIndexRow = schema.IntegrationIndex
 
 export interface DirectoryShape {
 	/** The directory database itself, for directory-path handlers. No transactions (D1). */
@@ -31,8 +32,30 @@ export interface DirectoryShape {
 		readonly id: OrganizationId
 		readonly slug: string | null
 		readonly name: string
+		readonly isPublic?: boolean
 		readonly deletedAt: Date | null
 	}) => Effect.Effect<void, DatabaseError>
+	/** The live organization holding `slug`. */
+	readonly orgBySlug: (slug: string) => Effect.Effect<Option.Option<OrgIndexRow>, DatabaseError>
+	/** Active members of `organizationId` (its `membership_index` rows). */
+	readonly memberCount: (organizationId: OrganizationId) => Effect.Effect<number, DatabaseError>
+	readonly upsertWebhook: (row: {
+		readonly webhookId: ChannelWebhookId
+		readonly organizationId: OrganizationId
+		readonly channelId: ChannelId
+		readonly tokenHash: string
+	}) => Effect.Effect<void, DatabaseError>
+	readonly deleteWebhook: (webhookId: ChannelWebhookId) => Effect.Effect<void, DatabaseError>
+	readonly webhook: (
+		webhookId: ChannelWebhookId,
+	) => Effect.Effect<Option.Option<schema.WebhookIndex>, DatabaseError>
+	/** The org holding a provider installation (a GitHub installation id, say). */
+	readonly integration: (
+		provider: string,
+		externalId: string,
+	) => Effect.Effect<Option.Option<IntegrationIndexRow>, DatabaseError>
+	readonly upsertIntegration: (row: IntegrationIndexRow) => Effect.Effect<void, DatabaseError>
+	readonly deleteIntegration: (row: IntegrationIndexRow) => Effect.Effect<void, DatabaseError>
 	readonly membership: (
 		userId: UserId,
 		organizationId: OrganizationId,
@@ -91,10 +114,98 @@ export const makeDirectory = (db: Database.DatabaseShape): DirectoryShape => ({
 					.values(row)
 					.onConflictDoUpdate({
 						target: ["id"],
-						set: { slug: row.slug, name: row.name, deletedAt: row.deletedAt },
+						set: {
+							slug: row.slug,
+							name: row.name,
+							...(row.isPublic === undefined ? {} : { isPublic: row.isPublic }),
+							deletedAt: row.deletedAt,
+						},
 					}),
 			)
 			.pipe(Effect.asVoid, Effect.withSpan("Directory.upsertOrg")),
+	orgBySlug: (slug) =>
+		db
+			.first(
+				SQLite.from(schema.orgIndexTable)
+					.select()
+					.where(($) => [$.slug.eq(slug), $.deletedAt.isNull()])
+					.limit(1),
+			)
+			.pipe(Effect.withSpan("Directory.orgBySlug")),
+	memberCount: (organizationId) =>
+		db
+			.run(
+				SQLite.from(schema.membershipIndexTable)
+					.select("userId")
+					.where(($) => [$.organizationId.eq(organizationId), $.deletedAt.isNull()]),
+			)
+			.pipe(
+				Effect.map((rows) => rows.length),
+				Effect.withSpan("Directory.memberCount"),
+			),
+	upsertWebhook: (row) =>
+		db
+			.run(
+				SQLite.insertInto(schema.webhookIndexTable)
+					.values(row)
+					.onConflictDoUpdate({
+						target: ["webhookId"],
+						set: {
+							organizationId: row.organizationId,
+							channelId: row.channelId,
+							tokenHash: row.tokenHash,
+						},
+					}),
+			)
+			.pipe(Effect.asVoid, Effect.withSpan("Directory.upsertWebhook")),
+	deleteWebhook: (webhookId) =>
+		db
+			.run(SQLite.deleteFrom(schema.webhookIndexTable).where(($) => [$.webhookId.eq(webhookId)]))
+			.pipe(Effect.asVoid, Effect.withSpan("Directory.deleteWebhook")),
+	webhook: (webhookId) =>
+		db
+			.first(
+				SQLite.from(schema.webhookIndexTable)
+					.select()
+					.where(($) => [$.webhookId.eq(webhookId)])
+					.limit(1),
+			)
+			.pipe(Effect.withSpan("Directory.webhook")),
+	integration: (provider, externalId) =>
+		db
+			.first(
+				SQLite.from(schema.integrationIndexTable)
+					.select()
+					.where(($) => [$.provider.eq(provider), $.externalId.eq(externalId)])
+					.limit(1),
+			)
+			.pipe(
+				Effect.withSpan("Directory.integration", {
+					attributes: { "integration.provider": provider },
+				}),
+			),
+	upsertIntegration: (row) =>
+		db
+			.run(
+				SQLite.insertInto(schema.integrationIndexTable)
+					.values(row)
+					.onConflictDoUpdate({
+						target: ["provider", "externalId"],
+						set: { organizationId: row.organizationId },
+					}),
+			)
+			.pipe(Effect.asVoid, Effect.withSpan("Directory.upsertIntegration")),
+	// Only the org's own row: another org may have claimed the installation since.
+	deleteIntegration: (row) =>
+		db
+			.run(
+				SQLite.deleteFrom(schema.integrationIndexTable).where(($) => [
+					$.provider.eq(row.provider),
+					$.externalId.eq(row.externalId),
+					$.organizationId.eq(row.organizationId),
+				]),
+			)
+			.pipe(Effect.asVoid, Effect.withSpan("Directory.deleteIntegration")),
 	membership: (userId, organizationId) =>
 		db
 			.first(

@@ -204,6 +204,7 @@ CREATE TABLE IF NOT EXISTS "org_index" (
 	"id" text PRIMARY KEY NOT NULL,
 	"slug" text,
 	"name" text NOT NULL,
+	"isPublic" integer NOT NULL DEFAULT false,
 	"deletedAt" text
 );
 --> statement-breakpoint

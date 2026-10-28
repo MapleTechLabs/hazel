@@ -5,16 +5,15 @@
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient"
 import { Effect, Layer } from "effect"
 import * as SqlClient from "effect/sql/SqlClient"
-import { applyMigrations, renderStoreSchema } from "./schema-ddl"
+import { applyMigrations } from "./schema-ddl"
 import { type Database, layerSqlite } from "./services/database"
-import { legacyTables, storeNames } from "./stores"
+import { storeNames } from "./stores"
 
-/** Applies every store's migrations (and the legacy tables) to one database. */
+/** Applies every store's migrations to one database. */
 const migrateAll = Layer.effectDiscard(
 	Effect.gen(function* () {
 		const sql = yield* SqlClient.SqlClient
 		for (const store of storeNames) yield* applyMigrations(sql, store)
-		for (const statement of yield* renderStoreSchema(legacyTables)) yield* sql.unsafe(statement)
 	}),
 )
 

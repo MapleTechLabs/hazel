@@ -1,5 +1,4 @@
 import { HttpApiBuilder } from "effect/http-api"
-import { IntegrationConnectionRepo } from "@hazel/backend-core"
 import { InternalServerError } from "@hazel/domain"
 import type { ExternalChannelId, OrganizationId } from "@hazel/schema"
 import {
@@ -15,7 +14,9 @@ import {
 import { Discord, GitHub } from "@hazel/integrations"
 import { Config, Effect, Option, Redacted } from "effect"
 import { HazelApi } from "../api"
-import { IntegrationTokenService, TokenNotFoundError } from "../services/integration-token-service"
+import { callObject } from "../worker/objects/calls"
+import { orgTarget } from "../worker/objects/kinds"
+import { IntegrationAccessTokenCall } from "../worker/objects/org/integrations"
 import {
 	fetchLinearIssue,
 	type LinearApiError,
@@ -23,6 +24,31 @@ import {
 	type LinearRateLimitError,
 	parseLinearIssueUrl,
 } from "../services/integrations/linear-resource-provider"
+
+type Provider = typeof IntegrationAccessTokenCall.payload.Type.provider
+
+/** The org's token for `provider`, from its `OrgObject`; null when none is usable. */
+const tokenOf = (orgId: OrganizationId, provider: Provider) =>
+	callObject(IntegrationAccessTokenCall, orgTarget(orgId), { provider }).pipe(
+		// A token that cannot be refreshed or decrypted: prompt a reconnect.
+		Effect.catchTag("IntegrationTokenUnavailableError", () => Effect.succeed(null)),
+		Effect.map((token) => (token === null ? null : token.accessToken)),
+	)
+
+/** As `tokenOf`, failing when the org has no usable connection. */
+const requireToken = (orgId: OrganizationId, provider: Provider) =>
+	tokenOf(orgId, provider).pipe(
+		Effect.flatMap((token) =>
+			token === null
+				? Effect.fail(new IntegrationNotConnectedForPreviewError({ provider }))
+				: Effect.succeed(token),
+		),
+		Effect.catchTag("ObjectCallError", (error) =>
+			Effect.fail(
+				new InternalServerError({ message: "The organization is unavailable", cause: error }),
+			),
+		),
+	)
 
 const prToResponse = (pr: GitHub.GitHubPR) =>
 	new GitHubPRResourceResponse({
@@ -63,28 +89,8 @@ export const HttpIntegrationResourceLive = HttpApiBuilder.group(
 						)
 					}
 
-					// Check if organization has Linear connected
-					const connectionRepo = yield* IntegrationConnectionRepo
-					const connectionOption = yield* connectionRepo.findByOrgAndProvider(orgId, "linear")
-
-					if (Option.isNone(connectionOption)) {
-						return yield* Effect.fail(
-							new IntegrationNotConnectedForPreviewError({ provider: "linear" }),
-						)
-					}
-
-					const connection = connectionOption.value
-
-					// Check if connection is active
-					if (connection.status !== "active") {
-						return yield* Effect.fail(
-							new IntegrationNotConnectedForPreviewError({ provider: "linear" }),
-						)
-					}
-
-					// Get valid access token
-					const tokenService = yield* IntegrationTokenService
-					const accessToken = yield* tokenService.getValidAccessToken(connection.id)
+					// The org's Linear token (active connection, refreshed)
+					const accessToken = yield* requireToken(orgId, "linear")
 
 					// Fetch issue from Linear API
 					const issue = yield* fetchLinearIssue(parsed.issueKey, accessToken)
@@ -110,8 +116,6 @@ export const HttpIntegrationResourceLive = HttpApiBuilder.group(
 						),
 					),
 					Effect.catchTags({
-						TokenNotFoundError: () =>
-							Effect.fail(new IntegrationNotConnectedForPreviewError({ provider: "linear" })),
 						LinearApiError: (error: LinearApiError) =>
 							Effect.fail(
 								new IntegrationResourceError({
@@ -137,22 +141,6 @@ export const HttpIntegrationResourceLive = HttpApiBuilder.group(
 									message: `Issue not found: ${error.issueId}`,
 								}),
 							),
-						DatabaseError: (error) =>
-							Effect.fail(
-								new InternalServerError({
-									message: "Database error while fetching integration",
-									cause: error,
-								}),
-							),
-						// When token decryption fails, prompt user to reconnect instead of showing 500 error
-						IntegrationEncryptionError: () =>
-							Effect.fail(new IntegrationNotConnectedForPreviewError({ provider: "linear" })),
-						KeyVersionNotFoundError: () =>
-							Effect.fail(new IntegrationNotConnectedForPreviewError({ provider: "linear" })),
-						TokenRefreshError: () =>
-							Effect.fail(new IntegrationNotConnectedForPreviewError({ provider: "linear" })),
-						ConnectionNotFoundError: () =>
-							Effect.fail(new IntegrationNotConnectedForPreviewError({ provider: "linear" })),
 					}),
 				),
 			)
@@ -176,21 +164,11 @@ export const HttpIntegrationResourceLive = HttpApiBuilder.group(
 
 					// Phase 1: Try authenticated fetch
 					const authenticatedResult = yield* Effect.gen(function* () {
-						const connectionRepo = yield* IntegrationConnectionRepo
-						const connectionOption = yield* connectionRepo.findByOrgAndProvider(orgId, "github")
-
-						if (Option.isNone(connectionOption)) {
-							return Option.none<GitHub.GitHubPR>()
-						}
-
-						const connection = connectionOption.value
-
-						if (connection.status !== "active") {
-							return Option.none<GitHub.GitHubPR>()
-						}
-
-						const tokenService = yield* IntegrationTokenService
-						const accessToken = yield* tokenService.getValidAccessToken(connection.id)
+						// Any token problem falls through to the public API.
+						const accessToken = yield* tokenOf(orgId, "github").pipe(
+							Effect.catchTag("ObjectCallError", () => Effect.succeed(null)),
+						)
+						if (accessToken === null) return Option.none<GitHub.GitHubPR>()
 
 						const pr = yield* gitHubApiClient.fetchPR(
 							parsed.owner,
@@ -231,15 +209,6 @@ export const HttpIntegrationResourceLive = HttpApiBuilder.group(
 								}),
 							),
 						),
-						// Auth-related failures — fall through to public API
-						Effect.catchTags({
-							TokenNotFoundError: () => Effect.succeed(Option.none<GitHub.GitHubPR>()),
-							IntegrationEncryptionError: () => Effect.succeed(Option.none<GitHub.GitHubPR>()),
-							KeyVersionNotFoundError: () => Effect.succeed(Option.none<GitHub.GitHubPR>()),
-							TokenRefreshError: () => Effect.succeed(Option.none<GitHub.GitHubPR>()),
-							ConnectionNotFoundError: () => Effect.succeed(Option.none<GitHub.GitHubPR>()),
-							DatabaseError: () => Effect.succeed(Option.none<GitHub.GitHubPR>()),
-						}),
 					)
 
 					if (Option.isSome(authenticatedResult)) {
@@ -287,60 +256,15 @@ export const HttpIntegrationResourceLive = HttpApiBuilder.group(
 			)
 			.handle("getGitHubRepositories", ({ params, query }) =>
 				handleGetGitHubRepositories(params, query).pipe(
-					Effect.catchTags({
-						DatabaseError: (error) =>
-							Effect.fail(
-								new InternalServerError({
-									message: "Failed to fetch GitHub repositories",
-									cause: error,
-								}),
-							),
-						TokenNotFoundError: () =>
-							Effect.fail(new IntegrationNotConnectedForPreviewError({ provider: "github" })),
-						IntegrationEncryptionError: () =>
-							Effect.fail(new IntegrationNotConnectedForPreviewError({ provider: "github" })),
-						KeyVersionNotFoundError: () =>
-							Effect.fail(new IntegrationNotConnectedForPreviewError({ provider: "github" })),
-						TokenRefreshError: () =>
-							Effect.fail(new IntegrationNotConnectedForPreviewError({ provider: "github" })),
-						ConnectionNotFoundError: () =>
-							Effect.fail(new IntegrationNotConnectedForPreviewError({ provider: "github" })),
-					}),
+					Effect.withSpan("IntegrationResources.getGitHubRepositories"),
 				),
 			)
 			.handle("getDiscordGuilds", ({ params }) =>
-				handleGetDiscordGuilds(params).pipe(
-					Effect.catchTags({
-						DatabaseError: (error) =>
-							Effect.fail(
-								new InternalServerError({
-									message: "Failed to fetch Discord guilds",
-									cause: error,
-								}),
-							),
-						TokenNotFoundError: () =>
-							Effect.fail(new IntegrationNotConnectedForPreviewError({ provider: "discord" })),
-						IntegrationEncryptionError: () =>
-							Effect.fail(new IntegrationNotConnectedForPreviewError({ provider: "discord" })),
-						KeyVersionNotFoundError: () =>
-							Effect.fail(new IntegrationNotConnectedForPreviewError({ provider: "discord" })),
-						TokenRefreshError: () =>
-							Effect.fail(new IntegrationNotConnectedForPreviewError({ provider: "discord" })),
-						ConnectionNotFoundError: () =>
-							Effect.fail(new IntegrationNotConnectedForPreviewError({ provider: "discord" })),
-					}),
-				),
+				handleGetDiscordGuilds(params).pipe(Effect.withSpan("IntegrationResources.getDiscordGuilds")),
 			)
 			.handle("getDiscordGuildChannels", ({ params }) =>
 				handleGetDiscordGuildChannels(params).pipe(
 					Effect.catchTags({
-						DatabaseError: (error) =>
-							Effect.fail(
-								new InternalServerError({
-									message: "Failed to fetch Discord channels",
-									cause: error,
-								}),
-							),
 						ConfigError: (error) =>
 							Effect.fail(
 								new InternalServerError({
@@ -364,25 +288,8 @@ const handleGetGitHubRepositories = Effect.fn("integration-resources.getGitHubRe
 	const page = query.page ?? 1
 	const perPage = query.perPage ?? 30
 
-	const connectionRepo = yield* IntegrationConnectionRepo
-	const tokenService = yield* IntegrationTokenService
-
-	// Check if organization has GitHub connected
-	const connectionOption = yield* connectionRepo.findByOrgAndProvider(orgId, "github")
-
-	if (Option.isNone(connectionOption)) {
-		return yield* Effect.fail(new IntegrationNotConnectedForPreviewError({ provider: "github" }))
-	}
-
-	const connection = connectionOption.value
-
-	// Check if connection is active
-	if (connection.status !== "active") {
-		return yield* Effect.fail(new IntegrationNotConnectedForPreviewError({ provider: "github" }))
-	}
-
-	// Get valid access token
-	const accessToken = yield* tokenService.getValidAccessToken(connection.id)
+	// The org's GitHub token (active connection, regenerated when due)
+	const accessToken = yield* requireToken(orgId, "github")
 
 	// Fetch repositories from GitHub API using GitHubApiClient
 	const gitHubApiClient = yield* GitHub.GitHubApiClient
@@ -417,31 +324,11 @@ const handleGetGitHubRepositories = Effect.fn("integration-resources.getGitHubRe
 	})
 })
 
-const getActiveDiscordConnection = Effect.fn("integration-resources.getActiveDiscordConnection")(function* (
-	orgId: OrganizationId,
-) {
-	const connectionRepo = yield* IntegrationConnectionRepo
-	const connectionOption = yield* connectionRepo.findByOrgAndProvider(orgId, "discord")
-
-	if (Option.isNone(connectionOption)) {
-		return yield* Effect.fail(new IntegrationNotConnectedForPreviewError({ provider: "discord" }))
-	}
-
-	const connection = connectionOption.value
-	if (connection.status !== "active") {
-		return yield* Effect.fail(new IntegrationNotConnectedForPreviewError({ provider: "discord" }))
-	}
-
-	return connection
-})
-
 const handleGetDiscordGuilds = Effect.fn("integration-resources.getDiscordGuilds")(function* (path: {
 	orgId: OrganizationId
 }) {
 	const { orgId } = path
-	const tokenService = yield* IntegrationTokenService
-	const connection = yield* getActiveDiscordConnection(orgId)
-	const accessToken = yield* tokenService.getValidAccessToken(connection.id)
+	const accessToken = yield* requireToken(orgId, "discord")
 
 	const discordApiClient = yield* Discord.DiscordApiClient
 	const guilds = yield* discordApiClient.listGuilds(accessToken).pipe(
@@ -461,7 +348,8 @@ const handleGetDiscordGuilds = Effect.fn("integration-resources.getDiscordGuilds
 const handleGetDiscordGuildChannels = Effect.fn("integration-resources.getDiscordGuildChannels")(
 	function* (path: { orgId: OrganizationId; guildId: string }) {
 		const { orgId, guildId } = path
-		yield* getActiveDiscordConnection(orgId)
+		// Only for an org with an active Discord connection.
+		yield* requireToken(orgId, "discord")
 
 		const botToken = yield* Config.Redacted("DISCORD_BOT_TOKEN")
 		const discordApiClient = yield* Discord.DiscordApiClient

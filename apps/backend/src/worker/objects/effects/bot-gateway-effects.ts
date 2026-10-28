@@ -9,6 +9,12 @@ import { OrganizationId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
 import { messageEventEnvelope } from "../../../services/bot-gateway-service"
 import { BotGatewayTransport } from "../../../services/bot-gateway-transport"
+import {
+	ChannelEventPayload,
+	ChannelMemberEventPayload,
+	publishChannelEvent,
+	publishChannelMemberEvent,
+} from "../org/bot-events"
 import { defineEffect, type EffectReceivers } from "./registry"
 
 export const MessageEventPayload = Schema.Struct({
@@ -19,6 +25,9 @@ export const MessageEventPayload = Schema.Struct({
 
 export const BotGatewayEffects = {
 	messageEvent: defineEffect("botGateway.messageEvent", "bot-gateway", MessageEventPayload),
+	/** From an `OrgObject`: to the org's installed bots (`../org/bot-events.ts`). */
+	channelEvent: defineEffect("botGateway.channelEvent", "bot-gateway", ChannelEventPayload),
+	channelMemberEvent: defineEffect("botGateway.channelMemberEvent", "bot-gateway", ChannelMemberEventPayload),
 }
 
 export const botGatewayReceivers = {
@@ -38,4 +47,6 @@ export const botGatewayReceivers = {
 			)
 			yield* Effect.annotateCurrentSpan({ "bot_gateway.bots": bots.length })
 		}),
+	"botGateway.channelEvent": publishChannelEvent,
+	"botGateway.channelMemberEvent": publishChannelMemberEvent,
 } satisfies EffectReceivers<typeof BotGatewayEffects, Database.Database | BotGatewayTransport>

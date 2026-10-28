@@ -1,7 +1,6 @@
 /**
- * TODO(do-sync): runs in the directory (D1) (`rpc/routing.ts`); not ported yet. To port: touch only that
- * store's tables and send everything else through the outbox (`worker/objects/effects`).
- * - no transactions; accept adds an org member: enqueue to the OrgObject
+ * `create` / `list` / `revoke` run in the org's `OrgObject`, `preview` / `accept` on the directory
+ * path (`rpc/routing.ts`); the rows are the directory's (`services/invitations.ts`).
  */
 import { InvitationRpcs } from "@hazel/domain/rpc"
 import { Effect } from "effect"

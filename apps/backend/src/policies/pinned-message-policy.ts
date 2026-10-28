@@ -1,10 +1,16 @@
-import { ChannelRepo, OrganizationMemberRepo, PinnedMessageRepo } from "@hazel/backend-core"
+import { PinnedMessageRepo } from "@hazel/backend-core"
 import { ErrorUtils, policy } from "@hazel/domain"
 import type { ChannelId, PinnedMessageId } from "@hazel/schema"
-import { Context, Effect, Layer, Option } from "effect"
-import { isAdminOrOwner } from "../lib/policy-utils"
-import { OrgResolver } from "../services/org-resolver"
+import { Context, Effect, Layer } from "effect"
+import { isAdminOrOwner, withAnnotatedScope } from "../lib/policy-utils"
+import { ChannelViewers } from "../services/channel-viewers"
 
+/**
+ * Pin authorization, run inside the channel's `ChannelObject`: a viewer of the channel (its
+ * `channel_viewers` row, with the scope) may pin; the pinner or an org admin or owner viewing
+ * the channel may unpin. Differs from the org-table version: a member may pin in a private
+ * channel they belong to (the object does not know the channel's type).
+ */
 export class PinnedMessagePolicy extends Context.Service<PinnedMessagePolicy>()(
 	"PinnedMessagePolicy/Policy",
 	{
@@ -12,37 +18,27 @@ export class PinnedMessagePolicy extends Context.Service<PinnedMessagePolicy>()(
 			const policyEntity = "PinnedMessage" as const
 
 			const pinnedMessageRepo = yield* PinnedMessageRepo
-			const channelRepo = yield* ChannelRepo
-			const organizationMemberRepo = yield* OrganizationMemberRepo
-			const orgResolver = yield* OrgResolver
+			const channelViewers = yield* ChannelViewers
 
-			const canUpdate = (id: PinnedMessageId) =>
+			/** The pinner, or an admin or owner among the channel's viewers. */
+			const pinnerOrAdmin = (action: "update" | "delete") => (id: PinnedMessageId) =>
 				ErrorUtils.refailUnauthorized(
 					policyEntity,
-					"update",
+					action,
 				)(
 					pinnedMessageRepo.with(id, (pinnedMessage) =>
-						channelRepo.with(pinnedMessage.channelId, (channel) =>
-							policy(
-								policyEntity,
-								"update",
-								Effect.fn(`${policyEntity}.update`)(function* (actor) {
-									if (actor.id === pinnedMessage.pinnedBy) {
-										return yield* Effect.succeed(true)
-									}
-
-									const orgMember = yield* organizationMemberRepo.findByOrgAndUser(
-										channel.organizationId,
-										actor.id,
-									)
-
-									if (Option.isSome(orgMember) && isAdminOrOwner(orgMember.value.role)) {
-										return yield* Effect.succeed(true)
-									}
-
-									return yield* Effect.succeed(false)
-								}),
-							),
+						withAnnotatedScope((scope) =>
+							Effect.gen(function* () {
+								const viewer = yield* channelViewers.require(pinnedMessage.channelId, scope)
+								return yield* policy(
+									policyEntity,
+									action,
+									Effect.fn(`${policyEntity}.${action}`)(function* (actor) {
+										if (actor.id === pinnedMessage.pinnedBy) return true
+										return viewer.role !== "guest" && isAdminOrOwner(viewer.role)
+									}),
+								)
+							}),
 						),
 					),
 				)
@@ -51,66 +47,10 @@ export class PinnedMessagePolicy extends Context.Service<PinnedMessagePolicy>()(
 				ErrorUtils.refailUnauthorized(
 					policyEntity,
 					"create",
-				)(
-					channelRepo.with(channelId, (channel) =>
-						policy(
-							policyEntity,
-							"create",
-							Effect.fn(`${policyEntity}.create`)(function* (actor) {
-								const orgMember = yield* organizationMemberRepo.findByOrgAndUser(
-									channel.organizationId,
-									actor.id,
-								)
+				)(withAnnotatedScope((scope) => Effect.asVoid(channelViewers.require(channelId, scope))))
 
-								if (Option.isNone(orgMember)) {
-									return yield* Effect.succeed(false)
-								}
-
-								if (isAdminOrOwner(orgMember.value.role)) {
-									return yield* Effect.succeed(true)
-								}
-
-								// Regular members can pin in public channels
-								if (channel.type === "public") {
-									return yield* Effect.succeed(true)
-								}
-
-								return yield* Effect.succeed(false)
-							}),
-						),
-					),
-				)
-
-			const canDelete = (id: PinnedMessageId) =>
-				ErrorUtils.refailUnauthorized(
-					policyEntity,
-					"delete",
-				)(
-					pinnedMessageRepo.with(id, (pinnedMessage) =>
-						channelRepo.with(pinnedMessage.channelId, (channel) =>
-							policy(
-								policyEntity,
-								"delete",
-								Effect.fn(`${policyEntity}.delete`)(function* (actor) {
-									if (actor.id === pinnedMessage.pinnedBy) {
-										return yield* Effect.succeed(true)
-									}
-
-									const orgMember = yield* organizationMemberRepo.findByOrgAndUser(
-										channel.organizationId,
-										actor.id,
-									)
-
-									if (Option.isSome(orgMember) && isAdminOrOwner(orgMember.value.role)) {
-										return yield* Effect.succeed(true)
-									}
-
-									return yield* Effect.succeed(false)
-								}),
-							),
-						),
-					),
-				)
+			const canUpdate = pinnerOrAdmin("update")
+			const canDelete = pinnerOrAdmin("delete")
 
 			return { canCreate, canDelete, canUpdate } as const
 		}),
@@ -118,8 +58,6 @@ export class PinnedMessagePolicy extends Context.Service<PinnedMessagePolicy>()(
 ) {
 	static readonly layer = Layer.effect(this, this.make).pipe(
 		Layer.provide(PinnedMessageRepo.layer),
-		Layer.provide(ChannelRepo.layer),
-		Layer.provide(OrganizationMemberRepo.layer),
-		Layer.provide(OrgResolver.layer),
+		Layer.provide(ChannelViewers.layer),
 	)
 }

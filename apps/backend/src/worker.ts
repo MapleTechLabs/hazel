@@ -17,11 +17,6 @@ import {
 } from "./worker/discord-gateway-object"
 import { apiEnv } from "./worker/env"
 import { buildApp, makeFetch } from "./worker/http"
-import {
-	OUTBOX_DISPATCHER_NAME,
-	OutboxDispatcherObject,
-	OutboxDispatcherObjectLive,
-} from "./worker/outbox-dispatcher-object"
 import { ChannelObject, ChannelObjectLive } from "./worker/objects/channel-object"
 import { OrgObject, OrgObjectLive } from "./worker/objects/org-object"
 import { UserObject, UserObjectLive } from "./worker/objects/user-object"
@@ -76,7 +71,7 @@ const props = Effect.gen(function* () {
 export class Api extends Cloudflare.Worker<
 	Api,
 	Cloudflare.WorkerShape,
-	RateLimiterObject | OutboxDispatcherObject | DiscordGatewayObject | OrgObject | ChannelObject | UserObject
+	RateLimiterObject | DiscordGatewayObject | OrgObject | ChannelObject | UserObject
 >()("api") {}
 
 export default Api.make(
@@ -84,7 +79,6 @@ export default Api.make(
 	Effect.gen(function* () {
 		// Yielding a hosted class binds, registers and exports it.
 		const rateLimiters = yield* RateLimiterObject
-		const outbox = yield* OutboxDispatcherObject
 		const discordGateway = yield* DiscordGatewayObject
 		// The sync objects (`worker/objects/`): bound here, reached through the env (`stubs.ts`).
 		yield* OrgObject
@@ -93,31 +87,22 @@ export default Api.make(
 		// Hosted by the bot-gateway Worker; BotGatewayService publishes bot events into it.
 		const botGateways = yield* bindBotGateways
 		const env = yield* Cloudflare.WorkerEnvironment
-		const exec = yield* Cloudflare.WorkerExecutionContext
 
 		// The graph builds on the first request, not here: init also runs at plan time, where
 		// alchemy would auto-bind every `Config` read.
 		const isolate = isolateContext(yield* Effect.context())
 		const app = yield* cachedRecoverable(buildApp(isolate, env, rateLimiters, botGateways))
 
-		// Backstops for the Durable Objects: drain anything a missed kick left behind, and keep
-		// the Discord gateway session up across deploys and evictions.
+		// Backstop: keep the Discord gateway session up across deploys and evictions.
 		yield* Cloudflare.Workers.cron("* * * * *", () =>
-			Effect.all(
-				[
-					outbox.getByName(OUTBOX_DISPATCHER_NAME).kick(),
-					discordGateway.getByName(DISCORD_GATEWAY_NAME).ensureRunning(),
-				],
-				{ concurrency: "unbounded", discard: true },
-			),
+			discordGateway.getByName(DISCORD_GATEWAY_NAME).ensureRunning(),
 		)
 
-		return { fetch: makeFetch(app, env, exec, outbox) }
+		return { fetch: makeFetch(app) }
 	}).pipe(
 		Effect.provide(
 			Layer.mergeAll(
 				RateLimiterObjectLive,
-				OutboxDispatcherObjectLive,
 				DiscordGatewayObjectLive,
 				OrgObjectLive,
 				ChannelObjectLive,

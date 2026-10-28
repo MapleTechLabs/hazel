@@ -1,20 +1,16 @@
 import { describe, expect, it } from "vitest"
-import { Database } from "@hazel/db"
 import { PermissionError } from "@hazel/domain"
-import { ConnectChannelAlreadySharedError, ConnectWorkspaceNotFoundError } from "@hazel/domain/rpc"
-import type { ChannelId, OrganizationId } from "@hazel/schema"
+import { ConnectWorkspaceNotFoundError } from "@hazel/domain/rpc"
+import type { OrganizationId } from "@hazel/schema"
 import { Effect, Option } from "effect"
 import {
 	assertGuestMemberAddsAllowed,
-	remapGuestMountInsertConflict,
 	resolveGuestOrganizationForInviteCreate,
 	validateInviteAcceptanceTarget,
 } from "./connect-shares"
 
-const HOST_ORG_ID = "00000000-0000-4000-8000-000000000101" as OrganizationId
 const GUEST_ORG_ID = "00000000-0000-4000-8000-000000000102" as OrganizationId
 const OTHER_GUEST_ORG_ID = "00000000-0000-4000-8000-000000000103" as OrganizationId
-const GUEST_CHANNEL_ID = "00000000-0000-4000-8000-000000000301" as ChannelId
 
 describe("connect-shares helpers", () => {
 	it("rejects invite creation when provided org and slug resolve to different workspaces", async () => {
@@ -100,26 +96,5 @@ describe("connect-shares helpers", () => {
 
 		expect(hostResult._tag).toBe("Success")
 		expect(guestResult._tag).toBe("Success")
-	})
-
-	it("remaps guest mount unique conflicts to an already-shared error", async () => {
-		const result = await Effect.runPromise(
-			remapGuestMountInsertConflict({
-				error: new Database.DatabaseError({
-					type: "unique_violation",
-					message: "duplicate key value violates unique constraint",
-					sqlState: "23505",
-					constraint: "connect_conv_channels_conversation_org_unique",
-					cause: new Error("duplicate key value violates unique constraint"),
-				}),
-				guestOrganizationId: GUEST_ORG_ID,
-				findExistingMount: () => Effect.succeed(Option.some({ channelId: GUEST_CHANNEL_ID })),
-			}).pipe(Effect.result) as Effect.Effect<any, never, never>,
-		)
-
-		expect(result._tag).toBe("Failure")
-		if (result._tag === "Failure") {
-			expect(result.failure).toBeInstanceOf(ConnectChannelAlreadySharedError)
-		}
 	})
 })

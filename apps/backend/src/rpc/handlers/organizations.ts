@@ -1,14 +1,5 @@
-/**
- * TODO(do-sync): runs in the OrgObject (create/getBySlug/join: directory) (`rpc/routing.ts`); not ported
- * yet. To port: touch only that store's tables and send everything else through the outbox
- * (`worker/objects/effects`).
- * - `organization.create` must seed the new OrgObject (invoke it) and write `org_index`; slug lookups read
- *   `org_index`
- * - update/delete: `DirectoryEffects.upsertOrgIndex`
- */
-import type { OrganizationId } from "@hazel/schema"
 import { ChannelMemberRepo, ChannelRepo, OrganizationMemberRepo, OrganizationRepo } from "@hazel/backend-core"
-import { Database } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import { CurrentUser, InternalServerError, withRemapDbErrors } from "@hazel/domain"
 import {
 	AlreadyMemberError,
@@ -18,18 +9,19 @@ import {
 	OrganizationSlugAlreadyExistsError,
 	PublicInviteDisabledError,
 } from "@hazel/domain/rpc"
+import { OrganizationId } from "@hazel/schema"
 import { Effect, Option } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
+import { currentObject } from "../../lib/current-object"
 import { OrganizationPolicy } from "../../policies/organization-policy"
-import { ChannelAccessSyncService } from "../../services/channel-access-sync"
+import { Directory } from "../../services/directory"
+import { forwardRpc } from "../../worker/objects/forward"
+import { orgTarget } from "../../worker/objects/kinds"
+import { syncMemberAccess } from "../../worker/objects/org/channel-access"
+import { publishOrgIndex, publishOrgRemoval } from "../../worker/objects/org/organization"
+import { projectUsers } from "../../worker/objects/org/projections"
 
 const UNKNOWN_ORGANIZATION_ID = "00000000-0000-4000-8000-000000000000" as OrganizationId
-
-/** A unique violation on the slug: someone else has it. */
-const isSlugTaken = (error: unknown): error is Database.DatabaseError =>
-	error instanceof Database.DatabaseError &&
-	error.type === "unique_violation" &&
-	error.constraint === "organizations_slug_unique"
 
 const slugTaken = (slug: string) =>
 	new OrganizationSlugAlreadyExistsError({
@@ -37,259 +29,231 @@ const slugTaken = (slug: string) =>
 		slug,
 	})
 
-/**
- * `withRemapDbErrors` for organization writes, except that a duplicate slug becomes
- * `OrganizationSlugAlreadyExistsError`.
- */
-const handleOrganizationDbErrors =
-	(entityType: string, action: "update" | "create", slug: string | null | undefined) =>
-	<A, E, R>(effect: Effect.Effect<A, E, R>) =>
-		effect.pipe(
-			Effect.mapError((error) => (isSlugTaken(error) ? slugTaken(slug ?? "unknown") : error)),
-			withRemapDbErrors(entityType, action),
-		)
+const toResponse = (
+	organization: schema.Organization,
+	transactionId: OrganizationResponse["transactionId"],
+) =>
+	new OrganizationResponse({
+		data: {
+			...organization,
+			settings: organization.settings as { readonly [x: string]: unknown } | null,
+		},
+		transactionId,
+	})
+
+/** The object's own organization id; `None` on the directory path. */
+const objectOrganizationId = Effect.map(currentObject, (object) =>
+	Option.isSome(object) && object.value.kind === "org"
+		? Option.some(OrganizationId.make(object.value.id))
+		: Option.none<OrganizationId>(),
+)
 
 /**
- * Organization RPC Handlers
+ * Organization RPC handlers.
  *
- * Implements the business logic for all organization-related RPC methods.
- * Each handler receives the payload and has access to CurrentUser via Effect context
- * (provided by AuthMiddleware).
+ * - `organization.create` / `organization.joinViaPublicInvite` arrive on the directory path
+ *   (`rpc/routing.ts`): the slug is resolved in `org_index` (D1), then the same RPC is forwarded
+ *   to the `OrgObject` (`forwardRpc`), which writes its rows and projects them (membership,
+ *   channel access, `org_index`, `user_organizations`) through its outbox.
+ * - `organization.getBySlugPublic` answers from `org_index` and `membership_index` alone.
+ * - update / delete / setSlug / setPublicMode run in the `OrgObject` and reproject `org_index`.
  *
- * All handlers use:
- * - Database transactions for atomicity
- * - Policy checks for authorization
- * - Transaction IDs for optimistic updates
- * - Error remapping for consistent error handling including slug uniqueness violations
+ * Slugs are unique across objects only through `org_index`: a write checks it, so two orgs racing
+ * for one slug can both win (accepted; the index keeps the last).
  */
 export const OrganizationRpcLive = OrganizationRpcs.toLayer(
 	Effect.gen(function* () {
 		const db = yield* Database.Database
+		const directory = yield* Directory
 		const organizationRepo = yield* OrganizationRepo
 		const organizationPolicy = yield* OrganizationPolicy
 		const channelRepo = yield* ChannelRepo
 		const channelMemberRepo = yield* ChannelMemberRepo
 		const organizationMemberRepo = yield* OrganizationMemberRepo
-		const channelAccessSync = yield* ChannelAccessSyncService
+
+		/** `slug` belongs to another live organization than `self`. */
+		const requireFreeSlug = (slug: string | null | undefined, self?: OrganizationId) =>
+			Effect.gen(function* () {
+				if (!slug) return
+				const owner = yield* directory.orgBySlug(slug)
+				if (Option.isSome(owner) && owner.value.id !== self) return yield* slugTaken(slug)
+			})
+
+		const localOrganization = (id: OrganizationId) =>
+			db.first(
+				SQLite.from(schema.organizationsTable)
+					.select()
+					.where(($) => [$.id.eq(id), $.deletedAt.isNull()])
+					.limit(1),
+			)
+
+		/** Join the org as `role` (its `general` channel too) and project the membership. */
+		const join = Effect.fn("Organization.join")(function* (
+			organizationId: OrganizationId,
+			role: "owner" | "member",
+		) {
+			const currentUser = yield* CurrentUser.Context
+			yield* projectUsers([currentUser.id])
+			yield* organizationMemberRepo.upsertByOrgAndUser({
+				organizationId,
+				userId: currentUser.id,
+				role,
+				nickname: undefined,
+				joinedAt: new Date(),
+				invitedBy: null,
+				deletedAt: null,
+			})
+			return currentUser
+		})
+
+		/** Update the org row (after `check`) and reproject `org_index`. */
+		const update = <E, R>(
+			id: OrganizationId,
+			patch: Parameters<typeof organizationRepo.update>[0],
+			check: Effect.Effect<void, E, R>,
+		) =>
+			db.transaction(
+				Effect.gen(function* () {
+					yield* organizationPolicy.canUpdate(id)
+					yield* check
+					const updated = yield* organizationRepo.update(patch)
+					yield* publishOrgIndex(id)
+					return toResponse(updated, yield* generateTransactionId())
+				}),
+			)
 
 		return {
 			"organization.create": (payload) =>
 				Effect.gen(function* () {
-					const currentUser = yield* CurrentUser.Context
-
-					if (payload.slug) {
-						const existingOrganization = yield* organizationRepo.findBySlug(payload.slug)
-
-						if (Option.isSome(existingOrganization)) {
-							return yield* Effect.fail(
-								new OrganizationSlugAlreadyExistsError({
-									message: `Organization slug '${payload.slug}' is already taken`,
-									slug: payload.slug,
-								}),
-							)
-						}
+					const self = yield* objectOrganizationId
+					if (Option.isNone(self)) {
+						// Directory path: claim an id, then let the new OrgObject create itself.
+						yield* requireFreeSlug(payload.slug)
+						yield* organizationPolicy.canCreate()
+						const id = OrganizationId.make(crypto.randomUUID())
+						return yield* forwardRpc<
+							OrganizationResponse,
+							OrganizationSlugAlreadyExistsError | InternalServerError
+						>(orgTarget(id), "organization.create", payload)
 					}
 
-					yield* organizationPolicy.canCreate()
-
+					const id = self.value
 					return yield* db.transaction(
 						Effect.gen(function* () {
-							const createdOrganization = yield* organizationRepo
-								.insert({
-									name: payload.name,
-									slug: payload.slug,
-									logoUrl: payload.logoUrl,
-									settings: payload.settings ?? null,
-									isPublic: false,
-									deletedAt: null,
+							const existing = yield* localOrganization(id)
+							if (Option.isSome(existing)) {
+								return yield* new InternalServerError({
+									message: `Organization ${id} already exists`,
 								})
-								.pipe(Effect.map((res) => res[0]!))
-
-							yield* organizationMemberRepo.upsertByOrgAndUser({
-								organizationId: createdOrganization.id,
-								userId: currentUser.id,
-								role: "owner",
-								nickname: undefined,
-								joinedAt: new Date(),
-								invitedBy: null,
-								deletedAt: null,
-							})
-
-							// Setup default channels for the organization
-							yield* organizationRepo.setupDefaultChannels(
-								createdOrganization.id,
-								currentUser.id,
+							}
+							yield* organizationPolicy.canCreate()
+							const [created] = yield* db.run(
+								SQLite.insertInto(schema.organizationsTable)
+									.values({
+										id,
+										name: payload.name,
+										slug: payload.slug,
+										logoUrl: payload.logoUrl,
+										settings: (payload.settings ?? null) as Record<
+											string,
+											unknown
+										> | null,
+										isPublic: false,
+										deletedAt: null,
+									})
+									.returning(),
 							)
-
-							yield* channelAccessSync.syncUserInOrganization(
-								currentUser.id,
-								createdOrganization.id,
-							)
-
-							const txid = yield* generateTransactionId()
-
-							return new OrganizationResponse({
-								data: {
-									...createdOrganization,
-									settings: createdOrganization.settings as {
-										readonly [x: string]: unknown
-									} | null,
-								},
-								transactionId: txid,
-							})
+							const owner = yield* join(id, "owner")
+							yield* organizationRepo.setupDefaultChannels(id, owner.id)
+							yield* syncMemberAccess(owner.id, id)
+							yield* publishOrgIndex(id)
+							return toResponse(created!, yield* generateTransactionId())
 						}),
 					)
-				}).pipe(handleOrganizationDbErrors("Organization", "create", payload.slug)),
+				}).pipe(withRemapDbErrors("Organization", "create")),
 
 			"organization.update": ({ id, ...payload }) =>
-				db
-					.transaction(
-						Effect.gen(function* () {
-							yield* Effect.logInfo("organizationRepo.update", payload)
-							yield* organizationPolicy.canUpdate(id)
-							const updatedOrganization = yield* organizationRepo.update({
-								id,
-								...payload,
-							})
-
-							const txid = yield* generateTransactionId()
-
-							return new OrganizationResponse({
-								data: {
-									...updatedOrganization,
-									settings: updatedOrganization.settings as {
-										readonly [x: string]: unknown
-									} | null,
-								},
-								transactionId: txid,
-							})
-						}),
-					)
-					.pipe(handleOrganizationDbErrors("Organization", "update", payload.slug)),
+				update(id, { id, ...payload }, requireFreeSlug(payload.slug, id)).pipe(
+					withRemapDbErrors("Organization", "update"),
+				),
 
 			"organization.delete": ({ id }) =>
 				db
 					.transaction(
 						Effect.gen(function* () {
 							yield* organizationPolicy.canDelete(id)
-							yield* organizationRepo.deleteById(id)
-
-							const txid = yield* generateTransactionId()
-
-							return { transactionId: txid }
+							yield* organizationRepo.softDelete(id)
+							// TODO(do-sync): cut the channels' viewers too (their ChannelObjects keep
+							// serving sockets until the org's members change).
+							yield* publishOrgRemoval(id)
+							return { transactionId: yield* generateTransactionId() }
 						}),
 					)
 					.pipe(withRemapDbErrors("Organization", "delete")),
 
 			"organization.setSlug": ({ id, slug }) =>
-				db
-					.transaction(
-						Effect.gen(function* () {
-							yield* organizationPolicy.canUpdate(id)
-							const updatedOrganization = yield* organizationRepo.update({
-								id,
-								slug,
-							})
-
-							const txid = yield* generateTransactionId()
-
-							return new OrganizationResponse({
-								data: {
-									...updatedOrganization,
-									settings: updatedOrganization.settings as {
-										readonly [x: string]: unknown
-									} | null,
-								},
-								transactionId: txid,
-							})
-						}),
-					)
-					.pipe(handleOrganizationDbErrors("Organization", "update", slug)),
+				update(id, { id, slug }, requireFreeSlug(slug, id)).pipe(
+					withRemapDbErrors("Organization", "update"),
+				),
 
 			"organization.setPublicMode": ({ id, isPublic }) =>
-				db
-					.transaction(
-						Effect.gen(function* () {
-							yield* organizationPolicy.canUpdate(id)
-							const updatedOrganization = yield* organizationRepo.update({
-								id,
-								isPublic,
-							})
-
-							const txid = yield* generateTransactionId()
-
-							return new OrganizationResponse({
-								data: {
-									...updatedOrganization,
-									settings: updatedOrganization.settings as {
-										readonly [x: string]: unknown
-									} | null,
-								},
-								transactionId: txid,
-							})
-						}),
-					)
-					.pipe(withRemapDbErrors("Organization", "update")),
+				update(id, { id, isPublic }, Effect.void).pipe(withRemapDbErrors("Organization", "update")),
 
 			"organization.getBySlugPublic": ({ slug }) =>
 				Effect.gen(function* () {
-					const orgOption = yield* organizationRepo.findBySlugIfPublic(slug)
-
-					if (Option.isNone(orgOption)) {
-						return null
-					}
-
-					const org = orgOption.value
-
-					// Count members for this organization
-					const memberCount = yield* organizationMemberRepo.countByOrganization(org.id)
-
+					const org = yield* directory.orgBySlug(slug)
+					if (Option.isNone(org) || !org.value.isPublic) return null
+					const memberCount = yield* directory.memberCount(org.value.id)
+					// The logo lives with the org; the join page shows the initial without it.
 					return {
-						id: org.id,
-						name: org.name,
-						slug: org.slug,
-						logoUrl: org.logoUrl,
+						id: org.value.id,
+						name: org.value.name,
+						slug: org.value.slug,
+						logoUrl: null,
 						memberCount,
 					}
 				}).pipe(
-					Effect.catchTags({
-						DatabaseError: (err) =>
-							Effect.fail(
-								new InternalServerError({
-									message: "Error fetching organization",
-									cause: err,
-								}),
-							),
-					}),
+					Effect.catchTag("DatabaseError", (cause) =>
+						Effect.fail(
+							new InternalServerError({ message: "Error fetching organization", cause }),
+						),
+					),
+					Effect.withSpan("Organization.getBySlugPublic"),
 				),
 
 			"organization.joinViaPublicInvite": ({ slug }) =>
-				db
-					.transaction(
+				Effect.gen(function* () {
+					const self = yield* objectOrganizationId
+					if (Option.isNone(self)) {
+						const indexed = yield* directory.orgBySlug(slug)
+						if (Option.isNone(indexed)) {
+							return yield* new OrganizationNotFoundError({
+								organizationId: UNKNOWN_ORGANIZATION_ID,
+							})
+						}
+						return yield* forwardRpc<
+							OrganizationResponse,
+							OrganizationNotFoundError | PublicInviteDisabledError | AlreadyMemberError
+						>(orgTarget(indexed.value.id), "organization.joinViaPublicInvite", { slug })
+					}
+
+					return yield* db.transaction(
 						Effect.gen(function* () {
 							const currentUser = yield* CurrentUser.Context
-
-							const orgOption = yield* organizationRepo.findBySlug(slug)
-
-							if (Option.isNone(orgOption)) {
+							const orgOption = yield* localOrganization(self.value)
+							if (Option.isNone(orgOption) || orgOption.value.slug !== slug) {
 								return yield* new OrganizationNotFoundError({
 									organizationId: UNKNOWN_ORGANIZATION_ID,
 								})
 							}
-
 							const org = orgOption.value
-
 							if (!org.isPublic) {
-								return yield* new PublicInviteDisabledError({
-									organizationId: org.id,
-								})
+								return yield* new PublicInviteDisabledError({ organizationId: org.id })
 							}
-
 							const existingMember = yield* organizationMemberRepo.findByOrgAndUser(
 								org.id,
 								currentUser.id,
 							)
-
 							if (Option.isSome(existingMember)) {
 								return yield* new AlreadyMemberError({
 									organizationId: org.id,
@@ -297,22 +261,11 @@ export const OrganizationRpcLive = OrganizationRpcs.toLayer(
 								})
 							}
 
-							yield* organizationMemberRepo.upsertByOrgAndUser({
-								organizationId: org.id,
-								userId: currentUser.id,
-								role: "member",
-								nickname: undefined,
-								joinedAt: new Date(),
-								invitedBy: null,
-								deletedAt: null,
-							})
-
-							// Add user to the default "general" channel
-							const generalChannel = yield* channelRepo.findByOrgAndName(org.id, "general")
-
-							if (Option.isSome(generalChannel)) {
+							yield* join(org.id, "member")
+							const general = yield* channelRepo.findByOrgAndName(org.id, "general")
+							if (Option.isSome(general)) {
 								yield* channelMemberRepo.insert({
-									channelId: generalChannel.value.id,
+									channelId: general.value.id,
 									userId: currentUser.id,
 									isHidden: false,
 									isMuted: false,
@@ -323,23 +276,11 @@ export const OrganizationRpcLive = OrganizationRpcs.toLayer(
 									deletedAt: null,
 								})
 							}
-
-							yield* channelAccessSync.syncUserInOrganization(currentUser.id, org.id)
-
-							const txid = yield* generateTransactionId()
-
-							return new OrganizationResponse({
-								data: {
-									...org,
-									settings: org.settings as {
-										readonly [x: string]: unknown
-									} | null,
-								},
-								transactionId: txid,
-							})
+							yield* syncMemberAccess(currentUser.id, org.id)
+							return toResponse(org, yield* generateTransactionId())
 						}),
 					)
-					.pipe(withRemapDbErrors("Organization", "update")),
+				}).pipe(withRemapDbErrors("Organization", "update")),
 		}
 	}),
 )

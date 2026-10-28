@@ -9,13 +9,17 @@
  *
  * A bad token is answered by accepting the socket and closing it with 4001 (`Reauth`): a browser
  * cannot read the HTTP status of a refused upgrade.
+ *
+ * A Connect guest's mounted channel streams from its host channel's object (`channel_index`).
  */
 import { SYNC_SUBPROTOCOL, SyncCloseCode } from "@hazel/domain/sync"
 import { toHttpServerResponse } from "@hazel/sync-do"
-import { Effect, Option } from "effect"
+import { Effect, Option, Schema } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
 import { HazelSession } from "../services/hazel-session"
-import { isObjectKind, OBJECT_NAMESPACES } from "./objects/kinds"
+import { ChannelId } from "@hazel/schema"
+import { Directory } from "../services/directory"
+import { isObjectKind, OBJECT_NAMESPACES, type ObjectKind } from "./objects/kinds"
 import { encodeSyncPrincipal, OBJECT_ID_HEADER, PRINCIPAL_HEADER } from "./objects/principal"
 
 interface WorkerdSocket {
@@ -26,6 +30,8 @@ interface WorkerdSocket {
 interface Namespace {
 	getByName(name: string): { fetch(request: Request): Promise<Response> }
 }
+
+const decodeChannelId = Schema.decodeUnknownOption(ChannelId)
 
 const SYNC_PATH = /^\/sync\/(org|channel|user)\/([^/?]+)/
 
@@ -50,6 +56,16 @@ const acceptAndClose = (code: number, reason: string) => {
 			webSocket: pair[0],
 			headers: { "Sec-WebSocket-Protocol": SYNC_SUBPROTOCOL },
 		} as unknown as ResponseInit),
+	)
+}
+
+/** The object a sync socket for `kind`/`id` opens: a Connect guest mount's host channel. */
+export const syncObjectId = (kind: ObjectKind, id: string) => {
+	const channelId = kind === "channel" ? decodeChannelId(id) : Option.none()
+	if (Option.isNone(channelId)) return Effect.succeed(id)
+	return Effect.flatMap(Directory, (directory) => directory.channel(channelId.value)).pipe(
+		Effect.map(Option.match({ onNone: () => id, onSome: (row) => row.hostChannelId ?? id })),
+		Effect.withSpan("SyncRoute.resolveObject", { attributes: { "channel.id": id } }),
 	)
 }
 
@@ -90,14 +106,15 @@ export const makeSyncRoute = (env: Record<string, unknown>) =>
 				)
 				if (Option.isNone(user)) return acceptAndClose(SyncCloseCode.Reauth, "invalid_token")
 
+				const objectId = yield* syncObjectId(kind, id).pipe(Effect.orDie)
 				const namespace = env[OBJECT_NAMESPACES[kind]] as Namespace
 				const web = yield* HttpServerRequest.toWeb(request).pipe(Effect.orDie)
 				const headers = new Headers(web.headers)
 				// TODO(do-sync): pass the session's expiry once HazelSession exposes it.
 				headers.set(PRINCIPAL_HEADER, encodeSyncPrincipal({ userId: user.value.id, expiresAt: null }))
-				headers.set(OBJECT_ID_HEADER, id)
+				headers.set(OBJECT_ID_HEADER, objectId)
 				const response = yield* Effect.promise(() =>
-					namespace.getByName(id).fetch(new Request(web, { headers })),
+					namespace.getByName(objectId).fetch(new Request(web, { headers })),
 				)
 				return toHttpServerResponse(response)
 			}).pipe(Effect.withSpan("SyncRoute.upgrade")),

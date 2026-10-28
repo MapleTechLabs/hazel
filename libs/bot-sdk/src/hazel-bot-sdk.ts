@@ -1039,6 +1039,7 @@ export class HazelBotClient extends Context.Service<HazelBotClient>()("HazelBotC
 					.updateMessage({
 						params: { id: messageId },
 						payload: new UpdateMessageRequest({
+							channelId: payload.channelId,
 							content: payload.content,
 							embeds: payload.embeds ?? null,
 						}),
@@ -1238,7 +1239,7 @@ export class HazelBotClient extends Context.Service<HazelBotClient>()("HazelBotC
 						httpApiClient["api-v1-messages"]
 							.updateMessage({
 								params: { id: message.id },
-								payload: new UpdateMessageRequest({ content }),
+								payload: new UpdateMessageRequest({ channelId: message.channelId, content }),
 							})
 							.pipe(
 								Effect.map((r) => r.data),
@@ -1259,12 +1260,14 @@ export class HazelBotClient extends Context.Service<HazelBotClient>()("HazelBotC
 				/**
 				 * Delete a message
 				 * @param id - Message ID to delete
+				 * @param channelId - The message's channel (the API routes the delete by it)
 				 */
-				delete: (id: MessageId) =>
+				delete: (id: MessageId, channelId?: ChannelId) =>
 					messageLimiter(
 						httpApiClient["api-v1-messages"]
 							.deleteMessage({
 								params: { id },
+								query: { channel_id: channelId },
 							})
 							.pipe(
 								Effect.mapError(

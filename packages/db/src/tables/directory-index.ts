@@ -12,6 +12,8 @@ export const orgIndexTable = SQLite.table("org_index", {
 		id: uuid(OrganizationId),
 		slug: SQLite.nullable(SQLite.text),
 		name: SQLite.text,
+		/** Joinable by its public invite link (`organization.getBySlugPublic`). */
+		isPublic: SQLite.column(SQLite.boolean, { default: false }),
 		deletedAt: SQLite.nullable(timestamptz),
 	},
 	primaryKey: ["id"],

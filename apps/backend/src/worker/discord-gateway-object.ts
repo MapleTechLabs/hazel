@@ -5,16 +5,19 @@
  * `ensureRunning()` starts the session if this instance isn't running one. The api Worker calls it
  * from a per-minute cron, which also restarts the session after a deploy or an eviction; while a
  * session runs, an alarm every 30s keeps the object warm and restarts a session that ended.
+ *
+ * Events are routed through the directory's `chat_sync_index` to the `OrgObject`s
+ * (`services/chat-sync/discord-gateway-service.ts`).
  */
-import { bindBotGateways } from "@hazel/bot-gateway/object"
 import * as Cloudflare from "alchemy/Cloudflare"
 import { RuntimeContext } from "alchemy/RuntimeContext"
 import { Context, Effect, Layer, Option, Ref } from "effect"
-import { FetchHttpClient } from "effect/http"
 import * as Socket from "effect/socket/Socket"
-import { AppServicesLive } from "../app"
+import { workerEnvLayer } from "@hazel/infra/worker-runtime"
 import { DiscordGatewayService } from "../services/chat-sync/discord-gateway-service"
-import { objectPlatformLive } from "./platform"
+import { Directory } from "../services/directory"
+import { workerObjectStubs } from "./objects/stubs"
+import { directoryBinding } from "./platform"
 
 export interface DiscordGatewayShape {
 	/** Start the gateway session unless one is running; reports whether one runs afterwards. */
@@ -35,18 +38,19 @@ export const DiscordGatewayObjectLive = DiscordGatewayObject.make(
 	Effect.gen(function* () {
 		const state = yield* Cloudflare.DurableObjectState
 		const env = yield* Cloudflare.WorkerEnvironment
-		// Cross-script binding to the bot gateway's Durable Objects (BotGatewayService publishes there).
-		const botGateways = yield* bindBotGateways
 		return Effect.gen(function* () {
 			const instanceScope = yield* Effect.scope
 			const services = yield* Layer.build(
-				// The cast restores the layer's type: the circular `DiscordSyncWorker` typing collapses
-				// `AppServicesLive`'s error and requirement channels to `unknown` (see index.ts).
 				DiscordGatewayService.layer.pipe(
-					Layer.provide(AppServicesLive),
-					Layer.provideMerge(FetchHttpClient.layer),
-					Layer.provide(objectPlatformLive(env, botGateways)),
-				) as unknown as Layer.Layer<DiscordGatewayService>,
+					Layer.provide(
+						Layer.mergeAll(
+							workerObjectStubs(env),
+							Directory.layerD1(directoryBinding(env)),
+							workerEnvLayer(env),
+						),
+					),
+					Layer.orDie,
+				),
 			)
 			const gateway = Context.get(services, DiscordGatewayService)
 			const running = yield* Ref.make(false)

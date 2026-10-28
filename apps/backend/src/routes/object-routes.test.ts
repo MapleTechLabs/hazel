@@ -1,0 +1,446 @@
+/**
+ * The api Worker's HTTP routes that write into the objects, on node SQLite (`makeTestObjects`):
+ * the public API's message create (HTTP, bot token), an incoming webhook, and a GitHub push.
+ * Each must land in the channel's `ChannelObject` with `message.create`'s side effects.
+ */
+import { createHash } from "node:crypto"
+import { NodeHttpPlatform, NodeServices } from "@effect/platform-node"
+import { BotRepo } from "@hazel/backend-core"
+import { Database, SQLite, schema } from "@hazel/db"
+import { MessagesApiGroup } from "@hazel/domain/http"
+import type { BotId, ChannelId, ChannelWebhookId, OrganizationId, UserId } from "@hazel/schema"
+import { Cause, Context, Effect, Exit, Layer, Option, type Scope } from "effect"
+import { Etag, HttpRouter } from "effect/http"
+import { HttpApi, HttpApiBuilder } from "effect/http-api"
+import { describe, expect, it } from "vitest"
+import { Directory } from "../services/directory"
+import { RateLimiterAllowAll } from "../services/rate-limiter"
+import { callObject } from "../worker/objects/calls"
+import { channelTarget, orgTarget } from "../worker/objects/kinds"
+import { ConnectIntegrationCall } from "../worker/objects/org/integrations"
+import { ObjectStubs } from "../worker/objects/protocol"
+import { makeTestObjects, type TestObject, type TestObjects } from "../worker/objects/testing"
+import { HttpMessagesApiLive } from "./api-v1/messages.http"
+import { deliverWebhook } from "./incoming-webhooks.http"
+import { dispatchGitHubEvent } from "./webhooks.http"
+
+const uuid = () => crypto.randomUUID()
+const sha256 = (value: string) => createHash("sha256").update(value).digest("hex")
+
+const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
+	Effect.runPromise(Effect.scoped(effect) as Effect.Effect<A, E>)
+
+interface World {
+	readonly objects: TestObjects
+	readonly org: TestObject
+	readonly orgId: OrganizationId
+	readonly alice: UserId
+	readonly channelId: ChannelId
+	readonly channel: TestObject
+	/** Run against the test objects as the api Worker would (stubs, directory). */
+	readonly worker: <A, E>(effect: Effect.Effect<A, E, ObjectStubs | Directory>) => Effect.Effect<A, E>
+}
+
+/** An org with alice, one public channel whose viewers include `extraViewers`. */
+const makeWorld = (
+	extraViewers: ReadonlyArray<UserId> = [],
+	bots: ReadonlyArray<{ botId: BotId; botUserId: UserId }> = [],
+) =>
+	Effect.gen(function* () {
+		const objects = yield* makeTestObjects
+		const orgId = uuid() as OrganizationId
+		const alice = uuid() as UserId
+		const channelId = uuid() as ChannelId
+		const org = yield* objects.get(orgTarget(orgId))
+		const db = org.storage.db
+		db.prepare(`INSERT INTO organizations (id, name, slug) VALUES (?, 'Acme', 'acme')`).run(orgId)
+		for (const userId of [alice, ...extraViewers]) {
+			db.prepare(
+				`INSERT INTO organization_members (id, organizationId, userId, role) VALUES (?, ?, ?, 'member')`,
+			).run(uuid(), orgId, userId)
+		}
+		db.prepare(
+			`INSERT INTO channels (id, name, type, organizationId) VALUES (?, 'general', 'public', ?)`,
+		).run(channelId, orgId)
+		db.prepare(`INSERT INTO channel_members (channelId, userId, isMuted) VALUES (?, ?, 0)`).run(
+			channelId,
+			alice,
+		)
+		const channel = yield* objects.get(channelTarget(channelId))
+		const applied = yield* channel.applyEffect({
+			objectId: channelId,
+			kind: "channel.setViewers",
+			payload: {
+				organizationId: orgId,
+				conversationId: null,
+				viewers: [alice, ...extraViewers].map((userId) => ({
+					userId,
+					organizationId: orgId,
+					role: "member",
+				})),
+				bots,
+			},
+			key: `viewers:${channelId}`,
+		})
+		expect(applied._tag).toBe("Applied")
+		const directory = Context.get(objects.directory, Directory)
+		yield* directory.upsertChannel({
+			channelId,
+			organizationId: orgId,
+			hostChannelId: null,
+			deletedAt: null,
+		})
+		const worker = <A, E>(effect: Effect.Effect<A, E, ObjectStubs | Directory>) =>
+			effect.pipe(
+				Effect.provideService(ObjectStubs, objects.stubs),
+				Effect.provideContext(objects.directory),
+			)
+		return { objects, org, orgId, alice, channelId, channel, worker } satisfies World
+	}).pipe(Effect.orDie)
+
+const messagesIn = (object: TestObject) =>
+	object.storage.db
+		.prepare(`SELECT id, authorId, content, embeds FROM messages ORDER BY createdAt`)
+		.all() as Array<{
+		id: string
+		authorId: string
+		content: string
+		embeds: string | null
+	}>
+
+const failureOf = (exit: Exit.Exit<unknown, unknown>) =>
+	Exit.isFailure(exit) ? Option.getOrUndefined(Cause.findErrorOption(exit.cause)) : undefined
+
+describe("public API (v1) messages", () => {
+	it("creates a bot's message in the ChannelObject, with its bot gateway event", async () => {
+		const botId = uuid() as BotId
+		const botUserId = uuid() as UserId
+		const token = `hzl_bot_${uuid()}`
+
+		await run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld([botUserId], [{ botId, botUserId }])
+				const directory = Context.get(world.objects.directory, Directory)
+				yield* directory.db
+					.run(
+						SQLite.insertInto(schema.botsTable).values({
+							id: botId,
+							userId: botUserId,
+							createdBy: world.alice,
+							name: "Helper",
+							apiTokenHash: sha256(token),
+						}),
+					)
+					.pipe(Effect.orDie)
+				const routes = HttpMessagesApiLive.pipe(
+					Layer.provideMerge(BotRepo.layer),
+					Layer.provideMerge(Layer.succeed(Database.Database, directory.db)),
+					Layer.provideMerge(Layer.succeedContext(world.objects.directory)),
+					Layer.provideMerge(Layer.succeed(ObjectStubs, world.objects.stubs)),
+					Layer.provideMerge(RateLimiterAllowAll),
+				)
+				const app = HttpApiBuilder.layer(HttpApi.make("HazelApp").add(MessagesApiGroup)).pipe(
+					Layer.provideMerge(routes),
+					Layer.provideMerge(HttpRouter.layer),
+					Layer.provideMerge(Etag.layer),
+					Layer.provideMerge(NodeServices.layer),
+					Layer.provideMerge(NodeHttpPlatform.layer),
+				)
+				const { handler, dispose } = HttpRouter.toWebHandler(app as never, { disableLogger: true })
+				yield* Effect.addFinalizer(() => Effect.promise(() => dispose()))
+				const request = (path: string, init: RequestInit = {}) =>
+					Effect.promise(() =>
+						handler(
+							new Request(`http://localhost${path}`, {
+								...init,
+								headers: {
+									authorization: `Bearer ${token}`,
+									"content-type": "application/json",
+								},
+							}),
+							Context.empty() as Context.Context<any>,
+						),
+					)
+				const json = (response: Response) =>
+					Effect.promise(async () => {
+						if (response.status !== 200) {
+							throw new Error(`${response.status} ${response.url}: ${await response.text()}`)
+						}
+						return (await response.json()) as any
+					})
+
+				const body = yield* json(
+					yield* request("/api/v1/messages", {
+						method: "POST",
+						body: JSON.stringify({
+							channelId: world.channelId,
+							content: "deployed",
+							replyToMessageId: null,
+							threadChannelId: null,
+							embeds: null,
+						}),
+					}),
+				)
+				expect(String(body.transactionId).startsWith(`channel:${world.channelId}:`)).toBe(true)
+				expect(messagesIn(world.channel)).toMatchObject([
+					{ id: body.data.id, authorId: botUserId, content: "deployed" },
+				])
+				expect(world.objects.published).toMatchObject([
+					{ botId, envelope: { eventType: "message.create" } },
+				])
+
+				// A message id alone cannot be routed: the update must name its channel.
+				const unrouted = yield* request(`/api/v1/messages/${body.data.id}`, {
+					method: "PATCH",
+					body: JSON.stringify({ content: "edited" }),
+				})
+				expect(unrouted.status).toBe(404)
+
+				yield* json(
+					yield* request(`/api/v1/messages/${body.data.id}`, {
+						method: "PATCH",
+						body: JSON.stringify({ channelId: world.channelId, content: "edited" }),
+					}),
+				)
+				expect(messagesIn(world.channel)).toMatchObject([{ content: "edited" }])
+
+				const listed = yield* json(yield* request(`/api/v1/messages?channel_id=${world.channelId}`))
+				expect(listed.data.map((m: { id: string }) => m.id)).toEqual([body.data.id])
+			}),
+		)
+	})
+})
+
+describe("incoming webhooks", () => {
+	const seedWebhook = (world: World, options: { readonly enabled: boolean }) =>
+		Effect.gen(function* () {
+			const webhookId = uuid() as ChannelWebhookId
+			const botUserId = uuid() as UserId
+			const token = uuid()
+			world.org.storage.db
+				.prepare(
+					`INSERT INTO channel_webhooks (id, channelId, organizationId, botUserId, name, tokenHash, tokenSuffix, isEnabled, createdBy)
+					 VALUES (?, ?, ?, ?, 'CI', ?, 'abcd', ?, ?)`,
+				)
+				.run(
+					webhookId,
+					world.channelId,
+					world.orgId,
+					botUserId,
+					sha256(token),
+					options.enabled ? 1 : 0,
+					world.alice,
+				)
+			yield* Context.get(world.objects.directory, Directory).upsertWebhook({
+				webhookId,
+				organizationId: world.orgId,
+				channelId: world.channelId,
+				tokenHash: sha256(token),
+			})
+			return { webhookId, botUserId, token }
+		}).pipe(Effect.orDie)
+
+	it("posts the message as the webhook's bot and refuses a bad token or a disabled webhook", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld()
+				const hook = yield* seedWebhook(world, { enabled: true })
+
+				const posted = yield* world.worker(
+					deliverWebhook({
+						webhookId: hook.webhookId,
+						token: hook.token,
+						provider: null,
+						content: `build passed @[userId:${world.alice}]`,
+						embeds: null,
+					}),
+				)
+				expect(posted.channelId).toBe(world.channelId)
+				expect(messagesIn(world.channel)).toMatchObject([
+					{
+						id: posted.messageId,
+						authorId: hook.botUserId,
+						content: `build passed @[userId:${world.alice}]`,
+					},
+				])
+				const lastUsed = world.org.storage.db
+					.prepare(`SELECT lastUsedAt FROM channel_webhooks WHERE id = ?`)
+					.get(hook.webhookId) as { lastUsedAt: string | null }
+				expect(lastUsed.lastUsedAt).not.toBeNull()
+				// `message.create`'s side effects ran: the mention reached alice's unread count.
+				const member = world.org.storage.db
+					.prepare(`SELECT notificationCount FROM channel_members WHERE userId = ?`)
+					.get(world.alice) as { notificationCount: number }
+				expect(member.notificationCount).toBe(1)
+
+				const badToken = yield* world
+					.worker(
+						deliverWebhook({
+							webhookId: hook.webhookId,
+							token: "nope",
+							provider: null,
+							content: "x",
+							embeds: null,
+						}),
+					)
+					.pipe(Effect.exit)
+				expect(failureOf(badToken)).toMatchObject({ _tag: "InvalidWebhookTokenError" })
+
+				const disabled = yield* seedWebhook(world, { enabled: false })
+				const refused = yield* world
+					.worker(
+						deliverWebhook({
+							webhookId: disabled.webhookId,
+							token: disabled.token,
+							provider: null,
+							content: "x",
+							embeds: null,
+						}),
+					)
+					.pipe(Effect.exit)
+				expect(failureOf(refused)).toMatchObject({ _tag: "WebhookDisabledError" })
+				expect(messagesIn(world.channel)).toHaveLength(1)
+			}),
+		))
+
+	it("authors a provider webhook's message with the provider's shared bot", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld()
+				const hook = yield* seedWebhook(world, { enabled: true })
+				yield* world.worker(
+					deliverWebhook({
+						webhookId: hook.webhookId,
+						token: hook.token,
+						provider: "railway",
+						content: "",
+						embeds: [{ title: "Deploy succeeded" }],
+					}),
+				)
+				const [message] = messagesIn(world.channel)
+				const bot = world.org.storage.db
+					.prepare(`SELECT id FROM users WHERE externalId = 'integration-bot-railway'`)
+					.get() as { id: string }
+				expect(message?.authorId).toBe(bot.id)
+				expect(JSON.parse(message!.embeds!)).toMatchObject([{ title: "Deploy succeeded" }])
+			}),
+		))
+})
+
+describe("GitHub webhooks", () => {
+	it("posts a push to the subscribed channel once, through the installation's org", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld()
+				// Connecting the GitHub App indexes its installation in the directory.
+				yield* world.worker(
+					callObject(ConnectIntegrationCall, orgTarget(world.orgId), {
+						provider: "github",
+						userId: null,
+						connectedBy: world.alice,
+						externalAccountId: "acme",
+						externalAccountName: "acme",
+						settings: null,
+						metadata: { installationId: "777" },
+						tokens: { accessToken: "ghs_test", refreshToken: null, expiresAt: null, scope: null },
+					}),
+				)
+				const indexed = yield* Context.get(world.objects.directory, Directory).integration(
+					"github",
+					"777",
+				)
+				expect(Option.map(indexed, (row) => row.organizationId)).toEqual(Option.some(world.orgId))
+
+				world.org.storage.db
+					.prepare(
+						`INSERT INTO github_subscriptions (id, channelId, organizationId, repositoryId, repositoryFullName, repositoryOwner, repositoryName, enabledEvents, createdBy)
+						 VALUES (?, ?, ?, 42, 'acme/app', 'acme', 'app', '["push"]', ?)`,
+					)
+					.run(uuid(), world.channelId, world.orgId, world.alice)
+
+				const push = {
+					ref: "refs/heads/main",
+					before: "a".repeat(40),
+					compare: "https://github.com/acme/app/compare/a...b",
+					installation: { id: 777 },
+					repository: { id: 42, full_name: "acme/app", html_url: "https://github.com/acme/app" },
+					sender: {
+						login: "octo",
+						html_url: "https://github.com/octo",
+						avatar_url: "https://x/y.png",
+					},
+					commits: [{ id: "b".repeat(40), message: "Fix the thing\n\nbody" }],
+				}
+				const delivery = { eventType: "push", deliveryId: uuid(), payload: push }
+				const result = yield* world.worker(dispatchGitHubEvent(delivery))
+				expect(result).toMatchObject({ processed: true, messagesCreated: 1 })
+
+				const [message] = messagesIn(world.channel)
+				const bot = world.org.storage.db
+					.prepare(`SELECT id FROM users WHERE externalId = 'integration-bot-github'`)
+					.get() as { id: string }
+				expect(message?.authorId).toBe(bot.id)
+				expect(JSON.parse(message!.embeds!)).toMatchObject([{ title: "acme/app" }])
+
+				// GitHub redelivers on failure: the same delivery posts nothing new.
+				yield* world.worker(dispatchGitHubEvent(delivery))
+				expect(messagesIn(world.channel)).toHaveLength(1)
+
+				// An installation no org connected is acknowledged and skipped.
+				const unknown = yield* world.worker(
+					dispatchGitHubEvent({
+						...delivery,
+						deliveryId: uuid(),
+						payload: { ...push, installation: { id: 999 } },
+					}),
+				)
+				expect(unknown).toMatchObject({ processed: false })
+			}),
+		))
+
+	it("suspends and removes the connection on installation events", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld()
+				yield* world.worker(
+					callObject(ConnectIntegrationCall, orgTarget(world.orgId), {
+						provider: "github",
+						userId: null,
+						connectedBy: world.alice,
+						externalAccountId: "acme",
+						externalAccountName: "acme",
+						settings: null,
+						metadata: { installationId: "778" },
+						tokens: { accessToken: "ghs_test", refreshToken: null, expiresAt: null, scope: null },
+					}),
+				)
+				const installation = (action: string) => ({
+					eventType: "installation",
+					deliveryId: uuid(),
+					payload: {
+						action,
+						installation: { id: 778, account: { login: "acme", type: "Organization" } },
+						sender: { login: "octo" },
+					},
+				})
+				const statusOf = () =>
+					world.org.storage.db
+						.prepare(
+							`SELECT status, deletedAt FROM integration_connections WHERE provider = 'github'`,
+						)
+						.get() as { status: string; deletedAt: string | null }
+
+				yield* world.worker(dispatchGitHubEvent(installation("suspend")))
+				expect(statusOf()).toMatchObject({ status: "suspended", deletedAt: null })
+
+				yield* world.worker(dispatchGitHubEvent(installation("deleted")))
+				expect(statusOf().status).toBe("revoked")
+				expect(statusOf().deletedAt).not.toBeNull()
+				const indexed = yield* Context.get(world.objects.directory, Directory).integration(
+					"github",
+					"778",
+				)
+				expect(Option.isNone(indexed)).toBe(true)
+			}),
+		))
+})

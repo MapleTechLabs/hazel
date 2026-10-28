@@ -1,181 +1,48 @@
-import { NotificationRepo, OrganizationMemberRepo } from "@hazel/backend-core"
+import { NotificationRepo } from "@hazel/backend-core"
 import { ErrorUtils, policy } from "@hazel/domain"
-import type { NotificationId, OrganizationMemberId } from "@hazel/schema"
-import { Context, Effect, Layer, Option } from "effect"
-import { isAdminOrOwner } from "../lib/policy-utils"
+import type { NotificationId } from "@hazel/schema"
+import { Context, Effect, Layer } from "effect"
+import { currentObject } from "../lib/current-object"
 
+/**
+ * Notifications live in their owner's `UserObject`: every row there is the owner's, so the actor
+ * may act on them only inside their own object (the org admin override is gone with the shared
+ * table). A notification id the object does not hold is refused.
+ */
 export class NotificationPolicy extends Context.Service<NotificationPolicy>()("NotificationPolicy/Policy", {
 	make: Effect.gen(function* () {
 		const policyEntity = "Notification" as const
-
 		const notificationRepo = yield* NotificationRepo
-		const organizationMemberRepo = yield* OrganizationMemberRepo
 
-		const canCreate = (_memberId: OrganizationMemberId) =>
-			ErrorUtils.refailUnauthorized(
-				policyEntity,
-				"create",
-			)(
-				policy(
-					policyEntity,
-					"create",
-					Effect.fn(`${policyEntity}.create`)(function* (_actor) {
-						return yield* Effect.succeed(true)
-					}),
-				),
+		/** The actor owns the `UserObject` the call runs in. */
+		const isOwner = (actorId: string) =>
+			Effect.map(
+				currentObject,
+				(object) =>
+					object._tag === "Some" && object.value.kind === "user" && object.value.id === actorId,
 			)
 
-		const canView = (id: NotificationId) =>
+		const ownObject = (action: string) =>
 			ErrorUtils.refailUnauthorized(
 				policyEntity,
-				"view",
-			)(
-				notificationRepo.with(id, (notification) =>
-					policy(
-						policyEntity,
-						"view",
-						Effect.fn(`${policyEntity}.view`)(function* (actor) {
-							const member = yield* organizationMemberRepo.findById(notification.memberId)
+				action,
+			)(policy(policyEntity, action, (actor) => isOwner(actor.id)))
 
-							if (Option.isSome(member) && member.value.userId === actor.id) {
-								return yield* Effect.succeed(true)
-							}
-
-							return yield* Effect.succeed(false)
-						}),
-					),
-				),
-			)
-
-		const canUpdate = (id: NotificationId) =>
+		const ownNotification = (action: string) => (id: NotificationId) =>
 			ErrorUtils.refailUnauthorized(
 				policyEntity,
-				"update",
-			)(
-				notificationRepo.with(id, (notification) =>
-					organizationMemberRepo.with(notification.memberId, (member) =>
-						policy(
-							policyEntity,
-							"update",
-							Effect.fn(`${policyEntity}.update`)(function* (actor) {
-								if (member.userId === actor.id) {
-									return yield* Effect.succeed(true)
-								}
+				action,
+			)(notificationRepo.with(id, () => policy(policyEntity, action, (actor) => isOwner(actor.id))))
 
-								const actorMember = yield* organizationMemberRepo.findByOrgAndUser(
-									member.organizationId,
-									actor.id,
-								)
-
-								if (Option.isSome(actorMember)) {
-									return yield* Effect.succeed(isAdminOrOwner(actorMember.value.role))
-								}
-
-								return yield* Effect.succeed(false)
-							}),
-						),
-					),
-				),
-			)
-
-		const canDelete = (id: NotificationId) =>
-			ErrorUtils.refailUnauthorized(
-				policyEntity,
-				"delete",
-			)(
-				notificationRepo.with(id, (notification) =>
-					organizationMemberRepo.with(notification.memberId, (member) =>
-						policy(
-							policyEntity,
-							"delete",
-							Effect.fn(`${policyEntity}.delete`)(function* (actor) {
-								if (member.userId === actor.id) {
-									return yield* Effect.succeed(true)
-								}
-
-								const actorMember = yield* organizationMemberRepo.findByOrgAndUser(
-									member.organizationId,
-									actor.id,
-								)
-
-								if (Option.isSome(actorMember)) {
-									return yield* Effect.succeed(isAdminOrOwner(actorMember.value.role))
-								}
-
-								return yield* Effect.succeed(false)
-							}),
-						),
-					),
-				),
-			)
-
-		const canMarkAsRead = (id: NotificationId) =>
-			ErrorUtils.refailUnauthorized(
-				policyEntity,
-				"markAsRead",
-			)(
-				notificationRepo.with(id, (notification) =>
-					organizationMemberRepo.with(notification.memberId, (member) =>
-						policy(
-							policyEntity,
-							"markAsRead",
-							Effect.fn(`${policyEntity}.markAsRead`)(function* (actor) {
-								if (member.userId === actor.id) {
-									return yield* Effect.succeed(true)
-								}
-
-								const actorMember = yield* organizationMemberRepo.findByOrgAndUser(
-									member.organizationId,
-									actor.id,
-								)
-
-								if (Option.isSome(actorMember)) {
-									return yield* Effect.succeed(isAdminOrOwner(actorMember.value.role))
-								}
-
-								return yield* Effect.succeed(false)
-							}),
-						),
-					),
-				),
-			)
-
-		const canMarkAllAsRead = (memberId: OrganizationMemberId) =>
-			ErrorUtils.refailUnauthorized(
-				policyEntity,
-				"markAllAsRead",
-			)(
-				organizationMemberRepo.with(memberId, (member) =>
-					policy(
-						policyEntity,
-						"markAllAsRead",
-						Effect.fn(`${policyEntity}.markAllAsRead`)(function* (actor) {
-							if (member.userId === actor.id) {
-								return yield* Effect.succeed(true)
-							}
-
-							const actorMember = yield* organizationMemberRepo.findByOrgAndUser(
-								member.organizationId,
-								actor.id,
-							)
-
-							if (Option.isSome(actorMember)) {
-								return yield* Effect.succeed(
-									actorMember.value.role === "admin" || actorMember.value.role === "owner",
-								)
-							}
-
-							return yield* Effect.succeed(false)
-						}),
-					),
-				),
-			)
-
-		return { canCreate, canView, canUpdate, canDelete, canMarkAsRead, canMarkAllAsRead } as const
+		return {
+			canCreate: () => ownObject("create"),
+			canView: ownNotification("view"),
+			canUpdate: ownNotification("update"),
+			canDelete: ownNotification("delete"),
+			canMarkAsRead: ownNotification("markAsRead"),
+			canMarkAllAsRead: () => ownObject("markAllAsRead"),
+		} as const
 	}),
 }) {
-	static readonly layer = Layer.effect(this, this.make).pipe(
-		Layer.provide(NotificationRepo.layer),
-		Layer.provide(OrganizationMemberRepo.layer),
-	)
+	static readonly layer = Layer.effect(this, this.make).pipe(Layer.provide(NotificationRepo.layer))
 }

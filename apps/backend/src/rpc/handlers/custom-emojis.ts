@@ -1,8 +1,3 @@
-/**
- * TODO(do-sync): runs in the OrgObject (`rpc/routing.ts`); not ported yet. To port: touch only that
- * store's tables and send everything else through the outbox (`worker/objects/effects`).
- * - org-local already; `organizationId` arrives as a routing hint for update/delete/restore
- */
 import { CustomEmojiRepo } from "@hazel/backend-core"
 import { Database } from "@hazel/db"
 import { CurrentUser, withRemapDbErrors } from "@hazel/domain"
@@ -17,6 +12,7 @@ import { Effect, Option } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
 import { CustomEmojiPolicy } from "../../policies/custom-emoji-policy"
 
+/** Custom emoji RPC handlers. Run in the `OrgObject` (`rpc/routing.ts`); org-local rows only. */
 export const CustomEmojiRpcLive = CustomEmojiRpcs.toLayer(
 	Effect.gen(function* () {
 		const db = yield* Database.Database

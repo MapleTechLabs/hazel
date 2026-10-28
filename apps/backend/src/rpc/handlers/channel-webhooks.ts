@@ -1,14 +1,8 @@
-/**
- * TODO(do-sync): runs in the OrgObject (`rpc/routing.ts`); not ported yet. To port: touch only that
- * store's tables and send everything else through the outbox (`worker/objects/effects`).
- * - write `webhook_index` in the directory through `DirectoryEffects` (add a kind)
- * - `listByOrganization` gets `organizationId` from the routing hint
- */
 import { createHash, randomBytes } from "node:crypto"
 import { ChannelRepo, ChannelWebhookRepo } from "@hazel/backend-core"
 import { Database } from "@hazel/db"
 import { CurrentUser, ErrorUtils, withRemapDbErrors } from "@hazel/domain"
-import type { ChannelWebhookId } from "@hazel/schema"
+import type { ChannelId, ChannelWebhookId, OrganizationId } from "@hazel/schema"
 import {
 	ChannelNotFoundError,
 	ChannelWebhookCreatedResponse,
@@ -19,11 +13,13 @@ import {
 } from "@hazel/domain/rpc"
 import { Effect, Option } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
+import { requestOrganizationId } from "../../worker/objects/org/organization"
 import { withAnnotatedScope } from "../../lib/policy-utils"
 import { ChannelWebhookPolicy } from "../../policies/channel-webhook-policy"
 import { OrgResolver } from "../../services/org-resolver"
-import { IntegrationBotService } from "../../services/integrations/integration-bot-service"
 import { WebhookBotService } from "../../services/webhook-bot-service"
+import { DirectoryEffects } from "../../worker/objects/effects/directory-effects"
+import { enqueueEffect } from "../../worker/objects/effects/registry"
 
 // Generate a secure token and return both the plain token and its hash
 const generateToken = () => {
@@ -43,13 +39,35 @@ const buildWebhookUrl = (webhookId: string, token: string) => {
  * Channel Webhook RPC Handlers
  *
  * Implements the business logic for all channel webhook-related RPC methods.
- * Only organization admins can manage webhooks.
+ * Only organization admins can manage webhooks. Run in the `OrgObject` (`rpc/routing.ts`); the
+ * token hash is projected to the directory's `webhook_index` (the incoming webhook route's lookup)
+ * through the outbox, and each webhook's bot user lives in the directory (`WebhookBotService`).
  */
 export const ChannelWebhookRpcLive = ChannelWebhookRpcs.toLayer(
 	Effect.gen(function* () {
 		const db = yield* Database.Database
 		const channelWebhookPolicy = yield* ChannelWebhookPolicy
 		const orgResolver = yield* OrgResolver
+
+		/** The directory's `webhook_index` row (`tokenHash: null` drops it). */
+		const indexWebhook = (
+			webhook: {
+				readonly id: ChannelWebhookId
+				readonly organizationId: OrganizationId
+				readonly channelId: ChannelId
+			},
+			tokenHash: string | null,
+		) =>
+			enqueueEffect(
+				DirectoryEffects.upsertWebhookIndex,
+				{ kind: "directory" },
+				{
+					webhookId: webhook.id,
+					organizationId: webhook.organizationId,
+					channelId: webhook.channelId,
+					tokenHash,
+				},
+			)
 
 		return {
 			"channelWebhook.create": (payload) =>
@@ -60,7 +78,6 @@ export const ChannelWebhookRpcLive = ChannelWebhookRpcs.toLayer(
 							const channelRepo = yield* ChannelRepo
 							const webhookRepo = yield* ChannelWebhookRepo
 							const webhookBotService = yield* WebhookBotService
-							const integrationBotService = yield* IntegrationBotService
 
 							// Get channel to get organization ID
 							const channelOption = yield* channelRepo.findById(payload.channelId)
@@ -87,7 +104,7 @@ export const ChannelWebhookRpcLive = ChannelWebhookRpcs.toLayer(
 										)
 									},
 									onSome: (provider) =>
-										integrationBotService.getOrCreateWebhookBotUser(
+										webhookBotService.getOrCreateIntegrationBot(
 											provider,
 											channel.organizationId,
 										),
@@ -111,6 +128,7 @@ export const ChannelWebhookRpcLive = ChannelWebhookRpcs.toLayer(
 								lastUsedAt: null,
 								deletedAt: null,
 							})
+							yield* indexWebhook(webhook, tokenHash)
 
 							const txid = yield* generateTransactionId()
 
@@ -203,6 +221,7 @@ export const ChannelWebhookRpcLive = ChannelWebhookRpcs.toLayer(
 								tokenHash,
 								tokenSuffix,
 							)
+							yield* indexWebhook(updatedWebhook!, tokenHash)
 
 							const txid = yield* generateTransactionId()
 
@@ -227,7 +246,9 @@ export const ChannelWebhookRpcLive = ChannelWebhookRpcs.toLayer(
 							// Soft delete webhook only - bot user cleanup can be handled separately
 							// (e.g., by admin or background job) since integrations may create webhooks
 							// and users shouldn't need permission to delete integration-created bot users
+							const existing = yield* webhookRepo.findById(id)
 							yield* webhookRepo.softDelete(id)
+							if (Option.isSome(existing)) yield* indexWebhook(existing.value, null)
 
 							const txid = yield* generateTransactionId()
 
@@ -238,15 +259,13 @@ export const ChannelWebhookRpcLive = ChannelWebhookRpcs.toLayer(
 
 			"channelWebhook.listByOrganization": () =>
 				Effect.gen(function* () {
-					const user = yield* CurrentUser.Context
 					const webhookRepo = yield* ChannelWebhookRepo
 
-					// User must have an organization to list webhooks
-					if (!user.organizationId) {
+					const requested = yield* requestOrganizationId
+					if (Option.isNone(requested)) {
 						return new ChannelWebhookListResponse({ data: [] })
 					}
-
-					const organizationId = user.organizationId
+					const organizationId = requested.value
 
 					yield* ErrorUtils.refailUnauthorized(
 						"ChannelWebhook",

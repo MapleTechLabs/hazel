@@ -1,7 +1,7 @@
 /**
- * Email invitations end to end against an in-memory SQLite database: inviting (admins only, members
- * skipped, one email per address), the public preview, accepting with the invited account, and
- * revoking. Emails are captured instead of sent.
+ * Email invitations against one in-memory SQLite database: the admin check, the repository's
+ * token guards, and a deleted org. The cross-store flow (rows in D1, accept applied at the
+ * `OrgObject`) is covered in `worker/objects/directory-path.test.ts`.
  */
 import { InvitationRepo } from "@hazel/backend-core"
 import { Database, SQLite, schema } from "@hazel/db"
@@ -122,89 +122,6 @@ describe("invitations", () => {
 		expect(failureTag(exit)).toEqual(["UnauthorizedError"])
 	})
 
-	it("invites new addresses, skips members, and the invited account accepts", async () => {
-		sent.length = 0
-		const created = await run(owner, "organization-members:write", (invitations) =>
-			invitations.create({
-				organizationId: orgId,
-				emails: ["invitee@hazel.test", "MEMBER@hazel.test"],
-				role: "admin",
-			}),
-		)
-		expect(Exit.isSuccess(created) && created.value.invited.map((invite) => invite.email)).toEqual([
-			"invitee@hazel.test",
-		])
-		expect(Exit.isSuccess(created) && created.value.skipped).toEqual([
-			{ email: "member@hazel.test", reason: "AlreadyMember" },
-		])
-		expect(sent).toHaveLength(1)
-		expect(sent[0]).toMatchObject({ to: "invitee@hazel.test", organizationName: "Hazel Labs" })
-		expect(sent[0]!.acceptUrl).toMatch(/^https:\/\/app\.hazel\.test\/invite\//)
-		const token = tokenOf(sent[0]!)
-
-		const listed = await run(owner, "organization-members:read", (invitations) =>
-			invitations.list({ organizationId: orgId }),
-		)
-		expect(Exit.isSuccess(listed) && listed.value.map((invite) => invite.role)).toEqual(["admin"])
-
-		const preview = await run(member, "organizations:read", (invitations) =>
-			invitations.preview({ token }),
-		)
-		expect(Exit.isSuccess(preview) && preview.value.status).toBe("Pending")
-
-		const wrongAccount = await run(member, "organizations:write", (invitations) =>
-			invitations.accept({ token }),
-		)
-		expect(failureTag(wrongAccount)).toEqual(["InvitationEmailMismatchError"])
-
-		const accepted = await run(invitee, "organizations:write", (invitations) =>
-			invitations.accept({ token }),
-		)
-		expect(Exit.isSuccess(accepted) && accepted.value.slug).toBe("hazel-labs")
-		const role = await harness.run(
-			Effect.gen(function* () {
-				const db = yield* Database.Database
-				return yield* db.run(
-					SQLite.from(schema.organizationMembersTable)
-						.select("role")
-						.where(($) => [$.organizationId.eq(orgId), $.userId.eq(invitee)]),
-				)
-			}),
-		)
-		expect(role).toEqual([{ role: "admin" }])
-
-		const again = await run(invitee, "organizations:write", (invitations) =>
-			invitations.accept({ token }),
-		)
-		expect(failureTag(again)).toEqual(["InvitationUnavailableError"])
-	}, 60_000)
-
-	it("re-inviting replaces the link, and a revoked link stops working", async () => {
-		sent.length = 0
-		const invite = () =>
-			run(owner, "organization-members:write", (invitations) =>
-				invitations.create({ organizationId: orgId, emails: ["late@hazel.test"], role: "member" }),
-			)
-		await invite()
-		const second = await invite()
-		const [first, latest] = [tokenOf(sent[0]!), tokenOf(sent[1]!)]
-		expect(first).not.toBe(latest)
-
-		const stale = await run(member, "organizations:read", (invitations) =>
-			invitations.preview({ token: first }),
-		)
-		expect(failureTag(stale)).toEqual(["InvitationNotFoundError"])
-
-		const invitationId = Exit.isSuccess(second) ? second.value.invited[0]!.id : undefined
-		const revoked = await run(owner, "organization-members:write", (invitations) =>
-			invitations.revoke({ id: invitationId! }),
-		)
-		expect(Exit.isSuccess(revoked)).toBe(true)
-		const preview = await run(member, "organizations:read", (invitations) =>
-			invitations.preview({ token: latest }),
-		)
-		expect(Exit.isSuccess(preview) && preview.value.status).toBe("Revoked")
-	}, 60_000)
 	it("a stale send failure or acceptance cannot consume a replacement invitation", async () => {
 		const result = await harness.run(
 			Effect.gen(function* () {

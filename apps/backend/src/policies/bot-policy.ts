@@ -5,7 +5,12 @@ import { Context, Effect, Layer } from "effect"
 import { withAnnotatedScope } from "../lib/policy-utils"
 import { OrgResolver } from "../services/org-resolver"
 
-/** @effect-leakable-service */
+/**
+ * `canCreate` / `canInstall` / `canUninstall` run in the `OrgObject` (local org members);
+ * `canRead` / `canUpdate` / `canDelete` on the directory path, against D1 `bots`.
+ *
+ * @effect-leakable-service
+ */
 export class BotPolicy extends Context.Service<BotPolicy>()("BotPolicy/Policy", {
 	make: Effect.gen(function* () {
 		const policyEntity = "Bot" as const
@@ -23,6 +28,8 @@ export class BotPolicy extends Context.Service<BotPolicy>()("BotPolicy/Policy", 
 				),
 			)
 
+		// The directory path (D1) has no org members to check, so a bot is its creator's to read;
+		// org members see installed bots through the org's `bots` projection.
 		const canRead = (botId: BotId) =>
 			ErrorUtils.refailUnauthorized(
 				policyEntity,
@@ -33,23 +40,7 @@ export class BotPolicy extends Context.Service<BotPolicy>()("BotPolicy/Policy", 
 						policyEntity,
 						"select",
 						Effect.fn(`${policyEntity}.select`)(function* (actor) {
-							// Bot creator can always read
-							if (bot.createdBy === actor.id) {
-								return true
-							}
-
-							// Org admin can read bots in their org if installed
-							const orgId = actor.organizationId
-							if (orgId) {
-								return yield* withAnnotatedScope((scope) =>
-									orgResolver.requireAdminOrOwner(orgId, scope, policyEntity, "select"),
-								).pipe(
-									Effect.map(() => true),
-									Effect.catchTag("PermissionError", () => Effect.succeed(false)),
-								)
-							}
-
-							return false
+							return actor.id === bot.createdBy
 						}),
 					),
 				),

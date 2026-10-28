@@ -1,3 +1,8 @@
+/**
+ * Discord gateway dispatches → chat-sync inbound events: decode and validate the payload, drop
+ * bot and self-authored events, and build the stable dedupe key. Where the event goes (the
+ * directory's `chat_sync_index`, then the `OrgObject`) is the caller's `ingest`.
+ */
 import { createHash } from "node:crypto"
 import {
 	ExternalChannelId,
@@ -5,11 +10,9 @@ import {
 	ExternalThreadId,
 	ExternalUserId,
 	ExternalWebhookId,
-	SyncConnectionId,
 } from "@hazel/schema"
-import { Context, Effect, Option, Schema } from "effect"
-import { DiscordSyncWorker } from "./discord-sync-worker"
-import type { ChatSyncIngressMessageAttachment } from "./chat-sync-core-worker"
+import { Effect, Option, Schema } from "effect"
+import type { ChatSyncAttachment, ChatSyncInboundEvent } from "./chat-sync-effects"
 
 export interface DiscordMessageAuthor {
 	id?: string
@@ -109,12 +112,12 @@ const buildAuthorAvatarUrl = (author?: DiscordMessageAuthor): string | null => {
 
 export const normalizeDiscordMessageAttachments = (
 	attachments: ReadonlyArray<DiscordMessageAttachment> | undefined,
-): ReadonlyArray<ChatSyncIngressMessageAttachment> => {
+): ReadonlyArray<ChatSyncAttachment> => {
 	if (!attachments || attachments.length === 0) {
 		return []
 	}
 
-	const normalized: Array<ChatSyncIngressMessageAttachment> = []
+	const normalized: Array<ChatSyncAttachment> = []
 	for (const attachment of attachments) {
 		const fileName = typeof attachment.filename === "string" ? attachment.filename.trim() : ""
 		const publicUrl = typeof attachment.url === "string" ? attachment.url.trim() : ""
@@ -124,9 +127,7 @@ export const normalizeDiscordMessageAttachments = (
 
 		normalized.push({
 			externalAttachmentId:
-				typeof attachment.id === "string" && attachment.id.trim().length > 0
-					? attachment.id
-					: undefined,
+				typeof attachment.id === "string" && attachment.id.trim().length > 0 ? attachment.id : null,
 			fileName,
 			fileSize:
 				typeof attachment.size === "number" &&
@@ -182,23 +183,6 @@ export const decodeOptionalExternalId = <A>(value: unknown, decode: ExternalIdDe
 
 const getValueType = (value: unknown): string => (value === null ? "null" : typeof value)
 
-type GatewayDirection = "both" | "hazel_to_external" | "external_to_hazel"
-
-type DiscordGatewayChannelLink = {
-	readonly syncConnectionId: SyncConnectionId
-	readonly direction: GatewayDirection
-}
-
-type DiscordGatewayDispatchWorker = Pick<
-	Context.Service.Shape<typeof DiscordSyncWorker>,
-	| "ingestMessageCreate"
-	| "ingestMessageUpdate"
-	| "ingestMessageDelete"
-	| "ingestReactionAdd"
-	| "ingestReactionRemove"
-	| "ingestThreadCreate"
->
-
 const decodeRequiredExternalIdOrWarn = <A>(params: {
 	eventType: string
 	field: string
@@ -235,313 +219,224 @@ const decodeOptionalExternalIdOrWarn = <A>(params: {
 		return decoded
 	})
 
-export const createDiscordGatewayDispatchHandlers = (deps: {
-	discordSyncWorker: DiscordGatewayDispatchWorker
-	findActiveLinksByExternalChannel: (
-		externalChannelId: ExternalChannelId,
-	) => Effect.Effect<ReadonlyArray<DiscordGatewayChannelLink>, unknown, never>
-	isCurrentBotAuthor: (authorId?: string) => Effect.Effect<boolean, never, never>
+/** Who a Discord event names as its actor. */
+export interface DiscordInboundAuthor {
+	readonly externalUserId: ExternalUserId
+	readonly displayName: string
+	readonly avatarUrl: string | null
+}
+
+/** One validated Discord event, ready to route. `author: null` means the event named nobody. */
+export interface DiscordInbound {
+	readonly externalChannelId: ExternalChannelId
+	readonly dedupeKey: string
+	readonly author: DiscordInboundAuthor | null
+	readonly event: ChatSyncInboundEvent
+}
+
+export const createDiscordGatewayDispatchHandlers = <E, R>(deps: {
+	readonly ingest: (inbound: DiscordInbound) => Effect.Effect<void, E, R>
+	readonly isCurrentBotAuthor: (authorId?: string) => Effect.Effect<boolean>
 }) => {
-	const ingestMessageCreateEvent = Effect.fn("DiscordGatewayService.ingestMessageCreateEvent")(function* (
+	const required = <A>(eventType: string, field: string, value: unknown, decode: ExternalIdDecoder<A>) =>
+		decodeRequiredExternalIdOrWarn({ eventType, field, value, decode })
+	const optional = <A>(eventType: string, field: string, value: unknown, decode: ExternalIdDecoder<A>) =>
+		decodeOptionalExternalIdOrWarn({ eventType, field, value, decode })
+
+	const ingestMessageCreateEvent = Effect.fn("DiscordGateway.ingestMessageCreateEvent")(function* (
 		event: DiscordMessageCreateEvent,
 	) {
 		if (!event.id || !event.channel_id || typeof event.content !== "string") return
 		if (event.author?.bot) return
 		if (yield* deps.isCurrentBotAuthor(event.author?.id)) return
-
-		const externalChannelIdOption = yield* decodeRequiredExternalIdOrWarn({
-			eventType: "MESSAGE_CREATE",
-			field: "channel_id",
-			value: event.channel_id,
-			decode: decodeExternalChannelId,
-		})
-		if (Option.isNone(externalChannelIdOption)) return
-
-		const externalMessageIdOption = yield* decodeRequiredExternalIdOrWarn({
-			eventType: "MESSAGE_CREATE",
-			field: "id",
-			value: event.id,
-			decode: decodeExternalMessageId,
-		})
-		if (Option.isNone(externalMessageIdOption)) return
-
-		const externalAuthorId = yield* decodeOptionalExternalIdOrWarn({
-			eventType: "MESSAGE_CREATE",
-			field: "author.id",
-			value: event.author?.id,
-			decode: decodeExternalUserId,
-		})
-
-		const externalReplyToMessageId = yield* decodeOptionalExternalIdOrWarn({
-			eventType: "MESSAGE_CREATE",
-			field: "message_reference.message_id",
-			value: event.message_reference?.message_id,
-			decode: decodeExternalMessageId,
-		})
-
-		const externalWebhookId = yield* decodeOptionalExternalIdOrWarn({
-			eventType: "MESSAGE_CREATE",
-			field: "webhook_id",
-			value: event.webhook_id,
-			decode: decodeExternalWebhookId,
-		})
-
-		const externalAttachments = normalizeDiscordMessageAttachments(event.attachments)
-		const links = yield* deps.findActiveLinksByExternalChannel(externalChannelIdOption.value)
-		const inboundLinks = links.filter((link) => link.direction !== "hazel_to_external")
-
-		yield* Effect.forEach(inboundLinks, (link) =>
-			deps.discordSyncWorker.ingestMessageCreate({
-				syncConnectionId: link.syncConnectionId,
-				externalChannelId: externalChannelIdOption.value,
-				externalMessageId: externalMessageIdOption.value,
-				externalWebhookId,
-				content: event.content ?? "",
-				externalAuthorId,
-				externalAuthorDisplayName: formatDiscordDisplayName(event.author),
-				externalAuthorAvatarUrl: buildAuthorAvatarUrl(event.author),
-				externalReplyToMessageId: externalReplyToMessageId ?? null,
-				externalAttachments,
-				dedupeKey: `discord:gateway:create:${externalMessageIdOption.value}`,
-			}),
+		const channelId = yield* required(
+			"MESSAGE_CREATE",
+			"channel_id",
+			event.channel_id,
+			decodeExternalChannelId,
 		)
+		if (Option.isNone(channelId)) return
+		const messageId = yield* required("MESSAGE_CREATE", "id", event.id, decodeExternalMessageId)
+		if (Option.isNone(messageId)) return
+		const authorId = yield* optional(
+			"MESSAGE_CREATE",
+			"author.id",
+			event.author?.id,
+			decodeExternalUserId,
+		)
+		const replyTo = yield* optional(
+			"MESSAGE_CREATE",
+			"message_reference.message_id",
+			event.message_reference?.message_id,
+			decodeExternalMessageId,
+		)
+		const webhookId = yield* optional(
+			"MESSAGE_CREATE",
+			"webhook_id",
+			event.webhook_id,
+			decodeExternalWebhookId,
+		)
+		yield* deps.ingest({
+			externalChannelId: channelId.value,
+			dedupeKey: `discord:gateway:create:${messageId.value}`,
+			author:
+				authorId === undefined
+					? null
+					: {
+							externalUserId: authorId,
+							displayName: formatDiscordDisplayName(event.author),
+							avatarUrl: buildAuthorAvatarUrl(event.author),
+						},
+			event: {
+				_tag: "MessageCreate",
+				externalMessageId: messageId.value,
+				externalWebhookId: webhookId ?? null,
+				content: event.content,
+				externalReplyToMessageId: replyTo ?? null,
+				attachments: normalizeDiscordMessageAttachments(event.attachments),
+			},
+		})
 	})
 
-	const ingestMessageUpdateEvent = Effect.fn("DiscordGatewayService.ingestMessageUpdateEvent")(function* (
+	const ingestMessageUpdateEvent = Effect.fn("DiscordGateway.ingestMessageUpdateEvent")(function* (
 		event: DiscordMessageUpdateEvent,
 	) {
 		if (!event.id || !event.channel_id || typeof event.content !== "string") return
 		if (event.author?.bot) return
 		if (yield* deps.isCurrentBotAuthor(event.author?.id)) return
-
-		const externalChannelIdOption = yield* decodeRequiredExternalIdOrWarn({
-			eventType: "MESSAGE_UPDATE",
-			field: "channel_id",
-			value: event.channel_id,
-			decode: decodeExternalChannelId,
-		})
-		if (Option.isNone(externalChannelIdOption)) return
-
-		const externalMessageIdOption = yield* decodeRequiredExternalIdOrWarn({
-			eventType: "MESSAGE_UPDATE",
-			field: "id",
-			value: event.id,
-			decode: decodeExternalMessageId,
-		})
-		if (Option.isNone(externalMessageIdOption)) return
-
-		const externalWebhookId = yield* decodeOptionalExternalIdOrWarn({
-			eventType: "MESSAGE_UPDATE",
-			field: "webhook_id",
-			value: event.webhook_id,
-			decode: decodeExternalWebhookId,
-		})
-
-		const links = yield* deps.findActiveLinksByExternalChannel(externalChannelIdOption.value)
-		const inboundLinks = links.filter((link) => link.direction !== "hazel_to_external")
-		const content = event.content
-		const dedupeSuffix =
-			event.edited_timestamp ??
-			createHash("sha256")
-				.update(`${externalMessageIdOption.value}:${event.content ?? ""}`)
-				.digest("hex")
-				.slice(0, 16)
-
-		yield* Effect.forEach(inboundLinks, (link) =>
-			deps.discordSyncWorker.ingestMessageUpdate({
-				syncConnectionId: link.syncConnectionId,
-				externalChannelId: externalChannelIdOption.value,
-				externalMessageId: externalMessageIdOption.value,
-				externalWebhookId,
-				content,
-				dedupeKey: `discord:gateway:update:${externalMessageIdOption.value}:${dedupeSuffix}`,
-			}),
+		const channelId = yield* required(
+			"MESSAGE_UPDATE",
+			"channel_id",
+			event.channel_id,
+			decodeExternalChannelId,
 		)
+		if (Option.isNone(channelId)) return
+		const messageId = yield* required("MESSAGE_UPDATE", "id", event.id, decodeExternalMessageId)
+		if (Option.isNone(messageId)) return
+		const webhookId = yield* optional(
+			"MESSAGE_UPDATE",
+			"webhook_id",
+			event.webhook_id,
+			decodeExternalWebhookId,
+		)
+		const version =
+			event.edited_timestamp ??
+			createHash("sha256").update(`${messageId.value}:${event.content}`).digest("hex").slice(0, 16)
+		yield* deps.ingest({
+			externalChannelId: channelId.value,
+			dedupeKey: `discord:gateway:update:${messageId.value}:${version}`,
+			author: null,
+			event: {
+				_tag: "MessageUpdate",
+				externalMessageId: messageId.value,
+				externalWebhookId: webhookId ?? null,
+				content: event.content,
+			},
+		})
 	})
 
-	const ingestMessageDeleteEvent = Effect.fn("DiscordGatewayService.ingestMessageDeleteEvent")(function* (
+	const ingestMessageDeleteEvent = Effect.fn("DiscordGateway.ingestMessageDeleteEvent")(function* (
 		event: DiscordMessageDeleteEvent,
 	) {
 		if (!event.id || !event.channel_id) return
-
-		const externalChannelIdOption = yield* decodeRequiredExternalIdOrWarn({
-			eventType: "MESSAGE_DELETE",
-			field: "channel_id",
-			value: event.channel_id,
-			decode: decodeExternalChannelId,
-		})
-		if (Option.isNone(externalChannelIdOption)) return
-
-		const externalMessageIdOption = yield* decodeRequiredExternalIdOrWarn({
-			eventType: "MESSAGE_DELETE",
-			field: "id",
-			value: event.id,
-			decode: decodeExternalMessageId,
-		})
-		if (Option.isNone(externalMessageIdOption)) return
-
-		const externalWebhookId = yield* decodeOptionalExternalIdOrWarn({
-			eventType: "MESSAGE_DELETE",
-			field: "webhook_id",
-			value: event.webhook_id,
-			decode: decodeExternalWebhookId,
-		})
-
-		const links = yield* deps.findActiveLinksByExternalChannel(externalChannelIdOption.value)
-		const inboundLinks = links.filter((link) => link.direction !== "hazel_to_external")
-
-		yield* Effect.forEach(inboundLinks, (link) =>
-			deps.discordSyncWorker.ingestMessageDelete({
-				syncConnectionId: link.syncConnectionId,
-				externalChannelId: externalChannelIdOption.value,
-				externalMessageId: externalMessageIdOption.value,
-				externalWebhookId,
-				dedupeKey: `discord:gateway:delete:${externalMessageIdOption.value}`,
-			}),
+		const channelId = yield* required(
+			"MESSAGE_DELETE",
+			"channel_id",
+			event.channel_id,
+			decodeExternalChannelId,
 		)
+		if (Option.isNone(channelId)) return
+		const messageId = yield* required("MESSAGE_DELETE", "id", event.id, decodeExternalMessageId)
+		if (Option.isNone(messageId)) return
+		const webhookId = yield* optional(
+			"MESSAGE_DELETE",
+			"webhook_id",
+			event.webhook_id,
+			decodeExternalWebhookId,
+		)
+		yield* deps.ingest({
+			externalChannelId: channelId.value,
+			dedupeKey: `discord:gateway:delete:${messageId.value}`,
+			author: null,
+			event: {
+				_tag: "MessageDelete",
+				externalMessageId: messageId.value,
+				externalWebhookId: webhookId ?? null,
+			},
+		})
 	})
 
-	const ingestMessageReactionAddEvent = Effect.fn("DiscordGatewayService.ingestMessageReactionAddEvent")(
-		function* (event: DiscordMessageReactionAddEvent) {
+	const ingestReaction = (eventType: "MESSAGE_REACTION_ADD" | "MESSAGE_REACTION_REMOVE") =>
+		Effect.fn(`DiscordGateway.ingest${eventType}`)(function* (
+			event: DiscordMessageReactionAddEvent | DiscordMessageReactionRemoveEvent,
+		) {
 			if (!event.channel_id || !event.message_id || !event.user_id) return
-
+			if (yield* deps.isCurrentBotAuthor(event.user_id)) return
 			const emoji = formatDiscordEmoji(event.emoji)
 			if (!emoji) return
-
-			const { externalAuthorDisplayName, externalAuthorAvatarUrl } = extractReactionAuthor(event)
-			const externalChannelIdOption = yield* decodeRequiredExternalIdOrWarn({
-				eventType: "MESSAGE_REACTION_ADD",
-				field: "channel_id",
-				value: event.channel_id,
-				decode: decodeExternalChannelId,
-			})
-			if (Option.isNone(externalChannelIdOption)) return
-
-			const externalMessageIdOption = yield* decodeRequiredExternalIdOrWarn({
-				eventType: "MESSAGE_REACTION_ADD",
-				field: "message_id",
-				value: event.message_id,
-				decode: decodeExternalMessageId,
-			})
-			if (Option.isNone(externalMessageIdOption)) return
-
-			const externalUserIdOption = yield* decodeRequiredExternalIdOrWarn({
-				eventType: "MESSAGE_REACTION_ADD",
-				field: "user_id",
-				value: event.user_id,
-				decode: decodeExternalUserId,
-			})
-			if (Option.isNone(externalUserIdOption)) return
-
-			const links = yield* deps.findActiveLinksByExternalChannel(externalChannelIdOption.value)
-			const inboundLinks = links.filter((link) => link.direction !== "hazel_to_external")
-
-			yield* Effect.forEach(inboundLinks, (link) =>
-				deps.discordSyncWorker.ingestReactionAdd({
-					syncConnectionId: link.syncConnectionId,
-					externalChannelId: externalChannelIdOption.value,
-					externalMessageId: externalMessageIdOption.value,
-					externalUserId: externalUserIdOption.value,
-					emoji,
-					externalAuthorDisplayName,
-					externalAuthorAvatarUrl,
-					dedupeKey: `discord:gateway:reaction:add:${externalChannelIdOption.value}:${externalMessageIdOption.value}:${externalUserIdOption.value}:${emoji}`,
-				}),
+			const channelId = yield* required(
+				eventType,
+				"channel_id",
+				event.channel_id,
+				decodeExternalChannelId,
 			)
-		},
-	)
-
-	const ingestMessageReactionRemoveEvent = Effect.fn(
-		"DiscordGatewayService.ingestMessageReactionRemoveEvent",
-	)(function* (event: DiscordMessageReactionRemoveEvent) {
-		if (!event.channel_id || !event.message_id || !event.user_id) return
-
-		const emoji = formatDiscordEmoji(event.emoji)
-		if (!emoji) return
-
-		const { externalAuthorDisplayName, externalAuthorAvatarUrl } = extractReactionAuthor(event)
-		const externalChannelIdOption = yield* decodeRequiredExternalIdOrWarn({
-			eventType: "MESSAGE_REACTION_REMOVE",
-			field: "channel_id",
-			value: event.channel_id,
-			decode: decodeExternalChannelId,
+			if (Option.isNone(channelId)) return
+			const messageId = yield* required(
+				eventType,
+				"message_id",
+				event.message_id,
+				decodeExternalMessageId,
+			)
+			if (Option.isNone(messageId)) return
+			const userId = yield* required(eventType, "user_id", event.user_id, decodeExternalUserId)
+			if (Option.isNone(userId)) return
+			const { externalAuthorDisplayName, externalAuthorAvatarUrl } = extractReactionAuthor(event)
+			const add = eventType === "MESSAGE_REACTION_ADD"
+			yield* deps.ingest({
+				externalChannelId: channelId.value,
+				dedupeKey: `discord:gateway:reaction:${add ? "add" : "remove"}:${channelId.value}:${messageId.value}:${userId.value}:${emoji}`,
+				author: {
+					externalUserId: userId.value,
+					displayName: externalAuthorDisplayName ?? "Discord User",
+					avatarUrl: externalAuthorAvatarUrl ?? null,
+				},
+				event: {
+					_tag: add ? "ReactionAdd" : "ReactionRemove",
+					externalMessageId: messageId.value,
+					emoji,
+				},
+			})
 		})
-		if (Option.isNone(externalChannelIdOption)) return
 
-		const externalMessageIdOption = yield* decodeRequiredExternalIdOrWarn({
-			eventType: "MESSAGE_REACTION_REMOVE",
-			field: "message_id",
-			value: event.message_id,
-			decode: decodeExternalMessageId,
-		})
-		if (Option.isNone(externalMessageIdOption)) return
-
-		const externalUserIdOption = yield* decodeRequiredExternalIdOrWarn({
-			eventType: "MESSAGE_REACTION_REMOVE",
-			field: "user_id",
-			value: event.user_id,
-			decode: decodeExternalUserId,
-		})
-		if (Option.isNone(externalUserIdOption)) return
-
-		const links = yield* deps.findActiveLinksByExternalChannel(externalChannelIdOption.value)
-		const inboundLinks = links.filter((link) => link.direction !== "hazel_to_external")
-
-		yield* Effect.forEach(inboundLinks, (link) =>
-			deps.discordSyncWorker.ingestReactionRemove({
-				syncConnectionId: link.syncConnectionId,
-				externalChannelId: externalChannelIdOption.value,
-				externalMessageId: externalMessageIdOption.value,
-				externalUserId: externalUserIdOption.value,
-				emoji,
-				externalAuthorDisplayName,
-				externalAuthorAvatarUrl,
-				dedupeKey: `discord:gateway:reaction:remove:${externalChannelIdOption.value}:${externalMessageIdOption.value}:${externalUserIdOption.value}:${emoji}`,
-			}),
-		)
-	})
-
-	const ingestThreadCreateEvent = Effect.fn("DiscordGatewayService.ingestThreadCreateEvent")(function* (
+	const ingestThreadCreateEvent = Effect.fn("DiscordGateway.ingestThreadCreateEvent")(function* (
 		event: DiscordThreadCreateEvent,
 	) {
-		if (!event.id || !event.parent_id || event.type !== 11) return
-
-		const externalParentChannelIdOption = yield* decodeRequiredExternalIdOrWarn({
-			eventType: "THREAD_CREATE",
-			field: "parent_id",
-			value: event.parent_id,
-			decode: decodeExternalChannelId,
-		})
-		if (Option.isNone(externalParentChannelIdOption)) return
-
-		const externalThreadIdOption = yield* decodeRequiredExternalIdOrWarn({
-			eventType: "THREAD_CREATE",
-			field: "id",
-			value: event.id,
-			decode: decodeExternalThreadId,
-		})
-		if (Option.isNone(externalThreadIdOption)) return
-
-		const links = yield* deps.findActiveLinksByExternalChannel(externalParentChannelIdOption.value)
-		const inboundLinks = links.filter((link) => link.direction !== "hazel_to_external")
-
-		yield* Effect.forEach(inboundLinks, (link) =>
-			deps.discordSyncWorker.ingestThreadCreate({
-				syncConnectionId: link.syncConnectionId,
-				externalParentChannelId: externalParentChannelIdOption.value,
-				externalThreadId: externalThreadIdOption.value,
-				name: event.name,
-				dedupeKey: `discord:gateway:thread:create:${externalThreadIdOption.value}`,
-			}),
+		if (!event.id || !event.parent_id) return
+		// 11: public thread, 12: private thread.
+		if (event.type !== undefined && event.type !== 11 && event.type !== 12) return
+		const parentId = yield* required(
+			"THREAD_CREATE",
+			"parent_id",
+			event.parent_id,
+			decodeExternalChannelId,
 		)
+		if (Option.isNone(parentId)) return
+		const threadId = yield* required("THREAD_CREATE", "id", event.id, decodeExternalThreadId)
+		if (Option.isNone(threadId)) return
+		yield* deps.ingest({
+			externalChannelId: parentId.value,
+			dedupeKey: `discord:gateway:thread:create:${threadId.value}`,
+			author: null,
+			event: { _tag: "ThreadCreate", externalThreadId: threadId.value, name: event.name ?? "Thread" },
+		})
 	})
 
 	return {
 		ingestMessageCreateEvent,
 		ingestMessageUpdateEvent,
 		ingestMessageDeleteEvent,
-		ingestMessageReactionAddEvent,
-		ingestMessageReactionRemoveEvent,
+		ingestMessageReactionAddEvent: ingestReaction("MESSAGE_REACTION_ADD"),
+		ingestMessageReactionRemoveEvent: ingestReaction("MESSAGE_REACTION_REMOVE"),
 		ingestThreadCreateEvent,
 	}
 }

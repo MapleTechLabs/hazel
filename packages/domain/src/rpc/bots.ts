@@ -6,6 +6,7 @@ import { Bot, BotCommand } from "../models"
 import { RateLimitExceededError } from "../rate-limit-errors"
 import { TransactionId } from "@hazel/schema"
 import { AuthMiddleware } from "./middleware"
+import { RouteOrganizationId } from "./routing-fields"
 import { RequiredScopes } from "../scopes/required-scopes"
 import { ApiScope } from "../scopes/api-scope"
 
@@ -118,6 +119,8 @@ export class BotRpcs extends RpcGroup.make(
 			webhookUrl: Schema.optional(Schema.String),
 			scopes: Schema.Array(ApiScope),
 			isPublic: Schema.optional(Schema.Boolean),
+			/** The org to install it in; defaults to the caller's active org. */
+			organizationId: RouteOrganizationId,
 		}),
 		success: BotCreatedResponse,
 		error: Schema.Union([
@@ -269,6 +272,7 @@ export class BotRpcs extends RpcGroup.make(
 	Rpc.make("bot.listPublic", {
 		payload: Schema.Struct({
 			search: Schema.optional(Schema.String),
+			organizationId: RouteOrganizationId,
 		}),
 		success: PublicBotListResponse,
 		error: Schema.Union([UnauthorizedError, InternalServerError]),
@@ -285,7 +289,7 @@ export class BotRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user is not authenticated
 	 */
 	Rpc.make("bot.listInstalled", {
-		payload: Schema.Struct({}),
+		payload: Schema.Struct({ organizationId: RouteOrganizationId }),
 		success: BotListResponse,
 		error: Schema.Union([UnauthorizedError, InternalServerError]),
 	})
@@ -304,7 +308,7 @@ export class BotRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user is not org admin
 	 */
 	Rpc.make("bot.install", {
-		payload: Schema.Struct({ botId: BotId }),
+		payload: Schema.Struct({ botId: BotId, organizationId: RouteOrganizationId }),
 		success: Schema.Struct({ transactionId: TransactionId }),
 		error: Schema.Union([
 			ActiveOrganizationRequiredError,
@@ -329,7 +333,7 @@ export class BotRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user is not org admin
 	 */
 	Rpc.make("bot.uninstall", {
-		payload: Schema.Struct({ botId: BotId }),
+		payload: Schema.Struct({ botId: BotId, organizationId: RouteOrganizationId }),
 		success: Schema.Struct({ transactionId: TransactionId }),
 		error: Schema.Union([
 			ActiveOrganizationRequiredError,
@@ -355,7 +359,7 @@ export class BotRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user is not org admin
 	 */
 	Rpc.make("bot.installById", {
-		payload: Schema.Struct({ botId: BotId }),
+		payload: Schema.Struct({ botId: BotId, organizationId: RouteOrganizationId }),
 		success: Schema.Struct({ transactionId: TransactionId }),
 		error: Schema.Union([
 			ActiveOrganizationRequiredError,

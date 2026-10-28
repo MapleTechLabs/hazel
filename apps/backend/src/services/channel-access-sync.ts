@@ -1,5 +1,12 @@
+/**
+ * Recomputes `channel_access` from org-local tables. Inside an `OrgObject`, call it through
+ * `worker/objects/org/channel-access.ts` (`syncChannelAccess`, `syncChannelTree`, `syncMemberAccess`),
+ * which also projects the result. TODO(do-sync): fold into that module and delete this service once
+ * bots and chat-sync have moved to those helpers. A Connect host channel's access includes the
+ * conversation's participants (`worker/objects/org/connect.ts`).
+ */
 import { Database, SQLite, schema } from "@hazel/db"
-import type { ChannelId, ConnectConversationId, OrganizationId, UserId } from "@hazel/schema"
+import type { ChannelId, OrganizationId, UserId } from "@hazel/schema"
 import { Context, Effect, Layer } from "effect"
 
 export class ChannelAccessSyncService extends Context.Service<ChannelAccessSyncService>()(
@@ -149,20 +156,6 @@ export class ChannelAccessSyncService extends Context.Service<ChannelAccessSyncS
 				yield* upsertChannelUsers(channel.id, channel.organizationId, userIds)
 			})
 
-			const syncConversation = Effect.fn("ChannelAccessSyncService.syncConversation")(function* (
-				conversationId: ConnectConversationId,
-			) {
-				const mounts = yield* db.run(
-					SQLite.from(schema.connectConversationChannelsTable)
-						.select("channelId")
-						.where(($) => [$.conversationId.eq(conversationId), $.deletedAt.isNull()]),
-				)
-
-				yield* Effect.forEach(mounts, (mount) => syncChannel(mount.channelId), {
-					concurrency: 10,
-				})
-			})
-
 			const syncChildThreads = Effect.fn("ChannelAccessSyncService.syncChildThreads")(function* (
 				parentChannelId: ChannelId,
 			) {
@@ -279,7 +272,6 @@ export class ChannelAccessSyncService extends Context.Service<ChannelAccessSyncS
 
 			return {
 				syncChannel,
-				syncConversation,
 				syncChildThreads,
 				syncUserInOrganization,
 				removeChannel,

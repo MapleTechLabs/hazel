@@ -1,8 +1,3 @@
-/**
- * TODO(do-sync): runs in the OrgObject (`rpc/routing.ts`); not ported yet. To port: touch only that
- * store's tables and send everything else through the outbox (`worker/objects/effects`).
- * - org-local already; check `db.transaction` + `generateTransactionId` order (txid last)
- */
 import { ChannelRepo, ChannelSectionRepo } from "@hazel/backend-core"
 import { Database, SQLite, schema } from "@hazel/db"
 import { ErrorUtils, withRemapDbErrors } from "@hazel/domain"
@@ -18,6 +13,7 @@ import { withAnnotatedScope } from "../../lib/policy-utils"
 import { ChannelSectionPolicy } from "../../policies/channel-section-policy"
 import { OrgResolver } from "../../services/org-resolver"
 
+/** Channel section RPC handlers. Run in the `OrgObject` (`rpc/routing.ts`); org-local rows only. */
 export const ChannelSectionRpcLive = ChannelSectionRpcs.toLayer(
 	Effect.gen(function* () {
 		const db = yield* Database.Database

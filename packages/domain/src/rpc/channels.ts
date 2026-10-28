@@ -23,6 +23,7 @@ import { Channel } from "../models"
 import { TransactionId } from "@hazel/schema"
 import { AuthMiddleware } from "./middleware"
 import { RequiredScopes } from "../scopes/required-scopes"
+import { RouteChannelId } from "./routing-fields"
 
 /**
  * Response schema for successful channel operations.
@@ -62,6 +63,8 @@ export class CreateThreadRequest extends Schema.Class<CreateThreadRequest>("Crea
 	id: Schema.optional(ChannelId),
 	messageId: MessageId,
 	organizationId: Schema.optional(OrganizationId),
+	/** The message's channel: the thread's parent, whose `ChannelObject` links the message. */
+	channelId: RouteChannelId,
 }) {}
 
 /**

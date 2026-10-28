@@ -11,6 +11,11 @@ import type { BotGatewayTransport } from "../../../services/bot-gateway-transpor
 import type { Directory } from "../../../services/directory"
 import type { ObjectKind } from "../kinds"
 import { ObjectStubs } from "../protocol"
+import type { ThreadNamer } from "../../../services/thread-namer"
+import { chatSyncDeliveryReceivers } from "../../../services/chat-sync/chat-sync-outbound"
+import { ChatSyncDeliveryEffects } from "../../../services/chat-sync/chat-sync-effects"
+import type { ChatSyncTransport } from "../../../services/chat-sync/chat-sync-transport"
+import { aiReceivers, AiEffects } from "./ai-effects"
 import { botGatewayReceivers, BotGatewayEffects } from "./bot-gateway-effects"
 import { channelReceivers, ChannelEffects } from "./channel-effects"
 import { directoryReceivers, DirectoryEffects } from "./directory-effects"
@@ -44,6 +49,11 @@ export const objectReceivers: Record<ObjectKind, Side<Database.Database | SqlCli
 
 const directorySide = side<Directory>(DirectoryEffects, directoryReceivers)
 const botGatewaySide = side<Database.Database | BotGatewayTransport>(BotGatewayEffects, botGatewayReceivers)
+const aiSide = side<Database.Database | SqlClient | ThreadNamer | ObjectStubs>(AiEffects, aiReceivers)
+const chatSyncSide = side<Database.Database | SqlClient | ChatSyncTransport | Directory>(
+	ChatSyncDeliveryEffects,
+	chatSyncDeliveryReceivers,
+)
 
 const failure = (message: string, retryable = true) => new OutboxDeliveryError({ message, retryable })
 
@@ -76,13 +86,21 @@ export const deliverOutboxRow = (
 ): Effect.Effect<
 	void,
 	OutboxDeliveryError,
-	ObjectStubs | Directory | BotGatewayTransport | Database.Database
+	| ObjectStubs
+	| Directory
+	| BotGatewayTransport
+	| Database.Database
+	| SqlClient
+	| ThreadNamer
+	| ChatSyncTransport
 > =>
 	Effect.gen(function* () {
 		const target = parseEffectTarget(row.target)
 		if (target === undefined) return yield* failure(`Unknown outbox target ${row.target}`, false)
 		if (target.kind === "directory") return yield* runLocal(directorySide, row)
 		if (target.kind === "bot-gateway") return yield* runLocal(botGatewaySide, row)
+		if (target.kind === "ai") return yield* runLocal(aiSide, row)
+		if (target.kind === "chat-sync") return yield* runLocal(chatSyncSide, row)
 		const stubs = yield* ObjectStubs
 		const result = yield* stubs
 			.get({ kind: target.kind, id: target.id! })

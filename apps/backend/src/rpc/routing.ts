@@ -17,9 +17,9 @@
  * The rate limits the handlers applied run here, once, before the call leaves the Worker; objects
  * and the directory path admit everything (`RateLimiterAllowAll`).
  */
-import type { DatabaseError } from "@hazel/db"
+import { type DatabaseError, SQLite, schema } from "@hazel/db"
 import type { CurrentUser, RateLimitExceededError } from "@hazel/domain"
-import type { ChannelId, OrganizationId } from "@hazel/schema"
+import type { ChannelId, ConnectConversationId, ConnectInviteId, OrganizationId } from "@hazel/schema"
 import { Effect, Option, Schema } from "effect"
 import type { Rpc } from "effect/rpc"
 import { Directory } from "../services/directory"
@@ -91,10 +91,68 @@ const channelHint = (method: string) => (payload: { readonly channelId?: Channel
 const orgHint = (method: string) => (payload: { readonly organizationId?: OrganizationId | undefined }) =>
 	Effect.flatMap(hint(method, "organizationId", payload.organizationId), org)
 
+/**
+ * The org a bot call acts in: the payload's `organizationId`, else the caller's active org; with
+ * neither, the directory path (which answers `ActiveOrganizationRequiredError`, or `[]`).
+ */
+const activeOrg = (payload: { readonly organizationId?: OrganizationId | undefined }, current: User) => {
+	const organizationId = payload.organizationId ?? current.organizationId ?? undefined
+	return organizationId === undefined ? directory() : org(organizationId)
+}
+
 const byOrg = (payload: { readonly organizationId: OrganizationId }) => org(payload.organizationId)
 const byChannel = (payload: { readonly channelId: ChannelId }) => channel(payload.channelId)
 const byOrgOfChannel = (method: string) => (payload: { readonly channelId: ChannelId }) =>
 	orgOfChannel(method, payload.channelId)
+
+/** A Connect invite's host or guest org (D1); unknown, the directory path answers not found. */
+const byInvite = (inviteId: ConnectInviteId, side: "host" | "guest") =>
+	Effect.gen(function* () {
+		const { db } = yield* Directory
+		const invite = yield* db.first(
+			SQLite.from(schema.connectInvitesTable)
+				.select("hostOrganizationId", "guestOrganizationId")
+				.where(($) => [$.id.eq(inviteId)])
+				.limit(1),
+		)
+		const organizationId = Option.flatMap(invite, (row) =>
+			Option.fromNullishOr(side === "host" ? row.hostOrganizationId : row.guestOrganizationId),
+		)
+		return Option.match(organizationId, {
+			onNone: () => directoryTarget,
+			onSome: (id) => orgTarget(id) as RpcTarget,
+		})
+	})
+
+/** The org hosting a Connect conversation, from its invites (D1). */
+const hostOfConversation = (conversationId: ConnectConversationId) =>
+	Effect.gen(function* () {
+		const { db } = yield* Directory
+		const invite = yield* db.first(
+			SQLite.from(schema.connectInvitesTable)
+				.select("hostOrganizationId")
+				.where(($) => [$.conversationId.eq(conversationId)])
+				.limit(1),
+		)
+		return Option.map(invite, (row) => row.hostOrganizationId)
+	})
+
+/**
+ * `connectShare.organization.disconnect`: the host org ends it or removes a guest; a guest org's
+ * own member (an admin there, checked by the object) leaves from the guest org.
+ */
+const connectDisconnect = (
+	payload: { readonly conversationId: ConnectConversationId; readonly organizationId: OrganizationId },
+	current: User,
+) =>
+	Effect.gen(function* () {
+		const host = yield* hostOfConversation(payload.conversationId)
+		if (Option.isNone(host)) return directoryTarget
+		if (payload.organizationId === host.value) return orgTarget(host.value) as RpcTarget
+		const membership = yield* (yield* Directory).membership(current.id, payload.organizationId)
+		const inGuest = Option.isSome(membership) && membership.value.deletedAt === null
+		return orgTarget(inGuest ? payload.organizationId : host.value) as RpcTarget
+	})
 
 export const routes: RouteTable = {
 	// ChannelObject
@@ -174,10 +232,22 @@ export const routes: RouteTable = {
 	"customEmoji.update": orgHint("customEmoji.update"),
 	"customEmoji.delete": orgHint("customEmoji.delete"),
 	"customEmoji.restore": orgHint("customEmoji.restore"),
+	// Connect: the host org (invites out, settings), the guest org (accepting), the channel's org
+	// (members), the caller's org (search, lists; the rows are D1's).
 	"connectShare.invite.create": byOrgOfChannel("connectShare.invite.create"),
 	"connectShare.member.add": byOrgOfChannel("connectShare.member.add"),
 	"connectShare.member.remove": byOrgOfChannel("connectShare.member.remove"),
-	"connectShare.organization.disconnect": byOrg,
+	"connectShare.organization.disconnect": (payload, current) => connectDisconnect(payload, current),
+	"connectShare.workspace.search": byOrg,
+	"connectShare.invite.accept": (payload) => org(payload.guestOrganizationId),
+	"connectShare.invite.decline": (payload) => byInvite(payload.inviteId, "guest"),
+	"connectShare.invite.revoke": (payload) => byInvite(payload.inviteId, "host"),
+	"connectShare.invite.listIncoming": byOrg,
+	"connectShare.invite.listOutgoing": byOrg,
+	"connectShare.settings.update": (payload) =>
+		Effect.map(hostOfConversation(payload.conversationId), (host) =>
+			Option.match(host, { onNone: () => directoryTarget, onSome: (id) => orgTarget(id) as RpcTarget }),
+		),
 	"chatSync.connection.create": byOrg,
 	"chatSync.connection.list": byOrg,
 	"chatSync.connection.delete": orgHint("chatSync.connection.delete"),
@@ -192,33 +262,41 @@ export const routes: RouteTable = {
 	"organization.getBySlugPublic": directory,
 	"organization.joinViaPublicInvite": directory, // * adds an org member
 	"user.me": directory,
-	"user.update": directory, // * projects to each OrgObject (membership_index)
+	"user.update": directory, // projects to each OrgObject (applied from the Worker)
 	"user.finalizeOnboarding": directory,
-	"bot.create": directory,
+	"bot.create": activeOrg, // writes the installation; the directory row goes through its outbox
 	"bot.list": directory,
 	"bot.get": directory,
-	"bot.update": directory,
-	"bot.delete": directory,
+	"bot.update": directory, // projects to the bot's orgs
+	"bot.delete": directory, // projects to the bot's orgs
 	"bot.regenerateToken": directory,
 	"bot.getCommands": directory,
 	"bot.listPublic": directory,
-	"bot.listInstalled": directory, // * installations are org rows: needs `organizationId`
-	"bot.install": directory, // *
-	"bot.uninstall": directory, // *
-	"bot.installById": directory, // *
-	"bot.updateAvatar": directory,
-	"invitation.create": directory,
-	"invitation.list": directory,
-	"invitation.revoke": directory,
+	"bot.listInstalled": activeOrg,
+	"bot.install": activeOrg,
+	"bot.uninstall": activeOrg,
+	"bot.installById": activeOrg,
+	"bot.updateAvatar": directory, // projects the bot user to its orgs
+	// Invitation rows are the directory's; the admin check needs the org's members.
+	"invitation.create": byOrg,
+	"invitation.list": byOrg,
+	"invitation.revoke": (payload) =>
+		Effect.gen(function* () {
+			const { db } = yield* Directory
+			const row = yield* db.first(
+				SQLite.from(schema.organizationInvitationsTable)
+					.select("organizationId")
+					.where(($) => [$.id.eq(payload.id)])
+					.limit(1),
+			)
+			// Unknown: the directory path answers InvitationNotFoundError.
+			return Option.match(row, {
+				onNone: () => directoryTarget,
+				onSome: (invitation) => orgTarget(invitation.organizationId) as RpcTarget,
+			})
+		}),
 	"invitation.preview": directory,
-	"invitation.accept": directory, // * adds an org member
-	"connectShare.workspace.search": directory,
-	"connectShare.invite.accept": directory, // * mounts in the guest org, participants in the host
-	"connectShare.invite.decline": directory,
-	"connectShare.invite.revoke": directory,
-	"connectShare.invite.listIncoming": directory,
-	"connectShare.invite.listOutgoing": directory,
-	"connectShare.settings.update": directory, // * conversation lives in the host OrgObject
+	"invitation.accept": directory, // applies `org.acceptInvitation` from the Worker
 }
 
 /** The limits the handlers used to apply themselves, now applied once in the api Worker. */

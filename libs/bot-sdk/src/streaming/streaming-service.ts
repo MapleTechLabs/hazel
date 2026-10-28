@@ -59,6 +59,8 @@ export type MessageCreateFn = (
 export type MessageUpdateFn = (
 	messageId: MessageId,
 	payload: {
+		/** The message's channel: the API routes the update by it. */
+		readonly channelId?: ChannelId
 		readonly content?: string
 		readonly embeds?: ReadonlyArray<{
 			readonly liveState?: {
@@ -253,7 +255,11 @@ export const createStreamSessionInternal = Effect.fn("StreamSession.create")(fun
 
 	// Return the session interface
 	return createSessionFromActor(message.id as MessageId, actor, {
-		updateMessage,
+		// The API routes an update by the message's channel.
+		updateMessage:
+			updateMessage === undefined
+				? undefined
+				: (id, payload) => updateMessage(id, { ...payload, channelId }),
 		persistOnComplete: options.persistOnComplete,
 	})
 })

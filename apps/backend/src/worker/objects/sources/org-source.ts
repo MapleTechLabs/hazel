@@ -4,8 +4,8 @@
  * `organization_members`.
  *
  * A principal is a member of the org or a Connect guest (an active `connect_participants` row).
- * A guest's `channel_access` holds only the conversation channels it participates in, so the
- * channel-scoped tables show it those rows only; the member-scoped ones show it nothing.
+ * A guest sees only the conversation rows of the channels it participates in (conversations,
+ * mounts, participants) and the users it shares those channels with; the rest needs membership.
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import type { Change, SyncSource } from "@hazel/sync-do"
@@ -21,6 +21,16 @@ const memberOf = (userId: string, col: SQLite.Expr<any>) =>
 /** `col` is a channel in `userId`'s `channel_access`. */
 const channelAccess = (userId: string, col: SQLite.Expr<any>) =>
 	SQLite.sql.cond`${col} IN (SELECT ca."channelId" FROM "channel_access" ca WHERE ca."userId" = ${userId})`
+
+/** `userId` is an active member of this org (not a Connect guest). */
+const isMember = (userId: string) =>
+	SQLite.sql.cond`EXISTS (SELECT 1 FROM "organization_members" om
+		WHERE om."userId" = ${userId} AND om."deletedAt" IS NULL)`
+
+/** `col` is a user sharing one of `userId`'s channels (a guest's view of the host's users). */
+const sharesChannel = (userId: string, col: SQLite.Expr<any>) =>
+	SQLite.sql.cond`${col} IN (SELECT other."userId" FROM "channel_access" other WHERE other."channelId" IN
+		(SELECT ca."channelId" FROM "channel_access" ca WHERE ca."userId" = ${userId}))`
 
 /** `col` is a Connect conversation mounted in one of `userId`'s channels. */
 const conversationAccess = (userId: string, col: SQLite.Expr<any>) =>
@@ -47,20 +57,41 @@ const byMembership = (table: Spec["table"], orgColumn: string, softDelete = true
 	affectedPrincipals: affected,
 })
 
+/** Rows of the member's channels; never a guest's (`isMember`). */
 const byChannel = (table: Spec["table"], channelColumn: string, softDelete = true): Spec => ({
 	table,
 	visible: (p, $) => [
 		softDelete ? $.deletedAt!.isNull() : undefined,
+		isMember(p.userId),
 		channelAccess(p.userId, $[channelColumn]!),
 	],
-	dependsOn: CHANNELS,
+	dependsOn: [...CHANNELS, ...MEMBERSHIP],
 	affectedPrincipals: affected,
 })
 
-/** Visible to every principal the org admits (members and guests), as Electric had it. */
-const toEveryone = (table: Spec["table"], softDelete: boolean): Spec => ({
+/** Rows of a Connect conversation mounted in one of the principal's channels (members and guests). */
+const byConversation = (table: Spec["table"], conversationColumn: string): Spec => ({
 	table,
-	visible: (_p, $) => [softDelete ? $.deletedAt!.isNull() : undefined],
+	visible: (p, $) => [$.deletedAt!.isNull(), conversationAccess(p.userId, $[conversationColumn]!)],
+	dependsOn: ["channel_access", "connect_conversation_channels"],
+	affectedPrincipals: affected,
+})
+
+/** Every row to members; to a guest, the users it shares a channel with. */
+const toMembersAndPeers = (table: Spec["table"], userColumn: string, softDelete: boolean): Spec => ({
+	table,
+	visible: (p, $) => [
+		softDelete ? $.deletedAt!.isNull() : undefined,
+		SQLite.or(isMember(p.userId), sharesChannel(p.userId, $[userColumn]!)),
+	],
+	dependsOn: [...CHANNELS, ...MEMBERSHIP],
+	affectedPrincipals: affected,
+})
+
+/** Every row to members (the installed bots). */
+const toMembers = (table: Spec["table"], softDelete: boolean): Spec => ({
+	table,
+	visible: (p, $) => [softDelete ? $.deletedAt!.isNull() : undefined, isMember(p.userId)],
 	dependsOn: MEMBERSHIP,
 	affectedPrincipals: affected,
 })
@@ -69,16 +100,11 @@ export const orgSyncTables: ReadonlyArray<Spec> = [
 	byMembership(schema.organizationsTable, "id"),
 	byMembership(schema.organizationMembersTable, "organizationId"),
 	// Projections: users and presence of members and participants, the installed bots.
-	toEveryone(schema.usersTable, true),
-	toEveryone(schema.userPresenceStatusTable, false),
-	toEveryone(schema.botsTable, true),
-	toEveryone(schema.botCommandsTable, false),
-	{
-		table: schema.channelsTable,
-		visible: (p, $) => [$.deletedAt!.isNull(), channelAccess(p.userId, $.id!)],
-		dependsOn: CHANNELS,
-		affectedPrincipals: affected,
-	},
+	toMembersAndPeers(schema.usersTable, "id", true),
+	toMembersAndPeers(schema.userPresenceStatusTable, "userId", false),
+	toMembers(schema.botsTable, true),
+	toMembers(schema.botCommandsTable, false),
+	byChannel(schema.channelsTable, "id"),
 	byChannel(schema.channelMembersTable, "channelId"),
 	byMembership(schema.channelSectionsTable, "organizationId"),
 	byMembership(schema.customEmojisTable, "organizationId"),
@@ -98,14 +124,10 @@ export const orgSyncTables: ReadonlyArray<Spec> = [
 	},
 	byMembership(schema.chatSyncConnectionsTable, "organizationId"),
 	byChannel(schema.chatSyncChannelLinksTable, "hazelChannelId"),
-	{
-		table: schema.connectConversationsTable,
-		visible: (p, $) => [$.deletedAt!.isNull(), conversationAccess(p.userId, $.id!)],
-		dependsOn: ["channel_access", "connect_conversation_channels"],
-		affectedPrincipals: affected,
-	},
-	byChannel(schema.connectConversationChannelsTable, "channelId"),
-	byChannel(schema.connectParticipantsTable, "channelId"),
+	byConversation(schema.connectConversationsTable, "id"),
+	// Every mount of the conversation (the host's copies of the guests', a guest's of the host's).
+	byConversation(schema.connectConversationChannelsTable, "conversationId"),
+	byConversation(schema.connectParticipantsTable, "conversationId"),
 ]
 
 /** Member of the org or a Connect guest; `not_found` before the org exists here. */

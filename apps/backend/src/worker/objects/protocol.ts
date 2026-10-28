@@ -3,6 +3,7 @@
  * clone: every field is plain data).
  */
 import { Context, type Effect } from "effect"
+import type { CallRequest, CallResponse } from "./calls"
 import type { ApplyEffectRequest, ApplyEffectResult } from "./effects/registry"
 import type { ObjectTarget } from "./kinds"
 import type { InvokePrincipalEncoded } from "./principal"
@@ -26,12 +27,15 @@ export interface InvokeResponse {
 export interface ObjectRpc {
 	readonly invoke: (request: InvokeRequest) => Effect.Effect<InvokeResponse>
 	readonly applyEffect: (request: ApplyEffectRequest) => Effect.Effect<ApplyEffectResult>
+	/** A route's typed call (`./calls.ts`). */
+	readonly call: (request: CallRequest) => Effect.Effect<CallResponse>
 }
 
 /** A stub as a caller sees it: the transport can fail (the object is unreachable, overloaded). */
 export interface ObjectStub {
 	readonly invoke: (request: InvokeRequest) => Effect.Effect<InvokeResponse, unknown>
 	readonly applyEffect: (request: ApplyEffectRequest) => Effect.Effect<ApplyEffectResult, unknown>
+	readonly call: (request: CallRequest) => Effect.Effect<CallResponse, unknown>
 }
 
 /** Stubs to every object: the Worker's namespaces in workerd, in-memory objects in tests. */

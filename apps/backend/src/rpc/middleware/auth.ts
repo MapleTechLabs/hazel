@@ -65,7 +65,8 @@ export const AuthMiddlewareLive = Layer.effect(
 						}
 					}
 
-					// Otherwise, treat as bot token (hash-based lookup)
+					// Otherwise, treat as bot token (hash-based lookup; `bots` and `users` are the
+					// directory's, and the Worker's `Database` is its D1)
 					const tokenHash = yield* Effect.promise(() => hashToken(token))
 
 					// Find bot by token hash

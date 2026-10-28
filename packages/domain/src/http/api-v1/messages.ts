@@ -43,8 +43,14 @@ export class CreateMessageRequest extends Schema.Class<CreateMessageRequest>("Cr
 }) {}
 
 export class UpdateMessageRequest extends Schema.Class<UpdateMessageRequest>("UpdateMessageRequest")({
+	/** The message's channel: routes the write to the channel's object. Required in practice. */
+	channelId: Schema.optional(ChannelId),
 	content: Schema.optional(Schema.String),
 	embeds: Schema.optional(Schema.NullOr(MessageEmbeds)),
+}) {}
+
+export class DeleteMessageQuery extends Schema.Class<DeleteMessageQuery>("DeleteMessageQuery")({
+	channel_id: Schema.optional(ChannelId),
 }) {}
 
 export class ToggleReactionRequest extends Schema.Class<ToggleReactionRequest>("ToggleReactionRequest")({
@@ -144,6 +150,8 @@ export class MessagesApiGroup extends HttpApiGroup.make("api-v1-messages")
 	.add(
 		HttpApiEndpoint.delete("deleteMessage", `/messages/:id`, {
 			params: { id: MessageId },
+			/** `channel_id`: the message's channel, which routes the delete. Required in practice. */
+			query: DeleteMessageQuery,
 			success: DeleteMessageResponse,
 			error: [MessageNotFoundError, UnauthorizedError, RateLimitExceededError, InternalServerError],
 		})

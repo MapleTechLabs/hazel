@@ -2,9 +2,15 @@
  * Effects applied to the directory (D1) by the sending object's own outbox: the routing index rows
  * it owns. Each is one idempotent upsert (D1 has no transactions), so a retry is harmless.
  */
-import { ChannelId, OrganizationId, UserId } from "@hazel/schema"
+import { SQLite, schema } from "@hazel/db"
+import { ChannelId, ChannelWebhookId, OrganizationId, UserId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
 import { Directory } from "../../../services/directory"
+import { DirectoryWireEffects, directoryWireReceivers } from "../directory-wire"
+import { ConnectDirectoryEffects, connectDirectoryReceivers } from "../connect-wire"
+import { UserProjection } from "../org/projections"
+import { ChatSyncDirectoryEffects } from "../../../services/chat-sync/chat-sync-effects"
+import { chatSyncDirectoryReceivers } from "../../../services/chat-sync/chat-sync-index"
 import { defineEffect, type EffectReceivers } from "./registry"
 
 /** ISO timestamp text, or null. */
@@ -28,7 +34,24 @@ export const UpsertOrgIndexPayload = Schema.Struct({
 	id: OrganizationId,
 	slug: Schema.NullOr(Schema.String),
 	name: Schema.String,
+	isPublic: Schema.optionalKey(Schema.Boolean),
 	deletedAt: DeletedAt,
+})
+
+/** A channel webhook's token hash, for the incoming webhook route. `tokenHash: null` removes it. */
+export const UpsertWebhookIndexPayload = Schema.Struct({
+	webhookId: ChannelWebhookId,
+	organizationId: OrganizationId,
+	channelId: ChannelId,
+	tokenHash: Schema.NullOr(Schema.String),
+})
+
+/** A provider installation owned by the org (`integration_index`); `remove` drops the org's row. */
+export const UpsertIntegrationIndexPayload = Schema.Struct({
+	provider: Schema.String,
+	externalId: Schema.String,
+	organizationId: OrganizationId,
+	remove: Schema.Boolean,
 })
 
 export const DirectoryEffects = {
@@ -39,6 +62,17 @@ export const DirectoryEffects = {
 		UpsertMembershipIndexPayload,
 	),
 	upsertOrgIndex: defineEffect("directory.upsertOrgIndex", "directory", UpsertOrgIndexPayload),
+	upsertWebhookIndex: defineEffect("directory.upsertWebhookIndex", "directory", UpsertWebhookIndexPayload),
+	upsertIntegrationIndex: defineEffect(
+		"directory.upsertIntegrationIndex",
+		"directory",
+		UpsertIntegrationIndexPayload,
+	),
+	/** A machine user an org created (a webhook's bot): the directory owns `users`. */
+	upsertBotUser: defineEffect("directory.upsertBotUser", "directory", UserProjection),
+	...DirectoryWireEffects,
+	...ChatSyncDirectoryEffects,
+	...ConnectDirectoryEffects,
 }
 
 export const directoryReceivers = {
@@ -54,4 +88,42 @@ export const directoryReceivers = {
 		Effect.flatMap(Directory, (directory) =>
 			directory.upsertOrg({ ...payload, deletedAt: toDate(payload.deletedAt) }),
 		),
+	"directory.upsertWebhookIndex": (payload) =>
+		Effect.flatMap(Directory, (directory) =>
+			payload.tokenHash === null
+				? directory.deleteWebhook(payload.webhookId)
+				: directory.upsertWebhook({ ...payload, tokenHash: payload.tokenHash }),
+		),
+	"directory.upsertIntegrationIndex": ({ remove, ...row }) =>
+		Effect.flatMap(Directory, (directory) =>
+			remove ? directory.deleteIntegration(row) : directory.upsertIntegration(row),
+		),
+	"directory.upsertBotUser": (user) =>
+		Effect.flatMap(Directory, (directory) => {
+			const row = {
+				...user,
+				createdAt: new Date(user.createdAt),
+				updatedAt: new Date(user.updatedAt),
+				deletedAt: toDate(user.deletedAt),
+			}
+			return directory.db
+				.run(
+					SQLite.insertInto(schema.usersTable)
+						.values(row)
+						.onConflictDoUpdate({
+							target: ["id"],
+							set: {
+								firstName: row.firstName,
+								lastName: row.lastName,
+								avatarUrl: row.avatarUrl,
+								updatedAt: row.updatedAt,
+								deletedAt: row.deletedAt,
+							},
+						}),
+				)
+				.pipe(Effect.asVoid)
+		}),
+	...directoryWireReceivers,
+	...chatSyncDirectoryReceivers,
+	...connectDirectoryReceivers,
 } satisfies EffectReceivers<typeof DirectoryEffects, Directory>
