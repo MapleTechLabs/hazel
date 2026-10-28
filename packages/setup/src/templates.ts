@@ -128,56 +128,41 @@ export interface Config {
 	klipyApiKey?: string
 }
 
+/**
+ * The env files setup writes. `.env.local` (repo root) is everything `bun run alchemy:dev` reads:
+ * alchemy hands it to the Workers it runs locally (the api and its Durable Objects, the bot
+ * gateway) and to the web build; the directory D1 and the objects' SQLite live under `.alchemy/`.
+ */
 export const ENV_TEMPLATES = {
-	web: (config: Config) => ({
-		VITE_BACKEND_URL: "https://localhost:3004",
-		VITE_CLUSTER_URL: "http://localhost:3020",
-		VITE_R2_PUBLIC_URL: config.s3PublicUrl ?? "",
-	}),
-
-	backend: (config: Config) => {
+	local: (config: Config) => {
 		const base: Record<string, string> = {
-			// Database
-			DATABASE_URL: "postgresql://user:password@localhost:5432/app",
-
-			// Server
-			PORT: "3003",
-			IS_DEV: "true",
-
-			// URLs
-			FRONTEND_URL: "http://localhost:3000",
-			API_BASE_URL: "http://localhost:3003",
-			CLUSTER_URL: "http://localhost:3020",
-
-			// Redis
-			REDIS_URL: "redis://localhost:6380",
-
-			// Electric
-			ELECTRIC_URL: "http://localhost:3333",
-
 			// Encryption
 			INTEGRATION_ENCRYPTION_KEY: config.secrets.encryptionKey,
 			INTEGRATION_ENCRYPTION_KEY_VERSION: "1",
 		}
 
-		// Add S3 config if provided
+		// Uploads (required by the api Worker)
 		if (config.s3) {
 			base.S3_BUCKET = config.s3.bucket
 			base.S3_ENDPOINT = config.s3.endpoint
 			base.S3_ACCESS_KEY_ID = config.s3.accessKeyId
 			base.S3_SECRET_ACCESS_KEY = config.s3.secretAccessKey
+			base.S3_PUBLIC_URL = config.s3.publicUrl
 		}
+		if (config.s3PublicUrl) base.VITE_R2_PUBLIC_URL = config.s3PublicUrl
 
 		// Linear config (always present, empty if not configured)
 		base.LINEAR_CLIENT_ID = config.linear?.clientId ?? ""
 		base.LINEAR_CLIENT_SECRET = config.linear?.clientSecret ?? ""
-		base.LINEAR_REDIRECT_URI = "http://localhost:3003/integrations/linear/callback"
 
 		// GitHub App config (always present, empty if not configured)
 		base.GITHUB_APP_ID = config.githubApp?.appId ?? ""
 		base.GITHUB_APP_SLUG = config.githubApp?.appSlug ?? ""
 		base.GITHUB_APP_PRIVATE_KEY = config.githubApp?.privateKey ?? ""
 		base.GITHUB_WEBHOOK_SECRET = config.githubWebhookSecret ?? ""
+
+		// Thread naming
+		base.OPENROUTER_API_KEY = config.openrouterApiKey ?? ""
 
 		// Klipy GIF search
 		base.KLIPY_API_KEY =
@@ -186,28 +171,8 @@ export const ENV_TEMPLATES = {
 		return base
 	},
 
-	cluster: (config: Config) => ({
-		DATABASE_URL: "postgresql://user:password@localhost:5432/app",
-		EFFECT_DATABASE_URL: "postgresql://user:password@localhost:5432/cluster",
-		IS_DEV: "true",
-		OPENROUTER_API_KEY: config.openrouterApiKey ?? "",
-	}),
-
-	electricProxy: (config: Config) => ({
-		PORT: "8184",
-		DATABASE_URL: "postgresql://user:password@localhost:5432/app",
-		IS_DEV: "true",
-		ELECTRIC_URL: "http://localhost:3333",
-		ALLOWED_ORIGIN: "http://localhost:3000",
-	}),
-
-	db: () => ({
-		DATABASE_URL: "postgresql://user:password@localhost:5432/app",
-	}),
-
 	hazelBot: (config: Config) => ({
 		BOT_TOKEN: "",
-		ELECTRIC_URL: "http://localhost:3333/v1/shape",
 		BACKEND_URL: "http://localhost:3003",
 		ACTORS_URL: "http://localhost:6420",
 		OPENROUTER_API_KEY: config.openrouterApiKey ?? "",
@@ -215,17 +180,9 @@ export const ENV_TEMPLATES = {
 
 	linearBot: (config: Config) => ({
 		BOT_TOKEN: "",
-		ELECTRIC_URL: "http://localhost:3333/v1/shape",
 		BACKEND_URL: "http://localhost:3003",
 		ACTORS_URL: "http://localhost:6420",
-		REDIS_URL: "redis://localhost:6380",
 		IS_DEV: "true",
 		OPENROUTER_API_KEY: config.openrouterApiKey ?? "",
-	}),
-
-	botGateway: () => ({
-		DATABASE_URL: "postgresql://user:password@localhost:5432/app",
-		REDIS_URL: "redis://localhost:6380",
-		IS_DEV: "true",
 	}),
 }

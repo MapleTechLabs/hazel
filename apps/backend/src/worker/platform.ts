@@ -1,16 +1,17 @@
 /**
- * The api Worker's platform services: what `index.ts` supplies on Bun (a SQLite file, Redis
- * caches, `ConfigProvider.fromEnv`), rebuilt over Cloudflare bindings.
+ * The api Worker's platform services over its Cloudflare bindings: the directory D1, the KV caches,
+ * the bot gateway namespace and the env as `ConfigProvider`.
  */
 import type { D1Database, KVNamespace } from "@cloudflare/workers-types"
 import { Database } from "@hazel/db"
 import { layerKvResultPersistence } from "@hazel/effect-cloudflare"
+import { DIRECTORY_DB_BINDING } from "@hazel/infra/cloudflare"
 import { workerEnvLayer } from "@hazel/infra/worker-runtime"
 import { Layer } from "effect"
 import { type BotGatewayNamespace, BotGatewayTransport } from "../services/bot-gateway-transport"
 import { InviteMailer, isEmailBinding } from "../services/invite-mailer"
 
-/** KV namespace backing the session/user-lookup caches (Redis on Bun). */
+/** KV namespace backing the session/user-lookup caches. */
 export const CACHE_BINDING = "CACHE"
 
 /** Cloudflare Email Sending, for invitation emails. */
@@ -24,7 +25,7 @@ const inviteMailerLive = (env: Record<string, unknown>) =>
 	})
 
 /** The directory D1 database (users, auth, bots, routing indexes). */
-export const DIRECTORY_DB_BINDING = "DIRECTORY_DB"
+export { DIRECTORY_DB_BINDING }
 
 /** The directory database and the auth storage's `SqlClient` over it; suspended like the KV. */
 const directoryDatabaseLive = (env: Record<string, unknown>) =>

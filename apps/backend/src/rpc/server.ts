@@ -60,7 +60,7 @@ import { ScopeInjectionMiddleware } from "@hazel/domain/rpc"
  * 1. Define RPC groups (in ./groups/*.ts) - API schema definitions
  * 2. Implement handlers (in ./handlers/*.ts) - Business logic
  * 3. Combine into server layer (here) - Server setup
- * 4. Add HTTP protocol (in index.ts) - Transport layer
+ * 4. Add HTTP protocol (in worker/http.ts) - Transport layer
  *
  */
 
@@ -157,7 +157,7 @@ export const RpcHandlersLive = Layer.empty
 		Layer.provideMerge(InvitationRpcLive),
 	)
 
-/** The handlers behind the api's own middleware (the Bun runtime serves them directly). */
+/** The handlers behind the api's own middleware, served in-process (tests). */
 export const RpcServerLive = RpcHandlersLive.pipe(
 	Layer.provideMerge(AuthMiddlewareLive),
 	Layer.provideMerge(ScopeInjectionMiddlewareLive),

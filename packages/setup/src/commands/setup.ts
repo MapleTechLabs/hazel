@@ -2,8 +2,7 @@ import { Command, Flag, Prompt } from "effect/cli"
 import { Console, Effect, Redacted } from "effect"
 import pc from "picocolors"
 import { SecretGenerator } from "../services/secrets.ts"
-import { CredentialValidator } from "../services/validators.ts"
-import { EnvWriter, type EnvReadResult } from "../services/env-writer.ts"
+import { EnvWriter } from "../services/env-writer.ts"
 import { Doctor } from "../services/doctor.ts"
 import {
 	ENV_TEMPLATES,
@@ -13,14 +12,8 @@ import {
 	type Config,
 } from "../templates.ts"
 import { promptWithExisting, getExistingValue } from "../prompts.ts"
-import { certsCommand, certsSetupEffect } from "./certs.ts"
 
 // CLI Options
-const skipValidation = Flag.Boolean("skip-validation").pipe(
-	Flag.withDescription("Skip credential validation (API calls)"),
-	Flag.withDefault(false),
-)
-
 const force = Flag.Boolean("force").pipe(
 	Flag.withAlias("f"),
 	Flag.withDescription("Overwrite existing .env files without prompting"),
@@ -40,15 +33,12 @@ const skipDoctor = Flag.Boolean("skip-doctor").pipe(
 
 export const setupCommand = Command.make(
 	"setup",
-	{ skipValidation, force, dryRun, skipDoctor },
-	({ skipValidation, force, dryRun, skipDoctor }) =>
+	{ force, dryRun, skipDoctor },
+	({ force, dryRun, skipDoctor }) =>
 		Effect.gen(function* () {
 			yield* Console.log(`\n${pc.bold("\u{1F33F} Hazel Local Development Setup")}\n`)
 
-			// Run the certs setup
-			yield* certsSetupEffect
-
-			// Start Docker Compose after that
+			// Docker Compose runs MinIO (local S3)
 			yield* Console.log(pc.cyan("\u2500\u2500\u2500 Starting Docker Compose \u2500\u2500\u2500"))
 			yield* Console.log(pc.dim("Running `docker compose up -d`...\n"))
 
@@ -157,14 +147,14 @@ export const setupCommand = Command.make(
 			const hasExistingValues = Object.keys(envResult.values).length > 0
 
 			// Check for existing .env files
-			const hasExisting = yield* envWriter.envFileExists("apps/backend/.env")
+			const hasExisting = yield* envWriter.envFileExists(".env.local")
 
 			if (hasExisting && !force) {
 				if (hasExistingValues) {
 					yield* Console.log(pc.cyan("Found existing configuration - values will be prefilled"))
 				}
 				const overwrite = yield* Prompt.Confirm({
-					message: "Existing .env files found. Overwrite?",
+					message: "Existing .env.local found. Overwrite?",
 					initial: hasExistingValues, // Default to yes if we found existing values to prefill
 				})
 				if (!overwrite) {
@@ -174,41 +164,19 @@ export const setupCommand = Command.make(
 			}
 
 			// Step 1: Local services info
+			yield* Console.log(pc.cyan("\u2500\u2500\u2500 Step 1: Local Services \u2500\u2500\u2500"))
 			yield* Console.log(
-				pc.cyan("\u2500\u2500\u2500 Step 1: Database & Local Services \u2500\u2500\u2500"),
+				pc.dim(
+					"  \u2022 The api Worker, its Durable Objects and the directory D1 run under `bun run alchemy:dev`",
+				),
 			)
-			yield* Console.log("Using Docker Compose defaults:")
-			yield* Console.log(pc.dim("  \u2022 PostgreSQL: postgresql://user:password@localhost:5432/app"))
-			yield* Console.log(pc.dim("  \u2022 Redis: redis://localhost:6380"))
-			yield* Console.log(pc.dim("  \u2022 Electric: http://localhost:3333\n"))
-
-			// Validate database connection
-			if (!skipValidation) {
-				const validator = yield* CredentialValidator
-				const dbResult = yield* validator
-					.validateDatabase("postgresql://user:password@localhost:5432/app")
-					.pipe(Effect.result)
-
-				if (dbResult._tag === "Failure") {
-					yield* Console.log(
-						pc.yellow("\u26A0\uFE0F  Database not reachable.") +
-							` Run ${pc.cyan("`docker compose up -d`")} first.`,
-					)
-					const continueAnyway = yield* Prompt.Confirm({
-						message: "Continue anyway?",
-						initial: true,
-					})
-					if (!continueAnyway) return
-				} else {
-					yield* Console.log(pc.green("\u2713") + " Database connected\n")
-				}
-			}
+			yield* Console.log(pc.dim("  \u2022 MinIO (Docker Compose) stands in for R2 uploads\n"))
 
 			// Step 2: Sign-in
 			yield* Console.log(pc.cyan("\u2500\u2500\u2500 Step 2: Sign-in \u2500\u2500\u2500"))
 			yield* Console.log(
 				pc.dim(
-					"Hazel sign-in is off until AUTH_GITHUB_CLIENT_ID / AUTH_GITHUB_CLIENT_SECRET are set in apps/backend/.env.",
+					"Hazel sign-in is off until AUTH_GITHUB_CLIENT_ID / AUTH_GITHUB_CLIENT_SECRET are set in .env.local.",
 				),
 			)
 			yield* Console.log(
@@ -274,9 +242,7 @@ export const setupCommand = Command.make(
 					yield* Console.log(
 						`Create a Linear OAuth app at ${pc.cyan("https://linear.app/settings/api")}`,
 					)
-					yield* Console.log(
-						pc.dim("Set redirect URI: http://localhost:3003/integrations/linear/callback\n"),
-					)
+					yield* Console.log(pc.dim("Set redirect URI: <api url>/integrations/linear/callback\n"))
 
 					const clientId = yield* promptWithExisting({
 						key: "LINEAR_CLIENT_ID",
@@ -463,11 +429,11 @@ export const setupCommand = Command.make(
 			// Step 5: Write .env files
 			if (dryRun) {
 				yield* Console.log(
-					pc.cyan("\n\u2500\u2500\u2500 Step 5: Preview .env files (dry-run) \u2500\u2500\u2500"),
+					pc.cyan("\n\u2500\u2500\u2500 Step 5: Preview .env.local (dry-run) \u2500\u2500\u2500"),
 				)
 			} else {
 				yield* Console.log(
-					pc.cyan("\n\u2500\u2500\u2500 Step 5: Writing .env files \u2500\u2500\u2500"),
+					pc.cyan("\n\u2500\u2500\u2500 Step 5: Writing .env.local \u2500\u2500\u2500"),
 				)
 			}
 
@@ -482,16 +448,7 @@ export const setupCommand = Command.make(
 				klipyApiKey,
 			}
 
-			yield* envWriter.writeEnvFile("apps/web-foldkit/.env", ENV_TEMPLATES.web(config), dryRun)
-			yield* envWriter.writeEnvFile("apps/backend/.env", ENV_TEMPLATES.backend(config), dryRun)
-			yield* envWriter.writeEnvFile("apps/bot-gateway/.env", ENV_TEMPLATES.botGateway(), dryRun)
-			yield* envWriter.writeEnvFile("apps/cluster/.env", ENV_TEMPLATES.cluster(config), dryRun)
-			yield* envWriter.writeEnvFile(
-				"apps/electric-proxy/.env",
-				ENV_TEMPLATES.electricProxy(config),
-				dryRun,
-			)
-			yield* envWriter.writeEnvFile("packages/db/.env", ENV_TEMPLATES.db(), dryRun)
+			yield* envWriter.writeEnvFile(".env.local", ENV_TEMPLATES.local(config), dryRun)
 
 			// Bot .env files — preserve existing BOT_TOKEN / ACTORS_URL values
 			const existingHazelBotEnv = yield* envWriter.readEnvFile("bots/hazel-bot/.env")
@@ -515,11 +472,11 @@ export const setupCommand = Command.make(
 				yield* Console.log(pc.dim("\nDry-run complete! No files were written."))
 				yield* Console.log(`Run without ${pc.cyan("--dry-run")} to apply these changes.\n`)
 			} else {
-				// The local SQLite database (every store's tables) is created and migrated on first start.
+				// alchemy dev creates and migrates the directory D1 and the objects' SQLite on first start.
 				yield* Console.log(pc.green("\n\u2705 Setup complete!"))
 				yield* Console.log(pc.bold("Next steps:"))
 				yield* Console.log(
-					`  1. Run ${pc.cyan("`bun run dev`")} to start the core apps and bot gateway`,
+					`  1. Run ${pc.cyan("`bun run dev`")} (\`alchemy:dev\`) to start the Workers and the web app`,
 				)
 				yield* Console.log(
 					`  2. Optional: Run ${pc.cyan("`bun run dev:bots`")} to start local bot apps\n`,

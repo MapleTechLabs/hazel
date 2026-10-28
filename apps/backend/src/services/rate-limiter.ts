@@ -20,8 +20,8 @@ export class RateLimiterError extends Schema.TaggedError<RateLimiterError>()("Ra
 }) {}
 
 /**
- * Fixed-window rate limiting. Implementations: Redis on Bun (`rate-limiter-redis.ts`), a Durable
- * Object per key on Cloudflare (`worker/rate-limiter-object.ts`), memory in tests.
+ * Fixed-window rate limiting. Implementations: a Durable Object per key
+ * (`worker/rate-limiter-object.ts`), memory in tests.
  */
 export class RateLimiter extends Context.Service<
 	RateLimiter,

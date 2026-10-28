@@ -1,7 +1,6 @@
 /**
  * The backend's runtime-agnostic application: routes plus every service that does not depend on
- * the host platform. Entry points (`index.ts` on Bun, `worker.ts` on Cloudflare) provide the
- * platform layer: `Database`, `Persistence`, `RateLimiter`, `BotGatewayTransport`, the tracer and
+ * the host platform. The api Worker (`worker.ts`) and the objects provide the platform layer: `Database`, `Persistence`, `RateLimiter`, `BotGatewayTransport`, the tracer and
  * the ConfigProvider.
  */
 import { HttpApiScalar } from "effect/http-api"
@@ -96,8 +95,8 @@ const DocsRoute = HttpApiScalar.layer(HazelApi, {
 })
 
 /**
- * The routes, with the RPC endpoint served by `rpcServer`: the handlers themselves (`RpcServerLive`,
- * Bun), or the api Worker's router into the objects (`RoutedRpcServerLive`). `extra` routes join
+ * The routes, with the RPC endpoint served by `rpcServer` (the api Worker's router into the
+ * objects, `RoutedRpcServerLive`; typed by the in-process `RpcServerLive`). `extra` routes join
  * the same CORS and failure reporting (the Worker's `/sync` upgrade).
  */
 export const makeRoutes = <E, R, EX = never, RX = never>(
@@ -133,8 +132,6 @@ export const makeRoutes = <E, R, EX = never, RX = never>(
 		// RpcServer and HttpApiBuilder report failed requests here; server failures get logged.
 		Layer.provide(ServerFailureReporterLive),
 	)
-
-export const AllRoutes = makeRoutes(RpcServerLive)
 
 /**
  * Hazel's own sign-in: the configured instance, its auth services, and the session lookup

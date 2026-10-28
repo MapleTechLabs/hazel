@@ -1,6 +1,6 @@
 /**
  * The Discord gateway session on Cloudflare: a singleton Durable Object holding the outbound
- * gateway WebSocket that the Bun process held in a forked fiber.
+ * gateway WebSocket.
  *
  * `ensureRunning()` starts the session if this instance isn't running one. The api Worker calls it
  * from a per-minute cron, which also restarts the session after a deploy or an eviction; while a

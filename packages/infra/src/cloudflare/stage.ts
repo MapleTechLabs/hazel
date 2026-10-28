@@ -20,7 +20,6 @@ export interface HazelDomains {
 	readonly landing?: string
 	readonly docs?: string
 	readonly api?: string
-	readonly electric?: string
 	readonly linkPreview?: string
 	readonly rivet?: string
 	readonly botGateway?: string
@@ -33,7 +32,6 @@ const PRD_DOMAINS: HazelDomains = {
 	landing: "hazel.sh",
 	docs: "docs.hazel.sh",
 	api: "api.hazel.sh",
-	electric: "electric.hazel.sh",
 	linkPreview: "link-preview.hazel.sh",
 	rivet: "rivet.hazel.sh",
 	botGateway: "bot-gateway.hazel.sh",
@@ -103,7 +101,6 @@ export function resolveHazelDomains(stage: HazelStage): HazelDomains {
 			return {
 				web: `app-pr-${stage.prNumber}.${ZONE}`,
 				api: `api-pr-${stage.prNumber}.${ZONE}`,
-				electric: `electric-pr-${stage.prNumber}.${ZONE}`,
 			}
 		case "dev":
 			return {}
@@ -111,7 +108,7 @@ export function resolveHazelDomains(stage: HazelStage): HazelDomains {
 }
 
 /**
- * Physical Worker/bucket/Hyperdrive name. prd keeps the pre-alchemy wrangler names (see
+ * Physical Worker/bucket/database name. prd keeps the pre-alchemy wrangler names (see
  * {@link LEGACY_PRD_NAMES}) so `--adopt` takes over the existing Workers instead of replacing them.
  */
 export function resolveWorkerName(base: string, stage: HazelStage): string {

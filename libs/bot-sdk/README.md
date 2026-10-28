@@ -3,8 +3,8 @@
 Official SDK for building Hazel bots with Effect-TS.
 
 The SDK now uses a single inbound delivery model: bots connect to the Hazel bot
-gateway over WebSocket, and the gateway handles replay and resume on top of
-Durable Streams.
+gateway over WebSocket, and the gateway handles replay and resume from each
+bot's event log (a `BotGateway` Durable Object).
 
 ## Requirements
 
@@ -76,7 +76,7 @@ yield *
 ## Architecture
 
 ```text
-Hazel backend -> Durable Streams -> Bot gateway websocket -> Your handlers
+Hazel api Worker -> BotGateway Durable Object -> Bot gateway websocket -> Your handlers
 ```
 
 Core pieces:

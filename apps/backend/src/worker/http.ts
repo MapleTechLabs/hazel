@@ -11,6 +11,7 @@ import { AppAuthorizationLive, AppServicesLive, makeRoutes } from "../app"
 import { LocalRpcDispatcher, RoutedRpcServerLive } from "../rpc/routed-server"
 import { Directory } from "../services/directory"
 import { workerObjectStubs } from "./objects/stubs"
+import { makeImportRoute } from "./import-route"
 import { makeSyncRoute } from "./sync-route"
 import type { BotGatewayNamespace } from "../services/bot-gateway-transport"
 import { directoryBinding, requestPlatformLive } from "./platform"
@@ -37,8 +38,8 @@ export const buildApp = (
 	forIsolate(isolate)(
 		HttpRouter.toHttpEffect(
 			// The cast restores the layer's type: the circular `DiscordSyncWorker` typing collapses
-			// `AppServicesLive`'s error and requirement channels to `unknown` (see index.ts).
-			makeRoutes(workerRpcServer(env), makeSyncRoute(env)).pipe(
+			// `AppServicesLive`'s error and requirement channels to `unknown`.
+			makeRoutes(workerRpcServer(env), Layer.mergeAll(makeSyncRoute(env), makeImportRoute(env))).pipe(
 				Layer.provide(AppAuthorizationLive),
 				Layer.provide(AppServicesLive),
 				Layer.provideMerge(rateLimiterLive(rateLimiters)),

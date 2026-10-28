@@ -12,13 +12,10 @@ export interface EnvReadResult {
 	valueSources: Record<string, string>
 }
 
-/** Files to scan for existing env values */
+/** Files to scan for existing env values (`apps/backend/.env` predates `.env.local`) */
 const ENV_FILE_PATHS = [
+	".env.local",
 	"apps/backend/.env",
-	"apps/web-foldkit/.env",
-	"apps/cluster/.env",
-	"apps/electric-proxy/.env",
-	"packages/db/.env",
 	"bots/hazel-bot/.env",
 	"bots/linear-bot/.env",
 ] as const

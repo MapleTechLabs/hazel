@@ -60,8 +60,7 @@ export const apiEnv = ({ stage, urls }: HazelStackContext) =>
 		optionalPlain("DISCORD_CLIENT_ID"),
 		optionalSecret("DISCORD_CLIENT_SECRET"),
 		optionalSecret("DISCORD_BOT_TOKEN"),
-		// Off until cutover: the Railway backend still holds the gateway session, and Discord
-		// allows one per bot token.
+		// Discord allows one gateway session per bot token: enable it on one stage only.
 		plainWithDefault("DISCORD_GATEWAY_ENABLED", "false"),
 		optionalPlain("DISCORD_GATEWAY_INTENTS"),
 		optionalPlain("GITHUB_APP_ID"),
@@ -71,4 +70,8 @@ export const apiEnv = ({ stage, urls }: HazelStackContext) =>
 		optionalPlain("GITHUB_WEBHOOK_SKIP_SIGNATURE"),
 		optionalSecret("INTERNAL_SECRET"),
 		optionalSecret("KLIPY_API_KEY"),
+		// The one-shot Postgres import route (`worker/import-route.ts`); unset turns it off.
+		optionalSecret("IMPORT_SECRET"),
+		// Thread naming (services/thread-namer.ts); unset disables it.
+		optionalSecret("OPENROUTER_API_KEY"),
 	)

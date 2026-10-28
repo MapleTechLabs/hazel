@@ -8,7 +8,7 @@ import { Config, Context, DateTime, Effect, Layer, Option, Redacted, Schema } fr
 import { FetchHttpClient } from "effect/http"
 
 /**
- * Short-lived access token for services on other hosts (electric.hazel.sh, rivet.hazel.sh).
+ * Short-lived access token for services on other hosts (rivet.hazel.sh).
  * The browser's session cookie is host-only on api.hazel.sh, so those services can't see
  * it. The backend exchanges a valid session for this ES256 JWT; the services verify it
  * locally against the published JWKS, without a database or network call.
@@ -77,7 +77,7 @@ export const publicJwk = (key: SigningKey) =>
 /** Seconds of clock difference between the API and a verifier that `exp` tolerates. */
 export const clockToleranceSeconds = 30
 
-/** Verification used by electric-proxy / actors. Requires `Jwks` (local or remote). */
+/** Verification used by the actors. Requires `Jwks` (local or remote). */
 export const verifyAccessToken = (issuer: string, token: string) =>
 	Jwt.verifyWithKeySet(AccessClaims, Redacted.make(token), {
 		algorithms: ["ES256"],
@@ -163,8 +163,7 @@ export const makeLocalVerifier = (issuer: string, key: SigningKey) =>
 	})
 
 /**
- * Verifies the access tokens `POST /auth/token` issues, for the Electric proxy and the
- * actors. The issuer is the API origin, so a token only verifies on its own stage.
+ * Verifies the access tokens `POST /auth/token` issues, for the actors. The issuer is the API origin, so a token only verifies on its own stage.
  */
 export class AccessTokenVerifier extends Context.Service<
 	AccessTokenVerifier,

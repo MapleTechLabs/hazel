@@ -4,6 +4,13 @@ Replace Postgres + Electric with Durable Objects (DOs) as the system of record a
 transport. TanStack DB stays the client store. **Instant cutover**: there is no dual-running and no
 per-org flags. A best-effort import script copies the Postgres data once, and some loss is accepted.
 
+> **Supersedes parts of [`cloudflare-migration-plan.md`](./cloudflare-migration-plan.md).** Its
+> data plane is replaced by this doc: Phase 1's PlanetScale Postgres, Hyperdrive and self-hosted
+> Electric; Phase 3 (the `electric-proxy` Worker); Phase 5 (the cluster, on Railway or as a
+> `cluster` Worker), whose workflows and crons now run in the objects; the Durable Streams half of
+> Phase 6; and the Postgres, Electric and cluster steps of its cutover order and known risks. Its
+> Alchemy foundation, R2, the api and bot-gateway Workers, CI/CD and observability still apply.
+
 This doc is the single brief for everyone working on the change. If the code and this doc
 disagree, fix one of them.
 
@@ -49,18 +56,18 @@ Rules:
 
 ## 2. Packages and layout
 
-| Path                                       | Contents                                                                                                                                                                                                                                    |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/db/src/tables/*`                 | Tables become `SQLite.table` (`@maple-dev/effect-orm/sqlite`). Shared column helpers in `columns.ts`: branded `uuid` → `text`, `timestamptz` → `timestamp`, `jsonb` → `json`, enums → `text` with a literal schema.                         |
-| `packages/db/src/stores.ts`                | `directoryTables`, `orgTables`, `channelTables`, `userTables`: the table lists per store.                                                                                                                                                   |
-| `packages/db/src/services/database.ts`     | `Database` over the SQLite dialect: `layerSqlite` (`@effect/sql-sqlite-do`, `@effect/sql-sqlite-node` for tests) and `layerD1`. `DatabaseError` classified from SQLite errors (`SQLITE_CONSTRAINT_UNIQUE` → `unique_violation`, and so on). |
-| `packages/db/src/schema-ddl.ts`            | `renderStoreSchema(tables)` → DDL statements, plus a versioned migration list per store.                                                                                                                                                    |
-| `packages/sync-do/` (new)                  | Sync runtime: change triggers, `_changes` log, broadcaster, hibernatable socket handling, outbox and inbox, `SyncedObject` helpers. Generic over effect-orm tables. No Hazel domain logic.                                                  |
-| `packages/domain/src/sync/`                | Protocol frames (Effect Schema) and `SyncSeq`. Shared by the client and the objects.                                                                                                                                                        |
-| `apps/backend/src/worker/objects/` | `OrgObject`, `ChannelObject` and `UserObject`, hosted by the backend Worker beside the existing DOs (an api deploy restarts them, and clients catch up from `since`). The Worker also serves `GET /sync/:kind/:id` (WebSocket). |
+| Path                                                    | Contents                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/db/src/tables/*`                              | Tables become `SQLite.table` (`@maple-dev/effect-orm/sqlite`). Shared column helpers in `columns.ts`: branded `uuid` → `text`, `timestamptz` → `timestamp`, `jsonb` → `json`, enums → `text` with a literal schema.                                                                                                                                                                                                                                      |
+| `packages/db/src/stores.ts`                             | `directoryTables`, `orgTables`, `channelTables`, `userTables`: the table lists per store.                                                                                                                                                                                                                                                                                                                                                                |
+| `packages/db/src/services/database.ts`                  | `Database` over the SQLite dialect: `layerSqlite` (`@effect/sql-sqlite-do`, `@effect/sql-sqlite-node` for tests) and `layerD1`. `DatabaseError` classified from SQLite errors (`SQLITE_CONSTRAINT_UNIQUE` → `unique_violation`, and so on).                                                                                                                                                                                                              |
+| `packages/db/src/schema-ddl.ts`                         | `renderStoreSchema(tables)` → DDL statements, plus a versioned migration list per store.                                                                                                                                                                                                                                                                                                                                                                 |
+| `packages/sync-do/` (new)                               | Sync runtime: change triggers, `_changes` log, broadcaster, hibernatable socket handling, outbox and inbox, `SyncedObject` helpers. Generic over effect-orm tables. No Hazel domain logic.                                                                                                                                                                                                                                                               |
+| `packages/domain/src/sync/`                             | Protocol frames (Effect Schema) and `SyncSeq`. Shared by the client and the objects.                                                                                                                                                                                                                                                                                                                                                                     |
+| `apps/backend/src/worker/objects/`                      | `OrgObject`, `ChannelObject` and `UserObject`, hosted by the backend Worker beside the existing DOs (an api deploy restarts them, and clients catch up from `since`). The Worker also serves `GET /sync/:kind/:id` (WebSocket).                                                                                                                                                                                                                          |
 | `apps/backend/src/rpc/handlers`, `policies`, `services` | **The existing RPC handlers run inside the objects.** Each object hosts the HazelRpc groups in-process, with `Database` set to its own SQLite and `CurrentUser` set from the principal. The api Worker routes each RPC to its target (`org`, `channel`, `user`, or `directory` = run in the Worker against D1) and forwards the encoded request. Porting a handler means making it touch only its own store and send everything else through the outbox. |
-| `libs/effect-db-collection`                | Renamed from `libs/effect-electric-db-collection`. `createEffectCollection` over the DO protocol, plus `optimisticAction` with `awaitSeqEffect`.                                                                                            |
-| `apps/web-foldkit/src/core/db/`            | Collections pointed at sources, plus a connection manager.                                                                                                                                                                                  |
+| `libs/effect-db-collection`                             | Renamed from `libs/effect-electric-db-collection`. `createEffectCollection` over the DO protocol, plus `optimisticAction` with `awaitSeqEffect`.                                                                                                                                                                                                                                                                                                         |
+| `apps/web-foldkit/src/core/db/`                         | Collections pointed at sources, plus a connection manager.                                                                                                                                                                                                                                                                                                                                                                                               |
 
 ## 3. Change tracking and the sync protocol
 
@@ -198,3 +205,35 @@ the client.
   FTS5.
 - **Messages load a whole channel** once its socket is open; there's no paging from the server yet.
 - **Auth checks call D1** on every api request; add a short KV cache if latency shows it's needed.
+- **Bot creation from the CLI is gone:** `hazel-setup bots` wrote the Bun runtime's SQLite file.
+  Create bots in the app.
+- **The import is best effort:** `channel_access` is recomputed rather than copied;
+  `typing_indicators`, `message_outbox_events` and attachments without a channel are dropped;
+  `connect_participants` get the objects' derived ids. One org's finalize runs in a single object
+  request, so a very large org could hit Worker time limits.
+
+## 7. Status
+
+- **Done (PRs 1–6):**
+    - The SQLite stores and the sync runtime.
+    - The org, channel and user objects with every handler, route and side effect ported.
+    - The client on the object sources.
+    - The cutover:
+        - Deleted `apps/electric-proxy`, `apps/cluster`, `packages/domain/src/cluster`, the
+          PlanetScale/Hyperdrive stack (`hazel-db.ts`), and Railway/Caddy/Durable Streams.
+        - Deleted the backend's and the bot gateway's Bun entries.
+        - `docker-compose.yaml` keeps only MinIO.
+        - The directory D1 is declared by the root stack (`@hazel/infra/cloudflare`
+          `declareDirectoryDb`) and bound by the api Worker and the bot gateway.
+    - `OutboxDispatcher` needs no code: alchemy derives the `deleted_classes` migration from the
+      previous deploy's class tags.
+- **Local dev:** `bun run alchemy:dev` with `.env.local` (`.env.local.example`).
+- **Import:** `apps/backend/src/scripts/import-postgres.ts`, through
+  `POST /internal/import/:store/:id`. The route answers only while the api Worker has
+  `IMPORT_SECRET`; unset it after the cutover.
+- **Not done yet:**
+    - The PR 6 verification: a `pr-<n>` preview deploy, the import against a staging copy, and a
+      full browser pass.
+    - `MessageLiveObject` (the RivetKit `apps/actors` stays until then).
+    - Dropping `WorkflowServiceUnavailableError` / `WorkflowInitializationError` from the RPC and
+      webhook contracts.

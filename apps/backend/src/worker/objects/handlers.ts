@@ -16,7 +16,7 @@ import { ObjectCalls } from "./call-receivers"
 
 /**
  * The cast restores the layer's output: the circular `DiscordSyncWorker` typing collapses
- * `AppServicesLive`'s error and requirement channels to `unknown` (see index.ts). Its
+ * `AppServicesLive`'s error and requirement channels to `unknown`. Its
  * requirements are the host services listed above.
  */
 export const objectHandlersLive = Layer.mergeAll(RpcHandlersLive, ObjectCalls.layer).pipe(

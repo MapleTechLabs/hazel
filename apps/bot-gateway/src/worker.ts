@@ -5,10 +5,10 @@
  *
  * A bot connection: the Worker accepts the socket and sends HELLO, authenticates the bot token in
  * the first IDENTIFY/RESUME frame against the directory D1 database, then relays the session to the
- * bot's object (`gateway/relay.ts`). The wire protocol is the Bun gateway's, unchanged.
+ * bot's object (`gateway/relay.ts`).
  */
 import type { D1Database } from "@cloudflare/workers-types"
-import { HAZEL_DB_BINDING, HazelStack, hazelWorkerProps } from "@hazel/infra/cloudflare"
+import { DIRECTORY_DB_BINDING, HazelStack, hazelWorkerProps } from "@hazel/infra/cloudflare"
 import { merge, optionalPlain, telemetryEnv } from "@hazel/infra/env"
 import { hazelTelemetry } from "@hazel/infra/maple"
 import * as Cloudflare from "alchemy/Cloudflare"
@@ -30,21 +30,19 @@ import { BOT_GATEWAY_APP, BOT_GATEWAY_NAMESPACE, BotGatewayObject } from "./obje
 
 export const BOT_GATEWAY_WS_PATH = "/bot-gateway/ws"
 
-/** The directory D1 database, where bot tokens are looked up. */
-export const DIRECTORY_DB_BINDING = "DIRECTORY_DB"
-
 /** `__ALCHEMY_RUNTIME__` folds to `true` in the bundle, so the stack-side branch is tree-shaken. */
 const props = Effect.gen(function* () {
 	if (globalThis.__ALCHEMY_RUNTIME__) return { main: import.meta.url }
 	const stack = yield* HazelStack
-	// The Bun gateway's tuning knobs; unset keeps its defaults (gateway/settings.ts).
+	// Tuning knobs; unset keeps the defaults (gateway/settings.ts).
 	const env = yield* merge(telemetryEnv(stack.stage), ...GATEWAY_ENV_KEYS.map((key) => optionalPlain(key)))
 	return {
 		main: import.meta.url,
 		...hazelWorkerProps(BOT_GATEWAY_APP, stack),
 		workersDev: stack.stage.kind !== "prd",
 		domain: stack.domains.botGateway,
-		env: { [HAZEL_DB_BINDING]: stack.db.hyperdrive, ...env },
+		// The directory D1, where bot tokens are looked up.
+		env: { [DIRECTORY_DB_BINDING]: stack.directoryDb, ...env },
 		observability: {
 			enabled: true,
 			headSamplingRate: 1,

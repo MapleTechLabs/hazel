@@ -170,8 +170,8 @@ export class DiscordGatewayService extends Context.Service<DiscordGatewayService
 
 		/**
 		 * The gateway session: connects, then handles dispatches until the connection is lost for
-		 * good. Never fails; the host decides where it runs (a forked fiber on Bun, a Durable
-		 * Object on Cloudflare) and supplies the WebSocket constructor.
+		 * good. Never fails; the host (`worker/discord-gateway-object.ts`) decides where it runs
+		 * and supplies the WebSocket constructor.
 		 *
 		 * The only service left unprovided here is the WebSocket constructor.
 		 */

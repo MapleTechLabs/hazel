@@ -18,6 +18,7 @@ import type { IntegrationBotService } from "../../services/integrations/integrat
 import type { WebhookBotService } from "../../services/webhook-bot-service"
 import { type AnyObjectCall, type CallRequest, type CallResponse, exitCodec, payloadCodec } from "./calls"
 import { listMessages, ListMessagesCall } from "./channel/api-messages"
+import { finalizeNothing, finalizeOrgImport, ImportCalls, importRows } from "./import"
 import type { ObjectKind } from "./kinds"
 import {
 	isOrgAdmin,
@@ -92,9 +93,18 @@ export const callReceivers: Record<ObjectKind, ReadonlyMap<string, Receiver>> = 
 		receiver(OrganizationProfileCall, () => organizationProfile()),
 		receiver(ListChannelsCall, listChannels),
 		receiver(IsOrgAdminCall, isOrgAdmin),
+		receiver(ImportCalls.org.rows, importRows("org")),
+		receiver(ImportCalls.org.finalize, finalizeOrgImport),
 	]),
-	channel: byName([receiver(ListMessagesCall, listMessages)]),
-	user: byName([]),
+	channel: byName([
+		receiver(ListMessagesCall, listMessages),
+		receiver(ImportCalls.channel.rows, importRows("channel")),
+		receiver(ImportCalls.channel.finalize, finalizeNothing),
+	]),
+	user: byName([
+		receiver(ImportCalls.user.rows, importRows("user")),
+		receiver(ImportCalls.user.finalize, finalizeNothing),
+	]),
 }
 
 export interface ObjectCallsShape {

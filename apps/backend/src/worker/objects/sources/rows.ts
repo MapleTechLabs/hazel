@@ -1,7 +1,7 @@
 /**
  * Building blocks for the objects' sync sources: a streamed table over an effect-orm table and a
- * per-principal visibility condition (the WHERE clauses `apps/electric-proxy` sent Electric,
- * ported to the object's local SQLite).
+ * per-principal visibility condition (the WHERE clauses the Electric proxy used, ported to the
+ * object's local SQLite).
  *
  * Rows go out the way Electric sent them, so the client models (`@hazel/domain/models`
  * `*.Schema`) decode them unchanged: column names as keys, timestamps as ISO strings, JSON

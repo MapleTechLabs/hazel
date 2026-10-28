@@ -1,7 +1,8 @@
 /**
- * The api Worker (alchemy two-step form): the backend's HTTP API and RPC, plus the Durable
- * Objects that replace the Bun process's background loops and Redis. The Bun entry is `index.ts`.
- * Plan: infra/cloudflare-migration-plan.md, Phase 4.
+ * The api Worker (alchemy two-step form): the backend's HTTP API and RPC, and the Durable Objects
+ * that hold the data (`worker/objects/`, infra/durable-object-sync-plan.md). Removed classes
+ * (`OutboxDispatcher`) need no code: alchemy emits their `deleted_classes` migration from the
+ * class tags of the previous deploy.
  */
 import { bindBotGateways } from "@hazel/bot-gateway/object"
 import { HazelStack, hazelWorkerProps, stageProps } from "@hazel/infra/cloudflare"
@@ -23,22 +24,10 @@ import { UserObject, UserObjectLive } from "./worker/objects/user-object"
 import { CACHE_BINDING, DIRECTORY_DB_BINDING, EMAIL_BINDING } from "./worker/platform"
 import { RateLimiterObject, RateLimiterObjectLive } from "./worker/rate-limiter-object"
 
-/** Session and user-lookup caches (Redis on Bun). */
+/** Session and user-lookup caches. */
 export const ApiCache = Cloudflare.KV.Namespace(
 	"api-cache",
 	stageProps("api-cache", (title) => ({ title })),
-)
-
-/**
- * The directory (`infra/durable-object-sync-plan.md` §1): users, auth, bots, invitations and the
- * routing indexes. Migrations: `packages/db/migrations/directory` (rendered from `stores.ts`).
- */
-export const DirectoryDb = Cloudflare.D1.Database(
-	"directory",
-	stageProps("directory", (name) => ({
-		name,
-		migrations: new URL("../../../packages/db/migrations/directory", import.meta.url).pathname,
-	})),
 )
 
 /** `__ALCHEMY_RUNTIME__` folds to `true` in the bundle, so the stack-side branch is tree-shaken. */
@@ -46,7 +35,6 @@ const props = Effect.gen(function* () {
 	if (globalThis.__ALCHEMY_RUNTIME__) return { main: import.meta.url }
 	const stack = yield* HazelStack
 	const cache = yield* ApiCache
-	const directory = yield* DirectoryDb
 	const email = yield* Cloudflare.Email.SendEmail(EMAIL_BINDING)
 	return {
 		main: import.meta.url,
@@ -60,7 +48,7 @@ const props = Effect.gen(function* () {
 			traces: { enabled: true },
 		},
 		env: {
-			[DIRECTORY_DB_BINDING]: directory,
+			[DIRECTORY_DB_BINDING]: stack.directoryDb,
 			[CACHE_BINDING]: cache,
 			[EMAIL_BINDING]: email,
 			...(yield* apiEnv(stack)),

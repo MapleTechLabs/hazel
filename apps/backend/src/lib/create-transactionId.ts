@@ -14,7 +14,7 @@ const HeadRow = Schema.Struct({ head: Schema.Number })
  * before it answers, so the client never waits for a seq that was not broadcast. Call it last in
  * the transaction: a write after it would land past the returned seq.
  *
- * Off an object (the directory path, the Bun runtime) the kind and id are unknown and the
+ * Off an object (the directory path, tests) the kind and id are unknown and the
  * position is `local:<seq>`, which no source confirms. Fails with the typed DatabaseError /
  * SchemaError, which callers remap with `withRemapDbErrors`.
  */

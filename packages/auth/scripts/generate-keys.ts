@@ -2,10 +2,10 @@
  * Prints fresh secrets for Hazel sign-in, as env lines:
  * - AUTH_BINDING_KEY / AUTH_TRANSACTION_KEY: 32 random bytes each (request binding and
  *   OAuth state encryption).
- * - AUTH_ACCESS_TOKEN_PRIVATE_JWK: an ES256 key for the access tokens the Electric proxy
- *   and actors verify. Changing it invalidates outstanding access tokens (5 minutes).
- * - AUTH_ACCESS_TOKEN_JWKS: its public key set, for the proxy and actors when the API is
- *   plain HTTP (local dev). Over HTTPS they fetch `/.well-known/jwks.json` instead.
+ * - AUTH_ACCESS_TOKEN_PRIVATE_JWK: an ES256 key for the access tokens the actors verify.
+ *   Changing it invalidates outstanding access tokens (5 minutes).
+ * - AUTH_ACCESS_TOKEN_JWKS: its public key set, for the actors when the API is plain HTTP
+ *   (local dev). Over HTTPS they fetch `/.well-known/jwks.json` instead.
  *
  * Usage: bun run --cwd packages/auth generate-keys
  */

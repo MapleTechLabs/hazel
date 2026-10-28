@@ -12,7 +12,7 @@ import {
 } from "./access-token.ts"
 import { CryptoLive } from "./server.ts"
 
-/** The verifier the Electric proxy and actors use, configured as they are on a stage. */
+/** The verifier the actors use, configured as they are on a stage. */
 
 const api = "https://api.hazel.test"
 const userId = "00000000-0000-4000-8000-000000000001"

@@ -64,7 +64,6 @@ jobs:
                   APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
                   APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
                   VITE_BACKEND_URL: ${{ vars.VITE_BACKEND_URL }}
-                  VITE_CLUSTER_URL: ${{ vars.VITE_CLUSTER_URL }}
                   VITE_R2_PUBLIC_URL: ${{ vars.VITE_R2_PUBLIC_URL }}
               with:
                   projectPath: apps/desktop

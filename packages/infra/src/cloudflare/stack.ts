@@ -2,14 +2,12 @@ import type * as Cloudflare from "alchemy/Cloudflare"
 import { Stage } from "alchemy/Stage"
 import * as Context from "effect/Context"
 import * as Effect from "effect/Effect"
-import type { HazelDbResources } from "./hazel-db.ts"
 import { type HazelDomains, type HazelStage, parseHazelStage, resolveWorkerName } from "./stage.ts"
 
 /** Inter-app public origins as plan-time strings (custom domains in prd/pr, env in dev). */
 export interface HazelUrls {
 	readonly web: string
 	readonly api: string
-	readonly electric: string
 	readonly rivet: string
 	readonly linkPreview: string
 }
@@ -20,8 +18,8 @@ export interface HazelStackContext {
 	readonly urls: HazelUrls
 	/** True under `alchemy dev` (not merely a dev stage: a dev stage can still be deployed). */
 	readonly isDevServer: boolean
-	/** The database resources every DB-backed Worker binds. */
-	readonly db: HazelDbResources
+	/** The directory D1 database the api Worker and the bot gateway bind. */
+	readonly directoryDb: Cloudflare.D1.Database
 }
 
 /** The deploy context Worker props read. Plan-time only: read behind `__ALCHEMY_RUNTIME__`. */

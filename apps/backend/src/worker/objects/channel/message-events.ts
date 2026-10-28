@@ -12,7 +12,7 @@
  *   except for writes that came from the provider.
  */
 import { Database, type DatabaseError, SQLite, schema } from "@hazel/db"
-import { Cluster } from "@hazel/domain"
+import { parseMentions } from "@hazel/domain"
 import type { Message, MessageReaction } from "@hazel/domain/models"
 import { OrganizationId } from "@hazel/schema"
 import { Effect, Option, type Schema } from "effect"
@@ -77,7 +77,7 @@ const notificationsHook: MessageEventHook = (event) =>
 		const organizationId = yield* channelOrganization
 		if (Option.isNone(organizationId)) return
 		const db = yield* Database.Database
-		const mentions = Cluster.parseMentions(message.content)
+		const mentions = parseMentions(message.content)
 		const replyTo =
 			message.replyToMessageId === null
 				? Option.none()

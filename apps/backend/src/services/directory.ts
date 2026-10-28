@@ -246,7 +246,7 @@ export class Directory extends Context.Service<Directory, DirectoryShape>()("@ha
 			Layer.provide(Database.layerD1(binding)),
 		)
 
-	/** Over the `Database` in context: node SQLite in tests, the Bun runtime's single database. */
+	/** Over the `Database` in context: node SQLite in tests, D1 on the api Worker. */
 	static readonly layerDatabase: Layer.Layer<Directory, never, Database.Database> = Layer.effect(
 		this,
 		Effect.map(Database.Database, makeDirectory),

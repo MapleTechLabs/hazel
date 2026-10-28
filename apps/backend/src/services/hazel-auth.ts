@@ -16,7 +16,7 @@ import { Headers, HttpRouter, HttpServerRequest, HttpServerResponse } from "effe
  *
  * - `/auth/*`: sign-in, registration, passkeys and sessions (cookie on the API host).
  * - `POST /auth/token`: exchanges the session for a short-lived JWT for the hosts that
- *   cannot see the API's cookie (Electric proxy, actors), when a signing key is set.
+ *   cannot see the API's cookie (the actors), when a signing key is set.
  * - `GET /.well-known/jwks.json`: the public key those hosts verify it with.
  */
 
@@ -125,7 +125,7 @@ export class HazelAuthInstance extends Context.Service<HazelAuthInstance>()(
 /**
  * `HazelAuth` and its storage, for the RPC and HttpApi auth middleware. Empty when disabled.
  * Storage runs over the ambient `SqlClient`: the directory D1 (`DIRECTORY_DB`) on the Worker,
- * committing in D1 batches; the SQLite file on Bun.
+ * committing in D1 batches; node SQLite in tests.
  */
 export const HazelAuthServicesLive = Layer.unwrap(
 	Effect.map(Effect.service(HazelAuthInstance), (instance) =>

@@ -1,17 +1,16 @@
 // The Hazel stack. Each app declares its resources in `apps/<app>/alchemy.run.ts`; this file
 // builds the deploy context (`HazelStack`) and yields them in dependency order.
-// Plan: infra/cloudflare-migration-plan.md
+// Plans: infra/cloudflare-migration-plan.md, infra/durable-object-sync-plan.md (data and sync).
 import { appendFileSync } from "node:fs"
 import * as Maple from "@maple-dev/alchemy"
 import * as Alchemy from "alchemy"
 import * as Cloudflare from "alchemy/Cloudflare"
-import * as Planetscale from "alchemy/Planetscale"
 import { ConfigError } from "effect/Config"
 import { SourceError } from "effect/ConfigProvider"
 import * as Effect from "effect/Effect"
 import * as Layer from "effect/Layer"
 import {
-	declareHazelDb,
+	declareDirectoryDb,
 	formatHazelStage,
 	HazelStack,
 	type HazelStackContext,
@@ -24,7 +23,6 @@ import { HazelMonitoring } from "@hazel/infra/maple-monitoring"
 import Actors from "./apps/actors/alchemy.run.ts"
 import ApiLive, { Api } from "./apps/backend/src/worker.ts"
 import BotGateway from "./apps/bot-gateway/alchemy.run.ts"
-import ElectricProxy from "./apps/electric-proxy/alchemy.run.ts"
 import Landing from "./apps/landing/alchemy.run.ts"
 import LinkPreview from "./apps/link-preview-worker/alchemy.run.ts"
 import Web from "./apps/web-foldkit/alchemy.run.ts"
@@ -62,11 +60,10 @@ const HazelStackLive = Layer.effect(
 			stage,
 			domains,
 			isDevServer,
-			db: yield* declareHazelDb(stage),
+			directoryDb: yield* declareDirectoryDb(stage),
 			urls: {
 				web: yield* resolveUrl(domains.web, "HAZEL_WEB_URL", "http://localhost:3000"),
 				api: yield* resolveUrl(domains.api, "HAZEL_API_URL", "http://localhost:3003"),
-				electric: yield* resolveUrl(domains.electric, "HAZEL_ELECTRIC_URL", "http://localhost:8184"),
 				rivet: yield* resolveUrl(domains.rivet, "HAZEL_RIVET_URL", "http://localhost:6420"),
 				linkPreview: yield* resolveUrl(
 					domains.linkPreview,
@@ -82,14 +79,8 @@ const HazelStackLive = Layer.effect(
 export default Alchemy.Stack(
 	"hazel",
 	{
-		// PlanetScale's credential lookup runs when the layer is built; `alchemy dev` never needs it.
 		// Maple (Worker telemetry's ingest key) only with `MAPLE_API_KEY`: see `@hazel/infra/maple`.
-		providers: Layer.mergeAll(
-			isDevServer
-				? Cloudflare.providers()
-				: Cloudflare.providers().pipe(Layer.provideMerge(Planetscale.providers())),
-			isMapleDeploy() ? Maple.providers() : Layer.empty,
-		),
+		providers: Layer.mergeAll(Cloudflare.providers(), isMapleDeploy() ? Maple.providers() : Layer.empty),
 		// ALCHEMY_LOCAL_STATE=1 uses .alchemy/ file state instead of the account-wide store.
 		state: process.env.ALCHEMY_LOCAL_STATE ? Alchemy.localState() : Cloudflare.state(),
 	},
@@ -100,8 +91,6 @@ export default Alchemy.Stack(
 		const botGateway = yield* BotGateway
 		// The Live layer registers the api Worker's Durable Object classes in its bundle.
 		const api = yield* Effect.provide(Api, ApiLive)
-		// Also yields the `electric` Worker (self-hosted Electric in a Container) on deployed stages.
-		const electricProxy = yield* ElectricProxy
 		const linkPreview = yield* LinkPreview
 		const actors = yield* Actors
 		const web = yield* Web
@@ -115,7 +104,6 @@ export default Alchemy.Stack(
 			stage: formatHazelStage(stage),
 			webUrl: domains.web ? `https://${domains.web}` : "",
 			apiUrl: urls.api,
-			electricUrl: urls.electric,
 		}
 		yield* Effect.sync(() =>
 			appendStepOutputs([`web_url=${summary.webUrl}`, `api_url=${summary.apiUrl}`]),
@@ -125,7 +113,6 @@ export default Alchemy.Stack(
 			...summary,
 			apiWorker: api.workerName,
 			botGatewayWorker: botGateway.workerName,
-			electricProxyWorker: electricProxy.workerName,
 			webWorker: web.workerName,
 			linkPreviewWorker: linkPreview.workerName,
 			actorsWorker: actors.workerName,

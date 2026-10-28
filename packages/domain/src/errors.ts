@@ -175,7 +175,7 @@ export class NestedThreadError extends Schema.TaggedError<NestedThreadError>("Ne
 
 /**
  * Error thrown when the workflow service is unreachable or unavailable.
- * Used when the cluster service cannot be contacted.
+ * Used when a background service (thread naming, webhooks) cannot be reached.
  */
 export class WorkflowServiceUnavailableError extends Schema.TaggedError<WorkflowServiceUnavailableError>(
 	"WorkflowServiceUnavailableError",
@@ -260,8 +260,7 @@ export * from "./session-errors"
 // Re-export desktop auth errors for frontend convenience
 export * from "./desktop-auth-errors"
 
-// Re-export thread naming workflow errors for frontend error handling
-// These are plain Schema.TaggedError classes that don't depend on @effect/cluster
+// Thread naming errors, for frontend error handling
 export {
 	AIProviderUnavailableError,
 	AIRateLimitError,
@@ -271,4 +270,4 @@ export {
 	ThreadContextQueryError,
 	ThreadNameUpdateError,
 	ThreadNamingWorkflowError,
-} from "./cluster/activities/thread-naming-activities"
+} from "./thread-naming-errors"

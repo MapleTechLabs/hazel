@@ -13,30 +13,10 @@ import { BotId, UserId } from "@hazel/schema"
 import { Effect, Layer, Option, Schema, Context } from "effect"
 import { Etag, HttpRouter } from "effect/http"
 import { HttpApi, HttpApiBuilder } from "effect/http-api"
-import { vi } from "vitest"
 import { HttpInternalLive } from "./internal.http"
 import { HttpPresencePublicLive } from "./presence.http"
 import { configLayer, serviceShape } from "../test/effect-helpers"
 import { ObjectStubs } from "../worker/objects/protocol"
-
-vi.mock("@hazel/effect-bun", async () => {
-	const { Layer, Context } = await import("effect")
-
-	class Redis extends Context.Service<
-		Redis,
-		{
-			readonly get: (key: string) => unknown
-			readonly del: (key: string) => unknown
-			readonly send: <T = unknown>(command: string, args: string[]) => T
-		}
-	>()("@hazel/effect-bun/Redis") {}
-
-	return {
-		Redis: Object.assign(Redis, {
-			Default: Layer.empty,
-		}),
-	}
-})
 
 const makeHandler = (api: any, routeLayer: any) => {
 	const appLayer = HttpApiBuilder.layer(api).pipe(
