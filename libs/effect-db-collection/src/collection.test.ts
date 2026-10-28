@@ -434,6 +434,20 @@ describe("awaitSeqEffect", () => {
 		const invalid = await Effect.runPromise(Effect.flip(channels.utils.awaitSeqEffect("42")))
 		expect(invalid._tag).toBe("InvalidTxIdError")
 	})
+
+	it("resolves a local position at once: no source streams it", async () => {
+		const { sockets, hub } = setup()
+		const channels = createEffectCollection({
+			id: `channels-${++collectionCount}`,
+			table: "channels",
+			schema: Channel,
+			getKey: (row) => row.id,
+			hub,
+			sources: ["org:a"],
+		})
+		expect(await Effect.runPromise(channels.utils.awaitSeqEffect("local:0"))).toBe(true)
+		expect(sockets.all).toHaveLength(0)
+	})
 })
 
 describe("extractPartitionValues", () => {

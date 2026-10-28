@@ -132,7 +132,6 @@ export const ENV_TEMPLATES = {
 	web: (config: Config) => ({
 		VITE_BACKEND_URL: "https://localhost:3004",
 		VITE_CLUSTER_URL: "http://localhost:3020",
-		VITE_ELECTRIC_URL: "https://localhost:5133/v1/shape",
 		VITE_R2_PUBLIC_URL: config.s3PublicUrl ?? "",
 	}),
 

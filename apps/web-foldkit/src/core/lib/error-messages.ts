@@ -22,7 +22,7 @@ import type {
 	SyncError,
 	TransactionStateEffectError,
 	UndefinedKeyEffectError,
-} from "@hazel/effect-electric-db-collection"
+} from "@hazel/effect-db-collection"
 import { type Cause, Match, Predicate, Schema } from "effect"
 import type { HttpClientError } from "effect/http"
 import type { RpcClientError } from "effect/rpc"

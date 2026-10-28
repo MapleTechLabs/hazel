@@ -244,14 +244,13 @@
       "name": "web-foldkit",
       "dependencies": {
         "@effect/platform-browser": "catalog:effect",
-        "@electric-sql/client": "1.5.28",
         "@foldkit/ui": "0.167.0",
         "@fontsource/inter": "^5.2.8",
         "@hazel/actors": "workspace:*",
         "@hazel/auth": "workspace:*",
         "@hazel/desktop": "workspace:*",
         "@hazel/domain": "workspace:*",
-        "@hazel/effect-electric-db-collection": "workspace:*",
+        "@hazel/effect-db-collection": "workspace:*",
         "@hazel/schema": "workspace:*",
         "@simplewebauthn/browser": "^14.0.0",
         "@tanstack/db": "0.11.3",
@@ -359,21 +358,6 @@
         "@hazel/domain": "workspace:*",
         "@standard-schema/spec": "^1.1.0",
         "@tanstack/db": "0.11.3",
-        "effect": "catalog:effect",
-      },
-      "devDependencies": {
-        "@vitest/coverage-istanbul": "^4.0.17",
-        "typescript": "catalog:tooling",
-      },
-    },
-    "libs/effect-electric-db-collection": {
-      "name": "@hazel/effect-electric-db-collection",
-      "version": "0.0.0",
-      "dependencies": {
-        "@electric-sql/client": "1.5.28",
-        "@standard-schema/spec": "^1.1.0",
-        "@tanstack/db": "0.11.3",
-        "@tanstack/electric-db-collection": "0.5.4",
         "effect": "catalog:effect",
       },
       "devDependencies": {
@@ -822,7 +806,7 @@
 
     "@effect/vitest": ["@effect/vitest@4.0.6", "", { "peerDependencies": { "effect": "^4.0.6", "vitest": ">=5.0.0 <6.0.0" } }, "sha512-oKNbtyUHK5+0o730CXwojULEu7f3+c235pYFD4U5T//o+hHrJbYbZU4bRkcv936tPr5IOnmujeyQiC/LuJJjHw=="],
 
-    "@electric-sql/client": ["@electric-sql/client@1.5.28", "", { "dependencies": { "@microsoft/fetch-event-source": "^2.0.1" }, "optionalDependencies": { "@rollup/rollup-darwin-arm64": "^4.18.1" }, "bin": { "intent": "bin/intent.mjs" } }, "sha512-b0cym3YWXL6PbQmEF0xDRsLt2xgXX46stvOSRAIXRPAP6dLZIHZL0o0HxeTdsZ27L3PbIg6Pw6KnyanRVGtWPA=="],
+    "@electric-sql/client": ["@electric-sql/client@1.5.15", "", { "dependencies": { "@microsoft/fetch-event-source": "^2.0.1" }, "optionalDependencies": { "@rollup/rollup-darwin-arm64": "^4.18.1" }, "bin": { "intent": "bin/intent.mjs" } }, "sha512-8C+mqZu6r68kU/jf63FLuc90M2ejyeTgB/68G0ufX4H2WepQw/NJXrIY3veE+sLrDGL+uyQB+fDStHH30fi8qg=="],
 
     "@electric-sql/pglite": ["@electric-sql/pglite@0.3.15", "", {}, "sha512-Cj++n1Mekf9ETfdc16TlDi+cDDQF0W7EcbyRHYOAeZdsAe8M/FJg18itDTSwyHfar2WIezawM9o0EKaRGVKygQ=="],
 
@@ -955,8 +939,6 @@
     "@hazel/effect-cloudflare": ["@hazel/effect-cloudflare@workspace:packages/effect-cloudflare"],
 
     "@hazel/effect-db-collection": ["@hazel/effect-db-collection@workspace:libs/effect-db-collection"],
-
-    "@hazel/effect-electric-db-collection": ["@hazel/effect-electric-db-collection@workspace:libs/effect-electric-db-collection"],
 
     "@hazel/electric-proxy": ["@hazel/electric-proxy@workspace:apps/electric-proxy"],
 
@@ -1565,8 +1547,6 @@
     "@tanstack/db": ["@tanstack/db@0.11.3", "", { "dependencies": { "@standard-schema/spec": "^1.1.0", "@tanstack/db-ivm": "0.1.25", "@tanstack/pacer-lite": "^0.2.1" }, "peerDependencies": { "typescript": ">=4.7" } }, "sha512-xrBwD+mIm0BU4zYm0jrhQcWorhZGwSysjCXTB+7i9B9m2LsbTSdqYRT9RhvB0D51cbteX6p959LCbyIyeZ3XUg=="],
 
     "@tanstack/db-ivm": ["@tanstack/db-ivm@0.1.25", "", { "dependencies": { "fractional-indexing": "^3.2.0", "sorted-btree": "^1.8.1" }, "peerDependencies": { "typescript": ">=4.7" } }, "sha512-/lLM7DHZLDurkoAGGgIAkc2Io483hXMXneaIOTrnpe7saJDU6Vz/GLT/bkvMpg6WfM3j4VJHw85fduo761CTNw=="],
-
-    "@tanstack/electric-db-collection": ["@tanstack/electric-db-collection@0.5.4", "", { "dependencies": { "@electric-sql/client": "^1.5.15", "@standard-schema/spec": "^1.1.0", "@tanstack/db": "0.11.3", "debug": "^4.4.3" } }, "sha512-me0CEYs3dIQpCDhlTHLftnkq1Otr9eG8x4/wNFHiufI9NwXJXnHOTt+v083+88QDiIXs/dKDmVHCOpE0FWVs0A=="],
 
     "@tanstack/history": ["@tanstack/history@1.161.4", "", {}, "sha512-Kp/WSt411ZWYvgXy6uiv5RmhHrz9cAml05AQPrtdAp7eUqvIDbMGPnML25OKbzR3RJ1q4wgENxDTvlGPa9+Mww=="],
 
@@ -3389,8 +3369,6 @@
     "@fumadocs/ui/tailwind-merge": ["tailwind-merge@3.4.0", "", {}, "sha512-uSaO4gnW+b3Y2aWoWfFpX62vn2sR3skfhbjsEnaBI81WD1wBLlHZe5sWf0AqjksNdYTbGBEd0UasQMT3SNV15g=="],
 
     "@hazel/effect-bun/@types/bun": ["@types/bun@1.4.4", "", { "dependencies": { "bun-types": "1.4.4" } }, "sha512-9wkRDXUXK124pEnAutE6n/l18j+i9GC5IAHK8TmX/2nlySETmky0OU6yL5U8pW1AoKh++AN9auDCr647BfurjQ=="],
-
-    "@hazel/electric-proxy/@electric-sql/client": ["@electric-sql/client@1.5.15", "", { "dependencies": { "@microsoft/fetch-event-source": "^2.0.1" }, "optionalDependencies": { "@rollup/rollup-darwin-arm64": "^4.18.1" }, "bin": { "intent": "bin/intent.mjs" } }, "sha512-8C+mqZu6r68kU/jf63FLuc90M2ejyeTgB/68G0ufX4H2WepQw/NJXrIY3veE+sLrDGL+uyQB+fDStHH30fi8qg=="],
 
     "@img/sharp-freebsd-wasm32/@img/sharp-wasm32": ["@img/sharp-wasm32@0.35.5", "", { "dependencies": { "@emnapi/runtime": "^1.11.3" } }, "sha512-Ptsga1su4tQx+LLF1ECS9U6nz5kmrXKo6XVbtR48Ke3ZRxxgaWBu7IDtEe1quo8hiupwm6WFqxVlXaSf7IINGQ=="],
 

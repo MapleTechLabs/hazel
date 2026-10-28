@@ -3,6 +3,7 @@ import { ChannelId, ChannelMemberId, TypingIndicatorId } from "@hazel/schema"
 import { Clock, Duration, Effect, Schema } from "effect"
 import { Command, type Update } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
+import { channelOfTypingIndicator } from "~/db/routing-hints"
 import { HazelRpc } from "../rpc"
 
 /**
@@ -76,7 +77,7 @@ export const SendTypingHeartbeat = Command.define("SendTypingHeartbeat", {
 export const deleteIndicator = (id: TypingIndicatorId): Effect.Effect<void, never, HazelRpc> =>
 	Effect.gen(function* () {
 		const client = yield* HazelRpc
-		yield* client("typingIndicator.delete", { id })
+		yield* client("typingIndicator.delete", { id, channelId: channelOfTypingIndicator(id) })
 	}).pipe(Effect.ignore)
 
 export const DeleteTypingIndicator = Command.define("DeleteTypingIndicator", {
@@ -91,7 +92,9 @@ export const WaitForHeartbeatInterval = Command.define("WaitForHeartbeatInterval
 	// Timers stay pending while typing goes on; a newer version supersedes them.
 	interrupt: true,
 	execute: ({ version }) =>
-		Effect.sleep(HEARTBEAT_INTERVAL).pipe(Effect.as(Message.CompletedWaitForHeartbeatInterval({ version }))),
+		Effect.sleep(HEARTBEAT_INTERVAL).pipe(
+			Effect.as(Message.CompletedWaitForHeartbeatInterval({ version })),
+		),
 })
 
 export const WaitForTypingTimeout = Command.define("WaitForTypingTimeout", {
@@ -141,7 +144,11 @@ const start = (model: Model, context: Context): Return => {
 		commands: [
 			...(shouldHeartbeat
 				? [
-						SendTypingHeartbeat({ channelId: context.channelId, memberId: context.memberId, sessionId }),
+						SendTypingHeartbeat({
+							channelId: context.channelId,
+							memberId: context.memberId,
+							sessionId,
+						}),
 						WaitForHeartbeatInterval({ version: heartbeatVersion }),
 					]
 				: []),
@@ -167,6 +174,7 @@ export const update = (model: Model, message: Message): Return =>
 		FailedSendTypingHeartbeat: () => ({ model }),
 		CompletedWaitForHeartbeatInterval: ({ version }) =>
 			version === model.heartbeatVersion ? { model: { ...model, canHeartbeat: true } } : { model },
-		CompletedWaitForTypingTimeout: ({ version }) => (version === model.timeoutVersion ? stop(model) : { model }),
+		CompletedWaitForTypingTimeout: ({ version }) =>
+			version === model.timeoutVersion ? stop(model) : { model },
 		CompletedDeleteTypingIndicator: () => ({ model }),
 	})

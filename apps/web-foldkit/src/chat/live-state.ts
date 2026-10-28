@@ -41,7 +41,12 @@ export const initialLiveState: LiveActorState = {
 const errorMessageOf = (error: unknown): string => {
 	if (typeof error === "string") return error
 	if (error instanceof Error) return error.message
-	if (typeof error === "object" && error !== null && "message" in error && typeof error.message === "string")
+	if (
+		typeof error === "object" &&
+		error !== null &&
+		"message" in error &&
+		typeof error.message === "string"
+	)
 		return error.message
 	return "Connection failed. Please try again."
 }
@@ -154,15 +159,23 @@ const errorOf = (payload: unknown) =>
 /** Each actor event as a `LiveEvent`, or nothing when the payload does not decode. */
 const eventDecoders: ReadonlyArray<readonly [string, (payload: unknown) => Option.Option<LiveEvent>]> = [
 	["started", () => Option.some(LiveEvent.Started())],
-	["progress", (payload) => progressOf(payload).pipe(Option.map((progress) => LiveEvent.Progress({ progress })))],
-	["textChunk", (payload) => fullTextOf(payload).pipe(Option.map((fullText) => LiveEvent.TextChunk({ fullText })))],
+	[
+		"progress",
+		(payload) => progressOf(payload).pipe(Option.map((progress) => LiveEvent.Progress({ progress }))),
+	],
+	[
+		"textChunk",
+		(payload) => fullTextOf(payload).pipe(Option.map((fullText) => LiveEvent.TextChunk({ fullText }))),
+	],
 	["textUpdate", (payload) => textOf(payload).pipe(Option.map((text) => LiveEvent.TextUpdate({ text })))],
 	["streamEnd", (payload) => textOf(payload).pipe(Option.map((text) => LiveEvent.StreamEnd({ text })))],
 	["completed", () => Option.some(LiveEvent.Completed())],
 	[
 		"failed",
 		(payload) =>
-			errorOf(payload).pipe(Option.map((error) => LiveEvent.Failed({ error: normalizeActorError(error) }))),
+			errorOf(payload).pipe(
+				Option.map((error) => LiveEvent.Failed({ error: normalizeActorError(error) })),
+			),
 	],
 	["stepAdded", () => Option.some(LiveEvent.StepAdded())],
 ]
@@ -190,6 +203,13 @@ export class LiveConnectionError extends Schema.TaggedError<LiveConnectionError>
 	cause: Schema.Defect(),
 }) {}
 
+/**
+ * The Rivet client module, loaded once (it is large and only needed once a live reply shows).
+ * Shared by concurrent connections: parallel `import()`s of a mocked module never settle in vitest.
+ */
+let rivetModule: Promise<typeof import("~/lib/rivet-client")> | undefined
+const loadRivet = () => (rivetModule ??= import("~/lib/rivet-client"))
+
 /** `getOrCreate([messageId], { params: { token } }).connect()` with every actor event forwarded. */
 const openConnection = (
 	messageId: MessageId,
@@ -198,9 +218,11 @@ const openConnection = (
 ) =>
 	Effect.tryPromise({
 		try: async () => {
-			const { rivetClient, getAccessToken } = await import("~/lib/rivet-client")
+			const { rivetClient, getAccessToken } = await loadRivet()
 			const token = await getAccessToken()
-			const connection = rivetClient.message.getOrCreate([messageId], { params: { token: token ?? "" } }).connect()
+			const connection = rivetClient.message
+				.getOrCreate([messageId], { params: { token: token ?? "" } })
+				.connect()
 			connection.onOpen(onOpen)
 			for (const [name, decode] of eventDecoders)
 				connection.on(name, (payload: unknown) => offer(decode(payload)))

@@ -205,7 +205,12 @@ describe("provider cards", () => {
 			Scene.given(listed(openStatus)),
 			Scene.click(Scene.role("button", { name: "Disable" })),
 			Scene.Command.expectExact(
-				RunProviderAction({ provider: "openstatus", webhookId: openStatus.id, isEnabled: false }),
+				RunProviderAction({
+					provider: "openstatus",
+					webhookId: openStatus.id,
+					channelId,
+					isEnabled: false,
+				}),
 			),
 			Scene.Command.resolve(
 				RunProviderAction,
@@ -261,7 +266,9 @@ describe("row removal", () => {
 			portalModalMounted,
 			Scene.expect(Scene.within(confirmDialog, Scene.text("Delete webhook?"))).toExist(),
 			Scene.click(Scene.within(confirmDialog, Scene.role("button", { name: "Delete" }))),
-			Scene.Command.expectExact(RunRowAction({ kind: "webhook", id: ci.id, isEnabled: null })),
+			Scene.Command.expectExact(
+				RunRowAction({ kind: "webhook", id: ci.id, channelId, isEnabled: null }),
+			),
 			Scene.Command.resolve(
 				RunRowAction,
 				Message.SucceededRowAction({ kind: "webhook", id: ci.id, successMessage: "Webhook deleted" }),
@@ -296,7 +303,9 @@ describe("rss feeds", () => {
 			Scene.click(Scene.role("menuitem", { name: "Pause" })),
 			Scene.Command.resolveAll(),
 			Scene.Mount.expectEnded({ name: "PortalMenu" }),
-			Scene.Command.expectExact(RunRowAction({ kind: "rss", id: feed.id, isEnabled: false })),
+			Scene.Command.expectExact(
+				RunRowAction({ kind: "rss", id: feed.id, channelId, isEnabled: false }),
+			),
 			Scene.Command.resolve(
 				RunRowAction,
 				Message.SucceededRowAction({ kind: "rss", id: feed.id, successMessage: "Feed paused" }),

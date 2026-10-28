@@ -2,6 +2,7 @@ import { OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { Duration, Effect, Schema } from "effect"
 import { Command } from "foldkit"
 import { load, replaceUrl } from "foldkit/navigation"
+import { orgOfMember } from "~/db/routing-hints"
 import { catchCommon } from "../../data/actions"
 import { sendInvitations } from "../../data/invitations"
 import { HazelRpc } from "../../rpc"
@@ -10,7 +11,9 @@ import { Message } from "./message"
 export const ReadBrowserTimezone = Command.define("ReadBrowserTimezone", {
 	messages: [Message.DetectedBrowserTimezone],
 	execute: Effect.sync(() =>
-		Message.DetectedBrowserTimezone({ browserTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+		Message.DetectedBrowserTimezone({
+			browserTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+		}),
 	),
 })
 
@@ -29,7 +32,8 @@ export const UpdateProfile = Command.define("UpdateProfile", {
 		HazelRpc.use((client) => client("user.update", { id: userId, firstName, lastName })).pipe(
 			Effect.as(Message.SucceededUpdateProfile()),
 			Effect.catchTags({
-				UserNotFoundError: () => Effect.succeed(Message.FailedUpdateProfile({ reason: "UserNotFound" })),
+				UserNotFoundError: () =>
+					Effect.succeed(Message.FailedUpdateProfile({ reason: "UserNotFound" })),
 			}),
 			catchCommon((reason) => Message.FailedUpdateProfile({ reason })),
 		),
@@ -49,7 +53,8 @@ export const UpdateUserTimezone = Command.define("UpdateUserTimezone", {
 		HazelRpc.use((client) => client("user.update", { id: userId, timezone })).pipe(
 			Effect.as(Message.SucceededUpdateTimezone({ timezone })),
 			Effect.catchTags({
-				UserNotFoundError: () => Effect.succeed(Message.FailedUpdateTimezone({ reason: "UserNotFound" })),
+				UserNotFoundError: () =>
+					Effect.succeed(Message.FailedUpdateTimezone({ reason: "UserNotFound" })),
 			}),
 			catchCommon((reason) => Message.FailedUpdateTimezone({ reason })),
 		),
@@ -88,6 +93,7 @@ export const CompleteOnboarding = Command.define("CompleteOnboarding", {
 					: HazelRpc.use((client) =>
 							client("organizationMember.updateMetadata", {
 								id: memberId,
+								organizationId: orgOfMember(memberId),
 								metadata: { ...(role === null ? {} : { role }), useCases },
 							}),
 						).pipe(

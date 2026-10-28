@@ -7,6 +7,7 @@ import {
 	generateSigningKey,
 	lifetimeSeconds,
 	makeIssuer,
+	makeLocalVerifier,
 	publicJwk,
 } from "./access-token.ts"
 import { CryptoLive } from "./server.ts"
@@ -103,4 +104,17 @@ test("malformed inline key JSON is a typed, secret-free configuration error", as
 	)
 	expect(failureTag(exit)).toEqual(["AccessTokenConfigurationError"])
 	expect(JSON.stringify(exit)).not.toContain("sensitive-invalid-key-json")
+})
+
+describe("makeLocalVerifier", () => {
+	test("verifies the API's own tokens with its signing key, and refuses another stage's", async () => {
+		const key = await keyPair("v1")
+		const verifier = await Effect.runPromise(makeLocalVerifier(api, key))
+		const own = await Effect.runPromise(verifier.verify(await mint(api, key)))
+		expect(own.userId).toBe(userId)
+		const foreign = await Effect.runPromiseExit(
+			verifier.verify(await mint("https://api.other.test", key)),
+		)
+		expect(Exit.isFailure(foreign)).toBe(true)
+	})
 })

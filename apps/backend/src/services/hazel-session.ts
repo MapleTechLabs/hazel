@@ -1,4 +1,4 @@
-import { HazelAuth } from "@hazel/auth/server"
+import { AccessToken, HazelAuth } from "@hazel/auth/server"
 import { UserRepo } from "@hazel/backend-core"
 import { CurrentUser, InvalidBearerTokenError, SessionLoadError } from "@hazel/domain"
 import { UserId } from "@hazel/schema"
@@ -89,6 +89,40 @@ export class HazelSession extends Context.Service<HazelSession>()("@hazel/backen
 				return Option.some(yield* loadUser(session.value.subjectId))
 			})
 
+		// The API's own access tokens (`POST /auth/token`), for the sync route; none without a key.
+		const accessVerifier =
+			Option.isSome(instance) && Option.isSome(instance.value.accessTokens)
+				? Option.some(
+						yield* AccessToken.makeLocalVerifier(
+							instance.value.config.origin,
+							instance.value.accessTokens.value,
+						),
+					)
+				: Option.none()
+
+		/** Verifies an access token; `None` when it is not a valid one (expired, foreign, malformed). */
+		const verifyAccessToken = (
+			token: string,
+		): Effect.Effect<Option.Option<CurrentUser.Schema>, InvalidBearerTokenError | SessionLoadError> =>
+			Effect.gen(function* () {
+				if (Option.isNone(accessVerifier)) return Option.none()
+				const access = yield* accessVerifier.value.verify(token).pipe(
+					Effect.map(Option.some),
+					Effect.catchTags({
+						AccessTokenInvalid: () => Effect.succeedNone,
+						AccessTokenUnavailable: (error) =>
+							Effect.fail(
+								new SessionLoadError({
+									message: "Access token keys are unavailable",
+									detail: error.reason,
+								}),
+							),
+					}),
+				)
+				if (Option.isNone(access)) return Option.none()
+				return Option.some(yield* loadUser(access.value.userId))
+			})
+
 		/**
 		 * The session cookie, if the request carries one. Cookie-authenticated requests must
 		 * come from a trusted origin: mutations are POSTs, which browsers always send with an
@@ -116,7 +150,7 @@ export class HazelSession extends Context.Service<HazelSession>()("@hazel/backen
 				return user
 			})
 
-		return { enabled, verify, fromCookie } as const
+		return { enabled, verify, verifyAccessToken, fromCookie } as const
 	}),
 }) {
 	static readonly layer = Layer.effect(this, this.make).pipe(Layer.provide(UserRepo.layer))

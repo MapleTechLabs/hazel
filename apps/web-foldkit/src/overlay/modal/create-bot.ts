@@ -1,4 +1,5 @@
 import { ApiScope } from "@hazel/domain/scopes"
+import { OrganizationId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
 import { Command, Submodel } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
@@ -21,7 +22,7 @@ import {
 } from "./bot-form"
 import { botTokenDisplay } from "./bot-token-display"
 import * as Requests from "./requests"
-import { defineModal, type ModalReturn, type ModalViewInputs } from "./contract"
+import { defineModal, type ModalContext, type ModalReturn, type ModalViewInputs } from "./contract"
 import { Frame, Message as FrameMessage, frameView, initFrame, isCloseRequest, modalTitle } from "./frame"
 import { errorToast, failureToast, successToast } from "../../data/actions"
 
@@ -71,16 +72,23 @@ const CreateBot = Command.define("CreateBot", {
 		description: Schema.optional(Schema.String),
 		scopes: Schema.Array(ApiScope),
 		isPublic: Schema.Boolean,
+		/** The org the bot is installed in (the routing hint). */
+		organizationId: Schema.NullOr(OrganizationId),
 	},
 	messages: [Message.SucceededCreateBot, Message.FailedCreateBot],
-	execute: (payload) =>
+	execute: ({ organizationId, ...payload }) =>
 		Effect.gen(function* () {
 			const client = yield* HazelRpc
-			const result = yield* client("bot.create", payload)
+			const result = yield* client("bot.create", {
+				...payload,
+				organizationId: organizationId ?? undefined,
+			})
 			return Message.SucceededCreateBot({ token: result.token, name: payload.name })
 		}).pipe(
 			Effect.catchCause((cause) =>
-				Effect.succeed(Message.FailedCreateBot({ toast: failureToast(cause, "friendly", rateLimitToast) })),
+				Effect.succeed(
+					Message.FailedCreateBot({ toast: failureToast(cause, "friendly", rateLimitToast) }),
+				),
 			),
 		),
 })
@@ -97,7 +105,7 @@ const CopyToken = Command.define("CopyToken", {
 
 type Return = ModalReturn<Model, Message>
 
-const submitted = (model: Model): Return => {
+const submitted = (model: Model, context: ModalContext): Return => {
 	const { model: next, isReady } = submittedBotForm(model)
 	if (!isReady) return { model: next }
 	return {
@@ -108,6 +116,7 @@ const submitted = (model: Model): Return => {
 				description: next.description || undefined,
 				scopes: next.scopes,
 				isPublic: next.isPublic,
+				organizationId: context.organization?.id ?? null,
 			}),
 		],
 	}
@@ -115,16 +124,17 @@ const submitted = (model: Model): Return => {
 
 const toast = (request: ToastRequest) => ModalOutMessage.RequestedToast({ toast: request })
 
-const update = (model: Model, message: Message): Return =>
+const update = (model: Model, message: Message, context: ModalContext): Return =>
 	Message.match<Return>(message, {
-		GotFrameMessage: ({ message }) => (isCloseRequest(message) ? { model, outMessage: closed } : { model }),
+		GotFrameMessage: ({ message }) =>
+			isCloseRequest(message) ? { model, outMessage: closed } : { model },
 		ChangedName: ({ value }) => ({ model: changedName(model, value) }),
 		ChangedDescription: ({ value }) => ({ model: changedDescription(model, value) }),
 		ToggledScope: ({ scope }) => ({ model: toggledScope(model, scope) }),
 		ToggledPublic: ({ isSelected }) => ({ model: toggledPublic(model, isSelected) }),
 		ClickedCancel: () => ({ model, outMessage: closed }),
 		ClickedDone: () => ({ model, outMessage: closed }),
-		SubmittedForm: () => submitted(model),
+		SubmittedForm: () => submitted(model, context),
 		SucceededCreateBot: ({ token, name }) => ({
 			model: modifyFields(model, {
 				isSubmitting: () => false,
@@ -137,9 +147,13 @@ const update = (model: Model, message: Message): Return =>
 			model: modifyFields(model, { isSubmitting: () => false }),
 			outMessage: toast(request),
 		}),
-		ClickedToggleTokenVisible: () => ({ model: modifyFields(model, { isTokenVisible: (value) => !value }) }),
+		ClickedToggleTokenVisible: () => ({
+			model: modifyFields(model, { isTokenVisible: (value) => !value }),
+		}),
 		ClickedCopyToken: () =>
-			model.createdBotToken === null ? { model } : { model, commands: [CopyToken({ token: model.createdBotToken })] },
+			model.createdBotToken === null
+				? { model }
+				: { model, commands: [CopyToken({ token: model.createdBotToken })] },
 		SucceededCopyToken: () => ({ model, outMessage: toast(successToast("Token copied to clipboard")) }),
 		FailedCopyToken: () => ({ model, outMessage: toast(errorToast("Failed to copy token")) }),
 	})
@@ -169,7 +183,9 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 								onCopy: Message.ClickedCopyToken(),
 							}),
 						]),
-						dialogFooter(h, [button(h, { intent: "primary", onPress: Message.ClickedDone() }, ["Done"])]),
+						dialogFooter(h, [
+							button(h, { intent: "primary", onPress: Message.ClickedDone() }, ["Done"]),
+						]),
 					]
 				: [
 						dialogHeader(h, {}, [
@@ -195,7 +211,9 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 									"flex flex-col gap-6",
 								),
 								dialogFooter(h, [
-									button(h, { intent: "outline", onPress: Message.ClickedCancel() }, ["Cancel"]),
+									button(h, { intent: "outline", onPress: Message.ClickedCancel() }, [
+										"Cancel",
+									]),
 									button(
 										h,
 										{
@@ -220,7 +238,12 @@ export const modal = defineModal(
 		init: () => ({
 			model: {
 				frame: initFrame(ID),
-				...initBotForm({ name: "", description: "", scopes: ["messages:read", "messages:write"], isPublic: false }),
+				...initBotForm({
+					name: "",
+					description: "",
+					scopes: ["messages:read", "messages:write"],
+					isPublic: false,
+				}),
 				createdBotToken: null,
 				createdBotName: "",
 				isTokenVisible: false,

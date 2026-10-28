@@ -19,14 +19,24 @@ const KBD = "inline-grid h-4 min-w-4 place-content-center rounded-xs bg-secondar
 const emptyState = (h: HtmlBuilder<Message>, message: string): Html =>
 	h.div(
 		[h.Class("flex flex-col items-center justify-center py-8 text-center")],
-		[IconMagnifier3(h, { className: "mb-3 size-8 text-muted-fg/50" }), h.p([h.Class("text-muted-fg text-sm")], [message])],
+		[
+			IconMagnifier3(h, { className: "mb-3 size-8 text-muted-fg/50" }),
+			h.p([h.Class("text-muted-fg text-sm")], [message]),
+		],
 	)
 
 const footer = (h: HtmlBuilder<Message>): Html =>
 	h.div(
 		[h.Class("flex-none border-t px-2 py-1.5 text-muted-fg text-xs")],
 		[
-			h.span([], [h.kbd([h.Class(`mx-1 ${KBD}`)], ["↑"]), h.kbd([h.Class(`mr-2 ${KBD}`)], ["↓"]), "to navigate"]),
+			h.span(
+				[],
+				[
+					h.kbd([h.Class(`mx-1 ${KBD}`)], ["↑"]),
+					h.kbd([h.Class(`mr-2 ${KBD}`)], ["↓"]),
+					"to navigate",
+				],
+			),
 			h.span([h.Class("ml-3")], [h.kbd([h.Class(`mx-1 ${KBD}`)], ["↵"]), "to select"]),
 			h.span([h.Class("ml-3")], [h.kbd([h.Class(`mx-1 ${KBD}`)], ["esc"]), "to go back"]),
 		],
@@ -42,7 +52,14 @@ const filterChips = (h: HtmlBuilder<Message>, page: SearchPage): Html[] =>
 					page.filters.map((filter, index) => {
 						const label = getFilterTypeLabel(filter.type)
 						return h.span(
-							[h.Class(cn("inline-flex items-center gap-1 rounded-md bg-secondary px-1.5 py-0.5 text-xs", "ring-1 ring-inset ring-border"))],
+							[
+								h.Class(
+									cn(
+										"inline-flex items-center gap-1 rounded-md bg-secondary px-1.5 py-0.5 text-xs",
+										"ring-1 ring-inset ring-border",
+									),
+								),
+							],
 							[
 								h.span([h.Class("text-muted-fg")], [`${label}:`]),
 								h.span([h.Class("font-medium text-fg")], [filter.displayValue]),
@@ -63,7 +80,11 @@ const filterChips = (h: HtmlBuilder<Message>, page: SearchPage): Html[] =>
 				),
 			]
 
-const AUTOCOMPLETE_TITLES = { from: "Select a user", in: "Select a channel", has: "Select attachment type" } as const
+const AUTOCOMPLETE_TITLES = {
+	from: "Select a user",
+	in: "Select a channel",
+	has: "Select attachment type",
+} as const
 
 /** The `filter:` autocomplete dropdown; mousedown is prevented so the editor keeps focus. */
 const autocompletePopover = (h: HtmlBuilder<Message>, model: Model): Html[] => {
@@ -77,7 +98,10 @@ const autocompletePopover = (h: HtmlBuilder<Message>, model: Model): Html[] => {
 				),
 			],
 			[
-				h.div([h.Class("border-b border-fg/5 px-3 py-2 text-muted-fg text-xs")], [AUTOCOMPLETE_TITLES[autocomplete.filterType]]),
+				h.div(
+					[h.Class("border-b border-fg/5 px-3 py-2 text-muted-fg text-xs")],
+					[AUTOCOMPLETE_TITLES[autocomplete.filterType]],
+				),
 				h.div(
 					[h.Class("p-1")],
 					model.suggestions.map((option, index) =>
@@ -88,7 +112,9 @@ const autocompletePopover = (h: HtmlBuilder<Message>, model: Model): Html[] => {
 								h.Class(
 									cn(
 										"flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-sm outline-none transition-colors",
-										index === model.suggestionIndex ? "bg-primary/10 text-primary" : "hover:bg-muted",
+										index === model.suggestionIndex
+											? "bg-primary/10 text-primary"
+											: "hover:bg-muted",
 									),
 								),
 								h.OnMouseDown(Message.ClickedSuggestion({ index })),
@@ -96,9 +122,18 @@ const autocompletePopover = (h: HtmlBuilder<Message>, model: Model): Html[] => {
 							],
 							[
 								...(option.kind === "user"
-									? [avatar(h, { size: "xs", src: option.avatarUrl, alt: option.label, seed: option.label })]
+									? [
+											avatar(h, {
+												size: "xs",
+												src: option.avatarUrl,
+												alt: option.label,
+												seed: option.label,
+											}),
+										]
 									: []),
-								...(option.kind === "channel" ? [IconHashtag(h, { className: "size-4 text-muted-fg" })] : []),
+								...(option.kind === "channel"
+									? [IconHashtag(h, { className: "size-4 text-muted-fg" })]
+									: []),
 								h.span([h.Class("truncate font-medium")], [option.label]),
 							],
 						),
@@ -145,11 +180,20 @@ const recentSearches = (h: HtmlBuilder<Message>, model: Model, page: SearchPage,
 							[
 								...search.filters.map((filter) =>
 									h.span(
-										[h.Class("inline-flex items-center gap-0.5 rounded-md bg-secondary px-1.5 py-0.5 text-xs ring-1 ring-inset ring-border")],
-										[h.span([h.Class("text-muted-fg")], [`${filter.type}:`]), h.span([h.Class("font-medium text-fg")], [filter.displayValue])],
+										[
+											h.Class(
+												"inline-flex items-center gap-0.5 rounded-md bg-secondary px-1.5 py-0.5 text-xs ring-1 ring-inset ring-border",
+											),
+										],
+										[
+											h.span([h.Class("text-muted-fg")], [`${filter.type}:`]),
+											h.span([h.Class("font-medium text-fg")], [filter.displayValue]),
+										],
 									),
 								),
-								...(search.query ? [h.span([h.Class("truncate text-fg")], [search.query])] : []),
+								...(search.query
+									? [h.span([h.Class("truncate text-fg")], [search.query])]
+									: []),
 							],
 						),
 						h.span(
@@ -169,13 +213,22 @@ const content = (h: HtmlBuilder<Message>, model: Model, page: SearchPage, nowMs:
 			? [
 					h.div(
 						[h.Class("space-y-1")],
-						results.map((result, index) => searchResultItem(h, result, page.query, index === page.selectedIndex, index, nowMs)),
+						results.map((result, index) =>
+							searchResultItem(
+								h,
+								result,
+								page.query,
+								index === page.selectedIndex,
+								index,
+								nowMs,
+							),
+						),
 					),
 				]
-			: [emptyState(h, "No messages found matching your search")]
+			: [emptyState(h, "No messages found in the channels opened this session")]
 	return model.recentSearches.length > 0
 		? [recentSearches(h, model, page, nowMs)]
-		: [emptyState(h, "Start typing to search messages across all channels")]
+		: [emptyState(h, "Start typing to search messages in the channels opened this session")]
 }
 
 /** `nowMs` is the root's clock: relative times never read `Date.now()` in the view. */
@@ -191,7 +244,9 @@ export const searchPage = (h: HtmlBuilder<Message>, model: Model, page: SearchPa
 					h.div(
 						[h.Class("relative min-w-0 flex-1")],
 						[
-							h.keyed("div")("search-editor", [h.OnMount(MountSearchEditor({ placeholder: searchPlaceholder(page) }))]),
+							h.keyed("div")("search-editor", [
+								h.OnMount(MountSearchEditor({ placeholder: searchPlaceholder(page) })),
+							]),
 							...autocompletePopover(h, model),
 						],
 					),
@@ -201,7 +256,9 @@ export const searchPage = (h: HtmlBuilder<Message>, model: Model, page: SearchPa
 									[
 										h.Type("button"),
 										h.Attribute("aria-label", "Clear search"),
-										h.Class("rounded p-1 text-muted-fg transition-colors hover:bg-secondary hover:text-fg"),
+										h.Class(
+											"rounded p-1 text-muted-fg transition-colors hover:bg-secondary hover:text-fg",
+										),
 										h.OnClick(Message.ClickedClearSearch()),
 									],
 									[IconClose(h, { className: "size-4" })],

@@ -92,7 +92,14 @@ const selectedRowItem = (model: Model, kind: RowKind, id: string, key: string): 
 	if (key === "toggle")
 		return {
 			model: reflectRowMenus(modifyFields(model, { togglingRowIds: (ids) => [...ids, id] })),
-			commands: [RunRowAction({ kind, id, isEnabled: !rowEnabled(model, kind, id) })],
+			commands: [
+				RunRowAction({
+					kind,
+					id,
+					channelId: model.channelId,
+					isEnabled: !rowEnabled(model, kind, id),
+				}),
+			],
 		}
 	if (key === "remove")
 		return { model: modifyFields(model, { remove: (remove) => ConfirmAction.ask(remove, { kind, id }) }) }
@@ -218,7 +225,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				onNone: () => ({ model }),
 				onSome: ([remove, target]) => ({
 					model: modifyFields(model, { remove: () => remove }),
-					commands: [RunRowAction({ ...target, isEnabled: null })],
+					commands: [RunRowAction({ ...target, channelId: model.channelId, isEnabled: null })],
 				}),
 			}),
 		GotRemoveConfirmMessage: ({ message: confirmMessage }) => removeConfirm(model, confirmMessage),

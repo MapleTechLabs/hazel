@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { Command, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
-import { currentUser, makeShared } from "../../../../test/pages-fixtures"
+import { makeShared } from "../../../../test/pages-fixtures"
 import { Message } from "./message"
 import { init, ListOrganizationWebhooks, sharedChanged, update } from "./update"
 
@@ -9,7 +9,7 @@ import { init, ListOrganizationWebhooks, sharedChanged, update } from "./update"
 
 const route = { _tag: "SettingsIntegrations", orgSlug: "hazel" } as const
 const shared = makeShared()
-const noOrganization = makeShared({ currentUser: { ...currentUser, organizationId: null } })
+const noOrganization = makeShared({ organization: null })
 
 describe("webhook providers", () => {
 	test("the query waits for the organization, then runs once", () => {

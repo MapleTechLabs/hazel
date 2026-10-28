@@ -6,6 +6,7 @@ import {
 	moveChannelToSectionAction,
 	updateChannelMemberAction,
 } from "~/db/actions"
+import { orgOfChannelMember } from "~/db/routing-hints"
 import { catchCommon } from "../../data/actions"
 import { HazelRpc } from "../../rpc"
 import { Message, type SidebarFailure, type SidebarOutcome } from "./model"
@@ -46,7 +47,9 @@ export const LeaveChannel = Command.define("LeaveChannel", {
 	args: { memberId: ChannelMemberId },
 	messages: [Message.SucceededSidebarAction, Message.FailedSidebarAction],
 	execute: ({ memberId }) =>
-		HazelRpc.use((rpc) => rpc("channelMember.delete", { id: memberId })).pipe(
+		HazelRpc.use((rpc) =>
+			rpc("channelMember.delete", { id: memberId, organizationId: orgOfChannelMember(memberId) }),
+		).pipe(
 			Effect.as(Message.SucceededSidebarAction({ outcome: "Left" })),
 			Effect.catchTags({
 				ChannelMemberNotFoundError: () => Effect.succeed(failed("MemberNotFound")),

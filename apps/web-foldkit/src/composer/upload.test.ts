@@ -87,7 +87,7 @@ describe("uploadStream", () => {
 			UploadEvent.ProgressedUpload({ fileId: "f1", progress: 50 }),
 			UploadEvent.SucceededUpload({ fileId: "f1", attachmentId }),
 		])
-		expect(rpcCalls).toEqual([["attachment.complete", { id: attachmentId }]])
+		expect(rpcCalls).toEqual([["attachment.complete", { id: attachmentId, channelId: args.channelId }]])
 	})
 
 	test("a network failure is a typed reason, and the attachment is marked failed", async () => {
@@ -99,7 +99,14 @@ describe("uploadStream", () => {
 		}).pipe(Effect.provide(clients), Effect.runPromise)
 		expect(events).toEqual([UploadEvent.FailedUpload({ fileId: "f1", reason: "StorageNetwork" })])
 		expect(rpcCalls).toEqual([
-			["attachment.fail", { id: attachmentId, reason: "Storage upload failed: StorageNetwork" }],
+			[
+				"attachment.fail",
+				{
+					id: attachmentId,
+					channelId: args.channelId,
+					reason: "Storage upload failed: StorageNetwork",
+				},
+			],
 		])
 	})
 
@@ -111,7 +118,9 @@ describe("uploadStream", () => {
 			return sent
 		}).pipe(Effect.provide(clients), Effect.runPromise)
 		expect(xhr.isAborted).toBe(true)
-		expect(rpcCalls).toEqual([["attachment.fail", { id: attachmentId, reason: "Upload cancelled" }]])
+		expect(rpcCalls).toEqual([
+			["attachment.fail", { id: attachmentId, channelId: args.channelId, reason: "Upload cancelled" }],
+		])
 	})
 
 	test("a file over the limit fails before anything is uploaded", async () => {

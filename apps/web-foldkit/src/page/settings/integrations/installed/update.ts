@@ -1,10 +1,10 @@
-import { BotId } from "@hazel/schema"
-import { Effect } from "effect"
+import { BotId, OrganizationId } from "@hazel/schema"
+import { Effect, Schema } from "effect"
 import { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import { HazelRpc } from "../../../../rpc"
 import { AppRoute, type RouteOf } from "../../../../route"
-import type { PageReturn } from "../../../contract"
+import type { PageReturn, Shared } from "../../../contract"
 import { PageOutMessage } from "../../../out-message"
 import { catchCommon, errorToastOf, successToast } from "../../../../data/actions"
 import { failureMessage } from "~/lib/error-messages"
@@ -13,10 +13,12 @@ import type { Model } from "./model"
 
 /** `uninstallBotMutation` */
 export const UninstallBot = Command.define("UninstallBot", {
-	args: { botId: BotId },
+	args: { botId: BotId, organizationId: Schema.NullOr(OrganizationId) },
 	messages: [Message.SucceededUninstallBot, Message.FailedUninstallBot],
-	execute: ({ botId }) =>
-		HazelRpc.use((rpc) => rpc("bot.uninstall", { botId })).pipe(
+	execute: ({ botId, organizationId }) =>
+		HazelRpc.use((rpc) =>
+			rpc("bot.uninstall", { botId, organizationId: organizationId ?? undefined }),
+		).pipe(
 			Effect.as(Message.SucceededUninstallBot({ botId })),
 			Effect.catchTags({
 				BotNotFoundError: () =>
@@ -37,7 +39,7 @@ export const init = (route: RouteOf<"SettingsIntegrationsInstalled">): Return =>
 const settled = (model: Model, botId: BotId): Model =>
 	modifyFields(model, { uninstallingBotIds: (ids) => ids.filter((id) => id !== botId) })
 
-export const update = (model: Model, message: Message): Return =>
+export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
 		UpdatedBots: ({ bots }) => ({ model: modifyFields(model, { bots: () => bots }) }),
 		ClickedUninstall: ({ botId }) =>
@@ -45,7 +47,7 @@ export const update = (model: Model, message: Message): Return =>
 				? { model }
 				: {
 						model: modifyFields(model, { uninstallingBotIds: (ids) => [...ids, botId] }),
-						commands: [UninstallBot({ botId })],
+						commands: [UninstallBot({ botId, organizationId: shared.organization?.id ?? null })],
 					},
 		SucceededUninstallBot: ({ botId }) => ({
 			model: settled(model, botId),

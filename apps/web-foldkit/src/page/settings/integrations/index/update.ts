@@ -1,3 +1,4 @@
+import { OrganizationId } from "@hazel/schema"
 import { Effect } from "effect"
 import { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
@@ -9,24 +10,28 @@ import { catchCommon } from "../../../../data/actions"
 import { Message } from "./message"
 import type { Model } from "./model"
 
-/** `listOrganizationWebhooksMutation({ payload: {} })`, once the user's organization is known. */
+/** `listOrganizationWebhooksMutation`, once the route's organization is known. */
 export const ListOrganizationWebhooks = Command.define("ListOrganizationWebhooks", {
+	args: { organizationId: OrganizationId },
 	messages: [Message.SucceededListWebhooks, Message.FailedListWebhooks],
-	execute: HazelRpc.use((rpc) => rpc("channelWebhook.listByOrganization", {})).pipe(
-		Effect.map((result) =>
-			Message.SucceededListWebhooks({ names: result.data.map((webhook) => webhook.name) }),
+	execute: ({ organizationId }) =>
+		HazelRpc.use((rpc) => rpc("channelWebhook.listByOrganization", { organizationId })).pipe(
+			Effect.map((result) =>
+				Message.SucceededListWebhooks({ names: result.data.map((webhook) => webhook.name) }),
+			),
+			catchCommon((reason) => Message.FailedListWebhooks({ reason })),
 		),
-		catchCommon((reason) => Message.FailedListWebhooks({ reason })),
-	),
 })
 
-const requestWebhooksOnce = (model: Model, shared: Shared): PageReturn<Model, Message> =>
-	model.hasRequestedWebhooks || !shared.currentUser?.organizationId
+const requestWebhooksOnce = (model: Model, shared: Shared): PageReturn<Model, Message> => {
+	const organizationId = shared.organization?.id
+	return model.hasRequestedWebhooks || organizationId === undefined
 		? { model }
 		: {
 				model: modifyFields(model, { hasRequestedWebhooks: () => true }),
-				commands: [ListOrganizationWebhooks()],
+				commands: [ListOrganizationWebhooks({ organizationId })],
 			}
+}
 
 export const init = (route: RouteOf<"SettingsIntegrations">, shared: Shared): PageReturn<Model, Message> =>
 	requestWebhooksOnce(

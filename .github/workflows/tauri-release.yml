@@ -65,7 +65,6 @@ jobs:
                   APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
                   VITE_BACKEND_URL: ${{ vars.VITE_BACKEND_URL }}
                   VITE_CLUSTER_URL: ${{ vars.VITE_CLUSTER_URL }}
-                  VITE_ELECTRIC_URL: ${{ vars.VITE_ELECTRIC_URL }}
                   VITE_R2_PUBLIC_URL: ${{ vars.VITE_R2_PUBLIC_URL }}
               with:
                   projectPath: apps/desktop

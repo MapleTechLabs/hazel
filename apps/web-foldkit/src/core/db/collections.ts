@@ -14,6 +14,7 @@ import {
 	ConnectParticipant,
 	CustomEmoji,
 	IntegrationConnection,
+	JsonDate,
 	Message,
 	MessageReaction,
 	Notification,
@@ -24,102 +25,97 @@ import {
 	User,
 	UserPresenceStatus,
 } from "@hazel/domain/models"
-import type { Schema } from "effect"
-import { electricFetchClient, electricOnError } from "~/lib/electric-fetch"
-import { createEffectCollection, type EffectCollection } from "@hazel/effect-electric-db-collection"
-
-const electricUrl = import.meta.env.VITE_ELECTRIC_URL
-
-interface ElectricCollectionOptions {
-	/** TanStack DB's sync mode; the default loads the whole shape eagerly. */
-	readonly syncMode?: "eager" | "on-demand"
-	/** Parse `timestamptz` columns into `Date`s before the schema sees them (default true). */
-	readonly parseTimestamps?: boolean
-}
+import { OrganizationId } from "@hazel/schema"
+import { Schema } from "effect"
+import {
+	type CollectionSources,
+	channelPartition,
+	createEffectCollection,
+	type EffectCollection,
+} from "@hazel/effect-db-collection"
+import { orgSources, syncHub, unionSources, userSources } from "./sync"
 
 /**
- * One Electric-synced table: the shape is the table itself (the proxy scopes it to the user), rows are keyed by
- * `id`. Retries: the Electric client (5xx, 429, network) and `electricOnError` (401), so collection backoff is off.
+ * Collections over the Durable Object sources (`./sync.ts`): the user's own object, the orgs it
+ * belongs to (plus Connect host orgs), and on demand the channels a query names by `channelId`.
+ * Rows are keyed by `id`, the server's `pk`.
  */
-const electricCollection = <A extends { readonly id: string }>(
+const syncedCollection = <A extends { readonly id: string }>(
 	table: string,
 	schema: Schema.Schema<A>,
-	{ syncMode, parseTimestamps = true }: ElectricCollectionOptions = {},
+	sources: CollectionSources,
 ): EffectCollection<A> =>
-	createEffectCollection({
+	createEffectCollection<A, string | number>({
 		id: table,
-		...(syncMode === undefined ? {} : { syncMode }),
-		backoff: false,
-		shapeOptions: {
-			url: electricUrl,
-			params: { table },
-			// The parser's value type follows the row, which a generic row can't name; `Schema.JsonDate`
-			// columns accept the string form too, so this is only the fast path.
-			...(parseTimestamps
-				? { parser: { timestamptz: ((date: string) => new Date(date)) as never } }
-				: {}),
-			fetchClient: electricFetchClient,
-			onError: electricOnError,
-		},
+		table,
 		schema,
 		getKey: (item) => item.id,
+		hub: syncHub,
+		sources,
 	})
 
-export const organizationCollection = electricCollection("organizations", Organization.Schema)
-export const messageCollection = electricCollection("messages", Message.Schema)
-export const messageReactionCollection = electricCollection("message_reactions", MessageReaction.Schema, {
-	syncMode: "on-demand",
+const orgCollection = <A extends { readonly id: string }>(table: string, schema: Schema.Schema<A>) =>
+	syncedCollection(table, schema, orgSources)
+
+const channelCollectionOf = <A extends { readonly id: string }>(table: string, schema: Schema.Schema<A>) =>
+	syncedCollection(table, schema, channelPartition())
+
+/** The user's organizations (`UserObject`): which `OrgObject`s to open. Keyed by `organizationId`. */
+export const UserOrganization = Schema.Struct({
+	organizationId: OrganizationId,
+	joinedAt: JsonDate,
 })
-export const pinnedMessageCollection = electricCollection("pinned_messages", PinnedMessage.Schema)
-export const notificationCollection = electricCollection("notifications", Notification.Schema, {
-	syncMode: "on-demand",
+export type UserOrganization = typeof UserOrganization.Type
+
+export const userOrganizationCollection = createEffectCollection({
+	id: "user_organizations",
+	table: "user_organizations",
+	schema: UserOrganization,
+	getKey: (row) => row.organizationId,
+	hub: syncHub,
+	sources: userSources,
 })
-export const userCollection = electricCollection("users", User.Schema)
-export const organizationMemberCollection = electricCollection(
-	"organization_members",
-	OrganizationMember.Schema,
-)
-export const channelCollection = electricCollection("channels", Channel.Schema)
-export const connectConversationCollection = electricCollection(
+
+export const organizationCollection = orgCollection("organizations", Organization.Schema)
+export const messageCollection = channelCollectionOf("messages", Message.Schema)
+export const messageReactionCollection = channelCollectionOf("message_reactions", MessageReaction.Schema)
+export const pinnedMessageCollection = channelCollectionOf("pinned_messages", PinnedMessage.Schema)
+export const notificationCollection = syncedCollection("notifications", Notification.Schema, userSources)
+export const userCollection = orgCollection("users", User.Schema)
+export const organizationMemberCollection = orgCollection("organization_members", OrganizationMember.Schema)
+export const channelCollection = orgCollection("channels", Channel.Schema)
+export const connectConversationCollection = orgCollection(
 	"connect_conversations",
 	ConnectConversation.Schema,
 )
-export const connectConversationChannelCollection = electricCollection(
+export const connectConversationChannelCollection = orgCollection(
 	"connect_conversation_channels",
 	ConnectConversationChannel.Schema,
 )
-export const connectParticipantCollection = electricCollection(
-	"connect_participants",
-	ConnectParticipant.Schema,
-)
-export const channelMemberCollection = electricCollection("channel_members", ChannelMember.Schema)
-export const channelSectionCollection = electricCollection("channel_sections", ChannelSection.Schema)
-export const attachmentCollection = electricCollection("attachments", Attachment.Schema)
-export const typingIndicatorCollection = electricCollection("typing_indicators", TypingIndicator.Schema, {
-	syncMode: "eager",
-	parseTimestamps: false,
-})
-export const userPresenceStatusCollection = electricCollection(
+export const connectParticipantCollection = orgCollection("connect_participants", ConnectParticipant.Schema)
+export const channelMemberCollection = orgCollection("channel_members", ChannelMember.Schema)
+export const channelSectionCollection = orgCollection("channel_sections", ChannelSection.Schema)
+export const attachmentCollection = channelCollectionOf("attachments", Attachment.Schema)
+export const typingIndicatorCollection = channelCollectionOf("typing_indicators", TypingIndicator.Schema)
+export const userPresenceStatusCollection = syncedCollection(
 	"user_presence_status",
 	UserPresenceStatus.Schema,
+	unionSources(userSources, orgSources),
 )
-export const integrationConnectionCollection = electricCollection(
+export const integrationConnectionCollection = orgCollection(
 	"integration_connections",
 	IntegrationConnection.Schema,
 )
-export const chatSyncConnectionCollection = electricCollection(
-	"chat_sync_connections",
-	ChatSyncConnection.Schema,
-)
-export const chatSyncChannelLinkCollection = electricCollection(
+export const chatSyncConnectionCollection = orgCollection("chat_sync_connections", ChatSyncConnection.Schema)
+export const chatSyncChannelLinkCollection = orgCollection(
 	"chat_sync_channel_links",
 	ChatSyncChannelLink.Schema,
 )
-export const chatSyncMessageLinkCollection = electricCollection(
+export const chatSyncMessageLinkCollection = channelCollectionOf(
 	"chat_sync_message_links",
 	ChatSyncMessageLink.Schema,
 )
-export const botCollection = electricCollection("bots", Bot.Schema)
-export const botCommandCollection = electricCollection("bot_commands", BotCommand.Schema)
-export const botInstallationCollection = electricCollection("bot_installations", BotInstallation.Schema)
-export const customEmojiCollection = electricCollection("custom_emojis", CustomEmoji.Schema)
+export const botCollection = orgCollection("bots", Bot.Schema)
+export const botCommandCollection = orgCollection("bot_commands", BotCommand.Schema)
+export const botInstallationCollection = orgCollection("bot_installations", BotInstallation.Schema)
+export const customEmojiCollection = orgCollection("custom_emojis", CustomEmoji.Schema)

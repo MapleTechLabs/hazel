@@ -1,9 +1,9 @@
 /**
  * `GET /sync/:kind/:id`: the sync WebSocket (`infra/durable-object-sync-plan.md` §3 Auth).
  *
- * The client offers `Sec-WebSocket-Protocol: hazel.v1, <session token>` (browsers cannot set an
- * Authorization header on a WebSocket). The token is verified the way the api verifies a bearer
- * session; the upgrade is then forwarded to the object with the principal and the object's id as
+ * The client offers `Sec-WebSocket-Protocol: hazel.v1, <token>` (browsers cannot set an
+ * Authorization header on a WebSocket): the access token from `POST /auth/token`, or a session
+ * credential, verified the way the api verifies a bearer session; the upgrade is then forwarded to the object with the principal and the object's id as
  * headers (objects are reachable only through bindings, so they trust them). The object
  * authorizes the principal against its own tables.
  *
@@ -42,6 +42,8 @@ export const tokenFromProtocols = (header: string | undefined): string | undefin
 	const token = offered[1]
 	return token === undefined || token.length === 0 ? undefined : token
 }
+
+const isJwt = (token: string) => token.split(".").length === 3
 
 /** A 101 whose socket is closed right away with `code`, so the browser sees the reason. */
 const acceptAndClose = (code: number, reason: string) => {
@@ -95,7 +97,9 @@ export const makeSyncRoute = (env: Record<string, unknown>) =>
 				if (token === undefined) return acceptAndClose(SyncCloseCode.Reauth, "missing_token")
 
 				const session = yield* HazelSession
-				const user = yield* session.verify(token).pipe(
+				// The web app sends its access token (a JWT); native clients may send the session itself.
+				const verify = isJwt(token) ? session.verifyAccessToken : session.verify
+				const user = yield* verify(token).pipe(
 					Effect.catchTags({
 						InvalidBearerTokenError: () => Effect.succeedNone,
 						SessionLoadError: (error) =>

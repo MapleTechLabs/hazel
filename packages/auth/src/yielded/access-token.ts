@@ -151,6 +151,18 @@ const makeVerifier = (issuer: string) =>
 	})
 
 /**
+ * A verifier over the API's own signing key, for the API itself: the sync route reads the access
+ * token from `Sec-WebSocket-Protocol` (a browser cannot read the HttpOnly session cookie to send).
+ */
+export const makeLocalVerifier = (issuer: string, key: SigningKey) =>
+	Effect.gen(function* () {
+		const jwk = yield* publicJwk(key).pipe(Effect.provide(VerifierCryptoLive))
+		return yield* makeVerifier(issuer).pipe(
+			Effect.provide(Layer.merge(Jwks.layerLocal({ keys: [jwk] }), VerifierCryptoLive)),
+		)
+	})
+
+/**
  * Verifies the access tokens `POST /auth/token` issues, for the Electric proxy and the
  * actors. The issuer is the API origin, so a token only verifies on its own stage.
  */

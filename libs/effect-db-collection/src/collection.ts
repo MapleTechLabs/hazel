@@ -317,6 +317,9 @@ const runtimeLogger =
 
 const DEFAULT_TIMEOUT = 30_000
 
+/** `local:<seq>`: a write position no source streams. */
+const LOCAL_POSITION = /^local:\d+$/
+
 /**
  * TanStack DB collection options for a table synced from Durable Object sources.
  *
@@ -350,6 +353,8 @@ export function doCollectionOptions<
 	hub.registerSink(mirror)
 
 	const awaitSeq = (txid: string, timeout: number = DEFAULT_TIMEOUT): Promise<boolean> => {
+		// Written off any object (the api Worker's directory path): no source confirms it.
+		if (typeof txid === "string" && LOCAL_POSITION.test(txid)) return Promise.resolve(true)
 		const position = typeof txid === "string" ? parseWritePosition(txid) : undefined
 		if (position === undefined) {
 			return Promise.reject(
