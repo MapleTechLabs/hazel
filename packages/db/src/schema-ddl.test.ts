@@ -1,29 +1,31 @@
-import { readFileSync } from "node:fs"
+import { readdirSync, readFileSync } from "node:fs"
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient"
 import { Effect } from "effect"
 import * as SqlClient from "effect/sql/SqlClient"
 import { describe, expect, it } from "vitest"
-import { initialStatements } from "./migrations.generated"
+import { planMigration, renderD1Migration, storeSchemaOf, type StoreSnapshot } from "./migration-plan"
 import { applyMigrations, renderStoreSchema, storeMigrations } from "./schema-ddl"
 import { storeNames, storeTables } from "./stores"
+import { structuralSchema } from "./test-schema"
 
 const withSqlite = <A, E>(effect: Effect.Effect<A, E, SqlClient.SqlClient>) =>
 	Effect.runPromise(effect.pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:" }))))
 
-/** The schema SQLite holds, as its own normalized `CREATE` text. */
-const schemaOf = Effect.gen(function* () {
-	const sql = yield* SqlClient.SqlClient
-	const rows = yield* sql<{ readonly sql: string }>`
-		SELECT sql FROM sqlite_master
-		WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND name != '_migrations'
-		ORDER BY type, name`
-	return rows.map((row) => row.sql)
-})
+const snapshotOf = (store: string): StoreSnapshot =>
+	JSON.parse(readFileSync(new URL(`../snapshots/${store}.json`, import.meta.url), "utf8"))
 
 describe.each(storeNames)("the %s store", (store) => {
-	it("commits an initial migration equal to the tables' DDL (run `bun run db:generate-sqlite`)", async () => {
-		const rendered = await Effect.runPromise(renderStoreSchema(storeTables[store]))
-		expect(initialStatements[store]).toEqual(rendered)
+	it("has no schema change pending (run `bun run db:generate-sqlite --name <name>`)", async () => {
+		const snapshot = snapshotOf(store)
+		expect(snapshot.migration).toBe(storeMigrations[store].at(-1)!.id)
+		const current = await Effect.runPromise(storeSchemaOf(storeTables[store]))
+		expect(planMigration(snapshot, current)).toEqual({ _tag: "Unchanged" })
+	})
+
+	it("numbers its migrations in order, starting with 0001_initial", () => {
+		const ids = storeMigrations[store].map((migration) => migration.id)
+		expect(ids[0]).toBe("0001_initial")
+		ids.forEach((id, i) => expect(id.startsWith(`${String(i + 1).padStart(4, "0")}_`)).toBe(true))
 	})
 
 	it("migrates to the schema its tables declare", async () => {
@@ -33,7 +35,7 @@ describe.each(storeNames)("the %s store", (store) => {
 				const applied = yield* applyMigrations(sql, store)
 				expect(applied).toEqual(storeMigrations[store].map((migration) => migration.id))
 				expect(yield* applyMigrations(sql, store)).toEqual([])
-				return yield* schemaOf
+				return yield* structuralSchema
 			}),
 		)
 		const fresh = await withSqlite(
@@ -41,7 +43,7 @@ describe.each(storeNames)("the %s store", (store) => {
 				const sql = yield* SqlClient.SqlClient
 				for (const statement of yield* renderStoreSchema(storeTables[store]))
 					yield* sql.unsafe(statement)
-				return yield* schemaOf
+				return yield* structuralSchema
 			}),
 		)
 		expect(migrated).toEqual(fresh)
@@ -49,12 +51,13 @@ describe.each(storeNames)("the %s store", (store) => {
 })
 
 describe("the D1 migration folder", () => {
-	it("holds the directory's initial migration (run `bun run db:generate-sqlite`)", () => {
-		const file = readFileSync(
-			new URL("../migrations/directory/0001_initial/migration.sql", import.meta.url),
-			"utf8",
-		)
-		expect(file).toBe(`${initialStatements.directory.join(";\n--> statement-breakpoint\n")};\n`)
+	it("holds each directory migration, in the layout Alchemy applies", () => {
+		const folder = new URL("../migrations/directory/", import.meta.url)
+		expect(readdirSync(folder).sort()).toEqual(storeMigrations.directory.map((migration) => migration.id))
+		for (const migration of storeMigrations.directory) {
+			const file = readFileSync(new URL(`${migration.id}/migration.sql`, folder), "utf8")
+			expect(file).toBe(renderD1Migration(migration.statements))
+		}
 	})
 })
 

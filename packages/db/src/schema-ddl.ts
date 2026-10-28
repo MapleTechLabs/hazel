@@ -2,9 +2,9 @@
  * Each store's DDL and its versioned migrations.
  *
  * `renderStoreSchema` writes a store's current schema from its tables. `storeMigrations` is what a
- * store applies, in order: `0001_initial` is the committed render (`bun run db:generate-sqlite`
- * rewrites it, and a test fails when it drifts from the tables). Once a store is deployed, a schema
- * change is a new migration appended here, not an edit of `0001_initial`.
+ * store applies, in order, from `migrations.generated.ts`: `bun run db:generate-sqlite --name <name>`
+ * appends the diff from the store's snapshot (`snapshots/<store>.json`), and a test fails while the
+ * tables differ from it. Committed migrations are never edited.
  */
 import {
 	sqliteEntitiesOf,
@@ -15,7 +15,7 @@ import type { SqliteSchemaTable } from "@maple-dev/effect-orm/sqlite"
 import { Effect } from "effect"
 import type * as SqlClient from "effect/sql/SqlClient"
 import type { SqlError } from "effect/sql/SqlError"
-import { initialStatements } from "./migrations.generated"
+import { generatedMigrations } from "./migrations.generated"
 import type { StoreName } from "./stores"
 import { extraIndexes, renderExtraIndex } from "./tables/extra-indexes"
 
@@ -43,12 +43,7 @@ export interface StoreMigration {
 	readonly statements: ReadonlyArray<string>
 }
 
-export const storeMigrations: Record<StoreName, ReadonlyArray<StoreMigration>> = {
-	directory: [{ id: "0001_initial", statements: initialStatements.directory }],
-	org: [{ id: "0001_initial", statements: initialStatements.org }],
-	channel: [{ id: "0001_initial", statements: initialStatements.channel }],
-	user: [{ id: "0001_initial", statements: initialStatements.user }],
-}
+export const storeMigrations: Record<StoreName, ReadonlyArray<StoreMigration>> = generatedMigrations
 
 /** The ledger `applyMigrations` keeps: `(store, id)`, so stores can share a test database. */
 export const MIGRATIONS_TABLE = "_migrations"

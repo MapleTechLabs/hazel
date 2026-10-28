@@ -12,7 +12,7 @@
 		"./node": "./src/node.ts"
 	},
 	"scripts": {
-		"db:generate-sqlite": "bun scripts/generate-sqlite.ts && oxfmt src/migrations.generated.ts",
+		"db:generate-sqlite": "bun scripts/generate-sqlite.ts",
 		"test": "vitest run",
 		"typecheck": "tsc --noEmit"
 	},

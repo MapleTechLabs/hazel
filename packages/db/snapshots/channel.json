@@ -1,0 +1,939 @@
+{
+	"migration": "0001_initial",
+	"entities": [
+		{
+			"kind": "table",
+			"name": "attachments",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "channel_bots",
+			"primaryKey": {
+				"columns": ["botId"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "channel_viewers",
+			"primaryKey": {
+				"columns": ["userId"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "chat_sync_event_receipts",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "chat_sync_message_links",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "message_reactions",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "messages",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "pinned_messages",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "typing_indicators",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "column",
+			"table": "attachments",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "attachments",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "attachments",
+			"name": "channelId",
+			"position": 2,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "attachments",
+			"name": "messageId",
+			"position": 3,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "attachments",
+			"name": "fileName",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "attachments",
+			"name": "fileSize",
+			"position": 5,
+			"type": "integer",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "attachments",
+			"name": "externalUrl",
+			"position": 6,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "attachments",
+			"name": "uploadedBy",
+			"position": 7,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "attachments",
+			"name": "status",
+			"position": 8,
+			"type": "text",
+			"notNull": true,
+			"default": "'uploading'"
+		},
+		{
+			"kind": "column",
+			"table": "attachments",
+			"name": "uploadedAt",
+			"position": 9,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "attachments",
+			"name": "deletedAt",
+			"position": 10,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_bots",
+			"name": "botId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_bots",
+			"name": "botUserId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_viewers",
+			"name": "userId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_viewers",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_viewers",
+			"name": "role",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_event_receipts",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_event_receipts",
+			"name": "syncConnectionId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_event_receipts",
+			"name": "channelLinkId",
+			"position": 2,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_event_receipts",
+			"name": "source",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_event_receipts",
+			"name": "externalEventId",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_event_receipts",
+			"name": "dedupeKey",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_event_receipts",
+			"name": "payloadHash",
+			"position": 6,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_event_receipts",
+			"name": "status",
+			"position": 7,
+			"type": "text",
+			"notNull": true,
+			"default": "'processed'"
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_event_receipts",
+			"name": "errorMessage",
+			"position": 8,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_event_receipts",
+			"name": "processedAt",
+			"position": 9,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_event_receipts",
+			"name": "createdAt",
+			"position": 10,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_message_links",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_message_links",
+			"name": "channelLinkId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_message_links",
+			"name": "hazelMessageId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_message_links",
+			"name": "externalMessageId",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_message_links",
+			"name": "source",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": "'hazel'"
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_message_links",
+			"name": "rootHazelMessageId",
+			"position": 5,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_message_links",
+			"name": "rootExternalMessageId",
+			"position": 6,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_message_links",
+			"name": "hazelThreadChannelId",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_message_links",
+			"name": "externalThreadId",
+			"position": 8,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_message_links",
+			"name": "lastSyncedAt",
+			"position": 9,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_message_links",
+			"name": "createdAt",
+			"position": 10,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_message_links",
+			"name": "updatedAt",
+			"position": 11,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_message_links",
+			"name": "deletedAt",
+			"position": 12,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "message_reactions",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "message_reactions",
+			"name": "messageId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "message_reactions",
+			"name": "channelId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "message_reactions",
+			"name": "conversationId",
+			"position": 3,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "message_reactions",
+			"name": "userId",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "message_reactions",
+			"name": "emoji",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "message_reactions",
+			"name": "createdAt",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "messages",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "messages",
+			"name": "channelId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "messages",
+			"name": "conversationId",
+			"position": 2,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "messages",
+			"name": "authorId",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "messages",
+			"name": "content",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "messages",
+			"name": "embeds",
+			"position": 5,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "messages",
+			"name": "replyToMessageId",
+			"position": 6,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "messages",
+			"name": "threadChannelId",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "messages",
+			"name": "createdAt",
+			"position": 8,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "messages",
+			"name": "updatedAt",
+			"position": 9,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "messages",
+			"name": "deletedAt",
+			"position": 10,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "pinned_messages",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "pinned_messages",
+			"name": "channelId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "pinned_messages",
+			"name": "messageId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "pinned_messages",
+			"name": "pinnedBy",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "pinned_messages",
+			"name": "pinnedAt",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "typing_indicators",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "typing_indicators",
+			"name": "channelId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "typing_indicators",
+			"name": "memberId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "typing_indicators",
+			"name": "lastTyped",
+			"position": 3,
+			"type": "integer",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "index",
+			"table": "attachments",
+			"name": "attachments_channel_id_idx",
+			"unique": false,
+			"columns": ["\"channelId\""]
+		},
+		{
+			"kind": "index",
+			"table": "attachments",
+			"name": "attachments_deleted_at_idx",
+			"unique": false,
+			"columns": ["\"deletedAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "attachments",
+			"name": "attachments_message_id_idx",
+			"unique": false,
+			"columns": ["\"messageId\""]
+		},
+		{
+			"kind": "index",
+			"table": "attachments",
+			"name": "attachments_message_uploaded_at_idx",
+			"unique": false,
+			"columns": ["\"messageId\"", "\"uploadedAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "attachments",
+			"name": "attachments_organization_id_idx",
+			"unique": false,
+			"columns": ["\"organizationId\""]
+		},
+		{
+			"kind": "index",
+			"table": "attachments",
+			"name": "attachments_status_idx",
+			"unique": false,
+			"columns": ["\"status\""]
+		},
+		{
+			"kind": "index",
+			"table": "attachments",
+			"name": "attachments_uploaded_by_idx",
+			"unique": false,
+			"columns": ["\"uploadedBy\""]
+		},
+		{
+			"kind": "index",
+			"table": "chat_sync_event_receipts",
+			"name": "chat_sync_receipt_channel_link_idx",
+			"unique": false,
+			"columns": ["\"channelLinkId\""]
+		},
+		{
+			"kind": "index",
+			"table": "chat_sync_event_receipts",
+			"name": "chat_sync_receipt_connection_idx",
+			"unique": false,
+			"columns": ["\"syncConnectionId\""]
+		},
+		{
+			"kind": "index",
+			"table": "chat_sync_event_receipts",
+			"name": "chat_sync_receipt_dedupe_unique",
+			"unique": true,
+			"columns": ["\"syncConnectionId\"", "\"source\"", "\"dedupeKey\""]
+		},
+		{
+			"kind": "index",
+			"table": "chat_sync_event_receipts",
+			"name": "chat_sync_receipt_processed_at_idx",
+			"unique": false,
+			"columns": ["\"processedAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "chat_sync_event_receipts",
+			"name": "chat_sync_receipt_source_idx",
+			"unique": false,
+			"columns": ["\"source\""]
+		},
+		{
+			"kind": "index",
+			"table": "chat_sync_message_links",
+			"name": "chat_sync_msg_link_channel_idx",
+			"unique": false,
+			"columns": ["\"channelLinkId\""]
+		},
+		{
+			"kind": "index",
+			"table": "chat_sync_message_links",
+			"name": "chat_sync_msg_link_deleted_at_idx",
+			"unique": false,
+			"columns": ["\"deletedAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "chat_sync_message_links",
+			"name": "chat_sync_msg_link_external_message_idx",
+			"unique": false,
+			"columns": ["\"externalMessageId\""]
+		},
+		{
+			"kind": "index",
+			"table": "chat_sync_message_links",
+			"name": "chat_sync_msg_link_hazel_message_idx",
+			"unique": false,
+			"columns": ["\"hazelMessageId\""]
+		},
+		{
+			"kind": "index",
+			"table": "chat_sync_message_links",
+			"name": "chat_sync_msg_link_root_hazel_idx",
+			"unique": false,
+			"columns": ["\"rootHazelMessageId\""]
+		},
+		{
+			"kind": "index",
+			"table": "message_reactions",
+			"name": "reactions_channel_id_idx",
+			"unique": false,
+			"columns": ["\"channelId\""]
+		},
+		{
+			"kind": "index",
+			"table": "message_reactions",
+			"name": "reactions_conversation_id_idx",
+			"unique": false,
+			"columns": ["\"conversationId\""]
+		},
+		{
+			"kind": "index",
+			"table": "message_reactions",
+			"name": "reactions_message_id_idx",
+			"unique": false,
+			"columns": ["\"messageId\""]
+		},
+		{
+			"kind": "index",
+			"table": "message_reactions",
+			"name": "reactions_message_user_emoji_idx",
+			"unique": false,
+			"columns": ["\"messageId\"", "\"userId\"", "\"emoji\""]
+		},
+		{
+			"kind": "index",
+			"table": "message_reactions",
+			"name": "reactions_message_user_emoji_unique",
+			"unique": true,
+			"columns": ["\"messageId\"", "\"userId\"", "\"emoji\""]
+		},
+		{
+			"kind": "index",
+			"table": "message_reactions",
+			"name": "reactions_user_id_idx",
+			"unique": false,
+			"columns": ["\"userId\""]
+		},
+		{
+			"kind": "index",
+			"table": "messages",
+			"name": "messages_author_id_idx",
+			"unique": false,
+			"columns": ["\"authorId\""]
+		},
+		{
+			"kind": "index",
+			"table": "messages",
+			"name": "messages_channel_id_idx",
+			"unique": false,
+			"columns": ["\"channelId\""]
+		},
+		{
+			"kind": "index",
+			"table": "messages",
+			"name": "messages_conversation_id_idx",
+			"unique": false,
+			"columns": ["\"conversationId\""]
+		},
+		{
+			"kind": "index",
+			"table": "messages",
+			"name": "messages_created_at_idx",
+			"unique": false,
+			"columns": ["\"createdAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "messages",
+			"name": "messages_deleted_at_idx",
+			"unique": false,
+			"columns": ["\"deletedAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "messages",
+			"name": "messages_reply_to_idx",
+			"unique": false,
+			"columns": ["\"replyToMessageId\""]
+		},
+		{
+			"kind": "index",
+			"table": "messages",
+			"name": "messages_thread_channel_idx",
+			"unique": false,
+			"columns": ["\"threadChannelId\""]
+		},
+		{
+			"kind": "index",
+			"table": "pinned_messages",
+			"name": "pinned_messages_channel_id_idx",
+			"unique": false,
+			"columns": ["\"channelId\""]
+		},
+		{
+			"kind": "index",
+			"table": "pinned_messages",
+			"name": "pinned_messages_message_id_idx",
+			"unique": false,
+			"columns": ["\"messageId\""]
+		},
+		{
+			"kind": "index",
+			"table": "pinned_messages",
+			"name": "pinned_messages_unique_idx",
+			"unique": true,
+			"columns": ["\"channelId\"", "\"messageId\""]
+		},
+		{
+			"kind": "index",
+			"table": "typing_indicators",
+			"name": "typing_indicators_channel_member_unique",
+			"unique": true,
+			"columns": ["\"channelId\"", "\"memberId\""]
+		},
+		{
+			"kind": "index",
+			"table": "typing_indicators",
+			"name": "typing_indicators_channel_timestamp_idx",
+			"unique": false,
+			"columns": ["\"channelId\"", "\"lastTyped\""]
+		},
+		{
+			"kind": "index",
+			"table": "typing_indicators",
+			"name": "typing_indicators_timestamp_idx",
+			"unique": false,
+			"columns": ["\"lastTyped\""]
+		}
+	],
+	"extraIndexes": [
+		{
+			"name": "chat_sync_msg_link_external_unique",
+			"table": "chat_sync_message_links",
+			"unique": true,
+			"on": ["channelLinkId", "externalMessageId"],
+			"where": "\"deletedAt\" IS NULL"
+		},
+		{
+			"name": "chat_sync_msg_link_hazel_unique",
+			"table": "chat_sync_message_links",
+			"unique": true,
+			"on": ["channelLinkId", "hazelMessageId"],
+			"where": "\"deletedAt\" IS NULL"
+		}
+	]
+}

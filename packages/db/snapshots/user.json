@@ -1,0 +1,278 @@
+{
+	"migration": "0001_initial",
+	"entities": [
+		{
+			"kind": "table",
+			"name": "notifications",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "user_organizations",
+			"primaryKey": {
+				"columns": ["organizationId"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "user_presence_status",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "column",
+			"table": "notifications",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "notifications",
+			"name": "memberId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "notifications",
+			"name": "targetedResourceId",
+			"position": 2,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "notifications",
+			"name": "targetedResourceType",
+			"position": 3,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "notifications",
+			"name": "resourceId",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "notifications",
+			"name": "resourceType",
+			"position": 5,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "notifications",
+			"name": "createdAt",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "notifications",
+			"name": "readAt",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "user_organizations",
+			"name": "organizationId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "user_organizations",
+			"name": "joinedAt",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_status",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_status",
+			"name": "userId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_status",
+			"name": "status",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": "'online'"
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_status",
+			"name": "customMessage",
+			"position": 3,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_status",
+			"name": "statusEmoji",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_status",
+			"name": "statusExpiresAt",
+			"position": 5,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_status",
+			"name": "activeChannelId",
+			"position": 6,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_status",
+			"name": "suppressNotifications",
+			"position": 7,
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_status",
+			"name": "updatedAt",
+			"position": 8,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "user_presence_status",
+			"name": "lastSeenAt",
+			"position": 9,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "index",
+			"table": "notifications",
+			"name": "notifications_member_created_id_idx",
+			"unique": false,
+			"columns": ["\"memberId\"", "\"createdAt\"", "\"id\""]
+		},
+		{
+			"kind": "index",
+			"table": "notifications",
+			"name": "notifications_member_id_idx",
+			"unique": false,
+			"columns": ["\"memberId\""]
+		},
+		{
+			"kind": "index",
+			"table": "notifications",
+			"name": "notifications_read_at_idx",
+			"unique": false,
+			"columns": ["\"readAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "notifications",
+			"name": "notifications_resource_idx",
+			"unique": false,
+			"columns": ["\"resourceId\"", "\"resourceType\""]
+		},
+		{
+			"kind": "index",
+			"table": "notifications",
+			"name": "notifications_targeted_resource_idx",
+			"unique": false,
+			"columns": ["\"targetedResourceId\"", "\"targetedResourceType\""]
+		},
+		{
+			"kind": "index",
+			"table": "user_presence_status",
+			"name": "user_presence_status_active_channel_idx",
+			"unique": false,
+			"columns": ["\"activeChannelId\""]
+		},
+		{
+			"kind": "index",
+			"table": "user_presence_status",
+			"name": "user_presence_status_last_seen_idx",
+			"unique": false,
+			"columns": ["\"lastSeenAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "user_presence_status",
+			"name": "user_presence_status_userId_unique",
+			"unique": true,
+			"columns": ["\"userId\""]
+		},
+		{
+			"kind": "index",
+			"table": "user_presence_status",
+			"name": "user_presence_status_user_id_idx",
+			"unique": false,
+			"columns": ["\"userId\""]
+		}
+	],
+	"extraIndexes": [
+		{
+			"name": "notifications_message_channel_dedupe_idx",
+			"table": "notifications",
+			"unique": true,
+			"on": ["memberId", "resourceId", "targetedResourceId"],
+			"where": "\"resourceType\" = 'message' AND \"targetedResourceType\" = 'channel'"
+		}
+	]
+}

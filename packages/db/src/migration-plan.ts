@@ -1,0 +1,131 @@
+/**
+ * Plans a store's next migration: the diff between its committed snapshot (the schema its last
+ * migration leaves) and its current tables. Used by `bun run db:generate-sqlite`.
+ *
+ * effect-orm's `diffSqliteSchemas` diffs the tables, columns, keys and indexes it models; the extra
+ * (partial and expression) indexes in `src/tables/extra-indexes.ts` are diffed here by their DDL.
+ */
+import {
+	diffSqliteSchemas,
+	renderSqliteOp,
+	sortEntities,
+	sqliteEntitiesOf,
+	type Hint,
+	type SchemaDefinitionError,
+	type SqliteMigrationOp,
+	type SqliteSchemaEntity,
+	type UnsupportedChange,
+} from "@maple-dev/effect-orm/schema"
+import type { SqliteSchemaTable } from "@maple-dev/effect-orm/sqlite"
+import { Effect } from "effect"
+import type { StoreMigration } from "./schema-ddl"
+import type { StoreName } from "./stores"
+import { type ExtraIndex, extraIndexes, renderExtraIndex } from "./tables/extra-indexes"
+
+/** The schema a store holds after its last migration, committed in `snapshots/<store>.json`. */
+export interface StoreSnapshot {
+	/** The migration that leaves the store in this schema. */
+	readonly migration: string
+	readonly entities: ReadonlyArray<SqliteSchemaEntity>
+	readonly extraIndexes: ReadonlyArray<ExtraIndex>
+}
+
+export interface StoreSchema {
+	readonly entities: ReadonlyArray<SqliteSchemaEntity>
+	readonly extraIndexes: ReadonlyArray<ExtraIndex>
+}
+
+/** A store's tables as snapshot entities, sorted so the snapshot file is stable. */
+export const storeSchemaOf = (
+	tables: ReadonlyArray<SqliteSchemaTable<string, any>>,
+): Effect.Effect<StoreSchema, SchemaDefinitionError> =>
+	sqliteEntitiesOf([...new Map(tables.map((table) => [table.name, table])).values()]).pipe(
+		Effect.map((entities) => {
+			const names = new Set(tables.map((table) => table.name))
+			return {
+				entities: sortEntities(entities) as ReadonlyArray<SqliteSchemaEntity>,
+				extraIndexes: [...extraIndexes]
+					.filter((index) => names.has(index.table))
+					.sort((a, b) => a.name.localeCompare(b.name)),
+			}
+		}),
+	)
+
+export type MigrationPlan =
+	| { readonly _tag: "Unchanged" }
+	| { readonly _tag: "Planned"; readonly statements: ReadonlyArray<string> }
+	| {
+			readonly _tag: "Blocked"
+			readonly missingHints: ReadonlyArray<Hint>
+			readonly unsupported: ReadonlyArray<UnsupportedChange>
+	  }
+
+/**
+ * `PRAGMA foreign_keys` is a no-op inside the transaction each migration runs in (DO SQLite and
+ * D1 alike), and no table declares a foreign key, so a rebuild's toggles are left out.
+ */
+const isForeignKeyPragma = (statement: string) => /^PRAGMA foreign_keys=/i.test(statement)
+
+const rebuiltTables = (ops: ReadonlyArray<SqliteMigrationOp>) =>
+	new Set(ops.flatMap((op) => (op.op === "rebuild_table" ? [op.table.name] : [])))
+
+/** The statements taking a store from `previous` to `next`, or why they can't be written. */
+export const planMigration = (
+	previous: StoreSchema,
+	next: StoreSchema,
+	hints: ReadonlyArray<Hint> = [],
+): MigrationPlan => {
+	const diff = diffSqliteSchemas(previous.entities, next.entities, hints)
+	if (diff.missingHints.length > 0 || diff.unsupported.length > 0)
+		return { _tag: "Blocked", missingHints: diff.missingHints, unsupported: diff.unsupported }
+
+	const before = new Map(previous.extraIndexes.map((index) => [index.name, renderExtraIndex(index)]))
+	const after = new Map(next.extraIndexes.map((index) => [index.name, renderExtraIndex(index)]))
+	const rebuilt = rebuiltTables(diff.ops)
+	// Dropped first: an index on a column blocks `DROP COLUMN`.
+	const drops = [...before]
+		.filter(([name, ddl]) => after.get(name) !== ddl)
+		.map(([name]) => `DROP INDEX IF EXISTS "${name}"`)
+	// Created last, and again for a rebuilt table: its `DROP TABLE` dropped them.
+	const creates = next.extraIndexes
+		.filter((index) => before.get(index.name) !== after.get(index.name) || rebuilt.has(index.table))
+		.map((index) => after.get(index.name)!)
+
+	const statements = [
+		...drops,
+		...diff.ops.flatMap(renderSqliteOp).filter((statement) => !isForeignKeyPragma(statement)),
+		...creates,
+	]
+	return statements.length === 0 ? { _tag: "Unchanged" } : { _tag: "Planned", statements }
+}
+
+/** `0002_add_topic` after `0001_initial`. */
+export const nextMigrationId = (existing: ReadonlyArray<{ readonly id: string }>, name: string): string =>
+	`${String(existing.length + 1).padStart(4, "0")}_${name}`
+
+/** Lowercase words joined by `_`: the id becomes a D1 folder name. */
+export const isMigrationName = (name: string): boolean => /^[a-z0-9]+(_[a-z0-9]+)*$/.test(name)
+
+/** The D1 `migration.sql`, in the layout `0001_initial` uses. */
+export const renderD1Migration = (statements: ReadonlyArray<string>): string =>
+	`${statements.join(";\n--> statement-breakpoint\n")};\n`
+
+/** `src/migrations.generated.ts`, oxfmt-formatted afterwards by the package script. */
+export const renderGeneratedModule = (migrations: Record<StoreName, ReadonlyArray<StoreMigration>>): string =>
+	`// Generated by \`bun run db:generate-sqlite\`. Append-only: a committed migration is never edited.\n\n` +
+	`import type { StoreMigration } from "./schema-ddl"\nimport type { StoreName } from "./stores"\n\n` +
+	`export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration>> = {\n${(
+		Object.keys(migrations) as ReadonlyArray<StoreName>
+	)
+		.map(
+			(store) =>
+				`\t${store}: [\n${migrations[store]
+					.map(
+						(migration) =>
+							`\t\t{\n\t\t\tid: ${JSON.stringify(migration.id)},\n\t\t\tstatements: [\n${migration.statements
+								.map((statement) => `\t\t\t\t${JSON.stringify(statement)},\n`)
+								.join("")}\t\t\t],\n\t\t},\n`,
+					)
+					.join("")}\t],\n`,
+		)
+		.join("")}}\n`
