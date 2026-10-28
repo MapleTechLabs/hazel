@@ -4,6 +4,7 @@
  * Worker secrets. Read from the Worker's props only, never from its init.
  */
 import type { HazelStackContext } from "@hazel/infra/cloudflare"
+import { Config } from "effect"
 import {
 	derived,
 	merge,
@@ -41,6 +42,9 @@ export const apiEnv = ({ stage, urls }: HazelStackContext) =>
 		optionalSecret("AUTH_ACCESS_TOKEN_PRIVATE_JWK"),
 		optionalPlain("AUTH_PASSKEY_RP_ID"),
 		optionalPlain("AUTH_TRUSTED_ORIGINS"),
+		// `POST /internal/dev/sign-in` (routes/dev-sign-in.http.ts): signs in as any email, so it
+		// is never passed to prd. Also enables sign-in on a stage without a GitHub app.
+		stage.kind === "prd" ? Config.succeed({}) : optionalSecret("DEV_SIGNIN_SECRET"),
 
 		// Uploads: presigned against the bucket's S3 API (R2)
 		requirePlainEntry("S3_BUCKET"),

@@ -25,7 +25,7 @@ const props = Effect.gen(function* () {
 			include: ["**/*", "../../packages/*/src/**", "../../libs/*/src/**"],
 			lockfile: true,
 		},
-		compatibility: { date: "2026-10-01" },
+		compatibility: { date: "2026-09-25" },
 		workersDev: stage.kind !== "prd",
 		domain: domains.web,
 		env: {

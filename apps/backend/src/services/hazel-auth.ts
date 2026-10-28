@@ -7,12 +7,13 @@ import {
 	makeHazelAuthLive,
 } from "@hazel/auth/server"
 import { Config, Context, Effect, Layer, Option, Redacted, Schema } from "effect"
+import { Base64Url } from "effect/encoding"
 import { Headers, HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
 
 /**
- * Hazel's own sign-in (`@hazel/auth/server`). Enabled when `AUTH_GITHUB_CLIENT_ID` is set;
- * until then nobody can sign in (only bot tokens authenticate) and these routes are not
- * mounted.
+ * Hazel's own sign-in (`@hazel/auth/server`). Enabled when `AUTH_GITHUB_CLIENT_ID` is set, or
+ * `DEV_SIGNIN_SECRET` (dev and preview stages, `routes/dev-sign-in.http.ts`); until then nobody
+ * can sign in (only bot tokens authenticate) and these routes are not mounted.
  *
  * - `/auth/*`: sign-in, registration, passkeys and sessions (cookie on the API host).
  * - `POST /auth/token`: exchanges the session for a short-lived JWT for the hosts that
@@ -20,10 +21,27 @@ import { Headers, HttpRouter, HttpServerRequest, HttpServerResponse } from "effe
  * - `GET /.well-known/jwks.json`: the public key those hosts verify it with.
  */
 
-const keyring = (name: string) =>
-	Config.Redacted(name).pipe(
-		Config.map((material) => ({ activeKeyId: "v1", keys: [{ id: "v1", material }] })),
-	)
+const keyringOf = (material: Redacted.Redacted<string>) => ({
+	activeKeyId: "v1",
+	keys: [{ id: "v1", material }],
+})
+
+/** A 32-byte key derived from the dev sign-in secret, for stages without auth keys of their own. */
+const derivedKey = (secret: Redacted.Redacted<string>, purpose: string) =>
+	Effect.promise(() =>
+		crypto.subtle.digest(
+			"SHA-256",
+			new TextEncoder().encode(`hazel-dev-sign-in/${purpose}:${Redacted.value(secret)}`),
+		),
+	).pipe(Effect.map((digest) => Redacted.make(Base64Url.encode(new Uint8Array(digest)))))
+
+const keyring = (name: string, devSecret: Option.Option<Redacted.Redacted<string>>) =>
+	Effect.gen(function* () {
+		const material = yield* Config.option(Config.Redacted(name))
+		if (Option.isSome(material)) return keyringOf(material.value)
+		if (Option.isSome(devSecret)) return keyringOf(yield* derivedKey(devSecret.value, name))
+		return keyringOf(yield* Config.Redacted(name))
+	})
 
 const origins = (name: string) =>
 	Config.String(name).pipe(
@@ -45,16 +63,28 @@ const AuthConfig = Config.all({
 	googleClientId: Config.option(Config.String("AUTH_GOOGLE_CLIENT_ID")),
 	accessTokenKid: Config.String("AUTH_ACCESS_TOKEN_KID").pipe(Config.withDefault("v1")),
 	accessTokenJwk: Config.option(Config.Redacted("AUTH_ACCESS_TOKEN_PRIVATE_JWK")),
+	devSignInSecret: Config.option(Config.Redacted("DEV_SIGNIN_SECRET")),
 })
+
+/** The GitHub client of a stage signed into only through the dev sign-in; GitHub rejects it. */
+const DEV_ONLY_GITHUB_CLIENT_ID = "hazel-dev-sign-in-only"
 
 const PrivateJwk = Schema.fromJsonString(Schema.Unknown)
 
 const make = Effect.gen(function* () {
 	const env = yield* AuthConfig
-	if (Option.isNone(env.githubClientId)) {
+	const devSignInSecret = Option.filter(env.devSignInSecret, (secret) => Redacted.value(secret) !== "")
+	if (Option.isNone(env.githubClientId) && Option.isNone(devSignInSecret)) {
 		yield* Effect.logInfo("[auth] AUTH_GITHUB_CLIENT_ID is not set; Hazel sign-in is disabled")
 		return Option.none()
 	}
+	// Without a GitHub app, only the dev sign-in signs anyone in.
+	const github = Option.isSome(env.githubClientId)
+		? {
+				clientId: env.githubClientId.value,
+				clientSecret: yield* Config.Redacted("AUTH_GITHUB_CLIENT_SECRET"),
+			}
+		: { clientId: DEV_ONLY_GITHUB_CLIENT_ID, clientSecret: Redacted.make(DEV_ONLY_GITHUB_CLIENT_ID) }
 
 	const origin = new URL(env.apiBaseUrl).origin
 	const appOrigin = new URL(env.frontendUrl).origin
@@ -71,18 +101,15 @@ const make = Effect.gen(function* () {
 		origin,
 		appOrigin,
 		trustedOrigins,
-		github: {
-			clientId: env.githubClientId.value,
-			clientSecret: yield* Config.Redacted("AUTH_GITHUB_CLIENT_SECRET"),
-		},
+		github,
 		...(google === undefined ? {} : { google }),
 		passkey: {
 			rpId: Option.getOrElse(env.passkeyRpId, () => new URL(appOrigin).hostname),
 			origins: trustedOrigins,
 		},
 		keys: {
-			binding: yield* keyring("AUTH_BINDING_KEY"),
-			transaction: yield* keyring("AUTH_TRANSACTION_KEY"),
+			binding: yield* keyring("AUTH_BINDING_KEY", devSignInSecret),
+			transaction: yield* keyring("AUTH_TRANSACTION_KEY", devSignInSecret),
 		},
 		returnTargets: ["/"],
 		registrationPath: "/auth/register",
@@ -106,7 +133,7 @@ const make = Effect.gen(function* () {
 				),
 			})
 
-	return Option.some({ ...makeHazelAuthLive(config), config, accessTokens })
+	return Option.some({ ...makeHazelAuthLive(config), config, accessTokens, devSignInSecret })
 })
 
 /**

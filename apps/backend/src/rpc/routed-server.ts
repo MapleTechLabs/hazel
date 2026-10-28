@@ -9,6 +9,7 @@
  *   D1 has no transactions: a directory handler must not use `db.transaction`.
  */
 import { InternalServerError } from "@hazel/domain"
+import type { CurrentUser } from "@hazel/domain"
 import { Context, Effect, Exit, Layer } from "effect"
 import type { RpcTarget } from "../worker/objects/kinds"
 import { formatTarget } from "../worker/objects/kinds"
@@ -78,8 +79,10 @@ const makeRoutedHandlers = Effect.gen(function* () {
 		Effect.gen(function* () {
 			const principal = yield* currentInvokePrincipal
 			const limit = rateLimits[tag]
-			if (limit !== undefined) yield* limit(principal.user)
-			const target = yield* resolveTarget(tag, payload, principal.user).pipe(
+			if (limit !== undefined && principal.user !== null) yield* limit(principal.user)
+			// Only the public methods (no `AuthMiddleware`) run without a user, and their routes
+			// never read it.
+			const target = yield* resolveTarget(tag, payload, principal.user as CurrentUser.Schema).pipe(
 				Effect.provideService(Directory, directory),
 				Effect.catchTags({
 					RoutingError: (error) => Effect.fail(internal(error.message)),

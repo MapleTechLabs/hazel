@@ -286,6 +286,8 @@ export interface DoCollectionConfig<
 	readonly table: string
 	/** Decodes synced rows (JSON encoding) and validates local mutations. */
 	readonly schema: Schema.Schema<T>
+	/** Rewrites a synced row before `schema` decodes it (e.g. timestamps into `Date`s). */
+	readonly parseRow?: (row: unknown) => unknown
 	/** Must equal the server's `pk` for the row (its `id`, or key columns joined with `:`). */
 	readonly getKey: (item: T) => TKey
 	readonly hub: SyncHub
@@ -346,7 +348,11 @@ export function doCollectionOptions<
 		: hub.log
 	const syncTimeout = config.syncTimeout ?? DEFAULT_TIMEOUT
 	// Domain models never carry decoding services; narrow the type so `decodeUnknownResult` accepts it.
-	const decode = Schema.decodeUnknownResult(config.schema as unknown as Schema.Codec<T, unknown>)
+	const decodeSchema = Schema.decodeUnknownResult(config.schema as unknown as Schema.Codec<T, unknown>)
+	const parseRow = config.parseRow
+	const decode: typeof decodeSchema = parseRow
+		? (row, options) => decodeSchema(parseRow(row), options)
+		: decodeSchema
 	const mirror = new SourceMirror<T, TKey>(table, id, decode, config.getKey, log)
 	// Registered now, not when TanStack starts syncing, so rows from sources other collections
 	// opened are already held when this collection's sync starts.

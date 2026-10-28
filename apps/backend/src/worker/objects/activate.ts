@@ -12,7 +12,7 @@ import { toHttpServerResponse } from "@hazel/sync-do"
 import { workerEnvLayer } from "@hazel/infra/worker-runtime"
 import * as Cloudflare from "alchemy/Cloudflare"
 import { RuntimeContext } from "alchemy/RuntimeContext"
-import { Effect, Layer } from "effect"
+import { Cause, Effect, Layer, Scope } from "effect"
 import { FetchHttpClient, HttpServerRequest, HttpServerResponse } from "effect/http"
 import { BotGatewayTransport } from "../../services/bot-gateway-transport"
 import { Directory } from "../../services/directory"
@@ -38,6 +38,9 @@ export const activateObject = (kind: ObjectKind) =>
 			const raw = state.raw
 			const storage = raw.storage
 			const services = servicesPlatformLive(env, botGateways)
+			// The constructor's scope closes once it returns; the dispatcher's server fibers must live
+			// as long as the in-memory instance, so they get a scope of their own that is never closed.
+			const instanceScope = Scope.makeUnsafe()
 			const object = yield* makeObjectRuntime({
 				kind,
 				storage: storage as never,
@@ -57,7 +60,7 @@ export const activateObject = (kind: ObjectKind) =>
 					),
 					ChatSyncTransport.layer.pipe(Layer.provide(workerEnvLayer(env)), Layer.orDie),
 				),
-			})
+			}).pipe(Effect.provideService(Scope.Scope, instanceScope))
 
 			const fetch = Effect.gen(function* () {
 				const request = yield* HttpServerRequest.HttpServerRequest
@@ -68,16 +71,27 @@ export const activateObject = (kind: ObjectKind) =>
 				return toHttpServerResponse(yield* object.connect(web))
 			})
 
+			/** The RPC bridge reports only "an unexpected cause" to the caller, so log it here. */
+			const logFailure =
+				(method: string) =>
+				<A, E, R>(effect: Effect.Effect<A, E, R>) =>
+					effect.pipe(
+						Effect.tapCause((cause) =>
+							Effect.logError(`${kind} object ${method} failed`, Cause.pretty(cause)),
+						),
+					)
+
 			return {
-				invoke: (request: InvokeRequest) => object.invoke(request),
-				applyEffect: (request: ApplyEffectRequest) => object.applyEffect(request),
-				call: (request: CallRequest) => object.call(request),
+				invoke: (request: InvokeRequest) => object.invoke(request).pipe(logFailure("invoke")),
+				applyEffect: (request: ApplyEffectRequest) =>
+					object.applyEffect(request).pipe(logFailure("applyEffect")),
+				call: (request: CallRequest) => object.call(request).pipe(logFailure("call")),
 				fetch,
 				webSocketMessage: (socket: Cloudflare.WebSocket, message: string | ArrayBuffer) =>
 					object.onMessage(socket.ws as unknown as SyncSocket, message),
 				webSocketClose: (socket: Cloudflare.WebSocket) =>
 					object.onClose(socket.ws as unknown as SyncSocket),
-				alarm: () => object.alarm.pipe(Effect.provide(RuntimeContext.phantom)),
+				alarm: () => object.alarm.pipe(logFailure("alarm"), Effect.provide(RuntimeContext.phantom)),
 			}
 		})
 	})

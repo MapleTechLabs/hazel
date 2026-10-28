@@ -12,7 +12,7 @@ const props = Effect.gen(function* () {
 		name: resolveWorkerName("docs", stage),
 		rootDir: new URL(".", import.meta.url).pathname,
 		memo: { include: ["**/*", "../../packages/ui/src/**"], lockfile: true },
-		compatibility: { date: "2026-10-01" },
+		compatibility: { date: "2026-09-25" },
 		workersDev: stage.kind !== "prd",
 		domain: domains.docs,
 	}

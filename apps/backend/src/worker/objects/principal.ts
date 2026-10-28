@@ -7,9 +7,12 @@ import { ApiScope, CurrentBotScopes } from "@hazel/domain/scopes"
 import { UserId } from "@hazel/schema"
 import { Effect, Option, Schema } from "effect"
 
-/** An RPC's principal: the resolved `CurrentUser`, plus the bot's granted scopes for a bot. */
+/**
+ * An RPC's principal: the resolved `CurrentUser` (null for the public methods, which carry no
+ * `AuthMiddleware`), plus the bot's granted scopes for a bot.
+ */
 export const InvokePrincipal = Schema.Struct({
-	user: CurrentUser.Schema,
+	user: Schema.NullOr(CurrentUser.Schema),
 	botScopes: Schema.NullOr(Schema.Array(ApiScope)),
 })
 export type InvokePrincipal = typeof InvokePrincipal.Type
@@ -22,12 +25,13 @@ export type InvokePrincipalEncoded = typeof InvokePrincipalJson.Encoded
 
 /** The principal of the current RPC, from what the auth middleware provided. */
 export const currentInvokePrincipal = Effect.gen(function* () {
-	const user = yield* CurrentUser.Context
+	const current = yield* Effect.serviceOption(CurrentUser.Context)
 	const botScopes = yield* Effect.serviceOption(CurrentBotScopes)
 	const scopes = Option.flatten(botScopes)
+	const user = Option.getOrNull(current)
 	return {
 		// The bot-token path provides a plain object; the schema encodes only the class.
-		user: user instanceof CurrentUser.Schema ? user : new CurrentUser.Schema(user),
+		user: user === null || user instanceof CurrentUser.Schema ? user : new CurrentUser.Schema(user),
 		botScopes: Option.isSome(scopes) ? [...scopes.value] : null,
 	} satisfies InvokePrincipal
 })
@@ -36,8 +40,10 @@ export const currentInvokePrincipal = Effect.gen(function* () {
 export const providePrincipal =
 	(principal: InvokePrincipal) =>
 	<A, E, R>(effect: Effect.Effect<A, E, R>) =>
-		effect.pipe(
-			Effect.provideService(CurrentUser.Context, principal.user),
+		(principal.user === null
+			? effect
+			: effect.pipe(Effect.provideService(CurrentUser.Context, principal.user))
+		).pipe(
 			Effect.provideService(
 				CurrentBotScopes,
 				principal.botScopes === null ? Option.none() : Option.some(new Set(principal.botScopes)),

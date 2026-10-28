@@ -62,7 +62,7 @@ const HazelStackLive = Layer.effect(
 			isDevServer,
 			directoryDb: yield* declareDirectoryDb(stage),
 			urls: {
-				web: yield* resolveUrl(domains.web, "HAZEL_WEB_URL", "http://localhost:3000"),
+				web: yield* resolveUrl(domains.web, "HAZEL_WEB_URL", "http://localhost:3100"),
 				api: yield* resolveUrl(domains.api, "HAZEL_API_URL", "http://localhost:3003"),
 				rivet: yield* resolveUrl(domains.rivet, "HAZEL_RIVET_URL", "http://localhost:6420"),
 				linkPreview: yield* resolveUrl(

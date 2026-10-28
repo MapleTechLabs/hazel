@@ -40,6 +40,21 @@ import { orgSources, syncHub, unionSources, userSources } from "./sync"
  * belongs to (plus Connect host orgs), and on demand the channels a query names by `channelId`.
  * Rows are keyed by `id`, the server's `pk`.
  */
+const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/
+
+/**
+ * Rows carry timestamps as ISO text; the models' `JsonDate` would decode that to a `DateTime`, while
+ * the app reads `Date`s (as Electric's `timestamptz` parser gave it), so parse them first.
+ */
+const parseTimestamps = (row: unknown): unknown => {
+	if (typeof row !== "object" || row === null) return row
+	const parsed: Record<string, unknown> = {}
+	for (const [key, value] of Object.entries(row)) {
+		parsed[key] = typeof value === "string" && ISO_TIMESTAMP.test(value) ? new Date(value) : value
+	}
+	return parsed
+}
+
 const syncedCollection = <A extends { readonly id: string }>(
 	table: string,
 	schema: Schema.Schema<A>,
@@ -49,6 +64,7 @@ const syncedCollection = <A extends { readonly id: string }>(
 		id: table,
 		table,
 		schema,
+		parseRow: parseTimestamps,
 		getKey: (item) => item.id,
 		hub: syncHub,
 		sources,
@@ -71,6 +87,7 @@ export const userOrganizationCollection = createEffectCollection({
 	id: "user_organizations",
 	table: "user_organizations",
 	schema: UserOrganization,
+	parseRow: parseTimestamps,
 	getKey: (row) => row.organizationId,
 	hub: syncHub,
 	sources: userSources,

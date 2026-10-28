@@ -27,6 +27,15 @@ export {
 } from "./contract.ts"
 export { cleanupDesktopLogins, makeDesktopLoginRoutes } from "./desktop-login.ts"
 export {
+	type DevSignIn,
+	DevSignInError,
+	type DevSignInInput,
+	type DevSignInPlatform,
+	type DevSignInResult,
+	devGitHubId,
+	makeDevSignIn,
+} from "./dev-sign-in.ts"
+export {
 	CryptoLive,
 	type HazelAuthConfig,
 	type Keyring,

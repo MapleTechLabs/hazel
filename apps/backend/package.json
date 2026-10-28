@@ -14,7 +14,8 @@
 		"test:sync": "vitest run src/services/chat-sync",
 		"test:watch": "vitest src/**/*.test.ts",
 		"test:policies": "vitest run src/lib/policy-utils.test.ts src/policies/*.test.ts",
-		"import-postgres": "bun run src/scripts/import-postgres.ts"
+		"import-postgres": "bun run src/scripts/import-postgres.ts",
+		"dev:sign-in": "bun run src/scripts/dev-sign-in.ts"
 	},
 	"dependencies": {
 		"@clerk/backend": "^3.3.0",

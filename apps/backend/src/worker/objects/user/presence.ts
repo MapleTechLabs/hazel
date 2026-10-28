@@ -29,6 +29,7 @@ export type PresenceRow = schema.UserPresenceStatus
 export type PresenceFields = Omit<PresenceRow, "id" | "userId">
 
 const toProjection = (row: PresenceRow): PresenceProjection => ({
+	id: row.id,
 	userId: row.userId,
 	status: row.status,
 	customMessage: row.customMessage,

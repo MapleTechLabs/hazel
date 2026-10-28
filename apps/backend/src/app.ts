@@ -74,6 +74,7 @@ import { OAuthBearerAuth } from "./services/oauth-bearer-auth"
 import { ObjectStorage } from "./services/object-storage"
 import { OAuthProviderRegistry } from "./services/oauth"
 import { HazelAuthInstance, HazelAuthRoutes, HazelAuthServicesLive } from "./services/hazel-auth"
+import { DevSignInRoutes } from "./routes/dev-sign-in.http"
 import { HazelSession } from "./services/hazel-session"
 import { WebhookBotService } from "./services/webhook-bot-service"
 import { BotGatewayService } from "./services/bot-gateway-service"
@@ -113,6 +114,7 @@ export const makeRoutes = <E, R, EX = never, RX = never>(
 			protocol: "http",
 		}).pipe(Layer.provide(RpcSerialization.layerNdjson), Layer.provide(rpcServer)),
 		HazelAuthRoutes,
+		DevSignInRoutes,
 		extra,
 	).pipe(
 		Layer.provide(

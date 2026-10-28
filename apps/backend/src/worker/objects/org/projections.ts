@@ -6,7 +6,7 @@
  * by `projectUsers` when a user joins (it reads the directory row itself).
  */
 import { Database, SQLite, schema } from "@hazel/db"
-import { ChannelId, UserId } from "@hazel/schema"
+import { ChannelId, UserId, UserPresenceStatusId } from "@hazel/schema"
 import { Effect, Option, Schema } from "effect"
 import { Directory } from "../../../services/directory"
 
@@ -33,6 +33,8 @@ export type UserProjection = typeof UserProjection.Type
 
 /** A `user_presence_status` row as it crosses the outbox. */
 export const PresenceProjection = Schema.Struct({
+	/** The UserObject row's id, so the client sees one presence row per user from every source. */
+	id: UserPresenceStatusId,
 	userId: UserId,
 	status: Schema.Literals(["online", "away", "busy", "dnd", "offline"]),
 	customMessage: Schema.NullOr(Schema.String),

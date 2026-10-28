@@ -8,6 +8,7 @@ import {
 	OrganizationRpcs,
 	OrganizationSlugAlreadyExistsError,
 	PublicInviteDisabledError,
+	PublicOrganizationInfo,
 } from "@hazel/domain/rpc"
 import { OrganizationId } from "@hazel/schema"
 import { Effect, Option } from "effect"
@@ -205,13 +206,13 @@ export const OrganizationRpcLive = OrganizationRpcs.toLayer(
 					if (Option.isNone(org) || !org.value.isPublic) return null
 					const memberCount = yield* directory.memberCount(org.value.id)
 					// The logo lives with the org; the join page shows the initial without it.
-					return {
+					return new PublicOrganizationInfo({
 						id: org.value.id,
 						name: org.value.name,
 						slug: org.value.slug,
 						logoUrl: null,
 						memberCount,
-					}
+					})
 				}).pipe(
 					Effect.catchTag("DatabaseError", (cause) =>
 						Effect.fail(

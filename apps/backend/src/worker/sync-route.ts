@@ -79,48 +79,58 @@ const pathOf = (url: string) => {
 
 export const makeSyncRoute = (env: Record<string, unknown>) =>
 	HttpRouter.use((router) =>
-		router.add(
-			"GET",
-			"/sync/*",
-			Effect.gen(function* () {
-				const request = yield* HttpServerRequest.HttpServerRequest
-				const match = SYNC_PATH.exec(pathOf(request.url))
-				const kind = match?.[1]
-				const id = match?.[2]
-				if (kind === undefined || id === undefined || !isObjectKind(kind)) {
-					return HttpServerResponse.text("Not found", { status: 404 })
-				}
-				if (request.headers.upgrade?.toLowerCase() !== "websocket") {
-					return HttpServerResponse.text("Expected a WebSocket upgrade", { status: 426 })
-				}
-				const token = tokenFromProtocols(request.headers["sec-websocket-protocol"])
-				if (token === undefined) return acceptAndClose(SyncCloseCode.Reauth, "missing_token")
+		Effect.gen(function* () {
+			// Resolved when the route is built: a handler only sees the request's own services.
+			const session = yield* HazelSession
+			const directory = yield* Directory
+			return yield* router.add(
+				"GET",
+				"/sync/*",
+				Effect.gen(function* () {
+					const request = yield* HttpServerRequest.HttpServerRequest
+					const match = SYNC_PATH.exec(pathOf(request.url))
+					const kind = match?.[1]
+					const id = match?.[2]
+					if (kind === undefined || id === undefined || !isObjectKind(kind)) {
+						return HttpServerResponse.text("Not found", { status: 404 })
+					}
+					if (request.headers.upgrade?.toLowerCase() !== "websocket") {
+						return HttpServerResponse.text("Expected a WebSocket upgrade", { status: 426 })
+					}
+					const token = tokenFromProtocols(request.headers["sec-websocket-protocol"])
+					if (token === undefined) return acceptAndClose(SyncCloseCode.Reauth, "missing_token")
 
-				const session = yield* HazelSession
-				// The web app sends its access token (a JWT); native clients may send the session itself.
-				const verify = isJwt(token) ? session.verifyAccessToken : session.verify
-				const user = yield* verify(token).pipe(
-					Effect.catchTags({
-						InvalidBearerTokenError: () => Effect.succeedNone,
-						SessionLoadError: (error) =>
-							Effect.logWarning("Sync token verification failed", {
-								detail: error.detail,
-							}).pipe(Effect.as(Option.none())),
-					}),
-				)
-				if (Option.isNone(user)) return acceptAndClose(SyncCloseCode.Reauth, "invalid_token")
+					// The web app sends its access token (a JWT); native clients may send the session itself.
+					const verify = isJwt(token) ? session.verifyAccessToken : session.verify
+					const user = yield* verify(token).pipe(
+						Effect.catchTags({
+							InvalidBearerTokenError: () => Effect.succeedNone,
+							SessionLoadError: (error) =>
+								Effect.logWarning("Sync token verification failed", {
+									detail: error.detail,
+								}).pipe(Effect.as(Option.none())),
+						}),
+					)
+					if (Option.isNone(user)) return acceptAndClose(SyncCloseCode.Reauth, "invalid_token")
 
-				const objectId = yield* syncObjectId(kind, id).pipe(Effect.orDie)
-				const namespace = env[OBJECT_NAMESPACES[kind]] as Namespace
-				const web = yield* HttpServerRequest.toWeb(request).pipe(Effect.orDie)
-				const headers = new Headers(web.headers)
-				// TODO(do-sync): pass the session's expiry once HazelSession exposes it.
-				headers.set(PRINCIPAL_HEADER, encodeSyncPrincipal({ userId: user.value.id, expiresAt: null }))
-				headers.set(OBJECT_ID_HEADER, objectId)
-				const response = yield* Effect.promise(() =>
-					namespace.getByName(objectId).fetch(new Request(web, { headers })),
-				)
-				return toHttpServerResponse(response)
-			}).pipe(Effect.withSpan("SyncRoute.upgrade")),
-		),
+					const objectId = yield* syncObjectId(kind, id).pipe(
+						Effect.provideService(Directory, directory),
+						Effect.orDie,
+					)
+					const namespace = env[OBJECT_NAMESPACES[kind]] as Namespace
+					const web = yield* HttpServerRequest.toWeb(request).pipe(Effect.orDie)
+					const headers = new Headers(web.headers)
+					// TODO(do-sync): pass the session's expiry once HazelSession exposes it.
+					headers.set(
+						PRINCIPAL_HEADER,
+						encodeSyncPrincipal({ userId: user.value.id, expiresAt: null }),
+					)
+					headers.set(OBJECT_ID_HEADER, objectId)
+					const response = yield* Effect.promise(() =>
+						namespace.getByName(objectId).fetch(new Request(web, { headers })),
+					)
+					return toHttpServerResponse(response)
+				}).pipe(Effect.withSpan("SyncRoute.upgrade")),
+			)
+		}),
 	)
