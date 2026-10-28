@@ -2,8 +2,8 @@
  * The wiring most objects want: the broadcaster, the outbox and one alarm over them.
  *
  * - `afterCommit` after every committed write: flush to sockets, deliver the urgent kinds, then the
- *   outbox, rearm.
- * - `alarm` from the object's `alarm()`: expire sockets, retry the outbox, prune, rearm.
+ *   outbox, flush what the deliveries wrote (sender-side effects write locally), rearm.
+ * - `alarm` from the object's `alarm()`: expire sockets, retry the outbox, flush, prune, rearm.
  */
 import { Cause, Clock, Effect } from "effect"
 import type { SqlError } from "effect/sql/SqlError"
@@ -104,6 +104,10 @@ export const makeSyncedObject = <P, E, R, RD = never, RX = never>(
 	)
 
 	const flush = sync.flush.pipe(total("flush", () => sync.headSeq()))
+	/** Flush again if a delivery wrote here (a sender-side effect's rows), so they go out now. */
+	const flushIfDirty = Effect.suspend(() =>
+		sync.headSeq() > sync.flushedSeq() ? flush : Effect.succeed(sync.flushedSeq()),
+	)
 
 	/**
 	 * Returns the flushed seq (the write position to hand back to the client); total, so a failure
@@ -121,8 +125,9 @@ export const makeSyncedObject = <P, E, R, RD = never, RX = never>(
 			logSqlError("Outbox drain failed"),
 			total("outbox drain", () => {}),
 		)
+		const after = yield* flushIfDirty
 		yield* schedule
-		return seq
+		return Math.max(seq, after)
 	}).pipe(Effect.withSpan("SyncDO.afterCommit"))
 
 	const alarm = Effect.gen(function* () {
@@ -132,6 +137,7 @@ export const makeSyncedObject = <P, E, R, RD = never, RX = never>(
 			logSqlError("Outbox drain failed"),
 			total("outbox drain", () => {}),
 		)
+		yield* flushIfDirty
 		yield* sync.pruneChanges
 		yield* pruneInbox().pipe(logSqlError("Inbox prune failed"))
 		yield* schedule

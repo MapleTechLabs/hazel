@@ -372,6 +372,42 @@ describe("synced object", () => {
 		}).pipe(Effect.provide(sqliteClientLayer(storage)))
 	})
 
+	it.effect("afterCommit flushes rows a delivery wrote locally", () => {
+		const storage = makeFakeStorage()
+		storage.db.exec(TOY_DDL)
+		const state = makeFakeState()
+		// A sender-side effect: delivering the row writes to this object's own tables.
+		const deliver = (row: OutboxRow) =>
+			Effect.gen(function* () {
+				const sql = yield* SqlClient
+				yield* sql`INSERT INTO projects (id, name) VALUES (${row.id}, 'Linked')`
+			}).pipe(Effect.orDie)
+		const object = makeSyncedObject({
+			storage,
+			state,
+			source: makeToySource(makeToyControls()),
+			deliver,
+		})
+		return Effect.gen(function* () {
+			const socket = makeFakeSocket()
+			yield* object.sync.adoptSocket(socket, { userId: "bob" })
+			yield* object.sync.onMessage(socket, JSON.stringify({ _tag: "Hello", since: null }))
+			socket.clear()
+
+			const sql = yield* SqlClient
+			yield* sql.withTransaction(
+				Effect.gen(function* () {
+					yield* sql`INSERT INTO projects (id, name) VALUES ('p1', 'One')`
+					yield* enqueue({ id: "p2", target: "local", kind: "k", payload: null })
+				}),
+			)
+			expect(yield* object.afterCommit).toBe(2)
+			expect(object.sync.flushedSeq()).toBe(2)
+			const commits = socket.frames().filter((frame) => frame._tag === "Commit")
+			expect(commits.map((frame) => (frame as unknown as { seq: number }).seq)).toEqual([1, 2])
+		}).pipe(Effect.provide(sqliteClientLayer(storage)))
+	})
+
 	it.effect("afterCommit is total: a rejected setAlarm or a failing flush still returns the seq", () => {
 		const storage = makeFakeStorage()
 		storage.db.exec(TOY_DDL)

@@ -7,6 +7,7 @@
  *   else the provider user's shadow, made a member here on first sight), then
  *   `channel.chatSyncIngest` to the linked channel. Provider threads become Hazel threads here.
  * - `org.chatSyncLinkSettings` (from a `ChannelObject`): a webhook identity it provisioned.
+ * - `org.chatSyncLinkThread` (from a `ChannelObject`): a provider thread it made for a Hazel thread.
  * - `publishChatSyncLinks` / `indexChatSync*`: project links to the channel, and keep the
  *   directory's `chat_sync_index` current. Call them wherever a connection or link changes.
  */
@@ -15,7 +16,11 @@ import { Database, SQLite, schema } from "@hazel/db"
 import type { ChannelId, ExternalChannelId, OrganizationId, SyncChannelLinkId, UserId } from "@hazel/schema"
 import { Effect, Layer, Option } from "effect"
 import type { SqlClient } from "effect/sql/SqlClient"
-import { enqueueEffect, type EffectReceivers } from "../../worker/objects/effects/registry"
+import {
+	CurrentEffectSender,
+	enqueueEffect,
+	type EffectReceivers,
+} from "../../worker/objects/effects/registry"
 import { channelTarget } from "../../worker/objects/kinds"
 import { syncChannelAccess, syncMemberAccess } from "../../worker/objects/org/channel-access"
 import { upsertUserProjection } from "../../worker/objects/org/projections"
@@ -29,6 +34,7 @@ import {
 	type ChatSyncLinkedAccount,
 	ChatSyncOrgEffects,
 	type LinkSettingsPayload,
+	type LinkThreadPayload,
 	type OrgChatSyncIngestPayload,
 } from "./chat-sync-effects"
 import { isOwnWebhookOrigin } from "./chat-sync-settings"
@@ -109,6 +115,35 @@ export const publishChatSyncLinks = Effect.fn("OrgObject.publishChatSyncLinks")(
 		accounts,
 	})
 	yield* Effect.annotateCurrentSpan({ "chat_sync.links": links.length })
+})
+
+/**
+ * A user linked or unlinked a `provider` account: re-project every channel linked on that
+ * provider, so its outbound mentions use the current accounts. Call after the account row changed.
+ */
+export const publishChatSyncAccounts = Effect.fn("OrgObject.publishChatSyncAccounts")(function* (
+	provider: string,
+) {
+	const db = yield* Database.Database
+	const rows = yield* db.run(
+		SQLite.from(schema.chatSyncChannelLinksTable, "link")
+			.innerJoin(schema.chatSyncConnectionsTable, "connection", (link, connection) =>
+				connection.id.eq(link.syncConnectionId),
+			)
+			.select(($) => ({ hazelChannelId: $.hazelChannelId }))
+			.where(($) => [
+				$.deletedAt.isNull(),
+				$.connection.provider.eq(provider),
+				$.connection.deletedAt.isNull(),
+			]),
+	)
+	const channelIds = [...new Set(rows.map((row) => row.hazelChannelId))]
+	yield* Effect.forEach(channelIds, (channelId) => publishChatSyncLinks(channelId), { discard: true })
+	yield* Effect.annotateCurrentSpan({
+		"chat_sync.provider": provider,
+		"chat_sync.channels": channelIds.length,
+	})
+	return channelIds.length
 })
 
 const indexRow = (
@@ -372,6 +407,106 @@ const linkSettings = Effect.fn("OrgObject.chatSyncLinkSettings")(function* (payl
 })
 
 /**
+ * A Hazel thread was mirrored as a provider thread (`chat-sync-outbound.ts`, `ThreadCreate`):
+ * link it like its parent. Only the parent's `ChannelObject` may send it, for one of its threads.
+ */
+const linkThread = Effect.fn("OrgObject.chatSyncLinkThread")(function* (payload: LinkThreadPayload) {
+	const db = yield* Database.Database
+	const outcome = (value: string) => Effect.annotateCurrentSpan({ "chat_sync.outcome": value })
+	yield* Effect.annotateCurrentSpan({
+		"chat_sync.link_id": payload.channelLinkId,
+		"channel.id": payload.threadChannelId,
+	})
+	const found = yield* db.first(
+		SQLite.from(schema.chatSyncChannelLinksTable, "link")
+			.innerJoin(schema.chatSyncConnectionsTable, "connection", (link, connection) =>
+				connection.id.eq(link.syncConnectionId),
+			)
+			.select(($) => ({
+				syncConnectionId: $.syncConnectionId,
+				hazelChannelId: $.hazelChannelId,
+				direction: $.direction,
+				settings: $.settings,
+				organizationId: $.connection.organizationId,
+				externalWorkspaceId: $.connection.externalWorkspaceId,
+				provider: $.connection.provider,
+			}))
+			.where(($) => [
+				$.id.eq(payload.channelLinkId),
+				$.deletedAt.isNull(),
+				$.connection.deletedAt.isNull(),
+			])
+			.limit(1),
+	)
+	if (Option.isNone(found)) return yield* outcome("parent_link_gone")
+	const parent = found.value
+	const sender = yield* Effect.serviceOption(CurrentEffectSender)
+	if (
+		Option.isNone(sender) ||
+		sender.value.kind !== "channel" ||
+		sender.value.id !== parent.hazelChannelId
+	) {
+		yield* Effect.logWarning("chatSyncLinkThread refused: not the parent channel", {
+			sender: Option.getOrNull(sender),
+			parentChannelId: parent.hazelChannelId,
+		})
+		return yield* outcome("refused_sender")
+	}
+	const thread = yield* db.first(
+		SQLite.from(schema.channelsTable)
+			.select("id")
+			.where(($) => [
+				$.id.eq(payload.threadChannelId),
+				$.parentChannelId.eq(parent.hazelChannelId),
+				$.type.eq("thread"),
+				$.deletedAt.isNull(),
+			])
+			.limit(1),
+	)
+	if (Option.isNone(thread)) return yield* outcome("not_a_thread")
+	const existing = yield* db.first(
+		SQLite.from(schema.chatSyncChannelLinksTable)
+			.select("id")
+			.where(($) => [
+				$.syncConnectionId.eq(parent.syncConnectionId),
+				SQLite.or(
+					$.externalChannelId.eq(payload.externalThreadId),
+					$.hazelChannelId.eq(payload.threadChannelId),
+				),
+				$.deletedAt.isNull(),
+			])
+			.limit(1),
+	)
+	if (Option.isSome(existing)) return yield* outcome("already_linked")
+	yield* db.run(
+		SQLite.insertInto(schema.chatSyncChannelLinksTable).values({
+			syncConnectionId: parent.syncConnectionId,
+			hazelChannelId: payload.threadChannelId,
+			externalChannelId: payload.externalThreadId,
+			externalChannelName: payload.externalThreadName,
+			direction: parent.direction,
+			isActive: true,
+			settings: parent.settings,
+			lastSyncedAt: null,
+			deletedAt: null,
+		}),
+	)
+	yield* indexChatSync(
+		{
+			provider: parent.provider,
+			externalWorkspaceId: parent.externalWorkspaceId,
+			organizationId: parent.organizationId,
+		},
+		{
+			link: { externalChannelId: payload.externalThreadId, hazelChannelId: payload.threadChannelId },
+			deleted: false,
+		},
+	)
+	yield* publishChatSyncLinks(payload.threadChannelId)
+	yield* outcome("linked")
+})
+
+/**
  * A provider account was linked to (or unlinked from) `toAuthorId`/`fromAuthorId`: move the
  * provider-synced messages of every linked channel (each `ChannelObject` holds its own).
  */
@@ -415,4 +550,5 @@ const orgServices = Layer.mergeAll(
 export const chatSyncOrgReceivers = {
 	"org.chatSyncIngest": (payload) => ingest(payload).pipe(Effect.provide(orgServices)),
 	"org.chatSyncLinkSettings": linkSettings,
+	"org.chatSyncLinkThread": linkThread,
 } satisfies EffectReceivers<typeof ChatSyncOrgEffects, Database.Database | SqlClient>

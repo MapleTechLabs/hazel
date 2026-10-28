@@ -61,6 +61,7 @@ export const orgReceivers = {
 		acceptInvitation(payload).pipe(Effect.provide(ChannelAccessSyncService.layer)),
 	"org.chatSyncIngest": (payload) => chatSyncOrgReceivers["org.chatSyncIngest"](payload),
 	"org.chatSyncLinkSettings": (payload) => chatSyncOrgReceivers["org.chatSyncLinkSettings"](payload),
+	"org.chatSyncLinkThread": (payload) => chatSyncOrgReceivers["org.chatSyncLinkThread"](payload),
 	// Connect receivers recompute channel access, which needs the sync service.
 	"org.connectMountAdded": (payload) =>
 		connectOrgReceivers["org.connectMountAdded"](payload).pipe(

@@ -12,7 +12,7 @@
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import type { ChatSyncChannelLink } from "@hazel/domain/models"
-import type { ExternalMessageId, MessageId, MessageReactionId, UserId } from "@hazel/schema"
+import type { ChannelId, ExternalMessageId, MessageId, MessageReactionId, UserId } from "@hazel/schema"
 import { Cause, Effect, Option } from "effect"
 import type { SqlClient } from "effect/sql/SqlClient"
 import type { MessageEventHook } from "../../worker/objects/channel/message-events"
@@ -99,6 +99,11 @@ export const ChatSyncOutbound = {
 		emoji: reaction.emoji,
 		userId: reaction.userId,
 	}),
+	threadCreated: (messageId: MessageId, threadChannelId: ChannelId): ChatSyncOutboundEvent => ({
+		_tag: "ThreadCreate",
+		messageId,
+		threadChannelId,
+	}),
 }
 
 /** The channel's message-event hook (`worker/objects/channel/message-events.ts`). */
@@ -141,8 +146,14 @@ const dedupeKeyOf = (event: ChatSyncOutboundEvent): string => {
 			return `hazel:reaction:create:${event.reactionId}`
 		case "ReactionDelete":
 			return `hazel:reaction:delete:${event.messageId}:${event.emoji}:${event.userId}`
+		case "ThreadCreate":
+			return `hazel:thread:create:${event.threadChannelId}`
 	}
 }
+
+/** Discord's thread title: the message's first line, mentions dropped, at most 100 characters. */
+const threadNameOf = (content: string) =>
+	content.replace(MENTION_PATTERN, "").split("\n")[0]!.replace(/\s+/g, " ").trim().slice(0, 100) || "Thread"
 
 const MENTION_PATTERN = /@\[userId:([^\]]+)\]/g
 
@@ -477,6 +488,36 @@ const deliver = (
 					...target,
 					externalMessageId: linked.value.externalMessageId as ExternalMessageId,
 					emoji: event.emoji,
+				})
+				return synced
+			}
+			case "ThreadCreate": {
+				const linked = yield* findMessageLink({ channelLinkId, hazelMessageId: event.messageId })
+				if (Option.isNone(linked)) return ignored("missing_link")
+				if (linked.value.externalThreadId !== null) return ignored("already_linked")
+				const message = yield* findMessage(event.messageId)
+				if (Option.isNone(message)) return ignored("missing_message")
+				const name = threadNameOf(message.value.content)
+				const externalThreadId = yield* adapter.createThread({
+					...target,
+					externalMessageId: linked.value.externalMessageId as ExternalMessageId,
+					name,
+				})
+				yield* db.run(
+					SQLite.update(schema.chatSyncMessageLinksTable)
+						.set({
+							hazelThreadChannelId: event.threadChannelId,
+							externalThreadId,
+							updatedAt: new Date(),
+						})
+						.where(($) => [$.id.eq(linked.value.id)]),
+				)
+				// The org owns channel links: it links the thread like its parent.
+				yield* enqueueEffect(ChatSyncOrgEffects.chatSyncLinkThread, orgTarget(link.organizationId), {
+					channelLinkId,
+					threadChannelId: event.threadChannelId,
+					externalThreadId,
+					externalThreadName: name,
 				})
 				return synced
 			}
