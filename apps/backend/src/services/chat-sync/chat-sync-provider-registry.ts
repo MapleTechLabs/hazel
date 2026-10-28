@@ -405,6 +405,14 @@ export class ChatSyncProviderRegistry extends Context.Service<ChatSyncProviderRe
 									while: isRetryableDiscordError,
 									schedule: DISCORD_SYNC_RETRY_SCHEDULE,
 								}),
+								// Already made (an earlier attempt landed but its answer or our write was
+								// lost): a message's thread has the message's id, so take that one.
+								Effect.catchIf(
+									(error) =>
+										error._tag === "DiscordApiError" &&
+										error.code === Discord.DISCORD_THREAD_ALREADY_CREATED,
+									() => Effect.succeed(params.externalMessageId),
+								),
 								Effect.mapError(
 									(error) =>
 										new ChatSyncProviderApiError({
