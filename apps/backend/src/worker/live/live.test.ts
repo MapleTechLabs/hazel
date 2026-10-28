@@ -15,7 +15,13 @@ import type { InvokePrincipal } from "../objects/principal"
 import { ObjectStubs } from "../objects/protocol"
 import { makeTestObjects, type TestObject } from "../objects/testing"
 import { readLive, writeLive } from "./client"
-import { LiveObjectStubs, type LiveStorage, liveRpcOf, makeMessageLiveRuntime } from "./runtime"
+import {
+	LIVE_STATE_LIMIT_BYTES,
+	LiveObjectStubs,
+	type LiveStorage,
+	liveRpcOf,
+	makeMessageLiveRuntime,
+} from "./runtime"
 import { applyLiveAction } from "./state"
 
 const uuid = () => crypto.randomUUID()
@@ -241,6 +247,23 @@ describe("MessageLiveObject", () => {
 				world.setUnreachable(true)
 				yield* write(world, world.bot, { _tag: "AppendText", text: "ok" })
 				expect(world.live.state().text).toBe("ok")
+			}),
+		))
+
+	it("refuses a write that would grow the state past its limit, without broadcasting it", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const viewer = yield* connect(world, world.alice)
+				const chunk = "x".repeat(LIVE_STATE_LIMIT_BYTES / 2)
+				yield* write(world, world.bot, { _tag: "AppendText", text: chunk })
+				const exit = yield* Effect.exit(write(world, world.bot, { _tag: "AppendText", text: chunk }))
+				expect(failureTag(exit)).toBe("LiveStateTooLargeError")
+				expect(world.live.state().text).toBe(chunk)
+				expect(tags(viewer.socket)).toEqual(["Snapshot", "TextAppended"])
+				// Replacing the text still works.
+				yield* write(world, world.bot, { _tag: "SetText", text: "short" })
+				expect(world.live.state().text).toBe("short")
 			}),
 		))
 

@@ -12,7 +12,12 @@
  * `Complete` and `Fail` write the final snapshot into the message (`message.update` in the
  * channel's object, as the writer), retried from the alarm while the channel is unreachable.
  */
-import { InternalServerError, MessageNotFoundError, UnauthorizedError } from "@hazel/domain"
+import {
+	InternalServerError,
+	LiveStateTooLargeError,
+	MessageNotFoundError,
+	UnauthorizedError,
+} from "@hazel/domain"
 import {
 	cachedLiveStateOf,
 	decodeLiveClientFrame,
@@ -58,7 +63,9 @@ export interface LiveStorage {
 // The object's DO RPC (structured clone; exits JSON-encoded)
 // ---------------------------------------------------------------------------
 
-const LiveError = Schema.Union([UnauthorizedError, MessageNotFoundError, InternalServerError])
+const LiveReadError = Schema.Union([UnauthorizedError, MessageNotFoundError, InternalServerError])
+/** Only a write can grow the state past its limit. */
+const LiveError = Schema.Union([...LiveReadError.members, LiveStateTooLargeError])
 export type LiveError = typeof LiveError.Type
 
 export const LiveWriteRequest = Schema.Struct({
@@ -82,7 +89,7 @@ const json = <S extends Schema.Codec<any, any, never, never>>(schema: S) =>
 export const LiveWriteRequestJson = json(LiveWriteRequest)
 export const LiveReadRequestJson = json(LiveReadRequest)
 export const LiveWriteExit = json(Schema.Exit(LiveWriteResult, LiveError, Schema.Defect()))
-export const LiveReadExit = json(Schema.Exit(LiveState, LiveError, Schema.Defect()))
+export const LiveReadExit = json(Schema.Exit(LiveState, LiveReadError, Schema.Defect()))
 
 export interface LiveResponse {
 	readonly exit: unknown
@@ -100,6 +107,14 @@ export interface MessageLiveRpc {
 // ---------------------------------------------------------------------------
 
 const STATE_KEY = "live.state"
+
+/**
+ * What one reply's live state may hold once encoded: well under a Durable Object's 2 MiB value
+ * limit, and it bounds the cost of rewriting the state on every action.
+ */
+export const LIVE_STATE_LIMIT_BYTES = 1024 * 1024
+
+const encodedBytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).length
 const BINDING_KEY = "live.binding"
 const FINALIZE_KEY = "live.finalize"
 const SOCKET_TAG = "live"
@@ -348,9 +363,16 @@ export const makeMessageLiveRuntime = (options: LiveRuntimeOptions) =>
 				}
 				const now = yield* Clock.currentTimeMillis
 				const applied = applyLiveAction(state, request.action, { now, newId })
+				if (encodedBytes(applied.state) > LIVE_STATE_LIMIT_BYTES) {
+					return yield* new LiveStateTooLargeError({
+						messageId: request.messageId,
+						limitBytes: LIVE_STATE_LIMIT_BYTES,
+					})
+				}
+				// Stored before it is broadcast: a refused write never reaches the sockets.
+				yield* persist(STATE_KEY, applied.state)
 				state = applied.state
 				yield* broadcast(applied.frames)
-				yield* persist(STATE_KEY, state)
 
 				const action = request.action
 				if ((action._tag === "Complete" || action._tag === "Fail") && action.persist !== false) {

@@ -17,6 +17,9 @@ import { type ColumnAccessors, selectVisible, type SyncTableSpec, syncTable, use
 
 /** Messages in a snapshot. */
 export const MESSAGE_SNAPSHOT_LIMIT = 200
+
+/** Pinned messages older than the window that a snapshot also carries, newest pins first. */
+export const PINNED_SNAPSHOT_LIMIT = 50
 /** The most messages one `LoadOlder` returns. */
 export const MESSAGE_PAGE_MAX = 200
 /** Ids per `IN (…)`: DO SQLite binds at most 100 parameters per statement. */
@@ -120,11 +123,21 @@ export const pageMessages = (principal: SyncPrincipal, before: SyncPageCursor | 
 		const window = newest.slice(0, limit)
 		const last = window.at(-1)
 		const oldest = last === undefined ? before : cursorOf(last)
-		// The snapshot also carries pinned messages past the window: the pins list joins on them.
+		// The snapshot also carries the newest pinned messages past the window (the pins list joins on
+		// them), capped so a pin-heavy channel stays bounded; older pins load by id.
 		const pinnedOlder =
 			before === null && hasMore && oldest !== null
-				? yield* selectVisible(messages, principal, ($) =>
-						SQLite.and(isPinned($), olderThan($, oldest)),
+				? yield* selectVisible(
+						messages,
+						principal,
+						($) => SQLite.and(isPinned($), olderThan($, oldest)),
+						{
+							orderBy: ($) => [
+								[$.createdAt!, "desc"],
+								[$.id!, "desc"],
+							],
+							limit: PINNED_SNAPSHOT_LIMIT,
+						},
 					)
 				: []
 		const rows = yield* withDependents(principal, [...window, ...pinnedOlder])

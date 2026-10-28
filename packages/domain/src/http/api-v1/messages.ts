@@ -1,6 +1,11 @@
 import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/http-api"
 import { Schema } from "effect"
-import { InternalServerError, MessageNotFoundError, UnauthorizedError } from "../../errors"
+import {
+	InternalServerError,
+	LiveStateTooLargeError,
+	MessageNotFoundError,
+	UnauthorizedError,
+} from "../../errors"
 import { AttachmentId, ChannelId, MessageId } from "@hazel/schema"
 import { Message, MessageReaction } from "../../models"
 import { MessageEmbeds } from "../../models/message-embed-schema"
@@ -206,7 +211,7 @@ export class MessagesApiGroup extends HttpApiGroup.make("api-v1-messages")
 			params: { id: MessageId },
 			payload: WriteLiveStateRequest,
 			success: WriteLiveStateResponse,
-			error: [MessageNotFoundError, UnauthorizedError, InternalServerError],
+			error: [MessageNotFoundError, UnauthorizedError, LiveStateTooLargeError, InternalServerError],
 		})
 			.annotateMerge(
 				OpenApi.annotations({

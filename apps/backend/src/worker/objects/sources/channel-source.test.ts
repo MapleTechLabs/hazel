@@ -8,7 +8,7 @@ import { Effect, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { channelTarget } from "../kinds"
 import { makeTestObjects } from "../testing"
-import { MESSAGE_SNAPSHOT_LIMIT } from "./channel-source"
+import { MESSAGE_SNAPSHOT_LIMIT, PINNED_SNAPSHOT_LIMIT } from "./channel-source"
 
 const uuid = () => crypto.randomUUID()
 
@@ -133,6 +133,47 @@ describe("channel source paging", () => {
 				expect(socket.frames()[0]).toEqual({ _tag: "Begin", reset: false, request: 2 })
 				expect(rowsOf(socket, "messages").map((row) => row.id)).toEqual([ids[2]])
 				expect(rowsOf(socket, "attachments").map((row) => row.id)).toEqual(["a-old"])
+			}),
+		))
+
+	it("caps the older pinned messages a snapshot carries, keeping the newest pins", () =>
+		run(
+			Effect.gen(function* () {
+				const objects = yield* makeTestObjects
+				const channelId = uuid() as ChannelId
+				const channel = yield* objects.get(channelTarget(channelId))
+				const db = channel.storage.db
+				const viewer = uuid()
+				db.prepare(
+					`INSERT INTO channel_viewers (userId, organizationId, role) VALUES (?, ?, 'member')`,
+				).run(viewer, uuid())
+				// Every message older than the window is pinned.
+				const older = PINNED_SNAPSHOT_LIMIT + 20
+				const total = older + MESSAGE_SNAPSHOT_LIMIT
+				const ids = Array.from({ length: total }, () => uuid())
+				const insert = db.prepare(
+					`INSERT INTO messages (id, channelId, authorId, content, createdAt) VALUES (?, ?, ?, ?, ?)`,
+				)
+				const pin = db.prepare(
+					`INSERT INTO pinned_messages (id, channelId, messageId, pinnedBy) VALUES (?, ?, ?, ?)`,
+				)
+				ids.forEach((id, i) => {
+					insert.run(id, channelId, viewer, `m${i}`, at(i))
+					if (i < older) pin.run(uuid(), channelId, id, viewer)
+				})
+				yield* channel.afterCommit
+
+				const socket = makeFakeSocket()
+				yield* channel.adopt(socket, { userId: viewer, expiresAt: null } as never)
+				yield* channel.onMessage(socket, JSON.stringify({ _tag: "Hello", since: null, paging: true }))
+
+				const sent = rowsOf(socket, "messages").map((row) => row.id)
+				expect(sent.length).toBe(MESSAGE_SNAPSHOT_LIMIT + PINNED_SNAPSHOT_LIMIT)
+				// The pins sent are the newest of the older ones.
+				expect(new Set(sent.slice(MESSAGE_SNAPSHOT_LIMIT))).toEqual(
+					new Set(ids.slice(older - PINNED_SNAPSHOT_LIMIT, older)),
+				)
+				expect(rowsOf(socket, "pinned_messages").length).toBe(PINNED_SNAPSHOT_LIMIT)
 			}),
 		))
 })
