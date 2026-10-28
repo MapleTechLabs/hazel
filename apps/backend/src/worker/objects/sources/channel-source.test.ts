@@ -136,7 +136,7 @@ describe("channel source paging", () => {
 			}),
 		))
 
-	it("caps the older pinned messages a snapshot carries, keeping the newest pins", () =>
+	it("caps the older pinned messages a snapshot carries but sends every pin row", () =>
 		run(
 			Effect.gen(function* () {
 				const objects = yield* makeTestObjects
@@ -173,7 +173,8 @@ describe("channel source paging", () => {
 				expect(new Set(sent.slice(MESSAGE_SNAPSHOT_LIMIT))).toEqual(
 					new Set(ids.slice(older - PINNED_SNAPSHOT_LIMIT, older)),
 				)
-				expect(rowsOf(socket, "pinned_messages").length).toBe(PINNED_SNAPSHOT_LIMIT)
+				// Every pin, so the client can load the messages past the cap by id.
+				expect(rowsOf(socket, "pinned_messages").length).toBe(older)
 			}),
 		))
 })

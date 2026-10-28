@@ -4,9 +4,9 @@
  * it resnapshots (and so reauthorizes) the viewers it names, closing sockets whose access went.
  *
  * Messages are paged: a snapshot sends the newest {@link MESSAGE_SNAPSHOT_LIMIT} messages (plus
- * older pinned ones, so the pins list is whole) and only their reactions, pins, attachments and
- * chat-sync links; `LoadOlder` pages further back and `LoadByIds` fetches single messages (reply
- * targets). Deltas go out for any row by key.
+ * the newest older pinned ones) and only their reactions, attachments and chat-sync links, but every
+ * pin row, so the pins list is whole; `LoadOlder` pages further back and `LoadByIds` fetches single
+ * messages (reply targets, pinned messages past the snapshot). Deltas go out for any row by key.
  */
 import type { SyncPageCursor } from "@hazel/domain/sync"
 import { Database, SQLite, schema } from "@hazel/db"
@@ -18,7 +18,10 @@ import { type ColumnAccessors, selectVisible, type SyncTableSpec, syncTable, use
 /** Messages in a snapshot. */
 export const MESSAGE_SNAPSHOT_LIMIT = 200
 
-/** Pinned messages older than the window that a snapshot also carries, newest pins first. */
+/**
+ * Pinned messages older than the window that a snapshot also carries, newest first; the client
+ * loads the rest by id (every pin row is in the snapshot).
+ */
 export const PINNED_SNAPSHOT_LIMIT = 50
 /** The most messages one `LoadOlder` returns. */
 export const MESSAGE_PAGE_MAX = 200
@@ -124,7 +127,7 @@ export const pageMessages = (principal: SyncPrincipal, before: SyncPageCursor | 
 		const last = window.at(-1)
 		const oldest = last === undefined ? before : cursorOf(last)
 		// The snapshot also carries the newest pinned messages past the window (the pins list joins on
-		// them), capped so a pin-heavy channel stays bounded; older pins load by id.
+		// them), capped so a pin-heavy channel stays bounded; the client loads the rest by id.
 		const pinnedOlder =
 			before === null && hasMore && oldest !== null
 				? yield* selectVisible(
@@ -141,10 +144,12 @@ export const pageMessages = (principal: SyncPrincipal, before: SyncPageCursor | 
 					)
 				: []
 		const rows = yield* withDependents(principal, [...window, ...pinnedOlder])
-		// Uploads not attached to a message yet belong to no page: the snapshot sends them.
+		// Uploads not attached to a message yet belong to no page, and every pin row is small and
+		// names a message the client can load: the snapshot sends them all.
 		if (before === null) {
 			const pending = yield* selectVisible(attachments, principal, ($) => $.messageId!.isNull())
 			rows.set(attachments.table.name, [...rows.get(attachments.table.name)!, ...pending])
+			rows.set(pins.table.name, yield* selectVisible(pins, principal, () => undefined))
 		}
 		yield* Effect.annotateCurrentSpan({
 			"sync.messages": window.length,

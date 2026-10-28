@@ -271,8 +271,30 @@ interface PinnedRow {
 	}
 }
 
-/** `PinnedMessagesModal`'s query, sorted by pin time like its `sortedPins`. */
-export const pinnedStream = <M>(channelId: ChannelId, toMessage: (pins: ReadonlyArray<PinnedInfo>) => M) =>
+/**
+ * `PinnedMessagesModal`'s query, sorted by pin time like its `sortedPins`. The snapshot sends every
+ * pin but only the newest pinned messages past the window, so the rest are fetched by id.
+ */
+export const pinnedStream = <M>(
+	channelId: ChannelId,
+	toMessage: (pins: ReadonlyArray<PinnedInfo>) => M,
+): Stream.Stream<M> => Stream.merge(pinnedQueryStream(channelId, toMessage), pinnedLoadStream(channelId))
+
+/** Keeps the messages of the channel's pins loaded while it runs. */
+const pinnedLoadStream = (channelId: ChannelId): Stream.Stream<never> =>
+	liveQueryStream<{ messageId: MessageId }, ReadonlyArray<MessageId>>(
+		(q) =>
+			q
+				.from({ pinned: pinnedMessageCollection })
+				.where(({ pinned }) => eq(pinned.channelId, channelId))
+				.select(({ pinned }) => ({ messageId: pinned.messageId })),
+		(rows) => rows.map((row) => row.messageId).sort(),
+	).pipe(
+		Stream.changesWith((a, b) => a.length === b.length && a.every((id, i) => id === b[i])),
+		Stream.switchMap((ids) => (ids.length === 0 ? Stream.empty : replyTargetLoadStream(channelId, ids))),
+	)
+
+const pinnedQueryStream = <M>(channelId: ChannelId, toMessage: (pins: ReadonlyArray<PinnedInfo>) => M) =>
 	liveQueryStream<PinnedRow, M>(
 		(q) =>
 			q
