@@ -225,10 +225,10 @@ const content = (h: HtmlBuilder<Message>, model: Model, page: SearchPage, nowMs:
 						),
 					),
 				]
-			: [emptyState(h, "No messages found in the channels opened this session")]
+			: [emptyState(h, "No messages found")]
 	return model.recentSearches.length > 0
 		? [recentSearches(h, model, page, nowMs)]
-		: [emptyState(h, "Start typing to search messages in the channels opened this session")]
+		: [emptyState(h, "Start typing to search messages")]
 }
 
 /** `nowMs` is the root's clock: relative times never read `Date.now()` in the view. */
