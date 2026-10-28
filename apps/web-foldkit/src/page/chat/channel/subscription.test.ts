@@ -1,6 +1,7 @@
 import { ChannelId, TypingIndicatorId } from "@hazel/schema"
 import { Effect, Fiber, Schema, Stream } from "effect"
 import { describe, expect, test, vi } from "vitest"
+import type * as Typing from "../../../composer/typing"
 import { chatMessageOf, liveEmbeds } from "../../../test/chat-messages"
 import {
 	adaMemberId,
@@ -13,7 +14,7 @@ import {
 } from "./fixtures.test-support"
 import { setTab } from "./page"
 import { Message, type Model } from "./model"
-import { indicatorIdsOf, subscriptions, type TypingCleanup, typingCleanupStream } from "./subscription"
+import { indicatorsOf, subscriptions, type TypingCleanup, typingCleanupStream } from "./subscription"
 
 /** Which Model slices gate the channel's Subscriptions (a changed dependency restarts the stream). */
 
@@ -80,6 +81,20 @@ describe("channel subscription gates", () => {
 		})
 	})
 
+	test("a thread's messages load only once `channel.createThread` answered", () => {
+		const opened = updateWithShared(
+			loadedModel(),
+			Message.ClickedThreadPreview({ threadChannelId, messageId: adaMessageId }),
+		).model
+		const panel = opened.threadPanel!
+		const creating: Model = { ...opened, threadPanel: { ...panel, creation: "Creating" } }
+		expect(subscriptions.chatThreadPanel.modelToDependencies(input(creating))).toEqual({
+			threadChannelId: null,
+		})
+		const created: Model = { ...opened, threadPanel: { ...panel, creation: "Created" } }
+		expect(subscriptions.chatThreadPanel.modelToDependencies(input(created))).toEqual({ threadChannelId })
+	})
+
 	test("an AI reply streaming in the open thread panel opens its actor connection", () => {
 		const live = chatMessageOf(20, { channelId: threadChannelId, embeds: liveEmbeds, hasEmbeds: true })
 		const opened = updateWithShared(
@@ -97,19 +112,20 @@ describe("channel subscription gates", () => {
 describe("typing cleanup on leaving the page", () => {
 	const indicatorId = Schema.decodeSync(TypingIndicatorId)("00000000-0000-4000-8000-000000009999")
 	const otherChannel = Schema.decodeSync(ChannelId)("00000000-0000-4000-8000-000000005555")
-	const own: TypingCleanup = { channelId: loadedModel().channelId, indicatorIds: [indicatorId] }
+	const indicator = { id: indicatorId, channelId: loadedModel().channelId }
+	const own: TypingCleanup = { channelId: loadedModel().channelId, indicators: [indicator] }
 
 	/** Starts the cleanup stream, interrupts it as a restart or teardown would, and lists the deletes. */
 	const deletedOnInterrupt = (latest: TypingCleanup) =>
 		Effect.runPromise(
 			Effect.gen(function* () {
-				const deleted: Array<TypingIndicatorId> = []
+				const deleted: Array<Typing.Indicator> = []
 				const fiber = yield* typingCleanupStream(
 					own,
 					() => latest,
-					(id) =>
+					(indicator) =>
 						Effect.sync(() => {
-							deleted.push(id)
+							deleted.push(indicator)
 						}),
 				).pipe(Stream.runDrain, Effect.forkChild)
 				yield* Effect.yieldNow
@@ -122,21 +138,21 @@ describe("typing cleanup on leaving the page", () => {
 		const model = loadedModel()
 		const typing: Model = {
 			...model,
-			draft: { ...model.draft, typing: { ...model.draft.typing, indicatorId } },
+			draft: { ...model.draft, typing: { ...model.draft.typing, indicator } },
 		}
-		expect(indicatorIdsOf(model)).toEqual([])
+		expect(indicatorsOf(model)).toEqual([])
 		expect(subscriptions.typingCleanup.modelToDependencies(input(typing))).toEqual(own)
 	})
 
 	test("switching to another channel while typing deletes the indicator", async () => {
-		expect(await deletedOnInterrupt({ channelId: otherChannel, indicatorIds: [] })).toEqual([indicatorId])
+		expect(await deletedOnInterrupt({ channelId: otherChannel, indicators: [] })).toEqual([indicator])
 	})
 
 	test("leaving the chat while typing deletes the indicator", async () => {
-		expect(await deletedOnInterrupt(own)).toEqual([indicatorId])
+		expect(await deletedOnInterrupt(own)).toEqual([indicator])
 	})
 
 	test("a stop inside the page already deleted it: no second delete", async () => {
-		expect(await deletedOnInterrupt({ channelId: own.channelId, indicatorIds: [] })).toEqual([])
+		expect(await deletedOnInterrupt({ channelId: own.channelId, indicators: [] })).toEqual([])
 	})
 })

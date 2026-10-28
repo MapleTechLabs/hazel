@@ -13,7 +13,6 @@ import type {
 	PinnedMessageId,
 	SyncChannelLinkId,
 	SyncConnectionId,
-	TypingIndicatorId,
 } from "@hazel/schema"
 import {
 	channelCollection,
@@ -25,13 +24,10 @@ import {
 	messageCollection,
 	organizationMemberCollection,
 	pinnedMessageCollection,
-	typingIndicatorCollection,
 } from "./collections"
 
 export const channelOfMessage = (id: MessageId) => messageCollection.get(id)?.channelId
 export const channelOfPin = (id: PinnedMessageId) => pinnedMessageCollection.get(id)?.channelId
-export const channelOfTypingIndicator = (id: TypingIndicatorId) =>
-	typingIndicatorCollection.get(id)?.channelId
 
 export const orgOfChannel = (id: ChannelId | undefined) =>
 	id === undefined ? undefined : channelCollection.get(id)?.organizationId

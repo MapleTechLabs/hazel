@@ -1,5 +1,7 @@
+import { createCollection, eq, localOnlyCollectionOptions } from "@tanstack/db"
+import { Effect, Fiber, Stream } from "effect"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
-import { watchStall } from "./live-query"
+import { liveQueryStream, watchStall } from "./live-query"
 
 type Status = "idle" | "loading" | "ready" | "error" | "cleaned-up"
 
@@ -99,5 +101,36 @@ describe("watchStall", () => {
 		vi.advanceTimersByTime(60_000)
 		expect(offered).toEqual([])
 		expect(collection.isWatched).toBe(false)
+	})
+})
+
+describe("liveQueryStream", () => {
+	test("emits the delete of a row that existed before the stream started", async () => {
+		const channels = createCollection(
+			localOnlyCollectionOptions({
+				id: "live-query-delete",
+				getKey: (row: { id: string; type: string }) => row.id,
+				initialData: [
+					{ id: "c1", type: "public" },
+					{ id: "c2", type: "public" },
+				],
+			}),
+		)
+		await channels.preload()
+		const emissions: Array<ReadonlyArray<string>> = []
+		const fiber = Effect.runFork(
+			liveQueryStream<{ id: string }, ReadonlyArray<string>>(
+				(q) =>
+					q
+						.from({ channel: channels })
+						.where(({ channel }) => eq(channel.type, "public"))
+						.select(({ channel }) => ({ id: channel.id })),
+				(rows) => rows.map((row) => row.id).sort(),
+			).pipe(Stream.runForEach((ids) => Effect.sync(() => emissions.push(ids)))),
+		)
+		await vi.waitFor(() => expect(emissions.at(-1)).toEqual(["c1", "c2"]))
+		channels.delete("c2")
+		await vi.waitFor(() => expect(emissions.at(-1)).toEqual(["c1"]))
+		await Effect.runPromise(Fiber.interrupt(fiber))
 	})
 })

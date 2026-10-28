@@ -95,6 +95,12 @@ export class SyncHub {
 
 	acquireKey(source: SourceKey): SyncLease {
 		let entry = this.entries.get(source)
+		// A refusal answered the leases that were open. A new lease on a released source asks
+		// again: the channel may exist by now (a thread), or the user may have been let in.
+		if (entry !== undefined && entry.refs === 0 && entry.connection.error !== undefined) {
+			this.evict(source, entry)
+			entry = undefined
+		}
 		if (entry === undefined) entry = this.open(source)
 		if (entry.graceTimer !== undefined) {
 			clearTimeout(entry.graceTimer)

@@ -53,7 +53,10 @@ export const invitationsOf = (model: Model): ReadonlyArray<Invitation> =>
 	Option.getOrElse(AsyncData.getData(model.invitations), () => [])
 
 /** One row menu per invitation, keeping open state for rows that stay. */
-const reflectMenus = (menus: ReadonlyArray<RowMenu>, invitations: ReadonlyArray<Invitation>): ReadonlyArray<RowMenu> =>
+const reflectMenus = (
+	menus: ReadonlyArray<RowMenu>,
+	invitations: ReadonlyArray<Invitation>,
+): ReadonlyArray<RowMenu> =>
 	invitations.map((invitation) =>
 		Option.getOrElse(
 			Array.findFirst(menus, (row) => row.invitationId === invitation.id),
@@ -80,6 +83,22 @@ export const init = (_route: unknown, shared: Shared): Return => {
 			revokingId: null,
 		},
 		commands: organizationId === null ? [] : [FetchInvitations({ organizationId, version: 1 })],
+	}
+}
+
+/** A direct load knows the organization only once it synced: fetch then, and on a switch. */
+export const sharedChanged = (model: Model, shared: Shared): Return => {
+	const organizationId = shared.organization?.id ?? null
+	if (organizationId === null || organizationId === model.organizationId) return { model }
+	const version = model.fetchVersion + 1
+	return {
+		model: modifyFields(model, {
+			organizationId: () => organizationId,
+			fetchVersion: () => version,
+			invitations: () => Invitations.Loading(),
+			menus: () => [],
+		}),
+		commands: [FetchInvitations({ organizationId, version })],
 	}
 }
 

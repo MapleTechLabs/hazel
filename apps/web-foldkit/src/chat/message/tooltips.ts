@@ -16,10 +16,10 @@ export interface TooltipContext<M> {
 	readonly currentUserId: string | null
 }
 
+// The kit's trigger attributes already carry `type="button"`; a raw one too crashes foldkit.
 const PRESSABLE = <M>(h: HtmlBuilder<M>) => [
 	h.Attribute("data-react-aria-pressable", "true"),
 	h.Attribute("tabindex", "0"),
-	h.Attribute("type", "button"),
 ]
 
 /** `ReactionUserList`: current user first, three names, then "and N others". */

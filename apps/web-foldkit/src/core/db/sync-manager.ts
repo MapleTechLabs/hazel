@@ -15,7 +15,10 @@ export interface ObservedRows<Row> {
 	readonly toArray: ReadonlyArray<Row>
 	readonly isReady: () => boolean
 	readonly onFirstReady: (callback: () => void) => void
-	readonly subscribeChanges: (callback: () => void) => { readonly unsubscribe: () => void }
+	readonly subscribeChanges: (
+		callback: () => void,
+		options: { readonly includeInitialState: false },
+	) => { readonly unsubscribe: () => void }
 }
 
 export interface SyncManagerDeps {
@@ -53,8 +56,9 @@ export const startSyncSession = (deps: SyncManagerDeps, userId: UserId): (() => 
 	}
 	deps.userSources.set([sourceKey("user", userId)])
 	const subscriptions = [
-		deps.userOrganizations.subscribeChanges(reconcile),
-		deps.connectConversations.subscribeChanges(reconcile),
+		// Unfiltered, so leaving an org (a delete of a row older than the subscription) reconciles.
+		deps.userOrganizations.subscribeChanges(reconcile, { includeInitialState: false }),
+		deps.connectConversations.subscribeChanges(reconcile, { includeInitialState: false }),
 	]
 	deps.userOrganizations.onFirstReady(reconcile)
 	reconcile()

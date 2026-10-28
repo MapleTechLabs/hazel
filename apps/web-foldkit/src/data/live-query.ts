@@ -41,7 +41,9 @@ export const liveQueryStream = <Row, Message>(
 				const collection = createLiveQueryCollection({ query, startSync: true })
 				const emit = () =>
 					Queue.offerUnsafe(queue, toMessage(collection.toArray as ReadonlyArray<Row>))
-				const subscription = collection.subscribeChanges(emit)
+				// `includeInitialState: false` passes every later change; left unset, TanStack drops
+				// deletes of rows that existed before this subscription.
+				const subscription = collection.subscribeChanges(emit, { includeInitialState: false })
 				collection.onFirstReady(emit)
 				const watchdog = options.onStalled
 					? watchStall(

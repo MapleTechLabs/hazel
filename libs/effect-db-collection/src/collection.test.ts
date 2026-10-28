@@ -366,6 +366,26 @@ describe("channel-partitioned collections", () => {
 		await vi.waitFor(() => expect(socket.isClosed).toBe(true))
 	})
 
+	it("asks a refused channel again once its leases were released", async () => {
+		const { sockets, messages } = messagesSetup({ releaseGraceMs: 60 })
+		const query = () =>
+			createLiveQueryCollection((q) => q.from({ m: messages }).where(({ m }) => eq(m.channelId, "t1")))
+		const first = query()
+		const ready = first.preload()
+		;(await socketFor(sockets, "/sync/channel/t1")).serverClose(4004)
+		await ready
+		await first.cleanup()
+
+		// The thread exists now: a new query within the grace period opens a new socket.
+		const second = query()
+		const loaded = second.preload()
+		const socket = await socketFor(sockets, "/sync/channel/t1", 2)
+		socket.snapshot(1, { messages: [{ id: "m1", channelId: "t1", content: "a" }] })
+		await loaded
+		expect(ids(second)).toEqual(["m1"])
+		await second.cleanup()
+	})
+
 	it("loads channels named through ensureChannels for the scope", async () => {
 		const { sockets, messages } = messagesSetup()
 		const live = createLiveQueryCollection((q) => q.from({ m: messages }))
