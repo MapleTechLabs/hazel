@@ -9,7 +9,7 @@
 import { formatWritePosition, type SyncSeq } from "@hazel/domain/sync"
 import { TransactionId } from "@hazel/schema"
 import { Effect, Schedule, Schema } from "effect"
-import type { AnyEffectKind } from "./effects/registry"
+import { type AnyEffectKind, WORKER_SENDER } from "./effects/registry"
 import { formatTarget, type ObjectTarget } from "./kinds"
 import { ObjectStubs } from "./protocol"
 
@@ -41,7 +41,13 @@ export const applyNow = <K extends AnyEffectKind>(
 			new ApplyNowError({ target: formatTarget(target), kind: kind.name, message, retryable })
 		const send = stubs
 			.get(target)
-			.applyEffect({ objectId: target.id, kind: kind.name, payload: encoded, key })
+			.applyEffect({
+				objectId: target.id,
+				kind: kind.name,
+				payload: encoded,
+				key,
+				sender: WORKER_SENDER,
+			})
 			.pipe(
 				Effect.mapError((cause) => fail(`unreachable: ${String(cause)}`, true)),
 				Effect.flatMap((result) =>

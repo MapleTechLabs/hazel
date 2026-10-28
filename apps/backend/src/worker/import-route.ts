@@ -1,6 +1,7 @@
 /**
  * `POST /internal/import/:store/:id`: the one-shot Postgres import (`scripts/import-postgres.ts`).
- * Off (404) unless `IMPORT_SECRET` is set; the caller sends `Authorization: Bearer <secret>`.
+ * Off (404) unless `IMPORT_SECRET` is set and the stage is not prd (or the import deploy set
+ * `IMPORT_ENABLED=true`); the caller sends `Authorization: Bearer <secret>`.
  *
  * The body is one `ImportRequest`: a batch `{ table, rows }` (encoded rows, `lib/import-rows.ts`)
  * or `{ finalize: true }`. `directory` batches are written to D1 here (one idempotent statement per
@@ -19,6 +20,7 @@ import {
 	importTableOf,
 	upsertStatement,
 } from "../lib/import-rows"
+import { isNonProductionStage } from "../lib/stage"
 import { callObject } from "./objects/calls"
 import { ImportCalls } from "./objects/import"
 import { directoryBinding } from "./platform"
@@ -93,6 +95,10 @@ const importDirectoryRows = (d1: D1Database, tableName: string, rows: ReadonlyAr
 		return Option.some<ImportResult>({ applied, skipped })
 	})
 
+/** Off on prd unless the import deploy also set `IMPORT_ENABLED=true` (`worker/env.ts`). */
+export const importAllowed = (env: Record<string, unknown>) =>
+	isNonProductionStage(env) || env.IMPORT_ENABLED === "true"
+
 export const makeImportRoute = (env: Record<string, unknown>) =>
 	HttpRouter.use((router) =>
 		router.add(
@@ -100,7 +106,7 @@ export const makeImportRoute = (env: Record<string, unknown>) =>
 			"/internal/import/*",
 			Effect.gen(function* () {
 				const secret = env.IMPORT_SECRET
-				if (typeof secret !== "string" || secret.length === 0) {
+				if (typeof secret !== "string" || secret.length === 0 || !importAllowed(env)) {
 					return HttpServerResponse.text("Not found", { status: 404 })
 				}
 				const request = yield* HttpServerRequest.HttpServerRequest

@@ -16,7 +16,7 @@
  */
 import { Database, type DatabaseError } from "@hazel/db"
 import { enqueue } from "@hazel/sync-do"
-import { Clock, Effect, Schema } from "effect"
+import { Clock, Context, Effect, Schema } from "effect"
 import type { SqlClient } from "effect/sql/SqlClient"
 import type { ObjectKind } from "../kinds"
 
@@ -100,6 +100,43 @@ export type EffectReceivers<Kinds extends Record<string, AnyEffectKind>, R> = {
 	readonly [K in keyof Kinds as Kinds[K]["name"]]: EffectReceiver<Kinds[K], R>
 }
 
+/**
+ * Who sent an effect: the delivering object (its own kind and stored id, never anything from the
+ * payload), or the api Worker itself (`worker`: routes and the directory path). DO RPC is only
+ * reachable from this Worker's own code, so receivers may trust it.
+ */
+export type EffectSender = { readonly kind: ObjectKind; readonly id: string } | { readonly kind: "worker" }
+
+export const WORKER_SENDER: EffectSender = { kind: "worker" }
+
+/** The sender of the effect being applied: provided to receivers (and to sender-side effects). */
+export class CurrentEffectSender extends Context.Service<CurrentEffectSender, EffectSender>()(
+	"@hazel/backend/CurrentEffectSender",
+) {}
+
+/** A receiver refused the effect's sender: never retried (the outbox marks the row dead). */
+export class EffectSenderRefusedError extends Schema.TaggedError<EffectSenderRefusedError>()(
+	"EffectSenderRefusedError",
+	{ kind: Schema.String, message: Schema.String },
+) {}
+
+/** Fail unless the current sender is the `OrgObject` of `organizationId`. */
+export const requireOrgSender = (kind: string, organizationId: string) =>
+	Effect.flatMap(CurrentEffectSender, (sender) =>
+		isOrgSender(sender, organizationId)
+			? Effect.void
+			: Effect.fail(
+					new EffectSenderRefusedError({
+						kind,
+						message: `${kind} for org ${organizationId} sent by ${sender.kind}${"id" in sender ? `:${sender.id}` : ""}`,
+					}),
+				),
+	)
+
+/** True when `sender` is the `OrgObject` of `organizationId`. */
+export const isOrgSender = (sender: EffectSender, organizationId: string) =>
+	sender.kind === "org" && sender.id === organizationId
+
 /** What `applyEffect` sends to the receiving object. */
 export interface ApplyEffectRequest {
 	/** The receiving object's id (its DO name), so a fresh object learns it. */
@@ -108,6 +145,8 @@ export interface ApplyEffectRequest {
 	readonly payload: unknown
 	/** The outbox row id: the inbox key. */
 	readonly key: string
+	/** Set by the delivering side from its own identity (`deliverOutboxRow`, `applyNow`). */
+	readonly sender: EffectSender
 }
 
 export type ApplyEffectResult =

@@ -46,7 +46,11 @@ export class ToyObject extends DurableObject<Env> {
 				userId: url.searchParams.get("user") ?? "anon",
 				...(exp === null ? {} : { expiresAt: Number(exp) }),
 			}
-			return this.runtime.runPromise(this.synced.sync.acceptSocket(request, principal))
+			const { response, result } = await this.runtime.runPromise(
+				this.synced.sync.upgradeSocket(request, principal),
+			)
+			response.headers.set("x-adopt-result", result)
+			return response
 		}
 		if (url.pathname === "/write") {
 			const id = url.searchParams.get("id")!

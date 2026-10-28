@@ -126,6 +126,10 @@ export const makeRpcDispatcher: Effect.Effect<RpcDispatcherShape, never, HazelRp
 					.pipe(
 						providePrincipal(principal),
 						Effect.andThen(Deferred.await(deferred)),
+						// The caller gave up (DO call cancelled, request aborted): stop the handler too.
+						Effect.onInterrupt(() =>
+							server.write(CLIENT_ID, { _tag: "Interrupt", requestId: id, interruptors: [] }),
+						),
 						Effect.ensuring(Effect.sync(() => pending.delete(id))),
 					)
 			}).pipe(Effect.withSpan("HazelRpc.dispatch", { attributes: { "rpc.method": tag } }))

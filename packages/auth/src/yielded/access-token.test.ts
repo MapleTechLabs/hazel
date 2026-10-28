@@ -59,7 +59,9 @@ describe("AccessTokenVerifier", () => {
 	test("a token the API minted resolves to its user", async () => {
 		const key = await keyPair("k1")
 		const exit = await verify(await mint(api, key), key)
-		expect(exit).toEqual(Exit.succeed({ userId, sessionId: "s1" }))
+		expect(exit).toEqual(
+			Exit.succeed({ userId, sessionId: "s1", expiresAt: expect.any(Number) as unknown as number }),
+		)
 	})
 
 	test("another stage's token is rejected", async () => {
@@ -72,7 +74,9 @@ describe("AccessTokenVerifier", () => {
 		const key = await keyPair("k1")
 		const issuedAtMs = Date.now() - (lifetimeSeconds + clockToleranceSeconds / 2) * 1000
 		const exit = await verify(await mint(api, key, issuedAtMs), key)
-		expect(exit).toEqual(Exit.succeed({ userId, sessionId: "s1" }))
+		// `exp` is in seconds; the verifier reports it in ms (already past, within the tolerance).
+		const expiresAt = (Math.floor(issuedAtMs / 1000) + lifetimeSeconds) * 1000
+		expect(exit).toEqual(Exit.succeed({ userId, sessionId: "s1", expiresAt }))
 	})
 
 	test("a token expired beyond the clock tolerance is rejected", async () => {
@@ -112,6 +116,9 @@ describe("makeLocalVerifier", () => {
 		const verifier = await Effect.runPromise(makeLocalVerifier(api, key))
 		const own = await Effect.runPromise(verifier.verify(await mint(api, key)))
 		expect(own.userId).toBe(userId)
+		// `exp` in epoch ms, one token lifetime after it was minted.
+		expect(own.expiresAt).toBeGreaterThan(Date.now())
+		expect(own.expiresAt).toBeLessThanOrEqual(Date.now() + lifetimeSeconds * 1000 + 1000)
 		const foreign = await Effect.runPromiseExit(
 			verifier.verify(await mint("https://api.other.test", key)),
 		)

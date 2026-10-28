@@ -204,6 +204,25 @@ the client.
 - **Message search** in the command palette only covers channels that are loaded. Follow-up: per-org
   FTS5.
 - **Messages load a whole channel** once its socket is open; there's no paging from the server yet.
+  Every `Hello` reset (first connect, a catch-up past `catchUpMaxChanges`, a dependency
+  resnapshot) runs `load(principal, "all")` for `messages`, `message_reactions`,
+  `pinned_messages`, `attachments` and `chat_sync_message_links`, so the ChannelObject reads the
+  whole history into memory and sends it. A bounded snapshot (newest N messages and their
+  dependents) is not safe today: the client pages purely locally (`page/chat/data.ts` runs
+  `offset`/`limit` windows over `messageCollection`; `loadSubset` in
+  `libs/effect-db-collection/src/collection.ts` ignores `limit`/`cursor` and only opens
+  `channel:<id>`), and the only client frame is `Hello { since }`, so messages older than the
+  snapshot could never be fetched. Proposed extension:
+    - Snapshot: `Begin { reset, horizon?: { createdAt, id } }`, the oldest message sent; the
+      object sends the newest N (e.g. 500) messages and only the dependents of those.
+    - Deltas: a change to a message older than the socket's horizon (edit, reaction, pin) is
+      dropped for that socket; the horizon lives in the socket attachment.
+    - Paging: client `LoadBefore { requestId, before: { createdAt, id }, limit }`, answered with
+      `Rows` frames and `PageDone { requestId, horizon, exhausted }`; the object lowers the
+      socket's horizon so the page's rows keep receiving deltas.
+    - Client: `loadSubset` forwards `limit`/`cursor` for the messages collection and sends
+      `LoadBefore` when the window's `offset + limit` passes the loaded count; a reset drops the
+      older pages (the visible window re-requests them).
 - **Auth checks call D1** on every api request; add a short KV cache if latency shows it's needed.
 - **Bot creation from the CLI is gone:** `hazel-setup bots` wrote the Bun runtime's SQLite file.
   Create bots in the app.
@@ -230,7 +249,10 @@ the client.
 - **Local dev:** `bun run alchemy:dev` with `.env.local` (`.env.local.example`).
 - **Import:** `apps/backend/src/scripts/import-postgres.ts`, through
   `POST /internal/import/:store/:id`. The route answers only while the api Worker has
-  `IMPORT_SECRET`; unset it after the cutover.
+  `IMPORT_SECRET`, and on prd only with `IMPORT_ENABLED=true` as well (`worker/import-route.ts`,
+  `lib/stage.ts`). Neither is in `deploy-prd.yml`: set both by hand in the env of one prd deploy
+  for the one-shot import, run it, then redeploy without them (the next CI deploy drops them) and
+  delete the `IMPORT_SECRET` repository secret.
 - **Not done yet:**
     - The PR 6 verification: a `pr-<n>` preview deploy, the import against a staging copy, and a
       full browser pass.

@@ -17,7 +17,7 @@
 import { Database, type StoreName, applyMigrations } from "@hazel/db"
 import { makeSyncedObject, type SyncObjectState, type SyncSocket, type SyncSource } from "@hazel/sync-do"
 import type { AlarmStorageLike, SqlStorageLike } from "@hazel/sync-do"
-import { Context, Effect, Exit, Layer, Option, type Scope } from "effect"
+import { Context, Effect, Exit, Layer, Option, Result, type Scope } from "effect"
 import { SqlClient } from "effect/sql/SqlClient"
 import { CurrentObject } from "../../lib/current-object"
 import {
@@ -33,7 +33,7 @@ import type { ThreadNamer } from "../../services/thread-namer"
 import type { ChatSyncTransport } from "../../services/chat-sync/chat-sync-transport"
 import { ObjectCalls } from "./call-receivers"
 import type { CallRequest, CallResponse } from "./calls"
-import { applyReceivedEffect, deliverOutboxRow } from "./effects/deliver"
+import { applyReceivedEffect, deliverOutboxRowFrom } from "./effects/deliver"
 import type { ApplyEffectRequest, ApplyEffectResult } from "./effects/registry"
 import type { ObjectKind } from "./kinds"
 import { installObjectMeta, makeObjectIdentity } from "./meta"
@@ -75,11 +75,12 @@ const storeOf: Record<ObjectKind, StoreName> = { org: "org", channel: "channel",
 
 const sourceOf = (
 	kind: ObjectKind,
+	sql: SqlStorageLike,
 	ownerId: () => string | undefined,
 ): SyncSource<SyncPrincipal, never, Database.Database> => {
 	switch (kind) {
 		case "org":
-			return makeOrgSource()
+			return makeOrgSource(sql)
 		case "channel":
 			return makeChannelSource()
 		case "user":
@@ -107,8 +108,8 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 		const synced = makeSyncedObject({
 			storage: options.storage,
 			state: options.state,
-			source: sourceOf(kind, identity.current),
-			deliver: deliverOutboxRow,
+			source: sourceOf(kind, options.storage.sql, identity.current),
+			deliver: deliverOutboxRowFrom(kind, identity.current),
 			...(kind === "channel" ? { deadlines: channelDeadlines } : {}),
 			...(kind === "org" ? { deadlines: rssDeadlines } : {}),
 			...(presence === undefined ? {} : { deadlines: presence.deadlines }),
@@ -128,11 +129,16 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 				const decoded = yield* Effect.all([
 					decodeInvokePrincipal(request.principal),
 					decodePayload(rpc, request.payload),
-				]).pipe(Effect.exit)
-				if (Exit.isFailure(decoded)) {
-					return { exit: yield* encodeExit(rpc, Exit.die(`Undecodable ${request.tag} request`)) }
+				]).pipe(
+					Effect.map(Result.succeed),
+					Effect.catchTag("SchemaError", (error) => Effect.succeed(Result.fail(error.message))),
+				)
+				if (Result.isFailure(decoded)) {
+					const message = `Undecodable ${request.tag} request: ${decoded.failure}`
+					yield* Effect.annotateCurrentSpan({ "rpc.decode_error": decoded.failure })
+					return { exit: yield* encodeExit(rpc, Exit.die(message)) }
 				}
-				const [principal, payload] = decoded.value
+				const [principal, payload] = decoded.success
 				const exit = yield* dispatcher
 					.dispatch(rpc._tag, payload, principal)
 					.pipe(Effect.provideService(CurrentObject, { kind, id }))
@@ -214,8 +220,12 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 					return new Response("Missing sync principal", { status: 400 })
 				}
 				yield* remember(objectId)
-				return yield* run(synced.sync.acceptSocket(request, principal.value)).pipe(
-					Effect.tap(() => presenceOpened(principal.value)),
+				return yield* run(synced.sync.upgradeSocket(request, principal.value)).pipe(
+					// A refused socket (closed with 4003/4004) must not mark the user online.
+					Effect.tap(({ result }) =>
+						result === "accepted" ? presenceOpened(principal.value) : Effect.void,
+					),
+					Effect.map(({ response }) => response),
 					Effect.catchTag("SyncAttachmentTooLargeError", () =>
 						Effect.succeed(new Response("Principal too large", { status: 400 })),
 					),

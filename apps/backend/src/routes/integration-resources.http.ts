@@ -1,5 +1,5 @@
 import { HttpApiBuilder } from "effect/http-api"
-import { InternalServerError } from "@hazel/domain"
+import { CurrentUser, InternalServerError, UnauthorizedError } from "@hazel/domain"
 import type { ExternalChannelId, OrganizationId } from "@hazel/schema"
 import {
 	DiscordGuildChannelsResponse,
@@ -14,6 +14,7 @@ import {
 import { Discord, GitHub } from "@hazel/integrations"
 import { Config, Effect, Option, Redacted } from "effect"
 import { HazelApi } from "../api"
+import { Directory } from "../services/directory"
 import { callObject } from "../worker/objects/calls"
 import { orgTarget } from "../worker/objects/kinds"
 import { IntegrationAccessTokenCall } from "../worker/objects/org/integrations"
@@ -27,9 +28,30 @@ import {
 
 type Provider = typeof IntegrationAccessTokenCall.payload.Type.provider
 
+/** The caller must be an active member of `orgId` before anything uses the org's tokens. */
+export const requireMember = Effect.fn("IntegrationResources.requireMember")(function* (
+	orgId: OrganizationId,
+) {
+	const user = yield* CurrentUser.Context
+	const membership = yield* Effect.flatMap(Directory, (directory) =>
+		directory.membership(user.id, orgId),
+	).pipe(
+		Effect.catchTag("DatabaseError", (error) =>
+			Effect.fail(new InternalServerError({ message: "Membership lookup failed", cause: error })),
+		),
+	)
+	if (Option.isNone(membership) || membership.value.deletedAt !== null) {
+		return yield* new UnauthorizedError({
+			message: "You are not a member of this organization",
+			detail: `organizationId=${orgId}`,
+		})
+	}
+})
+
 /** The org's token for `provider`, from its `OrgObject`; null when none is usable. */
 const tokenOf = (orgId: OrganizationId, provider: Provider) =>
-	callObject(IntegrationAccessTokenCall, orgTarget(orgId), { provider }).pipe(
+	requireMember(orgId).pipe(
+		Effect.andThen(callObject(IntegrationAccessTokenCall, orgTarget(orgId), { provider })),
 		// A token that cannot be refreshed or decrypted: prompt a reconnect.
 		Effect.catchTag("IntegrationTokenUnavailableError", () => Effect.succeed(null)),
 		Effect.map((token) => (token === null ? null : token.accessToken)),

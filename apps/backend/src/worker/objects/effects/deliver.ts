@@ -17,13 +17,16 @@ import { ChatSyncDeliveryEffects } from "../../../services/chat-sync/chat-sync-e
 import type { ChatSyncTransport } from "../../../services/chat-sync/chat-sync-transport"
 import { aiReceivers, AiEffects } from "./ai-effects"
 import { botGatewayReceivers, BotGatewayEffects } from "./bot-gateway-effects"
-import { channelReceivers, ChannelEffects } from "./channel-effects"
+import { channelReceivers, ChannelEffects, channelSenderRefusal } from "./channel-effects"
 import { directoryReceivers, DirectoryEffects } from "./directory-effects"
 import { orgReceivers, OrgEffects } from "./org-effects"
 import {
 	type AnyEffectKind,
 	type ApplyEffectRequest,
 	type ApplyEffectResult,
+	CurrentEffectSender,
+	type EffectSender,
+	EffectSenderRefusedError,
 	parseEffectTarget,
 } from "./registry"
 import { userReceivers, UserEffects } from "./user-effects"
@@ -47,9 +50,12 @@ export const objectReceivers: Record<ObjectKind, Side<Database.Database | SqlCli
 	user: side(UserEffects, userReceivers),
 }
 
-const directorySide = side<Directory>(DirectoryEffects, directoryReceivers)
+const directorySide = side<Directory | CurrentEffectSender>(DirectoryEffects, directoryReceivers)
 const botGatewaySide = side<Database.Database | BotGatewayTransport>(BotGatewayEffects, botGatewayReceivers)
-const aiSide = side<Database.Database | SqlClient | ThreadNamer | ObjectStubs>(AiEffects, aiReceivers)
+const aiSide = side<Database.Database | SqlClient | ThreadNamer | ObjectStubs | CurrentEffectSender>(
+	AiEffects,
+	aiReceivers,
+)
 const chatSyncSide = side<Database.Database | SqlClient | ChatSyncTransport | Directory>(
 	ChatSyncDeliveryEffects,
 	chatSyncDeliveryReceivers,
@@ -62,8 +68,20 @@ const decode = (kind: AnyEffectKind, payload: unknown) =>
 		Effect.mapError((error) => failure(`Bad ${kind.name} payload: ${error.message}`, false)),
 	)
 
+/**
+ * Refuses an effect its sender may not send here: `Some(reason)`, checked in the receiving
+ * transaction before the receiver runs. Kinds without one accept every sender.
+ */
+type SenderGuard = (
+	kind: string,
+	payload: unknown,
+	sender: EffectSender,
+) => Effect.Effect<Option.Option<string>, unknown, Database.Database | SqlClient>
+
+const senderGuards: Partial<Record<ObjectKind, SenderGuard>> = { channel: channelSenderRefusal }
+
 /** Run a sender-side effect (directory, bot gateway). */
-const runLocal = <R>(sideOf: Side<R>, row: OutboxRow) =>
+const runLocal = <R>(sideOf: Side<R>, row: OutboxRow, sender: EffectSender) =>
 	Effect.gen(function* () {
 		const kind = sideOf.kinds[row.kind]
 		const receiver = sideOf.receivers[row.kind]
@@ -72,17 +90,35 @@ const runLocal = <R>(sideOf: Side<R>, row: OutboxRow) =>
 		}
 		const payload = yield* decode(kind, row.payload)
 		yield* receiver(payload).pipe(
-			Effect.catchCause((cause) =>
-				Cause.hasInterruptsOnly(cause)
-					? Effect.interrupt
-					: Effect.fail(failure(`${row.kind} failed: ${Cause.pretty(cause).slice(0, 500)}`)),
-			),
+			Effect.provideService(CurrentEffectSender, sender),
+			Effect.catchCause((cause) => {
+				if (Cause.hasInterruptsOnly(cause)) return Effect.interrupt
+				const error = Option.getOrUndefined(Cause.findErrorOption(cause))
+				// A refused sender stays refused: no retry.
+				if (error instanceof EffectSenderRefusedError)
+					return Effect.fail(failure(error.message, false))
+				return Effect.fail(failure(`${row.kind} failed: ${Cause.pretty(cause).slice(0, 500)}`))
+			}),
 		)
 	})
 
-/** Every object's outbox `deliver`. */
+/**
+ * Every object's outbox `deliver`, as the object `kind` whose stored id `currentId` returns: the
+ * sender identity receivers check (`ApplyEffectRequest.sender`).
+ */
+export const deliverOutboxRowFrom =
+	(kind: ObjectKind, currentId: () => string | undefined) => (row: OutboxRow) =>
+		Effect.suspend(() => {
+			const id = currentId()
+			// Rows are only written after an entry point carried the id; retry if not yet known.
+			if (id === undefined) return Effect.fail(failure(`Sender ${kind} has no id yet`))
+			return deliverOutboxRow(row, { kind, id })
+		})
+
+/** Deliver one outbox row as `sender`. */
 export const deliverOutboxRow = (
 	row: OutboxRow,
+	sender: EffectSender,
 ): Effect.Effect<
 	void,
 	OutboxDeliveryError,
@@ -97,14 +133,20 @@ export const deliverOutboxRow = (
 	Effect.gen(function* () {
 		const target = parseEffectTarget(row.target)
 		if (target === undefined) return yield* failure(`Unknown outbox target ${row.target}`, false)
-		if (target.kind === "directory") return yield* runLocal(directorySide, row)
-		if (target.kind === "bot-gateway") return yield* runLocal(botGatewaySide, row)
-		if (target.kind === "ai") return yield* runLocal(aiSide, row)
-		if (target.kind === "chat-sync") return yield* runLocal(chatSyncSide, row)
+		if (target.kind === "directory") return yield* runLocal(directorySide, row, sender)
+		if (target.kind === "bot-gateway") return yield* runLocal(botGatewaySide, row, sender)
+		if (target.kind === "ai") return yield* runLocal(aiSide, row, sender)
+		if (target.kind === "chat-sync") return yield* runLocal(chatSyncSide, row, sender)
 		const stubs = yield* ObjectStubs
 		const result = yield* stubs
 			.get({ kind: target.kind, id: target.id! })
-			.applyEffect({ objectId: target.id!, kind: row.kind, payload: row.payload, key: row.id })
+			.applyEffect({
+				objectId: target.id!,
+				kind: row.kind,
+				payload: row.payload,
+				key: row.id,
+				sender,
+			})
 			.pipe(Effect.mapError((cause) => failure(`${row.target} unreachable: ${String(cause)}`)))
 		if (result._tag === "Rejected") return yield* failure(result.message, result.retryable)
 	}).pipe(
@@ -141,8 +183,31 @@ export const applyReceivedEffect = (
 			return { _tag: "Rejected", message: `Bad ${request.kind} payload`, retryable: false } as const
 		}
 		const db = yield* Database.Database
-		const applied = yield* db.transaction(withInbox(request.key, receiver(decoded.value)))
-		return Option.isSome(applied) ? ({ _tag: "Applied" } as const) : ({ _tag: "Duplicate" } as const)
+		const guard = senderGuards[objectKind]
+		const applied = yield* db.transaction(
+			Effect.gen(function* () {
+				// In the transaction: a guard that pins (the channel's org) cannot race its write.
+				const refusal =
+					guard === undefined
+						? Option.none<string>()
+						: yield* guard(request.kind, decoded.value, request.sender)
+				if (Option.isSome(refusal)) return { _tag: "Refused", message: refusal.value } as const
+				const result = yield* withInbox(
+					request.key,
+					receiver(decoded.value).pipe(Effect.provideService(CurrentEffectSender, request.sender)),
+				)
+				return { _tag: "Ran", applied: Option.isSome(result) } as const
+			}),
+		)
+		if (applied._tag === "Refused") {
+			yield* Effect.logWarning("Effect refused: sender not allowed", {
+				kind: request.kind,
+				sender: request.sender,
+				message: applied.message,
+			})
+			return { _tag: "Rejected", message: applied.message, retryable: false } as const
+		}
+		return applied.applied ? ({ _tag: "Applied" } as const) : ({ _tag: "Duplicate" } as const)
 	}).pipe(
 		Effect.catchCause((cause) =>
 			Cause.hasInterruptsOnly(cause)
@@ -154,6 +219,10 @@ export const applyReceivedEffect = (
 					} as const),
 		),
 		Effect.withSpan("ObjectEffects.apply", {
-			attributes: { "effect.kind": request.kind, "object.kind": objectKind },
+			attributes: {
+				"effect.kind": request.kind,
+				"object.kind": objectKind,
+				"effect.sender": request.sender?.kind ?? "unknown",
+			},
 		}),
 	)

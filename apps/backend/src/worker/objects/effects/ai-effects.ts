@@ -14,7 +14,7 @@ import { ThreadNamer, type ThreadLine } from "../../../services/thread-namer"
 import { readThreadOrigin } from "../channel/thread"
 import { ChannelRenameEffects } from "../org/channel-rename"
 import { ObjectStubs } from "../protocol"
-import { defineEffect, type EffectReceivers } from "./registry"
+import { CurrentEffectSender, defineEffect, type EffectReceivers } from "./registry"
 
 export const NameThreadPayload = Schema.Struct({
 	organizationId: OrganizationId,
@@ -88,6 +88,7 @@ const nameThread = Effect.fn("AiEffects.nameThread")(function* (payload: NameThr
 		kind: kind.name,
 		payload: rename,
 		key: `ai.nameThread:${payload.requestId}`,
+		sender: yield* CurrentEffectSender,
 	})
 	if (result._tag === "Rejected") {
 		return yield* new ThreadRenameRejectedError({ message: result.message })
@@ -96,4 +97,7 @@ const nameThread = Effect.fn("AiEffects.nameThread")(function* (payload: NameThr
 
 export const aiReceivers = {
 	"ai.nameThread": nameThread,
-} satisfies EffectReceivers<typeof AiEffects, Database.Database | SqlClient | ThreadNamer | ObjectStubs>
+} satisfies EffectReceivers<
+	typeof AiEffects,
+	Database.Database | SqlClient | ThreadNamer | ObjectStubs | CurrentEffectSender
+>

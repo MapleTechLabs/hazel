@@ -9,7 +9,7 @@ import {
 	ChatSyncConnectionRepo,
 	IntegrationConnectionRepo,
 } from "@hazel/backend-core"
-import { Database } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import { ExternalChannelId } from "@hazel/schema"
 import { CurrentUser, InternalServerError, withRemapDbErrors } from "@hazel/domain"
 import {
@@ -23,6 +23,7 @@ import {
 	ChatSyncConnectionNotFoundError,
 	ChatSyncConnectionResponse,
 	ChatSyncRpcs,
+	ChannelNotFoundError,
 } from "@hazel/domain/rpc"
 import { Effect, Option } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
@@ -171,6 +172,21 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 							}
 							const connection = connectionOption.value
 							yield* integrationConnectionPolicy.canInsert(connection.organizationId)
+
+							// Only a live channel of the connection's own org (this OrgObject's).
+							const channel = yield* db.first(
+								SQLite.from(schema.channelsTable)
+									.select("id")
+									.where(($) => [
+										$.id.eq(payload.hazelChannelId),
+										$.organizationId.eq(connection.organizationId),
+										$.deletedAt.isNull(),
+									])
+									.limit(1),
+							)
+							if (Option.isNone(channel)) {
+								return yield* new ChannelNotFoundError({ channelId: payload.hazelChannelId })
+							}
 
 							const existingHazel = yield* channelLinkRepo.findByHazelChannel(
 								payload.syncConnectionId,

@@ -10,26 +10,18 @@
  */
 import { InternalServerError } from "@hazel/domain"
 import type { CurrentUser } from "@hazel/domain"
-import { Context, Effect, Exit, Layer } from "effect"
-import type { RpcTarget } from "../worker/objects/kinds"
-import { formatTarget } from "../worker/objects/kinds"
+import { Context, Effect, type Exit, Layer } from "effect"
 import { objectHandlersLive } from "../worker/objects/handlers"
-import {
-	currentInvokePrincipal,
-	encodeInvokePrincipal,
-	type InvokePrincipal,
-} from "../worker/objects/principal"
+import { invokeObject } from "../worker/objects/forward"
+import { currentInvokePrincipal } from "../worker/objects/principal"
 import { ObjectStubs } from "../worker/objects/protocol"
 import { Directory } from "../services/directory"
 import type { RateLimiter } from "../services/rate-limiter"
 import {
-	decodeExit,
-	encodePayload,
 	type HazelRpcHandlers,
 	type HazelRpcTag,
 	makeRpcDispatcher,
 	type RpcDispatcherShape,
-	rpcFor,
 } from "./dispatch"
 import { AuthMiddlewareLive } from "./middleware/auth"
 import { ScopeInjectionMiddlewareLive } from "./middleware/scope-injection"
@@ -45,30 +37,6 @@ export class LocalRpcDispatcher extends Context.Service<LocalRpcDispatcher, RpcD
 
 const internal = (message: string, cause?: unknown) =>
 	new InternalServerError({ message, ...(cause === undefined ? {} : { cause }) })
-
-/** Forward one call to an object and decode its answer. */
-const invokeObject = (
-	stubs: Context.Service.Shape<typeof ObjectStubs>,
-	target: Exclude<RpcTarget, { kind: "directory" }>,
-	tag: HazelRpcTag,
-	payload: unknown,
-	principal: InvokePrincipal,
-) =>
-	Effect.gen(function* () {
-		const rpc = yield* rpcFor(tag).pipe(Effect.orDie)
-		const encoded = yield* encodePayload(rpc, payload).pipe(Effect.orDie)
-		const encodedPrincipal = yield* encodeInvokePrincipal(principal).pipe(Effect.orDie)
-		const response = yield* stubs
-			.get(target)
-			.invoke({ objectId: target.id, tag, payload: encoded, principal: encodedPrincipal })
-			.pipe(Effect.mapError((cause) => internal(`${formatTarget(target)} is unavailable`, cause)))
-		return yield* decodeExit(rpc, response.exit).pipe(Effect.orDie)
-	}).pipe(
-		Effect.withSpan("HazelRpc.forward", {
-			kind: "client",
-			attributes: { "rpc.method": tag, "rpc.target": formatTarget(target) },
-		}),
-	)
 
 const makeRoutedHandlers = Effect.gen(function* () {
 	const local = yield* LocalRpcDispatcher

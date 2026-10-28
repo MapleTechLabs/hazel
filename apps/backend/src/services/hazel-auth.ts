@@ -9,6 +9,7 @@ import {
 import { Config, Context, Effect, Layer, Option, Redacted, Schema } from "effect"
 import { Base64Url } from "effect/encoding"
 import { Headers, HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
+import { NonProductionStage } from "../lib/stage"
 
 /**
  * Hazel's own sign-in (`@hazel/auth/server`). Enabled when `AUTH_GITHUB_CLIENT_ID` is set, or
@@ -73,7 +74,13 @@ const PrivateJwk = Schema.fromJsonString(Schema.Unknown)
 
 const make = Effect.gen(function* () {
 	const env = yield* AuthConfig
-	const devSignInSecret = Option.filter(env.devSignInSecret, (secret) => Redacted.value(secret) !== "")
+	const configuredDevSecret = Option.filter(env.devSignInSecret, (secret) => Redacted.value(secret) !== "")
+	// Signs in as anyone: never on prd, even when the secret was set there by hand.
+	const nonProduction = yield* NonProductionStage
+	if (Option.isSome(configuredDevSecret) && !nonProduction) {
+		yield* Effect.logError("[auth] DEV_SIGNIN_SECRET is set on prd; ignoring it (remove the secret)")
+	}
+	const devSignInSecret = nonProduction ? configuredDevSecret : Option.none<Redacted.Redacted<string>>()
 	if (Option.isNone(env.githubClientId) && Option.isNone(devSignInSecret)) {
 		yield* Effect.logInfo("[auth] AUTH_GITHUB_CLIENT_ID is not set; Hazel sign-in is disabled")
 		return Option.none()

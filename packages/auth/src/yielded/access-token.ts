@@ -115,6 +115,8 @@ export interface VerifiedAccess {
 	/** Hazel's `users.id`. */
 	readonly userId: string
 	readonly sessionId: string
+	/** The token's `exp`, in epoch milliseconds. */
+	readonly expiresAt: number
 }
 
 const VerifierConfig = Config.all({
@@ -144,7 +146,11 @@ const makeVerifier = (issuer: string) =>
 					(error) => Effect.fail(new AccessTokenInvalid({ reason: error._tag })),
 				),
 			)
-			return { userId: verified.claims.sub, sessionId: verified.claims.sid } satisfies VerifiedAccess
+			return {
+				userId: verified.claims.sub,
+				sessionId: verified.claims.sid,
+				expiresAt: verified.claims.exp * 1000,
+			} satisfies VerifiedAccess
 		})
 
 		return { verify } as const

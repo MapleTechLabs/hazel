@@ -5,13 +5,13 @@
 import { SQLite, schema } from "@hazel/db"
 import { ChannelId, ChannelWebhookId, OrganizationId, UserId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
-import { Directory } from "../../../services/directory"
+import { Directory, type DirectoryShape } from "../../../services/directory"
 import { DirectoryWireEffects, directoryWireReceivers } from "../directory-wire"
 import { ConnectDirectoryEffects, connectDirectoryReceivers } from "../connect-wire"
 import { UserProjection } from "../org/projections"
 import { ChatSyncDirectoryEffects } from "../../../services/chat-sync/chat-sync-effects"
 import { chatSyncDirectoryReceivers } from "../../../services/chat-sync/chat-sync-index"
-import { defineEffect, type EffectReceivers } from "./registry"
+import { CurrentEffectSender, defineEffect, type EffectReceivers, requireOrgSender } from "./registry"
 
 /** ISO timestamp text, or null. */
 const DeletedAt = Schema.NullOr(Schema.String)
@@ -75,27 +75,34 @@ export const DirectoryEffects = {
 	...ConnectDirectoryEffects,
 }
 
+/** Index rows an org owns are written only by that org's own `OrgObject` (its outbox). */
+const asOwningOrg = <A, E, R>(
+	kind: string,
+	organizationId: string,
+	write: (directory: DirectoryShape) => Effect.Effect<A, E, R>,
+) => requireOrgSender(kind, organizationId).pipe(Effect.andThen(Effect.flatMap(Directory, write)))
+
 export const directoryReceivers = {
 	"directory.upsertChannelIndex": (payload) =>
-		Effect.flatMap(Directory, (directory) =>
+		asOwningOrg("directory.upsertChannelIndex", payload.organizationId, (directory) =>
 			directory.upsertChannel({ ...payload, deletedAt: toDate(payload.deletedAt) }),
 		),
 	"directory.upsertMembershipIndex": (payload) =>
-		Effect.flatMap(Directory, (directory) =>
+		asOwningOrg("directory.upsertMembershipIndex", payload.organizationId, (directory) =>
 			directory.upsertMembership({ ...payload, deletedAt: toDate(payload.deletedAt) }),
 		),
 	"directory.upsertOrgIndex": (payload) =>
-		Effect.flatMap(Directory, (directory) =>
+		asOwningOrg("directory.upsertOrgIndex", payload.id, (directory) =>
 			directory.upsertOrg({ ...payload, deletedAt: toDate(payload.deletedAt) }),
 		),
 	"directory.upsertWebhookIndex": (payload) =>
-		Effect.flatMap(Directory, (directory) =>
+		asOwningOrg("directory.upsertWebhookIndex", payload.organizationId, (directory) =>
 			payload.tokenHash === null
 				? directory.deleteWebhook(payload.webhookId)
 				: directory.upsertWebhook({ ...payload, tokenHash: payload.tokenHash }),
 		),
 	"directory.upsertIntegrationIndex": ({ remove, ...row }) =>
-		Effect.flatMap(Directory, (directory) =>
+		asOwningOrg("directory.upsertIntegrationIndex", row.organizationId, (directory) =>
 			remove ? directory.deleteIntegration(row) : directory.upsertIntegration(row),
 		),
 	"directory.upsertBotUser": (user) =>
@@ -126,4 +133,4 @@ export const directoryReceivers = {
 	...directoryWireReceivers,
 	...chatSyncDirectoryReceivers,
 	...connectDirectoryReceivers,
-} satisfies EffectReceivers<typeof DirectoryEffects, Directory>
+} satisfies EffectReceivers<typeof DirectoryEffects, Directory | CurrentEffectSender>

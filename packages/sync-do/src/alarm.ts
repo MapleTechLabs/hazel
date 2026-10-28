@@ -4,6 +4,7 @@
  * the bot gateway: an earlier pending alarm is kept, a later one is pulled forward.
  */
 import { Clock, Effect } from "effect"
+import { SyncAlarmError } from "./errors.ts"
 
 /** The alarm calls of `DurableObjectStorage`. */
 export interface AlarmStorageLike {
@@ -30,16 +31,19 @@ export const earliest = (deadlines: ReadonlyArray<number | null | undefined>): n
 export const scheduleAlarm = (
 	storage: AlarmStorageLike,
 	deadlines: ReadonlyArray<number | null | undefined>,
-): Effect.Effect<number | undefined> =>
+): Effect.Effect<number | undefined, SyncAlarmError> =>
 	Effect.gen(function* () {
 		const deadline = earliest(deadlines)
 		if (deadline === undefined) return undefined
 		const now = yield* Clock.currentTimeMillis
 		const target = Math.max(deadline, now + MIN_DELAY_MS)
-		return yield* Effect.promise(async () => {
-			const current = await storage.getAlarm()
-			if (current !== null && current <= target && current > now) return current
-			await storage.setAlarm(target)
-			return target
+		return yield* Effect.tryPromise({
+			try: async () => {
+				const current = await storage.getAlarm()
+				if (current !== null && current <= target && current > now) return current
+				await storage.setAlarm(target)
+				return target
+			},
+			catch: (cause) => new SyncAlarmError({ message: String(cause) }),
 		})
 	}).pipe(Effect.withSpan("SyncDO.scheduleAlarm"))

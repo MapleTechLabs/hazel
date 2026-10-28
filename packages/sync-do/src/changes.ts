@@ -27,9 +27,9 @@ export interface TrackedTable {
 }
 
 export interface RetentionPolicy {
-	/** Keep at least this many of the newest changes. */
+	/** Never prune the newest this-many changes, however old. */
 	readonly keepLatest: number
-	/** Drop changes older than this (beyond `keepLatest`). */
+	/** Drop changes older than this (outside the newest `keepLatest`). */
 	readonly maxAgeMs: number
 }
 
@@ -91,10 +91,21 @@ const signatureOf = (tables: ReadonlyArray<TrackedTable>) =>
 			.map(({ name, key }) => ({ name, key })),
 	})
 
+/** Every expected trigger is in `sqlite_master` (a table rebuild drops its triggers). */
+const triggersPresent = (sql: SqlStorageLike, tables: ReadonlyArray<TrackedTable>): boolean => {
+	const present = new Set(
+		sql
+			.exec<{ name: string }>(`SELECT name FROM sqlite_master WHERE type = 'trigger'`)
+			.toArray()
+			.map((row) => String(row.name)),
+	)
+	return tables.every((table) => triggerNames(table.name).every((name) => present.has(name)))
+}
+
 /**
  * Create `_changes` and the triggers. Idempotent and cheap when nothing changed; when the table or
- * key set differs from the installed one, every previous trigger is dropped and recreated. The
- * tracked tables must already exist.
+ * key set differs from the installed one, or a trigger is missing, every previous trigger is
+ * dropped and recreated. The tracked tables must already exist.
  */
 export const installChangeTracking = (sql: SqlStorageLike, tables: ReadonlyArray<TrackedTable>): void => {
 	installMeta(sql)
@@ -102,7 +113,7 @@ export const installChangeTracking = (sql: SqlStorageLike, tables: ReadonlyArray
 	sql.exec(`CREATE INDEX IF NOT EXISTS _changes_at ON _changes (at)`)
 	const signature = signatureOf(tables)
 	const installed = readMeta(sql, SIGNATURE_KEY)
-	if (installed === signature) return
+	if (installed === signature && triggersPresent(sql, tables)) return
 
 	if (installed !== undefined) {
 		const previous = JSON.parse(installed) as { tables: ReadonlyArray<TrackedTable> }
@@ -180,8 +191,10 @@ export const pruneChanges = (sql: SqlStorageLike, options: PruneOptions): number
 			options.now - maxAgeMs,
 		)
 		.toArray()[0]?.seq
+	// `keepLatest` is a floor: only aged changes outside the newest `keepLatest` go.
 	const cut = Math.min(
-		Math.max(head - keepLatest, aged === null || aged === undefined ? 0 : Number(aged)),
+		aged === null || aged === undefined ? 0 : Number(aged),
+		head - keepLatest,
 		options.notAfter ?? head,
 	)
 	if (cut <= floor) return floor
@@ -190,12 +203,22 @@ export const pruneChanges = (sql: SqlStorageLike, options: PruneOptions): number
 	return cut
 }
 
-/** When the oldest retained change ages out, or `undefined` when the log is empty. */
+/**
+ * When the oldest prunable change (outside the newest `keepLatest`) ages out, or `undefined` when
+ * there is none. Changes inside the floor are skipped, so they never arm an alarm that prunes nothing.
+ */
 export const nextChangePruneAt = (
 	sql: SqlStorageLike,
-	maxAgeMs = DEFAULT_RETENTION.maxAgeMs,
+	retention: Partial<RetentionPolicy> = {},
 ): number | undefined => {
-	const row = sql.exec<{ at: number | null }>(`SELECT MIN(at) AS at FROM _changes`).toArray()[0]
+	const keepLatest = retention.keepLatest ?? DEFAULT_RETENTION.keepLatest
+	const maxAgeMs = retention.maxAgeMs ?? DEFAULT_RETENTION.maxAgeMs
+	const row = sql
+		.exec<{ at: number | null }>(
+			`SELECT MIN(at) AS at FROM _changes WHERE seq <= ?`,
+			headSeq(sql) - keepLatest,
+		)
+		.toArray()[0]
 	const at = row?.at
 	return at === null || at === undefined ? undefined : Number(at) + maxAgeMs
 }

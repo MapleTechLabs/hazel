@@ -1,8 +1,9 @@
 /**
  * `POST /internal/dev/sign-in`: signs in as any email without an OAuth app, for local dev and
- * PR previews (`scripts/dev-sign-in.ts`). Mounted only when `DEV_SIGNIN_SECRET` is set (never on
- * prd, `worker/env.ts`); without it, and for a missing or wrong `Authorization: Bearer <secret>`,
- * it answers 404 like an unknown route.
+ * PR previews (`scripts/dev-sign-in.ts`). Mounted only when `DEV_SIGNIN_SECRET` is set on a non-prd
+ * stage (`worker/env.ts` never passes it to prd, and `HazelAuthInstance` drops it there,
+ * `lib/stage.ts`); without it, and for a missing or wrong `Authorization: Bearer <secret>`, it
+ * answers 404 like an unknown route.
  *
  * Body `{ email, name? }`. Finds or creates the user through the real GitHub sign-in flow
  * (`@hazel/auth/server` `makeDevSignIn`) and answers `{ userId, sessionToken }` with the session

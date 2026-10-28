@@ -81,6 +81,7 @@ const makeWorld = (
 				bots,
 			},
 			key: `viewers:${channelId}`,
+			sender: { kind: "org", id: orgId },
 		})
 		expect(applied._tag).toBe("Applied")
 		const directory = Context.get(objects.directory, Directory)

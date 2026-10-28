@@ -20,6 +20,7 @@ import { ObjectStorage } from "../services/object-storage"
 import { checkAvatarRateLimit } from "../services/rate-limit-helpers"
 import { Directory } from "../services/directory"
 import { AttachmentEffects, type CreateAttachmentPayload } from "../worker/objects/channel/attachments"
+import { WORKER_SENDER } from "../worker/objects/effects/registry"
 import { callObject } from "../worker/objects/calls"
 import { channelTarget, orgTarget } from "../worker/objects/kinds"
 import { IsOrgAdminCall } from "../worker/objects/org/api-v1"
@@ -84,6 +85,7 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 					kind: kind.name,
 					payload: yield* Schema.encodeEffect(kind.payload)(payload).pipe(Effect.orDie),
 					key: `attachment:${payload.id}`,
+					sender: WORKER_SENDER,
 				})
 				.pipe(Effect.mapError(() => new UploadError({ message: "The channel is unreachable" })))
 			if (result._tag === "Rejected") {

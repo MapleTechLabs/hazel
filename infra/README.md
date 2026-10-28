@@ -70,13 +70,13 @@ Instant, with some data loss accepted (`durable-object-sync-plan.md`):
 1. **Plan first.** `bunx alchemy plan --stage prd`: expect the D1 `directory` and the object
    classes to be created, `OutboxDispatcher` deleted (alchemy emits its `deleted_classes`
    migration), and the `electric-proxy` Worker and PlanetScale/Hyperdrive resources destroyed.
-2. **Deploy** with `IMPORT_SECRET` set on the api Worker.
+2. **Deploy** with `IMPORT_SECRET` and `IMPORT_ENABLED=true` in the deploy env (by hand; not in CI).
 3. **Import** the old Postgres (read-only from here on):
    `bun run --cwd apps/backend import-postgres --from <postgres url> --to https://api.hazel.sh --secret <IMPORT_SECRET>`.
    Run it with `--dry-run` first to see the row counts per target.
 4. **Discord gateway.** Set `DISCORD_GATEWAY_ENABLED=true` on the Worker and turn it off wherever
    else it runs: Discord allows one session per bot token.
-5. Unset `IMPORT_SECRET`, then decommission Railway (backend, cluster, Electric, Redis), Electric
+5. Redeploy without `IMPORT_SECRET` / `IMPORT_ENABLED`, then decommission Railway (backend, cluster, Electric, Redis), Electric
    Cloud and the PlanetScale database once nothing reads them.
 
 ## Cutover log (2026-10-10, local deploy via `bun run alchemy:deploy:prd:local`)

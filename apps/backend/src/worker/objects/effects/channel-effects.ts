@@ -12,7 +12,7 @@ import { AttachmentEffects, attachmentReceivers } from "../channel/attachments"
 import { deleteObjectMeta, readObjectMeta, writeObjectMeta } from "../meta"
 import { chatSyncChannelReceivers } from "../../../services/chat-sync/chat-sync-channel"
 import { ChatSyncChannelEffects } from "../../../services/chat-sync/chat-sync-effects"
-import { defineEffect, type EffectReceivers } from "./registry"
+import { defineEffect, type EffectReceivers, type EffectSender, isOrgSender } from "./registry"
 
 export const ViewerRole = Schema.Literals(["owner", "admin", "member", "guest"])
 
@@ -132,6 +132,46 @@ const setViewers = Effect.fn("ChannelEffects.setViewers")(function* (payload: Se
 		"channel.viewers_added": added.length,
 		"channel.viewers_changed": changed.length,
 	})
+})
+
+/** Sent by a `ChannelObject` (the thread's parent), not by the owning org. */
+const CHANNEL_SENT = new Set<string>([ThreadEffects.setThreadOrigin.name])
+/** Sent by the api Worker (the upload route), which authorizes the uploader itself. */
+const WORKER_SENT = new Set<string>([AttachmentEffects.createAttachment.name])
+
+/**
+ * Who may write to this channel. The first `setViewers` pins the owning org (`CHANNEL_ORG_KEY`);
+ * after that only that org's `OrgObject` may send org effects, and `setViewers` may never move
+ * the channel to another org (a Connect host channel stays its host org's: guests reach it
+ * through the host org's `setViewers`). `Some(reason)` refuses.
+ */
+export const channelSenderRefusal = Effect.fn("ChannelEffects.senderRefusal")(function* (
+	kind: string,
+	payload: unknown,
+	sender: EffectSender,
+) {
+	if (CHANNEL_SENT.has(kind)) {
+		return sender.kind === "channel" ? Option.none() : Option.some(`${kind} must come from a channel`)
+	}
+	if (WORKER_SENT.has(kind)) {
+		return sender.kind === "worker" ? Option.none() : Option.some(`${kind} must come from the api Worker`)
+	}
+	if (sender.kind !== "org") return Option.some(`${kind} must come from the channel's org`)
+	const pinned = yield* readObjectMeta(CHANNEL_ORG_KEY)
+	if (kind === ChannelEffects.setViewers.name) {
+		const { organizationId } = payload as SetViewersPayload
+		if (!isOrgSender(sender, organizationId)) {
+			return Option.some(`setViewers for org ${organizationId} sent by org ${sender.id}`)
+		}
+		if (Option.isSome(pinned) && pinned.value !== organizationId) {
+			return Option.some(`Channel belongs to org ${pinned.value}, not ${organizationId}`)
+		}
+		return Option.none()
+	}
+	if (Option.isNone(pinned)) return Option.some(`${kind} before the channel's first setViewers`)
+	return pinned.value === sender.id
+		? Option.none()
+		: Option.some(`Channel belongs to org ${pinned.value}, not ${sender.id}`)
 })
 
 export const channelReceivers = {

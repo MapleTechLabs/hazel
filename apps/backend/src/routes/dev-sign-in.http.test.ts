@@ -79,7 +79,7 @@ describe("POST /internal/dev/sign-in", () => {
 
 	beforeAll(async () => {
 		harness = await createChatSyncDbHarness()
-		enabled = await build({ DEV_SIGNIN_SECRET: secret })
+		enabled = await build({ DEV_SIGNIN_SECRET: secret, HAZEL_STAGE: "pr" })
 	}, 180_000)
 
 	afterAll(async () => {
@@ -108,6 +108,25 @@ describe("POST /internal/dev/sign-in", () => {
 			body: { email: "a@example.com" },
 		})
 		expect(response.status).toBe(404)
+	}, 60_000)
+
+	it("is not mounted on prd, or without a known non-prd stage, even with DEV_SIGNIN_SECRET", async () => {
+		const github = {
+			AUTH_GITHUB_CLIENT_ID: "Iv1.test",
+			AUTH_GITHUB_CLIENT_SECRET: "secret",
+			AUTH_BINDING_KEY: key,
+			AUTH_TRANSACTION_KEY: key,
+			DEV_SIGNIN_SECRET: secret,
+		}
+		for (const env of [{ ...github, HAZEL_STAGE: "prd" }, github, { DEV_SIGNIN_SECRET: secret }]) {
+			const refused = await build(env)
+			const response = await refused.send({
+				authorization: `Bearer ${secret}`,
+				body: { email: "prd@example.com" },
+			})
+			expect(response.status).toBe(404)
+		}
+		expect(await usersWithEmail("prd@example.com")).toHaveLength(0)
 	}, 60_000)
 
 	it("answers 404 for a missing or wrong secret", async () => {

@@ -52,6 +52,16 @@ describe("change tracking", () => {
 		])
 	})
 
+	it("reinstalls triggers a table rebuild dropped, even with an unchanged signature", () => {
+		const storage = fresh()
+		storage.db.exec(`CREATE TABLE projects_new AS SELECT * FROM projects`)
+		storage.db.exec(`DROP TABLE projects`)
+		storage.db.exec(`ALTER TABLE projects_new RENAME TO projects`)
+		installChangeTracking(storage.sql, TABLES)
+		storage.db.exec(`INSERT INTO projects (id, name) VALUES ('p1', 'One')`)
+		expect(rawLog(storage)).toEqual([{ seq: 1, tbl: "projects", pk: "p1", op: "insert" }])
+	})
+
 	it("coalesces per key, latest op wins", () => {
 		const storage = fresh()
 		storage.db.exec(`INSERT INTO projects (id, name) VALUES ('p1', 'One'), ('p2', 'Two')`)
@@ -83,19 +93,24 @@ describe("change tracking", () => {
 		expect(rawLog(storage)).toEqual([{ seq: 1, tbl: "tasks", pk: "t2", op: "insert" }])
 	})
 
-	it("prunes by count and age, never past notAfter, and keeps seq monotonic", () => {
+	it("prunes by age outside the keepLatest floor, never past notAfter", () => {
 		const storage = fresh()
 		for (let i = 0; i < 10; i++) storage.db.exec(`INSERT INTO projects (id, name) VALUES ('p${i}', 'n')`)
 		const now = Date.now()
-		expect(pruneChanges(storage.sql, { now, keepLatest: 4, maxAgeMs: 60_000, notAfter: 3 })).toBe(3)
-		expect(pruneChanges(storage.sql, { now, keepLatest: 4, maxAgeMs: 60_000 })).toBe(6)
+		const retention = { keepLatest: 4, maxAgeMs: 60_000 }
+		// Nothing aged: count alone never prunes.
+		expect(pruneChanges(storage.sql, { now, ...retention })).toBe(0)
+
+		// Age: backdate eight changes past maxAge.
+		storage.db.exec(`UPDATE _changes SET at = ${now - 120_000} WHERE seq <= 8`)
+		expect(nextChangePruneAt(storage.sql, retention)).toBe(now - 60_000)
+		expect(pruneChanges(storage.sql, { now, ...retention, notAfter: 3 })).toBe(3)
+		// 7 and 8 are aged but inside the newest 4: kept.
+		expect(pruneChanges(storage.sql, { now, ...retention })).toBe(6)
 		expect(oldestSeq(storage.sql)).toBe(6)
 		expect(readChanges(storage.sql, 0, 100).changes.map((c) => c.pk)).toEqual(["p6", "p7", "p8", "p9"])
-
-		// Age: backdate two changes past maxAge.
-		storage.db.exec(`UPDATE _changes SET at = ${now - 120_000} WHERE seq <= 8`)
-		expect(nextChangePruneAt(storage.sql, 60_000)).toBe(now - 60_000)
-		expect(pruneChanges(storage.sql, { now, keepLatest: 4, maxAgeMs: 60_000 })).toBe(8)
+		// Only floor-protected changes remain: no prune deadline (no alarm that prunes nothing).
+		expect(nextChangePruneAt(storage.sql, retention)).toBeUndefined()
 
 		// Everything pruned: head stays, and new changes continue after it.
 		expect(pruneChanges(storage.sql, { now: now + 10 ** 9, keepLatest: 0, maxAgeMs: 0 })).toBe(10)

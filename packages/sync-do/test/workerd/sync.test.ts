@@ -117,6 +117,22 @@ describe("sync runtime on workerd", () => {
 		])
 	})
 
+	it("upgradeSocket reports the adopt decision", async () => {
+		const stub = testEnv.TOY.get(testEnv.TOY.idFromName("five"))
+		const accepted = await stub.fetch("http://toy/connect?user=bob", {
+			headers: { Upgrade: "websocket" },
+		})
+		expect(accepted.headers.get("x-adopt-result")).toBe("accepted")
+		accepted.webSocket!.accept()
+		accepted.webSocket!.close()
+		const expired = await stub.fetch("http://toy/connect?user=bob&exp=1", {
+			headers: { Upgrade: "websocket" },
+		})
+		expect(expired.status).toBe(101)
+		expect(expired.headers.get("x-adopt-result")).toBe("expired")
+		expired.webSocket!.accept()
+	})
+
 	it("closes an expired principal's socket with Reauth on the next send", async () => {
 		const stub = testEnv.TOY.get(testEnv.TOY.idFromName("four"))
 		const client = await connect(stub, "bob", Date.now() + 300)

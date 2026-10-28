@@ -14,3 +14,8 @@ export class SyncAttachmentTooLargeError extends Schema.TaggedError<SyncAttachme
 		bytes: Schema.Number,
 	},
 ) {}
+
+/** `getAlarm`/`setAlarm` rejected. */
+export class SyncAlarmError extends Schema.TaggedError<SyncAlarmError>()("SyncAlarmError", {
+	message: Schema.String,
+}) {}

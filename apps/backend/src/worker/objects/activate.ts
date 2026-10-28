@@ -12,7 +12,7 @@ import { toHttpServerResponse } from "@hazel/sync-do"
 import { workerEnvLayer } from "@hazel/infra/worker-runtime"
 import * as Cloudflare from "alchemy/Cloudflare"
 import { RuntimeContext } from "alchemy/RuntimeContext"
-import { Cause, Effect, Layer, Scope } from "effect"
+import { Cause, Effect, Exit, Layer, Scope } from "effect"
 import { FetchHttpClient, HttpServerRequest, HttpServerResponse } from "effect/http"
 import { BotGatewayTransport } from "../../services/bot-gateway-transport"
 import { Directory } from "../../services/directory"
@@ -39,14 +39,15 @@ export const activateObject = (kind: ObjectKind) =>
 			const storage = raw.storage
 			const services = servicesPlatformLive(env, botGateways)
 			// The constructor's scope closes once it returns; the dispatcher's server fibers must live
-			// as long as the in-memory instance, so they get a scope of their own that is never closed.
+			// as long as the in-memory instance, so they get a scope of their own, closed only if
+			// construction fails.
 			const instanceScope = Scope.makeUnsafe()
 			const object = yield* makeObjectRuntime({
 				kind,
 				storage: storage as never,
 				state: raw as unknown as SyncObjectState,
 				sql: SqliteDo.layer({ storage: storage as never }),
-				// The cast drops the layer's config error: a missing required env var is a defect.
+				// A missing required env var (the layer's `ConfigError`) is a defect.
 				handlers: objectHandlersLive.pipe(
 					Layer.provide(Layer.mergeAll(services, FetchHttpClient.layer)),
 					Layer.orDie,
@@ -60,7 +61,11 @@ export const activateObject = (kind: ObjectKind) =>
 					),
 					ChatSyncTransport.layer.pipe(Layer.provide(workerEnvLayer(env)), Layer.orDie),
 				),
-			}).pipe(Effect.provideService(Scope.Scope, instanceScope))
+			}).pipe(
+				Effect.provideService(Scope.Scope, instanceScope),
+				// A failed construction leaves no instance to own the scope: release what it built.
+				Effect.onError((cause) => Scope.close(instanceScope, Exit.failCause(cause))),
+			)
 
 			const fetch = Effect.gen(function* () {
 				const request = yield* HttpServerRequest.HttpServerRequest
@@ -91,6 +96,11 @@ export const activateObject = (kind: ObjectKind) =>
 					object.onMessage(socket.ws as unknown as SyncSocket, message),
 				webSocketClose: (socket: Cloudflare.WebSocket) =>
 					object.onClose(socket.ws as unknown as SyncSocket),
+				// An errored socket is gone too: run the close path so presence goes offline.
+				webSocketError: (socket: Cloudflare.WebSocket, error: unknown) =>
+					Effect.logWarning(`${kind} object socket errored`, error).pipe(
+						Effect.andThen(object.onClose(socket.ws as unknown as SyncSocket)),
+					),
 				alarm: () => object.alarm.pipe(logFailure("alarm"), Effect.provide(RuntimeContext.phantom)),
 			}
 		})

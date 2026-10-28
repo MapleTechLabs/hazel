@@ -122,6 +122,7 @@ const makeWorld = Effect.gen(function* () {
 					bots: [],
 				},
 				key: `viewers:${id}`,
+				sender: { kind: "org", id: orgId },
 			})
 			expect(applied._tag).toBe("Applied")
 			return { id, object }
@@ -420,6 +421,7 @@ describe("ChannelObject messages", () => {
 							fileSize: 10,
 						},
 						key: `attachment:${id}`,
+						sender: { kind: "worker" },
 					})
 				const fresh = uuid()
 				const stale = uuid()
@@ -460,6 +462,7 @@ describe("ChannelObject messages", () => {
 					kind: "channel.setThreadChannel",
 					payload: { messageId: original.id, threadChannelId: thread.id },
 					key: uuid(),
+					sender: { kind: "org", id: world.orgId },
 				})
 				expect(linked._tag).toBe("Applied")
 				const parentRow = parent.object.storage.db

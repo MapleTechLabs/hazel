@@ -20,6 +20,8 @@ export const apiEnv = ({ stage, urls }: HazelStackContext) =>
 	merge(
 		telemetryEnv(stage),
 		derived("IS_DEV", stage.kind === "dev" ? "true" : "false"),
+		// `prd` | `pr` | `dev`: gates the routes that must never run on prd (`lib/stage.ts`).
+		derived("HAZEL_STAGE", stage.kind),
 		derived("API_BASE_URL", urls.api),
 		derived("FRONTEND_URL", urls.web),
 		optionalPlain("COOKIE_DOMAIN"),
@@ -74,8 +76,10 @@ export const apiEnv = ({ stage, urls }: HazelStackContext) =>
 		optionalPlain("GITHUB_WEBHOOK_SKIP_SIGNATURE"),
 		optionalSecret("INTERNAL_SECRET"),
 		optionalSecret("KLIPY_API_KEY"),
-		// The one-shot Postgres import route (`worker/import-route.ts`); unset turns it off.
+		// The one-shot Postgres import route (`worker/import-route.ts`); unset turns it off. On prd it
+		// also needs `IMPORT_ENABLED=true`: both are set only for the import deploy, never in CI.
 		optionalSecret("IMPORT_SECRET"),
+		optionalPlain("IMPORT_ENABLED"),
 		// Thread naming (services/thread-namer.ts); unset disables it.
 		optionalSecret("OPENROUTER_API_KEY"),
 	)

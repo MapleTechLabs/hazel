@@ -8,7 +8,10 @@
  * authorizes the principal against its own tables.
  *
  * A bad token is answered by accepting the socket and closing it with 4001 (`Reauth`): a browser
- * cannot read the HTTP status of a refused upgrade.
+ * cannot read the HTTP status of a refused upgrade. The principal carries the credential's expiry
+ * (the access token's `exp`, or the session's), at which the object closes the socket with 4001.
+ * A failure that is not the token's (the session store, the directory, the object) closes with
+ * 1011, which the client retries without dropping its token.
  *
  * A Connect guest's mounted channel streams from its host channel's object (`channel_index`).
  */
@@ -32,6 +35,15 @@ interface Namespace {
 }
 
 const decodeChannelId = Schema.decodeUnknownOption(ChannelId)
+
+/** Closed with this when the route cannot serve the socket right now; the client retries. */
+const UNAVAILABLE = 1011
+
+/** The object's `fetch` failed (overloaded, reset, unreachable). */
+class SyncForwardError extends Schema.TaggedError<SyncForwardError>()("SyncForwardError", {
+	objectId: Schema.String,
+	cause: Schema.Unknown,
+}) {}
 
 const SYNC_PATH = /^\/sync\/(org|channel|user)\/([^/?]+)/
 
@@ -101,35 +113,79 @@ export const makeSyncRoute = (env: Record<string, unknown>) =>
 					if (token === undefined) return acceptAndClose(SyncCloseCode.Reauth, "missing_token")
 
 					// The web app sends its access token (a JWT); native clients may send the session itself.
-					const verify = isJwt(token) ? session.verifyAccessToken : session.verify
-					const user = yield* verify(token).pipe(
+					const verify = isJwt(token)
+						? session.verifyAccessTokenWithExpiry
+						: session.verifyWithExpiry
+					const verified = yield* verify(token).pipe(
+						Effect.map((user) => ({ _tag: "Checked", user }) as const),
 						Effect.catchTags({
-							InvalidBearerTokenError: () => Effect.succeedNone,
+							InvalidBearerTokenError: () =>
+								Effect.succeed({ _tag: "Checked", user: Option.none() } as const),
+							// The session store or the key set is down: not the token's fault, so no
+							// 4001 (the client would drop a good token); it retries on 1011.
 							SessionLoadError: (error) =>
-								Effect.logWarning("Sync token verification failed", {
+								Effect.logWarning("Sync token verification unavailable", {
 									detail: error.detail,
-								}).pipe(Effect.as(Option.none())),
+								}).pipe(Effect.as({ _tag: "Unavailable" } as const)),
 						}),
 					)
-					if (Option.isNone(user)) return acceptAndClose(SyncCloseCode.Reauth, "invalid_token")
+					if (verified._tag === "Unavailable") return acceptAndClose(UNAVAILABLE, "unavailable")
+					if (Option.isNone(verified.user))
+						return acceptAndClose(SyncCloseCode.Reauth, "invalid_token")
+					const { user, expiresAt } = verified.user.value
 
 					const objectId = yield* syncObjectId(kind, id).pipe(
 						Effect.provideService(Directory, directory),
-						Effect.orDie,
+						Effect.map(Option.some),
+						Effect.catchTag("DatabaseError", (error) =>
+							Effect.logError("Sync route could not resolve the object", {
+								kind,
+								id,
+								error: error.message,
+							}).pipe(Effect.as(Option.none<string>())),
+						),
 					)
-					const namespace = env[OBJECT_NAMESPACES[kind]] as Namespace
-					const web = yield* HttpServerRequest.toWeb(request).pipe(Effect.orDie)
-					const headers = new Headers(web.headers)
-					// TODO(do-sync): pass the session's expiry once HazelSession exposes it.
-					headers.set(
-						PRINCIPAL_HEADER,
-						encodeSyncPrincipal({ userId: user.value.id, expiresAt: null }),
+					if (Option.isNone(objectId)) return acceptAndClose(UNAVAILABLE, "unavailable")
+
+					const namespace = env[OBJECT_NAMESPACES[kind]] as Namespace | undefined
+					if (namespace === undefined || typeof namespace.getByName !== "function") {
+						yield* Effect.logError("Sync route: object namespace is not bound", {
+							namespace: OBJECT_NAMESPACES[kind],
+						})
+						return acceptAndClose(UNAVAILABLE, "unavailable")
+					}
+					const web = yield* HttpServerRequest.toWeb(request).pipe(
+						Effect.map(Option.some),
+						// `RequestError`: the upgrade request itself could not be converted.
+						Effect.catch((error) =>
+							Effect.logWarning("Sync upgrade request unreadable", { error: error._tag }).pipe(
+								Effect.as(Option.none<Request>()),
+							),
+						),
 					)
-					headers.set(OBJECT_ID_HEADER, objectId)
-					const response = yield* Effect.promise(() =>
-						namespace.getByName(objectId).fetch(new Request(web, { headers })),
+					if (Option.isNone(web)) return acceptAndClose(UNAVAILABLE, "unavailable")
+					const headers = new Headers(web.value.headers)
+					// The object closes the socket with 4001 at `expiresAt`; the client reconnects with
+					// a fresh token.
+					headers.set(PRINCIPAL_HEADER, encodeSyncPrincipal({ userId: user.id, expiresAt }))
+					headers.set(OBJECT_ID_HEADER, objectId.value)
+					const forwarded = new Request(web.value, { headers })
+					return yield* Effect.tryPromise({
+						try: () => namespace.getByName(objectId.value).fetch(forwarded),
+						catch: (cause) => new SyncForwardError({ objectId: objectId.value, cause }),
+					}).pipe(
+						Effect.map(toHttpServerResponse),
+						Effect.withSpan("SyncRoute.forward", {
+							kind: "client",
+							attributes: { "object.kind": kind, "object.id": objectId.value },
+						}),
+						Effect.catchTag("SyncForwardError", (error) =>
+							Effect.logError("Sync upgrade could not reach the object", {
+								objectId: error.objectId,
+								cause: String(error.cause),
+							}).pipe(Effect.as(acceptAndClose(UNAVAILABLE, "unavailable"))),
+						),
 					)
-					return toHttpServerResponse(response)
 				}).pipe(Effect.withSpan("SyncRoute.upgrade")),
 			)
 		}),

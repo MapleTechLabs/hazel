@@ -26,6 +26,7 @@ import { enqueueEffect } from "../../worker/objects/effects/registry"
 import { channelTarget } from "../../worker/objects/kinds"
 import { syncChannelAccess, syncChannelTree } from "../../worker/objects/org/channel-access"
 import { ChannelViewers } from "../../services/channel-viewers"
+import { Directory } from "../../services/directory"
 import { requestThreadName } from "../../worker/objects/channel/message-events"
 import { readThreadOrigin } from "../../worker/objects/channel/thread"
 
@@ -48,6 +49,20 @@ export const ChannelRpcLive = ChannelRpcs.toLayer(
 		const channelRepo = yield* ChannelRepo
 		const organizationMemberRepo = yield* OrganizationMemberRepo
 		const userRepo = yield* UserRepo
+		const directory = yield* Directory
+
+		/**
+		 * A client-chosen channel id must be new everywhere: an id another org's channel holds
+		 * would otherwise be routed to that channel's object (`channel_index`).
+		 */
+		const requireUnusedChannelId = Effect.fn("ChannelRpc.requireUnusedChannelId")(function* (
+			id: ChannelId,
+		) {
+			const indexed = yield* directory.channel(id)
+			if (Option.isSome(indexed)) {
+				return yield* new InvalidChannelRequestError({ message: "The channel id is already taken" })
+			}
+		})
 
 		/** The installed bots hear about it after the commit (outbox). */
 		const channelEvent = (
@@ -80,6 +95,7 @@ export const ChannelRpcLive = ChannelRpcs.toLayer(
 								: { ...payload, deletedAt: null }
 
 							yield* channelPolicy.canCreate(payload.organizationId)
+							if (id) yield* requireUnusedChannelId(id)
 							const createdChannel = yield* channelRepo
 								.insert(insertData as typeof payload & { deletedAt: null })
 								.pipe(Effect.map((res) => res[0]!))
@@ -294,6 +310,7 @@ export const ChannelRpcLive = ChannelRpcs.toLayer(
 										transactionId: yield* generateTransactionId(),
 									})
 								}
+								yield* requireUnusedChannelId(id)
 							}
 
 							const createdChannel = yield* channelRepo

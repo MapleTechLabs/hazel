@@ -194,6 +194,9 @@ export const CreateChannelLink = Command.define("CreateChannelLink", {
 					Effect.succeed(Message.FailedCreateLink({ reason: "ConnectionNotFound" })),
 				ChatSyncChannelLinkExistsError: () =>
 					Effect.succeed(Message.FailedCreateLink({ reason: "AlreadyLinked" })),
+				// The picker lists only this org's channels; another org's id is refused.
+				ChannelNotFoundError: () =>
+					Effect.succeed(Message.FailedCreateLink({ reason: "Unexpected" })),
 			}),
 			catchCommon((reason) => Message.FailedCreateLink({ reason })),
 		),

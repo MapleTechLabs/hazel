@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest"
-import { Effect } from "effect"
+import { Effect, Exit } from "effect"
 import { TestClock } from "effect/testing"
 import { SqlClient } from "effect/sql/SqlClient"
 import { pruneChanges } from "./changes.ts"
@@ -112,7 +112,7 @@ describe("sync runtime", () => {
 				{ _tag: "Ready" },
 			])
 
-			pruneChanges(t.storage.sql, { now: Date.now(), keepLatest: 1, maxAgeMs: 10 ** 9 })
+			pruneChanges(t.storage.sql, { now: Date.now() + 1, keepLatest: 1, maxAgeMs: 0 })
 			const { socket: stale } = yield* t.connect({ userId: "bob" })
 			yield* t.hello(stale, 5)
 			expect(stale.frames()[0]).toEqual({ _tag: "Begin", reset: true })
@@ -239,6 +239,58 @@ describe("sync runtime", () => {
 			expect(frames[0]!.upserts[0]!.id).toBe("big")
 			expect(upsertIds(socket, "projects").sort()).toEqual(["big", "p0", "p1", "p2", "p3", "p4"])
 		}).pipe(Effect.provide(t.layer))
+	})
+
+	it.effect("splits frames on UTF-8 bytes, not string length", () => {
+		const t = setup({ maxFrameBytes: 200 })
+		return Effect.gen(function* () {
+			// ~90 chars but ~150 bytes each: two fit by length, not by bytes.
+			for (const id of ["a", "b"])
+				t.storage.db.exec(`INSERT INTO projects (id, name) VALUES ('${id}', '${"é".repeat(60)}')`)
+			const { socket } = yield* t.connect({ userId: "bob" })
+			yield* t.hello(socket, null)
+			expect(rowsOf(socket, "projects").map((frame) => frame.upserts.length)).toEqual([1, 1])
+		}).pipe(Effect.provide(t.layer))
+	})
+
+	it.effect("a send failing mid-batch on an open socket closes it with 1011", () => {
+		const t = setup()
+		return Effect.gen(function* () {
+			const { socket } = yield* t.connect({ userId: "bob" })
+			yield* t.hello(socket, null)
+			const cursor = (socket.deserializeAttachment() as { cursor: number }).cursor
+			const realSend = socket.send
+			let sends = 0
+			socket.send = (data) => {
+				// The Begin goes out, then the runtime fails to send (the socket stays open).
+				if (++sends > 1) throw new Error("send buffer full")
+				realSend(data)
+			}
+			yield* t.exec(`INSERT INTO projects (id, name) VALUES ('a', 'n')`)
+			yield* t.runtime.flush
+			expect(socket.closed).toEqual({ code: 1011, reason: "send_failed" })
+			expect((socket.deserializeAttachment() as { cursor: number }).cursor).toBe(cursor)
+		}).pipe(Effect.provide(t.layer))
+	})
+
+	it.effect("an interrupted load interrupts instead of closing the principal's sockets", () => {
+		const storage = makeFakeStorage()
+		storage.db.exec(TOY_DDL)
+		const base = makeToySource(makeToyControls())
+		const source = {
+			...base,
+			tables: base.tables.map((table) => ({ ...table, load: () => Effect.interrupt })),
+		}
+		const runtime = makeSyncRuntime({ sql: storage.sql, state: makeFakeState(), source })
+		return Effect.gen(function* () {
+			const socket = makeFakeSocket()
+			yield* runtime.adoptSocket(socket, { userId: "bob" })
+			const exit = yield* Effect.exit(
+				runtime.onMessage(socket, JSON.stringify({ _tag: "Hello", since: null })),
+			)
+			expect(Exit.hasInterrupts(exit)).toBe(true)
+			expect(socket.closed).toBeUndefined()
+		}).pipe(Effect.provide(sqliteClientLayer(storage)))
 	})
 
 	it.effect("passes at most loadBatchSize keys per load", () => {

@@ -66,6 +66,12 @@ export interface SyncRuntimeOptions {
 
 export type AdoptResult = "accepted" | "forbidden" | "not_found" | "expired" | "error"
 
+export interface UpgradeResult {
+	/** The `101` response; refused sockets are already closed with their code. */
+	readonly response: Response
+	readonly result: AdoptResult
+}
+
 export interface SyncRuntime<P, R> {
 	readonly headSeq: () => number
 	/** The flush cursor: every change at or below it reached every ready socket. */
@@ -75,6 +81,11 @@ export interface SyncRuntime<P, R> {
 		request: Request,
 		principal: P,
 	) => Effect.Effect<Response, SyncAttachmentTooLargeError, R>
+	/** `acceptSocket` plus the adopt decision: run per-connection hooks only when `"accepted"`. */
+	readonly upgradeSocket: (
+		request: Request,
+		principal: P,
+	) => Effect.Effect<UpgradeResult, SyncAttachmentTooLargeError, R>
 	/** Accept an already-created server socket; refused principals are closed with 4003/4004. */
 	readonly adoptSocket: (
 		socket: SyncSocket,
@@ -122,6 +133,9 @@ const send = (socket: SyncSocket, frame: string): boolean => {
 		return false
 	}
 }
+
+const utf8 = new TextEncoder()
+const utf8Length = (text: string) => utf8.encode(text).length
 
 const close = (socket: SyncSocket, code: number, reason: string) => {
 	try {
@@ -193,13 +207,22 @@ export const makeSyncRuntime = <P, E, R>(options: {
 	const isExpired = (attachment: SyncAttachment<P>, now: number) =>
 		attachment.expiresAt !== null && attachment.expiresAt <= now
 
-	/** Send `frames` unless the principal expired (then close with `Reauth`). */
+	/**
+	 * Send `frames` unless the principal expired (then close with `Reauth`). A send that fails on an
+	 * open socket closes it with 1011: it missed part of a batch, so it must reconnect and catch up
+	 * from its last real `Commit`.
+	 */
 	const sendAll = (live: LiveSocket<P>, frames: ReadonlyArray<string>, now: number): boolean => {
 		if (isExpired(live.attachment, now)) {
 			close(live.socket, SyncCloseCode.Reauth, "token_expired")
 			return false
 		}
-		for (const frame of frames) if (!send(live.socket, frame)) return false
+		for (const frame of frames) {
+			if (send(live.socket, frame)) continue
+			const state = live.socket.readyState
+			if (state === undefined || state === WEBSOCKET_OPEN) close(live.socket, 1011, "send_failed")
+			return false
+		}
 		return true
 	}
 
@@ -211,7 +234,7 @@ export const makeSyncRuntime = <P, E, R>(options: {
 		}
 	}
 
-	/** `Rows` frames for one table, split by row count and approximate encoded size. */
+	/** `Rows` frames for one table, split by row count and approximate UTF-8 encoded size. */
 	const rowsFrames = (table: string, upserts: ReadonlyArray<unknown>, deletes: ReadonlyArray<string>) => {
 		const frames: Array<string> = []
 		let rows: Array<unknown> = []
@@ -225,14 +248,14 @@ export const makeSyncRuntime = <P, E, R>(options: {
 			bytes = 0
 		}
 		for (const row of upserts) {
-			const size = JSON.stringify(row)?.length ?? 4
+			const size = utf8Length(JSON.stringify(row) ?? "null")
 			if (rows.length + keys.length >= maxRowsPerFrame || (bytes > 0 && bytes + size > maxFrameBytes))
 				push()
 			rows.push(row)
 			bytes += size + 1
 		}
 		for (const key of deletes) {
-			const size = key.length + 3
+			const size = utf8Length(JSON.stringify(key)) + 1
 			if (rows.length + keys.length >= maxRowsPerFrame || (bytes > 0 && bytes + size > maxFrameBytes))
 				push()
 			keys.push(key)
@@ -320,13 +343,16 @@ export const makeSyncRuntime = <P, E, R>(options: {
 		effect.pipe(
 			Effect.map(Option.some),
 			Effect.catchCause((cause) =>
-				Effect.logWarning(`Sync ${label} failed; closing the principal's sockets`, {
-					principal: group.pid,
-					cause: Cause.pretty(cause),
-				}).pipe(
-					Effect.andThen(Effect.sync(() => closeGroup(group, 1011, "internal"))),
-					Effect.as(Option.none<A>()),
-				),
+				// An interrupt is not the principal's failure: let it through.
+				Cause.hasInterruptsOnly(cause)
+					? Effect.interrupt
+					: Effect.logWarning(`Sync ${label} failed; closing the principal's sockets`, {
+							principal: group.pid,
+							cause: Cause.pretty(cause),
+						}).pipe(
+							Effect.andThen(Effect.sync(() => closeGroup(group, 1011, "internal"))),
+							Effect.as(Option.none<A>()),
+						),
 			),
 		)
 
@@ -403,10 +429,7 @@ export const makeSyncRuntime = <P, E, R>(options: {
 			flushed = batch.through
 			writeMeta(sql, FLUSHED_KEY, String(flushed))
 		}
-		// Amortized count-based pruning; age-based pruning runs from the alarm.
-		if (headSeq(sql) - oldestSeq(sql) > retention.keepLatest * 1.1) {
-			pruneChanges(sql, { ...retention, now: yield* Clock.currentTimeMillis, notAfter: flushed })
-		}
+		// Pruning (by age, outside the newest `keepLatest`) runs from the alarm.
 		yield* Effect.annotateCurrentSpan({
 			"sync.seq": flushed,
 			"sync.sockets": sockets,
@@ -532,13 +555,13 @@ export const makeSyncRuntime = <P, E, R>(options: {
 			return "forbidden" as const
 		}).pipe(Effect.withSpan("SyncDO.adoptSocket"))
 
-	const acceptSocket = (request: Request, principal: P) =>
+	const upgradeSocket = (request: Request, principal: P) =>
 		Effect.gen(function* () {
 			const Pair = (globalThis as unknown as { WebSocketPair: new () => Record<0 | 1, SyncSocket> })
 				.WebSocketPair
 			const pair = new Pair()
 			const client = pair[0]
-			yield* adoptSocket(pair[1], principal)
+			const result = yield* adoptSocket(pair[1], principal)
 			const offered = (request.headers.get("Sec-WebSocket-Protocol") ?? "")
 				.split(",")
 				.map((protocol) => protocol.trim())
@@ -546,8 +569,12 @@ export const makeSyncRuntime = <P, E, R>(options: {
 			const headers = offered.includes(SYNC_SUBPROTOCOL)
 				? { "Sec-WebSocket-Protocol": SYNC_SUBPROTOCOL }
 				: undefined
-			return new Response(null, { status: 101, webSocket: client, headers } as ResponseInit)
+			const response = new Response(null, { status: 101, webSocket: client, headers } as ResponseInit)
+			return { response, result } satisfies UpgradeResult
 		})
+
+	const acceptSocket = (request: Request, principal: P) =>
+		Effect.map(upgradeSocket(request, principal), ({ response }) => response)
 
 	const revalidate = permit
 		.withPermit(
@@ -581,13 +608,14 @@ export const makeSyncRuntime = <P, E, R>(options: {
 				expiry = attachment.expiresAt
 			}
 		}
-		return [nextChangePruneAt(sql, retention.maxAgeMs), expiry]
+		return [nextChangePruneAt(sql, retention), expiry]
 	}
 
 	return {
 		headSeq: () => headSeq(sql),
 		flushedSeq,
 		acceptSocket,
+		upgradeSocket,
 		adoptSocket,
 		onMessage,
 		onClose,

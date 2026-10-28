@@ -2,9 +2,15 @@ import { AccessToken, HazelAuth } from "@hazel/auth/server"
 import { UserRepo } from "@hazel/backend-core"
 import { CurrentUser, InvalidBearerTokenError, SessionLoadError } from "@hazel/domain"
 import { UserId } from "@hazel/schema"
-import { Cause, Context, Effect, Layer, Option, Redacted } from "effect"
+import { Cause, Context, DateTime, Effect, Layer, Option, Redacted } from "effect"
 import { Cookies, Headers } from "effect/http"
 import { HazelAuthInstance } from "./hazel-auth"
+
+/** A verified credential's user and when the credential stops being valid (epoch ms). */
+export interface VerifiedUser {
+	readonly user: CurrentUser.Schema
+	readonly expiresAt: number
+}
 
 /**
  * Resolves Hazel sessions (`@hazel/auth/server`) to the current user for the RPC and
@@ -67,10 +73,10 @@ export class HazelSession extends Context.Service<HazelSession>()("@hazel/backen
 				),
 			)
 
-		/** Verifies a session credential; `None` when it is not a valid Hazel session. */
-		const verify = (
+		/** A session credential with its expiry (epoch ms); `None` when it is not a valid one. */
+		const verifyWithExpiry = (
 			credential: string,
-		): Effect.Effect<Option.Option<CurrentUser.Schema>, InvalidBearerTokenError | SessionLoadError> =>
+		): Effect.Effect<Option.Option<VerifiedUser>, InvalidBearerTokenError | SessionLoadError> =>
 			Effect.gen(function* () {
 				if (Option.isNone(auth)) return Option.none()
 				const session = yield* auth.value.verifySession(Redacted.make(credential)).pipe(
@@ -86,8 +92,15 @@ export class HazelSession extends Context.Service<HazelSession>()("@hazel/backen
 					),
 				)
 				if (Option.isNone(session)) return Option.none()
-				return Option.some(yield* loadUser(session.value.subjectId))
+				return Option.some({
+					user: yield* loadUser(session.value.subjectId),
+					expiresAt: DateTime.toEpochMillis(session.value.expiresAt),
+				})
 			})
+
+		/** Verifies a session credential; `None` when it is not a valid Hazel session. */
+		const verify = (credential: string) =>
+			verifyWithExpiry(credential).pipe(Effect.map(Option.map((verified) => verified.user)))
 
 		// The API's own access tokens (`POST /auth/token`), for the sync route; none without a key.
 		const accessVerifier =
@@ -100,10 +113,13 @@ export class HazelSession extends Context.Service<HazelSession>()("@hazel/backen
 					)
 				: Option.none()
 
-		/** Verifies an access token; `None` when it is not a valid one (expired, foreign, malformed). */
-		const verifyAccessToken = (
+		/**
+		 * An access token with its `exp` (epoch ms); `None` when it is not a valid one (expired,
+		 * foreign, malformed). Tokens live minutes, far less than their session.
+		 */
+		const verifyAccessTokenWithExpiry = (
 			token: string,
-		): Effect.Effect<Option.Option<CurrentUser.Schema>, InvalidBearerTokenError | SessionLoadError> =>
+		): Effect.Effect<Option.Option<VerifiedUser>, InvalidBearerTokenError | SessionLoadError> =>
 			Effect.gen(function* () {
 				if (Option.isNone(accessVerifier)) return Option.none()
 				const access = yield* accessVerifier.value.verify(token).pipe(
@@ -120,8 +136,15 @@ export class HazelSession extends Context.Service<HazelSession>()("@hazel/backen
 					}),
 				)
 				if (Option.isNone(access)) return Option.none()
-				return Option.some(yield* loadUser(access.value.userId))
+				return Option.some({
+					user: yield* loadUser(access.value.userId),
+					expiresAt: access.value.expiresAt,
+				})
 			})
+
+		/** Verifies an access token; `None` when it is not a valid one (expired, foreign, malformed). */
+		const verifyAccessToken = (token: string) =>
+			verifyAccessTokenWithExpiry(token).pipe(Effect.map(Option.map((verified) => verified.user)))
 
 		/**
 		 * The session cookie, if the request carries one. Cookie-authenticated requests must
@@ -150,7 +173,14 @@ export class HazelSession extends Context.Service<HazelSession>()("@hazel/backen
 				return user
 			})
 
-		return { enabled, verify, verifyAccessToken, fromCookie } as const
+		return {
+			enabled,
+			verify,
+			verifyWithExpiry,
+			verifyAccessToken,
+			verifyAccessTokenWithExpiry,
+			fromCookie,
+		} as const
 	}),
 }) {
 	static readonly layer = Layer.effect(this, this.make).pipe(Layer.provide(UserRepo.layer))

@@ -27,7 +27,11 @@ export const BotGatewayEffects = {
 	messageEvent: defineEffect("botGateway.messageEvent", "bot-gateway", MessageEventPayload),
 	/** From an `OrgObject`: to the org's installed bots (`../org/bot-events.ts`). */
 	channelEvent: defineEffect("botGateway.channelEvent", "bot-gateway", ChannelEventPayload),
-	channelMemberEvent: defineEffect("botGateway.channelMemberEvent", "bot-gateway", ChannelMemberEventPayload),
+	channelMemberEvent: defineEffect(
+		"botGateway.channelMemberEvent",
+		"bot-gateway",
+		ChannelMemberEventPayload,
+	),
 }
 
 export const botGatewayReceivers = {

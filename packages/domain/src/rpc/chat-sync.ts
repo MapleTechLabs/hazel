@@ -11,6 +11,7 @@ import {
 import { Schema } from "effect"
 import { InternalServerError, UnauthorizedError } from "../errors"
 import { ChatSyncChannelLink, ChatSyncConnection } from "../models"
+import { ChannelNotFoundError } from "./channels"
 import { AuthMiddleware } from "./middleware"
 import { RequiredScopes } from "../scopes/required-scopes"
 import { RouteOrganizationId } from "./routing-fields"
@@ -140,6 +141,8 @@ export class ChatSyncRpcs extends RpcGroup.make(
 		error: Schema.Union([
 			ChatSyncConnectionNotFoundError,
 			ChatSyncChannelLinkExistsError,
+			/** `hazelChannelId` is not a live channel of the connection's organization. */
+			ChannelNotFoundError,
 			UnauthorizedError,
 			InternalServerError,
 		]),

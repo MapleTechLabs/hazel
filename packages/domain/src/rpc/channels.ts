@@ -87,12 +87,13 @@ export class ChannelRpcs extends RpcGroup.make(
 	 * @param payload - Channel data (name, type, organizationId, etc.) with optional id for optimistic updates
 	 * @returns Channel data and transaction ID
 	 * @throws UnauthorizedError if user lacks permission
+	 * @throws InvalidChannelRequestError if the client-chosen id is already taken
 	 * @throws InternalServerError for unexpected errors
 	 */
 	Rpc.make("channel.create", {
 		payload: CreateChannelRequest,
 		success: ChannelResponse,
-		error: Schema.Union([UnauthorizedError, InternalServerError]),
+		error: Schema.Union([UnauthorizedError, InvalidChannelRequestError, InternalServerError]),
 	})
 		.annotate(RequiredScopes, ["channels:write"])
 		.middleware(AuthMiddleware),

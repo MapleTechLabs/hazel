@@ -70,7 +70,7 @@ export const OrganizationMemberRpcLive = OrganizationMemberRpcs.toLayer(
 				db
 					.transaction(
 						Effect.gen(function* () {
-							yield* organizationMemberPolicy.canUpdate(id)
+							yield* organizationMemberPolicy.canUpdate(id, { role: payload.role })
 							const updatedOrganizationMember = yield* organizationMemberRepo.update({
 								id,
 								...payload,

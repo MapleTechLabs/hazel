@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest"
-import { Effect, Option } from "effect"
+import { Effect, Fiber, Option } from "effect"
 import { SqlClient } from "effect/sql/SqlClient"
 import { TestClock } from "effect/testing"
 import { earliest, scheduleAlarm } from "./alarm.ts"
@@ -74,7 +74,7 @@ describe("outbox", () => {
 		}).pipe(Effect.provide(t.layer))
 	})
 
-	it.effect("delivers in order per target, backs off, and marks rows dead", () => {
+	it.effect("delivers in order per target and backs off a failing target alone", () => {
 		const t = setup()
 		return Effect.gen(function* () {
 			const r = recorder()
@@ -83,7 +83,7 @@ describe("outbox", () => {
 			yield* enqueue({ id: "a2", target: "A", kind: "k", payload: { n: 3 } })
 			r.failing.set("A", new OutboxDeliveryError({ message: "A is down" }))
 
-			const first = yield* drainOutbox(r.deliver, { backoff: { maxAttempts: 3 } })
+			const first = yield* drainOutbox(r.deliver)
 			expect(r.delivered).toEqual(["b1"])
 			expect(first).toMatchObject({ delivered: 1, retried: 1, dead: 0 })
 			const [a1, a2] = outboxRows(t.storage) as Array<{
@@ -96,8 +96,9 @@ describe("outbox", () => {
 			expect(a2).toMatchObject({ attempts: 0 })
 			expect(a1!.next_at).toBeGreaterThanOrEqual(3_750)
 			expect(a1!.next_at).toBeLessThanOrEqual(6_250)
-			expect(first.nextAt).toBe(0)
-			expect(yield* nextOutboxAlarm).toBe(0)
+			// The alarm follows the head, not the (overdue) row behind it.
+			expect(first.nextAt).toBe(a1!.next_at)
+			expect(yield* nextOutboxAlarm).toBe(a1!.next_at)
 
 			// Not due yet: nothing is attempted, a2 still waits.
 			yield* drainOutbox(r.deliver)
@@ -106,27 +107,88 @@ describe("outbox", () => {
 				{ id: "a2", attempts: 0 },
 			])
 
-			yield* TestClock.adjust(7_000)
-			yield* drainOutbox(r.deliver, { backoff: { maxAttempts: 3 } })
-			expect(outboxRows(t.storage)).toMatchObject([
-				{ id: "a1", attempts: 2 },
-				{ id: "a2", attempts: 0 },
-			])
-
-			yield* TestClock.adjust(15_000)
-			const third = yield* drainOutbox(r.deliver, { backoff: { maxAttempts: 3 } })
-			expect(third.dead).toBe(1)
-			// The dead row is kept and no longer blocks its target.
-			expect(outboxRows(t.storage)).toMatchObject([
-				{ id: "a1", attempts: 3, status: "dead" },
-				{ id: "a2", attempts: 1, status: "pending" },
-			])
-
 			r.failing.delete("A")
-			yield* TestClock.adjust(15_000)
+			yield* TestClock.adjust(7_000)
 			const last = yield* drainOutbox(r.deliver)
-			expect(r.delivered).toEqual(["b1", "a2"])
+			// The target's queue continues in order within one drain.
+			expect(r.delivered).toEqual(["b1", "a1", "a2"])
 			expect(last.nextAt).toBeUndefined()
+		}).pipe(Effect.provide(t.layer))
+	})
+
+	it.effect("a target in backoff with a long queue does not starve the others", () => {
+		const t = setup()
+		return Effect.gen(function* () {
+			const r = recorder()
+			for (let i = 0; i < 150; i++)
+				yield* enqueue({ id: `a${i}`, target: "A", kind: "k", payload: null })
+			yield* enqueue({ id: "b1", target: "B", kind: "k", payload: null })
+			r.failing.set("A", new OutboxDeliveryError({ message: "A is down" }))
+			yield* drainOutbox(r.deliver)
+			r.failing.clear()
+			// A's head is backing off; B (behind A's 150 rows by rowid) still goes out.
+			r.failing.set("A", new OutboxDeliveryError({ message: "still down" }))
+			yield* enqueue({ id: "c1", target: "C", kind: "k", payload: null })
+			const result = yield* drainOutbox(r.deliver)
+			expect(r.delivered).toEqual(["b1", "c1"])
+			expect(result.retried).toBe(0)
+			const head = (outboxRows(t.storage)[0] as { next_at: number }).next_at
+			expect(result.nextAt).toBe(head)
+			expect(head).toBeGreaterThan(0)
+		}).pipe(Effect.provide(t.layer))
+	})
+
+	it.effect("a notBefore head holds its target and sets the next alarm", () => {
+		const t = setup()
+		return Effect.gen(function* () {
+			const r = recorder()
+			yield* enqueue({ id: "later", target: "A", kind: "k", payload: null, notBefore: 60_000 })
+			yield* enqueue({ id: "after", target: "A", kind: "k", payload: null })
+			const result = yield* drainOutbox(r.deliver)
+			expect(r.delivered).toEqual([])
+			expect(result.nextAt).toBe(60_000)
+			yield* TestClock.adjust(60_000)
+			yield* drainOutbox(r.deliver)
+			expect(r.delivered).toEqual(["later", "after"])
+		}).pipe(Effect.provide(t.layer))
+	})
+
+	it.effect("retryable failures retry forever with capped backoff, never dead", () => {
+		const t = setup()
+		return Effect.gen(function* () {
+			const r = recorder()
+			yield* enqueue({ id: "a1", target: "A", kind: "k", payload: null })
+			r.failing.set("A", new OutboxDeliveryError({ message: "down" }))
+			for (let i = 0; i < 30; i++) {
+				const result = yield* drainOutbox(r.deliver)
+				expect(result.dead).toBe(0)
+				yield* TestClock.adjust(DEFAULT_BACKOFF.capMs * 1.25)
+			}
+			const [row] = outboxRows(t.storage) as Array<{
+				status: string
+				attempts: number
+				next_at: number
+			}>
+			expect(row).toMatchObject({ status: "pending", attempts: 30 })
+			r.failing.delete("A")
+			yield* drainOutbox(r.deliver)
+			expect(r.delivered).toEqual(["a1"])
+		}).pipe(Effect.provide(t.layer))
+	})
+
+	it.effect("a hung delivery times out as a retryable failure", () => {
+		const t = setup()
+		return Effect.gen(function* () {
+			yield* enqueue({ id: "h", target: "H", kind: "k", payload: null })
+			const fiber = yield* Effect.forkChild(
+				drainOutbox(() => Effect.never, { deliveryTimeoutMs: 1_000 }),
+			)
+			yield* TestClock.adjust(1_000)
+			const result = yield* Fiber.join(fiber)
+			expect(result).toMatchObject({ delivered: 0, retried: 1, dead: 0 })
+			expect(outboxRows(t.storage)).toMatchObject([
+				{ id: "h", status: "pending", attempts: 1, last_error: "Delivery timed out after 1000ms" },
+			])
 		}).pipe(Effect.provide(t.layer))
 	})
 
@@ -135,14 +197,17 @@ describe("outbox", () => {
 		return Effect.gen(function* () {
 			yield* enqueue({ id: "x", target: "X", kind: "k", payload: null })
 			yield* enqueue({ id: "y", target: "Y", kind: "k", payload: null })
+			yield* enqueue({ id: "x2", target: "X", kind: "k2", payload: null })
 			yield* drainOutbox((row) =>
 				row.target === "X"
 					? Effect.fail(new OutboxDeliveryError({ message: "rejected", retryable: false }))
 					: Effect.die(new Error("kaput")),
 			)
+			// A dead row no longer blocks its target: x2 (also rejected) is attempted in the same drain.
 			expect(outboxRows(t.storage)).toMatchObject([
 				{ id: "x", status: "dead", attempts: 1, last_error: "rejected" },
 				{ id: "y", status: "pending", attempts: 1 },
+				{ id: "x2", status: "dead", attempts: 1 },
 			])
 			expect((outboxRows(t.storage)[1] as { last_error: string }).last_error).toContain("kaput")
 		}).pipe(Effect.provide(t.layer))
@@ -251,8 +316,8 @@ describe("synced object", () => {
 			expect(yield* object.afterCommit).toBe(1)
 			expect(socket.frames().map((frame) => frame._tag)).toEqual(["Begin", "Rows", "Commit"])
 			expect(r.delivered).toEqual(["evt-1"])
-			// The change log ages out in 7 days; the inbox is empty.
-			expect(storage.alarm()).toBeGreaterThan(6 * 24 * 60 * 60 * 1000)
+			// Nothing to retry, and one change is inside the retention floor: no alarm.
+			expect(storage.alarm()).toBeNull()
 
 			r.failing.set("org:1", new OutboxDeliveryError({ message: "down" }))
 			yield* enqueue({ id: "evt-2", target: "org:1", kind: "k", payload: null })
@@ -263,6 +328,57 @@ describe("synced object", () => {
 			yield* TestClock.adjust(10_000)
 			yield* object.alarm
 			expect(r.delivered).toEqual(["evt-1", "evt-2"])
+		}).pipe(Effect.provide(sqliteClientLayer(storage)))
+	})
+
+	it.effect("afterCommit is total: a rejected setAlarm or a failing flush still returns the seq", () => {
+		const storage = makeFakeStorage()
+		storage.db.exec(TOY_DDL)
+		const controls = makeToyControls()
+		const object = makeSyncedObject({
+			storage: {
+				sql: storage.sql,
+				getAlarm: storage.getAlarm,
+				setAlarm: () => Promise.reject(new Error("storage reset")),
+			},
+			state: makeFakeState(),
+			source: makeToySource(controls),
+			deliver: () => Effect.void,
+		})
+		return Effect.gen(function* () {
+			yield* enqueue({ id: "e", target: "T", kind: "k", payload: null, notBefore: 60_000 })
+			storage.db.exec(`INSERT INTO projects (id, name) VALUES ('p1', 'One')`)
+			expect(yield* object.afterCommit).toBe(1)
+		}).pipe(Effect.provide(sqliteClientLayer(storage)))
+	})
+
+	it.effect("afterCommit survives a flush defect; the alarm flushes what was left", () => {
+		const storage = makeFakeStorage()
+		storage.db.exec(TOY_DDL)
+		let broken = true
+		const state = makeFakeState()
+		const realGet = state.getWebSockets
+		// A defect inside the flush (outside `guarded`): reading the sockets throws.
+		state.getWebSockets = (tag) => {
+			if (broken) throw new Error("boom")
+			return realGet(tag)
+		}
+		const object = makeSyncedObject({
+			storage,
+			state,
+			source: makeToySource(makeToyControls()),
+			deliver: () => Effect.void,
+		})
+		return Effect.gen(function* () {
+			storage.db.exec(`INSERT INTO projects (id, name) VALUES ('p1', 'One')`)
+			expect(yield* object.afterCommit).toBe(1)
+			expect(object.sync.flushedSeq()).toBe(0)
+			// The unflushed commit arms an alarm (deadlines() is broken too, so arm it directly).
+			broken = false
+			yield* object.schedule
+			expect(storage.alarm()).toBe(1_000)
+			yield* object.alarm
+			expect(object.sync.flushedSeq()).toBe(1)
 		}).pipe(Effect.provide(sqliteClientLayer(storage)))
 	})
 })

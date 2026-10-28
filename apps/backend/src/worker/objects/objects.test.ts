@@ -222,6 +222,7 @@ describe("objects", () => {
 					kind: "channel.setViewers",
 					payload: { organizationId: seed.orgId, conversationId: null, viewers: [], bots: [] },
 					key,
+					sender: { kind: "org", id: seed.orgId },
 				})
 				expect(again._tag).toBe("Duplicate")
 				const viewers = channel.storage.db

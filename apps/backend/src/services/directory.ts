@@ -21,6 +21,7 @@ export interface DirectoryShape {
 	/** The directory database itself, for directory-path handlers. No transactions (D1). */
 	readonly db: Database.DatabaseShape
 	readonly channel: (channelId: ChannelId) => Effect.Effect<Option.Option<ChannelIndexRow>, DatabaseError>
+	/** Insert, or update the row the same org owns; never moves a channel to another org. */
 	readonly upsertChannel: (row: {
 		readonly channelId: ChannelId
 		readonly organizationId: OrganizationId
@@ -87,14 +88,21 @@ export const makeDirectory = (db: Database.DatabaseShape): DirectoryShape => ({
 					.values(row)
 					.onConflictDoUpdate({
 						target: ["channelId"],
-						set: {
-							organizationId: row.organizationId,
-							hostChannelId: row.hostChannelId,
-							deletedAt: row.deletedAt,
-						},
-					}),
+						// The owning org never changes: another org's upsert for the id is skipped.
+						set: { hostChannelId: row.hostChannelId, deletedAt: row.deletedAt },
+						where: ($) => $.organizationId.eq(row.organizationId),
+					})
+					.returning("channelId"),
 			)
 			.pipe(
+				Effect.tap((rows) =>
+					rows.length === 0
+						? Effect.logError("channel_index upsert skipped: the id belongs to another org", {
+								channelId: row.channelId,
+								organizationId: row.organizationId,
+							})
+						: Effect.void,
+				),
 				Effect.asVoid,
 				Effect.withSpan("Directory.upsertChannel", { attributes: { "channel.id": row.channelId } }),
 			),

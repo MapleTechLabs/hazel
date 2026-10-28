@@ -473,6 +473,7 @@ describe("UserObject", () => {
 					kind: "user.setOrganization",
 					payload: { organizationId: s.orgId, deletedAt: null },
 					key: uuid(),
+					sender: { kind: "org", id: s.orgId },
 				})
 				expect(joined._tag).toBe("Applied")
 
