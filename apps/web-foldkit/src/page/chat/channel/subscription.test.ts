@@ -13,7 +13,7 @@ import {
 	updateWithShared,
 } from "./fixtures.test-support"
 import { messageCollection } from "~/db/collections"
-import { messageHistoryStream } from "../data"
+import { messageHistoryStream, threadHistoryStream } from "../data"
 import { PAGE_SIZE } from "../queries"
 import { setTab } from "./page"
 import { Message, type Model } from "./model"
@@ -177,6 +177,18 @@ describe("message history paging", () => {
 		)
 		await vi.waitFor(() => expect(retain).toHaveBeenCalledWith(channelId, 30 + 60 + PAGE_SIZE))
 		expect(release).not.toHaveBeenCalled()
+		await Effect.runPromise(Fiber.interrupt(fiber))
+		expect(release).toHaveBeenCalledOnce()
+		retain.mockRestore()
+	})
+
+	test("the thread panel holds the thread's whole history while it is open", async () => {
+		const release = vi.fn()
+		const retain = vi
+			.spyOn(messageCollection.utils, "retainHistory")
+			.mockReturnValue({ settled: Promise.resolve(), release })
+		const fiber = Effect.runFork(Stream.runDrain(threadHistoryStream(threadChannelId)))
+		await vi.waitFor(() => expect(retain).toHaveBeenCalledWith(threadChannelId, Number.POSITIVE_INFINITY))
 		await Effect.runPromise(Fiber.interrupt(fiber))
 		expect(release).toHaveBeenCalledOnce()
 		retain.mockRestore()

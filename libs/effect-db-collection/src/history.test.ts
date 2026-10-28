@@ -181,6 +181,26 @@ describe("paged history", () => {
 		await live.cleanup()
 	})
 
+	it("an unbounded demand (a thread panel) pages the whole history in", async () => {
+		const { sockets, messages } = setup()
+		const live = channelQuery(messages)
+		const ready = live.preload()
+		const socket = await socketFor(sockets)
+		snapshot(socket, 5, range(20, 18), true)
+		await ready
+
+		const demand = messages.utils.retainHistory("c1", Number.POSITIVE_INFINITY)
+		expect(loadOlderFrames(socket)[0]!.limit).toBe(200)
+		answerPage(socket, 5, range(17, 10), true)
+		await vi.waitFor(() => expect(loadOlderFrames(socket)).toHaveLength(2))
+		answerPage(socket, 5, range(9, 0), false)
+		await demand.settled
+		expect(messages.utils.historyOf("c1")).toEqual({ loaded: 21, hasMore: false })
+		expect(loadOlderFrames(socket)).toHaveLength(2)
+		demand.release()
+		await live.cleanup()
+	})
+
 	it("drops a page a reset overtook", async () => {
 		const { sockets, messages } = setup()
 		const live = channelQuery(messages)

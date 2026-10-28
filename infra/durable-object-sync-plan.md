@@ -151,6 +151,7 @@ A `ChannelObject` pages `messages` instead of sending the whole channel (`SyncTa
     - A page answer to a request sent before a reset arrived is dropped, so no gap opens.
 - **Web:** the channel page's window subscription holds `retainHistory(offset + limit + PAGE_SIZE)`,
   so scrolling back pages older messages in before the window reaches them.
+  The open thread panel holds `retainHistory(thread, Infinity)`: it shows the whole thread.
 
 ### Auth
 
@@ -244,9 +245,9 @@ the client.
   `message.search`), backfilled on each org's first activation after the `0002_message_search`
   migration. Not yet: `has:` filters (local results only), and the chat page ignores `?messageId=`,
   so a result opens its channel without scrolling to the message.
-- **Only loaded history is visible outside the channel view** (see §3 Paged history): the thread
-  panel shows a thread's newest 200 messages, and the notifications inbox sees only the messages
-  its channels' windows hold. Pinning a message older than the window shows it in the pins list
+- **Only loaded history is visible outside the channel view** (see §3 Paged history): the
+  notifications inbox sees only the messages its channels' windows hold (the thread panel holds
+  `retainHistory(thread, Infinity)`, so it pages a long thread in whole). Pinning a message older than the window shows it in the pins list
   only after the next reset.
 - **Auth checks call D1** on every api request; add a short KV cache if latency shows it's needed.
 - **Bot creation from the CLI is gone:** `hazel-setup bots` wrote the Bun runtime's SQLite file.

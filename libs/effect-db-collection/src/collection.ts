@@ -334,6 +334,7 @@ export interface EffectDbCollectionUtils extends UtilsRecord {
 	/**
 	 * Keeps at least `count` of the channel's newest rows loaded, paging as needed, until released;
 	 * a reset re-requests the pages. It does not open the source: it applies once a snapshot is in.
+	 * `Infinity` holds the whole history.
 	 */
 	readonly retainHistory: (channelId: string, count: number) => HistoryDemand
 	/** How much of the channel's history is held; `undefined` when the source does not page it. */
