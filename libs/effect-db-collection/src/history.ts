@@ -44,6 +44,8 @@ export class HistoryPager {
 	private readonly requested = new Map<SourceKey, Set<string>>()
 	private readonly idsInFlight = new Set<SourceKey>()
 	private readonly idWaiters = new Map<SourceKey, Set<() => void>>()
+	/** Re-pumps a source the server rate limited, once it takes requests again. */
+	private readonly retryTimers = new Map<SourceKey, ReturnType<typeof setTimeout>>()
 
 	constructor(
 		private readonly hub: SyncHub,
@@ -167,7 +169,10 @@ export class HistoryPager {
 				? 0
 				: Math.max(0, wanted - this.mirror.loadedCount(source))
 		// A source that cannot page now (reconnecting, mid-reset) is pumped again by its next run.
-		if (missing === 0 || connection === undefined || !connection.canPage) return this.settle(source)
+		if (missing === 0 || connection === undefined || !connection.canPage) {
+			if (missing > 0 && connection !== undefined) this.retryLater(source, connection.pagingRetryInMs)
+			return this.settle(source)
+		}
 		void this.loadOlder(source, Math.max(HISTORY_PAGE_SIZE, missing))
 	}
 
@@ -184,6 +189,8 @@ export class HistoryPager {
 		const connection = this.hub.connectionOf(source)
 		// A source that cannot answer now is pumped again by its next run.
 		if (missing.size === 0 || connection === undefined || !connection.canLoadByIds) {
+			if (missing.size > 0 && connection !== undefined)
+				this.retryLater(source, connection.pagingRetryInMs)
 			return settleAll(this.idWaiters, source)
 		}
 		const batch = [...missing].slice(0, SYNC_LOAD_BY_IDS_MAX)
@@ -200,6 +207,18 @@ export class HistoryPager {
 				this.idsInFlight.delete(source)
 				this.pumpIds(source)
 			})
+	}
+
+	/** After a `rate_limited` answer, pumps `source` again once it may ask (`0`: not limited). */
+	private retryLater(source: SourceKey, delayMs: number): void {
+		if (delayMs <= 0 || this.retryTimers.has(source)) return
+		this.retryTimers.set(
+			source,
+			setTimeout(() => {
+				this.retryTimers.delete(source)
+				this.pump(source)
+			}, delayMs),
+		)
 	}
 
 	private settle(source: SourceKey): void {

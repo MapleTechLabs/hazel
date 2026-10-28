@@ -320,4 +320,38 @@ describe("rows by id", () => {
 		demand.release()
 		await live.cleanup()
 	})
+
+	it("a rate-limited request settles and is retried once the source takes requests again", async () => {
+		const { sockets, messages } = setup()
+		const live = channelQuery(messages)
+		const ready = live.preload()
+		const socket = await socketFor(sockets)
+		snapshot(socket, 5, range(20, 18), true)
+		await ready
+
+		const history = messages.utils.retainHistory("c1", 5)
+		const byIds = messages.utils.loadByIds("c1", [message(2).id])
+		const refuse = (frame: { readonly requestId: number }) =>
+			socket.receive({
+				_tag: "Error",
+				code: "rate_limited",
+				message: "rate limited",
+				request: frame.requestId,
+				retryInMs: 20,
+			})
+		refuse(loadOlderFrames(socket)[0]!)
+		refuse(loadByIdsFrames(socket)[0]!)
+		await Promise.all([history.settled, byIds.settled])
+		// Nothing more until `retryInMs` passed; then both are asked again.
+		expect(loadOlderFrames(socket)).toHaveLength(1)
+		expect(loadByIdsFrames(socket)).toHaveLength(1)
+		await vi.waitFor(() => {
+			expect(loadOlderFrames(socket)).toHaveLength(2)
+			expect(loadByIdsFrames(socket)).toHaveLength(2)
+		})
+		expect(loadByIdsFrames(socket)[1]!.ids).toEqual([message(2).id])
+		history.release()
+		byIds.release()
+		await live.cleanup()
+	})
 })

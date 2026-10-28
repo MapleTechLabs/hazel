@@ -1,7 +1,8 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
+import { TestClock } from "effect/testing"
 import { SqlClient } from "effect/sql/SqlClient"
-import { makeSyncRuntime } from "./runtime.ts"
+import { makeSyncRuntime, type SyncRuntimeOptions } from "./runtime.ts"
 import { makePagedSource, PAGED_DDL, type PagedPrincipal } from "./test/paged-source.ts"
 import {
 	type FakeSocket,
@@ -13,13 +14,13 @@ import {
 
 type Frame = { readonly _tag: string } & Record<string, any>
 
-const setup = (snapshotLimit = 3, maxLimit = 100) => {
+const setup = (snapshotLimit = 3, maxLimit = 100, options?: SyncRuntimeOptions) => {
 	const storage = makeFakeStorage()
 	storage.db.exec(PAGED_DDL)
 	const state = makeFakeState()
 	const pages: Array<string> = []
 	const source = makePagedSource({ snapshotLimit, maxLimit, pages })
-	const runtime = makeSyncRuntime({ sql: storage.sql, state, source })
+	const runtime = makeSyncRuntime({ sql: storage.sql, state, source, ...(options ? { options } : {}) })
 	const exec = (statement: string) =>
 		Effect.flatMap(SqlClient, (sql) => sql.unsafe(statement)).pipe(Effect.asVoid)
 	const connect = (principal: PagedPrincipal = { userId: "alice" }) =>
@@ -258,6 +259,50 @@ describe("sync runtime paging", () => {
 			expect(frames(socket)).toEqual([
 				{ _tag: "Error", code: "bad_frame", message: "Failed to decode sync frame" },
 			])
+		}).pipe(Effect.provide(t.layer))
+	})
+
+	it.effect("LoadOlder and LoadByIds share a per-socket token bucket", () => {
+		const t = setup(3, 100, { requestBurst: 2, requestsPerSecond: 2 })
+		return Effect.gen(function* () {
+			t.storage.db.exec(SEED)
+			const socket = yield* t.connect()
+			const other = yield* t.connect()
+			yield* t.send(socket, { _tag: "Hello", since: null, paging: true })
+			yield* t.send(other, { _tag: "Hello", since: null, paging: true })
+			socket.clear()
+			const byIds = (requestId: number) => ({
+				_tag: "LoadByIds",
+				requestId,
+				table: "notes",
+				ids: ["n1"],
+			})
+			yield* t.send(socket, byIds(1))
+			yield* t.send(socket, {
+				_tag: "LoadOlder",
+				requestId: 2,
+				table: "notes",
+				before: { createdAt: "2026-01-01T00:00:03.000Z", id: "n5" },
+				limit: 2,
+			})
+			socket.clear()
+			yield* t.send(socket, byIds(3))
+			expect(frames(socket)).toEqual([
+				{
+					_tag: "Error",
+					code: "rate_limited",
+					message: "LoadByIds rate limited",
+					request: 3,
+					retryInMs: 500,
+				},
+			])
+			// Another socket has its own bucket; time refills this one.
+			yield* t.send(other, byIds(1))
+			expect(frames(other).at(-1)).toMatchObject({ _tag: "Commit" })
+			yield* TestClock.adjust("500 millis")
+			socket.clear()
+			yield* t.send(socket, byIds(4))
+			expect(frames(socket)[0]).toEqual({ _tag: "Begin", reset: false, request: 4 })
 		}).pipe(Effect.provide(t.layer))
 	})
 })

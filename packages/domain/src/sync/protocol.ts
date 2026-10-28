@@ -172,11 +172,24 @@ export const SyncEphemeral = Schema.TaggedStruct("Ephemeral", {
 
 export const SyncPong = Schema.TaggedStruct("Pong", {})
 
-export const SyncErrorCode = Schema.Literals(["bad_frame", "forbidden", "not_found", "internal"])
+export const SyncErrorCode = Schema.Literals([
+	"bad_frame",
+	"forbidden",
+	"not_found",
+	"internal",
+	"rate_limited",
+])
 
+/**
+ * `request` names the `LoadOlder` or `LoadByIds` the error answers (it gets no run). `rate_limited`
+ * refuses a request over the socket's budget: retry after `retryInMs`. Only clients that page get
+ * these, so older clients never see the new code.
+ */
 export const SyncError = Schema.TaggedStruct("Error", {
 	code: SyncErrorCode,
 	message: Schema.String,
+	request: Schema.optionalKey(Schema.Int),
+	retryInMs: Schema.optionalKey(Schema.Number),
 })
 
 export const SyncServerFrame = Schema.Union([

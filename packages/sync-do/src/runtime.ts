@@ -72,6 +72,10 @@ export interface SyncRuntimeOptions {
 	/** A catch-up spanning more raw changes than this resnapshots instead. */
 	readonly catchUpMaxChanges?: number
 	readonly retention?: Partial<RetentionPolicy>
+	/** `LoadOlder`/`LoadByIds` a socket may send at once (a token bucket, in memory). @default 20 */
+	readonly requestBurst?: number
+	/** Tokens the bucket regains per second. @default 4 */
+	readonly requestsPerSecond?: number
 }
 
 export type AdoptResult = "accepted" | "forbidden" | "not_found" | "expired" | "error"
@@ -206,6 +210,47 @@ export const makeSyncRuntime = <P, E, R>(options: {
 	const flushBatchSize = options.options?.flushBatchSize ?? 5_000
 	const catchUpMaxChanges = options.options?.catchUpMaxChanges ?? 10_000
 	const retention: RetentionPolicy = { ...DEFAULT_RETENTION, ...options.options?.retention }
+	const requestBurst = options.options?.requestBurst ?? 20
+	const requestsPerSecond = options.options?.requestsPerSecond ?? 4
+	// Per socket and in memory: hibernation refills it, which only forgives.
+	const buckets = new WeakMap<SyncSocket, { tokens: number; at: number }>()
+
+	/** Takes a request token; `0` when granted, else the ms until one is free. */
+	const takeToken = (socket: SyncSocket, now: number): number => {
+		const bucket = buckets.get(socket) ?? { tokens: requestBurst, at: now }
+		bucket.tokens = Math.min(requestBurst, bucket.tokens + ((now - bucket.at) / 1000) * requestsPerSecond)
+		bucket.at = now
+		buckets.set(socket, bucket)
+		if (bucket.tokens >= 1) {
+			bucket.tokens -= 1
+			return 0
+		}
+		return Math.ceil(((1 - bucket.tokens) / requestsPerSecond) * 1000)
+	}
+
+	/** `true` when the request may run; else refuses it with `rate_limited`. */
+	const admitRequest = (socket: SyncSocket, frame: SyncLoadOlder | SyncLoadByIds, pid: string) =>
+		Effect.gen(function* () {
+			const retryInMs = takeToken(socket, yield* Clock.currentTimeMillis)
+			if (retryInMs === 0) return true
+			yield* Effect.logWarning("Sync request over the socket's rate limit", {
+				principal: pid,
+				frame: frame._tag,
+				table: frame.table,
+				retryInMs,
+			})
+			send(
+				socket,
+				encode({
+					_tag: "Error",
+					code: "rate_limited",
+					message: `${frame._tag} rate limited`,
+					request: frame.requestId,
+					retryInMs,
+				}),
+			)
+			return false
+		})
 
 	installChangeTracking(sql, trackedTables(source))
 	const tablesByName = new Map<string, SyncTable<P, E, R>>(
@@ -739,8 +784,10 @@ export const makeSyncRuntime = <P, E, R>(options: {
 				case "Reauth":
 					return yield* reauth(socket, frame.token)
 				case "LoadOlder":
+					if (!(yield* admitRequest(socket, frame, attachment.pid))) return
 					return yield* loadOlder(socket, frame)
 				case "LoadByIds":
+					if (!(yield* admitRequest(socket, frame, attachment.pid))) return
 					return yield* loadByIds(socket, frame)
 			}
 		})

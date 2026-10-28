@@ -148,6 +148,8 @@ export class SyncConnection {
 	 * Kept across sockets (a catch-up's `Ready` comes after its first `Commit`).
 	 */
 	private serverPages = false
+	/** A `rate_limited` answer: no `LoadOlder`/`LoadByIds` before this (epoch ms). */
+	private pagingBlockedUntil = 0
 	private nextRequestId = 0
 	private readonly pageRequests = new Map<number, PageRequest>()
 	private pingOutstanding = false
@@ -257,9 +259,22 @@ export class SyncConnection {
 		})
 	}
 
-	/** The socket is synced and no reset is being received: a `LoadOlder` now would be answered. */
+	/**
+	 * The socket is synced, no reset is being received, and the source is not rate limiting us: a
+	 * `LoadOlder` now would be answered.
+	 */
 	get canPage(): boolean {
-		return this.socket !== null && this.socketSynced && this.run?.reset !== true
+		return (
+			this.socket !== null &&
+			this.socketSynced &&
+			this.run?.reset !== true &&
+			this.pagingRetryInMs === 0
+		)
+	}
+
+	/** Ms until the source takes requests again after a `rate_limited` answer (`0`: now). */
+	get pagingRetryInMs(): number {
+		return Math.max(0, this.pagingBlockedUntil - Date.now())
 	}
 
 	/**
@@ -575,6 +590,15 @@ export class SyncConnection {
 					code: frame.code,
 					message: frame.message,
 				})
+				// A refused request gets no run: settle it, and hold off when rate limited.
+				if (frame.request !== undefined) {
+					if (frame.code === "rate_limited") {
+						this.pagingBlockedUntil = Date.now() + (frame.retryInMs ?? 1_000)
+					}
+					const pending = this.pageRequests.get(frame.request)
+					this.pageRequests.delete(frame.request)
+					pending?.resolve(undefined)
+				}
 				if (frame.code === "forbidden") {
 					this.fail(new SyncSourceForbiddenError({ message: frame.message, source: this.source }))
 				} else if (frame.code === "not_found") {

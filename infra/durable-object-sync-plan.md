@@ -119,7 +119,8 @@ Once any request or RPC method has committed, the object calls `flush()`:
     - `Reauthed { expiresInMs }` (a `Reauth` moved the expiry)
     - `Ephemeral { ... }`
     - `Pong`
-    - `Error { code, message }`
+    - `Error { code, message, request?, retryInMs? }` (`request`: the `LoadOlder`/`LoadByIds` it
+      refuses; `rate_limited` carries `retryInMs`)
 - Rows are encoded with the table's schema as JSON. Timestamps are ISO strings; the client models
   already accept them.
 
@@ -144,6 +145,10 @@ A `ChannelObject` pages `messages` instead of sending the whole channel (`SyncTa
 - **By id:** `LoadByIds` (≤ 50 ids) is answered the same way, `Begin { reset: false, request }`
   without `windows`: the visible messages among the ids and their dependents (`SyncPaging.byIds`,
   `messagesByIds`; a table without `byIds` answers from its `load`). Missing ids are left out.
+- **Rate limit:** `LoadOlder` and `LoadByIds` share a per-socket token bucket in memory (burst 20,
+  4 per second; `requestBurst`/`requestsPerSecond`). An excess one gets
+  `Error { code: "rate_limited", request, retryInMs }` and a warning log; the client settles it and
+  pages again after `retryInMs`.
 - **Deltas** are unchanged: a change to any row goes out by key, paged in or not. The object keeps
   no per-socket horizon.
 - **Client** (`libs/effect-db-collection`): the mirror records each source's window. A live upsert
