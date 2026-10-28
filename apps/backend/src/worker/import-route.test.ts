@@ -1,8 +1,9 @@
 /** `POST /internal/import/*` stays off on prd unless the import deploy explicitly enabled it. */
-import { Layer } from "effect"
+import { Effect, Layer } from "effect"
 import { HttpRouter } from "effect/http"
 import { afterAll, describe, expect, it } from "vitest"
 import { makeImportRoute } from "./import-route"
+import { ObjectStubs } from "./objects/protocol"
 
 const webs: Array<ReturnType<typeof HttpRouter.toWebHandler>> = []
 afterAll(async () => {
@@ -11,7 +12,11 @@ afterAll(async () => {
 
 /** The status a wrong bearer gets: 404 while the route is off, 401 once it is on. */
 const statusFor = async (env: Record<string, unknown>) => {
-	const web = HttpRouter.toWebHandler(makeImportRoute(env) as Layer.Layer<never>, { disableLogger: true })
+	// These requests never reach an object; the stubs only satisfy what the route resolves when built.
+	const stubs = Layer.succeed(ObjectStubs, ObjectStubs.of({ get: () => Effect.die("unused") as never }))
+	const web = HttpRouter.toWebHandler(makeImportRoute(env).pipe(Layer.provide(stubs)), {
+		disableLogger: true,
+	})
 	webs.push(web)
 	const response = await (web.handler as (request: Request) => Promise<Response>)(
 		new Request("http://api.test/internal/import/org/o-1", {

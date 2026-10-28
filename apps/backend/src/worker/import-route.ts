@@ -22,6 +22,7 @@ import {
 } from "../lib/import-rows"
 import { isNonProductionStage } from "../lib/stage"
 import { callObject } from "./objects/calls"
+import { ObjectStubs } from "./objects/protocol"
 import { ImportCalls } from "./objects/import"
 import { directoryBinding } from "./platform"
 
@@ -101,64 +102,71 @@ export const importAllowed = (env: Record<string, unknown>) =>
 
 export const makeImportRoute = (env: Record<string, unknown>) =>
 	HttpRouter.use((router) =>
-		router.add(
-			"POST",
-			"/internal/import/*",
-			Effect.gen(function* () {
-				const secret = env.IMPORT_SECRET
-				if (typeof secret !== "string" || secret.length === 0 || !importAllowed(env)) {
-					return HttpServerResponse.text("Not found", { status: 404 })
-				}
-				const request = yield* HttpServerRequest.HttpServerRequest
-				const bearer = (request.headers.authorization ?? "").replace(/^Bearer\s+/i, "")
-				if (!(yield* Effect.promise(() => sameSecret(bearer, secret)))) {
-					return HttpServerResponse.text("Unauthorized", { status: 401 })
-				}
-				const match = IMPORT_PATH.exec(pathOf(request.url))
-				const store = decodeStore(match?.[1])
-				const id = match?.[2]
-				if (Option.isNone(store) || id === undefined) {
-					return HttpServerResponse.text("Not found", { status: 404 })
-				}
-				const body = yield* request.json.pipe(Effect.flatMap(decodeRequest), Effect.option)
-				if (Option.isNone(body)) return HttpServerResponse.text("Bad import request", { status: 400 })
+		Effect.gen(function* () {
+			// Resolved when the route is built: a handler only sees the request's own services.
+			const stubs = yield* ObjectStubs
+			return yield* router.add(
+				"POST",
+				"/internal/import/*",
+				Effect.gen(function* () {
+					const secret = env.IMPORT_SECRET
+					if (typeof secret !== "string" || secret.length === 0 || !importAllowed(env)) {
+						return HttpServerResponse.text("Not found", { status: 404 })
+					}
+					const request = yield* HttpServerRequest.HttpServerRequest
+					const bearer = (request.headers.authorization ?? "").replace(/^Bearer\s+/i, "")
+					if (!(yield* Effect.promise(() => sameSecret(bearer, secret)))) {
+						return HttpServerResponse.text("Unauthorized", { status: 401 })
+					}
+					const match = IMPORT_PATH.exec(pathOf(request.url))
+					const store = decodeStore(match?.[1])
+					const id = match?.[2]
+					if (Option.isNone(store) || id === undefined) {
+						return HttpServerResponse.text("Not found", { status: 404 })
+					}
+					const body = yield* request.json.pipe(Effect.flatMap(decodeRequest), Effect.option)
+					if (Option.isNone(body))
+						return HttpServerResponse.text("Bad import request", { status: 400 })
 
-				const fail = (status: number, message: string) => HttpServerResponse.text(message, { status })
-				const payload = body.value
-				if (store.value === "directory") {
-					// The directory derives nothing on its own: the orgs' finalize writes the indexes.
-					if ("finalize" in payload)
-						return yield* HttpServerResponse.json({ applied: 0, skipped: 0 })
-					const result = yield* importDirectoryRows(
-						directoryBinding(env),
-						payload.table,
-						payload.rows,
+					const fail = (status: number, message: string) =>
+						HttpServerResponse.text(message, { status })
+					const payload = body.value
+					if (store.value === "directory") {
+						// The directory derives nothing on its own: the orgs' finalize writes the indexes.
+						if ("finalize" in payload)
+							return yield* HttpServerResponse.json({ applied: 0, skipped: 0 })
+						const result = yield* importDirectoryRows(
+							directoryBinding(env),
+							payload.table,
+							payload.rows,
+						)
+						return Option.isNone(result)
+							? fail(400, `directory has no table ${payload.table}`)
+							: yield* HttpServerResponse.json(result.value)
+					}
+
+					const kind = store.value
+					const calls = ImportCalls[kind]
+					const target = { kind, id }
+					const result = yield* (
+						"finalize" in payload
+							? callObject(calls.finalize, target, {})
+							: callObject(calls.rows, target, payload)
+					).pipe(
+						Effect.provideService(ObjectStubs, stubs),
+						Effect.map(Option.some),
+						Effect.catchTags({
+							ImportTableError: () => Effect.succeedNone,
+							ObjectCallError: (error) =>
+								Effect.logError("Import call failed", { message: error.message }).pipe(
+									Effect.andThen(Effect.die(error)),
+								),
+						}),
 					)
 					return Option.isNone(result)
-						? fail(400, `directory has no table ${payload.table}`)
+						? fail(400, `${kind} has no such table`)
 						: yield* HttpServerResponse.json(result.value)
-				}
-
-				const kind = store.value
-				const calls = ImportCalls[kind]
-				const target = { kind, id }
-				const result = yield* (
-					"finalize" in payload
-						? callObject(calls.finalize, target, {})
-						: callObject(calls.rows, target, payload)
-				).pipe(
-					Effect.map(Option.some),
-					Effect.catchTags({
-						ImportTableError: () => Effect.succeedNone,
-						ObjectCallError: (error) =>
-							Effect.logError("Import call failed", { message: error.message }).pipe(
-								Effect.andThen(Effect.die(error)),
-							),
-					}),
-				)
-				return Option.isNone(result)
-					? fail(400, `${kind} has no such table`)
-					: yield* HttpServerResponse.json(result.value)
-			}).pipe(Effect.withSpan("ImportRoute.apply")),
-		),
+				}).pipe(Effect.withSpan("ImportRoute.apply")),
+			)
+		}),
 	)
