@@ -53,7 +53,12 @@ import { pollDueRssFeeds, rssDeadlines } from "./org/rss"
 import { prepareMessageSearch, SEARCH_MIGRATION_ID } from "./org/message-search"
 import { channelDeadlines, runChannelTimers } from "./channel/timers"
 import { makePresenceHooks } from "./user/presence"
-import { reauthenticateWith, refuseAllTokens, type SocketTokenVerifier } from "./socket-token"
+import {
+	directoryUserActive,
+	reauthenticateWith,
+	refuseAllTokens,
+	type SocketTokenVerifier,
+} from "./socket-token"
 
 /** What every object reaches beyond its own storage. */
 export type ObjectPlatform = ObjectStubs | Directory | BotGatewayTransport | ThreadNamer | ChatSyncTransport
@@ -159,7 +164,10 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 			state: options.state,
 			source: {
 				...sourceOf(kind, options.storage.sql, identity.current),
-				reauthenticate: reauthenticateWith(options.socketTokens ?? Effect.succeed(refuseAllTokens)),
+				reauthenticate: reauthenticateWith(
+					options.socketTokens ?? Effect.succeed(refuseAllTokens),
+					(userId) => run(directoryUserActive(userId)),
+				),
 			},
 			deliver: deliverOutboxRowFrom(kind, identity.current),
 			...(kind === "channel" ? { deadlines: channelDeadlines } : {}),

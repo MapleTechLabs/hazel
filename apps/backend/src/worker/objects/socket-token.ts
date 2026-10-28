@@ -3,13 +3,16 @@
  * of reconnecting every few minutes (`@hazel/domain/sync` `SyncReauth`).
  *
  * The token is the api's ES256 access token (`POST /auth/token`). Objects run in the api Worker,
- * so they read the same signing key and verify locally, as the sync route does. Revocation is
- * unchanged: a token lives `AccessToken.lifetimeSeconds`, and an ended session cannot mint
- * another, so its sockets close with 4001 at the last token's `exp` either way.
+ * so they read the same signing key and verify locally, as the sync route does, and load the
+ * user from the directory as it does too (a deleted user's socket closes). A token lives
+ * `AccessToken.lifetimeSeconds`, and an ended session cannot mint another, so its sockets close
+ * with 4001 at the last token's `exp` either way.
  */
 import { AccessToken } from "@hazel/auth/server"
+import { SQLite, schema } from "@hazel/db"
 import { UserId } from "@hazel/schema"
 import { Config, Effect, Option, Redacted, Schema } from "effect"
+import { Directory } from "../../services/directory"
 import type { SyncPrincipal } from "./principal"
 
 export interface SocketTokenVerifier {
@@ -74,13 +77,46 @@ export const makeSocketTokenVerifier = Effect.gen(function* () {
 	Effect.withSpan("SyncDO.makeSocketTokenVerifier"),
 )
 
-/** The `SyncSource.reauthenticate` of every object kind: a valid token for the same user. */
+/**
+ * Whether the user may still hold a socket, as the sync route decides at connect
+ * (`HazelSession`): its directory row exists and is not deleted. `"unavailable"` when the
+ * directory cannot answer.
+ */
+export const directoryUserActive = (userId: UserId) =>
+	Effect.gen(function* () {
+		const directory = yield* Directory
+		const user = yield* directory.db.first(
+			SQLite.from(schema.usersTable)
+				.select("id", "deletedAt")
+				.where(($) => [$.id.eq(userId)])
+				.limit(1),
+		)
+		return Option.isSome(user) && user.value.deletedAt === null
+	}).pipe(
+		Effect.catchTag("DatabaseError", (error) =>
+			Effect.logWarning("Sync reauth could not load the user", { error: error.message }).pipe(
+				Effect.as("unavailable" as const),
+			),
+		),
+		Effect.withSpan("SyncDO.reauthUser"),
+	)
+
+/**
+ * The `SyncSource.reauthenticate` of every object kind: a valid token for the same user, who is
+ * still active (`userActive`); a deleted user's socket is closed (4001), and its reconnect refused.
+ */
 export const reauthenticateWith =
-	(verifier: Effect.Effect<SocketTokenVerifier>) =>
+	(
+		verifier: Effect.Effect<SocketTokenVerifier>,
+		userActive: (userId: UserId) => Effect.Effect<boolean | "unavailable"> = () => Effect.succeed(true),
+	) =>
 	(principal: SyncPrincipal, token: string): Effect.Effect<SyncPrincipal | null | "unavailable"> =>
 		Effect.gen(function* () {
 			const verified = yield* (yield* verifier).verify(token)
 			if (verified === "unavailable") return "unavailable" as const
 			if (Option.isNone(verified) || verified.value.userId !== principal.userId) return null
+			const active = yield* userActive(principal.userId)
+			if (active === "unavailable") return "unavailable" as const
+			if (!active) return null
 			return { ...principal, expiresAt: verified.value.expiresAt }
 		}).pipe(Effect.withSpan("SyncDO.verifyReauthToken"))

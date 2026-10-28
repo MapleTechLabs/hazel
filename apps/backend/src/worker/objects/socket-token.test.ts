@@ -1,8 +1,11 @@
 import { describe, expect, it } from "@effect/vitest"
 import { AccessToken, CryptoLive } from "@hazel/auth/server"
 import { UserId } from "@hazel/schema"
-import { ConfigProvider, Effect, Redacted } from "effect"
-import { makeSocketTokenVerifier, reauthenticateWith } from "./socket-token"
+import { ConfigProvider, Effect, Layer, Redacted } from "effect"
+import { SQLite, schema } from "@hazel/db"
+import { layerMemory } from "@hazel/db/node"
+import { Directory } from "../../services/directory"
+import { directoryUserActive, makeSocketTokenVerifier, reauthenticateWith } from "./socket-token"
 
 const api = "http://localhost:3003"
 const alice = UserId.make("00000000-0000-4000-8000-00000000a11c")
@@ -27,7 +30,7 @@ const setup = Effect.gen(function* () {
 			),
 		),
 	)
-	return { mint, reauthenticate: reauthenticateWith(Effect.succeed(verifier)) }
+	return { mint, verifier, reauthenticate: reauthenticateWith(Effect.succeed(verifier)) }
 }).pipe(Effect.provide(CryptoLive))
 
 describe("sync socket reauth tokens", () => {
@@ -60,5 +63,42 @@ describe("sync socket reauth tokens", () => {
 			const reauthenticate = reauthenticateWith(Effect.succeed(verifier))
 			expect(yield* reauthenticate({ userId: alice, expiresAt: 1 }, "a.b.c")).toBeNull()
 		}),
+	)
+
+	it.effect("refuses a valid token of a user who is no longer active, and waits out an unknown one", () =>
+		Effect.gen(function* () {
+			const t = yield* setup
+			const token = yield* t.mint(alice)
+			const principal = { userId: alice, expiresAt: 1 }
+			const deactivated = reauthenticateWith(Effect.succeed(t.verifier), () => Effect.succeed(false))
+			expect(yield* deactivated(principal, token)).toBeNull()
+			const unknown = reauthenticateWith(Effect.succeed(t.verifier), () =>
+				Effect.succeed("unavailable" as const),
+			)
+			expect(yield* unknown(principal, token)).toBe("unavailable")
+		}),
+	)
+
+	it.effect("a user is active while their directory row exists and is not deleted", () =>
+		Effect.gen(function* () {
+			const directory = yield* Directory
+			yield* directory.db.run(
+				SQLite.insertInto(schema.usersTable).values({
+					id: alice,
+					externalId: "ext-alice",
+					email: "alice@example.com",
+					firstName: "Alice",
+					lastName: "A",
+				}),
+			)
+			expect(yield* directoryUserActive(alice)).toBe(true)
+			expect(yield* directoryUserActive(bob)).toBe(false)
+			yield* directory.db.run(
+				SQLite.update(schema.usersTable)
+					.set({ deletedAt: new Date() })
+					.where(($) => [$.id.eq(alice)]),
+			)
+			expect(yield* directoryUserActive(alice)).toBe(false)
+		}).pipe(Effect.orDie, Effect.provide(Directory.layerDatabase.pipe(Layer.provide(layerMemory)))),
 	)
 })
