@@ -145,7 +145,7 @@ describe("sync runtime on workerd", () => {
 			await new Promise((resolve) => setTimeout(resolve, 50))
 		}
 		expect(client.closed()).toEqual({ code: 4001, reason: "token_expired" })
-		expect(client.frames.at(-1)).toEqual({ _tag: "Ready" })
+		expect(client.frames.at(-1)).toMatchObject({ _tag: "Ready" })
 	})
 
 	it("rolls back the outbox row and the change with the transaction", async () => {

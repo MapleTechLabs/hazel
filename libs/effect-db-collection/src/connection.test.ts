@@ -109,6 +109,58 @@ describe("SyncConnection", () => {
 		expect(socket.sent[0]).toEqual({ _tag: "Hello", since: 1 })
 	})
 
+	it("refreshes the token in band before the socket expires", async () => {
+		const { sockets, connection, invalidateToken } = setup({ heartbeatIntervalMs: 10_000_000 })
+		await flush()
+		const socket = sockets.latest("/sync/org/a")!
+		socket.open()
+		socket.commit(1, {}, true)
+		socket.receive({ _tag: "Ready", expiresInMs: 300_000 })
+
+		// 30s before expiry: `Reauth` with the next token, on the same socket.
+		await vi.advanceTimersByTimeAsync(269_999)
+		expect(socket.sent.map((frame) => frame._tag)).toEqual(["Hello"])
+		await vi.advanceTimersByTimeAsync(1)
+		expect(socket.sent.at(-1)).toEqual({ _tag: "Reauth", token: "token-2" })
+		expect(sockets.count("/sync/org/a")).toBe(1)
+
+		// The source moved the expiry: the next refresh follows it.
+		socket.receive({ _tag: "Reauthed", expiresInMs: 300_000 })
+		await vi.advanceTimersByTimeAsync(270_000)
+		expect(socket.sent.at(-1)).toEqual({ _tag: "Reauth", token: "token-3" })
+
+		// A refused refresh closes with 4001: the rejected token is dropped and the socket reopens.
+		socket.serverClose(4001)
+		expect(invalidateToken).toHaveBeenCalledWith("token-3")
+		await flush()
+		expect(sockets.count("/sync/org/a")).toBe(2)
+		expect(connection.status.state).toBe("connecting")
+	})
+
+	it("exchanges again when the cached token is the socket's own, and skips sockets that never expire", async () => {
+		let cached = "token-1"
+		const getToken = vi.fn(async () => cached)
+		const invalidateToken = vi.fn(() => {
+			cached = "token-2"
+		})
+		const { sockets } = setup({ getToken, invalidateToken, heartbeatIntervalMs: 10_000_000 })
+		await flush()
+		const socket = sockets.latest("/sync/org/a")!
+		socket.open()
+		socket.commit(1, {}, true)
+		socket.receive({ _tag: "Ready", expiresInMs: 60_000 })
+		await vi.advanceTimersByTimeAsync(30_000)
+		expect(invalidateToken).toHaveBeenCalledWith("token-1")
+		expect(socket.sent.at(-1)).toEqual({ _tag: "Reauth", token: "token-2" })
+
+		// `Ready` without an expiry (a session credential, or an older source): no refresh.
+		const other = setup({ heartbeatIntervalMs: 10_000_000 })
+		await flush()
+		other.sockets.latest("/sync/org/a")!.snapshot(1, {})
+		await vi.advanceTimersByTimeAsync(10_000_000)
+		expect(other.sockets.latest("/sync/org/a")!.sent.map((frame) => frame._tag)).not.toContain("Reauth")
+	})
+
 	it("backs off when a fresh token is rejected again", async () => {
 		const { sockets, connection } = setup()
 		await flush()

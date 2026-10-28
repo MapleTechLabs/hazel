@@ -9,7 +9,8 @@
  *
  * A bad token is answered by accepting the socket and closing it with 4001 (`Reauth`): a browser
  * cannot read the HTTP status of a refused upgrade. The principal carries the credential's expiry
- * (the access token's `exp`, or the session's), at which the object closes the socket with 4001.
+ * (the access token's `exp`, or the session's), at which the object closes the socket with 4001
+ * unless the client sent a fresh token in band first (`Reauth`, `./objects/socket-token.ts`).
  * A failure that is not the token's (the session store, the directory, the object) closes with
  * 1011, which the client retries without dropping its token.
  *

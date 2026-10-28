@@ -52,6 +52,7 @@ import { makeUserSource } from "./sources/user-source"
 import { pollDueRssFeeds, rssDeadlines } from "./org/rss"
 import { channelDeadlines, runChannelTimers } from "./channel/timers"
 import { makePresenceHooks } from "./user/presence"
+import { reauthenticateWith, refuseAllTokens, type SocketTokenVerifier } from "./socket-token"
 
 /** What every object reaches beyond its own storage. */
 export type ObjectPlatform = ObjectStubs | Directory | BotGatewayTransport | ThreadNamer | ChatSyncTransport
@@ -70,6 +71,8 @@ export interface ObjectRuntimeOptions {
 		Database.Database | SqlClient | ObjectPlatform
 	>
 	readonly platform: Layer.Layer<ObjectPlatform>
+	/** Verifies `Reauth` tokens (lazily built); omitted: every `Reauth` is refused (4001). */
+	readonly socketTokens?: Effect.Effect<SocketTokenVerifier>
 }
 
 const storeOf: Record<ObjectKind, StoreName> = { org: "org", channel: "channel", user: "user" }
@@ -109,7 +112,10 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 		const synced = makeSyncedObject({
 			storage: options.storage,
 			state: options.state,
-			source: sourceOf(kind, options.storage.sql, identity.current),
+			source: {
+				...sourceOf(kind, options.storage.sql, identity.current),
+				reauthenticate: reauthenticateWith(options.socketTokens ?? Effect.succeed(refuseAllTokens)),
+			},
 			deliver: deliverOutboxRowFrom(kind, identity.current),
 			...(kind === "channel" ? { deadlines: channelDeadlines } : {}),
 			...(kind === "org" ? { deadlines: rssDeadlines } : {}),

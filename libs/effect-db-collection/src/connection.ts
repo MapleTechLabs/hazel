@@ -72,6 +72,11 @@ export interface SyncConnectionOptions {
 	readonly backoff?: BackoffConfig
 	/** @default 25000 */
 	readonly heartbeatIntervalMs?: number
+	/**
+	 * How long before the socket's expiry (`Ready.expiresInMs`) to send `Reauth` with a fresh token, so
+	 * the socket stays open instead of closing with 4001. @default 30000
+	 */
+	readonly reauthLeadMs?: number
 	readonly log?: SyncLogger
 }
 
@@ -120,6 +125,7 @@ export class SyncConnection {
 	private pingOutstanding = false
 	private reconnectTimer: ReturnType<typeof setTimeout> | undefined
 	private heartbeatTimer: ReturnType<typeof setInterval> | undefined
+	private reauthTimer: ReturnType<typeof setTimeout> | undefined
 	private readonly waiters = new Set<SeqWaiter>()
 	private readonly statusListeners = new Set<(status: SyncConnectionStatus) => void>()
 	private readonly runListeners = new Set<(run: SyncRun) => void>()
@@ -327,6 +333,7 @@ export class SyncConnection {
 		this.socketToken = null
 		this.run = null
 		this.stopHeartbeat()
+		this.clearReauthTimer()
 		if (this.stopped) return
 
 		switch (code) {
@@ -449,8 +456,12 @@ export class SyncConnection {
 				this.reauthStreak = 0
 				this.hasSnapshot = true
 				this.setStatus({ state: "ready" })
+				this.scheduleReauth(frame.expiresInMs)
 				return
 			}
+			case "Reauthed":
+				this.scheduleReauth(frame.expiresInMs)
+				return
 			case "Pong":
 				return
 			case "Ephemeral": {
@@ -508,6 +519,7 @@ export class SyncConnection {
 		this.socketToken = null
 		this.run = null
 		this.stopHeartbeat()
+		this.clearReauthTimer()
 		this.generation++
 		if (ws === null) return
 		ws.onopen = null
@@ -554,6 +566,53 @@ export class SyncConnection {
 	private stopHeartbeat(): void {
 		if (this.heartbeatTimer !== undefined) clearInterval(this.heartbeatTimer)
 		this.heartbeatTimer = undefined
+	}
+
+	/**
+	 * Sends `Reauth` with a fresh token `reauthLeadMs` before the socket expires (at the latest
+	 * halfway there). Nothing to schedule when it does not expire.
+	 */
+	private scheduleReauth(expiresInMs: number | null | undefined): void {
+		this.clearReauthTimer()
+		if (expiresInMs === null || expiresInMs === undefined || expiresInMs <= 0) return
+		const lead = this.options.reauthLeadMs ?? 30_000
+		// setTimeout overflows past 2^31 - 1 ms; a later run reschedules.
+		const delay = Math.min(Math.max(expiresInMs - lead, expiresInMs / 2), 2 ** 31 - 1)
+		const generation = this.generation
+		this.reauthTimer = setTimeout(() => {
+			this.reauthTimer = undefined
+			void this.reauth(generation)
+		}, delay)
+	}
+
+	/** A failed refresh changes nothing: the source closes with 4001 at expiry and we reconnect. */
+	private async reauth(generation: number): Promise<void> {
+		const current = this.socketToken
+		const read = async (): Promise<string | undefined> => {
+			try {
+				const token = await this.options.getToken()
+				return typeof token === "string" && token !== "unavailable" ? token : undefined
+			} catch (cause) {
+				this.log("warning", "Sync token read failed", { source: this.source, cause })
+				return undefined
+			}
+		}
+		let token = await read()
+		// A cached token is the one the socket already has: drop it and exchange once more.
+		if (token !== undefined && token === current) {
+			this.options.invalidateToken?.(token)
+			token = await read()
+		}
+		if (generation !== this.generation || this.stopped || this.socket === null) return
+		if (token === undefined || token === current) return
+		this.socketToken = token
+		this.log("debug", "Sync token refreshed in band", { source: this.source })
+		this.send({ _tag: "Reauth", token })
+	}
+
+	private clearReauthTimer(): void {
+		if (this.reauthTimer !== undefined) clearTimeout(this.reauthTimer)
+		this.reauthTimer = undefined
 	}
 
 	private clearReconnectTimer(): void {

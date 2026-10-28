@@ -45,6 +45,12 @@ export interface SyncSource<P, E = never, R = never> {
 	readonly principalId: (principal: P) => string
 	/** Epoch ms after which the principal's sockets are closed with `Reauth`. */
 	readonly expiresAt?: (principal: P) => number | null | undefined
+	/**
+	 * A `Reauth` frame's token: the principal it proves (with its new expiry), `null` when it is
+	 * invalid (a principal with another `principalId` is refused too), or `"unavailable"` when it
+	 * cannot be checked now (the socket keeps its expiry). Omitted: `Reauth` is unsupported.
+	 */
+	readonly reauthenticate?: (principal: P, token: string) => Effect.Effect<P | null | "unavailable", E, R>
 }
 
 /** Every table the triggers must cover: streamed tables plus dependency-only ones. */

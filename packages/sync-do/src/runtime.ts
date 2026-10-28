@@ -483,17 +483,77 @@ export const makeSyncRuntime = <P, E, R>(options: {
 				)
 				if (Option.isNone(result)) return
 				const now = yield* Clock.currentTimeMillis
+				const expiresAt = live.attachment.expiresAt
 				const frames = [
 					encode({ _tag: "Begin", reset }),
 					...result.value.frames,
 					encode({ _tag: "Commit", seq: head } as SyncServerFrame),
-					encode({ _tag: "Ready" }),
+					// The client sends `Reauth` before this runs out.
+					encode(
+						expiresAt === null
+							? { _tag: "Ready" }
+							: { _tag: "Ready", expiresInMs: Math.max(0, expiresAt - now) },
+					),
 				]
 				if (sendAll(live, frames, now))
 					setAttachment(live, { ...live.attachment, cursor: head, ready: true })
 				yield* Effect.annotateCurrentSpan({ "sync.reset": reset, "sync.rows": result.value.rows })
 			}).pipe(Effect.withSpan("SyncDO.hello")),
 		)
+
+	/**
+	 * Move a socket's expiry with a fresh token for the same principal. Under the permit, so a
+	 * flush's attachment write (its cursor) never puts the old expiry back. A refused token closes
+	 * with `Reauth`; a failing check leaves the socket on its old expiry.
+	 */
+	const reauth = (socket: SyncSocket, token: string) =>
+		permit
+			.withPermit(
+				Effect.gen(function* () {
+					const reauthenticate = source.reauthenticate
+					if (reauthenticate === undefined) {
+						send(
+							socket,
+							encode({ _tag: "Error", code: "bad_frame", message: "Reauth is unsupported" }),
+						)
+						return
+					}
+					const current = socket.deserializeAttachment()
+					if (!isAttachment<P>(current)) return
+					const next = yield* reauthenticate(current.principal, token).pipe(
+						Effect.catchCause((cause) =>
+							Cause.hasInterruptsOnly(cause)
+								? Effect.interrupt
+								: Effect.logWarning("Sync reauth check failed; keeping the old expiry", {
+										principal: current.pid,
+										cause: Cause.pretty(cause),
+									}).pipe(Effect.as("unavailable" as const)),
+						),
+					)
+					if (next === "unavailable") {
+						yield* Effect.annotateCurrentSpan({ "sync.reauth": "unavailable" })
+						return
+					}
+					const principal = next
+					if (principal === null || source.principalId(principal) !== current.pid) {
+						yield* Effect.annotateCurrentSpan({ "sync.reauth": "refused" })
+						close(socket, SyncCloseCode.Reauth, "invalid_token")
+						return
+					}
+					const expiresAt = source.expiresAt?.(principal) ?? null
+					setAttachment({ socket, attachment: current }, { ...current, principal, expiresAt })
+					const now = yield* Clock.currentTimeMillis
+					send(
+						socket,
+						encode({
+							_tag: "Reauthed",
+							expiresInMs: expiresAt === null ? null : Math.max(0, expiresAt - now),
+						}),
+					)
+					yield* Effect.annotateCurrentSpan({ "sync.reauth": "accepted" })
+				}),
+			)
+			.pipe(Effect.withSpan("SyncDO.reauth"))
 
 	const onMessage = (socket: SyncSocket, message: string | ArrayBuffer) =>
 		Effect.gen(function* () {
@@ -517,6 +577,8 @@ export const makeSyncRuntime = <P, E, R>(options: {
 					return
 				case "Hello":
 					return yield* hello({ socket, attachment }, frame.since)
+				case "Reauth":
+					return yield* reauth(socket, frame.token)
 			}
 		})
 

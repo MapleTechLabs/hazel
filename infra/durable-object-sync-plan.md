@@ -106,12 +106,13 @@ Once any request or RPC method has committed, the object calls `flush()`:
 
 ### Frames (`packages/domain/src/sync/protocol.ts`, JSON text)
 
-- **Client → object:** `Hello { since: number | null }`, `Ping`.
+- **Client → object:** `Hello { since: number | null }`, `Ping`, `Reauth { token }`.
 - **Object → client:**
     - `Begin { reset: boolean }`: on reset, the client truncates the collections this source feeds.
     - `Rows { table, upserts: unknown[], deletes: string[] }`
     - `Commit { seq }`
-    - `Ready` (sent after the first Commit)
+    - `Ready { expiresInMs? }` (sent after the first Commit; when the socket expires)
+    - `Reauthed { expiresInMs }` (a `Reauth` moved the expiry)
     - `Ephemeral { ... }`
     - `Pong`
     - `Error { code, message }`
@@ -127,7 +128,11 @@ Once any request or RPC method has committed, the object calls `flush()`:
 - The object authorizes the principal against its own tables, and checks again on every
   re-snapshot.
 - When the token expires, the object closes the socket with code `4001`, and the client reconnects
-  with a fresh token.
+  with a fresh token. Before that (30 s ahead of `Ready.expiresInMs`), the client sends `Reauth` with
+  a fresh access token; the object verifies it locally with the api's signing key (it runs in the
+  api Worker and shares its env), requires the same user, and moves the socket's expiry. A refused
+  token closes with `4001`; an uncheckable one keeps the old expiry. Revocation is unchanged: an
+  ended session cannot mint a new token, so its sockets still close within one token lifetime.
 
 ### Write confirmation
 
