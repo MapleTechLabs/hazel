@@ -43,6 +43,7 @@ import {
 import { enqueueEffect } from "../../worker/objects/effects/registry"
 import { orgTarget } from "../../worker/objects/kinds"
 import { syncChannelAccess } from "../../worker/objects/org/channel-access"
+import { dropMountedSearch } from "../../worker/objects/org/message-search"
 import {
 	activeMountOf,
 	conversationOf,
@@ -776,10 +777,17 @@ export const ConnectShareRpcLive = ConnectShareRpcs.toLayer(
 										organizationId,
 									},
 								)
-								// The mounted channel is the org's own again (its index row, its object).
-								yield* Effect.forEach(mounts, (mount) => syncChannelAccess(mount.channelId), {
-									discard: true,
-								})
+								// The mounted channel is the org's own again (its index row, its object), and
+								// the host channel's messages leave this org's search.
+								yield* Effect.forEach(
+									mounts,
+									(mount) =>
+										Effect.andThen(
+											syncChannelAccess(mount.channelId),
+											dropMountedSearch(mount.channelId),
+										),
+									{ discard: true },
+								)
 							}
 							return { transactionId: yield* generateTransactionId() }
 						}),

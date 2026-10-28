@@ -414,9 +414,10 @@ describe("message search", () => {
 				)
 				expect(ids(yield* search(a, a2, { query: "kickoff" }))).toEqual([])
 
-				// Guest org: what was written after the share, under the mount.
+				// Guest org: everything, history from before the share included, under the mount.
+				yield* settle([a.object, host, b.object])
 				const guestHits = yield* search(b, b1, { query: "kickoff" })
-				expect(new Set(ids(guestHits))).toEqual(new Set([fromHost, fromGuest]))
+				expect(new Set(ids(guestHits))).toEqual(new Set([before, fromHost, fromGuest]))
 				expect(new Set(guestHits.results.map((hit) => hit.channelId))).toEqual(
 					new Set([guestChannelId]),
 				)
@@ -430,6 +431,78 @@ describe("message search", () => {
 				yield* settle([a.object, host, b.object])
 				expect(new Set(ids(yield* search(b, b1, { query: "kickoff" })))).toEqual(
 					new Set([before, fromHost, fromGuest]),
+				)
+
+				// The guest leaves: the host channel's messages leave its index.
+				const [{ conversationId }] = b.object.storage.db
+					.prepare(`SELECT conversationId FROM connect_conversation_channels WHERE role = 'guest'`)
+					.all() as Array<{ conversationId: string }>
+				ok(
+					yield* call(
+						b.object,
+						b.id,
+						"connectShare.organization.disconnect",
+						{ conversationId, organizationId: b.id },
+						b1,
+					),
+				)
+				yield* settle([a.object, host, b.object])
+				expect(
+					b.object.storage.db
+						.prepare(`SELECT count(*) AS n FROM message_search WHERE channelId = ?`)
+						.get(guestChannelId),
+				).toEqual({ n: 0 })
+				expect(ids(yield* search(b, b1, { query: "kickoff" }))).toEqual([])
+			}),
+		))
+
+	it("Connect: a guest the host removes loses the host channel's messages from its search", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const { objects, a, b, a1, b1 } = world
+				const hostChannelId = yield* makeChannel(a, a1, "private", "partners")
+				yield* send(world, hostChannelId, a1, "kickoff notes")
+				const created = ok(
+					yield* call(
+						a.object,
+						a.id,
+						"connectShare.invite.create",
+						{
+							channelId: hostChannelId,
+							target: { kind: "slug", value: "beta" },
+							allowGuestMemberAdds: true,
+						},
+						a1,
+					),
+				)
+				const accepted = ok(
+					yield* call(
+						b.object,
+						b.id,
+						"connectShare.invite.accept",
+						{ inviteId: created.data.id as ConnectInviteId, guestOrganizationId: b.id },
+						b1,
+					),
+				)
+				const host = yield* objects.get(channelTarget(hostChannelId))
+				yield* settle([a.object, host, b.object])
+				expect(ids(yield* search(b, b1, { query: "kickoff" })).length).toBe(1)
+
+				ok(
+					yield* call(
+						a.object,
+						a.id,
+						"connectShare.organization.disconnect",
+						{ conversationId: accepted.data.id, organizationId: b.id },
+						a1,
+					),
+				)
+				yield* settle([a.object, host, b.object])
+				expect(b.object.storage.db.prepare(`SELECT count(*) AS n FROM message_search`).get()).toEqual(
+					{
+						n: 0,
+					},
 				)
 			}),
 		))

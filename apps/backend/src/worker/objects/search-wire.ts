@@ -7,7 +7,7 @@
  *   each guest org, under the guest's mounted channel id.
  * - `channel.exportSearchMessages`: an org's backfill asks a channel for a page of its messages.
  */
-import { ChannelId, ConnectConversationId, MessageId, UserId } from "@hazel/schema"
+import { ChannelId, ConnectConversationId, MessageId, OrganizationId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineEffect } from "./effects/registry"
 
@@ -25,6 +25,10 @@ export const IndexedMessage = Schema.Struct({
 })
 export type IndexedMessage = typeof IndexedMessage.Type
 
+/** A host channel's history for one new Connect guest only, under its mount. */
+export const SearchGuest = Schema.Struct({ organizationId: OrganizationId, channelId: ChannelId })
+export type SearchGuest = typeof SearchGuest.Type
+
 export const IndexMessagesPayload = Schema.Struct({
 	upsert: Schema.Array(IndexedMessage),
 	remove: Schema.Array(MessageId),
@@ -36,6 +40,8 @@ export const IndexMessagesPayload = Schema.Struct({
 			replace: Schema.Boolean,
 			/** Where the next page starts; `null` when this was the last. */
 			next: Schema.NullOr(SearchCursor),
+			/** Asked for one guest (`ExportSearchMessagesPayload.guest`): only it gets the page. */
+			guest: Schema.optionalKey(SearchGuest),
 		}),
 	),
 })
@@ -54,6 +60,8 @@ export type IndexConnectMessagesPayload = typeof IndexConnectMessagesPayload.Typ
 export const ExportSearchMessagesPayload = Schema.Struct({
 	generation: Schema.Number,
 	after: Schema.NullOr(SearchCursor),
+	/** A Connect host filling a new guest's index; the pages are echoed back with it. */
+	guest: Schema.optionalKey(SearchGuest),
 })
 export type ExportSearchMessagesPayload = typeof ExportSearchMessagesPayload.Type
 

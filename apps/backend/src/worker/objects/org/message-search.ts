@@ -30,6 +30,7 @@ import {
 	type IndexedMessage,
 	type IndexMessagesPayload,
 	SearchChannelEffects,
+	type SearchGuest,
 	SearchOrgEffects,
 } from "../search-wire"
 
@@ -149,10 +150,11 @@ const localChannel = (channelId: string) =>
 		),
 	)
 
-/** Host: pass a host channel's index change to each guest org, under its mount. */
+/** Host: pass a host channel's index change to each guest org (or `only` it), under its mount. */
 const forwardToGuests = Effect.fn("OrgObject.forwardSearchToGuests")(function* (
 	channelId: ChannelId,
 	change: Omit<IndexConnectMessagesPayload, "conversationId" | "channelId">,
+	only?: SearchGuest,
 ) {
 	const db = yield* Database.Database
 	const mount = yield* db.first(
@@ -174,7 +176,12 @@ const forwardToGuests = Effect.fn("OrgObject.forwardSearchToGuests")(function* (
 			]),
 	)
 	yield* Effect.forEach(
-		guests,
+		only === undefined
+			? guests
+			: guests.filter(
+					(guest) =>
+						guest.organizationId === only.organizationId && guest.channelId === only.channelId,
+				),
 		(guest) =>
 			enqueueEffect(
 				SearchOrgEffects.indexConnectMessages,
@@ -203,10 +210,20 @@ export const indexMessages = Effect.fn("OrgObject.indexMessages")(function* (pay
 		remove: payload.remove,
 		replace: payload.page?.replace ?? false,
 	}
+	const page = payload.page
+	// A page for one new guest: only it is filled; this org's index already holds the messages.
+	if (page?.guest !== undefined) {
+		yield* forwardToGuests(channelId, change, page.guest)
+		if (page.next === null) return
+		return yield* enqueueEffect(
+			SearchChannelEffects.exportSearchMessages,
+			channelTarget(channelId) as { kind: "channel"; id: string },
+			{ generation: page.generation, after: page.next, guest: page.guest },
+		)
+	}
 	yield* applyIndex(channelId, change)
 	yield* forwardToGuests(channelId, change)
 
-	const page = payload.page
 	if (page === undefined) return
 	const sql = yield* SqlClient
 	const rows = yield* sql<{ generation: number }>`SELECT generation FROM message_search_backfill
@@ -230,6 +247,25 @@ export const indexConnectMessages = Effect.fn("OrgObject.indexConnectMessages")(
 ) {
 	yield* applyIndex(payload.channelId, payload)
 })
+
+/** Host: send a new guest the host channel's history, page by page, under its mount. */
+export const exportToGuest = Effect.fn("OrgObject.exportSearchToGuest")(function* (
+	hostChannelId: ChannelId,
+	guest: SearchGuest,
+) {
+	yield* enqueueEffect(
+		SearchChannelEffects.exportSearchMessages,
+		channelTarget(hostChannelId) as { kind: "channel"; id: string },
+		{ generation: yield* Clock.currentTimeMillis, after: null, guest },
+	)
+})
+
+/** Guest: the mount ended; what it indexed from the host channel goes. */
+export const dropMountedSearch = Effect.fn("OrgObject.dropMountedSearch")(function* (channelId: ChannelId) {
+	if (!(yield* searchAvailable)) return
+	const sql = yield* SqlClient
+	yield* sql`DELETE FROM message_search WHERE "channelId" = ${channelId}`
+}, Effect.mapError(Database.toDatabaseError))
 
 export const messageSearchOrgReceivers = {
 	"org.indexMessages": indexMessages,

@@ -80,6 +80,7 @@ export const exportSearchMessages = Effect.fn("ChannelObject.exportSearchMessage
 					last === undefined || upsert.length < SEARCH_EXPORT_PAGE_SIZE
 						? null
 						: { createdAt: last.createdAt, id: last.id },
+				...(payload.guest === undefined ? {} : { guest: payload.guest }),
 			},
 		},
 	)
