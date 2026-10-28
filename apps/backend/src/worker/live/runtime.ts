@@ -6,7 +6,8 @@
  * Authorization: the first access asks the message's `ChannelObject` (`channel.liveAccess`) for
  * the author and binds the object to that channel and author. Writes are the author's only (a
  * bot writes as its user); reads need a viewer of the channel (or the author), asked again on
- * every read and socket.
+ * every read and socket, and every `ACCESS_RECHECK_MS` from the alarm while sockets are open: a
+ * socket whose user lost access is closed (4003).
  *
  * `Complete` and `Fail` write the final snapshot into the message (`message.update` in the
  * channel's object, as the writer), retried from the alarm while the channel is unreachable.
@@ -114,6 +115,8 @@ interface Binding {
 interface PendingFinalize {
 	readonly principal: InvokePrincipalEncoded
 	readonly attempts: number
+	/** When the next attempt is due (epoch ms); absent: now. */
+	readonly dueAt?: number
 }
 
 interface LiveAttachment {
@@ -123,6 +126,8 @@ interface LiveAttachment {
 }
 
 const FINALIZE_MAX_ATTEMPTS = 6
+/** How often open sockets' access is asked again (revoked viewers are closed). */
+export const ACCESS_RECHECK_MS = 30_000
 const finalizeBackoff = (attempts: number) => Math.min(60_000, 1000 * 2 ** attempts)
 
 const send = (socket: SyncSocket, frame: LiveServerFrame) => {
@@ -231,6 +236,57 @@ export const makeMessageLiveRuntime = (options: LiveRuntimeOptions) =>
 						),
 			)
 
+		/** The one alarm: the pending snapshot's retry, and the access recheck while sockets are open. */
+		const scheduleAlarm = Effect.gen(function* () {
+			const now = yield* Clock.currentTimeMillis
+			const due = [
+				...(pending === undefined ? [] : [pending.dueAt ?? now]),
+				...(sockets().length > 0 ? [now + ACCESS_RECHECK_MS] : []),
+			]
+			if (due.length === 0) return
+			const at = Math.min(...due)
+			yield* Effect.promise(() => storage.setAlarm(at))
+		})
+
+		/** Ask the channel again for each open socket's user; close the ones that lost access. */
+		const recheckSockets = Effect.gen(function* () {
+			const target = binding
+			const open = sockets()
+			if (target === undefined || open.length === 0) return
+			const now = yield* Clock.currentTimeMillis
+			const byUser = new Map<UserId, Array<SyncSocket>>()
+			for (const socket of open) {
+				const attachment = socket.deserializeAttachment()
+				if (!isAttachment(attachment)) {
+					close(socket, 1011, "session_state_lost")
+					continue
+				}
+				if (attachment.expiresAt !== null && attachment.expiresAt <= now) {
+					close(socket, SyncCloseCode.Reauth, "token_expired")
+					continue
+				}
+				byUser.set(attachment.userId, [...(byUser.get(attachment.userId) ?? []), socket])
+			}
+			let closed = 0
+			for (const [userId, userSockets] of byUser) {
+				const refusal = yield* readable(target.messageId, target.channelId, userId).pipe(
+					Effect.as(undefined),
+					Effect.catchTags({
+						UnauthorizedError: () =>
+							Effect.succeed({ code: SyncCloseCode.Forbidden, reason: "forbidden" }),
+						MessageNotFoundError: () =>
+							Effect.succeed({ code: SyncCloseCode.NotFound, reason: "not_found" }),
+						// The channel is unreachable: keep streaming, ask again next time.
+						InternalServerError: () => Effect.succeed(undefined),
+					}),
+				)
+				if (refusal === undefined) continue
+				for (const socket of userSockets) close(socket, refusal.code, refusal.reason)
+				closed += userSockets.length
+			}
+			yield* Effect.annotateCurrentSpan({ "live.rechecked_users": byUser.size, "live.closed": closed })
+		}).pipe(Effect.withSpan("MessageLive.recheckSockets"))
+
 		/** Write the snapshot into the message; on an unreachable channel, retry from the alarm. */
 		const deliverFinalize = Effect.gen(function* () {
 			if (pending === undefined || binding === undefined) return
@@ -257,10 +313,10 @@ export const makeMessageLiveRuntime = (options: LiveRuntimeOptions) =>
 						messageId: target.messageId,
 					})
 				} else {
-					pending = { ...current, attempts }
-					yield* persist(FINALIZE_KEY, pending)
 					const now = yield* Clock.currentTimeMillis
-					yield* Effect.promise(() => storage.setAlarm(now + finalizeBackoff(attempts)))
+					pending = { ...current, attempts, dueAt: now + finalizeBackoff(attempts) }
+					yield* persist(FINALIZE_KEY, pending)
+					yield* scheduleAlarm
 					return
 				}
 			} else if (Exit.isFailure(outcome.success)) {
@@ -352,6 +408,7 @@ export const makeMessageLiveRuntime = (options: LiveRuntimeOptions) =>
 				switch (decision) {
 					case "accepted":
 						send(socket, { _tag: "Snapshot", state })
+						yield* scheduleAlarm
 						break
 					case "forbidden":
 						close(socket, SyncCloseCode.Forbidden, "forbidden")
@@ -399,7 +456,12 @@ export const makeMessageLiveRuntime = (options: LiveRuntimeOptions) =>
 
 		const onClose = (socket: SyncSocket) => Effect.sync(() => close(socket, 1000, "closed"))
 
-		const alarm = deliverFinalize
+		const alarm = Effect.gen(function* () {
+			// Any wake retries a pending snapshot: a recheck firing before its backoff only retries early.
+			yield* deliverFinalize
+			yield* recheckSockets
+			yield* scheduleAlarm
+		}).pipe(Effect.withSpan("MessageLive.alarm"))
 
 		return {
 			write,

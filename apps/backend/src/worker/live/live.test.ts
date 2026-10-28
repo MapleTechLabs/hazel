@@ -5,6 +5,7 @@
  */
 import { CurrentUser, InternalServerError } from "@hazel/domain"
 import { initialLiveState, type LiveAction, type LiveServerFrame } from "@hazel/domain/live"
+import { SyncCloseCode } from "@hazel/domain/sync"
 import type { ChannelId, MessageId, OrganizationId, UserId } from "@hazel/schema"
 import { type FakeSocket, makeFakeSocket, makeFakeState } from "@hazel/sync-do/testing"
 import { Cause, Effect, Exit, Layer, Option, type Scope } from "effect"
@@ -104,6 +105,7 @@ const makeWorld = Effect.gen(function* () {
 		make,
 		storage,
 		state,
+		orgId,
 		setUnreachable: (value: boolean) => void (unreachable = value),
 	}
 })
@@ -341,6 +343,40 @@ describe("MessageLiveObject", () => {
 				yield* write(world, world.bot, { _tag: "AppendText", text: "x" })
 				expect(viewer.socket.closed?.code).toBe(4001)
 				expect(tags(viewer.socket)).toEqual(["Snapshot"])
+			}),
+		))
+
+	it("closes an open socket from the alarm once its user is no longer a viewer", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const viewer = yield* connect(world, world.alice)
+				const author = yield* connect(world, world.bot)
+				expect(viewer.decision).toBe("accepted")
+				// Open sockets keep an access recheck armed.
+				expect(world.storage.alarm()).not.toBeNull()
+
+				yield* world.live.alarm
+				expect(viewer.socket.closed).toBeUndefined()
+
+				const applied = yield* world.channel.applyEffect({
+					objectId: world.channelId,
+					kind: "channel.setViewers",
+					payload: {
+						organizationId: world.orgId,
+						conversationId: null,
+						viewers: [{ userId: world.bot, organizationId: world.orgId, role: "member" }],
+						bots: [],
+						version: Date.now(),
+					},
+					key: `viewers:${world.channelId}:revoke`,
+					sender: { kind: "org", id: world.orgId },
+				})
+				expect(applied._tag).toBe("Applied")
+				yield* world.live.alarm
+				expect(viewer.socket.closed?.code).toBe(SyncCloseCode.Forbidden)
+				// The author (a viewer still) keeps streaming.
+				expect(author.socket.closed).toBeUndefined()
 			}),
 		))
 
