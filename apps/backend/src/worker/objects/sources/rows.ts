@@ -18,6 +18,7 @@ export interface ColumnAccessors {
 	readonly [column: string]: SQLite.Expr<any> & {
 		isNull(): SQLite.Condition
 		eq(value: unknown): SQLite.Condition
+		lt(value: unknown): SQLite.Condition
 		in_(...values: Array<any>): SQLite.Condition
 	}
 }
@@ -47,36 +48,56 @@ export interface SyncTableSpec<P> {
  */
 export const syncTable = <P>(spec: SyncTableSpec<P>): SyncTable<P, never, Database.Database> => {
 	const key = spec.key ?? ["id"]
-	const keyOf = (row: Record<string, unknown>) => key.map((column) => String(row[column])).join(":")
 	return {
 		name: spec.table.name,
 		key,
 		...(spec.dependsOn === undefined ? {} : { dependsOn: spec.dependsOn }),
 		...(spec.affectedPrincipals === undefined ? {} : { affectedPrincipals: spec.affectedPrincipals }),
 		load: (principal, keys) =>
-			Effect.gen(function* () {
-				if (keys !== "all" && keys.length === 0) return []
-				const db = yield* Database.Database
-				const rows = yield* db.run(
-					SQLite.from(spec.table)
-						.select()
-						.where((columns: unknown) => {
-							const $ = columns as ColumnAccessors
-							return [
-								...spec.visible(principal, $),
-								keys === "all" ? undefined : byKeys(key, $, keys),
-							] as never
-						}) as never,
-				)
-				return (rows as ReadonlyArray<Record<string, unknown>>).map(
-					(row): SyncRow => ({ key: keyOf(row), row: toWireRow(row) }),
-				)
-			}).pipe(
-				Effect.orDie,
-				Effect.withSpan("SyncDO.load", { attributes: { "sync.table": spec.table.name } }),
-			),
+			keys !== "all" && keys.length === 0
+				? Effect.succeed([])
+				: selectVisible(spec, principal, ($) =>
+						keys === "all" ? undefined : byKeys(key, $, keys),
+					).pipe(Effect.withSpan("SyncDO.load", { attributes: { "sync.table": spec.table.name } })),
 	}
 }
+
+/** Ordering and limit for {@link selectVisible}. */
+export interface SelectWindow {
+	readonly orderBy: ($: ColumnAccessors) => ReadonlyArray<readonly [SQLite.Expr<any>, "asc" | "desc"]>
+	readonly limit: number
+}
+
+/** The rows of `spec` that `principal` may see and `extra` matches, as sync rows. Failures are defects. */
+export const selectVisible = <P>(
+	spec: SyncTableSpec<P>,
+	principal: P,
+	extra: ($: ColumnAccessors) => SQLite.Condition | undefined,
+	window?: SelectWindow,
+): Effect.Effect<ReadonlyArray<SyncRow>, never, Database.Database> =>
+	Effect.gen(function* () {
+		const key = spec.key ?? ["id"]
+		const db = yield* Database.Database
+		const where = SQLite.from(spec.table)
+			.select()
+			.where((columns: unknown) => {
+				const $ = columns as ColumnAccessors
+				return [...spec.visible(principal, $), extra($)] as never
+			}) as any
+		const query =
+			window === undefined
+				? where
+				: where
+						.orderBy((columns: unknown) => window.orderBy(columns as ColumnAccessors))
+						.limit(window.limit)
+		const rows = yield* db.run(query as never)
+		return (rows as ReadonlyArray<Record<string, unknown>>).map(
+			(row): SyncRow => ({
+				key: key.map((column) => String(row[column])).join(":"),
+				row: toWireRow(row),
+			}),
+		)
+	}).pipe(Effect.orDie)
 
 /** `key IN (keys)`; a composite key matches `col1 || ':' || col2`. */
 const byKeys = (key: ReadonlyArray<string>, $: ColumnAccessors, keys: ReadonlyArray<string>) => {

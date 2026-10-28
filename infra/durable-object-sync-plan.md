@@ -106,9 +106,11 @@ Once any request or RPC method has committed, the object calls `flush()`:
 
 ### Frames (`packages/domain/src/sync/protocol.ts`, JSON text)
 
-- **Client → object:** `Hello { since: number | null }`, `Ping`, `Reauth { token }`.
+- **Client → object:** `Hello { since: number | null }`, `Ping`, `Reauth { token }`,
+  `LoadOlder { requestId, table, before: { createdAt, id }, limit }` (see Paged history).
 - **Object → client:**
-    - `Begin { reset: boolean }`: on reset, the client truncates the collections this source feeds.
+    - `Begin { reset: boolean, request?: number, windows?: [{ table, oldest, hasMore }] }`: on
+      reset, the client truncates the collections this source feeds.
     - `Rows { table, upserts: unknown[], deletes: string[] }`
     - `Commit { seq }`
     - `Ready { expiresInMs? }` (sent after the first Commit; when the socket expires)
@@ -118,6 +120,34 @@ Once any request or RPC method has committed, the object calls `flush()`:
     - `Error { code, message }`
 - Rows are encoded with the table's schema as JSON. Timestamps are ISO strings; the client models
   already accept them.
+
+### Paged history
+
+A `ChannelObject` pages `messages` instead of sending the whole channel (`SyncTable.paging` in
+`packages/sync-do`, `pageMessages` in `channel-source.ts`).
+
+- **Order:** `(createdAt, id)` descending; a cursor is the oldest row's `{ createdAt, id }`, so rows
+  sharing a `createdAt` split across pages without loss or repeats.
+- **Snapshot** (every reset: first connect, retention or catch-up overflow, a `channel_viewers`
+  resnapshot): the newest 200 visible messages, plus older pinned ones (the pins list joins on
+  them), and only those messages' `message_reactions`, `pinned_messages`, `attachments` and
+  `chat_sync_message_links` (plus uploads with no message yet). `Begin.windows` carries the
+  window: `oldest` (the cursor of the 200th message) and `hasMore`. Typing indicators are whole.
+- **Paging:** `LoadOlder` is answered, under the flush permit, by
+  `Begin { reset: false, request, windows: [lowered window] }`, `Rows…`, and a `Commit` at the
+  socket's current `seq` (the page never moves the stream). `limit` is clamped to 200.
+- **Deltas** are unchanged: a change to any row goes out by key, paged in or not. The object keeps
+  no per-socket horizon.
+- **Client** (`libs/effect-db-collection`): the mirror records each source's window. A live upsert
+  of a row it does not hold that is older than the window's start is dropped (it would sit next to
+  the window with the rows between missing); paging brings it in. A held row (paged in, or a
+  pinned one) takes every edit and delete.
+    - **Catch-up** (`Hello{since}`) carries no `windows`: the client keeps its pages and window.
+    - **Reset** drops the pages with everything else. Demands (`utils.retainHistory`, or a
+      `loadSubset` with `limit`/`offset`) outlive it and re-request pages from the new window.
+    - A page answer to a request sent before a reset arrived is dropped, so no gap opens.
+- **Web:** the channel page's window subscription holds `retainHistory(offset + limit + PAGE_SIZE)`,
+  so scrolling back pages older messages in before the window reaches them.
 
 ### Auth
 
@@ -209,26 +239,10 @@ the client.
 
 - **Message search** in the command palette only covers channels that are loaded. Follow-up: per-org
   FTS5.
-- **Messages load a whole channel** once its socket is open; there's no paging from the server yet.
-  Every `Hello` reset (first connect, a catch-up past `catchUpMaxChanges`, a dependency
-  resnapshot) runs `load(principal, "all")` for `messages`, `message_reactions`,
-  `pinned_messages`, `attachments` and `chat_sync_message_links`, so the ChannelObject reads the
-  whole history into memory and sends it. A bounded snapshot (newest N messages and their
-  dependents) is not safe today: the client pages purely locally (`page/chat/data.ts` runs
-  `offset`/`limit` windows over `messageCollection`; `loadSubset` in
-  `libs/effect-db-collection/src/collection.ts` ignores `limit`/`cursor` and only opens
-  `channel:<id>`), and the only client frame is `Hello { since }`, so messages older than the
-  snapshot could never be fetched. Proposed extension:
-    - Snapshot: `Begin { reset, horizon?: { createdAt, id } }`, the oldest message sent; the
-      object sends the newest N (e.g. 500) messages and only the dependents of those.
-    - Deltas: a change to a message older than the socket's horizon (edit, reaction, pin) is
-      dropped for that socket; the horizon lives in the socket attachment.
-    - Paging: client `LoadBefore { requestId, before: { createdAt, id }, limit }`, answered with
-      `Rows` frames and `PageDone { requestId, horizon, exhausted }`; the object lowers the
-      socket's horizon so the page's rows keep receiving deltas.
-    - Client: `loadSubset` forwards `limit`/`cursor` for the messages collection and sends
-      `LoadBefore` when the window's `offset + limit` passes the loaded count; a reset drops the
-      older pages (the visible window re-requests them).
+- **Only loaded history is visible outside the channel view** (see §3 Paged history): the thread
+  panel shows a thread's newest 200 messages, and the notifications inbox and message search
+  see only the messages their channels' windows hold. Pinning a message older than the window
+  shows it in the pins list only after the next reset.
 - **Auth checks call D1** on every api request; add a short KV cache if latency shows it's needed.
 - **Bot creation from the CLI is gone:** `hazel-setup bots` wrote the Bun runtime's SQLite file.
   Create bots in the app.

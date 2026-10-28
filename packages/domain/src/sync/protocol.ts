@@ -45,7 +45,29 @@ export const SyncReauth = Schema.TaggedStruct("Reauth", {
 	token: Schema.String,
 })
 
-export const SyncClientFrame = Schema.Union([SyncHello, SyncPing, SyncReauth])
+/**
+ * A position in a paged table's history: rows order by `(createdAt, id)` descending, so ties on
+ * `createdAt` break on `id`. `createdAt` is the row's ISO timestamp.
+ */
+export const SyncPageCursor = Schema.Struct({
+	createdAt: Schema.String,
+	id: Schema.String,
+})
+export type SyncPageCursor = typeof SyncPageCursor.Type
+
+/**
+ * Asks for up to `limit` rows of a paged table older than `before`, plus their dependent rows. The
+ * answer is a `Begin{reset:false, request}` run (see {@link SyncBegin}).
+ */
+export const SyncLoadOlder = Schema.TaggedStruct("LoadOlder", {
+	requestId: Schema.Int,
+	table: Schema.String,
+	before: SyncPageCursor,
+	limit: Schema.Int,
+})
+export type SyncLoadOlder = typeof SyncLoadOlder.Type
+
+export const SyncClientFrame = Schema.Union([SyncHello, SyncPing, SyncReauth, SyncLoadOlder])
 export type SyncClientFrame = typeof SyncClientFrame.Type
 
 // ---------------------------------------------------------------------------
@@ -53,12 +75,33 @@ export type SyncClientFrame = typeof SyncClientFrame.Type
 // ---------------------------------------------------------------------------
 
 /**
+ * How much of a paged table's history the client holds: everything from `oldest` (inclusive) to
+ * the newest row. `hasMore: false` means nothing older exists; `oldest` is `null` when the table
+ * is empty for this principal.
+ */
+export const SyncWindow = Schema.Struct({
+	table: Schema.String,
+	oldest: Schema.NullOr(SyncPageCursor),
+	hasMore: Schema.Boolean,
+})
+export type SyncWindow = typeof SyncWindow.Type
+
+/**
  * Opens a sync transaction. `reset: true` means the client's state for this source is stale (first
  * snapshot, retention passed `since`, or visibility changed): drop every row this source fed before
  * applying the rows that follow.
+ *
+ * Paged tables (a channel's `messages`): a snapshot sends only the newest rows and their dependents,
+ * and `windows` says where each paged table's history starts. `request` marks the answer to a
+ * `LoadOlder`; its `windows` entry is the lowered start. The page closes with a `Commit` at the
+ * socket's current `seq`, so it never moves the stream. Paging state lives only on the client:
+ * a catch-up (`Hello{since}`) keeps paged rows, a reset drops them (re-request what is still
+ * needed), and deltas carry changes to any row by key, paged in or not.
  */
 export const SyncBegin = Schema.TaggedStruct("Begin", {
 	reset: Schema.Boolean,
+	request: Schema.optionalKey(Schema.Int),
+	windows: Schema.optionalKey(Schema.Array(SyncWindow)),
 })
 
 /**

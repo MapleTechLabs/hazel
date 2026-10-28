@@ -15,6 +15,7 @@ import {
 	type ChannelInfo,
 	type ChannelQueryRow,
 	type MessageQueryRow,
+	PAGE_SIZE,
 	type ParentChannelInfo,
 	type ReactionQueryRow,
 	toChatMessage,
@@ -96,6 +97,21 @@ const messageQueryStream = <Message>(
 		windows,
 		(row) => row.id,
 		({ order, upserts }) => toMessage({ order, upserts: upserts.map(toChatMessage) }),
+	)
+
+/**
+ * Keeps the channel's history loaded a page past the window while the stream runs: a window that
+ * reaches past what the `ChannelObject` snapshot sent (its newest messages) pages older ones in, so
+ * scrolling back grows the window as before. A reset re-requests them.
+ */
+export const messageHistoryStream = (channelId: ChannelId, window: LiveQueryWindow): Stream.Stream<never> =>
+	Stream.callback<never>(() =>
+		Effect.acquireRelease(
+			Effect.sync(() =>
+				messageCollection.utils.retainHistory(channelId, window.offset + window.limit + PAGE_SIZE),
+			),
+			(demand) => Effect.sync(() => demand.release()),
+		).pipe(Effect.flatMap(() => Effect.never)),
 	)
 
 export const reactionsStream = <Message>(

@@ -28,8 +28,10 @@ export {
 	type SyncHubConfig,
 	type SyncLease,
 	type SyncRetention,
+	type SyncRunInfo,
 	type SyncTableSink,
 } from "./hub"
+export { HISTORY_PAGE_SIZE, type HistoryDemand, type HistoryState } from "./history"
 export { extractPartitionValues } from "./subset"
 // Events
 export {

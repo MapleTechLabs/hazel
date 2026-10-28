@@ -6,6 +6,7 @@ import * as FilesSubscriptions from "../files/subscriptions"
 import {
 	channelStream,
 	messageChangesStream,
+	messageHistoryStream,
 	parentChannelStream,
 	reactionsStream,
 	threadPanelStream,
@@ -83,7 +84,8 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 				),
 		},
 	),
-	// Restarts on every page and publishes the window, so the messages query moves only when paged.
+	// Restarts on every page and publishes the window, so the messages query moves only when paged;
+	// holds the history the window needs, so scrolling back pages older messages in.
 	chatMessagesWindow: entry(
 		{ channelId: ChannelId, limit: Schema.Number, offset: Schema.Number },
 		{
@@ -93,11 +95,14 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 				offset: model.offset,
 			}),
 			dependenciesToStream: (change) =>
-				Stream.fromEffect(
-					Effect.gen(function* () {
-						yield* PubSub.publish(yield* MessageWindows, change)
-					}),
-				).pipe(Stream.drain),
+				Stream.merge(
+					Stream.fromEffect(
+						Effect.gen(function* () {
+							yield* PubSub.publish(yield* MessageWindows, change)
+						}),
+					).pipe(Stream.drain),
+					messageHistoryStream(change.channelId, change),
+				),
 		},
 	),
 	// `MessageLive.Provider` -> `useMessageActor`: one actor connection per live AI reply. The stream
