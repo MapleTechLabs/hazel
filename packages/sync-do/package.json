@@ -1,0 +1,29 @@
+{
+	"name": "@hazel/sync-do",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"main": "src/index.ts",
+	"exports": {
+		".": "./src/index.ts",
+		"./testing": "./src/testing.ts"
+	},
+	"scripts": {
+		"test": "vitest run && vitest run --config vitest.workerd.config.ts",
+		"typecheck": "tsc --noEmit && tsc --noEmit -p test/workerd",
+		"test:workerd": "vitest run --config vitest.workerd.config.ts"
+	},
+	"dependencies": {
+		"@effect/sql-sqlite-do": "catalog:effect",
+		"@hazel/domain": "workspace:*",
+		"effect": "catalog:effect"
+	},
+	"devDependencies": {
+		"@cloudflare/vitest-plugin": "^1.4.9",
+		"@cloudflare/workers-types": "catalog:alchemy",
+		"@effect/vitest": "catalog:effect",
+		"@types/node": "^24.0.0",
+		"typescript": "catalog:tooling",
+		"vitest": "^4.1.0"
+	}
+}

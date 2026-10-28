@@ -8,6 +8,7 @@ import {
 import { Effect, Schema } from "effect"
 import { Command, Render } from "foldkit"
 import * as Dom from "foldkit/dom"
+import { orgOfChatSyncChannelLink, orgOfChatSyncConnection } from "~/db/routing-hints"
 import { HazelRpc } from "../../../rpc"
 import { catchCommon } from "../../../data/actions"
 import { fetchDiscordGuildChannels } from "../chat-sync/discord"
@@ -66,7 +67,10 @@ export const ListChannelLinks = Command.define("ListChannelLinks", {
 	execute: ({ syncConnectionId, version }) =>
 		Effect.gen(function* () {
 			const client = yield* HazelRpc
-			const response = yield* client("chatSync.channelLink.list", { syncConnectionId })
+			const response = yield* client("chatSync.channelLink.list", {
+				syncConnectionId,
+				organizationId: orgOfChatSyncConnection(syncConnectionId),
+			})
 			const links = response.data.map(
 				(link): ChannelLink => ({
 					id: link.id,
@@ -91,7 +95,12 @@ export const DisconnectConnection = Command.define("DisconnectConnection", {
 	args: { syncConnectionId: SyncConnectionId },
 	messages: [Message.SucceededDisconnect, Message.FailedDisconnect],
 	execute: ({ syncConnectionId }) =>
-		HazelRpc.use((rpc) => rpc("chatSync.connection.delete", { syncConnectionId })).pipe(
+		HazelRpc.use((rpc) =>
+			rpc("chatSync.connection.delete", {
+				syncConnectionId,
+				organizationId: orgOfChatSyncConnection(syncConnectionId),
+			}),
+		).pipe(
 			Effect.as(Message.SucceededDisconnect()),
 			Effect.catchTags({
 				ChatSyncConnectionNotFoundError: () =>
@@ -105,7 +114,12 @@ export const RemoveChannelLink = Command.define("RemoveChannelLink", {
 	args: { syncChannelLinkId: SyncChannelLinkId },
 	messages: [Message.SucceededRemoveLink, Message.FailedRemoveLink],
 	execute: ({ syncChannelLinkId }) =>
-		HazelRpc.use((rpc) => rpc("chatSync.channelLink.delete", { syncChannelLinkId })).pipe(
+		HazelRpc.use((rpc) =>
+			rpc("chatSync.channelLink.delete", {
+				syncChannelLinkId,
+				organizationId: orgOfChatSyncChannelLink(syncChannelLinkId),
+			}),
+		).pipe(
 			Effect.as(Message.SucceededRemoveLink()),
 			Effect.catchTags({
 				ChatSyncChannelLinkNotFoundError: () =>
@@ -130,10 +144,13 @@ export const UpdateChannelLink = Command.define("UpdateChannelLink", {
 					? "Channel link resumed"
 					: "Channel link paused"
 				: `Sync direction updated to ${DIRECTION_LABELS[direction]}`
+		const organizationId = orgOfChatSyncChannelLink(syncChannelLinkId)
 		return HazelRpc.use((rpc) =>
 			rpc(
 				"chatSync.channelLink.update",
-				direction === undefined ? { syncChannelLinkId, isActive } : { syncChannelLinkId, direction },
+				direction === undefined
+					? { syncChannelLinkId, organizationId, isActive }
+					: { syncChannelLinkId, organizationId, direction },
 			),
 		).pipe(
 			Effect.as(Message.SucceededUpdateLink({ linkId: syncChannelLinkId, successMessage })),
@@ -164,7 +181,10 @@ export const CreateChannelLink = Command.define("CreateChannelLink", {
 			// React paints the pending button on the click, before any reply; wait for that commit.
 			yield* Render.afterCommit
 			const client = yield* HazelRpc
-			yield* client("chatSync.channelLink.create", payload)
+			yield* client("chatSync.channelLink.create", {
+				...payload,
+				organizationId: orgOfChatSyncConnection(payload.syncConnectionId),
+			})
 			return Message.SucceededCreateLink({
 				successMessage: `Linked #${hazelChannelName} to #${payload.externalChannelName}`,
 			})
@@ -174,6 +194,9 @@ export const CreateChannelLink = Command.define("CreateChannelLink", {
 					Effect.succeed(Message.FailedCreateLink({ reason: "ConnectionNotFound" })),
 				ChatSyncChannelLinkExistsError: () =>
 					Effect.succeed(Message.FailedCreateLink({ reason: "AlreadyLinked" })),
+				// The picker lists only this org's channels; another org's id is refused.
+				ChannelNotFoundError: () =>
+					Effect.succeed(Message.FailedCreateLink({ reason: "Unexpected" })),
 			}),
 			catchCommon((reason) => Message.FailedCreateLink({ reason })),
 		),

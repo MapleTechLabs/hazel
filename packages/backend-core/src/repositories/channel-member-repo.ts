@@ -1,4 +1,4 @@
-import { Database, PG, Repository, schema } from "@hazel/db"
+import { Database, SQLite, Repository, schema } from "@hazel/db"
 
 import type { ChannelId, OrganizationId, UserId } from "@hazel/schema"
 import { ChannelMember } from "@hazel/domain/models"
@@ -19,7 +19,7 @@ export class ChannelMemberRepo extends Context.Service<ChannelMemberRepo>()("Cha
 		// Extended method to find channel member by channel and user
 		const findByChannelAndUser = (channelId: ChannelId, userId: UserId) =>
 			db.first(
-				PG.from(schema.channelMembersTable)
+				SQLite.from(schema.channelMembersTable)
 					.select()
 					.where(($) => [$.channelId.eq(channelId), $.userId.eq(userId), $.deletedAt.isNull()])
 					.limit(1),
@@ -32,7 +32,7 @@ export class ChannelMemberRepo extends Context.Service<ChannelMemberRepo>()("Cha
 			organizationId: OrganizationId,
 		) =>
 			db.first(
-				PG.from(schema.channelsTable)
+				SQLite.from(schema.channelsTable)
 					.innerJoin(schema.channelMembersTable, "cm", (channel, cm) => cm.channelId.eq(channel.id))
 					.select(($) => ({
 						id: $.id,
@@ -71,8 +71,8 @@ export class ChannelMemberRepo extends Context.Service<ChannelMemberRepo>()("Cha
 					)
 					// Ensure the channel has exactly 2 members and they are our users
 					.having(($) => [
-						PG.countDistinct($.cm.userId).eq(2),
-						PG.sql
+						SQLite.countDistinct($.cm.userId).eq(2),
+						SQLite.sql
 							.cond`COUNT(DISTINCT ${$.cm.userId}) FILTER (WHERE ${$.cm.userId} IN (${userId1}, ${userId2})) = 2`,
 					])
 					.limit(1),
@@ -80,7 +80,7 @@ export class ChannelMemberRepo extends Context.Service<ChannelMemberRepo>()("Cha
 
 		const listByChannel = (channelId: ChannelId) =>
 			db.run(
-				PG.from(schema.channelMembersTable)
+				SQLite.from(schema.channelMembersTable)
 					.select()
 					.where(($) => [$.channelId.eq(channelId), $.deletedAt.isNull()]),
 			)

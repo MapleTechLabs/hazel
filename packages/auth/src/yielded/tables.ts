@@ -2,8 +2,9 @@ import { AuthPersistence } from "@yielded/auth-persistence"
 import * as Mapping from "@yielded/auth-persistence/OAuthPersistence"
 
 /**
- * The library's view of Hazel's auth tables. The physical tables are the Drizzle schema in
- * `packages/db/src/tables/auth.ts` (plus `users`); keep names and unique keys in step.
+ * The library's view of Hazel's auth tables. The physical tables are the SQLite tables in
+ * `packages/db/src/tables/auth.ts` (plus `users`), in the directory store (D1); keep names
+ * and unique keys in step.
  */
 
 // ---- AuthPersistence (sessions, pending authentication, passkeys) ----

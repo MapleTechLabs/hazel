@@ -1,30 +1,18 @@
-import { MessageRepo, PinnedMessageRepo } from "@hazel/backend-core"
+import { PinnedMessageRepo } from "@hazel/backend-core"
 import { Database } from "@hazel/db"
 import { CurrentUser, withRemapDbErrors } from "@hazel/domain"
 import { PinnedMessageResponse, PinnedMessageRpcs } from "@hazel/domain/rpc"
 import { Effect } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
-import { MessagePolicy } from "../../policies/message-policy"
 import { PinnedMessagePolicy } from "../../policies/pinned-message-policy"
 
 /**
- * Pinned Message RPC Handlers
- *
- * Implements the business logic for all pinned message-related RPC methods.
- * Each handler receives the payload and has access to CurrentUser via Effect context
- * (provided by AuthMiddleware).
- *
- * All handlers use:
- * - Database transactions for atomicity
- * - Policy checks for authorization
- * - Transaction IDs for optimistic updates
- * - Error remapping for consistent error handling
+ * Pinned message RPC handlers. Run in the channel's `ChannelObject` (`rpc/routing.ts`), authorized
+ * against its `channel_viewers` (`PinnedMessagePolicy`).
  */
 export const PinnedMessageRpcLive = PinnedMessageRpcs.toLayer(
 	Effect.gen(function* () {
 		const db = yield* Database.Database
-		const messagePolicy = yield* MessagePolicy
-		const messageRepo = yield* MessageRepo
 		const pinnedMessagePolicy = yield* PinnedMessagePolicy
 		const pinnedMessageRepo = yield* PinnedMessageRepo
 
@@ -55,7 +43,7 @@ export const PinnedMessageRpcLive = PinnedMessageRpcs.toLayer(
 					)
 					.pipe(withRemapDbErrors("PinnedMessage", "create")),
 
-			"pinnedMessage.update": ({ id, ...payload }) =>
+			"pinnedMessage.update": ({ id, channelId: _route, ...payload }) =>
 				db
 					.transaction(
 						Effect.gen(function* () {

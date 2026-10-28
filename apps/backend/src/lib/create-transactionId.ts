@@ -1,16 +1,36 @@
 import { Database } from "@hazel/db"
-import { TransactionIdFromString } from "@hazel/schema"
-import { Effect, Schema } from "effect"
+import { formatWritePosition, type SyncSeq } from "@hazel/domain/sync"
+import { TransactionId } from "@hazel/schema"
+import { Effect, Option, Schema } from "effect"
+import { currentObject } from "./current-object"
 
-const TxidRow = Schema.Struct({ txid: Schema.String })
+const HeadRow = Schema.Struct({ head: Schema.Number })
 
 /**
- * The id of the open transaction, for Electric to confirm the client's optimistic write against.
- * Must run inside `db.transaction`, which pins this statement to the transaction's connection.
- * Fails with the typed DatabaseError / SchemaError, which callers remap with `withRemapDbErrors`.
+ * The write position the client confirms its optimistic write against: `<kind>:<id>:<seq>`.
+ *
+ * Inside the transaction the change triggers have already appended this write's rows to
+ * `_changes`, so its head is this write's seq. The object's invoke wrapper flushes (`afterCommit`)
+ * before it answers, so the client never waits for a seq that was not broadcast. Call it last in
+ * the transaction: a write after it would land past the returned seq.
+ *
+ * Off an object (the directory path, tests) the kind and id are unknown and the
+ * position is `local:<seq>`, which no source confirms. Fails with the typed DatabaseError /
+ * SchemaError, which callers remap with `withRemapDbErrors`.
  */
 export const generateTransactionId = Effect.fn("generateTransactionId")(function* () {
 	const db = yield* Database.Database
-	const rows = yield* db.query(Database.sql`SELECT pg_current_xact_id()::xid::text AS txid`, TxidRow)
-	return yield* Schema.decodeEffect(TransactionIdFromString)(rows[0]?.txid ?? "")
+	const tables = yield* db.query(
+		Database.sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name = '_changes'`,
+	)
+	const head =
+		tables.length === 0
+			? 0
+			: ((yield* db.query(Database.sql`SELECT coalesce(max(seq), 0) AS head FROM _changes`, HeadRow))[0]
+					?.head ?? 0)
+	const object = yield* currentObject
+	const position = Option.isSome(object)
+		? formatWritePosition({ kind: object.value.kind, id: object.value.id, seq: head as SyncSeq })
+		: `local:${head}`
+	return yield* Schema.decodeEffect(TransactionId)(position)
 }, Database.requireTransaction)

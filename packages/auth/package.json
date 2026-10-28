@@ -6,7 +6,6 @@
 	"main": "src/index.ts",
 	"exports": {
 		".": "./src/index.ts",
-		"./proxy": "./src/consumers/proxy-auth.ts",
 		"./access-token": "./src/yielded/access-token.ts",
 		"./desktop": "./src/yielded/desktop-client.ts",
 		"./errors": "./src/errors.ts",
@@ -14,14 +13,13 @@
 		"./server": "./src/yielded/index.ts"
 	},
 	"scripts": {
+		"test": "vitest run",
 		"test:integration": "vitest run src/yielded",
 		"generate-keys": "bun scripts/generate-keys.ts"
 	},
 	"dependencies": {
-		"@effect/sql-pg": "catalog:effect",
 		"@hazel/db": "workspace:*",
 		"@hazel/domain": "workspace:*",
-		"@hazel/effect-bun": "workspace:*",
 		"@hazel/schema": "workspace:*",
 		"@simplewebauthn/server": "^14.0.1",
 		"@yielded/auth": "0.1.0-beta.38",

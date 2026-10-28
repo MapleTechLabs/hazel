@@ -10,81 +10,74 @@ import {
 	RssSubscriptionResponse,
 	RssSubscriptionRpcs,
 } from "@hazel/domain/rpc"
-import { Rss } from "@hazel/integrations"
 import { Effect, Option } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
+import { requestOrganizationId } from "../../worker/objects/org/organization"
 import { RssSubscriptionPolicy } from "../../policies/rss-subscription-policy"
-import { IntegrationBotService } from "../../services/integrations/integration-bot-service"
+import { WebhookBotService } from "../../services/webhook-bot-service"
+import { fetchFeed } from "../../worker/objects/org/rss"
 
+/**
+ * RSS subscription RPC handlers. Run in the `OrgObject` (`rpc/routing.ts`), which also polls the
+ * feeds on its alarm (`worker/objects/org/rss.ts`).
+ */
 export const RssSubscriptionRpcLive = RssSubscriptionRpcs.toLayer(
 	Effect.gen(function* () {
 		const db = yield* Database.Database
 		const channelRepo = yield* ChannelRepo
 		const subscriptionRepo = yield* RssSubscriptionRepo
-		const integrationBotService = yield* IntegrationBotService
+		const webhookBotService = yield* WebhookBotService
 		const rssSubscriptionPolicy = yield* RssSubscriptionPolicy
 
 		return {
 			"rssSubscription.create": (payload) =>
-				db
-					.transaction(
+				Effect.gen(function* () {
+					yield* rssSubscriptionPolicy.canCreate(payload.channelId)
+					// Test-fetch the feed before the transaction (no network inside one).
+					const feed = yield* fetchFeed(payload.feedUrl).pipe(
+						Effect.mapError(
+							(error) =>
+								new RssFeedValidationError({
+									feedUrl: payload.feedUrl,
+									message: error.message,
+								}),
+						),
+					)
+					return yield* db.transaction(
 						Effect.gen(function* () {
 							const user = yield* CurrentUser.Context
 
-							// Get channel to get organization ID
 							const channelOption = yield* channelRepo.findById(payload.channelId)
 							if (Option.isNone(channelOption)) {
-								return yield* Effect.fail(
-									new ChannelNotFoundError({ channelId: payload.channelId }),
-								)
+								return yield* new ChannelNotFoundError({ channelId: payload.channelId })
 							}
 							const channel = channelOption.value
 
-							// Check if already subscribed to this feed URL in this channel
 							const existingOption = yield* subscriptionRepo.findByChannelAndFeedUrl(
 								payload.channelId,
 								payload.feedUrl,
 							)
 							if (Option.isSome(existingOption)) {
-								return yield* Effect.fail(
-									new RssSubscriptionExistsError({
-										channelId: payload.channelId,
-										feedUrl: payload.feedUrl,
-									}),
-								)
+								return yield* new RssSubscriptionExistsError({
+									channelId: payload.channelId,
+									feedUrl: payload.feedUrl,
+								})
 							}
 
-							// Validate the feed URL by test-fetching it
-							const feedMetadata = yield* Effect.tryPromise({
-								try: () => Rss.validateFeedUrl(payload.feedUrl),
-								catch: (error) =>
-									new RssFeedValidationError({
-										feedUrl: payload.feedUrl,
-										message:
-											error instanceof Error ? error.message : "Invalid RSS feed URL",
-									}),
-							})
-
-							yield* rssSubscriptionPolicy.canCreate(payload.channelId)
-
-							// Create subscription
 							const [subscription] = yield* subscriptionRepo.insert({
 								channelId: payload.channelId,
 								organizationId: channel.organizationId,
 								feedUrl: payload.feedUrl,
-								feedTitle: feedMetadata.title,
-								feedIconUrl: feedMetadata.iconUrl,
+								feedTitle: feed.metadata.title,
+								feedIconUrl: feed.metadata.iconUrl,
 								isEnabled: true,
 								pollingIntervalMinutes: payload.pollingIntervalMinutes ?? 15,
 								createdBy: user.id,
 								deletedAt: null,
 							})
 
-							// Ensure RSS bot user exists for this organization
-							yield* integrationBotService.getOrCreateWebhookBotUser(
-								"rss",
-								channel.organizationId,
-							)
+							// The shared RSS bot authors the posts; it must be in this org.
+							yield* webhookBotService.getOrCreateIntegrationBot("rss", channel.organizationId)
 
 							const txid = yield* generateTransactionId()
 
@@ -94,7 +87,7 @@ export const RssSubscriptionRpcLive = RssSubscriptionRpcs.toLayer(
 							})
 						}),
 					)
-					.pipe(withRemapDbErrors("RssSubscription", "create")),
+				}).pipe(withRemapDbErrors("RssSubscription", "create")),
 
 			"rssSubscription.list": ({ channelId }) =>
 				Effect.gen(function* () {
@@ -106,13 +99,11 @@ export const RssSubscriptionRpcLive = RssSubscriptionRpcs.toLayer(
 
 			"rssSubscription.listByOrganization": () =>
 				Effect.gen(function* () {
-					const user = yield* CurrentUser.Context
-
-					if (!user.organizationId) {
+					const requested = yield* requestOrganizationId
+					if (Option.isNone(requested)) {
 						return new RssSubscriptionListResponse({ data: [] })
 					}
-
-					const organizationId = user.organizationId
+					const organizationId = requested.value
 
 					yield* rssSubscriptionPolicy.canReadByOrganization(organizationId)
 					const subscriptions = yield* subscriptionRepo.findByOrganization(organizationId)
@@ -120,7 +111,7 @@ export const RssSubscriptionRpcLive = RssSubscriptionRpcs.toLayer(
 					return new RssSubscriptionListResponse({ data: subscriptions })
 				}).pipe(withRemapDbErrors("RssSubscription", "select")),
 
-			"rssSubscription.update": ({ id, ...payload }) =>
+			"rssSubscription.update": ({ id, organizationId: _route, ...payload }) =>
 				db
 					.transaction(
 						Effect.gen(function* () {

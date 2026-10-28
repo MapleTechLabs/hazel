@@ -1,21 +1,21 @@
 import { ChannelId, MessageId, PinnedMessageId, UserId } from "@hazel/schema"
-import * as PG from "@maple-dev/effect-orm/postgres"
-import { now, timestamptz, uuid } from "./columns"
+import * as SQLite from "@maple-dev/effect-orm/sqlite"
+import { randomUuid, timestamptz, uuid } from "./columns"
 
-export const pinnedMessagesTable = PG.table("pinned_messages", {
+export const pinnedMessagesTable = SQLite.table("pinned_messages", {
 	columns: {
-		id: PG.column(uuid(PinnedMessageId), { defaultExpr: "gen_random_uuid()" }),
+		id: SQLite.column(uuid(PinnedMessageId), { defaultExpr: randomUuid }),
 		channelId: uuid(ChannelId),
 		messageId: uuid(MessageId),
 		pinnedBy: uuid(UserId),
-		pinnedAt: PG.column(timestamptz, { defaultExpr: "now()" }),
+		pinnedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
 	},
 	primaryKey: ["id"],
 	indexes: [
-		PG.index("pinned_messages_channel_id_idx", ["channelId"]),
-		PG.index("pinned_messages_message_id_idx", ["messageId"]),
-		PG.uniqueIndex("pinned_messages_unique_idx", ["channelId", "messageId"]),
+		SQLite.index("pinned_messages_channel_id_idx", ["channelId"]),
+		SQLite.index("pinned_messages_message_id_idx", ["messageId"]),
+		SQLite.uniqueIndex("pinned_messages_unique_idx", ["channelId", "messageId"]),
 	],
 })
-export type PinnedMessage = PG.SelectRowOf<typeof pinnedMessagesTable>
-export type NewPinnedMessage = PG.InsertRowOf<typeof pinnedMessagesTable>
+export type PinnedMessage = SQLite.SelectRowOf<typeof pinnedMessagesTable>
+export type NewPinnedMessage = SQLite.InsertRowOf<typeof pinnedMessagesTable>

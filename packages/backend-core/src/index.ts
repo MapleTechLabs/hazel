@@ -21,21 +21,6 @@ export { GitHubSubscriptionRepo } from "./repositories/github-subscription-repo"
 export { IntegrationConnectionRepo } from "./repositories/integration-connection-repo"
 export { IntegrationTokenRepo } from "./repositories/integration-token-repo"
 export { MessageReactionRepo } from "./repositories/message-reaction-repo"
-export {
-	MessageCreatedPayloadSchema,
-	MessageDeletedPayloadSchema,
-	MessageOutboxRepo,
-	MessageUpdatedPayloadSchema,
-	OutboxWrites,
-	ReactionCreatedPayloadSchema,
-	ReactionDeletedPayloadSchema,
-	type MessageCreatedPayload,
-	type MessageDeletedPayload,
-	type MessageOutboxEventRecord,
-	type MessageUpdatedPayload,
-	type ReactionCreatedPayload,
-	type ReactionDeletedPayload,
-} from "./repositories/message-outbox-repo"
 export { MessageRepo, type ListByChannelParams } from "./repositories/message-repo"
 export { NotificationRepo } from "./repositories/notification-repo"
 export { OrganizationMemberRepo } from "./repositories/organization-member-repo"

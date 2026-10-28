@@ -3,6 +3,7 @@ import { Base64Url } from "effect/encoding"
 import { SqlClient } from "effect/sql"
 
 import { oauthNamespace } from "./auth.ts"
+import { runBatch } from "./batch.ts"
 
 /**
  * Links a GitHub or Google account to an existing Hazel user, so that signing in with it
@@ -63,40 +64,49 @@ export type LinkResult =
 	/** The account already belongs to another Hazel user; nothing was written. */
 	| { readonly _tag: "Conflict"; readonly ownerId: string }
 
-/** Idempotent: re-linking the same account to the same user is a no-op. */
-export const linkIdentity = (input: ExternalIdentity & { readonly userId: string }) =>
-	Effect.gen(function* () {
-		const sql = yield* SqlClient.SqlClient
-		const crypto = yield* Crypto.Crypto
-		const key = yield* identityKey(input)
-		const credentialId = yield* crypto.randomUUIDv4()
+/**
+ * Idempotent: re-linking the same account to the same user is a no-op. One atomic batch (D1
+ * has no transactions): the owner row is inserted unless the identity has one, the login
+ * credential and its authority row only when this user owns the identity and it has no login
+ * yet, and the last statement reads back who owns it and which credential its login holds.
+ */
+export const linkIdentity = Effect.fn("HazelAuth.linkIdentity")(function* (
+	input: ExternalIdentity & { readonly userId: string },
+) {
+	const sql = yield* SqlClient.SqlClient
+	const crypto = yield* Crypto.Crypto
+	const key = yield* identityKey(input)
+	const credentialId = yield* crypto.randomUUIDv4()
 
-		return yield* sql.withTransaction(
-			Effect.gen(function* () {
-				const inserted = yield* sql<{ identityKey: string }>`
-					insert into auth_oauth_identities ("identityKey", provider, issuer, "externalSubject", "subjectId")
-					values (${key}, ${input.provider}, ${providerIssuers[input.provider]}, ${input.subject}, ${input.userId}::uuid)
-					on conflict ("identityKey") do nothing
-					returning "identityKey"`
+	const ownedWithoutLogin = sql`
+		exists (select 1 from auth_oauth_identities where "identityKey" = ${key} and "subjectId" = ${input.userId})
+		and not exists (select 1 from auth_oauth_logins where "identityKey" = ${key})`
 
-				if (inserted.length === 0) {
-					const [owner] = yield* sql<{ subjectId: string }>`
-						select "subjectId"::text as "subjectId" from auth_oauth_identities where "identityKey" = ${key}`
-					return owner?.subjectId === input.userId
-						? ({ _tag: "AlreadyLinked" } as const)
-						: ({ _tag: "Conflict", ownerId: owner?.subjectId ?? "" } as const)
-				}
+	const results = yield* runBatch(sql, [
+		sql`
+			insert into auth_oauth_identities ("identityKey", provider, issuer, "externalSubject", "subjectId")
+			values (${key}, ${input.provider}, ${providerIssuers[input.provider]}, ${input.subject}, ${input.userId})
+			on conflict ("identityKey") do nothing`,
+		sql`
+			insert into auth_credentials ("credentialId", "subjectId", revision, active)
+			select ${credentialId}, ${input.userId}, 'initial', 1 where ${ownedWithoutLogin}`,
+		sql`
+			insert into auth_oauth_logins ("moduleId", "credentialId", "subjectId", "identityKey", "credentialRevision", status)
+			select ${oauthNamespace}, ${credentialId}, ${input.userId}, ${key}, 'initial', 'active'
+			where exists (select 1 from auth_credentials where "credentialId" = ${credentialId})
+			and not exists (select 1 from auth_oauth_logins where "identityKey" = ${key})`,
+		sql`
+			select i."subjectId" as "ownerId", l."credentialId" as "loginId"
+			from auth_oauth_identities i
+			left join auth_oauth_logins l on l."identityKey" = i."identityKey"
+			where i."identityKey" = ${key}`,
+	])
 
-				yield* sql`
-					insert into auth_credentials ("credentialId", "subjectId", revision, active)
-					values (${credentialId}, ${input.userId}::uuid, 'initial', true)`
-				yield* sql`
-					insert into auth_oauth_logins ("moduleId", "credentialId", "subjectId", "identityKey", "credentialRevision", status)
-					values (${oauthNamespace}, ${credentialId}, ${input.userId}::uuid, ${key}, 'initial', 'active')`
-				return { _tag: "Linked" } as const
-			}),
-		)
-	})
+	const [owner] = (results[3] ?? []) as ReadonlyArray<{ ownerId: string; loginId: string | null }>
+	if (owner?.ownerId !== input.userId)
+		return { _tag: "Conflict", ownerId: owner?.ownerId ?? "" } as LinkResult
+	return (owner.loginId === credentialId ? { _tag: "Linked" } : { _tag: "AlreadyLinked" }) as LinkResult
+})
 
 /**
  * The one active person (not a bot) with this email, compared case-insensitively.
@@ -106,7 +116,7 @@ export const findUserByEmail = (email: string) =>
 	Effect.gen(function* () {
 		const sql = yield* SqlClient.SqlClient
 		const rows = yield* sql<{ id: string }>`
-			select id::text as id from users
+			select id from users
 			where lower(email) = lower(${email}) and "deletedAt" is null and "userType" = 'user'
 			limit 2`
 		return rows.length === 1 ? rows[0]!.id : undefined

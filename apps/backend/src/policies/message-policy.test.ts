@@ -1,14 +1,16 @@
 import { describe, expect, it } from "@effect/vitest"
-import { ChannelMemberRepo, ChannelRepo, MessageRepo, OrganizationMemberRepo } from "@hazel/backend-core"
+import { MessageRepo } from "@hazel/backend-core"
+import { layerMemory } from "@hazel/db/node"
 import { UnauthorizedError } from "@hazel/domain"
 import type { ChannelId, MessageId, OrganizationId, UserId } from "@hazel/schema"
-import { Effect, Result, Layer, Option } from "effect"
-import { OrgResolver } from "../services/org-resolver.ts"
+import { Effect, Layer, Option, Result } from "effect"
+import { SqlClient } from "effect/sql/SqlClient"
+import { CurrentObject } from "../lib/current-object.ts"
+import { ChannelViewers } from "../services/channel-viewers.ts"
 import { MessagePolicy } from "./message-policy.ts"
 import {
 	makeActor,
 	makeEntityNotFound,
-	makeOrganizationMemberRepoLayer,
 	runWithActorEither,
 	serviceShape,
 	TEST_ORG_ID,
@@ -20,36 +22,6 @@ type Role = "admin" | "member" | "owner"
 const CHANNEL_ID = "00000000-0000-4000-8000-000000000801" as ChannelId
 const MESSAGE_ID = "00000000-0000-4000-8000-000000000802" as MessageId
 const MISSING_MESSAGE_ID = "00000000-0000-4000-8000-000000000899" as MessageId
-
-/**
- * Creates a ChannelRepo mock with both `findById` (for OrgResolver) and `with` (for MessagePolicy).
- */
-const makeChannelRepoLayer = (
-	channels: Record<string, { organizationId: OrganizationId; type: string; id: ChannelId }>,
-) =>
-	Layer.succeed(
-		ChannelRepo,
-		serviceShape<typeof ChannelRepo>({
-			findById: (id: ChannelId) => {
-				const channel = channels[id]
-				return Effect.succeed(channel ? Option.some(channel) : Option.none())
-			},
-			with: <A, E, R>(
-				id: ChannelId,
-				f: (channel: {
-					organizationId: OrganizationId
-					type: string
-					id: ChannelId
-				}) => Effect.Effect<A, E, R>,
-			) => {
-				const channel = channels[id]
-				if (!channel) {
-					return Effect.fail(makeEntityNotFound("Channel"))
-				}
-				return f(channel)
-			},
-		}),
-	)
 
 /**
  * Creates a MessageRepo mock with a `with` method.
@@ -75,39 +47,33 @@ const makeMessageRepoLayer = (messages: Record<string, { authorId: UserId; chann
 		}),
 	)
 
-const emptyChannelMemberRepoLayer = Layer.succeed(
-	ChannelMemberRepo,
-	serviceShape<typeof ChannelMemberRepo>({
-		findByChannelAndUser: (_channelId: ChannelId, _userId: UserId) => Effect.succeed(Option.none()),
-	}),
-)
-
 /**
- * Builds the full layer stack for MessagePolicy tests.
- * ChannelRepo is shared between OrgResolver (findById) and MessagePolicy (with).
+ * The policy as it runs in the channel's `ChannelObject`: `channel_viewers` rows (keyed
+ * `<org>:<user>` as the other policy tests key members) in a node SQLite.
  */
 const makePolicyLayer = (
-	members: Record<string, Role>,
+	viewers: Record<string, Role>,
 	messages: Record<string, { authorId: UserId; channelId: ChannelId }>,
-	channels: Record<string, { organizationId: OrganizationId; type: string; id: ChannelId }>,
+	_channels?: Record<string, { organizationId: OrganizationId; type: string; id: ChannelId }>,
 ) => {
-	const channelRepoLayer = makeChannelRepoLayer(channels)
-	const messageRepoLayer = makeMessageRepoLayer(messages)
-	const orgMemberRepoLayer = makeOrganizationMemberRepoLayer(members)
+	const seeded = Layer.effectDiscard(
+		Effect.gen(function* () {
+			const sql = yield* SqlClient
+			for (const [key, role] of Object.entries(viewers)) {
+				const [organizationId, userId] = key.split(":")
+				yield* sql`INSERT INTO channel_viewers (userId, organizationId, role)
+					VALUES (${userId!}, ${organizationId!}, ${role})`
+			}
+		}),
+	).pipe(Layer.provideMerge(layerMemory))
 
-	const orgResolverLayer = Layer.effect(OrgResolver, OrgResolver.make).pipe(
-		Layer.provide(orgMemberRepoLayer),
-		Layer.provide(channelRepoLayer),
-		Layer.provide(emptyChannelMemberRepoLayer),
-		Layer.provide(messageRepoLayer),
-	)
-
-	return Layer.effect(MessagePolicy, MessagePolicy.make).pipe(
-		Layer.provide(orgResolverLayer),
-		Layer.provide(messageRepoLayer),
-		Layer.provide(channelRepoLayer),
-		Layer.provide(orgMemberRepoLayer),
-	)
+	return Layer.mergeAll(
+		Layer.effect(MessagePolicy, MessagePolicy.make).pipe(
+			Layer.provide(makeMessageRepoLayer(messages)),
+			Layer.provide(ChannelViewers.layer),
+		),
+		Layer.succeed(CurrentObject, { kind: "channel", id: CHANNEL_ID }),
+	).pipe(Layer.provide(seeded))
 }
 
 describe("MessagePolicy", () => {
@@ -131,7 +97,7 @@ describe("MessagePolicy", () => {
 		expect(Result.isSuccess(result)).toBe(true)
 	})
 
-	it("canCreate denies non-org-member", async () => {
+	it("canCreate denies a non-viewer", async () => {
 		const actor = makeActor({
 			id: "00000000-0000-4000-8000-000000000199" as UserId,
 		})

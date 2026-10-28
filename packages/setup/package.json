@@ -12,8 +12,6 @@
 	},
 	"dependencies": {
 		"@effect/platform-bun": "catalog:effect",
-		"@hazel/db": "workspace:*",
-		"@hazel/schema": "workspace:*",
 		"effect": "catalog:effect",
 		"picocolors": "^1.1.1"
 	},

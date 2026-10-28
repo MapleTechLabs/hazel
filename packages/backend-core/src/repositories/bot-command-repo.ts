@@ -1,4 +1,4 @@
-import { Database, PG, Repository, schema } from "@hazel/db"
+import { Database, SQLite, Repository, schema } from "@hazel/db"
 
 import type { BotId } from "@hazel/schema"
 import { BotCommand } from "@hazel/domain/models"
@@ -19,7 +19,7 @@ export class BotCommandRepo extends Context.Service<BotCommandRepo>()("BotComman
 		// Find all commands for a bot
 		const findByBot = (botId: BotId) =>
 			db.run(
-				PG.from(schema.botCommandsTable)
+				SQLite.from(schema.botCommandsTable)
 					.select()
 					.where(($) => [$.botId.eq(botId)]),
 			)
@@ -27,7 +27,7 @@ export class BotCommandRepo extends Context.Service<BotCommandRepo>()("BotComman
 		// Find enabled commands for a bot
 		const findEnabledByBot = (botId: BotId) =>
 			db.run(
-				PG.from(schema.botCommandsTable)
+				SQLite.from(schema.botCommandsTable)
 					.select()
 					.where(($) => [$.botId.eq(botId), $.isEnabled.eq(true)]),
 			)
@@ -38,7 +38,7 @@ export class BotCommandRepo extends Context.Service<BotCommandRepo>()("BotComman
 				return Effect.succeed([])
 			}
 			return db.run(
-				PG.from(schema.botCommandsTable)
+				SQLite.from(schema.botCommandsTable)
 					.select()
 					.where(($) => [$.botId.in_(...botIds), $.isEnabled.eq(true)]),
 			)
@@ -47,7 +47,7 @@ export class BotCommandRepo extends Context.Service<BotCommandRepo>()("BotComman
 		// Find a specific command by bot and name
 		const findByBotAndName = (botId: BotId, name: string) =>
 			db.first(
-				PG.from(schema.botCommandsTable)
+				SQLite.from(schema.botCommandsTable)
 					.select()
 					.where(($) => [$.botId.eq(botId), $.name.eq(name)])
 					.limit(1),
@@ -69,7 +69,7 @@ export class BotCommandRepo extends Context.Service<BotCommandRepo>()("BotComman
 			}))
 			return db
 				.run(
-					PG.insertInto(schema.botCommandsTable)
+					SQLite.insertInto(schema.botCommandsTable)
 						.values({
 							botId: data.botId,
 							name: data.name,
@@ -96,7 +96,7 @@ export class BotCommandRepo extends Context.Service<BotCommandRepo>()("BotComman
 		// Delete commands not updated since the given timestamp (for bot sync cleanup)
 		const deleteStaleCommands = (botId: BotId, syncStartTime: Date) =>
 			db.run(
-				PG.deleteFrom(schema.botCommandsTable).where(($) => [
+				SQLite.deleteFrom(schema.botCommandsTable).where(($) => [
 					$.botId.eq(botId),
 					$.updatedAt.lt(syncStartTime),
 				]),

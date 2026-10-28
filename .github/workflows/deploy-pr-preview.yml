@@ -1,7 +1,7 @@
 name: Deploy PR Preview (Cloudflare via Alchemy)
 
 # Label-gated: a PR gets its own stage (`pr-<n>`) while it carries `preview`, torn down when the
-# label comes off or the PR closes. Previews share one preview database (`HAZEL_PG_URL`).
+# label comes off or the PR closes. Each stage gets its own directory D1 and Durable Objects.
 on:
     pull_request:
         types: [opened, reopened, synchronize, labeled, unlabeled, closed]
@@ -37,7 +37,6 @@ jobs:
             COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
             CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
             CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-            HAZEL_PG_URL: ${{ secrets.HAZEL_PG_URL }}
             VITE_CLERK_PUBLISHABLE_KEY: ${{ vars.VITE_CLERK_PUBLISHABLE_KEY }}
             CLERK_PUBLISHABLE_KEY: ${{ vars.CLERK_PUBLISHABLE_KEY }}
             CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
@@ -46,9 +45,9 @@ jobs:
             S3_PUBLIC_URL: ${{ vars.S3_PUBLIC_URL }}
             S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
             S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
-            CLUSTER_URL: ${{ vars.CLUSTER_URL }}
-            CLUSTER_API_SECRET: ${{ secrets.CLUSTER_API_SECRET }}
             INTEGRATION_ENCRYPTION_KEY: ${{ secrets.INTEGRATION_ENCRYPTION_KEY }}
+            # Optional: enables POST /internal/dev/sign-in (and sign-in itself) on the preview.
+            DEV_SIGNIN_SECRET: ${{ secrets.DEV_SIGNIN_SECRET }}
         steps:
             - name: Checkout
               uses: actions/checkout@v4

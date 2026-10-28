@@ -7,6 +7,7 @@ import {
 	organizationCollection,
 	organizationMemberCollection,
 } from "~/db/collections"
+import { syncSession } from "~/db/sync-manager"
 import { SESSION_REJECTED_EVENT } from "~/lib/access-token"
 import { liveQueryStream } from "../data/live-query"
 import { pageSubscriptions } from "../page/registry"
@@ -63,7 +64,15 @@ const rootSubscriptions = Subscription.make<Model, Message>()((entry) => ({
 					: Stream.empty,
 		},
 	),
-	// Every shape retries a refused token at once; one session check covers them all.
+	// The sync sources of the signed-in user (`core/db/sync-manager.ts`), once `user.me` answered.
+	sync: entry(
+		{ userId: Schema.NullOr(UserId) },
+		{
+			modelToDependencies: (model) => ({ userId: currentUserOf(model)?.id ?? null }),
+			dependenciesToStream: ({ userId }) => (userId === null ? Stream.empty : syncSession(userId)),
+		},
+	),
+	// Every source retries a refused token at once; one session check covers them all.
 	sessionRejected: entry(
 		{ isSignedIn: Schema.Boolean },
 		{

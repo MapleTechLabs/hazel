@@ -1,162 +1,74 @@
 import { describe, expect, it } from "@effect/vitest"
-import type { ExternalChannelId, SyncConnectionId } from "@hazel/schema"
-import { Effect, Context } from "effect"
-import { recordChatSyncDiagnostic } from "../../test/chat-sync-test-diagnostics"
+import type { ExternalChannelId } from "@hazel/schema"
+import { Effect } from "effect"
 import {
 	createDiscordGatewayDispatchHandlers,
+	type DiscordInbound,
 	type DiscordMessageCreateEvent,
 	type DiscordMessageDeleteEvent,
 	type DiscordMessageReactionAddEvent,
 	type DiscordMessageUpdateEvent,
 	type DiscordThreadCreateEvent,
 } from "./discord-gateway-shared"
-import {
-	DiscordSyncWorker,
-	type DiscordIngressMessageCreate,
-	type DiscordIngressMessageDelete,
-	type DiscordIngressMessageUpdate,
-	type DiscordIngressReactionAdd,
-	type DiscordIngressReactionRemove,
-	type DiscordIngressThreadCreate,
-} from "./discord-sync-worker"
 
-const run = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-	Effect.runPromise(effect as Effect.Effect<A, E, never>)
+const run = <A, E>(effect: Effect.Effect<A, E>) => Effect.runPromise(effect)
 
-type GatewayLink = {
-	syncConnectionId: SyncConnectionId
-	direction: "both" | "hazel_to_external" | "external_to_hazel"
-}
-
-type DispatchWorker = Pick<
-	Context.Service.Shape<typeof DiscordSyncWorker>,
-	| "ingestMessageCreate"
-	| "ingestMessageUpdate"
-	| "ingestMessageDelete"
-	| "ingestReactionAdd"
-	| "ingestReactionRemove"
-	| "ingestThreadCreate"
->
-
+/** The handlers with a recording `ingest`; routing by link happens behind it (the index, the org). */
 const makeDispatchHarness = () => {
-	const linksByChannel = new Map<string, ReadonlyArray<GatewayLink>>()
-	const calls = {
-		create: [] as Array<DiscordIngressMessageCreate>,
-		update: [] as Array<DiscordIngressMessageUpdate>,
-		delete: [] as Array<DiscordIngressMessageDelete>,
-		reactionAdd: [] as Array<DiscordIngressReactionAdd>,
-		reactionRemove: [] as Array<DiscordIngressReactionRemove>,
-		threadCreate: [] as Array<DiscordIngressThreadCreate>,
-	}
-
-	const discordSyncWorker: DispatchWorker = {
-		ingestMessageCreate: (payload) =>
-			Effect.sync(() => {
-				calls.create.push(payload)
-			}),
-		ingestMessageUpdate: (payload) =>
-			Effect.sync(() => {
-				calls.update.push(payload)
-			}),
-		ingestMessageDelete: (payload) =>
-			Effect.sync(() => {
-				calls.delete.push(payload)
-			}),
-		ingestReactionAdd: (payload) =>
-			Effect.sync(() => {
-				calls.reactionAdd.push(payload)
-			}),
-		ingestReactionRemove: (payload) =>
-			Effect.sync(() => {
-				calls.reactionRemove.push(payload)
-			}),
-		ingestThreadCreate: (payload) =>
-			Effect.sync(() => {
-				calls.threadCreate.push(payload)
-			}),
-	}
-
+	const routed: Array<DiscordInbound> = []
 	const handlers = createDiscordGatewayDispatchHandlers({
-		discordSyncWorker,
-		findActiveLinksByExternalChannel: (externalChannelId) =>
-			Effect.succeed(linksByChannel.get(externalChannelId) ?? []),
+		ingest: (inbound) => Effect.sync(() => void routed.push(inbound)),
 		isCurrentBotAuthor: (authorId) => Effect.succeed(authorId === "bot-self"),
 	})
-
-	return {
-		handlers,
-		calls,
-		setLinks: (channelId: ExternalChannelId, links: ReadonlyArray<GatewayLink>) => {
-			linksByChannel.set(channelId, links)
-		},
-	}
+	const of = (tag: DiscordInbound["event"]["_tag"]) =>
+		routed.filter((inbound) => inbound.event._tag === tag)
+	return { handlers, routed, of }
 }
 
-describe("DiscordGatewayService dispatch handlers", () => {
-	it("routes MESSAGE_CREATE for inbound-capable links and keeps dedupe key stable", async () => {
-		const harness = makeDispatchHarness()
-		const channelId = "123456789012345678" as ExternalChannelId
-		harness.setLinks(channelId, [
-			{
-				syncConnectionId: "00000000-0000-4000-8000-000000000001" as SyncConnectionId,
-				direction: "both",
-			},
-			{
-				syncConnectionId: "00000000-0000-4000-8000-000000000002" as SyncConnectionId,
-				direction: "hazel_to_external",
-			},
-		])
+describe("Discord gateway dispatch handlers", () => {
+	const channelId = "123456789012345678" as ExternalChannelId
 
+	it("routes MESSAGE_CREATE with its author and a stable dedupe key", async () => {
+		const harness = makeDispatchHarness()
 		await run(
 			harness.handlers.ingestMessageCreateEvent({
 				id: "223456789012345678",
 				channel_id: channelId,
 				content: "hello",
-				author: {
-					id: "778899",
-					username: "alice",
-				},
+				author: { id: "778899", username: "alice", avatar: "abc" },
+				message_reference: { message_id: "223456789012345600" },
 			} satisfies DiscordMessageCreateEvent),
 		)
-
-		expect(harness.calls.create).toHaveLength(1)
-		recordChatSyncDiagnostic({
-			suite: "discord-gateway-dispatch",
-			testCase: "message-create-routing",
-			workerMethod: "ingestMessageCreate",
-			action: "dispatch",
-			dedupeKey: String(harness.calls.create[0]?.dedupeKey),
-			syncConnectionId: String(harness.calls.create[0]?.syncConnectionId),
-			expected: "one inbound dispatch for both-direction link",
-			actual: `${harness.calls.create.length} dispatches`,
+		expect(harness.routed).toHaveLength(1)
+		const [inbound] = harness.routed
+		expect(inbound?.externalChannelId).toBe(channelId)
+		expect(inbound?.dedupeKey).toBe("discord:gateway:create:223456789012345678")
+		expect(inbound?.author).toEqual({
+			externalUserId: "778899",
+			displayName: "alice",
+			avatarUrl: "https://cdn.discordapp.com/avatars/778899/abc.png",
 		})
-		expect(harness.calls.create[0]?.syncConnectionId).toBe("00000000-0000-4000-8000-000000000001")
-		expect(harness.calls.create[0]?.dedupeKey).toBe("discord:gateway:create:223456789012345678")
+		expect(inbound?.event).toMatchObject({
+			_tag: "MessageCreate",
+			content: "hello",
+			externalReplyToMessageId: "223456789012345600",
+			externalWebhookId: null,
+		})
 	})
 
-	it("drops malformed MESSAGE_DELETE ids and does not dispatch", async () => {
+	it("drops malformed MESSAGE_DELETE ids", async () => {
 		const harness = makeDispatchHarness()
-
 		await run(
 			harness.handlers.ingestMessageDeleteEvent({
 				id: 123 as unknown as string,
-				channel_id: "123456789012345678",
+				channel_id: channelId,
 			} satisfies DiscordMessageDeleteEvent),
 		)
-
-		expect(harness.calls.delete).toHaveLength(0)
+		expect(harness.routed).toHaveLength(0)
 	})
 
 	it("suppresses bot-authored and self-authored message events", async () => {
 		const harness = makeDispatchHarness()
-		const channelId = "123456789012345678" as ExternalChannelId
-		harness.setLinks(channelId, [
-			{
-				syncConnectionId: "00000000-0000-4000-8000-000000000011" as SyncConnectionId,
-				direction: "both",
-			},
-		])
-
 		await run(
 			harness.handlers.ingestMessageCreateEvent({
 				id: "223456789012345678",
@@ -173,20 +85,11 @@ describe("DiscordGatewayService dispatch handlers", () => {
 				author: { id: "bot-self", username: "hazel-bot" },
 			}),
 		)
-
-		expect(harness.calls.create).toHaveLength(0)
+		expect(harness.routed).toHaveLength(0)
 	})
 
-	it("routes MESSAGE_UPDATE and derives deterministic hash-based dedupe when edited timestamp is missing", async () => {
+	it("derives a hash-based MESSAGE_UPDATE dedupe key without an edited timestamp", async () => {
 		const harness = makeDispatchHarness()
-		const channelId = "123456789012345678" as ExternalChannelId
-		harness.setLinks(channelId, [
-			{
-				syncConnectionId: "00000000-0000-4000-8000-000000000021" as SyncConnectionId,
-				direction: "external_to_hazel",
-			},
-		])
-
 		await run(
 			harness.handlers.ingestMessageUpdateEvent({
 				id: "223456789012345678",
@@ -195,67 +98,37 @@ describe("DiscordGatewayService dispatch handlers", () => {
 				webhook_id: 999 as unknown as string,
 			} satisfies DiscordMessageUpdateEvent),
 		)
-
-		expect(harness.calls.update).toHaveLength(1)
-		const dedupe = String(harness.calls.update[0]?.dedupeKey)
-		expect(dedupe.startsWith("discord:gateway:update:223456789012345678:")).toBe(true)
-		expect(dedupe.split(":")[4]?.length).toBe(16)
-		expect(harness.calls.update[0]?.externalWebhookId).toBeUndefined()
+		const [update] = harness.of("MessageUpdate")
+		expect(update?.dedupeKey.startsWith("discord:gateway:update:223456789012345678:")).toBe(true)
+		expect(update?.dedupeKey.split(":")[4]?.length).toBe(16)
+		expect(update?.event).toMatchObject({ externalWebhookId: null, content: "changed" })
 	})
 
-	it("routes reaction add/remove with direction filter and custom emoji formatting", async () => {
+	it("routes reaction add/remove with custom emoji formatting", async () => {
 		const harness = makeDispatchHarness()
-		const channelId = "123456789012345678" as ExternalChannelId
-		harness.setLinks(channelId, [
-			{
-				syncConnectionId: "00000000-0000-4000-8000-000000000031" as SyncConnectionId,
-				direction: "both",
-			},
-			{
-				syncConnectionId: "00000000-0000-4000-8000-000000000032" as SyncConnectionId,
-				direction: "hazel_to_external",
-			},
-		])
-
 		const reactionEvent: DiscordMessageReactionAddEvent = {
 			channel_id: channelId,
 			message_id: "223456789012345678",
 			user_id: "998877665544332211",
-			emoji: {
-				name: "party_blob",
-				id: "445566778899001122",
-			},
+			emoji: { name: "party_blob", id: "445566778899001122" },
 		}
-
 		await run(harness.handlers.ingestMessageReactionAddEvent(reactionEvent))
-		await run(
-			harness.handlers.ingestMessageReactionRemoveEvent({
-				...reactionEvent,
-			}),
-		)
-
-		expect(harness.calls.reactionAdd).toHaveLength(1)
-		expect(harness.calls.reactionRemove).toHaveLength(1)
-		expect(harness.calls.reactionAdd[0]?.emoji).toBe("party_blob:445566778899001122")
-		expect(harness.calls.reactionAdd[0]?.dedupeKey).toBe(
+		await run(harness.handlers.ingestMessageReactionRemoveEvent({ ...reactionEvent }))
+		const [add] = harness.of("ReactionAdd")
+		expect(harness.of("ReactionRemove")).toHaveLength(1)
+		expect(add?.event).toMatchObject({ emoji: "party_blob:445566778899001122" })
+		expect(add?.author?.externalUserId).toBe("998877665544332211")
+		expect(add?.dedupeKey).toBe(
 			"discord:gateway:reaction:add:123456789012345678:223456789012345678:998877665544332211:party_blob:445566778899001122",
 		)
 	})
 
-	it("routes THREAD_CREATE only for thread types and inbound-capable links", async () => {
+	it("routes THREAD_CREATE only for thread types", async () => {
 		const harness = makeDispatchHarness()
-		const parentChannelId = "123456789012345678" as ExternalChannelId
-		harness.setLinks(parentChannelId, [
-			{
-				syncConnectionId: "00000000-0000-4000-8000-000000000041" as SyncConnectionId,
-				direction: "both",
-			},
-		])
-
 		await run(
 			harness.handlers.ingestThreadCreateEvent({
 				id: "323456789012345678",
-				parent_id: parentChannelId,
+				parent_id: channelId,
 				type: 10,
 				name: "ignore-non-thread",
 			} satisfies DiscordThreadCreateEvent),
@@ -263,15 +136,13 @@ describe("DiscordGatewayService dispatch handlers", () => {
 		await run(
 			harness.handlers.ingestThreadCreateEvent({
 				id: "323456789012345679",
-				parent_id: parentChannelId,
+				parent_id: channelId,
 				type: 11,
 				name: "new-thread",
 			} satisfies DiscordThreadCreateEvent),
 		)
-
-		expect(harness.calls.threadCreate).toHaveLength(1)
-		expect(harness.calls.threadCreate[0]?.dedupeKey).toBe(
+		expect(harness.of("ThreadCreate").map((inbound) => inbound.dedupeKey)).toEqual([
 			"discord:gateway:thread:create:323456789012345679",
-		)
+		])
 	})
 })

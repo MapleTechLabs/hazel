@@ -1,6 +1,6 @@
 /**
- * The few workerd WebSocket APIs the gateway Worker uses, typed locally so this package keeps
- * compiling under Bun's ambient types (the Bun gateway in `src/index.ts` shares the tsconfig).
+ * The few workerd WebSocket APIs the gateway Worker uses, typed locally (narrower than
+ * `@cloudflare/workers-types`, so the relay can be tested with plain fakes).
  */
 import type { Handshake } from "./handshake.ts"
 import { encodeHandshake } from "./handshake.ts"

@@ -1,10 +1,10 @@
 /**
- * Email invitations end to end against a disposable Postgres: inviting (admins only, members
- * skipped, one email per address), the public preview, accepting with the invited account, and
- * revoking. Emails are captured instead of sent.
+ * Email invitations against one in-memory SQLite database: the admin check, the repository's
+ * token guards, and a deleted org. The cross-store flow (rows in D1, accept applied at the
+ * `OrgObject`) is covered in `worker/objects/directory-path.test.ts`.
  */
 import { InvitationRepo } from "@hazel/backend-core"
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import { CurrentUser } from "@hazel/domain"
 import { CurrentRpcScopes } from "@hazel/domain/scopes"
 import type { ApiScope } from "@hazel/domain/scopes"
@@ -85,7 +85,7 @@ const failureTag = (exit: Exit.Exit<unknown, unknown>) =>
 
 describe("invitations", () => {
 	beforeAll(async () => {
-		harness = await createChatSyncDbHarness(process.env.AUTH_TEST_DATABASE_URL)
+		harness = await createChatSyncDbHarness()
 		await harness.reset()
 		await harness.run(
 			Effect.gen(function* () {
@@ -93,15 +93,15 @@ describe("invitations", () => {
 				const setupSql = `
 						INSERT INTO users (id, "externalId", email, "firstName", "lastName", "userType", "isOnboarded", "createdAt", "updatedAt")
 						VALUES
-							('${owner}', 'owner', '${users[owner]}', 'Olive', 'Owner', 'user', true, NOW(), NOW()),
-							('${member}', 'member', '${users[member]}', 'Max', 'Member', 'user', true, NOW(), NOW()),
-							('${invitee}', 'invitee', '${users[invitee]}', 'Ivy', 'Invitee', 'user', true, NOW(), NOW());
+							('${owner}', 'owner', '${users[owner]}', 'Olive', 'Owner', 'user', true, strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now')),
+							('${member}', 'member', '${users[member]}', 'Max', 'Member', 'user', true, strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now')),
+							('${invitee}', 'invitee', '${users[invitee]}', 'Ivy', 'Invitee', 'user', true, strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'));
 						INSERT INTO organizations (id, name, slug, "isPublic", "createdAt", "updatedAt")
-						VALUES ('${orgId}', 'Hazel Labs', 'hazel-labs', false, NOW(), NOW());
+						VALUES ('${orgId}', 'Hazel Labs', 'hazel-labs', false, strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'));
 						INSERT INTO organization_members (id, "organizationId", "userId", role, "joinedAt", "createdAt")
 						VALUES
-							('${id(20)}', '${orgId}', '${owner}', 'owner', NOW(), NOW()),
-							('${id(21)}', '${orgId}', '${member}', 'member', NOW(), NOW());
+							('${id(20)}', '${orgId}', '${owner}', 'owner', strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now')),
+							('${id(21)}', '${orgId}', '${member}', 'member', strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'));
 					`
 				yield* Effect.forEach(
 					setupSql.split(";").filter((statement) => statement.trim() !== ""),
@@ -122,89 +122,6 @@ describe("invitations", () => {
 		expect(failureTag(exit)).toEqual(["UnauthorizedError"])
 	})
 
-	it("invites new addresses, skips members, and the invited account accepts", async () => {
-		sent.length = 0
-		const created = await run(owner, "organization-members:write", (invitations) =>
-			invitations.create({
-				organizationId: orgId,
-				emails: ["invitee@hazel.test", "MEMBER@hazel.test"],
-				role: "admin",
-			}),
-		)
-		expect(Exit.isSuccess(created) && created.value.invited.map((invite) => invite.email)).toEqual([
-			"invitee@hazel.test",
-		])
-		expect(Exit.isSuccess(created) && created.value.skipped).toEqual([
-			{ email: "member@hazel.test", reason: "AlreadyMember" },
-		])
-		expect(sent).toHaveLength(1)
-		expect(sent[0]).toMatchObject({ to: "invitee@hazel.test", organizationName: "Hazel Labs" })
-		expect(sent[0]!.acceptUrl).toMatch(/^https:\/\/app\.hazel\.test\/invite\//)
-		const token = tokenOf(sent[0]!)
-
-		const listed = await run(owner, "organization-members:read", (invitations) =>
-			invitations.list({ organizationId: orgId }),
-		)
-		expect(Exit.isSuccess(listed) && listed.value.map((invite) => invite.role)).toEqual(["admin"])
-
-		const preview = await run(member, "organizations:read", (invitations) =>
-			invitations.preview({ token }),
-		)
-		expect(Exit.isSuccess(preview) && preview.value.status).toBe("Pending")
-
-		const wrongAccount = await run(member, "organizations:write", (invitations) =>
-			invitations.accept({ token }),
-		)
-		expect(failureTag(wrongAccount)).toEqual(["InvitationEmailMismatchError"])
-
-		const accepted = await run(invitee, "organizations:write", (invitations) =>
-			invitations.accept({ token }),
-		)
-		expect(Exit.isSuccess(accepted) && accepted.value.slug).toBe("hazel-labs")
-		const role = await harness.run(
-			Effect.gen(function* () {
-				const db = yield* Database.Database
-				return yield* db.run(
-					PG.from(schema.organizationMembersTable)
-						.select("role")
-						.where(($) => [$.organizationId.eq(orgId), $.userId.eq(invitee)]),
-				)
-			}),
-		)
-		expect(role).toEqual([{ role: "admin" }])
-
-		const again = await run(invitee, "organizations:write", (invitations) =>
-			invitations.accept({ token }),
-		)
-		expect(failureTag(again)).toEqual(["InvitationUnavailableError"])
-	}, 60_000)
-
-	it("re-inviting replaces the link, and a revoked link stops working", async () => {
-		sent.length = 0
-		const invite = () =>
-			run(owner, "organization-members:write", (invitations) =>
-				invitations.create({ organizationId: orgId, emails: ["late@hazel.test"], role: "member" }),
-			)
-		await invite()
-		const second = await invite()
-		const [first, latest] = [tokenOf(sent[0]!), tokenOf(sent[1]!)]
-		expect(first).not.toBe(latest)
-
-		const stale = await run(member, "organizations:read", (invitations) =>
-			invitations.preview({ token: first }),
-		)
-		expect(failureTag(stale)).toEqual(["InvitationNotFoundError"])
-
-		const invitationId = Exit.isSuccess(second) ? second.value.invited[0]!.id : undefined
-		const revoked = await run(owner, "organization-members:write", (invitations) =>
-			invitations.revoke({ id: invitationId! }),
-		)
-		expect(Exit.isSuccess(revoked)).toBe(true)
-		const preview = await run(member, "organizations:read", (invitations) =>
-			invitations.preview({ token: latest }),
-		)
-		expect(Exit.isSuccess(preview) && preview.value.status).toBe("Revoked")
-	}, 60_000)
 	it("a stale send failure or acceptance cannot consume a replacement invitation", async () => {
 		const result = await harness.run(
 			Effect.gen(function* () {
@@ -237,13 +154,13 @@ describe("invitations", () => {
 				yield* db.execute(
 					Database.sql.raw(
 						`INSERT INTO organizations (id, name, slug, "isPublic", "createdAt", "updatedAt", "deletedAt")
-						VALUES ('${deletedOrgId}', 'Gone Labs', 'gone-labs', false, NOW(), NOW(), NOW())`,
+						VALUES ('${deletedOrgId}', 'Gone Labs', 'gone-labs', false, strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'))`,
 					),
 				)
 				yield* db.execute(
 					Database.sql.raw(
 						`INSERT INTO organization_members (id, "organizationId", "userId", role, "joinedAt", "createdAt")
-						VALUES ('${id(22)}', '${deletedOrgId}', '${owner}', 'owner', NOW(), NOW())`,
+						VALUES ('${id(22)}', '${deletedOrgId}', '${owner}', 'owner', strftime('%Y-%m-%d %H:%M:%f', 'now'), strftime('%Y-%m-%d %H:%M:%f', 'now'))`,
 					),
 				)
 			}),

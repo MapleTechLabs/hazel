@@ -9,7 +9,16 @@ import * as Menu from "../../../ui/menu"
 import { PageOutMessage } from "../../out-message"
 import { Message } from "./message"
 import type { Invitation } from "./model"
-import { FetchInvitations, init, invitationsOf, REVOKE_KEY, RevokeInvitation, rowMenuEntries, update } from "./update"
+import {
+	FetchInvitations,
+	init,
+	invitationsOf,
+	REVOKE_KEY,
+	RevokeInvitation,
+	rowMenuEntries,
+	sharedChanged,
+	update,
+} from "./update"
 
 const inv1 = Schema.decodeSync(InvitationId)(uuid(11))
 const inv2 = Schema.decodeSync(InvitationId)(uuid(12))
@@ -29,7 +38,9 @@ const rowMenu = (invitationId: InvitationId, child: Menu.Message) =>
 const openMenu = (invitationId: InvitationId) =>
 	message(rowMenu(invitationId, Menu.Message.PressedTrigger({ pointerType: "mouse" })))
 const pickRevoke = (invitationId: InvitationId) =>
-	message(rowMenu(invitationId, Menu.Message.ClickedItem({ key: REVOKE_KEY, entries: rowMenuEntries(false) })))
+	message(
+		rowMenu(invitationId, Menu.Message.ClickedItem({ key: REVOKE_KEY, entries: rowMenuEntries(false) })),
+	)
 const revokeDisabled = (invitationId: InvitationId) =>
 	model<typeof loaded>((current) => {
 		expect(current.revokingId).toBe(invitationId)
@@ -151,5 +162,15 @@ describe("revoke", () => {
 				expect(current.menus[1]?.menu.popup._tag).toBe("Closed")
 			}),
 		)
+	})
+})
+
+describe("organization arriving after the page", () => {
+	test("a direct load fetches once the organization synced, and only once", () => {
+		const waiting = init(undefined, makeShared({ organization: null }))
+		expect(waiting.commands ?? []).toEqual([])
+		const fetched = sharedChanged(waiting.model, makeShared())
+		expect(fetched.commands?.[0]).toMatchObject({ name: "FetchInvitations" })
+		expect(sharedChanged(fetched.model, makeShared()).commands ?? []).toEqual([])
 	})
 })

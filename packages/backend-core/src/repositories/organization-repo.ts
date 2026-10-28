@@ -1,4 +1,4 @@
-import { Database, PG, Repository, schema } from "@hazel/db"
+import { Database, SQLite, Repository, schema } from "@hazel/db"
 import type { OrganizationId, UserId } from "@hazel/schema"
 import { Organization } from "@hazel/domain/models"
 import { Context, Effect, Layer } from "effect"
@@ -21,7 +21,7 @@ export class OrganizationRepo extends Context.Service<OrganizationRepo>()("Organ
 
 		const findBySlug = (slug: string) =>
 			db.first(
-				PG.from(schema.organizationsTable)
+				SQLite.from(schema.organizationsTable)
 					.select()
 					.where(($) => [$.slug.eq(slug)])
 					.limit(1),
@@ -29,7 +29,7 @@ export class OrganizationRepo extends Context.Service<OrganizationRepo>()("Organ
 
 		const findBySlugIfPublic = (slug: string) =>
 			db.first(
-				PG.from(schema.organizationsTable)
+				SQLite.from(schema.organizationsTable)
 					.select()
 					.where(($) => [$.slug.eq(slug), $.isPublic.eq(true), $.deletedAt.isNull()])
 					.limit(1),
@@ -37,14 +37,14 @@ export class OrganizationRepo extends Context.Service<OrganizationRepo>()("Organ
 
 		const findAllActive = () =>
 			db.run(
-				PG.from(schema.organizationsTable)
+				SQLite.from(schema.organizationsTable)
 					.select()
 					.where(($) => [$.deletedAt.isNull()]),
 			)
 
 		const softDelete = (id: OrganizationId) =>
 			db.run(
-				PG.update(schema.organizationsTable)
+				SQLite.update(schema.organizationsTable)
 					.set({ deletedAt: new Date() })
 					.where(($) => [$.id.eq(id), $.deletedAt.isNull()]),
 			)

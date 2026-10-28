@@ -8,7 +8,7 @@ import { Config, Context, DateTime, Effect, Layer, Option, Redacted, Schema } fr
 import { FetchHttpClient } from "effect/http"
 
 /**
- * Short-lived access token for services on other hosts (electric.hazel.sh, rivet.hazel.sh).
+ * Short-lived access token for services on other hosts (rivet.hazel.sh).
  * The browser's session cookie is host-only on api.hazel.sh, so those services can't see
  * it. The backend exchanges a valid session for this ES256 JWT; the services verify it
  * locally against the published JWKS, without a database or network call.
@@ -77,7 +77,7 @@ export const publicJwk = (key: SigningKey) =>
 /** Seconds of clock difference between the API and a verifier that `exp` tolerates. */
 export const clockToleranceSeconds = 30
 
-/** Verification used by electric-proxy / actors. Requires `Jwks` (local or remote). */
+/** Verification used by the actors. Requires `Jwks` (local or remote). */
 export const verifyAccessToken = (issuer: string, token: string) =>
 	Jwt.verifyWithKeySet(AccessClaims, Redacted.make(token), {
 		algorithms: ["ES256"],
@@ -115,6 +115,8 @@ export interface VerifiedAccess {
 	/** Hazel's `users.id`. */
 	readonly userId: string
 	readonly sessionId: string
+	/** The token's `exp`, in epoch milliseconds. */
+	readonly expiresAt: number
 }
 
 const VerifierConfig = Config.all({
@@ -144,15 +146,30 @@ const makeVerifier = (issuer: string) =>
 					(error) => Effect.fail(new AccessTokenInvalid({ reason: error._tag })),
 				),
 			)
-			return { userId: verified.claims.sub, sessionId: verified.claims.sid } satisfies VerifiedAccess
+			return {
+				userId: verified.claims.sub,
+				sessionId: verified.claims.sid,
+				expiresAt: verified.claims.exp * 1000,
+			} satisfies VerifiedAccess
 		})
 
 		return { verify } as const
 	})
 
 /**
- * Verifies the access tokens `POST /auth/token` issues, for the Electric proxy and the
- * actors. The issuer is the API origin, so a token only verifies on its own stage.
+ * A verifier over the API's own signing key, for the API itself: the sync route reads the access
+ * token from `Sec-WebSocket-Protocol` (a browser cannot read the HttpOnly session cookie to send).
+ */
+export const makeLocalVerifier = (issuer: string, key: SigningKey) =>
+	Effect.gen(function* () {
+		const jwk = yield* publicJwk(key).pipe(Effect.provide(VerifierCryptoLive))
+		return yield* makeVerifier(issuer).pipe(
+			Effect.provide(Layer.merge(Jwks.layerLocal({ keys: [jwk] }), VerifierCryptoLive)),
+		)
+	})
+
+/**
+ * Verifies the access tokens `POST /auth/token` issues, for the actors. The issuer is the API origin, so a token only verifies on its own stage.
  */
 export class AccessTokenVerifier extends Context.Service<
 	AccessTokenVerifier,

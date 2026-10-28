@@ -11,8 +11,10 @@ import {
 import { Schema } from "effect"
 import { InternalServerError, UnauthorizedError } from "../errors"
 import { ChatSyncChannelLink, ChatSyncConnection } from "../models"
+import { ChannelNotFoundError } from "./channels"
 import { AuthMiddleware } from "./middleware"
 import { RequiredScopes } from "../scopes/required-scopes"
+import { RouteOrganizationId } from "./routing-fields"
 
 export class ChatSyncConnectionResponse extends Schema.Class<ChatSyncConnectionResponse>(
 	"ChatSyncConnectionResponse",
@@ -114,6 +116,7 @@ export class ChatSyncRpcs extends RpcGroup.make(
 
 	Rpc.make("chatSync.connection.delete", {
 		payload: Schema.Struct({
+			organizationId: RouteOrganizationId,
 			syncConnectionId: SyncConnectionId,
 		}),
 		success: Schema.Struct({
@@ -126,6 +129,7 @@ export class ChatSyncRpcs extends RpcGroup.make(
 
 	Rpc.make("chatSync.channelLink.create", {
 		payload: Schema.Struct({
+			organizationId: RouteOrganizationId,
 			syncConnectionId: SyncConnectionId,
 			hazelChannelId: ChannelId,
 			externalChannelId: ExternalChannelId,
@@ -137,6 +141,8 @@ export class ChatSyncRpcs extends RpcGroup.make(
 		error: Schema.Union([
 			ChatSyncConnectionNotFoundError,
 			ChatSyncChannelLinkExistsError,
+			/** `hazelChannelId` is not a live channel of the connection's organization. */
+			ChannelNotFoundError,
 			UnauthorizedError,
 			InternalServerError,
 		]),
@@ -146,6 +152,7 @@ export class ChatSyncRpcs extends RpcGroup.make(
 
 	Rpc.make("chatSync.channelLink.list", {
 		payload: Schema.Struct({
+			organizationId: RouteOrganizationId,
 			syncConnectionId: SyncConnectionId,
 		}),
 		success: ChatSyncChannelLinkListResponse,
@@ -156,6 +163,7 @@ export class ChatSyncRpcs extends RpcGroup.make(
 
 	Rpc.make("chatSync.channelLink.delete", {
 		payload: Schema.Struct({
+			organizationId: RouteOrganizationId,
 			syncChannelLinkId: SyncChannelLinkId,
 		}),
 		success: Schema.Struct({
@@ -168,6 +176,7 @@ export class ChatSyncRpcs extends RpcGroup.make(
 
 	Rpc.make("chatSync.channelLink.update", {
 		payload: Schema.Struct({
+			organizationId: RouteOrganizationId,
 			syncChannelLinkId: SyncChannelLinkId,
 			direction: Schema.optional(ChatSyncChannelLink.ChatSyncDirection),
 			isActive: Schema.optional(Schema.Boolean),

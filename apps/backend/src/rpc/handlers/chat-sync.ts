@@ -1,9 +1,15 @@
+/**
+ * Chat sync configuration: connections and channel links. Runs in the org's `OrgObject`
+ * (`rpc/routing.ts`), which owns both. Each change, inside its transaction, keeps the directory's
+ * `chat_sync_index` current (the gateway routes by it) and re-projects the affected channels'
+ * links to their `ChannelObject`s (`services/chat-sync/chat-sync-org.ts`).
+ */
 import {
 	ChatSyncChannelLinkRepo,
 	ChatSyncConnectionRepo,
 	IntegrationConnectionRepo,
 } from "@hazel/backend-core"
-import { Database } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import { ExternalChannelId } from "@hazel/schema"
 import { CurrentUser, InternalServerError, withRemapDbErrors } from "@hazel/domain"
 import {
@@ -17,21 +23,13 @@ import {
 	ChatSyncConnectionNotFoundError,
 	ChatSyncConnectionResponse,
 	ChatSyncRpcs,
+	ChannelNotFoundError,
 } from "@hazel/domain/rpc"
 import { Effect, Option } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
 import { IntegrationConnectionPolicy } from "../../policies/integration-connection-policy"
-
-const normalizeChannelLinkSettings = (
-	settings: Record<string, unknown> | null | undefined,
-): Record<string, unknown> => ({
-	...(settings ?? {}),
-	outboundIdentity: settings?.outboundIdentity ?? {
-		enabled: false,
-		strategy: "webhook",
-		providers: {},
-	},
-})
+import { indexChatSync, publishChatSyncLinks } from "../../services/chat-sync/chat-sync-org"
+import { normalizeChannelLinkSettings } from "../../services/chat-sync/chat-sync-settings"
 
 export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 	Effect.gen(function* () {
@@ -106,6 +104,7 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 								createdBy: currentUser.id,
 								deletedAt: null,
 							})
+							yield* indexChatSync(connection!, { deleted: false })
 
 							const txid = yield* generateTransactionId()
 							return new ChatSyncConnectionResponse({
@@ -141,8 +140,17 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 							yield* connectionRepo.softDelete(syncConnectionId)
 							const links = yield* channelLinkRepo.findBySyncConnection(syncConnectionId)
 							yield* Effect.forEach(links, (link) => channelLinkRepo.softDelete(link.id), {
-								concurrency: 10,
+								discard: true,
 							})
+							yield* indexChatSync(connection, { deleted: true })
+							yield* Effect.forEach(
+								links,
+								(link) =>
+									indexChatSync(connection, { link, deleted: true }).pipe(
+										Effect.andThen(publishChatSyncLinks(link.hazelChannelId)),
+									),
+								{ discard: true },
+							)
 
 							const txid = yield* generateTransactionId()
 							return { transactionId: txid }
@@ -164,6 +172,21 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 							}
 							const connection = connectionOption.value
 							yield* integrationConnectionPolicy.canInsert(connection.organizationId)
+
+							// Only a live channel of the connection's own org (this OrgObject's).
+							const channel = yield* db.first(
+								SQLite.from(schema.channelsTable)
+									.select("id")
+									.where(($) => [
+										$.id.eq(payload.hazelChannelId),
+										$.organizationId.eq(connection.organizationId),
+										$.deletedAt.isNull(),
+									])
+									.limit(1),
+							)
+							if (Option.isNone(channel)) {
+								return yield* new ChannelNotFoundError({ channelId: payload.hazelChannelId })
+							}
 
 							const existingHazel = yield* channelLinkRepo.findByHazelChannel(
 								payload.syncConnectionId,
@@ -204,6 +227,8 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 								lastSyncedAt: null,
 								deletedAt: null,
 							})
+							yield* indexChatSync(connection, { link: link!, deleted: false })
+							yield* publishChatSyncLinks(link!.hazelChannelId)
 
 							const brandedLink = {
 								...link,
@@ -263,6 +288,8 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 							)
 
 							yield* channelLinkRepo.softDelete(syncChannelLinkId)
+							yield* indexChatSync(connectionOption.value, { link, deleted: true })
+							yield* publishChatSyncLinks(link.hazelChannelId)
 							const txid = yield* generateTransactionId()
 							return { transactionId: txid }
 						}),
@@ -310,6 +337,7 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 									}),
 								)
 							}
+							yield* publishChatSyncLinks(link.hazelChannelId)
 
 							const txid = yield* generateTransactionId()
 							return new ChatSyncChannelLinkResponse({

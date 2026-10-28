@@ -1,4 +1,4 @@
-import { Database, PG, Repository, schema } from "@hazel/db"
+import { Database, SQLite, Repository, schema } from "@hazel/db"
 
 import { ChatSyncEventReceipt } from "@hazel/domain/models"
 import type { SyncChannelLinkId, SyncConnectionId, SyncEventReceiptId } from "@hazel/schema"
@@ -24,7 +24,7 @@ export class ChatSyncEventReceiptRepo extends Context.Service<ChatSyncEventRecei
 				dedupeKey: string,
 			) =>
 				db.first(
-					PG.from(schema.chatSyncEventReceiptsTable)
+					SQLite.from(schema.chatSyncEventReceiptsTable)
 						.select()
 						.where(($) => [
 							$.syncConnectionId.eq(syncConnectionId),
@@ -42,7 +42,7 @@ export class ChatSyncEventReceiptRepo extends Context.Service<ChatSyncEventRecei
 			}) =>
 				db
 					.run(
-						PG.insertInto(schema.chatSyncEventReceiptsTable)
+						SQLite.insertInto(schema.chatSyncEventReceiptsTable)
 							.values({
 								syncConnectionId: params.syncConnectionId,
 								channelLinkId: params.channelLinkId ?? null,
@@ -89,7 +89,7 @@ export class ChatSyncEventReceiptRepo extends Context.Service<ChatSyncEventRecei
 				}
 
 				return db.run(
-					PG.update(schema.chatSyncEventReceiptsTable)
+					SQLite.update(schema.chatSyncEventReceiptsTable)
 						.set(set)
 						.where(($) => [
 							$.syncConnectionId.eq(params.syncConnectionId),
@@ -107,7 +107,7 @@ export class ChatSyncEventReceiptRepo extends Context.Service<ChatSyncEventRecei
 				dedupeKey: string
 			}) =>
 				db.run(
-					PG.deleteFrom(schema.chatSyncEventReceiptsTable).where(($) => [
+					SQLite.deleteFrom(schema.chatSyncEventReceiptsTable).where(($) => [
 						$.syncConnectionId.eq(params.syncConnectionId),
 						$.source.eq(params.source),
 						$.dedupeKey.eq(params.dedupeKey),
@@ -116,7 +116,7 @@ export class ChatSyncEventReceiptRepo extends Context.Service<ChatSyncEventRecei
 
 			const findRecentByConnection = (syncConnectionId: SyncConnectionId, processedAfter: Date) =>
 				db.run(
-					PG.from(schema.chatSyncEventReceiptsTable)
+					SQLite.from(schema.chatSyncEventReceiptsTable)
 						.select()
 						.where(($) => [
 							$.syncConnectionId.eq(syncConnectionId),
@@ -126,7 +126,7 @@ export class ChatSyncEventReceiptRepo extends Context.Service<ChatSyncEventRecei
 
 			const markFailed = (id: SyncEventReceiptId, errorMessage: string) =>
 				db.run(
-					PG.update(schema.chatSyncEventReceiptsTable)
+					SQLite.update(schema.chatSyncEventReceiptsTable)
 						.set({
 							status: "failed",
 							errorMessage,

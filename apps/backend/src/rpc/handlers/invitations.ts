@@ -1,3 +1,7 @@
+/**
+ * `create` / `list` / `revoke` run in the org's `OrgObject`, `preview` / `accept` on the directory
+ * path (`rpc/routing.ts`); the rows are the directory's (`services/invitations.ts`).
+ */
 import { InvitationRpcs } from "@hazel/domain/rpc"
 import { Effect } from "effect"
 import { Invitations } from "../../services/invitations"

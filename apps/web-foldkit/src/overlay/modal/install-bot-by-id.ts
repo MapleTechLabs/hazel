@@ -1,4 +1,4 @@
-import { BotId } from "@hazel/schema"
+import { BotId, OrganizationId } from "@hazel/schema"
 import { Cause, Effect, Option, Schema } from "effect"
 import { Command, Submodel } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
@@ -12,7 +12,7 @@ import { textField } from "../../ui/text-field"
 import { closed, completed, ModalOutMessage } from "../out-message"
 import { ToastRequest } from "../toasts"
 import * as Requests from "./requests"
-import { defineModal, type ModalReturn, type ModalViewInputs } from "./contract"
+import { defineModal, type ModalContext, type ModalReturn, type ModalViewInputs } from "./contract"
 import { Frame, Message as FrameMessage, frameView, initFrame, isCloseRequest, modalTitle } from "./frame"
 import { failureToast, successToast } from "../../data/actions"
 
@@ -64,14 +64,14 @@ const installErrorFor = (cause: Cause.Cause<unknown>): string | null =>
 	})
 
 export const InstallBotById = Command.define("InstallBotById", {
-	args: { botId: Schema.String },
+	args: { botId: Schema.String, organizationId: Schema.NullOr(OrganizationId) },
 	messages: [Message.SucceededInstallBot, Message.FailedInstallBot],
-	execute: ({ botId }) =>
+	execute: ({ botId, organizationId }) =>
 		Effect.gen(function* () {
 			// Legacy casts the trimmed text to a BotId; the RPC client then rejects a non-UUID.
 			const id = yield* Schema.decodeUnknownEffect(BotId)(botId)
 			const client = yield* HazelRpc
-			yield* client("bot.installById", { botId: id })
+			yield* client("bot.installById", { botId: id, organizationId: organizationId ?? undefined })
 			return Message.SucceededInstallBot()
 		}).pipe(
 			Effect.catchCause((cause) =>
@@ -94,7 +94,7 @@ const interaction = Interaction.embed<Model, Message, PageSubscriptionInput<Mode
 
 const INSTALL_TARGET = "install"
 
-const submitted = (model: Model): Return => {
+const submitted = (model: Model, context: ModalContext): Return => {
 	const botId = model.installBotId.trim()
 	if (!botId) return { model: modifyFields(model, { installError: () => "Please enter an App ID" }) }
 	if (model.isInstalling) return { model }
@@ -104,11 +104,11 @@ const submitted = (model: Model): Return => {
 			installError: () => null,
 			interaction: (state) => Interaction.disabledTargets(state, [INSTALL_TARGET]),
 		}),
-		commands: [InstallBotById({ botId })],
+		commands: [InstallBotById({ botId, organizationId: context.organization?.id ?? null })],
 	}
 }
 
-export const update = (model: Model, message: Message): Return =>
+export const update = (model: Model, message: Message, context: ModalContext): Return =>
 	Message.match<Return>(message, {
 		GotFrameMessage: ({ message }) =>
 			isCloseRequest(message) ? { model, outMessage: closed } : { model },
@@ -116,7 +116,7 @@ export const update = (model: Model, message: Message): Return =>
 			model: modifyFields(model, { installBotId: () => value, installError: () => null }),
 		}),
 		ClickedCancel: () => ({ model, outMessage: closed }),
-		SubmittedForm: () => submitted(model),
+		SubmittedForm: () => submitted(model, context),
 		SucceededInstallBot: () => ({
 			model,
 			outMessage: completed({ toast: successToast("Application installed successfully") }),

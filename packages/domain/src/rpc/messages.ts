@@ -8,6 +8,7 @@ import { TransactionId } from "@hazel/schema"
 import { RequiredScopes } from "../scopes/required-scopes"
 import { ChannelNotFoundError } from "./channels"
 import { AuthMiddleware } from "./middleware"
+import { RouteChannelId } from "./routing-fields"
 
 // Re-export for backwards compatibility
 export { MessageNotFoundError } from "../errors"
@@ -96,6 +97,7 @@ export class MessageRpcs extends RpcGroup.make(
 	 */
 	Rpc.make("message.update", {
 		payload: Schema.Struct({
+			channelId: RouteChannelId,
 			id: MessageId,
 		}).pipe(Schema.fieldsAssign(Message.Patch.fields)),
 		success: MessageResponse,
@@ -123,7 +125,7 @@ export class MessageRpcs extends RpcGroup.make(
 	 * @throws InternalServerError for unexpected errors
 	 */
 	Rpc.make("message.delete", {
-		payload: Schema.Struct({ id: MessageId }),
+		payload: Schema.Struct({ id: MessageId, channelId: RouteChannelId }),
 		success: Schema.Struct({ transactionId: TransactionId }),
 		error: Schema.Union([
 			MessageNotFoundError,

@@ -1,0 +1,16 @@
+{
+	"include": ["./*.ts", "../../src/**/*.ts"],
+	"exclude": ["../../src/**/*.test.ts", "../../src/testing.ts"],
+	"compilerOptions": {
+		"target": "ES2022",
+		"module": "ESNext",
+		"lib": ["ES2023"],
+		"moduleResolution": "bundler",
+		"allowImportingTsExtensions": true,
+		"verbatimModuleSyntax": true,
+		"noEmit": true,
+		"skipLibCheck": true,
+		"strict": true,
+		"types": ["@cloudflare/workers-types", "@cloudflare/vitest-plugin/types"]
+	}
+}

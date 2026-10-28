@@ -1,4 +1,4 @@
-import { Database, PG, Repository, schema } from "@hazel/db"
+import { Database, SQLite, Repository, schema } from "@hazel/db"
 
 import { ChatSyncMessageLink } from "@hazel/domain/models"
 import type {
@@ -37,7 +37,7 @@ export class ChatSyncMessageLinkRepo extends Context.Service<ChatSyncMessageLink
 			const findByChannelLink = (channelLinkId: SyncChannelLinkId) =>
 				db
 					.run(
-						PG.from(schema.chatSyncMessageLinksTable)
+						SQLite.from(schema.chatSyncMessageLinksTable)
 							.select()
 							.where(($) => [$.channelLinkId.eq(channelLinkId), $.deletedAt.isNull()]),
 					)
@@ -46,7 +46,7 @@ export class ChatSyncMessageLinkRepo extends Context.Service<ChatSyncMessageLink
 			const findByHazelMessage = (channelLinkId: SyncChannelLinkId, hazelMessageId: MessageId) =>
 				db
 					.first(
-						PG.from(schema.chatSyncMessageLinksTable)
+						SQLite.from(schema.chatSyncMessageLinksTable)
 							.select()
 							.where(($) => [
 								$.channelLinkId.eq(channelLinkId),
@@ -63,7 +63,7 @@ export class ChatSyncMessageLinkRepo extends Context.Service<ChatSyncMessageLink
 			) =>
 				db
 					.first(
-						PG.from(schema.chatSyncMessageLinksTable)
+						SQLite.from(schema.chatSyncMessageLinksTable)
 							.select()
 							.where(($) => [
 								$.channelLinkId.eq(channelLinkId),
@@ -80,7 +80,7 @@ export class ChatSyncMessageLinkRepo extends Context.Service<ChatSyncMessageLink
 			) =>
 				db
 					.first(
-						PG.from(schema.chatSyncMessageLinksTable)
+						SQLite.from(schema.chatSyncMessageLinksTable)
 							.select()
 							.where(($) => [
 								$.channelLinkId.eq(channelLinkId),
@@ -92,7 +92,7 @@ export class ChatSyncMessageLinkRepo extends Context.Service<ChatSyncMessageLink
 
 			const updateLastSyncedAt = (id: SyncMessageLinkId) =>
 				db.run(
-					PG.update(schema.chatSyncMessageLinksTable)
+					SQLite.update(schema.chatSyncMessageLinksTable)
 						.set({
 							lastSyncedAt: new Date(),
 							updatedAt: new Date(),
@@ -103,7 +103,7 @@ export class ChatSyncMessageLinkRepo extends Context.Service<ChatSyncMessageLink
 
 			const softDelete = (id: SyncMessageLinkId) =>
 				db.run(
-					PG.update(schema.chatSyncMessageLinksTable)
+					SQLite.update(schema.chatSyncMessageLinksTable)
 						.set({
 							deletedAt: new Date(),
 							updatedAt: new Date(),

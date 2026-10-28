@@ -36,8 +36,6 @@ jobs:
               run: bun run build
               env:
                   VITE_BACKEND_URL: ${{ vars.VITE_BACKEND_URL }}
-                  VITE_CLUSTER_URL: ${{ vars.VITE_CLUSTER_URL }}
-                  VITE_ELECTRIC_URL: ${{ vars.VITE_ELECTRIC_URL }}
                   VITE_CLERK_PUBLISHABLE_KEY: ${{ vars.VITE_CLERK_PUBLISHABLE_KEY }}
                   VITE_R2_PUBLIC_URL: ${{ vars.VITE_R2_PUBLIC_URL }}
     typecheck:
@@ -118,47 +116,3 @@ jobs:
             - name: "Report Coverage"
               if: always()
               uses: davelosert/vitest-coverage-report-action@v2
-
-    electric-proxy-e2e:
-        runs-on: ubuntu-latest
-        timeout-minutes: 25
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
-
-            - name: Setup Bun
-              uses: oven-sh/setup-bun@v1
-              with:
-                  bun-version: latest
-
-            - name: Cache dependencies
-              uses: actions/cache@v4
-              with:
-                  path: |
-                      ~/.bun/install/cache
-                      node_modules
-                      */node_modules
-                  key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
-                  restore-keys: |
-                      ${{ runner.os }}-bun-
-
-            - name: Install dependencies
-              run: bun install --frozen-lockfile
-
-            - name: Docker preflight
-              run: |
-                  docker --version
-                  docker compose version
-
-            - name: Run electric-proxy E2E filter tests
-              run: bunx vitest run --config apps/electric-proxy/vitest.e2e.config.ts
-
-            - name: Docker diagnostics
-              if: always()
-              run: |
-                  docker compose ps
-                  docker compose logs postgres electric cache_redis --no-color
-
-            - name: Docker cleanup
-              if: always()
-              run: docker compose down -v --remove-orphans

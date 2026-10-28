@@ -1,37 +1,37 @@
 import { BotId, UserId } from "@hazel/schema"
-import * as PG from "@maple-dev/effect-orm/postgres"
-import { jsonb, now, timestamptz, uuid, varchar } from "./columns"
+import * as SQLite from "@maple-dev/effect-orm/sqlite"
+import { jsonb, randomUuid, timestamptz, uuid, varchar } from "./columns"
 import type { IntegrationConnection } from "./integration-connections"
 
 type IntegrationProvider = IntegrationConnection["provider"]
 
-export const botsTable = PG.table("bots", {
+export const botsTable = SQLite.table("bots", {
 	columns: {
-		id: PG.column(uuid(BotId), { defaultExpr: "gen_random_uuid()" }),
+		id: SQLite.column(uuid(BotId), { defaultExpr: randomUuid }),
 		userId: uuid(UserId),
 		createdBy: uuid(UserId),
 		name: varchar(100),
-		description: PG.nullable(PG.text),
-		webhookUrl: PG.nullable(PG.text),
-		apiTokenHash: PG.text,
-		scopes: PG.nullable(jsonb<string[]>()),
-		metadata: PG.nullable(jsonb<Record<string, any>>()),
-		isPublic: PG.column(PG.bool, { default: false }),
-		installCount: PG.column(PG.int4, { default: 0 }),
-		mentionable: PG.column(PG.bool, { default: false }),
-		allowedIntegrations: PG.column(PG.nullable(jsonb<IntegrationProvider[]>()), { default: [] }),
-		createdAt: PG.column(timestamptz, { defaultExpr: "now()" }),
-		updatedAt: PG.column(timestamptz, { defaultExpr: "now()" }),
-		deletedAt: PG.nullable(timestamptz),
+		description: SQLite.nullable(SQLite.text),
+		webhookUrl: SQLite.nullable(SQLite.text),
+		apiTokenHash: SQLite.text,
+		scopes: SQLite.nullable(jsonb<string[]>()),
+		metadata: SQLite.nullable(jsonb<Record<string, any>>()),
+		isPublic: SQLite.column(SQLite.boolean, { default: false }),
+		installCount: SQLite.column(SQLite.integer, { default: 0 }),
+		mentionable: SQLite.column(SQLite.boolean, { default: false }),
+		allowedIntegrations: SQLite.column(SQLite.nullable(jsonb<IntegrationProvider[]>()), { default: [] }),
+		createdAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		updatedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		deletedAt: SQLite.nullable(timestamptz),
 	},
 	primaryKey: ["id"],
-	uniqueConstraints: [PG.unique("bots_userId_unique", ["userId"])],
 	indexes: [
-		PG.index("bots_user_id_idx", ["userId"]),
-		PG.index("bots_created_by_idx", ["createdBy"]),
-		PG.index("bots_is_public_idx", ["isPublic"]),
-		PG.index("bots_deleted_at_idx", ["deletedAt"]),
+		SQLite.uniqueIndex("bots_userId_unique", ["userId"]),
+		SQLite.index("bots_user_id_idx", ["userId"]),
+		SQLite.index("bots_created_by_idx", ["createdBy"]),
+		SQLite.index("bots_is_public_idx", ["isPublic"]),
+		SQLite.index("bots_deleted_at_idx", ["deletedAt"]),
 	],
 })
-export type Bot = PG.SelectRowOf<typeof botsTable>
-export type NewBot = PG.InsertRowOf<typeof botsTable>
+export type Bot = SQLite.SelectRowOf<typeof botsTable>
+export type NewBot = SQLite.InsertRowOf<typeof botsTable>

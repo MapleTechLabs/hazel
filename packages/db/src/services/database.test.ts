@@ -1,35 +1,31 @@
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql"
-import type { ChannelId, OrganizationId } from "@hazel/schema"
+import type { D1ClientConfig } from "@effect/sql-d1/D1Client"
+import type { ChannelId, OrganizationId, UserId } from "@hazel/schema"
 import { Channel } from "@hazel/domain/models"
-import * as PG from "@maple-dev/effect-orm/postgres"
-import { Effect, Layer, Option, Redacted } from "effect"
+import { Effect, ManagedRuntime, Option } from "effect"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
-import { migrateUrl } from "../migrate"
+import { layerMemory } from "../node"
+import * as SQLite from "../sqlite"
 import * as schema from "../tables"
-import { Database, layer, sql } from "./database"
+import { Database, layerD1, sql } from "./database"
 import { makeRepository } from "./repository"
 
-let container: StartedPostgreSqlContainer
-let dbLayer: Layer.Layer<Database, unknown>
+let runtime: ManagedRuntime.ManagedRuntime<Database, never>
 
 beforeAll(async () => {
-	container = await new PostgreSqlContainer("postgres:17-alpine").start()
-	await Effect.runPromise(migrateUrl(container.getConnectionUri()))
-	dbLayer = layer({ url: Redacted.make(container.getConnectionUri()), ssl: false })
-	await run(
+	runtime = ManagedRuntime.make(layerMemory)
+	await runtime.runPromise(
 		Effect.gen(function* () {
 			const db = yield* Database
 			yield* db.execute(sql`CREATE TABLE _test_rollback (id TEXT PRIMARY KEY)`)
 		}),
 	)
-}, 120_000)
-
-afterAll(async () => {
-	await container?.stop()
 })
 
-const run = <A, E>(effect: Effect.Effect<A, E, Database>) =>
-	Effect.runPromise(effect.pipe(Effect.provide(dbLayer)) as Effect.Effect<A, E>)
+afterAll(async () => {
+	await runtime?.dispose()
+})
+
+const run = <A, E>(effect: Effect.Effect<A, E, Database>) => runtime.runPromise(effect)
 
 const countRows = (id: string) =>
 	Effect.gen(function* () {
@@ -130,9 +126,59 @@ describe("DatabaseError", () => {
 		)
 		expect(error._tag).toBe("DatabaseError")
 		expect(error.type).toBe("unique_violation")
-		expect(error.constraint).toBe("_test_rollback_pkey")
-		expect(error.sqlState).toBe("23505")
-		expect(error.detail).toBe(`Key (id)=(${id}) already exists.`)
+		expect(error.constraint).toBe("_test_rollback.id")
+		expect(error.sqlState).toBe("SQLITE_CONSTRAINT_PRIMARYKEY")
+	})
+
+	it("names a unique index from the columns SQLite reports", async () => {
+		const error = await run(
+			Effect.gen(function* () {
+				const db = yield* Database
+				const insert = db.run(
+					SQLite.insertInto(schema.organizationsTable).values({ name: "Acme", slug: "acme" }),
+				)
+				yield* insert
+				return yield* Effect.flip(insert)
+			}),
+		)
+		expect(error.type).toBe("unique_violation")
+		expect(error.constraint).toBe("organizations_slug_unique")
+		expect(error.detail).toBe("organizations.slug")
+	})
+
+	it("names a partial unique index", async () => {
+		const organizationId = crypto.randomUUID() as OrganizationId
+		const error = await run(
+			Effect.gen(function* () {
+				const db = yield* Database
+				const insert = db.run(
+					SQLite.insertInto(schema.customEmojisTable).values({
+						organizationId,
+						name: "party",
+						imageUrl: "https://example.com/party.png",
+						createdBy: crypto.randomUUID() as UserId,
+					}),
+				)
+				yield* insert
+				return yield* Effect.flip(insert)
+			}),
+		)
+		expect(error.constraint).toBe("custom_emojis_org_name_unique_idx")
+	})
+})
+
+describe("Database.layerD1", () => {
+	it("refuses a transaction before running its body", async () => {
+		let ran = false
+		// The binding is never reached: the transaction is refused first.
+		const error = await Effect.runPromise(
+			Effect.gen(function* () {
+				const database = yield* Database
+				return yield* Effect.flip(database.transaction(Effect.sync(() => (ran = true))))
+			}).pipe(Effect.provide(layerD1({} as D1ClientConfig["db"]))),
+		)
+		expect(error.type).toBe("query_error")
+		expect(ran).toBe(false)
 	})
 })
 
@@ -175,19 +221,19 @@ describe("Repository", () => {
 		expect(Option.isNone(result.afterDelete)).toBe(true)
 	})
 
-	it("reads typed rows with filters, ordering and jsonb", async () => {
+	it("reads typed rows with filters and ordering", async () => {
 		const organizationId = crypto.randomUUID() as OrganizationId
 		const rows = await run(
 			Effect.gen(function* () {
 				const db = yield* Database
 				yield* db.run(
-					PG.insertInto(schema.channelsTable).values([
+					SQLite.insertInto(schema.channelsTable).values([
 						{ name: "b", type: "public", organizationId },
 						{ name: "a", type: "private", organizationId },
 					]),
 				)
 				return yield* db.run(
-					PG.from(schema.channelsTable)
+					SQLite.from(schema.channelsTable)
 						.select("id", "name", "type")
 						.where(($) => [$.organizationId.eq(organizationId), $.deletedAt.isNull()])
 						.orderBy(["name", "asc"]),

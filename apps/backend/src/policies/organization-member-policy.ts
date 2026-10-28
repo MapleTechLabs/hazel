@@ -1,5 +1,6 @@
 import { OrganizationMemberRepo } from "@hazel/backend-core"
 import { ErrorUtils, policy } from "@hazel/domain"
+import type { OrganizationMember } from "@hazel/domain/models"
 import type { OrganizationId, OrganizationMemberId } from "@hazel/schema"
 import { Context, Effect, Layer, Option } from "effect"
 import { OrgResolver } from "../services/org-resolver"
@@ -39,7 +40,15 @@ export class OrganizationMemberPolicy extends Context.Service<OrganizationMember
 					),
 				)
 
-			const canUpdate = (id: OrganizationMemberId) =>
+			/**
+			 * A member may edit their own membership, admins and owners anyone's. A `role` change is
+			 * only for admins and owners: owners may set any role; admins may neither grant `owner`
+			 * nor change an owner's role. Pass the requested `role` (or none for other fields).
+			 */
+			const canUpdate = (
+				id: OrganizationMemberId,
+				change?: { readonly role?: OrganizationMember.OrganizationRole },
+			) =>
 				ErrorUtils.refailUnauthorized(
 					policyEntity,
 					"update",
@@ -49,22 +58,24 @@ export class OrganizationMemberPolicy extends Context.Service<OrganizationMember
 							policyEntity,
 							"update",
 							Effect.fn(`${policyEntity}.update`)(function* (actor) {
-								// Self-update always allowed
-								if (actor.id === member.userId) {
-									return yield* Effect.succeed(true)
-								}
-
-								// Admins can update other members
 								const currentMember = yield* organizationMemberRepo.findByOrgAndUser(
 									member.organizationId,
 									actor.id,
 								)
+								const actorRole = Option.map(currentMember, (row) => row.role)
+								const isOwner = Option.contains(actorRole, "owner")
+								const isAdmin = Option.contains(actorRole, "admin")
 
-								if (Option.isNone(currentMember)) {
-									return yield* Effect.succeed(false)
+								const role = change?.role
+								if (role !== undefined && role !== member.role) {
+									if (isOwner) return true
+									if (isAdmin) return role !== "owner" && member.role !== "owner"
+									// Members (and outsiders) may not change roles, their own included.
+									return false
 								}
 
-								return yield* Effect.succeed(currentMember.value.role === "admin")
+								if (actor.id === member.userId) return true
+								return isOwner || isAdmin
 							}),
 						),
 					),

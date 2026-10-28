@@ -1,4 +1,4 @@
-import { Database, PG, Repository, schema } from "@hazel/db"
+import { Database, SQLite, Repository, schema } from "@hazel/db"
 import type { ConnectInviteId, OrganizationId } from "@hazel/schema"
 import { ConnectInvite } from "@hazel/domain/models"
 import { Context, Effect, Layer } from "effect"
@@ -17,7 +17,7 @@ export class ConnectInviteRepo extends Context.Service<ConnectInviteRepo>()("Con
 
 		const findActiveById = (id: ConnectInviteId) =>
 			db.first(
-				PG.from(schema.connectInvitesTable)
+				SQLite.from(schema.connectInvitesTable)
 					.select()
 					.where(($) => [$.id.eq(id), $.deletedAt.isNull()])
 					.limit(1),
@@ -25,21 +25,21 @@ export class ConnectInviteRepo extends Context.Service<ConnectInviteRepo>()("Con
 
 		const listIncomingForOrganization = (organizationId: OrganizationId) =>
 			db.run(
-				PG.from(schema.connectInvitesTable)
+				SQLite.from(schema.connectInvitesTable)
 					.select()
 					.where(($) => [$.guestOrganizationId.eq(organizationId), $.deletedAt.isNull()]),
 			)
 
 		const listOutgoingForOrganization = (organizationId: OrganizationId) =>
 			db.run(
-				PG.from(schema.connectInvitesTable)
+				SQLite.from(schema.connectInvitesTable)
 					.select()
 					.where(($) => [$.hostOrganizationId.eq(organizationId), $.deletedAt.isNull()]),
 			)
 
 		const findPendingForGuestOrganization = (organizationId: OrganizationId) =>
 			db.run(
-				PG.from(schema.connectInvitesTable)
+				SQLite.from(schema.connectInvitesTable)
 					.select()
 					.where(($) => [
 						$.status.eq("pending"),

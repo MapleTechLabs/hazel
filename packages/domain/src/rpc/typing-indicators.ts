@@ -6,6 +6,7 @@ import { TypingIndicator } from "../models"
 import { TransactionId } from "@hazel/schema"
 import { AuthMiddleware } from "./middleware"
 import { RequiredScopes } from "../scopes/required-scopes"
+import { RouteChannelId } from "./routing-fields"
 
 /**
  * Response schema for successful typing indicator operations.
@@ -107,6 +108,7 @@ export class TypingIndicatorRpcs extends RpcGroup.make(
 	 */
 	Rpc.make("typingIndicator.update", {
 		payload: Schema.Struct({
+			channelId: RouteChannelId,
 			id: TypingIndicatorId,
 			lastTyped: Schema.optional(Schema.Number),
 		}),
@@ -129,7 +131,7 @@ export class TypingIndicatorRpcs extends RpcGroup.make(
 	 * @throws InternalServerError for unexpected errors
 	 */
 	Rpc.make("typingIndicator.delete", {
-		payload: Schema.Struct({ id: TypingIndicatorId }),
+		payload: Schema.Struct({ id: TypingIndicatorId, channelId: RouteChannelId }),
 		success: TypingIndicatorResponse,
 		error: Schema.Union([TypingIndicatorNotFoundError, UnauthorizedError, InternalServerError]),
 	})

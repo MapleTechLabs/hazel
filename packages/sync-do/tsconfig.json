@@ -1,0 +1,23 @@
+{
+	"include": ["src/**/*.ts", "vitest.config.ts", "vitest.workerd.config.ts"],
+	"compilerOptions": {
+		"target": "ES2022",
+		"module": "ESNext",
+		"lib": ["ES2023", "DOM", "DOM.Iterable"],
+		"moduleResolution": "bundler",
+		"allowImportingTsExtensions": true,
+		"verbatimModuleSyntax": true,
+		"noEmit": true,
+		"skipLibCheck": true,
+		"strict": true,
+		"types": ["node"],
+		"noFallthroughCasesInSwitch": true,
+		"noUncheckedSideEffectImports": true,
+		"plugins": [
+			{
+				"name": "@effect/language-service",
+				"reportSuggestionsAsWarningsInTsc": true
+			}
+		]
+	}
+}

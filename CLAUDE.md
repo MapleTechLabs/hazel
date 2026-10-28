@@ -7,10 +7,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This is a monorepo with the following structure:
 
 - `apps/web-foldkit/` - Web frontend built with Foldkit (Effect-based Elm architecture), Vite and TailwindCSS. Also the desktop app's webview
-- `apps/backend/` - Backend API and RPC (Effect-TS); runs on Bun locally and as a Cloudflare Worker
-- `apps/cluster/` - Effect Cluster service for distributed workflows and background jobs
-- `packages/db/` - Shared database package: effect-orm table definitions, the `Database` service, and migrations
-- `packages/domain/` - Shared domain types, RPC contracts, and cluster definitions
+- `apps/backend/` - The api Cloudflare Worker (Effect-TS): HTTP API, RPC, and the Durable Objects that hold the data (`src/worker/objects/`: `OrgObject`, `ChannelObject`, `UserObject`) over the directory D1 database
+- `apps/bot-gateway/` - Bot gateway Worker and its `BotGateway` Durable Object (one per bot)
+- `packages/db/` - Shared database package: effect-orm SQLite table definitions, the per-store table lists (`stores.ts`), the `Database` service, and the generated migrations
+- `packages/sync-do/` - Durable Object sync runtime: change triggers, `_changes` log, broadcaster, sockets, outbox and inbox
+- `packages/domain/` - Shared domain types, RPC and HTTP contracts, and the sync protocol (`src/sync/`)
+- `packages/infra/` - Alchemy stack helpers (stages, Worker props, env, the directory D1); the stack itself is the root `alchemy.run.ts`
 - `.context/` - Git Subtrees for context of how to use specific libraries (In this case Effect and Effect Atom)
 
 <!-- opensrc:start -->
@@ -61,11 +63,15 @@ When working with Effect, Effect Atom, or TanStack DB, refer to these directorie
 
 ## Development Commands
 
-**CRITICAL**: NEVER start the dev server - it should already be running! Do not run `bun run dev`, `PORT=3000 bun run dev`, or any variant of starting the dev server.
+**CRITICAL**: NEVER start the dev server - it should already be running! Do not run `bun run dev`, `bun run alchemy:dev`, `PORT=3000 bun run dev`, or any variant of starting the dev server.
+
+Local dev is `bun run alchemy:dev` (alias `bun run dev`): it runs every Worker in workerd, the Durable Objects and the directory D1 included (state in `.alchemy/`), plus the web app's Vite server. It reads only `.env.local` (see `.env.local.example`, or `bun run setup`); `docker compose up -d` starts MinIO for uploads. There is no Postgres, Electric or cluster.
 
 ### Root Level
 
-- `bun run dev` - Start all apps in development mode via Turbo (DO NOT USE - already running)
+- `bun run dev` / `bun run alchemy:dev` - Start the whole stack locally (DO NOT USE - already running)
+- `bun run alchemy:typecheck` - Typecheck the alchemy stack (`alchemy.run.ts`, `apps/*/alchemy.run.ts`)
+- `bun run setup` - Interactive setup: writes `.env.local` and the bots' `.env` files
 - `bun run build` - Build all apps and run typecheck
 - `bun run typecheck` - Run TypeScript typechecking across all packages
 - `bun run format` - Format code using Oxc (includes linting and auto-fixes)
@@ -82,22 +88,14 @@ When working with Effect, Effect Atom, or TanStack DB, refer to these directorie
 
 ### Backend (apps/backend)
 
-- `bun run dev` - Start backend with hot reload using Bun (DO NOT USE - already running)
-- `bun run typecheck` - TypeScript checking (Bun entry and the Worker's `tsconfig.worker.json`)
-- `bun run test` - Run the backend's Vitest suite (Postgres-backed tests start a Docker container; set `AUTH_TEST_DATABASE_URL` to use an existing database)
-- `bun run test:sync` / `bun run test:policies` - Chat-sync and outbox, or policy, tests only
-
-### Cluster (apps/cluster)
-
-- `bun run dev` - Start cluster service with hot reload on port 3020 (DO NOT USE - already running)
-- `bun run start` - Start cluster service in production mode
-- `bun run typecheck` - TypeScript checking
+- `bun run typecheck` - TypeScript checking (shared code, and the Worker graph under `tsconfig.worker.json`)
+- `bun run test` - Run the backend's Vitest suite (objects and repositories run on in-memory node SQLite)
+- `bun run test:sync` / `bun run test:policies` - Chat-sync, or policy, tests only
+- `bun run import-postgres -- --from <postgres url> --to <api url> --secret <IMPORT_SECRET> [--dry-run]` - One-shot import of the old Postgres data (cutover only)
 
 ### Database (packages/db)
 
-- `bun run db:migrate` - Apply migrations to `DATABASE_URL` (adopts a database `drizzle-kit push` built)
-- `bun run db:generate --name <name>` - Diff `src/tables` against the migrations and write the next one
-- `bun run db:check` / `db:status` / `db:verify` - Validate the folder, list applied migrations, compare with a live schema
+- `bun run db:generate-sqlite` - Regenerate every store's `0001_initial` (`src/migrations.generated.ts`) and the D1 copy in `migrations/directory/` from `src/tables`
 
 ## Tech Stack
 
@@ -108,26 +106,17 @@ When working with Effect, Effect Atom, or TanStack DB, refer to these directorie
 - **Routing**: Flat route union in `src/route.ts`
 - **Styling**: TailwindCSS v4, `tailwind-variants` styles in `src/core/components/ui/*.styles.ts`
 - **UI Components**: `src/ui/` on `@foldkit/ui`
-- **Data**: TanStack DB collections synced through Electric (`src/core/db/collections.ts`)
+- **Data**: TanStack DB collections synced from the Durable Objects over WebSockets (`src/core/db/collections.ts`, `libs/effect-db-collection`)
 - **Rich Text**: ProseMirror composer (`src/editor/`)
 - **Auth**: Hazel auth (`@yielded/auth`)
 
 ### Backend
 
-- **Runtime**: Bun
+- **Runtime**: Cloudflare Workers (the api Worker), deployed and run locally with Alchemy
 - **Framework**: Effect-TS for functional programming
-- **Database**: PostgreSQL with effect-orm (`@maple-dev/effect-orm`) over `@effect/sql-pg`
+- **Data**: SQLite everywhere through effect-orm (`@maple-dev/effect-orm`): each Durable Object's storage, and D1 for the global directory
 - **Auth**: Hazel auth (`@hazel/auth`, on `@yielded/auth`): GitHub/Google sign-in, passkeys, cookie sessions; Clerk is only used to verify Maple's OAuth tokens (`services/oauth-bearer-auth.ts`)
 - **API**: RPC-style endpoints via Effect Http Api
-
-### Cluster Service
-
-- **Runtime**: Bun
-- **Framework**: Effect Cluster + Effect Workflow
-- **Purpose**: Distributed workflows and background jobs
-- **Storage**: PostgreSQL-backed message persistence
-- **Communication**: BunClusterSocket for shard coordination
-- **API**: HTTP endpoints for workflow management (port 3020)
 
 ### Development Tools
 
@@ -157,10 +146,10 @@ Run `bun run format:fix` to apply formatting and fix linting issues automaticall
 import type { OrganizationId, ChannelId, UserId, MessageId } from "@hazel/schema"
 ```
 
-**`@hazel/domain`** - RPC, HTTP, Cluster contracts, and models:
+**`@hazel/domain`** - RPC and HTTP contracts, the sync protocol, and models:
 
 ```typescript
-import { Cluster, Rpc, Http } from "@hazel/domain"
+import { Rpc, Http, Sync } from "@hazel/domain"
 import { Message, Channel, User } from "@hazel/domain/models"
 ```
 
@@ -186,50 +175,53 @@ Available branded types in `@hazel/schema`: `OrganizationId`, `ChannelId`, `User
 
 ## Database
 
-Uses effect-orm (`@maple-dev/effect-orm`, source in `~/Documents/GitHub/effect-clickhouse`) over `@effect/sql-pg`. Tables are `PG.table` definitions in `packages/db/src/tables/`; migrations live in `packages/db/migrations/`.
+There is no central database. Data lives in SQLite stores (`infra/durable-object-sync-plan.md` §1), each with the table list in `packages/db/src/stores.ts`:
+
+- **directory** (D1 `DIRECTORY_DB`, global): users, `auth_*`, bots, bot commands, invitations, and the routing indexes (`org_index`, `membership_index`, `channel_index`, ...)
+- **org** (`OrgObject`, one per organization): organizations, members, channels, channel members, sections, `channel_access`, integrations, webhooks, Connect; plus read-only projections (`users`, presence, bots)
+- **channel** (`ChannelObject`, one per channel, threads too): messages, reactions, pins, attachments, typing; projections `channel_viewers`, `channel_bots`
+- **user** (`UserObject`, one per user): notifications, presence, `user_organizations`
+
+Uses effect-orm (`@maple-dev/effect-orm`, source in `~/Documents/GitHub/effect-clickhouse`). Tables are `SQLite.table` definitions in `packages/db/src/tables/`.
 
 ```typescript
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 
 const db = yield * Database.Database
 const channel =
 	yield *
 	db.first(
-		PG.from(schema.channelsTable)
+		SQLite.from(schema.channelsTable)
 			.select()
 			.where(($) => [$.id.eq(channelId), $.deletedAt.isNull()]),
 	)
-yield *
-	db.transaction(
-		Effect.gen(function* () {
-			/* every statement in here joins the transaction */
-		}),
-	)
 ```
 
-- `db.transaction(effect)` pins every statement inside `effect` (repositories included) to one connection through fiber context; there is no transaction handle to pass around.
-- Schema changes: edit `src/tables`, then `bun run db:generate --name <name>`. Enums are `PG.enumType`, unique constraints `PG.unique` in `uniqueConstraints`; `generate` migrates both. What effect-orm does not model (check constraints, removing or reordering enum labels) goes in a `--custom` migration.
+- Inside an object, `Database` is the object's own SQLite; on the api Worker it is D1. A handler touches only its own store and sends everything else through the outbox (`apps/backend/src/worker/objects/effects/`); a projection is written only by its owner's outbox deliveries.
+- `db.transaction(effect)` works on Durable Object SQLite; **D1 has no transactions** (it refuses), so directory writes are single statements or batches, and idempotent.
+- Schema changes: edit `src/tables`, then `bun run db:generate-sqlite`. Each object applies its store's migrations (`storeMigrations` in `schema-ddl.ts`) when it starts; alchemy applies the D1 migrations in `migrations/directory/` on deploy and under `alchemy dev`. `schema-ddl.test.ts` fails while the generated files are out of date. Once a store is deployed, append a migration instead of editing `0001_initial`.
 
 ## Architecture Notes
 
 - Backend follows Effect-TS patterns for error handling and dependency injection
-- Real-time features implemented via Cloudflare Realtimekit
+- Real-time sync: each object streams its tables to the client over a WebSocket (`GET /sync/:kind/:id`, `apps/backend/src/worker/sync-route.ts`); change triggers feed a `_changes` log, and RPC results carry a `transactionId` the client awaits (`packages/sync-do`)
+- RPCs: the api Worker authenticates and routes each RPC to its object (`org`, `channel`, `user`) or runs it against D1 (`apps/backend/src/rpc/routing.ts`); the handlers in `apps/backend/src/rpc/handlers` run inside the objects, and authorization runs there too
+- Background work runs in the objects: outbox deliveries, alarms (RSS polling, typing expiry, upload cleanup, presence), thread naming
 - Authentication handled by Hazel auth (`packages/auth`); the RPC and HttpApi middlewares resolve the session cookie, a session bearer credential (native clients) or a bot token to `CurrentUser`
 - Shared database package ensures type safety between frontend and backend
 - Domain package (`packages/domain/`) contains shared contracts:
     - RPC definitions for client-server communication
     - HTTP API definitions
-    - Cluster entity and workflow definitions (importable by both frontend and cluster service)
+    - The sync protocol frames (`src/sync/`)
     - Shared error types and data models
 
-### Electric SQL Proxy — Required When Adding New Collections
+### Adding a Synced Table
 
-**IMPORTANT**: When adding a new Electric-synced collection on the frontend (`apps/web-foldkit/src/core/db/collections.ts`), you **must also** update the Electric proxy to allow the table:
+A table the client syncs needs all of:
 
-1. **Add to `ALLOWED_TABLES`** in `apps/electric-proxy/src/tables/user-tables.ts`
-2. **Add a `Match.when` case** in `getWhereClauseForTable` in the same file, using the appropriate WHERE clause builder (e.g., `buildOrgMembershipClause` for org-scoped tables, `buildChannelAccessClause` for channel-scoped tables)
-
-Without both changes, Electric sync requests for the new table will be rejected by the proxy.
+1. **The store**: add the table to its store's list in `packages/db/src/stores.ts` (and a projection's to each store it is copied into), then run `bun run db:generate-sqlite`.
+2. **The sync source**: add a `SyncTableSpec` (the table, its per-principal `visible` condition, `dependsOn`) to the object's source in `apps/backend/src/worker/objects/sources/` (`org-source.ts`, `channel-source.ts`, `user-source.ts`). A table that is not listed there is never streamed.
+3. **The collection**: add it in `apps/web-foldkit/src/core/db/collections.ts` (`orgCollection`, `channelCollectionOf`, or a `userSources` collection).
 
 ## Effect-TS Best Practices
 
@@ -365,175 +357,6 @@ Use Brandfetch CDN for integration brand logos/icons. See `apps/web-foldkit/src/
 ```typescript
 // For small inline icons, use type="icon"
 <img src="https://cdn.brandfetch.io/linear.app/w/64/h/64/theme/dark/icon" alt="Linear" className="size-4" />
-```
-
-## Effect Cluster Architecture
-
-The cluster service provides durable, distributed workflow execution:
-
-### Domain Pattern for Cluster
-
-**Definitions (packages/domain/src/cluster/):**
-
-- `entities/` - Entity RPC definitions (client-importable)
-- `workflows/` - Workflow type definitions
-- `activities/` - Activity payload/result schemas
-- `errors.ts` - Cluster-specific error types
-
-**Implementations (apps/cluster/src/):**
-
-- `entities/` - Entity handler implementations
-- `workflows/` - Workflow handler implementations
-- `index.ts` - Cluster server setup and HTTP API
-
-### Available Workflows
-
-**MessageNotificationWorkflow**: Creates notifications for new messages
-
-- Triggered when a message is created in a channel
-- Queries channel members with notifications enabled (`isMuted = false`)
-- Excludes the message author from notifications
-- Creates notification entries in the `notifications` table
-- Increments `notificationCount` for each notified member
-- Uses idempotency key (messageId) to process each message only once
-- Activities:
-    - **GetChannelMembers**: Queries eligible members from `channel_members` table
-    - **CreateNotifications**: Batch creates notifications and updates counters
-
-### Workflow Execution
-
-Workflows can be triggered via HTTP API:
-
-```bash
-POST http://localhost:3020/workflows/MessageNotificationWorkflow/execute
-{
-  "id": "msg-uuid-123",
-  "messageId": "msg-uuid-123",
-  "channelId": "channel-uuid-456",
-  "authorId": "user-uuid-789"
-}
-```
-
-Or from backend code (typically in message creation handler):
-
-```typescript
-import { WorkflowClient } from "@hazel/cluster"
-
-// After creating a message, enqueue an outbox event and let the backend dispatcher trigger workflows
-yield *
-	WorkflowClient.pipe(
-		Effect.flatMap((client) =>
-			client.workflows.MessageNotificationWorkflow.execute({
-				id: message.id, // Execution ID (use message ID for idempotency)
-				messageId: message.id,
-				channelId: message.channelId,
-				authorId: message.authorId,
-			}),
-		),
-	)
-```
-
-### Adding New Workflows
-
-1. **Define in domain** (`packages/domain/src/cluster/workflows/`):
-
-    ```typescript
-    import { Workflow } from "@effect/cluster"
-    import { Schema } from "effect"
-
-    export const MyWorkflow = Workflow.make({
-    	name: "MyWorkflow",
-    	payload: {
-    		id: Schema.String,
-    		// ... other payload fields
-    	},
-    	idempotencyKey: ({ id }) => id,
-    })
-    ```
-
-2. **Define activity schemas** (`packages/domain/src/cluster/activities/`):
-
-    ```typescript
-    export const MyActivityResult = Schema.Struct({
-    	resultField: Schema.String,
-    })
-
-    export class MyActivityError extends Schema.TaggedError<MyActivityError>()("MyActivityError", {
-    	message: Schema.String,
-    }) {}
-    ```
-
-3. **Implement in cluster** (`apps/cluster/src/workflows/`):
-
-    ```typescript
-    import { Activity } from "@effect/workflow"
-    import { Cluster } from "@hazel/domain"
-    import { Effect } from "effect"
-
-    export const MyWorkflowLayer = Cluster.MyWorkflow.toLayer(
-    	Effect.fn(function* (payload) {
-    		// Use activities with proper schemas
-    		const result = yield* Activity.make({
-    			name: "MyActivity",
-    			success: Cluster.MyActivityResult, // REQUIRED
-    			error: Cluster.MyActivityError, // REQUIRED
-    			execute: Effect.gen(function* () {
-    				// Activity implementation
-    				return { resultField: "value" }
-    			}),
-    		})
-
-    		// Use result (properly typed)
-    		yield* Effect.log(result.resultField)
-    	}),
-    )
-    ```
-
-4. **Register** in `apps/cluster/src/index.ts`:
-
-    ```typescript
-    import { MyWorkflowLayer } from "./workflows/index.ts"
-
-    const workflows = [Cluster.MyWorkflow, ...] as const
-    const AllWorkflows = Layer.mergeAll(MyWorkflowLayer, ...)
-    ```
-
-### Important Workflow Patterns
-
-**Always include success/error schemas in Activity.make**:
-
-```typescript
-// ❌ WRONG - Missing schemas
-yield* Activity.make({
-  name: "SendEmail",
-  execute: Effect.gen(...)
-})
-
-// ✅ CORRECT - Includes schemas
-yield* Activity.make({
-  name: "SendEmail",
-  success: EmailSentResult,
-  error: EmailSendError,
-  execute: Effect.gen(...)
-})
-```
-
-**Database access in workflows**:
-
-```typescript
-import { PgClient } from "@effect/sql-pg"
-
-yield *
-	Activity.make({
-		name: "QueryDatabase",
-		success: QueryResult,
-		error: DatabaseError,
-		execute: Effect.gen(function* () {
-			const sql = yield* PgClient.PgClient
-			const rows = yield* sql`SELECT * FROM table WHERE id = ${id}`.pipe(Effect.orDie)
-			return rows
-		}),
-	})
 ```
 
 ## Design Context

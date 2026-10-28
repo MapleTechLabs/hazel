@@ -1,8 +1,14 @@
-import { ChannelMemberRepo, TypingIndicatorRepo } from "@hazel/backend-core"
-import type { ChannelId, ChannelMemberId, TypingIndicatorId } from "@hazel/schema"
-import { Context, Effect, Layer, Option } from "effect"
-import { makePolicy, withPolicyUnauthorized } from "../lib/policy-utils"
+import { TypingIndicatorRepo } from "@hazel/backend-core"
+import type { ChannelId, TypingIndicatorId } from "@hazel/schema"
+import { Context, Effect, Layer } from "effect"
+import { makePolicy, withAnnotatedScope, withPolicyUnauthorized } from "../lib/policy-utils"
+import { ChannelViewers } from "../services/channel-viewers"
 
+/**
+ * Typing authorization, run inside the channel's `ChannelObject`: any viewer of the channel.
+ * An indicator's `memberId` is a `channel_members` row of the `OrgObject`, which this object
+ * cannot resolve to a user, so the viewer is trusted with it (indicators expire in 10 s).
+ */
 export class TypingIndicatorPolicy extends Context.Service<TypingIndicatorPolicy>()(
 	"TypingIndicatorPolicy/Policy",
 	{
@@ -10,44 +16,32 @@ export class TypingIndicatorPolicy extends Context.Service<TypingIndicatorPolicy
 			const policyEntity = "TypingIndicator" as const
 			const authorize = makePolicy(policyEntity)
 
-			const channelMemberRepo = yield* ChannelMemberRepo
+			const channelViewers = yield* ChannelViewers
 			const typingIndicatorRepo = yield* TypingIndicatorRepo
+
+			const viewerOf = (action: string, channelId: ChannelId) =>
+				withPolicyUnauthorized(
+					policyEntity,
+					action,
+					withAnnotatedScope((scope) => Effect.asVoid(channelViewers.require(channelId, scope))),
+				)
 
 			const canRead = (_id: TypingIndicatorId) => authorize("select", () => Effect.succeed(true))
 
-			const canCreate = (channelId: ChannelId) =>
-				authorize("create", (actor) =>
-					channelMemberRepo
-						.findByChannelAndUser(channelId, actor.id)
-						.pipe(Effect.map(Option.isSome)),
-				)
+			const canCreate = (channelId: ChannelId) => viewerOf("create", channelId)
 
 			const canUpdate = (id: TypingIndicatorId) =>
 				withPolicyUnauthorized(
 					policyEntity,
 					"update",
-					typingIndicatorRepo.with(id, (indicator) =>
-						channelMemberRepo.with(indicator.memberId, (member) =>
-							authorize("update", (actor) => Effect.succeed(actor.id === member.userId)),
-						),
-					),
+					typingIndicatorRepo.with(id, (indicator) => viewerOf("update", indicator.channelId)),
 				)
 
-			const canDelete = (data: { memberId: ChannelMemberId } | { id: TypingIndicatorId }) =>
+			const canDelete = (id: TypingIndicatorId) =>
 				withPolicyUnauthorized(
 					policyEntity,
 					"delete",
-					"memberId" in data
-						? channelMemberRepo.with(data.memberId, (member) =>
-								authorize("delete", (actor) => Effect.succeed(member.userId === actor.id)),
-							)
-						: typingIndicatorRepo.with(data.id, (indicator) =>
-								channelMemberRepo.with(indicator.memberId, (member) =>
-									authorize("delete", (actor) =>
-										Effect.succeed(member.userId === actor.id),
-									),
-								),
-							),
+					typingIndicatorRepo.with(id, (indicator) => viewerOf("delete", indicator.channelId)),
 				)
 
 			return { canCreate, canUpdate, canDelete, canRead } as const
@@ -55,7 +49,7 @@ export class TypingIndicatorPolicy extends Context.Service<TypingIndicatorPolicy
 	},
 ) {
 	static readonly layer = Layer.effect(this, this.make).pipe(
-		Layer.provide(ChannelMemberRepo.layer),
+		Layer.provide(ChannelViewers.layer),
 		Layer.provide(TypingIndicatorRepo.layer),
 	)
 }

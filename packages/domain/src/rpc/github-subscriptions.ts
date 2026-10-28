@@ -7,6 +7,7 @@ import { TransactionId } from "@hazel/schema"
 import { ChannelNotFoundError } from "./channels"
 import { AuthMiddleware } from "./middleware"
 import { RequiredScopes } from "../scopes/required-scopes"
+import { RouteOrganizationId } from "./routing-fields"
 
 /**
  * Response schema for GitHub subscription operations.
@@ -132,7 +133,7 @@ export class GitHubSubscriptionRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user is not authenticated
 	 */
 	Rpc.make("githubSubscription.listByOrganization", {
-		payload: Schema.Struct({}),
+		payload: Schema.Struct({ organizationId: RouteOrganizationId }),
 		success: GitHubSubscriptionListResponse,
 		error: Schema.Union([UnauthorizedError, InternalServerError]),
 	})
@@ -151,6 +152,7 @@ export class GitHubSubscriptionRpcs extends RpcGroup.make(
 	 */
 	Rpc.make("githubSubscription.update", {
 		payload: Schema.Struct({
+			organizationId: RouteOrganizationId,
 			id: GitHubSubscriptionId,
 			enabledEvents: Schema.optional(GitHubSubscription.GitHubEventTypes),
 			branchFilter: Schema.optional(Schema.NullOr(Schema.String)),
@@ -173,7 +175,7 @@ export class GitHubSubscriptionRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user is not authorized
 	 */
 	Rpc.make("githubSubscription.delete", {
-		payload: Schema.Struct({ id: GitHubSubscriptionId }),
+		payload: Schema.Struct({ id: GitHubSubscriptionId, organizationId: RouteOrganizationId }),
 		success: Schema.Struct({ transactionId: TransactionId }),
 		error: Schema.Union([GitHubSubscriptionNotFoundError, UnauthorizedError, InternalServerError]),
 	})

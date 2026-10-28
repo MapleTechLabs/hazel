@@ -1,0 +1,26 @@
+{
+	"name": "@hazel/effect-db-collection",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"sideEffects": false,
+	"main": "src/index.ts",
+	"exports": {
+		".": "./src/index.ts",
+		"./testing": "./src/testing/fake-websocket.ts"
+	},
+	"scripts": {
+		"test": "npx vitest --run",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@hazel/domain": "workspace:*",
+		"@standard-schema/spec": "^1.1.0",
+		"@tanstack/db": "0.11.3",
+		"effect": "catalog:effect"
+	},
+	"devDependencies": {
+		"@vitest/coverage-istanbul": "^4.0.17",
+		"typescript": "catalog:tooling"
+	}
+}

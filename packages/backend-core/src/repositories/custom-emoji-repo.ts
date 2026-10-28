@@ -1,4 +1,4 @@
-import { Database, PG, Repository, schema } from "@hazel/db"
+import { Database, SQLite, Repository, schema } from "@hazel/db"
 
 import type { CustomEmojiId, OrganizationId } from "@hazel/schema"
 import { CustomEmoji } from "@hazel/domain/models"
@@ -18,7 +18,7 @@ export class CustomEmojiRepo extends Context.Service<CustomEmojiRepo>()("CustomE
 
 		const findByOrgAndName = (organizationId: OrganizationId, name: string) =>
 			db.first(
-				PG.from(schema.customEmojisTable)
+				SQLite.from(schema.customEmojisTable)
 					.select()
 					.where(($) => [
 						$.organizationId.eq(organizationId),
@@ -30,7 +30,7 @@ export class CustomEmojiRepo extends Context.Service<CustomEmojiRepo>()("CustomE
 
 		const findDeletedByOrgAndName = (organizationId: OrganizationId, name: string) =>
 			db.first(
-				PG.from(schema.customEmojisTable)
+				SQLite.from(schema.customEmojisTable)
 					.select()
 					.where(($) => [
 						$.organizationId.eq(organizationId),
@@ -42,7 +42,7 @@ export class CustomEmojiRepo extends Context.Service<CustomEmojiRepo>()("CustomE
 
 		const restore = (id: CustomEmojiId, imageUrl?: string) =>
 			db.first(
-				PG.update(schema.customEmojisTable)
+				SQLite.update(schema.customEmojisTable)
 					.set({
 						deletedAt: null,
 						updatedAt: new Date(),
@@ -54,7 +54,7 @@ export class CustomEmojiRepo extends Context.Service<CustomEmojiRepo>()("CustomE
 
 		const softDelete = (id: CustomEmojiId) =>
 			db.first(
-				PG.update(schema.customEmojisTable)
+				SQLite.update(schema.customEmojisTable)
 					.set({ deletedAt: new Date() })
 					.where(($) => [$.id.eq(id), $.deletedAt.isNull()])
 					.returning(),

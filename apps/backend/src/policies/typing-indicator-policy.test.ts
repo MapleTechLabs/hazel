@@ -1,213 +1,36 @@
 import { describe, expect, it } from "@effect/vitest"
-import { ChannelMemberRepo, TypingIndicatorRepo } from "@hazel/backend-core"
-import { UnauthorizedError } from "@hazel/domain"
-import type { ChannelId, ChannelMemberId, TypingIndicatorId, UserId } from "@hazel/schema"
-import { Effect, Result, Layer, Option } from "effect"
+import type { TypingIndicatorId, UserId } from "@hazel/schema"
+import { Result } from "effect"
+import { CHANNEL_ID, channelObjectLayer } from "./channel-object-test-helpers.ts"
+import { makeActor, runWithActorEither } from "./policy-test-helpers.ts"
 import { TypingIndicatorPolicy } from "./typing-indicator-policy.ts"
-import {
-	makeActor,
-	makeEntityNotFound,
-	runWithActorEither,
-	serviceShape,
-	TEST_ORG_ID,
-} from "./policy-test-helpers.ts"
 
-const CHANNEL_ID = "00000000-0000-4000-8000-000000000501" as ChannelId
-const MEMBER_ID = "00000000-0000-4000-8000-000000000601" as ChannelMemberId
-const OTHER_MEMBER_ID = "00000000-0000-4000-8000-000000000602" as ChannelMemberId
-const INDICATOR_ID = "00000000-0000-4000-8000-000000000701" as TypingIndicatorId
-const MISSING_INDICATOR_ID = "00000000-0000-4000-8000-000000000799" as TypingIndicatorId
+const VIEWER = "00000000-0000-4000-8000-000000000931" as UserId
+const OUTSIDER = "00000000-0000-4000-8000-000000000932" as UserId
+const INDICATOR_ID = "00000000-0000-4000-8000-000000000933" as TypingIndicatorId
+const MISSING_ID = "00000000-0000-4000-8000-000000000934" as TypingIndicatorId
 
-type MemberRecord = {
-	id: ChannelMemberId
-	channelId: ChannelId
-	userId: UserId
-	organizationId: typeof TEST_ORG_ID
-}
-type IndicatorRecord = { id: TypingIndicatorId; memberId: ChannelMemberId; channelId: ChannelId }
+const layer = () =>
+	channelObjectLayer(TypingIndicatorPolicy.layer, { [VIEWER]: "member" }, [
+		(sql) =>
+			sql`INSERT INTO typing_indicators (id, channelId, memberId, lastTyped) VALUES (${INDICATOR_ID}, ${CHANNEL_ID}, ${crypto.randomUUID()}, 0)`,
+	])
 
-const makeChannelMemberRepoLayer = (
-	recordsByMemberId: Record<string, MemberRecord>,
-	recordsByChannelAndUser: Record<string, MemberRecord>,
-) =>
-	Layer.succeed(
-		ChannelMemberRepo,
-		serviceShape<typeof ChannelMemberRepo>({
-			findByChannelAndUser: (channelId: ChannelId, userId: UserId) =>
-				Effect.succeed(Option.fromNullishOr(recordsByChannelAndUser[`${channelId}:${userId}`])),
-			with: <A, E, R>(id: ChannelMemberId, f: (member: MemberRecord) => Effect.Effect<A, E, R>) => {
-				const member = recordsByMemberId[id]
-				if (!member) {
-					return Effect.fail(makeEntityNotFound("ChannelMember"))
-				}
-				return f(member)
-			},
-		}),
-	)
+const run = (actor: UserId, use: Parameters<typeof TypingIndicatorPolicy.use>[0]) =>
+	runWithActorEither(TypingIndicatorPolicy.use(use), layer(), makeActor({ id: actor }), [
+		"typing-indicators:write",
+	])
 
-const makeTypingIndicatorRepoLayer = (recordsById: Record<string, IndicatorRecord>) =>
-	Layer.succeed(
-		TypingIndicatorRepo,
-		serviceShape<typeof TypingIndicatorRepo>({
-			with: <A, E, R>(
-				id: TypingIndicatorId,
-				f: (indicator: IndicatorRecord) => Effect.Effect<A, E, R>,
-			) => {
-				const indicator = recordsById[id]
-				if (!indicator) {
-					return Effect.fail(makeEntityNotFound("TypingIndicator"))
-				}
-				return f(indicator)
-			},
-		}),
-	)
-
-const makePolicyLayer = (
-	channelMembersById: Record<string, MemberRecord>,
-	channelMembersByChannelAndUser: Record<string, MemberRecord>,
-	indicatorsById: Record<string, IndicatorRecord>,
-) =>
-	Layer.effect(TypingIndicatorPolicy, TypingIndicatorPolicy.make).pipe(
-		Layer.provide(makeChannelMemberRepoLayer(channelMembersById, channelMembersByChannelAndUser)),
-		Layer.provide(makeTypingIndicatorRepoLayer(indicatorsById)),
-	)
-
-describe("TypingIndicatorPolicy", () => {
-	it("canRead always allows authenticated actors", async () => {
-		const layer = makePolicyLayer({}, {}, {})
-		const result = await runWithActorEither(
-			TypingIndicatorPolicy.use((policy) => policy.canRead(INDICATOR_ID)),
-			layer,
-		)
-		expect(Result.isSuccess(result)).toBe(true)
+describe("TypingIndicatorPolicy (ChannelObject)", () => {
+	it("a viewer may type, update and delete", async () => {
+		expect(Result.isSuccess(await run(VIEWER, (policy) => policy.canCreate(CHANNEL_ID)))).toBe(true)
+		expect(Result.isSuccess(await run(VIEWER, (policy) => policy.canUpdate(INDICATOR_ID)))).toBe(true)
+		expect(Result.isSuccess(await run(VIEWER, (policy) => policy.canDelete(INDICATOR_ID)))).toBe(true)
 	})
 
-	it("canCreate requires channel membership", async () => {
-		const actor = makeActor()
-		const layer = makePolicyLayer(
-			{},
-			{
-				[`${CHANNEL_ID}:${actor.id}`]: {
-					id: MEMBER_ID,
-					channelId: CHANNEL_ID,
-					userId: actor.id,
-					organizationId: TEST_ORG_ID,
-				},
-			},
-			{},
-		)
-
-		const allowed = await runWithActorEither(
-			TypingIndicatorPolicy.use((policy) => policy.canCreate(CHANNEL_ID)),
-			layer,
-			actor,
-		)
-		const denied = await runWithActorEither(
-			TypingIndicatorPolicy.use((policy) =>
-				policy.canCreate("00000000-0000-4000-8000-000000000599" as ChannelId),
-			),
-			layer,
-			actor,
-		)
-
-		expect(Result.isSuccess(allowed)).toBe(true)
-		expect(Result.isFailure(denied)).toBe(true)
-	})
-
-	it("canUpdate allows only the member owner and maps missing indicator to UnauthorizedError", async () => {
-		const actor = makeActor()
-		const otherActor = makeActor({
-			id: "00000000-0000-4000-8000-000000000103" as UserId,
-		})
-
-		const layer = makePolicyLayer(
-			{
-				[MEMBER_ID]: {
-					id: MEMBER_ID,
-					channelId: CHANNEL_ID,
-					userId: actor.id,
-					organizationId: TEST_ORG_ID,
-				},
-			},
-			{},
-			{
-				[INDICATOR_ID]: {
-					id: INDICATOR_ID,
-					memberId: MEMBER_ID,
-					channelId: CHANNEL_ID,
-				},
-			},
-		)
-
-		const ownerAllowed = await runWithActorEither(
-			TypingIndicatorPolicy.use((policy) => policy.canUpdate(INDICATOR_ID)),
-			layer,
-			actor,
-		)
-		const otherDenied = await runWithActorEither(
-			TypingIndicatorPolicy.use((policy) => policy.canUpdate(INDICATOR_ID)),
-			layer,
-			otherActor,
-		)
-		const missingDenied = await runWithActorEither(
-			TypingIndicatorPolicy.use((policy) => policy.canUpdate(MISSING_INDICATOR_ID)),
-			layer,
-			actor,
-		)
-
-		expect(Result.isSuccess(ownerAllowed)).toBe(true)
-		expect(Result.isFailure(otherDenied)).toBe(true)
-		expect(Result.isFailure(missingDenied)).toBe(true)
-		if (Result.isFailure(missingDenied)) {
-			expect(UnauthorizedError.is(missingDenied.failure)).toBe(true)
-		}
-	})
-
-	it("canDelete works for both memberId and indicatorId variants", async () => {
-		const actor = makeActor()
-		const layer = makePolicyLayer(
-			{
-				[MEMBER_ID]: {
-					id: MEMBER_ID,
-					channelId: CHANNEL_ID,
-					userId: actor.id,
-					organizationId: TEST_ORG_ID,
-				},
-				[OTHER_MEMBER_ID]: {
-					id: OTHER_MEMBER_ID,
-					channelId: CHANNEL_ID,
-					userId: "00000000-0000-4000-8000-000000000109" as UserId,
-					organizationId: TEST_ORG_ID,
-				},
-			},
-			{},
-			{
-				[INDICATOR_ID]: {
-					id: INDICATOR_ID,
-					memberId: MEMBER_ID,
-					channelId: CHANNEL_ID,
-				},
-			},
-		)
-
-		const byMemberAllowed = await runWithActorEither(
-			TypingIndicatorPolicy.use((policy) => policy.canDelete({ memberId: MEMBER_ID })),
-			layer,
-			actor,
-		)
-		const byIndicatorAllowed = await runWithActorEither(
-			TypingIndicatorPolicy.use((policy) => policy.canDelete({ id: INDICATOR_ID })),
-			layer,
-			actor,
-		)
-		const byMemberDenied = await runWithActorEither(
-			TypingIndicatorPolicy.use((policy) => policy.canDelete({ memberId: OTHER_MEMBER_ID })),
-			layer,
-			actor,
-		)
-
-		expect(Result.isSuccess(byMemberAllowed)).toBe(true)
-		expect(Result.isSuccess(byIndicatorAllowed)).toBe(true)
-		expect(Result.isFailure(byMemberDenied)).toBe(true)
+	it("a non-viewer may not, and a missing indicator is refused", async () => {
+		expect(Result.isFailure(await run(OUTSIDER, (policy) => policy.canCreate(CHANNEL_ID)))).toBe(true)
+		expect(Result.isFailure(await run(OUTSIDER, (policy) => policy.canUpdate(INDICATOR_ID)))).toBe(true)
+		expect(Result.isFailure(await run(VIEWER, (policy) => policy.canDelete(MISSING_ID)))).toBe(true)
 	})
 })

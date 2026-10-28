@@ -1,33 +1,31 @@
 /**
- * The database every Hazel service codes against: effect-orm over `@effect/sql-pg`.
+ * The database every Hazel service codes against: effect-orm over SQLite (a Durable Object's
+ * storage, D1, or node SQLite in tests).
  *
  * Statements are Effects over the typed tables in `@hazel/db/tables`:
  *
  *     const db = yield* Database.Database
- *     const rows = yield* db.run(PG.from(schema.channelsTable).select().where(($) => [$.id.eq(id)]))
+ *     const rows = yield* db.run(SQLite.from(schema.channelsTable).select().where(($) => [$.id.eq(id)]))
  *
- * `db.transaction(effect)` pins every statement in `effect` to one connection through fiber context,
- * so repositories and helpers need no transaction handle: whatever runs inside the transaction
- * joins it.
+ * `db.transaction(effect)` runs every statement in `effect` in one transaction through fiber
+ * context, so repositories and helpers need no transaction handle. D1 has no transactions: there
+ * `transaction` fails with a `query_error` before running its body.
  */
-import * as PgClient from "@effect/sql-pg/PgClient"
+import * as D1Client from "@effect/sql-d1/D1Client"
 import * as Orm from "@maple-dev/effect-orm/database"
 import { sql } from "@maple-dev/effect-orm/database"
-import { CompiledQueryDecodeError, postgresDialect, QueryBuilderError } from "@maple-dev/effect-orm/postgres"
 import {
-	Cause,
-	Context,
-	Duration,
-	Effect,
-	Layer,
-	Option,
-	Redacted,
-	Schedule,
-	Schema,
-	type Scope,
-} from "effect"
+	CompiledQueryDecodeError,
+	d1Dialect,
+	QueryBuilderError,
+	sqliteDialect,
+	type SqliteSchemaTable,
+} from "@maple-dev/effect-orm/sqlite"
+import { Cause, Context, Effect, Layer, Option, Schema } from "effect"
 import * as SqlClient from "effect/sql/SqlClient"
 import { SqlError } from "effect/sql/SqlError"
+import { extraIndexes } from "../tables/extra-indexes"
+import * as schema from "../tables"
 
 const DatabaseErrorType = Schema.Literals([
 	"unique_violation",
@@ -43,9 +41,14 @@ const DatabaseErrorType = Schema.Literals([
 export class DatabaseError extends Schema.TaggedError<DatabaseError>()("DatabaseError", {
 	type: DatabaseErrorType,
 	message: Schema.String,
+	/** SQLite's extended result code name, e.g. `SQLITE_CONSTRAINT_UNIQUE`, when known. */
 	sqlState: Schema.optional(Schema.String),
+	/**
+	 * The violated unique index (`organizations_slug_unique`) when its columns name one, else the
+	 * columns SQLite reported (`organizations.slug`).
+	 */
 	constraint: Schema.optional(Schema.String),
-	/** Postgres's DETAIL line, e.g. `Key (slug)=(acme) already exists.` */
+	/** The columns SQLite reported, e.g. `organizations.slug`. */
 	detail: Schema.optional(Schema.String),
 	cause: Schema.Defect(),
 }) {
@@ -54,29 +57,101 @@ export class DatabaseError extends Schema.TaggedError<DatabaseError>()("Database
 	}
 }
 
-/** Walks a driver error chain (`SqlError` → reason → the server's error) for a string field. */
-const findField = (cause: unknown, field: string): string | undefined => {
+/** The next error in a chain: a `SqlError`'s reason, else the `cause`. */
+const innerOf = (record: Record<string, unknown>): unknown =>
+	typeof record.reason === "object" && record.reason !== null ? record.reason : record.cause
+
+/** Every message in a driver error chain (`SqlError` → reason → the driver's error), outermost first. */
+const messagesOf = (cause: unknown): ReadonlyArray<string> => {
+	const messages: Array<string> = []
 	let current: unknown = cause
 	for (let depth = 0; depth < 8 && typeof current === "object" && current !== null; depth++) {
-		const value = (current as Record<string, unknown>)[field]
-		if (typeof value === "string" && value.length > 0) return value
-		const next =
-			"reason" in current && typeof current.reason === "object"
-				? current.reason
-				: "cause" in current
-					? current.cause
-					: undefined
+		const record = current as Record<string, unknown>
+		if (typeof record.message === "string") messages.push(record.message)
+		const next = innerOf(record)
+		if (next === undefined || next === current) break
+		current = next
+	}
+	return messages
+}
+
+/** SQLite's numeric extended result code, when the driver kept one (`errcode` on node:sqlite). */
+const errcodeOf = (cause: unknown): number | undefined => {
+	let current: unknown = cause
+	for (let depth = 0; depth < 8 && typeof current === "object" && current !== null; depth++) {
+		const record = current as Record<string, unknown>
+		for (const field of ["errcode", "errno"]) {
+			if (typeof record[field] === "number") return record[field] as number
+		}
+		const next = innerOf(record)
 		if (next === undefined || next === current) break
 		current = next
 	}
 	return undefined
 }
 
-const classify = (sqlState: string | undefined, reason: string): typeof DatabaseErrorType.Type => {
-	if (sqlState === "23505" || reason === "UniqueViolation") return "unique_violation"
-	if (sqlState === "23503" || reason === "ForeignKeyViolation") return "foreign_key_violation"
-	if (sqlState?.startsWith("08") || reason === "ConnectionError") return "connection_error"
-	return "query_error"
+const SQLITE_CONSTRAINT_FOREIGNKEY = 787
+const SQLITE_CONSTRAINT_PRIMARYKEY = 1555
+const SQLITE_CONSTRAINT_UNIQUE = 2067
+
+/** `UNIQUE constraint failed: users.email, users.org` → `["users.email", "users.org"]`. */
+const UNIQUE_FAILED = /UNIQUE constraint failed: ([^\n:]+?(?:\.[^\n:,]+)?(?:, [^\n:,]+)*)(?::|$|\n)/
+
+type Classified = {
+	readonly type: typeof DatabaseErrorType.Type
+	readonly sqlState?: string
+	readonly columns?: ReadonlyArray<string>
+}
+
+const classify = (cause: unknown, reason: string): Classified => {
+	const text = messagesOf(cause).join("\n")
+	const errcode = errcodeOf(cause)
+	const unique = UNIQUE_FAILED.exec(text)
+	if (
+		reason === "UniqueViolation" ||
+		errcode === SQLITE_CONSTRAINT_UNIQUE ||
+		errcode === SQLITE_CONSTRAINT_PRIMARYKEY ||
+		unique !== null
+	) {
+		return {
+			type: "unique_violation",
+			sqlState:
+				errcode === SQLITE_CONSTRAINT_PRIMARYKEY || /PRIMARY KEY/.test(text)
+					? "SQLITE_CONSTRAINT_PRIMARYKEY"
+					: "SQLITE_CONSTRAINT_UNIQUE",
+			...(unique === null ? undefined : { columns: unique[1]!.split(",").map((c) => c.trim()) }),
+		}
+	}
+	if (errcode === SQLITE_CONSTRAINT_FOREIGNKEY || /FOREIGN KEY constraint failed/.test(text)) {
+		return { type: "foreign_key_violation", sqlState: "SQLITE_CONSTRAINT_FOREIGNKEY" }
+	}
+	if (reason === "ConnectionError") return { type: "connection_error" }
+	return { type: "query_error" }
+}
+
+/** Unique indexes by `table(col,col)`, to name the one SQLite reports only by its columns. */
+const uniqueIndexNames: ReadonlyMap<string, string> = (() => {
+	const names = new Map<string, string>()
+	const key = (table: string, columns: ReadonlyArray<string>) =>
+		`${table}(${columns
+			.map((c) => c.replace(/^"|"$/g, ""))
+			.sort()
+			.join(",")})`
+	for (const table of Object.values(schema)) {
+		const ddl = (table as Partial<SqliteSchemaTable<string, any>>).ddl
+		if (ddl === undefined) continue
+		for (const index of [...ddl.indexes.filter((i) => i.unique), ...ddl.uniques]) {
+			names.set(key(index.table, index.columns), index.name)
+		}
+	}
+	for (const index of extraIndexes) if (index.unique) names.set(key(index.table, index.on), index.name)
+	return names
+})()
+
+const constraintOf = (columns: ReadonlyArray<string>): string => {
+	const table = columns[0]?.split(".")[0] ?? ""
+	const names = columns.map((column) => column.slice(column.indexOf(".") + 1)).sort()
+	return uniqueIndexNames.get(`${table}(${names.join(",")})`) ?? columns.join(", ")
 }
 
 /** What a statement can fail with below this module. */
@@ -103,24 +178,20 @@ const isOrmFailure = (value: unknown): value is OrmFailure =>
 	value instanceof CompiledQueryDecodeError
 
 export const toDatabaseError = (cause: OrmFailure): DatabaseError => {
-	const sqlState =
-		cause instanceof Orm.DatabaseError || cause instanceof Orm.TransactionCommitFailed
-			? (cause.sqlState ?? findField(cause.cause, "code"))
-			: findField(cause, "code")
 	const reason =
 		cause instanceof Orm.DatabaseError || cause instanceof Orm.TransactionCommitFailed
 			? cause.reason
 			: cause instanceof SqlError
 				? cause.reason._tag
 				: "Unknown"
-	const constraint = findField(cause, "constraint") ?? findField(cause, "constraint_name")
-	const detail = findField(cause, "detail")
+	const classified = classify(cause, reason)
 	return new DatabaseError({
-		type: classify(sqlState, reason),
+		type: classified.type,
 		message: cause.message,
-		...(sqlState === undefined ? undefined : { sqlState }),
-		...(constraint === undefined ? undefined : { constraint }),
-		...(detail === undefined ? undefined : { detail }),
+		...(classified.sqlState === undefined ? undefined : { sqlState: classified.sqlState }),
+		...(classified.columns === undefined
+			? undefined
+			: { constraint: constraintOf(classified.columns), detail: classified.columns.join(", ") }),
 		cause,
 	})
 }
@@ -211,117 +282,34 @@ const makeShape = (getOrm: Effect.Effect<Orm.DatabaseApi>): DatabaseShape => {
 
 export class Database extends Context.Service<Database, DatabaseShape>()("Database") {}
 
-/** effect-orm's database over a client, for Postgres. */
+/** effect-orm's database over a SQLite client. */
 export const fromSqlClient = (sql: SqlClient.SqlClient): Orm.DatabaseApi =>
-	Orm.fromSqlClient(sql, { dialect: postgresDialect })
+	Orm.fromSqlClient(sql, { dialect: sqliteDialect })
 
-export type Config = {
-	url: Redacted.Redacted
-	ssl: boolean
-	maxConnections?: number
-}
-
-/**
- * Checks the database is reachable, retrying for a while before giving up: the pool connects
- * lazily, so without this a bad URL would only surface on the first query.
- */
-const startupCheck = (shape: DatabaseShape) =>
-	shape.execute(sql`SELECT 1`).pipe(
-		Effect.retry(
-			Schedule.jittered(Schedule.spaced("1.25 seconds")).pipe(
-				(schedule) => Schedule.max([schedule, Schedule.recurs(10)]),
-				Schedule.tap(({ attempt }) =>
-					Effect.logWarning(
-						`[Database client]: Connection to the database failed. Retrying (attempt ${attempt}).`,
-					),
-				),
-			),
-		),
-		Effect.tap(() => Effect.logInfo("[Database client]: Connection to the database established.")),
-		Effect.orDie,
-	)
-
-/**
- * A long-lived pool, for long-running processes (Bun servers, the cluster, scripts). Probes the
- * database at startup and dies if it stays unreachable.
- */
-export const layer = (config: Config): Layer.Layer<Database> =>
-	Layer.effect(
-		Database,
-		Effect.gen(function* () {
-			const shape = makeShape(Effect.succeed(fromSqlClient(yield* SqlClient.SqlClient)))
-			yield* startupCheck(shape)
-			return shape
-		}),
-	).pipe(
-		Layer.provide(
-			PgClient.layer({
-				url: config.url,
-				ssl: config.ssl,
-				connectTimeout: Duration.seconds(10),
-				...(config.maxConnections === undefined
-					? undefined
-					: { maxConnections: config.maxConnections }),
-			}),
-		),
-		Layer.orDie,
-	)
-
-/**
- * The database for the current request. On Cloudflare Workers a TCP socket belongs to the request
- * that opened it, so an isolate-wide pool cannot be shared across requests; the Worker provides one
- * of these per request (see {@link makeRequestConnection}) and {@link layerRequestScoped} reads it
- * on every statement.
- */
-export class DatabaseConnection extends Context.Service<
-	DatabaseConnection,
-	{ readonly orm: Orm.DatabaseApi }
->()("DatabaseConnection") {}
-
-/**
- * Opens a client for one request. The pool dials nothing until the first statement, so requests
- * that never touch the database cost nothing, and it is closed with the given Scope. Through
- * Hyperdrive the pool lives at the edge, so `max` stays small, and statements stay unnamed: a
- * named prepared statement belongs to one connection, which the pooler need not hand back.
- */
-export const makeRequestConnection = (
-	url: string,
-): Effect.Effect<DatabaseConnection["Service"], SqlError, Scope.Scope> =>
-	Effect.gen(function* () {
-		const services = yield* Layer.build(
-			PgClient.layerFrom(
-				PgClient.make({
-					url: Redacted.make(url),
-					maxConnections: 5,
-					idleTimeout: Duration.seconds(5),
-					connectTimeout: Duration.seconds(10),
-					prepare: false,
-				}),
-			),
-		)
-		return { orm: fromSqlClient(Context.get(services, SqlClient.SqlClient)) }
-	})
-
-/** The request's database; a defect when the Worker forgot to provide one. */
-const requestOrm: Effect.Effect<Orm.DatabaseApi> = Effect.serviceOption(DatabaseConnection).pipe(
-	Effect.flatMap((connection) =>
-		Option.isSome(connection)
-			? Effect.succeed(connection.value.orm)
-			: Effect.die(new Error("DatabaseConnection is not provided for this request")),
-	),
-)
-
-/** Reads the per-request {@link DatabaseConnection}; for Cloudflare Workers and Durable Objects. */
-export const layerRequestScoped: Layer.Layer<Database> = Layer.succeed(Database, makeShape(requestOrm))
-
-/** A database over an existing client (tests over PGlite or a container). */
-export const layerFromSqlClient: Layer.Layer<Database, never, SqlClient.SqlClient> = Layer.effect(
+/** A database over the provided SQLite `SqlClient` (`@effect/sql-sqlite-do`, `@effect/sql-sqlite-node`). */
+export const layerSqlite: Layer.Layer<Database, never, SqlClient.SqlClient> = Layer.effect(
 	Database,
 	Effect.gen(function* () {
 		const sql = yield* SqlClient.SqlClient
 		return makeShape(Effect.succeed(fromSqlClient(sql)))
 	}),
 )
+
+/**
+ * A database over a Worker's D1 binding. D1 limits a statement to 100 bound parameters and has no
+ * transactions: `transaction` fails with a `query_error` without running its body, so each write
+ * must be one idempotent statement. Provides the D1 `SqlClient` too, for code that writes SQL itself.
+ */
+export const layerD1 = (
+	db: D1Client.D1ClientConfig["db"],
+): Layer.Layer<Database | D1Client.D1Client | SqlClient.SqlClient> =>
+	Layer.effect(
+		Database,
+		Effect.gen(function* () {
+			const sql = yield* SqlClient.SqlClient
+			return makeShape(Effect.succeed(Orm.fromSqlClient(sql, { dialect: d1Dialect })))
+		}),
+	).pipe(Layer.provideMerge(D1Client.layer({ db })), Layer.orDie)
 
 /** Marks an effect as correct only inside a transaction (see effect-orm's `requireTransaction`). */
 export const requireTransaction = Orm.requireTransaction

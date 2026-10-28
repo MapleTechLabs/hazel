@@ -1,4 +1,5 @@
 import { Effect, Schedule, Schema } from "effect"
+import { closeSync } from "~/db/sync-manager"
 import { clearAccessToken } from "~/lib/access-token"
 import { CommonReason, reasonOfUnknown } from "~/lib/error-messages"
 import { HazelAuthClient } from "../auth/client"
@@ -53,7 +54,7 @@ export class SignOutError extends Schema.TaggedError<SignOutError>()("SignOutErr
 	reason: CommonReason,
 }) {}
 
-/** Ends the session on the API and drops the cached access token. */
+/** Ends the session on the API, closes every sync connection and drops the cached access token. */
 export const signOut: Effect.Effect<void, SignOutError, HazelAuthClient> = Effect.gen(function* () {
 	if (isDesktop) {
 		// Ends only the desktop app's session; the browser it signed in with stays signed in.
@@ -62,5 +63,8 @@ export const signOut: Effect.Effect<void, SignOutError, HazelAuthClient> = Effec
 		const client = yield* HazelAuthClient
 		yield* client.auth.signOut()
 	}
-	yield* Effect.sync(clearAccessToken)
+	yield* Effect.sync(() => {
+		closeSync()
+		clearAccessToken()
+	})
 }).pipe(Effect.mapError((cause) => new SignOutError({ reason: reasonOfUnknown(cause) })))

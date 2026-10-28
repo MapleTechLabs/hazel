@@ -103,7 +103,12 @@ export const updateCards = (
 			: {
 					model: withAction(model, provider, CardAction.Toggling()),
 					commands: [
-						RunProviderAction({ provider, webhookId: webhook.id, isEnabled: !webhook.isEnabled }),
+						RunProviderAction({
+							provider,
+							webhookId: webhook.id,
+							channelId: model.channelId,
+							isEnabled: !webhook.isEnabled,
+						}),
 					],
 				}
 	},
@@ -115,7 +120,14 @@ export const updateCards = (
 		if (card.action._tag === "ConfirmingDelete")
 			return {
 				model: withAction(model, provider, CardAction.Deleting()),
-				commands: [RunProviderAction({ provider, webhookId: webhook.id, isEnabled: null })],
+				commands: [
+					RunProviderAction({
+						provider,
+						webhookId: webhook.id,
+						channelId: model.channelId,
+						isEnabled: null,
+					}),
+				],
 			}
 		if (card.action._tag !== "Idle") return { model }
 		const version = card.confirmVersion + 1

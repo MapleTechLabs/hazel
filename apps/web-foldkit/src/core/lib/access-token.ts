@@ -1,11 +1,11 @@
 /**
- * Short-lived access token for the hosts that cannot see the API's session cookie
- * (the Electric proxy and the Rivet actors). The backend exchanges the HttpOnly session
- * cookie for an ES256 JWT at `POST /auth/token`; those hosts verify it against the API's
- * JWKS. Requests to the API itself authenticate with the cookie and need no token.
+ * Short-lived access token for what cannot carry the API's session cookie: the sync sockets
+ * (`Sec-WebSocket-Protocol`) and the Rivet actors. The backend exchanges the HttpOnly session
+ * cookie for an ES256 JWT at `POST /auth/token`. Requests to the API itself authenticate with
+ * the cookie and need no token.
  *
- * The exchange is an Effect; the exports stay Promise functions because their callers are fetch
- * wrappers outside any runtime (Electric's `fetchClient`, the Rivet connection).
+ * The exchange is an Effect; the exports stay Promise functions because their callers live outside
+ * any runtime (the sync hub, the Rivet connection).
  */
 
 import { Duration, Effect, Schedule, Schema } from "effect"

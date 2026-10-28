@@ -15,7 +15,6 @@ version.json
 
 # Local SSL certificates (mkcert)
 certs/
-docker/caddy/certs/*.pem
 
 # opensrc - source code for packages
 opensrc/

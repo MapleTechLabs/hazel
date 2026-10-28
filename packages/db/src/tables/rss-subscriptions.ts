@@ -1,56 +1,53 @@
 import { ChannelId, MessageId, OrganizationId, RssSubscriptionId, UserId } from "@hazel/schema"
-import * as PG from "@maple-dev/effect-orm/postgres"
-import { now, timestamptz, uuid, varchar } from "./columns"
+import * as SQLite from "@maple-dev/effect-orm/sqlite"
+import { randomUuid, timestamptz, uuid, varchar } from "./columns"
 
-export const rssPostedItemsTable = PG.table("rss_posted_items", {
+export const rssPostedItemsTable = SQLite.table("rss_posted_items", {
 	columns: {
-		id: PG.column(PG.uuid, { defaultExpr: "gen_random_uuid()" }),
+		id: SQLite.column(SQLite.text, { defaultExpr: randomUuid }),
 		subscriptionId: uuid(RssSubscriptionId),
-		itemGuid: PG.text,
-		itemUrl: PG.nullable(PG.text),
-		messageId: PG.nullable(uuid(MessageId)),
-		postedAt: PG.column(timestamptz, { defaultExpr: "now()" }),
+		itemGuid: SQLite.text,
+		itemUrl: SQLite.nullable(SQLite.text),
+		messageId: SQLite.nullable(uuid(MessageId)),
+		postedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
 	},
 	primaryKey: ["id"],
 	indexes: [
-		PG.index("rss_posted_items_subscription_id_idx", ["subscriptionId"]),
-		PG.uniqueIndex("rss_posted_items_sub_guid_unique", ["subscriptionId", "itemGuid"]),
+		SQLite.index("rss_posted_items_subscription_id_idx", ["subscriptionId"]),
+		SQLite.uniqueIndex("rss_posted_items_sub_guid_unique", ["subscriptionId", "itemGuid"]),
 	],
 })
-export type RssPostedItem = PG.SelectRowOf<typeof rssPostedItemsTable>
-export type NewRssPostedItem = PG.InsertRowOf<typeof rssPostedItemsTable>
+export type RssPostedItem = SQLite.SelectRowOf<typeof rssPostedItemsTable>
+export type NewRssPostedItem = SQLite.InsertRowOf<typeof rssPostedItemsTable>
 
-export const rssSubscriptionsTable = PG.table("rss_subscriptions", {
+export const rssSubscriptionsTable = SQLite.table("rss_subscriptions", {
 	columns: {
-		id: PG.column(uuid(RssSubscriptionId), { defaultExpr: "gen_random_uuid()" }),
+		id: SQLite.column(uuid(RssSubscriptionId), { defaultExpr: randomUuid }),
 		channelId: uuid(ChannelId),
 		organizationId: uuid(OrganizationId),
-		feedUrl: PG.text,
-		feedTitle: PG.nullable(varchar(255)),
-		feedIconUrl: PG.nullable(PG.text),
-		lastFetchedAt: PG.nullable(timestamptz),
-		lastItemPublishedAt: PG.nullable(timestamptz),
-		lastItemGuid: PG.nullable(PG.text),
-		consecutiveErrors: PG.column(PG.int4, { default: 0 }),
-		lastErrorMessage: PG.nullable(PG.text),
-		lastErrorAt: PG.nullable(timestamptz),
-		isEnabled: PG.column(PG.bool, { default: true }),
-		pollingIntervalMinutes: PG.column(PG.int4, { default: 15 }),
+		feedUrl: SQLite.text,
+		feedTitle: SQLite.nullable(varchar(255)),
+		feedIconUrl: SQLite.nullable(SQLite.text),
+		lastFetchedAt: SQLite.nullable(timestamptz),
+		lastItemPublishedAt: SQLite.nullable(timestamptz),
+		lastItemGuid: SQLite.nullable(SQLite.text),
+		consecutiveErrors: SQLite.column(SQLite.integer, { default: 0 }),
+		lastErrorMessage: SQLite.nullable(SQLite.text),
+		lastErrorAt: SQLite.nullable(timestamptz),
+		isEnabled: SQLite.column(SQLite.boolean, { default: true }),
+		pollingIntervalMinutes: SQLite.column(SQLite.integer, { default: 15 }),
 		createdBy: uuid(UserId),
-		createdAt: PG.column(timestamptz, { defaultExpr: "now()" }),
-		updatedAt: PG.column(timestamptz, { defaultExpr: "now()" }),
-		deletedAt: PG.nullable(timestamptz),
+		createdAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		updatedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		deletedAt: SQLite.nullable(timestamptz),
 	},
 	primaryKey: ["id"],
 	indexes: [
-		PG.index("rss_subscriptions_channel_id_idx", ["channelId"]),
-		PG.index("rss_subscriptions_organization_id_idx", ["organizationId"]),
-		PG.index("rss_subscriptions_deleted_at_idx", ["deletedAt"]),
-		PG.index("rss_subscriptions_poll_idx", ["isEnabled", "lastFetchedAt", "deletedAt"]),
-		PG.uniqueIndex("rss_subscriptions_channel_feed_unique", ["channelId", "feedUrl"], {
-			where: '"deletedAt" IS NULL',
-		}),
+		SQLite.index("rss_subscriptions_channel_id_idx", ["channelId"]),
+		SQLite.index("rss_subscriptions_organization_id_idx", ["organizationId"]),
+		SQLite.index("rss_subscriptions_deleted_at_idx", ["deletedAt"]),
+		SQLite.index("rss_subscriptions_poll_idx", ["isEnabled", "lastFetchedAt", "deletedAt"]),
 	],
 })
-export type RssSubscription = PG.SelectRowOf<typeof rssSubscriptionsTable>
-export type NewRssSubscription = PG.InsertRowOf<typeof rssSubscriptionsTable>
+export type RssSubscription = SQLite.SelectRowOf<typeof rssSubscriptionsTable>
+export type NewRssSubscription = SQLite.InsertRowOf<typeof rssSubscriptionsTable>

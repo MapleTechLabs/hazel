@@ -1,8 +1,0 @@
-{
-	"name": "hazel-durable-streams-server",
-	"private": true,
-	"type": "module",
-	"dependencies": {
-		"@durable-streams/server": "0.2.1"
-	}
-}

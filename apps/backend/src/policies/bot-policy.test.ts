@@ -60,7 +60,7 @@ describe("BotPolicy", () => {
 		expect(Result.isFailure(denied)).toBe(true)
 	})
 
-	it("canRead allows creator or org admin", async () => {
+	it("canRead allows only the creator (no org admin override on the directory path)", async () => {
 		const creator = makeActor()
 		const admin = makeActor({
 			id: "00000000-0000-4000-8000-000000000402" as UserId,
@@ -85,7 +85,7 @@ describe("BotPolicy", () => {
 			layer,
 			creator,
 		)
-		const adminAllowed = await runWithActorEither(
+		const adminDenied = await runWithActorEither(
 			BotPolicy.use((policy) => policy.canRead(BOT_ID)),
 			layer,
 			makeActor({ ...admin, organizationId: TEST_ORG_ID }),
@@ -97,7 +97,7 @@ describe("BotPolicy", () => {
 		)
 
 		expect(Result.isSuccess(creatorAllowed)).toBe(true)
-		expect(Result.isSuccess(adminAllowed)).toBe(true)
+		expect(Result.isFailure(adminDenied)).toBe(true)
 		expect(Result.isFailure(outsiderDenied)).toBe(true)
 	})
 

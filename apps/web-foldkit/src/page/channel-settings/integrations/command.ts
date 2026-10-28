@@ -1,6 +1,7 @@
 import { ChannelId, ChannelWebhookId, GitHubSubscriptionId, RssSubscriptionId } from "@hazel/schema"
 import { Duration, Effect, Schema } from "effect"
 import { Command } from "foldkit"
+import { orgOfChannel } from "~/db/routing-hints"
 import { toDate } from "~/lib/utils"
 import { catchCommon } from "../../../data/actions"
 import { HazelRpc } from "../../../rpc"
@@ -111,34 +112,40 @@ const rowCopy = {
 	},
 } as const
 
-const rowRequest = (kind: RowKind, id: string, isEnabled: boolean | null) =>
+const rowRequest = (kind: RowKind, id: string, channelId: ChannelId, isEnabled: boolean | null) =>
 	Effect.gen(function* () {
 		const client = yield* HazelRpc
+		const organizationId = orgOfChannel(channelId)
 		if (kind === "webhook") {
 			const webhookId = ChannelWebhookId.make(id)
 			return isEnabled === null
-				? yield* client("channelWebhook.delete", { id: webhookId })
-				: yield* client("channelWebhook.update", { id: webhookId, isEnabled })
+				? yield* client("channelWebhook.delete", { id: webhookId, organizationId })
+				: yield* client("channelWebhook.update", { id: webhookId, organizationId, isEnabled })
 		}
 		if (kind === "rss") {
 			const rssId = RssSubscriptionId.make(id)
 			return isEnabled === null
-				? yield* client("rssSubscription.delete", { id: rssId })
-				: yield* client("rssSubscription.update", { id: rssId, isEnabled })
+				? yield* client("rssSubscription.delete", { id: rssId, organizationId })
+				: yield* client("rssSubscription.update", { id: rssId, organizationId, isEnabled })
 		}
 		const githubId = GitHubSubscriptionId.make(id)
 		return isEnabled === null
-			? yield* client("githubSubscription.delete", { id: githubId })
-			: yield* client("githubSubscription.update", { id: githubId, isEnabled })
+			? yield* client("githubSubscription.delete", { id: githubId, organizationId })
+			: yield* client("githubSubscription.update", { id: githubId, organizationId, isEnabled })
 	})
 
 /** `isEnabled: null` deletes the row; otherwise it sets the row's enabled flag. */
 export const RunRowAction = Command.define("RunRowAction", {
-	args: { kind: RowKind, id: Schema.String, isEnabled: Schema.NullOr(Schema.Boolean) },
+	args: {
+		kind: RowKind,
+		id: Schema.String,
+		channelId: ChannelId,
+		isEnabled: Schema.NullOr(Schema.Boolean),
+	},
 	messages: [Message.SucceededRowAction, Message.FailedRowAction],
-	execute: ({ kind, id, isEnabled }) => {
+	execute: ({ kind, id, channelId, isEnabled }) => {
 		const notFound = () => Effect.succeed(Message.FailedRowAction({ kind, id, reason: "NotFound" }))
-		return rowRequest(kind, id, isEnabled).pipe(
+		return rowRequest(kind, id, channelId, isEnabled).pipe(
 			Effect.as(
 				Message.SucceededRowAction({
 					kind,
@@ -194,14 +201,20 @@ export const ConnectProvider = Command.define("ConnectProvider", {
 
 /** The provider card's Enable/Disable and Delete (`isEnabled: null`). */
 export const RunProviderAction = Command.define("RunProviderAction", {
-	args: { provider: Provider, webhookId: ChannelWebhookId, isEnabled: Schema.NullOr(Schema.Boolean) },
+	args: {
+		provider: Provider,
+		webhookId: ChannelWebhookId,
+		channelId: ChannelId,
+		isEnabled: Schema.NullOr(Schema.Boolean),
+	},
 	messages: [Message.SucceededProviderAction, Message.FailedProviderAction],
-	execute: ({ provider, webhookId, isEnabled }) => {
+	execute: ({ provider, webhookId, channelId, isEnabled }) => {
 		const name = INTEGRATION_CONFIG[provider].name
+		const organizationId = orgOfChannel(channelId)
 		return HazelRpc.use((rpc) =>
 			isEnabled === null
-				? rpc("channelWebhook.delete", { id: webhookId })
-				: rpc("channelWebhook.update", { id: webhookId, isEnabled }),
+				? rpc("channelWebhook.delete", { id: webhookId, organizationId })
+				: rpc("channelWebhook.update", { id: webhookId, organizationId, isEnabled }),
 		).pipe(
 			Effect.as(
 				Message.SucceededProviderAction({

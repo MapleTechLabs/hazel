@@ -7,139 +7,113 @@ import {
 	OrganizationId,
 	UserId,
 } from "@hazel/schema"
-import * as PG from "@maple-dev/effect-orm/postgres"
-import { jsonb, now, timestamptz, uuid, varchar } from "./columns"
+import * as SQLite from "@maple-dev/effect-orm/sqlite"
+import { jsonb, randomUuid, textEnum, timestamptz, uuid, varchar } from "./columns"
 
-export const connectConversationStatusEnum = PG.enumType("connect_conversation_status", [
-	"active",
-	"disconnected",
-])
-export const connectConversationChannelRoleEnum = PG.enumType("connect_conversation_channel_role", [
-	"host",
-	"guest",
-])
-export const connectInviteStatusEnum = PG.enumType("connect_invite_status", [
-	"pending",
-	"accepted",
-	"declined",
-	"revoked",
-	"expired",
-])
-export const connectInviteTargetKindEnum = PG.enumType("connect_invite_target_kind", ["slug", "email"])
+export const connectConversationStatusEnum = textEnum(["active", "disconnected"])
+export const connectConversationChannelRoleEnum = textEnum(["host", "guest"])
+export const connectInviteStatusEnum = textEnum(["pending", "accepted", "declined", "revoked", "expired"])
+export const connectInviteTargetKindEnum = textEnum(["slug", "email"])
 
-export const connectConversationChannelsTable = PG.table("connect_conversation_channels", {
+export const connectConversationChannelsTable = SQLite.table("connect_conversation_channels", {
 	columns: {
-		id: PG.column(uuid(ConnectConversationChannelId), { defaultExpr: "gen_random_uuid()" }),
+		id: SQLite.column(uuid(ConnectConversationChannelId), { defaultExpr: randomUuid }),
 		conversationId: uuid(ConnectConversationId),
 		organizationId: uuid(OrganizationId),
 		channelId: uuid(ChannelId),
 		role: connectConversationChannelRoleEnum,
-		allowGuestMemberAdds: PG.column(PG.bool, { default: false }),
-		isActive: PG.column(PG.bool, { default: true }),
-		createdAt: PG.column(timestamptz, { defaultExpr: "now()" }),
-		updatedAt: PG.column(timestamptz, { defaultExpr: "now()" }),
-		deletedAt: PG.nullable(timestamptz),
+		allowGuestMemberAdds: SQLite.column(SQLite.boolean, { default: false }),
+		isActive: SQLite.column(SQLite.boolean, { default: true }),
+		createdAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		updatedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		deletedAt: SQLite.nullable(timestamptz),
 	},
 	primaryKey: ["id"],
 	indexes: [
-		PG.index("connect_conv_channels_conversation_idx", ["conversationId"]),
-		PG.index("connect_conv_channels_org_idx", ["organizationId"]),
-		PG.index("connect_conv_channels_channel_idx", ["channelId"]),
-		PG.index("connect_conv_channels_deleted_at_idx", ["deletedAt"]),
-		PG.uniqueIndex("connect_conv_channels_channel_unique", ["channelId"], {
-			where: '"deletedAt" IS NULL',
-		}),
-		PG.uniqueIndex(
-			"connect_conv_channels_conversation_org_unique",
-			["conversationId", "organizationId"],
-			{ where: '"deletedAt" IS NULL' },
-		),
+		SQLite.index("connect_conv_channels_conversation_idx", ["conversationId"]),
+		SQLite.index("connect_conv_channels_org_idx", ["organizationId"]),
+		SQLite.index("connect_conv_channels_channel_idx", ["channelId"]),
+		SQLite.index("connect_conv_channels_deleted_at_idx", ["deletedAt"]),
 	],
 })
-export type ConnectConversationChannel = PG.SelectRowOf<typeof connectConversationChannelsTable>
-export type NewConnectConversationChannel = PG.InsertRowOf<typeof connectConversationChannelsTable>
+export type ConnectConversationChannel = SQLite.SelectRowOf<typeof connectConversationChannelsTable>
+export type NewConnectConversationChannel = SQLite.InsertRowOf<typeof connectConversationChannelsTable>
 
-export const connectConversationsTable = PG.table("connect_conversations", {
+export const connectConversationsTable = SQLite.table("connect_conversations", {
 	columns: {
-		id: PG.column(uuid(ConnectConversationId), { defaultExpr: "gen_random_uuid()" }),
+		id: SQLite.column(uuid(ConnectConversationId), { defaultExpr: randomUuid }),
 		hostOrganizationId: uuid(OrganizationId),
 		hostChannelId: uuid(ChannelId),
-		status: PG.column(connectConversationStatusEnum, { default: "active" }),
-		settings: PG.nullable(jsonb<Record<string, unknown>>()),
+		status: SQLite.column(connectConversationStatusEnum, { default: "active" }),
+		settings: SQLite.nullable(jsonb<Record<string, unknown>>()),
 		createdBy: uuid(UserId),
-		createdAt: PG.column(timestamptz, { defaultExpr: "now()" }),
-		updatedAt: PG.column(timestamptz, { defaultExpr: "now()" }),
-		deletedAt: PG.nullable(timestamptz),
+		createdAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		updatedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		deletedAt: SQLite.nullable(timestamptz),
 	},
 	primaryKey: ["id"],
 	indexes: [
-		PG.index("connect_conversations_host_org_idx", ["hostOrganizationId"]),
-		PG.index("connect_conversations_host_channel_idx", ["hostChannelId"]),
-		PG.index("connect_conversations_status_idx", ["status"]),
-		PG.index("connect_conversations_deleted_at_idx", ["deletedAt"]),
-		PG.uniqueIndex("connect_conversations_host_channel_unique", ["hostChannelId"], {
-			where: '"deletedAt" IS NULL',
-		}),
+		SQLite.index("connect_conversations_host_org_idx", ["hostOrganizationId"]),
+		SQLite.index("connect_conversations_host_channel_idx", ["hostChannelId"]),
+		SQLite.index("connect_conversations_status_idx", ["status"]),
+		SQLite.index("connect_conversations_deleted_at_idx", ["deletedAt"]),
 	],
 })
-export type ConnectConversation = PG.SelectRowOf<typeof connectConversationsTable>
-export type NewConnectConversation = PG.InsertRowOf<typeof connectConversationsTable>
+export type ConnectConversation = SQLite.SelectRowOf<typeof connectConversationsTable>
+export type NewConnectConversation = SQLite.InsertRowOf<typeof connectConversationsTable>
 
-export const connectInvitesTable = PG.table("connect_invites", {
+export const connectInvitesTable = SQLite.table("connect_invites", {
 	columns: {
-		id: PG.column(uuid(ConnectInviteId), { defaultExpr: "gen_random_uuid()" }),
+		id: SQLite.column(uuid(ConnectInviteId), { defaultExpr: randomUuid }),
 		conversationId: uuid(ConnectConversationId),
 		hostOrganizationId: uuid(OrganizationId),
 		hostChannelId: uuid(ChannelId),
 		targetKind: connectInviteTargetKindEnum,
 		targetValue: varchar(255),
-		guestOrganizationId: PG.nullable(uuid(OrganizationId)),
-		status: PG.column(connectInviteStatusEnum, { default: "pending" }),
-		allowGuestMemberAdds: PG.column(PG.bool, { default: false }),
+		guestOrganizationId: SQLite.nullable(uuid(OrganizationId)),
+		status: SQLite.column(connectInviteStatusEnum, { default: "pending" }),
+		allowGuestMemberAdds: SQLite.column(SQLite.boolean, { default: false }),
 		invitedBy: uuid(UserId),
-		acceptedBy: PG.nullable(uuid(UserId)),
-		acceptedAt: PG.nullable(timestamptz),
-		expiresAt: PG.nullable(timestamptz),
-		createdAt: PG.column(timestamptz, { defaultExpr: "now()" }),
-		updatedAt: PG.column(timestamptz, { defaultExpr: "now()" }),
-		deletedAt: PG.nullable(timestamptz),
+		acceptedBy: SQLite.nullable(uuid(UserId)),
+		acceptedAt: SQLite.nullable(timestamptz),
+		expiresAt: SQLite.nullable(timestamptz),
+		createdAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		updatedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		deletedAt: SQLite.nullable(timestamptz),
 	},
 	primaryKey: ["id"],
 	indexes: [
-		PG.index("connect_invites_conversation_idx", ["conversationId"]),
-		PG.index("connect_invites_host_org_idx", ["hostOrganizationId"]),
-		PG.index("connect_invites_guest_org_idx", ["guestOrganizationId"]),
-		PG.index("connect_invites_status_idx", ["status"]),
-		PG.index("connect_invites_target_idx", ["targetKind", "targetValue"]),
-		PG.index("connect_invites_deleted_at_idx", ["deletedAt"]),
+		SQLite.index("connect_invites_conversation_idx", ["conversationId"]),
+		SQLite.index("connect_invites_host_org_idx", ["hostOrganizationId"]),
+		SQLite.index("connect_invites_guest_org_idx", ["guestOrganizationId"]),
+		SQLite.index("connect_invites_status_idx", ["status"]),
+		SQLite.index("connect_invites_target_idx", ["targetKind", "targetValue"]),
+		SQLite.index("connect_invites_deleted_at_idx", ["deletedAt"]),
 	],
 })
-export type ConnectInvite = PG.SelectRowOf<typeof connectInvitesTable>
-export type NewConnectInvite = PG.InsertRowOf<typeof connectInvitesTable>
+export type ConnectInvite = SQLite.SelectRowOf<typeof connectInvitesTable>
+export type NewConnectInvite = SQLite.InsertRowOf<typeof connectInvitesTable>
 
-export const connectParticipantsTable = PG.table("connect_participants", {
+export const connectParticipantsTable = SQLite.table("connect_participants", {
 	columns: {
-		id: PG.column(uuid(ConnectParticipantId), { defaultExpr: "gen_random_uuid()" }),
+		id: SQLite.column(uuid(ConnectParticipantId), { defaultExpr: randomUuid }),
 		conversationId: uuid(ConnectConversationId),
 		channelId: uuid(ChannelId),
 		userId: uuid(UserId),
 		homeOrganizationId: uuid(OrganizationId),
-		isExternal: PG.column(PG.bool, { default: false }),
-		addedBy: PG.nullable(uuid(UserId)),
-		createdAt: PG.column(timestamptz, { defaultExpr: "now()" }),
-		updatedAt: PG.column(timestamptz, { defaultExpr: "now()" }),
-		deletedAt: PG.nullable(timestamptz),
+		isExternal: SQLite.column(SQLite.boolean, { default: false }),
+		addedBy: SQLite.nullable(uuid(UserId)),
+		createdAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		updatedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		deletedAt: SQLite.nullable(timestamptz),
 	},
 	primaryKey: ["id"],
 	indexes: [
-		PG.index("connect_participants_conversation_idx", ["conversationId"]),
-		PG.index("connect_participants_channel_idx", ["channelId"]),
-		PG.index("connect_participants_user_idx", ["userId"]),
-		PG.index("connect_participants_deleted_at_idx", ["deletedAt"]),
-		PG.uniqueIndex("connect_participants_channel_user_unique", ["channelId", "userId"], {
-			where: '"deletedAt" IS NULL',
-		}),
+		SQLite.index("connect_participants_conversation_idx", ["conversationId"]),
+		SQLite.index("connect_participants_channel_idx", ["channelId"]),
+		SQLite.index("connect_participants_user_idx", ["userId"]),
+		SQLite.index("connect_participants_deleted_at_idx", ["deletedAt"]),
 	],
 })
-export type ConnectParticipant = PG.SelectRowOf<typeof connectParticipantsTable>
-export type NewConnectParticipant = PG.InsertRowOf<typeof connectParticipantsTable>
+export type ConnectParticipant = SQLite.SelectRowOf<typeof connectParticipantsTable>
+export type NewConnectParticipant = SQLite.InsertRowOf<typeof connectParticipantsTable>

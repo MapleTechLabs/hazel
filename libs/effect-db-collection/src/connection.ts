@@ -1,0 +1,582 @@
+/**
+ * One WebSocket to one source object (`/sync/<kind>/<id>`). Reconnects with jittered backoff,
+ * resumes after the last committed `seq`, and buffers each `Begin … Rows … Commit` run so
+ * subscribers see it whole.
+ */
+import {
+	formatWritePosition,
+	SYNC_SUBPROTOCOL,
+	SyncCloseCode,
+	type SyncClientFrame,
+	type SyncSeq,
+	SyncServerFrame,
+	type SyncSourceKind,
+} from "@hazel/domain/sync"
+import { Result, Schema } from "effect"
+import {
+	SyncConnectionClosedError,
+	SyncConnectionError,
+	SyncSourceForbiddenError,
+	SyncSourceNotFoundError,
+	type SyncSourceTerminalError,
+	TxIdTimeoutError,
+} from "./errors"
+import {
+	type BackoffConfig,
+	backoffDelay,
+	consoleLogger,
+	DEFAULT_BACKOFF,
+	type SourceKey,
+	type SyncLogger,
+	type SyncTokenResult,
+	type WebSocketConstructor,
+	type WebSocketLike,
+} from "./types"
+
+export type SyncConnectionStatus =
+	| { readonly state: "connecting"; readonly attempt: number }
+	| { readonly state: "ready" }
+	| {
+			readonly state: "error"
+			readonly error: SyncConnectionError | SyncSourceTerminalError
+			/** `true` when the connection stopped for good (4003, 4004). */
+			readonly terminal: boolean
+			/** When retrying: the delay before the next attempt. */
+			readonly retryInMs?: number
+	  }
+	| { readonly state: "closed" }
+
+/** The rows of one table inside a run. */
+export interface SyncRunTable {
+	readonly upserts: ReadonlyArray<unknown>
+	readonly deletes: ReadonlyArray<string>
+}
+
+/** One committed `Begin … Rows … Commit` run. */
+export interface SyncRun {
+	readonly source: SourceKey
+	readonly reset: boolean
+	readonly seq: SyncSeq
+	readonly tables: ReadonlyMap<string, SyncRunTable>
+}
+
+export interface SyncConnectionOptions {
+	readonly kind: SyncSourceKind
+	readonly id: string
+	/** The sync Worker's origin, `http(s)://` or `ws(s)://`. */
+	readonly baseUrl: string
+	readonly getToken: () => Promise<SyncTokenResult>
+	/** Called with a token the source rejected (close 4001), so the next read exchanges again. */
+	readonly invalidateToken?: (token: string) => void
+	readonly WebSocket?: WebSocketConstructor
+	readonly backoff?: BackoffConfig
+	/** @default 25000 */
+	readonly heartbeatIntervalMs?: number
+	readonly log?: SyncLogger
+}
+
+interface SeqWaiter {
+	readonly seq: number
+	readonly resolve: () => void
+	readonly reject: (error: unknown) => void
+	timer: ReturnType<typeof setTimeout> | undefined
+}
+
+interface OpenRun {
+	readonly reset: boolean
+	readonly tables: Map<string, { upserts: Array<unknown>; deletes: Array<string> }>
+}
+
+const decodeFrame = Schema.decodeUnknownResult(SyncServerFrame)
+
+const socketUrl = (baseUrl: string, kind: SyncSourceKind, id: string): string =>
+	`${baseUrl.replace(/\/+$/, "").replace(/^http/, "ws")}/sync/${kind}/${encodeURIComponent(id)}`
+
+export class SyncConnection {
+	readonly source: SourceKey
+	readonly url: string
+
+	/** The last `Commit.seq` this connection saw; sent as `Hello.since` on reconnect. */
+	lastSeq: SyncSeq | null = null
+	/** Tables that have delivered rows on this connection. */
+	readonly tablesSeen = new Set<string>()
+	/** Whether a snapshot completed at least once (a `Ready` arrived). */
+	hasSnapshot = false
+
+	private readonly options: SyncConnectionOptions
+	private readonly backoff: Required<BackoffConfig>
+	private readonly log: SyncLogger
+	private currentStatus: SyncConnectionStatus = { state: "connecting", attempt: 0 }
+	private socket: WebSocketLike | null = null
+	private socketToken: string | null = null
+	private generation = 0
+	private started = false
+	private stopped = false
+	private closed = false
+	private terminalError: SyncSourceTerminalError | undefined
+	private attempt = 0
+	private reauthStreak = 0
+	private run: OpenRun | null = null
+	private pingOutstanding = false
+	private reconnectTimer: ReturnType<typeof setTimeout> | undefined
+	private heartbeatTimer: ReturnType<typeof setInterval> | undefined
+	private readonly waiters = new Set<SeqWaiter>()
+	private readonly statusListeners = new Set<(status: SyncConnectionStatus) => void>()
+	private readonly runListeners = new Set<(run: SyncRun) => void>()
+	private readonly ephemeralListeners = new Set<(topic: string, payload: unknown) => void>()
+
+	constructor(options: SyncConnectionOptions) {
+		this.options = options
+		this.source = `${options.kind}:${options.id}`
+		this.url = socketUrl(options.baseUrl, options.kind, options.id)
+		this.backoff = { ...DEFAULT_BACKOFF, ...options.backoff }
+		this.log = options.log ?? consoleLogger
+	}
+
+	get status(): SyncConnectionStatus {
+		return this.currentStatus
+	}
+
+	/** Ready once, or stopped: a collection waiting on this source can stop waiting. */
+	get isSettled(): boolean {
+		return this.hasSnapshot || this.terminalError !== undefined || this.currentStatus.state === "closed"
+	}
+
+	get error(): SyncSourceTerminalError | undefined {
+		return this.terminalError
+	}
+
+	start(): void {
+		if (this.started || this.stopped) return
+		this.started = true
+		void this.open()
+	}
+
+	/** Closes the socket for good (released). Pending `awaitSeq`s fail. */
+	close(): void {
+		if (this.closed) return
+		this.closed = true
+		const wasStopped = this.stopped
+		this.stopped = true
+		this.clearReconnectTimer()
+		this.detach(1000, "released")
+		this.rejectWaiters(
+			new SyncConnectionClosedError({
+				message: `Connection to ${this.source} closed`,
+				source: this.source,
+			}),
+		)
+		// A refused source keeps its terminal status.
+		if (!wasStopped) this.setStatus({ state: "closed" })
+		this.statusListeners.clear()
+		this.runListeners.clear()
+		this.ephemeralListeners.clear()
+	}
+
+	/** Drops the resume point and reconnects: the source answers with a full `Begin{reset}` snapshot. */
+	resync(): void {
+		this.lastSeq = null
+		if (this.stopped || !this.started) return
+		this.detach(4000, "resync")
+		this.attempt = 0
+		void this.open()
+	}
+
+	/** Skips the backoff wait (e.g. the browser came back online). */
+	retryNow(): void {
+		if (this.stopped || !this.started) return
+		if (this.currentStatus.state !== "error") return
+		this.attempt = 0
+		void this.open()
+	}
+
+	/** Resolves when a `Commit` with `seq >= seq` arrives (or already did). */
+	awaitSeq(seq: number, timeoutMs: number): Promise<void> {
+		if (this.lastSeq !== null && this.lastSeq >= seq) return Promise.resolve()
+		if (this.terminalError) return Promise.reject(this.terminalError)
+		if (this.stopped) {
+			return Promise.reject(
+				new SyncConnectionClosedError({
+					message: `Connection to ${this.source} closed`,
+					source: this.source,
+				}),
+			)
+		}
+		return new Promise<void>((resolve, reject) => {
+			const waiter: SeqWaiter = { seq, resolve, reject, timer: undefined }
+			waiter.timer = setTimeout(() => {
+				this.waiters.delete(waiter)
+				const txid = formatWritePosition({
+					kind: this.options.kind,
+					id: this.options.id,
+					seq: seq as SyncSeq,
+				})
+				reject(
+					new TxIdTimeoutError({
+						message: `Timeout waiting for ${txid}`,
+						txid,
+						timeout: timeoutMs,
+					}),
+				)
+			}, timeoutMs)
+			this.waiters.add(waiter)
+		})
+	}
+
+	/** Resolves once settled: `undefined` when ready (or closed), the error when stopped for good. */
+	whenSettled(): Promise<SyncSourceTerminalError | undefined> {
+		if (this.isSettled) return Promise.resolve(this.terminalError)
+		return new Promise((resolve) => {
+			const unsubscribe = this.subscribeStatus(() => {
+				if (!this.isSettled) return
+				unsubscribe()
+				resolve(this.terminalError)
+			})
+		})
+	}
+
+	subscribeStatus(listener: (status: SyncConnectionStatus) => void): () => void {
+		this.statusListeners.add(listener)
+		return () => this.statusListeners.delete(listener)
+	}
+
+	subscribeRuns(listener: (run: SyncRun) => void): () => void {
+		this.runListeners.add(listener)
+		return () => this.runListeners.delete(listener)
+	}
+
+	subscribeEphemeral(listener: (topic: string, payload: unknown) => void): () => void {
+		this.ephemeralListeners.add(listener)
+		return () => this.ephemeralListeners.delete(listener)
+	}
+
+	// -------------------------------------------------------------------------
+
+	private async open(): Promise<void> {
+		const generation = ++this.generation
+		this.clearReconnectTimer()
+		this.setStatus({ state: "connecting", attempt: this.attempt })
+
+		let token: SyncTokenResult
+		try {
+			token = await this.options.getToken()
+		} catch (cause) {
+			this.log("warning", "Sync token read failed", { source: this.source, cause })
+			token = "unavailable"
+		}
+		if (generation !== this.generation || this.stopped) return
+
+		if (token === "unavailable") {
+			return this.retry(
+				new SyncConnectionError({
+					message: "The API did not answer the token exchange",
+					source: this.source,
+					reason: "TokenUnavailable",
+				}),
+			)
+		}
+		// No session: keep retrying; the app re-reads the session and signs out if it ended.
+		if (token === null) {
+			return this.retry(
+				new SyncConnectionError({
+					message: "No session to sync with",
+					source: this.source,
+					reason: "NoSession",
+				}),
+			)
+		}
+
+		const Ctor = this.options.WebSocket ?? (globalThis.WebSocket as unknown as WebSocketConstructor)
+		let ws: WebSocketLike
+		try {
+			ws = new Ctor(this.url, [SYNC_SUBPROTOCOL, token])
+		} catch (cause) {
+			return this.retry(
+				new SyncConnectionError({
+					message: "Could not open the sync socket",
+					source: this.source,
+					reason: "Network",
+					cause,
+				}),
+			)
+		}
+		this.socket = ws
+		this.socketToken = token
+		this.run = null
+
+		ws.onopen = () => {
+			if (this.socket !== ws) return
+			this.send({ _tag: "Hello", since: this.lastSeq })
+			this.startHeartbeat()
+		}
+		ws.onmessage = (event) => {
+			if (this.socket !== ws) return
+			this.onFrame(event.data)
+		}
+		ws.onclose = (event) => {
+			if (this.socket !== ws) return
+			this.onSocketClosed(event.code, event.reason)
+		}
+		// A close event always follows.
+		ws.onerror = () => {}
+	}
+
+	private onSocketClosed(code: number, reason: string): void {
+		const token = this.socketToken
+		this.socket = null
+		this.socketToken = null
+		this.run = null
+		this.stopHeartbeat()
+		if (this.stopped) return
+
+		switch (code) {
+			case SyncCloseCode.Reauth: {
+				if (token !== null) this.options.invalidateToken?.(token)
+				this.reauthStreak++
+				// A fresh token at once; a second 4001 before any `Ready` backs off instead of looping.
+				if (this.reauthStreak <= 1) {
+					this.log("debug", "Sync token expired, reconnecting", { source: this.source })
+					void this.open()
+					return
+				}
+				return this.retry(
+					new SyncConnectionError({
+						message: "The source rejected a fresh token",
+						source: this.source,
+						reason: "Reauth",
+						closeCode: code,
+					}),
+				)
+			}
+			case SyncCloseCode.Forbidden:
+				return this.fail(
+					new SyncSourceForbiddenError({
+						message: reason || `Not allowed to read ${this.source}`,
+						source: this.source,
+					}),
+				)
+			case SyncCloseCode.NotFound:
+				return this.fail(
+					new SyncSourceNotFoundError({
+						message: reason || `${this.source} does not exist`,
+						source: this.source,
+					}),
+				)
+			default:
+				return this.retry(
+					new SyncConnectionError({
+						message: reason || `Sync socket closed (${code})`,
+						source: this.source,
+						reason: "Network",
+						closeCode: code,
+					}),
+				)
+		}
+	}
+
+	private onFrame(data: unknown): void {
+		if (typeof data !== "string") return
+		let json: unknown
+		try {
+			json = JSON.parse(data)
+		} catch (cause) {
+			this.log("warning", "Sync frame is not JSON", { source: this.source, cause })
+			return
+		}
+		const decoded = decodeFrame(json)
+		if (Result.isFailure(decoded)) {
+			this.log("warning", "Unknown sync frame", { source: this.source, cause: decoded.failure })
+			return
+		}
+		// Any frame proves the socket alive.
+		this.pingOutstanding = false
+		const frame = decoded.success
+
+		switch (frame._tag) {
+			case "Begin": {
+				if (this.run !== null) {
+					this.log("warning", "Sync Begin inside an open run; dropping it", { source: this.source })
+				}
+				this.run = { reset: frame.reset, tables: new Map() }
+				return
+			}
+			case "Rows": {
+				if (this.run === null) {
+					this.log("warning", "Sync Rows outside a run", {
+						source: this.source,
+						table: frame.table,
+					})
+					return
+				}
+				let table = this.run.tables.get(frame.table)
+				if (table === undefined) {
+					table = { upserts: [], deletes: [] }
+					this.run.tables.set(frame.table, table)
+				}
+				for (const row of frame.upserts) table.upserts.push(row)
+				for (const key of frame.deletes) table.deletes.push(key)
+				return
+			}
+			case "Commit": {
+				const open = this.run ?? { reset: false, tables: new Map() }
+				this.run = null
+				this.lastSeq = frame.seq
+				for (const table of open.tables.keys()) this.tablesSeen.add(table)
+				const run: SyncRun = {
+					source: this.source,
+					reset: open.reset,
+					seq: frame.seq,
+					tables: open.tables,
+				}
+				// Rows first, so a write is visible by the time its `awaitSeq` resolves.
+				for (const listener of this.runListeners) {
+					try {
+						listener(run)
+					} catch (cause) {
+						this.log("error", "Sync run listener failed", { source: this.source, cause })
+					}
+				}
+				for (const waiter of this.waiters) {
+					if (waiter.seq > frame.seq) continue
+					clearTimeout(waiter.timer)
+					this.waiters.delete(waiter)
+					waiter.resolve()
+				}
+				return
+			}
+			case "Ready": {
+				this.attempt = 0
+				this.reauthStreak = 0
+				this.hasSnapshot = true
+				this.setStatus({ state: "ready" })
+				return
+			}
+			case "Pong":
+				return
+			case "Ephemeral": {
+				for (const listener of this.ephemeralListeners) listener(frame.topic, frame.payload)
+				return
+			}
+			case "Error": {
+				this.log("warning", "Sync source error", {
+					source: this.source,
+					code: frame.code,
+					message: frame.message,
+				})
+				if (frame.code === "forbidden") {
+					this.fail(new SyncSourceForbiddenError({ message: frame.message, source: this.source }))
+				} else if (frame.code === "not_found") {
+					this.fail(new SyncSourceNotFoundError({ message: frame.message, source: this.source }))
+				}
+				return
+			}
+		}
+	}
+
+	private retry(error: SyncConnectionError): void {
+		if (this.stopped) return
+		this.attempt++
+		const delay = backoffDelay(this.backoff, this.attempt)
+		this.log("warning", "Sync connection failed, retrying", {
+			source: this.source,
+			reason: error.reason,
+			attempt: this.attempt,
+			delayMs: Math.round(delay),
+		})
+		this.setStatus({ state: "error", error, terminal: false, retryInMs: delay })
+		this.clearReconnectTimer()
+		this.reconnectTimer = setTimeout(() => {
+			this.reconnectTimer = undefined
+			void this.open()
+		}, delay)
+	}
+
+	private fail(error: SyncSourceTerminalError): void {
+		if (this.stopped) return
+		this.stopped = true
+		this.terminalError = error
+		this.clearReconnectTimer()
+		this.detach(1000, "stopped")
+		this.log("warning", "Sync source refused, stopping", { source: this.source, error: error._tag })
+		this.rejectWaiters(error)
+		this.setStatus({ state: "error", error, terminal: true })
+	}
+
+	private detach(code: number, reason: string): void {
+		const ws = this.socket
+		this.socket = null
+		this.socketToken = null
+		this.run = null
+		this.stopHeartbeat()
+		this.generation++
+		if (ws === null) return
+		ws.onopen = null
+		ws.onmessage = null
+		ws.onclose = null
+		ws.onerror = null
+		try {
+			ws.close(code, reason)
+		} catch {
+			// Already closed.
+		}
+	}
+
+	private send(frame: SyncClientFrame): void {
+		try {
+			this.socket?.send(JSON.stringify(frame))
+		} catch (cause) {
+			this.log("warning", "Sync send failed", { source: this.source, cause })
+		}
+	}
+
+	private startHeartbeat(): void {
+		this.stopHeartbeat()
+		this.pingOutstanding = false
+		const interval = this.options.heartbeatIntervalMs ?? 25_000
+		this.heartbeatTimer = setInterval(() => {
+			if (this.pingOutstanding) {
+				// Nothing arrived for a whole interval after the last `Ping`: the socket is dead.
+				this.detach(4000, "heartbeat")
+				this.retry(
+					new SyncConnectionError({
+						message: "Sync heartbeat timed out",
+						source: this.source,
+						reason: "Heartbeat",
+					}),
+				)
+				return
+			}
+			this.pingOutstanding = true
+			this.send({ _tag: "Ping" })
+		}, interval)
+	}
+
+	private stopHeartbeat(): void {
+		if (this.heartbeatTimer !== undefined) clearInterval(this.heartbeatTimer)
+		this.heartbeatTimer = undefined
+	}
+
+	private clearReconnectTimer(): void {
+		if (this.reconnectTimer !== undefined) clearTimeout(this.reconnectTimer)
+		this.reconnectTimer = undefined
+	}
+
+	private rejectWaiters(error: unknown): void {
+		for (const waiter of this.waiters) {
+			clearTimeout(waiter.timer)
+			waiter.reject(error)
+		}
+		this.waiters.clear()
+	}
+
+	private setStatus(status: SyncConnectionStatus): void {
+		this.currentStatus = status
+		for (const listener of this.statusListeners) {
+			try {
+				listener(status)
+			} catch (cause) {
+				this.log("error", "Sync status listener failed", { source: this.source, cause })
+			}
+		}
+	}
+}

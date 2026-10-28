@@ -1,7 +1,15 @@
-import { MessageRepo, OrganizationMemberRepo, UserRepo } from "@hazel/backend-core"
-import type { OrganizationId, UserId } from "@hazel/schema"
+/**
+ * Re-attributes provider-synced messages when a user links (or unlinks) their provider account:
+ * between the provider user's shadow and the Hazel user. Runs in the org's `OrgObject` (its
+ * `users` projection names the shadow); each linked `ChannelObject` moves its own messages
+ * (`channel.chatSyncReassignAuthors`).
+ */
+import { Database, SQLite, schema } from "@hazel/db"
 import type { IntegrationConnection } from "@hazel/domain/models"
-import { Context, Effect, Layer } from "effect"
+import type { OrganizationId, UserId } from "@hazel/schema"
+import { Context, Effect, Layer, Option, Schema } from "effect"
+import { SqlClient } from "effect/sql/SqlClient"
+import { reattributeProviderMessages } from "./chat-sync-org"
 
 interface ReconcileAttributionParams {
 	organizationId: OrganizationId
@@ -11,126 +19,82 @@ interface ReconcileAttributionParams {
 	externalAccountName?: string | null
 }
 
-const defaultShadowDisplayName = (provider: string): string =>
-	`${provider.charAt(0).toUpperCase()}${provider.slice(1)} User`
+/** Re-attribution needs the org's object (its outbox); called elsewhere, it is refused. */
+export class ChatSyncAttributionUnavailableError extends Schema.TaggedError<ChatSyncAttributionUnavailableError>()(
+	"ChatSyncAttributionUnavailableError",
+	{ message: Schema.String },
+) {}
 
 export class ChatSyncAttributionReconciler extends Context.Service<ChatSyncAttributionReconciler>()(
 	"ChatSyncAttributionReconciler",
 	{
 		make: Effect.gen(function* () {
-			const messageRepo = yield* MessageRepo
-			const userRepo = yield* UserRepo
-			const organizationMemberRepo = yield* OrganizationMemberRepo
+			const db = yield* Database.Database
+			const sql = yield* Effect.serviceOption(SqlClient)
 
-			const getOrCreateShadowUserId = Effect.fn(
-				"ChatSyncAttributionReconciler.getOrCreateShadowUserId",
-			)(function* (params: {
-				provider: IntegrationConnection.IntegrationProvider
-				externalAccountId: string
-				organizationId: OrganizationId
-				displayName?: string | null
-			}) {
-				const externalId = `${params.provider}-user-${params.externalAccountId}`
-				const displayName = params.displayName?.trim() || defaultShadowDisplayName(params.provider)
-				const user = yield* userRepo.upsertByExternalId(
-					{
-						externalId,
-						email: `${externalId}@${params.provider}.internal`,
-						firstName: displayName,
-						lastName: "",
-						avatarUrl: "",
-						userType: "machine",
-						settings: null,
-						isOnboarded: true,
-						timezone: null,
-						deletedAt: null,
-					},
-					{ syncAvatarUrl: true },
-				)
+			/** The provider user's shadow, if this org ever saw them. */
+			const shadowOf = (params: ReconcileAttributionParams) =>
+				db
+					.first(
+						SQLite.from(schema.usersTable)
+							.select("id")
+							.where(($) => [
+								$.externalId.eq(`${params.provider}-user-${params.externalAccountId}`),
+							])
+							.limit(1),
+					)
+					.pipe(Effect.map(Option.map((row) => row.id)))
 
-				yield* organizationMemberRepo.upsertByOrgAndUser({
-					organizationId: params.organizationId,
-					userId: user.id,
-					role: "member",
-					nickname: null,
-					joinedAt: new Date(),
-					invitedBy: null,
-					deletedAt: null,
+			const reassign = (
+				event: string,
+				params: ReconcileAttributionParams,
+				direction: (shadow: UserId) => { fromAuthorId: UserId; toAuthorId: UserId },
+			) =>
+				Effect.gen(function* () {
+					if (Option.isNone(sql)) {
+						return yield* new ChatSyncAttributionUnavailableError({
+							message: "Chat sync re-attribution runs in the organization's object",
+						})
+					}
+					const shadow = yield* shadowOf(params)
+					if (Option.isNone(shadow)) return { updatedCount: 0 }
+					const channels = yield* reattributeProviderMessages({
+						provider: params.provider,
+						...direction(shadow.value),
+					}).pipe(Effect.provideService(SqlClient, sql.value))
+					yield* Effect.logInfo("External messages re-attribution sent to linked channels", {
+						event,
+						provider: params.provider,
+						organizationId: params.organizationId,
+						userId: params.userId,
+						shadowUserId: shadow.value,
+						channels,
+					})
+					// Each channel moves its own messages; the count is of channels.
+					return { updatedCount: channels }
 				})
-
-				return user.id
-			})
 
 			const relinkHistoricalProviderMessages = Effect.fn(
 				"ChatSyncAttributionReconciler.relinkHistoricalProviderMessages",
-			)(function* (params: ReconcileAttributionParams) {
-				const shadowUserId = yield* getOrCreateShadowUserId({
-					provider: params.provider,
-					externalAccountId: params.externalAccountId,
-					organizationId: params.organizationId,
-					displayName: params.externalAccountName,
-				})
-
-				const updatedCount = yield* messageRepo.reassignExternalSyncedAuthors({
-					organizationId: params.organizationId,
-					provider: params.provider,
-					fromAuthorId: shadowUserId,
+			)((params: ReconcileAttributionParams) =>
+				reassign("chat_sync_attribution_relinked", params, (shadow) => ({
+					fromAuthorId: shadow,
 					toAuthorId: params.userId,
-				})
-
-				yield* Effect.logInfo("Historical external messages re-attributed to linked user", {
-					event: "chat_sync_attribution_relinked",
-					provider: params.provider,
-					organizationId: params.organizationId,
-					userId: params.userId,
-					externalAccountId: params.externalAccountId,
-					shadowUserId,
-					updatedCount,
-				})
-
-				return { updatedCount }
-			})
+				})),
+			)
 
 			const unlinkHistoricalProviderMessages = Effect.fn(
 				"ChatSyncAttributionReconciler.unlinkHistoricalProviderMessages",
-			)(function* (params: ReconcileAttributionParams) {
-				const shadowUserId = yield* getOrCreateShadowUserId({
-					provider: params.provider,
-					externalAccountId: params.externalAccountId,
-					organizationId: params.organizationId,
-					displayName: params.externalAccountName,
-				})
-
-				const updatedCount = yield* messageRepo.reassignExternalSyncedAuthors({
-					organizationId: params.organizationId,
-					provider: params.provider,
+			)((params: ReconcileAttributionParams) =>
+				reassign("chat_sync_attribution_unlinked", params, (shadow) => ({
 					fromAuthorId: params.userId,
-					toAuthorId: shadowUserId,
-				})
+					toAuthorId: shadow,
+				})),
+			)
 
-				yield* Effect.logInfo("Historical external messages re-attributed to shadow user", {
-					event: "chat_sync_attribution_unlinked",
-					provider: params.provider,
-					organizationId: params.organizationId,
-					userId: params.userId,
-					externalAccountId: params.externalAccountId,
-					shadowUserId,
-					updatedCount,
-				})
-
-				return { updatedCount }
-			})
-
-			return {
-				relinkHistoricalProviderMessages,
-				unlinkHistoricalProviderMessages,
-			}
+			return { relinkHistoricalProviderMessages, unlinkHistoricalProviderMessages }
 		}),
 	},
 ) {
-	static readonly layer = Layer.effect(this, this.make).pipe(
-		Layer.provide(MessageRepo.layer),
-		Layer.provide(UserRepo.layer),
-		Layer.provide(OrganizationMemberRepo.layer),
-	)
+	static readonly layer = Layer.effect(this, this.make)
 }

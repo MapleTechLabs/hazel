@@ -12,7 +12,7 @@ const props = Effect.gen(function* () {
 		outdir: "dist",
 		dev: { command: "bun run dev" },
 		memo: { include: ["**/*", "../../packages/ui/src/**"], lockfile: true },
-		compatibility: { date: "2026-10-01" },
+		compatibility: { date: "2026-09-25" },
 		workersDev: stage.kind !== "prd",
 		domain: domains.landing,
 	}

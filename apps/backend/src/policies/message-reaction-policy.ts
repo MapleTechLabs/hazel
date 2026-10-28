@@ -1,11 +1,15 @@
 import { MessageReactionRepo, MessageRepo } from "@hazel/backend-core"
-import { ErrorUtils, PermissionError, policy } from "@hazel/domain"
+import { ErrorUtils, policy } from "@hazel/domain"
 import type { MessageId, MessageReactionId } from "@hazel/schema"
 import { Context, Effect, Layer } from "effect"
 import { withAnnotatedScope } from "../lib/policy-utils"
-import { ConnectConversationService } from "../services/connect-conversation-service"
-import { OrgResolver } from "../services/org-resolver"
+import { ChannelViewers } from "../services/channel-viewers"
 
+/**
+ * Reaction authorization, run inside the message's `ChannelObject`: reacting needs the message's
+ * channel in the actor's `channel_viewers` (a Connect guest is a viewer too, so no separate
+ * conversation check); changing or removing a reaction is its author's.
+ */
 export class MessageReactionPolicy extends Context.Service<MessageReactionPolicy>()(
 	"MessageReactionPolicy/Policy",
 	{
@@ -14,33 +18,18 @@ export class MessageReactionPolicy extends Context.Service<MessageReactionPolicy
 
 			const messageReactionRepo = yield* MessageReactionRepo
 			const messageRepo = yield* MessageRepo
-			const orgResolver = yield* OrgResolver
-			const connectConversationService = yield* ConnectConversationService
+			const channelViewers = yield* ChannelViewers
 
-			const canList = (_id: MessageId) =>
+			const ownReaction = (action: "update" | "delete") => (id: MessageReactionId) =>
 				ErrorUtils.refailUnauthorized(
 					policyEntity,
-					"select",
-				)(
-					policy(
-						policyEntity,
-						"select",
-						Effect.fn(`${policyEntity}.select`)(function* (_actor) {
-							return yield* Effect.succeed(true)
-						}),
-					),
-				)
-
-			const canUpdate = (id: MessageReactionId) =>
-				ErrorUtils.refailUnauthorized(
-					policyEntity,
-					"update",
+					action,
 				)(
 					messageReactionRepo.with(id, (reaction) =>
 						policy(
 							policyEntity,
-							"update",
-							Effect.fn(`${policyEntity}.update`)(function* (actor) {
+							action,
+							Effect.fn(`${policyEntity}.${action}`)(function* (actor) {
 								return yield* Effect.succeed(actor.id === reaction.userId)
 							}),
 						),
@@ -54,48 +43,20 @@ export class MessageReactionPolicy extends Context.Service<MessageReactionPolicy
 				)(
 					messageRepo.with(messageId, (message) =>
 						withAnnotatedScope((scope) =>
-							Effect.gen(function* () {
-								if (message.conversationId) {
-									const hasAccess = yield* connectConversationService.canAccessConversation(
-										message.conversationId,
-										scope,
-									)
-									if (!hasAccess) {
-										return yield* Effect.fail(
-											new PermissionError({
-												message: "You don't have access to this conversation",
-												requiredScope: scope,
-											}),
-										)
-									}
-									return
-								}
-								return yield* orgResolver.fromChannelWithAccess(
-									message.channelId,
-									scope,
-									policyEntity,
-									"create",
-								)
-							}),
+							Effect.asVoid(channelViewers.require(message.channelId, scope)),
 						),
 					),
 				)
 
-			const canDelete = (id: MessageReactionId) =>
+			/** Listing is gated by the route that reads (the channel's socket or its viewer check). */
+			const canList = (_id: MessageId) =>
 				ErrorUtils.refailUnauthorized(
 					policyEntity,
-					"delete",
-				)(
-					messageReactionRepo.with(id, (reaction) =>
-						policy(
-							policyEntity,
-							"delete",
-							Effect.fn(`${policyEntity}.delete`)(function* (actor) {
-								return yield* Effect.succeed(actor.id === reaction.userId)
-							}),
-						),
-					),
-				)
+					"select",
+				)(policy(policyEntity, "select", () => Effect.succeed(true)))
+
+			const canUpdate = ownReaction("update")
+			const canDelete = ownReaction("delete")
 
 			return { canCreate, canDelete, canUpdate, canList } as const
 		}),
@@ -104,7 +65,6 @@ export class MessageReactionPolicy extends Context.Service<MessageReactionPolicy
 	static readonly layer = Layer.effect(this, this.make).pipe(
 		Layer.provide(MessageReactionRepo.layer),
 		Layer.provide(MessageRepo.layer),
-		Layer.provide(OrgResolver.layer),
-		Layer.provide(ConnectConversationService.layer),
+		Layer.provide(ChannelViewers.layer),
 	)
 }

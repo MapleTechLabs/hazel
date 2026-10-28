@@ -9,158 +9,123 @@ import {
 	SyncMessageLinkId,
 	UserId,
 } from "@hazel/schema"
-import * as PG from "@maple-dev/effect-orm/postgres"
-import { jsonb, now, timestamptz, uuid, varchar } from "./columns"
+import * as SQLite from "@maple-dev/effect-orm/sqlite"
+import { jsonb, randomUuid, textEnum, timestamptz, uuid, varchar } from "./columns"
 
-export const chatSyncConnectionStatusEnum = PG.enumType("chat_sync_connection_status", [
-	"active",
-	"paused",
-	"error",
-	"disabled",
-])
-export const chatSyncDirectionEnum = PG.enumType("chat_sync_direction", [
-	"both",
-	"hazel_to_external",
-	"external_to_hazel",
-])
-export const chatSyncReceiptSourceEnum = PG.enumType("chat_sync_receipt_source", ["hazel", "external"])
-export const chatSyncReceiptStatusEnum = PG.enumType("chat_sync_receipt_status", [
-	"processed",
-	"ignored",
-	"failed",
-])
+export const chatSyncConnectionStatusEnum = textEnum(["active", "paused", "error", "disabled"])
+export const chatSyncDirectionEnum = textEnum(["both", "hazel_to_external", "external_to_hazel"])
+export const chatSyncReceiptSourceEnum = textEnum(["hazel", "external"])
+export const chatSyncReceiptStatusEnum = textEnum(["processed", "ignored", "failed"])
 
-export const chatSyncChannelLinksTable = PG.table("chat_sync_channel_links", {
+export const chatSyncChannelLinksTable = SQLite.table("chat_sync_channel_links", {
 	columns: {
-		id: PG.column(uuid(SyncChannelLinkId), { defaultExpr: "gen_random_uuid()" }),
+		id: SQLite.column(uuid(SyncChannelLinkId), { defaultExpr: randomUuid }),
 		syncConnectionId: uuid(SyncConnectionId),
 		hazelChannelId: uuid(ChannelId),
 		externalChannelId: varchar(255),
-		externalChannelName: PG.nullable(varchar(255)),
-		direction: PG.column(chatSyncDirectionEnum, { default: "both" }),
-		isActive: PG.column(PG.bool, { default: true }),
-		settings: PG.nullable(jsonb<Record<string, any>>()),
-		lastSyncedAt: PG.nullable(timestamptz),
-		createdAt: PG.column(timestamptz, { defaultExpr: "now()" }),
-		updatedAt: PG.column(timestamptz, { defaultExpr: "now()" }),
-		deletedAt: PG.nullable(timestamptz),
+		externalChannelName: SQLite.nullable(varchar(255)),
+		direction: SQLite.column(chatSyncDirectionEnum, { default: "both" }),
+		isActive: SQLite.column(SQLite.boolean, { default: true }),
+		settings: SQLite.nullable(jsonb<Record<string, any>>()),
+		lastSyncedAt: SQLite.nullable(timestamptz),
+		createdAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		updatedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		deletedAt: SQLite.nullable(timestamptz),
 	},
 	primaryKey: ["id"],
 	indexes: [
-		PG.index("chat_sync_link_connection_idx", ["syncConnectionId"]),
-		PG.index("chat_sync_link_hazel_channel_idx", ["hazelChannelId"]),
-		PG.index("chat_sync_link_external_channel_idx", ["externalChannelId"]),
-		PG.index("chat_sync_link_deleted_at_idx", ["deletedAt"]),
-		PG.uniqueIndex("chat_sync_link_connection_hazel_unique", ["syncConnectionId", "hazelChannelId"], {
-			where: '"deletedAt" IS NULL',
-		}),
-		PG.uniqueIndex(
-			"chat_sync_link_connection_external_unique",
-			["syncConnectionId", "externalChannelId"],
-			{ where: '"deletedAt" IS NULL' },
-		),
+		SQLite.index("chat_sync_link_connection_idx", ["syncConnectionId"]),
+		SQLite.index("chat_sync_link_hazel_channel_idx", ["hazelChannelId"]),
+		SQLite.index("chat_sync_link_external_channel_idx", ["externalChannelId"]),
+		SQLite.index("chat_sync_link_deleted_at_idx", ["deletedAt"]),
 	],
 })
-export type ChatSyncChannelLink = PG.SelectRowOf<typeof chatSyncChannelLinksTable>
-export type NewChatSyncChannelLink = PG.InsertRowOf<typeof chatSyncChannelLinksTable>
+export type ChatSyncChannelLink = SQLite.SelectRowOf<typeof chatSyncChannelLinksTable>
+export type NewChatSyncChannelLink = SQLite.InsertRowOf<typeof chatSyncChannelLinksTable>
 
-export const chatSyncConnectionsTable = PG.table("chat_sync_connections", {
+export const chatSyncConnectionsTable = SQLite.table("chat_sync_connections", {
 	columns: {
-		id: PG.column(uuid(SyncConnectionId), { defaultExpr: "gen_random_uuid()" }),
+		id: SQLite.column(uuid(SyncConnectionId), { defaultExpr: randomUuid }),
 		organizationId: uuid(OrganizationId),
-		integrationConnectionId: PG.nullable(uuid(IntegrationConnectionId)),
+		integrationConnectionId: SQLite.nullable(uuid(IntegrationConnectionId)),
 		provider: varchar(50),
 		externalWorkspaceId: varchar(255),
-		externalWorkspaceName: PG.nullable(varchar(255)),
-		status: PG.column(chatSyncConnectionStatusEnum, { default: "active" }),
-		settings: PG.nullable(jsonb<Record<string, any>>()),
-		metadata: PG.nullable(jsonb<Record<string, any>>()),
-		errorMessage: PG.nullable(PG.text),
-		lastSyncedAt: PG.nullable(timestamptz),
+		externalWorkspaceName: SQLite.nullable(varchar(255)),
+		status: SQLite.column(chatSyncConnectionStatusEnum, { default: "active" }),
+		settings: SQLite.nullable(jsonb<Record<string, any>>()),
+		metadata: SQLite.nullable(jsonb<Record<string, any>>()),
+		errorMessage: SQLite.nullable(SQLite.text),
+		lastSyncedAt: SQLite.nullable(timestamptz),
 		createdBy: uuid(UserId),
-		createdAt: PG.column(timestamptz, { defaultExpr: "now()" }),
-		updatedAt: PG.column(timestamptz, { defaultExpr: "now()" }),
-		deletedAt: PG.nullable(timestamptz),
+		createdAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		updatedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		deletedAt: SQLite.nullable(timestamptz),
 	},
 	primaryKey: ["id"],
 	indexes: [
-		PG.index("chat_sync_conn_org_idx", ["organizationId"]),
-		PG.index("chat_sync_conn_integration_idx", ["integrationConnectionId"]),
-		PG.index("chat_sync_conn_provider_idx", ["provider"]),
-		PG.index("chat_sync_conn_status_idx", ["status"]),
-		PG.index("chat_sync_conn_deleted_at_idx", ["deletedAt"]),
-		PG.uniqueIndex(
-			"chat_sync_conn_org_provider_workspace_unique",
-			["organizationId", "provider", "externalWorkspaceId"],
-			{ where: '"deletedAt" IS NULL' },
-		),
-		PG.uniqueIndex("chat_sync_conn_integration_unique", ["integrationConnectionId"], {
-			where: '"deletedAt" IS NULL AND "integrationConnectionId" IS NOT NULL',
-		}),
+		SQLite.index("chat_sync_conn_org_idx", ["organizationId"]),
+		SQLite.index("chat_sync_conn_integration_idx", ["integrationConnectionId"]),
+		SQLite.index("chat_sync_conn_provider_idx", ["provider"]),
+		SQLite.index("chat_sync_conn_status_idx", ["status"]),
+		SQLite.index("chat_sync_conn_deleted_at_idx", ["deletedAt"]),
 	],
 })
-export type ChatSyncConnection = PG.SelectRowOf<typeof chatSyncConnectionsTable>
-export type NewChatSyncConnection = PG.InsertRowOf<typeof chatSyncConnectionsTable>
+export type ChatSyncConnection = SQLite.SelectRowOf<typeof chatSyncConnectionsTable>
+export type NewChatSyncConnection = SQLite.InsertRowOf<typeof chatSyncConnectionsTable>
 
-export const chatSyncEventReceiptsTable = PG.table("chat_sync_event_receipts", {
+export const chatSyncEventReceiptsTable = SQLite.table("chat_sync_event_receipts", {
 	columns: {
-		id: PG.column(uuid(SyncEventReceiptId), { defaultExpr: "gen_random_uuid()" }),
+		id: SQLite.column(uuid(SyncEventReceiptId), { defaultExpr: randomUuid }),
 		syncConnectionId: uuid(SyncConnectionId),
-		channelLinkId: PG.nullable(uuid(SyncChannelLinkId)),
+		channelLinkId: SQLite.nullable(uuid(SyncChannelLinkId)),
 		source: chatSyncReceiptSourceEnum,
-		externalEventId: PG.nullable(varchar(255)),
+		externalEventId: SQLite.nullable(varchar(255)),
 		dedupeKey: varchar(255),
-		payloadHash: PG.nullable(varchar(128)),
-		status: PG.column(chatSyncReceiptStatusEnum, { default: "processed" }),
-		errorMessage: PG.nullable(PG.text),
-		processedAt: PG.column(timestamptz, { defaultExpr: "now()" }),
-		createdAt: PG.column(timestamptz, { defaultExpr: "now()" }),
+		payloadHash: SQLite.nullable(varchar(128)),
+		status: SQLite.column(chatSyncReceiptStatusEnum, { default: "processed" }),
+		errorMessage: SQLite.nullable(SQLite.text),
+		processedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		createdAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
 	},
 	primaryKey: ["id"],
 	indexes: [
-		PG.index("chat_sync_receipt_connection_idx", ["syncConnectionId"]),
-		PG.index("chat_sync_receipt_channel_link_idx", ["channelLinkId"]),
-		PG.index("chat_sync_receipt_source_idx", ["source"]),
-		PG.index("chat_sync_receipt_processed_at_idx", ["processedAt"]),
-		PG.uniqueIndex("chat_sync_receipt_dedupe_unique", ["syncConnectionId", "source", "dedupeKey"]),
+		SQLite.index("chat_sync_receipt_connection_idx", ["syncConnectionId"]),
+		SQLite.index("chat_sync_receipt_channel_link_idx", ["channelLinkId"]),
+		SQLite.index("chat_sync_receipt_source_idx", ["source"]),
+		SQLite.index("chat_sync_receipt_processed_at_idx", ["processedAt"]),
+		SQLite.uniqueIndex("chat_sync_receipt_dedupe_unique", ["syncConnectionId", "source", "dedupeKey"]),
 	],
 })
-export type ChatSyncEventReceipt = PG.SelectRowOf<typeof chatSyncEventReceiptsTable>
-export type NewChatSyncEventReceipt = PG.InsertRowOf<typeof chatSyncEventReceiptsTable>
+export type ChatSyncEventReceipt = SQLite.SelectRowOf<typeof chatSyncEventReceiptsTable>
+export type NewChatSyncEventReceipt = SQLite.InsertRowOf<typeof chatSyncEventReceiptsTable>
 
-export const chatSyncMessageLinksTable = PG.table("chat_sync_message_links", {
+export const chatSyncMessageLinksTable = SQLite.table("chat_sync_message_links", {
 	columns: {
-		id: PG.column(uuid(SyncMessageLinkId), { defaultExpr: "gen_random_uuid()" }),
+		id: SQLite.column(uuid(SyncMessageLinkId), { defaultExpr: randomUuid }),
 		channelLinkId: uuid(SyncChannelLinkId),
 		hazelMessageId: uuid(MessageId),
 		externalMessageId: varchar(255),
-		source: PG.column(chatSyncReceiptSourceEnum, { default: "hazel" }),
-		rootHazelMessageId: PG.nullable(uuid(MessageId)),
-		rootExternalMessageId: PG.nullable(varchar(255)),
-		hazelThreadChannelId: PG.nullable(uuid(ChannelId)),
-		externalThreadId: PG.nullable(varchar(255)),
-		lastSyncedAt: PG.column(timestamptz, { defaultExpr: "now()" }),
-		createdAt: PG.column(timestamptz, { defaultExpr: "now()" }),
-		updatedAt: PG.column(timestamptz, { defaultExpr: "now()" }),
-		deletedAt: PG.nullable(timestamptz),
+		source: SQLite.column(chatSyncReceiptSourceEnum, { default: "hazel" }),
+		rootHazelMessageId: SQLite.nullable(uuid(MessageId)),
+		rootExternalMessageId: SQLite.nullable(varchar(255)),
+		hazelThreadChannelId: SQLite.nullable(uuid(ChannelId)),
+		externalThreadId: SQLite.nullable(varchar(255)),
+		lastSyncedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		createdAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		updatedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		deletedAt: SQLite.nullable(timestamptz),
 	},
 	primaryKey: ["id"],
 	indexes: [
-		PG.index("chat_sync_msg_link_channel_idx", ["channelLinkId"]),
-		PG.index("chat_sync_msg_link_hazel_message_idx", ["hazelMessageId"]),
-		PG.index("chat_sync_msg_link_external_message_idx", ["externalMessageId"]),
-		PG.index("chat_sync_msg_link_root_hazel_idx", ["rootHazelMessageId"]),
-		PG.index("chat_sync_msg_link_deleted_at_idx", ["deletedAt"]),
-		PG.uniqueIndex("chat_sync_msg_link_hazel_unique", ["channelLinkId", "hazelMessageId"], {
-			where: '"deletedAt" IS NULL',
-		}),
-		PG.uniqueIndex("chat_sync_msg_link_external_unique", ["channelLinkId", "externalMessageId"], {
-			where: '"deletedAt" IS NULL',
-		}),
+		SQLite.index("chat_sync_msg_link_channel_idx", ["channelLinkId"]),
+		SQLite.index("chat_sync_msg_link_hazel_message_idx", ["hazelMessageId"]),
+		SQLite.index("chat_sync_msg_link_external_message_idx", ["externalMessageId"]),
+		SQLite.index("chat_sync_msg_link_root_hazel_idx", ["rootHazelMessageId"]),
+		SQLite.index("chat_sync_msg_link_deleted_at_idx", ["deletedAt"]),
 	],
 })
-export type ChatSyncMessageLink = PG.SelectRowOf<typeof chatSyncMessageLinksTable>
-export type NewChatSyncMessageLink = PG.InsertRowOf<typeof chatSyncMessageLinksTable>
+export type ChatSyncMessageLink = SQLite.SelectRowOf<typeof chatSyncMessageLinksTable>
+export type NewChatSyncMessageLink = SQLite.InsertRowOf<typeof chatSyncMessageLinksTable>
 
 export type ChatSyncOutboundIdentitySettings = {
 	readonly enabled: boolean

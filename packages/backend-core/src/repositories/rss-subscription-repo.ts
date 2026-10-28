@@ -1,4 +1,4 @@
-import { Database, PG, Repository, schema } from "@hazel/db"
+import { Database, SQLite, Repository, schema } from "@hazel/db"
 
 import type { ChannelId, OrganizationId, RssSubscriptionId } from "@hazel/schema"
 import { RssSubscription } from "@hazel/domain/models"
@@ -19,7 +19,7 @@ export class RssSubscriptionRepo extends Context.Service<RssSubscriptionRepo>()(
 		// Find all subscriptions for a channel
 		const findByChannel = (channelId: ChannelId) =>
 			db.run(
-				PG.from(schema.rssSubscriptionsTable)
+				SQLite.from(schema.rssSubscriptionsTable)
 					.select()
 					.where(($) => [$.channelId.eq(channelId), $.deletedAt.isNull()]),
 			)
@@ -27,7 +27,7 @@ export class RssSubscriptionRepo extends Context.Service<RssSubscriptionRepo>()(
 		// Find all subscriptions for an organization
 		const findByOrganization = (organizationId: OrganizationId) =>
 			db.run(
-				PG.from(schema.rssSubscriptionsTable)
+				SQLite.from(schema.rssSubscriptionsTable)
 					.select()
 					.where(($) => [$.organizationId.eq(organizationId), $.deletedAt.isNull()]),
 			)
@@ -35,7 +35,7 @@ export class RssSubscriptionRepo extends Context.Service<RssSubscriptionRepo>()(
 		// Find subscription by channel and feed URL (for uniqueness check)
 		const findByChannelAndFeedUrl = (channelId: ChannelId, feedUrl: string) =>
 			db.first(
-				PG.from(schema.rssSubscriptionsTable)
+				SQLite.from(schema.rssSubscriptionsTable)
 					.select()
 					.where(($) => [$.channelId.eq(channelId), $.feedUrl.eq(feedUrl), $.deletedAt.isNull()])
 					.limit(1),
@@ -50,7 +50,7 @@ export class RssSubscriptionRepo extends Context.Service<RssSubscriptionRepo>()(
 			},
 		) =>
 			db.run(
-				PG.update(schema.rssSubscriptionsTable)
+				SQLite.update(schema.rssSubscriptionsTable)
 					.set({
 						...(settings.isEnabled !== undefined && { isEnabled: settings.isEnabled }),
 						...(settings.pollingIntervalMinutes !== undefined && {
@@ -65,7 +65,7 @@ export class RssSubscriptionRepo extends Context.Service<RssSubscriptionRepo>()(
 		// Soft delete subscription
 		const softDelete = (id: RssSubscriptionId) =>
 			db.run(
-				PG.update(schema.rssSubscriptionsTable)
+				SQLite.update(schema.rssSubscriptionsTable)
 					.set({
 						deletedAt: new Date(),
 						updatedAt: new Date(),

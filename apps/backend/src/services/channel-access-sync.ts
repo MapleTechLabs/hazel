@@ -1,5 +1,12 @@
-import { Database, PG, schema } from "@hazel/db"
-import type { ChannelId, ConnectConversationId, OrganizationId, UserId } from "@hazel/schema"
+/**
+ * Recomputes `channel_access` from org-local tables. Inside an `OrgObject`, call it through
+ * `worker/objects/org/channel-access.ts` (`syncChannelAccess`, `syncChannelTree`, `syncMemberAccess`),
+ * which also projects the result. TODO(do-sync): fold into that module and delete this service once
+ * bots and chat-sync have moved to those helpers. A Connect host channel's access includes the
+ * conversation's participants (`worker/objects/org/connect.ts`).
+ */
+import { Database, SQLite, schema } from "@hazel/db"
+import type { ChannelId, OrganizationId, UserId } from "@hazel/schema"
 import { Context, Effect, Layer } from "effect"
 
 export class ChannelAccessSyncService extends Context.Service<ChannelAccessSyncService>()(
@@ -16,13 +23,15 @@ export class ChannelAccessSyncService extends Context.Service<ChannelAccessSyncS
 				const dedupedUserIds = [...new Set(userIds)].sort()
 				if (dedupedUserIds.length === 0) {
 					yield* db.run(
-						PG.deleteFrom(schema.channelAccessTable).where(($) => [$.channelId.eq(channelId)]),
+						SQLite.deleteFrom(schema.channelAccessTable).where(($) => [
+							$.channelId.eq(channelId),
+						]),
 					)
 					return
 				}
 
 				yield* db.run(
-					PG.insertInto(schema.channelAccessTable)
+					SQLite.insertInto(schema.channelAccessTable)
 						.values(
 							dedupedUserIds.map((userId) => ({
 								userId,
@@ -40,7 +49,7 @@ export class ChannelAccessSyncService extends Context.Service<ChannelAccessSyncS
 				)
 
 				yield* db.run(
-					PG.deleteFrom(schema.channelAccessTable).where(($) => [
+					SQLite.deleteFrom(schema.channelAccessTable).where(($) => [
 						$.channelId.eq(channelId),
 						$.userId.notIn(...dedupedUserIds),
 					]),
@@ -51,7 +60,7 @@ export class ChannelAccessSyncService extends Context.Service<ChannelAccessSyncS
 				channelId: ChannelId,
 			) {
 				yield* db.run(
-					PG.deleteFrom(schema.channelAccessTable).where(($) => [$.channelId.eq(channelId)]),
+					SQLite.deleteFrom(schema.channelAccessTable).where(($) => [$.channelId.eq(channelId)]),
 				)
 			})
 
@@ -59,7 +68,7 @@ export class ChannelAccessSyncService extends Context.Service<ChannelAccessSyncS
 				channelId: ChannelId,
 			) {
 				const channelOption = yield* db.first(
-					PG.from(schema.channelsTable)
+					SQLite.from(schema.channelsTable)
 						.select("id", "type", "organizationId", "parentChannelId")
 						.where(($) => [$.id.eq(channelId), $.deletedAt.isNull()])
 						.limit(1),
@@ -75,7 +84,7 @@ export class ChannelAccessSyncService extends Context.Service<ChannelAccessSyncS
 
 				if (channel.type === "public") {
 					const members = yield* db.run(
-						PG.from(schema.organizationMembersTable)
+						SQLite.from(schema.organizationMembersTable)
 							.select("userId")
 							.where(($) => [
 								$.organizationId.eq(channel.organizationId),
@@ -89,9 +98,9 @@ export class ChannelAccessSyncService extends Context.Service<ChannelAccessSyncS
 					channel.type === "single"
 				) {
 					const members = yield* db.run(
-						PG.from(schema.channelMembersTable, "cm")
+						SQLite.from(schema.channelMembersTable, "cm")
 							.innerJoin(schema.organizationMembersTable, "om", (cm, om) =>
-								PG.and(
+								SQLite.and(
 									om.organizationId.eq(channel.organizationId),
 									om.userId.eq(cm.userId),
 									om.deletedAt.isNull(),
@@ -109,9 +118,9 @@ export class ChannelAccessSyncService extends Context.Service<ChannelAccessSyncS
 					const parentChannelId = channel.parentChannelId
 
 					const parentAccess = yield* db.run(
-						PG.from(schema.channelAccessTable, "ca")
+						SQLite.from(schema.channelAccessTable, "ca")
 							.innerJoin(schema.organizationMembersTable, "om", (ca, om) =>
-								PG.and(
+								SQLite.and(
 									om.organizationId.eq(channel.organizationId),
 									om.userId.eq(ca.userId),
 									om.deletedAt.isNull(),
@@ -128,7 +137,7 @@ export class ChannelAccessSyncService extends Context.Service<ChannelAccessSyncS
 
 				// If channel is part of a connect conversation, add cross-org participants
 				const connectMount = yield* db.first(
-					PG.from(schema.connectConversationChannelsTable)
+					SQLite.from(schema.connectConversationChannelsTable)
 						.select("conversationId")
 						.where(($) => [$.channelId.eq(channelId), $.deletedAt.isNull()])
 						.limit(1),
@@ -137,7 +146,7 @@ export class ChannelAccessSyncService extends Context.Service<ChannelAccessSyncS
 				if (connectMount._tag === "Some") {
 					const conversationId = connectMount.value.conversationId
 					const participants = yield* db.run(
-						PG.from(schema.connectParticipantsTable)
+						SQLite.from(schema.connectParticipantsTable)
 							.select("userId")
 							.where(($) => [$.conversationId.eq(conversationId), $.deletedAt.isNull()]),
 					)
@@ -147,25 +156,11 @@ export class ChannelAccessSyncService extends Context.Service<ChannelAccessSyncS
 				yield* upsertChannelUsers(channel.id, channel.organizationId, userIds)
 			})
 
-			const syncConversation = Effect.fn("ChannelAccessSyncService.syncConversation")(function* (
-				conversationId: ConnectConversationId,
-			) {
-				const mounts = yield* db.run(
-					PG.from(schema.connectConversationChannelsTable)
-						.select("channelId")
-						.where(($) => [$.conversationId.eq(conversationId), $.deletedAt.isNull()]),
-				)
-
-				yield* Effect.forEach(mounts, (mount) => syncChannel(mount.channelId), {
-					concurrency: 10,
-				})
-			})
-
 			const syncChildThreads = Effect.fn("ChannelAccessSyncService.syncChildThreads")(function* (
 				parentChannelId: ChannelId,
 			) {
 				const childThreads = yield* db.run(
-					PG.from(schema.channelsTable)
+					SQLite.from(schema.channelsTable)
 						.select("id")
 						.where(($) => [
 							$.parentChannelId.eq(parentChannelId),
@@ -180,7 +175,7 @@ export class ChannelAccessSyncService extends Context.Service<ChannelAccessSyncS
 			const syncUserInOrganization = Effect.fn("ChannelAccessSyncService.syncUserInOrganization")(
 				function* (userId: UserId, organizationId: OrganizationId) {
 					const activeMembership = yield* db.run(
-						PG.from(schema.organizationMembersTable)
+						SQLite.from(schema.organizationMembersTable)
 							.select("id")
 							.where(($) => [
 								$.organizationId.eq(organizationId),
@@ -192,7 +187,7 @@ export class ChannelAccessSyncService extends Context.Service<ChannelAccessSyncS
 
 					if (activeMembership.length === 0) {
 						yield* db.run(
-							PG.deleteFrom(schema.channelAccessTable).where(($) => [
+							SQLite.deleteFrom(schema.channelAccessTable).where(($) => [
 								$.userId.eq(userId),
 								$.organizationId.eq(organizationId),
 							]),
@@ -201,15 +196,15 @@ export class ChannelAccessSyncService extends Context.Service<ChannelAccessSyncS
 					}
 
 					const channels = yield* db.run(
-						PG.from(schema.channelsTable)
+						SQLite.from(schema.channelsTable)
 							.select("id", "type", "parentChannelId")
 							.where(($) => [$.organizationId.eq(organizationId), $.deletedAt.isNull()]),
 					)
 
 					const membershipChannels = yield* db.run(
-						PG.from(schema.channelMembersTable, "cm")
+						SQLite.from(schema.channelMembersTable, "cm")
 							.innerJoin(schema.channelsTable, "c", (cm, c) =>
-								PG.and(
+								SQLite.and(
 									c.id.eq(cm.channelId),
 									c.organizationId.eq(organizationId),
 									c.deletedAt.isNull(),
@@ -239,7 +234,7 @@ export class ChannelAccessSyncService extends Context.Service<ChannelAccessSyncS
 
 					if (desiredChannelIds.length === 0) {
 						yield* db.run(
-							PG.deleteFrom(schema.channelAccessTable).where(($) => [
+							SQLite.deleteFrom(schema.channelAccessTable).where(($) => [
 								$.userId.eq(userId),
 								$.organizationId.eq(organizationId),
 							]),
@@ -248,7 +243,7 @@ export class ChannelAccessSyncService extends Context.Service<ChannelAccessSyncS
 					}
 
 					yield* db.run(
-						PG.insertInto(schema.channelAccessTable)
+						SQLite.insertInto(schema.channelAccessTable)
 							.values(
 								desiredChannelIds.map((channelId) => ({
 									userId,
@@ -266,7 +261,7 @@ export class ChannelAccessSyncService extends Context.Service<ChannelAccessSyncS
 					)
 
 					yield* db.run(
-						PG.deleteFrom(schema.channelAccessTable).where(($) => [
+						SQLite.deleteFrom(schema.channelAccessTable).where(($) => [
 							$.userId.eq(userId),
 							$.organizationId.eq(organizationId),
 							$.channelId.notIn(...desiredChannelIds),
@@ -277,7 +272,6 @@ export class ChannelAccessSyncService extends Context.Service<ChannelAccessSyncS
 
 			return {
 				syncChannel,
-				syncConversation,
 				syncChildThreads,
 				syncUserInOrganization,
 				removeChannel,

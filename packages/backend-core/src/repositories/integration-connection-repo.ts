@@ -1,4 +1,4 @@
-import { Database, PG, Repository, schema } from "@hazel/db"
+import { Database, SQLite, Repository, schema } from "@hazel/db"
 
 import type { IntegrationConnectionId, OrganizationId, UserId } from "@hazel/schema"
 import { IntegrationConnection } from "@hazel/domain/models"
@@ -28,7 +28,7 @@ export class IntegrationConnectionRepo extends Context.Service<IntegrationConnec
 				provider: IntegrationConnection.IntegrationProvider,
 			) =>
 				db.first(
-					PG.from(schema.integrationConnectionsTable)
+					SQLite.from(schema.integrationConnectionsTable)
 						.select()
 						.where(($) => [
 							$.organizationId.eq(organizationId),
@@ -47,7 +47,7 @@ export class IntegrationConnectionRepo extends Context.Service<IntegrationConnec
 				provider: IntegrationConnection.IntegrationProvider,
 			) =>
 				db.first(
-					PG.from(schema.integrationConnectionsTable)
+					SQLite.from(schema.integrationConnectionsTable)
 						.select()
 						.where(($) => [
 							$.organizationId.eq(organizationId),
@@ -67,7 +67,7 @@ export class IntegrationConnectionRepo extends Context.Service<IntegrationConnec
 				provider: IntegrationConnection.IntegrationProvider,
 			) =>
 				db.first(
-					PG.from(schema.integrationConnectionsTable)
+					SQLite.from(schema.integrationConnectionsTable)
 						.select()
 						.where(($) => [
 							$.organizationId.eq(organizationId),
@@ -85,7 +85,7 @@ export class IntegrationConnectionRepo extends Context.Service<IntegrationConnec
 				externalAccountId: string,
 			) =>
 				db.first(
-					PG.from(schema.integrationConnectionsTable)
+					SQLite.from(schema.integrationConnectionsTable)
 						.select()
 						.where(($) => [
 							$.organizationId.eq(organizationId),
@@ -101,7 +101,7 @@ export class IntegrationConnectionRepo extends Context.Service<IntegrationConnec
 			// Get all connections for an organization (both org-level and user-level)
 			const findAllForOrg = (organizationId: OrganizationId) =>
 				db.run(
-					PG.from(schema.integrationConnectionsTable)
+					SQLite.from(schema.integrationConnectionsTable)
 						.select()
 						.where(($) => [$.organizationId.eq(organizationId), $.deletedAt.isNull()]),
 				)
@@ -109,7 +109,7 @@ export class IntegrationConnectionRepo extends Context.Service<IntegrationConnec
 			// Get all active org-level connections for an organization
 			const findActiveOrgConnections = (organizationId: OrganizationId) =>
 				db.run(
-					PG.from(schema.integrationConnectionsTable)
+					SQLite.from(schema.integrationConnectionsTable)
 						.select()
 						.where(($) => [
 							$.organizationId.eq(organizationId),
@@ -127,7 +127,7 @@ export class IntegrationConnectionRepo extends Context.Service<IntegrationConnec
 				errorMessage?: string,
 			) =>
 				db.run(
-					PG.update(schema.integrationConnectionsTable)
+					SQLite.update(schema.integrationConnectionsTable)
 						.set({
 							status,
 							errorMessage: errorMessage ?? null,
@@ -140,7 +140,7 @@ export class IntegrationConnectionRepo extends Context.Service<IntegrationConnec
 			// Soft delete connection
 			const softDelete = (connectionId: IntegrationConnectionId) =>
 				db.run(
-					PG.update(schema.integrationConnectionsTable)
+					SQLite.update(schema.integrationConnectionsTable)
 						.set({
 							deletedAt: new Date(),
 							status: "revoked",
@@ -153,11 +153,11 @@ export class IntegrationConnectionRepo extends Context.Service<IntegrationConnec
 			// Find connection by GitHub installation ID (stored in metadata JSONB)
 			const findByGitHubInstallationId = (installationId: string) =>
 				db.first(
-					PG.from(schema.integrationConnectionsTable)
+					SQLite.from(schema.integrationConnectionsTable)
 						.select()
 						.where(($) => [
 							$.provider.eq("github"),
-							PG.jsonText($.metadata, "installationId").eq(installationId),
+							SQLite.jsonText($.metadata, "installationId").eq(installationId),
 							$.deletedAt.isNull(),
 						])
 						.limit(1),
@@ -166,11 +166,11 @@ export class IntegrationConnectionRepo extends Context.Service<IntegrationConnec
 			// Find all connections for a GitHub installation ID (stored in metadata JSONB)
 			const findAllByGitHubInstallationId = (installationId: string) =>
 				db.run(
-					PG.from(schema.integrationConnectionsTable)
+					SQLite.from(schema.integrationConnectionsTable)
 						.select()
 						.where(($) => [
 							$.provider.eq("github"),
-							PG.jsonText($.metadata, "installationId").eq(installationId),
+							SQLite.jsonText($.metadata, "installationId").eq(installationId),
 							$.deletedAt.isNull(),
 						]),
 				)
@@ -178,7 +178,7 @@ export class IntegrationConnectionRepo extends Context.Service<IntegrationConnec
 			// Overwrite an existing connection with the given insert data
 			const overwrite = (id: IntegrationConnectionId, data: typeof IntegrationConnection.Insert.Type) =>
 				db.run(
-					PG.update(schema.integrationConnectionsTable)
+					SQLite.update(schema.integrationConnectionsTable)
 						.set({
 							...data,
 							lastUsedAt: toDate(data.lastUsedAt),

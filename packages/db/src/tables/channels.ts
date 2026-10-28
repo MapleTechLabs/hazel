@@ -7,62 +7,56 @@ import {
 	OrganizationId,
 	UserId,
 } from "@hazel/schema"
-import * as PG from "@maple-dev/effect-orm/postgres"
-import { now, timestamptz, uuid, varchar } from "./columns"
+import * as SQLite from "@maple-dev/effect-orm/sqlite"
+import { randomUuid, textEnum, timestamptz, uuid, varchar } from "./columns"
 
-export const channelTypeEnum = PG.enumType("channel_type", [
-	"public",
-	"private",
-	"thread",
-	"direct",
-	"single",
-])
+export const channelTypeEnum = textEnum(["public", "private", "thread", "direct", "single"])
 
-export const channelMembersTable = PG.table("channel_members", {
+export const channelMembersTable = SQLite.table("channel_members", {
 	columns: {
-		id: PG.column(uuid(ChannelMemberId), { defaultExpr: "gen_random_uuid()" }),
+		id: SQLite.column(uuid(ChannelMemberId), { defaultExpr: randomUuid }),
 		channelId: uuid(ChannelId),
 		userId: uuid(UserId),
-		isHidden: PG.column(PG.bool, { default: false }),
-		isMuted: PG.column(PG.bool, { default: false }),
-		isFavorite: PG.column(PG.bool, { default: false }),
-		lastSeenMessageId: PG.nullable(uuid(MessageId)),
-		notificationCount: PG.column(PG.int4, { default: 0 }),
-		joinedAt: PG.column(timestamptz, { defaultExpr: "now()" }),
-		createdAt: PG.column(timestamptz, { defaultExpr: "now()" }),
-		deletedAt: PG.nullable(timestamptz),
+		isHidden: SQLite.column(SQLite.boolean, { default: false }),
+		isMuted: SQLite.column(SQLite.boolean, { default: false }),
+		isFavorite: SQLite.column(SQLite.boolean, { default: false }),
+		lastSeenMessageId: SQLite.nullable(uuid(MessageId)),
+		notificationCount: SQLite.column(SQLite.integer, { default: 0 }),
+		joinedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		createdAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		deletedAt: SQLite.nullable(timestamptz),
 	},
 	primaryKey: ["id"],
 	indexes: [
-		PG.index("channel_members_channel_id_idx", ["channelId"]),
-		PG.index("channel_members_user_id_idx", ["userId"]),
-		PG.index("channel_members_channel_user_idx", ["channelId", "userId"]),
+		SQLite.index("channel_members_channel_id_idx", ["channelId"]),
+		SQLite.index("channel_members_user_id_idx", ["userId"]),
+		SQLite.index("channel_members_channel_user_idx", ["channelId", "userId"]),
 	],
 })
-export type ChannelMember = PG.SelectRowOf<typeof channelMembersTable>
-export type NewChannelMember = PG.InsertRowOf<typeof channelMembersTable>
+export type ChannelMember = SQLite.SelectRowOf<typeof channelMembersTable>
+export type NewChannelMember = SQLite.InsertRowOf<typeof channelMembersTable>
 
-export const channelsTable = PG.table("channels", {
+export const channelsTable = SQLite.table("channels", {
 	columns: {
-		id: PG.column(uuid(ChannelId), { defaultExpr: "gen_random_uuid()" }),
+		id: SQLite.column(uuid(ChannelId), { defaultExpr: randomUuid }),
 		name: varchar(255),
-		icon: PG.nullable(PG.brand(varchar(32), ChannelIcon)),
+		icon: SQLite.nullable(SQLite.brand(varchar(32), ChannelIcon)),
 		type: channelTypeEnum,
 		organizationId: uuid(OrganizationId),
-		parentChannelId: PG.nullable(uuid(ChannelId)),
-		sectionId: PG.nullable(uuid(ChannelSectionId)),
-		createdAt: PG.column(timestamptz, { defaultExpr: "now()" }),
-		updatedAt: PG.column(timestamptz, { defaultExpr: "now()" }),
-		deletedAt: PG.nullable(timestamptz),
+		parentChannelId: SQLite.nullable(uuid(ChannelId)),
+		sectionId: SQLite.nullable(uuid(ChannelSectionId)),
+		createdAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		updatedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		deletedAt: SQLite.nullable(timestamptz),
 	},
 	primaryKey: ["id"],
 	indexes: [
-		PG.index("channels_organization_id_idx", ["organizationId"]),
-		PG.index("channels_parent_channel_id_idx", ["parentChannelId"]),
-		PG.index("channels_section_id_idx", ["sectionId"]),
-		PG.index("channels_type_idx", ["type"]),
-		PG.index("channels_deleted_at_idx", ["deletedAt"]),
+		SQLite.index("channels_organization_id_idx", ["organizationId"]),
+		SQLite.index("channels_parent_channel_id_idx", ["parentChannelId"]),
+		SQLite.index("channels_section_id_idx", ["sectionId"]),
+		SQLite.index("channels_type_idx", ["type"]),
+		SQLite.index("channels_deleted_at_idx", ["deletedAt"]),
 	],
 })
-export type Channel = PG.SelectRowOf<typeof channelsTable>
-export type NewChannel = PG.InsertRowOf<typeof channelsTable>
+export type Channel = SQLite.SelectRowOf<typeof channelsTable>
+export type NewChannel = SQLite.InsertRowOf<typeof channelsTable>

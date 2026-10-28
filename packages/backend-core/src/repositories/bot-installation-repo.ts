@@ -1,4 +1,4 @@
-import { Database, PG, Repository, schema } from "@hazel/db"
+import { Database, SQLite, Repository, schema } from "@hazel/db"
 
 import type { BotId, OrganizationId } from "@hazel/schema"
 import { BotInstallation } from "@hazel/domain/models"
@@ -19,7 +19,7 @@ export class BotInstallationRepo extends Context.Service<BotInstallationRepo>()(
 		// Find all installations for an organization
 		const findByOrg = (organizationId: OrganizationId) =>
 			db.run(
-				PG.from(schema.botInstallationsTable)
+				SQLite.from(schema.botInstallationsTable)
 					.select()
 					.where(($) => [$.organizationId.eq(organizationId)]),
 			)
@@ -27,7 +27,7 @@ export class BotInstallationRepo extends Context.Service<BotInstallationRepo>()(
 		// Find all installations for a bot
 		const findByBot = (botId: BotId) =>
 			db.run(
-				PG.from(schema.botInstallationsTable)
+				SQLite.from(schema.botInstallationsTable)
 					.select()
 					.where(($) => [$.botId.eq(botId)]),
 			)
@@ -35,7 +35,7 @@ export class BotInstallationRepo extends Context.Service<BotInstallationRepo>()(
 		// Find a specific installation
 		const findByBotAndOrg = (botId: BotId, organizationId: OrganizationId) =>
 			db.first(
-				PG.from(schema.botInstallationsTable)
+				SQLite.from(schema.botInstallationsTable)
 					.select()
 					.where(($) => [$.botId.eq(botId), $.organizationId.eq(organizationId)])
 					.limit(1),
