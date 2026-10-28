@@ -14,6 +14,7 @@ import { resolveTarget } from "../../rpc/routing"
 import { Directory } from "../../services/directory"
 import { channelTarget, formatTarget, orgTarget } from "./kinds"
 import {
+	BACKFILL_TIMEOUT_MS,
 	parseSnippet,
 	prepareMessageSearch,
 	SEARCH_MIGRATION_ID,
@@ -481,6 +482,48 @@ describe("message search", () => {
 				expect(done.results.length).toBe(100)
 				expect(done.results[0]!.snippet).toBe("archived note 449")
 				expect(ids(yield* search(a, a2, { query: "deleted" }))).toEqual([])
+			}),
+		))
+
+	it("stops reporting indexing for deleted channels and backfills that stopped answering", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const { a, a1, a2 } = world
+				const kept = yield* makeChannel(a, a1, "public", "kept")
+				const gone = yield* makeChannel(a, a1, "public", "gone")
+				const keptObject = yield* world.objects.get(channelTarget(kept))
+				const goneObject = yield* world.objects.get(channelTarget(gone))
+				const db = a.object.storage.db
+				const backfill = () =>
+					db
+						.prepare(
+							`SELECT channelId, done FROM message_search_backfill WHERE channelId IN (?, ?)`,
+						)
+						.all(kept, gone)
+
+				world.objects.setUnreachable(channelTarget(gone), true)
+				db.prepare(`DELETE FROM _object_meta WHERE key = 'messageSearchVersion'`).run()
+				yield* a.object.run(prepareMessageSearch({ fresh: false, objectId: a.id }))
+				yield* settle([a.object, keptObject])
+				expect((yield* search(a, a2, { query: "x" })).indexing).toBe(true)
+
+				// The channel is deleted while its pages are owed: no longer waited for.
+				db.prepare(`UPDATE channels SET deletedAt = '2026-01-01 00:00:00.000' WHERE id = ?`).run(gone)
+				expect((yield* search(a, a2, { query: "x" })).indexing).toBe(false)
+				// Its late answer drops its row instead of indexing it.
+				world.objects.setUnreachable(channelTarget(gone), false)
+				db.prepare(`UPDATE _outbox SET next_at = 0`).run()
+				yield* settle([a.object, goneObject])
+				expect(backfill()).toEqual([{ channelId: kept, done: 1 }])
+
+				// A backfill row whose pages never came times out.
+				db.prepare(`UPDATE message_search_backfill SET done = 0, generation = ?`).run(
+					Date.now() - BACKFILL_TIMEOUT_MS - 1,
+				)
+				expect((yield* search(a, a2, { query: "x" })).indexing).toBe(false)
+				db.prepare(`UPDATE message_search_backfill SET generation = ?`).run(Date.now())
+				expect((yield* search(a, a2, { query: "x" })).indexing).toBe(true)
 			}),
 		))
 

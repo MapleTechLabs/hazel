@@ -192,7 +192,12 @@ export const indexMessages = Effect.fn("OrgObject.indexMessages")(function* (pay
 	if (!(yield* searchAvailable)) return
 	const channelId = ChannelId.make(sender.value.id)
 	const channel = yield* localChannel(channelId)
-	if (Option.isNone(channel) || channel.value.deletedAt !== null) return
+	if (Option.isNone(channel) || channel.value.deletedAt !== null) {
+		// Gone since the backfill asked: nothing left to wait for.
+		const sql = yield* SqlClient
+		yield* sql`DELETE FROM message_search_backfill WHERE "channelId" = ${channelId}`
+		return
+	}
 	const change = {
 		upsert: payload.upsert,
 		remove: payload.remove,
@@ -334,6 +339,22 @@ export const prepareMessageSearch = Effect.fn("OrgObject.prepareMessageSearch")(
 	yield* db.transaction(reindexMessageSearch())
 })
 
+/**
+ * A backfill older than this counts as finished: a channel whose pages stopped coming (a dead
+ * delivery, an object that never answers) must not keep search "indexing" forever.
+ */
+export const BACKFILL_TIMEOUT_MS = 6 * 60 * 60 * 1000
+
+/** Whether some live channel still owes the current backfill pages. */
+const backfillPending = Effect.gen(function* () {
+	const sql = yield* SqlClient
+	const cutoff = (yield* Clock.currentTimeMillis) - BACKFILL_TIMEOUT_MS
+	const rows = yield* sql`SELECT 1 AS pending FROM message_search_backfill b
+		JOIN channels c ON c."id" = b."channelId" AND c."deletedAt" IS NULL
+		WHERE b.done = 0 AND b.generation > ${cutoff} LIMIT 1`
+	return rows.length > 0
+})
+
 // QUERY
 
 /** The FTS5 query for the user's words: each a quoted prefix term, all required. */
@@ -412,8 +433,7 @@ export const searchMessages = Effect.fn("OrgObject.searchMessages")(
 			"search.limit": limit,
 		})
 
-		const indexing =
-			(yield* sql`SELECT 1 AS pending FROM message_search_backfill WHERE done = 0 LIMIT 1`).length > 0
+		const indexing = yield* backfillPending
 		// Nothing to match by: no words (only punctuation) and no filter.
 		if (fts.length === 0 && (payload.query.trim().length > 0 || !hasFilter)) {
 			return new MessageSearchResponse({ results: [], nextCursor: null, indexing })
