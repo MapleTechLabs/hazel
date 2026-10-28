@@ -353,7 +353,7 @@ export class SyncConnection {
 
 		ws.onopen = () => {
 			if (this.socket !== ws) return
-			this.send({ _tag: "Hello", since: this.lastSeq })
+			this.send({ _tag: "Hello", since: this.lastSeq, paging: true })
 			this.startHeartbeat()
 		}
 		ws.onmessage = (event) => {

@@ -106,7 +106,7 @@ Once any request or RPC method has committed, the object calls `flush()`:
 
 ### Frames (`packages/domain/src/sync/protocol.ts`, JSON text)
 
-- **Client → object:** `Hello { since: number | null }`, `Ping`, `Reauth { token }`,
+- **Client → object:** `Hello { since: number | null, paging?: boolean }`, `Ping`, `Reauth { token }`,
   `LoadOlder { requestId, table, before: { createdAt, id }, limit }` (see Paged history).
 - **Object → client:**
     - `Begin { reset: boolean, request?: number, windows?: [{ table, oldest, hasMore }] }`: on
@@ -133,6 +133,9 @@ A `ChannelObject` pages `messages` instead of sending the whole channel (`SyncTa
   them), and only those messages' `message_reactions`, `pinned_messages`, `attachments` and
   `chat_sync_message_links` (plus uploads with no message yet). `Begin.windows` carries the
   window: `oldest` (the cursor of the 200th message) and `hasMore`. Typing indicators are whole.
+  Only for a socket whose `Hello` said `paging: true` (the current client always does): a client
+  from before paging cannot send `LoadOlder`, so its snapshots (and resnapshots) carry the whole
+  channel. The flag rides in the socket's attachment.
 - **Paging:** `LoadOlder` is answered, under the flush permit, by
   `Begin { reset: false, request, windows: [lowered window] }`, `Rows…`, and a `Commit` at the
   socket's current `seq` (the page never moves the stream). `limit` is clamped to 200.

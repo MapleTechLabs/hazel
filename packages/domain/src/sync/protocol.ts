@@ -30,9 +30,14 @@ export const SyncCloseCode = {
 // Client → object
 // ---------------------------------------------------------------------------
 
-/** First frame on a socket: resume after `since`, or `null` for a full snapshot. */
+/**
+ * First frame on a socket: resume after `since`, or `null` for a full snapshot. `paging: true`
+ * says the client pages history (`LoadOlder`); without it a snapshot sends paged tables whole, as
+ * clients from before paging expect.
+ */
 export const SyncHello = Schema.TaggedStruct("Hello", {
 	since: Schema.NullOr(SyncSeq),
+	paging: Schema.optionalKey(Schema.Boolean),
 })
 
 export const SyncPing = Schema.TaggedStruct("Ping", {})

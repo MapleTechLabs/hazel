@@ -57,6 +57,8 @@ export interface SyncAttachment<P> {
 	/** The socket said `Hello` and got its initial snapshot or catch-up. */
 	readonly ready: boolean
 	readonly expiresAt: number | null
+	/** `Hello.paging`: snapshots window paged tables. Absent (older clients): they go whole. */
+	readonly paging?: boolean
 }
 
 export interface SyncRuntimeOptions {
@@ -297,17 +299,18 @@ export const makeSyncRuntime = <P, E, R>(options: {
 	}
 
 	/**
-	 * Every table's visible rows, as `Rows` frames (after a `Begin{reset:true}`). A paged table and
-	 * its dependents send their newest page instead, and report its window.
+	 * Every table's visible rows, as `Rows` frames (after a `Begin{reset:true}`). For a socket that
+	 * pages, a paged table and its dependents send their newest page instead, and report its
+	 * window; one that does not (a client from before paging) gets them whole.
 	 */
-	const snapshotFrames = (principal: P) =>
+	const snapshotFrames = (principal: P, paging: boolean) =>
 		Effect.gen(function* () {
 			const frames: Array<string> = []
 			const windows: Array<SyncWindow> = []
 			let rows = 0
 			for (const table of source.tables) {
-				if (pagedDependents.has(table.name)) continue
-				if (table.paging !== undefined) {
+				if (paging && pagedDependents.has(table.name)) continue
+				if (paging && table.paging !== undefined) {
 					const page = yield* table.paging.page(principal, null, table.paging.snapshotLimit)
 					const sent = pageFrames(page)
 					rows += sent.rows
@@ -430,24 +433,37 @@ export const makeSyncRuntime = <P, E, R>(options: {
 			let resnapshots = 0
 			for (const group of groupByPrincipal(sockets)) {
 				const resnapshot = isAffected(affected, group.pid)
+				// A resnapshot differs for sockets that page and those that do not.
+				const modes = resnapshot
+					? [...new Set(group.sockets.map((live) => live.attachment.paging === true))]
+					: [false]
 				const result = yield* guarded(
 					group,
 					resnapshot
 						? Effect.flatMap(reauthorize(group), (allowed) =>
 								allowed
-									? Effect.map(snapshotFrames(group.principal), Option.some)
+									? Effect.map(
+											Effect.forEach(modes, (paging) =>
+												snapshotFrames(group.principal, paging),
+											),
+											Option.some,
+										)
 									: Effect.succeed(Option.none()),
 							)
-						: Effect.map(deltaFrames(group.principal, changes), Option.some),
+						: Effect.map(deltaFrames(group.principal, changes), (delta) => Option.some([delta])),
 					resnapshot ? "resnapshot" : "flush",
 				)
-				const frames = Option.flatten(result)
-				if (Option.isNone(frames)) continue
+				const byMode = Option.flatten(result)
+				if (Option.isNone(byMode)) continue
 				if (resnapshot) resnapshots++
-				rows += frames.value.rows
-				const begin = beginFrame(resnapshot, frames.value.windows)
-				const all = [begin, ...frames.value.frames, commit]
-				for (const live of group.sockets) commitTo(live, all, through, now)
+				const runs = byMode.value.map((frames) => {
+					rows += frames.rows
+					return [beginFrame(resnapshot, frames.windows), ...frames.frames, commit]
+				})
+				for (const live of group.sockets) {
+					const mode = resnapshot ? modes.indexOf(live.attachment.paging === true) : 0
+					commitTo(live, runs[mode]!, through, now)
+				}
 			}
 			return { rows, resnapshots }
 		})
@@ -495,7 +511,7 @@ export const makeSyncRuntime = <P, E, R>(options: {
 		)
 	})
 
-	const hello = (live: LiveSocket<P>, since: number | null) =>
+	const hello = (live: LiveSocket<P>, since: number | null, paging: boolean) =>
 		permit.withPermit(
 			Effect.gen(function* () {
 				const group: PrincipalGroup<P> = {
@@ -514,8 +530,10 @@ export const makeSyncRuntime = <P, E, R>(options: {
 				const result = yield* guarded(
 					group,
 					reset
-						? snapshotFrames(group.principal).pipe(
-								Effect.withSpan("SyncDO.snapshot", { attributes: { "sync.seq": head } }),
+						? snapshotFrames(group.principal, paging).pipe(
+								Effect.withSpan("SyncDO.snapshot", {
+									attributes: { "sync.seq": head, "sync.paging": paging },
+								}),
 							)
 						: deltaFrames(group.principal, catchUp).pipe(
 								Effect.withSpan("SyncDO.catchUp", {
@@ -542,8 +560,15 @@ export const makeSyncRuntime = <P, E, R>(options: {
 							: { _tag: "Ready", expiresInMs: Math.max(0, expiresAt - now) },
 					),
 				]
-				if (sendAll(live, frames, now))
-					setAttachment(live, { ...live.attachment, cursor: head, ready: true })
+				if (sendAll(live, frames, now)) {
+					const { paging: _previous, ...attachment } = live.attachment
+					setAttachment(live, {
+						...attachment,
+						cursor: head,
+						ready: true,
+						...(paging ? { paging: true } : {}),
+					})
+				}
 				yield* Effect.annotateCurrentSpan({ "sync.reset": reset, "sync.rows": result.value.rows })
 			}).pipe(Effect.withSpan("SyncDO.hello")),
 		)
@@ -682,7 +707,7 @@ export const makeSyncRuntime = <P, E, R>(options: {
 					send(socket, encode({ _tag: "Pong" }))
 					return
 				case "Hello":
-					return yield* hello({ socket, attachment }, frame.since)
+					return yield* hello({ socket, attachment }, frame.since, frame.paging === true)
 				case "Reauth":
 					return yield* reauth(socket, frame.token)
 				case "LoadOlder":

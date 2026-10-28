@@ -70,7 +70,7 @@ describe("channel source paging", () => {
 				expect(yield* channel.adopt(socket, { userId: viewer, expiresAt: null } as never)).toBe(
 					"accepted",
 				)
-				yield* channel.onMessage(socket, JSON.stringify({ _tag: "Hello", since: null }))
+				yield* channel.onMessage(socket, JSON.stringify({ _tag: "Hello", since: null, paging: true }))
 
 				const begin = socket.frames()[0] as Frame
 				const oldest = { createdAt: new Date(`${at(5)}Z`).toISOString(), id: ids[5] }

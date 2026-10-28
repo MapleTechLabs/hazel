@@ -56,7 +56,7 @@ describe("sync runtime paging", () => {
 		return Effect.gen(function* () {
 			t.storage.db.exec(SEED)
 			const socket = yield* t.connect()
-			yield* t.send(socket, { _tag: "Hello", since: null })
+			yield* t.send(socket, { _tag: "Hello", since: null, paging: true })
 			expect(frames(socket)[0]).toEqual({
 				_tag: "Begin",
 				reset: true,
@@ -83,7 +83,7 @@ describe("sync runtime paging", () => {
 		return Effect.gen(function* () {
 			t.storage.db.exec(SEED)
 			const socket = yield* t.connect()
-			yield* t.send(socket, { _tag: "Hello", since: null })
+			yield* t.send(socket, { _tag: "Hello", since: null, paging: true })
 			const seq = frames(socket).find((frame) => frame._tag === "Commit")!.seq
 			let window = frames(socket)[0]!.windows[0]
 			const seen = upsertIds(socket, "notes")
@@ -124,7 +124,7 @@ describe("sync runtime paging", () => {
 		return Effect.gen(function* () {
 			t.storage.db.exec(SEED)
 			const socket = yield* t.connect()
-			yield* t.send(socket, { _tag: "Hello", since: null })
+			yield* t.send(socket, { _tag: "Hello", since: null, paging: true })
 			yield* t.runtime.flush
 			socket.clear()
 
@@ -148,12 +148,12 @@ describe("sync runtime paging", () => {
 		return Effect.gen(function* () {
 			t.storage.db.exec(SEED)
 			const first = yield* t.connect()
-			yield* t.send(first, { _tag: "Hello", since: null })
+			yield* t.send(first, { _tag: "Hello", since: null, paging: true })
 			const seq = frames(first).find((frame) => frame._tag === "Commit")!.seq
 
 			yield* t.exec(`UPDATE notes SET body = 'edited' WHERE id = 'n1'`)
 			const resumed = yield* t.connect()
-			yield* t.send(resumed, { _tag: "Hello", since: seq })
+			yield* t.send(resumed, { _tag: "Hello", since: seq, paging: true })
 			// No `windows`: the client keeps the pages it holds.
 			expect(frames(resumed)[0]).toEqual({ _tag: "Begin", reset: false })
 			expect(upsertIds(resumed, "notes")).toEqual(["n1"])
@@ -182,7 +182,7 @@ describe("sync runtime paging", () => {
 				{ _tag: "Error", code: "bad_frame", message: "LoadOlder before Hello" },
 			])
 
-			yield* t.send(socket, { _tag: "Hello", since: null })
+			yield* t.send(socket, { _tag: "Hello", since: null, paging: true })
 			socket.clear()
 			yield* t.send(socket, { _tag: "LoadOlder", requestId: 2, table: "likes", before, limit: 2 })
 			expect(frames(socket).map((frame) => frame._tag)).toEqual(["Begin", "Commit"])
@@ -192,6 +192,36 @@ describe("sync runtime paging", () => {
 				request: 2,
 				windows: [{ table: "likes", oldest: before, hasMore: false }],
 			})
+		}).pipe(Effect.provide(t.layer))
+	})
+
+	it.effect("a socket that did not say paging (an older client) gets paged tables whole", () => {
+		const t = setup(3)
+		return Effect.gen(function* () {
+			t.storage.db.exec(SEED)
+			const old = yield* t.connect()
+			const paged = yield* t.connect()
+			yield* t.send(old, { _tag: "Hello", since: null })
+			yield* t.send(paged, { _tag: "Hello", since: null, paging: true })
+			expect(frames(old)[0]).toEqual({ _tag: "Begin", reset: true })
+			expect(upsertIds(old, "notes")).toEqual(["n1", "n2", "n3", "n4", "n5", "n6", "n7"])
+			expect(upsertIds(old, "likes")).toEqual(["l1", "l6"])
+			yield* t.runtime.flush
+			old.clear()
+			paged.clear()
+
+			// A resnapshot of the same principal answers each socket in its own mode.
+			yield* t.exec(`INSERT INTO members (user_id) VALUES ('bob')`)
+			yield* t.runtime.flush
+			expect(frames(old)[0]).toEqual({ _tag: "Begin", reset: true })
+			expect(upsertIds(old, "notes")).toHaveLength(7)
+			expect(frames(paged)[0]).toMatchObject({
+				_tag: "Begin",
+				reset: true,
+				windows: [{ table: "notes" }],
+			})
+			expect(upsertIds(paged, "notes")).toEqual(["n7", "n6", "n5"])
+			expect(frames(old).at(-1)).toEqual(frames(paged).at(-1))
 		}).pipe(Effect.provide(t.layer))
 	})
 })

@@ -44,7 +44,7 @@ describe("SyncConnection", () => {
 		expect(socket.url).toBe("wss://sync.test/sync/org/a")
 		expect(socket.protocols).toEqual(["hazel.v1", "token-1"])
 		socket.open()
-		expect(socket.sent).toEqual([{ _tag: "Hello", since: null }])
+		expect(socket.sent).toEqual([{ _tag: "Hello", since: null, paging: true }])
 		expect(connection.status.state).toBe("connecting")
 		socket.snapshot(7, {})
 		expect(connection.status.state).toBe("ready")
@@ -70,7 +70,7 @@ describe("SyncConnection", () => {
 		const socket = sockets.latest("/sync/org/a")!
 		expect(sockets.count("/sync/org/a")).toBe(3)
 		socket.open()
-		expect(socket.sent[0]).toEqual({ _tag: "Hello", since: 3 })
+		expect(socket.sent[0]).toEqual({ _tag: "Hello", since: 3, paging: true })
 
 		// A `Ready` resets the backoff.
 		socket.receive({ _tag: "Commit", seq: 4 })
@@ -106,7 +106,7 @@ describe("SyncConnection", () => {
 		expect(sockets.count("/sync/org/a")).toBe(2)
 		expect(socket.protocols).toEqual(["hazel.v1", "token-2"])
 		socket.open()
-		expect(socket.sent[0]).toEqual({ _tag: "Hello", since: 1 })
+		expect(socket.sent[0]).toEqual({ _tag: "Hello", since: 1, paging: true })
 	})
 
 	it("refreshes the token in band before the socket expires", async () => {
@@ -272,7 +272,7 @@ describe("SyncConnection", () => {
 		await vi.advanceTimersByTimeAsync(1000)
 		const next = sockets.latest("/sync/org/a")!
 		next.open()
-		expect(next.sent[0]).toEqual({ _tag: "Hello", since: null })
+		expect(next.sent[0]).toEqual({ _tag: "Hello", since: null, paging: true })
 		next.snapshot(3, { channels: [{ id: "c1" }] })
 		expect(runs).toHaveLength(1)
 		expect(runs[0]).toMatchObject({ source: "org:a", reset: true, seq: 3 })
