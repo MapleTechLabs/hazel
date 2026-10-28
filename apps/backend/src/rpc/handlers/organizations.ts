@@ -18,7 +18,7 @@ import { OrganizationPolicy } from "../../policies/organization-policy"
 import { Directory } from "../../services/directory"
 import { forwardRpc } from "../../worker/objects/forward"
 import { orgTarget } from "../../worker/objects/kinds"
-import { syncMemberAccess } from "../../worker/objects/org/channel-access"
+import { publishOrgChannelsRemoval, syncMemberAccess } from "../../worker/objects/org/channel-access"
 import { publishOrgIndex, publishOrgRemoval } from "../../worker/objects/org/organization"
 import { projectUsers } from "../../worker/objects/org/projections"
 
@@ -184,9 +184,8 @@ export const OrganizationRpcLive = OrganizationRpcs.toLayer(
 						Effect.gen(function* () {
 							yield* organizationPolicy.canDelete(id)
 							yield* organizationRepo.softDelete(id)
-							// TODO(do-sync): cut the channels' viewers too (their ChannelObjects keep
-							// serving sockets until the org's members change).
 							yield* publishOrgRemoval(id)
+							yield* publishOrgChannelsRemoval(id)
 							return { transactionId: yield* generateTransactionId() }
 						}),
 					)

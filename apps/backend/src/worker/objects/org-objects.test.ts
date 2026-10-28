@@ -14,6 +14,7 @@ import { decodeExit, encodePayload, type HazelRpcTag, rpcFor } from "../../rpc/d
 import { Directory } from "../../services/directory"
 import { channelTarget, orgTarget, userTarget } from "./kinds"
 import { encodeInvokePrincipal } from "./principal"
+import { makeFakeSocket } from "@hazel/sync-do/testing"
 import { makeTestObjects, type TestObject, type TestObjects } from "./testing"
 
 const uuid = () => crypto.randomUUID()
@@ -358,6 +359,86 @@ describe("OrgObject: organizations and members", () => {
 				expect(Option.map(index, (row) => row.deletedAt !== null)).toEqual(Option.some(true))
 				const ownerObject = yield* objects.get(userTarget(owner))
 				expect(rows(ownerObject, `SELECT organizationId FROM user_organizations`)).toEqual([])
+			}),
+		))
+
+	it("organization.delete empties its channels' and threads' viewers and closes their sockets", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const { objects, org, orgId, owner, member } = world
+				const general = yield* objects.get(channelTarget(world.general))
+				const message = ok(
+					yield* call(
+						general,
+						world.general,
+						"message.create",
+						{
+							channelId: world.general,
+							content: "start a thread",
+							embeds: null,
+							replyToMessageId: null,
+							threadChannelId: null,
+							authorId: member,
+							deletedAt: null,
+						},
+						member,
+					),
+				)
+				const threadId = uuid() as ChannelId
+				ok(
+					yield* call(
+						org,
+						orgId,
+						"channel.createThread",
+						new CreateThreadRequest({
+							id: threadId,
+							messageId: message.data.id,
+							organizationId: orgId,
+							channelId: world.general,
+						}),
+						owner,
+					),
+				)
+				const thread = yield* objects.get(channelTarget(threadId))
+				const sockets = [makeFakeSocket(), makeFakeSocket()]
+				expect(yield* general.adopt(sockets[0]!, { userId: member, expiresAt: null })).toBe(
+					"accepted",
+				)
+				expect(yield* thread.adopt(sockets[1]!, { userId: member, expiresAt: null })).toBe("accepted")
+				const hello = JSON.stringify({ _tag: "Hello", since: null })
+				yield* general.onMessage(sockets[0]!, hello)
+				yield* thread.onMessage(sockets[1]!, hello)
+
+				ok(yield* call(org, orgId, "organization.delete", { id: orgId }, owner))
+				expect(viewersOf(general)).toEqual([])
+				expect(viewersOf(thread)).toEqual([])
+				for (const socket of sockets) expect(socket.closed).toBeDefined()
+				// Routing refuses them too.
+				for (const id of [world.general, threadId]) {
+					const indexed = yield* inDirectory(
+						objects,
+						Effect.flatMap(Directory, (directory) => directory.channel(id)),
+					)
+					expect(Option.map(indexed, (row) => row.deletedAt !== null)).toEqual(Option.some(true))
+				}
+				// And the member can't write there any more.
+				const denied = yield* call(
+					general,
+					world.general,
+					"message.create",
+					{
+						channelId: world.general,
+						content: "still here?",
+						embeds: null,
+						replyToMessageId: null,
+						threadChannelId: null,
+						authorId: member,
+						deletedAt: null,
+					},
+					member,
+				)
+				expect(unauthorized(denied)).toBe(true)
 			}),
 		))
 })

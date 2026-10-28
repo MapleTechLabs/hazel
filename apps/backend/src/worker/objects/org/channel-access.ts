@@ -48,6 +48,14 @@ export const channelViewersPayload = Effect.fn("OrgObject.channelViewersPayload"
 		}>()
 	}
 	const organizationId = channel.value.organizationId
+	const org = yield* db.first(
+		SQLite.from(schema.organizationsTable)
+			.select("deletedAt")
+			.where(($) => [$.id.eq(organizationId)])
+			.limit(1),
+	)
+	// A deleted org's channels are gone with it (`publishOrgChannelsRemoval`).
+	const deletedAt = channel.value.deletedAt ?? Option.getOrUndefined(org)?.deletedAt ?? null
 
 	const mount = yield* activeMountOf(channelId)
 	// A host channel's other mounts: guest channel ids routed to this channel's object.
@@ -91,7 +99,7 @@ export const channelViewersPayload = Effect.fn("OrgObject.channelViewersPayload"
 						.where(($) => [$.id.in_(...installed.map((row) => row.botId)), $.deletedAt.isNull()]),
 				)
 
-	const deleted = channel.value.deletedAt !== null
+	const deleted = deletedAt !== null
 	const payload: SetViewersPayload = {
 		organizationId,
 		conversationId: Option.isSome(mount) ? mount.value.conversationId : null,
@@ -112,7 +120,7 @@ export const channelViewersPayload = Effect.fn("OrgObject.channelViewersPayload"
 	}
 	return Option.some({
 		payload,
-		deletedAt: channel.value.deletedAt,
+		deletedAt,
 		role: Option.isSome(mount) ? mount.value.role : null,
 	})
 })
@@ -270,4 +278,21 @@ export const syncMemberAccess = Effect.fn("OrgObject.syncMemberAccess")(function
 	yield* Effect.forEach(changed, publishChannelAccess, { discard: true })
 	if (options?.membership !== false) yield* publishMembership(userId, organizationId)
 	yield* Effect.annotateCurrentSpan({ "org.channels_republished": changed.size })
+})
+
+/**
+ * The organization was deleted: every channel and thread of it loses its viewers (closing their
+ * sockets) and its index row, as `channelViewersPayload` treats them as deleted now.
+ */
+export const publishOrgChannelsRemoval = Effect.fn("OrgObject.publishOrgChannelsRemoval")(function* (
+	organizationId: OrganizationId,
+) {
+	const db = yield* Database.Database
+	const channels = yield* db.run(
+		SQLite.from(schema.channelsTable)
+			.select("id")
+			.where(($) => [$.organizationId.eq(organizationId), $.deletedAt.isNull()]),
+	)
+	yield* Effect.forEach(channels, (channel) => publishChannelAccess(channel.id), { discard: true })
+	yield* Effect.annotateCurrentSpan({ "org.channels_removed": channels.length })
 })
