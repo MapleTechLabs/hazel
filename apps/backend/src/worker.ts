@@ -18,6 +18,7 @@ import {
 } from "./worker/discord-gateway-object"
 import { apiEnv } from "./worker/env"
 import { buildApp, makeFetch } from "./worker/http"
+import { MessageLiveObject, MessageLiveObjectLive } from "./worker/live/message-live-object"
 import { ChannelObject, ChannelObjectLive } from "./worker/objects/channel-object"
 import { OrgObject, OrgObjectLive } from "./worker/objects/org-object"
 import { UserObject, UserObjectLive } from "./worker/objects/user-object"
@@ -59,7 +60,7 @@ const props = Effect.gen(function* () {
 export class Api extends Cloudflare.Worker<
 	Api,
 	Cloudflare.WorkerShape,
-	RateLimiterObject | DiscordGatewayObject | OrgObject | ChannelObject | UserObject
+	RateLimiterObject | DiscordGatewayObject | OrgObject | ChannelObject | UserObject | MessageLiveObject
 >()("api") {}
 
 export default Api.make(
@@ -72,6 +73,8 @@ export default Api.make(
 		yield* OrgObject
 		yield* ChannelObject
 		yield* UserObject
+		// Live state of streamed replies (`worker/live/`), one per message.
+		yield* MessageLiveObject
 		// Hosted by the bot-gateway Worker; BotGatewayService publishes bot events into it.
 		const botGateways = yield* bindBotGateways
 		const env = yield* Cloudflare.WorkerEnvironment
@@ -95,6 +98,7 @@ export default Api.make(
 				OrgObjectLive,
 				ChannelObjectLive,
 				UserObjectLive,
+				MessageLiveObjectLive,
 				Cloudflare.Workers.CronEventSourceLive,
 				hazelTelemetry("api"),
 			),

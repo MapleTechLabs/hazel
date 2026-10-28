@@ -17,7 +17,7 @@
  */
 import { SYNC_SUBPROTOCOL, SyncCloseCode } from "@hazel/domain/sync"
 import { toHttpServerResponse } from "@hazel/sync-do"
-import { Effect, Option, Schema } from "effect"
+import { type Context, Effect, Option, Schema } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
 import { HazelSession } from "../services/hazel-session"
 import { ChannelId } from "@hazel/schema"
@@ -37,7 +37,7 @@ interface Namespace {
 const decodeChannelId = Schema.decodeUnknownOption(ChannelId)
 
 /** Closed with this when the route cannot serve the socket right now; the client retries. */
-const UNAVAILABLE = 1011
+export const UNAVAILABLE = 1011
 
 /** The object's `fetch` failed (overloaded, reset, unreachable). */
 class SyncForwardError extends Schema.TaggedError<SyncForwardError>()("SyncForwardError", {
@@ -58,7 +58,7 @@ export const tokenFromProtocols = (header: string | undefined): string | undefin
 const isJwt = (token: string) => token.split(".").length === 3
 
 /** A 101 whose socket is closed right away with `code`, so the browser sees the reason. */
-const acceptAndClose = (code: number, reason: string) => {
+export const acceptAndClose = (code: number, reason: string) => {
 	const Pair = (globalThis as unknown as { WebSocketPair: new () => Record<0 | 1, WorkerdSocket> })
 		.WebSocketPair
 	const pair = new Pair()
@@ -83,7 +83,24 @@ export const syncObjectId = (kind: ObjectKind, id: string) => {
 	)
 }
 
-const pathOf = (url: string) => {
+/**
+ * A socket's token: the web app sends its access token (a JWT); native clients may send the
+ * session itself. `Unavailable` when the session store or the key set is down: not the token's
+ * fault, so no 4001 (the client would drop a good token); it retries on 1011.
+ */
+export const verifySocketToken = (session: Context.Service.Shape<typeof HazelSession>, token: string) =>
+	(isJwt(token) ? session.verifyAccessTokenWithExpiry : session.verifyWithExpiry)(token).pipe(
+		Effect.map((user) => ({ _tag: "Checked", user }) as const),
+		Effect.catchTags({
+			InvalidBearerTokenError: () => Effect.succeed({ _tag: "Checked", user: Option.none() } as const),
+			SessionLoadError: (error) =>
+				Effect.logWarning("Socket token verification unavailable", { detail: error.detail }).pipe(
+					Effect.as({ _tag: "Unavailable" } as const),
+				),
+		}),
+	)
+
+export const pathOf = (url: string) => {
 	const path = url.startsWith("/") ? url : new URL(url).pathname
 	const query = path.indexOf("?")
 	return query === -1 ? path : path.slice(0, query)
@@ -112,23 +129,7 @@ export const makeSyncRoute = (env: Record<string, unknown>) =>
 					const token = tokenFromProtocols(request.headers["sec-websocket-protocol"])
 					if (token === undefined) return acceptAndClose(SyncCloseCode.Reauth, "missing_token")
 
-					// The web app sends its access token (a JWT); native clients may send the session itself.
-					const verify = isJwt(token)
-						? session.verifyAccessTokenWithExpiry
-						: session.verifyWithExpiry
-					const verified = yield* verify(token).pipe(
-						Effect.map((user) => ({ _tag: "Checked", user }) as const),
-						Effect.catchTags({
-							InvalidBearerTokenError: () =>
-								Effect.succeed({ _tag: "Checked", user: Option.none() } as const),
-							// The session store or the key set is down: not the token's fault, so no
-							// 4001 (the client would drop a good token); it retries on 1011.
-							SessionLoadError: (error) =>
-								Effect.logWarning("Sync token verification unavailable", {
-									detail: error.detail,
-								}).pipe(Effect.as({ _tag: "Unavailable" } as const)),
-						}),
-					)
+					const verified = yield* verifySocketToken(session, token)
 					if (verified._tag === "Unavailable") return acceptAndClose(UNAVAILABLE, "unavailable")
 					if (Option.isNone(verified.user))
 						return acceptAndClose(SyncCloseCode.Reauth, "invalid_token")

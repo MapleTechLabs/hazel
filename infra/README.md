@@ -9,9 +9,8 @@ version) in `alchemy.run.ts`. Each app declares its own resources:
 | landing      | `apps/landing/alchemy.run.ts`                   | `Website.StaticSite` (Astro) — prd only                                                                                                 |
 | docs         | `apps/docs/alchemy.run.ts`                      | `Website.Vite` (TanStack Start SSR) — prd only                                                                                          |
 | link-preview | `apps/link-preview-worker/alchemy.run.ts`       | async Worker + KV                                                                                                                       |
-| actors       | `apps/actors/alchemy.run.ts`                    | async Worker + RivetKit Durable Object + KV                                                                                             |
 | bot-gateway  | `apps/bot-gateway/alchemy.run.ts`               | Effect Worker relaying bot WebSockets + `BotGateway` Durable Object per bot (SQLite event log; replaces Durable Streams + Redis leases) |
-| api          | `apps/backend/src/worker.ts`                    | Effect Worker + Durable Objects (Org, Channel, User: the data; RateLimiter, DiscordGateway) + KV + cron                                 |
+| api          | `apps/backend/src/worker.ts`                    | Effect Worker + Durable Objects (Org, Channel, User: the data; MessageLive; RateLimiter, DiscordGateway) + KV + cron                    |
 | directory    | `packages/infra/src/cloudflare/directory-db.ts` | D1 `DIRECTORY_DB` (users, auth, bots, routing indexes), bound by api and bot-gateway                                                    |
 
 Shared deploy-time helpers (stage parsing, the `HazelStack` context, env/secret helpers, Worker

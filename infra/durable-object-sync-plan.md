@@ -34,7 +34,7 @@ Removed by this work:
 | `OrgObject`         | `organizationId`          | `organizations`, `organization_members`, `channels`, `channel_members`, `channel_sections`, `channel_access`, `custom_emojis`, `bot_installations`, `integration_connections`, `integration_tokens`, `integration_requests`, `chat_sync_connections`, `chat_sync_channel_links`, `channel_webhooks`, `github_subscriptions`, `rss_subscriptions`, `rss_posted_items`, `connect_conversations`, `connect_conversation_channels`, `connect_participants`. **Read-only projections:** `users` (members and Connect participants), `user_presence_status` (same users), `bots` and `bot_commands` (installed bots). |
 | `ChannelObject`     | `channelId` (threads too) | `messages`, `message_reactions`, `pinned_messages`, `attachments`, `chat_sync_message_links`, `chat_sync_event_receipts`, `typing_indicators`. **Projections:** `channel_viewers` (userId, organizationId, role; the channel's computed access) and `channel_bots` (botId, botUserId; bots that receive events).                                                                                                                                                                                                                                                                                                |
 | `UserObject`        | `userId`                  | `notifications`, `user_presence_status` (authoritative), `user_organizations` (organizationId; tells the client which `OrgObject`s to open).                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `MessageLiveObject` | `messageId`               | Live AI or progress state for one message. Replaces the RivetKit `message` actor (**last PR**).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `MessageLiveObject` | `messageId`               | Live AI or progress state for one message. Replaced the RivetKit `message` actor (`worker/live/`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
 Rules:
 
@@ -246,6 +246,16 @@ the client.
           `declareDirectoryDb`) and bound by the api Worker and the bot gateway.
     - `OutboxDispatcher` needs no code: alchemy derives the `deleted_classes` migration from the
       previous deploy's class tags.
+    - `MessageLiveObject` (`apps/backend/src/worker/live/`), hosted by the api Worker:
+        - Writes: `POST /api/v1/messages/:id/live` (bot token; the message's author only).
+          Reads: `GET /api/v1/messages/:id/live` and the `/live/:messageId?channelId=` socket
+          (token as for `/sync`; viewers of the channel, asked of the `ChannelObject` through
+          `channel.liveAccess`).
+        - `Complete`/`Fail` write the snapshot into `embeds[].liveState.cached` via
+          `message.update` in the `ChannelObject`, retried from the alarm.
+        - RivetKit (`apps/actors`, `packages/actors`, `packages/rivet-effect`, `rivet.hazel.sh`)
+          is deleted. Its Worker, KV namespace and domain left the stack: check the next deploy
+          of each stage removed them.
 - **Local dev:** `bun run alchemy:dev` with `.env.local` (`.env.local.example`).
 - **Import:** `apps/backend/src/scripts/import-postgres.ts`, through
   `POST /internal/import/:store/:id`. The route answers only while the api Worker has
@@ -256,6 +266,5 @@ the client.
 - **Not done yet:**
     - The PR 6 verification: a `pr-<n>` preview deploy, the import against a staging copy, and a
       full browser pass.
-    - `MessageLiveObject` (the RivetKit `apps/actors` stays until then).
     - Dropping `WorkflowServiceUnavailableError` / `WorkflowInitializationError` from the RPC and
       webhook contracts.

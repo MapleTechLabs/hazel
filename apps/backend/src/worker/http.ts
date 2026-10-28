@@ -13,6 +13,8 @@ import { Directory } from "../services/directory"
 import { workerObjectStubs } from "./objects/stubs"
 import { makeImportRoute } from "./import-route"
 import { makeSyncRoute } from "./sync-route"
+import { makeLiveRoute } from "./live-route"
+import { workerLiveObjectStubs } from "./live/message-live-object"
 import type { BotGatewayNamespace } from "../services/bot-gateway-transport"
 import { directoryBinding, requestPlatformLive } from "./platform"
 import { type RateLimiterObject, rateLimiterLive } from "./rate-limiter-object"
@@ -39,7 +41,10 @@ export const buildApp = (
 		HttpRouter.toHttpEffect(
 			// The cast restores the layer's type: the circular `DiscordSyncWorker` typing collapses
 			// `AppServicesLive`'s error and requirement channels to `unknown`.
-			makeRoutes(workerRpcServer(env), Layer.mergeAll(makeSyncRoute(env), makeImportRoute(env))).pipe(
+			makeRoutes(
+				workerRpcServer(env),
+				Layer.mergeAll(makeSyncRoute(env), makeLiveRoute(env), makeImportRoute(env)),
+			).pipe(
 				Layer.provide(AppAuthorizationLive),
 				Layer.provide(AppServicesLive),
 				Layer.provideMerge(rateLimiterLive(rateLimiters)),
@@ -48,6 +53,7 @@ export const buildApp = (
 				Layer.provideMerge(requestPlatformLive(env, botGateways)),
 				// HTTP routes that reach objects or the directory (presence, bot commands).
 				Layer.provideMerge(workerObjectStubs(env)),
+				Layer.provideMerge(workerLiveObjectStubs(env)),
 				Layer.provideMerge(Layer.suspend(() => Directory.layerD1(directoryBinding(env)))),
 			) as unknown as Layer.Layer<never, never, HttpRouter.HttpRouter>,
 		),

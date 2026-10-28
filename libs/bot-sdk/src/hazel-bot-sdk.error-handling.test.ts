@@ -80,7 +80,6 @@ const makeHazelBotLayer = () =>
 				botToken: BOT_TOKEN,
 				commands: CommandGroup.make(EchoCommand) ?? EmptyCommandGroup,
 				mentionable: false,
-				actorsEndpoint: "http://localhost:6420",
 				resumeOffset: "now",
 				maxConcurrentPartitions: 2,
 			}),

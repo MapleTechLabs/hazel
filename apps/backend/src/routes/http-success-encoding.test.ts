@@ -1,21 +1,11 @@
 import { NodeHttpPlatform, NodeServices } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
-import { BotRepo } from "@hazel/backend-core"
-import {
-	InternalApiGroup,
-	MarkOfflinePayload,
-	MarkOfflineResponse,
-	PresencePublicGroup,
-	ValidateBotTokenRequest,
-	ValidateBotTokenResponse,
-} from "@hazel/domain/http"
-import { BotId, UserId } from "@hazel/schema"
-import { Effect, Layer, Option, Schema, Context } from "effect"
+import { MarkOfflinePayload, MarkOfflineResponse, PresencePublicGroup } from "@hazel/domain/http"
+import { UserId } from "@hazel/schema"
+import { Effect, Layer, Schema, Context } from "effect"
 import { Etag, HttpRouter } from "effect/http"
 import { HttpApi, HttpApiBuilder } from "effect/http-api"
-import { HttpInternalLive } from "./internal.http"
 import { HttpPresencePublicLive } from "./presence.http"
-import { configLayer, serviceShape } from "../test/effect-helpers"
 import { ObjectStubs } from "../worker/objects/protocol"
 
 const makeHandler = (api: any, routeLayer: any) => {
@@ -79,59 +69,6 @@ describe("HTTP success response encoding", () => {
 
 			expect(decoded.success).toBe(true)
 			expect(applied).toEqual(["user:00000000-0000-4000-8000-000000000222 user.markOffline"])
-		} finally {
-			await dispose()
-		}
-	})
-
-	it("returns HTTP 200 with a decodable ValidateBotTokenResponse", async () => {
-		const api = HttpApi.make("HazelApp").add(InternalApiGroup)
-		const routeLayer = HttpInternalLive.pipe(
-			Layer.provideMerge(
-				Layer.succeed(
-					BotRepo,
-					serviceShape<typeof BotRepo>({
-						findByTokenHash: () =>
-							Effect.succeed(
-								Option.some({
-									id: BotId.make("00000000-0000-4000-8000-000000000456"),
-									userId: UserId.make("00000000-0000-4000-8000-000000000333"),
-									scopes: ["messages:write"],
-								}),
-							),
-					}),
-				),
-			),
-			Layer.provideMerge(configLayer({})),
-		)
-
-		const { handler, dispose } = makeHandler(api, routeLayer)
-
-		try {
-			const response = await handler(
-				new Request("http://localhost/internal/actors/validate-bot-token", {
-					method: "POST",
-					headers: {
-						"content-type": "application/json",
-					},
-					body: JSON.stringify(
-						new ValidateBotTokenRequest({
-							token: "hzl_bot_valid_token",
-						}),
-					),
-				}),
-				Context.empty() as Context.Context<any>,
-			)
-
-			if (response.status !== 200) {
-				throw new Error(await response.text())
-			}
-
-			const body = await response.json()
-			const decoded = Schema.decodeUnknownSync(ValidateBotTokenResponse)(body)
-
-			expect(decoded.userId).toBe("00000000-0000-4000-8000-000000000333")
-			expect(decoded.scopes).toEqual(["messages:write"])
 		} finally {
 			await dispose()
 		}

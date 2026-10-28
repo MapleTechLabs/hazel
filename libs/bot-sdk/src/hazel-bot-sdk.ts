@@ -93,20 +93,16 @@ import {
 } from "./gateway.ts"
 import { BotRpcClient, BotRpcClientConfigTag, BotRpcClientLive } from "./rpc/client.ts"
 import { BotHealthServerLive } from "./services/health-server.ts"
-import { createActorsClient } from "@hazel/actors/client"
 import {
-	BotNotConfiguredError,
 	createAIStreamSessionInternal,
 	createStreamSessionInternal,
-	type ActorsClientService,
+	makeLiveStateClient,
 	type AIStreamOptions,
 	type AIStreamSession,
 	type CreateStreamOptions,
 	type MessageCreateFn,
-	type MessageUpdateFn,
 } from "./streaming/index.ts"
 
-const DEFAULT_ACTORS_ENDPOINT = "https://rivet.hazel.sh"
 const GENERIC_COMMAND_ERROR_MESSAGE = "An unexpected error occurred. Please try again."
 const GATEWAY_SESSION_ID_STATE_KEY = "gateway_session_id"
 
@@ -120,7 +116,6 @@ export interface HazelBotRuntimeConfig<Commands extends CommandGroup<any> = Comm
 	readonly botToken: string
 	readonly commands: Commands
 	readonly mentionable: boolean
-	readonly actorsEndpoint: string
 	readonly resumeOffset: string
 	readonly maxConcurrentPartitions: number
 	readonly heartbeatIntervalMs?: number
@@ -932,32 +927,8 @@ export class HazelBotClient extends Context.Service<HazelBotClient>()("HazelBotC
 				),
 		})
 
-		/**
-		 * Helper to create actors service from runtime config.
-		 * Shared between stream.create and ai.stream to avoid code duplication.
-		 */
-		const createActorsServiceFn = () =>
-			Option.match(runtimeConfigOption, {
-				onNone: () =>
-					Effect.fail(
-						new BotNotConfiguredError({
-							message: "Bot runtime config not available for streaming",
-						}),
-					),
-				onSome: (config) => {
-					const client = createActorsClient(config.actorsEndpoint)
-					return Effect.succeed({
-						getMessageActor: (messageId: string) =>
-							Effect.sync(() =>
-								client.message.getOrCreate([messageId], {
-									params: { token: config.botToken },
-								}),
-							),
-						client,
-						botToken: config.botToken,
-					} as ActorsClientService)
-				},
-			})
+		/** Live state of streamed messages, over the same API client (`/api/v1/messages/:id/live`). */
+		const liveState = makeLiveStateClient(httpApiClient["api-v1-messages"])
 
 		/**
 		 * Helper to create the message creation function.
@@ -1027,34 +998,6 @@ export class HazelBotClient extends Context.Service<HazelBotClient>()("HazelBotC
 							cause,
 						}),
 				),
-			)
-
-		/**
-		 * Helper to update a message (for persisting streaming state).
-		 * Shared between stream.create and ai.stream to avoid code duplication.
-		 */
-		const updateMessageFnHelper: MessageUpdateFn = (messageId, payload) =>
-			messageLimiter(
-				httpApiClient["api-v1-messages"]
-					.updateMessage({
-						params: { id: messageId },
-						payload: new UpdateMessageRequest({
-							channelId: payload.channelId,
-							content: payload.content,
-							embeds: payload.embeds ?? null,
-						}),
-					})
-					.pipe(
-						Effect.map((r) => r.data),
-						Effect.mapError(
-							(cause) =>
-								new MessageUpdateError({
-									message: "Failed to update message",
-									messageId,
-									cause,
-								}),
-						),
-					),
 			)
 
 		return {
@@ -1611,11 +1554,9 @@ export class HazelBotClient extends Context.Service<HazelBotClient>()("HazelBotC
 			},
 
 			/**
-			 * Helper to create actors service from runtime config.
-			 * Uses Option.match for explicit handling of missing config.
-			 * Fails with BotNotConfiguredError if config is not available.
+			 * The live state of streamed messages (what `stream` and `ai.stream` write through).
 			 */
-			createActorsService: createActorsServiceFn,
+			liveState,
 
 			/**
 			 * Helper to create the message creation function.
@@ -1624,14 +1565,8 @@ export class HazelBotClient extends Context.Service<HazelBotClient>()("HazelBotC
 			createMessageFn: createMessageFnHelper,
 
 			/**
-			 * Helper to update a message (for persisting streaming state).
-			 * @internal
-			 */
-			updateMessageFn: updateMessageFnHelper,
-
-			/**
 			 * Low-level streaming API for real-time message updates.
-			 * Creates messages with live state and provides direct control over the actor.
+			 * Creates messages with live state and provides direct control over it.
 			 *
 			 * @example
 			 * ```typescript
@@ -1652,17 +1587,7 @@ export class HazelBotClient extends Context.Service<HazelBotClient>()("HazelBotC
 				 * @param options - Optional configuration (initialData, replyToMessageId, threadChannelId)
 				 */
 				create: (channelId: ChannelId, options?: CreateStreamOptions) =>
-					Effect.gen(function* () {
-						const actorsService = yield* createActorsServiceFn()
-
-						return yield* createStreamSessionInternal(
-							createMessageFnHelper,
-							updateMessageFnHelper,
-							actorsService,
-							channelId,
-							options,
-						)
-					}),
+					createStreamSessionInternal(createMessageFnHelper, liveState, channelId, options),
 			},
 
 			/**
@@ -1687,17 +1612,7 @@ export class HazelBotClient extends Context.Service<HazelBotClient>()("HazelBotC
 				 * @param options - Optional configuration including model info
 				 */
 				stream: (channelId: ChannelId, options?: AIStreamOptions) =>
-					Effect.gen(function* () {
-						const actorsService = yield* createActorsServiceFn()
-
-						return yield* createAIStreamSessionInternal(
-							createMessageFnHelper,
-							updateMessageFnHelper,
-							actorsService,
-							channelId,
-							options,
-						)
-					}),
+					createAIStreamSessionInternal(createMessageFnHelper, liveState, channelId, options),
 
 				/**
 				 * Error handler for AI streaming sessions.
@@ -1791,13 +1706,6 @@ export interface HazelBotConfig<Commands extends CommandGroup<any> = EmptyComman
 	 * Defaults to `backendUrl`.
 	 */
 	readonly gatewayUrl?: string
-
-	/**
-	 * Actors/Rivet endpoint for live state streaming
-	 * @default "https://rivet.hazel.sh"
-	 * @example "http://localhost:6420" // For local development
-	 */
-	readonly actorsEndpoint?: string
 
 	/**
 	 * Bot authentication token (required)
@@ -1943,13 +1851,6 @@ export const createHazelBot = <Commands extends CommandGroup<any> = EmptyCommand
 ): ManagedRuntime.ManagedRuntime<HazelBotClient, unknown> => {
 	const backendUrl = config.backendUrl ?? "https://api.hazel.sh"
 	const gatewayUrl = config.gatewayUrl ?? "https://bot-gateway.hazel.sh"
-	const actorsEndpoint =
-		config.actorsEndpoint ??
-		process.env.ACTORS_URL ??
-		process.env.RIVET_PUBLIC_ENDPOINT ??
-		process.env.RIVET_URL ??
-		DEFAULT_ACTORS_ENDPOINT
-
 	const AuthLayer = Layer.unwrap(
 		createAuthContextFromToken(config.botToken, backendUrl).pipe(
 			Effect.map((context) => BotAuth.layer(context)),
@@ -1972,7 +1873,6 @@ export const createHazelBot = <Commands extends CommandGroup<any> = EmptyCommand
 		botToken: config.botToken,
 		commands: config.commands ?? EmptyCommandGroup,
 		mentionable: config.mentionable ?? false,
-		actorsEndpoint,
 		resumeOffset: config.resumeOffset ?? "now",
 		maxConcurrentPartitions: config.maxConcurrentPartitions ?? 8,
 		heartbeatIntervalMs: config.heartbeatIntervalMs,

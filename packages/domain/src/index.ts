@@ -22,3 +22,4 @@ export * as Rpc from "./rpc"
 export * from "./session-errors"
 // Durable Object sync protocol
 export * as Sync from "./sync"
+export * as Live from "./live"

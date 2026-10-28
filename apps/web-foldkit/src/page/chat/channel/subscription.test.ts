@@ -53,24 +53,26 @@ describe("channel subscription gates", () => {
 		expect(keepAliveEquivalence(window, { ...window, channelId: threadChannelId })).toBe(false)
 	})
 
-	test("an AI reply in the window opens its actor connection; finished ones never do", () => {
+	test("an AI reply in the window opens its live socket; finished ones never do", () => {
 		const live = chatMessageOf(10, { embeds: liveEmbeds, hasEmbeds: true })
 		const model = updateWithShared(loadedModel(), loadedMessages([live, ...messages])).model
 		expect(subscriptions.chatLiveReplies.modelToDependencies(input(model))).toEqual({
-			messageIds: [live.id],
+			replies: [{ messageId: live.id, channelId: live.channelId }],
 		})
 		const idle = updateWithShared(loadedModel(), loadedMessages(messages)).model
-		expect(subscriptions.chatLiveReplies.modelToDependencies(input(idle))).toEqual({ messageIds: [] })
+		expect(subscriptions.chatLiveReplies.modelToDependencies(input(idle))).toEqual({ replies: [] })
 	})
 
 	test("a new live reply keeps the running stream; only the last one leaving stops it", () => {
 		const { keepAliveEquivalence } = subscriptions.chatLiveReplies
-		const first = chatMessageOf(10, { embeds: liveEmbeds, hasEmbeds: true })
-		const second = chatMessageOf(11, { embeds: liveEmbeds, hasEmbeds: true })
-		expect(keepAliveEquivalence({ messageIds: [first.id] }, { messageIds: [first.id, second.id] })).toBe(
-			true,
-		)
-		expect(keepAliveEquivalence({ messageIds: [first.id] }, { messageIds: [] })).toBe(false)
+		const replyOf = (message: ReturnType<typeof chatMessageOf>) => ({
+			messageId: message.id,
+			channelId: message.channelId,
+		})
+		const first = replyOf(chatMessageOf(10, { embeds: liveEmbeds, hasEmbeds: true }))
+		const second = replyOf(chatMessageOf(11, { embeds: liveEmbeds, hasEmbeds: true }))
+		expect(keepAliveEquivalence({ replies: [first] }, { replies: [first, second] })).toBe(true)
+		expect(keepAliveEquivalence({ replies: [first] }, { replies: [] })).toBe(false)
 	})
 
 	test("global typing is off on the Files tab", () => {
@@ -95,7 +97,7 @@ describe("channel subscription gates", () => {
 		expect(subscriptions.chatThreadPanel.modelToDependencies(input(created))).toEqual({ threadChannelId })
 	})
 
-	test("an AI reply streaming in the open thread panel opens its actor connection", () => {
+	test("an AI reply streaming in the open thread panel opens its live socket", () => {
 		const live = chatMessageOf(20, { channelId: threadChannelId, embeds: liveEmbeds, hasEmbeds: true })
 		const opened = updateWithShared(
 			loadedModel(),
@@ -105,7 +107,10 @@ describe("channel subscription gates", () => {
 			opened,
 			Message.UpdatedThreadPanelMessages({ threadChannelId, messages: [live] }),
 		).model
-		expect(subscriptions.chatLiveReplies.modelToDependencies(input(model)).messageIds).toContain(live.id)
+		expect(subscriptions.chatLiveReplies.modelToDependencies(input(model)).replies).toContainEqual({
+			messageId: live.id,
+			channelId: threadChannelId,
+		})
 	})
 })
 

@@ -4,7 +4,6 @@ const ACTOR_AUTH_ERROR_SNIPPETS = [
 	"invalid bot token",
 	"failed to validate bot token",
 	"failed to get response",
-	"/internal/actors/validate-bot-token",
 	"not found",
 	"404",
 	"authentication service unavailable",
