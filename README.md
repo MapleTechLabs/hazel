@@ -107,7 +107,7 @@ Hazel Chat is a full-stack chat application featuring:
     ```
 
     This runs `bun run alchemy:dev`: every Worker (the api with its Durable Objects and the
-    directory D1, the bot gateway, link preview) runs locally in workerd, plus the web
+    directory D1, the bot gateway, link preview, actors) runs locally in workerd, plus the web
     app's dev server. Local state lives in `.alchemy/`.
 
     To start local bot apps, run:
