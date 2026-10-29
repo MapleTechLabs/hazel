@@ -11,7 +11,7 @@ import { BotStateStoreTag, GatewaySessionStoreTag } from "./gateway.ts"
 import { HazelBotClient, HazelBotRuntimeConfigTag } from "./hazel-bot-sdk.ts"
 import { BotRpcClient, BotRpcClientConfigTag } from "./rpc/client.ts"
 
-vi.mock("@hazel/effect-bun/Telemetry", () => ({
+vi.mock("./telemetry.ts", () => ({
 	createTracingLayer: () => Layer.empty,
 }))
 

@@ -2,7 +2,7 @@ import { LanguageModel } from "effect/ai"
 import { OpenRouterClient, OpenRouterLanguageModel } from "@effect/ai-openrouter"
 import { FetchHttpClient } from "effect/http"
 import { Config, Effect, Layer, Schema } from "effect"
-import { runHazelBot } from "@hazel-chat/bot-sdk"
+import { defineBot } from "@hazel-chat/bot-sdk"
 import { LinearApiClient } from "@hazel/integrations/linear"
 import { commands, IssueCommand, IssueifyCommand, GeneratedIssueSchema } from "./commands.ts"
 
@@ -22,7 +22,8 @@ const OpenRouterModelLayer = OpenRouterLanguageModel.layer({
 // Bot Setup
 // ============================================================================
 
-runHazelBot({
+/** The Linear bot; hosted by `./worker.ts`. */
+export const bot = defineBot({
 	serviceName: "linear-bot",
 	commands,
 	layers: [LinearApiClient.layer],

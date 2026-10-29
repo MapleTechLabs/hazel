@@ -234,12 +234,16 @@
         "@effect/ai-openrouter": "catalog:effect",
         "@hazel-chat/bot-sdk": "workspace:*",
         "@hazel/domain": "workspace:*",
+        "@hazel/infra": "workspace:*",
         "@hazel/integrations": "workspace:*",
         "@hazel/schema": "workspace:*",
+        "alchemy": "catalog:alchemy",
         "effect": "catalog:effect",
       },
       "devDependencies": {
-        "@types/bun": "1.3.9",
+        "@cloudflare/workers-types": "catalog:alchemy",
+        "@types/node": "^24",
+        "typescript": "catalog:tooling",
       },
     },
     "bots/linear-bot": {
@@ -248,23 +252,24 @@
       "dependencies": {
         "@effect/ai-openrouter": "catalog:effect",
         "@hazel-chat/bot-sdk": "workspace:*",
-        "@hazel/db": "workspace:*",
         "@hazel/domain": "workspace:*",
+        "@hazel/infra": "workspace:*",
         "@hazel/integrations": "workspace:*",
+        "alchemy": "catalog:alchemy",
         "effect": "catalog:effect",
       },
       "devDependencies": {
-        "@types/bun": "1.3.9",
+        "@cloudflare/workers-types": "catalog:alchemy",
+        "@types/node": "^24",
+        "typescript": "catalog:tooling",
       },
     },
     "libs/bot-sdk": {
       "name": "@hazel-chat/bot-sdk",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "devDependencies": {
         "@effect/opentelemetry": "catalog:effect",
-        "@effect/platform-bun": "catalog:effect",
         "@hazel/domain": "workspace:*",
-        "@hazel/effect-bun": "workspace:*",
         "@hazel/schema": "workspace:*",
         "@types/bun": "1.3.9",
         "effect": "catalog:effect",
@@ -274,7 +279,6 @@
       },
       "peerDependencies": {
         "@effect/opentelemetry": ">=4.0.0-beta.0",
-        "@effect/platform-bun": ">=4.0.0-beta.0",
         "effect": ">=4.0.0-beta.0",
       },
       "optionalPeers": [
@@ -367,19 +371,6 @@
       },
       "devDependencies": {
         "@types/bun": "1.3.9",
-        "typescript": "catalog:tooling",
-      },
-    },
-    "packages/effect-bun": {
-      "name": "@hazel/effect-bun",
-      "version": "0.0.0",
-      "dependencies": {
-        "@effect/opentelemetry": "catalog:effect",
-        "@effect/platform-bun": "catalog:effect",
-        "effect": "catalog:effect",
-      },
-      "devDependencies": {
-        "@types/bun": "latest",
         "typescript": "catalog:tooling",
       },
     },
@@ -810,8 +801,6 @@
     "@hazel/desktop": ["@hazel/desktop@workspace:apps/desktop"],
 
     "@hazel/domain": ["@hazel/domain@workspace:packages/domain"],
-
-    "@hazel/effect-bun": ["@hazel/effect-bun@workspace:packages/effect-bun"],
 
     "@hazel/effect-cloudflare": ["@hazel/effect-cloudflare@workspace:packages/effect-cloudflare"],
 
@@ -3151,8 +3140,6 @@
 
     "@fumadocs/ui/tailwind-merge": ["tailwind-merge@3.4.0", "", {}, "sha512-uSaO4gnW+b3Y2aWoWfFpX62vn2sR3skfhbjsEnaBI81WD1wBLlHZe5sWf0AqjksNdYTbGBEd0UasQMT3SNV15g=="],
 
-    "@hazel/effect-bun/@types/bun": ["@types/bun@1.4.4", "", { "dependencies": { "bun-types": "1.4.4" } }, "sha512-9wkRDXUXK124pEnAutE6n/l18j+i9GC5IAHK8TmX/2nlySETmky0OU6yL5U8pW1AoKh++AN9auDCr647BfurjQ=="],
-
     "@img/sharp-freebsd-wasm32/@img/sharp-wasm32": ["@img/sharp-wasm32@0.35.5", "", { "dependencies": { "@emnapi/runtime": "^1.11.3" } }, "sha512-Ptsga1su4tQx+LLF1ECS9U6nz5kmrXKo6XVbtR48Ke3ZRxxgaWBu7IDtEe1quo8hiupwm6WFqxVlXaSf7IINGQ=="],
 
     "@img/sharp-webcontainers-wasm32/@img/sharp-wasm32": ["@img/sharp-wasm32@0.35.5", "", { "dependencies": { "@emnapi/runtime": "^1.11.3" } }, "sha512-Ptsga1su4tQx+LLF1ECS9U6nz5kmrXKo6XVbtR48Ke3ZRxxgaWBu7IDtEe1quo8hiupwm6WFqxVlXaSf7IINGQ=="],
@@ -3696,8 +3683,6 @@
     "@foldkit/vite-plugin/@effect/platform-node-shared/@types/ws": ["@types/ws@8.18.1", "", { "dependencies": { "@types/node": "*" } }, "sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg=="],
 
     "@foldkit/vite-plugin/magic-string/@jridgewell/sourcemap-codec": ["@jridgewell/sourcemap-codec@1.6.0", "", {}, "sha512-T7jf+5zgsZHwNJ4lvQ7/aezbyk0nNX+zJVWpmHA7VYsEx7a7qr5Rg5IbtJFqkgze5Y2sruq1RUY8Q837Od7iFw=="],
-
-    "@hazel/effect-bun/@types/bun/bun-types": ["bun-types@1.4.4", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-yjrJh5oGX7mMPKGd19YXyIjmEuj4G4zNC30bs7PM9Az7NQ3ndF3j6hbeRdvJTRQEhJ/FYQwW0a2moweEi2hMxQ=="],
 
     "@img/sharp-freebsd-wasm32/@img/sharp-wasm32/@emnapi/runtime": ["@emnapi/runtime@1.11.3", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA=="],
 

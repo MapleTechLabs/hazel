@@ -446,27 +446,10 @@ export const setupCommand = Command.make(
 				githubWebhookSecret,
 				openrouterApiKey,
 				klipyApiKey,
+				botTokens: yield* envWriter.readBotTokens(),
 			}
 
 			yield* envWriter.writeEnvFile(".env.local", ENV_TEMPLATES.local(config), dryRun)
-
-			// Bot .env files — preserve existing BOT_TOKEN / ACTORS_URL values
-			const existingHazelBotEnv = yield* envWriter.readEnvFile("bots/hazel-bot/.env")
-			const existingLinearBotEnv = yield* envWriter.readEnvFile("bots/linear-bot/.env")
-
-			const hazelBotVars = {
-				...ENV_TEMPLATES.hazelBot(config),
-				...(existingHazelBotEnv.BOT_TOKEN ? { BOT_TOKEN: existingHazelBotEnv.BOT_TOKEN } : {}),
-				...(existingHazelBotEnv.ACTORS_URL ? { ACTORS_URL: existingHazelBotEnv.ACTORS_URL } : {}),
-			}
-			const linearBotVars = {
-				...ENV_TEMPLATES.linearBot(config),
-				...(existingLinearBotEnv.BOT_TOKEN ? { BOT_TOKEN: existingLinearBotEnv.BOT_TOKEN } : {}),
-				...(existingLinearBotEnv.ACTORS_URL ? { ACTORS_URL: existingLinearBotEnv.ACTORS_URL } : {}),
-			}
-
-			yield* envWriter.writeEnvFile("bots/hazel-bot/.env", hazelBotVars, dryRun)
-			yield* envWriter.writeEnvFile("bots/linear-bot/.env", linearBotVars, dryRun)
 
 			if (dryRun) {
 				yield* Console.log(pc.dim("\nDry-run complete! No files were written."))
@@ -479,7 +462,7 @@ export const setupCommand = Command.make(
 					`  1. Run ${pc.cyan("`bun run dev`")} (\`alchemy:dev\`) to start the Workers and the web app`,
 				)
 				yield* Console.log(
-					`  2. Optional: Run ${pc.cyan("`bun run dev:bots`")} to start local bot apps\n`,
+					`  2. Optional: set ${pc.cyan("HAZEL_BOT_TOKEN")} / ${pc.cyan("LINEAR_BOT_TOKEN")} in .env.local to run the bots too\n`,
 				)
 			}
 		}),

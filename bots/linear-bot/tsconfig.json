@@ -1,13 +1,23 @@
 {
+	"include": ["**/*.ts", "**/*.tsx"],
 	"compilerOptions": {
-		"target": "ESNext",
+		"target": "ES2022",
 		"module": "ESNext",
+		"lib": ["ES2022", "DOM", "DOM.Iterable"],
 		"moduleResolution": "bundler",
 		"allowImportingTsExtensions": true,
-		"strict": true,
+		"verbatimModuleSyntax": true,
 		"noEmit": true,
 		"skipLibCheck": true,
-		"types": ["bun"]
-	},
-	"include": ["src/**/*.ts"]
+		"strict": true,
+		"types": ["node", "@cloudflare/workers-types"],
+		"noFallthroughCasesInSwitch": true,
+		"noUncheckedSideEffectImports": true,
+		"plugins": [
+			{
+				"name": "@effect/language-service",
+				"reportSuggestionsAsWarningsInTsc": true
+			}
+		]
+	}
 }

@@ -1,4 +1,4 @@
-import { defineBot, runNodeBot } from "@hazel-chat/bot-sdk"
+import { defineBot } from "@hazel-chat/bot-sdk"
 import type { OrganizationId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
 import { LinearApiClient } from "@hazel/integrations/linear"
@@ -20,7 +20,8 @@ const defaultActiveThreadsState = () => ({
 	byChannel: {} as Record<string, string>,
 })
 
-const bot = defineBot({
+/** The Hazel AI bot; hosted by `./worker.ts`. */
+export const bot = defineBot({
 	serviceName: "hazel-bot",
 	commands,
 	mentionable: true,
@@ -162,5 +163,3 @@ const bot = defineBot({
 			)
 		}),
 })
-
-runNodeBot(bot)

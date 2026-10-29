@@ -3,15 +3,14 @@
  *
  * Provides a simplified API for running Hazel bots with automatic:
  * - Environment configuration loading via Effect's Config
- * - Signal handling (SIGINT/SIGTERM) via BunRuntime.runMain
+ * - Signal handling (SIGINT/SIGTERM) on Bun and Node
  * - Error logging and recovery
  * - Graceful shutdown
  */
 
-import { BunRuntime } from "@effect/platform-bun"
-import { Effect, Layer, Redacted, Context } from "effect"
+import { Effect, Layer, Redacted, Context, Runtime } from "effect"
 import type { CommandGroup, EmptyCommands } from "./command.ts"
-import { createHazelBot, HazelBotClient, type HazelBotConfig } from "./hazel-bot-sdk.ts"
+import { createHazelBot, HazelBotClient, makeHazelBotLayer, type HazelBotConfig } from "./hazel-bot-sdk.ts"
 import { BotEnvConfig } from "./bot-config.ts"
 
 /**
@@ -71,7 +70,7 @@ export interface RunBotConfig<Commands extends CommandGroup<any> = EmptyCommands
  * 2. Creates the bot runtime with all necessary layers
  * 3. Registers your handlers via the setup function
  * 4. Starts the bot and keeps it running
- * 5. Handles graceful shutdown on SIGINT/SIGTERM (via BunRuntime.runMain)
+ * 5. Handles graceful shutdown on SIGINT/SIGTERM
  *
  * @example
  * ```typescript
@@ -97,53 +96,16 @@ export const runHazelBot = <Commands extends CommandGroup<any> = EmptyCommands>(
 	options: RunBotConfig<Commands>,
 ): void => {
 	const program = Effect.gen(function* () {
-		// Load configuration from environment
-		const envConfig = yield* BotEnvConfig
-
-		// Create runtime configuration
-		const botConfig: HazelBotConfig<Commands> = {
-			botToken: Redacted.value(envConfig.botToken),
-			backendUrl: options.config?.backendUrl ?? envConfig.backendUrl,
-			gatewayUrl: options.config?.gatewayUrl ?? envConfig.gatewayUrl,
-			commands: options.commands,
-			mentionable: options.mentionable,
-			healthPort: options.healthPort ?? envConfig.healthPort,
-			serviceName: options.serviceName ?? "hazel-bot",
-			resumeOffset: options.config?.resumeOffset,
-			sessionStore: options.config?.sessionStore,
-			stateStore: options.config?.stateStore,
-			maxConcurrentPartitions: options.config?.maxConcurrentPartitions,
-			heartbeatIntervalMs: options.config?.heartbeatIntervalMs,
-		}
+		const botConfig = yield* resolveBotConfig(options)
 
 		// Create the bot runtime
 		const runtime = createHazelBot(botConfig)
 
-		// Compose additional layers if provided
-		const additionalLayers =
-			options.layers && options.layers.length > 0
-				? Layer.mergeAll(
-						...(options.layers as [Layer.Layer<any, any, any>, ...Layer.Layer<any, any, any>[]]),
-					)
-				: Layer.empty
-
-		// Create the bot program
-		const botProgram = Effect.gen(function* () {
-			const bot = yield* HazelBotClient
-
-			// Run user's setup function
-			yield* options.setup(bot)
-
-			// Start the bot
-			yield* bot.start
-
-			// Keep running until interrupted
-			return yield* Effect.never
-		})
-
 		// Run with layers provided
 		return yield* Effect.promise(() =>
-			runtime.runPromise(botProgram.pipe(Effect.scoped, Effect.provide(additionalLayers))),
+			runtime.runPromise(
+				runSetup(options).pipe(Effect.scoped, Effect.provide(additionalLayers(options))),
+			),
 		)
 	}).pipe(
 		// Handle config errors with helpful messages
@@ -156,6 +118,75 @@ export const runHazelBot = <Commands extends CommandGroup<any> = EmptyCommands>(
 		),
 	)
 
-	// Run with BunRuntime which handles SIGINT/SIGTERM automatically
-	BunRuntime.runMain(program)
+	runMain(program)
 }
+
+/**
+ * Run a bot inside the current Effect context, which supplies logging, tracing and the
+ * `ConfigProvider` its env is read from: the entry point for a host that owns those (a Durable
+ * Object, see `@hazel-chat/bot-sdk/cloudflare`). Never returns; interrupt it to stop the bot.
+ */
+export const launchBot = <Commands extends CommandGroup<any> = EmptyCommands>(
+	options: RunBotConfig<Commands>,
+): Effect.Effect<never, unknown> =>
+	Effect.gen(function* () {
+		const botConfig = yield* resolveBotConfig(options)
+		return yield* runSetup(options).pipe(
+			Effect.scoped,
+			Effect.provide(additionalLayers(options)),
+			Effect.provide(makeHazelBotLayer(botConfig)),
+		)
+		// `setup` and `layers` are typed loosely (`unknown` requirements), as in `runHazelBot`.
+	}) as Effect.Effect<never, unknown>
+
+/** Configuration from the environment, overridden by `options.config`. */
+const resolveBotConfig = <Commands extends CommandGroup<any>>(options: RunBotConfig<Commands>) =>
+	Effect.gen(function* () {
+		const envConfig = yield* BotEnvConfig
+		return {
+			botToken: Redacted.value(envConfig.botToken),
+			backendUrl: options.config?.backendUrl ?? envConfig.backendUrl,
+			gatewayUrl: options.config?.gatewayUrl ?? envConfig.gatewayUrl,
+			commands: options.commands,
+			mentionable: options.mentionable,
+			healthPort: options.healthPort ?? envConfig.healthPort,
+			serviceName: options.serviceName ?? "hazel-bot",
+			resumeOffset: options.config?.resumeOffset,
+			sessionStore: options.config?.sessionStore,
+			stateStore: options.config?.stateStore,
+			maxConcurrentPartitions: options.config?.maxConcurrentPartitions,
+			heartbeatIntervalMs: options.config?.heartbeatIntervalMs,
+		} satisfies HazelBotConfig<Commands>
+	})
+
+const additionalLayers = (options: RunBotConfig<any>) =>
+	options.layers && options.layers.length > 0
+		? Layer.mergeAll(...(options.layers as [Layer.Layer<any, any, any>, ...Layer.Layer<any, any, any>[]]))
+		: Layer.empty
+
+/** Register the handlers, start the bot, and keep it running until interrupted. */
+const runSetup = (options: RunBotConfig<any>) =>
+	Effect.gen(function* () {
+		const bot = yield* HazelBotClient
+		yield* options.setup(bot)
+		yield* bot.start
+		return yield* Effect.never
+	})
+
+/** The process main for Bun and Node: SIGINT/SIGTERM interrupt the bot, failures exit non-zero. */
+const runMain = Runtime.makeRunMain(({ fiber, teardown }) => {
+	let receivedSignal = false
+	const onSignal = () => {
+		receivedSignal = true
+		fiber.interruptUnsafe(fiber.id)
+	}
+	fiber.addObserver((exit) => {
+		process.removeListener("SIGINT", onSignal)
+		process.removeListener("SIGTERM", onSignal)
+		teardown(exit, (code) => {
+			if (receivedSignal || code !== 0) process.exit(code)
+		})
+	})
+	process.on("SIGINT", onSignal)
+	process.on("SIGTERM", onSignal)
+})

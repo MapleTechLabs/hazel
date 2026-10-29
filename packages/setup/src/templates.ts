@@ -126,12 +126,20 @@ export interface Config {
 	githubWebhookSecret?: string
 	openrouterApiKey?: string
 	klipyApiKey?: string
+	/** Tokens of the first-party bots, kept from an earlier setup: alchemy dev runs a bot with one. */
+	botTokens?: BotTokens
+}
+
+export interface BotTokens {
+	hazelBot?: string
+	linearBot?: string
 }
 
 /**
- * The env files setup writes. `.env.local` (repo root) is everything `bun run alchemy:dev` reads:
+ * The env file setup writes. `.env.local` (repo root) is everything `bun run alchemy:dev` reads:
  * alchemy hands it to the Workers it runs locally (the api and its Durable Objects, the bot
- * gateway) and to the web build; the directory D1 and the objects' SQLite live under `.alchemy/`.
+ * gateway, the bots) and to the web build; the directory D1 and the objects' SQLite live under
+ * `.alchemy/`.
  */
 export const ENV_TEMPLATES = {
 	local: (config: Config) => {
@@ -168,21 +176,10 @@ export const ENV_TEMPLATES = {
 		base.KLIPY_API_KEY =
 			config.klipyApiKey ?? "bZNjfZASldu4OkLPwM3Wg7mcInb0oESRww2b4wz9E7P8bfdxPrCdue1N58Ciw6Ut"
 
+		// First-party bots (bots/*): alchemy dev runs each one whose token is set
+		if (config.botTokens?.hazelBot) base.HAZEL_BOT_TOKEN = config.botTokens.hazelBot
+		if (config.botTokens?.linearBot) base.LINEAR_BOT_TOKEN = config.botTokens.linearBot
+
 		return base
 	},
-
-	hazelBot: (config: Config) => ({
-		BOT_TOKEN: "",
-		BACKEND_URL: "http://localhost:3003",
-		ACTORS_URL: "http://localhost:6420",
-		OPENROUTER_API_KEY: config.openrouterApiKey ?? "",
-	}),
-
-	linearBot: (config: Config) => ({
-		BOT_TOKEN: "",
-		BACKEND_URL: "http://localhost:3003",
-		ACTORS_URL: "http://localhost:6420",
-		IS_DEV: "true",
-		OPENROUTER_API_KEY: config.openrouterApiKey ?? "",
-	}),
 }

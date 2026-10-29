@@ -100,7 +100,7 @@ Hazel Chat is a full-stack chat application featuring:
     - Start Docker services (MinIO)
     - Validate your environment
     - Generate secrets
-    - Write `.env.local` (what `bun run alchemy:dev` reads; see `.env.local.example`) and the bots' `.env` files
+    - Write `.env.local` (what `bun run alchemy:dev` reads; see `.env.local.example`)
 
 4. **Start development**
 
@@ -112,11 +112,8 @@ Hazel Chat is a full-stack chat application featuring:
     directory D1, the bot gateway, link preview, actors) runs locally in workerd, plus the web
     app's dev server. Local state lives in `.alchemy/`.
 
-    To start local bot apps, run:
-
-    ```bash
-    bun run dev:bots
-    ```
+    The first-party bots (`bots/*`) run as Workers too: set `HAZEL_BOT_TOKEN` and/or
+    `LINEAR_BOT_TOKEN` in `.env.local` and `alchemy:dev` starts them.
 
 ## Clerk Configuration
 
@@ -141,7 +138,6 @@ Copy the signing secret into `CLERK_WEBHOOK_SECRET`.
 | Command                 | Description                                 |
 | ----------------------- | ------------------------------------------- |
 | `bun run dev`           | Start the whole stack (`alchemy:dev`)       |
-| `bun run dev:bots`      | Start local bot apps                        |
 | `bun run build`         | Build all apps and packages                 |
 | `bun run typecheck`     | Run TypeScript checking across all packages |
 | `bun run format`        | Format and lint code with OXC               |

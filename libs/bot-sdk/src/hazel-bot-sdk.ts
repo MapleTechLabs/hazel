@@ -42,7 +42,6 @@ import {
 	UpdateMessageRequest,
 } from "@hazel/domain/http"
 import { Channel, ChannelMember, Message } from "@hazel/domain/models"
-import { createTracingLayer } from "@hazel/effect-bun/Telemetry"
 import {
 	Cache,
 	Config,
@@ -93,6 +92,7 @@ import {
 } from "./gateway.ts"
 import { BotRpcClient, BotRpcClientConfigTag, BotRpcClientLive } from "./rpc/client.ts"
 import { BotHealthServerLive } from "./services/health-server.ts"
+import { createTracingLayer } from "./telemetry.ts"
 import {
 	createAIStreamSessionInternal,
 	createStreamSessionInternal,
@@ -1849,6 +1849,53 @@ export interface HazelBotConfig<Commands extends CommandGroup<any> = EmptyComman
 export const createHazelBot = <Commands extends CommandGroup<any> = EmptyCommands>(
 	config: HazelBotConfig<Commands>,
 ): ManagedRuntime.ManagedRuntime<HazelBotClient, unknown> => {
+	// Create logger layer with configurable level and format
+	// Defaults: INFO level, format based on NODE_ENV
+	// LOG_LEVEL env var overrides config (e.g. LOG_LEVEL=debug bun run dev)
+	const LoggerLayer = Layer.unwrap(
+		Effect.gen(function* () {
+			const nodeEnv = yield* Config.String("NODE_ENV").pipe(Config.withDefault("development"))
+			const envLogLevel = yield* Config.String("LOG_LEVEL").pipe(Config.withDefault(""))
+			const defaultFormat: LogFormat = nodeEnv === "production" ? "structured" : "pretty"
+
+			const resolvedLevel = envLogLevel
+				? logLevelFromString(envLogLevel)
+				: (config.logging?.level ?? "Info")
+
+			const logConfig: BotLogConfig = {
+				level: resolvedLevel,
+				format: config.logging?.format ?? defaultFormat,
+			}
+
+			return createLoggerLayer(logConfig)
+		}),
+	)
+
+	// Create tracing layer with configurable service name
+	const TracingLayer = createTracingLayer(config.serviceName ?? "hazel-bot")
+
+	// Create health server layer (enabled by default on port 0 = OS-assigned)
+	const healthPort = config.healthPort ?? 0
+	const HealthServerLayer =
+		config.healthPort === false ? Layer.empty : BotHealthServerLive(healthPort as number)
+
+	const AllLayers = Layer.mergeAll(makeHazelBotLayer(config), HealthServerLayer).pipe(
+		Layer.provide(LoggerLayer),
+		Layer.provide(TracingLayer),
+	)
+
+	// Create runtime
+	return ManagedRuntime.make(AllLayers as Layer.Layer<HazelBotClient, any>)
+}
+
+/**
+ * The bot client and the services it needs, without logging, tracing or a health server: for a
+ * host that brings its own (a Durable Object, see `@hazel-chat/bot-sdk/cloudflare`), where the
+ * layer picks up the host's logger, tracer and `ConfigProvider`. {@link createHazelBot} adds them.
+ */
+export const makeHazelBotLayer = <Commands extends CommandGroup<any> = EmptyCommands>(
+	config: HazelBotConfig<Commands>,
+): Layer.Layer<HazelBotClient, unknown> => {
 	const backendUrl = config.backendUrl ?? "https://api.hazel.sh"
 	const gatewayUrl = config.gatewayUrl ?? "https://bot-gateway.hazel.sh"
 	const AuthLayer = Layer.unwrap(
@@ -1886,48 +1933,12 @@ export const createHazelBot = <Commands extends CommandGroup<any> = EmptyCommand
 		? Layer.succeed(BotStateStoreTag, config.stateStore)
 		: InMemoryBotStateStoreLive
 
-	// Create logger layer with configurable level and format
-	// Defaults: INFO level, format based on NODE_ENV
-	// LOG_LEVEL env var overrides config (e.g. LOG_LEVEL=debug bun run dev)
-	const LoggerLayer = Layer.unwrap(
-		Effect.gen(function* () {
-			const nodeEnv = yield* Config.String("NODE_ENV").pipe(Config.withDefault("development"))
-			const envLogLevel = yield* Config.String("LOG_LEVEL").pipe(Config.withDefault(""))
-			const defaultFormat: LogFormat = nodeEnv === "production" ? "structured" : "pretty"
-
-			const resolvedLevel = envLogLevel
-				? logLevelFromString(envLogLevel)
-				: (config.logging?.level ?? "Info")
-
-			const logConfig: BotLogConfig = {
-				level: resolvedLevel,
-				format: config.logging?.format ?? defaultFormat,
-			}
-
-			return createLoggerLayer(logConfig)
-		}),
-	)
-
-	// Create tracing layer with configurable service name
-	const TracingLayer = createTracingLayer(config.serviceName ?? "hazel-bot")
-
-	// Create health server layer (enabled by default on port 0 = OS-assigned)
-	const healthPort = config.healthPort ?? 0
-	const HealthServerLayer =
-		config.healthPort === false ? Layer.empty : BotHealthServerLive(healthPort as number)
-
-	// Compose all layers with proper dependency order
-	const AllLayers = Layer.mergeAll(
-		HazelBotClient.layer.pipe(
-			Layer.provide(RpcClientLayer),
-			Layer.provide(RpcClientConfigLayer),
-			Layer.provide(BotStateStoreLayer),
-			Layer.provide(GatewaySessionStoreLayer),
-			Layer.provide(RuntimeConfigLayer),
-		),
-		HealthServerLayer,
-	).pipe(Layer.provide(AuthLayer), Layer.provide(LoggerLayer), Layer.provide(TracingLayer))
-
-	// Create runtime
-	return ManagedRuntime.make(AllLayers as Layer.Layer<HazelBotClient, any>)
+	return HazelBotClient.layer.pipe(
+		Layer.provide(RpcClientLayer),
+		Layer.provide(RpcClientConfigLayer),
+		Layer.provide(BotStateStoreLayer),
+		Layer.provide(GatewaySessionStoreLayer),
+		Layer.provide(RuntimeConfigLayer),
+		Layer.provide(AuthLayer),
+	) as Layer.Layer<HazelBotClient, unknown>
 }
