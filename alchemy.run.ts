@@ -1,6 +1,6 @@
 // The Hazel stack. Each app declares its resources in `apps/<app>/alchemy.run.ts`; this file
 // builds the deploy context (`HazelStack`) and yields them in dependency order.
-// Plans: infra/cloudflare-migration-plan.md, infra/durable-object-sync-plan.md (data and sync).
+// Overview: infra/README.md; data and sync: infra/durable-object-sync-plan.md.
 import { appendFileSync } from "node:fs"
 import * as Maple from "@maple-dev/alchemy"
 import * as Alchemy from "alchemy"
@@ -79,9 +79,10 @@ export default Alchemy.Stack(
 	"hazel",
 	{
 		// Maple (Worker telemetry's ingest key) only with `MAPLE_API_KEY`: see `@hazel/infra/maple`.
-		// PlanetScale stays registered after the Postgres cutover so deploys can remove the old roles
-		// (the database itself is retained). Its credential lookup runs when the layer is built, so
-		// `alchemy dev` skips it.
+		// PlanetScale stays registered after the Postgres cutover so a prd deploy can delete the old
+		// roles (`db-api-role`, `db-electric-role`, `db-cluster-role`) still in state; the database
+		// itself is retained. Remove it once a prd deploy has succeeded (infra/README.md). Its
+		// credential lookup runs when the layer is built, so `alchemy dev` skips it.
 		providers: Layer.mergeAll(
 			isDevServer
 				? Cloudflare.providers()

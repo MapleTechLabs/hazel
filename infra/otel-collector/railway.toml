@@ -1,7 +1,0 @@
-[build]
-builder = "dockerfile"
-dockerfilePath = "infra/otel-collector/Dockerfile"
-watchPatterns = ["infra/otel-collector/**"]
-
-[deploy]
-# healthcheckPath = "/health"

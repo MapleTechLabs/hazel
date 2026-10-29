@@ -76,10 +76,6 @@ export const apiEnv = ({ stage, urls }: HazelStackContext) =>
 		optionalPlain("GITHUB_WEBHOOK_SKIP_SIGNATURE"),
 		optionalSecret("INTERNAL_SECRET"),
 		optionalSecret("KLIPY_API_KEY"),
-		// The one-shot Postgres import route (`worker/import-route.ts`); unset turns it off. On prd it
-		// also needs `IMPORT_ENABLED=true`: both are set only for the import deploy, never in CI.
-		optionalSecret("IMPORT_SECRET"),
-		optionalPlain("IMPORT_ENABLED"),
 		// Thread naming (services/thread-namer.ts); unset disables it.
 		optionalSecret("OPENROUTER_API_KEY"),
 	)

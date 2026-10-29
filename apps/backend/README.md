@@ -21,12 +21,3 @@ bun run alchemy:dev
 ```
 
 Tests run on in-memory node SQLite: `bun run test`.
-
-## Postgres import (cutover)
-
-`src/scripts/import-postgres.ts` copies the old Postgres database into the objects and D1 once,
-through `POST /internal/import/:store/:id` (on only while the Worker has `IMPORT_SECRET`):
-
-```bash
-bun run import-postgres --from <postgres url> --to <api url> --secret <IMPORT_SECRET> [--dry-run]
-```

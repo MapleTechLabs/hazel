@@ -125,5 +125,4 @@ const LEGACY_PRD_NAMES: Record<string, string> = {
 	web: "hazel-app",
 	landing: "hazel-landing",
 	"link-preview": "link-preview-worker",
-	actors: "hazel-actors",
 }

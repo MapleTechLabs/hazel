@@ -59,7 +59,6 @@ const DEV_PORTS: Record<string, number> = {
 	api: 3003,
 	"bot-gateway": 3004,
 	"link-preview": 5471,
-	actors: 6420,
 }
 
 export const hazelWorkerProps = (app: string, { stage }: HazelStackContext) => ({
