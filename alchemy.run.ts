@@ -1,11 +1,10 @@
 // The Hazel stack. Each app declares its resources in `apps/<app>/alchemy.run.ts`; this file
 // builds the deploy context (`HazelStack`) and yields them in dependency order.
-// Plans: infra/cloudflare-migration-plan.md, infra/durable-object-sync-plan.md (data and sync).
+// Overview: infra/README.md; data and sync: infra/durable-object-sync-plan.md.
 import { appendFileSync } from "node:fs"
 import * as Maple from "@maple-dev/alchemy"
 import * as Alchemy from "alchemy"
 import * as Cloudflare from "alchemy/Cloudflare"
-import * as Planetscale from "alchemy/Planetscale"
 import { ConfigError } from "effect/Config"
 import { SourceError } from "effect/ConfigProvider"
 import * as Effect from "effect/Effect"
@@ -79,15 +78,7 @@ export default Alchemy.Stack(
 	"hazel",
 	{
 		// Maple (Worker telemetry's ingest key) only with `MAPLE_API_KEY`: see `@hazel/infra/maple`.
-		// PlanetScale stays registered after the Postgres cutover so deploys can remove the old roles
-		// (the database itself is retained). Its credential lookup runs when the layer is built, so
-		// `alchemy dev` skips it.
-		providers: Layer.mergeAll(
-			isDevServer
-				? Cloudflare.providers()
-				: Cloudflare.providers().pipe(Layer.provideMerge(Planetscale.providers())),
-			isMapleDeploy() ? Maple.providers() : Layer.empty,
-		),
+		providers: Layer.mergeAll(Cloudflare.providers(), isMapleDeploy() ? Maple.providers() : Layer.empty),
 		// ALCHEMY_LOCAL_STATE=1 uses .alchemy/ file state instead of the account-wide store.
 		state: process.env.ALCHEMY_LOCAL_STATE ? Alchemy.localState() : Cloudflare.state(),
 	},

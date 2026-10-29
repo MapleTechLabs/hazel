@@ -91,7 +91,6 @@ Local dev is `bun run alchemy:dev` (alias `bun run dev`): it runs every Worker i
 - `bun run typecheck` - TypeScript checking (shared code, and the Worker graph under `tsconfig.worker.json`)
 - `bun run test` - Run the backend's Vitest suite (objects and repositories run on in-memory node SQLite)
 - `bun run test:sync` / `bun run test:policies` - Chat-sync, or policy, tests only
-- `bun run import-postgres -- --from <postgres url> --to <api url> --secret <IMPORT_SECRET> [--dry-run]` - One-shot import of the old Postgres data (cutover only)
 
 ### Database (packages/db)
 
