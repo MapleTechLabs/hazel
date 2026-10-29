@@ -81,7 +81,7 @@ describe("makeBotSupervisor", () => {
 				)
 
 				const before = Date.now()
-				expect(yield* check).toEqual({ running: true })
+				expect(yield* check).toEqual({ wasRunning: false })
 				expect(alarms).toHaveLength(1)
 				expect(alarms[0]).toBeGreaterThanOrEqual(before + 1_000)
 
@@ -111,9 +111,11 @@ describe("makeBotSupervisor", () => {
 					storage,
 				})
 				const check = supervisor.ensureRunning.pipe(Effect.provide(ConfigProvider.layer(counting)))
-				yield* Effect.all([check, check, check], { concurrency: "unbounded" })
+				const results = yield* Effect.all([check, check, check], { concurrency: "unbounded" })
 				yield* Effect.sleep("10 millis")
 				expect(launches).toBe(1)
+				expect(results.map((result) => result.wasRunning).sort()).toEqual([false, true, true])
+				expect(yield* check).toEqual({ wasRunning: true })
 			}).pipe(Effect.scoped),
 		))
 })

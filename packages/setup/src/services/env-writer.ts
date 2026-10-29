@@ -56,7 +56,10 @@ export class EnvWriter extends Context.Service<EnvWriter>()("EnvWriter", {
 					yield* Console.log("  " + "-".repeat(40))
 					for (const [key, value] of Object.entries(vars)) {
 						const masked =
-							key.includes("SECRET") || key.includes("PASSWORD") || key.includes("KEY")
+							key.includes("SECRET") ||
+							key.includes("PASSWORD") ||
+							key.includes("KEY") ||
+							key.includes("TOKEN")
 								? value.slice(0, 4) + "..." + value.slice(-4)
 								: value
 						yield* Console.log(`  ${key}=${masked}`)

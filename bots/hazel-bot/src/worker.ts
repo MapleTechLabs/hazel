@@ -20,8 +20,8 @@ export const HAZEL_BOT_APP = "hazel-bot"
 export const HAZEL_BOT_TOKEN_KEY = "HAZEL_BOT_TOKEN"
 
 export interface BotRunnerShape {
-	/** Start the bot unless it runs. */
-	readonly ensureRunning: () => Effect.Effect<{ readonly running: true }>
+	/** Start the bot unless it runs; `wasRunning` is whether it already ran. */
+	readonly ensureRunning: () => Effect.Effect<{ readonly wasRunning: boolean }>
 }
 
 export class HazelBotRunner extends Cloudflare.DurableObject<HazelBotRunner, BotRunnerShape>()(
@@ -79,7 +79,12 @@ export default HazelBotWorker.make(
 			fetch: Effect.gen(function* () {
 				const request = yield* HttpServerRequest.HttpServerRequest
 				if (request.method === "GET" && new URL(request.url, "http://bot").pathname === "/health") {
-					return HttpServerResponse.jsonUnsafe(yield* ensureRunning())
+					// 503 when the bot had stopped (it restarts now), so a crash-looping bot reads as down.
+					const { wasRunning } = yield* ensureRunning()
+					return HttpServerResponse.jsonUnsafe(
+						{ running: wasRunning },
+						{ status: wasRunning ? 200 : 503 },
+					)
 				}
 				return HttpServerResponse.text("Not found", { status: 404 })
 			}),

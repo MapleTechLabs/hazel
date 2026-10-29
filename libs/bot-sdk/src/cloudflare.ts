@@ -74,8 +74,12 @@ export interface BotSupervisorOptions {
 }
 
 export interface BotSupervisor {
-	/** Start the bot unless it runs, and re-arm the watchdog alarm. */
-	readonly ensureRunning: Effect.Effect<{ readonly running: true }>
+	/**
+	 * Start the bot unless it runs, and re-arm the watchdog alarm. `wasRunning` is whether the bot
+	 * was already up: `false` means it had stopped (or never started) and was just started, so a
+	 * health check should report it as down.
+	 */
+	readonly ensureRunning: Effect.Effect<{ readonly wasRunning: boolean }>
 }
 
 /**
@@ -99,13 +103,14 @@ export const makeBotSupervisor = <Commands extends CommandGroup<any> = EmptyComm
 		)
 
 		const ensureRunning = Effect.gen(function* () {
-			if (!(yield* Ref.getAndSet(running, true))) {
+			const wasRunning = yield* Ref.getAndSet(running, true)
+			if (!wasRunning) {
 				yield* Effect.forkIn(run, scope)
 			}
 			yield* Effect.tryPromise(() => options.storage.setAlarm(Date.now() + watchdogIntervalMs)).pipe(
 				Effect.catch((error) => Effect.logWarning("Failed to arm the bot watchdog alarm", { error })),
 			)
-			return { running: true } as const
+			return { wasRunning }
 		})
 
 		return { ensureRunning }
