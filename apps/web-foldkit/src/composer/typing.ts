@@ -16,6 +16,10 @@ const TYPING_TIMEOUT = Duration.millis(6000)
 
 // MODEL
 
+/** The heartbeat's indicator, with its channel: the delete is routed to that channel's object. */
+export const Indicator = Schema.Struct({ id: TypingIndicatorId, channelId: ChannelId })
+export type Indicator = typeof Indicator.Type
+
 export const Model = Schema.Struct({
 	isTyping: Schema.Boolean,
 	/** Bumped on every start and stop; a heartbeat answering an older session is deleted. */
@@ -23,7 +27,7 @@ export const Model = Schema.Struct({
 	canHeartbeat: Schema.Boolean,
 	heartbeatVersion: Schema.Number,
 	timeoutVersion: Schema.Number,
-	indicatorId: Schema.NullOr(TypingIndicatorId),
+	indicator: Schema.NullOr(Indicator),
 	lastContent: Schema.String,
 })
 export type Model = typeof Model.Type
@@ -34,14 +38,14 @@ export const init = (): Model => ({
 	canHeartbeat: true,
 	heartbeatVersion: 0,
 	timeoutVersion: 0,
-	indicatorId: null,
+	indicator: null,
 	lastContent: "",
 })
 
 // MESSAGE
 
 export const Message = defineMessageUnion({
-	SucceededSendTypingHeartbeat: { sessionId: Schema.Number, indicatorId: TypingIndicatorId },
+	SucceededSendTypingHeartbeat: { sessionId: Schema.Number, indicator: Indicator },
 	FailedSendTypingHeartbeat: {},
 	CompletedWaitForHeartbeatInterval: { version: Schema.Number },
 	CompletedWaitForTypingTimeout: { version: Schema.Number },
@@ -68,21 +72,25 @@ export const SendTypingHeartbeat = Command.define("SendTypingHeartbeat", {
 				"typingIndicator.create",
 				new CreateTypingIndicatorPayload({ channelId, memberId, lastTyped }),
 			)
-			return Message.SucceededSendTypingHeartbeat({ sessionId, indicatorId: response.data.id })
+			return Message.SucceededSendTypingHeartbeat({
+				sessionId,
+				indicator: { id: response.data.id, channelId },
+			})
 		}).pipe(Effect.catch(() => Effect.succeed(Message.FailedSendTypingHeartbeat()))),
 })
 
 /** `typingIndicator.delete`; a failure is ignored (the server expires the indicator anyway). */
-export const deleteIndicator = (id: TypingIndicatorId): Effect.Effect<void, never, HazelRpc> =>
+export const deleteIndicator = (indicator: Indicator): Effect.Effect<void, never, HazelRpc> =>
 	Effect.gen(function* () {
 		const client = yield* HazelRpc
-		yield* client("typingIndicator.delete", { id })
+		yield* client("typingIndicator.delete", indicator)
 	}).pipe(Effect.ignore)
 
 export const DeleteTypingIndicator = Command.define("DeleteTypingIndicator", {
-	args: { id: TypingIndicatorId },
+	args: Indicator.fields,
 	messages: [Message.CompletedDeleteTypingIndicator],
-	execute: ({ id }) => deleteIndicator(id).pipe(Effect.as(Message.CompletedDeleteTypingIndicator())),
+	execute: (indicator) =>
+		deleteIndicator(indicator).pipe(Effect.as(Message.CompletedDeleteTypingIndicator())),
 })
 
 export const WaitForHeartbeatInterval = Command.define("WaitForHeartbeatInterval", {
@@ -91,7 +99,9 @@ export const WaitForHeartbeatInterval = Command.define("WaitForHeartbeatInterval
 	// Timers stay pending while typing goes on; a newer version supersedes them.
 	interrupt: true,
 	execute: ({ version }) =>
-		Effect.sleep(HEARTBEAT_INTERVAL).pipe(Effect.as(Message.CompletedWaitForHeartbeatInterval({ version }))),
+		Effect.sleep(HEARTBEAT_INTERVAL).pipe(
+			Effect.as(Message.CompletedWaitForHeartbeatInterval({ version })),
+		),
 })
 
 export const WaitForTypingTimeout = Command.define("WaitForTypingTimeout", {
@@ -115,11 +125,11 @@ export const stop = (model: Model): Return => {
 		canHeartbeat: model.isTyping ? true : model.canHeartbeat,
 		heartbeatVersion: model.isTyping ? model.heartbeatVersion + 1 : model.heartbeatVersion,
 		timeoutVersion: model.timeoutVersion + 1,
-		indicatorId: null,
+		indicator: null,
 	}
-	return model.indicatorId === null
+	return model.indicator === null
 		? { model: next }
-		: { model: next, commands: [DeleteTypingIndicator({ id: model.indicatorId })] }
+		: { model: next, commands: [DeleteTypingIndicator(model.indicator)] }
 }
 
 /** `startTyping`: open a session, heartbeat when the interval allows, restart the idle timeout. */
@@ -141,7 +151,11 @@ const start = (model: Model, context: Context): Return => {
 		commands: [
 			...(shouldHeartbeat
 				? [
-						SendTypingHeartbeat({ channelId: context.channelId, memberId: context.memberId, sessionId }),
+						SendTypingHeartbeat({
+							channelId: context.channelId,
+							memberId: context.memberId,
+							sessionId,
+						}),
 						WaitForHeartbeatInterval({ version: heartbeatVersion }),
 					]
 				: []),
@@ -160,13 +174,14 @@ export const contentChanged = (model: Model, content: string, context: Context):
 
 export const update = (model: Model, message: Message): Return =>
 	Message.match<Return>(message, {
-		SucceededSendTypingHeartbeat: ({ sessionId, indicatorId }) =>
+		SucceededSendTypingHeartbeat: ({ sessionId, indicator }) =>
 			sessionId === model.sessionId && model.isTyping
-				? { model: { ...model, indicatorId } }
-				: { model, commands: [DeleteTypingIndicator({ id: indicatorId })] },
+				? { model: { ...model, indicator } }
+				: { model, commands: [DeleteTypingIndicator(indicator)] },
 		FailedSendTypingHeartbeat: () => ({ model }),
 		CompletedWaitForHeartbeatInterval: ({ version }) =>
 			version === model.heartbeatVersion ? { model: { ...model, canHeartbeat: true } } : { model },
-		CompletedWaitForTypingTimeout: ({ version }) => (version === model.timeoutVersion ? stop(model) : { model }),
+		CompletedWaitForTypingTimeout: ({ version }) =>
+			version === model.timeoutVersion ? stop(model) : { model },
 		CompletedDeleteTypingIndicator: () => ({ model }),
 	})

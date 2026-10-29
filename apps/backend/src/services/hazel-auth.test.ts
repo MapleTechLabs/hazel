@@ -1,14 +1,14 @@
 /**
  * The backend's Hazel sign-in wiring end to end: env config, the `/auth/*` and token
  * routes, and both auth middlewares (RPC and HttpApi) resolving the session cookie to the
- * Hazel user. Runs against a disposable Postgres container with the schema pushed from
- * packages/db. Only GitHub is simulated.
+ * Hazel user. Runs against an in-memory SQLite database with every store's tables. Only GitHub
+ * is simulated.
  */
 import * as NodeHttpPlatform from "@effect/platform-node/NodeHttpPlatform"
 import * as NodeServices from "@effect/platform-node/NodeServices"
-import { AccessToken, CryptoLive, layerPool } from "@hazel/auth/server"
+import { AccessToken, CryptoLive } from "@hazel/auth/server"
 import { BotRepo, UserRepo } from "@hazel/backend-core"
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import { CurrentUser } from "@hazel/domain"
 import { AuthMiddleware } from "@hazel/domain/rpc"
 import { ConfigProvider, Effect, Layer, Redacted } from "effect"
@@ -126,8 +126,7 @@ describe("Hazel sign-in in the backend", () => {
 	let web: ReturnType<typeof HttpRouter.toWebHandler>
 
 	beforeAll(async () => {
-		harness = await createChatSyncDbHarness(process.env.AUTH_TEST_DATABASE_URL)
-		const url = Redacted.make(harness.container.getConnectionUri())
+		harness = await createChatSyncDbHarness()
 
 		const pair = await Effect.runPromise(
 			AccessToken.generateSigningKey("test").pipe(Effect.provide(CryptoLive)),
@@ -155,7 +154,6 @@ describe("Hazel sign-in in the backend", () => {
 				Layer.provide(Auth),
 				Layer.provide([UserRepo.layer, BotRepo.layer]),
 				Layer.provide(harness.dbLayer),
-				Layer.provide(layerPool(url)),
 				Layer.provide(FakeGitHub),
 				Layer.provide([NodeServices.layer, NodeHttpPlatform.layer, Etag.layer]),
 				Layer.provide(ConfigProvider.layer(env)),
@@ -277,7 +275,7 @@ describe("Hazel sign-in in the backend", () => {
 			Effect.gen(function* () {
 				const db = yield* Database.Database
 				return yield* db.run(
-					PG.insertInto(schema.usersTable)
+					SQLite.insertInto(schema.usersTable)
 						.values({
 							externalId: "user_clerk_email_only",
 							email: "Clerk.User@Example.com",

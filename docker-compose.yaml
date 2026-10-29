@@ -1,85 +1,7 @@
+# Local services for `bun run alchemy:dev`. The api Worker, its Durable Objects and the directory D1
+# run inside alchemy dev; only S3 (uploads) needs a stand-in.
 name: hazel
 services:
-    # PostgreSQL Database
-    postgres:
-        image: postgres:17-alpine
-        shm_size: 1g
-        user: postgres
-        restart: always
-        healthcheck:
-            test: "pg_isready -U user --dbname=app"
-            interval: 10s
-            timeout: 5s
-            retries: 5
-        ports:
-            - "5432:5432"
-        environment:
-            POSTGRES_USER: user
-            POSTGRES_DB: app
-            POSTGRES_PASSWORD: password
-        command: |
-            postgres
-            -c max_connections=200
-            -c wal_level=logical
-        volumes:
-            - postgres_data:/var/lib/postgresql/data
-            - ./docker/postgres/init:/docker-entrypoint-initdb.d
-
-    # Electric - Real-time sync for Postgres
-    electric:
-        # Docker Hub's electricsql/electric repo is broken (pulls are denied); Electric publishes to
-        # electricsql/electric-temp until Docker repairs it. Switch back once it's restored.
-        image: electricsql/electric-temp:canary
-        ports:
-            - "3333:3000"
-        environment:
-            DATABASE_URL: "postgresql://user:password@postgres:5432/app?sslmode=disable"
-            # IMPORTANT: Only use insecure mode in development
-            # See https://electric-sql.com/docs/guides/security
-            ELECTRIC_INSECURE: "true"
-            ELECTRIC_FEATURE_FLAGS: "allow_subqueries,tagged_subqueries"
-            ELECTRIC_LOG_LEVEL: "debug"
-        depends_on:
-            postgres:
-                condition: service_healthy
-        restart: always
-
-    # Durable Streams - durable event log for bot gateway delivery
-    durable_streams:
-        build:
-            context: .
-            dockerfile: ./docker/durable-streams/Dockerfile
-        ports:
-            - "4437:4437"
-        environment:
-            DURABLE_STREAMS_PORT: "4437"
-            DURABLE_STREAMS_HOST: "0.0.0.0"
-            DURABLE_STREAMS_DATA_PATH: "/data/streams"
-        volumes:
-            - durable_streams_data:/data
-        healthcheck:
-            test:
-                [
-                    "CMD",
-                    "node",
-                    "-e",
-                    "fetch('http://127.0.0.1:4437').then(() => process.exit(0)).catch(() => process.exit(1))",
-                ]
-            interval: 10s
-            timeout: 5s
-            retries: 5
-        restart: always
-
-    # Redis for electric-proxy caching
-    cache_redis:
-        image: redis:7
-        ports:
-            - "6380:6379"
-        command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
-        volumes:
-            - cache_redis_data:/data
-        restart: always
-
     # MinIO - S3-compatible object storage
     minio:
         image: minio/minio:latest
@@ -113,31 +35,6 @@ services:
             exit 0;
             "
 
-    # Caddy - Reverse proxy for local development
-    caddy:
-        image: caddy:2-alpine
-        ports:
-            - "5133:5133" # SSE proxy (electric-proxy)
-            - "3004:3004" # WebSocket proxy (backend)
-        volumes:
-            - ./Caddyfile.docker:/etc/caddy/Caddyfile
-            - ./certs:/etc/caddy/certs:ro
-            - caddy_data:/data
-            - caddy_config:/config
-        extra_hosts:
-            - "host.docker.internal:host-gateway"
-        restart: always
-
 volumes:
-    postgres_data:
-        driver: local
-    cache_redis_data:
-        driver: local
     minio_data:
-        driver: local
-    durable_streams_data:
-        driver: local
-    caddy_data:
-        driver: local
-    caddy_config:
         driver: local

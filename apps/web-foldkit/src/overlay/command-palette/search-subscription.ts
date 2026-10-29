@@ -10,11 +10,14 @@ import {
 	organizationMemberCollection,
 	userCollection,
 } from "~/db/collections"
+import { openChannelIds } from "~/db/sync"
 import { HAS_FILTER_VALUES, parseDateFilter } from "~/lib/search-filter-parser"
 import { getFileCategory } from "~/utils/file-utils"
 import { liveQueryStream } from "../../data/live-query"
 import { Message } from "./message"
-import { SearchFilter, type SearchResult, type Suggestion } from "./search-data"
+import type { HazelRpc } from "../../rpc"
+import { emptySearchData, SearchFilter, type SearchResult, type Suggestion } from "./search-data"
+import { type HitLookup, mergeSearchResults, serverSearchStream, toSearchRequest } from "./server-search"
 import type { Input } from "./subscription"
 
 /** `useSearchQuery`, `useUserSuggestions` and `useChannelSuggestions`, while the search page shows. */
@@ -27,7 +30,11 @@ interface ResultRow {
 		readonly createdAt: Date
 		readonly embeds?: unknown
 	}
-	readonly author?: { readonly firstName?: string; readonly lastName?: string; readonly avatarUrl?: string | null } | null
+	readonly author?: {
+		readonly firstName?: string
+		readonly lastName?: string
+		readonly avatarUrl?: string | null
+	} | null
 	readonly channel?: { readonly name: string } | null
 }
 
@@ -38,7 +45,10 @@ interface AttachmentRow {
 
 const searchContext = (input: Input) =>
 	input.model.isOpen && input.model.page._tag === "Search"
-		? { organizationId: input.shared.organization?.id ?? null, userId: input.shared.currentUser?.id ?? null }
+		? {
+				organizationId: input.shared.organization?.id ?? null,
+				userId: input.shared.currentUser?.id ?? null,
+			}
 		: { organizationId: null, userId: null }
 
 const accessibleChannels = (organizationId: OrganizationId, userId: UserId) =>
@@ -46,31 +56,88 @@ const accessibleChannels = (organizationId: OrganizationId, userId: UserId) =>
 		(q) =>
 			q
 				.from({ member: channelMemberCollection })
-				.innerJoin({ channel: channelCollection }, ({ member, channel }) => eq(member.channelId, channel.id))
-				.where(({ member, channel }) => and(eq(member.userId, userId), eq(channel.organizationId, organizationId)))
+				.innerJoin({ channel: channelCollection }, ({ member, channel }) =>
+					eq(member.channelId, channel.id),
+				)
+				.where(({ member, channel }) =>
+					and(eq(member.userId, userId), eq(channel.organizationId, organizationId)),
+				)
 				.select(({ channel }) => ({ id: channel.id })),
 		(rows) => rows.map((row) => row.id),
 	)
 
-/** The results query plus its attachments, with the `has:` filter applied as legacy does. */
-const resultsStream = (channelIds: ReadonlyArray<ChannelId>, query: string, filters: ReadonlyArray<SearchFilter>) => {
+const hitLookup: HitLookup = {
+	authorOf: (hit) => {
+		const user = userCollection.get(hit.authorId)
+		return user === undefined
+			? null
+			: {
+					name: `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim(),
+					avatarUrl: user.avatarUrl ?? null,
+				}
+	},
+	channelNameOf: (channelId) => channelCollection.get(channelId)?.name ?? null,
+}
+
+/**
+ * Instant results from the loaded channels, merged with the org's server index (`message.search`,
+ * debounced) once it answers; `isLoading` until then.
+ */
+const resultsStream = (
+	organizationId: OrganizationId,
+	channelIds: ReadonlyArray<ChannelId>,
+	query: string,
+	filters: ReadonlyArray<SearchFilter>,
+): Stream.Stream<Message, never, HazelRpc> => {
+	if (query.trim().length === 0 && filters.length === 0)
+		return Stream.succeed(Message.UpdatedSearchData({ data: emptySearchData }))
+	return Stream.zipLatest(
+		localResultsStream(channelIds, query, filters),
+		serverSearchStream(toSearchRequest(organizationId, query, filters)),
+	).pipe(
+		Stream.map(([local, hits]) =>
+			Message.UpdatedSearchData({
+				data: {
+					results: mergeSearchResults(local, hits ?? [], hitLookup),
+					isLoading: hits === null,
+					hasQuery: true,
+				},
+			}),
+		),
+	)
+}
+
+/** The results query over loaded messages plus their attachments, `has:` applied as legacy does. */
+const localResultsStream = (
+	channelIds: ReadonlyArray<ChannelId>,
+	query: string,
+	filters: ReadonlyArray<SearchFilter>,
+): Stream.Stream<ReadonlyArray<SearchResult>> => {
 	const find = (type: SearchFilter["type"]) => filters.find((filter) => filter.type === type)
 	const from = find("from")
 	const inChannel = find("in")
 	const has = find("has")
 	const before = dateOf(find("before"))
 	const after = dateOf(find("after"))
-	const searchIds = inChannel ? channelIds.filter((id) => id === inChannel.id) : channelIds
-	const shouldSearch = (query.trim().length > 0 || filters.length > 0) && searchIds.length > 0
-	if (!shouldSearch) return Stream.succeed(Message.UpdatedSearchData({ data: { results: [], isLoading: false, hasQuery: false } }))
+	// Messages sync per open channel: these cover the channels loaded in this session.
+	const loaded = openChannelIds()
+	const searchIds = (inChannel ? channelIds.filter((id) => id === inChannel.id) : channelIds).filter((id) =>
+		loaded.has(id),
+	)
+	if (searchIds.length === 0) return Stream.succeed([])
 	return liveQueryStream<ResultRow, ReadonlyArray<ResultRow>>(
 		(q) => {
 			let builder = q
 				.from({ message: messageCollection })
-				.leftJoin({ author: userCollection }, ({ message, author }) => eq(message.authorId, author.id))
-				.leftJoin({ channel: channelCollection }, ({ message, channel }) => eq(message.channelId, channel.id))
+				.leftJoin({ author: userCollection }, ({ message, author }) =>
+					eq(message.authorId, author.id),
+				)
+				.leftJoin({ channel: channelCollection }, ({ message, channel }) =>
+					eq(message.channelId, channel.id),
+				)
 				.where(({ message }) => inArray(message.channelId, [...searchIds]))
-			if (query.trim()) builder = builder.where(({ message }) => ilike(message.content, `%${query.trim()}%`))
+			if (query.trim())
+				builder = builder.where(({ message }) => ilike(message.content, `%${query.trim()}%`))
 			if (from) builder = builder.where(({ message }) => eq(message.authorId, from.id))
 			if (before) builder = builder.where(({ message }) => lt(message.createdAt, before))
 			if (after) builder = builder.where(({ message }) => gt(message.createdAt, after))
@@ -81,31 +148,40 @@ const resultsStream = (channelIds: ReadonlyArray<ChannelId>, query: string, filt
 		},
 		(rows) => rows,
 	).pipe(
-		Stream.switchMap(
-			(rows) =>
-				(rows.length === 0
-					? Stream.succeed<ReadonlyArray<AttachmentRow>>([])
-					: liveQueryStream<AttachmentRow, ReadonlyArray<AttachmentRow>>(
-							(q) =>
-								q
-									.from({ attachment: attachmentCollection })
-									.where(({ attachment }) =>
-										and(
-											inArray(attachment.messageId, rows.map((row) => row.message.id)),
-											eq(attachment.status, "complete"),
+		Stream.switchMap((rows) =>
+			(rows.length === 0
+				? Stream.succeed<ReadonlyArray<AttachmentRow>>([])
+				: liveQueryStream<AttachmentRow, ReadonlyArray<AttachmentRow>>(
+						(q) =>
+							q
+								.from({ attachment: attachmentCollection })
+								.where(({ attachment }) =>
+									and(
+										inArray(
+											attachment.messageId,
+											rows.map((row) => row.message.id),
 										),
-									)
-									.select(({ attachment }) => ({ messageId: attachment.messageId, fileName: attachment.fileName })),
-							(attachments) => attachments,
-						)
-				).pipe(Stream.map((attachments) => Message.UpdatedSearchData({ data: toData(rows, attachments, has) }))),
+										eq(attachment.status, "complete"),
+									),
+								)
+								.select(({ attachment }) => ({
+									messageId: attachment.messageId,
+									fileName: attachment.fileName,
+								})),
+						(attachments) => attachments,
+					)
+			).pipe(Stream.map((attachments) => toResults(rows, attachments, has))),
 		),
 	)
 }
 
 const dateOf = (filter: SearchFilter | undefined) => (filter ? parseDateFilter(filter.value) : null)
 
-const toData = (rows: ReadonlyArray<ResultRow>, attachments: ReadonlyArray<AttachmentRow>, has: SearchFilter | undefined) => {
+const toResults = (
+	rows: ReadonlyArray<ResultRow>,
+	attachments: ReadonlyArray<AttachmentRow>,
+	has: SearchFilter | undefined,
+): ReadonlyArray<SearchResult> => {
 	const counts = new Map<string, number>()
 	const types = new Map<string, Set<string>>()
 	for (const attachment of attachments) {
@@ -123,23 +199,25 @@ const toData = (rows: ReadonlyArray<ResultRow>, attachments: ReadonlyArray<Attac
 			: hasType === "link"
 				? /https?:\/\/[^\s]+/i.test(row.message.content)
 				: hasType === "embed"
-					? typeof row.message.embeds === "object" && row.message.embeds !== null && Object.keys(row.message.embeds).length > 0
+					? typeof row.message.embeds === "object" &&
+						row.message.embeds !== null &&
+						Object.keys(row.message.embeds).length > 0
 					: true,
 	)
-	return {
-		results: kept.map((row) => ({
+	return kept.map(
+		(row): SearchResult => ({
 			messageId: row.message.id,
 			channelId: row.message.channelId,
 			content: row.message.content,
 			createdAtMs: new Date(row.message.createdAt).getTime(),
-			authorName: row.author ? `${row.author.firstName ?? ""} ${row.author.lastName ?? ""}`.trim() : "Unknown",
+			authorName: row.author
+				? `${row.author.firstName ?? ""} ${row.author.lastName ?? ""}`.trim()
+				: "Unknown",
 			authorAvatarUrl: row.author?.avatarUrl ?? null,
 			channelName: row.channel?.name ?? null,
 			attachmentCount: counts.get(row.message.id) ?? 0,
-		})),
-		isLoading: false,
-		hasQuery: true,
-	}
+		}),
+	)
 }
 
 interface UserRow {
@@ -154,9 +232,15 @@ const userQuery = (organizationId: OrganizationId, partial: string, field: "firs
 		(q) =>
 			q
 				.from({ user: userCollection })
-				.innerJoin({ member: organizationMemberCollection }, ({ user, member }) => eq(user.id, member.userId))
+				.innerJoin({ member: organizationMemberCollection }, ({ user, member }) =>
+					eq(user.id, member.userId),
+				)
 				.where(({ user, member }) =>
-					and(eq(member.organizationId, organizationId), isNull(member.deletedAt), ilike(user[field], `%${partial}%`)),
+					and(
+						eq(member.organizationId, organizationId),
+						isNull(member.deletedAt),
+						ilike(user[field], `%${partial}%`),
+					),
 				)
 				.orderBy(({ user }) => user[field], "asc")
 				.limit(20)
@@ -166,7 +250,10 @@ const userQuery = (organizationId: OrganizationId, partial: string, field: "firs
 
 /** `useUserSuggestions`: first-name matches, then last-name matches, deduplicated, at most ten. */
 const userSuggestions = (organizationId: OrganizationId, partial: string) =>
-	Stream.zipLatest(userQuery(organizationId, partial, "firstName"), userQuery(organizationId, partial, "lastName")).pipe(
+	Stream.zipLatest(
+		userQuery(organizationId, partial, "firstName"),
+		userQuery(organizationId, partial, "lastName"),
+	).pipe(
 		Stream.map(([byFirst, byLast]) => {
 			const byId = new Map<string, UserRow>()
 			for (const user of [...byFirst, ...byLast]) byId.set(user.id, user)
@@ -188,20 +275,29 @@ const channelSuggestions = (organizationId: OrganizationId, userId: UserId, part
 				(q) =>
 					q
 						.from({ channel: channelCollection })
-						.innerJoin({ member: channelMemberCollection }, ({ channel, member }) => eq(channel.id, member.channelId))
-						.where(({ channel, member }) => and(eq(channel.organizationId, organizationId), eq(member.userId, userId)))
+						.innerJoin({ member: channelMemberCollection }, ({ channel, member }) =>
+							eq(channel.id, member.channelId),
+						)
+						.where(({ channel, member }) =>
+							and(eq(channel.organizationId, organizationId), eq(member.userId, userId)),
+						)
 						.orderBy(({ channel }) => channel.name, "asc")
 						.select(({ channel }) => ({ ...channel }))
 						.limit(10),
 				(rows) =>
 					rows
 						.filter((row) => row.name.toLowerCase().includes(partial.toLowerCase()))
-						.map((row) => ({ id: row.id, label: row.name, avatarUrl: null, kind: "channel" as const })),
+						.map((row) => ({
+							id: row.id,
+							label: row.name,
+							avatarUrl: null,
+							kind: "channel" as const,
+						})),
 			)
 
 const Context = { organizationId: Schema.NullOr(OrganizationId), userId: Schema.NullOr(UserId) }
 
-export const searchSubscriptions = Subscription.make<Input, Message>()((entry) => ({
+export const searchSubscriptions = Subscription.make<Input, Message, HazelRpc>()((entry) => ({
 	searchResults: entry(
 		{ ...Context, query: Schema.String, filters: Schema.Array(SearchFilter) },
 		{
@@ -217,7 +313,9 @@ export const searchSubscriptions = Subscription.make<Input, Message>()((entry) =
 				organizationId === null || userId === null
 					? Stream.empty
 					: accessibleChannels(organizationId, userId).pipe(
-							Stream.switchMap((channelIds) => resultsStream(channelIds, query, filters)),
+							Stream.switchMap((channelIds) =>
+								resultsStream(organizationId, channelIds, query, filters),
+							),
 						),
 		},
 	),
@@ -230,13 +328,19 @@ export const searchSubscriptions = Subscription.make<Input, Message>()((entry) =
 				search: input.model.searchAutocomplete?.search ?? "",
 			}),
 			dependenciesToStream: ({ organizationId, userId, filterType, search }) => {
-				const toMessage = (suggestions: ReadonlyArray<Suggestion>) => Message.UpdatedSuggestions({ suggestions })
-				if (organizationId === null || userId === null || filterType === null) return Stream.succeed(toMessage([]))
-				if (filterType === "from") return userSuggestions(organizationId, search).pipe(Stream.map(toMessage))
-				if (filterType === "in") return channelSuggestions(organizationId, userId, search).pipe(Stream.map(toMessage))
+				const toMessage = (suggestions: ReadonlyArray<Suggestion>) =>
+					Message.UpdatedSuggestions({ suggestions })
+				if (organizationId === null || userId === null || filterType === null)
+					return Stream.succeed(toMessage([]))
+				if (filterType === "from")
+					return userSuggestions(organizationId, search).pipe(Stream.map(toMessage))
+				if (filterType === "in")
+					return channelSuggestions(organizationId, userId, search).pipe(Stream.map(toMessage))
 				return Stream.succeed(
 					toMessage(
-						HAS_FILTER_VALUES.filter((value) => value.toLowerCase().includes(search.toLowerCase())).map((value) => ({
+						HAS_FILTER_VALUES.filter((value) =>
+							value.toLowerCase().includes(search.toLowerCase()),
+						).map((value) => ({
 							id: value,
 							label: value,
 							avatarUrl: null,

@@ -1,10 +1,16 @@
 import { HttpApiBuilder } from "effect/http-api"
-import { BotCommandRepo, BotInstallationRepo, BotRepo } from "@hazel/backend-core"
+import { BotCommandRepo, BotRepo } from "@hazel/backend-core"
+import { SQLite, schema } from "@hazel/db"
 import { InternalServerError } from "@hazel/domain"
 import { AvailableCommandsResponse } from "@hazel/domain/http"
 import { Effect, Option } from "effect"
 import { HazelApi } from "../api"
+import { Directory } from "../services/directory"
 
+/**
+ * Slash commands of the bots installed in an org, from the directory: a bot is installed where
+ * its user has an active `membership_index` row (the `OrgObject` keeps it current).
+ */
 export const HttpIntegrationCommandLive = HttpApiBuilder.group(HazelApi, "integration-commands", (handlers) =>
 	handlers
 		// Get all available commands for the current organization's installed bots
@@ -12,12 +18,22 @@ export const HttpIntegrationCommandLive = HttpApiBuilder.group(HazelApi, "integr
 			Effect.gen(function* () {
 				const { orgId } = params
 
-				const botInstallationRepo = yield* BotInstallationRepo
+				const directory = yield* Directory
 				const botCommandRepo = yield* BotCommandRepo
 				const botRepo = yield* BotRepo
 
 				// Get bot commands for installed bots
-				const installedBotIds = yield* botInstallationRepo.getBotIdsForOrg(orgId)
+				const installed = yield* directory.db.run(
+					SQLite.from(schema.botsTable)
+						.innerJoin(schema.membershipIndexTable, "m", (bot, m) => m.userId.eq(bot.userId))
+						.select(($) => ({ id: $.id }))
+						.where(($) => [
+							$.m.organizationId.eq(orgId),
+							$.m.deletedAt.isNull(),
+							$.deletedAt.isNull(),
+						]),
+				)
+				const installedBotIds = installed.map((row) => row.id)
 				const botCommands = yield* botCommandRepo.findByBots(installedBotIds)
 
 				// Get bot info for each command
@@ -53,6 +69,7 @@ export const HttpIntegrationCommandLive = HttpApiBuilder.group(HazelApi, "integr
 
 				return new AvailableCommandsResponse({ commands })
 			}).pipe(
+				Effect.withSpan("IntegrationCommands.getAvailableCommands"),
 				Effect.catchTag("DatabaseError", (error) =>
 					Effect.fail(
 						new InternalServerError({

@@ -25,6 +25,10 @@ export const CreateChannel = Command.define("CreateChannel", {
 			currentUserId,
 		}).pipe(
 			Effect.map((result) => Message.SucceededCreateChannel({ channelId: result.data.channelId })),
+			// The fresh client id is already taken (never in practice): nothing to tell the user.
+			Effect.catchTag("InvalidChannelRequestError", () =>
+				Effect.succeed(Message.FailedCreateChannel({ reason: "Unexpected" })),
+			),
 			catchCommon((reason) => Message.FailedCreateChannel({ reason })),
 		),
 })
@@ -79,7 +83,9 @@ export const TrackRecentChannel = Command.define("TrackRecentChannel", {
 			),
 		).pipe(
 			// Best effort: a full or blocked localStorage only loses the recent list.
-			Effect.flatMap((channels) => Effect.try(() => localStorage.setItem(RECENT_CHANNELS_KEY, JSON.stringify(channels)))),
+			Effect.flatMap((channels) =>
+				Effect.try(() => localStorage.setItem(RECENT_CHANNELS_KEY, JSON.stringify(channels))),
+			),
 			Effect.ignore,
 			Effect.as(Message.CompletedTrackRecentChannel()),
 		),
@@ -100,5 +106,6 @@ export const readRecentChannelIds = readRecentChannels.pipe(
 export const FocusInput = Command.define("FocusInput", {
 	args: { selector: Schema.String },
 	messages: [Message.CompletedFocusInput],
-	execute: ({ selector }) => Dom.focus(selector).pipe(Effect.ignoreCause, Effect.as(Message.CompletedFocusInput())),
+	execute: ({ selector }) =>
+		Dom.focus(selector).pipe(Effect.ignoreCause, Effect.as(Message.CompletedFocusInput())),
 })

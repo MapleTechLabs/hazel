@@ -1,4 +1,4 @@
-import { Database, PG, Repository, schema } from "@hazel/db"
+import { Database, SQLite, Repository, schema } from "@hazel/db"
 
 import type { ChannelId, ChannelWebhookId, OrganizationId } from "@hazel/schema"
 import { ChannelWebhook } from "@hazel/domain/models"
@@ -19,7 +19,7 @@ export class ChannelWebhookRepo extends Context.Service<ChannelWebhookRepo>()("C
 		// Find all webhooks for a channel
 		const findByChannel = (channelId: ChannelId) =>
 			db.run(
-				PG.from(schema.channelWebhooksTable)
+				SQLite.from(schema.channelWebhooksTable)
 					.select()
 					.where(($) => [$.channelId.eq(channelId), $.deletedAt.isNull()]),
 			)
@@ -27,7 +27,7 @@ export class ChannelWebhookRepo extends Context.Service<ChannelWebhookRepo>()("C
 		// Find webhook by token hash (for authentication)
 		const findByTokenHash = (tokenHash: string) =>
 			db.first(
-				PG.from(schema.channelWebhooksTable)
+				SQLite.from(schema.channelWebhooksTable)
 					.select()
 					.where(($) => [$.tokenHash.eq(tokenHash), $.deletedAt.isNull()])
 					.limit(1),
@@ -36,7 +36,7 @@ export class ChannelWebhookRepo extends Context.Service<ChannelWebhookRepo>()("C
 		// Update last used timestamp
 		const updateLastUsed = (id: ChannelWebhookId) =>
 			db.run(
-				PG.update(schema.channelWebhooksTable)
+				SQLite.update(schema.channelWebhooksTable)
 					.set({ lastUsedAt: new Date(), updatedAt: new Date() })
 					.where(($) => [$.id.eq(id)])
 					.returning(),
@@ -45,7 +45,7 @@ export class ChannelWebhookRepo extends Context.Service<ChannelWebhookRepo>()("C
 		// Update token hash (for token regeneration)
 		const updateToken = (id: ChannelWebhookId, tokenHash: string, tokenSuffix: string) =>
 			db.run(
-				PG.update(schema.channelWebhooksTable)
+				SQLite.update(schema.channelWebhooksTable)
 					.set({
 						tokenHash,
 						tokenSuffix,
@@ -58,7 +58,7 @@ export class ChannelWebhookRepo extends Context.Service<ChannelWebhookRepo>()("C
 		// Soft delete webhook
 		const softDelete = (id: ChannelWebhookId) =>
 			db.run(
-				PG.update(schema.channelWebhooksTable)
+				SQLite.update(schema.channelWebhooksTable)
 					.set({
 						deletedAt: new Date(),
 						updatedAt: new Date(),
@@ -70,7 +70,7 @@ export class ChannelWebhookRepo extends Context.Service<ChannelWebhookRepo>()("C
 		// Find all webhooks for an organization
 		const findByOrganization = (organizationId: OrganizationId) =>
 			db.run(
-				PG.from(schema.channelWebhooksTable)
+				SQLite.from(schema.channelWebhooksTable)
 					.select()
 					.where(($) => [$.organizationId.eq(organizationId), $.deletedAt.isNull()]),
 			)

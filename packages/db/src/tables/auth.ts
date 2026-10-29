@@ -1,187 +1,189 @@
 import { UserId } from "@hazel/schema"
-import * as PG from "@maple-dev/effect-orm/postgres"
+import * as SQLite from "@maple-dev/effect-orm/sqlite"
 import { uuid } from "./columns"
 
 /** Auth storage metadata. The additive SQL migrations create these tables. */
-export const authCredentialsTable = PG.table("auth_credentials", {
+export const authCredentialsTable = SQLite.table("auth_credentials", {
 	columns: {
-		credentialId: PG.text,
+		credentialId: SQLite.text,
 		subjectId: uuid(UserId),
-		revision: PG.text,
-		active: PG.bool,
+		revision: SQLite.text,
+		active: SQLite.boolean,
 	},
-	uniqueConstraints: [
-		PG.unique("auth_credentials_credentialId_unique", ["credentialId"]),
-		PG.unique("auth_credentials_subject_credential", ["subjectId", "credentialId"]),
+	indexes: [
+		SQLite.uniqueIndex("auth_credentials_credentialId_unique", ["credentialId"]),
+		SQLite.uniqueIndex("auth_credentials_subject_credential", ["subjectId", "credentialId"]),
 	],
 })
 
-export const authIdentifiersTable = PG.table("auth_identifiers", {
+export const authIdentifiersTable = SQLite.table("auth_identifiers", {
 	columns: {
-		moduleId: PG.nullable(PG.text),
-		credentialId: PG.nullable(PG.text),
-		namespace: PG.text,
-		value: PG.text,
+		moduleId: SQLite.nullable(SQLite.text),
+		credentialId: SQLite.nullable(SQLite.text),
+		namespace: SQLite.text,
+		value: SQLite.text,
 		subjectId: uuid(UserId),
-		revision: PG.text,
-		verifiedAt: PG.nullable(PG.int8),
-		active: PG.bool,
+		revision: SQLite.text,
+		verifiedAt: SQLite.nullable(SQLite.integer),
+		active: SQLite.boolean,
 	},
-	uniqueConstraints: [PG.unique("auth_identifiers_namespace_value", ["namespace", "value"])],
+	indexes: [SQLite.uniqueIndex("auth_identifiers_namespace_value", ["namespace", "value"])],
 })
 
-export const authSessionsTable = PG.table("auth_sessions", {
+export const authSessionsTable = SQLite.table("auth_sessions", {
 	columns: {
-		sessionId: PG.text,
+		sessionId: SQLite.text,
 		subjectId: uuid(UserId),
-		digest: PG.text,
-		securityRevision: PG.text,
-		issuedAt: PG.int8,
-		expiresAt: PG.int8,
-		absoluteExpiresAt: PG.int8,
-		record: PG.text,
+		digest: SQLite.text,
+		securityRevision: SQLite.text,
+		issuedAt: SQLite.integer,
+		expiresAt: SQLite.integer,
+		absoluteExpiresAt: SQLite.integer,
+		record: SQLite.text,
 	},
-	uniqueConstraints: [
-		PG.unique("auth_sessions_sessionId_unique", ["sessionId"]),
-		PG.unique("auth_sessions_digest_unique", ["digest"]),
+	indexes: [
+		SQLite.uniqueIndex("auth_sessions_sessionId_unique", ["sessionId"]),
+		SQLite.uniqueIndex("auth_sessions_digest_unique", ["digest"]),
+		SQLite.index("auth_sessions_subject_idx", ["subjectId"]),
 	],
-	indexes: [PG.index("auth_sessions_subject_idx", ["subjectId"])],
 })
 
-export const authPendingTable = PG.table("auth_pending", {
+export const authPendingTable = SQLite.table("auth_pending", {
 	columns: {
-		moduleId: PG.text,
-		kind: PG.text,
-		digest: PG.text,
-		version: PG.text,
-		flowId: PG.text,
+		moduleId: SQLite.text,
+		kind: SQLite.text,
+		digest: SQLite.text,
+		version: SQLite.text,
+		flowId: SQLite.text,
 		subjectId: uuid(UserId),
-		bindingDigest: PG.text,
-		snapshot: PG.text,
-		expiresAt: PG.int8,
-		attemptLimit: PG.int8,
-		failedAttempts: PG.int8,
-		consumed: PG.bool,
+		bindingDigest: SQLite.text,
+		snapshot: SQLite.text,
+		expiresAt: SQLite.integer,
+		attemptLimit: SQLite.integer,
+		failedAttempts: SQLite.integer,
+		consumed: SQLite.boolean,
 	},
-	uniqueConstraints: [PG.unique("auth_pending_digest_unique", ["digest"])],
+	indexes: [SQLite.uniqueIndex("auth_pending_digest_unique", ["digest"])],
 })
 
-export const authPasskeyCredentialsTable = PG.table("auth_passkey_credentials", {
+export const authPasskeyCredentialsTable = SQLite.table("auth_passkey_credentials", {
 	columns: {
-		credentialId: PG.text,
+		credentialId: SQLite.text,
 		subjectId: uuid(UserId),
-		rpId: PG.text,
-		protocolCredentialId: PG.text,
-		credentialKey: PG.text,
-		userHandle: PG.text,
-		publicKey: PG.text,
-		algorithm: PG.int8,
-		profile: PG.text,
-		credentialRevision: PG.text,
-		active: PG.bool,
-		primarySignIn: PG.bool,
-		enrollmentUserVerified: PG.bool,
-		backupEligible: PG.bool,
-		backupState: PG.bool,
-		counter: PG.int8,
-		name: PG.text,
-		createdAt: PG.int8,
-		lastUsedAt: PG.nullable(PG.int8),
+		rpId: SQLite.text,
+		protocolCredentialId: SQLite.text,
+		credentialKey: SQLite.text,
+		userHandle: SQLite.text,
+		publicKey: SQLite.text,
+		algorithm: SQLite.integer,
+		profile: SQLite.text,
+		credentialRevision: SQLite.text,
+		active: SQLite.boolean,
+		primarySignIn: SQLite.boolean,
+		enrollmentUserVerified: SQLite.boolean,
+		backupEligible: SQLite.boolean,
+		backupState: SQLite.boolean,
+		counter: SQLite.integer,
+		name: SQLite.text,
+		createdAt: SQLite.integer,
+		lastUsedAt: SQLite.nullable(SQLite.integer),
 	},
-	uniqueConstraints: [
-		PG.unique("auth_passkey_credentials_credentialId_unique", ["credentialId"]),
-		PG.unique("auth_passkey_credentials_credentialKey_unique", ["credentialKey"]),
+	indexes: [
+		SQLite.uniqueIndex("auth_passkey_credentials_credentialId_unique", ["credentialId"]),
+		SQLite.uniqueIndex("auth_passkey_credentials_credentialKey_unique", ["credentialKey"]),
+		SQLite.index("auth_passkey_credentials_subject_idx", ["subjectId"]),
 	],
-	indexes: [PG.index("auth_passkey_credentials_subject_idx", ["subjectId"])],
 })
 
-export const authPasskeyFlowsTable = PG.table("auth_passkey_flows", {
+export const authPasskeyFlowsTable = SQLite.table("auth_passkey_flows", {
 	columns: {
-		moduleId: PG.text,
-		flowId: PG.text,
-		purpose: PG.text,
-		snapshot: PG.text,
-		requestBindingVerifier: PG.text,
-		requestBindingExpiresAt: PG.int8,
-		issuedAt: PG.int8,
-		expiresAt: PG.int8,
+		moduleId: SQLite.text,
+		flowId: SQLite.text,
+		purpose: SQLite.text,
+		snapshot: SQLite.text,
+		requestBindingVerifier: SQLite.text,
+		requestBindingExpiresAt: SQLite.integer,
+		issuedAt: SQLite.integer,
+		expiresAt: SQLite.integer,
 	},
-	uniqueConstraints: [PG.unique("auth_passkey_flows_module_flow", ["moduleId", "flowId"])],
+	indexes: [SQLite.uniqueIndex("auth_passkey_flows_module_flow", ["moduleId", "flowId"])],
 })
 
-export const authOAuthIdentitiesTable = PG.table("auth_oauth_identities", {
+export const authOAuthIdentitiesTable = SQLite.table("auth_oauth_identities", {
 	columns: {
-		identityKey: PG.text,
-		provider: PG.text,
-		issuer: PG.text,
-		externalSubject: PG.text,
+		identityKey: SQLite.text,
+		provider: SQLite.text,
+		issuer: SQLite.text,
+		externalSubject: SQLite.text,
 		subjectId: uuid(UserId),
 	},
 	primaryKey: ["identityKey"],
-	indexes: [PG.index("auth_oauth_identities_subject_idx", ["subjectId"])],
+	indexes: [SQLite.index("auth_oauth_identities_subject_idx", ["subjectId"])],
 })
 
-export const authOAuthLoginsTable = PG.table("auth_oauth_logins", {
+export const authOAuthLoginsTable = SQLite.table("auth_oauth_logins", {
 	columns: {
-		moduleId: PG.text,
-		credentialId: PG.text,
+		moduleId: SQLite.text,
+		credentialId: SQLite.text,
 		subjectId: uuid(UserId),
-		identityKey: PG.text,
-		credentialRevision: PG.text,
-		status: PG.text,
+		identityKey: SQLite.text,
+		credentialRevision: SQLite.text,
+		status: SQLite.text,
 	},
 	primaryKey: ["credentialId"],
-	uniqueConstraints: [PG.unique("auth_oauth_logins_identityKey_unique", ["identityKey"])],
-	indexes: [PG.index("auth_oauth_logins_owner_idx", ["identityKey", "subjectId"])],
-})
-
-export const authOAuthFlowsTable = PG.table("auth_oauth_flows", {
-	columns: {
-		moduleId: PG.text,
-		flowId: PG.text,
-		purpose: PG.text,
-		generation: PG.nullable(PG.int8),
-		provider: PG.nullable(PG.text),
-		callbackId: PG.nullable(PG.text),
-		issuer: PG.nullable(PG.text),
-		responseIssuerMode: PG.nullable(PG.text),
-		subjectId: PG.nullable(uuid(UserId)),
-		stateDigest: PG.nullable(PG.text),
-		binderVerifier: PG.nullable(PG.text),
-		binderExpiresAt: PG.nullable(PG.int8),
-		snapshot: PG.nullable(PG.text),
-		issuedAt: PG.nullable(PG.int8),
-		expiresAt: PG.nullable(PG.int8),
-	},
-	uniqueConstraints: [
-		PG.unique("auth_oauth_flows_stateDigest_unique", ["stateDigest"]),
-		PG.unique("auth_oauth_flows_module_flow", ["moduleId", "flowId"]),
+	indexes: [
+		SQLite.uniqueIndex("auth_oauth_logins_identityKey_unique", ["identityKey"]),
+		SQLite.index("auth_oauth_logins_owner_idx", ["identityKey", "subjectId"]),
 	],
 })
 
-export const authOAuthRegistrationsTable = PG.table("auth_oauth_registrations", {
+export const authOAuthFlowsTable = SQLite.table("auth_oauth_flows", {
 	columns: {
-		moduleId: PG.text,
-		reference: PG.text,
-		flowId: PG.text,
-		identityKey: PG.nullable(PG.text),
-		snapshot: PG.nullable(PG.text),
-		expiresAt: PG.nullable(PG.int8),
-		retentionUntil: PG.nullable(PG.int8),
+		moduleId: SQLite.text,
+		flowId: SQLite.text,
+		purpose: SQLite.text,
+		generation: SQLite.nullable(SQLite.integer),
+		provider: SQLite.nullable(SQLite.text),
+		callbackId: SQLite.nullable(SQLite.text),
+		issuer: SQLite.nullable(SQLite.text),
+		responseIssuerMode: SQLite.nullable(SQLite.text),
+		subjectId: SQLite.nullable(uuid(UserId)),
+		stateDigest: SQLite.nullable(SQLite.text),
+		binderVerifier: SQLite.nullable(SQLite.text),
+		binderExpiresAt: SQLite.nullable(SQLite.integer),
+		snapshot: SQLite.nullable(SQLite.text),
+		issuedAt: SQLite.nullable(SQLite.integer),
+		expiresAt: SQLite.nullable(SQLite.integer),
 	},
-	uniqueConstraints: [
-		PG.unique("auth_oauth_registrations_module_reference", ["moduleId", "reference"]),
-		PG.unique("auth_oauth_registrations_module_flow", ["moduleId", "flowId"]),
+	indexes: [
+		SQLite.uniqueIndex("auth_oauth_flows_stateDigest_unique", ["stateDigest"]),
+		SQLite.uniqueIndex("auth_oauth_flows_module_flow", ["moduleId", "flowId"]),
 	],
 })
 
-export const yieldedBrowserLoginTable = PG.table("yielded_browser_login", {
+export const authOAuthRegistrationsTable = SQLite.table("auth_oauth_registrations", {
 	columns: {
-		namespace: PG.text,
-		attempt_id: PG.text,
-		version: PG.text,
-		expires_at_millis: PG.int8,
-		payload: PG.text,
+		moduleId: SQLite.text,
+		reference: SQLite.text,
+		flowId: SQLite.text,
+		identityKey: SQLite.nullable(SQLite.text),
+		snapshot: SQLite.nullable(SQLite.text),
+		expiresAt: SQLite.nullable(SQLite.integer),
+		retentionUntil: SQLite.nullable(SQLite.integer),
+	},
+	indexes: [
+		SQLite.uniqueIndex("auth_oauth_registrations_module_reference", ["moduleId", "reference"]),
+		SQLite.uniqueIndex("auth_oauth_registrations_module_flow", ["moduleId", "flowId"]),
+	],
+})
+
+export const yieldedBrowserLoginTable = SQLite.table("yielded_browser_login", {
+	columns: {
+		namespace: SQLite.text,
+		attempt_id: SQLite.text,
+		version: SQLite.text,
+		expires_at_millis: SQLite.integer,
+		payload: SQLite.text,
 	},
 	primaryKey: ["namespace", "attempt_id"],
 })

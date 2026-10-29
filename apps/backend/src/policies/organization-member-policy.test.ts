@@ -69,52 +69,83 @@ describe("OrganizationMemberPolicy", () => {
 		expect(Result.isFailure(result)).toBe(true)
 	})
 
-	it("canUpdate allows self-update", async () => {
+	/** `canUpdate` for `actor`, who holds `actorRole`, on a target member holding `targetRole`. */
+	const update = (options: {
+		readonly actor: UserId
+		readonly actorRole?: Role
+		readonly self?: boolean
+		readonly targetRole?: Role
+		readonly role?: Role
+	}) => {
+		const targetUser = options.self ? options.actor : TARGET_USER_ID
+		const orgMembers: Record<string, Role> = {}
+		if (options.actorRole) orgMembers[`${TEST_ORG_ID}:${options.actor}`] = options.actorRole
+		if (!options.self) orgMembers[`${TEST_ORG_ID}:${TARGET_USER_ID}`] = options.targetRole ?? "member"
+		const layer = makePolicyLayer(
+			{
+				[MEMBER_ID]: {
+					userId: targetUser,
+					organizationId: TEST_ORG_ID,
+					role: options.self ? (options.actorRole ?? "member") : (options.targetRole ?? "member"),
+				},
+			},
+			orgMembers,
+		)
+		return runWithActorEither(
+			OrganizationMemberPolicy.use((policy) =>
+				policy.canUpdate(MEMBER_ID, options.role === undefined ? undefined : { role: options.role }),
+			),
+			layer,
+			makeActor({ id: options.actor }),
+		)
+	}
+
+	it("canUpdate allows self-update of non-role fields", async () => {
 		const actor = makeActor()
-		const layer = makePolicyLayer(
-			{ [MEMBER_ID]: { userId: actor.id, organizationId: TEST_ORG_ID, role: "member" } },
-			{ [`${TEST_ORG_ID}:${actor.id}`]: "member" },
-		)
-
-		const result = await runWithActorEither(
-			OrganizationMemberPolicy.use((policy) => policy.canUpdate(MEMBER_ID)),
-			layer,
-			actor,
-		)
+		const result = await update({ actor: actor.id, actorRole: "member", self: true })
 		expect(Result.isSuccess(result)).toBe(true)
+		// Sending the role it already has is not a change.
+		const same = await update({ actor: actor.id, actorRole: "member", self: true, role: "member" })
+		expect(Result.isSuccess(same)).toBe(true)
 	})
 
-	it("canUpdate allows org admin", async () => {
-		const admin = makeActor({ id: ADMIN_USER_ID })
-		const layer = makePolicyLayer(
-			{ [MEMBER_ID]: { userId: TARGET_USER_ID, organizationId: TEST_ORG_ID, role: "member" } },
-			{ [`${TEST_ORG_ID}:${ADMIN_USER_ID}`]: "admin" },
-		)
-
-		const result = await runWithActorEither(
-			OrganizationMemberPolicy.use((policy) => policy.canUpdate(MEMBER_ID)),
-			layer,
-			admin,
-		)
-		expect(Result.isSuccess(result)).toBe(true)
-	})
-
-	it("canUpdate denies org owner (only admin allowed)", async () => {
-		const owner = makeActor({ id: OWNER_USER_ID })
-		const layer = makePolicyLayer(
-			{ [MEMBER_ID]: { userId: TARGET_USER_ID, organizationId: TEST_ORG_ID, role: "member" } },
-			{ [`${TEST_ORG_ID}:${OWNER_USER_ID}`]: "owner" },
-		)
-
-		const result = await runWithActorEither(
-			OrganizationMemberPolicy.use((policy) => policy.canUpdate(MEMBER_ID)),
-			layer,
-			owner,
-		)
-		expect(Result.isFailure(result)).toBe(true)
-		if (Result.isFailure(result)) {
-			expect(UnauthorizedError.is(result.failure)).toBe(true)
+	it("canUpdate denies a member changing their own role", async () => {
+		const actor = makeActor()
+		for (const role of ["admin", "owner"] as const) {
+			const result = await update({ actor: actor.id, actorRole: "member", self: true, role })
+			expect(Result.isFailure(result)).toBe(true)
+			if (Result.isFailure(result)) expect(UnauthorizedError.is(result.failure)).toBe(true)
 		}
+	})
+
+	it("canUpdate allows org admin, but not to grant owner or touch an owner's role", async () => {
+		const actor = ADMIN_USER_ID
+		expect(Result.isSuccess(await update({ actor, actorRole: "admin" }))).toBe(true)
+		expect(Result.isSuccess(await update({ actor, actorRole: "admin", role: "admin" }))).toBe(true)
+		expect(Result.isFailure(await update({ actor, actorRole: "admin", role: "owner" }))).toBe(true)
+		expect(
+			Result.isFailure(
+				await update({ actor, actorRole: "admin", targetRole: "owner", role: "member" }),
+			),
+		).toBe(true)
+		expect(Result.isFailure(await update({ actor, actorRole: "admin", self: true, role: "owner" }))).toBe(
+			true,
+		)
+	})
+
+	it("canUpdate allows org owner to update anyone and set any role", async () => {
+		const actor = OWNER_USER_ID
+		expect(Result.isSuccess(await update({ actor, actorRole: "owner" }))).toBe(true)
+		expect(Result.isSuccess(await update({ actor, actorRole: "owner", role: "owner" }))).toBe(true)
+		expect(
+			Result.isSuccess(await update({ actor, actorRole: "owner", targetRole: "owner", role: "admin" })),
+		).toBe(true)
+	})
+
+	it("canUpdate denies a member changing another member's role", async () => {
+		const actor = "00000000-0000-4000-8000-000000000855" as UserId
+		expect(Result.isFailure(await update({ actor, actorRole: "member", role: "admin" }))).toBe(true)
+		expect(Result.isFailure(await update({ actor, actorRole: "member" }))).toBe(true)
 	})
 
 	it("canUpdate denies outsider", async () => {

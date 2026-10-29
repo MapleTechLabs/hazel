@@ -1,6 +1,6 @@
 import { BotCommandId, BotId } from "@hazel/schema"
-import * as PG from "@maple-dev/effect-orm/postgres"
-import { jsonb, now, timestamptz, uuid, varchar } from "./columns"
+import * as SQLite from "@maple-dev/effect-orm/sqlite"
+import { jsonb, randomUuid, timestamptz, uuid, varchar } from "./columns"
 
 /**
  * Argument definition for a bot command
@@ -16,23 +16,23 @@ export interface BotCommandArgument {
 /**
  * Bot commands table - stores slash commands registered by bots
  */
-export const botCommandsTable = PG.table("bot_commands", {
+export const botCommandsTable = SQLite.table("bot_commands", {
 	columns: {
-		id: PG.column(uuid(BotCommandId), { defaultExpr: "gen_random_uuid()" }),
+		id: SQLite.column(uuid(BotCommandId), { defaultExpr: randomUuid }),
 		botId: uuid(BotId),
 		name: varchar(50),
-		description: PG.text,
-		arguments: PG.column(PG.nullable(jsonb<BotCommandArgument[]>()), { default: [] }),
-		usageExample: PG.nullable(PG.text),
-		isEnabled: PG.column(PG.bool, { default: true }),
-		createdAt: PG.column(timestamptz, { defaultExpr: "now()" }),
-		updatedAt: PG.column(timestamptz, { defaultExpr: "now()" }),
+		description: SQLite.text,
+		arguments: SQLite.column(SQLite.nullable(jsonb<BotCommandArgument[]>()), { default: [] }),
+		usageExample: SQLite.nullable(SQLite.text),
+		isEnabled: SQLite.column(SQLite.boolean, { default: true }),
+		createdAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		updatedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
 	},
 	primaryKey: ["id"],
 	indexes: [
-		PG.index("bot_commands_bot_id_idx", ["botId"]),
-		PG.uniqueIndex("bot_commands_bot_id_name_idx", ["botId", "name"]),
+		SQLite.index("bot_commands_bot_id_idx", ["botId"]),
+		SQLite.uniqueIndex("bot_commands_bot_id_name_idx", ["botId", "name"]),
 	],
 })
-export type BotCommand = PG.SelectRowOf<typeof botCommandsTable>
-export type NewBotCommand = PG.InsertRowOf<typeof botCommandsTable>
+export type BotCommand = SQLite.SelectRowOf<typeof botCommandsTable>
+export type NewBotCommand = SQLite.InsertRowOf<typeof botCommandsTable>

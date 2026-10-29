@@ -3,7 +3,8 @@ import { Command, expectOutMessage, given, message, model, story } from "foldkit
 import { describe, expect, test } from "vitest"
 import { ModalOutMessage } from "../out-message"
 import { initFrame } from "./frame"
-import { InstallBotById, Message, update } from "./install-bot-by-id"
+import { makeShared, organizationId } from "../../test/pages-fixtures"
+import { InstallBotById, Message, update as modalUpdate } from "./install-bot-by-id"
 
 const botId = "00000000-0000-4000-8000-000000000000"
 const initial = {
@@ -12,6 +13,9 @@ const initial = {
 	installError: null,
 	isInstalling: false,
 }
+const context = { ...makeShared(), route: { _tag: "Root" } as const }
+const update = (current: Parameters<typeof modalUpdate>[0], next: Parameters<typeof modalUpdate>[1]) =>
+	modalUpdate(current, next, context)
 const toast = { intent: "error" as const, title: "Application not found", description: null }
 
 describe("install by ID", () => {
@@ -21,7 +25,7 @@ describe("install by ID", () => {
 			given(initial),
 			message(Message.ChangedBotId({ value: ` ${botId} ` })),
 			message(Message.SubmittedForm()),
-			Command.expectExact(InstallBotById({ botId })),
+			Command.expectExact(InstallBotById({ botId, organizationId })),
 			model((current) => expect(current.isInstalling).toBe(true)),
 			Command.resolve(
 				InstallBotById,

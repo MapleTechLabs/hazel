@@ -1,84 +1,72 @@
+/**
+ * The public bot API's messages and reactions. The bot authenticates with its token (directory
+ * `bots`); writes run as the bot's user through the same HazelRpc methods the app uses
+ * (`message.*`, `messageReaction.toggle`) in the channel's `ChannelObject`, so they get the same
+ * policies and side effects. Listing is a typed call on that object (`channel.listMessages`).
+ * Update and delete name the channel (`channelId`, `channel_id`): a message id alone cannot be
+ * routed.
+ */
 import { HttpApiBuilder } from "effect/http-api"
 import { HttpServerRequest } from "effect/http"
-import {
-	AttachmentRepo,
-	BotRepo,
-	MessageOutboxRepo,
-	MessageReactionRepo,
-	MessageRepo,
-} from "@hazel/backend-core"
-import { Database } from "@hazel/db"
-import { CurrentUser, InternalServerError, UnauthorizedError, withRemapDbErrors } from "@hazel/domain"
-import { CurrentRpcScopes, type ApiScope } from "@hazel/domain/scopes"
-import type { MessageId } from "@hazel/schema"
+import { BotRepo } from "@hazel/backend-core"
+import { CurrentUser, InternalServerError, MessageNotFoundError, UnauthorizedError } from "@hazel/domain"
 import {
 	ChannelNotFoundError,
 	DeleteMessageResponse,
 	InvalidPaginationError,
 	ListMessagesResponse,
+	LiveStateResponse,
 	MessageResponse,
 	ToggleReactionResponse,
+	WriteLiveStateResponse,
 } from "@hazel/domain/http"
+import type { MessageResponse as RpcMessageResponse } from "@hazel/domain/rpc"
+import type { MessageReaction } from "@hazel/domain/models"
+import type { ChannelId, MessageId, TransactionId, UserId } from "@hazel/schema"
 import { Effect, Option } from "effect"
 import { HazelApi } from "../../api"
-import { generateTransactionId } from "../../lib/create-transactionId"
-import { AttachmentPolicy } from "../../policies/attachment-policy"
-import { MessagePolicy } from "../../policies/message-policy"
-import { MessageReactionPolicy } from "../../policies/message-reaction-policy"
-import { BotGatewayService } from "../../services/bot-gateway-service"
+import { Directory } from "../../services/directory"
 import { checkMessageRateLimit } from "../../services/rate-limit-helpers"
+import { callObject } from "../../worker/objects/calls"
+import { ListMessagesCall } from "../../worker/objects/channel/api-messages"
+import { readLive, writeLive } from "../../worker/live/client"
+import { forwardRpc } from "../../worker/objects/forward"
+import { channelTarget } from "../../worker/objects/kinds"
+import { providePrincipal } from "../../worker/objects/principal"
 
-/**
- * Hash a token using SHA-256 (Web Crypto API)
- */
+/** Hash a token using SHA-256 (Web Crypto API). */
 async function hashToken(token: string): Promise<string> {
-	const encoder = new TextEncoder()
-	const data = encoder.encode(token)
+	const data = new TextEncoder().encode(token)
 	const hashBuffer = await crypto.subtle.digest("SHA-256", data)
-	const hashArray = Array.from(new Uint8Array(hashBuffer))
-	return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("")
+	return Array.from(new Uint8Array(hashBuffer))
+		.map((b) => b.toString(16).padStart(2, "0"))
+		.join("")
 }
 
-/**
- * Authenticate bot from Bearer token and return bot info
- */
+/** Authenticate the bot from its Bearer token. */
 const authenticateBotFromToken = Effect.gen(function* () {
 	const request = yield* HttpServerRequest.HttpServerRequest
 	const authHeader = request.headers.authorization
-
 	if (!authHeader || !authHeader.startsWith("Bearer ")) {
-		return yield* Effect.fail(
-			new UnauthorizedError({
-				message: "Missing or invalid API token",
-				detail: "Authorization header must be 'Bearer <token>'",
-			}),
-		)
+		return yield* new UnauthorizedError({
+			message: "Missing or invalid API token",
+			detail: "Authorization header must be 'Bearer <token>'",
+		})
 	}
-
-	const token = authHeader.slice(7)
-	const tokenHash = yield* Effect.promise(() => hashToken(token))
-
-	const botRepo = yield* BotRepo
-	const botOption = yield* botRepo.findByTokenHash(tokenHash)
-
-	if (Option.isNone(botOption)) {
-		return yield* Effect.fail(
-			new UnauthorizedError({
-				message: "Invalid API token",
-				detail: "No bot found with this token",
-			}),
-		)
+	const tokenHash = yield* Effect.promise(() => hashToken(authHeader.slice(7)))
+	const bot = yield* (yield* BotRepo).findByTokenHash(tokenHash)
+	if (Option.isNone(bot)) {
+		return yield* new UnauthorizedError({
+			message: "Invalid API token",
+			detail: "No bot found with this token",
+		})
 	}
-
-	return botOption.value
+	return bot.value
 })
 
-/**
- * Create a CurrentUser context for the bot
- * Bots act as their associated user account
- */
-const createBotUserContext = (bot: { userId: typeof import("@hazel/schema").UserId.Type; name: string }) =>
-	new CurrentUser.Schema({
+/** Bots act as their user, with a member's scopes (as the API always did). */
+const botPrincipal = (bot: { readonly userId: UserId; readonly name: string }) => ({
+	user: new CurrentUser.Schema({
 		id: bot.userId,
 		role: "member",
 		email: `bot-${bot.name}@hazel.bot`,
@@ -86,461 +74,181 @@ const createBotUserContext = (bot: { userId: typeof import("@hazel/schema").User
 		timezone: null,
 		organizationId: null,
 		settings: null,
+	}),
+	botScopes: null,
+})
+
+/** The `ChannelObject` holding `channelId`'s messages (a Connect mount's host). */
+const hostOf = (channelId: ChannelId) =>
+	Effect.gen(function* () {
+		const index = yield* (yield* Directory).channel(channelId)
+		return channelTarget(
+			Option.match(index, { onNone: () => channelId, onSome: (row) => row.hostChannelId ?? channelId }),
+		)
 	})
 
-const withHttpScopes = <A, E, R>(
-	scopes: ReadonlyArray<ApiScope>,
-	make: Effect.Effect<A, E, R>,
-): Effect.Effect<A, E, R> => Effect.provideService(make, CurrentRpcScopes, scopes) as Effect.Effect<A, E, R>
+const internal = (message: string) => (cause: unknown) =>
+	Effect.logError(message, { cause }).pipe(
+		Effect.andThen(Effect.fail(new InternalServerError({ message, cause }))),
+	)
+
+const missingChannel = (messageId: MessageId) =>
+	Effect.logWarning("API message write without its channel id", { messageId }).pipe(
+		Effect.andThen(Effect.fail(new MessageNotFoundError({ messageId }))),
+	)
+
+const toHttpMessage = (response: RpcMessageResponse) =>
+	new MessageResponse({ data: response.data, transactionId: response.transactionId })
 
 export const HttpMessagesApiLive = HttpApiBuilder.group(HazelApi, "api-v1-messages", (handlers) =>
-	Effect.gen(function* () {
-		const db = yield* Database.Database
-		const botGateway = yield* BotGatewayService
-		const outboxRepo = yield* MessageOutboxRepo
-		const messagePolicy = yield* MessagePolicy
-		const messageRepo = yield* MessageRepo
-		const messageReactionPolicy = yield* MessageReactionPolicy
-		const messageReactionRepo = yield* MessageReactionRepo
-		const attachmentPolicy = yield* AttachmentPolicy
-		const attachmentRepo = yield* AttachmentRepo
-
-		return (
-			handlers
-				// List Messages (with cursor-based pagination)
-				.handle("listMessages", ({ query }) =>
-					withHttpScopes(
-						["messages:read"],
-						Effect.gen(function* () {
-							const bot = yield* authenticateBotFromToken
-							const currentUser = createBotUserContext(bot)
-
-							const { channel_id, starting_after, ending_before, limit } = query
-
-							// Validate: cannot specify both cursors
-							if (starting_after && ending_before) {
-								return yield* Effect.fail(
-									new InvalidPaginationError({
-										message: "Cannot specify both starting_after and ending_before",
-									}),
-								)
-							}
-
-							const effectiveLimit = limit ?? 25
-
-							// First, check if user can read this channel (policy authorization)
-							yield* messagePolicy
-								.canRead(channel_id)
-								.pipe(Effect.provideService(CurrentUser.Context, currentUser))
-
-							// Resolve cursor IDs to stable cursor tuples.
-							let cursorBefore:
-								| {
-										id: MessageId
-										createdAt: Date
-								  }
-								| undefined = undefined
-							let cursorAfter:
-								| {
-										id: MessageId
-										createdAt: Date
-								  }
-								| undefined = undefined
-
-							if (starting_after) {
-								const cursorMsg = yield* messageRepo.findByIdForCursor({
-									id: starting_after,
-									channelId: channel_id,
-								})
-								if (Option.isNone(cursorMsg)) {
-									return yield* Effect.fail(
-										new InvalidPaginationError({
-											message: "Invalid starting_after cursor for channel",
-										}),
-									)
-								}
-								cursorBefore = {
-									id: cursorMsg.value.id,
-									createdAt: cursorMsg.value.createdAt,
-								}
-							} else if (ending_before) {
-								const cursorMsg = yield* messageRepo.findByIdForCursor({
-									id: ending_before,
-									channelId: channel_id,
-								})
-								if (Option.isNone(cursorMsg)) {
-									return yield* Effect.fail(
-										new InvalidPaginationError({
-											message: "Invalid ending_before cursor for channel",
-										}),
-									)
-								}
-								cursorAfter = {
-									id: cursorMsg.value.id,
-									createdAt: cursorMsg.value.createdAt,
-								}
-							}
-
-							// Query messages (policy already checked, use system actor for db access)
-							const messages = yield* messageRepo.listByChannel({
-								channelId: channel_id,
-								cursorBefore,
-								cursorAfter,
-								limit: effectiveLimit,
-							})
-
-							const hasMore = messages.length > effectiveLimit
-							const data = hasMore ? messages.slice(0, effectiveLimit) : messages
-
-							return new ListMessagesResponse({
-								data,
-								has_more: hasMore,
-							})
-						}).pipe(
-							Effect.catchTag("DatabaseError", (err) =>
-								Effect.fail(
-									new InternalServerError({
-										message: "Database error while listing messages",
-										cause: err,
-									}),
-								),
-							),
-						),
-					),
-				)
-
-				// Create Message
-				.handle("createMessage", ({ payload }) =>
-					withHttpScopes(
-						["messages:write"],
-						Effect.gen(function* () {
-							const bot = yield* authenticateBotFromToken
-							const currentUser = createBotUserContext(bot)
-
-							yield* checkMessageRateLimit(bot.userId)
-
-							const { attachmentIds, embeds, replyToMessageId, threadChannelId, ...rest } =
-								payload
-
-							const response = yield* db
-								.transaction(
-									Effect.gen(function* () {
-										yield* messagePolicy.canCreate(rest.channelId)
-										const createdMessage = yield* messageRepo
-											.insert({
-												...rest,
-												embeds: embeds ?? null,
-												replyToMessageId: replyToMessageId ?? null,
-												threadChannelId: threadChannelId ?? null,
-												authorId: bot.userId,
-												deletedAt: null,
-											})
-											.pipe(Effect.map((res) => res[0]!))
-
-										// Link attachments if provided
-										if (attachmentIds && attachmentIds.length > 0) {
-											yield* Effect.forEach(attachmentIds, (attachmentId) =>
-												Effect.gen(function* () {
-													yield* attachmentPolicy.canUpdate(attachmentId)
-													yield* attachmentRepo.update({
-														id: attachmentId,
-														messageId: createdMessage.id,
-													})
-												}),
-											)
-										}
-
-										yield* outboxRepo.insert({
-											eventType: "message_created",
-											aggregateId: createdMessage.id,
-											channelId: createdMessage.channelId,
-											payload: {
-												messageId: createdMessage.id,
-												channelId: createdMessage.channelId,
-												authorId: createdMessage.authorId,
-												content: createdMessage.content,
-												replyToMessageId: createdMessage.replyToMessageId,
-											},
-										})
-
-										const txid = yield* generateTransactionId()
-
-										return new MessageResponse({
-											data: createdMessage,
-											transactionId: txid,
-										})
-									}),
-								)
-								.pipe(
-									withRemapDbErrors("Message", "create"),
-									Effect.provideService(CurrentUser.Context, currentUser),
-								)
-
-							yield* botGateway.publishMessageEvent("message.create", response.data).pipe(
-								Effect.catchTag("DurableStreamRequestError", (error) =>
-									Effect.logWarning("Failed to publish API message.create to bot gateway", {
-										error,
-										messageId: response.data.id,
-									}),
-								),
-							)
-
-							return response
-						}).pipe(
-							Effect.catchTag("DatabaseError", (err) =>
-								Effect.fail(
-									new InternalServerError({
-										message: "Database error while creating message",
-										cause: err,
-									}),
-								),
-							),
-						),
-					),
-				)
-
-				// Update Message
-				.handle("updateMessage", ({ params, payload }) =>
-					withHttpScopes(
-						["messages:write"],
-						Effect.gen(function* () {
-							const bot = yield* authenticateBotFromToken
-							const currentUser = createBotUserContext(bot)
-
-							yield* checkMessageRateLimit(bot.userId)
-
-							const { embeds, ...rest } = payload
-
-							const response = yield* db
-								.transaction(
-									Effect.gen(function* () {
-										yield* messagePolicy.canUpdate(params.id)
-										const updatedMessage = yield* messageRepo.update({
-											id: params.id,
-											...rest,
-											...(embeds !== undefined ? { embeds } : {}),
-										})
-
-										yield* outboxRepo.insert({
-											eventType: "message_updated",
-											aggregateId: updatedMessage.id,
-											channelId: updatedMessage.channelId,
-											payload: {
-												messageId: updatedMessage.id,
-											},
-										})
-
-										const txid = yield* generateTransactionId()
-
-										return new MessageResponse({
-											data: updatedMessage,
-											transactionId: txid,
-										})
-									}),
-								)
-								.pipe(
-									withRemapDbErrors("Message", "update"),
-									Effect.provideService(CurrentUser.Context, currentUser),
-								)
-
-							yield* botGateway.publishMessageEvent("message.update", response.data).pipe(
-								Effect.catchTag("DurableStreamRequestError", (error) =>
-									Effect.logWarning("Failed to publish API message.update to bot gateway", {
-										error,
-										messageId: response.data.id,
-									}),
-								),
-							)
-
-							return response
-						}).pipe(
-							Effect.catchTag("DatabaseError", (err) =>
-								Effect.fail(
-									new InternalServerError({
-										message: "Database error while updating message",
-										cause: err,
-									}),
-								),
-							),
-						),
-					),
-				)
-
-				// Delete Message
-				.handle("deleteMessage", ({ params }) =>
-					withHttpScopes(
-						["messages:write"],
-						Effect.gen(function* () {
-							const bot = yield* authenticateBotFromToken
-							const currentUser = createBotUserContext(bot)
-							const existingMessage = yield* messageRepo.findById(params.id)
-
-							yield* checkMessageRateLimit(bot.userId)
-
-							const response = yield* db
-								.transaction(
-									Effect.gen(function* () {
-										yield* messagePolicy.canDelete(params.id)
-										yield* messageRepo.deleteById(params.id)
-
-										if (Option.isSome(existingMessage)) {
-											yield* outboxRepo.insert({
-												eventType: "message_deleted",
-												aggregateId: existingMessage.value.id,
-												channelId: existingMessage.value.channelId,
-												payload: {
-													messageId: existingMessage.value.id,
-													channelId: existingMessage.value.channelId,
-												},
-											})
-										}
-
-										const txid = yield* generateTransactionId()
-
-										return new DeleteMessageResponse({ transactionId: txid })
-									}),
-								)
-								.pipe(
-									withRemapDbErrors("Message", "delete"),
-									Effect.provideService(CurrentUser.Context, currentUser),
-								)
-
-							if (Option.isSome(existingMessage)) {
-								yield* botGateway
-									.publishMessageEvent("message.delete", existingMessage.value)
-									.pipe(
-										Effect.catchTag("DurableStreamRequestError", (error) =>
-											Effect.logWarning(
-												"Failed to publish API message.delete to bot gateway",
-												{
-													error,
-													messageId: existingMessage.value.id,
-												},
-											),
-										),
-									)
-							}
-
-							return response
-						}).pipe(
-							Effect.catchTag("DatabaseError", (err) =>
-								Effect.fail(
-									new InternalServerError({
-										message: "Database error while deleting message",
-										cause: err,
-									}),
-								),
-							),
-						),
-					),
-				)
-
-				// Toggle Reaction
-				.handle("toggleReaction", ({ params, payload }) =>
-					withHttpScopes(
-						["message-reactions:write"],
-						Effect.gen(function* () {
-							const bot = yield* authenticateBotFromToken
-							const currentUser = createBotUserContext(bot)
-
-							const result = yield* db
-								.transaction(
-									Effect.gen(function* () {
-										const { emoji, channelId } = payload
-										const messageId = params.id
-
-										yield* messageReactionPolicy.canList(messageId)
-										const existingReaction =
-											yield* messageReactionRepo.findByMessageUserEmoji(
-												messageId,
-												bot.userId,
-												emoji,
-											)
-
-										const txid = yield* generateTransactionId()
-
-										// If reaction exists, delete it
-										if (Option.isSome(existingReaction)) {
-											const deletedSyncPayload = {
-												reactionId: existingReaction.value.id,
-												hazelChannelId: existingReaction.value.channelId,
-												hazelMessageId: existingReaction.value.messageId,
-												emoji: existingReaction.value.emoji,
-												userId: existingReaction.value.userId,
-											} as const
-
-											yield* messageReactionPolicy.canDelete(existingReaction.value.id)
-											yield* messageReactionRepo.deleteById(existingReaction.value.id)
-											yield* outboxRepo.insert({
-												eventType: "reaction_deleted",
-												aggregateId: existingReaction.value.id,
-												channelId: existingReaction.value.channelId,
-												payload: {
-													hazelChannelId: existingReaction.value.channelId,
-													hazelMessageId: existingReaction.value.messageId,
-													emoji: existingReaction.value.emoji,
-													userId: existingReaction.value.userId,
-												},
-											})
-
-											return {
-												wasCreated: false,
-												data: undefined,
-												transactionId: txid,
-												deletedSyncPayload,
-											}
-										}
-
-										// Otherwise, create a new reaction
-										yield* messageReactionPolicy.canCreate(messageId)
-										const createdReaction = yield* messageReactionRepo
-											.insert({
-												messageId,
-												channelId,
-												emoji,
-												userId: bot.userId,
-											})
-											.pipe(Effect.map((res) => res[0]!))
-
-										yield* outboxRepo.insert({
-											eventType: "reaction_created",
-											aggregateId: createdReaction.id,
-											channelId: createdReaction.channelId,
-											payload: {
-												reactionId: createdReaction.id,
-											},
-										})
-
-										return {
-											wasCreated: true,
-											data: createdReaction,
-											transactionId: txid,
-											deletedSyncPayload: null,
-										}
-									}),
-								)
-								.pipe(
-									withRemapDbErrors("MessageReaction", "create"),
-									Effect.provideService(CurrentUser.Context, currentUser),
-								)
-
-							return new ToggleReactionResponse({
-								wasCreated: result.wasCreated,
-								data: result.data,
-								transactionId: result.transactionId,
-							})
-						}).pipe(
-							Effect.catchTag("DatabaseError", (err) =>
-								Effect.fail(
-									new InternalServerError({
-										message: "Database error while toggling reaction",
-										cause: err,
-									}),
-								),
-							),
-						),
-					),
-				)
-		)
-	}),
+	Effect.succeed(
+		handlers
+			.handle("listMessages", ({ query }) =>
+				Effect.gen(function* () {
+					const bot = yield* authenticateBotFromToken
+					const { channel_id, starting_after, ending_before, limit } = query
+					if (starting_after && ending_before) {
+						return yield* new InvalidPaginationError({
+							message: "Cannot specify both starting_after and ending_before",
+						})
+					}
+					const page = yield* callObject(ListMessagesCall, yield* hostOf(channel_id), {
+						userId: bot.userId,
+						channelId: channel_id,
+						startingAfter: starting_after ?? null,
+						endingBefore: ending_before ?? null,
+						limit: limit ?? 25,
+					})
+					return new ListMessagesResponse({ data: page.messages, has_more: page.hasMore })
+				}).pipe(
+					Effect.catchTags({
+						DatabaseError: internal("Database error while listing messages"),
+						ObjectCallError: internal("The channel is unavailable"),
+					}),
+					Effect.withSpan("ApiV1.listMessages"),
+				),
+			)
+			.handle("createMessage", ({ payload }) =>
+				Effect.gen(function* () {
+					const bot = yield* authenticateBotFromToken
+					yield* checkMessageRateLimit(bot.userId)
+					const { attachmentIds, embeds, replyToMessageId, threadChannelId, ...rest } = payload
+					const response = yield* forwardRpc<RpcMessageResponse, ChannelNotFoundError>(
+						yield* hostOf(payload.channelId),
+						"message.create",
+						{
+							...rest,
+							// Message.Insert's own fields; the handler authors it as the caller.
+							authorId: bot.userId,
+							deletedAt: null,
+							embeds: embeds ?? null,
+							replyToMessageId: replyToMessageId ?? null,
+							threadChannelId: threadChannelId ?? null,
+							...(attachmentIds === undefined ? {} : { attachmentIds }),
+						},
+					).pipe(providePrincipal(botPrincipal(bot)))
+					return toHttpMessage(response)
+				}).pipe(
+					Effect.catchTags({
+						DatabaseError: internal("Database error while creating message"),
+						ChannelNotFoundError: (error: { readonly channelId: ChannelId }) =>
+							Effect.fail(new ChannelNotFoundError({ channelId: error.channelId })),
+					}),
+					Effect.withSpan("ApiV1.createMessage"),
+				),
+			)
+			.handle("updateMessage", ({ params, payload }) =>
+				Effect.gen(function* () {
+					const bot = yield* authenticateBotFromToken
+					yield* checkMessageRateLimit(bot.userId)
+					const { channelId, embeds, ...rest } = payload
+					if (channelId === undefined) return yield* missingChannel(params.id)
+					const response = yield* forwardRpc<RpcMessageResponse, MessageNotFoundError>(
+						yield* hostOf(channelId),
+						"message.update",
+						{ id: params.id, channelId, ...rest, ...(embeds !== undefined ? { embeds } : {}) },
+					).pipe(providePrincipal(botPrincipal(bot)))
+					return toHttpMessage(response)
+				}).pipe(
+					Effect.catchTag("DatabaseError", internal("Database error while updating message")),
+					Effect.withSpan("ApiV1.updateMessage"),
+				),
+			)
+			.handle("deleteMessage", ({ params, query }) =>
+				Effect.gen(function* () {
+					const bot = yield* authenticateBotFromToken
+					yield* checkMessageRateLimit(bot.userId)
+					const channelId = query.channel_id
+					if (channelId === undefined) return yield* missingChannel(params.id)
+					const response = yield* forwardRpc<
+						{ readonly transactionId: TransactionId },
+						MessageNotFoundError
+					>(yield* hostOf(channelId), "message.delete", { id: params.id, channelId }).pipe(
+						providePrincipal(botPrincipal(bot)),
+					)
+					return new DeleteMessageResponse({ transactionId: response.transactionId })
+				}).pipe(
+					Effect.catchTag("DatabaseError", internal("Database error while deleting message")),
+					Effect.withSpan("ApiV1.deleteMessage"),
+				),
+			)
+			.handle("writeLiveState", ({ params, payload }) =>
+				Effect.gen(function* () {
+					const bot = yield* authenticateBotFromToken
+					const host = yield* hostOf(payload.channelId)
+					const result = yield* writeLive({
+						messageId: params.id,
+						channelId: host.id as ChannelId,
+						principal: botPrincipal(bot),
+						action: payload.action,
+					})
+					return new WriteLiveStateResponse({ data: result })
+				}).pipe(
+					Effect.catchTag("DatabaseError", internal("Database error while writing live state")),
+					Effect.withSpan("ApiV1.writeLiveState", {
+						attributes: { "message.id": params.id, "live.action": payload.action._tag },
+					}),
+				),
+			)
+			.handle("getLiveState", ({ params, query }) =>
+				Effect.gen(function* () {
+					const bot = yield* authenticateBotFromToken
+					const host = yield* hostOf(query.channel_id)
+					const state = yield* readLive({
+						messageId: params.id,
+						channelId: host.id as ChannelId,
+						userId: bot.userId,
+					})
+					return new LiveStateResponse({ data: state })
+				}).pipe(
+					Effect.catchTag("DatabaseError", internal("Database error while reading live state")),
+					Effect.withSpan("ApiV1.getLiveState", { attributes: { "message.id": params.id } }),
+				),
+			)
+			.handle("toggleReaction", ({ params, payload }) =>
+				Effect.gen(function* () {
+					const bot = yield* authenticateBotFromToken
+					const result = yield* forwardRpc<
+						{
+							readonly wasCreated: boolean
+							readonly data?: MessageReaction.Type | undefined
+							readonly transactionId: TransactionId
+						},
+						MessageNotFoundError
+					>(yield* hostOf(payload.channelId), "messageReaction.toggle", {
+						messageId: params.id,
+						channelId: payload.channelId,
+						emoji: payload.emoji,
+					}).pipe(providePrincipal(botPrincipal(bot)))
+					return new ToggleReactionResponse({
+						wasCreated: result.wasCreated,
+						data: result.data,
+						transactionId: result.transactionId,
+					})
+				}).pipe(
+					Effect.catchTag("DatabaseError", internal("Database error while toggling reaction")),
+					Effect.withSpan("ApiV1.toggleReaction"),
+				),
+			),
+	),
 )

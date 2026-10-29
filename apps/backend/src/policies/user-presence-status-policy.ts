@@ -1,22 +1,31 @@
+import type { UserId } from "@hazel/schema"
 import { Context, Effect, Layer } from "effect"
+import { currentObject } from "../lib/current-object"
 import { makePolicy } from "../lib/policy-utils"
 
+/**
+ * Presence is the caller's own: the RPC must run in the caller's `UserObject` (routing sends it
+ * there; this refuses one that landed anywhere else).
+ */
 export class UserPresenceStatusPolicy extends Context.Service<UserPresenceStatusPolicy>()(
 	"UserPresenceStatusPolicy/Policy",
 	{
 		make: Effect.gen(function* () {
-			const policyEntity = "UserPresenceStatus" as const
-			const authorize = makePolicy(policyEntity)
+			const authorize = makePolicy("UserPresenceStatus")
 
-			const canCreate = () => authorize("create", (_actor) => Effect.succeed(true))
+			const isOwnObject = (userId: UserId) =>
+				Effect.map(
+					currentObject,
+					(object) =>
+						object._tag === "Some" && object.value.kind === "user" && object.value.id === userId,
+				)
 
-			const canRead = () => authorize("select", (_actor) => Effect.succeed(true))
+			const canUpdate = (userId: UserId) =>
+				authorize("update", (actor) =>
+					actor.id === userId ? isOwnObject(userId) : Effect.succeed(false),
+				)
 
-			const canUpdate = () => authorize("update", (_actor) => Effect.succeed(true))
-
-			const canDelete = () => authorize("delete", (_actor) => Effect.succeed(true))
-
-			return { canUpdate, canDelete, canRead, canCreate } as const
+			return { canUpdate } as const
 		}),
 	},
 ) {

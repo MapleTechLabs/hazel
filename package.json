@@ -10,15 +10,17 @@
 		],
 		"catalogs": {
 			"effect": {
-				"effect": "4.0.4",
-				"@effect/platform-bun": "4.0.4",
-				"@effect/platform-browser": "4.0.4",
-				"@effect/platform-node": "4.0.4",
-				"@effect/sql-pg": "4.0.4",
-				"@effect/opentelemetry": "4.0.4",
-				"@effect/atom-react": "4.0.4",
-				"@effect/ai-openrouter": "4.0.4",
-				"@effect/vitest": "4.0.4"
+				"effect": "4.0.6",
+				"@effect/platform-bun": "4.0.6",
+				"@effect/platform-browser": "4.0.6",
+				"@effect/platform-node": "4.0.6",
+				"@effect/sql-sqlite-node": "4.0.6",
+				"@effect/sql-sqlite-do": "4.0.6",
+				"@effect/sql-d1": "4.0.6",
+				"@effect/opentelemetry": "4.0.6",
+				"@effect/atom-react": "4.0.6",
+				"@effect/ai-openrouter": "4.0.6",
+				"@effect/vitest": "4.0.6"
 			},
 			"alchemy": {
 				"@cloudflare/workers-types": "4.20260603.1",
@@ -31,9 +33,8 @@
 		}
 	},
 	"scripts": {
-		"dev:withBots": "turbo dev",
-		"dev": "turbo run dev --filter='*' --filter='!./bots/*'",
-		"dev:bots": "turbo run dev --filter='@hazel/bot-gateway' --filter='./bots/*'",
+		"dev": "bun run alchemy:dev",
+		"dev:bots": "turbo run dev --filter='./bots/*'",
 		"build": "turbo build typecheck",
 		"start": "turbo start",
 		"setup": "bun run packages/setup/src/index.ts",
@@ -45,10 +46,10 @@
 		"test:once": "vitest run",
 		"test:debug": "vitest --inspect-brk --no-file-parallelism",
 		"test:coverage": "vitest run --coverage --coverage.reporter=text",
-		"alchemy:deploy:prd": "alchemy deploy --yes --adopt --stage ${HAZEL_STAGE:-prd}",
+		"alchemy:deploy:prd": "bun scripts/alchemy-deploy.ts --yes --adopt --stage ${HAZEL_STAGE:-prd}",
 		"alchemy:plan:prd:local": "infisical run --env prod -- alchemy plan --adopt --stage prd",
-		"alchemy:deploy:prd:local": "infisical run --env prod -- alchemy deploy --yes --adopt --stage prd",
-		"alchemy:deploy:pr": "alchemy deploy --yes --adopt --stage pr-${PR_NUMBER}",
+		"alchemy:deploy:prd:local": "infisical run --env prod -- bun scripts/alchemy-deploy.ts --yes --adopt --stage prd",
+		"alchemy:deploy:pr": "bun scripts/alchemy-deploy.ts --yes --adopt --stage pr-${PR_NUMBER}",
 		"alchemy:destroy:pr": "alchemy destroy --yes --stage pr-${PR_NUMBER}",
 		"alchemy:dev": "ALCHEMY_LOCAL_STATE=1 alchemy dev --stage dev_${USER} --env-file .env.local",
 		"alchemy:typecheck": "tsc -p tsconfig.alchemy.json"

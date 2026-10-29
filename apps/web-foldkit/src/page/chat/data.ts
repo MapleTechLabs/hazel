@@ -15,6 +15,7 @@ import {
 	type ChannelInfo,
 	type ChannelQueryRow,
 	type MessageQueryRow,
+	PAGE_SIZE,
 	type ParentChannelInfo,
 	type ReactionQueryRow,
 	toChatMessage,
@@ -98,6 +99,23 @@ const messageQueryStream = <Message>(
 		({ order, upserts }) => toMessage({ order, upserts: upserts.map(toChatMessage) }),
 	)
 
+/**
+ * Keeps the channel's history loaded a page past the window while the stream runs: a window that
+ * reaches past what the `ChannelObject` snapshot sent (its newest messages) pages older ones in, so
+ * scrolling back grows the window as before. A reset re-requests them.
+ */
+export const messageHistoryStream = (channelId: ChannelId, window: LiveQueryWindow): Stream.Stream<never> =>
+	historyDemandStream(channelId, window.offset + window.limit + PAGE_SIZE)
+
+/** Holds `count` of the channel's newest messages loaded (paging older ones in) while it runs. */
+const historyDemandStream = (channelId: ChannelId, count: number): Stream.Stream<never> =>
+	Stream.callback<never>(() =>
+		Effect.acquireRelease(
+			Effect.sync(() => messageCollection.utils.retainHistory(channelId, count)),
+			(demand) => Effect.sync(() => demand.release()),
+		).pipe(Effect.flatMap(() => Effect.never)),
+	)
+
 export const reactionsStream = <Message>(
 	channelId: ChannelId,
 	toMessage: (reactions: ReadonlyArray<ChatReaction>) => Message,
@@ -154,8 +172,22 @@ export const parentChannelStream = <Message>(
 		},
 	)
 
-/** `threadMessagesWithAuthorAtomFamily`: the open thread panel's messages, oldest first. */
+/**
+ * `threadMessagesWithAuthorAtomFamily`: the open thread panel's messages, oldest first. The panel
+ * shows the whole thread, so it holds the thread's whole history: the `ChannelObject` snapshot
+ * sends only the newest messages, and the rest page in.
+ */
 export const threadPanelStream = <Message>(
+	threadChannelId: ChannelId,
+	toMessage: (messages: ReadonlyArray<ChatMessage>) => Message,
+): Stream.Stream<Message> =>
+	Stream.merge(threadPanelQueryStream(threadChannelId, toMessage), threadHistoryStream(threadChannelId))
+
+/** The whole thread's history, held while the panel is open. */
+export const threadHistoryStream = (threadChannelId: ChannelId): Stream.Stream<never> =>
+	historyDemandStream(threadChannelId, Number.POSITIVE_INFINITY)
+
+const threadPanelQueryStream = <Message>(
 	threadChannelId: ChannelId,
 	toMessage: (messages: ReadonlyArray<ChatMessage>) => Message,
 ): Stream.Stream<Message> =>

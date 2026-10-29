@@ -1,31 +1,31 @@
 import { IntegrationConnectionId, IntegrationTokenId } from "@hazel/schema"
-import * as PG from "@maple-dev/effect-orm/postgres"
-import { now, timestamptz, uuid, varchar } from "./columns"
+import * as SQLite from "@maple-dev/effect-orm/sqlite"
+import { randomUuid, timestamptz, uuid, varchar } from "./columns"
 
-export const integrationTokensTable = PG.table("integration_tokens", {
+export const integrationTokensTable = SQLite.table("integration_tokens", {
 	columns: {
-		id: PG.column(uuid(IntegrationTokenId), { defaultExpr: "gen_random_uuid()" }),
+		id: SQLite.column(uuid(IntegrationTokenId), { defaultExpr: randomUuid }),
 		connectionId: uuid(IntegrationConnectionId),
-		encryptedAccessToken: PG.text,
-		encryptedRefreshToken: PG.nullable(PG.text),
+		encryptedAccessToken: SQLite.text,
+		encryptedRefreshToken: SQLite.nullable(SQLite.text),
 		iv: varchar(32),
-		refreshTokenIv: PG.nullable(varchar(32)),
-		encryptionKeyVersion: PG.column(PG.int4, { default: 1 }),
-		tokenType: PG.column(PG.nullable(varchar(50)), { default: "Bearer" }),
-		scope: PG.nullable(PG.text),
-		expiresAt: PG.nullable(timestamptz),
-		refreshTokenExpiresAt: PG.nullable(timestamptz),
-		lastRefreshedAt: PG.nullable(timestamptz),
-		createdAt: PG.column(timestamptz, { defaultExpr: "now()" }),
-		updatedAt: PG.column(timestamptz, { defaultExpr: "now()" }),
+		refreshTokenIv: SQLite.nullable(varchar(32)),
+		encryptionKeyVersion: SQLite.column(SQLite.integer, { default: 1 }),
+		tokenType: SQLite.column(SQLite.nullable(varchar(50)), { default: "Bearer" }),
+		scope: SQLite.nullable(SQLite.text),
+		expiresAt: SQLite.nullable(timestamptz),
+		refreshTokenExpiresAt: SQLite.nullable(timestamptz),
+		lastRefreshedAt: SQLite.nullable(timestamptz),
+		createdAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		updatedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
 	},
 	primaryKey: ["id"],
-	uniqueConstraints: [PG.unique("integration_tokens_connectionId_unique", ["connectionId"])],
 	indexes: [
-		PG.index("int_tokens_connection_id_idx", ["connectionId"]),
-		PG.index("int_tokens_expires_at_idx", ["expiresAt"]),
-		PG.index("int_tokens_key_version_idx", ["encryptionKeyVersion"]),
+		SQLite.uniqueIndex("integration_tokens_connectionId_unique", ["connectionId"]),
+		SQLite.index("int_tokens_connection_id_idx", ["connectionId"]),
+		SQLite.index("int_tokens_expires_at_idx", ["expiresAt"]),
+		SQLite.index("int_tokens_key_version_idx", ["encryptionKeyVersion"]),
 	],
 })
-export type IntegrationToken = PG.SelectRowOf<typeof integrationTokensTable>
-export type NewIntegrationToken = PG.InsertRowOf<typeof integrationTokensTable>
+export type IntegrationToken = SQLite.SelectRowOf<typeof integrationTokensTable>
+export type NewIntegrationToken = SQLite.InsertRowOf<typeof integrationTokensTable>

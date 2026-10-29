@@ -3,7 +3,7 @@ import { Effect, Schema } from "effect"
 import { Command, Submodel } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
-import { organizationMemberCollection } from "~/db/collections"
+import { updateMemberRoleAction } from "~/db/actions"
 import { button } from "../../ui/button"
 import { dialogBody, dialogFooter, dialogHeader } from "../../ui/dialog"
 import { label } from "../../ui/field"
@@ -11,7 +11,15 @@ import { radioGroup } from "../../ui/radio"
 import { closed, completed, ModalOutMessage } from "../out-message"
 import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalViewInputs } from "./contract"
-import { Frame, Message as FrameMessage, frameView, initFrame, isCloseRequest, modalDescription, modalTitle } from "./frame"
+import {
+	Frame,
+	Message as FrameMessage,
+	frameView,
+	initFrame,
+	isCloseRequest,
+	modalDescription,
+	modalTitle,
+} from "./frame"
 import { errorToast, successToast } from "../../data/actions"
 
 /** `components/modals/change-role-modal.tsx` (legacy `useModal("change-role")`). */
@@ -44,19 +52,19 @@ const UpdateRole = Command.define("UpdateRole", {
 	args: { memberId: OrganizationMemberId, role: Role },
 	messages: [Message.SucceededUpdateRole, Message.FailedUpdateRole],
 	execute: ({ memberId, role }) =>
-		Effect.try(() =>
-			organizationMemberCollection.update(memberId, (draft) => {
-				draft.role = role
-			}),
-		).pipe(
-			Effect.flatMap((tx) => Effect.tryPromise(() => tx.isPersisted.promise)),
+		updateMemberRoleAction({ memberId, role }).pipe(
 			Effect.as(Message.SucceededUpdateRole()),
 			Effect.catchCause(() => Effect.succeed(Message.FailedUpdateRole())),
 		),
 })
 
 const roleOptions = (currentUserRole: string) => [
-	{ value: "member", label: "Member", description: "Can view and participate in channels", disabled: false },
+	{
+		value: "member",
+		label: "Member",
+		description: "Can view and participate in channels",
+		disabled: false,
+	},
 	{ value: "admin", label: "Admin", description: "Can manage members and settings", disabled: false },
 	{
 		value: "owner",
@@ -82,10 +90,13 @@ const clickedUpdateRole = (model: Model): Return => {
 
 const update = (model: Model, message: Message): Return =>
 	Message.match<Return>(message, {
-		GotFrameMessage: ({ message }) => (isCloseRequest(message) ? { model, outMessage: closed } : { model }),
+		GotFrameMessage: ({ message }) =>
+			isCloseRequest(message) ? { model, outMessage: closed } : { model },
 		// The kit radio has no per-radio isDisabled, so a disabled role is refused here.
 		ChangedRole: ({ value }) =>
-			isRoleDisabled(model, value) ? { model } : { model: modifyFields(model, { selectedRole: () => value }) },
+			isRoleDisabled(model, value)
+				? { model }
+				: { model: modifyFields(model, { selectedRole: () => value }) },
 		ClickedCancel: () => ({ model, outMessage: closed }),
 		ClickedUpdateRole: () => clickedUpdateRole(model),
 		SucceededUpdateRole: () => ({
@@ -136,9 +147,11 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 				),
 			]),
 			dialogFooter(h, [
-				button(h, { intent: "outline", onPress: Message.ClickedCancel(), isDisabled: model.isSubmitting }, [
-					"Cancel",
-				]),
+				button(
+					h,
+					{ intent: "outline", onPress: Message.ClickedCancel(), isDisabled: model.isSubmitting },
+					["Cancel"],
+				),
 				button(
 					h,
 					{

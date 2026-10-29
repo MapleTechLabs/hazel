@@ -1,12 +1,11 @@
 /**
  * The backend's runtime-agnostic application: routes plus every service that does not depend on
- * the host platform. Entry points (`index.ts` on Bun, `worker.ts` on Cloudflare) provide the
- * platform layer: `Database`, `Persistence`, `RateLimiter`, `BotGatewayTransport`, the tracer and
+ * the host platform. The api Worker (`worker.ts`) and the objects provide the platform layer: `Database`, `Persistence`, `RateLimiter`, `BotGatewayTransport`, the tracer and
  * the ConfigProvider.
  */
 import { HttpApiScalar } from "effect/http-api"
 import { FetchHttpClient, HttpRouter, HttpServerResponse } from "effect/http"
-import { RpcSerialization, RpcServer } from "effect/rpc"
+import { RpcSerialization } from "effect/rpc"
 import {
 	AttachmentRepo,
 	BotCommandRepo,
@@ -30,7 +29,6 @@ import {
 	IntegrationConnectionRepo,
 	IntegrationTokenRepo,
 	MessageReactionRepo,
-	MessageOutboxRepo,
 	MessageRepo,
 	NotificationRepo,
 	OrganizationMemberRepo,
@@ -67,24 +65,23 @@ import { PinnedMessagePolicy } from "./policies/pinned-message-policy"
 import { TypingIndicatorPolicy } from "./policies/typing-indicator-policy"
 import { UserPolicy } from "./policies/user-policy"
 import { UserPresenceStatusPolicy } from "./policies/user-presence-status-policy"
-import { AllRpcs, RpcServerLive } from "./rpc/server"
+import { layerRpcHttpPerRequest } from "./rpc/per-request"
+import { RpcServerLive } from "./rpc/server"
 import { AuthorizationLive } from "./services/auth"
 import { IntegrationTokenService } from "./services/integration-token-service"
 import { IntegrationBotService } from "./services/integrations/integration-bot-service"
 import { ChatSyncAttributionReconciler } from "./services/chat-sync/chat-sync-attribution-reconciler"
-import { DiscordSyncWorkerLayer } from "./services/chat-sync/discord-sync-worker"
-import { MessageSideEffectService } from "./services/message-side-effect-service"
-import { MockDataGenerator } from "./services/mock-data-generator"
 import { OAuthBearerAuth } from "./services/oauth-bearer-auth"
 import { ObjectStorage } from "./services/object-storage"
 import { OAuthProviderRegistry } from "./services/oauth"
 import { HazelAuthInstance, HazelAuthRoutes, HazelAuthServicesLive } from "./services/hazel-auth"
+import { DevSignInRoutes } from "./routes/dev-sign-in.http"
 import { HazelSession } from "./services/hazel-session"
 import { WebhookBotService } from "./services/webhook-bot-service"
 import { BotGatewayService } from "./services/bot-gateway-service"
 import { ChannelAccessSyncService } from "./services/channel-access-sync"
-import { ConnectConversationService } from "./services/connect-conversation-service"
 import { OrgResolver } from "./services/org-resolver"
+import { ChannelViewers } from "./services/channel-viewers"
 
 export { HazelApi }
 
@@ -99,42 +96,50 @@ const DocsRoute = HttpApiScalar.layer(HazelApi, {
 	path: "/docs",
 })
 
-// HTTP RPC endpoint
-const RpcRoute = RpcServer.layerHttp({
-	group: AllRpcs,
-	path: "/rpc",
-	protocol: "http",
-}).pipe(Layer.provide(RpcSerialization.layerNdjson), Layer.provide(RpcServerLive))
-
-export const AllRoutes = Layer.mergeAll(
-	HttpApiRoutes,
-	HealthRouter,
-	DocsRoute,
-	RpcRoute,
-	HazelAuthRoutes,
-).pipe(
-	Layer.provide(
-		HttpRouter.cors({
-			allowedOrigins: [
-				"http://localhost:3000",
-				"http://localhost:3100",
-				"http://localhost:5173",
-				"https://app.hazel.sh",
-				"tauri://localhost",
-				"http://tauri.localhost",
-			],
-			allowedMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-			credentials: true,
-		}),
-	),
-	// RpcServer and HttpApiBuilder report failed requests here; server failures get logged.
-	Layer.provide(ServerFailureReporterLive),
-)
+/**
+ * The routes, with the RPC endpoint served by `rpcServer` (the api Worker's router into the
+ * objects, `RoutedRpcServerLive`; typed by the in-process `RpcServerLive`). `extra` routes join
+ * the same CORS and failure reporting (the Worker's `/sync` upgrade).
+ */
+export const makeRoutes = <E, R, EX = never, RX = never>(
+	rpcServer: Layer.Layer<Layer.Success<typeof RpcServerLive>, E, R>,
+	extra: Layer.Layer<never, EX, RX> = Layer.empty as Layer.Layer<never, EX, RX>,
+) =>
+	Layer.mergeAll(
+		HttpApiRoutes,
+		HealthRouter,
+		DocsRoute,
+		// A server per request, never one shared across requests (`./rpc/per-request.ts`).
+		layerRpcHttpPerRequest("/rpc").pipe(
+			Layer.provide(RpcSerialization.layerNdjson),
+			Layer.provide(rpcServer),
+		),
+		HazelAuthRoutes,
+		DevSignInRoutes,
+		extra,
+	).pipe(
+		Layer.provide(
+			HttpRouter.cors({
+				allowedOrigins: [
+					"http://localhost:3000",
+					"http://localhost:3100",
+					"http://localhost:5173",
+					"https://app.hazel.sh",
+					"tauri://localhost",
+					"http://tauri.localhost",
+				],
+				allowedMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+				credentials: true,
+			}),
+		),
+		// RpcServer and HttpApiBuilder report failed requests here; server failures get logged.
+		Layer.provide(ServerFailureReporterLive),
+	)
 
 /**
  * Hazel's own sign-in: the configured instance, its auth services, and the session lookup
- * the RPC and HttpApi middleware use. Inert until `AUTH_GITHUB_CLIENT_ID` is set. Needs
- * `AuthSqlConnection` (and `AuthSqlDirect` on Workers) from the entry point.
+ * the RPC and HttpApi middleware use. Inert until `AUTH_GITHUB_CLIENT_ID` is set. Needs the
+ * directory's `SqlClient` from the entry point.
  */
 export const HazelAuthLive = HazelSession.layer.pipe(
 	Layer.provideMerge(HazelAuthServicesLive),
@@ -162,7 +167,6 @@ export const RepoLive = Layer.mergeAll(
 	NotificationRepo.layer,
 	TypingIndicatorRepo.layer,
 	MessageReactionRepo.layer,
-	MessageOutboxRepo.layer,
 	UserPresenceStatusRepo.layer,
 	IntegrationConnectionRepo.layer,
 	IntegrationTokenRepo.layer,
@@ -178,6 +182,7 @@ export const RepoLive = Layer.mergeAll(
 
 export const PolicyLive = Layer.mergeAll(
 	OrgResolver.layer,
+	ChannelViewers.layer,
 	OrganizationPolicy.layer,
 	ChannelPolicy.layer,
 	ChannelSectionPolicy.layer,
@@ -207,7 +212,6 @@ export const PolicyLive = Layer.mergeAll(
 export const AppServicesLive = Layer.mergeAll(
 	RepoLive,
 	PolicyLive,
-	MockDataGenerator.layer,
 	ObjectStorage.layer,
 	GitHub.GitHubAppJWTService.layer,
 	GitHub.GitHubApiClient.layer,
@@ -215,12 +219,9 @@ export const AppServicesLive = Layer.mergeAll(
 	OAuthProviderRegistry.layer,
 	IntegrationBotService.layer,
 	ChatSyncAttributionReconciler.layer,
-	DiscordSyncWorkerLayer,
-	MessageSideEffectService.layer,
 	BotGatewayService.layer,
 	WebhookBotService.layer,
 	ChannelAccessSyncService.layer,
-	ConnectConversationService.layer,
 	Invitations.layer,
 	OAuthBearerAuth.layer,
 ).pipe(Layer.provideMerge(FetchHttpClient.layer))

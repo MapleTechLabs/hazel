@@ -60,7 +60,7 @@ import { ScopeInjectionMiddleware } from "@hazel/domain/rpc"
  * 1. Define RPC groups (in ./groups/*.ts) - API schema definitions
  * 2. Implement handlers (in ./handlers/*.ts) - Business logic
  * 3. Combine into server layer (here) - Server setup
- * 4. Add HTTP protocol (in index.ts) - Transport layer
+ * 4. Add HTTP protocol (in worker/http.ts) - Transport layer
  *
  */
 
@@ -125,7 +125,11 @@ for (const [name, group] of rpcGroups) {
 	}
 }
 
-export const RpcServerLive = Layer.empty
+/**
+ * Every group's handlers, without the api middleware: what the objects and the api Worker's
+ * directory path run in process (`./dispatch.ts`). Still requires the app services.
+ */
+export const RpcHandlersLive = Layer.empty
 	.pipe(
 		Layer.provideMerge(MessageRpcLive),
 		Layer.provideMerge(MessageReactionRpcLive),
@@ -152,4 +156,9 @@ export const RpcServerLive = Layer.empty
 		Layer.provideMerge(CustomEmojiRpcLive),
 		Layer.provideMerge(InvitationRpcLive),
 	)
-	.pipe(Layer.provideMerge(AuthMiddlewareLive), Layer.provideMerge(ScopeInjectionMiddlewareLive))
+
+/** The handlers behind the api's own middleware, served in-process (tests). */
+export const RpcServerLive = RpcHandlersLive.pipe(
+	Layer.provideMerge(AuthMiddlewareLive),
+	Layer.provideMerge(ScopeInjectionMiddlewareLive),
+)

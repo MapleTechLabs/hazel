@@ -7,6 +7,7 @@ import { TransactionId } from "@hazel/schema"
 import { ChannelNotFoundError } from "./channels"
 import { AuthMiddleware } from "./middleware"
 import { RequiredScopes } from "../scopes/required-scopes"
+import { RouteOrganizationId } from "./routing-fields"
 
 /**
  * Response schema for webhook operations.
@@ -119,6 +120,7 @@ export class ChannelWebhookRpcs extends RpcGroup.make(
 	 */
 	Rpc.make("channelWebhook.update", {
 		payload: Schema.Struct({
+			organizationId: RouteOrganizationId,
 			id: ChannelWebhookId,
 			name: Schema.optional(Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(100))),
 			description: Schema.optional(Schema.NullOr(Schema.String.check(Schema.isMaxLength(500)))),
@@ -143,7 +145,7 @@ export class ChannelWebhookRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user is not org admin
 	 */
 	Rpc.make("channelWebhook.regenerateToken", {
-		payload: Schema.Struct({ id: ChannelWebhookId }),
+		payload: Schema.Struct({ id: ChannelWebhookId, organizationId: RouteOrganizationId }),
 		success: ChannelWebhookCreatedResponse,
 		error: Schema.Union([ChannelWebhookNotFoundError, UnauthorizedError, InternalServerError]),
 	})
@@ -161,7 +163,7 @@ export class ChannelWebhookRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user is not org admin
 	 */
 	Rpc.make("channelWebhook.delete", {
-		payload: Schema.Struct({ id: ChannelWebhookId }),
+		payload: Schema.Struct({ id: ChannelWebhookId, organizationId: RouteOrganizationId }),
 		success: Schema.Struct({ transactionId: TransactionId }),
 		error: Schema.Union([ChannelWebhookNotFoundError, UnauthorizedError, InternalServerError]),
 	})
@@ -178,7 +180,7 @@ export class ChannelWebhookRpcs extends RpcGroup.make(
 	 * @throws UnauthorizedError if user is not authenticated
 	 */
 	Rpc.make("channelWebhook.listByOrganization", {
-		payload: Schema.Struct({}),
+		payload: Schema.Struct({ organizationId: RouteOrganizationId }),
 		success: ChannelWebhookListResponse,
 		error: Schema.Union([UnauthorizedError, InternalServerError]),
 	})

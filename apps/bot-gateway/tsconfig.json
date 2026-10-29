@@ -10,7 +10,7 @@
 		"noEmit": true,
 		"skipLibCheck": true,
 		"strict": true,
-		"types": ["bun"],
+		"types": ["node", "@cloudflare/workers-types"],
 		"noFallthroughCasesInSwitch": true,
 		"noUncheckedSideEffectImports": true,
 		"plugins": [

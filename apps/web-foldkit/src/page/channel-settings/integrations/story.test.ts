@@ -181,7 +181,7 @@ describe("row removal", () => {
 			run,
 			given(confirming),
 			message(Message.ClickedConfirmRemove()),
-			Command.expectExact(RunRowAction({ kind: "webhook", id: ci.id, isEnabled: null })),
+			Command.expectExact(RunRowAction({ kind: "webhook", id: ci.id, channelId, isEnabled: null })),
 			model((current) => expect(current.remove.state._tag).toBe("Running")),
 			Command.resolve(
 				RunRowAction,
@@ -334,7 +334,12 @@ describe("provider cards", () => {
 			given(loaded),
 			message(Message.ClickedToggleProvider({ provider: "openstatus" })),
 			Command.expectExact(
-				RunProviderAction({ provider: "openstatus", webhookId: openStatus.id, isEnabled: false }),
+				RunProviderAction({
+					provider: "openstatus",
+					webhookId: openStatus.id,
+					channelId,
+					isEnabled: false,
+				}),
 			),
 			Command.resolve(
 				RunProviderAction,

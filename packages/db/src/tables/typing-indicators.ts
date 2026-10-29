@@ -1,20 +1,20 @@
 import { ChannelId, ChannelMemberId, TypingIndicatorId } from "@hazel/schema"
-import * as PG from "@maple-dev/effect-orm/postgres"
-import { uuid } from "./columns"
+import * as SQLite from "@maple-dev/effect-orm/sqlite"
+import { randomUuid, uuid } from "./columns"
 
-export const typingIndicatorsTable = PG.table("typing_indicators", {
+export const typingIndicatorsTable = SQLite.table("typing_indicators", {
 	columns: {
-		id: PG.column(uuid(TypingIndicatorId), { defaultExpr: "gen_random_uuid()" }),
+		id: SQLite.column(uuid(TypingIndicatorId), { defaultExpr: randomUuid }),
 		channelId: uuid(ChannelId),
 		memberId: uuid(ChannelMemberId),
-		lastTyped: PG.int8,
+		lastTyped: SQLite.integer,
 	},
 	primaryKey: ["id"],
 	indexes: [
-		PG.uniqueIndex("typing_indicators_channel_member_unique", ["channelId", "memberId"]),
-		PG.index("typing_indicators_channel_timestamp_idx", ["channelId", "lastTyped"]),
-		PG.index("typing_indicators_timestamp_idx", ["lastTyped"]),
+		SQLite.uniqueIndex("typing_indicators_channel_member_unique", ["channelId", "memberId"]),
+		SQLite.index("typing_indicators_channel_timestamp_idx", ["channelId", "lastTyped"]),
+		SQLite.index("typing_indicators_timestamp_idx", ["lastTyped"]),
 	],
 })
-export type TypingIndicator = PG.SelectRowOf<typeof typingIndicatorsTable>
-export type NewTypingIndicator = PG.InsertRowOf<typeof typingIndicatorsTable>
+export type TypingIndicator = SQLite.SelectRowOf<typeof typingIndicatorsTable>
+export type NewTypingIndicator = SQLite.InsertRowOf<typeof typingIndicatorsTable>

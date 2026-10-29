@@ -15,7 +15,7 @@ import { Effect, Option } from "effect"
 import { optionalString } from "../config-helpers.ts"
 
 /** The Workers that export through the Maple SDK (`hazelTelemetry`), by `service.name`. */
-export const HAZEL_TELEMETRY_SERVICES = ["api", "electric-proxy", "bot-gateway"] as const
+export const HAZEL_TELEMETRY_SERVICES = ["api", "bot-gateway"] as const
 
 const PRODUCTION = `deployment.environment = "production"`
 
@@ -121,7 +121,7 @@ const chart = (options: {
 const servicesDashboard = Maple.Dashboard("services", {
 	name: "Hazel services",
 	description:
-		"Production golden signals of the Hazel Workers (api, electric-proxy, bot-gateway) over root spans. Managed by alchemy.run.ts: edits in the UI are overwritten on deploy.",
+		"Production golden signals of the Hazel Workers (api, bot-gateway) over root spans. Managed by alchemy.run.ts: edits in the UI are overwritten on deploy.",
 	tags: ["hazel"],
 	time_range: { type: "relative", value: "12h" },
 	widgets: [

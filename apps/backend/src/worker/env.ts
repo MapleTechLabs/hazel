@@ -4,6 +4,7 @@
  * Worker secrets. Read from the Worker's props only, never from its init.
  */
 import type { HazelStackContext } from "@hazel/infra/cloudflare"
+import { Config } from "effect"
 import {
 	derived,
 	merge,
@@ -19,6 +20,8 @@ export const apiEnv = ({ stage, urls }: HazelStackContext) =>
 	merge(
 		telemetryEnv(stage),
 		derived("IS_DEV", stage.kind === "dev" ? "true" : "false"),
+		// `prd` | `pr` | `dev`: gates the routes that must never run on prd (`lib/stage.ts`).
+		derived("HAZEL_STAGE", stage.kind),
 		derived("API_BASE_URL", urls.api),
 		derived("FRONTEND_URL", urls.web),
 		optionalPlain("COOKIE_DOMAIN"),
@@ -41,6 +44,9 @@ export const apiEnv = ({ stage, urls }: HazelStackContext) =>
 		optionalSecret("AUTH_ACCESS_TOKEN_PRIVATE_JWK"),
 		optionalPlain("AUTH_PASSKEY_RP_ID"),
 		optionalPlain("AUTH_TRUSTED_ORIGINS"),
+		// `POST /internal/dev/sign-in` (routes/dev-sign-in.http.ts): signs in as any email, so it
+		// is never passed to prd. Also enables sign-in on a stage without a GitHub app.
+		stage.kind === "prd" ? Config.succeed({}) : optionalSecret("DEV_SIGNIN_SECRET"),
 
 		// Uploads: presigned against the bucket's S3 API (R2)
 		requirePlainEntry("S3_BUCKET"),
@@ -49,11 +55,6 @@ export const apiEnv = ({ stage, urls }: HazelStackContext) =>
 		optionalPlain("S3_PUBLIC_URL"),
 		requireSecretEntry("S3_ACCESS_KEY_ID"),
 		requireSecretEntry("S3_SECRET_ACCESS_KEY"),
-
-		// Workflows run on the Railway-hosted cluster (infra/cloudflare-migration-plan.md, Phase 5)
-		requirePlainEntry("CLUSTER_URL"),
-		// Sent by `makeClusterClient`; the cluster rejects workflow calls without it once set.
-		optionalSecret("CLUSTER_API_SECRET"),
 
 		// Integrations
 		requireSecretEntry("INTEGRATION_ENCRYPTION_KEY"),
@@ -65,8 +66,7 @@ export const apiEnv = ({ stage, urls }: HazelStackContext) =>
 		optionalPlain("DISCORD_CLIENT_ID"),
 		optionalSecret("DISCORD_CLIENT_SECRET"),
 		optionalSecret("DISCORD_BOT_TOKEN"),
-		// Off until cutover: the Railway backend still holds the gateway session, and Discord
-		// allows one per bot token.
+		// Discord allows one gateway session per bot token: enable it on one stage only.
 		plainWithDefault("DISCORD_GATEWAY_ENABLED", "false"),
 		optionalPlain("DISCORD_GATEWAY_INTENTS"),
 		optionalPlain("GITHUB_APP_ID"),
@@ -76,4 +76,10 @@ export const apiEnv = ({ stage, urls }: HazelStackContext) =>
 		optionalPlain("GITHUB_WEBHOOK_SKIP_SIGNATURE"),
 		optionalSecret("INTERNAL_SECRET"),
 		optionalSecret("KLIPY_API_KEY"),
+		// The one-shot Postgres import route (`worker/import-route.ts`); unset turns it off. On prd it
+		// also needs `IMPORT_ENABLED=true`: both are set only for the import deploy, never in CI.
+		optionalSecret("IMPORT_SECRET"),
+		optionalPlain("IMPORT_ENABLED"),
+		// Thread naming (services/thread-namer.ts); unset disables it.
+		optionalSecret("OPENROUTER_API_KEY"),
 	)

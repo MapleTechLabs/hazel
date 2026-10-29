@@ -1,32 +1,32 @@
 import { InvitationId, OrganizationId, UserId } from "@hazel/schema"
-import * as PG from "@maple-dev/effect-orm/postgres"
-import { timestamptz, typed, uuid, varchar } from "./columns"
+import * as SQLite from "@maple-dev/effect-orm/sqlite"
+import { randomUuid, timestamptz, typed, uuid, varchar } from "./columns"
 import { organizationRoleEnum } from "./organizations"
 
 /** Email links contain a random token; only its hash is stored. */
-export const organizationInvitationsTable = PG.table("organization_invitations", {
+export const organizationInvitationsTable = SQLite.table("organization_invitations", {
 	columns: {
-		id: PG.column(uuid(InvitationId), { defaultExpr: "gen_random_uuid()" }),
+		id: SQLite.column(uuid(InvitationId), { defaultExpr: randomUuid }),
 		organizationId: uuid(OrganizationId),
 		email: varchar(320),
-		role: PG.column(organizationRoleEnum, { default: "member" }),
-		tokenHash: PG.text,
+		role: SQLite.column(organizationRoleEnum, { default: "member" }),
+		tokenHash: SQLite.text,
 		invitedBy: uuid(UserId),
-		status: PG.column(typed<"pending" | "accepted" | "revoked">()(varchar(16)), { default: "pending" }),
+		status: SQLite.column(typed<"pending" | "accepted" | "revoked">()(varchar(16)), {
+			default: "pending",
+		}),
 		expiresAt: timestamptz,
-		acceptedBy: PG.nullable(uuid(UserId)),
-		acceptedAt: PG.nullable(timestamptz),
-		createdAt: PG.column(timestamptz, { defaultExpr: "now()" }),
-		updatedAt: PG.nullable(timestamptz),
+		acceptedBy: SQLite.nullable(uuid(UserId)),
+		acceptedAt: SQLite.nullable(timestamptz),
+		createdAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		updatedAt: SQLite.nullable(timestamptz),
 	},
 	primaryKey: ["id"],
 	indexes: [
-		PG.uniqueIndex("organization_invitations_token_hash_idx", ["tokenHash"]),
-		PG.uniqueIndex("organization_invitations_pending_email_idx", ["organizationId", "email"], {
-			where: "\"status\" = 'pending'",
-		}),
-		PG.index("organization_invitations_organization_id_idx", ["organizationId"]),
+		SQLite.uniqueIndex("organization_invitations_token_hash_idx", ["tokenHash"]),
+
+		SQLite.index("organization_invitations_organization_id_idx", ["organizationId"]),
 	],
 })
-export type OrganizationInvitation = PG.SelectRowOf<typeof organizationInvitationsTable>
-export type NewOrganizationInvitation = PG.InsertRowOf<typeof organizationInvitationsTable>
+export type OrganizationInvitation = SQLite.SelectRowOf<typeof organizationInvitationsTable>
+export type NewOrganizationInvitation = SQLite.InsertRowOf<typeof organizationInvitationsTable>

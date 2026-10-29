@@ -1,9 +1,11 @@
 {
 	"include": ["**/*.ts", "**/*.tsx"],
+	"exclude": ["node_modules", "test/workerd"],
 	"compilerOptions": {
 		"target": "ES2022",
 		"module": "ESNext",
 		"lib": ["ES2022", "DOM", "DOM.Iterable"],
+		"types": ["node"],
 
 		/* Bundler mode */
 		"moduleResolution": "bundler",

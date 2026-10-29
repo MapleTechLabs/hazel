@@ -1,5 +1,5 @@
 import { ChannelId, MessageId, type NotificationId, type UserId } from "@hazel/schema"
-import { Clock, Context, Effect, Layer, Option, Schema, Stream } from "effect"
+import { Clock, Context, Duration, Effect, Layer, Option, Schema, Stream } from "effect"
 import {
 	channelCollection,
 	messageCollection,
@@ -93,28 +93,56 @@ export const wireNotificationSinks = ({
 const decodeMessageId = Schema.decodeUnknownOption(MessageId)
 const decodeChannelId = Schema.decodeUnknownOption(ChannelId)
 
-/** The provider's `recentNotifications` effect: oldest first, with the rows the sinks describe. */
-export const deliverNotifications = (ids: ReadonlyArray<NotificationId>) =>
-	Effect.flatMap(Clock.currentTimeMillis, (receivedAtMs) =>
-		Effect.sync(() => {
-			const events = ids.flatMap((id): ReadonlyArray<NotificationEvent> => {
-				const notification = notificationCollection.state.get(id)
-				if (notification === undefined) return []
-				const message = Option.getOrUndefined(
-					Option.flatMapNullishOr(decodeMessageId(notification.resourceId), (id) =>
-						messageCollection.state.get(id),
-					),
-				)
-				const author = message?.authorId ? userCollection.state.get(message.authorId) : undefined
-				const channel = Option.getOrUndefined(
-					Option.flatMapNullishOr(decodeChannelId(notification.targetedResourceId), (id) =>
-						channelCollection.state.get(id),
-					),
-				)
-				return [
-					{ id: notification.id, notification, message, author, channel, receivedAt: receivedAtMs },
-				]
-			})
-			notificationOrchestrator.enqueue([...events].reverse())
+/** How long a new notification waits for its channel's messages before it is described without them. */
+const CHANNEL_LOAD_TIMEOUT = Duration.seconds(3)
+
+/**
+ * Opens the notifications' channels (messages sync per channel) until their snapshots are in, or
+ * the timeout passes; a refused channel just leaves its message undescribed.
+ */
+const loadNotificationChannels = (ids: ReadonlyArray<NotificationId>) => {
+	const channelIds = new Set<ChannelId>()
+	for (const id of ids) {
+		const notification = notificationCollection.state.get(id)
+		if (notification?.targetedResourceType !== "channel") continue
+		Option.map(decodeChannelId(notification.targetedResourceId), (channelId) => channelIds.add(channelId))
+	}
+	return messageCollection.utils.ensureChannels(channelIds).pipe(
+		Effect.timeoutOption(CHANNEL_LOAD_TIMEOUT),
+		Effect.asVoid,
+		Effect.catchTags({
+			SyncSourceForbiddenError: () => Effect.void,
+			SyncSourceNotFoundError: () => Effect.void,
 		}),
 	)
+}
+
+/** The provider's `recentNotifications` effect: oldest first, with the rows the sinks describe. */
+export const deliverNotifications = (ids: ReadonlyArray<NotificationId>) =>
+	Effect.scoped(
+		loadNotificationChannels(ids).pipe(
+			Effect.andThen(Clock.currentTimeMillis),
+			Effect.flatMap(describe(ids)),
+		),
+	)
+
+const describe = (ids: ReadonlyArray<NotificationId>) => (receivedAtMs: number) =>
+	Effect.sync(() => {
+		const events = ids.flatMap((id): ReadonlyArray<NotificationEvent> => {
+			const notification = notificationCollection.state.get(id)
+			if (notification === undefined) return []
+			const message = Option.getOrUndefined(
+				Option.flatMapNullishOr(decodeMessageId(notification.resourceId), (id) =>
+					messageCollection.state.get(id),
+				),
+			)
+			const author = message?.authorId ? userCollection.state.get(message.authorId) : undefined
+			const channel = Option.getOrUndefined(
+				Option.flatMapNullishOr(decodeChannelId(notification.targetedResourceId), (id) =>
+					channelCollection.state.get(id),
+				),
+			)
+			return [{ id: notification.id, notification, message, author, channel, receivedAt: receivedAtMs }]
+		})
+		notificationOrchestrator.enqueue([...events].reverse())
+	})

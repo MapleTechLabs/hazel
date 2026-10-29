@@ -2,7 +2,7 @@
 import { routeOfPath } from "../../../../route"
 import * as Scene from "foldkit/scene"
 import { describe, test } from "vitest"
-import { makeShared, pageScene } from "../../../../test/pages-fixtures"
+import { makeShared, organizationId, pageScene } from "../../../../test/pages-fixtures"
 import { bot, botId } from "../../../../test/pages-integrations-fixtures"
 import { PageOutMessage } from "../../../out-message"
 import { reasonToast, successToast } from "../../../../data/actions"
@@ -48,7 +48,7 @@ describe("installed apps", () => {
 			Scene.given({ ...initial, bots: [bot] }),
 			Scene.expect(Scene.text("Deploy Bot")).toExist(),
 			Scene.click(Scene.role("button", { name: "Uninstall" })),
-			Scene.Command.expectExact(UninstallBot({ botId })),
+			Scene.Command.expectExact(UninstallBot({ botId, organizationId })),
 			Scene.Command.resolve(UninstallBot, Message.SucceededUninstallBot({ botId: bot.id })),
 			Scene.expectOutMessage(
 				PageOutMessage.RequestedToast({
@@ -80,7 +80,7 @@ describe("installed apps", () => {
 			config,
 			Scene.given({ ...initial, bots: [bot] }),
 			Scene.click(Scene.role("button", { name: "Uninstall" })),
-			Scene.Command.expectExact(UninstallBot({ botId: bot.id })),
+			Scene.Command.expectExact(UninstallBot({ botId: bot.id, organizationId })),
 			Scene.expect(Scene.role("button", { name: "Uninstall" })).toBeEnabled(),
 			Scene.Command.resolve(UninstallBot, Message.SucceededUninstallBot({ botId: bot.id })),
 		)

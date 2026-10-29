@@ -10,16 +10,6 @@ export default defineConfig({
 	platform: "node",
 	treeshake: true,
 	noExternal: [/^@hazel\//],
-	external: [
-		"effect",
-		/^@effect\//,
-		"@electric-sql/client",
-		"jose",
-		/^rivetkit/,
-		"react",
-		"@linear/sdk",
-		"he",
-		"rss-parser",
-	],
+	external: ["effect", /^@effect\//, "react", "@linear/sdk", "he", "rss-parser"],
 	sourcemap: true,
 })

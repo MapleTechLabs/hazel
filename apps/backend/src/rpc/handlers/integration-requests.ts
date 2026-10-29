@@ -1,4 +1,4 @@
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import { CurrentUser, ErrorUtils, withRemapDbErrors } from "@hazel/domain"
 import { IntegrationRequestResponse, IntegrationRequestRpcs } from "@hazel/domain/rpc"
 import { Effect } from "effect"
@@ -9,7 +9,7 @@ import { OrgResolver } from "../../services/org-resolver"
 /**
  * Integration Request RPC Handlers
  *
- * Simple handler for creating integration requests.
+ * Simple handler for creating integration requests. Runs in the `OrgObject` (`rpc/routing.ts`).
  */
 export const IntegrationRequestRpcLive = IntegrationRequestRpcs.toLayer(
 	Effect.gen(function* () {
@@ -39,7 +39,7 @@ export const IntegrationRequestRpcLive = IntegrationRequestRpcs.toLayer(
 
 							// Direct database insert
 							const [result] = yield* db.run(
-								PG.insertInto(schema.integrationRequestsTable)
+								SQLite.insertInto(schema.integrationRequestsTable)
 									.values({
 										organizationId: payload.organizationId,
 										requestedBy: currentUser.id,

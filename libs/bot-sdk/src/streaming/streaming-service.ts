@@ -12,7 +12,8 @@
 
 import type { ChannelId, MessageId } from "@hazel/schema"
 import { Effect, Ref, Stream } from "effect"
-import type { ActorsClientService, MessageActor } from "./actors-client.ts"
+import type { LiveAction } from "@hazel/domain/live"
+import type { LiveStateClientService } from "./live-state-client.ts"
 import { ActorOperationError, MessageCreateError, StreamProcessingError } from "./errors.ts"
 import type {
 	AIContentChunk,
@@ -51,166 +52,64 @@ export type MessageCreateFn = (
 			  }[]
 			| null
 	},
-) => Effect.Effect<{ id: string }, unknown, unknown>
+) => Effect.Effect<{ id: string; channelId?: string }, unknown, unknown>
 
 /**
- * Message update function type - matches the message update API
+ * A StreamSession over one message's live state. `complete` and `fail` also make the live object
+ * save the final snapshot into the message (unless `persistOnComplete: false`).
  */
-export type MessageUpdateFn = (
+const createSession = (
 	messageId: MessageId,
-	payload: {
-		readonly content?: string
-		readonly embeds?: ReadonlyArray<{
-			readonly liveState?: {
-				readonly enabled: true
-				readonly cached?: {
-					readonly status: "idle" | "active" | "completed" | "failed"
-					readonly data: Record<string, unknown>
-					readonly text?: string
-					readonly progress?: number
-					readonly error?: string
-				}
-			}
-		}> | null
-	},
-) => Effect.Effect<{ id: string }, unknown, unknown>
-
-/**
- * Wrap an actor method call with Effect, error handling, and tracing.
- * Uses Effect.fn for automatic span creation.
- */
-const wrapActorCall = Effect.fn("StreamSession.actorCall")(function* <T>(
-	operation: string,
-	fn: () => Promise<T> | T,
-) {
-	yield* Effect.annotateCurrentSpan("operation", operation)
-	return (yield* Effect.tryPromise({
-		try: () => Promise.resolve(fn()),
-		catch: (error) =>
-			new ActorOperationError({
-				operation,
-				message: `Actor operation failed: ${operation}`,
-				cause: error,
-			}),
-	})) as Awaited<T>
-})
-
-/**
- * Options for creating a session from an actor
- */
-interface CreateSessionFromActorOptions {
-	readonly updateMessage?: MessageUpdateFn
-	readonly persistOnComplete?: boolean
+	channelId: ChannelId,
+	live: LiveStateClientService,
+	options: { readonly persistOnComplete?: boolean } = {},
+): StreamSession => {
+	const write = (action: LiveAction) => live.write(messageId, channelId, action)
+	const stepIdOf = (action: LiveAction) =>
+		write(action).pipe(
+			Effect.flatMap((result) =>
+				result.stepId === null
+					? Effect.fail(
+							new ActorOperationError({
+								operation: action._tag,
+								message: `Live state operation returned no step: ${action._tag}`,
+								cause: null,
+							}),
+						)
+					: Effect.succeed(result.stepId),
+			),
+		)
+	return {
+		messageId,
+		appendText: (text) => Effect.asVoid(write({ _tag: "AppendText", text })),
+		setText: (text) => Effect.asVoid(write({ _tag: "SetText", text })),
+		setProgress: (progress) => Effect.asVoid(write({ _tag: "SetProgress", progress })),
+		setData: (data) => Effect.asVoid(write({ _tag: "SetData", data })),
+		startThinking: () => stepIdOf({ _tag: "StartThinking" }),
+		startToolCall: (toolName, toolInput) => stepIdOf({ _tag: "StartToolCall", toolName, toolInput }),
+		updateStepContent: (stepId, content, append = false) =>
+			Effect.asVoid(write({ _tag: "UpdateStepContent", stepId, content, append })),
+		completeStep: (stepId, result) =>
+			Effect.asVoid(
+				write({
+					_tag: "CompleteStep",
+					stepId,
+					...(result?.output === undefined ? {} : { output: result.output }),
+					...(result?.error === undefined ? {} : { error: result.error }),
+				}),
+			),
+		complete: (finalData) =>
+			Effect.asVoid(
+				write({
+					_tag: "Complete",
+					...(finalData === undefined ? {} : { data: finalData }),
+					...(options.persistOnComplete === false ? { persist: false } : {}),
+				}),
+			),
+		// A failure is always saved, so it survives a page refresh.
+		fail: (error) => Effect.asVoid(write({ _tag: "Fail", error })),
+	}
 }
-
-/**
- * Create a StreamSession object from a message actor
- */
-const createSessionFromActor = (
-	messageId: MessageId,
-	actor: MessageActor,
-	options: CreateSessionFromActorOptions = {},
-): StreamSession => ({
-	messageId,
-
-	appendText: (text: string) => wrapActorCall("appendText", () => actor.appendText(text)),
-
-	setText: (text: string) => wrapActorCall("setText", () => actor.setText(text)),
-
-	setProgress: (progress: number) => wrapActorCall("setProgress", () => actor.setProgress(progress)),
-
-	setData: (data: Record<string, unknown>) => wrapActorCall("setData", () => actor.setData(data)),
-
-	startThinking: () => wrapActorCall("startThinking", () => actor.startThinking()),
-
-	startToolCall: (name: string, input: Record<string, unknown>) =>
-		wrapActorCall("startToolCall", () => actor.startToolCall(name, input)),
-
-	updateStepContent: (stepId: string, content: string, append = false) =>
-		wrapActorCall("updateStepContent", () => actor.updateStepContent(stepId, content, append)),
-
-	completeStep: (stepId: string, result?: { output?: unknown; error?: string }) =>
-		wrapActorCall("completeStep", () => actor.completeStep(stepId, result)),
-
-	complete: (finalData?: Record<string, unknown>) =>
-		Effect.gen(function* () {
-			// Complete the actor state
-			yield* wrapActorCall("complete", () => actor.complete(finalData))
-
-			// Persist to database if enabled (default: true)
-			if (options.persistOnComplete !== false && options.updateMessage) {
-				// Get final state from actor
-				const finalState = yield* wrapActorCall("getState", () => actor.getState())
-
-				// Build cached state for the embed
-				const cached = {
-					status: finalState.status,
-					data: finalState.data,
-					text: finalState.text || undefined,
-					progress: finalState.progress ?? undefined,
-					error: finalState.error ?? undefined,
-					steps: finalState.steps.length > 0 ? finalState.steps : undefined,
-				}
-
-				// Update message with final content and cached state
-				// Note: Using catchAll here is intentional since updateMessage has error type `unknown`
-				// and we want to gracefully log and continue if persistence fails
-				yield* options
-					.updateMessage(messageId, {
-						content: finalState.text || undefined,
-						embeds: [{ liveState: { enabled: true, cached } }],
-					})
-					.pipe(
-						Effect.catch((error) =>
-							Effect.logWarning("Failed to persist streaming message to database", {
-								messageId,
-								error: String(error),
-								errorType: error instanceof Error ? error.name : typeof error,
-							}),
-						),
-					)
-			}
-
-			// Stop streaming
-			yield* wrapActorCall("stopStreaming", () => actor.stopStreaming())
-		}),
-
-	fail: (error: string) =>
-		Effect.gen(function* () {
-			// Fail the actor state (updates state + broadcasts to connected clients)
-			yield* wrapActorCall("fail", () => actor.fail(error))
-
-			// Persist failed state to database so it survives page refresh
-			if (options.updateMessage) {
-				const finalState = yield* wrapActorCall("getState", () => actor.getState())
-
-				const cached = {
-					status: finalState.status,
-					data: finalState.data,
-					text: finalState.text || undefined,
-					progress: finalState.progress ?? undefined,
-					error: finalState.error ?? undefined,
-					steps: finalState.steps.length > 0 ? finalState.steps : undefined,
-				}
-
-				yield* options
-					.updateMessage(messageId, {
-						content: finalState.text || undefined,
-						embeds: [{ liveState: { enabled: true, cached } }],
-					})
-					.pipe(
-						Effect.catch((persistError) =>
-							Effect.logWarning("Failed to persist failed streaming state to database", {
-								messageId,
-								error: String(persistError),
-								errorType:
-									persistError instanceof Error ? persistError.name : typeof persistError,
-							}),
-						),
-					)
-			}
-		}),
-})
 
 /**
  * Internal function to create a stream session with injected dependencies.
@@ -220,8 +119,7 @@ const createSessionFromActor = (
  */
 export const createStreamSessionInternal = Effect.fn("StreamSession.create")(function* (
 	createMessage: MessageCreateFn,
-	updateMessage: MessageUpdateFn | undefined,
-	actorsClient: ActorsClientService,
+	live: LiveStateClientService,
 	channelId: ChannelId,
 	options: CreateStreamOptions & { loading?: LoadingState } = {},
 ) {
@@ -245,17 +143,11 @@ export const createStreamSessionInternal = Effect.fn("StreamSession.create")(fun
 
 	yield* Effect.annotateCurrentSpan("messageId", message.id)
 
-	// Get the actor for this message
-	const actor = yield* actorsClient.getMessageActor(message.id)
-
-	// Start the actor with initial data
-	yield* wrapActorCall("start", () => actor.start(options.initialData ?? {}))
-
-	// Return the session interface
-	return createSessionFromActor(message.id as MessageId, actor, {
-		updateMessage,
-		persistOnComplete: options.persistOnComplete,
-	})
+	// The live object checks the message against the channel it was created in.
+	const messageId = message.id as MessageId
+	const messageChannelId = (message.channelId ?? channelId) as ChannelId
+	yield* live.write(messageId, messageChannelId, { _tag: "Start", data: options.initialData ?? {} })
+	return createSession(messageId, messageChannelId, live, { persistOnComplete: options.persistOnComplete })
 })
 
 /**
@@ -266,8 +158,7 @@ export const createStreamSessionInternal = Effect.fn("StreamSession.create")(fun
  */
 export const createAIStreamSessionInternal = Effect.fn("AIStreamSession.create")(function* (
 	createMessage: MessageCreateFn,
-	updateMessage: MessageUpdateFn | undefined,
-	actorsClient: ActorsClientService,
+	live: LiveStateClientService,
 	channelId: ChannelId,
 	options: AIStreamOptions = {},
 ) {
@@ -280,17 +171,11 @@ export const createAIStreamSessionInternal = Effect.fn("AIStreamSession.create")
 	}
 
 	// Create base session with enriched initial data and loading configuration
-	const baseSession = yield* createStreamSessionInternal(
-		createMessage,
-		updateMessage,
-		actorsClient,
-		channelId,
-		{
-			...options,
-			initialData,
-			loading: options.loading,
-		},
-	)
+	const baseSession = yield* createStreamSessionInternal(createMessage, live, channelId, {
+		...options,
+		initialData,
+		loading: options.loading,
+	})
 
 	// Track active thinking/tool steps by their chunk IDs
 	const activeStepsRef = yield* Ref.make<Map<string, string>>(new Map())

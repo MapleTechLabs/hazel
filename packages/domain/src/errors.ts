@@ -162,6 +162,21 @@ export class MessageNotFoundError extends Schema.TaggedError<MessageNotFoundErro
 ) {}
 
 /**
+ * A live-state write would grow the message's live state past what one reply may hold. Nothing was
+ * applied; finish the reply (or replace its text) instead of appending more.
+ */
+export class LiveStateTooLargeError extends Schema.TaggedError<LiveStateTooLargeError>(
+	"LiveStateTooLargeError",
+)(
+	"LiveStateTooLargeError",
+	{
+		messageId: MessageId,
+		limitBytes: Schema.Number,
+	},
+	{ httpApiStatus: 413 },
+) {}
+
+/**
  * Error thrown when attempting to create a thread within a thread.
  * Nested threads are not supported.
  */
@@ -175,7 +190,7 @@ export class NestedThreadError extends Schema.TaggedError<NestedThreadError>("Ne
 
 /**
  * Error thrown when the workflow service is unreachable or unavailable.
- * Used when the cluster service cannot be contacted.
+ * Used when a background service (thread naming, webhooks) cannot be reached.
  */
 export class WorkflowServiceUnavailableError extends Schema.TaggedError<WorkflowServiceUnavailableError>(
 	"WorkflowServiceUnavailableError",
@@ -260,8 +275,7 @@ export * from "./session-errors"
 // Re-export desktop auth errors for frontend convenience
 export * from "./desktop-auth-errors"
 
-// Re-export thread naming workflow errors for frontend error handling
-// These are plain Schema.TaggedError classes that don't depend on @effect/cluster
+// Thread naming errors, for frontend error handling
 export {
 	AIProviderUnavailableError,
 	AIRateLimitError,
@@ -271,4 +285,4 @@ export {
 	ThreadContextQueryError,
 	ThreadNameUpdateError,
 	ThreadNamingWorkflowError,
-} from "./cluster/activities/thread-naming-activities"
+} from "./thread-naming-errors"

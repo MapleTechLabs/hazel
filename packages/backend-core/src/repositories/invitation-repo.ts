@@ -1,4 +1,4 @@
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import type { InvitationId, OrganizationId, UserId } from "@hazel/schema"
 import { Context, Effect, Layer } from "effect"
 
@@ -18,7 +18,7 @@ export class InvitationRepo extends Context.Service<InvitationRepo>()("Invitatio
 		const upsertPending = (data: NewInvitation) =>
 			db
 				.run(
-					PG.insertInto(table)
+					SQLite.insertInto(table)
 						.values({ ...data, status: "pending" })
 						.onConflictDoUpdate({
 							target: ["organizationId", "email"],
@@ -36,7 +36,7 @@ export class InvitationRepo extends Context.Service<InvitationRepo>()("Invitatio
 				.pipe(Effect.map((rows) => rows[0]!))
 		const listPending = (organizationId: OrganizationId, now: Date) =>
 			db.run(
-				PG.from(table)
+				SQLite.from(table)
 					.select()
 					.where(($) => [
 						$.organizationId.eq(organizationId),
@@ -47,21 +47,21 @@ export class InvitationRepo extends Context.Service<InvitationRepo>()("Invitatio
 			)
 		const findById = (id: InvitationId) =>
 			db.first(
-				PG.from(table)
+				SQLite.from(table)
 					.select()
 					.where(($) => [$.id.eq(id)])
 					.limit(1),
 			)
 		const findByTokenHash = (hash: string) =>
 			db.first(
-				PG.from(table)
+				SQLite.from(table)
 					.select()
 					.where(($) => [$.tokenHash.eq(hash)])
 					.limit(1),
 			)
 		const revoke = (id: InvitationId, expectedTokenHash?: string) =>
 			db.first(
-				PG.update(table)
+				SQLite.update(table)
 					.set({ status: "revoked", updatedAt: new Date() })
 					.where(($) => [
 						$.id.eq(id),
@@ -72,7 +72,7 @@ export class InvitationRepo extends Context.Service<InvitationRepo>()("Invitatio
 			)
 		const markAccepted = (id: InvitationId, userId: UserId, expectedTokenHash: string) =>
 			db.first(
-				PG.update(table)
+				SQLite.update(table)
 					.set({
 						status: "accepted",
 						acceptedBy: userId,
@@ -85,15 +85,15 @@ export class InvitationRepo extends Context.Service<InvitationRepo>()("Invitatio
 		const findMemberEmails = (organizationId: OrganizationId, emails: ReadonlyArray<string>) =>
 			db
 				.run(
-					PG.from(schema.organizationMembersTable, "members")
+					SQLite.from(schema.organizationMembersTable, "members")
 						.innerJoin(schema.usersTable, "users", (members, users) =>
 							users.id.eq(members.userId),
 						)
-						.select(($) => ({ email: PG.lower($.users.email) }))
+						.select(($) => ({ email: SQLite.lower($.users.email) }))
 						.where(($) => [
 							$.organizationId.eq(organizationId),
 							$.deletedAt.isNull(),
-							PG.inList(PG.lower($.users.email), [...emails]),
+							SQLite.inList(SQLite.lower($.users.email) as SQLite.Expr<string>, [...emails]),
 						]),
 				)
 				.pipe(Effect.map((rows) => new Set(rows.map((row) => row.email))))

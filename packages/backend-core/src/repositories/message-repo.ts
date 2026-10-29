@@ -1,4 +1,4 @@
-import { Database, PG, Repository, schema } from "@hazel/db"
+import { Database, SQLite, Repository, schema } from "@hazel/db"
 
 import type { ChannelId, ConnectConversationId, MessageId, OrganizationId, UserId } from "@hazel/schema"
 import { Message } from "@hazel/domain/models"
@@ -38,18 +38,22 @@ export class MessageRepo extends Context.Service<MessageRepo>()("MessageRepo", {
 		 */
 		const listByChannel = (params: ListByChannelParams) =>
 			db.run(
-				PG.from(schema.messagesTable)
+				SQLite.from(schema.messagesTable)
 					.select()
 					.where(($) => [
 						$.deletedAt.isNull(),
 						params.conversationId
 							? $.conversationId.eq(params.conversationId)
 							: $.channelId.eq(params.channelId),
-						PG.when(params.cursorBefore, (cursor) =>
-							$.createdAt.lt(cursor.createdAt).or($.createdAt.eq(cursor.createdAt).and($.id.lt(cursor.id))),
+						SQLite.when(params.cursorBefore, (cursor) =>
+							$.createdAt
+								.lt(cursor.createdAt)
+								.or($.createdAt.eq(cursor.createdAt).and($.id.lt(cursor.id))),
 						),
-						PG.when(params.cursorAfter, (cursor) =>
-							$.createdAt.gt(cursor.createdAt).or($.createdAt.eq(cursor.createdAt).and($.id.gt(cursor.id))),
+						SQLite.when(params.cursorAfter, (cursor) =>
+							$.createdAt
+								.gt(cursor.createdAt)
+								.or($.createdAt.eq(cursor.createdAt).and($.id.gt(cursor.id))),
 						),
 					])
 					.orderBy(["createdAt", "desc"], ["id", "desc"])
@@ -65,7 +69,7 @@ export class MessageRepo extends Context.Service<MessageRepo>()("MessageRepo", {
 			conversationId?: ConnectConversationId
 		}) =>
 			db.first(
-				PG.from(schema.messagesTable)
+				SQLite.from(schema.messagesTable)
 					.select()
 					.where(($) => [
 						$.id.eq(params.id),
@@ -75,16 +79,6 @@ export class MessageRepo extends Context.Service<MessageRepo>()("MessageRepo", {
 						$.deletedAt.isNull(),
 					])
 					.limit(1),
-			)
-
-		const backfillConversationIdForChannel = (channelId: ChannelId, conversationId: ConnectConversationId) =>
-			db.run(
-				PG.update(schema.messagesTable)
-					.set(($) => ({
-						conversationId,
-						updatedAt: PG.coalesce($.updatedAt, schema.now()),
-					}))
-					.where(($) => [$.channelId.eq(channelId), $.deletedAt.isNull(), $.conversationId.isNull()]),
 			)
 
 		/**
@@ -102,7 +96,7 @@ export class MessageRepo extends Context.Service<MessageRepo>()("MessageRepo", {
 					return 0
 				}
 
-				const externalLinkedMessageIds = PG.from(schema.chatSyncMessageLinksTable, "message_link")
+				const externalLinkedMessageIds = SQLite.from(schema.chatSyncMessageLinksTable, "message_link")
 					.innerJoin(schema.chatSyncChannelLinksTable, "channel_link", (link, channelLink) =>
 						channelLink.id.eq(link.channelLinkId).and(channelLink.deletedAt.isNull()),
 					)
@@ -119,12 +113,12 @@ export class MessageRepo extends Context.Service<MessageRepo>()("MessageRepo", {
 					])
 
 				const updatedMessages = yield* db.run(
-					PG.update(schema.messagesTable)
+					SQLite.update(schema.messagesTable)
 						.set({ authorId: params.toAuthorId, updatedAt: new Date() })
 						.where(($) => [
 							$.authorId.eq(params.fromAuthorId),
 							$.deletedAt.isNull(),
-							PG.inSubquery($.id, externalLinkedMessageIds),
+							SQLite.inSubquery($.id, externalLinkedMessageIds),
 						])
 						.returning("id"),
 				)
@@ -137,7 +131,6 @@ export class MessageRepo extends Context.Service<MessageRepo>()("MessageRepo", {
 			listByChannel,
 			findByIdForCursor,
 			reassignExternalSyncedAuthors,
-			backfillConversationIdForChannel,
 		}
 	}),
 }) {

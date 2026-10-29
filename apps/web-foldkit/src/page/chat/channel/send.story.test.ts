@@ -24,7 +24,9 @@ import { Message } from "./model"
 
 vi.hoisted(() => {
 	if (!("document" in globalThis))
-		Object.assign(globalThis, { document: Object.assign(new EventTarget(), { documentElement: { style: {} } }) })
+		Object.assign(globalThis, {
+			document: Object.assign(new EventTarget(), { documentElement: { style: {} } }),
+		})
 })
 
 const draft = (inner: Draft.Message) => Message.GotDraftMessage({ message: inner })
@@ -91,7 +93,11 @@ describe("send", () => {
 	})
 
 	test("a failed send restores the content, the reply and the attachments, then toasts", () => {
-		const toast = { intent: "error" as const, title: "Channel not found", description: "This channel may have been deleted." }
+		const toast = {
+			intent: "error" as const,
+			title: "Channel not found",
+			description: "This channel may have been deleted.",
+		}
 		story(
 			updateWithShared,
 			given(loadedModel()),
@@ -144,9 +150,13 @@ describe("edit", () => {
 			given(loadedModel()),
 			message(composer(Composer.Message.PressedArrowUpInEmpty())),
 			model((current) => expect(Draft.editingMessageIdOf(current.draft)).toBe(adaMessageId)),
-			Command.expectExact(EditorCommands.SetEditorContent({ editorId, markdown: "Shipped the onboarding copy" })),
+			Command.expectExact(
+				EditorCommands.SetEditorContent({ editorId, markdown: "Shipped the onboarding copy" }),
+			),
 			Command.resolve(EditorCommands.SetEditorContent, Composer.Message.CompletedSetEditorContent()),
-			message(composer(Composer.Message.SubmittedDraft({ markdown: "Shipped the new onboarding copy" }))),
+			message(
+				composer(Composer.Message.SubmittedDraft({ markdown: "Shipped the new onboarding copy" })),
+			),
 			model((current) => expect(Draft.editingMessageIdOf(current.draft)).toBeNull()),
 			Command.expectExact(
 				EditorCommands.ClearEditor({ editorId }),
@@ -173,6 +183,7 @@ describe("edit", () => {
 
 describe("typing", () => {
 	const indicatorId = Schema.decodeSync(TypingIndicatorId)("00000000-0000-4000-8000-000000009999")
+	const indicator = { id: indicatorId, channelId }
 
 	test("typing sends `typingIndicator.create` with the membership; emptying deletes it", () => {
 		story(
@@ -182,16 +193,19 @@ describe("typing", () => {
 			Command.expectHas(Typing.SendTypingHeartbeat({ channelId, memberId: adaMemberId, sessionId: 1 })),
 			Command.resolve(
 				Typing.SendTypingHeartbeat,
-				Typing.Message.SucceededSendTypingHeartbeat({ sessionId: 1, indicatorId }),
+				Typing.Message.SucceededSendTypingHeartbeat({ sessionId: 1, indicator }),
 			),
 			message(composer(Composer.Message.UpdatedDraft({ markdown: "", isEmpty: true }))),
-			Command.expectHas(Typing.DeleteTypingIndicator({ id: indicatorId })),
+			Command.expectHas(Typing.DeleteTypingIndicator(indicator)),
 			Command.resolve(Typing.DeleteTypingIndicator, Typing.Message.CompletedDeleteTypingIndicator()),
 			Command.resolve(
 				Typing.WaitForHeartbeatInterval,
 				Typing.Message.CompletedWaitForHeartbeatInterval({ version: 1 }),
 			),
-			Command.resolve(Typing.WaitForTypingTimeout, Typing.Message.CompletedWaitForTypingTimeout({ version: 1 })),
+			Command.resolve(
+				Typing.WaitForTypingTimeout,
+				Typing.Message.CompletedWaitForTypingTimeout({ version: 1 }),
+			),
 		)
 	})
 })
@@ -205,9 +219,20 @@ describe("uploads", () => {
 			updateWithShared,
 			given(loadedModel()),
 			message(draft(Draft.Message.SelectedFiles({ files: [file] }))),
-			Command.resolve(Draft.GenerateUploadFileId, Draft.Message.CompletedGenerateUploadFileId({ fileId: "f1" })),
-			model((current) => expect(current.draft.currentUpload).toEqual({ fileId: "f1", file, progress: 0 })),
-			message(draft(Draft.Message.ReceivedUploadEvent({ event: UploadEvent.ProgressedUpload({ fileId: "f1", progress: 40 }) }))),
+			Command.resolve(
+				Draft.GenerateUploadFileId,
+				Draft.Message.CompletedGenerateUploadFileId({ fileId: "f1" }),
+			),
+			model((current) =>
+				expect(current.draft.currentUpload).toEqual({ fileId: "f1", file, progress: 0 }),
+			),
+			message(
+				draft(
+					Draft.Message.ReceivedUploadEvent({
+						event: UploadEvent.ProgressedUpload({ fileId: "f1", progress: 40 }),
+					}),
+				),
+			),
 			model((current) => expect(current.draft.currentUpload?.progress).toBe(40)),
 			message(
 				draft(

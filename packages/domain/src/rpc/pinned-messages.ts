@@ -7,6 +7,7 @@ import { TransactionId } from "@hazel/schema"
 import { MessageNotFoundError } from "./messages"
 import { AuthMiddleware } from "./middleware"
 import { RequiredScopes } from "../scopes/required-scopes"
+import { RouteChannelId } from "./routing-fields"
 
 /**
  * Response schema for successful pinned message operations.
@@ -96,6 +97,7 @@ export class PinnedMessageRpcs extends RpcGroup.make(
 	 */
 	Rpc.make("pinnedMessage.update", {
 		payload: Schema.Struct({
+			channelId: RouteChannelId,
 			id: PinnedMessageId,
 		}).pipe(Schema.fieldsAssign(PinnedMessage.Patch.fields)),
 		success: PinnedMessageResponse,
@@ -117,7 +119,7 @@ export class PinnedMessageRpcs extends RpcGroup.make(
 	 * @throws InternalServerError for unexpected errors
 	 */
 	Rpc.make("pinnedMessage.delete", {
-		payload: Schema.Struct({ id: PinnedMessageId }),
+		payload: Schema.Struct({ id: PinnedMessageId, channelId: RouteChannelId }),
 		success: Schema.Struct({ transactionId: TransactionId }),
 		error: Schema.Union([PinnedMessageNotFoundError, UnauthorizedError, InternalServerError]),
 	})

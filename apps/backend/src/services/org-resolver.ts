@@ -1,16 +1,21 @@
-import { ChannelMemberRepo, ChannelRepo, MessageRepo, OrganizationMemberRepo } from "@hazel/backend-core"
+import { ChannelMemberRepo, ChannelRepo, OrganizationMemberRepo } from "@hazel/backend-core"
 import { PermissionError } from "@hazel/domain"
 import * as CurrentUser from "@hazel/domain/current-user"
 import { type ApiScope, CurrentBotScopes, scopesForRole } from "@hazel/domain/scopes"
 import type { DatabaseError } from "@hazel/db"
-import type { ChannelId, MessageId, OrganizationId } from "@hazel/schema"
+import type { ChannelId, OrganizationId } from "@hazel/schema"
 import { Context, Effect, Layer, Option } from "effect"
+import { CurrentObject } from "../lib/current-object"
 import { isAdminOrOwner, type OrganizationRole } from "../lib/policy-utils"
 
 /**
  * OrgResolver centralizes organization membership lookup + scope validation.
  * It replaces ad-hoc role checks across individual policy services with a single
  * point of scope resolution.
+ *
+ * In an `OrgObject` every lookup is org-local (`organization_members`, `channels`,
+ * `channel_members`), and a check against another organization than the object's own is refused
+ * outright: its rows are not here. Messages live in `ChannelObject`s (`ChannelViewers`).
  *
  * Lookups fail with the repositories' typed `DatabaseError`; policy boundaries
  * (`refailUnauthorized`) turn it into an `InternalServerError`, never a 401.
@@ -20,7 +25,24 @@ export class OrgResolver extends Context.Service<OrgResolver>()("OrgResolver", {
 		const organizationMemberRepo = yield* OrganizationMemberRepo
 		const channelRepo = yield* ChannelRepo
 		const channelMemberRepo = yield* ChannelMemberRepo
-		const messageRepo = yield* MessageRepo
+
+		/** The actor's membership of `organizationId`; never another org's from inside an `OrgObject`. */
+		const memberOf = (organizationId: OrganizationId, scope: ApiScope) =>
+			Effect.gen(function* () {
+				const object = yield* Effect.serviceOption(CurrentObject)
+				if (
+					Option.isSome(object) &&
+					object.value.kind === "org" &&
+					object.value.id !== organizationId
+				) {
+					return yield* new PermissionError({
+						message: `Organization ${organizationId} is not served by this object`,
+						requiredScope: scope,
+					})
+				}
+				const actor = yield* CurrentUser.Context
+				return yield* organizationMemberRepo.findByOrgAndUser(organizationId, actor.id)
+			})
 
 		/**
 		 * Resolves granted scopes for the current actor.
@@ -46,8 +68,7 @@ export class OrgResolver extends Context.Service<OrgResolver>()("OrgResolver", {
 			action: string,
 		) =>
 			Effect.gen(function* () {
-				const actor = yield* CurrentUser.Context
-				const member = yield* organizationMemberRepo.findByOrgAndUser(organizationId, actor.id)
+				const member = yield* memberOf(organizationId, scope)
 
 				if (Option.isNone(member)) {
 					return yield* Effect.fail(PermissionError.insufficientScope(scope))
@@ -70,8 +91,7 @@ export class OrgResolver extends Context.Service<OrgResolver>()("OrgResolver", {
 			action: string,
 		) =>
 			Effect.gen(function* () {
-				const actor = yield* CurrentUser.Context
-				const member = yield* organizationMemberRepo.findByOrgAndUser(organizationId, actor.id)
+				const member = yield* memberOf(organizationId, scope)
 
 				if (Option.isNone(member)) {
 					return yield* Effect.fail(PermissionError.insufficientScope(scope))
@@ -92,8 +112,7 @@ export class OrgResolver extends Context.Service<OrgResolver>()("OrgResolver", {
 			action: string,
 		) =>
 			Effect.gen(function* () {
-				const actor = yield* CurrentUser.Context
-				const member = yield* organizationMemberRepo.findByOrgAndUser(organizationId, actor.id)
+				const member = yield* memberOf(organizationId, scope)
 
 				if (Option.isNone(member) || member.value.role !== "owner") {
 					return yield* Effect.fail(PermissionError.insufficientScope(scope))
@@ -144,7 +163,7 @@ export class OrgResolver extends Context.Service<OrgResolver>()("OrgResolver", {
 				}
 
 				const ch = channel.value
-				const orgMember = yield* organizationMemberRepo.findByOrgAndUser(ch.organizationId, actor.id)
+				const orgMember = yield* memberOf(ch.organizationId, scope)
 
 				if (Option.isNone(orgMember)) {
 					return yield* Effect.fail(PermissionError.insufficientScope(scope))
@@ -166,20 +185,6 @@ export class OrgResolver extends Context.Service<OrgResolver>()("OrgResolver", {
 						}),
 					)
 				}
-			})
-
-		/**
-		 * Check scope by resolving message -> channel -> org chain.
-		 */
-		const fromMessage = (messageId: MessageId, scope: ApiScope, entity: string, action: string) =>
-			Effect.gen(function* () {
-				const message = yield* messageRepo.findById(messageId)
-				if (Option.isNone(message)) {
-					return yield* Effect.fail(
-						new PermissionError({ message: `Message not found: ${messageId}` }),
-					)
-				}
-				return yield* fromChannelWithAccess(message.value.channelId, scope, entity, action)
 			})
 
 		/**
@@ -239,7 +244,6 @@ export class OrgResolver extends Context.Service<OrgResolver>()("OrgResolver", {
 			fromOrganization,
 			fromChannel,
 			fromChannelWithAccess,
-			fromMessage,
 			checkChannelAccess,
 		} as const
 	}),
@@ -248,6 +252,5 @@ export class OrgResolver extends Context.Service<OrgResolver>()("OrgResolver", {
 		Layer.provide(OrganizationMemberRepo.layer),
 		Layer.provide(ChannelRepo.layer),
 		Layer.provide(ChannelMemberRepo.layer),
-		Layer.provide(MessageRepo.layer),
 	)
 }

@@ -5,6 +5,8 @@ import {
 	type QueryBuilder,
 } from "@tanstack/db"
 import { Effect, Queue, Stream } from "effect"
+import { sourceKey } from "@hazel/effect-db-collection"
+import { syncHub } from "~/db/sync"
 
 /** How long a query may stay unloaded before it counts as stalled. */
 const STALL_AFTER_MS = 10_000
@@ -39,7 +41,9 @@ export const liveQueryStream = <Row, Message>(
 				const collection = createLiveQueryCollection({ query, startSync: true })
 				const emit = () =>
 					Queue.offerUnsafe(queue, toMessage(collection.toArray as ReadonlyArray<Row>))
-				const subscription = collection.subscribeChanges(emit)
+				// `includeInitialState: false` passes every later change; left unset, TanStack drops
+				// deletes of rows that existed before this subscription.
+				const subscription = collection.subscribeChanges(emit, { includeInitialState: false })
 				collection.onFirstReady(emit)
 				const watchdog = options.onStalled
 					? watchStall(
@@ -99,3 +103,17 @@ export const watchStall = <Message>(
 		unsubscribe()
 	}
 }
+
+/**
+ * Holds `channel:<id>` open for each id while the stream runs, for rows no query can name by
+ * channel (a join on a message id). The channel collections get the rows from the open sources.
+ */
+export const retainChannels = (channelIds: ReadonlyArray<string>): Stream.Stream<never> =>
+	channelIds.length === 0
+		? Stream.never
+		: Stream.callback<never>(() =>
+				Effect.acquireRelease(
+					Effect.sync(() => syncHub.retain(channelIds.map((id) => sourceKey("channel", id)))),
+					(retention) => Effect.sync(() => retention.release()),
+				).pipe(Effect.flatMap(() => Effect.never)),
+			)

@@ -68,16 +68,15 @@ export {
 
 // Services
 export {
-	ActorsClient,
-	type ActorsClientConfig,
-	type ActorsClientService,
-	type MessageActor,
-} from "./actors-client.ts"
+	LiveStateClient,
+	type LiveStateClientConfig,
+	type LiveStateClientService,
+	makeLiveStateClient,
+} from "./live-state-client.ts"
 
 // Core functions (internal - use bot.stream.create or bot.ai.stream instead)
 export {
 	createAIStreamSessionInternal,
 	createStreamSessionInternal,
 	type MessageCreateFn,
-	type MessageUpdateFn,
 } from "./streaming-service.ts"

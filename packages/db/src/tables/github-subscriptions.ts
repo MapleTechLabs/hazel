@@ -1,37 +1,36 @@
 import type { GitHubSubscription as GitHubSubscriptionModel } from "@hazel/domain/models"
 import { ChannelId, GitHubSubscriptionId, OrganizationId, UserId } from "@hazel/schema"
-import * as PG from "@maple-dev/effect-orm/postgres"
-import { jsonb, now, timestamptz, uuid, varchar } from "./columns"
+import * as SQLite from "@maple-dev/effect-orm/sqlite"
+import { jsonb, randomUuid, timestamptz, uuid, varchar } from "./columns"
 
 type GitHubEventType = GitHubSubscriptionModel.GitHubEventType
 
-export const githubSubscriptionsTable = PG.table("github_subscriptions", {
+export const githubSubscriptionsTable = SQLite.table("github_subscriptions", {
 	columns: {
-		id: PG.column(uuid(GitHubSubscriptionId), { defaultExpr: "gen_random_uuid()" }),
+		id: SQLite.column(uuid(GitHubSubscriptionId), { defaultExpr: randomUuid }),
 		channelId: uuid(ChannelId),
 		organizationId: uuid(OrganizationId),
-		repositoryId: PG.int8,
+		repositoryId: SQLite.integer,
 		repositoryFullName: varchar(255),
 		repositoryOwner: varchar(255),
 		repositoryName: varchar(255),
-		enabledEvents: PG.column(jsonb<GitHubEventType[]>(), { default: ["push", "pull_request", "issues"] }),
-		branchFilter: PG.nullable(varchar(255)),
-		isEnabled: PG.column(PG.bool, { default: true }),
+		enabledEvents: SQLite.column(jsonb<GitHubEventType[]>(), {
+			default: ["push", "pull_request", "issues"],
+		}),
+		branchFilter: SQLite.nullable(varchar(255)),
+		isEnabled: SQLite.column(SQLite.boolean, { default: true }),
 		createdBy: uuid(UserId),
-		createdAt: PG.column(timestamptz, { defaultExpr: "now()" }),
-		updatedAt: PG.column(timestamptz, { defaultExpr: "now()" }),
-		deletedAt: PG.nullable(timestamptz),
+		createdAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		updatedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		deletedAt: SQLite.nullable(timestamptz),
 	},
 	primaryKey: ["id"],
 	indexes: [
-		PG.index("github_subscriptions_channel_id_idx", ["channelId"]),
-		PG.index("github_subscriptions_organization_id_idx", ["organizationId"]),
-		PG.index("github_subscriptions_repository_id_idx", ["repositoryId"]),
-		PG.index("github_subscriptions_deleted_at_idx", ["deletedAt"]),
-		PG.uniqueIndex("github_subscriptions_channel_repo_unique", ["channelId", "repositoryId"], {
-			where: '"deletedAt" IS NULL',
-		}),
+		SQLite.index("github_subscriptions_channel_id_idx", ["channelId"]),
+		SQLite.index("github_subscriptions_organization_id_idx", ["organizationId"]),
+		SQLite.index("github_subscriptions_repository_id_idx", ["repositoryId"]),
+		SQLite.index("github_subscriptions_deleted_at_idx", ["deletedAt"]),
 	],
 })
-export type GitHubSubscription = PG.SelectRowOf<typeof githubSubscriptionsTable>
-export type NewGitHubSubscription = PG.InsertRowOf<typeof githubSubscriptionsTable>
+export type GitHubSubscription = SQLite.SelectRowOf<typeof githubSubscriptionsTable>
+export type NewGitHubSubscription = SQLite.InsertRowOf<typeof githubSubscriptionsTable>

@@ -40,6 +40,7 @@ const editId = Schema.decodeSync(MessageId)(uuid(1002))
 const firstAttachment = Schema.decodeSync(AttachmentId)(uuid(7001))
 const secondAttachment = Schema.decodeSync(AttachmentId)(uuid(7002))
 const indicatorId = Schema.decodeSync(TypingIndicatorId)(uuid(9001))
+const indicator = { id: indicatorId, channelId }
 const editorId = "composer-draft"
 
 const context: Draft.Context = { currentUserId: ada, organizationId, memberId, lastOwnMessage: null }
@@ -422,10 +423,10 @@ describe("typing indicator", () => {
 			update,
 			given({
 				...fresh(),
-				typing: { ...Typing.init(), isTyping: true, sessionId: 1, indicatorId, lastContent: "H" },
+				typing: { ...Typing.init(), isTyping: true, sessionId: 1, indicator, lastContent: "H" },
 			}),
 			message(Message.LeftWindow()),
-			Command.expectExact(Typing.DeleteTypingIndicator({ id: indicatorId })),
+			Command.expectExact(Typing.DeleteTypingIndicator(indicator)),
 			Command.resolve(Typing.DeleteTypingIndicator, Typing.Message.CompletedDeleteTypingIndicator()),
 			model((current) => expect(current.typing.isTyping).toBe(false)),
 		)
@@ -437,10 +438,10 @@ describe("typing indicator", () => {
 			given({ ...fresh(), typing: { ...Typing.init(), isTyping: false, sessionId: 2 } }),
 			message(
 				Message.GotTypingMessage({
-					message: Typing.Message.SucceededSendTypingHeartbeat({ sessionId: 1, indicatorId }),
+					message: Typing.Message.SucceededSendTypingHeartbeat({ sessionId: 1, indicator }),
 				}),
 			),
-			Command.expectExact(Typing.DeleteTypingIndicator({ id: indicatorId })),
+			Command.expectExact(Typing.DeleteTypingIndicator(indicator)),
 			Command.resolve(Typing.DeleteTypingIndicator, Typing.Message.CompletedDeleteTypingIndicator()),
 		)
 	})

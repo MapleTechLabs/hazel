@@ -3,6 +3,7 @@ import { Effect, Option, Schema } from "effect"
 import { Command, Update } from "foldkit"
 import * as AsyncData from "foldkit/asyncData"
 import { modifyFields } from "foldkit/struct"
+import { orgOfChatSyncConnection } from "~/db/routing-hints"
 import { failureMessage } from "~/lib/error-messages"
 import { AppRoute } from "../../../route"
 import { HazelRpc } from "../../../rpc"
@@ -46,7 +47,12 @@ export const DeleteConnection = Command.define("DeleteConnection", {
 	args: { syncConnectionId: SyncConnectionId },
 	messages: [Message.SucceededDeleteConnection, Message.FailedDeleteConnection],
 	execute: ({ syncConnectionId }) =>
-		HazelRpc.use((rpc) => rpc("chatSync.connection.delete", { syncConnectionId })).pipe(
+		HazelRpc.use((rpc) =>
+			rpc("chatSync.connection.delete", {
+				syncConnectionId,
+				organizationId: orgOfChatSyncConnection(syncConnectionId),
+			}),
+		).pipe(
 			Effect.as(Message.SucceededDeleteConnection()),
 			Effect.catchTags({
 				ChatSyncConnectionNotFoundError: () =>

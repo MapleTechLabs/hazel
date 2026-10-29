@@ -23,6 +23,7 @@ import { Channel } from "../models"
 import { TransactionId } from "@hazel/schema"
 import { AuthMiddleware } from "./middleware"
 import { RequiredScopes } from "../scopes/required-scopes"
+import { RouteChannelId } from "./routing-fields"
 
 /**
  * Response schema for successful channel operations.
@@ -62,6 +63,8 @@ export class CreateThreadRequest extends Schema.Class<CreateThreadRequest>("Crea
 	id: Schema.optional(ChannelId),
 	messageId: MessageId,
 	organizationId: Schema.optional(OrganizationId),
+	/** The message's channel: the thread's parent, whose `ChannelObject` links the message. */
+	channelId: RouteChannelId,
 }) {}
 
 /**
@@ -84,12 +87,13 @@ export class ChannelRpcs extends RpcGroup.make(
 	 * @param payload - Channel data (name, type, organizationId, etc.) with optional id for optimistic updates
 	 * @returns Channel data and transaction ID
 	 * @throws UnauthorizedError if user lacks permission
+	 * @throws InvalidChannelRequestError if the client-chosen id is already taken
 	 * @throws InternalServerError for unexpected errors
 	 */
 	Rpc.make("channel.create", {
 		payload: CreateChannelRequest,
 		success: ChannelResponse,
-		error: Schema.Union([UnauthorizedError, InternalServerError]),
+		error: Schema.Union([UnauthorizedError, InvalidChannelRequestError, InternalServerError]),
 	})
 		.annotate(RequiredScopes, ["channels:write"])
 		.middleware(AuthMiddleware),

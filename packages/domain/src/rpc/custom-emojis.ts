@@ -5,6 +5,7 @@ import { CustomEmojiId, OrganizationId, TransactionId } from "@hazel/schema"
 import { CustomEmoji } from "../models"
 import { AuthMiddleware } from "./middleware"
 import { RequiredScopes } from "../scopes/required-scopes"
+import { RouteOrganizationId } from "./routing-fields"
 
 /**
  * Response schema for successful custom emoji operations.
@@ -94,6 +95,7 @@ export class CustomEmojiRpcs extends RpcGroup.make(
 	 */
 	Rpc.make("customEmoji.update", {
 		payload: Schema.Struct({
+			organizationId: RouteOrganizationId,
 			id: CustomEmojiId,
 			name: Schema.optional(Schema.String),
 		}),
@@ -120,7 +122,7 @@ export class CustomEmojiRpcs extends RpcGroup.make(
 	 * @throws InternalServerError for unexpected errors
 	 */
 	Rpc.make("customEmoji.delete", {
-		payload: Schema.Struct({ id: CustomEmojiId }),
+		payload: Schema.Struct({ id: CustomEmojiId, organizationId: RouteOrganizationId }),
 		success: Schema.Struct({ transactionId: TransactionId }),
 		error: Schema.Union([CustomEmojiNotFoundError, UnauthorizedError, InternalServerError]),
 	})
@@ -141,6 +143,7 @@ export class CustomEmojiRpcs extends RpcGroup.make(
 	 */
 	Rpc.make("customEmoji.restore", {
 		payload: Schema.Struct({
+			organizationId: RouteOrganizationId,
 			id: CustomEmojiId,
 			imageUrl: Schema.optional(Schema.String),
 		}),

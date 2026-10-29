@@ -20,8 +20,8 @@ export class RateLimiterError extends Schema.TaggedError<RateLimiterError>()("Ra
 }) {}
 
 /**
- * Fixed-window rate limiting. Implementations: Redis on Bun (`rate-limiter-redis.ts`), a Durable
- * Object per key on Cloudflare (`worker/rate-limiter-object.ts`), memory in tests.
+ * Fixed-window rate limiting. Implementations: a Durable Object per key
+ * (`worker/rate-limiter-object.ts`), memory in tests.
  */
 export class RateLimiter extends Context.Service<
 	RateLimiter,
@@ -86,5 +86,17 @@ export const RateLimiterMemoryLive = Layer.succeed(
 					limit,
 				}
 			}),
+	}),
+)
+
+/**
+ * Admits everything: for handlers running in an object or on the api Worker's directory path,
+ * behind the api Worker's routing, which already applied the limit (`rpc/routing.ts`).
+ */
+export const RateLimiterAllowAll = Layer.succeed(
+	RateLimiter,
+	RateLimiter.of({
+		consume: (_key, limit, windowMs) =>
+			Effect.succeed({ allowed: true, remaining: limit, resetAfterMs: windowMs, limit }),
 	}),
 )

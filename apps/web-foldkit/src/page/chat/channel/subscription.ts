@@ -1,4 +1,4 @@
-import { ChannelId, MessageId, OrganizationId, TypingIndicatorId, UserId } from "@hazel/schema"
+import { ChannelId, MessageId, OrganizationId, UserId } from "@hazel/schema"
 import { Effect, Option, PubSub, Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
 import * as Live from "../../../chat/live-state"
@@ -6,6 +6,7 @@ import * as FilesSubscriptions from "../files/subscriptions"
 import {
 	channelStream,
 	messageChangesStream,
+	messageHistoryStream,
 	parentChannelStream,
 	reactionsStream,
 	threadPanelStream,
@@ -83,7 +84,8 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 				),
 		},
 	),
-	// Restarts on every page and publishes the window, so the messages query moves only when paged.
+	// Restarts on every page and publishes the window, so the messages query moves only when paged;
+	// holds the history the window needs, so scrolling back pages older messages in.
 	chatMessagesWindow: entry(
 		{ channelId: ChannelId, limit: Schema.Number, offset: Schema.Number },
 		{
@@ -93,25 +95,28 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 				offset: model.offset,
 			}),
 			dependenciesToStream: (change) =>
-				Stream.fromEffect(
-					Effect.gen(function* () {
-						yield* PubSub.publish(yield* MessageWindows, change)
-					}),
-				).pipe(Stream.drain),
+				Stream.merge(
+					Stream.fromEffect(
+						Effect.gen(function* () {
+							yield* PubSub.publish(yield* MessageWindows, change)
+						}),
+					).pipe(Stream.drain),
+					messageHistoryStream(change.channelId, change),
+				),
 		},
 	),
-	// `MessageLive.Provider` -> `useMessageActor`: one actor connection per live AI reply. The stream
-	// stays up while any reply is live and connects or disposes replies by id, so the others keep theirs.
+	// One live socket per streaming AI reply. The stream stays up while any reply is live and
+	// connects or closes replies by id, so the others keep theirs.
 	chatLiveReplies: entry(
-		{ messageIds: Schema.Array(MessageId) },
+		{ replies: Schema.Array(Live.LiveReply) },
 		{
-			modelToDependencies: ({ model }) => ({ messageIds: model.liveIds }),
+			modelToDependencies: ({ model }) => ({ replies: model.liveReplies }),
 			keepAliveEquivalence: (previous, next) =>
-				(previous.messageIds.length === 0) === (next.messageIds.length === 0),
-			dependenciesToStream: ({ messageIds }, readDependencies) =>
-				messageIds.length === 0
+				(previous.replies.length === 0) === (next.replies.length === 0),
+			dependenciesToStream: ({ replies }, readDependencies) =>
+				replies.length === 0
 					? Stream.empty
-					: Live.liveRepliesStream(() => readDependencies().messageIds).pipe(
+					: Live.liveRepliesStream(() => readDependencies().replies).pipe(
 							Stream.map((message) => Message.GotLiveMessage({ message })),
 						),
 		},
@@ -181,18 +186,22 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 		},
 	),
 	chatReplyTargets: entry(
-		{ replyIds: Schema.Array(MessageId) },
+		{ channelId: ChannelId, replyIds: Schema.Array(MessageId) },
 		{
-			modelToDependencies: ({ model }) => ({ replyIds: model.replyIds }),
-			dependenciesToStream: ({ replyIds }) =>
-				replyTargetsStream(replyIds, (targets) => Message.UpdatedReplyTargets({ targets })),
+			modelToDependencies: ({ model }) => ({ channelId: model.channelId, replyIds: model.replyIds }),
+			dependenciesToStream: ({ channelId, replyIds }) =>
+				replyTargetsStream(channelId, replyIds, (targets) =>
+					Message.UpdatedReplyTargets({ targets }),
+				),
 		},
 	),
 	chatThreadPanel: entry(
 		{ threadChannelId: Schema.NullOr(ChannelId) },
 		{
+			// Not while `channel.createThread` runs: the thread's object would refuse the socket.
 			modelToDependencies: ({ model }) => ({
-				threadChannelId: model.threadPanel?.threadChannelId ?? null,
+				threadChannelId:
+					model.threadPanel?.creation === "Created" ? model.threadPanel.threadChannelId : null,
 			}),
 			dependenciesToStream: ({ threadChannelId }) =>
 				threadChannelId === null
@@ -266,15 +275,15 @@ type UploadDependencies = typeof UploadDependencies.Type
 
 export const TypingCleanup = Schema.Struct({
 	channelId: ChannelId,
-	indicatorIds: Schema.Array(TypingIndicatorId),
+	indicators: Schema.Array(Typing.Indicator),
 })
 export type TypingCleanup = typeof TypingCleanup.Type
 const isSameCleanup = Schema.toEquivalence(TypingCleanup)
 
 /** The indicators the page's drafts hold (channel, and the open thread's). */
-export const indicatorIdsOf = (model: Model): ReadonlyArray<TypingIndicatorId> =>
-	[model.draft.typing.indicatorId, model.threadPanel?.draft.typing.indicatorId ?? null].filter(
-		(id): id is TypingIndicatorId => id !== null,
+export const indicatorsOf = (model: Model): ReadonlyArray<Typing.Indicator> =>
+	[model.draft.typing.indicator, model.threadPanel?.draft.typing.indicator ?? null].filter(
+		(indicator): indicator is Typing.Indicator => indicator !== null,
 	)
 
 /**
@@ -285,9 +294,9 @@ export const indicatorIdsOf = (model: Model): ReadonlyArray<TypingIndicatorId> =
 export const typingCleanupStream = <R>(
 	own: TypingCleanup,
 	readLatest: () => TypingCleanup,
-	deleteIndicator: (id: TypingIndicatorId) => Effect.Effect<void, never, R>,
+	deleteIndicator: (indicator: Typing.Indicator) => Effect.Effect<void, never, R>,
 ): Stream.Stream<never, never, R> =>
-	own.indicatorIds.length === 0
+	own.indicators.length === 0
 		? Stream.empty
 		: Stream.fromEffect(
 				Effect.never.pipe(
@@ -297,7 +306,7 @@ export const typingCleanupStream = <R>(
 							const isPageLeft =
 								latest.channelId !== own.channelId || isSameCleanup(latest, own)
 							return isPageLeft
-								? Effect.forEach(own.indicatorIds, deleteIndicator, { discard: true })
+								? Effect.forEach(own.indicators, deleteIndicator, { discard: true })
 								: Effect.void
 						}),
 					),
@@ -370,7 +379,7 @@ const write = Subscription.make<Input, Message, HazelRpc | HazelApiClient>()((en
 	typingCleanup: entry(TypingCleanup.fields, {
 		modelToDependencies: ({ model }) => ({
 			channelId: model.channelId,
-			indicatorIds: indicatorIdsOf(model),
+			indicators: indicatorsOf(model),
 		}),
 		// Restarts on every change like the default; the variant only adds `readDependencies`.
 		keepAliveEquivalence: isSameCleanup,

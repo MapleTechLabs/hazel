@@ -5,7 +5,10 @@ import { Command, expectOutMessage, given, message, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
 import { PageOutMessage } from "../../../out-message"
 import { Message } from "./message"
-import { init, UninstallBot, update } from "./update"
+import { makeShared, organizationId, storyUpdate } from "../../../../test/pages-fixtures"
+import { init, UninstallBot, update as pageUpdate } from "./update"
+
+const update = storyUpdate(pageUpdate, makeShared())
 
 const botId = Schema.decodeSync(BotId)("00000000-0000-4000-8000-000000000001")
 const initial = init({ _tag: "SettingsIntegrationsInstalled", orgSlug: "hazel" }).model
@@ -21,7 +24,7 @@ describe("installed apps", () => {
 			update,
 			given(initial),
 			message(Message.ClickedUninstall({ botId })),
-			Command.expectExact(UninstallBot({ botId })),
+			Command.expectExact(UninstallBot({ botId, organizationId })),
 			Command.resolve(UninstallBot, Message.FailedUninstallBot({ botId, reason: "NotFound" })),
 			expectOutMessage(PageOutMessage.RequestedToast({ toast })),
 		)

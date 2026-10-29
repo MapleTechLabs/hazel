@@ -1,4 +1,4 @@
-import { Database, PG, Repository, schema } from "@hazel/db"
+import { Database, SQLite, Repository, schema } from "@hazel/db"
 
 import type { IntegrationConnectionId, IntegrationTokenId } from "@hazel/schema"
 import { IntegrationToken } from "@hazel/domain/models"
@@ -19,7 +19,7 @@ export class IntegrationTokenRepo extends Context.Service<IntegrationTokenRepo>(
 		// Find token by connection ID
 		const findByConnectionId = (connectionId: IntegrationConnectionId) =>
 			db.first(
-				PG.from(schema.integrationTokensTable)
+				SQLite.from(schema.integrationTokensTable)
 					.select()
 					.where(($) => [$.connectionId.eq(connectionId)])
 					.limit(1),
@@ -39,7 +39,7 @@ export class IntegrationTokenRepo extends Context.Service<IntegrationTokenRepo>(
 			},
 		) =>
 			db.run(
-				PG.update(schema.integrationTokensTable)
+				SQLite.update(schema.integrationTokensTable)
 					.set({
 						encryptedAccessToken: data.encryptedAccessToken,
 						encryptedRefreshToken: data.encryptedRefreshToken,
@@ -58,7 +58,9 @@ export class IntegrationTokenRepo extends Context.Service<IntegrationTokenRepo>(
 		// Delete token (hard delete for security)
 		const deleteByConnectionId = (connectionId: IntegrationConnectionId) =>
 			db.run(
-				PG.deleteFrom(schema.integrationTokensTable).where(($) => [$.connectionId.eq(connectionId)]),
+				SQLite.deleteFrom(schema.integrationTokensTable).where(($) => [
+					$.connectionId.eq(connectionId),
+				]),
 			)
 
 		return {

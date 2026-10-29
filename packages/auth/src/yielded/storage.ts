@@ -1,20 +1,53 @@
 import { OAuth, Schema as AuthSchema, Sessions } from "@yielded/auth"
-import { AuthPersistence, PersistenceMappingError } from "@yielded/auth-persistence"
-import type { SubjectIdCodec } from "@yielded/auth-persistence/Adapter"
+import {
+	AuthPersistence,
+	PersistenceConfigurationError,
+	PersistenceMappingError,
+} from "@yielded/auth-persistence"
+import * as Adapter from "@yielded/auth-persistence/Adapter"
 import * as Mapping from "@yielded/auth-persistence/OAuthPersistence"
 import { Cause, Context, Crypto, Effect, Layer, Schema } from "effect"
 import { SqlClient } from "effect/sql"
 
 import { HazelAuth, requirement } from "./auth.ts"
+import { batchCommit } from "./batch.ts"
 import { findUserByEmail, isProvider, linkIdentity, providerIssuers } from "./identities.ts"
 import { Registration } from "./contract.ts"
 import * as T from "./tables.ts"
 
 const { sql, eq } = Mapping
 
+type Table = ReturnType<typeof AuthPersistence.table>
+
+const describe = (table: Table): Adapter.StorageTable => ({
+	name: table.name,
+	...(table.schema === undefined ? {} : { schema: table.schema }),
+	columns: Object.fromEntries(Object.entries(table.columns).map(([key, column]) => [key, column.options])),
+	unique: table.unique,
+	indexes: table.indexes,
+})
+
+/**
+ * The library's SQL backend (`AuthPersistence`) plus a batch owner: auth tables live in the
+ * directory D1 database, which has no interactive transactions, so every commit is one atomic
+ * batch (`batch.ts`). The same path runs on node SQLite.
+ */
+const SqlitePersistence = Adapter.createPersistence<Table, never, SqlClient.SqlClient>({
+	makeTable: AuthPersistence.table,
+	describe,
+	acquire: Effect.gen(function* () {
+		const client = yield* SqlClient.SqlClient
+		if (!client.onDialectOrElse({ sqlite: () => true, orElse: () => false }))
+			return yield* PersistenceConfigurationError.make({ reason: "Hazel auth storage is SQLite (D1)" })
+		return client
+	}),
+	nativeTables: (client) => Adapter.makeNativeSqlTables(client),
+	batch: batchCommit,
+})
+
 /** Composed SQL storage for sessions, pending authentication and passkeys, on Hazel's
  * `users` table. OAuth registration has no composed storage, so it is mapped below. */
-export const Persistence = AuthPersistence.make(HazelAuth)
+export const Persistence = SqlitePersistence.make(HazelAuth)
 
 export const storage = Persistence.map({
 	subjects: {
@@ -38,7 +71,7 @@ export const storage = Persistence.map({
 
 // ---- OAuth mappings ----
 
-const subjectId: SubjectIdCodec<string> = {
+const subjectId: Adapter.SubjectIdCodec<string> = {
 	toNative: (id) => Effect.succeed(id),
 	toSubject: (id) =>
 		Schema.decodeEffect(AuthSchema.SubjectId)(id).pipe(
@@ -181,10 +214,130 @@ const linkByVerifiedEmail = (intent: OAuth.OAuthRegistrationIntent) =>
 		}),
 	)
 
+/**
+ * The OAuth mappings above over the library's native factories in batch mode. The
+ * `OAuthPersistence` facade needs interactive transactions and refuses D1; these are the
+ * factories its D1 adapter binds, without Drizzle.
+ */
+const signInMapping: Mapping.OAuthSignInMapping<Table, Table, Table, Table, Table, string> = {
+	subject,
+	authority,
+	subjectId,
+	clock: Mapping.clock,
+	ownership,
+	credential,
+	flow,
+	constraints: Mapping.requiredOAuthSignInConstraints,
+}
+
+const intentMapping: Mapping.OAuthRegistrationIntentMapping<Table, Table, string> = {
+	ownership,
+	intent,
+	clock: Mapping.clock,
+	constraints: {
+		intentReference: Mapping.requiredOAuthRegistrationConstraints.intentReference,
+		intentFlow: Mapping.requiredOAuthRegistrationConstraints.intentFlow,
+		ownership: Mapping.requiredOAuthRegistrationConstraints.ownership,
+	},
+	eligible: () => sql`true`,
+}
+
+const makeRegistrationMapping = (
+	uuid: Effect.Effect<string, PersistenceMappingError>,
+): Mapping.OAuthRegistrationMapping<typeof Registration.Type, Table, Table, Table, Table, Table, string> => ({
+	registration: Registration,
+	ownership,
+	intent,
+	subject,
+	credential,
+	authority,
+	subjectId,
+	clock: Mapping.clock,
+	constraints: Mapping.requiredOAuthRegistrationConstraints,
+	inspect: ({ registration }) =>
+		Effect.succeed({
+			fingerprint: `hazel-v1:${Schema.encodeSync(registrationJson)(registration)}`,
+			eligible: true,
+		}),
+	eligibility: { admission: () => sql`true`, postcondition: () => sql`true` },
+	allocateSubjectId: uuid,
+	allocateCredentialId: uuid,
+	allocateRevision: Effect.succeed(Sessions.SecurityRevision.make("initial")),
+	encodeSubjectInsert: ({ intent, registration }, ids) => ({
+		id: ids.subjectId,
+		// externalId is the Clerk user id for users who signed up through Clerk; it stays
+		// NOT NULL and unique, so users created here get a value in their own namespace.
+		externalId: `hazel:${ids.subjectId}`,
+		status: true,
+		securityRevision: ids.securityRevision,
+		email: emailFromIntent(intent),
+		firstName: registration.firstName,
+		lastName: registration.lastName,
+		avatarUrl: intent.profile?.avatarUrl ?? null,
+	}),
+})
+
+const makeAccountsMapping = (
+	uuid: Effect.Effect<string, PersistenceMappingError>,
+): Mapping.OAuthAccountsMapping<Table, Table, Table, Table, Table, string> => ({
+	subject,
+	authority,
+	subjectId,
+	clock: Mapping.clock,
+	ownership,
+	credential,
+	flow,
+	constraints: Mapping.requiredOAuthSignInConstraints,
+	metadataAccess: ({ invocation, subjectId }) =>
+		invocation._tag === "Authenticated" && invocation.subjectId === subjectId ? sql`true` : sql`false`,
+	eligibility: [
+		Mapping.oauthEligibilityTable<typeof T.oauthLogins, string>({
+			table: T.oauthLogins,
+			subjectId: "subjectId",
+			credentialId: "credentialId",
+			revision: "credentialRevision",
+			scope: "hazel-oauth-logins",
+			condition: () => eq(T.oauthLogins.columns.status, "active"),
+			decode: (row) => ({
+				credentialId: Schema.decodeUnknownSync(Schema.String)(row.credentialId),
+				revision: Schema.decodeUnknownSync(Sessions.SecurityRevision)(row.credentialRevision),
+				usablePrimary: row.status === "active",
+				factors: ["possession"],
+				userVerified: false,
+				phishingResistant: false,
+			}),
+		}),
+	],
+	cleanup: [],
+	sessionInvalidation: "same-authority-immediate",
+	otherReferences: () => sql`false`,
+	allocateCredentialId: uuid,
+	allocateRevision: uuid.pipe(Effect.map((value) => Sessions.SecurityRevision.make(value))),
+})
+
+/** The unique keys each mapping declares exist on the physical tables (what the facade checks). */
+const validateMappings = (mappings: ReadonlyArray<unknown>) =>
+	Effect.gen(function* () {
+		const plans = yield* Effect.try({
+			try: () =>
+				mappings.flatMap((mapping) =>
+					Adapter.storageKeyPlans(mapping, (table) => (table as Table).columns),
+				),
+			catch: (cause) =>
+				PersistenceConfigurationError.make({ reason: `Invalid OAuth mapping: ${cause}` }),
+		})
+		yield* Adapter.validateStorageBatch(
+			"sqlite",
+			plans.map(({ table, keys }) => ({ table: describe(table as Table), required: [keys] })),
+		)
+	}).pipe(Adapter.withStorageValidation, Effect.withSpan("HazelAuth.validateOAuthStorage"))
+
 export const OAuthStorageLive = Layer.effectContext(
 	Effect.gen(function* () {
 		const crypto = yield* Crypto.Crypto
 		const sqlClient = yield* SqlClient.SqlClient
+		const tables = Adapter.makeNativeSqlTables(sqlClient)
+		const batch = batchCommit(sqlClient)
 
 		const uuid = crypto
 			.randomUUIDv4()
@@ -193,96 +346,35 @@ export const OAuthStorageLive = Layer.effectContext(
 					PersistenceMappingError.make({ operation: "hazel.allocate", cause }),
 				),
 			)
+		const registrationMapping = makeRegistrationMapping(uuid)
+		const accountsMapping = makeAccountsMapping(uuid)
 
-		const common = { subject, authority, subjectId, clock: Mapping.clock }
+		yield* validateMappings([signInMapping, intentMapping, registrationMapping, accountsMapping])
 
-		const signIn = yield* Mapping.makeOAuthSignInServices({
-			...common,
-			ownership,
-			credential,
-			flow,
-			constraints: Mapping.requiredOAuthSignInConstraints,
-		})
-
-		const intents = yield* Mapping.makeOAuthRegistrationIntentServices({
-			ownership,
-			intent,
-			clock: Mapping.clock,
-			constraints: {
-				intentReference: Mapping.requiredOAuthRegistrationConstraints.intentReference,
-				intentFlow: Mapping.requiredOAuthRegistrationConstraints.intentFlow,
-				ownership: Mapping.requiredOAuthRegistrationConstraints.ownership,
-			},
-			eligible: () => sql`true`,
-		})
-
-		const registration = yield* Mapping.makeOAuthRegistrationServices({
-			registration: Registration,
-			ownership,
-			intent,
-			subject,
-			credential,
-			authority,
-			subjectId,
-			clock: Mapping.clock,
-			constraints: Mapping.requiredOAuthRegistrationConstraints,
-			inspect: ({ registration }) =>
-				Effect.succeed({
-					fingerprint: `hazel-v1:${Schema.encodeSync(registrationJson)(registration)}`,
-					eligible: true,
-				}),
-			eligibility: { admission: () => sql`true`, postcondition: () => sql`true` },
-			allocateSubjectId: uuid,
-			allocateCredentialId: uuid,
-			allocateRevision: Effect.succeed(Sessions.SecurityRevision.make("initial")),
-			encodeSubjectInsert: ({ intent, registration }, ids) => ({
-				id: ids.subjectId,
-				// externalId is the Clerk user id for users who signed up through Clerk; it stays
-				// NOT NULL and unique, so users created here get a value in their own namespace.
-				externalId: `hazel:${ids.subjectId}`,
-				status: true,
-				securityRevision: ids.securityRevision,
-				email: emailFromIntent(intent),
-				firstName: registration.firstName,
-				lastName: registration.lastName,
-				avatarUrl: intent.profile?.avatarUrl ?? null,
-			}),
-		})
-
-		const accounts = yield* Mapping.makeOAuthAccountsServices({
-			...common,
-			ownership,
-			credential,
-			flow,
-			constraints: Mapping.requiredOAuthSignInConstraints,
-			metadataAccess: ({ invocation, subjectId }) =>
-				invocation._tag === "Authenticated" && invocation.subjectId === subjectId
-					? sql`true`
-					: sql`false`,
-			eligibility: [
-				Mapping.oauthEligibilityTable<typeof T.oauthLogins, string>({
-					table: T.oauthLogins,
-					subjectId: "subjectId",
-					credentialId: "credentialId",
-					revision: "credentialRevision",
-					scope: "hazel-oauth-logins",
-					condition: () => eq(T.oauthLogins.columns.status, "active"),
-					decode: (row) => ({
-						credentialId: Schema.decodeUnknownSync(Schema.String)(row.credentialId),
-						revision: Schema.decodeUnknownSync(Sessions.SecurityRevision)(row.credentialRevision),
-						usablePrimary: row.status === "active",
-						factors: ["possession"],
-						userVerified: false,
-						phishingResistant: false,
-					}),
-				}),
-			],
-			cleanup: [],
-			sessionInvalidation: "same-authority-immediate",
-			otherReferences: () => sql`false`,
-			allocateCredentialId: uuid,
-			allocateRevision: uuid.pipe(Effect.map((value) => Sessions.SecurityRevision.make(value))),
-		})
+		const signIn = yield* Adapter.makeNativeOAuthSignInServices(
+			tables,
+			Adapter.captureOAuthMapping(signInMapping) as unknown as Adapter.OAuthNativeReadMapping,
+			batch,
+		)
+		const intents = yield* Adapter.makeNativeOAuthRegistrationIntentServices(
+			tables,
+			Adapter.captureOAuthMapping(
+				intentMapping,
+			) as unknown as Adapter.OAuthNativeRegistrationIntentMapping,
+			batch,
+		)
+		const registration = yield* Adapter.makeNativeOAuthRegistrationServices(
+			tables,
+			Adapter.captureOAuthMapping(
+				registrationMapping,
+			) as unknown as Adapter.OAuthNativeRegistrationMapping<typeof Registration.Type>,
+			batch,
+		)
+		const accounts = yield* Adapter.makeNativeOAuthAccountsServices(
+			tables,
+			Adapter.captureOAuthMapping(accountsMapping) as unknown as Adapter.OAuthNativeAccountsMapping,
+			batch,
+		)
 
 		return Context.make(OAuth.OAuthSignInPersistence, signIn.oauthSignInPersistence).pipe(
 			Context.add(OAuth.OAuthRegistrationIntents, {
@@ -305,5 +397,5 @@ export const OAuthStorageLive = Layer.effectContext(
 				registration.registrationAuthority,
 			),
 		)
-	}),
+	}).pipe(Effect.withSpan("HazelAuth.oauthStorage")),
 )

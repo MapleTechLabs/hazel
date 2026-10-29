@@ -20,7 +20,7 @@ import { PageOutMessage } from "../../../out-message"
 import { errorToast, successToast } from "../../../../data/actions"
 import { Message } from "./message"
 import type { Model } from "./model"
-import { InstallBot, init, update } from "./update"
+import { InstallBot, init, update as pageUpdate } from "./update"
 import { view } from "./view"
 import { sharedDefaults } from "../../../test-shared"
 
@@ -48,7 +48,10 @@ const deployBot = {
 }
 
 const loaded: Model = { ...init().model, bots: [deployBot] }
-const config = { update, view: (model: Model, h: Parameters<typeof view>[2]) => view(model, { shared }, h) }
+const config = {
+	update: (model: Model, message: Message) => pageUpdate(model, message, shared),
+	view: (model: Model, h: Parameters<typeof view>[2]) => view(model, { shared }, h),
+}
 
 describe("marketplace page", () => {
 	test("installs a bot and reports the failure toast, re-enabling the button", () => {
@@ -60,7 +63,7 @@ describe("marketplace page", () => {
 			config,
 			given(loaded),
 			click(role("button", { name: "Install" })),
-			Command.expectExact(InstallBot({ botId })),
+			Command.expectExact(InstallBot({ botId, organizationId: null })),
 			expectView(role("button", { name: "Installing..." })).toBeDisabled(),
 			Command.resolve(InstallBot, Message.FailedInstallBot({ botId, reason: "AlreadyInstalled" })),
 			expectOutMessage(PageOutMessage.RequestedToast({ toast })),

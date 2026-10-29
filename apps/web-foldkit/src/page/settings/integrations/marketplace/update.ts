@@ -1,10 +1,10 @@
-import { BotId } from "@hazel/schema"
-import { Effect } from "effect"
+import { BotId, OrganizationId } from "@hazel/schema"
+import { Effect, Schema } from "effect"
 import { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 import * as Interaction from "../../../../ui/aria/interaction"
 import { HazelRpc } from "../../../../rpc"
-import type { PageReturn } from "../../../contract"
+import type { PageReturn, Shared } from "../../../contract"
 import { PageOutMessage } from "../../../out-message"
 import { catchCommon, errorToastOf, successToast } from "../../../../data/actions"
 import type { PageSubscriptionInput } from "../../../contract"
@@ -14,10 +14,12 @@ import type { Model } from "./model"
 
 /** `installBotMutation` */
 export const InstallBot = Command.define("InstallBot", {
-	args: { botId: BotId },
+	args: { botId: BotId, organizationId: Schema.NullOr(OrganizationId) },
 	messages: [Message.SucceededInstallBot, Message.FailedInstallBot],
-	execute: ({ botId }) =>
-		HazelRpc.use((rpc) => rpc("bot.install", { botId })).pipe(
+	execute: ({ botId, organizationId }) =>
+		HazelRpc.use((rpc) =>
+			rpc("bot.install", { botId, organizationId: organizationId ?? undefined }),
+		).pipe(
 			Effect.as(Message.SucceededInstallBot({ botId })),
 			Effect.catchTags({
 				BotNotFoundError: () =>
@@ -54,7 +56,7 @@ export const init = (): Return => ({
 const doneInstalling = (model: Model, botId: BotId) =>
 	modifyFields(model, { installingBotIds: (ids) => ids.filter((id) => id !== botId) })
 
-export const update = (model: Model, message: Message): Return =>
+export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
 		UpdatedPublicBots: ({ bots }) => ({ model: modifyFields(model, { bots: () => bots }) }),
 		UpdatedInstalledBotIds: ({ botIds }) => ({
@@ -70,7 +72,7 @@ export const update = (model: Model, message: Message): Return =>
 							interaction: (state) =>
 								Interaction.disabledTargets(state, [installTarget(botId)]),
 						}),
-						commands: [InstallBot({ botId })],
+						commands: [InstallBot({ botId, organizationId: shared.organization?.id ?? null })],
 					},
 		SucceededInstallBot: ({ botId }) => ({
 			model: doneInstalling(model, botId),

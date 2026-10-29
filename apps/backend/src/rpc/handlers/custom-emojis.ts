@@ -12,6 +12,7 @@ import { Effect, Option } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
 import { CustomEmojiPolicy } from "../../policies/custom-emoji-policy"
 
+/** Custom emoji RPC handlers. Run in the `OrgObject` (`rpc/routing.ts`); org-local rows only. */
 export const CustomEmojiRpcLive = CustomEmojiRpcs.toLayer(
 	Effect.gen(function* () {
 		const db = yield* Database.Database
@@ -75,7 +76,7 @@ export const CustomEmojiRpcLive = CustomEmojiRpcs.toLayer(
 					)
 					.pipe(withRemapDbErrors("CustomEmoji", "create")),
 
-			"customEmoji.update": ({ id, ...payload }) =>
+			"customEmoji.update": ({ id, organizationId: _route, ...payload }) =>
 				db
 					.transaction(
 						Effect.gen(function* () {

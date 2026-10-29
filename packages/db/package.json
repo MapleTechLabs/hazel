@@ -8,27 +8,30 @@
 		".": "./src/index.ts",
 		"./schema": "./src/tables/index.ts",
 		"./tables": "./src/tables/index.ts",
-		"./migrate": "./src/migrate.ts"
+		"./stores": "./src/stores.ts",
+		"./node": "./src/node.ts"
 	},
 	"scripts": {
-		"db:generate": "bun --bun effect-orm generate",
-		"db:check": "bun --bun effect-orm check",
-		"db:migrate": "bun scripts/migrate.ts",
-		"db:status": "bun --bun effect-orm status",
-		"db:verify": "bun --bun effect-orm verify",
-		"setup": "bun scripts/migrate.ts",
-		"typecheck": "tsc --noEmit"
+		"db:generate-sqlite": "bun scripts/generate-sqlite.ts",
+		"test": "vitest run && vitest run --config vitest.workerd.config.ts",
+		"typecheck": "tsc --noEmit && tsc --noEmit -p test/workerd",
+		"test:workerd": "vitest run --config vitest.workerd.config.ts"
 	},
 	"dependencies": {
-		"@effect/sql-pg": "catalog:effect",
+		"@effect/sql-d1": "catalog:effect",
+		"@effect/sql-sqlite-node": "catalog:effect",
 		"@hazel/domain": "workspace:*",
 		"@hazel/schema": "workspace:*",
-		"@maple-dev/effect-orm": "0.6.0",
+		"@maple-dev/effect-orm": "0.8.0",
 		"effect": "catalog:effect"
 	},
 	"devDependencies": {
-		"@testcontainers/postgresql": "^10.18.0",
+		"@cloudflare/vitest-plugin": "^1.4.9",
+		"@cloudflare/workers-types": "catalog:alchemy",
+		"@effect/sql-sqlite-do": "catalog:effect",
 		"@types/bun": "1.3.9",
-		"typescript": "catalog:tooling"
+		"@types/node": "^24",
+		"typescript": "catalog:tooling",
+		"vitest": "^4.1.0"
 	}
 }

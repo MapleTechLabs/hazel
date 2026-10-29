@@ -71,14 +71,14 @@ const putToStorage = (uploadUrl: string, file: File, onProgress: (percent: numbe
 	})
 
 /** `attachment.fail`, so the row does not stay pending. Best-effort: the upload already failed for the user. */
-const markFailed = (id: AttachmentId, reason: string) =>
-	HazelRpc.use((client) => client("attachment.fail", { id, reason })).pipe(
+const markFailed = (id: AttachmentId, channelId: ChannelId, reason: string) =>
+	HazelRpc.use((client) => client("attachment.fail", { id, channelId, reason })).pipe(
 		Effect.timeout(Duration.seconds(10)),
 		Effect.ignore,
 	)
 
-const completeAttachment = (id: AttachmentId) =>
-	HazelRpc.use((client) => client("attachment.complete", { id }))
+const completeAttachment = (id: AttachmentId, channelId: ChannelId) =>
+	HazelRpc.use((client) => client("attachment.complete", { id, channelId }))
 
 /** Store the file for a presigned attachment and complete it; on any failure the attachment is marked failed. */
 const storeAndComplete = (
@@ -88,19 +88,19 @@ const storeAndComplete = (
 	onProgress: (percent: number) => void,
 ) =>
 	putToStorage(uploadUrl, args.file, onProgress).pipe(
-		Effect.andThen(completeAttachment(attachmentId)),
+		Effect.andThen(completeAttachment(attachmentId, args.channelId)),
 		Effect.as(UploadEvent.SucceededUpload({ fileId: args.fileId, attachmentId })),
 		Effect.catchTags({
 			StorageUploadError: ({ reason }) =>
-				markFailed(attachmentId, `Storage upload failed: ${reason}`).pipe(
+				markFailed(attachmentId, args.channelId, `Storage upload failed: ${reason}`).pipe(
 					Effect.as(UploadEvent.FailedUpload({ fileId: args.fileId, reason })),
 				),
 			AttachmentNotFoundError: () =>
 				Effect.succeed(UploadEvent.FailedUpload({ fileId: args.fileId, reason: "NotCompleted" })),
 		}),
 		// What is left is a common failure of `attachment.complete`.
-		Effect.tapError(() => markFailed(attachmentId, "Failed to finalize upload")),
-		Effect.onInterrupt(() => markFailed(attachmentId, "Upload cancelled")),
+		Effect.tapError(() => markFailed(attachmentId, args.channelId, "Failed to finalize upload")),
+		Effect.onInterrupt(() => markFailed(attachmentId, args.channelId, "Upload cancelled")),
 	)
 
 const upload = (args: UploadArgs, onProgress: (percent: number) => void) => {

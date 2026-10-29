@@ -61,14 +61,21 @@ export const liveQueryChangeSetStream = <Row, Message, Id extends string = strin
 							}),
 						)
 					}
-					const subscription = collection.subscribeChanges((changes) => {
-						signal()
-						if (!isReady) return snapshot()
-						const upserts = changes.flatMap((change) =>
-							change.type === "delete" ? [] : [change.value as Row],
-						)
-						Queue.offerUnsafe(queue, toMessage({ order: order(), upserts, isSnapshot: false }))
-					})
+					// Unfiltered: left unset, TanStack drops deletes of rows older than the subscription.
+					const subscription = collection.subscribeChanges(
+						(changes) => {
+							signal()
+							if (!isReady) return snapshot()
+							const upserts = changes.flatMap((change) =>
+								change.type === "delete" ? [] : [change.value as Row],
+							)
+							Queue.offerUnsafe(
+								queue,
+								toMessage({ order: order(), upserts, isSnapshot: false }),
+							)
+						},
+						{ includeInitialState: false },
+					)
 					collection.onFirstReady(() => {
 						signal()
 						if (!isReady) snapshot()

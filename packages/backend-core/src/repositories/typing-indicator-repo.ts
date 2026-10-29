@@ -1,4 +1,4 @@
-import { Database, PG, Repository, schema } from "@hazel/db"
+import { Database, SQLite, Repository, schema } from "@hazel/db"
 
 import { type ChannelId, type ChannelMemberId, TypingIndicatorId } from "@hazel/schema"
 import { TypingIndicator } from "@hazel/domain/models"
@@ -25,7 +25,7 @@ export class TypingIndicatorRepo extends Context.Service<TypingIndicatorRepo>()(
 			memberId: ChannelMemberId
 		}) =>
 			db.run(
-				PG.deleteFrom(schema.typingIndicatorsTable).where(($) => [
+				SQLite.deleteFrom(schema.typingIndicatorsTable).where(($) => [
 					$.channelId.eq(channelId),
 					$.memberId.eq(memberId),
 				]),
@@ -38,7 +38,7 @@ export class TypingIndicatorRepo extends Context.Service<TypingIndicatorRepo>()(
 			lastTyped: number
 		}) =>
 			db.run(
-				PG.insertInto(schema.typingIndicatorsTable)
+				SQLite.insertInto(schema.typingIndicatorsTable)
 					.values({
 						id: TypingIndicatorId.make(crypto.randomUUID()),
 						channelId: params.channelId,
@@ -56,7 +56,7 @@ export class TypingIndicatorRepo extends Context.Service<TypingIndicatorRepo>()(
 		const deleteStale = (thresholdMs: number = 10000) => {
 			const threshold = Date.now() - thresholdMs
 			return db.run(
-				PG.deleteFrom(schema.typingIndicatorsTable)
+				SQLite.deleteFrom(schema.typingIndicatorsTable)
 					.where(($) => [$.lastTyped.lt(threshold)])
 					.returning(),
 			)

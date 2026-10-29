@@ -1,6 +1,5 @@
 import { HttpApiBuilder } from "effect/http-api"
-import { AttachmentRepo, BotRepo, OrganizationRepo } from "@hazel/backend-core"
-import { Database } from "@hazel/db"
+import { BotRepo } from "@hazel/backend-core"
 import { CurrentUser, UnauthorizedError, withRemapDbErrors } from "@hazel/domain"
 import {
 	ALLOWED_AVATAR_TYPES,
@@ -12,14 +11,20 @@ import {
 	PresignUploadResponse,
 	UploadError,
 } from "@hazel/domain/http"
-import { AttachmentId } from "@hazel/schema"
+import { AttachmentId, type OrganizationId, type UserId } from "@hazel/schema"
 import { v7 as randomUUIDv7 } from "uuid"
-import { Effect, Match, Option } from "effect"
+import { Effect, Match, Option, Schema } from "effect"
 import { HazelApi } from "../api"
 import { AttachmentPolicy } from "../policies/attachment-policy"
-import { OrganizationPolicy } from "../policies/organization-policy"
 import { ObjectStorage } from "../services/object-storage"
 import { checkAvatarRateLimit } from "../services/rate-limit-helpers"
+import { Directory } from "../services/directory"
+import { AttachmentEffects, type CreateAttachmentPayload } from "../worker/objects/channel/attachments"
+import { WORKER_SENDER } from "../worker/objects/effects/registry"
+import { callObject } from "../worker/objects/calls"
+import { channelTarget, orgTarget } from "../worker/objects/kinds"
+import { IsOrgAdminCall } from "../worker/objects/org/api-v1"
+import { ObjectStubs } from "../worker/objects/protocol"
 
 /**
  * Get the public URL base for uploaded files.
@@ -38,11 +43,56 @@ const makePresignUploadResponse = (input: {
 
 export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handlers) =>
 	Effect.gen(function* () {
-		const db = yield* Database.Database
 		const storage = yield* ObjectStorage
 		const attachmentPolicy = yield* AttachmentPolicy
-		const organizationPolicy = yield* OrganizationPolicy
-		const attachmentRepo = yield* AttachmentRepo
+		const stubs = yield* ObjectStubs
+		const directory = yield* Directory
+
+		/** Admins and owners only: the org's members are its `OrgObject`'s. */
+		const requireOrgAdmin = Effect.fn("Uploads.requireOrgAdmin")(function* (
+			organizationId: OrganizationId,
+			userId: UserId,
+		) {
+			const isAdmin = yield* callObject(IsOrgAdminCall, orgTarget(organizationId), { userId }).pipe(
+				Effect.mapError(
+					(error) => new UploadError({ message: "The organization is unavailable", cause: error }),
+				),
+			)
+			if (!isAdmin) {
+				return yield* new UnauthorizedError({
+					message: "You can't manage this organization",
+					detail: `organizationId=${organizationId}`,
+				})
+			}
+		})
+
+		/** Create the `uploading` row in the channel's `ChannelObject` (a Connect mount's host). */
+		const createAttachmentInChannel = Effect.fn("Uploads.createAttachment")(function* (
+			payload: CreateAttachmentPayload,
+		) {
+			const index = yield* directory
+				.channel(payload.channelId)
+				.pipe(withRemapDbErrors("ChannelIndex", "select"))
+			const hostId = Option.match(index, {
+				onNone: () => payload.channelId,
+				onSome: (row) => row.hostChannelId ?? payload.channelId,
+			})
+			const kind = AttachmentEffects.createAttachment
+			const result = yield* stubs
+				.get(channelTarget(hostId))
+				.applyEffect({
+					objectId: hostId,
+					kind: kind.name,
+					payload: yield* Schema.encodeEffect(kind.payload)(payload).pipe(Effect.orDie),
+					key: `attachment:${payload.id}`,
+					sender: WORKER_SENDER,
+				})
+				.pipe(Effect.mapError(() => new UploadError({ message: "The channel is unreachable" })))
+			if (result._tag === "Rejected") {
+				yield* Effect.logWarning("Attachment upload refused", { message: result.message })
+				return yield* new UploadError({ message: "You can't upload to this channel" })
+			}
+		})
 
 		return handlers.handle(
 			"presign",
@@ -205,11 +255,9 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 								)
 							}
 
-							const orgRepo = yield* OrganizationRepo
-
-							// Check if organization exists
-							const orgOption = yield* orgRepo.findById(req.organizationId).pipe(Effect.orDie)
-							if (Option.isNone(orgOption)) {
+							// Check if organization exists (the directory's `org_index`)
+							const orgOption = yield* directory.org(req.organizationId).pipe(Effect.orDie)
+							if (Option.isNone(orgOption) || orgOption.value.deletedAt !== null) {
 								return yield* Effect.fail(
 									new OrganizationNotFoundForUploadError({
 										organizationId: req.organizationId,
@@ -218,7 +266,7 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 							}
 
 							// Check if user is an admin or owner of the organization
-							yield* organizationPolicy.canUpdate(req.organizationId)
+							yield* requireOrgAdmin(req.organizationId, user.id)
 
 							// Check rate limit (5 per hour)
 							yield* checkAvatarRateLimit(user.id)
@@ -281,7 +329,7 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 							}
 
 							// Check if user is admin/owner of the org
-							yield* organizationPolicy.canUpdate(req.organizationId)
+							yield* requireOrgAdmin(req.organizationId, user.id)
 
 							// Check rate limit (reuse avatar rate limit)
 							yield* checkAvatarRateLimit(user.id)
@@ -333,27 +381,16 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 								`Generating presigned URL for attachment upload: ${attachmentId} (size: ${req.fileSize} bytes, type: ${req.contentType})`,
 							)
 
-							// Create attachment record with "uploading" status
-							// Validates user has permission to upload to the specified channel/org
+							// The row lives in the channel's object, which refuses a non-viewer.
 							yield* attachmentPolicy.canCreate()
-							yield* db
-								.transaction(
-									Effect.gen(function* () {
-										yield* attachmentRepo.insert({
-											id: attachmentId,
-											uploadedBy: user.id,
-											organizationId,
-											status: "uploading",
-											channelId,
-											messageId: null,
-											fileName,
-											fileSize: req.fileSize,
-											externalUrl: null,
-											uploadedAt: new Date(),
-										})
-									}),
-								)
-								.pipe(withRemapDbErrors("AttachmentRepo", "create"))
+							yield* createAttachmentInChannel({
+								id: attachmentId,
+								organizationId,
+								channelId,
+								uploadedBy: user.id,
+								fileName,
+								fileSize: req.fileSize,
+							})
 
 							// Generate presigned URL
 							const uploadUrl = yield* storage

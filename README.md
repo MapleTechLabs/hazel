@@ -1,6 +1,6 @@
 # Hazel Chat
 
-A modern, real-time collaborative chat platform built with Effect-TS, Foldkit, ElectricSQL, TanStack DB, and PostgreSQL.
+A modern, real-time collaborative chat platform built with Effect-TS, Foldkit, TanStack DB and Cloudflare Durable Objects.
 
 ## Overview
 
@@ -9,8 +9,8 @@ Hazel Chat is a full-stack chat application featuring:
 - **Effect-TS** for type-safe, functional backend programming
 - **Foldkit** for an Elm-style frontend on Effect
 - **Type-safe RPC** for seamless client-server communication
-- **Local-first architecture** with Electric SQL for real-time sync
-- **Distributed workflows** via Effect Cluster for background jobs
+- **Real-time sync** from Durable Objects (one per organization, channel and user) into TanStack DB
+- **Background work** (notifications, RSS, webhooks, thread naming) inside those objects
 
 ## Features
 
@@ -35,21 +35,15 @@ Hazel Chat is a full-stack chat application featuring:
 - **TailwindCSS v4** with `tailwind-variants`
 - **`@foldkit/ui`** components
 - **ProseMirror** for the message composer
-- **Electric SQL** for local-first real-time sync
+- **Durable Object sync** over WebSockets (`libs/effect-db-collection`)
 
 ### Backend
 
-- **Bun** runtime
+- **Cloudflare Workers** and **Durable Objects**, deployed and run locally with **Alchemy**
 - **Effect-TS** functional programming framework
 - **Effect RPC** for type-safe APIs
-- **effect-orm** (`@maple-dev/effect-orm`) with PostgreSQL
-- **Clerk** for authentication
-
-### Cluster Service
-
-- **Effect Cluster** for distributed systems
-- **Effect Workflow** for durable background jobs
-- PostgreSQL-backed persistence
+- **effect-orm** (`@maple-dev/effect-orm`) on SQLite: Durable Object storage and D1
+- **Hazel auth** (`@hazel/auth`) for sign-in and sessions
 
 ### Development Tools
 
@@ -62,13 +56,13 @@ Hazel Chat is a full-stack chat application featuring:
 ```
 ├── apps/
 │   ├── web-foldkit/         # Foldkit frontend (port 3100)
-│   ├── backend/             # Effect-TS API server (port 3003)
-│   ├── cluster/             # Distributed workflow service (port 3020)
-│   ├── electric-proxy/      # Electric SQL proxy worker
+│   ├── backend/             # api Worker: HTTP API, RPC and the Durable Objects holding the data
+│   ├── bot-gateway/         # Bot gateway Worker and its per-bot Durable Object
 │   └── link-preview-worker/ # Link preview generation
 ├── packages/
-│   ├── db/                  # effect-orm table definitions and migrations (`migrations/`)
-│   ├── domain/              # Shared types, RPC contracts, cluster definitions
+│   ├── db/                  # effect-orm SQLite tables, per-store table lists, migrations
+│   ├── sync-do/             # Durable Object sync runtime
+│   ├── domain/              # Shared types, RPC contracts, sync protocol
 │   ├── backend-core/        # Reusable backend services and repositories
 │   ├── schema/              # Shared schema definitions
 │   └── ...
@@ -78,7 +72,7 @@ Hazel Chat is a full-stack chat application featuring:
 ## Prerequisites
 
 - [Bun](https://bun.sh/) **v1.2.14 or later** (required for [workspace catalogs](https://bun.sh/blog/release-notes/bun-v1.2.14))
-- [Docker](https://docker.com/) (for local services)
+- [Docker](https://docker.com/) (MinIO, the local S3 for uploads)
 - [Clerk](https://clerk.com/) account (for authentication)
 
 ## Getting Started
@@ -103,12 +97,10 @@ Hazel Chat is a full-stack chat application featuring:
     ```
 
     This interactive CLI will:
-    - Start Docker services (PostgreSQL, Redis, Electric, MinIO)
+    - Start Docker services (MinIO)
     - Validate your environment
-    - Configure Clerk authentication
     - Generate secrets
-    - Create all necessary `.env` files
-    - Initialize the database
+    - Write `.env.local` (what `bun run alchemy:dev` reads; see `.env.local.example`) and the bots' `.env` files
 
 4. **Start development**
 
@@ -116,22 +108,14 @@ Hazel Chat is a full-stack chat application featuring:
     bun run dev
     ```
 
-    This starts the core development stack via Turborepo:
-    - Web: http://localhost:3100
-    - Backend: http://localhost:3003
-    - Cluster: http://localhost:3020
-    - Bot gateway: http://localhost:3034
+    This runs `bun run alchemy:dev`: every Worker (the api with its Durable Objects and the
+    directory D1, the bot gateway, link preview, actors) runs locally in workerd, plus the web
+    app's dev server. Local state lives in `.alchemy/`.
 
-    To start local bot apps alongside the shared gateway, run:
+    To start local bot apps, run:
 
     ```bash
     bun run dev:bots
-    ```
-
-    To start everything at once, run:
-
-    ```bash
-    bun run dev:withBots
     ```
 
 ## Clerk Configuration
@@ -156,9 +140,8 @@ Copy the signing secret into `CLERK_WEBHOOK_SECRET`.
 
 | Command                 | Description                                 |
 | ----------------------- | ------------------------------------------- |
-| `bun run dev`           | Start core apps and the bot gateway         |
-| `bun run dev:bots`      | Start the bot gateway and local bot apps    |
-| `bun run dev:withBots`  | Start everything in development mode        |
+| `bun run dev`           | Start the whole stack (`alchemy:dev`)       |
+| `bun run dev:bots`      | Start local bot apps                        |
 | `bun run build`         | Build all apps and packages                 |
 | `bun run typecheck`     | Run TypeScript checking across all packages |
 | `bun run format`        | Format and lint code with OXC               |
@@ -187,19 +170,12 @@ Type-safe client-server communication using Effect RPC:
 
 ### Real-time Sync
 
-Electric SQL provides local-first data synchronization:
+Each organization, channel and user is a Durable Object with its own SQLite
+(`infra/durable-object-sync-plan.md`):
 
-- Optimistic updates with automatic conflict resolution
-- Offline support with background sync
-- Reactive queries via TanStack DB collections
-
-### Workflow System
-
-Effect Cluster handles background jobs:
-
-- Durable workflow execution
-- Automatic retries and failure handling
-- PostgreSQL-backed persistence
+- Clients open a WebSocket per object and receive their visible rows, then live changes
+- Writes return a `transactionId` the client awaits before dropping its optimistic state
+- Side effects between objects go through a transactional outbox, retried by alarms
 
 ## Documentation
 

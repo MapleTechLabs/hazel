@@ -6,6 +6,11 @@ import { Effect } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
 import { AttachmentPolicy } from "../../policies/attachment-policy"
 
+/**
+ * Attachment RPC handlers. Run in the attachment's `ChannelObject` (routed by the payload's
+ * `channelId`), where the upload route created the row (`channel.createAttachment`). Uploads left
+ * `uploading` fail on the object's alarm (`worker/objects/channel/uploads.ts`).
+ */
 export const AttachmentRpcLive = AttachmentRpcs.toLayer(
 	Effect.gen(function* () {
 		const db = yield* Database.Database

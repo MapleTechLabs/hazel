@@ -1,0 +1,2184 @@
+{
+	"migration": "0001_initial",
+	"entities": [
+		{
+			"kind": "table",
+			"name": "auth_credentials",
+			"primaryKey": null
+		},
+		{
+			"kind": "table",
+			"name": "auth_identifiers",
+			"primaryKey": null
+		},
+		{
+			"kind": "table",
+			"name": "auth_oauth_flows",
+			"primaryKey": null
+		},
+		{
+			"kind": "table",
+			"name": "auth_oauth_identities",
+			"primaryKey": {
+				"columns": ["identityKey"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "auth_oauth_logins",
+			"primaryKey": {
+				"columns": ["credentialId"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "auth_oauth_registrations",
+			"primaryKey": null
+		},
+		{
+			"kind": "table",
+			"name": "auth_passkey_credentials",
+			"primaryKey": null
+		},
+		{
+			"kind": "table",
+			"name": "auth_passkey_flows",
+			"primaryKey": null
+		},
+		{
+			"kind": "table",
+			"name": "auth_pending",
+			"primaryKey": null
+		},
+		{
+			"kind": "table",
+			"name": "auth_sessions",
+			"primaryKey": null
+		},
+		{
+			"kind": "table",
+			"name": "bot_commands",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "bots",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "channel_index",
+			"primaryKey": {
+				"columns": ["channelId"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "chat_sync_index",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "connect_invites",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "integration_index",
+			"primaryKey": {
+				"columns": ["provider", "externalId"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "membership_index",
+			"primaryKey": {
+				"columns": ["userId", "organizationId"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "org_index",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "organization_invitations",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "users",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "webhook_index",
+			"primaryKey": {
+				"columns": ["webhookId"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "yielded_browser_login",
+			"primaryKey": {
+				"columns": ["namespace", "attempt_id"]
+			}
+		},
+		{
+			"kind": "column",
+			"table": "auth_credentials",
+			"name": "credentialId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_credentials",
+			"name": "subjectId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_credentials",
+			"name": "revision",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_credentials",
+			"name": "active",
+			"position": 3,
+			"type": "integer",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_identifiers",
+			"name": "moduleId",
+			"position": 0,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_identifiers",
+			"name": "credentialId",
+			"position": 1,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_identifiers",
+			"name": "namespace",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_identifiers",
+			"name": "value",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_identifiers",
+			"name": "subjectId",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_identifiers",
+			"name": "revision",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_identifiers",
+			"name": "verifiedAt",
+			"position": 6,
+			"type": "integer",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_identifiers",
+			"name": "active",
+			"position": 7,
+			"type": "integer",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_flows",
+			"name": "moduleId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_flows",
+			"name": "flowId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_flows",
+			"name": "purpose",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_flows",
+			"name": "generation",
+			"position": 3,
+			"type": "integer",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_flows",
+			"name": "provider",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_flows",
+			"name": "callbackId",
+			"position": 5,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_flows",
+			"name": "issuer",
+			"position": 6,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_flows",
+			"name": "responseIssuerMode",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_flows",
+			"name": "subjectId",
+			"position": 8,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_flows",
+			"name": "stateDigest",
+			"position": 9,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_flows",
+			"name": "binderVerifier",
+			"position": 10,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_flows",
+			"name": "binderExpiresAt",
+			"position": 11,
+			"type": "integer",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_flows",
+			"name": "snapshot",
+			"position": 12,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_flows",
+			"name": "issuedAt",
+			"position": 13,
+			"type": "integer",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_flows",
+			"name": "expiresAt",
+			"position": 14,
+			"type": "integer",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_identities",
+			"name": "identityKey",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_identities",
+			"name": "provider",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_identities",
+			"name": "issuer",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_identities",
+			"name": "externalSubject",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_identities",
+			"name": "subjectId",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_logins",
+			"name": "moduleId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_logins",
+			"name": "credentialId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_logins",
+			"name": "subjectId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_logins",
+			"name": "identityKey",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_logins",
+			"name": "credentialRevision",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_logins",
+			"name": "status",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_registrations",
+			"name": "moduleId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_registrations",
+			"name": "reference",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_registrations",
+			"name": "flowId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_registrations",
+			"name": "identityKey",
+			"position": 3,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_registrations",
+			"name": "snapshot",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_registrations",
+			"name": "expiresAt",
+			"position": 5,
+			"type": "integer",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_oauth_registrations",
+			"name": "retentionUntil",
+			"position": 6,
+			"type": "integer",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_passkey_credentials",
+			"name": "credentialId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_passkey_credentials",
+			"name": "subjectId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_passkey_credentials",
+			"name": "rpId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_passkey_credentials",
+			"name": "protocolCredentialId",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_passkey_credentials",
+			"name": "credentialKey",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_passkey_credentials",
+			"name": "userHandle",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_passkey_credentials",
+			"name": "publicKey",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_passkey_credentials",
+			"name": "algorithm",
+			"position": 7,
+			"type": "integer",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_passkey_credentials",
+			"name": "profile",
+			"position": 8,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_passkey_credentials",
+			"name": "credentialRevision",
+			"position": 9,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_passkey_credentials",
+			"name": "active",
+			"position": 10,
+			"type": "integer",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_passkey_credentials",
+			"name": "primarySignIn",
+			"position": 11,
+			"type": "integer",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_passkey_credentials",
+			"name": "enrollmentUserVerified",
+			"position": 12,
+			"type": "integer",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_passkey_credentials",
+			"name": "backupEligible",
+			"position": 13,
+			"type": "integer",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_passkey_credentials",
+			"name": "backupState",
+			"position": 14,
+			"type": "integer",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_passkey_credentials",
+			"name": "counter",
+			"position": 15,
+			"type": "integer",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_passkey_credentials",
+			"name": "name",
+			"position": 16,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_passkey_credentials",
+			"name": "createdAt",
+			"position": 17,
+			"type": "integer",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_passkey_credentials",
+			"name": "lastUsedAt",
+			"position": 18,
+			"type": "integer",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_passkey_flows",
+			"name": "moduleId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_passkey_flows",
+			"name": "flowId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_passkey_flows",
+			"name": "purpose",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_passkey_flows",
+			"name": "snapshot",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_passkey_flows",
+			"name": "requestBindingVerifier",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_passkey_flows",
+			"name": "requestBindingExpiresAt",
+			"position": 5,
+			"type": "integer",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_passkey_flows",
+			"name": "issuedAt",
+			"position": 6,
+			"type": "integer",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_passkey_flows",
+			"name": "expiresAt",
+			"position": 7,
+			"type": "integer",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_pending",
+			"name": "moduleId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_pending",
+			"name": "kind",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_pending",
+			"name": "digest",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_pending",
+			"name": "version",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_pending",
+			"name": "flowId",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_pending",
+			"name": "subjectId",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_pending",
+			"name": "bindingDigest",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_pending",
+			"name": "snapshot",
+			"position": 7,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_pending",
+			"name": "expiresAt",
+			"position": 8,
+			"type": "integer",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_pending",
+			"name": "attemptLimit",
+			"position": 9,
+			"type": "integer",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_pending",
+			"name": "failedAttempts",
+			"position": 10,
+			"type": "integer",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_pending",
+			"name": "consumed",
+			"position": 11,
+			"type": "integer",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_sessions",
+			"name": "sessionId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_sessions",
+			"name": "subjectId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_sessions",
+			"name": "digest",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_sessions",
+			"name": "securityRevision",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_sessions",
+			"name": "issuedAt",
+			"position": 4,
+			"type": "integer",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_sessions",
+			"name": "expiresAt",
+			"position": 5,
+			"type": "integer",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_sessions",
+			"name": "absoluteExpiresAt",
+			"position": 6,
+			"type": "integer",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "auth_sessions",
+			"name": "record",
+			"position": 7,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bot_commands",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "bot_commands",
+			"name": "botId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bot_commands",
+			"name": "name",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bot_commands",
+			"name": "description",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bot_commands",
+			"name": "arguments",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": "'[]'"
+		},
+		{
+			"kind": "column",
+			"table": "bot_commands",
+			"name": "usageExample",
+			"position": 5,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bot_commands",
+			"name": "isEnabled",
+			"position": 6,
+			"type": "integer",
+			"notNull": true,
+			"default": "true"
+		},
+		{
+			"kind": "column",
+			"table": "bot_commands",
+			"name": "createdAt",
+			"position": 7,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "bot_commands",
+			"name": "updatedAt",
+			"position": 8,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "userId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "createdBy",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "name",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "description",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "webhookUrl",
+			"position": 5,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "apiTokenHash",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "scopes",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "metadata",
+			"position": 8,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "isPublic",
+			"position": 9,
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "installCount",
+			"position": 10,
+			"type": "integer",
+			"notNull": true,
+			"default": "0"
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "mentionable",
+			"position": 11,
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "allowedIntegrations",
+			"position": 12,
+			"type": "text",
+			"notNull": false,
+			"default": "'[]'"
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "createdAt",
+			"position": 13,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "updatedAt",
+			"position": 14,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "deletedAt",
+			"position": 15,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_index",
+			"name": "channelId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_index",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_index",
+			"name": "hostChannelId",
+			"position": 2,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_index",
+			"name": "deletedAt",
+			"position": 3,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_index",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_index",
+			"name": "provider",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_index",
+			"name": "externalWorkspaceId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_index",
+			"name": "externalChannelId",
+			"position": 3,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_index",
+			"name": "organizationId",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_index",
+			"name": "channelId",
+			"position": 5,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "connect_invites",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "connect_invites",
+			"name": "conversationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "connect_invites",
+			"name": "hostOrganizationId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "connect_invites",
+			"name": "hostChannelId",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "connect_invites",
+			"name": "targetKind",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "connect_invites",
+			"name": "targetValue",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "connect_invites",
+			"name": "guestOrganizationId",
+			"position": 6,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "connect_invites",
+			"name": "status",
+			"position": 7,
+			"type": "text",
+			"notNull": true,
+			"default": "'pending'"
+		},
+		{
+			"kind": "column",
+			"table": "connect_invites",
+			"name": "allowGuestMemberAdds",
+			"position": 8,
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "connect_invites",
+			"name": "invitedBy",
+			"position": 9,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "connect_invites",
+			"name": "acceptedBy",
+			"position": 10,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "connect_invites",
+			"name": "acceptedAt",
+			"position": 11,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "connect_invites",
+			"name": "expiresAt",
+			"position": 12,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "connect_invites",
+			"name": "createdAt",
+			"position": 13,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "connect_invites",
+			"name": "updatedAt",
+			"position": 14,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "connect_invites",
+			"name": "deletedAt",
+			"position": 15,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "integration_index",
+			"name": "provider",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "integration_index",
+			"name": "externalId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "integration_index",
+			"name": "organizationId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "membership_index",
+			"name": "userId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "membership_index",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "membership_index",
+			"name": "deletedAt",
+			"position": 2,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "org_index",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "org_index",
+			"name": "slug",
+			"position": 1,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "org_index",
+			"name": "name",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "org_index",
+			"name": "isPublic",
+			"position": 3,
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "org_index",
+			"name": "deletedAt",
+			"position": 4,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "organization_invitations",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "organization_invitations",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "organization_invitations",
+			"name": "email",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "organization_invitations",
+			"name": "role",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": "'member'"
+		},
+		{
+			"kind": "column",
+			"table": "organization_invitations",
+			"name": "tokenHash",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "organization_invitations",
+			"name": "invitedBy",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "organization_invitations",
+			"name": "status",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": "'pending'"
+		},
+		{
+			"kind": "column",
+			"table": "organization_invitations",
+			"name": "expiresAt",
+			"position": 7,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "organization_invitations",
+			"name": "acceptedBy",
+			"position": 8,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "organization_invitations",
+			"name": "acceptedAt",
+			"position": 9,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "organization_invitations",
+			"name": "createdAt",
+			"position": 10,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "organization_invitations",
+			"name": "updatedAt",
+			"position": 11,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "users",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "users",
+			"name": "externalId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "users",
+			"name": "authActive",
+			"position": 2,
+			"type": "integer",
+			"notNull": true,
+			"default": "true"
+		},
+		{
+			"kind": "column",
+			"table": "users",
+			"name": "securityRevision",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": "'initial'"
+		},
+		{
+			"kind": "column",
+			"table": "users",
+			"name": "email",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "users",
+			"name": "firstName",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "users",
+			"name": "lastName",
+			"position": 6,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "users",
+			"name": "avatarUrl",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "users",
+			"name": "userType",
+			"position": 8,
+			"type": "text",
+			"notNull": true,
+			"default": "'user'"
+		},
+		{
+			"kind": "column",
+			"table": "users",
+			"name": "settings",
+			"position": 9,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "users",
+			"name": "isOnboarded",
+			"position": 10,
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "users",
+			"name": "timezone",
+			"position": 11,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "users",
+			"name": "createdAt",
+			"position": 12,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "users",
+			"name": "updatedAt",
+			"position": 13,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "users",
+			"name": "deletedAt",
+			"position": 14,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "webhook_index",
+			"name": "webhookId",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "webhook_index",
+			"name": "organizationId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "webhook_index",
+			"name": "channelId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "webhook_index",
+			"name": "tokenHash",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "yielded_browser_login",
+			"name": "namespace",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "yielded_browser_login",
+			"name": "attempt_id",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "yielded_browser_login",
+			"name": "version",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "yielded_browser_login",
+			"name": "expires_at_millis",
+			"position": 3,
+			"type": "integer",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "yielded_browser_login",
+			"name": "payload",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "index",
+			"table": "auth_credentials",
+			"name": "auth_credentials_credentialId_unique",
+			"unique": true,
+			"columns": ["\"credentialId\""]
+		},
+		{
+			"kind": "index",
+			"table": "auth_credentials",
+			"name": "auth_credentials_subject_credential",
+			"unique": true,
+			"columns": ["\"subjectId\"", "\"credentialId\""]
+		},
+		{
+			"kind": "index",
+			"table": "auth_identifiers",
+			"name": "auth_identifiers_namespace_value",
+			"unique": true,
+			"columns": ["\"namespace\"", "\"value\""]
+		},
+		{
+			"kind": "index",
+			"table": "auth_oauth_flows",
+			"name": "auth_oauth_flows_module_flow",
+			"unique": true,
+			"columns": ["\"moduleId\"", "\"flowId\""]
+		},
+		{
+			"kind": "index",
+			"table": "auth_oauth_flows",
+			"name": "auth_oauth_flows_stateDigest_unique",
+			"unique": true,
+			"columns": ["\"stateDigest\""]
+		},
+		{
+			"kind": "index",
+			"table": "auth_oauth_identities",
+			"name": "auth_oauth_identities_subject_idx",
+			"unique": false,
+			"columns": ["\"subjectId\""]
+		},
+		{
+			"kind": "index",
+			"table": "auth_oauth_logins",
+			"name": "auth_oauth_logins_identityKey_unique",
+			"unique": true,
+			"columns": ["\"identityKey\""]
+		},
+		{
+			"kind": "index",
+			"table": "auth_oauth_logins",
+			"name": "auth_oauth_logins_owner_idx",
+			"unique": false,
+			"columns": ["\"identityKey\"", "\"subjectId\""]
+		},
+		{
+			"kind": "index",
+			"table": "auth_oauth_registrations",
+			"name": "auth_oauth_registrations_module_flow",
+			"unique": true,
+			"columns": ["\"moduleId\"", "\"flowId\""]
+		},
+		{
+			"kind": "index",
+			"table": "auth_oauth_registrations",
+			"name": "auth_oauth_registrations_module_reference",
+			"unique": true,
+			"columns": ["\"moduleId\"", "\"reference\""]
+		},
+		{
+			"kind": "index",
+			"table": "auth_passkey_credentials",
+			"name": "auth_passkey_credentials_credentialId_unique",
+			"unique": true,
+			"columns": ["\"credentialId\""]
+		},
+		{
+			"kind": "index",
+			"table": "auth_passkey_credentials",
+			"name": "auth_passkey_credentials_credentialKey_unique",
+			"unique": true,
+			"columns": ["\"credentialKey\""]
+		},
+		{
+			"kind": "index",
+			"table": "auth_passkey_credentials",
+			"name": "auth_passkey_credentials_subject_idx",
+			"unique": false,
+			"columns": ["\"subjectId\""]
+		},
+		{
+			"kind": "index",
+			"table": "auth_passkey_flows",
+			"name": "auth_passkey_flows_module_flow",
+			"unique": true,
+			"columns": ["\"moduleId\"", "\"flowId\""]
+		},
+		{
+			"kind": "index",
+			"table": "auth_pending",
+			"name": "auth_pending_digest_unique",
+			"unique": true,
+			"columns": ["\"digest\""]
+		},
+		{
+			"kind": "index",
+			"table": "auth_sessions",
+			"name": "auth_sessions_digest_unique",
+			"unique": true,
+			"columns": ["\"digest\""]
+		},
+		{
+			"kind": "index",
+			"table": "auth_sessions",
+			"name": "auth_sessions_sessionId_unique",
+			"unique": true,
+			"columns": ["\"sessionId\""]
+		},
+		{
+			"kind": "index",
+			"table": "auth_sessions",
+			"name": "auth_sessions_subject_idx",
+			"unique": false,
+			"columns": ["\"subjectId\""]
+		},
+		{
+			"kind": "index",
+			"table": "bot_commands",
+			"name": "bot_commands_bot_id_idx",
+			"unique": false,
+			"columns": ["\"botId\""]
+		},
+		{
+			"kind": "index",
+			"table": "bot_commands",
+			"name": "bot_commands_bot_id_name_idx",
+			"unique": true,
+			"columns": ["\"botId\"", "\"name\""]
+		},
+		{
+			"kind": "index",
+			"table": "bots",
+			"name": "bots_created_by_idx",
+			"unique": false,
+			"columns": ["\"createdBy\""]
+		},
+		{
+			"kind": "index",
+			"table": "bots",
+			"name": "bots_deleted_at_idx",
+			"unique": false,
+			"columns": ["\"deletedAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "bots",
+			"name": "bots_is_public_idx",
+			"unique": false,
+			"columns": ["\"isPublic\""]
+		},
+		{
+			"kind": "index",
+			"table": "bots",
+			"name": "bots_userId_unique",
+			"unique": true,
+			"columns": ["\"userId\""]
+		},
+		{
+			"kind": "index",
+			"table": "bots",
+			"name": "bots_user_id_idx",
+			"unique": false,
+			"columns": ["\"userId\""]
+		},
+		{
+			"kind": "index",
+			"table": "channel_index",
+			"name": "channel_index_host_channel_id_idx",
+			"unique": false,
+			"columns": ["\"hostChannelId\""]
+		},
+		{
+			"kind": "index",
+			"table": "channel_index",
+			"name": "channel_index_organization_id_idx",
+			"unique": false,
+			"columns": ["\"organizationId\""]
+		},
+		{
+			"kind": "index",
+			"table": "chat_sync_index",
+			"name": "chat_sync_index_external_unique",
+			"unique": true,
+			"columns": ["\"provider\"", "\"externalWorkspaceId\"", "\"externalChannelId\""]
+		},
+		{
+			"kind": "index",
+			"table": "chat_sync_index",
+			"name": "chat_sync_index_organization_id_idx",
+			"unique": false,
+			"columns": ["\"organizationId\""]
+		},
+		{
+			"kind": "index",
+			"table": "connect_invites",
+			"name": "connect_invites_conversation_idx",
+			"unique": false,
+			"columns": ["\"conversationId\""]
+		},
+		{
+			"kind": "index",
+			"table": "connect_invites",
+			"name": "connect_invites_deleted_at_idx",
+			"unique": false,
+			"columns": ["\"deletedAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "connect_invites",
+			"name": "connect_invites_guest_org_idx",
+			"unique": false,
+			"columns": ["\"guestOrganizationId\""]
+		},
+		{
+			"kind": "index",
+			"table": "connect_invites",
+			"name": "connect_invites_host_org_idx",
+			"unique": false,
+			"columns": ["\"hostOrganizationId\""]
+		},
+		{
+			"kind": "index",
+			"table": "connect_invites",
+			"name": "connect_invites_status_idx",
+			"unique": false,
+			"columns": ["\"status\""]
+		},
+		{
+			"kind": "index",
+			"table": "connect_invites",
+			"name": "connect_invites_target_idx",
+			"unique": false,
+			"columns": ["\"targetKind\"", "\"targetValue\""]
+		},
+		{
+			"kind": "index",
+			"table": "integration_index",
+			"name": "integration_index_organization_id_idx",
+			"unique": false,
+			"columns": ["\"organizationId\""]
+		},
+		{
+			"kind": "index",
+			"table": "membership_index",
+			"name": "membership_index_organization_id_idx",
+			"unique": false,
+			"columns": ["\"organizationId\""]
+		},
+		{
+			"kind": "index",
+			"table": "org_index",
+			"name": "org_index_slug_idx",
+			"unique": false,
+			"columns": ["\"slug\""]
+		},
+		{
+			"kind": "index",
+			"table": "organization_invitations",
+			"name": "organization_invitations_organization_id_idx",
+			"unique": false,
+			"columns": ["\"organizationId\""]
+		},
+		{
+			"kind": "index",
+			"table": "organization_invitations",
+			"name": "organization_invitations_token_hash_idx",
+			"unique": true,
+			"columns": ["\"tokenHash\""]
+		},
+		{
+			"kind": "index",
+			"table": "users",
+			"name": "users_deleted_at_idx",
+			"unique": false,
+			"columns": ["\"deletedAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "users",
+			"name": "users_email_idx",
+			"unique": false,
+			"columns": ["\"email\""]
+		},
+		{
+			"kind": "index",
+			"table": "users",
+			"name": "users_externalId_unique",
+			"unique": true,
+			"columns": ["\"externalId\""]
+		},
+		{
+			"kind": "index",
+			"table": "users",
+			"name": "users_external_id_idx",
+			"unique": false,
+			"columns": ["\"externalId\""]
+		},
+		{
+			"kind": "index",
+			"table": "users",
+			"name": "users_user_type_idx",
+			"unique": false,
+			"columns": ["\"userType\""]
+		},
+		{
+			"kind": "index",
+			"table": "webhook_index",
+			"name": "webhook_index_token_hash_unique",
+			"unique": true,
+			"columns": ["\"tokenHash\""]
+		}
+	],
+	"extraIndexes": [
+		{
+			"name": "organization_invitations_pending_email_idx",
+			"table": "organization_invitations",
+			"unique": true,
+			"on": ["organizationId", "email"],
+			"where": "\"status\" = 'pending'"
+		}
+	]
+}

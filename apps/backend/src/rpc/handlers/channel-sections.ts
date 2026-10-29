@@ -1,5 +1,5 @@
 import { ChannelRepo, ChannelSectionRepo } from "@hazel/backend-core"
-import { Database, PG, schema } from "@hazel/db"
+import { Database, SQLite, schema } from "@hazel/db"
 import { ErrorUtils, withRemapDbErrors } from "@hazel/domain"
 import {
 	ChannelNotFoundError,
@@ -13,6 +13,7 @@ import { withAnnotatedScope } from "../../lib/policy-utils"
 import { ChannelSectionPolicy } from "../../policies/channel-section-policy"
 import { OrgResolver } from "../../services/org-resolver"
 
+/** Channel section RPC handlers. Run in the `OrgObject` (`rpc/routing.ts`); org-local rows only. */
 export const ChannelSectionRpcLive = ChannelSectionRpcs.toLayer(
 	Effect.gen(function* () {
 		const db = yield* Database.Database
@@ -30,9 +31,9 @@ export const ChannelSectionRpcLive = ChannelSectionRpcs.toLayer(
 							let order = payload.order
 							if (order === 0) {
 								const maxOrderResult = yield* db.run(
-									PG.from(schema.channelSectionsTable)
+									SQLite.from(schema.channelSectionsTable)
 										.select(($) => ({
-											maxOrder: PG.coalesce(PG.max($.order), PG.lit(-1)),
+											maxOrder: SQLite.coalesce(SQLite.max($.order), SQLite.lit(-1)),
 										}))
 										.where(($) => [$.organizationId.eq(payload.organizationId)]),
 								)
@@ -60,7 +61,7 @@ export const ChannelSectionRpcLive = ChannelSectionRpcs.toLayer(
 					)
 					.pipe(withRemapDbErrors("ChannelSection", "create")),
 
-			"channelSection.update": ({ id, ...payload }) =>
+			"channelSection.update": ({ id, organizationId: _route, ...payload }) =>
 				db
 					.transaction(
 						Effect.gen(function* () {
@@ -94,7 +95,7 @@ export const ChannelSectionRpcLive = ChannelSectionRpcs.toLayer(
 
 							// Update all channels in this section to have null sectionId
 							yield* db.run(
-								PG.update(schema.channelsTable)
+								SQLite.update(schema.channelsTable)
 									.set({ sectionId: null })
 									.where(($) => [$.sectionId.eq(id)]),
 							)
@@ -115,11 +116,11 @@ export const ChannelSectionRpcLive = ChannelSectionRpcs.toLayer(
 						Effect.gen(function* () {
 							yield* channelSectionPolicy.canReorder(organizationId)
 							yield* db.run(
-								PG.update(schema.channelSectionsTable)
+								SQLite.update(schema.channelSectionsTable)
 									.set(($) => ({
-										order: PG.caseWhen(
+										order: SQLite.caseWhen(
 											sectionIds.map(
-												(id, index) => [$.id.eq(id), PG.lit(index)] as const,
+												(id, index) => [$.id.eq(id), SQLite.lit(index)] as const,
 											),
 											$.order,
 										),

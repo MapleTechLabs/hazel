@@ -7,7 +7,10 @@ import { botId } from "../../../../test/pages-integrations-fixtures"
 import { reasonToast } from "../../../../data/actions"
 import { PageOutMessage } from "../../../out-message"
 import { Message } from "./message"
-import { InstallBot, init, update } from "./update"
+import { makeShared, storyUpdate } from "../../../../test/pages-fixtures"
+import { InstallBot, init, update as pageUpdate } from "./update"
+
+const update = storyUpdate(pageUpdate, makeShared())
 
 /** Marketplace installs: per-bot pending state and its guard. */
 

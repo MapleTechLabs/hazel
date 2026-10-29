@@ -1,4 +1,4 @@
-import { Database, PG, Repository, schema } from "@hazel/db"
+import { Database, SQLite, Repository, schema } from "@hazel/db"
 import type { ChannelId, ConnectConversationId, OrganizationId } from "@hazel/schema"
 import { ConnectConversationChannel } from "@hazel/domain/models"
 import { Context, Effect, Layer } from "effect"
@@ -19,7 +19,7 @@ export class ConnectConversationChannelRepo extends Context.Service<ConnectConve
 
 			const findByChannelId = (channelId: ChannelId) =>
 				db.first(
-					PG.from(schema.connectConversationChannelsTable)
+					SQLite.from(schema.connectConversationChannelsTable)
 						.select()
 						.where(($) => [$.channelId.eq(channelId), $.deletedAt.isNull()])
 						.limit(1),
@@ -27,7 +27,7 @@ export class ConnectConversationChannelRepo extends Context.Service<ConnectConve
 
 			const findByConversationId = (conversationId: ConnectConversationId) =>
 				db.run(
-					PG.from(schema.connectConversationChannelsTable)
+					SQLite.from(schema.connectConversationChannelsTable)
 						.select()
 						.where(($) => [$.conversationId.eq(conversationId), $.deletedAt.isNull()]),
 				)
@@ -37,7 +37,7 @@ export class ConnectConversationChannelRepo extends Context.Service<ConnectConve
 				organizationId: OrganizationId,
 			) =>
 				db.first(
-					PG.from(schema.connectConversationChannelsTable)
+					SQLite.from(schema.connectConversationChannelsTable)
 						.select()
 						.where(($) => [
 							$.conversationId.eq(conversationId),

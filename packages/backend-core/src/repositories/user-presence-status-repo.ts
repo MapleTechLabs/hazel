@@ -1,4 +1,4 @@
-import { Database, PG, Repository, schema } from "@hazel/db"
+import { Database, SQLite, Repository, schema } from "@hazel/db"
 
 import type { ChannelId, UserId } from "@hazel/schema"
 import { UserPresenceStatus } from "@hazel/domain/models"
@@ -27,7 +27,7 @@ export class UserPresenceStatusRepo extends Context.Service<UserPresenceStatusRe
 			// Find status by user ID
 			const findByUserId = (userId: UserId) =>
 				db.first(
-					PG.from(schema.userPresenceStatusTable)
+					SQLite.from(schema.userPresenceStatusTable)
 						.select()
 						.where(($) => [$.userId.eq(userId)])
 						.limit(1),
@@ -37,7 +37,7 @@ export class UserPresenceStatusRepo extends Context.Service<UserPresenceStatusRe
 			const upsertByUserId = (data: Schema.Schema.Type<typeof UserPresenceStatus.Insert>) =>
 				db
 					.run(
-						PG.insertInto(schema.userPresenceStatusTable)
+						SQLite.insertInto(schema.userPresenceStatusTable)
 							.values({
 								userId: data.userId,
 								status: data.status,
@@ -68,7 +68,7 @@ export class UserPresenceStatusRepo extends Context.Service<UserPresenceStatusRe
 			// Update active channel for user
 			const updateActiveChannel = (params: { userId: UserId; activeChannelId: ChannelId | null }) =>
 				db.run(
-					PG.update(schema.userPresenceStatusTable)
+					SQLite.update(schema.userPresenceStatusTable)
 						.set({
 							activeChannelId: params.activeChannelId,
 							updatedAt: new Date(),
@@ -84,7 +84,7 @@ export class UserPresenceStatusRepo extends Context.Service<UserPresenceStatusRe
 				customMessage?: string | null
 			}) =>
 				db.run(
-					PG.update(schema.userPresenceStatusTable)
+					SQLite.update(schema.userPresenceStatusTable)
 						.set({
 							status: params.status,
 							customMessage: params.customMessage,
@@ -97,7 +97,7 @@ export class UserPresenceStatusRepo extends Context.Service<UserPresenceStatusRe
 			// Update heartbeat timestamp (lightweight operation for presence tracking)
 			const updateHeartbeat = (userId: UserId) =>
 				db.first(
-					PG.update(schema.userPresenceStatusTable)
+					SQLite.update(schema.userPresenceStatusTable)
 						.set({
 							lastSeenAt: new Date(),
 						})
@@ -108,7 +108,7 @@ export class UserPresenceStatusRepo extends Context.Service<UserPresenceStatusRe
 			// Find users with stale heartbeats (for cron job cleanup)
 			const findStaleUsers = (timeout: Date) =>
 				db.run(
-					PG.from(schema.userPresenceStatusTable)
+					SQLite.from(schema.userPresenceStatusTable)
 						.select("userId", "status", "lastSeenAt")
 						.where(($) => [$.lastSeenAt.lt(timeout), $.status.neq("offline")]),
 				)
@@ -116,7 +116,7 @@ export class UserPresenceStatusRepo extends Context.Service<UserPresenceStatusRe
 			// Batch update users to offline status
 			const markUsersOffline = (userIds: UserId[]) =>
 				db.run(
-					PG.update(schema.userPresenceStatusTable)
+					SQLite.update(schema.userPresenceStatusTable)
 						.set({
 							status: "offline",
 							updatedAt: new Date(),

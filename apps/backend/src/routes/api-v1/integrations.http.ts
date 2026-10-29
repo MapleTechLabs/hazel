@@ -1,8 +1,10 @@
-import { createHash, randomBytes } from "node:crypto"
+/**
+ * The public API for OAuth apps (Maple): the caller's organizations (directory `membership_index`
+ * plus each `OrgObject`'s card), an org's channels, and channel webhooks, created by the same
+ * `channelWebhook.create` RPC the app uses, in the channel's `OrgObject`.
+ */
 import { HttpApiBuilder } from "effect/http-api"
 import { HttpServerRequest } from "effect/http"
-import { ChannelRepo, ChannelWebhookRepo, OrganizationMemberRepo } from "@hazel/backend-core"
-import { Database, PG, schema } from "@hazel/db"
 import { CurrentUser, InternalServerError, UnauthorizedError } from "@hazel/domain"
 import {
 	ApiV1ChannelNotFoundError,
@@ -11,54 +13,37 @@ import {
 	ApiV1OrganizationNotFoundError,
 	ApiV1OrganizationsListResponse,
 } from "@hazel/domain/http"
-import { CurrentRpcScopes, type ApiScope } from "@hazel/domain/scopes"
-import type { ChannelWebhookId } from "@hazel/schema"
+import type { ChannelWebhookCreatedResponse } from "@hazel/domain/rpc"
+import type { ChannelId } from "@hazel/schema"
 import { Effect, Option } from "effect"
 import { HazelApi } from "../../api"
-import { ChannelWebhookPolicy } from "../../policies/channel-webhook-policy"
-import { IntegrationBotService } from "../../services/integrations/integration-bot-service"
+import { Directory } from "../../services/directory"
 import { OAuthBearerAuth } from "../../services/oauth-bearer-auth"
-import { WebhookBotService } from "../../services/webhook-bot-service"
-
-const REQUIRED_SCOPES: ReadonlyArray<ApiScope> = ["channel-webhooks:write"]
-
-const withHttpScopes = <A, E, R>(
-	scopes: ReadonlyArray<ApiScope>,
-	make: Effect.Effect<A, E, R>,
-): Effect.Effect<A, E, R> => Effect.provideService(make, CurrentRpcScopes, scopes) as Effect.Effect<A, E, R>
+import { callObject } from "../../worker/objects/calls"
+import { forwardRpc } from "../../worker/objects/forward"
+import { orgTarget } from "../../worker/objects/kinds"
+import { ListChannelsCall, OrganizationProfileCall } from "../../worker/objects/org/api-v1"
+import { providePrincipal } from "../../worker/objects/principal"
 
 const extractBearerToken = Effect.gen(function* () {
 	const request = yield* HttpServerRequest.HttpServerRequest
 	const authHeader = request.headers.authorization
 	if (!authHeader || !authHeader.startsWith("Bearer ")) {
-		return yield* Effect.fail(
-			new UnauthorizedError({
-				message: "Missing bearer token",
-				detail: "Authorization header must be 'Bearer <access_token>'",
-			}),
-		)
+		return yield* new UnauthorizedError({
+			message: "Missing bearer token",
+			detail: "Authorization header must be 'Bearer <access_token>'",
+		})
 	}
 	return authHeader.slice(7).trim()
 })
 
-const generateWebhookToken = () => {
-	const token = randomBytes(32).toString("hex")
-	const tokenHash = createHash("sha256").update(token).digest("hex")
-	const tokenSuffix = token.slice(-4)
-	return { token, tokenHash, tokenSuffix }
-}
-
-const buildWebhookUrl = (webhookId: string, token: string) => {
-	const baseUrl = process.env.API_BASE_URL ?? "http://localhost:3010"
-	return `${baseUrl}/webhooks/incoming/${webhookId}/${token}`
-}
+const internal = (message: string) => (cause: unknown) =>
+	Effect.fail(new InternalServerError({ message, cause }))
 
 export const HttpApiV1IntegrationsLive = HttpApiBuilder.group(HazelApi, "api-v1-integrations", (handlers) =>
 	Effect.gen(function* () {
 		const auth = yield* OAuthBearerAuth
-		const db = yield* Database.Database
-		const memberRepo = yield* OrganizationMemberRepo
-		const webhookPolicy = yield* ChannelWebhookPolicy
+		const directory = yield* Directory
 
 		const authenticate = Effect.gen(function* () {
 			const token = yield* extractBearerToken
@@ -69,200 +54,90 @@ export const HttpApiV1IntegrationsLive = HttpApiBuilder.group(HazelApi, "api-v1-
 			.handle("listOrganizations", () =>
 				Effect.gen(function* () {
 					const { currentUser } = yield* authenticate
-
-					const rows = yield* db
-						.run(
-							PG.from(schema.organizationMembersTable)
-								.innerJoin(schema.organizationsTable, "o", (om, o) =>
-									o.id.eq(om.organizationId),
-								)
-								.select(($) => ({
-									id: $.o.id,
-									name: $.o.name,
-									slug: $.o.slug,
-									logoUrl: $.o.logoUrl,
-								}))
-								.where(($) => [
-									$.userId.eq(currentUser.id),
-									$.deletedAt.isNull(),
-									$.o.deletedAt.isNull(),
-								]),
-						)
-						.pipe(
-							Effect.catchTag("DatabaseError", (err) =>
-								Effect.fail(
-									new InternalServerError({
-										message: "Failed to list organizations",
-										cause: err,
-									}),
-								),
-							),
-						)
-
+					const organizations = yield* directory.organizationsOf(currentUser.id)
+					const cards = yield* Effect.forEach(
+						organizations,
+						(organizationId) =>
+							callObject(OrganizationProfileCall, orgTarget(organizationId), {}),
+						{ concurrency: 8 },
+					)
 					return new ApiV1OrganizationsListResponse({
-						data: rows.map((row) => ({
-							id: row.id,
-							name: row.name,
-							slug: row.slug,
-							logoUrl: row.logoUrl,
-						})),
+						data: cards.flatMap((card) => (card === null ? [] : [card])),
 					})
-				}),
+				}).pipe(
+					Effect.catchTags({
+						DatabaseError: internal("Failed to list organizations"),
+						ObjectCallError: internal("Failed to list organizations"),
+					}),
+					Effect.withSpan("ApiV1.listOrganizations"),
+				),
 			)
 			.handle("listChannels", ({ params }) =>
 				Effect.gen(function* () {
 					const { currentUser } = yield* authenticate
-
-					const membership = yield* memberRepo
-						.findByOrgAndUser(params.organizationId, currentUser.id)
-						.pipe(
-							Effect.catchTag("DatabaseError", (err) =>
-								Effect.fail(
-									new InternalServerError({
-										message: "Failed to verify organization membership",
-										cause: err,
-									}),
-								),
-							),
-						)
-
-					if (Option.isNone(membership)) {
-						return yield* Effect.fail(
-							new ApiV1OrganizationNotFoundError({
-								organizationId: params.organizationId,
-								message: "Organization not found or you are not a member",
-							}),
-						)
-					}
-
-					const rows = yield* db
-						.run(
-							PG.from(schema.channelsTable)
-								.select("id", "name", "type", "organizationId")
-								.where(($) => [
-									$.organizationId.eq(params.organizationId),
-									$.deletedAt.isNull(),
-								]),
-						)
-						.pipe(
-							Effect.catchTag("DatabaseError", (err) =>
-								Effect.fail(
-									new InternalServerError({
-										message: "Failed to list channels",
-										cause: err,
-									}),
-								),
-							),
-						)
-
-					return new ApiV1ChannelsListResponse({
-						data: rows
-							.filter((row) => row.type === "public" || row.type === "private")
-							.map((row) => ({
-								id: row.id,
-								name: row.name,
-								type: row.type,
-								organizationId: row.organizationId,
-							})),
+					const notFound = new ApiV1OrganizationNotFoundError({
+						organizationId: params.organizationId,
+						message: "Organization not found or you are not a member",
 					})
-				}),
+					const membership = yield* directory.membership(currentUser.id, params.organizationId)
+					if (Option.isNone(membership) || membership.value.deletedAt !== null) {
+						return yield* Effect.fail(notFound)
+					}
+					const channels = yield* callObject(ListChannelsCall, orgTarget(params.organizationId), {
+						userId: currentUser.id,
+					}).pipe(Effect.catchTag("UnauthorizedError", () => Effect.fail(notFound)))
+					return new ApiV1ChannelsListResponse({ data: channels })
+				}).pipe(
+					Effect.catchTags({
+						DatabaseError: internal("Failed to list channels"),
+						ObjectCallError: internal("Failed to list channels"),
+					}),
+					Effect.withSpan("ApiV1.listChannels"),
+				),
 			)
 			.handle("createChannelWebhook", ({ payload }) =>
-				withHttpScopes(
-					REQUIRED_SCOPES,
-					Effect.gen(function* () {
-						const { currentUser } = yield* authenticate
-						const channelRepo = yield* ChannelRepo
-						const webhookRepo = yield* ChannelWebhookRepo
-						const webhookBotService = yield* WebhookBotService
-						const integrationBotService = yield* IntegrationBotService
-
-						const result = yield* db
-							.transaction(
-								Effect.gen(function* () {
-									const channelOption = yield* channelRepo.findById(payload.channelId)
-									if (Option.isNone(channelOption)) {
-										return yield* Effect.fail(
-											new ApiV1ChannelNotFoundError({
-												channelId: payload.channelId,
-												message: "Channel not found",
-											}),
-										)
-									}
-									const channel = channelOption.value
-
-									const { token, tokenHash, tokenSuffix } = generateWebhookToken()
-
-									const botUser = yield* Option.fromNullishOr(
-										payload.integrationProvider,
-									).pipe(
-										Option.match({
-											onNone: () => {
-												const botReferenceId = crypto.randomUUID() as ChannelWebhookId
-												return webhookBotService.createWebhookBot(
-													botReferenceId,
-													payload.name,
-													payload.avatarUrl ?? null,
-													channel.organizationId,
-												)
-											},
-											onSome: (provider) =>
-												integrationBotService.getOrCreateWebhookBotUser(
-													provider,
-													channel.organizationId,
-												),
-										}),
-									)
-
-									yield* webhookPolicy.canCreate(payload.channelId)
-
-									const [webhook] = yield* webhookRepo.insert({
-										channelId: payload.channelId,
-										organizationId: channel.organizationId,
-										botUserId: botUser.id,
-										name: payload.name,
-										description: payload.description ?? null,
-										avatarUrl: payload.avatarUrl ?? null,
-										tokenHash,
-										tokenSuffix,
-										isEnabled: true,
-										createdBy: currentUser.id,
-										lastUsedAt: null,
-										deletedAt: null,
-									})
-
-									return { webhook, token }
-								}),
-							)
-							.pipe(
-								Effect.catchTags({
-									DatabaseError: (err) =>
-										Effect.fail(
-											new InternalServerError({
-												message: "Failed to create channel webhook",
-												cause: err,
-											}),
-										),
-									SchemaError: (err) =>
-										Effect.fail(
-											new InternalServerError({
-												message: "Schema validation failed",
-												cause: err,
-											}),
-										),
-								}),
-								Effect.provideService(CurrentUser.Context, currentUser),
-							)
-
-						return new ApiV1ChannelWebhookCreatedResponse({
-							id: result.webhook.id,
-							channelId: result.webhook.channelId,
-							organizationId: result.webhook.organizationId,
-							name: result.webhook.name,
-							webhookUrl: buildWebhookUrl(result.webhook.id, result.token),
-							token: result.token,
-						})
-					}),
+				Effect.gen(function* () {
+					const { currentUser } = yield* authenticate
+					const notFound = new ApiV1ChannelNotFoundError({
+						channelId: payload.channelId,
+						message: "Channel not found",
+					})
+					const channel = yield* directory.channel(payload.channelId)
+					if (Option.isNone(channel) || channel.value.deletedAt !== null) {
+						return yield* Effect.fail(notFound)
+					}
+					const created = yield* forwardRpc<
+						ChannelWebhookCreatedResponse,
+						{ readonly _tag: "ChannelNotFoundError"; readonly channelId: ChannelId }
+					>(orgTarget(channel.value.organizationId), "channelWebhook.create", {
+						channelId: payload.channelId,
+						name: payload.name,
+						...(payload.description == null ? {} : { description: payload.description }),
+						...(payload.avatarUrl == null ? {} : { avatarUrl: payload.avatarUrl }),
+						...(payload.integrationProvider == null
+							? {}
+							: { integrationProvider: payload.integrationProvider }),
+					}).pipe(
+						providePrincipal({
+							user:
+								currentUser instanceof CurrentUser.Schema
+									? currentUser
+									: new CurrentUser.Schema(currentUser),
+							botScopes: null,
+						}),
+						Effect.catchTag("ChannelNotFoundError", () => Effect.fail(notFound)),
+					)
+					return new ApiV1ChannelWebhookCreatedResponse({
+						id: created.data.id,
+						channelId: created.data.channelId,
+						organizationId: created.data.organizationId,
+						name: created.data.name,
+						webhookUrl: created.webhookUrl,
+						token: created.token,
+					})
+				}).pipe(
+					Effect.catchTag("DatabaseError", internal("Failed to create channel webhook")),
+					Effect.withSpan("ApiV1.createChannelWebhook"),
 				),
 			)
 	}),

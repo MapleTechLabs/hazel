@@ -1,35 +1,29 @@
 import { ChannelId, UserId, UserPresenceStatusId } from "@hazel/schema"
-import * as PG from "@maple-dev/effect-orm/postgres"
-import { now, timestamptz, uuid, varchar } from "./columns"
+import * as SQLite from "@maple-dev/effect-orm/sqlite"
+import { randomUuid, textEnum, timestamptz, uuid, varchar } from "./columns"
 
-export const userPresenceStatusEnum = PG.enumType("user_presence_status_enum", [
-	"online",
-	"away",
-	"busy",
-	"dnd",
-	"offline",
-])
+export const userPresenceStatusEnum = textEnum(["online", "away", "busy", "dnd", "offline"])
 
-export const userPresenceStatusTable = PG.table("user_presence_status", {
+export const userPresenceStatusTable = SQLite.table("user_presence_status", {
 	columns: {
-		id: PG.column(uuid(UserPresenceStatusId), { defaultExpr: "gen_random_uuid()" }),
+		id: SQLite.column(uuid(UserPresenceStatusId), { defaultExpr: randomUuid }),
 		userId: uuid(UserId),
-		status: PG.column(userPresenceStatusEnum, { default: "online" }),
-		customMessage: PG.nullable(varchar(255)),
-		statusEmoji: PG.nullable(varchar(10)),
-		statusExpiresAt: PG.nullable(timestamptz),
-		activeChannelId: PG.nullable(uuid(ChannelId)),
-		suppressNotifications: PG.column(PG.bool, { default: false }),
-		updatedAt: PG.column(timestamptz, { defaultExpr: "now()" }),
-		lastSeenAt: PG.column(timestamptz, { defaultExpr: "now()" }),
+		status: SQLite.column(userPresenceStatusEnum, { default: "online" }),
+		customMessage: SQLite.nullable(varchar(255)),
+		statusEmoji: SQLite.nullable(varchar(10)),
+		statusExpiresAt: SQLite.nullable(timestamptz),
+		activeChannelId: SQLite.nullable(uuid(ChannelId)),
+		suppressNotifications: SQLite.column(SQLite.boolean, { default: false }),
+		updatedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		lastSeenAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
 	},
 	primaryKey: ["id"],
-	uniqueConstraints: [PG.unique("user_presence_status_userId_unique", ["userId"])],
 	indexes: [
-		PG.index("user_presence_status_user_id_idx", ["userId"]),
-		PG.index("user_presence_status_active_channel_idx", ["activeChannelId"]),
-		PG.index("user_presence_status_last_seen_idx", ["lastSeenAt"]),
+		SQLite.uniqueIndex("user_presence_status_userId_unique", ["userId"]),
+		SQLite.index("user_presence_status_user_id_idx", ["userId"]),
+		SQLite.index("user_presence_status_active_channel_idx", ["activeChannelId"]),
+		SQLite.index("user_presence_status_last_seen_idx", ["lastSeenAt"]),
 	],
 })
-export type UserPresenceStatus = PG.SelectRowOf<typeof userPresenceStatusTable>
-export type NewUserPresenceStatus = PG.InsertRowOf<typeof userPresenceStatusTable>
+export type UserPresenceStatus = SQLite.SelectRowOf<typeof userPresenceStatusTable>
+export type NewUserPresenceStatus = SQLite.InsertRowOf<typeof userPresenceStatusTable>

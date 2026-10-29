@@ -481,17 +481,18 @@ describe("threads", () => {
 	})
 
 	const indicatorId = Schema.decodeSync(TypingIndicatorId)("00000000-0000-4000-8000-000000009999")
+	const indicator = { id: indicatorId, channelId: threadChannelId }
 
 	// Legacy `useTyping` deletes the indicator when the panel's composer unmounts.
 	test("closing the thread panel while typing deletes the thread's typing indicator", () => {
 		const opened = updateWithShared(derived(), preview).model
 		const panel = opened.threadPanel!
-		const typing = { ...panel.draft.typing, isTyping: true, sessionId: 1, indicatorId }
+		const typing = { ...panel.draft.typing, isTyping: true, sessionId: 1, indicator }
 		story(
 			updateWithShared,
 			given({ ...opened, threadPanel: { ...panel, draft: { ...panel.draft, typing } } }),
 			message(Message.ClickedCloseThread()),
-			Command.expectExact(Typing.DeleteTypingIndicator({ id: indicatorId })),
+			Command.expectExact(Typing.DeleteTypingIndicator(indicator)),
 			Command.resolve(Typing.DeleteTypingIndicator, Typing.Message.CompletedDeleteTypingIndicator()),
 			model((current) => expect(current.threadPanel).toBeNull()),
 		)

@@ -1,4 +1,4 @@
-import { Database, PG, Repository, schema } from "@hazel/db"
+import { Database, SQLite, Repository, schema } from "@hazel/db"
 import type { ChannelId, ConnectConversationId, UserId } from "@hazel/schema"
 import { ConnectParticipant } from "@hazel/domain/models"
 import { Context, Effect, Layer, Option, type Schema as EffectSchema } from "effect"
@@ -19,7 +19,7 @@ export class ConnectParticipantRepo extends Context.Service<ConnectParticipantRe
 
 			const findByChannelAndUser = (channelId: ChannelId, userId: UserId) =>
 				db.first(
-					PG.from(schema.connectParticipantsTable)
+					SQLite.from(schema.connectParticipantsTable)
 						.select()
 						.where(($) => [$.channelId.eq(channelId), $.userId.eq(userId), $.deletedAt.isNull()])
 						.limit(1),
@@ -27,14 +27,14 @@ export class ConnectParticipantRepo extends Context.Service<ConnectParticipantRe
 
 			const listByChannel = (channelId: ChannelId) =>
 				db.run(
-					PG.from(schema.connectParticipantsTable)
+					SQLite.from(schema.connectParticipantsTable)
 						.select()
 						.where(($) => [$.channelId.eq(channelId), $.deletedAt.isNull()]),
 				)
 
 			const listByConversation = (conversationId: ConnectConversationId) =>
 				db.run(
-					PG.from(schema.connectParticipantsTable)
+					SQLite.from(schema.connectParticipantsTable)
 						.select()
 						.where(($) => [$.conversationId.eq(conversationId), $.deletedAt.isNull()]),
 				)

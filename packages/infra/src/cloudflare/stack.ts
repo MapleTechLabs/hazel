@@ -2,15 +2,12 @@ import type * as Cloudflare from "alchemy/Cloudflare"
 import { Stage } from "alchemy/Stage"
 import * as Context from "effect/Context"
 import * as Effect from "effect/Effect"
-import type { HazelDbResources } from "./hazel-db.ts"
 import { type HazelDomains, type HazelStage, parseHazelStage, resolveWorkerName } from "./stage.ts"
 
 /** Inter-app public origins as plan-time strings (custom domains in prd/pr, env in dev). */
 export interface HazelUrls {
 	readonly web: string
 	readonly api: string
-	readonly electric: string
-	readonly rivet: string
 	readonly linkPreview: string
 }
 
@@ -20,8 +17,8 @@ export interface HazelStackContext {
 	readonly urls: HazelUrls
 	/** True under `alchemy dev` (not merely a dev stage: a dev stage can still be deployed). */
 	readonly isDevServer: boolean
-	/** The database resources every DB-backed Worker binds. */
-	readonly db: HazelDbResources
+	/** The directory D1 database the api Worker and the bot gateway bind. */
+	readonly directoryDb: Cloudflare.D1.Database
 }
 
 /** The deploy context Worker props read. Plan-time only: read behind `__ALCHEMY_RUNTIME__`. */
@@ -51,10 +48,22 @@ export const stageProps = <Props extends object>(
 export const stageNamed = (base: string) => stageProps(base, (name) => ({ name }))
 
 /** Workers runtime compatibility date for every Hazel Worker. */
-export const WORKER_COMPATIBILITY_DATE = "2026-10-01"
+export const WORKER_COMPATIBILITY_DATE = "2026-09-25"
 
 /** The props every Hazel Worker shares. `app` is also the name base. */
+/**
+ * Fixed `alchemy dev` ports, matching the dev URLs in the root stack (`HAZEL_API_URL` and friends),
+ * so the apps find each other without per-run env.
+ */
+const DEV_PORTS: Record<string, number> = {
+	api: 3003,
+	"bot-gateway": 3004,
+	"link-preview": 5471,
+	actors: 6420,
+}
+
 export const hazelWorkerProps = (app: string, { stage }: HazelStackContext) => ({
 	name: resolveWorkerName(app, stage),
 	compatibility: { date: WORKER_COMPATIBILITY_DATE, flags: ["nodejs_compat"] },
+	...(DEV_PORTS[app] === undefined ? {} : { dev: { port: DEV_PORTS[app], strictPort: true } }),
 })
