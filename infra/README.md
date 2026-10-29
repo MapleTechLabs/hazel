@@ -66,7 +66,6 @@ cutover). What is left lives outside the repo:
 
 - **PlanetScale** (`makisuo/hazel`, Postgres). The stack no longer declares it: the alchemy roles and
   the `HAZEL_DB` Hyperdrive are deleted, and the database was retained and dropped from state.
-  Dropping it is a manual, irreversible step in PlanetScale, once the Railway services below no
-  longer connect to it.
-- **Railway** (backend, cluster, Electric, Redis, the OTel collector) and **Electric Cloud**:
-  shut down from their dashboards.
+  Dropping it is a manual, irreversible step in PlanetScale.
+- **Electric Cloud**: shut down from its dashboard. The Railway project (cluster, Electric, the OTel
+  collector) is deleted.
