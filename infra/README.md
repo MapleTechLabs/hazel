@@ -64,11 +64,9 @@ Worker env (secrets are uploaded as Worker secrets, plain values as vars) is lis
 The Postgres, Electric, cluster and RivetKit code is gone (`durable-object-sync-plan.md` has the
 cutover). What is left lives outside the repo:
 
-- **PlanetScale.** The old stack declared the `hazel` database (`RemovalPolicy.retain`) and the
-  roles `db-api-role`, `db-electric-role` and `db-cluster-role`, plus the `HAZEL_DB` Hyperdrive.
-  They are no longer declared, so the next successful prd deploy deletes the roles and the
-  Hyperdrive and drops the database from state without deleting it. That needs the PlanetScale
-  provider, which `alchemy.run.ts` registers until then; remove it after that deploy. Dropping the
-  database itself is a manual, irreversible step in PlanetScale.
+- **PlanetScale** (`makisuo/hazel`, Postgres). The stack no longer declares it: the alchemy roles and
+  the `HAZEL_DB` Hyperdrive are deleted, and the database was retained and dropped from state.
+  Dropping it is a manual, irreversible step in PlanetScale, once the Railway services below no
+  longer connect to it.
 - **Railway** (backend, cluster, Electric, Redis, the OTel collector) and **Electric Cloud**:
   shut down from their dashboards.
