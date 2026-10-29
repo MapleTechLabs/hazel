@@ -11,6 +11,7 @@ import * as Effect from "effect/Effect"
 import * as Layer from "effect/Layer"
 import {
 	declareDirectoryDb,
+	isBotDeployed,
 	formatHazelStage,
 	HazelStack,
 	type HazelStackContext,
@@ -25,6 +26,10 @@ import BotGateway from "./apps/bot-gateway/alchemy.run.ts"
 import Landing from "./apps/landing/alchemy.run.ts"
 import LinkPreview from "./apps/link-preview-worker/alchemy.run.ts"
 import Web from "./apps/web-foldkit/alchemy.run.ts"
+import HazelBot from "./bots/hazel-bot/alchemy.run.ts"
+import { HAZEL_BOT_TOKEN_KEY } from "./bots/hazel-bot/src/worker.ts"
+import LinearBot from "./bots/linear-bot/alchemy.run.ts"
+import { LINEAR_BOT_TOKEN_KEY } from "./bots/linear-bot/src/worker.ts"
 
 // Some secret stores define CLOUDFLARE_DEFAULT_ACCOUNT_ID; alchemy reads CLOUDFLARE_ACCOUNT_ID.
 if (!process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_DEFAULT_ACCOUNT_ID) {
@@ -83,7 +88,8 @@ export default Alchemy.Stack(
 		state: process.env.ALCHEMY_LOCAL_STATE ? Alchemy.localState() : Cloudflare.state(),
 	},
 	Effect.gen(function* () {
-		const { stage, domains, urls } = yield* HazelStack
+		const stack = yield* HazelStack
+		const { stage, domains, urls } = stack
 
 		// Before api, which binds its BotGateway Durable Objects cross-script.
 		const botGateway = yield* BotGateway
@@ -94,6 +100,9 @@ export default Alchemy.Stack(
 		// Shared marketing site: prd only (previews and dev run their own dev servers). docs.hazel.sh
 		// stays on Vercel until its DNS record is moved, so the docs site is not deployed here yet.
 		const landing = stage.kind === "prd" ? yield* Landing : undefined
+		// First-party bots: prd and `alchemy dev`, with their token set (`isBotDeployed`).
+		const hazelBot = (yield* isBotDeployed(HAZEL_BOT_TOKEN_KEY, stack)) ? yield* HazelBot : undefined
+		const linearBot = (yield* isBotDeployed(LINEAR_BOT_TOKEN_KEY, stack)) ? yield* LinearBot : undefined
 		// Maple alerts and dashboard watch production only: see `@hazel/infra/maple-monitoring`.
 		const monitoring = stage.kind === "prd" && isMapleDeploy() ? yield* HazelMonitoring : undefined
 
@@ -113,6 +122,8 @@ export default Alchemy.Stack(
 			webWorker: web.workerName,
 			linkPreviewWorker: linkPreview.workerName,
 			landingWorker: landing?.workerName,
+			hazelBotWorker: hazelBot?.workerName,
+			linearBotWorker: linearBot?.workerName,
 			mapleDashboard: monitoring?.dashboardId,
 			mapleAlertRules: monitoring?.alertRules,
 		}

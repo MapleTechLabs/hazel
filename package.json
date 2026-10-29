@@ -34,7 +34,6 @@
 	},
 	"scripts": {
 		"dev": "bun run alchemy:dev",
-		"dev:bots": "turbo run dev --filter='./bots/*'",
 		"build": "turbo build typecheck",
 		"start": "turbo start",
 		"setup": "bun run packages/setup/src/index.ts",

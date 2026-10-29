@@ -8,11 +8,10 @@ bot's event log (a `BotGateway` Durable Object).
 
 ## Requirements
 
-- Bun `>=1.2.0`
 - `effect`
-- `@effect/platform`
-- `@effect/platform-bun`
-- `@effect/rpc`
+- A runtime with global `fetch` and `WebSocket`: Bun `>=1.2.0`, Node 22+, or a Cloudflare
+  Durable Object (see [Running on Cloudflare](#running-on-cloudflare)). The optional `/health`
+  server needs Bun.
 
 Optional peer dependencies:
 
@@ -21,7 +20,7 @@ Optional peer dependencies:
 ## Installation
 
 ```bash
-bun add @hazel-chat/bot-sdk effect @effect/platform @effect/platform-bun @effect/rpc
+bun add @hazel-chat/bot-sdk effect
 ```
 
 ## Quick start
@@ -57,6 +56,60 @@ createHazelBot({
 - Message send, reply, update, delete, and react helpers
 - AI and live-state streaming helpers
 - Bot-local state and session offset stores
+
+## Running on Cloudflare
+
+A bot holds an open WebSocket to the gateway, so on Cloudflare it runs inside a Durable Object:
+the object keeps the socket and the bot's fibers alive between requests. `@hazel-chat/bot-sdk/cloudflare`
+has what the object needs:
+
+- `makeBotSupervisor(bot, { storage })` runs a `defineBot(...)` bot in the object. Its
+  `ensureRunning` starts the bot unless it runs and arms a watchdog alarm; call it from the
+  object's `alarm()` and from a per-minute cron on the Worker, which brings the bot back after a
+  deploy or an eviction.
+- The resume offset and bot state go to the object's storage (`durableObjectStores`), so a
+  restarted bot resumes where it stopped.
+
+The bot reads its config (`BOT_TOKEN`, `BACKEND_URL`, `GATEWAY_URL`, ...) through Effect's
+`ConfigProvider`, so provide the Worker env as one:
+
+```typescript
+import { makeBotSupervisor } from "@hazel-chat/bot-sdk/cloudflare"
+import { ConfigProvider, Effect, Scope } from "effect"
+import { bot } from "./bot"
+
+export class BotRunner {
+	private readonly supervisor
+	constructor(
+		readonly ctx: DurableObjectState,
+		readonly env: Record<string, unknown>,
+	) {
+		const scope = Effect.runSync(Scope.make())
+		this.supervisor = Effect.runSync(
+			Scope.provide(makeBotSupervisor(bot, { storage: ctx.storage }), scope),
+		)
+	}
+	ensureRunning() {
+		return Effect.runPromise(
+			this.supervisor.ensureRunning.pipe(
+				Effect.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(this.env))),
+			),
+		)
+	}
+	async alarm() {
+		await this.ensureRunning()
+	}
+}
+
+export default {
+	// wrangler.jsonc: "triggers": { "crons": ["* * * * *"] }
+	async scheduled(_event: ScheduledController, env: { BOT_RUNNER: DurableObjectNamespace<BotRunner> }) {
+		await env.BOT_RUNNER.getByName("bot").ensureRunning()
+	},
+}
+```
+
+Hazel's own bots run this way (`bots/*/src/worker.ts`, deployed with Alchemy).
 
 ## Live-state streaming
 

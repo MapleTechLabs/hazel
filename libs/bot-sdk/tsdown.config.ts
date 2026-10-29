@@ -1,7 +1,14 @@
 import { defineConfig } from "tsdown"
 
 export default defineConfig({
-	entry: ["src/index.ts", "src/config.ts", "src/auth.ts", "src/errors.ts", "src/services/index.ts"],
+	entry: [
+		"src/index.ts",
+		"src/config.ts",
+		"src/auth.ts",
+		"src/errors.ts",
+		"src/services/index.ts",
+		"src/cloudflare.ts",
+	],
 	format: ["esm"],
 	outDir: "dist",
 	clean: true,

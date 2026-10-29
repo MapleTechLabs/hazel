@@ -306,6 +306,7 @@ export const envCommand = Command.make("env", { force, dryRun }, ({ force, dryRu
 			linear: linearConfig,
 			githubWebhookSecret,
 			openrouterApiKey,
+			botTokens: yield* envWriter.readBotTokens(),
 		}
 
 		yield* envWriter.writeEnvFile(".env.local", ENV_TEMPLATES.local(config), dryRun)
@@ -321,7 +322,7 @@ export const envCommand = Command.make("env", { force, dryRun }, ({ force, dryRu
 				`  2. Run ${pc.cyan("`bun run dev`")} (\`alchemy:dev\`) to start the Workers and the web app`,
 			)
 			yield* Console.log(
-				`  3. Optional: Run ${pc.cyan("`bun run dev:bots`")} to start local bot apps\n`,
+				`  3. Optional: set ${pc.cyan("HAZEL_BOT_TOKEN")} / ${pc.cyan("LINEAR_BOT_TOKEN")} in .env.local to run the bots too\n`,
 			)
 		}
 	}),

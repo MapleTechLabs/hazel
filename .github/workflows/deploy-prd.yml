@@ -75,6 +75,9 @@ jobs:
             INTERNAL_SECRET: ${{ secrets.INTERNAL_SECRET }}
             KLIPY_API_KEY: ${{ secrets.KLIPY_API_KEY }}
             OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+            # First-party bots (bots/*/src/worker.ts): each deploys only when its token is set
+            HAZEL_BOT_TOKEN: ${{ secrets.HAZEL_BOT_TOKEN }}
+            LINEAR_BOT_TOKEN: ${{ secrets.LINEAR_BOT_TOKEN }}
             # Maple: an org-admin API key with `ingest_keys:read`, `dashboards:write`, `alerts:write`; the deploy binds the ingest key onto the Workers
             MAPLE_API_KEY: ${{ secrets.MAPLE_API_KEY }}
             # A Hazel channel's Maple webhook URL: production alerts post there (`@hazel/infra/maple-monitoring`)
