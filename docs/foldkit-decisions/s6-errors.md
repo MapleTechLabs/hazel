@@ -102,6 +102,6 @@ offer a "Try again" button from `isRetryableReason`.
 
 ## 5. Legacy, being migrated
 
-`failureToast(cause, fallback, handlers)` / `toastOfExit` / `settle` and `Failed*{ toast }` still exist so untouched
+`failureToast(cause, fallback, handlers)` / `settle` and `Failed*{ toast }` still exist so untouched
 screens compile. They are now safe (typed `handlers` keyed by `E["_tag"]`, no raw text ever shown, defects logged), but
 new or touched code uses sections 1–3. `fallback` is ignored and will be removed with the last caller.
