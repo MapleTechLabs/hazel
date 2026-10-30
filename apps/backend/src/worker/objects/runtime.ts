@@ -17,7 +17,7 @@
 import { Database, type StoreMigration, type StoreName, applyMigrations } from "@hazel/db"
 import { makeSyncedObject, type SyncObjectState, type SyncSocket, type SyncSource } from "@hazel/sync-do"
 import type { AlarmStorageLike, SqlStorageLike } from "@hazel/sync-do"
-import { Context, Effect, Exit, Layer, Option, Result } from "effect"
+import { Context, Effect, Exit, Layer, Option, Result, Scope } from "effect"
 import { SqlClient } from "effect/sql/SqlClient"
 import { CurrentObject } from "../../lib/current-object"
 import {
@@ -103,6 +103,8 @@ const sourceOf = (
 export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 	Effect.gen(function* () {
 		const { kind } = options
+		// Lives as long as the in-memory instance: background work forked after answering.
+		const instanceScope = yield* Scope.Scope
 		const base = yield* Layer.build(
 			Database.layerSqlite.pipe(Layer.provideMerge(options.sql), Layer.provideMerge(options.platform)),
 		)
@@ -256,12 +258,21 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 				}),
 			)
 
-		/** A presence change was written: broadcast it and deliver its projections. */
+		/**
+		 * A socket opened: mark the user online and broadcast it. The projections go to every org
+		 * the user is in, one cross-object call each, so they are delivered in the background
+		 * rather than holding the upgrade (the alarm is the backstop).
+		 */
 		const presenceOpened = (principal: SyncPrincipal) =>
 			presence === undefined
 				? Effect.void
 				: Effect.flatMap(run(presence.opened(principal.userId)), (changed) =>
-						changed ? Effect.asVoid(afterCommit) : Effect.void,
+						changed
+							? run(synced.flushAndSchedule).pipe(
+									Effect.andThen(Effect.forkIn(afterCommit, instanceScope)),
+									Effect.asVoid,
+								)
+							: Effect.void,
 					)
 
 		/** Adopt a sync socket (tests, and `connect` below). */

@@ -139,6 +139,37 @@ describe("outbox", () => {
 		}).pipe(Effect.provide(t.layer))
 	})
 
+	it.effect("delivers to targets concurrently, each target's rows still one at a time", () => {
+		const t = setup()
+		return Effect.gen(function* () {
+			const started: Array<string> = []
+			const gates = new Map<string, Deferred.Deferred<void>>()
+			for (const id of ["a1", "a2", "b1", "c1"]) gates.set(id, Deferred.makeUnsafe<void>())
+			const deliver = (row: OutboxRow) =>
+				Effect.suspend(() => {
+					started.push(row.id)
+					return Deferred.await(gates.get(row.id)!)
+				})
+			yield* enqueue({ id: "a1", target: "A", kind: "k", payload: null })
+			yield* enqueue({ id: "a2", target: "A", kind: "k", payload: null })
+			yield* enqueue({ id: "b1", target: "B", kind: "k", payload: null })
+			yield* enqueue({ id: "c1", target: "C", kind: "k", payload: null })
+
+			const drain = yield* Effect.forkChild(drainOutbox(deliver))
+			yield* Effect.yieldNow
+			// Every target's head is in flight at once; a2 waits behind a1.
+			expect(started).toEqual(["a1", "b1", "c1"])
+			yield* Deferred.succeed(gates.get("b1")!, undefined)
+			yield* Deferred.succeed(gates.get("c1")!, undefined)
+			yield* Deferred.succeed(gates.get("a1")!, undefined)
+			yield* Effect.yieldNow
+			expect(started).toEqual(["a1", "b1", "c1", "a2"])
+			yield* Deferred.succeed(gates.get("a2")!, undefined)
+			const result = yield* Fiber.join(drain)
+			expect(result).toMatchObject({ delivered: 4, retried: 0, dead: 0 })
+		}).pipe(Effect.provide(t.layer))
+	})
+
 	it.effect("a notBefore head holds its target and sets the next alarm", () => {
 		const t = setup()
 		return Effect.gen(function* () {
