@@ -32,6 +32,8 @@ import {
 	createEffectCollection,
 	type EffectCollection,
 } from "@hazel/effect-db-collection"
+import { persistedCollectionOptions } from "@tanstack/browser-db-sqlite-persistence"
+import { localCachePersistence } from "./local-cache"
 import { orgSources, syncHub, unionSources, userSources } from "./sync"
 
 /**
@@ -54,20 +56,41 @@ const parseTimestamps = (row: unknown): unknown => {
 	return parsed
 }
 
+/**
+ * The local cache's version of every stored row (`./local-cache.ts`): bump it when a synced model's
+ * shape changes, and the stored rows are dropped.
+ */
+const CACHE_SCHEMA_VERSION = 1
+
+/** Keeps an eager collection's rows on disk while the local cache is on. */
+const persist =
+	localCachePersistence === undefined
+		? undefined
+		: <O extends object>(options: O) =>
+				persistedCollectionOptions({
+					...(options as O & Parameters<typeof persistedCollectionOptions>[0]),
+					persistence: localCachePersistence!,
+					schemaVersion: CACHE_SCHEMA_VERSION,
+				})
+
 const syncedCollection = <A extends { readonly id: string }>(
 	table: string,
 	schema: Schema.Schema<A>,
 	sources: CollectionSources,
 ): EffectCollection<A> =>
-	createEffectCollection<A, string | number>({
-		id: table,
-		table,
-		schema,
-		parseRow: parseTimestamps,
-		getKey: (item) => item.id,
-		hub: syncHub,
-		sources,
-	})
+	createEffectCollection<A, string | number>(
+		{
+			id: table,
+			table,
+			schema,
+			parseRow: parseTimestamps,
+			getKey: (item) => item.id,
+			hub: syncHub,
+			sources,
+		},
+		// Channel-partitioned collections keep nothing: a channel's source sends its snapshot.
+		"partition" in sources ? undefined : persist,
+	)
 
 const orgCollection = <A extends { readonly id: string }>(table: string, schema: Schema.Schema<A>) =>
 	syncedCollection(table, schema, orgSources)
@@ -82,15 +105,18 @@ export const UserOrganization = Schema.Struct({
 })
 export type UserOrganization = typeof UserOrganization.Type
 
-export const userOrganizationCollection = createEffectCollection({
-	id: "user_organizations",
-	table: "user_organizations",
-	schema: UserOrganization,
-	parseRow: parseTimestamps,
-	getKey: (row) => row.organizationId,
-	hub: syncHub,
-	sources: userSources,
-})
+export const userOrganizationCollection = createEffectCollection(
+	{
+		id: "user_organizations",
+		table: "user_organizations",
+		schema: UserOrganization,
+		parseRow: parseTimestamps,
+		getKey: (row) => row.organizationId,
+		hub: syncHub,
+		sources: userSources,
+	},
+	persist,
+)
 
 export const organizationCollection = orgCollection("organizations", Organization.Schema)
 export const messageCollection = channelCollectionOf("messages", Message.Schema)

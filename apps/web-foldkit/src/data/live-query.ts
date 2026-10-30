@@ -91,7 +91,7 @@ export const watchStall = <Message>(
 	}
 	if (collection.status !== "ready") schedule(stallAfterMs)
 	const unsubscribe = collection.on("status:change", ({ status, previousStatus }) => {
-		if (status === "error") schedule(ERROR_GRACE_MS)
+		if (status === "error" || status === "crashed") schedule(ERROR_GRACE_MS)
 		if (status === "ready") {
 			clearTimeout(timer)
 			isReported = false

@@ -15,10 +15,11 @@
 	},
 	"dependencies": {
 		"@hazel/domain": "workspace:*",
-		"@tanstack/db": "0.11.3",
+		"@tanstack/db": "1.0.0-rc.1",
 		"effect": "catalog:effect"
 	},
 	"devDependencies": {
+		"@tanstack/browser-db-sqlite-persistence": "1.0.0-rc.1",
 		"typescript": "catalog:tooling"
 	}
 }

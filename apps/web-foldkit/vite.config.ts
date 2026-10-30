@@ -28,6 +28,8 @@ export default defineConfig({
 		sourcemap: !!process.env.TAURI_ENV_DEBUG,
 	},
 	plugins: [tailwindcss(), foldkit({ devToolsMcpPort: false })],
+	// The local cache's OPFS worker and wa-sqlite wasm resolve next to the package's own code.
+	optimizeDeps: { exclude: ["@tanstack/browser-db-sqlite-persistence"] },
 	resolve: {
 		alias: {
 			// Framework-free modules carried over from the React app (collections, theme, RPC client).

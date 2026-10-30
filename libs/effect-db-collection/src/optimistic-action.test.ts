@@ -65,7 +65,7 @@ describe("optimisticAction", () => {
 		expect(channels.get("c1")).toMatchObject({ name: "general" })
 		const result = await running
 		expect(result).toMatchObject({ data: "ok", transactionId: "org:a:2", mutateResult: { id: "c1" } })
-		expect(channels.get("c1")).toMatchObject({ name: "general", $synced: true })
+		expect(channels.get("c1")).toMatchObject({ name: "general", $hasPendingWrites: false })
 	})
 
 	it("rolls back and keeps the typed failure when mutate fails", async () => {
