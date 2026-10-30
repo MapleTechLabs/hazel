@@ -1,10 +1,10 @@
 import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { IconCheck, IconEnvelope, IconMsgs } from "../../icons"
+import { avatar } from "../../ui/avatar"
 import { button } from "../../ui/button"
 import { dialogBody, dialogFooter, dialogHeader } from "../../ui/dialog"
 import { input, inputGroup } from "../../ui/input"
-import { fallbackAvatar } from "../avatar"
 import type { ModalViewInputs } from "./contract"
 import type { OrgUser } from "./create-dm-data"
 import { Message, type Model, SEARCH_ID } from "./create-dm-model"
@@ -42,7 +42,7 @@ const userRow = (h: HtmlBuilder<Message>, user: OrgUser, isSelected: boolean): H
 			h.div(
 				[h.Class("flex items-center gap-3")],
 				[
-					fallbackAvatar(h, { size: "sm", src: user.avatarUrl, initials: initialsOf(user) }),
+					avatar(h, { size: "sm", src: user.avatarUrl, initials: initialsOf(user), fallbackIcon: true }),
 					h.div(
 						[h.Class("flex flex-col")],
 						[
@@ -74,7 +74,7 @@ const selectedSummary = (h: HtmlBuilder<Message>, selected: ReadonlyArray<OrgUse
 							[
 								...selected
 									.slice(0, 3)
-									.map((user) => fallbackAvatar(h, { size: "xs", src: user.avatarUrl, initials: initialsOf(user) })),
+									.map((user) => avatar(h, { size: "xs", src: user.avatarUrl, initials: initialsOf(user), fallbackIcon: true })),
 								...(selected.length > 3
 									? [
 											h.div(

@@ -17,10 +17,10 @@ import {
 	IconUsersPlus,
 } from "../../icons"
 import type { Shared } from "../../page/contract"
+import { avatar } from "../../ui/avatar"
 import type * as CommandMenu from "../../ui/command-menu"
 import { commandMenuShortcut, view as commandMenuView } from "../../ui/command-menu-view"
 import { labelId } from "../../ui/menu"
-import { fallbackAvatar } from "../avatar"
 import { createChannelPage, joinChannelPage } from "./form-pages"
 import { dmDisplayName, HOTKEYS, NAVIGATION, parseKey, recentChannelsOf, SETTINGS, STATUS_OPTIONS } from "./menu"
 import { Message } from "./message"
@@ -44,21 +44,28 @@ const channelIcon = (h: HtmlBuilder<Message>, icon: string | null): Html =>
 const dmIcon = (h: HtmlBuilder<Message>, dm: DmChannel): Html => {
 	const first = dm.otherMembers[0]
 	if (dm.type === "single" && dm.otherMembers.length === 1 && first)
-		return fallbackAvatar(h, { size: "xs", className: "mr-1", src: first.avatarUrl, alt: dmDisplayName(dm) })
+		return avatar(h, {
+			size: "xs",
+			className: "mr-1",
+			src: first.avatarUrl,
+			alt: dmDisplayName(dm),
+			fallbackIcon: true,
+		})
 	return h.div(
 		[h.Attribute("data-slot", "icon"), h.Class("flex -space-x-2 mr-1")],
 		[
 			...dm.otherMembers.slice(0, 2).map((member) =>
-				fallbackAvatar(h, {
+				avatar(h, {
 					size: "xs",
 					src: member.avatarUrl,
 					alt: member.firstName,
 					className: "ring-[1.5px] ring-overlay",
+					fallbackIcon: true,
 				}),
 			),
 			...(dm.otherMembers.length > 2
 				? [
-						fallbackAvatar(h, {
+						avatar(h, {
 							size: "xs",
 							className: "ring-[1.5px] ring-overlay",
 							placeholder: h.span(
