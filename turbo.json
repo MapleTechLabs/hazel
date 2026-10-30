@@ -28,7 +28,6 @@
 		"GITHUB_WEBHOOK_SECRET",
 		"OTEL_ENVIRONMENT",
 		"OTEL_BASE_URL",
-		"OTEL_SERVICE_NAME",
 		"MAPLE_INGEST_KEY",
 		"COMMIT_SHA",
 		"OPENROUTER_API_KEY"
@@ -41,10 +40,6 @@
 		},
 		"typecheck": {
 			"dependsOn": ["^typecheck"]
-		},
-		"setup": {
-			"cache": false,
-			"dependsOn": ["^setup"]
 		},
 		"dev": {
 			"persistent": true,

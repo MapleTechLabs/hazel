@@ -7,7 +7,6 @@
 		"build": "vite build",
 		"typecheck": "tsc --noEmit",
 		"test": "vitest run",
-		"deploy": "./scripts/deploy.sh",
 		"build:desktop": "./scripts/build-desktop.sh"
 	},
 	"dependencies": {

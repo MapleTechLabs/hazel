@@ -66,14 +66,13 @@ Hazel Chat is a full-stack chat application featuring:
 │   ├── backend-core/        # Reusable backend services and repositories
 │   ├── schema/              # Shared schema definitions
 │   └── ...
-└── .context/                # Library documentation (Effect, Effect Atom, TanStack DB)
+└── .context/                # Library documentation (Effect, TanStack DB)
 ```
 
 ## Prerequisites
 
 - [Bun](https://bun.sh/) **v1.2.14 or later** (required for [workspace catalogs](https://bun.sh/blog/release-notes/bun-v1.2.14))
 - [Docker](https://docker.com/) (MinIO, the local S3 for uploads)
-- [Clerk](https://clerk.com/) account (for authentication)
 
 ## Getting Started
 
@@ -109,29 +108,17 @@ Hazel Chat is a full-stack chat application featuring:
     ```
 
     This runs `bun run alchemy:dev`: every Worker (the api with its Durable Objects and the
-    directory D1, the bot gateway, link preview, actors) runs locally in workerd, plus the web
+    directory D1, the bot gateway, link preview) runs locally in workerd, plus the web
     app's dev server. Local state lives in `.alchemy/`.
 
     The first-party bots (`bots/*`) run as Workers too: set `HAZEL_BOT_TOKEN` and/or
     `LINEAR_BOT_TOKEN` in `.env.local` and `alchemy:dev` starts them.
 
-## Clerk Configuration
+## Sign-in
 
-This project uses [Clerk](https://clerk.com/) for authentication. After creating a Clerk application, grab your **Publishable key** and **Secret key** from the dashboard and provide them to `bun run setup` (or set `CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` in the generated `.env` files).
-
-### Organizations
-
-Enable **Organizations** in your Clerk dashboard (Organizations → Settings). Hazel uses Clerk organizations for multi-tenant workspaces, with members synced to our database via webhooks.
-
-### Webhook endpoint
-
-Add a webhook in the Clerk dashboard pointing at `http://<backend-host>/webhooks/clerk` (e.g. `http://localhost:3003/webhooks/clerk` for local dev, exposed via a tunnel). Subscribe to at least:
-
-- `user.created`, `user.updated`, `user.deleted`
-- `organization.created`, `organization.updated`, `organization.deleted`
-- `organizationMembership.created`, `organizationMembership.updated`, `organizationMembership.deleted`
-
-Copy the signing secret into `CLERK_WEBHOOK_SECRET`.
+Hazel auth (`packages/auth`) handles sign-in: GitHub and Google OAuth, passkeys and cookie sessions.
+Locally it is off until `AUTH_GITHUB_CLIENT_ID` / `AUTH_GITHUB_CLIENT_SECRET` are set in `.env.local`
+(see `.env.local.example`).
 
 ## Development Commands
 
@@ -177,7 +164,7 @@ Each organization, channel and user is a Durable Object with its own SQLite
 
 - **[CLAUDE.md](./CLAUDE.md)** - Detailed architecture and development guidelines
 - **[packages/db/README.md](./packages/db/README.md)** - Database schema documentation
-- **[.context/](./.context/)** - Library-specific guides for Effect, Effect Atom, and TanStack DB
+- **[.context/](./.context/)** - Library-specific guides for Effect and TanStack DB
 
 ## Contributing
 

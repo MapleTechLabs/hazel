@@ -31,15 +31,6 @@ const props = Effect.gen(function* () {
 		env: {
 			VITE_BACKEND_URL: yield* plainFrom(["VITE_BACKEND_URL"], urls.api),
 			VITE_R2_PUBLIC_URL: yield* plainFrom(["VITE_R2_PUBLIC_URL"], "https://cdn.hazel.sh"),
-			VITE_CLERK_PUBLISHABLE_KEY: yield* plainFrom(
-				["VITE_CLERK_PUBLISHABLE_KEY", "CLERK_PUBLISHABLE_KEY"],
-				"",
-			),
-			VITE_PUBLIC_POSTHOG_KEY: yield* plainFrom(["VITE_PUBLIC_POSTHOG_KEY"], ""),
-			VITE_PUBLIC_POSTHOG_HOST: yield* plainFrom(["VITE_PUBLIC_POSTHOG_HOST"], "https://ph.hazel.sh"),
-			VITE_MAPLE_PUBLIC_KEY: yield* plainFrom(["VITE_MAPLE_PUBLIC_KEY"], ""),
-			VITE_OTEL_ENVIRONMENT: stage.kind === "prd" ? "production" : "development",
-			VITE_COMMIT_SHA: yield* plainFrom(["VITE_COMMIT_SHA", "COMMIT_SHA", "GITHUB_SHA"], ""),
 		},
 	}
 }).pipe(

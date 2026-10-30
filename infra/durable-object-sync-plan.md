@@ -4,7 +4,7 @@ Replace Postgres + Electric with Durable Objects (DOs) as the system of record a
 transport. TanStack DB stays the client store. **Instant cutover**: there is no dual-running and no
 per-org flags. A best-effort import script copies the Postgres data once, and some loss is accepted.
 
-> **Supersedes parts of [`cloudflare-migration-plan.md`](./cloudflare-migration-plan.md).** Its
+> **Supersedes parts of `cloudflare-migration-plan.md` (since removed).** Its
 > data plane is replaced by this doc: Phase 1's PlanetScale Postgres, Hyperdrive and self-hosted
 > Electric; Phase 3 (the `electric-proxy` Worker); Phase 5 (the cluster, on Railway or as a
 > `cluster` Worker), whose workflows and crons now run in the objects; the Durable Streams half of
@@ -298,12 +298,8 @@ the client.
           is deleted. Its Worker, KV namespace and domain left the stack: check the next deploy
           of each stage removed them.
 - **Local dev:** `bun run alchemy:dev` with `.env.local` (`.env.local.example`).
-- **Import:** `apps/backend/src/scripts/import-postgres.ts`, through
-  `POST /internal/import/:store/:id`. The route answers only while the api Worker has
-  `IMPORT_SECRET`, and on prd only with `IMPORT_ENABLED=true` as well (`worker/import-route.ts`,
-  `lib/stage.ts`). Neither is in `deploy-prd.yml`: set both by hand in the env of one prd deploy
-  for the one-shot import, run it, then redeploy without them (the next CI deploy drops them) and
-  delete the `IMPORT_SECRET` repository secret.
+- **Import:** the one-shot Postgres import (`import-postgres.ts`, `POST /internal/import/:store/:id`,
+  `IMPORT_SECRET`) has been removed.
 - **Not done yet:**
     - The PR 6 verification: a `pr-<n>` preview deploy, the import against a staging copy, and a
       full browser pass.

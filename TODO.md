@@ -1,13 +1,8 @@
-# Today
-
-- replace tanstack form with effect based form
-
 # Integrations
 
 - Craft.do
 - Notion
 - Github
-- Railway
 
 # Bugs
 
