@@ -57,46 +57,6 @@ export const PresignUploadRequest = Schema.Struct({
 })
 export type PresignUploadRequest = typeof PresignUploadRequest.Type
 
-// ============ Per-type DTO shapes (TS-only) ============
-// These are convenience types for callers that build narrower payloads.
-// They intentionally do not exist as runtime Schemas — see the note above.
-
-export type UserAvatarUploadRequest = {
-	type: "user-avatar"
-	contentType: string
-	fileSize: number
-}
-
-export type BotAvatarUploadRequest = {
-	type: "bot-avatar"
-	botId: BotId
-	contentType: string
-	fileSize: number
-}
-
-export type OrganizationAvatarUploadRequest = {
-	type: "organization-avatar"
-	organizationId: OrganizationId
-	contentType: string
-	fileSize: number
-}
-
-export type AttachmentUploadRequest = {
-	type: "attachment"
-	fileName: string
-	contentType: string
-	fileSize: number
-	organizationId: OrganizationId
-	channelId: ChannelId
-}
-
-export type CustomEmojiUploadRequest = {
-	type: "custom-emoji"
-	organizationId: OrganizationId
-	contentType: string
-	fileSize: number
-}
-
 // ============ Response Schema ============
 
 /**
