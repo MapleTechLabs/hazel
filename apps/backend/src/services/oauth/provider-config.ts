@@ -1,5 +1,5 @@
 import type { IntegrationConnection } from "@hazel/domain/models"
-import { Config, Effect, type Redacted } from "effect"
+import { Config, type Redacted } from "effect"
 
 export type IntegrationProvider = IntegrationConnection.IntegrationProvider
 

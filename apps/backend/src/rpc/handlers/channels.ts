@@ -1,10 +1,4 @@
-import {
-	ChannelMemberRepo,
-	ChannelRepo,
-	MessageRepo,
-	OrganizationMemberRepo,
-	UserRepo,
-} from "@hazel/backend-core"
+import { ChannelMemberRepo, ChannelRepo, OrganizationMemberRepo, UserRepo } from "@hazel/backend-core"
 import { Database, SQLite, schema } from "@hazel/db"
 import {
 	CurrentUser,
@@ -15,7 +9,7 @@ import {
 	withRemapDbErrors,
 } from "@hazel/domain"
 import { type ChannelId, OrganizationId, type UserId } from "@hazel/schema"
-import { ChannelNotFoundError, ChannelResponse, ChannelRpcs, MessageNotFoundError } from "@hazel/domain/rpc"
+import { ChannelNotFoundError, ChannelResponse, ChannelRpcs } from "@hazel/domain/rpc"
 import { Effect, Option } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
 import { ChannelPolicy } from "../../policies/channel-policy"
@@ -46,7 +40,6 @@ export const ChannelRpcLive = ChannelRpcs.toLayer(
 		const channelMemberRepo = yield* ChannelMemberRepo
 		const channelPolicy = yield* ChannelPolicy
 		const userPolicy = yield* UserPolicy
-		const messageRepo = yield* MessageRepo
 		const channelRepo = yield* ChannelRepo
 		const organizationMemberRepo = yield* OrganizationMemberRepo
 		const userRepo = yield* UserRepo

@@ -6,7 +6,7 @@
  */
 
 import { FetchHttpClient, HttpBody, HttpClient } from "effect/http"
-import { Context, Duration, Effect, Layer, Predicate, Schema, SchemaGetter, SchemaIssue } from "effect"
+import { Context, Duration, Effect, Layer, Schema, SchemaGetter } from "effect"
 import type { OAuthIntegrationProvider } from "./provider-config"
 
 // ============================================================================

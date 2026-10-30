@@ -1,4 +1,3 @@
-import { RpcServer } from "effect/rpc"
 import {
 	AttachmentRpcs,
 	BotRpcs,
