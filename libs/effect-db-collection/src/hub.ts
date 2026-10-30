@@ -2,7 +2,7 @@
  * The registry of source connections: refcounted leases with a grace period on release, and the
  * router from each connection's runs to the collections registered for the run's tables.
  */
-import type { SyncSourceKind, SyncWindow, SyncWritePosition } from "@hazel/domain/sync"
+import type { SyncSeq, SyncSourceKind, SyncWindow, SyncWritePosition } from "@hazel/domain/sync"
 import { Effect, type Scope } from "effect"
 import { SyncConnection, type SyncConnectionStatus, type SyncRunTable } from "./connection"
 import type { SyncSourceTerminalError } from "./errors"
@@ -32,6 +32,8 @@ export interface SyncHubConfig {
 	readonly heartbeatIntervalMs?: number
 	/** How long a released connection stays open, to absorb route flips. @default 30000 */
 	readonly releaseGraceMs?: number
+	/** How long a new connection waits for its sinks' resume points before it asks for a snapshot. @default 3000 */
+	readonly resumeTimeoutMs?: number
 	readonly log?: SyncLogger
 }
 
@@ -53,6 +55,14 @@ export interface SyncTableSink {
 	applyRun(source: SourceKey, reset: boolean, rows: SyncRunTable | undefined, info?: SyncRunInfo): void
 	/** The source's connection closed for good: drop every row it delivered. */
 	dropSource(source: SourceKey): void
+	/**
+	 * Where the sink's rows of `source` can resume from (rows kept from an earlier load): a seq,
+	 * `null` when it needs a snapshot, `undefined` when it holds nothing of `source`. A new
+	 * connection resumes after the lowest seq only when every sink that holds the source has one.
+	 */
+	resumePoint?(source: SourceKey): Promise<SyncSeq | null> | SyncSeq | null | undefined
+	/** Every run committed on `source`'s stream, whatever its tables. */
+	onCommit?(source: SourceKey, seq: SyncSeq): void
 }
 
 /** A hold on one source connection. `release` is idempotent. */
@@ -236,6 +246,21 @@ export class SyncHub {
 					this.applyToSink(sink, source, false, run.tables.get(table), info(table))
 			}
 		})
+		const unsubscribeCommits = connection.subscribeRuns((run) => {
+			for (const set of this.sinks.values()) {
+				for (const sink of set) {
+					try {
+						sink.onCommit?.(source, run.seq)
+					} catch (cause) {
+						this.log("error", "Sync sink failed to note a commit", {
+							source,
+							table: sink.table,
+							cause,
+						})
+					}
+				}
+			}
+		})
 		const unsubscribeStatus = connection.subscribeStatus((status) => {
 			const isError = status.state === "error"
 			if (isError !== wasError && status.state !== "connecting") {
@@ -263,12 +288,52 @@ export class SyncHub {
 			graceTimer: undefined,
 			unsubscribe: () => {
 				unsubscribeRuns()
+				unsubscribeCommits()
 				unsubscribeStatus()
 			},
 		}
 		this.entries.set(source, entry)
-		connection.start()
+		void this.resumePoint(source).then((since) => {
+			connection.resumeFrom(since)
+			connection.start()
+		})
 		return entry
+	}
+
+	/** The seq every sink holding `source` can resume after, or `null` for a snapshot. */
+	private resumePoint(source: SourceKey): Promise<SyncSeq | null> {
+		const points: Array<Promise<SyncSeq | null> | SyncSeq | null> = []
+		for (const set of this.sinks.values()) {
+			for (const sink of set) {
+				const point = sink.resumePoint?.(source)
+				if (point !== undefined) points.push(point)
+			}
+		}
+		if (points.length === 0) return Promise.resolve(null)
+		const timeoutMs = this.config.resumeTimeoutMs ?? 3000
+		let timer: ReturnType<typeof setTimeout> | undefined
+		const timeout = new Promise<null>((resolve) => {
+			timer = setTimeout(() => resolve(null), timeoutMs)
+		})
+		const lowest = Promise.all(points).then((seqs) => {
+			let min: SyncSeq | null = null
+			for (const seq of seqs) {
+				if (seq === null) return null
+				if (min === null || seq < min) min = seq
+			}
+			return min
+		})
+		return Promise.race([lowest, timeout]).then(
+			(since) => {
+				clearTimeout(timer)
+				return since
+			},
+			(cause: unknown) => {
+				clearTimeout(timer)
+				this.log("warning", "Could not read a source's resume point", { source, cause })
+				return null
+			},
+		)
 	}
 
 	private release(source: SourceKey, entry: Entry): void {

@@ -182,6 +182,11 @@ export class SyncConnection {
 		return this.terminalError
 	}
 
+	/** Resumes after `seq` (rows kept from an earlier load) instead of asking for a snapshot; before `start` only. */
+	resumeFrom(seq: SyncSeq | null): void {
+		if (!this.started) this.lastSeq = seq
+	}
+
 	start(): void {
 		if (this.started || this.stopped) return
 		this.started = true

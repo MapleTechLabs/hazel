@@ -8,6 +8,7 @@ import { type MutableSourceSet, type SourceKey, sourceKey } from "@hazel/effect-
 import type { OrganizationId, UserId } from "@hazel/schema"
 import { Effect, Stream } from "effect"
 import { connectConversationCollection, userOrganizationCollection } from "./collections"
+import { bindLocalCache } from "./local-cache"
 import { orgSources, syncHub, userSources } from "./sync"
 
 /** The part of a TanStack collection the manager reads. */
@@ -82,7 +83,10 @@ const appDeps: SyncManagerDeps = {
 export const syncSession = (userId: UserId): Stream.Stream<never> =>
 	Stream.callback<never>(() =>
 		Effect.acquireRelease(
-			Effect.sync(() => startSyncSession(appDeps, userId)),
+			Effect.sync(() => {
+				bindLocalCache(userId)
+				return startSyncSession(appDeps, userId)
+			}),
 			(stop) => Effect.sync(stop),
 		).pipe(Effect.flatMap(() => Effect.never)),
 	)

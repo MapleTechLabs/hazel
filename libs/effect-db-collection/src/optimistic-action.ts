@@ -232,7 +232,7 @@ export function optimisticAction<
 
 			const persisted = yield* Effect.exit(
 				Effect.tryPromise({
-					try: () => transaction.isPersisted.promise,
+					try: () => transaction.when("settled"),
 					catch: (cause) =>
 						new OptimisticActionError({ message: "Optimistic action failed", cause }),
 				}),
