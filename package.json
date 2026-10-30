@@ -37,7 +37,6 @@
 		"build": "turbo build typecheck",
 		"start": "turbo start",
 		"setup": "bun run packages/setup/src/index.ts",
-		"setup:turbo": "turbo setup",
 		"typecheck": "turbo build typecheck",
 		"format": "oxfmt",
 		"lint": "oxlint --disable-nested-config",
