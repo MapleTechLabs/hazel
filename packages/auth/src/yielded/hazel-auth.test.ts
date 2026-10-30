@@ -39,6 +39,7 @@ const keyring = (byte: number) => ({
 
 // ---- Simulated GitHub (token endpoint, /user, /user/emails) and Google discovery ----
 let githubUserId = 0
+let googleTokenCalls = 0
 const FakeGitHub = Layer.succeed(
 	HttpClient.HttpClient,
 	HttpClient.make((request, url) =>
@@ -78,6 +79,7 @@ const FakeGitHub = Layer.succeed(
 					token_endpoint_auth_methods_supported: ["client_secret_post", "client_secret_basic"],
 					authorization_response_iss_parameter_supported: true,
 				})
+			if (url.href === "https://oauth2.googleapis.com/token") googleTokenCalls += 1
 			return HttpClientResponse.fromWeb(request, new Response("not found", { status: 404 }))
 		}),
 	),
@@ -295,6 +297,7 @@ describe("Hazel auth on D1 (node SQLite)", () => {
 	}, 60_000)
 
 	test("the Google callback accepts the query parameters Google appends", async () => {
+		googleTokenCalls = 0
 		const browser = jar()
 		const begin = await call(browser, "POST", "/auth/signIn", { provider: "google", returnTarget: "/" })
 		expect(begin.status).toBe(200)
@@ -313,10 +316,11 @@ describe("Hazel auth on D1 (node SQLite)", () => {
 				{ headers: { cookie: browser.header() }, redirect: "manual" },
 			),
 		)
-		// Google's token endpoint is not simulated, so the exchange fails later; the callback
-		// itself must not be refused as a malformed request.
+		// Google's token endpoint answers 404, so the exchange fails; the callback must get
+		// that far instead of being refused as a malformed request.
 		const body = callback.status === 400 ? await callback.text() : ""
 		expect(body).not.toContain("TransportFailure")
+		expect(googleTokenCalls).toBeGreaterThan(0)
 	})
 
 	test("returning user signs in; sign-out revokes the session server-side", async () => {
