@@ -15,46 +15,6 @@ export class UnauthorizedError extends Schema.TaggedError<UnauthorizedError>("Un
 }
 
 /**
- * Error thrown when an OAuth authorization code has expired or has already been used.
- * This is a specific 401 error that indicates the user must restart the OAuth flow.
- */
-export class OAuthCodeExpiredError extends Schema.TaggedError<OAuthCodeExpiredError>("OAuthCodeExpiredError")(
-	"OAuthCodeExpiredError",
-	{
-		message: Schema.String,
-	},
-	{ httpApiStatus: 401 },
-) {
-	static is(u: unknown): u is OAuthCodeExpiredError {
-		return Predicate.isTagged(u, "OAuthCodeExpiredError")
-	}
-}
-
-export class OAuthStateMismatchError extends Schema.TaggedError<OAuthStateMismatchError>()(
-	"OAuthStateMismatchError",
-	{
-		message: Schema.String,
-	},
-	{ httpApiStatus: 400 },
-) {
-	static is(u: unknown): u is OAuthStateMismatchError {
-		return Predicate.isTagged(u, "OAuthStateMismatchError")
-	}
-}
-
-export class OAuthRedemptionPendingError extends Schema.TaggedError<OAuthRedemptionPendingError>()(
-	"OAuthRedemptionPendingError",
-	{
-		message: Schema.String,
-	},
-	{ httpApiStatus: 503 },
-) {
-	static is(u: unknown): u is OAuthRedemptionPendingError {
-		return Predicate.isTagged(u, "OAuthRedemptionPendingError")
-	}
-}
-
-/**
  * Keeps the underlying failure on an error for server-side logs and traces without making it
  * part of the error's schema: `cause` is the native, non-enumerable `Error.cause`, so it is never
  * encoded into RPC or HTTP responses.
@@ -90,23 +50,6 @@ export class InternalServerError extends Schema.TaggedError<InternalServerError>
 		props: { readonly message: string; readonly detail?: string | undefined; readonly cause?: unknown },
 		options?: Schema.MakeOptions,
 	) {
-		const { cause, ...fields } = props
-		super(fields, options)
-		attachCause(this, cause)
-	}
-}
-
-/** A workflow could not be started. `cause` stays server-side, as on `InternalServerError`. */
-export class WorkflowInitializationError extends Schema.TaggedError<WorkflowInitializationError>(
-	"WorkflowInitializationError",
-)(
-	"WorkflowInitializationError",
-	{
-		message: Schema.String,
-	},
-	{ httpApiStatus: 500 },
-) {
-	constructor(props: { readonly message: string; readonly cause?: unknown }, options?: Schema.MakeOptions) {
 		const { cause, ...fields } = props
 		super(fields, options)
 		attachCause(this, cause)
@@ -189,30 +132,6 @@ export class NestedThreadError extends Schema.TaggedError<NestedThreadError>("Ne
 ) {}
 
 /**
- * Error thrown when the workflow service is unreachable or unavailable.
- * Used when a background service (thread naming, webhooks) cannot be reached.
- */
-export class WorkflowServiceUnavailableError extends Schema.TaggedError<WorkflowServiceUnavailableError>(
-	"WorkflowServiceUnavailableError",
-)(
-	"WorkflowServiceUnavailableError",
-	{
-		message: Schema.String,
-	},
-	{ httpApiStatus: 503 },
-) {
-	static is(u: unknown): u is WorkflowServiceUnavailableError {
-		return Predicate.isTagged(u, "WorkflowServiceUnavailableError")
-	}
-
-	constructor(props: { readonly message: string; readonly cause?: unknown }, options?: Schema.MakeOptions) {
-		const { cause, ...fields } = props
-		super(fields, options)
-		attachCause(this, cause)
-	}
-}
-
-/**
  * Turns the repository layer's `DatabaseError` / `SchemaError` into a client-safe
  * `InternalServerError`, keeping the original failure as its server-side `cause`.
  */
@@ -271,9 +190,6 @@ export { PermissionError } from "./scopes/permission-error"
 
 // Re-export session errors for frontend convenience
 export * from "./session-errors"
-
-// Re-export desktop auth errors for frontend convenience
-export * from "./desktop-auth-errors"
 
 // Thread naming errors, for frontend error handling
 export {

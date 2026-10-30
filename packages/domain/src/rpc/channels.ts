@@ -14,7 +14,6 @@ import {
 	ThreadContextQueryError,
 	ThreadNameUpdateError,
 	UnauthorizedError,
-	WorkflowServiceUnavailableError,
 } from "../errors"
 
 export { NestedThreadError } from "../errors"
@@ -223,7 +222,6 @@ export class ChannelRpcs extends RpcGroup.make(
 			InvalidChannelRequestError,
 			UnauthorizedError,
 			InternalServerError,
-			WorkflowServiceUnavailableError,
 			// Workflow errors - exposed to client for granular error handling
 			ThreadChannelNotFoundError,
 			OriginalMessageNotFoundError,

@@ -2,7 +2,6 @@
 
 export * from "./current-user"
 export * as CurrentUser from "./current-user"
-export * from "./desktop-auth-errors"
 export * as ErrorUtils from "./error-utils"
 export * from "./errors"
 export * from "./mention-parser"

@@ -2,14 +2,9 @@ import type { RateLimitExceededError } from "@hazel/domain"
 import type {
 	InternalServerError,
 	InvalidBearerTokenError,
-	InvalidJwtPayloadError,
-	SessionAuthenticationError,
-	SessionExpiredError,
 	SessionLoadError,
 	SessionNotProvidedError,
-	SessionRefreshError,
 	UnauthorizedError,
-	WorkflowServiceUnavailableError,
 } from "@hazel/domain/errors"
 import type {
 	CollectionInErrorEffectError,
@@ -57,15 +52,10 @@ export type CommonError =
 	// The auth middleware (`AuthFailure`)
 	| UnauthorizedError
 	| SessionNotProvidedError
-	| SessionAuthenticationError
-	| SessionExpiredError
-	| SessionRefreshError
 	| SessionLoadError
-	| InvalidJwtPayloadError
 	| InvalidBearerTokenError
 	// Server catch-alls
 	| InternalServerError
-	| WorkflowServiceUnavailableError
 	| RateLimitExceededError
 	// Optimistic actions and TanStack DB
 	| OptimisticActionError
@@ -120,13 +110,8 @@ export const commonReasonOf = (error: CommonError): CommonReason =>
 		TimeoutError: (): CommonReason => "Timeout",
 		UnauthorizedError: signedOut,
 		SessionNotProvidedError: signedOut,
-		SessionAuthenticationError: signedOut,
-		SessionExpiredError: signedOut,
-		SessionRefreshError: signedOut,
-		InvalidJwtPayloadError: signedOut,
 		InvalidBearerTokenError: signedOut,
 		SessionLoadError: unavailable,
-		WorkflowServiceUnavailableError: unavailable,
 		CollectionSyncEffectError: unavailable,
 		RateLimitExceededError: (): CommonReason => "RateLimited",
 		// The write may have landed; only the confirmation timed out.
@@ -149,13 +134,8 @@ const commonTags: ReadonlySet<string> = new Set<CommonError["_tag"]>([
 	"TimeoutError",
 	"UnauthorizedError",
 	"SessionNotProvidedError",
-	"SessionAuthenticationError",
-	"SessionExpiredError",
-	"SessionRefreshError",
-	"InvalidJwtPayloadError",
 	"InvalidBearerTokenError",
 	"SessionLoadError",
-	"WorkflowServiceUnavailableError",
 	"CollectionSyncEffectError",
 	"RateLimitExceededError",
 	"SyncError",

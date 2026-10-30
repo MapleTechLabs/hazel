@@ -11,12 +11,8 @@ import * as CurrentUser from "../current-user"
 import { UnauthorizedError } from "../errors"
 import {
 	InvalidBearerTokenError,
-	InvalidJwtPayloadError,
-	SessionAuthenticationError,
-	SessionExpiredError,
 	SessionLoadError,
 	SessionNotProvidedError,
-	SessionRefreshError,
 } from "../session-errors"
 
 /**
@@ -28,11 +24,7 @@ import {
 const AuthFailure = S.Union([
 	UnauthorizedError,
 	SessionLoadError,
-	SessionAuthenticationError,
-	InvalidJwtPayloadError,
 	SessionNotProvidedError,
-	SessionRefreshError,
-	SessionExpiredError,
 	InvalidBearerTokenError,
 ])
 

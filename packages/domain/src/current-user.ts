@@ -5,12 +5,8 @@ import { OrganizationId, UserId } from "@hazel/schema"
 import { User } from "./models"
 import {
 	InvalidBearerTokenError,
-	InvalidJwtPayloadError,
-	SessionAuthenticationError,
-	SessionExpiredError,
 	SessionLoadError,
 	SessionNotProvidedError,
-	SessionRefreshError,
 } from "./session-errors"
 
 export class Schema extends S.Class<Schema>("CurrentUserSchema")({
@@ -31,11 +27,7 @@ export class Context extends EffectContext.Service<Context, Schema>()("CurrentUs
 const AuthFailure = S.Union([
 	UnauthorizedError,
 	SessionLoadError,
-	SessionAuthenticationError,
-	InvalidJwtPayloadError,
 	SessionNotProvidedError,
-	SessionRefreshError,
-	SessionExpiredError,
 	InvalidBearerTokenError,
 ])
 

@@ -1,6 +1,6 @@
 import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
 import { Schema } from "effect"
-import { InternalServerError, WorkflowInitializationError, WorkflowServiceUnavailableError } from "../errors"
+import { InternalServerError } from "../errors"
 import { RequiredScopes } from "../scopes/required-scopes"
 
 // GitHub Webhook Types
@@ -39,8 +39,6 @@ export class WebhookGroup extends HttpApiGroup.make("webhooks")
 				InvalidGitHubWebhookSignature,
 				InvalidGitHubWebhookPayload,
 				InternalServerError,
-				WorkflowInitializationError,
-				WorkflowServiceUnavailableError,
 			],
 		})
 			.annotateMerge(
