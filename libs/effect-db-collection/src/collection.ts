@@ -155,6 +155,12 @@ class SourceMirror<T extends object, TKey extends string | number> implements Sy
 	private pendingReceipt: Promise<void> | undefined
 	/** The seq each source's rows reflect: every run up to it applied, or restored. */
 	private readonly seqs = new Map<SourceKey, SyncSeq>()
+	/**
+	 * Sources a run of which did not fully reach the collection (a row the schema cannot decode, a
+	 * rejected write or commit): their seq is not stored, so the next load asks for a snapshot
+	 * instead of resuming past the missing rows. A clean snapshot of the source clears it.
+	 */
+	private readonly lossy = new Set<SourceKey>()
 	/** Sources whose stored seq is behind `seqs`. */
 	private readonly dirtySeqs = new Set<SourceKey>()
 	private seqFlush: ReturnType<typeof setTimeout> | undefined
@@ -190,8 +196,17 @@ class SourceMirror<T extends object, TKey extends string | number> implements Sy
 
 	onCommit(source: SourceKey, seq: SyncSeq): void {
 		if (!this.concerns(source)) return
-		this.seqs.set(source, seq)
+		if (this.lossy.has(source)) this.seqs.delete(source)
+		else this.seqs.set(source, seq)
 		this.markSeqDirty(source)
+	}
+
+	/** Rows of `sources` did not reach the collection: stop storing where they resume. */
+	private markLossy(sources: Iterable<SourceKey>): void {
+		for (const source of sources) {
+			this.lossy.add(source)
+			if (this.seqs.delete(source)) this.markSeqDirty(source)
+		}
 	}
 
 	private markSeqDirty(source: SourceKey): void {
@@ -241,6 +256,7 @@ class SourceMirror<T extends object, TKey extends string | number> implements Sy
 		if (reset) {
 			this.delivered.add(source)
 			this.restoredSources.delete(source)
+			this.lossy.delete(source)
 		}
 		this.applyRows(source, reset, rows, info)
 		this.onRun?.(source, reset)
@@ -293,6 +309,7 @@ class SourceMirror<T extends object, TKey extends string | number> implements Sy
 					message,
 					row: raw,
 				})
+				this.markLossy([source])
 				continue
 			}
 			const value = decoded.success
@@ -328,7 +345,7 @@ class SourceMirror<T extends object, TKey extends string | number> implements Sy
 			else if (exists && changed.has(key)) writes.push(this.upsert("update", row!))
 			else if (exists) moved.push(key)
 		}
-		this.emit(writes, moved)
+		this.emit(writes, moved, false, [source])
 	}
 
 	private upsert(type: "insert" | "update", row: MirrorRow<T>): ChangeMessageOrDeleteKeyMessage<T, TKey> {
@@ -447,11 +464,14 @@ class SourceMirror<T extends object, TKey extends string | number> implements Sy
 		return this.pendingReceipt ?? true
 	}
 
+	/** `sources`: whose rows the writes carry (all of them when omitted), lossy if they fail. */
 	private emit(
 		writes: ReadonlyArray<ChangeMessageOrDeleteKeyMessage<T, TKey>>,
 		moved: ReadonlyArray<TKey> = [],
 		snapshot = false,
+		sources?: ReadonlyArray<SourceKey>,
 	): void {
+		const lost = () => this.markLossy(sources ?? [...this.seqs.keys(), ...this.restoredSources])
 		const target = this.target
 		if (target === null) return
 		if (!this.persistent) moved = []
@@ -469,6 +489,7 @@ class SourceMirror<T extends object, TKey extends string | number> implements Sy
 				table: this.table,
 				cause,
 			})
+			lost()
 		}
 		const receipt = target.commit()
 		if (receipt === true) return
@@ -483,6 +504,7 @@ class SourceMirror<T extends object, TKey extends string | number> implements Sy
 					table: this.table,
 					cause,
 				})
+				lost()
 			},
 		)
 		this.pendingReceipt = pending

@@ -217,6 +217,23 @@ describe("persisted collections", () => {
 			expect(names(third.collection)).toEqual({ u1: "Ada L." })
 		})
 
+		it("asks for a snapshot after a run whose rows did not all reach the collection", async () => {
+			const path = tempDatabase()
+			const first = session(path, ["org:a"])
+			first.collection.preload()
+			const socket = await first.socket("org:a")
+			socket.snapshot(7, { users: [{ id: "u1", name: "Ada" }] })
+			// u2 cannot decode: resuming after seq 8 would never bring it.
+			socket.commit(8, { users: { upserts: [{ id: "u2", name: 5 }] } })
+			await seqsStored()
+			await first.unload()
+
+			const second = session(path, ["org:a"])
+			second.collection.preload()
+			expect((await helloOf(second, "org:a")).hello).toMatchObject({ since: null })
+			expect(names(second.collection)).toEqual({ u1: "Ada" })
+		})
+
 		it("asks for a snapshot while a collection that keeps nothing holds the source", async () => {
 			const path = tempDatabase()
 			const first = session(path, ["org:a"])
