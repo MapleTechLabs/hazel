@@ -139,6 +139,17 @@ export const makeSyncedObject = <P, E, R, RD = never, RX = never>(
 		return Math.max(seq, after)
 	}).pipe(Effect.withSpan("SyncDO.afterCommit"))
 
+	/**
+	 * The part of `afterCommit` a caller cannot answer before: flush to sockets and arm the alarm.
+	 * For a write whose outbox rows nobody waits on (a socket opening): run `afterCommit` after
+	 * answering to deliver them; the alarm is the backstop if that never runs.
+	 */
+	const flushAndSchedule = Effect.gen(function* () {
+		const seq = yield* flush
+		yield* schedule
+		return seq
+	})
+
 	const alarm = Effect.gen(function* () {
 		yield* sync.closeExpired
 		if (sync.headSeq() > sync.flushedSeq()) yield* flush
@@ -152,7 +163,7 @@ export const makeSyncedObject = <P, E, R, RD = never, RX = never>(
 		yield* schedule
 	}).pipe(Effect.withSpan("SyncDO.alarm"))
 
-	return { sync, outbox, afterCommit, alarm, schedule }
+	return { sync, outbox, afterCommit, flushAndSchedule, alarm, schedule }
 }
 
 export type SyncedObject<P, E, R, RD = never, RX = never> = ReturnType<

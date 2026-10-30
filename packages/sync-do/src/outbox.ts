@@ -102,6 +102,8 @@ export interface DrainOptions {
 	readonly backoff?: Partial<BackoffPolicy>
 	/** Per-attempt timeout; a timeout is a retryable failure. */
 	readonly deliveryTimeoutMs?: number
+	/** Targets delivered to at once (default 8); each target's rows still go one at a time, in order. */
+	readonly concurrency?: number
 }
 
 type RawOutboxRow = {
@@ -194,11 +196,14 @@ const attemptRow = <R>(
 		return "retried" as const
 	})
 
+const DEFAULT_DRAIN_CONCURRENCY = 8
+
 /**
- * Deliver due rows in order per target: only each target's head is considered, and a target keeps
- * going while its next row is due and delivery succeeds. A retryable failure (or a defect or
- * timeout) backs the head off and holds its target; other targets are unaffected. A non-retryable
- * failure marks the row `dead` and its target moves on. Not single-flight; `makeOutbox` serializes.
+ * Deliver due rows in order per target, several targets at once: only each target's head is
+ * considered, and a target keeps going while its next row is due and delivery succeeds. A
+ * retryable failure (or a defect or timeout) backs the head off and holds its target; other
+ * targets are unaffected. A non-retryable failure marks the row `dead` and its target moves on.
+ * Not single-flight; `makeOutbox` serializes.
  */
 export const drainOutbox = <R>(
 	deliver: (row: OutboxRow) => Effect.Effect<void, OutboxDeliveryError, R>,
@@ -220,16 +225,29 @@ export const drainOutbox = <R>(
 				(rows) => rows[0],
 			)
 		const counts = { delivered: 0, retried: 0, dead: 0 }
-		for (const head of heads) {
-			let row: RawOutboxRow | undefined = head
-			// Walk this target's queue while rows are due and deliveries succeed (or go dead).
-			while (row !== undefined && Number(row.next_at) <= now && budget > 0) {
-				budget--
-				const outcome: AttemptOutcome = yield* attemptRow(deliver, row, now, policy, timeoutMs)
-				counts[outcome]++
-				row = outcome === "retried" ? undefined : yield* nextOf(row.target)
-			}
-		}
+		// Targets are independent objects: walk their queues concurrently, so one slow (or cold)
+		// target no longer delays every target after it.
+		yield* Effect.forEach(
+			heads,
+			(head) =>
+				Effect.gen(function* () {
+					let row: RawOutboxRow | undefined = head
+					// Walk this target's queue while rows are due and deliveries succeed (or go dead).
+					while (row !== undefined && Number(row.next_at) <= now && budget > 0) {
+						budget--
+						const outcome: AttemptOutcome = yield* attemptRow(
+							deliver,
+							row,
+							now,
+							policy,
+							timeoutMs,
+						)
+						counts[outcome]++
+						row = outcome === "retried" ? undefined : yield* nextOf(row.target)
+					}
+				}),
+			{ concurrency: options?.concurrency ?? DEFAULT_DRAIN_CONCURRENCY, discard: true },
+		)
 		const nextAt = yield* nextOutboxAlarm
 		yield* Effect.annotateCurrentSpan({
 			"outbox.heads": heads.length,
@@ -267,7 +285,7 @@ export const deliverKindsNow = <R>(
 		const outcomes = yield* Effect.forEach(
 			rows,
 			(row) => attemptRow(deliver, row, now, policy, timeoutMs),
-			{ concurrency: 8 },
+			{ concurrency: options?.concurrency ?? DEFAULT_DRAIN_CONCURRENCY },
 		)
 		const counts = { delivered: 0, retried: 0, dead: 0 }
 		for (const outcome of outcomes) counts[outcome]++

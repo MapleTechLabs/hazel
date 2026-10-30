@@ -486,6 +486,10 @@ describe("UserObject", () => {
 				const second = makeFakeSocket()
 				expect(yield* user.adopt(first, { userId: s.member, expiresAt: null })).toBe("accepted")
 				expect(yield* user.adopt(second, { userId: s.member, expiresAt: null })).toBe("accepted")
+				// The projection is delivered after the upgrade answers, not before.
+				for (let i = 0; i < 100 && orgStatus()?.status !== "online"; i++) {
+					yield* Effect.sleep("5 millis")
+				}
 				expect(orgStatus()?.status).toBe("online")
 
 				// Someone else's socket is refused and changes nothing.
