@@ -127,17 +127,4 @@ export const schema = new Schema({
 	marks: {},
 })
 
-export type NodeTypeName =
-	| "paragraph"
-	| "blockquote"
-	| "code-block"
-	| "subtext"
-	| "list-item"
-	| "heading"
-	| "table"
-	| "table-row"
-	| "table-cell"
-	| "mention"
-	| "custom-emoji"
-
 export type { ProseMirrorNode }

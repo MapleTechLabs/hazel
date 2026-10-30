@@ -1,5 +1,5 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { styles, type AvatarSize } from "./avatar-styles"
+import { type AvatarSize, styles } from "~/components/ui/avatar/styles"
 import { cx } from "~/utils/cx"
 import { IconCircleDottedUser } from "../icons"
 import { facehash } from "./facehash"
@@ -18,6 +18,8 @@ export interface AvatarProps {
 	readonly badge?: Html
 	/** Legacy `initials`: shown when there is no image and no seed. */
 	readonly initials?: string
+	/** Custom fallback shown when there is no image, seed or initials. */
+	readonly placeholder?: Html
 	/** Legacy default fallback (IconCircleDottedUser) when nothing else applies; opt-in here. */
 	readonly fallbackIcon?: boolean
 }
@@ -46,9 +48,11 @@ export const avatar = <Message>(h: HtmlBuilder<Message>, props: AvatarProps): Ht
 				]
 			: props.initials
 				? [h.span([h.Class(cx("text-quaternary", styles[size].initials))], [props.initials])]
-				: props.fallbackIcon
-					? [IconCircleDottedUser(h, { className: cx("text-muted-fg", styles[size].icon) })]
-					: []
+				: props.placeholder
+					? [props.placeholder]
+					: props.fallbackIcon
+						? [IconCircleDottedUser(h, { className: cx("text-muted-fg", styles[size].icon) })]
+						: []
 	return h.div(
 		[
 			h.Attribute("data-avatar", "true"),

@@ -47,7 +47,7 @@ memoized views and a `sharedChanged` hook. `page/root/` shows a page that only r
 - **Toast helpers.** `src/data/actions.ts` is the only toast module (pages, modals, palette, shell):
   `successToast` / `errorToast` / `warningToast` / `infoToast` / `loadingToast` build a `ToastRequest`, and
   `errorToastOf(failureMessage(reason, {...}))` turns a failure reason into one in `update`.
-  Legacy, being migrated: `failureToast(cause, fallback, handlers?)` / `toastOfExit` and `Failed*{ toast }`
+  Legacy, being migrated: `failureToast(cause, fallback, handlers?)` and `Failed*{ toast }`
   Messages. Handlers are keyed by the failure's own tags; unhandled errors get the shared copy and never
   show error text. `fallback` is ignored.
 - **Live queries.** Use `liveQueryStream` (`src/data/live-query.ts`) with the legacy `useLiveQuery`

@@ -232,19 +232,6 @@ export function isGitHubPRUrl(url: string): boolean {
 }
 
 /**
- * Check if a URL is a GitHub Issue URL
- * Format: https://github.com/{owner}/{repo}/issues/{number}
- */
-export function isGitHubIssueUrl(url: string): boolean {
-	try {
-		const parsed = new URL(url)
-		return parsed.hostname === "github.com" && /\/[^/]+\/[^/]+\/issues\/\d+/.test(parsed.pathname)
-	} catch {
-		return false
-	}
-}
-
-/**
  * Extract GitHub PR/Issue info from URL
  */
 export function extractGitHubInfo(url: string): {

@@ -3,8 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
 	createEmptyValue,
 	deserializeFromMarkdown,
-	extractMentionsFromMarkdown,
-	hasMentionPattern,
 	isValueEmpty,
 	serializeToMarkdown,
 } from "./markdown"
@@ -992,64 +990,6 @@ describe("markdown serializer (ProseMirror model)", () => {
 				},
 			] as any
 			expect(isValueEmpty(fromLegacy(value))).toBe(false)
-		})
-	})
-
-	describe("extractMentionsFromMarkdown", () => {
-		it("should extract user mentions", () => {
-			const result = extractMentionsFromMarkdown("Hello @[userId:123] how are you?")
-
-			expect(result).toHaveLength(1)
-			expect(result[0]).toEqual({ prefix: "userId", value: "123" })
-		})
-
-		it("should extract directive mentions", () => {
-			const result = extractMentionsFromMarkdown("@[directive:channel] everyone!")
-
-			expect(result).toHaveLength(1)
-			expect(result[0]).toEqual({ prefix: "directive", value: "channel" })
-		})
-
-		it("should extract multiple mentions", () => {
-			const result = extractMentionsFromMarkdown("@[userId:abc] and @[userId:def]")
-
-			expect(result).toHaveLength(2)
-			expect(result[0]).toEqual({ prefix: "userId", value: "abc" })
-			expect(result[1]).toEqual({ prefix: "userId", value: "def" })
-		})
-
-		it("should return empty array for no mentions", () => {
-			const result = extractMentionsFromMarkdown("No mentions here")
-
-			expect(result).toHaveLength(0)
-		})
-
-		it("should extract mentions from complex text", () => {
-			const result = extractMentionsFromMarkdown(
-				"Hey @[userId:user1], please talk to @[directive:channel] about @[userId:user2]",
-			)
-
-			expect(result).toHaveLength(3)
-		})
-	})
-
-	describe("hasMentionPattern", () => {
-		it("should return true for text with user mentions", () => {
-			expect(hasMentionPattern("Hello @[userId:123]")).toBe(true)
-		})
-
-		it("should return true for text with directive mentions", () => {
-			expect(hasMentionPattern("Hello @[directive:channel]")).toBe(true)
-		})
-
-		it("should return false for text without mentions", () => {
-			expect(hasMentionPattern("Hello world")).toBe(false)
-		})
-
-		it("should return false for malformed mentions", () => {
-			expect(hasMentionPattern("Hello @[invalid:123]")).toBe(false)
-			expect(hasMentionPattern("Hello @userId:123]")).toBe(false)
-			expect(hasMentionPattern("Hello @[userId:123")).toBe(false)
 		})
 	})
 })

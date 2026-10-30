@@ -28,20 +28,6 @@ const isTrustedCustomEmojiUrl = (rawUrl: string): boolean => {
 	)
 }
 
-const MENTION_PATTERN = /@\[(userId|directive):([^\]]+)\]/g
-
-/** Every `@[userId:…]` / `@[directive:…]` in a markdown string. */
-export const extractMentionsFromMarkdown = (
-	markdown: string,
-): Array<{ prefix: "userId" | "directive"; value: string }> =>
-	Array.from(markdown.matchAll(MENTION_PATTERN)).flatMap((match) => {
-		const prefix = match[1]
-		const value = match[2]
-		return (prefix === "userId" || prefix === "directive") && value ? [{ prefix, value }] : []
-	})
-
-export const hasMentionPattern = (text: string): boolean => /@\[(userId|directive):([^\]]+)\]/.test(text)
-
 const childrenOf = (node: ProseMirrorNode): ReadonlyArray<ProseMirrorNode> => {
 	const children: Array<ProseMirrorNode> = []
 	node.forEach((child) => children.push(child))
