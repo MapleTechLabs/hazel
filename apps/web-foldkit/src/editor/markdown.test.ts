@@ -1,11 +1,6 @@
 import type { Node as ProseMirrorNode } from "prosemirror-model"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import {
-	createEmptyValue,
-	deserializeFromMarkdown,
-	isValueEmpty,
-	serializeToMarkdown,
-} from "./markdown"
+import { createEmptyValue, deserializeFromMarkdown, isValueEmpty, serializeToMarkdown } from "./markdown"
 import { schema } from "./schema"
 
 /**
@@ -38,11 +33,14 @@ const shape = (nodes: ReadonlyArray<ProseMirrorNode>): Array<Shaped> =>
 		if (node.isText) return { text: node.text ?? "" }
 		const children: Array<ProseMirrorNode> = []
 		node.forEach((child) => children.push(child))
-		const attrs = Object.fromEntries(Object.entries(node.attrs).map(([key, value]) => [key, value ?? undefined]))
+		const attrs = Object.fromEntries(
+			Object.entries(node.attrs).map(([key, value]) => [key, value ?? undefined]),
+		)
 		return {
 			type: node.type.name,
 			...attrs,
-			children: children.length === 0 && (node.isTextblock || node.isAtom) ? [{ text: "" }] : shape(children),
+			children:
+				children.length === 0 && (node.isTextblock || node.isAtom) ? [{ text: "" }] : shape(children),
 		}
 	})
 

@@ -359,10 +359,7 @@ const LOCAL_POSITION = /^local:\d+$/
  *   until the subset unloads. A subset whose predicate names no channel loads nothing and resolves
  *   at once; use `utils.ensureChannels` to load such rows explicitly.
  */
-export function doCollectionOptions<
-	T extends object,
-	TKey extends string | number = string | number,
->(
+export function doCollectionOptions<T extends object, TKey extends string | number = string | number>(
 	config: DoCollectionConfig<T, TKey>,
 ): CollectionConfig<T, TKey, never, EffectDbCollectionUtils> & {
 	id: string
@@ -606,10 +603,9 @@ export type EffectCollection<T extends object, TKey extends string | number = st
  * })
  * ```
  */
-export function createEffectCollection<
-	T extends object,
-	TKey extends string | number = string | number,
->(config: DoCollectionConfig<T, TKey>): EffectCollection<T, TKey> {
+export function createEffectCollection<T extends object, TKey extends string | number = string | number>(
+	config: DoCollectionConfig<T, TKey>,
+): EffectCollection<T, TKey> {
 	// biome-ignore lint/suspicious/noExplicitAny: the options' overloads cannot be picked from a generic call site
 	return tanstackCreateCollection(doCollectionOptions(config) as any) as unknown as EffectCollection<
 		T,

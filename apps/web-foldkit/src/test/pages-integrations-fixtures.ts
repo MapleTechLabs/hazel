@@ -19,8 +19,18 @@ export const connection: Connection = {
 	lastSyncedAtMs: null,
 }
 
-export const guild: DiscordGuild = { id: "918273645500901", name: "Design Systems Guild", icon: null, owner: true }
-export const otherGuild: DiscordGuild = { id: "918273645500902", name: "Rust Hackers", icon: null, owner: false }
+export const guild: DiscordGuild = {
+	id: "918273645500901",
+	name: "Design Systems Guild",
+	icon: null,
+	owner: true,
+}
+export const otherGuild: DiscordGuild = {
+	id: "918273645500902",
+	name: "Rust Hackers",
+	icon: null,
+	owner: false,
+}
 
 export const bot: Bot = {
 	id: botId,

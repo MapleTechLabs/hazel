@@ -9,14 +9,14 @@ A page owns only its own state.
 1. Find the route tag in `src/route.ts` (all 39 legacy routes are already there).
 2. Create `page/<area>/<page>/` with the files the page needs:
 
-    | File              | Contents                                                                         |
-    | ----------------- | -------------------------------------------------------------------------------- |
-    | `model.ts`        | `Model` (Schema). Route params the page needs go here, set in `init`.            |
-    | `message.ts`      | `Message` (`defineMessageUnion`, verb-first past-tense facts).                   |
-    | `update.ts`       | `init(route, shared)` and `update(model, message, shared)`, plus its Commands.   |
-    | `view.ts`         | `view = Submodel.defineView<Model, Message, PageViewInputs>(...)`.               |
-    | `subscription.ts` | `Subscription.make<PageSubscriptionInput<Model>, Message>()(...)`.               |
-    | `index.ts`        | `export const page = definePage("<Id>", { Model, Message }, { routes, ... })`.   |
+    | File              | Contents                                                                       |
+    | ----------------- | ------------------------------------------------------------------------------ |
+    | `model.ts`        | `Model` (Schema). Route params the page needs go here, set in `init`.          |
+    | `message.ts`      | `Message` (`defineMessageUnion`, verb-first past-tense facts).                 |
+    | `update.ts`       | `init(route, shared)` and `update(model, message, shared)`, plus its Commands. |
+    | `view.ts`         | `view = Submodel.defineView<Model, Message, PageViewInputs>(...)`.             |
+    | `subscription.ts` | `Subscription.make<PageSubscriptionInput<Model>, Message>()(...)`.             |
+    | `index.ts`        | `export const page = definePage("<Id>", { Model, Message }, { routes, ... })`. |
 
 3. Register it in `page/registry.ts`: import the module and append `X.page` to `pages`. That is the
    only shared file you touch.
@@ -60,12 +60,12 @@ memoized views and a `sharedChanged` hook. `page/root/` shows a page that only r
   the theme classes or storage in a page), `RequestedSoundSettings({ settings })`,
   `RequestedCurrentUserRefresh({ toast? })` (re-runs `user.me`, e.g. after an
   avatar change) (`page/out-message.ts`). Plain links need nothing: an `<a href>` is followed by the app.
-  - A toast with an `id` replaces the live toast with the same id in place: give a loading toast an
-    id and send the success or error toast with the same id. The root's toaster (`overlay/toaster.ts`,
-    on the `@foldkit/ui` Toast) renders it; pages only import `ToastRequest` from `overlay/toasts.ts`.
-  - One `update` returns one OutMessage. Navigation and a toast together: `RequestedNavigation`'s
-    `toast`. A modal's own result (toast, navigation, closing) is the modal's job, not the page's: the
-    page only sends `RequestedModal` with the request fields the modal declares.
+    - A toast with an `id` replaces the live toast with the same id in place: give a loading toast an
+      id and send the success or error toast with the same id. The root's toaster (`overlay/toaster.ts`,
+      on the `@foldkit/ui` Toast) renders it; pages only import `ToastRequest` from `overlay/toasts.ts`.
+    - One `update` returns one OutMessage. Navigation and a toast together: `RequestedNavigation`'s
+      `toast`. A modal's own result (toast, navigation, closing) is the modal's job, not the page's: the
+      page only sends `RequestedModal` with the request fields the modal declares.
 - **Layout.** Render only what the legacy route's own component renders (its `<Outlet />` content). The
   root wraps it in the org shell and the route's section layout (`shell/layouts.ts`): `main` for
   settings, my-settings and notifications, the column for integrations and chat sync, the channel

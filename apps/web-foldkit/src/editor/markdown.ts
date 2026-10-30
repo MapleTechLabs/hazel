@@ -58,7 +58,10 @@ export function serializeToMarkdown(nodes: ReadonlyArray<ProseMirrorNode>): stri
 		.map((node): string => {
 			if (node.isText) return node.text ?? ""
 			return Match.value(node.type.name).pipe(
-				Match.when("custom-emoji", () => `![custom-emoji:${node.attrs.name}](${node.attrs.imageUrl})`),
+				Match.when(
+					"custom-emoji",
+					() => `![custom-emoji:${node.attrs.name}](${node.attrs.imageUrl})`,
+				),
 				Match.when("mention", () =>
 					isSpecialMention(node.attrs.userId)
 						? `@[directive:${node.attrs.userId}]`
@@ -71,7 +74,10 @@ export function serializeToMarkdown(nodes: ReadonlyArray<ProseMirrorNode>): stri
 						.map((line) => `> ${line}`)
 						.join("\n"),
 				),
-				Match.when("code-block", () => `\`\`\`${node.attrs.language ?? ""}\n${node.textContent}\n\`\`\``),
+				Match.when(
+					"code-block",
+					() => `\`\`\`${node.attrs.language ?? ""}\n${node.textContent}\n\`\`\``,
+				),
 				Match.when("subtext", () => `-# ${serializeInline(node)}`),
 				Match.when("list-item", () =>
 					node.attrs.ordered ? `1. ${serializeInline(node)}` : `- ${serializeInline(node)}`,
@@ -156,7 +162,10 @@ function parseTable(
 		schema.nodes["table-row"].create(
 			null,
 			parseTableRow(line).map((cell, index) =>
-				schema.nodes["table-cell"].create({ header, align: alignments[index] ?? null }, parseInlineContent(cell)),
+				schema.nodes["table-cell"].create(
+					{ header, align: alignments[index] ?? null },
+					parseInlineContent(cell),
+				),
 			),
 		)
 	const table = schema.nodes.table.create(null, [
@@ -203,7 +212,9 @@ export function deserializeFromMarkdown(markdown: string): Array<ProseMirrorNode
 
 		const headingMatch = line.match(/^(#{1,3})\s+(.+)$/)
 		if (headingMatch) {
-			nodes.push(block("heading", parseInlineContent(headingMatch[2]!), { level: headingMatch[1]!.length }))
+			nodes.push(
+				block("heading", parseInlineContent(headingMatch[2]!), { level: headingMatch[1]!.length }),
+			)
 			i++
 			continue
 		}
@@ -221,7 +232,12 @@ export function deserializeFromMarkdown(markdown: string): Array<ProseMirrorNode
 		if (line.startsWith(">>> ")) {
 			const restOfMessage = lines.slice(i + 1).join("\n")
 			const quoteText = line.slice(4)
-			nodes.push(block("blockquote", parseInlineContent(restOfMessage ? `${quoteText}\n${restOfMessage}` : quoteText)))
+			nodes.push(
+				block(
+					"blockquote",
+					parseInlineContent(restOfMessage ? `${quoteText}\n${restOfMessage}` : quoteText),
+				),
+			)
 			break
 		}
 

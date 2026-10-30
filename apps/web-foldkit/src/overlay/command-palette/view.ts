@@ -22,7 +22,15 @@ import type * as CommandMenu from "../../ui/command-menu"
 import { commandMenuShortcut, view as commandMenuView } from "../../ui/command-menu-view"
 import { labelId } from "../../ui/menu"
 import { createChannelPage, joinChannelPage } from "./form-pages"
-import { dmDisplayName, HOTKEYS, NAVIGATION, parseKey, recentChannelsOf, SETTINGS, STATUS_OPTIONS } from "./menu"
+import {
+	dmDisplayName,
+	HOTKEYS,
+	NAVIGATION,
+	parseKey,
+	recentChannelsOf,
+	SETTINGS,
+	STATUS_OPTIONS,
+} from "./menu"
 import { Message } from "./message"
 import { type ChannelSummary, type DmChannel, isFormPage, type Model } from "./model"
 import { searchPage } from "./search-view"
@@ -33,7 +41,10 @@ import { MENU_ID } from "./update"
 const toMenuMessage = (message: CommandMenu.Message): Message => Message.GotMenuMessage({ message })
 
 const label = (h: HtmlBuilder<Message>, key: string, children: Array<Html | string>): Html =>
-	h.span([h.Class(twMerge(dropdownLabelBase)), h.Id(labelId(MENU_ID, key)), h.Attribute("slot", "label")], children)
+	h.span(
+		[h.Class(twMerge(dropdownLabelBase)), h.Id(labelId(MENU_ID, key)), h.Attribute("slot", "label")],
+		children,
+	)
 
 const current = (h: HtmlBuilder<Message>) => h.span([h.Class("ml-2 text-muted-fg text-xs")], ["(current)"])
 
@@ -69,7 +80,11 @@ const dmIcon = (h: HtmlBuilder<Message>, dm: DmChannel): Html => {
 							size: "xs",
 							className: "ring-[1.5px] ring-overlay",
 							placeholder: h.span(
-								[h.Class("flex items-center justify-center font-semibold text-quaternary text-xs")],
+								[
+									h.Class(
+										"flex items-center justify-center font-semibold text-quaternary text-xs",
+									),
+								],
 								[`+${dm.otherMembers.length - 2}`],
 							),
 						}),
@@ -86,7 +101,11 @@ const QUICK_ACTIONS: Readonly<
 	Record<string, { icon: (h: HtmlBuilder<Message>) => Html; text: string; shortcut?: string }>
 > = {
 	"action:search": { icon: (h) => IconMagnifier3(h), text: "Search messages", shortcut: HOTKEYS.search },
-	"action:create-channel": { icon: (h) => IconPlus(h), text: "Create channel", shortcut: HOTKEYS.createChannel },
+	"action:create-channel": {
+		icon: (h) => IconPlus(h),
+		text: "Create channel",
+		shortcut: HOTKEYS.createChannel,
+	},
 	"action:start-dm": { icon: (h) => IconMsgs(h), text: "Start conversation", shortcut: HOTKEYS.createDm },
 	"action:join-channel": { icon: (h) => IconPlus(h), text: "Join channel" },
 	"action:invite": { icon: (h) => IconUsersPlus(h), text: "Invite members", shortcut: HOTKEYS.invite },
@@ -113,8 +132,19 @@ const THEME_ICONS: Readonly<Record<string, (h: HtmlBuilder<Message>) => Html>> =
 			[h.Class("flex size-4 overflow-hidden rounded-sm"), h.Attribute("data-slot", "icon")],
 			[h.div([h.Class("w-1/2 bg-white")], []), h.div([h.Class("w-1/2 bg-zinc-900")], [])],
 		),
-	light: (h) => h.div([h.Class("size-4 rounded-sm border border-zinc-200 bg-white"), h.Attribute("data-slot", "icon")], []),
-	dark: (h) => h.div([h.Class("size-4 rounded-sm border border-zinc-700 bg-zinc-900"), h.Attribute("data-slot", "icon")], []),
+	light: (h) =>
+		h.div(
+			[h.Class("size-4 rounded-sm border border-zinc-200 bg-white"), h.Attribute("data-slot", "icon")],
+			[],
+		),
+	dark: (h) =>
+		h.div(
+			[
+				h.Class("size-4 rounded-sm border border-zinc-700 bg-zinc-900"),
+				h.Attribute("data-slot", "icon"),
+			],
+			[],
+		),
 }
 
 const THEME_LABELS: Readonly<Record<string, string>> = { system: "System", light: "Light", dark: "Dark" }
@@ -136,7 +166,12 @@ const itemContent = (
 	const link = [...NAVIGATION, ...SETTINGS].find((entry) => entry.key === key)
 	if (link) return [LINK_ICONS[key]?.(h) ?? h.empty, label(h, key, [link.label])]
 	const { kind, value } = parseKey(key)
-	if (kind === "channel") return channelContent(h, key, model.channels.find((channel) => channel.id === value))
+	if (kind === "channel")
+		return channelContent(
+			h,
+			key,
+			model.channels.find((channel) => channel.id === value),
+		)
 	const dm = model.dmChannels.find((candidate) => candidate.id === value)
 	if (kind === "dm") return dm ? [dmIcon(h, dm), label(h, key, [dmDisplayName(dm)])] : []
 	if (kind === "recent") {
@@ -148,13 +183,19 @@ const itemContent = (
 	const status = STATUS_OPTIONS.find((option) => option.value === value)
 	if (kind === "status" && status)
 		return [
-			h.span([h.Class(cn("size-3 shrink-0 rounded-full", status.color)), h.Attribute("data-slot", "icon")]),
+			h.span([
+				h.Class(cn("size-3 shrink-0 rounded-full", status.color)),
+				h.Attribute("data-slot", "icon"),
+			]),
 			label(h, key, [status.label, ...(model.presenceStatus === value ? [current(h)] : [])]),
 		]
 	if (kind === "theme")
 		return [
 			THEME_ICONS[value]?.(h) ?? h.empty,
-			label(h, key, [THEME_LABELS[value] ?? value, ...(shared.theme.mode === value ? [current(h)] : [])]),
+			label(h, key, [
+				THEME_LABELS[value] ?? value,
+				...(shared.theme.mode === value ? [current(h)] : []),
+			]),
 		]
 	return []
 }

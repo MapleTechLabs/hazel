@@ -32,4 +32,3 @@ export class SessionLoadError extends Schema.TaggedError<SessionLoadError>("Sess
 	},
 	{ httpApiStatus: 503 },
 ) {}
-

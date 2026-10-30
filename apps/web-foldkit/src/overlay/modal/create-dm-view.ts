@@ -42,7 +42,12 @@ const userRow = (h: HtmlBuilder<Message>, user: OrgUser, isSelected: boolean): H
 			h.div(
 				[h.Class("flex items-center gap-3")],
 				[
-					avatar(h, { size: "sm", src: user.avatarUrl, initials: initialsOf(user), fallbackIcon: true }),
+					avatar(h, {
+						size: "sm",
+						src: user.avatarUrl,
+						initials: initialsOf(user),
+						fallbackIcon: true,
+					}),
 					h.div(
 						[h.Class("flex flex-col")],
 						[
@@ -74,11 +79,22 @@ const selectedSummary = (h: HtmlBuilder<Message>, selected: ReadonlyArray<OrgUse
 							[
 								...selected
 									.slice(0, 3)
-									.map((user) => avatar(h, { size: "xs", src: user.avatarUrl, initials: initialsOf(user), fallbackIcon: true })),
+									.map((user) =>
+										avatar(h, {
+											size: "xs",
+											src: user.avatarUrl,
+											initials: initialsOf(user),
+											fallbackIcon: true,
+										}),
+									),
 								...(selected.length > 3
 									? [
 											h.div(
-												[h.Class("flex size-6 items-center justify-center rounded-full bg-secondary font-medium text-xs")],
+												[
+													h.Class(
+														"flex size-6 items-center justify-center rounded-full bg-secondary font-medium text-xs",
+													),
+												],
 												[`+${selected.length - 3}`],
 											),
 										]
@@ -102,14 +118,21 @@ export const view = Submodel.defineView<Model, Message, ModalViewInputs>((model,
 					[h.Class("flex items-center gap-3")],
 					[
 						h.div(
-							[h.Class("flex size-10 items-center justify-center rounded-lg bg-primary-subtle")],
+							[
+								h.Class(
+									"flex size-10 items-center justify-center rounded-lg bg-primary-subtle",
+								),
+							],
 							[IconMsgs(h, { className: "size-5 text-primary" })],
 						),
 						h.div(
 							[h.Class("flex flex-col")],
 							[
 								modalTitle(h, model.frame, "Start a conversation"),
-								modalDescription(h, "Select one or more team members to start a conversation"),
+								modalDescription(
+									h,
+									"Select one or more team members to start a conversation",
+								),
 							],
 						),
 					],
@@ -123,14 +146,20 @@ export const view = Submodel.defineView<Model, Message, ModalViewInputs>((model,
 						[
 							inputGroup(
 								h,
-								{ attributes: model.isSearchFocused ? [h.Attribute("data-focus-within", "true")] : [] },
+								{
+									attributes: model.isSearchFocused
+										? [h.Attribute("data-focus-within", "true")]
+										: [],
+								},
 								[
 									IconEnvelope(h, { className: "text-muted-fg" }),
 									input(h, {
 										placeholder: "Search team members...",
 										attributes: [
 											h.Id(SEARCH_ID),
-											...(model.isSearchFocused ? [h.Attribute("data-focused", "true")] : []),
+											...(model.isSearchFocused
+												? [h.Attribute("data-focused", "true")]
+												: []),
 											h.Value(model.searchQuery),
 											h.OnInput((value) => Message.ChangedSearch({ value })),
 											h.OnFocus(Message.FocusedSearch()),
@@ -152,7 +181,9 @@ export const view = Submodel.defineView<Model, Message, ModalViewInputs>((model,
 									)
 								: h.div(
 										[h.Class("flex flex-col gap-1")],
-										users.map((user) => userRow(h, user, model.selectedUserIds.includes(user.id))),
+										users.map((user) =>
+											userRow(h, user, model.selectedUserIds.includes(user.id)),
+										),
 									),
 						],
 					),
@@ -160,7 +191,11 @@ export const view = Submodel.defineView<Model, Message, ModalViewInputs>((model,
 				"flex flex-col gap-4",
 			),
 			dialogFooter(h, [
-				button(h, { intent: "outline", isDisabled: model.isSubmitting, onPress: Message.ClickedCancel() }, ["Cancel"]),
+				button(
+					h,
+					{ intent: "outline", isDisabled: model.isSubmitting, onPress: Message.ClickedCancel() },
+					["Cancel"],
+				),
 				button(
 					h,
 					{

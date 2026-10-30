@@ -3,11 +3,7 @@ import { Context as EffectContext, Schema as S } from "effect"
 import { UnauthorizedError } from "./errors"
 import { OrganizationId, UserId } from "@hazel/schema"
 import { User } from "./models"
-import {
-	InvalidBearerTokenError,
-	SessionLoadError,
-	SessionNotProvidedError,
-} from "./session-errors"
+import { InvalidBearerTokenError, SessionLoadError, SessionNotProvidedError } from "./session-errors"
 
 export class Schema extends S.Class<Schema>("CurrentUserSchema")({
 	id: UserId,

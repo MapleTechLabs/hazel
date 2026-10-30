@@ -35,11 +35,7 @@ export class WebhookGroup extends HttpApiGroup.make("webhooks")
 		HttpApiEndpoint.post("github", "/github", {
 			payload: Schema.Unknown,
 			success: GitHubWebhookResponse,
-			error: [
-				InvalidGitHubWebhookSignature,
-				InvalidGitHubWebhookPayload,
-				InternalServerError,
-			],
+			error: [InvalidGitHubWebhookSignature, InvalidGitHubWebhookPayload, InternalServerError],
 		})
 			.annotateMerge(
 				OpenApi.annotations({

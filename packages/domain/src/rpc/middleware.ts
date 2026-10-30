@@ -9,11 +9,7 @@ import { RpcMiddleware } from "effect/rpc"
 import { Schema as S } from "effect"
 import * as CurrentUser from "../current-user"
 import { UnauthorizedError } from "../errors"
-import {
-	InvalidBearerTokenError,
-	SessionLoadError,
-	SessionNotProvidedError,
-} from "../session-errors"
+import { InvalidBearerTokenError, SessionLoadError, SessionNotProvidedError } from "../session-errors"
 
 /**
  * Authentication middleware that provides CurrentUser context to RPC handlers.
