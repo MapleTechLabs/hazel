@@ -6,18 +6,7 @@ import type {
 	SessionNotProvidedError,
 	UnauthorizedError,
 } from "@hazel/domain/errors"
-import type {
-	CollectionInErrorEffectError,
-	CollectionSyncEffectError,
-	DuplicateKeyEffectError,
-	KeyNotFoundEffectError,
-	KeyUpdateNotAllowedEffectError,
-	OptimisticActionError,
-	SchemaValidationEffectError,
-	SyncError,
-	TransactionStateEffectError,
-	UndefinedKeyEffectError,
-} from "@hazel/effect-db-collection"
+import type { OptimisticActionError, SyncError } from "@hazel/effect-db-collection"
 import { type Cause, Match, Predicate, Schema } from "effect"
 import type { HttpClientError } from "effect/http"
 import type { RpcClientError } from "effect/rpc"
@@ -41,7 +30,7 @@ export type CommonReason = typeof CommonReason.Type
 
 /**
  * The errors any backend call can fail with besides its own: transport and decoding, the auth middleware,
- * the server's catch-alls, and the optimistic-action/collection machinery.
+ * the server's catch-alls, and the optimistic-action machinery.
  */
 export type CommonError =
 	// Transport and decoding
@@ -57,17 +46,9 @@ export type CommonError =
 	// Server catch-alls
 	| InternalServerError
 	| RateLimitExceededError
-	// Optimistic actions and TanStack DB
+	// Optimistic actions
 	| OptimisticActionError
 	| SyncError
-	| DuplicateKeyEffectError
-	| KeyUpdateNotAllowedEffectError
-	| UndefinedKeyEffectError
-	| SchemaValidationEffectError
-	| KeyNotFoundEffectError
-	| CollectionInErrorEffectError
-	| TransactionStateEffectError
-	| CollectionSyncEffectError
 
 /** The HTTP-level reason tags an `HttpClientError` (or an RPC's `HttpError.kind`) carries. */
 type HttpReasonTag = HttpClientError.HttpClientErrorReason["_tag"]
@@ -112,19 +93,11 @@ export const commonReasonOf = (error: CommonError): CommonReason =>
 		SessionNotProvidedError: signedOut,
 		InvalidBearerTokenError: signedOut,
 		SessionLoadError: unavailable,
-		CollectionSyncEffectError: unavailable,
 		RateLimitExceededError: (): CommonReason => "RateLimited",
 		// The write may have landed; only the confirmation timed out.
 		SyncError: (): CommonReason => "Timeout",
 		InternalServerError: unexpected,
 		OptimisticActionError: unexpected,
-		DuplicateKeyEffectError: unexpected,
-		KeyUpdateNotAllowedEffectError: unexpected,
-		UndefinedKeyEffectError: unexpected,
-		SchemaValidationEffectError: unexpected,
-		KeyNotFoundEffectError: unexpected,
-		CollectionInErrorEffectError: unexpected,
-		TransactionStateEffectError: unexpected,
 	})
 
 const commonTags: ReadonlySet<string> = new Set<CommonError["_tag"]>([
@@ -136,18 +109,10 @@ const commonTags: ReadonlySet<string> = new Set<CommonError["_tag"]>([
 	"SessionNotProvidedError",
 	"InvalidBearerTokenError",
 	"SessionLoadError",
-	"CollectionSyncEffectError",
 	"RateLimitExceededError",
 	"SyncError",
 	"InternalServerError",
 	"OptimisticActionError",
-	"DuplicateKeyEffectError",
-	"KeyUpdateNotAllowedEffectError",
-	"UndefinedKeyEffectError",
-	"SchemaValidationEffectError",
-	"KeyNotFoundEffectError",
-	"CollectionInErrorEffectError",
-	"TransactionStateEffectError",
 ])
 
 /**

@@ -15,37 +15,16 @@ import type {
 	UtilsRecord,
 } from "@tanstack/db"
 import { BTreeIndex, createCollection as tanstackCreateCollection } from "@tanstack/db"
-import { Effect, type ManagedRuntime, Result, Schema, type Scope } from "effect"
+import { Effect, Result, Schema, type Scope } from "effect"
 import type { SyncRunTable } from "./connection"
 import { AwaitTxIdError, InvalidTxIdError, type SyncSourceTerminalError, TxIdTimeoutError } from "./errors"
 import { dispatchSchemaError } from "./events"
-import { convertDeleteHandler, convertInsertHandler, convertUpdateHandler } from "./handlers"
 import { type HistoryDemand, HistoryPager, type HistoryState } from "./history"
 import { ensureSources, type SyncHub, type SyncRetention, type SyncRunInfo, type SyncTableSink } from "./hub"
 import { extractPartitionValues } from "./subset"
-import {
-	type EffectDeleteHandler,
-	type EffectInsertHandler,
-	type EffectUpdateHandler,
-	type SourceKey,
-	sourceKey,
-	type SyncLogger,
-} from "./types"
+import { type SourceKey, sourceKey, type SyncLogger } from "./types"
 
 export type { CollectionStatus } from "@tanstack/db"
-
-/**
- * Error returned when the collection's last error is retrieved.
- * Wraps the underlying TanStack DB error with collection context.
- */
-export class CollectionSyncEffectError extends Schema.TaggedError<CollectionSyncEffectError>()(
-	"CollectionSyncEffectError",
-	{
-		message: Schema.String,
-		collectionId: Schema.optional(Schema.String),
-		cause: Schema.optional(Schema.Unknown),
-	},
-) {}
 
 // ---------------------------------------------------------------------------
 // Sources
@@ -314,11 +293,6 @@ export interface EffectDbCollectionUtils extends UtilsRecord {
 		txid: string,
 		timeout?: number,
 	) => Effect.Effect<boolean, TxIdTimeoutError | InvalidTxIdError | AwaitTxIdError>
-	/** Alias of {@link awaitSeqEffect}, for code written against the Electric lib. */
-	readonly awaitTxIdEffect: (
-		txid: string,
-		timeout?: number,
-	) => Effect.Effect<boolean, TxIdTimeoutError | InvalidTxIdError | AwaitTxIdError>
 	/** Promise version of {@link awaitSeqEffect}. */
 	readonly awaitSeq: (txid: string, timeout?: number) => Promise<boolean>
 	/**
@@ -352,11 +326,7 @@ export interface EffectDbCollectionUtils extends UtilsRecord {
 	readonly hub: SyncHub
 }
 
-export interface DoCollectionConfig<
-	T extends object,
-	TKey extends string | number = string | number,
-	R = never,
-> {
+export interface DoCollectionConfig<T extends object, TKey extends string | number = string | number> {
 	/** Unique identifier for the collection; defaults to `table`. */
 	readonly id?: string
 	/** The table name in `Rows` frames. */
@@ -369,30 +339,11 @@ export interface DoCollectionConfig<
 	readonly getKey: (item: T) => TKey
 	readonly hub: SyncHub
 	readonly sources: CollectionSources
-	/** Provides handler services, and receives the collection's logs. */
-	readonly runtime?: ManagedRuntime.ManagedRuntime<R, unknown>
-	readonly onInsert?: EffectInsertHandler<T, TKey, EffectDbCollectionUtils, any, R>
-	readonly onUpdate?: EffectUpdateHandler<T, TKey, EffectDbCollectionUtils, any, R>
-	readonly onDelete?: EffectDeleteHandler<T, TKey, EffectDbCollectionUtils, any, R>
-	/** How long handlers wait for their txids. @default 30000 */
-	readonly syncTimeout?: number
 	readonly gcTime?: number
 	readonly startSync?: boolean
 	readonly autoIndex?: "off" | "eager"
 	readonly compare?: (x: T, y: T) => number
 }
-
-const runtimeLogger =
-	(runtime: ManagedRuntime.ManagedRuntime<unknown, unknown>): SyncLogger =>
-	(level, message, annotations) => {
-		const log =
-			level === "warning"
-				? Effect.logWarning(message)
-				: level === "error"
-					? Effect.logError(message)
-					: Effect.logDebug(message)
-		runtime.runFork(log.pipe(Effect.annotateLogs(annotations)))
-	}
 
 const DEFAULT_TIMEOUT = 30_000
 
@@ -411,26 +362,21 @@ const LOCAL_POSITION = /^local:\d+$/
 export function doCollectionOptions<
 	T extends object,
 	TKey extends string | number = string | number,
-	R = never,
 >(
-	config: DoCollectionConfig<T, TKey, R>,
+	config: DoCollectionConfig<T, TKey>,
 ): CollectionConfig<T, TKey, never, EffectDbCollectionUtils> & {
 	id: string
 	utils: EffectDbCollectionUtils
 } {
 	const { hub, sources, table } = config
 	const id = config.id ?? table
-	const log = config.runtime
-		? runtimeLogger(config.runtime as ManagedRuntime.ManagedRuntime<unknown, unknown>)
-		: hub.log
-	const syncTimeout = config.syncTimeout ?? DEFAULT_TIMEOUT
 	// Domain models never carry decoding services; narrow the type so `decodeUnknownResult` accepts it.
 	const decodeSchema = Schema.decodeUnknownResult(config.schema as unknown as Schema.Codec<T, unknown>)
 	const parseRow = config.parseRow
 	const decode: typeof decodeSchema = parseRow
 		? (row, options) => decodeSchema(parseRow(row), options)
 		: decodeSchema
-	const mirror = new SourceMirror<T, TKey>(table, id, decode, config.getKey, log)
+	const mirror = new SourceMirror<T, TKey>(table, id, decode, config.getKey, hub.log)
 	const history = new HistoryPager(hub, mirror)
 	mirror.onRun = (source, reset) => history.onRun(source, reset)
 	// `Ready` says whether the source answers `LoadByIds`; it comes after the run it closes.
@@ -482,7 +428,6 @@ export function doCollectionOptions<
 
 	const utils: EffectDbCollectionUtils = {
 		awaitSeqEffect,
-		awaitTxIdEffect: awaitSeqEffect,
 		awaitSeq,
 		ensureChannels: (channelIds) => ensureSources(hub, channelSources(channelIds)),
 		retainChannels: (channelIds) => hub.retain(channelSources(channelIds)),
@@ -492,9 +437,6 @@ export function doCollectionOptions<
 		loadByIds: (channelId, ids) => history.demandIds(sourceKey("channel", channelId), ids),
 		hub,
 	}
-
-	const awaitTxIds = (txids: ReadonlyArray<string>) =>
-		Promise.all(txids.map((txid) => awaitSeq(txid, syncTimeout))).then(() => undefined)
 
 	const sync: SyncConfig<T, TKey>["sync"] = isChannelPartition(sources)
 		? (params) => syncPartitioned(params, sources, hub, mirror, history)
@@ -512,9 +454,6 @@ export function doCollectionOptions<
 		...(config.gcTime === undefined ? {} : { gcTime: config.gcTime }),
 		...(config.startSync === undefined ? {} : { startSync: config.startSync }),
 		...(config.compare === undefined ? {} : { compare: config.compare }),
-		onInsert: convertInsertHandler(config.onInsert, config.runtime, awaitTxIds),
-		onUpdate: convertUpdateHandler(config.onUpdate, config.runtime, awaitTxIds),
-		onDelete: convertDeleteHandler(config.onDelete, config.runtime, awaitTxIds),
 		utils,
 	} as CollectionConfig<T, TKey, never, EffectDbCollectionUtils> & {
 		id: string
@@ -670,8 +609,7 @@ export type EffectCollection<T extends object, TKey extends string | number = st
 export function createEffectCollection<
 	T extends object,
 	TKey extends string | number = string | number,
-	R = never,
->(config: DoCollectionConfig<T, TKey, R>): EffectCollection<T, TKey> {
+>(config: DoCollectionConfig<T, TKey>): EffectCollection<T, TKey> {
 	// biome-ignore lint/suspicious/noExplicitAny: the options' overloads cannot be picked from a generic call site
 	return tanstackCreateCollection(doCollectionOptions(config) as any) as unknown as EffectCollection<
 		T,
