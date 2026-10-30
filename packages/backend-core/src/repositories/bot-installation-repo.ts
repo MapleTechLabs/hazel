@@ -51,9 +51,7 @@ export class BotInstallationRepo extends Context.Service<BotInstallationRepo>()(
 
 		return {
 			...baseRepo,
-			findByOrg,
 			findByBot,
-			findByBotAndOrg,
 			isInstalled,
 			getBotIdsForOrg,
 		}

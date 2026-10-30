@@ -37,23 +37,11 @@ export class ConnectInviteRepo extends Context.Service<ConnectInviteRepo>()("Con
 					.where(($) => [$.hostOrganizationId.eq(organizationId), $.deletedAt.isNull()]),
 			)
 
-		const findPendingForGuestOrganization = (organizationId: OrganizationId) =>
-			db.run(
-				SQLite.from(schema.connectInvitesTable)
-					.select()
-					.where(($) => [
-						$.status.eq("pending"),
-						$.deletedAt.isNull(),
-						$.guestOrganizationId.eq(organizationId).or($.targetKind.eq("email")),
-					]),
-			)
-
 		return {
 			...baseRepo,
 			findActiveById,
 			listIncomingForOrganization,
 			listOutgoingForOrganization,
-			findPendingForGuestOrganization,
 		}
 	}),
 }) {

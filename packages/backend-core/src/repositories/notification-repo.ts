@@ -1,6 +1,6 @@
 import { Database, SQLite, Repository, schema } from "@hazel/db"
 
-import type { ChannelId, MessageId, OrganizationMemberId } from "@hazel/schema"
+import type { MessageId, OrganizationMemberId } from "@hazel/schema"
 import { Notification } from "@hazel/domain/models"
 import { Context, Effect, Layer } from "effect"
 
@@ -36,30 +36,9 @@ export class NotificationRepo extends Context.Service<NotificationRepo>()("Notif
 					.returning(),
 			)
 
-		/**
-		 * Delete all notifications for a specific channel and member.
-		 * Used when clearing notifications for a channel (e.g., when entering a channel).
-		 *
-		 * Note: Authorization is handled at the handler level by verifying
-		 * the user is a member of the channel. The memberId parameter
-		 * ensures users can only delete their own notifications.
-		 * The caller is responsible for authorization.
-		 */
-		const deleteByChannelId = (channelId: ChannelId, memberId: OrganizationMemberId) =>
-			db.run(
-				SQLite.deleteFrom(schema.notificationsTable)
-					.where(($) => [
-						$.targetedResourceId.eq(channelId),
-						$.targetedResourceType.eq("channel"),
-						$.memberId.eq(memberId),
-					])
-					.returning(),
-			)
-
 		return {
 			...baseRepo,
 			deleteByMessageIds,
-			deleteByChannelId,
 		} as const
 	}),
 }) {

@@ -1,7 +1,7 @@
 import { Database, SQLite, Repository, schema } from "@hazel/db"
 
 import { ChatSyncConnection } from "@hazel/domain/models"
-import type { IntegrationConnectionId, OrganizationId, SyncConnectionId } from "@hazel/schema"
+import type { OrganizationId, SyncConnectionId } from "@hazel/schema"
 import { Context, Effect, Layer } from "effect"
 
 export class ChatSyncConnectionRepo extends Context.Service<ChatSyncConnectionRepo>()(
@@ -42,51 +42,6 @@ export class ChatSyncConnectionRepo extends Context.Service<ChatSyncConnectionRe
 						.limit(1),
 				)
 
-			const findActiveByProvider = (provider: string) =>
-				db.run(
-					SQLite.from(schema.chatSyncConnectionsTable)
-						.select()
-						.where(($) => [$.provider.eq(provider), $.status.eq("active"), $.deletedAt.isNull()]),
-				)
-
-			const findByIntegrationConnectionId = (integrationConnectionId: IntegrationConnectionId) =>
-				db.first(
-					SQLite.from(schema.chatSyncConnectionsTable)
-						.select()
-						.where(($) => [
-							$.integrationConnectionId.eq(integrationConnectionId),
-							$.deletedAt.isNull(),
-						])
-						.limit(1),
-				)
-
-			const updateStatus = (
-				id: SyncConnectionId,
-				status: ChatSyncConnection.ChatSyncConnectionStatus,
-				errorMessage?: string,
-			) =>
-				db.run(
-					SQLite.update(schema.chatSyncConnectionsTable)
-						.set({
-							status,
-							errorMessage: errorMessage ?? null,
-							updatedAt: new Date(),
-						})
-						.where(($) => [$.id.eq(id)])
-						.returning(),
-				)
-
-			const updateLastSyncedAt = (id: SyncConnectionId) =>
-				db.run(
-					SQLite.update(schema.chatSyncConnectionsTable)
-						.set({
-							lastSyncedAt: new Date(),
-							updatedAt: new Date(),
-						})
-						.where(($) => [$.id.eq(id)])
-						.returning(),
-				)
-
 			const softDelete = (id: SyncConnectionId) =>
 				db.run(
 					SQLite.update(schema.chatSyncConnectionsTable)
@@ -103,10 +58,6 @@ export class ChatSyncConnectionRepo extends Context.Service<ChatSyncConnectionRe
 				...baseRepo,
 				findByOrganization,
 				findByProviderAndWorkspace,
-				findActiveByProvider,
-				findByIntegrationConnectionId,
-				updateStatus,
-				updateLastSyncedAt,
 				softDelete,
 			}
 		}),
