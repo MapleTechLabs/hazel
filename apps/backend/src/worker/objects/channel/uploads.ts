@@ -1,6 +1,5 @@
 /**
- * Abandoned uploads fail inside their `ChannelObject` (the cluster's `CleanupUploadsWorkflow` and
- * its cron, rehomed): an attachment still `uploading` `UPLOAD_TTL_MS` after it was presigned is
+ * Abandoned uploads fail inside their `ChannelObject`: an attachment still `uploading` `UPLOAD_TTL_MS` after it was presigned is
  * marked `failed` by the object's alarm, which this deadline wakes.
  */
 import { Database, SQLite, schema } from "@hazel/db"

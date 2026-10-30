@@ -54,14 +54,14 @@ const TimestampLiteral = Schema.Union([
 	),
 ]) as Schema.Codec<unknown, unknown>
 
-/** An instant, read and written as a `Date` (the name is kept from the Postgres schema). */
+/** An instant, stored as ISO text and read and written as a `Date`. */
 export const timestamptz: SQLite.SqliteType<"text", Date, string> = SQLite.custom(
 	"text",
 	DateFromText,
 	TimestampLiteral,
 )
 
-/** Text; SQLite does not enforce a length, so `length` documents the old `varchar(length)` only. */
+/** Text; SQLite does not enforce a length, so `length` is documentation only. */
 export const varchar = (_length: number): SQLite.SqliteType<"text", string> => SQLite.text
 
 /**
@@ -71,7 +71,7 @@ export const varchar = (_length: number): SQLite.SqliteType<"text", string> => S
 export const jsonb = <A>(): SQLite.SqliteType<"text", A, string> =>
 	SQLite.json(Schema.Unknown as Schema.Codec<A, unknown>) as SQLite.SqliteType<"text", A, string>
 
-/** Narrows a column's TypeScript type without a runtime check (drizzle's `$type<A>()`). */
+/** Narrows a column's TypeScript type without a runtime check. */
 export const typed =
 	<A>() =>
 	<T extends SQLite.SqliteType<string, any, any>>(
@@ -89,13 +89,13 @@ export const now = () => SQLite.sql(timestamptz)`strftime('%Y-%m-%d %H:%M:%f', '
 export const uuid = <S extends Schema.Top>(_id: S): SQLite.SqliteType<string, S["Type"], string> =>
 	typed<S["Type"]>()(SQLite.text)
 
-/** A text column holding one of `values` (a Postgres enum before). */
+/** A text column holding one of `values`, decoded as their literal union. */
 export const textEnum = <const Values extends ReadonlyArray<string>>(
 	values: Values,
 ): SQLite.SqliteType<"text", Values[number], string> =>
 	SQLite.custom("text", Schema.Literals(values) as unknown as Schema.Codec<Values[number], string>)
 
-/** `DEFAULT` for an id column: a random lowercase v4 UUID, as `gen_random_uuid()` wrote. */
+/** `DEFAULT` for an id column: a random lowercase v4 UUID. */
 export const randomUuid =
 	"(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || " +
 	"substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || " +

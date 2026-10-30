@@ -1,6 +1,6 @@
 /**
- * What an `OrgObject` streams, and to whom: the org's tables with the visibility the Electric proxy
- * had, over the org's local `channel_access` and `organization_members`.
+ * What an `OrgObject` streams, and to whom: the org's tables, each visible according to the org's
+ * local `channel_access` and `organization_members`.
  *
  * A principal is a member of the org or a Connect guest (an active `connect_participants` row).
  * A guest sees only the conversation rows of the channels it participates in (conversations,

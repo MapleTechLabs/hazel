@@ -1,6 +1,5 @@
 /**
- * GitHub webhooks in the `OrgObject` (the cluster's `GitHubWebhookWorkflow` and
- * `GitHubInstallationWorkflow`, rehomed). The api Worker verifies the signature and finds the org
+ * GitHub webhooks in the `OrgObject`. The api Worker verifies the signature and finds the org
  * by installation id in the directory's `integration_index`, then calls:
  *
  * - `org.githubEvent`: repository events. Each enabled subscription of the repository that wants

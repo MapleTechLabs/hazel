@@ -1,6 +1,5 @@
 /**
- * Names a thread from its conversation with a small model on OpenRouter (the cluster's
- * `ThreadNamingWorkflow`, rehomed). Called by the thread's `ChannelObject` from its outbox
+ * Names a thread from its conversation with a small model on OpenRouter. Called by the thread's `ChannelObject` from its outbox
  * (`worker/objects/effects/ai-effects.ts`); `OPENROUTER_API_KEY` unset disables it.
  */
 import { Config, Context, Effect, Layer, Option, Redacted, Schema } from "effect"

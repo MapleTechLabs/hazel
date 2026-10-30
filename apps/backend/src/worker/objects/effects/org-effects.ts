@@ -9,8 +9,7 @@
  * - Connect: a guest org's mount and participants (host side), the host's conversation snapshot
  *   (guest side), `../org/connect.ts`;
  * - message search: index changes from the org's channels, and from a Connect host org
- *   (`../org/message-search.ts`);
- * - TODO(do-sync): chat-sync.
+ *   (`../org/message-search.ts`).
  */
 import type { Database } from "@hazel/db"
 import { Effect } from "effect"
