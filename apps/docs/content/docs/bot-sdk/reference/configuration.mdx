@@ -14,7 +14,6 @@ gateway URL for inbound websocket delivery.
 | `BOT_TOKEN`   | Yes      | -                      | Bot authentication token                                  |
 | `BACKEND_URL` | No       | `https://api.hazel.sh` | Backend API URL for message sends, command sync, and auth |
 | `GATEWAY_URL` | No       | `BACKEND_URL`          | Bot gateway URL for inbound websocket delivery            |
-| `ACTORS_URL`  | No       | Hazel hosted default   | Actors endpoint for AI and live-state streaming           |
 | `PORT`        | No       | `0`                    | Health server port                                        |
 
 ### Example `.env`
@@ -23,7 +22,6 @@ gateway URL for inbound websocket delivery.
 BOT_TOKEN=your-bot-token-here
 BACKEND_URL=http://localhost:3003
 GATEWAY_URL=http://localhost:3034
-ACTORS_URL=http://localhost:6420
 ```
 
 ## `runHazelBot` options
@@ -111,5 +109,4 @@ For local development, point the bot at your local backend and gateway:
 BOT_TOKEN=dev-bot-token
 BACKEND_URL=http://localhost:3003
 GATEWAY_URL=http://localhost:3034
-ACTORS_URL=http://localhost:6420
 ```
