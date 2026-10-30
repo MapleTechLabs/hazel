@@ -3,7 +3,7 @@
  * change is projected to each of the user's orgs (`user_organizations`) through the outbox
  * (`org.upsertPresenceProjection`), in the same transaction.
  *
- * Replaces the cluster's crons:
+ * The object's alarm drives it:
  *
  * - online while the user has an open sync socket on their `UserObject`: the first socket marks
  *   them online, the last one closing marks them offline;

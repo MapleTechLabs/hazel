@@ -183,6 +183,14 @@ const normalizeCraftItemsResponse = (raw: unknown): unknown[] => {
 	return []
 }
 
+const decodeFailed = (endpoint: string) => (cause: Schema.SchemaError) =>
+	Effect.fail(
+		new CraftApiError({
+			message: `Unexpected response format for ${endpoint} endpoint`,
+			cause,
+		}),
+	)
+
 // ============================================================================
 // Retry Strategy
 // ============================================================================
@@ -361,13 +369,7 @@ export class CraftApiClient extends Context.Service<CraftApiClient>()("CraftApiC
 				const raw = yield* executeRequest(client, "GET", path)
 				const normalizedBlocks = normalizeCraftItemsResponse(raw)
 				return yield* Schema.decodeUnknownEffect(Schema.Array(CraftBlock))(normalizedBlocks).pipe(
-					Effect.catch(() =>
-						Effect.succeed(
-							normalizedBlocks.length > 0
-								? (normalizedBlocks as CraftBlock[])
-								: [raw as CraftBlock],
-						),
-					),
+					Effect.catchTag("SchemaError", decodeFailed("/blocks")),
 				)
 			}).pipe(
 				Effect.retry({ schedule: makeRetrySchedule, while: isRetryableError }),
@@ -490,7 +492,7 @@ export class CraftApiClient extends Context.Service<CraftApiClient>()("CraftApiC
 				const normalizedDocuments = normalizeCraftItemsResponse(raw)
 				return yield* Schema.decodeUnknownEffect(Schema.Array(CraftDocument))(
 					normalizedDocuments,
-				).pipe(Effect.catch(() => Effect.succeed(normalizedDocuments as CraftDocument[])))
+				).pipe(Effect.catchTag("SchemaError", decodeFailed("/documents")))
 			}).pipe(
 				Effect.retry({ schedule: makeRetrySchedule, while: isRetryableError }),
 				Effect.withSpan("CraftApiClient.listDocuments"),
@@ -591,7 +593,7 @@ export class CraftApiClient extends Context.Service<CraftApiClient>()("CraftApiC
 				const raw = yield* executeRequest(client, "GET", "/folders")
 				const normalizedFolders = normalizeCraftItemsResponse(raw)
 				return yield* Schema.decodeUnknownEffect(Schema.Array(CraftFolder))(normalizedFolders).pipe(
-					Effect.catch(() => Effect.succeed(normalizedFolders as CraftFolder[])),
+					Effect.catchTag("SchemaError", decodeFailed("/folders")),
 				)
 			}).pipe(
 				Effect.retry({ schedule: makeRetrySchedule, while: isRetryableError }),
@@ -660,7 +662,7 @@ export class CraftApiClient extends Context.Service<CraftApiClient>()("CraftApiC
 				const raw = yield* executeRequest(client, "GET", path)
 				const normalizedTasks = normalizeCraftItemsResponse(raw)
 				return yield* Schema.decodeUnknownEffect(Schema.Array(CraftTask))(normalizedTasks).pipe(
-					Effect.catch(() => Effect.succeed(normalizedTasks as CraftTask[])),
+					Effect.catchTag("SchemaError", decodeFailed("/tasks")),
 				)
 			}).pipe(
 				Effect.retry({ schedule: makeRetrySchedule, while: isRetryableError }),
@@ -731,7 +733,7 @@ export class CraftApiClient extends Context.Service<CraftApiClient>()("CraftApiC
 				const normalizedCollections = normalizeCraftItemsResponse(raw)
 				return yield* Schema.decodeUnknownEffect(Schema.Array(CraftCollection))(
 					normalizedCollections,
-				).pipe(Effect.catch(() => Effect.succeed(normalizedCollections as CraftCollection[])))
+				).pipe(Effect.catchTag("SchemaError", decodeFailed("/collections")))
 			}).pipe(
 				Effect.retry({ schedule: makeRetrySchedule, while: isRetryableError }),
 				Effect.withSpan("CraftApiClient.listCollections"),

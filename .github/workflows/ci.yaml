@@ -36,7 +36,6 @@ jobs:
               run: bun run build
               env:
                   VITE_BACKEND_URL: ${{ vars.VITE_BACKEND_URL }}
-                  VITE_CLERK_PUBLISHABLE_KEY: ${{ vars.VITE_CLERK_PUBLISHABLE_KEY }}
                   VITE_R2_PUBLIC_URL: ${{ vars.VITE_R2_PUBLIC_URL }}
     typecheck:
         runs-on: ubuntu-latest

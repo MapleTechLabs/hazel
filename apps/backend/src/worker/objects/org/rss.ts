@@ -1,6 +1,5 @@
 /**
- * RSS polling inside the `OrgObject` (replaces the cluster's `rss-poll` cron and
- * `RssFeedPollWorkflow`). The object's alarm is armed for the earliest due subscription
+ * RSS polling inside the `OrgObject`. The object's alarm is armed for the earliest due subscription
  * (`rssDeadlines`); when it fires, `pollDueRssFeeds` fetches each due feed (outside any
  * transaction), then in one transaction per feed records the new items in `rss_posted_items` and
  * posts each as a `channel.postSystemMessage` to the subscribed channel's `ChannelObject`, authored

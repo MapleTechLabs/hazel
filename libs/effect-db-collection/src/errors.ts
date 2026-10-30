@@ -1,41 +1,6 @@
 import { Schema } from "effect"
 
 /**
- * Base error for collection operations
- */
-export class DbCollectionError extends Schema.TaggedError<DbCollectionError>()("DbCollectionError", {
-	message: Schema.String,
-	cause: Schema.optional(Schema.Unknown),
-}) {}
-
-/**
- * Error thrown when an insert operation fails
- */
-export class InsertError extends Schema.TaggedError<InsertError>()("InsertError", {
-	message: Schema.String,
-	data: Schema.optional(Schema.Unknown),
-	cause: Schema.optional(Schema.Unknown),
-}) {}
-
-/**
- * Error thrown when an update operation fails
- */
-export class UpdateError extends Schema.TaggedError<UpdateError>()("UpdateError", {
-	message: Schema.String,
-	key: Schema.optional(Schema.Unknown),
-	cause: Schema.optional(Schema.Unknown),
-}) {}
-
-/**
- * Error thrown when a delete operation fails
- */
-export class DeleteError extends Schema.TaggedError<DeleteError>()("DeleteError", {
-	message: Schema.String,
-	key: Schema.optional(Schema.Unknown),
-	cause: Schema.optional(Schema.Unknown),
-}) {}
-
-/**
  * The source's stream did not pass the write's `seq` in time. `txid` is the write position
  * (`<kind>:<id>:<seq>`).
  */
@@ -43,14 +8,6 @@ export class TxIdTimeoutError extends Schema.TaggedError<TxIdTimeoutError>()("Tx
 	message: Schema.String,
 	txid: Schema.String,
 	timeout: Schema.Number,
-}) {}
-
-/**
- * Error thrown when a required transaction ID is missing from handler result
- */
-export class MissingTxIdError extends Schema.TaggedError<MissingTxIdError>()("MissingTxIdError", {
-	message: Schema.String,
-	operation: Schema.Literals(["insert", "update", "delete"]),
 }) {}
 
 /**
@@ -69,14 +26,6 @@ export class AwaitTxIdError extends Schema.TaggedError<AwaitTxIdError>()("AwaitT
 	message: Schema.String,
 	txid: Schema.String,
 	collectionId: Schema.optional(Schema.String),
-	cause: Schema.optional(Schema.Unknown),
-}) {}
-
-/**
- * Error thrown when sync configuration is invalid
- */
-export class SyncConfigError extends Schema.TaggedError<SyncConfigError>()("SyncConfigError", {
-	message: Schema.String,
 	cause: Schema.optional(Schema.Unknown),
 }) {}
 

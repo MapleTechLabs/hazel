@@ -13,7 +13,7 @@ This is a monorepo with the following structure:
 - `packages/sync-do/` - Durable Object sync runtime: change triggers, `_changes` log, broadcaster, sockets, outbox and inbox
 - `packages/domain/` - Shared domain types, RPC and HTTP contracts, and the sync protocol (`src/sync/`)
 - `packages/infra/` - Alchemy stack helpers (stages, Worker props, env, the directory D1); the stack itself is the root `alchemy.run.ts`
-- `.context/` - Git Subtrees for context of how to use specific libraries (In this case Effect and Effect Atom)
+- `.context/` - Git Subtrees for context of how to use specific libraries (In this case Effect and TanStack DB)
 
 <!-- opensrc:start -->
 
@@ -45,21 +45,9 @@ npx opensrc <owner>/<repo>      # GitHub repo (e.g., npx opensrc vercel/ai)
 Available library contexts:
 
 - `.context/effect/` - Effect-TS functional programming patterns and examples
-- `.context/effect-atom/` - Effect Atom state management documentation
 - `.context/tanstack-db/` - TanStack-DB
 
-When working with Effect, Effect Atom, or TanStack DB, refer to these directories for best practices, API usage, and implementation patterns.
-
-### Best Practices Guides
-
-**Effect Atom**: See `EFFECT_ATOM_BEST_PRACTICES.md` for comprehensive guidance on:
-
-- Creating and managing atoms
-- React integration patterns
-- Working with Effects and Results
-- Integration with localStorage, HttpApi, and TanStack DB
-- Performance optimization techniques
-- Real-world examples from this codebase
+When working with Effect or TanStack DB, refer to these directories for best practices, API usage, and implementation patterns.
 
 ## Development Commands
 
@@ -71,7 +59,7 @@ Local dev is `bun run alchemy:dev` (alias `bun run dev`): it runs every Worker i
 
 - `bun run dev` / `bun run alchemy:dev` - Start the whole stack locally (DO NOT USE - already running)
 - `bun run alchemy:typecheck` - Typecheck the alchemy stack (`alchemy.run.ts`, `apps/*/alchemy.run.ts`)
-- `bun run setup` - Interactive setup: writes `.env.local` and the bots' `.env` files
+- `bun run setup` - Interactive setup: writes `.env.local`
 - `bun run build` - Build all apps and run typecheck
 - `bun run typecheck` - Run TypeScript typechecking across all packages
 - `bun run format` - Format code using Oxc (includes linting and auto-fixes)
@@ -122,7 +110,7 @@ Local dev is `bun run alchemy:dev` (alias `bun run dev`): it runs every Worker i
 - **Package Manager**: Bun with workspaces
 - **Monorepo**: Turborepo for task orchestration
 - **Linting/Formatting**: OXC (replaces ESLint + Prettier)
-- **Testing**: Vitest with React Testing Library
+- **Testing**: Vitest
 - **TypeScript**: Strict mode enabled across all packages
 
 ## Code Style
@@ -228,9 +216,9 @@ A table the client syncs needs all of:
 
 ## Effect-TS Best Practices
 
-> **Skill Available**: Run `/effect-best-practices` for comprehensive Effect-TS patterns. The skill auto-activates when writing Context.Service, Schema.TaggedError, Layer composition, or effect-atom code.
+> **Skill Available**: Run `/effect-best-practices` for comprehensive Effect-TS patterns. The skill auto-activates when writing Context.Service, Schema.TaggedError, or Layer composition.
 
-> **Version note**: The repo is on Effect `4.0.1` stable. Former `effect/unstable/*` modules import from `effect/*` (e.g. `effect/http`, `effect/rpc`, `effect/workflow`), and `effect/unstable/httpapi` is now `effect/http-api`. Constructors are PascalCase (`Config.String`, `Schema.TaggedError`, `Flag.Boolean`).
+> **Version note**: The repo is on Effect `4.0.6` stable. Former `effect/unstable/*` modules import from `effect/*` (e.g. `effect/http`, `effect/rpc`, `effect/workflow`), and `effect/unstable/httpapi` is now `effect/http-api`. Constructors are PascalCase (`Config.String`, `Schema.TaggedError`, `Flag.Boolean`).
 
 > **Naming note**: As of `effect@4.0.0-beta.57` the `ServiceMap` module was renamed back to `Context`. The v3 `Context.Tag` API is gone — `Context.Service` (with a `make` option) is the v4 way to declare services. Older code may still reference `ServiceMap`; treat any new `ServiceMap` import as a mistake.
 
@@ -327,9 +315,7 @@ yield *
 yield *
 	someEffect.pipe(
 		Effect.catchTag("RequestError", (err) =>
-			Effect.fail(
-				new WorkflowServiceUnavailableError({ message: "Service unreachable", cause: String(err) }),
-			),
+			Effect.fail(new IntegrationUnavailableError({ message: "Service unreachable" })),
 		),
 		Effect.catchTag("ResponseError", (err) =>
 			Effect.fail(new InternalServerError({ message: err.reason, cause: String(err) })),

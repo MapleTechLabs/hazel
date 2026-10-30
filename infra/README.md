@@ -18,7 +18,8 @@ runtime glue) live in `packages/infra`. Data and sync are designed in
 [`durable-object-sync-plan.md`](./durable-object-sync-plan.md).
 
 Data lives in the Durable Objects and D1, uploads in R2, and the background work runs in the
-objects. **Not on Cloudflare (yet):** `bots/*` are being rewritten as Workers.
+objects. The first-party bots (`bots/hazel-bot`, `bots/linear-bot`) are Workers too, declared in
+their own `alchemy.run.ts`.
 
 ## Stages
 

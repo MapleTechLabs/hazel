@@ -23,12 +23,6 @@ export const isTauriMacOS = (): boolean => {
 }
 
 /**
- * CSS class for Tauri titlebar padding on macOS
- * Applied to top-level elements that need to clear the traffic lights
- */
-export const TAURI_TITLEBAR_PADDING_CLASS = "pt-5"
-
-/**
  * Initialize all Tauri-specific features
  * Safe to call in any environment - returns early if not in Tauri
  *

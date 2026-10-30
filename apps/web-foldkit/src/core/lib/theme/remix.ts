@@ -19,11 +19,6 @@ interface RGB {
 }
 
 /**
- * Color harmony types for generating themed colors
- */
-type ColorHarmony = "analogous" | "triadic" | "complementary" | "split-complementary"
-
-/**
  * Convert hex color string to HSL
  */
 export function hexToHsl(hex: string): HSL {
@@ -167,37 +162,6 @@ function hasGoodContrast(hex: string, minRatio: number = 4.5): boolean {
 }
 
 /**
- * Generate harmony colors based on a primary hue
- */
-export function generateHarmony(baseHue: number, harmony: ColorHarmony): number[] {
-	const hues: number[] = [baseHue]
-
-	switch (harmony) {
-		case "analogous":
-			// 30 degrees on each side
-			hues.push((baseHue + 30 / 360) % 1)
-			hues.push((baseHue - 30 / 360 + 1) % 1)
-			break
-		case "triadic":
-			// 120 degrees apart
-			hues.push((baseHue + 1 / 3) % 1)
-			hues.push((baseHue + 2 / 3) % 1)
-			break
-		case "complementary":
-			// 180 degrees apart
-			hues.push((baseHue + 0.5) % 1)
-			break
-		case "split-complementary":
-			// 150 and 210 degrees
-			hues.push((baseHue + 150 / 360) % 1)
-			hues.push((baseHue + 210 / 360) % 1)
-			break
-	}
-
-	return hues
-}
-
-/**
  * Select the best gray palette based on primary color hue
  */
 export function selectGrayPalette(primaryHex: string): Theme.GrayPalette {
@@ -323,29 +287,4 @@ export function generateRemixOptions(count: number = 4): Theme.ThemeCustomizatio
 	}
 
 	return options
-}
-
-/**
- * Generate a theme based on a specific color harmony
- */
-export function generateHarmonyTheme(baseColor: string, harmony: ColorHarmony): Theme.ThemeCustomization {
-	const hsl = hexToHsl(baseColor)
-	const harmonyHues = generateHarmony(hsl.h, harmony)
-
-	// Use the first harmony hue (which is the base hue) with adjusted saturation/lightness
-	const primaryHsl: HSL = {
-		h: harmonyHues[0]!,
-		s: Math.max(0.6, Math.min(0.85, hsl.s)),
-		l: Math.max(0.45, Math.min(0.6, hsl.l)),
-	}
-
-	const primary = hslToHex(primaryHsl) as Theme.HexColor
-	const grayPalette = selectGrayPalette(primary)
-	const radius = selectRandomRadius()
-
-	return {
-		primary,
-		grayPalette,
-		radius,
-	}
 }

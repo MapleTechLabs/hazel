@@ -1,6 +1,6 @@
 import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api"
 import { Schema } from "effect"
-import { InternalServerError, WorkflowInitializationError, WorkflowServiceUnavailableError } from "../errors"
+import { InternalServerError } from "../errors"
 import { RequiredScopes } from "../scopes/required-scopes"
 
 // GitHub Webhook Types
@@ -35,13 +35,7 @@ export class WebhookGroup extends HttpApiGroup.make("webhooks")
 		HttpApiEndpoint.post("github", "/github", {
 			payload: Schema.Unknown,
 			success: GitHubWebhookResponse,
-			error: [
-				InvalidGitHubWebhookSignature,
-				InvalidGitHubWebhookPayload,
-				InternalServerError,
-				WorkflowInitializationError,
-				WorkflowServiceUnavailableError,
-			],
+			error: [InvalidGitHubWebhookSignature, InvalidGitHubWebhookPayload, InternalServerError],
 		})
 			.annotateMerge(
 				OpenApi.annotations({

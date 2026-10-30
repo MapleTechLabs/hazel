@@ -3,7 +3,6 @@ import { ErrorUtils, policy } from "@hazel/domain"
 import type { OrganizationMember } from "@hazel/domain/models"
 import type { OrganizationId, OrganizationMemberId } from "@hazel/schema"
 import { Context, Effect, Layer, Option } from "effect"
-import { OrgResolver } from "../services/org-resolver"
 
 export class OrganizationMemberPolicy extends Context.Service<OrganizationMemberPolicy>()(
 	"OrganizationMemberPolicy/Policy",
@@ -12,7 +11,6 @@ export class OrganizationMemberPolicy extends Context.Service<OrganizationMember
 			const policyEntity = "OrganizationMember" as const
 
 			const organizationMemberRepo = yield* OrganizationMemberRepo
-			const orgResolver = yield* OrgResolver
 
 			const canCreate = (organizationId: OrganizationId) =>
 				ErrorUtils.refailUnauthorized(
@@ -116,8 +114,5 @@ export class OrganizationMemberPolicy extends Context.Service<OrganizationMember
 		}),
 	},
 ) {
-	static readonly layer = Layer.effect(this, this.make).pipe(
-		Layer.provide(OrganizationMemberRepo.layer),
-		Layer.provide(OrgResolver.layer),
-	)
+	static readonly layer = Layer.effect(this, this.make).pipe(Layer.provide(OrganizationMemberRepo.layer))
 }

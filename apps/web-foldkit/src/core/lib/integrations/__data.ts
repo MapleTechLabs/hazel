@@ -296,5 +296,3 @@ export const categories = [
 export const getIntegrationById = (id: string): Integration | undefined => {
 	return integrations.find((i) => i.id === id)
 }
-
-export const validIntegrationIds = integrations.map((i) => i.id)

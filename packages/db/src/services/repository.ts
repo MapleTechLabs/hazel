@@ -30,7 +30,7 @@ export interface Repository<
 	InsertType,
 	UpdateType,
 	Col extends keyof UpdateType & string,
-	Name extends string,
+	_Name extends string,
 	Id,
 > {
 	readonly insert: (insert: InsertType) => Effect.Effect<RecordType[], DatabaseError | Schema.SchemaError>

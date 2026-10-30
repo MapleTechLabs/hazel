@@ -1,8 +1,8 @@
 /**
- * `org.messageCreated`: who a new message notifies, decided by the channel's `OrgObject` (the
- * cluster's `MessageNotificationWorkflow`, rehomed). The `ChannelObject` sends what only it
- * knows (mentions, the replied-to author); the org owns the rest: the channel's type, its
- * `channel_members` (muted, left), presence, and the members' `organization_members` ids.
+ * `org.messageCreated`: who a new message notifies, decided by the channel's `OrgObject`. The
+ * `ChannelObject` sends what only it knows (mentions, the replied-to author); the org owns the
+ * rest: the channel's type, its `channel_members` (muted, left), presence, and the members'
+ * `organization_members` ids.
  *
  * - A DM or group DM, `@channel` or `@here`: every member but the author.
  * - Otherwise the mentioned users and the replied-to author.

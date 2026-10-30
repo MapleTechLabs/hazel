@@ -7,7 +7,6 @@
 		"build": "vite build",
 		"typecheck": "tsc --noEmit",
 		"test": "vitest run",
-		"deploy": "./scripts/deploy.sh",
 		"build:desktop": "./scripts/build-desktop.sh"
 	},
 	"dependencies": {
@@ -34,7 +33,6 @@
 		"prismjs": "^1.30.0",
 		"prosemirror-commands": "^1.7.2",
 		"prosemirror-history": "^1.5.1",
-		"prosemirror-keymap": "^1.2.3",
 		"prosemirror-model": "^1.25.12",
 		"prosemirror-state": "^1.4.4",
 		"prosemirror-transform": "^1.12.2",

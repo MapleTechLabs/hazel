@@ -82,7 +82,9 @@ export class DiscordGatewayService extends Context.Service<DiscordGatewayService
 		const directory = yield* Directory
 		const stubs = yield* ObjectStubs
 
-		const gatewayEnabled = yield* Config.Boolean("DISCORD_GATEWAY_ENABLED").pipe(Config.withDefault(true))
+		const gatewayEnabled = yield* Config.Boolean("DISCORD_GATEWAY_ENABLED").pipe(
+			Config.withDefault(false),
+		)
 		const configuredIntents = yield* Config.Number("DISCORD_GATEWAY_INTENTS").pipe(
 			// GUILDS + GUILD_MESSAGES + GUILD_MESSAGE_REACTIONS + MESSAGE_CONTENT
 			Config.withDefault(DISCORD_REQUIRED_GATEWAY_INTENTS),

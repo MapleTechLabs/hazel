@@ -6,6 +6,7 @@ import { BotId, ChannelId, OrganizationId, UserId } from "@hazel/schema"
 import { IntegrationConnection } from "../models"
 import { CommandArgumentValue } from "./integration-commands"
 import { IntegrationNotConnectedError } from "./integrations"
+import { BotNotFoundError } from "../rpc/bots"
 import { RequiredScopes } from "../scopes/required-scopes"
 
 // Re-export IntegrationProvider for convenience
@@ -65,9 +66,7 @@ export class BotMeResponse extends Schema.Class<BotMeResponse>("BotMeResponse")(
 
 // ============ ERROR TYPES ============
 
-export class BotNotFoundError extends Schema.TaggedError<BotNotFoundError>()("BotNotFoundError", {
-	botId: BotId,
-}) {}
+export { BotNotFoundError }
 
 export class BotNotInstalledError extends Schema.TaggedError<BotNotInstalledError>()("BotNotInstalledError", {
 	botId: BotId,

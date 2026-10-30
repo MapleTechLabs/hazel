@@ -11,7 +11,6 @@ export { serviceShape } from "../test/effect-helpers"
 export const TEST_ORG_ID = "00000000-0000-0000-0000-000000000001" as OrganizationId
 export const TEST_ALT_ORG_ID = "00000000-0000-0000-0000-000000000002" as OrganizationId
 export const TEST_USER_ID = "00000000-0000-0000-0000-000000000101" as UserId
-export const TEST_ALT_USER_ID = "00000000-0000-0000-0000-000000000102" as UserId
 
 export const makeActor = (overrides?: Partial<CurrentUser.Schema>): CurrentUser.Schema => ({
 	id: TEST_USER_ID,

@@ -68,38 +68,11 @@ export class OrganizationMemberRepo extends Context.Service<OrganizationMemberRe
 						.where(($) => [$.organizationId.eq(organizationId), $.deletedAt.isNull()]),
 				)
 
-			const countByOrganization = (organizationId: OrganizationId) =>
-				db
-					.run(
-						SQLite.from(schema.organizationMembersTable)
-							.select(() => ({ count: SQLite.count() }))
-							.where(($) => [$.organizationId.eq(organizationId), $.deletedAt.isNull()]),
-					)
-					.pipe(Effect.map((results) => results[0]?.count ?? 0))
-
-			const findAllActive = () =>
-				db.run(
-					SQLite.from(schema.organizationMembersTable)
-						.select()
-						.where(($) => [$.deletedAt.isNull()]),
-				)
-
 			const softDelete = (id: OrganizationMemberId) =>
 				db.run(
 					SQLite.update(schema.organizationMembersTable)
 						.set({ deletedAt: new Date() })
 						.where(($) => [$.id.eq(id), $.deletedAt.isNull()]),
-				)
-
-			const softDeleteByOrgAndUser = (organizationId: OrganizationId, userId: UserId) =>
-				db.run(
-					SQLite.update(schema.organizationMembersTable)
-						.set({ deletedAt: new Date() })
-						.where(($) => [
-							$.organizationId.eq(organizationId),
-							$.userId.eq(userId),
-							$.deletedAt.isNull(),
-						]),
 				)
 
 			const updateMetadata = (id: OrganizationMemberId, metadata: Record<string, any>) =>
@@ -110,21 +83,13 @@ export class OrganizationMemberRepo extends Context.Service<OrganizationMemberRe
 						.returning(),
 				)
 
-			const bulkUpsertByOrgAndUser = (
-				members: Schema.Schema.Type<typeof OrganizationMember.Insert>[],
-			) => Effect.forEach(members, (data) => upsertByOrgAndUser(data), { concurrency: 10 })
-
 			return {
 				...baseRepo,
 				findByOrgAndUser,
 				upsertByOrgAndUser,
 				findAllByOrganization,
-				countByOrganization,
-				findAllActive,
 				softDelete,
-				softDeleteByOrgAndUser,
 				updateMetadata,
-				bulkUpsertByOrgAndUser,
 			}
 		}),
 	},

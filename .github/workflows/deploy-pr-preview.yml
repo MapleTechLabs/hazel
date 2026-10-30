@@ -37,8 +37,6 @@ jobs:
             COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
             CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
             CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-            VITE_CLERK_PUBLISHABLE_KEY: ${{ vars.VITE_CLERK_PUBLISHABLE_KEY }}
-            CLERK_PUBLISHABLE_KEY: ${{ vars.CLERK_PUBLISHABLE_KEY }}
             CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
             S3_BUCKET: ${{ vars.S3_BUCKET }}
             S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}

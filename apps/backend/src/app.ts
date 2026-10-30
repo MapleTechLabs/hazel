@@ -16,12 +16,7 @@ import {
 	ChannelSectionRepo,
 	ChatSyncChannelLinkRepo,
 	ChatSyncConnectionRepo,
-	ChatSyncEventReceiptRepo,
-	ChatSyncMessageLinkRepo,
-	ConnectConversationChannelRepo,
-	ConnectConversationRepo,
 	ConnectInviteRepo,
-	ConnectParticipantRepo,
 	CustomEmojiRepo,
 	InvitationRepo,
 	ChannelWebhookRepo,
@@ -36,7 +31,6 @@ import {
 	PinnedMessageRepo,
 	RssSubscriptionRepo,
 	TypingIndicatorRepo,
-	UserPresenceStatusRepo,
 	UserRepo,
 } from "@hazel/backend-core"
 import { GitHub } from "@hazel/integrations"
@@ -84,9 +78,6 @@ import { OrgResolver } from "./services/org-resolver"
 import { ChannelViewers } from "./services/channel-viewers"
 
 export { HazelApi }
-
-// Export RPC groups for frontend consumption
-export { AuthMiddleware, MessageRpcs, NotificationRpcs } from "@hazel/domain/rpc"
 
 export const HealthRouter = HttpRouter.use((router) =>
 	router.add("GET", "/health", HttpServerResponse.text("OK")),
@@ -153,12 +144,7 @@ export const RepoLive = Layer.mergeAll(
 	ChannelSectionRepo.layer,
 	ChatSyncConnectionRepo.layer,
 	ChatSyncChannelLinkRepo.layer,
-	ChatSyncMessageLinkRepo.layer,
-	ChatSyncEventReceiptRepo.layer,
-	ConnectConversationRepo.layer,
-	ConnectConversationChannelRepo.layer,
 	ConnectInviteRepo.layer,
-	ConnectParticipantRepo.layer,
 	UserRepo.layer,
 	OrganizationRepo.layer,
 	OrganizationMemberRepo.layer,
@@ -167,7 +153,6 @@ export const RepoLive = Layer.mergeAll(
 	NotificationRepo.layer,
 	TypingIndicatorRepo.layer,
 	MessageReactionRepo.layer,
-	UserPresenceStatusRepo.layer,
 	IntegrationConnectionRepo.layer,
 	IntegrationTokenRepo.layer,
 	ChannelWebhookRepo.layer,

@@ -7,12 +7,11 @@
  *   `channel_index`), or the channel's `OrgObject` for channel-level org rows (members,
  *   webhooks, subscriptions).
  * - A payload with only a message, reaction, pin, typing or attachment id carries `channelId`; one
- *   with only an org row id carries `organizationId` (`@hazel/domain/rpc/routing-fields`). Until
- *   the client sends them those calls fail here with `RoutingError`.
+ *   with only an org row id carries `organizationId` (`@hazel/domain/rpc/routing-fields`); a call
+ *   missing it fails here with `RoutingError`.
  * - User-scoped calls → the caller's `UserObject`.
  *
- * `routes` is total: a method added to HazelRpc without an entry fails to compile. Entries are the
- * current best guess; porting a handler may move it (and its TODO says so).
+ * `routes` is total: a method added to HazelRpc without an entry fails to compile.
  *
  * The rate limits the handlers applied run here, once, before the call leaves the Worker; objects
  * and the directory path admit everything (`RateLimiterAllowAll`).

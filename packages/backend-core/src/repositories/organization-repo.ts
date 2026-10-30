@@ -19,29 +19,6 @@ export class OrganizationRepo extends Context.Service<OrganizationRepo>()("Organ
 		const channelRepo = yield* ChannelRepo
 		const channelMemberRepo = yield* ChannelMemberRepo
 
-		const findBySlug = (slug: string) =>
-			db.first(
-				SQLite.from(schema.organizationsTable)
-					.select()
-					.where(($) => [$.slug.eq(slug)])
-					.limit(1),
-			)
-
-		const findBySlugIfPublic = (slug: string) =>
-			db.first(
-				SQLite.from(schema.organizationsTable)
-					.select()
-					.where(($) => [$.slug.eq(slug), $.isPublic.eq(true), $.deletedAt.isNull()])
-					.limit(1),
-			)
-
-		const findAllActive = () =>
-			db.run(
-				SQLite.from(schema.organizationsTable)
-					.select()
-					.where(($) => [$.deletedAt.isNull()]),
-			)
-
 		const softDelete = (id: OrganizationId) =>
 			db.run(
 				SQLite.update(schema.organizationsTable)
@@ -82,9 +59,6 @@ export class OrganizationRepo extends Context.Service<OrganizationRepo>()("Organ
 
 		return {
 			...baseRepo,
-			findBySlug,
-			findBySlugIfPublic,
-			findAllActive,
 			softDelete,
 			setupDefaultChannels,
 		}

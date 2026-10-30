@@ -36,12 +36,6 @@ export const composer = (message: Composer.Message) => draft(Draft.Message.GotCo
 export const derivedModel = (base: Model = loadedModel()): Model =>
 	updateWithShared(base, loadedMessages(base.messages.length === 0 ? messages : base.messages)).model
 
-/** Runs steps in order (Scene has no `steps` grouping helper). */
-export const sequence =
-	(...steps: ReadonlyArray<Step>): Step =>
-	(simulation) =>
-		steps.reduce((current, step) => step(current), simulation)
-
 /** The channel's first render: the list measures its viewport, the editor, drop zone and hover tracker start. */
 export const mountedChannel = (hovered: MessageId | null = null): Step =>
 	Scene.Mount.resolveAll(
@@ -52,7 +46,11 @@ export const mountedChannel = (hovered: MessageId | null = null): Step =>
 		[{ name: "MountEditor" }, composer(Composer.Message.UpdatedDraft({ markdown: "", isEmpty: true }))],
 		[
 			{ name: "TrackFileDrop" },
-			draft(Draft.Message.ReceivedDropEvent({ event: DropEvent.ChangedDragState({ drag: DragState.Idle() }) })),
+			draft(
+				Draft.Message.ReceivedDropEvent({
+					event: DropEvent.ChangedDragState({ drag: DragState.Idle() }),
+				}),
+			),
 		],
 		[
 			{ name: "TrackMessageHover" },

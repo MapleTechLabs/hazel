@@ -1,9 +1,0 @@
-remote_theme: mikearnaldi/just-the-docs
-search_enabled: true
-aux_links:
-  "Docs":
-    - "//tim-smart.github.io/effect-rx"
-  "API Reference":
-    - "//tim-smart.github.io/effect-rx/docs/rx"
-  "GitHub":
-    - "//github.com/tim-smart/effect-rx"

@@ -4,7 +4,7 @@
  * Provides configurable log levels and formats for bot logging.
  */
 
-import { Effect, Layer, Logger, LogLevel, References } from "effect"
+import { Layer, Logger, LogLevel, References } from "effect"
 
 /**
  * Log output format options

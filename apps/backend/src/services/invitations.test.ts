@@ -4,7 +4,7 @@
  * `OrgObject`) is covered in `worker/objects/directory-path.test.ts`.
  */
 import { InvitationRepo } from "@hazel/backend-core"
-import { Database, SQLite, schema } from "@hazel/db"
+import { Database } from "@hazel/db"
 import { CurrentUser } from "@hazel/domain"
 import { CurrentRpcScopes } from "@hazel/domain/scopes"
 import type { ApiScope } from "@hazel/domain/scopes"
@@ -68,8 +68,6 @@ const run = <A, E, R>(
 			),
 		),
 	)
-
-const tokenOf = (invite: InviteEmail) => new URL(invite.acceptUrl).pathname.split("/").at(-1)!
 
 const failureTag = (exit: Exit.Exit<unknown, unknown>) =>
 	Exit.isFailure(exit)

@@ -78,34 +78,6 @@ export class IntegrationConnectionRepo extends Context.Service<IntegrationConnec
 						.limit(1),
 				)
 
-			// Find active user-level connection by external account ID.
-			const findActiveUserByExternalAccountId = (
-				organizationId: OrganizationId,
-				provider: IntegrationConnection.IntegrationProvider,
-				externalAccountId: string,
-			) =>
-				db.first(
-					SQLite.from(schema.integrationConnectionsTable)
-						.select()
-						.where(($) => [
-							$.organizationId.eq(organizationId),
-							$.provider.eq(provider),
-							$.externalAccountId.eq(externalAccountId),
-							$.level.eq("user"),
-							$.status.eq("active"),
-							$.deletedAt.isNull(),
-						])
-						.limit(1),
-				)
-
-			// Get all connections for an organization (both org-level and user-level)
-			const findAllForOrg = (organizationId: OrganizationId) =>
-				db.run(
-					SQLite.from(schema.integrationConnectionsTable)
-						.select()
-						.where(($) => [$.organizationId.eq(organizationId), $.deletedAt.isNull()]),
-				)
-
 			// Get all active org-level connections for an organization
 			const findActiveOrgConnections = (organizationId: OrganizationId) =>
 				db.run(
@@ -120,23 +92,6 @@ export class IntegrationConnectionRepo extends Context.Service<IntegrationConnec
 						]),
 				)
 
-			// Update connection status
-			const updateStatus = (
-				connectionId: IntegrationConnectionId,
-				status: IntegrationConnection.ConnectionStatus,
-				errorMessage?: string,
-			) =>
-				db.run(
-					SQLite.update(schema.integrationConnectionsTable)
-						.set({
-							status,
-							errorMessage: errorMessage ?? null,
-							updatedAt: new Date(),
-						})
-						.where(($) => [$.id.eq(connectionId)])
-						.returning(),
-				)
-
 			// Soft delete connection
 			const softDelete = (connectionId: IntegrationConnectionId) =>
 				db.run(
@@ -148,31 +103,6 @@ export class IntegrationConnectionRepo extends Context.Service<IntegrationConnec
 						})
 						.where(($) => [$.id.eq(connectionId)])
 						.returning(),
-				)
-
-			// Find connection by GitHub installation ID (stored in metadata JSONB)
-			const findByGitHubInstallationId = (installationId: string) =>
-				db.first(
-					SQLite.from(schema.integrationConnectionsTable)
-						.select()
-						.where(($) => [
-							$.provider.eq("github"),
-							SQLite.jsonText($.metadata, "installationId").eq(installationId),
-							$.deletedAt.isNull(),
-						])
-						.limit(1),
-				)
-
-			// Find all connections for a GitHub installation ID (stored in metadata JSONB)
-			const findAllByGitHubInstallationId = (installationId: string) =>
-				db.run(
-					SQLite.from(schema.integrationConnectionsTable)
-						.select()
-						.where(($) => [
-							$.provider.eq("github"),
-							SQLite.jsonText($.metadata, "installationId").eq(installationId),
-							$.deletedAt.isNull(),
-						]),
 				)
 
 			// Overwrite an existing connection with the given insert data
@@ -232,14 +162,8 @@ export class IntegrationConnectionRepo extends Context.Service<IntegrationConnec
 			return {
 				...baseRepo,
 				findOrgConnection,
-				findByOrgAndProvider: findOrgConnection, // Alias for consistency
 				findUserConnection,
-				findActiveUserByExternalAccountId,
-				findAllForOrg,
 				findActiveOrgConnections,
-				findByGitHubInstallationId,
-				findAllByGitHubInstallationId,
-				updateStatus,
 				softDelete,
 				upsertByOrgAndProvider,
 				upsertByUserAndProvider,

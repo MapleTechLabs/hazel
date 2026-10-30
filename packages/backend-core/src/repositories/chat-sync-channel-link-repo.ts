@@ -47,19 +47,6 @@ export class ChatSyncChannelLinkRepo extends Context.Service<ChatSyncChannelLink
 					)
 					.pipe(Effect.map(decodeChannelLinkRows))
 
-			const findActiveBySyncConnection = (syncConnectionId: SyncConnectionId) =>
-				db
-					.run(
-						SQLite.from(schema.chatSyncChannelLinksTable)
-							.select()
-							.where(($) => [
-								$.syncConnectionId.eq(syncConnectionId),
-								$.isActive.eq(true),
-								$.deletedAt.isNull(),
-							]),
-					)
-					.pipe(Effect.map(decodeChannelLinkRows))
-
 			const findByHazelChannel = (syncConnectionId: SyncConnectionId, hazelChannelId: ChannelId) =>
 				db
 					.first(
@@ -91,35 +78,11 @@ export class ChatSyncChannelLinkRepo extends Context.Service<ChatSyncChannelLink
 					)
 					.pipe(Effect.map(decodeChannelLinkOption))
 
-			const findActiveByExternalChannel = (externalChannelId: ExternalChannelId) =>
-				db
-					.run(
-						SQLite.from(schema.chatSyncChannelLinksTable)
-							.select()
-							.where(($) => [
-								$.externalChannelId.eq(externalChannelId),
-								$.isActive.eq(true),
-								$.deletedAt.isNull(),
-							]),
-					)
-					.pipe(Effect.map(decodeChannelLinkRows))
-
 			const setActive = (id: SyncChannelLinkId, isActive: boolean) =>
 				db.run(
 					SQLite.update(schema.chatSyncChannelLinksTable)
 						.set({
 							isActive,
-							updatedAt: new Date(),
-						})
-						.where(($) => [$.id.eq(id)])
-						.returning(),
-				)
-
-			const updateLastSyncedAt = (id: SyncChannelLinkId) =>
-				db.run(
-					SQLite.update(schema.chatSyncChannelLinksTable)
-						.set({
-							lastSyncedAt: new Date(),
 							updatedAt: new Date(),
 						})
 						.where(($) => [$.id.eq(id)])
@@ -168,13 +131,10 @@ export class ChatSyncChannelLinkRepo extends Context.Service<ChatSyncChannelLink
 				insert,
 				findBySyncConnection,
 				findById,
-				findActiveBySyncConnection,
 				findByHazelChannel,
 				findByExternalChannel,
-				findActiveByExternalChannel,
 				setActive,
 				updateDirection,
-				updateLastSyncedAt,
 				updateSettings,
 				softDelete,
 			}

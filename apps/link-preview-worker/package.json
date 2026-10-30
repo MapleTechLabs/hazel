@@ -18,8 +18,7 @@
 		"metascraper-logo": "^5.49.5",
 		"metascraper-publisher": "^5.49.5",
 		"metascraper-title": "^5.49.5",
-		"metascraper-url": "^5.49.5",
-		"react-tweet": "^3.3.0"
+		"metascraper-url": "^5.49.5"
 	},
 	"devDependencies": {
 		"@cloudflare/vitest-pool-workers": "^0.8.19",

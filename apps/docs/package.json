@@ -12,7 +12,6 @@
 	"dependencies": {
 		"@hazel/ui": "workspace:*",
 		"@tanstack/react-router": "1.166.6",
-		"@tanstack/react-router-devtools": "1.166.6",
 		"@tanstack/react-start": "1.145.3",
 		"class-variance-authority": "^0.7.1",
 		"fumadocs-core": "16.5.0",

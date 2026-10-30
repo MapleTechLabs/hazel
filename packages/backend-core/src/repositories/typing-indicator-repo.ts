@@ -16,21 +16,6 @@ export class TypingIndicatorRepo extends Context.Service<TypingIndicatorRepo>()(
 			},
 		)
 
-		// Add custom method to delete by channel and member
-		const deleteByChannelAndMember = ({
-			channelId,
-			memberId,
-		}: {
-			channelId: ChannelId
-			memberId: ChannelMemberId
-		}) =>
-			db.run(
-				SQLite.deleteFrom(schema.typingIndicatorsTable).where(($) => [
-					$.channelId.eq(channelId),
-					$.memberId.eq(memberId),
-				]),
-			)
-
 		// Upsert method to create or update typing indicator
 		const upsertByChannelAndMember = (params: {
 			channelId: ChannelId
@@ -52,21 +37,9 @@ export class TypingIndicatorRepo extends Context.Service<TypingIndicatorRepo>()(
 					.returning(),
 			)
 
-		// Cleanup method to remove stale indicators
-		const deleteStale = (thresholdMs: number = 10000) => {
-			const threshold = Date.now() - thresholdMs
-			return db.run(
-				SQLite.deleteFrom(schema.typingIndicatorsTable)
-					.where(($) => [$.lastTyped.lt(threshold)])
-					.returning(),
-			)
-		}
-
 		return {
 			...baseRepo,
-			deleteByChannelAndMember,
 			upsertByChannelAndMember,
-			deleteStale,
 		}
 	}),
 }) {

@@ -8,7 +8,6 @@
 import { Headers } from "effect/http"
 import { RpcMiddleware } from "effect/rpc"
 import { AuthMiddleware } from "@hazel/domain/rpc"
-import { Effect } from "effect"
 
 /**
  * Creates a client-side auth middleware that adds the bot's Bearer token

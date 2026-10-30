@@ -9,7 +9,7 @@ export * from "@maple-dev/effect-orm/sqlite"
 const nullableText = SQLite.nullable(SQLite.text)
 
 /**
- * A JSON object's field as text, NULL when it is absent (Postgres's `->>`). Cast, because
+ * A JSON object's field as text, NULL when it is absent. Cast, because
  * `json_extract` returns a number field as a number, which never equals its text.
  */
 export const jsonText = <P = never>(

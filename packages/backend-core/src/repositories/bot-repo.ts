@@ -34,15 +34,6 @@ export class BotRepo extends Context.Service<BotRepo>()("BotRepo", {
 					.limit(1),
 			)
 
-		// Find bot by user ID
-		const findByUserId = (userId: UserId) =>
-			db.first(
-				SQLite.from(schema.botsTable)
-					.select()
-					.where(($) => [$.userId.eq(userId), $.deletedAt.isNull()])
-					.limit(1),
-			)
-
 		// Find all bots created by a user
 		const findByCreator = (createdBy: UserId) =>
 			db.run(
@@ -63,18 +54,6 @@ export class BotRepo extends Context.Service<BotRepo>()("BotRepo", {
 					])
 					.orderBy(["installCount", "asc"]),
 			)
-
-		// Find bots by IDs (for installed bots lookup)
-		const findByIds = (ids: BotId[]) => {
-			if (ids.length === 0) {
-				return Effect.succeed([])
-			}
-			return db.run(
-				SQLite.from(schema.botsTable)
-					.select()
-					.where(($) => [$.id.in_(...ids), $.deletedAt.isNull()]),
-			)
-		}
 
 		// Insert a new bot
 		const insert = (data: Schema.Schema.Type<typeof Bot.Insert>) =>
@@ -147,36 +126,16 @@ export class BotRepo extends Context.Service<BotRepo>()("BotRepo", {
 					.where(($) => [$.id.eq(id), $.deletedAt.isNull()]),
 			)
 
-		// Increment install count
-		const incrementInstallCount = (id: BotId) =>
-			db.run(
-				SQLite.update(schema.botsTable)
-					.set(($) => ({ installCount: $.installCount.add(1) }))
-					.where(($) => [$.id.eq(id)]),
-			)
-
-		// Decrement install count
-		const decrementInstallCount = (id: BotId) =>
-			db.run(
-				SQLite.update(schema.botsTable)
-					.set(($) => ({ installCount: SQLite.greatest(SQLite.lit(0), $.installCount.sub(1)) }))
-					.where(($) => [$.id.eq(id)]),
-			)
-
 		return {
 			...baseRepo,
 			findById,
 			findByTokenHash,
-			findByUserId,
 			findByCreator,
 			findPublic,
-			findByIds,
 			insert,
 			update,
 			updateTokenHash,
 			softDelete,
-			incrementInstallCount,
-			decrementInstallCount,
 		}
 	}),
 }) {

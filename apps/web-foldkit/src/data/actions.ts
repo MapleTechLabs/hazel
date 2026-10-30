@@ -120,23 +120,6 @@ export const failureToast = <E>(
 	return errorToast(message.title, message.description ?? null)
 }
 
-/** Settles an action into a toast (or none), the way `exitToast(exit)...run()` reports it. */
-export const toastOfExit = <A, E, R>(
-	effect: Effect.Effect<A, E, R>,
-	fallback: Fallback,
-	options: { readonly success?: string; readonly handlers?: NoInfer<ErrorHandlers<E>> } = {},
-): Effect.Effect<ToastRequest | null, never, R> =>
-	Effect.matchCause(effect, {
-		onSuccess: () => (options.success === undefined ? null : successToast(options.success)),
-		onFailure: (cause) => failureToast(cause, fallback, options.handlers),
-	})
-
-/** Shared by the bot actions (`onErrorTag("RateLimitExceededError", ...)`). */
-export const rateLimitMessage: ErrorMessage = {
-	title: "Rate limit exceeded",
-	description: "Please wait before trying again.",
-}
-
 /** Settles an Effect into one of two Messages, keeping the failure's cause. */
 export const settle = <A, E, R, Success, Failure>(
 	effect: Effect.Effect<A, E, R>,

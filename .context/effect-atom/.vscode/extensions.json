@@ -1,7 +1,0 @@
-{
-  "recommendations": [
-    "dbaeumer.vscode-eslint",
-    "jnoortheen.nix-ide",
-    "mkhl.direnv"
-  ]
-}

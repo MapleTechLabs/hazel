@@ -5,10 +5,7 @@
 
 export type FilterType = "from" | "in" | "has" | "before" | "after"
 
-export const VALID_FILTER_TYPES: FilterType[] = ["from", "in", "has", "before", "after"]
-
 export const HAS_FILTER_VALUES = ["image", "file", "link", "embed"] as const
-export type HasFilterValue = (typeof HAS_FILTER_VALUES)[number]
 
 export interface SearchFilter {
 	type: FilterType
@@ -114,33 +111,6 @@ export function parseSearchInput(input: string): ParsedSearchInput {
 }
 
 /**
- * Serialize filters back to string format
- */
-export function serializeFilters(filters: SearchFilter[]): string {
-	return filters
-		.map((f) => {
-			const value = f.value.includes(" ") ? `"${f.value}"` : f.value
-			return `${f.type}:${value}`
-		})
-		.join(" ")
-}
-
-/**
- * Build full search string from filters and text query
- */
-export function buildSearchString(filters: SearchFilter[], textQuery: string): string {
-	const filterString = serializeFilters(filters)
-	return [filterString, textQuery].filter(Boolean).join(" ")
-}
-
-/**
- * Check if a filter type supports autocomplete suggestions
- */
-export function filterTypeSupportsAutocomplete(type: FilterType): boolean {
-	return type === "from" || type === "in" || type === "has"
-}
-
-/**
  * Parse date string for before/after filters
  * Supports: YYYY-MM-DD, "yesterday", "lastweek", "lastmonth"
  */
@@ -185,88 +155,4 @@ export function getFilterTypeLabel(type: FilterType): string {
 		case "after":
 			return "After"
 	}
-}
-
-/**
- * Token types for syntax highlighting
- */
-export type InputTokenType = "filter-keyword" | "filter-value" | "text"
-
-export interface InputToken {
-	type: InputTokenType
-	text: string
-	filterType?: FilterType
-}
-
-// Regex to match filter patterns for tokenization (captures keyword and value separately)
-const TOKEN_FILTER_REGEX = /\b(from|in|has|before|after):("([^"]+)"|(\S*))/gi
-
-/**
- * Tokenize search input for syntax highlighting
- * Returns an array of tokens that can be styled differently
- */
-export function tokenizeSearchInput(input: string): InputToken[] {
-	if (!input) return []
-
-	const tokens: InputToken[] = []
-	let lastIndex = 0
-
-	// Reset regex
-	TOKEN_FILTER_REGEX.lastIndex = 0
-
-	let match: RegExpExecArray | null
-	while ((match = TOKEN_FILTER_REGEX.exec(input)) !== null) {
-		// Add any text before this match
-		if (match.index > lastIndex) {
-			tokens.push({
-				type: "text",
-				text: input.slice(lastIndex, match.index),
-			})
-		}
-
-		const filterType = match[1]?.toLowerCase() as FilterType
-		const fullValue = match[2] || "" // includes quotes if present
-		const keyword = `${match[1]}:`
-
-		// Add the filter keyword (e.g., "from:")
-		tokens.push({
-			type: "filter-keyword",
-			text: keyword,
-			filterType,
-		})
-
-		// Add the filter value if present
-		if (fullValue) {
-			tokens.push({
-				type: "filter-value",
-				text: fullValue,
-				filterType,
-			})
-		}
-
-		lastIndex = match.index + match[0].length
-	}
-
-	// Add any remaining text after the last match
-	if (lastIndex < input.length) {
-		const remaining = input.slice(lastIndex)
-
-		// Check if remaining text is a partial filter keyword (e.g., "fro" or "from:")
-		const partialKeywordMatch = /^(from|in|has|before|after):?$/i.exec(remaining.trim())
-		if (partialKeywordMatch && remaining.trim() === remaining) {
-			// Only if it's at the end with no leading space in remaining
-			tokens.push({
-				type: "filter-keyword",
-				text: remaining,
-				filterType: partialKeywordMatch[1]?.toLowerCase() as FilterType,
-			})
-		} else {
-			tokens.push({
-				type: "text",
-				text: remaining,
-			})
-		}
-	}
-
-	return tokens
 }

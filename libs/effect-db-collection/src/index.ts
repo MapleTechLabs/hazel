@@ -3,7 +3,6 @@ export {
 	type ChannelPartition,
 	type CollectionSources,
 	type CollectionStatus,
-	CollectionSyncEffectError,
 	channelPartition,
 	createEffectCollection,
 	type DoCollectionConfig,
@@ -43,13 +42,8 @@ export {
 // Errors
 export {
 	AwaitTxIdError,
-	DbCollectionError,
-	DeleteError,
-	InsertError,
 	InvalidTxIdError,
-	MissingTxIdError,
 	OptimisticActionError,
-	SyncConfigError,
 	SyncConnectionClosedError,
 	SyncConnectionError,
 	SyncError,
@@ -57,26 +51,7 @@ export {
 	SyncSourceNotFoundError,
 	type SyncSourceTerminalError,
 	TxIdTimeoutError,
-	UpdateError,
 } from "./errors"
-// TanStack DB Error Wrappers
-export {
-	CollectionInErrorEffectError,
-	DuplicateKeyEffectError,
-	isPermanentError,
-	isRecoverableError,
-	KeyNotFoundEffectError,
-	KeyUpdateNotAllowedEffectError,
-	SchemaValidationEffectError,
-	type TanStackEffectError,
-	TanStackEffectErrorSchema,
-	TransactionStateEffectError,
-	UndefinedKeyEffectError,
-	type ValidationIssue,
-	wrapTanStackError,
-} from "./tanstack-errors"
-// Effect handlers
-export { type AwaitTxIds, convertDeleteHandler, convertInsertHandler, convertUpdateHandler } from "./handlers"
 // Optimistic Actions
 export {
 	type CollectionInput,
@@ -86,15 +61,9 @@ export {
 	type OptimisticActionResult,
 	optimisticAction,
 } from "./optimistic-action"
-// Services and Layers
-export { DbCollection, type DbCollectionService, makeDbCollectionLayer, SyncHubService } from "./service"
 // Types
 export {
 	type BackoffConfig,
-	type EffectDeleteHandler,
-	type EffectInsertHandler,
-	type EffectUpdateHandler,
-	type HandlerResult,
 	parseSourceKey,
 	type SourceKey,
 	sourceKey,

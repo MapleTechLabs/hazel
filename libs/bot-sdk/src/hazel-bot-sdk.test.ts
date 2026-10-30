@@ -1,10 +1,9 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "@effect/vitest"
 import { Duration, Effect, Layer, Ref } from "effect"
-import { delay, http, HttpResponse } from "msw"
+import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { vi } from "vitest"
 import {
-	BotGatewayAckFrame,
 	BotGatewayClientFrame,
 	BotGatewayDispatchFrame,
 	BotGatewayHelloFrame,

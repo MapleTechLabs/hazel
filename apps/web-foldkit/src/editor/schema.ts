@@ -21,7 +21,10 @@ export const mentionClassName = (userId: string) =>
 /** Slate renders a void's children as an absolutely positioned zero-width spacer. */
 const voidSpacer: DOMOutputSpec = [
 	"span",
-	{ "data-slate-spacer": "true", style: "height: 0px; color: transparent; outline: none; position: absolute;" },
+	{
+		"data-slate-spacer": "true",
+		style: "height: 0px; color: transparent; outline: none; position: absolute;",
+	},
 	["span", { "data-slate-zero-width": "z", "data-slate-length": "0" }, "﻿"],
 ]
 
@@ -57,7 +60,9 @@ export const schema = new Schema({
 				{ class: "group relative my-2" },
 				[
 					"pre",
-					{ class: "overflow-x-auto whitespace-pre-wrap rounded-lg bg-muted p-4 pr-24 font-mono text-sm" },
+					{
+						class: "overflow-x-auto whitespace-pre-wrap rounded-lg bg-muted p-4 pr-24 font-mono text-sm",
+					},
 					["code", 0],
 				],
 			],
@@ -126,18 +131,5 @@ export const schema = new Schema({
 	},
 	marks: {},
 })
-
-export type NodeTypeName =
-	| "paragraph"
-	| "blockquote"
-	| "code-block"
-	| "subtext"
-	| "list-item"
-	| "heading"
-	| "table"
-	| "table-row"
-	| "table-cell"
-	| "mention"
-	| "custom-emoji"
 
 export type { ProseMirrorNode }

@@ -1,7 +1,7 @@
 import { OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { Schema as S } from "effect"
 import * as M from "./utils"
-import { baseFields, JsonDate } from "./utils"
+import { JsonDate } from "./utils"
 
 export const OrganizationRole = S.Literals(["admin", "member", "owner"])
 export type OrganizationRole = S.Schema.Type<typeof OrganizationRole>
