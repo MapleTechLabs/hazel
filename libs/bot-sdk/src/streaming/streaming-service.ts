@@ -18,7 +18,6 @@ import { ActorOperationError, MessageCreateError, StreamProcessingError } from "
 import type {
 	AIContentChunk,
 	AIStreamOptions,
-	AIStreamSession,
 	CreateStreamOptions,
 	LoadingState,
 	StreamSession,

@@ -7,8 +7,6 @@ import { type Cause, Effect, ErrorReporter, Predicate } from "effect"
  */
 const SERVER_FAILURE_TAGS: ReadonlySet<string> = new Set([
 	"InternalServerError",
-	"WorkflowInitializationError",
-	"WorkflowServiceUnavailableError",
 	"UploadError",
 	// Escaped the remapping to InternalServerError; still a server failure.
 	"DatabaseError",

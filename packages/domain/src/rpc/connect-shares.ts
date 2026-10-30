@@ -8,7 +8,7 @@ import {
 	TransactionId,
 	UserId,
 } from "@hazel/schema"
-import { ConnectConversation, ConnectConversationChannel, ConnectInvite, ConnectParticipant } from "../models"
+import { ConnectConversation, ConnectInvite, ConnectParticipant } from "../models"
 import { InternalServerError, UnauthorizedError } from "../errors"
 import { ChannelNotFoundError } from "./channels"
 import { AuthMiddleware } from "./middleware"

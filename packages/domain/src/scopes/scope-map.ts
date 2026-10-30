@@ -1,4 +1,4 @@
-import { Context, Option } from "effect"
+import { Context } from "effect"
 import type { ApiScope } from "./api-scope"
 import { RequiredScopes } from "./required-scopes"
 

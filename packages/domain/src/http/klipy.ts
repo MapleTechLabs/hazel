@@ -1,4 +1,4 @@
-import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/http-api"
+import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api"
 import { Effect, Schema } from "effect"
 import { CurrentUser } from "../"
 import { RequiredScopes } from "../scopes/required-scopes"

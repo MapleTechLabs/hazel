@@ -1,5 +1,4 @@
 import { BotId, BotInstallationId, OrganizationId, UserId } from "@hazel/schema"
-import { Schema as S } from "effect"
 import * as M from "./utils"
 import { Generated, JsonDate } from "./utils"
 

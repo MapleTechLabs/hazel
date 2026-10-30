@@ -2,7 +2,7 @@ import { BotId, UserId } from "@hazel/schema"
 import { Schema as S } from "effect"
 import { IntegrationProvider } from "./integration-connection-model"
 import * as M from "./utils"
-import { baseFields, JsonDate } from "./utils"
+import { baseFields } from "./utils"
 
 class Model extends M.Class<Model>("Bot")({
 	id: M.Generated(BotId),

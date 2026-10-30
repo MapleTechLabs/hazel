@@ -1,11 +1,4 @@
 import type { SyncSourceKind } from "@hazel/domain/sync"
-import type {
-	DeleteMutationFnParams,
-	InsertMutationFnParams,
-	UpdateMutationFnParams,
-	UtilsRecord,
-} from "@tanstack/db"
-import type { Effect } from "effect"
 
 /** A source object, `<kind>:<id>`: `org:<organizationId>`, `channel:<channelId>`, `user:<userId>`. */
 export type SourceKey = `${SyncSourceKind}:${string}`
@@ -90,42 +83,3 @@ export const backoffDelay = (config: Required<BackoffConfig>, attempt: number): 
 	)
 	return config.jitter ? Math.min(base * (0.5 + Math.random()), config.maxDelayMs) : base
 }
-
-/** Handler results carry the write position(s) the server returned (`"<kind>:<id>:<seq>"`). */
-export interface HandlerResult {
-	readonly txid: string | ReadonlyArray<string>
-}
-
-/**
- * Effect-based insert handler
- * Note: When using with a runtime, handlers can require services (R parameter).
- */
-export type EffectInsertHandler<
-	T extends object,
-	TKey extends string | number,
-	TUtils extends UtilsRecord,
-	E = never,
-	R = never,
-> = (params: InsertMutationFnParams<T, TKey, TUtils>) => Effect.Effect<HandlerResult, E, R>
-
-/**
- * Effect-based update handler
- */
-export type EffectUpdateHandler<
-	T extends object,
-	TKey extends string | number,
-	TUtils extends UtilsRecord,
-	E = never,
-	R = never,
-> = (params: UpdateMutationFnParams<T, TKey, TUtils>) => Effect.Effect<HandlerResult, E, R>
-
-/**
- * Effect-based delete handler
- */
-export type EffectDeleteHandler<
-	T extends object,
-	TKey extends string | number,
-	TUtils extends UtilsRecord,
-	E = never,
-	R = never,
-> = (params: DeleteMutationFnParams<T, TKey, TUtils>) => Effect.Effect<HandlerResult, E, R>

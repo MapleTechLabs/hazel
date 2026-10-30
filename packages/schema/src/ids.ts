@@ -68,14 +68,6 @@ export const MessageReactionId = Schema.String.check(Schema.isUUID())
 	})
 export type MessageReactionId = Schema.Schema.Type<typeof MessageReactionId>
 
-export const MessageAttachmentId = Schema.String.check(Schema.isUUID())
-	.pipe(Schema.brand("@HazelChat/MessageAttachmentId"))
-	.annotate({
-		description: "The ID of the message attachment",
-		title: "Message Attachment ID",
-	})
-export type MessageAttachmentId = Schema.Schema.Type<typeof MessageAttachmentId>
-
 export const AttachmentId = Schema.String.check(Schema.isUUID())
 	.pipe(Schema.brand("@HazelChat/AttachmentId"))
 	.annotate({
@@ -218,14 +210,6 @@ export const IntegrationTokenId = Schema.String.check(Schema.isUUID())
 	})
 export type IntegrationTokenId = Schema.Schema.Type<typeof IntegrationTokenId>
 
-export const MessageIntegrationLinkId = Schema.String.check(Schema.isUUID())
-	.pipe(Schema.brand("@HazelChat/MessageIntegrationLinkId"))
-	.annotate({
-		description: "The ID of a message-integration link",
-		title: "Message Integration Link ID",
-	})
-export type MessageIntegrationLinkId = Schema.Schema.Type<typeof MessageIntegrationLinkId>
-
 export const ChannelWebhookId = Schema.String.check(Schema.isUUID())
 	.pipe(Schema.brand("@HazelChat/ChannelWebhookId"))
 	.annotate({
@@ -295,14 +279,6 @@ export const CustomEmojiId = Schema.String.check(Schema.isUUID())
 		title: "Custom Emoji ID",
 	})
 export type CustomEmojiId = Schema.Schema.Type<typeof CustomEmojiId>
-
-export const MessageOutboxEventId = Schema.String.check(Schema.isUUID())
-	.pipe(Schema.brand("@HazelChat/MessageOutboxEventId"))
-	.annotate({
-		description: "The ID of a message outbox event",
-		title: "Message Outbox Event ID",
-	})
-export type MessageOutboxEventId = Schema.Schema.Type<typeof MessageOutboxEventId>
 
 export const InvitationId = Schema.String.check(Schema.isUUID())
 	.pipe(Schema.brand("@HazelChat/InvitationId"))
