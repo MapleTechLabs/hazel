@@ -318,8 +318,15 @@ const handleComposer = (model: Model, message: Composer.Message, context: Contex
 					),
 				),
 			SubmittedDraft: ({ markdown }) => then((next) => submit(next, markdown, context)),
+			// Escape leaves edit mode, or cancels the reply (Discord, Slack); the draft text stays when replying.
 			PressedEscape: () =>
-				then((next) => (editingMessageIdOf(next) === null ? { model: next } : leaveEditing(next))),
+				then((next) =>
+					editingMessageIdOf(next) !== null
+						? leaveEditing(next)
+						: replyToMessageIdOf(next) !== null
+							? { model: setReply(next, null) }
+							: { model: next },
+				),
 			PressedArrowUpInEmpty: () =>
 				then((next) =>
 					context.lastOwnMessage === null

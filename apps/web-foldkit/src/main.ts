@@ -270,9 +270,9 @@ const enteredRoute: Step = (model) =>
 const pressedHotkey = (actionId: LayoutHotkeyActionId): Step =>
 	Match.value(actionId).pipe(
 		Match.withReturnType<Step>(),
-		// Legacy passes `initialPage`, but the palette shows its own (reset) page: always home.
 		Match.when("commandPalette.open", () => openCommandPalette("home")),
-		Match.when("search.open", () => openCommandPalette("home")),
+		// Straight into message search, as the hotkey's description says (Discord, Slack).
+		Match.when("search.open", () => openCommandPalette("search")),
 		Match.when(
 			"channel.create",
 			() => (model) =>

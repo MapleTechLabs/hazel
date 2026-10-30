@@ -2,7 +2,7 @@ import { detectLanguage } from "./detect-language"
 import { joinBackward, joinForward } from "prosemirror-commands"
 import { redo, undo } from "prosemirror-history"
 import type { Node as ProseMirrorNode } from "prosemirror-model"
-import { AllSelection, type EditorState, Plugin, TextSelection, type Transaction } from "prosemirror-state"
+import { type EditorState, Plugin, Selection, TextSelection, type Transaction } from "prosemirror-state"
 import type { EditorView } from "prosemirror-view"
 import { isAcceptedFile, isAcceptedMimeType } from "./file-types"
 import { blocksOf, isValueEmpty, serializeToMarkdown } from "./markdown"
@@ -24,13 +24,21 @@ export type BehaviorEvent =
 	| { readonly _tag: "PressedArrowUpInEmpty" }
 	| { readonly _tag: "PastedFiles"; readonly files: ReadonlyArray<File> }
 
+/** The block the selection starts in; a whole-document selection (`Mod+A`) starts in the first one. */
 const currentBlock = (state: EditorState) => {
-	const { $from } = state.selection
+	const $from =
+		state.selection.$from.depth > 0
+			? state.selection.$from
+			: (Selection.findFrom(state.doc.resolve(0), 1, true)?.$from ?? state.selection.$from)
 	return { node: $from.parent, start: $from.start(), end: $from.end(), pos: $from.before() }
 }
 
-const setBlockType = (tr: Transaction, pos: number, type: string, attrs: Record<string, unknown> | null = null) =>
-	tr.setNodeMarkup(pos, schema.nodes[type], attrs)
+const setBlockType = (
+	tr: Transaction,
+	pos: number,
+	type: string,
+	attrs: Record<string, unknown> | null = null,
+) => tr.setNodeMarkup(pos, schema.nodes[type], attrs)
 
 /** `maybeDetectLanguage`: set a code block's language from its content if unset. */
 const withDetectedLanguage = (tr: Transaction, node: ProseMirrorNode, pos: number) => {
@@ -40,12 +48,24 @@ const withDetectedLanguage = (tr: Transaction, node: ProseMirrorNode, pos: numbe
 }
 
 /** `withAutoformat`: a space after a block prefix converts the block. */
-const AUTOFORMAT: ReadonlyArray<{ match: (before: string) => boolean; type: string; attrs: (before: string) => Record<string, unknown> | null }> = [
+const AUTOFORMAT: ReadonlyArray<{
+	match: (before: string) => boolean
+	type: string
+	attrs: (before: string) => Record<string, unknown> | null
+}> = [
 	{ match: (before) => before === ">" || before === ">>>", type: "blockquote", attrs: () => null },
 	{ match: (before) => before === "```", type: "code-block", attrs: () => ({ language: null }) },
-	{ match: (before) => /^```(\w+)$/.test(before), type: "code-block", attrs: (before) => ({ language: before.slice(3) }) },
+	{
+		match: (before) => /^```(\w+)$/.test(before),
+		type: "code-block",
+		attrs: (before) => ({ language: before.slice(3) }),
+	},
 	{ match: (before) => before === "-#", type: "subtext", attrs: () => null },
-	{ match: (before) => before === "-" || before === "*", type: "list-item", attrs: () => ({ ordered: false }) },
+	{
+		match: (before) => before === "-" || before === "*",
+		type: "list-item",
+		attrs: () => ({ ordered: false }),
+	},
 	{ match: (before) => /^(\d+)\.$/.test(before), type: "list-item", attrs: () => ({ ordered: true }) },
 ]
 
@@ -58,7 +78,9 @@ const handleTextInput = (view: EditorView, from: number, to: number, text: strin
 		const before = state.doc.textBetween(block.start, from, "\n", "")
 		const rule = AUTOFORMAT.find((candidate) => candidate.match(before))
 		if (rule) {
-			view.dispatch(setBlockType(state.tr.delete(block.start, from), block.pos, rule.type, rule.attrs(before)))
+			view.dispatch(
+				setBlockType(state.tr.delete(block.start, from), block.pos, rule.type, rule.attrs(before)),
+			)
 			return true
 		}
 	}
@@ -66,9 +88,13 @@ const handleTextInput = (view: EditorView, from: number, to: number, text: strin
 	const trigger = DEFAULT_TRIGGERS.find((candidate) => candidate.char === text)
 	if (trigger && !isAutocompleteOpen(state) && canActivateTrigger(state, trigger, from)) {
 		view.dispatch(
-			state.tr
-				.insertText(text, from, to)
-				.setMeta(autocompleteKey, { trigger, search: "", from, optionCount: 0, activeOptionId: null }),
+			state.tr.insertText(text, from, to).setMeta(autocompleteKey, {
+				trigger,
+				search: "",
+				from,
+				optionCount: 0,
+				activeOptionId: null,
+			}),
 		)
 		return true
 	}
@@ -98,6 +124,46 @@ const pastedFiles = (data: DataTransfer): ReadonlyArray<File> => {
 		const file = item.kind === "file" && isAcceptedMimeType(item.type) ? item.getAsFile() : null
 		return file ? [file] : []
 	})
+}
+
+/** Deleting everything leaves an empty paragraph, not an empty quote or list item, so the placeholder returns. */
+const deleteSelection = (state: EditorState) => {
+	const { from, to } = state.selection
+	if (from > Selection.atStart(state.doc).from || to < Selection.atEnd(state.doc).to)
+		return state.tr.deleteSelection()
+	const tr = state.tr.replaceWith(0, state.doc.content.size, schema.nodes.paragraph.create())
+	return tr.setSelection(TextSelection.create(tr.doc, 1))
+}
+
+/** An inline atom (mention, custom emoji); text nodes are leaves too, so `isAtom` alone matches them. */
+const isInlineAtom = (node: ProseMirrorNode | null | undefined): node is ProseMirrorNode =>
+	node != null && node.isInline && !node.isText && node.isAtom
+
+/**
+ * `Mod+B`-style formatting: wrap the selection in a markdown marker, or unwrap it when the
+ * marker already surrounds it. An empty selection gets an empty pair with the caret inside.
+ */
+const toggleMarker = (state: EditorState, marker: string): Transaction | null => {
+	const { from, to, $from, $to } = state.selection
+	if ($from.depth === 0 || $from.parent !== $to.parent || $from.parent.type.spec.code) return null
+	const length = marker.length
+	const before = state.doc.textBetween(Math.max($from.start(), from - length), from)
+	const after = state.doc.textBetween(to, Math.min($to.end(), to + length))
+	if (before === marker && after === marker)
+		return state.tr.delete(to, to + length).delete(from - length, from)
+	const tr = state.tr.insertText(marker, to).insertText(marker, from)
+	return tr.setSelection(TextSelection.create(tr.doc, from + length, to + length))
+}
+
+/** Discord's and Slack's formatting shortcuts. */
+const markerFor = (event: KeyboardEvent): string | null => {
+	const key = event.key.toLowerCase()
+	if (event.altKey) return null
+	if (!event.shiftKey && key === "b") return "**"
+	if (!event.shiftKey && key === "i") return "*"
+	if (!event.shiftKey && key === "u") return "__"
+	if (event.shiftKey && key === "x") return "~~"
+	return null
 }
 
 const AUTOCOMPLETE_KEYS: ReadonlyArray<string> = ["ArrowDown", "ArrowUp", "Enter", "Tab", "Escape"]
@@ -136,18 +202,41 @@ export const behaviorPlugin = (emit: (event: BehaviorEvent) => void) => {
 			return true
 		}
 		if (mod && event.key === "a") {
+			// In a code block or quote the first press selects the block, a second one everything.
+			const selectsBlock =
+				(type === "code-block" || type === "blockquote") &&
+				!(state.selection.from === block.start && state.selection.to === block.end)
+			// A text selection over the whole document, like the browser's own: Chromium's native
+			// Backspace and typing do nothing over an `AllSelection`.
 			view.dispatch(
 				state.tr.setSelection(
-					type === "code-block" || type === "blockquote"
+					selectsBlock
 						? TextSelection.create(state.doc, block.start, block.end)
-						: new AllSelection(state.doc),
+						: TextSelection.between(
+								Selection.atStart(state.doc).$from,
+								Selection.atEnd(state.doc).$to,
+							),
 				),
 			)
 			return true
 		}
+		const marker = mod ? markerFor(event) : null
+		if (marker !== null) {
+			// Handled either way: the browser's own `Mod+B` would insert a `<b>`.
+			const tr = toggleMarker(state, marker)
+			if (tr) view.dispatch(tr.scrollIntoView())
+			return true
+		}
 		if (mod && !event.shiftKey && event.key === "z") return undo(state, view.dispatch)
-		if (mod && ((event.shiftKey && event.key === "z") || event.key === "y")) return redo(state, view.dispatch)
+		if (mod && ((event.shiftKey && event.key === "z") || event.key === "y"))
+			return redo(state, view.dispatch)
 
+		// ProseMirror's view blocks the browser's delete over a selection that spans blocks and expects
+		// a keymap to do it; deleting every selection here keeps one path for all of them.
+		if ((event.key === "Backspace" || event.key === "Delete") && !state.selection.empty) {
+			view.dispatch(deleteSelection(state).scrollIntoView())
+			return true
+		}
 		if (event.key === "Backspace" && state.selection.empty) {
 			if (isAtStart(state) && ["blockquote", "code-block", "list-item", "subtext"].includes(type)) {
 				view.dispatch(setBlockType(state.tr, block.pos, "paragraph"))
@@ -155,7 +244,7 @@ export const behaviorPlugin = (emit: (event: BehaviorEvent) => void) => {
 			}
 			// Slate deletes an inline void in one step.
 			const before = state.selection.$from.nodeBefore
-			if (before?.isAtom) {
+			if (isInlineAtom(before)) {
 				view.dispatch(state.tr.delete(state.selection.from - before.nodeSize, state.selection.from))
 				return true
 			}
@@ -163,7 +252,7 @@ export const behaviorPlugin = (emit: (event: BehaviorEvent) => void) => {
 		}
 		if (event.key === "Delete" && state.selection.empty) {
 			const after = state.selection.$from.nodeAfter
-			if (after?.isAtom) {
+			if (isInlineAtom(after)) {
 				view.dispatch(state.tr.delete(state.selection.from, state.selection.from + after.nodeSize))
 				return true
 			}
@@ -193,6 +282,11 @@ export const behaviorPlugin = (emit: (event: BehaviorEvent) => void) => {
 						? insertParagraphAt(state, block.pos + block.node.nodeSize)
 						: state.tr.insertText("\n").scrollIntoView(),
 				)
+				return true
+			}
+			// An empty list item ends the list, as in Discord and Slack.
+			if (type === "list-item" && block.node.content.size === 0) {
+				view.dispatch(setBlockType(state.tr, block.pos, "paragraph"))
 				return true
 			}
 			view.dispatch(splitKeepingType(state.tr))

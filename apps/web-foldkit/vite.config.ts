@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { foldkit } from "@foldkit/vite-plugin"
 import tailwindcss from "@tailwindcss/vite"
-import { defineConfig } from "vite"
+import { configDefaults, defineConfig } from "vitest/config"
 
 /** The desktop app's version (apps/desktop's tauri.conf.json is the single source of truth). */
 const appVersion: string = JSON.parse(
@@ -37,4 +37,6 @@ export default defineConfig({
 	define: {
 		__APP_VERSION__: JSON.stringify(appVersion),
 	},
+	// `*.browser.test.ts` need a real browser's editing: `vitest.browser.config.ts`.
+	test: { exclude: [...configDefaults.exclude, "**/*.browser.test.ts"] },
 })
