@@ -1,6 +1,6 @@
 import { Database, SQLite, Repository, schema } from "@hazel/db"
 
-import type { ChannelId, ConnectConversationId, MessageId, OrganizationId, UserId } from "@hazel/schema"
+import type { ChannelId, ConnectConversationId, MessageId } from "@hazel/schema"
 import { Message } from "@hazel/domain/models"
 import { Context, Effect, Layer } from "effect"
 
@@ -81,56 +81,10 @@ export class MessageRepo extends Context.Service<MessageRepo>()("MessageRepo", {
 					.limit(1),
 			)
 
-		/**
-		 * Reassign message authors for external chat-synced messages scoped to a provider + org.
-		 * Used when a user links/unlinks their external account and historical messages need re-attribution.
-		 */
-		const reassignExternalSyncedAuthors = (params: {
-			organizationId: OrganizationId
-			provider: string
-			fromAuthorId: UserId
-			toAuthorId: UserId
-		}) =>
-			Effect.gen(function* () {
-				if (params.fromAuthorId === params.toAuthorId) {
-					return 0
-				}
-
-				const externalLinkedMessageIds = SQLite.from(schema.chatSyncMessageLinksTable, "message_link")
-					.innerJoin(schema.chatSyncChannelLinksTable, "channel_link", (link, channelLink) =>
-						channelLink.id.eq(link.channelLinkId).and(channelLink.deletedAt.isNull()),
-					)
-					.innerJoin(schema.chatSyncConnectionsTable, "connection", (_link, connection) =>
-						connection.deletedAt.isNull(),
-					)
-					.select(($) => ({ hazelMessageId: $.hazelMessageId }))
-					.where(($) => [
-						$.connection.id.eq($.channel_link.syncConnectionId),
-						$.source.eq("external"),
-						$.deletedAt.isNull(),
-						$.connection.organizationId.eq(params.organizationId),
-						$.connection.provider.eq(params.provider),
-					])
-
-				const updatedMessages = yield* db.run(
-					SQLite.update(schema.messagesTable)
-						.set({ authorId: params.toAuthorId, updatedAt: new Date() })
-						.where(($) => [
-							$.authorId.eq(params.fromAuthorId),
-							$.deletedAt.isNull(),
-							SQLite.inSubquery($.id, externalLinkedMessageIds),
-						])
-						.returning("id"),
-				)
-
-				return updatedMessages.length
-			})
-
 		return {
 			...baseRepo,
 			listByChannel,
 			findByIdForCursor,
-			reassignExternalSyncedAuthors,
 		}
 	}),
 }) {

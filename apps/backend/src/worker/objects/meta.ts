@@ -59,5 +59,3 @@ export const makeObjectIdentity = Effect.gen(function* () {
 		current: () => known,
 	}
 })
-
-export type ObjectIdentity = Effect.Success<typeof makeObjectIdentity>

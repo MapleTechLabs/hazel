@@ -24,14 +24,6 @@ export class BotCommandRepo extends Context.Service<BotCommandRepo>()("BotComman
 					.where(($) => [$.botId.eq(botId)]),
 			)
 
-		// Find enabled commands for a bot
-		const findEnabledByBot = (botId: BotId) =>
-			db.run(
-				SQLite.from(schema.botCommandsTable)
-					.select()
-					.where(($) => [$.botId.eq(botId), $.isEnabled.eq(true)]),
-			)
-
 		// Find commands for multiple bots (for getAvailableCommands)
 		const findByBots = (botIds: BotId[]) => {
 			if (botIds.length === 0) {
@@ -105,7 +97,6 @@ export class BotCommandRepo extends Context.Service<BotCommandRepo>()("BotComman
 		return {
 			...baseRepo,
 			findByBot,
-			findEnabledByBot,
 			findByBots,
 			findByBotAndName,
 			upsert,

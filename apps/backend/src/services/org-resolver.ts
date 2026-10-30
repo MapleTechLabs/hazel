@@ -64,8 +64,8 @@ export class OrgResolver extends Context.Service<OrgResolver>()("OrgResolver", {
 		const requireScope = (
 			organizationId: OrganizationId,
 			scope: ApiScope,
-			entity: string,
-			action: string,
+			_entity: string,
+			_action: string,
 		) =>
 			Effect.gen(function* () {
 				const member = yield* memberOf(organizationId, scope)
@@ -87,8 +87,8 @@ export class OrgResolver extends Context.Service<OrgResolver>()("OrgResolver", {
 		const requireAdminOrOwner = (
 			organizationId: OrganizationId,
 			scope: ApiScope,
-			entity: string,
-			action: string,
+			_entity: string,
+			_action: string,
 		) =>
 			Effect.gen(function* () {
 				const member = yield* memberOf(organizationId, scope)
@@ -108,8 +108,8 @@ export class OrgResolver extends Context.Service<OrgResolver>()("OrgResolver", {
 		const requireOwner = (
 			organizationId: OrganizationId,
 			scope: ApiScope,
-			entity: string,
-			action: string,
+			_entity: string,
+			_action: string,
 		) =>
 			Effect.gen(function* () {
 				const member = yield* memberOf(organizationId, scope)
@@ -150,8 +150,8 @@ export class OrgResolver extends Context.Service<OrgResolver>()("OrgResolver", {
 		const fromChannelWithAccess = (
 			channelId: ChannelId,
 			scope: ApiScope,
-			entity: string,
-			action: string,
+			_entity: string,
+			_action: string,
 		) =>
 			Effect.gen(function* () {
 				const actor = yield* CurrentUser.Context

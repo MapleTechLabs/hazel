@@ -3,7 +3,7 @@
  * written only through these, by the channel's `OrgObject`.
  */
 import { Database, SQLite, schema } from "@hazel/db"
-import { BotId, ChannelId, ConnectConversationId, OrganizationId, UserId } from "@hazel/schema"
+import { ChannelId, ConnectConversationId, OrganizationId, UserId } from "@hazel/schema"
 import { StoredBotId } from "../wire-ids"
 import { Effect, Option, Schema } from "effect"
 import type { SqlClient } from "effect/sql/SqlClient"

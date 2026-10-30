@@ -16,7 +16,6 @@
 		"@hazel/db": "workspace:*",
 		"@hazel/domain": "workspace:*",
 		"@hazel/infra": "workspace:*",
-		"@hazel/schema": "workspace:*",
 		"alchemy": "catalog:alchemy",
 		"effect": "catalog:effect"
 	},

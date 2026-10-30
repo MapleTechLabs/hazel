@@ -19,9 +19,9 @@ type Role = "admin" | "member" | "owner"
 
 const CHANNEL_ID = "00000000-0000-4000-8000-000000000811" as ChannelId
 const CHANNEL_MEMBER_ID = "00000000-0000-4000-8000-000000000812" as ChannelMemberId
-const MISSING_CHANNEL_MEMBER_ID = "00000000-0000-4000-8000-000000000819" as ChannelMemberId
 const ADMIN_USER_ID = "00000000-0000-4000-8000-000000000813" as UserId
 const OWNER_USER_ID = "00000000-0000-4000-8000-000000000814" as UserId
+const MEMBER_USER_ID = "00000000-0000-4000-8000-000000000815" as UserId
 
 interface ChannelMemberEntry {
 	userId: UserId
@@ -284,7 +284,7 @@ describe("ChannelMemberPolicy", () => {
 		expect(Result.isSuccess(result)).toBe(true)
 	})
 
-	it("canUpdate allows org admin but NOT org owner", async () => {
+	it("canUpdate allows org admin and org owner", async () => {
 		const admin = makeActor({ id: ADMIN_USER_ID })
 		const owner = makeActor({ id: OWNER_USER_ID })
 
@@ -313,13 +313,8 @@ describe("ChannelMemberPolicy", () => {
 			owner,
 		)
 
-		// Admin is allowed
 		expect(Result.isSuccess(adminResult)).toBe(true)
-		// Owner is NOT allowed (canUpdate checks role === "admin", not isAdminOrOwner)
-		expect(Result.isFailure(ownerResult)).toBe(true)
-		if (Result.isFailure(ownerResult)) {
-			expect(UnauthorizedError.is(ownerResult.failure)).toBe(true)
-		}
+		expect(Result.isSuccess(ownerResult)).toBe(true)
 	})
 
 	it("canDelete allows self-removal", async () => {
@@ -344,7 +339,7 @@ describe("ChannelMemberPolicy", () => {
 		expect(Result.isSuccess(result)).toBe(true)
 	})
 
-	it("canDelete allows org admin but NOT org owner", async () => {
+	it("canDelete allows org admin and org owner", async () => {
 		const admin = makeActor({ id: ADMIN_USER_ID })
 		const owner = makeActor({ id: OWNER_USER_ID })
 
@@ -373,12 +368,35 @@ describe("ChannelMemberPolicy", () => {
 			owner,
 		)
 
-		// Admin is allowed
 		expect(Result.isSuccess(adminResult)).toBe(true)
-		// Owner is NOT allowed (canDelete checks role === "admin", not isAdminOrOwner)
-		expect(Result.isFailure(ownerResult)).toBe(true)
-		if (Result.isFailure(ownerResult)) {
-			expect(UnauthorizedError.is(ownerResult.failure)).toBe(true)
-		}
+		expect(Result.isSuccess(ownerResult)).toBe(true)
 	})
+
+	it.each(["canUpdate", "canDelete"] as const)(
+		"%s denies a plain org member acting on someone else's membership",
+		async (action) => {
+			const member = makeActor({ id: MEMBER_USER_ID })
+			const layer = makePolicyLayer({
+				members: {
+					[`${TEST_ORG_ID}:${MEMBER_USER_ID}`]: "member",
+				},
+				channels: {
+					[CHANNEL_ID]: { organizationId: TEST_ORG_ID, type: "public" },
+				},
+				channelMembers: {
+					[CHANNEL_MEMBER_ID]: { userId: TEST_USER_ID, channelId: CHANNEL_ID },
+				},
+			})
+
+			const result = await runWithActorEither(
+				ChannelMemberPolicy.use((policy) => policy[action](CHANNEL_MEMBER_ID)),
+				layer,
+				member,
+			)
+			expect(Result.isFailure(result)).toBe(true)
+			if (Result.isFailure(result)) {
+				expect(UnauthorizedError.is(result.failure)).toBe(true)
+			}
+		},
+	)
 })

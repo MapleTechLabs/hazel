@@ -1,6 +1,6 @@
 /**
- * Bot token authentication for the gateway Worker: the same SHA-256 token-hash lookup the Bun
- * gateway did, against the directory D1 database (where `bots` lives).
+ * Bot token authentication for the gateway Worker: a lookup of the token's SHA-256 hash in the
+ * directory D1 database (where `bots` lives).
  */
 import type { D1Database } from "@cloudflare/workers-types"
 import { BotRepo } from "@hazel/backend-core/repositories"

@@ -33,15 +33,6 @@ export class ChannelWebhookRepo extends Context.Service<ChannelWebhookRepo>()("C
 					.limit(1),
 			)
 
-		// Update last used timestamp
-		const updateLastUsed = (id: ChannelWebhookId) =>
-			db.run(
-				SQLite.update(schema.channelWebhooksTable)
-					.set({ lastUsedAt: new Date(), updatedAt: new Date() })
-					.where(($) => [$.id.eq(id)])
-					.returning(),
-			)
-
 		// Update token hash (for token regeneration)
 		const updateToken = (id: ChannelWebhookId, tokenHash: string, tokenSuffix: string) =>
 			db.run(
@@ -79,7 +70,6 @@ export class ChannelWebhookRepo extends Context.Service<ChannelWebhookRepo>()("C
 			...baseRepo,
 			findByChannel,
 			findByTokenHash,
-			updateLastUsed,
 			updateToken,
 			softDelete,
 			findByOrganization,

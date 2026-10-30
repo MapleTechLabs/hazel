@@ -29,15 +29,6 @@ export const isObjectKind = (value: string): value is ObjectKind =>
 export const formatTarget = (target: RpcTarget): string =>
 	target.kind === "directory" ? "directory" : `${target.kind}:${target.id}`
 
-export const parseTarget = (value: string): RpcTarget | undefined => {
-	if (value === "directory") return { kind: "directory" }
-	const separator = value.indexOf(":")
-	if (separator === -1) return undefined
-	const kind = value.slice(0, separator)
-	const id = value.slice(separator + 1)
-	return isObjectKind(kind) && id.length > 0 ? { kind, id } : undefined
-}
-
 export const directoryTarget: RpcTarget = { kind: "directory" }
 export const orgTarget = (id: string): ObjectTarget => ({ kind: "org", id })
 export const channelTarget = (id: string): ObjectTarget => ({ kind: "channel", id })

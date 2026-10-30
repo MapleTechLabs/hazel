@@ -1,4 +1,4 @@
-import { ConfigProvider, Effect, Layer, Result } from "effect"
+import { ConfigProvider, Effect, Result } from "effect"
 import { describe, expect, it } from "vitest"
 import { InviteMailer, renderInviteEmail } from "./invite-mailer"
 

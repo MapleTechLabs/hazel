@@ -4,7 +4,7 @@ import { IntegrationConnection } from "@hazel/domain/models"
 import { GitHub } from "@hazel/integrations"
 import { IntegrationConnectionId as IntegrationConnectionIdSchema } from "@hazel/schema"
 import { Context, Effect, Layer, Option, PartitionedSemaphore, Redacted, Schema } from "effect"
-import { type EncryptedToken, IntegrationEncryption } from "./integration-encryption"
+import { IntegrationEncryption } from "./integration-encryption"
 import { OAuthHttpClient } from "./oauth/oauth-http-client"
 import { type OAuthIntegrationProvider, loadProviderConfig } from "./oauth/provider-config"
 

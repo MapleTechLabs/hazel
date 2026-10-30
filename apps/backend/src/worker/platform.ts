@@ -60,12 +60,3 @@ export const servicesPlatformLive = (env: Record<string, unknown>, botGateways: 
 /** Platform services for an api request graph: the directory (D1) is its `Database`. */
 export const requestPlatformLive = (env: Record<string, unknown>, botGateways: BotGatewayNamespace) =>
 	Layer.mergeAll(directoryDatabaseLive(env), servicesPlatformLive(env, botGateways))
-
-/** Platform services for a Durable Object. */
-export const objectPlatformLive = (env: Record<string, unknown>, botGateways: BotGatewayNamespace) =>
-	Layer.mergeAll(
-		BotGatewayTransport.layerDurableObject(botGateways),
-		directoryDatabaseLive(env),
-		layerKvResultPersistence(cacheNamespace(env)),
-		workerEnvLayer(env),
-	)

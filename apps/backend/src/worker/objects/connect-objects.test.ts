@@ -491,7 +491,7 @@ describe("Hazel Connect", () => {
 		run(
 			Effect.gen(function* () {
 				const world = yield* makeWorld
-				const { objects, a, b, a1, b1, hostChannelId, host } = world
+				const { objects, a, b, a1, b1, host } = world
 				const { guestChannelId } = yield* share(world)
 				const conversationId = rows<{ id: string }>(
 					a.object,

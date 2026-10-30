@@ -17,7 +17,7 @@
 import { Database, type StoreMigration, type StoreName, applyMigrations } from "@hazel/db"
 import { makeSyncedObject, type SyncObjectState, type SyncSocket, type SyncSource } from "@hazel/sync-do"
 import type { AlarmStorageLike, SqlStorageLike } from "@hazel/sync-do"
-import { Context, Effect, Exit, Layer, Option, Result, type Scope } from "effect"
+import { Context, Effect, Exit, Layer, Option, Result } from "effect"
 import { SqlClient } from "effect/sql/SqlClient"
 import { CurrentObject } from "../../lib/current-object"
 import {
@@ -338,4 +338,3 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 	})
 
 export type ObjectRuntime = Effect.Success<ReturnType<typeof makeObjectRuntime>>
-export type ObjectRuntimeScope = Scope.Scope

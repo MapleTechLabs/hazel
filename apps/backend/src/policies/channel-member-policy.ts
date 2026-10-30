@@ -3,7 +3,6 @@ import { ErrorUtils, policy } from "@hazel/domain"
 import type { ChannelId, ChannelMemberId } from "@hazel/schema"
 import { Context, Effect, Layer, Option } from "effect"
 import { isAdminOrOwner } from "../lib/policy-utils"
-import { OrgResolver } from "../services/org-resolver"
 
 export class ChannelMemberPolicy extends Context.Service<ChannelMemberPolicy>()(
 	"ChannelMemberPolicy/Policy",
@@ -14,7 +13,6 @@ export class ChannelMemberPolicy extends Context.Service<ChannelMemberPolicy>()(
 			const channelMemberRepo = yield* ChannelMemberRepo
 			const channelRepo = yield* ChannelRepo
 			const organizationMemberRepo = yield* OrganizationMemberRepo
-			const orgResolver = yield* OrgResolver
 
 			const isOwner = (id: ChannelMemberId) =>
 				ErrorUtils.refailUnauthorized(
@@ -114,13 +112,13 @@ export class ChannelMemberPolicy extends Context.Service<ChannelMemberPolicy>()(
 										return yield* Effect.succeed(true)
 									}
 
-									// Organization admins can update any membership
+									// Organization admins and owners can update any membership
 									const orgMember = yield* organizationMemberRepo.findByOrgAndUser(
 										channel.organizationId,
 										actor.id,
 									)
 
-									if (Option.isSome(orgMember) && orgMember.value.role === "admin") {
+									if (Option.isSome(orgMember) && isAdminOrOwner(orgMember.value.role)) {
 										return yield* Effect.succeed(true)
 									}
 
@@ -147,13 +145,13 @@ export class ChannelMemberPolicy extends Context.Service<ChannelMemberPolicy>()(
 										return yield* Effect.succeed(true)
 									}
 
-									// Organization admins can remove members
+									// Organization admins and owners can remove members
 									const orgMember = yield* organizationMemberRepo.findByOrgAndUser(
 										channel.organizationId,
 										actor.id,
 									)
 
-									if (Option.isSome(orgMember) && orgMember.value.role === "admin") {
+									if (Option.isSome(orgMember) && isAdminOrOwner(orgMember.value.role)) {
 										return yield* Effect.succeed(true)
 									}
 
@@ -172,6 +170,5 @@ export class ChannelMemberPolicy extends Context.Service<ChannelMemberPolicy>()(
 		Layer.provide(ChannelMemberRepo.layer),
 		Layer.provide(ChannelRepo.layer),
 		Layer.provide(OrganizationMemberRepo.layer),
-		Layer.provide(OrgResolver.layer),
 	)
 }
