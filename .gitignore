@@ -26,3 +26,7 @@ opensrc/
 # Migration exports (contain PII — user emails, IDs, avatars)
 apps/backend/exports/
 .alchemy/
+
+# Vitest browser mode artifacts
+__screenshots__/
+.vitest-attachments/
