@@ -101,20 +101,6 @@ export const GRAY_PALETTE_LABELS: Record<Theme.GrayPalette, string> = {
 }
 
 /**
- * Descriptions for gray palettes
- */
-export const GRAY_PALETTE_DESCRIPTIONS: Record<Theme.GrayPalette, string> = {
-	gray: "Classic neutral gray",
-	"gray-blue": "Gray with blue undertones",
-	"gray-cool": "Cool-toned gray with subtle blue hints",
-	"gray-modern": "Contemporary gray with balanced undertones",
-	"gray-neutral": "Perfectly balanced neutral gray",
-	"gray-iron": "Slightly cool, iron-inspired gray",
-	"gray-true": "Pure, true neutral gray",
-	"gray-warm": "Gray with warm, earthy undertones",
-}
-
-/**
  * Quick color swatches for easy brand color selection
  */
 export const COLOR_SWATCHES = [
@@ -140,16 +126,4 @@ export function getBuiltInPreset(id: string): Theme.ThemePreset | undefined {
  */
 export function getDefaultThemeCustomization(): Theme.ThemeCustomization {
 	return BUILT_IN_PRESETS[0]!.customization
-}
-
-/**
- * Get the default user theme settings
- */
-export function getDefaultUserThemeSettings(): Theme.UserThemeSettings {
-	return {
-		activePresetId: "default",
-		customTheme: null,
-		savedPresets: [],
-		mode: "system",
-	}
 }

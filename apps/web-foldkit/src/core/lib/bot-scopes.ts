@@ -57,25 +57,6 @@ export function groupScopesByResource(scopes: readonly string[]): Record<string,
 }
 
 /**
- * Get a short display label for a scope
- */
-export function getScopeDisplayLabel(scope: string): string {
-	const [resource, action] = scope.split(":")
-	if (!resource || !action) return scope
-
-	// Capitalize first letter
-	const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
-	return `${capitalize(resource)} · ${capitalize(action)}`
-}
-
-/**
- * Get scope metadata by scope ID
- */
-export function getScopeInfo(scopeId: string) {
-	return BOT_SCOPES.find((s) => s.id === scopeId)
-}
-
-/**
  * Integration provider display info with Brandfetch CDN icons
  */
 export const INTEGRATION_PROVIDERS: Record<IntegrationProvider, { label: string; domain: string }> = {

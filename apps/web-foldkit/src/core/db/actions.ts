@@ -192,139 +192,6 @@ export const createChannelAction = optimisticAction({
 		}),
 })
 
-export const createDmChannelAction = optimisticAction({
-	collections: {
-		channel: channelCollection,
-		members: channelMemberCollection,
-	},
-
-	onMutate: (props: {
-		organizationId: OrganizationId
-		participantIds: UserId[]
-		type: "single" | "direct"
-		name?: string
-		currentUserId: UserId
-	}) => {
-		const channelId = ChannelId.make(crypto.randomUUID())
-		const now = new Date()
-
-		let channelName = props.name
-		if (props.type === "single" && props.participantIds.length === 1) {
-			channelName = channelName || "Direct Message"
-		}
-
-		// Optimistically insert the channel
-		channelCollection.insert({
-			id: channelId,
-			name: channelName || "Group Channel",
-			icon: null,
-			type: props.type === "direct" ? "single" : "direct",
-			organizationId: props.organizationId,
-			parentChannelId: null,
-			sectionId: null,
-			createdAt: now,
-			updatedAt: null,
-			deletedAt: null,
-		})
-
-		// Add current user as member
-		channelMemberCollection.insert({
-			id: ChannelMemberId.make(crypto.randomUUID()),
-			channelId: channelId,
-			userId: props.currentUserId,
-			isHidden: false,
-			isMuted: false,
-			isFavorite: false,
-			lastSeenMessageId: null,
-			notificationCount: 0,
-			joinedAt: now,
-			createdAt: now,
-			deletedAt: null,
-		})
-
-		// Add all participants as members
-		for (const participantId of props.participantIds) {
-			channelMemberCollection.insert({
-				id: ChannelMemberId.make(crypto.randomUUID()),
-				channelId: channelId,
-				userId: participantId,
-				isHidden: false,
-				isMuted: false,
-				isFavorite: false,
-				lastSeenMessageId: null,
-				notificationCount: 0,
-				joinedAt: now,
-				createdAt: now,
-				deletedAt: null,
-			})
-		}
-
-		return { channelId }
-	},
-
-	mutate: (props, _ctx) =>
-		Effect.gen(function* () {
-			const client = yield* HazelRpc
-
-			const result = yield* client("channel.createDm", {
-				organizationId: props.organizationId,
-				participantIds: props.participantIds,
-				type: props.type,
-				name: props.name,
-			})
-
-			// No manual sync needed - automatic sync on BOTH channel AND members collections!
-			return {
-				data: { channelId: result.data.id },
-				transactionId: result.transactionId,
-			}
-		}),
-})
-
-export const createOrganizationAction = optimisticAction({
-	collections: [organizationCollection],
-
-	onMutate: (props: { name: string; slug: string; logoUrl?: string | null }) => {
-		const organizationId = OrganizationId.make(crypto.randomUUID())
-		const now = new Date()
-
-		organizationCollection.insert({
-			id: organizationId,
-			name: props.name,
-			slug: props.slug,
-			logoUrl: props.logoUrl || null,
-			settings: {},
-			isPublic: false,
-			createdAt: now,
-			updatedAt: null,
-			deletedAt: null,
-		})
-
-		return { organizationId, slug: props.slug }
-	},
-
-	mutate: (props, _ctx) =>
-		Effect.gen(function* () {
-			const client = yield* HazelRpc
-			const result = yield* client("organization.create", {
-				name: props.name,
-				slug: props.slug,
-				logoUrl: props.logoUrl ?? null,
-				settings: null,
-				isPublic: false,
-			})
-
-			// No manual sync needed - automatic sync on organizationCollection!
-			return {
-				data: {
-					organizationId: result.data.id,
-					slug: result.data.slug,
-				},
-				transactionId: result.transactionId,
-			}
-		}),
-})
-
 export const toggleReactionAction = optimisticAction({
 	collections: [messageReactionCollection],
 
@@ -702,31 +569,6 @@ export const createChannelSectionAction = optimisticAction({
 		}),
 })
 
-export const updateChannelSectionAction = optimisticAction({
-	collections: [channelSectionCollection],
-
-	onMutate: (props: { sectionId: ChannelSectionId; name?: string; order?: number }) => {
-		const organizationId = orgOfSection(props.sectionId)
-		channelSectionCollection.update(props.sectionId, (section) => {
-			if (props.name !== undefined) section.name = props.name
-			if (props.order !== undefined) section.order = props.order
-		})
-		return { sectionId: props.sectionId, organizationId }
-	},
-
-	mutate: (props, ctx) =>
-		Effect.gen(function* () {
-			const client = yield* HazelRpc
-			const result = yield* client("channelSection.update", {
-				id: props.sectionId,
-				organizationId: ctx.mutateResult.organizationId,
-				...(props.name !== undefined && { name: props.name }),
-				...(props.order !== undefined && { order: props.order }),
-			})
-			return { data: result, transactionId: result.transactionId }
-		}),
-})
-
 export const deleteChannelSectionAction = optimisticAction({
 	collections: {
 		section: channelSectionCollection,
@@ -777,31 +619,6 @@ export const moveChannelToSectionAction = optimisticAction({
 			const result = yield* client("channelSection.moveChannel", {
 				channelId: props.channelId,
 				sectionId: props.sectionId,
-			})
-			return { data: result, transactionId: result.transactionId }
-		}),
-})
-
-export const reorderSectionsAction = optimisticAction({
-	collections: [channelSectionCollection],
-
-	onMutate: (props: { organizationId: OrganizationId; sectionIds: ChannelSectionId[] }) => {
-		// Update order for each section
-		for (let i = 0; i < props.sectionIds.length; i++) {
-			const sectionId = props.sectionIds[i]!
-			channelSectionCollection.update(sectionId, (section) => {
-				section.order = i
-			})
-		}
-		return { sectionIds: props.sectionIds }
-	},
-
-	mutate: (props, _ctx) =>
-		Effect.gen(function* () {
-			const client = yield* HazelRpc
-			const result = yield* client("channelSection.reorder", {
-				organizationId: props.organizationId,
-				sectionIds: props.sectionIds,
 			})
 			return { data: result, transactionId: result.transactionId }
 		}),

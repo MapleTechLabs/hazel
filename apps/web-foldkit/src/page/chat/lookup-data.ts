@@ -11,7 +11,6 @@ import {
 	chatSyncMessageLinkCollection,
 	customEmojiCollection,
 	messageCollection,
-	organizationCollection,
 	pinnedMessageCollection,
 	typingIndicatorCollection,
 	userCollection,
@@ -243,17 +242,6 @@ export const typingStream = <M>(channelId: ChannelId, toMessage: (typing: Readon
 				.orderBy(({ typing }) => typing.lastTyped, "desc")
 				.limit(10),
 		(rows) => toMessage(rows.map((row) => ({ memberId: row.memberId, lastTyped: row.lastTyped }))),
-	)
-
-/** The org's slug, for links (`useOrganization().slug`). */
-export const orgSlugStream = <M>(organizationId: OrganizationId, toMessage: (orgSlug: string | null) => M) =>
-	liveQueryStream<{ slug: string | null }, M>(
-		(q) =>
-			q
-				.from({ org: organizationCollection })
-				.where(({ org }) => eq(org.id, organizationId))
-				.findOne(),
-		(rows) => toMessage(rows[0]?.slug ?? null),
 	)
 
 interface PinnedRow {

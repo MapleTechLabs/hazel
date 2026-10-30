@@ -11,7 +11,6 @@ import {
 	ChatSyncMessageLink,
 	ConnectConversation,
 	ConnectConversationChannel,
-	ConnectParticipant,
 	CustomEmoji,
 	IntegrationConnection,
 	JsonDate,
@@ -109,7 +108,6 @@ export const connectConversationChannelCollection = orgCollection(
 	"connect_conversation_channels",
 	ConnectConversationChannel.Schema,
 )
-export const connectParticipantCollection = orgCollection("connect_participants", ConnectParticipant.Schema)
 export const channelMemberCollection = orgCollection("channel_members", ChannelMember.Schema)
 export const channelSectionCollection = orgCollection("channel_sections", ChannelSection.Schema)
 export const attachmentCollection = channelCollectionOf("attachments", Attachment.Schema)

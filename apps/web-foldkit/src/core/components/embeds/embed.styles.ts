@@ -1,4 +1,4 @@
-import { tv, type VariantProps } from "tailwind-variants"
+import { tv } from "tailwind-variants"
 
 // ============================================================================
 // Shared Embed Styles
@@ -41,6 +41,3 @@ export const embedSectionStyles = tv({
 		padding: "default",
 	},
 })
-
-export type EmbedContainerVariants = VariantProps<typeof embedContainerStyles>
-export type EmbedSectionVariants = VariantProps<typeof embedSectionStyles>

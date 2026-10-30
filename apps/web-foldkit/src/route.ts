@@ -462,9 +462,6 @@ export const integrationRoute = (orgSlug: string, integrationId: string): AppRou
 		errorCode: Option.none(),
 	})
 
-export const integrationHref = (orgSlug: string, integrationId: string): string =>
-	hrefOf(integrationRoute(orgSlug, integrationId))
-
 /** An org route, or `undefined` outside an org, where the org-only overlays never open. */
 export const orgRouteOf = (
 	orgSlug: string | null,

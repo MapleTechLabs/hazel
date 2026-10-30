@@ -65,16 +65,6 @@ export interface NativeNotificationResult {
 	error?: unknown
 }
 
-export async function getNativeNotificationPermissionState(): Promise<"granted" | "denied" | "unavailable"> {
-	const notification = await getNotificationApi()
-	if (!notification) {
-		return "unavailable"
-	}
-
-	const granted = await getPermission(false)
-	return granted ? "granted" : "denied"
-}
-
 export async function initNativeNotifications(): Promise<boolean> {
 	return getPermission(true)
 }

@@ -53,7 +53,3 @@ export function getEffectivePresenceStatus(
 			return "offline"
 	}
 }
-
-export function isEffectivelyOnline(status: PresenceStatus): boolean {
-	return status !== "offline"
-}
