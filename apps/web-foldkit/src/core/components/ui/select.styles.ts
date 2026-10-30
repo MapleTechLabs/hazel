@@ -9,9 +9,9 @@ export const selectTriggerWrapperClassName = "relative block w-full"
 
 /** The `cx` arguments of SelectTrigger's button, before the caller's `className`. */
 export const selectTriggerBase = [
-	"group/select-trigger flex w-full min-w-0 cursor-default items-center gap-x-2 rounded-lg border border-input px-[calc(--spacing(3.5)-1px)] py-[calc(--spacing(2.5)-1px)] text-start text-fg outline-hidden transition duration-200 sm:px-[calc(--spacing(3)-1px)] sm:py-[calc(--spacing(1.5)-1px)] sm:text-sm/6 sm:*:text-sm/6 dark:shadow-none",
+	"group/select-trigger flex w-full min-w-0 cursor-default items-center gap-x-2 rounded-lg border border-transparent bg-field px-[calc(--spacing(3.5)-1px)] py-[calc(--spacing(2.5)-1px)] text-start text-fg outline-hidden sm:px-[calc(--spacing(3)-1px)] sm:py-[calc(--spacing(1.5)-1px)] sm:text-sm/6 sm:*:text-sm/6 dark:shadow-none",
 	"focus:border-ring/70 focus:bg-primary-subtle/5 focus:ring-3 focus:ring-ring/20 focus:enabled:hover:border-ring/80",
-	"enabled:hover:border-muted-fg/30",
+	"enabled:hover:bg-field-hover",
 	"group-data-open/select:border-ring/70 group-data-open/select:bg-primary-subtle/5 group-data-open/select:ring-3 group-data-open/select:ring-ring/20",
 	"group-data-open/select:data-invalid:border-danger-subtle-fg/70 group-data-open/select:data-invalid:bg-danger-subtle/5 group-data-open/select:data-invalid:ring-3 group-data-open/select:data-invalid:ring-danger-subtle-fg/20 group-data-invalid/select:border-danger-subtle-fg/70 group-data-invalid/select:bg-danger-subtle/5 group-data-invalid/select:ring-danger-subtle-fg/20 group-data-invalid/select:enabled:hover:border-danger-subtle-fg/80 group-data-focused/select:group-data-invalid/select:border-danger-subtle-fg/70 group-data-focused/select:group-data-invalid/select:ring-danger-subtle-fg/20 group-data-focused/select:group-data-invalid/select:enabled:hover:border-danger-subtle-fg/80",
 	"*:data-[slot=icon]:size-5 *:data-[slot=icon]:shrink-0 *:data-[slot=icon]:self-center *:data-[slot=icon]:text-(--btn-icon) data-pressed:*:data-[slot=icon]:text-(--btn-icon-active) focus-visible:*:data-[slot=icon]:text-(--btn-icon-active)/80 enabled:hover:*:data-[slot=icon]:text-(--btn-icon-active)/90 sm:*:data-[slot=icon]:size-4 forced-colors:[--btn-icon:ButtonText] forced-colors:hover:[--btn-icon:ButtonText]",

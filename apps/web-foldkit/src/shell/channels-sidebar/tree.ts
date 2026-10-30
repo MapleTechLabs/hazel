@@ -66,7 +66,7 @@ export const sectionGroupHeader = <M>(
 			h.button(
 				[
 					h.Attribute("type", "button"),
-					h.Class("flex items-center gap-1 hover:text-fg transition-colors"),
+					h.Class("flex items-center gap-1 hover:text-fg active:text-fg"),
 				],
 				[
 					IconChevronDown(h, {

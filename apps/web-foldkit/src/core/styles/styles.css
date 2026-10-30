@@ -13,7 +13,7 @@ If you want to use the typography plugin, uncomment the line below.
 
 @theme inline {
 	--font-sans:
-		var(--font-inter), ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+		"Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
 		"Segoe UI Symbol", "Noto Color Emoji";
 
 	--font-mono:
@@ -30,6 +30,17 @@ If you want to use the typography plugin, uncomment the line below.
 
 	--color-bg: var(--bg);
 	--color-fg: var(--fg);
+	--color-fg-1: var(--fg-1);
+	--color-fg-2: var(--fg-2);
+	--color-fg-3: var(--fg-3);
+	--color-fg-4: var(--fg-4);
+
+	--color-wash: var(--wash);
+	--color-wash-strong: var(--wash-strong);
+	--color-field: var(--field);
+	--color-field-hover: var(--field-hover);
+
+	--shadow-control: var(--control-shadow);
 
 	--color-primary: var(--primary);
 	--color-primary-fg: var(--primary-fg);
@@ -291,6 +302,26 @@ If you want to use the typography plugin, uncomment the line below.
 	--bg: var(--color-white);
 	--fg: var(--color-zinc-950);
 
+	/*
+	 * The text ladder, mixed from --fg so every gray palette gets its own: fg-4 titles, values and
+	 * typed text; fg-3 body and rows at rest; fg-2 meta, hints and placeholders; fg-1 never readable
+	 * text, only dividers and disabled marks. An icon draws one step under its text.
+	 */
+	--fg-4: var(--fg);
+	--fg-3: color-mix(in oklab, var(--fg) 72%, var(--bg));
+	--fg-2: color-mix(in oklab, var(--fg) 56%, var(--bg));
+	--fg-1: color-mix(in oklab, var(--fg) 28%, var(--bg));
+
+	/* Alpha washes, the same on any surface: wash under a hovered row, wash-strong under the current
+	   row; field is a filled input's surface (fields have a fill, not a border). */
+	--wash: oklch(0 0 0 / 0.035);
+	--wash-strong: oklch(0 0 0 / 0.06);
+	--field: oklch(0 0 0 / 0.04);
+	--field-hover: oklch(0 0 0 / 0.065);
+
+	/* A filled control's edge: a top highlight and a bottom shade instead of a border. */
+	--control-shadow: inset 0 1px 0 oklch(1 0 0 / 0.16), inset 0 -1px 0 oklch(0 0 0 / 0.12);
+
 	--primary: var(--color-brand-600);
 	--primary-fg: oklch(1 0 0);
 	--primary-subtle: rgb(from var(--color-brand-500) r g b / 15%);
@@ -326,7 +357,7 @@ If you want to use the typography plugin, uncomment the line below.
 	--danger-subtle: theme("color-red-500/15%");
 	--danger-subtle-fg: var(--color-red-700);
 
-	--border: var(--color-zinc-300);
+	--border: var(--color-zinc-200);
 	--input: var(--color-zinc-300);
 	--ring: var(--primary);
 
@@ -375,6 +406,12 @@ If you want to use the typography plugin, uncomment the line below.
 .dark {
 	--bg: oklch(0.19 0.006 285.885);
 	--fg: var(--color-zinc-50);
+
+	--wash: oklch(1 0 0 / 0.045);
+	--wash-strong: oklch(1 0 0 / 0.08);
+	--field: oklch(1 0 0 / 0.05);
+	--field-hover: oklch(1 0 0 / 0.08);
+	--control-shadow: inset 0 1px 0 oklch(1 0 0 / 0.14), inset 0 -1px 0 oklch(0 0 0 / 0.2);
 
 	--primary: var(--color-brand-600);
 	--primary-fg: oklch(1 0 0);
@@ -445,6 +482,12 @@ If you want to use the typography plugin, uncomment the line below.
 		background-color: var(--selection-bg);
 		color: var(--selection-fg);
 	}
+}
+
+/* An active label's weight without the width: it keeps 400 and gains a hairline stroke, so nothing
+   beside it moves (`data-current:faux-medium`). */
+@utility faux-medium {
+	-webkit-text-stroke: 0.011em currentColor;
 }
 
 /* Tabular numbers for dynamic content (counters, timestamps, prices) */

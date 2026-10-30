@@ -1,7 +1,7 @@
 export const dateInputStyles = [
 	"relative block appearance-none rounded-lg px-[calc(--spacing(3.5)-1px)] py-[calc(--spacing(2.5)-1px)] sm:px-[calc(--spacing(3)-1px)] sm:py-[calc(--spacing(1.5)-1px)]",
 	"text-base/6 text-fg placeholder:text-muted-fg sm:text-sm/6",
-	"border border-input enabled:hover:border-muted-fg/30",
+	"border border-transparent bg-field enabled:hover:bg-field-hover",
 	"focus-within:border-ring/70 focus-within:outline-hidden focus-within:ring-3 focus-within:ring-ring/20 focus-within:hover:border-ring/80",
 	"group-data-open:border-ring/70 group-data-open:outline-hidden group-data-open:ring-3 group-data-open:ring-ring/20 group-data-open:enabled:hover:border-ring/80",
 	"data-invalid:border-danger-subtle-fg/70 focus-within:data-invalid:border-danger-subtle-fg/70 focus-within:data-invalid:ring-danger-subtle-fg/20 focus-within:data-invalid:hover:border-danger-subtle-fg/80 data-invalid:enabled:hover:border-danger-subtle-fg/80",

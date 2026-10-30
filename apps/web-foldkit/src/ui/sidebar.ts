@@ -243,10 +243,10 @@ export const sidebarItem = <Message>(
 					hasHref: false,
 					className: twMerge([
 						"cursor-default",
-						"w-full min-w-0 items-center rounded-lg text-left font-medium text-base/6 text-sidebar-fg",
+						"w-full min-w-0 items-center rounded-lg text-left font-normal text-base/6 text-fg-3",
 						"group/sidebar-item relative col-span-full overflow-hidden focus-visible:outline-hidden",
 						"**:data-[slot=menu-trigger]:absolute **:data-[slot=menu-trigger]:right-0 **:data-[slot=menu-trigger]:flex **:data-[slot=menu-trigger]:h-full **:data-[slot=menu-trigger]:w-auto **:data-[slot=menu-trigger]:items-center **:data-[slot=menu-trigger]:justify-end **:data-[slot=menu-trigger]:px-2.5 **:data-[slot=menu-trigger]:opacity-0 **:data-[slot=menu-trigger]:data-pressed:opacity-100 **:data-[slot=menu-trigger]:has-data-focus:opacity-100 **:data-[slot=menu-trigger]:focus-visible:opacity-100 hover:**:data-[slot=menu-trigger]:opacity-100",
-						"**:data-[slot=icon]:size-5 **:data-[slot=icon]:shrink-0 **:data-[slot=icon]:text-muted-fg sm:**:data-[slot=icon]:size-4",
+						"**:data-[slot=icon]:size-5 **:data-[slot=icon]:shrink-0 **:data-[slot=icon]:text-fg-2 sm:**:data-[slot=icon]:size-4",
 						"**:last:data-[slot=icon]:size-5 sm:**:last:data-[slot=icon]:size-4",
 						"has-[[data-slot=avatar]]:has-[[data-slot=sidebar-label]]:gap-2 has-[[data-slot=icon]]:has-[[data-slot=sidebar-label]]:gap-2",
 						"grid grid-cols-[auto_1fr_1.5rem_0.5rem_auto] **:last:data-[slot=icon]:ml-auto supports-[grid-template-columns:subgrid]:grid-cols-subgrid sm:text-sm/5",
@@ -254,7 +254,7 @@ export const sidebarItem = <Message>(
 						"[--sidebar-current-bg:var(--color-sidebar-primary)] [--sidebar-current-fg:var(--color-sidebar-primary-fg)]",
 						options.isCurrent &&
 							"font-medium text-(--sidebar-current-fg) hover:bg-(--sidebar-current-bg) hover:text-(--sidebar-current-fg) **:data-[slot=icon]:text-(--sidebar-current-fg) hover:**:data-[slot=icon]:text-(--sidebar-current-fg) [&_.text-muted-fg]:text-fg/80",
-						"hover:bg-sidebar-accent hover:text-sidebar-accent-fg hover:**:data-[slot=icon]:text-sidebar-accent-fg",
+						"hover:bg-wash hover:text-fg hover:**:data-[slot=icon]:text-fg-3 active:bg-wash active:text-fg active:**:data-[slot=icon]:text-fg-3",
 						options.className,
 					]),
 				}),

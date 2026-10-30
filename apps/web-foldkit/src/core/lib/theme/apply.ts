@@ -21,7 +21,7 @@ const LIGHT_MODE_GRAY_TOKENS = {
 	"--overlay-fg": "950",
 	"--muted": "100",
 	"--muted-fg": "600",
-	"--border": "300",
+	"--border": "200",
 	"--input": "300",
 	"--navbar": "25",
 	"--navbar-fg": "950",
