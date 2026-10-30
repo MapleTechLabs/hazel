@@ -801,24 +801,3 @@ export class GitHubApiClient extends Context.Service<GitHubApiClient>()("GitHubA
 }) {
 	static readonly layer = Layer.effect(this, this.make).pipe(Layer.provide(FetchHttpClient.layer))
 }
-
-// ============================================================================
-// Legacy exports for backwards compatibility
-// ============================================================================
-
-/**
- * @deprecated Use GitHubApiClient.fetchPR instead
- *
- * Fetch a GitHub PR by owner, repo, and number using the provided access token.
- * This is a legacy function that creates a temporary GitHubApiClient.
- */
-export const fetchGitHubPR = (
-	owner: string,
-	repo: string,
-	prNumber: number,
-	accessToken: string,
-): Effect.Effect<GitHubPR, GitHubApiError | GitHubPRNotFoundError | GitHubRateLimitError> =>
-	Effect.gen(function* () {
-		const client = yield* GitHubApiClient
-		return yield* client.fetchPR(owner, repo, prNumber, accessToken)
-	}).pipe(Effect.provide(GitHubApiClient.layer))
