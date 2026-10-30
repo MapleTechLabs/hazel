@@ -79,9 +79,6 @@ import { ChannelViewers } from "./services/channel-viewers"
 
 export { HazelApi }
 
-// Export RPC groups for frontend consumption
-export { AuthMiddleware, MessageRpcs, NotificationRpcs } from "@hazel/domain/rpc"
-
 export const HealthRouter = HttpRouter.use((router) =>
 	router.add("GET", "/health", HttpServerResponse.text("OK")),
 )

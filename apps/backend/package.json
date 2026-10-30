@@ -5,8 +5,7 @@
 	"module": "src/worker.ts",
 	"exports": {
 		".": "./src/worker.ts",
-		"./api": "./src/api.ts",
-		"./rpc/groups/*": "./src/rpc/groups/*.ts"
+		"./api": "./src/api.ts"
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.worker.json",
@@ -18,7 +17,6 @@
 	},
 	"dependencies": {
 		"@clerk/backend": "^3.3.0",
-		"@effect/opentelemetry": "catalog:effect",
 		"@effect/sql-sqlite-do": "catalog:effect",
 		"@hazel/auth": "workspace:*",
 		"@hazel/backend-core": "workspace:*",
@@ -35,7 +33,6 @@
 		"aws4fetch": "^1.0.20",
 		"dfx": "^1.1.0",
 		"effect": "catalog:effect",
-		"jose": "^6.1.3",
 		"uuid": "^13"
 	},
 	"devDependencies": {
