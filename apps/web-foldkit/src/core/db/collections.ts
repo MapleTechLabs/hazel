@@ -43,7 +43,7 @@ const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/
 
 /**
  * Rows carry timestamps as ISO text; the models' `JsonDate` would decode that to a `DateTime`, while
- * the app reads `Date`s (as Electric's `timestamptz` parser gave it), so parse them first.
+ * the app reads `Date`s, so ISO timestamp strings are parsed into `Date`s first.
  */
 const parseTimestamps = (row: unknown): unknown => {
 	if (typeof row !== "object" || row === null) return row
