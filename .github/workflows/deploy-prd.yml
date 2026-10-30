@@ -14,6 +14,8 @@ concurrency:
 
 permissions:
     contents: read
+    # The Infisical step signs in with this job's GitHub OIDC token.
+    id-token: write
 
 jobs:
     deploy:
@@ -31,56 +33,24 @@ jobs:
         env:
             # On workflow_run, `github.sha` is the branch head, not the commit CI tested.
             COMMIT_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
-            CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-            CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-            # api Worker (apps/backend/src/worker/env.ts)
-            CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
-            # Hazel sign-in
-            AUTH_GITHUB_CLIENT_ID: ${{ vars.AUTH_GITHUB_CLIENT_ID || secrets.AUTH_GITHUB_CLIENT_ID }}
-            AUTH_GITHUB_CLIENT_SECRET: ${{ secrets.AUTH_GITHUB_CLIENT_SECRET }}
-            AUTH_GOOGLE_CLIENT_ID: ${{ vars.AUTH_GOOGLE_CLIENT_ID || secrets.AUTH_GOOGLE_CLIENT_ID }}
-            AUTH_GOOGLE_CLIENT_SECRET: ${{ secrets.AUTH_GOOGLE_CLIENT_SECRET }}
-            AUTH_BINDING_KEY: ${{ secrets.AUTH_BINDING_KEY }}
-            AUTH_TRANSACTION_KEY: ${{ secrets.AUTH_TRANSACTION_KEY }}
-            AUTH_ACCESS_TOKEN_KID: ${{ vars.AUTH_ACCESS_TOKEN_KID || secrets.AUTH_ACCESS_TOKEN_KID }}
-            AUTH_ACCESS_TOKEN_PRIVATE_JWK: ${{ secrets.AUTH_ACCESS_TOKEN_PRIVATE_JWK }}
-            AUTH_PASSKEY_RP_ID: ${{ vars.AUTH_PASSKEY_RP_ID }}
-            AUTH_TRUSTED_ORIGINS: ${{ vars.AUTH_TRUSTED_ORIGINS }}
-            COOKIE_DOMAIN: ${{ vars.COOKIE_DOMAIN }}
-            S3_BUCKET: ${{ vars.S3_BUCKET }}
-            S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
-            S3_PUBLIC_URL: ${{ vars.S3_PUBLIC_URL }}
-            S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
-            S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
-            INTEGRATION_ENCRYPTION_KEY: ${{ secrets.INTEGRATION_ENCRYPTION_KEY }}
-            INTEGRATION_ENCRYPTION_KEY_VERSION: ${{ vars.INTEGRATION_ENCRYPTION_KEY_VERSION }}
-            INTEGRATION_ENCRYPTION_KEY_PREV: ${{ secrets.INTEGRATION_ENCRYPTION_KEY_PREV }}
-            INTEGRATION_ENCRYPTION_KEY_VERSION_PREV: ${{ vars.INTEGRATION_ENCRYPTION_KEY_VERSION_PREV }}
-            LINEAR_CLIENT_ID: ${{ vars.LINEAR_CLIENT_ID }}
-            LINEAR_CLIENT_SECRET: ${{ secrets.LINEAR_CLIENT_SECRET }}
-            DISCORD_CLIENT_ID: ${{ vars.DISCORD_CLIENT_ID }}
-            DISCORD_CLIENT_SECRET: ${{ secrets.DISCORD_CLIENT_SECRET }}
-            DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-            DISCORD_GATEWAY_ENABLED: ${{ vars.DISCORD_GATEWAY_ENABLED }}
-            GITHUB_APP_ID: ${{ vars.HAZEL_GITHUB_APP_ID }}
-            GITHUB_APP_SLUG: ${{ vars.HAZEL_GITHUB_APP_SLUG }}
-            GITHUB_APP_PRIVATE_KEY: ${{ secrets.HAZEL_GITHUB_APP_PRIVATE_KEY }}
-            GITHUB_WEBHOOK_SECRET: ${{ secrets.HAZEL_GITHUB_WEBHOOK_SECRET }}
-            INTERNAL_SECRET: ${{ secrets.INTERNAL_SECRET }}
-            KLIPY_API_KEY: ${{ secrets.KLIPY_API_KEY }}
-            OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-            # First-party bots (bots/*/src/worker.ts): each deploys only when its token is set
-            HAZEL_BOT_TOKEN: ${{ secrets.HAZEL_BOT_TOKEN }}
-            LINEAR_BOT_TOKEN: ${{ secrets.LINEAR_BOT_TOKEN }}
-            # Maple: an org-admin API key with `ingest_keys:read`, `dashboards:write`, `alerts:write`; the deploy binds the ingest key onto the Workers
-            MAPLE_API_KEY: ${{ secrets.MAPLE_API_KEY }}
-            # A Hazel channel's Maple webhook URL: production alerts post there (`@hazel/infra/maple-monitoring`)
-            MAPLE_ALERTS_WEBHOOK_URL: ${{ secrets.MAPLE_ALERTS_WEBHOOK_URL }}
+            # Every deploy secret (Cloudflare, the api Worker's env, bots, Maple) comes from
+            # Infisical's `prod` environment, the same source `alchemy:deploy:prd:local` reads.
+            # Don't list them here: a job-level `env:` entry shadows what the Infisical step exports.
         steps:
             - name: Checkout
               uses: actions/checkout@v4
               with:
                   ref: ${{ env.COMMIT_SHA }}
+
+            - name: Load secrets from Infisical
+              uses: Infisical/secrets-action@v1.0.18
+              with:
+                  # A machine identity with OIDC Auth (issuer https://token.actions.githubusercontent.com,
+                  # subject repo:MapleTechLabs/hazel:environment:production) and read access to `prod`.
+                  method: oidc
+                  identity-id: ${{ vars.INFISICAL_IDENTITY_ID }}
+                  project-id: 9e94bb4d-0348-440c-b0f3-073b6f1977f3
+                  env-slug: prod
 
             - name: Deploy setup
               uses: ./.github/actions/deploy-env
