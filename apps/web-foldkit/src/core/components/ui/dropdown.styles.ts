@@ -19,7 +19,7 @@ export const dropdownItemStyles = tv({
 		// avatar
 		"*:data-[slot=avatar]:mr-(--mr-icon) has-[[slot=description]]:*:data-[slot=avatar]:row-span-2 *:data-[slot=avatar]:[--avatar-size:--spacing(6)] sm:*:data-[slot=avatar]:[--avatar-size:--spacing(5)]",
 		// icon
-		"*:data-[slot=icon]:col-start-1 *:data-[slot=icon]:row-start-1 *:data-[slot=icon]:mr-(--mr-icon) *:data-[slot=icon]:-ml-0.5 *:data-[slot=icon]:shrink-0 [&_[data-slot='icon']:not([class*='text-'])]:text-muted-fg",
+		"*:data-[slot=icon]:col-start-1 *:data-[slot=icon]:row-start-1 *:data-[slot=icon]:mr-(--mr-icon) *:data-[slot=icon]:-ml-0.5 *:data-[slot=icon]:shrink-0 [&_[data-slot='icon']:not([class*='text-'])]:text-fg-2",
 		"not-has-[[slot=description]]:*:data-[slot=icon]:size-5 sm:not-has-[[slot=description]]:*:data-[slot=icon]:size-4",
 		"has-[[slot=description]]:*:data-[slot=icon]:h-lh has-[[slot=description]]:[&_[data-slot='icon']:not([class*='w-'])]:w-5 sm:has-[[slot=description]]:[&_[data-slot='icon']:not([class*='w-'])]:w-4",
 		"[&>[slot=label]+[data-slot=icon]]:absolute [&>[slot=label]+[data-slot=icon]]:right-1",
@@ -46,22 +46,22 @@ export const dropdownItemStyles = tv({
 		},
 		isSelected: {
 			true: [
-				"[&_[data-slot='icon']:not([class*='text-'])]:text-accent-fg",
+				"[&_[data-slot='icon']:not([class*='text-'])]:text-fg",
 				"has-data-[slot=avatar]:pr-6 has-data-[slot=icon]:pr-6",
 			],
 		},
 		isFocused: {
 			true: [
-				"*:data-[slot=keyboard]:text-accent-fg [&_[data-slot='icon']:not([class*='text-'])]:text-accent-fg",
-				"bg-accent text-accent-fg forced-colors:bg-[Highlight] forced-colors:text-[HighlightText]",
-				"[&_.text-muted-fg]:text-accent-fg/80 *:[[slot=description]]:text-accent-fg *:[[slot=label]]:text-accent-fg",
+				"*:data-[slot=keyboard]:text-fg-2 [&_[data-slot='icon']:not([class*='text-'])]:text-fg-3",
+				"bg-wash-strong text-fg forced-colors:bg-[Highlight] forced-colors:text-[HighlightText]",
+				"[&_.text-muted-fg]:text-fg-2 *:[[slot=description]]:text-fg-2 *:[[slot=label]]:text-fg",
 			],
 		},
 		isHovered: {
 			true: [
-				"*:data-[slot=keyboard]:text-accent-fg [&_[data-slot='icon']:not([class*='text-'])]:text-accent-fg",
-				"bg-accent text-accent-fg forced-colors:bg-[Highlight] forced-colors:text-[HighlightText]",
-				"[&_.text-muted-fg]:text-accent-fg/80 *:[[slot=description]]:text-accent-fg *:[[slot=label]]:text-accent-fg",
+				"*:data-[slot=keyboard]:text-fg-2 [&_[data-slot='icon']:not([class*='text-'])]:text-fg-3",
+				"bg-wash-strong text-fg forced-colors:bg-[Highlight] forced-colors:text-[HighlightText]",
+				"[&_.text-muted-fg]:text-fg-2 *:[[slot=description]]:text-fg-2 *:[[slot=label]]:text-fg",
 			],
 		},
 	},
@@ -77,6 +77,6 @@ export const dropdownCheckIndicatorClassName = twJoin(
 /** Base classes, each merged with the caller's `className` by `twMerge`. */
 export const dropdownLabelBase = "col-start-2"
 export const dropdownDescriptionBase = "col-start-2 font-normal text-muted-fg text-sm"
-export const dropdownSeparatorBase = "col-span-full -mx-1 h-px bg-fg/10"
+export const dropdownSeparatorBase = "col-span-full -mx-1 my-1 h-px bg-border"
 export const dropdownKeyboardBase =
 	"absolute right-2 pl-2 group-hover:text-primary-fg group-data-focused:text-primary-fg"

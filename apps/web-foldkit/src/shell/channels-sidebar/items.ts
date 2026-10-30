@@ -14,7 +14,7 @@ import { dotsMenuTrigger } from "./tree"
 
 /** `ChannelItem`, `DmChannelItem` and `DiscoverableChannelItem` (`components/sidebar/*`). */
 
-export const CHANNEL_ACTIVE = "bg-sidebar-accent font-medium text-sidebar-accent-fg"
+export const CHANNEL_ACTIVE = "bg-wash-strong faux-medium text-fg **:data-[slot=icon]:text-fg-3"
 
 export interface ItemContext {
 	readonly orgSlug: string
@@ -57,7 +57,7 @@ const sidebarBadge = <M>(h: HtmlBuilder<M>, count: number): Html =>
 		[
 			h.Attribute("data-slot", "sidebar-badge"),
 			h.Class(
-				"absolute inset-y-1/2 right-1.5 flex h-5 min-w-5 -translate-y-1/2 items-center justify-center rounded-full bg-primary px-1.5 font-semibold text-[11px] text-primary-fg tabular-nums transition-all group-hover/sidebar-item:right-8",
+				"absolute inset-y-1/2 right-1.5 flex h-5 min-w-5 -translate-y-1/2 items-center justify-center rounded-full bg-primary px-1.5 font-medium text-[11px] text-primary-fg tabular-nums group-hover/sidebar-item:right-8",
 			),
 		],
 		[String(count)],
@@ -123,7 +123,8 @@ export const channelItem = <M>(
 				[h.Class(partners.length > 0 ? "relative shrink-0" : "shrink-0")],
 				[channelIcon(h, entry.channel.icon), ...partnerOrgMarks(h, partners)],
 			),
-			label(h, [entry.channel.name]),
+			// Unread: the name steps up to full ink and medium, the count says how many.
+			label(h, [entry.channel.name], notificationCount > 0 ? "font-medium text-fg" : undefined),
 		]),
 		menu,
 		...badgeIf(h, notificationCount),

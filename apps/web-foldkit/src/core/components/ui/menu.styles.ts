@@ -16,7 +16,7 @@ export const menuPopoverBase = "min-w-32"
 export const menuItemSubmenuOpen = {
 	danger: "data-open:bg-danger-subtle data-open:text-danger-subtle-fg",
 	warning: "data-open:bg-warning-subtle data-open:text-warning-subtle-fg",
-	none: "data-open:bg-accent data-open:text-accent-fg data-open:*:data-[slot=icon]:text-accent-fg data-open:*:[.text-muted-fg]:text-accent-fg",
+	none: "data-open:bg-wash-strong data-open:text-fg data-open:*:data-[slot=icon]:text-fg-3 data-open:*:[.text-muted-fg]:text-fg-2",
 } as const
 
 export const menuChevronClassName = "absolute right-2 size-3.5"

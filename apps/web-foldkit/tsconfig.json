@@ -13,6 +13,9 @@
 		"jsx": "preserve",
 		"exactOptionalPropertyTypes": false,
 		"types": ["vite/client"],
-		"paths": { "~/*": ["./src/core/*"] }
+		"paths": {
+			"~/*": ["./src/core/*"],
+			"foldkit-internal/*": ["./node_modules/foldkit/dist/*"]
+		}
 	}
 }
