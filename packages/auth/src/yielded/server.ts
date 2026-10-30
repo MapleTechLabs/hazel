@@ -116,6 +116,15 @@ export const makeHazelAuthHttp = (
 		cookie: { secure },
 		oauth: {
 			providers,
+			// The callback rejects query parameters it does not know, and Google always appends
+			// `scope`, `authuser` and `prompt` (plus `hd` for Workspace accounts).
+			...(config.google === undefined
+				? {}
+				: {
+						callbacks: {
+							google: { allowedQueryParameters: ["scope", "authuser", "prompt", "hd"] },
+						},
+					}),
 			// Registration UI belongs to Hazel. Only public correlation enters the URL;
 			// the registration credential and request binder stay in HttpOnly cookies.
 			respond: (value, { flowId }) =>
