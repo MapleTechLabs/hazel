@@ -45,8 +45,9 @@ jobs:
             - name: Load secrets from Infisical
               uses: Infisical/secrets-action@v1.0.18
               with:
-                  # A machine identity with OIDC Auth (issuer https://token.actions.githubusercontent.com,
-                  # subject repo:MapleTechLabs/hazel:environment:production) and read access to `prod`.
+                  # A machine identity with OIDC Auth (issuer https://token.actions.githubusercontent.com)
+                  # and read access to `prod`. The repo uses immutable OIDC subjects, so it is bound to
+                  # repo:MapleTechLabs@282671153/hazel@972339714:environment:production.
                   method: oidc
                   identity-id: ${{ vars.INFISICAL_IDENTITY_ID }}
                   project-id: 9e94bb4d-0348-440c-b0f3-073b6f1977f3
