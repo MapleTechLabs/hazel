@@ -37,7 +37,7 @@ const keyring = (byte: number) => ({
 	keys: [{ id: "v1", material: Redacted.make(Base64Url.encode(new Uint8Array(32).fill(byte))) }],
 })
 
-// ---- Simulated GitHub: token endpoint, /user and /user/emails ----
+// ---- Simulated GitHub (token endpoint, /user, /user/emails) and Google discovery ----
 let githubUserId = 0
 const FakeGitHub = Layer.succeed(
 	HttpClient.HttpClient,
@@ -64,6 +64,20 @@ const FakeGitHub = Layer.succeed(
 				})
 			if (url.href.startsWith("https://api.github.com/user/emails"))
 				return json([{ email: `octo${githubUserId}@example.com`, primary: true, verified: true }])
+			// Google is discovered at startup; its token endpoint stays unsimulated.
+			if (url.href === "https://accounts.google.com/.well-known/openid-configuration")
+				return json({
+					issuer: "https://accounts.google.com",
+					authorization_endpoint: "https://accounts.google.com/o/oauth2/v2/auth",
+					token_endpoint: "https://oauth2.googleapis.com/token",
+					jwks_uri: "https://www.googleapis.com/oauth2/v3/certs",
+					response_types_supported: ["code"],
+					subject_types_supported: ["public"],
+					id_token_signing_alg_values_supported: ["RS256"],
+					code_challenge_methods_supported: ["S256"],
+					token_endpoint_auth_methods_supported: ["client_secret_post", "client_secret_basic"],
+					authorization_response_iss_parameter_supported: true,
+				})
 			return HttpClientResponse.fromWeb(request, new Response("not found", { status: 404 }))
 		}),
 	),
@@ -100,6 +114,7 @@ describe("Hazel auth on D1 (node SQLite)", () => {
 		appOrigin: webOrigin,
 		trustedOrigins: [webOrigin],
 		github: { clientId: "Iv1.test", clientSecret: Redacted.make("test-secret") },
+		google: { clientId: "google.test", clientSecret: Redacted.make("test-secret") },
 		passkey: { rpId: "localhost", origins: [webOrigin] },
 		keys: { binding: keyring(1), transaction: keyring(2) },
 		returnTargets: ["/"],
@@ -278,6 +293,31 @@ describe("Hazel auth on D1 (node SQLite)", () => {
 			isOnboarded: 0,
 		})
 	}, 60_000)
+
+	test("the Google callback accepts the query parameters Google appends", async () => {
+		const browser = jar()
+		const begin = await call(browser, "POST", "/auth/signIn", { provider: "google", returnTarget: "/" })
+		expect(begin.status).toBe(200)
+		const state = new URL((await begin.json()).value.authorizationUrl).searchParams.get("state")!
+		const callback = await send(
+			new Request(
+				`${origin}/auth/google/callback?${new URLSearchParams({
+					state,
+					iss: "https://accounts.google.com",
+					code: "abc",
+					scope: "email profile openid https://www.googleapis.com/auth/userinfo.email",
+					authuser: "0",
+					hd: "example.com",
+					prompt: "consent",
+				})}`,
+				{ headers: { cookie: browser.header() }, redirect: "manual" },
+			),
+		)
+		// Google's token endpoint is not simulated, so the exchange fails later; the callback
+		// itself must not be refused as a malformed request.
+		const body = callback.status === 400 ? await callback.text() : ""
+		expect(body).not.toContain("TransportFailure")
+	})
 
 	test("returning user signs in; sign-out revokes the session server-side", async () => {
 		githubUserId = 4242
