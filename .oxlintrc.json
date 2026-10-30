@@ -19,6 +19,13 @@
 	},
 	"overrides": [
 		{
+			// The landing and docs sites are plain React (Astro islands, Fumadocs), outside the no-useEffect rule.
+			"files": ["apps/landing/**", "apps/docs/**"],
+			"rules": {
+				"no-restricted-imports": "off"
+			}
+		},
+		{
 			// Foldkit's own lint rules, scoped to the Foldkit app's source. The plugin is a devDependency
 			// of apps/web-foldkit (isolated linker), so it is loaded by path.
 			"files": ["apps/web-foldkit/src/**"],
