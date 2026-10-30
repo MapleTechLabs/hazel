@@ -114,13 +114,13 @@ export class ChannelMemberPolicy extends Context.Service<ChannelMemberPolicy>()(
 										return yield* Effect.succeed(true)
 									}
 
-									// Organization admins can update any membership
+									// Organization admins and owners can update any membership
 									const orgMember = yield* organizationMemberRepo.findByOrgAndUser(
 										channel.organizationId,
 										actor.id,
 									)
 
-									if (Option.isSome(orgMember) && orgMember.value.role === "admin") {
+									if (Option.isSome(orgMember) && isAdminOrOwner(orgMember.value.role)) {
 										return yield* Effect.succeed(true)
 									}
 
@@ -147,13 +147,13 @@ export class ChannelMemberPolicy extends Context.Service<ChannelMemberPolicy>()(
 										return yield* Effect.succeed(true)
 									}
 
-									// Organization admins can remove members
+									// Organization admins and owners can remove members
 									const orgMember = yield* organizationMemberRepo.findByOrgAndUser(
 										channel.organizationId,
 										actor.id,
 									)
 
-									if (Option.isSome(orgMember) && orgMember.value.role === "admin") {
+									if (Option.isSome(orgMember) && isAdminOrOwner(orgMember.value.role)) {
 										return yield* Effect.succeed(true)
 									}
 
