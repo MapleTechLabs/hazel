@@ -1481,6 +1481,8 @@ export class HazelBotClient extends Context.Service<HazelBotClient>()("HazelBotC
 				createThread: (messageId: MessageId, channelId: ChannelId) =>
 					rpc["channel.createThread"]({
 						messageId,
+						// The message lives in the parent's ChannelObject; the handler needs it.
+						channelId,
 					}).pipe(
 						Effect.timeout(Duration.seconds(15)),
 						Effect.tapCause((cause) =>

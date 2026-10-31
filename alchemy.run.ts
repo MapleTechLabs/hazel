@@ -30,6 +30,8 @@ import HazelBot from "./bots/hazel-bot/alchemy.run.ts"
 import { HAZEL_BOT_TOKEN_KEY } from "./bots/hazel-bot/src/worker.ts"
 import LinearBot from "./bots/linear-bot/alchemy.run.ts"
 import { LINEAR_BOT_TOKEN_KEY } from "./bots/linear-bot/src/worker.ts"
+import T3CodeBot from "./bots/t3code-bot/alchemy.run.ts"
+import { T3CODE_BOT_TOKEN_KEY } from "./bots/t3code-bot/src/worker.ts"
 
 // Some secret stores define CLOUDFLARE_DEFAULT_ACCOUNT_ID; alchemy reads CLOUDFLARE_ACCOUNT_ID.
 if (!process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_DEFAULT_ACCOUNT_ID) {
@@ -103,6 +105,7 @@ export default Alchemy.Stack(
 		// First-party bots: prd and `alchemy dev`, with their token set (`isBotDeployed`).
 		const hazelBot = (yield* isBotDeployed(HAZEL_BOT_TOKEN_KEY, stack)) ? yield* HazelBot : undefined
 		const linearBot = (yield* isBotDeployed(LINEAR_BOT_TOKEN_KEY, stack)) ? yield* LinearBot : undefined
+		const t3codeBot = (yield* isBotDeployed(T3CODE_BOT_TOKEN_KEY, stack)) ? yield* T3CodeBot : undefined
 		// Maple alerts and dashboard watch production only: see `@hazel/infra/maple-monitoring`.
 		const monitoring = stage.kind === "prd" && isMapleDeploy() ? yield* HazelMonitoring : undefined
 
@@ -124,6 +127,7 @@ export default Alchemy.Stack(
 			landingWorker: landing?.workerName,
 			hazelBotWorker: hazelBot?.workerName,
 			linearBotWorker: linearBot?.workerName,
+			t3codeBotWorker: t3codeBot?.workerName,
 			mapleDashboard: monitoring?.dashboardId,
 			mapleAlertRules: monitoring?.alertRules,
 		}
