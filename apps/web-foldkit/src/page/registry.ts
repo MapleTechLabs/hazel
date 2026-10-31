@@ -5,6 +5,7 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import type { Resources } from "../rpc"
 import type { AppRoute } from "../route"
 import * as Auth from "./auth"
+import * as BotInstall from "./bot-install"
 import * as ChannelSettingsConnect from "./channel-settings/connect"
 import * as ChannelSettingsIntegrations from "./channel-settings/integrations"
 import * as ChannelSettingsOverview from "./channel-settings/overview"
@@ -72,6 +73,7 @@ export const pages = [
 	SelectOrganization.page,
 	Join.page,
 	Invite.page,
+	BotInstall.page,
 	ChannelSettingsRedirect.page,
 	ChannelSettingsOverview.page,
 	ChannelSettingsConnect.page,

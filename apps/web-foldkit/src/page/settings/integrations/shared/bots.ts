@@ -13,6 +13,8 @@ export const Bot = Schema.Struct({
 	isPublic: Schema.Boolean,
 	scopes: Schema.Array(Schema.String),
 	allowedIntegrations: Schema.Array(Schema.String),
+	/** Where its install link may send a grant (`@hazel/domain/bot-install`). */
+	installRedirectUris: Schema.Array(Schema.String),
 	avatarUrl: Schema.NullOr(Schema.String),
 	installCount: Schema.Number,
 })
@@ -38,6 +40,8 @@ export interface BotRow {
 	readonly isPublic: boolean
 	readonly scopes: ReadonlyArray<string> | null
 	readonly allowedIntegrations: ReadonlyArray<IntegrationConnection.IntegrationProvider> | null
+	/** Absent on a copy from an org that has not migrated yet. */
+	readonly installRedirectUris?: ReadonlyArray<string> | null
 	readonly installCount: number
 	readonly user: UserRow
 }
@@ -53,6 +57,7 @@ export const toBot = (row: BotRow): Bot => ({
 	isPublic: row.isPublic,
 	scopes: row.scopes ?? [],
 	allowedIntegrations: row.allowedIntegrations ?? [],
+	installRedirectUris: row.installRedirectUris ?? [],
 	avatarUrl: resolveBotAvatarUrl(row),
 	installCount: row.installCount,
 })

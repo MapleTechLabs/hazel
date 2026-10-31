@@ -261,6 +261,91 @@ describe("HazelBotClient durable gateway", () => {
 			}),
 		))
 
+	it("skips an event it cannot read and still handles and acknowledges the rest of the batch", () =>
+		Effect.runPromise(
+			Effect.gen(function* () {
+				const handledArgsRef = yield* Ref.make<Array<string>>([])
+				const savedOffsetsRef = yield* Ref.make<Array<string>>([])
+				const sentFramesRef = yield* Ref.make<Array<string>>([])
+				const originalWebSocket = globalThis.WebSocket
+
+				server.use(
+					http.post(`${BACKEND_URL}/bot-commands/sync`, async () =>
+						HttpResponse.json({ syncedCount: 1 }),
+					),
+					http.patch(`${BACKEND_URL}/bot-commands/settings`, async () =>
+						HttpResponse.json({ success: true }),
+					),
+				)
+
+				globalThis.WebSocket = FakeWebSocket as any
+				FakeWebSocket.onCreate = (socket) => {
+					socket.emitServerFrame({
+						op: "HELLO",
+						heartbeatIntervalMs: 60_000,
+					})
+				}
+				FakeWebSocket.onSend = (socket, frame) => {
+					Ref.update(sentFramesRef, (frames) => [...frames, frame.op]).pipe(Effect.runSync)
+					if (frame.op === "IDENTIFY") {
+						socket.emitServerFrame({
+							op: "READY",
+							sessionId: "session-1",
+							resumed: false,
+							resumeOffset: "now",
+						})
+						socket.emitServerFrame({
+							op: "DISPATCH",
+							sessionId: "session-1",
+							events: [
+								{ ...commandEnvelope, eventType: "something.added.later", payload: {} },
+								{ ...commandEnvelope, payload: { nope: true } },
+								commandEnvelope,
+							],
+							nextOffset: "1",
+						})
+					}
+					if (frame.op === "ACK") {
+						socket.close()
+					}
+				}
+
+				const TestLayer = makeHazelBotLayer({
+					commands: CommandGroup.make(EchoCommand),
+					sessionStore: {
+						load: () => Effect.succeed(null),
+						save: (_botId, offset) =>
+							Ref.update(savedOffsetsRef, (offsets) => [...offsets, offset]).pipe(
+								Effect.asVoid,
+							),
+					},
+				})
+
+				yield* Effect.gen(function* () {
+					const bot = yield* HazelBotClient
+					yield* bot.onCommand(EchoCommand, (ctx) =>
+						Ref.update(handledArgsRef, (handled) => [...handled, ctx.args.text]).pipe(
+							Effect.asVoid,
+						),
+					)
+					yield* bot.start
+					yield* Effect.sleep(Duration.millis(100))
+
+					expect(yield* Ref.get(handledArgsRef)).toEqual(["hello"])
+					expect(yield* Ref.get(savedOffsetsRef)).toEqual(["1"])
+					expect(yield* Ref.get(sentFramesRef)).toContain("ACK")
+				}).pipe(
+					Effect.scoped,
+					Effect.provide(TestLayer),
+					Effect.ensuring(
+						Effect.sync(() => {
+							globalThis.WebSocket = originalWebSocket
+						}),
+					),
+				)
+			}),
+		))
+
 	it("does not advance the offset when command handling fails", () =>
 		Effect.runPromise(
 			Effect.gen(function* () {

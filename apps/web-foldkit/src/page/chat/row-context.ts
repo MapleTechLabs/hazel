@@ -58,6 +58,9 @@ const toOpenThread = (threadChannelId: ChannelId, messageId: MessageId) =>
 
 const toHtmlRenderMessage = (message: HtmlRender.Message) => Message.GotHtmlRenderMessage({ message })
 
+const toPressEmbedAction = (channelId: ChannelId, messageId: MessageId, actionId: string) =>
+	Message.ClickedEmbedAction({ channelId, messageId, actionId })
+
 const toContextMenuMessage = (message: Menu.Message) =>
 	toOverlays(Overlays.Message.GotContextMenuMessage({ message }))
 
@@ -129,6 +132,7 @@ const buildIdleContext = (
 		toReact,
 		toOpenThread,
 		toHtmlRenderMessage,
+		toPressEmbedAction,
 		contextMenu: (_row, render) => render([], h.empty),
 		avatar: (row: MessageRow) =>
 			popoverTrigger(h, {
@@ -163,6 +167,7 @@ const buildOwnerContext = (h: H, model: Model, nowMs: number): RowContext<Messag
 		toReact,
 		toOpenThread,
 		toHtmlRenderMessage,
+		toPressEmbedAction,
 		contextMenu: (row, render) =>
 			contextMenu === null || contextMenu.messageId !== row.message.id
 				? render([], h.empty)

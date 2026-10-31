@@ -1,6 +1,6 @@
 import { BotId, BotInstallationId, OrganizationId, UserId } from "@hazel/schema"
 import * as SQLite from "@maple-dev/effect-orm/sqlite"
-import { randomUuid, timestamptz, uuid } from "./columns"
+import { randomUuid, timestamptz, uuid, varchar } from "./columns"
 
 export const botInstallationsTable = SQLite.table("bot_installations", {
 	columns: {
@@ -19,3 +19,24 @@ export const botInstallationsTable = SQLite.table("bot_installations", {
 })
 export type BotInstallation = SQLite.SelectRowOf<typeof botInstallationsTable>
 export type NewBotInstallation = SQLite.InsertRowOf<typeof botInstallationsTable>
+
+/**
+ * A one-time install grant (`bot.authorizeInstall`): what the consent page hands the bot's
+ * redirect URI as `code`, redeemed once by the bot with its token (`POST /api/v1/bot-installs/token`).
+ * Only the code's hash is kept. Never synced.
+ */
+export const botInstallGrantsTable = SQLite.table("bot_install_grants", {
+	columns: {
+		id: SQLite.column(SQLite.text, { defaultExpr: randomUuid }),
+		codeHash: varchar(64),
+		botId: uuid(BotId),
+		redirectUri: SQLite.text,
+		installedBy: uuid(UserId),
+		expiresAt: timestamptz,
+		redeemedAt: SQLite.nullable(timestamptz),
+		createdAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+	},
+	primaryKey: ["id"],
+	indexes: [SQLite.uniqueIndex("bot_install_grants_code_hash_unique", ["codeHash"])],
+})
+export type BotInstallGrant = SQLite.SelectRowOf<typeof botInstallGrantsTable>

@@ -17,9 +17,15 @@ import type { IntegrationTokenService } from "../../services/integration-token-s
 import type { IntegrationBotService } from "../../services/integrations/integration-bot-service"
 import type { WebhookBotService } from "../../services/webhook-bot-service"
 import { type AnyObjectCall, type CallRequest, type CallResponse, exitCodec, payloadCodec } from "./calls"
-import { listMessages, ListMessagesCall } from "./channel/api-messages"
+import { listMessages, ListMessagesCall, messageThread, MessageThreadCall } from "./channel/api-messages"
 import { liveAccess, LiveAccessCall } from "./channel/live-access"
 import type { ObjectKind } from "./kinds"
+import {
+	organizationUsers,
+	OrganizationUsersCall,
+	redeemBotInstallGrant,
+	RedeemBotInstallGrantCall,
+} from "./org/bot-install-grants"
 import {
 	isOrgAdmin,
 	IsOrgAdminCall,
@@ -107,8 +113,14 @@ export const callReceivers: Record<ObjectKind, ReadonlyMap<string, Receiver>> = 
 		receiver(OrganizationProfileCall, () => organizationProfile()),
 		receiver(ListChannelsCall, listChannels),
 		receiver(IsOrgAdminCall, isOrgAdmin),
+		receiver(RedeemBotInstallGrantCall, redeemBotInstallGrant),
+		receiver(OrganizationUsersCall, organizationUsers),
 	]),
-	channel: byName([receiver(ListMessagesCall, listMessages), receiver(LiveAccessCall, liveAccess)]),
+	channel: byName([
+		receiver(ListMessagesCall, listMessages),
+		receiver(MessageThreadCall, messageThread),
+		receiver(LiveAccessCall, liveAccess),
+	]),
 	user: byName([]),
 }
 

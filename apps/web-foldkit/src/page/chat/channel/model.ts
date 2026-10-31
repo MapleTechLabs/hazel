@@ -162,6 +162,8 @@ export const Message = defineMessageUnion({
 	GotActionMessage: { message: ActionMessage },
 	UpdatedThreadMember: { threadChannelId: ChannelId, memberId: Schema.NullOr(ChannelMemberId) },
 	ClickedThreadPreview: { threadChannelId: ChannelId, messageId: MessageId },
+	/** A button on a bot's message (`MessageEmbed.actions`). */
+	ClickedEmbedAction: { channelId: ChannelId, messageId: MessageId, actionId: Schema.String },
 	ClickedCloseThread: {},
 	ClickedGenerateThreadName: {},
 	ClickedRenameThread: {},

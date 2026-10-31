@@ -2,7 +2,7 @@
 	"name": "simple-echo-bot-example",
 	"version": "1.0.0",
 	"private": true,
-	"description": "Simple echo bot example using @hazel/bot-sdk",
+	"description": "Simple echo bot example using @hazel-chat/bot-sdk",
 	"type": "module",
 	"scripts": {
 		"start": "bun run index.ts",

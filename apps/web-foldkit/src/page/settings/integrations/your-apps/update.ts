@@ -34,6 +34,7 @@ const modalFor = (bot: Bot, key: string): ModalRequest | null =>
 				isPublic: bot.isPublic,
 				scopes: bot.scopes,
 				allowedIntegrations: bot.allowedIntegrations,
+				installRedirectUris: bot.installRedirectUris,
 				avatarUrl: bot.avatarUrl,
 			}
 		: key === "regenerate"

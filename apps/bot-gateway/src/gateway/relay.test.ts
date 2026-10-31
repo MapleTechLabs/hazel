@@ -61,7 +61,12 @@ const fakeClock = () => {
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
 
-const BOT = { _tag: "Authenticated", botId: "00000000-0000-4000-8000-000000000111", botName: "echo" } as const
+const BOT = {
+	_tag: "Authenticated",
+	botId: "00000000-0000-4000-8000-000000000111",
+	botUserId: "00000000-0000-4000-8000-000000000222",
+	botName: "echo",
+} as const
 
 const setup = (options?: {
 	auth?: (token: string) => Promise<AuthResult>
@@ -113,7 +118,12 @@ describe("gateway relay", () => {
 
 		expect(tokens).toEqual(["hzl_bot_x"])
 		expect(handshakes).toEqual([
-			{ botId: BOT.botId, botName: "echo", request: { op: "IDENTIFY", resumeOffset: "-1" } },
+			{
+				botId: BOT.botId,
+				botUserId: BOT.botUserId,
+				botName: "echo",
+				request: { op: "IDENTIFY", resumeOffset: "-1" },
+			},
 		])
 		expect(relay.phase()).toBe("relaying")
 
@@ -261,6 +271,7 @@ describe("handshake headers", () => {
 		}
 		const resume: Handshake = {
 			botId: BOT.botId,
+			botUserId: BOT.botUserId,
 			botName: "echo",
 			request: { op: "RESUME", sessionId: "s1", resumeOffset: "0000000000000003" },
 		}

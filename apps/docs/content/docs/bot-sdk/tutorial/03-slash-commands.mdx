@@ -12,7 +12,7 @@ Use `Command.make` to define a command:
 
 ```typescript
 import { Schema } from "effect"
-import { Command } from "@hazel/bot-sdk"
+import { Command } from "@hazel-chat/bot-sdk"
 
 const AddTaskCommand = Command.make("task-add", {
 	description: "Add a new task",
@@ -30,7 +30,7 @@ The `args` field uses Effect Schema to define typed arguments. The SDK validates
 Group related commands with `CommandGroup.make`:
 
 ```typescript
-import { Command, CommandGroup } from "@hazel/bot-sdk"
+import { Command, CommandGroup } from "@hazel-chat/bot-sdk"
 import { Schema } from "effect"
 
 const AddTaskCommand = Command.make("task-add", {
@@ -67,7 +67,7 @@ Use `bot.onCommand` to handle commands. The context (`ctx`) is fully typed:
 
 ```typescript
 import { Effect, Schema } from "effect"
-import { Command, CommandGroup, runHazelBot } from "@hazel/bot-sdk"
+import { Command, CommandGroup, runHazelBot } from "@hazel-chat/bot-sdk"
 
 // In-memory task storage
 const tasks: string[] = []
@@ -155,7 +155,7 @@ Here's what our Task Bot looks like so far:
 
 ```typescript
 import { Effect, Schema } from "effect"
-import { Command, CommandGroup, runHazelBot } from "@hazel/bot-sdk"
+import { Command, CommandGroup, runHazelBot } from "@hazel-chat/bot-sdk"
 
 const tasks: string[] = []
 

@@ -1,6 +1,6 @@
-# @hazel/bot-sdk Examples
+# @hazel-chat/bot-sdk Examples
 
-This directory contains example bots demonstrating how to use the `@hazel/bot-sdk` package.
+This directory contains example bots demonstrating how to use the `@hazel-chat/bot-sdk` package.
 
 ## Available Examples
 
@@ -33,7 +33,7 @@ Before running any example, you need:
 
 1. **Bot Token**: Create a bot in your organization and get its authentication token
 2. **Organization ID**: The ID of the organization where your bot will operate
-3. **Gateway URL**: The URL of your bot gateway service (defaults to `http://localhost:3034`)
+3. **Gateway URL**: The URL of your bot gateway service (defaults to `http://localhost:3004`)
 
 ### Running an Example
 
@@ -54,7 +54,7 @@ Before running any example, you need:
     ```
     BOT_TOKEN=your_bot_token_here
     BACKEND_URL=http://localhost:3003
-    GATEWAY_URL=http://localhost:3034
+    GATEWAY_URL=http://localhost:3004
     ```
 
 4. **Install dependencies** (if not already installed from the workspace root):
@@ -183,4 +183,4 @@ Found a bug or have an idea for a new example? Please open an issue or submit a 
 
 ## License
 
-These examples are part of the @hazel/bot-sdk package and follow the same license.
+These examples are part of the @hazel-chat/bot-sdk package and follow the same license.

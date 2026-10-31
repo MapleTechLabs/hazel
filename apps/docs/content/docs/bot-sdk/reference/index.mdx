@@ -21,7 +21,7 @@ The recommended way to create a bot. Handles configuration, signal handling, and
 
 ```typescript
 import { Effect } from "effect"
-import { runHazelBot } from "@hazel/bot-sdk"
+import { runHazelBot } from "@hazel-chat/bot-sdk"
 
 runHazelBot({
 	commands, // Optional: CommandGroup
@@ -39,7 +39,7 @@ For advanced use cases where you need full control over the runtime:
 
 ```typescript
 import { Effect } from "effect"
-import { createHazelBot, HazelBotClient } from "@hazel/bot-sdk"
+import { createHazelBot, HazelBotClient } from "@hazel-chat/bot-sdk"
 
 const runtime = createHazelBot({
 	botToken: process.env.BOT_TOKEN!,

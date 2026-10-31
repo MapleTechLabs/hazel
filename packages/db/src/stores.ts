@@ -43,6 +43,7 @@ export const orgTables = [
 	schema.channelAccessTable,
 	schema.customEmojisTable,
 	schema.botInstallationsTable,
+	schema.botInstallGrantsTable,
 	schema.integrationConnectionsTable,
 	schema.integrationTokensTable,
 	schema.integrationRequestsTable,

@@ -39,6 +39,7 @@ export const bot: Bot = {
 	isPublic: true,
 	scopes: ["messages:write"],
 	allowedIntegrations: [],
+	installRedirectUris: [],
 	avatarUrl: null,
 	installCount: 12,
 }

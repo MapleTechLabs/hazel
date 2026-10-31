@@ -56,7 +56,10 @@ export const objectReceivers: Record<ObjectKind, Side<Database.Database | SqlCli
 }
 
 const directorySide = side<Directory | CurrentEffectSender>(DirectoryEffects, directoryReceivers)
-const botGatewaySide = side<Database.Database | BotGatewayTransport>(BotGatewayEffects, botGatewayReceivers)
+const botGatewaySide = side<Database.Database | BotGatewayTransport | Directory>(
+	BotGatewayEffects,
+	botGatewayReceivers,
+)
 const aiSide = side<Database.Database | SqlClient | ThreadNamer | ObjectStubs | CurrentEffectSender>(
 	AiEffects,
 	aiReceivers,

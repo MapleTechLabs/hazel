@@ -20,6 +20,8 @@ class Model extends M.Class<Model>("Bot")({
 	allowedIntegrations: S.NullOr(S.Array(IntegrationProvider)),
 	// Whether this bot can be @mentioned in messages
 	mentionable: S.Boolean,
+	// Where the bot-install consent page (`/oauth/bot-install`) may send an install grant
+	installRedirectUris: S.NullOr(S.Array(S.String)),
 	...baseFields,
 }) {}
 

@@ -38,6 +38,8 @@ export const BotWire = Schema.Struct({
 	installCount: Schema.Number,
 	mentionable: Schema.Boolean,
 	allowedIntegrations: Schema.NullOr(Schema.Array(IntegrationConnection.IntegrationProvider)),
+	/** Optional: deliveries enqueued before the column existed omit it. */
+	installRedirectUris: Schema.optionalKey(Schema.NullOr(Schema.Array(Schema.String))),
 	createdAt: Timestamp,
 	updatedAt: Timestamp,
 	deletedAt: Schema.NullOr(Timestamp),
@@ -86,6 +88,7 @@ export const fromBotWire = (bot: BotWire): schema.NewBot => ({
 	...bot,
 	scopes: bot.scopes === null ? null : [...bot.scopes],
 	allowedIntegrations: bot.allowedIntegrations === null ? null : [...bot.allowedIntegrations],
+	installRedirectUris: bot.installRedirectUris ? [...bot.installRedirectUris] : null,
 	createdAt: new Date(bot.createdAt),
 	updatedAt: new Date(bot.updatedAt),
 	deletedAt: toDate(bot.deletedAt),

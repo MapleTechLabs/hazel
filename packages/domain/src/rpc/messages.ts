@@ -22,6 +22,22 @@ export class MessageResponse extends Schema.Class<MessageResponse>("MessageRespo
 	transactionId: TransactionId,
 }) {}
 
+export class MessageInteractionResponse extends Schema.Class<MessageInteractionResponse>(
+	"MessageInteractionResponse",
+)({
+	/** The id the bot's `interaction.create` event carries. */
+	interactionId: Schema.String,
+}) {}
+
+/** The message has no enabled action with that id, or was not posted by a bot. */
+export class MessageActionUnavailableError extends Schema.TaggedError<MessageActionUnavailableError>()(
+	"MessageActionUnavailableError",
+	{
+		messageId: MessageId,
+		actionId: Schema.String,
+	},
+) {}
+
 export class HtmlRenderUrlResponse extends Schema.Class<HtmlRenderUrlResponse>("HtmlRenderUrlResponse")({
 	url: Schema.String,
 	/** Epoch milliseconds. */
@@ -194,6 +210,33 @@ export class MessageRpcs extends RpcGroup.make(
 		payload: Schema.Struct({ channelId: ChannelId, messageId: MessageId, renderId: HtmlRenderId }),
 		success: HtmlRenderUrlResponse,
 		error: Schema.Union([MessageNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["messages:read"])
+		.middleware(AuthMiddleware),
+
+	/**
+	 * MessageInteract
+	 *
+	 * Press a button on a bot's message (`MessageEmbed.actions`): the bot that posted it gets an
+	 * `interaction.create` gateway event. For a viewer of the channel.
+	 *
+	 * @throws MessageNotFoundError if the message is gone
+	 * @throws MessageActionUnavailableError if it has no enabled action with that id
+	 */
+	Rpc.make("message.interact", {
+		payload: Schema.Struct({
+			channelId: ChannelId,
+			messageId: MessageId,
+			actionId: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(100)),
+		}),
+		success: MessageInteractionResponse,
+		error: Schema.Union([
+			MessageNotFoundError,
+			MessageActionUnavailableError,
+			UnauthorizedError,
+			InternalServerError,
+			RateLimitExceededError,
+		]),
 	})
 		.annotate(RequiredScopes, ["messages:read"])
 		.middleware(AuthMiddleware),

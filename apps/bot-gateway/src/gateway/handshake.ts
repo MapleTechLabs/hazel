@@ -9,6 +9,7 @@ import type { SessionRequest } from "./log.ts"
 
 export const HANDSHAKE_HEADERS = {
 	botId: "x-hazel-bot-id",
+	botUserId: "x-hazel-bot-user-id",
 	botName: "x-hazel-bot-name",
 	op: "x-hazel-gateway-op",
 	sessionId: "x-hazel-gateway-session-id",
@@ -17,12 +18,15 @@ export const HANDSHAKE_HEADERS = {
 
 export interface Handshake {
 	readonly botId: string
+	/** The bot's user, for READY. Optional: a Worker deployed before it sends none. */
+	readonly botUserId?: string | undefined
 	readonly botName: string
 	readonly request: SessionRequest
 }
 
 export const encodeHandshake = (handshake: Handshake): Record<string, string> => ({
 	[HANDSHAKE_HEADERS.botId]: handshake.botId,
+	...(handshake.botUserId === undefined ? {} : { [HANDSHAKE_HEADERS.botUserId]: handshake.botUserId }),
 	// Header values must be ByteStrings; bot names are free text.
 	[HANDSHAKE_HEADERS.botName]: encodeURIComponent(handshake.botName),
 	[HANDSHAKE_HEADERS.op]: handshake.request.op,
@@ -48,9 +52,11 @@ export const decodeHandshake = (
 	const botName = safeDecode(headers[HANDSHAKE_HEADERS.botName] ?? "")
 	const op = headers[HANDSHAKE_HEADERS.op]
 	const resumeOffset = safeDecode(headers[HANDSHAKE_HEADERS.resumeOffset] ?? "")
+	const botUserId = headers[HANDSHAKE_HEADERS.botUserId] || undefined
 	if (!botId || botName === undefined || resumeOffset === undefined) return undefined
-	if (op === "IDENTIFY") return { botId, botName, request: { op, resumeOffset } }
+	if (op === "IDENTIFY") return { botId, botUserId, botName, request: { op, resumeOffset } }
 	const sessionId = headers[HANDSHAKE_HEADERS.sessionId]
-	if (op === "RESUME" && sessionId) return { botId, botName, request: { op, sessionId, resumeOffset } }
+	if (op === "RESUME" && sessionId)
+		return { botId, botUserId, botName, request: { op, sessionId, resumeOffset } }
 	return undefined
 }

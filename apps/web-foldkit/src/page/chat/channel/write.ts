@@ -25,6 +25,7 @@ import {
 	GenerateThreadName,
 	OpenUrl,
 	PinMessage,
+	PressEmbedAction,
 	ToggleReaction,
 	UnpinMessage,
 } from "../message-actions"
@@ -383,9 +384,33 @@ const messageNotFoundToast = (reason: MessageActionFailure): ToastRequest =>
 const withToast = (model: Model, request: ToastRequest | null): PageReturn =>
 	request === null ? { model } : { model, outMessage: toast(request) }
 
+/** A button on a bot's message: `message.interact`, reported only if it fails. */
+export const pressEmbedAction = (
+	model: Model,
+	press: { readonly channelId: ChannelId; readonly messageId: MessageId; readonly actionId: string },
+): PageReturn => ({ model, commands: actionCommands([PressEmbedAction(press)]) })
+
 export const handleActionMessage = (model: Model, message: ActionMessage): PageReturn =>
 	ActionMessage.match<PageReturn>(message, {
 		SucceededToggleReaction: () => ({ model }),
+		// The bot answers by editing its message; nothing to show until it does.
+		SucceededPressEmbedAction: () => ({ model }),
+		FailedPressEmbedAction: ({ reason }) =>
+			withToast(
+				model,
+				errorToastOf(
+					failureMessage(reason, {
+						MessageNotFound: {
+							title: "Message not found",
+							description: "The message no longer exists",
+						},
+						ActionUnavailable: {
+							title: "That button no longer works",
+							description: "The app may have already handled it.",
+						},
+					}),
+				),
+			),
 		FailedToggleReaction: ({ reason }) => withToast(model, messageNotFoundToast(reason)),
 		SucceededPinMessage: () => withToast(model, successToast("Message pinned")),
 		FailedPinMessage: ({ reason }) => withToast(model, messageNotFoundToast(reason)),

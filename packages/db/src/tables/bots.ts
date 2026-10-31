@@ -20,6 +20,8 @@ export const botsTable = SQLite.table("bots", {
 		installCount: SQLite.column(SQLite.integer, { default: 0 }),
 		mentionable: SQLite.column(SQLite.boolean, { default: false }),
 		allowedIntegrations: SQLite.column(SQLite.nullable(jsonb<IntegrationProvider[]>()), { default: [] }),
+		/** Where the bot-install consent page may send a grant (`/oauth/bot-install`); exact matches only. */
+		installRedirectUris: SQLite.nullable(jsonb<string[]>()),
 		createdAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
 		updatedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
 		deletedAt: SQLite.nullable(timestamptz),

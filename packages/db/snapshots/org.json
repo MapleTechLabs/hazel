@@ -1,9 +1,16 @@
 {
-	"migration": "0003_notification_levels",
+	"migration": "0004_bot_install_oauth",
 	"entities": [
 		{
 			"kind": "table",
 			"name": "bot_commands",
+			"primaryKey": {
+				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "bot_install_grants",
 			"primaryKey": {
 				"columns": ["id"]
 			}
@@ -252,6 +259,78 @@
 		},
 		{
 			"kind": "column",
+			"table": "bot_install_grants",
+			"name": "id",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": "(lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2) || '-' || substr('89ab', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))))"
+		},
+		{
+			"kind": "column",
+			"table": "bot_install_grants",
+			"name": "codeHash",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bot_install_grants",
+			"name": "botId",
+			"position": 2,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bot_install_grants",
+			"name": "redirectUri",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bot_install_grants",
+			"name": "installedBy",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bot_install_grants",
+			"name": "expiresAt",
+			"position": 5,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bot_install_grants",
+			"name": "redeemedAt",
+			"position": 6,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "bot_install_grants",
+			"name": "createdAt",
+			"position": 7,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
 			"table": "bot_installations",
 			"name": "id",
 			"position": 0,
@@ -415,16 +494,16 @@
 		{
 			"kind": "column",
 			"table": "bots",
-			"name": "createdAt",
+			"name": "installRedirectUris",
 			"position": 13,
 			"type": "text",
-			"notNull": true,
-			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+			"notNull": false,
+			"default": null
 		},
 		{
 			"kind": "column",
 			"table": "bots",
-			"name": "updatedAt",
+			"name": "createdAt",
 			"position": 14,
 			"type": "text",
 			"notNull": true,
@@ -433,8 +512,17 @@
 		{
 			"kind": "column",
 			"table": "bots",
-			"name": "deletedAt",
+			"name": "updatedAt",
 			"position": 15,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "deletedAt",
+			"position": 16,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -2567,6 +2655,13 @@
 			"name": "bot_commands_bot_id_name_idx",
 			"unique": true,
 			"columns": ["\"botId\"", "\"name\""]
+		},
+		{
+			"kind": "index",
+			"table": "bot_install_grants",
+			"name": "bot_install_grants_code_hash_unique",
+			"unique": true,
+			"columns": ["\"codeHash\""]
 		},
 		{
 			"kind": "index",

@@ -3,7 +3,7 @@
 /**
  * Simple Echo Bot Example
  *
- * This example demonstrates the basic usage of the @hazel/bot-sdk.
+ * This example demonstrates the basic usage of the @hazel-chat/bot-sdk.
  * It listens for new messages and responds with an echo.
  *
  * Features demonstrated:
@@ -64,7 +64,7 @@ const runtime = createHazelBot({
 	botToken,
 	// For local development, override the URLs:
 	backendUrl: process.env.BACKEND_URL ?? "http://localhost:3003",
-	gatewayUrl: process.env.GATEWAY_URL ?? "http://localhost:3034",
+	gatewayUrl: process.env.GATEWAY_URL ?? "http://localhost:3004",
 	// Pass the typesafe command group
 	commands,
 })

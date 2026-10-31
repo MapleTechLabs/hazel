@@ -42,6 +42,7 @@ const deployBot = {
 	isPublic: true,
 	scopes: ["messages:read"],
 	allowedIntegrations: [],
+	installRedirectUris: [],
 	avatarUrl: null,
 	installCount: 1200,
 	creatorName: "Ada Lovelace",

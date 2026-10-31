@@ -23,8 +23,12 @@ import {
 	BotGatewayEnvelope,
 	BotGatewayHeartbeatFrame,
 	BotGatewayHelloFrame,
+	BotGatewayReadyFrame,
 	BotGatewayResumeFrame,
-	BotGatewayServerFrame,
+	BotGatewayDispatchFrame,
+	BotGatewayHeartbeatAckFrame,
+	BotGatewayReconnectFrame,
+	BotGatewayInvalidSessionFrame,
 	isTemporaryActorServiceError,
 } from "@hazel/domain"
 import type { IntegrationConnection } from "@hazel/domain/models"
@@ -109,6 +113,25 @@ const GATEWAY_SESSION_ID_STATE_KEY = "gateway_session_id"
  * Internal configuration context for HazelBotClient
  * Contains commands to sync and backend URL for HTTP calls
  */
+
+/**
+ * `BotGatewayServerFrame` with a DISPATCH batch's events left undecoded, so each envelope is read
+ * on its own (`readableEnvelopes`) rather than the whole frame failing over one.
+ */
+const LenientServerFrame = Schema.Union([
+	BotGatewayHelloFrame,
+	BotGatewayReadyFrame,
+	Schema.Struct({ ...BotGatewayDispatchFrame.fields, events: Schema.Array(Schema.Unknown) }),
+	BotGatewayHeartbeatAckFrame,
+	BotGatewayReconnectFrame,
+	BotGatewayInvalidSessionFrame,
+])
+const decodeServerFrame = Schema.decodeUnknownSync(LenientServerFrame)
+const decodeEnvelope = Schema.decodeUnknownOption(BotGatewayEnvelope)
+const decodeEventType = Schema.decodeUnknownOption(Schema.Struct({ eventType: Schema.String }))
+const eventTypeOf = (event: unknown): string =>
+	Option.match(decodeEventType(event), { onNone: () => "unknown", onSome: (decoded) => decoded.eventType })
+
 export interface HazelBotRuntimeConfig<Commands extends CommandGroup<any> = CommandGroup<any>> {
 	readonly backendUrl: string
 	readonly gatewayUrl: string
@@ -598,6 +621,24 @@ export class HazelBotClient extends Context.Service<HazelBotClient>()("HazelBotC
 				}
 			})
 
+		/**
+		 * The batch's envelopes this SDK can read. One it cannot — an event type added to Hazel after
+		 * this version, a field it does not know how to decode — is logged and skipped, and the batch
+		 * is still acknowledged: failing the whole frame would redeliver the same batch on every
+		 * reconnect and stall the bot for good.
+		 */
+		const readableEnvelopes = (events: ReadonlyArray<unknown>) =>
+			events.flatMap((event) => {
+				const decoded = decodeEnvelope(event)
+				if (Option.isSome(decoded)) return [decoded.value]
+				Effect.runFork(
+					Effect.logWarning("Skipping a gateway event this SDK cannot read", {
+						eventType: eventTypeOf(event),
+					}),
+				)
+				return []
+			})
+
 		const processGatewayBatch = (
 			envelopes: ReadonlyArray<Schema.Schema.Type<typeof BotGatewayEnvelope>>,
 		) =>
@@ -742,11 +783,9 @@ export class HazelBotClient extends Context.Service<HazelBotClient>()("HazelBotC
 
 							socket.addEventListener("message", (event) => {
 								const payload = normalizeSocketPayload(event.data)
-								let frame: Schema.Schema.Type<typeof BotGatewayServerFrame>
+								let frame: Schema.Schema.Type<typeof LenientServerFrame>
 								try {
-									frame = Schema.decodeUnknownSync(BotGatewayServerFrame)(
-										JSON.parse(payload),
-									)
+									frame = decodeServerFrame(JSON.parse(payload))
 								} catch (error) {
 									socket.close(1011, "invalid_gateway_frame")
 									finish(
@@ -820,7 +859,7 @@ export class HazelBotClient extends Context.Service<HazelBotClient>()("HazelBotC
 									case "DISPATCH": {
 										Effect.runPromiseWith(services)(
 											Effect.gen(function* () {
-												yield* processGatewayBatch(frame.events)
+												yield* processGatewayBatch(readableEnvelopes(frame.events))
 												yield* gatewaySessionStore.save(
 													authContext.botId as BotId,
 													frame.nextOffset,
@@ -1472,17 +1511,23 @@ export class HazelBotClient extends Context.Service<HazelBotClient>()("HazelBotC
 				/**
 				 * Ensure a thread exists on a message and return it.
 				 *
+				 * Idempotent: asking again for the same message answers with the same thread.
+				 *
 				 * @param messageId - The message to create a thread on
-				 * @param channelId - Deprecated/unused. Kept for backwards compatibility.
+				 * @param channelId - The message's channel (the thread's parent). Required: the thread
+				 *   is linked to the message in that channel.
+				 * @param organizationId - The channel's organization, when the bot knows it (a message
+				 *   event's `partitionKey` names it). Optional: Hazel resolves it from the channel.
 				 * @returns The thread channel data (use `.id` as the thread's ChannelId)
 				 *
 				 * @throws MessageNotFoundError if the message doesn't exist
 				 */
-				createThread: (messageId: MessageId, channelId: ChannelId) =>
+				createThread: (messageId: MessageId, channelId: ChannelId, organizationId?: OrganizationId) =>
 					rpc["channel.createThread"]({
 						messageId,
 						// The message lives in the parent's ChannelObject; the handler needs it.
 						channelId,
+						...(organizationId === undefined ? {} : { organizationId }),
 					}).pipe(
 						Effect.timeout(Duration.seconds(15)),
 						Effect.tapCause((cause) =>

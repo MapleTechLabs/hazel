@@ -17,6 +17,7 @@ const bot = (n: number, name: string): Bot => ({
 	isPublic: false,
 	scopes: [],
 	allowedIntegrations: [],
+	installRedirectUris: [],
 	avatarUrl: null,
 	installCount: 0,
 })
@@ -54,7 +55,12 @@ describe("your apps menu actions", () => {
 		story(
 			update,
 			given(withOpenMenu),
-			message(Message.GotMenuMessage({ botId: deploy.id, message: Menu.Message.ClickedItem({ key: "regenerate", entries: BOT_MENU_ENTRIES }) })),
+			message(
+				Message.GotMenuMessage({
+					botId: deploy.id,
+					message: Menu.Message.ClickedItem({ key: "regenerate", entries: BOT_MENU_ENTRIES }),
+				}),
+			),
 			expectOutMessage(
 				PageOutMessage.RequestedModal({
 					modal: { _tag: "RegenerateBotToken", botId: deploy.id, botName: "Deploy Bot" },
@@ -68,7 +74,12 @@ describe("your apps menu actions", () => {
 		story(
 			update,
 			given(withOpenMenu),
-			message(Message.GotMenuMessage({ botId: triage.id, message: Menu.Message.ClickedItem({ key: "delete", entries: BOT_MENU_ENTRIES }) })),
+			message(
+				Message.GotMenuMessage({
+					botId: triage.id,
+					message: Menu.Message.ClickedItem({ key: "delete", entries: BOT_MENU_ENTRIES }),
+				}),
+			),
 			expectNoOutMessage(),
 			model((current) => expect(current).toEqual(withOpenMenu)),
 		)
