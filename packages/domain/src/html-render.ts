@@ -178,6 +178,9 @@ export const HTML_RENDER_AUTHOR_GUIDE = [
 const HOST_CONTEXT_CHANGED_METHOD = "ui/notifications/host-context-changed"
 const SIZE_CHANGED_METHOD = "ui/notifications/size-changed"
 const OPEN_LINK_METHOD = "ui/open-link"
+// Hazel's own: the pointer left the page. The app sees no pointer events while it is over the
+// frame, so without this a row can stay highlighted after the pointer leaves through the frame.
+const POINTER_LEFT_METHOD = "hazel/notifications/pointer-left"
 const THEME_FRAGMENT_KEY = "hazel-theme"
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -196,6 +199,10 @@ export const readHtmlRenderLinkRequest = (data: unknown): string | undefined => 
 	const url = isRecord(data.params) ? data.params.url : undefined
 	return typeof url === "string" && /^https?:\/\//i.test(url) ? url : undefined
 }
+
+/** The page says the pointer left it. */
+export const isHtmlRenderPointerLeft = (data: unknown): boolean =>
+	isRecord(data) && data.jsonrpc === "2.0" && data.method === POINTER_LEFT_METHOD
 
 export const htmlRenderThemeMessage = (theme: HtmlRenderTheme) =>
 	({
@@ -222,7 +229,7 @@ const rootRule = (theme: HtmlRenderTheme): string =>
 
 // Applies the theme from the URL fragment before paint and from the app's notifications after;
 // hands link clicks to the app; reports the content height whenever it changes.
-const BOOTSTRAP_SCRIPT = `(function(){var s=document.getElementById("hazel-theme"),n=0,P=window.parent!==window;if(!s)return;var b=${JSON.stringify(BASE_CSS)};function a(t){if(!t||typeof t!=="object"||!t.variables||typeof t.variables!=="object")return;var c=":root{color-scheme:"+(t.appearance==="light"?"light":"dark")+";";for(var k in t.variables){if(/^--[a-z0-9-]+$/.test(k))c+=k+":"+String(t.variables[k]).replace(/[;{}<>]/g,"")+";";}s.textContent=c+"}"+b;}try{var m=/[#&]${THEME_FRAGMENT_KEY}=([^&]*)/.exec(location.hash);if(m){a(JSON.parse(decodeURIComponent(m[1])));history.replaceState(history.state,"",location.pathname+location.search);}}catch(e){}window.addEventListener("message",function(e){var d=e.data,p=d&&d.params;if(e.source===window.parent&&d&&d.jsonrpc==="2.0"&&d.method===${JSON.stringify(HOST_CONTEXT_CHANGED_METHOD)}&&p&&p.styles)a({appearance:p.theme,variables:p.styles.variables});});document.addEventListener("click",function(e){var l=e.isTrusted?e.composedPath().find(function(t){return t&&t.matches&&t.matches("a[href]");}):null,u;if(!l)return;try{u=new URL(l.getAttribute("href"),document.baseURI);}catch(x){return;}if(!/^https?:$/.test(u.protocol)||u.href.split("#")[0]===location.href.split("#")[0])return;if(!P)return;e.preventDefault();window.parent.postMessage({jsonrpc:"2.0",id:"hazel-link-"+(++n),method:${JSON.stringify(OPEN_LINK_METHOD)},params:{url:u.href}},"*");},true);if(P){var h,o,z=function(){var r=document.documentElement,v=Math.ceil(r.scrollHeight>r.clientHeight?r.scrollHeight:r.getBoundingClientRect().height);if(v===h)return;h=v;window.parent.postMessage({jsonrpc:"2.0",method:${JSON.stringify(SIZE_CHANGED_METHOD)},params:{height:v}},"*");};if(window.ResizeObserver){o=new ResizeObserver(z);o.observe(document.documentElement);}document.addEventListener("DOMContentLoaded",function(){if(o&&document.body)o.observe(document.body);z();});window.addEventListener("load",z);}})();`
+const BOOTSTRAP_SCRIPT = `(function(){var s=document.getElementById("hazel-theme"),n=0,P=window.parent!==window;if(!s)return;var b=${JSON.stringify(BASE_CSS)};function a(t){if(!t||typeof t!=="object"||!t.variables||typeof t.variables!=="object")return;var c=":root{color-scheme:"+(t.appearance==="light"?"light":"dark")+";";for(var k in t.variables){if(/^--[a-z0-9-]+$/.test(k))c+=k+":"+String(t.variables[k]).replace(/[;{}<>]/g,"")+";";}s.textContent=c+"}"+b;}try{var m=/[#&]${THEME_FRAGMENT_KEY}=([^&]*)/.exec(location.hash);if(m){a(JSON.parse(decodeURIComponent(m[1])));history.replaceState(history.state,"",location.pathname+location.search);}}catch(e){}window.addEventListener("message",function(e){var d=e.data,p=d&&d.params;if(e.source===window.parent&&d&&d.jsonrpc==="2.0"&&d.method===${JSON.stringify(HOST_CONTEXT_CHANGED_METHOD)}&&p&&p.styles)a({appearance:p.theme,variables:p.styles.variables});});document.addEventListener("click",function(e){var l=e.isTrusted?e.composedPath().find(function(t){return t&&t.matches&&t.matches("a[href]");}):null,u;if(!l)return;try{u=new URL(l.getAttribute("href"),document.baseURI);}catch(x){return;}if(!/^https?:$/.test(u.protocol)||u.href.split("#")[0]===location.href.split("#")[0])return;if(!P)return;e.preventDefault();window.parent.postMessage({jsonrpc:"2.0",id:"hazel-link-"+(++n),method:${JSON.stringify(OPEN_LINK_METHOD)},params:{url:u.href}},"*");},true);if(P){var h,o,z=function(){var r=document.documentElement,v=Math.ceil(r.scrollHeight>r.clientHeight?r.scrollHeight:r.getBoundingClientRect().height);if(v===h)return;h=v;window.parent.postMessage({jsonrpc:"2.0",method:${JSON.stringify(SIZE_CHANGED_METHOD)},params:{height:v}},"*");};if(window.ResizeObserver){o=new ResizeObserver(z);o.observe(document.documentElement);}document.addEventListener("DOMContentLoaded",function(){if(o&&document.body)o.observe(document.body);z();});window.addEventListener("load",z);document.addEventListener("mouseout",function(e){if(!e.relatedTarget)window.parent.postMessage({jsonrpc:"2.0",method:${JSON.stringify(POINTER_LEFT_METHOD)}},"*");});}})();`
 
 const bootstrapMarkup = (markup: string): string => {
 	const defaultCss = `${rootRule(HTML_RENDER_DEFAULT_THEMES.dark)}@media (prefers-color-scheme: light){${rootRule(HTML_RENDER_DEFAULT_THEMES.light)}}${BASE_CSS}`

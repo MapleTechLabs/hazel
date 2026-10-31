@@ -5,6 +5,7 @@ import {
 	HTML_RENDER_DEFAULT_THEMES,
 	injectHtmlRenderBootstrap,
 	readHtmlRenderContentHeight,
+	isHtmlRenderPointerLeft,
 	readHtmlRenderLinkRequest,
 } from "./html-render"
 
@@ -69,6 +70,11 @@ describe("bridge", () => {
 		const link = { jsonrpc: "2.0", id: 1, method: "ui/open-link", params: { url: "https://hazel.sh" } }
 		expect(readHtmlRenderLinkRequest(link)).toBe("https://hazel.sh")
 		expect(readHtmlRenderLinkRequest({ ...link, params: { url: "javascript:alert(1)" } })).toBeUndefined()
+
+		expect(isHtmlRenderPointerLeft({ jsonrpc: "2.0", method: "hazel/notifications/pointer-left" })).toBe(
+			true,
+		)
+		expect(isHtmlRenderPointerLeft({ method: "hazel/notifications/pointer-left" })).toBe(false)
 	})
 
 	it("carries the theme in the URL fragment", () => {

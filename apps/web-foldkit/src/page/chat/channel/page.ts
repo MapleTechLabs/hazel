@@ -413,8 +413,16 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 				modifyFields(model, { liveStates: (states) => Live.applyMessage(states, liveMessage) }),
 			),
 		// Without the shared clock the fullscreen check treats every URL as expiring.
-		GotHtmlRenderMessage: ({ message: htmlRenderMessage }) =>
-			liftHtmlRender(model, htmlRenderMessage, shared?.nowMs ?? Number.MAX_SAFE_INTEGER),
+		GotHtmlRenderMessage: ({ message: htmlRenderMessage }) => {
+			const result = liftHtmlRender(model, htmlRenderMessage, shared?.nowMs ?? Number.MAX_SAFE_INTEGER)
+			if (htmlRenderMessage._tag !== "PointerLeftFrame") return result
+			// The list saw no pointer events while the pointer was over the frame: it left the message too.
+			const left = liftOverlays(
+				result.model,
+				Overlays.update(result.model.overlays, Overlays.Message.PointerLeftList()),
+			)
+			return { ...left, commands: [...(result.commands ?? []), ...(left.commands ?? [])] }
+		},
 		GotListMessage: ({ message: listMessage }) =>
 			loadWhenNearEdge(liftList(model, MessageList.update(model.list, listMessage))),
 		GotOverlaysMessage: ({ message: overlaysMessage }) =>

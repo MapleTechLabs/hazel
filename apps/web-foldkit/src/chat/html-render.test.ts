@@ -414,6 +414,14 @@ describe("frameMessageOf", () => {
 		expect(HtmlRender.frameMessageOf({ source: null, data: size(300) }, frames, true)).toBeUndefined()
 	})
 
+	test("the pointer leaving one of our frames clears the list's hover; anyone else's is ignored", () => {
+		const left = { jsonrpc: "2.0", method: "hazel/notifications/pointer-left" }
+		expect(HtmlRender.frameMessageOf({ source: inlineWindow, data: left }, frames, false)).toEqual(
+			HtmlRender.Message.PointerLeftFrame(),
+		)
+		expect(HtmlRender.frameMessageOf({ source: {}, data: left }, frames, false)).toBeUndefined()
+	})
+
 	test("an inline frame's size change goes to its render on its own surface", () => {
 		expect(HtmlRender.frameMessageOf({ source: inlineWindow, data: size(300) }, frames, true)).toEqual(
 			reportHeight(300, "list"),

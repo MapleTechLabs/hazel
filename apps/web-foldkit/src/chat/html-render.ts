@@ -8,6 +8,7 @@ import {
 	htmlRenderThemeFragment,
 	htmlRenderThemeMessage,
 	readHtmlRenderContentHeight,
+	isHtmlRenderPointerLeft,
 	readHtmlRenderLinkRequest,
 } from "@hazel/domain/html-render"
 import { ChannelId, HtmlRenderId, MessageId } from "@hazel/schema"
@@ -138,6 +139,9 @@ export const Message = defineMessageUnion({
 	GotFullscreenModalMessage: { message: Modal.Message },
 	CompletedPostTheme: {},
 	CompletedOpenLink: {},
+	/** The pointer left a frame: the app saw none of its moves while it was over it. */
+	PointerLeftFrame: {},
+	CompletedMarkPointerOutside: {},
 })
 export type Message = typeof Message.Type
 
@@ -460,6 +464,8 @@ export const update = (model: Model, message: Message, nowMs: number): UpdateRet
 		},
 		CompletedPostTheme: () => ({ model }),
 		CompletedOpenLink: () => ({ model }),
+		PointerLeftFrame: () => ({ model, commands: [MarkPointerOutside()] }),
+		CompletedMarkPointerOutside: () => ({ model }),
 	})
 
 // BRIDGE
@@ -502,6 +508,7 @@ export const frameMessageOf = (
 			? Message.ReportedContentHeight({ ...target.value, surface: frame.mode, height })
 			: undefined
 	}
+	if (isHtmlRenderPointerLeft(event.data)) return Message.PointerLeftFrame()
 	const url = readHtmlRenderLinkRequest(event.data)
 	return url !== undefined && frame.isFocused && hasUserActivation
 		? Message.RequestedOpenLink({ url })
@@ -635,6 +642,27 @@ export const OpenHtmlRenderLink = Command.define("OpenHtmlRenderLink", {
 					)
 		).pipe(Effect.as(Message.CompletedOpenLink()))
 	},
+})
+
+/** Set on the root while the pointer is outside the app after leaving a frame (`styles.css`). */
+export const POINTER_OUTSIDE_ATTRIBUTE = "data-html-render-pointer-outside"
+
+/**
+ * The pointer left a frame, maybe straight out of the window: the browser can keep the app's
+ * `:hover` on the frame's row until the app sees the pointer again, so row hover is off until then.
+ */
+export const MarkPointerOutside = Command.define("MarkPointerOutside", {
+	messages: [Message.CompletedMarkPointerOutside],
+	execute: Effect.sync(() => {
+		const root = document.documentElement
+		if (!root.hasAttribute(POINTER_OUTSIDE_ATTRIBUTE)) {
+			root.setAttribute(POINTER_OUTSIDE_ATTRIBUTE, "")
+			window.addEventListener("pointermove", () => root.removeAttribute(POINTER_OUTSIDE_ATTRIBUTE), {
+				once: true,
+			})
+		}
+		return Message.CompletedMarkPointerOutside()
+	}),
 })
 
 // MOUNT

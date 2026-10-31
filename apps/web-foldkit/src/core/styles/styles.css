@@ -587,3 +587,10 @@ If you want to use the typography plugin, uncomment the line below.
 .no-transitions *::after {
 	transition: none !important;
 }
+
+/* While the pointer is outside the app after leaving an HTML render frame, rows drop their hover
+   background: the browser can keep the frame row's :hover until the app sees the pointer again
+   (`MarkPointerOutside`, chat/html-render.ts). Pinned rows keep their own background. */
+[data-html-render-pointer-outside] [id^="message-"]:hover:not([class*="bg-warning"]) {
+	background-color: transparent;
+}
