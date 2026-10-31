@@ -73,6 +73,29 @@ export const T3CodeAccessCall = defineCall("org.t3codeAccess", "org", {
 	error: Schema.Union([T3CodeNotConnectedError, T3CodeExpiredError, T3CodeAccessDeniedError]),
 })
 
+/** Whether every user is a current member of this org and a person (not a bot's machine user). */
+const areHumanMembers = Effect.fn("OrgObject.t3codeAreHumanMembers")(function* (
+	userIds: ReadonlyArray<UserId>,
+) {
+	const db = yield* Database.Database
+	const organizationId = yield* requireOrganizationId
+	const ids = [...new Set(userIds)]
+	const rows = yield* db
+		.run(
+			SQLite.from(schema.organizationMembersTable)
+				.innerJoin(schema.usersTable, "u", (member, u) => u.id.eq(member.userId))
+				.select(($) => ({ userId: $.userId }))
+				.where(($) => [
+					$.organizationId.eq(organizationId),
+					$.userId.in_(...ids),
+					$.deletedAt.isNull(),
+					$.u.userType.eq("user"),
+				]),
+		)
+		.pipe(Effect.orDie)
+	return new Set(rows.map((row) => row.userId)).size === ids.length
+})
+
 const findLink = Effect.fn("OrgObject.t3codeFindLink")(function* (userId: UserId) {
 	const organizationId = yield* requireOrganizationId
 	const repo = yield* IntegrationConnectionRepo
@@ -117,7 +140,8 @@ export const t3CodeAccess = Effect.fn("OrgObject.t3codeAccess")(function* (paylo
 	if (Option.isNone(found)) return yield* new T3CodeNotConnectedError({ ownerId })
 	const link = found.value
 	// Sharing first: a member the owner does not share with learns nothing about the link's state.
-	if (!canDriveT3Code(link.sharing, ownerId, actorId)) {
+	// Only people drive an environment: never a bot, nor anyone who left (or the owner, once gone).
+	if (!canDriveT3Code(link.sharing, ownerId, actorId) || !(yield* areHumanMembers([ownerId, actorId]))) {
 		return yield* new T3CodeAccessDeniedError({ ownerId, actorId })
 	}
 	if (link.status !== "active") return yield* new T3CodeExpiredError({ ownerId })
@@ -126,7 +150,7 @@ export const t3CodeAccess = Effect.fn("OrgObject.t3codeAccess")(function* (paylo
 		Effect.catchTags({
 			TokenNotFoundError: () => Effect.fail(new T3CodeExpiredError({ ownerId })),
 			ConnectionNotFoundError: () => Effect.fail(new T3CodeNotConnectedError({ ownerId })),
-			TokenRefreshError: Effect.die,
+			TokenRefreshError: () => Effect.fail(new T3CodeExpiredError({ ownerId })),
 			IntegrationEncryptionError: Effect.die,
 			KeyVersionNotFoundError: Effect.die,
 			DatabaseError: Effect.die,

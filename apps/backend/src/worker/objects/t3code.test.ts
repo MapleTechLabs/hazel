@@ -44,15 +44,27 @@ const inAMonth = () => new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString(
 const makeWorld = Effect.gen(function* () {
 	const objects = yield* makeTestObjects
 	const orgId = uuid() as OrganizationId
-	const [alice, bob, carol] = [uuid(), uuid(), uuid()] as UserId[] as [UserId, UserId, UserId]
+	const [alice, bob, carol, robot] = [uuid(), uuid(), uuid(), uuid()] as UserId[] as [
+		UserId,
+		UserId,
+		UserId,
+		UserId,
+	]
 	const org = yield* objects.get(orgTarget(orgId))
-	org.storage.db.prepare(`INSERT INTO organizations (id, name, slug) VALUES (?, 'Acme', 'acme')`).run(orgId)
-	for (const userId of [alice, bob, carol]) {
-		org.storage.db
-			.prepare(
-				`INSERT INTO organization_members (id, organizationId, userId, role) VALUES (?, ?, ?, 'member')`,
-			)
-			.run(uuid(), orgId, userId)
+	const db = org.storage.db
+	db.prepare(`INSERT INTO organizations (id, name, slug) VALUES (?, 'Acme', 'acme')`).run(orgId)
+	for (const [userId, userType] of [
+		[alice, "user"],
+		[bob, "user"],
+		[carol, "user"],
+		[robot, "machine"],
+	] as const) {
+		db.prepare(
+			`INSERT INTO users (id, externalId, email, firstName, lastName, userType) VALUES (?, ?, ?, 'X', 'Y', ?)`,
+		).run(userId, `ext-${userId}`, `${userId}@acme.test`, userType)
+		db.prepare(
+			`INSERT INTO organization_members (id, organizationId, userId, role) VALUES (?, ?, ?, 'member')`,
+		).run(uuid(), orgId, userId)
 	}
 	const worker = <A, E>(effect: Effect.Effect<A, E, ObjectStubs | Directory>) =>
 		effect.pipe(
@@ -86,7 +98,7 @@ const makeWorld = Effect.gen(function* () {
 				sharing: { mode, userIds },
 			}),
 		)
-	return { objects, org, orgId, alice, bob, carol, worker, link, access, share }
+	return { objects, org, orgId, alice, bob, carol, robot, worker, link, access, share }
 }).pipe(Effect.orDie)
 
 describe("T3 Code links", () => {
@@ -135,6 +147,27 @@ describe("T3 Code links", () => {
 				yield* world.share("private")
 				expect(failureTag(yield* world.access(world.bob))).toBe("T3CodeAccessDeniedError")
 				expect(Exit.isSuccess(yield* world.access(world.alice))).toBe(true)
+			}),
+		))
+
+	it("never lets a bot, or someone who left, drive it", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				yield* world.link()
+				yield* world.share("organization")
+				expect(failureTag(yield* world.access(world.robot))).toBe("T3CodeAccessDeniedError")
+				expect(failureTag(yield* world.access(uuid() as UserId))).toBe("T3CodeAccessDeniedError")
+
+				world.org.storage.db
+					.prepare(`UPDATE organization_members SET deletedAt = CURRENT_TIMESTAMP WHERE userId = ?`)
+					.run(world.bob)
+				expect(failureTag(yield* world.access(world.bob))).toBe("T3CodeAccessDeniedError")
+				// The owner leaving ends it for everyone.
+				world.org.storage.db
+					.prepare(`UPDATE organization_members SET deletedAt = CURRENT_TIMESTAMP WHERE userId = ?`)
+					.run(world.alice)
+				expect(failureTag(yield* world.access(world.carol))).toBe("T3CodeAccessDeniedError")
 			}),
 		))
 

@@ -30,6 +30,7 @@ import { Cookies, HttpServerRequest, HttpServerResponse } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { HazelApi } from "../api"
 import { Directory } from "../services/directory"
+import { IntegrationEncryption } from "../services/integration-encryption"
 import { callObject } from "../worker/objects/calls"
 import { orgTarget } from "../worker/objects/kinds"
 import { ConnectIntegrationCall, DisconnectIntegrationCall } from "../worker/objects/org/integrations"
@@ -64,6 +65,33 @@ const Pending = Schema.Struct({
 	createdAt: Schema.Number,
 })
 const PendingJson = Schema.fromJsonString(Pending)
+
+/**
+ * The cookie is sealed (AES-GCM with the integration key): the callback trusts its org, endpoints
+ * and return URL, so a member must not be able to write their own.
+ */
+const sealPending = (pending: typeof Pending.Type) =>
+	Effect.gen(function* () {
+		const encryption = yield* IntegrationEncryption
+		const sealed = yield* encryption.encrypt(Schema.encodeSync(PendingJson)(pending))
+		return encodeURIComponent(`${sealed.keyVersion}.${sealed.iv}.${sealed.ciphertext}`)
+	})
+
+const openPending = (raw: string) =>
+	Effect.gen(function* () {
+		const [version, iv, ciphertext] = decodeURIComponent(raw).split(".")
+		const keyVersion = Number(version)
+		if (iv === undefined || ciphertext === undefined || !Number.isInteger(keyVersion))
+			return Option.none()
+		const encryption = yield* IntegrationEncryption
+		const json = yield* encryption.decrypt({ iv, ciphertext, keyVersion })
+		return Schema.decodeUnknownOption(PendingJson)(json)
+	}).pipe(
+		Effect.catchTags({
+			IntegrationEncryptionError: () => Effect.succeedNone,
+			KeyVersionNotFoundError: () => Effect.succeedNone,
+		}),
+	)
 
 const environmentConfig = Effect.gen(function* () {
 	const nodeEnv = yield* Config.String("NODE_ENV").pipe(Config.withDefault("production"))
@@ -162,20 +190,19 @@ const handleStartConnect = Effect.fn("t3code.startConnect")(function* (
 		resource: `${origin}/mcp`,
 	})
 
+	const sealed = yield* sealPending(pending).pipe(
+		Effect.mapError((cause) => new InternalServerError({ message: "Failed to seal the sign-in", cause })),
+	)
 	const cookie = yield* Effect.try({
 		try: () =>
-			Cookies.makeCookieUnsafe(
-				PENDING_COOKIE,
-				encodeURIComponent(Schema.encodeSync(PendingJson)(pending)),
-				{
-					domain: config.cookieDomain,
-					path: "/integrations/t3code",
-					httpOnly: true,
-					secure: !config.development,
-					sameSite: "lax",
-					maxAge: PENDING_MAX_AGE,
-				},
-			),
+			Cookies.makeCookieUnsafe(PENDING_COOKIE, sealed, {
+				domain: config.cookieDomain,
+				path: "/integrations/t3code",
+				httpOnly: true,
+				secure: !config.development,
+				sameSite: "lax",
+				maxAge: PENDING_MAX_AGE,
+			}),
 		catch: (cause) => new InternalServerError({ message: "Failed to create the sign-in cookie", cause }),
 	})
 	yield* Effect.logInfo("T3 Code sign-in started", {
@@ -198,10 +225,16 @@ type CallbackError = "denied" | "invalid_state" | "token_exchange_failed" | "db_
 
 /**
  * Whether a callback may finish the sign-in in `flow`: the member who started it, the state it
- * sent, T3 as the issuer (RFC 9207), and a code rather than a refusal.
+ * sent, T3 as the issuer (RFC 9207), its own token endpoint, and a code rather than a refusal.
  */
 export const checkCallback = (
-	flow: { readonly userId: UserId; readonly state: string; readonly issuer: string },
+	flow: {
+		readonly userId: UserId
+		readonly state: string
+		readonly issuer: string
+		readonly tokenEndpoint: string
+		readonly environmentUrl: string
+	},
 	query: {
 		readonly code?: string | undefined
 		readonly state?: string | undefined
@@ -215,7 +248,10 @@ export const checkCallback = (
 	if (
 		currentUserId !== flow.userId ||
 		query.state !== flow.state ||
-		(query.iss !== undefined && query.iss !== flow.issuer)
+		// T3 always sends `iss` (it advertises RFC 9207 support): a code from elsewhere is a mix-up.
+		query.iss !== flow.issuer ||
+		!URL.canParse(flow.tokenEndpoint) ||
+		new URL(flow.tokenEndpoint).origin !== flow.environmentUrl
 	) {
 		return { _tag: "refused", error: "invalid_state" }
 	}
@@ -232,9 +268,7 @@ const handleCallback = Effect.fn("t3code.callback")(function* (query: {
 	const config = yield* environmentConfig
 	const request = yield* HttpServerRequest.HttpServerRequest
 	const raw = request.cookies[PENDING_COOKIE]
-	const pending = Option.flatMap(Option.fromNullishOr(raw), (value) =>
-		Schema.decodeUnknownOption(PendingJson)(decodeURIComponent(value)),
-	)
+	const pending = raw === undefined ? Option.none() : yield* openPending(raw)
 	if (Option.isNone(pending) || Date.now() - pending.value.createdAt > Duration.toMillis(PENDING_MAX_AGE)) {
 		return yield* new InvalidOAuthStateError({ message: "The T3 Code sign-in expired. Start it again." })
 	}
@@ -310,7 +344,9 @@ const handleCallback = Effect.fn("t3code.callback")(function* (query: {
 		tokens: {
 			accessToken: tokens.success.accessToken,
 			refreshToken: null,
-			expiresAt: tokens.success.expiresAt,
+			// No refresh exists: the lapse is the link's (`metadata.expiresAt`), so the token
+			// service never tries to refresh it.
+			expiresAt: null,
 			scope: tokens.success.scope,
 		},
 	}).pipe(Effect.result)
@@ -453,4 +489,4 @@ export const HttpT3CodeLive = HttpApiBuilder.group(HazelApi, "t3code", (handlers
 				Effect.catchTag("ObjectCallError", unavailable),
 			),
 		),
-).pipe(Layer.provide(T3CodeOAuthClient.layer))
+).pipe(Layer.provide([T3CodeOAuthClient.layer, IntegrationEncryption.layer]))
