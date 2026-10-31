@@ -108,7 +108,8 @@ export type MessageEmbedLiveState = Schema.Schema.Type<typeof MessageEmbedLiveSt
 
 /**
  * A sandboxed HTML page shown in the embed (`@hazel/domain/html-render`). The page lives in the
- * uploads bucket; clients load it through a short-lived signed URL (`message.htmlRenderUrl`).
+ * private `html-renders` bucket; clients load it through a short-lived signed URL
+ * (`message.htmlRenderUrl`).
  */
 export const MessageEmbedHtml = Schema.Struct({
 	renderId: HtmlRenderId,

@@ -76,7 +76,7 @@ export interface TestObjects {
 	readonly namingRequests: Array<ThreadNamingContext>
 	/** The name `ThreadNamer` answers (default `"Generated name"`). */
 	readonly setThreadName: (name: string) => void
-	/** The uploads bucket's objects (HTML renders), by key. */
+	/** The HTML render pages (`HtmlRenderStore`), by key. */
 	readonly bucket: Map<string, string>
 	/** Run `tag` (decoded payload) on the directory path, as the api Worker does for D1 methods. */
 	readonly invokeDirectory: (

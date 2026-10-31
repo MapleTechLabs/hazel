@@ -1,5 +1,5 @@
 /**
- * Uploads-bucket cleanup a `ChannelObject` runs from its own outbox (`storage` target), after the
+ * HTML render bucket cleanup a `ChannelObject` runs from its own outbox (`storage` target), after the
  * write that orphaned the objects commits; the alarm retries a failed delete.
  *
  * `storage.deleteHtmlRenders`: the pages of HTML renders a message no longer shows (deleted, or

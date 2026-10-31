@@ -24,7 +24,7 @@ import type { ObjectKind } from "../kinds"
  * Where an effect is applied: an object, the directory (D1), the bot gateway, `ai` (a model
  * call made by the sending object itself, `ai-effects.ts`), `chat-sync` (a provider API call
  * made by the sending `ChannelObject`, `services/chat-sync/chat-sync-outbound.ts`), or `storage`
- * (uploads-bucket cleanup by the sender, `storage-effects.ts`).
+ * (HTML render bucket cleanup by the sender, `storage-effects.ts`).
  */
 export type EffectTargetKind = ObjectKind | "directory" | "bot-gateway" | "ai" | "chat-sync" | "storage"
 
