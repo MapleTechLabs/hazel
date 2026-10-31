@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest"
-import { ConfigProvider, Effect, Layer } from "effect"
+import { ConfigProvider, Effect, Exit, Layer } from "effect"
 import { GitHubAppJWTService } from "./jwt-service"
 
 const withEnv = (env: Record<string, string>) =>
@@ -34,5 +34,14 @@ describe("GitHubAppJWTService", () => {
 				}),
 			),
 		),
+	)
+
+	it.effect("dies on a partial GitHub App config", () =>
+		Effect.gen(function* () {
+			const exit = yield* Effect.exit(
+				Effect.provide(Effect.service(GitHubAppJWTService), withEnv({ GITHUB_APP_ID: "1" })),
+			)
+			expect(Exit.hasDies(exit)).toBe(true)
+		}),
 	)
 })

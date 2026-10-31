@@ -167,7 +167,7 @@ describe("POST /internal/dev/sign-in", () => {
 		expect(Option.isNone(await enabled.verify("not-a-session"))).toBe(true)
 	}, 60_000)
 
-	it("signs in on a stage with its own auth keys", async () => {
+	it("signs in with the stage's own auth keys instead of ones derived from the secret", async () => {
 		const keyed = await build({
 			DEV_SIGNIN_SECRET: secret,
 			HAZEL_STAGE: "pr",

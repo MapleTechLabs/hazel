@@ -159,12 +159,12 @@ const GITHUB_API_BASE_URL = "https://api.github.com"
  */
 export class GitHubAppJWTService extends Context.Service<GitHubAppJWTService>()("GitHubAppJWTService", {
 	make: Effect.gen(function* () {
-		// Optional: a stage without a GitHub App (previews, local dev) still serves everything else,
-		// and only the GitHub integration fails, with `GitHubAppJWTError`.
-		const config = yield* loadGitHubAppConfig.pipe(
-			Effect.map(Option.some),
-			Effect.catchTag("ConfigError", () => Effect.succeed(Option.none<GitHubAppConfig>())),
-		)
+		// Optional: a stage without a GitHub App (no GITHUB_APP_ID: previews, local dev) still serves
+		// everything else, and only the GitHub integration fails, with `GitHubAppJWTError`. A partial
+		// config is still a fatal startup error.
+		const config = Option.isNone(yield* Config.option(Config.String("GITHUB_APP_ID")))
+			? Option.none<GitHubAppConfig>()
+			: Option.some(yield* loadGitHubAppConfig.pipe(Effect.orDie))
 		const httpClient = yield* HttpClient.HttpClient
 
 		const requireConfig = Option.match(config, {
