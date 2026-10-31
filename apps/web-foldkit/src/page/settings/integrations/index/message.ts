@@ -7,6 +7,7 @@ export const Message = defineMessageUnion({
 	ClickedCategory: { categoryId: Schema.String },
 	ClickedIntegration: { integrationId: Schema.String },
 	UpdatedConnections: { connections: Schema.Array(Connection) },
+	UpdatedUserConnections: { connections: Schema.Array(Connection) },
 	SucceededListWebhooks: { names: Schema.Array(Schema.String) },
 	FailedListWebhooks: { reason: CommonReason },
 	ClickedRequestIntegration: {},

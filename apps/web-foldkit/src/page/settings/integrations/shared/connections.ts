@@ -1,5 +1,5 @@
 import type { IntegrationConnection } from "@hazel/domain/models"
-import type { OrganizationId } from "@hazel/schema"
+import type { OrganizationId, UserId } from "@hazel/schema"
 import { and, eq, type InitialQueryBuilder, isNull } from "@tanstack/db"
 import { Schema } from "effect"
 import { integrationConnectionCollection } from "~/db/collections"
@@ -46,6 +46,29 @@ export const connectionsQuery =
 							eq(connection.provider, provider),
 							eq(connection.level, "organization"),
 							isNull(connection.userId),
+							isNull(connection.deletedAt),
+						),
+			)
+
+/** The member's own (user-level) connections in the organization; T3 Code links are per member. */
+export const userConnectionsQuery =
+	(organizationId: OrganizationId, userId: UserId, provider?: IntegrationConnection.IntegrationProvider) =>
+	(q: InitialQueryBuilder) =>
+		q
+			.from({ connection: integrationConnectionCollection })
+			.where(({ connection }) =>
+				provider === undefined
+					? and(
+							eq(connection.organizationId, organizationId),
+							eq(connection.level, "user"),
+							eq(connection.userId, userId),
+							isNull(connection.deletedAt),
+						)
+					: and(
+							eq(connection.organizationId, organizationId),
+							eq(connection.provider, provider),
+							eq(connection.level, "user"),
+							eq(connection.userId, userId),
 							isNull(connection.deletedAt),
 						),
 			)

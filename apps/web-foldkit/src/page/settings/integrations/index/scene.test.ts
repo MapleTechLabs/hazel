@@ -31,6 +31,22 @@ describe("integrations catalog", () => {
 		)
 	})
 
+	test("the member's own T3 Code link marks T3 Code connected", () => {
+		const t3code = {
+			provider: "t3code",
+			isActive: true,
+			externalAccountName: null,
+			hasInstallationId: false,
+		}
+		Scene.scene(
+			config,
+			Scene.given(initial),
+			Scene.expect(card("T3 Code")).toContainText("Not connected"),
+			Scene.Subscription.emit(Message.UpdatedUserConnections({ connections: [t3code] })),
+			Scene.expect(card("T3 Code")).not.toContainText("Not connected"),
+		)
+	})
+
 	test("an inactive connection is not connected", () => {
 		Scene.scene(
 			config,

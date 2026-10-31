@@ -39,6 +39,7 @@ export const init = (route: RouteOf<"SettingsIntegrations">, shared: Shared): Pa
 			orgSlug: route.orgSlug,
 			selectedCategory: "all",
 			connections: [],
+			userConnections: [],
 			webhookProviders: [],
 			hasRequestedWebhooks: false,
 		},
@@ -61,6 +62,9 @@ export const update = (model: Model, message: Message): PageReturn<Model, Messag
 		}),
 		UpdatedConnections: ({ connections }) => ({
 			model: modifyFields(model, { connections: () => connections }),
+		}),
+		UpdatedUserConnections: ({ connections }) => ({
+			model: modifyFields(model, { userConnections: () => connections }),
 		}),
 		SucceededListWebhooks: ({ names }) => ({
 			model: modifyFields(model, {

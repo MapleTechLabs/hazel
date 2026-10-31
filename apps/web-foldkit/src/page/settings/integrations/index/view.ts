@@ -144,10 +144,14 @@ const integrationCard = (h: HtmlBuilder<Message>, integration: Integration, conn
 				],
 			)
 
-/** `isIntegrationConnected`: an active OAuth connection (last row per provider wins) or a webhook. */
+/**
+ * `isIntegrationConnected`: an active OAuth connection (last row per provider wins) or a webhook. The
+ * member's own connections count too (T3 Code is linked per member).
+ */
 const isConnectedWith = (model: Model) => {
 	const byProvider = new Map<string, Connection>()
-	for (const connection of model.connections) byProvider.set(connection.provider, connection)
+	for (const connection of [...model.connections, ...model.userConnections])
+		byProvider.set(connection.provider, connection)
 	return (integrationId: string) =>
 		byProvider.get(integrationId)?.isActive === true || model.webhookProviders.includes(integrationId)
 }
