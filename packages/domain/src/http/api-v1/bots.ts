@@ -136,7 +136,7 @@ export class BotsApiGroup extends HttpApiGroup.make("api-v1-bots")
 		),
 	)
 	.add(
-		HttpApiEndpoint.get("listOrganizationChannels", "/organizations/:organizationId/channels", {
+		HttpApiEndpoint.get("listOrganizationChannels", "/organizations/:organizationId/bot-channels", {
 			params: { organizationId: OrganizationId },
 			success: ApiV1ChannelsResponse,
 			error: [UnauthorizedError, BotNotInstalledError, InternalServerError],

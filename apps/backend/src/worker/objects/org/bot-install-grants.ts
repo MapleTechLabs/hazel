@@ -5,7 +5,7 @@
  * org's own store holds the grant, so a code works the moment the consent page hands it out.
  *
  * Also the public bot API's user lookup (`GET /api/v1/organizations/:id/users`), read from the
- * org's `users` projection, and its channel list (`GET /api/v1/organizations/:id/channels`), read
+ * org's `users` projection, and its channel list (`GET /api/v1/organizations/:id/bot-channels`), read
  * from the bot user's `channel_access`.
  */
 import { Database, SQLite, schema } from "@hazel/db"
@@ -185,19 +185,17 @@ export const organizationChannels = Effect.fn("OrgObject.botChannels")(
 	function* (payload: typeof OrganizationChannelsCall.payload.Type) {
 		const organizationId = yield* requireBotMember(payload)
 		const db = yield* Database.Database
-		const access = yield* db.run(
-			SQLite.from(schema.channelAccessTable)
-				.select("channelId")
-				.where(($) => [$.organizationId.eq(organizationId), $.userId.eq(payload.botUserId)]),
-		)
-		if (access.length === 0) return []
+		// One join, not an `IN` over the ids: a Durable Object binds at most 100 parameters.
 		const channels = yield* db.run(
-			SQLite.from(schema.channelsTable)
-				.select("id", "name", "type")
+			SQLite.from(schema.channelAccessTable, "ca")
+				.innerJoin(schema.channelsTable, "c", (ca, c) =>
+					SQLite.and(c.id.eq(ca.channelId), c.deletedAt.isNull()),
+				)
+				.select(($) => ({ id: $.c.id, name: $.c.name, type: $.c.type }))
 				.where(($) => [
-					$.id.in_(...access.map((row) => row.channelId)),
-					$.type.in_("public", "private"),
-					$.deletedAt.isNull(),
+					$.organizationId.eq(organizationId),
+					$.userId.eq(payload.botUserId),
+					$.c.type.in_("public", "private"),
 				]),
 		)
 		yield* Effect.annotateCurrentSpan({ "org.bot_channels": channels.length })
