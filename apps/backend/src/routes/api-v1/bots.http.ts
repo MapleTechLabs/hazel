@@ -1,7 +1,7 @@
 /**
  * The public bot API for bots that live outside Hazel (`@hazel/domain/http` `api-v1-bots`):
  * redeeming an install grant in the `OrgObject` its code names, opening a thread through
- * `channel.createThread` in the channel's org, and the org's user lookup. Each runs as the bot
+ * `channel.createThread` in the channel's org, and the org's user and channel lookups. Each runs as the bot
  * authenticated by its token (`./bot-auth.ts`).
  */
 import { HttpApiBuilder } from "effect/http-api"
@@ -16,6 +16,7 @@ import {
 	BotInstallGrantInvalidError,
 	BotInstallRedeemedResponse,
 	ChannelNotFoundError,
+	ApiV1ChannelsResponse,
 	ApiV1UsersResponse,
 	ThreadResponse,
 } from "@hazel/domain/http"
@@ -33,11 +34,12 @@ import {
 	hashInstallCode,
 	ORGANIZATION_USERS_MAX_IDS,
 	organizationOfInstallCode,
+	OrganizationChannelsCall,
 	OrganizationUsersCall,
 	RedeemBotInstallGrantCall,
 } from "../../worker/objects/org/bot-install-grants"
 import { providePrincipal } from "../../worker/objects/principal"
-import { authenticateBotFromToken, botPrincipal } from "./bot-auth"
+import { authenticateBotFromToken, botPrincipal, requireBotScope } from "./bot-auth"
 
 const internal = (message: string) => (cause: unknown) =>
 	Effect.logError(message, { cause }).pipe(
@@ -150,6 +152,24 @@ export const HttpApiV1BotsLive = HttpApiBuilder.group(HazelApi, "api-v1-bots", (
 						ObjectCallError: internal("The organization is unavailable"),
 					}),
 					Effect.withSpan("ApiV1.listOrganizationUsers"),
+				),
+			)
+			.handle("listOrganizationChannels", ({ params }) =>
+				Effect.gen(function* () {
+					const bot = yield* authenticateBotFromToken
+					yield* requireBotScope(bot, "channels:read")
+					const channels = yield* callObject(
+						OrganizationChannelsCall,
+						orgTarget(params.organizationId),
+						{ botId: bot.id, botUserId: bot.userId },
+					)
+					return new ApiV1ChannelsResponse({ data: channels })
+				}).pipe(
+					Effect.catchTags({
+						DatabaseError: internal("Database error while listing channels"),
+						ObjectCallError: internal("The organization is unavailable"),
+					}),
+					Effect.withSpan("ApiV1.listOrganizationChannels"),
 				),
 			),
 	),

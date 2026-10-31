@@ -6,7 +6,7 @@
  */
 import { Database } from "@hazel/db"
 import { CurrentUser } from "@hazel/domain"
-import type { ChannelId, NotificationId, OrganizationId, UserId } from "@hazel/schema"
+import type { BotId, ChannelId, NotificationId, OrganizationId, UserId } from "@hazel/schema"
 import { makeFakeSocket } from "@hazel/sync-do/testing"
 import { Cause, Effect, Exit, Option, type Scope } from "effect"
 import { Hex } from "effect/encoding"
@@ -15,7 +15,12 @@ import { decodeExit, encodePayload, type HazelRpcTag, rpcFor } from "../../rpc/d
 import { Directory } from "../../services/directory"
 import { callObject } from "./calls"
 import { channelTarget, orgTarget, userTarget } from "./kinds"
-import { hashInstallCode, OrganizationUsersCall, RedeemBotInstallGrantCall } from "./org/bot-install-grants"
+import {
+	hashInstallCode,
+	OrganizationChannelsCall,
+	OrganizationUsersCall,
+	RedeemBotInstallGrantCall,
+} from "./org/bot-install-grants"
 import { ObjectStubs } from "./protocol"
 import { encodeInvokePrincipal } from "./principal"
 import { makeTestObjects, type TestObject, type TestObjects } from "./testing"
@@ -127,7 +132,7 @@ const directoryRows = <A>(objects: TestObjects, statement: string) =>
 		Effect.orDie,
 	)
 
-const createChannel = (org: TestObject, s: Seed, name: string) =>
+const createChannel = (org: TestObject, s: Seed, name: string, type: "public" | "private" = "public") =>
 	Effect.map(
 		call(
 			org,
@@ -136,7 +141,7 @@ const createChannel = (org: TestObject, s: Seed, name: string) =>
 			{
 				name,
 				icon: null,
-				type: "public",
+				type,
 				organizationId: s.orgId,
 				parentChannelId: null,
 				sectionId: null,
@@ -404,6 +409,56 @@ describe("directory path", () => {
 					}),
 				)
 				expect(errorTag(refused)).toBe("BotNotInstalledError")
+			}),
+		))
+
+	it("a bot lists the channels it can post in: public ones, and private ones it is in", () =>
+		run(
+			Effect.gen(function* () {
+				const objects = yield* makeTestObjects
+				const { seed: s, org } = yield* seed(objects)
+				const created = ok<{ data: { id: string; userId: string } }>(
+					yield* call(
+						org,
+						s.orgId,
+						"bot.create",
+						{ name: "Maple", scopes: ["channels:read"], organizationId: s.orgId },
+						s.owner,
+					),
+				)
+				const botId = created.data.id as BotId
+				const botUserId = created.data.userId as UserId
+				const general = yield* createChannel(org, s, "general")
+				// The bot is added to one private channel; the update recomputes its access.
+				const incidents = yield* createChannel(org, s, "incidents", "private")
+				org.storage.db
+					.prepare(`INSERT INTO channel_members (channelId, userId) VALUES (?, ?)`)
+					.run(incidents, botUserId)
+				ok(yield* call(org, s.orgId, "channel.update", { id: incidents, name: "incidents" }, s.owner))
+				yield* createChannel(org, s, "leadership", "private")
+				const gone = yield* createChannel(org, s, "archive")
+				ok(yield* call(org, s.orgId, "channel.delete", { id: gone }, s.owner))
+
+				const list = (orgId: OrganizationId) =>
+					callObject(OrganizationChannelsCall, orgTarget(orgId), { botId, botUserId }).pipe(
+						Effect.provideService(ObjectStubs, objects.stubs),
+						Effect.provideContext(objects.directory),
+						Effect.exit,
+					)
+				expect(ok(yield* list(s.orgId))).toEqual([
+					{ id: general, name: "general", private: false },
+					{ id: incidents, name: "incidents", private: true },
+				])
+
+				// An org the bot is not installed in refuses.
+				const stranger = yield* seed(objects)
+				expect(errorTag(yield* list(stranger.seed.orgId))).toBe("BotNotInstalledError")
+
+				// So does a deleted org, whose member and access rows are left behind.
+				org.storage.db
+					.prepare(`UPDATE organizations SET deletedAt = '2026-10-31 00:00:00.000' WHERE id = ?`)
+					.run(s.orgId)
+				expect(errorTag(yield* list(s.orgId))).toBe("BotNotInstalledError")
 			}),
 		))
 

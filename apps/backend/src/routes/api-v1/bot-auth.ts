@@ -61,3 +61,14 @@ export const botPrincipal = (bot: {
 	}),
 	botScopes: bot.scopes === null ? null : bot.scopes.filter(isApiScope),
 })
+
+/** A bot with scopes recorded must hold `scope`; one without keeps a member's, as in `botPrincipal`. */
+export const requireBotScope = (bot: { readonly scopes: ReadonlyArray<string> | null }, scope: ApiScope) =>
+	bot.scopes === null || bot.scopes.includes(scope)
+		? Effect.void
+		: Effect.fail(
+				new UnauthorizedError({
+					message: `This bot lacks the ${scope} scope`,
+					detail: `Add ${scope} to the bot's scopes`,
+				}),
+			)
