@@ -1,7 +1,14 @@
 import { AttachmentRepo, MessageRepo } from "@hazel/backend-core"
 import { Database, SQLite, schema } from "@hazel/db"
 import { CurrentUser, MessageNotFoundError, withRemapDbErrors } from "@hazel/domain"
-import { HtmlRenderUrlResponse, MessageResponse, MessageRpcs } from "@hazel/domain/rpc"
+import { MessageEmbed } from "@hazel/domain/models"
+import {
+	HtmlRenderUrlResponse,
+	MessageActionUnavailableError,
+	MessageInteractionResponse,
+	MessageResponse,
+	MessageRpcs,
+} from "@hazel/domain/rpc"
 import type { ChannelId, HtmlRenderId, UserId } from "@hazel/schema"
 import { Effect, Option } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
@@ -11,7 +18,8 @@ import { ChannelViewers } from "../../services/channel-viewers"
 import { HtmlRenders, htmlRenderIdsOf } from "../../services/html-renders"
 import { checkMessageRateLimit } from "../../services/rate-limit-helpers"
 import { SqlClient } from "effect/sql/SqlClient"
-import { emitMessageEvent } from "../../worker/objects/channel/message-events"
+import { channelOrganization, emitMessageEvent } from "../../worker/objects/channel/message-events"
+import { BotGatewayEffects } from "../../worker/objects/effects/bot-gateway-effects"
 import { enqueueEffect } from "../../worker/objects/effects/registry"
 import { StorageEffects } from "../../worker/objects/effects/storage-effects"
 import { searchMessages } from "../../worker/objects/org/message-search"
@@ -204,6 +212,56 @@ export const MessageRpcLive = MessageRpcs.toLayer(
 						renderId,
 					})
 					return new HtmlRenderUrlResponse({ url, expiresAt })
+				}).pipe(withRemapDbErrors("Message", "select")),
+
+			// A button on a bot's message: only the bot that posted it hears about the press.
+			"message.interact": ({ channelId, messageId, actionId }) =>
+				Effect.gen(function* () {
+					const user = yield* CurrentUser.Context
+					yield* messagePolicy.canRead(channelId)
+					const message = yield* messageRepo.findById(messageId)
+					if (
+						Option.isNone(message) ||
+						message.value.channelId !== channelId ||
+						message.value.deletedAt !== null
+					) {
+						return yield* new MessageNotFoundError({ messageId })
+					}
+					const unavailable = new MessageActionUnavailableError({ messageId, actionId })
+					if (MessageEmbed.findEmbedAction(message.value.embeds, actionId) === undefined)
+						return yield* unavailable
+					const authorId = message.value.authorId
+					const bot = yield* db.first(
+						SQLite.from(schema.channelBotsTable)
+							.select("botId")
+							.where(($) => [$.botUserId.eq(authorId)])
+							.limit(1),
+					)
+					const organizationId = yield* channelOrganization
+					if (Option.isNone(bot) || Option.isNone(organizationId)) return yield* unavailable
+					const interactionId = crypto.randomUUID()
+					yield* db.transaction(
+						enqueueEffect(
+							BotGatewayEffects.interaction,
+							{ kind: "bot-gateway" },
+							{
+								botId: bot.value.botId,
+								interaction: {
+									interactionId,
+									actionId,
+									messageId,
+									channelId,
+									orgId: organizationId.value,
+									userId: user.id,
+									userName:
+										[user.firstName, user.lastName].filter(Boolean).join(" ") ||
+										user.email,
+									timestamp: Date.now(),
+								},
+							},
+						),
+					)
+					return new MessageInteractionResponse({ interactionId })
 				}).pipe(withRemapDbErrors("Message", "select")),
 
 			// Runs in the org's `OrgObject` (`message-search.ts`), not a channel's.

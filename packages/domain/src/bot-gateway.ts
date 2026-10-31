@@ -1,6 +1,6 @@
 import { type Effect, Schema } from "effect"
 import { Channel, ChannelMember, Message } from "./models"
-import { BotId, ChannelId, OrganizationId, UserId } from "@hazel/schema"
+import { BotId, ChannelId, MessageId, OrganizationId, UserId } from "@hazel/schema"
 
 export const BotGatewayDeliveryId = Schema.String
 
@@ -13,6 +13,35 @@ export const BotGatewayCommandInvokePayload = Schema.Struct({
 	timestamp: Schema.Number,
 })
 export type BotGatewayCommandInvokePayload = Schema.Schema.Type<typeof BotGatewayCommandInvokePayload>
+
+/**
+ * Someone pressed a button on one of the bot's messages (`MessageEmbed.actions`, RPC
+ * `message.interact`). Sent only to the bot that posted the message. `channelId` is where the
+ * message is: a thread's own channel when it is in one.
+ */
+export const BotGatewayInteractionCreatePayload = Schema.Struct({
+	interactionId: Schema.String,
+	actionId: Schema.String,
+	messageId: MessageId,
+	channelId: ChannelId,
+	orgId: OrganizationId,
+	userId: UserId,
+	/** Who pressed it, as Hazel shows them. */
+	userName: Schema.String,
+	timestamp: Schema.Number,
+})
+export type BotGatewayInteractionCreatePayload = Schema.Schema.Type<typeof BotGatewayInteractionCreatePayload>
+
+/**
+ * Who wrote a message event's message, as the directory has them: the name a bot shows for them
+ * and whether they are a bot. Absent where the author could not be read (a deleted user).
+ */
+export const BotGatewayMessageAuthor = Schema.Struct({
+	id: UserId,
+	displayName: Schema.String,
+	isBot: Schema.Boolean,
+})
+export type BotGatewayMessageAuthor = Schema.Schema.Type<typeof BotGatewayMessageAuthor>
 
 const BaseGatewayEnvelope = {
 	schemaVersion: Schema.Literal(1),
@@ -28,22 +57,31 @@ export const BotGatewayCommandInvokeEnvelope = Schema.Struct({
 	payload: BotGatewayCommandInvokePayload,
 })
 
+export const BotGatewayInteractionCreateEnvelope = Schema.Struct({
+	...BaseGatewayEnvelope,
+	eventType: Schema.Literal("interaction.create"),
+	payload: BotGatewayInteractionCreatePayload,
+})
+
 export const BotGatewayMessageCreateEnvelope = Schema.Struct({
 	...BaseGatewayEnvelope,
 	eventType: Schema.Literal("message.create"),
 	payload: Message.Schema,
+	author: Schema.optionalKey(BotGatewayMessageAuthor),
 })
 
 export const BotGatewayMessageUpdateEnvelope = Schema.Struct({
 	...BaseGatewayEnvelope,
 	eventType: Schema.Literal("message.update"),
 	payload: Message.Schema,
+	author: Schema.optionalKey(BotGatewayMessageAuthor),
 })
 
 export const BotGatewayMessageDeleteEnvelope = Schema.Struct({
 	...BaseGatewayEnvelope,
 	eventType: Schema.Literal("message.delete"),
 	payload: Message.Schema,
+	author: Schema.optionalKey(BotGatewayMessageAuthor),
 })
 
 export const BotGatewayChannelCreateEnvelope = Schema.Struct({
@@ -78,6 +116,7 @@ export const BotGatewayChannelMemberRemoveEnvelope = Schema.Struct({
 
 export const BotGatewayEnvelope = Schema.Union([
 	BotGatewayCommandInvokeEnvelope,
+	BotGatewayInteractionCreateEnvelope,
 	BotGatewayMessageCreateEnvelope,
 	BotGatewayMessageUpdateEnvelope,
 	BotGatewayMessageDeleteEnvelope,
@@ -147,6 +186,9 @@ export const BotGatewayReadyFrame = Schema.Struct({
 	sessionId: Schema.String,
 	resumed: Schema.Boolean,
 	resumeOffset: BotGatewayOffset,
+	/** The bot this session is for, and its user: what a mention of it (`@[userId:…]`) names. */
+	botId: Schema.optionalKey(Schema.String),
+	botUserId: Schema.optionalKey(Schema.String),
 })
 
 export const BotGatewayDispatchFrame = Schema.Struct({

@@ -9,6 +9,7 @@ import { AuthMiddleware } from "./middleware"
 import { RouteOrganizationId } from "./routing-fields"
 import { RequiredScopes } from "../scopes/required-scopes"
 import { ApiScope } from "../scopes/api-scope"
+import { InstallRedirectUris } from "../bot-install"
 
 /**
  * Response schema for bot operations.
@@ -75,6 +76,33 @@ export class BotAlreadyInstalledError extends Schema.TaggedError<BotAlreadyInsta
 		botId: BotId,
 	},
 ) {}
+
+/** The redirect URI is not one the bot's owner registered (`installRedirectUris`). */
+export class BotInstallRedirectMismatchError extends Schema.TaggedError<BotInstallRedirectMismatchError>()(
+	"BotInstallRedirectMismatchError",
+	{
+		botId: BotId,
+	},
+) {}
+
+/** What the bot-install consent page shows about the bot asking to be installed. */
+export class BotInstallRequestResponse extends Schema.Class<BotInstallRequestResponse>(
+	"BotInstallRequestResponse",
+)({
+	id: BotId,
+	name: Schema.String,
+	description: Schema.NullOr(Schema.String),
+	avatarUrl: Schema.NullOr(Schema.String),
+	creatorName: Schema.String,
+}) {}
+
+/** An approved install: the one-time `code` the consent page hands the bot's redirect URI. */
+export class BotInstallAuthorizedResponse extends Schema.Class<BotInstallAuthorizedResponse>(
+	"BotInstallAuthorizedResponse",
+)({
+	code: Schema.String,
+	transactionId: TransactionId,
+}) {}
 
 /**
  * Bot RPC Group
@@ -185,6 +213,7 @@ export class BotRpcs extends RpcGroup.make(
 			webhookUrl: Schema.optional(Schema.NullOr(Schema.String)),
 			scopes: Schema.optional(Schema.Array(ApiScope)),
 			isPublic: Schema.optional(Schema.Boolean),
+			installRedirectUris: Schema.optional(Schema.NullOr(InstallRedirectUris)),
 		}),
 		success: BotResponse,
 		error: Schema.Union([
@@ -365,6 +394,57 @@ export class BotRpcs extends RpcGroup.make(
 			ActiveOrganizationRequiredError,
 			BotNotFoundError,
 			BotAlreadyInstalledError,
+			UnauthorizedError,
+			InternalServerError,
+			RateLimitExceededError,
+		]),
+	})
+		.annotate(RequiredScopes, ["bots:write"])
+		.middleware(AuthMiddleware),
+
+	/**
+	 * bot.getInstallRequest
+	 *
+	 * The bot-install consent page's lookup (`/oauth/bot-install`, see `@hazel/domain/bot-install`):
+	 * the bot asking to be installed, once its redirect URI checks out.
+	 *
+	 * @throws BotNotFoundError if the bot doesn't exist
+	 * @throws BotInstallRedirectMismatchError if the redirect URI is not registered on the bot
+	 */
+	Rpc.make("bot.getInstallRequest", {
+		payload: Schema.Struct({ botId: BotId, redirectUri: Schema.String }),
+		success: BotInstallRequestResponse,
+		error: Schema.Union([
+			BotNotFoundError,
+			BotInstallRedirectMismatchError,
+			UnauthorizedError,
+			InternalServerError,
+		]),
+	})
+		.annotate(RequiredScopes, ["bots:read"])
+		.middleware(AuthMiddleware),
+
+	/**
+	 * bot.authorizeInstall
+	 *
+	 * Approve a bot-install request: installs the bot in the organization (when it is not already)
+	 * and mints the one-time code the bot redeems with its token for that organization.
+	 *
+	 * @throws BotNotFoundError if the bot doesn't exist
+	 * @throws BotInstallRedirectMismatchError if the redirect URI is not registered on the bot
+	 * @throws UnauthorizedError if user is not org admin
+	 */
+	Rpc.make("bot.authorizeInstall", {
+		payload: Schema.Struct({
+			botId: BotId,
+			organizationId: RouteOrganizationId,
+			redirectUri: Schema.String,
+		}),
+		success: BotInstallAuthorizedResponse,
+		error: Schema.Union([
+			ActiveOrganizationRequiredError,
+			BotNotFoundError,
+			BotInstallRedirectMismatchError,
 			UnauthorizedError,
 			InternalServerError,
 			RateLimitExceededError,

@@ -4,3 +4,4 @@ import type { Message } from "@hazel/domain/models"
 export type EmbedType = NonNullable<Message.Type["embeds"]>[number]
 export type EmbedBadge = NonNullable<EmbedType["badge"]>
 export type EmbedField = NonNullable<EmbedType["fields"]>[number]
+export type EmbedAction = NonNullable<EmbedType["actions"]>[number]

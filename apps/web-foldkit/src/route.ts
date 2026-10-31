@@ -18,6 +18,12 @@ export const AppRoute = defineRouteUnion({
 	Join: { slug: Schema.String },
 	/** The link in an invitation email. */
 	Invite: { token: Schema.String },
+	/** A bot's install link (`@hazel/domain/bot-install`): `?bot_id=&redirect_uri=&state=`. */
+	BotInstall: {
+		botId: Schema.Option(Schema.String),
+		redirectUri: Schema.Option(Schema.String),
+		state: Schema.Option(Schema.String),
+	},
 	/** `?orgId=&step=` (`validateSearch` in `onboarding/index.tsx`). */
 	Onboarding: { orgId: Schema.Option(OrganizationId), step: Schema.Option(Schema.String) },
 	OnboardingSetupOrganization: { orgId: Schema.Option(OrganizationId) },
@@ -83,6 +89,12 @@ const RegisterQuery = Schema.Struct({
 })
 const ContinueQuery = Schema.Struct({ provider: Schema.OptionFromOptional(Schema.String) })
 const DesktopQuery = Schema.Struct({ attempt: Schema.OptionFromOptional(Schema.String) })
+/** Decoded by the page: a malformed link is a page state, not a 404. */
+const BotInstallQuery = Schema.Struct({
+	botId: Schema.OptionFromOptional(Schema.String),
+	redirectUri: Schema.OptionFromOptional(Schema.String),
+	state: Schema.OptionFromOptional(Schema.String),
+}).pipe(Schema.encodeKeys({ botId: "bot_id", redirectUri: "redirect_uri" }))
 const OrgIdQuery = Schema.Struct({ orgId: Schema.OptionFromOptional(OrganizationId) })
 const OnboardingQuery = Schema.Struct({
 	orgId: Schema.OptionFromOptional(OrganizationId),
@@ -136,6 +148,12 @@ const routers = {
 	),
 	Join: pipe(literal("join"), slash(string("slug")), Route.mapTo(AppRoute.Join)),
 	Invite: pipe(literal("invite"), slash(string("token")), Route.mapTo(AppRoute.Invite)),
+	BotInstall: pipe(
+		literal("oauth"),
+		slash(literal("bot-install")),
+		query(BotInstallQuery),
+		Route.mapTo(AppRoute.BotInstall),
+	),
 	Onboarding: pipe(literal("onboarding"), query(OnboardingQuery), Route.mapTo(AppRoute.Onboarding)),
 	OnboardingSetupOrganization: pipe(
 		literal("onboarding"),
@@ -237,6 +255,7 @@ export const urlToAppRoute = Route.parseUrlWithFallback(
 		routers.AuthDesktop,
 		routers.Join,
 		routers.Invite,
+		routers.BotInstall,
 		routers.Onboarding,
 		routers.OnboardingSetupOrganization,
 		routers.SelectOrganization,
@@ -308,6 +327,7 @@ export const isPublicRoute = AppRoute.isAnyOf([
 	"AuthDesktop",
 	"Join",
 	"Invite",
+	"BotInstall",
 	"NotFound",
 ])
 
@@ -398,6 +418,7 @@ export const titleOf = (route: AppRoute): string => {
 			SignUp: () => "Sign up",
 			Join: () => "Join",
 			Invite: () => "Invitation",
+			BotInstall: () => "Install an app",
 			Onboarding: () => "Welcome",
 			OnboardingSetupOrganization: () => "Welcome",
 			SelectOrganization: () => "Select a workspace",

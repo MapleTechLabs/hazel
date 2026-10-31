@@ -2,6 +2,7 @@ import { BotInstallationRepo, ChannelRepo } from "@hazel/backend-core"
 import {
 	type BotGatewayCommandInvokePayload,
 	type BotGatewayEnvelope,
+	type BotGatewayMessageAuthor,
 	createBotGatewayPartitionKey,
 } from "@hazel/domain"
 import type { Channel, ChannelMember, Message } from "@hazel/domain/models"
@@ -22,6 +23,7 @@ export const messageEventEnvelope = (
 	organizationId: OrganizationId,
 	eventType: "message.create" | "message.update" | "message.delete",
 	message: Schema.Schema.Type<typeof Message.Schema>,
+	author?: BotGatewayMessageAuthor,
 ): BotGatewayEnvelope => {
 	const eventTimestamp = message.updatedAt
 		? toEpochMs(message.updatedAt)
@@ -36,6 +38,7 @@ export const messageEventEnvelope = (
 		idempotencyKey: `${eventType}:${message.id}:${eventTimestamp}`,
 		eventType,
 		payload: message,
+		...(author === undefined ? {} : { author }),
 	}
 }
 

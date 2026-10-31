@@ -100,6 +100,11 @@ export class BotRepo extends Context.Service<BotRepo>()("BotRepo", {
 							...(data.mentionable !== undefined && {
 								mentionable: data.mentionable,
 							}),
+							...(data.installRedirectUris !== undefined && {
+								installRedirectUris: data.installRedirectUris
+									? [...data.installRedirectUris]
+									: null,
+							}),
 							updatedAt: new Date(),
 						})
 						.where(($) => [$.id.eq(data.id), $.deletedAt.isNull()])

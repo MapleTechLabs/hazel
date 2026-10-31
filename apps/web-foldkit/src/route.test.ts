@@ -220,6 +220,24 @@ describe("hrefOf", () => {
 		],
 		Join: [[AppRoute.Join({ slug: "hazel" }), "/join/hazel"]],
 		Invite: [[AppRoute.Invite({ token: "abc_DEF-123" }), "/invite/abc_DEF-123"]],
+		BotInstall: [
+			[
+				AppRoute.BotInstall({
+					botId: Option.some(orgId),
+					redirectUri: Option.some("https://maple.dev/cb?x=1"),
+					state: Option.some("s t"),
+				}),
+				`/oauth/bot-install?bot_id=${orgId}&redirect_uri=https%3A%2F%2Fmaple.dev%2Fcb%3Fx%3D1&state=s+t`,
+			],
+			[
+				AppRoute.BotInstall({
+					botId: Option.none(),
+					redirectUri: Option.none(),
+					state: Option.none(),
+				}),
+				"/oauth/bot-install",
+			],
+		],
 		AuthDesktop: [[AppRoute.AuthDesktop({ attempt: Option.some("a1") }), "/auth/desktop?attempt=a1"]],
 		Onboarding: [
 			[AppRoute.Onboarding({ orgId: Option.none(), step: none }), "/onboarding"],

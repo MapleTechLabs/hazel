@@ -159,6 +159,7 @@ export const routes: RouteTable = {
 	"message.update": channelHint("message.update"),
 	"message.delete": channelHint("message.delete"),
 	"message.htmlRenderUrl": byChannel,
+	"message.interact": byChannel,
 	"messageReaction.toggle": byChannel,
 	"messageReaction.create": byChannel,
 	"messageReaction.update": channelHint("messageReaction.update"),
@@ -278,6 +279,8 @@ export const routes: RouteTable = {
 	"bot.install": activeOrg,
 	"bot.uninstall": activeOrg,
 	"bot.installById": activeOrg,
+	"bot.getInstallRequest": directory,
+	"bot.authorizeInstall": activeOrg,
 	"bot.updateAvatar": directory, // projects the bot user to its orgs
 	// Invitation rows are the directory's; the admin check needs the org's members.
 	"invitation.create": byOrg,
@@ -308,12 +311,14 @@ export const rateLimits: Partial<
 	"message.create": (current) => checkMessageRateLimit(current.id),
 	"message.update": (current) => checkMessageRateLimit(current.id),
 	"message.delete": (current) => checkMessageRateLimit(current.id),
+	"message.interact": (current) => checkMessageRateLimit(current.id),
 	"bot.create": (current) => checkBotOperationRateLimit(current.id),
 	"bot.update": (current) => checkBotUpdateRateLimit(current.id),
 	"bot.regenerateToken": (current) => checkBotOperationRateLimit(current.id),
 	"bot.install": (current) => checkBotOperationRateLimit(current.id),
 	"bot.uninstall": (current) => checkBotOperationRateLimit(current.id),
 	"bot.installById": (current) => checkBotOperationRateLimit(current.id),
+	"bot.authorizeInstall": (current) => checkBotOperationRateLimit(current.id),
 }
 
 /** Where `tag` runs for `payload` (decoded) and `user`. */

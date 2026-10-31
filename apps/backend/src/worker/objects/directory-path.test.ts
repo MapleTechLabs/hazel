@@ -13,7 +13,10 @@ import { Hex } from "effect/encoding"
 import { describe, expect, it } from "vitest"
 import { decodeExit, encodePayload, type HazelRpcTag, rpcFor } from "../../rpc/dispatch"
 import { Directory } from "../../services/directory"
+import { callObject } from "./calls"
 import { channelTarget, orgTarget, userTarget } from "./kinds"
+import { hashInstallCode, OrganizationUsersCall, RedeemBotInstallGrantCall } from "./org/bot-install-grants"
+import { ObjectStubs } from "./protocol"
 import { encodeInvokePrincipal } from "./principal"
 import { makeTestObjects, type TestObject, type TestObjects } from "./testing"
 
@@ -285,6 +288,123 @@ describe("directory path", () => {
 				// Without an org there is nothing to install into.
 				const none = yield* objects.invokeDirectory("bot.install", { botId }, principalOf(s.owner))
 				expect(errorTag(none)).toBe("ActiveOrganizationRequiredError")
+			}),
+		))
+
+	it("bot install grants: a registered redirect, an admin's approval, one redemption by that bot", () =>
+		run(
+			Effect.gen(function* () {
+				const objects = yield* makeTestObjects
+				const home = yield* seed(objects)
+				const away = yield* seed(objects)
+				const worker = <A, E>(effect: Effect.Effect<A, E, ObjectStubs | Directory>) =>
+					effect.pipe(
+						Effect.provideService(ObjectStubs, objects.stubs),
+						Effect.provideContext(objects.directory),
+						Effect.exit,
+					)
+				const redirectUri = "https://maple.example/oauth/chat/hazel/callback"
+				const created = ok<{ data: { id: string; userId: string } }>(
+					yield* call(
+						home.org,
+						home.seed.orgId,
+						"bot.create",
+						{ name: "Maple", scopes: ["messages:read"], organizationId: home.seed.orgId },
+						home.seed.owner,
+					),
+				)
+				const botId = created.data.id
+				const request = (uri: string) =>
+					objects.invokeDirectory(
+						"bot.getInstallRequest",
+						{ botId, redirectUri: uri },
+						principalOf(away.seed.owner),
+					)
+				expect(errorTag(yield* request(redirectUri))).toBe("BotInstallRedirectMismatchError")
+
+				ok(
+					yield* objects.invokeDirectory(
+						"bot.update",
+						{ id: botId, installRedirectUris: [redirectUri] },
+						principalOf(home.seed.owner),
+					),
+				)
+				expect(ok<{ name: string }>(yield* request(redirectUri)).name).toBe("Maple")
+				expect(errorTag(yield* request(`${redirectUri}?x=1`))).toBe("BotInstallRedirectMismatchError")
+
+				const authorize = (user: UserId, uri = redirectUri) =>
+					call(
+						away.org,
+						away.seed.orgId,
+						"bot.authorizeInstall",
+						{ botId, organizationId: away.seed.orgId, redirectUri: uri },
+						user,
+					)
+				expect(errorTag(yield* authorize(away.seed.member))).toBe("UnauthorizedError")
+				expect(errorTag(yield* authorize(away.seed.owner, "https://evil.example/cb"))).toBe(
+					"BotInstallRedirectMismatchError",
+				)
+				const { code } = ok<{ code: string }>(yield* authorize(away.seed.owner))
+				expect(code.startsWith(`${away.seed.orgId}.`)).toBe(true)
+				expect(away.org.storage.db.prepare(`SELECT botId FROM bot_installations`).all()).toEqual([
+					{ botId },
+				])
+				// Approving again while installed mints another grant rather than failing.
+				const second = ok<{ code: string }>(yield* authorize(away.seed.owner)).code
+				expect(second).not.toBe(code)
+
+				const redeem = (input: { code: string; botId?: string; redirectUri?: string }) =>
+					Effect.flatMap(hashInstallCode(input.code), (codeHash) =>
+						worker(
+							callObject(RedeemBotInstallGrantCall, orgTarget(away.seed.orgId), {
+								botId: (input.botId ?? botId) as never,
+								codeHash,
+								redirectUri: input.redirectUri ?? redirectUri,
+							}),
+						),
+					)
+				expect(errorTag(yield* redeem({ code, botId: uuid() }))).toBe("BotInstallGrantInvalidError")
+				expect(errorTag(yield* redeem({ code, redirectUri: `${redirectUri}/x` }))).toBe(
+					"BotInstallGrantInvalidError",
+				)
+				expect(ok(yield* redeem({ code }))).toEqual({
+					organizationId: away.seed.orgId,
+					organizationName: "Acme",
+					installedBy: away.seed.owner,
+				})
+				expect(errorTag(yield* redeem({ code }))).toBe("BotInstallGrantInvalidError")
+
+				// An expired grant is refused.
+				away.org.storage.db
+					.prepare(`UPDATE bot_install_grants SET expiresAt = '2000-01-01 00:00:00.000'`)
+					.run()
+				expect(errorTag(yield* redeem({ code: second }))).toBe("BotInstallGrantInvalidError")
+
+				// The bot reads the org's people by id; another org it is not in refuses.
+				const users = ok<ReadonlyArray<{ id: string; isBot: boolean; displayName: string }>>(
+					yield* worker(
+						callObject(OrganizationUsersCall, orgTarget(away.seed.orgId), {
+							botId: botId as never,
+							botUserId: created.data.userId as UserId,
+							ids: [away.seed.owner, created.data.userId as UserId, uuid() as UserId],
+						}),
+					),
+				)
+				expect(users.map((user) => [user.id, user.isBot]).sort()).toEqual(
+					[
+						[away.seed.owner, false],
+						[created.data.userId, true],
+					].sort(),
+				)
+				const stranger = yield* seed(objects)
+				const refused = yield* worker(
+					callObject(OrganizationUsersCall, orgTarget(stranger.seed.orgId), {
+						botId: botId as never,
+						botUserId: created.data.userId as UserId,
+						ids: [stranger.seed.owner],
+					}),
+				)
+				expect(errorTag(refused)).toBe("BotNotInstalledError")
 			}),
 		))
 

@@ -443,6 +443,8 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 				: { model },
 		ClickedThreadPreview: ({ threadChannelId, messageId }) =>
 			Write.openThread(model, threadChannelId, messageId, "Created"),
+		ClickedEmbedAction: ({ channelId, messageId, actionId }) =>
+			Write.pressEmbedAction(model, { channelId, messageId, actionId }),
 		ClickedCloseThread: () => Write.closeThread(model),
 		ClickedGenerateThreadName: () => Write.generateThreadName(model),
 		ClickedRenameThread: () =>

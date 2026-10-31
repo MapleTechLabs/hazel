@@ -12,7 +12,10 @@ export const JoinChannel = Schema.TaggedStruct("JoinChannel", {})
 export const EmailInvite = Schema.TaggedStruct("EmailInvite", {})
 export const CreateOrganization = Schema.TaggedStruct("CreateOrganization", {})
 export const CreateSection = Schema.TaggedStruct("CreateSection", {})
-export const DeleteChannel = Schema.TaggedStruct("DeleteChannel", { channelId: ChannelId, channelName: Schema.String })
+export const DeleteChannel = Schema.TaggedStruct("DeleteChannel", {
+	channelId: ChannelId,
+	channelName: Schema.String,
+})
 export const Feedback = Schema.TaggedStruct("Feedback", {})
 export const SetStatus = Schema.TaggedStruct("SetStatus", {})
 export const RenameChannel = Schema.TaggedStruct("RenameChannel", { channelId: ChannelId })
@@ -37,11 +40,15 @@ export const EditBot = Schema.TaggedStruct("EditBot", {
 	isPublic: Schema.Boolean,
 	scopes: Schema.Array(Schema.String),
 	allowedIntegrations: Schema.Array(Schema.String),
+	installRedirectUris: Schema.Array(Schema.String),
 	/** Resolved like `BotAvatar` (`resolveBotAvatarUrl`): the machine user's avatar or null. */
 	avatarUrl: Schema.NullOr(Schema.String),
 })
 export const InstallBotById = Schema.TaggedStruct("InstallBotById", {})
-export const RegenerateBotToken = Schema.TaggedStruct("RegenerateBotToken", { botId: BotId, botName: Schema.String })
+export const RegenerateBotToken = Schema.TaggedStruct("RegenerateBotToken", {
+	botId: BotId,
+	botName: Schema.String,
+})
 export const DeleteBot = Schema.TaggedStruct("DeleteBot", { botId: BotId, botName: Schema.String })
 export const DeleteMessage = Schema.TaggedStruct("DeleteMessage", { messageId: MessageId })
 

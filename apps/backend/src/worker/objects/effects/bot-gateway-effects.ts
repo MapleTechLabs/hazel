@@ -4,11 +4,13 @@
  * bot's `BotGateway` object (`bindBotGateways`). Replaces the global message outbox for these.
  */
 import { Database, SQLite, schema } from "@hazel/db"
+import { BotGatewayInteractionCreatePayload, createBotGatewayPartitionKey } from "@hazel/domain"
 import { Message } from "@hazel/domain/models"
-import { OrganizationId } from "@hazel/schema"
-import { Effect, Schema } from "effect"
+import { BotId, OrganizationId } from "@hazel/schema"
+import { Effect, Option, Schema } from "effect"
 import { messageEventEnvelope } from "../../../services/bot-gateway-service"
 import { BotGatewayTransport } from "../../../services/bot-gateway-transport"
+import { Directory } from "../../../services/directory"
 import {
 	ChannelEventPayload,
 	ChannelMemberEventPayload,
@@ -23,7 +25,14 @@ export const MessageEventPayload = Schema.Struct({
 	message: Message.Schema,
 })
 
+/** A button press on `botId`'s message (`message.interact`), for that bot alone. */
+export const InteractionEventPayload = Schema.Struct({
+	botId: BotId,
+	interaction: BotGatewayInteractionCreatePayload,
+})
+
 export const BotGatewayEffects = {
+	interaction: defineEffect("botGateway.interaction", "bot-gateway", InteractionEventPayload),
 	messageEvent: defineEffect("botGateway.messageEvent", "bot-gateway", MessageEventPayload),
 	/** From an `OrgObject`: to the org's installed bots (`../org/bot-events.ts`). */
 	channelEvent: defineEffect("botGateway.channelEvent", "bot-gateway", ChannelEventPayload),
@@ -34,23 +43,62 @@ export const BotGatewayEffects = {
 	),
 }
 
+/** The message's author from the directory, read once for every bot the event goes to. */
+const authorOf = (userId: typeof Message.Schema.Type.authorId) =>
+	Effect.gen(function* () {
+		const directory = yield* Directory
+		const user = yield* directory.db.first(
+			SQLite.from(schema.usersTable)
+				.select("id", "firstName", "lastName", "email", "userType")
+				.where(($) => [$.id.eq(userId)])
+				.limit(1),
+		)
+		return Option.map(user, (row) => ({
+			id: row.id,
+			displayName: [row.firstName, row.lastName].filter(Boolean).join(" ") || row.email,
+			isBot: row.userType === "machine",
+		}))
+	})
+
 export const botGatewayReceivers = {
 	"botGateway.messageEvent": (payload) =>
 		Effect.gen(function* () {
 			const db = yield* Database.Database
 			const transport = yield* BotGatewayTransport
 			const bots = yield* db.run(SQLite.from(schema.channelBotsTable).select("botId"))
+			if (bots.length === 0) return
+			const author = Option.getOrUndefined(yield* authorOf(payload.message.authorId))
 			yield* Effect.forEach(
 				bots,
 				(bot) =>
 					transport.append(
 						bot.botId,
-						messageEventEnvelope(payload.organizationId, payload.eventType, payload.message),
+						messageEventEnvelope(
+							payload.organizationId,
+							payload.eventType,
+							payload.message,
+							author,
+						),
 					),
 				{ concurrency: 8, discard: true },
 			)
 			yield* Effect.annotateCurrentSpan({ "bot_gateway.bots": bots.length })
 		}),
+	"botGateway.interaction": ({ botId, interaction }) =>
+		Effect.flatMap(BotGatewayTransport, (transport) =>
+			transport.append(botId, {
+				schemaVersion: 1,
+				deliveryId: crypto.randomUUID(),
+				partitionKey: createBotGatewayPartitionKey({
+					organizationId: interaction.orgId,
+					channelId: interaction.channelId,
+				}),
+				occurredAt: interaction.timestamp,
+				idempotencyKey: `interaction.create:${interaction.interactionId}`,
+				eventType: "interaction.create",
+				payload: interaction,
+			}),
+		),
 	"botGateway.channelEvent": publishChannelEvent,
 	"botGateway.channelMemberEvent": publishChannelMemberEvent,
-} satisfies EffectReceivers<typeof BotGatewayEffects, Database.Database | BotGatewayTransport>
+} satisfies EffectReceivers<typeof BotGatewayEffects, Database.Database | BotGatewayTransport | Directory>

@@ -5,16 +5,41 @@
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient"
 import { Effect, Layer } from "effect"
 import * as SqlClient from "effect/sql/SqlClient"
-import { applyMigrations } from "./schema-ddl"
+import { applyMigrations, type StoreMigration, storeMigrations } from "./schema-ddl"
 import { type Database, layerSqlite } from "./services/database"
 import { storeNames } from "./stores"
+
+const ADD_COLUMN = /^ALTER TABLE "([^"]+)" ADD COLUMN "([^"]+)"/
+
+/**
+ * `migration` without the `ADD COLUMN`s already applied. One database holds every store here, and a
+ * table two stores share (a projection) gets each store's copy of the same column.
+ */
+const withoutAppliedColumns = (sql: SqlClient.SqlClient, migration: StoreMigration) =>
+	Effect.gen(function* () {
+		const statements: Array<string> = []
+		for (const statement of migration.statements) {
+			const match = ADD_COLUMN.exec(statement)
+			if (match !== null) {
+				const columns = yield* sql<{
+					readonly name: string
+				}>`SELECT "name" FROM pragma_table_info(${match[1]!})`
+				if (columns.some((column) => column.name === match[2])) continue
+			}
+			statements.push(statement)
+		}
+		return { ...migration, statements }
+	})
 
 /** Applies every store's migrations to one database. */
 const migrateAll = Layer.effectDiscard(
 	Effect.gen(function* () {
 		const sql = yield* SqlClient.SqlClient
 		for (const store of storeNames) {
-			const { failed } = yield* applyMigrations(sql, store)
+			const migrations = yield* Effect.forEach(storeMigrations[store], (migration) =>
+				withoutAppliedColumns(sql, migration),
+			)
+			const { failed } = yield* applyMigrations(sql, store, migrations)
 			// Local databases have no reason to tolerate one.
 			if (failed.length > 0) return yield* Effect.die(failed[0]!.error)
 		}

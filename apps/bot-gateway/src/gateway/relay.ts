@@ -29,7 +29,12 @@ export interface RelaySocket {
 }
 
 export type AuthResult =
-	| { readonly _tag: "Authenticated"; readonly botId: string; readonly botName: string }
+	| {
+			readonly _tag: "Authenticated"
+			readonly botId: string
+			readonly botUserId: string
+			readonly botName: string
+	  }
 	| { readonly _tag: "Rejected"; readonly reason: string }
 	| { readonly _tag: "Unavailable"; readonly reason: string }
 
@@ -174,7 +179,7 @@ export const startRelay = (options: RelayOptions): RelayHandle => {
 		}
 
 		const result = await options
-			.connect({ botId: auth.botId, botName: auth.botName, request })
+			.connect({ botId: auth.botId, botUserId: auth.botUserId, botName: auth.botName, request })
 			.catch((cause): UpstreamResult => ({ _tag: "Unavailable", reason: String(cause) }))
 		if (isClosed()) {
 			if (result._tag === "Connected") closeSocket(result.socket, 1000, "client_closed")

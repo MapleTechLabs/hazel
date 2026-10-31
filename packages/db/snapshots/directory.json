@@ -1,5 +1,5 @@
 {
-	"migration": "0001_initial",
+	"migration": "0002_bot_install_oauth",
 	"entities": [
 		{
 			"kind": "table",
@@ -1168,16 +1168,16 @@
 		{
 			"kind": "column",
 			"table": "bots",
-			"name": "createdAt",
+			"name": "installRedirectUris",
 			"position": 13,
 			"type": "text",
-			"notNull": true,
-			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+			"notNull": false,
+			"default": null
 		},
 		{
 			"kind": "column",
 			"table": "bots",
-			"name": "updatedAt",
+			"name": "createdAt",
 			"position": 14,
 			"type": "text",
 			"notNull": true,
@@ -1186,8 +1186,17 @@
 		{
 			"kind": "column",
 			"table": "bots",
-			"name": "deletedAt",
+			"name": "updatedAt",
 			"position": 15,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "bots",
+			"name": "deletedAt",
+			"position": 16,
 			"type": "text",
 			"notNull": false,
 			"default": null

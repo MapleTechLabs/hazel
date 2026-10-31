@@ -1,3 +1,4 @@
+import { BOT_INSTALL_MAX_REDIRECT_URIS, isValidInstallRedirectUri } from "@hazel/domain/bot-install"
 import { ApiScope } from "@hazel/domain/scopes"
 import { BotId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
@@ -7,6 +8,7 @@ import { modifyFields } from "foldkit/struct"
 import { BOT_SCOPES } from "~/lib/bot-scopes"
 import { HazelRpc } from "../../rpc"
 import { button } from "../../ui/button"
+import { textField } from "../../ui/text-field"
 import { dialogBody, dialogDescription, dialogFooter, dialogHeader } from "../../ui/dialog"
 import { closed, completed, ModalOutMessage } from "../out-message"
 import { ToastRequest } from "../toasts"
@@ -39,8 +41,29 @@ const Model = Schema.Struct({
 	botName: Schema.String,
 	avatarUrl: Schema.NullOr(Schema.String),
 	...BotFormFields,
+	/** The install link's redirect URIs, one per line as typed. */
+	redirectUris: Schema.String,
+	redirectUrisError: Schema.NullOr(Schema.String),
 })
 type Model = typeof Model.Type
+
+/** The typed lines, trimmed and without blanks or repeats. */
+const redirectUrisOf = (value: string): ReadonlyArray<string> => [
+	...new Set(
+		value
+			.split("\n")
+			.map((line) => line.trim())
+			.filter((line) => line.length > 0),
+	),
+]
+
+const validateRedirectUris = (value: string): string | null => {
+	const uris = redirectUrisOf(value)
+	if (uris.length > BOT_INSTALL_MAX_REDIRECT_URIS)
+		return `At most ${BOT_INSTALL_MAX_REDIRECT_URIS} redirect URIs`
+	const invalid = uris.find((uri) => !isValidInstallRedirectUri(uri))
+	return invalid === undefined ? null : `${invalid} is not an https URL`
+}
 
 const Message = defineMessageUnion({
 	GotFrameMessage: { message: FrameMessage },
@@ -48,6 +71,7 @@ const Message = defineMessageUnion({
 	ChangedDescription: { value: Schema.String },
 	ToggledScope: { scope: ApiScope },
 	ToggledPublic: { isSelected: Schema.Boolean },
+	ChangedRedirectUris: { value: Schema.String },
 	ClickedCancel: {},
 	SubmittedForm: {},
 	SucceededUpdateBot: { name: Schema.String },
@@ -75,6 +99,7 @@ const UpdateBot = Command.define("UpdateBot", {
 		description: Schema.NullOr(Schema.String),
 		scopes: Schema.Array(ApiScope),
 		isPublic: Schema.Boolean,
+		installRedirectUris: Schema.NullOr(Schema.Array(Schema.String)),
 	},
 	messages: [Message.SucceededUpdateBot, Message.FailedUpdateBot],
 	execute: (payload) =>
@@ -84,7 +109,9 @@ const UpdateBot = Command.define("UpdateBot", {
 			return Message.SucceededUpdateBot({ name: payload.name })
 		}).pipe(
 			Effect.catchCause((cause) =>
-				Effect.succeed(Message.FailedUpdateBot({ toast: failureToast(cause, "friendly", errorOverrides) })),
+				Effect.succeed(
+					Message.FailedUpdateBot({ toast: failureToast(cause, "friendly", errorOverrides) }),
+				),
 			),
 		),
 })
@@ -92,8 +119,10 @@ const UpdateBot = Command.define("UpdateBot", {
 type Return = ModalReturn<Model, Message>
 
 const submitted = (model: Model): Return => {
-	const { model: next, isReady } = submittedBotForm(model)
-	if (!isReady) return { model: next }
+	const { model: form, isReady } = submittedBotForm(model)
+	const next = modifyFields(form, { redirectUrisError: () => validateRedirectUris(form.redirectUris) })
+	if (!isReady || next.redirectUrisError !== null) return { model: next }
+	const redirectUris = redirectUrisOf(next.redirectUris)
 	return {
 		model: modifyFields(next, { isSubmitting: () => true }),
 		commands: [
@@ -103,6 +132,7 @@ const submitted = (model: Model): Return => {
 				description: next.description || null,
 				scopes: next.scopes,
 				isPublic: next.isPublic,
+				installRedirectUris: redirectUris.length === 0 ? null : redirectUris,
 			}),
 		],
 	}
@@ -110,11 +140,18 @@ const submitted = (model: Model): Return => {
 
 const update = (model: Model, message: Message): Return =>
 	Message.match<Return>(message, {
-		GotFrameMessage: ({ message }) => (isCloseRequest(message) ? { model, outMessage: closed } : { model }),
+		GotFrameMessage: ({ message }) =>
+			isCloseRequest(message) ? { model, outMessage: closed } : { model },
 		ChangedName: ({ value }) => ({ model: changedName(model, value) }),
 		ChangedDescription: ({ value }) => ({ model: changedDescription(model, value) }),
 		ToggledScope: ({ scope }) => ({ model: toggledScope(model, scope) }),
 		ToggledPublic: ({ isSelected }) => ({ model: toggledPublic(model, isSelected) }),
+		ChangedRedirectUris: ({ value }) => ({
+			model: modifyFields(model, {
+				redirectUris: () => value,
+				redirectUrisError: () => validateRedirectUris(value),
+			}),
+		}),
 		ClickedCancel: () => ({ model, outMessage: closed }),
 		SubmittedForm: () => submitted(model),
 		SucceededUpdateBot: ({ name }) => ({
@@ -157,6 +194,31 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 								onToggleScope: (scope) => Message.ToggledScope({ scope }),
 								onPublic: (isSelected) => Message.ToggledPublic({ isSelected }),
 							}),
+							textField(
+								h,
+								{
+									id: `${ID}-redirect-uris`,
+									value: model.redirectUris,
+									onInput: (value) => Message.ChangedRedirectUris({ value }),
+								},
+								(field) => [
+									field.label(["Install redirect URIs"]),
+									field.description([
+										"Where a service may send an admin back after they install this app from its install link (/oauth/bot-install). One https URL per line.",
+									]),
+									field.textarea({
+										placeholder: "https://example.com/hazel/callback",
+										attributes: [
+											h.Rows(2),
+											h.Attribute(
+												"aria-invalid",
+												model.redirectUrisError === null ? "false" : "true",
+											),
+										],
+									}),
+									field.fieldError([model.redirectUrisError ?? ""]),
+								],
+							),
 						],
 						"flex flex-col gap-6",
 					),
@@ -164,7 +226,11 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 						button(h, { intent: "outline", onPress: Message.ClickedCancel() }, ["Cancel"]),
 						button(
 							h,
-							{ intent: "primary", isDisabled: isBotSubmitDisabled(model), attributes: [h.Type("submit")] },
+							{
+								intent: "primary",
+								isDisabled: isBotSubmitDisabled(model) || model.redirectUrisError !== null,
+								attributes: [h.Type("submit")],
+							},
 							[model.isSubmitting ? "Saving..." : "Save Changes"],
 						),
 					]),
@@ -199,6 +265,8 @@ export const modal = defineModal(
 					scopes: knownScopes(request.scopes),
 					isPublic: request.isPublic,
 				}),
+				redirectUris: request.installRedirectUris.join("\n"),
+				redirectUrisError: null,
 			},
 		}),
 		update,

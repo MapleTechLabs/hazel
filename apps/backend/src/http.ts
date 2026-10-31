@@ -1,7 +1,7 @@
 import { Layer } from "effect"
 import { HttpApiBuilder } from "effect/http-api"
 import { HazelApi } from "./api"
-import { HttpApiV1IntegrationsLive, HttpMessagesApiLive } from "./routes/api-v1"
+import { HttpApiV1BotsLive, HttpApiV1IntegrationsLive, HttpMessagesApiLive } from "./routes/api-v1"
 import { HttpKlipyLive } from "./routes/klipy.http"
 import { HttpBotCommandsLive } from "./routes/bot-commands.http"
 import { HttpIncomingWebhookLive } from "./routes/incoming-webhooks.http"
@@ -18,6 +18,7 @@ export const HttpApiRoutes = HttpApiBuilder.layer(HazelApi).pipe(
 	Layer.provide(HttpRootLive),
 	Layer.provide(HttpMessagesApiLive),
 	Layer.provide(HttpApiV1IntegrationsLive),
+	Layer.provide(HttpApiV1BotsLive),
 	Layer.provide(HttpBotCommandsLive),
 	Layer.provide(HttpIntegrationLive),
 	Layer.provide(HttpT3CodeLive),
