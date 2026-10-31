@@ -164,3 +164,82 @@ describe("message.delete and message.list", () => {
 		expect(hits).toEqual([`delete ${CHANNEL_ID}`, "list 5"])
 	})
 })
+
+describe("message.update with html", () => {
+	beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
+	afterEach(() => server.resetHandlers())
+	afterAll(() => server.close())
+
+	const OLD_RENDER = "00000000-0000-4000-8000-000000000777"
+	const message = {
+		id: MESSAGE_ID,
+		channelId: CHANNEL_ID,
+		conversationId: null,
+		authorId: USER_ID,
+		content: "Deploys",
+		embeds: [{ title: "Summary" }, { html: { renderId: OLD_RENDER, title: "Old", height: 200 } }],
+		replyToMessageId: null,
+		threadChannelId: null,
+		createdAt: new Date(),
+		updatedAt: null,
+		deletedAt: null,
+	} as never
+
+	/** Records each PATCH payload; answers with the message as sent. */
+	const recordUpdates = () => {
+		const payloads: Array<Record<string, unknown>> = []
+		server.use(
+			http.post(`${BACKEND_URL}/api/v1/html-renders`, () => HttpResponse.json({ data: reference })),
+			http.patch(`${BACKEND_URL}/api/v1/messages/:id`, async ({ request }) => {
+				const payload = (await request.json()) as Record<string, unknown>
+				payloads.push(payload)
+				return HttpResponse.json({
+					data: {
+						id: MESSAGE_ID,
+						channelId: CHANNEL_ID,
+						conversationId: null,
+						authorId: USER_ID,
+						content: payload.content,
+						embeds: payload.embeds ?? null,
+						replyToMessageId: null,
+						threadChannelId: null,
+						createdAt: new Date().toISOString(),
+						updatedAt: null,
+						deletedAt: null,
+					},
+					transactionId: "1",
+				})
+			}),
+		)
+		return payloads
+	}
+
+	const update = (content: string, options?: object) =>
+		Effect.runPromise(
+			HazelBotClient.use((bot) => bot.message.update(message, content, options)).pipe(
+				Effect.provide(layer),
+			),
+		)
+
+	it("replaces the page and keeps the other embeds", async () => {
+		const payloads = recordUpdates()
+		await update("Deploys v2", { html: { title: "Chart", html: "<p>new</p>" } })
+		expect(payloads[0]!.embeds).toEqual([{ title: "Summary" }, { html: reference }])
+	})
+
+	it("leaves the embeds alone when neither embeds nor html is given", async () => {
+		const payloads = recordUpdates()
+		await update("Deploys v2")
+		expect(payloads[0]).not.toHaveProperty("embeds")
+		expect(payloads[0]!.content).toBe("Deploys v2")
+	})
+
+	it("uses the given embeds, then the new page, when both are given", async () => {
+		const payloads = recordUpdates()
+		await update("Deploys v2", {
+			embeds: [{ title: "Only" }],
+			html: { title: "Chart", html: "<p>new</p>" },
+		})
+		expect(payloads[0]!.embeds).toEqual([{ title: "Only" }, { html: reference }])
+	})
+})
