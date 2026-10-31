@@ -6,7 +6,7 @@ import {
 	MessageNotFoundError,
 	UnauthorizedError,
 } from "../../errors"
-import { AttachmentId, ChannelId, MessageId } from "@hazel/schema"
+import { AttachmentId, ChannelId, HtmlRenderId, MessageId } from "@hazel/schema"
 import {
 	HTML_RENDER_AUTHOR_GUIDE,
 	HTML_RENDER_MAX_BYTES,
@@ -65,6 +65,12 @@ export class UpdateMessageRequest extends Schema.Class<UpdateMessageRequest>("Up
 export class DeleteMessageQuery extends Schema.Class<DeleteMessageQuery>("DeleteMessageQuery")({
 	channel_id: Schema.optional(ChannelId),
 }) {}
+
+/** A plain struct, not a class: clients pass the query as an object. */
+export const DeleteHtmlRenderQuery = Schema.Struct({
+	/** The channel it was published for. */
+	channel_id: ChannelId,
+})
 
 export class ToggleReactionRequest extends Schema.Class<ToggleReactionRequest>("ToggleReactionRequest")({
 	emoji: Schema.String,
@@ -289,6 +295,22 @@ export class MessagesApiGroup extends HttpApiGroup.make("api-v1-messages")
 					title: "Publish HTML Render",
 					description: `Store an HTML page to show in a message: put the returned reference in an embed's \`html\` when creating or updating a message in the same channel. The page runs sandboxed. ${HTML_RENDER_AUTHOR_GUIDE}`,
 					summary: "Publish HTML render",
+				}),
+			)
+			.annotate(RequiredScopes, ["messages:write"]),
+	)
+	.add(
+		HttpApiEndpoint.delete("deleteHtmlRender", `/html-renders/:renderId`, {
+			params: { renderId: HtmlRenderId },
+			query: DeleteHtmlRenderQuery,
+			error: [UnauthorizedError, RateLimitExceededError, InternalServerError],
+		})
+			.annotateMerge(
+				OpenApi.annotations({
+					title: "Delete HTML Render",
+					description:
+						"Delete a page the bot published, for one no message ended up showing. A message that still names it shows its error state. Deleting or editing a message deletes its pages already.",
+					summary: "Delete HTML render",
 				}),
 			)
 			.annotate(RequiredScopes, ["messages:write"]),

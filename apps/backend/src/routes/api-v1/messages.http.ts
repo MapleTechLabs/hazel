@@ -245,6 +245,26 @@ export const HttpMessagesApiLive = HttpApiBuilder.group(HazelApi, "api-v1-messag
 					}),
 				),
 			)
+			// Only the bot's own pages: the key carries its user id (`htmlRenderKey`).
+			.handle("deleteHtmlRender", ({ params, query }) =>
+				Effect.gen(function* () {
+					const bot = yield* authenticateBotFromToken
+					yield* checkMessageRateLimit(bot.userId)
+					yield* (yield* HtmlRenders).remove({
+						channelId: query.channel_id,
+						authorId: bot.userId,
+						renderId: params.renderId,
+					})
+				}).pipe(
+					Effect.catchTags({
+						DatabaseError: internal("Database error while deleting an HTML render"),
+						HtmlRenderStoreError: internal("Could not delete the HTML render"),
+					}),
+					Effect.withSpan("ApiV1.deleteHtmlRender", {
+						attributes: { "html_render.id": params.renderId },
+					}),
+				),
+			)
 			.handle("toggleReaction", ({ params, payload }) =>
 				Effect.gen(function* () {
 					const bot = yield* authenticateBotFromToken
