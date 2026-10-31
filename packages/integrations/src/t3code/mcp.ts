@@ -319,7 +319,15 @@ export const makeT3CodeMcpSession = Effect.fn("T3CodeMcp.session")(function* (ta
 					(cause) => new T3CodeProtocolError({ message: `${tool}: unexpected result`, cause }),
 				),
 			)
-		}).pipe(Effect.withSpan(`T3CodeMcp.${tool}`))
+		}).pipe(
+			Effect.withSpan("T3CodeMcp.callTool", {
+				attributes: {
+					"mcp.tool.name": tool,
+					"peer.service": "t3code-environment",
+					"url.full": target.mcpUrl,
+				},
+			}),
+		)
 
 	return {
 		listProjects: () =>
