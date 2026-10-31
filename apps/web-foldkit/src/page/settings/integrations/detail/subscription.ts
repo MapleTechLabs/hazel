@@ -5,6 +5,7 @@ import { Subscription } from "foldkit"
 import { organizationMemberCollection, userCollection } from "~/db/collections"
 import { liveQueryStream } from "../../../../data/live-query"
 import type { PageSubscriptionInput } from "../../../contract"
+import { installationsQuery } from "../shared/bots"
 import {
 	type ConnectionRow,
 	connectionsQuery,
@@ -14,6 +15,7 @@ import {
 import { isProvider } from "./command"
 import { Message } from "./message"
 import type { Model } from "./model"
+import { MAPLE_BOT_IDS } from "./view-maple"
 
 interface T3CodeMemberRow {
 	readonly userId: UserId
@@ -42,6 +44,26 @@ export const subscriptions = Subscription.make<PageSubscriptionInput<Model>, Mes
 							(rows) =>
 								Message.UpdatedConnection({
 									connection: rows[0] ? toConnection(rows[0]) : null,
+								}),
+						),
+		},
+	),
+	// Whether one of Maple's bots is installed here: the Maple page's agent panel.
+	mapleBot: entry(
+		{ organizationId: Schema.NullOr(OrganizationId), provider: Schema.String },
+		{
+			modelToDependencies: ({ model, shared }) => ({
+				organizationId: shared.organization?.id ?? null,
+				provider: model.integrationId,
+			}),
+			dependenciesToStream: ({ organizationId, provider }) =>
+				organizationId === null || provider !== "maple"
+					? Stream.empty
+					: liveQueryStream<{ readonly botId: string }, Message>(
+							installationsQuery(organizationId),
+							(rows) =>
+								Message.UpdatedMapleBotInstalled({
+									isInstalled: rows.some((row) => MAPLE_BOT_IDS.includes(row.botId)),
 								}),
 						),
 		},

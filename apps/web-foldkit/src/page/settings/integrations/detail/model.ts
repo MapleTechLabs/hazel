@@ -90,6 +90,8 @@ export const Model = Schema.Struct({
 	sharingSave: SharingSave,
 	/** The latest sharing PUT; an older one's result is ignored. */
 	sharingRequestId: Schema.Number,
+	/** Maple's own bot is installed in this workspace (`view-maple.ts`). */
+	mapleBotInstalled: Schema.Boolean,
 	/** Disconnect asks first; the target is the environment label. */
 	disconnectConfirm: ConfirmAction.Model(Schema.String),
 })

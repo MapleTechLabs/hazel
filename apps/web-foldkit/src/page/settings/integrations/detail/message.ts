@@ -31,6 +31,7 @@ export type T3CodeLinkFailure = typeof T3CodeLinkFailure.Type
 
 export const Message = defineMessageUnion({
 	UpdatedConnection: { connection: Schema.NullOr(Connection) },
+	UpdatedMapleBotInstalled: { isInstalled: Schema.Boolean },
 	ClickedBack: {},
 	ClickedConnect: {},
 	SucceededGetOAuthUrl: { authorizationUrl: Schema.String },

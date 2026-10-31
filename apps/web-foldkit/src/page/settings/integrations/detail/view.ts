@@ -19,6 +19,7 @@ import {
 	panel,
 	verifyingState,
 } from "./view-connection"
+import { mapleColumn } from "./view-maple"
 import { isT3CodeConnected, t3CodeColumn } from "./view-t3code"
 
 /** Port of `routes/_app/$orgSlug/settings/integrations/$integrationId.tsx`. */
@@ -74,6 +75,7 @@ const mainColumn = (h: H, integration: Integration, model: Model, shared: Shared
 	const hasOrganization = shared.organization !== null
 	const isConnected = model.connection?.isActive === true
 	if (integration.connectionType === "environment") return t3CodeColumn(h, integration, model, shared.nowMs)
+	if (integration.id === "maple") return mapleColumn(h, model.mapleBotInstalled)
 	if (WEBHOOK_INTEGRATIONS.includes(integration.id))
 		return hasOrganization ? [unported(h, `IntegrationContent:${integration.id}`)] : []
 	if (integration.connectionType === "api-key")
@@ -166,7 +168,8 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 	// Unknown ids are a `notFound()` in the legacy `beforeLoad`.
 	const integration = getIntegrationById(model.integrationId)
 	if (integration === undefined) return h.empty
-	const isWebhook = WEBHOOK_INTEGRATIONS.includes(integration.id)
+	// Maple's badge is its agent: installed here or not.
+	const isWebhook = WEBHOOK_INTEGRATIONS.includes(integration.id) && integration.id !== "maple"
 	return h.div(
 		[h.Class("flex flex-col gap-6 px-4 lg:px-8")],
 		[
@@ -177,7 +180,9 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 				isWebhook,
 				integration.connectionType === "environment"
 					? isT3CodeConnected(model, shared.nowMs)
-					: model.connection?.isActive === true,
+					: integration.id === "maple"
+						? model.mapleBotInstalled
+						: model.connection?.isActive === true,
 			),
 			h.div(
 				[h.Class("grid gap-8 lg:grid-cols-[1fr_320px]")],
