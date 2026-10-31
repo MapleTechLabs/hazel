@@ -1,18 +1,20 @@
-import { BOT_INSTALL_MAX_REDIRECT_URIS, isValidInstallRedirectUri } from "@hazel/domain/bot-install"
 import { ApiScope } from "@hazel/domain/scopes"
 import { BotId } from "@hazel/schema"
-import { Effect, Schema } from "effect"
-import { Command, Submodel } from "foldkit"
+import { Array, Effect, Option, Schema } from "effect"
+import { Command, Submodel, Update } from "foldkit"
+import * as Dom from "foldkit/dom"
+import { File } from "foldkit/file"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
 import { BOT_SCOPES } from "~/lib/bot-scopes"
 import { HazelRpc } from "../../rpc"
+import { UploadTarget, uploadFile, uploadProblemMessage } from "../../page/settings/upload"
+import * as DropZone from "../../page/shared/drop-zone"
 import { button } from "../../ui/button"
-import { textField } from "../../ui/text-field"
 import { dialogBody, dialogDescription, dialogFooter, dialogHeader } from "../../ui/dialog"
 import { closed, completed, ModalOutMessage } from "../out-message"
 import { ToastRequest } from "../toasts"
-import { botAvatarUpload } from "./bot-avatar-upload"
+import { BOT_AVATAR_INPUT_ID, botAvatarUpload } from "./bot-avatar-upload"
 import {
 	BotFormFields,
 	botFormFields,
@@ -27,11 +29,12 @@ import {
 import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalViewInputs } from "./contract"
 import { Frame, Message as FrameMessage, frameView, initFrame, isCloseRequest, modalTitle } from "./frame"
-import { failureToast, successToast } from "../../data/actions"
+import { errorToastOf, failureToast, successToast } from "../../data/actions"
 
 /**
  * `components/modals/edit-bot-modal.tsx`. The request is the settings pages' `Bot` shape (minus
- * `installCount`). The legacy `onSuccess`/`reactivityKeys` props (refresh the apps list) are not ported.
+ * `installCount`). The legacy `onSuccess`/`reactivityKeys` props (refresh the apps list) are not ported:
+ * the list is a live query. The avatar saves on its own, as soon as it is picked (`bot.updateAvatar`).
  */
 
 const Model = Schema.Struct({
@@ -40,42 +43,28 @@ const Model = Schema.Struct({
 	/** The saved name and avatar, as the avatar shows them (not the edited name). */
 	botName: Schema.String,
 	avatarUrl: Schema.NullOr(Schema.String),
+	isUploadingAvatar: Schema.Boolean,
+	dropZone: DropZone.Model,
 	...BotFormFields,
-	/** The install link's redirect URIs, one per line as typed. */
-	redirectUris: Schema.String,
-	redirectUrisError: Schema.NullOr(Schema.String),
 })
 type Model = typeof Model.Type
 
-/** The typed lines, trimmed and without blanks or repeats. */
-const redirectUrisOf = (value: string): ReadonlyArray<string> => [
-	...new Set(
-		value
-			.split("\n")
-			.map((line) => line.trim())
-			.filter((line) => line.length > 0),
-	),
-]
-
-const validateRedirectUris = (value: string): string | null => {
-	const uris = redirectUrisOf(value)
-	if (uris.length > BOT_INSTALL_MAX_REDIRECT_URIS)
-		return `At most ${BOT_INSTALL_MAX_REDIRECT_URIS} redirect URIs`
-	const invalid = uris.find((uri) => !isValidInstallRedirectUri(uri))
-	return invalid === undefined ? null : `${invalid} is not an https URL`
-}
-
-const Message = defineMessageUnion({
+export const Message = defineMessageUnion({
 	GotFrameMessage: { message: FrameMessage },
 	ChangedName: { value: Schema.String },
 	ChangedDescription: { value: Schema.String },
 	ToggledScope: { scope: ApiScope },
 	ToggledPublic: { isSelected: Schema.Boolean },
-	ChangedRedirectUris: { value: Schema.String },
 	ClickedCancel: {},
 	SubmittedForm: {},
 	SucceededUpdateBot: { name: Schema.String },
 	FailedUpdateBot: { toast: ToastRequest },
+	ClickedAvatar: {},
+	CompletedOpenAvatarPicker: {},
+	SelectedAvatarFiles: { files: Schema.Array(File) },
+	GotDropZoneMessage: { message: DropZone.Message },
+	SucceededUploadAvatar: { avatarUrl: Schema.String },
+	FailedUploadAvatar: { toast: ToastRequest },
 })
 type Message = typeof Message.Type
 
@@ -99,7 +88,6 @@ const UpdateBot = Command.define("UpdateBot", {
 		description: Schema.NullOr(Schema.String),
 		scopes: Schema.Array(ApiScope),
 		isPublic: Schema.Boolean,
-		installRedirectUris: Schema.NullOr(Schema.Array(Schema.String)),
 	},
 	messages: [Message.SucceededUpdateBot, Message.FailedUpdateBot],
 	execute: (payload) =>
@@ -116,13 +104,75 @@ const UpdateBot = Command.define("UpdateBot", {
 		),
 })
 
+export const OpenAvatarPicker = Command.define("OpenAvatarPicker", {
+	messages: [Message.CompletedOpenAvatarPicker],
+	// The hidden input's change event reports the file (`SelectedAvatarFiles`). Best effort: a missing input opens nothing.
+	execute: Dom.clickElement(`#${BOT_AVATAR_INPUT_ID}`).pipe(
+		Effect.ignore,
+		Effect.as(Message.CompletedOpenAvatarPicker()),
+	),
+})
+
+/** `BotAvatarUpload`'s upload: store the image, then point the bot's machine user at it. */
+export const UploadBotAvatar = Command.define("UploadBotAvatar", {
+	args: { botId: BotId, file: File },
+	messages: [Message.SucceededUploadAvatar, Message.FailedUploadAvatar],
+	execute: ({ botId, file }) =>
+		Effect.sync(() => {
+			// Reset the input so the same file can be picked again.
+			const input = document.getElementById(BOT_AVATAR_INPUT_ID)
+			if (input instanceof HTMLInputElement) input.value = ""
+		}).pipe(
+			Effect.andThen(uploadFile(UploadTarget.BotAvatar({ botId }), file)),
+			Effect.tap((avatarUrl) =>
+				Effect.gen(function* () {
+					const client = yield* HazelRpc
+					yield* client("bot.updateAvatar", { id: botId, avatarUrl })
+				}),
+			),
+			Effect.map((avatarUrl) => Message.SucceededUploadAvatar({ avatarUrl })),
+			Effect.catchTag("UploadFailedError", ({ problem }) =>
+				Effect.succeed(
+					Message.FailedUploadAvatar({
+						toast: errorToastOf(uploadProblemMessage("avatar", problem)),
+					}),
+				),
+			),
+			Effect.catchCause((cause) =>
+				Effect.succeed(
+					Message.FailedUploadAvatar({ toast: failureToast(cause, "friendly", errorOverrides) }),
+				),
+			),
+		),
+})
+
 type Return = ModalReturn<Model, Message>
 
+const foldDropZone = Update.foldChild({
+	update: DropZone.update,
+	read: (model: Model) => Option.some(model.dropZone),
+	write: (model: Model, dropZone: DropZone.Model): Model =>
+		modifyFields(model, { dropZone: () => dropZone }),
+	toParentMessage: (message: DropZone.Message) => Message.GotDropZoneMessage({ message }),
+})
+
+/** One upload at a time; the first file of a pick or drop. */
+const selectedAvatar = (model: Model, files: ReadonlyArray<File>): Return => {
+	const next = modifyFields(model, { dropZone: () => DropZone.reset() })
+	return model.isUploadingAvatar
+		? { model: next }
+		: Option.match(Array.head(files), {
+				onNone: () => ({ model: next }),
+				onSome: (file) => ({
+					model: modifyFields(next, { isUploadingAvatar: () => true }),
+					commands: [UploadBotAvatar({ botId: model.botId, file })],
+				}),
+			})
+}
+
 const submitted = (model: Model): Return => {
-	const { model: form, isReady } = submittedBotForm(model)
-	const next = modifyFields(form, { redirectUrisError: () => validateRedirectUris(form.redirectUris) })
-	if (!isReady || next.redirectUrisError !== null) return { model: next }
-	const redirectUris = redirectUrisOf(next.redirectUris)
+	const { model: next, isReady } = submittedBotForm(model)
+	if (!isReady) return { model: next }
 	return {
 		model: modifyFields(next, { isSubmitting: () => true }),
 		commands: [
@@ -132,13 +182,12 @@ const submitted = (model: Model): Return => {
 				description: next.description || null,
 				scopes: next.scopes,
 				isPublic: next.isPublic,
-				installRedirectUris: redirectUris.length === 0 ? null : redirectUris,
 			}),
 		],
 	}
 }
 
-const update = (model: Model, message: Message): Return =>
+export const update = (model: Model, message: Message): Return =>
 	Message.match<Return>(message, {
 		GotFrameMessage: ({ message }) =>
 			isCloseRequest(message) ? { model, outMessage: closed } : { model },
@@ -146,12 +195,6 @@ const update = (model: Model, message: Message): Return =>
 		ChangedDescription: ({ value }) => ({ model: changedDescription(model, value) }),
 		ToggledScope: ({ scope }) => ({ model: toggledScope(model, scope) }),
 		ToggledPublic: ({ isSelected }) => ({ model: toggledPublic(model, isSelected) }),
-		ChangedRedirectUris: ({ value }) => ({
-			model: modifyFields(model, {
-				redirectUris: () => value,
-				redirectUrisError: () => validateRedirectUris(value),
-			}),
-		}),
 		ClickedCancel: () => ({ model, outMessage: closed }),
 		SubmittedForm: () => submitted(model),
 		SucceededUpdateBot: ({ name }) => ({
@@ -160,6 +203,19 @@ const update = (model: Model, message: Message): Return =>
 		}),
 		FailedUpdateBot: ({ toast }) => ({
 			model: modifyFields(model, { isSubmitting: () => false }),
+			outMessage: ModalOutMessage.RequestedToast({ toast }),
+		}),
+		ClickedAvatar: () =>
+			model.isUploadingAvatar ? { model } : { model, commands: [OpenAvatarPicker()] },
+		CompletedOpenAvatarPicker: () => ({ model }),
+		SelectedAvatarFiles: ({ files }) => selectedAvatar(model, files),
+		GotDropZoneMessage: ({ message }) => foldDropZone(model, message),
+		SucceededUploadAvatar: ({ avatarUrl }) => ({
+			model: modifyFields(model, { isUploadingAvatar: () => false, avatarUrl: () => avatarUrl }),
+			outMessage: ModalOutMessage.RequestedToast({ toast: successToast("Avatar updated") }),
+		}),
+		FailedUploadAvatar: ({ toast }) => ({
+			model: modifyFields(model, { isUploadingAvatar: () => false }),
 			outMessage: ModalOutMessage.RequestedToast({ toast }),
 		}),
 	})
@@ -184,7 +240,18 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 						[
 							h.div(
 								[h.Class("flex justify-center")],
-								[botAvatarUpload(h, { name: model.botName, avatarUrl: model.avatarUrl })],
+								[
+									botAvatarUpload(h, {
+										name: model.botName,
+										avatarUrl: model.avatarUrl,
+										isUploading: model.isUploadingAvatar,
+										dropZone: model.dropZone,
+										toDropZoneMessage: (message) =>
+											Message.GotDropZoneMessage({ message }),
+										onPress: Message.ClickedAvatar(),
+										onFiles: (files) => Message.SelectedAvatarFiles({ files }),
+									}),
+								],
 							),
 							...botFormFields(h, {
 								id: ID,
@@ -194,31 +261,6 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 								onToggleScope: (scope) => Message.ToggledScope({ scope }),
 								onPublic: (isSelected) => Message.ToggledPublic({ isSelected }),
 							}),
-							textField(
-								h,
-								{
-									id: `${ID}-redirect-uris`,
-									value: model.redirectUris,
-									onInput: (value) => Message.ChangedRedirectUris({ value }),
-								},
-								(field) => [
-									field.label(["Install redirect URIs"]),
-									field.description([
-										"Where a service may send an admin back after they install this app from its install link (/oauth/bot-install). One https URL per line.",
-									]),
-									field.textarea({
-										placeholder: "https://example.com/hazel/callback",
-										attributes: [
-											h.Rows(2),
-											h.Attribute(
-												"aria-invalid",
-												model.redirectUrisError === null ? "false" : "true",
-											),
-										],
-									}),
-									field.fieldError([model.redirectUrisError ?? ""]),
-								],
-							),
 						],
 						"flex flex-col gap-6",
 					),
@@ -228,7 +270,7 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 							h,
 							{
 								intent: "primary",
-								isDisabled: isBotSubmitDisabled(model) || model.redirectUrisError !== null,
+								isDisabled: isBotSubmitDisabled(model),
 								attributes: [h.Type("submit")],
 							},
 							[model.isSubmitting ? "Saving..." : "Save Changes"],
@@ -259,14 +301,14 @@ export const modal = defineModal(
 				botId: request.id,
 				botName: request.name,
 				avatarUrl: request.avatarUrl,
+				isUploadingAvatar: false,
+				dropZone: DropZone.init(),
 				...initBotForm({
 					name: request.name,
 					description: request.description ?? "",
 					scopes: knownScopes(request.scopes),
 					isPublic: request.isPublic,
 				}),
-				redirectUris: request.installRedirectUris.join("\n"),
-				redirectUrisError: null,
 			},
 		}),
 		update,

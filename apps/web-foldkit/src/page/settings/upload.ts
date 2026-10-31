@@ -1,11 +1,11 @@
-import { OrganizationId } from "@hazel/schema"
+import { BotId, OrganizationId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
 import { defineTaggedUnion } from "foldkit/schema"
 import { type UploadErrorType, uploadErrorMessages, uploadToStorage } from "~/lib/upload-to-storage"
 import type { CommonError, UserErrorMessage } from "~/lib/error-messages"
 import { HazelApiClient } from "../../rpc"
 
-/** Port of `hooks/use-upload.ts` for the settings uploads (avatars, organization logo, custom emoji). */
+/** Port of `hooks/use-upload.ts` for the settings uploads (avatars, bot avatars, organization logo, custom emoji). */
 
 export const MAX_AVATAR_SIZE = 5 * 1024 * 1024
 export const MAX_EMOJI_SIZE = 256 * 1024
@@ -15,6 +15,7 @@ export const ALLOWED_EMOJI_TYPES: ReadonlyArray<string> = ["image/png", "image/g
 /** What the file is for; the presign request's `type` and its organization. */
 export const UploadTarget = defineTaggedUnion({
 	UserAvatar: {},
+	BotAvatar: { botId: BotId },
 	OrganizationAvatar: { organizationId: OrganizationId },
 	CustomEmoji: { organizationId: OrganizationId },
 })
@@ -62,6 +63,7 @@ const storageProblem: { readonly [T in UploadErrorType]: UploadProblem } = {
 const presignPayload = (target: UploadTarget) =>
 	UploadTarget.match(target, {
 		UserAvatar: () => ({ type: "user-avatar" as const }),
+		BotAvatar: ({ botId }) => ({ type: "bot-avatar" as const, botId }),
 		OrganizationAvatar: ({ organizationId }) => ({
 			type: "organization-avatar" as const,
 			organizationId,
