@@ -215,6 +215,8 @@ export const activateBotGateway = Effect.gen(function* () {
 				sessionId: session.sessionId,
 				resumed: sessionRequest.op === "RESUME",
 				resumeOffset: sessionRequest.resumeOffset,
+				botId: handshake.botId,
+				...(handshake.botUserId === undefined ? {} : { botUserId: handshake.botUserId }),
 			} satisfies typeof BotGatewayReadyFrame.Type)
 			deliver(rawSocket, session, now)
 			yield* scheduleAlarm

@@ -7,9 +7,7 @@
  * routed.
  */
 import { HttpApiBuilder } from "effect/http-api"
-import { HttpServerRequest } from "effect/http"
-import { BotRepo } from "@hazel/backend-core"
-import { CurrentUser, InternalServerError, MessageNotFoundError, UnauthorizedError } from "@hazel/domain"
+import { InternalServerError, MessageNotFoundError } from "@hazel/domain"
 import {
 	ChannelNotFoundError,
 	DeleteMessageResponse,
@@ -23,9 +21,10 @@ import {
 } from "@hazel/domain/http"
 import type { MessageResponse as RpcMessageResponse } from "@hazel/domain/rpc"
 import type { MessageReaction } from "@hazel/domain/models"
-import type { ChannelId, MessageId, TransactionId, UserId } from "@hazel/schema"
+import type { ChannelId, MessageId, TransactionId } from "@hazel/schema"
 import { Effect, Option } from "effect"
 import { HazelApi } from "../../api"
+import { authenticateBotFromToken, botPrincipal } from "./bot-auth"
 import { Directory } from "../../services/directory"
 import { HtmlRenders } from "../../services/html-renders"
 import { checkMessageRateLimit } from "../../services/rate-limit-helpers"
@@ -35,50 +34,6 @@ import { readLive, writeLive } from "../../worker/live/client"
 import { forwardRpc } from "../../worker/objects/forward"
 import { channelTarget } from "../../worker/objects/kinds"
 import { providePrincipal } from "../../worker/objects/principal"
-
-/** Hash a token using SHA-256 (Web Crypto API). */
-async function hashToken(token: string): Promise<string> {
-	const data = new TextEncoder().encode(token)
-	const hashBuffer = await crypto.subtle.digest("SHA-256", data)
-	return Array.from(new Uint8Array(hashBuffer))
-		.map((b) => b.toString(16).padStart(2, "0"))
-		.join("")
-}
-
-/** Authenticate the bot from its Bearer token. */
-const authenticateBotFromToken = Effect.gen(function* () {
-	const request = yield* HttpServerRequest.HttpServerRequest
-	const authHeader = request.headers.authorization
-	if (!authHeader || !authHeader.startsWith("Bearer ")) {
-		return yield* new UnauthorizedError({
-			message: "Missing or invalid API token",
-			detail: "Authorization header must be 'Bearer <token>'",
-		})
-	}
-	const tokenHash = yield* Effect.promise(() => hashToken(authHeader.slice(7)))
-	const bot = yield* (yield* BotRepo).findByTokenHash(tokenHash)
-	if (Option.isNone(bot)) {
-		return yield* new UnauthorizedError({
-			message: "Invalid API token",
-			detail: "No bot found with this token",
-		})
-	}
-	return bot.value
-})
-
-/** Bots act as their user, with a member's scopes (as the API always did). */
-const botPrincipal = (bot: { readonly userId: UserId; readonly name: string }) => ({
-	user: new CurrentUser.Schema({
-		id: bot.userId,
-		role: "member",
-		email: `bot-${bot.name}@hazel.bot`,
-		isOnboarded: true,
-		timezone: null,
-		organizationId: null,
-		settings: null,
-	}),
-	botScopes: null,
-})
 
 /** The `ChannelObject` holding `channelId`'s messages (a Connect mount's host). */
 const hostOf = (channelId: ChannelId) =>

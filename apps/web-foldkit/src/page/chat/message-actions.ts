@@ -60,6 +60,13 @@ export type JoinChannelFailure = typeof JoinChannelFailure.Type
 export const MessageActionFailure = Schema.Union([Schema.Literals(["MessageNotFound"]), CommonReason])
 export type MessageActionFailure = typeof MessageActionFailure.Type
 
+/** What can go wrong pressing a button on a bot's message, beyond the shared reasons. */
+export const PressEmbedActionFailure = Schema.Union([
+	Schema.Literals(["MessageNotFound", "ActionUnavailable"]),
+	CommonReason,
+])
+export type PressEmbedActionFailure = typeof PressEmbedActionFailure.Type
+
 /** What can go wrong unpinning, beyond the shared reasons. */
 export const UnpinMessageFailure = Schema.Union([Schema.Literals(["PinNotFound"]), CommonReason])
 export type UnpinMessageFailure = typeof UnpinMessageFailure.Type
@@ -84,6 +91,8 @@ export const ActionMessage = defineMessageUnion({
 	FailedGenerateThreadName: { threadChannelId: ChannelId, reason: GenerateThreadNameFailure },
 	SucceededJoinChannel: {},
 	FailedJoinChannel: { reason: JoinChannelFailure },
+	SucceededPressEmbedAction: {},
+	FailedPressEmbedAction: { reason: PressEmbedActionFailure },
 })
 export type ActionMessage = typeof ActionMessage.Type
 /** `ActionMessage` under the Submodel name, so a parent's Got wrapper imports it as `Message`. */
@@ -103,6 +112,23 @@ export const ToggleReaction = Command.define("ToggleReaction", {
 					Effect.succeed(ActionMessage.FailedToggleReaction({ reason: "MessageNotFound" })),
 			}),
 			catchCommon((reason) => ActionMessage.FailedToggleReaction({ reason })),
+		),
+})
+
+/** A button on a bot's message (`MessageEmbed.actions`): the bot hears about it and answers itself. */
+export const PressEmbedAction = Command.define("PressEmbedAction", {
+	args: { channelId: ChannelId, messageId: MessageId, actionId: Schema.String },
+	messages: [ActionMessage.SucceededPressEmbedAction, ActionMessage.FailedPressEmbedAction],
+	execute: (args) =>
+		HazelRpc.use((client) => client("message.interact", args)).pipe(
+			Effect.as(ActionMessage.SucceededPressEmbedAction()),
+			Effect.catchTags({
+				MessageNotFoundError: () =>
+					Effect.succeed(ActionMessage.FailedPressEmbedAction({ reason: "MessageNotFound" })),
+				MessageActionUnavailableError: () =>
+					Effect.succeed(ActionMessage.FailedPressEmbedAction({ reason: "ActionUnavailable" })),
+			}),
+			catchCommon((reason) => ActionMessage.FailedPressEmbedAction({ reason })),
 		),
 })
 

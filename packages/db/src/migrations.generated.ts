@@ -79,6 +79,10 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE UNIQUE INDEX IF NOT EXISTS "organization_invitations_pending_email_idx" ON "organization_invitations" ("organizationId", "email") WHERE "status" = \'pending\'',
 			],
 		},
+		{
+			id: "0002_bot_install_oauth",
+			statements: ['ALTER TABLE "bots" ADD COLUMN "installRedirectUris" text'],
+		},
 	],
 	org: [
 		{
@@ -216,8 +220,6 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 			],
 		},
 		{
-			// Hand-written: FTS5 tables and triggers that effect-orm does not model (schema-ddl.ts).
-			// Optional: an org serves without search if it fails, and retries it next activation.
 			id: "0002_message_search",
 			optional: true,
 			statements: [
@@ -237,6 +239,14 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 			statements: [
 				'ALTER TABLE "channel_members" ADD COLUMN "mutedUntil" text',
 				'ALTER TABLE "channel_members" ADD COLUMN "notificationLevel" text',
+			],
+		},
+		{
+			id: "0004_bot_install_oauth",
+			statements: [
+				'ALTER TABLE "bots" ADD COLUMN "installRedirectUris" text',
+				'CREATE TABLE IF NOT EXISTS "bot_install_grants" (\n\t"id" text PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(4))) || \'-\' || lower(hex(randomblob(2))) || \'-4\' || substr(lower(hex(randomblob(2))), 2) || \'-\' || substr(\'89ab\', 1 + (abs(random()) % 4), 1) || substr(lower(hex(randomblob(2))), 2) || \'-\' || lower(hex(randomblob(6)))),\n\t"codeHash" text NOT NULL,\n\t"botId" text NOT NULL,\n\t"redirectUri" text NOT NULL,\n\t"installedBy" text NOT NULL,\n\t"expiresAt" text NOT NULL,\n\t"redeemedAt" text,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\'))\n)',
+				'CREATE UNIQUE INDEX IF NOT EXISTS "bot_install_grants_code_hash_unique" ON "bot_install_grants" ("codeHash")',
 			],
 		},
 	],

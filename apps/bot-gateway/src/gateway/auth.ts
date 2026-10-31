@@ -21,7 +21,12 @@ export const authenticateBotToken = (token: string, directory: D1Database): Effe
 		const bot = yield* repo.findByTokenHash(tokenHash)
 		return Option.match(bot, {
 			onNone: (): AuthResult => ({ _tag: "Rejected", reason: "Invalid bot token" }),
-			onSome: (found): AuthResult => ({ _tag: "Authenticated", botId: found.id, botName: found.name }),
+			onSome: (found): AuthResult => ({
+				_tag: "Authenticated",
+				botId: found.id,
+				botUserId: found.userId,
+				botName: found.name,
+			}),
 		})
 	}).pipe(
 		Effect.catchTag("DatabaseError", (error) =>

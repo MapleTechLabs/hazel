@@ -31,6 +31,7 @@ import {
 	DownloadImage,
 	GenerateThreadChannelId,
 	JoinChannel,
+	PressEmbedAction,
 	ToggleReaction,
 } from "../message-actions"
 import {
@@ -55,6 +56,55 @@ describe("reading", () => {
 			mountedChannel(),
 			Scene.expect(Scene.text("Shipped the onboarding copy")).toExist(),
 			Scene.expect(Scene.text("Launch window confirmed")).toExist(),
+		)
+	})
+})
+
+describe("bot buttons", () => {
+	test("a button on a bot's message tells the bot; a stale one says so", () => {
+		const base = loadedModel()
+		const withButtons = {
+			...base,
+			messages: base.messages.map((message) =>
+				message.id === graceMessageId
+					? {
+							...message,
+							hasEmbeds: true,
+							embeds: [
+								{
+									description: "Restart checkout?",
+									actions: [
+										{ id: "approve:call_1", label: "Approve", style: "primary" as const },
+										{ id: "deny:call_1", label: "Deny", disabled: true },
+									],
+								},
+							],
+						}
+					: message,
+			),
+		}
+		Scene.scene(
+			channelScene,
+			Scene.given(derivedModel(withButtons)),
+			mountedChannel(),
+			Scene.expect(Scene.role("button", { name: "Deny" })).toBeDisabled(),
+			Scene.click(Scene.role("button", { name: "Approve" })),
+			Scene.Command.expectExact(
+				PressEmbedAction({ channelId, messageId: graceMessageId, actionId: "approve:call_1" }),
+			),
+			Scene.Command.resolve(
+				PressEmbedAction,
+				ActionMessage.FailedPressEmbedAction({ reason: "ActionUnavailable" }),
+			),
+			Scene.expectOutMessage(
+				PageOutMessage.RequestedToast({
+					toast: {
+						intent: "error",
+						title: "That button no longer works",
+						description: "The app may have already handled it.",
+					},
+				}),
+			),
 		)
 	})
 })

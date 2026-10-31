@@ -149,7 +149,7 @@ yield *
 For retry classification, use the exported helpers:
 
 ```typescript
-import { getErrorTag, retryPolicyForTag } from "@hazel/bot-sdk"
+import { getErrorTag, retryPolicyForTag } from "@hazel-chat/bot-sdk"
 
 const tag = getErrorTag(error)
 if (tag && retryPolicyForTag(tag) === "transient") {

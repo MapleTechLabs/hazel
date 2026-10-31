@@ -69,6 +69,12 @@ export interface MessageEmbed {
 	badge?: MessageEmbedBadge // Status badge (e.g., "Deployed", "Failed")
 	liveState?: MessageEmbedLiveState // Live state for real-time updates
 	html?: { renderId: HtmlRenderId; title: string; height: number } // Sandboxed HTML page (`@hazel/domain/html-render`)
+	actions?: Array<{
+		id: string
+		label: string
+		style?: "primary" | "secondary" | "danger"
+		disabled?: boolean
+	}> // Buttons (`message.interact`)
 }
 
 export const messageReactionsTable = SQLite.table("message_reactions", {

@@ -15,7 +15,9 @@
 		"./scopes": "./src/scopes/index.ts",
 		"./sync": "./src/sync/index.ts",
 		"./live": "./src/live/index.ts",
-		"./html-render": "./src/html-render.ts"
+		"./html-render": "./src/html-render.ts",
+		"./bot-install": "./src/bot-install.ts",
+		"./thread-id": "./src/thread-id.ts"
 	},
 	"dependencies": {
 		"@hazel/integrations": "workspace:*",

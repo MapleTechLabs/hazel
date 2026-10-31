@@ -21,7 +21,7 @@ bun init -y
 Install the Bot SDK and Effect:
 
 ```bash
-bun add @hazel/bot-sdk effect
+bun add @hazel-chat/bot-sdk effect
 ```
 
 ## Configure TypeScript
@@ -62,7 +62,7 @@ Create `index.ts`:
 
 ```typescript
 import { Effect } from "effect"
-import { runHazelBot } from "@hazel/bot-sdk"
+import { runHazelBot } from "@hazel-chat/bot-sdk"
 
 runHazelBot({
 	setup: (bot) =>

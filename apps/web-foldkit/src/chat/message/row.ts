@@ -38,6 +38,8 @@ export interface RowContext<M> {
 	readonly avatar: (row: MessageRow) => Html
 	/** An HTML render frame's mount, load, height and controls. */
 	readonly toHtmlRenderMessage: (message: HtmlRender.Message) => M
+	/** A button on a bot's message (`MessageEmbed.actions`). */
+	readonly toPressEmbedAction: (channelId: ChannelId, messageId: MessageId, actionId: string) => M
 }
 
 /** `DateDivider`: the line is hidden while the divider is pinned to the top. */
@@ -130,6 +132,7 @@ const contentView = <M>(h: HtmlBuilder<M>, row: MessageRow, context: RowContext<
 				rows: row.htmlRenders,
 				toMessage: context.toHtmlRenderMessage,
 			},
+			(actionId) => context.toPressEmbedAction(message.channelId, message.id, actionId),
 		),
 	]
 }

@@ -5,7 +5,7 @@
  */
 import { MessageRepo } from "@hazel/backend-core"
 import { Database, SQLite, schema } from "@hazel/db"
-import { UnauthorizedError } from "@hazel/domain"
+import { MessageNotFoundError, UnauthorizedError } from "@hazel/domain"
 import { InvalidPaginationError } from "@hazel/domain/http"
 import { Message } from "@hazel/domain/models"
 import { ChannelId, MessageId, UserId } from "@hazel/schema"
@@ -75,6 +75,40 @@ export const listMessages = Effect.fn("ChannelObject.listMessages")(
 		const hasMore = rows.length > payload.limit
 		yield* Effect.annotateCurrentSpan({ "messages.count": Math.min(rows.length, payload.limit) })
 		return { messages: hasMore ? rows.slice(0, payload.limit) : rows, hasMore }
+	},
+	Effect.catchTag("DatabaseError", (error) => Effect.die(error)),
+)
+
+export const MessageThreadCall = defineCall("channel.messageThread", "channel", {
+	payload: Schema.Struct({ userId: UserId, messageId: MessageId }),
+	success: Schema.NullOr(ChannelId),
+	error: Schema.Union([UnauthorizedError, MessageNotFoundError]),
+})
+
+/** The thread a message already has, for a viewer of its channel (`POST /api/v1/channels/:id/threads`). */
+export const messageThread = Effect.fn("ChannelObject.messageThread")(
+	function* (payload: typeof MessageThreadCall.payload.Type) {
+		const db = yield* Database.Database
+		const viewer = yield* db.first(
+			SQLite.from(schema.channelViewersTable)
+				.select("userId")
+				.where(($) => [$.userId.eq(payload.userId)])
+				.limit(1),
+		)
+		if (Option.isNone(viewer)) {
+			return yield* new UnauthorizedError({
+				message: "You can't read this channel",
+				detail: `messageId=${payload.messageId}`,
+			})
+		}
+		const message = yield* db.first(
+			SQLite.from(schema.messagesTable)
+				.select("threadChannelId")
+				.where(($) => [$.id.eq(payload.messageId), $.deletedAt.isNull()])
+				.limit(1),
+		)
+		if (Option.isNone(message)) return yield* new MessageNotFoundError({ messageId: payload.messageId })
+		return message.value.threadChannelId
 	},
 	Effect.catchTag("DatabaseError", (error) => Effect.die(error)),
 )

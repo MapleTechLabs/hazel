@@ -45,7 +45,7 @@ export type MessageEventHook = (
 export const THREAD_NAMING_THRESHOLD = 3
 
 /** The channel's organization, from the last `channel.setViewers`. */
-const channelOrganization = Effect.gen(function* () {
+export const channelOrganization = Effect.gen(function* () {
 	const db = yield* Database.Database
 	const rows = yield* db.query(Database.sql`SELECT value FROM _object_meta WHERE key = 'organizationId'`)
 	return Option.map(Option.fromNullishOr(rows[0]?.value as string | undefined), (id) =>

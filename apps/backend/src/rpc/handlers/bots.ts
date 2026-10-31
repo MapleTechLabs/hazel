@@ -13,9 +13,13 @@
 import { BotCommandRepo, BotRepo, UserRepo } from "@hazel/backend-core"
 import { Database, SQLite, schema } from "@hazel/db"
 import { ActiveOrganizationRequiredError, CurrentUser, withRemapDbErrors } from "@hazel/domain"
+import { isRegisteredInstallRedirect } from "@hazel/domain/bot-install"
 import {
 	BotAlreadyInstalledError,
 	BotCommandListResponse,
+	BotInstallAuthorizedResponse,
+	BotInstallRedirectMismatchError,
+	BotInstallRequestResponse,
 	BotCreatedResponse,
 	BotListResponse,
 	BotNotFoundError,
@@ -41,6 +45,7 @@ import { DirectoryEffects } from "../../worker/objects/effects/directory-effects
 import { enqueueEffect } from "../../worker/objects/effects/registry"
 import { fanOut, transactionIdOf } from "../../worker/objects/fanout"
 import { orgTarget } from "../../worker/objects/kinds"
+import { mintInstallGrant } from "../../worker/objects/org/bot-install-grants"
 import { installBotHere, uninstallBotHere } from "../../worker/objects/org/bot-installs"
 import { toUserProjection, upsertUserProjection } from "../../worker/objects/org/projections"
 import { projectUserToOrgs } from "./users"
@@ -183,6 +188,7 @@ export const BotRpcLive = BotRpcs.toLayer(
 						installCount: 1,
 						mentionable: false,
 						allowedIntegrations: null,
+						installRedirectUris: null,
 						createdAt: now,
 						updatedAt: now,
 						deletedAt: null,
@@ -245,6 +251,7 @@ export const BotRpcLive = BotRpcs.toLayer(
 						webhookUrl: payload.webhookUrl,
 						scopes: payload.scopes ? [...payload.scopes] : undefined,
 						isPublic: payload.isPublic,
+						installRedirectUris: payload.installRedirectUris,
 					})
 					// The machine user's name follows the bot's.
 					if (payload.name) {
@@ -398,6 +405,77 @@ export const BotRpcLive = BotRpcs.toLayer(
 						)
 						.pipe(withRemapDbErrors("BotInstallation", "delete"))
 				}),
+
+			"bot.getInstallRequest": ({ botId, redirectUri }) =>
+				Effect.gen(function* () {
+					const botRepo = yield* BotRepo
+					const userRepo = yield* UserRepo
+					const bot = yield* botRepo.findById(botId)
+					if (Option.isNone(bot)) return yield* new BotNotFoundError({ botId })
+					if (!isRegisteredInstallRedirect(bot.value.installRedirectUris, redirectUri)) {
+						return yield* new BotInstallRedirectMismatchError({ botId })
+					}
+					const [botUser, creator] = yield* Effect.all(
+						[userRepo.findById(bot.value.userId), userRepo.findById(bot.value.createdBy)],
+						{ concurrency: 2 },
+					)
+					const creatorName = Option.match(creator, {
+						onNone: () => "Unknown",
+						onSome: ({ firstName, lastName, email }) =>
+							firstName && lastName ? `${firstName} ${lastName}` : email,
+					})
+					return new BotInstallRequestResponse({
+						id: bot.value.id,
+						name: bot.value.name,
+						description: bot.value.description,
+						avatarUrl: Option.match(botUser, {
+							onNone: () => null,
+							onSome: (user) => user.avatarUrl ?? null,
+						}),
+						creatorName,
+					})
+				}).pipe(withRemapDbErrors("Bot", "select")),
+
+			// The consent page's approval: install (unless it already is) and mint the grant together.
+			"bot.authorizeInstall": ({ botId, organizationId: hint, redirectUri }) =>
+				Effect.gen(function* () {
+					const currentUser = yield* CurrentUser.Context
+					const organizationId = yield* activeOrganization(hint)
+					yield* botPolicy.canInstall(organizationId)
+					const found = yield* readDirectoryBot(botId)
+					if (Option.isNone(found)) return yield* new BotNotFoundError({ botId })
+					if (!isRegisteredInstallRedirect(found.value.bot.installRedirectUris, redirectUri)) {
+						return yield* new BotInstallRedirectMismatchError({ botId })
+					}
+					return yield* db.transaction(
+						Effect.gen(function* () {
+							const installed = yield* db.first(
+								SQLite.from(schema.botInstallationsTable)
+									.select("id")
+									.where(($) => [$.botId.eq(botId), $.organizationId.eq(organizationId)])
+									.limit(1),
+							)
+							if (Option.isNone(installed)) {
+								yield* installBotHere({
+									bot: found.value.bot,
+									commands: found.value.commands,
+									organizationId,
+									installedBy: currentUser.id,
+								})
+							}
+							const code = yield* mintInstallGrant({
+								organizationId,
+								botId,
+								redirectUri,
+								installedBy: currentUser.id,
+							})
+							return new BotInstallAuthorizedResponse({
+								code,
+								transactionId: yield* generateTransactionId(),
+							})
+						}),
+					)
+				}).pipe(withRemapDbErrors("BotInstallation", "create")),
 
 			"bot.updateAvatar": ({ id, avatarUrl }) =>
 				Effect.gen(function* () {

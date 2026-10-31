@@ -7,7 +7,8 @@ import { createHash } from "node:crypto"
 import { NodeHttpPlatform, NodeServices } from "@effect/platform-node"
 import { BotRepo } from "@hazel/backend-core"
 import { Database, SQLite, schema } from "@hazel/db"
-import { MessagesApiGroup } from "@hazel/domain/http"
+import { CurrentUser } from "@hazel/domain"
+import { BotsApiGroup, MessagesApiGroup } from "@hazel/domain/http"
 import type { BotId, ChannelId, ChannelWebhookId, OrganizationId, UserId } from "@hazel/schema"
 import { Cause, Context, Effect, Exit, Layer, Option, type Scope } from "effect"
 import { Etag, HttpRouter } from "effect/http"
@@ -20,6 +21,9 @@ import { channelTarget, orgTarget } from "../worker/objects/kinds"
 import { ConnectIntegrationCall } from "../worker/objects/org/integrations"
 import { ObjectStubs } from "../worker/objects/protocol"
 import { makeTestObjects, type TestObject, type TestObjects } from "../worker/objects/testing"
+import { decodeExit, encodePayload, type HazelRpcTag, rpcFor } from "../rpc/dispatch"
+import { encodeInvokePrincipal } from "../worker/objects/principal"
+import { HttpApiV1BotsLive } from "./api-v1/bots.http"
 import { HttpMessagesApiLive } from "./api-v1/messages.http"
 import { deliverWebhook } from "./incoming-webhooks.http"
 import { dispatchGitHubEvent } from "./webhooks.http"
@@ -112,6 +116,93 @@ const messagesIn = (object: TestObject) =>
 const failureOf = (exit: Exit.Exit<unknown, unknown>) =>
 	Exit.isFailure(exit) ? Option.getOrUndefined(Cause.findErrorOption(exit.cause)) : undefined
 
+/** The public bot API over `world`'s objects, authenticated as the bot holding `token`. */
+const botHttp = (world: World, token: string) =>
+	Effect.gen(function* () {
+		const directory = Context.get(world.objects.directory, Directory)
+		const routes = Layer.mergeAll(HttpMessagesApiLive, HttpApiV1BotsLive).pipe(
+			Layer.provideMerge(BotRepo.layer),
+			Layer.provideMerge(Layer.succeed(Database.Database, directory.db)),
+			Layer.provideMerge(Layer.succeedContext(world.objects.directory)),
+			Layer.provideMerge(Layer.succeed(ObjectStubs, world.objects.stubs)),
+			Layer.provideMerge(RateLimiterAllowAll),
+		)
+		const app = HttpApiBuilder.layer(
+			HttpApi.make("HazelApp").add(MessagesApiGroup).add(BotsApiGroup),
+		).pipe(
+			Layer.provideMerge(routes),
+			Layer.provideMerge(HttpRouter.layer),
+			Layer.provideMerge(Etag.layer),
+			Layer.provideMerge(NodeServices.layer),
+			Layer.provideMerge(NodeHttpPlatform.layer),
+		)
+		const { handler, dispose } = HttpRouter.toWebHandler(app as never, { disableLogger: true })
+		yield* Effect.addFinalizer(() => Effect.promise(() => dispose()))
+		const request = (path: string, init: RequestInit = {}) =>
+			Effect.promise(() =>
+				handler(
+					new Request(`http://localhost${path}`, {
+						...init,
+						headers: {
+							authorization: `Bearer ${token}`,
+							"content-type": "application/json",
+						},
+					}),
+					Context.empty() as Context.Context<any>,
+				),
+			)
+		const json = (response: Response) =>
+			Effect.promise(async () => {
+				if (response.status !== 200) {
+					throw new Error(`${response.status} ${response.url}: ${await response.text()}`)
+				}
+				return (await response.json()) as any
+			})
+		return { request, json }
+	})
+
+/** A directory bot row for `botId`, authenticated by `token`. */
+const insertDirectoryBot = (
+	world: World,
+	bot: { botId: BotId; botUserId: UserId; token: string; scopes?: ReadonlyArray<string> },
+) =>
+	Context.get(world.objects.directory, Directory)
+		.db.run(
+			SQLite.insertInto(schema.botsTable).values({
+				id: bot.botId,
+				userId: bot.botUserId,
+				createdBy: world.alice,
+				name: "Helper",
+				apiTokenHash: sha256(bot.token),
+				scopes: bot.scopes === undefined ? null : [...bot.scopes],
+			}),
+		)
+		.pipe(Effect.orDie)
+
+/** Run `tag` on `object` as `userId`, the way the api Worker forwards it. */
+const invokeAs = (object: TestObject, objectId: string, tag: HazelRpcTag, payload: unknown, userId: UserId) =>
+	Effect.gen(function* () {
+		const rpc = yield* rpcFor(tag)
+		const response = yield* object.invoke({
+			objectId,
+			tag,
+			payload: yield* encodePayload(rpc, payload),
+			principal: yield* encodeInvokePrincipal({
+				user: new CurrentUser.Schema({
+					id: userId,
+					organizationId: null,
+					role: "member",
+					email: `${userId}@example.com`,
+					isOnboarded: true,
+					timezone: null,
+					settings: null,
+				}),
+				botScopes: null,
+			}),
+		})
+		return yield* decodeExit(rpc, structuredClone(response).exit)
+	}).pipe(Effect.orDie)
+
 describe("public API (v1) messages", () => {
 	it("creates a bot's message in the ChannelObject, with its bot gateway event", async () => {
 		const botId = uuid() as BotId
@@ -121,54 +212,8 @@ describe("public API (v1) messages", () => {
 		await run(
 			Effect.gen(function* () {
 				const world = yield* makeWorld([botUserId], [{ botId, botUserId }])
-				const directory = Context.get(world.objects.directory, Directory)
-				yield* directory.db
-					.run(
-						SQLite.insertInto(schema.botsTable).values({
-							id: botId,
-							userId: botUserId,
-							createdBy: world.alice,
-							name: "Helper",
-							apiTokenHash: sha256(token),
-						}),
-					)
-					.pipe(Effect.orDie)
-				const routes = HttpMessagesApiLive.pipe(
-					Layer.provideMerge(BotRepo.layer),
-					Layer.provideMerge(Layer.succeed(Database.Database, directory.db)),
-					Layer.provideMerge(Layer.succeedContext(world.objects.directory)),
-					Layer.provideMerge(Layer.succeed(ObjectStubs, world.objects.stubs)),
-					Layer.provideMerge(RateLimiterAllowAll),
-				)
-				const app = HttpApiBuilder.layer(HttpApi.make("HazelApp").add(MessagesApiGroup)).pipe(
-					Layer.provideMerge(routes),
-					Layer.provideMerge(HttpRouter.layer),
-					Layer.provideMerge(Etag.layer),
-					Layer.provideMerge(NodeServices.layer),
-					Layer.provideMerge(NodeHttpPlatform.layer),
-				)
-				const { handler, dispose } = HttpRouter.toWebHandler(app as never, { disableLogger: true })
-				yield* Effect.addFinalizer(() => Effect.promise(() => dispose()))
-				const request = (path: string, init: RequestInit = {}) =>
-					Effect.promise(() =>
-						handler(
-							new Request(`http://localhost${path}`, {
-								...init,
-								headers: {
-									authorization: `Bearer ${token}`,
-									"content-type": "application/json",
-								},
-							}),
-							Context.empty() as Context.Context<any>,
-						),
-					)
-				const json = (response: Response) =>
-					Effect.promise(async () => {
-						if (response.status !== 200) {
-							throw new Error(`${response.status} ${response.url}: ${await response.text()}`)
-						}
-						return (await response.json()) as any
-					})
+				yield* insertDirectoryBot(world, { botId, botUserId, token })
+				const { request, json } = yield* botHttp(world, token)
 
 				const body = yield* json(
 					yield* request("/api/v1/messages", {
@@ -210,6 +255,243 @@ describe("public API (v1) messages", () => {
 			}),
 		)
 	})
+})
+
+describe("public API (v1) for bots outside Hazel", () => {
+	it("holds a bot to the scopes it declared, as RPC does", () =>
+		run(
+			Effect.gen(function* () {
+				const botId = uuid() as BotId
+				const botUserId = uuid() as UserId
+				const token = `hzl_bot_${uuid()}`
+				const world = yield* makeWorld([botUserId], [{ botId, botUserId }])
+				yield* insertDirectoryBot(world, { botId, botUserId, token, scopes: ["messages:read"] })
+				const { request } = yield* botHttp(world, token)
+				const refused = yield* request("/api/v1/messages", {
+					method: "POST",
+					body: JSON.stringify({
+						channelId: world.channelId,
+						content: "not allowed",
+						replyToMessageId: null,
+						threadChannelId: null,
+						embeds: null,
+					}),
+				})
+				expect(refused.status).toBe(401)
+				expect(messagesIn(world.channel)).toEqual([])
+				const listed = yield* request(`/api/v1/messages?channel_id=${world.channelId}`)
+				expect(listed.status).toBe(200)
+			}),
+		))
+
+	it("a button press reaches the bot that posted it; threads and people by id", () =>
+		run(
+			Effect.gen(function* () {
+				const botId = uuid() as BotId
+				const botUserId = uuid() as UserId
+				const otherBotId = uuid() as BotId
+				const otherBotUserId = uuid() as UserId
+				const token = `hzl_bot_${uuid()}`
+				const world = yield* makeWorld(
+					[botUserId, otherBotUserId],
+					[
+						{ botId, botUserId },
+						{ botId: otherBotId, botUserId: otherBotUserId },
+					],
+				)
+				for (const [userId, userType, name] of [
+					[world.alice, "user", "Alice"],
+					[botUserId, "machine", "Maple"],
+				] as const) {
+					world.org.storage.db
+						.prepare(
+							`INSERT INTO users (id, externalId, email, firstName, lastName, userType) VALUES (?, ?, ?, ?, '', ?)`,
+						)
+						.run(userId, `ext-${userId}`, `${userId}@example.com`, name, userType)
+				}
+				yield* insertDirectoryBot(world, {
+					botId,
+					botUserId,
+					token,
+					scopes: ["messages:read", "messages:write", "channels:write"],
+				})
+				yield* Context.get(world.objects.directory, Directory)
+					.db.run(
+						SQLite.insertInto(schema.usersTable).values({
+							id: botUserId,
+							externalId: `bot_${botUserId}`,
+							email: `${botUserId}@bot.hazel.sh`,
+							firstName: "Maple",
+							lastName: "",
+							userType: "machine",
+						}),
+					)
+					.pipe(Effect.orDie)
+				const { request, json } = yield* botHttp(world, token)
+
+				const posted = yield* json(
+					yield* request("/api/v1/messages", {
+						method: "POST",
+						body: JSON.stringify({
+							channelId: world.channelId,
+							content: "Restart checkout?",
+							replyToMessageId: null,
+							threadChannelId: null,
+							embeds: [
+								{
+									description: "Maple wants to restart checkout",
+									actions: [
+										{ id: "approve:call_1", label: "Approve", style: "primary" },
+										{ id: "deny:call_1", label: "Deny", disabled: true },
+									],
+								},
+							],
+						}),
+					}),
+				)
+				const messageId = posted.data.id
+				// Message events name their author, read from the directory.
+				const created = {
+					eventType: "message.create",
+					author: { id: botUserId, displayName: "Maple", isBot: true },
+				}
+				expect(world.objects.published.map((entry) => entry.envelope)).toMatchObject([
+					created,
+					created,
+				])
+				world.objects.published.length = 0
+
+				// A deleted author is named nowhere: the event goes out without one.
+				const directory = Context.get(world.objects.directory, Directory)
+				const setDeleted = (deletedAt: Date | null) =>
+					directory.db
+						.run(
+							SQLite.update(schema.usersTable)
+								.set({ deletedAt })
+								.where(($) => [$.id.eq(botUserId)]),
+						)
+						.pipe(Effect.orDie)
+				yield* setDeleted(new Date())
+				yield* json(
+					yield* request("/api/v1/messages", {
+						method: "POST",
+						body: JSON.stringify({
+							channelId: world.channelId,
+							content: "from a deleted author",
+							replyToMessageId: null,
+							threadChannelId: null,
+							embeds: null,
+						}),
+					}),
+				)
+				const anonymous = world.objects.published.map((entry) => entry.envelope)
+				expect(anonymous).toHaveLength(2)
+				expect(anonymous.every((envelope) => !("author" in envelope))).toBe(true)
+				yield* setDeleted(null)
+				world.objects.published.length = 0
+
+				const press = (actionId: string, userId: UserId = world.alice) =>
+					invokeAs(
+						world.channel,
+						world.channelId,
+						"message.interact",
+						{ channelId: world.channelId, messageId, actionId },
+						userId,
+					)
+				const pressed = yield* press("approve:call_1")
+				expect(Exit.isSuccess(pressed)).toBe(true)
+				// Only the bot that posted the message hears about it.
+				expect(world.objects.published).toMatchObject([
+					{
+						botId,
+						envelope: {
+							eventType: "interaction.create",
+							payload: {
+								actionId: "approve:call_1",
+								messageId,
+								channelId: world.channelId,
+								orgId: world.orgId,
+								userId: world.alice,
+								// Alice has no name here, and a bot never gets her email instead.
+								userName: "Unknown",
+							},
+						},
+					},
+				])
+				expect((failureOf(yield* press("deny:call_1")) as { _tag: string })._tag).toBe(
+					"MessageActionUnavailableError",
+				)
+				expect((failureOf(yield* press("nope")) as { _tag: string })._tag).toBe(
+					"MessageActionUnavailableError",
+				)
+				// Someone who cannot read the channel cannot press its buttons.
+				expect(failureOf(yield* press("approve:call_1", uuid() as UserId))).toBeDefined()
+
+				// The org's access rows for the channel, which a thread copies (this world sets the
+				// channel's viewers by hand rather than through the org).
+				for (const userId of [world.alice, botUserId, otherBotUserId]) {
+					world.org.storage.db
+						.prepare(
+							`INSERT INTO channel_access (userId, channelId, organizationId) VALUES (?, ?, ?)`,
+						)
+						.run(userId, world.channelId, world.orgId)
+				}
+
+				// A thread on the bot's own message; asking again answers with the same thread.
+				const thread = yield* json(
+					yield* request(`/api/v1/channels/${world.channelId}/threads`, {
+						method: "POST",
+						body: JSON.stringify({ messageId }),
+					}),
+				)
+				expect(thread.data).toMatchObject({
+					parentChannelId: world.channelId,
+					organizationId: world.orgId,
+				})
+				const again = yield* json(
+					yield* request(`/api/v1/channels/${world.channelId}/threads`, {
+						method: "POST",
+						body: JSON.stringify({ messageId }),
+					}),
+				)
+				expect(again.data.id).toBe(thread.data.id)
+
+				// A mention inside the thread answers with that same thread, not a thread on a thread.
+				const inThread = yield* json(
+					yield* request("/api/v1/messages", {
+						method: "POST",
+						body: JSON.stringify({
+							channelId: thread.data.id,
+							content: "follow-up",
+							replyToMessageId: null,
+							threadChannelId: null,
+							embeds: null,
+						}),
+					}),
+				)
+				const sameThread = yield* json(
+					yield* request(`/api/v1/channels/${thread.data.id}/threads`, {
+						method: "POST",
+						body: JSON.stringify({ messageId: inThread.data.id }),
+					}),
+				)
+				expect(sameThread.data.id).toBe(thread.data.id)
+
+				const users = yield* json(
+					yield* request(
+						`/api/v1/organizations/${world.orgId}/users?ids=${world.alice},not-a-uuid,${botUserId},${uuid()}`,
+					),
+				)
+				expect(
+					[...users.data].sort((a: { displayName: string }, b: { displayName: string }) =>
+						a.displayName.localeCompare(b.displayName),
+					),
+				).toMatchObject([
+					{ id: world.alice, displayName: "Alice", isBot: false },
+					{ id: botUserId, displayName: "Maple", isBot: true },
+				])
+			}),
+		))
 })
 
 describe("incoming webhooks", () => {

@@ -107,6 +107,7 @@ const BOT_RECORD: BotRecord = {
 	isPublic: false,
 	installCount: 0,
 	allowedIntegrations: null,
+	installRedirectUris: null,
 	mentionable: true,
 	createdAt: new Date("2026-01-01T00:00:00.000Z"),
 	updatedAt: new Date("2026-01-01T00:00:00.000Z"),

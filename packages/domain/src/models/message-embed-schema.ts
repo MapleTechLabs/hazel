@@ -121,6 +121,22 @@ export const MessageEmbedHtml = Schema.Struct({
 })
 export type MessageEmbedHtml = Schema.Schema.Type<typeof MessageEmbedHtml>
 
+/**
+ * A button on a bot's embed. Clicking it sends the bot that posted the message an
+ * `interaction.create` event carrying `id` (`message.interact`); nothing else happens until the bot
+ * answers, typically by editing the message. `id` is the bot's own: up to 100 characters it gets
+ * back verbatim.
+ */
+export const MessageEmbedAction = Schema.Struct({
+	id: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(100)),
+	label: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(80)),
+	style: Schema.optional(Schema.Literals(["primary", "secondary", "danger"])),
+	disabled: Schema.optional(Schema.Boolean),
+})
+export type MessageEmbedAction = Schema.Schema.Type<typeof MessageEmbedAction>
+
+export const MESSAGE_EMBED_MAX_ACTIONS = 5
+
 // Full embed schema (Discord-style)
 export const MessageEmbed = Schema.Struct({
 	title: Schema.optional(Schema.String.check(Schema.isMaxLength(256))),
@@ -138,8 +154,25 @@ export const MessageEmbed = Schema.Struct({
 	badge: Schema.optional(MessageEmbedBadge), // Status badge (e.g., "Deployed", "Failed")
 	liveState: Schema.optional(MessageEmbedLiveState), // Live state for real-time updates
 	html: Schema.optional(MessageEmbedHtml),
+	actions: Schema.optional(
+		Schema.Array(MessageEmbedAction).check(Schema.isMaxLength(MESSAGE_EMBED_MAX_ACTIONS)),
+	),
 })
 export type MessageEmbed = Schema.Schema.Type<typeof MessageEmbed>
+
+/** The enabled action `actionId` on any of `embeds`, if there is one. */
+export const findEmbedAction = (
+	embeds: ReadonlyArray<MessageEmbed> | null | undefined,
+	actionId: string,
+): MessageEmbedAction | undefined => {
+	for (const embed of embeds ?? []) {
+		const action = embed.actions?.find(
+			(candidate) => candidate.id === actionId && candidate.disabled !== true,
+		)
+		if (action !== undefined) return action
+	}
+	return undefined
+}
 
 // Array of embeds for a message
 export const MessageEmbeds = Schema.Array(MessageEmbed)
