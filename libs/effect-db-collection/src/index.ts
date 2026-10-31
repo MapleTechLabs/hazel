@@ -30,6 +30,7 @@ export {
 	type SyncRunInfo,
 	type SyncTableSink,
 } from "./hub"
+export { SyncMux, type SyncMuxOptions } from "./mux"
 export { HISTORY_PAGE_SIZE, type HistoryDemand, type HistoryState } from "./history"
 export { extractPartitionValues } from "./subset"
 // Events

@@ -9,6 +9,8 @@ export class FakeSocket implements WebSocketLike {
 	onclose: ((event: { readonly code: number; readonly reason: string }) => void) | null = null
 	onerror: ((event: unknown) => void) | null = null
 	readonly sent: Array<{ readonly _tag: string; readonly [key: string]: unknown }> = []
+	/** Every frame as sent; `sent` holds the JSON ones parsed. */
+	readonly sentRaw: Array<string> = []
 	closedWith: { readonly code?: number; readonly reason?: string } | undefined
 
 	constructor(
@@ -17,7 +19,8 @@ export class FakeSocket implements WebSocketLike {
 	) {}
 
 	send(data: string): void {
-		this.sent.push(JSON.parse(data))
+		this.sentRaw.push(data)
+		if (data.startsWith("{")) this.sent.push(JSON.parse(data))
 	}
 
 	close(code?: number, reason?: string): void {
@@ -33,7 +36,11 @@ export class FakeSocket implements WebSocketLike {
 	}
 
 	receive(frame: SyncServerFrame | Record<string, unknown>): void {
-		this.onmessage?.({ data: JSON.stringify(frame) })
+		this.receiveRaw(JSON.stringify(frame))
+	}
+
+	receiveRaw(data: string): void {
+		this.onmessage?.({ data })
 	}
 
 	/** A full run: `Begin`, one `Rows` per table, `Commit`. */

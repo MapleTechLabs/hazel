@@ -7,6 +7,7 @@ import { Effect, type Scope } from "effect"
 import { SyncConnection, type SyncConnectionStatus, type SyncRunTable } from "./connection"
 import type { SyncSourceTerminalError } from "./errors"
 import { dispatchErrorStateChanged } from "./events"
+import { SyncMux } from "./mux"
 import {
 	type BackoffConfig,
 	consoleLogger,
@@ -27,6 +28,11 @@ export interface SyncHubConfig {
 	readonly invalidateToken?: (token: string) => void
 	/** Injected in tests; defaults to `globalThis.WebSocket`. */
 	readonly WebSocket?: WebSocketConstructor
+	/**
+	 * Carry every source over one socket (`<baseUrl>/sync/mux`, `./mux.ts`) instead of a socket per
+	 * source: a browser opens one WebSocket handshake at a time per host. @default false
+	 */
+	readonly multiplex?: boolean
 	readonly backoff?: BackoffConfig
 	/** @default 25000 */
 	readonly heartbeatIntervalMs?: number
@@ -90,6 +96,8 @@ interface Entry {
 export class SyncHub {
 	readonly log: SyncLogger
 	private readonly config: SyncHubConfig
+	/** The sources' shared socket, when multiplexing. */
+	private readonly mux: SyncMux | undefined
 	private readonly entries = new Map<SourceKey, Entry>()
 	private readonly sinks = new Map<string, Set<SyncTableSink>>()
 	private readonly statusListeners = new Set<(source: SourceKey, status: SyncConnectionStatus) => void>()
@@ -101,6 +109,13 @@ export class SyncHub {
 	constructor(config: SyncHubConfig) {
 		this.config = config
 		this.log = config.log ?? consoleLogger
+		this.mux = config.multiplex
+			? new SyncMux({
+					baseUrl: config.baseUrl,
+					...(config.WebSocket ? { WebSocket: config.WebSocket } : {}),
+					log: this.log,
+				})
+			: undefined
 		if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
 			window.addEventListener("online", this.onOnline)
 		}
@@ -207,6 +222,7 @@ export class SyncHub {
 			window.removeEventListener("online", this.onOnline)
 		}
 		for (const [source, entry] of this.entries) this.evict(source, entry)
+		this.mux?.close()
 		this.statusListeners.clear()
 	}
 
@@ -220,7 +236,8 @@ export class SyncHub {
 			baseUrl: this.config.baseUrl,
 			getToken: this.config.getToken,
 			...(this.config.invalidateToken ? { invalidateToken: this.config.invalidateToken } : {}),
-			...(this.config.WebSocket ? { WebSocket: this.config.WebSocket } : {}),
+			...(this.mux ? { WebSocket: this.mux.WebSocket } : {}),
+			...(!this.mux && this.config.WebSocket ? { WebSocket: this.config.WebSocket } : {}),
 			...(this.config.backoff ? { backoff: this.config.backoff } : {}),
 			...(this.config.heartbeatIntervalMs
 				? { heartbeatIntervalMs: this.config.heartbeatIntervalMs }
