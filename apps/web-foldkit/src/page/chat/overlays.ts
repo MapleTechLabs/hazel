@@ -175,7 +175,7 @@ export interface MessageFacts {
 
 const HIDE_DELAY = Duration.millis(200)
 
-const WaitForHideToolbar = Command.define("WaitForHideToolbar", {
+export const WaitForHideToolbar = Command.define("WaitForHideToolbar", {
 	args: { version: Schema.Number },
 	messages: [Message.CompletedWaitForHideToolbar],
 	execute: ({ version }) =>
