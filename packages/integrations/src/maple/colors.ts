@@ -36,12 +36,14 @@ const SIGNAL_LABELS: Record<MapleSignalType, string> = {
 	p99_latency: "P99 latency",
 	apdex: "Apdex",
 	throughput: "Throughput",
-	metric: "Metric",
-	query: "Query",
+	builder_query: "Query",
+	raw_query: "SQL query",
+	uptime: "Uptime",
 }
 
-export function formatSignalType(signal: MapleSignalType): string {
-	return SIGNAL_LABELS[signal] ?? signal
+/** A signal type Hazel does not know yet is shown as it came. */
+export function formatSignalType(signal: string): string {
+	return Object.hasOwn(SIGNAL_LABELS, signal) ? SIGNAL_LABELS[signal as MapleSignalType] : signal
 }
 
 export function severityIntent(severity: MapleSeverity): BadgeIntent {

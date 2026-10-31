@@ -103,19 +103,13 @@ export type MapleIncidentStatus = Schema.Schema.Type<typeof MapleIncidentStatus>
 export const MapleSeverity = Schema.Literals(["warning", "critical"])
 export type MapleSeverity = Schema.Schema.Type<typeof MapleSeverity>
 
-export const MapleComparator = Schema.Literals(["gt", "gte", "lt", "lte"])
-export type MapleComparator = Schema.Schema.Type<typeof MapleComparator>
-
-export const MapleSignalType = Schema.Literals([
-	"error_rate",
-	"p95_latency",
-	"p99_latency",
-	"apdex",
-	"throughput",
-	"metric",
-	"query",
-])
-export type MapleSignalType = Schema.Schema.Type<typeof MapleSignalType>
+/**
+ * Open strings, not literals: Maple adds comparators and signal types (`between`, `uptime`,
+ * `builder_query`...) on its own schedule, and an alert Hazel cannot name yet must still arrive.
+ * The embed shows a value it does not know as it came.
+ */
+export const MapleComparator = Schema.String
+export const MapleSignalType = Schema.String
 
 export const MapleAlertRule = Schema.Struct({
 	id: Schema.String,
@@ -125,6 +119,8 @@ export const MapleAlertRule = Schema.Struct({
 	groupKey: Schema.NullOr(Schema.String),
 	comparator: MapleComparator,
 	threshold: Schema.Number,
+	/** The upper bound of a `between` / `not_between` rule. */
+	thresholdUpper: Schema.optional(Schema.NullOr(Schema.Number)),
 	windowMinutes: Schema.Number,
 })
 export type MapleAlertRule = Schema.Schema.Type<typeof MapleAlertRule>
@@ -132,8 +128,19 @@ export type MapleAlertRule = Schema.Schema.Type<typeof MapleAlertRule>
 export const MapleObserved = Schema.Struct({
 	value: Schema.NullOr(Schema.Number),
 	sampleCount: Schema.NullOr(Schema.Number),
+	/** Uptime rules: the failing check's error, e.g. `Status 503, expected 2xx`. */
+	detail: Schema.optional(Schema.NullOr(Schema.String)),
 })
 export type MapleObserved = Schema.Schema.Type<typeof MapleObserved>
+
+/** What the alert saw, snapshotted when Maple queued it. */
+export const MapleChart = Schema.Struct({
+	/** Unicode sparkline of the recent values. */
+	sparkline: Schema.optional(Schema.String),
+	/** Signed, public URL of the chart image. */
+	url: Schema.optional(Schema.String),
+})
+export type MapleChart = Schema.Schema.Type<typeof MapleChart>
 
 export class MaplePayload extends Schema.Class<MaplePayload>("MaplePayload")({
 	eventType: MapleEventType,
@@ -141,7 +148,10 @@ export class MaplePayload extends Schema.Class<MaplePayload>("MaplePayload")({
 	incidentStatus: MapleIncidentStatus,
 	dedupeKey: Schema.String,
 	rule: MapleAlertRule,
+	/** The highest severity the incident reached. */
+	peakSeverity: Schema.optional(Schema.NullOr(MapleSeverity)),
 	observed: MapleObserved,
+	chart: Schema.optional(Schema.NullOr(MapleChart)),
 	linkUrl: Schema.String,
 	chatUrl: Schema.String,
 	sentAt: Schema.String,
