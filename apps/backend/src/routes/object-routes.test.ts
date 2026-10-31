@@ -361,6 +361,35 @@ describe("public API (v1) for bots outside Hazel", () => {
 				])
 				world.objects.published.length = 0
 
+				// A deleted author is named nowhere: the event goes out without one.
+				const directory = Context.get(world.objects.directory, Directory)
+				const setDeleted = (deletedAt: Date | null) =>
+					directory.db
+						.run(
+							SQLite.update(schema.usersTable)
+								.set({ deletedAt })
+								.where(($) => [$.id.eq(botUserId)]),
+						)
+						.pipe(Effect.orDie)
+				yield* setDeleted(new Date())
+				yield* json(
+					yield* request("/api/v1/messages", {
+						method: "POST",
+						body: JSON.stringify({
+							channelId: world.channelId,
+							content: "from a deleted author",
+							replyToMessageId: null,
+							threadChannelId: null,
+							embeds: null,
+						}),
+					}),
+				)
+				const anonymous = world.objects.published.map((entry) => entry.envelope)
+				expect(anonymous).toHaveLength(2)
+				expect(anonymous.every((envelope) => !("author" in envelope))).toBe(true)
+				yield* setDeleted(null)
+				world.objects.published.length = 0
+
 				const press = (actionId: string, userId: UserId = world.alice) =>
 					invokeAs(
 						world.channel,
