@@ -64,7 +64,7 @@ const setup = (rememberedOrgSources?: RememberedOrgSources) => {
 		{ userSources, orgSources, userOrganizations, connectConversations, rememberedOrgSources },
 		userId,
 	)
-	return { sockets, hub, userSources, orgSources, userOrganizations, stop }
+	return { sockets, hub, userSources, orgSources, userOrganizations, connectConversations, stop }
 }
 
 const socketFor = async (sockets: ReturnType<typeof fakeSockets>, path: string) => {
@@ -162,8 +162,18 @@ describe("sync connection manager", () => {
 
 	it("settles the org sources once the user's object and every org source have answered", async () => {
 		const { remembered } = memory({ [userId]: [`org:${orgA}`] })
-		const { sockets, hub, orgSources, userOrganizations } = setup(remembered)
-		const settled = orgSourcesSettled({ userOrganizations, orgSources, hub })
+		const { sockets, hub, orgSources, userOrganizations, connectConversations } = setup(remembered)
+		const settled = orgSourcesSettled({
+			userOrganizations,
+			userOrganizationsStatus: userOrganizations,
+			connectConversations,
+			orgSources,
+			hub,
+		})
+		// Whenever the user's organizations change, the remembered set must not count as settled:
+		// the manager may not have applied the real set yet (listener order is not guaranteed).
+		const settledOnArrival: Array<boolean> = []
+		userOrganizations.on("status:change", () => void settledOnArrival.push(settled.isSettled()))
 		let changes = 0
 		const unsubscribe = settled.subscribe(() => void changes++)
 		expect(settled.isSettled()).toBe(false)
@@ -183,6 +193,8 @@ describe("sync connection manager", () => {
 		joinedSocket.snapshot(1, {})
 		await vi.waitFor(() => expect(settled.isSettled()).toBe(true))
 		expect(changes).toBeGreaterThan(0)
+		expect(settledOnArrival.length).toBeGreaterThan(0)
+		expect(settledOnArrival.every((isSettled) => !isSettled)).toBe(true)
 		unsubscribe()
 	})
 })

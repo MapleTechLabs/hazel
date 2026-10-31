@@ -8,13 +8,7 @@
  * instead of after its snapshot. A remembered org the user has left refuses its socket (4003),
  * which drops its rows, and the user's object then sets the real set.
  */
-import {
-	type MutableSourceSet,
-	type SourceKey,
-	type SourceSet,
-	type SyncHub,
-	sourceKey,
-} from "@hazel/effect-db-collection"
+import { type MutableSourceSet, type SourceKey, type SyncHub, sourceKey } from "@hazel/effect-db-collection"
 import type { Collection } from "@tanstack/db"
 import type { EmptyHold } from "../../data/live-query"
 import type { OrganizationId, UserId } from "@hazel/schema"
@@ -55,7 +49,9 @@ const sameSources = (a: ReadonlyArray<SourceKey>, b: ReadonlyArray<SourceKey>) =
 	a.length === b.length && a.every((source, index) => source === b[index])
 
 /** The org sources: the user's orgs and the Connect host orgs; unknown until the user's object synced. */
-export const orgSourcesOf = (deps: SyncManagerDeps): ReadonlyArray<SourceKey> | undefined => {
+export const orgSourcesOf = (
+	deps: Pick<SyncManagerDeps, "userOrganizations" | "connectConversations">,
+): ReadonlyArray<SourceKey> | undefined => {
 	if (!deps.userOrganizations.isReady()) return undefined
 	const ids = new Set<OrganizationId>(deps.userOrganizations.toArray.map((row) => row.organizationId))
 	for (const conversation of deps.connectConversations.toArray) {
@@ -65,21 +61,35 @@ export const orgSourcesOf = (deps: SyncManagerDeps): ReadonlyArray<SourceKey> | 
 }
 
 /**
- * The org sources are known and have answered: `user_organizations` has loaded, and every org
- * source in the set has its snapshot (or refused). Until then a query over them may lack an org
- * the user just joined: its source is a guess or still connecting.
+ * The org sources are known and have answered: the open set is the one `user_organizations`
+ * names (not last load's guess, nor a set the manager has yet to apply), and every source in it
+ * has its snapshot (or refused). Until then a query over them may lack an org the user just
+ * joined.
  */
-export const orgSourcesSettled = (deps: {
-	readonly userOrganizations: Pick<Collection<any, any>, "isReady" | "on">
-	readonly orgSources: SourceSet
-	readonly hub: Pick<SyncHub, "connectionOf" | "subscribeStatus">
-}): EmptyHold => ({
-	isSettled: () =>
-		deps.userOrganizations.isReady() &&
-		(deps.orgSources.get() ?? []).every((source) => deps.hub.connectionOf(source)?.isSettled === true),
+export const orgSourcesSettled = (
+	deps: Pick<SyncManagerDeps, "userOrganizations" | "connectConversations" | "orgSources"> & {
+		/** The user's organizations again, for their status (an empty one becomes ready silently). */
+		readonly userOrganizationsStatus: Pick<Collection<any, any>, "on">
+		readonly hub: Pick<SyncHub, "connectionOf" | "subscribeStatus">
+	},
+): EmptyHold => ({
+	isSettled: () => {
+		const expected = orgSourcesOf(deps)
+		const current = deps.orgSources.get()
+		return (
+			expected !== undefined &&
+			current !== undefined &&
+			sameSources(current, expected) &&
+			current.every((source) => deps.hub.connectionOf(source)?.isSettled === true)
+		)
+	},
 	subscribe: (onChange) => {
+		const rows = [deps.userOrganizations, deps.connectConversations].map((collection) =>
+			collection.subscribeChanges(onChange, { includeInitialState: false }),
+		)
 		const unsubscribes = [
-			deps.userOrganizations.on("status:change", onChange),
+			...rows.map((subscription) => () => subscription.unsubscribe()),
+			deps.userOrganizationsStatus.on("status:change", onChange),
 			deps.orgSources.subscribe(onChange),
 			deps.hub.subscribeStatus(onChange),
 		]
@@ -167,8 +177,8 @@ export const syncSession = (userId: UserId): Stream.Stream<never> =>
 
 /** `orgSourcesSettled` over the app's collections and hub. */
 export const appOrgSourcesSettled = orgSourcesSettled({
-	userOrganizations: userOrganizationCollection,
-	orgSources,
+	...appDeps,
+	userOrganizationsStatus: userOrganizationCollection,
 	hub: syncHub,
 })
 
