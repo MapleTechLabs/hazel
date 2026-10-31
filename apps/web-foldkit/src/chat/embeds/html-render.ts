@@ -19,7 +19,9 @@ export type EmbedHtml = NonNullable<EmbedType["html"]>
 export interface HtmlRenderContext<M> {
 	readonly channelId: ChannelId
 	readonly messageId: MessageId
-	/** The message's frames, by render id (`MessageRowData.htmlRenders`). */
+	/** Where the frames show; each surface keeps its own heights. */
+	readonly surface: HtmlRender.FrameSurface
+	/** The message's frames on that surface, by render id (`MessageRowData.htmlRenders`). */
 	readonly rows: ReadonlyArray<HtmlRenderRow>
 	readonly toMessage: (message: HtmlRender.Message) => M
 }
@@ -35,7 +37,7 @@ const frameAttributes = <M>(
 	mode: HtmlRender.FrameMode,
 	toMessage: (message: HtmlRender.Message) => M,
 ) => [
-	h.Attribute("loading", mode === "inline" ? "lazy" : "eager"),
+	h.Attribute("loading", mode === "fullscreen" ? "eager" : "lazy"),
 	h.Attribute("sandbox", "allow-scripts"),
 	h.Attribute("referrerpolicy", "no-referrer"),
 	h.Attribute("title", title),
@@ -51,10 +53,11 @@ const frameView = <M>(
 	ref: HtmlRender.RenderRef,
 	title: string,
 	row: HtmlRenderRow,
+	surface: HtmlRender.FrameSurface,
 	toMessage: (message: HtmlRender.Message) => M,
 ): Html =>
 	h.iframe([
-		...frameAttributes(h, ref, title, row.src ?? "", "inline", toMessage),
+		...frameAttributes(h, ref, title, row.src ?? "", surface, toMessage),
 		h.Class(htmlRenderStyles({ isLoaded: row.isLoaded }).frame()),
 		// The frame's canvas stays transparent only while its color scheme matches the page's.
 		h.Style({
@@ -70,7 +73,7 @@ export const htmlRenderView = <M>(
 	context: HtmlRenderContext<M>,
 ): Html => {
 	const row = context.rows.find((candidate) => candidate.renderId === html.renderId)
-	const { toMessage } = context
+	const { surface, toMessage } = context
 	const height = HtmlRender.frameHeightOf(html.height, undefined)
 	const shownHeight = row?.shownHeight ?? height.shown
 	const status = row?.status ?? "Loading"
@@ -78,14 +81,17 @@ export const htmlRenderView = <M>(
 	const ref = { channelId: context.channelId, messageId: context.messageId, renderId: html.renderId }
 	// Keyed per message: a pooled list container that switches rows inserts a new box, so it mounts.
 	return h.keyed("div")(
-		`html-render-${HtmlRender.renderKey(ref)}`,
-		[h.Class(styles.root()), h.OnMount(Mount.mapMessage(HtmlRender.FrameMounted({ ref }), toMessage))],
+		`html-render-${HtmlRender.frameKey(surface, ref)}`,
+		[
+			h.Class(styles.root()),
+			h.OnMount(Mount.mapMessage(HtmlRender.FrameMounted({ ref, surface }), toMessage)),
+		],
 		[
 			h.div(
 				[h.Class(styles.viewport()), h.Style({ height: `${shownHeight}px` })],
 				[
 					row !== undefined && row.status === "Ready" && row.src !== null
-						? frameView(h, ref, html.title, row, toMessage)
+						? frameView(h, ref, html.title, row, surface, toMessage)
 						: h.empty,
 					status === "Failed"
 						? h.p([h.Class(styles.error())], [`Unable to load ${html.title}`])
@@ -116,7 +122,7 @@ export const htmlRenderView = <M>(
 							h.Type("button"),
 							h.Class(styles.toggle()),
 							h.AriaExpanded(row.isExpanded),
-							h.OnClick(toMessage(HtmlRender.Message.ClickedToggleExpanded({ ref }))),
+							h.OnClick(toMessage(HtmlRender.Message.ClickedToggleExpanded({ ref, surface }))),
 						],
 						[row.isExpanded ? "Show less" : "Show more"],
 					)

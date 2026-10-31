@@ -7,7 +7,7 @@ import type { ChannelId, HtmlRenderId, MessageId, OrganizationId, UserId } from 
 import { Cause, Effect, Exit, Option, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { decodeExit, encodePayload, type HazelRpcTag, rpcFor } from "../../rpc/dispatch"
-import { htmlRenderKey } from "../../services/html-renders"
+import { htmlRenderKey, pendingHtmlRenderKey } from "../../services/html-renders"
 import { channelTarget } from "./kinds"
 import { encodeInvokePrincipal } from "./principal"
 import { makeTestObjects, type TestObject } from "./testing"
@@ -45,7 +45,10 @@ const ok = <A>(exit: Exit.Exit<A, unknown>) => {
 const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
 	Effect.runPromise(Effect.scoped(effect) as Effect.Effect<A, E>)
 
-/** A channel whose viewers are `author` and `alice`; `store` puts a page `author` published. */
+/**
+ * A channel whose viewers are `author` and `alice`. `store` publishes a page as `author` (pending
+ * until a message claims it); `stored` is whether it still exists, `claimed` whether it was kept.
+ */
 const makeChannel = Effect.gen(function* () {
 	const objects = yield* makeTestObjects
 	const orgId = uuid() as OrganizationId
@@ -65,10 +68,24 @@ const makeChannel = Effect.gen(function* () {
 		sender: { kind: "org", id: orgId },
 	})
 	expect(applied._tag).toBe("Applied")
-	const key = (renderId: HtmlRenderId) => htmlRenderKey({ channelId: id, authorId: author!, renderId })
-	const stored = (renderId: HtmlRenderId) => objects.bucket.has(key(renderId))
-	const store = (renderId: HtmlRenderId) => void objects.bucket.set(key(renderId), "<p>page</p>")
-	return { objects, object, id, author: author!, alice: alice!, outsider: outsider!, stored, store }
+	const location = (renderId: HtmlRenderId) => ({ channelId: id, authorId: author!, renderId })
+	const claimed = (renderId: HtmlRenderId) => objects.bucket.has(htmlRenderKey(location(renderId)))
+	const pending = (renderId: HtmlRenderId) => objects.bucket.has(pendingHtmlRenderKey(location(renderId)))
+	const stored = (renderId: HtmlRenderId) => claimed(renderId) || pending(renderId)
+	const store = (renderId: HtmlRenderId) =>
+		void objects.bucket.set(pendingHtmlRenderKey(location(renderId)), "<p>page</p>")
+	return {
+		objects,
+		object,
+		id,
+		author: author!,
+		alice: alice!,
+		outsider: outsider!,
+		stored,
+		claimed,
+		pending,
+		store,
+	}
 })
 
 const htmlEmbed = (renderId: HtmlRenderId) => ({ html: { renderId, title: "Chart", height: 200 } })
@@ -149,6 +166,10 @@ describe("HTML renders", () => {
 						ok,
 					)
 
+				// The message claimed its page: out of the expiring `pending/`.
+				expect(channel.claimed(first!)).toBe(true)
+				expect(channel.pending(first!)).toBe(false)
+
 				// Editing the content alone keeps the page.
 				yield* update({ content: "Report v2" })
 				expect(channel.stored(first!)).toBe(true)
@@ -156,7 +177,7 @@ describe("HTML renders", () => {
 				// Replacing the embed's page deletes the old one.
 				yield* update({ embeds: [htmlEmbed(second!)] })
 				expect(channel.stored(first!)).toBe(false)
-				expect(channel.stored(second!)).toBe(true)
+				expect(channel.claimed(second!)).toBe(true)
 
 				ok(
 					yield* call(
@@ -168,8 +189,9 @@ describe("HTML renders", () => {
 					),
 				)
 				expect(channel.stored(second!)).toBe(false)
-				// A page no message showed is left alone.
-				expect(channel.stored(third!)).toBe(true)
+				// A page no message showed stays pending, for the bucket's lifecycle rule to expire.
+				expect(channel.pending(third!)).toBe(true)
+				expect(channel.claimed(third!)).toBe(false)
 			}),
 		))
 
@@ -218,7 +240,11 @@ describe("HTML renders", () => {
 						channel.alice,
 					),
 				)
-				// Her message's URL names her as publisher, where nothing is stored (the route answers 404).
+				// Her message claims nothing (she published nothing): no page under her id. Its URL names
+				// her as publisher, where nothing is stored (the route answers 404).
+				const hers = { channelId: channel.id, authorId: channel.alice, renderId }
+				expect(channel.objects.bucket.has(htmlRenderKey(hers))).toBe(false)
+				expect(channel.objects.bucket.has(pendingHtmlRenderKey(hers))).toBe(false)
 				expect(signed.url).toContain(`/${channel.alice}/${renderId}`)
 				ok(
 					yield* call(

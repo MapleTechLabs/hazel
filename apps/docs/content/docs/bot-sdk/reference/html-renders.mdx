@@ -50,4 +50,4 @@ The HTTP API is `POST /api/v1/html-renders` (`{ channelId, title, html, height }
 - **Layout**: the frame is as wide as the message column and sits on the channel background. Leave `html` and `body` without a background, outer card or side padding, and use fluid widths.
 - **Height**: `height` is the frame's height until the page loads (80 to 2000 px); after that the frame fits the content. Viewport height units (`vh`, `dvh`...) are rejected, and `height: 100%` on `html` or `body` makes the frame grow forever.
 
-Only members of the channel can open the page. Deleting the message, or replacing its page, deletes the stored page.
+Only members of the channel can open the page, and only through a message that shows it. A published page is kept once a message shows it; one no message shows within a day (a failed send, a publish you never posted) is deleted. Deleting the message, or replacing its page, deletes the stored page. If a send fails after the page was published, the SDK deletes the page right away; `DELETE /api/v1/html-renders/:renderId?channel_id=` does the same over HTTP.

@@ -138,7 +138,7 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 		{ isActive: Schema.Boolean },
 		{
 			modelToDependencies: ({ model }) => ({
-				isActive: Object.keys(model.htmlRender.renders).length > 0,
+				isActive: Object.keys(model.htmlRender.urls).length > 0,
 			}),
 			dependenciesToStream: ({ isActive }) =>
 				isActive

@@ -3,7 +3,13 @@ import type { ChannelId, HtmlRenderId, UserId } from "@hazel/schema"
 import { ConfigProvider, Effect, Exit, Layer, Option } from "effect"
 import { TestClock } from "effect/testing"
 import { describe, expect, it } from "vitest"
-import { HTML_RENDER_URL_TTL_MS, HtmlRenderStore, HtmlRenders, htmlRenderKey } from "./html-renders"
+import {
+	HTML_RENDER_URL_TTL_MS,
+	HtmlRenderStore,
+	HtmlRenders,
+	htmlRenderKey,
+	pendingHtmlRenderKey,
+} from "./html-renders"
 
 const channelId = crypto.randomUUID() as ChannelId
 const authorId = crypto.randomUUID() as UserId
@@ -52,9 +58,36 @@ describe("HtmlRenders", () => {
 		)
 		expect(reference.title).toBe("Chart")
 		expect(reference.height).toBe(2000)
-		const page = bucket.get(htmlRenderKey({ channelId, authorId, renderId: reference.renderId }))!
+		const location = { channelId, authorId, renderId: reference.renderId }
+		// Pending until a message claims it.
+		expect(bucket.has(htmlRenderKey(location))).toBe(false)
+		const page = bucket.get(pendingHtmlRenderKey(location))!
 		expect(page).toContain('<style id="hazel-theme">')
 		expect(page).toContain("<h1>Hi</h1>")
+	})
+
+	it("claims a pending page once, reads it before and after, and removes either", async () => {
+		const bucket = new Map<string, string>()
+		const location = { channelId, authorId, renderId: crypto.randomUUID() as HtmlRenderId }
+		bucket.set(pendingHtmlRenderKey(location), "<p>page</p>")
+		const result = await run(
+			Effect.gen(function* () {
+				const renders = yield* HtmlRenders
+				const beforeClaim = yield* renders.read(location)
+				yield* renders.claim(location)
+				// A second claim (a reused reference) finds nothing pending and keeps the page.
+				yield* renders.claim(location)
+				const afterClaim = yield* renders.read(location)
+				const keys = [...bucket.keys()]
+				yield* renders.remove(location)
+				return { beforeClaim, afterClaim, keys, left: bucket.size }
+			}),
+			bucket,
+		)
+		expect(Option.getOrNull(result.beforeClaim)).toBe("<p>page</p>")
+		expect(Option.getOrNull(result.afterClaim)).toBe("<p>page</p>")
+		expect(result.keys).toEqual([htmlRenderKey(location)])
+		expect(result.left).toBe(0)
 	})
 
 	it("refuses viewport height units and oversized pages", async () => {

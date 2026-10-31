@@ -2,7 +2,7 @@ import { AttachmentRepo, MessageRepo } from "@hazel/backend-core"
 import { Database, SQLite, schema } from "@hazel/db"
 import { CurrentUser, MessageNotFoundError, withRemapDbErrors } from "@hazel/domain"
 import { HtmlRenderUrlResponse, MessageResponse, MessageRpcs } from "@hazel/domain/rpc"
-import type { ChannelId, HtmlRenderId, MessageId, UserId } from "@hazel/schema"
+import type { ChannelId, HtmlRenderId, UserId } from "@hazel/schema"
 import { Effect, Option } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
 import { AttachmentPolicy } from "../../policies/attachment-policy"
@@ -17,30 +17,33 @@ import { StorageEffects } from "../../worker/objects/effects/storage-effects"
 import { searchMessages } from "../../worker/objects/org/message-search"
 
 /**
- * Delete the pages of renders a message stopped showing, once the write commits. A page another
- * of the channel's messages still shows stays (a bot may reuse a published reference).
+ * Claim (`storage.claimHtmlRenders`) or delete (`storage.deleteHtmlRenders`) the pages of renders a
+ * message started or stopped showing, once the write commits.
  */
-const deleteHtmlRenders = (
-	message: { readonly id: MessageId; readonly channelId: ChannelId; readonly authorId: UserId },
+const enqueueHtmlRenders = (
+	kind: typeof StorageEffects.claimHtmlRenders | typeof StorageEffects.deleteHtmlRenders,
+	message: { readonly channelId: ChannelId; readonly authorId: UserId },
 	renderIds: ReadonlyArray<HtmlRenderId>,
 ) =>
-	Effect.gen(function* () {
-		if (renderIds.length === 0) return
-		const db = yield* Database.Database
-		const unshown = yield* Effect.filter(renderIds, (renderId) =>
-			db
-				.query(
-					Database.sql`SELECT 1 FROM messages WHERE id != ${message.id} AND authorId = ${message.authorId} AND deletedAt IS NULL AND embeds LIKE ${`%${renderId}%`} LIMIT 1`,
-				)
-				.pipe(Effect.map((rows) => rows.length === 0)),
-		)
-		if (unshown.length === 0) return
-		yield* enqueueEffect(
-			StorageEffects.deleteHtmlRenders,
-			{ kind: "storage" },
-			{ channelId: message.channelId, authorId: message.authorId, renderIds: unshown },
-		)
-	}).pipe(Effect.catchTag("SchemaError", (error) => Effect.die(error)))
+	renderIds.length === 0
+		? Effect.void
+		: Effect.asVoid(
+				enqueueEffect(
+					kind,
+					{ kind: "storage" },
+					{ channelId: message.channelId, authorId: message.authorId, renderIds },
+				),
+			).pipe(Effect.catchTag("SchemaError", (error) => Effect.die(error)))
+
+const claimHtmlRenders = (
+	message: { readonly channelId: ChannelId; readonly authorId: UserId },
+	renderIds: ReadonlyArray<HtmlRenderId>,
+) => enqueueHtmlRenders(StorageEffects.claimHtmlRenders, message, renderIds)
+
+const deleteHtmlRenders = (
+	message: { readonly channelId: ChannelId; readonly authorId: UserId },
+	renderIds: ReadonlyArray<HtmlRenderId>,
+) => enqueueHtmlRenders(StorageEffects.deleteHtmlRenders, message, renderIds)
 
 /**
  * Message RPC handlers. Writes run in the message's `ChannelObject` (`rpc/routing.ts`), search in
@@ -93,6 +96,10 @@ export const MessageRpcLive = MessageRpcs.toLayer(
 									)
 								}
 
+								yield* claimHtmlRenders(
+									createdMessage,
+									htmlRenderIdsOf(createdMessage.embeds),
+								)
 								yield* emitMessageEvent({ _tag: "MessageCreated", message: createdMessage })
 
 								const txid = yield* generateTransactionId()
@@ -118,12 +125,15 @@ export const MessageRpcLive = MessageRpcs.toLayer(
 								const updatedMessage = yield* messageRepo.update({ id, ...payload })
 
 								if (Option.isSome(existing)) {
-									const kept = new Set(htmlRenderIdsOf(updatedMessage.embeds))
+									const before = new Set(htmlRenderIdsOf(existing.value.embeds))
+									const after = new Set(htmlRenderIdsOf(updatedMessage.embeds))
+									yield* claimHtmlRenders(
+										updatedMessage,
+										[...after].filter((renderId) => !before.has(renderId)),
+									)
 									yield* deleteHtmlRenders(
 										updatedMessage,
-										htmlRenderIdsOf(existing.value.embeds).filter(
-											(renderId) => !kept.has(renderId),
-										),
+										[...before].filter((renderId) => !after.has(renderId)),
 									)
 								}
 								yield* emitMessageEvent({ _tag: "MessageUpdated", message: updatedMessage })

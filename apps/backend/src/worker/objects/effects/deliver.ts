@@ -66,7 +66,7 @@ const chatSyncSide = side<Database.Database | SqlClient | ChatSyncTransport | Di
 	chatSyncDeliveryReceivers,
 )
 
-const storageSide = side<HtmlRenders>(StorageEffects, storageReceivers)
+const storageSide = side<Database.Database | HtmlRenders>(StorageEffects, storageReceivers)
 
 const failure = (message: string, retryable = true) => new OutboxDeliveryError({ message, retryable })
 

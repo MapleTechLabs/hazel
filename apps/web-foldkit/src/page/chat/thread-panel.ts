@@ -1,13 +1,15 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { handleStyles, indicatorStyles, panelStyles } from "~/components/ui/split-panel/split-panel.styles"
 import { format } from "date-fns"
+import { htmlRenderView } from "../../chat/embeds/html-render"
+import type * as HtmlRender from "../../chat/html-render"
 import { messageRowView, type RowContext } from "../../chat/message/row"
 import { markdownView } from "../../chat/markdown/markdown-view"
 import { IconClose, IconEdit, IconPenSparkle } from "../../icons"
 import { avatar } from "../../ui/avatar"
 import { button } from "../../ui/button"
 import { loader } from "../../ui/loader"
-import { type DeriveContext, authorIdentity } from "./derive"
+import { type DeriveContext, authorIdentity, htmlRendersOf } from "./derive"
 import type { ChatMessage, MessageRow } from "./rows"
 
 /** Port of `SplitPanel` + `ThreadPanel` (header, original message, `ThreadMessageList`, composer). */
@@ -21,6 +23,8 @@ export interface ThreadPanelInputs<M> {
 	readonly rows: ReadonlyArray<MessageRow>
 	readonly context: DeriveContext
 	readonly rowContext: RowContext<M>
+	/** The original message's HTML render frames, on the thread surface. */
+	readonly toHtmlRenderMessage: (message: HtmlRender.Message) => M
 	readonly onClose: M
 	readonly onGenerateName: M
 	readonly onRename: M
@@ -51,10 +55,38 @@ const headerButton = <M>(
 		[icon],
 	)
 
-const originalView = <M>(h: HtmlBuilder<M>, original: ChatMessage, context: DeriveContext): Html => {
-	const author = authorIdentity(original.author, context.botNames.get(original.authorId))
+/** The original message's HTML renders, in their own frames: the list's copy is sized for its width. */
+const originalRendersView = <M>(
+	h: HtmlBuilder<M>,
+	original: ChatMessage,
+	context: DeriveContext,
+	toMessage: (message: HtmlRender.Message) => M,
+): Html => {
+	const renders = (original.embeds ?? []).flatMap((embed) => (embed.html === undefined ? [] : [embed.html]))
+	if (renders.length === 0) return h.empty
+	const renderContext = {
+		channelId: original.channelId,
+		messageId: original.id,
+		surface: "thread" as const,
+		rows: htmlRendersOf(context, original, "thread"),
+		toMessage,
+	}
 	return h.div(
-		[h.Class("border-border border-b bg-secondary px-4 py-3")],
+		[h.Class("mt-2 flex flex-col gap-2")],
+		renders.map((html) => htmlRenderView(h, html, renderContext)),
+	)
+}
+
+const originalView = <M>(
+	h: HtmlBuilder<M>,
+	original: ChatMessage,
+	context: DeriveContext,
+	toHtmlRenderMessage: (message: HtmlRender.Message) => M,
+): Html => {
+	const author = authorIdentity(original.author, context.botNames.get(original.authorId))
+	// Capped: a tall HTML render scrolls here instead of squeezing the replies.
+	return h.div(
+		[h.Class("max-h-[45vh] shrink-0 overflow-y-auto border-border border-b bg-secondary px-4 py-3")],
 		[
 			h.div(
 				[h.Class("flex gap-3")],
@@ -79,6 +111,7 @@ const originalView = <M>(h: HtmlBuilder<M>, original: ChatMessage, context: Deri
 								],
 							),
 							h.div([h.Class("mt-1")], [markdownView(h, original.content)]),
+							originalRendersView(h, original, context, toHtmlRenderMessage),
 						],
 					),
 				],
@@ -183,7 +216,12 @@ export const threadPanelView = <M>(h: HtmlBuilder<M>, inputs: ThreadPanelInputs<
 							),
 							inputs.original === null
 								? h.empty
-								: originalView(h, inputs.original, inputs.context),
+								: originalView(
+										h,
+										inputs.original,
+										inputs.context,
+										inputs.toHtmlRenderMessage,
+									),
 							h.div([h.Class("flex-1 overflow-hidden bg-bg")], [listView(h, inputs)]),
 							h.div(
 								[h.Class("border-border border-t bg-bg px-4 py-3")],

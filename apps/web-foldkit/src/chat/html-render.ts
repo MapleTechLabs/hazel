@@ -23,8 +23,9 @@ import * as Modal from "../ui/modal"
 
 /**
  * HTML renders (`MessageEmbed.html`): a bot's sandboxed page, framed from a short-lived signed URL
- * (`message.htmlRenderUrl`). The page keeps one state per message and render; the frames talk to the app over
- * `postMessage` (`@hazel/domain/html-render`), which the bridge Stream reads.
+ * (`message.htmlRenderUrl`). The page keeps one URL per message and render, and one display state per
+ * inline frame of it (the message list's, and the thread panel's when the message heads an open thread);
+ * the frames talk to the app over `postMessage` (`@hazel/domain/html-render`), which the bridge Stream reads.
  */
 
 /** Inline frames taller than this show "Show more". */
@@ -34,25 +35,40 @@ const MIN_URL_LIFE_MS = 5 * 60_000
 
 // MODEL
 
-/** A render as one message shows it: URLs are minted, and frames kept, per message and render. */
+/** A render as one message shows it: URLs are minted per message and render. */
 export const RenderRef = Schema.Struct({ channelId: ChannelId, messageId: MessageId, renderId: HtmlRenderId })
 export type RenderRef = typeof RenderRef.Type
 
 export const renderKey = (ref: Pick<RenderRef, "messageId" | "renderId">): string =>
 	`${ref.messageId}/${ref.renderId}`
 
+/**
+ * Where an inline frame shows: the message list, or the thread panel's original message. The same
+ * render can show in both at once, at different widths, so each keeps its own heights.
+ */
+export const FrameSurface = Schema.Literals(["list", "thread"])
+export type FrameSurface = typeof FrameSurface.Type
+
+/** A frame: an inline one on its surface, or the fullscreen dialog's. */
+export const FrameMode = Schema.Literals(["list", "thread", "fullscreen"])
+export type FrameMode = typeof FrameMode.Type
+
+/** An inline frame's state key: its surface and render. */
+export const frameKey = (surface: FrameSurface, ref: Pick<RenderRef, "messageId" | "renderId">): string =>
+	`${surface}:${renderKey(ref)}`
+
+const isSurface = (mode: FrameMode): mode is FrameSurface => mode !== "fullscreen"
+
 export const HtmlRenderThemeSchema = Schema.Struct({
 	appearance: Schema.Literals(["light", "dark"]),
 	variables: Schema.Record(Schema.String, Schema.String),
 })
 
-/** The signed URL: `src` is what the inline frame loaded and keeps; `url` the latest mint. */
+/** The render's signed URL, shared by its frames: `url` is the latest mint. */
 export const UrlState = defineTaggedUnion({
 	Loading: {},
 	Failed: {},
 	Ready: {
-		src: Schema.String,
-		srcExpiresAt: Schema.Number,
 		url: Schema.String,
 		expiresAt: Schema.Number,
 		isMinting: Schema.Boolean,
@@ -60,15 +76,18 @@ export const UrlState = defineTaggedUnion({
 })
 export type UrlState = typeof UrlState.Type
 
-export const RenderState = Schema.Struct({
-	url: UrlState,
+/** One inline frame of a render. */
+export const FrameState = Schema.Struct({
+	/** What the frame loaded and keeps; null until a URL is at hand. */
+	src: Schema.NullOr(Schema.String),
+	srcExpiresAt: Schema.Number,
 	/** The page's own height (`size-changed`), once it reported one. */
 	contentHeight: Schema.NullOr(Schema.Number),
 	isExpanded: Schema.Boolean,
-	/** The inline frame fired `load`: it shows, with the app's color scheme. */
+	/** The frame fired `load`: it shows, with the app's color scheme. */
 	isLoaded: Schema.Boolean,
 })
-export type RenderState = typeof RenderState.Type
+export type FrameState = typeof FrameState.Type
 
 export const Fullscreen = Schema.Struct({
 	ref: RenderRef,
@@ -83,14 +102,16 @@ export type Fullscreen = typeof Fullscreen.Type
 
 export const Model = Schema.Struct({
 	/** By `renderKey`. */
-	renders: Schema.Record(Schema.String, RenderState),
+	urls: Schema.Record(Schema.String, UrlState),
+	/** By `frameKey`. */
+	frames: Schema.Record(Schema.String, FrameState),
 	/** The app's tokens as the page's variables; null until first read. */
 	theme: Schema.NullOr(HtmlRenderThemeSchema),
 	fullscreen: Schema.NullOr(Fullscreen),
 })
 export type Model = typeof Model.Type
 
-export const init = (): Model => ({ renders: {}, theme: null, fullscreen: null })
+export const init = (): Model => ({ urls: {}, frames: {}, theme: null, fullscreen: null })
 
 export const FULLSCREEN_MODAL_ID = "html-render-fullscreen"
 
@@ -99,18 +120,20 @@ export const FULLSCREEN_MODAL_ID = "html-render-fullscreen"
 export const MintPurpose = Schema.Literals(["Inline", "Fullscreen"])
 export type MintPurpose = typeof MintPurpose.Type
 
-export const FrameMode = Schema.Literals(["inline", "fullscreen"])
-export type FrameMode = typeof FrameMode.Type
-
 export const Message = defineMessageUnion({
-	MountedFrame: { ref: RenderRef, nowMs: Schema.Number },
+	MountedFrame: { ref: RenderRef, surface: FrameSurface, nowMs: Schema.Number },
 	LoadedFrame: { ref: RenderRef, mode: FrameMode },
 	SucceededMintUrl: { ref: RenderRef, purpose: MintPurpose, url: Schema.String, expiresAt: Schema.Number },
 	FailedMintUrl: { ref: RenderRef, purpose: MintPurpose },
-	ReportedContentHeight: { messageId: MessageId, renderId: HtmlRenderId, height: Schema.Number },
+	ReportedContentHeight: {
+		messageId: MessageId,
+		renderId: HtmlRenderId,
+		surface: FrameSurface,
+		height: Schema.Number,
+	},
 	RequestedOpenLink: { url: Schema.String },
 	ChangedAppTheme: { theme: HtmlRenderThemeSchema },
-	ClickedToggleExpanded: { ref: RenderRef },
+	ClickedToggleExpanded: { ref: RenderRef, surface: FrameSurface },
 	ClickedFullscreen: { ref: RenderRef, title: Schema.String },
 	GotFullscreenModalMessage: { message: Modal.Message },
 	CompletedPostTheme: {},
@@ -123,13 +146,13 @@ export type Message = typeof Message.Type
 export interface FrameHeight {
 	/** The page's whole height. */
 	readonly fitted: number
-	/** What the message list shows of it. */
+	/** What the frame's surface shows of it. */
 	readonly shown: number
 	readonly isTall: boolean
 }
 
 /** The embed's height until the page reports its own; inline display stops at the cap unless expanded. */
-export const frameHeightOf = (initialHeight: number, state: RenderState | undefined): FrameHeight => {
+export const frameHeightOf = (initialHeight: number, state: FrameState | undefined): FrameHeight => {
 	const fitted =
 		state?.contentHeight == null
 			? clampHtmlRenderHeight(initialHeight)
@@ -224,49 +247,70 @@ export interface UpdateReturn {
 	readonly commands?: ReadonlyArray<Command.Command<Message, never, HazelRpc>>
 }
 
-const setRender = (model: Model, key: string, state: RenderState): Model =>
-	modifyFields(model, { renders: (renders) => ({ ...renders, [key]: state }) })
+const setUrl = (model: Model, key: string, url: UrlState): Model =>
+	modifyFields(model, { urls: (urls) => ({ ...urls, [key]: url }) })
 
-const newRender = (url: UrlState): RenderState => ({
-	url,
+const setFrame = (model: Model, key: string, frame: FrameState): Model =>
+	modifyFields(model, { frames: (frames) => ({ ...frames, [key]: frame }) })
+
+const NEW_FRAME: FrameState = {
+	src: null,
+	srcExpiresAt: 0,
 	contentHeight: null,
 	isExpanded: false,
 	isLoaded: false,
-})
+}
 
 const isFullscreenOf = (fullscreen: Fullscreen | null, ref: Pick<RenderRef, "messageId" | "renderId">) =>
 	fullscreen !== null && renderKey(fullscreen.ref) === renderKey(ref)
 
 /**
- * A frame entered the DOM: mint its URL the first time (or after a failure), and again only when the
- * one it loads has expired (a new frame, so a new src reloads nothing).
+ * A frame entered the DOM. One still on a live src keeps it. Otherwise it waits for a URL (no src,
+ * not loaded): the render's minted one while it has life left, else a fresh mint. Only waiting
+ * frames take a mint, so a frame shown elsewhere never reloads.
  */
-const mountFrame = (model: Model, ref: RenderRef, nowMs: number): UpdateReturn => {
+const mountFrame = (model: Model, ref: RenderRef, surface: FrameSurface, nowMs: number): UpdateReturn => {
 	const key = renderKey(ref)
-	const state = model.renders[key]
-	if (state === undefined || state.url._tag === "Failed")
+	const fkey = frameKey(surface, ref)
+	const url = model.urls[key]
+	const frame = model.frames[fkey]
+	if (frame?.src != null && frame.srcExpiresAt > nowMs) return { model }
+	const waiting = { ...(frame ?? NEW_FRAME), src: null, isLoaded: false }
+	const withFrame =
+		frame !== undefined && frame.src === null && !frame.isLoaded ? model : setFrame(model, fkey, waiting)
+	if (url === undefined || url._tag === "Failed")
 		return {
-			model: setRender(model, key, {
-				...(state ?? newRender(UrlState.Loading())),
-				url: UrlState.Loading(),
-			}),
+			model: setUrl(withFrame, key, UrlState.Loading()),
 			commands: [MintHtmlRenderUrl({ ref, purpose: "Inline" })],
 		}
-	const url = state.url
-	if (url._tag === "Loading" || url.srcExpiresAt > nowMs) return { model }
+	if (url._tag === "Loading") return { model: withFrame }
 	if (url.expiresAt - nowMs > MIN_URL_LIFE_MS)
 		return {
-			model: setRender(model, key, {
-				...state,
-				url: { ...url, src: frameSrc(url.url, themeOf(model)), srcExpiresAt: url.expiresAt },
+			model: setFrame(withFrame, fkey, {
+				...waiting,
+				src: frameSrc(url.url, themeOf(model)),
+				srcExpiresAt: url.expiresAt,
 			}),
 		}
 	return {
-		model: setRender(model, key, { ...state, url: { ...url, isMinting: true } }),
+		model: setUrl(withFrame, key, { ...url, isMinting: true }),
 		commands: url.isMinting ? [] : [MintHtmlRenderUrl({ ref, purpose: "Inline" })],
 	}
 }
 
+/** The render's frames on every surface. */
+const framesOf = (model: Model, ref: Pick<RenderRef, "messageId" | "renderId">) =>
+	FrameSurface.literals.flatMap((surface) => {
+		const key = frameKey(surface, ref)
+		const frame = model.frames[key]
+		return frame === undefined ? [] : [{ key, frame }]
+	})
+
+/**
+ * An inline mint loads into the render's waiting frames (no src: `mountFrame`); a frame that has one,
+ * even an expired one it already loaded, keeps it and does not reload. A fullscreen mint leaves the
+ * frames alone.
+ */
 const succeedMint = (
 	model: Model,
 	ref: RenderRef,
@@ -274,50 +318,51 @@ const succeedMint = (
 	url: string,
 	expiresAt: number,
 ): Model => {
-	const key = renderKey(ref)
-	const state = model.renders[key] ?? newRender(UrlState.Loading())
-	const previous = state.url
-	const keepsSrc = previous._tag === "Ready" && purpose === "Fullscreen"
-	const withUrl = setRender(model, key, {
-		...state,
-		url: UrlState.Ready({
-			src: keepsSrc ? previous.src : frameSrc(url, themeOf(model)),
-			srcExpiresAt: keepsSrc ? previous.srcExpiresAt : expiresAt,
-			url,
-			expiresAt,
-			isMinting: false,
-		}),
-	})
-	const fullscreen = withUrl.fullscreen
+	const withUrl = setUrl(model, renderKey(ref), UrlState.Ready({ url, expiresAt, isMinting: false }))
+	const withFrames =
+		purpose === "Inline"
+			? framesOf(withUrl, ref).reduce(
+					(next, { key, frame }) =>
+						frame.src !== null
+							? next
+							: setFrame(next, key, {
+									...frame,
+									src: frameSrc(url, themeOf(model)),
+									srcExpiresAt: expiresAt,
+								}),
+					withUrl,
+				)
+			: withUrl
+	const fullscreen = withFrames.fullscreen
 	return purpose === "Fullscreen" &&
 		fullscreen !== null &&
 		isFullscreenOf(fullscreen, ref) &&
 		fullscreen.src === null
-		? modifyFields(withUrl, {
+		? modifyFields(withFrames, {
 				fullscreen: () =>
 					modifyFields(fullscreen, {
-						src: () => frameSrc(url, themeOf(withUrl)),
+						src: () => frameSrc(url, themeOf(withFrames)),
 						isFailed: () => false,
 					}),
 			})
-		: withUrl
+		: withFrames
 }
 
 const failMint = (model: Model, ref: RenderRef, purpose: MintPurpose): Model => {
 	const key = renderKey(ref)
-	const state = model.renders[key]
+	const url = model.urls[key]
 	const withState =
-		state === undefined
+		url === undefined
 			? model
-			: setRender(model, key, {
-					...state,
-					url:
-						state.url._tag === "Ready"
-							? { ...state.url, isMinting: false }
-							: purpose === "Inline"
-								? UrlState.Failed()
-								: state.url,
-				})
+			: setUrl(
+					model,
+					key,
+					url._tag === "Ready"
+						? { ...url, isMinting: false }
+						: purpose === "Inline"
+							? UrlState.Failed()
+							: url,
+				)
 	const fullscreen = withState.fullscreen
 	return purpose === "Fullscreen" &&
 		fullscreen !== null &&
@@ -330,8 +375,7 @@ const failMint = (model: Model, ref: RenderRef, purpose: MintPurpose): Model => 
 /** Opens the dialog on the latest URL, or on a fresh one when it has under five minutes left. */
 const openFullscreen = (model: Model, ref: RenderRef, title: string, nowMs: number): UpdateReturn => {
 	const key = renderKey(ref)
-	const state = model.renders[key]
-	const url = state?.url
+	const url = model.urls[key]
 	const isFresh = url?._tag === "Ready" && url.expiresAt - nowMs > MIN_URL_LIFE_MS
 	const opened = modifyFields(model, {
 		fullscreen: () => ({
@@ -344,17 +388,14 @@ const openFullscreen = (model: Model, ref: RenderRef, title: string, nowMs: numb
 		}),
 	})
 	if (isFresh) return { model: opened }
-	const minting =
-		state !== undefined && url?._tag === "Ready"
-			? setRender(opened, key, { ...state, url: { ...url, isMinting: true } })
-			: opened
+	const minting = url?._tag === "Ready" ? setUrl(opened, key, { ...url, isMinting: true }) : opened
 	return { model: minting, commands: [MintHtmlRenderUrl({ ref, purpose: "Fullscreen" })] }
 }
 
 const loadFrame = (model: Model, ref: RenderRef, mode: FrameMode): UpdateReturn => {
 	const commands = [PostHtmlRenderTheme({ theme: themeOf(model), key: renderKey(ref), mode })]
 	const fullscreen = model.fullscreen
-	if (mode === "fullscreen")
+	if (!isSurface(mode))
 		return fullscreen !== null && isFullscreenOf(fullscreen, ref) && !fullscreen.isLoaded
 			? {
 					model: modifyFields(model, {
@@ -363,9 +404,10 @@ const loadFrame = (model: Model, ref: RenderRef, mode: FrameMode): UpdateReturn 
 					commands,
 				}
 			: { model, commands }
-	const state = model.renders[renderKey(ref)]
-	return state !== undefined && !state.isLoaded
-		? { model: setRender(model, renderKey(ref), { ...state, isLoaded: true }), commands }
+	const key = frameKey(mode, ref)
+	const frame = model.frames[key]
+	return frame !== undefined && !frame.isLoaded
+		? { model: setFrame(model, key, { ...frame, isLoaded: true }), commands }
 		: { model, commands }
 }
 
@@ -374,18 +416,18 @@ const isSameTheme = Schema.toEquivalence(HtmlRenderThemeSchema)
 /** `nowMs` is the app clock, for the fullscreen URL check. */
 export const update = (model: Model, message: Message, nowMs: number): UpdateReturn =>
 	Message.match<UpdateReturn>(message, {
-		MountedFrame: ({ ref, nowMs: mountedAtMs }) => mountFrame(model, ref, mountedAtMs),
+		MountedFrame: ({ ref, surface, nowMs: mountedAtMs }) => mountFrame(model, ref, surface, mountedAtMs),
 		LoadedFrame: ({ ref, mode }) => loadFrame(model, ref, mode),
 		SucceededMintUrl: ({ ref, purpose, url, expiresAt }) => ({
 			model: succeedMint(model, ref, purpose, url, expiresAt),
 		}),
 		FailedMintUrl: ({ ref, purpose }) => ({ model: failMint(model, ref, purpose) }),
-		ReportedContentHeight: ({ messageId, renderId, height }) => {
-			const key = renderKey({ messageId, renderId })
-			const state = model.renders[key]
-			return state === undefined || state.contentHeight === height
+		ReportedContentHeight: ({ messageId, renderId, surface, height }) => {
+			const key = frameKey(surface, { messageId, renderId })
+			const frame = model.frames[key]
+			return frame === undefined || frame.contentHeight === height
 				? { model }
-				: { model: setRender(model, key, { ...state, contentHeight: height }) }
+				: { model: setFrame(model, key, { ...frame, contentHeight: height }) }
 		},
 		RequestedOpenLink: ({ url }) => ({ model, commands: [OpenHtmlRenderLink({ url })] }),
 		ChangedAppTheme: ({ theme }) =>
@@ -395,12 +437,12 @@ export const update = (model: Model, message: Message, nowMs: number): UpdateRet
 						model: modifyFields(model, { theme: () => theme }),
 						commands: [PostHtmlRenderTheme({ theme, key: null, mode: null })],
 					},
-		ClickedToggleExpanded: ({ ref }) => {
-			const key = renderKey(ref)
-			const state = model.renders[key]
-			return state === undefined
+		ClickedToggleExpanded: ({ ref, surface }) => {
+			const key = frameKey(surface, ref)
+			const frame = model.frames[key]
+			return frame === undefined
 				? { model }
-				: { model: setRender(model, key, { ...state, isExpanded: !state.isExpanded }) }
+				: { model: setFrame(model, key, { ...frame, isExpanded: !frame.isExpanded }) }
 		},
 		ClickedFullscreen: ({ ref, title }) => openFullscreen(model, ref, title, nowMs),
 		GotFullscreenModalMessage: ({ message: modalMessage }) => {
@@ -442,7 +484,8 @@ const decodeHeightTarget = Schema.decodeUnknownOption(
 
 /**
  * The Message a `message` event stands for: only events from one of our frames' windows count;
- * inline frames report heights, and a link opens only from the focused frame while the reader acts.
+ * inline frames report heights, to their own surface's state, and a link opens only from the focused
+ * frame while the reader acts.
  */
 export const frameMessageOf = (
 	event: { readonly source: unknown; readonly data: unknown },
@@ -455,8 +498,8 @@ export const frameMessageOf = (
 	const height = readHtmlRenderContentHeight(event.data)
 	if (height !== undefined) {
 		const target = decodeHeightTarget({ messageId: frame.messageId, renderId: frame.renderId })
-		return frame.mode === "inline" && Option.isSome(target)
-			? Message.ReportedContentHeight({ ...target.value, height })
+		return isSurface(frame.mode) && Option.isSome(target)
+			? Message.ReportedContentHeight({ ...target.value, surface: frame.mode, height })
 			: undefined
 	}
 	const url = readHtmlRenderLinkRequest(event.data)
@@ -469,11 +512,16 @@ const frameElements = (): ReadonlyArray<HTMLIFrameElement> => [
 	...document.querySelectorAll<HTMLIFrameElement>(`iframe[${RENDER_ID_ATTRIBUTE}]`),
 ]
 
-const frameKeyOf = (frame: Element) =>
+const renderKeyOf = (frame: Element) =>
 	`${frame.getAttribute(MESSAGE_ID_ATTRIBUTE) ?? ""}/${frame.getAttribute(RENDER_ID_ATTRIBUTE) ?? ""}`
 
-const frameModeOf = (frame: Element): FrameMode =>
-	frame.getAttribute(MODE_ATTRIBUTE) === "fullscreen" ? "fullscreen" : "inline"
+const isFrameMode = Schema.is(FrameMode)
+
+/** A frame without a known mode counts as fullscreen: its heights are never heard. */
+const frameModeOf = (frame: Element): FrameMode => {
+	const mode = frame.getAttribute(MODE_ATTRIBUTE)
+	return isFrameMode(mode) ? mode : "fullscreen"
+}
 
 const bridgeFrames = (): ReadonlyArray<BridgeFrame> =>
 	frameElements().map((frame) => ({
@@ -563,7 +611,7 @@ export const PostHtmlRenderTheme = Command.define("PostHtmlRenderTheme", {
 		Effect.sync(() => {
 			const message = htmlRenderThemeMessage(theme)
 			for (const frame of frameElements()) {
-				if (key !== null && frameKeyOf(frame) !== key) continue
+				if (key !== null && renderKeyOf(frame) !== key) continue
 				if (mode !== null && frameModeOf(frame) !== mode) continue
 				frame.contentWindow?.postMessage(message, "*")
 			}
@@ -599,9 +647,9 @@ const NEAR_VIEWPORT_MARGIN = "600px 0px"
  * Without IntersectionObserver it counts as soon as it mounts.
  */
 export const FrameMounted = Mount.define("HtmlRenderFrameMounted", {
-	args: { ref: RenderRef },
+	args: { ref: RenderRef, surface: FrameSurface },
 	messages: [Message.MountedFrame],
-	execute: ({ element, ref }) =>
+	execute: ({ element, ref, surface }) =>
 		Effect.callback<void>((resume) => {
 			if (typeof IntersectionObserver === "undefined") return resume(Effect.void)
 			const observer = new IntersectionObserver(
@@ -616,6 +664,6 @@ export const FrameMounted = Mount.define("HtmlRenderFrameMounted", {
 			return Effect.sync(() => observer.disconnect())
 		}).pipe(
 			Effect.andThen(Clock.currentTimeMillis),
-			Effect.map((nowMs) => Message.MountedFrame({ ref, nowMs })),
+			Effect.map((nowMs) => Message.MountedFrame({ ref, surface, nowMs })),
 		),
 })

@@ -68,10 +68,7 @@ export const avatarButton = <M>(
 	attributes: ReadonlyArray<ChildAttribute>,
 ) =>
 	h.button(
-		[
-			...attributes,
-			h.Class("size-fit outline-hidden"),
-		],
+		[...attributes, h.Class("size-fit outline-hidden")],
 		[
 			avatar(h, {
 				size: "md",
@@ -129,6 +126,7 @@ const contentView = <M>(h: HtmlBuilder<M>, row: MessageRow, context: RowContext<
 			{
 				channelId: message.channelId,
 				messageId: message.id,
+				surface: "list",
 				rows: row.htmlRenders,
 				toMessage: context.toHtmlRenderMessage,
 			},

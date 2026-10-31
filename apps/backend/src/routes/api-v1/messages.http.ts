@@ -245,12 +245,13 @@ export const HttpMessagesApiLive = HttpApiBuilder.group(HazelApi, "api-v1-messag
 					}),
 				),
 			)
-			// Only the bot's own pages: the key carries its user id (`htmlRenderKey`).
+			// Only the bot's own pages (the key carries its user id), and only one no message claimed: a
+			// claim racing this delete keeps the page its message shows.
 			.handle("deleteHtmlRender", ({ params, query }) =>
 				Effect.gen(function* () {
 					const bot = yield* authenticateBotFromToken
 					yield* checkMessageRateLimit(bot.userId)
-					yield* (yield* HtmlRenders).remove({
+					yield* (yield* HtmlRenders).removePending({
 						channelId: query.channel_id,
 						authorId: bot.userId,
 						renderId: params.renderId,

@@ -13,6 +13,7 @@ import {
 	HtmlRenders,
 	type HtmlRenderLocation,
 	htmlRenderKey,
+	pendingHtmlRenderKey,
 } from "../services/html-renders"
 import { HtmlRenderRoute } from "./html-render-route"
 
@@ -52,7 +53,7 @@ const setup = (options: { readonly storageDown?: boolean } = {}) => {
 		Effect.runPromise(
 			HtmlRenders.use((service) => service.signedUrl(at)).pipe(Effect.provide(renders), Effect.orDie),
 		).then((signed) => signed.url)
-	return { fetch, location, sign }
+	return { fetch, location, sign, bucket }
 }
 
 describe("HtmlRenderRoute", () => {
@@ -86,6 +87,15 @@ describe("HtmlRenderRoute", () => {
 		expect((await fetch(`http://api.test/html-renders/${location.channelId}/../etc?exp=1`)).status).toBe(
 			404,
 		)
+	})
+
+	it("serves a page its message has not claimed yet", async () => {
+		const { fetch, location, sign, bucket } = setup()
+		bucket.delete(htmlRenderKey(location))
+		bucket.set(pendingHtmlRenderKey(location), PAGE)
+		const response = await fetch(await sign(location))
+		expect(response.status).toBe(200)
+		expect(await response.text()).toBe(PAGE)
 	})
 
 	it("answers 503 when the bucket is unavailable", async () => {

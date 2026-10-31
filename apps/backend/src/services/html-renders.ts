@@ -1,8 +1,13 @@
 /**
  * HTML renders (`@hazel/domain/html-render`): pages bots publish for message embeds. Each lives in
- * the private `html-renders` R2 bucket (`HtmlRenderStore`, never the public uploads bucket) at
- * `html-renders/<channelId>/<authorId>/<renderId>.html`, bootstrap already injected. Keyed by its
- * publisher, so a message by anyone else that names the render resolves (and deletes) nothing.
+ * the private `html-renders` R2 bucket (`HtmlRenderStore`, never the public uploads bucket), bootstrap
+ * already injected, keyed by `<channelId>/<authorId>/<renderId>`: by its publisher, so a message by
+ * anyone else that names the render resolves (and deletes) nothing.
+ *
+ * A published page starts under `pending/`, which the bucket expires after a day
+ * (`HTML_RENDER_PENDING_MAX_AGE_SECONDS`, `worker.ts`). The write of a message that shows it claims
+ * it (`storage.claimHtmlRenders`): it moves to `pages/`, kept until the message stops showing it.
+ * A page no message ever showed (a failed send, a publish never posted) is gone by the next day.
  *
  * Clients never reach the bucket: `message.htmlRenderUrl` (the channel's object, viewers only, for
  * a message that shows the render) signs a short-lived URL for `GET /html-renders/<key>`, which
@@ -37,7 +42,16 @@ export interface HtmlRenderLocation {
 const locationPath = ({ channelId, authorId, renderId }: HtmlRenderLocation) =>
 	`${channelId}/${authorId}/${renderId}`
 
-export const htmlRenderKey = (location: HtmlRenderLocation) => `html-renders/${locationPath(location)}.html`
+/** The bucket's lifecycle rule deletes unclaimed pages after this long. */
+export const HTML_RENDER_PENDING_PREFIX = "pending/"
+export const HTML_RENDER_PENDING_MAX_AGE_SECONDS = 24 * 60 * 60
+
+/** A published page no message has claimed yet. */
+export const pendingHtmlRenderKey = (location: HtmlRenderLocation) =>
+	`${HTML_RENDER_PENDING_PREFIX}${locationPath(location)}.html`
+
+/** A page a message claimed. */
+export const htmlRenderKey = (location: HtmlRenderLocation) => `pages/${locationPath(location)}.html`
 
 const encoder = new TextEncoder()
 
@@ -102,8 +116,9 @@ export class HtmlRenderStore extends Context.Service<HtmlRenderStore, HtmlRender
 }
 
 /** The render ids an embed list references. */
-export const htmlRenderIdsOf = (embeds: ReadonlyArray<MessageEmbed.MessageEmbed> | null | undefined) =>
-	(embeds ?? []).flatMap((embed) => (embed.html === undefined ? [] : [embed.html.renderId]))
+export const htmlRenderIdsOf = (embeds: ReadonlyArray<MessageEmbed.MessageEmbed> | null | undefined) => [
+	...new Set((embeds ?? []).flatMap((embed) => (embed.html === undefined ? [] : [embed.html.renderId]))),
+]
 
 export class HtmlRenders extends Context.Service<HtmlRenders>()("@hazel/backend/HtmlRenders", {
 	make: Effect.gen(function* () {
@@ -154,7 +169,7 @@ export class HtmlRenders extends Context.Service<HtmlRenders>()("@hazel/backend/
 				"html_render.bytes": bytes,
 			})
 			yield* storage.put(
-				htmlRenderKey({ channelId: input.channelId, authorId: input.authorId, renderId }),
+				pendingHtmlRenderKey({ channelId: input.channelId, authorId: input.authorId, renderId }),
 				injectHtmlRenderBootstrap(input.html),
 			)
 			return {
@@ -189,11 +204,39 @@ export class HtmlRenders extends Context.Service<HtmlRenders>()("@hazel/backend/
 			).pipe(Effect.orElseSucceed(() => false))
 		})
 
-		const read = (location: HtmlRenderLocation) => storage.getText(htmlRenderKey(location))
+		/** The page, claimed or (until its message's claim lands) still pending. */
+		const read = Effect.fn("HtmlRenders.read")(function* (location: HtmlRenderLocation) {
+			const claimed = yield* storage.getText(htmlRenderKey(location))
+			return Option.isSome(claimed) ? claimed : yield* storage.getText(pendingHtmlRenderKey(location))
+		})
 
-		const remove = (location: HtmlRenderLocation) => storage.remove(htmlRenderKey(location))
+		/**
+		 * Keep a page a message now shows: move it out of `pending/`. A page already claimed (a
+		 * reused reference), expired, or never published (someone else's id) is left as it is.
+		 */
+		const claim = Effect.fn("HtmlRenders.claim")(function* (location: HtmlRenderLocation) {
+			const pending = yield* storage.getText(pendingHtmlRenderKey(location))
+			if (Option.isNone(pending)) {
+				// Fine for a reused reference; a page in neither place expired, or was never published by
+				// this author, and the message shows its error state.
+				if (Option.isNone(yield* storage.getText(htmlRenderKey(location)))) {
+					yield* Effect.logWarning("HTML render to claim is missing", { ...location })
+				}
+				return
+			}
+			yield* storage.put(htmlRenderKey(location), pending.value)
+			yield* storage.remove(pendingHtmlRenderKey(location))
+		})
 
-		return { publish, signedUrl, verify, read, remove } as const
+		const remove = Effect.fn("HtmlRenders.remove")(function* (location: HtmlRenderLocation) {
+			yield* storage.remove(htmlRenderKey(location))
+			yield* storage.remove(pendingHtmlRenderKey(location))
+		})
+
+		/** A page no message claimed (the bot's `DELETE`): a claimed one belongs to its messages. */
+		const removePending = (location: HtmlRenderLocation) => storage.remove(pendingHtmlRenderKey(location))
+
+		return { publish, signedUrl, verify, read, claim, remove, removePending } as const
 	}),
 }) {
 	/** Needs `HtmlRenderStore` from the platform (`worker/platform.ts`). */

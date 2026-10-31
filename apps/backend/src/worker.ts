@@ -5,7 +5,7 @@
  * class tags of the previous deploy.
  */
 import { bindBotGateways } from "@hazel/bot-gateway/object"
-import { HazelStack, hazelWorkerProps, stageNamed, stageProps } from "@hazel/infra/cloudflare"
+import { HazelStack, hazelWorkerProps, stageProps } from "@hazel/infra/cloudflare"
 import { cachedRecoverable } from "@hazel/infra/cached-recoverable"
 import { hazelTelemetry } from "@hazel/infra/maple"
 import { isolateContext } from "@hazel/infra/worker-http"
@@ -16,6 +16,7 @@ import {
 	DiscordGatewayObject,
 	DiscordGatewayObjectLive,
 } from "./worker/discord-gateway-object"
+import { HTML_RENDER_PENDING_MAX_AGE_SECONDS, HTML_RENDER_PENDING_PREFIX } from "./services/html-renders"
 import { apiEnv } from "./worker/env"
 import { buildApp, makeFetch } from "./worker/http"
 import { MessageLiveObject, MessageLiveObjectLive } from "./worker/live/message-live-object"
@@ -35,7 +36,22 @@ export const ApiCache = Cloudflare.KV.Namespace(
  * HTML render pages (`services/html-renders.ts`). Private, with no public domain: a page is only
  * served by the api's signed `GET /html-renders/...`, with the sandbox CSP.
  */
-export const HtmlRendersBucket = Cloudflare.R2.Bucket("html-renders", stageNamed("html-renders"))
+export const HtmlRendersBucket = Cloudflare.R2.Bucket(
+	"html-renders",
+	stageProps("html-renders", (name) => ({
+		name,
+		// Pages no message claimed (`services/html-renders.ts`).
+		lifecycleRules: [
+			{
+				id: "expire-unclaimed-pages",
+				prefix: HTML_RENDER_PENDING_PREFIX,
+				deleteObjectsTransition: {
+					condition: { type: "Age" as const, maxAge: HTML_RENDER_PENDING_MAX_AGE_SECONDS },
+				},
+			},
+		],
+	})),
+)
 
 /** `__ALCHEMY_RUNTIME__` folds to `true` in the bundle, so the stack-side branch is tree-shaken. */
 const props = Effect.gen(function* () {

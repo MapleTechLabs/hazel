@@ -179,7 +179,7 @@ export const deriveContextOf = (
 	toDeriveContext(model.lookups, model.currentUserId ?? undefined, {
 		unfurls: model.unfurls,
 		liveStates: model.liveStates,
-		htmlRenders: model.htmlRender.renders,
+		htmlRenders: model.htmlRender,
 		appearance: model.htmlRender.theme?.appearance ?? "dark",
 	})
 
@@ -192,7 +192,8 @@ const liftHtmlRender = (model: Model, message: HtmlRender.Message, nowMs: number
 		Message.GotHtmlRenderMessage({ message: inner }),
 	)
 	const isRowChange =
-		result.model.renders !== previous.renders ||
+		result.model.urls !== previous.urls ||
+		result.model.frames !== previous.frames ||
 		result.model.theme?.appearance !== previous.theme?.appearance
 	if (!isRowChange) return { model: next, commands }
 	const derived = deriveRows(next)

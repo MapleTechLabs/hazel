@@ -7,7 +7,13 @@ import {
 	extractYoutubeVideoId,
 	isKlipyUrl,
 } from "~/components/link-preview.utils"
-import { frameHeightOf, type Model as HtmlRenderModel, renderKey } from "../../chat/html-render"
+import {
+	type FrameSurface,
+	frameHeightOf,
+	frameKey,
+	type Model as HtmlRenderModel,
+	renderKey,
+} from "../../chat/html-render"
 import { cachedLiveState, initialLiveState, liveEmbedOf, type LiveStates } from "../../chat/live-state"
 import { processMessageUrls } from "../../chat/message/content"
 import { linkPreviewKey, tweetKey, type Unfurls } from "../../chat/unfurl"
@@ -53,15 +59,20 @@ export interface DeriveContext {
 	readonly replyTargets: ReadonlyMap<string, Lookups["replyTargets"][number]>
 	readonly unfurls: Unfurls
 	readonly liveStates: LiveStates
-	readonly htmlRenders: HtmlRenderModel["renders"]
+	readonly htmlRenders: HtmlRenderState
 	readonly appearance: "light" | "dark"
 }
+
+/** The HTML render URLs and frames the rows read. */
+export type HtmlRenderState = Pick<HtmlRenderModel, "urls" | "frames">
+
+const NO_HTML_RENDER_STATE: HtmlRenderState = { urls: {}, frames: {} }
 
 /** Fetched URL unfurls, streamed AI replies and HTML render frames, kept by the page beside the lookups. */
 export interface EmbedState {
 	readonly unfurls: Unfurls
 	readonly liveStates: LiveStates
-	readonly htmlRenders?: HtmlRenderModel["renders"]
+	readonly htmlRenders?: HtmlRenderState
 	/** The app's appearance, the frames' color scheme. */
 	readonly appearance?: "light" | "dark"
 }
@@ -88,7 +99,7 @@ export const toDeriveContext = (
 	currentUserId,
 	unfurls: embedState.unfurls,
 	liveStates: embedState.liveStates,
-	htmlRenders: embedState.htmlRenders ?? {},
+	htmlRenders: embedState.htmlRenders ?? NO_HTML_RENDER_STATE,
 	appearance: embedState.appearance ?? "dark",
 	users: byKey(lookups.users, (user) => user.id),
 	presence: byKey(lookups.presence, (presence) => presence.userId),
@@ -255,18 +266,23 @@ const liveOf = (context: DeriveContext, message: ChatMessage): LiveRow | null =>
 	}
 }
 
-/** The frames of the message's HTML render embeds, in embed order. */
-const htmlRendersOf = (context: DeriveContext, message: ChatMessage): ReadonlyArray<HtmlRenderRow> => {
+/** The frames of the message's HTML render embeds on one surface, in embed order. */
+export const htmlRendersOf = (
+	context: DeriveContext,
+	message: ChatMessage,
+	surface: FrameSurface,
+): ReadonlyArray<HtmlRenderRow> => {
 	const rows: HtmlRenderRow[] = []
 	for (const embed of message.embeds ?? []) {
 		if (embed.html === undefined) continue
-		const state = context.htmlRenders[renderKey({ messageId: message.id, renderId: embed.html.renderId })]
+		const ref = { messageId: message.id, renderId: embed.html.renderId }
+		const url = context.htmlRenders.urls[renderKey(ref)]
+		const state = context.htmlRenders.frames[frameKey(surface, ref)]
 		const height = frameHeightOf(embed.html.height, state)
-		const url = state?.url
 		rows.push({
 			renderId: embed.html.renderId,
 			status: url?._tag ?? "Loading",
-			src: url?._tag === "Ready" ? url.src : null,
+			src: url?._tag === "Ready" ? (state?.src ?? null) : null,
 			fittedHeight: height.fitted,
 			shownHeight: height.shown,
 			isTall: height.isTall,
@@ -303,7 +319,7 @@ export const messageRowData = (
 	refs: refsOf(context, message.content),
 	urlEmbeds: urlEmbedsOf(context, message),
 	live: liveOf(context, message),
-	htmlRenders: htmlRendersOf(context, message),
+	htmlRenders: htmlRendersOf(context, message, "list"),
 })
 
 /**
