@@ -243,3 +243,55 @@ describe("message.update with html", () => {
 		expect(payloads[0]!.embeds).toEqual([{ title: "Only" }, { html: reference }])
 	})
 })
+
+describe("invalid input and ambiguous failures", () => {
+	beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
+	afterEach(() => server.resetHandlers())
+	afterAll(() => server.close())
+
+	it("fails with typed errors instead of throwing", async () => {
+		const results = await Effect.runPromise(
+			HazelBotClient.use((bot) =>
+				Effect.all([
+					Effect.flip(bot.htmlRender.publish(CHANNEL_ID, { title: "", html: "<p>x</p>" })),
+					Effect.flip(bot.message.list(CHANNEL_ID, { limit: 500 })),
+				]),
+			).pipe(Effect.provide(layer)),
+		)
+		expect(results.map((error) => error._tag)).toEqual(["HtmlRenderPublishError", "MessageListError"])
+	})
+
+	it("clamps the page height instead of failing", async () => {
+		const heights: Array<number> = []
+		server.use(
+			http.post(`${BACKEND_URL}/api/v1/html-renders`, async ({ request }) => {
+				heights.push(((await request.json()) as { height: number }).height)
+				return HttpResponse.json({ data: reference })
+			}),
+		)
+		await Effect.runPromise(
+			HazelBotClient.use((bot) =>
+				bot.htmlRender.publish(CHANNEL_ID, { title: "T", html: "<p>x</p>", height: 5000 }),
+			).pipe(Effect.provide(layer)),
+		)
+		expect(heights).toEqual([2000])
+	})
+
+	it("keeps the page when the message write failed ambiguously (the message may exist)", async () => {
+		const calls: Array<string> = []
+		server.use(
+			http.post(`${BACKEND_URL}/api/v1/html-renders`, () => HttpResponse.json({ data: reference })),
+			http.post(`${BACKEND_URL}/api/v1/messages`, () => {
+				calls.push("create")
+				return HttpResponse.json({ _tag: "InternalServerError", message: "boom" }, { status: 500 })
+			}),
+			http.delete(`${BACKEND_URL}/api/v1/html-renders/:renderId`, () => {
+				calls.push("delete")
+				return new HttpResponse(null, { status: 204 })
+			}),
+		)
+		const exit = await Effect.runPromise(Effect.exit(send.pipe(Effect.provide(layer))))
+		expect(Exit.isFailure(exit)).toBe(true)
+		expect(calls).toEqual(["create"])
+	})
+})
