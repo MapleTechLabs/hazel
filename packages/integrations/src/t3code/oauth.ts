@@ -124,6 +124,10 @@ export class T3CodeOAuthClient extends Context.Service<T3CodeOAuthClient>()("T3C
 				const response = yield* request.pipe(
 					Effect.provideService(FetchHttpClient.RequestInit, { redirect: "manual" }),
 				)
+				yield* Effect.annotateCurrentSpan({
+					"url.full": response.request.url,
+					"http.response.status_code": response.status,
+				})
 				if (response.status >= 300) {
 					// The body stays in the cause (logs), never in the message a member sees.
 					const body = yield* response.text.pipe(Effect.orElseSucceed(() => ""))
@@ -155,7 +159,9 @@ export class T3CodeOAuthClient extends Context.Service<T3CodeOAuthClient>()("T3C
 							new T3CodeOAuthError({ message: `${step}: not a T3 Code environment`, cause }),
 						),
 				}),
-				Effect.withSpan(`T3CodeOAuthClient.${step}`),
+				Effect.withSpan("T3CodeOAuthClient.request", {
+					attributes: { "t3code.oauth.step": step, "peer.service": "t3code-environment" },
+				}),
 			)
 
 		const postJson = (url: string, body: unknown) =>

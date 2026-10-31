@@ -70,16 +70,21 @@ const PendingJson = Schema.fromJsonString(Pending)
  * The cookie is sealed (AES-GCM with the integration key): the callback trusts its org, endpoints
  * and return URL, so a member must not be able to write their own.
  */
-const sealPending = (pending: typeof Pending.Type) =>
+export const sealPending = (pending: typeof Pending.Type) =>
 	Effect.gen(function* () {
 		const encryption = yield* IntegrationEncryption
 		const sealed = yield* encryption.encrypt(Schema.encodeSync(PendingJson)(pending))
 		return encodeURIComponent(`${sealed.keyVersion}.${sealed.iv}.${sealed.ciphertext}`)
 	})
 
-const openPending = (raw: string) =>
+const decodeCookie = Option.liftThrowable(decodeURIComponent)
+
+export const openPending = (raw: string) =>
 	Effect.gen(function* () {
-		const [version, iv, ciphertext] = decodeURIComponent(raw).split(".")
+		// A cookie mangled elsewhere (a stray `%`) is no sign-in, not a 500.
+		const decoded = decodeCookie(raw)
+		if (Option.isNone(decoded)) return Option.none()
+		const [version, iv, ciphertext] = decoded.value.split(".")
 		const keyVersion = Number(version)
 		if (iv === undefined || ciphertext === undefined || !Number.isInteger(keyVersion))
 			return Option.none()
@@ -369,7 +374,7 @@ const handleCallback = Effect.fn("t3code.callback")(function* (query: {
 })
 
 /** Only the seeded T3 Code bot may read an owner's credential; a member's own bot never can. */
-const requireT3CodeBot = Effect.gen(function* () {
+export const requireT3CodeBot = Effect.gen(function* () {
 	const bot = yield* validateBotToken.pipe(
 		Effect.catchTag("DatabaseError", (cause) =>
 			Effect.fail(new InternalServerError({ message: "Failed to check the bot token", cause })),

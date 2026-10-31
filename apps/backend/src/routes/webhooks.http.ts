@@ -61,18 +61,16 @@ export const dispatchGitHubEvent = Effect.fn("GitHubWebhook.dispatch")(
 		const { eventType, deliveryId, payload } = input
 		const directory = yield* Directory
 		const orgOf = (installationId: number) =>
-			directory
-				.integration("github", String(installationId))
-				.pipe(
-					Effect.tap((row) =>
-						Option.isNone(row)
-							? Effect.logInfo("GitHub webhook for an unknown installation", {
-									deliveryId,
-									installationId,
-								})
-							: Effect.annotateCurrentSpan({ "organization.id": row.value.organizationId }),
-					),
-				)
+			directory.integration("github", String(installationId)).pipe(
+				Effect.tap((row) =>
+					Option.isNone(row)
+						? Effect.logInfo("GitHub webhook for an unknown installation", {
+								deliveryId,
+								installationId,
+							})
+						: Effect.annotateCurrentSpan({ "organization.id": row.value.organizationId }),
+				),
+			)
 		yield* Effect.annotateCurrentSpan({
 			"github.event_type": eventType,
 			"github.delivery_id": deliveryId,
