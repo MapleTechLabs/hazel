@@ -85,6 +85,20 @@ describe("bot install page", () => {
 		)
 	})
 
+	test("signed out, a lookup that needs a session offers sign-in instead of a dead retry", () => {
+		Scene.scene(
+			pageScene(update, view, signedOut),
+			Scene.given(loaded({ lookup: Lookup.Failed({ reason: "SignedOut" }) })),
+			Scene.expect(Scene.role("heading", { name: "Sign in to install this app" })).toExist(),
+			Scene.expect(Scene.role("button", { name: "Try again" })).toBeAbsent(),
+			Scene.click(Scene.role("button", { name: "Sign in to continue" })),
+			Scene.Command.expectExact(
+				RedirectToBotInstallSignIn({ returnTo: "/oauth/bot-install?bot_id=x" }),
+			),
+			Scene.Command.resolve(RedirectToBotInstallSignIn, Message.LeftPage()),
+		)
+	})
+
 	test("a link missing its parameters, or one the server refuses, never redirects", () => {
 		const started = init({
 			_tag: "BotInstall",

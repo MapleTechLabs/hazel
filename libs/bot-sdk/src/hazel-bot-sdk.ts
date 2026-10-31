@@ -628,16 +628,15 @@ export class HazelBotClient extends Context.Service<HazelBotClient>()("HazelBotC
 		 * reconnect and stall the bot for good.
 		 */
 		const readableEnvelopes = (events: ReadonlyArray<unknown>) =>
-			events.flatMap((event) => {
-				const decoded = decodeEnvelope(event)
-				if (Option.isSome(decoded)) return [decoded.value]
-				Effect.runFork(
-					Effect.logWarning("Skipping a gateway event this SDK cannot read", {
-						eventType: eventTypeOf(event),
-					}),
-				)
-				return []
-			})
+			Effect.forEach(events, (event) =>
+				Option.match(decodeEnvelope(event), {
+					onSome: (envelope) => Effect.succeed([envelope]),
+					onNone: () =>
+						Effect.logWarning("Skipping a gateway event this SDK cannot read", {
+							eventType: eventTypeOf(event),
+						}).pipe(Effect.as([])),
+				}),
+			).pipe(Effect.map((batches) => batches.flat()))
 
 		const processGatewayBatch = (
 			envelopes: ReadonlyArray<Schema.Schema.Type<typeof BotGatewayEnvelope>>,
@@ -859,7 +858,9 @@ export class HazelBotClient extends Context.Service<HazelBotClient>()("HazelBotC
 									case "DISPATCH": {
 										Effect.runPromiseWith(services)(
 											Effect.gen(function* () {
-												yield* processGatewayBatch(readableEnvelopes(frame.events))
+												yield* processGatewayBatch(
+													yield* readableEnvelopes(frame.events),
+												)
 												yield* gatewaySessionStore.save(
 													authContext.botId as BotId,
 													frame.nextOffset,

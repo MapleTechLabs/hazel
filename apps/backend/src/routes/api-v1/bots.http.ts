@@ -44,7 +44,8 @@ const internal = (message: string) => (cause: unknown) =>
 		Effect.andThen(Effect.fail(new InternalServerError({ message, cause }))),
 	)
 
-const decodeUserIds = Schema.decodeUnknownOption(Schema.Array(UserId))
+/** Each id on its own: a malformed one is left out like an unknown one, not the whole lookup. */
+const isUserId = Schema.is(UserId)
 
 export const HttpApiV1BotsLive = HttpApiBuilder.group(HazelApi, "api-v1-bots", (handlers) =>
 	Effect.succeed(
@@ -136,7 +137,7 @@ export const HttpApiV1BotsLive = HttpApiBuilder.group(HazelApi, "api-v1-bots", (
 						.split(",")
 						.map((id) => id.trim())
 						.filter((id) => id.length > 0)
-					const ids = Option.getOrElse(decodeUserIds([...new Set(raw)]), () => [])
+					const ids = [...new Set(raw)].filter(isUserId)
 					const users = yield* callObject(OrganizationUsersCall, orgTarget(params.organizationId), {
 						botId: bot.id,
 						botUserId: bot.userId,

@@ -450,7 +450,7 @@ describe("public API (v1) for bots outside Hazel", () => {
 
 				const users = yield* json(
 					yield* request(
-						`/api/v1/organizations/${world.orgId}/users?ids=${world.alice},${botUserId},${uuid()}`,
+						`/api/v1/organizations/${world.orgId}/users?ids=${world.alice},not-a-uuid,${botUserId},${uuid()}`,
 					),
 				)
 				expect(

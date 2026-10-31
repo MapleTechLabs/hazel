@@ -151,18 +151,29 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 						),
 						homeLink(h),
 					],
-					Failed: ({ reason }) => [
-						authHeading(h, "Couldn't load this app", commonMessage(reason).title),
-						button(
-							h,
-							{
-								intent: "outline",
-								className: "w-full",
-								onPress: Message.ClickedRetryRequest(),
-							},
-							["Try again"],
-						),
-					],
+					// Looking the app up needs a session: a signed-out visitor signs in and comes back.
+					Failed: ({ reason }) =>
+						reason === "SignedOut" && shared.currentUser === null
+							? [
+									authHeading(
+										h,
+										"Sign in to install this app",
+										"You'll come back here afterwards.",
+									),
+									...actions(h, model, shared),
+								]
+							: [
+									authHeading(h, "Couldn't load this app", commonMessage(reason).title),
+									button(
+										h,
+										{
+											intent: "outline",
+											className: "w-full",
+											onPress: Message.ClickedRetryRequest(),
+										},
+										["Try again"],
+									),
+								],
 				}),
 	),
 )
