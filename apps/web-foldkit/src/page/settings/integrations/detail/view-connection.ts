@@ -1,6 +1,6 @@
 import { anyInvalid, type Field as ValidatedField } from "foldkit/fieldValidation"
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { type ConfigOption, getBrandfetchIcon, type Integration } from "~/lib/integrations/__data"
+import type { ConfigOption, Integration } from "~/lib/integrations/__data"
 import { button } from "../../../../ui/button"
 import * as Field from "../../../../ui/field"
 import { input, inputGroup } from "../../../../ui/input"
@@ -35,16 +35,6 @@ export const panel = <Message>(
 			h.div([h.Class(bodyClass)], [...body]),
 		],
 	)
-
-export const brandIcon = <Message>(h: HtmlBuilder<Message>, integration: Integration) =>
-	h.img([
-		h.Attribute(
-			"src",
-			getBrandfetchIcon(integration.logoDomain, { theme: "light", type: integration.logoType }),
-		),
-		h.Attribute("alt", ""),
-		h.Class("size-4 rounded object-contain"),
-	])
 
 export const centered = (
 	h: H,
@@ -86,11 +76,10 @@ export const disconnectedState = (h: H, integration: Integration, isConnecting: 
 					className: "mt-2",
 					onPress: Message.ClickedConnect(),
 					isDisabled: isConnecting,
-					attributes: [h.Style({ backgroundColor: integration.brandColor })],
 				},
 				isConnecting
 					? [spinner(h, "size-4 animate-spin"), "Connecting..."]
-					: [brandIcon(h, integration), "Connect with ", integration.name],
+					: ["Connect with ", integration.name],
 			),
 		],
 	)
@@ -245,11 +234,9 @@ export const apiKeyConnectionForm = (h: H, integration: Integration, model: Mode
 					size: "md",
 					className: "self-start",
 					isDisabled: isConnecting || anyInvalid([model.apiToken, model.apiBaseUrl]),
-					attributes: [h.Type("submit"), h.Style({ backgroundColor: integration.brandColor })],
+					attributes: [h.Type("submit")],
 				},
-				isConnecting
-					? [spinner(h, "size-4 animate-spin"), "Connecting..."]
-					: [brandIcon(h, integration), "Connect"],
+				isConnecting ? [spinner(h, "size-4 animate-spin"), "Connecting..."] : ["Connect"],
 			),
 		],
 	)

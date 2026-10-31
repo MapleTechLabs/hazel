@@ -1,6 +1,6 @@
 import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { getBrandfetchIcon, getIntegrationById, type Integration } from "~/lib/integrations/__data"
+import { getIntegrationById, type Integration } from "~/lib/integrations/__data"
 import {
 	sectionHeaderGroup,
 	sectionHeaderHeading,
@@ -8,7 +8,7 @@ import {
 	sectionHeaderSubheading,
 } from "../../../../ui/section-header"
 import type { PageViewInputs, Shared } from "../../../contract"
-import { CHECK, strokeIcon } from "../shared/view"
+import { CHECK, integrationLogo, strokeIcon } from "../shared/view"
 import { Message } from "./message"
 import type { Model } from "./model"
 import {
@@ -51,28 +51,7 @@ const header = (h: H, integration: Integration, isWebhook: boolean, isConnected:
 			h.div(
 				[h.Class("flex items-center gap-4")],
 				[
-					h.div(
-						[
-							h.Class(
-								"flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl shadow-md ring-1 ring-black/8",
-							),
-							h.Style({ backgroundColor: `${integration.brandColor}10` }),
-						],
-						[
-							h.img([
-								h.Attribute(
-									"src",
-									integration.logoSrc ??
-										getBrandfetchIcon(integration.logoDomain, {
-											theme: "light",
-											type: integration.logoType,
-										}),
-								),
-								h.Attribute("alt", `${integration.name} logo`),
-								h.Class("size-12 object-contain"),
-							]),
-						],
-					),
+					integrationLogo(h, integration, "lg"),
 					h.div(
 						[h.Class("flex flex-col gap-1")],
 						[

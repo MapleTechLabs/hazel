@@ -1,6 +1,6 @@
 import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { categories, getBrandfetchIcon, type Integration, integrations } from "~/lib/integrations/__data"
+import { categories, type Integration, integrations } from "~/lib/integrations/__data"
 import { IconPlus } from "../../../../icons"
 import { button } from "../../../../ui/button"
 import { emptyState } from "../../../../ui/empty-state"
@@ -12,100 +12,66 @@ import {
 } from "../../../../ui/section-header"
 import type { PageViewInputs } from "../../../contract"
 import type { Connection } from "../shared/connections"
-import { CHEVRON_RIGHT, fragment, strokeIcon } from "../shared/view"
+import { CHEVRON_RIGHT, fragment, integrationLogo, strokeIcon } from "../shared/view"
 import { Message } from "./message"
 import type { Model } from "./model"
 
 /** Port of `routes/_app/$orgSlug/settings/integrations/index.tsx`. */
 
-const connectionStatus = (h: HtmlBuilder<Message>, connected: boolean, comingSoon: boolean): Html =>
-	comingSoon
-		? h.div(
-				[h.Class("flex items-center gap-1.5")],
-				[
-					h.div([h.Class("size-1.5 rounded-full bg-warning")]),
-					h.span([h.Class("text-warning text-xs")], ["Coming soon"]),
-				],
-			)
-		: h.div(
-				[h.Class("flex items-center gap-1.5")],
-				[
-					h.div([h.Class(`size-1.5 rounded-full ${connected ? "bg-success" : "bg-secondary"}`)]),
-					h.span(
-						[h.Class(`text-xs ${connected ? "text-success" : "text-muted-fg"}`)],
-						[connected ? "Connected" : "Not connected"],
-					),
-				],
-			)
+type Status = "connected" | "disconnected" | "coming-soon"
 
-const cardBody = (h: HtmlBuilder<Message>, integration: Integration, status: Html): Html => {
-	const logoSrc =
-		integration.logoSrc ?? getBrandfetchIcon(integration.logoDomain, { type: integration.logoType })
-	return h.div(
-		[h.Class("flex flex-1 flex-col gap-4 p-5")],
+const STATUS: Readonly<
+	Record<Status, { readonly label: string; readonly dot: string; readonly text: string }>
+> = {
+	connected: { label: "Connected", dot: "bg-success", text: "text-success" },
+	disconnected: { label: "Not connected", dot: "bg-muted-fg/40", text: "text-muted-fg" },
+	"coming-soon": { label: "Coming soon", dot: "bg-muted-fg/40", text: "text-muted-fg" },
+}
+
+const connectionStatus = (h: HtmlBuilder<Message>, status: Status): Html =>
+	h.div(
+		[h.Class("flex items-center gap-1.5")],
 		[
-			h.div(
-				[h.Class("flex items-start justify-between gap-3")],
-				[
-					h.div(
-						[h.Class("flex items-center gap-3")],
-						[
-							h.div(
-								[
-									h.Class(
-										"flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-black/8",
-									),
-								],
-								[
-									h.img([
-										h.Attribute("src", logoSrc),
-										h.Attribute("alt", `${integration.name} logo`),
-										h.Class("size-10 object-contain"),
-									]),
-								],
-							),
-							h.div(
-								[h.Class("flex flex-col gap-0.5")],
-								[
-									h.h3([h.Class("font-semibold text-fg text-sm")], [integration.name]),
-									status,
-								],
-							),
-						],
-					),
-				],
-			),
-			h.p([h.Class("text-muted-fg text-sm leading-relaxed")], [integration.description]),
+			h.span([h.Class(`size-1.5 rounded-full ${STATUS[status].dot}`)], []),
+			h.span([h.Class(`text-xs ${STATUS[status].text}`)], [STATUS[status].label]),
 		],
 	)
-}
+
+const cardContent = (h: HtmlBuilder<Message>, integration: Integration, status: Status): Array<Html> => [
+	h.div(
+		[h.Class("flex items-center gap-3")],
+		[
+			integrationLogo(h, integration, "md"),
+			h.div(
+				[h.Class("flex min-w-0 flex-1 flex-col gap-0.5")],
+				[
+					h.h3([h.Class("truncate font-medium text-fg text-sm")], [integration.name]),
+					connectionStatus(h, status),
+				],
+			),
+			...(status === "coming-soon"
+				? []
+				: [
+						strokeIcon(h, {
+							className:
+								"size-4 shrink-0 text-muted-fg opacity-0 transition duration-150 group-hover:translate-x-0.5 group-hover:opacity-100 group-focus-visible:opacity-100",
+							strokeWidth: "2",
+							d: CHEVRON_RIGHT,
+						}),
+					]),
+		],
+	),
+	h.p([h.Class("text-muted-fg text-sm leading-relaxed")], [integration.description]),
+]
+
+const CARD = "flex flex-col gap-4 rounded-xl border border-border bg-bg p-5 text-left"
 
 const integrationCard = (h: HtmlBuilder<Message>, integration: Integration, connected: boolean): Html =>
 	integration.comingSoon
 		? h.keyed("div")(
 				integration.id,
-				[
-					h.Class(
-						"relative flex flex-col overflow-hidden rounded-xl border border-border bg-bg opacity-70",
-					),
-				],
-				[
-					cardBody(h, integration, connectionStatus(h, false, true)),
-					h.div(
-						[
-							h.Class(
-								"flex items-center justify-end border-border border-t bg-bg-muted/50 px-5 py-3",
-							),
-						],
-						[
-							strokeIcon(h, {
-								className: "size-4 text-muted-fg/50",
-								strokeWidth: "2",
-								d: CHEVRON_RIGHT,
-							}),
-						],
-					),
-				],
+				[h.Class(`${CARD} bg-bg-muted/30`)],
+				cardContent(h, integration, "coming-soon"),
 			)
 		: h.keyed("button")(
 				integration.id,
@@ -113,35 +79,10 @@ const integrationCard = (h: HtmlBuilder<Message>, integration: Integration, conn
 					h.Type("button"),
 					h.OnClick(Message.ClickedIntegration({ integrationId: integration.id })),
 					h.Class(
-						"group relative flex flex-col overflow-hidden rounded-xl border border-border bg-bg text-left transition-all duration-200 hover:border-border-hover hover:shadow-md",
+						`${CARD} group cursor-pointer outline-none transition-colors duration-150 hover:border-border-hover hover:bg-bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring`,
 					),
 				],
-				[
-					cardBody(h, integration, connectionStatus(h, connected, false)),
-					h.div(
-						[
-							h.Class(
-								"flex items-center justify-between border-border border-t bg-bg-muted/50 px-5 py-3",
-							),
-						],
-						[
-							h.span(
-								[
-									h.Class(
-										"font-medium text-fg text-xs opacity-0 transition-opacity group-hover:opacity-100",
-									),
-								],
-								["Configure"],
-							),
-							strokeIcon(h, {
-								className:
-									"size-4 text-muted-fg transition-transform group-hover:translate-x-0.5",
-								strokeWidth: "2",
-								d: CHEVRON_RIGHT,
-							}),
-						],
-					),
-				],
+				cardContent(h, integration, connected ? "connected" : "disconnected"),
 			)
 
 /**
@@ -186,12 +127,12 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 			]),
 		]),
 		h.div(
-			[h.Class("flex flex-wrap gap-2")],
+			[h.Class("flex flex-wrap gap-1")],
 			categories.map((category) =>
 				button(
 					h,
 					{
-						intent: model.selectedCategory === category.id ? "primary" : "secondary",
+						intent: model.selectedCategory === category.id ? "secondary" : "plain",
 						size: "sm",
 						onPress: Message.ClickedCategory({ categoryId: category.id }),
 					},
