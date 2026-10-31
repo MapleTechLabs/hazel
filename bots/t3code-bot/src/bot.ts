@@ -13,7 +13,16 @@ import { Cause, Config, Effect, FiberMap, Layer, Option, Redacted, Schema } from
 import { FetchHttpClient } from "effect/http"
 import { HttpApiClient } from "effect/http-api"
 import { commands, T3Command, T3ProjectCommand, T3StopCommand } from "./commands.ts"
-import { answersFrom, followThread, type LiveMessage, orgOf, ownerOf, T3Run, threadOf } from "./runner.ts"
+import {
+	answersFrom,
+	type ChatPort,
+	followThread,
+	type LiveMessage,
+	orgOf,
+	ownerOf,
+	T3Run,
+	threadOf,
+} from "./runner.ts"
 
 const runKey = (threadChannelId: string) => `t3code:run:${threadChannelId}`
 const FOLLOWING_KEY = "t3code:following"
@@ -129,13 +138,26 @@ export const bot = defineBot({
 					yield* sdk.state.setJson(FOLLOWING_KEY, Following, f(ids))
 				})
 
-			const chat = {
-				post: (channelId: ChannelId, content: string) =>
-					Effect.asVoid(sdk.message.send(channelId, content)) as Effect.Effect<void, unknown>,
-				live: (channelId: ChannelId) =>
-					sdk.stream.create(channelId) as Effect.Effect<LiveMessage, unknown>,
-				saveRun,
-			}
+			/** Merge `patch` over the stored run: a follower and a reply each own their fields. */
+			const updateRun = (threadChannelId: string, patch: Partial<T3Run>) =>
+				Effect.gen(function* () {
+					const stored = yield* loadRun(threadChannelId)
+					if (stored !== null) yield* saveRun({ ...stored, ...patch })
+				})
+
+			const post = (channelId: ChannelId, content: string) =>
+				Effect.asVoid(sdk.message.send(channelId, content)) as Effect.Effect<void, unknown>
+			const chatFor = (threadChannelId: string): ChatPort => ({
+				post,
+				live: (channelId) => sdk.stream.create(channelId) as Effect.Effect<LiveMessage, unknown>,
+				updateRun: (patch) => updateRun(threadChannelId, patch),
+			})
+			const chat = { post }
+
+			const refused = new Set<string>()
+
+			/** Threads that got a follow-up while their follower ran: it keeps going. */
+			const pokes = new Set<string>()
 
 			/**
 			 * A handler failed: log it, tell the channel why in words, and when T3 refused the
@@ -153,6 +175,10 @@ export const bot = defineBot({
 				) =>
 				(cause: Cause.Cause<unknown>) => {
 					const error = firstError(cause)
+					// Say "not shared with you" once per member and thread: never loop with a bot.
+					const refusal = `${channelId}:${who.actorId}`
+					const quiet = tagOf(error) === "T3CodeAccessDeniedError" && refused.has(refusal)
+					if (tagOf(error) === "T3CodeAccessDeniedError") refused.add(refusal)
 					return Effect.logWarning(`${label} failed`, { cause }).pipe(
 						Effect.andThen(
 							tagOf(error) === "T3CodeUnauthorizedError"
@@ -161,7 +187,7 @@ export const bot = defineBot({
 									})
 								: Effect.void,
 						),
-						Effect.andThen(chat.post(channelId, explain(error, who))),
+						Effect.andThen(quiet ? Effect.void : chat.post(channelId, explain(error, who))),
 						Effect.ignore,
 					)
 				}
@@ -172,31 +198,40 @@ export const bot = defineBot({
 				actorId,
 			})
 
-			/** Follow a Hazel thread's T3 thread until it idles; one follower per thread. */
-			const follow = (run: T3Run) =>
-				FiberMap.run(
+			/**
+			 * Follow a Hazel thread's T3 thread until it idles; one follower per thread. A follower
+			 * already running is poked instead, so it does not stop before the new run.
+			 */
+			const follow = (run: T3Run) => {
+				const id = run.threadChannelId
+				pokes.add(id)
+				return FiberMap.run(
 					followers,
-					run.threadChannelId,
+					id,
 					Effect.gen(function* () {
-						yield* updateFollowing((ids) => [...new Set([...ids, run.threadChannelId])])
+						yield* updateFollowing((ids) => [...new Set([...ids, id])])
 						// The owner's own access: a run they allowed keeps reporting to its thread.
 						const { mcp } = yield* environmentFor(orgOf(run), ownerOf(run), ownerOf(run))
-						yield* followThread({ mcp, chat, run })
+						pokes.delete(id)
+						const takePoke = Effect.sync(() => pokes.delete(id))
+						for (;;) {
+							const latest = (yield* loadRun(id)) ?? run
+							yield* followThread({ mcp, chat: chatFor(id), run: latest, takePoke })
+							// Poked after its last check: follow again rather than drop the follow-up.
+							if (!pokes.delete(id)) break
+						}
 					}).pipe(
 						Effect.catchCause(
 							failed("T3 Code follower", threadOf(run), whoOf(run, ownerOf(run))),
 						),
 						Effect.ensuring(
-							updateFollowing((ids) => ids.filter((id) => id !== run.threadChannelId)).pipe(
-								Effect.ignore,
-							),
+							updateFollowing((ids) => ids.filter((other) => other !== id)).pipe(Effect.ignore),
 						),
-						Effect.withSpan("t3code.follow", {
-							attributes: { "hazel.thread_channel_id": run.threadChannelId },
-						}),
+						Effect.withSpan("t3code.follow", { attributes: { "hazel.thread_channel_id": id } }),
 					),
 					{ onlyIfMissing: true },
 				)
+			}
 
 			// Pick up the threads that were being followed when the bot last stopped.
 			const following = ((yield* sdk.state
@@ -344,7 +379,7 @@ export const bot = defineBot({
 						const { mcp } = yield* environmentFor(orgOf(run), ownerOf(run), message.authorId)
 						const pending = run.pendingQuestion
 						if (pending !== null) {
-							yield* saveRun({ ...run, pendingQuestion: null })
+							yield* updateRun(run.threadChannelId, { pendingQuestion: null })
 							const open = yield* mcp.pendingQuestions(run.t3ThreadId)
 							if (open.includes(pending.requestId)) {
 								yield* mcp.answerQuestion(

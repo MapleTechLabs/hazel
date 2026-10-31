@@ -229,7 +229,8 @@ export const makeT3CodeMcpSession = Effect.fn("T3CodeMcp.session")(function* (ta
 		Effect.gen(function* () {
 			const id = yield* Ref.getAndUpdate(nextId, (n) => n + 1)
 			const response = yield* post({ id, method, params }, session)
-			if (response.status === 401 || response.status === 403) {
+			// Only a 401 means the credential is gone; a 403 is a refusal of this call.
+			if (response.status === 401) {
 				return yield* new T3CodeUnauthorizedError({ message: "T3 Code refused Hazel's sign-in" })
 			}
 			if (response.status === 404 && session !== null) return { stale: true as const }

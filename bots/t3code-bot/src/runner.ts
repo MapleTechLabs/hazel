@@ -56,7 +56,10 @@ export interface LiveMessage {
 export interface ChatPort {
 	readonly post: (channelId: ChannelId, content: string) => Effect.Effect<void, unknown>
 	readonly live: (channelId: ChannelId) => Effect.Effect<LiveMessage, unknown>
-	readonly saveRun: (run: T3Run) => Effect.Effect<void, unknown>
+	/** Save the runner's fields over the stored run (a reply may have changed others meanwhile). */
+	readonly updateRun: (
+		patch: Partial<Pick<T3Run, "cursor" | "pendingQuestion" | "notifiedApprovals">>,
+	) => Effect.Effect<void, unknown>
 }
 
 export type Mcp = Pick<T3CodeMcpSession, "wait" | "read" | "pendingQuestions" | "readQuestion">
@@ -161,18 +164,22 @@ interface RunRender {
 }
 
 /**
- * Follow the thread until no run is active. Returns when the thread is idle, with the run saved
- * (its cursor and any pending question) for the next follow-up.
+ * Follow the thread until no run is active and no follow-up is pending. Saves its cursor, the
+ * question it asked and the approvals it pointed out as it goes, for the next follower.
  */
 export const followThread = Effect.fn("T3Runner.followThread")(function* (input: {
 	readonly mcp: Mcp
 	readonly chat: ChatPort
 	readonly run: T3Run
+	/** Whether a follow-up was sent since the last check: then the thread is not done yet. */
+	readonly takePoke: Effect.Effect<boolean>
 }) {
 	const { mcp, chat } = input
 	let run = input.run
 	const threadChannelId = threadOf(run)
 	let current: RunRender | null = null
+	/** Runs whose message is finished: their items never reopen it. */
+	const finishedRuns = new Set<string>()
 	yield* Effect.annotateCurrentSpan({
 		"t3.thread_id": run.t3ThreadId,
 		"hazel.thread_channel_id": threadChannelId,
@@ -183,6 +190,7 @@ export const followThread = Effect.fn("T3Runner.followThread")(function* (input:
 			if (current === null) return
 			const render = current
 			current = null
+			finishedRuns.add(render.runId)
 			for (const step of render.steps.values()) {
 				if (!step.done) yield* render.live.completeStep(step.stepId, {}).pipe(Effect.ignore)
 			}
@@ -207,14 +215,18 @@ export const followThread = Effect.fn("T3Runner.followThread")(function* (input:
 			return render
 		})
 
-	const renderItem = (item: T3Item) =>
+	const renderItem = (item: T3Item, activeRunId: string | null) =>
 		Effect.gen(function* () {
-			if (item.runId == null) return
+			if (item.runId == null || finishedRuns.has(item.runId)) return
+			// An unfinished item of a run that is neither active nor shown (read again after a
+			// restart) will not finish: leave it.
+			if (!isFinal(item) && item.runId !== activeRunId && current?.runId !== item.runId) return
 			const view = viewOf(item)
 			if (view._tag === "hidden") return
 			if (view._tag === "approval") {
 				if (isFinal(item) || run.notifiedApprovals.includes(item.itemId)) return
 				run = { ...run, notifiedApprovals: [...run.notifiedApprovals, item.itemId] }
+				yield* chat.updateRun({ notifiedApprovals: run.notifiedApprovals })
 				yield* chat.post(
 					threadChannelId,
 					[
@@ -253,7 +265,10 @@ export const followThread = Effect.fn("T3Runner.followThread")(function* (input:
 			}
 		})
 
-	/** Read new activity; the cursor stays before the first unfinished item so it is read again. */
+	/**
+	 * Read new activity; the cursor stays before the first unfinished item of the active run, so
+	 * it is read again. An item of a run that ended counts as finished whatever its status says.
+	 */
 	const readActivity = Effect.gen(function* () {
 		let after = run.cursor
 		let cursor = run.cursor
@@ -266,9 +281,10 @@ export const followThread = Effect.fn("T3Runner.followThread")(function* (input:
 				limit: 50,
 				maxCharsPerItem: 4000,
 			})
+			const activeRunId = read.thread.activeRunId ?? null
 			for (const item of read.items) {
-				yield* renderItem(item)
-				if (!isFinal(item)) settled = false
+				yield* renderItem(item, activeRunId)
+				if (!isFinal(item) && item.runId === activeRunId) settled = false
 				if (settled) cursor = item.position
 			}
 			if (!read.hasMore || read.nextPosition === null) return { thread: read.thread, cursor }
@@ -286,7 +302,7 @@ export const followThread = Effect.fn("T3Runner.followThread")(function* (input:
 			...run,
 			pendingQuestion: { requestId, questionIds: pending.questions.map((question) => question.id) },
 		}
-		yield* chat.saveRun(run)
+		yield* chat.updateRun({ pendingQuestion: run.pendingQuestion })
 		yield* chat.post(threadChannelId, questionMessage(pending.questions))
 	})
 
@@ -326,15 +342,16 @@ export const followThread = Effect.fn("T3Runner.followThread")(function* (input:
 		const waited = yield* retryOffline(mcp.wait({ threadId: run.t3ThreadId }))
 		const activity = yield* retryOffline(readActivity)
 		run = { ...run, cursor: activity.cursor }
+		yield* chat.updateRun({ cursor: run.cursor })
 		const done = waited.status === "idle" || TERMINAL_RUN_STATUSES.has(waited.status)
 		if (waited.status === "waiting") yield* retryOffline(askQuestions)
 		if (done) {
-			// A queued follow-up starts as soon as this run ends: keep following it.
-			if (activity.thread?.activeRunId != null) continue
+			// A queued or just-sent follow-up keeps the thread going.
+			if (activity.thread?.activeRunId != null || (yield* input.takePoke)) continue
 			yield* finishRender(waited.status === "idle" ? "completed" : waited.status)
-			yield* chat.saveRun(run)
 			return run
 		}
-		yield* chat.saveRun(run)
+		// `wait` returns early only on news; if it did without any, don't spin.
+		if (!waited.timedOut) yield* Effect.sleep("3 seconds")
 	}
 })

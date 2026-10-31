@@ -49,7 +49,10 @@ const readOf = (items: ReadonlyArray<T3Item>, activeRunId: string | null = null)
 /** A T3 thread scripted as wait results and the activity after each `afterPosition`. */
 const scripted = (script: {
 	readonly waits: ReadonlyArray<T3Waited | "offline">
-	readonly reads: ReadonlyArray<ReadonlyArray<T3Item>>
+	/** Each read's items; `{ items, active }` while the run is still going. */
+	readonly reads: ReadonlyArray<
+		ReadonlyArray<T3Item> | { readonly items: ReadonlyArray<T3Item>; readonly active: string }
+	>
 	readonly questions?: ReadonlyArray<string>
 }) => {
 	const calls = { reads: [] as Array<number | undefined> }
@@ -66,7 +69,8 @@ const scripted = (script: {
 		read: (input) =>
 			Effect.sync(() => {
 				calls.reads.push(input.afterPosition)
-				return readOf(script.reads[Math.min(readIndex++, script.reads.length - 1)] ?? [])
+				const next = script.reads[Math.min(readIndex++, script.reads.length - 1)] ?? []
+				return "items" in next ? readOf(next.items, next.active) : readOf(next)
 			}) as Mcp["read"] extends (...args: any) => infer R ? R : never,
 		pendingQuestions: () => Effect.succeed(script.questions ?? []) as never,
 		readQuestion: (_thread, requestId) =>
@@ -87,7 +91,7 @@ const scripted = (script: {
 const recordingChat = () => {
 	const log: Array<string> = []
 	const posts: Array<string> = []
-	const saved: Array<T3Run> = []
+	const saved: Array<Partial<T3Run>> = []
 	let steps = 0
 	const live: LiveMessage = {
 		setText: (text) => Effect.sync(() => void log.push(`text:${text}`)),
@@ -110,7 +114,7 @@ const recordingChat = () => {
 	const chat: ChatPort = {
 		post: (_channel, content) => Effect.sync(() => void posts.push(content)),
 		live: () => Effect.sync(() => (log.push("live"), live)),
-		saveRun: (run) => Effect.sync(() => void saved.push(run)),
+		updateRun: (patch) => Effect.sync(() => void saved.push(patch)),
 	}
 	return { chat, log, posts, saved }
 }
@@ -128,15 +132,18 @@ describe("followThread", () => {
 			const { mcp, calls } = scripted({
 				waits: [waited("running", true), waited("completed")],
 				reads: [
-					[
-						item(1, { type: "user_message", text: "Fix the test" }),
-						item(2, { type: "reasoning", text: "Looking at the test", status: "completed" }),
-						item(3, {
-							type: "command_execution",
-							text: "$ bun test\nrunning…",
-							status: "running",
-						}),
-					],
+					{
+						active: "run-1",
+						items: [
+							item(1, { type: "user_message", text: "Fix the test" }),
+							item(2, { type: "reasoning", text: "Looking at the test", status: "completed" }),
+							item(3, {
+								type: "command_execution",
+								text: "$ bun test\nrunning…",
+								status: "running",
+							}),
+						],
+					},
 					[
 						item(3, {
 							type: "command_execution",
@@ -148,7 +155,7 @@ describe("followThread", () => {
 				],
 			})
 			const { chat, log, saved } = recordingChat()
-			const final = yield* followThread({ mcp, chat, run: baseRun })
+			const final = yield* followThread({ mcp, chat, run: baseRun, takePoke: Effect.succeed(false) })
 
 			expect(log).toEqual([
 				"live",
@@ -163,7 +170,7 @@ describe("followThread", () => {
 			// The unfinished command kept the cursor before it, so it was read again.
 			expect(calls.reads).toEqual([undefined, 2])
 			expect(final.cursor).toBe(4)
-			expect(saved.at(-1)?.cursor).toBe(4)
+			expect(saved.filter((patch) => "cursor" in patch).at(-1)?.cursor).toBe(4)
 		}),
 	)
 
@@ -176,10 +183,14 @@ describe("followThread", () => {
 			})
 			const { mcp } = scripted({
 				waits: [waited("waiting", true), waited("waiting", true), waited("completed")],
-				reads: [[approval], [approval], [item(3, { type: "assistant_message", text: "Done" })]],
+				reads: [
+					{ items: [approval], active: "run-1" },
+					{ items: [approval], active: "run-1" },
+					[item(3, { type: "assistant_message", text: "Done" })],
+				],
 			})
 			const { chat, posts } = recordingChat()
-			yield* followThread({ mcp, chat, run: baseRun })
+			yield* followThread({ mcp, chat, run: baseRun, takePoke: Effect.succeed(false) })
 			expect(posts).toHaveLength(1)
 			expect(posts[0]).toContain("Waiting for approval in T3 Code")
 			expect(posts[0]).toContain("Run rm -rf build?")
@@ -196,11 +207,11 @@ describe("followThread", () => {
 				questions: ["req-1"],
 			})
 			const { chat, posts, saved } = recordingChat()
-			const final = yield* followThread({ mcp, chat, run: baseRun })
+			const final = yield* followThread({ mcp, chat, run: baseRun, takePoke: Effect.succeed(false) })
 			expect(posts).toEqual([expect.stringContaining("Which database?")])
 			expect(posts[0]).toContain("- SQLite")
 			expect(final.pendingQuestion).toEqual({ requestId: "req-1", questionIds: ["q1"] })
-			expect(saved.some((run) => run.pendingQuestion?.requestId === "req-1")).toBe(true)
+			expect(saved.some((patch) => patch.pendingQuestion?.requestId === "req-1")).toBe(true)
 		}),
 	)
 
@@ -211,7 +222,7 @@ describe("followThread", () => {
 				reads: [[item(1, { type: "command_execution", text: "$ make\nerror", status: "failed" })]],
 			})
 			const { chat, log } = recordingChat()
-			yield* followThread({ mcp, chat, run: baseRun })
+			yield* followThread({ mcp, chat, run: baseRun, takePoke: Effect.succeed(false) })
 			expect(log).toContain('done:step-1:{"error":"error"}')
 			expect(log.at(-1)).toBe("fail:The run failed.")
 		}),
@@ -224,11 +235,66 @@ describe("followThread", () => {
 				reads: [[item(1, { type: "assistant_message", text: "Back" })]],
 			})
 			const { chat, posts, log } = recordingChat()
-			const fiber = yield* followThread({ mcp, chat, run: baseRun }).pipe(Effect.forkChild)
+			const fiber = yield* followThread({
+				mcp,
+				chat,
+				run: baseRun,
+				takePoke: Effect.succeed(false),
+			}).pipe(Effect.forkChild)
 			yield* TestClock.adjust("2 minutes")
 			yield* Fiber.join(fiber)
 			expect(posts).toEqual([expect.stringContaining("is not answering")])
 			expect(log.at(-1)).toBe("complete")
+		}),
+	)
+})
+
+describe("followThread across runs", () => {
+	it.effect("keeps following when a follow-up was sent as the run ended", () =>
+		Effect.gen(function* () {
+			const { mcp } = scripted({
+				waits: [waited("completed"), waited("completed")],
+				reads: [
+					[item(1, { type: "assistant_message", text: "First" })],
+					[item(2, { type: "assistant_message", text: "Second", runId: "run-2" })],
+				],
+			})
+			const { chat, log } = recordingChat()
+			let pokes = 1
+			yield* followThread({
+				mcp,
+				chat,
+				run: baseRun,
+				takePoke: Effect.sync(() => pokes-- > 0),
+			})
+			// One message per run, each finished.
+			expect(log.filter((entry) => entry === "live")).toHaveLength(2)
+			expect(log).toContain("text:Second")
+			expect(log.at(-1)).toBe("complete")
+		}),
+	)
+
+	it.effect("does not let a stuck item of a finished run hold the cursor", () =>
+		Effect.gen(function* () {
+			const { mcp } = scripted({
+				waits: [waited("completed")],
+				reads: [
+					[
+						item(5, {
+							type: "command_execution",
+							text: "$ sleep 999",
+							status: "running",
+							runId: "run-0",
+						}),
+						item(6, { type: "assistant_message", text: "Done" }),
+					],
+				],
+			})
+			const { chat, log } = recordingChat()
+			const final = yield* followThread({ mcp, chat, run: baseRun, takePoke: Effect.succeed(false) })
+			expect(final.cursor).toBe(6)
+			// The old run's item is not shown either.
+			expect(log.some((entry) => entry.includes("sleep 999"))).toBe(false)
 		}),
 	)
 })
