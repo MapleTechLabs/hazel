@@ -46,6 +46,9 @@ describe("normalizeEnvironmentUrl", () => {
 			"https://10.0.0.5",
 			"https://[fd00::1]:3773",
 			"https://internal-service",
+			"https://localhost.",
+			"https://foo.localhost",
+			"https://mac.t3.example.",
 		]) {
 			expect(Exit.isFailure(normalize(raw))).toBe(true)
 		}
