@@ -494,6 +494,43 @@ describe("public API (v1) for bots outside Hazel", () => {
 		))
 })
 
+describe("public API (v1) bot channels", () => {
+	it("lists the channels a bot can post in, and refuses a bot without channels:read", () =>
+		run(
+			Effect.gen(function* () {
+				const reader = {
+					botId: uuid() as BotId,
+					botUserId: uuid() as UserId,
+					token: `hzl_bot_${uuid()}`,
+				}
+				const writer = {
+					botId: uuid() as BotId,
+					botUserId: uuid() as UserId,
+					token: `hzl_bot_${uuid()}`,
+				}
+				const world = yield* makeWorld([reader.botUserId, writer.botUserId])
+				// The org's computed access for each bot user, as `syncChannelAccess` writes it.
+				for (const bot of [reader, writer]) {
+					world.org.storage.db
+						.prepare(
+							`INSERT INTO channel_access (userId, channelId, organizationId) VALUES (?, ?, ?)`,
+						)
+						.run(bot.botUserId, world.channelId, world.orgId)
+				}
+				yield* insertDirectoryBot(world, { ...reader, scopes: ["channels:read", "messages:write"] })
+				yield* insertDirectoryBot(world, { ...writer, scopes: ["messages:write", "channels:write"] })
+				const path = `/api/v1/organizations/${world.orgId}/bot-channels`
+
+				const allowed = yield* botHttp(world, reader.token)
+				expect(yield* allowed.json(yield* allowed.request(path))).toEqual({
+					data: [{ id: world.channelId, name: "general", private: false }],
+				})
+				const refused = yield* botHttp(world, writer.token)
+				expect((yield* refused.request(path)).status).toBe(401)
+			}),
+		))
+})
+
 describe("incoming webhooks", () => {
 	const seedWebhook = (world: World, options: { readonly enabled: boolean }) =>
 		Effect.gen(function* () {
