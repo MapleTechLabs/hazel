@@ -253,9 +253,10 @@ export const MessageRpcLive = MessageRpcs.toLayer(
 									channelId,
 									orgId: organizationId.value,
 									userId: user.id,
+									// Never the email: the bot is not granted members' contact details.
 									userName:
 										[user.firstName, user.lastName].filter(Boolean).join(" ") ||
-										user.email,
+										"Unknown",
 									timestamp: Date.now(),
 								},
 							},

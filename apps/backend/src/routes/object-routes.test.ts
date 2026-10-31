@@ -383,7 +383,8 @@ describe("public API (v1) for bots outside Hazel", () => {
 								channelId: world.channelId,
 								orgId: world.orgId,
 								userId: world.alice,
-								userName: `${world.alice}@example.com`,
+								// Alice has no name here, and a bot never gets her email instead.
+								userName: "Unknown",
 							},
 						},
 					},
@@ -396,6 +397,16 @@ describe("public API (v1) for bots outside Hazel", () => {
 				)
 				// Someone who cannot read the channel cannot press its buttons.
 				expect(failureOf(yield* press("approve:call_1", uuid() as UserId))).toBeDefined()
+
+				// The org's access rows for the channel, which a thread copies (this world sets the
+				// channel's viewers by hand rather than through the org).
+				for (const userId of [world.alice, botUserId, otherBotUserId]) {
+					world.org.storage.db
+						.prepare(
+							`INSERT INTO channel_access (userId, channelId, organizationId) VALUES (?, ?, ?)`,
+						)
+						.run(userId, world.channelId, world.orgId)
+				}
 
 				// A thread on the bot's own message; asking again answers with the same thread.
 				const thread = yield* json(
@@ -415,6 +426,27 @@ describe("public API (v1) for bots outside Hazel", () => {
 					}),
 				)
 				expect(again.data.id).toBe(thread.data.id)
+
+				// A mention inside the thread answers with that same thread, not a thread on a thread.
+				const inThread = yield* json(
+					yield* request("/api/v1/messages", {
+						method: "POST",
+						body: JSON.stringify({
+							channelId: thread.data.id,
+							content: "follow-up",
+							replyToMessageId: null,
+							threadChannelId: null,
+							embeds: null,
+						}),
+					}),
+				)
+				const sameThread = yield* json(
+					yield* request(`/api/v1/channels/${thread.data.id}/threads`, {
+						method: "POST",
+						body: JSON.stringify({ messageId: inThread.data.id }),
+					}),
+				)
+				expect(sameThread.data.id).toBe(thread.data.id)
 
 				const users = yield* json(
 					yield* request(

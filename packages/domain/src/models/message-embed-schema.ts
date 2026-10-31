@@ -166,8 +166,10 @@ export const findEmbedAction = (
 	actionId: string,
 ): MessageEmbedAction | undefined => {
 	for (const embed of embeds ?? []) {
-		const action = embed.actions?.find((candidate) => candidate.id === actionId)
-		if (action !== undefined) return action.disabled === true ? undefined : action
+		const action = embed.actions?.find(
+			(candidate) => candidate.id === actionId && candidate.disabled !== true,
+		)
+		if (action !== undefined) return action
 	}
 	return undefined
 }

@@ -141,12 +141,13 @@ export const organizationUsers = Effect.fn("OrgObject.botUsers")(
 		if (payload.ids.length === 0) return []
 		const users = yield* db.run(
 			SQLite.from(schema.usersTable)
-				.select("id", "firstName", "lastName", "email", "avatarUrl", "userType")
+				.select("id", "firstName", "lastName", "avatarUrl", "userType")
 				.where(($) => [$.id.in_(...payload.ids), $.deletedAt.isNull()]),
 		)
 		return users.map((user) => ({
 			id: user.id,
-			displayName: [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email,
+			// Never the email: a bot is not granted members' contact details.
+			displayName: [user.firstName, user.lastName].filter(Boolean).join(" ") || "Unknown",
 			avatarUrl: user.avatarUrl ?? null,
 			isBot: user.userType === "machine",
 		}))

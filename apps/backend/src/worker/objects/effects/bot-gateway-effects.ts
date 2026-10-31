@@ -49,13 +49,14 @@ const authorOf = (userId: typeof Message.Schema.Type.authorId) =>
 		const directory = yield* Directory
 		const user = yield* directory.db.first(
 			SQLite.from(schema.usersTable)
-				.select("id", "firstName", "lastName", "email", "userType")
+				.select("id", "firstName", "lastName", "userType")
 				.where(($) => [$.id.eq(userId)])
 				.limit(1),
 		)
 		return Option.map(user, (row) => ({
 			id: row.id,
-			displayName: [row.firstName, row.lastName].filter(Boolean).join(" ") || row.email,
+			// Never the email: a bot is not granted members' contact details.
+			displayName: [row.firstName, row.lastName].filter(Boolean).join(" ") || "Unknown",
 			isBot: row.userType === "machine",
 		}))
 	})
