@@ -119,3 +119,59 @@ describe("session token exchange", () => {
 		expect(await getAccessToken()).toBe("second")
 	})
 })
+
+describe("the exchange index.html starts early", () => {
+	const early = (response: Response | null, startedAtMs = Date.now()) => {
+		window.__hazelEarlyToken = { response: Promise.resolve(response), startedAtMs }
+	}
+
+	it("hands out its token without a second exchange", async () => {
+		const fetch = vi.fn<typeof globalThis.fetch>()
+		vi.stubGlobal("fetch", fetch)
+		early(Response.json({ token: "early", expiresIn: 300 }))
+		expect(await getAccessToken()).toBe("early")
+		expect(fetch).not.toHaveBeenCalled()
+	})
+
+	it("is used once: a later exchange asks the API", async () => {
+		const fetch = vi.fn<typeof globalThis.fetch>(async () =>
+			Response.json({ token: "fresh", expiresIn: 300 }),
+		)
+		vi.stubGlobal("fetch", fetch)
+		early(Response.json({ token: "early", expiresIn: 300 }))
+		expect(await getAccessToken()).toBe("early")
+		invalidateAccessToken("early")
+		expect(await getAccessToken()).toBe("fresh")
+		expect(fetch).toHaveBeenCalledTimes(1)
+	})
+
+	it("asks again after a refused, failed or stale early exchange, without reporting it", async () => {
+		const { seen, stop } = rejections()
+		const fetch = vi.fn<typeof globalThis.fetch>(async () =>
+			Response.json({ token: "fresh", expiresIn: 300 }),
+		)
+		vi.stubGlobal("fetch", fetch)
+		for (const set of [
+			() => early(new Response(null, { status: 401 })),
+			() => early(null),
+			() => early(Response.json({ token: "stale", expiresIn: 300 }), Date.now() - 60_000),
+		]) {
+			set()
+			expect(await getAccessToken()).toBe("fresh")
+			clearAccessToken()
+		}
+		expect(fetch).toHaveBeenCalledTimes(3)
+		expect(seen).not.toHaveBeenCalled()
+		stop()
+	})
+
+	it("is dropped on sign-out", async () => {
+		const fetch = vi.fn<typeof globalThis.fetch>(async () =>
+			Response.json({ token: "fresh", expiresIn: 300 }),
+		)
+		vi.stubGlobal("fetch", fetch)
+		early(Response.json({ token: "early", expiresIn: 300 }))
+		clearAccessToken()
+		expect(await getAccessToken()).toBe("fresh")
+	})
+})

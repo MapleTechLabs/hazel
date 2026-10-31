@@ -64,6 +64,8 @@ export type SyncPrincipal = typeof SyncPrincipal.Type
 export const PRINCIPAL_HEADER = "x-hazel-principal"
 /** The object's own id (DO name), forwarded with every request so the object learns it. */
 export const OBJECT_ID_HEADER = "x-hazel-object-id"
+/** Set on a request that only wakes the object (`POST /sync/warm`): it answers 204 once activated. */
+export const WARM_HEADER = "x-hazel-warm"
 
 export const decodeSyncPrincipal = Schema.decodeUnknownOption(Schema.fromJsonString(SyncPrincipal))
 export const encodeSyncPrincipal = Schema.encodeSync(Schema.fromJsonString(SyncPrincipal))

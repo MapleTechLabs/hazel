@@ -23,6 +23,7 @@ import { objectHandlersLive } from "./handlers"
 import type { ObjectKind } from "./kinds"
 import type { CallRequest } from "./calls"
 import type { ApplyEffectRequest } from "./effects/registry"
+import { WARM_HEADER } from "./principal"
 import type { InvokeRequest } from "./protocol"
 import { makeObjectRuntime } from "./runtime"
 import { makeSocketTokenVerifier } from "./socket-token"
@@ -75,6 +76,9 @@ export const activateObject = (kind: ObjectKind) =>
 
 			const fetch = Effect.gen(function* () {
 				const request = yield* HttpServerRequest.HttpServerRequest
+				// Reaching here means the instance is built: a warm-up needs nothing else.
+				if (request.headers[WARM_HEADER] !== undefined)
+					return HttpServerResponse.empty({ status: 204 })
 				if (request.headers.upgrade?.toLowerCase() !== "websocket") {
 					return HttpServerResponse.text("Expected a WebSocket upgrade", { status: 426 })
 				}

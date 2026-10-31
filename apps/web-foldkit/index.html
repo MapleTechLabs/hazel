@@ -7,6 +7,42 @@
 		<meta name="theme-color" content="#000000" />
 		<meta name="description" content="Slack alternative for modern teams." />
 		<title>Hazel Chat</title>
+		<script>
+			// Runs before the app's script has loaded: starts the sync token exchange, which
+			// `readAccessToken` takes over (`src/core/lib/access-token.ts`), then wakes the Durable
+			// Objects this page opens (`POST /sync/warm`), so a cold one starts in the meantime.
+			// Not on public routes, nor in the desktop app (its session is a bearer, not this cookie).
+			;(function () {
+				var path = location.pathname
+				if ("__TAURI_INTERNALS__" in window) return
+				if (/^\/(sign-in|sign-up|auth|join|invite)(\/|$)/.test(path)) return
+				var api = "%VITE_BACKEND_URL%"
+				if (api === "" || api.charAt(0) === "%") api = "http://localhost:3003"
+				var channel = /^\/[^/]+\/chat\/([0-9a-f-]{36})(\/|$)/i.exec(path)
+				var token = fetch(api + "/auth/token", {
+					method: "POST",
+					credentials: "include",
+					headers: { "x-effect-auth-csrf": "1" },
+				}).catch(function () {
+					return null
+				})
+				window.__hazelEarlyToken = { response: token, startedAtMs: Date.now() }
+				token
+					.then(function (response) {
+						if (!response || !response.ok) return
+						return response
+							.clone()
+							.json()
+							.then(function (body) {
+								return fetch(api + "/sync/warm" + (channel ? "?channel=" + channel[1] : ""), {
+									method: "POST",
+									headers: { authorization: "Bearer " + body.token },
+								})
+							})
+					})
+					.catch(function () {})
+			})()
+		</script>
 	</head>
 	<body class="bg-bg text-fg">
 		<div id="app"></div>
