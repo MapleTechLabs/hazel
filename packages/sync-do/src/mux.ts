@@ -71,15 +71,15 @@ export const runMuxSession = Effect.fnUntraced(function* (
 	const relay = (stream: typeof SyncMuxOpen.Type) =>
 		Effect.gen(function* () {
 			const { id } = stream
-			const opened = yield* open(stream)
+			// Opening is the acquire, so it is uninterruptible: a stream closed (or a client gone)
+			// while its object answers waits for the socket, and the release closes it.
+			const opened = yield* Effect.acquireRelease(open(stream), (result) =>
+				result._tag === "Opened" ? closeQuietly(result.socket, 1000, "closed") : Effect.void,
+			)
 			if (opened._tag === "Refused") {
 				return yield* sendControl({ _tag: "Closed", id, code: opened.code, reason: opened.reason })
 			}
-			const upstream = yield* Socket.fromWebSocket(
-				Effect.acquireRelease(Effect.succeed(opened.socket), (socket) =>
-					closeQuietly(socket, 1000, "closed"),
-				),
-			)
+			const upstream = yield* Socket.fromWebSocket(Effect.succeed(opened.socket))
 			const { pull: pullUpstream } = yield* upstream.reader
 			upstreams.set(id, opened.socket)
 			yield* Effect.addFinalizer(() =>

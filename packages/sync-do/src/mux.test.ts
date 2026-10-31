@@ -3,7 +3,7 @@
  * with their stream id, and an object's close reaches the client with its code.
  */
 import { encodeMuxData, type SyncMuxClientControl, type SyncMuxOpen } from "@hazel/domain/sync"
-import { Effect, Fiber } from "effect"
+import { Deferred, Effect, Fiber } from "effect"
 import { describe, expect, it } from "vitest"
 import { type MuxOpenResult, refuseMuxStream, runMuxSession } from "./mux.ts"
 
@@ -117,6 +117,20 @@ describe("runMuxSession", () => {
 		expect(sockets[1]!.sent).toEqual(['{"_tag":"Ping"}'])
 		expect(client.sent).toContain(encodeMuxData(2, '{"_tag":"Pong"}'))
 		expect(controls()).toContainEqual({ _tag: "Opened", id: 2 })
+	})
+
+	it("closes the socket of a stream closed while its object was still answering", async () => {
+		const upstream = new FakeSocket()
+		const answer = Effect.runSync(Deferred.make<MuxOpenResult>())
+		const { client, controls } = start(() => Deferred.await(answer))
+		client.receive(control({ _tag: "Open", id: 1, kind: "org", sourceId: "o1", token: "t" }))
+		await flush()
+		client.receive(control({ _tag: "Close", id: 1 }))
+		await flush()
+		Effect.runSync(Deferred.succeed(answer, { _tag: "Opened", socket: upstream }))
+		await flush()
+		expect(upstream.closedWith).toEqual({ code: 1000, reason: "closed" })
+		expect(controls()).toEqual([])
 	})
 
 	it("closes every object socket when the client goes", async () => {
