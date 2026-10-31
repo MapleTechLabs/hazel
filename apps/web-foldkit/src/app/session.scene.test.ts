@@ -4,7 +4,7 @@ import { describe, test } from "vitest"
 import { boot, rootScene, sessionMessages } from "../test/root-fixtures"
 import * as Menu from "../ui/menu"
 import { FocusTriggerOnPress } from "../ui/menu-view"
-import { FetchCurrentUser, RetryFetchCurrentUser } from "./command"
+import { RetryFetchCurrentUser } from "./command"
 import { Message } from "./message"
 
 /** What the root renders for each session state, and how a session arriving changes it. */
@@ -37,7 +37,8 @@ describe("session states", () => {
 			rootScene,
 			given(boot("/hazel/settings/team")),
 			Subscription.emit(Message.ChangedAuth({ auth: "SignedIn" })),
-			Command.resolve(FetchCurrentUser, Message.FailedFetchCurrentUser({ reason: "Offline" })),
+			// The boot user.me, sent by `init` beside the session check.
+			Subscription.emit(Message.FailedFetchCurrentUser({ reason: "Offline" })),
 			sceneExpect(loader).toExist(),
 			Command.resolve(RetryFetchCurrentUser, user),
 			sceneExpect(loader).toExist(),
@@ -51,7 +52,7 @@ describe("session states", () => {
 			given(boot("/hazel/settings/team")),
 			Subscription.emit(signedIn),
 			sceneExpect(loader).toExist(),
-			Command.resolve(FetchCurrentUser, user),
+			Subscription.emit(user),
 			sceneExpect(loader).toExist(),
 			Subscription.emit(organization),
 			Mount.resolve(FocusTriggerOnPress, Menu.Message.CompletedFocusTriggerOnPress()),

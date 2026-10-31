@@ -15,6 +15,11 @@
  * 1011, which the client retries without dropping its token.
  *
  * A Connect guest's mounted channel streams from its host channel's object (`channel_index`).
+ *
+ * `POST /sync/warm?channel=<id>` wakes the objects a load is about to open, so a cold one starts
+ * while the web app's script still loads (`index.html`): the caller's `UserObject`, and the
+ * channel's object when the directory knows it (an unknown id must not create one). It carries
+ * the access token as a bearer and answers 204 once they are up; the page does not wait for it.
  */
 import { SYNC_SUBPROTOCOL, SyncCloseCode } from "@hazel/domain/sync"
 import { toHttpServerResponse } from "@hazel/sync-do"
@@ -24,7 +29,7 @@ import { HazelSession } from "../services/hazel-session"
 import { ChannelId } from "@hazel/schema"
 import { Directory } from "../services/directory"
 import { isObjectKind, OBJECT_NAMESPACES, type ObjectKind } from "./objects/kinds"
-import { encodeSyncPrincipal, OBJECT_ID_HEADER, PRINCIPAL_HEADER } from "./objects/principal"
+import { encodeSyncPrincipal, OBJECT_ID_HEADER, PRINCIPAL_HEADER, WARM_HEADER } from "./objects/principal"
 
 interface WorkerdSocket {
 	accept(): void
@@ -107,12 +112,71 @@ export const pathOf = (url: string) => {
 	return query === -1 ? path : path.slice(0, query)
 }
 
+/** The object `kind`/`name` is up; a failure only means the socket wakes it later. */
+const warmObject = (namespace: Namespace, kind: ObjectKind, name: string) =>
+	Effect.tryPromise(() =>
+		namespace
+			.getByName(name)
+			.fetch(new Request("https://object/warm", { headers: { [WARM_HEADER]: "1" } })),
+	).pipe(
+		Effect.ignore,
+		Effect.withSpan("SyncRoute.warmObject", {
+			kind: "client",
+			attributes: { "object.kind": kind, "object.id": name },
+		}),
+	)
+
 export const makeSyncRoute = (env: Record<string, unknown>) =>
 	HttpRouter.use((router) =>
 		Effect.gen(function* () {
 			// Resolved when the route is built: a handler only sees the request's own services.
 			const session = yield* HazelSession
 			const directory = yield* Directory
+			const namespaceOf = (kind: ObjectKind) => {
+				const namespace = env[OBJECT_NAMESPACES[kind]] as Namespace | undefined
+				return namespace !== undefined && typeof namespace.getByName === "function"
+					? namespace
+					: undefined
+			}
+
+			yield* router.add(
+				"POST",
+				"/sync/warm",
+				Effect.gen(function* () {
+					const request = yield* HttpServerRequest.HttpServerRequest
+					const authorization = request.headers.authorization
+					const token = authorization?.startsWith("Bearer ") ? authorization.slice(7) : undefined
+					if (token === undefined || !isJwt(token)) return HttpServerResponse.empty({ status: 401 })
+					const verified = yield* verifySocketToken(session, token)
+					if (verified._tag === "Unavailable") return HttpServerResponse.empty({ status: 503 })
+					if (Option.isNone(verified.user)) return HttpServerResponse.empty({ status: 401 })
+
+					const channelId = decodeChannelId(
+						new URL(request.url, "http://localhost").searchParams.get("channel"),
+					)
+					const channel = Option.isNone(channelId)
+						? Option.none()
+						: yield* directory
+								.channel(channelId.value)
+								.pipe(Effect.catchTag("DatabaseError", () => Effect.succeed(Option.none())))
+					const targets: Array<readonly [ObjectKind, string]> = [
+						["user", verified.user.value.user.id],
+					]
+					if (Option.isSome(channel) && channel.value.deletedAt === null) {
+						targets.push(["channel", channel.value.hostChannelId ?? channel.value.channelId])
+					}
+					yield* Effect.forEach(
+						targets,
+						([kind, name]) => {
+							const namespace = namespaceOf(kind)
+							return namespace === undefined ? Effect.void : warmObject(namespace, kind, name)
+						},
+						{ concurrency: "unbounded", discard: true },
+					)
+					return HttpServerResponse.empty({ status: 204 })
+				}).pipe(Effect.withSpan("SyncRoute.warm")),
+			)
+
 			return yield* router.add(
 				"GET",
 				"/sync/*",

@@ -121,6 +121,9 @@ export const makeRoutes = <E, R, EX = never, RX = never>(
 				],
 				allowedMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
 				credentials: true,
+				// Without it a preflight is cached for 5s (Chrome), so each load's first session check,
+				// token exchange and RPC waited a round trip on `OPTIONS`. Chrome caps this at 2h.
+				maxAge: 7200,
 			}),
 		),
 		// RpcServer and HttpApiBuilder report failed requests here; server failures get logged.

@@ -46,6 +46,33 @@ const decodeTokenResponse = Schema.decodeUnknownEffect(TokenResponse)
 
 const backendUrl = () => import.meta.env.VITE_BACKEND_URL || "http://localhost:3003"
 
+/** The exchange `index.html` starts before the app's script has loaded. */
+interface EarlyToken {
+	readonly response: Promise<Response | null>
+	readonly startedAtMs: number
+}
+
+declare global {
+	interface Window {
+		__hazelEarlyToken?: EarlyToken | undefined
+	}
+}
+
+/** Older than this, the early exchange is not reused: the page sat on a screen long enough to matter. */
+const EARLY_TOKEN_MAX_AGE_MS = 30_000
+
+/**
+ * The early exchange's response, taken once. Only a token is reused: a refused or failed early
+ * exchange is asked again here, so it never reports a session that ended in between.
+ */
+const takeEarlyToken = (): Promise<Response | null> => {
+	const early = typeof window === "undefined" ? undefined : window.__hazelEarlyToken
+	if (early === undefined) return Promise.resolve(null)
+	window.__hazelEarlyToken = undefined
+	if (Date.now() - early.startedAtMs > EARLY_TOKEN_MAX_AGE_MS) return Promise.resolve(null)
+	return early.response.then((response) => (response?.ok ? response : null))
+}
+
 /** Attempts per exchange: a network error or 5xx right after sign-in is usually momentary. */
 const EXCHANGE_ATTEMPTS = 3
 
@@ -54,18 +81,21 @@ const unreachable = (cause: unknown) => new TokenExchangeError({ reason: "Unreac
 /** A token, or `null` when the API answered and there is no session (or sign-out superseded this exchange). */
 const exchangeOnce = (startedGeneration: number): Effect.Effect<string | null, TokenExchangeError> =>
 	Effect.gen(function* () {
+		const early = yield* Effect.promise(takeEarlyToken)
 		const authorization = yield* sessionAuthorizationEffect.pipe(Effect.mapError(unreachable))
-		const response = yield* Effect.tryPromise({
-			try: () =>
-				fetch(`${backendUrl()}/auth/token`, {
-					method: "POST",
-					// The desktop app's session is a bearer; a browser's is the API's cookie.
-					...(authorization === null
-						? { credentials: "include" as const, headers: { "x-effect-auth-csrf": "1" } }
-						: { credentials: "omit" as const, headers: { authorization } }),
-				}),
-			catch: unreachable,
-		})
+		const response =
+			early ??
+			(yield* Effect.tryPromise({
+				try: () =>
+					fetch(`${backendUrl()}/auth/token`, {
+						method: "POST",
+						// The desktop app's session is a bearer; a browser's is the API's cookie.
+						...(authorization === null
+							? { credentials: "include" as const, headers: { "x-effect-auth-csrf": "1" } }
+							: { credentials: "omit" as const, headers: { authorization } }),
+					}),
+				catch: unreachable,
+			}))
 		if (startedGeneration !== generation) return null
 		if (response.status >= 500) return yield* new TokenExchangeError({ reason: "ServerError" })
 		if (!response.ok) {
@@ -129,6 +159,7 @@ export const invalidateAccessToken = (rejected: string) => {
 
 /** Drops the cached token, for sign-out. */
 export const clearAccessToken = () => {
+	if (typeof window !== "undefined") window.__hazelEarlyToken = undefined
 	generation++
 	pending = null
 	cached = null

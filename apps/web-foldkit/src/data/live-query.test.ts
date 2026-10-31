@@ -133,4 +133,65 @@ describe("liveQueryStream", () => {
 		await vi.waitFor(() => expect(emissions.at(-1)).toEqual(["c1"]))
 		await Effect.runPromise(Fiber.interrupt(fiber))
 	})
+
+	/** A hold the test settles by hand. */
+	const manualHold = () => {
+		let settled = false
+		const listeners = new Set<() => void>()
+		return {
+			hold: {
+				isSettled: () => settled,
+				subscribe: (onChange: () => void) => {
+					listeners.add(onChange)
+					return () => void listeners.delete(onChange)
+				},
+			},
+			settle: () => {
+				settled = true
+				for (const listener of listeners) listener()
+			},
+			listeners,
+		}
+	}
+
+	const emptyOrgs = (id: string) =>
+		createCollection(
+			localOnlyCollectionOptions({ id, getKey: (row: { id: string }) => row.id, initialData: [] }),
+		)
+
+	test("holds an empty result until the hold settles, then sends it", async () => {
+		const orgs = emptyOrgs("live-query-hold")
+		await orgs.preload()
+		const { hold, settle } = manualHold()
+		const emissions: Array<string> = []
+		const fiber = Effect.runFork(
+			liveQueryStream<{ id: string }, string>(
+				(q) => q.from({ org: orgs }),
+				(rows) => (rows.length === 0 ? "none" : "some"),
+				{ holdEmptyUntil: hold },
+			).pipe(Stream.runForEach((message) => Effect.sync(() => emissions.push(message)))),
+		)
+		await new Promise((resolve) => setTimeout(resolve, 20))
+		expect(emissions).toEqual([])
+		settle()
+		await vi.waitFor(() => expect(emissions).toEqual(["none"]))
+		await Effect.runPromise(Fiber.interrupt(fiber))
+	})
+
+	test("a held empty result that never settles is reported as stalled, and the hold is released", async () => {
+		const orgs = emptyOrgs("live-query-hold-stall")
+		await orgs.preload()
+		const { hold, listeners } = manualHold()
+		const emissions: Array<string> = []
+		const fiber = Effect.runFork(
+			liveQueryStream<{ id: string }, string>(
+				(q) => q.from({ org: orgs }),
+				(rows) => (rows.length === 0 ? "none" : "some"),
+				{ holdEmptyUntil: hold, onStalled: () => "stalled", stallAfterMs: 30 },
+			).pipe(Stream.runForEach((message) => Effect.sync(() => emissions.push(message)))),
+		)
+		await vi.waitFor(() => expect(emissions).toEqual(["stalled"]))
+		await Effect.runPromise(Fiber.interrupt(fiber))
+		expect(listeners.size).toBe(0)
+	})
 })

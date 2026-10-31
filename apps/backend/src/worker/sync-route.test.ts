@@ -11,7 +11,7 @@ import { HttpRouter } from "effect/http"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { Directory } from "../services/directory"
 import { HazelSession, type VerifiedUser } from "../services/hazel-session"
-import { decodeSyncPrincipal, OBJECT_ID_HEADER, PRINCIPAL_HEADER } from "./objects/principal"
+import { decodeSyncPrincipal, OBJECT_ID_HEADER, PRINCIPAL_HEADER, WARM_HEADER } from "./objects/principal"
 import { makeSyncRoute } from "./sync-route"
 
 const userId = crypto.randomUUID() as UserId
@@ -69,12 +69,45 @@ const build = (options: {
 		makeSyncRoute(options.env).pipe(Layer.provide(Layer.mergeAll(session, directory))),
 		{ disableLogger: true },
 	)
-	return (path: string) =>
-		(web.handler as (request: Request) => Promise<Response>)(
-			new Request(`http://api.test${path}`, {
-				headers: { upgrade: "websocket", "sec-websocket-protocol": `${SYNC_SUBPROTOCOL}, ${jwt}` },
+	const handler = web.handler as (request: Request) => Promise<Response>
+	return Object.assign(
+		(path: string) =>
+			handler(
+				new Request(`http://api.test${path}`, {
+					headers: {
+						upgrade: "websocket",
+						"sec-websocket-protocol": `${SYNC_SUBPROTOCOL}, ${jwt}`,
+					},
+				}),
+			),
+		{
+			/** `POST /sync/warm`, with `token` as the bearer (`null`: none). */
+			warm: (query: string, token: string | null = jwt) =>
+				handler(
+					new Request(`http://api.test/sync/warm${query}`, {
+						method: "POST",
+						headers: token === null ? {} : { authorization: `Bearer ${token}` },
+					}),
+				),
+		},
+	)
+}
+
+/** A namespace that records which object names it was asked to wake. */
+const warmNamespace = () => {
+	const woken: Array<string> = []
+	return {
+		woken,
+		namespace: {
+			getByName: (name: string) => ({
+				fetch: (request: Request) => {
+					expect(request.headers.get(WARM_HEADER)).toBe("1")
+					woken.push(name)
+					return Promise.resolve(new Response(null, { status: 204 }))
+				},
 			}),
-		)
+		},
+	}
 }
 
 /** An `OrgObject` namespace that records what it was forwarded. */
@@ -156,5 +189,66 @@ describe("sync route", () => {
 			{ code: 1011, reason: "unavailable" },
 			{ code: 1011, reason: "unavailable" },
 		])
+	})
+})
+
+describe("sync warm-up", () => {
+	const verify: Verify = () => Effect.succeed(Option.some({ user, expiresAt: Date.now() + 60_000 }))
+	const channelId = crypto.randomUUID()
+	const hostChannelId = crypto.randomUUID()
+
+	it("wakes the caller's user object and the channel the directory knows, by its host", async () => {
+		const users = warmNamespace()
+		const channels = warmNamespace()
+		const send = build({
+			verify,
+			channel: () =>
+				Effect.succeed(Option.some({ channelId, hostChannelId, deletedAt: null } as never)),
+			env: { UserObject: users.namespace, ChannelObject: channels.namespace },
+		})
+		const response = await send.warm(`?channel=${channelId}`)
+		expect(response.status).toBe(204)
+		expect(users.woken).toEqual([userId])
+		expect(channels.woken).toEqual([hostChannelId])
+	})
+
+	it("never wakes a channel the directory does not know, or a deleted one", async () => {
+		const channels = warmNamespace()
+		const unknown = build({
+			verify,
+			env: { UserObject: warmNamespace().namespace, ChannelObject: channels.namespace },
+		})
+		await unknown.warm(`?channel=${channelId}`)
+		await unknown.warm("?channel=not-a-uuid")
+		const deleted = build({
+			verify,
+			channel: () =>
+				Effect.succeed(
+					Option.some({ channelId, hostChannelId: null, deletedAt: new Date() } as never),
+				),
+			env: { UserObject: warmNamespace().namespace, ChannelObject: channels.namespace },
+		})
+		await deleted.warm(`?channel=${channelId}`)
+		expect(channels.woken).toEqual([])
+	})
+
+	it("refuses a missing or invalid token, and wakes nothing", async () => {
+		const users = warmNamespace()
+		const refused = build({
+			verify: () => Effect.succeed(Option.none()),
+			env: { UserObject: users.namespace },
+		})
+		expect((await refused.warm("")).status).toBe(401)
+		expect((await refused.warm("", null)).status).toBe(401)
+		expect((await refused.warm("", "not-a-jwt")).status).toBe(401)
+		expect(users.woken).toEqual([])
+	})
+
+	it("still answers when an object cannot be reached", async () => {
+		const send = build({
+			verify,
+			env: { UserObject: { getByName: () => ({ fetch: () => Promise.reject(new Error("reset")) }) } },
+		})
+		expect((await send.warm("")).status).toBe(204)
 	})
 })

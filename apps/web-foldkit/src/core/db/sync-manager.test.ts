@@ -4,7 +4,7 @@ import { OrganizationId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { UserOrganization } from "./collections"
-import { startSyncSession } from "./sync-manager"
+import { orgSourcesSettled, type RememberedOrgSources, startSyncSession } from "./sync-manager"
 
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`
 const userId = UserId.make(uuid(1))
@@ -22,7 +22,16 @@ const Conversation = Schema.Struct({
 const hubs: Array<SyncHub> = []
 let count = 0
 
-const setup = () => {
+const memory = (initial: Record<string, ReadonlyArray<string>> = {}) => {
+	const stored = new Map(Object.entries(initial))
+	const remembered: RememberedOrgSources = {
+		read: (id) => stored.get(id) as ReturnType<RememberedOrgSources["read"]>,
+		write: (id, sources) => void stored.set(id, sources),
+	}
+	return { remembered, stored }
+}
+
+const setup = (rememberedOrgSources?: RememberedOrgSources) => {
 	const sockets = fakeSockets()
 	const hub = new SyncHub({
 		baseUrl: "https://api.test",
@@ -52,10 +61,10 @@ const setup = () => {
 		sources: orgSources,
 	})
 	const stop = startSyncSession(
-		{ userSources, orgSources, userOrganizations, connectConversations },
+		{ userSources, orgSources, userOrganizations, connectConversations, rememberedOrgSources },
 		userId,
 	)
-	return { sockets, hub, userSources, orgSources, stop }
+	return { sockets, hub, userSources, orgSources, userOrganizations, connectConversations, stop }
 }
 
 const socketFor = async (sockets: ReturnType<typeof fakeSockets>, path: string) => {
@@ -109,6 +118,32 @@ describe("sync connection manager", () => {
 		await vi.waitFor(() => expect(orgSources.get()).toEqual([`org:${orgA}`]))
 	})
 
+	it("opens the remembered orgs beside the user's object, then follows its rows", async () => {
+		const { remembered, stored } = memory({ [userId]: [`org:${orgA}`, `org:${orgB}`] })
+		const { sockets, orgSources } = setup(remembered)
+		expect(orgSources.get()).toEqual([`org:${orgA}`, `org:${orgB}`])
+		// Both org sockets open before the user's object has answered.
+		await socketFor(sockets, `/sync/org/${orgA}`)
+		await socketFor(sockets, `/sync/org/${orgB}`)
+		expect(sockets.count(`/sync/user/${userId}`)).toBe(1)
+
+		// The user left orgB and joined orgC since: the real set replaces the guess and is remembered.
+		const user = sockets.latest(`/sync/user/${userId}`)!
+		user.snapshot(1, { user_organizations: [joined(orgA), joined(orgC)] })
+		await vi.waitFor(() => expect(orgSources.get()).toEqual([`org:${orgA}`, `org:${orgC}`]))
+		expect(stored.get(userId)).toEqual([`org:${orgA}`, `org:${orgC}`])
+		await socketFor(sockets, `/sync/org/${orgC}`)
+	})
+
+	it("remembers the org set for the next load", async () => {
+		const { remembered, stored } = memory()
+		const { sockets, orgSources } = setup(remembered)
+		expect(orgSources.get()).toBeUndefined()
+		const user = await socketFor(sockets, `/sync/user/${userId}`)
+		user.snapshot(1, { user_organizations: [joined(orgA)] })
+		await vi.waitFor(() => expect(stored.get(userId)).toEqual([`org:${orgA}`]))
+	})
+
 	it("closes every source when the session stops (sign-out)", async () => {
 		const { sockets, userSources, orgSources, stop } = setup()
 		const user = await socketFor(sockets, `/sync/user/${userId}`)
@@ -123,5 +158,43 @@ describe("sync connection manager", () => {
 			expect(user.isClosed).toBe(true)
 			expect(org.isClosed).toBe(true)
 		})
+	})
+
+	it("settles the org sources once the user's object and every org source have answered", async () => {
+		const { remembered } = memory({ [userId]: [`org:${orgA}`] })
+		const { sockets, hub, orgSources, userOrganizations, connectConversations } = setup(remembered)
+		const settled = orgSourcesSettled({
+			userOrganizations,
+			userOrganizationsStatus: userOrganizations,
+			connectConversations,
+			orgSources,
+			hub,
+		})
+		// Whenever the user's organizations change, the remembered set must not count as settled:
+		// the manager may not have applied the real set yet (listener order is not guaranteed).
+		const settledOnArrival: Array<boolean> = []
+		userOrganizations.on("status:change", () => void settledOnArrival.push(settled.isSettled()))
+		let changes = 0
+		const unsubscribe = settled.subscribe(() => void changes++)
+		expect(settled.isSettled()).toBe(false)
+
+		// The remembered org answers first: still a guess until the user's object has.
+		const rememberedOrg = await socketFor(sockets, `/sync/org/${orgA}`)
+		rememberedOrg.snapshot(1, {})
+		await vi.waitFor(() => expect(hub.connectionOf(`org:${orgA}`)?.isSettled).toBe(true))
+		expect(settled.isSettled()).toBe(false)
+
+		// The user joined orgB since: its source opens, and nothing is settled until it answers.
+		const user = sockets.latest(`/sync/user/${userId}`)!
+		user.snapshot(1, { user_organizations: [joined(orgA), joined(orgB)] })
+		await vi.waitFor(() => expect(orgSources.get()).toEqual([`org:${orgA}`, `org:${orgB}`]))
+		expect(settled.isSettled()).toBe(false)
+		const joinedSocket = await socketFor(sockets, `/sync/org/${orgB}`)
+		joinedSocket.snapshot(1, {})
+		await vi.waitFor(() => expect(settled.isSettled()).toBe(true))
+		expect(changes).toBeGreaterThan(0)
+		expect(settledOnArrival.length).toBeGreaterThan(0)
+		expect(settledOnArrival.every((isSettled) => !isSettled)).toBe(true)
+		unsubscribe()
 	})
 })

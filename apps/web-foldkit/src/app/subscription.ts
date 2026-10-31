@@ -7,7 +7,7 @@ import {
 	organizationCollection,
 	organizationMemberCollection,
 } from "~/db/collections"
-import { syncSession } from "~/db/sync-manager"
+import { appOrgSourcesSettled, syncSession } from "~/db/sync-manager"
 import { SESSION_REJECTED_EVENT } from "~/lib/access-token"
 import { liveQueryStream } from "../data/live-query"
 import { pageSubscriptions } from "../page/registry"
@@ -120,7 +120,12 @@ const rootSubscriptions = Subscription.make<Model, Message>()((entry) => ({
 										: null,
 								})
 							},
-							{ onStalled: () => Message.StalledOrganization({ orgSlug }) },
+							{
+								onStalled: () => Message.StalledOrganization({ orgSlug }),
+								// The org sources start as last load's set: an org joined since is
+								// missing until its own source answers, not "not found".
+								holdEmptyUntil: appOrgSourcesSettled,
+							},
 						),
 		},
 	),
