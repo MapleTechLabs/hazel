@@ -94,6 +94,27 @@ describe("menu scene", () => {
 		)
 	})
 
+	test("a pointer-focused item loses its highlight, not its focus, when the pointer leaves", () => {
+		const step = (model: ReturnType<typeof init>, message: Message) => update(model, message).model
+		const opened = step(init({ id: "file" }), Message.PressedTrigger({ pointerType: "mouse" }))
+		const hovered = step(opened, Message.HoveredItem({ key: "new", entries }))
+		Scene.scene(
+			config,
+			Scene.given(hovered),
+			mounted,
+			portalled,
+			Scene.expect(menuItem("New file")).toHaveAttr("data-focused", "true"),
+		)
+		Scene.scene(
+			config,
+			Scene.given(step(hovered, Message.UnhoveredItem({ key: "new" }))),
+			mounted,
+			portalled,
+			Scene.expect(menuItem("New file")).not.toHaveAttr("data-focused"),
+			Scene.expect(menuItem("New file")).toHaveAttr("tabindex", "0"),
+		)
+	})
+
 	test("a key the trigger does not handle falls through", () => {
 		Scene.scene(
 			config,

@@ -71,6 +71,27 @@ describe("select scene", () => {
 		)
 	})
 
+	test("a pointer-focused option loses its highlight, not its focus, when the pointer leaves", () => {
+		const step = (model: ReturnType<typeof init>, message: Message) => update(model, message).model
+		const opened = step(init({ id: "clear" }), Message.PressedTrigger({ pointerType: "mouse" }))
+		const hovered = step(opened, Message.HoveredOption({ key: "today", items }))
+		Scene.scene(
+			config,
+			Scene.given(hovered),
+			mounted,
+			portalled,
+			Scene.expect(option("Today")).toHaveAttr("data-focused", "true"),
+		)
+		Scene.scene(
+			config,
+			Scene.given(step(hovered, Message.UnhoveredOption({ key: "today" }))),
+			mounted,
+			portalled,
+			Scene.expect(option("Today")).not.toHaveAttr("data-focused"),
+			Scene.expect(option("Today")).toHaveAttr("tabindex", "0"),
+		)
+	})
+
 	test("clicking an option selects it, closes the listbox and shows its label", () => {
 		Scene.scene(
 			config,

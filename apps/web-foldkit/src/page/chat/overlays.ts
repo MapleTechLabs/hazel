@@ -98,6 +98,14 @@ export const init = (): Model => ({
 export const hoveredMessageIdOf = (model: Model): MessageId | null =>
 	model.hover._tag === "None" ? null : model.hover.messageId
 
+/**
+ * The message whose row keeps its highlight without native `:hover`: the toolbar renders outside the
+ * row, so the pointer on it leaves the row. Otherwise the row's own `hover:` is the highlight, so it
+ * ends the moment the pointer leaves instead of lingering in gaps or through the hide delay.
+ */
+export const heldMessageIdOf = (model: Model): MessageId | null =>
+	model.hover._tag === "Shown" && model.hover.isToolbarHovered ? model.hover.messageId : null
+
 /** The active tooltip as the host renders it. */
 export const activeTooltipOf = (model: Model): TooltipHost.Model => model.tooltip?.tooltip ?? null
 
