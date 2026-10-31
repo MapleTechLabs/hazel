@@ -234,7 +234,11 @@ export class HtmlRenders extends Context.Service<HtmlRenders>()("@hazel/backend/
 		})
 
 		/** A page no message claimed (the bot's `DELETE`): a claimed one belongs to its messages. */
-		const removePending = (location: HtmlRenderLocation) => storage.remove(pendingHtmlRenderKey(location))
+		const removePending = Effect.fn("HtmlRenders.removePending")(function* (
+			location: HtmlRenderLocation,
+		) {
+			yield* storage.remove(pendingHtmlRenderKey(location))
+		})
 
 		return { publish, signedUrl, verify, read, claim, remove, removePending } as const
 	}),
