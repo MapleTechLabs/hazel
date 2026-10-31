@@ -910,6 +910,8 @@ const handleGetConnectionStatus = Effect.fn("integrations.getConnectionStatus")(
 	const { orgId, provider } = path
 	const currentUser = yield* CurrentUser.Context
 	const level = query.level ?? "organization"
+	// A T3 Code link is a member's own, with its own routes (`./t3code.http.ts`).
+	if (provider === "t3code") return yield* Effect.fail(new UnsupportedProviderError({ provider }))
 
 	if (!currentUser.organizationId || currentUser.organizationId !== orgId) {
 		return yield* Effect.fail(
@@ -962,6 +964,8 @@ const handleDisconnect = Effect.fn("integrations.disconnect")(function* (
 	const { orgId, provider } = path
 	const currentUser = yield* CurrentUser.Context
 	const level = query.level ?? "organization"
+	// A T3 Code link is a member's own, with its own routes (`./t3code.http.ts`).
+	if (provider === "t3code") return yield* Effect.fail(new UnsupportedProviderError({ provider }))
 
 	if (!currentUser.organizationId || currentUser.organizationId !== orgId) {
 		return yield* Effect.fail(

@@ -41,15 +41,20 @@ export const normalizeEnvironmentUrl = (raw: string, options: { readonly allowLo
 		if (url.username !== "" || url.password !== "") {
 			return yield* invalid("The URL must not contain credentials.")
 		}
-		const loopback = LOOPBACK_HOSTNAMES.has(url.hostname)
+		// A trailing dot names the same host: `localhost.` must not pass as a public name.
+		const hostname = url.hostname.replace(/\.$/, "").toLowerCase()
+		const loopback = LOOPBACK_HOSTNAMES.has(hostname)
 		if (loopback && options.allowLoopbackHttp) {
 			if (url.protocol !== "https:" && url.protocol !== "http:")
 				return yield* invalid("Use an http(s) URL.")
 		} else if (
 			url.protocol !== "https:" ||
 			// The backend fetches it: a public host name only, never an IP or an internal name.
-			isIpLiteral(url.hostname) ||
-			!url.hostname.includes(".")
+			url.hostname.endsWith(".") ||
+			isIpLiteral(hostname) ||
+			hostname === "localhost" ||
+			hostname.endsWith(".localhost") ||
+			!hostname.includes(".")
 		) {
 			return yield* invalid("Use the environment's https address, such as its T3 Connect address.")
 		}
@@ -116,7 +121,7 @@ export class T3CodeOAuthClient extends Context.Service<T3CodeOAuthClient>()("T3C
 		): Effect.Effect<A, T3CodeOAuthError> =>
 			Effect.gen(function* () {
 				// Never follow a redirect: every endpoint must be the environment's own.
-				const response = yield* Effect.timeout(request, TIMEOUT).pipe(
+				const response = yield* request.pipe(
 					Effect.provideService(FetchHttpClient.RequestInit, { redirect: "manual" }),
 				)
 				if (response.status >= 300) {
@@ -133,6 +138,8 @@ export class T3CodeOAuthClient extends Context.Service<T3CodeOAuthClient>()("T3C
 				}
 				return yield* Schema.decodeUnknownEffect(schema)(yield* response.json)
 			}).pipe(
+				// The whole step, body included: an environment can send headers and then stall.
+				Effect.timeout(TIMEOUT),
 				Effect.catchTags({
 					TimeoutError: (cause: unknown) =>
 						Effect.fail(new T3CodeOAuthError({ message: `${step} timed out`, cause })),
