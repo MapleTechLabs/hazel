@@ -85,7 +85,7 @@ describe("integration detail page", () => {
 			),
 			expectView(role("link", { name: "Set up alerts in Maple" })).toHaveAttr(
 				"href",
-				"https://app.maple.dev/integrations?integration=hazel",
+				"https://app.maple.dev/alerts?tab=routing",
 			),
 			expectView(role("link", { name: "Connect in Maple EU" })).toHaveAttr(
 				"href",
@@ -93,7 +93,7 @@ describe("integration detail page", () => {
 			),
 			expectView(role("link", { name: "Set up alerts in Maple EU" })).toHaveAttr(
 				"href",
-				"https://app.eu.maple.dev/integrations?integration=hazel",
+				"https://app.eu.maple.dev/alerts?tab=routing",
 			),
 		)
 	})
