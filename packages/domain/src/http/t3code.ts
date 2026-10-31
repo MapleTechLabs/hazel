@@ -214,4 +214,21 @@ export class T3CodeGroup extends HttpApiGroup.make("t3code")
 			)
 			.annotate(RequiredScopes, []),
 	)
+	// Bot token auth: T3 refused the owner's credential (revoked in T3); the link shows as expired.
+	.add(
+		HttpApiEndpoint.post("reportT3CodeExpired", `/bot/expired`, {
+			payload: Schema.Struct({ organizationId: OrganizationId, ownerId: UserId }),
+			success: Schema.Void,
+			error: [UnauthorizedError, InternalServerError],
+		})
+			.annotateMerge(
+				OpenApi.annotations({
+					title: "Report T3 Code Expired",
+					description:
+						"Marks the owner's link expired after T3 refused its credential. T3 Code bot only.",
+					summary: "Report T3 Code expired",
+				}),
+			)
+			.annotate(RequiredScopes, []),
+	)
 	.prefix("/integrations/t3code") {}

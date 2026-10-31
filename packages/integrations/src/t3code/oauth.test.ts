@@ -43,6 +43,9 @@ describe("normalizeEnvironmentUrl", () => {
 			"https://mac.t3.example/api",
 			"ftp://mac.t3.example",
 			"not a url at all",
+			"https://10.0.0.5",
+			"https://[fd00::1]:3773",
+			"https://internal-service",
 		]) {
 			expect(Exit.isFailure(normalize(raw))).toBe(true)
 		}
@@ -51,6 +54,7 @@ describe("normalizeEnvironmentUrl", () => {
 	it("allows http on loopback only in local dev", () => {
 		expect(normalize("http://localhost:3773/mcp", true)).toEqual(Exit.succeed("http://localhost:3773"))
 		expect(Exit.isFailure(normalize("http://10.0.0.5:3773", true))).toBe(true)
+		expect(Exit.isFailure(normalize("http://internal-service", true))).toBe(true)
 	})
 })
 
@@ -93,7 +97,40 @@ describe("T3CodeOAuthClient", () => {
 			const exit = yield* Effect.exit(oauth.environmentInfo(origin))
 			expect(exit).toMatchObject({ _tag: "Failure" })
 			expect(String(Exit.isFailure(exit) && exit.cause)).toContain("environmentInfo failed (404)")
+			// What the environment answered never reaches the member.
+			expect(Exit.isFailure(exit) && JSON.stringify(exit.cause)).not.toContain(
+				'"message":"environmentInfo failed (404): not found"',
+			)
 		}).pipe(Effect.provide(fakeT3({}))),
+	)
+
+	it.effect("does not follow a redirect off the environment", () =>
+		Effect.gen(function* () {
+			const oauth = yield* T3CodeOAuthClient
+			const exit = yield* Effect.exit(oauth.environmentInfo(origin))
+			expect(String(Exit.isFailure(exit) && exit.cause)).toContain("redirected elsewhere")
+		}).pipe(
+			Effect.provide(
+				T3CodeOAuthClient.layer.pipe(
+					Layer.provide(
+						Layer.succeed(
+							HttpClient.HttpClient,
+							HttpClient.make((request) =>
+								Effect.succeed(
+									HttpClientResponse.fromWeb(
+										request,
+										new Response(null, {
+											status: 302,
+											headers: { location: "http://169.254.169.254/" },
+										}),
+									),
+								),
+							),
+						),
+					),
+				),
+			),
+		),
 	)
 
 	it.effect("builds the sign-in URL with PKCE and the MCP resource", () =>

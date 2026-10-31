@@ -3,7 +3,13 @@
  * registration, authorization code with PKCE S256). T3 issues no refresh tokens; a credential
  * lasts 30 days and the member signs in again after it. See T3 Code's `docs/user/outside-agents.md`.
  */
-import { HttpBody, HttpClient, type HttpClientError, type HttpClientResponse } from "effect/http"
+import {
+	FetchHttpClient,
+	HttpBody,
+	HttpClient,
+	type HttpClientError,
+	type HttpClientResponse,
+} from "effect/http"
 import { Context, Duration, Effect, Layer, Schema } from "effect"
 
 const TIMEOUT = Duration.seconds(15)
@@ -17,9 +23,11 @@ export class T3CodeOAuthError extends Schema.TaggedError<T3CodeOAuthError>()("T3
 
 const LOOPBACK_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"])
 
+const isIpLiteral = (hostname: string) => hostname.startsWith("[") || /^[\d.]+$/.test(hostname)
+
 /**
- * The environment's origin from what a member pastes: its address or its MCP URL. Only `https`,
- * plus `http` on loopback when `allowLoopbackHttp` (local dev), with no credentials in the URL.
+ * The environment's origin from what a member pastes: its address or its MCP URL. Only `https` to
+ * a public host name, plus loopback when `allowLoopbackHttp` (local dev), with no credentials.
  */
 export const normalizeEnvironmentUrl = (raw: string, options: { readonly allowLoopbackHttp: boolean }) =>
 	Effect.gen(function* () {
@@ -34,9 +42,14 @@ export const normalizeEnvironmentUrl = (raw: string, options: { readonly allowLo
 			return yield* invalid("The URL must not contain credentials.")
 		}
 		const loopback = LOOPBACK_HOSTNAMES.has(url.hostname)
-		if (
-			url.protocol !== "https:" &&
-			!(url.protocol === "http:" && loopback && options.allowLoopbackHttp)
+		if (loopback && options.allowLoopbackHttp) {
+			if (url.protocol !== "https:" && url.protocol !== "http:")
+				return yield* invalid("Use an http(s) URL.")
+		} else if (
+			url.protocol !== "https:" ||
+			// The backend fetches it: a public host name only, never an IP or an internal name.
+			isIpLiteral(url.hostname) ||
+			!url.hostname.includes(".")
 		) {
 			return yield* invalid("Use the environment's https address, such as its T3 Connect address.")
 		}
@@ -102,12 +115,20 @@ export class T3CodeOAuthClient extends Context.Service<T3CodeOAuthClient>()("T3C
 			schema: Schema.Codec<A, unknown>,
 		): Effect.Effect<A, T3CodeOAuthError> =>
 			Effect.gen(function* () {
-				const response = yield* Effect.timeout(request, TIMEOUT)
-				if (response.status >= 400) {
+				// Never follow a redirect: every endpoint must be the environment's own.
+				const response = yield* Effect.timeout(request, TIMEOUT).pipe(
+					Effect.provideService(FetchHttpClient.RequestInit, { redirect: "manual" }),
+				)
+				if (response.status >= 300) {
+					// The body stays in the cause (logs), never in the message a member sees.
 					const body = yield* response.text.pipe(Effect.orElseSucceed(() => ""))
 					return yield* new T3CodeOAuthError({
-						message: `${step} failed (${response.status})${body ? `: ${body.slice(0, 300)}` : ""}`,
+						message:
+							response.status < 400
+								? `${step}: the environment redirected elsewhere`
+								: `${step} failed (${response.status})`,
 						status: response.status,
+						cause: body.slice(0, 500),
 					})
 				}
 				return yield* Schema.decodeUnknownEffect(schema)(yield* response.json)
