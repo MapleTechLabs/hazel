@@ -76,6 +76,8 @@ const GitHubErrorApiResponse = Schema.Struct({
  * - GITHUB_APP_SLUG: The app slug (from URL)
  * - GITHUB_APP_PRIVATE_KEY: Base64-encoded PEM private key
  */
+const GITHUB_APP_KEYS = ["GITHUB_APP_ID", "GITHUB_APP_SLUG", "GITHUB_APP_PRIVATE_KEY"] as const
+
 export const loadGitHubAppConfig = Effect.withSpan("GitHubAppJWTService.loadConfig")(
 	Effect.gen(function* () {
 		const appId = yield* Config.String("GITHUB_APP_ID")
@@ -159,12 +161,15 @@ const GITHUB_API_BASE_URL = "https://api.github.com"
  */
 export class GitHubAppJWTService extends Context.Service<GitHubAppJWTService>()("GitHubAppJWTService", {
 	make: Effect.gen(function* () {
-		// Optional: a stage without a GitHub App (no GITHUB_APP_ID: previews, local dev) still serves
-		// everything else, and only the GitHub integration fails, with `GitHubAppJWTError`. A partial
-		// config is still a fatal startup error.
-		const config = Option.isNone(yield* Config.option(Config.String("GITHUB_APP_ID")))
-			? Option.none<GitHubAppConfig>()
-			: Option.some(yield* loadGitHubAppConfig.pipe(Effect.orDie))
+		// Optional: a stage without a GitHub App (none of the three keys: previews, local dev) still
+		// serves everything else, and only the GitHub integration fails, with `GitHubAppJWTError`.
+		// A partial config is still a fatal startup error.
+		const present = yield* Config.all(
+			GITHUB_APP_KEYS.map((key) => Config.option(Config.String(key)).pipe(Config.map(Option.isSome))),
+		)
+		const config = present.includes(true)
+			? Option.some(yield* loadGitHubAppConfig.pipe(Effect.orDie))
+			: Option.none<GitHubAppConfig>()
 		const httpClient = yield* HttpClient.HttpClient
 
 		const requireConfig = Option.match(config, {

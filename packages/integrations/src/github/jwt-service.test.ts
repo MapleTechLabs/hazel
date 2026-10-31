@@ -38,10 +38,15 @@ describe("GitHubAppJWTService", () => {
 
 	it.effect("dies on a partial GitHub App config", () =>
 		Effect.gen(function* () {
-			const exit = yield* Effect.exit(
-				Effect.provide(Effect.service(GitHubAppJWTService), withEnv({ GITHUB_APP_ID: "1" })),
-			)
-			expect(Exit.hasDies(exit)).toBe(true)
+			for (const env of [
+				{ GITHUB_APP_ID: "1" },
+				{ GITHUB_APP_SLUG: "hazel", GITHUB_APP_PRIVATE_KEY: "a2V5" },
+			]) {
+				const exit = yield* Effect.exit(
+					Effect.provide(Effect.service(GitHubAppJWTService), withEnv(env)),
+				)
+				expect(Exit.hasDies(exit)).toBe(true)
+			}
 		}),
 	)
 })
