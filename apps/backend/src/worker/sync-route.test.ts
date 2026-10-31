@@ -4,7 +4,7 @@
  */
 import { Database } from "@hazel/db"
 import { CurrentUser, SessionLoadError } from "@hazel/domain"
-import { SYNC_SUBPROTOCOL, SyncCloseCode } from "@hazel/domain/sync"
+import { SYNC_MUX_SUBPROTOCOL, SYNC_SUBPROTOCOL, SyncCloseCode } from "@hazel/domain/sync"
 import type { UserId } from "@hazel/schema"
 import { Effect, Layer, Option } from "effect"
 import { HttpRouter } from "effect/http"
@@ -81,6 +81,13 @@ const build = (options: {
 				}),
 			),
 		{
+			/** `GET /sync/mux`, offering `protocols`. */
+			mux: (protocols: string) =>
+				handler(
+					new Request("http://api.test/sync/mux", {
+						headers: { upgrade: "websocket", "sec-websocket-protocol": protocols },
+					}),
+				),
 			/** `POST /sync/warm`, with `token` as the bearer (`null`: none). */
 			warm: (query: string, token: string | null = jwt) =>
 				handler(
@@ -125,6 +132,28 @@ const recordingNamespace = () => {
 		},
 	}
 }
+
+describe("multiplexed sync socket", () => {
+	it("closes a bad or missing token with 4001, echoing the mux subprotocol", async () => {
+		const send = build({ verify: () => Effect.succeed(Option.none()), env: {} })
+		const response = await send.mux(`${SYNC_MUX_SUBPROTOCOL}, ${jwt}`)
+		expect(response.headers.get("sec-websocket-protocol")).toBe(SYNC_MUX_SUBPROTOCOL)
+		await send.mux(`${SYNC_SUBPROTOCOL}, ${jwt}`)
+		expect(closed).toEqual([
+			{ code: SyncCloseCode.Reauth, reason: "invalid_token" },
+			{ code: SyncCloseCode.Reauth, reason: "missing_token" },
+		])
+	})
+
+	it("closes with 1011 (not 4001) when the session store is down", async () => {
+		const send = build({
+			verify: () => Effect.fail(new SessionLoadError({ message: "down", detail: "db" })),
+			env: {},
+		})
+		await send.mux(`${SYNC_MUX_SUBPROTOCOL}, ${jwt}`)
+		expect(closed).toEqual([{ code: 1011, reason: "unavailable" }])
+	})
+})
 
 describe("sync route", () => {
 	it("forwards the credential's expiry as the principal's expiresAt", async () => {

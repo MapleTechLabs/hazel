@@ -6,7 +6,16 @@ import * as SqliteDo from "@effect/sql-sqlite-do/SqliteClient"
 import { DurableObject } from "cloudflare:workers"
 import { Effect, ManagedRuntime } from "effect"
 import { SqlClient } from "effect/sql/SqlClient"
-import { enqueue, makeSyncedObject, type SyncObjectState, type SyncSocket } from "../../src/index.ts"
+import type { SyncMuxOpen } from "@hazel/domain/sync"
+import {
+	enqueue,
+	makeSyncedObject,
+	type MuxOpenResult,
+	refuseMuxStream,
+	startMuxSession,
+	type SyncObjectState,
+	type SyncSocket,
+} from "../../src/index.ts"
 import { makeToyControls, makeToySource, TOY_DDL, type ToyPrincipal } from "../../src/test/toy-source.ts"
 
 export interface Env {
@@ -110,6 +119,31 @@ export class ToyObject extends DurableObject<Env> {
 	}
 }
 
+/**
+ * `/mux`: the multiplexed socket's relay as the api Worker runs it, detached from the upgrade
+ * request. A stream opens the toy object named by its `sourceId`, as the user named by its token.
+ */
+const muxUpgrade = (env: Env) =>
+	Effect.gen(function* () {
+		const pair = new WebSocketPair()
+		const server = pair[1]
+		server.accept()
+		const open = (stream: typeof SyncMuxOpen.Type) =>
+			Effect.promise(async (): Promise<MuxOpenResult> => {
+				const stub = env.TOY.get(env.TOY.idFromName(stream.sourceId))
+				const response = await stub.fetch(`http://toy/connect?user=${stream.token}`, {
+					headers: { Upgrade: "websocket", "Sec-WebSocket-Protocol": "hazel.v1, secret-token" },
+				})
+				const socket = response.webSocket
+				if (socket === null) return refuseMuxStream(1011, "unavailable")
+				socket.accept()
+				return { _tag: "Opened", socket: socket as never }
+			})
+		yield* startMuxSession(server as never, open)
+		return new Response(null, { status: 101, webSocket: pair[0] })
+	})
+
 export default {
-	fetch: () => new Response("toy"),
+	fetch: (request: Request, env: Env) =>
+		new URL(request.url).pathname === "/mux" ? Effect.runPromise(muxUpgrade(env)) : new Response("toy"),
 }
