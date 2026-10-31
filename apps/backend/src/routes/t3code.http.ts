@@ -34,6 +34,7 @@ import { callObject } from "../worker/objects/calls"
 import { orgTarget } from "../worker/objects/kinds"
 import { ConnectIntegrationCall, DisconnectIntegrationCall } from "../worker/objects/org/integrations"
 import {
+	MarkT3CodeExpiredCall,
 	T3CodeAccessCall,
 	T3CodeLinkCall,
 	type T3CodeMetadata,
@@ -195,6 +196,33 @@ const handleStartConnect = Effect.fn("t3code.startConnect")(function* (
 
 type CallbackError = "denied" | "invalid_state" | "token_exchange_failed" | "db_error"
 
+/**
+ * Whether a callback may finish the sign-in in `flow`: the member who started it, the state it
+ * sent, T3 as the issuer (RFC 9207), and a code rather than a refusal.
+ */
+export const checkCallback = (
+	flow: { readonly userId: UserId; readonly state: string; readonly issuer: string },
+	query: {
+		readonly code?: string | undefined
+		readonly state?: string | undefined
+		readonly iss?: string | undefined
+		readonly error?: string | undefined
+	},
+	currentUserId: UserId,
+):
+	| { readonly _tag: "ok"; readonly code: string }
+	| { readonly _tag: "refused"; readonly error: CallbackError } => {
+	if (
+		currentUserId !== flow.userId ||
+		query.state !== flow.state ||
+		(query.iss !== undefined && query.iss !== flow.issuer)
+	) {
+		return { _tag: "refused", error: "invalid_state" }
+	}
+	if (query.error !== undefined || query.code === undefined) return { _tag: "refused", error: "denied" }
+	return { _tag: "ok", code: query.code }
+}
+
 const handleCallback = Effect.fn("t3code.callback")(function* (query: {
 	readonly code?: string | undefined
 	readonly state?: string | undefined
@@ -229,20 +257,15 @@ const handleCallback = Effect.fn("t3code.callback")(function* (query: {
 
 	// The cookie names who started; only that member's own session may finish.
 	const currentUser = yield* CurrentUser.Context
-	if (
-		currentUser.id !== flow.userId ||
-		query.state !== flow.state ||
-		(query.iss !== undefined && query.iss !== flow.issuer)
-	) {
+	const checked = checkCallback(flow, query, currentUser.id)
+	if (checked._tag === "refused") {
 		yield* Effect.logWarning("T3 Code callback refused", {
-			event: "t3code_callback_invalid_state",
+			event: "t3code_callback_refused",
+			error: checked.error,
 			sameUser: currentUser.id === flow.userId,
 			stateMatches: query.state === flow.state,
 		})
-		return finish({ error: "invalid_state" })
-	}
-	if (query.error !== undefined || query.code === undefined) {
-		return finish({ error: "denied" })
+		return finish({ error: checked.error })
 	}
 
 	const oauth = yield* T3CodeOAuthClient
@@ -251,7 +274,7 @@ const handleCallback = Effect.fn("t3code.callback")(function* (query: {
 			tokenEndpoint: flow.tokenEndpoint,
 			clientId: flow.clientId,
 			redirectUri: redirectUriOf(config.apiBaseUrl),
-			code: query.code,
+			code: checked.code,
 			codeVerifier: flow.codeVerifier,
 			resource: `${flow.environmentUrl}/mcp`,
 		})
@@ -391,6 +414,19 @@ export const HttpT3CodeLive = HttpApiBuilder.group(HazelApi, "t3code", (handlers
 						Effect.fail(new T3CodeNotConnectedError({ ownerId: currentUser.id })),
 					),
 				)
+			}).pipe(Effect.catchTag("ObjectCallError", unavailable)),
+		)
+		.handle("reportT3CodeExpired", ({ payload }) =>
+			Effect.gen(function* () {
+				yield* requireT3CodeBot
+				yield* callObject(MarkT3CodeExpiredCall, orgTarget(payload.organizationId), {
+					ownerId: payload.ownerId,
+				})
+				yield* Effect.logInfo("T3 Code link expired: T3 refused its credential", {
+					event: "t3code_credential_refused",
+					organizationId: payload.organizationId,
+					ownerId: payload.ownerId,
+				})
 			}).pipe(Effect.catchTag("ObjectCallError", unavailable)),
 		)
 		.handle("getT3CodeAccess", ({ payload }) =>
