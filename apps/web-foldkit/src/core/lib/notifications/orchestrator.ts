@@ -111,6 +111,12 @@ export class NotificationOrchestrator {
 			reasons.add("muted")
 		}
 
+		// The server's call: do not disturb, paused notifications or quiet hours.
+		const isSilent = event.notification.silent
+		if (isSilent) {
+			reasons.add("silent")
+		}
+
 		const isFocusedAndVisible = ctx.isWindowFocused && ctx.visibilityState === "visible"
 		const isCurrentChannel =
 			ctx.currentChannelId !== null && event.notification.targetedResourceId === ctx.currentChannelId
@@ -123,8 +129,9 @@ export class NotificationOrchestrator {
 			reasons.add("focused_window")
 		}
 
-		const playSound = !isOldNotification && !ctx.isMuted && !(isFocusedAndVisible && isCurrentChannel)
-		const sendNative = !isOldNotification && !isFocusedAndVisible
+		const playSound =
+			!isOldNotification && !isSilent && !ctx.isMuted && !(isFocusedAndVisible && isCurrentChannel)
+		const sendNative = !isOldNotification && !isSilent && !isFocusedAndVisible
 
 		if (!reasons.size) {
 			reasons.add("ok")

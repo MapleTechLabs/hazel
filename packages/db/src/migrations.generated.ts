@@ -232,6 +232,13 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE TABLE IF NOT EXISTS "message_search_backfill" (\n\t"channelId" text PRIMARY KEY NOT NULL,\n\t"generation" integer NOT NULL,\n\t"done" integer NOT NULL DEFAULT 0\n)',
 			],
 		},
+		{
+			id: "0003_notification_levels",
+			statements: [
+				'ALTER TABLE "channel_members" ADD COLUMN "mutedUntil" text',
+				'ALTER TABLE "channel_members" ADD COLUMN "notificationLevel" text',
+			],
+		},
 	],
 	channel: [
 		{
@@ -304,6 +311,13 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE UNIQUE INDEX IF NOT EXISTS "user_presence_status_userId_unique" ON "user_presence_status" ("userId")',
 				'CREATE INDEX IF NOT EXISTS "user_presence_status_user_id_idx" ON "user_presence_status" ("userId")',
 				'CREATE UNIQUE INDEX IF NOT EXISTS "notifications_message_channel_dedupe_idx" ON "notifications" ("memberId", "resourceId", "targetedResourceId") WHERE "resourceType" = \'message\' AND "targetedResourceType" = \'channel\'',
+			],
+		},
+		{
+			id: "0002_notification_levels",
+			statements: [
+				'ALTER TABLE "notifications" ADD COLUMN "reason" text',
+				'ALTER TABLE "notifications" ADD COLUMN "silent" integer NOT NULL DEFAULT false',
 			],
 		},
 	],

@@ -28,7 +28,12 @@ const waitFor = async (predicate: () => boolean) => {
 	throw new Error("Timed out waiting for predicate")
 }
 
-const createEvent = (id: string, createdAt: string, channelId: string | null = null): NotificationEvent => ({
+const createEvent = (
+	id: string,
+	createdAt: string,
+	channelId: string | null = null,
+	silent = false,
+): NotificationEvent => ({
 	id,
 	notification: {
 		id,
@@ -39,6 +44,8 @@ const createEvent = (id: string, createdAt: string, channelId: string | null = n
 		resourceType: null,
 		createdAt: new Date(createdAt),
 		readAt: null,
+		reason: null,
+		silent,
 	} as any,
 	receivedAt: Date.now(),
 })
@@ -123,5 +130,32 @@ describe("NotificationOrchestrator", () => {
 		// Let a duplicate run, if it were going to.
 		await new Promise((resolve) => setTimeout(resolve, 20))
 		expect(sound.handled.length).toBe(1)
+	})
+
+	it("neither rings nor shows a silent notification (do not disturb on the server)", async () => {
+		const sound = new RecordingSink("sound")
+		const native = new RecordingSink("native")
+		const orchestrator = new NotificationOrchestrator()
+
+		orchestrator.setDependencies({
+			getContext: () => ({
+				currentChannelId: null,
+				sessionStartTime: new Date("2024-01-01T00:00:00Z"),
+				isMuted: false,
+				isWindowFocused: false,
+				visibilityState: "hidden",
+				now: Date.now(),
+			}),
+			soundSink: sound,
+			nativeSink: native,
+		})
+
+		orchestrator.enqueue([createEvent("n1", "2025-01-01T10:00:01Z", "channel-1", true)])
+		await waitFor(() => native.handled.length === 1)
+
+		const decision = native.handled[0]?.decision
+		expect(decision?.playSound).toBe(false)
+		expect(decision?.sendNative).toBe(false)
+		expect(decision?.reasons).toContain("silent")
 	})
 })

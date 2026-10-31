@@ -2,7 +2,7 @@ import { ChannelMemberRepo, ChannelRepo } from "@hazel/backend-core"
 import { Database } from "@hazel/db"
 import { CurrentUser, withRemapDbErrors } from "@hazel/domain"
 import { ChannelMemberResponse, ChannelMemberRpcs } from "@hazel/domain/rpc"
-import { Effect, Option } from "effect"
+import { DateTime, Effect, Option } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
 import { ChannelMemberPolicy } from "../../policies/channel-member-policy"
 import { BotGatewayEffects } from "../../worker/objects/effects/bot-gateway-effects"
@@ -73,14 +73,23 @@ export const ChannelMemberRpcLive = ChannelMemberRpcs.toLayer(
 					)
 					.pipe(withRemapDbErrors("ChannelMember", "create")),
 
-			"channelMember.update": ({ id, organizationId: _route, ...payload }) =>
+			"channelMember.update": ({ id, organizationId: _route, mutedUntil, ...payload }) =>
 				db
 					.transaction(
 						Effect.gen(function* () {
 							yield* channelMemberPolicy.canUpdate(id)
+							// The repo's codec takes a `Date`, not the decoded `DateTime`.
 							const updatedChannelMember = yield* channelMemberRepo.update({
 								id,
 								...payload,
+								...(mutedUntil === undefined
+									? {}
+									: {
+											mutedUntil:
+												mutedUntil === null || mutedUntil instanceof Date
+													? mutedUntil
+													: DateTime.toDateUtc(mutedUntil),
+										}),
 							})
 
 							const txid = yield* generateTransactionId()

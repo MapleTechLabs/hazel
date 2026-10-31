@@ -21,6 +21,9 @@ interface NodeCursor<T> extends SqlCursorLike<T> {
 	raw(): IterableIterator<Array<unknown>>
 }
 
+/** Durable Object SQLite binds at most this many parameters per statement. */
+export const MAX_BOUND_PARAMETERS = 100
+
 /** `ctx.storage.sql` over `node:sqlite`. One statement per `exec`, as the runtime issues them. */
 export const nodeSqlStorage = (
 	db: DatabaseSync,
@@ -31,6 +34,10 @@ export const nodeSqlStorage = (
 		query: string,
 		...bindings: Array<SqlValue>
 	): NodeCursor<T> => {
+		// workerd's limit, which node's SQLite does not have.
+		if (bindings.length > MAX_BOUND_PARAMETERS) {
+			throw new Error(`too many SQL variables: ${bindings.length} (max ${MAX_BOUND_PARAMETERS})`)
+		}
 		const statement = db.prepare(query)
 		const columnNames = statement.columns().map((column) => column.name)
 		const rows = statement.all(...bindings.map(toInput)) as Array<T>

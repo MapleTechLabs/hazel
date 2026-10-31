@@ -12,6 +12,10 @@ export const notificationsTable = SQLite.table("notifications", {
 		resourceType: SQLite.nullable(varchar(50)),
 		createdAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
 		readAt: SQLite.nullable(timestamptz),
+		/** Why it notifies: `direct`, `mention`, `reply`, `everyone` or `message`. */
+		reason: SQLite.nullable(varchar(50)),
+		/** Do not disturb or quiet hours: a badge and an inbox row, no sound or system notification. */
+		silent: SQLite.column(SQLite.boolean, { default: false }),
 	},
 	primaryKey: ["id"],
 	indexes: [

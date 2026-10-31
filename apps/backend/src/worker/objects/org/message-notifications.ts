@@ -4,25 +4,17 @@
  * rest: the channel's type, its `channel_members` (muted, left), presence, and the members'
  * `organization_members` ids.
  *
- * - A DM or group DM, `@channel` or `@here`: every member but the author.
- * - Otherwise the mentioned users and the replied-to author.
- * - Never a muted member, nor one viewing the channel right now (online, active in it) or
- *   suppressing notifications.
+ * Who it notifies, and how, is `NotificationService`'s (`services/notifications/`): Discord's
+ * levels (all, mentions, nothing), mutes, presence, do not disturb and quiet hours.
  *
  * Each recipient's `notificationCount` goes up here; the notification row itself is the
  * recipient's `UserObject`'s (`user.createNotification`).
  */
 import { Database, SQLite, schema } from "@hazel/db"
-import {
-	ChannelId,
-	type ConnectConversationId,
-	MessageId,
-	type OrganizationMemberId,
-	UserId,
-} from "@hazel/schema"
-import { Array, Effect, Option, Schema } from "effect"
+import { ChannelId, type ConnectConversationId, MessageId, UserId } from "@hazel/schema"
+import { Effect, Option, Schema } from "effect"
+import { NotificationService } from "../../../services/notifications/notification-service"
 import { enqueueEffect, defineEffect } from "../effects/registry"
-import { MessageNotificationEffects } from "../user/message-notifications"
 
 export const MessageCreatedPayload = Schema.Struct({
 	channelId: ChannelId,
@@ -45,7 +37,7 @@ const localChannel = (channelId: ChannelId) =>
 	Effect.flatMap(Database.Database, (db) =>
 		db.first(
 			SQLite.from(schema.channelsTable)
-				.select("id", "type", "organizationId")
+				.select("id", "type", "organizationId", "parentChannelId")
 				.where(($) => [$.id.eq(channelId), $.deletedAt.isNull()])
 				.limit(1),
 		),
@@ -112,78 +104,18 @@ export const messageCreated = Effect.fn("OrgEffects.messageCreated")(function* (
 	const channel = yield* localChannel(payload.channelId)
 	if (channel._tag === "None") return
 
-	const everyone = channel.value.type === "direct" || channel.value.type === "single" || payload.notifyAll
-	const targets = Array.dedupe([
-		...payload.mentionedUserIds,
-		...(payload.replyToAuthorId === null ? [] : [payload.replyToAuthorId]),
-	]).filter((userId) => userId !== payload.authorId)
-	yield* Effect.annotateCurrentSpan({
-		"notification.mode": everyone ? "all" : "targeted",
-		"notification.targets": targets.length,
-	})
-	if (!everyone && targets.length === 0) return
-
-	const members = yield* db.run(
-		SQLite.from(schema.channelMembersTable)
-			.leftJoin(schema.userPresenceStatusTable, "presence", (member, presence) =>
-				presence.userId.eq(member.userId),
-			)
-			.select("id", "userId")
-			.where(($) => [
-				$.channelId.eq(payload.channelId),
-				$.isMuted.eq(false),
-				$.userId.neq(payload.authorId),
-				$.deletedAt.isNull(),
-				...(everyone ? [] : [$.userId.in_(...targets)]),
-				SQLite.or(
-					$.presence.userId.isNull(),
-					SQLite.and(
-						$.presence.suppressNotifications.eq(false),
-						SQLite.or(
-							$.presence.activeChannelId.isNull(),
-							$.presence.activeChannelId.neq(payload.channelId),
-							$.presence.status.neq("online"),
-						),
-					),
-				),
-			]),
-	)
-	if (members.length === 0) return
-
-	const orgMembers = yield* db.run(
-		SQLite.from(schema.organizationMembersTable)
-			.select("id", "userId")
-			.where(($) => [
-				$.organizationId.eq(channel.value.organizationId),
-				$.userId.in_(...members.map((member) => member.userId)),
-				$.deletedAt.isNull(),
-			]),
-	)
-	const memberIdOf = new Map<UserId, OrganizationMemberId>(orgMembers.map((row) => [row.userId, row.id]))
-	const recipients = members.filter((member) => memberIdOf.has(member.userId))
-	if (recipients.length === 0) return
-
-	yield* db.run(
-		SQLite.update(schema.channelMembersTable)
-			.set(($) => ({ notificationCount: $.notificationCount.add(1) }))
-			.where(($) => [$.id.in_(...recipients.map((member) => member.id))]),
-	)
-	yield* Effect.forEach(
-		recipients,
-		(member) =>
-			enqueueEffect(
-				MessageNotificationEffects.createNotification,
-				{ kind: "user", id: member.userId },
-				{
-					memberId: memberIdOf.get(member.userId)!,
-					channelId: payload.channelId,
-					messageId: payload.messageId,
-				},
-				{ id: `notify:${payload.messageId}:${member.userId}` },
-			),
-		{ discard: true },
-	)
-	yield* Effect.annotateCurrentSpan({ "notification.recipients": recipients.length })
+	yield* NotificationService.use((service) =>
+		service.notify(channel.value.organizationId, {
+			channelId: payload.channelId,
+			channelType: channel.value.type,
+			parentChannelId: channel.value.parentChannelId,
+			messageId: payload.messageId,
+			authorId: payload.authorId,
+			mentionedUserIds: payload.mentionedUserIds,
+			notifyAll: payload.notifyAll,
+			replyToAuthorId: payload.replyToAuthorId,
+		}),
+	).pipe(Effect.provide(NotificationService.layer))
 })
 
 export const messageNotificationOrgReceivers = {

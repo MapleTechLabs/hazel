@@ -7,7 +7,7 @@
 import { SQLite, schema } from "@hazel/db"
 import { CurrentUser, UnauthorizedError } from "@hazel/domain"
 import type { ChannelId, OrganizationId, UserId } from "@hazel/schema"
-import { Cause, Effect, Exit, Fiber, Option, type Scope } from "effect"
+import { Cause, DateTime, Effect, Exit, Fiber, Option, type Scope } from "effect"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { CreateDmChannelRequest, CreateThreadRequest } from "@hazel/domain/rpc"
 import { decodeExit, encodePayload, type HazelRpcTag, rpcFor } from "../../rpc/dispatch"
@@ -574,6 +574,47 @@ describe("OrgObject: channels", () => {
 						member,
 					),
 				)
+			}),
+		))
+
+	it("channelMember.update: sets a notification level and a timed mute", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const { org, orgId, member } = world
+				const open = yield* createChannel(world, "public")
+				const joined = ok(
+					yield* call(org, orgId, "channelMember.create", { channelId: open.id }, member),
+				)
+				const until = new Date(Date.now() + 60 * 60 * 1000)
+				const updated = ok(
+					yield* call(
+						org,
+						orgId,
+						"channelMember.update",
+						{
+							organizationId: orgId,
+							id: joined.data.id,
+							notificationLevel: "all",
+							mutedUntil: until,
+						},
+						member,
+					),
+				)
+				expect(updated.data.notificationLevel).toBe("all")
+				expect(DateTime.toEpochMillis(updated.data.mutedUntil)).toBe(until.getTime())
+
+				const cleared = ok(
+					yield* call(
+						org,
+						orgId,
+						"channelMember.update",
+						{ organizationId: orgId, id: joined.data.id, mutedUntil: null },
+						member,
+					),
+				)
+				expect(cleared.data.mutedUntil).toBeNull()
+				expect(cleared.data.notificationLevel).toBe("all")
 			}),
 		))
 })

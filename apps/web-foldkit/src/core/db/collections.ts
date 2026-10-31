@@ -60,7 +60,7 @@ const parseTimestamps = (row: unknown): unknown => {
  * The local cache's version of every stored row (`./local-cache.ts`): bump it when a synced model's
  * shape changes, and the stored rows are dropped.
  */
-const CACHE_SCHEMA_VERSION = 1
+const CACHE_SCHEMA_VERSION = 2
 
 /** Keeps an eager collection's rows on disk while the local cache is on. */
 const persist =

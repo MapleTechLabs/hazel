@@ -12,6 +12,10 @@ class Model extends M.Class<Model>("Notification")({
 	resourceType: M.Immutable(S.NullOr(S.String)),
 	createdAt: M.Generated(JsonDate),
 	readAt: S.NullOr(JsonDate),
+	/** Why it notifies (`NotificationReason`); null on rows from before reasons. */
+	reason: M.GeneratedOptional(S.NullOr(S.String)),
+	/** Do not disturb or quiet hours: counted and listed, but no sound or system notification. */
+	silent: M.GeneratedOptional(S.Boolean),
 }) {}
 
 export const { Insert, Update, Schema, Create, Patch, PatchPartial } = M.expose(Model)
