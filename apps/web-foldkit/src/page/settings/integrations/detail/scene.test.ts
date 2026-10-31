@@ -536,12 +536,23 @@ describe("T3 Code", () => {
 				),
 			}),
 		)
+		// Back from sign-in the page verifies; the active link it then loads ends the verifying.
+		const returned = { ...pageFor("t3code", { status: "success" }).model, t3CodeMembers: members }
+		expect(returned.activity).toEqual(Activity.Verifying())
+		const loadedLink = update(returned, Message.SucceededGetT3CodeLink({ link }), shared).model
+		expect(loadedLink.activity).toEqual(Activity.Idle())
+		// A link that is not active yet keeps it verifying.
+		const pendingLink = update(
+			returned,
+			Message.SucceededGetT3CodeLink({ link: { ...link, status: "expired" } }),
+			shared,
+		).model
+		expect(pendingLink.activity).toEqual(Activity.Verifying())
 		scene(
 			t3,
-			given({ ...pageFor("t3code", { status: "success" }).model, t3CodeMembers: members }),
+			given(returned),
 			Subscription.emit(Message.ChangedT3CodeRow()),
 			Command.resolve(GetT3CodeLink, Message.SucceededGetT3CodeLink({ link })),
-			expectView(text("Verifying connection...")).toBeAbsent(),
 			expectView(text("ada-macbook")).toExist(),
 		)
 	})
