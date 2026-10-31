@@ -35,9 +35,11 @@ What `preview` holds, and how it differs from `prod`:
 | `INTEGRATION_ENCRYPTION_KEY`                    | its own key (previews never read prod ciphertexts)                       |
 | `DEV_SIGNIN_SECRET`                             | its own secret; turns on dev sign-in (never passed to prd)               |
 | `MAPLE_API_KEY`                                 | same as prod: the deploy binds Maple's ingest key onto the Workers       |
+| `AUTH_BINDING_KEY`, `AUTH_TRANSACTION_KEY`      | their own keys (`bun run --cwd packages/auth generate-keys`)             |
+| `AUTH_ACCESS_TOKEN_KID`, `…_PRIVATE_JWK`        | their own ES256 key; without it `/auth/token` is off and the app hangs   |
 
-Left unset on purpose: `COOKIE_DOMAIN` (prd's `.hazel.sh` would share the session cookie with
-prod), the OAuth apps (`AUTH_GITHUB_*`, `AUTH_GOOGLE_*`: their callback URLs cannot cover every
+Left unset on purpose: `COOKIE_DOMAIN` (prd's `.hazel.sh` would share the integration OAuth
+cookies with prod; the session cookie is host-only `__Host-` anyway), the OAuth apps (`AUTH_GITHUB_*`, `AUTH_GOOGLE_*`: their callback URLs cannot cover every
 preview), `CLERK_SECRET_KEY` (API v1 answers 503) and the integrations.
 
 ### Adding a secret
