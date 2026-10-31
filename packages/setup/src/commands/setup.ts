@@ -411,7 +411,7 @@ export const setupCommand = Command.make(
 
 			if (!klipyApiKey) {
 				const setupKlipy = yield* Prompt.Confirm({
-					message: "Set up Klipy API key? (for GIF search, uses default if skipped)",
+					message: "Set up Klipy API key? (GIF search is off without one)",
 					initial: false,
 				})
 
