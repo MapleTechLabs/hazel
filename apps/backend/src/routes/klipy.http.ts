@@ -1,7 +1,7 @@
 import { HttpApiBuilder } from "effect/http-api"
 import { HttpClient } from "effect/http"
 import { KlipyApiError } from "@hazel/domain/http"
-import { Config, Effect, Redacted, Schema } from "effect"
+import { Config, Effect, Option, Redacted, Schema } from "effect"
 import { HazelApi } from "../api"
 
 const KLIPY_BASE_URL = "https://api.klipy.com/api/v1"
@@ -62,13 +62,17 @@ const KlipyRawCategoriesResponse = Schema.Struct({
 
 const fetchKlipy = (
 	httpClient: HttpClient.HttpClient,
-	apiKey: string,
+	apiKey: Option.Option<string>,
 	path: string,
 	params: Record<string, string>,
 ) => {
+	// Optional: a stage without a Klipy key (previews, local dev) answers GIF requests with an error.
+	if (Option.isNone(apiKey)) {
+		return Effect.fail(new KlipyApiError({ message: "GIF search is not configured (KLIPY_API_KEY)" }))
+	}
 	const searchParams = new URLSearchParams(params)
 	const queryString = searchParams.toString()
-	const url = `${KLIPY_BASE_URL}/${apiKey}${path}${queryString ? `?${queryString}` : ""}`
+	const url = `${KLIPY_BASE_URL}/${apiKey.value}${path}${queryString ? `?${queryString}` : ""}`
 
 	return httpClient.get(url).pipe(
 		Effect.flatMap((response) => {
@@ -95,8 +99,7 @@ const fetchKlipy = (
 export const HttpKlipyLive = HttpApiBuilder.group(HazelApi, "klipy", (handlers) =>
 	Effect.gen(function* () {
 		const httpClient = yield* HttpClient.HttpClient
-		const apiKeyRedacted = yield* Config.Redacted("KLIPY_API_KEY")
-		const apiKey = Redacted.value(apiKeyRedacted)
+		const apiKey = Option.map(yield* Config.option(Config.Redacted("KLIPY_API_KEY")), Redacted.value)
 
 		return handlers
 			.handle("trending", ({ query }) =>

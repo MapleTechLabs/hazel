@@ -1,6 +1,6 @@
 import { createPrivateKey } from "node:crypto"
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http"
-import { Context, Config, Effect, Layer, Redacted, Schema } from "effect"
+import { Context, Config, Effect, Layer, Option, Redacted, Schema } from "effect"
 import { SignJWT } from "jose"
 
 // ============================================================================
@@ -76,6 +76,8 @@ const GitHubErrorApiResponse = Schema.Struct({
  * - GITHUB_APP_SLUG: The app slug (from URL)
  * - GITHUB_APP_PRIVATE_KEY: Base64-encoded PEM private key
  */
+const GITHUB_APP_KEYS = ["GITHUB_APP_ID", "GITHUB_APP_SLUG", "GITHUB_APP_PRIVATE_KEY"] as const
+
 export const loadGitHubAppConfig = Effect.withSpan("GitHubAppJWTService.loadConfig")(
 	Effect.gen(function* () {
 		const appId = yield* Config.String("GITHUB_APP_ID")
@@ -159,25 +161,38 @@ const GITHUB_API_BASE_URL = "https://api.github.com"
  */
 export class GitHubAppJWTService extends Context.Service<GitHubAppJWTService>()("GitHubAppJWTService", {
 	make: Effect.gen(function* () {
-		// Load config once at service initialization
-		// Use orDie since missing config is a fatal startup error
-		const config = yield* loadGitHubAppConfig.pipe(Effect.orDie)
+		// Optional: a stage without a GitHub App (none of the three keys: previews, local dev) still
+		// serves everything else, and only the GitHub integration fails, with `GitHubAppJWTError`.
+		// A partial config is still a fatal startup error.
+		const present = yield* Config.all(
+			GITHUB_APP_KEYS.map((key) => Config.option(Config.String(key)).pipe(Config.map(Option.isSome))),
+		)
+		const config = present.includes(true)
+			? Option.some(yield* loadGitHubAppConfig.pipe(Effect.orDie))
+			: Option.none<GitHubAppConfig>()
 		const httpClient = yield* HttpClient.HttpClient
 
-		/**
-		 * Get the app slug for building installation URLs.
-		 */
-		const getAppSlug = (): string => config.appSlug
+		const requireConfig = Option.match(config, {
+			onNone: () =>
+				Effect.fail(
+					new GitHubAppJWTError({
+						message:
+							"GitHub App is not configured (GITHUB_APP_ID, GITHUB_APP_SLUG, GITHUB_APP_PRIVATE_KEY)",
+					}),
+				),
+			onSome: Effect.succeed,
+		})
 
 		/**
 		 * Build the installation URL for redirecting users.
 		 */
-		const buildInstallationUrl = (state: string): URL => {
-			// Use select_target to let users choose which org/account to install on
-			const url = new URL(`https://github.com/apps/${config.appSlug}/installations/select_target`)
-			url.searchParams.set("state", state)
-			return url
-		}
+		const buildInstallationUrl = (state: string): Effect.Effect<URL, GitHubAppJWTError> =>
+			Effect.map(requireConfig, ({ appSlug }) => {
+				// Use select_target to let users choose which org/account to install on
+				const url = new URL(`https://github.com/apps/${appSlug}/installations/select_target`)
+				url.searchParams.set("state", state)
+				return url
+			})
 
 		/**
 		 * Generate an installation access token using the App JWT.
@@ -265,8 +280,9 @@ export class GitHubAppJWTService extends Context.Service<GitHubAppJWTService>()(
 		const getInstallationToken = Effect.fn("GitHubAppJWTService.getInstallationToken")(function* (
 			installationId: string,
 		) {
+			const { appId, privateKey } = yield* requireConfig
 			// Generate a fresh JWT for this request
-			const jwt = yield* generateAppJWT(config.appId, config.privateKey)
+			const jwt = yield* generateAppJWT(appId, privateKey)
 
 			// Exchange JWT for installation token
 			const token = yield* generateInstallationToken(installationId, jwt)
@@ -275,7 +291,7 @@ export class GitHubAppJWTService extends Context.Service<GitHubAppJWTService>()(
 		})
 
 		return {
-			getAppSlug,
+			isConfigured: Option.isSome(config),
 			buildInstallationUrl,
 			getInstallationToken,
 		}

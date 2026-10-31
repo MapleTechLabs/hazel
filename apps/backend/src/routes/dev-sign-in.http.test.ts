@@ -5,9 +5,10 @@
  */
 import * as NodeHttpPlatform from "@effect/platform-node/NodeHttpPlatform"
 import * as NodeServices from "@effect/platform-node/NodeServices"
+import { AccessToken, CryptoLive } from "@hazel/auth/server"
 import { UserRepo } from "@hazel/backend-core"
 import { Database, SQLite, schema } from "@hazel/db"
-import { ConfigProvider, type Context, Effect, Exit, Layer, Option, Scope } from "effect"
+import { ConfigProvider, type Context, Effect, Exit, Layer, Option, Redacted, Scope } from "effect"
 import { Base64Url } from "effect/encoding"
 import { Etag, FetchHttpClient, HttpRouter } from "effect/http"
 import { SqlClient } from "effect/sql"
@@ -164,6 +165,30 @@ describe("POST /internal/dev/sign-in", () => {
 			lastName: "Lovelace",
 		})
 		expect(Option.isNone(await enabled.verify("not-a-session"))).toBe(true)
+	}, 60_000)
+
+	it("signs in with the stage's own auth keys instead of ones derived from the secret", async () => {
+		const keyed = await build({
+			DEV_SIGNIN_SECRET: secret,
+			HAZEL_STAGE: "pr",
+			AUTH_BINDING_KEY: key,
+			AUTH_TRANSACTION_KEY: key,
+			AUTH_ACCESS_TOKEN_KID: "test",
+			AUTH_ACCESS_TOKEN_PRIVATE_JWK: JSON.stringify(
+				Redacted.value(
+					(
+						await Effect.runPromise(
+							AccessToken.generateSigningKey("test").pipe(Effect.provide(CryptoLive)),
+						)
+					).privateKey,
+				),
+			),
+		})
+		const response = await Promise.race([
+			keyed.send({ authorization: `Bearer ${secret}`, body: { email: "keyed@example.com" } }),
+			new Promise<never>((_, reject) => setTimeout(() => reject(new Error("sign-in hung")), 10_000)),
+		])
+		expect(response.status).toBe(200)
 	}, 60_000)
 
 	it("reuses the user on a second call for the same email", async () => {

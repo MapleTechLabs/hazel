@@ -128,8 +128,9 @@ export type DevSignInPlatform =
 	| Etag.Generator
 
 /**
- * Builds the in-process auth app over the host's platform (the same database and keys as
- * the real `/auth/*` routes) and returns the sign-in. Disposed with the scope.
+ * Returns the sign-in over the host's platform (the same database and keys as the real `/auth/*`
+ * routes). Each sign-in builds its own in-process auth app and disposes it: workerd binds I/O to
+ * the request that started it, so an app built during one request hangs when a later one uses it.
  */
 export const makeDevSignIn = Effect.fn("HazelAuth.makeDevSignIn")(function* (config: HazelAuthConfig) {
 	// Only these: the build context also holds the host's own router, which must not get the routes.
@@ -141,24 +142,28 @@ export const makeDevSignIn = Effect.fn("HazelAuth.makeDevSignIn")(function* (con
 		Etag.Generator,
 	)(yield* Effect.context<DevSignInPlatform>())
 	const { http, Services, sessionCookieName } = makeHazelAuthLive(config)
-	const web = HttpRouter.toWebHandler(
-		http
-			.routes()
-			.pipe(
-				Layer.provide(http.layer),
-				Layer.provideMerge(Services),
-				Layer.provide(SimulatedGitHub),
-				Layer.provide(Hooks.LifecycleHooks.empty),
-				Layer.provide(Layer.succeedContext(platform)),
-			),
-		{ disableLogger: true },
+	const routes = http
+		.routes()
+		.pipe(
+			Layer.provide(http.layer),
+			Layer.provideMerge(Services),
+			Layer.provide(SimulatedGitHub),
+			Layer.provide(Hooks.LifecycleHooks.empty),
+			Layer.provide(Layer.succeedContext(platform)),
+		)
+	const authApp = Effect.acquireRelease(
+		Effect.sync(() => HttpRouter.toWebHandler(routes, { disableLogger: true })),
+		(web) => Effect.promise(() => web.dispose()),
 	)
-	yield* Effect.addFinalizer(() => Effect.promise(() => web.dispose()))
-	const handler = web.handler as (request: Request, context: Context.Context<never>) => Promise<Response>
 
 	const appOrigin = new URL(config.appOrigin).origin
 
-	return Effect.fn("HazelAuth.devSignIn")(function* (input: DevSignInInput) {
+	const signIn = Effect.fn("HazelAuth.devSignIn")(function* (input: DevSignInInput) {
+		const web = yield* authApp
+		const handler = web.handler as (
+			request: Request,
+			context: Context.Context<never>,
+		) => Promise<Response>
 		const email = input.email.trim()
 		const { name, firstName, lastName } = splitName(input)
 		const code = encodeAccount({ id: yield* devGitHubId(email), email, name })
@@ -248,6 +253,7 @@ export const makeDevSignIn = Effect.fn("HazelAuth.makeDevSignIn")(function* (con
 			setCookie: session.raw,
 		} satisfies DevSignInResult
 	})
+	return (input: DevSignInInput) => Effect.scoped(signIn(input))
 })
 
 export type DevSignIn = Effect.Success<ReturnType<typeof makeDevSignIn>>
