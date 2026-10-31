@@ -21,6 +21,8 @@ import { listMessages, ListMessagesCall, messageThread, MessageThreadCall } from
 import { liveAccess, LiveAccessCall } from "./channel/live-access"
 import type { ObjectKind } from "./kinds"
 import {
+	organizationChannels,
+	OrganizationChannelsCall,
 	organizationUsers,
 	OrganizationUsersCall,
 	redeemBotInstallGrant,
@@ -115,6 +117,7 @@ export const callReceivers: Record<ObjectKind, ReadonlyMap<string, Receiver>> = 
 		receiver(IsOrgAdminCall, isOrgAdmin),
 		receiver(RedeemBotInstallGrantCall, redeemBotInstallGrant),
 		receiver(OrganizationUsersCall, organizationUsers),
+		receiver(OrganizationChannelsCall, organizationChannels),
 	]),
 	channel: byName([
 		receiver(ListMessagesCall, listMessages),

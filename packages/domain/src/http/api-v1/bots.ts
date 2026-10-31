@@ -9,7 +9,7 @@ import { ChannelNotFoundError } from "./messages"
 /**
  * Public API v1 for bots that live outside Hazel (a service holding a bot token): redeeming an
  * install grant (`@hazel/domain/bot-install`), opening a thread on a message, and reading the
- * people in an organization the bot is installed in. Auth: `Authorization: Bearer hzl_bot_…`.
+ * people and channels of an organization the bot is installed in. Auth: `Authorization: Bearer hzl_bot_…`.
  */
 
 // ============ MODELS ============
@@ -75,6 +75,19 @@ export class ApiV1UsersResponse extends Schema.Class<ApiV1UsersResponse>("ApiV1U
 	data: Schema.Array(ApiV1User),
 }) {}
 
+export const ApiV1Channel = Schema.Struct({
+	id: ChannelId,
+	name: Schema.String,
+	/** Private channels are listed only when the bot has been added to them. */
+	private: Schema.Boolean,
+})
+export type ApiV1Channel = typeof ApiV1Channel.Type
+
+export class ApiV1ChannelsResponse extends Schema.Class<ApiV1ChannelsResponse>("ApiV1ChannelsResponse")({
+	/** The channels the bot can post in, by name. Threads and direct messages are left out. */
+	data: Schema.Array(ApiV1Channel),
+}) {}
+
 // ============ API GROUP ============
 
 export class BotsApiGroup extends HttpApiGroup.make("api-v1-bots")
@@ -119,6 +132,20 @@ export class BotsApiGroup extends HttpApiGroup.make("api-v1-bots")
 				description:
 					"Look up people (and bots) in an organization the bot is installed in by id, e.g. the authors of the messages it reads.",
 				summary: "List organization users",
+			}),
+		),
+	)
+	.add(
+		HttpApiEndpoint.get("listOrganizationChannels", "/organizations/:organizationId/channels", {
+			params: { organizationId: OrganizationId },
+			success: ApiV1ChannelsResponse,
+			error: [UnauthorizedError, BotNotInstalledError, InternalServerError],
+		}).annotateMerge(
+			OpenApi.annotations({
+				title: "List Organization Channels",
+				description:
+					"The channels the bot can post in, in an organization it is installed in: every public channel, and the private ones it was added to. Needs the `channels:read` scope.",
+				summary: "List organization channels",
 			}),
 		),
 	)

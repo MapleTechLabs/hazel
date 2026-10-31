@@ -5,11 +5,17 @@
  * org's own store holds the grant, so a code works the moment the consent page hands it out.
  *
  * Also the public bot API's user lookup (`GET /api/v1/organizations/:id/users`), read from the
- * org's `users` projection.
+ * org's `users` projection, and its channel list (`GET /api/v1/organizations/:id/channels`), read
+ * from the bot user's `channel_access`.
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import { BOT_INSTALL_GRANT_TTL_MS } from "@hazel/domain/bot-install"
-import { ApiV1User, BotInstallGrantInvalidError, BotNotInstalledError } from "@hazel/domain/http"
+import {
+	ApiV1Channel,
+	ApiV1User,
+	BotInstallGrantInvalidError,
+	BotNotInstalledError,
+} from "@hazel/domain/http"
 import { BotId, OrganizationId, UserId } from "@hazel/schema"
 import { Effect, Option, Schema } from "effect"
 import { Hex } from "effect/encoding"
@@ -121,23 +127,33 @@ export const OrganizationUsersCall = defineCall("org.botUsers", "org", {
 	error: BotNotInstalledError,
 })
 
+/** The bot's user is a member here: the bot is installed in this org. */
+const requireBotMember = Effect.fn("OrgObject.requireBotMember")(function* (input: {
+	readonly botId: BotId
+	readonly botUserId: UserId
+}) {
+	const organizationId = yield* requireOrganizationId
+	const db = yield* Database.Database
+	const membership = yield* db.first(
+		SQLite.from(schema.organizationMembersTable)
+			.select("id")
+			.where(($) => [
+				$.organizationId.eq(organizationId),
+				$.userId.eq(input.botUserId),
+				$.deletedAt.isNull(),
+			])
+			.limit(1),
+	)
+	if (Option.isNone(membership))
+		return yield* new BotNotInstalledError({ botId: input.botId, orgId: organizationId })
+	return organizationId
+})
+
 /** The org's people (and bots) among `ids`, for a bot that is a member here. */
 export const organizationUsers = Effect.fn("OrgObject.botUsers")(
 	function* (payload: typeof OrganizationUsersCall.payload.Type) {
-		const organizationId = yield* requireOrganizationId
+		yield* requireBotMember(payload)
 		const db = yield* Database.Database
-		const membership = yield* db.first(
-			SQLite.from(schema.organizationMembersTable)
-				.select("id")
-				.where(($) => [
-					$.organizationId.eq(organizationId),
-					$.userId.eq(payload.botUserId),
-					$.deletedAt.isNull(),
-				])
-				.limit(1),
-		)
-		if (Option.isNone(membership))
-			return yield* new BotNotInstalledError({ botId: payload.botId, orgId: organizationId })
 		if (payload.ids.length === 0) return []
 		const users = yield* db.run(
 			SQLite.from(schema.usersTable)
@@ -151,6 +167,43 @@ export const organizationUsers = Effect.fn("OrgObject.botUsers")(
 			avatarUrl: user.avatarUrl ?? null,
 			isBot: user.userType === "machine",
 		}))
+	},
+	Effect.catchTag("DatabaseError", (error) => Effect.die(error)),
+)
+
+export const OrganizationChannelsCall = defineCall("org.botChannels", "org", {
+	payload: Schema.Struct({ botId: BotId, botUserId: UserId }),
+	success: Schema.Array(ApiV1Channel),
+	error: BotNotInstalledError,
+})
+
+/**
+ * The channels the bot can post in here, by name: its `channel_access` (every public channel, and
+ * the private ones it is a member of), without threads, direct messages or deleted channels.
+ */
+export const organizationChannels = Effect.fn("OrgObject.botChannels")(
+	function* (payload: typeof OrganizationChannelsCall.payload.Type) {
+		const organizationId = yield* requireBotMember(payload)
+		const db = yield* Database.Database
+		const access = yield* db.run(
+			SQLite.from(schema.channelAccessTable)
+				.select("channelId")
+				.where(($) => [$.organizationId.eq(organizationId), $.userId.eq(payload.botUserId)]),
+		)
+		if (access.length === 0) return []
+		const channels = yield* db.run(
+			SQLite.from(schema.channelsTable)
+				.select("id", "name", "type")
+				.where(($) => [
+					$.id.in_(...access.map((row) => row.channelId)),
+					$.type.in_("public", "private"),
+					$.deletedAt.isNull(),
+				]),
+		)
+		yield* Effect.annotateCurrentSpan({ "org.bot_channels": channels.length })
+		return channels
+			.map((channel) => ({ id: channel.id, name: channel.name, private: channel.type === "private" }))
+			.sort((a, b) => a.name.localeCompare(b.name))
 	},
 	Effect.catchTag("DatabaseError", (error) => Effect.die(error)),
 )
