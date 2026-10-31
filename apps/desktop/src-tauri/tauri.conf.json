@@ -1,7 +1,7 @@
 {
 	"$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
 	"productName": "Hazel",
-	"version": "1.0.3",
+	"version": "1.0.4",
 	"identifier": "com.hazel.app",
 	"plugins": {
 		"deep-link": {
