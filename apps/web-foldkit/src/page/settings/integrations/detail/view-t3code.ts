@@ -12,7 +12,7 @@ import type * as ConfirmAction from "../../../shared/confirm-action"
 import { CHECK, spinner, strokeIcon } from "../shared/view"
 import { Message } from "./message"
 import type { Model, T3CodeLink, T3CodeMember } from "./model"
-import { apiField, brandIcon, centered, LINK_ICON, panel, verifyingState } from "./view-connection"
+import { apiField, centered, LINK_ICON, panel, verifyingState } from "./view-connection"
 
 /**
  * T3 Code's connection and sharing panels. Unlike the other integrations the link is the member's own:
@@ -102,9 +102,7 @@ const notLinked = (h: H, integration: Integration, model: Model): Html => {
 					isDisabled: isConnecting,
 					attributes: [h.Type("submit")],
 				},
-				isConnecting
-					? [spinner(h, "size-4 animate-spin"), "Connecting..."]
-					: [brandIcon(h, integration), "Connect"],
+				isConnecting ? [spinner(h, "size-4 animate-spin"), "Connecting..."] : ["Connect"],
 			),
 		],
 	)

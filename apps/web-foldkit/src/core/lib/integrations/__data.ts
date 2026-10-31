@@ -13,6 +13,7 @@ export type Integration = {
 	fullDescription: string
 	logoDomain: string
 	logoType?: "symbol" | "icon"
+	/** A bundled brand glyph (no background), drawn padded on the logo tile. Falls back to Brandfetch. */
 	logoSrc?: string
 	brandColor: string
 	category: string
@@ -35,9 +36,15 @@ export const getBrandfetchIcon = (
 	return `https://cdn.brandfetch.io/${domain}/w/${size}/h/${size}/theme/${theme}/${type}?token=1id0IQ-4i8Z46-n-DfQ`
 }
 
+/** The bundled glyph, or Brandfetch's light icon (which carries its own padding). */
+export const integrationLogoSrc = (integration: Integration): string =>
+	integration.logoSrc ??
+	getBrandfetchIcon(integration.logoDomain, { theme: "light", type: integration.logoType ?? "icon" })
+
 export const integrations: Integration[] = [
 	{
 		id: "linear",
+		logoSrc: "/images/integrations/linear.svg",
 		name: "Linear",
 		description: "Streamline software projects, sprints, and bug tracking.",
 		fullDescription:
@@ -75,6 +82,7 @@ export const integrations: Integration[] = [
 	},
 	{
 		id: "github",
+		logoSrc: "/images/integrations/github.svg",
 		name: "GitHub",
 		description: "Link pull requests and automate workflows.",
 		fullDescription:
@@ -112,6 +120,7 @@ export const integrations: Integration[] = [
 	},
 	{
 		id: "figma",
+		logoSrc: "/images/integrations/figma.svg",
 		name: "Figma",
 		description: "Embed file previews in projects.",
 		fullDescription:
@@ -139,6 +148,7 @@ export const integrations: Integration[] = [
 	},
 	{
 		id: "notion",
+		logoSrc: "/images/integrations/notion.svg",
 		name: "Notion",
 		description: "Embed notion pages and notes in projects.",
 		fullDescription:
@@ -178,6 +188,7 @@ export const integrations: Integration[] = [
 	},
 	{
 		id: "discord",
+		logoSrc: "/images/integrations/discord.svg",
 		name: "Discord",
 		description: "Connect Discord servers for channel syncing.",
 		fullDescription:
@@ -195,6 +206,7 @@ export const integrations: Integration[] = [
 	},
 	{
 		id: "craft",
+		logoSrc: "/images/integrations/craft.png",
 		name: "Craft",
 		description: "Connect your Craft workspace for documents, tasks, and notes.",
 		fullDescription:
@@ -233,6 +245,7 @@ export const integrations: Integration[] = [
 	},
 	{
 		id: "openstatus",
+		logoSrc: "/images/integrations/openstatus.svg",
 		name: "OpenStatus",
 		description: "Monitor alerts and uptime notifications for your services.",
 		fullDescription:
@@ -251,14 +264,13 @@ export const integrations: Integration[] = [
 	},
 	{
 		id: "rss",
+		logoSrc: "/images/integrations/rss.svg",
 		name: "RSS Feeds",
 		description: "Subscribe to RSS feeds and post new items to channels.",
 		fullDescription:
 			"Subscribe channels to RSS and Atom feeds to automatically post new articles, blog posts, and updates. Each feed is polled on a configurable interval with built-in deduplication and error handling.",
 		logoDomain: "rss.com",
 		logoType: "icon",
-		logoSrc:
-			"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23F26522'%3E%3Ccircle cx='6.18' cy='17.82' r='2.18'/%3E%3Cpath d='M4 4.44v2.83c7.03 0 12.73 5.7 12.73 12.73h2.83c0-8.59-6.97-15.56-15.56-15.56zm0 5.66v2.83c3.9 0 7.07 3.17 7.07 7.07h2.83c0-5.47-4.43-9.9-9.9-9.9z'/%3E%3C/svg%3E",
 		brandColor: "#F26522",
 		category: "productivity",
 		features: [
@@ -271,6 +283,7 @@ export const integrations: Integration[] = [
 	},
 	{
 		id: "railway",
+		logoSrc: "/images/integrations/railway.svg",
 		name: "Railway",
 		description: "Deployment notifications and alerts for your Railway projects.",
 		fullDescription:
@@ -289,13 +302,14 @@ export const integrations: Integration[] = [
 	},
 	{
 		id: "maple",
+		logoSrc: "/images/integrations/maple.svg",
 		name: "Maple",
 		description: "Observability alerts for traces, latency, and error rates.",
 		fullDescription:
 			"Connect Maple to receive alerts directly in your channels when error rates spike, latency degrades, or custom rules trip. Each alert includes severity, observed values, and deep links back to the incident and Maple AI chat.",
 		logoDomain: "maple.dev",
 		logoType: "icon",
-		brandColor: "#10B981",
+		brandColor: "#E86F00",
 		category: "developer-tools",
 		connectionType: "webhook",
 		features: [

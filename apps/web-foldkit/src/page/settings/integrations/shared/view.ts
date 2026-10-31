@@ -1,4 +1,5 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
+import { type Integration, integrationLogoSrc } from "~/lib/integrations/__data"
 
 /**
  * Legacy routes here render a fragment straight into the layout's flex column. Foldkit has no
@@ -62,3 +63,33 @@ export const listSpinner = <Message>(h: HtmlBuilder<Message>): Html =>
 
 export const CHEVRON_RIGHT = "M9 5l7 7-7 7"
 export const CHECK = "M5 13l4 4L19 7"
+
+const LOGO_TILE = {
+	sm: { tile: "size-8 rounded-lg", glyph: "size-4.5" },
+	md: { tile: "size-11 rounded-xl", glyph: "size-6" },
+	lg: { tile: "size-14 rounded-2xl", glyph: "size-8" },
+} as const
+
+/**
+ * An integration's logo on a white tile, the same at every size: a bundled glyph sits padded in the
+ * middle, a Brandfetch icon (which carries its own padding) fills the tile.
+ */
+export const integrationLogo = <Message>(
+	h: HtmlBuilder<Message>,
+	integration: Integration,
+	size: keyof typeof LOGO_TILE,
+): Html =>
+	h.div(
+		[
+			h.Class(
+				`flex shrink-0 items-center justify-center overflow-hidden bg-white shadow-xs ring-1 ring-black/10 dark:ring-white/10 ${LOGO_TILE[size].tile}`,
+			),
+		],
+		[
+			h.img([
+				h.Attribute("src", integrationLogoSrc(integration)),
+				h.Attribute("alt", `${integration.name} logo`),
+				h.Class(`object-contain ${integration.logoSrc ? LOGO_TILE[size].glyph : "size-full"}`),
+			]),
+		],
+	)
