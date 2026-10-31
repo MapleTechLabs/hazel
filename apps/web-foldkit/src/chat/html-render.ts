@@ -484,8 +484,11 @@ const bridgeFrames = (): ReadonlyArray<BridgeFrame> =>
 		isFocused: document.activeElement === frame,
 	}))
 
-/** One gesture in a frame opens at most one link: activation lasts seconds, and the desktop opener does not consume it. */
-const LINK_COOLDOWN_MS = 2_000
+/**
+ * At most one link per activation window (about 5s): the desktop opener does not consume the
+ * gesture the way `window.open` does.
+ */
+const LINK_COOLDOWN_MS = 5_000
 let lastLinkAt = Number.NEGATIVE_INFINITY
 
 /** The frames' `postMessage`s, as Messages. Without the activation API, no link opens. */
