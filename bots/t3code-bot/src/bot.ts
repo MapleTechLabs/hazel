@@ -9,7 +9,7 @@ import { defineBot, type MessageType, type TypedCommandContext } from "@hazel-ch
 import { HazelApi } from "@hazel/domain/http"
 import { makeT3CodeMcpSession, type T3Project } from "@hazel/integrations/t3code"
 import type { ChannelId, OrganizationId, UserId } from "@hazel/schema"
-import { Cause, Config, Effect, FiberMap, Layer, Option, Redacted, Schema } from "effect"
+import { Cause, Config, Effect, FiberMap, Layer, Option, Redacted, Schema, Semaphore } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { HttpApiClient } from "effect/http-api"
 import { commands, T3Command, T3ProjectCommand, T3StopCommand } from "./commands.ts"
@@ -131,19 +131,22 @@ export const bot = defineBot({
 				sdk.state.getJson(runKey(threadChannelId), T3Run) as Effect.Effect<T3Run | null, unknown>
 			const saveRun = (run: T3Run) =>
 				sdk.state.setJson(runKey(run.threadChannelId), T3Run, run) as Effect.Effect<void, unknown>
+			// The bot's state is read, edited and written back: one writer at a time, or two
+			// followers starting at once would drop each other's thread (and its resume).
+			const stateLock = yield* Semaphore.make(1)
 			const updateFollowing = (f: (ids: ReadonlyArray<string>) => ReadonlyArray<string>) =>
 				Effect.gen(function* () {
 					const ids = ((yield* sdk.state.getJson(FOLLOWING_KEY, Following)) ??
 						[]) as ReadonlyArray<string>
 					yield* sdk.state.setJson(FOLLOWING_KEY, Following, f(ids))
-				})
+				}).pipe(Semaphore.withPermit(stateLock))
 
 			/** Merge `patch` over the stored run: a follower and a reply each own their fields. */
 			const updateRun = (threadChannelId: string, patch: Partial<T3Run>) =>
 				Effect.gen(function* () {
 					const stored = yield* loadRun(threadChannelId)
 					if (stored !== null) yield* saveRun({ ...stored, ...patch })
-				})
+				}).pipe(Semaphore.withPermit(stateLock))
 
 			const post = (channelId: ChannelId, content: string) =>
 				Effect.asVoid(sdk.message.send(channelId, content)) as Effect.Effect<void, unknown>
