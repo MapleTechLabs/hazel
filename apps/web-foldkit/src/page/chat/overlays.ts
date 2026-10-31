@@ -28,6 +28,9 @@ export type ViewerAction = typeof ViewerAction.Type
 /** The kit Popover's id (and DOM slot) of a message's author popover. */
 export const avatarPopoverKey = (messageId: MessageId) => `${messageId}:avatar`
 
+/** The kit Popover's id of the profile popover opened from a message's `index`th mention. */
+export const mentionPopoverKey = (messageId: MessageId, index: number) => `${messageId}:mention:${index}`
+
 /** A tooltip trigger: its key (the Tooltip's id) and the message it renders in. */
 export const Trigger = Schema.Struct({ key: Schema.String, messageId: MessageId })
 export type Trigger = typeof Trigger.Type
@@ -40,8 +43,8 @@ export const OpenOverlay = defineTaggedUnion({
 	None: {},
 	MoreMenu: { messageId: MessageId, menu: Menu.Model },
 	ContextMenu: { messageId: MessageId, menu: Menu.Model },
-	/** The author popover open from a message's avatar. */
-	Popover: { messageId: MessageId, popover: Popover.Model },
+	/** The profile popover open from a message's avatar or one of its mentions (`key`). */
+	Popover: { messageId: MessageId, key: Schema.String, popover: Popover.Model },
 	/** `urlImages` are a GIF or tweet photos (`ViewerImage` of type "url"); otherwise the attachments. */
 	ImageViewer: {
 		messageId: MessageId,
@@ -117,9 +120,7 @@ export const contextMenuOf = (model: Model) => (model.open._tag === "ContextMenu
 
 /** The open popover in the shape the popover host takes. */
 export const activePopoverOf = (model: Model) =>
-	model.open._tag === "Popover"
-		? { key: avatarPopoverKey(model.open.messageId), popover: model.open.popover }
-		: null
+	model.open._tag === "Popover" ? { key: model.open.key, popover: model.open.popover } : null
 
 // MESSAGE
 
@@ -134,7 +135,7 @@ export const Message = defineMessageUnion({
 	GotMoreMenuMessage: { messageId: MessageId, message: Menu.Message },
 	RightClickedMessage: { messageId: MessageId, offset: Schema.Number, crossOffset: Schema.Number },
 	GotContextMenuMessage: { message: Menu.Message },
-	GotPopoverMessage: { messageId: MessageId, message: Popover.Message },
+	GotPopoverMessage: { messageId: MessageId, key: Schema.String, message: Popover.Message },
 	GotPinnedMessage: { message: Popover.Message },
 	ClickedReply: { messageId: MessageId },
 	ClickedDelete: { messageId: MessageId },
@@ -451,17 +452,15 @@ export const update = (model: Model, message: Message): OverlaysReturn =>
 				result.outMessage,
 			)
 		},
-		GotPopoverMessage: ({ messageId, message: popoverMessage }) => {
-			const isCurrent = model.open._tag === "Popover" && model.open.messageId === messageId
+		GotPopoverMessage: ({ messageId, key, message: popoverMessage }) => {
+			const isCurrent = model.open._tag === "Popover" && model.open.key === key
 			const current =
-				model.open._tag === "Popover" && isCurrent
-					? model.open.popover
-					: Popover.init(avatarPopoverKey(messageId))
+				model.open._tag === "Popover" && isCurrent ? model.open.popover : Popover.init(key)
 			return withChild(model, Popover.update(current, popoverMessage), {
 				isCurrent,
 				isOpen: (popover) => popover.isOpen,
-				toOpen: (popover) => OpenOverlay.Popover({ messageId, popover }),
-				wrap: (inner) => Message.GotPopoverMessage({ messageId, message: inner }),
+				toOpen: (popover) => OpenOverlay.Popover({ messageId, key, popover }),
+				wrap: (inner) => Message.GotPopoverMessage({ messageId, key, message: inner }),
 			})
 		},
 		GotPinnedMessage: ({ message: popoverMessage }) => {

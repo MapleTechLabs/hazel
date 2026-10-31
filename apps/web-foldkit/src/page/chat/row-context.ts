@@ -25,6 +25,7 @@ import { contextMenuView, menuLabel } from "../../ui/menu-view"
 import type * as Popover from "../../ui/popover"
 import * as Overlays from "./overlays"
 import { factsOf, Message, type Model } from "./channel/page"
+import { authorIdentity } from "./derive"
 import type { MessageRow } from "./rows"
 
 /**
@@ -60,6 +61,12 @@ const toHtmlRenderMessage = (message: HtmlRender.Message) => Message.GotHtmlRend
 
 const toPressEmbedAction = (channelId: ChannelId, messageId: MessageId, actionId: string) =>
 	Message.ClickedEmbedAction({ channelId, messageId, actionId })
+
+const toPopoverMessage = (messageId: MessageId) => (key: string, message: Popover.Message) =>
+	toOverlays(Overlays.Message.GotPopoverMessage({ messageId, key, message }))
+
+/** A mention's profile popover opens below the mention. */
+const MENTION_POPOVER = { placement: "bottom start", className: "w-72 p-0 lg:w-80" } as const
 
 const toContextMenuMessage = (message: Menu.Message) =>
 	toOverlays(Overlays.Message.GotContextMenuMessage({ message }))
@@ -138,11 +145,19 @@ const buildIdleContext = (
 			popoverTrigger(h, {
 				key: Overlays.avatarPopoverKey(row.message.id),
 				active: null,
-				toMessage: (_key, message: Popover.Message) =>
-					toOverlays(Overlays.Message.GotPopoverMessage({ messageId: row.message.id, message })),
+				toMessage: toPopoverMessage(row.message.id),
 				placement: "right top",
 				className: "w-72 p-0 lg:w-80",
 				toTrigger: (attributes) => avatarButton(h, row, attributes),
+				toContent: () => [],
+			}),
+		mention: (row) => (mention, toTrigger) =>
+			popoverTrigger(h, {
+				key: Overlays.mentionPopoverKey(row.message.id, mention.index),
+				active: null,
+				toMessage: toPopoverMessage(row.message.id),
+				...MENTION_POPOVER,
+				toTrigger,
 				toContent: () => [],
 			}),
 	}
@@ -154,6 +169,18 @@ const buildOwnerContext = (h: H, model: Model, nowMs: number): RowContext<Messag
 	const names = userNamesOf(users)
 	const overlays = model.overlays
 	const contextMenu = Overlays.contextMenuOf(overlays)
+	const profileOf = (userId: string): ReadonlyArray<Html> => {
+		const user = users.find((candidate) => candidate.id === userId)
+		if (user === undefined) return []
+		const identity = authorIdentity(user, model.lookups.bots.find((bot) => bot.userId === user.id)?.name)
+		return profilePopoverContent(h, {
+			user,
+			...identity,
+			presence: model.lookups.presence.find((presence) => presence.userId === user.id) ?? null,
+			isOwnProfile: model.currentUserId === user.id,
+			nowMs,
+		})
+	}
 	return {
 		tooltip: {
 			active: Overlays.activeTooltipOf(overlays),
@@ -188,25 +215,20 @@ const buildOwnerContext = (h: H, model: Model, nowMs: number): RowContext<Messag
 			popoverTrigger(h, {
 				key: Overlays.avatarPopoverKey(row.message.id),
 				active: Overlays.activePopoverOf(overlays),
-				toMessage: (_key, message: Popover.Message) =>
-					toOverlays(Overlays.Message.GotPopoverMessage({ messageId: row.message.id, message })),
+				toMessage: toPopoverMessage(row.message.id),
 				placement: "right top",
 				className: "w-72 p-0 lg:w-80",
 				toTrigger: (attributes) => avatarButton(h, row, attributes),
-				toContent: () => {
-					const user = users.find((candidate) => candidate.id === row.message.authorId)
-					if (user === undefined) return []
-					return profilePopoverContent(h, {
-						user,
-						displayName: row.author.displayName,
-						avatarUrl: row.author.avatarUrl,
-						isBot: row.author.isBot,
-						presence:
-							model.lookups.presence.find((presence) => presence.userId === user.id) ?? null,
-						isOwnProfile: model.currentUserId === user.id,
-						nowMs,
-					})
-				},
+				toContent: () => profileOf(row.message.authorId),
+			}),
+		mention: (row) => (mention, toTrigger) =>
+			popoverTrigger(h, {
+				key: Overlays.mentionPopoverKey(row.message.id, mention.index),
+				active: Overlays.activePopoverOf(overlays),
+				toMessage: toPopoverMessage(row.message.id),
+				...MENTION_POPOVER,
+				toTrigger,
+				toContent: () => profileOf(mention.userId),
 			}),
 	}
 }

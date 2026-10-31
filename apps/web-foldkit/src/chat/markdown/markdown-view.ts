@@ -1,4 +1,4 @@
-import type { Html, HtmlBuilder } from "foldkit/html"
+import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { isEmojiOnly } from "~/lib/emoji-utils"
 import { cn } from "~/lib/utils"
 import { cx } from "~/utils/cx"
@@ -20,6 +20,22 @@ export interface MarkdownRefs {
 }
 
 export const NO_REFS: MarkdownRefs = { mentions: [], emojis: [] }
+
+/**
+ * Wraps a user mention's button in an overlay trigger (the profile popover). `index` counts the
+ * message's user mentions in document order, so two mentions of one user get their own trigger.
+ */
+export type MentionTrigger = (
+	mention: { readonly userId: string; readonly index: number },
+	toTrigger: (attributes: ReadonlyArray<ChildAttribute>) => Html,
+) => Html
+
+/** One render's inputs: the refs, the mention trigger, and the user mentions rendered so far. */
+interface Env {
+	readonly refs: MarkdownRefs
+	readonly mentionTrigger: MentionTrigger | undefined
+	mentionCount: number
+}
 
 const childrenOf = (node: ProseMirrorNode): ReadonlyArray<ProseMirrorNode> => {
 	const children: Array<ProseMirrorNode> = []
@@ -104,7 +120,7 @@ const MENTION_CLASS =
 	"inline-block cursor-pointer rounded bg-primary/10 px-1 py-0.5 align-baseline font-medium text-primary transition-colors"
 
 /** `MentionElement`, interactive (a popover trigger). */
-const mentionView = <M>(h: HtmlBuilder<M>, element: ProseMirrorNode, refs: MarkdownRefs): Html => {
+const mentionView = <M>(h: HtmlBuilder<M>, element: ProseMirrorNode, env: Env): Html => {
 	const userId: string = element.attrs.userId
 	const displayName: string = element.attrs.displayName
 	const node = h.Attribute("data-slate-node", "element")
@@ -113,26 +129,30 @@ const mentionView = <M>(h: HtmlBuilder<M>, element: ProseMirrorNode, refs: Markd
 			[node, h.Attribute("contenteditable", "false"), h.Class(cn(MENTION_CLASS))],
 			["@", displayName, voidChildView(h)],
 		)
-	const fullName = refs.mentions.find((mention) => mention.userId === userId)?.name ?? displayName
-	return h.button(
-		[
-			h.Attribute("aria-expanded", "false"),
-			h.Class(
-				cn(
-					"inline-block cursor-pointer rounded bg-primary/10 px-1 py-0.5 align-baseline font-medium text-primary outline-hidden transition-colors hover:bg-primary/20",
+	const fullName = env.refs.mentions.find((mention) => mention.userId === userId)?.name ?? displayName
+	const index = env.mentionCount++
+	const toTrigger = (attributes: ReadonlyArray<ChildAttribute>) =>
+		h.button(
+			[
+				// The trigger's attributes carry its own `aria-expanded`.
+				...(attributes.length === 0 ? [h.Attribute("aria-expanded", "false")] : attributes),
+				h.Class(
+					cn(
+						"inline-block cursor-pointer rounded bg-primary/10 px-1 py-0.5 align-baseline font-medium text-primary outline-hidden transition-colors hover:bg-primary/20",
+					),
 				),
-			),
-			h.Attribute("data-react-aria-pressable", "true"),
-			node,
-			h.Attribute("tabindex", "0"),
-			h.Attribute("type", "button"),
-		],
-		["@", fullName, voidChildView(h)],
-	)
+				h.Attribute("data-react-aria-pressable", "true"),
+				node,
+				h.Attribute("tabindex", "0"),
+				h.Attribute("type", "button"),
+			],
+			["@", fullName, voidChildView(h)],
+		)
+	return env.mentionTrigger === undefined ? toTrigger([]) : env.mentionTrigger({ userId, index }, toTrigger)
 }
 
 /** `CustomEmojiElement`: the org's image, or `:name:` when the org has no such emoji. */
-const customEmojiView = <M>(h: HtmlBuilder<M>, element: ProseMirrorNode, refs: MarkdownRefs): Html => {
+const customEmojiView = <M>(h: HtmlBuilder<M>, element: ProseMirrorNode, { refs }: Env): Html => {
 	const name: string = element.attrs.name
 	const node = h.Attribute("data-slate-node", "element")
 	const imageUrl = refs.emojis.find((emoji) => emoji.name === name)?.imageUrl
@@ -160,11 +180,11 @@ const customEmojiView = <M>(h: HtmlBuilder<M>, element: ProseMirrorNode, refs: M
 	)
 }
 
-const elementView = <M>(h: HtmlBuilder<M>, element: ProseMirrorNode, refs: MarkdownRefs): Html => {
+const elementView = <M>(h: HtmlBuilder<M>, element: ProseMirrorNode, env: Env): Html => {
 	const type = element.type.name
 	if (type === "code-block") return codeBlockView(h, element)
-	if (type === "mention") return mentionView(h, element, refs)
-	if (type === "custom-emoji") return customEmojiView(h, element, refs)
+	if (type === "mention") return mentionView(h, element, env)
+	if (type === "custom-emoji") return customEmojiView(h, element, env)
 	const elementChildren = childrenOf(element)
 	const children =
 		element.inlineContent && elementChildren.length === 0
@@ -172,7 +192,7 @@ const elementView = <M>(h: HtmlBuilder<M>, element: ProseMirrorNode, refs: Markd
 			: elementChildren.map((child, index) =>
 					child.isText
 						? textView(h, child.text ?? "", element, index === elementChildren.length - 1)
-						: elementView(h, child, refs),
+						: elementView(h, child, env),
 				)
 	const node = h.Attribute("data-slate-node", "element")
 	if (type === "paragraph") return h.p([node, h.Class("my-0 last:empty:hidden")], children)
@@ -228,8 +248,14 @@ const tableView = <M>(h: HtmlBuilder<M>, element: ProseMirrorNode, children: Rea
 }
 
 /** `SlateMessageViewer`. */
-export const markdownView = <M>(h: HtmlBuilder<M>, content: string, refs: MarkdownRefs = NO_REFS): Html => {
+export const markdownView = <M>(
+	h: HtmlBuilder<M>,
+	content: string,
+	refs: MarkdownRefs = NO_REFS,
+	mentionTrigger?: MentionTrigger,
+): Html => {
 	const blocks = deserializeFromMarkdown(content)
+	const env: Env = { refs, mentionTrigger, mentionCount: 0 }
 	return h.div(
 		[h.Class(cx("w-full", undefined))],
 		[
@@ -252,7 +278,7 @@ export const markdownView = <M>(h: HtmlBuilder<M>, content: string, refs: Markdo
 					h.Attribute("translate", "no"),
 					h.Attribute("zindex", "-1"),
 				],
-				blocks.map((block) => elementView(h, block, refs)),
+				blocks.map((block) => elementView(h, block, env)),
 			),
 		],
 	)

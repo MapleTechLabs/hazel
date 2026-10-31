@@ -9,7 +9,7 @@ import { attachmentsView } from "../attachments"
 import { messageEmbedsView } from "../embeds"
 import { liveView } from "../embeds/live-view"
 import { gifView, linkPreviewView, tweetView, youtubeView } from "../embeds/url-embeds"
-import { markdownView } from "../markdown/markdown-view"
+import { type MentionTrigger, markdownView } from "../markdown/markdown-view"
 import { tweetOf } from "../unfurl"
 import { processMessageUrls } from "./content"
 import { formatTime, headerView, replySectionView, threadPreviewView } from "./parts"
@@ -36,6 +36,8 @@ export interface RowContext<M> {
 	) => Html
 	/** The author avatar, a `UserProfilePopover` trigger. */
 	readonly avatar: (row: MessageRow) => Html
+	/** A user (or bot) mention in the content, a `UserProfilePopover` trigger. */
+	readonly mention: (row: MessageRow) => MentionTrigger
 	/** An HTML render frame's mount, load, height and controls. */
 	readonly toHtmlRenderMessage: (message: HtmlRender.Message) => M
 	/** A button on a bot's message (`MessageEmbed.actions`). */
@@ -119,7 +121,9 @@ const contentView = <M>(h: HtmlBuilder<M>, row: MessageRow, context: RowContext<
 	const { message } = row
 	const { displayContent } = processMessageUrls(message)
 	return [
-		row.live === null && displayContent ? markdownView(h, displayContent, row.refs) : h.empty,
+		row.live === null && displayContent
+			? markdownView(h, displayContent, row.refs, context.mention(row))
+			: h.empty,
 		...row.urlEmbeds.map((embed) => urlEmbedView(h, row, embed, context)),
 		messageEmbedsView(
 			h,
