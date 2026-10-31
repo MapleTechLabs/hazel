@@ -27,7 +27,8 @@ export const htmlRenderStyles = tv({
 /** The fullscreen dialog around the page. */
 export const htmlRenderDialogStyles = tv({
 	slots: {
-		panel: "h-[90dvh] p-0! sm:h-[calc(100dvh-1.5rem)]",
+		// The modal's inner section must fill the panel, or the frame falls back to 150px.
+		panel: "h-[90dvh] p-0! sm:h-[calc(100dvh-1.5rem)] [&>section]:min-h-0 [&>section]:flex-1",
 		header: "flex shrink-0 items-center border-border border-b px-4 py-3 pr-12",
 		title: "truncate font-medium text-fg text-sm",
 		body: "relative min-h-0 flex-1",
