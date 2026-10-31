@@ -19,7 +19,8 @@
 		"./maple/browser": "./src/maple/browser.ts",
 		"./craft": "./src/craft/index.ts",
 		"./discord": "./src/discord/index.ts",
-		"./rss": "./src/rss/index.ts"
+		"./rss": "./src/rss/index.ts",
+		"./t3code": "./src/t3code/index.ts"
 	},
 	"dependencies": {
 		"@linear/sdk": "^73.0.0",

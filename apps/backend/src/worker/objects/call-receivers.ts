@@ -47,6 +47,16 @@ import {
 	integrationConnection,
 	IntegrationConnectionCall,
 } from "./org/integrations"
+import {
+	markT3CodeExpired,
+	MarkT3CodeExpiredCall,
+	t3CodeAccess,
+	T3CodeAccessCall,
+	t3CodeLink,
+	T3CodeLinkCall,
+	updateT3CodeSharing,
+	UpdateT3CodeSharingCall,
+} from "./org/t3code"
 import type { ObjectStubs } from "./protocol"
 
 /** What a receiver may use: the object's storage and platform, and the app services. */
@@ -88,6 +98,10 @@ export const callReceivers: Record<ObjectKind, ReadonlyMap<string, Receiver>> = 
 		receiver(ActiveIntegrationsCall, () => activeIntegrations()),
 		receiver(ConnectIntegrationCall, connectIntegration),
 		receiver(DisconnectIntegrationCall, disconnectIntegration),
+		receiver(T3CodeLinkCall, t3CodeLink),
+		receiver(UpdateT3CodeSharingCall, updateT3CodeSharing),
+		receiver(T3CodeAccessCall, t3CodeAccess),
+		receiver(MarkT3CodeExpiredCall, markT3CodeExpired),
 		receiver(GitHubEventCall, githubEvent),
 		receiver(GitHubInstallationCall, githubInstallation),
 		receiver(OrganizationProfileCall, () => organizationProfile()),

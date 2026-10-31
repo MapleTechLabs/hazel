@@ -8,7 +8,9 @@ export const connectionStatusEnum = textEnum(["active", "expired", "revoked", "e
 export const integrationConnectionsTable = SQLite.table("integration_connections", {
 	columns: {
 		id: SQLite.column(uuid(IntegrationConnectionId), { defaultExpr: randomUuid }),
-		provider: typed<"linear" | "github" | "figma" | "notion" | "discord" | "craft">()(varchar(50)),
+		provider: typed<"linear" | "github" | "figma" | "notion" | "discord" | "craft" | "t3code">()(
+			varchar(50),
+		),
 		organizationId: uuid(OrganizationId),
 		userId: SQLite.nullable(uuid(UserId)),
 		level: connectionLevelEnum,

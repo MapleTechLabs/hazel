@@ -1,7 +1,7 @@
 /**
  * Integration provider types for OAuth-based integrations.
  */
-export type IntegrationProvider = "linear" | "github" | "figma" | "notion" | "discord" | "craft"
+export type IntegrationProvider = "linear" | "github" | "figma" | "notion" | "discord" | "craft" | "t3code"
 
 /**
  * Bot configuration for integration providers.
@@ -51,6 +51,11 @@ export const INTEGRATION_BOT_CONFIGS: Record<IntegrationProvider, IntegrationBot
 		name: "Craft",
 		avatarUrl: "https://cdn.brandfetch.io/craft.do/w/64/h/64/theme/dark/icon?token=1id0IQ-4i8Z46-n-DfQ",
 		botId: "bot-craft",
+	},
+	t3code: {
+		name: "T3 Code",
+		avatarUrl: "https://cdn.brandfetch.io/t3.chat/w/64/h/64/theme/dark/icon?token=1id0IQ-4i8Z46-n-DfQ",
+		botId: "bot-t3code",
 	},
 }
 

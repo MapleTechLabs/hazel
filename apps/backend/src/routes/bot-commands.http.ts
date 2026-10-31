@@ -86,7 +86,7 @@ const projectBot = Effect.fn("BotCommands.projectBot")(function* (botId: BotId, 
 /**
  * Validate bot token from Authorization header and return the bot
  */
-const validateBotToken = Effect.gen(function* () {
+export const validateBotToken = Effect.gen(function* () {
 	const request = yield* HttpServerRequest.HttpServerRequest
 	const authHeader = request.headers.authorization
 

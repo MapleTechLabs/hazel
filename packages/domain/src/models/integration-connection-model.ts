@@ -3,7 +3,15 @@ import { Schema as S } from "effect"
 import * as M from "./utils"
 import { JsonDate } from "./utils"
 
-export const IntegrationProvider = S.Literals(["linear", "github", "figma", "notion", "discord", "craft"])
+export const IntegrationProvider = S.Literals([
+	"linear",
+	"github",
+	"figma",
+	"notion",
+	"discord",
+	"craft",
+	"t3code",
+])
 export type IntegrationProvider = S.Schema.Type<typeof IntegrationProvider>
 
 export const ConnectionLevel = S.Literals(["organization", "user"])
