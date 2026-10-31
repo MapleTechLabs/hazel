@@ -4,8 +4,8 @@ import { CHECK, strokeIcon } from "../shared/view"
 import { panel } from "./view-connection"
 
 /**
- * Maple is two things in Hazel: an AI agent you ask in a channel (the Maple bot, installed from
- * Maple through `/oauth/bot-install`) and alerts it posts through a channel webhook. Both are set up
+ * Maple is two things in Hazel, both through one bot: an AI agent you ask in a channel (installed
+ * from Maple through `/oauth/bot-install`) and the alerts it posts in channels you pick. Both are set up
  * from Maple, because the link starts there (Maple's org owns the request), so this page shows
  * what is connected and sends you to the right place in Maple, in either region.
  */
@@ -21,9 +21,13 @@ const MAPLE_APPS = {
 	eu: "https://app.eu.maple.dev",
 } as const
 
-/** Maple's integrations page, opened on one entry: `chat-hazel` is the agent, `hazel` the alerts. */
-export const mapleIntegrationUrl = (region: keyof typeof MAPLE_APPS, entry: "chat-hazel" | "hazel"): string =>
-	`${MAPLE_APPS[region]}/integrations?integration=${entry}`
+/** Maple's integrations page, opened on its Hazel entry, where the bot is installed. */
+export const mapleIntegrationUrl = (region: keyof typeof MAPLE_APPS): string =>
+	`${MAPLE_APPS[region]}/integrations?integration=chat-hazel`
+
+/** Maple's alert routing, where a Hazel channel is added as a destination once the bot is in. */
+export const mapleAlertsUrl = (region: keyof typeof MAPLE_APPS): string =>
+	`${MAPLE_APPS[region]}/alerts?tab=routing`
 
 const external = { rel: "noopener noreferrer", target: "_blank" }
 
@@ -39,14 +43,14 @@ const linkButton = <M>(h: HtmlBuilder<M>, href: string, label: string, intent: "
 	)
 
 /** "Using Maple's EU region?" — the same place in the other instance. */
-const euLink = <M>(h: HtmlBuilder<M>, entry: "chat-hazel" | "hazel", label: string): Html =>
+const euLink = <M>(h: HtmlBuilder<M>, href: string, label: string): Html =>
 	h.p(
 		[h.Class("text-muted-fg text-xs")],
 		[
 			"On Maple's EU region? ",
 			h.a(
 				[
-					h.Href(mapleIntegrationUrl("eu", entry)),
+					h.Href(href),
 					h.Attribute("rel", external.rel),
 					h.Attribute("target", external.target),
 					h.Class("text-fg underline underline-offset-2"),
@@ -113,16 +117,9 @@ const agentPanel = <M>(h: HtmlBuilder<M>, isInstalled: boolean): Html =>
 						),
 						h.div(
 							[h.Class("flex flex-wrap items-center gap-3")],
-							[
-								linkButton(
-									h,
-									mapleIntegrationUrl("us", "chat-hazel"),
-									"Manage in Maple",
-									"outline",
-								),
-							],
+							[linkButton(h, mapleIntegrationUrl("us"), "Manage in Maple", "outline")],
 						),
-						euLink(h, "chat-hazel", "Manage in Maple EU"),
+						euLink(h, mapleIntegrationUrl("eu"), "Manage in Maple EU"),
 					]
 				: [
 						h.p(
@@ -138,16 +135,9 @@ const agentPanel = <M>(h: HtmlBuilder<M>, isInstalled: boolean): Html =>
 						]),
 						h.div(
 							[h.Class("flex flex-wrap items-center gap-3")],
-							[
-								linkButton(
-									h,
-									mapleIntegrationUrl("us", "chat-hazel"),
-									"Connect in Maple",
-									"primary",
-								),
-							],
+							[linkButton(h, mapleIntegrationUrl("us"), "Connect in Maple", "primary")],
 						),
-						euLink(h, "chat-hazel", "Connect in Maple EU"),
+						euLink(h, mapleIntegrationUrl("eu"), "Connect in Maple EU"),
 					],
 		),
 	])
@@ -160,14 +150,14 @@ const alertsPanel = <M>(h: HtmlBuilder<M>): Html =>
 				h.p(
 					[h.Class("text-muted-fg text-sm")],
 					[
-						"Maple can post alerts into a channel you pick when error rates spike, latency degrades or a custom rule trips. You choose the workspace and channels in Maple.",
+						"Maple posts alerts through the same bot when error rates spike, latency degrades or a custom rule trips. Once the bot is installed, pick the channels in Maple's alert routing.",
 					],
 				),
 				h.div(
 					[h.Class("flex flex-wrap items-center gap-3")],
-					[linkButton(h, mapleIntegrationUrl("us", "hazel"), "Set up alerts in Maple", "outline")],
+					[linkButton(h, mapleAlertsUrl("us"), "Set up alerts in Maple", "outline")],
 				),
-				euLink(h, "hazel", "Set up alerts in Maple EU"),
+				euLink(h, mapleAlertsUrl("eu"), "Set up alerts in Maple EU"),
 			],
 		),
 	])
