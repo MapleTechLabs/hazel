@@ -70,6 +70,7 @@ export const init = (route: Route): Return =>
 			memberSearch: "",
 			sharingSave: "Idle",
 			sharingRequestId: 0,
+			mapleBotInstalled: false,
 			disconnectConfirm: ConfirmAction.init("t3code-disconnect"),
 		},
 		route,
@@ -164,6 +165,9 @@ const validateApiBaseUrl = validate(apiBaseUrlRules)
 
 export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
+		UpdatedMapleBotInstalled: ({ isInstalled }) => ({
+			model: modifyFields(model, { mapleBotInstalled: () => isInstalled }),
+		}),
 		UpdatedConnection: ({ connection }) => ({
 			model: {
 				...model,

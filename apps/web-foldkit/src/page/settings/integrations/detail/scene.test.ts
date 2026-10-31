@@ -74,6 +74,42 @@ const pageFor = (integrationId: string, callback?: { status: string; errorCode?:
 	})
 
 describe("integration detail page", () => {
+	test("Maple: not installed, it says how to connect and links to Maple in either region", () => {
+		scene(
+			config,
+			given(pageFor("maple").model),
+			expectView(text("Not connected")).toExist(),
+			expectView(role("link", { name: "Connect in Maple" })).toHaveAttr(
+				"href",
+				"https://app.maple.dev/integrations?integration=chat-hazel",
+			),
+			expectView(role("link", { name: "Set up alerts in Maple" })).toHaveAttr(
+				"href",
+				"https://app.maple.dev/integrations?integration=hazel",
+			),
+			expectView(role("link", { name: "Connect in Maple EU" })).toHaveAttr(
+				"href",
+				"https://app.eu.maple.dev/integrations?integration=chat-hazel",
+			),
+			expectView(role("link", { name: "Set up alerts in Maple EU" })).toHaveAttr(
+				"href",
+				"https://app.eu.maple.dev/integrations?integration=hazel",
+			),
+		)
+	})
+
+	test("Maple: once its bot is installed here, the page says so and how to use it", () => {
+		scene(
+			config,
+			given(pageFor("maple").model),
+			Subscription.emit(Message.UpdatedMapleBotInstalled({ isInstalled: true })),
+			expectView(text("Connected")).toExist(),
+			expectView(role("link", { name: "Connect in Maple" })).toBeAbsent(),
+			expectView(role("link", { name: "Manage in Maple" })).toExist(),
+			expectView(text("Maple is installed in this workspace.", { exact: false })).toExist(),
+		)
+	})
+
 	test("a failed OAuth callback toasts the mapped error with the navigation that clears the search params", () => {
 		const page = pageFor("linear", { status: "error", errorCode: "token_exchange_failed" })
 		expect(page.outMessage).toEqual(
