@@ -5,6 +5,8 @@ export const Model = Schema.Struct({
 	orgSlug: Schema.String,
 	selectedCategory: Schema.String,
 	connections: Schema.Array(Connection),
+	/** The member's own connections (T3 Code links are per member). */
+	userConnections: Schema.Array(Connection),
 	/** Lower-cased names of the org's webhooks (OpenStatus, Railway are webhook-based). */
 	webhookProviders: Schema.Array(Schema.String),
 	hasRequestedWebhooks: Schema.Boolean,

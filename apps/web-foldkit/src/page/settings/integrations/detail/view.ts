@@ -7,7 +7,7 @@ import {
 	sectionHeaderRoot,
 	sectionHeaderSubheading,
 } from "../../../../ui/section-header"
-import type { PageViewInputs } from "../../../contract"
+import type { PageViewInputs, Shared } from "../../../contract"
 import { CHECK, strokeIcon } from "../shared/view"
 import { Message } from "./message"
 import type { Model } from "./model"
@@ -16,26 +16,16 @@ import {
 	configOptionRow,
 	connectedState,
 	disconnectedState,
+	panel,
 	verifyingState,
 } from "./view-connection"
+import { isT3CodeConnected, t3CodeColumn } from "./view-t3code"
 
 /** Port of `routes/_app/$orgSlug/settings/integrations/$integrationId.tsx`. */
 
 type H = HtmlBuilder<Message>
 
 const WEBHOOK_INTEGRATIONS = ["openstatus", "railway", "rss", "maple"]
-
-const panel = (h: H, title: string, body: ReadonlyArray<Html>, bodyClass = "p-5"): Html =>
-	h.div(
-		[h.Class("overflow-hidden rounded-xl border border-border bg-bg")],
-		[
-			h.div(
-				[h.Class("border-border border-b bg-bg-muted/30 px-5 py-3")],
-				[h.h3([h.Class("font-semibold text-fg text-sm")], [title])],
-			),
-			h.div([h.Class(bodyClass)], [...body]),
-		],
-	)
 
 const connectionBadge = (h: H, connected: boolean): Html =>
 	h.span(
@@ -101,8 +91,10 @@ const header = (h: H, integration: Integration, isWebhook: boolean, isConnected:
 		]),
 	])
 
-const mainColumn = (h: H, integration: Integration, model: Model, hasOrganization: boolean) => {
+const mainColumn = (h: H, integration: Integration, model: Model, shared: Shared) => {
+	const hasOrganization = shared.organization !== null
 	const isConnected = model.connection?.isActive === true
+	if (integration.connectionType === "environment") return t3CodeColumn(h, integration, model, shared.nowMs)
 	if (WEBHOOK_INTEGRATIONS.includes(integration.id))
 		return hasOrganization ? [unported(h, `IntegrationContent:${integration.id}`)] : []
 	if (integration.connectionType === "api-key")
@@ -200,14 +192,18 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 		[h.Class("flex flex-col gap-6 px-4 lg:px-8")],
 		[
 			backLink(h),
-			header(h, integration, isWebhook, model.connection?.isActive === true),
+			header(
+				h,
+				integration,
+				isWebhook,
+				integration.connectionType === "environment"
+					? isT3CodeConnected(model, shared.nowMs)
+					: model.connection?.isActive === true,
+			),
 			h.div(
 				[h.Class("grid gap-8 lg:grid-cols-[1fr_320px]")],
 				[
-					h.div(
-						[h.Class("flex flex-col gap-8")],
-						mainColumn(h, integration, model, shared.organization !== null),
-					),
+					h.div([h.Class("flex flex-col gap-8")], mainColumn(h, integration, model, shared)),
 					featuresPanel(h, integration),
 				],
 			),

@@ -8,6 +8,7 @@ import { IntegrationResourceGroup } from "./integration-resources"
 import { IntegrationGroup } from "./integrations"
 import { PresencePublicGroup } from "./presence"
 import { RootGroup } from "./root"
+import { T3CodeGroup } from "./t3code"
 import { KlipyGroup } from "./klipy"
 import { UploadsGroup } from "./uploads"
 import { WebhookGroup } from "./webhooks"
@@ -19,6 +20,7 @@ export class HazelApi extends HttpApi.make("HazelApp")
 	.add(PresencePublicGroup)
 	.add(RootGroup)
 	.add(IntegrationGroup)
+	.add(T3CodeGroup)
 	.add(IntegrationCommandGroup)
 	.add(IntegrationResourceGroup)
 	.add(IncomingWebhookGroup)

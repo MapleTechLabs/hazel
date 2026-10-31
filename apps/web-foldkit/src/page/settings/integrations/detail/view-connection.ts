@@ -14,12 +14,29 @@ import type { Model } from "./model"
 
 type H = HtmlBuilder<Message>
 
-const LINK_ICON =
+export const LINK_ICON =
 	"M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"
 const SLIDERS_ICON =
 	"M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75"
 
-const brandIcon = (h: H, integration: Integration) =>
+export const panel = <Message>(
+	h: HtmlBuilder<Message>,
+	title: string,
+	body: ReadonlyArray<Html>,
+	bodyClass = "p-5",
+): Html =>
+	h.div(
+		[h.Class("overflow-hidden rounded-xl border border-border bg-bg")],
+		[
+			h.div(
+				[h.Class("border-border border-b bg-bg-muted/30 px-5 py-3")],
+				[h.h3([h.Class("font-semibold text-fg text-sm")], [title])],
+			),
+			h.div([h.Class(bodyClass)], [...body]),
+		],
+	)
+
+export const brandIcon = <Message>(h: HtmlBuilder<Message>, integration: Integration) =>
 	h.img([
 		h.Attribute(
 			"src",
@@ -29,7 +46,13 @@ const brandIcon = (h: H, integration: Integration) =>
 		h.Class("size-4 rounded object-contain"),
 	])
 
-const centered = (h: H, icon: Html, title: string | Array<string>, body: Array<string>, extra: Array<Html>) =>
+export const centered = (
+	h: H,
+	icon: Html,
+	title: string | Array<string>,
+	body: Array<string>,
+	extra: Array<Html>,
+) =>
 	h.div(
 		[h.Class("flex flex-col items-center gap-4 py-4 text-center")],
 		[
@@ -152,7 +175,7 @@ export const connectedState = (
 	)
 }
 
-const apiField = (
+export const apiField = (
 	h: H,
 	options: {
 		readonly id: string

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { routeOfPath } from "../../../../route"
-import { OrganizationId } from "@hazel/schema"
+import { OrganizationId, UserId } from "@hazel/schema"
 import { Option, Schema } from "effect"
 import {
 	click,
@@ -15,18 +15,38 @@ import {
 	submit,
 	Subscription,
 	text,
+	Mount,
+	selector,
 	type as typeInto,
+	within,
 } from "foldkit/scene"
 import { describe, expect, test } from "vitest"
 import type { Shared } from "../../../contract"
 import { PageOutMessage } from "../../../out-message"
 import { errorToast, reasonToast, successToast } from "../../../../data/actions"
-import { ConnectApiKey, Disconnect, GetOAuthUrl, RedirectToProvider } from "./command"
+import {
+	ConnectApiKey,
+	Disconnect,
+	DisconnectT3Code,
+	GetOAuthUrl,
+	GetT3CodeLink,
+	RedirectToProvider,
+	StartT3CodeConnect,
+	UpdateT3CodeSharing,
+} from "./command"
 import { Message } from "./message"
-import { Activity, type Model } from "./model"
+import { Activity, type Model, type T3CodeLink, T3CodeState } from "./model"
 import { init, update } from "./update"
 import { view } from "./view"
 import { sharedDefaults } from "../../../test-shared"
+import * as Modal from "../../../../ui/modal"
+import {
+	makeShared,
+	organizationId,
+	pageScene,
+	portalModalMounted,
+	uuid,
+} from "../../../../test/pages-fixtures"
 
 const orgId = Schema.decodeSync(OrganizationId)("00000000-0000-4000-8000-000000000001")
 const shared: Shared = {
@@ -152,7 +172,10 @@ describe("integration detail page", () => {
 			given(pageFor("linear").model),
 			click(role("button", { name: "Back to integrations" })),
 			expectOutMessage(
-				PageOutMessage.RequestedNavigation({ route: routeOfPath("/hazel/settings/integrations"), replace: false }),
+				PageOutMessage.RequestedNavigation({
+					route: routeOfPath("/hazel/settings/integrations"),
+					replace: false,
+				}),
 			),
 		)
 	})
@@ -241,6 +264,296 @@ describe("integration detail flows", () => {
 			Command.resolve(ConnectApiKey, Message.FailedConnectApiKey({ reason: "InvalidApiKey" })),
 			expectOutMessage(PageOutMessage.RequestedToast({ toast: failure })),
 			expectView(role("button", { name: /Connect$/ })).toBeEnabled(),
+		)
+	})
+})
+
+describe("T3 Code", () => {
+	const nowMs = Date.UTC(2026, 9, 31, 12)
+	const DAY = 24 * 60 * 60 * 1000
+	const t3Shared = makeShared({ nowMs })
+	const t3 = pageScene(update, view, t3Shared)
+	const graceId = Schema.decodeSync(UserId)(uuid(21))
+	const linusId = Schema.decodeSync(UserId)(uuid(22))
+	const members = [
+		{ userId: graceId, name: "Grace Hopper", email: "grace@hazel.test", avatarUrl: null },
+		{ userId: linusId, name: "Linus Torvalds", email: "linus@hazel.test", avatarUrl: null },
+	]
+	const link: T3CodeLink = {
+		environmentLabel: "ada-macbook",
+		environmentUrl: "https://ada-macbook.t3.chat",
+		status: "active",
+		connectedAtMs: nowMs - 2 * DAY,
+		expiresAtMs: nowMs + 28 * DAY,
+		sharing: { mode: "private", userIds: [] },
+	}
+	const page = pageFor("t3code").model
+	const loaded = (shown: T3CodeLink | null) => ({
+		...page,
+		t3Code: T3CodeState.Loaded({ link: shown }),
+		t3CodeMembers: members,
+	})
+	const formatted = (ms: number) =>
+		new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+	const dialog = role("dialog")
+	const sharingRadio = (mode: string) => selector(`#t3code-sharing-${mode}`)
+
+	test("the link loads when its row syncs; with none, the form explains the per-member link", () => {
+		scene(
+			t3,
+			given(page),
+			expectView(text("Loading your link...")).toExist(),
+			Subscription.emit(Message.ChangedT3CodeRow()),
+			Command.expectExact(GetT3CodeLink({ orgId: organizationId })),
+			Command.resolve(GetT3CodeLink, Message.SucceededGetT3CodeLink({ link: null })),
+			expectView(text("Link your T3 Code environment")).toExist(),
+			expectView(text(/Copy MCP URL/)).toExist(),
+			expectView(text("The link is yours alone: each member links their own machine.")).toExist(),
+			expectView(text("Not connected")).toExist(),
+		)
+	})
+
+	test("Connect sends the trimmed address and redirects to T3's sign-in", () => {
+		scene(
+			t3,
+			given(loaded(null)),
+			typeInto(label("Environment address"), "  https://ada-macbook.t3.chat/mcp "),
+			click(role("button", { name: /Connect$/ })),
+			Command.expectExact(
+				StartT3CodeConnect({
+					orgId: organizationId,
+					environmentUrl: "https://ada-macbook.t3.chat/mcp",
+				}),
+			),
+			expectView(role("button", { name: /Connecting\.\.\.$/ })).toBeDisabled(),
+			Command.resolve(
+				StartT3CodeConnect,
+				Message.SucceededGetOAuthUrl({
+					authorizationUrl: "https://ada-macbook.t3.chat/oauth/authorize",
+				}),
+			),
+			Command.expectExact(
+				RedirectToProvider({ authorizationUrl: "https://ada-macbook.t3.chat/oauth/authorize" }),
+			),
+			Command.resolve(RedirectToProvider, Message.CompletedRedirectToProvider()),
+		)
+	})
+
+	test("an address that is not a T3 Code environment shows the server's reason under the input", () => {
+		scene(
+			t3,
+			given(loaded(null)),
+			submit("form"),
+			Command.expectNone(),
+			expectView(text("Environment address is required")).toExist(),
+			typeInto(label("Environment address"), "http://localhost:3773"),
+			click(role("button", { name: /Connect$/ })),
+			Command.resolve(
+				StartT3CodeConnect,
+				Message.RejectedT3CodeEnvironment({ message: "The environment address must use https." }),
+			),
+			expectView(text("The environment address must use https.")).toExist(),
+			expectView(label("Environment address")).toHaveAttr("aria-invalid", "true"),
+			expectView(role("button", { name: /Connect$/ })).toBeEnabled(),
+			// Editing clears the server's message.
+			typeInto(label("Environment address"), "https://ada-macbook.t3.chat"),
+			expectView(text("The environment address must use https.")).toBeAbsent(),
+		)
+	})
+
+	test("a linked environment shows its label, address and dates, with no warning", () => {
+		scene(
+			t3,
+			given(loaded(link)),
+			expectView(text("ada-macbook")).toExist(),
+			expectView(text("https://ada-macbook.t3.chat")).toExist(),
+			expectView(text(formatted(link.connectedAtMs))).toExist(),
+			expectView(text(formatted(nowMs + 28 * DAY))).toExist(),
+			expectView(text("Connected")).toExist(),
+			expectView(text("Your T3 Code sign-in expires soon")).toBeAbsent(),
+			expectView(role("button", { name: "Reconnect" })).toBeAbsent(),
+			expectView(text(/Settings → Sharing & access/)).toExist(),
+		)
+	})
+
+	test("a sign-in that expires within 3 days warns and offers Reconnect with the same address", () => {
+		scene(
+			t3,
+			given(loaded({ ...link, expiresAtMs: nowMs + 2 * DAY })),
+			expectView(text("Your T3 Code sign-in expires soon")).toExist(),
+			click(role("button", { name: "Reconnect" })),
+			Command.expectExact(
+				StartT3CodeConnect({ orgId: organizationId, environmentUrl: "https://ada-macbook.t3.chat" }),
+			),
+			expectView(role("button", { name: /Redirecting\.\.\.$/ })).toBeDisabled(),
+			Command.resolve(StartT3CodeConnect, Message.FailedStartT3CodeConnect({ reason: "Offline" })),
+			expectOutMessage(PageOutMessage.RequestedToast({ toast: reasonToast("Offline") })),
+		)
+	})
+
+	test("an expired link warns and reconnects; a lapsed active link reads as expired too", () => {
+		scene(
+			t3,
+			given(loaded({ ...link, status: "expired" })),
+			expectView(text("Your T3 Code sign-in expired")).toExist(),
+			expectView(text("Not connected")).toExist(),
+			click(role("button", { name: "Reconnect" })),
+			Command.expectExact(
+				StartT3CodeConnect({ orgId: organizationId, environmentUrl: "https://ada-macbook.t3.chat" }),
+			),
+			Command.resolve(
+				StartT3CodeConnect,
+				Message.RejectedT3CodeEnvironment({ message: "The environment did not answer." }),
+			),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({
+					toast: errorToast(
+						"Could not reach your T3 Code environment",
+						"The environment did not answer.",
+					),
+				}),
+			),
+		)
+		scene(
+			t3,
+			given(loaded({ ...link, expiresAtMs: nowMs - DAY })),
+			expectView(text("Your T3 Code sign-in expired")).toExist(),
+		)
+		scene(
+			t3,
+			given(loaded({ ...link, status: "revoked" })),
+			expectView(text("Access was revoked in T3 Code")).toExist(),
+			expectView(role("button", { name: "Reconnect" })).toExist(),
+		)
+	})
+
+	test("Disconnect asks first, then unlinks", () => {
+		scene(
+			t3,
+			given(loaded(link)),
+			click(role("button", { name: "Disconnect" })),
+			portalModalMounted,
+			expectView(within(dialog, text("ada-macbook"))).toExist(),
+			click(within(dialog, role("button", { name: "Disconnect" }))),
+			Command.expectExact(DisconnectT3Code({ orgId: organizationId })),
+			Command.resolve(DisconnectT3Code, Message.SucceededDisconnectT3Code()),
+			expectOutMessage(PageOutMessage.RequestedToast({ toast: successToast("T3 Code unlinked") })),
+			expectView(text("Link your T3 Code environment")).toExist(),
+			Mount.expectEnded(Modal.AcquireResources),
+		)
+	})
+
+	test("sharing with the organization saves at once and shows the save", () => {
+		scene(
+			t3,
+			given(loaded(link)),
+			expectView(sharingRadio("private")).toBeChecked(),
+			expectView(text(/runs agents on your machine/)).toExist(),
+			click(text("Everyone in this organization")),
+			Command.expectExact(
+				UpdateT3CodeSharing({
+					orgId: organizationId,
+					requestId: 1,
+					sharing: { mode: "organization", userIds: [] },
+				}),
+			),
+			expectView(sharingRadio("organization")).toBeChecked(),
+			expectView(text("Saving...")).toExist(),
+			Command.resolve(
+				UpdateT3CodeSharing,
+				Message.SucceededUpdateSharing({
+					requestId: 1,
+					link: { ...link, sharing: { mode: "organization", userIds: [] } },
+				}),
+			),
+			expectView(text("Saved")).toExist(),
+		)
+	})
+
+	test("specific members: the picker lists the other members, filters, and saves each pick", () => {
+		scene(
+			t3,
+			given(loaded(link)),
+			expectView(text("Grace Hopper")).toBeAbsent(),
+			click(text("Specific members")),
+			Command.resolve(
+				UpdateT3CodeSharing,
+				Message.SucceededUpdateSharing({
+					requestId: 1,
+					link: { ...link, sharing: { mode: "members", userIds: [] } },
+				}),
+			),
+			expectView(text("No one else yet: pick the members who may drive it.")).toExist(),
+			expectView(text("Grace Hopper")).toExist(),
+			expectView(text("Linus Torvalds")).toExist(),
+			click(text("Grace Hopper")),
+			Command.expectExact(
+				UpdateT3CodeSharing({
+					orgId: organizationId,
+					requestId: 2,
+					sharing: { mode: "members", userIds: [graceId] },
+				}),
+			),
+			expectView(role("checkbox", { name: /Grace Hopper/ })).toBeChecked(),
+			expectView(text("1 member may drive it.")).toExist(),
+			Command.resolve(
+				UpdateT3CodeSharing,
+				Message.SucceededUpdateSharing({
+					requestId: 2,
+					link: { ...link, sharing: { mode: "members", userIds: [graceId] } },
+				}),
+			),
+			typeInto(placeholder("Search members..."), "linus"),
+			expectView(text("Grace Hopper")).toBeAbsent(),
+			expectView(text("Linus Torvalds")).toExist(),
+		)
+	})
+
+	test("a failed sharing save toasts and reloads the saved sharing", () => {
+		scene(
+			t3,
+			given(loaded(link)),
+			click(text("Everyone in this organization")),
+			Command.resolve(
+				UpdateT3CodeSharing,
+				Message.FailedUpdateSharing({ requestId: 1, reason: "Offline" }),
+			),
+			expectOutMessage(PageOutMessage.RequestedToast({ toast: reasonToast("Offline") })),
+			Command.expectExact(GetT3CodeLink({ orgId: organizationId })),
+			Command.resolve(GetT3CodeLink, Message.SucceededGetT3CodeLink({ link })),
+			expectView(sharingRadio("private")).toBeChecked(),
+		)
+	})
+
+	test("the sign-in callback toasts its result; a denied sign-in says so", () => {
+		expect(pageFor("t3code", { status: "error", errorCode: "denied" }).outMessage).toEqual(
+			PageOutMessage.RequestedNavigation({
+				route: routeOfPath("/hazel/settings/integrations/t3code"),
+				replace: true,
+				toast: errorToast(
+					"Failed to connect to T3 Code",
+					"The sign-in was cancelled. Please try again.",
+				),
+			}),
+		)
+		// Back from sign-in the page verifies; the active link it then loads ends the verifying.
+		const returned = { ...pageFor("t3code", { status: "success" }).model, t3CodeMembers: members }
+		expect(returned.activity).toEqual(Activity.Verifying())
+		const loadedLink = update(returned, Message.SucceededGetT3CodeLink({ link }), shared).model
+		expect(loadedLink.activity).toEqual(Activity.Idle())
+		// A link that is not active yet keeps it verifying.
+		const pendingLink = update(
+			returned,
+			Message.SucceededGetT3CodeLink({ link: { ...link, status: "expired" } }),
+			shared,
+		).model
+		expect(pendingLink.activity).toEqual(Activity.Verifying())
+		scene(
+			t3,
+			given(returned),
+			Subscription.emit(Message.ChangedT3CodeRow()),
+			Command.resolve(GetT3CodeLink, Message.SucceededGetT3CodeLink({ link })),
+			expectView(text("ada-macbook")).toExist(),
 		)
 	})
 })

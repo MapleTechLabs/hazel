@@ -9,6 +9,7 @@ export default defineConfig({
 			"apps/web-foldkit",
 			"libs/*",
 			"apps/bot-gateway",
+			"bots/t3code-bot",
 		],
 		coverage: {
 			reporter: ["text", "json-summary", "json"],

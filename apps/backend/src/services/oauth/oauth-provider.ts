@@ -1,3 +1,4 @@
+import { IntegrationConnection } from "@hazel/domain/models"
 import { Effect, Schema } from "effect"
 import { OAuthHttpClient } from "./oauth-http-client"
 import type {
@@ -8,7 +9,7 @@ import type {
 	OAuthTokens,
 } from "./provider-config"
 
-const IntegrationProviderSchema = Schema.Literals(["linear", "github", "figma", "notion", "discord", "craft"])
+const IntegrationProviderSchema = IntegrationConnection.IntegrationProvider
 
 /**
  * Error when exchanging authorization code for tokens fails.

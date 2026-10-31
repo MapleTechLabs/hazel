@@ -266,7 +266,8 @@ export const connectIntegration = Effect.fn("OrgObject.connectIntegration")(
 		}
 
 		let botInstalled = false
-		if (payload.userId === null) {
+		// A T3 Code link is a member's own, but the T3 Code bot must be in the org to answer `/t3`.
+		if (payload.userId === null || payload.provider === "t3code") {
 			const bots = yield* IntegrationBotService
 			botInstalled = yield* db.transaction(bots.addBotToOrg(payload.provider, organizationId)).pipe(
 				Effect.map(Option.isSome),

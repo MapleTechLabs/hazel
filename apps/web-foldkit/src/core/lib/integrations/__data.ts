@@ -19,8 +19,11 @@ export type Integration = {
 	features: string[]
 	configOptions: ConfigOption[]
 	comingSoon?: boolean
-	/** Connection type: "oauth" (default), "api-key", or "webhook" */
-	connectionType?: "oauth" | "api-key" | "webhook"
+	/**
+	 * Connection type: "oauth" (default), "api-key", "webhook", or "environment" (T3 Code: each member
+	 * links their own environment by its address, then signs in to it)
+	 */
+	connectionType?: "oauth" | "api-key" | "webhook" | "environment"
 }
 
 // Helper to generate Brandfetch CDN URLs
@@ -206,6 +209,25 @@ export const integrations: Integration[] = [
 			"Create and edit documents",
 			"Manage tasks (inbox, active, upcoming)",
 			"Browse folders and collections",
+		],
+		configOptions: [],
+	},
+	{
+		id: "t3code",
+		name: "T3 Code",
+		description: "Drive T3 Code threads on your own machine from Hazel.",
+		fullDescription:
+			"Link your T3 Code environment to start and steer its threads with /t3 from any conversation. Each member links their own machine and chooses who else in the organization may drive it; every action is posted in the Hazel thread.",
+		logoDomain: "t3.chat",
+		logoType: "icon",
+		brandColor: "#1C1C1E",
+		category: "developer-tools",
+		connectionType: "environment",
+		features: [
+			"Start threads with /t3",
+			"Reply in Hazel to steer the agent",
+			"Each member links their own machine",
+			"Share with the whole team or chosen members",
 		],
 		configOptions: [],
 	},
