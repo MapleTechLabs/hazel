@@ -136,7 +136,11 @@ export const FetchCurrentUser = Command.define("FetchCurrentUser", {
  */
 export const WarmAccessToken = Command.define("WarmAccessToken", {
 	messages: [Message.CompletedWarmAccessToken],
-	execute: Effect.promise(readAccessToken).pipe(Effect.as(Message.CompletedWarmAccessToken())),
+	// Best effort: a failed exchange is asked again by the sockets' own read.
+	execute: Effect.tryPromise(readAccessToken).pipe(
+		Effect.ignore,
+		Effect.as(Message.CompletedWarmAccessToken()),
+	),
 })
 
 /** `user.me` again after a pause, while the API keeps failing to answer it. */

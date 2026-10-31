@@ -22,10 +22,17 @@ export interface LiveQueryOptions<Message> {
 	readonly onStalled?: () => Message
 	readonly stallAfterMs?: number
 	/**
-	 * An empty result is held back until this is ready, then sent: for a query whose sources are a
-	 * guess until another collection has loaded, where empty only means "not found" afterwards.
+	 * An empty result is held back until this settles, then sent: for a query whose sources are a
+	 * guess until they settle, where empty only means "not found" afterwards. Still unsettled after
+	 * `stallAfterMs`, it counts as stalled.
 	 */
-	readonly holdEmptyUntil?: Pick<Collection<any, any>, "isReady" | "onFirstReady">
+	readonly holdEmptyUntil?: EmptyHold
+}
+
+/** When an empty result means "none": `subscribe` calls back whenever `isSettled` may have changed. */
+export interface EmptyHold {
+	readonly isSettled: () => boolean
+	readonly subscribe: (onChange: () => void) => () => void
 }
 
 /**
@@ -45,14 +52,28 @@ export const liveQueryStream = <Row, Message>(
 			Effect.sync(() => {
 				const collection = createLiveQueryCollection({ query, startSync: true })
 				const hold = options.holdEmptyUntil
+				const isHeld = (rows: ReadonlyArray<Row>) =>
+					rows.length === 0 && hold !== undefined && !hold.isSettled()
+				let isEmptyHeld = false
 				const emit = () => {
 					const rows = collection.toArray as ReadonlyArray<Row>
-					if (rows.length === 0 && hold !== undefined && !hold.isReady()) return
-					Queue.offerUnsafe(queue, toMessage(rows))
+					isEmptyHeld = isHeld(rows)
+					if (!isEmptyHeld) Queue.offerUnsafe(queue, toMessage(rows))
 				}
-				hold?.onFirstReady(() => {
-					if (collection.isReady()) emit()
-				})
+				// A held empty result goes out once the hold settles.
+				const unsubscribeHold =
+					hold?.subscribe(() => {
+						if (isEmptyHeld && hold.isSettled()) emit()
+					}) ?? (() => {})
+				// A loaded query whose empty result stays held is stalled too (`watchStall` covers
+				// one still loading).
+				const holdTimer =
+					hold === undefined || options.onStalled === undefined
+						? undefined
+						: setTimeout(() => {
+								if (collection.isReady() && isHeld(collection.toArray as ReadonlyArray<Row>))
+									Queue.offerUnsafe(queue, options.onStalled!())
+							}, options.stallAfterMs ?? STALL_AFTER_MS)
 				// `includeInitialState: false` passes every later change; left unset, TanStack drops
 				// deletes of rows that existed before this subscription.
 				const subscription = collection.subscribeChanges(emit, { includeInitialState: false })
@@ -66,7 +87,15 @@ export const liveQueryStream = <Row, Message>(
 							(message) => Queue.offerUnsafe(queue, message),
 						)
 					: () => {}
-				return { collection, subscription, watchdog }
+				return {
+					collection,
+					subscription,
+					watchdog: () => {
+						watchdog()
+						unsubscribeHold()
+						clearTimeout(holdTimer)
+					},
+				}
 			}),
 			({ collection, subscription, watchdog }) =>
 				// A failed cleanup must not take the app down; the query is gone either way.

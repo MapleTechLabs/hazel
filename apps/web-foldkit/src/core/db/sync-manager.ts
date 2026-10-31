@@ -8,7 +8,15 @@
  * instead of after its snapshot. A remembered org the user has left refuses its socket (4003),
  * which drops its rows, and the user's object then sets the real set.
  */
-import { type MutableSourceSet, type SourceKey, sourceKey } from "@hazel/effect-db-collection"
+import {
+	type MutableSourceSet,
+	type SourceKey,
+	type SourceSet,
+	type SyncHub,
+	sourceKey,
+} from "@hazel/effect-db-collection"
+import type { Collection } from "@tanstack/db"
+import type { EmptyHold } from "../../data/live-query"
 import type { OrganizationId, UserId } from "@hazel/schema"
 import { Effect, Stream } from "effect"
 import { connectConversationCollection, userOrganizationCollection } from "./collections"
@@ -55,6 +63,31 @@ export const orgSourcesOf = (deps: SyncManagerDeps): ReadonlyArray<SourceKey> | 
 	}
 	return [...ids].sort().map((id) => sourceKey("org", id))
 }
+
+/**
+ * The org sources are known and have answered: `user_organizations` has loaded, and every org
+ * source in the set has its snapshot (or refused). Until then a query over them may lack an org
+ * the user just joined: its source is a guess or still connecting.
+ */
+export const orgSourcesSettled = (deps: {
+	readonly userOrganizations: Pick<Collection<any, any>, "isReady" | "on">
+	readonly orgSources: SourceSet
+	readonly hub: Pick<SyncHub, "connectionOf" | "subscribeStatus">
+}): EmptyHold => ({
+	isSettled: () =>
+		deps.userOrganizations.isReady() &&
+		(deps.orgSources.get() ?? []).every((source) => deps.hub.connectionOf(source)?.isSettled === true),
+	subscribe: (onChange) => {
+		const unsubscribes = [
+			deps.userOrganizations.on("status:change", onChange),
+			deps.orgSources.subscribe(onChange),
+			deps.hub.subscribeStatus(onChange),
+		]
+		return () => {
+			for (const unsubscribe of unsubscribes) unsubscribe()
+		}
+	},
+})
 
 /** Opens `userId`'s sources and keeps the org set current; returns the stop function. */
 export const startSyncSession = (deps: SyncManagerDeps, userId: UserId): (() => void) => {
@@ -131,6 +164,13 @@ export const syncSession = (userId: UserId): Stream.Stream<never> =>
 			(stop) => Effect.sync(stop),
 		).pipe(Effect.flatMap(() => Effect.never)),
 	)
+
+/** `orgSourcesSettled` over the app's collections and hub. */
+export const appOrgSourcesSettled = orgSourcesSettled({
+	userOrganizations: userOrganizationCollection,
+	orgSources,
+	hub: syncHub,
+})
 
 /** Sign-out: every connection closes and the synced rows go with them. */
 export const closeSync = () => {

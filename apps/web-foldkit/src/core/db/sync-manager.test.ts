@@ -4,7 +4,7 @@ import { OrganizationId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { UserOrganization } from "./collections"
-import { type RememberedOrgSources, startSyncSession } from "./sync-manager"
+import { orgSourcesSettled, type RememberedOrgSources, startSyncSession } from "./sync-manager"
 
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`
 const userId = UserId.make(uuid(1))
@@ -64,7 +64,7 @@ const setup = (rememberedOrgSources?: RememberedOrgSources) => {
 		{ userSources, orgSources, userOrganizations, connectConversations, rememberedOrgSources },
 		userId,
 	)
-	return { sockets, hub, userSources, orgSources, stop }
+	return { sockets, hub, userSources, orgSources, userOrganizations, stop }
 }
 
 const socketFor = async (sockets: ReturnType<typeof fakeSockets>, path: string) => {
@@ -158,5 +158,31 @@ describe("sync connection manager", () => {
 			expect(user.isClosed).toBe(true)
 			expect(org.isClosed).toBe(true)
 		})
+	})
+
+	it("settles the org sources once the user's object and every org source have answered", async () => {
+		const { remembered } = memory({ [userId]: [`org:${orgA}`] })
+		const { sockets, hub, orgSources, userOrganizations } = setup(remembered)
+		const settled = orgSourcesSettled({ userOrganizations, orgSources, hub })
+		let changes = 0
+		const unsubscribe = settled.subscribe(() => void changes++)
+		expect(settled.isSettled()).toBe(false)
+
+		// The remembered org answers first: still a guess until the user's object has.
+		const rememberedOrg = await socketFor(sockets, `/sync/org/${orgA}`)
+		rememberedOrg.snapshot(1, {})
+		await vi.waitFor(() => expect(hub.connectionOf(`org:${orgA}`)?.isSettled).toBe(true))
+		expect(settled.isSettled()).toBe(false)
+
+		// The user joined orgB since: its source opens, and nothing is settled until it answers.
+		const user = sockets.latest(`/sync/user/${userId}`)!
+		user.snapshot(1, { user_organizations: [joined(orgA), joined(orgB)] })
+		await vi.waitFor(() => expect(orgSources.get()).toEqual([`org:${orgA}`, `org:${orgB}`]))
+		expect(settled.isSettled()).toBe(false)
+		const joinedSocket = await socketFor(sockets, `/sync/org/${orgB}`)
+		joinedSocket.snapshot(1, {})
+		await vi.waitFor(() => expect(settled.isSettled()).toBe(true))
+		expect(changes).toBeGreaterThan(0)
+		unsubscribe()
 	})
 })
