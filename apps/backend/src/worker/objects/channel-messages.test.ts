@@ -202,7 +202,7 @@ const runAlarm = (object: TestObject) =>
 	})
 
 describe("ChannelObject messages", () => {
-	it("notifies mentioned users and the replied-to author, never the author or a muted member", () =>
+	it("notifies mentioned users and the replied-to author, never the author; a mute lets a mention through", () =>
 		run(
 			Effect.gen(function* () {
 				const world = yield* makeWorld
@@ -222,13 +222,20 @@ describe("ChannelObject messages", () => {
 				expect(yield* notificationsOf(world, world.alice)).toEqual([
 					{ memberId: world.memberIds.get(world.alice), resourceId: reply.id },
 				])
-				expect(yield* notificationsOf(world, world.muted)).toEqual([])
+				expect(yield* notificationsOf(world, world.muted)).toEqual([
+					{ memberId: world.memberIds.get(world.muted), resourceId: reply.id },
+				])
 				expect(yield* notificationsOf(world, world.author)).toEqual([])
 				expect(countsIn(world, channel.id)).toEqual({
 					[world.author]: 0,
 					[world.alice]: 1,
-					[world.muted]: 0,
+					[world.muted]: 1,
 				})
+
+				// A plain message: nobody is on the `all` level, and the muted member's mute holds.
+				yield* send(world, channel, world.author, "plain")
+				expect(countsIn(world, channel.id)[world.alice]).toBe(1)
+				expect((yield* notificationsOf(world, world.muted)).length).toBe(1)
 			}),
 		))
 
@@ -253,6 +260,98 @@ describe("ChannelObject messages", () => {
 				yield* send(world, channel, world.author, "@[directive:channel] standup")
 				expect((yield* notificationsOf(world, world.alice)).length).toBe(1)
 				expect(countsIn(world, channel.id)[world.alice]).toBe(0)
+			}),
+		))
+
+	it("follows each member's level, and notifies silently in do not disturb", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const channel = yield* world.channel("public")
+				world.org.storage.db
+					.prepare(
+						`UPDATE channel_members SET notificationLevel = 'all' WHERE channelId = ? AND userId = ?`,
+					)
+					.run(channel.id, world.alice)
+				world.org.storage.db
+					.prepare(
+						`INSERT INTO user_presence_status (userId, status, suppressNotifications) VALUES (?, 'dnd', 0)`,
+					)
+					.run(world.alice)
+
+				const sent = yield* send(world, channel, world.author, "plain")
+				const user = yield* world.objects.get(userTarget(world.alice))
+				expect(
+					user.storage.db.prepare(`SELECT resourceId, reason, silent FROM notifications`).all(),
+				).toEqual([{ resourceId: sent.id, reason: "message", silent: 1 }])
+				expect(countsIn(world, channel.id)[world.alice]).toBe(1)
+
+				// `nothing` silences even a mention.
+				world.org.storage.db
+					.prepare(
+						`UPDATE channel_members SET notificationLevel = 'nothing' WHERE channelId = ? AND userId = ?`,
+					)
+					.run(channel.id, world.alice)
+				yield* send(world, channel, world.author, `@[userId:${world.alice}] hi`)
+				expect(countsIn(world, channel.id)[world.alice]).toBe(1)
+			}),
+		))
+
+	it("a thread under a muted channel stays quiet but for mentions", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const parent = yield* world.channel("public")
+				const thread = yield* world.channel("thread")
+				world.org.storage.db
+					.prepare(`UPDATE channels SET parentChannelId = ? WHERE id = ?`)
+					.run(parent.id, thread.id)
+				world.org.storage.db
+					.prepare(`UPDATE channel_members SET isMuted = 1 WHERE channelId = ? AND userId = ?`)
+					.run(parent.id, world.alice)
+
+				yield* send(world, thread, world.author, "progress")
+				expect(countsIn(world, thread.id)[world.alice]).toBe(0)
+				yield* send(world, thread, world.author, `@[userId:${world.alice}] look`)
+				expect(countsIn(world, thread.id)[world.alice]).toBe(1)
+			}),
+		))
+
+	it("@channel, and 120 mentions, reach every member of a channel past 100 members", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const channel = yield* world.channel("public")
+				const db = world.org.storage.db
+				const extra = Array.from({ length: 150 }, () => uuid())
+				for (const userId of extra) {
+					db.prepare(
+						`INSERT INTO organization_members (id, organizationId, userId, role) VALUES (?, ?, ?, 'member')`,
+					).run(uuid(), world.orgId, userId)
+					db.prepare(`INSERT INTO channel_members (channelId, userId) VALUES (?, ?)`).run(
+						channel.id,
+						userId,
+					)
+				}
+
+				yield* send(world, channel, world.author, "@[directive:channel] all hands")
+				const counts = countsIn(world, channel.id)
+				expect(extra.every((userId) => counts[userId] === 1)).toBe(true)
+				expect(counts[world.alice]).toBe(1)
+				expect(counts[world.muted]).toBe(0)
+
+				// Mentioning 120 of them by name (on the default `mentions` level) reaches the same set.
+				const named = extra.slice(0, 120)
+				yield* send(
+					world,
+					channel,
+					world.author,
+					named.map((userId) => `@[userId:${userId}]`).join(" "),
+				)
+				const after = countsIn(world, channel.id)
+				expect(named.every((userId) => after[userId] === 2)).toBe(true)
+				expect(extra.slice(120).every((userId) => after[userId] === 1)).toBe(true)
+				expect(after[world.alice]).toBe(1)
 			}),
 		))
 

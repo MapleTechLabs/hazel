@@ -5,6 +5,7 @@ export type NotificationDeliveryReason =
 	| "duplicate"
 	| "before_session_start"
 	| "muted"
+	| "silent"
 	| "focused_current_channel"
 	| "focused_window"
 	| "not_ready"

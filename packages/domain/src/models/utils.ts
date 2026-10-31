@@ -99,6 +99,26 @@ export const GeneratedByApp = <S extends Schema.Top>(schema: S): GeneratedByApp<
 		json: schema,
 	})
 
+export interface Defaulted<S extends Schema.Top> extends VariantSchema.Field<{
+	readonly select: S
+	readonly insert: Schema.optionalKey<S>
+	readonly update: S
+	readonly json: S
+	readonly jsonCreate: Schema.optionalKey<S>
+	readonly jsonUpdate: S
+}> {}
+
+/** A column with a database default: optional on insert and create, otherwise a plain field. */
+export const Defaulted = <S extends Schema.Top>(schema: S): Defaulted<S> =>
+	Field({
+		select: schema,
+		insert: Schema.optionalKey(schema),
+		update: schema,
+		json: schema,
+		jsonCreate: Schema.optionalKey(schema),
+		jsonUpdate: schema,
+	})
+
 export interface Immutable<S extends Schema.Top> extends VariantSchema.Field<{
 	readonly select: S
 	readonly insert: S

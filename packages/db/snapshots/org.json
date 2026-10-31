@@ -1,5 +1,5 @@
 {
-	"migration": "0002_message_search",
+	"migration": "0003_notification_levels",
 	"entities": [
 		{
 			"kind": "table",
@@ -532,16 +532,16 @@
 		{
 			"kind": "column",
 			"table": "channel_members",
-			"name": "isFavorite",
+			"name": "mutedUntil",
 			"position": 5,
-			"type": "integer",
-			"notNull": true,
-			"default": "false"
+			"type": "text",
+			"notNull": false,
+			"default": null
 		},
 		{
 			"kind": "column",
 			"table": "channel_members",
-			"name": "lastSeenMessageId",
+			"name": "notificationLevel",
 			"position": 6,
 			"type": "text",
 			"notNull": false,
@@ -550,8 +550,26 @@
 		{
 			"kind": "column",
 			"table": "channel_members",
-			"name": "notificationCount",
+			"name": "isFavorite",
 			"position": 7,
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
+		},
+		{
+			"kind": "column",
+			"table": "channel_members",
+			"name": "lastSeenMessageId",
+			"position": 8,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_members",
+			"name": "notificationCount",
+			"position": 9,
 			"type": "integer",
 			"notNull": true,
 			"default": "0"
@@ -560,7 +578,7 @@
 			"kind": "column",
 			"table": "channel_members",
 			"name": "joinedAt",
-			"position": 8,
+			"position": 10,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -569,7 +587,7 @@
 			"kind": "column",
 			"table": "channel_members",
 			"name": "createdAt",
-			"position": 9,
+			"position": 11,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -578,7 +596,7 @@
 			"kind": "column",
 			"table": "channel_members",
 			"name": "deletedAt",
-			"position": 10,
+			"position": 12,
 			"type": "text",
 			"notNull": false,
 			"default": null

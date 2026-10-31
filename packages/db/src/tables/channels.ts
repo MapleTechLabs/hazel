@@ -12,6 +12,9 @@ import { randomUuid, textEnum, timestamptz, uuid, varchar } from "./columns"
 
 export const channelTypeEnum = textEnum(["public", "private", "thread", "direct", "single"])
 
+/** What a member is notified of in a channel; null on the member row is the channel type's default. */
+export const notificationLevelEnum = textEnum(["all", "mentions", "nothing"])
+
 export const channelMembersTable = SQLite.table("channel_members", {
 	columns: {
 		id: SQLite.column(uuid(ChannelMemberId), { defaultExpr: randomUuid }),
@@ -19,6 +22,9 @@ export const channelMembersTable = SQLite.table("channel_members", {
 		userId: uuid(UserId),
 		isHidden: SQLite.column(SQLite.boolean, { default: false }),
 		isMuted: SQLite.column(SQLite.boolean, { default: false }),
+		/** Muted until then (`isMuted` is muted indefinitely). */
+		mutedUntil: SQLite.nullable(timestamptz),
+		notificationLevel: SQLite.nullable(notificationLevelEnum),
 		isFavorite: SQLite.column(SQLite.boolean, { default: false }),
 		lastSeenMessageId: SQLite.nullable(uuid(MessageId)),
 		notificationCount: SQLite.column(SQLite.integer, { default: 0 }),

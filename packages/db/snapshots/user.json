@@ -1,5 +1,5 @@
 {
-	"migration": "0001_initial",
+	"migration": "0002_notification_levels",
 	"entities": [
 		{
 			"kind": "table",
@@ -93,6 +93,24 @@
 			"type": "text",
 			"notNull": false,
 			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "notifications",
+			"name": "reason",
+			"position": 8,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "notifications",
+			"name": "silent",
+			"position": 9,
+			"type": "integer",
+			"notNull": true,
+			"default": "false"
 		},
 		{
 			"kind": "column",
