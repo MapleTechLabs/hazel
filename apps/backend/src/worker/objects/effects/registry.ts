@@ -22,10 +22,11 @@ import type { ObjectKind } from "../kinds"
 
 /**
  * Where an effect is applied: an object, the directory (D1), the bot gateway, `ai` (a model
- * call made by the sending object itself, `ai-effects.ts`), or `chat-sync` (a provider API call
- * made by the sending `ChannelObject`, `services/chat-sync/chat-sync-outbound.ts`).
+ * call made by the sending object itself, `ai-effects.ts`), `chat-sync` (a provider API call
+ * made by the sending `ChannelObject`, `services/chat-sync/chat-sync-outbound.ts`), or `storage`
+ * (uploads-bucket cleanup by the sender, `storage-effects.ts`).
  */
-export type EffectTargetKind = ObjectKind | "directory" | "bot-gateway" | "ai" | "chat-sync"
+export type EffectTargetKind = ObjectKind | "directory" | "bot-gateway" | "ai" | "chat-sync" | "storage"
 
 export interface EffectKind<Name extends string, Target extends EffectTargetKind, S extends Schema.Top> {
 	readonly name: Name
@@ -56,7 +57,13 @@ export const formatEffectTarget = (target: { readonly kind: EffectTargetKind; re
 export const parseEffectTarget = (
 	value: string,
 ): { readonly kind: EffectTargetKind; readonly id?: string } | undefined => {
-	if (value === "directory" || value === "bot-gateway" || value === "ai" || value === "chat-sync") {
+	if (
+		value === "directory" ||
+		value === "bot-gateway" ||
+		value === "ai" ||
+		value === "chat-sync" ||
+		value === "storage"
+	) {
 		return { kind: value }
 	}
 	const separator = value.indexOf(":")

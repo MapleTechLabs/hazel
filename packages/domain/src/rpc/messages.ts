@@ -1,7 +1,7 @@
 import { Rpc, RpcGroup } from "effect/rpc"
 import { Schema } from "effect"
 import { InternalServerError, MessageNotFoundError, UnauthorizedError } from "../errors"
-import { ChannelId, MessageId, OrganizationId, UserId } from "@hazel/schema"
+import { ChannelId, HtmlRenderId, MessageId, OrganizationId, UserId } from "@hazel/schema"
 import { Message } from "../models"
 import { RateLimitExceededError } from "../rate-limit-errors"
 import { TransactionId } from "@hazel/schema"
@@ -20,6 +20,12 @@ export { MessageNotFoundError } from "../errors"
 export class MessageResponse extends Schema.Class<MessageResponse>("MessageResponse")({
 	data: Message.Schema,
 	transactionId: TransactionId,
+}) {}
+
+export class HtmlRenderUrlResponse extends Schema.Class<HtmlRenderUrlResponse>("HtmlRenderUrlResponse")({
+	url: Schema.String,
+	/** Epoch milliseconds. */
+	expiresAt: Schema.Number,
 }) {}
 
 /** `message.search`: the org's messages the caller can read, newest first. */
@@ -174,6 +180,22 @@ export class MessageRpcs extends RpcGroup.make(
 		]),
 	})
 		.annotate(RequiredScopes, ["messages:write"])
+		.middleware(AuthMiddleware),
+
+	/**
+	 * MessageHtmlRenderUrl
+	 *
+	 * A short-lived signed URL for an HTML render a message shows (`MessageEmbed.html`), for a
+	 * viewer of its channel. The page is served sandboxed (`@hazel/domain/html-render`).
+	 *
+	 * @throws MessageNotFoundError if the message is gone or does not show the render
+	 */
+	Rpc.make("message.htmlRenderUrl", {
+		payload: Schema.Struct({ channelId: ChannelId, messageId: MessageId, renderId: HtmlRenderId }),
+		success: HtmlRenderUrlResponse,
+		error: Schema.Union([MessageNotFoundError, UnauthorizedError, InternalServerError]),
+	})
+		.annotate(RequiredScopes, ["messages:read"])
 		.middleware(AuthMiddleware),
 
 	/**

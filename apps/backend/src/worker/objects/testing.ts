@@ -13,6 +13,7 @@ import { ConfigProvider, Context, Deferred, Effect, type Exit, Layer, Option, Sc
 import { Persistence } from "effect/persistence"
 import { BotGatewayTransport } from "../../services/bot-gateway-transport"
 import { Directory } from "../../services/directory"
+import { HtmlRenderStore, HtmlRenders } from "../../services/html-renders"
 import { InviteMailer } from "../../services/invite-mailer"
 import { ThreadNamer, type ThreadNamingContext } from "../../services/thread-namer"
 import {
@@ -75,6 +76,8 @@ export interface TestObjects {
 	readonly namingRequests: Array<ThreadNamingContext>
 	/** The name `ThreadNamer` answers (default `"Generated name"`). */
 	readonly setThreadName: (name: string) => void
+	/** The uploads bucket's objects (HTML renders), by key. */
+	readonly bucket: Map<string, string>
 	/** Run `tag` (decoded payload) on the directory path, as the api Worker does for D1 methods. */
 	readonly invokeDirectory: (
 		tag: string,
@@ -163,16 +166,30 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 		)
 
 		const chatSync = makeRecordingChatSyncTransport({ attachmentPublicUrlBase: "https://files.test" })
+		// The real service over an in-memory bucket.
+		const bucket = new Map<string, string>()
+		const htmlRenderStore = Layer.succeed(HtmlRenderStore, {
+			put: (key, html) => Effect.sync(() => void bucket.set(key, html)),
+			getText: (key) => Effect.sync(() => Option.fromNullishOr(bucket.get(key))),
+			remove: (key) => Effect.sync(() => void bucket.delete(key)),
+		})
+		const htmlRenders = HtmlRenders.layer.pipe(
+			Layer.provide(htmlRenderStore),
+			Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(TEST_CONFIG))),
+			Layer.orDie,
+		)
 		const platform = Layer.mergeAll(
 			Layer.succeedContext(directory),
 			Layer.succeed(ObjectStubs, stubs),
 			transport,
 			threadNamer,
 			chatSync.layer,
+			htmlRenders,
 		)
 
 		const appPlatform = Layer.mergeAll(
 			Persistence.layerMemory,
+			htmlRenderStore,
 			// Logs links (IS_DEV) instead of sending.
 			InviteMailer.layerLog.pipe(
 				Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(TEST_CONFIG))),
@@ -232,6 +249,7 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 
 		return {
 			get,
+			bucket,
 			invokeDirectory: (tag, payload, principal) =>
 				isolated(
 					Effect.flatMap(directoryPath, (dispatcher) =>

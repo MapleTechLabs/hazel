@@ -1,16 +1,46 @@
 import { AttachmentRepo, MessageRepo } from "@hazel/backend-core"
 import { Database, SQLite, schema } from "@hazel/db"
-import { CurrentUser, withRemapDbErrors } from "@hazel/domain"
-import { MessageResponse, MessageRpcs } from "@hazel/domain/rpc"
+import { CurrentUser, MessageNotFoundError, withRemapDbErrors } from "@hazel/domain"
+import { HtmlRenderUrlResponse, MessageResponse, MessageRpcs } from "@hazel/domain/rpc"
+import type { ChannelId, HtmlRenderId, MessageId, UserId } from "@hazel/schema"
 import { Effect, Option } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
 import { AttachmentPolicy } from "../../policies/attachment-policy"
 import { MessagePolicy } from "../../policies/message-policy"
 import { ChannelViewers } from "../../services/channel-viewers"
+import { HtmlRenders, htmlRenderIdsOf } from "../../services/html-renders"
 import { checkMessageRateLimit } from "../../services/rate-limit-helpers"
 import { SqlClient } from "effect/sql/SqlClient"
 import { emitMessageEvent } from "../../worker/objects/channel/message-events"
+import { enqueueEffect } from "../../worker/objects/effects/registry"
+import { StorageEffects } from "../../worker/objects/effects/storage-effects"
 import { searchMessages } from "../../worker/objects/org/message-search"
+
+/**
+ * Delete the pages of renders a message stopped showing, once the write commits. A page another
+ * of the channel's messages still shows stays (a bot may reuse a published reference).
+ */
+const deleteHtmlRenders = (
+	message: { readonly id: MessageId; readonly channelId: ChannelId; readonly authorId: UserId },
+	renderIds: ReadonlyArray<HtmlRenderId>,
+) =>
+	Effect.gen(function* () {
+		if (renderIds.length === 0) return
+		const db = yield* Database.Database
+		const unshown = yield* Effect.filter(renderIds, (renderId) =>
+			db
+				.query(
+					Database.sql`SELECT 1 FROM messages WHERE id != ${message.id} AND authorId = ${message.authorId} AND deletedAt IS NULL AND embeds LIKE ${`%${renderId}%`} LIMIT 1`,
+				)
+				.pipe(Effect.map((rows) => rows.length === 0)),
+		)
+		if (unshown.length === 0) return
+		yield* enqueueEffect(
+			StorageEffects.deleteHtmlRenders,
+			{ kind: "storage" },
+			{ channelId: message.channelId, authorId: message.authorId, renderIds: unshown },
+		)
+	}).pipe(Effect.catchTag("SchemaError", (error) => Effect.die(error)))
 
 /**
  * Message RPC handlers. Writes run in the message's `ChannelObject` (`rpc/routing.ts`), search in
@@ -29,6 +59,7 @@ export const MessageRpcLive = MessageRpcs.toLayer(
 		const attachmentPolicy = yield* AttachmentPolicy
 		const attachmentRepo = yield* AttachmentRepo
 		const sql = yield* SqlClient
+		const htmlRenders = yield* HtmlRenders
 
 		return {
 			"message.create": ({ attachmentIds, ...messageData }) =>
@@ -80,8 +111,21 @@ export const MessageRpcLive = MessageRpcs.toLayer(
 						.transaction(
 							Effect.gen(function* () {
 								yield* messagePolicy.canUpdate(id)
+								const existing =
+									payload.embeds === undefined
+										? Option.none()
+										: yield* messageRepo.findById(id)
 								const updatedMessage = yield* messageRepo.update({ id, ...payload })
 
+								if (Option.isSome(existing)) {
+									const kept = new Set(htmlRenderIdsOf(updatedMessage.embeds))
+									yield* deleteHtmlRenders(
+										updatedMessage,
+										htmlRenderIdsOf(existing.value.embeds).filter(
+											(renderId) => !kept.has(renderId),
+										),
+									)
+								}
 								yield* emitMessageEvent({ _tag: "MessageUpdated", message: updatedMessage })
 
 								const txid = yield* generateTransactionId()
@@ -115,6 +159,10 @@ export const MessageRpcLive = MessageRpcs.toLayer(
 								)
 
 								if (Option.isSome(existing)) {
+									yield* deleteHtmlRenders(
+										existing.value,
+										htmlRenderIdsOf(existing.value.embeds),
+									)
 									yield* emitMessageEvent({
 										_tag: "MessageDeleted",
 										message: existing.value,
@@ -127,6 +175,26 @@ export const MessageRpcLive = MessageRpcs.toLayer(
 						)
 						.pipe(withRemapDbErrors("Message", "delete"))
 				}),
+
+			// Only through a message that shows the render: its author published the page.
+			"message.htmlRenderUrl": ({ channelId, messageId, renderId }) =>
+				Effect.gen(function* () {
+					yield* messagePolicy.canRead(channelId)
+					const message = yield* messageRepo.findById(messageId)
+					if (
+						Option.isNone(message) ||
+						message.value.channelId !== channelId ||
+						!htmlRenderIdsOf(message.value.embeds).includes(renderId)
+					) {
+						return yield* new MessageNotFoundError({ messageId })
+					}
+					const { url, expiresAt } = yield* htmlRenders.signedUrl({
+						channelId,
+						authorId: message.value.authorId,
+						renderId,
+					})
+					return new HtmlRenderUrlResponse({ url, expiresAt })
+				}).pipe(withRemapDbErrors("Message", "select")),
 
 			// Runs in the org's `OrgObject` (`message-search.ts`), not a channel's.
 			"message.search": (payload) =>

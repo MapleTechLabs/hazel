@@ -2,17 +2,21 @@
  * The api Worker's platform services over its Cloudflare bindings: the directory D1, the KV caches,
  * the bot gateway namespace and the env as `ConfigProvider`.
  */
-import type { D1Database, KVNamespace } from "@cloudflare/workers-types"
+import type { D1Database, KVNamespace, R2Bucket } from "@cloudflare/workers-types"
 import { Database } from "@hazel/db"
 import { layerKvResultPersistence } from "@hazel/effect-cloudflare"
 import { DIRECTORY_DB_BINDING } from "@hazel/infra/cloudflare"
 import { workerEnvLayer } from "@hazel/infra/worker-runtime"
 import { Layer } from "effect"
 import { type BotGatewayNamespace, BotGatewayTransport } from "../services/bot-gateway-transport"
+import { HtmlRenderStore } from "../services/html-renders"
 import { InviteMailer, isEmailBinding } from "../services/invite-mailer"
 
 /** KV namespace backing the session/user-lookup caches. */
 export const CACHE_BINDING = "CACHE"
+
+/** The private R2 bucket of HTML render pages (`services/html-renders.ts`). */
+export const HTML_RENDERS_BINDING = "HTML_RENDERS"
 
 /** Cloudflare Email Sending, for invitation emails. */
 export const EMAIL_BINDING = "EMAIL"
@@ -37,6 +41,15 @@ const cacheNamespace = (env: Record<string, unknown>): KVNamespace => {
 	return kv as KVNamespace
 }
 
+/** The HTML render pages' bucket; suspended like the KV (no binding at plan time). */
+export const htmlRenderStoreLive = (env: Record<string, unknown>) =>
+	Layer.suspend(() => {
+		const bucket = env[HTML_RENDERS_BINDING]
+		if (bucket === undefined)
+			throw new Error(`${HTML_RENDERS_BINDING} R2 binding is missing from the Worker env`)
+		return HtmlRenderStore.layerR2(bucket as R2Bucket)
+	})
+
 /** The `DIRECTORY_DB` binding off a Worker env. */
 export const directoryBinding = (env: Record<string, unknown>): D1Database => {
 	const db = env[DIRECTORY_DB_BINDING]
@@ -46,7 +59,7 @@ export const directoryBinding = (env: Record<string, unknown>): D1Database => {
 
 /**
  * What the app services read besides `Database`: bot gateway transport, the KV caches, the
- * invite mailer and the env as `ConfigProvider`. Objects run these over their own SQLite.
+ * invite mailer, the HTML render pages' bucket and the env as `ConfigProvider`. Objects run these over their own SQLite.
  */
 export const servicesPlatformLive = (env: Record<string, unknown>, botGateways: BotGatewayNamespace) =>
 	Layer.mergeAll(
@@ -54,6 +67,7 @@ export const servicesPlatformLive = (env: Record<string, unknown>, botGateways: 
 		// Suspended: init also runs at plan time, where the KV binding does not exist yet.
 		Layer.suspend(() => layerKvResultPersistence(cacheNamespace(env))),
 		inviteMailerLive(env).pipe(Layer.provide(workerEnvLayer(env))),
+		htmlRenderStoreLive(env),
 		workerEnvLayer(env),
 	)
 

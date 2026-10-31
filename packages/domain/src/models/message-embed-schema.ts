@@ -1,4 +1,6 @@
+import { HtmlRenderId } from "@hazel/schema"
 import { Schema } from "effect"
+import { HTML_RENDER_MAX_HEIGHT, HTML_RENDER_MAX_TITLE_LENGTH, HTML_RENDER_MIN_HEIGHT } from "../html-render"
 
 // Embed author section
 export const MessageEmbedAuthor = Schema.Struct({
@@ -104,6 +106,20 @@ export const MessageEmbedLiveState = Schema.Struct({
 })
 export type MessageEmbedLiveState = Schema.Schema.Type<typeof MessageEmbedLiveState>
 
+/**
+ * A sandboxed HTML page shown in the embed (`@hazel/domain/html-render`). The page lives in the
+ * uploads bucket; clients load it through a short-lived signed URL (`message.htmlRenderUrl`).
+ */
+export const MessageEmbedHtml = Schema.Struct({
+	renderId: HtmlRenderId,
+	title: Schema.String.check(Schema.isMaxLength(HTML_RENDER_MAX_TITLE_LENGTH)),
+	/** The frame's height before the page reports its own, in CSS pixels. */
+	height: Schema.Int.check(
+		Schema.isBetween({ minimum: HTML_RENDER_MIN_HEIGHT, maximum: HTML_RENDER_MAX_HEIGHT }),
+	),
+})
+export type MessageEmbedHtml = Schema.Schema.Type<typeof MessageEmbedHtml>
+
 // Full embed schema (Discord-style)
 export const MessageEmbed = Schema.Struct({
 	title: Schema.optional(Schema.String.check(Schema.isMaxLength(256))),
@@ -120,6 +136,7 @@ export const MessageEmbed = Schema.Struct({
 	timestamp: Schema.optional(Schema.String), // ISO 8601 timestamp
 	badge: Schema.optional(MessageEmbedBadge), // Status badge (e.g., "Deployed", "Failed")
 	liveState: Schema.optional(MessageEmbedLiveState), // Live state for real-time updates
+	html: Schema.optional(MessageEmbedHtml),
 })
 export type MessageEmbed = Schema.Schema.Type<typeof MessageEmbed>
 

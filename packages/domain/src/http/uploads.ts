@@ -57,6 +57,23 @@ export const PresignUploadRequest = Schema.Struct({
 })
 export type PresignUploadRequest = typeof PresignUploadRequest.Type
 
+/**
+ * Types a browser runs as a document (HTML, XML, SVG). Attachments are public on the uploads
+ * domain, so one stored with such a type would run script there: clients upload these files as
+ * `application/octet-stream`, and the attachment presign refuses them.
+ */
+export const isActiveContentType = (contentType: string): boolean => {
+	const type = contentType.split(";", 1)[0]!.trim().toLowerCase()
+	return (
+		type === "text/html" ||
+		type === "application/xhtml+xml" ||
+		type === "text/xml" ||
+		type === "application/xml" ||
+		type.endsWith("+xml") ||
+		type === "multipart/x-mixed-replace"
+	)
+}
+
 // ============ Response Schema ============
 
 /**

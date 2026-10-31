@@ -1,4 +1,4 @@
-import { ChannelId, MessageId, UserId } from "@hazel/schema"
+import { ChannelId, HtmlRenderId, MessageId, UserId } from "@hazel/schema"
 import { MessageEmbed } from "@hazel/domain/models"
 import { Schema } from "effect"
 import { defineTaggedUnion } from "foldkit/schema"
@@ -108,6 +108,20 @@ export const LiveRow = Schema.Struct({
 })
 export type LiveRow = typeof LiveRow.Type
 
+/** An HTML render embed's frame (`MessageEmbed.html`), by render id: its URL state and heights. */
+export const HtmlRenderRow = Schema.Struct({
+	renderId: HtmlRenderId,
+	status: Schema.Literals(["Loading", "Failed", "Ready"]),
+	src: Schema.NullOr(Schema.String),
+	fittedHeight: Schema.Number,
+	shownHeight: Schema.Number,
+	isTall: Schema.Boolean,
+	isExpanded: Schema.Boolean,
+	isLoaded: Schema.Boolean,
+	appearance: Schema.Literals(["light", "dark"]),
+})
+export type HtmlRenderRow = typeof HtmlRenderRow.Type
+
 export const GroupPosition = Schema.Literals(["start", "middle", "end", "standalone"])
 export type GroupPosition = typeof GroupPosition.Type
 
@@ -125,6 +139,7 @@ export const MessageRowData = Schema.Struct({
 	refs: MarkdownRefs,
 	urlEmbeds: Schema.Array(UrlEmbed),
 	live: Schema.NullOr(LiveRow),
+	htmlRenders: Schema.Array(HtmlRenderRow),
 })
 export type MessageRowData = typeof MessageRowData.Type
 

@@ -1,6 +1,7 @@
 import { ChannelId, MessageId, OrganizationId, UserId } from "@hazel/schema"
 import { Effect, Option, PubSub, Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
+import * as HtmlRender from "../../../chat/html-render"
 import * as Live from "../../../chat/live-state"
 import * as FilesSubscriptions from "../files/subscriptions"
 import {
@@ -119,6 +120,32 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 					: Live.liveRepliesStream(() => readDependencies().replies).pipe(
 							Stream.map((message) => Message.GotLiveMessage({ message })),
 						),
+		},
+	),
+	// The app theme the HTML render frames get, read from the root's tokens.
+	htmlRenderTheme: entry(
+		{},
+		{
+			modelToDependencies: () => ({}),
+			dependenciesToStream: () =>
+				HtmlRender.themeStream.pipe(
+					Stream.map((message) => Message.GotHtmlRenderMessage({ message })),
+				),
+		},
+	),
+	// The frames' heights and link requests, while any frame is on the page.
+	htmlRenderBridge: entry(
+		{ isActive: Schema.Boolean },
+		{
+			modelToDependencies: ({ model }) => ({
+				isActive: Object.keys(model.htmlRender.renders).length > 0,
+			}),
+			dependenciesToStream: ({ isActive }) =>
+				isActive
+					? HtmlRender.bridgeStream.pipe(
+							Stream.map((message) => Message.GotHtmlRenderMessage({ message })),
+						)
+					: Stream.empty,
 		},
 	),
 	chatReactions: entry(byChannel, {

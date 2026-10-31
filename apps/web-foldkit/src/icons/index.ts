@@ -1900,6 +1900,36 @@ export const IconExternalLink = <Message>(h: HtmlBuilder<Message>, options: Icon
 		],
 	)
 
+export const IconMaximize = <Message>(h: HtmlBuilder<Message>, options: IconOptions = {}): Html =>
+	icon(
+		h,
+		{
+			height: "18",
+			width: "18",
+			"data-slot": "icon",
+			viewBox: "0 0 18 18",
+			xmlns: "http://www.w3.org/2000/svg",
+		},
+		options,
+		[
+			h.g(
+				[
+					h.Attribute("fill", "none"),
+					h.Attribute("stroke", "currentColor"),
+					h.Attribute("stroke-linecap", "round"),
+					h.Attribute("stroke-linejoin", "round"),
+					h.Attribute("stroke-width", "1.5"),
+				],
+				[
+					h.path([h.Attribute("d", "M11 2.75H15.25V7")]),
+					h.path([h.Attribute("d", "M15.25 2.75L10.25 7.75")]),
+					h.path([h.Attribute("d", "M7 15.25H2.75V11")]),
+					h.path([h.Attribute("d", "M2.75 15.25L7.75 10.25")]),
+				],
+			),
+		],
+	)
+
 export const IconLoader = <Message>(h: HtmlBuilder<Message>, options: IconOptions = {}): Html =>
 	icon(
 		h,

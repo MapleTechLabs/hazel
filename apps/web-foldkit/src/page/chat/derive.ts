@@ -7,6 +7,7 @@ import {
 	extractYoutubeVideoId,
 	isKlipyUrl,
 } from "~/components/link-preview.utils"
+import { frameHeightOf, type Model as HtmlRenderModel, renderKey } from "../../chat/html-render"
 import { cachedLiveState, initialLiveState, liveEmbedOf, type LiveStates } from "../../chat/live-state"
 import { processMessageUrls } from "../../chat/message/content"
 import { linkPreviewKey, tweetKey, type Unfurls } from "../../chat/unfurl"
@@ -18,6 +19,7 @@ import {
 	type ChatReaction,
 	type DisplayRow,
 	type GroupPosition,
+	type HtmlRenderRow,
 	type LiveRow,
 	type MarkdownRefs,
 	MessageRowData,
@@ -51,12 +53,17 @@ export interface DeriveContext {
 	readonly replyTargets: ReadonlyMap<string, Lookups["replyTargets"][number]>
 	readonly unfurls: Unfurls
 	readonly liveStates: LiveStates
+	readonly htmlRenders: HtmlRenderModel["renders"]
+	readonly appearance: "light" | "dark"
 }
 
-/** Fetched URL unfurls and streamed AI replies, kept by the page beside the lookups. */
+/** Fetched URL unfurls, streamed AI replies and HTML render frames, kept by the page beside the lookups. */
 export interface EmbedState {
 	readonly unfurls: Unfurls
 	readonly liveStates: LiveStates
+	readonly htmlRenders?: HtmlRenderModel["renders"]
+	/** The app's appearance, the frames' color scheme. */
+	readonly appearance?: "light" | "dark"
 }
 
 const NO_EMBED_STATE: EmbedState = { unfurls: {}, liveStates: {} }
@@ -81,6 +88,8 @@ export const toDeriveContext = (
 	currentUserId,
 	unfurls: embedState.unfurls,
 	liveStates: embedState.liveStates,
+	htmlRenders: embedState.htmlRenders ?? {},
+	appearance: embedState.appearance ?? "dark",
 	users: byKey(lookups.users, (user) => user.id),
 	presence: byKey(lookups.presence, (presence) => presence.userId),
 	botNames: new Map(lookups.bots.map((bot) => [bot.userId, bot.name])),
@@ -246,6 +255,30 @@ const liveOf = (context: DeriveContext, message: ChatMessage): LiveRow | null =>
 	}
 }
 
+/** The frames of the message's HTML render embeds, in embed order. */
+const htmlRendersOf = (context: DeriveContext, message: ChatMessage): ReadonlyArray<HtmlRenderRow> => {
+	const rows: HtmlRenderRow[] = []
+	for (const embed of message.embeds ?? []) {
+		if (embed.html === undefined) continue
+		const state = context.htmlRenders[renderKey({ messageId: message.id, renderId: embed.html.renderId })]
+		const height = frameHeightOf(embed.html.height, state)
+		const url = state?.url
+		rows.push({
+			renderId: embed.html.renderId,
+			status: url?._tag ?? "Loading",
+			src: url?._tag === "Ready" ? url.src : null,
+			fittedHeight: height.fitted,
+			shownHeight: height.shown,
+			isTall: height.isTall,
+			isExpanded: state?.isExpanded ?? false,
+			isLoaded: state?.isLoaded ?? false,
+			appearance: context.appearance,
+		})
+	}
+	return rows.length === 0 ? NO_HTML_RENDERS : rows
+}
+
+const NO_HTML_RENDERS: ReadonlyArray<HtmlRenderRow> = []
 const NO_URL_EMBEDS: ReadonlyArray<UrlEmbed> = []
 const NO_REACTIONS: ReadonlyArray<ChatReaction> = []
 const NO_ATTACHMENTS: ReadonlyArray<AttachmentInfo> = []
@@ -270,6 +303,7 @@ export const messageRowData = (
 	refs: refsOf(context, message.content),
 	urlEmbeds: urlEmbedsOf(context, message),
 	live: liveOf(context, message),
+	htmlRenders: htmlRendersOf(context, message),
 })
 
 /**

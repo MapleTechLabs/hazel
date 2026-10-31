@@ -31,6 +31,7 @@ import type { IntegrationConnection } from "@hazel/domain/models"
 import {
 	CreateMessageRequest,
 	HazelApi,
+	PublishHtmlRenderRequest,
 	SyncBotCommandsRequest,
 	ToggleReactionRequest,
 	UpdateBotSettingsRequest,
@@ -68,6 +69,7 @@ import {
 	EventHandlerError,
 	GatewayDecodeError,
 	GatewayReadError,
+	HtmlRenderPublishError,
 	MentionableSyncError,
 	MessageDeleteError,
 	MessageListError,
@@ -174,7 +176,36 @@ export interface SendMessageOptions {
 	readonly attachmentIds?: readonly AttachmentId[]
 	/** Embeds to include (rich content, live state, etc.) */
 	readonly embeds?: import("@hazel/domain/models").MessageEmbed.MessageEmbeds | null
+	/** An HTML page to publish and show in an embed after `embeds` (see `HtmlRenderInput`) */
+	readonly html?: HtmlRenderInput
 }
+
+/**
+ * A self-contained HTML page shown sandboxed in a message (`client.htmlRender.publish`). Inline
+ * its CSS and JS; https assets load, but the page cannot fetch or open sockets. Use the theme CSS
+ * variables (`--background`, `--foreground`, `--primary`, `--border`, `--chart-1`...) instead of
+ * fixed colors, leave html and body without a background, and avoid vh units (rejected).
+ */
+export interface HtmlRenderInput {
+	readonly title: string
+	readonly html: string
+	/** The frame's height until the page reports its own, in CSS pixels (80-2000, default 240) */
+	readonly height?: number
+}
+
+/**
+ * Options for updating a message
+ */
+export interface UpdateMessageOptions {
+	/** Replace the message's embeds (`null` removes them) */
+	readonly embeds?: import("@hazel/domain/models").MessageEmbed.MessageEmbeds | null
+	/** An HTML page to publish and show in an embed after `embeds` */
+	readonly html?: HtmlRenderInput
+}
+
+const DEFAULT_HTML_RENDER_HEIGHT = 240
+
+type MessageEmbeds = import("@hazel/domain/models").MessageEmbed.MessageEmbeds
 
 /**
  * Hazel Bot Client - Effect Service with typed convenience methods
@@ -215,6 +246,46 @@ export class HazelBotClient extends Context.Service<HazelBotClient>()("HazelBotC
 		const messageSemaphore = Semaphore.makeUnsafe(10)
 		const messageLimiter = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
 			Semaphore.withPermit(messageSemaphore)(effect)
+
+		const publishHtmlRender = (channelId: ChannelId, input: HtmlRenderInput) =>
+			messageLimiter(
+				httpApiClient["api-v1-messages"]
+					.publishHtmlRender({
+						payload: new PublishHtmlRenderRequest({
+							channelId,
+							title: input.title,
+							html: input.html,
+							height: input.height ?? DEFAULT_HTML_RENDER_HEIGHT,
+						}),
+					})
+					.pipe(
+						Effect.map((r) => r.data),
+						Effect.mapError(
+							(cause) =>
+								new HtmlRenderPublishError({
+									message:
+										cause._tag === "HtmlRenderRejectedError"
+											? cause.message
+											: "Failed to publish HTML render",
+									channelId,
+									cause,
+								}),
+						),
+						Effect.withSpan("bot.htmlRender.publish", { attributes: { channelId } }),
+					),
+			)
+
+		/** `embeds`, plus an embed showing `html` once it is published (outside the message's permit). */
+		const embedsWithHtml = (
+			channelId: ChannelId,
+			embeds: MessageEmbeds | null | undefined,
+			html: HtmlRenderInput | undefined,
+		): Effect.Effect<MessageEmbeds | null | undefined, HtmlRenderPublishError> =>
+			html === undefined
+				? Effect.succeed(embeds)
+				: publishHtmlRender(channelId, html).pipe(
+						Effect.map((reference): MessageEmbeds => [...(embeds ?? []), { html: reference }]),
+					)
 
 		// Get the runtime config (optional - contains commands to sync)
 		const runtimeConfigOption = yield* Effect.serviceOption(HazelBotRuntimeConfigTag)
@@ -1084,6 +1155,14 @@ export class HazelBotClient extends Context.Service<HazelBotClient>()("HazelBotC
 			 * Uses the public HTTP API at /api/v1/messages with type-safe HttpApiClient
 			 * All operations are rate-limited to prevent API throttling
 			 */
+			htmlRender: {
+				/**
+				 * Publish an HTML page for messages in `channelId`; put the result in an embed's
+				 * `html`. `message.send({ html })` does both. See `HtmlRenderInput` for the rules.
+				 */
+				publish: publishHtmlRender,
+			},
+
 			message: {
 				/**
 				 * Send a message to a channel
@@ -1092,32 +1171,36 @@ export class HazelBotClient extends Context.Service<HazelBotClient>()("HazelBotC
 				 * @param options - Optional settings (reply, thread, attachments, embeds)
 				 */
 				send: (channelId: ChannelId, content: string, options?: SendMessageOptions) =>
-					messageLimiter(
-						httpApiClient["api-v1-messages"]
-							.createMessage({
-								payload: new CreateMessageRequest({
-									channelId,
-									content,
-									replyToMessageId: options?.replyToMessageId ?? null,
-									threadChannelId: options?.threadChannelId ?? null,
-									attachmentIds: options?.attachmentIds
-										? [...options.attachmentIds]
-										: undefined,
-									embeds: options?.embeds ?? null,
-								}),
-							})
-							.pipe(
-								Effect.map((r) => r.data),
-								Effect.mapError(
-									(cause) =>
-										new MessageSendError({
-											message: "Failed to send message",
+					embedsWithHtml(channelId, options?.embeds, options?.html).pipe(
+						Effect.flatMap((embeds) =>
+							messageLimiter(
+								httpApiClient["api-v1-messages"]
+									.createMessage({
+										payload: new CreateMessageRequest({
 											channelId,
-											cause,
+											content,
+											replyToMessageId: options?.replyToMessageId ?? null,
+											threadChannelId: options?.threadChannelId ?? null,
+											attachmentIds: options?.attachmentIds
+												? [...options.attachmentIds]
+												: undefined,
+											embeds: embeds ?? null,
 										}),
-								),
-								Effect.withSpan("bot.message.send", { attributes: { channelId } }),
+									})
+									.pipe(
+										Effect.map((r) => r.data),
+										Effect.mapError(
+											(cause) =>
+												new MessageSendError({
+													message: "Failed to send message",
+													channelId,
+													cause,
+												}),
+										),
+									),
 							),
+						),
+						Effect.withSpan("bot.message.send", { attributes: { channelId } }),
 					),
 
 				/**
@@ -1131,66 +1214,89 @@ export class HazelBotClient extends Context.Service<HazelBotClient>()("HazelBotC
 					content: string,
 					options?: Omit<SendMessageOptions, "replyToMessageId">,
 				) =>
-					messageLimiter(
-						httpApiClient["api-v1-messages"]
-							.createMessage({
-								payload: new CreateMessageRequest({
-									channelId: message.channelId,
-									content,
-									replyToMessageId: message.id,
-									threadChannelId: options?.threadChannelId ?? null,
-									attachmentIds: options?.attachmentIds
-										? [...options.attachmentIds]
-										: undefined,
-									embeds: null,
-								}),
-							})
-							.pipe(
-								Effect.map((r) => r.data),
-								Effect.mapError(
-									(cause) =>
-										new MessageReplyError({
-											message: "Failed to reply to message",
+					embedsWithHtml(message.channelId, options?.embeds, options?.html).pipe(
+						Effect.flatMap((embeds) =>
+							messageLimiter(
+								httpApiClient["api-v1-messages"]
+									.createMessage({
+										payload: new CreateMessageRequest({
 											channelId: message.channelId,
+											content,
 											replyToMessageId: message.id,
-											cause,
+											threadChannelId: options?.threadChannelId ?? null,
+											attachmentIds: options?.attachmentIds
+												? [...options.attachmentIds]
+												: undefined,
+											embeds: embeds ?? null,
 										}),
-								),
-								Effect.withSpan("bot.message.reply", {
-									attributes: {
-										channelId: message.channelId,
-										replyToMessageId: message.id,
-									},
-								}),
+									})
+									.pipe(
+										Effect.map((r) => r.data),
+										Effect.mapError(
+											(cause) =>
+												new MessageReplyError({
+													message: "Failed to reply to message",
+													channelId: message.channelId,
+													replyToMessageId: message.id,
+													cause,
+												}),
+										),
+									),
 							),
+						),
+						Effect.withSpan("bot.message.reply", {
+							attributes: {
+								channelId: message.channelId,
+								replyToMessageId: message.id,
+							},
+						}),
 					),
 
 				/**
 				 * Update a message
 				 * @param message - The message to update (requires id)
 				 * @param content - New content
+				 * @param options - Replace its embeds; `html` publishes a page shown after them (the
+				 *   message's current embeds when `embeds` is not given). A replaced page is deleted.
 				 */
-				update: (message: MessageType, content: string) =>
-					messageLimiter(
-						httpApiClient["api-v1-messages"]
-							.updateMessage({
-								params: { id: message.id },
-								payload: new UpdateMessageRequest({ channelId: message.channelId, content }),
-							})
-							.pipe(
-								Effect.map((r) => r.data),
-								Effect.mapError(
-									(cause) =>
-										new MessageUpdateError({
-											message: "Failed to update message",
-											messageId: message.id,
-											cause,
+				update: (message: MessageType, content: string, options?: UpdateMessageOptions) =>
+					(options?.html === undefined
+						? Effect.succeed(options?.embeds)
+						: embedsWithHtml(
+								message.channelId,
+								options.embeds !== undefined
+									? options.embeds
+									: (message.embeds ?? []).filter((embed) => embed.html === undefined),
+								options.html,
+							)
+					).pipe(
+						Effect.flatMap((embeds) =>
+							messageLimiter(
+								httpApiClient["api-v1-messages"]
+									.updateMessage({
+										params: { id: message.id },
+										payload: new UpdateMessageRequest({
+											channelId: message.channelId,
+											content,
+											...(embeds === undefined ? {} : { embeds }),
 										}),
-								),
-								Effect.withSpan("bot.message.update", {
-									attributes: { messageId: message.id },
-								}),
+									})
+									.pipe(
+										Effect.map((r) => r.data),
+										Effect.mapError(
+											(cause) =>
+												new MessageUpdateError({
+													message: "Failed to update message",
+													messageId: message.id,
+													cause,
+												}),
+										),
+									),
 							),
+						),
+						Effect.withSpan("bot.message.update", {
+							attributes: { messageId: message.id },
+						}),
 					),
 
 				/**

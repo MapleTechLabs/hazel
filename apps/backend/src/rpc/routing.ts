@@ -158,6 +158,7 @@ export const routes: RouteTable = {
 	"message.create": byChannel,
 	"message.update": channelHint("message.update"),
 	"message.delete": channelHint("message.delete"),
+	"message.htmlRenderUrl": byChannel,
 	"messageReaction.toggle": byChannel,
 	"messageReaction.create": byChannel,
 	"messageReaction.update": channelHint("messageReaction.update"),

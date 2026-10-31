@@ -16,9 +16,10 @@ import { Cause, Effect, Exit, Layer, Scope } from "effect"
 import { FetchHttpClient, HttpServerRequest, HttpServerResponse } from "effect/http"
 import { BotGatewayTransport } from "../../services/bot-gateway-transport"
 import { Directory } from "../../services/directory"
+import { HtmlRenders } from "../../services/html-renders"
 import { ThreadNamer } from "../../services/thread-namer"
 import { ChatSyncTransport } from "../../services/chat-sync/chat-sync-transport"
-import { directoryBinding, servicesPlatformLive } from "../platform"
+import { directoryBinding, htmlRenderStoreLive, servicesPlatformLive } from "../platform"
 import { objectHandlersLive } from "./handlers"
 import type { ObjectKind } from "./kinds"
 import type { CallRequest } from "./calls"
@@ -66,6 +67,10 @@ export const activateObject = (kind: ObjectKind) =>
 						Layer.provide(Layer.mergeAll(FetchHttpClient.layer, workerEnvLayer(env))),
 					),
 					ChatSyncTransport.layer.pipe(Layer.provide(workerEnvLayer(env)), Layer.orDie),
+					HtmlRenders.layer.pipe(
+						Layer.provide(Layer.mergeAll(workerEnvLayer(env), htmlRenderStoreLive(env))),
+						Layer.orDie,
+					),
 				),
 			}).pipe(
 				Effect.provideService(Scope.Scope, instanceScope),

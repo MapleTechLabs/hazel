@@ -17,6 +17,7 @@ import {
 	ListMessagesResponse,
 	LiveStateResponse,
 	MessageResponse,
+	PublishHtmlRenderResponse,
 	ToggleReactionResponse,
 	WriteLiveStateResponse,
 } from "@hazel/domain/http"
@@ -26,6 +27,7 @@ import type { ChannelId, MessageId, TransactionId, UserId } from "@hazel/schema"
 import { Effect, Option } from "effect"
 import { HazelApi } from "../../api"
 import { Directory } from "../../services/directory"
+import { HtmlRenders } from "../../services/html-renders"
 import { checkMessageRateLimit } from "../../services/rate-limit-helpers"
 import { callObject } from "../../worker/objects/calls"
 import { ListMessagesCall } from "../../worker/objects/channel/api-messages"
@@ -223,6 +225,24 @@ export const HttpMessagesApiLive = HttpApiBuilder.group(HazelApi, "api-v1-messag
 				}).pipe(
 					Effect.catchTag("DatabaseError", internal("Database error while reading live state")),
 					Effect.withSpan("ApiV1.getLiveState", { attributes: { "message.id": params.id } }),
+				),
+			)
+			// Stored under the named channel and the bot: only a message the bot posts there (which it
+			// must be allowed to) shows it, and only that channel's viewers get a URL for it.
+			.handle("publishHtmlRender", ({ payload }) =>
+				Effect.gen(function* () {
+					const bot = yield* authenticateBotFromToken
+					yield* checkMessageRateLimit(bot.userId)
+					const data = yield* (yield* HtmlRenders).publish({ ...payload, authorId: bot.userId })
+					return new PublishHtmlRenderResponse({ data })
+				}).pipe(
+					Effect.catchTags({
+						DatabaseError: internal("Database error while publishing an HTML render"),
+						HtmlRenderStoreError: internal("Could not store the HTML render"),
+					}),
+					Effect.withSpan("ApiV1.publishHtmlRender", {
+						attributes: { "channel.id": payload.channelId },
+					}),
 				),
 			)
 			.handle("toggleReaction", ({ params, payload }) =>

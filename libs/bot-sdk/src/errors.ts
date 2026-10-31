@@ -93,6 +93,18 @@ export class MessageUpdateError extends Schema.TaggedError<MessageUpdateError>()
 }) {}
 
 /**
+ * Error thrown when publishing an HTML render fails (rejected page, storage, network).
+ */
+export class HtmlRenderPublishError extends Schema.TaggedError<HtmlRenderPublishError>()(
+	"HtmlRenderPublishError",
+	{
+		message: Schema.String,
+		channelId: Schema.String,
+		cause: Schema.Unknown,
+	},
+) {}
+
+/**
  * Error thrown when deleting a message fails.
  */
 export class MessageDeleteError extends Schema.TaggedError<MessageDeleteError>()("MessageDeleteError", {

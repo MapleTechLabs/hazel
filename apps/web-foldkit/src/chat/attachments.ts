@@ -22,7 +22,8 @@ export interface AttachmentsOptions<M> {
 	readonly toDownload?: (attachment: ChatAttachmentView) => M
 }
 
-const IMAGE_TYPES = ["jpg", "png", "gif", "webp", "svg"]
+// No svg: uploads store it as plain bytes (`isActiveContentType`), which no image tag renders.
+const IMAGE_TYPES = ["jpg", "png", "gif", "webp"]
 const VIDEO_TYPES = ["mp4", "webm"]
 
 const typeOf = (attachment: ChatAttachmentView) => getFileTypeFromName(attachment.fileName)

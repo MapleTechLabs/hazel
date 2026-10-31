@@ -5,7 +5,7 @@
  * class tags of the previous deploy.
  */
 import { bindBotGateways } from "@hazel/bot-gateway/object"
-import { HazelStack, hazelWorkerProps, stageProps } from "@hazel/infra/cloudflare"
+import { HazelStack, hazelWorkerProps, stageNamed, stageProps } from "@hazel/infra/cloudflare"
 import { cachedRecoverable } from "@hazel/infra/cached-recoverable"
 import { hazelTelemetry } from "@hazel/infra/maple"
 import { isolateContext } from "@hazel/infra/worker-http"
@@ -22,7 +22,7 @@ import { MessageLiveObject, MessageLiveObjectLive } from "./worker/live/message-
 import { ChannelObject, ChannelObjectLive } from "./worker/objects/channel-object"
 import { OrgObject, OrgObjectLive } from "./worker/objects/org-object"
 import { UserObject, UserObjectLive } from "./worker/objects/user-object"
-import { CACHE_BINDING, DIRECTORY_DB_BINDING, EMAIL_BINDING } from "./worker/platform"
+import { CACHE_BINDING, DIRECTORY_DB_BINDING, EMAIL_BINDING, HTML_RENDERS_BINDING } from "./worker/platform"
 import { RateLimiterObject, RateLimiterObjectLive } from "./worker/rate-limiter-object"
 
 /** Session and user-lookup caches. */
@@ -31,11 +31,18 @@ export const ApiCache = Cloudflare.KV.Namespace(
 	stageProps("api-cache", (title) => ({ title })),
 )
 
+/**
+ * HTML render pages (`services/html-renders.ts`). Private, with no public domain: a page is only
+ * served by the api's signed `GET /html-renders/...`, with the sandbox CSP.
+ */
+export const HtmlRendersBucket = Cloudflare.R2.Bucket("html-renders", stageNamed("html-renders"))
+
 /** `__ALCHEMY_RUNTIME__` folds to `true` in the bundle, so the stack-side branch is tree-shaken. */
 const props = Effect.gen(function* () {
 	if (globalThis.__ALCHEMY_RUNTIME__) return { main: import.meta.url }
 	const stack = yield* HazelStack
 	const cache = yield* ApiCache
+	const htmlRenders = yield* HtmlRendersBucket
 	const email = yield* Cloudflare.Email.SendEmail(EMAIL_BINDING)
 	return {
 		main: import.meta.url,
@@ -51,6 +58,7 @@ const props = Effect.gen(function* () {
 		env: {
 			[DIRECTORY_DB_BINDING]: stack.directoryDb,
 			[CACHE_BINDING]: cache,
+			[HTML_RENDERS_BINDING]: htmlRenders,
 			[EMAIL_BINDING]: email,
 			...(yield* apiEnv(stack)),
 		},

@@ -1,6 +1,8 @@
 import { createLazy, type Html, type HtmlBuilder } from "foldkit/html"
 import { contentStyles, rootStyles } from "~/components/ui/split-panel/split-panel.styles"
 import { isImageAttachment } from "../../../chat/attachments"
+import { htmlRenderFullscreenView } from "../../../chat/embeds/html-render"
+import * as HtmlRender from "../../../chat/html-render"
 import { imageViewerView } from "../../../chat/image-viewer"
 import { dateDividerView, messageRowView, type RowContext } from "../../../chat/message/row"
 import type * as Draft from "../../../composer/draft"
@@ -34,6 +36,7 @@ const toDraftMessage = (message: Draft.Message) => Message.GotDraftMessage({ mes
 const toThreadDraftMessage = (message: Draft.Message) => Message.GotThreadDraftMessage({ message })
 const toFilesMessage = (message: FilesPage.Message) => Message.GotFilesMessage({ message })
 const toOverlay = (message: Overlays.Message) => Message.GotOverlaysMessage({ message })
+const toHtmlRenderMessage = (message: HtmlRender.Message) => Message.GotHtmlRenderMessage({ message })
 const toPinnedMessage = (message: Parameters<typeof Overlays.Message.GotPinnedMessage>[0]["message"]) =>
 	toOverlay(Overlays.Message.GotPinnedMessage({ message }))
 
@@ -223,6 +226,7 @@ const messagesOutlet = (h: H, model: Model, nowMs: number) => {
 		imageViewerOverlay(h, model),
 		lazyToolbar(messageToolbarOverlay, [h, toolbarInputOf(model)]) ?? h.empty,
 		reactionModalView(h, model),
+		htmlRenderFullscreenView(h, model.htmlRender, toHtmlRenderMessage),
 	]
 }
 
@@ -360,7 +364,13 @@ const threadPanelOverlay = (
 	rowContext: RowContext<Message>,
 	h: H,
 ): Html => {
-	const context = deriveContextOf({ lookups, currentUserId, unfurls: {}, liveStates: {} })
+	const context = deriveContextOf({
+		lookups,
+		currentUserId,
+		unfurls: {},
+		liveStates: {},
+		htmlRender: HtmlRender.init(),
+	})
 	const name = lookups.threadChannels.find((channel) => channel.id === panel.threadChannelId)?.name
 	return threadPanelView(h, {
 		threadName: name || "Thread",
