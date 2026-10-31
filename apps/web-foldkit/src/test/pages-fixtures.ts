@@ -26,7 +26,6 @@ export const currentUser: CurrentUser = {
 	email: "ada@hazel.test",
 	avatarUrl: null,
 	isOnboarded: true,
-	organizationId,
 }
 
 export const memberWithRole = (role: Member["role"]): Member => ({ id: memberId, role })

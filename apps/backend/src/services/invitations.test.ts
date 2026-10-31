@@ -31,7 +31,6 @@ const actor = (userId: UserId) =>
 	new CurrentUser.Schema({
 		id: userId,
 		role: "member",
-		organizationId: undefined,
 		avatarUrl: undefined,
 		firstName: "Test",
 		lastName: "User",

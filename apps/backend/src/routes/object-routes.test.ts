@@ -190,7 +190,6 @@ const invokeAs = (object: TestObject, objectId: string, tag: HazelRpcTag, payloa
 			principal: yield* encodeInvokePrincipal({
 				user: new CurrentUser.Schema({
 					id: userId,
-					organizationId: null,
 					role: "member",
 					email: `${userId}@example.com`,
 					isOnboarded: true,

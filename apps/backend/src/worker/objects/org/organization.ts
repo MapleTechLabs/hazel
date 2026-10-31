@@ -3,7 +3,6 @@
  * cascade of an organization delete to its members' `membership_index` and `user_organizations`.
  */
 import { Database, SQLite, schema } from "@hazel/db"
-import { CurrentUser } from "@hazel/domain"
 import { type OrganizationId, OrganizationId as OrganizationIdSchema } from "@hazel/schema"
 import { Effect, Option } from "effect"
 import { currentObject } from "../../../lib/current-object"
@@ -62,13 +61,11 @@ export const publishOrgRemoval = Effect.fn("OrgObject.publishOrgRemoval")(functi
 
 /**
  * The organization a `listByOrganization`-style call is about: the `OrgObject` it landed in (the
- * api Worker routed it by its `organizationId` hint), else the session's active organization.
+ * api Worker routed it by its `organizationId` hint); none elsewhere.
  */
 export const requestOrganizationId = Effect.gen(function* () {
 	const object = yield* currentObject
-	if (Option.isSome(object) && object.value.kind === "org") {
-		return Option.some(OrganizationIdSchema.make(object.value.id))
-	}
-	const user = yield* CurrentUser.Context
-	return Option.fromNullishOr(user.organizationId)
+	return Option.isSome(object) && object.value.kind === "org"
+		? Option.some(OrganizationIdSchema.make(object.value.id))
+		: Option.none<OrganizationId>()
 })

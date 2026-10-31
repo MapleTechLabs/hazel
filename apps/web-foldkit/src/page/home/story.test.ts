@@ -37,7 +37,6 @@ const shared: Shared = {
 		email: "ada@hazel.test",
 		avatarUrl: null,
 		isOnboarded: true,
-		organizationId,
 	},
 	organization: { id: organizationId, name: "Hazel", slug: "hazel", logoUrl: null },
 	member: null,

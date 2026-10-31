@@ -21,6 +21,7 @@ import { Cause, Config, DateTime, Effect, Layer, Option, Schedule, Schema, Schem
 import * as Duration from "effect/Duration"
 import { HazelApi } from "../api"
 import { Directory } from "../services/directory"
+import { requireMember } from "./integration-resources.http"
 import { OAuthProviderRegistry } from "../services/oauth"
 import { callObject } from "../worker/objects/calls"
 import { orgTarget } from "../worker/objects/kinds"
@@ -270,14 +271,7 @@ const handleGetOAuthUrl = Effect.fn("integrations.getOAuthUrl")(function* (
 	const { orgId, provider } = path
 	const level = query.level ?? "organization"
 
-	if (!currentUser.organizationId || currentUser.organizationId !== orgId) {
-		return yield* Effect.fail(
-			new UnauthorizedError({
-				message: "You are not authorized to access this organization",
-				detail: `organizationId=${orgId}`,
-			}),
-		)
-	}
+	yield* requireMember(orgId)
 
 	// Get the OAuth provider from registry
 	const registry = yield* OAuthProviderRegistry
@@ -913,14 +907,7 @@ const handleGetConnectionStatus = Effect.fn("integrations.getConnectionStatus")(
 	// A T3 Code link is a member's own, with its own routes (`./t3code.http.ts`).
 	if (provider === "t3code") return yield* Effect.fail(new UnsupportedProviderError({ provider }))
 
-	if (!currentUser.organizationId || currentUser.organizationId !== orgId) {
-		return yield* Effect.fail(
-			new UnauthorizedError({
-				message: "You are not authorized to access this organization",
-				detail: `organizationId=${orgId}`,
-			}),
-		)
-	}
+	yield* requireMember(orgId)
 
 	const connectionOption = Option.fromNullishOr(
 		yield* callObject(IntegrationConnectionCall, orgTarget(orgId), {
@@ -967,14 +954,7 @@ const handleDisconnect = Effect.fn("integrations.disconnect")(function* (
 	// A T3 Code link is a member's own, with its own routes (`./t3code.http.ts`).
 	if (provider === "t3code") return yield* Effect.fail(new UnsupportedProviderError({ provider }))
 
-	if (!currentUser.organizationId || currentUser.organizationId !== orgId) {
-		return yield* Effect.fail(
-			new UnauthorizedError({
-				message: "You are not authorized to access this organization",
-				detail: `organizationId=${orgId}`,
-			}),
-		)
-	}
+	yield* requireMember(orgId)
 
 	// Tokens, the connection and (for a user link) re-attribution, in the org's object.
 	const connection = yield* callObject(DisconnectIntegrationCall, orgTarget(orgId), {

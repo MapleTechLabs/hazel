@@ -24,7 +24,6 @@ const uuid = () => crypto.randomUUID()
 const userOf = (id: string) =>
 	new CurrentUser.Schema({
 		id: id as UserId,
-		organizationId: null,
 		role: "member",
 		email: `${id}@example.com`,
 		isOnboarded: true,
@@ -578,7 +577,6 @@ describe("OrgObject: channels", () => {
 					unnamed,
 					new CurrentUser.Schema({
 						id: world.owner,
-						organizationId: null,
 						role: "member",
 						email: "owner@example.com",
 						isOnboarded: true,

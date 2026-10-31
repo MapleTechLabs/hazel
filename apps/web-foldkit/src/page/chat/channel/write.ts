@@ -83,7 +83,7 @@ const lastOwn = (messages: ReadonlyArray<ChatMessage>, currentUserId: string | n
 /** What a draft needs from the page: user, organization, membership, last own message. */
 export const contextFor = (model: Model, which: Which, shared: Shared | null): Draft.Context => ({
 	currentUserId: model.currentUserId,
-	organizationId: shared?.currentUser?.organizationId ?? null,
+	organizationId: shared?.organization?.id ?? null,
 	memberId:
 		which === "channel"
 			? (model.members?.find((member) => member.userId === model.currentUserId)?.id ?? null)

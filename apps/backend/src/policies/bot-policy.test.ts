@@ -67,7 +67,6 @@ describe("BotPolicy", () => {
 		})
 		const outsider = makeActor({
 			id: "00000000-0000-4000-8000-000000000403" as UserId,
-			organizationId: TEST_ORG_ID,
 		})
 
 		const layer = makePolicyLayer(
@@ -88,7 +87,7 @@ describe("BotPolicy", () => {
 		const adminDenied = await runWithActorEither(
 			BotPolicy.use((policy) => policy.canRead(BOT_ID)),
 			layer,
-			makeActor({ ...admin, organizationId: TEST_ORG_ID }),
+			admin,
 		)
 		const outsiderDenied = await runWithActorEither(
 			BotPolicy.use((policy) => policy.canRead(BOT_ID)),

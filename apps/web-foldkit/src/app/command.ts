@@ -120,7 +120,6 @@ const fetchCurrentUser = Effect.gen(function* () {
 			email: user.email,
 			avatarUrl: user.avatarUrl ?? null,
 			isOnboarded: user.isOnboarded,
-			organizationId: user.organizationId ?? null,
 		},
 	})
 }).pipe(catchCommon((reason) => Message.FailedFetchCurrentUser({ reason })))

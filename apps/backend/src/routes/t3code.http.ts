@@ -42,6 +42,7 @@ import {
 	UpdateT3CodeSharingCall,
 } from "../worker/objects/org/t3code"
 import { validateBotToken } from "./bot-commands.http"
+import { requireMember } from "./integration-resources.http"
 
 /** The seeded T3 Code bot's directory user (`IntegrationBotService`); the only caller of `getT3CodeAccess`. */
 export const T3CODE_BOT_EXTERNAL_ID = "internal-bot-t3code"
@@ -110,17 +111,8 @@ const environmentConfig = Effect.gen(function* () {
 
 const redirectUriOf = (apiBaseUrl: string) => `${new URL(apiBaseUrl).origin}/integrations/t3code/callback`
 
-const requireOrg = (orgId: OrganizationId) =>
-	Effect.gen(function* () {
-		const currentUser = yield* CurrentUser.Context
-		if (currentUser.organizationId !== orgId) {
-			return yield* new UnauthorizedError({
-				message: "You are not authorized to access this organization",
-				detail: `organizationId=${orgId}`,
-			})
-		}
-		return currentUser
-	})
+/** The caller, once they are an active member of `orgId` (sessions carry no organization). */
+const requireOrg = (orgId: OrganizationId) => requireMember(orgId).pipe(Effect.andThen(CurrentUser.Context))
 
 const toDateTime = (value: Date | DateTime.Utc) =>
 	DateTime.isDateTime(value) ? value : DateTime.fromDateUnsafe(value)

@@ -20,7 +20,7 @@ const discordConnection = Subscription.make<PageSubscriptionInput<Model>, Messag
 		{ organizationId: Schema.NullOr(OrganizationId), userId: Schema.NullOr(UserId) },
 		{
 			modelToDependencies: ({ shared }) => ({
-				organizationId: shared.currentUser?.organizationId ?? null,
+				organizationId: shared.organization?.id ?? null,
 				userId: shared.currentUser?.id ?? null,
 			}),
 			dependenciesToStream: ({ organizationId, userId }) =>

@@ -32,7 +32,6 @@ const makeCurrentUser = (
 	role: "member",
 	isOnboarded: true,
 	timezone: "UTC",
-	organizationId: null,
 	settings: null,
 	...overrides,
 })

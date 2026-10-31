@@ -58,11 +58,9 @@ const generateBotToken = Effect.promise(async () => {
 	return { token, tokenHash: Hex.encode(new Uint8Array(digest)) }
 })
 
-/** The org a bot call acts in: the routing hint, else the caller's active org. */
-const activeOrganization = (hint: OrganizationId | undefined) =>
+/** The org a bot call acts in: the routing hint. */
+const activeOrganization = (organizationId: OrganizationId | undefined) =>
 	Effect.gen(function* () {
-		const user = yield* CurrentUser.Context
-		const organizationId = hint ?? user.organizationId ?? undefined
 		// The router sends calls with an org to its OrgObject; anywhere else there is none.
 		const object = yield* currentObject
 		if (organizationId === undefined || Option.isNone(object) || object.value.kind !== "org") {
@@ -317,21 +315,19 @@ export const BotRpcLive = BotRpcs.toLayer(
 
 			"bot.listPublic": ({ search, organizationId }) =>
 				Effect.gen(function* () {
-					const user = yield* CurrentUser.Context
 					const botRepo = yield* BotRepo
 					const userRepo = yield* UserRepo
 					const directory = yield* Directory
 					const publicBots = yield* botRepo.findPublic(search)
 
 					// Installed here = the bot user is an active member (`membership_index`).
-					const orgId = organizationId ?? user.organizationId ?? undefined
 					const installed = new Set<string>()
-					if (orgId !== undefined && publicBots.length > 0) {
+					if (organizationId !== undefined && publicBots.length > 0) {
 						const rows = yield* directory.db.run(
 							SQLite.from(schema.membershipIndexTable)
 								.select("userId")
 								.where(($) => [
-									$.organizationId.eq(orgId),
+									$.organizationId.eq(organizationId),
 									$.deletedAt.isNull(),
 									$.userId.in_(...publicBots.map((bot) => bot.userId)),
 								]),

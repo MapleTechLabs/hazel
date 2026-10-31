@@ -59,7 +59,6 @@ export class HazelSession extends Context.Service<HazelSession>()("@hazel/backen
 										new CurrentUser.Schema({
 											id: user.id,
 											role: "member",
-											organizationId: undefined,
 											avatarUrl: user.avatarUrl ?? undefined,
 											firstName: user.firstName,
 											lastName: user.lastName,

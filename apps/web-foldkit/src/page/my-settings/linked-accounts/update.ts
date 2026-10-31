@@ -71,7 +71,7 @@ const unsupported = {
 }
 
 export const update = (model: Model, message: Message, shared: Shared): Return => {
-	const orgId = shared.currentUser?.organizationId ?? null
+	const orgId = shared.organization?.id ?? null
 	const isIdle = model.link._tag === "Idle"
 	const toIdle = () => modifyFields(model, { link: () => Link.Idle() })
 	return Message.match<Return>(message, {

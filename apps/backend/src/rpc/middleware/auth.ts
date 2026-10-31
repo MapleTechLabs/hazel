@@ -133,7 +133,6 @@ export const AuthMiddlewareLive = Layer.effect(
 						role: "member",
 						isOnboarded: true,
 						timezone: user.timezone,
-						organizationId: null,
 						settings: user.settings,
 					}
 

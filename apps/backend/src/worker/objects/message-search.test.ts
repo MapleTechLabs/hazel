@@ -29,7 +29,6 @@ const uuid = () => crypto.randomUUID()
 const userOf = (id: string) =>
 	new CurrentUser.Schema({
 		id: id as UserId,
-		organizationId: null,
 		role: "member",
 		email: `${id}@example.com`,
 		isOnboarded: true,

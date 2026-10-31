@@ -29,7 +29,6 @@ export const shared: Shared = {
 		email: "ada@hazel.sh",
 		avatarUrl: null,
 		isOnboarded: true,
-		organizationId,
 	},
 	organization: { id: organizationId, name: "Hazel", slug: "hazel", logoUrl: null },
 	member: null,

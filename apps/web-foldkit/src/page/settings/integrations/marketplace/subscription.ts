@@ -25,7 +25,7 @@ const dataSubscriptions = Subscription.make<PageSubscriptionInput<Model>, Messag
 		{ organizationId: Schema.NullOr(OrganizationId) },
 		{
 			modelToDependencies: ({ shared }) => ({
-				organizationId: shared.currentUser?.organizationId ?? null,
+				organizationId: shared.organization?.id ?? null,
 			}),
 			dependenciesToStream: ({ organizationId }) =>
 				organizationId === null

@@ -172,7 +172,6 @@ describe("redirects", () => {
 		email: "ada@hazel.test",
 		avatarUrl: null,
 		isOnboarded,
-		organizationId: null,
 	})
 
 	it("resolves the root redirect like `_app/index.tsx`", () => {
