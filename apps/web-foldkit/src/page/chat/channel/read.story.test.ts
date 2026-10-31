@@ -614,6 +614,19 @@ describe("image viewer", () => {
 		)
 	})
 
+	test("a row keeps its forced highlight only while the pointer is on its toolbar", () => {
+		const entered = Overlays.update(
+			Overlays.init(),
+			Overlays.Message.PointerEnteredMessage({ messageId: graceMessageId }),
+		).model
+		expect(Overlays.heldMessageIdOf(entered)).toBeNull()
+		const onToolbar = Overlays.update(entered, Overlays.Message.EnteredToolbar()).model
+		expect(Overlays.heldMessageIdOf(onToolbar)).toBe(graceMessageId)
+		const offToolbar = Overlays.update(onToolbar, Overlays.Message.LeftToolbar()).model
+		expect(Overlays.heldMessageIdOf(offToolbar)).toBeNull()
+		expect(Overlays.hoveredMessageIdOf(offToolbar)).toBe(graceMessageId)
+	})
+
 	test("re-entering the hovered message cancels a pending hide; moving within it changes nothing", () => {
 		const entered = Overlays.update(
 			Overlays.init(),
