@@ -127,13 +127,20 @@ export const OrganizationUsersCall = defineCall("org.botUsers", "org", {
 	error: BotNotInstalledError,
 })
 
-/** The bot's user is a member here: the bot is installed in this org. */
+/** The org is live and the bot's user is a member here: the bot is installed in this org. */
 const requireBotMember = Effect.fn("OrgObject.requireBotMember")(function* (input: {
 	readonly botId: BotId
 	readonly botUserId: UserId
 }) {
 	const organizationId = yield* requireOrganizationId
 	const db = yield* Database.Database
+	// A deleted org keeps its member and access rows, so it is checked on its own.
+	const organization = yield* db.first(
+		SQLite.from(schema.organizationsTable)
+			.select("id")
+			.where(($) => [$.id.eq(organizationId), $.deletedAt.isNull()])
+			.limit(1),
+	)
 	const membership = yield* db.first(
 		SQLite.from(schema.organizationMembersTable)
 			.select("id")
@@ -144,7 +151,7 @@ const requireBotMember = Effect.fn("OrgObject.requireBotMember")(function* (inpu
 			])
 			.limit(1),
 	)
-	if (Option.isNone(membership))
+	if (Option.isNone(organization) || Option.isNone(membership))
 		return yield* new BotNotInstalledError({ botId: input.botId, orgId: organizationId })
 	return organizationId
 })

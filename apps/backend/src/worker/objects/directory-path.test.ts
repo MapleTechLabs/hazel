@@ -454,6 +454,12 @@ describe("directory path", () => {
 				// An org the bot is not installed in refuses.
 				const stranger = yield* seed(objects)
 				expect(errorTag(yield* list(stranger.seed.orgId))).toBe("BotNotInstalledError")
+
+				// So does a deleted org, whose member and access rows are left behind.
+				org.storage.db
+					.prepare(`UPDATE organizations SET deletedAt = '2026-10-31 00:00:00.000' WHERE id = ?`)
+					.run(s.orgId)
+				expect(errorTag(yield* list(s.orgId))).toBe("BotNotInstalledError")
 			}),
 		))
 
