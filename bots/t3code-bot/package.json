@@ -1,0 +1,26 @@
+{
+	"name": "t3code-bot",
+	"version": "1.0.0",
+	"private": true,
+	"description": "T3 Code bot: drive T3 Code threads from Hazel, on a Cloudflare Worker",
+	"type": "module",
+	"module": "src/worker.ts",
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"@hazel-chat/bot-sdk": "workspace:*",
+		"@hazel/domain": "workspace:*",
+		"@hazel/infra": "workspace:*",
+		"@hazel/integrations": "workspace:*",
+		"@hazel/schema": "workspace:*",
+		"alchemy": "catalog:alchemy",
+		"effect": "catalog:effect"
+	},
+	"devDependencies": {
+		"@cloudflare/workers-types": "catalog:alchemy",
+		"@types/node": "^24",
+		"typescript": "catalog:tooling"
+	}
+}
