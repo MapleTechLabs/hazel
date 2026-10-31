@@ -50,7 +50,7 @@ const authorOf = (userId: typeof Message.Schema.Type.authorId) =>
 		const user = yield* directory.db.first(
 			SQLite.from(schema.usersTable)
 				.select("id", "firstName", "lastName", "userType")
-				.where(($) => [$.id.eq(userId)])
+				.where(($) => [$.id.eq(userId), $.deletedAt.isNull()])
 				.limit(1),
 		)
 		return Option.map(user, (row) => ({
