@@ -24,7 +24,6 @@ export const ada: CurrentUser = {
 	email: "ada@hazel.test",
 	avatarUrl: null,
 	isOnboarded: true,
-	organizationId: null,
 }
 
 export const hazelOrg: Organization = {

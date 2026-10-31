@@ -13,7 +13,7 @@ export const newcomer: Shared = makeShared({
 	orgSlug: null,
 	organization: null,
 	member: null,
-	currentUser: { ...currentUser, firstName: "Nora", lastName: "Newcomer", isOnboarded: false, organizationId: null },
+	currentUser: { ...currentUser, firstName: "Nora", lastName: "Newcomer", isOnboarded: false },
 })
 
 /** A membership with a slug: the user was invited into an existing organization. */

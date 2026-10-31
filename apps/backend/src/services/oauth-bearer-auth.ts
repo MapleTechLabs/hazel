@@ -112,7 +112,6 @@ export class OAuthBearerAuth extends Context.Service<OAuthBearerAuth>()("@hazel/
 					currentUser: new CurrentUser.Schema({
 						id: user.id,
 						role: "member",
-						organizationId: undefined,
 						avatarUrl: user.avatarUrl ?? undefined,
 						firstName: user.firstName,
 						lastName: user.lastName,

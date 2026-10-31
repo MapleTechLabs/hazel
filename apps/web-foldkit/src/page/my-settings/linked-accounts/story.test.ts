@@ -3,7 +3,7 @@ import { routeOfPath } from "../../../route"
 import { Option } from "effect"
 import { Command, expectNoOutMessage, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
-import { currentUser, makeShared, organizationId, storyUpdate } from "../../../test/pages-fixtures"
+import { makeShared, organizationId, storyUpdate } from "../../../test/pages-fixtures"
 import { PageOutMessage } from "../../out-message"
 import { DisconnectDiscord, StartDiscordLink } from "./command"
 import { Message } from "./message"
@@ -63,7 +63,7 @@ describe("link discord", () => {
 	})
 
 	test("without an organization nothing starts", () => {
-		const orphan = makeShared({ currentUser: { ...currentUser, organizationId: null } })
+		const orphan = makeShared({ organization: null })
 		story<Model, Message, PageOutMessage>(
 			storyUpdate(update, orphan),
 			given(initial()),

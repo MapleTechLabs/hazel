@@ -46,7 +46,6 @@ const requestScheduler = (label: string): Scheduler.Scheduler => ({
 
 const user = new CurrentUser.Schema({
 	id: "00000000-0000-4000-8000-000000000001" as UserId,
-	organizationId: null,
 	role: "member",
 	email: "me@example.com",
 	isOnboarded: true,

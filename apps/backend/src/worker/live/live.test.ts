@@ -32,7 +32,6 @@ const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
 const principalOf = (id: UserId): InvokePrincipal => ({
 	user: new CurrentUser.Schema({
 		id,
-		organizationId: null,
 		role: "member",
 		email: `${id}@example.com`,
 		isOnboarded: true,

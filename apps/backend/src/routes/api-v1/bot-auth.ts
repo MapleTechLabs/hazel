@@ -57,7 +57,6 @@ export const botPrincipal = (bot: {
 		email: `bot-${bot.name}@hazel.bot`,
 		isOnboarded: true,
 		timezone: null,
-		organizationId: null,
 		settings: null,
 	}),
 	botScopes: bot.scopes === null ? null : bot.scopes.filter(isApiScope),

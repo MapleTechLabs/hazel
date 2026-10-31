@@ -32,7 +32,6 @@ const shared: Shared = {
 		email: "ada@hazel.test",
 		avatarUrl: null,
 		isOnboarded: true,
-		organizationId: null,
 	},
 	organization: null,
 	member: null,

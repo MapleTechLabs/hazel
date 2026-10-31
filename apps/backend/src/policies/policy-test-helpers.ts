@@ -20,7 +20,6 @@ export const makeActor = (overrides?: Partial<CurrentUser.Schema>): CurrentUser.
 	role: "member",
 	isOnboarded: true,
 	timezone: "UTC",
-	organizationId: TEST_ORG_ID,
 	settings: null,
 	...overrides,
 })

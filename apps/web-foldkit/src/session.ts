@@ -10,8 +10,6 @@ export const CurrentUser = Schema.Struct({
 	email: Schema.String,
 	avatarUrl: Schema.NullOr(Schema.String),
 	isOnboarded: Schema.Boolean,
-	/** `user.me`'s organization, if any (legacy `useAuth().user.organizationId`). */
-	organizationId: Schema.NullOr(OrganizationId),
 })
 export type CurrentUser = typeof CurrentUser.Type
 

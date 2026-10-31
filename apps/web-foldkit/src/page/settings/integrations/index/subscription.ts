@@ -16,9 +16,8 @@ export const subscriptions = Subscription.make<PageSubscriptionInput<Model>, Mes
 	connections: entry(
 		{ organizationId: Schema.NullOr(OrganizationId) },
 		{
-			// Legacy reads `useAuth().user.organizationId` here.
 			modelToDependencies: ({ shared }) => ({
-				organizationId: shared.currentUser?.organizationId ?? null,
+				organizationId: shared.organization?.id ?? null,
 			}),
 			dependenciesToStream: ({ organizationId }) =>
 				organizationId === null
@@ -32,7 +31,7 @@ export const subscriptions = Subscription.make<PageSubscriptionInput<Model>, Mes
 		{ organizationId: Schema.NullOr(OrganizationId), userId: Schema.NullOr(UserId) },
 		{
 			modelToDependencies: ({ shared }) => ({
-				organizationId: shared.currentUser?.organizationId ?? null,
+				organizationId: shared.organization?.id ?? null,
 				userId: shared.currentUser?.id ?? null,
 			}),
 			dependenciesToStream: ({ organizationId, userId }) =>

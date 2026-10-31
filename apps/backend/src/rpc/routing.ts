@@ -91,13 +91,11 @@ const orgHint = (method: string) => (payload: { readonly organizationId?: Organi
 	Effect.flatMap(hint(method, "organizationId", payload.organizationId), org)
 
 /**
- * The org a bot call acts in: the payload's `organizationId`, else the caller's active org; with
- * neither, the directory path (which answers `ActiveOrganizationRequiredError`, or `[]`).
+ * The org a bot call acts in: the payload's `organizationId`; without one, the directory path
+ * (which answers `ActiveOrganizationRequiredError`, or `[]`).
  */
-const activeOrg = (payload: { readonly organizationId?: OrganizationId | undefined }, current: User) => {
-	const organizationId = payload.organizationId ?? current.organizationId ?? undefined
-	return organizationId === undefined ? directory() : org(organizationId)
-}
+const activeOrg = (payload: { readonly organizationId?: OrganizationId | undefined }) =>
+	payload.organizationId === undefined ? directory() : org(payload.organizationId)
 
 const byOrg = (payload: { readonly organizationId: OrganizationId }) => org(payload.organizationId)
 const byChannel = (payload: { readonly channelId: ChannelId }) => channel(payload.channelId)

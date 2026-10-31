@@ -12,7 +12,7 @@ export const subscriptions = Subscription.make<PageSubscriptionInput<Model>, Mes
 		{ organizationId: Schema.NullOr(OrganizationId) },
 		{
 			modelToDependencies: ({ shared }) => ({
-				organizationId: shared.currentUser?.organizationId ?? null,
+				organizationId: shared.organization?.id ?? null,
 			}),
 			dependenciesToStream: ({ organizationId }) =>
 				organizationId === null

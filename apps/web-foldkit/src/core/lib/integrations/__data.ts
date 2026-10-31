@@ -226,12 +226,12 @@ export const integrations: Integration[] = [
 	},
 	{
 		id: "t3code",
+		logoSrc: "/images/integrations/t3code.svg",
 		name: "T3 Code",
 		description: "Drive T3 Code threads on your own machine from Hazel.",
 		fullDescription:
 			"Link your T3 Code environment to start and steer its threads with /t3 from any conversation. Each member links their own machine and chooses who else in the organization may drive it; every action is posted in the Hazel thread.",
-		logoDomain: "t3.chat",
-		logoType: "icon",
+		logoDomain: "t3.codes",
 		brandColor: "#1C1C1E",
 		category: "developer-tools",
 		connectionType: "environment",

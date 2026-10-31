@@ -15,7 +15,6 @@ import { CurrentUser } from "@hazel/domain"
 const sessionUser = (id: UserId) =>
 	new CurrentUser.Schema({
 		id,
-		organizationId: null,
 		role: "member",
 		email: "caller@example.com",
 		isOnboarded: true,

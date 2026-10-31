@@ -364,7 +364,7 @@ const write = Subscription.make<Input, Message, HazelRpc | HazelApiClient>()((en
 		{ organizationId: Schema.NullOr(OrganizationId) },
 		{
 			modelToDependencies: ({ shared }) => ({
-				organizationId: shared.currentUser?.organizationId ?? null,
+				organizationId: shared.organization?.id ?? null,
 			}),
 			dependenciesToStream: ({ organizationId }) =>
 				organizationId === null
@@ -378,7 +378,7 @@ const write = Subscription.make<Input, Message, HazelRpc | HazelApiClient>()((en
 		{ organizationId: Schema.NullOr(OrganizationId) },
 		{
 			modelToDependencies: ({ shared }) => ({
-				organizationId: shared.currentUser?.organizationId ?? null,
+				organizationId: shared.organization?.id ?? null,
 			}),
 			dependenciesToStream: ({ organizationId }) =>
 				organizationId === null

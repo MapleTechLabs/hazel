@@ -1,5 +1,5 @@
 import { OrganizationId, UserId } from "@hazel/schema"
-import { and, eq } from "@tanstack/db"
+import { eq } from "@tanstack/db"
 import { Effect, Option, Schema, Stream } from "effect"
 import { Command, Submodel, Subscription } from "foldkit"
 import { modifyFields } from "foldkit/struct"
@@ -78,13 +78,10 @@ interface MembershipRow {
 
 const subscriptions = Subscription.make<PageSubscriptionInput<Model>, Message>()((entry) => ({
 	membership: entry(
-		{ userId: Schema.NullOr(UserId), organizationId: Schema.NullOr(OrganizationId) },
+		{ userId: Schema.NullOr(UserId) },
 		{
-			modelToDependencies: ({ shared }) => ({
-				userId: shared.currentUser?.id ?? null,
-				organizationId: shared.currentUser?.organizationId ?? null,
-			}),
-			dependenciesToStream: ({ userId, organizationId }) =>
+			modelToDependencies: ({ shared }) => ({ userId: shared.currentUser?.id ?? null }),
+			dependenciesToStream: ({ userId }) =>
 				userId === null
 					? Stream.empty
 					: liveQueryStream<MembershipRow, Message>(
@@ -94,15 +91,7 @@ const subscriptions = Subscription.make<PageSubscriptionInput<Model>, Message>()
 									.innerJoin({ org: organizationCollection }, ({ member, org }) =>
 										eq(member.organizationId, org.id),
 									)
-									// With an org in the JWT, only that membership counts.
-									.where(({ member }) =>
-										organizationId
-											? and(
-													eq(member.userId, userId),
-													eq(member.organizationId, organizationId),
-												)
-											: eq(member.userId, userId),
-									)
+									.where(({ member }) => eq(member.userId, userId))
 									.findOne(),
 							(rows) => {
 								const row = rows[0]

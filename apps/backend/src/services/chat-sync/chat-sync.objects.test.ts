@@ -39,7 +39,6 @@ const DISCORD_CHANNEL = "222222222222222222" as ExternalChannelId
 const userOf = (id: string) =>
 	new CurrentUser.Schema({
 		id: id as UserId,
-		organizationId: null,
 		role: "member",
 		email: `${id}@example.com`,
 		isOnboarded: true,
