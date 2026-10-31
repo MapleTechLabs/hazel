@@ -173,8 +173,7 @@ export const ENV_TEMPLATES = {
 		base.OPENROUTER_API_KEY = config.openrouterApiKey ?? ""
 
 		// Klipy GIF search
-		base.KLIPY_API_KEY =
-			config.klipyApiKey ?? "bZNjfZASldu4OkLPwM3Wg7mcInb0oESRww2b4wz9E7P8bfdxPrCdue1N58Ciw6Ut"
+		base.KLIPY_API_KEY = config.klipyApiKey ?? ""
 
 		// First-party bots (bots/*): alchemy dev runs each one whose token is set
 		if (config.botTokens?.hazelBot) base.HAZEL_BOT_TOKEN = config.botTokens.hazelBot
