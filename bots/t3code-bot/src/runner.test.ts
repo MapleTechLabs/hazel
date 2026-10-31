@@ -302,6 +302,7 @@ describe("followThread across runs", () => {
 describe("viewOf", () => {
 	it("hides the prompt and shows unknown items as named steps", () => {
 		expect(viewOf(item(1, { type: "user_message", text: "hi" }))._tag).toBe("hidden")
+		expect(viewOf(item(1, { type: "checkpoint" }))._tag).toBe("hidden")
 		expect(
 			viewOf(item(1, { type: "web_search", title: "Search docs", text: "effect schedule" })),
 		).toMatchObject({

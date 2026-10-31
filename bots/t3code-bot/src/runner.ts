@@ -120,6 +120,8 @@ export const viewOf = (item: T3Item): ItemView => {
 		case "user_message":
 		case "user_input_request":
 		case "proposed_plan":
+		// T3's own bookkeeping: a snapshot of the workspace after each turn.
+		case "checkpoint":
 			return { _tag: "hidden" }
 		default:
 			return {

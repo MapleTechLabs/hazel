@@ -7,7 +7,7 @@
  */
 import { defineBot, type MessageType, type TypedCommandContext } from "@hazel-chat/bot-sdk"
 import { HazelApi } from "@hazel/domain/http"
-import { makeT3CodeMcpSession, type T3Project } from "@hazel/integrations/t3code"
+import { makeT3CodeMcpSession, pickModelSelection, type T3Project } from "@hazel/integrations/t3code"
 import type { ChannelId, OrganizationId, UserId } from "@hazel/schema"
 import { Cause, Config, Effect, FiberMap, Layer, Option, Redacted, Schema, Semaphore } from "effect"
 import { FetchHttpClient } from "effect/http"
@@ -275,6 +275,18 @@ export const bot = defineBot({
 						)
 					}
 
+					// A project without a default model needs one named: the first provider that can run.
+					const modelSelection =
+						project.defaultModelSelection == null
+							? pickModelSelection(yield* mcp.providers())
+							: undefined
+					if (project.defaultModelSelection == null && modelSelection === null) {
+						return yield* chat.post(
+							ctx.channelId,
+							`\`${project.title}\` has no default model and no provider in T3 Code can run. Set one up in T3 Code first.`,
+						)
+					}
+
 					const prompt = ctx.args.prompt.trim()
 					const root = yield* sdk.message.send(
 						ctx.channelId,
@@ -288,6 +300,7 @@ export const bot = defineBot({
 						projectId: project.id,
 						title: prompt.length > 80 ? `${prompt.slice(0, 79)}…` : prompt,
 						message: prompt,
+						...(modelSelection == null ? {} : { modelSelection }),
 					})
 					const run: T3Run = {
 						organizationId: ctx.orgId,

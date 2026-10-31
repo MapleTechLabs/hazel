@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Cause, Effect, Exit, Layer, Option } from "effect"
 import { HttpClient, HttpClientResponse } from "effect/http"
-import { makeT3CodeMcpSession, parseSseMessages } from "./mcp"
+import { makeT3CodeMcpSession, parseSseMessages, pickModelSelection } from "./mcp"
 
 interface Seen {
 	readonly method: string
@@ -184,4 +184,27 @@ describe("makeT3CodeMcpSession", () => {
 			}
 		}),
 	)
+})
+
+describe("pickModelSelection", () => {
+	it("takes the first provider that can run, with its first model", () => {
+		expect(
+			pickModelSelection([
+				{ providerInstanceId: "cursor", displayName: "Cursor", models: [], constraints: [] },
+				{
+					providerInstanceId: "grok",
+					displayName: "Grok",
+					models: [{ id: "grok-build" }],
+					constraints: ["Provider instance is disabled."],
+				},
+				{
+					providerInstanceId: "claudeAgent",
+					displayName: "Claude",
+					models: [{ id: "claude-opus-5-5" }, { id: "claude-sonnet-5-5" }],
+					constraints: [],
+				},
+			]),
+		).toEqual({ instanceId: "claudeAgent", model: "claude-opus-5-5" })
+		expect(pickModelSelection([])).toBeNull()
+	})
 })

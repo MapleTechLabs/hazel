@@ -59,10 +59,15 @@ export const TERMINAL_RUN_STATUSES: ReadonlySet<string> = new Set([
 	"rolled_back",
 ])
 
+export const T3ModelSelection = Schema.Struct({ instanceId: Schema.String, model: Schema.String })
+export type T3ModelSelection = typeof T3ModelSelection.Type
+
 export const T3Project = Schema.Struct({
 	id: Schema.String,
 	title: Schema.String,
 	workspaceRoot: Schema.optional(Schema.String),
+	/** Null when the project has none: a launch must then name a model. */
+	defaultModelSelection: Schema.optional(Schema.NullOr(Schema.Unknown)),
 })
 export type T3Project = typeof T3Project.Type
 
@@ -126,6 +131,27 @@ export const T3Read = Schema.Struct({
 	hasMore: Schema.Boolean,
 })
 export type T3Read = typeof T3Read.Type
+
+export const T3Provider = Schema.Struct({
+	providerInstanceId: Schema.String,
+	displayName: Schema.NullishOr(Schema.String),
+	models: Schema.Array(Schema.Struct({ id: Schema.String, label: Schema.optional(Schema.String) })),
+	/** Why the provider can't run now (disabled, signed out); empty when it can. */
+	constraints: Schema.Array(Schema.String),
+})
+export type T3Provider = typeof T3Provider.Type
+
+const Capabilities = Schema.Struct({ providers: Schema.Array(T3Provider) })
+
+/** The first provider that can run, with its first listed model (T3 lists its default first). */
+export const pickModelSelection = (providers: ReadonlyArray<T3Provider>): T3ModelSelection | null => {
+	const provider = providers.find(
+		(candidate) => candidate.constraints.length === 0 && candidate.models.length > 0,
+	)
+	return provider === undefined
+		? null
+		: { instanceId: provider.providerInstanceId, model: provider.models[0]!.id }
+}
 
 const PendingList = Schema.Struct({ requestIds: Schema.Array(Schema.String) })
 
@@ -334,10 +360,16 @@ export const makeT3CodeMcpSession = Effect.fn("T3CodeMcp.session")(function* (ta
 			callTool("t3_project_list", { limit: 100 }, ProjectList).pipe(
 				Effect.map((list) => list.projects),
 			),
+		/** The environment's providers and models (`orchestrator_capabilities`). */
+		providers: () =>
+			callTool("orchestrator_capabilities", {}, Capabilities).pipe(
+				Effect.map((result) => result.providers),
+			),
 		launchThread: (input: {
 			readonly projectId: string
 			readonly title: string
 			readonly message: string
+			readonly modelSelection?: T3ModelSelection
 		}) => callTool("t3_thread_launch", { ...input }, T3Launched),
 		send: (input: {
 			readonly threadId: string
