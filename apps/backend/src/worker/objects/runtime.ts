@@ -29,6 +29,7 @@ import {
 } from "../../rpc/dispatch"
 import type { BotGatewayTransport } from "../../services/bot-gateway-transport"
 import type { Directory } from "../../services/directory"
+import type { HtmlRenders } from "../../services/html-renders"
 import type { ThreadNamer } from "../../services/thread-namer"
 import type { ChatSyncTransport } from "../../services/chat-sync/chat-sync-transport"
 import { ObjectCalls } from "./call-receivers"
@@ -61,7 +62,13 @@ import {
 } from "./socket-token"
 
 /** What every object reaches beyond its own storage. */
-export type ObjectPlatform = ObjectStubs | Directory | BotGatewayTransport | ThreadNamer | ChatSyncTransport
+export type ObjectPlatform =
+	| ObjectStubs
+	| Directory
+	| BotGatewayTransport
+	| ThreadNamer
+	| ChatSyncTransport
+	| HtmlRenders
 
 export interface ObjectRuntimeOptions {
 	readonly kind: ObjectKind

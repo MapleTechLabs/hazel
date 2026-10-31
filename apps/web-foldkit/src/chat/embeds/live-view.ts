@@ -1,6 +1,6 @@
 import { ACTOR_SERVICE_ERROR_UI_MESSAGE, ACTOR_SERVICE_ERROR_UI_TITLE } from "@hazel/domain"
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { marked } from "marked"
+import { Marked } from "marked"
 import remend from "remend"
 import { cn } from "~/lib/utils"
 import { IconBrainSparkle, IconSparkles, IconWarning } from "../../icons"
@@ -19,12 +19,10 @@ export interface LiveLoading {
 }
 
 const dot = <M>(h: HtmlBuilder<M>, delay: string | null): Html =>
-	h.span(
-		[
-			h.Class("size-1 rounded-full bg-current animate-[ai-thinking-dot_1.4s_ease-in-out_infinite]"),
-			...(delay === null ? [] : [h.Attribute("style", `animation-delay: ${delay};`)]),
-		],
-	)
+	h.span([
+		h.Class("size-1 rounded-full bg-current animate-[ai-thinking-dot_1.4s_ease-in-out_infinite]"),
+		...(delay === null ? [] : [h.Attribute("style", `animation-delay: ${delay};`)]),
+	])
 
 /** `MessageLiveLoading`. */
 const loadingView = <M>(h: HtmlBuilder<M>, loading: LiveLoading): Html =>
@@ -37,7 +35,13 @@ const loadingView = <M>(h: HtmlBuilder<M>, loading: LiveLoading): Html =>
 			}),
 			h.span(
 				[h.Class("flex items-center gap-1")],
-				[loading.text, h.span([h.Class("inline-flex gap-0.5 ml-0.5")], [dot(h, null), dot(h, "0.2s"), dot(h, "0.4s")])],
+				[
+					loading.text,
+					h.span(
+						[h.Class("inline-flex gap-0.5 ml-0.5")],
+						[dot(h, null), dot(h, "0.2s"), dot(h, "0.4s")],
+					),
+				],
 			),
 		],
 	)
@@ -65,15 +69,16 @@ const progressView = <M>(h: HtmlBuilder<M>, value: number): Html => {
 							? []
 							: [
 									h.div(
-										[h.Class("absolute inset-0 overflow-hidden"), h.Attribute("aria-hidden", "true")],
 										[
-											h.div(
-												[
-													h.Class(
-														"absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent animate-[progress-shimmer_1.5s_ease-in-out_infinite]",
-													),
-												],
-											),
+											h.Class("absolute inset-0 overflow-hidden"),
+											h.Attribute("aria-hidden", "true"),
+										],
+										[
+											h.div([
+												h.Class(
+													"absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent animate-[progress-shimmer_1.5s_ease-in-out_infinite]",
+												),
+											]),
 										],
 									),
 								],
@@ -103,10 +108,50 @@ const streamingClass = cn(
 	undefined,
 )
 
+const escapeHtml = (text: string) =>
+	text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+
+/** http(s), mailto and relative URLs; `javascript:`, `data:` and the like are dropped. */
+const isSafeUrl = (href: string) => {
+	// Browsers drop leading controls and spaces, and tabs and newlines anywhere, before the scheme.
+	let start = 0
+	while (start < href.length && href.charCodeAt(start) <= 0x20) start++
+	const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(href.slice(start).replace(/[\t\n\r]/g, ""))?.[1]
+	return scheme === undefined || ["http", "https", "mailto"].includes(scheme.toLowerCase())
+}
+
+/**
+ * The bot streams this text into `InnerHTML`, so raw HTML renders as text and links and images keep
+ * safe URLs only: nothing from the stream runs in the app's origin. HTML is never tokenized: after
+ * an inline `<code>` tag marked emits the following text unescaped, so escaping in the `html`
+ * renderer alone is not enough.
+ */
+const streamingMarked = new Marked({
+	async: false,
+	gfm: true,
+	breaks: false,
+	// `undefined` (not `false`, which falls back to marked's own) leaves the HTML to the text rules.
+	tokenizer: { html: () => undefined, tag: () => undefined },
+	renderer: {
+		html: ({ text }) => escapeHtml(text),
+		link({ href, title, tokens }) {
+			const label = this.parser.parseInline(tokens)
+			if (!isSafeUrl(href)) return label
+			const titleAttribute = title ? ` title="${escapeHtml(title)}"` : ""
+			return `<a href="${escapeHtml(href)}"${titleAttribute} rel="noopener noreferrer" target="_blank">${label}</a>`
+		},
+		image({ href, title, text }) {
+			if (!isSafeUrl(href)) return escapeHtml(text)
+			const titleAttribute = title ? ` title="${escapeHtml(title)}"` : ""
+			return `<img src="${escapeHtml(href)}" alt="${escapeHtml(text)}"${titleAttribute}>`
+		},
+	},
+})
+
 /** `StreamingMarkdown`'s HTML: remend closes what the stream left open, marked renders it. */
-const streamingHtml = (text: string) =>
-	marked
-		.parse(remend(text || ""), { async: false, gfm: true, breaks: false })
+export const streamingHtml = (text: string) =>
+	streamingMarked
+		.parse(remend(text || ""), { async: false })
 		.replace(/<p>\s*<\/p>/g, "")
 		.replace(/>\s+</g, "><")
 		.trim()
@@ -148,8 +193,17 @@ const errorView = <M>(h: HtmlBuilder<M>, error: string): Html => {
 				[h.Class("flex items-start gap-3")],
 				[
 					h.div(
-						[h.Class("rounded-full bg-danger/10 p-2 animate-[error-icon-bounce_0.4s_var(--ease-out-cubic)_0.3s]")],
-						[IconWarning(h, { className: "size-5 text-danger", attributes: { "aria-hidden": "true" } })],
+						[
+							h.Class(
+								"rounded-full bg-danger/10 p-2 animate-[error-icon-bounce_0.4s_var(--ease-out-cubic)_0.3s]",
+							),
+						],
+						[
+							IconWarning(h, {
+								className: "size-5 text-danger",
+								attributes: { "aria-hidden": "true" },
+							}),
+						],
 					),
 					h.div(
 						[h.Class("flex-1 space-y-1")],
@@ -173,7 +227,11 @@ export const liveView = <M>(h: HtmlBuilder<M>, state: LiveActorState, loading: L
 		[h.Class(cn("space-y-2", undefined))],
 		[
 			state.status === "active" && state.progress !== null ? progressView(h, state.progress) : h.empty,
-			state.text ? (state.isStreaming ? streamingView(h, state.text) : markdownView(h, state.text)) : h.empty,
+			state.text
+				? state.isStreaming
+					? streamingView(h, state.text)
+					: markdownView(h, state.text)
+				: h.empty,
 			state.status === "failed" && state.error ? errorView(h, state.error) : h.empty,
 		],
 	)

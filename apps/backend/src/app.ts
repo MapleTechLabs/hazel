@@ -67,6 +67,7 @@ import { IntegrationBotService } from "./services/integrations/integration-bot-s
 import { ChatSyncAttributionReconciler } from "./services/chat-sync/chat-sync-attribution-reconciler"
 import { OAuthBearerAuth } from "./services/oauth-bearer-auth"
 import { ObjectStorage } from "./services/object-storage"
+import { HtmlRenders } from "./services/html-renders"
 import { OAuthProviderRegistry } from "./services/oauth"
 import { HazelAuthInstance, HazelAuthRoutes, HazelAuthServicesLive } from "./services/hazel-auth"
 import { DevSignInRoutes } from "./routes/dev-sign-in.http"
@@ -201,6 +202,7 @@ export const AppServicesLive = Layer.mergeAll(
 	RepoLive,
 	PolicyLive,
 	ObjectStorage.layer,
+	HtmlRenders.layer,
 	GitHub.GitHubAppJWTService.layer,
 	GitHub.GitHubApiClient.layer,
 	IntegrationTokenService.layer,

@@ -1,6 +1,8 @@
 import { createLazy, type Html, type HtmlBuilder } from "foldkit/html"
 import { contentStyles, rootStyles } from "~/components/ui/split-panel/split-panel.styles"
 import { isImageAttachment } from "../../../chat/attachments"
+import { htmlRenderFullscreenView } from "../../../chat/embeds/html-render"
+import type * as HtmlRender from "../../../chat/html-render"
 import { imageViewerView } from "../../../chat/image-viewer"
 import { dateDividerView, messageRowView, type RowContext } from "../../../chat/message/row"
 import type * as Draft from "../../../composer/draft"
@@ -9,7 +11,7 @@ import * as MessageList from "../../../mount/message-list"
 import { mobileMenuButton } from "../../../shell/mobile"
 import { joinBannerView, typingIndicatorView } from "../banners"
 import { attachmentInfoFrom, composerAreaView, replyPreviewOf } from "../composer-view"
-import { authorIdentity } from "../derive"
+import { authorIdentity, toDeriveContext } from "../derive"
 import * as FilesPage from "../files/page"
 import * as FilesView from "../files/view"
 import { chatHeaderView } from "../header"
@@ -20,7 +22,7 @@ import { idleRowContext, rowContextFor } from "../row-context"
 import type { DisplayRow, MessageRow } from "../rows"
 import { chatTabBarView } from "../tab-bar"
 import { threadPanelView } from "../thread-panel"
-import { deriveContextOf, isMemberOf, Message, type Model, routeTabOf, type ThreadPanel } from "./page"
+import { isMemberOf, Message, type Model, routeTabOf, type ThreadPanel } from "./page"
 
 /** The channel route's content: header, tab bar, message list and composer (desktop). */
 
@@ -34,6 +36,7 @@ const toDraftMessage = (message: Draft.Message) => Message.GotDraftMessage({ mes
 const toThreadDraftMessage = (message: Draft.Message) => Message.GotThreadDraftMessage({ message })
 const toFilesMessage = (message: FilesPage.Message) => Message.GotFilesMessage({ message })
 const toOverlay = (message: Overlays.Message) => Message.GotOverlaysMessage({ message })
+const toHtmlRenderMessage = (message: HtmlRender.Message) => Message.GotHtmlRenderMessage({ message })
 const toPinnedMessage = (message: Parameters<typeof Overlays.Message.GotPinnedMessage>[0]["message"]) =>
 	toOverlay(Overlays.Message.GotPinnedMessage({ message }))
 
@@ -344,9 +347,15 @@ export const view = (h: H, model: Model, options: ViewOptions = {}): Html => {
 						model.lookups,
 						model.messages,
 						model.currentUserId,
+						// Only what the panel's frames read: not the fullscreen dialog or the theme's variables.
+						model.htmlRender.urls,
+						model.htmlRender.frames,
+						model.htmlRender.theme?.appearance ?? "dark",
 						idleRowContext(h, model),
 						h,
 					]) ?? h.empty),
+			// Outside the tabs: the list's frames and the thread panel's both open it.
+			htmlRenderFullscreenView(h, model.htmlRender, toHtmlRenderMessage),
 		],
 	)
 }
@@ -357,10 +366,19 @@ const threadPanelOverlay = (
 	lookups: Model["lookups"],
 	messages: Model["messages"],
 	currentUserId: Model["currentUserId"],
+	urls: HtmlRender.Model["urls"],
+	frames: HtmlRender.Model["frames"],
+	appearance: "light" | "dark",
 	rowContext: RowContext<Message>,
 	h: H,
 ): Html => {
-	const context = deriveContextOf({ lookups, currentUserId, unfurls: {}, liveStates: {} })
+	// The original message's HTML renders show here too, so the panel re-renders with their state.
+	const context = toDeriveContext(lookups, currentUserId ?? undefined, {
+		unfurls: {},
+		liveStates: {},
+		htmlRenders: { urls, frames },
+		appearance,
+	})
 	const name = lookups.threadChannels.find((channel) => channel.id === panel.threadChannelId)?.name
 	return threadPanelView(h, {
 		threadName: name || "Thread",
@@ -368,6 +386,7 @@ const threadPanelOverlay = (
 		rows: panel.rows,
 		context,
 		rowContext,
+		toHtmlRenderMessage,
 		onClose: Message.ClickedCloseThread(),
 		onGenerateName: Message.ClickedGenerateThreadName(),
 		onRename: Message.ClickedRenameThread(),

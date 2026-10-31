@@ -1,6 +1,7 @@
 /**
  * Outbox delivery and receipt. `deliverOutboxRow` is every object's `deliver`: object targets get
- * a DO RPC `applyEffect`, directory and bot-gateway effects run right here, in the sender.
+ * a DO RPC `applyEffect`; directory, bot-gateway, ai, chat-sync and storage effects run right here,
+ * in the sender.
  * `applyReceivedEffect` is the receiving object's side: decode, run once per key, report.
  */
 import { Database } from "@hazel/db"
@@ -11,6 +12,7 @@ import type { BotGatewayTransport } from "../../../services/bot-gateway-transpor
 import type { Directory } from "../../../services/directory"
 import type { ObjectKind } from "../kinds"
 import { ObjectStubs } from "../protocol"
+import type { HtmlRenders } from "../../../services/html-renders"
 import type { ThreadNamer } from "../../../services/thread-namer"
 import { chatSyncDeliveryReceivers } from "../../../services/chat-sync/chat-sync-outbound"
 import { ChatSyncDeliveryEffects } from "../../../services/chat-sync/chat-sync-effects"
@@ -31,6 +33,7 @@ import {
 	EffectSenderRefusedError,
 	parseEffectTarget,
 } from "./registry"
+import { storageReceivers, StorageEffects } from "./storage-effects"
 import { userReceivers, UserEffects } from "./user-effects"
 
 type Receiver<R> = (payload: any) => Effect.Effect<void, unknown, R>
@@ -62,6 +65,8 @@ const chatSyncSide = side<Database.Database | SqlClient | ChatSyncTransport | Di
 	ChatSyncDeliveryEffects,
 	chatSyncDeliveryReceivers,
 )
+
+const storageSide = side<Database.Database | HtmlRenders>(StorageEffects, storageReceivers)
 
 const failure = (message: string, retryable = true) => new OutboxDeliveryError({ message, retryable })
 
@@ -140,6 +145,7 @@ export const deliverOutboxRow = (
 	| SqlClient
 	| ThreadNamer
 	| ChatSyncTransport
+	| HtmlRenders
 > =>
 	Effect.gen(function* () {
 		const target = parseEffectTarget(row.target)
@@ -148,6 +154,7 @@ export const deliverOutboxRow = (
 		if (target.kind === "bot-gateway") return yield* runLocal(botGatewaySide, row, sender)
 		if (target.kind === "ai") return yield* runLocal(aiSide, row, sender)
 		if (target.kind === "chat-sync") return yield* runLocal(chatSyncSide, row, sender)
+		if (target.kind === "storage") return yield* runLocal(storageSide, row, sender)
 		const stubs = yield* ObjectStubs
 		const result = yield* stubs
 			.get({ kind: target.kind, id: target.id! })

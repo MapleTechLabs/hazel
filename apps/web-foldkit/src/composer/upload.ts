@@ -1,3 +1,4 @@
+import { isActiveContentType } from "@hazel/domain/http"
 import { AttachmentId, type ChannelId, type OrganizationId } from "@hazel/schema"
 import { Duration, Effect, Queue, Schema, Stream } from "effect"
 import { defineMessageUnion } from "foldkit/message"
@@ -50,6 +51,10 @@ class StorageUploadError extends Schema.TaggedError<StorageUploadError>()("Stora
 	reason: Schema.Literals(["StorageNetwork", "StorageTimeout", "StorageServer"]),
 }) {}
 
+/** The type the file is stored with: one a browser would run as a document is stored as plain bytes. */
+const uploadContentType = (file: File) =>
+	file.type === "" || isActiveContentType(file.type) ? "application/octet-stream" : file.type
+
 /** The presigned PUT, with progress. Interrupting it aborts the request. */
 const putToStorage = (uploadUrl: string, file: File, onProgress: (percent: number) => void) =>
 	Effect.callback<void, StorageUploadError>((resume) => {
@@ -65,7 +70,7 @@ const putToStorage = (uploadUrl: string, file: File, onProgress: (percent: numbe
 		xhr.onerror = () => fail("StorageNetwork")
 		xhr.ontimeout = () => fail("StorageTimeout")
 		xhr.open("PUT", uploadUrl)
-		xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream")
+		xhr.setRequestHeader("Content-Type", uploadContentType(file))
 		xhr.send(file)
 		return Effect.sync(() => xhr.abort())
 	})
@@ -113,7 +118,7 @@ const upload = (args: UploadArgs, onProgress: (percent: number) => void) => {
 				type: "attachment" as const,
 				fileName: file.name,
 				fileSize: file.size,
-				contentType: file.type || "application/octet-stream",
+				contentType: uploadContentType(file),
 				organizationId: args.organizationId,
 				channelId: args.channelId,
 			},

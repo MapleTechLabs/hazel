@@ -6,9 +6,16 @@ import {
 	MessageNotFoundError,
 	UnauthorizedError,
 } from "../../errors"
-import { AttachmentId, ChannelId, MessageId } from "@hazel/schema"
+import { AttachmentId, ChannelId, HtmlRenderId, MessageId } from "@hazel/schema"
+import {
+	HTML_RENDER_AUTHOR_GUIDE,
+	HTML_RENDER_MAX_BYTES,
+	HTML_RENDER_MAX_HEIGHT,
+	HTML_RENDER_MAX_TITLE_LENGTH,
+	HTML_RENDER_MIN_HEIGHT,
+} from "../../html-render"
 import { Message, MessageReaction } from "../../models"
-import { MessageEmbeds } from "../../models/message-embed-schema"
+import { MessageEmbedHtml, MessageEmbeds } from "../../models/message-embed-schema"
 import { LiveAction, LiveState, LiveWriteResult } from "../../live/protocol"
 import { RateLimitExceededError } from "../../rate-limit-errors"
 import { RequiredScopes } from "../../scopes/required-scopes"
@@ -59,6 +66,12 @@ export class DeleteMessageQuery extends Schema.Class<DeleteMessageQuery>("Delete
 	channel_id: Schema.optional(ChannelId),
 }) {}
 
+/** A plain struct, not a class: clients pass the query as an object. */
+export const DeleteHtmlRenderQuery = Schema.Struct({
+	/** The channel it was published for. */
+	channel_id: ChannelId,
+})
+
 export class ToggleReactionRequest extends Schema.Class<ToggleReactionRequest>("ToggleReactionRequest")({
 	emoji: Schema.String,
 	channelId: ChannelId,
@@ -74,7 +87,29 @@ export class GetLiveStateQuery extends Schema.Class<GetLiveStateQuery>("GetLiveS
 	channel_id: ChannelId,
 }) {}
 
+export class PublishHtmlRenderRequest extends Schema.Class<PublishHtmlRenderRequest>(
+	"PublishHtmlRenderRequest",
+)({
+	/** The channel whose messages will show the page: only its viewers can load it. */
+	channelId: ChannelId,
+	title: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(HTML_RENDER_MAX_TITLE_LENGTH)),
+	html: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(HTML_RENDER_MAX_BYTES)).annotate({
+		description: "A complete, self-contained HTML document.",
+	}),
+	/** The frame's height until the page reports its own, in CSS pixels. */
+	height: Schema.Int.check(
+		Schema.isBetween({ minimum: HTML_RENDER_MIN_HEIGHT, maximum: HTML_RENDER_MAX_HEIGHT }),
+	),
+}) {}
+
 // ============ RESPONSE SCHEMAS ============
+
+export class PublishHtmlRenderResponse extends Schema.Class<PublishHtmlRenderResponse>(
+	"PublishHtmlRenderResponse",
+)({
+	/** Put it in a message embed's `html`. */
+	data: MessageEmbedHtml,
+}) {}
 
 export class MessageResponse extends Schema.Class<MessageResponse>("MessageResponse")({
 	data: Message.Schema as any,
@@ -111,6 +146,15 @@ export class ChannelNotFoundError extends Schema.TaggedError<ChannelNotFoundErro
 
 export class InvalidPaginationError extends Schema.TaggedError<InvalidPaginationError>()(
 	"InvalidPaginationError",
+	{
+		message: Schema.String,
+	},
+	{ httpApiStatus: 400 },
+) {}
+
+/** The page breaks a publishing rule (size, viewport height units). */
+export class HtmlRenderRejectedError extends Schema.TaggedError<HtmlRenderRejectedError>()(
+	"HtmlRenderRejectedError",
 	{
 		message: Schema.String,
 	},
@@ -238,5 +282,37 @@ export class MessagesApiGroup extends HttpApiGroup.make("api-v1-messages")
 				}),
 			)
 			.annotate(RequiredScopes, ["messages:read"]),
+	)
+	// HTML renders: a sandboxed page shown in a message embed (`@hazel/domain/html-render`)
+	.add(
+		HttpApiEndpoint.post("publishHtmlRender", `/html-renders`, {
+			payload: PublishHtmlRenderRequest,
+			success: PublishHtmlRenderResponse,
+			error: [HtmlRenderRejectedError, UnauthorizedError, RateLimitExceededError, InternalServerError],
+		})
+			.annotateMerge(
+				OpenApi.annotations({
+					title: "Publish HTML Render",
+					description: `Store an HTML page to show in a message: put the returned reference in an embed's \`html\` when creating or updating a message in the same channel. The page runs sandboxed. ${HTML_RENDER_AUTHOR_GUIDE}`,
+					summary: "Publish HTML render",
+				}),
+			)
+			.annotate(RequiredScopes, ["messages:write"]),
+	)
+	.add(
+		HttpApiEndpoint.delete("deleteHtmlRender", `/html-renders/:renderId`, {
+			params: { renderId: HtmlRenderId },
+			query: DeleteHtmlRenderQuery,
+			error: [UnauthorizedError, RateLimitExceededError, InternalServerError],
+		})
+			.annotateMerge(
+				OpenApi.annotations({
+					title: "Delete HTML Render",
+					description:
+						"Delete a page the bot published, for one no message ended up showing. A message that still names it shows its error state. Deleting or editing a message deletes its pages already.",
+					summary: "Delete HTML render",
+				}),
+			)
+			.annotate(RequiredScopes, ["messages:write"]),
 	)
 	.prefix("/api/v1") {}

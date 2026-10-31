@@ -1,4 +1,11 @@
-import { ChannelId, ConnectConversationId, MessageId, MessageReactionId, UserId } from "@hazel/schema"
+import {
+	ChannelId,
+	ConnectConversationId,
+	type HtmlRenderId,
+	MessageId,
+	MessageReactionId,
+	UserId,
+} from "@hazel/schema"
 import * as SQLite from "@maple-dev/effect-orm/sqlite"
 import { jsonb, randomUuid, timestamptz, uuid, varchar } from "./columns"
 
@@ -61,6 +68,7 @@ export interface MessageEmbed {
 	timestamp?: string // ISO 8601 timestamp
 	badge?: MessageEmbedBadge // Status badge (e.g., "Deployed", "Failed")
 	liveState?: MessageEmbedLiveState // Live state for real-time updates
+	html?: { renderId: HtmlRenderId; title: string; height: number } // Sandboxed HTML page (`@hazel/domain/html-render`)
 }
 
 export const messageReactionsTable = SQLite.table("message_reactions", {

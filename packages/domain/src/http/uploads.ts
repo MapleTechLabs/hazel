@@ -57,6 +57,8 @@ export const PresignUploadRequest = Schema.Struct({
 })
 export type PresignUploadRequest = typeof PresignUploadRequest.Type
 
+export { isActiveContentType } from "../content-type"
+
 // ============ Response Schema ============
 
 /**

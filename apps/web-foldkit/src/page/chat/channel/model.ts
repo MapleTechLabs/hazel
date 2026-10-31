@@ -4,6 +4,7 @@ import type { Update } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
 import { defineTaggedUnion } from "foldkit/schema"
 import { CommonReason } from "~/lib/error-messages"
+import * as HtmlRender from "../../../chat/html-render"
 import * as Live from "../../../chat/live-state"
 import * as Unfurl from "../../../chat/unfurl"
 import * as Draft from "../../../composer/draft"
@@ -97,6 +98,8 @@ export const Model = Schema.Struct({
 	liveStates: Live.LiveStates,
 	/** AI replies that hold a live socket, in the window or the open thread panel. */
 	liveReplies: Schema.Array(Live.LiveReply),
+	/** HTML render frames by render id, the app theme they get, and the fullscreen dialog. */
+	htmlRender: HtmlRender.Model,
 	/** Oldest first, with date headers; what the list renders. */
 	rows: Schema.Array(DisplayRow),
 	limit: Schema.Number,
@@ -150,6 +153,7 @@ export const Message = defineMessageUnion({
 	GotListMessage: { message: MessageList.Message },
 	GotUnfurlMessage: { message: Unfurl.Message },
 	GotLiveMessage: { message: Live.Message },
+	GotHtmlRenderMessage: { message: HtmlRender.Message },
 	GotOverlaysMessage: { message: Overlays.Message },
 	GotFilesMessage: { message: FilesPage.Message },
 	ClickedMobileMenu: {},

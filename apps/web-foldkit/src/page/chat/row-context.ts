@@ -13,6 +13,7 @@ import {
 	IconTrash,
 	IconUnpin,
 } from "../../icons"
+import type * as HtmlRender from "../../chat/html-render"
 import { avatarButton, type RowContext } from "../../chat/message/row"
 import { TOP_EMOJIS } from "../../chat/message/toolbar"
 import { popoverTrigger } from "../../chat/popover-host"
@@ -54,6 +55,8 @@ const toReact = (messageId: MessageId, emoji: string) =>
 
 const toOpenThread = (threadChannelId: ChannelId, messageId: MessageId) =>
 	Message.ClickedThreadPreview({ threadChannelId, messageId })
+
+const toHtmlRenderMessage = (message: HtmlRender.Message) => Message.GotHtmlRenderMessage({ message })
 
 const toContextMenuMessage = (message: Menu.Message) =>
 	toOverlays(Overlays.Message.GotContextMenuMessage({ message }))
@@ -125,6 +128,7 @@ const buildIdleContext = (
 		toOpenEmbedImage,
 		toReact,
 		toOpenThread,
+		toHtmlRenderMessage,
 		contextMenu: (_row, render) => render([], h.empty),
 		avatar: (row: MessageRow) =>
 			popoverTrigger(h, {
@@ -158,6 +162,7 @@ const buildOwnerContext = (h: H, model: Model, nowMs: number): RowContext<Messag
 		toOpenEmbedImage,
 		toReact,
 		toOpenThread,
+		toHtmlRenderMessage,
 		contextMenu: (row, render) =>
 			contextMenu === null || contextMenu.messageId !== row.message.id
 				? render([], h.empty)

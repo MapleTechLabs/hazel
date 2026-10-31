@@ -169,6 +169,7 @@ const message =
 		replyToMessageId: parentMessageId, // Optional: reply to message
 		threadChannelId: threadId, // Optional: send in thread
 		attachmentIds: [attachmentId], // Optional: attachments
+		html: { title: "Deploys", html: page }, // Optional: a sandboxed HTML page, see HTML Renders
 	})
 ```
 
@@ -186,6 +187,12 @@ Edit a message.
 
 ```typescript
 yield * bot.message.update(message, "Updated content")
+```
+
+Pass `embeds` to replace the message's embeds, or `html` to publish a new page in place of its current one (the old page is deleted):
+
+```typescript
+yield * bot.message.update(message, "Deploys (updated)", { html: { title: "Deploys", html: nextPage } })
 ```
 
 ### `bot.message.delete`

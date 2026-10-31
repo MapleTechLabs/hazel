@@ -43,7 +43,9 @@ export class ObjectStorage extends Context.Service<ObjectStorage>()("ObjectStora
 					client.sign(url.toString(), {
 						method: "PUT",
 						headers: { "Content-Type": options.contentType },
-						aws: { signQuery: true },
+						// `allHeaders` signs Content-Type too (aws4fetch skips it by default): the PUT must send
+						// the type the handler checked, so a refused type cannot be stored after all.
+						aws: { signQuery: true, allHeaders: true },
 					}),
 				catch: (cause) => new ObjectStorageError({ message: "Failed to presign upload URL", cause }),
 			})

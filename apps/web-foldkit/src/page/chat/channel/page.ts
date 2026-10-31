@@ -2,6 +2,7 @@ import type { ChannelId, MessageId, UserId } from "@hazel/schema"
 import { Record, Struct } from "effect"
 import { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
+import * as HtmlRender from "../../../chat/html-render"
 import * as Live from "../../../chat/live-state"
 import * as Unfurl from "../../../chat/unfurl"
 import * as Composer from "../../../composer/composer"
@@ -80,6 +81,7 @@ export const init = (
 	unfurls: {},
 	liveStates: {},
 	liveReplies: [],
+	htmlRender: HtmlRender.init(),
 	rows: [],
 	limit: PAGE_SIZE,
 	offset: 0,
@@ -114,12 +116,16 @@ export const switchChannel = (
 		...Record.remove(model.heightsByChannel, model.channelId),
 		[model.channelId]: model.list.measuredHeights,
 	}).slice(-REMEMBERED_CHANNELS)
-	return init(channelId, model.orgSlug, model.currentUserId, {
+	const next = init(channelId, model.orgSlug, model.currentUserId, {
 		...options,
 		carry: {
 			viewportHeight: model.list.viewportHeight,
 			heightsByChannel: Object.fromEntries(remembered),
 		},
+	})
+	// The theme stream keeps running across the switch, so the new page keeps the theme it read.
+	return modifyFields(next, {
+		htmlRender: (htmlRender) => modifyFields(htmlRender, { theme: () => model.htmlRender.theme }),
 	})
 }
 
@@ -166,12 +172,33 @@ const liftList = (model: Model, result: MessageList.ListReturn): PageReturn => (
 	commands: Command.mapMessages(result.commands, (message) => Message.GotListMessage({ message })),
 })
 
-/** The derive context with the page's unfurls and live states. */
-export const deriveContextOf = (model: Pick<Model, "lookups" | "currentUserId" | "unfurls" | "liveStates">) =>
+/** The derive context with the page's unfurls, live states and HTML render frames. */
+export const deriveContextOf = (
+	model: Pick<Model, "lookups" | "currentUserId" | "unfurls" | "liveStates" | "htmlRender">,
+) =>
 	toDeriveContext(model.lookups, model.currentUserId ?? undefined, {
 		unfurls: model.unfurls,
 		liveStates: model.liveStates,
+		htmlRenders: model.htmlRender,
+		appearance: model.htmlRender.theme?.appearance ?? "dark",
 	})
+
+/** An HTML render step; rows re-derive when a frame's state or the appearance changed. */
+const liftHtmlRender = (model: Model, message: HtmlRender.Message, nowMs: number): PageReturn => {
+	const previous = model.htmlRender
+	const result = HtmlRender.update(previous, message, nowMs)
+	const next = result.model === previous ? model : modifyFields(model, { htmlRender: () => result.model })
+	const commands = Command.mapMessages(result.commands ?? [], (inner) =>
+		Message.GotHtmlRenderMessage({ message: inner }),
+	)
+	const isRowChange =
+		result.model.urls !== previous.urls ||
+		result.model.frames !== previous.frames ||
+		result.model.theme?.appearance !== previous.theme?.appearance
+	if (!isRowChange) return { model: next, commands }
+	const derived = deriveRows(next)
+	return { ...derived, commands: [...commands, ...(derived.commands ?? [])] }
+}
 
 const threadMessagesOf = (model: Model): ReadonlyArray<ChatMessage> => model.threadPanel?.messages ?? []
 
@@ -385,6 +412,17 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 			deriveRows(
 				modifyFields(model, { liveStates: (states) => Live.applyMessage(states, liveMessage) }),
 			),
+		// Without the shared clock the fullscreen check treats every URL as expiring.
+		GotHtmlRenderMessage: ({ message: htmlRenderMessage }) => {
+			const result = liftHtmlRender(model, htmlRenderMessage, shared?.nowMs ?? Number.MAX_SAFE_INTEGER)
+			if (htmlRenderMessage._tag !== "PointerLeftFrame") return result
+			// The list saw no pointer events while the pointer was over the frame: it left the message too.
+			const left = liftOverlays(
+				result.model,
+				Overlays.update(result.model.overlays, Overlays.Message.PointerLeftList()),
+			)
+			return { ...left, commands: [...(result.commands ?? []), ...(left.commands ?? [])] }
+		},
 		GotListMessage: ({ message: listMessage }) =>
 			loadWhenNearEdge(liftList(model, MessageList.update(model.list, listMessage))),
 		GotOverlaysMessage: ({ message: overlaysMessage }) =>

@@ -5,6 +5,7 @@ import {
 	ALLOWED_AVATAR_TYPES,
 	ALLOWED_EMOJI_TYPES,
 	BotNotFoundForUploadError,
+	isActiveContentType,
 	MAX_AVATAR_SIZE,
 	MAX_EMOJI_SIZE,
 	OrganizationNotFoundForUploadError,
@@ -371,6 +372,14 @@ export const HttpUploadsLive = HttpApiBuilder.group(HazelApi, "uploads", (handle
 									new UploadError({
 										message:
 											"organizationId, channelId, and fileName are required for attachment uploads",
+									}),
+								)
+							}
+
+							if (isActiveContentType(req.contentType)) {
+								return yield* Effect.fail(
+									new UploadError({
+										message: `Attachments of type ${req.contentType} must be uploaded as application/octet-stream`,
 									}),
 								)
 							}

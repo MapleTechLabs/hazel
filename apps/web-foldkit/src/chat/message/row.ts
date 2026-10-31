@@ -1,5 +1,6 @@
 import type { ChannelId, MessageId } from "@hazel/schema"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
+import type * as HtmlRender from "../html-render"
 import { twMerge } from "tailwind-merge"
 import { cn } from "~/lib/utils"
 import { type MessageRow, UrlEmbed } from "../../page/chat/rows"
@@ -35,6 +36,8 @@ export interface RowContext<M> {
 	) => Html
 	/** The author avatar, a `UserProfilePopover` trigger. */
 	readonly avatar: (row: MessageRow) => Html
+	/** An HTML render frame's mount, load, height and controls. */
+	readonly toHtmlRenderMessage: (message: HtmlRender.Message) => M
 }
 
 /** `DateDivider`: the line is hidden while the divider is pinned to the top. */
@@ -65,10 +68,7 @@ export const avatarButton = <M>(
 	attributes: ReadonlyArray<ChildAttribute>,
 ) =>
 	h.button(
-		[
-			...attributes,
-			h.Class("size-fit outline-hidden"),
-		],
+		[...attributes, h.Class("size-fit outline-hidden")],
 		[
 			avatar(h, {
 				size: "md",
@@ -123,6 +123,13 @@ const contentView = <M>(h: HtmlBuilder<M>, row: MessageRow, context: RowContext<
 			h,
 			message.embeds,
 			row.live === null ? h.empty : liveView(h, row.live.state, row.live.loading),
+			{
+				channelId: message.channelId,
+				messageId: message.id,
+				surface: "list",
+				rows: row.htmlRenders,
+				toMessage: context.toHtmlRenderMessage,
+			},
 		),
 	]
 }

@@ -76,6 +76,14 @@ export const AttachmentId = Schema.String.check(Schema.isUUID())
 	})
 export type AttachmentId = Schema.Schema.Type<typeof AttachmentId>
 
+export const HtmlRenderId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/HtmlRenderId"))
+	.annotate({
+		description: "The ID of an HTML page a bot published (`POST /api/v1/html-renders`)",
+		title: "HTML Render ID",
+	})
+export type HtmlRenderId = Schema.Schema.Type<typeof HtmlRenderId>
+
 export const OrganizationId = Schema.String.check(Schema.isUUID())
 	.pipe(Schema.brand("@HazelChat/OrganizationId"))
 	.annotate({

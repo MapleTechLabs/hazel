@@ -1,0 +1,53 @@
+---
+title: HTML Renders
+description: Show a sandboxed HTML page (chart, report, dashboard) inside a message
+icon: Code
+---
+
+A bot can attach a self-contained HTML page to a message. Hazel shows it inline, in a sandboxed frame that follows the reader's theme and grows to fit the page.
+
+```typescript
+import { Effect } from "effect"
+import { Command, CommandGroup, runHazelBot } from "@hazel/bot-sdk"
+
+const DeploysCommand = Command.make("deploys", { description: "Show this week's deploys" })
+
+const page = `
+<style>
+	.bar { height: 12px; border-radius: 6px; background: var(--chart-1); margin: 6px 0; }
+</style>
+<h3>Deploys this week</h3>
+<div class="bar" style="width: 90%"></div>
+<div class="bar" style="width: 60%; background: var(--chart-2)"></div>
+`
+
+runHazelBot({
+	commands: CommandGroup.make(DeploysCommand),
+	setup: (bot) =>
+		bot.onCommand(DeploysCommand, (ctx) =>
+			bot.message.send(ctx.channelId, "Deploys this week", {
+				html: { title: "Deploys this week", html: page, height: 120 },
+			}),
+		),
+})
+```
+
+`message.send`, `message.reply` and `message.update` accept `html`. To build the embed yourself, publish first and put the result in an embed's `html`:
+
+```typescript
+const reference = yield * bot.htmlRender.publish(channelId, { title: "Report", html: page })
+yield * bot.message.send(channelId, "Weekly report", { embeds: [{ title: "Report", html: reference }] })
+```
+
+The HTTP API is `POST /api/v1/html-renders` (`{ channelId, title, html, height }`), which returns the reference for `embeds[].html`.
+
+## Page rules
+
+- **One self-contained document**, up to 512 KB. Inline your `<style>` and `<script>`. Scripts, styles, images and fonts can load over `https`.
+- **No connections**: the page cannot `fetch`, open WebSockets or submit forms. Send the data with the page, or update the message with a new page.
+- **Sandboxed**: the page runs in an opaque origin, with no access to Hazel's cookies, storage or API. Links open in the reader's browser.
+- **Theme**: use the CSS variables on `:root` instead of fixed colors: `--background`, `--foreground`, `--muted`, `--card`, `--border`, `--ring`, `--primary`, `--secondary`, `--accent`, `--destructive`, `--warning`, `--success` (most have a `-foreground`), `--code-background`, `--chart-1` to `--chart-5`, `--radius`, `--font-sans`, `--font-mono`. They follow the reader's light or dark theme.
+- **Layout**: the frame is as wide as the message column and sits on the channel background. Leave `html` and `body` without a background, outer card or side padding, and use fluid widths.
+- **Height**: `height` is the frame's height until the page loads (80 to 2000 px); after that the frame fits the content. Viewport height units (`vh`, `dvh`...) are rejected, and `height: 100%` on `html` or `body` makes the frame grow forever.
+
+Only members of the channel can open the page, and only through a message that shows it. A published page is kept once a message shows it; one no message shows within a day (a failed send, a publish you never posted) is deleted. Deleting the message, or replacing its page, deletes the stored page. If a send fails after the page was published, the SDK deletes the page right away; `DELETE /api/v1/html-renders/:renderId?channel_id=` does the same over HTTP.

@@ -2,6 +2,7 @@ import { ChannelId, TypingIndicatorId } from "@hazel/schema"
 import { Schema } from "effect"
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test, vi } from "vitest"
+import * as HtmlRender from "../../../chat/html-render"
 import * as Live from "../../../chat/live-state"
 import * as Unfurl from "../../../chat/unfurl"
 import * as Draft from "../../../composer/draft"
@@ -593,6 +594,23 @@ describe("image viewer", () => {
 			message(overlays(Overlays.Message.PointerLeftList())),
 			Command.expectNone(),
 			model((current) => expect(Overlays.hoveredMessageIdOf(current.overlays)).toBe(graceMessageId)),
+		)
+	})
+
+	// The list sees no pointer events over a render's sandboxed frame, so the frame reports the leave.
+	test("the pointer leaving an HTML render frame hides the hover like leaving the list", () => {
+		story(
+			updateWithShared,
+			given(loadedModel()),
+			message(overlays(Overlays.Message.PointerEnteredMessage({ messageId: graceMessageId }))),
+			model((current) => expect(Overlays.hoveredMessageIdOf(current.overlays)).toBe(graceMessageId)),
+			message(Message.GotHtmlRenderMessage({ message: HtmlRender.Message.PointerLeftFrame() })),
+			Command.resolve(HtmlRender.MarkPointerOutside, HtmlRender.Message.CompletedMarkPointerOutside()),
+			Command.resolve(
+				Overlays.WaitForHideToolbar,
+				Overlays.Message.CompletedWaitForHideToolbar({ version: 1 }),
+			),
+			model((current) => expect(Overlays.hoveredMessageIdOf(current.overlays)).toBeNull()),
 		)
 	})
 
