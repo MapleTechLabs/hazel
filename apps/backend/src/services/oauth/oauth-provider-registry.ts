@@ -101,6 +101,13 @@ export class OAuthProviderRegistry extends Context.Service<OAuthProviderRegistry
 
 				// Handle GitHub App separately (uses JWT service, not standard OAuth)
 				if (oauthProvider_ === "github") {
+					if (!gitHubJwtService.isConfigured) {
+						return yield* new ProviderNotConfiguredError({
+							provider: oauthProvider_,
+							message:
+								"Missing configuration for github: GITHUB_APP_ID, GITHUB_APP_SLUG, GITHUB_APP_PRIVATE_KEY",
+						})
+					}
 					// Create provider with JWT service and API client
 					// Uses minimal AppProviderConfig since GitHub Apps manage their own auth via JWT
 					const oauthProvider = createGitHubAppProvider(
