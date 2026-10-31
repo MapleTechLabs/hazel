@@ -200,12 +200,18 @@ export const routes: RouteTable = {
 	"channel.update": (payload) => orgOfChannel("channel.update", payload.id),
 	"channel.delete": (payload) => orgOfChannel("channel.delete", payload.id),
 	"channel.createDm": byOrg,
+	// Bots have no active org and older SDKs never sent one: the message's channel names it.
 	"channel.createThread": (payload) =>
-		payload.organizationId === undefined
-			? Effect.fail(
-					new RoutingError({ method: "channel.createThread", message: "needs `organizationId`" }),
-				)
-			: org(payload.organizationId),
+		payload.organizationId !== undefined
+			? org(payload.organizationId)
+			: payload.channelId !== undefined
+				? orgOfChannel("channel.createThread", payload.channelId)
+				: Effect.fail(
+						new RoutingError({
+							method: "channel.createThread",
+							message: "needs `organizationId` or `channelId`",
+						}),
+					),
 	"channelMember.create": byOrgOfChannel("channelMember.create"),
 	"channelMember.update": orgHint("channelMember.update"),
 	"channelMember.delete": orgHint("channelMember.delete"),

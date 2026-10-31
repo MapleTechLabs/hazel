@@ -1,3 +1,4 @@
+import { derivedThreadChannelId } from "@hazel/domain/thread-id"
 import { ChannelMemberRepo, ChannelRepo, OrganizationMemberRepo, UserRepo } from "@hazel/backend-core"
 import { Database, SQLite, schema } from "@hazel/db"
 import {
@@ -289,9 +290,12 @@ export const ChannelRpcLive = ChannelRpcs.toLayer(
 
 							yield* channelPolicy.canCreate(organizationId)
 
-							// A retried create (same client-chosen id) returns the thread it made.
-							if (id !== undefined) {
-								const existing = yield* channelRepo.findById(id)
+							// A retried create (same id) returns the thread it made. Without an id from the
+							// caller the id follows from the message, so retries and racing bots agree too.
+							const threadId =
+								id ?? (yield* Effect.promise(() => derivedThreadChannelId(messageId)))
+							{
+								const existing = yield* channelRepo.findById(threadId)
 								if (Option.isSome(existing)) {
 									if (
 										existing.value.type !== "thread" ||
@@ -306,12 +310,12 @@ export const ChannelRpcLive = ChannelRpcs.toLayer(
 										transactionId: yield* generateTransactionId(),
 									})
 								}
-								yield* requireUnusedChannelId(id)
+								yield* requireUnusedChannelId(threadId)
 							}
 
 							const createdChannel = yield* channelRepo
 								.insert({
-									...(id === undefined ? {} : { id }),
+									id: threadId,
 									name: "Thread",
 									icon: null,
 									type: "thread" as const,

@@ -15,13 +15,13 @@ This guide walks you through installing the Bot SDK and creating a simple bot th
 ## Installation
 
 ```bash
-bun add @hazel/bot-sdk effect
+bun add @hazel-chat/bot-sdk effect
 ```
 
 Or with npm:
 
 ```bash
-npm install @hazel/bot-sdk effect
+npm install @hazel-chat/bot-sdk effect
 ```
 
 ## Environment Setup
@@ -37,7 +37,7 @@ For local development, you may also need:
 ```bash
 # Optional: Override for local development
 BACKEND_URL=http://localhost:3003
-GATEWAY_URL=http://localhost:3034
+GATEWAY_URL=http://localhost:3004
 ```
 
 ## Your First Bot
@@ -46,7 +46,7 @@ Create an `index.ts` file:
 
 ```typescript
 import { Effect } from "effect"
-import { runHazelBot } from "@hazel/bot-sdk"
+import { runHazelBot } from "@hazel-chat/bot-sdk"
 
 runHazelBot({
 	setup: (bot) =>

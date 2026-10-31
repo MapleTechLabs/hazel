@@ -21,7 +21,7 @@ gateway URL for inbound websocket delivery.
 ```bash
 BOT_TOKEN=your-bot-token-here
 BACKEND_URL=http://localhost:3003
-GATEWAY_URL=http://localhost:3034
+GATEWAY_URL=http://localhost:3004
 ```
 
 ## `runHazelBot` options
@@ -52,7 +52,7 @@ runHazelBot({
 		}),
 	config: {
 		backendUrl: "http://localhost:3003",
-		gatewayUrl: "http://localhost:3034",
+		gatewayUrl: "http://localhost:3004",
 	},
 	serviceName: "my-task-bot",
 })
@@ -86,7 +86,7 @@ interface HazelBotConfig<Commands> {
 const runtime = createHazelBot({
 	botToken: process.env.BOT_TOKEN!,
 	backendUrl: "http://localhost:3003",
-	gatewayUrl: "http://localhost:3034",
+	gatewayUrl: "http://localhost:3004",
 	commands: myCommands,
 	maxConcurrentPartitions: 8,
 })
@@ -108,5 +108,5 @@ For local development, point the bot at your local backend and gateway:
 ```bash
 BOT_TOKEN=dev-bot-token
 BACKEND_URL=http://localhost:3003
-GATEWAY_URL=http://localhost:3034
+GATEWAY_URL=http://localhost:3004
 ```

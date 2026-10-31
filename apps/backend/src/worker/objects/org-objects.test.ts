@@ -10,7 +10,9 @@ import type { ChannelId, OrganizationId, UserId } from "@hazel/schema"
 import { Cause, DateTime, Effect, Exit, Fiber, Option, type Scope } from "effect"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { CreateDmChannelRequest, CreateThreadRequest } from "@hazel/domain/rpc"
+import { derivedThreadChannelId } from "@hazel/domain/thread-id"
 import { decodeExit, encodePayload, type HazelRpcTag, rpcFor } from "../../rpc/dispatch"
+import { resolveTarget } from "../../rpc/routing"
 import { Directory } from "../../services/directory"
 import { channelTarget, orgTarget, userTarget } from "./kinds"
 import { encodeInvokePrincipal } from "./principal"
@@ -547,6 +549,48 @@ describe("OrgObject: channels", () => {
 				expect(
 					ok(yield* call(org, orgId, "channel.createThread", payload, world.owner)).data.id,
 				).toBe(threadId)
+
+				// Without an id (bots, older SDKs) the thread's follows from the message: asking twice
+				// opens one thread, and the router finds the org from the channel.
+				const second = ok(
+					yield* call(
+						parent,
+						world.general,
+						"message.create",
+						{
+							channelId: world.general,
+							content: "another",
+							embeds: null,
+							replyToMessageId: null,
+							threadChannelId: null,
+							authorId: member,
+							deletedAt: null,
+						},
+						member,
+					),
+				)
+				const unnamed = new CreateThreadRequest({
+					messageId: second.data.id,
+					channelId: world.general,
+				})
+				const target = yield* resolveTarget(
+					"channel.createThread",
+					unnamed,
+					new CurrentUser.Schema({
+						id: world.owner,
+						organizationId: null,
+						role: "member",
+						email: "owner@example.com",
+						isOnboarded: true,
+						timezone: null,
+						settings: null,
+					}),
+				).pipe(Effect.provideContext(objects.directory))
+				expect(target).toEqual(orgTarget(orgId))
+				const derived = yield* Effect.promise(() => derivedThreadChannelId(second.data.id))
+				const first = ok(yield* call(org, orgId, "channel.createThread", unnamed, world.owner))
+				const again = ok(yield* call(org, orgId, "channel.createThread", unnamed, world.owner))
+				expect([first.data.id, again.data.id]).toEqual([derived, derived])
 			}),
 		))
 
