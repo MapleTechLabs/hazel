@@ -398,6 +398,8 @@ const option = (
 	const isSelected = Option.contains(model.selectedKey, key)
 	const isFocused = Option.contains(open.focusedKey, key)
 	const isHovered = !candidate.isDisabled && Option.contains(open.hoveredKey, key)
+	// A pointer-focused option keeps DOM focus after the pointer leaves, but not its highlight.
+	const isFocusShown = isFocused && (open.modality === "Keyboard" || isHovered)
 	const flag = (name: string, isOn: boolean) => (isOn ? [h.Attribute(name, "true")] : [])
 	return h.keyed("div")(
 		key,
@@ -406,11 +408,16 @@ const option = (
 			h.Attribute("aria-labelledby", optionLabelId(model.id, key)),
 			h.Attribute("aria-selected", isSelected ? "true" : "false"),
 			h.Class(
-				dropdownItemStyles({ isSelected, isFocused, isHovered, isDisabled: candidate.isDisabled }),
+				dropdownItemStyles({
+					isSelected,
+					isFocused: isFocusShown,
+					isHovered,
+					isDisabled: candidate.isDisabled,
+				}),
 			),
 			...flag("data-disabled", candidate.isDisabled),
 			...flag("data-focus-visible", isFocused && open.modality === "Keyboard"),
-			...flag("data-focused", isFocused),
+			...flag("data-focused", isFocusShown),
 			...flag("data-hovered", isHovered),
 			h.Attribute("data-key", key),
 			h.Attribute("data-react-aria-pressable", "true"),

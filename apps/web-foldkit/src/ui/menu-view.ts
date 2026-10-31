@@ -535,6 +535,8 @@ const menuItem = (
 	const isFocused = Option.contains(levelFocusedKey, key)
 	const isHovered = !entry.isDisabled && Option.contains(open.hoveredKey, key)
 	const isFocusVisible = isFocused && open.modality === "Keyboard"
+	// A pointer-focused item keeps DOM focus after the pointer leaves, but not its highlight.
+	const isFocusShown = isFocused && (open.modality === "Keyboard" || isHovered)
 	const isSelectable = model.selectionMode === "Single"
 	const isSelected = isSelectable && Array.contains(model.selectedKeys, key)
 	const intent = Option.getOrUndefined(entry.intent)
@@ -567,7 +569,7 @@ const menuItem = (
 			h.Attribute("aria-labelledby", labelId(model.id, key)),
 			h.Class(
 				dropdownItemStyles({
-					isFocused,
+					isFocused: isFocusShown,
 					isHovered,
 					isDisabled: entry.isDisabled,
 					isSelected,
@@ -577,7 +579,7 @@ const menuItem = (
 			),
 			...flag("data-disabled", entry.isDisabled),
 			...flag("data-focus-visible", isFocusVisible),
-			...flag("data-focused", isFocused),
+			...flag("data-focused", isFocusShown),
 			...flag("data-has-submenu", hasSubmenu),
 			...flag("data-hovered", isHovered),
 			...flag("data-open", isSubmenuOpen),

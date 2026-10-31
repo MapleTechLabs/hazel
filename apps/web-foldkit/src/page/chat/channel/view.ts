@@ -128,7 +128,7 @@ const listView = (model: Model, nowMs: number, h: H): Html => {
 	if (!model.hasLoadedMessages) return h.div([])
 	if (model.messages.length === 0) return emptyStateView(h)
 	const idle = idleRowContext(h, model)
-	const hovered = Overlays.hoveredMessageIdOf(model.overlays)
+	const held = Overlays.heldMessageIdOf(model.overlays)
 	const list = MessageList.view(h, model.list, {
 		items: model.rows,
 		itemToKey: (row) => row.key,
@@ -137,7 +137,7 @@ const listView = (model: Model, nowMs: number, h: H): Html => {
 				h,
 				row,
 				isStuck,
-				row.key === hovered,
+				row.key === held,
 				row._tag === "MessageRow" ? rowContextFor(h, model, row, idle, nowMs) : idle,
 			),
 		isStickyHeader: (row) => row._tag === "DateHeader",
