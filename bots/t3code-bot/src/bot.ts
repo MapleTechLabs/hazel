@@ -47,9 +47,15 @@ export const findProject = (projects: ReadonlyArray<T3Project>, query: string) =
 const projectList = (projects: ReadonlyArray<T3Project>) =>
 	projects.map((project) => `- \`${project.title}\``).join("\n")
 
+const tagOf = (error: unknown) =>
+	typeof error === "object" && error !== null && "_tag" in error ? String(error._tag) : ""
+
 /** Why a call to an owner's environment could not happen, as a chat message. */
-const explain = (error: unknown, ctx: { readonly ownerId: UserId; readonly actorId: UserId }): string => {
-	const tag = typeof error === "object" && error !== null && "_tag" in error ? String(error._tag) : ""
+export const explain = (
+	error: unknown,
+	ctx: { readonly ownerId: UserId; readonly actorId: UserId },
+): string => {
+	const tag = tagOf(error)
 	const own = ctx.ownerId === ctx.actorId
 	switch (tag) {
 		case "T3CodeNotConnectedError":
@@ -127,9 +133,44 @@ export const bot = defineBot({
 				post: (channelId: ChannelId, content: string) =>
 					Effect.asVoid(sdk.message.send(channelId, content)) as Effect.Effect<void, unknown>,
 				live: (channelId: ChannelId) =>
-					sdk.stream.create(channelId) as Effect.Effect<LiveMessage, unknown, unknown>,
+					sdk.stream.create(channelId) as Effect.Effect<LiveMessage, unknown>,
 				saveRun,
 			}
+
+			/**
+			 * A handler failed: log it, tell the channel why in words, and when T3 refused the
+			 * owner's credential, have Hazel mark the link expired so their settings say so.
+			 */
+			const failed =
+				(
+					label: string,
+					channelId: ChannelId,
+					who: {
+						readonly organizationId: OrganizationId
+						readonly ownerId: UserId
+						readonly actorId: UserId
+					},
+				) =>
+				(cause: Cause.Cause<unknown>) => {
+					const error = firstError(cause)
+					return Effect.logWarning(`${label} failed`, { cause }).pipe(
+						Effect.andThen(
+							tagOf(error) === "T3CodeUnauthorizedError"
+								? hazel.t3code.reportT3CodeExpired({
+										payload: { organizationId: who.organizationId, ownerId: who.ownerId },
+									})
+								: Effect.void,
+						),
+						Effect.andThen(chat.post(channelId, explain(error, who))),
+						Effect.ignore,
+					)
+				}
+
+			const whoOf = (run: T3Run, actorId: UserId) => ({
+				organizationId: orgOf(run),
+				ownerId: ownerOf(run),
+				actorId,
+			})
 
 			/** Follow a Hazel thread's T3 thread until it idles; one follower per thread. */
 			const follow = (run: T3Run) =>
@@ -138,25 +179,12 @@ export const bot = defineBot({
 					run.threadChannelId,
 					Effect.gen(function* () {
 						yield* updateFollowing((ids) => [...new Set([...ids, run.threadChannelId])])
+						// The owner's own access: a run they allowed keeps reporting to its thread.
 						const { mcp } = yield* environmentFor(orgOf(run), ownerOf(run), ownerOf(run))
 						yield* followThread({ mcp, chat, run })
 					}).pipe(
-						Effect.catchCause((cause) =>
-							Effect.logWarning("T3 Code follower stopped", {
-								threadChannelId: run.threadChannelId,
-								cause,
-							}).pipe(
-								Effect.andThen(
-									chat.post(
-										threadOf(run),
-										explain(firstError(cause), {
-											ownerId: ownerOf(run),
-											actorId: ownerOf(run),
-										}),
-									),
-								),
-								Effect.ignore,
-							),
+						Effect.catchCause(
+							failed("T3 Code follower", threadOf(run), whoOf(run, ownerOf(run))),
 						),
 						Effect.ensuring(
 							updateFollowing((ids) => ids.filter((id) => id !== run.threadChannelId)).pipe(
@@ -179,22 +207,16 @@ export const bot = defineBot({
 				if (run !== null) yield* follow(run)
 			}
 
-			yield* sdk.onCommand(T3Command, (ctx: TypedCommandContext<typeof T3Command.argsSchema.Type>) =>
-				Effect.gen(function* () {
-					const actorId = ctx.userId
-					const ownerArg = ctx.args.owner
-					const ownerId = parseOwner(ownerArg) ?? actorId
-					if (ownerArg !== undefined && ownerArg.trim() !== "" && parseOwner(ownerArg) === null) {
+			yield* sdk.onCommand(T3Command, (ctx: TypedCommandContext<typeof T3Command.argsSchema.Type>) => {
+				const actorId = ctx.userId
+				const ownerArg = ctx.args.owner?.trim() ?? ""
+				const ownerId = parseOwner(ownerArg) ?? actorId
+				const who = { organizationId: ctx.orgId, ownerId, actorId }
+				return Effect.gen(function* () {
+					if (ownerArg !== "" && parseOwner(ownerArg) === null) {
 						return yield* chat.post(ctx.channelId, "Name the owner with an @mention.")
 					}
-					const environment = yield* environmentFor(ctx.orgId, ownerId, actorId).pipe(Effect.result)
-					if (environment._tag === "Failure") {
-						return yield* chat.post(
-							ctx.channelId,
-							explain(environment.failure, { ownerId, actorId }),
-						)
-					}
-					const { access, mcp } = environment.success
+					const { access, mcp } = yield* environmentFor(ctx.orgId, ownerId, actorId)
 					const projects = yield* mcp.listProjects()
 					const wanted =
 						ctx.args.project ??
@@ -242,48 +264,30 @@ export const bot = defineBot({
 						notifiedApprovals: [],
 					}
 					yield* saveRun(run)
-					if (run.link !== null) {
-						yield* chat.post(
-							thread.id,
-							`Following [the T3 Code thread](${run.link}). Reply here to send follow-ups; \`/t3-stop\` stops the run.`,
-						)
-					}
+					yield* chat.post(
+						thread.id,
+						`${run.link === null ? "Following the T3 Code thread." : `Following [the T3 Code thread](${run.link}).`} Reply here to send follow-ups; \`/t3-stop\` stops the run.`,
+					)
 					yield* follow(run)
 				}).pipe(
-					Effect.catchCause((cause) =>
-						Effect.logError("/t3 failed", { cause }).pipe(
-							Effect.andThen(
-								chat.post(
-									ctx.channelId,
-									explain(firstError(cause), { ownerId: ctx.userId, actorId: ctx.userId }),
-								),
-							),
-							Effect.ignore,
-						),
-					),
-					Effect.withSpan("t3code.command.t3"),
-				),
-			)
+					Effect.catchCause(failed("/t3", ctx.channelId, who)),
+					Effect.withSpan("t3code.command.t3", {
+						attributes: { "t3code.shared": ownerId !== actorId },
+					}),
+				)
+			})
 
 			yield* sdk.onCommand(
 				T3ProjectCommand,
 				(ctx: TypedCommandContext<typeof T3ProjectCommand.argsSchema.Type>) =>
 					Effect.gen(function* () {
-						const environment = yield* environmentFor(ctx.orgId, ctx.userId, ctx.userId).pipe(
-							Effect.result,
-						)
-						if (environment._tag === "Failure") {
+						const { access, mcp } = yield* environmentFor(ctx.orgId, ctx.userId, ctx.userId)
+						const projects = yield* mcp.listProjects()
+						const wanted = ctx.args.project?.trim() ?? ""
+						if (wanted === "") {
 							return yield* chat.post(
 								ctx.channelId,
-								explain(environment.failure, { ownerId: ctx.userId, actorId: ctx.userId }),
-							)
-						}
-						const projects = yield* environment.success.mcp.listProjects()
-						const wanted = ctx.args.project
-						if (wanted === undefined || wanted.trim() === "") {
-							return yield* chat.post(
-								ctx.channelId,
-								`Projects in T3 Code on ${environment.success.access.environmentLabel}:\n${projectList(projects)}`,
+								`Projects in T3 Code on ${access.environmentLabel}:\n${projectList(projects)}`,
 							)
 						}
 						const project = findProject(projects, wanted)
@@ -299,14 +303,14 @@ export const bot = defineBot({
 							`\`/t3\` in this channel now uses \`${project.title}\`.`,
 						)
 					}).pipe(
-						Effect.catchCause((cause) =>
-							Effect.logError("/t3-project failed", { cause }).pipe(
-								Effect.andThen(
-									chat.post(ctx.channelId, "Something went wrong talking to T3 Code."),
-								),
-								Effect.ignore,
-							),
+						Effect.catchCause(
+							failed("/t3-project", ctx.channelId, {
+								organizationId: ctx.orgId,
+								ownerId: ctx.userId,
+								actorId: ctx.userId,
+							}),
 						),
+						Effect.withSpan("t3code.command.project"),
 					),
 			)
 
@@ -315,33 +319,17 @@ export const bot = defineBot({
 					const run = yield* loadRun(ctx.channelId)
 					if (run === null)
 						return yield* chat.post(ctx.channelId, "Use `/t3-stop` in a T3 Code thread.")
-					const environment = yield* environmentFor(orgOf(run), ownerOf(run), ctx.userId).pipe(
-						Effect.result,
-					)
-					if (environment._tag === "Failure") {
-						return yield* chat.post(
+					yield* Effect.gen(function* () {
+						const { mcp } = yield* environmentFor(orgOf(run), ownerOf(run), ctx.userId)
+						const stopped = yield* mcp.interrupt(run.t3ThreadId, "Stopped from Hazel")
+						yield* chat.post(
 							ctx.channelId,
-							explain(environment.failure, { ownerId: ownerOf(run), actorId: ctx.userId }),
+							stopped.status === "no_active_run"
+								? "Nothing is running."
+								: `${mention(ctx.userId)} stopped the run.`,
 						)
-					}
-					const stopped = yield* environment.success.mcp.interrupt(
-						run.t3ThreadId,
-						"Stopped from Hazel",
-					)
-					yield* chat.post(
-						ctx.channelId,
-						stopped.status === "no_active_run"
-							? "Nothing is running."
-							: `${mention(ctx.userId)} stopped the run.`,
-					)
-				}).pipe(
-					Effect.catchCause((cause) =>
-						Effect.logError("/t3-stop failed", { cause }).pipe(
-							Effect.andThen(chat.post(ctx.channelId, "Could not stop the run.")),
-							Effect.ignore,
-						),
-					),
-				),
+					}).pipe(Effect.catchCause(failed("/t3-stop", ctx.channelId, whoOf(run, ctx.userId))))
+				}).pipe(Effect.ignore, Effect.withSpan("t3code.command.stop")),
 			)
 
 			// A reply in a T3 Code thread: the answer to its question, else a follow-up.
@@ -352,47 +340,34 @@ export const bot = defineBot({
 					if (content === "" || content.startsWith("/")) return
 					const run = yield* loadRun(message.channelId)
 					if (run === null) return
-					const actorId = message.authorId
-					const environment = yield* environmentFor(orgOf(run), ownerOf(run), actorId).pipe(
-						Effect.result,
-					)
-					if (environment._tag === "Failure") {
-						return yield* chat.post(
-							threadOf(run),
-							explain(environment.failure, { ownerId: ownerOf(run), actorId }),
-						)
-					}
-					const { mcp } = environment.success
-					if (run.pendingQuestion !== null) {
+					yield* Effect.gen(function* () {
+						const { mcp } = yield* environmentFor(orgOf(run), ownerOf(run), message.authorId)
 						const pending = run.pendingQuestion
-						const open = yield* mcp.pendingQuestions(run.t3ThreadId)
-						yield* saveRun({ ...run, pendingQuestion: null })
-						if (open.includes(pending.requestId)) {
-							yield* mcp.answerQuestion(
-								run.t3ThreadId,
-								pending.requestId,
-								answersFrom(pending.questionIds, content),
-							)
-							return yield* follow({ ...run, pendingQuestion: null })
+						if (pending !== null) {
+							yield* saveRun({ ...run, pendingQuestion: null })
+							const open = yield* mcp.pendingQuestions(run.t3ThreadId)
+							if (open.includes(pending.requestId)) {
+								yield* mcp.answerQuestion(
+									run.t3ThreadId,
+									pending.requestId,
+									answersFrom(pending.questionIds, content),
+								)
+								return yield* follow({ ...run, pendingQuestion: null })
+							}
 						}
-					}
-					yield* mcp.send({
-						threadId: run.t3ThreadId,
-						message: content,
-						clientRequestId: message.id,
-					})
-					yield* follow({ ...run, pendingQuestion: null })
-				}).pipe(
-					Effect.catchCause((cause) =>
-						Effect.logError("T3 Code follow-up failed", { cause }).pipe(
-							Effect.andThen(
-								chat.post(message.channelId as ChannelId, "Could not send that to T3 Code."),
-							),
-							Effect.ignore,
+						// The message id makes a redelivered event send once.
+						yield* mcp.send({
+							threadId: run.t3ThreadId,
+							message: content,
+							clientRequestId: message.id,
+						})
+						yield* follow({ ...run, pendingQuestion: null })
+					}).pipe(
+						Effect.catchCause(
+							failed("T3 Code follow-up", threadOf(run), whoOf(run, message.authorId)),
 						),
-					),
-					Effect.withSpan("t3code.followUp"),
-				),
+					)
+				}).pipe(Effect.ignore, Effect.withSpan("t3code.followUp")),
 			)
 		}),
 })

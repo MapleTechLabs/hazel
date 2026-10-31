@@ -48,14 +48,14 @@ export interface LiveMessage {
 		stepId: string,
 		result?: { output?: unknown; error?: string },
 	) => Effect.Effect<void, unknown>
-	readonly complete: () => Effect.Effect<void, unknown, unknown>
-	readonly fail: (error: string) => Effect.Effect<void, unknown, unknown>
+	readonly complete: () => Effect.Effect<void, unknown>
+	readonly fail: (error: string) => Effect.Effect<void, unknown>
 }
 
 /** What the runner needs from Hazel. */
 export interface ChatPort {
 	readonly post: (channelId: ChannelId, content: string) => Effect.Effect<void, unknown>
-	readonly live: (channelId: ChannelId) => Effect.Effect<LiveMessage, unknown, unknown>
+	readonly live: (channelId: ChannelId) => Effect.Effect<LiveMessage, unknown>
 	readonly saveRun: (run: T3Run) => Effect.Effect<void, unknown>
 }
 
