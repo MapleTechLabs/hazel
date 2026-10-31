@@ -28,7 +28,8 @@ export type CurrentUserData = typeof CurrentUserData.schema.Type
  * answer, so nothing is known about the session and the app offers to try again.
  */
 export const Session = defineTaggedUnion({
-	Loading: {},
+	/** `isFetchingUser`: the boot `user.me` runs beside the session check, so a confirmed session need not ask again. */
+	Loading: { isFetchingUser: Schema.Boolean },
 	Unreachable: { reason: CommonReason, retries: Schema.Number },
 	SignedOut: {},
 	/** `retries`: automatic `user.me` retries so far; past the limit the error screen offers one by hand. */

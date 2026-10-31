@@ -6,7 +6,7 @@ import { UrlRequest } from "foldkit/navigation"
 import { describe, expect, test } from "vitest"
 import { MAX_AUTO_RETRIES, update } from "../main"
 import { AppRoute } from "../route"
-import { ada, after, boot, hazelOrg, owner, signedIn, urlOf } from "../test/root-fixtures"
+import { ada, after, boot, bootReturn, hazelOrg, owner, signedIn, urlOf } from "../test/root-fixtures"
 import {
 	CheckSession,
 	FetchCurrentUser,
@@ -15,6 +15,7 @@ import {
 	ReplaceUrl,
 	RetryCheckSession,
 	RetryFetchCurrentUser,
+	WarmAccessToken,
 } from "./command"
 import { Message } from "./message"
 import { currentUserOf, sharedOf } from "./model"
@@ -80,15 +81,63 @@ describe("redirects", () => {
 		)
 	})
 
-	test("signing in asks for user.me once", () => {
+	test("an app route asks for the session, user.me and the sync token at once", () => {
+		expect(bootReturn("/hazel/settings/team").commands).toEqual(
+			expect.arrayContaining([CheckSession(), FetchCurrentUser(), WarmAccessToken()]),
+		)
+	})
+
+	test("a public route asks only for the session", () => {
+		const names = (bootReturn("/sign-in").commands ?? []).map((command) => command.name)
+		expect(names).toContain("CheckSession")
+		expect(names).not.toContain("FetchCurrentUser")
+		expect(names).not.toContain("WarmAccessToken")
+	})
+
+	test("a confirmed session does not ask for user.me again while the boot one runs", () => {
 		story(
 			update,
 			given(boot("/hazel/settings/team")),
 			message(Message.ChangedAuth({ auth: "SignedIn" })),
-			Command.expectExact(FetchCurrentUser()),
-			Command.resolve(FetchCurrentUser, Message.SucceededFetchCurrentUser({ user: ada })),
+			Command.expectNone(),
+			message(Message.SucceededFetchCurrentUser({ user: ada })),
+			model((m) => expect(currentUserOf(m)).toEqual(ada)),
 			message(Message.ChangedAuth({ auth: "SignedIn" })),
 			Command.expectNone(),
+		)
+	})
+
+	test("user.me answering before the session check signs in", () => {
+		story(
+			update,
+			given(boot("/hazel/settings/team")),
+			message(Message.SucceededFetchCurrentUser({ user: ada })),
+			model((m) => expect(currentUserOf(m)).toEqual(ada)),
+			message(Message.ChangedAuth({ auth: "SignedIn" })),
+			Command.expectNone(),
+		)
+	})
+
+	test("a boot user.me that failed before the session check is asked again once it confirms", () => {
+		story(
+			update,
+			given(boot("/hazel/settings/team")),
+			message(Message.FailedFetchCurrentUser({ reason: "Offline" })),
+			Command.expectNone(),
+			message(Message.ChangedAuth({ auth: "SignedIn" })),
+			Command.expectExact(FetchCurrentUser()),
+			Command.resolve(FetchCurrentUser, Message.SucceededFetchCurrentUser({ user: ada })),
+			model((m) => expect(currentUserOf(m)).toEqual(ada)),
+		)
+	})
+
+	test("signing in on a public route asks for user.me once", () => {
+		story(
+			update,
+			given(boot("/sign-in")),
+			message(Message.ChangedAuth({ auth: "SignedIn" })),
+			Command.expectHas(FetchCurrentUser()),
+			Command.resolve(FetchCurrentUser, Message.SucceededFetchCurrentUser({ user: ada })),
 		)
 	})
 
@@ -182,7 +231,8 @@ describe("user.me", () => {
 			update,
 			given(boot("/hazel/settings/team")),
 			message(Message.ChangedAuth({ auth: "SignedIn" })),
-			Command.resolve(FetchCurrentUser, offline),
+			// The boot user.me, sent by `init`.
+			message(offline),
 			...steps,
 			Command.expectNone(),
 			model((m) =>
@@ -203,7 +253,7 @@ describe("user.me", () => {
 			update,
 			given(boot("/hazel/settings/team")),
 			message(Message.ChangedAuth({ auth: "SignedIn" })),
-			Command.resolve(FetchCurrentUser, Message.FailedFetchCurrentUser({ reason: "SignedOut" })),
+			message(Message.FailedFetchCurrentUser({ reason: "SignedOut" })),
 			Command.expectExact(CheckSession()),
 			Command.resolve(CheckSession, Message.ChangedAuth({ auth: "SignedOut" })),
 			Command.expectHas(ReplaceUrl({ url: "/sign-in?redirect_url=%2Fhazel%2Fsettings%2Fteam" })),

@@ -21,6 +21,11 @@ export interface LiveQueryOptions<Message> {
 	 */
 	readonly onStalled?: () => Message
 	readonly stallAfterMs?: number
+	/**
+	 * An empty result is held back until this is ready, then sent: for a query whose sources are a
+	 * guess until another collection has loaded, where empty only means "not found" afterwards.
+	 */
+	readonly holdEmptyUntil?: Pick<Collection<any, any>, "isReady" | "onFirstReady">
 }
 
 /**
@@ -39,8 +44,15 @@ export const liveQueryStream = <Row, Message>(
 		Effect.acquireRelease(
 			Effect.sync(() => {
 				const collection = createLiveQueryCollection({ query, startSync: true })
-				const emit = () =>
-					Queue.offerUnsafe(queue, toMessage(collection.toArray as ReadonlyArray<Row>))
+				const hold = options.holdEmptyUntil
+				const emit = () => {
+					const rows = collection.toArray as ReadonlyArray<Row>
+					if (rows.length === 0 && hold !== undefined && !hold.isReady()) return
+					Queue.offerUnsafe(queue, toMessage(rows))
+				}
+				hold?.onFirstReady(() => {
+					if (collection.isReady()) emit()
+				})
 				// `includeInitialState: false` passes every later change; left unset, TanStack drops
 				// deletes of rows that existed before this subscription.
 				const subscription = collection.subscribeChanges(emit, { includeInitialState: false })

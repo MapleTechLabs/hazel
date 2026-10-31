@@ -2,6 +2,7 @@ import { NotificationId } from "@hazel/schema"
 import { Duration, Effect, Schedule, Schema } from "effect"
 import { Command } from "foldkit"
 import { load, pushUrl, replaceUrl } from "foldkit/navigation"
+import { readAccessToken } from "~/lib/access-token"
 import { isRetryableError } from "~/lib/error-messages"
 import { catchCommon } from "../data/actions"
 import { saveSoundSettings, SoundSettings } from "../notification-sound"
@@ -127,6 +128,15 @@ const fetchCurrentUser = Effect.gen(function* () {
 export const FetchCurrentUser = Command.define("FetchCurrentUser", {
 	messages: [Message.SucceededFetchCurrentUser, Message.FailedFetchCurrentUser],
 	execute: fetchCurrentUser,
+})
+
+/**
+ * Exchanges the sync token at boot, beside the session check, so the sync sockets need not wait
+ * for it once `user.me` answers. A refused exchange is reported by `readAccessToken` itself.
+ */
+export const WarmAccessToken = Command.define("WarmAccessToken", {
+	messages: [Message.CompletedWarmAccessToken],
+	execute: Effect.promise(readAccessToken).pipe(Effect.as(Message.CompletedWarmAccessToken())),
 })
 
 /** `user.me` again after a pause, while the API keeps failing to answer it. */

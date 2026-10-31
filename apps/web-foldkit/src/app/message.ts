@@ -47,6 +47,7 @@ export const Message = defineMessageUnion({
 	SucceededFetchCurrentUser: { user: CurrentUser },
 	FailedFetchCurrentUser: { reason: CommonReason },
 	PressedRetryCurrentUser: {},
+	CompletedWarmAccessToken: {},
 	SucceededSignOut: {},
 	FailedSignOut: { reason: CommonReason },
 	/** The organization query for `orgSlug` answered (found or not). */

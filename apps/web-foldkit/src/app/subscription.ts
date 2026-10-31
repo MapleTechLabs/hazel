@@ -6,6 +6,7 @@ import {
 	notificationCollection,
 	organizationCollection,
 	organizationMemberCollection,
+	userOrganizationCollection,
 } from "~/db/collections"
 import { syncSession } from "~/db/sync-manager"
 import { SESSION_REJECTED_EVENT } from "~/lib/access-token"
@@ -120,7 +121,12 @@ const rootSubscriptions = Subscription.make<Model, Message>()((entry) => ({
 										: null,
 								})
 							},
-							{ onStalled: () => Message.StalledOrganization({ orgSlug }) },
+							{
+								onStalled: () => Message.StalledOrganization({ orgSlug }),
+								// The org sources start as last load's set: an org joined since is
+								// missing until the user's object answers, not "not found".
+								holdEmptyUntil: userOrganizationCollection,
+							},
 						),
 		},
 	),

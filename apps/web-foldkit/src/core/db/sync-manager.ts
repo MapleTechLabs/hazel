@@ -3,6 +3,10 @@
  * session; `org:<id>` for each `user_organizations` row, plus the host org of every Connect
  * conversation the user can see (a guest gets a filtered socket to the host `OrgObject`, for the
  * host's users and the conversation rows). Channels open on demand (`channelPartition`).
+ *
+ * The org set is remembered per user, so the next load opens those orgs beside the user's object
+ * instead of after its snapshot. A remembered org the user has left refuses its socket (4003),
+ * which drops its rows, and the user's object then sets the real set.
  */
 import { type MutableSourceSet, type SourceKey, sourceKey } from "@hazel/effect-db-collection"
 import type { OrganizationId, UserId } from "@hazel/schema"
@@ -30,6 +34,13 @@ export interface SyncManagerDeps {
 		readonly hostOrganizationId: OrganizationId
 		readonly deletedAt: unknown
 	}>
+	/** The org set last seen for a user; the next load opens it before the user's object answers. */
+	readonly rememberedOrgSources?: RememberedOrgSources
+}
+
+export interface RememberedOrgSources {
+	readonly read: (userId: UserId) => ReadonlyArray<SourceKey> | undefined
+	readonly write: (userId: UserId, sources: ReadonlyArray<SourceKey>) => void
 }
 
 const sameSources = (a: ReadonlyArray<SourceKey>, b: ReadonlyArray<SourceKey>) =>
@@ -53,9 +64,14 @@ export const startSyncSession = (deps: SyncManagerDeps, userId: UserId): (() => 
 		const next = orgSourcesOf(deps)
 		if (next === undefined) return
 		const current = deps.orgSources.get()
-		if (current === undefined || !sameSources(current, next)) deps.orgSources.set(next)
+		if (current === undefined || !sameSources(current, next)) {
+			deps.orgSources.set(next)
+			deps.rememberedOrgSources?.write(userId, next)
+		}
 	}
 	deps.userSources.set([sourceKey("user", userId)])
+	const remembered = deps.rememberedOrgSources?.read(userId)
+	if (remembered !== undefined && remembered.length > 0) deps.orgSources.set(remembered)
 	const subscriptions = [
 		// Unfiltered, so leaving an org (a delete of a row older than the subscription) reconciles.
 		deps.userOrganizations.subscribeChanges(reconcile, { includeInitialState: false }),
@@ -72,11 +88,36 @@ export const startSyncSession = (deps: SyncManagerDeps, userId: UserId): (() => 
 	}
 }
 
+const rememberedKey = (userId: UserId) => `hazel:org-sources:${userId}`
+
+/** `localStorage`, ignoring a missing, full or blocked store: remembering only saves time. */
+const localRememberedOrgSources: RememberedOrgSources = {
+	read: (userId) => {
+		try {
+			const stored: unknown = JSON.parse(
+				globalThis.localStorage?.getItem(rememberedKey(userId)) ?? "null",
+			)
+			return Array.isArray(stored) &&
+				stored.every((key) => typeof key === "string" && key.startsWith("org:"))
+				? (stored as Array<SourceKey>)
+				: undefined
+		} catch {
+			return undefined
+		}
+	},
+	write: (userId, sources) => {
+		try {
+			globalThis.localStorage?.setItem(rememberedKey(userId), JSON.stringify(sources))
+		} catch {}
+	},
+}
+
 const appDeps: SyncManagerDeps = {
 	userSources,
 	orgSources,
 	userOrganizations: userOrganizationCollection,
 	connectConversations: connectConversationCollection,
+	rememberedOrgSources: localRememberedOrgSources,
 }
 
 /** The app's sources for `userId` while the stream runs (a root subscription keyed on the user). */

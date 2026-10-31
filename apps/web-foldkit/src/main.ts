@@ -19,6 +19,7 @@ import {
 	SaveSoundSettings,
 	SaveThemePreference,
 	SignOut,
+	WarmAccessToken,
 } from "./app/command"
 import { Message } from "./app/message"
 import {
@@ -49,8 +50,8 @@ import * as Platform from "./platform"
 import type { DesktopMenuItem } from "./platform/desktop-menu"
 import * as Updates from "./platform/updates"
 import { authRedirect, routeRedirect } from "./redirect"
-import { AppRoute, hrefOf, orgSlugOf, urlToAppRoute } from "./route"
-import type { Member, Organization } from "./session"
+import { AppRoute, hrefOf, isPublicRoute, orgSlugOf, urlToAppRoute } from "./route"
+import type { CurrentUser, Member, Organization } from "./session"
 import type { Resources } from "./rpc"
 import { loadIsCreateChannelHintDismissed } from "./shell/channels-sidebar"
 import { Message as ShellMessage, type Model as ShellModel } from "./shell/model"
@@ -360,11 +361,13 @@ const changedAuth =
 			return model.session._tag === "SignedOut"
 				? { model }
 				: sessionChanged(modifyFields(model, { session: () => Session.SignedOut() }))
-		// A session check that confirms the session changes nothing; a new one loads its user.
+		// A session check that confirms the session changes nothing; a new one loads its user,
+		// unless the boot `user.me` is already on its way.
 		if (model.session._tag === "SignedIn") return { model }
+		const isFetchingUser = model.session._tag === "Loading" && model.session.isFetchingUser
 		return Update.combine(modifyFields(model, { session: () => signedInSession }), [
 			sessionChanged,
-			command(FetchCurrentUser()),
+			isFetchingUser ? unchanged : command(FetchCurrentUser()),
 		])
 	}
 
@@ -383,10 +386,28 @@ const failedCheckSession =
 		}
 	}
 
+/** `user.me` answered. Before the session check does, the answer settles the session too. */
+const succeededFetchCurrentUser =
+	(user: CurrentUser): Step =>
+	(model) =>
+		model.session._tag === "SignedOut"
+			? { model }
+			: sessionChanged(
+					modifyFields(model, {
+						session: () =>
+							Session.SignedIn({ user: AsyncData.Success({ data: user }), retries: 0 }),
+					}),
+				)
+
 /** `user.me` failed. A transient failure is retried a few times; after that, or an ended session, it shows. */
 const failedFetchCurrentUser =
 	(reason: CommonReason): Step =>
 	(model) => {
+		// The boot `user.me` failed before the session check answered: that check fetches again if signed in.
+		if (model.session._tag === "Loading")
+			return {
+				model: modifyFields(model, { session: () => Session.Loading({ isFetchingUser: false }) }),
+			}
 		if (model.session._tag !== "SignedIn") return { model }
 		const { user, retries } = model.session
 		const hasUser = AsyncData.hasData(user)
@@ -509,11 +530,13 @@ const appliedTheme: Step = (model) =>
 
 export const init: Runtime.RoutingApplicationInit<Model, Message, Flags, Resources> = (flags, url) => {
 	const route = urlToAppRoute(url)
+	// An app route needs the user: ask for it, and the sync token, beside the session check.
+	const isAppRoute = route._tag !== "NotFound" && !isPublicRoute(route)
 	const model: Model = withUrl(
 		{
 			route,
 			currentUrl: "",
-			session: Session.Loading(),
+			session: Session.Loading({ isFetchingUser: isAppRoute }),
 			org: OrgState.None(),
 			isMobile: flags.isMobile,
 			nowMs: flags.sessionStartMs,
@@ -531,7 +554,13 @@ export const init: Runtime.RoutingApplicationInit<Model, Message, Flags, Resourc
 		},
 		url,
 	)
-	return Update.combine(model, [appliedTheme, enteredRoute, informShell, redirect, command(CheckSession())])
+	return Update.combine(model, [
+		appliedTheme,
+		enteredRoute,
+		informShell,
+		redirect,
+		isAppRoute ? command(CheckSession(), FetchCurrentUser(), WarmAccessToken()) : command(CheckSession()),
+	])
 }
 
 // UPDATE
@@ -569,22 +598,17 @@ export const update = (model: Model, message: Message): Return =>
 		PressedRetrySession: () =>
 			model.session._tag === "Unreachable"
 				? {
-						model: modifyFields(model, { session: () => Session.Loading() }),
+						model: modifyFields(model, {
+							session: () => Session.Loading({ isFetchingUser: false }),
+						}),
 						commands: [CheckSession()],
 					}
 				: { model },
 		RejectedSession: () => ({ model, commands: [CheckSession()] }),
-		SucceededFetchCurrentUser: ({ user }) =>
-			model.session._tag === "SignedIn"
-				? sessionChanged(
-						modifyFields(model, {
-							session: () =>
-								Session.SignedIn({ user: AsyncData.Success({ data: user }), retries: 0 }),
-						}),
-					)
-				: { model },
+		SucceededFetchCurrentUser: ({ user }) => succeededFetchCurrentUser(user)(model),
 		FailedFetchCurrentUser: ({ reason }) => failedFetchCurrentUser(reason)(model),
 		PressedRetryCurrentUser: () => refreshCurrentUser(model),
+		CompletedWarmAccessToken: () => ({ model }),
 		// A full load of `/`: every collection, token and subscription starts over, signed out.
 		SucceededSignOut: () => ({ model, commands: [LoadExternal({ href: hrefOf(AppRoute.Root()) })] }),
 		FailedSignOut: ({ reason }) =>
