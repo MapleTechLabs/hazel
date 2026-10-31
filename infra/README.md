@@ -57,8 +57,9 @@ Locally, `bunx alchemy profile refresh --profile default --provider Cloudflare` 
 the default profile.
 
 Worker env (secrets are uploaded as Worker secrets, plain values as vars) is listed in
-`apps/backend/src/worker/env.ts` and in each app's `alchemy.run.ts`. CI passes them from the
-`production` / `pr-preview` GitHub Environments (`.github/workflows/deploy-*.yml`).
+`apps/backend/src/worker/env.ts` and in each app's `alchemy.run.ts`. CI loads them from Infisical
+(`prod` for prd, `preview` for `pr-<n>` stages) over GitHub OIDC (`.github/workflows/deploy-*.yml`);
+previews are covered in `docs/pr-previews.md`.
 
 ## Decommissioning the Postgres stack
 

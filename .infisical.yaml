@@ -1,0 +1,10 @@
+version: 1
+general: {}
+secrets-management:
+    # The Hazel project. Environments: `prod` (prd deploys), `preview` (PR previews, see
+    # docs/pr-previews.md), `dev`. The default is `dev` so a bare `infisical run` never reads prod;
+    # the prd scripts in package.json pass `--env prod`.
+    project-id: 9e94bb4d-0348-440c-b0f3-073b6f1977f3
+    default-environment: dev
+    mappings:
+        git-branch-to-environment: {}

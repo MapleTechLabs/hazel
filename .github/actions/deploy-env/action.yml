@@ -1,7 +1,7 @@
 name: deploy setup
 description: >-
     Toolchain and dependencies for an alchemy deploy job. Secrets reach the job as env vars
-    (prd: Infisical's `prod` environment; previews: the `pr-preview` GitHub Environment); alchemy
+    (Infisical: `prod` for prd, `preview` for PR previews); alchemy
     reads them through Config when it plans the stack (see apps/*/alchemy.run.ts and apps/backend/src/worker/env.ts).
 
 runs:
