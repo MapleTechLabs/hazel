@@ -2,7 +2,14 @@ import type { ChannelId, ChannelMemberId, ChannelSectionId, OrganizationId, User
 import { and, eq, inArray, isNull, not, or } from "@tanstack/db"
 import { channelCollection, channelMemberCollection, channelSectionCollection } from "~/db/collections"
 import { liveQueryStream } from "../../data/live-query"
-import type { ChannelEntry, DiscoverableChannel, Section, SidebarChannel, SidebarMember } from "./rows"
+import type {
+	ChannelEntry,
+	DiscoverableChannel,
+	Section,
+	SidebarChannel,
+	SidebarMember,
+	SidebarThread,
+} from "./rows"
 
 /**
  * The chat sidebar's live queries: the exact query builders of `components/sidebar/*` and the
@@ -115,6 +122,62 @@ export const favoritesStream = <M>(
 				)
 				.orderBy(({ channel }) => channel.createdAt, "asc"),
 		(rows) => toMessage(rows.map(toEntry)),
+	)
+
+/** The threads the user joined and has not hidden, oldest first (the view picks the recent ones). */
+export const threadsStream = <M>(
+	organizationId: OrganizationId,
+	userId: UserId,
+	toMessage: (threads: Array<SidebarThread>) => M,
+) =>
+	liveQueryStream<
+		{
+			id: ChannelId
+			name: string
+			parentChannelId: ChannelId | null
+			createdAt: Date
+			notificationCount: number
+		},
+		M
+	>(
+		(q) =>
+			q
+				.from({ channel: channelCollection })
+				.innerJoin({ member: channelMemberCollection }, ({ channel, member }) =>
+					eq(member.channelId, channel.id),
+				)
+				.where((q) =>
+					and(
+						eq(q.channel.organizationId, organizationId),
+						eq(q.channel.type, "thread"),
+						eq(q.member.userId, userId),
+						eq(q.member.isHidden, false),
+					),
+				)
+				.orderBy(({ channel }) => channel.createdAt, "asc")
+				.select(({ channel, member }) => ({
+					id: channel.id,
+					name: channel.name,
+					parentChannelId: channel.parentChannelId,
+					createdAt: channel.createdAt,
+					notificationCount: member.notificationCount,
+				})),
+		(rows) =>
+			toMessage(
+				rows.flatMap((row) =>
+					row.parentChannelId === null
+						? []
+						: [
+								{
+									id: row.id,
+									name: row.name,
+									parentChannelId: row.parentChannelId,
+									createdAtMs: new Date(row.createdAt).getTime(),
+									notificationCount: row.notificationCount,
+								},
+							],
+				),
+			),
 	)
 
 /** `DmChannelGroup`. */

@@ -141,6 +141,18 @@ const contentView = <M>(h: HtmlBuilder<M>, row: MessageRow, context: RowContext<
 	]
 }
 
+/**
+ * Discord's spine from the avatar down into the thread card's middle (the card is the content's last
+ * part and 58px tall; the avatar 40px wide, 16px from the content).
+ */
+const threadSpineView = <M>(h: HtmlBuilder<M>): Html =>
+	h.div([
+		h.Class(
+			"pointer-events-none absolute top-12 bottom-[28px] left-[19px] w-[31px] rounded-bl-[10px] border-border border-b-2 border-l-2",
+		),
+		h.Attribute("aria-hidden", "true"),
+	])
+
 /** `isHovered` is the list's injected `#message-<id> { background-color: ... !important }` hover rule. */
 export const messageRowView = <M>(
 	h: HtmlBuilder<M>,
@@ -189,8 +201,9 @@ export const messageRowView = <M>(
 					[
 						row.reply === null ? h.empty : replySectionView(h, row.reply, null),
 						h.div(
-							[h.Class("flex gap-4")],
+							[h.Class("relative flex gap-4")],
 							[
+								showAvatar && row.thread !== null ? threadSpineView(h) : h.empty,
 								avatarOrTime,
 								h.div(
 									[h.Class("min-w-0 flex-1")],

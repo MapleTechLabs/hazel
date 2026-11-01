@@ -13,6 +13,7 @@ import {
 	PartnerOrg,
 	Presence,
 	Section,
+	SidebarThread,
 	UnreadCount,
 } from "./rows"
 
@@ -34,6 +35,8 @@ export const Model = Schema.Struct({
 	/** Keyed by section id, `"default"` for channels without a section. */
 	sectionChannels: Schema.Record(Schema.String, Schema.Array(ChannelEntry)),
 	favorites: Schema.Array(ChannelEntry),
+	/** Joined threads, nested under their parent channel's row. */
+	threads: Schema.Array(SidebarThread),
 	dmChannelIds: Schema.Array(ChannelId),
 	dmChannels: Schema.Record(Schema.String, Schema.NullOr(DmChannel)),
 	presence: Schema.Array(Presence),
@@ -79,6 +82,7 @@ export const Message = defineMessageUnion({
 	UpdatedSections: { sections: Schema.Array(Section) },
 	UpdatedSectionChannels: { sectionKey: Schema.String, channels: Schema.Array(ChannelEntry) },
 	UpdatedFavorites: { channels: Schema.Array(ChannelEntry) },
+	UpdatedThreads: { threads: Schema.Array(SidebarThread) },
 	UpdatedDmChannelIds: { channelIds: Schema.Array(ChannelId) },
 	UpdatedDmChannel: { channelId: ChannelId, channel: Schema.NullOr(DmChannel) },
 	UpdatedPresence: { presence: Schema.Array(Presence) },
@@ -107,6 +111,7 @@ export const emptyData = {
 	sections: [],
 	sectionChannels: {},
 	favorites: [],
+	threads: [],
 	dmChannelIds: [],
 	dmChannels: {},
 	presence: [],

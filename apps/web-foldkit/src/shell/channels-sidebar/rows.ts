@@ -33,6 +33,16 @@ export type SidebarMember = typeof SidebarMember.Type
 export const ChannelEntry = Schema.Struct({ channel: SidebarChannel, member: SidebarMember })
 export type ChannelEntry = typeof ChannelEntry.Type
 
+/** A thread the user joined, listed under its parent channel (Discord's sidebar threads). */
+export const SidebarThread = Schema.Struct({
+	id: ChannelId,
+	name: Schema.String,
+	parentChannelId: ChannelId,
+	createdAtMs: Schema.Number,
+	notificationCount: Schema.Number,
+})
+export type SidebarThread = typeof SidebarThread.Type
+
 export const Section = Schema.Struct({ id: ChannelSectionId, name: Schema.String })
 export type Section = typeof Section.Type
 

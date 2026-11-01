@@ -9,7 +9,15 @@ import { IconHashtag } from "../../icons"
 import { AppRoute, hrefOf } from "../../route"
 import { avatar } from "../../ui/avatar"
 import { sidebarItem, sidebarLink } from "../../ui/sidebar"
-import type { ChannelEntry, DiscoverableChannel, DmChannel, DmMember, PartnerOrg, Presence } from "./rows"
+import type {
+	ChannelEntry,
+	DiscoverableChannel,
+	DmChannel,
+	DmMember,
+	PartnerOrg,
+	Presence,
+	SidebarThread,
+} from "./rows"
 import { dotsMenuTrigger } from "./tree"
 
 /** `ChannelItem`, `DmChannelItem` and `DiscoverableChannelItem` (`components/sidebar/*`). */
@@ -130,6 +138,71 @@ export const channelItem = <M>(
 		...badgeIf(h, notificationCount),
 	])
 }
+
+/** One joined thread under its channel, on a branch of the spine that runs down from the channel. */
+const threadItem = <M>(
+	h: HtmlBuilder<M>,
+	thread: SidebarThread,
+	isActive: boolean,
+	isLast: boolean,
+	orgSlug: string,
+): Html => {
+	const count = thread.notificationCount
+	return h.a(
+		[
+			h.Href(chatHref({ orgSlug }, thread.id)),
+			h.Attribute("data-react-aria-pressable", "true"),
+			...(isActive ? [h.Attribute("aria-current", "page"), h.Attribute("data-current", "true")] : []),
+			h.Class(
+				cx(
+					"relative ml-[26px] flex h-8 min-w-0 items-center gap-2 rounded-lg px-2 text-fg-3 text-sm/5",
+					"outline-hidden hover:bg-wash hover:text-fg focus-visible:bg-wash",
+					"before:pointer-events-none before:absolute before:top-0 before:-left-[11px] before:h-1/2 before:w-2",
+					"before:rounded-bl-md before:border-fg/15 before:border-b-[1.5px] before:border-l-[1.5px]",
+					!isLast &&
+						"after:pointer-events-none after:absolute after:top-1/2 after:bottom-0 after:-left-[11px] after:border-fg/15 after:border-l-[1.5px]",
+					isActive && CHANNEL_ACTIVE,
+					count > 0 && "font-medium text-fg",
+				),
+			),
+		],
+		[
+			h.span([h.Class("min-w-0 flex-1 truncate")], [thread.name]),
+			count > 0
+				? h.span(
+						[
+							h.Class(
+								"flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 font-medium text-[11px] text-primary-fg tabular-nums",
+							),
+						],
+						[String(count)],
+					)
+				: h.empty,
+		],
+	)
+}
+
+/** The channel's joined threads, below its row. */
+export const threadItems = <M>(
+	h: HtmlBuilder<M>,
+	threads: ReadonlyArray<SidebarThread>,
+	activeThreadId: ChannelId | null,
+	orgSlug: string,
+): Html =>
+	threads.length === 0
+		? h.empty
+		: h.div(
+				[h.Class("col-span-full flex min-w-0 flex-col"), h.Attribute("aria-label", "Threads")],
+				threads.map((thread, index) =>
+					threadItem(
+						h,
+						thread,
+						thread.id === activeThreadId,
+						index === threads.length - 1,
+						orgSlug,
+					),
+				),
+			)
 
 export const discoverableItem = <M>(
 	h: HtmlBuilder<M>,

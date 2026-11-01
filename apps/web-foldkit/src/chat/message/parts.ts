@@ -1,12 +1,12 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { formatDistanceToNow } from "date-fns"
+import { formatDistanceToNowStrict } from "date-fns"
 import { cx } from "~/utils/cx"
-import { IconDiscord, IconPin } from "../../icons"
+import { IconChevronRight, IconDiscord, IconPin } from "../../icons"
 import { avatar } from "../../ui/avatar"
 import { badge } from "../../ui/badge"
 import type { MessageRow, ReplyPreview, ThreadPreview } from "../../page/chat/rows"
 
-/** Static parts of `Message.*`: author header, reply section, thread preview. */
+/** Static parts of `Message.*`: author header, reply section, thread card. */
 
 const pad = (value: number) => String(value).padStart(2, "0")
 
@@ -110,91 +110,70 @@ export const replySectionView = <M>(h: HtmlBuilder<M>, reply: ReplyPreview, onCl
 		],
 	)
 
-/** `InlineThreadPreview`. */
-export const threadPreviewView = <M>(h: HtmlBuilder<M>, thread: ThreadPreview, onClick: M | null): Html =>
-	h.button(
+/** Discord's thread card under its starter message: the name, the message count and the last message. */
+export const threadPreviewView = <M>(h: HtmlBuilder<M>, thread: ThreadPreview, onClick: M | null): Html => {
+	const last = thread.lastMessage
+	return h.button(
 		[
 			h.Attribute("type", "button"),
+			h.Attribute("aria-label", `Open thread ${thread.name}`),
 			...(onClick === null ? [] : [h.OnClick(onClick)]),
 			h.Class(
 				cx(
-					"group/thread mt-1 flex items-center gap-2 rounded-md py-1 px-1 -ml-1 max-w-full",
-					"transition-colors hover:bg-secondary/60 active:bg-secondary/80",
-					"cursor-pointer select-none",
+					"group/thread mt-2 flex h-[58px] w-full max-w-lg cursor-pointer select-none flex-col justify-center gap-0.5",
+					"rounded-lg border border-border bg-secondary/40 px-3 text-left text-sm",
+					"transition-colors hover:border-fg/15 hover:bg-secondary active:bg-secondary/80",
 				),
 			),
 		],
 		[
 			h.div(
-				[h.Class("shrink-0")],
-				thread.authors.length === 0
-					? []
-					: [
-							h.div(
-								[h.Class("flex items-center -space-x-1.5")],
-								thread.authors.map((author, index) =>
-									author === null
-										? h.div([
-												h.Class("size-5 rounded-md bg-muted ring-[1.5px] ring-bg"),
-												h.Attribute("style", `z-index: ${10 - index};`),
-											])
-										: avatar(h, {
-												src: author.avatarUrl,
-												seed: author.displayName || undefined,
-												alt: author.displayName,
-												size: "xxs",
-												className: "ring-[1.5px] ring-bg",
-												isSquare: true,
-											}),
-								),
+				[h.Class("flex min-w-0 items-center gap-2")],
+				[
+					h.span([h.Class("truncate font-semibold text-fg")], [thread.name]),
+					h.span(
+						[
+							h.Class(
+								"flex shrink-0 items-center gap-0.5 font-medium text-primary group-hover/thread:underline",
 							),
 						],
-			),
-			h.div(
-				[h.Class("flex min-w-0 items-center gap-1.5 text-[13px] whitespace-nowrap")],
-				[
-					...(thread.customName
-						? [
-								h.span(
-									[h.Class("max-w-[150px] truncate font-medium text-fg/80")],
-									[thread.customName],
-								),
-								h.span([h.Class("shrink-0 text-muted-fg")], ["·"]),
-							]
-						: []),
-					h.span(
-						[h.Class("shrink-0 font-medium text-primary group-hover/thread:underline")],
-						[String(thread.count), " ", thread.count === 1 ? "reply" : "replies"],
-					),
-					h.span([h.Class("shrink-0 text-muted-fg")], ["·"]),
-					h.span(
-						[h.Class("relative shrink-0")],
 						[
-							...(thread.lastReplyAtMs !== null
-								? [
-										h.span(
-											[h.Class("text-muted-fg group-hover/thread:invisible truncate")],
-											[
-												...(thread.count > 1 ? ["Last reply "] : []),
-												formatDistanceToNow(new Date(thread.lastReplyAtMs), {
-													addSuffix: false,
-												}),
-												" ago",
-											],
-										),
-									]
-								: []),
-							h.span(
-								[
-									h.Class(
-										"invisible absolute left-0 text-muted-fg group-hover/thread:visible",
-									),
-								],
-								["View thread"],
-							),
+							`${thread.count} ${thread.count === 1 ? "Message" : "Messages"}`,
+							IconChevronRight(h, { className: "size-3.5" }),
 						],
 					),
 				],
 			),
+			last === null
+				? h.span([h.Class("truncate text-muted-fg")], ["No recent messages"])
+				: h.div(
+						[h.Class("flex min-w-0 items-center gap-1.5")],
+						[
+							last.author === null
+								? h.div([h.Class("size-4 shrink-0 rounded-full bg-muted")])
+								: avatar(h, {
+										src: last.author.avatarUrl,
+										seed: last.author.displayName || undefined,
+										alt: last.author.displayName,
+										size: "xxs",
+										className: "size-4 shrink-0",
+									}),
+							last.author === null
+								? h.empty
+								: h.span(
+										[h.Class("shrink-0 font-medium text-fg/85")],
+										[last.author.displayName],
+									),
+							h.span(
+								[h.Class("min-w-0 truncate text-muted-fg")],
+								[last.text === "" ? "Click to see attachment" : last.text],
+							),
+							h.span(
+								[h.Class("ml-1 shrink-0 text-muted-fg text-xs")],
+								[formatDistanceToNowStrict(new Date(last.createdAtMs), { addSuffix: true })],
+							),
+						],
+					),
 		],
 	)
+}

@@ -75,6 +75,7 @@ export const update = (model: Model, message: Message): SidebarReturn =>
 			}),
 		}),
 		UpdatedFavorites: ({ channels }) => ({ model: modifyFields(model, { favorites: () => channels }) }),
+		UpdatedThreads: ({ threads }) => ({ model: modifyFields(model, { threads: () => threads }) }),
 		UpdatedDmChannelIds: ({ channelIds }) => ({
 			model: modifyFields(model, { dmChannelIds: () => channelIds }),
 		}),

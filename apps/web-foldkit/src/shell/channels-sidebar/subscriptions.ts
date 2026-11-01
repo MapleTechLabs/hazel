@@ -103,6 +103,12 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
 			),
 		),
 	}),
+	sidebarThreads: entry(Scope, {
+		modelToDependencies: scopeOf,
+		dependenciesToStream: scoped((organizationId, userId) =>
+			Data.threadsStream(organizationId, userId, (threads) => Message.UpdatedThreads({ threads })),
+		),
+	}),
 	sidebarDmChannelIds: entry(Scope, {
 		modelToDependencies: scopeOf,
 		dependenciesToStream: scoped((organizationId, userId) =>

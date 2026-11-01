@@ -18,6 +18,7 @@ import * as Draft from "../../../composer/draft"
 import { DragState, DropEvent, TrackFileDrop } from "../../../composer/drop"
 import { MountEditor } from "../../../composer/composer"
 import { Message } from "./model"
+import { LoadThreadPanelWidth } from "./thread-width"
 import * as Picker from "../../../emoji-picker/picker"
 import * as EmojiDialog from "../../../emoji-picker/dialog"
 import { PopoverEvent, popoverId } from "../../../picker-popover/popover"
@@ -226,6 +227,7 @@ describe("threads", () => {
 			),
 			Scene.expect(Scene.role("heading", { name: "Thread" })).toExist(),
 			Scene.expect(Scene.text("Creating thread...")).toExist(),
+			Scene.Command.resolve(LoadThreadPanelWidth, Message.LoadedThreadPanelWidth({ width: null })),
 			Scene.Command.resolve(CreateThread, ActionMessage.SucceededCreateThread({ threadChannelId })),
 			Scene.expect(Scene.text("Creating thread...")).toBeAbsent(),
 			Scene.Mount.resolveAll(

@@ -1,4 +1,4 @@
-import { ChannelId, TypingIndicatorId } from "@hazel/schema"
+import { ChannelId, MessageId, TypingIndicatorId } from "@hazel/schema"
 import { Schema } from "effect"
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test, vi } from "vitest"
@@ -26,6 +26,7 @@ import {
 } from "./fixtures.test-support"
 import { Message, type Model } from "./model"
 import { MAX_WINDOW, setTab } from "./page"
+import { LoadThreadPanelWidth, SaveThreadPanelWidth } from "./thread-width"
 
 /** The channel page's read path: message windows, change sets, unfurls, AI streams, threads, viewer. */
 
@@ -384,8 +385,99 @@ describe("threads", () => {
 				})
 				expect(current.threadPanel?.draft.channelId).toBe(threadChannelId)
 			}),
+			Command.resolve(LoadThreadPanelWidth, Message.LoadedThreadPanelWidth({ width: 520 })),
+			model((current) => expect(current.threadPanelWidth).toBe(520)),
 			message(Message.ClickedCloseThread()),
 			model((current) => expect(current.threadPanel).toBeNull()),
+		)
+	})
+
+	test("a message's thread card shows the thread's name, message count and last message", () => {
+		const starter = { ...messages[1]!, threadChannelId }
+		const loaded = derived({ ...loadedModel(), messages: [messages[0]!, starter] })
+		const replyOf = (n: number, content: string, minute: number) => ({
+			id: Schema.decodeSync(MessageId)(`00000000-0000-4000-8000-00000000300${n}`),
+			channelId: threadChannelId,
+			authorId: ada,
+			content,
+			createdAtMs: Date.UTC(2026, 2, 12, 9, minute),
+		})
+		story(
+			updateWithShared,
+			given(loaded),
+			// Neither the thread's channel nor its messages have synced: no card yet.
+			model((current) => expect(rowOf(current, graceMessageId)?.thread).toBeNull()),
+			message(
+				Message.UpdatedUsers({
+					users: [
+						{
+							id: ada,
+							firstName: "Ada",
+							lastName: "Lovelace",
+							email: "ada@hazel.sh",
+							avatarUrl: null,
+							userType: "user",
+							timezone: null,
+						},
+					],
+				}),
+			),
+			message(
+				Message.UpdatedThreadChannels({ channels: [{ id: threadChannelId, name: "Launch plan" }] }),
+			),
+			model((current) =>
+				expect(rowOf(current, graceMessageId)?.thread).toEqual({
+					threadChannelId,
+					name: "Launch plan",
+					count: 0,
+					lastMessage: null,
+				}),
+			),
+			// Newest first, as the lookup returns them.
+			message(
+				Message.UpdatedThreadMessages({
+					messages: [
+						replyOf(2, `**Ship it** with @[userId:${ada}]\nsecond line`, 5),
+						replyOf(1, "First", 4),
+					],
+				}),
+			),
+			model((current) =>
+				expect(rowOf(current, graceMessageId)?.thread).toMatchObject({
+					name: "Launch plan",
+					count: 2,
+					lastMessage: {
+						author: { displayName: "Ada Lovelace" },
+						text: "Ship it with @Ada Lovelace",
+						createdAtMs: Date.UTC(2026, 2, 12, 9, 5),
+					},
+				}),
+			),
+		)
+	})
+
+	test("the panel's edge resizes it within its bounds and saves the width when let go", () => {
+		story(
+			updateWithShared,
+			given(derived()),
+			message(Message.PressedThreadPanelEdge({ clientX: 1000, startWidth: 480, maxWidth: 700 })),
+			message(Message.MovedThreadPanelEdge({ clientX: 900 })),
+			model((current) => expect(current.threadPanelWidth).toBe(580)),
+			message(Message.MovedThreadPanelEdge({ clientX: 100 })),
+			model((current) => expect(current.threadPanelWidth).toBe(700)),
+			message(Message.MovedThreadPanelEdge({ clientX: 1600 })),
+			model((current) => expect(current.threadPanelWidth).toBe(360)),
+			message(Message.ReleasedThreadPanelEdge()),
+			Command.expectExact(SaveThreadPanelWidth({ width: 360 })),
+			Command.resolve(SaveThreadPanelWidth, Message.CompletedSaveThreadPanelWidth()),
+			model((current) => expect(current.threadPanelDrag).toBeNull()),
+			// The stored width answering late never undoes the drag.
+			message(Message.LoadedThreadPanelWidth({ width: 640 })),
+			model((current) => expect(current.threadPanelWidth).toBe(360)),
+			message(Message.PressedThreadPanelEdgeKey({ delta: 24 })),
+			Command.expectExact(SaveThreadPanelWidth({ width: 384 })),
+			Command.resolve(SaveThreadPanelWidth, Message.CompletedSaveThreadPanelWidth()),
+			model((current) => expect(current.threadPanelWidth).toBe(384)),
 		)
 	})
 

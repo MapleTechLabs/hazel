@@ -145,14 +145,17 @@ export const threadChannelsStream = <M>(
 				(rows) => toMessage(rows.map((row) => ({ id: row.id, name: row.name }))),
 			)
 
-/** Thread messages for the reply count, avatar stack and last reply time. */
+/** Thread messages for the cards' message count and last message. */
 export const threadMessagesStream = <M>(
 	threadIds: ReadonlyArray<ChannelId>,
 	toMessage: (messages: ReadonlyArray<ThreadMessageInfo>) => M,
 ) =>
 	threadIds.length === 0
 		? Stream.make(toMessage([]))
-		: liveQueryStream<{ id: MessageId; channelId: ChannelId; authorId: UserId; createdAt: Date }, M>(
+		: liveQueryStream<
+				{ id: MessageId; channelId: ChannelId; authorId: UserId; content: string; createdAt: Date },
+				M
+			>(
 				(q) =>
 					q
 						.from({ message: messageCollection })
@@ -164,6 +167,7 @@ export const threadMessagesStream = <M>(
 							id: row.id,
 							channelId: row.channelId,
 							authorId: row.authorId,
+							content: row.content,
 							createdAtMs: new Date(row.createdAt).getTime(),
 						})),
 					),

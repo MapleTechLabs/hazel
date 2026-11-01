@@ -39,8 +39,6 @@ import {
 /** Row derivation: grouping, date dividers and every lookup a message row displays. */
 
 const GROUP_THRESHOLD_MS = 3 * 60 * 1000
-const THREAD_AUTHORS = 3
-const THREAD_AUTHOR_WINDOW = 10
 
 const toGroupPosition = (isGroupStart: boolean, isGroupEnd: boolean): GroupPosition =>
 	isGroupStart && isGroupEnd ? "standalone" : isGroupStart ? "start" : isGroupEnd ? "end" : "middle"
@@ -172,23 +170,43 @@ const replyOf = (context: DeriveContext, replyToMessageId: MessageId | null): Re
 const threadOf = (context: DeriveContext, threadChannelId: ChannelId | null): ThreadPreview | null => {
 	if (threadChannelId === null) return null
 	const messages = context.threadMessages.get(threadChannelId) ?? []
-	if (messages.length === 0) return null
 	const name = context.threadNames.get(threadChannelId)
-	const authorIds: string[] = []
-	for (const message of messages.slice(0, THREAD_AUTHOR_WINDOW))
-		if (!authorIds.includes(message.authorId) && authorIds.length < THREAD_AUTHORS)
-			authorIds.push(message.authorId)
+	// Neither synced yet: no card rather than an empty one.
+	if (messages.length === 0 && name === undefined) return null
+	const last = messages[0]
 	return {
 		threadChannelId,
-		customName: name && name !== "Thread" ? name : null,
+		name: name || "Thread",
 		count: messages.length,
-		authors: authorIds.map((authorId) => identityOf(context, authorId)),
-		lastReplyAtMs: messages[0]?.createdAtMs ?? null,
+		lastMessage:
+			last === undefined
+				? null
+				: {
+						author: identityOf(context, last.authorId),
+						text: plainLineOf(context, last.content),
+						createdAtMs: last.createdAtMs,
+					},
 	}
 }
 
 const MENTION_PATTERN = /@\[userId:([^\]]+)\]/g
 const EMOJI_PATTERN = /!\[custom-emoji:([^\]]+)\]/g
+
+const MARKDOWN_MARKS = /[*_`~#>|]/g
+const EMOJI_MARKUP = /!\[custom-emoji:([^\]]+)\]\([^)]*\)/g
+
+/** A thread card's last message: its first non-empty line, mentions named and markdown marks dropped. */
+const plainLineOf = (context: DeriveContext, content: string): string =>
+	content
+		.replace(MENTION_PATTERN, (_, userId: string) => {
+			const user = context.users.get(userId)
+			return `@${context.botNames.get(userId) ?? (user ? `${user.firstName} ${user.lastName}` : "unknown")}`
+		})
+		.replace(EMOJI_MARKUP, ":$1:")
+		.replace(MARKDOWN_MARKS, "")
+		.split("\n")
+		.map((line) => line.trim())
+		.find((line) => line.length > 0) ?? ""
 
 const refsOf = (context: DeriveContext, content: string): MarkdownRefs => ({
 	mentions: [...content.matchAll(MENTION_PATTERN)].flatMap(([, userId]) => {

@@ -151,6 +151,8 @@ export interface TreeRowOptions<M> {
 	readonly setSize: number
 	readonly allowsDragging: boolean
 	readonly content: Html
+	/** Below the row's item, moving with it (the channel's threads). */
+	readonly children?: Html
 	/** Set on the open channel's row only: scrolls the row into view when it becomes active. */
 	readonly onActiveMount: Attribute<M> | null
 }
@@ -191,6 +193,7 @@ export const treeRow = <M>(h: HtmlBuilder<M>, options: TreeRowOptions<M>): Html 
 						[
 							dragButton(h, options.label, options.allowsDragging, options.onActiveMount),
 							options.content,
+							options.children ?? h.empty,
 						],
 					),
 				],

@@ -70,6 +70,14 @@ export const ThreadPanel = Schema.Struct({
 })
 export type ThreadPanel = typeof ThreadPanel.Type
 
+/** A drag of the thread panel's edge: where it started, and the widest the channel leaves room for. */
+export const ThreadPanelDrag = Schema.Struct({
+	startX: Schema.Number,
+	startWidth: Schema.Number,
+	maxWidth: Schema.Number,
+})
+export type ThreadPanelDrag = typeof ThreadPanelDrag.Type
+
 export const Model = Schema.Struct({
 	channelId: ChannelId,
 	tab: Tab,
@@ -110,6 +118,9 @@ export const Model = Schema.Struct({
 	/** The channel composer's draft (`ChatProvider` + `ComposerEditor` state). */
 	draft: Draft.Model,
 	threadPanel: Schema.NullOr(ThreadPanel),
+	/** The thread panel's width in px, the same for every thread; null until read from storage. */
+	threadPanelWidth: Schema.NullOr(Schema.Number),
+	threadPanelDrag: Schema.NullOr(ThreadPanelDrag),
 	/** `channelMember.clearNotifications` for this visit: not sent yet (or failed), in flight, done. */
 	notificationsClear: Schema.Literals(["NotSent", "Sending", "Cleared"]),
 	/** The non-member's "Join #channel" is running. */
@@ -167,6 +178,14 @@ export const Message = defineMessageUnion({
 	ClickedCloseThread: {},
 	ClickedGenerateThreadName: {},
 	ClickedRenameThread: {},
+	/** The panel's edge was grabbed: its rendered width and the widest it may grow. */
+	PressedThreadPanelEdge: { clientX: Schema.Number, startWidth: Schema.Number, maxWidth: Schema.Number },
+	MovedThreadPanelEdge: { clientX: Schema.Number },
+	ReleasedThreadPanelEdge: {},
+	/** An arrow key on the focused edge, by the px it moves the edge (left grows the panel). */
+	PressedThreadPanelEdgeKey: { delta: Schema.Number },
+	LoadedThreadPanelWidth: { width: Schema.NullOr(Schema.Number) },
+	CompletedSaveThreadPanelWidth: {},
 	ClickedJoinChannel: {},
 	/** A printable key typed outside any input (`useGlobalKeyboardFocus`). */
 	PressedGlobalKey: { key: Schema.String },
