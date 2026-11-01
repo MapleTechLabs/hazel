@@ -17,6 +17,8 @@ import { Database, SQLite, schema } from "@hazel/db"
 import type {
 	ChannelId,
 	ExternalChannelId,
+	ExternalMessageId,
+	ExternalThreadId,
 	ExternalUserId,
 	OrganizationId,
 	SyncChannelLinkId,
@@ -337,6 +339,38 @@ const ingestThreadCreate = Effect.fn("OrgObject.chatSyncThreadCreate")(function*
 })
 
 /**
+ * The link an event applies to: its channel's, or, for a reply in a provider thread that lives in
+ * its channel (Slack), the thread's. A reply in a thread Hazel has not seen yet makes the thread
+ * first, hung off the message it replies to. `None`: an edit or delete in an unlinked thread.
+ */
+const replyThreadLink = Effect.fn("OrgObject.chatSyncReplyThread")(function* (
+	definition: ChatSyncProviderDefinition,
+	payload: OrgChatSyncIngestPayload,
+	channel: InboundLink,
+) {
+	const { event } = payload
+	if (!("inExternalThreadId" in event) || event.inExternalThreadId === undefined)
+		return Option.some(channel)
+	const threadChannelId = definition.threadChannelId(
+		payload.externalChannelId,
+		event.inExternalThreadId,
+	) as ExternalChannelId
+	yield* Effect.annotateCurrentSpan({ "chat_sync.external_thread_id": threadChannelId })
+	const existing = yield* findInboundLink(payload.provider, threadChannelId)
+	if (Option.isSome(existing) || event._tag !== "MessageCreate") return existing
+	if (channel.status !== "active" || !channel.isActive || channel.direction === "hazel_to_external") {
+		return Option.some(channel)
+	}
+	yield* ingestThreadCreate(payload.provider, channel, {
+		_tag: "ThreadCreate",
+		externalThreadId: threadChannelId as string as ExternalThreadId,
+		name: "Thread",
+		externalParentMessageId: event.inExternalThreadId as string as ExternalMessageId,
+	})
+	return yield* findInboundLink(payload.provider, threadChannelId)
+})
+
+/**
  * Inbound text as Hazel content. Hazel's own mention syntax typed on the provider side is
  * defused first (a provider user must not mention or broadcast to Hazel users by writing
  * `@[userId:…]`); then provider mentions become `@[userId:…]`: the Hazel user who linked that
@@ -399,7 +433,9 @@ const ingest = Effect.fn("OrgObject.chatSyncIngest")(function* (payload: OrgChat
 	if (Option.isNone(definition)) return yield* outcome("unknown_provider")
 	const found = yield* findInboundLink(provider, payload.externalChannelId)
 	if (Option.isNone(found)) return yield* outcome("unlinked")
-	const link = found.value
+	const resolved = yield* replyThreadLink(definition.value, payload, found.value)
+	if (Option.isNone(resolved)) return yield* outcome("unlinked_thread")
+	const link = resolved.value
 	if (link.status !== "active" || !link.isActive) return yield* outcome("inactive")
 	if (link.direction === "hazel_to_external") return yield* outcome("outbound_only")
 	if ("externalWebhookId" in event && definition.value.isOwnEcho(link.settings, event.externalWebhookId)) {

@@ -2,7 +2,7 @@
 import type { ExternalMessageId, ExternalThreadId } from "@hazel/schema"
 import { Effect, Layer, Option } from "effect"
 import { ChatSyncProviders, chatSyncProvidersOf } from "./chat-sync-providers"
-import { type ChatSyncClient, ChatSyncProviderApiError } from "./provider"
+import { type ChatSyncClient, ChatSyncProviderApiError, type ChatSyncProviderId } from "./provider"
 import { chatSyncProviders } from "./providers"
 
 /** One provider call a recording client saw. */
@@ -20,6 +20,8 @@ export interface ChatSyncCall {
  */
 export const makeRecordingChatSyncProviders = (options?: { readonly attachmentPublicUrlBase?: string }) => {
 	const calls: Array<ChatSyncCall> = []
+	/** External channels a new link prepared (kept apart: every link makes one). */
+	const prepared: Array<string> = []
 	const control: { fail: number | undefined } = { fail: undefined }
 	let counter = 0
 	const nextId = () => `${900000000000000000 + ++counter}`
@@ -40,6 +42,7 @@ export const makeRecordingChatSyncProviders = (options?: { readonly attachmentPu
 				return Effect.succeed(value())
 			})
 		return {
+			prepareLink: (link) => Effect.sync(() => void prepared.push(link.externalChannelId)),
 			postMessage: ({ link }, message) =>
 				record(
 					{
@@ -88,6 +91,7 @@ export const makeRecordingChatSyncProviders = (options?: { readonly attachmentPu
 					},
 					() => undefined,
 				),
+			// As a real client answers: the thread's link key (Discord's is the message's id too).
 			createThread: ({ link }, thread) =>
 				record(
 					{
@@ -96,7 +100,11 @@ export const makeRecordingChatSyncProviders = (options?: { readonly attachmentPu
 						externalMessageId: thread.externalMessageId,
 						content: thread.name,
 					},
-					() => nextId() as ExternalThreadId,
+					() =>
+						chatSyncProviders[link.provider as ChatSyncProviderId].threadChannelId(
+							link.externalChannelId,
+							thread.externalMessageId,
+						) as ExternalThreadId,
 				),
 		}
 	}
@@ -109,5 +117,5 @@ export const makeRecordingChatSyncProviders = (options?: { readonly attachmentPu
 		),
 	)
 
-	return { layer, calls, control }
+	return { layer, calls, prepared, control }
 }

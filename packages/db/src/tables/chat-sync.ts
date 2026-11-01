@@ -132,3 +132,26 @@ export type ChatSyncOutboundIdentitySettings = {
 	readonly strategy: "webhook" | "fallback_bot"
 	readonly providers: Record<string, Record<string, unknown>>
 }
+
+/**
+ * A provider workspace the Hazel app is installed in (directory, D1): the bot token every org
+ * linked to that workspace posts with. One per workspace, not per org: two Hazel orgs connected
+ * to the same Slack workspace share its install. Written on the OAuth callback; removed when the
+ * provider reports the app uninstalled.
+ */
+export const chatSyncInstallationsTable = SQLite.table("chat_sync_installations", {
+	columns: {
+		provider: SQLite.text,
+		externalWorkspaceId: SQLite.text,
+		externalWorkspaceName: SQLite.nullable(SQLite.text),
+		encryptedToken: SQLite.text,
+		iv: SQLite.text,
+		encryptionKeyVersion: SQLite.integer,
+		scope: SQLite.nullable(SQLite.text),
+		installedBy: SQLite.nullable(uuid(UserId)),
+		createdAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		updatedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+	},
+	primaryKey: ["provider", "externalWorkspaceId"],
+})
+export type ChatSyncInstallation = SQLite.SelectRowOf<typeof chatSyncInstallationsTable>

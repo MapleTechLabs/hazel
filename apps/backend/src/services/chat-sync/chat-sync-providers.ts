@@ -3,8 +3,9 @@
  * served. Part of every object's platform; a `ChannelObject`'s outbox uses it
  * (`chat-sync-outbound.ts`).
  */
-import { Discord } from "@hazel/integrations"
+import { Discord, Slack } from "@hazel/integrations"
 import { Config, Context, Effect, Layer, Option } from "effect"
+import { FetchHttpClient } from "effect/http"
 import {
 	type ChatSyncClient,
 	type ChatSyncProviderDefinition,
@@ -13,7 +14,9 @@ import {
 	isChatSyncProviderId,
 } from "./provider"
 import { chatSyncProviders } from "./providers"
+import { ChatSyncInstallations } from "./chat-sync-installations"
 import { makeDiscordClient } from "./providers/discord/client"
+import { makeSlackClient } from "./providers/slack/client"
 
 /** A provider this build syncs with: its definition and its client. */
 export interface ChatSyncProvider {
@@ -44,18 +47,29 @@ export const chatSyncProvidersOf = (
 export class ChatSyncProviders extends Context.Service<ChatSyncProviders, ChatSyncProvidersShape>()(
 	"@hazel/backend/ChatSyncProviders",
 ) {
-	/** The providers' REST APIs over fetch; reads their tokens and `S3_PUBLIC_URL`. */
+	/**
+	 * The providers' APIs over fetch; reads Discord's token and `S3_PUBLIC_URL`, and Slack's
+	 * per-workspace tokens from the globally provided `Directory`.
+	 */
 	static readonly layer = Layer.effect(
 		this,
 		Effect.gen(function* () {
 			const publicUrl = yield* Config.String("S3_PUBLIC_URL").pipe(Config.option)
 			return chatSyncProvidersOf(
-				{ discord: yield* makeDiscordClient },
+				{ discord: yield* makeDiscordClient, slack: yield* makeSlackClient },
 				Option.filter(
 					Option.map(publicUrl, (url) => url.trim()),
 					(url) => url.length > 0,
 				),
 			)
 		}),
-	).pipe(Layer.provide(Discord.DiscordApiClient.layer))
+	).pipe(
+		Layer.provide(
+			Layer.mergeAll(
+				Discord.DiscordApiClient.layer,
+				Slack.SlackApiClient.layer.pipe(Layer.provide(FetchHttpClient.layer)),
+				ChatSyncInstallations.layer,
+			),
+		),
+	)
 }

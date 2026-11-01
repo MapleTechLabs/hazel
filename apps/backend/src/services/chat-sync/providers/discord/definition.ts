@@ -23,8 +23,11 @@ export const discordWebhookConfigOf = (
 export const discord: ChatSyncProviderDefinition = {
 	id: "discord",
 	displayName: "Discord",
+	// One bot for every guild; the org's connection is the user who added it.
+	workspaceIsInstall: false,
 	maxMessageLength: 2000,
 	maxThreadNameLength: 100,
+	threadChannelId: (_parent, externalThreadId) => externalThreadId,
 	mention: (externalUserId) => `<@${externalUserId}>`,
 	// `<@123>`, and the legacy nickname form `<@!123>`.
 	mentionPattern: /<@!?(\d{17,30})>/g,

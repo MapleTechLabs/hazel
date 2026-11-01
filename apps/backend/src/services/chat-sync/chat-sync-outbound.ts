@@ -31,6 +31,7 @@ import {
 	type ChatSyncLinkedAccount,
 	type ChatSyncOutboundEvent,
 	type ChatSyncOutboundPayload,
+	type PrepareLinkPayload,
 	ChatSyncOrgEffects,
 	InboundChatSyncWrite,
 } from "./chat-sync-effects"
@@ -454,8 +455,32 @@ export const deliverChatSyncOutbound = Effect.fn("ChatSync.deliverOutbound")(fun
 	})
 })
 
+/**
+ * The `chatSync.prepareLink` receiver, in the org's outbox: retried while the provider may still
+ * answer, else logged (the link stays; its first sync reports the same failure).
+ */
+export const prepareChatSyncLink = Effect.fn("ChatSync.prepareLink")(function* (payload: PrepareLinkPayload) {
+	yield* Effect.annotateCurrentSpan({
+		"chat_sync.provider": payload.provider,
+		"chat_sync.external_channel_id": payload.externalChannelId,
+	})
+	const { client } = yield* (yield* ChatSyncProviders).get(payload.provider)
+	yield* client.prepareLink(payload).pipe(
+		Effect.catch((error) =>
+			isRetryableSyncFailure(error)
+				? Effect.fail(error)
+				: Effect.logWarning("Chat sync link could not be prepared", {
+						provider: payload.provider,
+						externalChannelId: payload.externalChannelId,
+						error: error.message,
+					}),
+		),
+	)
+})
+
 export const chatSyncDeliveryReceivers = {
 	"chatSync.outbound": deliverChatSyncOutbound,
+	"chatSync.prepareLink": prepareChatSyncLink,
 } satisfies EffectReceivers<
 	typeof ChatSyncDeliveryEffects,
 	Database.Database | SqlClient | ChatSyncProviders | Directory

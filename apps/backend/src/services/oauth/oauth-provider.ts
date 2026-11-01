@@ -88,9 +88,14 @@ export interface OAuthProvider {
 	 * Build the OAuth authorization URL for redirecting the user.
 	 *
 	 * @param state - Encoded state containing organizationId, userId, etc.
+	 * @param level - The organization's connection, or a user linking their own account (which
+	 *   may need fewer scopes).
 	 * @returns Full authorization URL with all required parameters.
 	 */
-	buildAuthorizationUrl(state: string): Effect.Effect<URL, never>
+	buildAuthorizationUrl(
+		state: string,
+		level: IntegrationConnection.ConnectionLevel,
+	): Effect.Effect<URL, never>
 
 	/**
 	 * Exchange an authorization code for access and refresh tokens.

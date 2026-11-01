@@ -67,7 +67,15 @@ export const activateObject = (kind: ObjectKind) =>
 					ThreadNamer.layer.pipe(
 						Layer.provide(Layer.mergeAll(FetchHttpClient.layer, workerEnvLayer(env))),
 					),
-					ChatSyncProviders.layer.pipe(Layer.provide(workerEnvLayer(env)), Layer.orDie),
+					ChatSyncProviders.layer.pipe(
+						Layer.provide(
+							Layer.mergeAll(
+								workerEnvLayer(env),
+								Layer.suspend(() => Directory.layerD1(directoryBinding(env))),
+							),
+						),
+						Layer.orDie,
+					),
 					HtmlRenders.layer.pipe(
 						Layer.provide(Layer.mergeAll(workerEnvLayer(env), htmlRenderStoreLive(env))),
 						Layer.orDie,

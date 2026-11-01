@@ -80,7 +80,9 @@ export type ChatSyncMention = typeof ChatSyncMention.Type
 
 /**
  * A provider event as its source (gateway, events webhook) saw it; the org resolves its link and
- * author. `content` is in the provider's syntax; the org turns its mentions into Hazel's.
+ * author. `content` is in the provider's syntax; the org turns its mentions into Hazel's. A
+ * provider whose threads are replies in their channel (Slack) routes a reply by its channel and
+ * names the thread it is in (`inExternalThreadId`); the org finds, or makes, the thread's link.
  */
 export const ChatSyncInboundEvent = Schema.TaggedUnion({
 	MessageCreate: {
@@ -90,16 +92,19 @@ export const ChatSyncInboundEvent = Schema.TaggedUnion({
 		externalReplyToMessageId: Schema.NullOr(ExternalMessageId),
 		attachments: Schema.Array(ChatSyncAttachment),
 		mentions: Schema.optional(Schema.Array(ChatSyncMention)),
+		inExternalThreadId: Schema.optional(ExternalThreadId),
 	},
 	MessageUpdate: {
 		externalMessageId: ExternalMessageId,
 		externalWebhookId: Schema.NullOr(ExternalWebhookId),
 		content: Schema.String,
 		mentions: Schema.optional(Schema.Array(ChatSyncMention)),
+		inExternalThreadId: Schema.optional(ExternalThreadId),
 	},
 	MessageDelete: {
 		externalMessageId: ExternalMessageId,
 		externalWebhookId: Schema.NullOr(ExternalWebhookId),
+		inExternalThreadId: Schema.optional(ExternalThreadId),
 	},
 	ReactionAdd: { externalMessageId: ExternalMessageId, emoji: Schema.String },
 	ReactionRemove: { externalMessageId: ExternalMessageId, emoji: Schema.String },
@@ -238,8 +243,17 @@ export const ChatSyncDirectoryEffects = {
 	deleteChatSyncIndex: defineEffect("directory.deleteChatSyncIndex", "directory", ChatSyncIndexPayload),
 }
 
+/** A link was made: get the provider ready to sync it (Slack: the bot joins the channel). */
+export const PrepareLinkPayload = Schema.Struct({
+	provider: Schema.String,
+	externalWorkspaceId: Schema.String,
+	externalChannelId: ExternalChannelId,
+})
+export type PrepareLinkPayload = typeof PrepareLinkPayload.Type
+
 export const ChatSyncDeliveryEffects = {
 	outbound: defineEffect("chatSync.outbound", "chat-sync", ChatSyncOutboundPayload),
+	prepareLink: defineEffect("chatSync.prepareLink", "chat-sync", PrepareLinkPayload),
 }
 
 /**

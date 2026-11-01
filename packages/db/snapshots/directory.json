@@ -1,5 +1,5 @@
 {
-	"migration": "0002_bot_install_oauth",
+	"migration": "0003_chat_sync_installations",
 	"entities": [
 		{
 			"kind": "table",
@@ -81,6 +81,13 @@
 			"name": "chat_sync_index",
 			"primaryKey": {
 				"columns": ["id"]
+			}
+		},
+		{
+			"kind": "table",
+			"name": "chat_sync_installations",
+			"primaryKey": {
+				"columns": ["provider", "externalWorkspaceId"]
 			}
 		},
 		{
@@ -1290,6 +1297,96 @@
 			"type": "text",
 			"notNull": false,
 			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_installations",
+			"name": "provider",
+			"position": 0,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_installations",
+			"name": "externalWorkspaceId",
+			"position": 1,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_installations",
+			"name": "externalWorkspaceName",
+			"position": 2,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_installations",
+			"name": "encryptedToken",
+			"position": 3,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_installations",
+			"name": "iv",
+			"position": 4,
+			"type": "text",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_installations",
+			"name": "encryptionKeyVersion",
+			"position": 5,
+			"type": "integer",
+			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_installations",
+			"name": "scope",
+			"position": 6,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_installations",
+			"name": "installedBy",
+			"position": 7,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_installations",
+			"name": "createdAt",
+			"position": 8,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "chat_sync_installations",
+			"name": "updatedAt",
+			"position": 9,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
 		},
 		{
 			"kind": "column",

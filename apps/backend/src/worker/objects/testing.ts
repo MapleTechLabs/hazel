@@ -67,6 +67,8 @@ export interface TestObjects {
 	readonly stubs: Context.Service.Shape<typeof ObjectStubs>
 	/** Provider calls chat-sync deliveries made (`chatSync.outbound`), in order. */
 	readonly chatSyncCalls: Array<ChatSyncCall>
+	/** External channels new chat-sync links prepared (`chatSync.prepareLink`). */
+	readonly chatSyncPrepared: Array<string>
 	/** Make provider calls fail with `status` (retryable for 429/5xx), or succeed again (undefined). */
 	readonly setChatSyncFailure: (status: number | undefined) => void
 	/** What `ThreadNamer` was asked to name, in order. */
@@ -273,6 +275,7 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 			},
 			stubs,
 			chatSyncCalls: chatSync.calls,
+			chatSyncPrepared: chatSync.prepared,
 			setChatSyncFailure: (status) => {
 				chatSync.control.fail = status
 			},

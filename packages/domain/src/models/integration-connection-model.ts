@@ -9,6 +9,7 @@ export const IntegrationProvider = S.Literals([
 	"figma",
 	"notion",
 	"discord",
+	"slack",
 	"craft",
 	"t3code",
 ])

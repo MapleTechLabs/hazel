@@ -102,6 +102,25 @@ export const PROVIDER_CONFIGS: Record<
 			permissions: "536947712",
 		},
 	},
+	slack: {
+		provider: "slack",
+		authorizationUrl: "https://slack.com/oauth/v2/authorize",
+		tokenUrl: "https://slack.com/api/oauth.v2.access",
+		// Bot scopes for chat sync: read and post in linked channels (as each author), react, join.
+		scopes: [
+			"channels:history",
+			"channels:read",
+			"channels:join",
+			"groups:history",
+			"groups:read",
+			"chat:write",
+			"chat:write.customize",
+			"reactions:read",
+			"reactions:write",
+			"users:read",
+		],
+		scopeDelimiter: ",",
+	},
 }
 
 /**

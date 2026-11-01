@@ -11,7 +11,7 @@
  * contract; each provider lives in `providers/<id>/`.
  */
 import { Database } from "@hazel/db"
-import type { ExternalMessageId, ExternalThreadId, ExternalWebhookId } from "@hazel/schema"
+import type { ExternalChannelId, ExternalMessageId, ExternalThreadId, ExternalWebhookId } from "@hazel/schema"
 import { type Effect, Schema } from "effect"
 import type { SqlError } from "effect/sql/SqlError"
 import type { ChatSyncOutboundAttachment } from "./chat-sync-attachment-content"
@@ -19,7 +19,7 @@ import type { ChatSyncChannelTarget } from "./chat-sync-effects"
 
 export type { ChatSyncOutboundAttachment }
 
-export const ChatSyncProviderId = Schema.Literals(["discord"])
+export const ChatSyncProviderId = Schema.Literals(["discord", "slack"])
 export type ChatSyncProviderId = typeof ChatSyncProviderId.Type
 
 export const isChatSyncProviderId = Schema.is(ChatSyncProviderId)
@@ -56,8 +56,19 @@ export interface ChatSyncProviderDefinition {
 	readonly id: ChatSyncProviderId
 	/** Shown to people: the integration bot's name, "Connect Discord". */
 	readonly displayName: string
+	/**
+	 * The provider installs Hazel per workspace (Slack), and an org's connection names the one it
+	 * installed in: a sync connection may only be to that workspace.
+	 */
+	readonly workspaceIsInstall: boolean
 	readonly maxMessageLength: number
 	readonly maxThreadNameLength: number
+	/**
+	 * The external channel id a provider thread's channel link is keyed by. Discord threads are
+	 * channels of their own (the thread id); a Slack thread is replies in its parent channel
+	 * (`<channel>/<thread ts>`), which only its client and source take apart.
+	 */
+	readonly threadChannelId: (parentExternalChannelId: string, externalThreadId: string) => string
 	/** Renders a mention of a provider user (`<@123>`). */
 	readonly mention: (externalUserId: string) => string
 	/** Matches the provider's user mentions in inbound text; group 1 is the external user id. */
@@ -93,6 +104,14 @@ export interface ChatSyncLinkContext {
 }
 
 export interface ChatSyncClient {
+	/**
+	 * Make a newly linked external channel ready to sync (Slack: the bot joins it, or it gets no
+	 * events). Idempotent; run by the org's outbox after the link is saved.
+	 */
+	readonly prepareLink: (link: {
+		readonly externalWorkspaceId: string
+		readonly externalChannelId: ExternalChannelId
+	}) => Effect.Effect<void, ChatSyncClientError>
 	readonly postMessage: (
 		context: ChatSyncLinkContext,
 		message: {

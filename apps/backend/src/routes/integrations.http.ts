@@ -1,4 +1,7 @@
 import { HttpApiBuilder } from "effect/http-api"
+import { ChatSyncInstallations } from "../services/chat-sync/chat-sync-installations"
+import { isChatSyncProviderId } from "../services/chat-sync/provider"
+import { chatSyncProviders } from "../services/chat-sync/providers"
 import { HttpServerRequest, HttpServerResponse, Cookies } from "effect/http"
 import { CurrentUser, InternalServerError, UnauthorizedError } from "@hazel/domain"
 import type { OrganizationId, UserId } from "@hazel/schema"
@@ -17,7 +20,18 @@ import {
 	CraftRateLimitError,
 } from "@hazel/integrations/craft"
 import type { IntegrationConnection } from "@hazel/domain/models"
-import { Cause, Config, DateTime, Effect, Layer, Option, Schedule, Schema, SchemaGetter } from "effect"
+import {
+	Cause,
+	Config,
+	DateTime,
+	Effect,
+	Layer,
+	Option,
+	Redacted,
+	Schedule,
+	Schema,
+	SchemaGetter,
+} from "effect"
 import * as Duration from "effect/Duration"
 import { HazelApi } from "../api"
 import { Directory } from "../services/directory"
@@ -331,16 +345,7 @@ const handleGetOAuthUrl = Effect.fn("integrations.getOAuthUrl")(function* (
 	const state = JSON.stringify(stateData)
 
 	// Build authorization URL using the provider
-	const authorizationUrl = yield* oauthProvider.buildAuthorizationUrl(state).pipe(
-		Effect.map((url) => {
-			// User-level Discord linking only needs identity; org-level keeps guild/bot scopes.
-			if (provider === "discord" && level === "user") {
-				url.searchParams.set("scope", "identify")
-				url.searchParams.delete("permissions")
-			}
-			return url
-		}),
-	)
+	const authorizationUrl = yield* oauthProvider.buildAuthorizationUrl(state, level)
 
 	yield* Effect.logInfo("OAuth flow initiated", {
 		event: "oauth_flow_initiated",
@@ -772,6 +777,33 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 			error: error.message,
 		})
 		return redirectWithError(error._tag === "IntegrationConnectFailedError" ? error.stage : "db_error")
+	}
+
+	// A provider that installs Hazel per workspace: its bot token is the workspace's, for every
+	// org synced with it (`chat_sync_installations`).
+	if (
+		parsedState.level === "organization" &&
+		isChatSyncProviderId(provider) &&
+		chatSyncProviders[provider].workspaceIsInstall
+	) {
+		const saved = yield* Effect.flatMap(ChatSyncInstallations, (installations) =>
+			installations.save({
+				provider,
+				externalWorkspaceId: accountInfo.externalAccountId,
+				externalWorkspaceName: accountInfo.externalAccountName,
+				token: Redacted.make(tokens.accessToken),
+				scope: tokens.scope ?? null,
+				installedBy: userId,
+			}),
+		).pipe(Effect.result)
+		if (saved._tag === "Failure") {
+			yield* Effect.logError("Chat sync install save failed", {
+				event: "integration_install_save_failed",
+				provider,
+				error: String(saved.failure),
+			})
+			return redirectWithError("db_error")
+		}
 	}
 
 	yield* Effect.logInfo("AUDIT: Integration connected", {

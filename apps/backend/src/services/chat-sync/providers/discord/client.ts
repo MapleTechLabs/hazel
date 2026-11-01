@@ -184,6 +184,8 @@ export const makeDiscordClient = Effect.gen(function* () {
 		})
 
 	const client: ChatSyncClient = {
+		// The bot is in every channel of a guild it was added to.
+		prepareLink: () => Effect.void,
 		postMessage: Effect.fn("DiscordChatSyncClient.postMessage")(function* (context, message) {
 			const channelId = context.link.externalChannelId
 			yield* requireIds({ channelId, replyToMessageId: message.replyToExternalMessageId })
