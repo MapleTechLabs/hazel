@@ -196,8 +196,23 @@ const elementView = <M>(h: HtmlBuilder<M>, element: ProseMirrorNode, env: Env): 
 						: elementView(h, child, env),
 				)
 	const node = h.Attribute("data-slate-node", "element")
+	// A blank line in the markdown: half a line of space, not a whole empty one.
+	if (type === "paragraph" && element.content.size === 0)
+		return h.div([node, h.Class("h-2"), h.AriaHidden(true)])
 	if (type === "paragraph") return h.p([node, h.Class("my-0 last:empty:hidden")], children)
-	if (type === "list-item") return h.li([node, h.Class("my-0.5 ml-4")], children)
+	if (type === "list-item")
+		return h.li(
+			[
+				node,
+				h.Class(
+					cx(
+						"my-0.5 ml-5 pl-1",
+						element.attrs.ordered ? "list-decimal" : "list-disc marker:text-muted-fg",
+					),
+				),
+			],
+			children,
+		)
 	if (type === "subtext") return h.p([node, h.Class("my-0 text-muted-fg text-xs")], children)
 	if (type === "blockquote")
 		return h.blockquote(
@@ -255,7 +270,7 @@ export const markdownView = <M>(
 	refs: MarkdownRefs = NO_REFS,
 	mentionTrigger?: MentionTrigger,
 ): Html => {
-	const blocks = deserializeFromMarkdown(content)
+	const blocks = deserializeFromMarkdown(content, { paragraphBreaks: true })
 	const env: Env = { refs, mentionTrigger, mentionCount: 0 }
 	return h.div(
 		[h.Class(cx("w-full", undefined))],

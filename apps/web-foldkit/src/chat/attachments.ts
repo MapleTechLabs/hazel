@@ -3,6 +3,7 @@ import { formatFileSize, getFileTypeFromName } from "~/utils/file-utils"
 import { IconDownload } from "../icons"
 import { button } from "../ui/button"
 import { fileIcon } from "./file-icons"
+import { imageMosaicView } from "./image-mosaic"
 import { videoPlayerView } from "./video-player"
 
 /** Port of `MessageAttachments` (`components/chat/message-attachments.tsx`). */
@@ -29,45 +30,6 @@ const VIDEO_TYPES = ["mp4", "webm"]
 const typeOf = (attachment: ChatAttachmentView) => getFileTypeFromName(attachment.fileName)
 export const isImageAttachment = (attachment: ChatAttachmentView) => IMAGE_TYPES.includes(typeOf(attachment))
 const isVideoAttachment = (attachment: ChatAttachmentView) => VIDEO_TYPES.includes(typeOf(attachment))
-
-/** `getImageWrapperClass`: Discord-style grid cell classes. */
-const imageWrapperClass = (count: number, index: number) => {
-	if (count === 1) {
-		return "group relative col-span-2 block w-fit cursor-pointer overflow-hidden rounded-md border border-border transition-opacity hover:opacity-90"
-	}
-	const baseClasses =
-		"group relative aspect-square cursor-pointer overflow-hidden rounded-md border border-border transition-opacity hover:opacity-90"
-	if (count === 3 && index === 0) return `${baseClasses} col-span-2 row-span-2`
-	return baseClasses
-}
-
-/** `ImageAttachmentItem` (without the `onError` hide, which needs per-image state). */
-const imageItem = <M>(
-	h: HtmlBuilder<M>,
-	attachment: ChatAttachmentView,
-	imageCount: number,
-	index: number,
-	onClick: M,
-): ReadonlyArray<Html> => [
-	h.img([
-		h.Attribute("src", attachment.url),
-		h.Attribute("alt", attachment.fileName),
-		h.Class(imageCount === 1 ? "block max-h-[300px] max-w-full" : "size-full object-cover"),
-		h.OnClick(onClick),
-	]),
-	...(imageCount > 4 && index === 3
-		? [
-				h.div(
-					[
-						h.Class(
-							"pointer-events-none absolute inset-0 flex items-center justify-center bg-black/60",
-						),
-					],
-					[h.span([h.Class("font-semibold text-lg text-white")], ["+", String(imageCount - 4)])],
-				),
-			]
-		: []),
-]
 
 /** `AttachmentItem`: a video player or a compact file card. */
 const attachmentItem = <M>(
@@ -139,32 +101,15 @@ export const attachmentsView = <M>(
 	return h.div(
 		[h.Class("mt-2 flex flex-col gap-2")],
 		[
-			...(images.length > 0
-				? [
-						h.div(
-							[
-								h.Class(
-									`grid max-w-lg gap-1 ${images.length === 3 ? "grid-cols-3" : "grid-cols-2"}`,
-								),
-							],
-							images
-								.slice(0, 4)
-								.map((attachment, index) =>
-									h.keyed("div")(
-										attachment.id,
-										[h.Class(imageWrapperClass(images.length, index))],
-										imageItem(
-											h,
-											attachment,
-											images.length,
-											index,
-											options.toOpenImage(index),
-										),
-									),
-								),
-						),
-					]
-				: []),
+			imageMosaicView(
+				h,
+				images.map((attachment, index) => ({
+					key: attachment.id,
+					url: attachment.url,
+					alt: attachment.fileName,
+					onOpen: options.toOpenImage(index),
+				})),
+			),
 			...(videos.length > 0 ? [fileColumn(h, videos, options)] : []),
 			...(otherFiles.length > 0 ? [fileColumn(h, otherFiles, options)] : []),
 		],

@@ -47,7 +47,7 @@ const toOpenImage = (messageId: MessageId, index: number) =>
 
 const toOpenEmbedImage = (
 	messageId: MessageId,
-	images: ReadonlyArray<{ readonly url: string; readonly alt: string }>,
+	images: ReadonlyArray<Overlays.ViewerUrlImage>,
 	index: number,
 ) => toOverlays(Overlays.Message.ClickedEmbedImage({ messageId, images, index }))
 

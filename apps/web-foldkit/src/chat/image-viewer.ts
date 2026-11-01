@@ -23,8 +23,13 @@ import type { ChatAttachmentView } from "./attachments"
 
 export type ImageViewerAction = "download" | "copyUrl" | "openInBrowser"
 
+/** A viewer image; an embed's has a caption (its title and description) under it. */
+export interface ImageViewerImage extends ChatAttachmentView {
+	readonly caption?: { readonly title?: string | undefined; readonly description?: string | undefined }
+}
+
 export interface ImageViewerInputs<M> {
-	readonly images: ReadonlyArray<ChatAttachmentView>
+	readonly images: ReadonlyArray<ImageViewerImage>
 	readonly index: number
 	readonly author: {
 		readonly name: string
@@ -69,7 +74,8 @@ const MainCarousel = Mount.defineStream("ImageViewerMainCarousel", {
 					const embla = EmblaCarousel(element, { startIndex: readSelected(element), loop: false })
 					embla.on("select", () => {
 						const index = embla.selectedScrollSnap()
-						if (index !== readSelected(element)) Queue.offerUnsafe(queue, Intent.PressedSelect({ index }))
+						if (index !== readSelected(element))
+							Queue.offerUnsafe(queue, Intent.PressedSelect({ index }))
 					})
 					const observer = observeSelected(element, (index) => {
 						if (index !== embla.selectedScrollSnap()) embla.scrollTo(index)
@@ -177,6 +183,22 @@ const navButton = <M>(h: HtmlBuilder<M>, side: "left" | "right", onPress: M): Ht
 /** Marks an overlay that legacy portals from inside the message list (React tree, not DOM). */
 export const LIST_PORTAL_ATTRIBUTE = "list-portal"
 
+/** An embed image's title and description, under it. */
+const captionView = <M>(h: HtmlBuilder<M>, caption: ImageViewerImage["caption"]): Html =>
+	caption?.title || caption?.description
+		? h.div(
+				[h.Class("max-w-xl text-center")],
+				[
+					caption.title
+						? h.p([h.Class("font-medium text-sm text-white")], [caption.title])
+						: h.empty,
+					caption.description
+						? h.p([h.Class("mt-0.5 text-white/60 text-xs")], [caption.description])
+						: h.empty,
+				],
+			)
+		: h.empty
+
 export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<M>): Html => {
 	const { images, author } = inputs
 	const selectedIndex = Math.min(Math.max(inputs.index, 0), Math.max(images.length - 1, 0))
@@ -244,13 +266,18 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 								images.map((image) =>
 									h.keyed("div")(
 										image.id,
-										[h.Class("flex min-w-0 flex-[0_0_100%] items-center justify-center")],
+										[
+											h.Class(
+												"flex min-w-0 flex-[0_0_100%] flex-col items-center justify-center gap-3",
+											),
+										],
 										[
 											h.img([
 												h.Attribute("src", image.url),
 												h.Attribute("alt", image.fileName),
 												h.Class("max-h-[70vh] max-w-full rounded-md"),
 											]),
+											captionView(h, image.caption),
 										],
 									),
 								),

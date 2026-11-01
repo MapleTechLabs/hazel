@@ -3,6 +3,7 @@ import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import type * as HtmlRender from "../html-render"
 import { twMerge } from "tailwind-merge"
 import { cn } from "~/lib/utils"
+import type { ViewerUrlImage } from "../../page/chat/overlays"
 import { type MessageRow, UrlEmbed } from "../../page/chat/rows"
 import { avatar } from "../../ui/avatar"
 import { attachmentsView } from "../attachments"
@@ -23,7 +24,7 @@ export interface RowContext<M> {
 	/** A GIF or tweet photo opens the viewer on its URL images. */
 	readonly toOpenEmbedImage: (
 		messageId: MessageId,
-		images: ReadonlyArray<{ readonly url: string; readonly alt: string }>,
+		images: ReadonlyArray<ViewerUrlImage>,
 		index: number,
 	) => M
 	readonly toOpenThread: (threadChannelId: ChannelId, messageId: MessageId) => M
@@ -137,6 +138,7 @@ const contentView = <M>(h: HtmlBuilder<M>, row: MessageRow, context: RowContext<
 				toMessage: context.toHtmlRenderMessage,
 			},
 			(actionId) => context.toPressEmbedAction(message.channelId, message.id, actionId),
+			(images, index) => context.toOpenEmbedImage(message.id, images, index),
 		),
 	]
 }

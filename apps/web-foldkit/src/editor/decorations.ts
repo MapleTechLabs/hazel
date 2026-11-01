@@ -6,21 +6,23 @@ import { getEmojiShortcode } from "~/lib/emoji-shortcode-map"
  * legacy Slate decorators (`decorateMarkdown`, `decorateEmoji`, `MarkdownLeaf`) and Slate's
  * `Text.decorations` leaf splitting. Framework-free: text in, leaves out.
  *
- * The split and merge rules are Slate's, so leaf boundaries and classes match the legacy
- * DOM exactly, quirks included: `**bold**` also matches the italic pattern, which is
- * merged last, so its content renders `italic`.
+ * The split and merge rules are Slate's. A single `*` or `_` next to another marker character
+ * is not italic, so `**bold**` stays bold and `snake_case_names` stay plain, and nothing inside
+ * an inline code span is decorated.
  */
 
 const MARKDOWN_PATTERNS = [
 	{ pattern: /(\*\*)([^*]+)(\*\*)/g, type: "bold" },
-	{ pattern: /(\*)([^*]+)(\*)/g, type: "italic" },
+	{ pattern: /(?<!\*)(\*)(?!\s)([^*]+)(?<!\s)(\*)(?!\*)/g, type: "italic" },
 	{ pattern: /(~~)([^~]+)(~~)/g, type: "strikethrough" },
 	{ pattern: /(`)([^`]+)(`)/g, type: "code" },
 	{ pattern: /(__)([^_]+)(__)/g, type: "underline" },
-	{ pattern: /(_)([^_]+)(_)/g, type: "italic" },
+	{ pattern: /(?<!\w)(_)(?!\s)([^_]+)(?<!\s)(_)(?!\w)/g, type: "italic" },
 	{ pattern: /(==)([^=]+)(==)/g, type: "highlight" },
 	{ pattern: /(\|\|)([^|]+)(\|\|)/g, type: "spoiler" },
 ] as const
+
+const CODE_PATTERN = /`[^`]+`/g
 
 export const LINK_PATTERN = /\[([^\]]+)\]\(([^)]+)\)/g
 export const URL_PATTERN = /(https?:\/\/[^\s<>()]+|www\.[^\s<>()]+)/g
@@ -74,16 +76,23 @@ export function decorateMarkdown(text: string): ReadonlyArray<MarkdownRange> {
 		})
 	}
 
+	const codeSpans = [...text.matchAll(CODE_PATTERN)].map((match) => ({
+		start: match.index,
+		end: match.index + match[0].length,
+	}))
 	for (const { pattern, type } of MARKDOWN_PATTERNS) {
 		for (const match of text.matchAll(pattern)) {
 			const [fullMatch, openMarker, content, closeMarker] = match
 			if (!openMarker || !content || !closeMarker) continue
 			const index = match.index
+			const end = index + fullMatch.length
 			const overlapsLink = ranges.some(
-				(range) =>
-					range.type === "link" && index < range.end && index + fullMatch.length > range.start,
+				(range) => range.type === "link" && index < range.end && end > range.start,
 			)
 			if (overlapsLink) continue
+			const overlapsCode =
+				type !== "code" && codeSpans.some((span) => index < span.end && end > span.start)
+			if (overlapsCode) continue
 			const contentStart = index + openMarker.length
 			const contentEnd = contentStart + content.length
 			ranges.push({ start: index, end: contentStart, type, isMarker: true })

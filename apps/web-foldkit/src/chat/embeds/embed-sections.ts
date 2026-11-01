@@ -87,8 +87,9 @@ export const embedBodyView = <M>(
 	)
 }
 
+/** Discord's thumbnail: the whole image, fitted in 80px square, top right. */
 export const embedThumbnailView = <M>(h: HtmlBuilder<M>, src: string): Html =>
-	image(h, src, cn("absolute top-3 right-3 size-16 rounded-lg object-cover"))
+	image(h, src, "absolute top-3 right-3 max-h-20 max-w-20 rounded-md object-contain")
 
 export const embedFieldsView = <M>(h: HtmlBuilder<M>, fields: ReadonlyArray<EmbedField>): Html =>
 	fields.length === 0
@@ -125,11 +126,31 @@ export const embedFieldsView = <M>(h: HtmlBuilder<M>, fields: ReadonlyArray<Embe
 				),
 			)
 
-export const embedImageView = <M>(h: HtmlBuilder<M>, src: string): Html =>
-	h.div(
-		[h.Class(cn(embedSectionStyles({ position: "bottom", padding: "none" })))],
-		[image(h, src, "aspect-video w-full object-cover")],
+/**
+ * Discord's embed image: inside the card's padding, at its own aspect ratio, never scaled up, at most
+ * 300px tall. A press opens the image viewer.
+ */
+export const embedImageView = <M>(h: HtmlBuilder<M>, src: string, onOpen?: M): Html => {
+	const img = image(h, src, "block h-auto max-h-[300px] w-auto max-w-full rounded-md")
+	return h.div(
+		[h.Class("px-3 pt-1 pb-3 first:pt-3")],
+		[
+			onOpen === undefined
+				? img
+				: h.button(
+						[
+							h.Type("button"),
+							h.Class(
+								"block max-w-full cursor-zoom-in rounded-md outline-hidden transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring",
+							),
+							h.AriaLabel("Open image"),
+							h.OnClick(onOpen),
+						],
+						[img],
+					),
+		],
 	)
+}
 
 const footerTimeFormat = new Intl.DateTimeFormat("en", {
 	month: "short",

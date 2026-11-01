@@ -178,8 +178,14 @@ function parseTable(
 const block = (type: string, content: Array<InlineNode>, attrs: Record<string, unknown> | null = null) =>
 	schema.node(type, attrs, content)
 
-/** Markdown from the backend to composer blocks (for editing a message). */
-export function deserializeFromMarkdown(markdown: string): Array<ProseMirrorNode> {
+/**
+ * Markdown from the backend to composer blocks (for editing a message). With `paragraphBreaks`
+ * (the message viewer), each run of blank lines between two blocks becomes one empty paragraph.
+ */
+export function deserializeFromMarkdown(
+	markdown: string,
+	options: { readonly paragraphBreaks?: boolean } = {},
+): Array<ProseMirrorNode> {
 	if (!markdown || markdown.trim() === "") return createEmptyValue()
 
 	const nodes: Array<ProseMirrorNode> = []
@@ -188,8 +194,11 @@ export function deserializeFromMarkdown(markdown: string): Array<ProseMirrorNode
 
 	while (i < lines.length) {
 		const line = lines[i]
-		if (!line) {
+		if (!line?.trim()) {
 			i++
+			const isBreak = options.paragraphBreaks && nodes.length > 0 && nodes.at(-1)!.content.size > 0
+			if (isBreak && lines.slice(i).some((rest) => rest.trim() !== ""))
+				nodes.push(block("paragraph", []))
 			continue
 		}
 
