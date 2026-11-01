@@ -2,7 +2,9 @@
 import { ChannelId } from "@hazel/schema"
 import { Schema } from "effect"
 import * as Scene from "foldkit/scene"
-import { describe, test } from "vitest"
+import type { Html } from "foldkit/html"
+import { describe, expect, test } from "vitest"
+import { isBackdropDismiss, isBackdropTarget } from "../../../chat/image-viewer"
 import * as Composer from "../../../composer/composer"
 import * as EditorCommands from "../../../composer/editor-commands"
 import {
@@ -292,6 +294,68 @@ describe("image viewer", () => {
 			Scene.click(Scene.role("button", { name: "Previous image" })),
 			Scene.expect(Scene.text("1 of 2")).toExist(),
 		)
+	})
+
+	test("a thumbnail selects its image and leaves the viewer open", () => {
+		Scene.scene(
+			channelScene,
+			Scene.given(withImages()),
+			mountedChannel(),
+			Scene.click(Scene.altText("photo-1.png")),
+			viewerMounted(0),
+			Scene.click(Scene.role("button", { name: "photo-2.png" })),
+			Scene.expect(Scene.text("2 of 2")).toExist(),
+			Scene.expect(Scene.role("button", { name: "photo-2.png" })).toHaveAttr("aria-current", "true"),
+		)
+	})
+
+	// The backdrop click is a DOM listener in the portal Mount, so it reads the rendered viewer as DOM.
+	test("a click beside the image closes the viewer; one on its content does not", () => {
+		const toDom = (node: NonNullable<Html>): Node => {
+			if (node.sel === undefined) return document.createTextNode(node.text ?? "")
+			const element = document.createElement(node.sel.split(/[#.]/)[0] ?? "div")
+			for (const [name, value] of Object.entries(node.data?.attrs ?? {})) {
+				element.setAttribute(name, String(value))
+			}
+			if (node.text !== undefined) element.textContent = node.text
+			for (const child of node.children ?? []) {
+				element.append(typeof child === "string" ? document.createTextNode(child) : toDom(child))
+			}
+			return element
+		}
+		let viewer: Element | null = null
+		Scene.scene(
+			channelScene,
+			Scene.given(withImages()),
+			mountedChannel(),
+			Scene.click(Scene.altText("photo-1.png")),
+			viewerMounted(0),
+			Scene.tap(({ html }) => {
+				viewer = (toDom(html) as Element).querySelector("[data-list-portal]")
+			}),
+		)
+		const root = viewer as Element | null
+		if (root === null) throw new Error("the viewer did not render")
+		const image = root.querySelector('img[alt="photo-1.png"]')
+		const contentOf = (selector: string) => root.querySelector(selector)
+		expect(isBackdropTarget(root)).toBe(true)
+		// A slide fills the carousel; the space around its image is backdrop.
+		expect(isBackdropTarget(image?.parentElement ?? null)).toBe(true)
+		expect(isBackdropTarget(image)).toBe(false)
+		expect(isBackdropTarget(contentOf('[aria-label="photo-2.png"]'))).toBe(false)
+		expect(
+			isBackdropTarget(
+				contentOf('button[aria-label="Download"]')?.parentElement?.parentElement ?? null,
+			),
+		).toBe(false)
+		expect(isBackdropTarget(contentOf('button[aria-label="Previous image"]'))).toBe(false)
+		// A drag from beside the image onto an arrow clicks their common ancestor, outside embla's viewport.
+		const beside = { target: image?.parentElement ?? null, x: 100, y: 100 }
+		const ancestor = contentOf('button[aria-label="Previous image"]')?.parentElement ?? null
+		expect(isBackdropDismiss(beside, { target: ancestor, x: 102, y: 101 })).toBe(true)
+		expect(isBackdropDismiss(beside, { target: ancestor, x: 160, y: 100 })).toBe(false)
+		expect(isBackdropDismiss({ target: image, x: 100, y: 100 }, beside)).toBe(false)
+		expect(isBackdropDismiss(null, beside)).toBe(false)
 	})
 
 	// The toolbar buttons are named by their icon's <title>, as in legacy (no aria-label there).
