@@ -94,7 +94,7 @@ const chart = (options: {
 	readonly unit: string
 	readonly x: number
 	readonly y: number
-}) => ({
+}): Maple.DashboardWidget => ({
 	id: options.id,
 	visualization: "chart",
 	data_source: {

@@ -24,7 +24,7 @@
 				"@alchemy.run/cloudflare": "2.0.0-beta.84",
 				"@alchemy.run/domain": "2.0.0-beta.84",
 				"@cloudflare/workers-types": "4.20260603.1",
-				"@maple-dev/alchemy": "0.2.0",
+				"@maple-dev/alchemy": "0.3.0",
 				"alchemy": "2.0.0-beta.84"
 			},
 			"tooling": {
