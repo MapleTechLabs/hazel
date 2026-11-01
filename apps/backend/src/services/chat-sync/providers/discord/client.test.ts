@@ -194,3 +194,41 @@ describe("Discord per-author identity", () => {
 		}),
 	)
 })
+
+describe("Discord edits", () => {
+	it.effect("an edited message keeps its attachment links", () =>
+		Effect.gen(function* () {
+			const sent: Array<string> = []
+			const api = {
+				updateMessage: (params: { content: string }) =>
+					Effect.sync(() => void sent.push(params.content)).pipe(Effect.as({})),
+			}
+			const client = yield* makeDiscordClient.pipe(
+				Effect.provide(
+					Layer.mergeAll(
+						Layer.succeed(
+							Discord.DiscordApiClient,
+							api as unknown as Discord.DiscordApiClient["Service"],
+						),
+						ConfigProvider.layer(ConfigProvider.fromUnknown({ DISCORD_BOT_TOKEN: "bot-token" })),
+					),
+				),
+			)
+			yield* client.updateMessage(context, {
+				externalMessageId: messageId,
+				content: "edited",
+				attachments: [
+					{
+						id: "00000000-0000-0000-0000-000000000001" as never,
+						fileName: "plan.pdf",
+						fileSize: 2048,
+						publicUrl: "https://files.test/plan.pdf",
+					},
+				],
+			})
+			expect(sent).toHaveLength(1)
+			expect(sent[0]).toContain("edited")
+			expect(sent[0]).toContain("https://files.test/plan.pdf")
+		}),
+	)
+})
