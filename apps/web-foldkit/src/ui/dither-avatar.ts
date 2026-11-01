@@ -15,7 +15,10 @@ const stringHash = (value: string) => {
 	return Math.abs(hash)
 }
 
-/** OKLCH hues the seed picks from, brand purple first. */
+/**
+ * OKLCH hues the seed picks from, brand purple first. On every hue both tones (L 0.4 and 0.55)
+ * keep the white initial at 4.5:1 or more.
+ */
 const HUES = [285, 255, 215, 165, 85, 45, 15, 330] as const
 
 export const ditherHue = (seed: string): number => HUES[stringHash(seed) % HUES.length] ?? HUES[0]
@@ -84,7 +87,7 @@ export const ditherAvatar = <Message>(h: HtmlBuilder<Message>, seed: string, siz
 			h.Class(
 				"relative flex size-full items-center justify-center overflow-hidden [container-type:size]",
 			),
-			h.Style({ "background-color": `oklch(0.5 0.13 ${hue})` }),
+			h.Style({ "background-color": `oklch(0.4 0.13 ${hue})` }),
 		],
 		[
 			h.svg(
@@ -99,7 +102,7 @@ export const ditherAvatar = <Message>(h: HtmlBuilder<Message>, seed: string, siz
 				[
 					h.path([
 						h.Attribute("d", ditherPath(cells)),
-						h.Attribute("fill", `oklch(0.7 0.12 ${hue})`),
+						h.Attribute("fill", `oklch(0.55 0.12 ${hue})`),
 					]),
 				],
 			),

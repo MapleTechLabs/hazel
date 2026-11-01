@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest"
 import { ditherHue, ditherInitial, ditherPath } from "./dither-avatar"
 
 describe("dither avatar", () => {
-	it("picks the same hue for the same seed", () => {
-		expect(ditherHue("Noor Haddad")).toBe(ditherHue("Noor Haddad"))
+	it("maps each seed to a fixed hue", () => {
+		expect(ditherHue("Noor Haddad")).toBe(285)
+		expect(ditherHue("Ada Lovelace")).toBe(45)
+		expect(ditherHue("Chloe Park")).toBe(165)
 	})
 
 	it("uses the first letter of the trimmed seed, uppercased", () => {
