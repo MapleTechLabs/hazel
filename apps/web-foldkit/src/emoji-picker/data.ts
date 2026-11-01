@@ -1,4 +1,4 @@
-import { Effect, Option, Schedule, Schema } from "effect"
+import { Effect, Layer, Option, Schedule, Schema } from "effect"
 import { FetchHttpClient, Headers, HttpClient, type HttpClientError, HttpClientResponse } from "effect/http"
 import { isRetryableError } from "~/lib/error-messages"
 
@@ -189,7 +189,8 @@ const fetchEmojiData = (locale: string) =>
 	}).pipe(
 		// A dropped connection or a CDN hiccup gets two more tries before the picker shows its error.
 		Effect.retry({ times: 2, schedule: Schedule.exponential("300 millis"), while: isRetryableError }),
-		Effect.provide(FetchHttpClient.layer),
+		// Fresh: the runtime's memoized `FetchHttpClient.layer` sends the RPC client's credentials.
+		Effect.provide(Layer.fresh(FetchHttpClient.layer)),
 	)
 
 /** `isEmojiSupported`: a color emoji renders the same in two text colors. */

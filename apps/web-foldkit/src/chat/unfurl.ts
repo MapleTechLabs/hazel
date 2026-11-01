@@ -1,4 +1,4 @@
-import { Duration, Effect, Option, Schema } from "effect"
+import { Duration, Effect, Layer, Option, Schema } from "effect"
 import { FetchHttpClient, HttpClient, HttpClientResponse } from "effect/http"
 import { AsyncData, Command } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
@@ -328,7 +328,9 @@ const getJson = <S extends Schema.Top & { readonly DecodingServices: never }>(pa
 	HttpClient.get(`${LINK_PREVIEW_URL}${path}`).pipe(
 		Effect.flatMap(HttpClientResponse.filterStatusOk),
 		Effect.flatMap(HttpClientResponse.schemaBodyJson(schema)),
-		Effect.provide(FetchHttpClient.layer),
+		// Fresh: the runtime's memoized `FetchHttpClient.layer` is the RPC client's, which sends
+		// credentials, and a credentialed request fails the worker's `Access-Control-Allow-Origin: *`.
+		Effect.provide(Layer.fresh(FetchHttpClient.layer)),
 		Effect.timeout(UNFURL_TIMEOUT),
 		Effect.mapError((error): UnfurlFailure =>
 			error._tag === "TimeoutError" ? "TimedOut" : "Unavailable",
