@@ -12,12 +12,6 @@
 		"strict": true,
 		"types": ["node", "@cloudflare/workers-types"],
 		"noFallthroughCasesInSwitch": true,
-		"noUncheckedSideEffectImports": true,
-		"plugins": [
-			{
-				"name": "@effect/language-service",
-				"reportSuggestionsAsWarningsInTsc": true
-			}
-		]
+		"noUncheckedSideEffectImports": true
 	}
 }

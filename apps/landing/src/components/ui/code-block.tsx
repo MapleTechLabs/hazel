@@ -62,14 +62,4 @@ function CodeBlockCode({
 	)
 }
 
-export type CodeBlockGroupProps = React.HTMLAttributes<HTMLDivElement>
-
-function CodeBlockGroup({ children, className, ...props }: CodeBlockGroupProps) {
-	return (
-		<div className={cn("flex items-center justify-between", className)} {...props}>
-			{children}
-		</div>
-	)
-}
-
-export { CodeBlockGroup, CodeBlockCode, CodeBlock }
+export { CodeBlockCode, CodeBlock }

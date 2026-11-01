@@ -127,7 +127,7 @@ const menu = (h: HtmlBuilder<M>) =>
 					menuItem(h, IconCopy(h), "Copy link"),
 					menuItem(h, IconStar(h), "Add to favorites"),
 					menuItem(h, IconUsers(h), "Members"),
-					h.div([h.Class(dropdownSeparatorBase), h.Attribute("role", "separator")], []),
+					h.div([h.Class(dropdownSeparatorBase), h.Attribute("role", "separator")]),
 					menuItem(h, IconTrash(h), "Delete channel", { intent: "danger" }),
 				],
 			),

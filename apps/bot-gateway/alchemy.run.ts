@@ -4,5 +4,4 @@ import BotGatewayWorkerLive, { BotGatewayWorker } from "./src/worker.ts"
 
 export { BotGatewayWorker }
 
-// oxlint-disable-next-line effecttsgo/strict-effect-provide
 export default Effect.provide(BotGatewayWorker, BotGatewayWorkerLive)

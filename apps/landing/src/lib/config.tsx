@@ -15,8 +15,6 @@ export const Highlight = ({ children, className }: { children: React.ReactNode; 
 	)
 }
 
-export const BLUR_FADE_DELAY = 0.15
-
 export const siteConfig = {
 	name: "Hazel",
 	description: "The Open Source Slack Alternative Your Team Will Actually Love",
@@ -947,5 +945,3 @@ export const siteConfig = {
 		},
 	],
 }
-
-export type SiteConfig = typeof siteConfig

@@ -32,7 +32,7 @@ const connectionStatus = (h: HtmlBuilder<Message>, status: Status): Html =>
 	h.div(
 		[h.Class("flex items-center gap-1.5")],
 		[
-			h.span([h.Class(`size-1.5 rounded-full ${STATUS[status].dot}`)], []),
+			h.span([h.Class(`size-1.5 rounded-full ${STATUS[status].dot}`)]),
 			h.span([h.Class(`text-xs ${STATUS[status].text}`)], [STATUS[status].label]),
 		],
 	)

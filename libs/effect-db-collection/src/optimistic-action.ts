@@ -1,5 +1,5 @@
 import type { Collection, Transaction } from "@tanstack/db"
-import { createTransaction } from "@tanstack/db"
+import { CollectionImpl, createTransaction } from "@tanstack/db"
 import { type Cause, Effect, Exit } from "effect"
 import {
 	type AwaitTxIdError,
@@ -101,10 +101,8 @@ export interface OptimisticActionConfig<
  * Normalize collection input to array format
  */
 function normalizeCollections(collections: CollectionInput): NormalizedCollection[] {
-	// Single collection - check if it looks like a collection
-	// biome-ignore lint/suspicious/noExplicitAny: Runtime type check
-	if ("state" in collections && typeof (collections as any).insert === "function") {
-		return [{ name: "primary", collection: collections as EffectCollection }]
+	if (collections instanceof CollectionImpl) {
+		return [{ name: "primary", collection: collections }]
 	}
 
 	// Array of collections

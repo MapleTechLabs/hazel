@@ -2,7 +2,7 @@
  * HTML renders in the `ChannelObject`: signed URLs for viewers only (`message.htmlRenderUrl`), and
  * the bucket cleanup (`storage.deleteHtmlRenders`) when a message stops showing a page.
  */
-import { CurrentUser, UnauthorizedError } from "@hazel/domain"
+import { CurrentUser } from "@hazel/domain"
 import type { ChannelId, HtmlRenderId, MessageId, OrganizationId, UserId } from "@hazel/schema"
 import { Cause, Effect, Exit, Option, type Scope } from "effect"
 import { describe, expect, it } from "vitest"

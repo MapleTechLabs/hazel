@@ -33,7 +33,7 @@ import { sectionGroupContent } from "./channels-sidebar/view"
 
 // MODEL AND MESSAGE
 
-export { Message, Model, OpenMenu, SidebarFailure, SidebarOutcome } from "./channels-sidebar/model"
+export { Message, Model, OpenMenu } from "./channels-sidebar/model"
 
 // INIT
 

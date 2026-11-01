@@ -1,12 +1,6 @@
 import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
-import {
-	descriptionStyles,
-	fieldErrorStyles,
-	fieldsetStyles,
-	labelStyles,
-	legendStyles,
-} from "~/components/ui/field.styles"
+import { descriptionStyles, fieldErrorStyles, labelStyles } from "~/components/ui/field.styles"
 
 /** Port of `components/ui/field.tsx`. Inside a field the ids come from the field (React Aria context). */
 export interface PartOptions<Message> {
@@ -61,27 +55,6 @@ export const fieldError = <Message>(
 			h.Class(twMerge(twMerge(fieldErrorStyles()), options.className)),
 			h.Attribute("slot", "errorMessage"),
 			...(options.id === undefined ? [] : [h.Id(options.id)]),
-			...(options.attributes ?? []),
-		],
-		children,
-	)
-
-export const fieldset = <Message>(
-	h: HtmlBuilder<Message>,
-	options: PartOptions<Message>,
-	children: Array<Html | string>,
-): Html =>
-	h.fieldset([h.Class(twMerge(fieldsetStyles, options.className)), ...(options.attributes ?? [])], children)
-
-export const legend = <Message>(
-	h: HtmlBuilder<Message>,
-	options: PartOptions<Message>,
-	children: Array<Html | string>,
-): Html =>
-	h.legend(
-		[
-			h.DataAttribute("slot", "legend"),
-			h.Class(twMerge(legendStyles, options.className)),
 			...(options.attributes ?? []),
 		],
 		children,

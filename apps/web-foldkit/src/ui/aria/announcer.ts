@@ -134,14 +134,14 @@ export const gridSelectionMessage = (options: {
 
 /** @react-aria/utils isAppleDevice: VoiceOver gets extra announcements on Apple platforms. */
 export const isAppleDevice = (): boolean => {
-	const userAgentData: unknown = Reflect.get(navigator, "userAgentData")
-	const platform =
-		typeof userAgentData === "object" &&
-		userAgentData !== null &&
-		"platform" in userAgentData &&
-		typeof userAgentData.platform === "string"
-			? userAgentData.platform
-			: navigator.platform
+	const platform = navigator.userAgentData?.platform ?? navigator.platform
 	const isMac = /^Mac/i.test(platform)
 	return isMac || /^iPhone/i.test(platform) || /^iPad/i.test(platform)
+}
+
+declare global {
+	interface Navigator {
+		/** User-Agent Client Hints: Chromium only, so it may be missing; not in TypeScript's DOM lib. */
+		readonly userAgentData?: { readonly platform: string }
+	}
 }

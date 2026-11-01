@@ -5,7 +5,7 @@ import * as Segments from "../../../ui/date-segments"
 import * as Slider from "../../../ui/slider"
 
 /** The sound settings are `Shared.soundSettings` (root-owned, like the legacy provider's atom). */
-export { DEFAULT_SOUND_SETTINGS, SoundFile, SoundSettings } from "../../../notification-sound"
+export { SoundFile, SoundSettings } from "../../../notification-sound"
 
 export const NotificationStatus = Schema.Literals(["idle", "sent", "unavailable"])
 export type NotificationStatus = typeof NotificationStatus.Type

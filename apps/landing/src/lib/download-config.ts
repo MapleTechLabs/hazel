@@ -1,5 +1,4 @@
 export type Platform = "macos" | "windows" | "linux"
-export type Architecture = "arm64" | "x64" | "universal"
 
 // GitHub release types
 export interface GitHubAsset {
@@ -31,21 +30,6 @@ export async function fetchLatestRelease(): Promise<ReleaseData | null> {
 	} catch {
 		return null
 	}
-}
-
-// Asset filename patterns for each platform/architecture
-export const assetPatterns: Record<Platform, Record<string, RegExp>> = {
-	macos: {
-		arm64: /Hazel.*aarch64.*\.dmg$/i,
-		x64: /Hazel.*x64.*\.dmg$/i,
-	},
-	windows: {
-		x64: /Hazel.*x64.*setup.*\.exe$/i,
-	},
-	linux: {
-		appimage: /Hazel.*\.AppImage$/i,
-		deb: /Hazel.*\.deb$/i,
-	},
 }
 
 // Find asset URL by pattern
@@ -171,13 +155,4 @@ export function detectPlatform(): { platform: Platform | null; arch: string } {
 	}
 
 	return { platform: null, arch: "x64" }
-}
-
-export function getPlatformDisplayName(platform: Platform): string {
-	const names: Record<Platform, string> = {
-		macos: "macOS",
-		windows: "Windows",
-		linux: "Linux",
-	}
-	return names[platform]
 }

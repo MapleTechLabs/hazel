@@ -29,7 +29,7 @@ export const defaultOutboundIdentity = (): ChatSyncChannelLink.OutboundIdentityS
 
 /** A new link's settings: the caller's, with an outbound identity (off) when they gave none. */
 export const normalizeChannelLinkSettings = (settings: Settings): Record<string, unknown> => ({
-	...(settings ?? {}),
+	...settings,
 	outboundIdentity: settings?.outboundIdentity ?? defaultOutboundIdentity(),
 })
 
@@ -84,7 +84,7 @@ export const withOutboundIdentity = (
 			? (current.providers as Record<string, unknown>)
 			: {}
 	return {
-		...(settings ?? {}),
+		...settings,
 		outboundIdentity: {
 			...current,
 			enabled: identity.enabled,

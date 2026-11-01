@@ -38,14 +38,11 @@ export const PortalPopoverBackdrop = Popover.PortalPopoverBackdrop
 export const FocusButton = Popover.FocusButton
 
 export const triggerId = Popover.buttonId
-export const popoverId = (id: string) => `${id}-panel`
 const contentId = (id: string) => `${id}-content`
 
 // UPDATE
 
 export const update = Popover.update
-export const open = Popover.open
-export const close = Popover.close
 
 // VIEW
 

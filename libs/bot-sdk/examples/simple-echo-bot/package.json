@@ -10,6 +10,6 @@
 	},
 	"dependencies": {
 		"@hazel-chat/bot-sdk": "workspace:*",
-		"effect": "^3.19.3"
+		"effect": "^4.0.6"
 	}
 }

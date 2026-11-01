@@ -13,10 +13,6 @@ bot's event log (a `BotGateway` Durable Object).
   Durable Object (see [Running on Cloudflare](#running-on-cloudflare)). The optional `/health`
   server needs Bun.
 
-Optional peer dependencies:
-
-- `@effect/opentelemetry` for tracing
-
 ## Installation
 
 ```bash

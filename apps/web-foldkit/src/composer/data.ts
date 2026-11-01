@@ -5,11 +5,10 @@ import {
 	botInstallationCollection,
 	channelMemberCollection,
 	userCollection,
-	userPresenceStatusCollection,
 } from "~/db/collections"
 import type { BotCommandId, BotId, ChannelId, ChannelMemberId, OrganizationId, UserId } from "@hazel/schema"
 import { liveQueryStream } from "../data/live-query"
-import type { BotCommand, MentionableBot, MentionMember, Presence } from "./composer"
+import type { BotCommand, MentionableBot, MentionMember } from "./composer"
 
 /** Channel members for mention autocomplete: the exact query `useMentionOptions` runs. */
 export const mentionMembersStream = <Message>(
@@ -45,13 +44,6 @@ export const mentionMembersStream = <Message>(
 						: [],
 				),
 			),
-	)
-
-/** Every presence row, as `useMentionOptions` reads it. */
-export const presenceStream = <Message>(toMessage: (presence: ReadonlyArray<Presence>) => Message) =>
-	liveQueryStream<Presence, Message>(
-		(q) => q.from({ presence: userPresenceStatusCollection }).select(({ presence }) => presence),
-		(rows) => toMessage(rows.map((row) => ({ userId: row.userId, status: row.status }))),
 	)
 
 /** `useMentionOptions`' mentionable bots installed in the organization. */

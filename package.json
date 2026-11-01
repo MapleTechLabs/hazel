@@ -17,7 +17,6 @@
 				"@effect/sql-sqlite-node": "4.0.6",
 				"@effect/sql-sqlite-do": "4.0.6",
 				"@effect/sql-d1": "4.0.6",
-				"@effect/opentelemetry": "4.0.6",
 				"@effect/ai-openrouter": "4.0.6",
 				"@effect/vitest": "4.0.6"
 			},
@@ -38,7 +37,7 @@
 		"setup": "bun run packages/setup/src/index.ts",
 		"typecheck": "turbo build typecheck",
 		"format": "oxfmt",
-		"lint": "oxlint --disable-nested-config",
+		"lint": "oxlint --disable-nested-config --quiet",
 		"test": "vitest",
 		"test:once": "vitest run",
 		"test:debug": "vitest --inspect-brk --no-file-parallelism",
@@ -49,23 +48,26 @@
 		"alchemy:deploy:pr": "bun scripts/alchemy-deploy.ts --yes --adopt --stage pr-${PR_NUMBER}",
 		"alchemy:destroy:pr": "alchemy destroy --yes --stage pr-${PR_NUMBER}",
 		"alchemy:dev": "ALCHEMY_LOCAL_STATE=1 alchemy dev --stage dev_${USER} --env-file .env.local",
-		"alchemy:typecheck": "tsc -p tsconfig.alchemy.json"
+		"alchemy:typecheck": "tsc -p tsconfig.alchemy.json",
+		"knip": "knip",
+		"knip:fix": "knip --fix --allow-remove-files"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "catalog:alchemy",
 		"@effect/vitest": "catalog:effect",
 		"@hazel/infra": "workspace:*",
 		"@maple-dev/alchemy": "catalog:alchemy",
-		"@types/node": "^24",
-		"@vitest/coverage-v8": "^4.1.0",
+		"@oxlint/plugins": "1.89.0",
+		"@types/node": "^24.19.2",
+		"@vitest/coverage-v8": "^4.1.12",
 		"alchemy": "catalog:alchemy",
 		"effect": "catalog:effect",
+		"knip": "^6.43.0",
 		"oxfmt": "^0.40.0",
-		"oxlint": "^1.55.0",
-		"turbo": "^2.8.16",
+		"oxlint": "1.89.0",
+		"turbo": "^2.11.10",
 		"typescript": "catalog:tooling",
-		"vitest": "^4.1.0",
-		"wrangler": "^4.73.0"
+		"vitest": "^4.1.12"
 	},
 	"engines": {
 		"bun": ">=1.2.14"

@@ -68,6 +68,12 @@ jobs:
             - name: Type check the alchemy stack
               run: bun run alchemy:typecheck
 
+            - name: Lint
+              run: bun run lint
+
+            - name: Unused files, dependencies and exports
+              run: bun run knip
+
     test:
         runs-on: ubuntu-latest
         permissions:

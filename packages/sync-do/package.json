@@ -22,8 +22,8 @@
 		"@cloudflare/vitest-plugin": "^1.4.9",
 		"@cloudflare/workers-types": "catalog:alchemy",
 		"@effect/vitest": "catalog:effect",
-		"@types/node": "^24.0.0",
+		"@types/node": "^24.19.2",
 		"typescript": "catalog:tooling",
-		"vitest": "^4.1.0"
+		"vitest": "^4.1.12"
 	}
 }

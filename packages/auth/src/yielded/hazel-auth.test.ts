@@ -96,6 +96,7 @@ const asD1 = (sql: SqlClient.SqlClient): SqlClient.SqlClient =>
 					target.withTransaction(Effect.forEach(statements, (statement) => statement))
 			if (property === "withTransaction")
 				return () => Effect.die(new Error("D1 has no transactions: BEGIN refused"))
+			// oxlint-disable-next-line anti-slop/no-reflect-get -- a Proxy `get` trap forwards to its target
 			return Reflect.get(target, property, receiver)
 		},
 	})

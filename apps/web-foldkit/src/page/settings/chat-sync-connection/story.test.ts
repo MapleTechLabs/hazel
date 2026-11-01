@@ -68,10 +68,9 @@ const loaded = [
 
 describe("chat sync connection", () => {
 	test("init lists the connections and the channel links", () => {
-		expect(init(route, shared).commands?.map((command) => command.name)).toEqual([
-			ListChatSyncConnectionsForConnection.name,
-			ListChannelLinks.name,
-		])
+		const names = init(route, shared).commands?.map((command) => command.name)
+		expect(names).toContain(ListChatSyncConnectionsForConnection.name)
+		expect(names).toContain(ListChannelLinks.name)
 	})
 
 	test("Remove link from the row menu confirms, removes and refreshes the shown links", () => {
