@@ -16,7 +16,7 @@ import type { HtmlRenders } from "../../../services/html-renders"
 import type { ThreadNamer } from "../../../services/thread-namer"
 import { chatSyncDeliveryReceivers } from "../../../services/chat-sync/chat-sync-outbound"
 import { ChatSyncDeliveryEffects } from "../../../services/chat-sync/chat-sync-effects"
-import type { ChatSyncTransport } from "../../../services/chat-sync/chat-sync-transport"
+import type { ChatSyncProviders } from "../../../services/chat-sync/chat-sync-providers"
 import { aiReceivers, AiEffects } from "./ai-effects"
 import { botGatewayReceivers, BotGatewayEffects } from "./bot-gateway-effects"
 import { channelReceivers, ChannelEffects, channelSenderRefusal } from "./channel-effects"
@@ -64,7 +64,7 @@ const aiSide = side<Database.Database | SqlClient | ThreadNamer | ObjectStubs | 
 	AiEffects,
 	aiReceivers,
 )
-const chatSyncSide = side<Database.Database | SqlClient | ChatSyncTransport | Directory>(
+const chatSyncSide = side<Database.Database | SqlClient | ChatSyncProviders | Directory>(
 	ChatSyncDeliveryEffects,
 	chatSyncDeliveryReceivers,
 )
@@ -147,7 +147,7 @@ export const deliverOutboxRow = (
 	| Database.Database
 	| SqlClient
 	| ThreadNamer
-	| ChatSyncTransport
+	| ChatSyncProviders
 	| HtmlRenders
 > =>
 	Effect.gen(function* () {

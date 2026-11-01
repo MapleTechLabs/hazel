@@ -1,7 +1,7 @@
 /**
- * Discord gateway dispatches → chat-sync inbound events: decode and validate the payload, drop
- * bot and self-authored events, and build the stable dedupe key. Where the event goes (the
- * directory's `chat_sync_index`, then the `OrgObject`) is the caller's `ingest`.
+ * Discord gateway dispatches → `ChatSyncInbound`: decode and validate the payload, drop bot and
+ * self-authored events, and build the stable dedupe key. Where the event goes
+ * (`routeChatSyncInbound`) is the caller's `ingest`.
  */
 import { createHash } from "node:crypto"
 import {
@@ -12,7 +12,8 @@ import {
 	ExternalWebhookId,
 } from "@hazel/schema"
 import { Effect, Option, Schema } from "effect"
-import type { ChatSyncAttachment, ChatSyncInboundEvent } from "./chat-sync-effects"
+import type { ChatSyncAttachment, ChatSyncMention } from "../../chat-sync-effects"
+import type { ChatSyncInbound } from "../../chat-sync-inbound"
 
 export interface DiscordMessageAuthor {
 	id?: string
@@ -34,6 +35,7 @@ export interface DiscordMessageCreateEvent {
 	webhook_id?: string
 	attachments?: ReadonlyArray<DiscordMessageAttachment>
 	author?: DiscordMessageAuthor
+	mentions?: ReadonlyArray<DiscordMessageAuthor>
 	message_reference?: {
 		message_id?: string
 		channel_id?: string
@@ -53,6 +55,7 @@ export interface DiscordMessageUpdateEvent {
 	content?: string
 	webhook_id?: string
 	author?: DiscordMessageAuthor
+	mentions?: ReadonlyArray<DiscordMessageAuthor>
 	edited_timestamp?: string | null
 }
 
@@ -144,6 +147,17 @@ export const normalizeDiscordMessageAttachments = (
 	return normalized
 }
 
+/** The users a message mentions, for names when they map to no Hazel user. */
+export const normalizeDiscordMentions = (
+	mentions: ReadonlyArray<DiscordMessageAuthor> | undefined,
+): ReadonlyArray<ChatSyncMention> =>
+	(mentions ?? []).flatMap((user) => {
+		const id = decodeExternalUserId(user.id)
+		return Option.isSome(id)
+			? [{ externalUserId: id.value, displayName: formatDiscordDisplayName(user) }]
+			: []
+	})
+
 export const extractReactionAuthor = (event: {
 	member?: { user?: DiscordMessageAuthor }
 	user?: DiscordMessageAuthor
@@ -221,23 +235,8 @@ const decodeOptionalExternalIdOrWarn = <A>(params: {
 		return decoded
 	})
 
-/** Who a Discord event names as its actor. */
-export interface DiscordInboundAuthor {
-	readonly externalUserId: ExternalUserId
-	readonly displayName: string
-	readonly avatarUrl: string | null
-}
-
-/** One validated Discord event, ready to route. `author: null` means the event named nobody. */
-export interface DiscordInbound {
-	readonly externalChannelId: ExternalChannelId
-	readonly dedupeKey: string
-	readonly author: DiscordInboundAuthor | null
-	readonly event: ChatSyncInboundEvent
-}
-
 export const createDiscordGatewayDispatchHandlers = <E, R>(deps: {
-	readonly ingest: (inbound: DiscordInbound) => Effect.Effect<void, E, R>
+	readonly ingest: (inbound: ChatSyncInbound) => Effect.Effect<void, E, R>
 	readonly isCurrentBotAuthor: (authorId?: string) => Effect.Effect<boolean>
 }) => {
 	const required = <A>(eventType: string, field: string, value: unknown, decode: ExternalIdDecoder<A>) =>
@@ -279,6 +278,7 @@ export const createDiscordGatewayDispatchHandlers = <E, R>(deps: {
 			decodeExternalWebhookId,
 		)
 		yield* deps.ingest({
+			provider: "discord",
 			externalChannelId: channelId.value,
 			dedupeKey: `discord:gateway:create:${messageId.value}`,
 			author:
@@ -296,6 +296,7 @@ export const createDiscordGatewayDispatchHandlers = <E, R>(deps: {
 				content: event.content,
 				externalReplyToMessageId: replyTo ?? null,
 				attachments: normalizeDiscordMessageAttachments(event.attachments),
+				mentions: normalizeDiscordMentions(event.mentions),
 			},
 		})
 	})
@@ -325,6 +326,7 @@ export const createDiscordGatewayDispatchHandlers = <E, R>(deps: {
 			event.edited_timestamp ??
 			createHash("sha256").update(`${messageId.value}:${event.content}`).digest("hex").slice(0, 16)
 		yield* deps.ingest({
+			provider: "discord",
 			externalChannelId: channelId.value,
 			dedupeKey: `discord:gateway:update:${messageId.value}:${version}`,
 			author: null,
@@ -333,6 +335,7 @@ export const createDiscordGatewayDispatchHandlers = <E, R>(deps: {
 				externalMessageId: messageId.value,
 				externalWebhookId: webhookId ?? null,
 				content: event.content,
+				mentions: normalizeDiscordMentions(event.mentions),
 			},
 		})
 	})
@@ -357,6 +360,7 @@ export const createDiscordGatewayDispatchHandlers = <E, R>(deps: {
 			decodeExternalWebhookId,
 		)
 		yield* deps.ingest({
+			provider: "discord",
 			externalChannelId: channelId.value,
 			dedupeKey: `discord:gateway:delete:${messageId.value}`,
 			author: null,
@@ -395,6 +399,7 @@ export const createDiscordGatewayDispatchHandlers = <E, R>(deps: {
 			const { externalAuthorDisplayName, externalAuthorAvatarUrl } = extractReactionAuthor(event)
 			const add = eventType === "MESSAGE_REACTION_ADD"
 			yield* deps.ingest({
+				provider: "discord",
 				externalChannelId: channelId.value,
 				dedupeKey: `discord:gateway:reaction:${add ? "add" : "remove"}:${channelId.value}:${messageId.value}:${userId.value}:${emoji}`,
 				author: {
@@ -428,10 +433,17 @@ export const createDiscordGatewayDispatchHandlers = <E, R>(deps: {
 		const threadId = yield* required("THREAD_CREATE", "id", event.id, decodeExternalThreadId)
 		if (Option.isNone(threadId)) return
 		yield* deps.ingest({
+			provider: "discord",
 			externalChannelId: parentId.value,
 			dedupeKey: `discord:gateway:thread:create:${threadId.value}`,
 			author: null,
-			event: { _tag: "ThreadCreate", externalThreadId: threadId.value, name: event.name ?? "Thread" },
+			event: {
+				_tag: "ThreadCreate",
+				externalThreadId: threadId.value,
+				name: event.name ?? "Thread",
+				// A thread started on a message takes the message's id.
+				externalParentMessageId: threadId.value as string as ExternalMessageId,
+			},
 		})
 	})
 

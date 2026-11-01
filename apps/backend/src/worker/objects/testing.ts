@@ -16,10 +16,7 @@ import { Directory } from "../../services/directory"
 import { HtmlRenderStore, HtmlRenders } from "../../services/html-renders"
 import { InviteMailer } from "../../services/invite-mailer"
 import { ThreadNamer, type ThreadNamingContext } from "../../services/thread-namer"
-import {
-	type ChatSyncCall,
-	makeRecordingChatSyncTransport,
-} from "../../services/chat-sync/chat-sync-transport"
+import { type ChatSyncCall, makeRecordingChatSyncProviders } from "../../services/chat-sync/testing"
 import { makeRpcDispatcher, type RpcDispatcherShape } from "../../rpc/dispatch"
 import { objectHandlersLive } from "./handlers"
 import type { InvokePrincipal } from "./principal"
@@ -165,7 +162,7 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 			}),
 		)
 
-		const chatSync = makeRecordingChatSyncTransport({ attachmentPublicUrlBase: "https://files.test" })
+		const chatSync = makeRecordingChatSyncProviders({ attachmentPublicUrlBase: "https://files.test" })
 		// The real service over an in-memory bucket.
 		const bucket = new Map<string, string>()
 		const htmlRenderStore = Layer.succeed(HtmlRenderStore, {

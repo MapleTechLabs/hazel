@@ -1,8 +1,9 @@
 /**
- * Chat sync's effect kinds (`infra/durable-object-sync-plan.md` §4, Discord gateway). Defined here
- * and merged into each receiving side's registry (`worker/objects/effects/*-effects.ts`).
+ * Chat sync's effect kinds (`infra/durable-object-sync-plan.md` §4). Defined here and merged into
+ * each receiving side's registry (`worker/objects/effects/*-effects.ts`). Payloads may be in an
+ * outbox across a deploy: change them additively only.
  *
- * Inbound (provider → Hazel): the gateway resolves the `OrgObject` through the directory's
+ * Inbound (provider → Hazel): a provider's source (`chat-sync-inbound.ts`) resolves the `OrgObject` through the directory's
  * `chat_sync_index` and applies `org.chatSyncIngest` there; the org finds the link and the author,
  * then sends `channel.chatSyncIngest` to the linked channel, which writes the message.
  *
@@ -39,6 +40,8 @@ export const ChatSyncChannelTarget = Schema.Struct({
 	syncConnectionId: SyncConnectionId,
 	organizationId: OrganizationId,
 	provider: Schema.String,
+	/** The provider workspace (Discord guild, Slack team); absent on links projected before it. */
+	externalWorkspaceId: Schema.optional(Schema.String),
 	externalChannelId: ExternalChannelId,
 	direction: ChatSyncDirection,
 	settings: Settings,
@@ -68,7 +71,17 @@ export const ChatSyncAttachment = Schema.Struct({
 })
 export type ChatSyncAttachment = typeof ChatSyncAttachment.Type
 
-/** A provider event as the gateway saw it; the org resolves its link and author. */
+/** A provider user an inbound message mentions, for a readable name when they map to nobody. */
+export const ChatSyncMention = Schema.Struct({
+	externalUserId: ExternalUserId,
+	displayName: Schema.String,
+})
+export type ChatSyncMention = typeof ChatSyncMention.Type
+
+/**
+ * A provider event as its source (gateway, events webhook) saw it; the org resolves its link and
+ * author. `content` is in the provider's syntax; the org turns its mentions into Hazel's.
+ */
 export const ChatSyncInboundEvent = Schema.TaggedUnion({
 	MessageCreate: {
 		externalMessageId: ExternalMessageId,
@@ -76,11 +89,13 @@ export const ChatSyncInboundEvent = Schema.TaggedUnion({
 		content: Schema.String,
 		externalReplyToMessageId: Schema.NullOr(ExternalMessageId),
 		attachments: Schema.Array(ChatSyncAttachment),
+		mentions: Schema.optional(Schema.Array(ChatSyncMention)),
 	},
 	MessageUpdate: {
 		externalMessageId: ExternalMessageId,
 		externalWebhookId: Schema.NullOr(ExternalWebhookId),
 		content: Schema.String,
+		mentions: Schema.optional(Schema.Array(ChatSyncMention)),
 	},
 	MessageDelete: {
 		externalMessageId: ExternalMessageId,
@@ -88,11 +103,16 @@ export const ChatSyncInboundEvent = Schema.TaggedUnion({
 	},
 	ReactionAdd: { externalMessageId: ExternalMessageId, emoji: Schema.String },
 	ReactionRemove: { externalMessageId: ExternalMessageId, emoji: Schema.String },
-	ThreadCreate: { externalThreadId: ExternalThreadId, name: Schema.String },
+	ThreadCreate: {
+		externalThreadId: ExternalThreadId,
+		name: Schema.String,
+		/** The synced message the thread was started on, when it has one. */
+		externalParentMessageId: Schema.optional(ExternalMessageId),
+	},
 })
 export type ChatSyncInboundEvent = typeof ChatSyncInboundEvent.Type
 
-/** `org.chatSyncIngest`: applied by the gateway at each org indexed for the external channel. */
+/** `org.chatSyncIngest`: applied by a provider source at each org indexed for the external channel. */
 export const OrgChatSyncIngestPayload = Schema.Struct({
 	provider: Schema.String,
 	externalChannelId: ExternalChannelId,
@@ -133,6 +153,15 @@ export const ChannelChatSyncIngestPayload = Schema.Struct({
 	event: ChannelIngestEvent,
 })
 export type ChannelChatSyncIngestPayload = typeof ChannelChatSyncIngestPayload.Type
+
+/** Point a synced message at the Hazel thread made for its provider thread (in the parent channel). */
+export const AttachThreadPayload = Schema.Struct({
+	channelLinkId: SyncChannelLinkId,
+	externalMessageId: ExternalMessageId,
+	threadChannelId: ChannelId,
+	externalThreadId: ExternalThreadId,
+})
+export type AttachThreadPayload = typeof AttachThreadPayload.Type
 
 /** Re-attribute the channel's provider-synced messages (a provider account was linked or unlinked). */
 export const ReassignAuthorsPayload = Schema.Struct({
@@ -195,6 +224,7 @@ export const ChatSyncChannelEffects = {
 		"channel",
 		ReassignAuthorsPayload,
 	),
+	chatSyncAttachThread: defineEffect("channel.chatSyncAttachThread", "channel", AttachThreadPayload),
 }
 
 export const ChatSyncOrgEffects = {

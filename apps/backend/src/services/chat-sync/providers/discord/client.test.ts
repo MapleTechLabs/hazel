@@ -1,30 +1,43 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Discord } from "@hazel/integrations"
-import { ExternalChannelId, ExternalMessageId } from "@hazel/schema"
+import {
+	ExternalChannelId,
+	ExternalMessageId,
+	OrganizationId,
+	SyncChannelLinkId,
+	SyncConnectionId,
+} from "@hazel/schema"
 import { ConfigProvider, Effect, Layer } from "effect"
-import { ChatSyncProviderRegistry } from "./chat-sync-provider-registry"
+import type { ChatSyncLinkContext } from "../../provider"
+import { makeDiscordClient } from "./client"
 
 const channelId = ExternalChannelId.make("100000000000000001")
 const messageId = ExternalMessageId.make("100000000000000002")
 
+const context: ChatSyncLinkContext = {
+	link: {
+		channelLinkId: SyncChannelLinkId.make(crypto.randomUUID()),
+		syncConnectionId: SyncConnectionId.make(crypto.randomUUID()),
+		organizationId: OrganizationId.make(crypto.randomUUID()),
+		provider: "discord",
+		externalChannelId: channelId,
+		direction: "both",
+		settings: null,
+	},
+	saveSettings: () => Effect.void,
+}
+
 const registryWith = (createThread: () => Effect.Effect<string, Discord.DiscordApiError>) =>
-	Layer.effect(ChatSyncProviderRegistry, ChatSyncProviderRegistry.make).pipe(
-		Layer.provide(
-			Layer.succeed(Discord.DiscordApiClient, {
-				createThread,
-			} as unknown as Discord.DiscordApiClient["Service"]),
-		),
-		Layer.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({ DISCORD_BOT_TOKEN: "bot-token" }))),
+	Layer.mergeAll(
+		Layer.succeed(Discord.DiscordApiClient, {
+			createThread,
+		} as unknown as Discord.DiscordApiClient["Service"]),
+		ConfigProvider.layer(ConfigProvider.fromUnknown({ DISCORD_BOT_TOKEN: "bot-token" })),
 	)
 
 const createThread = Effect.gen(function* () {
-	const registry = yield* ChatSyncProviderRegistry
-	const adapter = yield* registry.getAdapter("discord")
-	return yield* adapter.createThread({
-		externalChannelId: channelId,
-		externalMessageId: messageId,
-		name: "Hi",
-	})
+	const client = yield* makeDiscordClient
+	return yield* client.createThread(context, { externalMessageId: messageId, name: "Hi" })
 })
 
 describe("Discord thread creation", () => {

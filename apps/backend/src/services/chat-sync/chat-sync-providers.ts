@@ -1,0 +1,47 @@
+/**
+ * The provider clients an outbound chat-sync delivery calls, plus where attachments are publicly
+ * served. Part of every object's platform; a `ChannelObject`'s outbox uses it
+ * (`chat-sync-outbound.ts`).
+ */
+import { Discord } from "@hazel/integrations"
+import { Config, Context, Effect, Layer, Option } from "effect"
+import { type ChatSyncClient, type ChatSyncProviderId, ChatSyncProviderNotSupportedError } from "./provider"
+import { makeDiscordClient } from "./providers/discord/client"
+
+export interface ChatSyncProvidersShape {
+	readonly client: (provider: string) => Effect.Effect<ChatSyncClient, ChatSyncProviderNotSupportedError>
+	/** `S3_PUBLIC_URL`: attachments are linked as `<base>/<attachmentId>`. */
+	readonly attachmentPublicUrlBase: Option.Option<string>
+}
+
+/** The shape over a client per provider. */
+export const chatSyncProvidersOf = (
+	clients: Partial<Record<ChatSyncProviderId, ChatSyncClient>>,
+	attachmentPublicUrlBase: Option.Option<string>,
+): ChatSyncProvidersShape => ({
+	client: (provider) =>
+		Option.match(Option.fromNullishOr(clients[provider as ChatSyncProviderId]), {
+			onNone: () => Effect.fail(new ChatSyncProviderNotSupportedError({ provider })),
+			onSome: Effect.succeed,
+		}),
+	attachmentPublicUrlBase,
+})
+
+export class ChatSyncProviders extends Context.Service<ChatSyncProviders, ChatSyncProvidersShape>()(
+	"@hazel/backend/ChatSyncProviders",
+) {
+	/** The providers' REST APIs over fetch; reads their tokens and `S3_PUBLIC_URL`. */
+	static readonly layer = Layer.effect(
+		this,
+		Effect.gen(function* () {
+			const publicUrl = yield* Config.String("S3_PUBLIC_URL").pipe(Config.option)
+			return chatSyncProvidersOf(
+				{ discord: yield* makeDiscordClient },
+				Option.filter(
+					Option.map(publicUrl, (url) => url.trim()),
+					(url) => url.length > 0,
+				),
+			)
+		}),
+	).pipe(Layer.provide(Discord.DiscordApiClient.layer))
+}

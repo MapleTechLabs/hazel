@@ -14,6 +14,7 @@ import { Effect, Option, Schema } from "effect"
 import type { SqlClient } from "effect/sql/SqlClient"
 import { ChatSyncAttributionReconciler } from "../../../services/chat-sync/chat-sync-attribution-reconciler"
 import { publishChatSyncAccounts } from "../../../services/chat-sync/chat-sync-org"
+import { isChatSyncProviderId } from "../../../services/chat-sync/provider"
 import { IntegrationTokenService } from "../../../services/integration-token-service"
 import { IntegrationBotService } from "../../../services/integrations/integration-bot-service"
 import { CurrentObject } from "../../../lib/current-object"
@@ -31,8 +32,6 @@ const Provider = IntegrationConnection.IntegrationProvider
 type Provider = IntegrationConnection.IntegrationProvider
 type Connection = IntegrationConnection.Type
 
-/** Providers whose user-level link re-attributes synced messages (chat-sync). */
-const ATTRIBUTION_PROVIDERS = new Set<Provider>(["discord"])
 
 /** The token exists but could not be produced (refresh, decryption or storage failed). */
 export class IntegrationTokenUnavailableError extends Schema.TaggedError<IntegrationTokenUnavailableError>()(
@@ -219,7 +218,7 @@ export const connectIntegration = Effect.fn("OrgObject.connectIntegration")(
 					Effect.catchTags({ DatabaseError: failed("db_error"), SchemaError: failed("db_error") }),
 				)
 				// A user's provider account: re-project the linked channels (mentions resolve to it).
-				if (payload.userId !== null && ATTRIBUTION_PROVIDERS.has(payload.provider)) {
+				if (payload.userId !== null && isChatSyncProviderId(payload.provider)) {
 					yield* publishChatSyncAccounts(payload.provider).pipe(
 						Effect.catchTags({
 							DatabaseError: failed("db_error"),
@@ -234,7 +233,7 @@ export const connectIntegration = Effect.fn("OrgObject.connectIntegration")(
 		// Best effort after the connection is saved: neither may fail the connect.
 		if (
 			payload.userId !== null &&
-			ATTRIBUTION_PROVIDERS.has(payload.provider) &&
+			isChatSyncProviderId(payload.provider) &&
 			payload.externalAccountId !== null &&
 			payload.externalAccountId.length > 0
 		) {
@@ -305,7 +304,7 @@ export const disconnectIntegration = Effect.fn("OrgObject.disconnectIntegration"
 
 	if (
 		payload.userId !== null &&
-		ATTRIBUTION_PROVIDERS.has(payload.provider) &&
+		isChatSyncProviderId(payload.provider) &&
 		typeof externalAccountId === "string" &&
 		externalAccountId.length > 0
 	) {
@@ -341,7 +340,7 @@ export const disconnectIntegration = Effect.fn("OrgObject.disconnectIntegration"
 				yield* tokens.deleteTokens(connection.id)
 				yield* repo.softDelete(connection.id)
 				yield* indexInstallation(connection, true)
-				if (payload.userId !== null && ATTRIBUTION_PROVIDERS.has(payload.provider)) {
+				if (payload.userId !== null && isChatSyncProviderId(payload.provider)) {
 					yield* publishChatSyncAccounts(payload.provider)
 				}
 			}),

@@ -31,7 +31,7 @@ import type { BotGatewayTransport } from "../../services/bot-gateway-transport"
 import type { Directory } from "../../services/directory"
 import type { HtmlRenders } from "../../services/html-renders"
 import type { ThreadNamer } from "../../services/thread-namer"
-import type { ChatSyncTransport } from "../../services/chat-sync/chat-sync-transport"
+import type { ChatSyncProviders } from "../../services/chat-sync/chat-sync-providers"
 import { ObjectCalls } from "./call-receivers"
 import type { CallRequest, CallResponse } from "./calls"
 import { ChannelEffects } from "./effects/channel-effects"
@@ -67,7 +67,7 @@ export type ObjectPlatform =
 	| Directory
 	| BotGatewayTransport
 	| ThreadNamer
-	| ChatSyncTransport
+	| ChatSyncProviders
 	| HtmlRenders
 
 export interface ObjectRuntimeOptions {

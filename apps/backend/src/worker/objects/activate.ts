@@ -18,7 +18,7 @@ import { BotGatewayTransport } from "../../services/bot-gateway-transport"
 import { Directory } from "../../services/directory"
 import { HtmlRenders } from "../../services/html-renders"
 import { ThreadNamer } from "../../services/thread-namer"
-import { ChatSyncTransport } from "../../services/chat-sync/chat-sync-transport"
+import { ChatSyncProviders } from "../../services/chat-sync/chat-sync-providers"
 import { directoryBinding, htmlRenderStoreLive, servicesPlatformLive } from "../platform"
 import { objectHandlersLive } from "./handlers"
 import type { ObjectKind } from "./kinds"
@@ -67,7 +67,7 @@ export const activateObject = (kind: ObjectKind) =>
 					ThreadNamer.layer.pipe(
 						Layer.provide(Layer.mergeAll(FetchHttpClient.layer, workerEnvLayer(env))),
 					),
-					ChatSyncTransport.layer.pipe(Layer.provide(workerEnvLayer(env)), Layer.orDie),
+					ChatSyncProviders.layer.pipe(Layer.provide(workerEnvLayer(env)), Layer.orDie),
 					HtmlRenders.layer.pipe(
 						Layer.provide(Layer.mergeAll(workerEnvLayer(env), htmlRenderStoreLive(env))),
 						Layer.orDie,

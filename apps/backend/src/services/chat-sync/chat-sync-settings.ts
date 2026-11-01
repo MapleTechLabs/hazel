@@ -1,10 +1,10 @@
 /**
- * A channel link's `settings`: the outbound identity (post as a Discord webhook per Hazel author,
- * or as the bot) and the webhook permission Discord last reported. Pure; the org owns the row,
- * the channel holds a copy (`channel.setChatSyncLinks`).
+ * A channel link's `settings`: the outbound identity (post as each Hazel author, or as the bot)
+ * and the permission the provider last reported for it. Pure; the org owns the row, the channel
+ * holds a copy (`channel.setChatSyncLinks`). A provider keeps its own identity config under
+ * `outboundIdentity.providers.<id>` (`providers/<id>/definition.ts`).
  */
 import { ChatSyncChannelLink } from "@hazel/domain/models"
-import type { ExternalWebhookId } from "@hazel/schema"
 import { Option, Schema } from "effect"
 
 type Settings = Record<string, unknown> | null | undefined
@@ -19,9 +19,6 @@ export interface WebhookPermissionState {
 
 const decodeOutboundIdentitySettings = Schema.decodeUnknownOption(
 	ChatSyncChannelLink.OutboundIdentitySettings,
-)
-const decodeDiscordWebhookConfig = Schema.decodeUnknownOption(
-	ChatSyncChannelLink.DiscordWebhookOutboundIdentityConfig,
 )
 
 export const defaultOutboundIdentity = (): ChatSyncChannelLink.OutboundIdentitySettings => ({
@@ -47,17 +44,9 @@ export const outboundIdentityOf = (settings: Settings): ChatSyncChannelLink.Outb
 	return Option.getOrElse(decodeOutboundIdentitySettings(raw), defaultOutboundIdentity)
 }
 
+/** Whether the link posts as each Hazel author (rather than as the bot). */
 export const isWebhookStrategyEnabled = (identity: ChatSyncChannelLink.OutboundIdentitySettings) =>
 	identity.enabled && identity.strategy === "webhook"
-
-export const discordWebhookConfigOf = (
-	identity: ChatSyncChannelLink.OutboundIdentitySettings,
-): Option.Option<ChatSyncChannelLink.DiscordWebhookOutboundIdentityConfig> => {
-	const config = (identity.providers as Record<string, unknown>)["discord"]
-	if (config === null || typeof config !== "object") return Option.none()
-	if ((config as { kind?: unknown }).kind !== "discord.webhook") return Option.none()
-	return decodeDiscordWebhookConfig(config)
-}
 
 export const webhookPermissionOf = (settings: Settings): WebhookPermissionState | undefined => {
 	const raw = settings?.webhookPermission
@@ -82,22 +71,6 @@ export const webhookPermission = (
 	checkedAt: new Date().toISOString(),
 	...(reason ? { reason } : {}),
 })
-
-/**
- * A message the link's own webhook posted: Hazel's outbound echo coming back through the
- * gateway, to be ignored.
- */
-export const isOwnWebhookOrigin = (
-	provider: string,
-	settings: Settings,
-	externalWebhookId: ExternalWebhookId | null,
-): boolean => {
-	if (externalWebhookId === null || provider !== "discord") return false
-	const identity = outboundIdentityOf(settings)
-	if (!isWebhookStrategyEnabled(identity)) return false
-	const config = discordWebhookConfigOf(identity)
-	return Option.isSome(config) && config.value.webhookId === externalWebhookId
-}
 
 /** `settings` with `identity` merged into its outbound identity, and the permission state. */
 export const withOutboundIdentity = (

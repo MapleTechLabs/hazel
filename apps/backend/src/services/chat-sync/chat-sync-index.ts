@@ -7,11 +7,12 @@
  */
 import { SQLite, schema } from "@hazel/db"
 import type { ExternalChannelId, ExternalUserId } from "@hazel/schema"
-import { Effect } from "effect"
+import { Effect, Option } from "effect"
 import type { EffectReceivers } from "../../worker/objects/effects/registry"
 import { toUserProjection } from "../../worker/objects/org/projections"
 import { Directory } from "../directory"
 import type { ChatSyncDirectoryEffects, ChatSyncIndexPayload } from "./chat-sync-effects"
+import { definitionOf } from "./providers"
 
 const indexId = (row: ChatSyncIndexPayload) =>
 	row.externalChannelId === null
@@ -137,6 +138,9 @@ export const upsertIntegrationBot = (provider: string) =>
 	upsertExternalUser({
 		externalId: `integration-bot-${provider}`,
 		email: `integration-bot-${provider}@${provider}.internal`,
-		displayName: provider === "discord" ? "Discord" : provider,
+		displayName: Option.match(definitionOf(provider), {
+			onNone: () => provider,
+			onSome: (definition) => definition.displayName,
+		}),
 		avatarUrl: null,
 	})
