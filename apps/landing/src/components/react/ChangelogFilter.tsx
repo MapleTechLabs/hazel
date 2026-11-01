@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils"
-import type { ChangeType } from "@/content/config"
+import type { ChangeType } from "@/content.config"
 import { typeConfig } from "./CategoryBadge"
 
 interface ChangelogFilterProps {

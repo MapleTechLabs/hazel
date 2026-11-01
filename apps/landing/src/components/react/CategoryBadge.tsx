@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils"
-import type { ChangeType } from "@/content/config"
+import type { ChangeType } from "@/content.config"
 
 const typeConfig: Record<ChangeType, { label: string; className: string }> = {
 	feature: {

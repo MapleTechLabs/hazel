@@ -13,7 +13,6 @@ const MOVEMENT_DAMPING = 1400
 const GLOBE_CONFIG: COBEOptions = {
 	width: 800,
 	height: 800,
-	onRender: () => {},
 	devicePixelRatio: 2,
 	phi: 0,
 	theta: 0.3,
@@ -111,16 +110,24 @@ export function Globe({ className, config = GLOBE_CONFIG }: { className?: string
 			...finalConfig,
 			width: widthRef.current * 2,
 			height: widthRef.current * 2,
-			onRender: (state) => {
-				if (!pointerInteracting.current) phiRef.current += 0.005
-				state.phi = phiRef.current + rs.get()
-				state.width = widthRef.current * 2
-				state.height = widthRef.current * 2
-			},
 		})
+
+		// cobe 2 has no render loop of its own: spin it a frame at a time.
+		let frame = 0
+		const render = () => {
+			if (!pointerInteracting.current) phiRef.current += 0.005
+			globe.update({
+				phi: phiRef.current + rs.get(),
+				width: widthRef.current * 2,
+				height: widthRef.current * 2,
+			})
+			frame = requestAnimationFrame(render)
+		}
+		frame = requestAnimationFrame(render)
 
 		setTimeout(() => (canvasRef.current!.style.opacity = "1"), 0)
 		return () => {
+			cancelAnimationFrame(frame)
 			globe.destroy()
 			window.removeEventListener("resize", onResize)
 		}
