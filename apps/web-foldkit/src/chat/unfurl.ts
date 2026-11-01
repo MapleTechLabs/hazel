@@ -242,6 +242,14 @@ const getEntities = (tweet: RawTweet): ReadonlyArray<TweetEntity> => {
 	})
 }
 
+const isMp4Url = (src: string) => {
+	try {
+		return new URL(src).pathname.endsWith(".mp4")
+	} catch {
+		return false
+	}
+}
+
 const toTweetView = (tweet: RawTweet): TweetView => ({
 	url: `https://x.com/${tweet.user.screen_name}/status/${tweet.id_str}`,
 	text: tweet.text,
@@ -258,7 +266,13 @@ const toTweetView = (tweet: RawTweet): TweetView => ({
 		? {
 				poster: tweet.video.poster,
 				// The first variant is usually the HLS playlist, which `<video>` cannot play as mp4.
-				src: tweet.video.variants.find((variant) => variant.type === "video/mp4")?.src ?? null,
+				src:
+					(
+						tweet.video.variants.find((variant) => variant.type === "video/mp4") ??
+						tweet.video.variants.find(
+							(variant) => variant.type === undefined && isMp4Url(variant.src),
+						)
+					)?.src ?? null,
 			}
 		: null,
 	favoriteCount: tweet.favorite_count ?? null,
@@ -316,8 +330,8 @@ const getJson = <S extends Schema.Top & { readonly DecodingServices: never }>(pa
 		Effect.flatMap(HttpClientResponse.schemaBodyJson(schema)),
 		Effect.provide(FetchHttpClient.layer),
 		Effect.timeout(UNFURL_TIMEOUT),
-		Effect.mapError(
-			(error): UnfurlFailure => (error._tag === "TimeoutError" ? "TimedOut" : "Unavailable"),
+		Effect.mapError((error): UnfurlFailure =>
+			error._tag === "TimeoutError" ? "TimedOut" : "Unavailable",
 		),
 	)
 

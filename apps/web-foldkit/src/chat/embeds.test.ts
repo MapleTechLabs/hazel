@@ -97,6 +97,15 @@ describe("tweetViewOf", () => {
 		expect(view.video).toEqual({ poster: "https://poster", src: "https://video/480.mp4" })
 	})
 
+	test("falls back to an untyped mp4 variant, never an untyped playlist", () => {
+		const videoOf = (variants: ReadonlyArray<{ src: string }>) =>
+			Option.getOrThrow(tweetViewOf({ ...raw, video: { poster: "https://poster", variants } })).video
+		expect(
+			videoOf([{ src: "https://video/pl.m3u8?tag=14" }, { src: "https://video/480.mp4?tag=14" }]),
+		).toEqual({ poster: "https://poster", src: "https://video/480.mp4?tag=14" })
+		expect(videoOf([{ src: "https://video/pl.m3u8" }])).toEqual({ poster: "https://poster", src: null })
+	})
+
 	test("a response without the tweet fields does not decode", () => {
 		expect(Option.isNone(tweetViewOf({ error: "nope" }))).toBe(true)
 	})
