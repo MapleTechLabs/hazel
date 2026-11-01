@@ -126,6 +126,31 @@ export const CONTENT_ATTRIBUTE = "image-viewer-content"
 export const isBackdropTarget = (target: EventTarget | null) =>
 	!(target instanceof Element) || target.closest(`img, button, [data-${CONTENT_ATTRIBUTE}]`) === null
 
+// Embla's default `dragThreshold`: a press that moves further is a drag, not a click.
+const DRAG_THRESHOLD = 10
+
+export interface BackdropPoint {
+	readonly target: EventTarget | null
+	readonly x: number
+	readonly y: number
+}
+
+/**
+ * A press and release both on the backdrop, without a drag between them. Embla swallows the click of a
+ * drag inside its viewport, but one that ends on an arrow clicks their common ancestor, outside it.
+ */
+export const isBackdropDismiss = (press: BackdropPoint | null, release: BackdropPoint) =>
+	press !== null &&
+	isBackdropTarget(press.target) &&
+	isBackdropTarget(release.target) &&
+	Math.hypot(release.x - press.x, release.y - press.y) < DRAG_THRESHOLD
+
+const pointOf = (event: MouseEvent): BackdropPoint => ({
+	target: event.target,
+	x: event.clientX,
+	y: event.clientY,
+})
+
 /** Portal + the Escape hotkey + backdrop click; the carousel owns the arrows (and swallows a drag's click). */
 const ImageViewerPortal = Mount.defineStream("ImageViewerPortal", {
 	messages: [Intent.PressedClose, Intent.PressedSelect],
@@ -137,13 +162,21 @@ const ImageViewerPortal = Mount.defineStream("ImageViewerPortal", {
 					const onKeyDown = (event: KeyboardEvent) => {
 						if (event.key === "Escape") Queue.offerUnsafe(queue, Intent.PressedClose())
 					}
+					let press: BackdropPoint | null = null
+					const onPointerDown = (event: Event) => {
+						press = event instanceof MouseEvent ? pointOf(event) : null
+					}
 					const onClick = (event: Event) => {
-						if (isBackdropTarget(event.target)) Queue.offerUnsafe(queue, Intent.PressedClose())
+						if (event instanceof MouseEvent && isBackdropDismiss(press, pointOf(event)))
+							Queue.offerUnsafe(queue, Intent.PressedClose())
+						press = null
 					}
 					document.addEventListener("keydown", onKeyDown)
+					element.addEventListener("pointerdown", onPointerDown, true)
 					element.addEventListener("click", onClick)
 					return () => {
 						document.removeEventListener("keydown", onKeyDown)
+						element.removeEventListener("pointerdown", onPointerDown, true)
 						element.removeEventListener("click", onClick)
 						releasePortal()
 					}

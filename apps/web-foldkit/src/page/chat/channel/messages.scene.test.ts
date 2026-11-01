@@ -4,7 +4,7 @@ import { Schema } from "effect"
 import * as Scene from "foldkit/scene"
 import type { Html } from "foldkit/html"
 import { describe, expect, test } from "vitest"
-import { isBackdropTarget } from "../../../chat/image-viewer"
+import { isBackdropDismiss, isBackdropTarget } from "../../../chat/image-viewer"
 import * as Composer from "../../../composer/composer"
 import * as EditorCommands from "../../../composer/editor-commands"
 import {
@@ -349,6 +349,13 @@ describe("image viewer", () => {
 			),
 		).toBe(false)
 		expect(isBackdropTarget(contentOf('button[aria-label="Previous image"]'))).toBe(false)
+		// A drag from beside the image onto an arrow clicks their common ancestor, outside embla's viewport.
+		const beside = { target: image?.parentElement ?? null, x: 100, y: 100 }
+		const ancestor = contentOf('button[aria-label="Previous image"]')?.parentElement ?? null
+		expect(isBackdropDismiss(beside, { target: ancestor, x: 102, y: 101 })).toBe(true)
+		expect(isBackdropDismiss(beside, { target: ancestor, x: 160, y: 100 })).toBe(false)
+		expect(isBackdropDismiss({ target: image, x: 100, y: 100 }, beside)).toBe(false)
+		expect(isBackdropDismiss(null, beside)).toBe(false)
 	})
 
 	// The toolbar buttons are named by their icon's <title>, as in legacy (no aria-label there).
