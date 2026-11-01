@@ -764,6 +764,34 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 	// Save the connection, its tokens and the org's integration bot in the org's `OrgObject`.
 	const organizationId = parsedState.organizationId as OrganizationId
 	const userId = parsedState.userId as UserId
+	// A provider that installs Hazel per workspace: its bot token is the workspace's, for every
+	// org synced with it (`chat_sync_installations`). Saved before the connection: an install
+	// without a connection is harmless, a connection without its install syncs nothing.
+	if (
+		parsedState.level === "organization" &&
+		isChatSyncProviderId(provider) &&
+		chatSyncProviders[provider].workspaceIsInstall
+	) {
+		const saved = yield* Effect.flatMap(ChatSyncInstallations, (installations) =>
+			installations.save({
+				provider,
+				externalWorkspaceId: accountInfo.externalAccountId,
+				externalWorkspaceName: accountInfo.externalAccountName,
+				token: Redacted.make(tokens.accessToken),
+				scope: tokens.scope ?? null,
+				installedBy: userId,
+			}),
+		).pipe(Effect.result)
+		if (saved._tag === "Failure") {
+			yield* Effect.logError("Chat sync install save failed", {
+				event: "integration_install_save_failed",
+				provider,
+				error: String(saved.failure),
+			})
+			return redirectWithError("db_error")
+		}
+	}
+
 	const connectResult = yield* callObject(ConnectIntegrationCall, orgTarget(organizationId), {
 		provider,
 		userId: parsedState.level === "user" ? userId : null,
@@ -788,33 +816,6 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 			error: error.message,
 		})
 		return redirectWithError(error._tag === "IntegrationConnectFailedError" ? error.stage : "db_error")
-	}
-
-	// A provider that installs Hazel per workspace: its bot token is the workspace's, for every
-	// org synced with it (`chat_sync_installations`).
-	if (
-		parsedState.level === "organization" &&
-		isChatSyncProviderId(provider) &&
-		chatSyncProviders[provider].workspaceIsInstall
-	) {
-		const saved = yield* Effect.flatMap(ChatSyncInstallations, (installations) =>
-			installations.save({
-				provider,
-				externalWorkspaceId: accountInfo.externalAccountId,
-				externalWorkspaceName: accountInfo.externalAccountName,
-				token: Redacted.make(tokens.accessToken),
-				scope: tokens.scope ?? null,
-				installedBy: userId,
-			}),
-		).pipe(Effect.result)
-		if (saved._tag === "Failure") {
-			yield* Effect.logError("Chat sync install save failed", {
-				event: "integration_install_save_failed",
-				provider,
-				error: String(saved.failure),
-			})
-			return redirectWithError("db_error")
-		}
 	}
 
 	yield* Effect.logInfo("AUDIT: Integration connected", {
