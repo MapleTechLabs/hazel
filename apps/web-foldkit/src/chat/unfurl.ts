@@ -96,13 +96,18 @@ const RawTweet = Schema.Struct({
 	id_str: Schema.String,
 	text: Schema.String,
 	display_text_range: Indices,
+	// X omits an entity list that would be empty.
 	entities: Schema.Struct({
-		hashtags: Schema.Array(Schema.Struct({ indices: Indices, text: Schema.String })),
-		user_mentions: Schema.Array(Schema.Struct({ indices: Indices, screen_name: Schema.String })),
-		urls: Schema.Array(
-			Schema.Struct({ indices: Indices, display_url: Schema.String, expanded_url: Schema.String }),
+		hashtags: Schema.optionalKey(Schema.Array(Schema.Struct({ indices: Indices, text: Schema.String }))),
+		user_mentions: Schema.optionalKey(
+			Schema.Array(Schema.Struct({ indices: Indices, screen_name: Schema.String })),
 		),
-		symbols: Schema.Array(Schema.Struct({ indices: Indices, text: Schema.String })),
+		urls: Schema.optionalKey(
+			Schema.Array(
+				Schema.Struct({ indices: Indices, display_url: Schema.String, expanded_url: Schema.String }),
+			),
+		),
+		symbols: Schema.optionalKey(Schema.Array(Schema.Struct({ indices: Indices, text: Schema.String }))),
 		media: Schema.optionalKey(
 			Schema.Array(
 				Schema.Struct({ indices: Indices, display_url: Schema.String, expanded_url: Schema.String }),
@@ -122,7 +127,9 @@ const RawTweet = Schema.Struct({
 	video: Schema.optionalKey(
 		Schema.Struct({
 			poster: Schema.String,
-			variants: Schema.Array(Schema.Struct({ src: Schema.String })),
+			variants: Schema.Array(
+				Schema.Struct({ src: Schema.String, type: Schema.optionalKey(Schema.String) }),
+			),
 		}),
 	),
 	favorite_count: Schema.optionalKey(Schema.Number),
@@ -178,7 +185,7 @@ const getEntities = (tweet: RawTweet): ReadonlyArray<TweetEntity> => {
 	const { entities } = tweet
 	addEntities(
 		result,
-		entities.hashtags.map((hashtag) => ({
+		(entities.hashtags ?? []).map((hashtag) => ({
 			indices: hashtag.indices,
 			type: "hashtag",
 			href: `https://x.com/hashtag/${hashtag.text}`,
@@ -187,7 +194,7 @@ const getEntities = (tweet: RawTweet): ReadonlyArray<TweetEntity> => {
 	)
 	addEntities(
 		result,
-		entities.user_mentions.map((mention) => ({
+		(entities.user_mentions ?? []).map((mention) => ({
 			indices: mention.indices,
 			type: "mention",
 			href: `https://x.com/${mention.screen_name}`,
@@ -196,7 +203,7 @@ const getEntities = (tweet: RawTweet): ReadonlyArray<TweetEntity> => {
 	)
 	addEntities(
 		result,
-		entities.urls.map((url) => ({
+		(entities.urls ?? []).map((url) => ({
 			indices: url.indices,
 			type: "url",
 			href: url.expanded_url,
@@ -205,7 +212,7 @@ const getEntities = (tweet: RawTweet): ReadonlyArray<TweetEntity> => {
 	)
 	addEntities(
 		result,
-		entities.symbols.map((symbol) => ({
+		(entities.symbols ?? []).map((symbol) => ({
 			indices: symbol.indices,
 			type: "symbol",
 			href: `https://x.com/search?q=%24${symbol.text}`,
@@ -247,7 +254,13 @@ const toTweetView = (tweet: RawTweet): TweetView => ({
 	},
 	entities: getEntities(tweet),
 	photos: tweet.photos ?? null,
-	video: tweet.video ? { poster: tweet.video.poster, src: tweet.video.variants[0]?.src ?? null } : null,
+	video: tweet.video
+		? {
+				poster: tweet.video.poster,
+				// The first variant is usually the HLS playlist, which `<video>` cannot play as mp4.
+				src: tweet.video.variants.find((variant) => variant.type === "video/mp4")?.src ?? null,
+			}
+		: null,
 	favoriteCount: tweet.favorite_count ?? null,
 	replyCount: tweet.reply_count ?? null,
 	retweetCount: tweet.retweet_count ?? null,

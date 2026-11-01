@@ -71,6 +71,32 @@ describe("tweetViewOf", () => {
 		expect([view.favoriteCount, view.replyCount, view.retweetCount]).toEqual([3, null, null])
 	})
 
+	test("decodes a media tweet whose empty entity lists X left out, playing its mp4", () => {
+		const mediaText = "Entering HQ https://t.co/D6"
+		const view = Option.getOrThrow(
+			tweetViewOf({
+				...raw,
+				text: mediaText,
+				display_text_range: [0, 11],
+				entities: {
+					media: [
+						{ indices: [12, 27], display_url: "pic.x.com/D6", expanded_url: "https://x.com/v" },
+					],
+				},
+				video: {
+					poster: "https://poster",
+					variants: [
+						{ type: "application/x-mpegURL", src: "https://video/pl.m3u8" },
+						{ type: "video/mp4", src: "https://video/480.mp4" },
+					],
+				},
+			}),
+		)
+		// The media link sits past the displayed range: the video shows instead of it.
+		expect(view.entities.map((entity) => [entity.type, entity.text])).toEqual([["text", "Entering HQ"]])
+		expect(view.video).toEqual({ poster: "https://poster", src: "https://video/480.mp4" })
+	})
+
 	test("a response without the tweet fields does not decode", () => {
 		expect(Option.isNone(tweetViewOf({ error: "nope" }))).toBe(true)
 	})

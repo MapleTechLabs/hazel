@@ -13,6 +13,8 @@ const makeAppLayer = (env: Env) => {
 
 	return HttpApiBuilder.layer(LinkPreviewApi).pipe(
 		Layer.provide(HandlerLayers),
+		// The web app fetches previews straight from the browser; public and cookieless, so any origin.
+		Layer.provide(HttpRouter.cors({ allowedMethods: ["GET"], maxAge: 7200 })),
 		HttpRouter.provideRequest(ServiceLayers),
 		Layer.provide(HttpServer.layerServices),
 		Layer.provide(Logger.layer([Logger.consolePretty()])),
