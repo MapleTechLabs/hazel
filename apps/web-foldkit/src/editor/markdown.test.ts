@@ -991,3 +991,27 @@ describe("markdown serializer (ProseMirror model)", () => {
 		})
 	})
 })
+
+describe("deserializeFromMarkdown with paragraphBreaks (the message viewer)", () => {
+	/** Each block as its type and text, an empty paragraph as `break`. */
+	const blocksOf = (markdown: string, paragraphBreaks = true) =>
+		deserializeFromMarkdown(markdown, { paragraphBreaks }).map((node) =>
+			node.type.name === "paragraph" && node.content.size === 0 ? "break" : node.textContent,
+		)
+
+	it("keeps one break for each run of blank lines between blocks", () => {
+		expect(blocksOf("a\n\nb")).toEqual(["a", "break", "b"])
+		expect(blocksOf("a\n\n\nb")).toEqual(["a", "break", "b"])
+		expect(blocksOf("a\n \t\nb")).toEqual(["a", "break", "b"])
+		expect(blocksOf("- a\n- b\n\nc")).toEqual(["a", "b", "break", "c"])
+	})
+
+	it("adds no break before the first block or after the last", () => {
+		expect(blocksOf("\n\na\n\n")).toEqual(["a"])
+		expect(blocksOf("a\nb")).toEqual(["a", "b"])
+	})
+
+	it("adds no break without the option (the composer's parse)", () => {
+		expect(blocksOf("a\n\nb", false)).toEqual(["a", "b"])
+	})
+})
