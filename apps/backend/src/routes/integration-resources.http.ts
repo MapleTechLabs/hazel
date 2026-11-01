@@ -397,7 +397,11 @@ const handleGetDiscordGuildChannels = Effect.fn("integration-resources.getDiscor
 	},
 )
 
-/** The org's Slack workspace (its connection's account) and the channels its bot token sees. */
+/**
+ * The org's Slack workspace (its connection's account) and its public channels. The bot is one
+ * per workspace, shared by every org installed there, so the private channels it was invited to
+ * may be another org's: they are not offered.
+ */
 const handleGetSlackChannels = Effect.fn("integration-resources.getSlackChannels")(function* (path: {
 	orgId: OrganizationId
 }) {
@@ -432,6 +436,8 @@ const handleGetSlackChannels = Effect.fn("integration-resources.getSlackChannels
 			id: access.connection.externalAccountId,
 			name: access.connection.externalAccountName,
 		},
-		channels: channels.map((channel) => ({ ...channel, id: channel.id as ExternalChannelId })),
+		channels: channels.flatMap((channel) =>
+			channel.isPrivate ? [] : [{ ...channel, id: channel.id as ExternalChannelId }],
+		),
 	})
 })

@@ -139,7 +139,10 @@ export const handleSlackDelivery = Effect.gen(function* () {
 	const invalid = (message: string) => new InvalidSlackWebhookSignature({ message })
 	const rawBody = yield* request.text.pipe(Effect.mapError(() => invalid("Invalid request body")))
 	const signingSecret = yield* Config.Redacted("SLACK_SIGNING_SECRET").pipe(
-		Effect.mapError(() => invalid("SLACK_SIGNING_SECRET is not configured")),
+		Effect.tapError(() => Effect.logError("SLACK_SIGNING_SECRET is not configured")),
+		Effect.mapError(
+			(cause) => new InternalServerError({ message: "Slack events are not configured", cause }),
+		),
 	)
 	const verified = Slack.verifySlackSignature({
 		signingSecret: Redacted.value(signingSecret),

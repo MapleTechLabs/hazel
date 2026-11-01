@@ -31,6 +31,20 @@ const isOwnOrBot = (envelope: EventCallback, message: Slack.SlackMessage) =>
 	message.botId !== null ||
 	(message.user !== null && message.user === botUserOf(envelope))
 
+/**
+ * The workspaces an event happened in: the delivery's team, and for a channel shared with another
+ * workspace (Slack Connect) the team it belongs to and the installs it reached.
+ */
+const workspacesOf = (envelope: EventCallback): ReadonlyArray<string> => [
+	...new Set(
+		[
+			envelope.team_id,
+			envelope.context_team_id,
+			...(envelope.authorizations ?? []).map((authorization) => authorization.team_id),
+		].filter((team): team is string => typeof team === "string" && team.length > 0),
+	),
+]
+
 /** A reply's thread: the parent's ts, unless the message is the parent itself. */
 const threadOf = (message: { readonly ts: string; readonly threadTs: string | null }) =>
 	message.threadTs !== null && message.threadTs !== message.ts
@@ -94,7 +108,7 @@ export const slackInbound = Effect.fn("SlackEvents.inbound")(function* (
 	lookupUser: SlackUserLookup,
 ) {
 	const dedupeKey = `slack:event:${envelope.event_id}`
-	const base = { provider: "slack" as const, dedupeKey }
+	const base = { provider: "slack" as const, dedupeKey, externalWorkspaceIds: workspacesOf(envelope) }
 	yield* Effect.annotateCurrentSpan({ "slack.event": event._tag, "slack.event_id": envelope.event_id })
 	switch (event._tag) {
 		case "MessagePosted": {
@@ -180,6 +194,9 @@ export const endsInstall = (event: Slack.SlackEvent) =>
 
 /** `users.info` answers, per isolate: an event names its author, and mentions repeat. */
 const USER_TTL_MS = 10 * 60 * 1000
+const MAX_CACHED_USERS = 5_000
+/** Slack wants an answer within 3s: a slow lookup leaves the author unnamed instead. */
+const USER_LOOKUP_TIMEOUT = "1 second"
 const users = new Map<
 	string,
 	{ readonly user: Option.Option<ChatSyncInboundAuthor>; readonly until: number }
@@ -215,9 +232,12 @@ export const dispatchSlackEvent = Effect.fn("SlackEvents.dispatch")(function* (e
 				displayName: user.displayName,
 				avatarUrl: user.avatarUrl,
 			})
+			if (users.size >= MAX_CACHED_USERS) users.clear()
 			users.set(key, { user: found, until: Date.now() + USER_TTL_MS })
 			return found
 		}).pipe(
+			Effect.timeoutOption(USER_LOOKUP_TIMEOUT),
+			Effect.map(Option.flatten),
 			Effect.catchTags({
 				SlackApiError: () => Effect.succeed(Option.none<ChatSyncInboundAuthor>()),
 				DatabaseError: () => Effect.succeed(Option.none<ChatSyncInboundAuthor>()),

@@ -11,6 +11,7 @@ import { IntegrationEncryption } from "../integration-encryption"
 
 /** How long a decrypted token is reused in this isolate before it is read again. */
 const TOKEN_TTL = Duration.minutes(5)
+const MAX_CACHED_TOKENS = 1_000
 
 export interface ChatSyncInstallationInput {
 	readonly provider: string
@@ -91,6 +92,7 @@ export class ChatSyncInstallations extends Context.Service<ChatSyncInstallations
 				keyVersion: row.value.encryptionKeyVersion,
 			})
 			const value = Redacted.make(plain)
+			if (cache.size >= MAX_CACHED_TOKENS) cache.clear()
 			cache.set(key, { token: value, until: now + Duration.toMillis(TOKEN_TTL) })
 			return Option.some(value)
 		})

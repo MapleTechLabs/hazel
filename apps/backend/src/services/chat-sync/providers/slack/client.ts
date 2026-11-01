@@ -97,18 +97,24 @@ export const makeSlackClient = Effect.gen(function* () {
 		externalWorkspaceId: string | undefined,
 		request: (token: string) => Effect.Effect<A, Slack.SlackApiError>,
 	) =>
-		tokenFor(externalWorkspaceId).pipe(
-			Effect.flatMap((token) =>
-				request(token).pipe(Effect.catchTag("SlackApiError", toChatSyncError(externalWorkspaceId))),
-			),
-		)
-
-	const emojiName = (emoji: string) => {
-		const name = Slack.unicodeToSlackEmoji(emoji)
-		return name === null
-			? Effect.fail(configError(`Slack has no name for ${emoji}`))
-			: Effect.succeed(name)
-	}
+		Effect.gen(function* () {
+			const token = yield* tokenFor(externalWorkspaceId)
+			const first = yield* request(token).pipe(Effect.result)
+			if (first._tag === "Success") return first.success
+			const error = first.failure
+			// A refused token may only be this isolate's stale copy (the workspace reinstalled): read
+			// the install again and retry once with a token that changed.
+			if (error.reason === "api" && SLACK_TOKEN_ERRORS.has(error.message) && externalWorkspaceId) {
+				yield* installations.invalidate("slack", externalWorkspaceId)
+				const fresh = yield* tokenFor(externalWorkspaceId)
+				if (fresh !== token) {
+					return yield* request(fresh).pipe(
+						Effect.catchTag("SlackApiError", toChatSyncError(externalWorkspaceId)),
+					)
+				}
+			}
+			return yield* toChatSyncError(externalWorkspaceId)(error)
+		})
 
 	const client: ChatSyncClient = {
 		prepareLink: Effect.fn("SlackChatSyncClient.prepareLink")(function* (link) {
@@ -158,14 +164,14 @@ export const makeSlackClient = Effect.gen(function* () {
 		}),
 		addReaction: Effect.fn("SlackChatSyncClient.addReaction")(function* (context, reaction) {
 			const { channel } = slackTarget(context.link.externalChannelId)
-			const name = yield* emojiName(reaction.emoji)
+			const name = slack.emojiToProvider(reaction.emoji)
 			yield* call(context.link.externalWorkspaceId, (token) =>
 				api.addReaction(token, { channel, ts: reaction.externalMessageId, name }),
 			)
 		}),
 		removeReaction: Effect.fn("SlackChatSyncClient.removeReaction")(function* (context, reaction) {
 			const { channel } = slackTarget(context.link.externalChannelId)
-			const name = yield* emojiName(reaction.emoji)
+			const name = slack.emojiToProvider(reaction.emoji)
 			yield* call(context.link.externalWorkspaceId, (token) =>
 				api.removeReaction(token, { channel, ts: reaction.externalMessageId, name }),
 			)

@@ -194,8 +194,12 @@ export const indexChatSync = (
 		indexRow(connection, options.link),
 	)
 
-/** The active link for an external channel, with its connection. */
-const findInboundLink = (provider: string, externalChannelId: ExternalChannelId) =>
+/** The active link for an external channel in one of the event's workspaces, with its connection. */
+const findInboundLink = (
+	provider: string,
+	externalChannelId: ExternalChannelId,
+	externalWorkspaceIds: ReadonlyArray<string> | undefined,
+) =>
 	Effect.flatMap(Database.Database, (db) =>
 		db.first(
 			SQLite.from(schema.chatSyncChannelLinksTable, "link")
@@ -218,6 +222,10 @@ const findInboundLink = (provider: string, externalChannelId: ExternalChannelId)
 					$.deletedAt.isNull(),
 					$.connection.provider.eq(provider),
 					$.connection.deletedAt.isNull(),
+					...(externalWorkspaceIds === undefined
+						? []
+						: // An event naming no workspace ("" matches none) reaches no link.
+							[$.connection.externalWorkspaceId.in_(...externalWorkspaceIds, "")]),
 				])
 				.limit(1),
 		),
@@ -356,7 +364,7 @@ const replyThreadLink = Effect.fn("OrgObject.chatSyncReplyThread")(function* (
 		event.inExternalThreadId,
 	) as ExternalChannelId
 	yield* Effect.annotateCurrentSpan({ "chat_sync.external_thread_id": threadChannelId })
-	const existing = yield* findInboundLink(payload.provider, threadChannelId)
+	const existing = yield* findInboundLink(payload.provider, threadChannelId, payload.externalWorkspaceIds)
 	if (Option.isSome(existing) || event._tag !== "MessageCreate") return existing
 	if (channel.status !== "active" || !channel.isActive || channel.direction === "hazel_to_external") {
 		return Option.some(channel)
@@ -367,7 +375,7 @@ const replyThreadLink = Effect.fn("OrgObject.chatSyncReplyThread")(function* (
 		name: "Thread",
 		externalParentMessageId: event.inExternalThreadId as string as ExternalMessageId,
 	})
-	return yield* findInboundLink(payload.provider, threadChannelId)
+	return yield* findInboundLink(payload.provider, threadChannelId, payload.externalWorkspaceIds)
 })
 
 /**
@@ -431,7 +439,7 @@ const ingest = Effect.fn("OrgObject.chatSyncIngest")(function* (payload: OrgChat
 	const outcome = (value: string) => Effect.annotateCurrentSpan({ "chat_sync.outcome": value })
 	const definition = definitionOf(provider)
 	if (Option.isNone(definition)) return yield* outcome("unknown_provider")
-	const found = yield* findInboundLink(provider, payload.externalChannelId)
+	const found = yield* findInboundLink(provider, payload.externalChannelId, payload.externalWorkspaceIds)
 	if (Option.isNone(found)) return yield* outcome("unlinked")
 	const resolved = yield* replyThreadLink(definition.value, payload, found.value)
 	if (Option.isNone(resolved)) return yield* outcome("unlinked_thread")

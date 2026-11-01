@@ -55,6 +55,7 @@ describe("Slack events → chat-sync inbound", () => {
 			expect(Option.getOrThrow(result)).toEqual({
 				provider: "slack",
 				dedupeKey: "slack:event:Ev0001",
+				externalWorkspaceIds: ["T0HAZEL01"],
 				externalChannelId: "C0GENERAL1",
 				author: { externalUserId: "U0DANA0001", displayName: "Name U0DANA0001", avatarUrl: null },
 				event: {

@@ -29,6 +29,8 @@ export interface DiscordReadyEvent {
 }
 
 export interface DiscordMessageCreateEvent {
+	/** The guild (workspace) it happened in; absent in DMs. */
+	guild_id?: string
 	id?: string
 	channel_id?: string
 	content?: string
@@ -50,6 +52,8 @@ interface DiscordMessageAttachment {
 }
 
 export interface DiscordMessageUpdateEvent {
+	/** The guild (workspace) it happened in; absent in DMs. */
+	guild_id?: string
 	id?: string
 	channel_id?: string
 	content?: string
@@ -60,6 +64,8 @@ export interface DiscordMessageUpdateEvent {
 }
 
 export interface DiscordMessageDeleteEvent {
+	/** The guild (workspace) it happened in; absent in DMs. */
+	guild_id?: string
 	id?: string
 	channel_id?: string
 	webhook_id?: string
@@ -71,6 +77,8 @@ interface DiscordReactionEmoji {
 }
 
 export interface DiscordMessageReactionAddEvent {
+	/** The guild (workspace) it happened in; absent in DMs. */
+	guild_id?: string
 	channel_id?: string
 	message_id?: string
 	user_id?: string
@@ -82,6 +90,8 @@ export interface DiscordMessageReactionAddEvent {
 }
 
 export interface DiscordMessageReactionRemoveEvent {
+	/** The guild (workspace) it happened in; absent in DMs. */
+	guild_id?: string
 	channel_id?: string
 	message_id?: string
 	user_id?: string
@@ -93,6 +103,8 @@ export interface DiscordMessageReactionRemoveEvent {
 }
 
 export interface DiscordThreadCreateEvent {
+	/** The guild (workspace) it happened in; absent in DMs. */
+	guild_id?: string
 	id?: string
 	parent_id?: string
 	name?: string
@@ -235,6 +247,10 @@ const decodeOptionalExternalIdOrWarn = <A>(params: {
 		return decoded
 	})
 
+/** The event's guild, the workspace its channel link must be under. */
+const guildOf = (event: { readonly guild_id?: string }): ReadonlyArray<string> =>
+	typeof event.guild_id === "string" && event.guild_id.length > 0 ? [event.guild_id] : []
+
 export const createDiscordGatewayDispatchHandlers = <E, R>(deps: {
 	readonly ingest: (inbound: ChatSyncInbound) => Effect.Effect<void, E, R>
 	readonly isCurrentBotAuthor: (authorId?: string) => Effect.Effect<boolean>
@@ -279,6 +295,7 @@ export const createDiscordGatewayDispatchHandlers = <E, R>(deps: {
 		)
 		yield* deps.ingest({
 			provider: "discord",
+			externalWorkspaceIds: guildOf(event),
 			externalChannelId: channelId.value,
 			dedupeKey: `discord:gateway:create:${messageId.value}`,
 			author:
@@ -327,6 +344,7 @@ export const createDiscordGatewayDispatchHandlers = <E, R>(deps: {
 			createHash("sha256").update(`${messageId.value}:${event.content}`).digest("hex").slice(0, 16)
 		yield* deps.ingest({
 			provider: "discord",
+			externalWorkspaceIds: guildOf(event),
 			externalChannelId: channelId.value,
 			dedupeKey: `discord:gateway:update:${messageId.value}:${version}`,
 			author: null,
@@ -361,6 +379,7 @@ export const createDiscordGatewayDispatchHandlers = <E, R>(deps: {
 		)
 		yield* deps.ingest({
 			provider: "discord",
+			externalWorkspaceIds: guildOf(event),
 			externalChannelId: channelId.value,
 			dedupeKey: `discord:gateway:delete:${messageId.value}`,
 			author: null,
@@ -400,6 +419,7 @@ export const createDiscordGatewayDispatchHandlers = <E, R>(deps: {
 			const add = eventType === "MESSAGE_REACTION_ADD"
 			yield* deps.ingest({
 				provider: "discord",
+				externalWorkspaceIds: guildOf(event),
 				externalChannelId: channelId.value,
 				dedupeKey: `discord:gateway:reaction:${add ? "add" : "remove"}:${channelId.value}:${messageId.value}:${userId.value}:${emoji}`,
 				author: {
@@ -434,6 +454,7 @@ export const createDiscordGatewayDispatchHandlers = <E, R>(deps: {
 		if (Option.isNone(threadId)) return
 		yield* deps.ingest({
 			provider: "discord",
+			externalWorkspaceIds: guildOf(event),
 			externalChannelId: parentId.value,
 			dedupeKey: `discord:gateway:thread:create:${threadId.value}`,
 			author: null,
