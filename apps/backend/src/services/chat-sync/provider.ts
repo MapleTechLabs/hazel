@@ -13,6 +13,7 @@
 import { Database } from "@hazel/db"
 import type { ExternalMessageId, ExternalThreadId, ExternalWebhookId } from "@hazel/schema"
 import { type Effect, Schema } from "effect"
+import type { SqlError } from "effect/sql/SqlError"
 import type { ChatSyncOutboundAttachment } from "./chat-sync-attachment-content"
 import type { ChatSyncChannelTarget } from "./chat-sync-effects"
 
@@ -80,10 +81,15 @@ export interface ChatSyncAuthor {
 	readonly avatarUrl: string | null
 }
 
+/** Saving link settings failed (`DatabaseError` is retried, the rest settle the delivery). */
+export type ChatSyncSaveSettingsError = Database.DatabaseError | SqlError | Schema.SchemaError
+
 /** The link a client call is for, and how to persist link settings the client changed. */
 export interface ChatSyncLinkContext {
 	readonly link: ChatSyncChannelTarget
-	readonly saveSettings: (settings: Record<string, unknown>) => Effect.Effect<void, Database.DatabaseError>
+	readonly saveSettings: (
+		settings: Record<string, unknown>,
+	) => Effect.Effect<void, ChatSyncSaveSettingsError>
 }
 
 export interface ChatSyncClient {
@@ -95,15 +101,19 @@ export interface ChatSyncClient {
 			readonly replyToExternalMessageId: ExternalMessageId | undefined
 			readonly author: ChatSyncAuthor
 		},
-	) => Effect.Effect<ExternalMessageId, ChatSyncClientError | Database.DatabaseError>
+	) => Effect.Effect<ExternalMessageId, ChatSyncClientError | ChatSyncSaveSettingsError>
 	readonly updateMessage: (
 		context: ChatSyncLinkContext,
-		message: { readonly externalMessageId: ExternalMessageId; readonly content: string },
-	) => Effect.Effect<void, ChatSyncClientError | Database.DatabaseError>
+		message: {
+			readonly externalMessageId: ExternalMessageId
+			readonly content: string
+			readonly attachments: ReadonlyArray<ChatSyncOutboundAttachment>
+		},
+	) => Effect.Effect<void, ChatSyncClientError | ChatSyncSaveSettingsError>
 	readonly deleteMessage: (
 		context: ChatSyncLinkContext,
 		message: { readonly externalMessageId: ExternalMessageId },
-	) => Effect.Effect<void, ChatSyncClientError | Database.DatabaseError>
+	) => Effect.Effect<void, ChatSyncClientError | ChatSyncSaveSettingsError>
 	readonly addReaction: (
 		context: ChatSyncLinkContext,
 		reaction: { readonly externalMessageId: ExternalMessageId; readonly emoji: string },

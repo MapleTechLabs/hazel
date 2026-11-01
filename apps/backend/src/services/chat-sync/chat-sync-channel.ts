@@ -290,20 +290,34 @@ const ingest = Effect.fn("ChannelObject.chatSyncIngest")(function* (payload: Cha
 	yield* Effect.annotateCurrentSpan({ "chat_sync.outcome": "applied", "message.id": hazelMessageId })
 })
 
-/** Point the synced message at its thread, as an inbound write (nothing goes back out). */
+/**
+ * Point the synced message at its thread, as an inbound write (nothing goes back out). The
+ * message's first thread wins (`setThreadChannel`); the message link follows only if this one did.
+ */
 const attachThread = Effect.fn("ChannelObject.chatSyncAttachThread")(function* (
 	payload: AttachThreadPayload,
 ) {
+	const outcome = (value: string) => Effect.annotateCurrentSpan({ "chat_sync.outcome": value })
+	yield* Effect.annotateCurrentSpan({ "chat_sync.link_id": payload.channelLinkId })
 	const linked = yield* findMessageLink({
 		channelLinkId: payload.channelLinkId,
 		externalMessageId: payload.externalMessageId,
 	})
-	yield* Effect.annotateCurrentSpan({
-		"chat_sync.link_id": payload.channelLinkId,
-		"chat_sync.outcome": Option.isSome(linked) ? "attached" : "missing_link",
-	})
-	if (Option.isNone(linked)) return
+	if (Option.isNone(linked)) return yield* outcome("missing_link")
+	yield* setThreadChannel({
+		messageId: linked.value.hazelMessageId,
+		threadChannelId: payload.threadChannelId,
+	}).pipe(Effect.provideService(InboundChatSyncWrite, true))
 	const db = yield* Database.Database
+	const message = yield* db.first(
+		SQLite.from(schema.messagesTable)
+			.select("threadChannelId")
+			.where(($) => [$.id.eq(linked.value.hazelMessageId)])
+			.limit(1),
+	)
+	if (Option.isNone(message) || message.value.threadChannelId !== payload.threadChannelId) {
+		return yield* outcome("message_has_other_thread")
+	}
 	yield* db.run(
 		SQLite.update(schema.chatSyncMessageLinksTable)
 			.set({
@@ -313,10 +327,7 @@ const attachThread = Effect.fn("ChannelObject.chatSyncAttachThread")(function* (
 			})
 			.where(($) => [$.id.eq(linked.value.id)]),
 	)
-	yield* setThreadChannel({
-		messageId: linked.value.hazelMessageId,
-		threadChannelId: payload.threadChannelId,
-	}).pipe(Effect.provideService(InboundChatSyncWrite, true))
+	yield* outcome("attached")
 })
 
 /** Move the channel's provider-synced messages from one author to another. */

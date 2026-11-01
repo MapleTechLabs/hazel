@@ -166,8 +166,10 @@ export const makeDiscordClient = Effect.gen(function* () {
 		bot: Effect.Effect<A, E2>,
 	) =>
 		Effect.gen(function* () {
+			const identity = (value: "webhook" | "bot" | "webhook_failed_bot") =>
+				Effect.annotateCurrentSpan({ "chat_sync.identity": value })
 			const target = yield* webhookOf(context)
-			if (Option.isNone(target)) return yield* bot
+			if (Option.isNone(target)) return yield* identity("bot").pipe(Effect.andThen(bot))
 			const sent = yield* webhook(target.value).pipe(
 				Effect.map(Option.some),
 				Effect.catchTag("ChatSyncProviderApiError", (error) =>
@@ -177,143 +179,143 @@ export const makeDiscordClient = Effect.gen(function* () {
 					).pipe(Effect.as(Option.none<A>())),
 				),
 			)
-			return Option.isSome(sent) ? sent.value : yield* bot
+			if (Option.isSome(sent)) return yield* identity("webhook").pipe(Effect.as(sent.value))
+			return yield* identity("webhook_failed_bot").pipe(Effect.andThen(bot))
 		})
 
 	const client: ChatSyncClient = {
-		postMessage: (context, message) =>
-			Effect.gen(function* () {
-				const channelId = context.link.externalChannelId
-				yield* requireIds({ channelId, replyToMessageId: message.replyToExternalMessageId })
-				const content = formatMessageContentWithAttachments({
-					content: message.content,
-					attachments: message.attachments,
-					maxLength: discord.maxMessageLength,
-				})
-				yield* requireContent(content)
-				const id = yield* withWebhookFallback(
-					context,
-					(webhook) =>
-						api
-							.executeWebhookMessage({
-								...webhook,
-								content,
-								replyToExternalMessageId: message.replyToExternalMessageId,
-								username: message.author.name || "Discord User",
-								...(message.author.avatarUrl ? { avatarUrl: message.author.avatarUrl } : {}),
-							})
-							.pipe(Effect.mapError(apiError)),
-					viaBot((token) =>
-						api.createMessage({
-							channelId,
+		postMessage: Effect.fn("DiscordChatSyncClient.postMessage")(function* (context, message) {
+			const channelId = context.link.externalChannelId
+			yield* requireIds({ channelId, replyToMessageId: message.replyToExternalMessageId })
+			const content = formatMessageContentWithAttachments({
+				content: message.content,
+				attachments: message.attachments,
+				maxLength: discord.maxMessageLength,
+			})
+			yield* requireContent(content)
+			const id = yield* withWebhookFallback(
+				context,
+				(webhook) =>
+					api
+						.executeWebhookMessage({
+							...webhook,
 							content,
-							replyToMessageId: message.replyToExternalMessageId,
-							botToken: token,
-						}),
-					),
-				)
-				return id as ExternalMessageId
-			}),
-		updateMessage: (context, message) =>
-			Effect.gen(function* () {
-				const channelId = context.link.externalChannelId
-				yield* requireIds({ channelId, messageId: message.externalMessageId })
-				yield* requireContent(message.content)
-				yield* withWebhookFallback(
-					context,
-					(webhook) =>
-						api
-							.updateWebhookMessage({
-								...webhook,
-								webhookMessageId: message.externalMessageId,
-								content: message.content,
-							})
-							.pipe(Effect.asVoid, Effect.mapError(apiError)),
-					viaBot((token) =>
-						api.updateMessage({
-							channelId,
-							messageId: message.externalMessageId,
+							replyToExternalMessageId: message.replyToExternalMessageId,
+							username: message.author.name || "Discord User",
+							...(message.author.avatarUrl ? { avatarUrl: message.author.avatarUrl } : {}),
+						})
+						.pipe(Effect.mapError(apiError)),
+				viaBot((token) =>
+					api.createMessage({
+						channelId,
+						content,
+						replyToMessageId: message.replyToExternalMessageId,
+						botToken: token,
+					}),
+				),
+			)
+			return id as ExternalMessageId
+		}),
+		updateMessage: Effect.fn("DiscordChatSyncClient.updateMessage")(function* (context, message) {
+			const channelId = context.link.externalChannelId
+			yield* requireIds({ channelId, messageId: message.externalMessageId })
+			const content = formatMessageContentWithAttachments({
+				content: message.content,
+				attachments: message.attachments,
+				maxLength: discord.maxMessageLength,
+			})
+			yield* requireContent(content)
+			yield* withWebhookFallback(
+				context,
+				(webhook) =>
+					api
+						.updateWebhookMessage({
+							...webhook,
+							webhookMessageId: message.externalMessageId,
 							content: message.content,
-							botToken: token,
-						}),
-					).pipe(Effect.asVoid),
-				)
-			}),
-		deleteMessage: (context, message) =>
-			Effect.gen(function* () {
-				const channelId = context.link.externalChannelId
-				yield* requireIds({ channelId, messageId: message.externalMessageId })
-				yield* withWebhookFallback(
-					context,
-					(webhook) =>
-						api
-							.deleteWebhookMessage({ ...webhook, webhookMessageId: message.externalMessageId })
-							.pipe(Effect.asVoid, Effect.mapError(apiError)),
-					viaBot((token) =>
-						api.deleteMessage({
-							channelId,
-							messageId: message.externalMessageId,
-							botToken: token,
-						}),
-					).pipe(Effect.asVoid),
-				)
-			}),
-		addReaction: (context, reaction) =>
-			Effect.gen(function* () {
-				const channelId = context.link.externalChannelId
-				yield* requireIds({ channelId, messageId: reaction.externalMessageId })
-				if (!reaction.emoji.trim()) return yield* configError("Reaction emoji cannot be empty")
-				yield* viaBot((token) =>
-					api.addReaction({
+						})
+						.pipe(Effect.asVoid, Effect.mapError(apiError)),
+				viaBot((token) =>
+					api.updateMessage({
 						channelId,
-						messageId: reaction.externalMessageId,
-						emoji: discord.emojiToProvider(reaction.emoji),
+						messageId: message.externalMessageId,
+						content: message.content,
 						botToken: token,
 					}),
-				)
-			}),
-		removeReaction: (context, reaction) =>
-			Effect.gen(function* () {
-				const channelId = context.link.externalChannelId
-				yield* requireIds({ channelId, messageId: reaction.externalMessageId })
-				if (!reaction.emoji.trim()) return yield* configError("Reaction emoji cannot be empty")
-				yield* viaBot((token) =>
-					api.removeReaction({
+				).pipe(Effect.asVoid),
+			)
+		}),
+		deleteMessage: Effect.fn("DiscordChatSyncClient.deleteMessage")(function* (context, message) {
+			const channelId = context.link.externalChannelId
+			yield* requireIds({ channelId, messageId: message.externalMessageId })
+			yield* withWebhookFallback(
+				context,
+				(webhook) =>
+					api
+						.deleteWebhookMessage({ ...webhook, webhookMessageId: message.externalMessageId })
+						.pipe(Effect.asVoid, Effect.mapError(apiError)),
+				viaBot((token) =>
+					api.deleteMessage({
 						channelId,
-						messageId: reaction.externalMessageId,
-						emoji: discord.emojiToProvider(reaction.emoji),
+						messageId: message.externalMessageId,
 						botToken: token,
 					}),
+				).pipe(Effect.asVoid),
+			)
+		}),
+		addReaction: Effect.fn("DiscordChatSyncClient.addReaction")(function* (context, reaction) {
+			const channelId = context.link.externalChannelId
+			yield* requireIds({ channelId, messageId: reaction.externalMessageId })
+			if (!reaction.emoji.trim()) return yield* configError("Reaction emoji cannot be empty")
+			yield* viaBot((token) =>
+				api.addReaction({
+					channelId,
+					messageId: reaction.externalMessageId,
+					emoji: discord.emojiToProvider(reaction.emoji),
+					botToken: token,
+				}),
+			)
+		}),
+		removeReaction: Effect.fn("DiscordChatSyncClient.removeReaction")(function* (context, reaction) {
+			const channelId = context.link.externalChannelId
+			yield* requireIds({ channelId, messageId: reaction.externalMessageId })
+			if (!reaction.emoji.trim()) return yield* configError("Reaction emoji cannot be empty")
+			yield* viaBot((token) =>
+				api.removeReaction({
+					channelId,
+					messageId: reaction.externalMessageId,
+					emoji: discord.emojiToProvider(reaction.emoji),
+					botToken: token,
+				}),
+			)
+		}),
+		createThread: Effect.fn("DiscordChatSyncClient.createThread")(function* (context, thread) {
+			const channelId = context.link.externalChannelId
+			yield* requireIds({ channelId, messageId: thread.externalMessageId })
+			const name = thread.name.trim()
+			if (!name) return yield* configError("Thread name cannot be empty")
+			if (name.length > discord.maxThreadNameLength)
+				return yield* configError("Thread name is too long")
+			const token = yield* botToken
+			const id = yield* api
+				.createThread({ channelId, messageId: thread.externalMessageId, name, botToken: token })
+				.pipe(
+					Effect.retry({
+						while: isRetryableAnswer,
+						schedule: RETRY_SCHEDULE,
+					}),
+					// Already made (an earlier attempt landed but its answer or our write was lost):
+					// a message's thread has the message's id, so take that one.
+					Effect.catchIf(
+						(error) =>
+							error._tag === "DiscordApiError" &&
+							error.code === Discord.DISCORD_THREAD_ALREADY_CREATED,
+						() => Effect.succeed(thread.externalMessageId as string),
+					),
+					Effect.mapError(apiError),
 				)
-			}),
-		createThread: (context, thread) =>
-			Effect.gen(function* () {
-				const channelId = context.link.externalChannelId
-				yield* requireIds({ channelId, messageId: thread.externalMessageId })
-				const name = thread.name.trim()
-				if (!name) return yield* configError("Thread name cannot be empty")
-				if (name.length > discord.maxThreadNameLength)
-					return yield* configError("Thread name is too long")
-				const token = yield* botToken
-				const id = yield* api
-					.createThread({ channelId, messageId: thread.externalMessageId, name, botToken: token })
-					.pipe(
-						Effect.retry({
-							while: isRetryableAnswer,
-							schedule: RETRY_SCHEDULE,
-						}),
-						// Already made (an earlier attempt landed but its answer or our write was lost):
-						// a message's thread has the message's id, so take that one.
-						Effect.catchIf(
-							(error) =>
-								error._tag === "DiscordApiError" &&
-								error.code === Discord.DISCORD_THREAD_ALREADY_CREATED,
-							() => Effect.succeed(thread.externalMessageId as string),
-						),
-						Effect.mapError(apiError),
-					)
-				return id as ExternalThreadId
-			}),
+			return id as ExternalThreadId
+		}),
 	}
 	return client
 })

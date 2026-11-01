@@ -32,7 +32,6 @@ const Provider = IntegrationConnection.IntegrationProvider
 type Provider = IntegrationConnection.IntegrationProvider
 type Connection = IntegrationConnection.Type
 
-
 /** The token exists but could not be produced (refresh, decryption or storage failed). */
 export class IntegrationTokenUnavailableError extends Schema.TaggedError<IntegrationTokenUnavailableError>()(
 	"IntegrationTokenUnavailableError",

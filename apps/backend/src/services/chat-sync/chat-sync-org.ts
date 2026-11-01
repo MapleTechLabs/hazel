@@ -86,7 +86,7 @@ const channelTargets = (channelId: ChannelId) =>
 		),
 	)
 
-/** The org's users with a linked provider account (Discord mentions). */
+/** The org's users with a linked provider account (outbound mentions). */
 const linkedAccounts = (providers: ReadonlyArray<string>) =>
 	Effect.gen(function* () {
 		if (providers.length === 0) return [] as Array<ChatSyncLinkedAccount>
@@ -337,14 +337,17 @@ const ingestThreadCreate = Effect.fn("OrgObject.chatSyncThreadCreate")(function*
 })
 
 /**
- * Provider mentions in inbound text → Hazel's `@[userId:…]`: the Hazel user who linked that
+ * Inbound text as Hazel content. Hazel's own mention syntax typed on the provider side is
+ * defused first (a provider user must not mention or broadcast to Hazel users by writing
+ * `@[userId:…]`); then provider mentions become `@[userId:…]`: the Hazel user who linked that
  * account, else the provider user's shadow when this org knows them, else `@Name`.
  */
-const toHazelMentions = Effect.fn("OrgObject.chatSyncMentions")(function* (
+const toHazelContent = Effect.fn("OrgObject.chatSyncContent")(function* (
 	definition: ChatSyncProviderDefinition,
-	content: string,
+	raw: string,
 	mentions: ReadonlyArray<ChatSyncMention>,
 ) {
+	const content = raw.replaceAll("@[", "@\u200B[")
 	const pattern = new RegExp(definition.mentionPattern.source, "g")
 	const externalIds = [...new Set([...content.matchAll(pattern)].map((match) => match[1]!))]
 	if (externalIds.length === 0) return content
@@ -370,7 +373,12 @@ const toHazelMentions = Effect.fn("OrgObject.chatSyncMentions")(function* (
 	for (const row of shadows) users.set(row.externalId.slice(shadowIdOf("").length), row.id)
 	for (const row of linked)
 		if (row.userId !== null && row.externalAccountId) users.set(row.externalAccountId, row.userId)
-	const names = new Map(mentions.map((mention) => [mention.externalUserId as string, mention.displayName]))
+	const names = new Map(
+		mentions.map((mention) => [
+			mention.externalUserId as string,
+			mention.displayName.replace(/[[\]]/g, ""),
+		]),
+	)
 	return content.replace(pattern, (match, externalId: string) => {
 		const userId = users.get(externalId)
 		if (userId !== undefined) return `@[userId:${userId}]`
@@ -410,7 +418,7 @@ const ingest = Effect.fn("OrgObject.chatSyncIngest")(function* (payload: OrgChat
 			forwarded = {
 				_tag: "MessageCreate",
 				externalMessageId: event.externalMessageId,
-				content: yield* toHazelMentions(definition.value, event.content, event.mentions ?? []),
+				content: yield* toHazelContent(definition.value, event.content, event.mentions ?? []),
 				authorId,
 				externalReplyToMessageId: event.externalReplyToMessageId,
 				attachments: event.attachments,
@@ -420,7 +428,7 @@ const ingest = Effect.fn("OrgObject.chatSyncIngest")(function* (payload: OrgChat
 			forwarded = {
 				_tag: "MessageUpdate",
 				externalMessageId: event.externalMessageId,
-				content: yield* toHazelMentions(definition.value, event.content, event.mentions ?? []),
+				content: yield* toHazelContent(definition.value, event.content, event.mentions ?? []),
 			}
 			break
 		case "MessageDelete":
@@ -433,7 +441,7 @@ const ingest = Effect.fn("OrgObject.chatSyncIngest")(function* (payload: OrgChat
 				_tag: event._tag,
 				externalMessageId: event.externalMessageId,
 				userId: authorId,
-				emoji: event.emoji,
+				emoji: definition.value.emojiFromProvider(event.emoji),
 			}
 			break
 	}

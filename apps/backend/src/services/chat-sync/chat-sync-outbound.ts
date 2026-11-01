@@ -12,7 +12,7 @@
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import type { ChannelId, ExternalMessageId, MessageId, MessageReactionId, UserId } from "@hazel/schema"
-import { Effect, Option, Schema } from "effect"
+import { Effect, Option } from "effect"
 import { SqlClient } from "effect/sql/SqlClient"
 import type { MessageEventHook } from "../../worker/objects/channel/message-events"
 import { enqueueEffect, type EffectReceivers } from "../../worker/objects/effects/registry"
@@ -40,10 +40,8 @@ import {
 	ChatSyncProviderConfigurationError,
 	type ChatSyncLinkContext,
 	type ChatSyncProviderDefinition,
-	ChatSyncProviderNotSupportedError,
 	isRetryableStatus,
 } from "./provider"
-import { definitionOf } from "./providers"
 
 /**
  * Mirror a Hazel write on every outbound link of this channel. Call inside the write's
@@ -217,11 +215,7 @@ const persistLinkSettings = (link: ChatSyncChannelTarget, settings: Record<strin
 			channelLinkId: link.channelLinkId,
 			settings,
 		})
-	}).pipe(
-		Effect.catchTag("SqlError", (error) => Effect.fail(Database.toDatabaseError(error))),
-		// Our own payload failing its schema is a bug, not a retry.
-		Effect.catchIf(Schema.isSchemaError, Effect.die),
-	)
+	})
 
 const findMessage = (id: string) =>
 	Effect.flatMap(Database.Database, (db) =>
@@ -254,12 +248,34 @@ const deliver = (
 	Effect.gen(function* () {
 		const db = yield* Database.Database
 		const providers = yield* ChatSyncProviders
-		const definition = yield* Option.match(definitionOf(link.provider), {
-			onNone: () => Effect.fail(new ChatSyncProviderNotSupportedError({ provider: link.provider })),
-			onSome: Effect.succeed,
-		})
-		const client = yield* providers.client(link.provider)
+		const { definition, client } = yield* providers.get(link.provider)
 		const channelLinkId = link.channelLinkId
+		/** The message's uploaded files, as public links (`S3_PUBLIC_URL`). */
+		const attachmentsOf = (messageId: MessageId) =>
+			Effect.gen(function* () {
+				const rows = yield* db.run(
+					SQLite.from(schema.attachmentsTable)
+						.select("id", "fileName", "fileSize")
+						.where(($) => [
+							$.messageId.eq(messageId),
+							$.status.eq("complete"),
+							$.deletedAt.isNull(),
+						])
+						.orderBy(($) => [
+							[$.uploadedAt, "asc"],
+							[$.id, "asc"],
+						]),
+				)
+				if (rows.length === 0) return []
+				if (Option.isNone(providers.attachmentPublicUrlBase)) {
+					return yield* new ChatSyncProviderConfigurationError({
+						provider: link.provider,
+						message: "S3_PUBLIC_URL is required for syncing message attachments",
+					})
+				}
+				const base = providers.attachmentPublicUrlBase.value.replace(/\/+$/, "")
+				return rows.map((row) => ({ ...row, publicUrl: `${base}/${row.id}` }))
+			})
 		const sql = yield* SqlClient
 		const context: ChatSyncLinkContext = {
 			link,
@@ -286,30 +302,10 @@ const deliver = (
 				const replyToExternalMessageId = Option.getOrUndefined(
 					Option.map(reply, (row) => row.externalMessageId as ExternalMessageId),
 				)
-				const attachmentRows = yield* db.run(
-					SQLite.from(schema.attachmentsTable)
-						.select("id", "fileName", "fileSize")
-						.where(($) => [
-							$.messageId.eq(event.messageId),
-							$.status.eq("complete"),
-							$.deletedAt.isNull(),
-						])
-						.orderBy(($) => [
-							[$.uploadedAt, "asc"],
-							[$.id, "asc"],
-						]),
-				)
-				if (attachmentRows.length > 0 && Option.isNone(providers.attachmentPublicUrlBase)) {
-					return yield* new ChatSyncProviderConfigurationError({
-						provider: link.provider,
-						message: "S3_PUBLIC_URL is required for syncing message attachments",
-					})
-				}
-				const base = Option.getOrElse(providers.attachmentPublicUrlBase, () => "").replace(/\/+$/, "")
 				const author = (yield* displayNames([message.value.authorId])).get(message.value.authorId)
 				const externalMessageId = yield* client.postMessage(context, {
 					content: yield* outboundContent(definition, message.value.content, accounts),
-					attachments: attachmentRows.map((row) => ({ ...row, publicUrl: `${base}/${row.id}` })),
+					attachments: yield* attachmentsOf(event.messageId),
 					replyToExternalMessageId,
 					author: { name: author?.name ?? "", avatarUrl: author?.avatarUrl ?? null },
 				})
@@ -337,6 +333,7 @@ const deliver = (
 				yield* client.updateMessage(context, {
 					externalMessageId,
 					content: yield* outboundContent(definition, message.value.content, accounts),
+					attachments: yield* attachmentsOf(event.messageId),
 				})
 				yield* touchMessageLink(linked.value.id, {})
 				return synced

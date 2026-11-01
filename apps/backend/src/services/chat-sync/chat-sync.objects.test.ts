@@ -608,7 +608,8 @@ describe("chat sync on the objects", () => {
 				).pipe(Effect.orDie)
 				// Dana writes once, so the org knows her shadow.
 				yield* world.inbound(discordCreate("444444444444444450", "hello", "333333333333333333"))
-				const dana = rows<{ authorId: string }>(world.channel, `SELECT authorId FROM messages`)[0]!.authorId
+				const dana = rows<{ authorId: string }>(world.channel, `SELECT authorId FROM messages`)[0]!
+					.authorId
 
 				yield* world.inbound({
 					...discordCreate(
@@ -624,7 +625,9 @@ describe("chat sync on the objects", () => {
 							"<@666666666666666666> and <@!333333333333333333> meet <@777777777777777777> or <@888888888888888888>",
 						externalReplyToMessageId: null,
 						attachments: [],
-						mentions: [{ externalUserId: "777777777777777777" as ExternalUserId, displayName: "Sam" }],
+						mentions: [
+							{ externalUserId: "777777777777777777" as ExternalUserId, displayName: "Sam" },
+						],
 					},
 				})
 				const content = rows<{ content: string }>(
@@ -633,6 +636,37 @@ describe("chat sync on the objects", () => {
 				)[0]!.content
 				expect(content).toBe(
 					`@[userId:${world.owner}] and @[userId:${dana}] meet @Sam or <@888888888888888888>`,
+				)
+			}),
+		))
+
+	it("a provider user cannot mention or broadcast to Hazel users with Hazel's own syntax", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const spoof = `hey @[directive:channel] and @[userId:${world.owner}] <@777777777777777777>`
+				yield* world.inbound({
+					...discordCreate("444444444444444470", spoof),
+					event: {
+						_tag: "MessageCreate",
+						externalMessageId: "444444444444444470" as ExternalMessageId,
+						externalWebhookId: null,
+						content: spoof,
+						externalReplyToMessageId: null,
+						attachments: [],
+						mentions: [
+							{
+								externalUserId: "777777777777777777" as ExternalUserId,
+								displayName: `[userId:${world.owner}]`,
+							},
+						],
+					},
+				})
+				const content = rows<{ content: string }>(world.channel, `SELECT content FROM messages`)[0]!
+					.content
+				expect(content).not.toMatch(/@\[(userId|directive):/)
+				expect(content).toBe(
+					`hey @\u200B[directive:channel] and @\u200B[userId:${world.owner}] @userId:${world.owner}`,
 				)
 			}),
 		))
@@ -663,7 +697,10 @@ describe("chat sync on the objects", () => {
 					externalMessageId,
 				)[0]!.hazelChannelId
 				expect(
-					rows<{ threadChannelId: string | null }>(world.channel, `SELECT threadChannelId FROM messages`),
+					rows<{ threadChannelId: string | null }>(
+						world.channel,
+						`SELECT threadChannelId FROM messages`,
+					),
 				).toEqual([{ threadChannelId: threadId }])
 				expect(
 					rows<{ externalThreadId: string | null }>(

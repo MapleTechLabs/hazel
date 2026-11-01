@@ -441,8 +441,11 @@ export const createDiscordGatewayDispatchHandlers = <E, R>(deps: {
 				_tag: "ThreadCreate",
 				externalThreadId: threadId.value,
 				name: event.name ?? "Thread",
-				// A thread started on a message takes the message's id.
-				externalParentMessageId: threadId.value as string as ExternalMessageId,
+				// A public thread may be started on a message, and then takes the message's id (the
+				// parent channel ignores one with no synced message). Private threads never are.
+				...(event.type === 12
+					? {}
+					: { externalParentMessageId: ExternalMessageId.make(threadId.value) }),
 			},
 		})
 	})

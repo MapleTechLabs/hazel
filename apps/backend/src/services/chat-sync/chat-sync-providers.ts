@@ -5,11 +5,24 @@
  */
 import { Discord } from "@hazel/integrations"
 import { Config, Context, Effect, Layer, Option } from "effect"
-import { type ChatSyncClient, type ChatSyncProviderId, ChatSyncProviderNotSupportedError } from "./provider"
+import {
+	type ChatSyncClient,
+	type ChatSyncProviderDefinition,
+	type ChatSyncProviderId,
+	ChatSyncProviderNotSupportedError,
+	isChatSyncProviderId,
+} from "./provider"
+import { chatSyncProviders } from "./providers"
 import { makeDiscordClient } from "./providers/discord/client"
 
+/** A provider this build syncs with: its definition and its client. */
+export interface ChatSyncProvider {
+	readonly definition: ChatSyncProviderDefinition
+	readonly client: ChatSyncClient
+}
+
 export interface ChatSyncProvidersShape {
-	readonly client: (provider: string) => Effect.Effect<ChatSyncClient, ChatSyncProviderNotSupportedError>
+	readonly get: (provider: string) => Effect.Effect<ChatSyncProvider, ChatSyncProviderNotSupportedError>
 	/** `S3_PUBLIC_URL`: attachments are linked as `<base>/<attachmentId>`. */
 	readonly attachmentPublicUrlBase: Option.Option<string>
 }
@@ -19,11 +32,12 @@ export const chatSyncProvidersOf = (
 	clients: Partial<Record<ChatSyncProviderId, ChatSyncClient>>,
 	attachmentPublicUrlBase: Option.Option<string>,
 ): ChatSyncProvidersShape => ({
-	client: (provider) =>
-		Option.match(Option.fromNullishOr(clients[provider as ChatSyncProviderId]), {
-			onNone: () => Effect.fail(new ChatSyncProviderNotSupportedError({ provider })),
-			onSome: Effect.succeed,
-		}),
+	get: (provider) => {
+		const client = isChatSyncProviderId(provider) ? clients[provider] : undefined
+		return client === undefined
+			? Effect.fail(new ChatSyncProviderNotSupportedError({ provider }))
+			: Effect.succeed({ definition: chatSyncProviders[provider as ChatSyncProviderId], client })
+	},
 	attachmentPublicUrlBase,
 })
 
