@@ -42,7 +42,9 @@ export const CreateSection = Command.define("CreateSection", {
 	execute: (args) =>
 		createChannelSectionAction(args).pipe(
 			Effect.as(Message.SucceededCreateSection()),
-			Effect.catchCause((cause) => Effect.succeed(Message.FailedCreateSection({ toast: failureToast(cause, "friendly") }))),
+			Effect.catchCause((cause) =>
+				Effect.succeed(Message.FailedCreateSection({ toast: failureToast(cause, "friendly") })),
+			),
 		),
 })
 
@@ -66,7 +68,8 @@ const submitted = (model: Model, shared: Shared): Return => {
 
 const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
-		GotFrameMessage: ({ message }) => (isCloseRequest(message) ? { model, outMessage: closed } : { model }),
+		GotFrameMessage: ({ message }) =>
+			isCloseRequest(message) ? { model, outMessage: closed } : { model },
 		ChangedName: ({ value }) => ({
 			model: modifyFields(model, { name: () => value, nameError: () => validateName(value) }),
 		}),
@@ -100,7 +103,11 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 							// reflects the error and React Aria's FieldError never renders.
 							textField(
 								h,
-								{ id: `${ID}-name`, value: model.name, onInput: (value) => Message.ChangedName({ value }) },
+								{
+									id: `${ID}-name`,
+									value: model.name,
+									onInput: (value) => Message.ChangedName({ value }),
+								},
 								(field) => [
 									field.label(["Section Name"]),
 									field.input({
@@ -119,7 +126,11 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 						button(h, { intent: "outline", onPress: Message.ClickedCancel() }, ["Cancel"]),
 						button(
 							h,
-							{ intent: "primary", isDisabled: isInvalid || model.isSubmitting, attributes: [h.Type("submit")] },
+							{
+								intent: "primary",
+								isDisabled: isInvalid || model.isSubmitting,
+								attributes: [h.Type("submit")],
+							},
 							[model.isSubmitting ? "Creating..." : "Create section"],
 						),
 					]),

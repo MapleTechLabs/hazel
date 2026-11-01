@@ -1,0 +1,123 @@
+diff --git a/src/Workers/ObservabilityDestination.ts b/src/Workers/ObservabilityDestination.ts
+--- a/src/Workers/ObservabilityDestination.ts
++++ b/src/Workers/ObservabilityDestination.ts
+@@ -206,12 +206,7 @@
+       if (oldDataset !== undefined && oldDataset !== news.logpushDataset) {
+         return { action: "replace" } as const;
+       }
+-      // State written by earlier versions holds `destinationConf` as a plain
+-      // string. Reconcile to re-read it as `Redacted`; without header or URL
+-      // drift this issues no PATCH.
+-      if (output?.destinationConf !== undefined && !Redacted.isRedacted(output.destinationConf)) {
+-        return { action: "update" } as const;
+-      }
++
+       return undefined;
+     }),
+ 
+@@ -247,6 +242,17 @@
+       // just sent.
+       let appliedHeaders = olds?.headers ? unwrapRedacted(olds.headers) : undefined;
+       const enabled = news.enabled ?? true;
++      // Maple: settle unchanged resumed updates without listing destinations.
++      if (output?.slug && olds !== undefined && olds.url === url &&
++          (olds.enabled ?? true) === enabled &&
++          sameHeaders(unwrapRedacted(olds.headers ?? {}), headers, undefined)) {
++        return {
++          ...output,
++          destinationConf: output.destinationConf === undefined || Redacted.isRedacted(output.destinationConf)
++            ? output.destinationConf
++            : Redacted.make(output.destinationConf as unknown as string),
++        };
++      }
+ 
+       // 1. Observe — the slug cached on `output` is a hint, not a
+       //    guarantee; fall back to the name (Cloudflare enforces name
+diff --git a/lib/Workers/ObservabilityDestination.js b/lib/Workers/ObservabilityDestination.js
+--- a/lib/Workers/ObservabilityDestination.js
++++ b/lib/Workers/ObservabilityDestination.js
+@@ -96,12 +96,7 @@
+         if (oldDataset !== undefined && oldDataset !== news.logpushDataset) {
+             return { action: "replace" };
+         }
+-        // State written by earlier versions holds `destinationConf` as a plain
+-        // string. Reconcile to re-read it as `Redacted`; without header or URL
+-        // drift this issues no PATCH.
+-        if (output?.destinationConf !== undefined && !Redacted.isRedacted(output.destinationConf)) {
+-            return { action: "update" };
+-        }
++
+         return undefined;
+     }),
+     read: Effect.fn(function* ({ id, output, olds }) {
+@@ -134,6 +129,17 @@
+         // just sent.
+         let appliedHeaders = olds?.headers ? unwrapRedacted(olds.headers) : undefined;
+         const enabled = news.enabled ?? true;
++        // Maple: settle unchanged resumed updates without listing destinations.
++        if (output?.slug && olds !== undefined && olds.url === url &&
++            (olds.enabled ?? true) === enabled &&
++            sameHeaders(unwrapRedacted(olds.headers ?? {}), headers, undefined)) {
++          return {
++            ...output,
++            destinationConf: output.destinationConf === undefined || Redacted.isRedacted(output.destinationConf)
++              ? output.destinationConf
++              : Redacted.make(output.destinationConf),
++          };
++        }
+         // 1. Observe — the slug cached on `output` is a hint, not a
+         //    guarantee; fall back to the name (Cloudflare enforces name
+         //    uniqueness, and ownership of a name match has already been
+diff --git a/src/Workers/ViteChild.ts b/src/Workers/ViteChild.ts
+--- a/src/Workers/ViteChild.ts
++++ b/src/Workers/ViteChild.ts
+@@ -43,6 +43,13 @@
+ const resolveRunner = (basename: string) =>
+   fileURLToPath(import.meta.resolve(`./${basename}${moduleExtension(import.meta.url)}`));
+ 
++// A node child of a published install runs the compiled runner: the `.ts`
++// runner selects `bin/register-dev-mode.js`, which the package excludes.
++const resolveNodeRunner = (basename: string) =>
++  import.meta.url.includes("/node_modules/") && /\.ts$/.test(import.meta.url)
++    ? fileURLToPath(new URL(`../../lib/Workers/${basename}.js`, import.meta.url))
++    : resolveRunner(basename);
++
+ export const startViteChild = (
+   config: ViteChildConfig,
+   onOutput: (channel: "stdout" | "stderr", line: string) => Effect.Effect<void>,
+@@ -50,6 +57,7 @@
+   Effect.gen(function* () {
+     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+     const runner = resolveRunner("ViteChildRunner");
++    const nodeRunner = resolveNodeRunner("ViteChildRunner");
+     const isBun = typeof globalThis.Bun !== "undefined";
+     // The dev server runs on node, as `@cloudflare/vite-plugin`'s does,
+     // whenever node is installed; otherwise on the engine's own runtime.
+@@ -105,7 +113,9 @@
+     const child = yield* spawner.spawn(
+       ChildProcess.make(
+         nodeExecPath ?? process.execPath,
+-        isBun && nodeExecPath === undefined ? ["run", runner] : [...nodeLoaderArgs(runner), runner],
++        isBun && nodeExecPath === undefined
++          ? ["run", runner]
++          : [...nodeLoaderArgs(nodeRunner), nodeRunner],
+         {
+           cwd: config.rootDir,
+           stdin: Stream.succeed(serializedConfig),
+@@ -196,6 +206,7 @@
+       const path = yield* Path.Path;
+       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+       const runner = resolveRunner("ViteBuildChildRunner");
++      const nodeRunner = resolveNodeRunner("ViteBuildChildRunner");
+       const isBun = typeof globalThis.Bun !== "undefined";
+       const outputDir = yield* fs.makeTempDirectoryScoped({
+         prefix: "alchemy-vite-build-",
+@@ -207,7 +218,7 @@
+       const child = yield* spawner.spawn(
+         ChildProcess.make(
+           process.execPath,
+-          isBun ? ["run", runner] : [...nodeLoaderArgs(runner), runner],
++          isBun ? ["run", runner] : [...nodeLoaderArgs(nodeRunner), nodeRunner],
+           {
+             cwd: config.rootDir,
+             stdin: Stream.succeed(serializedConfig),

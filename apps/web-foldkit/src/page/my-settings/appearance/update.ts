@@ -26,7 +26,9 @@ export const toGrayPaletteMessage = (message: Select.Message) => Message.GotGray
 const isGrayPalette = (key: string): key is Theme.GrayPalette =>
 	GRAY_PALETTES.some((palette) => palette === key)
 
-export const GRAY_PALETTE_ITEMS = GRAY_PALETTES.map((palette) => Select.item(palette, GRAY_PALETTE_LABELS[palette]))
+export const GRAY_PALETTE_ITEMS = GRAY_PALETTES.map((palette) =>
+	Select.item(palette, GRAY_PALETTE_LABELS[palette]),
+)
 
 const grayPaletteSelect = (selected: Theme.GrayPalette) =>
 	Select.init({ id: "gray-palette", selectedKey: selected })

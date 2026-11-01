@@ -22,7 +22,8 @@ export const FetchPreview = Command.define("FetchPreview", {
 				}),
 			),
 			Effect.catchTags({
-				InvitationNotFoundError: () => Effect.succeed(Message.FailedFetchPreview({ reason: "NotFound" })),
+				InvitationNotFoundError: () =>
+					Effect.succeed(Message.FailedFetchPreview({ reason: "NotFound" })),
 			}),
 			catchCommon((reason) => Message.FailedFetchPreview({ reason })),
 		),
@@ -43,14 +44,22 @@ export const AcceptInvitation = Command.define("AcceptInvitation", {
 	execute: ({ token }) =>
 		HazelRpc.use((client) => client("invitation.accept", { token })).pipe(
 			Effect.flatMap((accepted) =>
-				load(accepted.slug ? hrefOf(AppRoute.OrgHome({ orgSlug: accepted.slug })) : hrefOf(AppRoute.Root())),
+				load(
+					accepted.slug
+						? hrefOf(AppRoute.OrgHome({ orgSlug: accepted.slug }))
+						: hrefOf(AppRoute.Root()),
+				),
 			),
 			Effect.as(Message.LeftPage()),
 			Effect.catchTags({
-				InvitationEmailMismatchError: () => Effect.succeed(Message.FailedAccept({ reason: "EmailMismatch" })),
-				InvitationUnavailableError: () => Effect.succeed(Message.FailedAccept({ reason: "NoLongerValid" })),
-				InvitationNotFoundError: () => Effect.succeed(Message.FailedAccept({ reason: "NoLongerValid" })),
-				OrganizationNotFoundError: () => Effect.succeed(Message.FailedAccept({ reason: "WorkspaceGone" })),
+				InvitationEmailMismatchError: () =>
+					Effect.succeed(Message.FailedAccept({ reason: "EmailMismatch" })),
+				InvitationUnavailableError: () =>
+					Effect.succeed(Message.FailedAccept({ reason: "NoLongerValid" })),
+				InvitationNotFoundError: () =>
+					Effect.succeed(Message.FailedAccept({ reason: "NoLongerValid" })),
+				OrganizationNotFoundError: () =>
+					Effect.succeed(Message.FailedAccept({ reason: "WorkspaceGone" })),
 			}),
 			catchCommon((reason) => Message.FailedAccept({ reason })),
 		),

@@ -1,6 +1,6 @@
 /** The link-preview Worker: an async (non-Effect-runtime) Worker over its own `src/index.ts`. */
 import { HazelStack, hazelWorkerProps, stageProps } from "@hazel/infra/cloudflare"
-import * as Cloudflare from "alchemy/Cloudflare"
+import * as Cloudflare from "@alchemy.run/cloudflare"
 import { Effect } from "effect"
 
 /** Pre-alchemy wrangler title, kept for prd so `--adopt` reuses the existing namespace. */

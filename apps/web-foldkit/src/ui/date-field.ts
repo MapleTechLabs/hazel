@@ -95,7 +95,9 @@ export const dateSegments = <ParentMessage>(
 				h.DataAttribute("type", type),
 				...statusAttributes,
 				...(part.isPlaceholder ? [h.DataAttribute("placeholder", "true")] : []),
-				h.AriaLabel(segmentName(fieldName(options.model.locale, type), options.ariaLabel, options.labelledBy)),
+				h.AriaLabel(
+					segmentName(fieldName(options.model.locale, type), options.ariaLabel, options.labelledBy),
+				),
 				...(options.labelledBy === undefined
 					? []
 					: [h.AriaLabelledBy(`${id} ${options.labelledBy}`)]),

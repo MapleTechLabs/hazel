@@ -16,7 +16,13 @@ import * as Tabs from "../../ui/tabs"
 import { can, type PageViewInputs, type Shared } from "../contract"
 import { channelCard, dmCard } from "./cards"
 import { Message } from "./message"
-import { type ChannelGroups, type ChannelSummary, ChatIndexTabs, type ChatIndexTab, type Model } from "./model"
+import {
+	type ChannelGroups,
+	type ChannelSummary,
+	ChatIndexTabs,
+	type ChatIndexTab,
+	type Model,
+} from "./model"
 
 /** Port of `routes/_app/$orgSlug/chat/index.tsx`. */
 
@@ -29,8 +35,12 @@ const TAB_LABELS: Record<ChatIndexTab, string> = {
 	dms: "Direct messages",
 }
 const countOf = (groups: ChannelGroups, tab: ChatIndexTab) =>
-	(tab === "public" ? groups.publicChannels : tab === "private" ? groups.privateChannels : groups.dmChannels)
-		.length
+	(tab === "public"
+		? groups.publicChannels
+		: tab === "private"
+			? groups.privateChannels
+			: groups.dmChannels
+	).length
 
 const tabLabel = (h: HtmlBuilder<Message>, label: string, count: number): Html =>
 	h.span(

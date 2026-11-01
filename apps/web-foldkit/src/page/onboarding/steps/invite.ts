@@ -22,45 +22,51 @@ const emailField = (
 	row: InviteRow,
 	index: number,
 ): Html =>
-	h.keyed("div")(`invite-row-${row.id}`, [], [
-		textField(
-			h,
-			{
-				id: `onboarding-invite-${row.id}`,
-				value: row.email,
-				isInvalid: Option.isSome(row.error),
-				onInput: (value) => Message.ChangedEmail({ rowId: row.id, value }),
-				interaction,
-			},
-			(parts) => [
-				parts.label(["Email ", String(index + 1)], { className: "sr-only" }),
-				h.div(
-					[h.Class("flex items-center gap-2")],
-					[
-						parts.input({
-							placeholder: "colleague@example.com",
-							attributes: [h.Type("email"), ...(index === 0 ? [autoFocus(h)] : [])],
-						}),
-						...(form.rows.length > 1
-							? [
-									button(
-										h,
-										{
-											intent: "secondary",
-											size: "sq-sm",
-											onPress: Message.ClickedRemoveEmail({ rowId: row.id }),
-											attributes: [h.AriaLabel("Remove email")],
-										},
-										[IconClose(h, { className: "size-4" })],
-									),
-								]
-							: []),
-					],
-				),
-				...(Option.isSome(row.error) ? [parts.fieldError(["Please enter a valid email address"])] : []),
-			],
-		),
-	])
+	h.keyed("div")(
+		`invite-row-${row.id}`,
+		[],
+		[
+			textField(
+				h,
+				{
+					id: `onboarding-invite-${row.id}`,
+					value: row.email,
+					isInvalid: Option.isSome(row.error),
+					onInput: (value) => Message.ChangedEmail({ rowId: row.id, value }),
+					interaction,
+				},
+				(parts) => [
+					parts.label(["Email ", String(index + 1)], { className: "sr-only" }),
+					h.div(
+						[h.Class("flex items-center gap-2")],
+						[
+							parts.input({
+								placeholder: "colleague@example.com",
+								attributes: [h.Type("email"), ...(index === 0 ? [autoFocus(h)] : [])],
+							}),
+							...(form.rows.length > 1
+								? [
+										button(
+											h,
+											{
+												intent: "secondary",
+												size: "sq-sm",
+												onPress: Message.ClickedRemoveEmail({ rowId: row.id }),
+												attributes: [h.AriaLabel("Remove email")],
+											},
+											[IconClose(h, { className: "size-4" })],
+										),
+									]
+								: []),
+						],
+					),
+					...(Option.isSome(row.error)
+						? [parts.fieldError(["Please enter a valid email address"])]
+						: []),
+				],
+			),
+		],
+	)
 
 export const inviteStep = (
 	h: HtmlBuilder<Message>,

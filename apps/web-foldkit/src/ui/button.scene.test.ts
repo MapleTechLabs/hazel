@@ -43,7 +43,9 @@ describe("button scene", () => {
 			Scene.pointerDown(save(0)),
 			Scene.expect(save(0)).toHaveAttr("data-pressed", "true"),
 			// usePress ends a pointer press on a document pointerup, which the Submodel subscribes to.
-			Scene.Subscription.emit(Message.GotInteractionMessage({ message: Interaction.Message.ReleasedPointer() })),
+			Scene.Subscription.emit(
+				Message.GotInteractionMessage({ message: Interaction.Message.ReleasedPointer() }),
+			),
 			Scene.expect(save(0)).not.toHaveAttr("data-pressed"),
 		)
 	})

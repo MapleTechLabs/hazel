@@ -1,5 +1,4 @@
 import { cn } from "@/lib/utils"
-import { ChevronDownIcon } from "lucide-react"
 import React, { createContext, useContext, useEffect, useRef, useState } from "react"
 import { Markdown } from "./markdown"
 import { useTextStream, type Mode } from "./response-stream"
@@ -47,28 +46,6 @@ function Reasoning({ children, className, open, onOpenChange }: ReasoningProps) 
 		>
 			<div className={className}>{children}</div>
 		</ReasoningContext.Provider>
-	)
-}
-
-export type ReasoningTriggerProps = {
-	children: React.ReactNode
-	className?: string
-} & React.HTMLAttributes<HTMLButtonElement>
-
-function ReasoningTrigger({ children, className, ...props }: ReasoningTriggerProps) {
-	const { isOpen, onOpenChange } = useReasoningContext()
-
-	return (
-		<button
-			className={cn("flex cursor-pointer items-center gap-2", className)}
-			onClick={() => onOpenChange(!isOpen)}
-			{...props}
-		>
-			<span className="text-primary">{children}</span>
-			<div className={cn("transform transition-transform", isOpen ? "rotate-180" : "")}>
-				<ChevronDownIcon className="size-4" />
-			</div>
-		</button>
 	)
 }
 
@@ -161,4 +138,4 @@ function ReasoningResponse({
 	)
 }
 
-export { Reasoning, ReasoningTrigger, ReasoningContent, ReasoningResponse }
+export { Reasoning, ReasoningContent, ReasoningResponse }

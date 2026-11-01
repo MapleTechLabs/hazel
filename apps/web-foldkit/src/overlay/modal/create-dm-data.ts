@@ -31,13 +31,18 @@ interface OrgUserRow {
 }
 
 /** `organizationUsers`: the org's human users joined with their presence row. */
-export const organizationUsersStream = <M>(organizationId: OrganizationId, toMessage: (users: Array<OrgUser>) => M) =>
+export const organizationUsersStream = <M>(
+	organizationId: OrganizationId,
+	toMessage: (users: Array<OrgUser>) => M,
+) =>
 	liveQueryStream<OrgUserRow, M>(
 		(q) =>
 			q
 				.from({ member: organizationMemberCollection })
 				.innerJoin({ user: userCollection }, ({ member, user }) => eq(member.userId, user.id))
-				.leftJoin({ presence: userPresenceStatusCollection }, ({ user, presence }) => eq(user.id, presence.userId))
+				.leftJoin({ presence: userPresenceStatusCollection }, ({ user, presence }) =>
+					eq(user.id, presence.userId),
+				)
 				.where(({ member }) => eq(member.organizationId, organizationId))
 				.where(({ user }) => eq(user.userType, "user"))
 				.select(({ user, presence }) => ({ ...user, presence })),
@@ -55,7 +60,11 @@ export const organizationUsersStream = <M>(organizationId: OrganizationId, toMes
 	)
 
 interface DmRow {
-	readonly channel: { readonly id: ChannelId; readonly type: string; readonly organizationId: OrganizationId }
+	readonly channel: {
+		readonly id: ChannelId
+		readonly type: string
+		readonly organizationId: OrganizationId
+	}
 	readonly member: { readonly userId: UserId }
 }
 
@@ -77,7 +86,9 @@ export const findExistingDmChannel = (
 				query: (q) =>
 					q
 						.from({ channel: channelCollection })
-						.innerJoin({ member: channelMemberCollection }, ({ channel, member }) => eq(member.channelId, channel.id))
+						.innerJoin({ member: channelMemberCollection }, ({ channel, member }) =>
+							eq(member.channelId, channel.id),
+						)
 						.where(({ channel }) => or(eq(channel.type, "single"), eq(channel.type, "direct"))),
 			}),
 		),
@@ -87,7 +98,10 @@ export const findExistingDmChannel = (
 				catch: (error) => new DmLookupError({ message: String(error) }),
 			}).pipe(
 				Effect.map((rows: ReadonlyArray<DmRow>) => {
-					const byChannel = new Map<string, { channel: DmRow["channel"]; memberIds: Array<string> }>()
+					const byChannel = new Map<
+						string,
+						{ channel: DmRow["channel"]; memberIds: Array<string> }
+					>()
 					for (const row of rows) {
 						if (row.channel.organizationId !== organizationId) continue
 						const entry = byChannel.get(row.channel.id) ?? { channel: row.channel, memberIds: [] }
@@ -97,7 +111,9 @@ export const findExistingDmChannel = (
 					const participants = [currentUserId, ...targetUserIds].sort()
 					const found = [...byChannel.values()].find(({ channel, memberIds }) =>
 						channel.type === "single" && targetUserIds.length === 1
-							? memberIds.length === 2 && memberIds.includes(currentUserId) && memberIds.includes(targetUserIds[0] ?? "")
+							? memberIds.length === 2 &&
+								memberIds.includes(currentUserId) &&
+								memberIds.includes(targetUserIds[0] ?? "")
 							: channel.type === "direct" &&
 								targetUserIds.length > 1 &&
 								memberIds.length === participants.length &&

@@ -192,14 +192,12 @@ export class DiscordApiClient extends Context.Service<DiscordApiClient>()("Disco
 				),
 			)
 
-			return body.map(
-				(guild): DiscordGuild => ({
-					id: guild.id,
-					name: guild.name,
-					icon: guild.icon ?? null,
-					owner: guild.owner,
-				}),
-			)
+			return body.map((guild): DiscordGuild => ({
+				id: guild.id,
+				name: guild.name,
+				icon: guild.icon ?? null,
+				owner: guild.owner,
+			}))
 		})
 
 		const listGuildChannels = Effect.fn("DiscordApiClient.listGuildChannels")(function* (
@@ -227,15 +225,13 @@ export class DiscordApiClient extends Context.Service<DiscordApiClient>()("Disco
 
 			return body
 				.filter((channel) => channelTypeIsMessageCapable(channel.type))
-				.map(
-					(channel): DiscordGuildChannel => ({
-						id: channel.id,
-						guildId: channel.guild_id,
-						name: channel.name,
-						type: channel.type,
-						parentId: channel.parent_id ?? null,
-					}),
-				)
+				.map((channel): DiscordGuildChannel => ({
+					id: channel.id,
+					guildId: channel.guild_id,
+					name: channel.name,
+					type: channel.type,
+					parentId: channel.parent_id ?? null,
+				}))
 		})
 
 		const createMessage = Effect.fn("DiscordApiClient.createMessage")(function* (params: {

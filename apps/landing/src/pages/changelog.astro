@@ -4,7 +4,7 @@ import ChangelogHeroSection from "@/components/sections/ChangelogHeroSection.ast
 import { ChangelogTimeline } from "@/components/react/ChangelogTimeline";
 import FooterSection from "@/components/sections/FooterSection.astro";
 import { getCollection, type CollectionEntry } from "astro:content";
-import { type ChangeType } from "@/content/config";
+import { type ChangeType } from "@/content.config";
 import { siteConfig } from "@/lib/site";
 
 const changelogEntries = await getCollection("changelog", ({ data }: CollectionEntry<"changelog">) => {
@@ -42,7 +42,7 @@ const blogPostingSchema = sortedEntries.map((entry: CollectionEntry<"changelog">
   },
   "mainEntityOfPage": {
     "@type": "WebPage",
-    "@id": `${siteConfig.url}/changelog#${entry.slug}`
+    "@id": `${siteConfig.url}/changelog#${entry.id}`
   }
 }));
 ---
@@ -75,7 +75,7 @@ const blogPostingSchema = sortedEntries.map((entry: CollectionEntry<"changelog">
       <div class="max-w-3xl mx-auto">
         <ChangelogTimeline
           entries={sortedEntries.map((entry: CollectionEntry<"changelog">) => ({
-            slug: entry.slug,
+            slug: entry.id,
             ...entry.data,
             date: entry.data.date.toISOString(),
           }))}

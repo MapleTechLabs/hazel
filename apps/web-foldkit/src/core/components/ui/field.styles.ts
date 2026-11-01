@@ -27,7 +27,3 @@ export const fieldStyles = tv({
 		"*:data-[slot=label]:font-medium",
 	],
 })
-
-export const fieldsetStyles = "*:data-[slot=text]:mt-1 [&>*+[data-slot=control]]:mt-6"
-
-export const legendStyles = "font-semibold text-base/6 data-disabled:opacity-50"

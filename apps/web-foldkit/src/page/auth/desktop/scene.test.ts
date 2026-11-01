@@ -60,7 +60,9 @@ describe("desktop handoff page", () => {
 		Scene.scene(
 			pageScene(update, view, makeShared()),
 			Scene.given(offline),
-			Scene.expect(Scene.role("alert")).toHaveText("Connection lost. Check your internet connection and try again."),
+			Scene.expect(Scene.role("alert")).toHaveText(
+				"Connection lost. Check your internet connection and try again.",
+			),
 			Scene.click(Scene.role("button", { name: "Try again" })),
 			Scene.Command.expectExact(DescribeAttempt({ attemptId: attempt })),
 			Scene.Command.resolve(DescribeAttempt, { _tag: "DescribedAttempt", appName: "Hazel Desktop" }),

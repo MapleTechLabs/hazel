@@ -4,5 +4,12 @@
 	"printWidth": 110,
 	"useTabs": true,
 	"tabWidth": 4,
-	"ignorePatterns": [".context"],
+	"ignorePatterns": [
+		".context",
+		"coverage",
+		// Vendored upstream; kept as close to Maple's copy as it is.
+		"scripts/oxlint-plugins/anti-slop/**",
+		// TanStack Router regenerates it in its own style on every docs build.
+		"apps/docs/src/routeTree.gen.ts",
+	],
 }

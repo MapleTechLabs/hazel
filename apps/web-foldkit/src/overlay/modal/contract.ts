@@ -27,7 +27,12 @@ export interface ModalSubscriptionInput<Model> {
 	readonly shared: Shared
 }
 
-export type ModalReturn<Model, Message> = Update.ReturnWithOutMessage<Model, Message, ModalOutMessage, Resources>
+export type ModalReturn<Model, Message> = Update.ReturnWithOutMessage<
+	Model,
+	Message,
+	ModalOutMessage,
+	Resources
+>
 
 export interface ModalSpec<Request, Model, Message> {
 	readonly init: (request: Request, context: ModalContext) => ModalReturn<Model, Message>
@@ -68,13 +73,20 @@ export const defineModal = <
 	MessageSchema extends Schema.Top,
 >(
 	id: Id,
-	schemas: { readonly request: RequestSchema; readonly Model: ModelSchema; readonly Message: MessageSchema },
+	schemas: {
+		readonly request: RequestSchema
+		readonly Model: ModelSchema
+		readonly Message: MessageSchema
+	},
 	spec: ModalSpec<RequestSchema["Type"], ModelSchema["Type"], MessageSchema["Type"]>,
 ) => {
 	type Model = ModelSchema["Type"]
 	type Message = MessageSchema["Type"]
 	const Slot = Schema.TaggedStruct(id, { instance: Schema.Number, model: schemas.Model })
-	const Wrapped = Schema.TaggedStruct(id, { instance: Schema.NullOr(Schema.Number), message: schemas.Message })
+	const Wrapped = Schema.TaggedStruct(id, {
+		instance: Schema.NullOr(Schema.Number),
+		message: schemas.Message,
+	})
 	type SlotType = { readonly _tag: Id; readonly instance: number; readonly model: Model }
 	type WrappedType = { readonly _tag: Id; readonly instance: number | null; readonly message: Message }
 
@@ -85,7 +97,10 @@ export const defineModal = <
 	const wrapFor =
 		(instance: number | null) =>
 		(message: Message): WrappedType => ({ _tag: id, instance, message })
-	const step = (instance: number, result: ModalReturn<Model, Message>): ModalStep<SlotType, WrappedType> => ({
+	const step = (
+		instance: number,
+		result: ModalReturn<Model, Message>,
+	): ModalStep<SlotType, WrappedType> => ({
 		slot: { _tag: id, instance, model: result.model },
 		commands: Command.mapMessages(result.commands, wrapFor(instance)),
 		outMessage: Option.fromNullishOr(result.outMessage),

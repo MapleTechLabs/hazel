@@ -3,7 +3,7 @@ import Layout from "@/layouts/Layout.astro";
 import FooterSection from "@/components/sections/FooterSection.astro";
 import CTASection from "@/components/sections/CTASection.astro";
 import { getCollection, type CollectionEntry } from "astro:content";
-import { integrationCategories, type IntegrationCategory, type IntegrationStatus } from "@/content/config";
+import { integrationCategories, type IntegrationCategory, type IntegrationStatus } from "@/content.config";
 
 const integrations = await getCollection("integrations", ({ data }: CollectionEntry<"integrations">) => {
 	return import.meta.env.PROD ? !data.draft : true;

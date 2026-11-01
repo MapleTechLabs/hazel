@@ -44,4 +44,3 @@ export const sectionLabelRoot = <Message>(
 		...children,
 	])
 }
-

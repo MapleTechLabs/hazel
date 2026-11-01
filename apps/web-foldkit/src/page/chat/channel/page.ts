@@ -514,5 +514,5 @@ export const isMemberOf = (model: Model): boolean | null =>
 	model.channel?.type === "thread"
 		? true
 		: model.members === null || model.currentUserId === null
-		? null
-		: model.members.some((member) => member.userId === model.currentUserId)
+			? null
+			: model.members.some((member) => member.userId === model.currentUserId)

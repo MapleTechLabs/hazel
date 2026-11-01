@@ -6,7 +6,7 @@
 import type { MessageId } from "@hazel/schema"
 import type { SyncObjectState, SyncSocket } from "@hazel/sync-do"
 import { toHttpServerResponse } from "@hazel/sync-do"
-import * as Cloudflare from "alchemy/Cloudflare"
+import * as Cloudflare from "@alchemy.run/cloudflare"
 import { RuntimeContext } from "alchemy/RuntimeContext"
 import { Cause, Effect, Layer } from "effect"
 import { HttpServerRequest, HttpServerResponse } from "effect/http"

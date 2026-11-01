@@ -16,7 +16,10 @@ import { view } from "./view"
 
 const admin: Shared = {
 	...memberShared,
-	member: { id: Schema.decodeSync(OrganizationMemberId)("00000000-0000-4000-8000-000000000099"), role: "admin" },
+	member: {
+		id: Schema.decodeSync(OrganizationMemberId)("00000000-0000-4000-8000-000000000099"),
+		role: "admin",
+	},
 }
 
 const sceneFor = (shared: Shared) => ({

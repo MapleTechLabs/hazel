@@ -33,11 +33,15 @@ export const init = (overrides: Partial<Model> = {}): Model => ({
 
 export const update = (model: Model, message: Message) =>
 	Message.match<Update.Return<Model, Message>>(message, {
-		ChangedSelection: ({ isSelected }) => ({ model: modifyFields(model, { isSelected: () => isSelected }) }),
+		ChangedSelection: ({ isSelected }) => ({
+			model: modifyFields(model, { isSelected: () => isSelected }),
+		}),
 		ChoseValue: ({ value }) => ({ model: modifyFields(model, { choice: () => value }) }),
 		ClickedButton: () => ({ model: modifyFields(model, { pressCount: (count) => count + 1 }) }),
 		GotInteractionMessage: ({ message }) => ({
-			model: modifyFields(model, { interaction: () => Interaction.update(model.interaction, message).model }),
+			model: modifyFields(model, {
+				interaction: () => Interaction.update(model.interaction, message).model,
+			}),
 		}),
 	})
 

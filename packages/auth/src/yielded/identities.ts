@@ -1,4 +1,6 @@
-import { Crypto, Effect } from "effect"
+import { Effect } from "effect"
+import * as Digest from "effect/crypto/Digest"
+import * as SecureRandom from "effect/crypto/SecureRandom"
 import { Base64Url } from "effect/encoding"
 import { SqlClient } from "effect/sql"
 
@@ -54,8 +56,8 @@ export const identityKey = (identity: ExternalIdentity) =>
 			offset += 4 + value.length
 		}
 
-		const crypto = yield* Crypto.Crypto
-		return "v1:" + Base64Url.encode(yield* crypto.digest("SHA-256", packed))
+		const digest = yield* Digest.Digest
+		return "v1:" + Base64Url.encode(yield* digest.digest(Digest.sha256, packed))
 	})
 
 export type LinkResult =
@@ -74,9 +76,9 @@ export const linkIdentity = Effect.fn("HazelAuth.linkIdentity")(function* (
 	input: ExternalIdentity & { readonly userId: string },
 ) {
 	const sql = yield* SqlClient.SqlClient
-	const crypto = yield* Crypto.Crypto
+	const random = yield* SecureRandom.SecureRandom
 	const key = yield* identityKey(input)
-	const credentialId = yield* crypto.randomUUIDv4()
+	const credentialId = yield* random.uuidV4()
 
 	const ownedWithoutLogin = sql`
 		exists (select 1 from auth_oauth_identities where "identityKey" = ${key} and "subjectId" = ${input.userId})

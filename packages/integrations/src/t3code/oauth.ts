@@ -258,16 +258,14 @@ export class T3CodeOAuthClient extends Context.Service<T3CodeOAuthClient>()("T3C
 				}),
 				TokenResponse,
 			).pipe(
-				Effect.map(
-					(token): T3CodeTokens => ({
-						accessToken: token.access_token,
-						expiresAt:
-							token.expires_in === undefined
-								? null
-								: new Date(Date.now() + token.expires_in * 1000),
-						scope: token.scope ?? null,
-					}),
-				),
+				Effect.map((token): T3CodeTokens => ({
+					accessToken: token.access_token,
+					expiresAt:
+						token.expires_in === undefined
+							? null
+							: new Date(Date.now() + token.expires_in * 1000),
+					scope: token.scope ?? null,
+				})),
 			)
 
 		return { environmentInfo, authorizationServer, register, authorizationUrl, exchangeCode }

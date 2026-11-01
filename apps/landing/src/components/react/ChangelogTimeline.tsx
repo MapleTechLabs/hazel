@@ -1,6 +1,6 @@
 import { motion } from "motion/react"
 import { useMemo, useState } from "react"
-import type { ChangeType } from "@/content/config"
+import type { ChangeType } from "@/content.config"
 import { ChangelogEntry } from "./ChangelogEntry"
 import { ChangelogFilter } from "./ChangelogFilter"
 

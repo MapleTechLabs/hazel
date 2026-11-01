@@ -21,12 +21,6 @@
 		"skipLibCheck": true,
 		"strict": true,
 		"noFallthroughCasesInSwitch": true,
-		"noUncheckedSideEffectImports": true,
-		"plugins": [
-			{
-				"name": "@effect/language-service",
-				"reportSuggestionsAsWarningsInTsc": true
-			}
-		]
+		"noUncheckedSideEffectImports": true
 	}
 }

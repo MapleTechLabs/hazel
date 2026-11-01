@@ -40,7 +40,10 @@ const filterDecorations = new Plugin({
 				const start = 1 + (match.index ?? 0)
 				const keywordEnd = start + keyword.length + 1
 				decorations.push(Decoration.inline(start, keywordEnd, { class: "text-primary font-medium" }))
-				if (value) decorations.push(Decoration.inline(keywordEnd, keywordEnd + value.length, { class: "text-fg" }))
+				if (value)
+					decorations.push(
+						Decoration.inline(keywordEnd, keywordEnd + value.length, { class: "text-fg" }),
+					)
 			}
 			return DecorationSet.create(state.doc, decorations)
 		},
@@ -69,7 +72,10 @@ const placeholderPlugin = (initial: string) =>
 				const text = placeholderKey.getState(state) ?? ""
 				return state.doc.textContent === ""
 					? DecorationSet.create(state.doc, [
-							Decoration.widget(1, placeholderSpan(text), { side: 1, key: `placeholder:${text}` }),
+							Decoration.widget(1, placeholderSpan(text), {
+								side: 1,
+								key: `placeholder:${text}`,
+							}),
 						])
 					: DecorationSet.empty
 			},
@@ -77,7 +83,9 @@ const placeholderPlugin = (initial: string) =>
 		view: (view) => {
 			const sync = () => {
 				const placeholder = view.dom.querySelector<HTMLElement>("[data-slate-placeholder]")
-				view.dom.style.minHeight = placeholder ? `${placeholder.getBoundingClientRect().height}px` : ""
+				view.dom.style.minHeight = placeholder
+					? `${placeholder.getBoundingClientRect().height}px`
+					: ""
 			}
 			sync()
 			return { update: sync }
@@ -85,7 +93,8 @@ const placeholderPlugin = (initial: string) =>
 	})
 
 export const setPlaceholder = (view: EditorView, text: string) => {
-	if (placeholderKey.getState(view.state) !== text) view.dispatch(view.state.tr.setMeta(placeholderKey, text))
+	if (placeholderKey.getState(view.state) !== text)
+		view.dispatch(view.state.tr.setMeta(placeholderKey, text))
 }
 
 export interface Autocomplete {
@@ -97,7 +106,10 @@ export interface Autocomplete {
 export type SearchEditorEvent =
 	| { readonly _tag: "ChangedText"; readonly text: string; readonly autocomplete: Autocomplete | null }
 	| { readonly _tag: "PressedKey"; readonly key: "ArrowDown" | "ArrowUp" | "Enter" | "BackspaceAtStart" }
-	| { readonly _tag: "PressedAutocompleteKey"; readonly key: "ArrowDown" | "ArrowUp" | "Enter" | "Tab" | "Escape" }
+	| {
+			readonly _tag: "PressedAutocompleteKey"
+			readonly key: "ArrowDown" | "ArrowUp" | "Enter" | "Tab" | "Escape"
+	  }
 
 /** How many suggestions the host shows: keys go to the autocomplete only while there are some. */
 const optionCountKey = new PluginKey<number>("searchOptionCount")
@@ -122,9 +134,13 @@ export const createSearchEditor = (
 	const keyHandler = new Plugin({
 		props: {
 			handleKeyDown: (view, event) => {
-				const isOpen = autocompleteAt(view.state) !== null && (optionCountKey.getState(view.state) ?? 0) > 0
+				const isOpen =
+					autocompleteAt(view.state) !== null && (optionCountKey.getState(view.state) ?? 0) > 0
 				const key = event.key
-				if (isOpen && (key === "ArrowDown" || key === "ArrowUp" || key === "Enter" || key === "Tab")) {
+				if (
+					isOpen &&
+					(key === "ArrowDown" || key === "ArrowUp" || key === "Enter" || key === "Tab")
+				) {
 					options.emit({ _tag: "PressedAutocompleteKey", key })
 					return true
 				}
@@ -150,7 +166,12 @@ export const createSearchEditor = (
 		{
 			state: EditorState.create({
 				schema,
-				plugins: [keyHandler, optionCountPlugin, placeholderPlugin(options.placeholder), filterDecorations],
+				plugins: [
+					keyHandler,
+					optionCountPlugin,
+					placeholderPlugin(options.placeholder),
+					filterDecorations,
+				],
 			}),
 			attributes: {
 				class: EDITABLE_CLASS,
@@ -161,7 +182,11 @@ export const createSearchEditor = (
 			dispatchTransaction: (tr) => {
 				view.updateState(view.state.apply(tr))
 				if (tr.docChanged || tr.selectionSet)
-					options.emit({ _tag: "ChangedText", text: view.state.doc.textContent, autocomplete: autocompleteAt(view.state) })
+					options.emit({
+						_tag: "ChangedText",
+						text: view.state.doc.textContent,
+						autocomplete: autocompleteAt(view.state),
+					})
 			},
 		},
 	)
@@ -182,5 +207,6 @@ export const deleteFilterText = (view: EditorView, filterStartOffset: number) =>
 }
 
 export const syncOptionCount = (view: EditorView, count: number) => {
-	if ((optionCountKey.getState(view.state) ?? 0) !== count) view.dispatch(view.state.tr.setMeta(optionCountKey, count))
+	if ((optionCountKey.getState(view.state) ?? 0) !== count)
+		view.dispatch(view.state.tr.setMeta(optionCountKey, count))
 }

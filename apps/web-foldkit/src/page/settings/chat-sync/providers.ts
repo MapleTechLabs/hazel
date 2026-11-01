@@ -120,9 +120,12 @@ export const PROVIDERS: Readonly<Record<ChatSyncProvider, ProviderDescriptor>> =
 				client["integration-resources"].getDiscordGuildChannels({ params: { orgId, guildId } }),
 			).pipe(
 				Effect.map((response) =>
-					response.channels.map(
-						({ id, name }): ExternalChannel => ({ id, name, isPrivate: false, isMember: true }),
-					),
+					response.channels.map(({ id, name }): ExternalChannel => ({
+						id,
+						name,
+						isPrivate: false,
+						isMember: true,
+					})),
 				),
 			),
 	},
@@ -147,11 +150,9 @@ export const PROVIDERS: Readonly<Record<ChatSyncProvider, ProviderDescriptor>> =
 		// The org has one install, so the "list" is that workspace.
 		fetchWorkspaces: (orgId) =>
 			fetchSlack(orgId).pipe(
-				Effect.map(
-					({ workspace }): ReadonlyArray<Workspace> => [
-						{ id: workspace.id, name: workspace.name ?? "Slack Workspace", owner: false },
-					],
-				),
+				Effect.map(({ workspace }): ReadonlyArray<Workspace> => [
+					{ id: workspace.id, name: workspace.name ?? "Slack Workspace", owner: false },
+				]),
 			),
 		// Only while the org's install is still this connection's workspace (Slack reconnected
 		// elsewhere lists another workspace's channels, which would never sync here).

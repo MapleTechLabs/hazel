@@ -56,6 +56,7 @@ export const layerTauriStore: Layer.Layer<KeyValueStore.KeyValueStore> = Layer.e
 			remove: (key) => withStore("remove", key, (store) => store.delete(key)).pipe(Effect.asVoid),
 			clear: withStore("clear", "all", (store) => store.clear()),
 			size: withStore("size", "length", (store) => store.length()),
+			keys: withStore("keys", "all", (store) => store.keys()),
 			has: (key) =>
 				withStore("has", key, async (store) => {
 					const value = await store.get<string>(key)

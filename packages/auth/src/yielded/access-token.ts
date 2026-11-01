@@ -1,10 +1,10 @@
-import * as PortableCrypto from "@yielded/crypto/Portable"
 import { InvalidKey, type JwksUnavailable } from "@yielded/jose/Errors"
 import * as Jwk from "@yielded/jose/Jwk"
 import * as Jwks from "@yielded/jose/Jwks"
 import * as Jwt from "@yielded/jose/Jwt"
-import { Signature } from "@yielded/crypto/Signature"
 import { Config, Context, DateTime, Effect, Layer, Option, Redacted, Schema } from "effect"
+import * as SecureRandom from "effect/crypto/SecureRandom"
+import * as Signature from "effect/crypto/Signature"
 import { FetchHttpClient } from "effect/http"
 
 /**
@@ -38,7 +38,7 @@ export const makeIssuer = (issuer: string, key: SigningKey) =>
 	Effect.gen(function* () {
 		const privateKey = yield* Jwk.importPrivate(key.privateJwk, "ES256")
 		// Held here so minting needs nothing from the request.
-		const signature = yield* Signature
+		const signature = yield* Signature.Signature
 
 		return {
 			mint: (session: { readonly subjectId: string; readonly sessionId: string }) =>
@@ -57,7 +57,7 @@ export const makeIssuer = (issuer: string, key: SigningKey) =>
 						privateKey,
 						{ alg: "ES256", kid: key.kid, typ: "at+jwt" },
 					)
-				}).pipe(Effect.provideService(Signature, signature)),
+				}).pipe(Effect.provideService(Signature.Signature, signature)),
 		}
 	})
 
@@ -128,12 +128,12 @@ const VerifierConfig = Config.all({
 	inlineJwks: Config.option(Config.String("AUTH_ACCESS_TOKEN_JWKS")),
 })
 
-/** Signature verification only: WebCrypto through the library's portable layer. */
-const VerifierCryptoLive = Layer.suspend(() => PortableCrypto.layerWithoutKdf(globalThis.crypto.subtle))
+/** Signature verification only, on WebCrypto. */
+const VerifierCryptoLive = Signature.layerWebCrypto.pipe(Layer.provide(SecureRandom.layerWebCrypto))
 
 const makeVerifier = (issuer: string) =>
 	Effect.gen(function* () {
-		const services = yield* Effect.context<Jwks.Jwks | Signature>()
+		const services = yield* Effect.context<Jwks.Jwks | Signature.Signature>()
 
 		const verify = Effect.fn("AccessTokenVerifier.verify")(function* (token: string) {
 			const verified = yield* verifyAccessToken(issuer, token).pipe(

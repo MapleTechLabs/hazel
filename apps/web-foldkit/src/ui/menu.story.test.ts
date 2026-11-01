@@ -26,7 +26,8 @@ const entries = [
 	item("docs", { textValue: "Docs", href: "/docs" }),
 ]
 const menu = init({ id: "file" })
-const pressMenuKey = (key: string, isModified = false) => message(Message.PressedMenuKey({ key, isModified, entries: entries }))
+const pressMenuKey = (key: string, isModified = false) =>
+	message(Message.PressedMenuKey({ key, isModified, entries: entries }))
 const focusOf = (next: Model) => (next.popup._tag === "Open" ? next.popup.focusedKey : Option.none())
 const submenuOf = (next: Model) => (next.popup._tag === "Open" ? next.popup.submenu : Option.none())
 const searchOf = (next: Model) => (next.popup._tag === "Open" ? next.popup.search : "")

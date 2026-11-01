@@ -63,7 +63,9 @@ const RegenerateToken = Command.define("RegenerateToken", {
 			return Message.SucceededRegenerateToken({ token: result.token })
 		}).pipe(
 			Effect.catchCause((cause) =>
-				Effect.succeed(Message.FailedRegenerateToken({ toast: failureToast(cause, "friendly", errorOverrides) })),
+				Effect.succeed(
+					Message.FailedRegenerateToken({ toast: failureToast(cause, "friendly", errorOverrides) }),
+				),
 			),
 		),
 })
@@ -84,7 +86,8 @@ const toast = (request: ToastRequest) => ModalOutMessage.RequestedToast({ toast:
 
 const update = (model: Model, message: Message): Return =>
 	Message.match<Return>(message, {
-		GotFrameMessage: ({ message }) => (isCloseRequest(message) ? { model, outMessage: closed } : { model }),
+		GotFrameMessage: ({ message }) =>
+			isCloseRequest(message) ? { model, outMessage: closed } : { model },
 		ClickedCancel: () => ({ model, outMessage: closed }),
 		ClickedDone: () => ({ model, outMessage: closed }),
 		ClickedRegenerate: () =>
@@ -102,8 +105,11 @@ const update = (model: Model, message: Message): Return =>
 			model: modifyFields(model, { isRegenerating: () => false }),
 			outMessage: toast(request),
 		}),
-		ClickedToggleTokenVisible: () => ({ model: modifyFields(model, { isTokenVisible: (value) => !value }) }),
-		ClickedCopyToken: () => (model.token === null ? { model } : { model, commands: [CopyToken({ token: model.token })] }),
+		ClickedToggleTokenVisible: () => ({
+			model: modifyFields(model, { isTokenVisible: (value) => !value }),
+		}),
+		ClickedCopyToken: () =>
+			model.token === null ? { model } : { model, commands: [CopyToken({ token: model.token })] },
 		SucceededCopyToken: () => ({ model, outMessage: toast(successToast("Token copied to clipboard")) }),
 		FailedCopyToken: () => ({ model, outMessage: toast(errorToast("Failed to copy token")) }),
 	})
@@ -144,7 +150,11 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 							button(h, { intent: "outline", onPress: Message.ClickedCancel() }, ["Cancel"]),
 							button(
 								h,
-								{ intent: "danger", onPress: Message.ClickedRegenerate(), isDisabled: model.isRegenerating },
+								{
+									intent: "danger",
+									onPress: Message.ClickedRegenerate(),
+									isDisabled: model.isRegenerating,
+								},
 								[model.isRegenerating ? "Regenerating..." : "Regenerate Token"],
 							),
 						],

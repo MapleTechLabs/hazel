@@ -39,7 +39,12 @@ const removeButton = <M>(h: HtmlBuilder<M>, onPress: M, label: string, isCompact
 			onPress,
 			attributes: [h.AriaLabel(label)],
 		},
-		[IconClose(h, { ...(isCompact ? { className: "size-3.5" } : {}), attributes: { "data-slot": "icon" } })],
+		[
+			IconClose(h, {
+				...(isCompact ? { className: "size-3.5" } : {}),
+				attributes: { "data-slot": "icon" },
+			}),
+		],
 	)
 
 /** `ComposerAttachmentPreviews`. */
@@ -81,7 +86,11 @@ const attachmentPreviews = <M>(h: HtmlBuilder<M>, model: Model, inputs: DraftVie
 									className: "size-8 shrink-0 text-muted-fg",
 								}),
 								fileText(fileName, formatFileSize(info?.fileSize || 0)),
-								removeButton(h, inputs.toMessage(Message.ClickedRemoveAttachment({ attachmentId })), `Remove ${fileName}`),
+								removeButton(
+									h,
+									inputs.toMessage(Message.ClickedRemoveAttachment({ attachmentId })),
+									`Remove ${fileName}`,
+								),
 							],
 						)
 					}),

@@ -18,7 +18,14 @@ import { ada, plainMember, signedIn } from "../test/root-fixtures"
 import * as CommandMenu from "../ui/command-menu"
 import { DEFAULT_SOUND_SETTINGS } from "../notification-sound"
 import * as Menu from "../ui/menu"
-import { ApplyTheme, LoadExternal, NavigateInternal, SaveSoundSettings, SaveThemePreference, SignOut } from "./command"
+import {
+	ApplyTheme,
+	LoadExternal,
+	NavigateInternal,
+	SaveSoundSettings,
+	SaveThemePreference,
+	SignOut,
+} from "./command"
 import { Message } from "./message"
 
 /** The facts children report (OutMessages) and what the root does with them. */
@@ -140,7 +147,9 @@ describe("RequestedSignOut", () => {
 			update,
 			given(signedIn("/hazel/chat")),
 			message(Message.FailedSignOut({ reason: "Offline" })),
-			model((m) => expect(m.toasts.entries.map((entry) => entry.payload.title)).toEqual(["Failed to sign out"])),
+			model((m) =>
+				expect(m.toasts.entries.map((entry) => entry.payload.title)).toEqual(["Failed to sign out"]),
+			),
 			UiToast.test.drainEntry({ entryId: "toaster-entry-0" }),
 			model((m) => expect(m.toasts.entries).toEqual([])),
 		)

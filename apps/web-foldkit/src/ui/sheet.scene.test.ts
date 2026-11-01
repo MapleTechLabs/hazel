@@ -46,7 +46,7 @@ describe("sheet scene", () => {
 			config,
 			...opened,
 			Scene.click(Scene.role("button", { name: "Done" })),
-					Scene.Mount.expectEnded(AcquireResources),
+			Scene.Mount.expectEnded(AcquireResources),
 			Scene.expect(Scene.role("dialog")).toBeAbsent(),
 		)
 	})

@@ -52,7 +52,11 @@ export const dialogSection = <Message>(
 	children: Children,
 ): Html =>
 	h.section(
-		[h.Class(twMerge(dialogBase, options.className)), h.Attribute("data-slot", "dialog"), h.Id(options.id)],
+		[
+			h.Class(twMerge(dialogBase, options.className)),
+			h.Attribute("data-slot", "dialog"),
+			h.Id(options.id),
+		],
 		children,
 	)
 

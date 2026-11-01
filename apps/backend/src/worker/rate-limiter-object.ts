@@ -3,7 +3,7 @@
  * Lua script in `services/rate-limiter.ts`, with the object's single-threaded execution standing
  * in for the script's atomicity.
  */
-import * as Cloudflare from "alchemy/Cloudflare"
+import * as Cloudflare from "@alchemy.run/cloudflare"
 import { RuntimeContext } from "alchemy/RuntimeContext"
 import { Effect, Layer } from "effect"
 import { type RateLimitResult, RateLimiter } from "../services/rate-limiter"

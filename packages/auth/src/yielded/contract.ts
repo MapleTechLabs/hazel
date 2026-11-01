@@ -64,9 +64,13 @@ export const desktopClient = {
 } as const
 
 /** The browser-to-desktop handoff: the web app authorizes, the desktop app exchanges. */
-export const desktopLogin = BrowserLoginContract.make(HazelAuthApi.sessions.moduleId, HazelAuthApi.sessions.Session, {
-	basePath: "/auth/browser-login",
-})
+export const desktopLogin = BrowserLoginContract.make(
+	HazelAuthApi.sessions.moduleId,
+	HazelAuthApi.sessions.Session,
+	{
+		basePath: "/auth/browser-login",
+	},
+)
 
 /** The desktop app's own session: who it is signed in as, and signing out. */
 export const nativeSession = OperationHttp.make({

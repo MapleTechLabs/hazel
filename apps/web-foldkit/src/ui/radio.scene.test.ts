@@ -38,7 +38,10 @@ describe("radio group scene", () => {
 		Scene.scene(
 			{ update, view: styledView() },
 			Scene.given(init()),
-			Scene.expect(Scene.role("radiogroup", { name: "Plan" })).toHaveAttr("aria-orientation", "vertical"),
+			Scene.expect(Scene.role("radiogroup", { name: "Plan" })).toHaveAttr(
+				"aria-orientation",
+				"vertical",
+			),
 			Scene.expect(Scene.role("radiogroup")).toHaveAccessibleDescription("Billed monthly"),
 			Scene.expectAll(Scene.all.role("radio")).toHaveCount(2),
 			Scene.expect(radio("free")).toHaveAttr("name", "plan"),
@@ -102,8 +105,12 @@ const unstyledView =
 					interaction: wiring(model),
 				},
 				(radio) => [
-					radio("s", { ariaLabel: "Small" }, (state) => [h.span([], [state.isSelected ? "S selected" : "S"])]),
-					radio("m", { ariaLabel: "Medium", className: "medium-radio" }, (state) => [h.span([], [state.isHovered ? "M hovered" : "M"])]),
+					radio("s", { ariaLabel: "Small" }, (state) => [
+						h.span([], [state.isSelected ? "S selected" : "S"]),
+					]),
+					radio("m", { ariaLabel: "Medium", className: "medium-radio" }, (state) => [
+						h.span([], [state.isHovered ? "M hovered" : "M"]),
+					]),
 				],
 			),
 		])
@@ -148,4 +155,3 @@ describe("unstyled aria radio group scene", () => {
 		)
 	})
 })
-

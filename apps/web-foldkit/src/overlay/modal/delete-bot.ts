@@ -55,7 +55,9 @@ const DeleteBot = Command.define("DeleteBot", {
 			return Message.SucceededDeleteBot()
 		}).pipe(
 			Effect.catchCause((cause) =>
-				Effect.succeed(Message.FailedDeleteBot({ toast: failureToast(cause, "friendly", errorOverrides) })),
+				Effect.succeed(
+					Message.FailedDeleteBot({ toast: failureToast(cause, "friendly", errorOverrides) }),
+				),
 			),
 		),
 })
@@ -64,12 +66,16 @@ type Return = ModalReturn<Model, Message>
 
 const update = (model: Model, message: Message): Return =>
 	Message.match<Return>(message, {
-		GotFrameMessage: ({ message }) => (isCloseRequest(message) ? { model, outMessage: closed } : { model }),
+		GotFrameMessage: ({ message }) =>
+			isCloseRequest(message) ? { model, outMessage: closed } : { model },
 		ClickedCancel: () => ({ model, outMessage: closed }),
 		ClickedDelete: () =>
 			model.isDeleting
 				? { model }
-				: { model: modifyFields(model, { isDeleting: () => true }), commands: [DeleteBot({ id: model.botId })] },
+				: {
+						model: modifyFields(model, { isDeleting: () => true }),
+						commands: [DeleteBot({ id: model.botId })],
+					},
 		SucceededDeleteBot: () => ({
 			model,
 			outMessage: completed({ toast: successToast("Application deleted successfully") }),
@@ -96,9 +102,11 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 			]),
 			dialogFooter(h, [
 				button(h, { intent: "outline", onPress: Message.ClickedCancel() }, ["Cancel"]),
-				button(h, { intent: "danger", onPress: Message.ClickedDelete(), isDisabled: model.isDeleting }, [
-					model.isDeleting ? "Deleting..." : "Delete Application",
-				]),
+				button(
+					h,
+					{ intent: "danger", onPress: Message.ClickedDelete(), isDisabled: model.isDeleting },
+					[model.isDeleting ? "Deleting..." : "Delete Application"],
+				),
 			]),
 		],
 		(message) => Message.GotFrameMessage({ message }),

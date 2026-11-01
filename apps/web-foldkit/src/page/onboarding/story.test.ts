@@ -45,7 +45,9 @@ describe("start-up", () => {
 	test("an onboarded user is sent home once, and later shared changes do not redirect again", () => {
 		const onboarded = makeShared()
 		const started = init(onboardingRoute(null), onboarded)
-		expect(started.outMessage).toEqual(PageOutMessage.RequestedNavigation({ route: routeOfPath("/"), replace: false }))
+		expect(started.outMessage).toEqual(
+			PageOutMessage.RequestedNavigation({ route: routeOfPath("/"), replace: false }),
+		)
 		expect(started.model.phase._tag).toBe("Leaving")
 		expect(started.commands?.map((command) => command.name)).toEqual([ReadBrowserTimezone.name])
 		expect(sharedChanged(started.model, onboarded).outMessage).toBeUndefined()
@@ -113,7 +115,9 @@ describe("profile step", () => {
 		story(
 			run,
 			given(profile),
-			model((current) => expect(stepStateOf(current)).toMatchObject({ firstName: "Nora", lastName: "Newcomer" })),
+			model((current) =>
+				expect(stepStateOf(current)).toMatchObject({ firstName: "Nora", lastName: "Newcomer" }),
+			),
 			message(Message.ChangedFirstName({ value: "  Ada " })),
 			message(Message.SubmittedProfile()),
 			Command.expectExact(UpdateProfile({ userId, firstName: "Ada", lastName: "Newcomer" })),
@@ -134,7 +138,9 @@ describe("profile step", () => {
 			given(profileForm("", "Newcomer")),
 			message(Message.SubmittedProfile()),
 			Command.expectNone(),
-			model((current) => expect(stepStateOf(current)).toMatchObject({ hasChanged: true, isSubmitting: false })),
+			model((current) =>
+				expect(stepStateOf(current)).toMatchObject({ hasChanged: true, isSubmitting: false }),
+			),
 		)
 	})
 
@@ -154,7 +160,12 @@ describe("profile step", () => {
 
 	// SubmittedProfile is guarded on isSubmitting, so Enter while saving sends no second update.
 	test("a submit while saving sends nothing", () => {
-		story(run, given(profileForm("Nora", "Newcomer", true)), message(Message.SubmittedProfile()), Command.expectNone())
+		story(
+			run,
+			given(profileForm("Nora", "Newcomer", true)),
+			message(Message.SubmittedProfile()),
+			Command.expectNone(),
+		)
 	})
 
 	// Validation trims, so "   " is not sent as a first name.
@@ -206,8 +217,14 @@ describe("profile step", () => {
 			firstName: "Nora",
 			lastName: "Newcomer",
 		})
-		const edited = withStep(profile, StepState.Profile({ firstName: "", lastName: "", hasChanged: true, isSubmitting: false }))
-		expect(stepStateOf(sharedChanged(edited, newcomer).model)).toMatchObject({ firstName: "", lastName: "" })
+		const edited = withStep(
+			profile,
+			StepState.Profile({ firstName: "", lastName: "", hasChanged: true, isSubmitting: false }),
+		)
+		expect(stepStateOf(sharedChanged(edited, newcomer).model)).toMatchObject({
+			firstName: "",
+			lastName: "",
+		})
 	})
 })
 
@@ -231,8 +248,13 @@ describe("timezone step", () => {
 			run,
 			given(timezone),
 			message(Message.ChangedTimezoneQuery({ value: "vie" })),
-			Command.resolve(DebounceTimezoneQuery({ query: "vie" }), Message.ElapsedTimezoneDebounce({ query: "vi" })),
-			model((current) => expect(stepStateOf(current)).toMatchObject({ query: "vie", debouncedQuery: "" })),
+			Command.resolve(
+				DebounceTimezoneQuery({ query: "vie" }),
+				Message.ElapsedTimezoneDebounce({ query: "vi" }),
+			),
+			model((current) =>
+				expect(stepStateOf(current)).toMatchObject({ query: "vie", debouncedQuery: "" }),
+			),
 			message(Message.ChangedTimezoneQuery({ value: "vienna" })),
 			Command.resolve(DebounceTimezoneQuery, Message.ElapsedTimezoneDebounce({ query: "vienna" })),
 			model((current) => expect(stepStateOf(current)).toMatchObject({ debouncedQuery: "vienna" })),
@@ -259,7 +281,10 @@ describe("timezone step", () => {
 			message(Message.ClickedCity({ timezone: "Europe/Vienna" })),
 			message(Message.ClickedContinueTimezone()),
 			Command.expectExact(UpdateUserTimezone({ userId, timezone: "Europe/Vienna" })),
-			Command.resolve(UpdateUserTimezone, Message.SucceededUpdateTimezone({ timezone: "Europe/Vienna" })),
+			Command.resolve(
+				UpdateUserTimezone,
+				Message.SucceededUpdateTimezone({ timezone: "Europe/Vienna" }),
+			),
 			Command.resolve(urlFor("themeSelection"), urlDone),
 			model((current) => {
 				expect(stepNameOf(current)).toBe("themeSelection")
@@ -283,7 +308,12 @@ describe("timezone step", () => {
 
 	// ClickedContinueTimezone is guarded on isSubmitting, so a second press does not save twice.
 	test("Continue while saving sends nothing", () => {
-		story(run, given(timezoneForm("UTC", true)), message(Message.ClickedContinueTimezone()), Command.expectNone())
+		story(
+			run,
+			given(timezoneForm("UTC", true)),
+			message(Message.ClickedContinueTimezone()),
+			Command.expectNone(),
+		)
 	})
 })
 
@@ -325,7 +355,12 @@ describe("theme and choice steps", () => {
 		)
 		story(
 			run,
-			given(withStep(useCases, StepState.UseCases({ box: ChoiceBox.init({ id: "team-size", selectedKeys: ["small"] }) }))),
+			given(
+				withStep(
+					useCases,
+					StepState.UseCases({ box: ChoiceBox.init({ id: "team-size", selectedKeys: ["small"] }) }),
+				),
+			),
 			message(Message.ClickedContinueChoice()),
 			Command.resolve(urlFor("role"), urlDone),
 			model((current) => {
@@ -354,7 +389,9 @@ describe("invite step and finalization", () => {
 			given(invite),
 			message(Message.ClickedAddEmail()),
 			message(Message.ChangedEmail({ rowId: 1, value: "grace@hazel.test" })),
-			model((current) => expect(inviteRows(current).map((row) => row.email)).toEqual(["", "grace@hazel.test"])),
+			model((current) =>
+				expect(inviteRows(current).map((row) => row.email)).toEqual(["", "grace@hazel.test"]),
+			),
 			message(Message.ClickedRemoveEmail({ rowId: 0 })),
 			message(Message.ClickedRemoveEmail({ rowId: 1 })),
 			model((current) => {
@@ -394,7 +431,10 @@ describe("invite step and finalization", () => {
 				[CompleteOnboarding, Message.SucceededCompleteOnboarding()],
 			),
 			Command.expectExact(urlFor("completed"), LoadOnboardingHome({ href: "/" })),
-			Command.resolveAll([ReplaceOnboardingStepUrl, urlDone], [LoadOnboardingHome, Message.CompletedLoadHome()]),
+			Command.resolveAll(
+				[ReplaceOnboardingStepUrl, urlDone],
+				[LoadOnboardingHome, Message.CompletedLoadHome()],
+			),
 			model((current) => expect(stepNameOf(current)).toBe("completed")),
 		)
 	})
@@ -414,7 +454,10 @@ describe("invite step and finalization", () => {
 				[ReplaceOnboardingStepUrl, urlDone],
 				[CompleteOnboarding, Message.SucceededCompleteOnboarding()],
 			),
-			Command.resolveAll([ReplaceOnboardingStepUrl, urlDone], [LoadOnboardingHome, Message.CompletedLoadHome()]),
+			Command.resolveAll(
+				[ReplaceOnboardingStepUrl, urlDone],
+				[LoadOnboardingHome, Message.CompletedLoadHome()],
+			),
 		)
 	})
 
@@ -428,7 +471,9 @@ describe("invite step and finalization", () => {
 				[CompleteOnboarding, Message.FailedCompleteOnboarding({ reason: "Unavailable" })],
 			),
 			model((current) =>
-				expect(stepStateOf(current)).toEqual(StepState.Finalizing({ failure: Option.some("Unavailable") })),
+				expect(stepStateOf(current)).toEqual(
+					StepState.Finalizing({ failure: Option.some("Unavailable") }),
+				),
 			),
 			message(Message.ClickedBack()),
 			Command.expectNone(),
@@ -440,7 +485,10 @@ describe("invite step and finalization", () => {
 				expect(run(current, Message.ClickedRetryFinalize()).commands ?? []).toEqual([])
 			}),
 			Command.resolve(CompleteOnboarding, Message.SucceededCompleteOnboarding()),
-			Command.resolveAll([ReplaceOnboardingStepUrl, urlDone], [LoadOnboardingHome, Message.CompletedLoadHome()]),
+			Command.resolveAll(
+				[ReplaceOnboardingStepUrl, urlDone],
+				[LoadOnboardingHome, Message.CompletedLoadHome()],
+			),
 			model((current) => expect(stepNameOf(current)).toBe("completed")),
 		)
 	})
@@ -448,7 +496,12 @@ describe("invite step and finalization", () => {
 	test("without an active organization nothing is sent and the form stays open", () => {
 		story(
 			run,
-			given(withStep(onboardingAt("teamInvitation"), StepState.Invite({ rows: rowsOf(["grace@hazel.test"]), nextRowId: 1, isSending: false }))),
+			given(
+				withStep(
+					onboardingAt("teamInvitation"),
+					StepState.Invite({ rows: rowsOf(["grace@hazel.test"]), nextRowId: 1, isSending: false }),
+				),
+			),
 			message(Message.ClickedContinueInvite()),
 			Command.expectNone(),
 			expectOutMessage(errorOut("No active organization")),
@@ -468,7 +521,12 @@ describe("invite step and finalization", () => {
 
 	// Continue is guarded on isSending, so a second press while sending does not invite twice.
 	test("Continue while sending sends nothing", () => {
-		story(run, given(inviteForm(["grace@hazel.test"], true)), message(Message.ClickedContinueInvite()), Command.expectNone())
+		story(
+			run,
+			given(inviteForm(["grace@hazel.test"], true)),
+			message(Message.ClickedContinueInvite()),
+			Command.expectNone(),
+		)
 	})
 
 	test("an invalid address is flagged on its own row", () => {
@@ -478,7 +536,10 @@ describe("invite step and finalization", () => {
 			message(Message.ClickedContinueInvite()),
 			Command.expectNone(),
 			model((current) =>
-				expect(inviteRows(current).map((row) => row.error)).toEqual([Option.none(), Option.some("InvalidEmail")]),
+				expect(inviteRows(current).map((row) => row.error)).toEqual([
+					Option.none(),
+					Option.some("InvalidEmail"),
+				]),
 			),
 		)
 	})
@@ -516,7 +577,10 @@ describe("invite step and finalization", () => {
 				[CompleteOnboarding, Message.SucceededCompleteOnboarding()],
 			),
 			Command.expectHas(LoadOnboardingHome({ href: "/hazel" })),
-			Command.resolveAll([ReplaceOnboardingStepUrl, urlDone], [LoadOnboardingHome, Message.CompletedLoadHome()]),
+			Command.resolveAll(
+				[ReplaceOnboardingStepUrl, urlDone],
+				[LoadOnboardingHome, Message.CompletedLoadHome()],
+			),
 		)
 	})
 

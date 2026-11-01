@@ -74,24 +74,6 @@ export function getTimezoneAbbreviation(timezone: string | null | undefined): st
 }
 
 /**
- * Gets the UTC offset string (e.g., "GMT-8", "GMT+5:30")
- */
-export function getTimezoneOffset(timezone: string | null | undefined): string {
-	if (!timezone) return ""
-
-	try {
-		const formatter = new Intl.DateTimeFormat("en-US", {
-			timeZone: timezone,
-			timeZoneName: "shortOffset",
-		})
-		const parts = formatter.formatToParts(new Date())
-		return parts.find((p) => p.type === "timeZoneName")?.value || ""
-	} catch {
-		return ""
-	}
-}
-
-/**
  * Detect the user's browser timezone
  */
 export function detectBrowserTimezone(): string {
@@ -103,62 +85,6 @@ export interface TimezoneCity {
 	timezone: string
 	offset: number
 	country: string
-}
-
-/**
- * Convert an IANA timezone string to a display-friendly city object
- * e.g., "America/New_York" -> { name: "New York", timezone: "America/New_York", offset: -5, country: "America" }
- */
-export function timezoneToCity(timezone: string): TimezoneCity {
-	// Extract city name from timezone (e.g., "America/New_York" -> "New York")
-	const parts = timezone.split("/")
-	const cityPart = parts[parts.length - 1] || timezone
-	const name = cityPart.replace(/_/g, " ")
-
-	// Extract region as country (e.g., "America", "Europe", "Asia")
-	const country = parts[0]?.replace(/_/g, " ") || ""
-
-	// Calculate current UTC offset
-	const offset = getTimezoneOffsetNumber(timezone)
-
-	return {
-		name,
-		timezone,
-		offset,
-		country,
-	}
-}
-
-/**
- * Get the UTC offset as a number (e.g., -5 for EST, 5.5 for IST)
- */
-export function getTimezoneOffsetNumber(timezone: string): number {
-	try {
-		const now = new Date()
-		const formatter = new Intl.DateTimeFormat("en-US", {
-			timeZone: timezone,
-			hour: "numeric",
-			minute: "numeric",
-			hourCycle: "h23",
-		})
-		const parts = formatter.formatToParts(now)
-		const hour = Number.parseInt(parts.find((p) => p.type === "hour")?.value || "0")
-		const minute = Number.parseInt(parts.find((p) => p.type === "minute")?.value || "0")
-
-		const utcHour = now.getUTCHours()
-		const utcMinute = now.getUTCMinutes()
-
-		let hourDiff = hour - utcHour
-		const minuteDiff = minute - utcMinute
-
-		// Handle day boundary
-		if (hourDiff > 12) hourDiff -= 24
-		if (hourDiff < -12) hourDiff += 24
-
-		return hourDiff + minuteDiff / 60
-	} catch {
-		return 0
-	}
 }
 
 /**

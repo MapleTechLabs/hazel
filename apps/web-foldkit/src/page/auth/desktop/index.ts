@@ -9,7 +9,13 @@ import { authorizeAttempt, describeAttempt, HandoffFailure } from "../../../auth
 import { AppRoute, hrefOf, signInHref, type RouteOf } from "../../../route"
 import { button } from "../../../ui/button"
 import { loader } from "../../../ui/loader"
-import { definePage, isSessionLoading, type PageReturn, type PageViewInputs, type Shared } from "../../contract"
+import {
+	definePage,
+	isSessionLoading,
+	type PageReturn,
+	type PageViewInputs,
+	type Shared,
+} from "../../contract"
 import { authError, authFrame, authHeading } from "../layout"
 
 /**
@@ -50,7 +56,9 @@ export const DescribeAttempt = Command.define("DescribeAttempt", {
 	execute: ({ attemptId }) =>
 		describeAttempt(attemptId).pipe(
 			Effect.map((description) => Message.DescribedAttempt({ appName: description.displayName })),
-			Effect.catchTags({ HandoffError: ({ reason }) => Effect.succeed(Message.FailedDescribe({ reason })) }),
+			Effect.catchTags({
+				HandoffError: ({ reason }) => Effect.succeed(Message.FailedDescribe({ reason })),
+			}),
 		),
 })
 
@@ -62,7 +70,9 @@ export const AuthorizeAttempt = Command.define("AuthorizeAttempt", {
 		authorizeAttempt(attemptId).pipe(
 			Effect.tap(load),
 			Effect.map((callbackUrl) => Message.AuthorizedAttempt({ callbackUrl })),
-			Effect.catchTags({ HandoffError: ({ reason }) => Effect.succeed(Message.FailedAuthorize({ reason })) }),
+			Effect.catchTags({
+				HandoffError: ({ reason }) => Effect.succeed(Message.FailedAuthorize({ reason })),
+			}),
 		),
 })
 
@@ -189,7 +199,11 @@ const failed = (h: HtmlBuilder<Message>, reason: HandoffFailure | null): Readonl
 					? [
 							button(
 								h,
-								{ intent: "outline", className: "mt-4 w-full", onPress: Message.ClickedRetry() },
+								{
+									intent: "outline",
+									className: "mt-4 w-full",
+									onPress: Message.ClickedRetry(),
+								},
 								["Try again"],
 							),
 						]
@@ -205,13 +219,21 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 			? [loader(h, { className: "size-6" })]
 			: Model.match(model, {
 					NoAttempt: () => [
-						authHeading(h, "Couldn't sign in the app", "Open this page from the Hazel desktop app."),
+						authHeading(
+							h,
+							"Couldn't sign in the app",
+							"Open this page from the Hazel desktop app.",
+						),
 					],
 					Loading: () => [loader(h, { className: "size-6" })],
 					Ready: ({ appName }) => confirm(h, appName, shared, false),
 					Authorizing: ({ appName }) => confirm(h, appName, shared, true),
 					Returned: ({ callbackUrl }) => [
-						authHeading(h, "You're signed in", "Switch back to the Hazel app. You can close this tab."),
+						authHeading(
+							h,
+							"You're signed in",
+							"Switch back to the Hazel app. You can close this tab.",
+						),
 						h.a(
 							[
 								h.Class("text-fg text-sm underline underline-offset-2"),

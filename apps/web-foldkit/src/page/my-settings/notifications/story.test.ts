@@ -110,7 +110,10 @@ describe("notification preferences", () => {
 			),
 			expectOutMessage(
 				PageOutMessage.RequestedSoundSettings({
-					settings: { ...shared.soundSettings, volume: Slider.snapAndClamp(shared.soundSettings.volume + 0.1, 0, 1, 0.1) },
+					settings: {
+						...shared.soundSettings,
+						volume: Slider.snapAndClamp(shared.soundSettings.volume + 0.1, 0, 1, 0.1),
+					},
 				}),
 			),
 		)
@@ -143,8 +146,10 @@ describe("user settings writes", () => {
 	})
 
 	const synced = () =>
-		pageUpdate(init().model, Message.UpdatedUserRow({ row: Schema.decodeUnknownSync(UserRow)(row) })).model
-	const settingsWith = (patch: object) => Schema.decodeUnknownSync(User.UserSettingsSchema)({ ...row.settings, ...patch })
+		pageUpdate(init().model, Message.UpdatedUserRow({ row: Schema.decodeUnknownSync(UserRow)(row) }))
+			.model
+	const settingsWith = (patch: object) =>
+		Schema.decodeUnknownSync(User.UserSettingsSchema)({ ...row.settings, ...patch })
 	const writeOf = (result: ReturnType<typeof pageUpdate>) =>
 		result.commands?.map((command) => ({ name: command.name, args: command.args }))
 

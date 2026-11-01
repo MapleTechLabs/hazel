@@ -4,5 +4,4 @@ import LinearBotWorkerLive, { LinearBotWorker } from "./src/worker.ts"
 
 export { LinearBotWorker }
 
-// oxlint-disable-next-line effecttsgo/strict-effect-provide
 export default Effect.provide(LinearBotWorker, LinearBotWorkerLive)

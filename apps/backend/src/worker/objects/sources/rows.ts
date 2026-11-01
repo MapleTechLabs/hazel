@@ -90,12 +90,10 @@ export const selectVisible = <P>(
 						.orderBy((columns: unknown) => window.orderBy(columns as ColumnAccessors))
 						.limit(window.limit)
 		const rows = yield* db.run(query as never)
-		return (rows as ReadonlyArray<Record<string, unknown>>).map(
-			(row): SyncRow => ({
-				key: key.map((column) => String(row[column])).join(":"),
-				row: toWireRow(row),
-			}),
-		)
+		return (rows as ReadonlyArray<Record<string, unknown>>).map((row): SyncRow => ({
+			key: key.map((column) => String(row[column])).join(":"),
+			row: toWireRow(row),
+		}))
 	}).pipe(Effect.orDie)
 
 /** `key IN (keys)`; a composite key matches `col1 || ':' || col2`. */

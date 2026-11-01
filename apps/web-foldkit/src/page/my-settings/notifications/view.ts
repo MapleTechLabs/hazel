@@ -133,7 +133,10 @@ const soundSettings = (
 							isDisabled: !enabled,
 							formatValue: volumeText,
 							toView: (attributes) =>
-								Slider.layout(h, attributes, { label: "Volume", valueText: volumeText(sound.volume) }),
+								Slider.layout(h, attributes, {
+									label: "Volume",
+									valueText: volumeText(sound.volume),
+								}),
 						},
 						toParentMessage: toVolumeMessage,
 					}),

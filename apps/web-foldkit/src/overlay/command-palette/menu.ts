@@ -95,7 +95,12 @@ const homeSections = (model: Model): ReadonlyArray<CommandMenu.Section> => {
 	const recent = recentChannelsOf(model)
 	return [
 		...(recent.length > 0
-			? [CommandMenu.section("Recent", recent.map((channel) => recentItem(model, channel)))]
+			? [
+					CommandMenu.section(
+						"Recent",
+						recent.map((channel) => recentItem(model, channel)),
+					),
+				]
 			: []),
 		CommandMenu.section("Quick Actions", [
 			CommandMenu.item("action:search", "search messages find", true),
@@ -108,7 +113,9 @@ const homeSections = (model: Model): ReadonlyArray<CommandMenu.Section> => {
 			? [
 					CommandMenu.section(
 						"Channels",
-						model.channels.map((channel) => CommandMenu.item(`channel:${channel.id}`, channel.name)),
+						model.channels.map((channel) =>
+							CommandMenu.item(`channel:${channel.id}`, channel.name),
+						),
 					),
 				]
 			: []),
@@ -119,7 +126,9 @@ const homeSections = (model: Model): ReadonlyArray<CommandMenu.Section> => {
 						model.dmChannels.map((dm) =>
 							CommandMenu.item(
 								`dm:${dm.id}`,
-								dm.otherMembers.map((member) => `${member.firstName} ${member.lastName}`).join(" "),
+								dm.otherMembers
+									.map((member) => `${member.firstName} ${member.lastName}`)
+									.join(" "),
 							),
 						),
 					),
@@ -159,7 +168,9 @@ export const menuSectionsOf = (model: Model, _shared: Shared): ReadonlyArray<Com
 		return [
 			CommandMenu.section(
 				"Theme",
-				THEME_OPTIONS.map((option) => CommandMenu.item(`theme:${option.value}`, `${option.label} theme mode`)),
+				THEME_OPTIONS.map((option) =>
+					CommandMenu.item(`theme:${option.value}`, `${option.label} theme mode`),
+				),
 			),
 		]
 	return page._tag === "Home" ? homeSections(model) : []

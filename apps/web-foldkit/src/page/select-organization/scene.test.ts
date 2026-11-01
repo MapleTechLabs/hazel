@@ -15,8 +15,20 @@ import { view } from "./view"
 /** The organization picker through its view. */
 
 const shared = makeShared()
-const hazel: UserOrganization = { id: Schema.decodeSync(OrganizationId)(uuid(1)), name: "Hazel Labs", slug: "hazel", logoUrl: null, role: "owner" }
-const acme: UserOrganization = { id: Schema.decodeSync(OrganizationId)(uuid(2)), name: "Acme Corp", slug: null, logoUrl: null, role: "member" }
+const hazel: UserOrganization = {
+	id: Schema.decodeSync(OrganizationId)(uuid(1)),
+	name: "Hazel Labs",
+	slug: "hazel",
+	logoUrl: null,
+	role: "owner",
+}
+const acme: UserOrganization = {
+	id: Schema.decodeSync(OrganizationId)(uuid(2)),
+	name: "Acme Corp",
+	slug: null,
+	logoUrl: null,
+	role: "member",
+}
 const withOrganizations = (organizations: ReadonlyArray<UserOrganization>): Model => ({
 	organizations: Organizations.Loaded({ organizations: [...organizations] }),
 	createWorkspace: CreateWorkspace.init(),
@@ -32,11 +44,17 @@ describe("select organization view", () => {
 			Scene.expect(Scene.text("@hazel")).toExist(),
 			Scene.click(Scene.role("button", { name: /Acme Corp/ })),
 			Scene.expectOutMessage(
-				PageOutMessage.RequestedNavigation({ route: routeOfPath(`/onboarding/setup-organization?orgId=${acme.id}`), replace: false }),
+				PageOutMessage.RequestedNavigation({
+					route: routeOfPath(`/onboarding/setup-organization?orgId=${acme.id}`),
+					replace: false,
+				}),
 			),
 			Scene.click(Scene.role("button", { name: "Create a new one" })),
 			Scene.expectOutMessage(
-				PageOutMessage.RequestedNavigation({ route: routeOfPath("/onboarding/setup-organization"), replace: false }),
+				PageOutMessage.RequestedNavigation({
+					route: routeOfPath("/onboarding/setup-organization"),
+					replace: false,
+				}),
 			),
 		)
 	})
@@ -47,7 +65,9 @@ describe("select organization view", () => {
 			Scene.given(init().model),
 			Scene.expect(Scene.role("heading", { name: "Select an organization" })).toBeAbsent(),
 			Scene.Subscription.emit(Message.UpdatedOrganizations({ organizations: [hazel] })),
-			Scene.expectOutMessage(PageOutMessage.RequestedNavigation({ route: routeOfPath("/hazel"), replace: false })),
+			Scene.expectOutMessage(
+				PageOutMessage.RequestedNavigation({ route: routeOfPath("/hazel"), replace: false }),
+			),
 			Scene.expect(Scene.role("button", { name: /Hazel Labs/ })).toBeAbsent(),
 		)
 	})
@@ -61,7 +81,9 @@ describe("select organization view", () => {
 			Scene.expect(Scene.role("heading", { name: "Create your workspace" })).toExist(),
 			Scene.type(Scene.label("Workspace name"), "Hazel Labs"),
 			Scene.click(Scene.role("button", { name: "Create workspace" })),
-			Scene.Command.expectExact(CreateWorkspace.CreateWorkspace({ name: "Hazel Labs", slug: "hazel-labs" })),
+			Scene.Command.expectExact(
+				CreateWorkspace.CreateWorkspace({ name: "Hazel Labs", slug: "hazel-labs" }),
+			),
 			Scene.Command.resolve(
 				CreateWorkspace.CreateWorkspace,
 				CreateWorkspace.Message.LeftForWorkspace(),

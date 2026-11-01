@@ -53,7 +53,12 @@ export interface PageSubscriptionInput<Model> {
 	readonly shared: Shared
 }
 
-export type PageReturn<Model, Message> = Update.ReturnWithOutMessage<Model, Message, PageOutMessage, Resources>
+export type PageReturn<Model, Message> = Update.ReturnWithOutMessage<
+	Model,
+	Message,
+	PageOutMessage,
+	Resources
+>
 
 // SPEC (what a page module provides)
 

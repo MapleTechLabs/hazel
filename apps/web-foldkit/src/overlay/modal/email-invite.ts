@@ -14,7 +14,15 @@ import { closed, completed, ModalOutMessage } from "../out-message"
 import { ToastRequest } from "../toasts"
 import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalViewInputs } from "./contract"
-import { Frame, Message as FrameMessage, frameView, initFrame, isCloseRequest, modalDescription, modalTitle } from "./frame"
+import {
+	Frame,
+	Message as FrameMessage,
+	frameView,
+	initFrame,
+	isCloseRequest,
+	modalDescription,
+	modalTitle,
+} from "./frame"
 import { errorToast, successToast, warningToast } from "../../data/actions"
 import { sendInvitations } from "../../data/invitations"
 import { OrganizationId } from "@hazel/schema"
@@ -55,7 +63,9 @@ const SendInvites = Command.define("SendInvites", {
 	},
 	messages: [Message.CompletedSendInvites, Message.FailedSendInvites],
 	execute: ({ organizationId, invites }) =>
-		sendInvitations(organizationId, invites).pipe(Effect.map((results) => Message.CompletedSendInvites(results))),
+		sendInvitations(organizationId, invites).pipe(
+			Effect.map((results) => Message.CompletedSendInvites(results)),
+		),
 })
 
 const ID = "email-invite-modal"
@@ -123,17 +133,22 @@ const completedSendInvites = (model: Model, successCount: number, errorCount: nu
 
 const update = (model: Model, message: Message): Return =>
 	Message.match<Return>(message, {
-		GotFrameMessage: ({ message }) => (isCloseRequest(message) ? { model, outMessage: closed } : { model }),
+		GotFrameMessage: ({ message }) =>
+			isCloseRequest(message) ? { model, outMessage: closed } : { model },
 		GotRoleMessage: ({ rowId, message }) => {
 			const row = model.invites.find((candidate) => candidate.rowId === rowId)
 			if (row === undefined) return { model }
 			const result = Select.update(row.role, message)
 			return {
 				model: updateRow(model, rowId, (current) => ({ ...current, role: result.model })),
-				commands: Command.mapMessages(result.commands, (child) => Message.GotRoleMessage({ rowId, message: child })),
+				commands: Command.mapMessages(result.commands, (child) =>
+					Message.GotRoleMessage({ rowId, message: child }),
+				),
 			}
 		},
-		ChangedEmail: ({ rowId, value }) => ({ model: updateRow(model, rowId, (row) => ({ ...row, email: value })) }),
+		ChangedEmail: ({ rowId, value }) => ({
+			model: updateRow(model, rowId, (row) => ({ ...row, email: value })),
+		}),
 		ClickedRemoveInvite: ({ rowId }) => ({
 			model: modifyFields(model, { invites: (rows) => rows.filter((row) => row.rowId !== rowId) }),
 		}),
@@ -148,7 +163,8 @@ const update = (model: Model, message: Message): Return =>
 					},
 		ClickedCancel: () => ({ model, outMessage: closed }),
 		SubmittedForm: () => submitted(model),
-		CompletedSendInvites: ({ successCount, errorCount }) => completedSendInvites(model, successCount, errorCount),
+		CompletedSendInvites: ({ successCount, errorCount }) =>
+			completedSendInvites(model, successCount, errorCount),
 		FailedSendInvites: ({ toast }) => ({
 			model: modifyFields(model, { isSubmitting: () => false }),
 			outMessage: ModalOutMessage.RequestedToast({ toast }),
@@ -184,7 +200,8 @@ const inviteRow = (h: HtmlBuilder<Message>, row: Row, index: number, count: numb
 						model: row.role,
 						view: selectView,
 						viewInputs: { items: ROLE_ITEMS },
-						toParentMessage: (message: Select.Message) => Message.GotRoleMessage({ rowId: row.rowId, message }),
+						toParentMessage: (message: Select.Message) =>
+							Message.GotRoleMessage({ rowId: row.rowId, message }),
 					}),
 				],
 			),
@@ -214,11 +231,18 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 		() => [
 			dialogHeader(h, {}, [
 				h.div(
-					[h.Class("mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-primary/50")],
+					[
+						h.Class(
+							"mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-primary/50",
+						),
+					],
 					[IconUsersPlus(h, { className: "size-6 text-primary" })],
 				),
 				modalTitle(h, model.frame, "Invite team members"),
-				modalDescription(h, "Invite colleagues to join your organization. They'll receive an email invitation."),
+				modalDescription(
+					h,
+					"Invite colleagues to join your organization. They'll receive an email invitation.",
+				),
 			]),
 			h.form(
 				[h.OnSubmit(Message.SubmittedForm())],
@@ -226,7 +250,9 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 					dialogBody(
 						h,
 						[
-							...model.invites.map((row, index) => inviteRow(h, row, index, model.invites.length)),
+							...model.invites.map((row, index) =>
+								inviteRow(h, row, index, model.invites.length),
+							),
 							button(
 								h,
 								{
@@ -242,9 +268,15 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 					),
 					dialogFooter(h, [
 						button(h, { intent: "outline", onPress: Message.ClickedCancel() }, ["Cancel"]),
-						button(h, { intent: "primary", isDisabled: model.isSubmitting, attributes: [h.Type("submit")] }, [
-							model.isSubmitting ? "Sending..." : `Send invite${plural(validCount)}`,
-						]),
+						button(
+							h,
+							{
+								intent: "primary",
+								isDisabled: model.isSubmitting,
+								attributes: [h.Type("submit")],
+							},
+							[model.isSubmitting ? "Sending..." : `Send invite${plural(validCount)}`],
+						),
 					]),
 				],
 			),

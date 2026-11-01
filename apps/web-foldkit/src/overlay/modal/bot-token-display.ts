@@ -11,7 +11,10 @@ export interface BotTokenDisplayOptions<Message> {
 	readonly onCopy: Message
 }
 
-export const botTokenDisplay = <Message>(h: HtmlBuilder<Message>, options: BotTokenDisplayOptions<Message>): Html =>
+export const botTokenDisplay = <Message>(
+	h: HtmlBuilder<Message>,
+	options: BotTokenDisplayOptions<Message>,
+): Html =>
 	h.div(
 		[h.Class("flex flex-col gap-4")],
 		[
@@ -24,7 +27,10 @@ export const botTokenDisplay = <Message>(h: HtmlBuilder<Message>, options: BotTo
 						[
 							h.span([h.Class("font-medium text-warning")], ["Save this token now."]),
 							" ",
-							h.span([h.Class("text-fg")], ["You won't be able to see it again after closing this dialog."]),
+							h.span(
+								[h.Class("text-fg")],
+								["You won't be able to see it again after closing this dialog."],
+							),
 						],
 					),
 				],
@@ -44,11 +50,22 @@ export const botTokenDisplay = <Message>(h: HtmlBuilder<Message>, options: BotTo
 							onPress: options.onToggleVisible,
 							attributes: [h.AriaLabel(options.isVisible ? "Hide token" : "Show token")],
 						},
-						[options.isVisible ? IconEyeSlash(h, { className: "size-4" }) : IconEye(h, { className: "size-4" })],
+						[
+							options.isVisible
+								? IconEyeSlash(h, { className: "size-4" })
+								: IconEye(h, { className: "size-4" }),
+						],
 					),
-					button(h, { size: "sm", intent: "plain", onPress: options.onCopy, attributes: [h.AriaLabel("Copy token")] }, [
-						IconCopy(h, { className: "size-4" }),
-					]),
+					button(
+						h,
+						{
+							size: "sm",
+							intent: "plain",
+							onPress: options.onCopy,
+							attributes: [h.AriaLabel("Copy token")],
+						},
+						[IconCopy(h, { className: "size-4" })],
+					),
 				],
 			),
 			h.p(

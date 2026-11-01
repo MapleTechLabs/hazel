@@ -115,7 +115,9 @@ const normalized = (text: string) =>
 const contains = (text: string, search: string) => normalized(text).includes(normalized(search))
 
 export const visibleItems = (model: Model, open: Open, items: ReadonlyArray<Item>): ReadonlyArray<Item> =>
-	open.isShowingAll ? items : Array.filter(items, (candidate) => contains(candidate.label, model.inputValue))
+	open.isShowingAll
+		? items
+		: Array.filter(items, (candidate) => contains(candidate.label, model.inputValue))
 
 /** ListKeyboardDelegate without wrapping. */
 const stepKey = (items: ReadonlyArray<Item>, from: Option.Option<string>, direction: 1 | -1) => {
@@ -156,8 +158,13 @@ const closedAndReverted = (model: Model, items: ReadonlyArray<Item>): Model =>
 		inputValue: () => labelOf(items, model.selectedKey),
 	})
 
-const openedAll = (model: Model, items: ReadonlyArray<Item>, strategy: "Selected" | "First" | "Last"): Model => {
-	const fallback = strategy === "Last" ? stepKey(items, Option.none(), -1) : stepKey(items, Option.none(), 1)
+const openedAll = (
+	model: Model,
+	items: ReadonlyArray<Item>,
+	strategy: "Selected" | "First" | "Last",
+): Model => {
+	const fallback =
+		strategy === "Last" ? stepKey(items, Option.none(), -1) : stepKey(items, Option.none(), 1)
 	const focusedKey =
 		strategy === "Selected" ? model.selectedKey : Option.orElse(model.selectedKey, () => fallback)
 	return withPopup(model, {
@@ -218,7 +225,11 @@ export const AnnounceComboBox = Command.define("AnnounceComboBox", {
 const countAnnouncement = (count: number) => `${count} ${count === 1 ? "option" : "options"} available.`
 
 /** useComboBox's live announcements: option count, then (on Apple devices) focus and selection. */
-const announcementsFor = (previous: Model, next: Model, items: ReadonlyArray<Item>): ReadonlyArray<string> => {
+const announcementsFor = (
+	previous: Model,
+	next: Model,
+	items: ReadonlyArray<Item>,
+): ReadonlyArray<string> => {
 	if (next.popup._tag !== "Open") {
 		const isSelectionNew = Option.exists(
 			next.selectedKey,
@@ -262,8 +273,9 @@ export const update = (model: Model, message: Message, items: ReadonlyArray<Item
 					`${labelOf(items, Option.some(message.key))}${Option.contains(model.selectedKey, message.key) ? ", selected" : ""}`,
 				]
 			: []
-	const announcements = Array.map([...pressedFocus, ...announcementsFor(model, result.model, items)], (text) =>
-		AnnounceComboBox({ message: text }),
+	const announcements = Array.map(
+		[...pressedFocus, ...announcementsFor(model, result.model, items)],
+		(text) => AnnounceComboBox({ message: text }),
 	)
 	return Array.isReadonlyArrayNonEmpty(announcements)
 		? { ...result, commands: [...(result.commands ?? []), ...announcements] }
@@ -288,10 +300,15 @@ const updateComboBox = (model: Model, message: Message, items: ReadonlyArray<Ite
 			}
 		},
 		FocusedInput: () => ({ model: modifyFields(model, { isFocused: () => true }) }),
-		BlurredInput: () => ({ model: modifyFields(closedAndReverted(model, items), { isFocused: () => false }) }),
+		BlurredInput: () => ({
+			model: modifyFields(closedAndReverted(model, items), { isFocused: () => false }),
+		}),
 		PressedInputKey: ({ key }) => pressedInputKey(model, items, key),
 		PressedButton: () => ({
-			model: model.popup._tag === "Open" ? closedAndReverted(model, items) : openedAll(model, items, "Selected"),
+			model:
+				model.popup._tag === "Open"
+					? closedAndReverted(model, items)
+					: openedAll(model, items, "Selected"),
 			commands: [FocusComboBoxInput({ elementId: inputId(model.id) })],
 		}),
 		HoveredOption: ({ key }) =>

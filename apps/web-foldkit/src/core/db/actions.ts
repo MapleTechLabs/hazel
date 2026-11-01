@@ -1,4 +1,3 @@
-import { type User } from "@hazel/domain/models"
 import {
 	type AttachmentId,
 	type OrganizationMemberId,
@@ -38,7 +37,6 @@ import {
 	organizationCollection,
 	organizationMemberCollection,
 	pinnedMessageCollection,
-	userCollection,
 } from "./collections"
 
 /**
@@ -317,33 +315,6 @@ export const createThreadAction = optimisticAction({
 				data: { threadChannelId: result.data.id },
 				transactionId: result.transactionId,
 			}
-		}),
-})
-
-/** Updates the user's Hazel preferences (timezone, settings). Profile settings save names and avatar via `user.update`. */
-export const updateUserAction = optimisticAction({
-	collections: [userCollection],
-
-	onMutate: (props: { userId: UserId; timezone?: string | null; settings?: User.UserSettings | null }) => {
-		userCollection.update(props.userId, (draft) => {
-			if (props.timezone !== undefined) draft.timezone = props.timezone
-			if (props.settings !== undefined) draft.settings = props.settings
-		})
-
-		return { userId: props.userId }
-	},
-
-	mutate: (props, _ctx) =>
-		Effect.gen(function* () {
-			const client = yield* HazelRpc
-
-			const result = yield* client("user.update", {
-				id: props.userId,
-				...(props.timezone !== undefined && { timezone: props.timezone }),
-				...(props.settings !== undefined && { settings: props.settings }),
-			})
-
-			return result
 		}),
 })
 

@@ -22,10 +22,7 @@ export interface RadioIndicatorState {
 }
 
 /** The dot: `twMerge(radioIndicatorStyles(state))`. The focus ring follows the label (`group`). */
-export const radioIndicatorStyles = ({
-	isSelected,
-	isInvalid,
-}: RadioIndicatorState): ClassNameValue[] => [
+export const radioIndicatorStyles = ({ isSelected, isInvalid }: RadioIndicatorState): ClassNameValue[] => [
 	"relative inset-ring inset-ring-input isolate flex size-4.5 shrink-0 items-center justify-center rounded-full text-bg transition before:absolute before:inset-auto before:size-2 before:shrink-0 before:rounded-full before:content-[''] hover:before:bg-muted-fg/20 sm:size-4 sm:before:size-1.7",
 	isSelected && [
 		"inset-ring-primary bg-primary text-primary-fg before:bg-bg hover:before:bg-muted/90",

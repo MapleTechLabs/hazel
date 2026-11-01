@@ -85,22 +85,6 @@ export const indexedLinkOwner = (provider: string, externalWorkspaceId: string, 
 		),
 	).pipe(Effect.map(Option.map((row) => row.organizationId)))
 
-/** The orgs connected to a provider workspace (or to any, without `externalWorkspaceId`). */
-export const indexedConnections = (provider: string, externalWorkspaceId?: string) =>
-	Effect.flatMap(Directory, (directory) =>
-		directory.db.run(
-			SQLite.from(schema.chatSyncIndexTable)
-				.select("organizationId", "externalWorkspaceId")
-				.where(($) => [
-					$.provider.eq(provider),
-					$.externalChannelId.isNull(),
-					...(externalWorkspaceId === undefined
-						? []
-						: [$.externalWorkspaceId.eq(externalWorkspaceId)]),
-				]),
-		),
-	).pipe(Effect.withSpan("ChatSync.indexedConnections"))
-
 /**
  * Upsert a machine user in the directory by its external id and return it as a projection: a
  * provider user's shadow (`discord-user-<id>`) or the provider's integration bot.

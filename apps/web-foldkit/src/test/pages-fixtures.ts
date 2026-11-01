@@ -17,7 +17,12 @@ export const memberId = Schema.decodeSync(OrganizationMemberId)(uuid(2))
 export const userId = Schema.decodeSync(UserId)(uuid(3))
 export const channelId = Schema.decodeSync(ChannelId)(uuid(4))
 
-export const organization: Organization = { id: organizationId, name: "Hazel Labs", slug: "hazel", logoUrl: null }
+export const organization: Organization = {
+	id: organizationId,
+	name: "Hazel Labs",
+	slug: "hazel",
+	logoUrl: null,
+}
 
 export const currentUser: CurrentUser = {
 	id: userId,
@@ -42,12 +47,19 @@ export const makeShared = (overrides: Partial<Shared> = {}): Shared => ({
 	...overrides,
 })
 
-type PageUpdate<Model, Message> = (model: Model, message: Message, shared: Shared) => PageReturn<Model, Message>
+type PageUpdate<Model, Message> = (
+	model: Model,
+	message: Message,
+	shared: Shared,
+) => PageReturn<Model, Message>
 type PageView<Model, Message> = (model: Model, viewInputs: PageViewInputs, h: HtmlBuilder<Message>) => Html
 
 /** Binds a page's `update` to one `Shared` for Story (generic over the return so inference stays exact). */
 export const storyUpdate =
-	<Model, Message, Return>(update: (model: Model, message: Message, shared: Shared) => Return, shared: Shared) =>
+	<Model, Message, Return>(
+		update: (model: Model, message: Message, shared: Shared) => Return,
+		shared: Shared,
+	) =>
 	(model: Model, message: Message): Return =>
 		update(model, message, shared)
 
@@ -62,7 +74,10 @@ export const pageScene = <Model, Message>(
 })
 
 /** Acknowledges the overlay Mount every open `ui/modal` dialog renders. */
-export const portalModalMounted = Scene.Mount.resolve(Modal.AcquireResources, Modal.Message.SucceededAcquireResources())
+export const portalModalMounted = Scene.Mount.resolve(
+	Modal.AcquireResources,
+	Modal.Message.SucceededAcquireResources(),
+)
 
 /** A server failure toast, as a Command's `failureToast` would build it. */
 export const failureToastFixture: ToastRequest = {

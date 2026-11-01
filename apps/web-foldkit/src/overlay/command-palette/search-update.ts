@@ -41,7 +41,9 @@ type SearchKey = Extract<SearchMessage, { _tag: "PressedSearchKey" }>["key"]
 const MAX_RECENT_SEARCHES = 10
 
 export const searchPlaceholder = (page: SearchPage) =>
-	page.filters.length > 0 ? "Add more filters or search..." : "Search messages... (from:user in:channel has:image)"
+	page.filters.length > 0
+		? "Add more filters or search..."
+		: "Search messages... (from:user in:channel has:image)"
 
 const withPage = (model: Model, page: SearchPage): Model => modifyFields(model, { page: () => page })
 
@@ -58,13 +60,29 @@ const withFilters = (model: Model, page: SearchPage, filters: ReadonlyArray<Sear
 const selectSuggestion = (model: Model, page: SearchPage, suggestion: Suggestion | undefined): Return => {
 	const autocomplete = model.searchAutocomplete
 	if (suggestion === undefined || autocomplete === null) return { model }
-	const filter = { type: autocomplete.filterType, value: suggestion.label, displayValue: suggestion.label, id: suggestion.id }
-	const result = withFilters(modifyFields(model, { searchAutocomplete: () => null }), page, [...page.filters, filter])
-	return { ...result, commands: [DeleteFilterText({ filterStartOffset: autocomplete.filterStartOffset }), ...(result.commands ?? [])] }
+	const filter = {
+		type: autocomplete.filterType,
+		value: suggestion.label,
+		displayValue: suggestion.label,
+		id: suggestion.id,
+	}
+	const result = withFilters(modifyFields(model, { searchAutocomplete: () => null }), page, [
+		...page.filters,
+		filter,
+	])
+	return {
+		...result,
+		commands: [
+			DeleteFilterText({ filterStartOffset: autocomplete.filterStartOffset }),
+			...(result.commands ?? []),
+		],
+	}
 }
 
 const filterString = (filters: ReadonlyArray<SearchFilter>) =>
-	filters.map((filter) => `${filter.type}:${filter.value.includes(" ") ? `"${filter.value}"` : filter.value}`).join(" ")
+	filters
+		.map((filter) => `${filter.type}:${filter.value.includes(" ") ? `"${filter.value}"` : filter.value}`)
+		.join(" ")
 
 /** `navigateToResult`: remember the search, open the message in its channel, close. */
 const openResult = (model: Model, page: SearchPage, index: number, shared: Shared): Return => {
@@ -75,7 +93,9 @@ const openResult = (model: Model, page: SearchPage, index: number, shared: Share
 		? [
 				search,
 				...model.recentSearches.filter(
-					(entry) => entry.query !== search.query || JSON.stringify(entry.filters) !== JSON.stringify(search.filters),
+					(entry) =>
+						entry.query !== search.query ||
+						JSON.stringify(entry.filters) !== JSON.stringify(search.filters),
 				),
 			].slice(0, MAX_RECENT_SEARCHES)
 		: model.recentSearches
@@ -100,27 +120,40 @@ const loadRecent = (model: Model, page: SearchPage, index: number): Return => {
 	})
 	return {
 		model: withPage(model, next),
-		commands: [SetSearchText({ text: rawInput }), SetSearchPlaceholder({ placeholder: searchPlaceholder(next) })],
+		commands: [
+			SetSearchText({ text: rawInput }),
+			SetSearchPlaceholder({ placeholder: searchPlaceholder(next) }),
+		],
 	}
 }
 
 const moveSelection = (model: Model, page: SearchPage, step: 1 | -1): Return => {
 	const count = model.search.hasQuery ? model.search.results.length : model.recentSearches.length
 	if (step === 1 && count === 0) return { model }
-	const selectedIndex = step === 1 ? Math.min(page.selectedIndex + 1, count - 1) : Math.max(page.selectedIndex - 1, 0)
+	const selectedIndex =
+		step === 1 ? Math.min(page.selectedIndex + 1, count - 1) : Math.max(page.selectedIndex - 1, 0)
 	return { model: withPage(model, modifyFields(page, { selectedIndex: () => selectedIndex })) }
 }
 
 const pressedAutocompleteKey = (model: Model, page: SearchPage, key: string): Return => {
 	const count = model.suggestions.length
 	if (key === "Escape") return { model: modifyFields(model, { searchAutocomplete: () => null }) }
-	if (key === "Enter" || key === "Tab") return selectSuggestion(model, page, model.suggestions[model.suggestionIndex])
+	if (key === "Enter" || key === "Tab")
+		return selectSuggestion(model, page, model.suggestions[model.suggestionIndex])
 	const suggestionIndex =
-		key === "ArrowDown" ? (model.suggestionIndex + 1) % count : model.suggestionIndex <= 0 ? count - 1 : model.suggestionIndex - 1
+		key === "ArrowDown"
+			? (model.suggestionIndex + 1) % count
+			: model.suggestionIndex <= 0
+				? count - 1
+				: model.suggestionIndex - 1
 	return { model: modifyFields(model, { suggestionIndex: () => suggestionIndex }) }
 }
 
-const editedSearch = (model: Model, page: SearchPage, message: Extract<SearchMessage, { _tag: "EditedSearch" }>) => {
+const editedSearch = (
+	model: Model,
+	page: SearchPage,
+	message: Extract<SearchMessage, { _tag: "EditedSearch" }>,
+) => {
 	const isSameTrigger = model.searchAutocomplete?.filterType === message.autocomplete?.filterType
 	const next = modifyFields(page, {
 		rawInput: () => message.text,
@@ -172,7 +205,10 @@ const clearedSearch = (model: Model, page: SearchPage): Return => {
 	})
 	return {
 		model: withPage(model, next),
-		commands: [SetSearchText({ text: "" }), SetSearchPlaceholder({ placeholder: searchPlaceholder(next) })],
+		commands: [
+			SetSearchText({ text: "" }),
+			SetSearchPlaceholder({ placeholder: searchPlaceholder(next) }),
+		],
 	}
 }
 
@@ -181,11 +217,17 @@ const searchStep = (model: Model, page: SearchPage, message: SearchMessage, shar
 		EditedSearch: (edited): Return => editedSearch(model, page, edited),
 		PressedSearchKey: ({ key }) => pressedSearchKey(model, page, key, shared),
 		PressedAutocompleteKey: ({ key }) => pressedAutocompleteKey(model, page, key),
-		HoveredSuggestion: ({ index }): Return => ({ model: modifyFields(model, { suggestionIndex: () => index }) }),
+		HoveredSuggestion: ({ index }): Return => ({
+			model: modifyFields(model, { suggestionIndex: () => index }),
+		}),
 		ClickedSuggestion: ({ index }) => selectSuggestion(model, page, model.suggestions[index]),
 		UpdatedSuggestions: ({ suggestions }) => updatedSuggestions(model, suggestions),
 		ClickedRemoveFilter: ({ index }) =>
-			withFilters(model, page, page.filters.filter((_, filterIndex) => filterIndex !== index)),
+			withFilters(
+				model,
+				page,
+				page.filters.filter((_, filterIndex) => filterIndex !== index),
+			),
 		ClickedClearSearch: () => clearedSearch(model, page),
 		ClickedSearchResult: ({ index }) => openResult(model, page, index, shared),
 		ClickedRecentSearch: ({ index }) => loadRecent(model, page, index),

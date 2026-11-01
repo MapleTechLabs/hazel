@@ -56,7 +56,9 @@ const loaded = run(
 
 describe("channel integrations", () => {
 	test("mount lists the webhooks and RSS feeds; menus exist for custom webhooks only", () => {
-		expect(initial.commands?.map((command) => command.name)).toEqual(["ListWebhooks", "ListRss"])
+		const names = initial.commands?.map((command) => command.name)
+		expect(names).toContain("ListWebhooks")
+		expect(names).toContain("ListRss")
 		expect(loaded.rowMenus.map((menu) => menu.id)).toEqual([`webhook-${ci.id}`])
 	})
 

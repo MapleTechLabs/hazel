@@ -17,14 +17,12 @@ export const ListOutgoingInvites = Command.define("ListOutgoingInvites", {
 					organizationId,
 					invites: response.data
 						.filter((invite) => invite.hostChannelId === channelId)
-						.map(
-							(invite): Invite => ({
-								id: invite.id,
-								targetValue: invite.targetValue,
-								status: invite.status,
-								createdAtMs: toDate(invite.createdAt).getTime(),
-							}),
-						),
+						.map((invite): Invite => ({
+							id: invite.id,
+							targetValue: invite.targetValue,
+							status: invite.status,
+							createdAtMs: toDate(invite.createdAt).getTime(),
+						})),
 				}),
 			),
 			catchCommon((reason) => Message.FailedListOutgoingInvites({ organizationId, reason })),

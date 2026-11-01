@@ -3,42 +3,42 @@
 # SLACK_CLIENT_SECRET and SLACK_SIGNING_SECRET from "Basic Information". Enable "Manage
 # Distribution" so other workspaces can install it.
 display_information:
-  name: Hazel
-  description: Sync Slack channels with Hazel
-  background_color: "#6938ef"
+    name: Hazel
+    description: Sync Slack channels with Hazel
+    background_color: "#6938ef"
 features:
-  bot_user:
-    display_name: Hazel
-    always_online: true
+    bot_user:
+        display_name: Hazel
+        always_online: true
 oauth_config:
-  redirect_urls:
-    - https://api.hazel.sh/integrations/slack/callback
-  scopes:
-    bot:
-      - channels:history
-      - channels:read
-      - channels:join
-      - groups:history
-      - groups:read
-      - chat:write
-      - chat:write.customize
-      - reactions:read
-      - reactions:write
-      - users:read
-    # Linking a user's own Slack account (mentions and authorship).
-    user:
-      - users:read
+    redirect_urls:
+        - https://api.hazel.sh/integrations/slack/callback
+    scopes:
+        bot:
+            - channels:history
+            - channels:read
+            - channels:join
+            - groups:history
+            - groups:read
+            - chat:write
+            - chat:write.customize
+            - reactions:read
+            - reactions:write
+            - users:read
+        # Linking a user's own Slack account (mentions and authorship).
+        user:
+            - users:read
 settings:
-  event_subscriptions:
-    request_url: https://api.hazel.sh/webhooks/slack
-    bot_events:
-      - message.channels
-      - message.groups
-      - reaction_added
-      - reaction_removed
-      # The install's end: its bot token is dead (`chat_sync_installations` drops it).
-      - app_uninstalled
-      - tokens_revoked
-  org_deploy_enabled: false
-  socket_mode_enabled: false
-  token_rotation_enabled: false
+    event_subscriptions:
+        request_url: https://api.hazel.sh/webhooks/slack
+        bot_events:
+            - message.channels
+            - message.groups
+            - reaction_added
+            - reaction_removed
+            # The install's end: its bot token is dead (`chat_sync_installations` drops it).
+            - app_uninstalled
+            - tokens_revoked
+    org_deploy_enabled: false
+    socket_mode_enabled: false
+    token_rotation_enabled: false

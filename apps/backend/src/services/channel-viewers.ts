@@ -15,8 +15,6 @@ import { type ChannelId, ConnectConversationId, OrganizationId, type UserId } fr
 import { Context, Effect, Layer, Option } from "effect"
 import { CurrentObject } from "../lib/current-object"
 
-export type ChannelViewerRow = schema.ChannelViewer
-
 /** `_object_meta` keys `channel.setViewers` writes (see `worker/objects/effects/channel-effects.ts`). */
 const META_ORG = "organizationId"
 const META_CONVERSATION = "conversationId"

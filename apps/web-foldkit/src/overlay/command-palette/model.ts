@@ -3,11 +3,16 @@ import { Schema } from "effect"
 import * as CommandMenu from "../../ui/command-menu"
 import { RecentSearch, SearchAutocomplete, SearchData, SearchFilter, Suggestion } from "./search-data"
 
-export { FilterType, SearchFilter } from "./search-data"
-
 /** Legacy `atoms/command-palette-state.ts`: open state, the current page and the back stack. */
 
-export const Page = Schema.Literals(["home", "search", "join-channel", "create-channel", "status", "appearance"])
+export const Page = Schema.Literals([
+	"home",
+	"search",
+	"join-channel",
+	"create-channel",
+	"status",
+	"appearance",
+])
 export type Page = typeof Page.Type
 
 export const ChannelType = Schema.Literals(["public", "private"])
@@ -39,7 +44,13 @@ const initialPageStates: Readonly<Record<Page, PageState>> = {
 	search: { _tag: "Search", query: "", rawInput: "", filters: [], selectedIndex: 0 },
 	status: { _tag: "Status", inputValue: "" },
 	appearance: { _tag: "Appearance", inputValue: "" },
-	"create-channel": { _tag: "CreateChannel", name: "", channelType: "public", error: null, isSubmitting: false },
+	"create-channel": {
+		_tag: "CreateChannel",
+		name: "",
+		channelType: "public",
+		error: null,
+		isSubmitting: false,
+	},
 	"join-channel": { _tag: "JoinChannel", searchQuery: "" },
 }
 

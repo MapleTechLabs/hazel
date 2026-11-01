@@ -18,7 +18,12 @@ import { FocusTriggerOnPress } from "../../ui/menu-view"
 
 const shared = makeShared()
 const grace = Schema.decodeSync(UserId)(uuid(40))
-const member = (id: UserId, firstName: string, lastName: string, role: DirectoryMember["role"]): DirectoryMember => ({
+const member = (
+	id: UserId,
+	firstName: string,
+	lastName: string,
+	role: DirectoryMember["role"],
+): DirectoryMember => ({
 	id,
 	firstName,
 	lastName,
@@ -91,7 +96,12 @@ describe("member directory", () => {
 			Scene.Subscription.emit(Message.UpdatedDmChannels({ rows: dmWithGrace })),
 			Scene.click(messageButton),
 			Scene.Command.expectNone(),
-			Scene.expectOutMessage(PageOutMessage.RequestedNavigation({ route: routeOfPath(`/hazel/chat/${channelId}`), replace: false })),
+			Scene.expectOutMessage(
+				PageOutMessage.RequestedNavigation({
+					route: routeOfPath(`/hazel/chat/${channelId}`),
+					replace: false,
+				}),
+			),
 		)
 	})
 
@@ -104,7 +114,12 @@ describe("member directory", () => {
 			Scene.click(messageButton),
 			Scene.expectNoOutMessage(),
 			Scene.Subscription.emit(Message.UpdatedDmChannels({ rows: dmWithGrace })),
-			Scene.expectOutMessage(PageOutMessage.RequestedNavigation({ route: routeOfPath(`/hazel/chat/${channelId}`), replace: false })),
+			Scene.expectOutMessage(
+				PageOutMessage.RequestedNavigation({
+					route: routeOfPath(`/hazel/chat/${channelId}`),
+					replace: false,
+				}),
+			),
 		)
 	})
 

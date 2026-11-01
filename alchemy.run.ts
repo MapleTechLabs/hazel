@@ -4,7 +4,7 @@
 import { appendFileSync } from "node:fs"
 import * as Maple from "@maple-dev/alchemy"
 import * as Alchemy from "alchemy"
-import * as Cloudflare from "alchemy/Cloudflare"
+import * as Cloudflare from "@alchemy.run/cloudflare"
 import { ConfigError } from "effect/Config"
 import { SourceError } from "effect/ConfigProvider"
 import * as Effect from "effect/Effect"

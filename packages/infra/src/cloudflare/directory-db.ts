@@ -3,7 +3,7 @@
  * invitations and the routing indexes. The api Worker and the bot gateway bind it. Migrations are
  * rendered from `packages/db/src/stores.ts` into `packages/db/migrations/directory`.
  */
-import * as Cloudflare from "alchemy/Cloudflare"
+import * as Cloudflare from "@alchemy.run/cloudflare"
 import { type HazelStage, resolveWorkerName } from "./stage.ts"
 
 /** The binding name both Workers read the directory from. */

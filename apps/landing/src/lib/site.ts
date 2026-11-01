@@ -8,5 +8,3 @@ export const siteConfig = {
 		github: "https://github.com/hazelchat/hazel",
 	},
 }
-
-export type SiteConfig = typeof siteConfig

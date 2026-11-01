@@ -5,7 +5,10 @@ import { CommonReason } from "~/lib/error-messages"
 import { Bot } from "../shared/bots"
 
 /** What can go wrong uninstalling a bot, beyond the shared reasons. */
-export const UninstallFailure = Schema.Union([Schema.Literals(["NotFound", "NoActiveOrganization"]), CommonReason])
+export const UninstallFailure = Schema.Union([
+	Schema.Literals(["NotFound", "NoActiveOrganization"]),
+	CommonReason,
+])
 export type UninstallFailure = typeof UninstallFailure.Type
 
 export const Message = defineMessageUnion({

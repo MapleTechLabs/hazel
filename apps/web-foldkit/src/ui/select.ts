@@ -119,9 +119,7 @@ const searchKey = (
 		!candidate.isDisabled &&
 		candidate.label.slice(0, search.length).toLowerCase() === search.toLowerCase()
 	const start = Option.getOrElse(
-		Option.flatMap(from, (key) =>
-			Array.findFirstIndex(items, (candidate) => candidate.key === key),
-		),
+		Option.flatMap(from, (key) => Array.findFirstIndex(items, (candidate) => candidate.key === key)),
 		() => 0,
 	)
 	return Option.map(

@@ -10,7 +10,15 @@ import { textField } from "../../ui/text-field"
 import { closed, completed } from "../out-message"
 import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalViewInputs } from "./contract"
-import { Frame, Message as FrameMessage, frameView, initFrame, isCloseRequest, modalDescription, modalTitle } from "./frame"
+import {
+	Frame,
+	Message as FrameMessage,
+	frameView,
+	initFrame,
+	isCloseRequest,
+	modalDescription,
+	modalTitle,
+} from "./frame"
 import { successToast } from "../../data/actions"
 
 /**
@@ -52,14 +60,21 @@ type Return = ModalReturn<Model, Message>
 
 const update = (model: Model, message: Message): Return =>
 	Message.match<Return>(message, {
-		GotFrameMessage: ({ message }) => (isCloseRequest(message) ? { model, outMessage: closed } : { model }),
+		GotFrameMessage: ({ message }) =>
+			isCloseRequest(message) ? { model, outMessage: closed } : { model },
 		GotCategoryMessage: ({ message }) => {
 			const result = Select.update(model.category, message)
 			// The form-level validator reruns on any field change.
-			const messageError = result.outMessage === undefined ? model.messageError : validateMessage(model.message)
+			const messageError =
+				result.outMessage === undefined ? model.messageError : validateMessage(model.message)
 			return {
-				model: modifyFields(model, { category: () => result.model, messageError: () => messageError }),
-				commands: Command.mapMessages(result.commands, (child) => Message.GotCategoryMessage({ message: child })),
+				model: modifyFields(model, {
+					category: () => result.model,
+					messageError: () => messageError,
+				}),
+				commands: Command.mapMessages(result.commands, (child) =>
+					Message.GotCategoryMessage({ message: child }),
+				),
 			}
 		},
 		ChangedMessage: ({ value }) => ({
@@ -84,7 +99,10 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 		() => [
 			dialogHeader(h, {}, [
 				modalTitle(h, model.frame, "Send Feedback"),
-				modalDescription(h, "Help us improve by sharing your thoughts, reporting bugs, or requesting features."),
+				modalDescription(
+					h,
+					"Help us improve by sharing your thoughts, reporting bugs, or requesting features.",
+				),
 			]),
 			h.form(
 				[h.OnSubmit(Message.SubmittedForm())],
@@ -113,7 +131,12 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 									field.label(["Message"]),
 									field.textarea({
 										placeholder: "Describe your feedback in detail...",
-										attributes: [h.Attribute("aria-invalid", model.messageError !== null ? "true" : "false")],
+										attributes: [
+											h.Attribute(
+												"aria-invalid",
+												model.messageError !== null ? "true" : "false",
+											),
+										],
 									}),
 									// Only the textarea is invalid: React Aria never renders the FieldError here.
 								],
@@ -125,7 +148,11 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 						button(h, { intent: "outline", onPress: Message.ClickedCancel() }, ["Cancel"]),
 						button(
 							h,
-							{ intent: "primary", isDisabled: model.messageError !== null, attributes: [h.Type("submit")] },
+							{
+								intent: "primary",
+								isDisabled: model.messageError !== null,
+								attributes: [h.Type("submit")],
+							},
 							["Submit Feedback"],
 						),
 					]),

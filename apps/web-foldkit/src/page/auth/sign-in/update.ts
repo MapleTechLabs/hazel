@@ -37,7 +37,12 @@ export const update = (model: Model, message: Message): Return =>
 		ClickedCancelBrowserSignIn: () =>
 			pendingAttempt(model) !== "browser"
 				? { model }
-				: { model, commands: [StartBrowserSignIn.Interrupt(() => Message.CompletedCancelBrowserSignIn())] },
+				: {
+						model,
+						commands: [
+							StartBrowserSignIn.Interrupt(() => Message.CompletedCancelBrowserSignIn()),
+						],
+					},
 		CompletedCancelBrowserSignIn: () => ({
 			model: modifyFields(model, { submission: () => Submission.Idle() }),
 			commands: [RetireBrowserSignIn()],

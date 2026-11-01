@@ -1,0 +1,78 @@
+{
+	"$schema": "https://unpkg.com/knip@6/schema.json",
+	"ignore": [".context/**"],
+	"ignoreExportsUsedInFile": true,
+	"workspaces": {
+		".": {
+			"entry": ["alchemy.run.ts", "scripts/**/*.ts", "scripts/oxlint-plugins/*.mjs"],
+			"ignoreBinaries": ["infisical"]
+		},
+		"apps/backend": {
+			// The folder's map (`objects/` and what lives where); nothing imports the barrel.
+			"ignore": ["src/worker/objects/index.ts"]
+		},
+		"apps/bot-gateway": {
+			"entry": ["alchemy.run.ts"]
+		},
+		"apps/docs": {
+			// Not in the root stack yet: docs.hazel.sh still serves from Vercel.
+			"entry": ["alchemy.run.ts"]
+		},
+		"apps/landing": {
+			// Kept for the hero video and quote section, both commented out in their pages.
+			"ignore": [
+				"src/components/react/HeroVideoDialog.tsx",
+				"src/components/sections/QuoteSection.astro"
+			]
+		},
+		"libs/bot-sdk": {
+			// Run by hand (`bun run index.ts`) to try the SDK; not imported by anything.
+			"entry": ["examples/*/index.ts"]
+		},
+		"apps/link-preview-worker": {
+			"entry": ["alchemy.run.ts"]
+		},
+		"apps/web-foldkit": {
+			"entry": ["alchemy.run.ts", "src/main.ts", "**/*.gallery.ts", "public/sw.js"],
+			// @foldkit/devtools is loaded by @foldkit/vite-plugin's dev overlay; the oxlint plugin by
+			// path from the root .oxlintrc.json.
+			"ignoreDependencies": ["@foldkit/devtools", "@foldkit/oxlint-plugin"]
+		},
+		"bots/*": {
+			"entry": ["alchemy.run.ts"]
+		},
+		"packages/auth": {
+			"entry": ["scripts/**/*.ts"]
+		},
+		// The workerd suites' Worker, named by path in their vitest config.
+		"packages/db": {
+			"entry": ["test/workerd/worker.ts"]
+		},
+		"packages/sync-do": {
+			"entry": ["test/workerd/worker.ts"]
+		},
+		"packages/integrations": {
+			"entry": ["scripts/**/*.ts"]
+		},
+		"packages/ui": {
+			// The JSX in its .tsx files needs React's types; nothing imports them by name.
+			"ignoreDependencies": ["@types/react"]
+		}
+	},
+	"rules": {
+		"files": "error",
+		"dependencies": "error",
+		"devDependencies": "error",
+		"unlisted": "error",
+		"binaries": "error",
+		"unresolved": "error",
+		"catalog": "error",
+		"exports": "warn",
+		"types": "warn",
+		"nsExports": "warn",
+		"nsTypes": "warn",
+		"enumMembers": "warn",
+		"namespaceMembers": "warn",
+		"duplicates": "warn"
+	}
+}

@@ -5,7 +5,7 @@
  */
 import { HazelStack, resolveWorkerName } from "@hazel/infra/cloudflare"
 import { plainFrom } from "@hazel/infra/env"
-import * as Cloudflare from "alchemy/Cloudflare"
+import * as Cloudflare from "@alchemy.run/cloudflare"
 import { Effect } from "effect"
 
 const props = Effect.gen(function* () {

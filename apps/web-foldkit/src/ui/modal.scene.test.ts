@@ -60,11 +60,21 @@ describe("modal scene", () => {
 	})
 
 	test("the close icon closes the modal", () => {
-		Scene.scene(config, ...opened, Scene.click(Scene.role("button", { name: "Close" })), ...closedByRequest())
+		Scene.scene(
+			config,
+			...opened,
+			Scene.click(Scene.role("button", { name: "Close" })),
+			...closedByRequest(),
+		)
 	})
 
 	test("a close button in the content closes the modal", () => {
-		Scene.scene(config, ...opened, Scene.click(Scene.role("button", { name: "Cancel" })), ...closedByRequest())
+		Scene.scene(
+			config,
+			...opened,
+			Scene.click(Scene.role("button", { name: "Cancel" })),
+			...closedByRequest(),
+		)
 	})
 
 	test("a press on the backdrop dismisses the modal", () => {

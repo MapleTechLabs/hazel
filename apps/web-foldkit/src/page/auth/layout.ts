@@ -33,7 +33,9 @@ export const authShell = <M>(
 					"relative z-20 flex items-center gap-2",
 					logoContent(h, { logoClassName: "size-8 text-white" }),
 				),
-				...(tagline === null ? [] : [panelCard(h, [h.p([h.Class("text-lg text-white")], [tagline])])]),
+				...(tagline === null
+					? []
+					: [panelCard(h, [h.p([h.Class("text-lg text-white")], [tagline])])]),
 			]),
 			h.div(
 				[h.Class("flex h-full flex-col p-6 lg:p-12")],
@@ -73,7 +75,11 @@ export const authError = <M>(h: HtmlBuilder<M>, message: UserErrorMessage | null
 		? null
 		: h.p(
 				[h.Class("mt-4 text-danger text-sm"), h.Role("alert")],
-				[message.description === undefined ? message.title : `${message.title}. ${message.description}`],
+				[
+					message.description === undefined
+						? message.title
+						: `${message.title}. ${message.description}`,
+				],
 			)
 
 /** What a failed sign-in says; nothing when the visitor cancelled it themselves. */

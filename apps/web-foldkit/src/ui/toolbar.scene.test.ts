@@ -7,7 +7,11 @@ import { FocusToolbarItem, init, Message, update, view } from "./toolbar"
 /** Toolbar through the view: toolbar role, orientation, and arrow keys mapped to focus moves. */
 
 // Inert children: the toolbar only needs them to render, not to dispatch.
-const buttons: ReadonlyArray<Html> = [h.button([], ["Bold"]), h.button([], ["Italic"]), h.button([], ["Link"])]
+const buttons: ReadonlyArray<Html> = [
+	h.button([], ["Bold"]),
+	h.button([], ["Italic"]),
+	h.button([], ["Link"]),
+]
 const sceneView = Scene.withViewInputs(view, { content: buttons })
 const config = { update, view: sceneView() }
 const formatting = Scene.role("toolbar", { name: "Text formatting" })

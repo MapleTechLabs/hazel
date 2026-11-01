@@ -70,7 +70,9 @@ describe("calendar scene", () => {
 			Scene.given(init({ id: "event", today, value: "2026-03-18" })),
 			...mounted,
 			Scene.click(Scene.role("button", { name: "Next" })),
-			Scene.Command.expectExact(AnnounceCalendar({ message: "April 2026", timeout: 7000, assertiveness: "assertive" })),
+			Scene.Command.expectExact(
+				AnnounceCalendar({ message: "April 2026", timeout: 7000, assertiveness: "assertive" }),
+			),
 			resolveAnnounce,
 			Scene.expect(Scene.role("grid", { name: "Event date, April 2026" })).toExist(),
 			Scene.click(Scene.role("button", { name: "Previous" })),
@@ -86,7 +88,9 @@ describe("calendar scene", () => {
 			...mounted,
 			Scene.expectAll(disabledCells).toHaveCount(13),
 			Scene.expect(day("Monday, March 9, 2026")).toHaveAttr("aria-disabled", "true"),
-			Scene.expect(day("Tuesday, March 10, 2026, First available date")).not.toHaveAttr("aria-disabled"),
+			Scene.expect(day("Tuesday, March 10, 2026, First available date")).not.toHaveAttr(
+				"aria-disabled",
+			),
 			Scene.expect(Scene.role("button", { name: "Previous" })).toBeDisabled(),
 		)
 	})
@@ -97,7 +101,9 @@ describe("calendar scene", () => {
 			Scene.given(init({ id: "event", today, value: "2026-03-18" })),
 			...mounted,
 			Scene.keydown(Scene.role("grid"), "ArrowRight"),
-			Scene.Command.expectExact(FocusCalendarCell({ gridId: "event-grid", label: "Thursday, March 19, 2026" })),
+			Scene.Command.expectExact(
+				FocusCalendarCell({ gridId: "event-grid", label: "Thursday, March 19, 2026" }),
+			),
 			Scene.Command.resolve(FocusCalendarCell, Message.CompletedFocusCell()),
 			Scene.expect(selectedCell).toHaveText("18"),
 		)

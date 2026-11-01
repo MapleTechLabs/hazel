@@ -87,15 +87,3 @@ export const CraftSearchBlocks = Tool.make("craft_search_blocks", {
 	}),
 	success: Schema.Unknown,
 })
-
-/** All Craft tool definitions for use in Toolkit.make() */
-export const AllCraftTools = [
-	CraftSearchDocuments,
-	CraftGetDocument,
-	CraftCreateDocument,
-	CraftInsertBlocks,
-	CraftGetTasks,
-	CraftCreateTask,
-	CraftGetFolders,
-	CraftSearchBlocks,
-] as const

@@ -128,16 +128,3 @@ export const LinearUpdateIssue = Tool.make("linear_update_issue", {
 	}),
 	success: Schema.Unknown,
 })
-
-/** All Linear tool definitions for use in Toolkit.make() */
-export const AllLinearTools = [
-	LinearGetAccountInfo,
-	LinearGetDefaultTeam,
-	LinearCreateIssue,
-	LinearFetchIssue,
-	LinearListIssues,
-	LinearSearchIssues,
-	LinearListTeams,
-	LinearGetWorkflowStates,
-	LinearUpdateIssue,
-] as const

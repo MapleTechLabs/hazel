@@ -110,7 +110,9 @@ const requireSession = (outcome: Outcome): Effect.Effect<void, AuthFlowError> =>
 		// A second factor Hazel does not ask for: the pending sign-in can't be finished here.
 		Match.when("PendingAuthentication", () => Effect.fail(new AuthFlowError({ reason: "Expired" }))),
 		// The account exists but this call did not sign it in.
-		Match.when("RegistrationAccepted", () => Effect.fail(new AuthFlowError({ reason: "AccountCreated" }))),
+		Match.when("RegistrationAccepted", () =>
+			Effect.fail(new AuthFlowError({ reason: "AccountCreated" })),
+		),
 		Match.exhaustive,
 	)
 

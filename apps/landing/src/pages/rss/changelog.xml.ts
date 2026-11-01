@@ -22,7 +22,7 @@ export async function GET(context: APIContext) {
 				title: entry.data.title || `Week of ${entry.data.week}`,
 				pubDate: entry.data.date,
 				description: entry.data.summary,
-				link: `/changelog#week-${entry.slug}`,
+				link: `/changelog#week-${entry.id}`,
 			})),
 	})
 }

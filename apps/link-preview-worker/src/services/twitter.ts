@@ -1,8 +1,11 @@
 import { FetchHttpClient, HttpClient } from "effect/http"
-import { Context, Effect, Layer, Schema } from "effect"
+import { Context, Effect, Layer, Option, Schema } from "effect"
 
 const SYNDICATION_URL = "https://cdn.syndication.twimg.com"
 const TWEET_ID_REGEX = /^[0-9]+$/
+
+/** The body the syndication API answers a failed request with. */
+const SyndicationErrorBody = Schema.Struct({ error: Schema.String })
 
 export class TwitterApiError extends Schema.TaggedError<TwitterApiError>("TwitterApiError")(
 	"TwitterApiError",
@@ -150,10 +153,13 @@ export class TwitterApi extends Context.Service<TwitterApi>()("TwitterApi", {
 					}
 
 					// Handle other errors
-					const errorMessage =
-						data && typeof data.error === "string"
-							? data.error
-							: `Failed to fetch tweet from "${url}" with status ${response.status}`
+					const errorMessage = Schema.decodeUnknownOption(SyndicationErrorBody)(data).pipe(
+						Option.match({
+							onNone: () =>
+								`Failed to fetch tweet from "${url}" with status ${response.status}`,
+							onSome: (body) => body.error,
+						}),
+					)
 
 					return yield* Effect.fail(
 						new TwitterApiError({

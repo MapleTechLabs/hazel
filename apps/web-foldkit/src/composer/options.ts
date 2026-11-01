@@ -35,17 +35,15 @@ export const mentionOptions = (model: Model): ReadonlyArray<MentionOption> => {
 		}))
 	const bots = model.mentionableBots
 		.filter((bot) => bot.name.toLowerCase().includes(search))
-		.map(
-			(bot): MentionOption => ({
-				id: bot.userId,
-				label: bot.name,
-				description: bot.description ?? "Bot",
-				type: "bot",
-				displayName: bot.name,
-				avatarUrl: bot.avatarUrl,
-				status: null,
-			}),
-		)
+		.map((bot): MentionOption => ({
+			id: bot.userId,
+			label: bot.name,
+			description: bot.description ?? "Bot",
+			type: "bot",
+			displayName: bot.name,
+			avatarUrl: bot.avatarUrl,
+			status: null,
+		}))
 	const statusOf = new Map(model.presence.map((row) => [row.userId, row.status]))
 	const members = model.members.flatMap((member): Array<MentionOption> => {
 		const displayName = `${member.firstName} ${member.lastName}`
@@ -105,7 +103,8 @@ export const emojiOptions = (model: Model): ReadonlyArray<EmojiOption> => {
 	const search = model.autocomplete.search.toLowerCase()
 	if (search.length < 2) return []
 	const standard = ALL_EMOJI_OPTIONS.filter(
-		(option) => option.name.includes(search) || option.keywords.some((keyword) => keyword.includes(search)),
+		(option) =>
+			option.name.includes(search) || option.keywords.some((keyword) => keyword.includes(search)),
 	)
 	const custom = model.customEmojis
 		.filter((emoji) => emoji.name.includes(search))

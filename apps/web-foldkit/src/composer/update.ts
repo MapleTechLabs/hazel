@@ -153,10 +153,10 @@ export const update = (model: Model, message: Message): Return =>
 				Match.when("ArrowDown", () => moveTo(index >= count - 1 ? 0 : index + 1)),
 				Match.when("ArrowUp", () => moveTo(index <= 0 ? count - 1 : index - 1)),
 				Match.whenOr("Enter", "Tab", () => select(model, index)),
-				Match.when(
-					"Escape",
-					(): Return => ({ model, commands: [CloseAutocomplete({ editorId: model.editorId })] }),
-				),
+				Match.when("Escape", (): Return => ({
+					model,
+					commands: [CloseAutocomplete({ editorId: model.editorId })],
+				})),
 				Match.exhaustive,
 			)
 		},

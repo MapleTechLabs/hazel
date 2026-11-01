@@ -296,7 +296,9 @@ const listbox = (model: Model, open: Open, viewInputs: ViewInputs, h: HtmlBuilde
 			h.Id(listboxId(model.id)),
 			h.Role("listbox"),
 		],
-		Array.map(visibleItems(model, open, viewInputs.items), (candidate) => option(model, open, candidate, h)),
+		Array.map(visibleItems(model, open, viewInputs.items), (candidate) =>
+			option(model, open, candidate, h),
+		),
 	)
 
 const option = (model: Model, open: Open, candidate: Item, h: HtmlBuilder<Message>): Html => {

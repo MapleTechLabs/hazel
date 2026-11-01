@@ -19,14 +19,15 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@alchemy.run/cloudflare": "catalog:alchemy",
 		"@maple-dev/alchemy": "catalog:alchemy",
 		"alchemy": "catalog:alchemy",
 		"effect": "catalog:effect"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "catalog:alchemy",
-		"@types/node": "^24.0.0",
+		"@types/node": "^24.19.2",
 		"typescript": "catalog:tooling",
-		"vitest": "^4.1.0"
+		"vitest": "^5.0.5"
 	}
 }

@@ -214,12 +214,7 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, view
 	const monthYear = D.formatMonthYear(model.focusedDate)
 	const label = viewInputs.ariaLabel === undefined ? monthYear : `${viewInputs.ariaLabel}, ${monthYear}`
 	return h.div(
-		[
-			h.AriaLabel(label),
-			h.Attribute("data-slot", "calendar"),
-			h.Id(model.id),
-			h.Role("application"),
-		],
+		[h.AriaLabel(label), h.Attribute("data-slot", "calendar"), h.Id(model.id), h.Role("application")],
 		[
 			h.div([h.Attribute("style", visuallyHidden)], [h.h2([], [label])]),
 			header(h, model, monthYear),

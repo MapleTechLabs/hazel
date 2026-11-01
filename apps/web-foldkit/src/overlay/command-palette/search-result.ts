@@ -125,7 +125,6 @@ const parseMarkdown = (text: string): Segment[] => {
 	return segments
 }
 
-
 /** `highlightSearchQuery`: every case-insensitive match in a `<mark>`. */
 const highlight = (h: HtmlBuilder<Message>, text: string, query: string): Array<Html | string> => {
 	if (!query.trim()) return [text]
@@ -207,7 +206,11 @@ export const searchResultItem = (
 								: [
 										h.span([h.Class("text-muted-fg")], ["in"]),
 										h.span(
-											[h.Class("inline-flex items-center gap-0.5 truncate text-muted-fg")],
+											[
+												h.Class(
+													"inline-flex items-center gap-0.5 truncate text-muted-fg",
+												),
+											],
 											[IconHashtag(h, { className: "size-3" }), result.channelName],
 										),
 									]),
@@ -217,16 +220,24 @@ export const searchResultItem = (
 							),
 						],
 					),
-					markdownText(h, truncate(result.content), query, "mt-0.5 line-clamp-2 text-muted-fg text-sm"),
+					markdownText(
+						h,
+						truncate(result.content),
+						query,
+						"mt-0.5 line-clamp-2 text-muted-fg text-sm",
+					),
 					...(result.attachmentCount > 0
 						? [
 								h.div(
 									[h.Class("mt-1 flex items-center gap-1 text-muted-fg text-xs")],
 									[
 										IconPaperclip2(h, { className: "size-3" }),
-										h.span([], [
-											`${result.attachmentCount} ${result.attachmentCount === 1 ? "attachment" : "attachments"}`,
-										]),
+										h.span(
+											[],
+											[
+												`${result.attachmentCount} ${result.attachmentCount === 1 ? "attachment" : "attachments"}`,
+											],
+										),
 									],
 								),
 							]

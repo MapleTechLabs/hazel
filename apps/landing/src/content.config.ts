@@ -1,4 +1,6 @@
-import { defineCollection, z } from "astro:content"
+import { defineCollection } from "astro:content"
+import { glob } from "astro/loaders"
+import { z } from "astro/zod"
 
 // Changelog types
 export const changeTypes = [
@@ -24,7 +26,7 @@ const changeItemSchema = z.object({
 export type ChangeItem = z.infer<typeof changeItemSchema>
 
 const changelogCollection = defineCollection({
-	type: "content",
+	loader: glob({ pattern: "**/*.md", base: "./src/content/changelog" }),
 	schema: z.object({
 		week: z.string(),
 		date: z.date(),
@@ -87,7 +89,7 @@ const ctaButtonSchema = z.object({
 export type CTAButton = z.infer<typeof ctaButtonSchema>
 
 const integrationCollection = defineCollection({
-	type: "content",
+	loader: glob({ pattern: "**/*.md", base: "./src/content/integrations" }),
 	schema: z.object({
 		name: z.string(),
 		logo: z.string(),

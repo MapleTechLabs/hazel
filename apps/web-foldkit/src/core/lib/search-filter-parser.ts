@@ -7,13 +7,6 @@ export type FilterType = "from" | "in" | "has" | "before" | "after"
 
 export const HAS_FILTER_VALUES = ["image", "file", "link", "embed"] as const
 
-export interface SearchFilter {
-	type: FilterType
-	value: string
-	displayValue: string
-	id: string
-}
-
 export interface RawFilter {
 	type: FilterType
 	value: string

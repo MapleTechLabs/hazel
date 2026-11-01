@@ -13,7 +13,8 @@ export const items: ReadonlyArray<ComboBox.Item> = Array.map(getTimezones(), (zo
 	ComboBox.item(zone.id, zone.label),
 )
 
-export const update = (model: ComboBox.Model, message: ComboBox.Message) => ComboBox.update(model, message, items)
+export const update = (model: ComboBox.Model, message: ComboBox.Message) =>
+	ComboBox.update(model, message, items)
 
 export const init = (config: { readonly id: string; readonly value?: string }): ComboBox.Model =>
 	ComboBox.init({

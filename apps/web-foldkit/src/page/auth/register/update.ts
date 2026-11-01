@@ -13,7 +13,13 @@ export const init = (route: RouteOf<"AuthRegister">): Return => ({
 		onNone: () => Model.BrokenLink(),
 		onSome: ({ flowId, reference }) =>
 			Model.Ready({
-				form: { flowId, reference, firstName: "", lastName: "", submission: Submission.NotSubmitted() },
+				form: {
+					flowId,
+					reference,
+					firstName: "",
+					lastName: "",
+					submission: Submission.NotSubmitted(),
+				},
 			}),
 	}),
 })

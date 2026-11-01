@@ -4,7 +4,7 @@
  * call each other without a layer cycle; the Worker's init still yields the classes, which binds
  * the namespaces and registers the classes.
  */
-import * as Cloudflare from "alchemy/Cloudflare"
+import * as Cloudflare from "@alchemy.run/cloudflare"
 import { Layer } from "effect"
 import { OBJECT_NAMESPACES } from "./kinds"
 import { type ObjectRpc, type ObjectStub, ObjectStubs } from "./protocol"

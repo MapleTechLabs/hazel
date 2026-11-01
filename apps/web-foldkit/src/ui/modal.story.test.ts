@@ -1,17 +1,7 @@
 // @vitest-environment jsdom
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
-import {
-	close,
-	init,
-	initOpen,
-	isCloseRequest,
-	isReady,
-	Message,
-	OutMessage,
-	open,
-	update,
-} from "./modal"
+import { close, init, initOpen, isCloseRequest, isReady, Message, OutMessage, open, update } from "./modal"
 
 /** Modal on @foldkit/ui Dialog: opening shows the native dialog, closing closes it, both announced. */
 

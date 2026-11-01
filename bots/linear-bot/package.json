@@ -9,6 +9,7 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@alchemy.run/cloudflare": "catalog:alchemy",
 		"@effect/ai-openrouter": "catalog:effect",
 		"@hazel-chat/bot-sdk": "workspace:*",
 		"@hazel/infra": "workspace:*",
@@ -18,7 +19,7 @@
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "catalog:alchemy",
-		"@types/node": "^24",
+		"@types/node": "^24.19.2",
 		"typescript": "catalog:tooling"
 	}
 }

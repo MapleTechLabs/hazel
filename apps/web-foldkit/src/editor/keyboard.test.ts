@@ -150,10 +150,11 @@ describe("Select all", () => {
 		expect(e.blocks()).toHaveLength(1)
 	})
 
-	test("pasting over Mod+A does not throw", () => {
+	test("pasting over Mod+A replaces everything", () => {
 		const e = open("hello")
 		e.press("a", { mod: true })
-		expect(() => e.paste("replaced")).not.toThrow()
+		e.paste("replaced")
+		expect(e.markdown()).toBe("replaced")
 	})
 
 	test("in a code block the first Mod+A selects the block, a second everything", () => {

@@ -66,11 +66,15 @@ type UpdateReturn = Update.ReturnWithOutMessage<Model, Message, OutMessage>
  * renders only while open, and its Mount shows it and takes its resources.
  */
 export const open = (model: Model): UpdateReturn =>
-	model.isOpen ? { model } : { model: modifyFields(model, { isOpen: () => true }), outMessage: OutMessage.Opened() }
+	model.isOpen
+		? { model }
+		: { model: modifyFields(model, { isOpen: () => true }), outMessage: OutMessage.Opened() }
 
 /** Closes the modal from the parent; removing the dialog releases its resources and returns focus. */
 export const close = (model: Model): UpdateReturn =>
-	model.isOpen ? { model: modifyFields(model, { isOpen: () => false }), outMessage: OutMessage.Closed() } : { model }
+	model.isOpen
+		? { model: modifyFields(model, { isOpen: () => false }), outMessage: OutMessage.Closed() }
+		: { model }
 
 /** Open and close requests are Model changes (see `open`); the rest is the Dialog's own lifecycle. */
 export const update = (model: Model, message: Message): UpdateReturn =>

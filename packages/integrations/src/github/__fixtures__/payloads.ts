@@ -371,5 +371,3 @@ export const testPayloads = {
 		sender: baseUser,
 	} satisfies GitHubMilestonePayload,
 }
-
-export type TestPayloadKey = keyof typeof testPayloads

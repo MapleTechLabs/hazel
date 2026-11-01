@@ -1,7 +1,7 @@
 import { ExternalLink } from "lucide-react"
 import { motion } from "motion/react"
 import { Markdown } from "@/components/ui/markdown"
-import type { ChangeType } from "@/content/config"
+import type { ChangeType } from "@/content.config"
 import { cn } from "@/lib/utils"
 import { CategoryBadge } from "./CategoryBadge"
 
