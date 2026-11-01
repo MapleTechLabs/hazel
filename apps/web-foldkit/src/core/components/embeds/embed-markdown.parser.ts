@@ -26,10 +26,10 @@ export function parseInlineMarkdown(text: string): ParsedSegment[] {
 		{ regex: /^\{(\w+):([^}]+)\}/, type: "colored" as const },
 		// Bold: **text** or __text__
 		{ regex: /^\*\*(.+?)\*\*/, type: "bold" as const },
-		{ regex: /^__(.+?)__/, type: "bold" as const },
-		// Italic: *text* or _text_ (but not ** or __)
+		{ regex: /^__(.+?)__(?![\p{L}\p{N}\p{M}_])/u, type: "bold" as const },
+		// Italic: *text* or _text_ (but not ** or __). Underscores inside a word (`snake_case`) stay text.
 		{ regex: /^\*([^*]+?)\*/, type: "italic" as const },
-		{ regex: /^_([^_]+?)_/, type: "italic" as const },
+		{ regex: /^_([^_]+?)_(?![\p{L}\p{N}\p{M}_])/u, type: "italic" as const },
 		// Strikethrough: ~~text~~
 		{ regex: /^~~(.+?)~~/, type: "strikethrough" as const },
 		// Inline code: `text`
@@ -43,7 +43,9 @@ export function parseInlineMarkdown(text: string): ParsedSegment[] {
 	while (remaining.length > 0) {
 		let matched = false
 
+		const isInWord = /[\p{L}\p{N}\p{M}_]/u.test(text[text.length - remaining.length - 1] ?? "")
 		for (const pattern of patterns) {
+			if (isInWord && remaining.startsWith("_")) continue
 			const match = remaining.match(pattern.regex)
 			if (match) {
 				// Badge pattern: [[intent:text]] or [[text]]

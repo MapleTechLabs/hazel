@@ -2,6 +2,7 @@ import type { MessageEmbed } from "@hazel/domain/models"
 import { ChannelId, MessageId } from "@hazel/schema"
 import { Option, Schema } from "effect"
 import { describe, expect, test } from "vitest"
+import { type EmbedType, isImageOnly } from "./embeds"
 import * as Live from "./live-state"
 import { processUrls } from "./message/content"
 import { tweetViewOf } from "./unfurl"
@@ -152,5 +153,26 @@ describe("live state", () => {
 			text: "done",
 			progress: 100,
 		})
+	})
+})
+
+describe("isImageOnly", () => {
+	const chart: EmbedType = {
+		title: "Service error rate (last 6h)",
+		description: "17 items, highest electric-sync (61.8)",
+		image: { url: "https://maple.dev/chart.png" },
+	}
+
+	test("a titled image shows bare; its title and description move to the viewer", () => {
+		expect(isImageOnly(chart)).toBe(true)
+		expect(isImageOnly({ image: chart.image! })).toBe(true)
+	})
+
+	test("an image in a real card (an alert's colour, fields, footer or link) keeps its card", () => {
+		expect(isImageOnly({ ...chart, color: 0xef3b4a })).toBe(false)
+		expect(isImageOnly({ ...chart, fields: [{ name: "Signal", value: "Error rate" }] })).toBe(false)
+		expect(isImageOnly({ ...chart, footer: { text: "maple-cli" } })).toBe(false)
+		expect(isImageOnly({ ...chart, url: "https://maple.dev/alerts/1" })).toBe(false)
+		expect(isImageOnly({ title: chart.title })).toBe(false)
 	})
 })

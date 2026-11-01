@@ -25,24 +25,12 @@ export const linkPreviewView = <M>(h: HtmlBuilder<M>, url: string, unfurl: Unfur
 			h.Attribute("target", "_blank"),
 			h.Attribute("rel", "noopener noreferrer"),
 			h.Class(
-				"mt-2 block max-w-sm overflow-hidden rounded-lg border data-pressed:border-fg/15 bg-muted/40 data-pressed:bg-muted hover:border-fg/15 hover:bg-muted",
+				"mt-2 block max-w-md overflow-hidden rounded-lg border data-pressed:border-fg/15 bg-muted/40 data-pressed:bg-muted hover:border-fg/15 hover:bg-muted",
 			),
 		],
 		[
-			imageUrl
-				? h.div(
-						[h.Class("aspect-video w-full overflow-hidden bg-muted")],
-						[
-							h.img([
-								h.Attribute("src", imageUrl),
-								h.Attribute("alt", ""),
-								h.Class("h-full w-full object-cover"),
-							]),
-						],
-					)
-				: h.empty,
 			h.div(
-				[h.Class("flex items-start border-t p-3")],
+				[h.Class("flex items-start p-3")],
 				[
 					h.div(
 						[h.Class("min-w-0")],
@@ -59,6 +47,20 @@ export const linkPreviewView = <M>(h: HtmlBuilder<M>, url: string, unfurl: Unfur
 					),
 				],
 			),
+			// Discord's link image: under the text, at its own aspect ratio, never scaled up.
+			imageUrl
+				? h.div(
+						[h.Class("px-3 pb-3")],
+						[
+							h.img([
+								h.Attribute("src", imageUrl),
+								h.Attribute("alt", ""),
+								h.Attribute("loading", "lazy"),
+								h.Class("block h-auto max-h-[300px] w-auto max-w-full rounded-md"),
+							]),
+						],
+					)
+				: h.empty,
 			isLoading
 				? h.div([h.Class("px-3 pb-3 text-[11px] text-muted-fg")], ["Loading preview…"])
 				: h.empty,

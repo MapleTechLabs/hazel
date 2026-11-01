@@ -15,6 +15,7 @@ import { avatar } from "../ui/avatar"
 import { ariaButton, button } from "../ui/button"
 import { portalOverlay } from "../ui/aria/overlay"
 import type { ChatAttachmentView } from "./attachments"
+import { embedMarkdownView } from "./embeds/embed-markdown"
 
 /**
  * Port of `ImageViewerModal` (`components/chat/image-viewer-modal.tsx`) in its open state: a plain
@@ -23,8 +24,13 @@ import type { ChatAttachmentView } from "./attachments"
 
 export type ImageViewerAction = "download" | "copyUrl" | "openInBrowser"
 
+/** A viewer image; an embed's has a caption (its title and description) under it. */
+export interface ImageViewerImage extends ChatAttachmentView {
+	readonly caption?: { readonly title?: string | undefined; readonly description?: string | undefined }
+}
+
 export interface ImageViewerInputs<M> {
-	readonly images: ReadonlyArray<ChatAttachmentView>
+	readonly images: ReadonlyArray<ImageViewerImage>
 	readonly index: number
 	readonly author: {
 		readonly name: string
@@ -69,7 +75,8 @@ const MainCarousel = Mount.defineStream("ImageViewerMainCarousel", {
 					const embla = EmblaCarousel(element, { startIndex: readSelected(element), loop: false })
 					embla.on("select", () => {
 						const index = embla.selectedScrollSnap()
-						if (index !== readSelected(element)) Queue.offerUnsafe(queue, Intent.PressedSelect({ index }))
+						if (index !== readSelected(element))
+							Queue.offerUnsafe(queue, Intent.PressedSelect({ index }))
 					})
 					const observer = observeSelected(element, (index) => {
 						if (index !== embla.selectedScrollSnap()) embla.scrollTo(index)
@@ -177,6 +184,30 @@ const navButton = <M>(h: HtmlBuilder<M>, side: "left" | "right", onPress: M): Ht
 /** Marks an overlay that legacy portals from inside the message list (React tree, not DOM). */
 export const LIST_PORTAL_ATTRIBUTE = "list-portal"
 
+const hasCaption = (image: ImageViewerImage) => !!(image.caption?.title || image.caption?.description)
+
+/** An embed image's title and description (embed markdown), under it; a long one scrolls. */
+const captionView = <M>(h: HtmlBuilder<M>, caption: ImageViewerImage["caption"]): Html =>
+	caption?.title || caption?.description
+		? h.div(
+				[h.Class("max-h-[12vh] max-w-xl overflow-y-auto text-center")],
+				[
+					caption.title
+						? h.p(
+								[h.Class("font-medium text-sm text-white")],
+								[embedMarkdownView(h, caption.title)],
+							)
+						: h.empty,
+					caption.description
+						? h.p(
+								[h.Class("mt-0.5 text-white/60 text-xs")],
+								[embedMarkdownView(h, caption.description)],
+							)
+						: h.empty,
+				],
+			)
+		: h.empty
+
 export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<M>): Html => {
 	const { images, author } = inputs
 	const selectedIndex = Math.min(Math.max(inputs.index, 0), Math.max(images.length - 1, 0))
@@ -244,13 +275,23 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 								images.map((image) =>
 									h.keyed("div")(
 										image.id,
-										[h.Class("flex min-w-0 flex-[0_0_100%] items-center justify-center")],
+										[
+											h.Class(
+												"flex min-w-0 flex-[0_0_100%] flex-col items-center justify-center gap-3",
+											),
+										],
 										[
 											h.img([
 												h.Attribute("src", image.url),
 												h.Attribute("alt", image.fileName),
-												h.Class("max-h-[70vh] max-w-full rounded-md"),
+												// A caption takes room under the image, clear of the thumbnail strip.
+												h.Class(
+													hasCaption(image)
+														? "max-h-[55vh] max-w-full rounded-md"
+														: "max-h-[70vh] max-w-full rounded-md",
+												),
 											]),
+											captionView(h, image.caption),
 										],
 									),
 								),

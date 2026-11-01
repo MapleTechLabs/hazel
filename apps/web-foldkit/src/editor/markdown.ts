@@ -80,7 +80,9 @@ export function serializeToMarkdown(nodes: ReadonlyArray<ProseMirrorNode>): stri
 				),
 				Match.when("subtext", () => `-# ${serializeInline(node)}`),
 				Match.when("list-item", () =>
-					node.attrs.ordered ? `1. ${serializeInline(node)}` : `- ${serializeInline(node)}`,
+					node.attrs.ordered
+						? `${node.attrs.number ?? 1}. ${serializeInline(node)}`
+						: `- ${serializeInline(node)}`,
 				),
 				Match.when("table", () => serializeTable(node)),
 				Match.whenOr("table-row", "table-cell", () => ""),
@@ -178,18 +180,30 @@ function parseTable(
 const block = (type: string, content: Array<InlineNode>, attrs: Record<string, unknown> | null = null) =>
 	schema.node(type, attrs, content)
 
-/** Markdown from the backend to composer blocks (for editing a message). */
-export function deserializeFromMarkdown(markdown: string): Array<ProseMirrorNode> {
+/**
+ * Markdown from the backend to composer blocks (for editing a message). With `paragraphBreaks`
+ * (the message viewer), each run of blank lines between two blocks becomes one empty paragraph.
+ */
+export function deserializeFromMarkdown(
+	markdown: string,
+	options: { readonly paragraphBreaks?: boolean } = {},
+): Array<ProseMirrorNode> {
 	if (!markdown || markdown.trim() === "") return createEmptyValue()
 
 	const nodes: Array<ProseMirrorNode> = []
 	const lines = markdown.split("\n")
+	// Plain loops, not `findLastIndex` / `at`: the app builds for Safari 14.
+	let lastContentIndex = lines.length - 1
+	while (lastContentIndex >= 0 && lines[lastContentIndex]!.trim() === "") lastContentIndex--
 	let i = 0
 
 	while (i < lines.length) {
 		const line = lines[i]
-		if (!line) {
+		if (!line?.trim()) {
 			i++
+			const previous = nodes[nodes.length - 1]
+			const isBreak = options.paragraphBreaks && previous !== undefined && previous.content.size > 0
+			if (isBreak && i <= lastContentIndex) nodes.push(block("paragraph", []))
 			continue
 		}
 
@@ -265,8 +279,14 @@ export function deserializeFromMarkdown(markdown: string): Array<ProseMirrorNode
 			continue
 		}
 
-		if (/^\d+\. /.test(line)) {
-			nodes.push(block("list-item", parseInlineContent(line.replace(/^\d+\. /, "")), { ordered: true }))
+		const orderedMatch = line.match(/^(\d+)\. /)
+		if (orderedMatch) {
+			nodes.push(
+				block("list-item", parseInlineContent(line.slice(orderedMatch[0].length)), {
+					ordered: true,
+					number: Number(orderedMatch[1]),
+				}),
+			)
 			i++
 			continue
 		}

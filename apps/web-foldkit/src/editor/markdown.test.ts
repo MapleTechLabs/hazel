@@ -991,3 +991,42 @@ describe("markdown serializer (ProseMirror model)", () => {
 		})
 	})
 })
+
+describe("deserializeFromMarkdown with paragraphBreaks (the message viewer)", () => {
+	/** Each block as its type and text, an empty paragraph as `break`. */
+	const blocksOf = (markdown: string, paragraphBreaks = true) =>
+		deserializeFromMarkdown(markdown, { paragraphBreaks }).map((node) =>
+			node.type.name === "paragraph" && node.content.size === 0 ? "break" : node.textContent,
+		)
+
+	it("keeps one break for each run of blank lines between blocks", () => {
+		expect(blocksOf("a\n\nb")).toEqual(["a", "break", "b"])
+		expect(blocksOf("a\n\n\nb")).toEqual(["a", "break", "b"])
+		expect(blocksOf("a\n \t\nb")).toEqual(["a", "break", "b"])
+		expect(blocksOf("- a\n- b\n\nc")).toEqual(["a", "b", "break", "c"])
+	})
+
+	it("adds no break before the first block or after the last", () => {
+		expect(blocksOf("\n\na\n\n")).toEqual(["a"])
+		expect(blocksOf("a\nb")).toEqual(["a", "b"])
+	})
+
+	it("adds no break without the option (the composer's parse)", () => {
+		expect(blocksOf("a\n\nb", false)).toEqual(["a", "b"])
+	})
+})
+
+describe("ordered list numbers", () => {
+	it("keeps each item's number, so a list starting at 5 starts at 5", () => {
+		const items = deserializeFromMarkdown("5. five\n6. six")
+		expect(items.map((item) => [item.attrs.ordered, item.attrs.number])).toEqual([
+			[true, 5],
+			[true, 6],
+		])
+		expect(serializeToMarkdown(items)).toBe("5. five\n6. six")
+	})
+
+	it("bullets carry no number", () => {
+		expect(deserializeFromMarkdown("- a")[0]!.attrs.number).toBeNull()
+	})
+})

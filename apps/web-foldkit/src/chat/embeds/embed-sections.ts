@@ -71,24 +71,31 @@ export const embedBodyView = <M>(
 		[h.Class("font-semibold text-fg text-sm leading-snug")],
 		[embedMarkdownView(h, props.title)],
 	)
+	const descriptionElement = truncated
+		? h.p(
+				[h.Class(cn("line-clamp-2 text-muted-fg text-xs leading-relaxed", props.title && "mt-1.5"))],
+				[embedMarkdownView(h, truncated)],
+			)
+		: h.empty
+	// The link sits on the title, or on the description when there is no title.
 	return h.div(
 		[h.Class(cn("p-3", props.className))],
 		[
-			props.titleUrl
-				? externalLink(h, props.titleUrl, "hover:underline", [titleElement])
-				: titleElement,
-			truncated
-				? h.p(
-						[h.Class("mt-1.5 line-clamp-2 text-muted-fg text-xs leading-relaxed")],
-						[embedMarkdownView(h, truncated)],
-					)
+			props.title
+				? props.titleUrl
+					? externalLink(h, props.titleUrl, "hover:underline", [titleElement])
+					: titleElement
 				: h.empty,
+			!props.title && props.titleUrl && truncated
+				? externalLink(h, props.titleUrl, "hover:underline", [descriptionElement])
+				: descriptionElement,
 		],
 	)
 }
 
+/** Discord's thumbnail: the whole image, fitted in 80px square, top right. */
 export const embedThumbnailView = <M>(h: HtmlBuilder<M>, src: string): Html =>
-	image(h, src, cn("absolute top-3 right-3 size-16 rounded-lg object-cover"))
+	image(h, src, "absolute top-3 right-3 max-h-20 max-w-20 rounded-md object-contain")
 
 export const embedFieldsView = <M>(h: HtmlBuilder<M>, fields: ReadonlyArray<EmbedField>): Html =>
 	fields.length === 0
@@ -125,11 +132,58 @@ export const embedFieldsView = <M>(h: HtmlBuilder<M>, fields: ReadonlyArray<Embe
 				),
 			)
 
-export const embedImageView = <M>(h: HtmlBuilder<M>, src: string): Html =>
-	h.div(
-		[h.Class(cn(embedSectionStyles({ position: "bottom", padding: "none" })))],
-		[image(h, src, "aspect-video w-full object-cover")],
+/**
+ * Discord's embed image: inside the card's padding, at its own aspect ratio, never scaled up, at most
+ * 300px tall. A press opens the image viewer, or follows `href` (the embed's link, when nothing
+ * else in the card can carry it).
+ */
+export const embedImageView = <M>(
+	h: HtmlBuilder<M>,
+	src: string,
+	press: { readonly onOpen?: M; readonly href?: string },
+): Html => {
+	const img = image(h, src, "block h-auto max-h-[300px] w-auto max-w-full rounded-md")
+	const { onOpen, href } = press
+	return h.div(
+		[h.Class("px-3 pt-1 pb-3 first:pt-3")],
+		[
+			href !== undefined
+				? h.a(
+						[
+							h.Class("block w-fit max-w-full rounded-md transition-opacity hover:opacity-90"),
+							h.Href(href),
+							h.Attribute("rel", "noopener noreferrer"),
+							h.Attribute("target", "_blank"),
+							// The image is decorative (`alt=""`), so the link names where it goes.
+							h.AriaLabel(`Open ${hostOf(href)}`),
+						],
+						[img],
+					)
+				: onOpen === undefined
+					? img
+					: h.button(
+							[
+								h.Type("button"),
+								h.Class(
+									"block w-fit max-w-full cursor-zoom-in rounded-md outline-hidden transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring",
+								),
+								h.AriaLabel("Open image"),
+								h.OnClick(onOpen),
+							],
+							[img],
+						),
+		],
 	)
+}
+
+/** A link's host for its label (`URL.canParse` is newer than the Safari 14 the app builds for). */
+const hostOf = (href: string) => {
+	try {
+		return new URL(href).host
+	} catch {
+		return href
+	}
+}
 
 const footerTimeFormat = new Intl.DateTimeFormat("en", {
 	month: "short",

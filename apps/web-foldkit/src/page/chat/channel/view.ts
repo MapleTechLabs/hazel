@@ -189,6 +189,7 @@ const imageViewerOverlay = (h: H, model: Model): Html => {
 						fileName: image.alt,
 						fileSize: 0,
 						url: image.url,
+						caption: { title: image.title, description: image.description },
 					})),
 		index: viewer.index,
 		author: row.message.author

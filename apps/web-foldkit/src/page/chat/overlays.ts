@@ -17,8 +17,16 @@ import * as Tooltip from "../../ui/tooltip"
 
 // MODEL
 
-/** An image the viewer shows by URL (legacy `ViewerImage` `{ type: "url", url, alt }`). */
-export const ViewerUrlImage = Schema.Struct({ url: Schema.String, alt: Schema.String })
+/**
+ * An image the viewer shows by URL (legacy `ViewerImage` `{ type: "url", url, alt }`). An embed
+ * image carries its embed's title and description, the viewer's caption.
+ */
+export const ViewerUrlImage = Schema.Struct({
+	url: Schema.String,
+	alt: Schema.String,
+	title: Schema.optionalKey(Schema.String),
+	description: Schema.optionalKey(Schema.String),
+})
 export type ViewerUrlImage = typeof ViewerUrlImage.Type
 
 /** The image viewer's toolbar actions (`ImageViewerAction`). */
