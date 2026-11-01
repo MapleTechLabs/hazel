@@ -14,17 +14,17 @@ import * as Menu from "../../../ui/menu"
 import type { Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
 import * as ConfirmAction from "../../shared/confirm-action"
-import { DiscordChannels } from "../chat-sync/discord"
+import { ExternalChannels } from "../chat-sync/providers"
 import {
 	CreateChannelLink,
 	DisconnectConnection,
 	ListChannelLinks,
 	ListChatSyncConnectionsForConnection,
-	ListDiscordChannels,
+	ListExternalChannels,
 	RemoveChannelLink,
 	UpdateChannelLink,
 } from "./command"
-import { ChannelLinks, ConnectionLookup, Message, Submission } from "./model"
+import { ChannelLinks, ConnectionLookup, directionLabel, Message, Submission } from "./model"
 import { init, update } from "./update"
 import { sharedDefaults } from "../../test-shared"
 import { linkMenuEntries } from "./model"
@@ -52,6 +52,7 @@ const link = {
 }
 const connection = {
 	id: connectionId,
+	provider: "discord" as const,
 	displayName: "Hazel Community",
 	status: "active" as const,
 	externalWorkspaceId: "918273645500120",
@@ -60,10 +61,10 @@ const connection = {
 }
 const run = (current: Parameters<typeof update>[0], next: Message) => update(current, next, shared)
 const route = { _tag: "SettingsChatSyncConnection" as const, orgSlug: "hazel", connectionId }
-const loaded = run(
-	init(route, shared).model,
+const loaded = [
+	Message.SucceededListConnections({ organizationId, connections: [connection] }),
 	Message.SucceededListChannelLinks({ version: 1, links: [link] }),
-).model
+].reduce((current, next) => run(current, next).model, init(route, shared).model)
 
 describe("chat sync connection", () => {
 	test("init lists the connections and the channel links", () => {
@@ -200,9 +201,9 @@ describe("chat sync connection", () => {
 				Message.SucceededListConnections({ organizationId, connections: [connection] }),
 			),
 			Command.resolve(
-				ListDiscordChannels,
-				Message.SucceededListDiscordChannels({
-					guildId: connection.externalWorkspaceId,
+				ListExternalChannels,
+				Message.SucceededListExternalChannels({
+					workspaceId: connection.externalWorkspaceId,
 					channels: [],
 				}),
 			),
@@ -215,22 +216,26 @@ describe("chat sync connection", () => {
 	test("a found connection mounts the link modal, which lists its guild's Discord channels", () => {
 		const channel = {
 			id: Schema.decodeSync(ExternalChannelId)("1"),
-			guildId: "918273645500120",
 			name: "general",
-			type: 0,
-			parentId: null,
+			isPrivate: false,
+			isMember: true,
 		}
 		story(
 			run,
 			given(init(route, shared).model),
 			message(Message.SucceededListConnections({ organizationId, connections: [connection] })),
-			Command.expectExact(ListDiscordChannels({ organizationId, guildId: "918273645500120" })),
+			Command.expectExact(
+				ListExternalChannels({ organizationId, provider: "discord", workspaceId: "918273645500120" }),
+			),
 			Command.resolve(
-				ListDiscordChannels,
-				Message.SucceededListDiscordChannels({ guildId: "918273645500120", channels: [channel] }),
+				ListExternalChannels,
+				Message.SucceededListExternalChannels({
+					workspaceId: "918273645500120",
+					channels: [channel],
+				}),
 			),
 			model((current) =>
-				expect(current.discordChannels).toEqual(DiscordChannels.Success({ data: [channel] })),
+				expect(current.externalChannels).toEqual(ExternalChannels.Success({ data: [channel] })),
 			),
 		)
 		const listing = run(
@@ -239,9 +244,9 @@ describe("chat sync connection", () => {
 		)
 		const otherGuild = run(
 			listing.model,
-			Message.SucceededListDiscordChannels({ guildId: "1", channels: [channel] }),
+			Message.SucceededListExternalChannels({ workspaceId: "1", channels: [channel] }),
 		)
-		expect(otherGuild.model.discordChannels).toEqual(DiscordChannels.Loading())
+		expect(otherGuild.model.externalChannels).toEqual(ExternalChannels.Loading())
 	})
 
 	test("failed Discord channels keep their reason, and Try again lists them again", () => {
@@ -252,15 +257,19 @@ describe("chat sync connection", () => {
 		story(
 			run,
 			given(listing),
-			message(Message.FailedListDiscordChannels({ guildId: "918273645500120", reason: "Timeout" })),
-			model((current) =>
-				expect(current.discordChannels).toEqual(DiscordChannels.Failure({ error: "Timeout" })),
+			message(
+				Message.FailedListExternalChannels({ workspaceId: "918273645500120", reason: "Timeout" }),
 			),
-			message(Message.ClickedRetryListDiscordChannels()),
-			Command.expectExact(ListDiscordChannels({ organizationId, guildId: "918273645500120" })),
+			model((current) =>
+				expect(current.externalChannels).toEqual(ExternalChannels.Failure({ error: "Timeout" })),
+			),
+			message(Message.ClickedRetryListExternalChannels()),
+			Command.expectExact(
+				ListExternalChannels({ organizationId, provider: "discord", workspaceId: "918273645500120" }),
+			),
 			Command.resolve(
-				ListDiscordChannels,
-				Message.SucceededListDiscordChannels({ guildId: "918273645500120", channels: [] }),
+				ListExternalChannels,
+				Message.SucceededListExternalChannels({ workspaceId: "918273645500120", channels: [] }),
 			),
 		)
 	})
@@ -278,17 +287,16 @@ describe("chat sync connection", () => {
 		const hazel = { id: link.hazelChannelId, name: "random" }
 		const discord = {
 			id: Schema.decodeSync(ExternalChannelId)("555000111222401"),
-			guildId: "918273645500120",
 			name: "announcements",
-			type: 0,
-			parentId: null,
+			isPrivate: false,
+			isMember: true,
 		}
 		story(
 			run,
 			given(loaded),
 			message(Message.ClickedLinkChannel()),
 			message(Message.ClickedHazelChannel({ channel: hazel })),
-			message(Message.ClickedDiscordChannel({ channel: discord })),
+			message(Message.ClickedExternalChannel({ channel: discord })),
 			message(Message.ClickedDirection({ direction: "external_to_hazel" })),
 			message(Message.ClickedCreateLink()),
 			Command.expectExact(
@@ -344,7 +352,9 @@ describe("chat sync connection guards and link actions", () => {
 			message(openMenu),
 			Command.resolveAll(),
 			message(pick("toggle")),
-			Command.expectHas(UpdateChannelLink({ syncChannelLinkId: linkId, isActive: false })),
+			Command.expectHas(
+				UpdateChannelLink({ syncChannelLinkId: linkId, provider: "discord", isActive: false }),
+			),
 			Command.resolve(
 				UpdateChannelLink,
 				Message.SucceededUpdateLink({ linkId, successMessage: "Channel link paused" }),
@@ -434,5 +444,57 @@ describe("chat sync connection guards and link actions", () => {
 			Command.expectNone(),
 			model((current) => expect(current.submission).toEqual(Submission.NotSubmitted())),
 		)
+	})
+})
+
+describe("a Slack connection", () => {
+	const slackConnection = {
+		...connection,
+		provider: "slack" as const,
+		displayName: "Acme Corp",
+		externalWorkspaceId: "T024BE7LD",
+	}
+
+	test("a found Slack connection lists its workspace's Slack channels", () => {
+		story(
+			run,
+			given(init(route, shared).model),
+			message(Message.SucceededListConnections({ organizationId, connections: [slackConnection] })),
+			Command.expectExact(
+				ListExternalChannels({ organizationId, provider: "slack", workspaceId: "T024BE7LD" }),
+			),
+			Command.resolve(
+				ListExternalChannels,
+				Message.SucceededListExternalChannels({ workspaceId: "T024BE7LD", channels: [] }),
+			),
+			model((current) =>
+				expect(current.externalChannels).toEqual(ExternalChannels.Success({ data: [] })),
+			),
+		)
+	})
+
+	test("a Slack link's update carries its provider, and directions name Slack", () => {
+		const slackLoaded = [
+			Message.SucceededListConnections({ organizationId, connections: [slackConnection] }),
+			Message.SucceededListChannelLinks({ version: 1, links: [link] }),
+		].reduce((current, next) => run(current, next).model, init(route, shared).model)
+		const updated = run(
+			run(
+				slackLoaded,
+				Message.GotLinkMenuMessage({
+					linkId,
+					message: Menu.Message.PressedTrigger({ pointerType: "mouse" }),
+				}),
+			).model,
+			Message.GotLinkMenuMessage({
+				linkId,
+				message: Menu.Message.ClickedItem({ key: "toggle", entries: linkMenuEntries }),
+			}),
+		)
+		expect(updated.commands?.map((command) => command.args)).toContainEqual(
+			UpdateChannelLink({ syncChannelLinkId: linkId, provider: "slack", isActive: false }).args,
+		)
+		expect(directionLabel("hazel_to_external", "slack")).toBe("Hazel to Slack")
+		expect(directionLabel("external_to_hazel", "discord")).toBe("Discord to Hazel")
 	})
 })

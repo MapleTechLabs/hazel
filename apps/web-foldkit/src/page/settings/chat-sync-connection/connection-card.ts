@@ -6,8 +6,8 @@ import {
 	sectionHeaderRoot,
 	sectionHeaderSubheading,
 } from "../../../ui/section-header"
-import { discordLogo } from "../chat-sync/brand-icons"
 import type { Connection } from "../chat-sync/model"
+import { PROVIDERS } from "../chat-sync/providers"
 import { formatSyncedAt } from "../chat-sync/rpc"
 import { Message } from "./model"
 import { outlineIcon } from "./parts"
@@ -23,6 +23,7 @@ const STATUS_CONFIG = {
 
 export const header = (h: HtmlBuilder<Message>, connection: Connection): Html => {
 	const status = STATUS_CONFIG[connection.status]
+	const provider = PROVIDERS[connection.provider]
 	return sectionHeaderRoot(h, { className: "border-none pb-0" }, [
 		sectionHeaderGroup(h, {}, [
 			h.div(
@@ -31,12 +32,10 @@ export const header = (h: HtmlBuilder<Message>, connection: Connection): Html =>
 					h.div(
 						[
 							h.Class(
-								"flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl shadow-md ring-1 ring-black/8",
+								`flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl shadow-md ring-1 ring-black/8 ${provider.tintClass}`,
 							),
-							// React writes `${DISCORD_BRAND_COLOR}10` as rgba.
-							h.Attribute("style", "background-color: rgba(88, 101, 242, 0.063);"),
 						],
-						[discordLogo(h, "size-10")],
+						[provider.logo(h, "size-10")],
 					),
 					h.div(
 						[h.Class("flex flex-col gap-1")],
@@ -58,7 +57,10 @@ export const header = (h: HtmlBuilder<Message>, connection: Connection): Html =>
 									),
 								],
 							),
-							sectionHeaderSubheading(h, {}, ["Guild ID: ", connection.externalWorkspaceId]),
+							sectionHeaderSubheading(h, {}, [
+								`${provider.workspaceIdLabel}: `,
+								connection.externalWorkspaceId,
+							]),
 						],
 					),
 				],
@@ -144,7 +146,9 @@ export const connectionCard = (h: HtmlBuilder<Message>, connection: Connection):
 												[
 													h.p(
 														[h.Class("font-medium text-fg text-sm")],
-														["Connected to Discord"],
+														[
+															`Connected to ${PROVIDERS[connection.provider].name}`,
+														],
 													),
 													h.p(
 														[h.Class("text-muted-fg text-xs")],

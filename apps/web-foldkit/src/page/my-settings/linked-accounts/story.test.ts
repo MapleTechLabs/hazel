@@ -5,7 +5,7 @@ import { Command, expectNoOutMessage, expectOutMessage, given, message, model, s
 import { describe, expect, test } from "vitest"
 import { makeShared, organizationId, storyUpdate } from "../../../test/pages-fixtures"
 import { PageOutMessage } from "../../out-message"
-import { DisconnectDiscord, StartDiscordLink } from "./command"
+import { Disconnect, StartLink } from "./command"
 import { Message } from "./message"
 import { Link, type Model } from "./model"
 import { init, update } from "./update"
@@ -23,7 +23,7 @@ const route = {
 const initial = () => init(route).model
 const linked = () => ({
 	...initial(),
-	connection: { status: "active" as const, externalAccountName: "ada#1815" },
+	connections: { discord: { status: "active" as const, externalAccountName: "ada#1815" }, slack: null },
 })
 const toast = (intent: "success" | "error", title: string, description: string | null = null) =>
 	PageOutMessage.RequestedToast({ toast: { intent, title, description } })
@@ -33,12 +33,12 @@ describe("link discord", () => {
 		story<Model, Message, PageOutMessage>(
 			storyUpdate(update, shared),
 			given(initial()),
-			message(Message.ClickedLinkDiscord()),
-			Command.expectExact(StartDiscordLink({ orgId: organizationId })),
-			model((current) => expect(current.link).toEqual(Link.Linking())),
-			Command.resolve(StartDiscordLink, Message.SucceededGetDiscordOAuthUrl()),
+			message(Message.ClickedLink({ provider: "discord" })),
+			Command.expectExact(StartLink({ orgId: organizationId, provider: "discord" })),
+			model((current) => expect(current.link).toEqual(Link.Linking({ provider: "discord" }))),
+			Command.resolve(StartLink, Message.SucceededGetOAuthUrl()),
 			expectNoOutMessage(),
-			model((current) => expect(current.link).toEqual(Link.Linking())),
+			model((current) => expect(current.link).toEqual(Link.Linking({ provider: "discord" }))),
 		)
 	})
 
@@ -46,10 +46,10 @@ describe("link discord", () => {
 		story<Model, Message, PageOutMessage>(
 			storyUpdate(update, shared),
 			given(initial()),
-			message(Message.ClickedLinkDiscord()),
+			message(Message.ClickedLink({ provider: "discord" })),
 			Command.resolve(
-				StartDiscordLink,
-				Message.FailedGetDiscordOAuthUrl({ reason: "UnsupportedProvider" }),
+				StartLink,
+				Message.FailedGetOAuthUrl({ provider: "discord", reason: "UnsupportedProvider" }),
 			),
 			expectOutMessage(
 				toast(
@@ -67,17 +67,17 @@ describe("link discord", () => {
 		story<Model, Message, PageOutMessage>(
 			storyUpdate(update, orphan),
 			given(initial()),
-			message(Message.ClickedLinkDiscord()),
+			message(Message.ClickedLink({ provider: "discord" })),
 			Command.expectNone(),
 		)
 	})
 
-	// ClickedLinkDiscord is guarded on isConnecting in update, not only by the disabled button.
+	// ClickedLink is guarded on isConnecting in update, not only by the disabled button.
 	test("a second link click while redirecting is ignored", () => {
 		story<Model, Message, PageOutMessage>(
 			storyUpdate(update, shared),
-			given({ ...initial(), link: Link.Linking() }),
-			message(Message.ClickedLinkDiscord()),
+			given({ ...initial(), link: Link.Linking({ provider: "discord" }) }),
+			message(Message.ClickedLink({ provider: "discord" })),
 			Command.expectNone(),
 		)
 	})
@@ -88,10 +88,10 @@ describe("unlink discord", () => {
 		story<Model, Message, PageOutMessage>(
 			storyUpdate(update, shared),
 			given(linked()),
-			message(Message.ClickedUnlinkDiscord()),
-			Command.expectExact(DisconnectDiscord({ orgId: organizationId })),
-			model((current) => expect(current.link).toEqual(Link.Unlinking())),
-			Command.resolve(DisconnectDiscord, Message.SucceededDisconnectDiscord()),
+			message(Message.ClickedUnlink({ provider: "discord" })),
+			Command.expectExact(Disconnect({ orgId: organizationId, provider: "discord" })),
+			model((current) => expect(current.link).toEqual(Link.Unlinking({ provider: "discord" }))),
+			Command.resolve(Disconnect, Message.SucceededDisconnect({ provider: "discord" })),
 			expectOutMessage(toast("success", "Discord account unlinked")),
 			model((current) => expect(current.link).toEqual(Link.Idle())),
 		)
@@ -101,8 +101,8 @@ describe("unlink discord", () => {
 		story<Model, Message, PageOutMessage>(
 			storyUpdate(update, shared),
 			given(linked()),
-			message(Message.ClickedUnlinkDiscord()),
-			Command.resolve(DisconnectDiscord, Message.FailedDisconnectDiscord({ reason: "Timeout" })),
+			message(Message.ClickedUnlink({ provider: "discord" })),
+			Command.resolve(Disconnect, Message.FailedDisconnect({ provider: "discord", reason: "Timeout" })),
 			expectOutMessage(
 				toast(
 					"error",
@@ -112,17 +112,17 @@ describe("unlink discord", () => {
 			),
 			model((current) => {
 				expect(current.link).toEqual(Link.Idle())
-				expect(current.connection?.status).toBe("active")
+				expect(current.connections.discord?.status).toBe("active")
 			}),
 		)
 	})
 
-	// ClickedUnlinkDiscord is guarded on isDisconnecting in update, not only by the disabled button.
+	// ClickedUnlink is guarded on isDisconnecting in update, not only by the disabled button.
 	test("a second unlink click while one is pending is ignored", () => {
 		story<Model, Message, PageOutMessage>(
 			storyUpdate(update, shared),
-			given({ ...linked(), link: Link.Unlinking() }),
-			message(Message.ClickedUnlinkDiscord()),
+			given({ ...linked(), link: Link.Unlinking({ provider: "discord" }) }),
+			message(Message.ClickedUnlink({ provider: "discord" })),
 			Command.expectNone(),
 		)
 	})

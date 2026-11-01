@@ -5,9 +5,9 @@ import { errorToast, successToast } from "../../../data/actions"
 import * as Interaction from "../../../ui/aria/interaction"
 import type { PageReturn, PageSubscriptionInput, Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
-import { DisconnectDiscord, StartDiscordLink } from "./command"
+import { Disconnect, StartLink } from "./command"
 import { Message } from "./message"
-import { Link, type Model } from "./model"
+import { isLinkedProvider, Link, type LinkedProvider, type Model, PROVIDER_LABELS } from "./model"
 import { linkedAccountsRoute, type RouteOf } from "../../../route"
 
 type Return = PageReturn<Model, Message>
@@ -20,24 +20,26 @@ export const interaction = Interaction.embed<Model, Message, PageSubscriptionInp
 type Route = RouteOf<"MySettingsLinkedAccounts">
 
 /** The backend's OAuth callback `error_code`s (`OAuthErrorCode`), in words; anything else is a retry hint. */
-const callbackErrorCopy: Readonly<Record<string, string>> = {
-	token_exchange_failed: "Could not authenticate with Discord. Please try again.",
-	account_info_failed: "Could not fetch your Discord account information.",
+const callbackErrorCopy = (name: string): Readonly<Record<string, string>> => ({
+	token_exchange_failed: `Could not authenticate with ${name}. Please try again.`,
+	account_info_failed: `Could not fetch your ${name} account information.`,
 	db_error: "A database error occurred. Please try again.",
 	encryption_error: "A security error occurred. Please try again.",
 	invalid_state: "The link request expired. Please try again.",
-}
+})
 
-const callbackErrorOf = (errorCode: Option.Option<string>): string =>
+const callbackErrorOf = (name: string, errorCode: Option.Option<string>): string =>
 	Option.match(errorCode, {
 		onNone: () => "Please try again.",
-		onSome: (code) => callbackErrorCopy[code] ?? "Please try again.",
+		onSome: (code) => callbackErrorCopy(name)[code] ?? "Please try again.",
 	})
 
 /** The OAuth callback's `?connection_status=&provider=&error_code=`: clean the URL with the result toast. */
 const linkResult = (model: Model, route: Route): Return => {
 	const status = Option.getOrNull(route.connectionStatus)
-	if (status === null || Option.getOrNull(route.provider) !== "discord") return { model }
+	const provider = Option.getOrNull(route.provider)
+	if (status === null || provider === null || !isLinkedProvider(provider)) return { model }
+	const { name } = PROVIDER_LABELS[provider]
 	return {
 		model,
 		outMessage: PageOutMessage.RequestedNavigation({
@@ -45,8 +47,8 @@ const linkResult = (model: Model, route: Route): Return => {
 			replace: true,
 			toast:
 				status === "success"
-					? successToast("Discord account linked")
-					: errorToast("Failed to link Discord account", callbackErrorOf(route.errorCode)),
+					? successToast(`${name} account linked`)
+					: errorToast(`Failed to link ${name} account`, callbackErrorOf(name, route.errorCode)),
 		}),
 	}
 }
@@ -55,7 +57,7 @@ export const init = (route: Route): Return =>
 	linkResult(
 		{
 			orgSlug: route.orgSlug,
-			connection: null,
+			connections: { discord: null, slack: null },
 			link: Link.Idle(),
 			interaction: Interaction.init(),
 		},
@@ -65,9 +67,9 @@ export const init = (route: Route): Return =>
 /** Same page, new search: a later callback redirect, or the cleaned URL (nothing to show). */
 export const routeChanged = (model: Model, route: Route): Return => linkResult(model, route)
 
-const unsupported = {
-	title: "Discord is not available",
-	description: "Discord linking is not supported right now.",
+const unsupported = (provider: LinkedProvider) => {
+	const { name } = PROVIDER_LABELS[provider]
+	return { title: `${name} is not available`, description: `${name} linking is not supported right now.` }
 }
 
 export const update = (model: Model, message: Message, shared: Shared): Return => {
@@ -75,53 +77,59 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 	const isIdle = model.link._tag === "Idle"
 	const toIdle = () => modifyFields(model, { link: () => Link.Idle() })
 	return Message.match<Return>(message, {
-		UpdatedDiscordConnection: ({ connection }) => ({
-			model: modifyFields(model, { connection: () => connection }),
+		UpdatedConnections: ({ connections }) => ({
+			model: modifyFields(model, { connections: () => connections }),
 		}),
-		ClickedLinkDiscord: () =>
+		ClickedLink: ({ provider }) =>
 			orgId === null || !isIdle
 				? { model }
 				: {
-						model: modifyFields(model, { link: () => Link.Linking() }),
-						commands: [StartDiscordLink({ orgId })],
+						model: modifyFields(model, { link: () => Link.Linking({ provider }) }),
+						commands: [StartLink({ orgId, provider })],
 					},
 		// The page is navigating away; `Linking` keeps the button pending until it does.
-		SucceededGetDiscordOAuthUrl: () => ({ model }),
-		FailedGetDiscordOAuthUrl: ({ reason }) => ({
+		SucceededGetOAuthUrl: () => ({ model }),
+		FailedGetOAuthUrl: ({ provider, reason }) => ({
 			model: toIdle(),
 			outMessage: PageOutMessage.RequestedToast({
 				toast: errorToast(
-					"Failed to start Discord linking flow",
-					failureMessage(reason, { UnsupportedProvider: unsupported }).description ?? null,
+					`Failed to start ${PROVIDER_LABELS[provider].name} linking flow`,
+					failureMessage(reason, { UnsupportedProvider: unsupported(provider) }).description ??
+						null,
 				),
 			}),
 		}),
-		ClickedUnlinkDiscord: () =>
+		ClickedUnlink: ({ provider }) =>
 			orgId === null || !isIdle
 				? { model }
 				: {
-						model: modifyFields(model, { link: () => Link.Unlinking() }),
-						commands: [DisconnectDiscord({ orgId })],
+						model: modifyFields(model, { link: () => Link.Unlinking({ provider }) }),
+						commands: [Disconnect({ orgId, provider })],
 					},
-		SucceededDisconnectDiscord: () => ({
-			model: toIdle(),
-			outMessage: PageOutMessage.RequestedToast({ toast: successToast("Discord account unlinked") }),
-		}),
-		FailedDisconnectDiscord: ({ reason }) => ({
+		SucceededDisconnect: ({ provider }) => ({
 			model: toIdle(),
 			outMessage: PageOutMessage.RequestedToast({
-				toast: errorToast(
-					"Failed to unlink Discord account",
-					failureMessage(reason, {
-						NotConnected: {
-							title: "Not linked",
-							description: "This Discord account is no longer linked.",
-						},
-						UnsupportedProvider: unsupported,
-					}).description ?? null,
-				),
+				toast: successToast(`${PROVIDER_LABELS[provider].name} account unlinked`),
 			}),
 		}),
+		FailedDisconnect: ({ provider, reason }) => {
+			const { name } = PROVIDER_LABELS[provider]
+			return {
+				model: toIdle(),
+				outMessage: PageOutMessage.RequestedToast({
+					toast: errorToast(
+						`Failed to unlink ${name} account`,
+						failureMessage(reason, {
+							NotConnected: {
+								title: "Not linked",
+								description: `This ${name} account is no longer linked.`,
+							},
+							UnsupportedProvider: unsupported(provider),
+						}).description ?? null,
+					),
+				}),
+			}
+		},
 		GotInteractionMessage: ({ message: child }) => interaction.fold(model, child),
 	})
 }

@@ -4,7 +4,7 @@ import * as Scene from "foldkit/scene"
 import { describe, test } from "vitest"
 import { makeShared, organizationId, pageScene } from "../../../test/pages-fixtures"
 import { PageOutMessage } from "../../out-message"
-import { DisconnectDiscord, StartDiscordLink } from "./command"
+import { Disconnect, StartLink } from "./command"
 import { Message } from "./message"
 import { init, update } from "./update"
 import { view } from "./view"
@@ -21,8 +21,8 @@ const route = {
 }
 const link = Scene.role("button", { name: "Link Discord" })
 const unlink = Scene.role("button", { name: "Unlink" })
-const active = Message.UpdatedDiscordConnection({
-	connection: { status: "active", externalAccountName: "ada#1815" },
+const active = Message.UpdatedConnections({
+	connections: { discord: { status: "active", externalAccountName: "ada#1815" }, slack: null },
 })
 
 describe("discord card", () => {
@@ -32,9 +32,12 @@ describe("discord card", () => {
 			Scene.given(init(route).model),
 			Scene.expect(unlink).toBeAbsent(),
 			Scene.click(link),
-			Scene.Command.expectExact(StartDiscordLink({ orgId: organizationId })),
+			Scene.Command.expectExact(StartLink({ orgId: organizationId, provider: "discord" })),
 			Scene.expect(Scene.role("button", { name: "Redirecting..." })).toBeDisabled(),
-			Scene.Command.resolve(StartDiscordLink, Message.FailedGetDiscordOAuthUrl({ reason: "Offline" })),
+			Scene.Command.resolve(
+				StartLink,
+				Message.FailedGetOAuthUrl({ provider: "discord", reason: "Offline" }),
+			),
 			Scene.expectOutMessage(
 				PageOutMessage.RequestedToast({
 					toast: {
@@ -65,15 +68,17 @@ describe("discord card", () => {
 			Scene.given(init(route).model),
 			Scene.Subscription.emit(active),
 			Scene.click(unlink),
-			Scene.Command.expectExact(DisconnectDiscord({ orgId: organizationId })),
+			Scene.Command.expectExact(Disconnect({ orgId: organizationId, provider: "discord" })),
 			Scene.expect(Scene.role("button", { name: "Unlinking..." })).toBeDisabled(),
-			Scene.Command.resolve(DisconnectDiscord, Message.SucceededDisconnectDiscord()),
+			Scene.Command.resolve(Disconnect, Message.SucceededDisconnect({ provider: "discord" })),
 			Scene.expectOutMessage(
 				PageOutMessage.RequestedToast({
 					toast: { intent: "success", title: "Discord account unlinked", description: null },
 				}),
 			),
-			Scene.Subscription.emit(Message.UpdatedDiscordConnection({ connection: null })),
+			Scene.Subscription.emit(
+				Message.UpdatedConnections({ connections: { discord: null, slack: null } }),
+			),
 			Scene.expect(link).toBeEnabled(),
 		)
 	})
@@ -85,8 +90,8 @@ describe("discord card", () => {
 			Scene.Subscription.emit(active),
 			Scene.click(unlink),
 			Scene.Command.resolve(
-				DisconnectDiscord,
-				Message.FailedDisconnectDiscord({ reason: "NotConnected" }),
+				Disconnect,
+				Message.FailedDisconnect({ provider: "discord", reason: "NotConnected" }),
 			),
 			Scene.expectOutMessage(
 				PageOutMessage.RequestedToast({
@@ -99,6 +104,60 @@ describe("discord card", () => {
 			),
 			Scene.expect(unlink).toBeEnabled(),
 			Scene.expect(Scene.text(/Linked as ada#1815\./)).toExist(),
+		)
+	})
+})
+
+describe("slack card", () => {
+	const linkSlack = Scene.role("button", { name: "Link Slack" })
+
+	test("Slack is offered next to Discord and links the same way", () => {
+		Scene.scene(
+			pageScene(update, view, shared),
+			Scene.given(init(route).model),
+			Scene.expect(Scene.text("Slack")).toExist(),
+			Scene.expect(link).toBeEnabled(),
+			Scene.click(linkSlack),
+			Scene.Command.expectExact(StartLink({ orgId: organizationId, provider: "slack" })),
+			Scene.expect(Scene.role("button", { name: "Redirecting..." })).toBeDisabled(),
+			// One action at a time: Discord waits too.
+			Scene.expect(link).toBeDisabled(),
+			Scene.Command.resolve(
+				StartLink,
+				Message.FailedGetOAuthUrl({ provider: "slack", reason: "UnsupportedProvider" }),
+			),
+			Scene.expectOutMessage(
+				PageOutMessage.RequestedToast({
+					toast: {
+						intent: "error",
+						title: "Failed to start Slack linking flow",
+						description: "Slack linking is not supported right now.",
+					},
+				}),
+			),
+			Scene.expect(linkSlack).toBeEnabled(),
+		)
+	})
+
+	test("a linked Slack account shows its name and unlinks Slack", () => {
+		Scene.scene(
+			pageScene(update, view, shared),
+			Scene.given(init(route).model),
+			Scene.Subscription.emit(
+				Message.UpdatedConnections({
+					connections: { discord: null, slack: { status: "active", externalAccountName: "ada" } },
+				}),
+			),
+			Scene.expect(Scene.text(/Linked as ada\. Synced Slack messages/)).toExist(),
+			Scene.expect(link).toBeEnabled(),
+			Scene.click(unlink),
+			Scene.Command.expectExact(Disconnect({ orgId: organizationId, provider: "slack" })),
+			Scene.Command.resolve(Disconnect, Message.SucceededDisconnect({ provider: "slack" })),
+			Scene.expectOutMessage(
+				PageOutMessage.RequestedToast({
+					toast: { intent: "success", title: "Slack account unlinked", description: null },
+				}),
+			),
 		)
 	})
 })

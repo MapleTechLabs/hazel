@@ -3,15 +3,16 @@ import { routeOfPath } from "../../../route"
 import { OrganizationId, SyncConnectionId } from "@hazel/schema"
 import { Option, Schema } from "effect"
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
+import * as Menu from "../../../ui/menu"
 import { describe, expect, test } from "vitest"
 import type { Shared } from "../../contract"
 import { PageOutMessage } from "../../out-message"
 import * as ConfirmAction from "../../shared/confirm-action"
-import { Connections, Message, Submission } from "./model"
-import { DeleteConnection, init, ListConnections, ListDiscordGuilds, sharedChanged, update } from "./update"
+import { addMenuEntries, Connections, Message, Submission } from "./model"
+import { DeleteConnection, init, ListConnections, sharedChanged, update } from "./update"
 import { sharedDefaults } from "../../test-shared"
-import { CreateConnection } from "./add-connection"
-import { DiscordGuilds } from "./discord"
+import { CreateConnection, FocusWorkspaceSearch, ListWorkspaces } from "./add-connection"
+import { Workspaces } from "./providers"
 
 const organizationId = Schema.decodeSync(OrganizationId)("00000000-0000-4000-8000-000000000001")
 const connectionId = Schema.decodeSync(SyncConnectionId)("00000000-0000-4000-8000-000000000002")
@@ -26,6 +27,7 @@ const shared: Shared = {
 }
 const connection = {
 	id: connectionId,
+	provider: "discord" as const,
 	displayName: "Hazel Community",
 	status: "active" as const,
 	externalWorkspaceId: "1",
@@ -78,39 +80,37 @@ describe("chat sync connections", () => {
 	})
 
 	test("a loaded list mounts the add modal, which lists the Discord guilds", () => {
-		const guild = { id: "918273645500120", name: "Hazel Community", icon: null, owner: true }
+		const guild = { id: "918273645500120", name: "Hazel Community", owner: true }
 		story(
 			updateWithShared,
 			given(init(undefined, shared).model),
 			message(Message.SucceededListConnections({ organizationId, connections: [connection] })),
-			Command.expectExact(ListDiscordGuilds({ organizationId, version: 1 })),
+			Command.expectExact(ListWorkspaces({ organizationId, provider: "discord", version: 1 })),
 			Command.resolve(
-				ListDiscordGuilds,
-				Message.SucceededListDiscordGuilds({ organizationId, version: 1, guilds: [guild] }),
+				ListWorkspaces,
+				Message.SucceededListWorkspaces({ organizationId, version: 1, workspaces: [guild] }),
 			),
-			model((current) =>
-				expect(current.discordGuilds).toEqual(DiscordGuilds.Success({ data: [guild] })),
-			),
+			model((current) => expect(current.workspaces).toEqual(Workspaces.Success({ data: [guild] }))),
 		)
 	})
 
 	test("a guild list for an older request or another organization is dropped", () => {
-		const guild = { id: "918273645500120", name: "Hazel Community", icon: null, owner: true }
+		const guild = { id: "918273645500120", name: "Hazel Community", owner: true }
 		const listing = updateWithShared(
 			init(undefined, shared).model,
 			Message.SucceededListConnections({ organizationId, connections: [connection] }),
 		).model
-		const refetching = { ...listing, guildsVersion: 2 }
+		const refetching = { ...listing, workspacesVersion: 2 }
 		const stale = updateWithShared(
 			refetching,
-			Message.SucceededListDiscordGuilds({ organizationId, version: 1, guilds: [guild] }),
+			Message.SucceededListWorkspaces({ organizationId, version: 1, workspaces: [guild] }),
 		)
-		expect(stale.model.discordGuilds).toEqual(DiscordGuilds.Loading())
+		expect(stale.model.workspaces).toEqual(Workspaces.Loading())
 		const staleFailure = updateWithShared(
 			refetching,
-			Message.FailedListDiscordGuilds({ organizationId, version: 1, reason: "Offline" }),
+			Message.FailedListWorkspaces({ organizationId, version: 1, reason: "Offline" }),
 		)
-		expect(staleFailure.model.discordGuilds).toEqual(DiscordGuilds.Loading())
+		expect(staleFailure.model.workspaces).toEqual(Workspaces.Loading())
 	})
 
 	test("a failed guild list keeps its reason, and Try again queries the guilds anew", () => {
@@ -121,16 +121,14 @@ describe("chat sync connections", () => {
 		story(
 			updateWithShared,
 			given(listing),
-			message(Message.FailedListDiscordGuilds({ organizationId, version: 1, reason: "Offline" })),
-			model((current) =>
-				expect(current.discordGuilds).toEqual(DiscordGuilds.Failure({ error: "Offline" })),
-			),
-			message(Message.ClickedRetryListDiscordGuilds()),
-			Command.expectExact(ListDiscordGuilds({ organizationId, version: 2 })),
-			model((current) => expect(current.discordGuilds).toEqual(DiscordGuilds.Loading())),
+			message(Message.FailedListWorkspaces({ organizationId, version: 1, reason: "Offline" })),
+			model((current) => expect(current.workspaces).toEqual(Workspaces.Failure({ error: "Offline" }))),
+			message(Message.ClickedRetryListWorkspaces()),
+			Command.expectExact(ListWorkspaces({ organizationId, provider: "discord", version: 2 })),
+			model((current) => expect(current.workspaces).toEqual(Workspaces.Loading())),
 			Command.resolve(
-				ListDiscordGuilds,
-				Message.SucceededListDiscordGuilds({ organizationId, version: 2, guilds: [] }),
+				ListWorkspaces,
+				Message.SucceededListWorkspaces({ organizationId, version: 2, workspaces: [] }),
 			),
 		)
 	})
@@ -152,10 +150,10 @@ describe("chat sync connections", () => {
 				Message.SucceededListConnections({ organizationId, connections: [connection] }),
 			),
 			// The list mounts the add modal now, so the guilds are queried.
-			Command.expectHas(ListDiscordGuilds),
+			Command.expectHas(ListWorkspaces),
 			Command.resolve(
-				ListDiscordGuilds,
-				Message.SucceededListDiscordGuilds({ organizationId, version: 1, guilds: [] }),
+				ListWorkspaces,
+				Message.SucceededListWorkspaces({ organizationId, version: 1, workspaces: [] }),
 			),
 		)
 	})
@@ -182,24 +180,25 @@ describe("chat sync connections", () => {
 	})
 
 	test("connecting a picked guild closes the modal, toasts, and refreshes the list", () => {
-		const guild = { id: "918273645500901", name: "Design Systems Guild", icon: null, owner: true }
+		const guild = { id: "918273645500901", name: "Design Systems Guild", owner: true }
 		const loaded = updateWithShared(
 			updateWithShared(
 				init(undefined, shared).model,
 				Message.SucceededListConnections({ organizationId, connections: [connection] }),
 			).model,
-			Message.SucceededListDiscordGuilds({ organizationId, version: 1, guilds: [guild] }),
+			Message.SucceededListWorkspaces({ organizationId, version: 1, workspaces: [guild] }),
 		).model
 		story(
 			updateWithShared,
 			given({ ...loaded, addModal: { ...loaded.addModal, isOpen: true } }),
-			message(Message.ChangedGuildSearch({ value: "design" })),
-			message(Message.ClickedGuild({ guild })),
-			model((current) => expect(current.selectedGuild).toEqual(guild)),
+			message(Message.ChangedWorkspaceSearch({ value: "design" })),
+			message(Message.ClickedWorkspace({ workspace: guild })),
+			model((current) => expect(current.selectedWorkspace).toEqual(guild)),
 			message(Message.ClickedConnect()),
 			Command.expectExact(
 				CreateConnection({
 					organizationId,
+					provider: "discord",
 					externalWorkspaceId: guild.id,
 					externalWorkspaceName: guild.name,
 				}),
@@ -212,8 +211,8 @@ describe("chat sync connections", () => {
 			),
 			model((current) => {
 				expect(current.addModal.isOpen).toBe(false)
-				expect(current.selectedGuild).toBeNull()
-				expect(current.guildSearch).toBe("")
+				expect(current.selectedWorkspace).toBeNull()
+				expect(current.workspaceSearch).toBe("")
 				expect(current.submission).toEqual(Submission.NotSubmitted())
 				expect(current.connections._tag).toBe("Refreshing")
 			}),
@@ -244,7 +243,7 @@ describe("chat sync connections", () => {
 
 describe("chat sync guards", () => {
 	const otherOrganizationId = Schema.decodeSync(OrganizationId)("00000000-0000-4000-8000-000000000009")
-	const guild = { id: "918273645500901", name: "Design Systems Guild", icon: null, owner: true }
+	const guild = { id: "918273645500901", name: "Design Systems Guild", owner: true }
 	const loaded = updateWithShared(
 		init(undefined, shared).model,
 		Message.SucceededListConnections({ organizationId, connections: [connection] }),
@@ -272,7 +271,7 @@ describe("chat sync guards", () => {
 	test("a second confirm while deleting sends no second delete; a failure re-asks", () => {
 		story(
 			updateWithShared,
-			given({ ...loaded, discordGuilds: DiscordGuilds.Failure({ error: "NotConnected" }) }),
+			given({ ...loaded, workspaces: Workspaces.Failure({ error: "NotConnected" }) }),
 			message(Message.ClickedDeleteConnection({ target })),
 			message(Message.ClickedConfirmDelete()),
 			Command.expectExact(DeleteConnection({ syncConnectionId: connectionId })),
@@ -306,14 +305,11 @@ describe("chat sync guards", () => {
 			given(loaded),
 			message(Message.ClickedConnect()),
 			Command.expectNone(),
-			message(Message.ClickedGuild({ guild })),
+			message(Message.ClickedWorkspace({ workspace: guild })),
 			message(Message.ClickedConnect()),
 			Command.expectHas(CreateConnection),
 			model((current) => expect(current.submission).toEqual(Submission.Submitting())),
-			Command.resolve(
-				CreateConnection,
-				Message.FailedCreateConnection({ reason: "DiscordNotConnected" }),
-			),
+			Command.resolve(CreateConnection, Message.FailedCreateConnection({ reason: "NotConnected" })),
 			expectOutMessage(
 				PageOutMessage.RequestedToast({
 					toast: {
@@ -325,7 +321,7 @@ describe("chat sync guards", () => {
 			),
 		)
 		const creating = updateWithShared(
-			{ ...loaded, selectedGuild: guild, submission: Submission.Submitting() },
+			{ ...loaded, selectedWorkspace: guild, submission: Submission.Submitting() },
 			Message.ClickedConnect(),
 		)
 		expect(creating.commands ?? []).toHaveLength(0)
@@ -342,10 +338,118 @@ describe("chat sync guards", () => {
 					replace: false,
 				}),
 			),
-			message(Message.ClickedOpenDiscordIntegration()),
+			message(Message.ClickedOpenIntegration()),
 			expectOutMessage(
 				PageOutMessage.RequestedNavigation({
 					route: routeOfPath("/hazel/settings/integrations/discord"),
+					replace: false,
+				}),
+			),
+		)
+	})
+})
+
+describe("chat sync providers", () => {
+	const slackWorkspace = { id: "T024BE7LD", name: "Acme Corp", owner: false }
+	const guild = { id: "918273645500901", name: "Design Systems Guild", owner: true }
+	const loaded = updateWithShared(
+		updateWithShared(
+			init(undefined, shared).model,
+			Message.SucceededListConnections({ organizationId, connections: [connection] }),
+		).model,
+		Message.SucceededListWorkspaces({ organizationId, version: 1, workspaces: [guild] }),
+	).model
+	const pickFromAddMenu = (key: string) => [
+		message(
+			Message.GotAddMenuMessage({ message: Menu.Message.PressedTrigger({ pointerType: "mouse" }) }),
+		),
+		Command.resolveAll(),
+		message(
+			Message.GotAddMenuMessage({
+				message: Menu.Message.ClickedItem({ key, entries: addMenuEntries }),
+			}),
+		),
+	]
+
+	test("picking Slack opens the modal for Slack and queries its installed workspace", () => {
+		story(
+			updateWithShared,
+			given(loaded),
+			...pickFromAddMenu("slack"),
+			Command.expectHas(ListWorkspaces({ organizationId, provider: "slack", version: 2 })),
+			model((current) => {
+				expect(current.addProvider).toBe("slack")
+				expect(current.addModal.isOpen).toBe(true)
+				expect(current.workspaces).toEqual(Workspaces.Loading())
+			}),
+			Command.resolveAll([
+				ListWorkspaces,
+				Message.SucceededListWorkspaces({ organizationId, version: 2, workspaces: [slackWorkspace] }),
+			]),
+			// Slack's one workspace needs no pick.
+			message(Message.ClickedConnect()),
+			Command.expectExact(
+				CreateConnection({
+					organizationId,
+					provider: "slack",
+					externalWorkspaceId: "T024BE7LD",
+					externalWorkspaceName: "Acme Corp",
+				}),
+			),
+			Command.resolve(CreateConnection, Message.FailedCreateConnection({ reason: "NotConnected" })),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({
+					toast: {
+						intent: "error",
+						title: "Slack not connected",
+						description: "Install Hazel in this Slack workspace from Integrations first.",
+					},
+				}),
+			),
+		)
+	})
+
+	test("picking Discord again after Slack queries the guilds anew; the same provider keeps its list", () => {
+		const slack = {
+			...loaded,
+			addProvider: "slack" as const,
+			workspacesVersion: 2,
+			workspaces: Workspaces.Success({ data: [slackWorkspace] }),
+		}
+		story(
+			updateWithShared,
+			given(slack),
+			...pickFromAddMenu("discord"),
+			Command.expectHas(ListWorkspaces({ organizationId, provider: "discord", version: 3 })),
+			model((current) => expect(current.addProvider).toBe("discord")),
+			Command.resolveAll([
+				ListWorkspaces,
+				Message.SucceededListWorkspaces({ organizationId, version: 3, workspaces: [guild] }),
+			]),
+			// Discord's server search takes focus once its list arrives in the open modal.
+			Command.resolve(FocusWorkspaceSearch, Message.CompletedFocusWorkspaceSearch()),
+		)
+		const reopened = updateWithShared(
+			updateWithShared(
+				slack,
+				Message.GotAddMenuMessage({ message: Menu.Message.PressedTrigger({ pointerType: "mouse" }) }),
+			).model,
+			Message.GotAddMenuMessage({
+				message: Menu.Message.ClickedItem({ key: "slack", entries: addMenuEntries }),
+			}),
+		)
+		expect(reopened.commands?.some((command) => command.name === ListWorkspaces.name)).toBe(false)
+		expect(reopened.model.workspaces).toEqual(Workspaces.Success({ data: [slackWorkspace] }))
+	})
+
+	test("the Slack link navigates to the Slack integration", () => {
+		story(
+			updateWithShared,
+			given({ ...loaded, addProvider: "slack" }),
+			message(Message.ClickedOpenIntegration()),
+			expectOutMessage(
+				PageOutMessage.RequestedNavigation({
+					route: routeOfPath("/hazel/settings/integrations/slack"),
 					replace: false,
 				}),
 			),

@@ -8,7 +8,7 @@ import { emptyState } from "../../../ui/empty-state"
 import type { PageViewInputs } from "../../contract"
 import type * as ConfirmAction from "../../shared/confirm-action"
 import { confirmDialog } from "../chat-sync/confirm-dialog"
-import { isRetryable } from "../chat-sync/discord"
+import { isRetryable, PROVIDERS } from "../chat-sync/providers"
 import type { Connection } from "../chat-sync/model"
 import {
 	type ChannelLink,
@@ -68,7 +68,12 @@ const linkChannelButton = (h: HtmlBuilder<Message>, intent: "primary" | "seconda
 		"Link Channel",
 	])
 
-const linksBody = (h: HtmlBuilder<Message>, model: Model, links: ReadonlyArray<ChannelLink>): Html =>
+const linksBody = (
+	h: HtmlBuilder<Message>,
+	model: Model,
+	connection: Connection,
+	links: ReadonlyArray<ChannelLink>,
+): Html =>
 	links.length === 0
 		? h.div(
 				[h.Class("flex flex-col items-center justify-center px-5 py-12 text-center")],
@@ -86,7 +91,9 @@ const linksBody = (h: HtmlBuilder<Message>, model: Model, links: ReadonlyArray<C
 					h.p([h.Class("mb-1 font-medium text-fg text-sm")], ["No channels linked"]),
 					h.p(
 						[h.Class("mb-4 text-muted-fg text-sm")],
-						["Link a Hazel channel to a Discord channel to start syncing messages."],
+						[
+							`Link a Hazel channel to a ${PROVIDERS[connection.provider].name} channel to start syncing messages.`,
+						],
 					),
 					linkChannelButton(h, "primary"),
 				],
@@ -97,6 +104,7 @@ const linksBody = (h: HtmlBuilder<Message>, model: Model, links: ReadonlyArray<C
 					channelLinkRow(
 						h,
 						link,
+						connection.provider,
 						model.channelNames[link.hazelChannelId],
 						model.linkMenus.find((menu) => menu.id.endsWith(link.id)),
 					),
@@ -128,7 +136,7 @@ const linksFailed = (h: HtmlBuilder<Message>, reason: ListLinksFailure): Html =>
 	)
 }
 
-const linksCard = (h: HtmlBuilder<Message>, model: Model): Html => {
+const linksCard = (h: HtmlBuilder<Message>, model: Model, connection: Connection): Html => {
 	const links = listedLinks(model)
 	return h.div(
 		[h.Class("overflow-hidden rounded-xl border border-border bg-bg")],
@@ -165,9 +173,9 @@ const linksCard = (h: HtmlBuilder<Message>, model: Model): Html => {
 				onIdle: () => spinner(h, "size-5", "Loading channel links...", "p-8"),
 				onLoading: () => spinner(h, "size-5", "Loading channel links...", "p-8"),
 				onFailure: (reason) => linksFailed(h, reason),
-				onRefreshing: (data) => linksBody(h, model, data),
-				onStale: ({ data }) => linksBody(h, model, data),
-				onSuccess: (data) => linksBody(h, model, data),
+				onRefreshing: (data) => linksBody(h, model, connection, data),
+				onStale: ({ data }) => linksBody(h, model, connection, data),
+				onSuccess: (data) => linksBody(h, model, connection, data),
 			}),
 		],
 	)
@@ -187,12 +195,12 @@ const detail = (h: HtmlBuilder<Message>, model: Model, connection: Connection): 
 				[
 					h.div(
 						[h.Class("flex flex-col gap-8")],
-						[connectionCard(h, connection), linksCard(h, model)],
+						[connectionCard(h, connection), linksCard(h, model, connection)],
 					),
-					aboutCard(h),
+					aboutCard(h, connection.provider),
 				],
 			),
-			addLinkModal(h, model),
+			addLinkModal(h, model, connection.provider),
 			confirmDialog(h, {
 				slotId: "remove-link",
 				confirm: model.removeLinkConfirm,
@@ -212,7 +220,7 @@ const detail = (h: HtmlBuilder<Message>, model: Model, connection: Connection): 
 				slotId: "disconnect",
 				confirm: model.disconnectConfirm,
 				icon: warningIcon(h),
-				title: "Disconnect from Discord",
+				title: `Disconnect from ${PROVIDERS[connection.provider].name}`,
 				description: () => [
 					"Are you sure you want to disconnect",
 					connection.displayName,
