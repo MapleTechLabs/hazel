@@ -8,11 +8,9 @@ export const LinkedProvider = Schema.Literals(["discord", "slack"])
 export type LinkedProvider = typeof LinkedProvider.Type
 export const isLinkedProvider = Schema.is(LinkedProvider)
 
-export const PROVIDER_LABELS: Readonly<
-	Record<LinkedProvider, { readonly name: string; readonly domain: string }>
-> = {
-	discord: { name: "Discord", domain: "discord.com" },
-	slack: { name: "Slack", domain: "slack.com" },
+export const PROVIDER_LABELS: Readonly<Record<LinkedProvider, { readonly name: string }>> = {
+	discord: { name: "Discord" },
+	slack: { name: "Slack" },
 }
 
 /** A user-level connection row (`useUserIntegrationConnection`). */

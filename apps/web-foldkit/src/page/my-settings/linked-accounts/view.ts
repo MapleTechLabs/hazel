@@ -10,7 +10,7 @@ import { interaction } from "./update"
 /** Port of `routes/_app/$orgSlug/my-settings/linked-accounts.tsx`, one card per provider. */
 
 const accountCard = (h: HtmlBuilder<Message>, model: Model, provider: LinkedProvider): Html => {
-	const { name, domain } = PROVIDER_LABELS[provider]
+	const { name } = PROVIDER_LABELS[provider]
 	const connection = model.connections[provider]
 	const isConnected = connection?.status === "active"
 	const wiring = interaction.wiring(model)
@@ -49,7 +49,8 @@ const accountCard = (h: HtmlBuilder<Message>, model: Model, provider: LinkedProv
 				[h.Class("flex items-start gap-4")],
 				[
 					h.img([
-						h.Src(`https://cdn.brandfetch.io/${domain}/w/64/h/64/theme/dark/icon`),
+						// Brandfetch refuses hotlinked icons; the app ships each provider's logo.
+						h.Src(`/images/integrations/${provider}.svg`),
 						h.Alt(name),
 						h.Class("size-10 rounded-lg"),
 					]),
