@@ -506,8 +506,13 @@ export const setCurrentUserId = (model: Model, currentUserId: UserId | null): Pa
 		? { model }
 		: deriveRows(modifyFields(model, { currentUserId: () => currentUserId }))
 
-/** `useIsChannelMember`: unknown until the members query has answered. */
+/**
+ * `useIsChannelMember`: unknown until the members query has answered. A thread has no join step:
+ * its access is the parent channel's, so anyone who can open it counts as a member.
+ */
 export const isMemberOf = (model: Model): boolean | null =>
-	model.members === null || model.currentUserId === null
+	model.channel?.type === "thread"
+		? true
+		: model.members === null || model.currentUserId === null
 		? null
 		: model.members.some((member) => member.userId === model.currentUserId)
