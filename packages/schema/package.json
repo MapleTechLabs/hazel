@@ -11,7 +11,7 @@
 		"effect": "catalog:effect"
 	},
 	"devDependencies": {
-		"@types/bun": "1.3.9",
+		"@types/bun": "1.4.3",
 		"typescript": "catalog:tooling"
 	}
 }

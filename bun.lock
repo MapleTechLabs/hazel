@@ -50,7 +50,7 @@
       "devDependencies": {
         "@cloudflare/workers-types": "catalog:alchemy",
         "@effect/platform-node": "catalog:effect",
-        "@types/bun": "1.3.9",
+        "@types/bun": "1.4.3",
         "typescript": "catalog:tooling",
       },
     },
@@ -282,7 +282,7 @@
       "devDependencies": {
         "@hazel/domain": "workspace:*",
         "@hazel/schema": "workspace:*",
-        "@types/bun": "1.3.9",
+        "@types/bun": "1.4.3",
         "effect": "catalog:effect",
         "msw": "^2.7.0",
         "tsdown": "^0.20.3",
@@ -319,7 +319,7 @@
       },
       "devDependencies": {
         "@effect/platform-node": "catalog:effect",
-        "@types/bun": "1.3.9",
+        "@types/bun": "1.4.3",
         "typescript": "catalog:tooling",
       },
     },
@@ -333,7 +333,7 @@
         "effect": "catalog:effect",
       },
       "devDependencies": {
-        "@types/bun": "1.3.9",
+        "@types/bun": "1.4.3",
         "typescript": "catalog:tooling",
       },
     },
@@ -352,7 +352,7 @@
         "@cloudflare/vitest-plugin": "^1.4.9",
         "@cloudflare/workers-types": "catalog:alchemy",
         "@effect/sql-sqlite-do": "catalog:effect",
-        "@types/bun": "1.3.9",
+        "@types/bun": "1.4.3",
         "@types/node": "^24.19.2",
         "typescript": "catalog:tooling",
         "vitest": "^5.0.5",
@@ -367,7 +367,7 @@
         "effect": "catalog:effect",
       },
       "devDependencies": {
-        "@types/bun": "1.3.9",
+        "@types/bun": "1.4.3",
         "typescript": "catalog:tooling",
       },
     },
@@ -409,7 +409,7 @@
         "rss-parser": "^3.13.0",
       },
       "devDependencies": {
-        "@types/bun": "1.3.9",
+        "@types/bun": "1.4.3",
         "@types/he": "^1.2.3",
         "typescript": "catalog:tooling",
       },
@@ -421,7 +421,7 @@
         "effect": "catalog:effect",
       },
       "devDependencies": {
-        "@types/bun": "1.3.9",
+        "@types/bun": "1.4.3",
         "typescript": "catalog:tooling",
       },
     },
@@ -437,7 +437,7 @@
         "picocolors": "^1.1.1",
       },
       "devDependencies": {
-        "@types/bun": "1.3.9",
+        "@types/bun": "1.4.3",
         "typescript": "catalog:tooling",
       },
     },
@@ -1434,7 +1434,7 @@
 
     "@types/body-parser": ["@types/body-parser@1.19.6", "", { "dependencies": { "@types/connect": "*", "@types/node": "*" } }, "sha512-HLFeCYgz89uk22N5Qg3dvGvsv46B8GLvKKo1zKG4NybA8U2DiEO3w9lqGg29t/tfLRJpJ6iQxnVw4OnB7MoM9g=="],
 
-    "@types/bun": ["@types/bun@1.3.9", "", { "dependencies": { "bun-types": "1.3.9" } }, "sha512-KQ571yULOdWJiMH+RIWIOZ7B2RXQGpL1YQrBtLIV3FqDcCu6FsbFUBwhdKUlCKUpS3PJDsHlJ1QKlpxoVR+xtw=="],
+    "@types/bun": ["@types/bun@1.4.3", "", { "dependencies": { "bun-types": "1.4.3" } }, "sha512-N67Pqy8JXbAY/j0tNraS3V5mubGvc6rrrNDmDCtZLlFzccbUJPDb0tvgUBC5q4m8ybkP93Jcn1QB+RYQ6PvBhw=="],
 
     "@types/chai": ["@types/chai@5.2.3", "", { "dependencies": { "@types/deep-eql": "*", "assertion-error": "^2.0.1" } }, "sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA=="],
 
@@ -1658,7 +1658,7 @@
 
     "browserslist": ["browserslist@4.28.0", "", { "dependencies": { "baseline-browser-mapping": "^2.8.25", "caniuse-lite": "^1.0.30001754", "electron-to-chromium": "^1.5.249", "node-releases": "^2.0.27", "update-browserslist-db": "^1.1.4" }, "bin": { "browserslist": "cli.js" } }, "sha512-tbydkR/CxfMwelN0vwdP/pLkDwyAASZ+VfWm4EOwlB6SWhx1sYnWLqo8N5j0rAzPfzfRaxt0mM/4wPU/Su84RQ=="],
 
-    "bun-types": ["bun-types@1.3.9", "", { "dependencies": { "@types/node": "*" } }, "sha512-+UBWWOakIP4Tswh0Bt0QD0alpTY8cb5hvgiYeWCMet9YukHbzuruIEeXC2D7nMJPB12kbh8C7XJykSexEqGKJg=="],
+    "bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
 
     "cac": ["cac@6.7.14", "", {}, "sha512-b6Ilus+c3RrdDk+JhLKUAQfzzgLEPy6wcXqS7f/xe1EETvsDP6GORG7SFuOs6cID5YkqchW/LXZbX5bc8j7ZcQ=="],
 
