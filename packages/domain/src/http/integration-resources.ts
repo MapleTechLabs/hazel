@@ -150,6 +150,8 @@ export class IntegrationNotConnectedForPreviewError extends Schema.TaggedError<I
 	{
 		provider: IntegrationProvider,
 	},
+	// The organization has no connection to the provider: a client state, not a server fault.
+	{ httpApiStatus: 404 },
 ) {}
 
 // Error when resource cannot be found
