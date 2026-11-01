@@ -9,12 +9,18 @@ gateway URL for inbound websocket delivery.
 
 ## Environment variables
 
-| Variable      | Required | Default                | Description                                               |
-| ------------- | -------- | ---------------------- | --------------------------------------------------------- |
-| `BOT_TOKEN`   | Yes      | -                      | Bot authentication token                                  |
-| `BACKEND_URL` | No       | `https://api.hazel.sh` | Backend API URL for message sends, command sync, and auth |
-| `GATEWAY_URL` | No       | `BACKEND_URL`          | Bot gateway URL for inbound websocket delivery            |
-| `PORT`        | No       | `0`                    | Health server port                                        |
+| Variable      | Required | Default                        | Description                                               |
+| ------------- | -------- | ------------------------------ | --------------------------------------------------------- |
+| `BOT_TOKEN`   | Yes      | -                              | Bot authentication token                                  |
+| `BACKEND_URL` | No       | `https://api.hazel.sh`         | Backend API URL for message sends, command sync, and auth |
+| `GATEWAY_URL` | No       | `https://bot-gateway.hazel.sh` | Bot gateway URL for inbound websocket delivery            |
+| `PORT`        | No       | `0` (OS-assigned)              | Health server port (Bun only)                             |
+| `COMMIT_SHA`  | No       | `unknown`                      | Service version reported in traces                        |
+
+`runHazelBot` and `createHazelBot` also export traces. Locally they go to Effect DevTools; set
+`OTEL_ENVIRONMENT` (`local`, `staging` or `production`), `OTEL_BASE_URL` (the OTLP endpoint, required
+outside `local`) and optionally `MAPLE_INGEST_KEY` to send them elsewhere. A bot on
+[Cloudflare](/bot-sdk/reference/cloudflare) uses its host's tracer instead.
 
 ### Example `.env`
 
@@ -67,7 +73,6 @@ interface HazelBotConfig<Commands> {
 	botToken: string
 	backendUrl?: string
 	gatewayUrl?: string
-	actorsEndpoint?: string
 	commands?: Commands
 	mentionable?: boolean
 	resumeOffset?: string
@@ -77,8 +82,12 @@ interface HazelBotConfig<Commands> {
 	heartbeatIntervalMs?: number
 	serviceName?: string
 	healthPort?: number | false
+	logging?: { level?: LogLevel; format?: LogFormat }
 }
 ```
+
+`backendUrl` and `gatewayUrl` default to `https://api.hazel.sh` and `https://bot-gateway.hazel.sh`,
+`maxConcurrentPartitions` to `8`, and `resumeOffset` to `"now"` (when no `sessionStore` has a saved offset).
 
 ### Example
 
@@ -99,7 +108,8 @@ The websocket runtime uses two optional stores:
 - `sessionStore` persists the last acknowledged gateway offset.
 - `stateStore` persists small bot-local state, such as thread mappings.
 
-If you do not provide either store, the SDK uses in-memory defaults.
+If you do not provide either store, the SDK uses in-memory defaults. On Cloudflare,
+`makeBotSupervisor` keeps both in the Durable Object's storage, see [Running on Cloudflare](/bot-sdk/reference/cloudflare).
 
 ## Local development
 

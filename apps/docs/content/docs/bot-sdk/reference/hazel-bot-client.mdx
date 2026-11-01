@@ -137,6 +137,19 @@ yield *
 	)
 ```
 
+### `onMention`
+
+Register a handler for messages that @mention the bot. Requires `mentionable: true` in the bot's config.
+
+```typescript
+yield *
+	bot.onMention((message) =>
+		Effect.gen(function* () {
+			yield* bot.message.reply(message, "You mentioned me! How can I help?")
+		}),
+	)
+```
+
 ### `onCommand`
 
 Register a handler for a slash command. See [Commands](/bot-sdk/reference/commands) for details.
@@ -169,13 +182,14 @@ const message =
 		replyToMessageId: parentMessageId, // Optional: reply to message
 		threadChannelId: threadId, // Optional: send in thread
 		attachmentIds: [attachmentId], // Optional: attachments
+		embeds: [embed], // Optional: rich embeds
 		html: { title: "Deploys", html: page }, // Optional: a sandboxed HTML page, see HTML Renders
 	})
 ```
 
 ### `bot.message.reply`
 
-Reply to a message.
+Reply to a message. Takes the same options as `send`, except `replyToMessageId`.
 
 ```typescript
 yield * bot.message.reply(message, "Got it!")
@@ -197,10 +211,10 @@ yield * bot.message.update(message, "Deploys (updated)", { html: { title: "Deplo
 
 ### `bot.message.delete`
 
-Delete a message by ID.
+Delete a message by ID. Pass the message's channel when you have it; the API routes the delete by it.
 
 ```typescript
-yield * bot.message.delete(messageId)
+yield * bot.message.delete(message.id, message.channelId)
 ```
 
 ### `bot.message.react`
@@ -210,6 +224,25 @@ React to a message with an emoji.
 ```typescript
 yield * bot.message.react(message, "👍")
 ```
+
+### `bot.message.list`
+
+List a channel's messages, newest first, 25 per page by default.
+
+```typescript
+const page1 = yield * bot.message.list(channelId)
+
+if (page1.has_more) {
+	const last = page1.data[page1.data.length - 1]
+	const page2 = yield * bot.message.list(channelId, { startingAfter: last.id })
+}
+```
+
+| Option          | Type        | Description                            |
+| --------------- | ----------- | -------------------------------------- |
+| `startingAfter` | `MessageId` | Fetch messages older than this message |
+| `endingBefore`  | `MessageId` | Fetch messages newer than this message |
+| `limit`         | `number`    | Messages per page (1-100, default 25)  |
 
 ## Typing Indicators
 
@@ -241,6 +274,32 @@ yield *
 		name: "new-name",
 		description: "New description",
 	})
+```
+
+### `bot.channel.createThread`
+
+Create a thread on a message, or get the thread it already has. Returns the thread channel; use its `id` as the thread's `ChannelId`.
+
+```typescript
+const thread = yield * bot.channel.createThread(message.id, message.channelId)
+yield * bot.message.send(thread.id, "Let's discuss here")
+```
+
+Pass the organization as the third argument when the bot knows it (a message event's `partitionKey` names it); otherwise Hazel resolves it from the channel.
+
+## Bot State
+
+`bot.state` is small key-value storage for the bot, kept in the configured `stateStore` (in memory by default, the Durable Object's storage on [Cloudflare](/bot-sdk/reference/cloudflare)).
+
+```typescript
+yield * bot.state.set("last-digest", new Date().toISOString())
+const last = yield * bot.state.get("last-digest") // string | null
+yield * bot.state.delete("last-digest")
+
+// With a schema
+const Mapping = Schema.Struct({ threadId: Schema.String })
+yield * bot.state.setJson("mapping:123", Mapping, { threadId: "abc" })
+const mapping = yield * bot.state.getJson("mapping:123", Mapping)
 ```
 
 ## Utilities

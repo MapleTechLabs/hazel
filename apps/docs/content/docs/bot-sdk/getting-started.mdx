@@ -8,7 +8,7 @@ This guide walks you through installing the Bot SDK and creating a simple bot th
 
 ## Prerequisites
 
-- [Bun](https://bun.sh) v1.0 or later (or Node.js 20+)
+- [Bun](https://bun.sh) v1.2 or later, or Node.js 22+ (the optional `/health` server only runs on Bun). To run a bot on Cloudflare, see [Running on Cloudflare](/bot-sdk/reference/cloudflare)
 - A Hazel bot token (get one from your organization settings)
 - Basic familiarity with TypeScript and async/await
 
@@ -108,11 +108,12 @@ Registers a handler for new messages. The handler receives the full message obje
 
 Sends a reply to a message. The SDK provides several message operations:
 
-- `bot.message.send(channelId, content)` - Send a new message
-- `bot.message.reply(message, content)` - Reply to a message
-- `bot.message.update(message, newContent)` - Edit a message
-- `bot.message.delete(messageId)` - Delete a message
+- `bot.message.send(channelId, content, options?)` - Send a new message (options: reply, thread, attachments, embeds, `html`)
+- `bot.message.reply(message, content, options?)` - Reply to a message
+- `bot.message.update(message, newContent, options?)` - Edit a message (options: embeds, `html`)
+- `bot.message.delete(messageId, channelId?)` - Delete a message
 - `bot.message.react(message, emoji)` - React with an emoji
+- `bot.message.list(channelId, options?)` - List a channel's messages, newest first
 
 ## Next Steps
 

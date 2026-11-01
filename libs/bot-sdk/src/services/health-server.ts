@@ -4,8 +4,9 @@
  * Lightweight HTTP health endpoint for bot process monitoring.
  * Reports process liveness and uptime for the websocket-based bot runtime.
  *
- * Enabled by default on port 9090. Set `healthPort: false` in config to disable. Needs Bun: on
- * another runtime it is skipped (a Cloudflare host answers health on its Worker instead).
+ * Enabled by default on an OS-assigned port (`PORT` picks one). Set `healthPort: false` in config
+ * to disable. Needs Bun: on another runtime it is skipped (a Cloudflare host answers health on its
+ * Worker instead).
  */
 
 import { Effect, Layer, Context } from "effect"

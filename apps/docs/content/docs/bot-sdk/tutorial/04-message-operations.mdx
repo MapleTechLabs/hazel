@@ -75,10 +75,10 @@ yield * bot.message.update(message, "Done!")
 
 ## Delete a Message
 
-Use `bot.message.delete` to remove a message:
+Use `bot.message.delete` to remove a message. Pass the message's channel when you have it; the API routes the delete by it:
 
 ```typescript
-yield * bot.message.delete(messageId)
+yield * bot.message.delete(message.id, message.channelId)
 ```
 
 ## Rate Limiting
