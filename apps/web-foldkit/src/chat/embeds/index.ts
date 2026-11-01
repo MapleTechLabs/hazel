@@ -1,6 +1,7 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { embedContainerStyles } from "~/components/embeds/embed.styles"
 import { cn } from "~/lib/utils"
+import { button } from "../../ui/button"
 import {
 	embedAuthorView,
 	embedBodyView,
@@ -10,7 +11,7 @@ import {
 	embedThumbnailView,
 } from "./embed-sections"
 import { type HtmlRenderContext, htmlRenderView } from "./html-render"
-import type { EmbedType } from "./types"
+import type { EmbedAction, EmbedType } from "./types"
 
 /** Port of `components/chat/message-embeds.tsx` (`MessageEmbeds` + `MessageEmbedCard`). */
 
@@ -28,7 +29,8 @@ const hasCardContent = (embed: EmbedType): boolean =>
 		embed.footer ||
 		embed.image ||
 		embed.thumbnail ||
-		(embed.fields && embed.fields.length > 0)
+		(embed.fields && embed.fields.length > 0) ||
+		(embed.actions && embed.actions.length > 0)
 	)
 
 /** `Embed` root: wrapped in a block `<a>` when the embed has a url. */
@@ -63,6 +65,37 @@ const embedRootView = <M>(
 		: content
 }
 
+const actionIntent = (style: EmbedAction["style"]) =>
+	style === "primary" ? "primary" : style === "danger" ? "danger" : "outline"
+
+/** The embed's buttons; inert where nothing handles a press (previews outside the message list). */
+const embedActionsView = <M>(
+	h: HtmlBuilder<M>,
+	actions: ReadonlyArray<EmbedAction>,
+	onAction: ((actionId: string) => M) | undefined,
+): Html =>
+	h.div(
+		[h.Class("flex flex-wrap gap-2 px-3 pt-1 pb-3")],
+		actions.map((action) =>
+			h.keyed("span")(
+				action.id,
+				[],
+				[
+					button(
+						h,
+						{
+							intent: actionIntent(action.style),
+							size: "sm",
+							isDisabled: action.disabled === true || onAction === undefined,
+							...(onAction === undefined ? {} : { onPress: onAction(action.id) }),
+						},
+						[action.label],
+					),
+				],
+			),
+		),
+	)
+
 /** The HTML render of an embed, or nothing without a render context (it renders only in the message list). */
 const embedHtmlView = <M>(h: HtmlBuilder<M>, embed: EmbedType, html: HtmlRenderContext<M> | undefined) =>
 	embed.html === undefined || html === undefined ? h.empty : htmlRenderView(h, embed.html, html)
@@ -71,14 +104,20 @@ export const messageEmbedCardView = <M>(
 	h: HtmlBuilder<M>,
 	embed: EmbedType,
 	html?: HtmlRenderContext<M>,
+	onAction?: (actionId: string) => M,
 ): Html => {
 	if (!hasCardContent(embed)) return embedHtmlView(h, embed, html)
 	const accentColor = embed.color ? `#${embed.color.toString(16).padStart(6, "0")}` : undefined
 	const hasHtml = embed.html !== undefined && html !== undefined
-	// The frame takes the column's width, and an `<a>` around it would swallow its controls.
+	const hasActions = embed.actions !== undefined && embed.actions.length > 0
+	// The frame takes the column's width, and an `<a>` around it would swallow its controls (so would buttons).
 	return embedRootView(
 		h,
-		{ accentColor, url: hasHtml ? undefined : embed.url, className: hasHtml ? "max-w-none" : undefined },
+		{
+			accentColor,
+			url: hasHtml || hasActions ? undefined : embed.url,
+			className: hasHtml ? "max-w-none" : undefined,
+		},
 		[
 			embed.author
 				? embedAuthorView(h, {
@@ -113,6 +152,7 @@ export const messageEmbedCardView = <M>(
 						timestamp: embed.timestamp ? new Date(embed.timestamp) : undefined,
 					})
 				: h.empty,
+			hasActions ? embedActionsView(h, embed.actions ?? [], onAction) : h.empty,
 		],
 	)
 }
@@ -127,6 +167,7 @@ export const messageEmbedsView = <M>(
 	embeds: ReadonlyArray<EmbedType> | null,
 	live: Html = h.empty,
 	html?: HtmlRenderContext<M>,
+	onAction?: (actionId: string) => M,
 ): Html =>
 	embeds?.length
 		? h.div(
@@ -138,7 +179,7 @@ export const messageEmbedsView = <M>(
 							(embed) =>
 								hasCardContent(embed) || (embed.html !== undefined && html !== undefined),
 						)
-						.map((embed) => messageEmbedCardView(h, embed, html)),
+						.map((embed) => messageEmbedCardView(h, embed, html, onAction)),
 				],
 			)
 		: h.empty
