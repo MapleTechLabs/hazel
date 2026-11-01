@@ -17,6 +17,7 @@ describe("mosaicLayout", () => {
 	})
 
 	test("past ten, the rows of ten (the last cell counts the rest)", () => {
-		expect(mosaicLayout(14)).toEqual(mosaicLayout(10))
+		expect(mosaicLayout(10)).toEqual([1, 3, 3, 3])
+		expect(mosaicLayout(14)).toEqual([1, 3, 3, 3])
 	})
 })
