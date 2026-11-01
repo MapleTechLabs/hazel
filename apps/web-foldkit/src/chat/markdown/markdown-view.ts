@@ -134,8 +134,10 @@ const mentionView = <M>(h: HtmlBuilder<M>, element: ProseMirrorNode, env: Env): 
 	const toTrigger = (attributes: ReadonlyArray<ChildAttribute>) =>
 		h.button(
 			[
-				// The trigger's attributes carry its own `aria-expanded`.
-				...(attributes.length === 0 ? [h.Attribute("aria-expanded", "false")] : attributes),
+				// The trigger's attributes carry its own `aria-expanded` and `type`.
+				...(attributes.length === 0
+					? [h.Attribute("aria-expanded", "false"), h.Type("button")]
+					: attributes),
 				h.Class(
 					cn(
 						"inline-block cursor-pointer rounded bg-primary/10 px-1 py-0.5 align-baseline font-medium text-primary outline-hidden transition-colors hover:bg-primary/20",
@@ -144,7 +146,6 @@ const mentionView = <M>(h: HtmlBuilder<M>, element: ProseMirrorNode, env: Env): 
 				h.Attribute("data-react-aria-pressable", "true"),
 				node,
 				h.Attribute("tabindex", "0"),
-				h.Attribute("type", "button"),
 			],
 			["@", fullName, voidChildView(h)],
 		)
