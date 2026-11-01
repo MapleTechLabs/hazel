@@ -17,14 +17,6 @@ import { isAdminOf, LOGO_INPUT_ID } from "./update"
 
 /** Port of `routes/_app/$orgSlug/settings/index.tsx`. */
 
-const getInitials = (orgName: string) => {
-	const words = orgName.trim().split(/\s+/)
-	if (words.length >= 2) {
-		return `${words[0]?.charAt(0) ?? ""}${words[1]?.charAt(0) ?? ""}`.toUpperCase()
-	}
-	return orgName.slice(0, 2).toUpperCase()
-}
-
 const sectionHeader = (
 	h: HtmlBuilder<Message>,
 	options: {
@@ -112,7 +104,7 @@ const profileCard = (h: HtmlBuilder<Message>, model: Model, shared: Shared, orga
 										[
 											avatar(h, {
 												src: organization.logoUrl,
-												initials: getInitials(organization.name),
+												seed: organization.name,
 												size: "4xl",
 											}),
 											...(isAdmin

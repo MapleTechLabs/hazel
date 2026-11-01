@@ -283,7 +283,7 @@ const memberRow = (h: H, member: T3CodeMember, isSelected: boolean): Html =>
 					h.div(
 						[h.Class("ml-1 flex min-w-0 items-center gap-2.5")],
 						[
-							avatar(h, { src: member.avatarUrl, seed: member.name, className: "size-6" }),
+							avatar(h, { size: "xs", src: member.avatarUrl, seed: member.name }),
 							h.span([h.Class("truncate text-fg text-sm")], [member.name]),
 							h.span([h.Class("truncate text-muted-fg text-xs")], [member.email]),
 						],

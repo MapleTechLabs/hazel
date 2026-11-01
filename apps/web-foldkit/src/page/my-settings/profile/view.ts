@@ -11,7 +11,7 @@ import * as TimezoneSelect from "../../../ui/timezone-select"
 import type { PageViewInputs, Shared } from "../../contract"
 import { pageHeader } from "../shared"
 import { profilePictureUpload } from "./avatar-view"
-import { initialsOf, isSaveDisabled } from "./form"
+import { isSaveDisabled } from "./form"
 import { Message } from "./message"
 import type { Model } from "./model"
 import { interaction, toTimezoneMessage } from "./update"
@@ -69,7 +69,7 @@ export const profileView = (model: Model, shared: Shared, h: HtmlBuilder<Message
 					section(h, "Profile picture", [
 						profilePictureUpload(h, model, {
 							avatarUrl: user?.avatarUrl ?? null,
-							initials: initialsOf(user?.firstName ?? "", user?.lastName ?? ""),
+							name: `${user?.firstName ?? ""} ${user?.lastName ?? ""}`.trim(),
 						}),
 					]),
 					section(

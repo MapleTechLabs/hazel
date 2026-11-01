@@ -22,7 +22,7 @@ import type { Bot, PublicBot } from "./bots"
 const isProvider = (provider: string): provider is IntegrationConnection.IntegrationProvider =>
 	provider in INTEGRATION_PROVIDERS
 
-/** `BotAvatar`: the machine user's avatar, else the facehash of the name. */
+/** `BotAvatar`: the machine user's avatar, else the dithered initial of the name. */
 const botAvatar = <Message>(h: HtmlBuilder<Message>, bot: Bot, size: "md" | "lg") =>
 	avatar(h, {
 		size,

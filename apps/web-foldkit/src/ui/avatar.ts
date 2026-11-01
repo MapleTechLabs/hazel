@@ -2,11 +2,10 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { type AvatarSize, styles } from "~/components/ui/avatar/styles"
 import { cx } from "~/utils/cx"
 import { IconCircleDottedUser } from "../icons"
-import { facehash } from "./facehash"
+import { ditherAvatar } from "./dither-avatar"
 
 /**
- * Port of `components/ui/avatar` (image or facehash fallback). Same classes via the
- * same `cx` (tailwind-merge), so the class strings match the legacy DOM exactly.
+ * Port of `components/ui/avatar`: the image, else a dithered initial seeded by `seed`.
  */
 export interface AvatarProps {
 	readonly size?: AvatarSize
@@ -16,12 +15,16 @@ export interface AvatarProps {
 	readonly isSquare?: boolean
 	readonly className?: string
 	readonly badge?: Html
-	/** Legacy `initials`: shown when there is no image and no seed. */
-	readonly initials?: string
-	/** Custom fallback shown when there is no image, seed or initials. */
+	/** Custom fallback shown when there is no image or seed. */
 	readonly placeholder?: Html
 	/** Legacy default fallback (IconCircleDottedUser) when nothing else applies; opt-in here. */
 	readonly fallbackIcon?: boolean
+}
+
+/** A `size-*` class in `className` overrides the size's own (tailwind-merge), so the grain follows it. */
+const renderedPx = (size: AvatarSize, className: string | undefined): number => {
+	const override = className?.match(/(?:^|\s)size-(\d+(?:\.5)?)(?=\s|$)/)?.[1]
+	return override === undefined ? styles[size].px : Number(override) * 4
 }
 
 export const avatar = <Message>(h: HtmlBuilder<Message>, props: AvatarProps): Html => {
@@ -43,16 +46,14 @@ export const avatar = <Message>(h: HtmlBuilder<Message>, props: AvatarProps): Ht
 			? [
 					h.div(
 						[h.Class(cx("absolute inset-0 overflow-hidden", rounded)), squircle],
-						[facehash(h, seed)],
+						[ditherAvatar(h, seed, renderedPx(size, props.className))],
 					),
 				]
-			: props.initials
-				? [h.span([h.Class(cx("text-quaternary", styles[size].initials))], [props.initials])]
-				: props.placeholder
-					? [props.placeholder]
-					: props.fallbackIcon
-						? [IconCircleDottedUser(h, { className: cx("text-muted-fg", styles[size].icon) })]
-						: []
+			: props.placeholder
+				? [props.placeholder]
+				: props.fallbackIcon
+					? [IconCircleDottedUser(h, { className: cx("text-muted-fg", styles[size].icon) })]
+					: []
 	return h.div(
 		[
 			h.Attribute("data-avatar", "true"),

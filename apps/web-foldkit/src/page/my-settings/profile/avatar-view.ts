@@ -65,7 +65,7 @@ const editOverlay = <M>(h: HtmlBuilder<M>, isUploading: boolean) =>
 export const profilePictureUpload = (
 	h: HtmlBuilder<Message>,
 	model: Model,
-	user: { readonly avatarUrl: string | null; readonly initials: string },
+	user: { readonly avatarUrl: string | null; readonly name: string },
 ): Html => {
 	const wiring = interaction.wiring(model)
 	const isUploading = model.avatarAction._tag === "Uploading"
@@ -123,7 +123,7 @@ export const profilePictureUpload = (
 							avatar(h, {
 								src: user.avatarUrl,
 								alt: "Your profile picture",
-								initials: user.initials,
+								seed: user.name,
 								size: "4xl",
 								className: "transition-all duration-200",
 							}),

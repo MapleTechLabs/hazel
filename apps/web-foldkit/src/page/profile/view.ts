@@ -84,6 +84,7 @@ const profile = (
 										size: "xl",
 										alt: fullName,
 										src: user.avatarUrl,
+										seed: fullName,
 										fallbackIcon: true,
 									}),
 									h.span([

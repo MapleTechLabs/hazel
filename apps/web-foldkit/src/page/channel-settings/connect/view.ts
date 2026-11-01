@@ -42,7 +42,8 @@ const connectionRow = (h: HtmlBuilder<Message>, model: Model, mount: Mount, shar
 						size: "sm",
 						isSquare: true,
 						src: org?.logoUrl,
-						seed: org?.name ?? mount.organizationId,
+						seed: org?.name,
+						fallbackIcon: true,
 					}),
 					h.div(
 						[h.Class("flex flex-col")],

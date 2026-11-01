@@ -106,6 +106,7 @@ const singleDmCard = <M>(
 					size: "md",
 					src: member.avatarUrl,
 					alt: `${member.firstName} ${member.lastName}`,
+					seed: `${member.firstName} ${member.lastName}`,
 					fallbackIcon: true,
 				}),
 				h.span([
@@ -152,6 +153,7 @@ export const dmCard = <M>(
 					size: "sm",
 					src: member.avatarUrl,
 					alt: member.firstName,
+					seed: `${member.firstName} ${member.lastName}`,
 					className: "ring-2 ring-bg",
 					fallbackIcon: true,
 				}),

@@ -5,7 +5,6 @@ import { avatar } from "../../ui/avatar"
 import { button } from "../../ui/button"
 import type { PageViewInputs } from "../contract"
 import * as CreateWorkspace from "../create-workspace"
-import { initialsOf } from "../initials"
 import { Message } from "./message"
 import { type Model, Organizations, type UserOrganization } from "./model"
 
@@ -51,7 +50,7 @@ const organizationButton = (h: HtmlBuilder<Message>, organization: UserOrganizat
 		[
 			avatar(h, {
 				src: organization.logoUrl,
-				initials: initialsOf(organization.name),
+				seed: organization.name,
 				className: "size-12",
 			}),
 			h.div(

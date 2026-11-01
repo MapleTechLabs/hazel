@@ -27,6 +27,3 @@ export const isDirty = (model: Model): boolean =>
 /** `isDisabled={!canSubmit || isSubmitting || !isDirty}` */
 export const isSaveDisabled = (model: Model): boolean =>
 	!isDirty(model) || model.save._tag === "Saving" || anyInvalid([model.firstName, model.lastName])
-
-export const initialsOf = (firstName: string, lastName: string) =>
-	`${firstName.charAt(0)}${lastName.charAt(0)}`

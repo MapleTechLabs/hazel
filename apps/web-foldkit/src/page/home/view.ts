@@ -25,11 +25,6 @@ import { type DirectoryMember, filterMembers, menuEntries, menuIdOf, type Model,
 
 const toInteractionMessage = (message: Interaction.Message) => Message.GotInteractionMessage({ message })
 
-const getInitials = (name: string) => {
-	const [firstName, lastName] = name.split(" ")
-	return `${firstName?.charAt(0) ?? ""}${lastName?.charAt(0) ?? ""}`
-}
-
 const toMenuMessage = (member: DirectoryMember) => (message: Menu.Message) =>
 	Message.GotMemberMenuMessage({ userId: member.id, message })
 
@@ -111,7 +106,7 @@ const memberRow = (
 						[
 							avatar(h, {
 								src: member.avatarUrl,
-								initials: getInitials(fullName || "User"),
+								seed: fullName || "User",
 								className: "size-9",
 							}),
 							member.presenceStatus

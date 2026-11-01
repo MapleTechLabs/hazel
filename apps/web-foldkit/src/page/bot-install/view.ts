@@ -7,7 +7,6 @@ import { button } from "../../ui/button"
 import { loader } from "../../ui/loader"
 import { authError, authFrame, authHeading } from "../auth/layout"
 import { isSessionLoading, type PageViewInputs, type Shared } from "../contract"
-import { initialsOf } from "../initials"
 import { Message } from "./message"
 import { type ApproveFailure, type BotSummary, type InstallTarget, Lookup, type Model } from "./model"
 
@@ -39,7 +38,7 @@ const targetOption = (h: HtmlBuilder<Message>, target: InstallTarget, isSelected
 			),
 		],
 		[
-			avatar(h, { src: target.logoUrl, initials: initialsOf(target.name), className: "size-8" }),
+			avatar(h, { src: target.logoUrl, seed: target.name, className: "size-8" }),
 			h.span([h.Class("flex-1 truncate font-medium text-fg text-sm")], [target.name]),
 		],
 	)
@@ -115,7 +114,7 @@ const request = (
 	bot: BotSummary,
 	shared: Shared,
 ): ReadonlyArray<Html> => [
-	avatar(h, { src: bot.avatarUrl, initials: initialsOf(bot.name), size: "xl", className: "mb-6" }),
+	avatar(h, { src: bot.avatarUrl, seed: bot.name, size: "xl", className: "mb-6" }),
 	authHeading(
 		h,
 		`Install ${bot.name}`,
