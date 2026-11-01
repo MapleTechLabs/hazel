@@ -93,7 +93,7 @@ export const botAvatarUpload = <Message>(
 							],
 						},
 						[
-							// BotAvatar: the machine user's avatar, else the facehash of the name.
+							// BotAvatar: the machine user's avatar, else the dithered initial of the name.
 							avatar(h, {
 								size: "4xl",
 								src: options.avatarUrl,

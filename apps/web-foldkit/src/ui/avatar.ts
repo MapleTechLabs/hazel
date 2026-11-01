@@ -2,11 +2,10 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { type AvatarSize, styles } from "~/components/ui/avatar/styles"
 import { cx } from "~/utils/cx"
 import { IconCircleDottedUser } from "../icons"
-import { facehash } from "./facehash"
+import { ditherAvatar } from "./dither-avatar"
 
 /**
- * Port of `components/ui/avatar` (image or facehash fallback). Same classes via the
- * same `cx` (tailwind-merge), so the class strings match the legacy DOM exactly.
+ * Port of `components/ui/avatar`: the image, else a dithered initial seeded by `seed`.
  */
 export interface AvatarProps {
 	readonly size?: AvatarSize
@@ -43,7 +42,7 @@ export const avatar = <Message>(h: HtmlBuilder<Message>, props: AvatarProps): Ht
 			? [
 					h.div(
 						[h.Class(cx("absolute inset-0 overflow-hidden", rounded)), squircle],
-						[facehash(h, seed)],
+						[ditherAvatar(h, seed, styles[size].px)],
 					),
 				]
 			: props.initials
