@@ -234,14 +234,14 @@ export const makeDiscordClient = Effect.gen(function* () {
 						.updateWebhookMessage({
 							...webhook,
 							webhookMessageId: message.externalMessageId,
-							content: message.content,
+							content,
 						})
 						.pipe(Effect.asVoid, Effect.mapError(apiError)),
 				viaBot((token) =>
 					api.updateMessage({
 						channelId,
 						messageId: message.externalMessageId,
-						content: message.content,
+						content,
 						botToken: token,
 					}),
 				).pipe(Effect.asVoid),
