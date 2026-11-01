@@ -119,13 +119,12 @@ const ThumbCarousel = Mount.defineStream("ImageViewerThumbCarousel", {
 		),
 })
 
-// Marks what a click lands on without closing the viewer: the images, captions, header and thumbnail strip.
-const CONTENT_ATTRIBUTE = "image-viewer-content"
+// Marks what a click lands on without closing the viewer: the caption, header, counter, toolbar and thumbnails.
+export const CONTENT_ATTRIBUTE = "image-viewer-content"
 
-/** A click on the backdrop, or on a slide around its image, rather than on the viewer's content. */
-const isBackdropClick = (event: Event) =>
-	!(event.target instanceof Element) ||
-	event.target.closest(`img, button, [data-${CONTENT_ATTRIBUTE}]`) === null
+/** A click target on the backdrop, or on a slide around its image, rather than on the viewer's content. */
+export const isBackdropTarget = (target: EventTarget | null) =>
+	!(target instanceof Element) || target.closest(`img, button, [data-${CONTENT_ATTRIBUTE}]`) === null
 
 /** Portal + the Escape hotkey + backdrop click; the carousel owns the arrows (and swallows a drag's click). */
 const ImageViewerPortal = Mount.defineStream("ImageViewerPortal", {
@@ -139,7 +138,7 @@ const ImageViewerPortal = Mount.defineStream("ImageViewerPortal", {
 						if (event.key === "Escape") Queue.offerUnsafe(queue, Intent.PressedClose())
 					}
 					const onClick = (event: Event) => {
-						if (isBackdropClick(event)) Queue.offerUnsafe(queue, Intent.PressedClose())
+						if (isBackdropTarget(event.target)) Queue.offerUnsafe(queue, Intent.PressedClose())
 					}
 					document.addEventListener("keydown", onKeyDown)
 					element.addEventListener("click", onClick)
@@ -197,7 +196,7 @@ const thumbView = <M>(h: HtmlBuilder<M>, image: ImageViewerImage, isSelected: bo
 		h,
 		{
 			onPress,
-			className: `relative flex-[0_0_80px] cursor-pointer overflow-hidden rounded-md outline-none transition-opacity duration-150 after:pointer-events-none after:absolute after:inset-0 after:rounded-md after:ring-inset focus-visible:after:ring-2 focus-visible:after:ring-ring ${
+			className: `relative flex-[0_0_80px] cursor-pointer select-none overflow-hidden rounded-md outline-none transition-opacity duration-150 after:pointer-events-none after:absolute after:inset-0 after:rounded-md after:ring-inset focus-visible:after:ring-2 focus-visible:after:ring-ring ${
 				isSelected ? "opacity-100 after:ring-2 after:ring-white" : "opacity-50 hover:opacity-80"
 			}`,
 			attributes: [h.AriaLabel(image.fileName), ...(isSelected ? [h.AriaCurrent("true")] : [])],
@@ -207,7 +206,7 @@ const thumbView = <M>(h: HtmlBuilder<M>, image: ImageViewerImage, isSelected: bo
 				h.Attribute("src", image.url),
 				h.Attribute("alt", ""),
 				h.Draggable(false),
-				h.Class("block h-16 w-20 object-cover"),
+				h.Class("block h-16 w-20 select-none object-cover"),
 			]),
 		],
 	)
@@ -261,7 +260,7 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 	return h.div(
 		[
 			h.Class(
-				"fixed inset-0 isolate z-9999 flex select-none items-center justify-center bg-black/90 transition-opacity duration-200",
+				"fixed inset-0 isolate z-9999 flex items-center justify-center bg-black/90 transition-opacity duration-200",
 			),
 			// Legacy renders the viewer through a React portal inside the message list, so React's
 			// pointerleave never sees the pointer leave the list for it. Hover tracking reads this.
@@ -325,8 +324,8 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 												// A caption takes room under the image, clear of the thumbnail strip.
 												h.Class(
 													hasCaption(image)
-														? "max-h-[55vh] max-w-full rounded-md"
-														: "max-h-[70vh] max-w-full rounded-md",
+														? "max-h-[55vh] max-w-full select-none rounded-md"
+														: "max-h-[70vh] max-w-full select-none rounded-md",
 												),
 											]),
 											captionView(h, image.caption),
@@ -366,6 +365,7 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 					h.Class(
 						"absolute top-5 right-5 flex gap-1 rounded-md border border-white/10 bg-black/50 p-1",
 					),
+					h.DataAttribute(CONTENT_ATTRIBUTE, ""),
 				],
 				actions.map(([onPress, label, icon]) => toolbarButton(h, onPress, label, icon)),
 			),
