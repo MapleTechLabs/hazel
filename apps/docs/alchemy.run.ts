@@ -7,14 +7,14 @@ import * as Cloudflare from "@alchemy.run/cloudflare"
 import { Effect } from "effect"
 
 const props = Effect.gen(function* () {
-	const { stage, domains } = yield* HazelStack
+	const { stage } = yield* HazelStack
 	return {
 		name: resolveWorkerName("docs", stage),
 		rootDir: new URL(".", import.meta.url).pathname,
 		memo: { include: ["**/*", "../../packages/ui/src/**"], lockfile: true },
 		compatibility: { date: "2026-09-25" },
-		workersDev: stage.kind !== "prd",
-		domain: domains.docs,
+		// docs.hazel.sh still points at Vercel: serve on workers.dev until the hostname moves here.
+		workersDev: true,
 	}
 })
 

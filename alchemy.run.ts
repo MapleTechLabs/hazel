@@ -23,6 +23,7 @@ import { isMapleDeploy } from "@hazel/infra/maple"
 import { HazelMonitoring } from "@hazel/infra/maple-monitoring"
 import ApiLive, { Api } from "./apps/backend/src/worker.ts"
 import BotGateway from "./apps/bot-gateway/alchemy.run.ts"
+import Docs from "./apps/docs/alchemy.run.ts"
 import Landing from "./apps/landing/alchemy.run.ts"
 import LinkPreview from "./apps/link-preview-worker/alchemy.run.ts"
 import Web from "./apps/web-foldkit/alchemy.run.ts"
@@ -99,9 +100,9 @@ export default Alchemy.Stack(
 		const api = yield* Effect.provide(Api, ApiLive)
 		const linkPreview = yield* LinkPreview
 		const web = yield* Web
-		// Shared marketing site: prd only (previews and dev run their own dev servers). docs.hazel.sh
-		// stays on Vercel until its DNS record is moved, so the docs site is not deployed here yet.
+		// Shared marketing and docs sites: prd only (previews and dev run their own dev servers).
 		const landing = stage.kind === "prd" ? yield* Landing : undefined
+		const docs = stage.kind === "prd" ? yield* Docs : undefined
 		// First-party bots: prd and `alchemy dev`, with their token set (`isBotDeployed`).
 		const hazelBot = (yield* isBotDeployed(HAZEL_BOT_TOKEN_KEY, stack)) ? yield* HazelBot : undefined
 		const linearBot = (yield* isBotDeployed(LINEAR_BOT_TOKEN_KEY, stack)) ? yield* LinearBot : undefined
@@ -125,6 +126,7 @@ export default Alchemy.Stack(
 			webWorker: web.workerName,
 			linkPreviewWorker: linkPreview.workerName,
 			landingWorker: landing?.workerName,
+			docsWorker: docs?.workerName,
 			hazelBotWorker: hazelBot?.workerName,
 			linearBotWorker: linearBot?.workerName,
 			t3codeBotWorker: t3codeBot?.workerName,
