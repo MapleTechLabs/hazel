@@ -34,7 +34,7 @@
 		"aws4fetch": "^1.0.20",
 		"dfx": "^1.1.1",
 		"effect": "catalog:effect",
-		"uuid": "^13"
+		"uuid": "^14.0.3"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "catalog:alchemy",

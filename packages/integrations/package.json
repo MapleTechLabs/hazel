@@ -24,9 +24,9 @@
 		"./t3code": "./src/t3code/index.ts"
 	},
 	"dependencies": {
-		"@linear/sdk": "^73.0.0",
+		"@linear/sdk": "^100.0.0",
 		"effect": "catalog:effect",
-		"he": "^1.2.0",
+		"he": "^2.0.0",
 		"jose": "^6.2.14",
 		"rss-parser": "^3.13.0"
 	},

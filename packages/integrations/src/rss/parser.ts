@@ -1,4 +1,4 @@
-import he from "he"
+import * as he from "he"
 import RssParser from "rss-parser"
 
 export interface RssFeedItem {
