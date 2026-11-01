@@ -140,7 +140,7 @@ describe("Discord per-author identity", () => {
 			expect(h.calls).toEqual(["createWebhook", "executeWebhook:Olive Owner"])
 			expect(permissionOf(h.saved[0])).toBe("allowed")
 			expect(
-				(h.saved[0]?.outboundIdentity as { providers: Record<string, unknown> }).providers.discord,
+				(h.saved[0]!.outboundIdentity as { providers: Record<string, unknown> }).providers.discord,
 			).toEqual({ kind: "discord.webhook", webhookId: "700000000000000001", webhookToken: "t" })
 		}),
 	)
@@ -155,7 +155,7 @@ describe("Discord per-author identity", () => {
 			expect(yield* h.post).toBe("100000000000000020")
 			expect(h.calls).toEqual(["createWebhook", "createMessage"])
 			expect(permissionOf(h.saved[0])).toBe("denied")
-			expect((h.saved[0]?.outboundIdentity as { strategy: string }).strategy).toBe("fallback_bot")
+			expect((h.saved[0]!.outboundIdentity as { strategy: string }).strategy).toBe("fallback_bot")
 		}),
 	)
 
