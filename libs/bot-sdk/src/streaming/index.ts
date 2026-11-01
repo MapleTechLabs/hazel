@@ -3,7 +3,7 @@
  *
  * @example Low-level streaming API
  * ```typescript
- * import { createStreamSession } from "@hazel/bot-sdk"
+ * import { createStreamSession } from "@hazel-chat/bot-sdk"
  *
  * const stream = yield* createStreamSession(channelId)
  * yield* stream.appendText("Hello ")
@@ -13,7 +13,7 @@
  *
  * @example High-level AI streaming API
  * ```typescript
- * import { createAIStreamSession } from "@hazel/bot-sdk"
+ * import { createAIStreamSession } from "@hazel-chat/bot-sdk"
  *
  * const stream = yield* createAIStreamSession(channelId, { model: "claude-3.5-sonnet" })
  * yield* stream.processChunk({ type: "text", text: "Hello" })

@@ -10,7 +10,7 @@
  *   generateIntegrationInstructions,
  *   type IntegrationToolFactory,
  *   type ToolFactoryOptions,
- * } from "@hazel/bot-sdk"
+ * } from "@hazel-chat/bot-sdk"
  *
  * // Define your tool factory (specific to your AI SDK)
  * const LinearToolFactory: IntegrationToolFactory = {

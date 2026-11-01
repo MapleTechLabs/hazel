@@ -1,5 +1,5 @@
 /**
- * @hazel/bot-sdk
+ * @hazel-chat/bot-sdk
  *
  * Effect-based SDK for building bots that interact with Hazel over the bot gateway websocket
  *
@@ -8,7 +8,7 @@
  * For building Hazel chat app integrations, use the HazelBotSDK:
  *
  * ```typescript
- * import { createHazelBot, HazelBotClient } from "@hazel/bot-sdk"
+ * import { createHazelBot, HazelBotClient } from "@hazel-chat/bot-sdk"
  *
  * const runtime = createHazelBot({
  *   botToken: process.env.BOT_TOKEN!,

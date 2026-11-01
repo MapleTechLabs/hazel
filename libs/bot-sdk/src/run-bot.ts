@@ -31,7 +31,7 @@ export interface RunBotConfig<Commands extends CommandGroup<any> = EmptyCommands
 
 	/**
 	 * Health check server port. Set to `false` to disable.
-	 * @default 9090 (or PORT env var)
+	 * @default 0, OS-assigned (or the PORT env var)
 	 */
 	readonly healthPort?: number | false
 
@@ -75,7 +75,7 @@ export interface RunBotConfig<Commands extends CommandGroup<any> = EmptyCommands
  * @example
  * ```typescript
  * import { Effect, Schema } from "effect"
- * import { Command, CommandGroup, runHazelBot } from "@hazel/bot-sdk"
+ * import { Command, CommandGroup, runHazelBot } from "@hazel-chat/bot-sdk"
  *
  * const EchoCommand = Command.make("echo", {
  *   description: "Echo text back",

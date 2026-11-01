@@ -1888,7 +1888,7 @@ export interface HazelBotConfig<Commands extends CommandGroup<any> = EmptyComman
 
 	/**
 	 * Gateway URL for durable bot event delivery.
-	 * Defaults to `backendUrl`.
+	 * @default "https://bot-gateway.hazel.sh"
 	 */
 	readonly gatewayUrl?: string
 
@@ -1999,7 +1999,7 @@ export interface HazelBotConfig<Commands extends CommandGroup<any> = EmptyComman
  *
  * @example
  * ```typescript
- * import { createHazelBot, HazelBotClient, Command, CommandGroup } from "@hazel/bot-sdk"
+ * import { createHazelBot, HazelBotClient, Command, CommandGroup } from "@hazel-chat/bot-sdk"
  * import { Context, Schema } from "effect"
  *
  * // Define typesafe commands
