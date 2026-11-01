@@ -63,7 +63,7 @@
 		"@maple-dev/alchemy": "catalog:alchemy",
 		"@oxlint/plugins": "1.89.0",
 		"@types/node": "^24.19.2",
-		"@vitest/coverage-v8": "^4.1.12",
+		"@vitest/coverage-v8": "^5.0.5",
 		"alchemy": "catalog:alchemy",
 		"effect": "catalog:effect",
 		"knip": "^6.43.0",
@@ -71,7 +71,7 @@
 		"oxlint": "1.89.0",
 		"turbo": "^2.11.10",
 		"typescript": "catalog:tooling",
-		"vitest": "^4.1.12"
+		"vitest": "^5.0.5"
 	},
 	"engines": {
 		"bun": ">=1.2.14"
