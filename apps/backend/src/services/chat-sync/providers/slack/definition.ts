@@ -22,7 +22,8 @@ export const slack: ChatSyncProviderDefinition = {
 	threadChannelId: (parent, threadTs) => `${slackTarget(parent).channel}/${threadTs}`,
 	mention: (externalUserId) => `<@${externalUserId}>`,
 	mentionPattern: /<@([UW][A-Z0-9]+)>/g,
-	emojiToProvider: (emoji) => Slack.unicodeToSlackEmoji(emoji) ?? emoji,
+	// A custom workspace emoji came in as `:name:` and goes back by its name.
+	emojiToProvider: (emoji) => Slack.unicodeToSlackEmoji(emoji) ?? /^:([^:\s]+):$/.exec(emoji)?.[1] ?? emoji,
 	// A custom workspace emoji has no unicode: keep its `:name:`.
 	emojiFromProvider: (name) => Slack.slackEmojiToUnicode(name) ?? `:${name}:`,
 	// The events source drops the app's own posts (`app_id`), so nothing reaches the org as one.

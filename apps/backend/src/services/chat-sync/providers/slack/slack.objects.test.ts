@@ -14,7 +14,7 @@ import { decodeExit, encodePayload, type HazelRpcTag, rpcFor } from "../../../..
 import { channelTarget, orgTarget } from "../../../../worker/objects/kinds"
 import { encodeInvokePrincipal } from "../../../../worker/objects/principal"
 import { ObjectStubs } from "../../../../worker/objects/protocol"
-import { makeTestObjects, type TestObject } from "../../../../worker/objects/testing"
+import { makeTestObjects, type TestObject, type TestObjects } from "../../../../worker/objects/testing"
 import { routeChatSyncInbound } from "../../chat-sync-inbound"
 import { type SlackUserLookup, slackInbound } from "./events"
 
@@ -61,14 +61,17 @@ const lookupUser: SlackUserLookup = (userId) =>
 		Option.some({ externalUserId: userId as never, displayName: `Slack ${userId}`, avatarUrl: null }),
 	)
 
-const envelope = (eventId: string): Extract<Slack.SlackEnvelope, { readonly _tag: "EventCallback" }> => ({
+const envelope = (
+	eventId: string,
+	team = TEAM,
+): Extract<Slack.SlackEnvelope, { readonly _tag: "EventCallback" }> => ({
 	_tag: "EventCallback",
-	team_id: TEAM,
+	team_id: team,
 	api_app_id: APP,
 	event_id: eventId,
 	event_time: 1_700_000_000,
 	event: null,
-	authorizations: [{ team_id: TEAM, user_id: BOT_USER, is_bot: true }],
+	authorizations: [{ team_id: team, user_id: BOT_USER, is_bot: true }],
 })
 
 const slackMessage = (
@@ -90,81 +93,92 @@ const slackMessage = (
 	...extra,
 })
 
-/** An org installed in `TEAM`, a channel, and a Slack connection with a link for it. */
-const makeWorld = Effect.gen(function* () {
-	const objects = yield* makeTestObjects
-	const orgId = uuid() as OrganizationId
-	const owner = uuid() as UserId
-	const org = yield* objects.get(orgTarget(orgId))
-	const db = org.storage.db
-	db.prepare(`INSERT INTO organizations (id, name, slug) VALUES (?, 'Acme', 'acme')`).run(orgId)
-	db.prepare(
-		`INSERT INTO users (id, externalId, email, firstName, lastName) VALUES (?, ?, ?, 'Olive', 'Owner')`,
-	).run(owner, `ext-${owner}`, `${owner}@example.com`)
-	db.prepare(`INSERT INTO organization_members (organizationId, userId, role) VALUES (?, ?, 'owner')`).run(
-		orgId,
-		owner,
-	)
-	db.prepare(
-		`INSERT INTO integration_connections (provider, organizationId, level, status, connectedBy, externalAccountId)
+/** An org installed in `team`, a channel, and a Slack connection with a link for it. */
+const makeOrg = (objects: TestObjects, team = TEAM) =>
+	Effect.gen(function* () {
+		const orgId = uuid() as OrganizationId
+		const owner = uuid() as UserId
+		const org = yield* objects.get(orgTarget(orgId))
+		const db = org.storage.db
+		db.prepare(`INSERT INTO organizations (id, name, slug) VALUES (?, 'Acme', 'acme')`).run(orgId)
+		db.prepare(
+			`INSERT INTO users (id, externalId, email, firstName, lastName) VALUES (?, ?, ?, 'Olive', 'Owner')`,
+		).run(owner, `ext-${owner}`, `${owner}@example.com`)
+		db.prepare(
+			`INSERT INTO organization_members (organizationId, userId, role) VALUES (?, ?, 'owner')`,
+		).run(orgId, owner)
+		db.prepare(
+			`INSERT INTO integration_connections (provider, organizationId, level, status, connectedBy, externalAccountId)
 		 VALUES ('slack', ?, 'organization', 'active', ?, ?)`,
-	).run(orgId, owner, TEAM)
+		).run(orgId, owner, team)
 
-	const created = (yield* ok(
-		yield* call(
+		const created = (yield* ok(
+			yield* call(
+				org,
+				orgId,
+				"channel.create",
+				{
+					name: "general",
+					icon: null,
+					type: "public",
+					organizationId: orgId,
+					parentChannelId: null,
+					sectionId: null,
+				},
+				owner,
+			),
+		)) as { data: { id: ChannelId } }
+		const connectTo = (externalWorkspaceId: string) =>
+			call(
+				org,
+				orgId,
+				"chatSync.connection.create",
+				{
+					organizationId: orgId,
+					provider: "slack",
+					externalWorkspaceId,
+					externalWorkspaceName: "Acme",
+				},
+				owner,
+			)
+		const connection = (yield* ok(yield* connectTo(team))) as { data: { id: SyncConnectionId } }
+		const linkChannel = () =>
+			call(
+				org,
+				orgId,
+				"chatSync.channelLink.create",
+				{
+					organizationId: orgId,
+					syncConnectionId: connection.data.id,
+					hazelChannelId: created.data.id,
+					externalChannelId: SLACK_CHANNEL,
+				},
+				owner,
+			)
+		const stubs = Layer.succeed(ObjectStubs, objects.stubs)
+		const inbound = (eventId: string, event: Slack.SlackEvent, fromTeam = team) =>
+			Effect.gen(function* () {
+				const found = yield* slackInbound(envelope(eventId, fromTeam), event, lookupUser)
+				if (Option.isSome(found)) yield* routeChatSyncInbound(found.value)
+			}).pipe(Effect.provide(stubs), Effect.provideContext(objects.directory), Effect.orDie)
+		return {
+			objects,
 			org,
 			orgId,
-			"channel.create",
-			{
-				name: "general",
-				icon: null,
-				type: "public",
-				organizationId: orgId,
-				parentChannelId: null,
-				sectionId: null,
-			},
 			owner,
-		),
-	)) as { data: { id: ChannelId } }
-	const connectTo = (externalWorkspaceId: string) =>
-		call(
-			org,
-			orgId,
-			"chatSync.connection.create",
-			{ organizationId: orgId, provider: "slack", externalWorkspaceId, externalWorkspaceName: "Acme" },
-			owner,
-		)
-	const connection = (yield* ok(yield* connectTo(TEAM))) as { data: { id: SyncConnectionId } }
-	yield* ok(
-		yield* call(
-			org,
-			orgId,
-			"chatSync.channelLink.create",
-			{
-				organizationId: orgId,
-				syncConnectionId: connection.data.id,
-				hazelChannelId: created.data.id,
-				externalChannelId: SLACK_CHANNEL,
-			},
-			owner,
-		),
-	)
-	const stubs = Layer.succeed(ObjectStubs, objects.stubs)
-	const inbound = (eventId: string, event: Slack.SlackEvent) =>
-		Effect.gen(function* () {
-			const found = yield* slackInbound(envelope(eventId), event, lookupUser)
-			if (Option.isSome(found)) yield* routeChatSyncInbound(found.value)
-		}).pipe(Effect.provide(stubs), Effect.provideContext(objects.directory), Effect.orDie)
-	return {
-		objects,
-		org,
-		orgId,
-		owner,
-		channelId: created.data.id,
-		channel: yield* objects.get(channelTarget(created.data.id)),
-		connectTo,
-		inbound,
-	}
+			channelId: created.data.id,
+			channel: yield* objects.get(channelTarget(created.data.id)),
+			connectTo,
+			linkChannel,
+			inbound,
+		}
+	})
+
+/** One org with its channel linked to `SLACK_CHANNEL`. */
+const makeWorld = Effect.gen(function* () {
+	const world = yield* makeOrg(yield* makeTestObjects)
+	yield* ok(yield* world.linkChannel())
+	return world
 })
 
 describe("Slack chat sync on the objects", () => {
@@ -177,6 +191,46 @@ describe("Slack chat sync on the objects", () => {
 				expect(Cause.pretty((other as Exit.Failure<unknown, unknown>).cause)).toContain(
 					"ChatSyncIntegrationNotConnectedError",
 				)
+			}),
+		))
+
+	it("an event from another workspace reaches no link, even for the same channel id", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				yield* world.inbound(
+					"Ev90",
+					{
+						_tag: "MessagePosted",
+						subtype: "message",
+						message: slackMessage("1700000000.000900", "x"),
+					},
+					"T0ATTACKER",
+				)
+				expect(rows(world.channel, `SELECT id FROM messages`)).toEqual([])
+			}),
+		))
+
+	it("a second org in the same workspace cannot take a channel another org syncs", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const other = yield* makeOrg(world.objects)
+				const taken = yield* other.linkChannel()
+				expect(Exit.isFailure(taken)).toBe(true)
+				expect(Cause.pretty((taken as Exit.Failure<unknown, unknown>).cause)).toContain(
+					"ChatSyncChannelLinkExistsError",
+				)
+				// The channel's events still reach the first org only.
+				yield* world.inbound("Ev91", {
+					_tag: "MessagePosted",
+					subtype: "message",
+					message: slackMessage("1700000000.000910", "still ours"),
+				})
+				expect(rows(world.channel, `SELECT content FROM messages`)).toEqual([
+					{ content: "still ours" },
+				])
+				expect(rows(other.channel, `SELECT id FROM messages`)).toEqual([])
 			}),
 		))
 

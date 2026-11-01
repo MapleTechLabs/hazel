@@ -121,6 +121,8 @@ export type ChatSyncInboundEvent = typeof ChatSyncInboundEvent.Type
 export const OrgChatSyncIngestPayload = Schema.Struct({
 	provider: Schema.String,
 	externalChannelId: ExternalChannelId,
+	/** The workspaces the event happened in; the org's link must be under one of them. */
+	externalWorkspaceIds: Schema.optional(Schema.Array(Schema.String)),
 	dedupeKey: Schema.String,
 	/**
 	 * Who acted, already upserted into the directory: the provider user's shadow (or the

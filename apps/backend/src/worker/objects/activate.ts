@@ -45,6 +45,7 @@ export const activateObject = (kind: ObjectKind) =>
 			const raw = state.raw
 			const storage = raw.storage
 			const services = servicesPlatformLive(env, botGateways)
+			const directory = Layer.suspend(() => Directory.layerD1(directoryBinding(env)))
 			// The constructor's scope closes once it returns; the dispatcher's server fibers must live
 			// as long as the in-memory instance, so they get a scope of their own, closed only if
 			// construction fails.
@@ -62,18 +63,13 @@ export const activateObject = (kind: ObjectKind) =>
 				socketTokens,
 				platform: Layer.mergeAll(
 					workerObjectStubs(env),
-					Layer.suspend(() => Directory.layerD1(directoryBinding(env))),
+					directory,
 					BotGatewayTransport.layerDurableObject(botGateways),
 					ThreadNamer.layer.pipe(
 						Layer.provide(Layer.mergeAll(FetchHttpClient.layer, workerEnvLayer(env))),
 					),
 					ChatSyncProviders.layer.pipe(
-						Layer.provide(
-							Layer.mergeAll(
-								workerEnvLayer(env),
-								Layer.suspend(() => Directory.layerD1(directoryBinding(env))),
-							),
-						),
+						Layer.provide(Layer.mergeAll(workerEnvLayer(env), directory)),
 						Layer.orDie,
 					),
 					HtmlRenders.layer.pipe(

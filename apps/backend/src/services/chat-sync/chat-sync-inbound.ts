@@ -28,6 +28,11 @@ export interface ChatSyncInboundAuthor {
 export interface ChatSyncInbound {
 	readonly provider: ChatSyncProviderId
 	readonly externalChannelId: ExternalChannelId
+	/**
+	 * The provider workspaces the event happened in (Discord's guild; Slack's team, and the
+	 * other team of a shared channel). Only links under one of them get it; none: nobody does.
+	 */
+	readonly externalWorkspaceIds: ReadonlyArray<string>
 	/** Stable across redeliveries of the same event, and unique per provider. */
 	readonly dedupeKey: string
 	readonly author: ChatSyncInboundAuthor | null
@@ -37,7 +42,7 @@ export interface ChatSyncInbound {
 /** Route one provider event to every org whose link indexes its channel. */
 export const routeChatSyncInbound = Effect.fn("ChatSync.routeInbound")(function* (inbound: ChatSyncInbound) {
 	const { provider } = inbound
-	const targets = yield* indexedLinks(provider, inbound.externalChannelId)
+	const targets = yield* indexedLinks(provider, inbound.externalChannelId, inbound.externalWorkspaceIds)
 	yield* Effect.annotateCurrentSpan({
 		"chat_sync.provider": provider,
 		"chat_sync.event": inbound.event._tag,
@@ -62,6 +67,7 @@ export const routeChatSyncInbound = Effect.fn("ChatSync.routeInbound")(function*
 	const payload: OrgChatSyncIngestPayload = {
 		provider,
 		externalChannelId: inbound.externalChannelId,
+		externalWorkspaceIds: inbound.externalWorkspaceIds,
 		dedupeKey: inbound.dedupeKey,
 		author,
 		event: inbound.event,

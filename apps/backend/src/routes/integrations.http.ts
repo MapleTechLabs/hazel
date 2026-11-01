@@ -750,6 +750,17 @@ const handleOAuthCallback = Effect.fn("integrations.oauthCallback")(function* (
 				}
 			: null
 
+	// A per-workspace install must have granted the bot: an authorize URL stripped of its bot
+	// scopes answers with a user token only, which is no install.
+	if (
+		parsedState.level === "organization" &&
+		isChatSyncProviderId(provider) &&
+		chatSyncProviders[provider].workspaceIsInstall &&
+		tokens.tokenType !== "bot"
+	) {
+		return redirectWithError("token_exchange_failed")
+	}
+
 	// Save the connection, its tokens and the org's integration bot in the org's `OrgObject`.
 	const organizationId = parsedState.organizationId as OrganizationId
 	const userId = parsedState.userId as UserId

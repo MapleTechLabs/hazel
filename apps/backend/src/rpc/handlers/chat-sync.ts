@@ -28,6 +28,7 @@ import {
 import { Effect, Option } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
 import { IntegrationConnectionPolicy } from "../../policies/integration-connection-policy"
+import { indexedLinkOwner } from "../../services/chat-sync/chat-sync-index"
 import { indexChatSync, publishChatSyncLinks } from "../../services/chat-sync/chat-sync-org"
 import { ChatSyncDeliveryEffects } from "../../services/chat-sync/chat-sync-effects"
 import { normalizeChannelLinkSettings } from "../../services/chat-sync/chat-sync-settings"
@@ -210,7 +211,17 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 								payload.syncConnectionId,
 								payload.externalChannelId,
 							)
-							if (Option.isSome(existingExternal)) {
+							// Another org syncs that channel already (first link wins): one install can
+							// serve several orgs, and none may take another's channel.
+							const owner = yield* indexedLinkOwner(
+								connection.provider,
+								connection.externalWorkspaceId,
+								payload.externalChannelId,
+							)
+							if (
+								Option.isSome(existingExternal) ||
+								(Option.isSome(owner) && owner.value !== connection.organizationId)
+							) {
 								return yield* Effect.fail(
 									new ChatSyncChannelLinkExistsError({
 										syncConnectionId: payload.syncConnectionId,

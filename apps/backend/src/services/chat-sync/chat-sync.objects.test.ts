@@ -184,6 +184,7 @@ const discordCreate = (
 	authorId = "333333333333333333",
 ): ChatSyncInbound => ({
 	provider: "discord",
+	externalWorkspaceIds: [GUILD],
 	externalChannelId: DISCORD_CHANNEL,
 	dedupeKey: `discord:gateway:create:${messageId}`,
 	author: { externalUserId: authorId as ExternalUserId, displayName: "Dana Discord", avatarUrl: null },
@@ -318,6 +319,7 @@ describe("chat sync on the objects", () => {
 				yield* world.inbound(discordCreate(externalMessageId, "original"))
 				const update: ChatSyncInbound = {
 					provider: "discord",
+					externalWorkspaceIds: [GUILD],
 					externalChannelId: DISCORD_CHANNEL,
 					dedupeKey: `discord:gateway:update:${externalMessageId}:v1`,
 					author: null,
@@ -340,6 +342,7 @@ describe("chat sync on the objects", () => {
 				}
 				const reaction = (tag: "ReactionAdd" | "ReactionRemove"): ChatSyncInbound => ({
 					provider: "discord",
+					externalWorkspaceIds: [GUILD],
 					externalChannelId: DISCORD_CHANNEL,
 					dedupeKey: `discord:gateway:reaction:${tag}:${externalMessageId}:${reactor.externalUserId}:🔥`,
 					author: reactor,
@@ -353,6 +356,7 @@ describe("chat sync on the objects", () => {
 
 				yield* world.inbound({
 					provider: "discord",
+					externalWorkspaceIds: [GUILD],
 					externalChannelId: DISCORD_CHANNEL,
 					dedupeKey: `discord:gateway:delete:${externalMessageId}`,
 					author: null,
@@ -679,6 +683,7 @@ describe("chat sync on the objects", () => {
 				yield* world.inbound(discordCreate(externalMessageId, "start here"))
 				yield* world.inbound({
 					provider: "discord",
+					externalWorkspaceIds: [GUILD],
 					externalChannelId: DISCORD_CHANNEL,
 					dedupeKey: `discord:gateway:thread:create:${externalMessageId}`,
 					author: null,

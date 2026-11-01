@@ -3,7 +3,8 @@
  * `OrgObject`, and the provider users' shadow identities. Each write is one idempotent statement.
  *
  * A row's id is derived from its key: a link row (`provider:workspace:channel`) belongs to one org,
- * the last to link that channel; a connection row (`provider:workspace::org`) is per org.
+ * the first to link that channel (another org's link to it is never indexed, so it cannot take
+ * the channel's events); a connection row (`provider:workspace::org`) is per org.
  */
 import { SQLite, schema } from "@hazel/db"
 import type { ExternalChannelId, ExternalUserId } from "@hazel/schema"
@@ -20,16 +21,14 @@ const indexId = (row: ChatSyncIndexPayload) =>
 		: `${row.provider}:${row.externalWorkspaceId}:${row.externalChannelId}`
 
 const upsertIndex = (row: ChatSyncIndexPayload) =>
-	Effect.flatMap(Directory, (directory) =>
-		directory.db.run(
-			SQLite.insertInto(schema.chatSyncIndexTable)
-				.values({ id: indexId(row), ...row })
-				.onConflictDoUpdate({
-					target: ["id"],
-					set: { organizationId: row.organizationId, channelId: row.channelId },
-				}),
-		),
-	).pipe(
+	Effect.flatMap(Directory, (directory) => {
+		const insert = SQLite.insertInto(schema.chatSyncIndexTable).values({ id: indexId(row), ...row })
+		return directory.db.run(
+			row.externalChannelId === null
+				? insert.onConflictDoUpdate({ target: ["id"], set: { channelId: row.channelId } })
+				: insert.onConflictDoNothing({ target: ["id"] }),
+		)
+	}).pipe(
 		Effect.asVoid,
 		Effect.withSpan("ChatSync.upsertIndex", { attributes: { "chat_sync.index": indexId(row) } }),
 	)
@@ -53,15 +52,38 @@ export const chatSyncDirectoryReceivers = {
 	"directory.deleteChatSyncIndex": deleteIndex,
 } satisfies EffectReceivers<typeof ChatSyncDirectoryEffects, Directory>
 
-/** The orgs (and their Hazel channels) linked to a provider channel. */
-export const indexedLinks = (provider: string, externalChannelId: ExternalChannelId) =>
+/**
+ * The orgs (and their Hazel channels) linked to a provider channel, in one of the workspaces the
+ * event came from: a link to the same channel id under another workspace gets nothing.
+ */
+export const indexedLinks = (
+	provider: string,
+	externalChannelId: ExternalChannelId,
+	externalWorkspaceIds: ReadonlyArray<string>,
+) =>
+	externalWorkspaceIds.length === 0
+		? Effect.succeed([])
+		: Effect.flatMap(Directory, (directory) =>
+				directory.db.run(
+					SQLite.from(schema.chatSyncIndexTable)
+						.select("organizationId", "channelId")
+						.where(($) => [
+							$.provider.eq(provider),
+							$.externalChannelId.eq(externalChannelId),
+							$.externalWorkspaceId.in_(...externalWorkspaceIds),
+						]),
+				),
+			).pipe(Effect.withSpan("ChatSync.indexedLinks"))
+
+/** The org that has `externalChannelId` indexed in a workspace, if any (first link wins). */
+export const indexedLinkOwner = (provider: string, externalWorkspaceId: string, externalChannelId: string) =>
 	Effect.flatMap(Directory, (directory) =>
-		directory.db.run(
+		directory.db.first(
 			SQLite.from(schema.chatSyncIndexTable)
-				.select("organizationId", "channelId")
-				.where(($) => [$.provider.eq(provider), $.externalChannelId.eq(externalChannelId)]),
+				.select("organizationId")
+				.where(($) => [$.id.eq(`${provider}:${externalWorkspaceId}:${externalChannelId}`)]),
 		),
-	).pipe(Effect.withSpan("ChatSync.indexedLinks"))
+	).pipe(Effect.map(Option.map((row) => row.organizationId)))
 
 /** The orgs connected to a provider workspace (or to any, without `externalWorkspaceId`). */
 export const indexedConnections = (provider: string, externalWorkspaceId?: string) =>
