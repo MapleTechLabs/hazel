@@ -1,6 +1,6 @@
 import { ChannelId, MessageId, OrganizationId, UserId } from "@hazel/schema"
 import { Effect, Option, PubSub, Schema, Stream } from "effect"
-import { Subscription } from "foldkit"
+import { Dom, Subscription } from "foldkit"
 import * as HtmlRender from "../../../chat/html-render"
 import * as Live from "../../../chat/live-state"
 import * as FilesSubscriptions from "../files/subscriptions"
@@ -236,6 +236,35 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 					: threadPanelStream(threadChannelId, (messages) =>
 							Message.UpdatedThreadPanelMessages({ threadChannelId, messages }),
 						),
+		},
+	),
+	// The panel edge's drag: window listeners, so the pointer may leave the thin handle.
+	chatThreadPanelDrag: entry(
+		{ isDragging: Schema.Boolean },
+		{
+			modelToDependencies: ({ model }) => ({ isDragging: model.threadPanelDrag !== null }),
+			dependenciesToStream: ({ isDragging }) =>
+				isDragging
+					? Stream.merge(
+							Dom.streamFromEvent({
+								target: window,
+								type: "pointermove",
+								mapEvent: (event) => Message.MovedThreadPanelEdge({ clientX: event.clientX }),
+							}),
+							Stream.merge(
+								Dom.streamFromEvent({
+									target: window,
+									type: "pointerup",
+									mapEvent: () => Message.ReleasedThreadPanelEdge(),
+								}),
+								Dom.streamFromEvent({
+									target: window,
+									type: "pointercancel",
+									mapEvent: () => Message.ReleasedThreadPanelEdge(),
+								}),
+							),
+						)
+					: Stream.empty,
 		},
 	),
 	chatPinned: entry(byChannel, {

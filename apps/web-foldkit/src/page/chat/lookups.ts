@@ -45,11 +45,12 @@ export const AttachmentInfo = Schema.Struct({
 })
 export type AttachmentInfo = typeof AttachmentInfo.Type
 
-/** A message of one of the window's threads (thread previews need count, authors, last reply). */
+/** A message of one of the window's threads (thread cards need the count and the last message). */
 export const ThreadMessageInfo = Schema.Struct({
 	id: MessageId,
 	channelId: ChannelId,
 	authorId: UserId,
+	content: Schema.String,
 	createdAtMs: Schema.Number,
 })
 export type ThreadMessageInfo = typeof ThreadMessageInfo.Type

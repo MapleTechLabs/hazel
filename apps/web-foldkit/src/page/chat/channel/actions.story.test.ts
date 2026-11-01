@@ -29,6 +29,7 @@ import {
 	updateWithShared,
 } from "./fixtures.test-support"
 import { Message, type Model } from "./model"
+import { LoadThreadPanelWidth } from "./thread-width"
 import * as Write from "./write"
 
 /** Behavioral parity of the message actions (`useMessageActions` and `ChatProvider`). */
@@ -212,7 +213,9 @@ describe("message actions", () => {
 					organizationId,
 					currentUserId: ada,
 				}),
+				LoadThreadPanelWidth(),
 			),
+			Command.resolve(LoadThreadPanelWidth, Message.LoadedThreadPanelWidth({ width: null })),
 			Command.resolve(CreateThread, ActionMessage.SucceededCreateThread({ threadChannelId })),
 			model((current) => expect(current.threadPanel?.creation).toBe("Created")),
 			message(Message.ClickedGenerateThreadName()),

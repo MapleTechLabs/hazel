@@ -1,5 +1,6 @@
 import { createLazy, type Html, type HtmlBuilder } from "foldkit/html"
 import { contentStyles, rootStyles } from "~/components/ui/split-panel/split-panel.styles"
+import { cn } from "~/lib/utils"
 import { isImageAttachment } from "../../../chat/attachments"
 import { htmlRenderFullscreenView } from "../../../chat/embeds/html-render"
 import type * as HtmlRender from "../../../chat/html-render"
@@ -22,7 +23,9 @@ import { idleRowContext, rowContextFor } from "../row-context"
 import type { DisplayRow, MessageRow } from "../rows"
 import { chatTabBarView } from "../tab-bar"
 import { threadPanelView } from "../thread-panel"
+import { AppRoute, hrefOf } from "../../../route"
 import { isMemberOf, Message, type Model, routeTabOf, type ThreadPanel } from "./page"
+import { threadPanelWidthOf } from "./thread-width"
 
 /** The channel route's content: header, tab bar, message list and composer (desktop). */
 
@@ -37,6 +40,9 @@ const toThreadDraftMessage = (message: Draft.Message) => Message.GotThreadDraftM
 const toFilesMessage = (message: FilesPage.Message) => Message.GotFilesMessage({ message })
 const toOverlay = (message: Overlays.Message) => Message.GotOverlaysMessage({ message })
 const toHtmlRenderMessage = (message: HtmlRender.Message) => Message.GotHtmlRenderMessage({ message })
+const toPressEdge = (clientX: number, startWidth: number, maxWidth: number) =>
+	Message.PressedThreadPanelEdge({ clientX, startWidth, maxWidth })
+const toNudgeEdge = (delta: number) => Message.PressedThreadPanelEdgeKey({ delta })
 const toPinnedMessage = (message: Parameters<typeof Overlays.Message.GotPinnedMessage>[0]["message"]) =>
 	toOverlay(Overlays.Message.GotPinnedMessage({ message }))
 
@@ -314,7 +320,18 @@ export const view = (h: H, model: Model, options: ViewOptions = {}): Html => {
 	// page would keep the previous channel's list observer and never measure the new viewport.
 	return h.keyed("div")(
 		model.channelId,
-		[h.Class(rootStyles({ className: "h-[calc(100dvh-4rem)] md:h-dvh" }))],
+		[
+			h.Class(
+				rootStyles({
+					className: cn(
+						"relative h-[calc(100dvh-4rem)] md:h-dvh",
+						// While the thread panel's edge is dragged: no text selection, and frames never take the pointer.
+						model.threadPanelDrag !== null &&
+							"cursor-col-resize select-none [&_iframe]:pointer-events-none",
+					),
+				}),
+			),
+		],
 		[
 			h.div(
 				[h.Class(contentStyles())],
@@ -346,7 +363,12 @@ export const view = (h: H, model: Model, options: ViewOptions = {}): Html => {
 						model.threadPanel,
 						model.lookups,
 						model.messages,
+						// Only the starter's row: the panel keeps its memo while other channel rows change.
+						starterRowOf(model, model.threadPanel.messageId),
 						model.currentUserId,
+						model.orgSlug,
+						threadPanelWidthOf(model),
+						model.threadPanelDrag !== null,
 						// Only what the panel's frames read: not the fullscreen dialog or the theme's variables.
 						model.htmlRender.urls,
 						model.htmlRender.frames,
@@ -360,12 +382,22 @@ export const view = (h: H, model: Model, options: ViewOptions = {}): Html => {
 	)
 }
 
+/** The thread's starter message as the channel list shows it; null outside the loaded window. */
+const starterRowOf = (model: Model, messageId: string): MessageRow | null => {
+	const row = model.rows.find((candidate) => candidate.key === messageId)
+	return row?._tag === "MessageRow" ? row : null
+}
+
 /** The `SplitPanel` beside the channel while a thread is open. */
 const threadPanelOverlay = (
 	panel: ThreadPanel,
 	lookups: Model["lookups"],
 	messages: Model["messages"],
+	originalRow: MessageRow | null,
 	currentUserId: Model["currentUserId"],
+	orgSlug: Model["orgSlug"],
+	width: number,
+	isResizing: boolean,
 	urls: HtmlRender.Model["urls"],
 	frames: HtmlRender.Model["frames"],
 	appearance: "light" | "dark",
@@ -383,10 +415,19 @@ const threadPanelOverlay = (
 	return threadPanelView(h, {
 		threadName: name || "Thread",
 		original: messages.find((message) => message.id === panel.messageId) ?? null,
+		originalRow,
 		rows: panel.rows,
 		context,
 		rowContext,
 		toHtmlRenderMessage,
+		width,
+		isResizing,
+		toPressEdge,
+		toNudgeEdge,
+		fullViewHref:
+			panel.creation === "Created"
+				? hrefOf(AppRoute.ChatChannel({ orgSlug, channelId: panel.threadChannelId }))
+				: null,
 		onClose: Message.ClickedCloseThread(),
 		onGenerateName: Message.ClickedGenerateThreadName(),
 		onRename: Message.ClickedRenameThread(),

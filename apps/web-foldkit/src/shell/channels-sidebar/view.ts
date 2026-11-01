@@ -1,4 +1,5 @@
 import { canPerform, RPC_SCOPE_MAP } from "@hazel/domain/scopes"
+import type { ChannelId } from "@hazel/schema"
 import { type Attribute, createKeyedLazy, type Html, type HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { IconMagnifier3, IconUsers } from "../../icons"
@@ -19,6 +20,7 @@ import {
 	dmPartners,
 	type ItemContext,
 	label,
+	threadItems,
 } from "./items"
 import {
 	type ChannelEntry,
@@ -26,6 +28,7 @@ import {
 	type PartnerOrg,
 	partnerOrgsByChannel,
 	type Presence,
+	type SidebarThread,
 } from "./rows"
 import { sectionGroupHeader, strong, treeRow, treeSection } from "./tree"
 
@@ -46,6 +49,8 @@ interface SectionsContext<M> extends ItemContext {
 	readonly sectionAction: (sectionKey: string) => Html
 	readonly unreadByChannel: ReadonlyMap<string, number>
 	readonly partnersByChannel: ReturnType<typeof partnerOrgsByChannel>
+	/** Joined threads listed under each channel row, by parent channel id. */
+	readonly threadsByParent: ReadonlyMap<string, ReadonlyArray<SidebarThread>>
 }
 
 /** A row's position in its tree; part of every row memo. */
@@ -63,6 +68,42 @@ interface RowPlace {
 const rowSlots = createKeyedLazy()
 
 const NO_PARTNERS: ReadonlyArray<PartnerOrg> = []
+const NO_THREADS: ReadonlyArray<SidebarThread> = []
+
+/** Joined threads stay listed this long after they start; an unread or open one always shows. */
+const RECENT_THREAD_MS = 7 * 24 * 60 * 60 * 1000
+const HOUR_MS = 60 * 60 * 1000
+
+// Pure memo on the frozen threads, so each channel's thread array (a row memo arg) keeps its identity.
+const threadsMemo = new WeakMap<
+	Model["threads"],
+	{ readonly key: string; readonly result: ReadonlyMap<string, ReadonlyArray<SidebarThread>> }
+>()
+
+/** The listed threads by parent channel: recent, unread, or the one the route shows. */
+const threadsByParentOf = (
+	threads: Model["threads"],
+	activeChannelId: ChannelId | null,
+	nowMs: number,
+): ReadonlyMap<string, ReadonlyArray<SidebarThread>> => {
+	// The cutoff moves by the hour, so the clock's 30 s ticks keep the memo.
+	const hour = Math.floor(nowMs / HOUR_MS)
+	const key = `${activeChannelId ?? ""}:${hour}`
+	const cached = threadsMemo.get(threads)
+	if (cached !== undefined && cached.key === key) return cached.result
+	const cutoffMs = hour * HOUR_MS - RECENT_THREAD_MS
+	const result = new Map<string, Array<SidebarThread>>()
+	for (const thread of threads) {
+		const isListed =
+			thread.id === activeChannelId || thread.notificationCount > 0 || thread.createdAtMs >= cutoffMs
+		if (!isListed) continue
+		const siblings = result.get(thread.parentChannelId)
+		if (siblings === undefined) result.set(thread.parentChannelId, [thread])
+		else siblings.push(thread)
+	}
+	threadsMemo.set(threads, { key, result })
+	return result
+}
 
 const channelRowView = <M>(
 	h: HtmlBuilder<M>,
@@ -80,6 +121,8 @@ const channelRowView = <M>(
 	sections: Model["sections"],
 	canDelete: boolean,
 	toParentMessage: (message: Message) => M,
+	threads: ReadonlyArray<SidebarThread>,
+	activeThreadId: ChannelId | null,
 ): Html =>
 	treeRow(h, {
 		onActiveMount,
@@ -106,6 +149,7 @@ const channelRowView = <M>(
 					),
 			}),
 		),
+		children: threadItems(h, threads, activeThreadId, orgSlug),
 	})
 
 /** Favorites render `ChannelItem` without `partnerOrgs`, so they never show the shared-org badge. */
@@ -117,6 +161,10 @@ const channelRow = <M>(
 	showsPartners: boolean,
 ): Html => {
 	const id = entry.channel.id
+	const threads = context.threadsByParent.get(id) ?? NO_THREADS
+	const activeThreadId = threads.some((thread) => thread.id === context.activeChannelId)
+		? context.activeChannelId
+		: null
 	return (
 		rowSlots(`${place.treeId}:${id}`, channelRowView<M>, [
 			h,
@@ -129,11 +177,14 @@ const channelRow = <M>(
 			place.position,
 			place.setSize,
 			place.allowsDragging,
-			id === context.activeChannelId ? context.onActiveMount : null,
+			// An open thread scrolls its channel's row into view.
+			id === context.activeChannelId || activeThreadId !== null ? context.onActiveMount : null,
 			openRowMenu(context.openMenu, id),
 			context.sections,
 			context.canDeleteChannels,
 			context.toParentMessage,
+			threads,
+			activeThreadId,
 		]) ?? h.empty
 	)
 }
@@ -401,6 +452,7 @@ export const sectionGroupContent = <M>(
 		presenceByUser: new Map(model.presence.map((presence) => [presence.userId, presence])),
 		unreadByChannel: new Map(model.unreadCounts.map((unread) => [unread.channelId, unread.count])),
 		partnersByChannel: partnersOf(model),
+		threadsByParent: threadsByParentOf(model.threads, itemContext.activeChannelId, itemContext.nowMs),
 		openMenu: model.openMenu,
 		sections: model.sections,
 		canDeleteChannels: canOn(model, "channel.delete"),

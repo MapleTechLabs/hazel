@@ -75,13 +75,20 @@ export const ReplyPreview = Schema.Struct({
 })
 export type ReplyPreview = typeof ReplyPreview.Type
 
+/** The thread's newest message, as its card shows it: one line of plain text. */
+export const ThreadLastMessage = Schema.Struct({
+	/** Null while the author's user row has not synced. */
+	author: Schema.NullOr(AuthorIdentity),
+	text: Schema.String,
+	createdAtMs: Schema.Number,
+})
+export type ThreadLastMessage = typeof ThreadLastMessage.Type
+
 export const ThreadPreview = Schema.Struct({
 	threadChannelId: ChannelId,
-	customName: Schema.NullOr(Schema.String),
+	name: Schema.String,
 	count: Schema.Number,
-	/** Null entries are authors whose user row has not synced (a placeholder square). */
-	authors: Schema.Array(Schema.NullOr(AuthorIdentity)),
-	lastReplyAtMs: Schema.NullOr(Schema.Number),
+	lastMessage: Schema.NullOr(ThreadLastMessage),
 })
 export type ThreadPreview = typeof ThreadPreview.Type
 

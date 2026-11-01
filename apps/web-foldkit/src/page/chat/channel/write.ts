@@ -32,6 +32,7 @@ import {
 import * as Overlays from "../overlays"
 import type { ChatMessage } from "../rows"
 import { Message, type Model, type PageReturn, type ThreadCreation, type ThreadPanel } from "./model"
+import { loadWidthCommands } from "./thread-width"
 import { resetWindow } from "./window"
 
 /** The channel page's write path: `ChatProvider`'s actions and the two drafts (channel and thread). */
@@ -231,7 +232,7 @@ export const openThread = (
 						rows: [],
 					}),
 				}),
-				commands: stopThreadTyping(model),
+				commands: [...stopThreadTyping(model), ...loadWidthCommands(model)],
 			}
 
 export const closeThread = (model: Model): PageReturn =>

@@ -35,6 +35,7 @@ import {
 } from "../rows"
 import { type ChatTab, Message, type Model, type PageReturn, Tab } from "./model"
 import { loadWhenNearEdge } from "./window"
+import * as ThreadWidth from "./thread-width"
 import * as Write from "./write"
 
 /** Channel page (`routes/_app/$orgSlug/chat/$id.tsx` + `$id/index.tsx`), read path. */
@@ -52,6 +53,7 @@ export interface InitOptions {
 	readonly carry?: {
 		readonly viewportHeight: number
 		readonly heightsByChannel: Model["heightsByChannel"]
+		readonly threadPanelWidth: Model["threadPanelWidth"]
 	}
 }
 
@@ -94,6 +96,8 @@ export const init = (
 	overlays: Overlays.init(),
 	draft: Draft.init(channelId, composerEditorId(channelId)),
 	threadPanel: null,
+	threadPanelWidth: options.carry?.threadPanelWidth ?? null,
+	threadPanelDrag: null,
 	notificationsClear: "NotSent",
 	isJoining: false,
 	heightsByChannel: Record.remove(options.carry?.heightsByChannel ?? {}, channelId),
@@ -121,6 +125,7 @@ export const switchChannel = (
 		carry: {
 			viewportHeight: model.list.viewportHeight,
 			heightsByChannel: Object.fromEntries(remembered),
+			threadPanelWidth: model.threadPanelWidth,
 		},
 	})
 	// The theme stream keeps running across the switch, so the new page keeps the theme it read.
@@ -456,6 +461,13 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 							modal: { _tag: "RenameThread", threadId: model.threadPanel.threadChannelId },
 						}),
 					},
+		PressedThreadPanelEdge: ({ clientX, startWidth, maxWidth }) =>
+			ThreadWidth.pressEdge(model, clientX, startWidth, maxWidth),
+		MovedThreadPanelEdge: ({ clientX }) => ThreadWidth.moveEdge(model, clientX),
+		ReleasedThreadPanelEdge: () => ThreadWidth.releaseEdge(model),
+		PressedThreadPanelEdgeKey: ({ delta }) => ThreadWidth.nudgeEdge(model, delta),
+		LoadedThreadPanelWidth: ({ width }) => ThreadWidth.loadedWidth(model, width),
+		CompletedSaveThreadPanelWidth: () => ({ model }),
 		ClickedJoinChannel: () => joinChannel(model),
 		PressedGlobalKey: ({ key }) => Write.insertGlobalKey(model, key),
 		LeftWindow: () =>
