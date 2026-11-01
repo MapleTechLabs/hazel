@@ -4,7 +4,8 @@
  * copy of the channel's active links (`channel.setChatSyncLinks`, from its `OrgObject`).
  *
  * `channel.chatSyncIngest` writes an inbound provider event (its link and author resolved by the
- * org) once per dedupe key. Inbound writes run the channel's message events (bots, notifications)
+ * org) once per dedupe key; `channel.chatSyncAttachThread` hangs a provider-made thread off the
+ * synced message it was started on. Inbound writes run the channel's message events (bots, notifications)
  * like any write, flagged `InboundChatSyncWrite` so they produce no `chatSync.outbound`: a
  * provider message is not echoed back.
  */
@@ -20,9 +21,11 @@ import {
 import { Effect, Layer, Option, Schema } from "effect"
 import type { SqlClient } from "effect/sql/SqlClient"
 import { emitMessageEvent, type MessageEvent } from "../../worker/objects/channel/message-events"
+import { setThreadChannel } from "../../worker/objects/channel/thread"
 import type { EffectReceivers } from "../../worker/objects/effects/registry"
 import { readObjectMeta, writeObjectMeta } from "../../worker/objects/meta"
 import {
+	type AttachThreadPayload,
 	type ChannelChatSyncIngestPayload,
 	ChatSyncChannelEffects,
 	InboundChatSyncWrite,
@@ -287,6 +290,46 @@ const ingest = Effect.fn("ChannelObject.chatSyncIngest")(function* (payload: Cha
 	yield* Effect.annotateCurrentSpan({ "chat_sync.outcome": "applied", "message.id": hazelMessageId })
 })
 
+/**
+ * Point the synced message at its thread, as an inbound write (nothing goes back out). The
+ * message's first thread wins (`setThreadChannel`); the message link follows only if this one did.
+ */
+const attachThread = Effect.fn("ChannelObject.chatSyncAttachThread")(function* (
+	payload: AttachThreadPayload,
+) {
+	const outcome = (value: string) => Effect.annotateCurrentSpan({ "chat_sync.outcome": value })
+	yield* Effect.annotateCurrentSpan({ "chat_sync.link_id": payload.channelLinkId })
+	const linked = yield* findMessageLink({
+		channelLinkId: payload.channelLinkId,
+		externalMessageId: payload.externalMessageId,
+	})
+	if (Option.isNone(linked)) return yield* outcome("missing_link")
+	yield* setThreadChannel({
+		messageId: linked.value.hazelMessageId,
+		threadChannelId: payload.threadChannelId,
+	}).pipe(Effect.provideService(InboundChatSyncWrite, true))
+	const db = yield* Database.Database
+	const message = yield* db.first(
+		SQLite.from(schema.messagesTable)
+			.select("threadChannelId")
+			.where(($) => [$.id.eq(linked.value.hazelMessageId)])
+			.limit(1),
+	)
+	if (Option.isNone(message) || message.value.threadChannelId !== payload.threadChannelId) {
+		return yield* outcome("message_has_other_thread")
+	}
+	yield* db.run(
+		SQLite.update(schema.chatSyncMessageLinksTable)
+			.set({
+				hazelThreadChannelId: payload.threadChannelId,
+				externalThreadId: payload.externalThreadId,
+				updatedAt: new Date(),
+			})
+			.where(($) => [$.id.eq(linked.value.id)]),
+	)
+	yield* outcome("attached")
+})
+
 /** Move the channel's provider-synced messages from one author to another. */
 const reassignAuthors = Effect.fn("ChannelObject.chatSyncReassignAuthors")(function* (
 	payload: ReassignAuthorsPayload,
@@ -319,4 +362,5 @@ export const chatSyncChannelReceivers = {
 	"channel.setChatSyncLinks": setChatSyncLinks,
 	"channel.chatSyncIngest": (payload) => ingest(payload).pipe(Effect.provide(repos)),
 	"channel.chatSyncReassignAuthors": reassignAuthors,
+	"channel.chatSyncAttachThread": attachThread,
 } satisfies EffectReceivers<typeof ChatSyncChannelEffects, Database.Database | SqlClient>

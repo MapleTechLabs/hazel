@@ -65,6 +65,7 @@ export const INTEGRATION_PROVIDERS: Record<IntegrationProvider, { label: string;
 	figma: { label: "Figma", domain: "figma.com" },
 	notion: { label: "Notion", domain: "notion.so" },
 	discord: { label: "Discord", domain: "discord.com" },
+	slack: { label: "Slack", domain: "slack.com" },
 	craft: { label: "Craft", domain: "craft.do" },
 	t3code: { label: "T3 Code", domain: "t3.chat" },
 }

@@ -83,6 +83,12 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 			id: "0002_bot_install_oauth",
 			statements: ['ALTER TABLE "bots" ADD COLUMN "installRedirectUris" text'],
 		},
+		{
+			id: "0003_chat_sync_installations",
+			statements: [
+				'CREATE TABLE IF NOT EXISTS "chat_sync_installations" (\n\t"provider" text NOT NULL,\n\t"externalWorkspaceId" text NOT NULL,\n\t"externalWorkspaceName" text,\n\t"encryptedToken" text NOT NULL,\n\t"iv" text NOT NULL,\n\t"encryptionKeyVersion" integer NOT NULL,\n\t"scope" text,\n\t"installedBy" text,\n\t"createdAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\t"updatedAt" text NOT NULL DEFAULT (strftime(\'%Y-%m-%d %H:%M:%f\', \'now\')),\n\tPRIMARY KEY ("provider", "externalWorkspaceId")\n)',
+			],
+		},
 	],
 	org: [
 		{

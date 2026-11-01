@@ -205,6 +205,24 @@ export const integrations: Integration[] = [
 		configOptions: [],
 	},
 	{
+		id: "slack",
+		logoSrc: "/images/integrations/slack.svg",
+		name: "Slack",
+		description: "Connect a Slack workspace for channel syncing.",
+		fullDescription:
+			"Install Hazel in your Slack workspace to sync messages between Hazel and Slack channels. Link specific channels, choose sync direction, and keep threads and reactions aligned in real time. Synced messages post as each Hazel author.",
+		logoDomain: "slack.com",
+		brandColor: "#4A154B",
+		category: "communication",
+		features: [
+			"OAuth install in your Slack workspace",
+			"Channel picker",
+			"Bidirectional channel sync",
+			"Threads and reactions sync",
+		],
+		configOptions: [],
+	},
+	{
 		id: "craft",
 		logoSrc: "/images/integrations/craft.png",
 		name: "Craft",

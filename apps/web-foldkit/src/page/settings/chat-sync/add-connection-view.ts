@@ -4,31 +4,37 @@ import { button } from "../../../ui/button"
 import { dialogBody, dialogClose, dialogFooter, dialogHeader, dialogTitle } from "../../../ui/dialog"
 import { description, label } from "../../../ui/field"
 import * as Modal from "../../../ui/modal"
-import { GUILD_SEARCH_ID } from "./add-connection"
-import { discordLogo } from "./brand-icons"
-import { type DiscordFailure, type DiscordGuild, discordFailureMessage, isRetryable } from "./discord"
+import { WORKSPACE_SEARCH_ID } from "./add-connection"
 import { filterByName, scrollList, searchInput, selectedName, selectedRow, spinnerLine } from "./modal-parts"
-import { Message, type Model } from "./model"
-import { CONNECT_TARGET, GUILD_SEARCH_TARGET, interaction } from "./update"
+import { chosenWorkspace, Message, type Model } from "./model"
+import {
+	type ChatSyncProvider,
+	isRetryable,
+	PROVIDERS,
+	type ResourceFailure,
+	resourceFailureMessage,
+	type Workspace,
+} from "./providers"
+import { CONNECT_TARGET, interaction, WORKSPACE_SEARCH_TARGET } from "./update"
 
-/** Port of `components/chat-sync/add-connection-modal.tsx`. */
+/** Port of `components/chat-sync/add-connection-modal.tsx`, for each provider. */
 
 const toAddModalMessage = (message: Modal.Message) => Message.GotAddModalMessage({ message })
-const toGuildSearchMessage = (value: string) => Message.ChangedGuildSearch({ value })
+const toWorkspaceSearchMessage = (value: string) => Message.ChangedWorkspaceSearch({ value })
 
-const guildRow = (h: HtmlBuilder<Message>, guild: DiscordGuild): Html =>
+const workspaceRow = (h: HtmlBuilder<Message>, workspace: Workspace): Html =>
 	h.keyed("button")(
-		guild.id,
+		workspace.id,
 		[
 			h.Type("button"),
-			h.OnClick(Message.ClickedGuild({ guild })),
+			h.OnClick(Message.ClickedWorkspace({ workspace })),
 			h.Class(
 				"flex w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors hover:bg-secondary/50",
 			),
 		],
 		[
-			h.span([h.Class("truncate text-fg")], [guild.name]),
-			...(guild.owner
+			h.span([h.Class("truncate text-fg")], [workspace.name]),
+			...(workspace.owner
 				? [
 						h.span(
 							[h.Class("rounded bg-secondary px-1.5 py-0.5 text-[10px] text-muted-fg")],
@@ -39,102 +45,138 @@ const guildRow = (h: HtmlBuilder<Message>, guild: DiscordGuild): Html =>
 		],
 	)
 
-const guildPicker = (h: HtmlBuilder<Message>, model: Model, guilds: ReadonlyArray<DiscordGuild>): Html =>
-	h.div(
+/** Discord: search the servers the bot is in and pick one. */
+const workspacePicker = (
+	h: HtmlBuilder<Message>,
+	model: Model,
+	workspaces: ReadonlyArray<Workspace>,
+): ReadonlyArray<Html> => {
+	const { name, workspaceKind } = PROVIDERS[model.addProvider]
+	return [
+		...(model.selectedWorkspace === null
+			? [
+					searchInput(h, {
+						id: WORKSPACE_SEARCH_ID,
+						placeholder: "Search servers...",
+						value: model.workspaceSearch,
+						isFocused: model.isWorkspaceSearchFocused,
+						onInput: toWorkspaceSearchMessage,
+						onFocus: Message.FocusedWorkspaceSearch(),
+						onBlur: Message.BlurredWorkspaceSearch(),
+						hover: { wiring: interaction.wiring(model), target: WORKSPACE_SEARCH_TARGET },
+					}),
+					scrollList(
+						h,
+						"max-h-56",
+						`No ${name} servers found`,
+						filterByName(workspaces, model.workspaceSearch).map((workspace) =>
+							workspaceRow(h, workspace),
+						),
+					),
+				]
+			: [
+					selectedRow(
+						h,
+						[selectedName(h, model.selectedWorkspace.name)],
+						Message.ClickedChangeWorkspace(),
+					),
+				]),
+		description(h, {}, [`Select the ${name} ${workspaceKind} you want to sync with Hazel.`]),
+	]
+}
+
+/** Slack: the one workspace the organization installed Hazel in. */
+const installedWorkspace = (h: HtmlBuilder<Message>, model: Model): ReadonlyArray<Html> => {
+	const workspace = chosenWorkspace(model)
+	const { name, logo } = PROVIDERS[model.addProvider]
+	return [
+		h.div(
+			[h.Class("flex items-center gap-2 rounded-lg border border-border bg-bg-muted/30 px-3 py-2.5")],
+			[logo(h, "size-4 shrink-0"), selectedName(h, workspace?.name ?? "")],
+		),
+		description(h, {}, [
+			`Hazel is installed in this workspace. To sync another one, reconnect ${name} in Integrations.`,
+		]),
+	]
+}
+
+const workspaceSection = (
+	h: HtmlBuilder<Message>,
+	model: Model,
+	workspaces: ReadonlyArray<Workspace>,
+): Html => {
+	const provider = PROVIDERS[model.addProvider]
+	return h.div(
 		[h.Class("flex flex-col gap-3")],
 		[
-			label(h, {}, ["Discord Server"]),
-			...(model.selectedGuild === null
-				? [
-						searchInput(h, {
-							id: GUILD_SEARCH_ID,
-							placeholder: "Search servers...",
-							value: model.guildSearch,
-							isFocused: model.isGuildSearchFocused,
-							onInput: toGuildSearchMessage,
-							onFocus: Message.FocusedGuildSearch(),
-							onBlur: Message.BlurredGuildSearch(),
-							hover: { wiring: interaction.wiring(model), target: GUILD_SEARCH_TARGET },
-						}),
-						scrollList(
-							h,
-							"max-h-56",
-							"No Discord servers found",
-							filterByName(guilds, model.guildSearch).map((guild) => guildRow(h, guild)),
-						),
-					]
-				: [
-						selectedRow(
-							h,
-							[selectedName(h, model.selectedGuild.name)],
-							Message.ClickedChangeGuild(),
-						),
-					]),
-			description(h, {}, ["Select the Discord server you want to sync with Hazel."]),
-		],
-	)
-
-const connectFirst = (h: HtmlBuilder<Message>): Html =>
-	h.div(
-		[h.Class("rounded-lg border border-border bg-bg-muted/20 p-4")],
-		[
-			h.p([h.Class("font-medium text-fg text-sm")], ["Connect Discord first"]),
-			h.p(
-				[h.Class("mt-1 text-muted-fg text-sm")],
-				["Authorize Discord in Integrations so we can load your guilds."],
-			),
-			button(
-				h,
-				{
-					intent: "secondary",
-					size: "sm",
-					className: "mt-3",
-					onPress: Message.ClickedOpenDiscordIntegration(),
-				},
-				["Open Discord Integration"],
-			),
-		],
-	)
-
-/** A guild list that failed for another reason than Discord not being authorized. */
-const loadFailed = (h: HtmlBuilder<Message>, reason: DiscordFailure): Html => {
-	const message = discordFailureMessage(reason, "guilds")
-	return h.div(
-		[h.Class("rounded-lg border border-border bg-bg-muted/20 p-4")],
-		[
-			h.p([h.Class("font-medium text-fg text-sm")], [message.title]),
-			...(message.description === undefined
-				? []
-				: [h.p([h.Class("mt-1 text-muted-fg text-sm")], [message.description])]),
-			...(isRetryable(reason)
-				? [
-						button(
-							h,
-							{
-								intent: "secondary",
-								size: "sm",
-								className: "mt-3",
-								onPress: Message.ClickedRetryListDiscordGuilds(),
-							},
-							["Try again"],
-						),
-					]
-				: []),
+			label(h, {}, [provider.workspaceTitle]),
+			...(provider.picksWorkspace
+				? workspacePicker(h, model, workspaces)
+				: installedWorkspace(h, model)),
 		],
 	)
 }
 
-const loadingGuilds = (h: HtmlBuilder<Message>): Html =>
-	h.div([h.Class("flex items-center justify-center py-8")], [spinnerLine(h, "Loading Discord guilds...")])
+const notice = (
+	h: HtmlBuilder<Message>,
+	title: string,
+	text: string | undefined,
+	action: Html | null,
+): Html =>
+	h.div(
+		[h.Class("rounded-lg border border-border bg-bg-muted/20 p-4")],
+		[
+			h.p([h.Class("font-medium text-fg text-sm")], [title]),
+			...(text === undefined ? [] : [h.p([h.Class("mt-1 text-muted-fg text-sm")], [text])]),
+			...(action === null ? [] : [action]),
+		],
+	)
+
+const noticeButton = (h: HtmlBuilder<Message>, onPress: Message, text: string): Html =>
+	button(h, { intent: "secondary", size: "sm", className: "mt-3", onPress }, [text])
+
+/** The provider is not connected to the organization: link to its integration page. */
+const connectFirst = (h: HtmlBuilder<Message>, provider: ChatSyncProvider): Html => {
+	const { name, workspacesResource } = PROVIDERS[provider]
+	const message = resourceFailureMessage(provider, "NotConnected", workspacesResource)
+	return notice(
+		h,
+		message.title,
+		message.description,
+		noticeButton(h, Message.ClickedOpenIntegration(), `Open ${name} Integration`),
+	)
+}
+
+/** A workspace list that failed for another reason than the provider not being connected. */
+const loadFailed = (h: HtmlBuilder<Message>, provider: ChatSyncProvider, reason: ResourceFailure): Html => {
+	const message = resourceFailureMessage(provider, reason, PROVIDERS[provider].workspacesResource)
+	return notice(
+		h,
+		message.title,
+		message.description,
+		isRetryable(reason) ? noticeButton(h, Message.ClickedRetryListWorkspaces(), "Try again") : null,
+	)
+}
+
+const loadingWorkspaces = (h: HtmlBuilder<Message>, provider: ChatSyncProvider): Html => {
+	const { name, workspacesResource } = PROVIDERS[provider]
+	return h.div(
+		[h.Class("flex items-center justify-center py-8")],
+		[spinnerLine(h, `Loading ${name} ${workspacesResource}...`)],
+	)
+}
 
 const body = (h: HtmlBuilder<Message>, model: Model): Html =>
-	AsyncData.match(model.discordGuilds, {
-		onIdle: () => loadingGuilds(h),
-		onLoading: () => loadingGuilds(h),
-		onFailure: (reason) => (reason === "NotConnected" ? connectFirst(h) : loadFailed(h, reason)),
-		onRefreshing: (guilds) => guildPicker(h, model, guilds),
-		onStale: ({ data }) => guildPicker(h, model, data),
-		onSuccess: (guilds) => guildPicker(h, model, guilds),
+	AsyncData.match(model.workspaces, {
+		onIdle: () => loadingWorkspaces(h, model.addProvider),
+		onLoading: () => loadingWorkspaces(h, model.addProvider),
+		onFailure: (reason) =>
+			reason === "NotConnected"
+				? connectFirst(h, model.addProvider)
+				: loadFailed(h, model.addProvider, reason),
+		onRefreshing: (workspaces) => workspaceSection(h, model, workspaces),
+		onStale: ({ data }) => workspaceSection(h, model, data),
+		onSuccess: (workspaces) => workspaceSection(h, model, workspaces),
 	})
 
 const content = (
@@ -143,16 +185,25 @@ const content = (
 	closeAttributes: ReadonlyArray<ChildAttribute>,
 ): ReadonlyArray<Html> => {
 	const isSubmitting = model.submission._tag === "Submitting"
+	const provider = PROVIDERS[model.addProvider]
 	return [
 		dialogHeader(h, {}, [
 			h.div(
 				[h.Class("flex items-center gap-3")],
 				[
 					h.div(
-						[h.Class("flex size-10 items-center justify-center rounded-xl bg-[#5865F2]/[0.06]")],
-						[discordLogo(h, "size-6")],
+						[
+							h.Class(
+								`flex size-10 items-center justify-center rounded-xl ${provider.tintClass}`,
+							),
+						],
+						[provider.logo(h, "size-6")],
 					),
-					dialogTitle(h, { id: Modal.titleId(model.addModal.id) }, "Connect Discord Server"),
+					dialogTitle(
+						h,
+						{ id: Modal.titleId(model.addModal.id) },
+						`Connect ${provider.workspaceTitle}`,
+					),
 				],
 			),
 		]),
@@ -165,9 +216,9 @@ const content = (
 					intent: "primary",
 					onPress: Message.ClickedConnect(),
 					isDisabled:
-						model.selectedGuild === null ||
+						chosenWorkspace(model) === null ||
 						isSubmitting ||
-						!AsyncData.isSuccess(model.discordGuilds),
+						!AsyncData.isSuccess(model.workspaces),
 					isPending: isSubmitting,
 					interaction: { wiring: interaction.wiring(model), target: CONNECT_TARGET },
 				},

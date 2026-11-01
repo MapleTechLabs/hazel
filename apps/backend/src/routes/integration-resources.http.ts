@@ -4,6 +4,7 @@ import type { ExternalChannelId, OrganizationId } from "@hazel/schema"
 import {
 	DiscordGuildChannelsResponse,
 	DiscordGuildsResponse,
+	SlackChannelsResponse,
 	GitHubPRResourceResponse,
 	GitHubRepositoriesResponse,
 	IntegrationNotConnectedForPreviewError,
@@ -11,7 +12,7 @@ import {
 	LinearIssueResourceResponse,
 	ResourceNotFoundError,
 } from "@hazel/domain/http"
-import { Discord, GitHub } from "@hazel/integrations"
+import { Discord, GitHub, Slack } from "@hazel/integrations"
 import { Config, Effect, Option, Redacted } from "effect"
 import { HazelApi } from "../api"
 import { Directory } from "../services/directory"
@@ -281,6 +282,7 @@ export const HttpIntegrationResourceLive = HttpApiBuilder.group(
 					Effect.withSpan("IntegrationResources.getGitHubRepositories"),
 				),
 			)
+			.handle("getSlackChannels", ({ params }) => handleGetSlackChannels(params))
 			.handle("getDiscordGuilds", ({ params }) =>
 				handleGetDiscordGuilds(params).pipe(Effect.withSpan("IntegrationResources.getDiscordGuilds")),
 			)
@@ -394,3 +396,48 @@ const handleGetDiscordGuildChannels = Effect.fn("integration-resources.getDiscor
 		})
 	},
 )
+
+/**
+ * The org's Slack workspace (its connection's account) and its public channels. The bot is one
+ * per workspace, shared by every org installed there, so the private channels it was invited to
+ * may be another org's: they are not offered.
+ */
+const handleGetSlackChannels = Effect.fn("integration-resources.getSlackChannels")(function* (path: {
+	orgId: OrganizationId
+}) {
+	const { orgId } = path
+	yield* requireMember(orgId)
+	const access = yield* callObject(IntegrationAccessTokenCall, orgTarget(orgId), {
+		provider: "slack",
+	}).pipe(
+		Effect.catchTag("IntegrationTokenUnavailableError", () => Effect.succeed(null)),
+		Effect.catchTag("ObjectCallError", (error) =>
+			Effect.fail(
+				new InternalServerError({ message: "The organization is unavailable", cause: error }),
+			),
+		),
+	)
+	if (access === null || access.connection.externalAccountId === null) {
+		return yield* new IntegrationNotConnectedForPreviewError({ provider: "slack" })
+	}
+	const api = yield* Slack.SlackApiClient
+	const channels = yield* api.listChannels(access.accessToken).pipe(
+		Effect.mapError(
+			(error) =>
+				new IntegrationResourceError({
+					url: "slack://conversations",
+					message: error.message,
+					provider: "slack",
+				}),
+		),
+	)
+	return new SlackChannelsResponse({
+		workspace: {
+			id: access.connection.externalAccountId,
+			name: access.connection.externalAccountName,
+		},
+		channels: channels.flatMap((channel) =>
+			channel.isPrivate ? [] : [{ ...channel, id: channel.id as ExternalChannelId }],
+		),
+	})
+})

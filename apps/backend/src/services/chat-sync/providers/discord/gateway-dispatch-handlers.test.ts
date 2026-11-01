@@ -3,24 +3,24 @@ import type { ExternalChannelId } from "@hazel/schema"
 import { Effect } from "effect"
 import {
 	createDiscordGatewayDispatchHandlers,
-	type DiscordInbound,
 	type DiscordMessageCreateEvent,
 	type DiscordMessageDeleteEvent,
 	type DiscordMessageReactionAddEvent,
 	type DiscordMessageUpdateEvent,
 	type DiscordThreadCreateEvent,
-} from "./discord-gateway-shared"
+} from "./gateway-dispatch"
+import type { ChatSyncInbound } from "../../chat-sync-inbound"
 
 const run = <A, E>(effect: Effect.Effect<A, E>) => Effect.runPromise(effect)
 
 /** The handlers with a recording `ingest`; routing by link happens behind it (the index, the org). */
 const makeDispatchHarness = () => {
-	const routed: Array<DiscordInbound> = []
+	const routed: Array<ChatSyncInbound> = []
 	const handlers = createDiscordGatewayDispatchHandlers({
 		ingest: (inbound) => Effect.sync(() => void routed.push(inbound)),
 		isCurrentBotAuthor: (authorId) => Effect.succeed(authorId === "bot-self"),
 	})
-	const of = (tag: DiscordInbound["event"]["_tag"]) =>
+	const of = (tag: ChatSyncInbound["event"]["_tag"]) =>
 		routed.filter((inbound) => inbound.event._tag === tag)
 	return { handlers, routed, of }
 }

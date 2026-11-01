@@ -1,12 +1,12 @@
 import { OrganizationId, SyncConnectionId } from "@hazel/schema"
-import { Effect, Option, Schema } from "effect"
+import { Effect, Option } from "effect"
 import { Command, Update } from "foldkit"
 import * as AsyncData from "foldkit/asyncData"
 import { modifyFields } from "foldkit/struct"
 import { orgOfChatSyncConnection } from "~/db/routing-hints"
 import { failureMessage } from "~/lib/error-messages"
 import { AppRoute } from "../../../route"
-import { HazelRpc } from "../../../rpc"
+import { HazelRpc, type Resources } from "../../../rpc"
 import * as Interaction from "../../../ui/aria/interaction"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
@@ -14,13 +14,18 @@ import { catchCommon, errorToastOf, reasonToast, successToast } from "../../../d
 import type { PageReturn, PageSubscriptionInput, Shared } from "../../contract"
 import { PageOutMessage, requestedOrgNavigation } from "../../out-message"
 import * as ConfirmAction from "../../shared/confirm-action"
-import { Connections, type DeleteTarget, Message, type Model, Submission } from "./model"
-import { DiscordGuilds, fetchDiscordGuilds } from "./discord"
+import { chosenWorkspace, Connections, type DeleteTarget, Message, type Model, Submission } from "./model"
+import { type ChatSyncProvider, isChatSyncProvider, PROVIDERS, Workspaces } from "./providers"
 import { fetchConnections } from "./rpc"
-import { ADD_CONNECTION_MODAL_ID, CreateConnection, FocusGuildSearch } from "./add-connection"
+import {
+	ADD_CONNECTION_MODAL_ID,
+	CreateConnection,
+	FocusWorkspaceSearch,
+	ListWorkspaces,
+} from "./add-connection"
 
 type Return = PageReturn<Model, Message>
-type Step = Update.StepWithOutMessage<Model, Message, PageOutMessage>
+type Step = Update.StepWithOutMessage<Model, Message, PageOutMessage, Resources>
 
 export const interaction = Interaction.embed<Model, Message, PageSubscriptionInput<Model>>(
 	(message) => Message.GotInteractionMessage({ message }),
@@ -28,7 +33,7 @@ export const interaction = Interaction.embed<Model, Message, PageSubscriptionInp
 )
 
 /** Interaction targets in the add connection modal. */
-export const GUILD_SEARCH_TARGET = "guild-search"
+export const WORKSPACE_SEARCH_TARGET = "workspace-search"
 export const CONNECT_TARGET = "connect"
 
 // COMMAND
@@ -62,27 +67,6 @@ export const DeleteConnection = Command.define("DeleteConnection", {
 		),
 })
 
-/** `AddConnectionModal`'s guild query; the modal mounts with the loaded list. */
-export const ListDiscordGuilds = Command.define("ListDiscordGuilds", {
-	args: { organizationId: OrganizationId, version: Schema.Number },
-	messages: [Message.SucceededListDiscordGuilds, Message.FailedListDiscordGuilds],
-	execute: ({ organizationId, version }) =>
-		fetchDiscordGuilds(organizationId).pipe(
-			Effect.map((guilds) => Message.SucceededListDiscordGuilds({ organizationId, version, guilds })),
-			Effect.catchTags({
-				IntegrationNotConnectedForPreviewError: () =>
-					Effect.succeed(
-						Message.FailedListDiscordGuilds({ organizationId, version, reason: "NotConnected" }),
-					),
-				IntegrationResourceError: () =>
-					Effect.succeed(
-						Message.FailedListDiscordGuilds({ organizationId, version, reason: "ProviderError" }),
-					),
-			}),
-			catchCommon((reason) => Message.FailedListDiscordGuilds({ organizationId, version, reason })),
-		),
-})
-
 // INIT
 
 /** Runs the list query for the current organization (`organizationId!` waits for it in legacy). */
@@ -106,11 +90,12 @@ export const init = (_route: unknown, shared: Shared): Return =>
 			addMenu: Menu.init({ id: "chat-sync-add", placement: "bottom end" }),
 			emptyAddMenu: Menu.init({ id: "chat-sync-add-empty", placement: "bottom end" }),
 			addModal: Modal.init(ADD_CONNECTION_MODAL_ID),
-			discordGuilds: DiscordGuilds.Loading(),
-			guildsVersion: 0,
-			selectedGuild: null,
-			guildSearch: "",
-			isGuildSearchFocused: false,
+			addProvider: "discord",
+			workspaces: Workspaces.Loading(),
+			workspacesVersion: 0,
+			selectedWorkspace: null,
+			workspaceSearch: "",
+			isWorkspaceSearchFocused: false,
 			submission: Submission.NotSubmitted(),
 			deleteConfirm: ConfirmAction.init("chat-sync-delete"),
 			interaction: Interaction.init(),
@@ -135,15 +120,15 @@ const reloadConnections = (model: Model): Pick<Return, "model" | "commands"> => 
 	}
 }
 
-/** A new guild request; a reply for an older one is dropped. */
-const requestGuilds = (model: Model, organizationId: OrganizationId): Return => {
-	const version = model.guildsVersion + 1
+/** A new workspace request for the modal's provider; a reply for an older one is dropped. */
+const requestWorkspaces = (model: Model, organizationId: OrganizationId): Return => {
+	const version = model.workspacesVersion + 1
 	return {
 		model: modifyFields(model, {
-			discordGuilds: () => DiscordGuilds.Loading(),
-			guildsVersion: () => version,
+			workspaces: () => Workspaces.Loading(),
+			workspacesVersion: () => version,
 		}),
-		commands: [ListDiscordGuilds({ organizationId, version })],
+		commands: [ListWorkspaces({ organizationId, provider: model.addProvider, version })],
 	}
 }
 
@@ -155,9 +140,9 @@ const addModal = {
 			? modifyFields(model, { addModal: () => modal })
 			: modifyFields(model, {
 					addModal: () => modal,
-					selectedGuild: () => null,
-					guildSearch: () => "",
-					isGuildSearchFocused: () => false,
+					selectedWorkspace: () => null,
+					workspaceSearch: () => "",
+					isWorkspaceSearchFocused: () => false,
 					submission: (submission) =>
 						submission._tag === "Failed" ? Submission.NotSubmitted() : submission,
 				}),
@@ -172,20 +157,32 @@ const closeAddModal = Update.foldChildStep({ update: Modal.close, ...addModal })
 const foldAddModal = (model: Model, message: Modal.Message): Return => {
 	const result = foldAddModalChild(model, message)
 	const focus =
-		result.model.addModal.isOpen && Modal.isReady(message) && hasGuildSearch(model)
-			? [FocusGuildSearch()]
+		result.model.addModal.isOpen && Modal.isReady(message) && hasWorkspaceSearch(model)
+			? [FocusWorkspaceSearch()]
 			: []
 	return { model: result.model, commands: [...(result.commands ?? []), ...focus] }
 }
 
-/** The search Input is rendered while the guilds are listed and none is selected. */
-const hasGuildSearch = (model: Model) =>
-	AsyncData.isSuccess(model.discordGuilds) && model.selectedGuild === null
+/** The search Input is rendered while a provider's workspaces to pick from are listed and none is picked. */
+const hasWorkspaceSearch = (model: Model) =>
+	PROVIDERS[model.addProvider].picksWorkspace &&
+	AsyncData.isSuccess(model.workspaces) &&
+	model.selectedWorkspace === null
+
+/** The add menu's pick: the modal opens for that provider, querying its workspaces when it changed. */
+const openAddModalFor = (model: Model, provider: ChatSyncProvider) => {
+	const organizationId = model.requestedOrganizationId
+	if (provider === model.addProvider || organizationId === null) return openAddModal(model)
+	const requested = requestWorkspaces(modifyFields(model, { addProvider: () => provider }), organizationId)
+	const opened = openAddModal(requested.model)
+	return { ...opened, commands: [...(requested.commands ?? []), ...(opened.commands ?? [])] }
+}
 
 const submitConnection = (model: Model): Return => {
 	const organizationId = model.requestedOrganizationId
-	const guild = model.selectedGuild
-	if (organizationId === null || guild === null || model.submission._tag === "Submitting") return { model }
+	const workspace = chosenWorkspace(model)
+	if (organizationId === null || workspace === null || model.submission._tag === "Submitting")
+		return { model }
 	return {
 		// The Connect button disables while it runs, which ends its hover (useHover).
 		model: modifyFields(model, {
@@ -195,8 +192,9 @@ const submitConnection = (model: Model): Return => {
 		commands: [
 			CreateConnection({
 				organizationId,
-				externalWorkspaceId: guild.id,
-				externalWorkspaceName: guild.name,
+				provider: model.addProvider,
+				externalWorkspaceId: workspace.id,
+				externalWorkspaceName: workspace.name,
 			}),
 		],
 	}
@@ -206,7 +204,7 @@ const foldAddMenuOutMessage = Menu.OutMessage.match<Step>({
 	SelectedItem:
 		({ key }) =>
 		(model) =>
-			key === "discord" ? openAddModal(model) : { model },
+			isChatSyncProvider(key) ? openAddModalFor(model, key) : { model },
 	ActivatedLink: () => (model) => ({ model }),
 })
 
@@ -238,8 +236,8 @@ const foldDeleteConfirm = Update.foldChild({
 const withDeleteConfirm = (model: Model, deleteConfirm: ConfirmAction.Model<DeleteTarget>): Model =>
 	modifyFields(model, { deleteConfirm: () => deleteConfirm })
 
-const isCurrentGuildList = (model: Model, organizationId: OrganizationId, version: number) =>
-	organizationId === model.requestedOrganizationId && version === model.guildsVersion
+const isCurrentWorkspaceList = (model: Model, organizationId: OrganizationId, version: number) =>
+	organizationId === model.requestedOrganizationId && version === model.workspacesVersion
 
 export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
@@ -248,10 +246,10 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			const next = modifyFields(model, {
 				connections: () => Connections.Success({ data: connections }),
 			})
-			// The add modal mounts with the first list and queries the guilds then; a refresh keeps it mounted.
+			// The add modal mounts with the first list and queries the workspaces then; a refresh keeps it mounted.
 			return AsyncData.hasData(model.connections)
 				? { model: next }
-				: requestGuilds(next, organizationId)
+				: requestWorkspaces(next, organizationId)
 		},
 		FailedListConnections: ({ organizationId, reason }) => {
 			if (organizationId !== model.requestedOrganizationId) return { model }
@@ -269,27 +267,23 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			})
 		},
 		ClickedRetryListConnections: () => reloadConnections(model),
-		SucceededListDiscordGuilds: ({ organizationId, version, guilds }) => {
-			if (!isCurrentGuildList(model, organizationId, version)) return { model }
-			const next = modifyFields(model, { discordGuilds: () => DiscordGuilds.Success({ data: guilds }) })
-			// The search mounts with `autoFocus` when the guilds arrive while the modal is open.
+		SucceededListWorkspaces: ({ organizationId, version, workspaces }) => {
+			if (!isCurrentWorkspaceList(model, organizationId, version)) return { model }
+			const next = modifyFields(model, { workspaces: () => Workspaces.Success({ data: workspaces }) })
+			// The search mounts with `autoFocus` when the workspaces arrive while the modal is open.
 			return {
 				model: next,
-				commands: model.addModal.isOpen && hasGuildSearch(next) ? [FocusGuildSearch()] : [],
+				commands: model.addModal.isOpen && hasWorkspaceSearch(next) ? [FocusWorkspaceSearch()] : [],
 			}
 		},
-		FailedListDiscordGuilds: ({ organizationId, version, reason }) =>
-			isCurrentGuildList(model, organizationId, version)
-				? {
-						model: modifyFields(model, {
-							discordGuilds: () => DiscordGuilds.Failure({ error: reason }),
-						}),
-					}
+		FailedListWorkspaces: ({ organizationId, version, reason }) =>
+			isCurrentWorkspaceList(model, organizationId, version)
+				? { model: modifyFields(model, { workspaces: () => Workspaces.Failure({ error: reason }) }) }
 				: { model },
-		ClickedRetryListDiscordGuilds: () =>
+		ClickedRetryListWorkspaces: () =>
 			model.requestedOrganizationId === null
 				? { model }
-				: requestGuilds(model, model.requestedOrganizationId),
+				: requestWorkspaces(model, model.requestedOrganizationId),
 		ClickedConnection: ({ connectionId }) => ({
 			model,
 			outMessage: requestedOrgNavigation(shared.orgSlug, (orgSlug) =>
@@ -328,23 +322,32 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		GotEmptyAddMenuMessage: ({ message: menuMessage }) => foldEmptyAddMenu(model, menuMessage),
 		GotDeleteConfirmMessage: ({ message: confirmMessage }) => foldDeleteConfirm(model, confirmMessage),
 		GotAddModalMessage: ({ message: modalMessage }) => foldAddModal(model, modalMessage),
-		ChangedGuildSearch: ({ value }) => ({ model: modifyFields(model, { guildSearch: () => value }) }),
-		FocusedGuildSearch: () => ({ model: modifyFields(model, { isGuildSearchFocused: () => true }) }),
-		BlurredGuildSearch: () => ({ model: modifyFields(model, { isGuildSearchFocused: () => false }) }),
-		CompletedFocusGuildSearch: () => ({ model }),
-		ClickedGuild: ({ guild }) => ({
-			model: modifyFields(model, { selectedGuild: () => guild, isGuildSearchFocused: () => false }),
+		ChangedWorkspaceSearch: ({ value }) => ({
+			model: modifyFields(model, { workspaceSearch: () => value }),
 		}),
-		ClickedChangeGuild: () => ({
-			model: modifyFields(model, { selectedGuild: () => null }),
-			commands: [FocusGuildSearch()],
+		FocusedWorkspaceSearch: () => ({
+			model: modifyFields(model, { isWorkspaceSearchFocused: () => true }),
 		}),
-		ClickedOpenDiscordIntegration: () => ({
+		BlurredWorkspaceSearch: () => ({
+			model: modifyFields(model, { isWorkspaceSearchFocused: () => false }),
+		}),
+		CompletedFocusWorkspaceSearch: () => ({ model }),
+		ClickedWorkspace: ({ workspace }) => ({
+			model: modifyFields(model, {
+				selectedWorkspace: () => workspace,
+				isWorkspaceSearchFocused: () => false,
+			}),
+		}),
+		ClickedChangeWorkspace: () => ({
+			model: modifyFields(model, { selectedWorkspace: () => null }),
+			commands: [FocusWorkspaceSearch()],
+		}),
+		ClickedOpenIntegration: () => ({
 			model,
 			outMessage: requestedOrgNavigation(shared.orgSlug, (orgSlug) =>
 				AppRoute.SettingsIntegration({
 					orgSlug,
-					integrationId: "discord",
+					integrationId: PROVIDERS[model.addProvider].integrationId,
 					connectionStatus: Option.none(),
 					errorCode: Option.none(),
 				}),
@@ -358,24 +361,28 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				closeAddModal,
 				reloadConnections,
 			]),
-			outMessage: PageOutMessage.RequestedToast({ toast: successToast("Discord connection created") }),
-		}),
-		FailedCreateConnection: ({ reason }) => ({
-			model: modifyFields(model, { submission: () => Submission.Failed({ reason }) }),
 			outMessage: PageOutMessage.RequestedToast({
-				toast: errorToastOf(
-					failureMessage(reason, {
-						AlreadyExists: {
-							title: "Connection already exists",
-							description:
-								"A connection to this Discord server already exists in your workspace.",
-						},
-						DiscordNotConnected: {
-							title: "Discord not connected",
-							description: "Connect Discord first to load your guilds.",
-						},
-					}),
-				),
+				toast: successToast(`${PROVIDERS[model.addProvider].name} connection created`),
 			}),
 		}),
+		FailedCreateConnection: ({ reason }) => {
+			const { name, copy } = PROVIDERS[model.addProvider]
+			return {
+				model: modifyFields(model, { submission: () => Submission.Failed({ reason }) }),
+				outMessage: PageOutMessage.RequestedToast({
+					toast: errorToastOf(
+						failureMessage(reason, {
+							AlreadyExists: {
+								title: "Connection already exists",
+								description: copy.alreadyConnected,
+							},
+							NotConnected: {
+								title: `${name} not connected`,
+								description: copy.createNotConnected,
+							},
+						}),
+					),
+				}),
+			}
+		},
 	})

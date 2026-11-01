@@ -7,14 +7,14 @@
  * session runs, an alarm every 30s keeps the object warm and restarts a session that ended.
  *
  * Events are routed through the directory's `chat_sync_index` to the `OrgObject`s
- * (`services/chat-sync/discord-gateway-service.ts`).
+ * (`services/chat-sync/providers/discord/gateway-service.ts`).
  */
 import * as Cloudflare from "alchemy/Cloudflare"
 import { RuntimeContext } from "alchemy/RuntimeContext"
 import { Context, Effect, Layer, Option, Ref } from "effect"
 import * as Socket from "effect/socket/Socket"
 import { workerEnvLayer } from "@hazel/infra/worker-runtime"
-import { DiscordGatewayService } from "../services/chat-sync/discord-gateway-service"
+import { DiscordGatewayService } from "../services/chat-sync/providers/discord/gateway-service"
 import { Directory } from "../services/directory"
 import { workerObjectStubs } from "./objects/stubs"
 import { directoryBinding } from "./platform"

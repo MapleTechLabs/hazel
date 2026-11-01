@@ -210,5 +210,7 @@ export const channelReceivers = {
 	"channel.chatSyncIngest": (payload) => chatSyncChannelReceivers["channel.chatSyncIngest"](payload),
 	"channel.chatSyncReassignAuthors": (payload) =>
 		chatSyncChannelReceivers["channel.chatSyncReassignAuthors"](payload),
+	"channel.chatSyncAttachThread": (payload) =>
+		chatSyncChannelReceivers["channel.chatSyncAttachThread"](payload),
 	"channel.exportSearchMessages": (payload) => exportSearchMessages(payload),
 } satisfies EffectReceivers<typeof ChannelEffects, Database.Database | SqlClient>

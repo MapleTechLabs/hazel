@@ -8,14 +8,15 @@ import * as Interaction from "../../../ui/aria/interaction"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
 import * as ConfirmAction from "../../shared/confirm-action"
-import { DiscordFailure, DiscordGuild, DiscordGuilds } from "./discord"
+import { ChatSyncProvider, PROVIDERS, ResourceFailure, Workspace, Workspaces } from "./providers"
 
 export const ConnectionStatus = Schema.Literals(["active", "paused", "error", "disabled"])
 export type ConnectionStatus = typeof ConnectionStatus.Type
 
 export const Connection = Schema.Struct({
 	id: SyncConnectionId,
-	/** `externalWorkspaceName || "Discord Server"` */
+	provider: ChatSyncProvider,
+	/** `externalWorkspaceName`, or the provider's "Discord Server" / "Slack Workspace" */
 	displayName: Schema.String,
 	status: ConnectionStatus,
 	externalWorkspaceId: Schema.String,
@@ -34,7 +35,7 @@ export const DeleteConnectionFailure = Schema.Union([Schema.Literal("NotFound"),
 export type DeleteConnectionFailure = typeof DeleteConnectionFailure.Type
 
 export const CreateConnectionFailure = Schema.Union([
-	Schema.Literals(["AlreadyExists", "DiscordNotConnected"]),
+	Schema.Literals(["AlreadyExists", "NotConnected"]),
 	CommonReason,
 ])
 export type CreateConnectionFailure = typeof CreateConnectionFailure.Type
@@ -53,14 +54,19 @@ export const Model = Schema.Struct({
 	connections: Connections.schema,
 	addMenu: Menu.Model,
 	emptyAddMenu: Menu.Model,
-	/** `AddConnectionModal`: open state, its guild query (run when the first list mounts it) and form. */
+	/**
+	 * `AddConnectionModal`: open state, the provider it connects, its workspace query (run when the first
+	 * list mounts it, and again when another provider opens it) and form.
+	 */
 	addModal: Modal.Model,
-	discordGuilds: DiscordGuilds.schema,
-	/** Bumped per guild request; a list for an older request or another organization is dropped. */
-	guildsVersion: Schema.Number,
-	selectedGuild: Schema.NullOr(DiscordGuild),
-	guildSearch: Schema.String,
-	isGuildSearchFocused: Schema.Boolean,
+	addProvider: ChatSyncProvider,
+	workspaces: Workspaces.schema,
+	/** Bumped per workspace request; a list for an older request or another organization is dropped. */
+	workspacesVersion: Schema.Number,
+	/** The picked Discord server (Slack has its one installed workspace). */
+	selectedWorkspace: Schema.NullOr(Workspace),
+	workspaceSearch: Schema.String,
+	isWorkspaceSearchFocused: Schema.Boolean,
 	submission: Submission,
 	deleteConfirm: ConfirmAction.Model(DeleteTarget),
 	/** Hover, press and focus of the add modal's search Input and Connect button. */
@@ -72,17 +78,17 @@ export const Message = defineMessageUnion({
 	SucceededListConnections: { organizationId: OrganizationId, connections: Schema.Array(Connection) },
 	FailedListConnections: { organizationId: OrganizationId, reason: CommonReason },
 	ClickedRetryListConnections: {},
-	SucceededListDiscordGuilds: {
+	SucceededListWorkspaces: {
 		organizationId: OrganizationId,
 		version: Schema.Number,
-		guilds: Schema.Array(DiscordGuild),
+		workspaces: Schema.Array(Workspace),
 	},
-	FailedListDiscordGuilds: {
+	FailedListWorkspaces: {
 		organizationId: OrganizationId,
 		version: Schema.Number,
-		reason: DiscordFailure,
+		reason: ResourceFailure,
 	},
-	ClickedRetryListDiscordGuilds: {},
+	ClickedRetryListWorkspaces: {},
 	ClickedConnection: { connectionId: SyncConnectionId },
 	ClickedDeleteConnection: { target: DeleteTarget },
 	ClickedConfirmDelete: {},
@@ -92,13 +98,13 @@ export const Message = defineMessageUnion({
 	GotEmptyAddMenuMessage: { message: Menu.Message },
 	GotDeleteConfirmMessage: { message: ConfirmAction.Message },
 	GotAddModalMessage: { message: Modal.Message },
-	ChangedGuildSearch: { value: Schema.String },
-	FocusedGuildSearch: {},
-	BlurredGuildSearch: {},
-	CompletedFocusGuildSearch: {},
-	ClickedGuild: { guild: DiscordGuild },
-	ClickedChangeGuild: {},
-	ClickedOpenDiscordIntegration: {},
+	ChangedWorkspaceSearch: { value: Schema.String },
+	FocusedWorkspaceSearch: {},
+	BlurredWorkspaceSearch: {},
+	CompletedFocusWorkspaceSearch: {},
+	ClickedWorkspace: { workspace: Workspace },
+	ClickedChangeWorkspace: {},
+	ClickedOpenIntegration: {},
 	ClickedConnect: {},
 	SucceededCreateConnection: {},
 	FailedCreateConnection: { reason: CreateConnectionFailure },
@@ -118,8 +124,13 @@ export const STATUS_CONFIG: Readonly<
 	disabled: { label: "Disabled", dotClass: "bg-secondary", textClass: "text-muted-fg" },
 }
 
-export const addMenuEntries: ReadonlyArray<Menu.Entry> = [
-	Menu.item("discord"),
-	Menu.separator,
-	Menu.item("slack", { isDisabled: true }),
-]
+/** The add menu: one item per provider, keyed by its id. */
+export const addMenuEntries: ReadonlyArray<Menu.Entry> = ChatSyncProvider.literals.map((provider) =>
+	Menu.item(provider),
+)
+
+/** The workspace Connect creates: the picked Discord server, or Slack's one installed workspace. */
+export const chosenWorkspace = (model: Model): Workspace | null => {
+	if (PROVIDERS[model.addProvider].picksWorkspace) return model.selectedWorkspace
+	return AsyncData.isSuccess(model.workspaces) ? (model.workspaces.data[0] ?? null) : null
+}

@@ -13,14 +13,14 @@ import { errorToastOf, reasonToast, successToast } from "../../../data/actions"
 import type { PageReturn, PageSubscriptionInput, Shared } from "../../contract"
 import { PageOutMessage, requestedOrgNavigation } from "../../out-message"
 import * as ConfirmAction from "../../shared/confirm-action"
-import { DiscordChannels } from "../chat-sync/discord"
+import { ExternalChannels } from "../chat-sync/providers"
 import {
 	CreateChannelLink,
 	DisconnectConnection,
 	FocusChannelSearch,
 	ListChannelLinks,
 	ListChatSyncConnectionsForConnection,
-	ListDiscordChannels,
+	ListExternalChannels,
 	RemoveChannelLink,
 	UpdateChannelLink,
 } from "./command"
@@ -80,13 +80,13 @@ export const init = (route: RouteOf<"SettingsChatSyncConnection">, shared: Share
 			channelNames: {},
 			linkMenus: [],
 			addLinkModal: Modal.init(ADD_LINK_MODAL_ID, { focusSelector: `#${CHANNEL_SEARCH_ID}` }),
-			discordChannels: DiscordChannels.Loading(),
+			externalChannels: ExternalChannels.Loading(),
 			hazelChannels: [],
 			selectedChannel: null,
-			selectedDiscordChannel: null,
+			selectedExternalChannel: null,
 			direction: "both",
 			channelSearch: "",
-			discordChannelSearch: "",
+			externalChannelSearch: "",
 			focusedSearch: null,
 			submission: Submission.NotSubmitted(),
 			removeLinkConfirm: ConfirmAction.init("chat-sync-remove-link"),
@@ -170,13 +170,15 @@ const selectedLinkAction = (model: Model, link: ChannelLink, key: string): Retur
 		}
 	if (key !== "toggle" && !isDirection(key)) return { model }
 	// One update per link at a time; the menu stays enabled as in legacy.
-	if (model.updatingLinkIds.includes(link.id)) return { model }
+	const connection = foundConnection(model)
+	if (connection === null || model.updatingLinkIds.includes(link.id)) return { model }
+	const target = { syncChannelLinkId: link.id, provider: connection.provider }
 	return {
 		model: modifyFields(model, { updatingLinkIds: (ids) => [...ids, link.id] }),
 		commands: [
 			key === "toggle"
-				? UpdateChannelLink({ syncChannelLinkId: link.id, isActive: !link.isActive })
-				: UpdateChannelLink({ syncChannelLinkId: link.id, direction: key }),
+				? UpdateChannelLink({ ...target, isActive: !link.isActive })
+				: UpdateChannelLink({ ...target, direction: key }),
 		],
 	}
 }
@@ -212,10 +214,10 @@ const addLinkModal = {
 			: modifyFields(model, {
 					addLinkModal: () => modal,
 					selectedChannel: () => null,
-					selectedDiscordChannel: () => null,
+					selectedExternalChannel: () => null,
 					direction: () => "both" as const,
 					channelSearch: () => "",
-					discordChannelSearch: () => "",
+					externalChannelSearch: () => "",
 					focusedSearch: () => null,
 					submission: (submission) =>
 						submission._tag === "Failed" ? Submission.NotSubmitted() : submission,
@@ -230,8 +232,8 @@ const closeAddLinkModal = Update.foldChildStep({ update: Modal.close, ...addLink
 
 const submitLink = (model: Model): Return => {
 	const channel = model.selectedChannel
-	const discordChannel = model.selectedDiscordChannel
-	if (channel === null || discordChannel === null || model.submission._tag === "Submitting")
+	const externalChannel = model.selectedExternalChannel
+	if (channel === null || externalChannel === null || model.submission._tag === "Submitting")
 		return { model }
 	return {
 		// Link Channel disables while it runs, which ends its hover (useHover).
@@ -244,25 +246,31 @@ const submitLink = (model: Model): Return => {
 				syncConnectionId: model.connectionId,
 				hazelChannelId: channel.id,
 				hazelChannelName: channel.name,
-				externalChannelId: discordChannel.id,
-				externalChannelName: discordChannel.name,
+				externalChannelId: externalChannel.id,
+				externalChannelName: externalChannel.name,
 				direction: model.direction,
 			}),
 		],
 	}
 }
 
-/** The Discord channel list belongs to the guild of the connection currently shown. */
-const isCurrentGuild = (model: Model, guildId: string) =>
-	foundConnection(model)?.externalWorkspaceId === guildId
+/** The channel list belongs to the workspace of the connection currently shown. */
+const isCurrentWorkspace = (model: Model, workspaceId: string) =>
+	foundConnection(model)?.externalWorkspaceId === workspaceId
 
-const requestDiscordChannels = (model: Model): Return => {
+const requestExternalChannels = (model: Model): Return => {
 	const organizationId = model.requestedOrganizationId
 	const connection = foundConnection(model)
 	if (organizationId === null || connection === null) return { model }
 	return {
-		model: modifyFields(model, { discordChannels: () => DiscordChannels.Loading() }),
-		commands: [ListDiscordChannels({ organizationId, guildId: connection.externalWorkspaceId })],
+		model: modifyFields(model, { externalChannels: () => ExternalChannels.Loading() }),
+		commands: [
+			ListExternalChannels({
+				organizationId,
+				provider: connection.provider,
+				workspaceId: connection.externalWorkspaceId,
+			}),
+		],
 	}
 }
 
@@ -289,11 +297,11 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			const next = modifyFields(model, {
 				connection: () => ConnectionLookup.Success({ data: connection }),
 			})
-			// `AddChannelLinkModal` mounts once the connection is found, and queries its guild.
+			// `AddChannelLinkModal` mounts once the connection is found, and queries its workspace's channels.
 			const previous = foundConnection(model)
 			if (connection === null || previous?.externalWorkspaceId === connection.externalWorkspaceId)
 				return { model: next }
-			return requestDiscordChannels(next)
+			return requestExternalChannels(next)
 		},
 		// A failed list is an error to show (and retry), not a missing connection.
 		FailedListConnections: ({ organizationId, reason }) => {
@@ -316,23 +324,23 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			model.requestedOrganizationId === null
 				? { model }
 				: loadConnection(model, model.requestedOrganizationId),
-		SucceededListDiscordChannels: ({ guildId, channels }) =>
-			isCurrentGuild(model, guildId)
+		SucceededListExternalChannels: ({ workspaceId, channels }) =>
+			isCurrentWorkspace(model, workspaceId)
 				? {
 						model: modifyFields(model, {
-							discordChannels: () => DiscordChannels.Success({ data: channels }),
+							externalChannels: () => ExternalChannels.Success({ data: channels }),
 						}),
 					}
 				: { model },
-		FailedListDiscordChannels: ({ guildId, reason }) =>
-			isCurrentGuild(model, guildId)
+		FailedListExternalChannels: ({ workspaceId, reason }) =>
+			isCurrentWorkspace(model, workspaceId)
 				? {
 						model: modifyFields(model, {
-							discordChannels: () => DiscordChannels.Failure({ error: reason }),
+							externalChannels: () => ExternalChannels.Failure({ error: reason }),
 						}),
 					}
 				: { model },
-		ClickedRetryListDiscordChannels: () => requestDiscordChannels(model),
+		ClickedRetryListExternalChannels: () => requestExternalChannels(model),
 		SucceededListChannelLinks: ({ version, links }) =>
 			version !== model.linksVersion
 				? { model }
@@ -403,8 +411,8 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			model: modifyFields(model, { hazelChannels: () => channels }),
 		}),
 		ChangedChannelSearch: ({ value }) => ({ model: modifyFields(model, { channelSearch: () => value }) }),
-		ChangedDiscordChannelSearch: ({ value }) => ({
-			model: modifyFields(model, { discordChannelSearch: () => value }),
+		ChangedExternalChannelSearch: ({ value }) => ({
+			model: modifyFields(model, { externalChannelSearch: () => value }),
 		}),
 		FocusedSearch: ({ search }) => ({ model: modifyFields(model, { focusedSearch: () => search }) }),
 		BlurredSearch: () => ({ model: modifyFields(model, { focusedSearch: () => null }) }),
@@ -420,16 +428,16 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			model: modifyFields(model, { selectedChannel: () => null }),
 			commands: [FocusChannelSearch()],
 		}),
-		ClickedDiscordChannel: ({ channel }) => ({
+		ClickedExternalChannel: ({ channel }) => ({
 			model: modifyFields(model, {
-				selectedDiscordChannel: () => channel,
-				discordChannelSearch: () => "",
+				selectedExternalChannel: () => channel,
+				externalChannelSearch: () => "",
 				focusedSearch: () => null,
 			}),
 		}),
 		GotInteractionMessage: ({ message }) => interaction.fold(model, message),
-		ClickedChangeDiscordChannel: () => ({
-			model: modifyFields(model, { selectedDiscordChannel: () => null }),
+		ClickedChangeExternalChannel: () => ({
+			model: modifyFields(model, { selectedExternalChannel: () => null }),
 		}),
 		ClickedDirection: ({ direction }) => ({ model: modifyFields(model, { direction: () => direction }) }),
 		ClickedCreateLink: () => submitLink(model),
@@ -450,9 +458,10 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 							title: "Connection not found",
 							description: "This sync connection may have been deleted.",
 						},
+						// This pair, or the external channel synced by another organization.
 						AlreadyLinked: {
 							title: "Link already exists",
-							description: "This channel pair is already linked.",
+							description: "This channel is already synced.",
 						},
 					}),
 				),

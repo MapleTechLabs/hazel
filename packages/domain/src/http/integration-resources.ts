@@ -130,12 +130,28 @@ export class DiscordGuildChannelsResponse extends Schema.Class<DiscordGuildChann
 	channels: Schema.Array(DiscordGuildChannel),
 }) {}
 
+const SlackChannel = Schema.Struct({
+	id: ExternalChannelId,
+	name: Schema.String,
+	isPrivate: Schema.Boolean,
+	/** Whether Hazel's bot is in it already (linking joins a public one). */
+	isMember: Schema.Boolean,
+})
+
+/** The Slack workspace the org installed Hazel in, and its channels the bot can see. */
+export class SlackChannelsResponse extends Schema.Class<SlackChannelsResponse>("SlackChannelsResponse")({
+	workspace: Schema.Struct({ id: Schema.String, name: Schema.NullOr(Schema.String) }),
+	channels: Schema.Array(SlackChannel),
+}) {}
+
 // Error when organization doesn't have the integration connected
 export class IntegrationNotConnectedForPreviewError extends Schema.TaggedError<IntegrationNotConnectedForPreviewError>()(
 	"IntegrationNotConnectedForPreviewError",
 	{
 		provider: IntegrationProvider,
 	},
+	// The organization has no connection to the provider: a client state, not a server fault.
+	{ httpApiStatus: 404 },
 ) {}
 
 // Error when resource cannot be found
@@ -265,6 +281,27 @@ export class IntegrationResourceGroup extends HttpApiGroup.make("integration-res
 					title: "Get Discord Guild Channels",
 					description: "List message-capable channels in a Discord guild using the bot token",
 					summary: "List Discord guild channels",
+				}),
+			)
+			.annotate(RequiredScopes, ["integration-connections:read"]),
+	)
+	.add(
+		HttpApiEndpoint.get("getSlackChannels", `/:orgId/slack/channels`, {
+			params: { orgId: OrganizationId },
+			success: SlackChannelsResponse,
+			error: [
+				IntegrationNotConnectedForPreviewError,
+				IntegrationResourceError,
+				UnauthorizedError,
+				InternalServerError,
+			],
+		})
+			.annotateMerge(
+				OpenApi.annotations({
+					title: "Get Slack Channels",
+					description:
+						"List the channels of the Slack workspace the organization installed Hazel in",
+					summary: "List Slack channels",
 				}),
 			)
 			.annotate(RequiredScopes, ["integration-connections:read"]),

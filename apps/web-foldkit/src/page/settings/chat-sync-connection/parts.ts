@@ -2,10 +2,10 @@ import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { IconCirclePause, IconDotsVertical, IconHashtag, IconPlay, IconTrash } from "../../../icons"
 import type * as Menu from "../../../ui/menu"
 import { menuLabel, menuTriggerClassName, view as menuView } from "../../../ui/menu-view"
-import { discordLogo } from "../chat-sync/brand-icons"
+import { type ChatSyncProvider, PROVIDERS } from "../chat-sync/providers"
 import {
 	type ChannelLink,
-	DIRECTION_LABELS,
+	directionLabel,
 	linkMenuId,
 	linkMenuEntries,
 	Message,
@@ -57,7 +57,7 @@ const WEBHOOK_PERMISSION_LABELS: Readonly<
 const isDirectionKey = (key: string): key is SyncDirection => key in DIRECTION_PATHS
 
 const linkMenuContent =
-	(h: HtmlBuilder<Message>, link: ChannelLink) =>
+	(h: HtmlBuilder<Message>, link: ChannelLink, provider: ChatSyncProvider) =>
 	(key: string): ReadonlyArray<Html> => {
 		const id = linkMenuId(link.id)
 		if (key === "direction")
@@ -72,7 +72,7 @@ const linkMenuContent =
 		if (key === "remove")
 			return [IconTrash(h, { className: "size-4" }), menuLabel(h, id, key, "Remove link")]
 		if (isDirectionKey(key))
-			return [directionIcon(h, key, "icon"), menuLabel(h, id, key, DIRECTION_LABELS[key])]
+			return [directionIcon(h, key, "icon"), menuLabel(h, id, key, directionLabel(key, provider))]
 		return []
 	}
 
@@ -80,11 +80,13 @@ const linkMenuContent =
 export const channelLinkRow = (
 	h: HtmlBuilder<Message>,
 	link: ChannelLink,
+	provider: ChatSyncProvider,
 	channelName: string | undefined,
 	menu: Menu.Model | undefined,
 ): Html => {
 	const permission = WEBHOOK_PERMISSION_LABELS[link.webhookPermission]
-	const directionLabel = DIRECTION_LABELS[link.direction]
+	const direction = directionLabel(link.direction, provider)
+	const { logo, hasWebhookIdentity } = PROVIDERS[provider]
 	return h.keyed("div")(
 		link.id,
 		[h.Class("flex items-center gap-4 px-5 py-3")],
@@ -104,24 +106,33 @@ export const channelLinkRow = (
 					h.Class(
 						"flex shrink-0 items-center gap-1.5 rounded-sm bg-bg-muted/50 px-2.5 py-1 text-muted-fg",
 					),
-					h.Title(directionLabel),
+					h.Title(direction),
 				],
-				[directionIcon(h, link.direction), h.span([h.Class("text-xs")], [directionLabel])],
+				[directionIcon(h, link.direction), h.span([h.Class("text-xs")], [direction])],
 			),
 			h.div(
 				[h.Class("flex min-w-0 flex-1 items-center gap-2")],
 				[
-					discordLogo(h, "size-4 shrink-0"),
+					logo(h, "size-4 shrink-0"),
 					h.span([h.Class("truncate text-fg text-sm")], [link.externalName]),
 				],
 			),
 			h.div(
 				[h.Class("flex shrink-0 items-center gap-2")],
 				[
-					h.span(
-						[h.Class(`inline-flex rounded-sm px-2 py-0.5 text-xs ${permission.badgeClass}`)],
-						[permission.label],
-					),
+					// How Discord posts for this link; Slack always posts as the author.
+					...(hasWebhookIdentity
+						? [
+								h.span(
+									[
+										h.Class(
+											`inline-flex rounded-sm px-2 py-0.5 text-xs ${permission.badgeClass}`,
+										),
+									],
+									[permission.label],
+								),
+							]
+						: []),
 					h.span(
 						[
 							h.Class(
@@ -163,7 +174,7 @@ export const channelLinkRow = (
 												],
 												[IconDotsVertical(h, { className: "size-4" }), overlay],
 											),
-										content: linkMenuContent(h, link),
+										content: linkMenuContent(h, link, provider),
 									},
 									toParentMessage: (message: Menu.Message) =>
 										Message.GotLinkMenuMessage({ linkId: link.id, message }),
@@ -185,7 +196,7 @@ export const FEATURES = [
 ]
 
 /** The "About Chat Sync" card in the right column. */
-export const aboutCard = <M>(h: HtmlBuilder<M>): Html =>
+export const aboutCard = <M>(h: HtmlBuilder<M>, provider: ChatSyncProvider): Html =>
 	h.div(
 		[h.Class("lg:sticky lg:top-6 lg:self-start")],
 		[
@@ -202,7 +213,7 @@ export const aboutCard = <M>(h: HtmlBuilder<M>): Html =>
 							h.p(
 								[h.Class("mb-4 text-muted-fg text-sm leading-relaxed")],
 								[
-									"Chat Sync keeps messages in sync between Hazel and Discord. Messages sent in either platform are automatically mirrored to the linked channel, including edits and deletions.",
+									`Chat Sync keeps messages in sync between Hazel and ${PROVIDERS[provider].name}. Messages sent in either platform are automatically mirrored to the linked channel, including edits and deletions.`,
 								],
 							),
 							h.ul(

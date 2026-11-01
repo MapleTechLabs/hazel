@@ -7,7 +7,7 @@ import {
 	decodeRequiredExternalId,
 	extractReactionAuthor,
 	normalizeDiscordMessageAttachments,
-} from "./discord-gateway-shared"
+} from "./gateway-dispatch"
 
 describe("DiscordGatewayService reaction author extraction", () => {
 	it("prefers member.user for reaction events", () => {

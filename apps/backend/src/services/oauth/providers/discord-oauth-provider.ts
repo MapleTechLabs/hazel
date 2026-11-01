@@ -12,7 +12,16 @@ export const createDiscordOAuthProvider = (config: OAuthProviderConfig): OAuthPr
 	provider: "discord",
 	config,
 
-	buildAuthorizationUrl: (state: string) => Effect.succeed(createBaseAuthorizationUrl(config, state)),
+	buildAuthorizationUrl: (state, level) =>
+		Effect.sync(() => {
+			const url = createBaseAuthorizationUrl(config, state)
+			// Linking a user's account only needs their identity; the org's keeps guild and bot scopes.
+			if (level === "user") {
+				url.searchParams.set("scope", "identify")
+				url.searchParams.delete("permissions")
+			}
+			return url
+		}),
 
 	exchangeCodeForTokens: (code: string) =>
 		makeTokenExchangeRequest(config, code, Redacted.value(config.clientSecret)),

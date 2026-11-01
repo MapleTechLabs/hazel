@@ -5,45 +5,40 @@ import { load } from "foldkit/navigation"
 import { catchCommon } from "../../../data/actions"
 import { HazelApiClient } from "../../../rpc"
 import { Message } from "./message"
+import { LinkedProvider } from "./model"
 
 /** `integrations.getOAuthUrl`, then a full-page redirect to the provider. */
-export const StartDiscordLink = Command.define("StartDiscordLink", {
-	args: { orgId: OrganizationId },
-	messages: [Message.SucceededGetDiscordOAuthUrl, Message.FailedGetDiscordOAuthUrl],
-	execute: ({ orgId }) =>
+export const StartLink = Command.define("StartLink", {
+	args: { orgId: OrganizationId, provider: LinkedProvider },
+	messages: [Message.SucceededGetOAuthUrl, Message.FailedGetOAuthUrl],
+	execute: ({ orgId, provider }) =>
 		HazelApiClient.use((client) =>
-			client.integrations.getOAuthUrl({
-				params: { orgId, provider: "discord" },
-				query: { level: "user" },
-			}),
+			client.integrations.getOAuthUrl({ params: { orgId, provider }, query: { level: "user" } }),
 		).pipe(
 			Effect.flatMap((response) => load(response.authorizationUrl)),
-			Effect.as(Message.SucceededGetDiscordOAuthUrl()),
+			Effect.as(Message.SucceededGetOAuthUrl()),
 			Effect.catchTags({
 				UnsupportedProviderError: () =>
-					Effect.succeed(Message.FailedGetDiscordOAuthUrl({ reason: "UnsupportedProvider" })),
+					Effect.succeed(Message.FailedGetOAuthUrl({ provider, reason: "UnsupportedProvider" })),
 			}),
-			catchCommon((reason) => Message.FailedGetDiscordOAuthUrl({ reason })),
+			catchCommon((reason) => Message.FailedGetOAuthUrl({ provider, reason })),
 		),
 })
 
-export const DisconnectDiscord = Command.define("DisconnectDiscord", {
-	args: { orgId: OrganizationId },
-	messages: [Message.SucceededDisconnectDiscord, Message.FailedDisconnectDiscord],
-	execute: ({ orgId }) =>
+export const Disconnect = Command.define("Disconnect", {
+	args: { orgId: OrganizationId, provider: LinkedProvider },
+	messages: [Message.SucceededDisconnect, Message.FailedDisconnect],
+	execute: ({ orgId, provider }) =>
 		HazelApiClient.use((client) =>
-			client.integrations.disconnect({
-				params: { orgId, provider: "discord" },
-				query: { level: "user" },
-			}),
+			client.integrations.disconnect({ params: { orgId, provider }, query: { level: "user" } }),
 		).pipe(
-			Effect.as(Message.SucceededDisconnectDiscord()),
+			Effect.as(Message.SucceededDisconnect({ provider })),
 			Effect.catchTags({
 				IntegrationNotConnectedError: () =>
-					Effect.succeed(Message.FailedDisconnectDiscord({ reason: "NotConnected" })),
+					Effect.succeed(Message.FailedDisconnect({ provider, reason: "NotConnected" })),
 				UnsupportedProviderError: () =>
-					Effect.succeed(Message.FailedDisconnectDiscord({ reason: "UnsupportedProvider" })),
+					Effect.succeed(Message.FailedDisconnect({ provider, reason: "UnsupportedProvider" })),
 			}),
-			catchCommon((reason) => Message.FailedDisconnectDiscord({ reason })),
+			catchCommon((reason) => Message.FailedDisconnect({ provider, reason })),
 		),
 })

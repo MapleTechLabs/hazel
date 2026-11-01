@@ -69,6 +69,10 @@ export const apiEnv = ({ stage, urls }: HazelStackContext) =>
 		// Discord allows one gateway session per bot token: enable it on one stage only.
 		plainWithDefault("DISCORD_GATEWAY_ENABLED", "false"),
 		optionalPlain("DISCORD_GATEWAY_INTENTS"),
+		optionalPlain("SLACK_CLIENT_ID"),
+		optionalSecret("SLACK_CLIENT_SECRET"),
+		// Verifies Slack's Events API deliveries (`POST /webhooks/slack`).
+		optionalSecret("SLACK_SIGNING_SECRET"),
 		optionalPlain("GITHUB_APP_ID"),
 		optionalPlain("GITHUB_APP_SLUG"),
 		optionalSecret("GITHUB_APP_PRIVATE_KEY"),

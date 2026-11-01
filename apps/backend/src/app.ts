@@ -33,7 +33,7 @@ import {
 	TypingIndicatorRepo,
 	UserRepo,
 } from "@hazel/backend-core"
-import { GitHub } from "@hazel/integrations"
+import { Discord, GitHub, Slack } from "@hazel/integrations"
 import { Config, Effect, Layer, Option } from "effect"
 import { HazelApi } from "./api"
 import { HttpApiRoutes } from "./http"
@@ -65,6 +65,7 @@ import { AuthorizationLive } from "./services/auth"
 import { IntegrationTokenService } from "./services/integration-token-service"
 import { IntegrationBotService } from "./services/integrations/integration-bot-service"
 import { ChatSyncAttributionReconciler } from "./services/chat-sync/chat-sync-attribution-reconciler"
+import { ChatSyncInstallations } from "./services/chat-sync/chat-sync-installations"
 import { OAuthBearerAuth } from "./services/oauth-bearer-auth"
 import { ObjectStorage } from "./services/object-storage"
 import { HtmlRenders } from "./services/html-renders"
@@ -213,6 +214,9 @@ export const AppServicesLive = Layer.mergeAll(
 	HtmlRenders.layer,
 	GitHub.GitHubAppJWTService.layer,
 	GitHub.GitHubApiClient.layer,
+	Discord.DiscordApiClient.layer,
+	Slack.SlackApiClient.layer,
+	ChatSyncInstallations.layer,
 	IntegrationTokenService.layer,
 	OAuthProviderRegistry.layer,
 	IntegrationBotService.layer,

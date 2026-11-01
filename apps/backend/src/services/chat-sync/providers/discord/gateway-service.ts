@@ -1,8 +1,6 @@
 /**
- * The Discord gateway session (dfx): receives Discord's dispatches and routes each to the orgs
- * linked to its channel. The directory's `chat_sync_index` names the orgs; the provider user is
- * upserted into the directory as a shadow; then `org.chatSyncIngest` is applied at each
- * `OrgObject` (keyed by the event's dedupe key, so a redelivered event is applied once).
+ * The Discord gateway session (dfx): Discord's chat-sync source. Receives dispatches, turns each
+ * into a `ChatSyncInbound` (`./gateway-dispatch.ts`) and routes it (`routeChatSyncInbound`).
  */
 import { FetchHttpClient } from "effect/http"
 import { ExternalUserId } from "@hazel/schema"
@@ -10,16 +8,12 @@ import { Schema } from "effect"
 import { DiscordConfig } from "dfx"
 import { DiscordGateway, DiscordLive } from "dfx/gateway"
 import { Cause, Context, Config, Effect, Layer, Option, Redacted, Ref } from "effect"
-import { applyNow } from "../../worker/objects/fanout"
-import { orgTarget } from "../../worker/objects/kinds"
-import { ObjectStubs } from "../../worker/objects/protocol"
-import { Directory } from "../directory"
-import { ChatSyncOrgEffects, type OrgChatSyncIngestPayload } from "./chat-sync-effects"
-import { indexedLinks, upsertIntegrationBot, upsertShadowUser } from "./chat-sync-index"
+import { ObjectStubs } from "../../../../worker/objects/protocol"
+import { Directory } from "../../../directory"
+import { routeChatSyncInbound } from "../../chat-sync-inbound"
 import {
 	createDiscordGatewayDispatchHandlers,
 	decodeRequiredExternalId,
-	type DiscordInbound,
 	type DiscordMessageCreateEvent,
 	type DiscordMessageDeleteEvent,
 	type DiscordMessageReactionAddEvent,
@@ -27,55 +21,9 @@ import {
 	type DiscordMessageUpdateEvent,
 	type DiscordReadyEvent,
 	type DiscordThreadCreateEvent,
-} from "./discord-gateway-shared"
+} from "./gateway-dispatch"
 
 const DISCORD_REQUIRED_GATEWAY_INTENTS = 34305
-
-/** Route one Discord event to every org whose link indexes its channel. */
-export const routeDiscordInbound = Effect.fn("DiscordGateway.routeInbound")(function* (
-	inbound: DiscordInbound,
-) {
-	const targets = yield* indexedLinks("discord", inbound.externalChannelId)
-	yield* Effect.annotateCurrentSpan({
-		"chat_sync.event": inbound.event._tag,
-		"chat_sync.external_channel_id": inbound.externalChannelId,
-		"chat_sync.orgs": targets.length,
-	})
-	if (targets.length === 0) return
-	const author: OrgChatSyncIngestPayload["author"] =
-		inbound.author !== null
-			? {
-					externalUserId: inbound.author.externalUserId,
-					user: yield* upsertShadowUser(
-						"discord",
-						inbound.author.externalUserId,
-						inbound.author.displayName,
-						inbound.author.avatarUrl,
-					),
-				}
-			: inbound.event._tag === "MessageCreate"
-				? { externalUserId: null, user: yield* upsertIntegrationBot("discord") }
-				: null
-	const payload: OrgChatSyncIngestPayload = {
-		provider: "discord",
-		externalChannelId: inbound.externalChannelId,
-		dedupeKey: inbound.dedupeKey,
-		author,
-		event: inbound.event,
-	}
-	const organizations = [...new Set(targets.map((target) => target.organizationId))]
-	yield* Effect.forEach(
-		organizations,
-		(organizationId) =>
-			applyNow(
-				ChatSyncOrgEffects.chatSyncIngest,
-				orgTarget(organizationId),
-				payload,
-				inbound.dedupeKey,
-			),
-		{ concurrency: 4, discard: true },
-	)
-})
 
 export class DiscordGatewayService extends Context.Service<DiscordGatewayService>()("DiscordGatewayService", {
 	make: Effect.gen(function* () {
@@ -133,7 +81,7 @@ export class DiscordGatewayService extends Context.Service<DiscordGatewayService
 
 		const dispatchHandlers = createDiscordGatewayDispatchHandlers({
 			ingest: (inbound) =>
-				routeDiscordInbound(inbound).pipe(
+				routeChatSyncInbound(inbound).pipe(
 					Effect.provideService(Directory, directory),
 					Effect.provideService(ObjectStubs, stubs),
 				),

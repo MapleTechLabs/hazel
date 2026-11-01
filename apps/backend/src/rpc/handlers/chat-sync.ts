@@ -28,8 +28,13 @@ import {
 import { Effect, Option } from "effect"
 import { generateTransactionId } from "../../lib/create-transactionId"
 import { IntegrationConnectionPolicy } from "../../policies/integration-connection-policy"
+import { indexedLinkOwner } from "../../services/chat-sync/chat-sync-index"
 import { indexChatSync, publishChatSyncLinks } from "../../services/chat-sync/chat-sync-org"
+import { ChatSyncDeliveryEffects } from "../../services/chat-sync/chat-sync-effects"
 import { normalizeChannelLinkSettings } from "../../services/chat-sync/chat-sync-settings"
+import { isChatSyncProviderId } from "../../services/chat-sync/provider"
+import { chatSyncProviders } from "../../services/chat-sync/providers"
+import { enqueueEffect } from "../../worker/objects/effects/registry"
 
 export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 	Effect.gen(function* () {
@@ -47,32 +52,32 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 							yield* integrationConnectionPolicy.canInsert(payload.organizationId)
 							const currentUser = yield* CurrentUser.Context
 
+							// A chat-sync provider needs the org's own connection to it; one whose
+							// installs are per workspace (Slack) only to the workspace it installed in,
+							// so no org can link (and read) a workspace it does not belong to.
 							const integrationConnectionId = yield* Effect.gen(function* () {
-								if (payload.provider !== "discord") {
+								if (!isChatSyncProviderId(payload.provider)) {
 									return payload.integrationConnectionId ?? null
 								}
-
-								if (payload.integrationConnectionId) {
-									return payload.integrationConnectionId
-								}
-
-								const integrationOption = yield* integrationConnectionRepo.findOrgConnection(
+								const provider = payload.provider
+								const notConnected = new ChatSyncIntegrationNotConnectedError({
+									organizationId: payload.organizationId,
+									provider,
+								})
+								const integration = yield* integrationConnectionRepo.findOrgConnection(
 									payload.organizationId,
-									"discord",
+									provider,
 								)
-								if (
-									Option.isNone(integrationOption) ||
-									integrationOption.value.status !== "active"
-								) {
-									return yield* Effect.fail(
-										new ChatSyncIntegrationNotConnectedError({
-											organizationId: payload.organizationId,
-											provider: "discord",
-										}),
-									)
+								if (Option.isNone(integration) || integration.value.status !== "active") {
+									return yield* notConnected
 								}
-
-								return integrationOption.value.id
+								if (
+									chatSyncProviders[provider].workspaceIsInstall &&
+									integration.value.externalAccountId !== payload.externalWorkspaceId
+								) {
+									return yield* notConnected
+								}
+								return integration.value.id
 							})
 
 							const existing = yield* connectionRepo.findByProviderAndWorkspace(
@@ -206,7 +211,17 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 								payload.syncConnectionId,
 								payload.externalChannelId,
 							)
-							if (Option.isSome(existingExternal)) {
+							// Another org syncs that channel already (first link wins): one install can
+							// serve several orgs, and none may take another's channel.
+							const owner = yield* indexedLinkOwner(
+								connection.provider,
+								connection.externalWorkspaceId,
+								payload.externalChannelId,
+							)
+							if (
+								Option.isSome(existingExternal) ||
+								(Option.isSome(owner) && owner.value !== connection.organizationId)
+							) {
 								return yield* Effect.fail(
 									new ChatSyncChannelLinkExistsError({
 										syncConnectionId: payload.syncConnectionId,
@@ -229,6 +244,15 @@ export const ChatSyncRpcLive = ChatSyncRpcs.toLayer(
 							})
 							yield* indexChatSync(connection, { link: link!, deleted: false })
 							yield* publishChatSyncLinks(link!.hazelChannelId)
+							yield* enqueueEffect(
+								ChatSyncDeliveryEffects.prepareLink,
+								{ kind: "chat-sync" },
+								{
+									provider: connection.provider,
+									externalWorkspaceId: connection.externalWorkspaceId,
+									externalChannelId: link!.externalChannelId as ExternalChannelId,
+								},
+							)
 
 							const brandedLink = {
 								...link,

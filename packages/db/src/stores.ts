@@ -31,6 +31,7 @@ export const directoryTables = [
 	schema.webhookIndexTable,
 	schema.integrationIndexTable,
 	schema.chatSyncIndexTable,
+	schema.chatSyncInstallationsTable,
 ] as const
 
 /** `OrgObject`, one per organization. */

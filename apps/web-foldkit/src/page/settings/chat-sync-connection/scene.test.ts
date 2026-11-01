@@ -9,16 +9,22 @@ import { FocusTriggerOnPress } from "../../../ui/menu-view"
 import * as Modal from "../../../ui/modal"
 import { successToast } from "../../../data/actions"
 import { makeShared, organizationId, pageScene, portalModalMounted, uuid } from "../../../test/pages-fixtures"
-import { connection, syncConnectionId } from "../../../test/pages-integrations-fixtures"
+import {
+	connection,
+	slackChannels,
+	slackConnection,
+	slackSyncConnectionId,
+	syncConnectionId,
+} from "../../../test/pages-integrations-fixtures"
 import { PageOutMessage } from "../../out-message"
 import * as ConfirmAction from "../../shared/confirm-action"
-import { DiscordChannels } from "../chat-sync/discord"
+import { ExternalChannels } from "../chat-sync/providers"
 import {
 	CreateChannelLink,
 	DisconnectConnection,
 	ListChannelLinks,
 	ListChatSyncConnectionsForConnection,
-	ListDiscordChannels,
+	ListExternalChannels,
 	RemoveChannelLink,
 } from "./command"
 import { Message, type Model } from "./model"
@@ -39,10 +45,9 @@ const linkId = Schema.decodeSync(SyncChannelLinkId)(uuid(40))
 const hazelChannel = { id: Schema.decodeSync(ChannelId)(uuid(41)), name: "engineering" }
 const discordChannel = {
 	id: Schema.decodeSync(ExternalChannelId)("918273645500777"),
-	guildId: connection.externalWorkspaceId,
 	name: "dev-chat",
-	type: 0,
-	parentId: null,
+	isPrivate: false,
+	isMember: true,
 }
 const link = {
 	id: linkId,
@@ -55,7 +60,7 @@ const link = {
 const initial = init(route, shared).model
 const found = [
 	Message.SucceededListConnections({ organizationId, connections: [connection] }),
-	Message.SucceededListDiscordChannels({ guildId: "918273645500120", channels: [discordChannel] }),
+	Message.SucceededListExternalChannels({ workspaceId: "918273645500120", channels: [discordChannel] }),
 	Message.UpdatedHazelChannels({ channels: [hazelChannel] }),
 	Message.UpdatedChannelNames({ names: { [hazelChannel.id]: "engineering" } }),
 ].reduce(step, initial)
@@ -90,7 +95,10 @@ describe("connection states", () => {
 			Scene.expect(Scene.text("Connection not found")).toExist(),
 			Scene.click(Scene.role("button", { name: "Go back" })),
 			Scene.expectOutMessage(
-				PageOutMessage.RequestedNavigation({ route: routeOfPath("/hazel/settings/chat-sync"), replace: false }),
+				PageOutMessage.RequestedNavigation({
+					route: routeOfPath("/hazel/settings/chat-sync"),
+					replace: false,
+				}),
 			),
 		)
 	})
@@ -110,9 +118,9 @@ describe("connection states", () => {
 				Message.SucceededListConnections({ organizationId, connections: [connection] }),
 			),
 			Scene.Command.resolve(
-				ListDiscordChannels,
-				Message.SucceededListDiscordChannels({
-					guildId: connection.externalWorkspaceId,
+				ListExternalChannels,
+				Message.SucceededListExternalChannels({
+					workspaceId: connection.externalWorkspaceId,
 					channels: [],
 				}),
 			),
@@ -252,8 +260,10 @@ describe("remove a channel link", () => {
 	})
 })
 
+const linkButtonOf = () => inDialog("Link Channel")
+
 describe("link a channel", () => {
-	const linkButton = inDialog("Link Channel")
+	const linkButton = linkButtonOf()
 
 	test("Link Channel enables once both channels are picked, then creates the link", () => {
 		Scene.scene(
@@ -302,7 +312,7 @@ describe("link a channel", () => {
 			Scene.given({
 				...withoutLinks,
 				selectedChannel: hazelChannel,
-				selectedDiscordChannel: discordChannel,
+				selectedExternalChannel: discordChannel,
 			}),
 			Scene.click(Scene.role("button", { name: /Link Channel$/ })),
 			addLinkModalMounted,
@@ -313,7 +323,7 @@ describe("link a channel", () => {
 					toast: {
 						intent: "error",
 						title: "Link already exists",
-						description: "This channel pair is already linked.",
+						description: "This channel is already synced.",
 					},
 				}),
 			),
@@ -327,7 +337,7 @@ describe("link a channel", () => {
 			config,
 			Scene.given({
 				...withoutLinks,
-				discordChannels: DiscordChannels.Failure({ error: "ProviderError" }),
+				externalChannels: ExternalChannels.Failure({ error: "ProviderError" }),
 				selectedChannel: hazelChannel,
 			}),
 			Scene.click(Scene.role("button", { name: /Link Channel$/ })),
@@ -335,6 +345,85 @@ describe("link a channel", () => {
 			Scene.expect(Scene.text("Could not load Discord channels")).toExist(),
 			Scene.expect(Scene.within(dialog, tryAgain)).toBeAbsent(),
 			Scene.expect(linkButton).toBeDisabled(),
+		)
+	})
+})
+
+describe("a Slack connection", () => {
+	const slackFound = [
+		Message.SucceededListConnections({ organizationId, connections: [slackConnection] }),
+		Message.SucceededListExternalChannels({
+			workspaceId: slackConnection.externalWorkspaceId,
+			channels: slackChannels,
+		}),
+		Message.UpdatedHazelChannels({ channels: [hazelChannel] }),
+		Message.UpdatedChannelNames({ names: { [hazelChannel.id]: "engineering" } }),
+	].reduce(step, init({ ...route, connectionId: slackSyncConnectionId }, shared).model)
+	const withSlackLink = step(slackFound, Message.SucceededListChannelLinks({ version: 1, links: [link] }))
+	const withoutSlackLinks = step(slackFound, Message.SucceededListChannelLinks({ version: 1, links: [] }))
+
+	test("names Slack and has no webhook identity on its links", () => {
+		Scene.scene(
+			config,
+			Scene.given(withSlackLink),
+			linkMenuMounted,
+			Scene.expect(Scene.text("Connected to Slack")).toExist(),
+			Scene.expect(Scene.text("Workspace ID: T024BE7LD")).toExist(),
+			Scene.expect(Scene.text("general")).toExist(),
+			Scene.expect(Scene.text("Webhook")).toBeAbsent(),
+		)
+	})
+
+	test("the link modal lists the Slack channels and links one", () => {
+		Scene.scene(
+			config,
+			Scene.given(withoutSlackLinks),
+			Scene.click(Scene.role("button", { name: /Link Channel$/ })),
+			addLinkModalMounted,
+			Scene.expect(Scene.within(dialog, Scene.text("Slack Channel"))).toExist(),
+			Scene.expect(
+				Scene.within(dialog, Scene.text(/Private channels are not supported yet\./)),
+			).toExist(),
+			Scene.click(Scene.within(dialog, Scene.role("button", { name: /engineering$/ }))),
+			Scene.type(Scene.placeholder("Search Slack channels..."), "launch"),
+			Scene.expect(Scene.within(dialog, Scene.text("design-reviews"))).toBeAbsent(),
+			Scene.click(Scene.within(dialog, Scene.role("button", { name: /launch-room$/ }))),
+			Scene.click(Scene.within(dialog, Scene.text("Slack to Hazel"))),
+			Scene.click(linkButtonOf()),
+			Scene.Command.expectExact(
+				CreateChannelLink({
+					syncConnectionId: slackSyncConnectionId,
+					hazelChannelId: hazelChannel.id,
+					hazelChannelName: "engineering",
+					externalChannelId: slackChannels[2]!.id,
+					externalChannelName: "launch-room",
+					direction: "external_to_hazel",
+				}),
+			),
+			Scene.Command.resolve(CreateChannelLink, Message.FailedCreateLink({ reason: "AlreadyLinked" })),
+			Scene.expectOutMessage(
+				PageOutMessage.RequestedToast({
+					toast: {
+						intent: "error",
+						title: "Link already exists",
+						description: "This channel is already synced.",
+					},
+				}),
+			),
+		)
+	})
+
+	test("Slack channels that fail to load because Slack is not installed ask to connect it", () => {
+		Scene.scene(
+			config,
+			Scene.given({
+				...withoutSlackLinks,
+				externalChannels: ExternalChannels.Failure({ error: "NotConnected" }),
+			}),
+			Scene.click(Scene.role("button", { name: /Link Channel$/ })),
+			addLinkModalMounted,
+			Scene.expect(Scene.within(dialog, Scene.text("Connect Slack first"))).toExist(),
+			Scene.expect(linkButtonOf()).toBeDisabled(),
 		)
 	})
 })

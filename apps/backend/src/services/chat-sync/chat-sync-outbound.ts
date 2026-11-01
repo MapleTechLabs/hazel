@@ -11,15 +11,13 @@
  * so the outbox retries it; any other failure marks the receipt `failed` and the row done.
  */
 import { Database, SQLite, schema } from "@hazel/db"
-import type { ChatSyncChannelLink } from "@hazel/domain/models"
 import type { ChannelId, ExternalMessageId, MessageId, MessageReactionId, UserId } from "@hazel/schema"
-import { Cause, Effect, Option } from "effect"
-import type { SqlClient } from "effect/sql/SqlClient"
+import { Effect, Option } from "effect"
+import { SqlClient } from "effect/sql/SqlClient"
 import type { MessageEventHook } from "../../worker/objects/channel/message-events"
 import { enqueueEffect, type EffectReceivers } from "../../worker/objects/effects/registry"
 import { orgTarget } from "../../worker/objects/kinds"
 import { Directory } from "../directory"
-import { formatMessageContentWithAttachments } from "./chat-sync-attachment-content"
 import {
 	claimReceipt,
 	findMessageLink,
@@ -33,19 +31,18 @@ import {
 	type ChatSyncLinkedAccount,
 	type ChatSyncOutboundEvent,
 	type ChatSyncOutboundPayload,
+	type PrepareLinkPayload,
 	ChatSyncOrgEffects,
 	InboundChatSyncWrite,
 } from "./chat-sync-effects"
-import { ChatSyncProviderApiError, ChatSyncProviderConfigurationError } from "./chat-sync-provider-registry"
+import { ChatSyncProviders } from "./chat-sync-providers"
 import {
-	discordWebhookConfigOf,
-	isWebhookStrategyEnabled,
-	outboundIdentityOf,
-	webhookPermission,
-	webhookPermissionOf,
-	withOutboundIdentity,
-} from "./chat-sync-settings"
-import { ChatSyncTransport, type DiscordWebhookTarget } from "./chat-sync-transport"
+	ChatSyncProviderApiError,
+	ChatSyncProviderConfigurationError,
+	type ChatSyncLinkContext,
+	type ChatSyncProviderDefinition,
+	isRetryableStatus,
+} from "./provider"
 
 /**
  * Mirror a Hazel write on every outbound link of this channel. Call inside the write's
@@ -127,10 +124,7 @@ export const chatSyncOutboundHook: MessageEventHook = (event) =>
 /** Whether another attempt may succeed: database blips, transport failures, 408/429/5xx. */
 export const isRetryableSyncFailure = (error: unknown): boolean => {
 	if (error instanceof Database.DatabaseError) return true
-	if (error instanceof ChatSyncProviderApiError) {
-		const status = error.status
-		return status === undefined || status === 408 || status === 429 || status >= 500
-	}
+	if (error instanceof ChatSyncProviderApiError) return isRetryableStatus(error.status)
 	return false
 }
 
@@ -151,11 +145,16 @@ const dedupeKeyOf = (event: ChatSyncOutboundEvent): string => {
 	}
 }
 
-/** Discord's thread title: the message's first line, mentions dropped, at most 100 characters. */
-const threadNameOf = (content: string) =>
-	content.replace(MENTION_PATTERN, "").split("\n")[0]!.replace(/\s+/g, " ").trim().slice(0, 100) || "Thread"
-
 const MENTION_PATTERN = /@\[userId:([^\]]+)\]/g
+
+/** A provider thread's title: the message's first line, mentions dropped, within the limit. */
+const threadNameOf = (definition: ChatSyncProviderDefinition, content: string) =>
+	content
+		.replace(MENTION_PATTERN, "")
+		.split("\n")[0]!
+		.replace(/\s+/g, " ")
+		.trim()
+		.slice(0, definition.maxThreadNameLength) || "Thread"
 
 /** Directory display names for `userIds` (D1 `users`). */
 const displayNames = (userIds: ReadonlyArray<UserId>) =>
@@ -180,30 +179,28 @@ const displayNames = (userIds: ReadonlyArray<UserId>) =>
 		)
 	})
 
-/** `@[userId:…]` → `<@discordId>` for linked accounts, else `@Name`. */
-const translateMentions = (content: string, accounts: ReadonlyArray<ChatSyncLinkedAccount>) =>
+/** `@[userId:…]` → the provider's mention for linked accounts, else `@Name`. */
+const outboundContent = (
+	definition: ChatSyncProviderDefinition,
+	content: string,
+	accounts: ReadonlyArray<ChatSyncLinkedAccount>,
+) =>
 	Effect.gen(function* () {
 		const userIds = [...content.matchAll(MENTION_PATTERN)].map((match) => match[1] as UserId)
 		if (userIds.length === 0) return content
 		const linked = new Map(
 			accounts
-				.filter((account) => account.provider === "discord")
-				.map((a) => [a.userId, a.externalAccountId]),
+				.filter((account) => account.provider === definition.id)
+				.map((account) => [account.userId, account.externalAccountId]),
 		)
 		const names = yield* displayNames(userIds.filter((id) => !linked.has(id)))
 		return content.replace(MENTION_PATTERN, (_match, userId: string) => {
 			const external = linked.get(userId as UserId)
-			if (external !== undefined) return `<@${external}>`
+			if (external !== undefined) return definition.mention(external)
 			const name = names.get(userId as UserId)?.name
 			return name ? `@${name}` : "@unknown-user"
 		})
 	})
-
-const outboundContent = (
-	link: ChatSyncChannelTarget,
-	content: string,
-	accounts: ReadonlyArray<ChatSyncLinkedAccount>,
-) => (link.provider === "discord" ? translateMentions(content, accounts) : Effect.succeed(content))
 
 /** Store new link settings here at once, and at the org (the owner), which re-projects them. */
 const persistLinkSettings = (link: ChatSyncChannelTarget, settings: Record<string, unknown>) =>
@@ -219,95 +216,6 @@ const persistLinkSettings = (link: ChatSyncChannelTarget, settings: Record<strin
 			channelLinkId: link.channelLinkId,
 			settings,
 		})
-	})
-
-/**
- * The link's Discord webhook, provisioned on first use when the link posts as each author.
- * `None`: post as the bot (webhooks off, refused, or failing).
- */
-const discordWebhookOf = (link: ChatSyncChannelTarget) =>
-	Effect.gen(function* () {
-		if (link.provider !== "discord") return Option.none<DiscordWebhookTarget>()
-		const identity = outboundIdentityOf(link.settings)
-		if (!isWebhookStrategyEnabled(identity)) return Option.none<DiscordWebhookTarget>()
-		const permission = webhookPermissionOf(link.settings)
-		if (permission?.status === "denied") return Option.none<DiscordWebhookTarget>()
-		const current = discordWebhookConfigOf(identity)
-		if (Option.isSome(current)) return Option.some<DiscordWebhookTarget>(current.value)
-
-		const transport = yield* ChatSyncTransport
-		return yield* transport.discordWebhooks.create(link.externalChannelId).pipe(
-			Effect.flatMap((created) =>
-				persistLinkSettings(
-					link,
-					withOutboundIdentity(
-						link.settings,
-						{
-							enabled: true,
-							strategy: "webhook",
-							providers: {
-								...identity.providers,
-								discord: { kind: "discord.webhook", ...created },
-							},
-						} as ChatSyncChannelLink.OutboundIdentitySettings,
-						webhookPermission("allowed"),
-					),
-				).pipe(Effect.as(Option.some(created))),
-			),
-			Effect.catchTag("ChatSyncProviderConfigurationError", () =>
-				Effect.succeed(Option.none<DiscordWebhookTarget>()),
-			),
-			// Discord refusing or failing the webhook leaves the bot identity; database errors propagate.
-			Effect.catchTag("ChatSyncProviderApiError", (error) =>
-				Effect.gen(function* () {
-					const settings =
-						error.status === 403
-							? withOutboundIdentity(
-									link.settings,
-									{ ...identity, strategy: "fallback_bot" },
-									webhookPermission(
-										"denied",
-										`Webhook create forbidden (HTTP ${error.status})`,
-									),
-								)
-							: withOutboundIdentity(
-									link.settings,
-									identity,
-									webhookPermission("unknown", error.message),
-								)
-					yield* persistLinkSettings(link, settings)
-					yield* Effect.logWarning(
-						"Failed to provision Discord webhook identity",
-						Cause.fail(error),
-						{
-							externalChannelId: link.externalChannelId,
-						},
-					)
-					return Option.none<DiscordWebhookTarget>()
-				}),
-			),
-		)
-	})
-
-/** Run `viaWebhook` when the link has a webhook, falling back to the bot when Discord fails it. */
-const withWebhookFallback = <A, E, R, E2, R2>(
-	link: ChatSyncChannelTarget,
-	viaWebhook: (webhook: DiscordWebhookTarget) => Effect.Effect<A, E | ChatSyncProviderApiError, R>,
-	viaBot: Effect.Effect<A, E2, R2>,
-) =>
-	Effect.gen(function* () {
-		const webhook = yield* discordWebhookOf(link)
-		if (Option.isNone(webhook)) return yield* viaBot
-		const sent = yield* viaWebhook(webhook.value).pipe(
-			Effect.map(Option.some),
-			Effect.catchTag("ChatSyncProviderApiError", (error) =>
-				Effect.logWarning(
-					"Discord webhook call failed; falling back to the bot",
-					Cause.fail(error),
-				).pipe(Effect.as(Option.none<A>())),
-			),
-		)
-		return Option.isSome(sent) ? sent.value : yield* viaBot
 	})
 
 const findMessage = (id: string) =>
@@ -340,10 +248,41 @@ const deliver = (
 ) =>
 	Effect.gen(function* () {
 		const db = yield* Database.Database
-		const transport = yield* ChatSyncTransport
-		const adapter = yield* transport.adapter(link.provider)
+		const providers = yield* ChatSyncProviders
+		const { definition, client } = yield* providers.get(link.provider)
 		const channelLinkId = link.channelLinkId
-		const target = { externalChannelId: link.externalChannelId }
+		/** The message's uploaded files, as public links (`S3_PUBLIC_URL`). */
+		const attachmentsOf = (messageId: MessageId) =>
+			Effect.gen(function* () {
+				const rows = yield* db.run(
+					SQLite.from(schema.attachmentsTable)
+						.select("id", "fileName", "fileSize")
+						.where(($) => [
+							$.messageId.eq(messageId),
+							$.status.eq("complete"),
+							$.deletedAt.isNull(),
+						])
+						.orderBy(($) => [
+							[$.uploadedAt, "asc"],
+							[$.id, "asc"],
+						]),
+				)
+				if (rows.length === 0) return []
+				if (Option.isNone(providers.attachmentPublicUrlBase)) {
+					return yield* new ChatSyncProviderConfigurationError({
+						provider: link.provider,
+						message: "S3_PUBLIC_URL is required for syncing message attachments",
+					})
+				}
+				const base = providers.attachmentPublicUrlBase.value.replace(/\/+$/, "")
+				return rows.map((row) => ({ ...row, publicUrl: `${base}/${row.id}` }))
+			})
+		const sql = yield* SqlClient
+		const context: ChatSyncLinkContext = {
+			link,
+			saveSettings: (settings) =>
+				persistLinkSettings(link, settings).pipe(Effect.provideService(SqlClient, sql)),
+		}
 
 		switch (event._tag) {
 			case "MessageCreate": {
@@ -364,57 +303,13 @@ const deliver = (
 				const replyToExternalMessageId = Option.getOrUndefined(
 					Option.map(reply, (row) => row.externalMessageId as ExternalMessageId),
 				)
-				const attachmentRows = yield* db.run(
-					SQLite.from(schema.attachmentsTable)
-						.select("id", "fileName", "fileSize")
-						.where(($) => [
-							$.messageId.eq(event.messageId),
-							$.status.eq("complete"),
-							$.deletedAt.isNull(),
-						])
-						.orderBy(($) => [
-							[$.uploadedAt, "asc"],
-							[$.id, "asc"],
-						]),
-				)
-				if (attachmentRows.length > 0 && Option.isNone(transport.attachmentPublicUrlBase)) {
-					return yield* new ChatSyncProviderConfigurationError({
-						provider: link.provider,
-						message: "S3_PUBLIC_URL is required for syncing message attachments",
-					})
-				}
-				const base = Option.getOrElse(transport.attachmentPublicUrlBase, () => "").replace(/\/+$/, "")
-				const attachments = attachmentRows.map((row) => ({ ...row, publicUrl: `${base}/${row.id}` }))
-				const content = yield* outboundContent(link, message.value.content, accounts)
-				const viaBot =
-					attachments.length > 0
-						? adapter.createMessageWithAttachments({
-								...target,
-								content,
-								attachments,
-								replyToExternalMessageId,
-							})
-						: adapter.createMessage({ ...target, content, replyToExternalMessageId })
-				const externalMessageId = yield* withWebhookFallback(
-					link,
-					(webhook) =>
-						Effect.gen(function* () {
-							const author = (yield* displayNames([message.value.authorId])).get(
-								message.value.authorId,
-							)
-							return yield* transport.discordWebhooks.execute({
-								...webhook,
-								content:
-									attachments.length > 0
-										? formatMessageContentWithAttachments({ content, attachments })
-										: content,
-								replyToExternalMessageId,
-								username: author?.name || "Discord User",
-								...(author?.avatarUrl ? { avatarUrl: author.avatarUrl } : {}),
-							})
-						}),
-					viaBot,
-				)
+				const author = (yield* displayNames([message.value.authorId])).get(message.value.authorId)
+				const externalMessageId = yield* client.postMessage(context, {
+					content: yield* outboundContent(definition, message.value.content, accounts),
+					attachments: yield* attachmentsOf(event.messageId),
+					replyToExternalMessageId,
+					author: { name: author?.name ?? "", avatarUrl: author?.avatarUrl ?? null },
+				})
 				yield* db.run(
 					SQLite.insertInto(schema.chatSyncMessageLinksTable).values({
 						channelLinkId,
@@ -436,17 +331,11 @@ const deliver = (
 				const linked = yield* findMessageLink({ channelLinkId, hazelMessageId: event.messageId })
 				if (Option.isNone(linked)) return ignored("missing_link")
 				const externalMessageId = linked.value.externalMessageId as ExternalMessageId
-				const content = yield* outboundContent(link, message.value.content, accounts)
-				yield* withWebhookFallback(
-					link,
-					(webhook) =>
-						transport.discordWebhooks.update({
-							...webhook,
-							messageId: externalMessageId,
-							content,
-						}),
-					adapter.updateMessage({ ...target, externalMessageId, content }),
-				)
+				yield* client.updateMessage(context, {
+					externalMessageId,
+					content: yield* outboundContent(definition, message.value.content, accounts),
+					attachments: yield* attachmentsOf(event.messageId),
+				})
 				yield* touchMessageLink(linked.value.id, {})
 				return synced
 			}
@@ -454,20 +343,14 @@ const deliver = (
 				const linked = yield* findMessageLink({ channelLinkId, hazelMessageId: event.messageId })
 				if (Option.isNone(linked)) return ignored("missing_link")
 				const externalMessageId = linked.value.externalMessageId as ExternalMessageId
-				yield* withWebhookFallback(
-					link,
-					(webhook) =>
-						transport.discordWebhooks.delete({ ...webhook, messageId: externalMessageId }),
-					adapter.deleteMessage({ ...target, externalMessageId }),
-				)
+				yield* client.deleteMessage(context, { externalMessageId })
 				yield* touchMessageLink(linked.value.id, { deletedAt: new Date() })
 				return synced
 			}
 			case "ReactionCreate": {
 				const linked = yield* findMessageLink({ channelLinkId, hazelMessageId: event.messageId })
 				if (Option.isNone(linked)) return ignored("missing_link")
-				yield* adapter.addReaction({
-					...target,
+				yield* client.addReaction(context, {
 					externalMessageId: linked.value.externalMessageId as ExternalMessageId,
 					emoji: event.emoji,
 				})
@@ -482,10 +365,10 @@ const deliver = (
 						.where(($) => [$.messageId.eq(event.messageId), $.emoji.eq(event.emoji)])
 						.limit(1),
 				)
-				// Discord shows one bot reaction per emoji: keep it while Hazel users still react.
+				// The provider shows one bot reaction per emoji for all of Hazel: keep it while Hazel
+				// users still react with it.
 				if (Option.isSome(remaining)) return ignored("remaining_reactions_for_emoji")
-				yield* adapter.removeReaction({
-					...target,
+				yield* client.removeReaction(context, {
 					externalMessageId: linked.value.externalMessageId as ExternalMessageId,
 					emoji: event.emoji,
 				})
@@ -497,9 +380,8 @@ const deliver = (
 				if (linked.value.externalThreadId !== null) return ignored("already_linked")
 				const message = yield* findMessage(event.messageId)
 				if (Option.isNone(message)) return ignored("missing_message")
-				const name = threadNameOf(message.value.content)
-				const externalThreadId = yield* adapter.createThread({
-					...target,
+				const name = threadNameOf(definition, message.value.content)
+				const externalThreadId = yield* client.createThread(context, {
 					externalMessageId: linked.value.externalMessageId as ExternalMessageId,
 					name,
 				})
@@ -573,9 +455,33 @@ export const deliverChatSyncOutbound = Effect.fn("ChatSync.deliverOutbound")(fun
 	})
 })
 
+/**
+ * The `chatSync.prepareLink` receiver, in the org's outbox: retried while the provider may still
+ * answer, else logged (the link stays; its first sync reports the same failure).
+ */
+export const prepareChatSyncLink = Effect.fn("ChatSync.prepareLink")(function* (payload: PrepareLinkPayload) {
+	yield* Effect.annotateCurrentSpan({
+		"chat_sync.provider": payload.provider,
+		"chat_sync.external_channel_id": payload.externalChannelId,
+	})
+	const { client } = yield* (yield* ChatSyncProviders).get(payload.provider)
+	yield* client.prepareLink(payload).pipe(
+		Effect.catch((error) =>
+			isRetryableSyncFailure(error)
+				? Effect.fail(error)
+				: Effect.logWarning("Chat sync link could not be prepared", {
+						provider: payload.provider,
+						externalChannelId: payload.externalChannelId,
+						error: error.message,
+					}),
+		),
+	)
+})
+
 export const chatSyncDeliveryReceivers = {
 	"chatSync.outbound": deliverChatSyncOutbound,
+	"chatSync.prepareLink": prepareChatSyncLink,
 } satisfies EffectReceivers<
 	typeof ChatSyncDeliveryEffects,
-	Database.Database | SqlClient | ChatSyncTransport | Directory
+	Database.Database | SqlClient | ChatSyncProviders | Directory
 >

@@ -8,7 +8,13 @@ import * as Interaction from "../../../ui/aria/interaction"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
 import * as ConfirmAction from "../../shared/confirm-action"
-import { DiscordChannel, DiscordChannels, DiscordFailure } from "../chat-sync/discord"
+import {
+	type ChatSyncProvider,
+	ExternalChannel,
+	ExternalChannels,
+	PROVIDERS,
+	ResourceFailure,
+} from "../chat-sync/providers"
 import { Connection, DeleteConnectionFailure } from "../chat-sync/model"
 
 export const SyncDirection = Schema.Literals(["both", "hazel_to_external", "external_to_hazel"])
@@ -83,14 +89,14 @@ export const Model = Schema.Struct({
 	linkMenus: Schema.Array(Menu.Model),
 	/** `AddChannelLinkModal`: open state, its queries (run once the connection is found) and form. */
 	addLinkModal: Modal.Model,
-	discordChannels: DiscordChannels.schema,
+	externalChannels: ExternalChannels.schema,
 	hazelChannels: Schema.Array(HazelChannel),
 	selectedChannel: Schema.NullOr(HazelChannel),
-	selectedDiscordChannel: Schema.NullOr(DiscordChannel),
+	selectedExternalChannel: Schema.NullOr(ExternalChannel),
 	direction: SyncDirection,
 	channelSearch: Schema.String,
-	discordChannelSearch: Schema.String,
-	focusedSearch: Schema.NullOr(Schema.Literals(["hazel", "discord"])),
+	externalChannelSearch: Schema.String,
+	focusedSearch: Schema.NullOr(Schema.Literals(["hazel", "external"])),
 	submission: Submission,
 	removeLinkConfirm: ConfirmAction.Model(LinkTarget),
 	/** Disconnecting deletes this page's connection. */
@@ -104,9 +110,9 @@ export const Message = defineMessageUnion({
 	SucceededListConnections: { organizationId: OrganizationId, connections: Schema.Array(Connection) },
 	FailedListConnections: { organizationId: OrganizationId, reason: CommonReason },
 	ClickedRetryLoadConnection: {},
-	SucceededListDiscordChannels: { guildId: Schema.String, channels: Schema.Array(DiscordChannel) },
-	FailedListDiscordChannels: { guildId: Schema.String, reason: DiscordFailure },
-	ClickedRetryListDiscordChannels: {},
+	SucceededListExternalChannels: { workspaceId: Schema.String, channels: Schema.Array(ExternalChannel) },
+	FailedListExternalChannels: { workspaceId: Schema.String, reason: ResourceFailure },
+	ClickedRetryListExternalChannels: {},
 	SucceededListChannelLinks: { version: Schema.Number, links: Schema.Array(ChannelLink) },
 	FailedListChannelLinks: { version: Schema.Number, reason: ListLinksFailure },
 	ClickedRetryListChannelLinks: {},
@@ -128,14 +134,14 @@ export const Message = defineMessageUnion({
 	GotAddLinkModalMessage: { message: Modal.Message },
 	UpdatedHazelChannels: { channels: Schema.Array(HazelChannel) },
 	ChangedChannelSearch: { value: Schema.String },
-	ChangedDiscordChannelSearch: { value: Schema.String },
-	FocusedSearch: { search: Schema.Literals(["hazel", "discord"]) },
+	ChangedExternalChannelSearch: { value: Schema.String },
+	FocusedSearch: { search: Schema.Literals(["hazel", "external"]) },
 	BlurredSearch: {},
 	CompletedFocusChannelSearch: {},
 	ClickedHazelChannel: { channel: HazelChannel },
 	ClickedChangeHazelChannel: {},
-	ClickedDiscordChannel: { channel: DiscordChannel },
-	ClickedChangeDiscordChannel: {},
+	ClickedExternalChannel: { channel: ExternalChannel },
+	ClickedChangeExternalChannel: {},
 	ClickedDirection: { direction: SyncDirection },
 	ClickedCreateLink: {},
 	SucceededCreateLink: { successMessage: Schema.String },
@@ -152,10 +158,12 @@ export const foundConnection = (model: Model): Connection | null =>
 export const listedLinks = (model: Model): ReadonlyArray<ChannelLink> =>
 	Option.getOrElse(AsyncData.getData(model.links), () => [])
 
-export const DIRECTION_LABELS: Readonly<Record<SyncDirection, string>> = {
-	both: "Both",
-	hazel_to_external: "Hazel to Discord",
-	external_to_hazel: "Discord to Hazel",
+/** "Both", "Hazel to Slack", "Slack to Hazel". */
+export const directionLabel = (direction: SyncDirection, provider: ChatSyncProvider): string => {
+	const { name } = PROVIDERS[provider]
+	if (direction === "hazel_to_external") return `Hazel to ${name}`
+	if (direction === "external_to_hazel") return `${name} to Hazel`
+	return "Both"
 }
 
 export const ADD_LINK_MODAL_ID = "chat-sync-add-link"

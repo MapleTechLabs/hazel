@@ -4,7 +4,6 @@ import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { buttonStyles } from "~/components/ui/button.styles"
 import { type CommonReason, commonMessage, isRetryableReason } from "~/lib/error-messages"
 import { IconArrowPath, IconChevronDown, IconPlus, IconTrash, IconWarning } from "../../../icons"
-import { badge } from "../../../ui/badge"
 import { button } from "../../../ui/button"
 import { emptyState } from "../../../ui/empty-state"
 import { loader } from "../../../ui/loader"
@@ -18,11 +17,11 @@ import {
 	sectionHeaderSubheading,
 } from "../../../ui/section-header"
 import type { PageViewInputs } from "../../contract"
-import { discordLogo, slackLogo } from "./brand-icons"
 import { addConnectionModal } from "./add-connection-view"
 import { confirmDialog } from "./confirm-dialog"
 import { formatSyncedAt } from "./rpc"
 import { addMenuEntries, type Connection, Message, type Model, STATUS_CONFIG } from "./model"
+import { isChatSyncProvider, PROVIDERS } from "./providers"
 
 /** Port of `settings/chat-sync/index.tsx`. */
 
@@ -48,15 +47,7 @@ const header = (h: HtmlBuilder<Message>, actions: ReadonlyArray<Html>): Html =>
 const addMenuContent =
 	(h: HtmlBuilder<Message>) =>
 	(key: string): ReadonlyArray<Html | string> =>
-		key === "discord"
-			? [discordLogo(h, "size-5 shrink-0"), "Discord"]
-			: [
-					slackLogo(h, "size-5 shrink-0"),
-					h.span(
-						[h.Class("flex items-center gap-2")],
-						["Slack", badge(h, { intent: "secondary", size: "sm" }, ["Coming Soon"])],
-					),
-				]
+		isChatSyncProvider(key) ? [PROVIDERS[key].logo(h, "size-5 shrink-0"), PROVIDERS[key].name] : []
 
 /** `AddConnectionDropdown`: a MenuTrigger styled as a primary button. */
 const addConnectionDropdown = (
@@ -97,6 +88,7 @@ const addConnectionDropdown = (
 
 const connectionCard = (h: HtmlBuilder<Message>, connection: Connection): Html => {
 	const statusConfig = STATUS_CONFIG[connection.status]
+	const provider = PROVIDERS[connection.provider]
 	return h.keyed("div")(
 		connection.id,
 		[
@@ -124,7 +116,7 @@ const connectionCard = (h: HtmlBuilder<Message>, connection: Connection): Html =
 												"flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-black/8",
 											),
 										],
-										[discordLogo(h, "size-8")],
+										[provider.logo(h, "size-8")],
 									),
 									h.div(
 										[h.Class("flex flex-col gap-0.5")],
@@ -156,7 +148,16 @@ const connectionCard = (h: HtmlBuilder<Message>, connection: Connection): Html =
 					h.div(
 						[h.Class("flex flex-col gap-1 text-muted-fg text-xs")],
 						[
-							h.span([], ["Guild ID: ", connection.externalWorkspaceId]),
+							h.span(
+								[],
+								[
+									provider.name,
+									" · ",
+									provider.workspaceIdLabel,
+									": ",
+									connection.externalWorkspaceId,
+								],
+							),
 							...(connection.lastSyncedAtMs === null
 								? []
 								: [

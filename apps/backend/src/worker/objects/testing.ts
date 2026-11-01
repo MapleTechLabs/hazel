@@ -16,10 +16,7 @@ import { Directory } from "../../services/directory"
 import { HtmlRenderStore, HtmlRenders } from "../../services/html-renders"
 import { InviteMailer } from "../../services/invite-mailer"
 import { ThreadNamer, type ThreadNamingContext } from "../../services/thread-namer"
-import {
-	type ChatSyncCall,
-	makeRecordingChatSyncTransport,
-} from "../../services/chat-sync/chat-sync-transport"
+import { type ChatSyncCall, makeRecordingChatSyncProviders } from "../../services/chat-sync/testing"
 import { makeRpcDispatcher, type RpcDispatcherShape } from "../../rpc/dispatch"
 import { objectHandlersLive } from "./handlers"
 import type { InvokePrincipal } from "./principal"
@@ -70,6 +67,8 @@ export interface TestObjects {
 	readonly stubs: Context.Service.Shape<typeof ObjectStubs>
 	/** Provider calls chat-sync deliveries made (`chatSync.outbound`), in order. */
 	readonly chatSyncCalls: Array<ChatSyncCall>
+	/** External channels new chat-sync links prepared (`chatSync.prepareLink`). */
+	readonly chatSyncPrepared: Array<string>
 	/** Make provider calls fail with `status` (retryable for 429/5xx), or succeed again (undefined). */
 	readonly setChatSyncFailure: (status: number | undefined) => void
 	/** What `ThreadNamer` was asked to name, in order. */
@@ -165,7 +164,7 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 			}),
 		)
 
-		const chatSync = makeRecordingChatSyncTransport({ attachmentPublicUrlBase: "https://files.test" })
+		const chatSync = makeRecordingChatSyncProviders({ attachmentPublicUrlBase: "https://files.test" })
 		// The real service over an in-memory bucket.
 		const bucket = new Map<string, string>()
 		const htmlRenderStore = Layer.succeed(HtmlRenderStore, {
@@ -276,6 +275,7 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 			},
 			stubs,
 			chatSyncCalls: chatSync.calls,
+			chatSyncPrepared: chatSync.prepared,
 			setChatSyncFailure: (status) => {
 				chatSync.control.fail = status
 			},

@@ -5,7 +5,7 @@ import { describe, expect, test } from "vitest"
 import { PageOutMessage } from "../../out-message"
 import { init, routeChanged } from "./update"
 
-/** The Discord link callback comes in through the route's typed search params. */
+/** The Discord and Slack link callback comes in through the route's typed search params. */
 
 const routeWith = (search: { status?: string; provider?: string; errorCode?: string }) => ({
 	_tag: "MySettingsLinkedAccounts" as const,
@@ -51,6 +51,22 @@ describe("linked accounts callback", () => {
 				title: "Failed to link Discord account",
 				description: "Please try again.",
 			},
+		})
+	})
+
+	test("a Slack callback names Slack", () => {
+		const page = init(
+			routeWith({ status: "error", provider: "slack", errorCode: "token_exchange_failed" }),
+		)
+		expect(page.outMessage).toMatchObject({
+			toast: {
+				intent: "error",
+				title: "Failed to link Slack account",
+				description: "Could not authenticate with Slack. Please try again.",
+			},
+		})
+		expect(init(routeWith({ status: "success", provider: "slack" })).outMessage).toMatchObject({
+			toast: { intent: "success", title: "Slack account linked" },
 		})
 	})
 

@@ -6,9 +6,13 @@ import {
 	GitHubWebhookResponse,
 	InvalidGitHubWebhookPayload,
 	InvalidGitHubWebhookSignature,
+	InvalidSlackWebhookSignature,
+	SlackWebhookResponse,
 } from "@hazel/domain/http"
-import { Config, Effect, Option, pipe, Redacted, Schema } from "effect"
+import { Slack } from "@hazel/integrations"
+import { Cause, Config, Effect, Option, pipe, Redacted, Schema } from "effect"
 import { HazelApi } from "../api"
+import { dispatchSlackEvent } from "../services/chat-sync/providers/slack/events"
 import { Directory } from "../services/directory"
 import { callObject } from "../worker/objects/calls"
 import { orgTarget } from "../worker/objects/kinds"
@@ -61,18 +65,16 @@ export const dispatchGitHubEvent = Effect.fn("GitHubWebhook.dispatch")(
 		const { eventType, deliveryId, payload } = input
 		const directory = yield* Directory
 		const orgOf = (installationId: number) =>
-			directory
-				.integration("github", String(installationId))
-				.pipe(
-					Effect.tap((row) =>
-						Option.isNone(row)
-							? Effect.logInfo("GitHub webhook for an unknown installation", {
-									deliveryId,
-									installationId,
-								})
-							: Effect.annotateCurrentSpan({ "organization.id": row.value.organizationId }),
-					),
-				)
+			directory.integration("github", String(installationId)).pipe(
+				Effect.tap((row) =>
+					Option.isNone(row)
+						? Effect.logInfo("GitHub webhook for an unknown installation", {
+								deliveryId,
+								installationId,
+							})
+						: Effect.annotateCurrentSpan({ "organization.id": row.value.organizationId }),
+				),
+			)
 		yield* Effect.annotateCurrentSpan({
 			"github.event_type": eventType,
 			"github.delivery_id": deliveryId,
@@ -127,105 +129,158 @@ export const dispatchGitHubEvent = Effect.fn("GitHubWebhook.dispatch")(
 	}),
 )
 
-export const HttpWebhookLive = HttpApiBuilder.group(HazelApi, "webhooks", (handlers) =>
-	handlers.handle("github", (_args) =>
-		Effect.gen(function* () {
-			const request = yield* HttpServerRequest.HttpServerRequest
-
-			const eventType = request.headers["x-github-event"]
-			const signature = request.headers["x-hub-signature-256"]
-			const deliveryId = request.headers["x-github-delivery"]
-
-			if (!eventType || !deliveryId) {
-				return yield* Effect.fail(
-					new InvalidGitHubWebhookSignature({
-						message: "Missing required GitHub webhook headers",
-					}),
-				)
-			}
-
-			const rawBody = yield* pipe(
-				request.text,
-				Effect.mapError(
-					() =>
-						new InvalidGitHubWebhookSignature({
-							message: "Invalid request body",
-						}),
-				),
-			)
-
-			const skipSignatureVerification = yield* Config.Boolean("GITHUB_WEBHOOK_SKIP_SIGNATURE").pipe(
-				Config.withDefault(false),
-			)
-
-			const webhookSecret = yield* Effect.gen(function* () {
-				return yield* Config.Redacted("GITHUB_WEBHOOK_SECRET")
-			}).pipe(
-				Effect.catchTag("ConfigError", () =>
-					skipSignatureVerification
-						? Effect.succeed(Redacted.make(""))
-						: Effect.fail(
-								new InvalidGitHubWebhookSignature({
-									message:
-										"GITHUB_WEBHOOK_SECRET not configured. Set GITHUB_WEBHOOK_SKIP_SIGNATURE=true to disable in development.",
-								}),
+/**
+ * Slack's Events API: verify the delivery against `SLACK_SIGNING_SECRET` (on the raw body),
+ * answer the URL check, then apply the event (`providers/slack/events.ts`). A failure answers 500,
+ * and Slack redelivers the same `event_id`, which chat sync applies once.
+ */
+export const handleSlackDelivery = Effect.gen(function* () {
+	const request = yield* HttpServerRequest.HttpServerRequest
+	const invalid = (message: string) => new InvalidSlackWebhookSignature({ message })
+	const rawBody = yield* request.text.pipe(Effect.mapError(() => invalid("Invalid request body")))
+	const signingSecret = yield* Config.Redacted("SLACK_SIGNING_SECRET").pipe(
+		Effect.tapError(() => Effect.logError("SLACK_SIGNING_SECRET is not configured")),
+		Effect.mapError(
+			(cause) => new InternalServerError({ message: "Slack events are not configured", cause }),
+		),
+	)
+	const verified = Slack.verifySlackSignature({
+		signingSecret: Redacted.value(signingSecret),
+		timestamp: request.headers["x-slack-request-timestamp"],
+		signature: request.headers["x-slack-signature"],
+		rawBody,
+		nowSeconds: Math.floor(Date.now() / 1000),
+	})
+	if (!verified) {
+		yield* Effect.logWarning("Invalid Slack request signature")
+		return yield* invalid("Invalid request signature")
+	}
+	const body = yield* decodeJson(rawBody).pipe(Effect.mapError(() => invalid("Body is not JSON")))
+	const envelope = Slack.decodeSlackEnvelope(body)
+	if (Option.isNone(envelope)) return new SlackWebhookResponse({ ok: true })
+	switch (envelope.value._tag) {
+		case "UrlVerification":
+			return new SlackWebhookResponse({ ok: true, challenge: envelope.value.challenge })
+		case "Other":
+			yield* Effect.logInfo("Slack delivery skipped", { type: envelope.value.type })
+			return new SlackWebhookResponse({ ok: true })
+		case "EventCallback":
+			yield* dispatchSlackEvent(envelope.value).pipe(
+				Effect.catchCause((cause) =>
+					Cause.hasInterruptsOnly(cause)
+						? Effect.interrupt
+						: Effect.logError("Slack event failed", cause).pipe(
+								Effect.andThen(
+									Effect.fail(new InternalServerError({ message: "Slack event failed" })),
+								),
 							),
 				),
 			)
+			return new SlackWebhookResponse({ ok: true })
+	}
+}).pipe(Effect.withSpan("SlackWebhook.delivery"))
 
-			const secretValue = Redacted.value(webhookSecret)
-			if (secretValue) {
-				if (!signature) {
-					yield* Effect.logWarning("Missing GitHub webhook signature header")
+export const HttpWebhookLive = HttpApiBuilder.group(HazelApi, "webhooks", (handlers) =>
+	handlers
+		.handle("slack", () => handleSlackDelivery)
+		.handle("github", (_args) =>
+			Effect.gen(function* () {
+				const request = yield* HttpServerRequest.HttpServerRequest
+
+				const eventType = request.headers["x-github-event"]
+				const signature = request.headers["x-hub-signature-256"]
+				const deliveryId = request.headers["x-github-delivery"]
+
+				if (!eventType || !deliveryId) {
 					return yield* Effect.fail(
 						new InvalidGitHubWebhookSignature({
-							message: "Missing x-hub-signature-256 header",
+							message: "Missing required GitHub webhook headers",
 						}),
 					)
 				}
 
-				const bodyHmac = createHmac("sha256", secretValue)
-				bodyHmac.update(rawBody)
-				const expectedSignature = `sha256=${bodyHmac.digest("hex")}`
+				const rawBody = yield* pipe(
+					request.text,
+					Effect.mapError(
+						() =>
+							new InvalidGitHubWebhookSignature({
+								message: "Invalid request body",
+							}),
+					),
+				)
 
-				const signatureBuffer = Buffer.from(signature)
-				const expectedBuffer = Buffer.from(expectedSignature)
+				const skipSignatureVerification = yield* Config.Boolean("GITHUB_WEBHOOK_SKIP_SIGNATURE").pipe(
+					Config.withDefault(false),
+				)
 
-				if (
-					signatureBuffer.length !== expectedBuffer.length ||
-					!timingSafeEqual(signatureBuffer, expectedBuffer)
-				) {
-					yield* Effect.logWarning("Invalid GitHub webhook signature", {
-						eventType,
-						deliveryId,
-					})
-					return yield* Effect.fail(
-						new InvalidGitHubWebhookSignature({
-							message: "Invalid webhook signature",
-						}),
-					)
+				const webhookSecret = yield* Effect.gen(function* () {
+					return yield* Config.Redacted("GITHUB_WEBHOOK_SECRET")
+				}).pipe(
+					Effect.catchTag("ConfigError", () =>
+						skipSignatureVerification
+							? Effect.succeed(Redacted.make(""))
+							: Effect.fail(
+									new InvalidGitHubWebhookSignature({
+										message:
+											"GITHUB_WEBHOOK_SECRET not configured. Set GITHUB_WEBHOOK_SKIP_SIGNATURE=true to disable in development.",
+									}),
+								),
+					),
+				)
+
+				const secretValue = Redacted.value(webhookSecret)
+				if (secretValue) {
+					if (!signature) {
+						yield* Effect.logWarning("Missing GitHub webhook signature header")
+						return yield* Effect.fail(
+							new InvalidGitHubWebhookSignature({
+								message: "Missing x-hub-signature-256 header",
+							}),
+						)
+					}
+
+					const bodyHmac = createHmac("sha256", secretValue)
+					bodyHmac.update(rawBody)
+					const expectedSignature = `sha256=${bodyHmac.digest("hex")}`
+
+					const signatureBuffer = Buffer.from(signature)
+					const expectedBuffer = Buffer.from(expectedSignature)
+
+					if (
+						signatureBuffer.length !== expectedBuffer.length ||
+						!timingSafeEqual(signatureBuffer, expectedBuffer)
+					) {
+						yield* Effect.logWarning("Invalid GitHub webhook signature", {
+							eventType,
+							deliveryId,
+						})
+						return yield* Effect.fail(
+							new InvalidGitHubWebhookSignature({
+								message: "Invalid webhook signature",
+							}),
+						)
+					}
 				}
-			}
 
-			const payload = yield* decodeJson(rawBody).pipe(
-				Effect.mapError(
-					() => new InvalidGitHubWebhookPayload({ message: "Webhook body is not valid JSON" }),
+				const payload = yield* decodeJson(rawBody).pipe(
+					Effect.mapError(
+						() => new InvalidGitHubWebhookPayload({ message: "Webhook body is not valid JSON" }),
+					),
+				)
+
+				const logged = decodeLoggedFields(payload)
+				yield* Effect.logInfo("Received GitHub webhook", {
+					eventType,
+					deliveryId,
+					repository: Option.getOrUndefined(logged)?.repository?.full_name,
+					action: Option.getOrUndefined(logged)?.action,
+				})
+
+				return yield* dispatchGitHubEvent({ eventType, deliveryId, payload })
+			}).pipe(
+				Effect.catchTag("ConfigError", (cause) =>
+					Effect.fail(new InternalServerError({ message: "Missing configuration", cause })),
 				),
-			)
-
-			const logged = decodeLoggedFields(payload)
-			yield* Effect.logInfo("Received GitHub webhook", {
-				eventType,
-				deliveryId,
-				repository: Option.getOrUndefined(logged)?.repository?.full_name,
-				action: Option.getOrUndefined(logged)?.action,
-			})
-
-			return yield* dispatchGitHubEvent({ eventType, deliveryId, payload })
-		}).pipe(
-			Effect.catchTag("ConfigError", (cause) =>
-				Effect.fail(new InternalServerError({ message: "Missing configuration", cause })),
 			),
 		),
-	),
 )

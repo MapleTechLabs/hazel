@@ -11,6 +11,7 @@ import type {
 	ChannelId,
 	ExternalChannelId,
 	ExternalMessageId,
+	ExternalThreadId,
 	ExternalUserId,
 	MessageId,
 	OrganizationId,
@@ -29,8 +30,8 @@ import { ObjectStubs } from "../../worker/objects/protocol"
 import { makeTestObjects, type TestObject, type TestObjects } from "../../worker/objects/testing"
 import { Directory } from "../directory"
 import { readChatSyncLinks } from "./chat-sync-channel"
-import { routeDiscordInbound } from "./discord-gateway-service"
-import { createDiscordGatewayDispatchHandlers, type DiscordInbound } from "./discord-gateway-shared"
+import { type ChatSyncInbound, routeChatSyncInbound } from "./chat-sync-inbound"
+import { createDiscordGatewayDispatchHandlers } from "./providers/discord/gateway-dispatch"
 
 const uuid = () => crypto.randomUUID()
 const GUILD = "111111111111111111"
@@ -74,7 +75,7 @@ interface World {
 	readonly syncConnectionId: SyncConnectionId
 	readonly channelLinkId: SyncChannelLinkId
 	/** Route a Discord event the way the gateway object does. */
-	readonly inbound: (event: DiscordInbound) => Effect.Effect<void>
+	readonly inbound: (event: ChatSyncInbound) => Effect.Effect<void>
 	readonly index: () => Effect.Effect<
 		ReadonlyArray<{ externalChannelId: string | null; channelId: string | null }>
 	>
@@ -148,8 +149,8 @@ const makeWorld = Effect.gen(function* () {
 	)) as { data: { id: SyncChannelLinkId } }
 
 	const stubs = Layer.succeed(ObjectStubs, objects.stubs)
-	const inbound = (event: DiscordInbound) =>
-		routeDiscordInbound(event).pipe(
+	const inbound = (event: ChatSyncInbound) =>
+		routeChatSyncInbound(event).pipe(
 			Effect.provide(stubs),
 			Effect.provideContext(objects.directory),
 			Effect.orDie,
@@ -181,7 +182,9 @@ const discordCreate = (
 	messageId: string,
 	content: string,
 	authorId = "333333333333333333",
-): DiscordInbound => ({
+): ChatSyncInbound => ({
+	provider: "discord",
+	externalWorkspaceIds: [GUILD],
 	externalChannelId: DISCORD_CHANNEL,
 	dedupeKey: `discord:gateway:create:${messageId}`,
 	author: { externalUserId: authorId as ExternalUserId, displayName: "Dana Discord", avatarUrl: null },
@@ -314,7 +317,9 @@ describe("chat sync on the objects", () => {
 				const world = yield* makeWorld
 				const externalMessageId = "444444444444444442" as ExternalMessageId
 				yield* world.inbound(discordCreate(externalMessageId, "original"))
-				const update: DiscordInbound = {
+				const update: ChatSyncInbound = {
+					provider: "discord",
+					externalWorkspaceIds: [GUILD],
 					externalChannelId: DISCORD_CHANNEL,
 					dedupeKey: `discord:gateway:update:${externalMessageId}:v1`,
 					author: null,
@@ -335,7 +340,9 @@ describe("chat sync on the objects", () => {
 					displayName: "Rae",
 					avatarUrl: null,
 				}
-				const reaction = (tag: "ReactionAdd" | "ReactionRemove"): DiscordInbound => ({
+				const reaction = (tag: "ReactionAdd" | "ReactionRemove"): ChatSyncInbound => ({
+					provider: "discord",
+					externalWorkspaceIds: [GUILD],
 					externalChannelId: DISCORD_CHANNEL,
 					dedupeKey: `discord:gateway:reaction:${tag}:${externalMessageId}:${reactor.externalUserId}:🔥`,
 					author: reactor,
@@ -348,6 +355,8 @@ describe("chat sync on the objects", () => {
 				expect(rows(world.channel, `SELECT id FROM message_reactions`)).toHaveLength(0)
 
 				yield* world.inbound({
+					provider: "discord",
+					externalWorkspaceIds: [GUILD],
 					externalChannelId: DISCORD_CHANNEL,
 					dedupeKey: `discord:gateway:delete:${externalMessageId}`,
 					author: null,
@@ -581,6 +590,132 @@ describe("chat sync on the objects", () => {
 					owner_id: "777777777777777777",
 				})
 				expect(ingested).toEqual([])
+			}),
+		))
+
+	it("inbound mentions become Hazel mentions: a linked account, a known shadow, else the name", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				yield* Effect.provide(
+					callObject(ConnectIntegrationCall, orgTarget(world.orgId), {
+						provider: "discord",
+						userId: world.owner,
+						connectedBy: world.owner,
+						externalAccountId: "666666666666666666",
+						externalAccountName: "olive",
+						settings: null,
+						metadata: null,
+						tokens: { accessToken: "token", refreshToken: null, expiresAt: null, scope: null },
+					}),
+					Layer.succeed(ObjectStubs, world.objects.stubs),
+				).pipe(Effect.orDie)
+				// Dana writes once, so the org knows her shadow.
+				yield* world.inbound(discordCreate("444444444444444450", "hello", "333333333333333333"))
+				const dana = rows<{ authorId: string }>(world.channel, `SELECT authorId FROM messages`)[0]!
+					.authorId
+
+				yield* world.inbound({
+					...discordCreate(
+						"444444444444444451",
+						"<@666666666666666666> and <@!333333333333333333> meet <@777777777777777777> or <@888888888888888888>",
+						"555555555555555555",
+					),
+					event: {
+						_tag: "MessageCreate",
+						externalMessageId: "444444444444444451" as ExternalMessageId,
+						externalWebhookId: null,
+						content:
+							"<@666666666666666666> and <@!333333333333333333> meet <@777777777777777777> or <@888888888888888888>",
+						externalReplyToMessageId: null,
+						attachments: [],
+						mentions: [
+							{ externalUserId: "777777777777777777" as ExternalUserId, displayName: "Sam" },
+						],
+					},
+				})
+				const content = rows<{ content: string }>(
+					world.channel,
+					`SELECT content FROM messages ORDER BY createdAt DESC, rowid DESC LIMIT 1`,
+				)[0]!.content
+				expect(content).toBe(
+					`@[userId:${world.owner}] and @[userId:${dana}] meet @Sam or <@888888888888888888>`,
+				)
+			}),
+		))
+
+	it("a provider user cannot mention or broadcast to Hazel users with Hazel's own syntax", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const spoof = `hey @[directive:channel] and @[userId:${world.owner}] <@777777777777777777>`
+				yield* world.inbound({
+					...discordCreate("444444444444444470", spoof),
+					event: {
+						_tag: "MessageCreate",
+						externalMessageId: "444444444444444470" as ExternalMessageId,
+						externalWebhookId: null,
+						content: spoof,
+						externalReplyToMessageId: null,
+						attachments: [],
+						mentions: [
+							{
+								externalUserId: "777777777777777777" as ExternalUserId,
+								displayName: `[userId:${world.owner}]`,
+							},
+						],
+					},
+				})
+				const content = rows<{ content: string }>(world.channel, `SELECT content FROM messages`)[0]!
+					.content
+				expect(content).not.toMatch(/@\[(userId|directive):/)
+				expect(content).toBe(
+					`hey @\u200B[directive:channel] and @\u200B[userId:${world.owner}] @userId:${world.owner}`,
+				)
+			}),
+		))
+
+	it("a provider thread on a synced message hangs off that message, without echoing back", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const externalMessageId = "444444444444444460" as ExternalMessageId
+				yield* world.inbound(discordCreate(externalMessageId, "start here"))
+				yield* world.inbound({
+					provider: "discord",
+					externalWorkspaceIds: [GUILD],
+					externalChannelId: DISCORD_CHANNEL,
+					dedupeKey: `discord:gateway:thread:create:${externalMessageId}`,
+					author: null,
+					event: {
+						_tag: "ThreadCreate",
+						externalThreadId: externalMessageId as string as ExternalThreadId,
+						name: "Start here",
+						externalParentMessageId: externalMessageId,
+					},
+				})
+				// The org's link and the parent's attach are outbox deliveries.
+				yield* world.org.alarm
+				const threadId = rows<{ hazelChannelId: string }>(
+					world.org,
+					`SELECT hazelChannelId FROM chat_sync_channel_links WHERE externalChannelId = ?`,
+					externalMessageId,
+				)[0]!.hazelChannelId
+				expect(
+					rows<{ threadChannelId: string | null }>(
+						world.channel,
+						`SELECT threadChannelId FROM messages`,
+					),
+				).toEqual([{ threadChannelId: threadId }])
+				expect(
+					rows<{ externalThreadId: string | null }>(
+						world.channel,
+						`SELECT externalThreadId FROM chat_sync_message_links`,
+					),
+				).toEqual([{ externalThreadId: externalMessageId }])
+				// Inbound: no provider thread is created back.
+				expect(chatSyncOutbox(world.channel)).toBe(0)
+				expect(world.objects.chatSyncCalls).toEqual([])
 			}),
 		))
 

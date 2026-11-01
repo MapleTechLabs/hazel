@@ -11,12 +11,12 @@ import * as Dom from "foldkit/dom"
 import { orgOfChatSyncChannelLink, orgOfChatSyncConnection } from "~/db/routing-hints"
 import { HazelRpc } from "../../../rpc"
 import { catchCommon } from "../../../data/actions"
-import { fetchDiscordGuildChannels } from "../chat-sync/discord"
+import { ChatSyncProvider, listResource, PROVIDERS } from "../chat-sync/providers"
 import { fetchConnections } from "../chat-sync/rpc"
 import {
 	CHANNEL_SEARCH_ID,
 	type ChannelLink,
-	DIRECTION_LABELS,
+	directionLabel,
 	Message,
 	SyncDirection,
 	WebhookPermission,
@@ -32,20 +32,15 @@ export const ListChatSyncConnectionsForConnection = Command.define("ListChatSync
 		),
 })
 
-/** `AddChannelLinkModal`'s channel query for the connection's guild. */
-export const ListDiscordChannels = Command.define("ListDiscordChannels", {
-	args: { organizationId: OrganizationId, guildId: Schema.String },
-	messages: [Message.SucceededListDiscordChannels, Message.FailedListDiscordChannels],
-	execute: ({ organizationId, guildId }) =>
-		fetchDiscordGuildChannels(organizationId, guildId).pipe(
-			Effect.map((channels) => Message.SucceededListDiscordChannels({ guildId, channels })),
-			Effect.catchTags({
-				IntegrationNotConnectedForPreviewError: () =>
-					Effect.succeed(Message.FailedListDiscordChannels({ guildId, reason: "NotConnected" })),
-				IntegrationResourceError: () =>
-					Effect.succeed(Message.FailedListDiscordChannels({ guildId, reason: "ProviderError" })),
-			}),
-			catchCommon((reason) => Message.FailedListDiscordChannels({ guildId, reason })),
+/** `AddChannelLinkModal`'s channel query for the connection's workspace. */
+export const ListExternalChannels = Command.define("ListExternalChannels", {
+	args: { organizationId: OrganizationId, provider: ChatSyncProvider, workspaceId: Schema.String },
+	messages: [Message.SucceededListExternalChannels, Message.FailedListExternalChannels],
+	execute: ({ organizationId, provider, workspaceId }) =>
+		listResource(
+			PROVIDERS[provider].fetchChannels(organizationId, workspaceId),
+			(channels) => Message.SucceededListExternalChannels({ workspaceId, channels }),
+			(reason) => Message.FailedListExternalChannels({ workspaceId, reason }),
 		),
 })
 
@@ -133,17 +128,19 @@ export const RemoveChannelLink = Command.define("RemoveChannelLink", {
 export const UpdateChannelLink = Command.define("UpdateChannelLink", {
 	args: {
 		syncChannelLinkId: SyncChannelLinkId,
+		/** Names the platform in the direction's toast. */
+		provider: ChatSyncProvider,
 		isActive: Schema.optional(Schema.Boolean),
 		direction: Schema.optional(SyncDirection),
 	},
 	messages: [Message.SucceededUpdateLink, Message.FailedUpdateLink],
-	execute: ({ syncChannelLinkId, isActive, direction }) => {
+	execute: ({ syncChannelLinkId, provider, isActive, direction }) => {
 		const successMessage =
 			direction === undefined
 				? isActive
 					? "Channel link resumed"
 					: "Channel link paused"
-				: `Sync direction updated to ${DIRECTION_LABELS[direction]}`
+				: `Sync direction updated to ${directionLabel(direction, provider)}`
 		const organizationId = orgOfChatSyncChannelLink(syncChannelLinkId)
 		return HazelRpc.use((rpc) =>
 			rpc(
