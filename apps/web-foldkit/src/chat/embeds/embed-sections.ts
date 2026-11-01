@@ -148,10 +148,15 @@ export const embedImageView = <M>(
 		[h.Class("px-3 pt-1 pb-3 first:pt-3")],
 		[
 			href !== undefined
-				? externalLink(
-						h,
-						href,
-						"block w-fit max-w-full rounded-md transition-opacity hover:opacity-90",
+				? h.a(
+						[
+							h.Class("block w-fit max-w-full rounded-md transition-opacity hover:opacity-90"),
+							h.Href(href),
+							h.Attribute("rel", "noopener noreferrer"),
+							h.Attribute("target", "_blank"),
+							// The image is decorative (`alt=""`), so the link names where it goes.
+							h.AriaLabel(`Open ${hostOf(href)}`),
+						],
 						[img],
 					)
 				: onOpen === undefined
@@ -169,6 +174,15 @@ export const embedImageView = <M>(
 						),
 		],
 	)
+}
+
+/** A link's host for its label (`URL.canParse` is newer than the Safari 14 the app builds for). */
+const hostOf = (href: string) => {
+	try {
+		return new URL(href).host
+	} catch {
+		return href
+	}
 }
 
 const footerTimeFormat = new Intl.DateTimeFormat("en", {
