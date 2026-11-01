@@ -1,4 +1,4 @@
-import type * as Cloudflare from "alchemy/Cloudflare"
+import type * as Cloudflare from "@alchemy.run/cloudflare"
 import { Stage } from "alchemy/Stage"
 import * as Context from "effect/Context"
 import * as Effect from "effect/Effect"

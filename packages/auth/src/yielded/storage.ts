@@ -6,7 +6,9 @@ import {
 } from "@yielded/auth-persistence"
 import * as Adapter from "@yielded/auth-persistence/Adapter"
 import * as Mapping from "@yielded/auth-persistence/OAuthPersistence"
-import { Cause, Context, Crypto, Effect, Layer, Schema } from "effect"
+import { Cause, Context, Effect, Layer, Result, Schema } from "effect"
+import * as Digest from "effect/crypto/Digest"
+import * as SecureRandom from "effect/crypto/SecureRandom"
 import { SqlClient } from "effect/sql"
 
 import { HazelAuth, requirement } from "./auth.ts"
@@ -207,10 +209,6 @@ const linkByVerifiedEmail = (intent: OAuth.OAuthRegistrationIntent) =>
 				Effect.logError("[auth] verified-email linking failed", Cause.fail(cause)).pipe(
 					Effect.andThen(Effect.fail(OAuth.OAuthUnavailable.make({}))),
 				),
-			PlatformError: (cause) =>
-				Effect.logError("[auth] verified-email linking failed", Cause.fail(cause)).pipe(
-					Effect.andThen(Effect.fail(OAuth.OAuthUnavailable.make({}))),
-				),
 		}),
 	)
 
@@ -318,14 +316,16 @@ const makeAccountsMapping = (
 /** The unique keys each mapping declares exist on the physical tables (what the facade checks). */
 const validateMappings = (mappings: ReadonlyArray<unknown>) =>
 	Effect.gen(function* () {
-		const plans = yield* Effect.try({
-			try: () =>
-				mappings.flatMap((mapping) =>
-					Adapter.storageKeyPlans(mapping, (table) => (table as Table).columns),
-				),
-			catch: (cause) =>
-				PersistenceConfigurationError.make({ reason: `Invalid OAuth mapping: ${cause}` }),
-		})
+		const plans: Array<{ readonly table: object; readonly keys: ReadonlyArray<string> }> = []
+		for (const mapping of mappings) {
+			const planned = Adapter.storageKeyPlans(mapping, (table) => Result.succeed((table as Table).columns))
+			if (Result.isFailure(planned)) {
+				return yield* PersistenceConfigurationError.make({
+					reason: `Invalid OAuth mapping: ${planned.failure}`,
+				})
+			}
+			plans.push(...planned.success)
+		}
 		yield* Adapter.validateStorageBatch(
 			"sqlite",
 			plans.map(({ table, keys }) => ({ table: describe(table as Table), required: [keys] })),
@@ -334,18 +334,13 @@ const validateMappings = (mappings: ReadonlyArray<unknown>) =>
 
 export const OAuthStorageLive = Layer.effectContext(
 	Effect.gen(function* () {
-		const crypto = yield* Crypto.Crypto
+		const digest = yield* Digest.Digest
+		const random = yield* SecureRandom.SecureRandom
 		const sqlClient = yield* SqlClient.SqlClient
 		const tables = Adapter.makeNativeSqlTables(sqlClient)
 		const batch = batchCommit(sqlClient)
 
-		const uuid = crypto
-			.randomUUIDv4()
-			.pipe(
-				Effect.mapError((cause) =>
-					PersistenceMappingError.make({ operation: "hazel.allocate", cause }),
-				),
-			)
+		const uuid = random.uuidV4()
 		const registrationMapping = makeRegistrationMapping(uuid)
 		const accountsMapping = makeAccountsMapping(uuid)
 
@@ -386,7 +381,8 @@ export const OAuthStorageLive = Layer.effectContext(
 							Effect.tap(() =>
 								linkByVerifiedEmail(input.intent).pipe(
 									Effect.provideService(SqlClient.SqlClient, sqlClient),
-									Effect.provideService(Crypto.Crypto, crypto),
+									Effect.provideService(Digest.Digest, digest),
+									Effect.provideService(SecureRandom.SecureRandom, random),
 								),
 							),
 						),

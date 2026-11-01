@@ -2,8 +2,7 @@ import { Auth, Http, OAuth, Operations, Passkey } from "@yielded/auth"
 import * as GitHub from "@yielded/auth/GitHub"
 import * as Google from "@yielded/auth/Google"
 import * as SimpleWebAuthn from "@yielded/auth-simplewebauthn/Server"
-import * as PortableCrypto from "@yielded/crypto/Portable"
-import * as WebCrypto from "@yielded/crypto/WebCrypto"
+import * as WebCrypto from "@yielded/auth/WebCrypto"
 import { Effect, Layer, Option, type Redacted, Schema } from "effect"
 import { SqlClient } from "effect/sql"
 
@@ -13,13 +12,10 @@ import { ActionPoliciesLive } from "./policy.ts"
 import { OAuthStorageLive, Persistence, storage } from "./storage.ts"
 
 /**
- * WebCrypto plus the library's pure-JS XChaCha20-Poly1305 (OAuth state encryption), the
- * same on Bun and Workers. There are no passwords, so there is no KDF.
+ * `effect/crypto` on WebCrypto (randomness, digests, HMAC, encryption, signatures), the same on
+ * Bun and Workers. There are no passwords, so there is no KDF.
  */
-export const CryptoLive = Layer.merge(
-	WebCrypto.layerCryptoWeb,
-	Layer.suspend(() => PortableCrypto.layerWithoutKdf(globalThis.crypto.subtle)),
-)
+export const CryptoLive = WebCrypto.layer
 
 export interface Keyring {
 	readonly activeKeyId: string

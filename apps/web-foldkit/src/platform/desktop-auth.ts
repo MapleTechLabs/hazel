@@ -2,7 +2,7 @@ import { desktopClient } from "@hazel/auth/contract"
 import { type DesktopAuth, layerVault, makeDesktopAuth } from "@hazel/auth/desktop"
 import { getTauriCore, getTauriDeepLink, getTauriOpener } from "@hazel/desktop/bridge"
 import { BrowserLogin } from "@yielded/auth"
-import { layerCryptoWeb } from "@yielded/crypto/WebCrypto"
+import * as WebCrypto from "@yielded/auth/WebCrypto"
 import { Context, Effect, Exit, Layer, ManagedRuntime, Option, Schema, SynchronizedRef } from "effect"
 import { FetchHttpClient } from "effect/http"
 
@@ -148,7 +148,7 @@ const DesktopAuthLive = Layer.effect(
 		hostedUrl: hostedUrl(),
 	}),
 ).pipe(
-	Layer.provide(Layer.mergeAll(BrowserLive, layerVault(KeychainStore), layerCryptoWeb)),
+	Layer.provide(Layer.mergeAll(BrowserLive, layerVault(KeychainStore), WebCrypto.layer)),
 	Layer.provide(FetchHttpClient.layer),
 	// The desktop session travels in headers: never cookies, never redirects.
 	Layer.provide(Layer.succeed(FetchHttpClient.RequestInit, { credentials: "omit", redirect: "error" })),

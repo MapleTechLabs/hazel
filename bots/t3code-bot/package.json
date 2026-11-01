@@ -10,6 +10,7 @@
 		"test": "vitest run"
 	},
 	"dependencies": {
+		"@alchemy.run/cloudflare": "catalog:alchemy",
 		"@hazel-chat/bot-sdk": "workspace:*",
 		"@hazel/domain": "workspace:*",
 		"@hazel/infra": "workspace:*",

@@ -3,7 +3,7 @@
  * which builds the SSR Worker and client assets in one `vite build`.
  */
 import { HazelStack, resolveWorkerName } from "@hazel/infra/cloudflare"
-import * as Cloudflare from "alchemy/Cloudflare"
+import * as Cloudflare from "@alchemy.run/cloudflare"
 import { Effect } from "effect"
 
 const props = Effect.gen(function* () {

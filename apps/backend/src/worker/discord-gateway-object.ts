@@ -9,7 +9,7 @@
  * Events are routed through the directory's `chat_sync_index` to the `OrgObject`s
  * (`services/chat-sync/providers/discord/gateway-service.ts`).
  */
-import * as Cloudflare from "alchemy/Cloudflare"
+import * as Cloudflare from "@alchemy.run/cloudflare"
 import { RuntimeContext } from "alchemy/RuntimeContext"
 import { Context, Effect, Layer, Option, Ref } from "effect"
 import * as Socket from "effect/socket/Socket"

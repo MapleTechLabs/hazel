@@ -19,6 +19,7 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@alchemy.run/cloudflare": "catalog:alchemy",
 		"@maple-dev/alchemy": "catalog:alchemy",
 		"alchemy": "catalog:alchemy",
 		"effect": "catalog:effect"

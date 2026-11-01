@@ -3,7 +3,7 @@
  * and the fetch handler that runs it.
  */
 import { bridgeHandler, forIsolate, WorkerPlatformLive } from "@hazel/infra/worker-http"
-import type * as Cloudflare from "alchemy/Cloudflare"
+import type * as Cloudflare from "@alchemy.run/cloudflare"
 import type { HttpEffect } from "alchemy/Http"
 import { type Context, Effect, Layer } from "effect"
 import { FetchHttpClient, HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"

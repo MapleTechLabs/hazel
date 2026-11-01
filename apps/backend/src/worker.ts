@@ -9,7 +9,7 @@ import { HazelStack, hazelWorkerProps, stageProps } from "@hazel/infra/cloudflar
 import { cachedRecoverable } from "@hazel/infra/cached-recoverable"
 import { hazelTelemetry } from "@hazel/infra/maple"
 import { isolateContext } from "@hazel/infra/worker-http"
-import * as Cloudflare from "alchemy/Cloudflare"
+import * as Cloudflare from "@alchemy.run/cloudflare"
 import { Effect, Layer } from "effect"
 import {
 	DISCORD_GATEWAY_NAME,
