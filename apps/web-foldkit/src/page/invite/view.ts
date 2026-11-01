@@ -7,12 +7,14 @@ import { commonMessage, failureMessage, type UserErrorMessage } from "~/lib/erro
 import { AppRoute, hrefOf } from "../../route"
 import { authError, authFrame, authHeading } from "../auth/layout"
 import { isSessionLoading, type PageViewInputs, type Shared } from "../contract"
-import { initialsOf } from "../initials"
 import { Message } from "./message"
 import { type AcceptFailure, Lookup, type Model, type Preview } from "./model"
 
 const homeLink = (h: HtmlBuilder<Message>): Html =>
-	h.a([h.Class("text-fg text-sm underline underline-offset-2"), h.Href(hrefOf(AppRoute.Root()))], ["Go to Hazel"])
+	h.a(
+		[h.Class("text-fg text-sm underline underline-offset-2"), h.Href(hrefOf(AppRoute.Root()))],
+		["Go to Hazel"],
+	)
 
 const unavailable = (h: HtmlBuilder<Message>, title: string, description: string): ReadonlyArray<Html> => [
 	authHeading(h, title, description),
@@ -84,7 +86,7 @@ const invitation = (
 		: [
 				avatar(h, {
 					src: preview.organizationLogoUrl,
-					initials: initialsOf(preview.organizationName),
+					seed: preview.organizationName,
 					size: "xl",
 					className: "mb-6",
 				}),
@@ -116,9 +118,15 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 						),
 					Failed: ({ reason }) => [
 						authHeading(h, "Couldn't load the invitation", commonMessage(reason).title),
-						button(h, { intent: "outline", className: "w-full", onPress: Message.ClickedRetryPreview() }, [
-							"Try again",
-						]),
+						button(
+							h,
+							{
+								intent: "outline",
+								className: "w-full",
+								onPress: Message.ClickedRetryPreview(),
+							},
+							["Try again"],
+						),
 					],
 				}),
 	),

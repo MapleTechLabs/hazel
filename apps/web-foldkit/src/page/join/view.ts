@@ -8,7 +8,6 @@ import { button, buttonClassName } from "../../ui/button"
 import { loader } from "../../ui/loader"
 import { authShell } from "../auth/layout"
 import { isSessionLoading, type PageViewInputs, type Shared } from "../contract"
-import { initialsOf } from "../initials"
 import { animateEnter, endStyleOf } from "../onboarding/motion"
 import { Message } from "./message"
 import { Lookup, type Model, type PublicOrganization } from "./model"
@@ -102,7 +101,10 @@ const failedView = (h: HtmlBuilder<Message>, nowMs: number, reason: CommonReason
 		nowMs,
 		problemCard(h, {
 			title: "Couldn't load this workspace",
-			description: message.description === undefined ? message.title : `${message.title}. ${message.description}`,
+			description:
+				message.description === undefined
+					? message.title
+					: `${message.title}. ${message.description}`,
 			action: button(h, { intent: "secondary", onPress: Message.ClickedRetryLookup() }, ["Try again"]),
 		}),
 		{ tagline: null },
@@ -167,7 +169,7 @@ const inviteView = (h: HtmlBuilder<Message>, model: Model, org: PublicOrganizati
 		animatedCard(h, [
 			avatar(h, {
 				src: org.logoUrl,
-				initials: initialsOf(org.name),
+				seed: org.name,
 				size: "4xl",
 				className: "mb-6 shadow-lg",
 			}),

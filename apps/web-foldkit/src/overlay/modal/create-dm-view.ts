@@ -12,7 +12,7 @@ import { frameView, modalDescription, modalTitle } from "./frame"
 
 /** The create DM modal's view (`CreateDmModal` JSX). */
 
-const initialsOf = (user: OrgUser) => `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`
+const fullNameOf = (user: OrgUser) => `${user.firstName} ${user.lastName}`.trim()
 
 /** `filteredUsers`: everyone but the signed-in user, matched on first, last or full name. */
 const filteredUsers = (model: Model, currentUserId: string | undefined) => {
@@ -45,7 +45,7 @@ const userRow = (h: HtmlBuilder<Message>, user: OrgUser, isSelected: boolean): H
 					avatar(h, {
 						size: "sm",
 						src: user.avatarUrl,
-						initials: initialsOf(user),
+						seed: fullNameOf(user),
 						fallbackIcon: true,
 					}),
 					h.div(
@@ -77,16 +77,14 @@ const selectedSummary = (h: HtmlBuilder<Message>, selected: ReadonlyArray<OrgUse
 						h.div(
 							[h.Class("flex -space-x-2")],
 							[
-								...selected
-									.slice(0, 3)
-									.map((user) =>
-										avatar(h, {
-											size: "xs",
-											src: user.avatarUrl,
-											initials: initialsOf(user),
-											fallbackIcon: true,
-										}),
-									),
+								...selected.slice(0, 3).map((user) =>
+									avatar(h, {
+										size: "xs",
+										src: user.avatarUrl,
+										seed: fullNameOf(user),
+										fallbackIcon: true,
+									}),
+								),
 								...(selected.length > 3
 									? [
 											h.div(

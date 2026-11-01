@@ -60,6 +60,7 @@ const dmIcon = (h: HtmlBuilder<Message>, dm: DmChannel): Html => {
 			className: "mr-1",
 			src: first.avatarUrl,
 			alt: dmDisplayName(dm),
+			seed: `${first.firstName} ${first.lastName}`,
 			fallbackIcon: true,
 		})
 	return h.div(
@@ -70,6 +71,7 @@ const dmIcon = (h: HtmlBuilder<Message>, dm: DmChannel): Html => {
 					size: "xs",
 					src: member.avatarUrl,
 					alt: member.firstName,
+					seed: `${member.firstName} ${member.lastName}`,
 					className: "ring-[1.5px] ring-overlay",
 					fallbackIcon: true,
 				}),

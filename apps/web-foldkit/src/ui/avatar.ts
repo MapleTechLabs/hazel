@@ -15,12 +15,16 @@ export interface AvatarProps {
 	readonly isSquare?: boolean
 	readonly className?: string
 	readonly badge?: Html
-	/** Legacy `initials`: shown when there is no image and no seed. */
-	readonly initials?: string
-	/** Custom fallback shown when there is no image, seed or initials. */
+	/** Custom fallback shown when there is no image or seed. */
 	readonly placeholder?: Html
 	/** Legacy default fallback (IconCircleDottedUser) when nothing else applies; opt-in here. */
 	readonly fallbackIcon?: boolean
+}
+
+/** A `size-*` class in `className` overrides the size's own (tailwind-merge), so the grain follows it. */
+const renderedPx = (size: AvatarSize, className: string | undefined): number => {
+	const override = className?.match(/(?:^|\s)size-(\d+(?:\.5)?)(?=\s|$)/)?.[1]
+	return override === undefined ? styles[size].px : Number(override) * 4
 }
 
 export const avatar = <Message>(h: HtmlBuilder<Message>, props: AvatarProps): Html => {
@@ -42,16 +46,14 @@ export const avatar = <Message>(h: HtmlBuilder<Message>, props: AvatarProps): Ht
 			? [
 					h.div(
 						[h.Class(cx("absolute inset-0 overflow-hidden", rounded)), squircle],
-						[ditherAvatar(h, seed, styles[size].px)],
+						[ditherAvatar(h, seed, renderedPx(size, props.className))],
 					),
 				]
-			: props.initials
-				? [h.span([h.Class(cx("text-quaternary", styles[size].initials))], [props.initials])]
-				: props.placeholder
-					? [props.placeholder]
-					: props.fallbackIcon
-						? [IconCircleDottedUser(h, { className: cx("text-muted-fg", styles[size].icon) })]
-						: []
+			: props.placeholder
+				? [props.placeholder]
+				: props.fallbackIcon
+					? [IconCircleDottedUser(h, { className: cx("text-muted-fg", styles[size].icon) })]
+					: []
 	return h.div(
 		[
 			h.Attribute("data-avatar", "true"),
