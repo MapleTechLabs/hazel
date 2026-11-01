@@ -192,6 +192,13 @@ export const slackInbound = Effect.fn("SlackEvents.inbound")(function* (
 export const endsInstall = (event: Slack.SlackEvent) =>
 	event._tag === "AppUninstalled" || (event._tag === "TokensRevoked" && event.bot.length > 0)
 
+/** A Slack user Hazel could not look up: logged, and left unnamed. */
+const unnamed = (userId: string) => (error: { readonly _tag: string; readonly message: string }) =>
+	Effect.logWarning("Slack user lookup failed", { userId, error: error._tag, reason: error.message }).pipe(
+		Effect.andThen(Effect.annotateCurrentSpan({ "slack.user_lookup_failed": error._tag })),
+		Effect.as(Option.none<ChatSyncInboundAuthor>()),
+	)
+
 /** `users.info` answers, per isolate: an event names its author, and mentions repeat. */
 const USER_TTL_MS = 10 * 60 * 1000
 const MAX_CACHED_USERS = 5_000
@@ -238,11 +245,12 @@ export const dispatchSlackEvent = Effect.fn("SlackEvents.dispatch")(function* (e
 		}).pipe(
 			Effect.timeoutOption(USER_LOOKUP_TIMEOUT),
 			Effect.map(Option.flatten),
+			// The event still applies, its author unnamed; the reason (a dead token, say) is logged.
 			Effect.catchTags({
-				SlackApiError: () => Effect.succeed(Option.none<ChatSyncInboundAuthor>()),
-				DatabaseError: () => Effect.succeed(Option.none<ChatSyncInboundAuthor>()),
-				IntegrationEncryptionError: () => Effect.succeed(Option.none<ChatSyncInboundAuthor>()),
-				KeyVersionNotFoundError: () => Effect.succeed(Option.none<ChatSyncInboundAuthor>()),
+				SlackApiError: unnamed(userId),
+				DatabaseError: unnamed(userId),
+				IntegrationEncryptionError: unnamed(userId),
+				KeyVersionNotFoundError: unnamed(userId),
 			}),
 		)
 	const inbound = yield* slackInbound(envelope, event.value, lookupUser)
