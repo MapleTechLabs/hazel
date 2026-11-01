@@ -42,7 +42,9 @@ describe("profile page", () => {
 		Scene.scene(
 			pageScene(update, view, shared),
 			Scene.given(init(graceId).model),
-			Scene.Subscription.emit(Message.UpdatedProfileUser({ user: { ...grace, presenceLastSeenMs: NOW - 60_000 } })),
+			Scene.Subscription.emit(
+				Message.UpdatedProfileUser({ user: { ...grace, presenceLastSeenMs: NOW - 60_000 } }),
+			),
 			Scene.expect(Scene.text("Offline")).toExist(),
 			Scene.expect(Scene.text("Do Not Disturb")).toBeAbsent(),
 		)
@@ -52,9 +54,14 @@ describe("profile page", () => {
 		Scene.scene(
 			pageScene(update, view, shared),
 			Scene.given(init(userId).model),
-			Scene.Subscription.emit(Message.UpdatedProfileUser({ user: { ...grace, firstName: "Ada", lastName: "Lovelace" } })),
+			Scene.Subscription.emit(
+				Message.UpdatedProfileUser({ user: { ...grace, firstName: "Ada", lastName: "Lovelace" } }),
+			),
 			Scene.expect(Scene.text("View your profile information.")).toExist(),
-			Scene.expect(Scene.role("link", { name: /Edit Profile/ })).toHaveAttr("href", "/hazel/my-settings/profile"),
+			Scene.expect(Scene.role("link", { name: /Edit Profile/ })).toHaveAttr(
+				"href",
+				"/hazel/my-settings/profile",
+			),
 		)
 	})
 

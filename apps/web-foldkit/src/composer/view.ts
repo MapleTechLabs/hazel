@@ -1,5 +1,11 @@
 import { Mount } from "foldkit"
-import { type Attribute, type ChildAttribute, childAttributes, type Html, type HtmlBuilder } from "foldkit/html"
+import {
+	type Attribute,
+	type ChildAttribute,
+	childAttributes,
+	type Html,
+	type HtmlBuilder,
+} from "foldkit/html"
 import { cn } from "~/lib/utils"
 import { cx } from "~/utils/cx"
 import { IconEmoji1, IconGif, IconPaperclip2 } from "../icons"

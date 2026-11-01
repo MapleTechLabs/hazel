@@ -13,7 +13,13 @@ const decorateTextblock = (block: ProseMirrorNode, blockStart: number): Array<De
 			const className = leafClassName(leaf)
 			const attrs: Record<string, string> =
 				leaf.type === "link" || leaf.type === "url"
-					? { nodeName: "a", href: leaf.url ?? "", target: "_blank", rel: "noopener noreferrer", class: className }
+					? {
+							nodeName: "a",
+							href: leaf.url ?? "",
+							target: "_blank",
+							rel: "noopener noreferrer",
+							class: className,
+						}
 					: { class: className }
 			decorations.push(Decoration.inline(from + leaf.start, from + leaf.end, attrs))
 		}
@@ -37,7 +43,9 @@ export const markdownDecorationsPlugin = new Plugin({
 			state.doc.descendants((node, pos) => {
 				if (!node.isTextblock) return true
 				if (node.type.name === "blockquote") {
-					decorations.push(Decoration.widget(pos + 1, blockquoteBar, { side: -1, ignoreSelection: true }))
+					decorations.push(
+						Decoration.widget(pos + 1, blockquoteBar, { side: -1, ignoreSelection: true }),
+					)
 				}
 				// Code blocks get Prism tokens in legacy, not markdown leaves (Phase 4).
 				if (node.type.name !== "code-block") decorations.push(...decorateTextblock(node, pos))
@@ -108,7 +116,9 @@ export const placeholderPlugin = (text: string) =>
 			const syncMinHeight = () => {
 				const placeholder = view.dom.querySelector<HTMLElement>("[data-slate-placeholder]")
 				const editable = view.dom as HTMLElement
-				editable.style.minHeight = placeholder ? `${placeholder.getBoundingClientRect().height}px` : ""
+				editable.style.minHeight = placeholder
+					? `${placeholder.getBoundingClientRect().height}px`
+					: ""
 			}
 			syncMinHeight()
 			return { update: syncMinHeight }
@@ -157,7 +167,11 @@ export const autocompleteKey = new PluginKey<AutocompleteState>("autocomplete")
 export const isAutocompleteOpen = (state: EditorState) => autocompleteKey.getState(state)?.trigger != null
 
 /** Re-derive the search from the document, closing when the trigger text is gone. */
-const deriveAutocomplete = (tr: Transaction, previous: AutocompleteState, state: EditorState): AutocompleteState => {
+const deriveAutocomplete = (
+	tr: Transaction,
+	previous: AutocompleteState,
+	state: EditorState,
+): AutocompleteState => {
 	if (!previous.trigger) return previous
 	const from = tr.mapping.map(previous.from)
 	const { $head } = state.selection
@@ -182,7 +196,8 @@ export const autocompletePlugin = new Plugin<AutocompleteState>({
 		handleDOMEvents: {
 			// Legacy `onBlur`: closing the popover when focus leaves.
 			blur: (view) => {
-				if (isAutocompleteOpen(view.state)) view.dispatch(view.state.tr.setMeta(autocompleteKey, closedAutocomplete))
+				if (isAutocompleteOpen(view.state))
+					view.dispatch(view.state.tr.setMeta(autocompleteKey, closedAutocomplete))
 				return false
 			},
 		},

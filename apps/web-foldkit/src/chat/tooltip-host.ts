@@ -37,20 +37,18 @@ export const update = <Wrapped>(
 	wrap: (message: Message) => Wrapped,
 ): Update.Return<Model, Wrapped> => {
 	const current =
-		model !== null && model.id === key
-			? model
-			: isActivating(message)
-				? Tooltip.init(key, delayMs)
-				: null
+		model !== null && model.id === key ? model : isActivating(message) ? Tooltip.init(key, delayMs) : null
 	if (current === null) return { model }
 	const result = Tooltip.update(current, message)
 	return {
 		model: result.model,
 		commands: Command.mapMessages(
-			Command.mapMessages(
-				result.commands ?? [],
-				(inner): Message => ({ key, messageId, delayMs, message: inner }),
-			),
+			Command.mapMessages(result.commands ?? [], (inner): Message => ({
+				key,
+				messageId,
+				delayMs,
+				message: inner,
+			})),
 			wrap,
 		),
 	}

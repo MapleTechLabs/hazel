@@ -101,7 +101,9 @@ describe("org home directory", () => {
 		story(
 			pageUpdate,
 			given(withOpenMenu(grace)),
-			message(menuMessage(grace, Menu.Message.ClickedItem({ key: "copy-email", entries: menuEntries }))),
+			message(
+				menuMessage(grace, Menu.Message.ClickedItem({ key: "copy-email", entries: menuEntries })),
+			),
 			model((current) => expect(current.menus[grace]?.popup._tag).toBe("Closed")),
 			Command.resolve(CopyEmail, Message.SucceededCopyEmail({ email: "grace@hazel.test" })),
 			expectOutMessage(
@@ -123,7 +125,10 @@ describe("org home directory", () => {
 			message(Message.PressedMessageMember({ userId: grace, name: "Grace Hopper" })),
 			Command.expectNone(),
 			expectOutMessage(
-				PageOutMessage.RequestedNavigation({ route: routeOfPath(`/hazel/chat/${channelId}`), replace: false }),
+				PageOutMessage.RequestedNavigation({
+					route: routeOfPath(`/hazel/chat/${channelId}`),
+					replace: false,
+				}),
 			),
 			model((current) => expect(current.dmRequest).toEqual(DmRequest.Idle())),
 		)
@@ -185,10 +190,18 @@ describe("org home failures and guards", () => {
 		story(
 			pageUpdate,
 			given(withOpenMenu(grace)),
-			message(menuMessage(grace, Menu.Message.ClickedItem({ key: "copy-email", entries: menuEntries }))),
+			message(
+				menuMessage(grace, Menu.Message.ClickedItem({ key: "copy-email", entries: menuEntries })),
+			),
 			Command.resolve(CopyEmail({ email: "grace@hazel.test" }), Message.FailedCopyEmail()),
 			expectOutMessage(
-				PageOutMessage.RequestedToast({ toast: { intent: "error", title: "Failed to copy email", description: "Please try again" } }),
+				PageOutMessage.RequestedToast({
+					toast: {
+						intent: "error",
+						title: "Failed to copy email",
+						description: "Please try again",
+					},
+				}),
 			),
 		)
 	})
@@ -210,24 +223,45 @@ describe("org home failures and guards", () => {
 			message(Message.PressedMessageMember({ userId: grace, name: "Grace Hopper" })),
 			Command.expectNone(),
 			expectNoOutMessage(),
-			model((current) => expect(current.dmRequest).toEqual(DmRequest.AwaitingChannels({ userId: grace }))),
+			model((current) =>
+				expect(current.dmRequest).toEqual(DmRequest.AwaitingChannels({ userId: grace })),
+			),
 			message(Message.UpdatedDmChannels({ rows: dmWithGrace })),
-			expectOutMessage(PageOutMessage.RequestedNavigation({ route: routeOfPath(`/hazel/chat/${channelId}`), replace: false })),
+			expectOutMessage(
+				PageOutMessage.RequestedNavigation({
+					route: routeOfPath(`/hazel/chat/${channelId}`),
+					replace: false,
+				}),
+			),
 			model((current) => expect(current.dmRequest).toEqual(DmRequest.Idle())),
 		)
 	})
 
 	test("a DM row update while the DM is being created does not open it a second time", () => {
-		const creating = pageUpdate(loaded(), Message.PressedMessageMember({ userId: grace, name: "Grace Hopper" })).model
+		const creating = pageUpdate(
+			loaded(),
+			Message.PressedMessageMember({ userId: grace, name: "Grace Hopper" }),
+		).model
 		const synced = pageUpdate(creating, Message.UpdatedDmChannels({ rows: dmWithGrace }))
 		expect(synced.outMessage).toBeUndefined()
 		expect(synced.model.dmRequest).toEqual(DmRequest.Creating({ userId: grace }))
 	})
 
 	test("without an organization, or for an unknown member, Message does nothing", () => {
-		const noOrg = (current: Model, next: Message) => update(current, next, { ...shared, organization: null })
-		story(noOrg, given(loaded()), message(Message.PressedMessageMember({ userId: grace, name: "Grace Hopper" })), Command.expectNone())
-		story(pageUpdate, given(init().model), message(Message.PressedMessageMember({ userId: grace, name: "Grace Hopper" })), Command.expectNone())
+		const noOrg = (current: Model, next: Message) =>
+			update(current, next, { ...shared, organization: null })
+		story(
+			noOrg,
+			given(loaded()),
+			message(Message.PressedMessageMember({ userId: grace, name: "Grace Hopper" })),
+			Command.expectNone(),
+		)
+		story(
+			pageUpdate,
+			given(init().model),
+			message(Message.PressedMessageMember({ userId: grace, name: "Grace Hopper" })),
+			Command.expectNone(),
+		)
 	})
 
 	test("clearing the search empties it and refocuses the field", () => {
@@ -244,8 +278,14 @@ describe("org home failures and guards", () => {
 
 	// dmRequest marks a DM as opening, so pressing Message again cannot create a second DM.
 	test("a second Message press while a DM is opening sends nothing", () => {
-		const first = pageUpdate(loaded(), Message.PressedMessageMember({ userId: grace, name: "Grace Hopper" }))
-		const second = pageUpdate(first.model, Message.PressedMessageMember({ userId: grace, name: "Grace Hopper" }))
+		const first = pageUpdate(
+			loaded(),
+			Message.PressedMessageMember({ userId: grace, name: "Grace Hopper" }),
+		)
+		const second = pageUpdate(
+			first.model,
+			Message.PressedMessageMember({ userId: grace, name: "Grace Hopper" }),
+		)
 		expect(second.commands ?? []).toEqual([])
 	})
 })

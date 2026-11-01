@@ -204,20 +204,18 @@ const toResults = (
 						Object.keys(row.message.embeds).length > 0
 					: true,
 	)
-	return kept.map(
-		(row): SearchResult => ({
-			messageId: row.message.id,
-			channelId: row.message.channelId,
-			content: row.message.content,
-			createdAtMs: new Date(row.message.createdAt).getTime(),
-			authorName: row.author
-				? `${row.author.firstName ?? ""} ${row.author.lastName ?? ""}`.trim()
-				: "Unknown",
-			authorAvatarUrl: row.author?.avatarUrl ?? null,
-			channelName: row.channel?.name ?? null,
-			attachmentCount: counts.get(row.message.id) ?? 0,
-		}),
-	)
+	return kept.map((row): SearchResult => ({
+		messageId: row.message.id,
+		channelId: row.message.channelId,
+		content: row.message.content,
+		createdAtMs: new Date(row.message.createdAt).getTime(),
+		authorName: row.author
+			? `${row.author.firstName ?? ""} ${row.author.lastName ?? ""}`.trim()
+			: "Unknown",
+		authorAvatarUrl: row.author?.avatarUrl ?? null,
+		channelName: row.channel?.name ?? null,
+		attachmentCount: counts.get(row.message.id) ?? 0,
+	}))
 }
 
 interface UserRow {
@@ -257,14 +255,12 @@ const userSuggestions = (organizationId: OrganizationId, partial: string) =>
 		Stream.map(([byFirst, byLast]) => {
 			const byId = new Map<string, UserRow>()
 			for (const user of [...byFirst, ...byLast]) byId.set(user.id, user)
-			return [...byId.values()].slice(0, 10).map(
-				(user): Suggestion => ({
-					id: user.id,
-					label: `${user.firstName} ${user.lastName}`.trim(),
-					avatarUrl: user.avatarUrl ?? null,
-					kind: "user",
-				}),
-			)
+			return [...byId.values()].slice(0, 10).map((user): Suggestion => ({
+				id: user.id,
+				label: `${user.firstName} ${user.lastName}`.trim(),
+				avatarUrl: user.avatarUrl ?? null,
+				kind: "user",
+			}))
 		}),
 	)
 

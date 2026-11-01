@@ -123,7 +123,12 @@ const customLabel = (model: Model): string | null => {
 	const date = customDateTime(customDateOf(model), committedOf(model.customTime))
 	return date === null
 		? null
-		: date.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+		: date.toLocaleString(undefined, {
+				month: "short",
+				day: "numeric",
+				hour: "numeric",
+				minute: "2-digit",
+			})
 }
 
 /** The expiration Select's items: the custom option shows the chosen date and time. */

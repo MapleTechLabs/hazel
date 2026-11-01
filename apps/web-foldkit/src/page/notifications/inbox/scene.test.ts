@@ -32,10 +32,16 @@ describe("notifications inbox view", () => {
 			Scene.expect(Scene.role("progressbar")).toExist(),
 			Scene.Subscription.emit(Message.UpdatedNotifications({ notifications: [unread] })),
 			Scene.expect(Scene.role("progressbar")).toBeAbsent(),
-			Scene.expect(Scene.role("link", { name: /Ship it/ })).toHaveAttr("href", `/hazel/chat/${uuid(900)}`),
+			Scene.expect(Scene.role("link", { name: /Ship it/ })).toHaveAttr(
+				"href",
+				`/hazel/chat/${uuid(900)}`,
+			),
 			Scene.click(Scene.role("link", { name: /Ship it/ })),
 			Scene.Command.expectExact(MarkNotificationRead({ id: unread.id })),
-			Scene.Command.resolve(MarkNotificationRead, Message.SucceededMarkNotificationRead({ id: unread.id })),
+			Scene.Command.resolve(
+				MarkNotificationRead,
+				Message.SucceededMarkNotificationRead({ id: unread.id }),
+			),
 		)
 	})
 

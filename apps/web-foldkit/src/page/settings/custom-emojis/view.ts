@@ -296,7 +296,10 @@ const emojiRow = (h: HtmlBuilder<Message>, emoji: Emoji, isAdmin: boolean, nowMs
 										{
 											intent: "danger",
 											size: "sq-sm",
-											onPress: Message.ClickedDeleteEmoji({ id: emoji.id, name: emoji.name }),
+											onPress: Message.ClickedDeleteEmoji({
+												id: emoji.id,
+												name: emoji.name,
+											}),
 											attributes: [h.AriaLabel(`Delete :${emoji.name}:`)],
 										},
 										[IconTrash(h, { attributes: { "data-slot": "icon" } })],

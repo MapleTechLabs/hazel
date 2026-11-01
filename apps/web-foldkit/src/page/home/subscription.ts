@@ -74,7 +74,11 @@ const memberSubscriptions = Subscription.make<PageSubscriptionInput<Model>, Mess
 					: liveQueryStream<DmRow, Message>(dmChannelsQuery, (rows) =>
 							Message.UpdatedDmChannels({
 								rows: rows.map(({ channel, member }) => ({
-									channel: { id: channel.id, type: channel.type, organizationId: channel.organizationId },
+									channel: {
+										id: channel.id,
+										type: channel.type,
+										organizationId: channel.organizationId,
+									},
 									member: { userId: member.userId },
 								})),
 							}),

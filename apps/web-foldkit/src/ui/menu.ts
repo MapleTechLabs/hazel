@@ -466,7 +466,10 @@ export const update = (model: Model, message: Message): UpdateReturn => {
 			ifOpen((open) => {
 				const pointer: Open = { ...open, modality: "Pointer", hoveredKey: Option.some(key) }
 				const inSubmenu = Option.exists(open.submenu, (submenu) =>
-					Array.some(submenuItems(entries, submenu.triggerKey), (candidate) => candidate.key === key),
+					Array.some(
+						submenuItems(entries, submenu.triggerKey),
+						(candidate) => candidate.key === key,
+					),
 				)
 				if (inSubmenu)
 					return withOpen(

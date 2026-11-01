@@ -149,7 +149,8 @@ export const mobileSidebarSheet = <Message>(
 			closeButton: false,
 			ariaLabel: "Sidebar",
 			panelAttributes: { "data-slot": "sidebar", "data-intent": "default" },
-			className: "w-(--sidebar-width) [--sidebar-width:18rem] has-data-[slot=calendar]:[--sidebar-width:23rem]",
+			className:
+				"w-(--sidebar-width) [--sidebar-width:18rem] has-data-[slot=calendar]:[--sidebar-width:23rem]",
 		},
 		toParentMessage: options.toMessage,
 	})

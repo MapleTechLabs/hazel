@@ -108,11 +108,10 @@ export class Doctor extends Context.Service<Doctor>()("Doctor", {
 		/** `.env.local` is what `bun run alchemy:dev` reads. */
 		checkEnvLocal: (): Effect.Effect<CheckResult> =>
 			Effect.promise(() => Bun.file(".env.local").exists()).pipe(
-				Effect.map(
-					(exists): CheckResult =>
-						exists
-							? { name: ".env.local", status: "ok", message: "Found" }
-							: { name: ".env.local", status: "warn", message: "Missing. Run `bun run setup`" },
+				Effect.map((exists): CheckResult =>
+					exists
+						? { name: ".env.local", status: "ok", message: "Found" }
+						: { name: ".env.local", status: "warn", message: "Missing. Run `bun run setup`" },
 				),
 			),
 

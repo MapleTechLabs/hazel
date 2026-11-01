@@ -318,7 +318,9 @@ const validateMappings = (mappings: ReadonlyArray<unknown>) =>
 	Effect.gen(function* () {
 		const plans: Array<{ readonly table: object; readonly keys: ReadonlyArray<string> }> = []
 		for (const mapping of mappings) {
-			const planned = Adapter.storageKeyPlans(mapping, (table) => Result.succeed((table as Table).columns))
+			const planned = Adapter.storageKeyPlans(mapping, (table) =>
+				Result.succeed((table as Table).columns),
+			)
 			if (Result.isFailure(planned)) {
 				return yield* PersistenceConfigurationError.make({
 					reason: `Invalid OAuth mapping: ${planned.failure}`,

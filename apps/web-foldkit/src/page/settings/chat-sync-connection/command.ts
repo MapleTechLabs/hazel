@@ -66,16 +66,14 @@ export const ListChannelLinks = Command.define("ListChannelLinks", {
 				syncConnectionId,
 				organizationId: orgOfChatSyncConnection(syncConnectionId),
 			})
-			const links = response.data.map(
-				(link): ChannelLink => ({
-					id: link.id,
-					hazelChannelId: link.hazelChannelId,
-					externalName: link.externalChannelName || link.externalChannelId,
-					direction: isDirection(link.direction) ? link.direction : "both",
-					isActive: link.isActive,
-					webhookPermission: webhookPermissionOf(link.settings),
-				}),
-			)
+			const links = response.data.map((link): ChannelLink => ({
+				id: link.id,
+				hazelChannelId: link.hazelChannelId,
+				externalName: link.externalChannelName || link.externalChannelId,
+				direction: isDirection(link.direction) ? link.direction : "both",
+				isActive: link.isActive,
+				webhookPermission: webhookPermissionOf(link.settings),
+			}))
 			return Message.SucceededListChannelLinks({ version, links })
 		}).pipe(
 			Effect.catchTags({

@@ -2,7 +2,11 @@ import { Schema } from "effect"
 import { CustomElement } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
-import { checkboxIndicatorStyles, checkboxLayoutStyles, checkboxStyles } from "~/components/ui/checkbox.styles"
+import {
+	checkboxIndicatorStyles,
+	checkboxLayoutStyles,
+	checkboxStyles,
+} from "~/components/ui/checkbox.styles"
 import { IconCheck, IconMinus } from "../icons"
 import * as Collection from "./aria/collection"
 import * as Field from "./field"
@@ -131,4 +135,3 @@ export const checkbox = <Message>(
 		],
 	)
 }
-

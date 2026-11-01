@@ -99,7 +99,11 @@ const retire = (retired: ReadonlyArray<Slot>, slot: Slot): ReadonlyArray<Slot> =
 const isClosing = (outMessage: Option.Option<ModalOutMessage>) =>
 	Option.match(outMessage, {
 		onNone: () => false,
-		onSome: ModalOutMessage.match<boolean>({ Closed: () => true, Completed: () => true, RequestedToast: () => false }),
+		onSome: ModalOutMessage.match<boolean>({
+			Closed: () => true,
+			Completed: () => true,
+			RequestedToast: () => false,
+		}),
 	})
 
 /** A step of the open instance: a closing OutMessage retires it. */
@@ -126,7 +130,11 @@ const retiredStep = (model: Model, step: ModalStep<Slot, Message>): Transition =
 /** A registry entry with its own Slot and Message widened to the registry's unions. */
 interface RegisteredModal {
 	readonly id: string
-	readonly init: (request: unknown, context: ModalContext, instance: number) => Option.Option<ModalStep<Slot, Message>>
+	readonly init: (
+		request: unknown,
+		context: ModalContext,
+		instance: number,
+	) => Option.Option<ModalStep<Slot, Message>>
 	readonly update: (
 		slot: Slot,
 		message: ModalMessageBase,
@@ -161,7 +169,9 @@ export const open = (model: Model, request: ModalRequest, context: ModalContext)
 export const update = (model: Model, message: ModalMessageBase, context: ModalContext): Transition => {
 	const current = model.current
 	const isForCurrent =
-		current !== null && current._tag === message._tag && (message.instance === null || message.instance === current.instance)
+		current !== null &&
+		current._tag === message._tag &&
+		(message.instance === null || message.instance === current.instance)
 	if (isForCurrent)
 		return Option.match(
 			Option.flatMap(modalById(message._tag), (modal) => modal.update(current, message, context)),
@@ -192,15 +202,18 @@ export const view = <ParentMessage>(
 	const current = model.current
 	return current === null
 		? h.empty
-		: Option.match(Array.findFirst(modals, (modal) => modal.id === current._tag), {
-				onNone: () => h.empty,
-				onSome: (modal) =>
-					h.submodel({
-						slotId: `modal:${current._tag}:${current.instance}`,
-						model: current,
-						view: modal.hostView,
-						viewInputs: { shared },
-						toParentMessage,
-					}),
-			})
+		: Option.match(
+				Array.findFirst(modals, (modal) => modal.id === current._tag),
+				{
+					onNone: () => h.empty,
+					onSome: (modal) =>
+						h.submodel({
+							slotId: `modal:${current._tag}:${current.instance}`,
+							model: current,
+							view: modal.hostView,
+							viewInputs: { shared },
+							toParentMessage,
+						}),
+				},
+			)
 }

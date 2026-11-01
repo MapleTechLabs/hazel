@@ -60,14 +60,12 @@ export const listInvitations = (organizationId: OrganizationId) =>
 	Effect.gen(function* () {
 		const client = yield* HazelRpc
 		const invitations = yield* client("invitation.list", { organizationId })
-		return invitations.map(
-			(invitation): PendingInvitation => ({
-				id: invitation.id,
-				emailAddress: invitation.email,
-				role: invitation.role,
-				createdAtMs: DateTime.toEpochMillis(invitation.createdAt),
-			}),
-		)
+		return invitations.map((invitation): PendingInvitation => ({
+			id: invitation.id,
+			emailAddress: invitation.email,
+			role: invitation.role,
+			createdAtMs: DateTime.toEpochMillis(invitation.createdAt),
+		}))
 	})
 
 export const revokeInvitation = (id: InvitationId) =>

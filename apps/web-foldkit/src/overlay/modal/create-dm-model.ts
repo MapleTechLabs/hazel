@@ -34,4 +34,3 @@ export const Message = defineMessageUnion({
 export type Message = typeof Message.Type
 
 export const SEARCH_ID = "create-dm-modal-search"
-

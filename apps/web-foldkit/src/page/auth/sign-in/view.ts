@@ -89,9 +89,7 @@ const switchLink = (h: HtmlBuilder<Message>, model: Model): Html => {
 			h.a(
 				[
 					h.Class("text-fg underline underline-offset-2"),
-					h.Href(
-						hrefOf(target({ redirectUrl: Option.fromNullishOr(model.redirectUrl) })),
-					),
+					h.Href(hrefOf(target({ redirectUrl: Option.fromNullishOr(model.redirectUrl) }))),
 				],
 				[isSignIn ? "Create an account" : "Sign in"],
 			),
@@ -123,9 +121,15 @@ const desktopChoices = (h: HtmlBuilder<Message>, model: Model): ReadonlyArray<Ht
 						loader(h, { className: "size-4" }),
 						"Waiting for your browser...",
 					]),
-					button(h, { intent: "outline", className: "w-full", onPress: Message.ClickedCancelBrowserSignIn() }, [
-						"Cancel",
-					]),
+					button(
+						h,
+						{
+							intent: "outline",
+							className: "w-full",
+							onPress: Message.ClickedCancelBrowserSignIn(),
+						},
+						["Cancel"],
+					),
 				],
 			)
 		: button(h, { intent: "primary", className: "w-full", onPress: Message.ClickedBrowserSignIn() }, [
@@ -139,15 +143,15 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 	isDesktop
 		? authFrame(h, shared.nowMs, desktopChoices(h, model))
 		: authFrame(h, shared.nowMs, [
-		model.mode === "SignIn"
-			? authHeading(h, "Sign in to Hazel", "Welcome back. Pick how you'd like to sign in.")
-			: authHeading(
-					h,
-					"Create your Hazel account",
-					"Sign up with GitHub or Google. It takes a few seconds.",
-				),
-		choices(h, pendingAttempt(model)),
-		authError(h, failureOf(model)),
-		switchLink(h, model),
-	]),
+				model.mode === "SignIn"
+					? authHeading(h, "Sign in to Hazel", "Welcome back. Pick how you'd like to sign in.")
+					: authHeading(
+							h,
+							"Create your Hazel account",
+							"Sign up with GitHub or Google. It takes a few seconds.",
+						),
+				choices(h, pendingAttempt(model)),
+				authError(h, failureOf(model)),
+				switchLink(h, model),
+			]),
 )

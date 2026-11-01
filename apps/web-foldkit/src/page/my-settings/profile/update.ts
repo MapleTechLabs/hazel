@@ -324,7 +324,6 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				toast: updateUserToast("Failed to remove profile picture", reason),
 			}),
 		}),
-		GotCropModalMessage: ({ message: child }) =>
-			foldCropModal(model, child),
+		GotCropModalMessage: ({ message: child }) => foldCropModal(model, child),
 		GotInteractionMessage: ({ message: child }) => interaction.fold(model, child),
 	})

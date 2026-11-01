@@ -52,7 +52,11 @@ describe("join page", () => {
 	test("a failed lookup is not a missing workspace: it says so and retries", () => {
 		Scene.scene(
 			pageScene(update, view, signedIn),
-			Scene.given<Model>({ slug: "hazel", lookup: Lookup.Failed({ reason: "Offline" }), isJoining: false }),
+			Scene.given<Model>({
+				slug: "hazel",
+				lookup: Lookup.Failed({ reason: "Offline" }),
+				isJoining: false,
+			}),
 			cardShown,
 			Scene.expect(Scene.role("heading", { name: "Workspace Not Found" })).toBeAbsent(),
 			Scene.expect(Scene.role("heading", { name: "Couldn't load this workspace" })).toExist(),
@@ -60,7 +64,10 @@ describe("join page", () => {
 			Scene.Command.expectExact(FetchPublicOrganization({ slug: "hazel" })),
 			Scene.expect(Scene.text("Loading workspace...")).toExist(),
 			Scene.Mount.expectEnded(CardEnterAnimation),
-			Scene.Command.resolve(FetchPublicOrganization, Message.SucceededFetchOrganization({ organization: null })),
+			Scene.Command.resolve(
+				FetchPublicOrganization,
+				Message.SucceededFetchOrganization({ organization: null }),
+			),
 			Scene.expect(Scene.role("heading", { name: "Workspace Not Found" })).toExist(),
 			cardShown,
 		)

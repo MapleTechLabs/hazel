@@ -31,7 +31,10 @@ export const layout = <M>(
 				[h.Class("flex items-center justify-between")],
 				[
 					h.label([...attributes.label, h.Class("font-medium text-sm")], [options.label]),
-					h.span([h.Class(twMerge(sliderOutputStyles, "text-muted-fg text-sm"))], [options.valueText]),
+					h.span(
+						[h.Class(twMerge(sliderOutputStyles, "text-muted-fg text-sm"))],
+						[options.valueText],
+					),
 				],
 			),
 			h.div(

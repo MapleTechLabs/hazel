@@ -233,9 +233,7 @@ import { Context, Effect, Layer } from "effect"
 export class MyService extends Context.Service<MyService>()("MyService", {
 	make: Effect.gen(function* () {
 		// ... implementation
-		return {
-			/* methods */
-		}
+		return {/* methods */}
 	}),
 }) {
 	static readonly layer = Layer.effect(this, this.make)
@@ -270,9 +268,7 @@ export class MyService extends Context.Service<MyService>()("MyService", {
 		const db = yield* DatabaseService
 		const cache = yield* CacheService
 		// ... implementation
-		return {
-			/* methods */
-		}
+		return {/* methods */}
 	}),
 }) {
 	static readonly layer = Layer.effect(this, this.make).pipe(

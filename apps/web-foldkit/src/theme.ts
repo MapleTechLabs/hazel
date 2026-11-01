@@ -83,7 +83,10 @@ export const loadThemePreference: Effect.Effect<ThemePreference> = Effect.gen(fu
 				? {
 						...defaultCustomization(),
 						primary: Option.getOrElse(
-							Option.flatMap(Option.flatMapNullishOr(brandColor, (hex) => hex), decodeHexColor),
+							Option.flatMap(
+								Option.flatMapNullishOr(brandColor, (hex) => hex),
+								decodeHexColor,
+							),
 							() => DEFAULT_BRAND_COLOR,
 						),
 					}

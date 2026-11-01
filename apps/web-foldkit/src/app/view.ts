@@ -52,8 +52,7 @@ const clickedMarkAllRead = toShellMessage(
 const openedMobileSidebar = toShellMessage(Shell.Message.ToggledSidebar({ isOpen: true }))
 export const toPageMessage = (message: PageMessage): Message => ({ _tag: "GotPageMessage", message })
 const toToastsMessage = (message: Toasts.Message): Message => ({ _tag: "GotToastsMessage", message })
-const toaster = (h: HtmlBuilder<Message>, model: Model): Html =>
-	Toasts.view(h, model.toasts, toToastsMessage)
+const toaster = (h: HtmlBuilder<Message>, model: Model): Html => Toasts.view(h, model.toasts, toToastsMessage)
 const toModalMessage = (message: Modal.Message): Message => ({ _tag: "GotModalMessage", message })
 const toCommandPaletteMessage = (message: CommandPalette.Message): Message => ({
 	_tag: "GotCommandPaletteMessage",

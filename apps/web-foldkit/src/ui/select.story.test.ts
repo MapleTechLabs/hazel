@@ -23,7 +23,8 @@ const items = [
 ]
 const select = init({ id: "clear" })
 const triggerKey = (key: string) => message(Message.PressedTriggerKey({ key, items: items }))
-const listKey = (key: string, isModified = false) => message(Message.PressedListKey({ key, isModified, items: items }))
+const listKey = (key: string, isModified = false) =>
+	message(Message.PressedListKey({ key, isModified, items: items }))
 const focusOf = (next: Model) => (next.popup._tag === "Open" ? next.popup.focusedKey : Option.none())
 const searchOf = (next: Model) => (next.popup._tag === "Open" ? next.popup.search : "")
 const resolveFocus = Command.resolve(FocusSelectElement, Message.CompletedFocusElement())

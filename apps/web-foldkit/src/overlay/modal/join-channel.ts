@@ -17,7 +17,16 @@ import { closed, completed, ModalOutMessage } from "../out-message"
 import { ToastRequest } from "../toasts"
 import * as Requests from "./requests"
 import { defineModal, type ModalReturn, type ModalSubscriptionInput, type ModalViewInputs } from "./contract"
-import { Frame, Message as FrameMessage, frameView, initFrame, isCloseRequest, isPortalReady, modalDescription, modalTitle } from "./frame"
+import {
+	Frame,
+	Message as FrameMessage,
+	frameView,
+	initFrame,
+	isCloseRequest,
+	isPortalReady,
+	modalDescription,
+	modalTitle,
+} from "./frame"
 import { failureToast, successToast } from "../../data/actions"
 
 /** `components/modals/join-channel-modal.tsx` (legacy `useModal("join-channel")`). */
@@ -97,9 +106,16 @@ const update = (model: Model, message: Message, shared: Shared): Return =>
 				? { model }
 				: { model, commands: [JoinChannel({ channelId, userId: shared.currentUser.id })] },
 		ClickedClose: () => ({ model, outMessage: closed }),
-		UpdatedMemberChannelIds: ({ channelIds }) => ({ model: modifyFields(model, { memberChannelIds: () => channelIds }) }),
-		UpdatedUnjoinedChannels: ({ channels }) => ({ model: modifyFields(model, { unjoinedChannels: () => channels }) }),
-		SucceededJoinChannel: () => ({ model, outMessage: completed({ toast: successToast("Successfully joined channel") }) }),
+		UpdatedMemberChannelIds: ({ channelIds }) => ({
+			model: modifyFields(model, { memberChannelIds: () => channelIds }),
+		}),
+		UpdatedUnjoinedChannels: ({ channels }) => ({
+			model: modifyFields(model, { unjoinedChannels: () => channels }),
+		}),
+		SucceededJoinChannel: () => ({
+			model,
+			outMessage: completed({ toast: successToast("Successfully joined channel") }),
+		}),
 		FailedJoinChannel: ({ toast }) => ({ model, outMessage: ModalOutMessage.RequestedToast({ toast }) }),
 		CompletedFocusSearch: () => ({ model }),
 	})
@@ -118,7 +134,10 @@ const subscriptions = Subscription.make<ModalSubscriptionInput<Model>, Message>(
 									.from({ m: channelMemberCollection })
 									.where(({ m }) => eq(m.userId, userId))
 									.select(({ m }) => ({ channelId: m.channelId })),
-							(rows) => Message.UpdatedMemberChannelIds({ channelIds: rows.map((row) => row.channelId) }),
+							(rows) =>
+								Message.UpdatedMemberChannelIds({
+									channelIds: rows.map((row) => row.channelId),
+								}),
 						),
 		},
 	),
@@ -136,15 +155,22 @@ const subscriptions = Subscription.make<ModalSubscriptionInput<Model>, Message>(
 							(q) => {
 								const base = q
 									.from({ channel: channelCollection })
-									.where(({ channel }) => or(eq(channel.type, "public"), eq(channel.type, "private")))
+									.where(({ channel }) =>
+										or(eq(channel.type, "public"), eq(channel.type, "private")),
+									)
 									.where(({ channel }) => eq(channel.organizationId, organizationId))
 								return (
 									channelIds.length === 0
 										? base
-										: base.where(({ channel }) => not(inArray(channel.id, [...channelIds])))
+										: base.where(({ channel }) =>
+												not(inArray(channel.id, [...channelIds])),
+											)
 								).select(({ channel }) => ({ ...channel }))
 							},
-							(rows) => Message.UpdatedUnjoinedChannels({ channels: rows.map(({ id, name }) => ({ id, name })) }),
+							(rows) =>
+								Message.UpdatedUnjoinedChannels({
+									channels: rows.map(({ id, name }) => ({ id, name })),
+								}),
 						),
 		},
 	),
@@ -152,7 +178,9 @@ const subscriptions = Subscription.make<ModalSubscriptionInput<Model>, Message>(
 
 const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _inputs, h) => {
 	const query = model.searchQuery.toLowerCase()
-	const filtered = (model.unjoinedChannels ?? []).filter((channel) => channel.name.toLowerCase().includes(query))
+	const filtered = (model.unjoinedChannels ?? []).filter((channel) =>
+		channel.name.toLowerCase().includes(query),
+	)
 	const emptyText = model.searchQuery
 		? "No channels found matching your search"
 		: model.unjoinedChannels?.length === 0
@@ -186,7 +214,11 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 						[
 							filtered.length === 0
 								? h.div(
-										[h.Class("flex flex-col items-center justify-center py-8 text-center")],
+										[
+											h.Class(
+												"flex flex-col items-center justify-center py-8 text-center",
+											),
+										],
 										[
 											IconHashtag(h, { className: "mb-3 size-12 text-muted-fg" }),
 											h.p([h.Class("text-muted-fg text-sm")], [emptyText]),
@@ -206,13 +238,21 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 													h.div(
 														[h.Class("flex items-center gap-3")],
 														[
-															IconHashtag(h, { className: "size-5 text-muted-fg" }),
+															IconHashtag(h, {
+																className: "size-5 text-muted-fg",
+															}),
 															h.div([h.Class("font-medium")], [channel.name]),
 														],
 													),
 													button(
 														h,
-														{ size: "sm", intent: "primary", onPress: Message.ClickedJoin({ channelId: channel.id }) },
+														{
+															size: "sm",
+															intent: "primary",
+															onPress: Message.ClickedJoin({
+																channelId: channel.id,
+															}),
+														},
 														["Join"],
 													),
 												],

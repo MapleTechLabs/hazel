@@ -29,7 +29,10 @@ const iconField = (h: HtmlBuilder<Message>, form: Form): Html =>
 							intent: "outline",
 							size: "sq-md",
 							className: "text-xl",
-							attributes: [h.AriaLabel("Change channel icon"), h.Attribute("aria-expanded", "false")],
+							attributes: [
+								h.AriaLabel("Change channel icon"),
+								h.Attribute("aria-expanded", "false"),
+							],
 						},
 						[channelIcon(h, form.icon)],
 					),

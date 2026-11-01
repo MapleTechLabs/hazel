@@ -8,7 +8,12 @@ import { Register } from "./register/command"
 import { Message as RegisterMessage } from "./register/message"
 import { init as initRegister, update as updateRegister } from "./register/update"
 import { view as registerView } from "./register/view"
-import { RetireBrowserSignIn, StartBrowserSignIn, StartOAuthSignIn, StartPasskeySignIn } from "./sign-in/command"
+import {
+	RetireBrowserSignIn,
+	StartBrowserSignIn,
+	StartOAuthSignIn,
+	StartPasskeySignIn,
+} from "./sign-in/command"
 import { Message as SignInMessage } from "./sign-in/message"
 import { init as initSignIn, update as updateSignIn } from "./sign-in/update"
 import { view as signInView } from "./sign-in/view"
@@ -19,8 +24,7 @@ const signedOut = makeShared({ auth: "SignedOut", currentUser: null, organizatio
 const github = Scene.role("button", { name: "Continue with GitHub" })
 const passkey = Scene.role("button", { name: "Sign in with a passkey" })
 
-const signIn = (redirectUrl: Option.Option<string>) =>
-	initSignIn(AppRoute.SignIn.make({ redirectUrl })).model
+const signIn = (redirectUrl: Option.Option<string>) => initSignIn(AppRoute.SignIn.make({ redirectUrl })).model
 
 describe("sign in", () => {
 	test("a provider starts OAuth with the route's redirect, and disables the other choices", () => {
@@ -96,7 +100,9 @@ describe("register", () => {
 			Scene.click(Scene.role("button", { name: "Continue" })),
 			Scene.expect(Scene.role("button", { name: "Creating your account..." })).toBeDisabled(),
 			Scene.Command.resolve(Register, RegisterMessage.FailedRegistration({ reason: "Expired" })),
-			Scene.expect(Scene.role("alert")).toHaveText("That sign-in expired or was already used. Please start again."),
+			Scene.expect(Scene.role("alert")).toHaveText(
+				"That sign-in expired or was already used. Please start again.",
+			),
 			Scene.expect(Scene.role("link", { name: "Start sign-in again" })).toExist(),
 			Scene.expect(Scene.role("button", { name: "Continue" })).toBeEnabled(),
 		)

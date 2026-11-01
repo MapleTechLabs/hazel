@@ -40,13 +40,11 @@ export class BotHealthServer extends Context.Service<BotHealthServer>()("BotHeal
 		const startTime = Date.now()
 		const services = yield* Effect.context<never>()
 
-		const collectHealth = Effect.sync(
-			(): HealthResponse => ({
-				status: "healthy",
-				timestamp: new Date().toISOString(),
-				uptime_ms: Date.now() - startTime,
-			}),
-		)
+		const collectHealth = Effect.sync((): HealthResponse => ({
+			status: "healthy",
+			timestamp: new Date().toISOString(),
+			uptime_ms: Date.now() - startTime,
+		}))
 
 		const bun = (globalThis as { readonly Bun?: BunLike }).Bun
 		if (bun === undefined) {

@@ -64,8 +64,12 @@ describe("checkbox scene", () => {
 			{ update, view: view() },
 			Scene.given(init()),
 			Scene.expect(control).toHaveClass("group"),
-			Scene.expect(Scene.selector(`[data-slot="indicator"]`)).toHaveClass("group-hover:inset-ring-muted-fg/30"),
-			Scene.expect(Scene.selector(`[data-slot="indicator"]`)).toHaveClass("group-has-focus-visible:ring-3"),
+			Scene.expect(Scene.selector(`[data-slot="indicator"]`)).toHaveClass(
+				"group-hover:inset-ring-muted-fg/30",
+			),
+			Scene.expect(Scene.selector(`[data-slot="indicator"]`)).toHaveClass(
+				"group-has-focus-visible:ring-3",
+			),
 		)
 	})
 

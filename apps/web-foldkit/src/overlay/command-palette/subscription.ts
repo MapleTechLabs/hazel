@@ -37,7 +37,11 @@ interface DmRow {
 	readonly channel: ChannelRow
 	readonly member: {
 		readonly userId: UserId
-		readonly user: { readonly firstName: string; readonly lastName: string; readonly avatarUrl?: string | null }
+		readonly user: {
+			readonly firstName: string
+			readonly lastName: string
+			readonly avatarUrl?: string | null
+		}
 	}
 }
 
@@ -68,7 +72,10 @@ const toDmChannels = (rows: ReadonlyArray<DmRow>, userId: UserId): Array<DmChann
 const Context = { organizationId: Schema.NullOr(OrganizationId), userId: Schema.NullOr(UserId) }
 const contextOf = (input: Input, page: Model["page"]["_tag"]) =>
 	input.model.isOpen && input.model.page._tag === page
-		? { organizationId: input.shared.organization?.id ?? null, userId: input.shared.currentUser?.id ?? null }
+		? {
+				organizationId: input.shared.organization?.id ?? null,
+				userId: input.shared.currentUser?.id ?? null,
+			}
 		: { organizationId: null, userId: null }
 
 const pageSubscriptions = Subscription.make<Input, Message>()((entry) => ({
@@ -93,7 +100,8 @@ const pageSubscriptions = Subscription.make<Input, Message>()((entry) => ({
 									),
 								)
 								.orderBy(({ channel }) => channel.name, "asc"),
-						(rows) => Message.UpdatedChannels({ channels: rows.map((row) => toSummary(row.channel)) }),
+						(rows) =>
+							Message.UpdatedChannels({ channels: rows.map((row) => toSummary(row.channel)) }),
 					),
 	}),
 	homeDmChannels: entry(Context, {
@@ -105,8 +113,9 @@ const pageSubscriptions = Subscription.make<Input, Message>()((entry) => ({
 						(q) =>
 							q
 								.from({ channel: channelCollection })
-								.innerJoin({ member: channelMemberWithUserCollection }, ({ channel, member }) =>
-									eq(member.channelId, channel.id),
+								.innerJoin(
+									{ member: channelMemberWithUserCollection },
+									({ channel, member }) => eq(member.channelId, channel.id),
 								)
 								.where((t) =>
 									and(
@@ -120,7 +129,9 @@ const pageSubscriptions = Subscription.make<Input, Message>()((entry) => ({
 	recentChannelIds: entry(
 		{ isOpen: Schema.Boolean },
 		{
-			modelToDependencies: (input) => ({ isOpen: input.model.isOpen && input.model.page._tag === "Home" }),
+			modelToDependencies: (input) => ({
+				isOpen: input.model.isOpen && input.model.page._tag === "Home",
+			}),
 			dependenciesToStream: ({ isOpen }) =>
 				isOpen
 					? Stream.fromEffect(readRecentChannelIds).pipe(
@@ -144,7 +155,10 @@ const pageSubscriptions = Subscription.make<Input, Message>()((entry) => ({
 								q
 									.from({ channel: channelCollection })
 									.where(({ channel }) =>
-										and(eq(channel.organizationId, organizationId), inArray(channel.id, [...channelIds])),
+										and(
+											eq(channel.organizationId, organizationId),
+											inArray(channel.id, [...channelIds]),
+										),
 									)
 									.select(({ channel }) => ({ ...channel })),
 							(rows) => Message.UpdatedRecentChannels({ channels: rows.map(toSummary) }),
@@ -154,7 +168,10 @@ const pageSubscriptions = Subscription.make<Input, Message>()((entry) => ({
 	presence: entry(
 		{ userId: Schema.NullOr(UserId), nowMs: Schema.Number },
 		{
-			modelToDependencies: (input) => ({ userId: contextOf(input, "Status").userId, nowMs: input.shared.nowMs }),
+			modelToDependencies: (input) => ({
+				userId: contextOf(input, "Status").userId,
+				nowMs: input.shared.nowMs,
+			}),
 			dependenciesToStream: ({ userId, nowMs }) =>
 				userId === null
 					? Stream.empty
@@ -168,11 +185,18 @@ const pageSubscriptions = Subscription.make<Input, Message>()((entry) => ({
 							(rows) => {
 								const row = rows[0]
 								const status = getEffectivePresenceStatus(
-									row ? { status: row.status, lastSeenAt: row.lastSeenAt ? new Date(row.lastSeenAt) : null } : null,
+									row
+										? {
+												status: row.status,
+												lastSeenAt: row.lastSeenAt ? new Date(row.lastSeenAt) : null,
+											}
+										: null,
 									nowMs,
 								)
 								// `usePresence().status` never shows the local user as offline.
-								return Message.UpdatedPresenceStatus({ status: status === "offline" ? "online" : status })
+								return Message.UpdatedPresenceStatus({
+									status: status === "offline" ? "online" : status,
+								})
 							},
 						),
 		},
@@ -190,7 +214,10 @@ const pageSubscriptions = Subscription.make<Input, Message>()((entry) => ({
 									.from({ m: channelMemberCollection })
 									.where(({ m }) => eq(m.userId, userId))
 									.select(({ m }) => ({ channelId: m.channelId })),
-							(rows) => Message.UpdatedMemberChannelIds({ channelIds: rows.map((row) => row.channelId) }),
+							(rows) =>
+								Message.UpdatedMemberChannelIds({
+									channelIds: rows.map((row) => row.channelId),
+								}),
 						),
 		},
 	),
@@ -208,12 +235,16 @@ const pageSubscriptions = Subscription.make<Input, Message>()((entry) => ({
 							(q) => {
 								const base = q
 									.from({ channel: channelCollection })
-									.where(({ channel }) => or(eq(channel.type, "public"), eq(channel.type, "private")))
+									.where(({ channel }) =>
+										or(eq(channel.type, "public"), eq(channel.type, "private")),
+									)
 									.where(({ channel }) => eq(channel.organizationId, organizationId))
 								return (
 									channelIds.length === 0
 										? base
-										: base.where(({ channel }) => not(inArray(channel.id, [...channelIds])))
+										: base.where(({ channel }) =>
+												not(inArray(channel.id, [...channelIds])),
+											)
 								).select(({ channel }) => ({ ...channel }))
 							},
 							(rows) => Message.UpdatedUnjoinedChannels({ channels: rows.map(toSummary) }),
@@ -224,5 +255,8 @@ const pageSubscriptions = Subscription.make<Input, Message>()((entry) => ({
 
 /** Keys are prefixed: Subscription keys share one namespace across the root aggregate. */
 export const subscriptions = Object.fromEntries(
-	Object.entries({ ...pageSubscriptions, ...searchSubscriptions }).map(([key, entry]) => [`commandPalette.${key}`, entry]),
+	Object.entries({ ...pageSubscriptions, ...searchSubscriptions }).map(([key, entry]) => [
+		`commandPalette.${key}`,
+		entry,
+	]),
 )

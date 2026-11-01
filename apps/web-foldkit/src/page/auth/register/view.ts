@@ -81,7 +81,9 @@ const nameForm = (h: HtmlBuilder<Message>, form: Form): Html => {
 					isDisabled: isSubmitting,
 					onPress: Message.SubmittedRegistration(),
 				},
-				isSubmitting ? [loader(h, { className: "size-4" }), "Creating your account..."] : ["Continue"],
+				isSubmitting
+					? [loader(h, { className: "size-4" }), "Creating your account..."]
+					: ["Continue"],
 			),
 		],
 	)

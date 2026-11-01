@@ -102,24 +102,22 @@ const brandColors = (h: HtmlBuilder<Message>, theme: ThemeState): Html =>
 						onSelect: Message.SelectedBrandColor({ hex: swatch.hex }),
 					},
 					[
-						h.div(
-							[
-								h.AriaLabel(swatch.name),
-								h.Attribute("aria-roledescription", "color swatch"),
-								h.Class(
-									twMerge(
-										"size-7 cursor-pointer rounded-full outline-1 outline-black/10 -outline-offset-1",
-										isSelected && "ring-2 ring-ring ring-offset-2 ring-offset-bg",
-									),
+						h.div([
+							h.AriaLabel(swatch.name),
+							h.Attribute("aria-roledescription", "color swatch"),
+							h.Class(
+								twMerge(
+									"size-7 cursor-pointer rounded-full outline-1 outline-black/10 -outline-offset-1",
+									isSelected && "ring-2 ring-ring ring-offset-2 ring-offset-bg",
 								),
-								h.Id(`color-${swatch.hex}`),
-								h.Role("img"),
-								h.Attribute(
-									"style",
-									`background-color: ${rgbOf(swatch.hex)}; forced-color-adjust: none;`,
-								),
-							],
-						),
+							),
+							h.Id(`color-${swatch.hex}`),
+							h.Role("img"),
+							h.Attribute(
+								"style",
+								`background-color: ${rgbOf(swatch.hex)}; forced-color-adjust: none;`,
+							),
+						]),
 					],
 				)
 			}),

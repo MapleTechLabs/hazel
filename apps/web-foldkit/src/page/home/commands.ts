@@ -36,9 +36,11 @@ export const CreateDm = Command.define("CreateDm", {
 		).pipe(
 			Effect.map((result) => Message.SucceededCreateDm({ channelId: result.data.id, name })),
 			Effect.catchTags({
-				DmChannelAlreadyExistsError: () => Effect.succeed(Message.FailedCreateDm({ reason: "AlreadyExists" })),
+				DmChannelAlreadyExistsError: () =>
+					Effect.succeed(Message.FailedCreateDm({ reason: "AlreadyExists" })),
 				// The page only asks for a single DM with one member; a rejected shape is a bug here.
-				InvalidChannelRequestError: () => Effect.succeed(Message.FailedCreateDm({ reason: "Unexpected" })),
+				InvalidChannelRequestError: () =>
+					Effect.succeed(Message.FailedCreateDm({ reason: "Unexpected" })),
 			}),
 			catchCommon((reason) => Message.FailedCreateDm({ reason })),
 		),

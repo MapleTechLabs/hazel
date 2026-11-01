@@ -49,10 +49,7 @@ const rowActions = (h: HtmlBuilder<Message>, row: RowMenu, isRevoking: boolean):
 						isDisabled: isRevoking,
 						attributes: [h.AriaLabel("Invitation actions"), ...attributes],
 					},
-					[
-						IconDots(h),
-						overlay,
-					],
+					[IconDots(h), overlay],
 				),
 			content: (key) => [
 				IconClose(h, { attributes: { "data-slot": "icon" } }),

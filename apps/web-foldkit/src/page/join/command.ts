@@ -33,10 +33,12 @@ export const JoinWorkspace = Command.define("JoinWorkspace", {
 		HazelRpc.use((client) => client("organization.joinViaPublicInvite", { slug })).pipe(
 			Effect.as(Message.SucceededJoinWorkspace()),
 			Effect.catchTags({
-				OrganizationNotFoundError: () => Effect.succeed(Message.FailedJoinWorkspace({ reason: "NotFound" })),
+				OrganizationNotFoundError: () =>
+					Effect.succeed(Message.FailedJoinWorkspace({ reason: "NotFound" })),
 				PublicInviteDisabledError: () =>
 					Effect.succeed(Message.FailedJoinWorkspace({ reason: "PublicInvitesDisabled" })),
-				AlreadyMemberError: () => Effect.succeed(Message.FailedJoinWorkspace({ reason: "AlreadyMember" })),
+				AlreadyMemberError: () =>
+					Effect.succeed(Message.FailedJoinWorkspace({ reason: "AlreadyMember" })),
 			}),
 			catchCommon((reason) => Message.FailedJoinWorkspace({ reason })),
 		),

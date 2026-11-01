@@ -75,7 +75,9 @@ describe("interaction story", () => {
 			message(Message.PressedKey({ target: "save", key: "a" })),
 			model((next) => expect(next.press).toBeNull()),
 			message(Message.PressedKey({ target: "save", key: " " })),
-			model((next) => expect(next.press).toEqual({ target: "save", source: "keyboard", isInside: true })),
+			model((next) =>
+				expect(next.press).toEqual({ target: "save", source: "keyboard", isInside: true }),
+			),
 			message(Message.ReleasedDocumentKey({ key: "Escape" })),
 			model((next) => expect(stateOf(next, "save").isPressed).toBe(true)),
 			message(Message.ReleasedDocumentKey({ key: " " })),

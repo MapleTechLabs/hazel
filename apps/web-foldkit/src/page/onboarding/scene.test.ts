@@ -1,6 +1,22 @@
 import { OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
 import { Option, Schema } from "effect"
-import { Command, Mount, all, click, expect, expectAll, expectOutMessage, given, last, role, scene, selector, submit, text, type } from "foldkit/scene"
+import {
+	Command,
+	Mount,
+	all,
+	click,
+	expect,
+	expectAll,
+	expectOutMessage,
+	given,
+	last,
+	role,
+	scene,
+	selector,
+	submit,
+	text,
+	type,
+} from "foldkit/scene"
 import { describe, test, vi, expect as vitestExpect } from "vitest"
 import type { Shared } from "../contract"
 import { PageOutMessage } from "../out-message"
@@ -147,7 +163,9 @@ describe("onboarding flow", () => {
 
 	test("the theme step previews a choice through the root", () => {
 		const themed = ready("themeSelection", membership)
-		vitestExpect(update(themed, Message.SelectedTheme({ theme: "light" }), darkShared).outMessage).toEqual(
+		vitestExpect(
+			update(themed, Message.SelectedTheme({ theme: "light" }), darkShared).outMessage,
+		).toEqual(
 			PageOutMessage.RequestedTheme({
 				preference: { mode: "light", customization: darkShared.theme.customization },
 			}),
@@ -170,7 +188,9 @@ describe("onboarding flow", () => {
 			Mount.resolve(EnterAnimation, settled),
 			Command.resolve(CompleteOnboarding, Message.FailedCompleteOnboarding({ reason: "Offline" })),
 			expect(text("Setting up your workspace...")).toBeAbsent(),
-			expect(role("alert")).toHaveText("Connection lost. Check your internet connection and try again."),
+			expect(role("alert")).toHaveText(
+				"Connection lost. Check your internet connection and try again.",
+			),
 			click(role("button", { name: "Try again" })),
 			Command.expectExact(CompleteOnboarding),
 			expect(text("Setting up your workspace...")).toExist(),
@@ -277,7 +297,15 @@ describe("invite step", () => {
 			config,
 			given(ready("teamInvitation", creator)),
 			firstMounts,
-			addRow, addRow, addRow, addRow, addRow, addRow, addRow, addRow, addRow,
+			addRow,
+			addRow,
+			addRow,
+			addRow,
+			addRow,
+			addRow,
+			addRow,
+			addRow,
+			addRow,
 			expect(role("textbox", { name: "Email 10" })).toExist(),
 			expect(role("button", { name: /Add another email/ })).toBeDisabled(),
 			expect(text("Maximum of 10 invites at a time. You can invite more later.")).toExist(),
@@ -291,12 +319,19 @@ describe("invite step", () => {
 			firstMounts,
 			type(role("textbox", { name: "Email 1" }), "grace@hazel.test"),
 			click(role("button", { name: /Send invites/ })),
-			Command.expectExact(SendInvites({ organizationId: creator.organizationId, emails: ["grace@hazel.test"] })),
+			Command.expectExact(
+				SendInvites({ organizationId: creator.organizationId, emails: ["grace@hazel.test"] }),
+			),
 			expect(role("button", { name: /Send invites/ })).toBeDisabled(),
 			expect(role("button", { name: /Back/ })).toBeDisabled(),
-			Command.resolve(SendInvites, Message.SucceededSendInvites({ emails: ["grace@hazel.test"], failedCount: 0 })),
+			Command.resolve(
+				SendInvites,
+				Message.SucceededSendInvites({ emails: ["grace@hazel.test"], failedCount: 0 }),
+			),
 			expectOutMessage(
-				PageOutMessage.RequestedToast({ toast: { intent: "success", title: "Sent 1 invitation", description: null } }),
+				PageOutMessage.RequestedToast({
+					toast: { intent: "success", title: "Sent 1 invitation", description: null },
+				}),
 			),
 			Command.resolve(ReplaceOnboardingStepUrl, Message.CompletedReplaceStepUrl()),
 			expect(text("Setting up your workspace...")).toExist(),

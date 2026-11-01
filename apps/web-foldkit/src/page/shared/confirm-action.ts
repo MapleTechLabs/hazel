@@ -37,7 +37,10 @@ export const Model = <Target, Encoded>(target: Schema.Codec<Target, Encoded>) =>
 		modal: Modal.Model,
 	})
 
-export const init = <Target>(id: string): Model<Target> => ({ state: { _tag: "Closed" }, modal: Modal.init(id) })
+export const init = <Target>(id: string): Model<Target> => ({
+	state: { _tag: "Closed" },
+	modal: Modal.init(id),
+})
 
 // MESSAGE
 
@@ -60,12 +63,17 @@ export const isRunning = <Target>(model: Model<Target>): boolean => model.state.
 
 /** Opens the dialog for `target`; ignored while an action runs. */
 export const ask = <Target>(model: Model<Target>, target: Target): Model<Target> =>
-	isRunning(model) ? model : { state: { _tag: "Confirming", target }, modal: Modal.initOpen(model.modal.id) }
+	isRunning(model)
+		? model
+		: { state: { _tag: "Confirming", target }, modal: Modal.initOpen(model.modal.id) }
 
 /** The user confirmed: `Running`, with the target to act on. `None` unless a confirmation is open. */
 export const confirm = <Target>(model: Model<Target>): Option.Option<readonly [Model<Target>, Target]> =>
 	model.state._tag === "Confirming"
-		? Option.some([{ ...model, state: { _tag: "Running", target: model.state.target } }, model.state.target])
+		? Option.some([
+				{ ...model, state: { _tag: "Running", target: model.state.target } },
+				model.state.target,
+			])
 		: Option.none()
 
 /** The action succeeded (or the parent dismisses it): closed. */
@@ -91,7 +99,11 @@ export const update = <Target>(
 			const result = Modal.update(model.modal, modalMessage)
 			const modal = result.model
 			// Dismissing the dialog cancels a pending confirmation; a running action settles on its own.
-			const state = !modal.isOpen && model.state._tag === "Confirming" ? { _tag: "Closed" as const } : model.state
-			return { model: { state, modal }, commands: Command.mapMessages(result.commands ?? [], toModalMessage) }
+			const state =
+				!modal.isOpen && model.state._tag === "Confirming" ? { _tag: "Closed" as const } : model.state
+			return {
+				model: { state, modal },
+				commands: Command.mapMessages(result.commands ?? [], toModalMessage),
+			}
 		},
 	})

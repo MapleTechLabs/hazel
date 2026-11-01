@@ -383,4 +383,3 @@ export const pressStyleAttributes = <ParentMessage>(
 	model.press?.target === target && model.press.source === "pointer"
 		? [h.Attribute("style", "user-select: none;")]
 		: []
-

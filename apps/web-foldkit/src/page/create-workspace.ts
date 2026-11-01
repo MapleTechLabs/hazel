@@ -178,7 +178,12 @@ export const view = <ParentMessage>(
 				],
 			),
 			...(model.submission._tag === "Failed"
-				? [h.p([h.Class("text-danger text-sm"), h.Role("alert")], [failureText(model.submission.reason)])]
+				? [
+						h.p(
+							[h.Class("text-danger text-sm"), h.Role("alert")],
+							[failureText(model.submission.reason)],
+						),
+					]
 				: []),
 			button(
 				h,

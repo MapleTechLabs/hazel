@@ -36,7 +36,9 @@ describe("notifications inbox update", () => {
 			update,
 			given(started.model),
 			message(Message.UpdatedNotifications({ notifications: [unread] })),
-			model((current) => expect(current.notifications).toEqual(Notifications.Loaded({ items: [unread] }))),
+			model((current) =>
+				expect(current.notifications).toEqual(Notifications.Loaded({ items: [unread] })),
+			),
 		)
 	})
 
@@ -53,8 +55,18 @@ describe("notifications inbox update", () => {
 	})
 
 	test("a read row, or a row no longer in the list, is not marked", () => {
-		story(update, given(loaded), message(Message.ClickedNotification({ id: read.id })), Command.expectNone())
-		story(update, given(loaded), message(Message.ClickedNotification({ id: notification(3, true).id })), Command.expectNone())
+		story(
+			update,
+			given(loaded),
+			message(Message.ClickedNotification({ id: read.id })),
+			Command.expectNone(),
+		)
+		story(
+			update,
+			given(loaded),
+			message(Message.ClickedNotification({ id: notification(3, true).id })),
+			Command.expectNone(),
+		)
 	})
 
 	test("a failed mark-read leaves the row unread and says so", () => {
@@ -62,10 +74,16 @@ describe("notifications inbox update", () => {
 			update,
 			given(loaded),
 			message(Message.ClickedNotification({ id: unread.id })),
-			Command.resolve(MarkNotificationRead, Message.FailedMarkNotificationRead({ id: unread.id, reason: "Offline" })),
+			Command.resolve(
+				MarkNotificationRead,
+				Message.FailedMarkNotificationRead({ id: unread.id, reason: "Offline" }),
+			),
 			expectOutMessage(
 				PageOutMessage.RequestedToast({
-					toast: errorToast("Couldn't mark the notification as read", "Check your internet connection and try again."),
+					toast: errorToast(
+						"Couldn't mark the notification as read",
+						"Check your internet connection and try again.",
+					),
 				}),
 			),
 			model((current) => expect(current).toEqual(loaded)),
@@ -77,7 +95,10 @@ describe("notifications inbox update", () => {
 			update,
 			given(loaded),
 			message(Message.ClickedNotification({ id: unread.id })),
-			Command.resolve(MarkNotificationRead, Message.FailedMarkNotificationRead({ id: unread.id, reason: "NotFound" })),
+			Command.resolve(
+				MarkNotificationRead,
+				Message.FailedMarkNotificationRead({ id: unread.id, reason: "NotFound" }),
+			),
 			expectNoOutMessage(),
 		)
 	})

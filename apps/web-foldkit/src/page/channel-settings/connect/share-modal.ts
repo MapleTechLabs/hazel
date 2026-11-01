@@ -255,9 +255,7 @@ export const update = (model: Model, message: Message, context: Context): Return
 		}),
 		GotModalMessage: ({ message: modalMessage }) => {
 			const next = Modal.update(model.modal, modalMessage)
-			const nextModel = next.model.isOpen
-				? modifyFields(model, { modal: () => next.model })
-				: init()
+			const nextModel = next.model.isOpen ? modifyFields(model, { modal: () => next.model }) : init()
 			return {
 				model: nextModel,
 				commands: Command.mapMessages(next.commands ?? [], (child) =>

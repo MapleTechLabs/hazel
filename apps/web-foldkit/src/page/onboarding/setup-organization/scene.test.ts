@@ -19,7 +19,9 @@ describe("setup organization", () => {
 			Scene.type(Scene.label("Workspace name"), "Acme Corp!"),
 			Scene.expect(Scene.label("Workspace URL")).toHaveValue("acme-corp"),
 			Scene.click(create),
-			Scene.Command.expectExact(CreateWorkspace.CreateWorkspace({ name: "Acme Corp!", slug: "acme-corp" })),
+			Scene.Command.expectExact(
+				CreateWorkspace.CreateWorkspace({ name: "Acme Corp!", slug: "acme-corp" }),
+			),
 			Scene.Command.resolve(
 				CreateWorkspace.CreateWorkspace,
 				CreateWorkspace.Message.FailedCreateWorkspace({ reason: "SlugTaken" }),

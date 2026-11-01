@@ -20,14 +20,7 @@ import {
 	UpdateUserTimezone,
 } from "./command"
 import { Message } from "./message"
-import {
-	type Model,
-	Phase,
-	type Running,
-	type StepOf,
-	StepState,
-	type UpdateUserFailure,
-} from "./model"
+import { type Model, Phase, type Running, type StepOf, StepState, type UpdateUserFailure } from "./model"
 import { CITIES } from "./timezone/data"
 import {
 	advance,
@@ -131,7 +124,11 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 	Message.match<Return>(message, {
 		DetectedBrowserTimezone: ({ browserTimezone }) =>
 			model.phase._tag === "Starting"
-				? startWhenReady(model, { ...model.phase, browserTimezone: Option.some(browserTimezone) }, shared)
+				? startWhenReady(
+						model,
+						{ ...model.phase, browserTimezone: Option.some(browserTimezone) },
+						shared,
+					)
 				: { model },
 		// A running flow keeps its user type; the membership itself stays current.
 		UpdatedMembership: ({ membership }) =>
@@ -142,7 +139,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				Running: (running) => ({
 					model: withPhase(
 						model,
-						modifyFields(running, { flow: (flow) => modifyFields(flow, { membership: () => membership }) }),
+						modifyFields(running, {
+							flow: (flow) => modifyFields(flow, { membership: () => membership }),
+						}),
 					),
 				}),
 			}),
@@ -151,11 +150,19 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 
 		ChangedFirstName: ({ value }) =>
 			withStep(model, "Profile", (form, running) => ({
-				model: setStep(model, running, StepState.Profile({ ...form, firstName: value, hasChanged: true })),
+				model: setStep(
+					model,
+					running,
+					StepState.Profile({ ...form, firstName: value, hasChanged: true }),
+				),
 			})),
 		ChangedLastName: ({ value }) =>
 			withStep(model, "Profile", (form, running) => ({
-				model: setStep(model, running, StepState.Profile({ ...form, lastName: value, hasChanged: true })),
+				model: setStep(
+					model,
+					running,
+					StepState.Profile({ ...form, lastName: value, hasChanged: true }),
+				),
 			})),
 		SubmittedProfile: () =>
 			withStep(model, "Profile", (form, running) => {
@@ -164,7 +171,11 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				return !isProfileValid(form) || userId === undefined
 					? { model: setStep(model, running, StepState.Profile({ ...form, hasChanged: true })) }
 					: {
-							model: setStep(model, running, StepState.Profile({ ...form, isSubmitting: true })),
+							model: setStep(
+								model,
+								running,
+								StepState.Profile({ ...form, isSubmitting: true }),
+							),
 							commands: [
 								UpdateProfile({
 									userId,
@@ -230,8 +241,17 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				form.isSubmitting || form.selected === null || shared.currentUser === null
 					? { model }
 					: {
-							model: setStep(model, running, StepState.Timezone({ ...form, isSubmitting: true })),
-							commands: [UpdateUserTimezone({ userId: shared.currentUser.id, timezone: form.selected })],
+							model: setStep(
+								model,
+								running,
+								StepState.Timezone({ ...form, isSubmitting: true }),
+							),
+							commands: [
+								UpdateUserTimezone({
+									userId: shared.currentUser.id,
+									timezone: form.selected,
+								}),
+							],
 						},
 			),
 		SucceededUpdateTimezone: ({ timezone }) =>
@@ -308,7 +328,10 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 								running,
 								StepState.Invite({
 									...form,
-									rows: [...form.rows, { id: form.nextRowId, email: "", error: Option.none() }],
+									rows: [
+										...form.rows,
+										{ id: form.nextRowId, email: "", error: Option.none() },
+									],
 									nextRowId: form.nextRowId + 1,
 								}),
 							),
@@ -357,7 +380,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 								failedCount === 0
 									? toast(successToast(`Sent ${plural(emails.length)}`))
 									: toast(
-											warningToast(`Sent ${plural(emails.length - failedCount)}, ${failedCount} failed`),
+											warningToast(
+												`Sent ${plural(emails.length - failedCount)}, ${failedCount} failed`,
+											),
 										),
 						},
 			),
@@ -370,7 +395,11 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		SucceededCompleteOnboarding: () =>
 			withStep(model, "Finalizing", (_, running) => {
 				const slug = running.flow.membership?.slug
-				const completed = enterStep(model, running, "completed", { direction: "forward", shared, syncUrl: true })
+				const completed = enterStep(model, running, "completed", {
+					direction: "forward",
+					shared,
+					syncUrl: true,
+				})
 				return {
 					...completed,
 					commands: [

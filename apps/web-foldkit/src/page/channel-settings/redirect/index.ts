@@ -18,7 +18,10 @@ export const page = definePage(
 		init: (route) => ({
 			model: {},
 			outMessage: PageOutMessage.RequestedNavigation({
-				route: AppRoute.ChannelSettingsOverview({ orgSlug: route.orgSlug, channelId: route.channelId }),
+				route: AppRoute.ChannelSettingsOverview({
+					orgSlug: route.orgSlug,
+					channelId: route.channelId,
+				}),
 				replace: true,
 			}),
 		}),

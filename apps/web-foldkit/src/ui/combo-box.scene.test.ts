@@ -1,7 +1,16 @@
 // @vitest-environment jsdom
 import * as Scene from "foldkit/scene"
 import { describe, test } from "vitest"
-import { AnnounceComboBox, FocusComboBoxInput, init, item, Message, type Model, OutMessage, update } from "./combo-box"
+import {
+	AnnounceComboBox,
+	FocusComboBoxInput,
+	init,
+	item,
+	Message,
+	type Model,
+	OutMessage,
+	update,
+} from "./combo-box"
 import { view } from "./combo-box-view"
 
 /** ComboBox through the view: combobox ARIA, virtual focus via aria-activedescendant, commit and revert. */
@@ -13,7 +22,10 @@ const items = [
 	item("cafe", "Café"),
 ]
 const sceneView = Scene.withViewInputs(view, { items, label: "Channel", placeholder: "Pick a channel" })
-const config = { update: (model: Model, message: Message) => update(model, message, items), view: sceneView() }
+const config = {
+	update: (model: Model, message: Message) => update(model, message, items),
+	view: sceneView(),
+}
 const input = Scene.role("combobox")
 const button = Scene.label("Show suggestions")
 const listbox = Scene.role("listbox")

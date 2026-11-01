@@ -9,13 +9,7 @@ import { errorToastOf, reasonToast, successToast } from "../../data/actions"
 import type { Resources } from "../../rpc"
 import * as CommandMenu from "../../ui/command-menu"
 import type { ToastRequest } from "../toasts"
-import {
-	CreateChannel,
-	FocusInput,
-	JoinChannel,
-	SetPresenceStatus,
-	TrackRecentChannel,
-} from "./commands"
+import { CreateChannel, FocusInput, JoinChannel, SetPresenceStatus, TrackRecentChannel } from "./commands"
 import { Message, OutMessage } from "./message"
 import { initialPageState, isFormPage, type Model, type Page, type PageState } from "./model"
 import { emptySearchData } from "./search-data"
@@ -74,8 +68,17 @@ const focusCommandsOf = (page: PageState) =>
 				? [LoadRecentSearches(), FocusSearchEditor()]
 				: [FocusInput({ selector: `#${CommandMenu.searchId(MENU_ID)}` })]
 
-const showPage = (model: Model, page: PageState, history: ReadonlyArray<PageState>, shared: Shared): Return => ({
-	model: withMenu(modifyFields(model, { page: () => page, history: () => history }), shared, inputValueOf(page)),
+const showPage = (
+	model: Model,
+	page: PageState,
+	history: ReadonlyArray<PageState>,
+	shared: Shared,
+): Return => ({
+	model: withMenu(
+		modifyFields(model, { page: () => page, history: () => history }),
+		shared,
+		inputValueOf(page),
+	),
 	commands: focusCommandsOf(page),
 })
 
@@ -100,8 +103,12 @@ const remember = (model: Model): PageState =>
  * `navigateTo(page)`: push the current page (with its search value) and show a fresh one. A menu
  * selection passes `current` read before the menu reset its input.
  */
-export const navigateTo = (model: Model, page: Page, shared: Shared, current: PageState = remember(model)): Return =>
-	showPage(model, initialPageState(page), [...model.history, current], shared)
+export const navigateTo = (
+	model: Model,
+	page: Page,
+	shared: Shared,
+	current: PageState = remember(model),
+): Return => showPage(model, initialPageState(page), [...model.history, current], shared)
 
 /** Escape: `goBack()` when there is history, otherwise close. */
 const goBackOrClose = (model: Model, shared: Shared): Return => {
@@ -139,7 +146,10 @@ const selectedItem = (model: Model, key: string, shared: Shared, current: PageSt
 	if (key === "action:start-dm")
 		return { model: close(model), outMessage: OutMessage.RequestedModal({ modal: { _tag: "CreateDm" } }) }
 	if (key === "action:invite")
-		return { model: close(model), outMessage: OutMessage.RequestedModal({ modal: { _tag: "EmailInvite" } }) }
+		return {
+			model: close(model),
+			outMessage: OutMessage.RequestedModal({ modal: { _tag: "EmailInvite" } }),
+		}
 	const { kind, value } = parseKey(key)
 	// Channel keys always carry a channel id; an undecodable one just closes the palette.
 	if (kind === "recent" || kind === "channel" || kind === "dm")
@@ -186,7 +196,9 @@ const gotMenuMessage = (model: Model, message: CommandMenu.Message, shared: Shar
 	const current = remember(model)
 	const result = CommandMenu.update(model.menu, message)
 	const next = modifyFields(model, { menu: () => result.model })
-	const commands = Command.mapMessages(result.commands, (child) => Message.GotMenuMessage({ message: child }))
+	const commands = Command.mapMessages(result.commands, (child) =>
+		Message.GotMenuMessage({ message: child }),
+	)
 	return Option.match(Option.fromNullishOr(result.outMessage), {
 		onNone: () => ({ model: next, commands }),
 		onSome: CommandMenu.OutMessage.match<Return>({
@@ -201,7 +213,13 @@ const gotMenuMessage = (model: Model, message: CommandMenu.Message, shared: Shar
 
 const refreshMenu = (result: Return, shared: Shared): Return =>
 	result.model.isOpen && !isFormPage(result.model.page)
-		? { ...result, model: modifyFields(result.model, { menu: (menu) => modifyFields(menu, { sections: () => menuSectionsOf(result.model, shared) }) }) }
+		? {
+				...result,
+				model: modifyFields(result.model, {
+					menu: (menu) =>
+						modifyFields(menu, { sections: () => menuSectionsOf(result.model, shared) }),
+				}),
+			}
 		: result
 
 const withPage = (model: Model, page: PageState): Model => modifyFields(model, { page: () => page })
@@ -213,18 +231,24 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			ClickedBack: () => goBackOrClose(model, shared),
 			ClickedEscButton: () => ({ model: close(model) }),
 			UpdatedChannels: ({ channels }) => ({ model: modifyFields(model, { channels: () => channels }) }),
-			UpdatedDmChannels: ({ dmChannels }) => ({ model: modifyFields(model, { dmChannels: () => dmChannels }) }),
+			UpdatedDmChannels: ({ dmChannels }) => ({
+				model: modifyFields(model, { dmChannels: () => dmChannels }),
+			}),
 			UpdatedRecentChannelIds: ({ channelIds }) => ({
 				model: modifyFields(model, { recentChannelIds: () => channelIds }),
 			}),
-			UpdatedRecentChannels: ({ channels }) => ({ model: modifyFields(model, { recentChannels: () => channels }) }),
+			UpdatedRecentChannels: ({ channels }) => ({
+				model: modifyFields(model, { recentChannels: () => channels }),
+			}),
 			UpdatedMemberChannelIds: ({ channelIds }) => ({
 				model: modifyFields(model, { memberChannelIds: () => channelIds }),
 			}),
 			UpdatedUnjoinedChannels: ({ channels }) => ({
 				model: modifyFields(model, { unjoinedChannels: () => channels }),
 			}),
-			UpdatedPresenceStatus: ({ status }) => ({ model: modifyFields(model, { presenceStatus: () => status }) }),
+			UpdatedPresenceStatus: ({ status }) => ({
+				model: modifyFields(model, { presenceStatus: () => status }),
+			}),
 			ChangedChannelName: ({ value }) =>
 				model.page._tag === "CreateChannel"
 					? { model: withPage(model, { ...model.page, name: value, error: null }) }
@@ -238,11 +262,15 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				closedWith(model, chatHref(shared, channelId), successToast("Channel created successfully")),
 			FailedCreateChannel: ({ reason }) => ({
 				model:
-					model.page._tag === "CreateChannel" ? withPage(model, { ...model.page, isSubmitting: false }) : model,
+					model.page._tag === "CreateChannel"
+						? withPage(model, { ...model.page, isSubmitting: false })
+						: model,
 				outMessage: OutMessage.RequestedToast({ toast: reasonToast(reason) }),
 			}),
 			ChangedJoinSearch: ({ value }) =>
-				model.page._tag === "JoinChannel" ? { model: withPage(model, { ...model.page, searchQuery: value }) } : { model },
+				model.page._tag === "JoinChannel"
+					? { model: withPage(model, { ...model.page, searchQuery: value }) }
+					: { model },
 			ClickedJoinChannel: ({ channelId }) =>
 				shared.currentUser === null
 					? { model }
@@ -253,7 +281,10 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				outMessage: OutMessage.RequestedToast({
 					toast: errorToastOf(
 						failureMessage(reason, {
-							NotFound: { title: "Channel not found", description: "This channel may have been deleted." },
+							NotFound: {
+								title: "Channel not found",
+								description: "This channel may have been deleted.",
+							},
 						}),
 					),
 				}),
@@ -270,7 +301,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			ClickedRecentSearch: (found) => updateSearch(model, found, shared),
 			ClickedClearRecentSearches: (found) => updateSearch(model, found, shared),
 			UpdatedSearchData: ({ data }) => ({ model: modifyFields(model, { search: () => data }) }),
-			LoadedRecentSearches: ({ searches }) => ({ model: modifyFields(model, { recentSearches: () => searches }) }),
+			LoadedRecentSearches: ({ searches }) => ({
+				model: modifyFields(model, { recentSearches: () => searches }),
+			}),
 			CompletedFocusInput: () => ({ model }),
 			CompletedTrackRecentChannel: () => ({ model }),
 			SucceededSetPresenceStatus: () => ({ model }),
@@ -297,7 +330,8 @@ const submittedCreateChannel = (model: Model, shared: Shared): Return => {
 	if (page._tag !== "CreateChannel" || page.isSubmitting) return { model }
 	if (page.name.length <= 2)
 		return { model: withPage(model, { ...page, error: "Channel name must be at least 3 characters" }) }
-	if (shared.currentUser === null || shared.organization === null || shared.orgSlug === null) return { model }
+	if (shared.currentUser === null || shared.organization === null || shared.orgSlug === null)
+		return { model }
 	return {
 		model: withPage(model, { ...page, isSubmitting: true, error: null }),
 		commands: [

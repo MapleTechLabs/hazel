@@ -44,7 +44,10 @@ describe("DropZone", () => {
 	it("tracks the zone hover and nested page drags", () => {
 		const over = DropZone.update(DropZone.init(), DropZone.Message.EnteredZone()).model
 		expect(over.isOver).toBe(true)
-		const entered = DropZone.update(over, DropZone.Message.DraggedFilesOverPage({ isEntering: true })).model
+		const entered = DropZone.update(
+			over,
+			DropZone.Message.DraggedFilesOverPage({ isEntering: true }),
+		).model
 		expect(DropZone.isDraggingOnPage(entered)).toBe(true)
 		expect(DropZone.update(entered, DropZone.Message.EndedPageDrag()).model).toEqual(DropZone.init())
 	})

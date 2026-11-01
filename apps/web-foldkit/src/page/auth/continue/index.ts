@@ -24,7 +24,9 @@ const ContinueSignIn = Command.define("ContinueSignIn", {
 	execute: ({ provider }) =>
 		startOAuthSignIn(provider, null).pipe(
 			Effect.as(Message.LeftForProvider()),
-			Effect.catchTags({ AuthFlowError: ({ reason }) => Effect.succeed(Message.FailedSignIn({ reason })) }),
+			Effect.catchTags({
+				AuthFlowError: ({ reason }) => Effect.succeed(Message.FailedSignIn({ reason })),
+			}),
 		),
 })
 

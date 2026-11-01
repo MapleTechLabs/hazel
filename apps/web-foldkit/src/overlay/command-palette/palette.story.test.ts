@@ -25,7 +25,8 @@ const run = (model: Model, message: Message) => update(model, message, shared)
 const opened = open(init(), "home", shared).model
 const done = Message.CompletedFocusInput()
 const item = (key: string) => Message.GotMenuMessage({ message: CommandMenu.Message.ClickedItem({ key }) })
-const searched = (value: string) => Message.GotMenuMessage({ message: CommandMenu.Message.ChangedSearch({ value }) })
+const searched = (value: string) =>
+	Message.GotMenuMessage({ message: CommandMenu.Message.ChangedSearch({ value }) })
 const escape = Message.GotMenuMessage({ message: CommandMenu.Message.PressedSearchKey({ key: "Escape" }) })
 const channelId = Schema.decodeSync(ChannelId)("00000000-0000-4000-8000-0000000000c1")
 
@@ -139,7 +140,9 @@ describe("create channel", () => {
 			message(Message.ChangedChannelName({ value: "ab" })),
 			message(Message.SubmittedCreateChannel()),
 			Command.expectNone(),
-			model((m) => expect(m.page).toMatchObject({ error: "Channel name must be at least 3 characters" })),
+			model((m) =>
+				expect(m.page).toMatchObject({ error: "Channel name must be at least 3 characters" }),
+			),
 			message(Message.ChangedChannelName({ value: "abc" })),
 			model((m) => expect(m.page).toMatchObject({ error: null })),
 		)
@@ -194,7 +197,9 @@ describe("join channel", () => {
 			message(Message.ClickedJoinChannel({ channelId })),
 			Command.expectExact(JoinChannel({ channelId, userId: ada.id })),
 			Command.resolve(JoinChannel, Message.SucceededJoinChannel()),
-			expectOutMessage(OutMessage.Completed({ href: null, toast: successToast("Successfully joined channel") })),
+			expectOutMessage(
+				OutMessage.Completed({ href: null, toast: successToast("Successfully joined channel") }),
+			),
 		)
 	})
 })
@@ -227,7 +232,9 @@ describe("home actions", () => {
 			given(run(opened, item("pref:appearance")).model),
 			message(item("theme:light")),
 			expectOutMessage(
-				OutMessage.RequestedTheme({ preference: { mode: "light", customization: shared.theme.customization } }),
+				OutMessage.RequestedTheme({
+					preference: { mode: "light", customization: shared.theme.customization },
+				}),
 			),
 		)
 	})
@@ -291,7 +298,10 @@ describe("search page", () => {
 			message(Message.ClickedSearchResult({ index: 0 })),
 			Command.expectExact(SaveRecentSearches({ searches: recent })),
 			expectOutMessage(
-				OutMessage.Completed({ href: `/hazel/chat/${channelId}?messageId=${messageId}`, toast: null }),
+				OutMessage.Completed({
+					href: `/hazel/chat/${channelId}?messageId=${messageId}`,
+					toast: null,
+				}),
 			),
 			Command.resolve(SaveRecentSearches, Message.CompletedSaveRecentSearches()),
 			model((m) => expect(m.recentSearches).toEqual(recent)),
@@ -312,7 +322,10 @@ describe("search page", () => {
 			message(item("action:search")),
 			Command.expectExact(LoadRecentSearches(), FocusSearchEditor()),
 			Command.resolve(LoadRecentSearches, Message.LoadedRecentSearches({ searches: recentSearches })),
-			Command.resolve(FocusSearchEditor, Message.FailedFocusSearchEditor({ reason: "EditorNotMounted" })),
+			Command.resolve(
+				FocusSearchEditor,
+				Message.FailedFocusSearchEditor({ reason: "EditorNotMounted" }),
+			),
 			model((m) => {
 				expect(m.page._tag).toBe("Search")
 				expect(m.recentSearches).toEqual(recentSearches)

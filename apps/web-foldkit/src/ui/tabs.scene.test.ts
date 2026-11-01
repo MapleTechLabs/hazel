@@ -59,7 +59,10 @@ const view = (model: Model, h: HtmlBuilder<Message>): Html =>
 					ariaLabel: "Settings sections",
 					isTabDisabled: (section) => section === "billing",
 					toView: (render) =>
-						Tabs.layout(h, render, { tab: (section) => [labels[section]], panel: (section) => [panels[section]] }),
+						Tabs.layout(h, render, {
+							tab: (section) => [labels[section]],
+							panel: (section) => [panels[section]],
+						}),
 				},
 				toParentMessage: toTabsMessage,
 			}),

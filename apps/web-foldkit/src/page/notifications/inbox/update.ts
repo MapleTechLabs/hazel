@@ -54,14 +54,19 @@ export const routeChanged = (model: Model, route: InboxRoute): PageReturn<Model,
 
 const isUnread = (model: Model, id: NotificationId) =>
 	Option.exists(
-		Array.findFirst(model.notifications._tag === "Loaded" ? model.notifications.items : [], (item) => item.id === id),
+		Array.findFirst(
+			model.notifications._tag === "Loaded" ? model.notifications.items : [],
+			(item) => item.id === id,
+		),
 		(item) => item.isUnread,
 	)
 
 export const update = (model: Model, message: Message): PageReturn<Model, Message> =>
 	Message.match<PageReturn<Model, Message>>(message, {
 		UpdatedNotifications: ({ notifications }) => ({
-			model: modifyFields(model, { notifications: () => Notifications.Loaded({ items: notifications }) }),
+			model: modifyFields(model, {
+				notifications: () => Notifications.Loaded({ items: notifications }),
+			}),
 		}),
 		// Legacy `handleClick`: only unread notifications are marked; a link still navigates.
 		ClickedNotification: ({ id }) =>

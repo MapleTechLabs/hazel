@@ -74,7 +74,9 @@ describe("chat index update", () => {
 		story(
 			update,
 			given(init().model),
-			message(Message.GotTabsMessage({ message: Tabs.Message.SelectedTab({ index: 2, value: "dms" }) })),
+			message(
+				Message.GotTabsMessage({ message: Tabs.Message.SelectedTab({ index: 2, value: "dms" }) }),
+			),
 			Command.resolve(Tabs.FocusTab, Tabs.Message.CompletedFocusTab()),
 			model((current) => expect(current.tab).toBe("dms")),
 		)

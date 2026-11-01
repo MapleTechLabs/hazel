@@ -148,13 +148,11 @@ export const loadProviderConfig = (provider: OAuthIntegrationProvider) => {
 		clientId: Config.String(`${prefix}_CLIENT_ID`),
 		clientSecret: Config.Redacted(`${prefix}_CLIENT_SECRET`),
 	}).pipe(
-		Config.map(
-			(envConfig): OAuthProviderConfig => ({
-				...staticConfig,
-				clientId: envConfig.clientId,
-				clientSecret: envConfig.clientSecret,
-				redirectUri: `${envConfig.apiBaseUrl}/integrations/${provider}/callback`,
-			}),
-		),
+		Config.map((envConfig): OAuthProviderConfig => ({
+			...staticConfig,
+			clientId: envConfig.clientId,
+			clientSecret: envConfig.clientSecret,
+			redirectUri: `${envConfig.apiBaseUrl}/integrations/${provider}/callback`,
+		})),
 	)
 }

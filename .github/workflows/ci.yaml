@@ -68,6 +68,9 @@ jobs:
             - name: Type check the alchemy stack
               run: bun run alchemy:typecheck
 
+            - name: Format
+              run: bun run format:check
+
             - name: Lint
               run: bun run lint
 

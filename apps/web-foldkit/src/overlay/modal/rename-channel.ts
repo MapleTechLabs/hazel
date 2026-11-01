@@ -79,7 +79,8 @@ export const RenameChannel = Command.define("RenameChannel", {
 		updateChannelAction({ channelId, name }).pipe(
 			Effect.as(Message.SucceededRenameChannel()),
 			Effect.catchTags({
-				ChannelNotFoundError: () => Effect.succeed(Message.FailedRenameChannel({ reason: "NotFound" })),
+				ChannelNotFoundError: () =>
+					Effect.succeed(Message.FailedRenameChannel({ reason: "NotFound" })),
 			}),
 			catchCommon((reason) => Message.FailedRenameChannel({ reason })),
 		),

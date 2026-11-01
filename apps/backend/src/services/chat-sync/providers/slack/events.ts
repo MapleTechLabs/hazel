@@ -77,11 +77,10 @@ const mentionsOf = (text: string, lookupUser: SlackUserLookup) => {
 	)
 	return Effect.forEach(ids, (id) => lookupUser(id), { concurrency: 4 }).pipe(
 		Effect.map((users) =>
-			users.flatMap(
-				(user): Array<ChatSyncMention> =>
-					Option.isSome(user)
-						? [{ externalUserId: user.value.externalUserId, displayName: user.value.displayName }]
-						: [],
+			users.flatMap((user): Array<ChatSyncMention> =>
+				Option.isSome(user)
+					? [{ externalUserId: user.value.externalUserId, displayName: user.value.displayName }]
+					: [],
 			),
 		),
 	)
@@ -91,13 +90,11 @@ const mentionsOf = (text: string, lookupUser: SlackUserLookup) => {
 const authorOf = (userId: string, lookupUser: SlackUserLookup) =>
 	lookupUser(userId).pipe(
 		Effect.map(
-			Option.getOrElse(
-				(): ChatSyncInboundAuthor => ({
-					externalUserId: ExternalUserId.make(userId),
-					displayName: "Slack user",
-					avatarUrl: null,
-				}),
-			),
+			Option.getOrElse((): ChatSyncInboundAuthor => ({
+				externalUserId: ExternalUserId.make(userId),
+				displayName: "Slack user",
+				avatarUrl: null,
+			})),
 		),
 	)
 

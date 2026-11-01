@@ -42,7 +42,10 @@ export const onboardingAt = (
 	[
 		Message.DetectedBrowserTimezone({ browserTimezone: "UTC" }),
 		Message.UpdatedMembership({ membership }),
-	].reduce((model, message) => update(model, message, shared).model, init(onboardingRoute(urlStep), shared).model)
+	].reduce(
+		(model, message) => update(model, message, shared).model,
+		init(onboardingRoute(urlStep), shared).model,
+	)
 
 /** The running flow; fails the test when the page is still starting or leaving. */
 export const runningOf = (model: Model): Running => {

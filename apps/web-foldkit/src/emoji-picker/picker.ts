@@ -201,19 +201,15 @@ const movedPosition = (
 			if (column < (rows[row]?.emojis.length ?? 1) - 1) return { row, column: column + 1 }
 			return next ? { row: row + 1, column: 0 } : { row, column }
 		}),
-		Match.when(
-			"ArrowUp",
-			(): Position =>
-				previous
-					? { row: row - 1, column: previous.emojis[column] ? column : lastColumnOf(previous) }
-					: { row, column },
+		Match.when("ArrowUp", (): Position =>
+			previous
+				? { row: row - 1, column: previous.emojis[column] ? column : lastColumnOf(previous) }
+				: { row, column },
 		),
-		Match.when(
-			"ArrowDown",
-			(): Position =>
-				next
-					? { row: row + 1, column: next.emojis[column] ? column : lastColumnOf(next) }
-					: { row, column },
+		Match.when("ArrowDown", (): Position =>
+			next
+				? { row: row + 1, column: next.emojis[column] ? column : lastColumnOf(next) }
+				: { row, column },
 		),
 		Match.orElse((): Position => ({ row, column })),
 	)

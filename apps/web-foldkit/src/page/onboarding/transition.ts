@@ -8,7 +8,16 @@ import type { PageReturn, Shared } from "../contract"
 import { CompleteOnboarding, ReplaceOnboardingStepUrl } from "./command"
 import { type Direction, nextStep, previousStep, type Step, stepFromUrl } from "./flow"
 import type { Message } from "./message"
-import { type Data, type Membership, type Model, Phase, type Running, StepState, isBusy, stepOf } from "./model"
+import {
+	type Data,
+	type Membership,
+	type Model,
+	Phase,
+	type Running,
+	StepState,
+	isBusy,
+	stepOf,
+} from "./model"
 
 /** Step changes: each entered step gets fresh state, like the legacy step components remounting. */
 
@@ -43,11 +52,18 @@ const stateFor = (step: Step, running: Running, shared: Shared): StepState =>
 		),
 		Match.when("role", () =>
 			StepState.Role({
-				box: ChoiceBox.init({ id: "role", selectedKeys: running.data.role ? [running.data.role] : [] }),
+				box: ChoiceBox.init({
+					id: "role",
+					selectedKeys: running.data.role ? [running.data.role] : [],
+				}),
 			}),
 		),
 		Match.when("teamInvitation", () =>
-			StepState.Invite({ rows: [{ id: 0, email: "", error: Option.none() }], nextRowId: 1, isSending: false }),
+			StepState.Invite({
+				rows: [{ id: 0, email: "", error: Option.none() }],
+				nextRowId: 1,
+				isSending: false,
+			}),
 		),
 		Match.when("finalization", () => StepState.Finalizing({ failure: Option.none() })),
 		Match.when("completed", () => StepState.Completed()),
@@ -83,7 +99,9 @@ export const enterStep = (
 	return {
 		model: withPhase(model, next),
 		commands: [
-			...(options.syncUrl ? [ReplaceOnboardingStepUrl({ href: onboardingHref(model.orgId, step) })] : []),
+			...(options.syncUrl
+				? [ReplaceOnboardingStepUrl({ href: onboardingHref(model.orgId, step) })]
+				: []),
 			...(step === "finalization" ? [completeOnboarding(next)] : []),
 		],
 	}
@@ -92,7 +110,12 @@ export const enterStep = (
 type DataTransform = Partial<{ readonly [K in keyof Data]: (value: Data[K]) => Data[K] }>
 
 /** `createStepHandler`: record the step's data and move forward. */
-export const advance = (model: Model, running: Running, shared: Shared, transform: DataTransform = {}): Return =>
+export const advance = (
+	model: Model,
+	running: Running,
+	shared: Shared,
+	transform: DataTransform = {},
+): Return =>
 	enterStep(
 		model,
 		modifyFields(running, { data: (data) => modifyFields(data, transform) }),
@@ -119,7 +142,10 @@ export const goBack = (model: Model, running: Running, shared: Shared): Return =
  */
 export const startWhenReady = (
 	model: Model,
-	known: { readonly membership: Option.Option<Membership | null>; readonly browserTimezone: Option.Option<string> },
+	known: {
+		readonly membership: Option.Option<Membership | null>
+		readonly browserTimezone: Option.Option<string>
+	},
 	shared: Shared,
 ): Return =>
 	Option.match(Option.all({ membership: known.membership, browserTimezone: known.browserTimezone }), {

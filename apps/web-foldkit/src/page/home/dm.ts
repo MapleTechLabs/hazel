@@ -7,7 +7,9 @@ import type { DmRow } from "./model"
 export const dmChannelsQuery = (q: InitialQueryBuilder) =>
 	q
 		.from({ channel: channelCollection })
-		.innerJoin({ member: channelMemberCollection }, ({ channel, member }) => eq(member.channelId, channel.id))
+		.innerJoin({ member: channelMemberCollection }, ({ channel, member }) =>
+			eq(member.channelId, channel.id),
+		)
 		.where(({ channel }) => or(eq(channel.type, "single"), eq(channel.type, "direct")))
 
 /** `findExistingDmChannel`: a single DM with exactly the two users, or a group DM with exactly them all. */

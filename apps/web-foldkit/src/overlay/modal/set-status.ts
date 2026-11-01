@@ -54,7 +54,11 @@ const SaveStatus = Command.define("SaveStatus", {
 			const client = yield* HazelRpc
 			yield* client("userPresenceStatus.update", { ...fields, statusExpiresAt })
 			return Message.SucceededSaveStatus()
-		}).pipe(Effect.catchCause((cause) => Effect.succeed(Message.FailedSaveStatus({ toast: failureToast(cause, "friendly") })))),
+		}).pipe(
+			Effect.catchCause((cause) =>
+				Effect.succeed(Message.FailedSaveStatus({ toast: failureToast(cause, "friendly") })),
+			),
+		),
 })
 
 const ClearStatus = Command.define("ClearStatus", {
@@ -63,12 +67,20 @@ const ClearStatus = Command.define("ClearStatus", {
 		const client = yield* HazelRpc
 		yield* client("userPresenceStatus.clearStatus", {})
 		return Message.SucceededClearStatus()
-	}).pipe(Effect.catchCause((cause) => Effect.succeed(Message.FailedClearStatus({ toast: failureToast(cause, "friendly") })))),
+	}).pipe(
+		Effect.catchCause((cause) =>
+			Effect.succeed(Message.FailedClearStatus({ toast: failureToast(cause, "friendly") })),
+		),
+	),
 })
 
 type Return = ModalReturn<Model, Message>
 
-const expirationChanged = (model: Model, result: ReturnType<typeof Select.update>, shared: Shared): Return => {
+const expirationChanged = (
+	model: Model,
+	result: ReturnType<typeof Select.update>,
+	shared: Shared,
+): Return => {
 	const next = modifyFields(model, { expiration: () => result.model })
 	// Picking "custom" defaults the date to today and the time to the next hour.
 	const isCustom = result.outMessage !== undefined && result.outMessage.key === "custom"
@@ -76,15 +88,20 @@ const expirationChanged = (model: Model, result: ReturnType<typeof Select.update
 		? modifyFields(next, {
 				customDate: (current) => {
 					const today = todayValue(shared.nowMs)
-					return current ?? DatePicker.init({ id: `${ID}-date`, today, value: today, minValue: today })
+					return (
+						current ?? DatePicker.init({ id: `${ID}-date`, today, value: today, minValue: today })
+					)
 				},
 				customTime: (current) =>
-					current ?? Segments.init({ id: `${ID}-time`, kind: "time", value: nextHourValue(shared.nowMs) }),
+					current ??
+					Segments.init({ id: `${ID}-time`, kind: "time", value: nextHourValue(shared.nowMs) }),
 			})
 		: next
 	return {
 		model: withDefaults,
-		commands: Command.mapMessages(result.commands, (message) => Message.GotExpirationMessage({ message })),
+		commands: Command.mapMessages(result.commands, (message) =>
+			Message.GotExpirationMessage({ message }),
+		),
 	}
 }
 
@@ -139,13 +156,17 @@ const presenceUpdated = (model: Model, presence: Presence | null): Return => ({
 
 const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
-		GotFrameMessage: ({ message }) => (isCloseRequest(message) ? { model, outMessage: closed } : { model }),
-		GotExpirationMessage: ({ message }) => expirationChanged(model, Select.update(model.expiration, message), shared),
+		GotFrameMessage: ({ message }) =>
+			isCloseRequest(message) ? { model, outMessage: closed } : { model },
+		GotExpirationMessage: ({ message }) =>
+			expirationChanged(model, Select.update(model.expiration, message), shared),
 		GotCustomDateMessage: ({ message }) => customDateChanged(model, message),
 		GotEmojiPickerMessage: ({ message }) => emojiPickerChanged(model, message),
 		UpdatedCustomEmojis: ({ emojis }) => ({ model: modifyFields(model, { customEmojis: () => emojis }) }),
 		GotCustomTimeMessage: ({ message }) =>
-			segmentsChanged(model, "customTime", message, (child) => Message.GotCustomTimeMessage({ message: child })),
+			segmentsChanged(model, "customTime", message, (child) =>
+				Message.GotCustomTimeMessage({ message: child }),
+			),
 		UpdatedPresence: ({ presence }) => presenceUpdated(model, presence),
 		ChangedMessage: ({ value }) => ({ model: modifyFields(model, { message: () => value }) }),
 		ToggledPauseNotifications: ({ isSelected }) => ({
@@ -176,12 +197,18 @@ const update = (model: Model, message: Message, shared: Shared): Return =>
 			model.isSubmitting || shared.currentUser === null
 				? { model }
 				: { model: modifyFields(model, { isSubmitting: () => true }), commands: [ClearStatus()] },
-		SucceededSaveStatus: () => ({ model, outMessage: completed({ toast: successToast("Status updated") }) }),
+		SucceededSaveStatus: () => ({
+			model,
+			outMessage: completed({ toast: successToast("Status updated") }),
+		}),
 		FailedSaveStatus: ({ toast }) => ({
 			model: modifyFields(model, { isSubmitting: () => false }),
 			outMessage: ModalOutMessage.RequestedToast({ toast }),
 		}),
-		SucceededClearStatus: () => ({ model, outMessage: completed({ toast: successToast("Status cleared") }) }),
+		SucceededClearStatus: () => ({
+			model,
+			outMessage: completed({ toast: successToast("Status cleared") }),
+		}),
 		FailedClearStatus: ({ toast }) => ({
 			model: modifyFields(model, { isSubmitting: () => false }),
 			outMessage: ModalOutMessage.RequestedToast({ toast }),
@@ -240,7 +267,10 @@ const dataSubscriptions = Subscription.make<ModalSubscriptionInput<Model>, Messa
 }))
 
 /** The custom date's calendar (hover, press and focus modality) while "custom" is picked. */
-const datePickerSubscriptions = Subscription.lift(DatePicker.subscriptions)<ModalSubscriptionInput<Model>, Message>({
+const datePickerSubscriptions = Subscription.lift(DatePicker.subscriptions)<
+	ModalSubscriptionInput<Model>,
+	Message
+>({
 	read: (input) => Option.fromNullishOr(input.model.customDate),
 	toParentMessage: (message) => Message.GotCustomDateMessage({ message }),
 })

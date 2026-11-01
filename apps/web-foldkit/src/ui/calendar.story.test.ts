@@ -1,15 +1,7 @@
 import { Option } from "effect"
 import { Command, expectNoOutMessage, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
-import {
-	AnnounceCalendar,
-	FocusCalendarCell,
-	init,
-	Message,
-	OutMessage,
-	update,
-	yearItems,
-} from "./calendar"
+import { AnnounceCalendar, FocusCalendarCell, init, Message, OutMessage, update, yearItems } from "./calendar"
 import * as Select from "./select"
 
 /** Calendar update: grid keys, paging, minimum date, selection and announcements. */
@@ -226,7 +218,12 @@ describe("calendar story: single selection", () => {
 			update,
 			given(event),
 			message(
-				Message.GotYearMessage({ message: Select.Message.PressedTriggerKey({ key: "ArrowRight", items: yearItems(event.focusedDate) }) }),
+				Message.GotYearMessage({
+					message: Select.Message.PressedTriggerKey({
+						key: "ArrowRight",
+						items: yearItems(event.focusedDate),
+					}),
+				}),
 			),
 			Command.expectExact(
 				AnnounceCalendar({ message: "March 2027", timeout: 7000, assertiveness: "assertive" }),

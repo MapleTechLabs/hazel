@@ -41,7 +41,11 @@ export const layout = <M, Value extends string>(
 				Array.map(render.tabs, (info) =>
 					h.keyed("button")(
 						info.value,
-						[...info.tab, h.Class(twMerge(...tabsStyles.tab("horizontal", false))), h.DataAttribute("slot", "tab")],
+						[
+							...info.tab,
+							h.Class(twMerge(...tabsStyles.tab("horizontal", false))),
+							h.DataAttribute("slot", "tab"),
+						],
 						[
 							...options.tab(info.value),
 							...(info.isActive
@@ -61,7 +65,11 @@ export const layout = <M, Value extends string>(
 				(info) =>
 					h.keyed("div")(
 						info.value,
-						[...info.panel, h.Class(twMerge(tabsStyles.tabPanel)), h.DataAttribute("slot", "tab-panel")],
+						[
+							...info.panel,
+							h.Class(twMerge(tabsStyles.tabPanel)),
+							h.DataAttribute("slot", "tab-panel"),
+						],
 						[...options.panel(info.value)],
 					),
 			),

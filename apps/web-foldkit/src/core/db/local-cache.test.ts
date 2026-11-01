@@ -26,8 +26,11 @@ const loadModule = async (flag: string | undefined) => {
 
 /** The database handle the persistence was created with. */
 const databaseOf = () =>
-	(persistence.create.mock.calls[0]![0] as { readonly database: { readonly execute: (sql: string) => Promise<unknown> } })
-		.database
+	(
+		persistence.create.mock.calls[0]![0] as {
+			readonly database: { readonly execute: (sql: string) => Promise<unknown> }
+		}
+	).database
 
 beforeEach(() => {
 	persistence.open.mockReset()

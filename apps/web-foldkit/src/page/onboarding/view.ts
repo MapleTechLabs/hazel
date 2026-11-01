@@ -87,7 +87,11 @@ const finalizationView = (h: HtmlBuilder<Message>, step: StepOf<"Finalizing">): 
 					h.p([h.Class("font-medium text-lg")], ["Couldn't finish setting up your workspace"]),
 					h.p(
 						[h.Class("text-danger text-sm"), h.Role("alert")],
-						[message.description === undefined ? message.title : `${message.title}. ${message.description}`],
+						[
+							message.description === undefined
+								? message.title
+								: `${message.title}. ${message.description}`,
+						],
 					),
 					button(h, { intent: "primary", onPress: Message.ClickedRetryFinalize() }, ["Try again"]),
 				],
@@ -105,7 +109,10 @@ const stepBody = (h: HtmlBuilder<Message>, model: Model, running: Running, share
 			}),
 		Profile: (form) => profileStep(h, form, interaction),
 		Timezone: (form) =>
-			timezoneStep(h, form, { browserTimezone: running.flow.browserTimezone || "UTC", nowMs: shared.nowMs }),
+			timezoneStep(h, form, {
+				browserTimezone: running.flow.browserTimezone || "UTC",
+				nowMs: shared.nowMs,
+			}),
 		Theme: () => themeStep(h, shared.theme),
 		UseCases: ({ box }) => useCaseStep(h, box),
 		Role: ({ box }) => roleStep(h, box),

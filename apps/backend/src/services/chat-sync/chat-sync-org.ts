@@ -79,12 +79,10 @@ const channelTargets = (channelId: ChannelId) =>
 		),
 	).pipe(
 		Effect.map((rows) =>
-			rows.map(
-				(row): ChatSyncChannelTarget => ({
-					...row,
-					externalChannelId: row.externalChannelId as ExternalChannelId,
-				}),
-			),
+			rows.map((row): ChatSyncChannelTarget => ({
+				...row,
+				externalChannelId: row.externalChannelId as ExternalChannelId,
+			})),
 		),
 	)
 
@@ -103,17 +101,16 @@ const linkedAccounts = (providers: ReadonlyArray<string>) =>
 					$.provider.in_(...(providers as Array<never>)),
 				]),
 		)
-		return rows.flatMap(
-			(row): Array<ChatSyncLinkedAccount> =>
-				row.userId !== null && row.externalAccountId
-					? [
-							{
-								userId: row.userId,
-								provider: row.provider,
-								externalAccountId: row.externalAccountId,
-							},
-						]
-					: [],
+		return rows.flatMap((row): Array<ChatSyncLinkedAccount> =>
+			row.userId !== null && row.externalAccountId
+				? [
+						{
+							userId: row.userId,
+							provider: row.provider,
+							externalAccountId: row.externalAccountId,
+						},
+					]
+				: [],
 		)
 	})
 

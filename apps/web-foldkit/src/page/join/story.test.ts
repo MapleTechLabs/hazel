@@ -85,6 +85,11 @@ describe("join workspace", () => {
 
 	// ClickedJoin is guarded on isJoining, so a second press sends no second join request.
 	test("a press while joining sends nothing", () => {
-		story(update, given({ ...loaded, isJoining: true }), message(Message.ClickedJoin()), Command.expectNone())
+		story(
+			update,
+			given({ ...loaded, isJoining: true }),
+			message(Message.ClickedJoin()),
+			Command.expectNone(),
+		)
 	})
 })

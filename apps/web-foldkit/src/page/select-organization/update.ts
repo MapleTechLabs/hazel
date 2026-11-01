@@ -31,7 +31,11 @@ export const update = (model: Model, message: Message): Return =>
 						modifyFields(model, { organizations: () => Organizations.Redirected() }),
 						organizationRoute(single),
 					)
-				: { model: modifyFields(model, { organizations: () => Organizations.Loaded({ organizations }) }) }
+				: {
+						model: modifyFields(model, {
+							organizations: () => Organizations.Loaded({ organizations }),
+						}),
+					}
 		},
 		ClickedOrganization: ({ organization }) => navigate(model, organizationRoute(organization)),
 		// Not `/onboarding`: it sends an onboarded user (anyone with organizations to pick) back to `/`.

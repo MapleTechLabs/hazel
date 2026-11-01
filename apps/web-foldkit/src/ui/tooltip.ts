@@ -127,7 +127,12 @@ const panel = (id: string, anchor: AnchorConfig, viewInputs: ViewInputs, h: Html
 								h.Attribute("height", "12"),
 								h.Attribute("viewBox", "0 0 12 12"),
 								h.AriaHidden(true),
-								h.Class(twJoin(tooltipArrowBase, inverse ? tooltipArrowInverse : tooltipArrowDefault)),
+								h.Class(
+									twJoin(
+										tooltipArrowBase,
+										inverse ? tooltipArrowInverse : tooltipArrowDefault,
+									),
+								),
 							],
 							[h.path([h.Attribute("d", "M0 0 L6 6 L12 0")])],
 						),

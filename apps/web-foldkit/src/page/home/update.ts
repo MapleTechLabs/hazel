@@ -52,8 +52,7 @@ const reconcileMenus = (model: Model, members: ReadonlyArray<DirectoryMember>): 
 	Object.fromEntries(
 		members.map((member) => [
 			member.id,
-			model.menus[member.id] ??
-				Menu.init({ id: menuIdOf(member.id), placement: "bottom end" }),
+			model.menus[member.id] ?? Menu.init({ id: menuIdOf(member.id), placement: "bottom end" }),
 		]),
 	)
 
@@ -64,13 +63,21 @@ const withDmRequest = (model: Model, dmRequest: DmRequest): Model =>
 	modifyFields(model, { dmRequest: () => dmRequest })
 
 /** `handleOpenChat`: reuse an existing DM with the member, or create one. */
-const openDm = (model: Model, shared: Shared, member: DirectoryMember, rows: ReadonlyArray<DmRow>): Return => {
+const openDm = (
+	model: Model,
+	shared: Shared,
+	member: DirectoryMember,
+	rows: ReadonlyArray<DmRow>,
+): Return => {
 	const organizationId = shared.organization?.id
 	const currentUserId = shared.currentUser?.id
 	if (!organizationId || !currentUserId) return { model: withDmRequest(model, DmRequest.Idle()) }
 	const existing = findExistingDmChannel(rows, currentUserId, [member.id], organizationId)
 	if (existing !== null)
-		return { model: withDmRequest(model, DmRequest.Idle()), outMessage: navigateToChannel(shared, existing) }
+		return {
+			model: withDmRequest(model, DmRequest.Idle()),
+			outMessage: navigateToChannel(shared, existing),
+		}
 	const name = `${member.firstName} ${member.lastName}`.trim()
 	return {
 		model: withDmRequest(model, DmRequest.Creating({ userId: member.id })),
@@ -89,12 +96,7 @@ const requestDm = (model: Model, shared: Shared, member: DirectoryMember): Retur
 	})
 }
 
-const updateMenu = (
-	model: Model,
-	shared: Shared,
-	member: DirectoryMember,
-	message: Menu.Message,
-): Return => {
+const updateMenu = (model: Model, shared: Shared, member: DirectoryMember, message: Menu.Message): Return => {
 	const menu = model.menus[member.id]
 	if (menu === undefined) return { model }
 	const result = Menu.update(menu, message)

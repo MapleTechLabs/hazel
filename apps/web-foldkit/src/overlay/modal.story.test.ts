@@ -52,10 +52,16 @@ describe("delete message", () => {
 			Command.expectExact(DeleteMessage.DeleteMessage({ messageId })),
 			expectOutMessage(closed),
 			model((m) => expect(m.current).toBeNull()),
-			Command.resolve(DeleteMessage.DeleteMessage, DeleteMessage.Message.FailedDeleteMessage({ reason: "NotFound" })),
+			Command.resolve(
+				DeleteMessage.DeleteMessage,
+				DeleteMessage.Message.FailedDeleteMessage({ reason: "NotFound" }),
+			),
 			expectOutMessage(
 				ModalOutMessage.RequestedToast({
-					toast: errorToastOf({ title: "Message not found", description: "It may have already been deleted." }),
+					toast: errorToastOf({
+						title: "Message not found",
+						description: "It may have already been deleted.",
+					}),
 				}),
 			),
 			model((m) => {
@@ -70,7 +76,10 @@ describe("delete message", () => {
 			run,
 			given(opened(Modal.initialModel, { _tag: "DeleteMessage", messageId })),
 			message(deleteMessage(0, DeleteMessage.Message.ClickedDelete())),
-			Command.resolve(DeleteMessage.DeleteMessage, DeleteMessage.Message.FailedDeleteMessage({ reason: "Offline" })),
+			Command.resolve(
+				DeleteMessage.DeleteMessage,
+				DeleteMessage.Message.FailedDeleteMessage({ reason: "Offline" }),
+			),
 			expectOutMessage(ModalOutMessage.RequestedToast({ toast: reasonToast("Offline") })),
 		)
 	})

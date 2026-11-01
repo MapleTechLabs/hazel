@@ -21,7 +21,9 @@ export const BotFormFields = {
 const BotForm = Schema.Struct(BotFormFields)
 export type BotForm = typeof BotForm.Type
 
-export const initBotForm = (values: Pick<BotForm, "name" | "description" | "scopes" | "isPublic">): BotForm => ({
+export const initBotForm = (
+	values: Pick<BotForm, "name" | "description" | "scopes" | "isPublic">,
+): BotForm => ({
 	...values,
 	nameError: null,
 	isSubmitting: false,
@@ -52,7 +54,9 @@ export const changedDescription = <M extends BotForm>(model: M, value: string): 
 
 export const toggledScope = <M extends BotForm>(model: M, scope: ApiScope): M => ({
 	...model,
-	scopes: model.scopes.includes(scope) ? model.scopes.filter((item) => item !== scope) : [...model.scopes, scope],
+	scopes: model.scopes.includes(scope)
+		? model.scopes.filter((item) => item !== scope)
+		: [...model.scopes, scope],
 	nameError: validateBotName(model.name),
 })
 
@@ -66,7 +70,9 @@ export const toggledPublic = <M extends BotForm>(model: M, isSelected: boolean):
 export const isBotSubmitDisabled = (model: BotForm) => model.nameError !== null || model.isSubmitting
 
 /** Submit validates the schema, then legacy `onSubmit` returns early without scopes. */
-export const submittedBotForm = <M extends BotForm>(model: M): { readonly model: M; readonly isReady: boolean } => {
+export const submittedBotForm = <M extends BotForm>(
+	model: M,
+): { readonly model: M; readonly isReady: boolean } => {
 	const nameError = validateBotName(model.name)
 	return {
 		model: { ...model, nameError },
@@ -87,7 +93,10 @@ const scopeLabelClass =
 	"flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-muted/50 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
 
 /** The ModalBody children: name, description, permissions, advanced. */
-export const botFormFields = <Message>(h: HtmlBuilder<Message>, options: BotFormViewOptions<Message>): Array<Html> => {
+export const botFormFields = <Message>(
+	h: HtmlBuilder<Message>,
+	options: BotFormViewOptions<Message>,
+): Array<Html> => {
 	const { form } = options
 	const isNameInvalid = form.nameError !== null
 	return [
@@ -115,7 +124,10 @@ export const botFormFields = <Message>(h: HtmlBuilder<Message>, options: BotForm
 		h.div(
 			[h.Class("flex flex-col gap-3")],
 			[
-				h.div([], [label(h, {}, ["Permissions"]), description(h, {}, ["Select what this bot can access"])]),
+				h.div(
+					[],
+					[label(h, {}, ["Permissions"]), description(h, {}, ["Select what this bot can access"])],
+				),
 				// The "Select at least one permission" FieldError has no field context, so React Aria never renders it.
 				h.div(
 					[h.Class("grid gap-2 sm:grid-cols-2")],
@@ -156,12 +168,18 @@ export const botFormFields = <Message>(h: HtmlBuilder<Message>, options: BotForm
 							[h.Class("flex flex-col gap-0.5")],
 							[
 								label(h, { className: "font-medium" }, ["List in Marketplace"]),
-								description(h, {}, ["Allow other workspaces to discover and install this application"]),
+								description(h, {}, [
+									"Allow other workspaces to discover and install this application",
+								]),
 							],
 						),
 						switchControl(
 							h,
-							{ id: `${options.id}-public`, isSelected: form.isPublic, onChange: options.onPublic },
+							{
+								id: `${options.id}-public`,
+								isSelected: form.isPublic,
+								onChange: options.onPublic,
+							},
 							[],
 						),
 					],

@@ -23,7 +23,8 @@ const org = (n: number, slug: string | null): UserOrganization => ({
 })
 const hazel = org(1, "hazel")
 const unfinished = org(2, null)
-const navigation = (href: string) => PageOutMessage.RequestedNavigation({ route: routeOfPath(href), replace: false })
+const navigation = (href: string) =>
+	PageOutMessage.RequestedNavigation({ route: routeOfPath(href), replace: false })
 
 describe("select organization", () => {
 	test("a single organization redirects once, even when the live query re-emits", () => {
@@ -55,7 +56,12 @@ describe("select organization", () => {
 			given(init().model),
 			message(Message.UpdatedOrganizations({ organizations: [hazel, unfinished] })),
 			expectNoOutMessage(),
-			model((current) => expect(current.organizations).toMatchObject({ _tag: "Loaded", organizations: [hazel, unfinished] })),
+			model((current) =>
+				expect(current.organizations).toMatchObject({
+					_tag: "Loaded",
+					organizations: [hazel, unfinished],
+				}),
+			),
 			message(Message.ClickedOrganization({ organization: hazel })),
 			expectOutMessage(navigation("/hazel")),
 			message(Message.ClickedCreateNew()),
