@@ -119,7 +119,15 @@ const ThumbCarousel = Mount.defineStream("ImageViewerThumbCarousel", {
 		),
 })
 
-/** Portal + the Escape hotkey + backdrop click (`target === currentTarget`); the carousel owns the arrows. */
+// Marks what a click lands on without closing the viewer: the images, captions, header and thumbnail strip.
+const CONTENT_ATTRIBUTE = "image-viewer-content"
+
+/** A click on the backdrop, or on a slide around its image, rather than on the viewer's content. */
+const isBackdropClick = (event: Event) =>
+	!(event.target instanceof Element) ||
+	event.target.closest(`img, button, [data-${CONTENT_ATTRIBUTE}]`) === null
+
+/** Portal + the Escape hotkey + backdrop click; the carousel owns the arrows (and swallows a drag's click). */
 const ImageViewerPortal = Mount.defineStream("ImageViewerPortal", {
 	messages: [Intent.PressedClose, Intent.PressedSelect],
 	execute: ({ element }) =>
@@ -131,8 +139,7 @@ const ImageViewerPortal = Mount.defineStream("ImageViewerPortal", {
 						if (event.key === "Escape") Queue.offerUnsafe(queue, Intent.PressedClose())
 					}
 					const onClick = (event: Event) => {
-						if (event.target === event.currentTarget)
-							Queue.offerUnsafe(queue, Intent.PressedClose())
+						if (isBackdropClick(event)) Queue.offerUnsafe(queue, Intent.PressedClose())
 					}
 					document.addEventListener("keydown", onKeyDown)
 					element.addEventListener("click", onClick)
@@ -156,7 +163,7 @@ const toolbarButton = <M>(h: HtmlBuilder<M>, onPress: M | undefined, label: stri
 				intent: "plain",
 				size: "sq-sm",
 				...(onPress === undefined ? {} : { onPress }),
-				className: "text-white hover:bg-white/10",
+				className: "text-white [--btn-overlay:rgb(255_255_255/0.1)]",
 				attributes: [h.AriaLabel(label)],
 			},
 			[icon],
@@ -171,13 +178,37 @@ const navButton = <M>(h: HtmlBuilder<M>, side: "left" | "right", onPress: M): Ht
 			size: "sq-md",
 			isCircle: true,
 			onPress,
-			className: `absolute top-1/2 ${side === "left" ? "left-4" : "right-4"} -translate-y-1/2 bg-black/50 text-white hover:bg-black/70`,
+			className: `absolute top-1/2 ${side === "left" ? "left-4" : "right-4"} -translate-y-1/2 text-white [--btn-bg:rgb(0_0_0/0.5)] [--btn-overlay:rgb(0_0_0/0.7)]`,
 			attributes: [h.AriaLabel(side === "left" ? "Previous image" : "Next image")],
 		},
 		[
 			side === "left"
 				? IconChevronLeft(h, { className: "size-6" })
 				: IconChevronRight(h, { className: "size-6" }),
+		],
+	)
+
+/**
+ * A thumbnail: the ring is drawn inside it (over the image), so the strip's overflow never clips it,
+ * and a press only fades it in, with no button background.
+ */
+const thumbView = <M>(h: HtmlBuilder<M>, image: ImageViewerImage, isSelected: boolean, onPress: M): Html =>
+	ariaButton(
+		h,
+		{
+			onPress,
+			className: `relative flex-[0_0_80px] cursor-pointer overflow-hidden rounded-md outline-none transition-opacity duration-150 after:pointer-events-none after:absolute after:inset-0 after:rounded-md after:ring-inset focus-visible:after:ring-2 focus-visible:after:ring-ring ${
+				isSelected ? "opacity-100 after:ring-2 after:ring-white" : "opacity-50 hover:opacity-80"
+			}`,
+			attributes: [h.AriaLabel(image.fileName), ...(isSelected ? [h.AriaCurrent("true")] : [])],
+		},
+		[
+			h.img([
+				h.Attribute("src", image.url),
+				h.Attribute("alt", ""),
+				h.Draggable(false),
+				h.Class("block h-16 w-20 object-cover"),
+			]),
 		],
 	)
 
@@ -190,7 +221,10 @@ const hasCaption = (image: ImageViewerImage) => !!(image.caption?.title || image
 const captionView = <M>(h: HtmlBuilder<M>, caption: ImageViewerImage["caption"]): Html =>
 	caption?.title || caption?.description
 		? h.div(
-				[h.Class("max-h-[12vh] max-w-xl overflow-y-auto text-center")],
+				[
+					h.Class("max-h-[12vh] max-w-xl overflow-y-auto text-center"),
+					h.DataAttribute(CONTENT_ATTRIBUTE, ""),
+				],
 				[
 					caption.title
 						? h.p(
@@ -227,7 +261,7 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 	return h.div(
 		[
 			h.Class(
-				"fixed inset-0 isolate z-9999 flex items-center justify-center bg-black/90 transition-opacity duration-200",
+				"fixed inset-0 isolate z-9999 flex select-none items-center justify-center bg-black/90 transition-opacity duration-200",
 			),
 			// Legacy renders the viewer through a React portal inside the message list, so React's
 			// pointerleave never sees the pointer leave the list for it. Hover tracking reads this.
@@ -238,7 +272,10 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 			...(author
 				? [
 						h.div(
-							[h.Class("absolute top-5 left-5 flex items-center gap-2")],
+							[
+								h.Class("absolute top-5 left-5 flex items-center gap-2"),
+								h.DataAttribute(CONTENT_ATTRIBUTE, ""),
+							],
 							[
 								avatar(h, {
 									src: author.avatarUrl,
@@ -284,6 +321,7 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 											h.img([
 												h.Attribute("src", image.url),
 												h.Attribute("alt", image.fileName),
+												h.Draggable(false),
 												// A caption takes room under the image, clear of the thumbnail strip.
 												h.Class(
 													hasCaption(image)
@@ -317,6 +355,7 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 								h.Class(
 									"absolute top-5 left-1/2 -translate-x-1/2 rounded-md bg-black/50 px-3 py-1.5 text-sm text-white",
 								),
+								h.DataAttribute(CONTENT_ATTRIBUTE, ""),
 							],
 							[String(selectedIndex + 1), " of ", String(images.length)],
 						),
@@ -333,36 +372,24 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 			...(hasMany
 				? [
 						h.div(
-							[h.Class("absolute bottom-5 left-1/2 w-full max-w-2xl -translate-x-1/2 px-8")],
+							[h.Class("absolute inset-x-0 bottom-5 flex justify-center px-8")],
 							[
 								h.div(
 									[
-										h.Class("overflow-hidden rounded-md"),
+										h.Class("max-w-2xl overflow-hidden rounded-md"),
 										h.Attribute(SELECTED_ATTRIBUTE, String(selectedIndex)),
+										h.DataAttribute(CONTENT_ATTRIBUTE, ""),
 										h.OnMount(Mount.mapMessage(ThumbCarousel(), toMessage)),
 									],
 									[
 										h.div(
 											[h.Class("flex gap-2")],
 											images.map((image, index) =>
-												button(
+												thumbView(
 													h,
-													{
-														intent: "plain",
-														onPress: inputs.toSelect(index),
-														className: `relative min-w-0 flex-[0_0_80px] overflow-hidden rounded border-2 p-0 transition-all ${
-															index === selectedIndex
-																? "border-white opacity-100"
-																: "border-transparent opacity-50 hover:opacity-75"
-														}`,
-													},
-													[
-														h.img([
-															h.Attribute("src", image.url),
-															h.Attribute("alt", image.fileName),
-															h.Class("h-16 w-20 object-cover"),
-														]),
-													],
+													image,
+													index === selectedIndex,
+													inputs.toSelect(index),
 												),
 											),
 										),
