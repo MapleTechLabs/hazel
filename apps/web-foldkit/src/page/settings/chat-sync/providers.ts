@@ -1,4 +1,4 @@
-import type { IntegrationNotConnectedForPreviewError, IntegrationResourceError } from "@hazel/domain/http"
+import { type IntegrationNotConnectedForPreviewError, IntegrationResourceError } from "@hazel/domain/http"
 import { ExternalChannelId, type OrganizationId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
@@ -153,9 +153,21 @@ export const PROVIDERS: Readonly<Record<ChatSyncProvider, ProviderDescriptor>> =
 					],
 				),
 			),
-		fetchChannels: (orgId) =>
+		// Only while the org's install is still this connection's workspace (Slack reconnected
+		// elsewhere lists another workspace's channels, which would never sync here).
+		fetchChannels: (orgId, workspaceId) =>
 			fetchSlack(orgId).pipe(
-				Effect.map((response): ReadonlyArray<ExternalChannel> => response.channels),
+				Effect.flatMap((response) =>
+					response.workspace.id === workspaceId
+						? Effect.succeed<ReadonlyArray<ExternalChannel>>(response.channels)
+						: Effect.fail(
+								new IntegrationResourceError({
+									url: "slack://conversations",
+									message: "Slack is installed in another workspace",
+									provider: "slack",
+								}),
+							),
+				),
 			),
 	},
 }
