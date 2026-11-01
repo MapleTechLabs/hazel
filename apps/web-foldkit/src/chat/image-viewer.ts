@@ -15,6 +15,7 @@ import { avatar } from "../ui/avatar"
 import { ariaButton, button } from "../ui/button"
 import { portalOverlay } from "../ui/aria/overlay"
 import type { ChatAttachmentView } from "./attachments"
+import { embedMarkdownView } from "./embeds/embed-markdown"
 
 /**
  * Port of `ImageViewerModal` (`components/chat/image-viewer-modal.tsx`) in its open state: a plain
@@ -183,17 +184,23 @@ const navButton = <M>(h: HtmlBuilder<M>, side: "left" | "right", onPress: M): Ht
 /** Marks an overlay that legacy portals from inside the message list (React tree, not DOM). */
 export const LIST_PORTAL_ATTRIBUTE = "list-portal"
 
-/** An embed image's title and description, under it. */
+/** An embed image's title and description (embed markdown), under it; a long one scrolls. */
 const captionView = <M>(h: HtmlBuilder<M>, caption: ImageViewerImage["caption"]): Html =>
 	caption?.title || caption?.description
 		? h.div(
-				[h.Class("max-w-xl text-center")],
+				[h.Class("max-h-[20vh] max-w-xl overflow-y-auto text-center")],
 				[
 					caption.title
-						? h.p([h.Class("font-medium text-sm text-white")], [caption.title])
+						? h.p(
+								[h.Class("font-medium text-sm text-white")],
+								[embedMarkdownView(h, caption.title)],
+							)
 						: h.empty,
 					caption.description
-						? h.p([h.Class("mt-0.5 text-white/60 text-xs")], [caption.description])
+						? h.p(
+								[h.Class("mt-0.5 text-white/60 text-xs")],
+								[embedMarkdownView(h, caption.description)],
+							)
 						: h.empty,
 				],
 			)

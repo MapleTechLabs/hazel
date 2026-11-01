@@ -44,6 +44,13 @@ describe("markdown leaves (legacy Slate decoration parity)", () => {
 		])
 	})
 
+	it("keeps a style around an inline code span on either side of it", () => {
+		const leaves = render("**before `code` after**")
+		expect(leaves).toContainEqual(["before ", "font-bold"])
+		expect(leaves).toContainEqual(["code", "bg-accent/50 rounded px-1 py-0.5 font-mono text-sm"])
+		expect(leaves).toContainEqual([" after", "font-bold"])
+	})
+
 	it("leaves plain text as one undecorated leaf", () => {
 		expect(render("hello")).toEqual([["hello", ""]])
 	})

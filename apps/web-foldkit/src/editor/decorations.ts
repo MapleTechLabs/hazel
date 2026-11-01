@@ -8,7 +8,7 @@ import { getEmojiShortcode } from "~/lib/emoji-shortcode-map"
  *
  * The split and merge rules are Slate's. A single `*` or `_` next to another marker character
  * is not italic, so `**bold**` stays bold and `snake_case_names` stay plain, and nothing inside
- * an inline code span is decorated.
+ * an inline code span is decorated (a style around one applies on either side of it).
  */
 
 const MARKDOWN_PATTERNS = [
@@ -42,6 +42,23 @@ export interface LeafProps {
 interface MarkdownRange extends LeafProps {
 	readonly start: number
 	readonly end: number
+}
+
+/** The parts of `start`–`end` outside the code spans. */
+const outsideCode = (
+	start: number,
+	end: number,
+	spans: ReadonlyArray<{ readonly start: number; readonly end: number }>,
+): Array<{ start: number; end: number }> => {
+	const pieces: Array<{ start: number; end: number }> = []
+	let cursor = start
+	for (const span of spans) {
+		if (span.end <= cursor || span.start >= end) continue
+		if (span.start > cursor) pieces.push({ start: cursor, end: span.start })
+		cursor = Math.max(cursor, span.end)
+	}
+	if (cursor < end) pieces.push({ start: cursor, end })
+	return pieces
 }
 
 /** `decorateMarkdown` for one text run (Slate decorates each text node separately). */
@@ -90,14 +107,16 @@ export function decorateMarkdown(text: string): ReadonlyArray<MarkdownRange> {
 				(range) => range.type === "link" && index < range.end && end > range.start,
 			)
 			if (overlapsLink) continue
-			const overlapsCode =
-				type !== "code" && codeSpans.some((span) => index < span.end && end > span.start)
-			if (overlapsCode) continue
 			const contentStart = index + openMarker.length
 			const contentEnd = contentStart + content.length
+			const inCode = (start: number, stop: number) =>
+				type !== "code" && codeSpans.some((span) => start < span.end && stop > span.start)
+			// A marker inside a code span is code; content around one keeps its style outside it.
+			if (inCode(index, contentStart) || inCode(contentEnd, end)) continue
 			ranges.push({ start: index, end: contentStart, type, isMarker: true })
-			ranges.push({ start: contentStart, end: contentEnd, type, isMarker: false })
-			ranges.push({ start: contentEnd, end: index + fullMatch.length, type, isMarker: true })
+			for (const piece of outsideCode(contentStart, contentEnd, type === "code" ? [] : codeSpans))
+				ranges.push({ ...piece, type, isMarker: false })
+			ranges.push({ start: contentEnd, end, type, isMarker: true })
 		}
 	}
 

@@ -71,18 +71,24 @@ export const embedBodyView = <M>(
 		[h.Class("font-semibold text-fg text-sm leading-snug")],
 		[embedMarkdownView(h, props.title)],
 	)
+	const descriptionElement = truncated
+		? h.p(
+				[h.Class(cn("line-clamp-2 text-muted-fg text-xs leading-relaxed", props.title && "mt-1.5"))],
+				[embedMarkdownView(h, truncated)],
+			)
+		: h.empty
+	// The link sits on the title, or on the description when there is no title.
 	return h.div(
 		[h.Class(cn("p-3", props.className))],
 		[
-			props.titleUrl
-				? externalLink(h, props.titleUrl, "hover:underline", [titleElement])
-				: titleElement,
-			truncated
-				? h.p(
-						[h.Class("mt-1.5 line-clamp-2 text-muted-fg text-xs leading-relaxed")],
-						[embedMarkdownView(h, truncated)],
-					)
+			props.title
+				? props.titleUrl
+					? externalLink(h, props.titleUrl, "hover:underline", [titleElement])
+					: titleElement
 				: h.empty,
+			!props.title && props.titleUrl && truncated
+				? externalLink(h, props.titleUrl, "hover:underline", [descriptionElement])
+				: descriptionElement,
 		],
 	)
 }
@@ -141,7 +147,7 @@ export const embedImageView = <M>(h: HtmlBuilder<M>, src: string, onOpen?: M): H
 						[
 							h.Type("button"),
 							h.Class(
-								"block max-w-full cursor-zoom-in rounded-md outline-hidden transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring",
+								"block w-fit max-w-full cursor-zoom-in rounded-md outline-hidden transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring",
 							),
 							h.AriaLabel("Open image"),
 							h.OnClick(onOpen),

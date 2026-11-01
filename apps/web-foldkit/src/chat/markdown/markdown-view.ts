@@ -200,19 +200,7 @@ const elementView = <M>(h: HtmlBuilder<M>, element: ProseMirrorNode, env: Env): 
 	if (type === "paragraph" && element.content.size === 0)
 		return h.div([node, h.Class("h-2"), h.AriaHidden(true)])
 	if (type === "paragraph") return h.p([node, h.Class("my-0 last:empty:hidden")], children)
-	if (type === "list-item")
-		return h.li(
-			[
-				node,
-				h.Class(
-					cx(
-						"my-0.5 ml-5 pl-1",
-						element.attrs.ordered ? "list-decimal" : "list-disc marker:text-muted-fg",
-					),
-				),
-			],
-			children,
-		)
+	if (type === "list-item") return h.li([node, h.Class("my-0.5 pl-1")], children)
 	if (type === "subtext") return h.p([node, h.Class("my-0 text-muted-fg text-xs")], children)
 	if (type === "blockquote")
 		return h.blockquote(
@@ -263,6 +251,39 @@ const tableView = <M>(h: HtmlBuilder<M>, element: ProseMirrorNode, children: Rea
 	)
 }
 
+const isListItem = (node: ProseMirrorNode) => node.type.name === "list-item"
+
+/** The blocks, each run of list items of one kind gathered into a list (its own counter). */
+const listGroupsOf = (
+	blocks: ReadonlyArray<ProseMirrorNode>,
+): Array<ProseMirrorNode | Array<ProseMirrorNode>> => {
+	const groups: Array<ProseMirrorNode | Array<ProseMirrorNode>> = []
+	for (const block of blocks) {
+		const last = groups.at(-1)
+		if (isListItem(block) && Array.isArray(last) && last[0]!.attrs.ordered === block.attrs.ordered)
+			last.push(block)
+		else groups.push(isListItem(block) ? [block] : block)
+	}
+	return groups
+}
+
+/** A run of list items: an `ol` numbered from its first item's number, or a `ul`. */
+const listView = <M>(h: HtmlBuilder<M>, items: ReadonlyArray<ProseMirrorNode>, env: Env): Html => {
+	const children = items.map((item) => elementView(h, item, env))
+	const first = items[0]!
+	return first.attrs.ordered
+		? h.ol(
+				[
+					h.Class("my-0 ml-5 list-decimal"),
+					...(first.attrs.number === null
+						? []
+						: [h.Attribute("start", String(first.attrs.number))]),
+				],
+				children,
+			)
+		: h.ul([h.Class("my-0 ml-5 list-disc marker:text-muted-fg")], children)
+}
+
 /** `SlateMessageViewer`. */
 export const markdownView = <M>(
 	h: HtmlBuilder<M>,
@@ -294,7 +315,9 @@ export const markdownView = <M>(
 					h.Attribute("translate", "no"),
 					h.Attribute("zindex", "-1"),
 				],
-				blocks.map((block) => elementView(h, block, env)),
+				listGroupsOf(blocks).map((group) =>
+					Array.isArray(group) ? listView(h, group, env) : elementView(h, group, env),
+				),
 			),
 		],
 	)

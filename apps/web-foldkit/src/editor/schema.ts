@@ -75,7 +75,8 @@ export const schema = new Schema({
 		"list-item": {
 			group: "block",
 			content: "inline*",
-			attrs: { ordered: { default: false } },
+			// `number` is an ordered item's number in the markdown, so a list starting at 5 shows 5.
+			attrs: { ordered: { default: false }, number: { default: null } },
 			toDOM: () => ["li", { class: "my-0.5 ml-4" }, 0],
 		},
 		// The legacy composer's `renderElement` has no heading or table case, so they fall

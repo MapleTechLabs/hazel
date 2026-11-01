@@ -80,7 +80,9 @@ export function serializeToMarkdown(nodes: ReadonlyArray<ProseMirrorNode>): stri
 				),
 				Match.when("subtext", () => `-# ${serializeInline(node)}`),
 				Match.when("list-item", () =>
-					node.attrs.ordered ? `1. ${serializeInline(node)}` : `- ${serializeInline(node)}`,
+					node.attrs.ordered
+						? `${node.attrs.number ?? 1}. ${serializeInline(node)}`
+						: `- ${serializeInline(node)}`,
 				),
 				Match.when("table", () => serializeTable(node)),
 				Match.whenOr("table-row", "table-cell", () => ""),
@@ -190,6 +192,7 @@ export function deserializeFromMarkdown(
 
 	const nodes: Array<ProseMirrorNode> = []
 	const lines = markdown.split("\n")
+	const lastContentIndex = lines.findLastIndex((rest) => rest.trim() !== "")
 	let i = 0
 
 	while (i < lines.length) {
@@ -197,8 +200,7 @@ export function deserializeFromMarkdown(
 		if (!line?.trim()) {
 			i++
 			const isBreak = options.paragraphBreaks && nodes.length > 0 && nodes.at(-1)!.content.size > 0
-			if (isBreak && lines.slice(i).some((rest) => rest.trim() !== ""))
-				nodes.push(block("paragraph", []))
+			if (isBreak && i <= lastContentIndex) nodes.push(block("paragraph", []))
 			continue
 		}
 
@@ -274,8 +276,14 @@ export function deserializeFromMarkdown(
 			continue
 		}
 
-		if (/^\d+\. /.test(line)) {
-			nodes.push(block("list-item", parseInlineContent(line.replace(/^\d+\. /, "")), { ordered: true }))
+		const orderedMatch = line.match(/^(\d+)\. /)
+		if (orderedMatch) {
+			nodes.push(
+				block("list-item", parseInlineContent(line.slice(orderedMatch[0].length)), {
+					ordered: true,
+					number: Number(orderedMatch[1]),
+				}),
+			)
 			i++
 			continue
 		}

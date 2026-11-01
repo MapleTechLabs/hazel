@@ -1015,3 +1015,18 @@ describe("deserializeFromMarkdown with paragraphBreaks (the message viewer)", ()
 		expect(blocksOf("a\n\nb", false)).toEqual(["a", "b"])
 	})
 })
+
+describe("ordered list numbers", () => {
+	it("keeps each item's number, so a list starting at 5 starts at 5", () => {
+		const items = deserializeFromMarkdown("5. five\n6. six")
+		expect(items.map((item) => [item.attrs.ordered, item.attrs.number])).toEqual([
+			[true, 5],
+			[true, 6],
+		])
+		expect(serializeToMarkdown(items)).toBe("5. five\n6. six")
+	})
+
+	it("bullets carry no number", () => {
+		expect(deserializeFromMarkdown("- a")[0]!.attrs.number).toBeNull()
+	})
+})
