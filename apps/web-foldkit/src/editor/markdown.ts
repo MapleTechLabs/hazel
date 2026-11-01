@@ -192,14 +192,17 @@ export function deserializeFromMarkdown(
 
 	const nodes: Array<ProseMirrorNode> = []
 	const lines = markdown.split("\n")
-	const lastContentIndex = lines.findLastIndex((rest) => rest.trim() !== "")
+	// Plain loops, not `findLastIndex` / `at`: the app builds for Safari 14.
+	let lastContentIndex = lines.length - 1
+	while (lastContentIndex >= 0 && lines[lastContentIndex]!.trim() === "") lastContentIndex--
 	let i = 0
 
 	while (i < lines.length) {
 		const line = lines[i]
 		if (!line?.trim()) {
 			i++
-			const isBreak = options.paragraphBreaks && nodes.length > 0 && nodes.at(-1)!.content.size > 0
+			const previous = nodes[nodes.length - 1]
+			const isBreak = options.paragraphBreaks && previous !== undefined && previous.content.size > 0
 			if (isBreak && i <= lastContentIndex) nodes.push(block("paragraph", []))
 			continue
 		}

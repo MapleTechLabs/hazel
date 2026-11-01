@@ -60,3 +60,17 @@ describe("markdown leaves (legacy Slate decoration parity)", () => {
 		expect(leaves.find((leaf) => leaf.type === "url")).toMatchObject({ url: "https://www.hazel.sh" })
 	})
 })
+
+describe("markdown leaves: boundaries and code spans", () => {
+	it("treats letters in any script as part of a word around underscores", () => {
+		expect(render("café_été_")).toEqual([["café_été_", ""]])
+		expect(render("a _été_ b")).toContainEqual(["été", "italic"])
+	})
+
+	it("keeps a style whose closing marker only looked like it sat inside code", () => {
+		const leaves = render("**before `**` after**")
+		expect(leaves).toContainEqual(["before ", "font-bold"])
+		expect(leaves).toContainEqual([" after", "font-bold"])
+		expect(leaves).toContainEqual(["**", "bg-accent/50 rounded px-1 py-0.5 font-mono text-sm"])
+	})
+})

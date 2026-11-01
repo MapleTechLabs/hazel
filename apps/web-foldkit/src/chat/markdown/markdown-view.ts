@@ -259,7 +259,7 @@ const listGroupsOf = (
 ): Array<ProseMirrorNode | Array<ProseMirrorNode>> => {
 	const groups: Array<ProseMirrorNode | Array<ProseMirrorNode>> = []
 	for (const block of blocks) {
-		const last = groups.at(-1)
+		const last = groups[groups.length - 1]
 		if (isListItem(block) && Array.isArray(last) && last[0]!.attrs.ordered === block.attrs.ordered)
 			last.push(block)
 		else groups.push(isListItem(block) ? [block] : block)

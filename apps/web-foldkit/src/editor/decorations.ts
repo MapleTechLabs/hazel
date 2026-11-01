@@ -9,18 +9,51 @@ import { getEmojiShortcode } from "~/lib/emoji-shortcode-map"
  * The split and merge rules are Slate's. A single `*` or `_` next to another marker character
  * is not italic, so `**bold**` stays bold and `snake_case_names` stay plain, and nothing inside
  * an inline code span is decorated (a style around one applies on either side of it).
+ *
+ * No lookbehind in these patterns: the app builds for Safari 14, which cannot parse one. What a
+ * match may touch on either side is `isValid`'s check instead.
  */
 
-const MARKDOWN_PATTERNS = [
+/** A letter, digit, mark or underscore in any script: an `_` touching one is inside a word. */
+const WORD_CHARACTER = /[\p{L}\p{N}\p{M}_]/u
+const isWordCharacter = (character: string | undefined) =>
+	character !== undefined && WORD_CHARACTER.test(character)
+
+type Boundary = (text: string, start: number, end: number) => boolean
+
+const MARKDOWN_PATTERNS: ReadonlyArray<{
+	readonly pattern: RegExp
+	readonly type: "bold" | "italic" | "strikethrough" | "code" | "underline" | "highlight" | "spoiler"
+	readonly isValid?: Boundary
+}> = [
 	{ pattern: /(\*\*)([^*]+)(\*\*)/g, type: "bold" },
-	{ pattern: /(?<!\*)(\*)(?!\s)([^*]+)(?<!\s)(\*)(?!\*)/g, type: "italic" },
+	{
+		pattern: /(\*)([^*\s](?:[^*]*[^*\s])?)(\*)/g,
+		type: "italic",
+		isValid: (text, start, end) => text[start - 1] !== "*" && text[end] !== "*",
+	},
 	{ pattern: /(~~)([^~]+)(~~)/g, type: "strikethrough" },
 	{ pattern: /(`)([^`]+)(`)/g, type: "code" },
 	{ pattern: /(__)([^_]+)(__)/g, type: "underline" },
-	{ pattern: /(?<!\w)(_)(?!\s)([^_]+)(?<!\s)(_)(?!\w)/g, type: "italic" },
+	{
+		pattern: /(_)([^_\s](?:[^_]*[^_\s])?)(_)/g,
+		type: "italic",
+		isValid: (text, start, end) => !isWordCharacter(text[start - 1]) && !isWordCharacter(text[end]),
+	},
 	{ pattern: /(==)([^=]+)(==)/g, type: "highlight" },
 	{ pattern: /(\|\|)([^|]+)(\|\|)/g, type: "spoiler" },
-] as const
+]
+
+/** `pattern`'s matches that pass `isValid`; a rejected one is retried from its next character. */
+function* matchesOf(text: string, pattern: RegExp, isValid: Boundary | undefined) {
+	const regex = new RegExp(pattern.source, "g")
+	let match = regex.exec(text)
+	while (match !== null) {
+		if (isValid === undefined || isValid(text, match.index, match.index + match[0].length)) yield match
+		else regex.lastIndex = match.index + 1
+		match = regex.exec(text)
+	}
+}
 
 const CODE_PATTERN = /`[^`]+`/g
 
@@ -28,6 +61,9 @@ export const LINK_PATTERN = /\[([^\]]+)\]\(([^)]+)\)/g
 export const URL_PATTERN = /(https?:\/\/[^\s<>()]+|www\.[^\s<>()]+)/g
 
 export type MarkdownDecorationType = (typeof MARKDOWN_PATTERNS)[number]["type"] | "link" | "url"
+
+/** Stands in for a code span's characters, so no other pattern sees a marker inside one. */
+const CODE_MASK = "\uE000"
 
 export interface LeafProps {
 	type?: MarkdownDecorationType | "emoji"
@@ -97,8 +133,9 @@ export function decorateMarkdown(text: string): ReadonlyArray<MarkdownRange> {
 		start: match.index,
 		end: match.index + match[0].length,
 	}))
-	for (const { pattern, type } of MARKDOWN_PATTERNS) {
-		for (const match of text.matchAll(pattern)) {
+	const masked = text.replace(CODE_PATTERN, (span) => CODE_MASK.repeat(span.length))
+	for (const { pattern, type, isValid } of MARKDOWN_PATTERNS) {
+		for (const match of matchesOf(type === "code" ? text : masked, pattern, isValid)) {
 			const [fullMatch, openMarker, content, closeMarker] = match
 			if (!openMarker || !content || !closeMarker) continue
 			const index = match.index
@@ -109,10 +146,7 @@ export function decorateMarkdown(text: string): ReadonlyArray<MarkdownRange> {
 			if (overlapsLink) continue
 			const contentStart = index + openMarker.length
 			const contentEnd = contentStart + content.length
-			const inCode = (start: number, stop: number) =>
-				type !== "code" && codeSpans.some((span) => start < span.end && stop > span.start)
-			// A marker inside a code span is code; content around one keeps its style outside it.
-			if (inCode(index, contentStart) || inCode(contentEnd, end)) continue
+			// Content around a code span keeps its style outside it.
 			ranges.push({ start: index, end: contentStart, type, isMarker: true })
 			for (const piece of outsideCode(contentStart, contentEnd, type === "code" ? [] : codeSpans))
 				ranges.push({ ...piece, type, isMarker: false })

@@ -184,11 +184,13 @@ const navButton = <M>(h: HtmlBuilder<M>, side: "left" | "right", onPress: M): Ht
 /** Marks an overlay that legacy portals from inside the message list (React tree, not DOM). */
 export const LIST_PORTAL_ATTRIBUTE = "list-portal"
 
+const hasCaption = (image: ImageViewerImage) => !!(image.caption?.title || image.caption?.description)
+
 /** An embed image's title and description (embed markdown), under it; a long one scrolls. */
 const captionView = <M>(h: HtmlBuilder<M>, caption: ImageViewerImage["caption"]): Html =>
 	caption?.title || caption?.description
 		? h.div(
-				[h.Class("max-h-[20vh] max-w-xl overflow-y-auto text-center")],
+				[h.Class("max-h-[12vh] max-w-xl overflow-y-auto text-center")],
 				[
 					caption.title
 						? h.p(
@@ -282,7 +284,12 @@ export const imageViewerView = <M>(h: HtmlBuilder<M>, inputs: ImageViewerInputs<
 											h.img([
 												h.Attribute("src", image.url),
 												h.Attribute("alt", image.fileName),
-												h.Class("max-h-[70vh] max-w-full rounded-md"),
+												// A caption takes room under the image, clear of the thumbnail strip.
+												h.Class(
+													hasCaption(image)
+														? "max-h-[55vh] max-w-full rounded-md"
+														: "max-h-[70vh] max-w-full rounded-md",
+												),
 											]),
 											captionView(h, image.caption),
 										],
