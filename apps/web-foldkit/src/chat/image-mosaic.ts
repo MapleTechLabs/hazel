@@ -44,12 +44,9 @@ const cellFrame = "relative block overflow-hidden rounded-md border border-borde
 const pressable =
 	"cursor-zoom-in outline-hidden transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring"
 
-const cell = <M>(
-	h: HtmlBuilder<M>,
-	image: MosaicImage<M>,
-	className: string,
-	extra: Html = h.empty,
-): Html => {
+/** One cropped cell; `hidden` (the images past it) puts "+N" over it and in its label. */
+const cell = <M>(h: HtmlBuilder<M>, image: MosaicImage<M>, className: string, hidden: number): Html => {
+	const extra = hidden > 0 ? moreOverlay(h, hidden) : h.empty
 	const img = h.img([
 		h.Src(image.url),
 		h.Attribute("alt", image.alt),
@@ -64,7 +61,7 @@ const cell = <M>(
 				[
 					h.Type("button"),
 					h.Class(cx(cellFrame, pressable, className)),
-					h.AriaLabel(`Open ${image.alt}`),
+					h.AriaLabel(hidden > 0 ? `Open ${image.alt} (+${hidden} more)` : `Open ${image.alt}`),
 					h.OnClick(image.onOpen),
 				],
 				[img, extra],
@@ -110,13 +107,12 @@ export const imageMosaicView = <M>(h: HtmlBuilder<M>, images: ReadonlyArray<Mosa
 	if (layout === "single") return singleView(h, images[0]!)
 	const shown = images.slice(0, MAX_SHOWN)
 	const hidden = images.length - shown.length
-	const extraFor = (index: number) =>
-		hidden > 0 && index === shown.length - 1 ? moreOverlay(h, hidden) : h.empty
+	const hiddenFor = (index: number) => (index === shown.length - 1 ? hidden : 0)
 	if (layout === "feature")
 		return h.div(
 			[h.Class("grid aspect-[3/2] w-full max-w-[480px] grid-cols-3 grid-rows-2 gap-1")],
 			shown.map((image, index) =>
-				cell(h, image, index === 0 ? "col-span-2 row-span-2" : "", extraFor(index)),
+				cell(h, image, index === 0 ? "col-span-2 row-span-2" : "", hiddenFor(index)),
 			),
 		)
 	let offset = 0
@@ -129,7 +125,7 @@ export const imageMosaicView = <M>(h: HtmlBuilder<M>, images: ReadonlyArray<Mosa
 				[h.Class(cx("grid gap-1", GRID_COLUMNS[count]))],
 				shown
 					.slice(start, start + count)
-					.map((image, index) => cell(h, image, ROW_ASPECT[count]!, extraFor(start + index))),
+					.map((image, index) => cell(h, image, ROW_ASPECT[count]!, hiddenFor(start + index))),
 			)
 		}),
 	)

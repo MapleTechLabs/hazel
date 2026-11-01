@@ -134,26 +134,39 @@ export const embedFieldsView = <M>(h: HtmlBuilder<M>, fields: ReadonlyArray<Embe
 
 /**
  * Discord's embed image: inside the card's padding, at its own aspect ratio, never scaled up, at most
- * 300px tall. A press opens the image viewer.
+ * 300px tall. A press opens the image viewer, or follows `href` (the embed's link, when nothing
+ * else in the card can carry it).
  */
-export const embedImageView = <M>(h: HtmlBuilder<M>, src: string, onOpen?: M): Html => {
+export const embedImageView = <M>(
+	h: HtmlBuilder<M>,
+	src: string,
+	press: { readonly onOpen?: M; readonly href?: string },
+): Html => {
 	const img = image(h, src, "block h-auto max-h-[300px] w-auto max-w-full rounded-md")
+	const { onOpen, href } = press
 	return h.div(
 		[h.Class("px-3 pt-1 pb-3 first:pt-3")],
 		[
-			onOpen === undefined
-				? img
-				: h.button(
-						[
-							h.Type("button"),
-							h.Class(
-								"block w-fit max-w-full cursor-zoom-in rounded-md outline-hidden transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring",
-							),
-							h.AriaLabel("Open image"),
-							h.OnClick(onOpen),
-						],
+			href !== undefined
+				? externalLink(
+						h,
+						href,
+						"block w-fit max-w-full rounded-md transition-opacity hover:opacity-90",
 						[img],
-					),
+					)
+				: onOpen === undefined
+					? img
+					: h.button(
+							[
+								h.Type("button"),
+								h.Class(
+									"block w-fit max-w-full cursor-zoom-in rounded-md outline-hidden transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring",
+								),
+								h.AriaLabel("Open image"),
+								h.OnClick(onOpen),
+							],
+							[img],
+						),
 		],
 	)
 }

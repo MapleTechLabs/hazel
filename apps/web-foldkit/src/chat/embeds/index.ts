@@ -183,7 +183,10 @@ export const messageEmbedCardView = <M>(
 				? embedImageView(
 						h,
 						embed.image.url,
-						toOpenImages?.([embedImageOf(embed, embed.image.url)], 0),
+						// With no title or description to carry the embed's link, the image does.
+						embed.url && !embed.title && !embed.description
+							? { href: embed.url }
+							: { onOpen: toOpenImages?.([embedImageOf(embed, embed.image.url)], 0) },
 					)
 				: h.empty,
 			hasHtml ? h.div([h.Class("px-3 py-2")], [embedHtmlView(h, embed, html)]) : h.empty,
