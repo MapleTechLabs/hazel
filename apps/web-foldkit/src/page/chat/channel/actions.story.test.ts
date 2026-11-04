@@ -1,7 +1,7 @@
 import { routeOfPath } from "../../../route"
 import { ChannelId, PinnedMessageId } from "@hazel/schema"
 import { derivedThreadChannelId } from "@hazel/domain/thread-id"
-import { Schema } from "effect"
+import { Effect, Schema } from "effect"
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test, vi } from "vitest"
 import * as Composer from "../../../composer/composer"
@@ -304,6 +304,12 @@ describe("a thread still being created", () => {
 		expect(sent?.args).toMatchObject({ channelId: threadChannelId })
 	})
 
+	test("a bot command run meanwhile waits for the thread", () => {
+		const held = run(creating(), [composer(Composer.Message.ClickedExecuteCommand())])
+		expect(held.model.threadPanel?.held).toHaveLength(1)
+		expect(held.commands.map((command) => command.name)).not.toContain("ExecuteBotCommand")
+	})
+
 	test("a send held behind a file waits for its upload instead of being dropped", () => {
 		const file = new File(["x"], "notes.txt", { type: "text/plain" })
 		const done = run(creating(), [
@@ -341,6 +347,16 @@ describe("Reply in thread twice on one message", () => {
 		const first = await derivedThreadChannelId(graceMessageId)
 		expect(await derivedThreadChannelId(graceMessageId)).toBe(first)
 		expect(await derivedThreadChannelId(adaMessageId)).not.toBe(first)
+		// The command "Reply in thread" runs names that id, never a fresh one.
+		const generated = await Effect.runPromise(
+			GenerateThreadChannelId({ messageId: graceMessageId }).effect,
+		)
+		expect(generated).toEqual(
+			ActionMessage.CompletedGenerateThreadChannelId({
+				messageId: graceMessageId,
+				threadChannelId: first,
+			}),
+		)
 	})
 
 	test("while the panel already opens on it: no second create", () => {

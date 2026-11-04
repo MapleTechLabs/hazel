@@ -149,13 +149,19 @@ const updateOneDraft = (
 		: liftDraft(model, which, DraftUpdate.update(draft, message, contextFor(model, which, shared)))
 }
 
-/** What needs the thread to exist: a send (a GIF too), and files (their upload is presigned for its channel). */
+/**
+ * What needs the thread to exist: a send (a GIF, a bot command too), and files (their upload is
+ * presigned for its channel). A held command re-reads the command field when it plays back.
+ */
 const needsThread = (message: Draft.Message): boolean =>
 	message._tag === "SelectedFiles" ||
 	message._tag === "SelectedGif" ||
 	(message._tag === "ReceivedDropEvent" && message.event._tag === "DroppedFiles") ||
 	(message._tag === "GotComposerMessage" &&
-		(message.message._tag === "SubmittedDraft" || message.message._tag === "PastedFiles"))
+		(message.message._tag === "SubmittedDraft" ||
+			message.message._tag === "PastedFiles" ||
+			message.message._tag === "ClickedExecuteCommand" ||
+			(message.message._tag === "PressedCommandFieldKey" && message.message.key === "Enter")))
 
 /** The thread panel's sends and files, while its thread is still being created: held until it exists. */
 const holdForThread = (model: Model, message: Draft.Message): PageReturn | undefined =>
