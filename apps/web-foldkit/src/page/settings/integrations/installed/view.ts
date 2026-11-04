@@ -38,8 +38,9 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 				? emptyState(h, {
 						icon: (className) => IconRobot(h, { className }),
 						title: "No installed applications",
+						// Integration apps (Maple) are left out of this list, so the empty state says where they are.
 						description:
-							"Browse the Marketplace to find and install applications for your workspace.",
+							"Browse the Marketplace to find and install applications for your workspace. Apps that come with an integration, like Maple, are managed on their page in Integrations.",
 						action: button(
 							h,
 							{ intent: "primary", onPress: Message.ClickedBrowseMarketplace() },
