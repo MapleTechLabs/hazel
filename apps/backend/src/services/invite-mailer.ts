@@ -6,6 +6,13 @@ import { Config, Context, Effect, Layer, Schema } from "effect"
  * Without a binding, delivery fails unless IS_DEV is explicitly enabled.
  */
 
+/**
+ * The domain invitations are sent from. The stack registers it as a Cloudflare Email Sending
+ * subdomain (`worker.ts`); a sender on a domain that is not onboarded can only reach verified
+ * addresses ("destination address is not a verified address").
+ */
+export const INVITE_EMAIL_DOMAIN = "mail.hazel.sh"
+
 export interface InviteEmail {
 	readonly to: string
 	readonly organizationName: string
@@ -66,7 +73,7 @@ export class InviteMailer extends Context.Service<
 			InviteMailer,
 			Effect.gen(function* () {
 				const from = yield* Config.String("INVITE_EMAIL_FROM").pipe(
-					Config.withDefault("invites@hazel.sh"),
+					Config.withDefault(`invites@${INVITE_EMAIL_DOMAIN}`),
 				)
 				return {
 					send: Effect.fn("InviteMailer.send")(function* (invite: InviteEmail) {
