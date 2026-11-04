@@ -230,8 +230,8 @@ describe("threads", () => {
 			Scene.expect(Scene.role("heading", { name: "Thread" })).toExist(),
 			Scene.expect(Scene.text("Creating thread...")).toExist(),
 			Scene.Command.resolve(LoadThreadPanelWidth, Message.LoadedThreadPanelWidth({ width: null })),
-			Scene.Command.resolve(CreateThread, ActionMessage.SucceededCreateThread({ threadChannelId })),
-			Scene.expect(Scene.text("Creating thread...")).toBeAbsent(),
+			Scene.Command.resolve(EditorCommands.FocusEditor, Composer.Message.CompletedFocusEditor()),
+			// The composer is there while the thread is created: typing never waits on it.
 			Scene.Mount.resolveAll(
 				[
 					MountEditor({
@@ -254,6 +254,8 @@ describe("threads", () => {
 					),
 				],
 			),
+			Scene.Command.resolve(CreateThread, ActionMessage.SucceededCreateThread({ threadChannelId })),
+			Scene.expect(Scene.text("Creating thread...")).toBeAbsent(),
 			Scene.click(Scene.role("button", { name: "Close thread" })),
 			Scene.expect(Scene.role("heading", { name: "Thread" })).toBeAbsent(),
 			Scene.Mount.expectEnded(

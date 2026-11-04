@@ -149,17 +149,41 @@ const updateOneDraft = (
 		: liftDraft(model, which, DraftUpdate.update(draft, message, contextFor(model, which, shared)))
 }
 
+/** The thread panel's send, while its thread is still being created: held until it exists. */
+const queueThreadSubmit = (model: Model, message: Draft.Message): PageReturn | undefined => {
+	if (model.threadPanel?.creation !== "Creating") return undefined
+	if (message._tag !== "GotComposerMessage" || message.message._tag !== "SubmittedDraft") return undefined
+	const { markdown } = message.message
+	// The text stays in the editor until it really goes out.
+	return { model: withPanel(model, (panel) => modifyFields(panel, { queuedSubmit: () => markdown })) }
+}
+
+/** Sends what was queued while the panel's thread was being created, now that it exists. */
+export const sendQueuedThreadSubmit = (model: Model, shared: Shared | null): PageReturn => {
+	const panel = model.threadPanel
+	if (panel === null || panel.creation !== "Created" || panel.queuedSubmit === null) return { model }
+	const markdown = panel.queuedSubmit
+	const next = withPanel(model, (current) => modifyFields(current, { queuedSubmit: () => null }))
+	return updateOneDraft(
+		next,
+		"thread",
+		Draft.Message.GotComposerMessage({ message: Composer.Message.SubmittedDraft({ markdown }) }),
+		shared,
+	)
+}
+
 export const updateDraft = (
 	model: Model,
 	which: Which,
 	message: Draft.Message,
 	shared: Shared | null,
 ): PageReturn =>
-	which === "channel" && isSharedComposerData(message)
+	(which === "thread" ? queueThreadSubmit(model, message) : undefined) ??
+	(which === "channel" && isSharedComposerData(message)
 		? andThen(updateOneDraft(model, "channel", message, shared), (next) =>
 				updateOneDraft(next, "thread", message, shared),
 			)
-		: updateOneDraft(model, which, message, shared)
+		: updateOneDraft(model, which, message, shared))
 
 /** Presence and custom emojis arrive as page lookups; the composers get their copy. */
 export const forwardComposerData = (model: Model, message: Composer.Message): PageReturn =>
@@ -193,8 +217,10 @@ export const react = (model: Model, messageId: MessageId, emoji: string): PageRe
 
 // THREAD PANEL
 
+const threadEditorId = (threadChannelId: ChannelId) => `thread-composer-${threadChannelId}`
+
 export const newThreadDraft = (model: Model, threadChannelId: ChannelId): Draft.Model => {
-	const draft = Draft.init(threadChannelId, `thread-composer-${threadChannelId}`, "Reply in thread...")
+	const draft = Draft.init(threadChannelId, threadEditorId(threadChannelId), "Reply in thread...")
 	const { members, presence, mentionableBots, botCommands, customEmojis } = model.draft.composer
 	return {
 		...draft,
@@ -227,12 +253,24 @@ export const openThread = (
 						draft: newThreadDraft(model, threadChannelId),
 						memberId: null,
 						creation,
+						queuedSubmit: null,
 						isNaming: false,
 						messages: [],
 						rows: [],
 					}),
 				}),
-				commands: [...stopThreadTyping(model), ...loadWidthCommands(model)],
+				commands: [
+					...stopThreadTyping(model),
+					...loadWidthCommands(model),
+					// Reply at once: the panel's composer takes the focus as it mounts.
+					...Command.mapMessages(
+						[EditorCommands.FocusEditor({ editorId: threadEditorId(threadChannelId) })],
+						(message) =>
+							Message.GotThreadDraftMessage({
+								message: Draft.Message.GotComposerMessage({ message }),
+							}),
+					),
+				],
 			}
 
 export const closeThread = (model: Model): PageReturn =>
@@ -428,9 +466,13 @@ export const handleActionMessage = (model: Model, message: ActionMessage): PageR
 					}),
 				),
 			),
-		// The panel opens at once on the optimistic id; the composer waits for the RPC.
+		// The panel opens at once on the optimistic id; a send waits for the RPC (`queueThreadSubmit`).
 		CompletedGenerateThreadChannelId: ({ messageId, threadChannelId }) => {
 			if (model.currentUserId === null || model.channel === null) return { model }
+			// The same message's thread: already opening here, or already made (its link not in yet).
+			if (model.threadPanel?.threadChannelId === threadChannelId) return { model }
+			if (model.lookups.threadChannels.some((channel) => channel.id === threadChannelId))
+				return openThread(model, threadChannelId, messageId, "Created")
 			const create = CreateThread({
 				threadChannelId,
 				messageId,

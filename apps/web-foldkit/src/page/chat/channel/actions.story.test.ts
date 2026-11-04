@@ -1,5 +1,6 @@
 import { routeOfPath } from "../../../route"
 import { ChannelId, PinnedMessageId } from "@hazel/schema"
+import { derivedThreadChannelId } from "@hazel/domain/thread-id"
 import { Schema } from "effect"
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test, vi } from "vitest"
@@ -214,8 +215,11 @@ describe("message actions", () => {
 					currentUserId: ada,
 				}),
 				LoadThreadPanelWidth(),
+				EditorCommands.FocusEditor({ editorId: `thread-composer-${threadChannelId}` }),
 			),
 			Command.resolve(LoadThreadPanelWidth, Message.LoadedThreadPanelWidth({ width: null })),
+			Command.resolve(EditorCommands.FocusEditor, Composer.Message.CompletedFocusEditor()),
+
 			Command.resolve(CreateThread, ActionMessage.SucceededCreateThread({ threadChannelId })),
 			model((current) => expect(current.threadPanel?.creation).toBe("Created")),
 			message(Message.ClickedGenerateThreadName()),
@@ -232,6 +236,80 @@ describe("message actions", () => {
 			),
 		)
 		expect(start.commands?.map((command) => command.name)).toEqual([GenerateThreadChannelId.name])
+	})
+})
+
+describe("a thread still being created", () => {
+	test("takes typing at once; a send waits for the thread, then goes out to it", () => {
+		const threadChannelId = Schema.decodeSync(ChannelId)("00000000-0000-4000-8000-000000005555")
+		const creating = updateWithShared(
+			loadedModel(),
+			Message.GotActionMessage({
+				message: ActionMessage.CompletedGenerateThreadChannelId({
+					messageId: graceMessageId,
+					threadChannelId,
+				}),
+			}),
+		).model
+		expect(creating.threadPanel?.creation).toBe("Creating")
+
+		const submit = Message.GotThreadDraftMessage({
+			message: Draft.Message.GotComposerMessage({
+				message: Composer.Message.SubmittedDraft({ markdown: "first reply" }),
+			}),
+		})
+		const queued = updateWithShared(creating, submit)
+		// Nothing goes out to a channel that does not exist yet, and the text stays in the editor.
+		expect(queued.commands ?? []).toEqual([])
+		expect(queued.model.threadPanel?.queuedSubmit).toBe("first reply")
+
+		const created = updateWithShared(
+			queued.model,
+			Message.GotActionMessage({ message: ActionMessage.SucceededCreateThread({ threadChannelId }) }),
+		)
+		expect(created.model.threadPanel).toMatchObject({ creation: "Created", queuedSubmit: null })
+		const sent = (created.commands ?? []).find((command) => command.name === "SendMessage")
+		expect(sent?.args).toMatchObject({ channelId: threadChannelId, content: "first reply" })
+	})
+})
+
+describe("Reply in thread twice on one message", () => {
+	const threadChannelId = Schema.decodeSync(ChannelId)("00000000-0000-4000-8000-000000006666")
+	const generated = Message.GotActionMessage({
+		message: ActionMessage.CompletedGenerateThreadChannelId({
+			messageId: graceMessageId,
+			threadChannelId,
+		}),
+	})
+
+	test("names the message's own thread: the id the server derives for it", async () => {
+		const first = await derivedThreadChannelId(graceMessageId)
+		expect(await derivedThreadChannelId(graceMessageId)).toBe(first)
+		expect(await derivedThreadChannelId(adaMessageId)).not.toBe(first)
+	})
+
+	test("while the panel already opens on it: no second create", () => {
+		const opening = updateWithShared(loadedModel(), generated).model
+		const again = updateWithShared(opening, generated)
+		expect(again.commands ?? []).toEqual([])
+		expect(again.model.threadPanel?.creation).toBe("Creating")
+	})
+
+	test("once the thread exists but its link has not reached the message: opens it", () => {
+		const base = loadedModel()
+		const known: Model = {
+			...base,
+			lookups: {
+				...base.lookups,
+				threadChannels: [
+					...base.lookups.threadChannels,
+					{ id: threadChannelId, name: "Thread" } as Model["lookups"]["threadChannels"][number],
+				],
+			},
+		}
+		const opened = updateWithShared(known, generated)
+		expect(opened.model.threadPanel).toMatchObject({ threadChannelId, creation: "Created" })
+		expect((opened.commands ?? []).map((command) => command.name)).not.toContain(CreateThread.name)
 	})
 })
 

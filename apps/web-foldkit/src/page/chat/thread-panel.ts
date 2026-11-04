@@ -320,16 +320,19 @@ export const threadPanelView = <M>(h: HtmlBuilder<M>, inputs: ThreadPanelInputs<
 					h.div(
 						[h.Class("relative shrink-0 bg-bg px-4 pt-2.5 pb-4")],
 						[
-							inputs.isCreating
-								? h.div(
-										[
-											h.Class(
-												"flex items-center justify-center gap-2 py-3 text-muted-fg text-sm",
-											),
-										],
-										[loader(h, { className: "size-4" }), "Creating thread..."],
-									)
-								: inputs.composer,
+							// Typing starts at once; a send waits for the thread to exist.
+							...(inputs.isCreating
+								? [
+										h.div(
+											[
+												h.Class("flex items-center gap-2 pb-2 text-muted-fg text-xs"),
+												h.Attribute("role", "status"),
+											],
+											[loader(h, { className: "size-3" }), "Creating thread..."],
+										),
+									]
+								: []),
+							inputs.composer,
 						],
 					),
 				],
