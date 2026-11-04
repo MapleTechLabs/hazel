@@ -401,8 +401,9 @@ export class SyncConnection {
 
 		const hello: SyncClientFrame = { _tag: "Hello", since: this.lastSeq, paging: true }
 		// Over the mux the Hello rides with the open: the snapshot comes back on the same round trip.
-		const helloWithOpen = ws.sendFirst !== undefined
-		if (helloWithOpen) ws.sendFirst!(JSON.stringify(hello))
+		const sendFirst = ws.sendFirst?.bind(ws)
+		const helloWithOpen = sendFirst !== undefined
+		if (sendFirst !== undefined) sendFirst(JSON.stringify(hello))
 		ws.onopen = () => {
 			if (this.socket !== ws) return
 			if (!helloWithOpen) this.send(hello)

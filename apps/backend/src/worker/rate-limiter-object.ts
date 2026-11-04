@@ -67,10 +67,18 @@ export const RateLimiterObjectLive = RateLimiterObject.make(
  * 10 or 60 s period cannot express, on rare operations) to its Durable Object, whose first call
  * after an idle spell wakes it, costing up to a second on the request.
  */
-export const rateLimiterLive = (
-	limiters: Cloudflare.DurableObject<RateLimiterObject>,
-	messages: Cloudflare.RateLimitClient,
-) =>
+/** What `rateLimiterLive` uses of the Durable Object namespace and of the binding's client. */
+export interface RateLimiterBackends {
+	readonly getByName: (key: string) => {
+		readonly consume: (
+			limit: number,
+			windowMs: number,
+		) => Effect.Effect<RateLimitResult, never, RuntimeContext>
+	}
+}
+export type MessageRateLimit = Pick<Cloudflare.RateLimitClient, "limit">
+
+export const rateLimiterLive = (limiters: RateLimiterBackends, messages: MessageRateLimit) =>
 	Layer.succeed(
 		RateLimiter,
 		RateLimiter.of({

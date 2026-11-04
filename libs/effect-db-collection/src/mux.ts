@@ -234,14 +234,14 @@ export class SyncMux {
 		stream.clearOpenTimer()
 		stream.announcedAt = Date.now()
 		stream.openTimer = setTimeout(() => this.openTimedOut(stream), this.openTimeoutMs)
-		this.sendControl({
+		const open = {
 			_tag: "Open",
 			id: stream.id,
 			kind: stream.kind,
 			sourceId: stream.sourceId,
 			token: stream.token,
-			...(stream.first === undefined ? {} : { hello: stream.first }),
-		})
+		} as const
+		this.sendControl(stream.first === undefined ? open : { ...open, hello: stream.first })
 	}
 
 	/** A stream's `Opened` never came: the socket is dead if it went quiet too, else just that stream. */

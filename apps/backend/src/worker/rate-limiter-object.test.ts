@@ -1,36 +1,35 @@
-import type * as Cloudflare from "@alchemy.run/cloudflare"
 import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
 import { MESSAGE_RATE_LIMIT, checkMessageRateLimit } from "../services/rate-limit-helpers"
 import { RateLimiter } from "../services/rate-limiter"
-import { type RateLimiterObject, rateLimiterLive } from "./rate-limiter-object"
+import { type MessageRateLimit, type RateLimiterBackends, rateLimiterLive } from "./rate-limiter-object"
 
 /** The binding's client, admitting `allowed` calls per key. */
 const fakeBinding = (allowed: number) => {
 	const counts = new Map<string, number>()
-	const client = {
-		limit: ({ key }: { key: string }) =>
+	const client: MessageRateLimit = {
+		limit: ({ key }) =>
 			Effect.sync(() => {
 				const count = (counts.get(key) ?? 0) + 1
 				counts.set(key, count)
 				return { success: count <= allowed }
 			}),
-	} as unknown as Cloudflare.RateLimitClient
+	}
 	return { client, counts }
 }
 
 /** The Durable Object namespace, recording which keys reached it. */
 const fakeObjects = () => {
 	const keys: Array<string> = []
-	const namespace = {
-		getByName: (key: string) => ({
-			consume: (limit: number, windowMs: number) =>
+	const namespace: RateLimiterBackends = {
+		getByName: (key) => ({
+			consume: (limit, windowMs) =>
 				Effect.sync(() => {
 					keys.push(key)
 					return { allowed: true, remaining: limit - 1, resetAfterMs: windowMs, limit }
 				}),
 		}),
-	} as unknown as Cloudflare.DurableObject<RateLimiterObject>
+	}
 	return { namespace, keys }
 }
 
