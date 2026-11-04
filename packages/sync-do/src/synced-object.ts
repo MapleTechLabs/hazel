@@ -104,8 +104,10 @@ export const makeSyncedObject = <P, E, R, RD = never, RX = never>(
 	const scheduleWith = (outboxNotBefore?: number) =>
 		Effect.gen(function* () {
 			const pending = yield* outbox.nextAlarm
+			const now = yield* Clock.currentTimeMillis
+			// Only rows due now are the delivery's to make; a later row keeps its own time.
 			const outboxAt =
-				pending === undefined || outboxNotBefore === undefined
+				pending === undefined || outboxNotBefore === undefined || pending > now
 					? pending
 					: Math.max(pending, outboxNotBefore)
 			const inboxAt = yield* nextInboxPruneAt()

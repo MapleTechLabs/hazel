@@ -320,7 +320,7 @@ export const threadPanelView = <M>(h: HtmlBuilder<M>, inputs: ThreadPanelInputs<
 					h.div(
 						[h.Class("relative shrink-0 bg-bg px-4 pt-2.5 pb-4")],
 						[
-							// Typing starts at once; a send waits for the thread to exist.
+							// Typing starts at once; a send or a file waits for the thread to exist.
 							...(inputs.isCreating
 								? [
 										h.div(

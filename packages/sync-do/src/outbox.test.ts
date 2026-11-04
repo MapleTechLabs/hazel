@@ -501,6 +501,49 @@ describe("synced object", () => {
 		},
 	)
 
+	it.effect("drain (the alarm's) also delivers rows a drainUntilQuiet asked for while it ran", () => {
+		const t = setup()
+		return Effect.gen(function* () {
+			const delivered: Array<string> = []
+			const gate = yield* Deferred.make<void>()
+			const reached = yield* Deferred.make<void>()
+			const outbox = makeOutbox((row: OutboxRow) =>
+				Effect.gen(function* () {
+					if (row.id === "first") {
+						yield* Deferred.succeed(reached, undefined)
+						yield* Deferred.await(gate)
+					}
+					delivered.push(row.id)
+				}),
+			)
+			yield* enqueue({ id: "first", target: "A", kind: "k", payload: null })
+			const alarm = yield* Effect.forkChild(outbox.drain)
+			yield* Deferred.await(reached)
+			yield* enqueue({ id: "second", target: "B", kind: "k", payload: null })
+			yield* outbox.drainUntilQuiet
+			yield* Deferred.succeed(gate, undefined)
+			yield* Fiber.join(alarm)
+			expect(delivered.sort()).toEqual(["first", "second"])
+		}).pipe(Effect.provide(t.layer))
+	})
+
+	it.effect("commit's backstop leaves a row that is not due yet at its own time", () => {
+		const storage = makeFakeStorage()
+		storage.db.exec(TOY_DDL)
+		const object = makeSyncedObject({
+			storage,
+			state: makeFakeState(),
+			source: makeToySource(makeToyControls()),
+			deliver: () => Effect.void,
+		})
+		return Effect.gen(function* () {
+			yield* enqueue({ id: "later", target: "A", kind: "k", payload: null, notBefore: 3_000 })
+			storage.db.exec(`INSERT INTO projects (id, name) VALUES ('p1', 'One')`)
+			yield* object.commit
+			expect(storage.alarm()).toBe(3_000)
+		}).pipe(Effect.provide(sqliteClientLayer(storage)))
+	})
+
 	it.effect("afterCommit flushes rows a delivery wrote locally", () => {
 		const storage = makeFakeStorage()
 		storage.db.exec(TOY_DDL)

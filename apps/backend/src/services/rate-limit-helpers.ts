@@ -11,9 +11,12 @@ import { Effect } from "effect"
 import { RateLimiter } from "./rate-limiter"
 
 /**
- * Rate limit configuration for messages: 120 a minute per user. Counted by Cloudflare's rate
- * limit binding (`MESSAGE_RATE_LIMIT_BINDING` in `worker.ts`, configured from this), whose period
- * is 10 or 60 s, so the window must stay one of those.
+ * Rate limit configuration for messages: 120 a minute per user, per Cloudflare location. Counted
+ * by Cloudflare's rate limit binding (`MESSAGE_RATE_LIMIT_BINDING` in `worker.ts`, configured
+ * from this), which counts in each location on its own: a user whose requests reach two locations
+ * within a minute gets up to the limit in each. That bounds abuse well enough for messages, and
+ * costs no round trip; the strict, global hourly limits below stay on a Durable Object. The
+ * binding's period is 10 or 60 s, so the window must stay one of those.
  */
 export const MESSAGE_RATE_LIMIT = {
 	limit: 120,

@@ -438,7 +438,7 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 			Write.updateDraft(model, "thread", draftMessage, shared),
 		GotActionMessage: ({ message: actionMessage }) =>
 			Write.andThen(Write.handleActionMessage(model, actionMessage), (next) =>
-				Write.sendQueuedThreadSubmit(next, shared),
+				Write.playHeldThreadMessages(next, shared),
 			),
 		UpdatedThreadMember: ({ threadChannelId, memberId }) =>
 			model.threadPanel?.threadChannelId === threadChannelId

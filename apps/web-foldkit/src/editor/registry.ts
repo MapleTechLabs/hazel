@@ -31,6 +31,9 @@ const makeRegistry = (): EditorRegistryShape => {
 	const waiters = new Map<string, Set<(view: EditorView) => void>>()
 	const awaitMount = (editorId: string) =>
 		Effect.callback<EditorView>((resume) => {
+			// Checked in the same synchronous step that installs the waiter: no register slips between.
+			const mounted = editors.get(editorId)
+			if (mounted !== undefined) return resume(Effect.succeed(mounted))
 			const waiting = waiters.get(editorId) ?? new Set()
 			const waiter = (view: EditorView) => resume(Effect.succeed(view))
 			waiting.add(waiter)

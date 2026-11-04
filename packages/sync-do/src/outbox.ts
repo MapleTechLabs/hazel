@@ -310,9 +310,20 @@ export const makeOutbox = <R>(
 		wanted = false
 		return Effect.andThen(drainOutbox(deliver, options), drainWhileWanted)
 	})
+	// Whoever holds the permit goes round while a write asked for a drain. Checked again once the
+	// permit is released: a request that came between the last check and the release found the
+	// permit taken, so nobody else will.
+	const drainWhileWantedHeld: Effect.Effect<void, SqlError, SqlClient | R> = Effect.suspend(() =>
+		Effect.flatMap(permit.withPermitsIfAvailable(1)(drainWhileWanted), (ran) =>
+			Option.isSome(ran) && wanted ? drainWhileWantedHeld : Effect.void,
+		),
+	)
 	return {
 		enqueue,
-		drain: permit.withPermit(drainOutbox(deliver, options)),
+		drain: Effect.andThen(
+			permit.withPermit(Effect.andThen(drainOutbox(deliver, options), drainWhileWanted)),
+			Effect.suspend(() => (wanted ? drainWhileWantedHeld : Effect.void)),
+		),
 		/**
 		 * Drain unless one is already running. A delivery that calls back into this object (A
 		 * delivers to B, B's write delivers to A) would otherwise wait on the drain waiting on it;
@@ -326,7 +337,7 @@ export const makeOutbox = <R>(
 		 */
 		drainUntilQuiet: Effect.suspend(() => {
 			wanted = true
-			return Effect.asVoid(permit.withPermitsIfAvailable(1)(drainWhileWanted))
+			return drainWhileWantedHeld
 		}),
 		/** `deliverKindsNow`: runs even while a drain is. */
 		deliverNow: (kinds: ReadonlyArray<string>) => deliverKindsNow(deliver, kinds, options),

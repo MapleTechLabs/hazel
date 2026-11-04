@@ -61,8 +61,11 @@ export const ThreadPanel = Schema.Struct({
 	/** The signed-in user's membership of the thread (its typing indicator). */
 	memberId: Schema.NullOr(ChannelMemberId),
 	creation: ThreadCreation,
-	/** What was sent while the thread was still being created: sent once it exists. */
-	queuedSubmit: Schema.NullOr(Schema.String),
+	/**
+	 * What the composer did while the thread was still being created (a send, files picked, pasted
+	 * or dropped), in order: played back once it exists.
+	 */
+	held: Schema.Array(Draft.Message),
 	/** "Generate thread name" is running for this thread. */
 	isNaming: Schema.Boolean,
 	/** The thread's messages, oldest first. */

@@ -122,7 +122,10 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 			const all = [...objects.values()]
 			return Effect.forEach(all, (object) => object.deliveriesInFlight).pipe(
 				Effect.flatMap((counts) =>
-					counts.some((count) => count > 0) ? Effect.andThen(Effect.yieldNow, settle) : Effect.void,
+					// An object a delivery created meanwhile is not in `all`: look again.
+					counts.some((count) => count > 0) || objects.size !== all.length
+						? Effect.andThen(Effect.yieldNow, settle)
+						: Effect.void,
 				),
 			)
 		})

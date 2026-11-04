@@ -149,26 +149,42 @@ const updateOneDraft = (
 		: liftDraft(model, which, DraftUpdate.update(draft, message, contextFor(model, which, shared)))
 }
 
-/** The thread panel's send, while its thread is still being created: held until it exists. */
-const queueThreadSubmit = (model: Model, message: Draft.Message): PageReturn | undefined => {
-	if (model.threadPanel?.creation !== "Creating") return undefined
-	if (message._tag !== "GotComposerMessage" || message.message._tag !== "SubmittedDraft") return undefined
-	const { markdown } = message.message
-	// The text stays in the editor until it really goes out.
-	return { model: withPanel(model, (panel) => modifyFields(panel, { queuedSubmit: () => markdown })) }
-}
+/** What needs the thread to exist: a send, and files (their upload is presigned for its channel). */
+const needsThread = (message: Draft.Message): boolean =>
+	message._tag === "SelectedFiles" ||
+	(message._tag === "ReceivedDropEvent" && message.event._tag === "DroppedFiles") ||
+	(message._tag === "GotComposerMessage" &&
+		(message.message._tag === "SubmittedDraft" || message.message._tag === "PastedFiles"))
 
-/** Sends what was queued while the panel's thread was being created, now that it exists. */
-export const sendQueuedThreadSubmit = (model: Model, shared: Shared | null): PageReturn => {
+/** The thread panel's sends and files, while its thread is still being created: held until it exists. */
+const holdForThread = (model: Model, message: Draft.Message): PageReturn | undefined =>
+	model.threadPanel?.creation === "Creating" && needsThread(message)
+		? // A held send's text stays in the editor until it really goes out.
+			{
+				model: withPanel(model, (panel) =>
+					modifyFields(panel, { held: (held) => [...held, message] }),
+				),
+			}
+		: undefined
+
+/** A held send still to go: the editor holds what was sent, not text typed (or a send edited) since. */
+const isStillWanted = (panel: ThreadPanel, message: Draft.Message) =>
+	message._tag !== "GotComposerMessage" ||
+	message.message._tag !== "SubmittedDraft" ||
+	panel.draft.composer.markdown.trim() === message.message.markdown.trim()
+
+/** Plays back what the composer did while the panel's thread was being created, now that it exists. */
+export const playHeldThreadMessages = (model: Model, shared: Shared | null): PageReturn => {
 	const panel = model.threadPanel
-	if (panel === null || panel.creation !== "Created" || panel.queuedSubmit === null) return { model }
-	const markdown = panel.queuedSubmit
-	const next = withPanel(model, (current) => modifyFields(current, { queuedSubmit: () => null }))
-	return updateOneDraft(
-		next,
-		"thread",
-		Draft.Message.GotComposerMessage({ message: Composer.Message.SubmittedDraft({ markdown }) }),
-		shared,
+	if (panel === null || panel.creation !== "Created" || panel.held.length === 0) return { model }
+	const held = panel.held
+	const cleared = withPanel(model, (current) => modifyFields(current, { held: () => [] }))
+	return held.reduce<PageReturn>(
+		(result, message) =>
+			result.model.threadPanel !== null && isStillWanted(result.model.threadPanel, message)
+				? andThen(result, (next) => updateOneDraft(next, "thread", message, shared))
+				: result,
+		{ model: cleared },
 	)
 }
 
@@ -178,7 +194,7 @@ export const updateDraft = (
 	message: Draft.Message,
 	shared: Shared | null,
 ): PageReturn =>
-	(which === "thread" ? queueThreadSubmit(model, message) : undefined) ??
+	(which === "thread" ? holdForThread(model, message) : undefined) ??
 	(which === "channel" && isSharedComposerData(message)
 		? andThen(updateOneDraft(model, "channel", message, shared), (next) =>
 				updateOneDraft(next, "thread", message, shared),
@@ -253,7 +269,7 @@ export const openThread = (
 						draft: newThreadDraft(model, threadChannelId),
 						memberId: null,
 						creation,
-						queuedSubmit: null,
+						held: [],
 						isNaming: false,
 						messages: [],
 						rows: [],
@@ -466,7 +482,7 @@ export const handleActionMessage = (model: Model, message: ActionMessage): PageR
 					}),
 				),
 			),
-		// The panel opens at once on the optimistic id; a send waits for the RPC (`queueThreadSubmit`).
+		// The panel opens at once on the optimistic id; a send or a file waits for the RPC (`holdForThread`).
 		CompletedGenerateThreadChannelId: ({ messageId, threadChannelId }) => {
 			if (model.currentUserId === null || model.channel === null) return { model }
 			// The same message's thread: already opening here, or already made (its link not in yet).

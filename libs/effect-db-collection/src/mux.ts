@@ -55,8 +55,9 @@ class MuxStream implements WebSocketLike {
 	onmessage: ((event: { readonly data: unknown }) => void) | null = null
 	onclose: ((event: { readonly code: number; readonly reason: string }) => void) | null = null
 	onerror: ((event: unknown) => void) | null = null
-	/** When `Open` went out (`Date.now()`, 0 before), and the timer that gives up on its `Opened`. */
-	announcedAt = 0
+	/** Whether `Open` went out; the socket's frame count then, and the timer that gives up on its `Opened`. */
+	announced = false
+	framesAtAnnounce = 0
 	/** The frame `sendFirst` gave, carried by `Open`. */
 	first: string | undefined
 	openTimer: ReturnType<typeof setTimeout> | undefined
@@ -124,8 +125,8 @@ export class SyncMux {
 	private nextId = 0
 	private readonly streams = new Map<number, MuxStream>()
 	private idleTimer: ReturnType<typeof setTimeout> | undefined
-	/** When the shared socket last said anything (`Date.now()`): a late stream on a silent socket means it is dead. */
-	private lastFrameAt = 0
+	/** Frames the shared socket has received: a late stream on a socket that said nothing since means it is dead. */
+	private framesReceived = 0
 
 	constructor(options: SyncMuxOptions) {
 		this.options = options
@@ -175,7 +176,7 @@ export class SyncMux {
 		// Announced after the caller's `sendFirst`, which follows `new` in the same turn.
 		else if (this.isOpen)
 			queueMicrotask(() => {
-				if (this.streams.get(stream.id) === stream && this.isOpen && stream.announcedAt === 0)
+				if (this.streams.get(stream.id) === stream && this.isOpen && !stream.announced)
 					this.announce(stream)
 			})
 		return stream
@@ -206,12 +207,11 @@ export class SyncMux {
 			clearTimeout(handshakeTimer)
 			if (this.socket !== ws) return
 			this.isOpen = true
-			this.lastFrameAt = Date.now()
-			for (const stream of this.streams.values()) if (stream.announcedAt === 0) this.announce(stream)
+			for (const stream of this.streams.values()) if (!stream.announced) this.announce(stream)
 		}
 		ws.onmessage = (event) => {
 			if (this.socket !== ws) return
-			this.lastFrameAt = Date.now()
+			this.framesReceived++
 			if (typeof event.data === "string") this.onFrame(event.data)
 		}
 		ws.onclose = (event) => {
@@ -232,7 +232,8 @@ export class SyncMux {
 
 	private announce(stream: MuxStream): void {
 		stream.clearOpenTimer()
-		stream.announcedAt = Date.now()
+		stream.announced = true
+		stream.framesAtAnnounce = this.framesReceived
 		stream.openTimer = setTimeout(() => this.openTimedOut(stream), this.openTimeoutMs)
 		const open = {
 			_tag: "Open",
@@ -249,7 +250,8 @@ export class SyncMux {
 		stream.openTimer = undefined
 		if (this.streams.get(stream.id) !== stream || stream.readyState !== CONNECTING) return
 		const ws = this.socket
-		if (ws !== null && this.lastFrameAt < stream.announcedAt) {
+		// Counted, not timed: a frame in the same millisecond as the `Open` still shows the socket lives.
+		if (ws !== null && this.framesReceived === stream.framesAtAnnounce) {
 			this.log("warning", "The sync socket went quiet; reconnecting", { source: stream.sourceId })
 			this.detach(ws, 1000, "unresponsive")
 			this.closeStreams(ABNORMAL, "unresponsive")

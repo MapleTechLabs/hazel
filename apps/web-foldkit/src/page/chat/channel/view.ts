@@ -120,9 +120,9 @@ const loadingView = (h: H): Html =>
 				"flex size-full animate-skeleton-in flex-col justify-end pb-4 motion-safe:*:animate-pulse",
 			),
 			h.Attribute("aria-busy", "true"),
-			h.Attribute("aria-label", "Loading messages"),
 		],
 		[
+			h.span([h.Class("sr-only"), h.Attribute("role", "status")], ["Loading messages"]),
 			skeletonMessage(h, ["w-3/5"]),
 			skeletonMessage(h, ["w-4/5", "w-2/5"]),
 			skeletonMessage(h, ["w-1/2"]),

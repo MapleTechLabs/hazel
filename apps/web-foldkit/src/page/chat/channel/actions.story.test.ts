@@ -240,9 +240,15 @@ describe("message actions", () => {
 })
 
 describe("a thread still being created", () => {
-	test("takes typing at once; a send waits for the thread, then goes out to it", () => {
-		const threadChannelId = Schema.decodeSync(ChannelId)("00000000-0000-4000-8000-000000005555")
-		const creating = updateWithShared(
+	const threadChannelId = Schema.decodeSync(ChannelId)("00000000-0000-4000-8000-000000005555")
+	const thread = (message: Draft.Message) => Message.GotThreadDraftMessage({ message })
+	const composer = (message: Composer.Message) => thread(Draft.Message.GotComposerMessage({ message }))
+	const typed = (markdown: string) => composer(Composer.Message.UpdatedDraft({ markdown, isEmpty: false }))
+	const created = Message.GotActionMessage({
+		message: ActionMessage.SucceededCreateThread({ threadChannelId }),
+	})
+	const creating = () =>
+		updateWithShared(
 			loadedModel(),
 			Message.GotActionMessage({
 				message: ActionMessage.CompletedGenerateThreadChannelId({
@@ -251,25 +257,52 @@ describe("a thread still being created", () => {
 				}),
 			}),
 		).model
-		expect(creating.threadPanel?.creation).toBe("Creating")
+	const run = (start: Model, messages: ReadonlyArray<Message>) => {
+		let model = start
+		const commands: Array<{ readonly name: string; readonly args?: unknown }> = []
+		for (const message of messages) {
+			const next = updateWithShared(model, message)
+			model = next.model
+			for (const command of next.commands ?? []) commands.push(command)
+		}
+		return { model, commands }
+	}
 
-		const submit = Message.GotThreadDraftMessage({
-			message: Draft.Message.GotComposerMessage({
-				message: Composer.Message.SubmittedDraft({ markdown: "first reply" }),
-			}),
-		})
-		const queued = updateWithShared(creating, submit)
+	test("takes typing at once; a send waits for the thread, then goes out to it", () => {
+		const start = creating()
+		expect(start.threadPanel?.creation).toBe("Creating")
+		const queued = run(start, [
+			typed("first reply"),
+			composer(Composer.Message.SubmittedDraft({ markdown: "first reply" })),
+		])
 		// Nothing goes out to a channel that does not exist yet, and the text stays in the editor.
-		expect(queued.commands ?? []).toEqual([])
-		expect(queued.model.threadPanel?.queuedSubmit).toBe("first reply")
+		expect(queued.commands.map((command) => command.name)).not.toContain("SendMessage")
+		expect(queued.model.threadPanel?.held).toHaveLength(1)
 
-		const created = updateWithShared(
-			queued.model,
-			Message.GotActionMessage({ message: ActionMessage.SucceededCreateThread({ threadChannelId }) }),
-		)
-		expect(created.model.threadPanel).toMatchObject({ creation: "Created", queuedSubmit: null })
-		const sent = (created.commands ?? []).find((command) => command.name === "SendMessage")
+		const done = run(queued.model, [created])
+		expect(done.model.threadPanel).toMatchObject({ creation: "Created", held: [] })
+		const sent = done.commands.find((command) => command.name === "SendMessage")
 		expect(sent?.args).toMatchObject({ channelId: threadChannelId, content: "first reply" })
+	})
+
+	test("text typed after the send stays in the editor for the user to send", () => {
+		const done = run(creating(), [
+			typed("first reply"),
+			composer(Composer.Message.SubmittedDraft({ markdown: "first reply" })),
+			typed("first reply, and more"),
+			created,
+		])
+		expect(done.commands.map((command) => command.name)).not.toContain("SendMessage")
+		expect(done.model.threadPanel?.draft.composer.markdown).toBe("first reply, and more")
+	})
+
+	test("a file picked meanwhile uploads once the thread exists", () => {
+		const file = new File(["x"], "notes.txt", { type: "text/plain" })
+		const held = run(creating(), [thread(Draft.Message.SelectedFiles({ files: [file] }))])
+		expect(held.model.threadPanel?.held).toHaveLength(1)
+		expect(held.commands.map((command) => command.name)).not.toContain("GenerateUploadFileId")
+		const done = run(held.model, [created])
+		expect(done.commands.map((command) => command.name)).toContain("GenerateUploadFileId")
 	})
 })
 

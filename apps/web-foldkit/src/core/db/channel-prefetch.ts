@@ -61,12 +61,18 @@ export const installChannelPrefetch = (root: Document | HTMLElement = document) 
 		const channelId = channelOfLink(event.target)
 		if (channelId !== undefined) prefetchChannel(channelId)
 	}
+	// The pointer left the page (no element is entered): it is not resting on a link any more.
+	const onOut = (event: Event) => {
+		if (event instanceof PointerEvent && event.relatedTarget === null) cancel()
+	}
 	root.addEventListener("pointerover", onOver, { passive: true })
+	root.addEventListener("pointerout", onOut, { passive: true })
 	root.addEventListener("pointerdown", onPress, { passive: true })
 	root.addEventListener("focusin", onPress)
 	return () => {
 		cancel()
 		root.removeEventListener("pointerover", onOver)
+		root.removeEventListener("pointerout", onOut)
 		root.removeEventListener("pointerdown", onPress)
 		root.removeEventListener("focusin", onPress)
 	}
