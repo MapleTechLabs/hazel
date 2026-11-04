@@ -96,6 +96,40 @@ const emptyStateView = (h: H): Html =>
 		],
 	)
 
+/** One placeholder message: avatar, name and `lines` of text of the given widths. */
+const skeletonMessage = (h: H, lines: ReadonlyArray<string>): Html =>
+	h.div(
+		[h.Class("flex gap-3 px-4 py-2")],
+		[
+			h.div([h.Class("size-9 shrink-0 rounded-lg bg-wash")], []),
+			h.div(
+				[h.Class("flex min-w-0 flex-1 flex-col gap-2 pt-1")],
+				[
+					h.div([h.Class("h-3 w-28 rounded bg-wash-strong")], []),
+					...lines.map((width) => h.div([h.Class(`h-3 rounded bg-wash ${width}`)], [])),
+				],
+			),
+		],
+	)
+
+/** The list before its first snapshot: placeholders at the bottom, where messages will land. */
+const loadingView = (h: H): Html =>
+	h.div(
+		[
+			h.Class(
+				"flex size-full animate-skeleton-in flex-col justify-end pb-4 motion-safe:*:animate-pulse",
+			),
+			h.Attribute("aria-busy", "true"),
+			h.Attribute("aria-label", "Loading messages"),
+		],
+		[
+			skeletonMessage(h, ["w-3/5"]),
+			skeletonMessage(h, ["w-4/5", "w-2/5"]),
+			skeletonMessage(h, ["w-1/2"]),
+			skeletonMessage(h, ["w-3/4", "w-1/3"]),
+		],
+	)
+
 /** Everything `listView` reads from the page, so a page that differs elsewhere keeps the list memo. */
 const isListInputEqual = (a: Model, b: Model) =>
 	a.hasLoadedMessages === b.hasLoadedMessages &&
@@ -131,7 +165,7 @@ const messageListView = (h: H, model: Model, nowMs: number): Html =>
 	lazyList(listView, [listInputOf(model), popoverClockOf(model, nowMs), h]) ?? h.empty
 
 const listView = (model: Model, nowMs: number, h: H): Html => {
-	if (!model.hasLoadedMessages) return h.div([])
+	if (!model.hasLoadedMessages) return loadingView(h)
 	if (model.messages.length === 0) return emptyStateView(h)
 	const idle = idleRowContext(h, model)
 	const held = Overlays.heldMessageIdOf(model.overlays)
