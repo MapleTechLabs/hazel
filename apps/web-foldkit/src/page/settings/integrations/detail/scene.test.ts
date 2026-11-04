@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { routeOfPath } from "../../../../route"
-import { OrganizationId, UserId } from "@hazel/schema"
+import { type BotId, OrganizationId, UserId } from "@hazel/schema"
 import { Option, Schema } from "effect"
 import {
 	click,
@@ -32,12 +32,16 @@ import {
 	GetT3CodeLink,
 	RedirectToProvider,
 	StartT3CodeConnect,
+	UninstallMaple,
 	UpdateT3CodeSharing,
 } from "./command"
 import { Message } from "./message"
 import { Activity, type Model, type T3CodeLink, T3CodeState } from "./model"
 import { init, update } from "./update"
 import { view } from "./view"
+
+const MAPLE_BOT = "ca08852a-fb2e-4df9-8602-519e7ec3b9bf" as BotId
+const OLD_EU_BOT = "de89c591-fcf9-4ff7-a13e-0118180bfc99" as BotId
 import { sharedDefaults } from "../../../test-shared"
 import * as Modal from "../../../../ui/modal"
 import {
@@ -102,11 +106,66 @@ describe("integration detail page", () => {
 		scene(
 			config,
 			given(pageFor("maple").model),
-			Subscription.emit(Message.UpdatedMapleBotInstalled({ isInstalled: true })),
+			Subscription.emit(
+				Message.UpdatedMapleInstall({
+					install: { botId: MAPLE_BOT, region: "eu", botIds: [MAPLE_BOT] },
+				}),
+			),
 			expectView(text("Connected")).toExist(),
 			expectView(role("link", { name: "Connect in Maple" })).toBeAbsent(),
-			expectView(role("link", { name: "Manage in Maple" })).toExist(),
 			expectView(text("Maple is installed in this workspace.", { exact: false })).toExist(),
+			// The install names its region, so the links go straight there.
+			expectView(role("link", { name: "Manage in Maple" })).toHaveAttr(
+				"href",
+				"https://app.eu.maple.dev/integrations?integration=chat-hazel",
+			),
+			expectView(role("link", { name: "Manage in Maple EU" })).toBeAbsent(),
+			expectView(role("link", { name: "Set up alerts in Maple" })).toHaveAttr(
+				"href",
+				"https://app.eu.maple.dev/alerts?tab=routing",
+			),
+		)
+	})
+
+	test("Maple: an install from before regions offers both regions", () => {
+		scene(
+			config,
+			given(pageFor("maple").model),
+			Subscription.emit(
+				Message.UpdatedMapleInstall({
+					install: { botId: MAPLE_BOT, region: null, botIds: [MAPLE_BOT] },
+				}),
+			),
+			expectView(role("link", { name: "Manage in Maple" })).toHaveAttr(
+				"href",
+				"https://app.maple.dev/integrations?integration=chat-hazel",
+			),
+			expectView(role("link", { name: "Manage in Maple EU" })).toExist(),
+		)
+	})
+
+	test("Maple: removing its bot uninstalls it from this workspace", () => {
+		scene(
+			config,
+			given(pageFor("maple").model),
+			Subscription.emit(
+				Message.UpdatedMapleInstall({
+					install: { botId: MAPLE_BOT, region: "eu", botIds: [MAPLE_BOT, OLD_EU_BOT] },
+				}),
+			),
+			click(role("button", { name: "Remove from workspace" })),
+			// Both Maple bots go: the shared one and the old EU one.
+			Command.expectExact(UninstallMaple({ botIds: [MAPLE_BOT, OLD_EU_BOT], organizationId: orgId })),
+			expectView(role("button", { name: "Removing..." })).toBeDisabled(),
+			Command.resolve(
+				UninstallMaple,
+				Message.SucceededUninstallMaple({ botIds: [MAPLE_BOT, OLD_EU_BOT], organizationId: orgId }),
+			),
+			expectOutMessage(
+				PageOutMessage.RequestedToast({ toast: successToast("Maple removed from this workspace") }),
+			),
+			Subscription.emit(Message.UpdatedMapleInstall({ install: null })),
+			expectView(role("link", { name: "Connect in Maple" })).toExist(),
 		)
 	})
 

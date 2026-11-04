@@ -45,6 +45,8 @@ export const ApproveInstall = Command.define("ApproveInstall", {
 				BotNotFoundError: () => Effect.succeed(Message.FailedApprove({ reason: "Invalid" })),
 				BotInstallRedirectMismatchError: () =>
 					Effect.succeed(Message.FailedApprove({ reason: "Invalid" })),
+				BotInstallRegionConflictError: () =>
+					Effect.succeed(Message.FailedApprove({ reason: "RegionConflict" })),
 				ActiveOrganizationRequiredError: () =>
 					Effect.succeed(Message.FailedApprove({ reason: "Invalid" })),
 			}),

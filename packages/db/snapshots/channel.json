@@ -1,5 +1,5 @@
 {
-	"migration": "0001_initial",
+	"migration": "0002_channel_bot_region",
 	"entities": [
 		{
 			"kind": "table",
@@ -179,6 +179,15 @@
 			"position": 1,
 			"type": "text",
 			"notNull": true,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "channel_bots",
+			"name": "region",
+			"position": 2,
+			"type": "text",
+			"notNull": false,
 			"default": null
 		},
 		{

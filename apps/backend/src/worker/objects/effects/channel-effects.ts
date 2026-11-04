@@ -35,7 +35,14 @@ export const SetViewersPayload = Schema.Struct({
 	organizationId: OrganizationId,
 	conversationId: Schema.NullOr(ConnectConversationId),
 	viewers: Schema.Array(ChannelViewer),
-	bots: Schema.Array(Schema.Struct({ botId: StoredBotId, botUserId: UserId })),
+	bots: Schema.Array(
+		Schema.Struct({
+			botId: StoredBotId,
+			botUserId: UserId,
+			/** The install's region; absent on rows enqueued before regions (the default). */
+			region: Schema.optionalKey(Schema.NullOr(Schema.String)),
+		}),
+	),
 	/** A Connect host channel's guest mounts: their ids are routed here (`ChannelViewers.require`). */
 	mountChannelIds: Schema.optionalKey(Schema.Array(ChannelId)),
 	/**
@@ -130,7 +137,13 @@ const setViewers = Effect.fn("ChannelEffects.setViewers")(function* (payload: Se
 	yield* db.run(SQLite.deleteFrom(schema.channelBotsTable).allRows())
 	if (payload.bots.length > 0) {
 		yield* db.run(
-			SQLite.insertInto(schema.channelBotsTable).values(payload.bots.map((bot) => ({ ...bot }))),
+			SQLite.insertInto(schema.channelBotsTable).values(
+				payload.bots.map((bot) => ({
+					botId: bot.botId,
+					botUserId: bot.botUserId,
+					region: bot.region ?? null,
+				})),
+			),
 		)
 	}
 

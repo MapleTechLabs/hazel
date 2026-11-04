@@ -85,6 +85,19 @@ export class BotInstallRedirectMismatchError extends Schema.TaggedError<BotInsta
 	},
 ) {}
 
+/**
+ * The bot is already installed in this organization for another region of its service: the
+ * install has to be removed first, or the earlier region's link would silently stop receiving.
+ */
+export class BotInstallRegionConflictError extends Schema.TaggedError<BotInstallRegionConflictError>()(
+	"BotInstallRegionConflictError",
+	{
+		botId: BotId,
+		/** The region the existing install belongs to; `null` for the default one. */
+		installedRegion: Schema.NullOr(Schema.String),
+	},
+) {}
+
 /** What the bot-install consent page shows about the bot asking to be installed. */
 export class BotInstallRequestResponse extends Schema.Class<BotInstallRequestResponse>(
 	"BotInstallRequestResponse",
@@ -432,6 +445,7 @@ export class BotRpcs extends RpcGroup.make(
 	 *
 	 * @throws BotNotFoundError if the bot doesn't exist
 	 * @throws BotInstallRedirectMismatchError if the redirect URI is not registered on the bot
+	 * @throws BotInstallRegionConflictError if it is installed here for another region
 	 * @throws UnauthorizedError if user is not org admin
 	 */
 	Rpc.make("bot.authorizeInstall", {
@@ -445,6 +459,7 @@ export class BotRpcs extends RpcGroup.make(
 			ActiveOrganizationRequiredError,
 			BotNotFoundError,
 			BotInstallRedirectMismatchError,
+			BotInstallRegionConflictError,
 			UnauthorizedError,
 			InternalServerError,
 			RateLimitExceededError,

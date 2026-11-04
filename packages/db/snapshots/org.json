@@ -1,5 +1,5 @@
 {
-	"migration": "0004_bot_install_oauth",
+	"migration": "0005_bot_installation_region",
 	"entities": [
 		{
 			"kind": "table",
@@ -373,6 +373,15 @@
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "bot_installations",
+			"name": "region",
+			"position": 5,
+			"type": "text",
+			"notNull": false,
+			"default": null
 		},
 		{
 			"kind": "column",

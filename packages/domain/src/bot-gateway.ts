@@ -141,12 +141,30 @@ export const createBotGatewayPartitionKey = (params: {
 			? `bot:${params.botId}`
 			: `org:${params.organizationId}`
 
+/**
+ * A region of the service behind a bot (`eu`, `us-west`): one bot can hold one gateway session
+ * per region, and each install's events go only to the region its registered redirect URI names
+ * (`?hazel_region=`, `@hazel/domain/bot-install`), recorded on the install and named with every
+ * publish. No region is the default one.
+ */
+export const BOT_GATEWAY_REGION_PATTERN = /^[a-z0-9][a-z0-9-]{0,31}$/
+
+export const BotGatewayRegion = Schema.String.check(
+	Schema.makeFilter(
+		(value: string) =>
+			BOT_GATEWAY_REGION_PATTERN.test(value) ||
+			"Expected a region: lowercase letters, digits and dashes, at most 32",
+	),
+)
+
 export const BotGatewayOffset = Schema.String
 
 export const BotGatewayIdentifyFrame = Schema.Struct({
 	op: Schema.Literal("IDENTIFY"),
 	botToken: Schema.String,
 	resumeOffset: BotGatewayOffset,
+	/** The region this session serves; omitted for the default one. */
+	region: Schema.optional(BotGatewayRegion),
 })
 
 export const BotGatewayResumeFrame = Schema.Struct({
@@ -154,6 +172,8 @@ export const BotGatewayResumeFrame = Schema.Struct({
 	botToken: Schema.String,
 	sessionId: Schema.String,
 	resumeOffset: BotGatewayOffset,
+	/** The region the session was identified for; omitted for the default one. */
+	region: Schema.optional(BotGatewayRegion),
 })
 
 export const BotGatewayAckFrame = Schema.Struct({
@@ -244,9 +264,11 @@ export interface BotGatewayPublishResult {
 export interface BotGatewayRpc {
 	/**
 	 * Append one event (a `BotGatewayEnvelope` as JSON text, the exact wire form bots decode) to
-	 * the bot's log and deliver it to the connected session, if any.
+	 * the bot's log and deliver it to the connected session of `region`, if any: the region of the
+	 * install the event belongs to (`bot_installations.region`), omitted or `null` for the default.
 	 */
 	readonly publish: (
 		eventJson: string,
+		region?: string | null,
 	) => Effect.Effect<BotGatewayPublishResult, BotGatewayEventRejectedError>
 }

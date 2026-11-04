@@ -377,7 +377,6 @@ describe("directory path", () => {
 					installedBy: away.seed.owner,
 				})
 				expect(errorTag(yield* redeem({ code }))).toBe("BotInstallGrantInvalidError")
-
 				// An expired grant is refused.
 				away.org.storage.db
 					.prepare(`UPDATE bot_install_grants SET expiresAt = '2000-01-01 00:00:00.000'`)
@@ -409,6 +408,111 @@ describe("directory path", () => {
 					}),
 				)
 				expect(errorTag(refused)).toBe("BotNotInstalledError")
+			}),
+		))
+
+	it("an install through a regional callback publishes to its region, refuses another region, and a reinstall follows the new install", () =>
+		run(
+			Effect.gen(function* () {
+				const objects = yield* makeTestObjects
+				const home = yield* seed(objects)
+				const away = yield* seed(objects)
+				const redirectUri = "https://maple.example/oauth/chat/hazel/callback"
+				const euRedirectUri = "https://eu.maple.example/oauth/chat/hazel/callback?hazel_region=eu"
+				const created = ok<{ data: { id: string } }>(
+					yield* call(
+						home.org,
+						home.seed.orgId,
+						"bot.create",
+						{ name: "Maple", scopes: ["messages:read"], organizationId: home.seed.orgId },
+						home.seed.owner,
+					),
+				)
+				const botId = created.data.id
+				ok(
+					yield* objects.invokeDirectory(
+						"bot.update",
+						{ id: botId, installRedirectUris: [redirectUri, euRedirectUri] },
+						principalOf(home.seed.owner),
+					),
+				)
+				const authorize = (uri: string) =>
+					call(
+						away.org,
+						away.seed.orgId,
+						"bot.authorizeInstall",
+						{ botId, organizationId: away.seed.orgId, redirectUri: uri },
+						away.seed.owner,
+					)
+				const installations = () =>
+					away.org.storage.db.prepare(`SELECT id, region FROM bot_installations`).all() as Array<{
+						id: string
+						region: string | null
+					}>
+
+				// The bot's events in this org, by the region session they were published to.
+				const regionsOfChannelCreates = () =>
+					objects.published
+						.filter(
+							(entry) => entry.botId === botId && entry.envelope.eventType === "channel.create",
+						)
+						.map((entry) => entry.region)
+
+				ok(yield* authorize(euRedirectUri))
+				expect(installations().map((row) => row.region)).toEqual(["eu"])
+				const incidents = yield* createChannel(away.org, away.seed, "incidents")
+				// Every event of a regional install goes to its region's session, from the first one.
+				expect(regionsOfChannelCreates()).toEqual(["eu"])
+				// The channel learns the bot with its region, so its messages go there too.
+				const channel = yield* objects.get(channelTarget(incidents))
+				expect(channel.storage.db.prepare(`SELECT botId, region FROM channel_bots`).all()).toEqual([
+					{ botId, region: "eu" },
+				])
+				ok(
+					yield* call(
+						channel,
+						incidents,
+						"message.create",
+						{
+							channelId: incidents,
+							content: "checkout is slow",
+							embeds: null,
+							replyToMessageId: null,
+							threadChannelId: null,
+							authorId: away.seed.owner,
+							deletedAt: null,
+						},
+						away.seed.owner,
+					),
+				)
+				expect(
+					objects.published
+						.filter((entry) => entry.envelope.eventType === "message.create")
+						.map((entry) => [entry.botId, entry.region]),
+				).toEqual([[botId, "eu"]])
+
+				// Approving again from the same region mints another grant; another region is refused,
+				// and a link that edits the region no longer matches a registered callback.
+				ok(yield* authorize(euRedirectUri))
+				expect(errorTag(yield* authorize(redirectUri))).toBe("BotInstallRegionConflictError")
+				expect(errorTag(yield* authorize(`${redirectUri}?hazel_region=us-west`))).toBe(
+					"BotInstallRedirectMismatchError",
+				)
+
+				// Removed, then installed from the default region: its events follow the new install.
+				ok(
+					yield* call(
+						away.org,
+						away.seed.orgId,
+						"bot.uninstall",
+						{ botId, organizationId: away.seed.orgId },
+						away.seed.owner,
+					),
+				)
+				ok(yield* authorize(redirectUri))
+				expect(installations().map((row) => row.region)).toEqual([null])
+				yield* createChannel(away.org, away.seed, "alerts")
+				expect(regionsOfChannelCreates()).toEqual(["eu", null])
 			}),
 		))
 

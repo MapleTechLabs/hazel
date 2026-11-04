@@ -167,7 +167,7 @@ export const startRelay = (options: RelayOptions): RelayHandle => {
 		for (const data of buffered.splice(0)) socket.send(data)
 	}
 
-	const identify = async (botToken: string, request: SessionRequest) => {
+	const identify = async (botToken: string, request: SessionRequest, region: string | undefined) => {
 		const auth = await options
 			.authenticate(botToken)
 			.catch((cause): AuthResult => ({ _tag: "Unavailable", reason: `auth failed: ${String(cause)}` }))
@@ -179,7 +179,7 @@ export const startRelay = (options: RelayOptions): RelayHandle => {
 		}
 
 		const result = await options
-			.connect({ botId: auth.botId, botUserId: auth.botUserId, botName: auth.botName, request })
+			.connect({ botId: auth.botId, botUserId: auth.botUserId, botName: auth.botName, request, region })
 			.catch((cause): UpstreamResult => ({ _tag: "Unavailable", reason: String(cause) }))
 		if (isClosed()) {
 			if (result._tag === "Connected") closeSocket(result.socket, 1000, "client_closed")
@@ -221,7 +221,7 @@ export const startRelay = (options: RelayOptions): RelayHandle => {
 					frame.op === "IDENTIFY"
 						? { op: "IDENTIFY", resumeOffset: frame.resumeOffset }
 						: { op: "RESUME", sessionId: frame.sessionId, resumeOffset: frame.resumeOffset }
-				void identify(frame.botToken, request)
+				void identify(frame.botToken, request, frame.region)
 				return
 			}
 			case "ACK": {

@@ -75,7 +75,12 @@ const mainColumn = (h: H, integration: Integration, model: Model, shared: Shared
 	const hasOrganization = shared.organization !== null
 	const isConnected = model.connection?.isActive === true
 	if (integration.connectionType === "environment") return t3CodeColumn(h, integration, model, shared.nowMs)
-	if (integration.id === "maple") return mapleColumn(h, model.mapleBotInstalled)
+	if (integration.id === "maple")
+		return mapleColumn(h, {
+			install: model.mapleInstall,
+			isUninstalling: model.mapleUninstalling,
+			onUninstall: Message.ClickedUninstallMaple(),
+		})
 	if (WEBHOOK_INTEGRATIONS.includes(integration.id))
 		return hasOrganization ? [unported(h, `IntegrationContent:${integration.id}`)] : []
 	if (integration.connectionType === "api-key")
@@ -181,7 +186,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 				integration.connectionType === "environment"
 					? isT3CodeConnected(model, shared.nowMs)
 					: integration.id === "maple"
-						? model.mapleBotInstalled
+						? model.mapleInstall !== null
 						: model.connection?.isActive === true,
 			),
 			h.div(

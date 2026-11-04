@@ -118,6 +118,32 @@ export const redeemBotInstallGrant = Effect.fn("OrgObject.redeemBotInstallGrant"
 	Effect.catchTag("DatabaseError", (error) => Effect.die(error)),
 )
 
+export const BotInstallRegionCall = defineCall("org.botInstallRegion", "org", {
+	payload: Schema.Struct({ botId: BotId }),
+	/**
+	 * The install, by its region (`bot_installations.region`, `null` for the default); `null` when
+	 * the bot is not installed here (the directory's membership can lag an uninstall).
+	 */
+	success: Schema.NullOr(Schema.Struct({ region: Schema.NullOr(Schema.String) })),
+	error: Schema.Never,
+})
+
+/** The region session that receives `botId`'s events here: what a command the api Worker sends needs. */
+export const botInstallRegion = Effect.fn("OrgObject.botInstallRegion")(
+	function* (payload: typeof BotInstallRegionCall.payload.Type) {
+		const organizationId = yield* requireOrganizationId
+		const db = yield* Database.Database
+		const installation = yield* db.first(
+			SQLite.from(schema.botInstallationsTable)
+				.select("region")
+				.where(($) => [$.botId.eq(payload.botId), $.organizationId.eq(organizationId)])
+				.limit(1),
+		)
+		return Option.match(installation, { onNone: () => null, onSome: (row) => ({ region: row.region }) })
+	},
+	Effect.catchTag("DatabaseError", (error) => Effect.die(error)),
+)
+
 /** At most this many ids per lookup. */
 export const ORGANIZATION_USERS_MAX_IDS = 100
 

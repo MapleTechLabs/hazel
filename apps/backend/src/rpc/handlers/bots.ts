@@ -13,12 +13,13 @@
 import { BotCommandRepo, BotRepo, UserRepo } from "@hazel/backend-core"
 import { Database, SQLite, schema } from "@hazel/db"
 import { ActiveOrganizationRequiredError, CurrentUser, withRemapDbErrors } from "@hazel/domain"
-import { isRegisteredInstallRedirect } from "@hazel/domain/bot-install"
+import { isRegisteredInstallRedirect, regionOfInstallRedirect } from "@hazel/domain/bot-install"
 import {
 	BotAlreadyInstalledError,
 	BotCommandListResponse,
 	BotInstallAuthorizedResponse,
 	BotInstallRedirectMismatchError,
+	BotInstallRegionConflictError,
 	BotInstallRequestResponse,
 	BotCreatedResponse,
 	BotListResponse,
@@ -443,20 +444,32 @@ export const BotRpcLive = BotRpcs.toLayer(
 					if (!isRegisteredInstallRedirect(found.value.bot.installRedirectUris, redirectUri)) {
 						return yield* new BotInstallRedirectMismatchError({ botId })
 					}
+					// The registered (exactly matched) callback names the region, never the link. The
+					// install records it, and every event of the install is published to that region's
+					// session (`channel_bots.region`, `bot-events.ts`): there is no route to keep in sync.
+					const region = regionOfInstallRedirect(redirectUri)
 					return yield* db.transaction(
 						Effect.gen(function* () {
 							const installed = yield* db.first(
 								SQLite.from(schema.botInstallationsTable)
-									.select("id")
+									.select("id", "region")
 									.where(($) => [$.botId.eq(botId), $.organizationId.eq(organizationId)])
 									.limit(1),
 							)
+							// One install per org: another region's link would silently take its events.
+							if (Option.isSome(installed) && installed.value.region !== region) {
+								return yield* new BotInstallRegionConflictError({
+									botId,
+									installedRegion: installed.value.region,
+								})
+							}
 							if (Option.isNone(installed)) {
 								yield* installBotHere({
 									bot: found.value.bot,
 									commands: found.value.commands,
 									organizationId,
 									installedBy: currentUser.id,
+									region,
 								})
 							}
 							const code = yield* mintInstallGrant({

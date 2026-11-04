@@ -191,7 +191,7 @@ export const decideAdmission = (
 }
 
 export interface RetentionPolicy {
-	/** Unacknowledged events kept per bot; older ones are dropped on append. */
+	/** Unacknowledged events kept per bot and region; older ones are dropped on append. */
 	readonly maxEvents: number
 	/** Age after which an unacknowledged event is dropped. */
 	readonly maxAgeMs: number
@@ -199,13 +199,10 @@ export interface RetentionPolicy {
 
 /**
  * Bounds what an offline bot can accumulate. Durable Streams kept everything forever; with one
- * consumer per log, events nobody acknowledges within a week (or past 10k) are dropped.
+ * consumer per region, events nobody acknowledges within a week (or past a region's newest 10k)
+ * are dropped.
  */
 export const DEFAULT_RETENTION: RetentionPolicy = { maxEvents: 10_000, maxAgeMs: 7 * 24 * 60 * 60 * 1000 }
-
-/** Sequence numbers at or below this fall outside `maxEvents`; `0` keeps everything. */
-export const retentionFloor = (head: Seq, policy: RetentionPolicy): Seq =>
-	Math.max(0, head - policy.maxEvents)
 
 /**
  * When the object must next wake: the earliest ACK deadline, or when the oldest retained event

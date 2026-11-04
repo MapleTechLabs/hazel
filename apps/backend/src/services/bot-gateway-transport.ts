@@ -20,10 +20,14 @@ export class DurableStreamRequestError extends Schema.TaggedError<DurableStreamR
 ) {}
 
 export interface BotGatewayTransportShape {
-	/** Durably append one envelope to the bot's event log; resolves once it is stored. */
+	/**
+	 * Durably append one envelope to the bot's event log, for the session of `region` (the
+	 * install's `bot_installations.region`; omitted or `null` for the default); resolves once stored.
+	 */
 	readonly append: (
 		botId: BotId,
 		envelope: BotGatewayEnvelope,
+		region?: string | null,
 	) => Effect.Effect<void, DurableStreamRequestError>
 }
 
@@ -36,11 +40,15 @@ export interface BotGatewayNamespace {
 }
 
 const makeDurableObjectTransport = (namespace: BotGatewayNamespace): BotGatewayTransportShape => ({
-	append: Effect.fn("BotGatewayTransport.append")(function* (botId: BotId, envelope: BotGatewayEnvelope) {
+	append: Effect.fn("BotGatewayTransport.append")(function* (
+		botId: BotId,
+		envelope: BotGatewayEnvelope,
+		region?: string | null,
+	) {
 		// `RpcCallError`s (the object or the RPC hop failed) arrive here too, untyped by the stub.
 		yield* namespace
 			.getByName(botId)
-			.publish(JSON.stringify(envelope))
+			.publish(JSON.stringify(envelope), region ?? null)
 			.pipe(
 				Effect.mapError(
 					(cause) =>

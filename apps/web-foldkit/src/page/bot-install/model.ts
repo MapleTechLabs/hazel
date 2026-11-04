@@ -41,7 +41,10 @@ export const Lookup = defineTaggedUnion({
 })
 export type Lookup = typeof Lookup.Type
 
-export const ApproveFailure = Schema.Union([Schema.Literals(["NotAdmin", "Invalid"]), CommonReason])
+export const ApproveFailure = Schema.Union([
+	Schema.Literals(["NotAdmin", "Invalid", "RegionConflict"]),
+	CommonReason,
+])
 export type ApproveFailure = typeof ApproveFailure.Type
 
 /** Approving (or cancelling) stays in flight until the browser leaves for the redirect. */

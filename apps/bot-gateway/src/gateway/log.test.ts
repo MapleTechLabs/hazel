@@ -10,7 +10,6 @@ import {
 	parseOffset,
 	parseResumeOffset,
 	resolveCursor,
-	retentionFloor,
 	SESSION_CONFLICT_REASON,
 	selectBatch,
 	type SessionCursor,
@@ -165,11 +164,6 @@ describe("decideAdmission", () => {
 
 describe("retention and alarms", () => {
 	const policy = { maxEvents: 100, maxAgeMs: 1_000 }
-
-	it("keeps the newest maxEvents", () => {
-		expect(retentionFloor(50, policy)).toBe(0)
-		expect(retentionFloor(150, policy)).toBe(50)
-	})
 
 	it("wakes for the earliest ACK deadline or retention expiry", () => {
 		expect(nextAlarmAt([], undefined, policy)).toBeUndefined()

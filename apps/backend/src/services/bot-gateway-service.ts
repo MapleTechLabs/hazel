@@ -77,6 +77,8 @@ export class BotGatewayService extends Context.Service<BotGatewayService>()("Bot
 		const publishCommand = Effect.fn("BotGatewayService.publishCommand")(function* (
 			botId: BotId,
 			payload: BotGatewayCommandInvokePayload,
+			/** The install's region (`bot_installations.region`); `null` for the default. */
+			region: string | null = null,
 		) {
 			const envelope: BotGatewayEnvelope = {
 				schemaVersion: 1,
@@ -92,7 +94,7 @@ export class BotGatewayService extends Context.Service<BotGatewayService>()("Bot
 				payload,
 			}
 
-			yield* appendToBot(botId, envelope)
+			yield* transport.append(botId, envelope, region)
 		})
 
 		const resolveOrganizationIdForChannel = Effect.fn(

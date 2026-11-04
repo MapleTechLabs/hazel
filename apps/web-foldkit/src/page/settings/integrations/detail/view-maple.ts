@@ -1,25 +1,27 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { buttonClassName } from "../../../../ui/button"
+import { button, buttonClassName } from "../../../../ui/button"
 import { CHECK, strokeIcon } from "../shared/view"
+import type { MapleInstall } from "./model"
 import { panel } from "./view-connection"
 
 /**
  * Maple is two things in Hazel, both through one bot: an AI agent you ask in a channel (installed
  * from Maple through `/oauth/bot-install`) and the alerts it posts in channels you pick. Both are set up
  * from Maple, because the link starts there (Maple's org owns the request), so this page shows
- * what is connected and sends you to the right place in Maple, in either region.
+ * what is connected, sends you to the right place in Maple, in the region that owns the install,
+ * and removes the bot. It is not listed in Installed Apps (`../shared/integration-bots.ts`).
  */
-
-/** Maple's own bots in production Hazel, one per Maple region. */
-export const MAPLE_BOT_IDS: ReadonlyArray<string> = [
-	"ca08852a-fb2e-4df9-8602-519e7ec3b9bf",
-	"de89c591-fcf9-4ff7-a13e-0118180bfc99",
-]
 
 const MAPLE_APPS = {
 	us: "https://app.maple.dev",
 	eu: "https://app.eu.maple.dev",
 } as const
+
+type MapleRegion = keyof typeof MAPLE_APPS
+
+/** The Maple region an install belongs to, when it says (`null`: before regions, or the default). */
+const regionOf = (install: MapleInstall): MapleRegion | null =>
+	install.region === "eu" ? "eu" : install.region === null ? null : "us"
 
 /** Maple's integrations page, opened on its Hazel entry, where the bot is installed. */
 export const mapleIntegrationUrl = (region: keyof typeof MAPLE_APPS): string =>
@@ -102,11 +104,41 @@ const installedNote = <M>(h: HtmlBuilder<M>): Html =>
 		],
 	)
 
-const agentPanel = <M>(h: HtmlBuilder<M>, isInstalled: boolean): Html =>
+export interface MapleColumnOptions<M> {
+	readonly install: MapleInstall | null
+	readonly isUninstalling: boolean
+	readonly onUninstall: M
+}
+
+const installedActions = <M>(h: HtmlBuilder<M>, options: MapleColumnOptions<M>, install: MapleInstall) => {
+	const region = regionOf(install)
+	return [
+		h.div(
+			[h.Class("flex flex-wrap items-center gap-3")],
+			[
+				linkButton(h, mapleIntegrationUrl(region ?? "us"), "Manage in Maple", "outline"),
+				button(
+					h,
+					{
+						intent: "danger",
+						size: "sm",
+						onPress: options.onUninstall,
+						isDisabled: options.isUninstalling,
+					},
+					[options.isUninstalling ? "Removing..." : "Remove from workspace"],
+				),
+			],
+		),
+		// An install that names its region links straight there; an older one offers both.
+		...(region === null ? [euLink(h, mapleIntegrationUrl("eu"), "Manage in Maple EU")] : []),
+	]
+}
+
+const agentPanel = <M>(h: HtmlBuilder<M>, options: MapleColumnOptions<M>): Html =>
 	panel(h, "AI agent", [
 		h.div(
 			[h.Class("flex flex-col gap-4")],
-			isInstalled
+			options.install !== null
 				? [
 						installedNote(h),
 						h.p(
@@ -115,11 +147,7 @@ const agentPanel = <M>(h: HtmlBuilder<M>, isInstalled: boolean): Html =>
 								"Ask about errors, slow endpoints, traces and logs. When Maple proposes a change, anyone here can approve it with the buttons on its message.",
 							],
 						),
-						h.div(
-							[h.Class("flex flex-wrap items-center gap-3")],
-							[linkButton(h, mapleIntegrationUrl("us"), "Manage in Maple", "outline")],
-						),
-						euLink(h, mapleIntegrationUrl("eu"), "Manage in Maple EU"),
+						...installedActions(h, options, options.install),
 					]
 				: [
 						h.p(
@@ -142,7 +170,7 @@ const agentPanel = <M>(h: HtmlBuilder<M>, isInstalled: boolean): Html =>
 		),
 	])
 
-const alertsPanel = <M>(h: HtmlBuilder<M>): Html =>
+const alertsPanel = <M>(h: HtmlBuilder<M>, region: MapleRegion | null): Html =>
 	panel(h, "Alerts", [
 		h.div(
 			[h.Class("flex flex-col gap-4")],
@@ -155,15 +183,15 @@ const alertsPanel = <M>(h: HtmlBuilder<M>): Html =>
 				),
 				h.div(
 					[h.Class("flex flex-wrap items-center gap-3")],
-					[linkButton(h, mapleAlertsUrl("us"), "Set up alerts in Maple", "outline")],
+					[linkButton(h, mapleAlertsUrl(region ?? "us"), "Set up alerts in Maple", "outline")],
 				),
-				euLink(h, mapleAlertsUrl("eu"), "Set up alerts in Maple EU"),
+				...(region === null ? [euLink(h, mapleAlertsUrl("eu"), "Set up alerts in Maple EU")] : []),
 			],
 		),
 	])
 
 /** The Maple page's main column: the agent, then alerts. */
-export const mapleColumn = <M>(h: HtmlBuilder<M>, isInstalled: boolean): ReadonlyArray<Html> => [
-	agentPanel(h, isInstalled),
-	alertsPanel(h),
+export const mapleColumn = <M>(h: HtmlBuilder<M>, options: MapleColumnOptions<M>): ReadonlyArray<Html> => [
+	agentPanel(h, options),
+	alertsPanel(h, options.install === null ? null : regionOf(options.install)),
 ]

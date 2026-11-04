@@ -50,7 +50,12 @@ export interface TestObjects {
 	readonly get: (target: ObjectTarget) => Effect.Effect<TestObject>
 	readonly directory: Context.Context<Directory>
 	/** Envelopes appended to each bot's gateway. */
-	readonly published: Array<{ readonly botId: BotId; readonly envelope: BotGatewayEnvelope }>
+	readonly published: Array<{
+		readonly botId: BotId
+		readonly envelope: BotGatewayEnvelope
+		/** The region session it was published to; `null` for the default. */
+		readonly region: string | null
+	}>
 	/** `applyEffect` calls that crossed objects, as `target kind key`. */
 	readonly deliveries: Array<string>
 	/** Make deliveries to `target` fail (outbox retry), or succeed again. */
@@ -108,7 +113,8 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 		const transport = Layer.succeed(
 			BotGatewayTransport,
 			BotGatewayTransport.of({
-				append: (botId, envelope) => Effect.sync(() => void published.push({ botId, envelope })),
+				append: (botId, envelope, region) =>
+					Effect.sync(() => void published.push({ botId, envelope, region: region ?? null })),
 			}),
 		)
 

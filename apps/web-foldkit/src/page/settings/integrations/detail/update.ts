@@ -19,6 +19,7 @@ import {
 	isProvider,
 	RedirectToProvider,
 	StartT3CodeConnect,
+	UninstallMaple,
 	UpdateT3CodeSharing,
 } from "./command"
 import { Message } from "./message"
@@ -70,7 +71,8 @@ export const init = (route: Route): Return =>
 			memberSearch: "",
 			sharingSave: "Idle",
 			sharingRequestId: 0,
-			mapleBotInstalled: false,
+			mapleInstall: null,
+			mapleUninstalling: false,
 			disconnectConfirm: ConfirmAction.init("t3code-disconnect"),
 		},
 		route,
@@ -165,8 +167,55 @@ const validateApiBaseUrl = validate(apiBaseUrlRules)
 
 export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
-		UpdatedMapleBotInstalled: ({ isInstalled }) => ({
-			model: modifyFields(model, { mapleBotInstalled: () => isInstalled }),
+		UpdatedMapleInstall: ({ install }) => ({
+			model: modifyFields(model, { mapleInstall: () => install }),
+		}),
+		ClickedUninstallMaple: () => {
+			const organization = shared.organization
+			return model.mapleInstall === null || organization === null || model.mapleUninstalling
+				? { model }
+				: {
+						model: modifyFields(model, { mapleUninstalling: () => true }),
+						commands: [
+							UninstallMaple({
+								botIds: model.mapleInstall.botIds,
+								organizationId: organization.id,
+							}),
+						],
+					}
+		},
+		// Cleared now rather than when the query catches up, but only if it still shows one of them.
+		// …and only in the workspace it was removed from (the page may have switched since).
+		SucceededUninstallMaple: ({ botIds, organizationId }) => {
+			const settled = modifyFields(model, { mapleUninstalling: () => false })
+			// The page may have switched workspace since: nothing was removed in this one.
+			if (organizationId !== shared.organization?.id) return { model: settled }
+			return {
+				model: modifyFields(settled, {
+					mapleInstall: (install) =>
+						install !== null && botIds.includes(install.botId) ? null : install,
+				}),
+				outMessage: PageOutMessage.RequestedToast({
+					toast: successToast("Maple removed from this workspace"),
+				}),
+			}
+		},
+		FailedUninstallMaple: ({ reason }) => ({
+			model: modifyFields(model, { mapleUninstalling: () => false }),
+			outMessage: PageOutMessage.RequestedToast({
+				toast: errorToastOf(
+					failureMessage(reason, {
+						NotFound: {
+							title: "Maple is not installed",
+							description: "It may have already been removed from this workspace.",
+						},
+						NoActiveOrganization: {
+							title: "No workspace selected",
+							description: "Open a workspace and try again.",
+						},
+					}),
+				),
+			}),
 		}),
 		UpdatedConnection: ({ connection }) => ({
 			model: {

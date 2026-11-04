@@ -20,6 +20,10 @@ const approveFailureMessage = (reason: ApproveFailure): UserErrorMessage =>
 	failureMessage(reason, {
 		NotAdmin: { title: "Only an owner or admin can install apps in this workspace" },
 		Invalid: { title: "This install link is no longer valid", description: "Start again from the app." },
+		RegionConflict: {
+			title: "This app is already installed in this workspace from another region",
+			description: "Remove it in Settings → Integrations first, then install it again.",
+		},
 	})
 
 const targetOption = (h: HtmlBuilder<Message>, target: InstallTarget, isSelected: boolean): Html =>

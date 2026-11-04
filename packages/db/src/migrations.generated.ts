@@ -255,6 +255,10 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE UNIQUE INDEX IF NOT EXISTS "bot_install_grants_code_hash_unique" ON "bot_install_grants" ("codeHash")',
 			],
 		},
+		{
+			id: "0005_bot_installation_region",
+			statements: ['ALTER TABLE "bot_installations" ADD COLUMN "region" text'],
+		},
 	],
 	channel: [
 		{
@@ -308,6 +312,10 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE UNIQUE INDEX IF NOT EXISTS "chat_sync_msg_link_hazel_unique" ON "chat_sync_message_links" ("channelLinkId", "hazelMessageId") WHERE "deletedAt" IS NULL',
 				'CREATE UNIQUE INDEX IF NOT EXISTS "chat_sync_msg_link_external_unique" ON "chat_sync_message_links" ("channelLinkId", "externalMessageId") WHERE "deletedAt" IS NULL',
 			],
+		},
+		{
+			id: "0002_channel_bot_region",
+			statements: ['ALTER TABLE "channel_bots" ADD COLUMN "region" text'],
 		},
 	],
 	user: [

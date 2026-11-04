@@ -37,10 +37,11 @@ const publishToInstalledBots = Effect.fn("OrgObject.publishToInstalledBots")(fun
 	const transport = yield* BotGatewayTransport
 	const installed = yield* db.run(
 		SQLite.from(schema.botInstallationsTable)
-			.select("botId")
+			.select("botId", "region")
 			.where(($) => [$.organizationId.eq(organizationId)]),
 	)
-	yield* Effect.forEach(installed, (row) => transport.append(row.botId, envelope), {
+	// Each install's region session: the region it was installed for (`bot_installations.region`).
+	yield* Effect.forEach(installed, (row) => transport.append(row.botId, envelope, row.region), {
 		concurrency: 8,
 		discard: true,
 	})

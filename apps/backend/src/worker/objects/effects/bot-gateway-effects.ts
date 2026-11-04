@@ -29,6 +29,8 @@ export const MessageEventPayload = Schema.Struct({
 export const InteractionEventPayload = Schema.Struct({
 	botId: BotId,
 	interaction: BotGatewayInteractionCreatePayload,
+	/** The install's region (`channel_bots.region`); absent on rows enqueued before regions. */
+	region: Schema.optionalKey(Schema.NullOr(Schema.String)),
 })
 
 export const BotGatewayEffects = {
@@ -66,7 +68,7 @@ export const botGatewayReceivers = {
 		Effect.gen(function* () {
 			const db = yield* Database.Database
 			const transport = yield* BotGatewayTransport
-			const bots = yield* db.run(SQLite.from(schema.channelBotsTable).select("botId"))
+			const bots = yield* db.run(SQLite.from(schema.channelBotsTable).select("botId", "region"))
 			if (bots.length === 0) return
 			const author = Option.getOrUndefined(yield* authorOf(payload.message.authorId))
 			yield* Effect.forEach(
@@ -80,25 +82,30 @@ export const botGatewayReceivers = {
 							payload.message,
 							author,
 						),
+						bot.region,
 					),
 				{ concurrency: 8, discard: true },
 			)
 			yield* Effect.annotateCurrentSpan({ "bot_gateway.bots": bots.length })
 		}),
-	"botGateway.interaction": ({ botId, interaction }) =>
+	"botGateway.interaction": ({ botId, interaction, region }) =>
 		Effect.flatMap(BotGatewayTransport, (transport) =>
-			transport.append(botId, {
-				schemaVersion: 1,
-				deliveryId: crypto.randomUUID(),
-				partitionKey: createBotGatewayPartitionKey({
-					organizationId: interaction.orgId,
-					channelId: interaction.channelId,
-				}),
-				occurredAt: interaction.timestamp,
-				idempotencyKey: `interaction.create:${interaction.interactionId}`,
-				eventType: "interaction.create",
-				payload: interaction,
-			}),
+			transport.append(
+				botId,
+				{
+					schemaVersion: 1,
+					deliveryId: crypto.randomUUID(),
+					partitionKey: createBotGatewayPartitionKey({
+						organizationId: interaction.orgId,
+						channelId: interaction.channelId,
+					}),
+					occurredAt: interaction.timestamp,
+					idempotencyKey: `interaction.create:${interaction.interactionId}`,
+					eventType: "interaction.create",
+					payload: interaction,
+				},
+				region ?? null,
+			),
 		),
 	"botGateway.channelEvent": publishChannelEvent,
 	"botGateway.channelMemberEvent": publishChannelMemberEvent,

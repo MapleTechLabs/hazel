@@ -74,6 +74,8 @@ export const installBotHere = Effect.fn("OrgObject.installBot")(function* (input
 	readonly commands: ReadonlyArray<schema.BotCommand>
 	readonly organizationId: OrganizationId
 	readonly installedBy: UserId
+	/** The region of the bot's service it is installed for (`bot.authorizeInstall`); `null`: the default. */
+	readonly region?: string | null
 }) {
 	const db = yield* Database.Database
 	const { bot, organizationId } = input
@@ -84,6 +86,7 @@ export const installBotHere = Effect.fn("OrgObject.installBot")(function* (input
 			botId: bot.id,
 			organizationId,
 			installedBy: input.installedBy,
+			region: input.region ?? null,
 		}),
 	)
 	yield* db.run(

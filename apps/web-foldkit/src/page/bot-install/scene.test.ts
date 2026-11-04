@@ -99,6 +99,21 @@ describe("bot install page", () => {
 		)
 	})
 
+	test("an install from another region of the app is refused with how to fix it", () => {
+		Scene.scene(
+			pageScene(update, view, makeShared()),
+			Scene.given(loaded()),
+			Scene.click(Scene.role("button", { name: "Install" })),
+			Scene.Command.expectExact(
+				ApproveInstall({ botId, organizationId: acme, redirectUri, state: "nonce" }),
+			),
+			Scene.Command.resolve(ApproveInstall, Message.FailedApprove({ reason: "RegionConflict" })),
+			Scene.expect(Scene.role("alert")).toHaveText(
+				"This app is already installed in this workspace from another region. Remove it in Settings → Integrations first, then install it again.",
+			),
+		)
+	})
+
 	test("a link missing its parameters, or one the server refuses, never redirects", () => {
 		const started = init({
 			_tag: "BotInstall",

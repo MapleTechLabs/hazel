@@ -87,9 +87,10 @@ export const channelViewersPayload = Effect.fn("OrgObject.channelViewersPayload"
 
 	const installed = yield* db.run(
 		SQLite.from(schema.botInstallationsTable)
-			.select("botId")
+			.select("botId", "region")
 			.where(($) => [$.organizationId.eq(organizationId)]),
 	)
+	const regionOf = new Map(installed.map((row) => [row.botId, row.region]))
 	const bots =
 		installed.length === 0
 			? []
@@ -116,7 +117,13 @@ export const channelViewersPayload = Effect.fn("OrgObject.channelViewersPayload"
 							}
 						: { userId, organizationId, role }
 				}),
-		bots: deleted ? [] : bots.map((bot) => ({ botId: bot.id, botUserId: bot.userId })),
+		bots: deleted
+			? []
+			: bots.map((bot) => ({
+					botId: bot.id,
+					botUserId: bot.userId,
+					region: regionOf.get(bot.id) ?? null,
+				})),
 	}
 	return Option.some({
 		payload,

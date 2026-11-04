@@ -3,7 +3,7 @@
  * synchronous subset of workerd's `SqlStorage` the object uses, so tests can back it with any
  * SQLite. Every function runs synchronously, so inside the object each call is atomic.
  */
-import { type LogBounds, type RetentionPolicy, retentionFloor, type Seq, type StoredEvent } from "./log.ts"
+import type { LogBounds, RetentionPolicy, Seq, StoredEvent } from "./log.ts"
 
 type SqlValue = string | number | null | ArrayBuffer
 
@@ -16,7 +16,12 @@ export interface SqlStorageLike {
 	exec<T extends Record<string, SqlValue>>(query: string, ...bindings: Array<SqlValue>): SqlCursorLike<T>
 }
 
-const SCHEMA = [
+/** The session region of an install nobody routed elsewhere (`BotGatewayRegion` omitted). */
+export const DEFAULT_REGION = ""
+
+const SCHEMA_VERSION = 2
+
+const SCHEMA_V1 = [
 	`CREATE TABLE IF NOT EXISTS bot_gateway_events (
 		seq INTEGER PRIMARY KEY,
 		body TEXT NOT NULL,
@@ -29,20 +34,70 @@ const SCHEMA = [
 	)`,
 ]
 
+/**
+ * v2: one log, read per region. Each event carries the region whose session receives it, as its
+ * publisher named it (the default one is `''`). Sequence numbers stay global, so offsets keep
+ * comparing within a region. Each event also has its region's own sequence number (`rseq`, the
+ * region's head in `bot_gateway_meta` under `region_head:<region>`), which bounds a region's
+ * backlog with one indexed delete. Existing events are the default region's, numbered as before.
+ */
+const SCHEMA_V2 = [
+	`ALTER TABLE bot_gateway_events ADD COLUMN region TEXT NOT NULL DEFAULT ''`,
+	`ALTER TABLE bot_gateway_events ADD COLUMN rseq INTEGER NOT NULL DEFAULT 0`,
+	`UPDATE bot_gateway_events SET rseq = seq`,
+	`INSERT INTO bot_gateway_meta (key, value)
+		SELECT 'region_head:', value FROM bot_gateway_meta WHERE key = 'head'
+		ON CONFLICT (key) DO NOTHING`,
+	`CREATE INDEX IF NOT EXISTS bot_gateway_events_region_seq ON bot_gateway_events (region, seq)`,
+	`CREATE INDEX IF NOT EXISTS bot_gateway_events_region_rseq ON bot_gateway_events (region, rseq)`,
+]
+
+const REGION_HEAD_PREFIX = "region_head:"
+
+/**
+ * Bring the object's storage to {@link SCHEMA_VERSION}. Every activation runs it; the statements
+ * between two awaits commit together in a Durable Object, so a version is applied whole or not.
+ */
 export const migrate = (sql: SqlStorageLike): void => {
-	for (const statement of SCHEMA) sql.exec(statement)
+	for (const statement of SCHEMA_V1) sql.exec(statement)
+	const row = sql
+		.exec<{ value: number }>(`SELECT value FROM bot_gateway_meta WHERE key = 'schema'`)
+		.toArray()[0]
+	const version = row === undefined ? 1 : Number(row.value)
+	if (version >= SCHEMA_VERSION) return
+	for (const statement of SCHEMA_V2) sql.exec(statement)
+	sql.exec(
+		`INSERT INTO bot_gateway_meta (key, value) VALUES ('schema', ?)
+		ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
+		SCHEMA_VERSION,
+	)
 }
 
-const readHead = (sql: SqlStorageLike): Seq => {
+const readMeta = (sql: SqlStorageLike, key: string): number => {
 	const row = sql
-		.exec<{ value: number }>(`SELECT value FROM bot_gateway_meta WHERE key = 'head'`)
+		.exec<{ value: number }>(`SELECT value FROM bot_gateway_meta WHERE key = ?`, key)
 		.toArray()[0]
 	return row === undefined ? 0 : Number(row.value)
 }
 
-export const bounds = (sql: SqlStorageLike): LogBounds => {
+const writeMeta = (sql: SqlStorageLike, key: string, value: number): void => {
+	sql.exec(
+		`INSERT INTO bot_gateway_meta (key, value) VALUES (?, ?)
+		ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
+		key,
+		value,
+	)
+}
+
+const readHead = (sql: SqlStorageLike): Seq => readMeta(sql, "head")
+
+/** The log's extent as `region`'s session sees it: the global head, its own oldest event. */
+export const bounds = (sql: SqlStorageLike, region: string = DEFAULT_REGION): LogBounds => {
 	const row = sql
-		.exec<{ first: number | null }>(`SELECT MIN(seq) AS first FROM bot_gateway_events`)
+		.exec<{ first: number | null }>(
+			`SELECT MIN(seq) AS first FROM bot_gateway_events WHERE region = ?`,
+			region,
+		)
 		.toArray()[0]
 	const first = row?.first
 	return {
@@ -51,43 +106,73 @@ export const bounds = (sql: SqlStorageLike): LogBounds => {
 	}
 }
 
-/** Append one event; returns its sequence number. */
-export const append = (sql: SqlStorageLike, body: string, appendedAt: number): Seq => {
+/** Append one event for `region`'s session; returns its sequence number. */
+export const append = (
+	sql: SqlStorageLike,
+	body: string,
+	appendedAt: number,
+	region: string = DEFAULT_REGION,
+): Seq => {
 	const seq = readHead(sql) + 1
+	const regionKey = `${REGION_HEAD_PREFIX}${region}`
+	const rseq = readMeta(sql, regionKey) + 1
 	sql.exec(
-		`INSERT INTO bot_gateway_events (seq, body, appended_at) VALUES (?, ?, ?)`,
+		`INSERT INTO bot_gateway_events (seq, body, appended_at, region, rseq) VALUES (?, ?, ?, ?, ?)`,
 		seq,
 		body,
 		appendedAt,
+		region,
+		rseq,
 	)
-	sql.exec(
-		`INSERT INTO bot_gateway_meta (key, value) VALUES ('head', ?)
-		ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
-		seq,
-	)
+	writeMeta(sql, "head", seq)
+	writeMeta(sql, regionKey, rseq)
 	return seq
 }
 
-/** Up to `limit` events after `cursor`, in log order. */
-export const readAfter = (sql: SqlStorageLike, cursor: Seq, limit: number): ReadonlyArray<StoredEvent> =>
+/** Up to `limit` of `region`'s events after `cursor`, in log order. */
+export const readAfter = (
+	sql: SqlStorageLike,
+	cursor: Seq,
+	limit: number,
+	region: string = DEFAULT_REGION,
+): ReadonlyArray<StoredEvent> =>
 	sql
 		.exec<{ seq: number; body: string }>(
-			`SELECT seq, body FROM bot_gateway_events WHERE seq > ? ORDER BY seq LIMIT ?`,
+			`SELECT seq, body FROM bot_gateway_events WHERE region = ? AND seq > ? ORDER BY seq LIMIT ?`,
+			region,
 			cursor,
 			limit,
 		)
 		.toArray()
 		.map((row) => ({ seq: Number(row.seq), body: String(row.body) }))
 
-/** Drop every event at or before `seq` (it has been acknowledged). */
-export const trimThrough = (sql: SqlStorageLike, seq: Seq): void => {
-	sql.exec(`DELETE FROM bot_gateway_events WHERE seq <= ?`, seq)
+/** Drop every event of `region` at or before `seq` (its session acknowledged them). */
+export const trimThrough = (sql: SqlStorageLike, seq: Seq, region: string = DEFAULT_REGION): void => {
+	sql.exec(`DELETE FROM bot_gateway_events WHERE region = ? AND seq <= ?`, region, seq)
 }
 
-/** Drop events past the retention policy's count and age limits. */
+/**
+ * Drop events past the retention policy's limits. The count is per region: each region keeps its
+ * newest `maxEvents`, so one region's traffic never evicts another's undelivered events. The age
+ * limit is per event, whatever its region.
+ */
 export const enforceRetention = (sql: SqlStorageLike, now: number, policy: RetentionPolicy): void => {
-	const floor = retentionFloor(readHead(sql), policy)
-	if (floor > 0) trimThrough(sql, floor)
+	const heads = sql
+		.exec<{ key: string; value: number }>(
+			`SELECT key, value FROM bot_gateway_meta WHERE key LIKE 'region_head:%'`,
+		)
+		.toArray()
+	for (const { key, value } of heads) {
+		// A region's events numbered at or below its head minus `maxEvents` are past its limit.
+		const floor = Number(value) - policy.maxEvents
+		if (floor > 0) {
+			sql.exec(
+				`DELETE FROM bot_gateway_events WHERE region = ? AND rseq <= ?`,
+				String(key).slice(REGION_HEAD_PREFIX.length),
+				floor,
+			)
+		}
+	}
 	sql.exec(`DELETE FROM bot_gateway_events WHERE appended_at <= ?`, now - policy.maxAgeMs)
 }
 

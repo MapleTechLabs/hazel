@@ -1,11 +1,11 @@
 import { T3CodeSharingMode } from "@hazel/domain/http"
-import { UserId } from "@hazel/schema"
+import { BotId, OrganizationId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import { CommonReason } from "~/lib/error-messages"
 import * as ConfirmAction from "../../../shared/confirm-action"
 import { Connection } from "../shared/connections"
-import { T3CodeLink, T3CodeMember } from "./model"
+import { MapleInstall, T3CodeLink, T3CodeMember } from "./model"
 
 /** What can go wrong fetching the OAuth URL, beyond the shared reasons. */
 export const GetOAuthUrlFailure = Schema.Union([Schema.Literals(["UnsupportedProvider"]), CommonReason])
@@ -29,9 +29,19 @@ export type ConnectApiKeyFailure = typeof ConnectApiKeyFailure.Type
 export const T3CodeLinkFailure = Schema.Union([Schema.Literals(["NotConnected"]), CommonReason])
 export type T3CodeLinkFailure = typeof T3CodeLinkFailure.Type
 
+/** What can go wrong removing Maple's bot, beyond the shared reasons. */
+export const UninstallMapleFailure = Schema.Union([
+	Schema.Literals(["NotFound", "NoActiveOrganization"]),
+	CommonReason,
+])
+export type UninstallMapleFailure = typeof UninstallMapleFailure.Type
+
 export const Message = defineMessageUnion({
 	UpdatedConnection: { connection: Schema.NullOr(Connection) },
-	UpdatedMapleBotInstalled: { isInstalled: Schema.Boolean },
+	UpdatedMapleInstall: { install: Schema.NullOr(MapleInstall) },
+	ClickedUninstallMaple: {},
+	SucceededUninstallMaple: { botIds: Schema.Array(BotId), organizationId: OrganizationId },
+	FailedUninstallMaple: { reason: UninstallMapleFailure },
 	ClickedBack: {},
 	ClickedConnect: {},
 	SucceededGetOAuthUrl: { authorizationUrl: Schema.String },

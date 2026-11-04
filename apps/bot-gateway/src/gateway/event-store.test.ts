@@ -70,6 +70,17 @@ describe("event store", () => {
 		expect(Store.bounds(sql).firstRetained).toBe(5)
 		expect(Store.oldestAppendedAt(sql)).toBe(5_000)
 	})
+
+	it("caps each region's backlog on its own, so one region's traffic keeps another's events", () => {
+		const sql = freshStore()
+		Store.append(sql, body(1), 1_000, "eu")
+		Store.append(sql, body(2), 1_000, "eu")
+		for (let n = 3; n <= 10; n++) Store.append(sql, body(n), 1_000)
+		Store.enforceRetention(sql, 2_000, { maxEvents: 3, maxAgeMs: 60_000 })
+		// The default region keeps its newest three; the EU session's two, older, are untouched.
+		expect(Store.readAfter(sql, 0, 10).map((e) => e.seq)).toEqual([8, 9, 10])
+		expect(Store.readAfter(sql, 0, 10, "eu").map((e) => e.seq)).toEqual([1, 2])
+	})
 })
 
 describe("delivery: offsets, replay and acks", () => {
@@ -127,5 +138,46 @@ describe("delivery: offsets, replay and acks", () => {
 		expect(nextBatch(sql, session)).toEqual([])
 		Store.append(sql, body(4), 1_000)
 		expect(nextBatch(sql, session).map((e) => e.seq)).toEqual([4])
+	})
+
+	it("upgrades a log created before regions, keeping its events in the default region", () => {
+		const sql = memorySql()
+		sql.exec(
+			`CREATE TABLE bot_gateway_events (seq INTEGER PRIMARY KEY, body TEXT NOT NULL, appended_at INTEGER NOT NULL)`,
+		)
+		sql.exec(`CREATE TABLE bot_gateway_meta (key TEXT PRIMARY KEY, value INTEGER NOT NULL)`)
+		sql.exec(`INSERT INTO bot_gateway_events (seq, body, appended_at) VALUES (1, ?, 1000)`, body(1))
+		sql.exec(`INSERT INTO bot_gateway_meta (key, value) VALUES ('head', 1)`)
+
+		Store.migrate(sql)
+		Store.migrate(sql)
+
+		expect(Store.readAfter(sql, 0, 10)).toEqual([{ seq: 1, body: body(1) }])
+		expect(Store.append(sql, body(2), 1_000, "eu")).toBe(2)
+		expect(Store.readAfter(sql, 0, 10, "eu").map((e) => e.seq)).toEqual([2])
+
+		// The old event keeps its place in the default region's count: one newer, it is the one cut.
+		Store.append(sql, body(3), 1_000)
+		Store.enforceRetention(sql, 2_000, { maxEvents: 1, maxAgeMs: 60_000 })
+		expect(Store.readAfter(sql, 0, 10).map((e) => e.seq)).toEqual([3])
+		expect(Store.readAfter(sql, 0, 10, "eu").map((e) => e.seq)).toEqual([2])
+	})
+
+	it("keeps each region's events, bounds and trimming apart over one sequence", () => {
+		const sql = freshStore()
+		Store.append(sql, body(1), 1_000)
+		Store.append(sql, body(2), 1_000, "eu")
+		Store.append(sql, body(3), 1_000)
+		Store.append(sql, body(4), 1_000, "eu")
+
+		expect(Store.readAfter(sql, 0, 10).map((e) => e.seq)).toEqual([1, 3])
+		expect(Store.readAfter(sql, 0, 10, "eu").map((e) => e.seq)).toEqual([2, 4])
+		expect(Store.bounds(sql, "eu")).toEqual({ head: 4, firstRetained: 2 })
+
+		// The default session acknowledging through 3 leaves the EU session's events alone.
+		Store.trimThrough(sql, 3)
+		expect(Store.readAfter(sql, 0, 10)).toEqual([])
+		expect(Store.readAfter(sql, 0, 10, "eu").map((e) => e.seq)).toEqual([2, 4])
+		expect(Store.bounds(sql)).toEqual({ head: 4, firstRetained: undefined })
 	})
 })
