@@ -15,8 +15,12 @@ import { Effect } from "effect"
 import type { SyncPrincipal } from "../principal"
 import { type ColumnAccessors, selectVisible, type SyncTableSpec, syncTable, userIdsOf } from "./rows"
 
-/** Messages in a snapshot. */
-export const MESSAGE_SNAPSHOT_LIMIT = 200
+/**
+ * Messages in a snapshot: what opening a channel waits for, so just past what the client asks for
+ * first (a 30-message page and one page of headroom, `page/chat/data.ts`); scrolling back pages
+ * older ones in with `LoadOlder`.
+ */
+export const MESSAGE_SNAPSHOT_LIMIT = 80
 
 /**
  * Pinned messages older than the window that a snapshot also carries, newest first; the client

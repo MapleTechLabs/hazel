@@ -71,6 +71,16 @@ describe("runMuxSession", () => {
 		expect(client.sent).toContain(encodeMuxData(1, '{"_tag":"Ready"}'))
 	})
 
+	it("sends the Open's hello to the source as it opens, and says so", async () => {
+		const upstream = new FakeSocket()
+		const { client, controls } = start(() => Effect.succeed({ _tag: "Opened", socket: upstream }))
+		const hello = '{"_tag":"Hello","since":null,"paging":true}'
+		client.receive(control({ _tag: "Open", id: 1, kind: "channel", sourceId: "c1", token: "t", hello }))
+		await flush()
+		expect(upstream.sent).toEqual([hello])
+		expect(controls()).toEqual([{ _tag: "Opened", id: 1, hello: true }])
+	})
+
 	it("tells the client a refused source's close code", async () => {
 		const { client, controls } = start(() => Effect.succeed(refuseMuxStream(4001, "invalid_token")))
 		client.receive(control({ _tag: "Open", id: 1, kind: "user", sourceId: "u1", token: "bad" }))

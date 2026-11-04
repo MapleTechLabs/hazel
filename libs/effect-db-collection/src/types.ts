@@ -25,6 +25,12 @@ export interface WebSocketLike {
 	onerror: ((event: unknown) => void) | null
 	send(data: string): void
 	close(code?: number, reason?: string): void
+	/**
+	 * Present on a socket that can carry its first frame with its open (a mux stream): call it
+	 * before the socket opens instead of sending the frame on `onopen`. The frame goes out exactly
+	 * once, either way.
+	 */
+	sendFirst?(data: string): void
 }
 
 export type WebSocketConstructor = new (url: string, protocols: string | Array<string>) => WebSocketLike

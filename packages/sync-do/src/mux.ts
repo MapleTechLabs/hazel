@@ -87,7 +87,18 @@ export const runMuxSession = Effect.fnUntraced(function* (
 					if (upstreams.get(id) === opened.socket) upstreams.delete(id)
 				}),
 			)
-			yield* sendControl({ _tag: "Opened", id })
+			// The client's first frame came with the open: the source starts on it right away.
+			const hello = stream.hello
+			if (hello !== undefined) {
+				try {
+					opened.socket.send(hello)
+				} catch {
+					// The object socket is closing; the pull below reports the close.
+				}
+			}
+			yield* sendControl(
+				hello === undefined ? { _tag: "Opened", id } : { _tag: "Opened", id, hello: true },
+			)
 			// Fails when either side goes: the object closed its socket, or the client is gone.
 			const error = yield* pullUpstream.pipe(
 				Effect.flatMap((frames) =>
