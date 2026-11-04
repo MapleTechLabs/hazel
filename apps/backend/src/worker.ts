@@ -5,7 +5,7 @@
  * class tags of the previous deploy.
  */
 import { bindBotGateways } from "@hazel/bot-gateway/object"
-import { HazelStack, hazelWorkerProps, stageProps } from "@hazel/infra/cloudflare"
+import { HazelStack, hazelWorkerProps, stageProps, ZONE } from "@hazel/infra/cloudflare"
 import { cachedRecoverable } from "@hazel/infra/cached-recoverable"
 import { hazelTelemetry } from "@hazel/infra/maple"
 import { isolateContext } from "@hazel/infra/worker-http"
@@ -17,6 +17,7 @@ import {
 	DiscordGatewayObjectLive,
 } from "./worker/discord-gateway-object"
 import { HTML_RENDER_PENDING_MAX_AGE_SECONDS, HTML_RENDER_PENDING_PREFIX } from "./services/html-renders"
+import { INVITE_EMAIL_DOMAIN } from "./services/invite-mailer"
 import { apiEnv } from "./worker/env"
 import { buildApp, makeFetch } from "./worker/http"
 import { MessageLiveObject, MessageLiveObjectLive } from "./worker/live/message-live-object"
@@ -61,12 +62,28 @@ export const HtmlRendersBucket = Cloudflare.R2.Bucket(
 	})),
 )
 
+/**
+ * Onboards the invitation sender's domain to Cloudflare Email Sending (DKIM, SPF and return-path
+ * records are created on the zone). Without it the `EMAIL` binding only reaches verified
+ * addresses. One per zone, so only prd declares it; every stage sends from it.
+ */
+const InviteSendingSubdomain = Effect.gen(function* () {
+	const { accountId } = yield* yield* Cloudflare.CloudflareEnvironment
+	const zone = yield* Cloudflare.Zone.findZoneByName({ accountId, name: ZONE })
+	if (zone === undefined) return yield* Effect.die(new Error(`Cloudflare zone ${ZONE} not found`))
+	return yield* Cloudflare.Email.SendingSubdomain("invite-sending-subdomain", {
+		zoneId: zone.id,
+		name: INVITE_EMAIL_DOMAIN,
+	})
+}).pipe(Effect.orDie)
+
 /** `__ALCHEMY_RUNTIME__` folds to `true` in the bundle, so the stack-side branch is tree-shaken. */
 const props = Effect.gen(function* () {
 	if (globalThis.__ALCHEMY_RUNTIME__) return { main: import.meta.url }
 	const stack = yield* HazelStack
 	const cache = yield* ApiCache
 	const htmlRenders = yield* HtmlRendersBucket
+	if (stack.stage.kind === "prd") yield* InviteSendingSubdomain
 	const email = yield* Cloudflare.Email.SendEmail(EMAIL_BINDING)
 	return {
 		main: import.meta.url,
