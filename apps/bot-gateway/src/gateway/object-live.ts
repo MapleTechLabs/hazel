@@ -1,8 +1,13 @@
 /**
  * The `BotGateway` Durable Object: one per bot. It owns the bot's append-only event log (SQLite)
- * and its single WebSocket session (hibernatable, opened by the gateway Worker's relay once the
- * bot is authenticated, see `relay.ts`).
+ * and its WebSocket sessions, one per region (hibernatable, opened by the gateway Worker's relay
+ * once the bot is authenticated, see `relay.ts`).
  *
+ * - Regions let one bot serve installs from several deployments of its service (Maple's US and
+ *   EU): each install's events go to the session of the region that redeemed it
+ *   (`setInstallRegion`), every other install's to the default region's (`''`). Each region has
+ *   its own cursor, ACKs and trimming over the one log; a bot that never names a region has
+ *   exactly the single session it always had.
  * - `publish` (RPC, from the backend) appends an event and dispatches it if the session is idle.
  * - The session gets one DISPATCH batch at a time; its ACK advances the cursor, trims the log and
  *   sends the next batch. An ACK not received within the batch timeout ends the session with
@@ -15,6 +20,7 @@
 import {
 	BotGatewayClientFrame,
 	BotGatewayEnvelope,
+	organizationOfPartitionKey,
 	BotGatewayEventRejectedError,
 	type BotGatewayHeartbeatAckFrame,
 	type BotGatewayInvalidSessionFrame,
@@ -48,7 +54,11 @@ interface SessionAttachment extends SessionCursor {
 	readonly v: 1
 	readonly botId: string
 	readonly botName: string
+	/** The session's region; absent on sessions opened before regions (the default region). */
+	readonly region?: string
 }
+
+const regionOfSession = (session: SessionAttachment): string => session.region ?? Store.DEFAULT_REGION
 
 const isSessionAttachment = (value: unknown): value is SessionAttachment =>
 	typeof value === "object" && value !== null && (value as { v?: unknown }).v === 1
@@ -101,6 +111,14 @@ const invalidSession = (socket: RawSocket, reason: string) => {
 	closeSocket(socket, 1008, reason.slice(0, 120))
 }
 
+/** The organization an event belongs to: its partition key's, else its payload's `orgId`. */
+const organizationOfEnvelope = (envelope: BotGatewayEnvelope): string | undefined => {
+	const fromKey = organizationOfPartitionKey(envelope.partitionKey)
+	if (fromKey !== undefined) return fromKey
+	const payload = envelope.payload as { readonly orgId?: unknown }
+	return typeof payload.orgId === "string" ? payload.orgId : undefined
+}
+
 /** The activation, in alchemy's two phases; the outer one also runs at plan time, against a mock. */
 export const activateBotGateway = Effect.gen(function* () {
 	const state = yield* Cloudflare.DurableObjectState
@@ -122,7 +140,14 @@ export const activateBotGateway = Effect.gen(function* () {
 		/** Send the next batch if nothing is in flight; returns the session's new state. */
 		const deliver = (socket: RawSocket, session: SessionAttachment, now: number): SessionAttachment => {
 			if (session.pending !== null) return session
-			const batch = selectBatch(Store.readAfter(sql, session.cursor, DEFAULT_BATCH_LIMITS.maxEvents))
+			const batch = selectBatch(
+				Store.readAfter(
+					sql,
+					session.cursor,
+					DEFAULT_BATCH_LIMITS.maxEvents,
+					regionOfSession(session),
+				),
+			)
 			const last = batch[batch.length - 1]
 			if (last === undefined) return session
 			const next: SessionAttachment = {
@@ -162,16 +187,27 @@ export const activateBotGateway = Effect.gen(function* () {
 					),
 				)
 				const now = Date.now()
-				const seq = Store.append(sql, eventJson, now)
+				const region = Store.regionOf(sql, organizationOfEnvelope(envelope))
+				const seq = Store.append(sql, eventJson, now, region)
 				Store.enforceRetention(sql, now, DEFAULT_RETENTION)
-				for (const { socket, session } of liveSessions()) deliver(socket, session, now)
+				for (const { socket, session } of liveSessions()) {
+					if (regionOfSession(session) === region) deliver(socket, session, now)
+				}
 				yield* scheduleAlarm
 				yield* Effect.annotateCurrentSpan({
 					"bot_gateway.offset": seq,
 					"bot_gateway.event_type": envelope.eventType,
+					"bot_gateway.region": region,
 				})
 				return { offset: formatOffset(seq) } satisfies BotGatewayPublishResult
 			}).pipe(Effect.withSpan("BotGateway.publish"))
+
+		const setInstallRegion = (organizationId: string, region: string | null) =>
+			Effect.sync(() => Store.setRegion(sql, organizationId, region)).pipe(
+				Effect.withSpan("BotGateway.setInstallRegion", {
+					attributes: { "organization.id": organizationId, "bot_gateway.region": region ?? "" },
+				}),
+			)
 
 		const fetch = Effect.gen(function* () {
 			const request = yield* HttpServerRequest.HttpServerRequest
@@ -183,11 +219,14 @@ export const activateBotGateway = Effect.gen(function* () {
 				return HttpServerResponse.text("Expected a WebSocket upgrade", { status: 426 })
 			}
 
-			const live = liveSessions()
+			const region = handshake.region ?? Store.DEFAULT_REGION
+			// Admission is per region: each region holds one session of its own.
+			const live = liveSessions().filter(({ session }) => regionOfSession(session) === region)
 			const admission = decideAdmission(live[0]?.session, handshake.request)
 			if (admission._tag === "Reject") {
 				yield* Effect.logInfo("Bot gateway session rejected", {
 					botId: handshake.botId,
+					region,
 					reason: admission.reason,
 				})
 				return HttpServerResponse.jsonUnsafe({ reason: admission.reason }, { status: 409 })
@@ -203,7 +242,11 @@ export const activateBotGateway = Effect.gen(function* () {
 				sessionId: sessionRequest.op === "RESUME" ? sessionRequest.sessionId : crypto.randomUUID(),
 				botId: handshake.botId,
 				botName: handshake.botName,
-				cursor: resolveCursor(parseResumeOffset(sessionRequest.resumeOffset), Store.bounds(sql)),
+				...(region === Store.DEFAULT_REGION ? {} : { region }),
+				cursor: resolveCursor(
+					parseResumeOffset(sessionRequest.resumeOffset),
+					Store.bounds(sql, region),
+				),
 				pending: null,
 				pendingDeadline: null,
 			}
@@ -224,6 +267,7 @@ export const activateBotGateway = Effect.gen(function* () {
 				sessionId: session.sessionId,
 				botId: session.botId,
 				botName: session.botName,
+				region,
 				resumed: sessionRequest.op === "RESUME",
 				resumeOffset: sessionRequest.resumeOffset,
 				cursor: formatOffset(session.cursor),
@@ -253,7 +297,7 @@ export const activateBotGateway = Effect.gen(function* () {
 							})
 							return
 						}
-						Store.trimThrough(sql, outcome.cursor)
+						Store.trimThrough(sql, outcome.cursor, regionOfSession(session))
 						const acked: SessionAttachment = {
 							...session,
 							cursor: outcome.cursor,
@@ -313,7 +357,7 @@ export const activateBotGateway = Effect.gen(function* () {
 				yield* scheduleAlarm
 			})
 
-		return { publish, fetch, webSocketMessage, webSocketClose, alarm }
+		return { publish, setInstallRegion, fetch, webSocketMessage, webSocketClose, alarm }
 	})
 })
 

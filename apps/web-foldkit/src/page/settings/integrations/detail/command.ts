@@ -1,10 +1,10 @@
 import { type T3CodeConnection, T3CodeSharing } from "@hazel/domain/http"
 import { IntegrationConnection } from "@hazel/domain/models"
-import { OrganizationId } from "@hazel/schema"
+import { BotId, OrganizationId } from "@hazel/schema"
 import { DateTime, Effect, Schema } from "effect"
 import { Command } from "foldkit"
 import { load } from "foldkit/navigation"
-import { HazelApiClient } from "../../../../rpc"
+import { HazelApiClient, HazelRpc } from "../../../../rpc"
 import { catchCommon } from "../../../../data/actions"
 import { Message } from "./message"
 import type { T3CodeLink } from "./model"
@@ -12,6 +12,22 @@ import type { T3CodeLink } from "./model"
 const Provider = IntegrationConnection.IntegrationProvider
 
 const target = { orgId: OrganizationId, provider: Provider }
+
+/** Remove Maple's bot from the workspace (`bot.uninstall`), from its integration page. */
+export const UninstallMaple = Command.define("UninstallMaple", {
+	args: { botId: BotId, organizationId: OrganizationId },
+	messages: [Message.SucceededUninstallMaple, Message.FailedUninstallMaple],
+	execute: ({ botId, organizationId }) =>
+		HazelRpc.use((rpc) => rpc("bot.uninstall", { botId, organizationId })).pipe(
+			Effect.as(Message.SucceededUninstallMaple()),
+			Effect.catchTags({
+				BotNotFoundError: () => Effect.succeed(Message.FailedUninstallMaple({ reason: "NotFound" })),
+				ActiveOrganizationRequiredError: () =>
+					Effect.succeed(Message.FailedUninstallMaple({ reason: "NotFound" })),
+			}),
+			catchCommon((reason) => Message.FailedUninstallMaple({ reason })),
+		),
+})
 
 /** `getOAuthUrlMutation`, organization level. */
 export const GetOAuthUrl = Command.define("GetOAuthUrl", {

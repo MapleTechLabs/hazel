@@ -13,6 +13,7 @@ import {
 	DirectoryWireEffects,
 	fromBotWire,
 } from "../directory-wire"
+import { BotGatewayEffects } from "../effects/bot-gateway-effects"
 import { enqueueEffect } from "../effects/registry"
 import { publishChannelAccess, syncMemberAccess } from "./channel-access"
 import { projectUsers, removeUserProjection } from "./projections"
@@ -108,7 +109,7 @@ export const uninstallBotHere = Effect.fn("OrgObject.uninstallBot")(function* (
 	const db = yield* Database.Database
 	const installation = yield* db.first(
 		SQLite.from(schema.botInstallationsTable)
-			.select("id")
+			.select("id", "region")
 			.where(($) => [$.botId.eq(botId), $.organizationId.eq(organizationId)])
 			.limit(1),
 	)
@@ -116,6 +117,14 @@ export const uninstallBotHere = Effect.fn("OrgObject.uninstallBot")(function* (
 	yield* db.run(
 		SQLite.deleteFrom(schema.botInstallationsTable).where(($) => [$.id.eq(installation.value.id)]),
 	)
+	// A reinstall starts on the default session until a region redeems it again.
+	if (installation.value.region !== null) {
+		yield* enqueueEffect(
+			BotGatewayEffects.installRegion,
+			{ kind: "bot-gateway" },
+			{ botId, organizationId, region: null },
+		)
+	}
 	const bot = yield* db.first(
 		SQLite.from(schema.botsTable)
 			.select("userId")

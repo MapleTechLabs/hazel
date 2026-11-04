@@ -147,6 +147,21 @@ describe("gateway relay", () => {
 		})
 	})
 
+	it("passes the session's region through", async () => {
+		const { client, handshakes } = setup()
+		client.receive({ op: "IDENTIFY", botToken: "t", resumeOffset: "now", region: "eu" })
+		await flush()
+		expect(handshakes[0]?.region).toBe("eu")
+	})
+
+	it("refuses a malformed region before authenticating", async () => {
+		const { client, handshakes } = setup()
+		client.receive({ op: "IDENTIFY", botToken: "t", resumeOffset: "now", region: "EU/../x" })
+		await flush()
+		expect(handshakes).toEqual([])
+		expect(client.frames().at(-1)).toMatchObject({ op: "INVALID_SESSION" })
+	})
+
 	it("rejects an invalid token with INVALID_SESSION", async () => {
 		const { client, handshakes } = setup({
 			auth: async () => ({ _tag: "Rejected", reason: "Invalid bot token" }),
@@ -279,10 +294,21 @@ describe("handshake headers", () => {
 			Object.fromEntries(Object.entries(headers).map(([key, value]) => [key.toLowerCase(), value]))
 		expect(decodeHandshake(lower(encodeHandshake(identify)))).toEqual(identify)
 		expect(decodeHandshake(lower(encodeHandshake(resume)))).toEqual(resume)
+		const regional: Handshake = { ...identify, region: "eu" }
+		expect(decodeHandshake(lower(encodeHandshake(regional)))).toEqual(regional)
 	})
 
 	it("rejects incomplete handshakes", () => {
 		expect(decodeHandshake({})).toBeUndefined()
+		expect(
+			decodeHandshake({
+				"x-hazel-bot-id": "b",
+				"x-hazel-bot-name": "n",
+				"x-hazel-gateway-op": "IDENTIFY",
+				"x-hazel-gateway-resume-offset": "now",
+				"x-hazel-gateway-region": "Not A Region",
+			}),
+		).toBeUndefined()
 		expect(
 			decodeHandshake({
 				"x-hazel-bot-id": "b",

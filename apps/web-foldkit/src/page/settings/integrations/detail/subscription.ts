@@ -1,4 +1,4 @@
-import { OrganizationId, UserId } from "@hazel/schema"
+import { type BotId, OrganizationId, UserId } from "@hazel/schema"
 import { and, eq, not } from "@tanstack/db"
 import { Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
@@ -15,7 +15,7 @@ import {
 import { isProvider } from "./command"
 import { Message } from "./message"
 import type { Model } from "./model"
-import { MAPLE_BOT_IDS } from "./view-maple"
+import { MAPLE_BOT_IDS } from "../shared/integration-bots"
 
 interface T3CodeMemberRow {
 	readonly userId: UserId
@@ -48,7 +48,7 @@ export const subscriptions = Subscription.make<PageSubscriptionInput<Model>, Mes
 						),
 		},
 	),
-	// Whether one of Maple's bots is installed here: the Maple page's agent panel.
+	// Maple's bot's install here, with its region: the Maple page's agent panel.
 	mapleBot: entry(
 		{ organizationId: Schema.NullOr(OrganizationId), provider: Schema.String },
 		{
@@ -59,12 +59,15 @@ export const subscriptions = Subscription.make<PageSubscriptionInput<Model>, Mes
 			dependenciesToStream: ({ organizationId, provider }) =>
 				organizationId === null || provider !== "maple"
 					? Stream.empty
-					: liveQueryStream<{ readonly botId: string }, Message>(
+					: liveQueryStream<{ readonly botId: BotId; readonly region: string | null }, Message>(
 							installationsQuery(organizationId),
-							(rows) =>
-								Message.UpdatedMapleBotInstalled({
-									isInstalled: rows.some((row) => MAPLE_BOT_IDS.includes(row.botId)),
-								}),
+							(rows) => {
+								const row = rows.find((candidate) => MAPLE_BOT_IDS.includes(candidate.botId))
+								return Message.UpdatedMapleInstall({
+									install:
+										row === undefined ? null : { botId: row.botId, region: row.region },
+								})
+							},
 						),
 		},
 	),

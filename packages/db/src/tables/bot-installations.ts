@@ -9,6 +9,11 @@ export const botInstallationsTable = SQLite.table("bot_installations", {
 		organizationId: uuid(OrganizationId),
 		installedBy: uuid(UserId),
 		installedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
+		/**
+		 * The region of the bot's service that redeemed this install (`BotGatewayRegion`): its
+		 * gateway session receives this org's events. `null` for the default session.
+		 */
+		region: SQLite.nullable(SQLite.text),
 	},
 	primaryKey: ["id"],
 	indexes: [

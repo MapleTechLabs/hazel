@@ -4,6 +4,7 @@ import { ChannelId, MessageId, OrganizationId, UserId } from "@hazel/schema"
 import { InternalServerError, UnauthorizedError } from "../../errors"
 import { RateLimitExceededError } from "../../rate-limit-errors"
 import { BotNotInstalledError } from "../bot-commands"
+import { BotGatewayRegion } from "../../bot-gateway"
 import { ChannelNotFoundError } from "./messages"
 
 /**
@@ -20,6 +21,11 @@ export class RedeemBotInstallRequest extends Schema.Class<RedeemBotInstallReques
 		code: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(256)),
 		/** The redirect URI the install was approved for; it must match exactly. */
 		redirectUri: Schema.String.check(Schema.isMaxLength(2048)),
+		/**
+		 * The region of the bot's service that owns this install: its events go to the gateway
+		 * session identified with the same `region`. Omitted for the default session.
+		 */
+		region: Schema.optional(BotGatewayRegion),
 	},
 ) {}
 

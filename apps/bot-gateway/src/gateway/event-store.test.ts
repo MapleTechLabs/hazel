@@ -128,4 +128,55 @@ describe("delivery: offsets, replay and acks", () => {
 		Store.append(sql, body(4), 1_000)
 		expect(nextBatch(sql, session).map((e) => e.seq)).toEqual([4])
 	})
+
+	it("upgrades a log created before regions, keeping its events in the default region", () => {
+		const sql = memorySql()
+		sql.exec(
+			`CREATE TABLE bot_gateway_events (seq INTEGER PRIMARY KEY, body TEXT NOT NULL, appended_at INTEGER NOT NULL)`,
+		)
+		sql.exec(`CREATE TABLE bot_gateway_meta (key TEXT PRIMARY KEY, value INTEGER NOT NULL)`)
+		sql.exec(`INSERT INTO bot_gateway_events (seq, body, appended_at) VALUES (1, ?, 1000)`, body(1))
+		sql.exec(`INSERT INTO bot_gateway_meta (key, value) VALUES ('head', 1)`)
+
+		Store.migrate(sql)
+		Store.migrate(sql)
+
+		expect(Store.readAfter(sql, 0, 10)).toEqual([{ seq: 1, body: body(1) }])
+		expect(Store.append(sql, body(2), 1_000, "eu")).toBe(2)
+		expect(Store.readAfter(sql, 0, 10, "eu").map((e) => e.seq)).toEqual([2])
+	})
+
+	it("keeps each region's events, bounds and trimming apart over one sequence", () => {
+		const sql = freshStore()
+		Store.append(sql, body(1), 1_000)
+		Store.append(sql, body(2), 1_000, "eu")
+		Store.append(sql, body(3), 1_000)
+		Store.append(sql, body(4), 1_000, "eu")
+
+		expect(Store.readAfter(sql, 0, 10).map((e) => e.seq)).toEqual([1, 3])
+		expect(Store.readAfter(sql, 0, 10, "eu").map((e) => e.seq)).toEqual([2, 4])
+		expect(Store.bounds(sql, "eu")).toEqual({ head: 4, firstRetained: 2 })
+
+		// The default session acknowledging through 3 leaves the EU session's events alone.
+		Store.trimThrough(sql, 3)
+		expect(Store.readAfter(sql, 0, 10)).toEqual([])
+		expect(Store.readAfter(sql, 0, 10, "eu").map((e) => e.seq)).toEqual([2, 4])
+		expect(Store.bounds(sql)).toEqual({ head: 4, firstRetained: undefined })
+	})
+
+	it("routes an organization to the region its install named until it is cleared", () => {
+		const sql = freshStore()
+		expect(Store.regionOf(sql, "org-1")).toBe(Store.DEFAULT_REGION)
+		expect(Store.regionOf(sql, undefined)).toBe(Store.DEFAULT_REGION)
+
+		Store.setRegion(sql, "org-1", "eu")
+		expect(Store.regionOf(sql, "org-1")).toBe("eu")
+		expect(Store.regionOf(sql, "org-2")).toBe(Store.DEFAULT_REGION)
+
+		Store.setRegion(sql, "org-1", "us-west")
+		expect(Store.regionOf(sql, "org-1")).toBe("us-west")
+
+		Store.setRegion(sql, "org-1", null)
+		expect(Store.regionOf(sql, "org-1")).toBe(Store.DEFAULT_REGION)
+	})
 })

@@ -4,7 +4,7 @@
  * (`bindBotGateways` from `@hazel/bot-gateway/object`).
  */
 import type { BotGatewayEnvelope, BotGatewayRpc } from "@hazel/domain"
-import type { BotId } from "@hazel/schema"
+import type { BotId, OrganizationId } from "@hazel/schema"
 import { Context, Effect, Layer, Schema } from "effect"
 
 /**
@@ -24,6 +24,12 @@ export interface BotGatewayTransportShape {
 	readonly append: (
 		botId: BotId,
 		envelope: BotGatewayEnvelope,
+	) => Effect.Effect<void, DurableStreamRequestError>
+	/** Route the organization's events for `botId` to the session of `region` (`null`: the default). */
+	readonly setInstallRegion: (
+		botId: BotId,
+		organizationId: OrganizationId,
+		region: string | null,
 	) => Effect.Effect<void, DurableStreamRequestError>
 }
 
@@ -46,6 +52,24 @@ const makeDurableObjectTransport = (namespace: BotGatewayNamespace): BotGatewayT
 					(cause) =>
 						new DurableStreamRequestError({
 							message: `Failed to publish bot gateway event for bot ${botId}`,
+							cause,
+						}),
+				),
+			)
+	}),
+	setInstallRegion: Effect.fn("BotGatewayTransport.setInstallRegion")(function* (
+		botId: BotId,
+		organizationId: OrganizationId,
+		region: string | null,
+	) {
+		yield* namespace
+			.getByName(botId)
+			.setInstallRegion(organizationId, region)
+			.pipe(
+				Effect.mapError(
+					(cause) =>
+						new DurableStreamRequestError({
+							message: `Failed to route bot ${botId}'s events for organization ${organizationId}`,
 							cause,
 						}),
 				),

@@ -4,7 +4,11 @@
  * bot's `BotGateway` object (`bindBotGateways`). Replaces the global message outbox for these.
  */
 import { Database, SQLite, schema } from "@hazel/db"
-import { BotGatewayInteractionCreatePayload, createBotGatewayPartitionKey } from "@hazel/domain"
+import {
+	BotGatewayInteractionCreatePayload,
+	BotGatewayRegion,
+	createBotGatewayPartitionKey,
+} from "@hazel/domain"
 import { Message } from "@hazel/domain/models"
 import { BotId, OrganizationId } from "@hazel/schema"
 import { Effect, Option, Schema } from "effect"
@@ -31,7 +35,16 @@ export const InteractionEventPayload = Schema.Struct({
 	interaction: BotGatewayInteractionCreatePayload,
 })
 
+/** Where `botId`'s events for `organizationId` go: the region that redeemed its install, or the default. */
+export const InstallRegionPayload = Schema.Struct({
+	botId: BotId,
+	organizationId: OrganizationId,
+	region: Schema.NullOr(BotGatewayRegion),
+})
+
 export const BotGatewayEffects = {
+	/** From an `OrgObject`: an install redeemed with a region, or a bot uninstalled. */
+	installRegion: defineEffect("botGateway.installRegion", "bot-gateway", InstallRegionPayload),
 	interaction: defineEffect("botGateway.interaction", "bot-gateway", InteractionEventPayload),
 	messageEvent: defineEffect("botGateway.messageEvent", "bot-gateway", MessageEventPayload),
 	/** From an `OrgObject`: to the org's installed bots (`../org/bot-events.ts`). */
@@ -99,6 +112,10 @@ export const botGatewayReceivers = {
 				eventType: "interaction.create",
 				payload: interaction,
 			}),
+		),
+	"botGateway.installRegion": ({ botId, organizationId, region }) =>
+		Effect.flatMap(BotGatewayTransport, (transport) =>
+			transport.setInstallRegion(botId, organizationId, region),
 		),
 	"botGateway.channelEvent": publishChannelEvent,
 	"botGateway.channelMemberEvent": publishChannelMemberEvent,

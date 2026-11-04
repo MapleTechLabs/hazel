@@ -141,12 +141,40 @@ export const createBotGatewayPartitionKey = (params: {
 			? `bot:${params.botId}`
 			: `org:${params.organizationId}`
 
+/**
+ * The organization a partition key names (`org:<id>` or `org:<id>:channel:<id>`), or `undefined`
+ * for a key without one (`bot:<id>`). The gateway routes an event to an install's region by it.
+ */
+export const organizationOfPartitionKey = (partitionKey: string): string | undefined => {
+	if (!partitionKey.startsWith("org:")) return undefined
+	const end = partitionKey.indexOf(":", 4)
+	const organizationId = end === -1 ? partitionKey.slice(4) : partitionKey.slice(4, end)
+	return organizationId === "" ? undefined : organizationId
+}
+
+/**
+ * A region of the service behind a bot (`eu`, `us-west`): one bot can hold one gateway session
+ * per region, and each install's events go only to the region that redeemed it
+ * (`POST /api/v1/bot-installs/token` with `region`). No region is the default one.
+ */
+export const BOT_GATEWAY_REGION_PATTERN = /^[a-z0-9][a-z0-9-]{0,31}$/
+
+export const BotGatewayRegion = Schema.String.check(
+	Schema.makeFilter(
+		(value: string) =>
+			BOT_GATEWAY_REGION_PATTERN.test(value) ||
+			"Expected a region: lowercase letters, digits and dashes, at most 32",
+	),
+)
+
 export const BotGatewayOffset = Schema.String
 
 export const BotGatewayIdentifyFrame = Schema.Struct({
 	op: Schema.Literal("IDENTIFY"),
 	botToken: Schema.String,
 	resumeOffset: BotGatewayOffset,
+	/** The region this session serves; omitted for the default one. */
+	region: Schema.optional(BotGatewayRegion),
 })
 
 export const BotGatewayResumeFrame = Schema.Struct({
@@ -154,6 +182,8 @@ export const BotGatewayResumeFrame = Schema.Struct({
 	botToken: Schema.String,
 	sessionId: Schema.String,
 	resumeOffset: BotGatewayOffset,
+	/** The region the session was identified for; omitted for the default one. */
+	region: Schema.optional(BotGatewayRegion),
 })
 
 export const BotGatewayAckFrame = Schema.Struct({
@@ -249,4 +279,9 @@ export interface BotGatewayRpc {
 	readonly publish: (
 		eventJson: string,
 	) => Effect.Effect<BotGatewayPublishResult, BotGatewayEventRejectedError>
+	/**
+	 * Route the organization's events to `region`'s session from now on (`null`: the default
+	 * session). Set when an install is redeemed, cleared when the bot is uninstalled.
+	 */
+	readonly setInstallRegion: (organizationId: string, region: string | null) => Effect.Effect<void>
 }

@@ -68,6 +68,7 @@ export const HttpApiV1BotsLive = HttpApiBuilder.group(HazelApi, "api-v1-bots", (
 							botId: bot.id,
 							codeHash: yield* hashInstallCode(payload.code),
 							redirectUri: payload.redirectUri,
+							region: payload.region ?? null,
 						},
 					)
 					return new BotInstallRedeemedResponse(redeemed)

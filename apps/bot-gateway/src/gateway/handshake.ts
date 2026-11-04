@@ -5,6 +5,7 @@
  * object, describing the session in these headers. The object is reachable only through its
  * namespace binding, so it can trust them.
  */
+import { BOT_GATEWAY_REGION_PATTERN } from "@hazel/domain"
 import type { SessionRequest } from "./log.ts"
 
 export const HANDSHAKE_HEADERS = {
@@ -14,6 +15,7 @@ export const HANDSHAKE_HEADERS = {
 	op: "x-hazel-gateway-op",
 	sessionId: "x-hazel-gateway-session-id",
 	resumeOffset: "x-hazel-gateway-resume-offset",
+	region: "x-hazel-gateway-region",
 } as const
 
 export interface Handshake {
@@ -22,6 +24,8 @@ export interface Handshake {
 	readonly botUserId?: string | undefined
 	readonly botName: string
 	readonly request: SessionRequest
+	/** The region the session serves (`BotGatewayRegion`, already validated); omitted for the default. */
+	readonly region?: string | undefined
 }
 
 export const encodeHandshake = (handshake: Handshake): Record<string, string> => ({
@@ -34,6 +38,7 @@ export const encodeHandshake = (handshake: Handshake): Record<string, string> =>
 	...(handshake.request.op === "RESUME"
 		? { [HANDSHAKE_HEADERS.sessionId]: handshake.request.sessionId }
 		: {}),
+	...(handshake.region === undefined ? {} : { [HANDSHAKE_HEADERS.region]: handshake.region }),
 })
 
 const safeDecode = (value: string): string | undefined => {
@@ -53,10 +58,12 @@ export const decodeHandshake = (
 	const op = headers[HANDSHAKE_HEADERS.op]
 	const resumeOffset = safeDecode(headers[HANDSHAKE_HEADERS.resumeOffset] ?? "")
 	const botUserId = headers[HANDSHAKE_HEADERS.botUserId] || undefined
+	const region = headers[HANDSHAKE_HEADERS.region] || undefined
 	if (!botId || botName === undefined || resumeOffset === undefined) return undefined
-	if (op === "IDENTIFY") return { botId, botUserId, botName, request: { op, resumeOffset } }
+	if (region !== undefined && !BOT_GATEWAY_REGION_PATTERN.test(region)) return undefined
+	if (op === "IDENTIFY") return { botId, botUserId, botName, region, request: { op, resumeOffset } }
 	const sessionId = headers[HANDSHAKE_HEADERS.sessionId]
 	if (op === "RESUME" && sessionId)
-		return { botId, botUserId, botName, request: { op, sessionId, resumeOffset } }
+		return { botId, botUserId, botName, region, request: { op, sessionId, resumeOffset } }
 	return undefined
 }

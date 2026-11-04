@@ -357,13 +357,19 @@ describe("directory path", () => {
 				const second = ok<{ code: string }>(yield* authorize(away.seed.owner)).code
 				expect(second).not.toBe(code)
 
-				const redeem = (input: { code: string; botId?: string; redirectUri?: string }) =>
+				const redeem = (input: {
+					code: string
+					botId?: string
+					redirectUri?: string
+					region?: string
+				}) =>
 					Effect.flatMap(hashInstallCode(input.code), (codeHash) =>
 						worker(
 							callObject(RedeemBotInstallGrantCall, orgTarget(away.seed.orgId), {
 								botId: (input.botId ?? botId) as never,
 								codeHash,
 								redirectUri: input.redirectUri ?? redirectUri,
+								region: input.region ?? null,
 							}),
 						),
 					)
@@ -377,6 +383,34 @@ describe("directory path", () => {
 					installedBy: away.seed.owner,
 				})
 				expect(errorTag(yield* redeem({ code }))).toBe("BotInstallGrantInvalidError")
+				// The default region needs no routing.
+				expect(objects.installRegions).toEqual([])
+
+				// A region redeeming the install takes its events: the installation and the bot's
+				// gateway both record it, and an uninstall routes the org back to the default.
+				const regional = ok<{ code: string }>(yield* authorize(away.seed.owner)).code
+				ok(yield* redeem({ code: regional, region: "eu" }))
+				expect(away.org.storage.db.prepare(`SELECT region FROM bot_installations`).all()).toEqual([
+					{ region: "eu" },
+				])
+				expect(objects.installRegions).toEqual([
+					{ botId, organizationId: away.seed.orgId, region: "eu" },
+				])
+				ok(
+					yield* call(
+						away.org,
+						away.seed.orgId,
+						"bot.uninstall",
+						{ botId, organizationId: away.seed.orgId },
+						away.seed.owner,
+					),
+				)
+				expect(objects.installRegions.at(-1)).toEqual({
+					botId,
+					organizationId: away.seed.orgId,
+					region: null,
+				})
+				ok(yield* authorize(away.seed.owner))
 
 				// An expired grant is refused.
 				away.org.storage.db

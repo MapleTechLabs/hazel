@@ -7,7 +7,7 @@
 import type { BotGatewayEnvelope } from "@hazel/domain"
 import type { StoreMigration } from "@hazel/db"
 import { layerMemory } from "@hazel/db/node"
-import type { BotId } from "@hazel/schema"
+import type { BotId, OrganizationId } from "@hazel/schema"
 import { type FakeStorage, makeFakeState, makeFakeStorage, sqliteClientLayer } from "@hazel/sync-do/testing"
 import { ConfigProvider, Context, Deferred, Effect, type Exit, Layer, Option, Scope } from "effect"
 import { Persistence } from "effect/persistence"
@@ -51,6 +51,12 @@ export interface TestObjects {
 	readonly directory: Context.Context<Directory>
 	/** Envelopes appended to each bot's gateway. */
 	readonly published: Array<{ readonly botId: BotId; readonly envelope: BotGatewayEnvelope }>
+	/** Every `setInstallRegion` the gateway received, in order. */
+	readonly installRegions: Array<{
+		readonly botId: BotId
+		readonly organizationId: OrganizationId
+		readonly region: string | null
+	}>
 	/** `applyEffect` calls that crossed objects, as `target kind key`. */
 	readonly deliveries: Array<string>
 	/** Make deliveries to `target` fail (outbox retry), or succeed again. */
@@ -98,6 +104,7 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 			Directory.layerDatabase.pipe(Layer.provide(Layer.succeedContext(directoryDatabase))),
 		)
 		const published: TestObjects["published"] = []
+		const installRegions: TestObjects["installRegions"] = []
 		const deliveries: Array<string> = []
 		const unreachable = new Set<string>()
 		const held = new Map<string, { reached: Deferred.Deferred<void>; gate: Deferred.Deferred<void> }>()
@@ -109,6 +116,8 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 			BotGatewayTransport,
 			BotGatewayTransport.of({
 				append: (botId, envelope) => Effect.sync(() => void published.push({ botId, envelope })),
+				setInstallRegion: (botId, organizationId, region) =>
+					Effect.sync(() => void installRegions.push({ botId, organizationId, region })),
 			}),
 		)
 
@@ -257,6 +266,7 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 				),
 			directory,
 			published,
+			installRegions,
 			deliveries,
 			setUnreachable: (target, value) => {
 				if (value) unreachable.add(formatTarget(target))

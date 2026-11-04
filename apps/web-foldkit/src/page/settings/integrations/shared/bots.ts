@@ -108,4 +108,4 @@ export const installationsQuery = (organizationId: OrganizationId) => (q: Initia
 	q
 		.from({ installation: botInstallationCollection })
 		.where(({ installation }) => eq(installation.organizationId, organizationId))
-		.select(({ installation }) => ({ botId: installation.botId }))
+		.select(({ installation }) => ({ botId: installation.botId, region: installation.region }))

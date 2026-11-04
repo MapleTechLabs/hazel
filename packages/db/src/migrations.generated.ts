@@ -255,6 +255,10 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE UNIQUE INDEX IF NOT EXISTS "bot_install_grants_code_hash_unique" ON "bot_install_grants" ("codeHash")',
 			],
 		},
+		{
+			id: "0005_bot_installation_region",
+			statements: ['ALTER TABLE "bot_installations" ADD COLUMN "region" text'],
+		},
 	],
 	channel: [
 		{

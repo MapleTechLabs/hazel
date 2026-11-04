@@ -1,11 +1,15 @@
 import { T3CodeSharing } from "@hazel/domain/http"
 import { IntegrationConnection } from "@hazel/domain/models"
-import { UserId } from "@hazel/schema"
+import { BotId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { Field, makeRules, Rule } from "foldkit/fieldValidation"
 import { defineTaggedUnion } from "foldkit/schema"
 import * as ConfirmAction from "../../../shared/confirm-action"
 import { Connection } from "../shared/connections"
+
+/** Maple's bot in this workspace, and the Maple region that owns the install (`null`: not known). */
+export const MapleInstall = Schema.Struct({ botId: BotId, region: Schema.NullOr(Schema.String) })
+export type MapleInstall = typeof MapleInstall.Type
 
 export const CallbackStatus = Schema.Literals(["success", "error"])
 export type CallbackStatus = typeof CallbackStatus.Type
@@ -90,8 +94,9 @@ export const Model = Schema.Struct({
 	sharingSave: SharingSave,
 	/** The latest sharing PUT; an older one's result is ignored. */
 	sharingRequestId: Schema.Number,
-	/** Maple's own bot is installed in this workspace (`view-maple.ts`). */
-	mapleBotInstalled: Schema.Boolean,
+	/** Maple's bot's install in this workspace, `null` when it is not installed (`view-maple.ts`). */
+	mapleInstall: Schema.NullOr(MapleInstall),
+	mapleUninstalling: Schema.Boolean,
 	/** Disconnect asks first; the target is the environment label. */
 	disconnectConfirm: ConfirmAction.Model(Schema.String),
 })
