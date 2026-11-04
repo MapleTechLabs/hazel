@@ -87,16 +87,15 @@ export const checkMessageRateLimit = Effect.fn("RateLimitHelpers.checkMessageRat
 		return yield* Effect.fail(
 			new RateLimitExceededError({
 				message: "Message rate limit exceeded. Please wait before sending more messages.",
+				// At most this: the binding does not say when the window ends.
 				retryAfterMs: result.resetAfterMs,
 				limit: result.limit,
-				remaining: result.remaining,
+				remaining: 0,
 			}),
 		)
 	}
 
-	yield* Effect.logDebug(
-		`Rate limit check passed for user ${userId}: ${result.remaining}/${result.limit} remaining`,
-	)
+	yield* Effect.logDebug(`Message rate limit check passed for user ${userId}`)
 })
 
 /**
@@ -133,7 +132,7 @@ export const checkAvatarRateLimit = Effect.fn("RateLimitHelpers.checkAvatarRateL
 				message: "Avatar upload rate limit exceeded. Please wait before uploading again.",
 				retryAfterMs: result.resetAfterMs,
 				limit: result.limit,
-				remaining: result.remaining,
+				remaining: 0,
 			}),
 		)
 	}
@@ -181,7 +180,7 @@ export const checkBotOperationRateLimit = Effect.fn("RateLimitHelpers.checkBotOp
 				message: "Bot operation rate limit exceeded. Please wait before trying again.",
 				retryAfterMs: result.resetAfterMs,
 				limit: result.limit,
-				remaining: result.remaining,
+				remaining: 0,
 			}),
 		)
 	}
@@ -225,7 +224,7 @@ export const checkBotUpdateRateLimit = Effect.fn("RateLimitHelpers.checkBotUpdat
 				message: "Bot update rate limit exceeded. Please wait before trying again.",
 				retryAfterMs: result.resetAfterMs,
 				limit: result.limit,
-				remaining: result.remaining,
+				remaining: 0,
 			}),
 		)
 	}

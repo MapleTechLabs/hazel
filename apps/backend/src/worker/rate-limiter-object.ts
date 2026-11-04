@@ -87,8 +87,9 @@ export const rateLimiterLive = (limiters: RateLimiterBackends, messages: Message
 					? messages.limit({ key }).pipe(
 							Effect.map(({ success }): RateLimitResult => ({
 								allowed: success,
-								// The binding does not say how many are left, nor when its window ends.
-								remaining: success ? limit : 0,
+								// The binding answers only allowed or not: no count of what is left, and
+								// no window end, so a refusal's wait is the window, an upper bound.
+								remaining: success ? null : 0,
 								resetAfterMs: windowMs,
 								limit,
 							})),
