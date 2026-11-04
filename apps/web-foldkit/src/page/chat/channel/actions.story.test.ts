@@ -1,5 +1,5 @@
 import { routeOfPath } from "../../../route"
-import { ChannelId, PinnedMessageId } from "@hazel/schema"
+import { BotCommandId, BotId, ChannelId, PinnedMessageId } from "@hazel/schema"
 import { derivedThreadChannelId } from "@hazel/domain/thread-id"
 import { Effect, Schema } from "effect"
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
@@ -304,10 +304,41 @@ describe("a thread still being created", () => {
 		expect(sent?.args).toMatchObject({ channelId: threadChannelId })
 	})
 
-	test("a bot command run meanwhile waits for the thread", () => {
-		const held = run(creating(), [composer(Composer.Message.ClickedExecuteCommand())])
+	test("a bot command run meanwhile waits for the thread, then runs in it", () => {
+		const command: Composer.BotCommand = {
+			id: Schema.decodeSync(BotCommandId)("00000000-0000-4000-8000-000000007777"),
+			name: "deploy",
+			description: "Deploy",
+			bot: {
+				id: Schema.decodeSync(BotId)("00000000-0000-4000-8000-000000008888"),
+				name: "CI",
+				avatarUrl: null,
+			},
+			arguments: [],
+		}
+		const start = creating()
+		const panel = start.threadPanel
+		if (panel === null) throw new Error("The panel opens on the thread being created")
+		const withCommand: Model = {
+			...start,
+			threadPanel: {
+				...panel,
+				draft: {
+					...panel.draft,
+					composer: {
+						...panel.draft.composer,
+						commandInput: { command, values: {}, submission: "Idle" },
+					},
+				},
+			},
+		}
+		const held = run(withCommand, [composer(Composer.Message.ClickedExecuteCommand())])
 		expect(held.model.threadPanel?.held).toHaveLength(1)
 		expect(held.commands.map((command) => command.name)).not.toContain("ExecuteBotCommand")
+
+		const done = run(held.model, [created])
+		const ran = done.commands.find((command) => command.name === "ExecuteBotCommand")
+		expect(ran?.args).toMatchObject({ channelId: threadChannelId, commandName: "deploy" })
 	})
 
 	test("a send held behind a file waits for its upload instead of being dropped", () => {
