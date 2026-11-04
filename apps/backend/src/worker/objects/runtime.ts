@@ -7,8 +7,9 @@
  * Entry points, each carrying the object's id (stored on first sight, `./meta.ts`):
  *
  * - `invoke`: one RPC forwarded by the api Worker. The real handler runs with `Database` = this
- *   object's SQLite and `CurrentUser` = the principal; the object flushes (`afterCommit`) before it
- *   answers, so the returned `transactionId` is already broadcast. The answer is the encoded exit.
+ *   object's SQLite and `CurrentUser` = the principal; the object flushes (`commit`) before it
+ *   answers, so the returned `transactionId` is already broadcast, and delivers the rest of its
+ *   outbox after answering. The answer is the encoded exit.
  * - `applyEffect`: an outbox delivery from another object, once per key.
  * - `call`: a route's typed call (`./calls.ts`), flushed before it answers like `invoke`.
  * - `connect` / `onMessage` / `onClose`: the sync sockets.
@@ -17,7 +18,7 @@
 import { Database, type StoreMigration, type StoreName, applyMigrations } from "@hazel/db"
 import { makeSyncedObject, type SyncObjectState, type SyncSocket, type SyncSource } from "@hazel/sync-do"
 import type { AlarmStorageLike, SqlStorageLike } from "@hazel/sync-do"
-import { Context, Effect, Exit, Layer, Option, Result, Scope } from "effect"
+import { Context, Effect, Exit, FiberSet, Layer, Option, Result } from "effect"
 import { SqlClient } from "effect/sql/SqlClient"
 import { CurrentObject } from "../../lib/current-object"
 import {
@@ -110,8 +111,6 @@ const sourceOf = (
 export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 	Effect.gen(function* () {
 		const { kind } = options
-		// Lives as long as the in-memory instance: background work forked after answering.
-		const instanceScope = yield* Scope.Scope
 		const base = yield* Layer.build(
 			Database.layerSqlite.pipe(Layer.provideMerge(options.sql), Layer.provideMerge(options.platform)),
 		)
@@ -192,6 +191,20 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 
 		const remember = (id: string) => run(identity.remember(id).pipe(Effect.orDie))
 		const afterCommit = run(synced.afterCommit)
+		// Outbox deliveries started after answering; they live as long as the instance.
+		const deliveries = yield* FiberSet.make<void, never>()
+		/**
+		 * Broadcast (and deliver the urgent kinds) before answering: the client's transactionId must
+		 * not name a seq its socket has not seen pass. The rest of the outbox (bots, notifications,
+		 * search, projections) goes out right after, so a write never waits on another object.
+		 */
+		const answer = Effect.gen(function* () {
+			const seq = yield* run(synced.commit)
+			yield* FiberSet.run(deliveries, run(synced.deliverSoon))
+			return seq
+		})
+		/** The deliveries started after answering that are still running (tests). */
+		const deliveriesInFlight = FiberSet.size(deliveries)
 
 		const invoke = (request: InvokeRequest): Effect.Effect<InvokeResponse> =>
 			Effect.gen(function* () {
@@ -213,9 +226,7 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 				const exit = yield* dispatcher
 					.dispatch(rpc._tag, payload, principal)
 					.pipe(Effect.provideService(CurrentObject, { kind, id }))
-				// Broadcast (and deliver the outbox) before answering: the client's transactionId
-				// must not name a seq its socket has not seen pass.
-				const seq = yield* afterCommit
+				const seq = yield* answer
 				yield* Effect.annotateCurrentSpan({ "sync.seq": seq, "rpc.success": Exit.isSuccess(exit) })
 				return { exit: yield* encodeExit(rpc, exit) }
 			}).pipe(
@@ -235,7 +246,7 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 				const response = yield* calls
 					.run(kind, request)
 					.pipe(Effect.provideService(CurrentObject, { kind, id }))
-				yield* Effect.annotateCurrentSpan({ "sync.seq": yield* afterCommit })
+				yield* Effect.annotateCurrentSpan({ "sync.seq": yield* answer })
 				return response
 			}).pipe(
 				Effect.withSpan("ObjectCall.invoke", {
@@ -252,7 +263,7 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 			Effect.gen(function* () {
 				yield* remember(request.objectId)
 				const result = yield* run(applyReceivedEffect(kind, request))
-				if (result._tag === "Applied") return { ...result, seq: yield* afterCommit }
+				if (result._tag === "Applied") return { ...result, seq: yield* answer }
 				if (result._tag === "Duplicate") return { ...result, seq: synced.sync.flushedSeq() }
 				return result
 			}).pipe(
@@ -274,12 +285,7 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 			presence === undefined
 				? Effect.void
 				: Effect.flatMap(run(presence.opened(principal.userId)), (changed) =>
-						changed
-							? run(synced.flushAndSchedule).pipe(
-									Effect.andThen(Effect.forkIn(afterCommit, instanceScope)),
-									Effect.asVoid,
-								)
-							: Effect.void,
+						changed ? Effect.asVoid(answer) : Effect.void,
 					)
 
 		/** Adopt a sync socket (tests, and `connect` below). */
@@ -352,6 +358,7 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 			onClose,
 			alarm,
 			afterCommit,
+			deliveriesInFlight,
 		}
 	})
 

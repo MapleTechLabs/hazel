@@ -303,6 +303,13 @@ export const makeOutbox = <R>(
 	options?: DrainOptions,
 ) => {
 	const permit = Semaphore.makeUnsafe(1)
+	// Set by every `drainUntilQuiet`; the drain holding the permit goes round again while it is.
+	let wanted = false
+	const drainWhileWanted: Effect.Effect<void, SqlError, SqlClient | R> = Effect.suspend(() => {
+		if (!wanted) return Effect.void
+		wanted = false
+		return Effect.andThen(drainOutbox(deliver, options), drainWhileWanted)
+	})
 	return {
 		enqueue,
 		drain: permit.withPermit(drainOutbox(deliver, options)),
@@ -312,6 +319,15 @@ export const makeOutbox = <R>(
 		 * rows it adds are left to the alarm the running drain schedules.
 		 */
 		drainIfIdle: Effect.asVoid(permit.withPermitsIfAvailable(1)(drainOutbox(deliver, options))),
+		/**
+		 * Drain until no write asked for one: when a drain is already running, it goes round again
+		 * for the rows this caller added instead of leaving them to the alarm. Never waits on a
+		 * running drain, so it is safe from inside a delivery that calls back into this object.
+		 */
+		drainUntilQuiet: Effect.suspend(() => {
+			wanted = true
+			return Effect.asVoid(permit.withPermitsIfAvailable(1)(drainWhileWanted))
+		}),
 		/** `deliverKindsNow`: runs even while a drain is. */
 		deliverNow: (kinds: ReadonlyArray<string>) => deliverKindsNow(deliver, kinds, options),
 		nextAlarm: nextOutboxAlarm,

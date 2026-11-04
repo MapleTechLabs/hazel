@@ -437,6 +437,70 @@ describe("synced object", () => {
 		}).pipe(Effect.provide(sqliteClientLayer(storage)))
 	})
 
+	it.effect(
+		"commit answers after the urgent kinds; deliverSoon delivers the rest, a backstop armed",
+		() => {
+			const storage = makeFakeStorage()
+			storage.db.exec(TOY_DDL)
+			const r = recorder()
+			const object = makeSyncedObject({
+				storage,
+				state: makeFakeState(),
+				source: makeToySource(makeToyControls()),
+				deliver: r.deliver,
+				urgentKinds: ["urgent"],
+			})
+			return Effect.gen(function* () {
+				yield* enqueue({ id: "u", target: "A", kind: "urgent", payload: null })
+				yield* enqueue({ id: "n", target: "B", kind: "normal", payload: null })
+				storage.db.exec(`INSERT INTO projects (id, name) VALUES ('p1', 'One')`)
+
+				expect(yield* object.commit).toBe(1)
+				expect(r.delivered).toEqual(["u"])
+				// The pending row arms a backstop, not an alarm racing the delivery about to run.
+				expect(storage.alarm()).toBe(10_000)
+
+				yield* object.deliverSoon
+				expect(r.delivered).toEqual(["u", "n"])
+				expect(outboxRows(storage)).toEqual([])
+			}).pipe(Effect.provide(sqliteClientLayer(storage)))
+		},
+	)
+
+	it.effect(
+		"drainUntilQuiet: rows added while a drain runs go out in that drain, never waiting on it",
+		() => {
+			const t = setup()
+			return Effect.gen(function* () {
+				const delivered: Array<string> = []
+				const gate = yield* Deferred.make<void>()
+				const reached = yield* Deferred.make<void>()
+				const outbox = makeOutbox((row: OutboxRow) =>
+					Effect.gen(function* () {
+						if (row.id === "first") {
+							yield* Deferred.succeed(reached, undefined)
+							yield* Deferred.await(gate)
+						}
+						delivered.push(row.id)
+					}),
+				)
+				yield* enqueue({ id: "first", target: "A", kind: "k", payload: null })
+				const running = yield* Effect.forkChild(outbox.drainUntilQuiet)
+				yield* Deferred.await(reached)
+
+				// A second write while the first drain is stuck on a slow target: returns at once.
+				yield* enqueue({ id: "second", target: "B", kind: "k", payload: null })
+				yield* outbox.drainUntilQuiet
+				expect(delivered).toEqual([])
+
+				yield* Deferred.succeed(gate, undefined)
+				yield* Fiber.join(running)
+				expect(delivered.sort()).toEqual(["first", "second"])
+				expect(outboxRows(t.storage)).toEqual([])
+			}).pipe(Effect.provide(t.layer))
+		},
+	)
+
 	it.effect("afterCommit flushes rows a delivery wrote locally", () => {
 		const storage = makeFakeStorage()
 		storage.db.exec(TOY_DDL)
