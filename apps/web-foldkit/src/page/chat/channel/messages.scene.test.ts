@@ -64,7 +64,7 @@ describe("reading", () => {
 		)
 	})
 
-	test("before its first snapshot the list shows placeholders and says it is loading", () => {
+	test("before its first snapshot the list says it is loading, and shows no messages", () => {
 		Scene.scene(
 			channelScene,
 			Scene.given({ ...loadedModel(), hasLoadedMessages: false, messages: [], rows: [] }),

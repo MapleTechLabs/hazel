@@ -199,6 +199,24 @@ const isHeldSend = (message: Draft.Message) =>
 	message._tag === "GotComposerMessage" && message.message._tag === "SubmittedDraft"
 
 /**
+ * What waits for a running upload: a send (it would be ignored, or go out without the file) and a
+ * dropped file (a drop during an upload is ignored). Picked and pasted files queue behind it.
+ */
+const waitsForUpload = (message: Draft.Message) =>
+	isHeldSend(message) || (message._tag === "ReceivedDropEvent" && message.event._tag === "DroppedFiles")
+
+/**
+ * A file the held sends were waiting on failed to upload: they would go out without it, so they
+ * are dropped and their text stays in the editor, to send again.
+ */
+const dropHeldSendsOnFailedUpload = (model: Model, message: Draft.Message): Model =>
+	message._tag === "ReceivedUploadEvent" && message.event._tag === "FailedUpload"
+		? withPanel(model, (panel) =>
+				modifyFields(panel, { held: (held) => held.filter((entry) => !isHeldSend(entry.message)) }),
+			)
+		: model
+
+/**
  * A held action still to go: a send whose text the editor still holds, a command whose field still
  * holds the command and arguments that were submitted (not edits, or another command, since).
  */
@@ -225,7 +243,8 @@ export const playHeldThreadMessages = (model: Model, shared: Shared | null): Pag
 		const panel = result.model.threadPanel
 		if (panel === null || panel.creation !== "Created" || panel.held.length === 0) return result
 		const [held, ...rest] = panel.held
-		if (held === undefined || (isHeldSend(held.message) && Draft.isUploading(panel.draft))) return result
+		if (held === undefined || (waitsForUpload(held.message) && Draft.isUploading(panel.draft)))
+			return result
 		const next = withPanel(result.model, (current) => modifyFields(current, { held: () => rest }))
 		result = isStillWanted(panel, held)
 			? andThen({ ...result, model: next }, (current) =>
@@ -243,8 +262,9 @@ export const updateDraft = (
 ): PageReturn =>
 	(which === "thread"
 		? (holdForThread(model, message) ??
-			andThen(updateOneDraft(model, "thread", message, shared), (next) =>
-				playHeldThreadMessages(next, shared),
+			andThen(
+				updateOneDraft(dropHeldSendsOnFailedUpload(model, message), "thread", message, shared),
+				(next) => playHeldThreadMessages(next, shared),
 			))
 		: undefined) ??
 	(which === "channel" && isSharedComposerData(message)

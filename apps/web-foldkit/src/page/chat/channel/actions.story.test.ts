@@ -6,6 +6,7 @@ import { Command, expectOutMessage, given, message, model, story } from "foldkit
 import { describe, expect, test, vi } from "vitest"
 import * as Composer from "../../../composer/composer"
 import * as Draft from "../../../composer/draft"
+import { UploadEvent } from "../../../composer/upload"
 import * as EditorCommands from "../../../composer/editor-commands"
 import { PageOutMessage } from "../../out-message"
 import {
@@ -373,6 +374,27 @@ describe("a thread still being created", () => {
 		expect(done.commands.map((command) => command.name)).toContain("GenerateUploadFileId")
 		expect(done.commands.map((command) => command.name)).not.toContain("SendMessage")
 		expect(done.model.threadPanel?.held).toHaveLength(1)
+	})
+
+	test("a held send whose file fails to upload is not sent without it", () => {
+		const file = new File(["x"], "notes.txt", { type: "text/plain" })
+		const waiting = run(creating(), [
+			thread(Draft.Message.SelectedFiles({ files: [file] })),
+			typed("see attached"),
+			composer(Composer.Message.SubmittedDraft({ markdown: "see attached" })),
+			created,
+		])
+		expect(waiting.model.threadPanel?.held).toHaveLength(1)
+		const failed = run(waiting.model, [
+			thread(
+				Draft.Message.ReceivedUploadEvent({
+					event: UploadEvent.FailedUpload({ fileId: "file-1", reason: "StorageNetwork" }),
+				}),
+			),
+		])
+		expect(failed.commands.map((command) => command.name)).not.toContain("SendMessage")
+		expect(failed.model.threadPanel?.held).toEqual([])
+		expect(failed.model.threadPanel?.draft.composer.markdown).toBe("see attached")
 	})
 
 	test("a file picked meanwhile uploads once the thread exists", () => {
