@@ -217,6 +217,16 @@ export const EditMessage = Command.define("EditMessage", {
 		),
 })
 
+/**
+ * The GIF picker's choice, back as `SelectedGif`: the one path a GIF is sent by, so whoever owns
+ * the draft sees it (a thread still being created holds it until it exists).
+ */
+export const SelectGif = Command.define("SelectGif", {
+	args: { url: Schema.String },
+	messages: [Message.SelectedGif],
+	execute: ({ url }) => Effect.succeed(Message.SelectedGif({ url })),
+})
+
 /** `handleFilesUpload` names each upload with a fresh id. */
 export const GenerateUploadFileId = Command.define("GenerateUploadFileId", {
 	messages: [Message.CompletedGenerateUploadFileId],
