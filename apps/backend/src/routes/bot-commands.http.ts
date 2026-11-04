@@ -270,8 +270,12 @@ export const HttpBotCommandsLive = HttpApiBuilder.group(HazelApi, "bot-commands"
 					timestamp: Date.now(),
 				}
 
-				// To the session of the region the bot is installed for here.
-				const region = yield* callObject(BotInstallRegionCall, orgTarget(orgId), { botId })
+				// To the session of the region the bot is installed for here; the org's own install
+				// row decides, since the directory's membership can still lag an uninstall.
+				const installation = yield* callObject(BotInstallRegionCall, orgTarget(orgId), { botId })
+				if (installation === null) {
+					return yield* Effect.fail(new BotNotInstalledError({ botId, orgId }))
+				}
 				yield* botGateway.publishCommand(
 					botId,
 					{
@@ -282,7 +286,7 @@ export const HttpBotCommandsLive = HttpApiBuilder.group(HazelApi, "bot-commands"
 						arguments: commandEvent.arguments,
 						timestamp: commandEvent.timestamp,
 					},
-					region,
+					installation.region,
 				)
 
 				yield* Effect.logDebug(`Appended command ${commandName} to durable gateway for bot ${botId}`)

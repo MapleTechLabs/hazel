@@ -120,8 +120,11 @@ export const redeemBotInstallGrant = Effect.fn("OrgObject.redeemBotInstallGrant"
 
 export const BotInstallRegionCall = defineCall("org.botInstallRegion", "org", {
 	payload: Schema.Struct({ botId: BotId }),
-	/** The install's region (`bot_installations.region`); `null` for the default or no install. */
-	success: Schema.NullOr(Schema.String),
+	/**
+	 * The install, by its region (`bot_installations.region`, `null` for the default); `null` when
+	 * the bot is not installed here (the directory's membership can lag an uninstall).
+	 */
+	success: Schema.NullOr(Schema.Struct({ region: Schema.NullOr(Schema.String) })),
 	error: Schema.Never,
 })
 
@@ -136,7 +139,7 @@ export const botInstallRegion = Effect.fn("OrgObject.botInstallRegion")(
 				.where(($) => [$.botId.eq(payload.botId), $.organizationId.eq(organizationId)])
 				.limit(1),
 		)
-		return Option.match(installation, { onNone: () => null, onSome: (row) => row.region })
+		return Option.match(installation, { onNone: () => null, onSome: (row) => ({ region: row.region }) })
 	},
 	Effect.catchTag("DatabaseError", (error) => Effect.die(error)),
 )
