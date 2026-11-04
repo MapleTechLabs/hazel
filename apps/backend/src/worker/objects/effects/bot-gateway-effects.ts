@@ -4,13 +4,9 @@
  * bot's `BotGateway` object (`bindBotGateways`). Replaces the global message outbox for these.
  */
 import { Database, SQLite, schema } from "@hazel/db"
-import {
-	BotGatewayInteractionCreatePayload,
-	BotGatewayRegion,
-	createBotGatewayPartitionKey,
-} from "@hazel/domain"
+import { BotGatewayInteractionCreatePayload, createBotGatewayPartitionKey } from "@hazel/domain"
 import { Message } from "@hazel/domain/models"
-import { BotId, OrganizationId } from "@hazel/schema"
+import { BotId, BotInstallationId, OrganizationId } from "@hazel/schema"
 import { Effect, Option, Schema } from "effect"
 import { messageEventEnvelope } from "../../../services/bot-gateway-service"
 import { BotGatewayTransport } from "../../../services/bot-gateway-transport"
@@ -35,16 +31,20 @@ export const InteractionEventPayload = Schema.Struct({
 	interaction: BotGatewayInteractionCreatePayload,
 })
 
-/** Where `botId`'s events for `organizationId` go: the region that redeemed its install, or the default. */
-export const InstallRegionPayload = Schema.Struct({
+/** Clear the gateway route a regional install set (`bot-installs.ts`), once that install is gone. */
+export const InstallRegionClearedPayload = Schema.Struct({
 	botId: BotId,
 	organizationId: OrganizationId,
-	region: Schema.NullOr(BotGatewayRegion),
+	installationId: BotInstallationId,
 })
 
 export const BotGatewayEffects = {
-	/** From an `OrgObject`: an install redeemed with a region, or a bot uninstalled. */
-	installRegion: defineEffect("botGateway.installRegion", "bot-gateway", InstallRegionPayload),
+	/** From an `OrgObject`: a regional install was removed. */
+	installRegionCleared: defineEffect(
+		"botGateway.installRegionCleared",
+		"bot-gateway",
+		InstallRegionClearedPayload,
+	),
 	interaction: defineEffect("botGateway.interaction", "bot-gateway", InteractionEventPayload),
 	messageEvent: defineEffect("botGateway.messageEvent", "bot-gateway", MessageEventPayload),
 	/** From an `OrgObject`: to the org's installed bots (`../org/bot-events.ts`). */
@@ -113,9 +113,9 @@ export const botGatewayReceivers = {
 				payload: interaction,
 			}),
 		),
-	"botGateway.installRegion": ({ botId, organizationId, region }) =>
+	"botGateway.installRegionCleared": ({ botId, organizationId, installationId }) =>
 		Effect.flatMap(BotGatewayTransport, (transport) =>
-			transport.setInstallRegion(botId, organizationId, region),
+			transport.setInstallRegion(botId, organizationId, installationId, null),
 		),
 	"botGateway.channelEvent": publishChannelEvent,
 	"botGateway.channelMemberEvent": publishChannelMemberEvent,

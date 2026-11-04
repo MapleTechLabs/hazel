@@ -202,10 +202,14 @@ export const activateBotGateway = Effect.gen(function* () {
 				return { offset: formatOffset(seq) } satisfies BotGatewayPublishResult
 			}).pipe(Effect.withSpan("BotGateway.publish"))
 
-		const setInstallRegion = (organizationId: string, region: string | null) =>
-			Effect.sync(() => Store.setRegion(sql, organizationId, region)).pipe(
+		const setInstallRegion = (organizationId: string, installationId: string, region: string | null) =>
+			Effect.sync(() => Store.setRegion(sql, organizationId, installationId, region)).pipe(
 				Effect.withSpan("BotGateway.setInstallRegion", {
-					attributes: { "organization.id": organizationId, "bot_gateway.region": region ?? "" },
+					attributes: {
+						"organization.id": organizationId,
+						"bot.installation_id": installationId,
+						"bot_gateway.region": region ?? "",
+					},
 				}),
 			)
 

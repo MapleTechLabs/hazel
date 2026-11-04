@@ -4,7 +4,7 @@
  * (`bindBotGateways` from `@hazel/bot-gateway/object`).
  */
 import type { BotGatewayEnvelope, BotGatewayRpc } from "@hazel/domain"
-import type { BotId, OrganizationId } from "@hazel/schema"
+import type { BotId, BotInstallationId, OrganizationId } from "@hazel/schema"
 import { Context, Effect, Layer, Schema } from "effect"
 
 /**
@@ -25,10 +25,14 @@ export interface BotGatewayTransportShape {
 		botId: BotId,
 		envelope: BotGatewayEnvelope,
 	) => Effect.Effect<void, DurableStreamRequestError>
-	/** Route the organization's events for `botId` to the session of `region` (`null`: the default). */
+	/**
+	 * Route the organization's events for `botId` to the session of `region`, for the install
+	 * `installationId`; `null` clears that install's route (`BotGatewayRpc.setInstallRegion`).
+	 */
 	readonly setInstallRegion: (
 		botId: BotId,
 		organizationId: OrganizationId,
+		installationId: BotInstallationId,
 		region: string | null,
 	) => Effect.Effect<void, DurableStreamRequestError>
 }
@@ -60,11 +64,12 @@ const makeDurableObjectTransport = (namespace: BotGatewayNamespace): BotGatewayT
 	setInstallRegion: Effect.fn("BotGatewayTransport.setInstallRegion")(function* (
 		botId: BotId,
 		organizationId: OrganizationId,
+		installationId: BotInstallationId,
 		region: string | null,
 	) {
 		yield* namespace
 			.getByName(botId)
-			.setInstallRegion(organizationId, region)
+			.setInstallRegion(organizationId, installationId, region)
 			.pipe(
 				Effect.mapError(
 					(cause) =>

@@ -9,7 +9,6 @@
  * from the bot user's `channel_access`.
  */
 import { Database, SQLite, schema } from "@hazel/db"
-import { BotGatewayRegion } from "@hazel/domain"
 import { BOT_INSTALL_GRANT_TTL_MS } from "@hazel/domain/bot-install"
 import {
 	ApiV1Channel,
@@ -21,8 +20,6 @@ import { BotId, OrganizationId, UserId } from "@hazel/schema"
 import { Effect, Option, Schema } from "effect"
 import { Hex } from "effect/encoding"
 import { defineCall } from "../calls"
-import { BotGatewayEffects } from "../effects/bot-gateway-effects"
-import { enqueueEffect } from "../effects/registry"
 import { requireOrganizationId } from "./integrations"
 
 const CODE_SEPARATOR = "."
@@ -65,13 +62,7 @@ export const mintInstallGrant = Effect.fn("OrgObject.mintInstallGrant")(function
 })
 
 export const RedeemBotInstallGrantCall = defineCall("org.redeemBotInstallGrant", "org", {
-	payload: Schema.Struct({
-		botId: BotId,
-		codeHash: Schema.String,
-		redirectUri: Schema.String,
-		/** The region of the bot's service redeeming it; `null` for the default one. */
-		region: Schema.NullOr(BotGatewayRegion),
-	}),
+	payload: Schema.Struct({ botId: BotId, codeHash: Schema.String, redirectUri: Schema.String }),
 	success: Schema.Struct({
 		organizationId: OrganizationId,
 		organizationName: Schema.String,
@@ -84,20 +75,9 @@ export const RedeemBotInstallGrantCall = defineCall("org.redeemBotInstallGrant",
  * Redeem a grant: one conditional update, so a code is spent once however many requests race
  * for it, and only by the bot and redirect URI it was issued to while it is still fresh. One
  * failure for every reason, so the answer says nothing about which codes exist.
- *
- * The redeeming region owns the install from then on: the installation records it and the bot's
- * gateway routes this org's events to that region's session (`botGateway.installRegion`).
  */
 export const redeemBotInstallGrant = Effect.fn("OrgObject.redeemBotInstallGrant")(
 	function* (payload: typeof RedeemBotInstallGrantCall.payload.Type) {
-		const db = yield* Database.Database
-		return yield* db.transaction(redeem(payload))
-	},
-	Effect.catchTag("DatabaseError", (error) => Effect.die(error)),
-)
-
-const redeem = (payload: typeof RedeemBotInstallGrantCall.payload.Type) =>
-	Effect.gen(function* () {
 		const organizationId = yield* requireOrganizationId
 		const db = yield* Database.Database
 		const now = new Date()
@@ -120,7 +100,7 @@ const redeem = (payload: typeof RedeemBotInstallGrantCall.payload.Type) =>
 		// Uninstalled between approving and redeeming: there is nothing to link.
 		const installation = yield* db.first(
 			SQLite.from(schema.botInstallationsTable)
-				.select("id", "region")
+				.select("id")
 				.where(($) => [$.botId.eq(payload.botId), $.organizationId.eq(organizationId)])
 				.limit(1),
 		)
@@ -132,24 +112,11 @@ const redeem = (payload: typeof RedeemBotInstallGrantCall.payload.Type) =>
 				.limit(1),
 		)
 		if (Option.isNone(organization)) return yield* invalid
-		if (installation.value.region !== payload.region) {
-			yield* db.run(
-				SQLite.update(schema.botInstallationsTable)
-					.set({ region: payload.region })
-					.where(($) => [$.id.eq(installation.value.id)]),
-			)
-			yield* enqueueEffect(
-				BotGatewayEffects.installRegion,
-				{ kind: "bot-gateway" },
-				{ botId: payload.botId, organizationId, region: payload.region },
-			)
-		}
-		yield* Effect.annotateCurrentSpan({ "bot.id": payload.botId, "bot.region": payload.region ?? "" })
+		yield* Effect.annotateCurrentSpan({ "bot.id": payload.botId })
 		return { organizationId, organizationName: organization.value.name, installedBy: grant.installedBy }
-	}).pipe(
-		Effect.catchTag("SchemaError", (error) => Effect.die(error)),
-		Effect.withSpan("OrgObject.redeemBotInstallGrant.redeem"),
-	)
+	},
+	Effect.catchTag("DatabaseError", (error) => Effect.die(error)),
+)
 
 /** At most this many ids per lookup. */
 export const ORGANIZATION_USERS_MAX_IDS = 100

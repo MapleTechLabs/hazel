@@ -55,6 +55,7 @@ export interface TestObjects {
 	readonly installRegions: Array<{
 		readonly botId: BotId
 		readonly organizationId: OrganizationId
+		readonly installationId: string
 		readonly region: string | null
 	}>
 	/** `applyEffect` calls that crossed objects, as `target kind key`. */
@@ -116,8 +117,10 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 			BotGatewayTransport,
 			BotGatewayTransport.of({
 				append: (botId, envelope) => Effect.sync(() => void published.push({ botId, envelope })),
-				setInstallRegion: (botId, organizationId, region) =>
-					Effect.sync(() => void installRegions.push({ botId, organizationId, region })),
+				setInstallRegion: (botId, organizationId, installationId, region) =>
+					Effect.sync(
+						() => void installRegions.push({ botId, organizationId, installationId, region }),
+					),
 			}),
 		)
 

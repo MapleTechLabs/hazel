@@ -1,6 +1,7 @@
 /**
  * Installing a bot from outside Hazel, the way a chat platform installs an app: the bot's service
- * sends an org admin to `/oauth/bot-install?bot_id=&redirect_uri=&state=`, the admin picks an
+ * sends an org admin to `/oauth/bot-install?bot_id=&redirect_uri=&state=` (plus `region=` when the
+ * service runs one gateway session per region, `BotGatewayRegion`), the admin picks an
  * organization and approves, Hazel installs the bot there and sends the browser back to
  * `redirect_uri?code=&state=`, and the service redeems the code with its own bot token
  * (`POST /api/v1/bot-installs/token`) for the organization it was installed in.

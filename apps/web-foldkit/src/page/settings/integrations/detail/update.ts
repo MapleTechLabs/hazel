@@ -184,8 +184,12 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 						],
 					}
 		},
-		SucceededUninstallMaple: () => ({
-			model: modifyFields(model, { mapleUninstalling: () => false }),
+		// Cleared now rather than when the query catches up, but only if it still shows this bot.
+		SucceededUninstallMaple: ({ botId }) => ({
+			model: modifyFields(model, {
+				mapleInstall: (install) => (install?.botId === botId ? null : install),
+				mapleUninstalling: () => false,
+			}),
 			outMessage: PageOutMessage.RequestedToast({
 				toast: successToast("Maple removed from this workspace"),
 			}),

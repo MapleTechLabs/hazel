@@ -10,6 +10,7 @@ import { RouteOrganizationId } from "./routing-fields"
 import { RequiredScopes } from "../scopes/required-scopes"
 import { ApiScope } from "../scopes/api-scope"
 import { InstallRedirectUris } from "../bot-install"
+import { BotGatewayRegion } from "../bot-gateway"
 
 /**
  * Response schema for bot operations.
@@ -82,6 +83,19 @@ export class BotInstallRedirectMismatchError extends Schema.TaggedError<BotInsta
 	"BotInstallRedirectMismatchError",
 	{
 		botId: BotId,
+	},
+) {}
+
+/**
+ * The bot is already installed in this organization for another region of its service: the
+ * install has to be removed first, or the earlier region's link would silently stop receiving.
+ */
+export class BotInstallRegionConflictError extends Schema.TaggedError<BotInstallRegionConflictError>()(
+	"BotInstallRegionConflictError",
+	{
+		botId: BotId,
+		/** The region the existing install belongs to; `null` for the default one. */
+		installedRegion: Schema.NullOr(Schema.String),
 	},
 ) {}
 
@@ -432,6 +446,7 @@ export class BotRpcs extends RpcGroup.make(
 	 *
 	 * @throws BotNotFoundError if the bot doesn't exist
 	 * @throws BotInstallRedirectMismatchError if the redirect URI is not registered on the bot
+	 * @throws BotInstallRegionConflictError if it is installed here for another region
 	 * @throws UnauthorizedError if user is not org admin
 	 */
 	Rpc.make("bot.authorizeInstall", {
@@ -439,12 +454,15 @@ export class BotRpcs extends RpcGroup.make(
 			botId: BotId,
 			organizationId: RouteOrganizationId,
 			redirectUri: Schema.String,
+			/** The install link's `region`: the gateway session that receives this org's events. */
+			region: Schema.optional(BotGatewayRegion),
 		}),
 		success: BotInstallAuthorizedResponse,
 		error: Schema.Union([
 			ActiveOrganizationRequiredError,
 			BotNotFoundError,
 			BotInstallRedirectMismatchError,
+			BotInstallRegionConflictError,
 			UnauthorizedError,
 			InternalServerError,
 			RateLimitExceededError,

@@ -154,8 +154,8 @@ export const organizationOfPartitionKey = (partitionKey: string): string | undef
 
 /**
  * A region of the service behind a bot (`eu`, `us-west`): one bot can hold one gateway session
- * per region, and each install's events go only to the region that redeemed it
- * (`POST /api/v1/bot-installs/token` with `region`). No region is the default one.
+ * per region, and each install's events go only to the region its install link named
+ * (`/oauth/bot-install?…&region=`). No region is the default one.
  */
 export const BOT_GATEWAY_REGION_PATTERN = /^[a-z0-9][a-z0-9-]{0,31}$/
 
@@ -280,8 +280,13 @@ export interface BotGatewayRpc {
 		eventJson: string,
 	) => Effect.Effect<BotGatewayPublishResult, BotGatewayEventRejectedError>
 	/**
-	 * Route the organization's events to `region`'s session from now on (`null`: the default
-	 * session). Set when an install is redeemed, cleared when the bot is uninstalled.
+	 * Route the organization's events to `region`'s session from now on, for the install
+	 * `installationId`. Set before a regional install commits (so no event of it reaches another
+	 * region); `null` clears it when that install is removed, and only that install's route.
 	 */
-	readonly setInstallRegion: (organizationId: string, region: string | null) => Effect.Effect<void>
+	readonly setInstallRegion: (
+		organizationId: string,
+		installationId: string,
+		region: string | null,
+	) => Effect.Effect<void>
 }

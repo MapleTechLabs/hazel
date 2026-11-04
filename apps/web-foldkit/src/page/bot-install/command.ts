@@ -1,4 +1,5 @@
 import { installRedirectUrl } from "@hazel/domain/bot-install"
+import { BotGatewayRegion } from "@hazel/domain"
 import { BotId, OrganizationId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
 import { Command } from "foldkit"
@@ -34,10 +35,23 @@ export const FetchInstallRequest = Command.define("FetchInstallRequest", {
 
 /** Install, then hand the grant to the bot's redirect URI. */
 export const ApproveInstall = Command.define("ApproveInstall", {
-	args: { botId: BotId, organizationId: OrganizationId, redirectUri: Schema.String, state: Schema.String },
+	args: {
+		botId: BotId,
+		organizationId: OrganizationId,
+		redirectUri: Schema.String,
+		state: Schema.String,
+		region: Schema.NullOr(BotGatewayRegion),
+	},
 	messages: [Message.LeftPage, Message.FailedApprove],
-	execute: ({ botId, organizationId, redirectUri, state }) =>
-		HazelRpc.use((client) => client("bot.authorizeInstall", { botId, organizationId, redirectUri })).pipe(
+	execute: ({ botId, organizationId, redirectUri, state, region }) =>
+		HazelRpc.use((client) =>
+			client(
+				"bot.authorizeInstall",
+				region === null
+					? { botId, organizationId, redirectUri }
+					: { botId, organizationId, redirectUri, region },
+			),
+		).pipe(
 			Effect.flatMap(({ code }) => load(installRedirectUrl(redirectUri, { code, state }))),
 			Effect.as(Message.LeftPage()),
 			Effect.catchTags({
@@ -45,6 +59,8 @@ export const ApproveInstall = Command.define("ApproveInstall", {
 				BotNotFoundError: () => Effect.succeed(Message.FailedApprove({ reason: "Invalid" })),
 				BotInstallRedirectMismatchError: () =>
 					Effect.succeed(Message.FailedApprove({ reason: "Invalid" })),
+				BotInstallRegionConflictError: () =>
+					Effect.succeed(Message.FailedApprove({ reason: "RegionConflict" })),
 				ActiveOrganizationRequiredError: () =>
 					Effect.succeed(Message.FailedApprove({ reason: "Invalid" })),
 			}),

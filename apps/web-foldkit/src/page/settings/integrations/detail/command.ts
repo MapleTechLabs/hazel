@@ -19,7 +19,7 @@ export const UninstallMaple = Command.define("UninstallMaple", {
 	messages: [Message.SucceededUninstallMaple, Message.FailedUninstallMaple],
 	execute: ({ botId, organizationId }) =>
 		HazelRpc.use((rpc) => rpc("bot.uninstall", { botId, organizationId })).pipe(
-			Effect.as(Message.SucceededUninstallMaple()),
+			Effect.as(Message.SucceededUninstallMaple({ botId })),
 			Effect.catchTags({
 				BotNotFoundError: () => Effect.succeed(Message.FailedUninstallMaple({ reason: "NotFound" })),
 				ActiveOrganizationRequiredError: () =>

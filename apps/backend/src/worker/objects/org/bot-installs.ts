@@ -5,7 +5,7 @@
  * user's `membership_index` row and the directory's install count, all through the outbox.
  */
 import { Database, SQLite, schema } from "@hazel/db"
-import type { BotId, OrganizationId, UserId } from "@hazel/schema"
+import type { BotId, BotInstallationId, OrganizationId, UserId } from "@hazel/schema"
 import { Effect, Option } from "effect"
 import {
 	type BotProjectionPayload,
@@ -75,18 +75,20 @@ export const installBotHere = Effect.fn("OrgObject.installBot")(function* (input
 	readonly commands: ReadonlyArray<schema.BotCommand>
 	readonly organizationId: OrganizationId
 	readonly installedBy: UserId
+	/** For a regional install, its id and region: the gateway already routes it (`bot.authorizeInstall`). */
+	readonly regional?: { readonly installationId: BotInstallationId; readonly region: string } | undefined
 }) {
 	const db = yield* Database.Database
 	const { bot, organizationId } = input
 	yield* upsertBotProjection(botProjection(bot, input.commands))
 	yield* projectUsers([bot.userId])
-	yield* db.run(
-		SQLite.insertInto(schema.botInstallationsTable).values({
-			botId: bot.id,
-			organizationId,
-			installedBy: input.installedBy,
-		}),
-	)
+	const row = { botId: bot.id, organizationId, installedBy: input.installedBy }
+	// A regional install keeps the id its gateway route was set under.
+	const installation: schema.NewBotInstallation =
+		input.regional === undefined
+			? row
+			: { ...row, id: input.regional.installationId, region: input.regional.region }
+	yield* db.run(SQLite.insertInto(schema.botInstallationsTable).values(installation))
 	yield* db.run(
 		SQLite.insertInto(schema.organizationMembersTable)
 			.values({
@@ -117,12 +119,12 @@ export const uninstallBotHere = Effect.fn("OrgObject.uninstallBot")(function* (
 	yield* db.run(
 		SQLite.deleteFrom(schema.botInstallationsTable).where(($) => [$.id.eq(installation.value.id)]),
 	)
-	// A reinstall starts on the default session until a region redeems it again.
+	// Its gateway route goes with it; a reinstall's newer route is left alone.
 	if (installation.value.region !== null) {
 		yield* enqueueEffect(
-			BotGatewayEffects.installRegion,
+			BotGatewayEffects.installRegionCleared,
 			{ kind: "bot-gateway" },
-			{ botId, organizationId, region: null },
+			{ botId, organizationId, installationId: installation.value.id },
 		)
 	}
 	const bot = yield* db.first(

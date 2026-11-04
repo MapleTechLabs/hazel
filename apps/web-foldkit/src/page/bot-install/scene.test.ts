@@ -19,7 +19,7 @@ const redirectUri = "https://api.maple.dev/oauth/chat/hazel/callback"
 
 const loaded = (overrides: Partial<Model> = {}): Model => ({
 	returnTo: "/oauth/bot-install?bot_id=x",
-	request: { botId, redirectUri, state: "nonce" },
+	request: { botId, redirectUri, state: "nonce", region: null },
 	lookup: Lookup.Loaded({
 		bot: { id: botId, name: "Maple", description: null, avatarUrl: null, creatorName: "Maple Labs" },
 	}),
@@ -42,7 +42,7 @@ describe("bot install page", () => {
 			Scene.click(Scene.role("radio", { name: "Beta" })),
 			Scene.click(Scene.role("button", { name: "Install" })),
 			Scene.Command.expectExact(
-				ApproveInstall({ botId, organizationId: beta, redirectUri, state: "nonce" }),
+				ApproveInstall({ botId, organizationId: beta, redirectUri, state: "nonce", region: null }),
 			),
 			Scene.expect(Scene.role("button", { name: "Installing..." })).toBeDisabled(),
 			Scene.Command.resolve(ApproveInstall, Message.FailedApprove({ reason: "NotAdmin" })),
@@ -99,12 +99,40 @@ describe("bot install page", () => {
 		)
 	})
 
+	test("a regional link installs for its region; another region's install is refused with how to fix it", () => {
+		Scene.scene(
+			pageScene(update, view, makeShared()),
+			Scene.given(loaded({ request: { botId, redirectUri, state: "nonce", region: "eu" } })),
+			Scene.click(Scene.role("button", { name: "Install" })),
+			Scene.Command.expectExact(
+				ApproveInstall({ botId, organizationId: acme, redirectUri, state: "nonce", region: "eu" }),
+			),
+			Scene.Command.resolve(ApproveInstall, Message.FailedApprove({ reason: "RegionConflict" })),
+			Scene.expect(Scene.role("alert")).toHaveText(
+				"This app is already installed in this workspace from another region. Remove it in Settings → Integrations first, then install it again.",
+			),
+		)
+	})
+
+	test("a link with a malformed region is not honoured", () => {
+		const started = init({
+			_tag: "BotInstall",
+			botId: Option.some(botId),
+			redirectUri: Option.some(redirectUri),
+			state: Option.some("nonce"),
+			region: Option.some("EU/../x"),
+		})
+		expect(started.model.lookup._tag).toBe("Invalid")
+		expect(started.commands ?? []).toEqual([])
+	})
+
 	test("a link missing its parameters, or one the server refuses, never redirects", () => {
 		const started = init({
 			_tag: "BotInstall",
 			botId: Option.some("not-a-uuid"),
 			redirectUri: Option.some(redirectUri),
 			state: Option.some("nonce"),
+			region: Option.none(),
 		})
 		expect(started.commands ?? []).toEqual([])
 		Scene.scene(

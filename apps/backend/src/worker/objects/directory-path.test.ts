@@ -357,19 +357,13 @@ describe("directory path", () => {
 				const second = ok<{ code: string }>(yield* authorize(away.seed.owner)).code
 				expect(second).not.toBe(code)
 
-				const redeem = (input: {
-					code: string
-					botId?: string
-					redirectUri?: string
-					region?: string
-				}) =>
+				const redeem = (input: { code: string; botId?: string; redirectUri?: string }) =>
 					Effect.flatMap(hashInstallCode(input.code), (codeHash) =>
 						worker(
 							callObject(RedeemBotInstallGrantCall, orgTarget(away.seed.orgId), {
 								botId: (input.botId ?? botId) as never,
 								codeHash,
 								redirectUri: input.redirectUri ?? redirectUri,
-								region: input.region ?? null,
 							}),
 						),
 					)
@@ -385,33 +379,6 @@ describe("directory path", () => {
 				expect(errorTag(yield* redeem({ code }))).toBe("BotInstallGrantInvalidError")
 				// The default region needs no routing.
 				expect(objects.installRegions).toEqual([])
-
-				// A region redeeming the install takes its events: the installation and the bot's
-				// gateway both record it, and an uninstall routes the org back to the default.
-				const regional = ok<{ code: string }>(yield* authorize(away.seed.owner)).code
-				ok(yield* redeem({ code: regional, region: "eu" }))
-				expect(away.org.storage.db.prepare(`SELECT region FROM bot_installations`).all()).toEqual([
-					{ region: "eu" },
-				])
-				expect(objects.installRegions).toEqual([
-					{ botId, organizationId: away.seed.orgId, region: "eu" },
-				])
-				ok(
-					yield* call(
-						away.org,
-						away.seed.orgId,
-						"bot.uninstall",
-						{ botId, organizationId: away.seed.orgId },
-						away.seed.owner,
-					),
-				)
-				expect(objects.installRegions.at(-1)).toEqual({
-					botId,
-					organizationId: away.seed.orgId,
-					region: null,
-				})
-				ok(yield* authorize(away.seed.owner))
-
 				// An expired grant is refused.
 				away.org.storage.db
 					.prepare(`UPDATE bot_install_grants SET expiresAt = '2000-01-01 00:00:00.000'`)
@@ -443,6 +410,88 @@ describe("directory path", () => {
 					}),
 				)
 				expect(errorTag(refused)).toBe("BotNotInstalledError")
+			}),
+		))
+
+	it("a regional install is routed before it exists, refuses another region, and its route leaves with it", () =>
+		run(
+			Effect.gen(function* () {
+				const objects = yield* makeTestObjects
+				const home = yield* seed(objects)
+				const away = yield* seed(objects)
+				const redirectUri = "https://maple.example/oauth/chat/hazel/callback"
+				const created = ok<{ data: { id: string } }>(
+					yield* call(
+						home.org,
+						home.seed.orgId,
+						"bot.create",
+						{ name: "Maple", scopes: ["messages:read"], organizationId: home.seed.orgId },
+						home.seed.owner,
+					),
+				)
+				const botId = created.data.id
+				ok(
+					yield* objects.invokeDirectory(
+						"bot.update",
+						{ id: botId, installRedirectUris: [redirectUri] },
+						principalOf(home.seed.owner),
+					),
+				)
+				const request = { botId, organizationId: away.seed.orgId, redirectUri }
+				const authorize = (region?: string) =>
+					call(
+						away.org,
+						away.seed.orgId,
+						"bot.authorizeInstall",
+						region === undefined ? request : { ...request, region },
+						away.seed.owner,
+					)
+				const installations = () =>
+					away.org.storage.db.prepare(`SELECT id, region FROM bot_installations`).all() as Array<{
+						id: string
+						region: string | null
+					}>
+
+				ok(yield* authorize("eu"))
+				const [installation] = installations()
+				expect(installation?.region).toBe("eu")
+				// The gateway was told before the install committed, under the install's own id.
+				expect(objects.installRegions).toEqual([
+					{
+						botId,
+						organizationId: away.seed.orgId,
+						installationId: installation?.id,
+						region: "eu",
+					},
+				])
+
+				// Approving again from the same region mints another grant; another region is refused.
+				ok(yield* authorize("eu"))
+				expect(errorTag(yield* authorize())).toBe("BotInstallRegionConflictError")
+				expect(errorTag(yield* authorize("us-west"))).toBe("BotInstallRegionConflictError")
+				expect(objects.installRegions).toHaveLength(1)
+
+				// Removing it clears exactly that install's route.
+				ok(
+					yield* call(
+						away.org,
+						away.seed.orgId,
+						"bot.uninstall",
+						{ botId, organizationId: away.seed.orgId },
+						away.seed.owner,
+					),
+				)
+				expect(objects.installRegions.at(-1)).toEqual({
+					botId,
+					organizationId: away.seed.orgId,
+					installationId: installation?.id,
+					region: null,
+				})
+
+				// Then any region may install it; the default one needs no route.
+				ok(yield* authorize())
+				expect(installations().map((row) => row.region)).toEqual([null])
+				expect(objects.installRegions).toHaveLength(2)
 			}),
 		))
 

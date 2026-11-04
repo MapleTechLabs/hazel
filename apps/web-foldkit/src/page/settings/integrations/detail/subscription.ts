@@ -62,7 +62,10 @@ export const subscriptions = Subscription.make<PageSubscriptionInput<Model>, Mes
 					: liveQueryStream<{ readonly botId: BotId; readonly region: string | null }, Message>(
 							installationsQuery(organizationId),
 							(rows) => {
-								const row = rows.find((candidate) => MAPLE_BOT_IDS.includes(candidate.botId))
+								// In `MAPLE_BOT_IDS` order: the bot every region shares wins over the old EU one.
+								const row = MAPLE_BOT_IDS.map((botId) =>
+									rows.find((candidate) => candidate.botId === botId),
+								).find((candidate) => candidate !== undefined)
 								return Message.UpdatedMapleInstall({
 									install:
 										row === undefined ? null : { botId: row.botId, region: row.region },

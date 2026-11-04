@@ -12,13 +12,19 @@
  */
 import { BotCommandRepo, BotRepo, UserRepo } from "@hazel/backend-core"
 import { Database, SQLite, schema } from "@hazel/db"
-import { ActiveOrganizationRequiredError, CurrentUser, withRemapDbErrors } from "@hazel/domain"
+import {
+	ActiveOrganizationRequiredError,
+	CurrentUser,
+	InternalServerError,
+	withRemapDbErrors,
+} from "@hazel/domain"
 import { isRegisteredInstallRedirect } from "@hazel/domain/bot-install"
 import {
 	BotAlreadyInstalledError,
 	BotCommandListResponse,
 	BotInstallAuthorizedResponse,
 	BotInstallRedirectMismatchError,
+	BotInstallRegionConflictError,
 	BotInstallRequestResponse,
 	BotCreatedResponse,
 	BotListResponse,
@@ -27,12 +33,13 @@ import {
 	BotRpcs,
 	PublicBotListResponse,
 } from "@hazel/domain/rpc"
-import { BotId, type OrganizationId, UserId } from "@hazel/schema"
+import { BotId, BotInstallationId, type OrganizationId, UserId } from "@hazel/schema"
 import { Effect, Option } from "effect"
 import { Hex } from "effect/encoding"
 import { generateTransactionId } from "../../lib/create-transactionId"
 import { currentObject } from "../../lib/current-object"
 import { BotPolicy } from "../../policies/bot-policy"
+import { BotGatewayTransport } from "../../services/bot-gateway-transport"
 import { Directory } from "../../services/directory"
 import {
 	botProjection,
@@ -433,7 +440,7 @@ export const BotRpcLive = BotRpcs.toLayer(
 				}).pipe(withRemapDbErrors("Bot", "select")),
 
 			// The consent page's approval: install (unless it already is) and mint the grant together.
-			"bot.authorizeInstall": ({ botId, organizationId: hint, redirectUri }) =>
+			"bot.authorizeInstall": ({ botId, organizationId: hint, redirectUri, region }) =>
 				Effect.gen(function* () {
 					const currentUser = yield* CurrentUser.Context
 					const organizationId = yield* activeOrganization(hint)
@@ -443,20 +450,58 @@ export const BotRpcLive = BotRpcs.toLayer(
 					if (!isRegisteredInstallRedirect(found.value.bot.installRedirectUris, redirectUri)) {
 						return yield* new BotInstallRedirectMismatchError({ botId })
 					}
+					const installationOf = db.first(
+						SQLite.from(schema.botInstallationsTable)
+							.select("id", "region")
+							.where(($) => [$.botId.eq(botId), $.organizationId.eq(organizationId)])
+							.limit(1),
+					)
+					const requested = region ?? null
+					// One install per org: a link from another region would silently take its events.
+					const existing = yield* installationOf
+					if (Option.isSome(existing) && existing.value.region !== requested) {
+						return yield* new BotInstallRegionConflictError({
+							botId,
+							installedRegion: existing.value.region,
+						})
+					}
+					// A regional install is routed before it exists, so none of its events can reach
+					// another region's session. A route whose install never commits matches no install.
+					const regional =
+						Option.isNone(existing) && region !== undefined
+							? { installationId: BotInstallationId.make(crypto.randomUUID()), region }
+							: undefined
+					if (regional !== undefined) {
+						const transport = yield* BotGatewayTransport
+						yield* transport
+							.setInstallRegion(botId, organizationId, regional.installationId, regional.region)
+							.pipe(
+								Effect.catchTag("DurableStreamRequestError", (error) =>
+									Effect.fail(
+										new InternalServerError({
+											message: "The bot gateway is unavailable; try again",
+											cause: error,
+										}),
+									),
+								),
+							)
+					}
 					return yield* db.transaction(
 						Effect.gen(function* () {
-							const installed = yield* db.first(
-								SQLite.from(schema.botInstallationsTable)
-									.select("id")
-									.where(($) => [$.botId.eq(botId), $.organizationId.eq(organizationId)])
-									.limit(1),
-							)
+							const installed = yield* installationOf
+							if (Option.isSome(installed) && installed.value.region !== requested) {
+								return yield* new BotInstallRegionConflictError({
+									botId,
+									installedRegion: installed.value.region,
+								})
+							}
 							if (Option.isNone(installed)) {
 								yield* installBotHere({
 									bot: found.value.bot,
 									commands: found.value.commands,
 									organizationId,
 									installedBy: currentUser.id,
+									regional,
 								})
 							}
 							const code = yield* mintInstallGrant({

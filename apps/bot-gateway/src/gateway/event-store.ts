@@ -44,7 +44,8 @@ const SCHEMA_V2 = [
 	`CREATE INDEX IF NOT EXISTS bot_gateway_events_region_seq ON bot_gateway_events (region, seq)`,
 	`CREATE TABLE IF NOT EXISTS bot_gateway_install_regions (
 		organization_id TEXT PRIMARY KEY,
-		region TEXT NOT NULL
+		region TEXT NOT NULL,
+		installation_id TEXT NOT NULL
 	)`,
 ]
 
@@ -161,16 +162,30 @@ export const regionOf = (sql: SqlStorageLike, organizationId: string | undefined
 	return row === undefined ? DEFAULT_REGION : String(row.region)
 }
 
-/** Route `organizationId`'s events to `region` (the default one for `null` or `''`). */
-export const setRegion = (sql: SqlStorageLike, organizationId: string, region: string | null): void => {
+/**
+ * Route `organizationId`'s events to `region` for the install `installationId`. `null` (or `''`)
+ * clears the route, but only the one that install set: a clear delivered late, after the org
+ * reinstalled the bot, leaves the newer install's route alone.
+ */
+export const setRegion = (
+	sql: SqlStorageLike,
+	organizationId: string,
+	installationId: string,
+	region: string | null,
+): void => {
 	if (region === null || region === DEFAULT_REGION) {
-		sql.exec(`DELETE FROM bot_gateway_install_regions WHERE organization_id = ?`, organizationId)
+		sql.exec(
+			`DELETE FROM bot_gateway_install_regions WHERE organization_id = ? AND installation_id = ?`,
+			organizationId,
+			installationId,
+		)
 		return
 	}
 	sql.exec(
-		`INSERT INTO bot_gateway_install_regions (organization_id, region) VALUES (?, ?)
-		ON CONFLICT (organization_id) DO UPDATE SET region = excluded.region`,
+		`INSERT INTO bot_gateway_install_regions (organization_id, region, installation_id) VALUES (?, ?, ?)
+		ON CONFLICT (organization_id) DO UPDATE SET region = excluded.region, installation_id = excluded.installation_id`,
 		organizationId,
 		region,
+		installationId,
 	)
 }

@@ -26,6 +26,8 @@ export const Request = Schema.Struct({
 	botId: BotId,
 	redirectUri: Schema.String,
 	state: Schema.String,
+	/** The region of the bot's service the install belongs to (`BotGatewayRegion`); `null`: the default. */
+	region: Schema.NullOr(Schema.String),
 })
 export type Request = typeof Request.Type
 
@@ -41,7 +43,10 @@ export const Lookup = defineTaggedUnion({
 })
 export type Lookup = typeof Lookup.Type
 
-export const ApproveFailure = Schema.Union([Schema.Literals(["NotAdmin", "Invalid"]), CommonReason])
+export const ApproveFailure = Schema.Union([
+	Schema.Literals(["NotAdmin", "Invalid", "RegionConflict"]),
+	CommonReason,
+])
 export type ApproveFailure = typeof ApproveFailure.Type
 
 /** Approving (or cancelling) stays in flight until the browser leaves for the redirect. */
