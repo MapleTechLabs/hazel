@@ -1,7 +1,8 @@
+import * as Cloudflare from "@alchemy.run/cloudflare"
 import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
 import { MESSAGE_RATE_LIMIT, checkMessageRateLimit } from "../services/rate-limit-helpers"
-import { RateLimiter } from "../services/rate-limiter"
+import { RateLimiter, RateLimiterError } from "../services/rate-limiter"
 import { type MessageRateLimit, type RateLimiterBackends, rateLimiterLive } from "./rate-limiter-object"
 
 /** The binding's client, admitting `allowed` calls per key. */
@@ -64,5 +65,23 @@ describe("rateLimiterLive", () => {
 		)
 		expect(exit._tag).toBe("Failure")
 		expect(MESSAGE_RATE_LIMIT.windowMs).toBe(MESSAGE_RATE_LIMIT.periodSeconds * 1000)
+	})
+
+	it("a binding that errors fails open: the send goes through, the error keeps its message", async () => {
+		const failing: MessageRateLimit = {
+			limit: () =>
+				Effect.fail(new Cloudflare.RateLimitError({ message: "binding unavailable", cause: "test" })),
+		}
+		const layer = rateLimiterLive(fakeObjects().namespace, failing)
+		const mapped = await Effect.runPromise(
+			Effect.flip(RateLimiter.use((limiter) => limiter.consume("messages:u1", 120, 60_000))).pipe(
+				Effect.provide(layer),
+			),
+		)
+		expect(mapped).toBeInstanceOf(RateLimiterError)
+		expect(mapped.message).toBe("binding unavailable")
+
+		const exit = await Effect.runPromiseExit(checkMessageRateLimit("u1").pipe(Effect.provide(layer)))
+		expect(exit._tag).toBe("Success")
 	})
 })

@@ -10,6 +10,7 @@ import * as EditorCommands from "../../../composer/editor-commands"
 import {
 	channelScene,
 	derivedModel,
+	composer,
 	mountedChannel,
 	mountedToolbar,
 	overlays,
@@ -59,6 +60,30 @@ describe("reading", () => {
 			mountedChannel(),
 			Scene.expect(Scene.text("Shipped the onboarding copy")).toExist(),
 			Scene.expect(Scene.text("Launch window confirmed")).toExist(),
+			Scene.expect(Scene.text("Loading messages")).toBeAbsent(),
+		)
+	})
+
+	test("before its first snapshot the list shows placeholders and says it is loading", () => {
+		Scene.scene(
+			channelScene,
+			Scene.given({ ...loadedModel(), hasLoadedMessages: false, messages: [], rows: [] }),
+			Scene.Mount.resolveAll(
+				[
+					{ name: "MountEditor" },
+					composer(Composer.Message.UpdatedDraft({ markdown: "", isEmpty: true })),
+				],
+				[
+					{ name: "TrackFileDrop" },
+					draft(
+						Draft.Message.ReceivedDropEvent({
+							event: DropEvent.ChangedDragState({ drag: DragState.Idle() }),
+						}),
+					),
+				],
+			),
+			Scene.expect(Scene.text("Loading messages")).toExist(),
+			Scene.expect(Scene.text("Shipped the onboarding copy")).toBeAbsent(),
 		)
 	})
 })
