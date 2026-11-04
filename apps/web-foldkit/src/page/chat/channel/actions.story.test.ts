@@ -296,6 +296,28 @@ describe("a thread still being created", () => {
 		expect(done.model.threadPanel?.draft.composer.markdown).toBe("first reply, and more")
 	})
 
+	test("a GIF picked meanwhile is sent once the thread exists", () => {
+		const held = run(creating(), [thread(Draft.Message.SelectedGif({ url: "https://media.test/a.gif" }))])
+		expect(held.commands.map((command) => command.name)).not.toContain("SendMessage")
+		const done = run(held.model, [created])
+		const sent = done.commands.find((command) => command.name === "SendMessage")
+		expect(sent?.args).toMatchObject({ channelId: threadChannelId })
+	})
+
+	test("a send held behind a file waits for its upload instead of being dropped", () => {
+		const file = new File(["x"], "notes.txt", { type: "text/plain" })
+		const done = run(creating(), [
+			thread(Draft.Message.SelectedFiles({ files: [file] })),
+			typed("see attached"),
+			composer(Composer.Message.SubmittedDraft({ markdown: "see attached" })),
+			created,
+		])
+		// The file uploads; the send stays held (a send now would be ignored) until the upload ends.
+		expect(done.commands.map((command) => command.name)).toContain("GenerateUploadFileId")
+		expect(done.commands.map((command) => command.name)).not.toContain("SendMessage")
+		expect(done.model.threadPanel?.held).toHaveLength(1)
+	})
+
 	test("a file picked meanwhile uploads once the thread exists", () => {
 		const file = new File(["x"], "notes.txt", { type: "text/plain" })
 		const held = run(creating(), [thread(Draft.Message.SelectedFiles({ files: [file] }))])

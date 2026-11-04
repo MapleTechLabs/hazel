@@ -149,9 +149,10 @@ const updateOneDraft = (
 		: liftDraft(model, which, DraftUpdate.update(draft, message, contextFor(model, which, shared)))
 }
 
-/** What needs the thread to exist: a send, and files (their upload is presigned for its channel). */
+/** What needs the thread to exist: a send (a GIF too), and files (their upload is presigned for its channel). */
 const needsThread = (message: Draft.Message): boolean =>
 	message._tag === "SelectedFiles" ||
+	message._tag === "SelectedGif" ||
 	(message._tag === "ReceivedDropEvent" && message.event._tag === "DroppedFiles") ||
 	(message._tag === "GotComposerMessage" &&
 		(message.message._tag === "SubmittedDraft" || message.message._tag === "PastedFiles"))
@@ -167,25 +168,34 @@ const holdForThread = (model: Model, message: Draft.Message): PageReturn | undef
 			}
 		: undefined
 
+const isHeldSend = (message: Draft.Message) =>
+	message._tag === "GotComposerMessage" && message.message._tag === "SubmittedDraft"
+
 /** A held send still to go: the editor holds what was sent, not text typed (or a send edited) since. */
 const isStillWanted = (panel: ThreadPanel, message: Draft.Message) =>
 	message._tag !== "GotComposerMessage" ||
 	message.message._tag !== "SubmittedDraft" ||
 	panel.draft.composer.markdown.trim() === message.message.markdown.trim()
 
-/** Plays back what the composer did while the panel's thread was being created, now that it exists. */
+/**
+ * Plays back what the composer did while the panel's thread was being created, now that it exists,
+ * in order. A send waits while a file before it uploads (a send then would be ignored): playback
+ * stops there and resumes on a later thread draft update, the upload's end among them.
+ */
 export const playHeldThreadMessages = (model: Model, shared: Shared | null): PageReturn => {
-	const panel = model.threadPanel
-	if (panel === null || panel.creation !== "Created" || panel.held.length === 0) return { model }
-	const held = panel.held
-	const cleared = withPanel(model, (current) => modifyFields(current, { held: () => [] }))
-	return held.reduce<PageReturn>(
-		(result, message) =>
-			result.model.threadPanel !== null && isStillWanted(result.model.threadPanel, message)
-				? andThen(result, (next) => updateOneDraft(next, "thread", message, shared))
-				: result,
-		{ model: cleared },
-	)
+	let result: PageReturn = { model }
+	for (;;) {
+		const panel = result.model.threadPanel
+		if (panel === null || panel.creation !== "Created" || panel.held.length === 0) return result
+		const [message, ...rest] = panel.held
+		if (message === undefined || (isHeldSend(message) && Draft.isUploading(panel.draft))) return result
+		const next = withPanel(result.model, (current) => modifyFields(current, { held: () => rest }))
+		result = isStillWanted(panel, message)
+			? andThen({ ...result, model: next }, (current) =>
+					updateOneDraft(current, "thread", message, shared),
+				)
+			: { ...result, model: next }
+	}
 }
 
 export const updateDraft = (
@@ -194,7 +204,12 @@ export const updateDraft = (
 	message: Draft.Message,
 	shared: Shared | null,
 ): PageReturn =>
-	(which === "thread" ? holdForThread(model, message) : undefined) ??
+	(which === "thread"
+		? (holdForThread(model, message) ??
+			andThen(updateOneDraft(model, "thread", message, shared), (next) =>
+				playHeldThreadMessages(next, shared),
+			))
+		: undefined) ??
 	(which === "channel" && isSharedComposerData(message)
 		? andThen(updateOneDraft(model, "channel", message, shared), (next) =>
 				updateOneDraft(next, "thread", message, shared),
