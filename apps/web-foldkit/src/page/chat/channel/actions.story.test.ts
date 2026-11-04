@@ -339,6 +339,26 @@ describe("a thread still being created", () => {
 		const done = run(held.model, [created])
 		const ran = done.commands.find((command) => command.name === "ExecuteBotCommand")
 		expect(ran?.args).toMatchObject({ channelId: threadChannelId, commandName: "deploy" })
+
+		// Arguments edited after the click: what runs would not be what was submitted, so nothing runs.
+		const heldPanel = held.model.threadPanel
+		if (heldPanel === null) throw new Error("The panel stays open while the thread is created")
+		const edited: Model = {
+			...held.model,
+			threadPanel: {
+				...heldPanel,
+				draft: {
+					...heldPanel.draft,
+					composer: {
+						...heldPanel.draft.composer,
+						commandInput: { command, values: { branch: "edited" }, submission: "Idle" },
+					},
+				},
+			},
+		}
+		const skipped = run(edited, [created])
+		expect(skipped.commands.map((command) => command.name)).not.toContain("ExecuteBotCommand")
+		expect(skipped.model.threadPanel?.held).toEqual([])
 	})
 
 	test("a send held behind a file waits for its upload instead of being dropped", () => {

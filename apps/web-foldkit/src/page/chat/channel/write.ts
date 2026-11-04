@@ -31,7 +31,14 @@ import {
 } from "../message-actions"
 import * as Overlays from "../overlays"
 import type { ChatMessage } from "../rows"
-import { Message, type Model, type PageReturn, type ThreadCreation, type ThreadPanel } from "./model"
+import {
+	type HeldThreadMessage,
+	Message,
+	type Model,
+	type PageReturn,
+	type ThreadCreation,
+	type ThreadPanel,
+} from "./model"
 import { loadWidthCommands } from "./thread-width"
 import { resetWindow } from "./window"
 
@@ -151,7 +158,7 @@ const updateOneDraft = (
 
 /**
  * What needs the thread to exist: a send (a GIF, a bot command too), and files (their upload is
- * presigned for its channel). A held command re-reads the command field when it plays back.
+ * presigned for its channel). A held command keeps what was submitted (`HeldThreadMessage`).
  */
 const needsThread = (message: Draft.Message): boolean =>
 	message._tag === "SelectedFiles" ||
@@ -164,24 +171,48 @@ const needsThread = (message: Draft.Message): boolean =>
 			(message.message._tag === "PressedCommandFieldKey" && message.message.key === "Enter")))
 
 /** The thread panel's sends and files, while its thread is still being created: held until it exists. */
-const holdForThread = (model: Model, message: Draft.Message): PageReturn | undefined =>
-	model.threadPanel?.creation === "Creating" && needsThread(message)
-		? // A held send's text stays in the editor until it really goes out.
-			{
-				model: withPanel(model, (panel) =>
-					modifyFields(panel, { held: (held) => [...held, message] }),
-				),
-			}
-		: undefined
+const isCommandRun = (message: Draft.Message) =>
+	message._tag === "GotComposerMessage" &&
+	(message.message._tag === "ClickedExecuteCommand" || message.message._tag === "PressedCommandFieldKey")
+
+const holdForThread = (model: Model, message: Draft.Message): PageReturn | undefined => {
+	const panel = model.threadPanel
+	if (panel?.creation !== "Creating" || !needsThread(message)) return undefined
+	const input = panel.draft.composer.commandInput
+	const held: HeldThreadMessage = {
+		message,
+		command:
+			isCommandRun(message) && input !== null
+				? { id: input.command.id, values: { ...input.values } }
+				: null,
+	}
+	// A held send's text stays in the editor until it really goes out.
+	return { model: withPanel(model, (current) => modifyFields(current, { held: (all) => [...all, held] })) }
+}
+
+const sameValues = (a: Readonly<Record<string, string>>, b: Readonly<Record<string, string>>) => {
+	const keys = Object.keys(a)
+	return keys.length === Object.keys(b).length && keys.every((key) => a[key] === b[key])
+}
 
 const isHeldSend = (message: Draft.Message) =>
 	message._tag === "GotComposerMessage" && message.message._tag === "SubmittedDraft"
 
-/** A held send still to go: the editor holds what was sent, not text typed (or a send edited) since. */
-const isStillWanted = (panel: ThreadPanel, message: Draft.Message) =>
-	message._tag !== "GotComposerMessage" ||
-	message.message._tag !== "SubmittedDraft" ||
-	panel.draft.composer.markdown.trim() === message.message.markdown.trim()
+/**
+ * A held action still to go: a send whose text the editor still holds, a command whose field still
+ * holds the command and arguments that were submitted (not edits, or another command, since).
+ */
+const isStillWanted = (panel: ThreadPanel, { message, command }: HeldThreadMessage) => {
+	if (command !== null) {
+		const input = panel.draft.composer.commandInput
+		return input !== null && input.command.id === command.id && sameValues(input.values, command.values)
+	}
+	return (
+		message._tag !== "GotComposerMessage" ||
+		message.message._tag !== "SubmittedDraft" ||
+		panel.draft.composer.markdown.trim() === message.message.markdown.trim()
+	)
+}
 
 /**
  * Plays back what the composer did while the panel's thread was being created, now that it exists,
@@ -193,12 +224,12 @@ export const playHeldThreadMessages = (model: Model, shared: Shared | null): Pag
 	for (;;) {
 		const panel = result.model.threadPanel
 		if (panel === null || panel.creation !== "Created" || panel.held.length === 0) return result
-		const [message, ...rest] = panel.held
-		if (message === undefined || (isHeldSend(message) && Draft.isUploading(panel.draft))) return result
+		const [held, ...rest] = panel.held
+		if (held === undefined || (isHeldSend(held.message) && Draft.isUploading(panel.draft))) return result
 		const next = withPanel(result.model, (current) => modifyFields(current, { held: () => rest }))
-		result = isStillWanted(panel, message)
+		result = isStillWanted(panel, held)
 			? andThen({ ...result, model: next }, (current) =>
-					updateOneDraft(current, "thread", message, shared),
+					updateOneDraft(current, "thread", held.message, shared),
 				)
 			: { ...result, model: next }
 	}
