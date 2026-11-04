@@ -418,7 +418,7 @@ describe("directory path", () => {
 				const home = yield* seed(objects)
 				const away = yield* seed(objects)
 				const redirectUri = "https://maple.example/oauth/chat/hazel/callback"
-				const euRedirectUri = "https://eu.maple.example/oauth/chat/hazel/callback?region=eu"
+				const euRedirectUri = "https://eu.maple.example/oauth/chat/hazel/callback?hazel_region=eu"
 				const created = ok<{ data: { id: string } }>(
 					yield* call(
 						home.org,
@@ -495,7 +495,7 @@ describe("directory path", () => {
 				// and a link that edits the region no longer matches a registered callback.
 				ok(yield* authorize(euRedirectUri))
 				expect(errorTag(yield* authorize(redirectUri))).toBe("BotInstallRegionConflictError")
-				expect(errorTag(yield* authorize(`${redirectUri}?region=us-west`))).toBe(
+				expect(errorTag(yield* authorize(`${redirectUri}?hazel_region=us-west`))).toBe(
 					"BotInstallRedirectMismatchError",
 				)
 

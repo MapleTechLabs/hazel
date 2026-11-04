@@ -21,12 +21,17 @@ describe("bot install redirect URIs", () => {
 	})
 
 	it("takes one well-formed region, which names the callback's region of the service", () => {
-		expect(isValidInstallRedirectUri("https://api.eu.maple.dev/cb?region=eu")).toBe(true)
-		expect(isValidInstallRedirectUri("https://api.eu.maple.dev/cb?region=EU")).toBe(false)
-		expect(isValidInstallRedirectUri("https://api.eu.maple.dev/cb?region=")).toBe(false)
-		expect(isValidInstallRedirectUri("https://api.eu.maple.dev/cb?region=eu&region=us")).toBe(false)
-		expect(regionOfInstallRedirect("https://api.eu.maple.dev/cb?region=eu")).toBe("eu")
+		expect(isValidInstallRedirectUri("https://api.eu.maple.dev/cb?hazel_region=eu")).toBe(true)
+		expect(isValidInstallRedirectUri("https://api.eu.maple.dev/cb?hazel_region=EU")).toBe(false)
+		expect(isValidInstallRedirectUri("https://api.eu.maple.dev/cb?hazel_region=")).toBe(false)
+		expect(isValidInstallRedirectUri("https://api.eu.maple.dev/cb?hazel_region=eu&hazel_region=us")).toBe(
+			false,
+		)
+		expect(regionOfInstallRedirect("https://api.eu.maple.dev/cb?hazel_region=eu")).toBe("eu")
 		expect(regionOfInstallRedirect("https://api.maple.dev/cb")).toBe(null)
+		// A bot's own `region` parameter is just part of its URI.
+		expect(isValidInstallRedirectUri("https://api.example/cb?region=prod")).toBe(true)
+		expect(regionOfInstallRedirect("https://api.example/cb?region=prod")).toBe(null)
 	})
 
 	it("decodes a list of at most ten", () => {

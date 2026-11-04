@@ -21,12 +21,13 @@ const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"])
 
 /**
  * The query parameter of a registered redirect URI that names the region of the bot's service the
- * callback belongs to (`https://api.eu.example/cb?region=eu`). A service that runs one gateway
+ * callback belongs to (`https://api.eu.example/cb?hazel_region=eu`). Namespaced, so a bot's own
+ * `region` (or any other) parameter never becomes its gateway routing key. A service that runs one gateway
  * session per region (`BotGatewayRegion`) registers one URI per region; an install approved for
  * that URI is routed to that region's session. Bound to the URI, which must match a registered one
  * exactly, so a link cannot name a region its callback was not registered for.
  */
-export const INSTALL_REGION_PARAM = "region"
+export const INSTALL_REGION_PARAM = "hazel_region"
 
 /** The region a registered redirect URI names; `null` when it names none. Assumes a valid URI. */
 export const regionOfInstallRedirect = (redirectUri: string): string | null =>
@@ -34,7 +35,7 @@ export const regionOfInstallRedirect = (redirectUri: string): string | null =>
 
 /**
  * A redirect URI a bot may register: absolute `https:` (or `http:` on loopback, for local
- * development), with no fragment and no credentials, and at most one well-formed `region`.
+ * development), with no fragment and no credentials, and at most one well-formed `hazel_region`.
  */
 export const isValidInstallRedirectUri = (value: string): boolean => {
 	if (value.length > 2048 || !URL.canParse(value)) return false

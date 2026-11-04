@@ -144,7 +144,7 @@ export const createBotGatewayPartitionKey = (params: {
 /**
  * A region of the service behind a bot (`eu`, `us-west`): one bot can hold one gateway session
  * per region, and each install's events go only to the region its registered redirect URI names
- * (`?region=`, `@hazel/domain/bot-install`), recorded on the install and named with every
+ * (`?hazel_region=`, `@hazel/domain/bot-install`), recorded on the install and named with every
  * publish. No region is the default one.
  */
 export const BOT_GATEWAY_REGION_PATTERN = /^[a-z0-9][a-z0-9-]{0,31}$/
