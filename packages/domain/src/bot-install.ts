@@ -48,8 +48,21 @@ export const isValidInstallRedirectUri = (value: string): boolean => {
 	return url.protocol === "http:" && LOOPBACK_HOSTS.has(url.hostname)
 }
 
+/** Why a URI fails {@link isValidInstallRedirectUri}: a bad `hazel_region` is named as such. */
+const installRedirectUriProblem = (value: string): string => {
+	if (URL.canParse(value)) {
+		const regions = new URL(value).searchParams.getAll(INSTALL_REGION_PARAM)
+		if (regions.length > 1) return `Expected at most one ${INSTALL_REGION_PARAM}`
+		if (regions[0] !== undefined && !BOT_GATEWAY_REGION_PATTERN.test(regions[0]))
+			return `Expected ${INSTALL_REGION_PARAM} to be lowercase letters, digits and dashes`
+	}
+	return "Expected an https URL"
+}
+
 export const InstallRedirectUri = Schema.String.check(
-	Schema.makeFilter((value: string) => isValidInstallRedirectUri(value) || "Expected an https URL"),
+	Schema.makeFilter(
+		(value: string) => isValidInstallRedirectUri(value) || installRedirectUriProblem(value),
+	),
 )
 
 export const InstallRedirectUris = Schema.Array(InstallRedirectUri).check(

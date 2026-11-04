@@ -1,6 +1,7 @@
 import { Schema } from "effect"
 import { describe, expect, it } from "vitest"
 import {
+	InstallRedirectUri,
 	InstallRedirectUris,
 	installRedirectUrl,
 	isRegisteredInstallRedirect,
@@ -32,6 +33,17 @@ describe("bot install redirect URIs", () => {
 		// A bot's own `region` parameter is just part of its URI.
 		expect(isValidInstallRedirectUri("https://api.example/cb?region=prod")).toBe(true)
 		expect(regionOfInstallRedirect("https://api.example/cb?region=prod")).toBe(null)
+	})
+
+	it("says what is wrong with a rejected region", () => {
+		const decode = Schema.decodeUnknownExit(InstallRedirectUri)
+		expect(String(decode("https://a.example/cb?hazel_region=EU"))).toContain(
+			"hazel_region to be lowercase",
+		)
+		expect(String(decode("https://a.example/cb?hazel_region=eu&hazel_region=us"))).toContain(
+			"at most one hazel_region",
+		)
+		expect(String(decode("http://a.example/cb"))).toContain("Expected an https URL")
 	})
 
 	it("decodes a list of at most ten", () => {
