@@ -1,5 +1,6 @@
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { IconCheck, IconCopy, IconPlus, IconWebhook } from "../../../icons"
+import { avatar } from "../../../ui/avatar"
 import { badge } from "../../../ui/badge"
 import { button } from "../../../ui/button"
 import { loader } from "../../../ui/loader"
@@ -35,16 +36,12 @@ const compactWebhookItem = (
 			),
 		],
 		[
-			webhook.avatarUrl
-				? h.img([
-						h.Src(webhook.avatarUrl),
-						h.Alt(webhook.name),
-						h.Class("size-8 rounded-full object-cover"),
-					])
-				: h.div(
-						[h.Class("flex size-8 items-center justify-center rounded-full bg-secondary")],
-						[IconWebhook(h, { className: "size-4 text-muted-fg" })],
-					),
+			avatar(h, {
+				size: "sm",
+				src: webhook.avatarUrl,
+				alt: webhook.name,
+				placeholder: IconWebhook(h, { className: "size-4 text-muted-fg" }),
+			}),
 			h.div(
 				[h.Class("min-w-0 flex-1")],
 				[

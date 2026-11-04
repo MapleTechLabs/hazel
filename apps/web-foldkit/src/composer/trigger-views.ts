@@ -1,6 +1,7 @@
 import { Option } from "effect"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { cx } from "~/utils/cx"
+import { avatar } from "../ui/avatar"
 import { type BotCommand, type CommandInput, Message, type Model } from "./composer"
 import { commandFieldId } from "./editor-commands"
 import { listBox } from "./autocomplete-view"
@@ -14,22 +15,15 @@ import {
 
 /** `CommandTrigger` / `BotCommandItem`, `EmojiTrigger` / `EmojiItem` and `CommandInputPanel`. */
 
-const botAvatar = <M>(h: HtmlBuilder<M>, bot: BotCommand["bot"], className: string, fallback: string): Html =>
-	bot.avatarUrl
-		? h.img([h.Attribute("src", bot.avatarUrl), h.Attribute("alt", bot.name), h.Class(className)])
-		: h.div([h.Class(fallback)], [bot.name[0]?.toUpperCase() ?? ""])
+const botAvatar = <M>(h: HtmlBuilder<M>, bot: BotCommand["bot"], className: string): Html =>
+	avatar(h, { size: "xs", src: bot.avatarUrl, seed: bot.name, alt: bot.name, className })
 
 const botCommandItem = <M>(h: HtmlBuilder<M>, option: CommandOption, isFocused: boolean): Html => {
 	const { command } = option
 	return h.div(
 		[h.Class("flex items-start gap-2.5")],
 		[
-			botAvatar(
-				h,
-				command.bot,
-				"mt-0.5 size-5 shrink-0 rounded-md",
-				"mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md bg-primary/20 font-medium text-primary text-xs",
-			),
+			botAvatar(h, command.bot, "mt-0.5 size-5"),
 			h.div(
 				[h.Class("min-w-0 flex-1")],
 				[
@@ -129,12 +123,7 @@ export const commandInputPanel = <M>(
 			h.div(
 				[h.Class("mb-3 flex items-center gap-2")],
 				[
-					botAvatar(
-						h,
-						command.bot,
-						"size-5 rounded-md",
-						"flex size-5 items-center justify-center rounded-md bg-primary/20 font-medium text-primary text-xs",
-					),
+					botAvatar(h, command.bot, "size-5"),
 					h.span([h.Class("font-medium text-fg")], [`/${command.name}`]),
 					h.span([h.Class("text-muted-fg text-sm")], [command.description]),
 				],

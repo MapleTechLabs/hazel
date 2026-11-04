@@ -28,7 +28,9 @@ const renderedPx = (size: AvatarSize, className: string | undefined): number => 
 }
 
 export const avatar = <Message>(h: HtmlBuilder<Message>, props: AvatarProps): Html => {
-	const { size = "md", isSquare = true, src, seed } = props
+	const { size = "md", isSquare = true, src } = props
+	// One person, one fallback: "Bob " (empty last name) and "Bob" hash to the same hue.
+	const seed = props.seed?.trim() || undefined
 	const rounded = isSquare ? "rounded-xl" : "rounded-3xl"
 	// `corner-shape` is not a CSSStyleDeclaration property, so Foldkit's h.Style rejects it; React writes it as raw style text.
 	const squircle = h.Attribute("style", "corner-shape: squircle;")

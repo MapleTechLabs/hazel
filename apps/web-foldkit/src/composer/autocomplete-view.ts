@@ -33,7 +33,7 @@ const mentionItem = <M>(h: HtmlBuilder<M>, option: MentionOption): Html =>
 	h.div(
 		[h.Class("flex items-center gap-2")],
 		[
-			option.type === "user"
+			option.type === "user" || option.type === "bot"
 				? avatar(h, {
 						size: "xs",
 						src: option.avatarUrl,
@@ -54,7 +54,11 @@ const mentionItem = <M>(h: HtmlBuilder<M>, option: MentionOption): Html =>
 				[
 					h.div(
 						[h.Class("truncate font-medium")],
-						[option.type === "user" ? option.label : `@${option.displayName}`],
+						[
+							option.type === "user" || option.type === "bot"
+								? option.label
+								: `@${option.displayName}`,
+						],
 					),
 					...(option.description
 						? [h.div([h.Class("truncate text-muted-fg text-xs")], [option.description])]
