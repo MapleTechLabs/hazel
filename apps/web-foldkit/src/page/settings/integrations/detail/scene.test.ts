@@ -159,7 +159,7 @@ describe("integration detail page", () => {
 			expectView(role("button", { name: "Removing..." })).toBeDisabled(),
 			Command.resolve(
 				UninstallMaple,
-				Message.SucceededUninstallMaple({ botIds: [MAPLE_BOT, OLD_EU_BOT] }),
+				Message.SucceededUninstallMaple({ botIds: [MAPLE_BOT, OLD_EU_BOT], organizationId: orgId }),
 			),
 			expectOutMessage(
 				PageOutMessage.RequestedToast({ toast: successToast("Maple removed from this workspace") }),

@@ -32,6 +32,7 @@ import { orgTarget } from "../worker/objects/kinds.ts"
 import { BotGatewayService } from "../services/bot-gateway-service.ts"
 import { callObject } from "../worker/objects/calls.ts"
 import { ActiveIntegrationsCall, IntegrationAccessTokenCall } from "../worker/objects/org/integrations.ts"
+import { BotInstallRegionCall } from "../worker/objects/org/bot-install-grants.ts"
 import { createSseHeartbeatStream } from "./bot-commands.sse.ts"
 
 /**
@@ -269,14 +270,20 @@ export const HttpBotCommandsLive = HttpApiBuilder.group(HazelApi, "bot-commands"
 					timestamp: Date.now(),
 				}
 
-				yield* botGateway.publishCommand(botId, {
-					commandName: commandEvent.commandName,
-					channelId: commandEvent.channelId,
-					userId: commandEvent.userId,
-					orgId: commandEvent.orgId,
-					arguments: commandEvent.arguments,
-					timestamp: commandEvent.timestamp,
-				})
+				// To the session of the region the bot is installed for here.
+				const region = yield* callObject(BotInstallRegionCall, orgTarget(orgId), { botId })
+				yield* botGateway.publishCommand(
+					botId,
+					{
+						commandName: commandEvent.commandName,
+						channelId: commandEvent.channelId,
+						userId: commandEvent.userId,
+						orgId: commandEvent.orgId,
+						arguments: commandEvent.arguments,
+						timestamp: commandEvent.timestamp,
+					},
+					region,
+				)
 
 				yield* Effect.logDebug(`Appended command ${commandName} to durable gateway for bot ${botId}`)
 
@@ -290,6 +297,11 @@ export const HttpBotCommandsLive = HttpApiBuilder.group(HazelApi, "bot-commands"
 							message: "Database error while executing command",
 							cause: error,
 						}),
+					),
+				),
+				Effect.catchTag("ObjectCallError", (error) =>
+					Effect.fail(
+						new InternalServerError({ message: "The organization is unavailable", cause: error }),
 					),
 				),
 				Effect.catchTag("DurableStreamRequestError", (error) =>

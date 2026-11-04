@@ -21,6 +21,8 @@ export const channelBotsTable = SQLite.table("channel_bots", {
 	columns: {
 		botId: uuid(BotId),
 		botUserId: uuid(UserId),
+		/** The install's region (`bot_installations.region`): the gateway session its events go to. */
+		region: SQLite.nullable(SQLite.text),
 	},
 	primaryKey: ["botId"],
 })

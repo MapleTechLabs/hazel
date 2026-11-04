@@ -6,7 +6,7 @@
 import { Database, SQLite, schema } from "@hazel/db"
 import { BotGatewayInteractionCreatePayload, createBotGatewayPartitionKey } from "@hazel/domain"
 import { Message } from "@hazel/domain/models"
-import { BotId, BotInstallationId, OrganizationId } from "@hazel/schema"
+import { BotId, OrganizationId } from "@hazel/schema"
 import { Effect, Option, Schema } from "effect"
 import { messageEventEnvelope } from "../../../services/bot-gateway-service"
 import { BotGatewayTransport } from "../../../services/bot-gateway-transport"
@@ -29,22 +29,11 @@ export const MessageEventPayload = Schema.Struct({
 export const InteractionEventPayload = Schema.Struct({
 	botId: BotId,
 	interaction: BotGatewayInteractionCreatePayload,
-})
-
-/** Clear the gateway route a regional install set (`bot-installs.ts`), once that install is gone. */
-export const InstallRegionClearedPayload = Schema.Struct({
-	botId: BotId,
-	organizationId: OrganizationId,
-	installationId: BotInstallationId,
+	/** The install's region (`channel_bots.region`); absent on rows enqueued before regions. */
+	region: Schema.optionalKey(Schema.NullOr(Schema.String)),
 })
 
 export const BotGatewayEffects = {
-	/** From an `OrgObject`: a regional install was removed. */
-	installRegionCleared: defineEffect(
-		"botGateway.installRegionCleared",
-		"bot-gateway",
-		InstallRegionClearedPayload,
-	),
 	interaction: defineEffect("botGateway.interaction", "bot-gateway", InteractionEventPayload),
 	messageEvent: defineEffect("botGateway.messageEvent", "bot-gateway", MessageEventPayload),
 	/** From an `OrgObject`: to the org's installed bots (`../org/bot-events.ts`). */
@@ -79,7 +68,7 @@ export const botGatewayReceivers = {
 		Effect.gen(function* () {
 			const db = yield* Database.Database
 			const transport = yield* BotGatewayTransport
-			const bots = yield* db.run(SQLite.from(schema.channelBotsTable).select("botId"))
+			const bots = yield* db.run(SQLite.from(schema.channelBotsTable).select("botId", "region"))
 			if (bots.length === 0) return
 			const author = Option.getOrUndefined(yield* authorOf(payload.message.authorId))
 			yield* Effect.forEach(
@@ -93,29 +82,30 @@ export const botGatewayReceivers = {
 							payload.message,
 							author,
 						),
+						bot.region,
 					),
 				{ concurrency: 8, discard: true },
 			)
 			yield* Effect.annotateCurrentSpan({ "bot_gateway.bots": bots.length })
 		}),
-	"botGateway.interaction": ({ botId, interaction }) =>
+	"botGateway.interaction": ({ botId, interaction, region }) =>
 		Effect.flatMap(BotGatewayTransport, (transport) =>
-			transport.append(botId, {
-				schemaVersion: 1,
-				deliveryId: crypto.randomUUID(),
-				partitionKey: createBotGatewayPartitionKey({
-					organizationId: interaction.orgId,
-					channelId: interaction.channelId,
-				}),
-				occurredAt: interaction.timestamp,
-				idempotencyKey: `interaction.create:${interaction.interactionId}`,
-				eventType: "interaction.create",
-				payload: interaction,
-			}),
-		),
-	"botGateway.installRegionCleared": ({ botId, organizationId, installationId }) =>
-		Effect.flatMap(BotGatewayTransport, (transport) =>
-			transport.setInstallRegion(botId, organizationId, installationId, null),
+			transport.append(
+				botId,
+				{
+					schemaVersion: 1,
+					deliveryId: crypto.randomUUID(),
+					partitionKey: createBotGatewayPartitionKey({
+						organizationId: interaction.orgId,
+						channelId: interaction.channelId,
+					}),
+					occurredAt: interaction.timestamp,
+					idempotencyKey: `interaction.create:${interaction.interactionId}`,
+					eventType: "interaction.create",
+					payload: interaction,
+				},
+				region ?? null,
+			),
 		),
 	"botGateway.channelEvent": publishChannelEvent,
 	"botGateway.channelMemberEvent": publishChannelMemberEvent,

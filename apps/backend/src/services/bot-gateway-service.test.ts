@@ -56,7 +56,6 @@ const makeRecordingNamespace = (options?: { readonly reject?: boolean }) => {
 					? Effect.fail(new BotGatewayEventRejectedError({ message: "rejected" }))
 					: Effect.succeed({ offset: String(published.length).padStart(16, "0") })
 			},
-			setInstallRegion: () => Effect.void,
 		}),
 	}
 	return { namespace, published }

@@ -27,6 +27,8 @@ import {
 	OrganizationUsersCall,
 	redeemBotInstallGrant,
 	RedeemBotInstallGrantCall,
+	botInstallRegion,
+	BotInstallRegionCall,
 } from "./org/bot-install-grants"
 import {
 	isOrgAdmin,
@@ -116,6 +118,7 @@ export const callReceivers: Record<ObjectKind, ReadonlyMap<string, Receiver>> = 
 		receiver(ListChannelsCall, listChannels),
 		receiver(IsOrgAdminCall, isOrgAdmin),
 		receiver(RedeemBotInstallGrantCall, redeemBotInstallGrant),
+		receiver(BotInstallRegionCall, botInstallRegion),
 		receiver(OrganizationUsersCall, organizationUsers),
 		receiver(OrganizationChannelsCall, organizationChannels),
 	]),

@@ -163,22 +163,4 @@ describe("delivery: offsets, replay and acks", () => {
 		expect(Store.readAfter(sql, 0, 10, "eu").map((e) => e.seq)).toEqual([2, 4])
 		expect(Store.bounds(sql)).toEqual({ head: 4, firstRetained: undefined })
 	})
-
-	it("routes an organization to the region its install named until that install clears it", () => {
-		const sql = freshStore()
-		expect(Store.regionOf(sql, "org-1")).toBe(Store.DEFAULT_REGION)
-		expect(Store.regionOf(sql, undefined)).toBe(Store.DEFAULT_REGION)
-
-		Store.setRegion(sql, "org-1", "install-1", "eu")
-		expect(Store.regionOf(sql, "org-1")).toBe("eu")
-		expect(Store.regionOf(sql, "org-2")).toBe(Store.DEFAULT_REGION)
-
-		// Uninstalled and reinstalled: the first install's clear arrives after the new route.
-		Store.setRegion(sql, "org-1", "install-2", "us-west")
-		Store.setRegion(sql, "org-1", "install-1", null)
-		expect(Store.regionOf(sql, "org-1")).toBe("us-west")
-
-		Store.setRegion(sql, "org-1", "install-2", null)
-		expect(Store.regionOf(sql, "org-1")).toBe(Store.DEFAULT_REGION)
-	})
 })

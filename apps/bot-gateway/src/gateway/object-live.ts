@@ -4,10 +4,10 @@
  * once the bot is authenticated, see `relay.ts`).
  *
  * - Regions let one bot serve installs from several deployments of its service (Maple's US and
- *   EU): each install's events go to the session of the region that redeemed it
- *   (`setInstallRegion`), every other install's to the default region's (`''`). Each region has
- *   its own cursor, ACKs and trimming over the one log; a bot that never names a region has
- *   exactly the single session it always had.
+ *   EU): `publish` names the region of the install an event belongs to (the publisher reads it
+ *   off the install), and only that region's session receives it; no region is the default
+ *   (`''`). Each region has its own cursor, ACKs and trimming over the one log; a bot that never
+ *   names a region has exactly the single session it always had.
  * - `publish` (RPC, from the backend) appends an event and dispatches it if the session is idle.
  * - The session gets one DISPATCH batch at a time; its ACK advances the cursor, trims the log and
  *   sends the next batch. An ACK not received within the batch timeout ends the session with
@@ -20,7 +20,7 @@
 import {
 	BotGatewayClientFrame,
 	BotGatewayEnvelope,
-	organizationOfPartitionKey,
+	BOT_GATEWAY_REGION_PATTERN,
 	BotGatewayEventRejectedError,
 	type BotGatewayHeartbeatAckFrame,
 	type BotGatewayInvalidSessionFrame,
@@ -111,14 +111,6 @@ const invalidSession = (socket: RawSocket, reason: string) => {
 	closeSocket(socket, 1008, reason.slice(0, 120))
 }
 
-/** The organization an event belongs to: its partition key's, else its payload's `orgId`. */
-const organizationOfEnvelope = (envelope: BotGatewayEnvelope): string | undefined => {
-	const fromKey = organizationOfPartitionKey(envelope.partitionKey)
-	if (fromKey !== undefined) return fromKey
-	const payload = envelope.payload as { readonly orgId?: unknown }
-	return typeof payload.orgId === "string" ? payload.orgId : undefined
-}
-
 /** The activation, in alchemy's two phases; the outer one also runs at plan time, against a mock. */
 export const activateBotGateway = Effect.gen(function* () {
 	const state = yield* Cloudflare.DurableObjectState
@@ -174,8 +166,12 @@ export const activateBotGateway = Effect.gen(function* () {
 			if (current === null || current > target) await raw.storage.setAlarm(target)
 		})
 
-		const publish = (eventJson: string) =>
+		const publish = (eventJson: string, installRegion?: string | null) =>
 			Effect.gen(function* () {
+				const region = installRegion ?? Store.DEFAULT_REGION
+				if (region !== Store.DEFAULT_REGION && !BOT_GATEWAY_REGION_PATTERN.test(region)) {
+					return yield* new BotGatewayEventRejectedError({ message: `Invalid region: ${region}` })
+				}
 				const parsed = parseJson(eventJson)
 				if (parsed === undefined) {
 					return yield* new BotGatewayEventRejectedError({ message: "Event is not valid JSON" })
@@ -187,7 +183,6 @@ export const activateBotGateway = Effect.gen(function* () {
 					),
 				)
 				const now = Date.now()
-				const region = Store.regionOf(sql, organizationOfEnvelope(envelope))
 				const seq = Store.append(sql, eventJson, now, region)
 				Store.enforceRetention(sql, now, DEFAULT_RETENTION)
 				for (const { socket, session } of liveSessions()) {
@@ -201,17 +196,6 @@ export const activateBotGateway = Effect.gen(function* () {
 				})
 				return { offset: formatOffset(seq) } satisfies BotGatewayPublishResult
 			}).pipe(Effect.withSpan("BotGateway.publish"))
-
-		const setInstallRegion = (organizationId: string, installationId: string, region: string | null) =>
-			Effect.sync(() => Store.setRegion(sql, organizationId, installationId, region)).pipe(
-				Effect.withSpan("BotGateway.setInstallRegion", {
-					attributes: {
-						"organization.id": organizationId,
-						"bot.installation_id": installationId,
-						"bot_gateway.region": region ?? "",
-					},
-				}),
-			)
 
 		const fetch = Effect.gen(function* () {
 			const request = yield* HttpServerRequest.HttpServerRequest
@@ -361,7 +345,7 @@ export const activateBotGateway = Effect.gen(function* () {
 				yield* scheduleAlarm
 			})
 
-		return { publish, setInstallRegion, fetch, webSocketMessage, webSocketClose, alarm }
+		return { publish, fetch, webSocketMessage, webSocketClose, alarm }
 	})
 })
 

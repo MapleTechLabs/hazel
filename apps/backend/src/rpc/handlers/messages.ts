@@ -233,7 +233,7 @@ export const MessageRpcLive = MessageRpcs.toLayer(
 					const authorId = message.value.authorId
 					const bot = yield* db.first(
 						SQLite.from(schema.channelBotsTable)
-							.select("botId")
+							.select("botId", "region")
 							.where(($) => [$.botUserId.eq(authorId)])
 							.limit(1),
 					)
@@ -246,6 +246,7 @@ export const MessageRpcLive = MessageRpcs.toLayer(
 							{ kind: "bot-gateway" },
 							{
 								botId: bot.value.botId,
+								region: bot.value.region,
 								interaction: {
 									interactionId,
 									actionId,

@@ -313,6 +313,10 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE UNIQUE INDEX IF NOT EXISTS "chat_sync_msg_link_external_unique" ON "chat_sync_message_links" ("channelLinkId", "externalMessageId") WHERE "deletedAt" IS NULL',
 			],
 		},
+		{
+			id: "0002_channel_bot_region",
+			statements: ['ALTER TABLE "channel_bots" ADD COLUMN "region" text'],
+		},
 	],
 	user: [
 		{

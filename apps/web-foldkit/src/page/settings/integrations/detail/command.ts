@@ -32,7 +32,7 @@ export const UninstallMaple = Command.define("UninstallMaple", {
 				{ discard: true },
 			),
 		).pipe(
-			Effect.as(Message.SucceededUninstallMaple({ botIds })),
+			Effect.as(Message.SucceededUninstallMaple({ botIds, organizationId })),
 			Effect.catchTags({
 				ActiveOrganizationRequiredError: () =>
 					Effect.succeed(Message.FailedUninstallMaple({ reason: "NotFound" })),

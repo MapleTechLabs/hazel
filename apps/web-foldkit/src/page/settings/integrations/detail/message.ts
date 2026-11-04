@@ -1,5 +1,5 @@
 import { T3CodeSharingMode } from "@hazel/domain/http"
-import { BotId, UserId } from "@hazel/schema"
+import { BotId, OrganizationId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import { CommonReason } from "~/lib/error-messages"
@@ -37,7 +37,7 @@ export const Message = defineMessageUnion({
 	UpdatedConnection: { connection: Schema.NullOr(Connection) },
 	UpdatedMapleInstall: { install: Schema.NullOr(MapleInstall) },
 	ClickedUninstallMaple: {},
-	SucceededUninstallMaple: { botIds: Schema.Array(BotId) },
+	SucceededUninstallMaple: { botIds: Schema.Array(BotId), organizationId: OrganizationId },
 	FailedUninstallMaple: { reason: UninstallMapleFailure },
 	ClickedBack: {},
 	ClickedConnect: {},

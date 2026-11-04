@@ -377,8 +377,6 @@ describe("directory path", () => {
 					installedBy: away.seed.owner,
 				})
 				expect(errorTag(yield* redeem({ code }))).toBe("BotInstallGrantInvalidError")
-				// The default region needs no routing.
-				expect(objects.installRegions).toEqual([])
 				// An expired grant is refused.
 				away.org.storage.db
 					.prepare(`UPDATE bot_install_grants SET expiresAt = '2000-01-01 00:00:00.000'`)
@@ -413,7 +411,7 @@ describe("directory path", () => {
 			}),
 		))
 
-	it("an install through a regional callback is routed before it exists, refuses another region, and its route leaves with it", () =>
+	it("an install through a regional callback publishes to its region, refuses another region, and a reinstall follows the new install", () =>
 		run(
 			Effect.gen(function* () {
 				const objects = yield* makeTestObjects
@@ -452,18 +450,46 @@ describe("directory path", () => {
 						region: string | null
 					}>
 
+				// The bot's events in this org, by the region session they were published to.
+				const regionsOfChannelCreates = () =>
+					objects.published
+						.filter(
+							(entry) => entry.botId === botId && entry.envelope.eventType === "channel.create",
+						)
+						.map((entry) => entry.region)
+
 				ok(yield* authorize(euRedirectUri))
-				const [installation] = installations()
-				expect(installation?.region).toBe("eu")
-				// The gateway was told before the install committed, under the install's own id.
-				expect(objects.installRegions).toEqual([
-					{
-						botId,
-						organizationId: away.seed.orgId,
-						installationId: installation?.id,
-						region: "eu",
-					},
+				expect(installations().map((row) => row.region)).toEqual(["eu"])
+				const incidents = yield* createChannel(away.org, away.seed, "incidents")
+				// Every event of a regional install goes to its region's session, from the first one.
+				expect(regionsOfChannelCreates()).toEqual(["eu"])
+				// The channel learns the bot with its region, so its messages go there too.
+				const channel = yield* objects.get(channelTarget(incidents))
+				expect(channel.storage.db.prepare(`SELECT botId, region FROM channel_bots`).all()).toEqual([
+					{ botId, region: "eu" },
 				])
+				ok(
+					yield* call(
+						channel,
+						incidents,
+						"message.create",
+						{
+							channelId: incidents,
+							content: "checkout is slow",
+							embeds: null,
+							replyToMessageId: null,
+							threadChannelId: null,
+							authorId: away.seed.owner,
+							deletedAt: null,
+						},
+						away.seed.owner,
+					),
+				)
+				expect(
+					objects.published
+						.filter((entry) => entry.envelope.eventType === "message.create")
+						.map((entry) => [entry.botId, entry.region]),
+				).toEqual([[botId, "eu"]])
 
 				// Approving again from the same region mints another grant; another region is refused,
 				// and a link that edits the region no longer matches a registered callback.
@@ -472,9 +498,8 @@ describe("directory path", () => {
 				expect(errorTag(yield* authorize(`${redirectUri}?region=us-west`))).toBe(
 					"BotInstallRedirectMismatchError",
 				)
-				expect(objects.installRegions).toHaveLength(1)
 
-				// Removing it clears exactly that install's route.
+				// Removed, then installed from the default region: its events follow the new install.
 				ok(
 					yield* call(
 						away.org,
@@ -484,17 +509,10 @@ describe("directory path", () => {
 						away.seed.owner,
 					),
 				)
-				expect(objects.installRegions.at(-1)).toEqual({
-					botId,
-					organizationId: away.seed.orgId,
-					installationId: installation?.id,
-					region: null,
-				})
-
-				// Then any region may install it; the default one needs no route.
 				ok(yield* authorize(redirectUri))
 				expect(installations().map((row) => row.region)).toEqual([null])
-				expect(objects.installRegions).toHaveLength(2)
+				yield* createChannel(away.org, away.seed, "alerts")
+				expect(regionsOfChannelCreates()).toEqual(["eu", null])
 			}),
 		))
 
