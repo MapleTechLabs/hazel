@@ -11,13 +11,18 @@ import { Effect } from "effect"
 import { RateLimiter } from "./rate-limiter"
 
 /**
- * Rate limit configuration for messages
- * 60 requests per minute per user
+ * Rate limit configuration for messages: 120 a minute per user. Counted by Cloudflare's rate
+ * limit binding (`MESSAGE_RATE_LIMIT_BINDING` in `worker.ts`, configured from this), whose period
+ * is 10 or 60 s, so the window must stay one of those.
  */
 export const MESSAGE_RATE_LIMIT = {
 	limit: 120,
+	periodSeconds: 60,
 	windowMs: 60 * 1000,
-}
+} as const
+
+/** The keys `checkMessageRateLimit` counts; the Worker sends them to the rate limit binding. */
+export const MESSAGE_RATE_LIMIT_KEY_PREFIX = "messages:"
 
 /**
  * Rate limit configuration for avatar uploads
@@ -58,7 +63,11 @@ export const checkMessageRateLimit = Effect.fn("RateLimitHelpers.checkMessageRat
 	const rateLimiter = yield* RateLimiter
 
 	const result = yield* rateLimiter
-		.consume(`messages:${userId}`, MESSAGE_RATE_LIMIT.limit, MESSAGE_RATE_LIMIT.windowMs)
+		.consume(
+			`${MESSAGE_RATE_LIMIT_KEY_PREFIX}${userId}`,
+			MESSAGE_RATE_LIMIT.limit,
+			MESSAGE_RATE_LIMIT.windowMs,
+		)
 		.pipe(
 			Effect.catchTag("RateLimiterError", (error) =>
 				Effect.gen(function* () {

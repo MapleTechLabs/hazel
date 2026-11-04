@@ -35,6 +35,7 @@ export const buildApp = (
 	isolate: Context.Context<never>,
 	env: Record<string, unknown>,
 	rateLimiters: Cloudflare.DurableObject<RateLimiterObject>,
+	messageRateLimit: Cloudflare.RateLimitClient,
 	botGateways: BotGatewayNamespace,
 ) =>
 	forIsolate(isolate)(
@@ -47,7 +48,7 @@ export const buildApp = (
 			).pipe(
 				Layer.provide(AppAuthorizationLive),
 				Layer.provide(AppServicesLive),
-				Layer.provideMerge(rateLimiterLive(rateLimiters)),
+				Layer.provideMerge(rateLimiterLive(rateLimiters, messageRateLimit)),
 				Layer.provideMerge(FetchHttpClient.layer),
 				Layer.provideMerge(WorkerPlatformLive),
 				Layer.provideMerge(requestPlatformLive(env, botGateways)),

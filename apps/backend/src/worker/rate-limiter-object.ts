@@ -6,7 +6,8 @@
 import * as Cloudflare from "@alchemy.run/cloudflare"
 import { RuntimeContext } from "alchemy/RuntimeContext"
 import { Effect, Layer } from "effect"
-import { type RateLimitResult, RateLimiter } from "../services/rate-limiter"
+import { MESSAGE_RATE_LIMIT_KEY_PREFIX } from "../services/rate-limit-helpers"
+import { type RateLimitResult, RateLimiter, RateLimiterError } from "../services/rate-limiter"
 
 interface WindowState {
 	readonly startedAt: number
@@ -60,15 +61,35 @@ export const RateLimiterObjectLive = RateLimiterObject.make(
 	}),
 )
 
-/** The `RateLimiter` port over the Durable Object namespace the Worker bound. */
-export const rateLimiterLive = (limiters: Cloudflare.DurableObject<RateLimiterObject>) =>
+/**
+ * The `RateLimiter` port: message keys go to Cloudflare's rate limit binding, counted in the
+ * colo that handles the request with no round trip; every other key (hourly limits the binding's
+ * 10 or 60 s period cannot express, on rare operations) to its Durable Object, whose first call
+ * after an idle spell wakes it, costing up to a second on the request.
+ */
+export const rateLimiterLive = (
+	limiters: Cloudflare.DurableObject<RateLimiterObject>,
+	messages: Cloudflare.RateLimitClient,
+) =>
 	Layer.succeed(
 		RateLimiter,
 		RateLimiter.of({
 			consume: (key, limit, windowMs) =>
-				limiters
-					.getByName(key)
-					.consume(limit, windowMs)
+				(key.startsWith(MESSAGE_RATE_LIMIT_KEY_PREFIX)
+					? messages.limit({ key }).pipe(
+							Effect.map(({ success }): RateLimitResult => ({
+								allowed: success,
+								// The binding does not say how many are left, nor when its window ends.
+								remaining: success ? limit : 0,
+								resetAfterMs: windowMs,
+								limit,
+							})),
+							Effect.mapError(
+								(error) => new RateLimiterError({ message: error.message, cause: error }),
+							),
+						)
+					: limiters.getByName(key).consume(limit, windowMs)
+				)
 					// Discharge alchemy's phantom color: handlers run inside a Worker event.
 					.pipe(Effect.provide(RuntimeContext.phantom)),
 		}),

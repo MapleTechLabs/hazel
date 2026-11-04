@@ -25,6 +25,14 @@ import { OrgObject, OrgObjectLive } from "./worker/objects/org-object"
 import { UserObject, UserObjectLive } from "./worker/objects/user-object"
 import { CACHE_BINDING, DIRECTORY_DB_BINDING, EMAIL_BINDING, HTML_RENDERS_BINDING } from "./worker/platform"
 import { RateLimiterObject, RateLimiterObjectLive } from "./worker/rate-limiter-object"
+import { MESSAGE_RATE_LIMIT } from "./services/rate-limit-helpers"
+
+const MESSAGE_RATE_LIMIT_BINDING = "MESSAGE_RATE_LIMIT"
+/**
+ * The account-wide id of the message limit's counters. Shared by every stage: keys carry the user
+ * id, so stages only share a count for the same user, which never spans environments.
+ */
+const MESSAGE_RATE_LIMIT_NAMESPACE_ID = 1001
 
 /** Session and user-lookup caches. */
 export const ApiCache = Cloudflare.KV.Namespace(
@@ -92,6 +100,11 @@ export default Api.make(
 	Effect.gen(function* () {
 		// Yielding a hosted class binds, registers and exports it.
 		const rateLimiters = yield* RateLimiterObject
+		// Messages are rate limited in the colo, without a Durable Object round trip.
+		const messageRateLimit = yield* Cloudflare.RateLimit(MESSAGE_RATE_LIMIT_BINDING, {
+			namespaceId: MESSAGE_RATE_LIMIT_NAMESPACE_ID,
+			simple: { limit: MESSAGE_RATE_LIMIT.limit, period: MESSAGE_RATE_LIMIT.periodSeconds },
+		})
 		const discordGateway = yield* DiscordGatewayObject
 		// The sync objects (`worker/objects/`): bound here, reached through the env (`stubs.ts`).
 		yield* OrgObject
@@ -106,7 +119,9 @@ export default Api.make(
 		// The graph builds on the first request, not here: init also runs at plan time, where
 		// alchemy would auto-bind every `Config` read.
 		const isolate = isolateContext(yield* Effect.context())
-		const app = yield* cachedRecoverable(buildApp(isolate, env, rateLimiters, botGateways))
+		const app = yield* cachedRecoverable(
+			buildApp(isolate, env, rateLimiters, messageRateLimit, botGateways),
+		)
 
 		// Backstop: keep the Discord gateway session up across deploys and evictions.
 		yield* Cloudflare.Workers.cron("* * * * *", () =>
@@ -124,6 +139,7 @@ export default Api.make(
 				UserObjectLive,
 				MessageLiveObjectLive,
 				Cloudflare.Workers.CronEventSourceLive,
+				Cloudflare.Workers.RateLimitBinding,
 				hazelTelemetry("api"),
 			),
 		),
