@@ -10,6 +10,7 @@ import * as EditorCommands from "../../../composer/editor-commands"
 import {
 	channelScene,
 	derivedModel,
+	composer,
 	mountedChannel,
 	mountedToolbar,
 	overlays,
@@ -59,6 +60,30 @@ describe("reading", () => {
 			mountedChannel(),
 			Scene.expect(Scene.text("Shipped the onboarding copy")).toExist(),
 			Scene.expect(Scene.text("Launch window confirmed")).toExist(),
+			Scene.expect(Scene.text("Loading messages")).toBeAbsent(),
+		)
+	})
+
+	test("before its first snapshot the list says it is loading, and shows no messages", () => {
+		Scene.scene(
+			channelScene,
+			Scene.given({ ...loadedModel(), hasLoadedMessages: false, messages: [], rows: [] }),
+			Scene.Mount.resolveAll(
+				[
+					{ name: "MountEditor" },
+					composer(Composer.Message.UpdatedDraft({ markdown: "", isEmpty: true })),
+				],
+				[
+					{ name: "TrackFileDrop" },
+					draft(
+						Draft.Message.ReceivedDropEvent({
+							event: DropEvent.ChangedDragState({ drag: DragState.Idle() }),
+						}),
+					),
+				],
+			),
+			Scene.expect(Scene.text("Loading messages")).toExist(),
+			Scene.expect(Scene.text("Shipped the onboarding copy")).toBeAbsent(),
 		)
 	})
 })
@@ -230,8 +255,8 @@ describe("threads", () => {
 			Scene.expect(Scene.role("heading", { name: "Thread" })).toExist(),
 			Scene.expect(Scene.text("Creating thread...")).toExist(),
 			Scene.Command.resolve(LoadThreadPanelWidth, Message.LoadedThreadPanelWidth({ width: null })),
-			Scene.Command.resolve(CreateThread, ActionMessage.SucceededCreateThread({ threadChannelId })),
-			Scene.expect(Scene.text("Creating thread...")).toBeAbsent(),
+			Scene.Command.resolve(EditorCommands.FocusEditor, Composer.Message.CompletedFocusEditor()),
+			// The composer is there while the thread is created: typing never waits on it.
 			Scene.Mount.resolveAll(
 				[
 					MountEditor({
@@ -254,6 +279,8 @@ describe("threads", () => {
 					),
 				],
 			),
+			Scene.Command.resolve(CreateThread, ActionMessage.SucceededCreateThread({ threadChannelId })),
+			Scene.expect(Scene.text("Creating thread...")).toBeAbsent(),
 			Scene.click(Scene.role("button", { name: "Close thread" })),
 			Scene.expect(Scene.role("heading", { name: "Thread" })).toBeAbsent(),
 			Scene.Mount.expectEnded(

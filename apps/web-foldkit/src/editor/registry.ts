@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, Schema, type Scope } from "effect"
+import { Context, Duration, Effect, Layer, Schema, type Scope } from "effect"
 import type { EditorView } from "prosemirror-view"
 
 /**
@@ -8,6 +8,9 @@ import type { EditorView } from "prosemirror-view"
  *
  * Mount `execute` cannot require services, so the Mounts register into the one `editorRegistry`
  * instance directly; `EditorRegistryLive` hands that same instance to Commands.
+ *
+ * A Command can run before the editor it targets has mounted (a key typed as a thread panel opens,
+ * a focus right after the view that renders the editor): `get` waits a moment for it to register.
  */
 
 export class EditorNotMounted extends Schema.TaggedError<EditorNotMounted>()("EditorNotMounted", {
@@ -20,13 +23,34 @@ export interface EditorRegistryShape {
 	readonly get: (editorId: string) => Effect.Effect<EditorView, EditorNotMounted>
 }
 
+/** How long `get` waits for an editor that has not mounted yet. */
+const MOUNT_WAIT = Duration.millis(500)
+
 const makeRegistry = (): EditorRegistryShape => {
 	const editors = new Map<string, EditorView>()
+	const waiters = new Map<string, Set<(view: EditorView) => void>>()
+	const awaitMount = (editorId: string) =>
+		Effect.callback<EditorView>((resume) => {
+			// Checked in the same synchronous step that installs the waiter: no register slips between.
+			const mounted = editors.get(editorId)
+			if (mounted !== undefined) return resume(Effect.succeed(mounted))
+			const waiting = waiters.get(editorId) ?? new Set()
+			const waiter = (view: EditorView) => resume(Effect.succeed(view))
+			waiting.add(waiter)
+			waiters.set(editorId, waiting)
+			return Effect.sync(() => {
+				waiting.delete(waiter)
+				if (waiting.size === 0) waiters.delete(editorId)
+			})
+		})
 	return {
 		register: (editorId, view) =>
 			Effect.acquireRelease(
 				Effect.sync(() => {
 					editors.set(editorId, view)
+					const waiting = waiters.get(editorId)
+					waiters.delete(editorId)
+					if (waiting !== undefined) for (const waiter of waiting) waiter(view)
 				}),
 				() =>
 					Effect.sync(() => {
@@ -38,7 +62,12 @@ const makeRegistry = (): EditorRegistryShape => {
 			Effect.suspend(() => {
 				const view = editors.get(editorId)
 				return view === undefined
-					? Effect.fail(new EditorNotMounted({ editorId }))
+					? awaitMount(editorId).pipe(
+							Effect.timeoutOrElse({
+								duration: MOUNT_WAIT,
+								orElse: () => Effect.fail(new EditorNotMounted({ editorId })),
+							}),
+						)
 					: Effect.succeed(view)
 			}),
 	}

@@ -9,7 +9,7 @@ import {
 	TypingIndicatorId,
 	UserId,
 } from "@hazel/schema"
-import { Schema } from "effect"
+import { Effect, Schema } from "effect"
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test, vi } from "vitest"
 import * as Composer from "./composer"
@@ -613,6 +613,15 @@ describe("emoji and GIFs", () => {
 			Command.expectExact(send(null)),
 			Command.resolve(Draft.SendMessage, Message.SucceededSendMessage()),
 			model((current) => expect(Draft.editingMessageIdOf(current)).toBe(editId)),
+		)
+	})
+})
+
+describe("the GIF picker's choice", () => {
+	test("comes back as SelectedGif, the one path a GIF is sent by", async () => {
+		const url = "https://media.klipy.com/cat.gif"
+		expect(await Effect.runPromise(Draft.SelectGif({ url }).effect)).toEqual(
+			Draft.Message.SelectedGif({ url }),
 		)
 	})
 })

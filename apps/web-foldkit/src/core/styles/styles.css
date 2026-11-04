@@ -112,6 +112,18 @@ If you want to use the typography plugin, uncomment the line below.
 
 	--animate-field-error-enter: field-error-enter 0.2s ease-out;
 	--animate-shake: shake 0.5s ease-in-out;
+	/* Only a load slower than 300ms shows its placeholder: a fast one never flashes it. */
+	--animate-skeleton-in: skeleton-in 150ms ease-out 300ms both;
+
+	@keyframes skeleton-in {
+		from {
+			opacity: 0;
+		}
+
+		to {
+			opacity: 1;
+		}
+	}
 
 	@keyframes marquee {
 		from {

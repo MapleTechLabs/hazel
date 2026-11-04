@@ -143,8 +143,10 @@ export const composerBoxView = <M>(h: HtmlBuilder<M>, model: Model, extras: BoxE
 														model.commandInput,
 														extras.toMessage,
 													),
-											// ProseMirror owns this element's attributes and children.
-											h.keyed("div")("editor", [
+											// ProseMirror owns this element's attributes and children. Keyed by
+											// editor: another draft (thread B after thread A) mounts its own
+											// editor instead of patching A's, which stays registered as A's.
+											h.keyed("div")(`editor:${model.editorId}`, [
 												h.OnMount(
 													Mount.mapMessage(
 														MountEditor({

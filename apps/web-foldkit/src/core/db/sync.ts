@@ -17,6 +17,8 @@ export const syncHub = new SyncHub({
 	// One socket for every source: a browser opens WebSockets to a host one handshake at a time,
 	// so a socket per org made a load wait one handshake per org, in turn.
 	multiplex: true,
+	// Going back to a channel within this keeps its rows and live stream: no new snapshot.
+	releaseGraceMs: 3 * 60_000,
 })
 
 /** `user:<me>`, set by the connection manager once `user.me` answered. */

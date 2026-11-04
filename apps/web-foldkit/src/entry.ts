@@ -12,6 +12,7 @@ import { isDesktop } from "./platform/desktop"
 import { desktopSessionBearer } from "./platform/desktop-auth"
 import { Flags, flags, init, Message, Model, subscriptions, update, view } from "./main"
 import { NotificationSinks } from "./app/notification-sinks"
+import { installChannelPrefetch } from "./core/db/channel-prefetch"
 import { ResourcesLive } from "./rpc"
 import * as PendingAnnouncement from "./ui/aria/pending-announcement"
 
@@ -41,5 +42,6 @@ const startApplication = () =>
 // The desktop app has no API cookie: its requests carry its own session as a bearer.
 if (isDesktop) setSessionBearerProvider(desktopSessionBearer)
 startApplication()
+installChannelPrefetch()
 // Desktop only: native notification permission (a no-op in the browser).
 void initTauri()

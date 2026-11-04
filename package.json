@@ -21,11 +21,11 @@
 				"@effect/vitest": "4.1.1"
 			},
 			"alchemy": {
-				"@alchemy.run/cloudflare": "2.0.0-beta.84",
-				"@alchemy.run/domain": "2.0.0-beta.84",
+				"@alchemy.run/cloudflare": "2.0.0-beta.85",
+				"@alchemy.run/domain": "2.0.0-beta.85",
 				"@cloudflare/workers-types": "4.20260603.1",
 				"@maple-dev/alchemy": "0.3.0",
-				"alchemy": "2.0.0-beta.84"
+				"alchemy": "2.0.0-beta.85"
 			},
 			"tooling": {
 				"typescript": "^7.0.2"
@@ -79,8 +79,7 @@
 	},
 	"packageManager": "bun@1.4.3",
 	"patchedDependencies": {
-		"alchemy@2.0.0-beta.84": "patches/alchemy@2.0.0-beta.84.patch",
-		"@alchemy.run/cloudflare@2.0.0-beta.84": "patches/@alchemy.run%2Fcloudflare@2.0.0-beta.84.patch"
+		"@alchemy.run/cloudflare@2.0.0-beta.85": "patches/@alchemy.run%2Fcloudflare@2.0.0-beta.85.patch"
 	},
 	"trustedDependencies": []
 }

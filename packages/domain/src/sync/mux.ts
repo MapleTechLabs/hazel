@@ -27,6 +27,12 @@ export const SyncMuxOpen = Schema.TaggedStruct("Open", {
 	kind: SyncSourceKind,
 	sourceId: Schema.String,
 	token: Schema.String,
+	/**
+	 * The stream's first frame (its `Hello`), sent to the source as soon as its socket opens: the
+	 * open and the snapshot take one round trip instead of two. A Worker that predates it ignores
+	 * it and its `Opened` does not say `hello`, so the client sends the frame itself.
+	 */
+	hello: Schema.optionalKey(Schema.String),
 })
 
 /** Close stream `id`. */
@@ -36,7 +42,11 @@ export const SyncMuxClientControl = Schema.Union([SyncMuxOpen, SyncMuxClose])
 export type SyncMuxClientControl = typeof SyncMuxClientControl.Type
 
 /** The source's object accepted stream `id`: its frames follow. */
-export const SyncMuxOpened = Schema.TaggedStruct("Opened", { id: StreamId })
+export const SyncMuxOpened = Schema.TaggedStruct("Opened", {
+	id: StreamId,
+	/** The `Open`'s `hello` went to the source: the client must not send it again. */
+	hello: Schema.optionalKey(Schema.Boolean),
+})
 
 /** Stream `id` closed, with the code and reason its own socket would have closed with. */
 export const SyncMuxClosed = Schema.TaggedStruct("Closed", {

@@ -27,6 +27,7 @@ import {
 	OutMessage,
 	replyToMessageIdOf,
 	type SendFailure,
+	SelectGif,
 	SendMessage,
 } from "./draft"
 import * as EmojiDialog from "../emoji-picker/dialog"
@@ -287,15 +288,15 @@ const foldEmojiPicker = Update.foldChild({
 		insertEmoji(selected.emoji, selected.label, selected.imageUrl),
 })
 
-const foldGifPicker = (context: Context) =>
-	Update.foldChild({
-		update: GifPicker.update,
-		read: (model: Model) => Option.some(model.gifPicker),
-		write: (model: Model, gifPicker: GifPicker.Model) =>
-			modifyFields(model, { gifPicker: () => gifPicker }),
-		toParentMessage: (message: GifPicker.Message) => Message.GotGifPickerMessage({ message }),
-		foldOutMessage: (selected: GifPicker.OutMessage) => sendGif(selected.url, context),
-	})
+const foldGifPicker = Update.foldChild({
+	update: GifPicker.update,
+	read: (model: Model) => Option.some(model.gifPicker),
+	write: (model: Model, gifPicker: GifPicker.Model) => modifyFields(model, { gifPicker: () => gifPicker }),
+	toParentMessage: (message: GifPicker.Message) => Message.GotGifPickerMessage({ message }),
+	foldOutMessage:
+		(selected: GifPicker.OutMessage): Step =>
+		(model) => ({ model, commands: [SelectGif({ url: selected.url })] }),
+})
 
 // UPDATE
 
@@ -420,6 +421,6 @@ export const update = (model: Model, message: Message, context: Context): Return
 			),
 		SelectedEmoji: ({ emoji, label, imageUrl }) => insertEmoji(emoji, label, imageUrl)(model),
 		GotEmojiPickerMessage: ({ message: dialogMessage }) => foldEmojiPicker(model, dialogMessage),
-		GotGifPickerMessage: ({ message: gifMessage }) => foldGifPicker(context)(model, gifMessage),
+		GotGifPickerMessage: ({ message: gifMessage }) => foldGifPicker(model, gifMessage),
 		SelectedGif: ({ url }) => sendGif(url, context)(model),
 	})

@@ -112,6 +112,25 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 			}),
 		)
 
+		/**
+		 * Wait until no object has deliveries running that it started after answering (`answer` in
+		 * `./runtime.ts`), so a test sees a call's whole outcome. Skipped while a target is held:
+		 * those tests watch what happens before the held delivery lands.
+		 */
+		const settle: Effect.Effect<void> = Effect.suspend(() => {
+			if (held.size > 0) return Effect.void
+			const all = [...objects.values()]
+			return Effect.forEach(all, (object) => object.deliveriesInFlight).pipe(
+				Effect.flatMap((counts) =>
+					// An object a delivery created meanwhile is not in `all`: look again.
+					counts.some((count) => count > 0) || objects.size !== all.length
+						? Effect.andThen(Effect.yieldNow, settle)
+						: Effect.void,
+				),
+			)
+		})
+		const settled = <A, E>(effect: Effect.Effect<A, E>) => Effect.tap(effect, () => settle)
+
 		/** A DO call starts from a clean context, as a real one (another isolate) would. */
 		const isolated = <A, E>(effect: Effect.Effect<A, E>): Effect.Effect<A, E> =>
 			effect.pipe(Effect.updateContext(() => Context.empty())) as Effect.Effect<A, E>
@@ -119,10 +138,12 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 		const stubs: Context.Service.Shape<typeof ObjectStubs> = {
 			get: (target) => ({
 				invoke: (request) =>
-					isolated(Effect.flatMap(get(target), (object) => object.invoke(request))),
+					settled(isolated(Effect.flatMap(get(target), (object) => object.invoke(request)))),
 				call: (request) =>
-					isolated(
-						Effect.flatMap(get(target), (object) => object.call(structuredClone(request))),
+					settled(
+						isolated(
+							Effect.flatMap(get(target), (object) => object.call(structuredClone(request))),
+						),
 					).pipe(Effect.map((response) => structuredClone(response))),
 				applyEffect: (request) =>
 					Effect.suspend(() => {
@@ -148,6 +169,9 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 									Effect.flatMap(get(target), (object) => object.applyEffect(request)),
 								),
 							),
+							// From the Worker (a route, the directory path) it is a test's own call;
+							// between objects it runs inside a delivery that must not wait on itself.
+							(applied) => (request.sender.kind === "worker" ? settled(applied) : applied),
 						)
 					}),
 			}),
@@ -210,7 +234,13 @@ export const makeTestObjectsWith = (options: TestObjectsOptions = {}) =>
 					? {}
 					: { migrations: options.migrations[target.kind] }),
 			}).pipe(
-				Effect.map((object): TestObject => ({ ...object, storage, state })),
+				Effect.map((object): TestObject => ({
+					...object,
+					invoke: (request) => settled(object.invoke(request)),
+					call: (request) => settled(object.call(request)),
+					storage,
+					state,
+				})),
 				Effect.provideService(Scope.Scope, scope),
 			)
 		}

@@ -1,4 +1,5 @@
 import { ChannelId, MessageId, OrganizationId, PinnedMessageId, UserId } from "@hazel/schema"
+import { derivedThreadChannelId } from "@hazel/domain/thread-id"
 import { Effect, Schema } from "effect"
 import { Command } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
@@ -160,16 +161,20 @@ export const UnpinMessage = Command.define("UnpinMessage", {
 		),
 })
 
-/** `createThread` generates the thread id up front so the panel opens before the RPC answers. */
+/**
+ * `createThread` names the thread up front so the panel opens before the RPC answers. The id is
+ * the one the server derives from the message (`derivedThreadChannelId`): a second "Reply in
+ * thread" before the first link shows (a double click, another tab, another member) names the
+ * same thread, which `channel.createThread` answers with instead of making another.
+ */
 export const GenerateThreadChannelId = Command.define("GenerateThreadChannelId", {
 	args: { messageId: MessageId },
 	messages: [ActionMessage.CompletedGenerateThreadChannelId],
 	execute: ({ messageId }) =>
-		Effect.sync(() =>
-			ActionMessage.CompletedGenerateThreadChannelId({
-				messageId,
-				threadChannelId: ChannelId.make(crypto.randomUUID()),
-			}),
+		Effect.promise(() => derivedThreadChannelId(messageId)).pipe(
+			Effect.map((threadChannelId) =>
+				ActionMessage.CompletedGenerateThreadChannelId({ messageId, threadChannelId }),
+			),
 		),
 })
 

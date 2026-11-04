@@ -1,8 +1,9 @@
 /**
  * The wiring most objects want: the broadcaster, the outbox and one alarm over them.
  *
- * - `afterCommit` after every committed write: flush to sockets, deliver the urgent kinds, then the
- *   outbox, flush what the deliveries wrote (sender-side effects write locally), rearm.
+ * - `commit` after every committed write, before answering: flush to sockets, deliver the urgent
+ *   kinds, rearm. Then `deliverSoon`, after answering: the outbox, flush what the deliveries wrote
+ *   (sender-side effects write locally), rearm. `afterCommit` is both in line.
  * - `alarm` from the object's `alarm()`: expire sockets, retry the outbox, flush, prune, rearm.
  */
 import { Cause, Clock, Effect } from "effect"
@@ -33,12 +34,17 @@ export interface SyncedObjectOptions<P, E, R, RD, RX> {
 	readonly runtime?: SyncRuntimeOptions
 	readonly drain?: DrainOptions
 	/**
-	 * Outbox kinds `afterCommit` delivers before it answers even while a drain runs (e.g. access
+	 * Outbox kinds `commit` delivers before the caller is answered even while a drain runs (e.g. access
 	 * revocations); their receivers must order payloads themselves (`deliverKindsNow`).
 	 */
 	readonly urgentKinds?: ReadonlyArray<string>
-	/** What `afterCommit` spends on urgent kinds per call (default 25 rows, 5 s); the rest go to the alarm. */
+	/** What `commit` spends on urgent kinds per call (default 25 rows, 5 s); the rest go to the alarm. */
 	readonly urgentBudget?: { readonly rows?: number; readonly ms?: number }
+	/**
+	 * How long after `commit` the alarm retries the outbox rows `deliverSoon` did not get to (the
+	 * instance went away first; default 10 s).
+	 */
+	readonly deliveryBackstopMs?: number
 }
 
 export const makeSyncedObject = <P, E, R, RD = never, RX = never>(
@@ -91,26 +97,39 @@ export const makeSyncedObject = <P, E, R, RD = never, RX = never>(
 		sync.headSeq() > sync.flushedSeq() ? now : undefined,
 	)
 
-	const schedule = Effect.gen(function* () {
-		const outboxAt = yield* outbox.nextAlarm
-		const inboxAt = yield* nextInboxPruneAt()
-		const own = yield* extra
-		const unflushed = yield* unflushedAt
-		return yield* scheduleAlarm(options.storage, [
-			...sync.deadlines(),
-			outboxAt,
-			inboxAt,
-			unflushed,
-			...own,
-		])
-	}).pipe(
-		Effect.catchTags({
-			SqlError: (error) => Effect.logError("Sync alarm scheduling failed", { error: error.message }),
-			SyncAlarmError: (error) =>
-				Effect.logError("Sync alarm scheduling failed", { error: error.message }),
-		}),
-		total("alarm scheduling", () => undefined),
-	)
+	/**
+	 * `outboxNotBefore`: the earliest the outbox may arm the alarm for (a backstop for rows a
+	 * delivery that is about to run will most likely take care of).
+	 */
+	const scheduleWith = (outboxNotBefore?: number) =>
+		Effect.gen(function* () {
+			const pending = yield* outbox.nextAlarm
+			const now = yield* Clock.currentTimeMillis
+			// Only rows due now are the delivery's to make; a later row keeps its own time.
+			const outboxAt =
+				pending === undefined || outboxNotBefore === undefined || pending > now
+					? pending
+					: Math.max(pending, outboxNotBefore)
+			const inboxAt = yield* nextInboxPruneAt()
+			const own = yield* extra
+			const unflushed = yield* unflushedAt
+			return yield* scheduleAlarm(options.storage, [
+				...sync.deadlines(),
+				outboxAt,
+				inboxAt,
+				unflushed,
+				...own,
+			])
+		}).pipe(
+			Effect.catchTags({
+				SqlError: (error) =>
+					Effect.logError("Sync alarm scheduling failed", { error: error.message }),
+				SyncAlarmError: (error) =>
+					Effect.logError("Sync alarm scheduling failed", { error: error.message }),
+			}),
+			total("alarm scheduling", () => undefined),
+		)
+	const schedule = scheduleWith()
 
 	const flush = sync.flush.pipe(total("flush", () => sync.headSeq()))
 	/** Flush again if a delivery wrote here (a sender-side effect's rows), so they go out now. */
@@ -119,10 +138,12 @@ export const makeSyncedObject = <P, E, R, RD = never, RX = never>(
 	)
 
 	/**
-	 * Returns the flushed seq (the write position to hand back to the client); total, so a failure
-	 * here never fails the committed write (it is logged and the alarm retries).
+	 * What a caller waits for after a write: flush to sockets, deliver the urgent kinds, arm the
+	 * alarm (which also covers the outbox rows still pending). Returns the flushed seq (the write
+	 * position to hand back to the client); total, so a failure here never fails the committed
+	 * write (it is logged and the alarm retries). The rest of the outbox is `deliverSoon`'s.
 	 */
-	const afterCommit = Effect.gen(function* () {
+	const flushAndDeliverUrgent = Effect.gen(function* () {
 		const seq = yield* flush
 		if (urgentKinds.length > 0) {
 			yield* urgentNow.pipe(
@@ -130,25 +151,36 @@ export const makeSyncedObject = <P, E, R, RD = never, RX = never>(
 				total("outbox urgent delivery", () => {}),
 			)
 		}
-		yield* outbox.drainIfIdle.pipe(
+		return Math.max(seq, yield* flushIfDirty)
+	})
+	const commit = Effect.gen(function* () {
+		const seq = yield* flushAndDeliverUrgent
+		// The rows `deliverSoon` is about to deliver arm a backstop, not an alarm racing it.
+		const now = yield* Clock.currentTimeMillis
+		yield* scheduleWith(now + (options.deliveryBackstopMs ?? 10_000))
+		return seq
+	}).pipe(Effect.withSpan("SyncDO.commit"))
+
+	/**
+	 * Deliver the outbox now, then flush what the deliveries wrote and rearm. Meant to run after
+	 * the caller was answered: a write never waits on another object (a cold one costs seconds).
+	 * Total; the alarm `commit` armed retries whatever this does not get to.
+	 */
+	const deliverSoon = Effect.gen(function* () {
+		yield* outbox.drainUntilQuiet.pipe(
 			logSqlError("Outbox drain failed"),
 			total("outbox drain", () => {}),
 		)
-		const after = yield* flushIfDirty
+		yield* flushIfDirty
 		yield* schedule
-		return Math.max(seq, after)
-	}).pipe(Effect.withSpan("SyncDO.afterCommit"))
+	}).pipe(Effect.withSpan("SyncDO.deliverSoon"))
 
-	/**
-	 * The part of `afterCommit` a caller cannot answer before: flush to sockets and arm the alarm.
-	 * For a write whose outbox rows nobody waits on (a socket opening): run `afterCommit` after
-	 * answering to deliver them; the alarm is the backstop if that never runs.
-	 */
-	const flushAndSchedule = Effect.gen(function* () {
-		const seq = yield* flush
-		yield* schedule
-		return seq
-	})
+	/** `commit` then `deliverSoon`, in line: for callers with nobody waiting (alarms, tests). */
+	const afterCommit = Effect.gen(function* () {
+		const seq = yield* flushAndDeliverUrgent
+		yield* deliverSoon
+		return Math.max(seq, sync.flushedSeq())
+	}).pipe(Effect.withSpan("SyncDO.afterCommit"))
 
 	const alarm = Effect.gen(function* () {
 		yield* sync.closeExpired
@@ -163,7 +195,7 @@ export const makeSyncedObject = <P, E, R, RD = never, RX = never>(
 		yield* schedule
 	}).pipe(Effect.withSpan("SyncDO.alarm"))
 
-	return { sync, outbox, afterCommit, flushAndSchedule, alarm, schedule }
+	return { sync, outbox, commit, deliverSoon, afterCommit, alarm, schedule }
 }
 
 export type SyncedObject<P, E, R, RD = never, RX = never> = ReturnType<

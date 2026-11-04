@@ -52,6 +52,18 @@ export const ThreadCreation = Schema.Literals(["Creating", "Created"])
 export type ThreadCreation = typeof ThreadCreation.Type
 
 /** `useChatThread`: the thread panel beside the channel, with everything that lives and dies with it. */
+/**
+ * A composer action held while its thread is created. A bot command keeps what was submitted (the
+ * command and its arguments): it runs only if the command field still holds exactly that.
+ */
+export const HeldThreadMessage = Schema.Struct({
+	message: Draft.Message,
+	command: Schema.NullOr(
+		Schema.Struct({ id: Schema.String, values: Schema.Record(Schema.String, Schema.String) }),
+	),
+})
+export type HeldThreadMessage = typeof HeldThreadMessage.Type
+
 export const ThreadPanel = Schema.Struct({
 	threadChannelId: ChannelId,
 	/** The message the thread hangs off. */
@@ -61,6 +73,11 @@ export const ThreadPanel = Schema.Struct({
 	/** The signed-in user's membership of the thread (its typing indicator). */
 	memberId: Schema.NullOr(ChannelMemberId),
 	creation: ThreadCreation,
+	/**
+	 * What the composer did while the thread was still being created (a send, files picked, pasted
+	 * or dropped), in order: played back once it exists.
+	 */
+	held: Schema.Array(HeldThreadMessage),
 	/** "Generate thread name" is running for this thread. */
 	isNaming: Schema.Boolean,
 	/** The thread's messages, oldest first. */

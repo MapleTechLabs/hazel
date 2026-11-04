@@ -6,8 +6,8 @@ import { Context, Effect, Layer, Schema } from "effect"
 export interface RateLimitResult {
 	/** Whether the request is allowed */
 	readonly allowed: boolean
-	/** Number of requests remaining in the current window */
-	readonly remaining: number
+	/** Number of requests remaining in the current window; `null` when the limiter does not say */
+	readonly remaining: number | null
 	/** Milliseconds until the rate limit resets */
 	readonly resetAfterMs: number
 	/** Maximum requests allowed per window */

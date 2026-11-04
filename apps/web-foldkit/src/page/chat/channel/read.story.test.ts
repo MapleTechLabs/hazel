@@ -5,7 +5,9 @@ import { describe, expect, test, vi } from "vitest"
 import * as HtmlRender from "../../../chat/html-render"
 import * as Live from "../../../chat/live-state"
 import * as Unfurl from "../../../chat/unfurl"
+import * as Composer from "../../../composer/composer"
 import * as Draft from "../../../composer/draft"
+import * as EditorCommands from "../../../composer/editor-commands"
 import * as Typing from "../../../composer/typing"
 import * as MessageList from "../../../mount/message-list"
 import { chatMessageOf, imageAttachmentOf, liveEmbeds } from "../../../test/chat-messages"
@@ -386,6 +388,7 @@ describe("threads", () => {
 				expect(current.threadPanel?.draft.channelId).toBe(threadChannelId)
 			}),
 			Command.resolve(LoadThreadPanelWidth, Message.LoadedThreadPanelWidth({ width: 520 })),
+			Command.resolve(EditorCommands.FocusEditor, Composer.Message.CompletedFocusEditor()),
 			model((current) => expect(current.threadPanelWidth).toBe(520)),
 			message(Message.ClickedCloseThread()),
 			model((current) => expect(current.threadPanel).toBeNull()),

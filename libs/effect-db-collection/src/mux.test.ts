@@ -57,14 +57,18 @@ describe("SyncMux", () => {
 		expect(socket.protocols).toEqual(["hazel.mux.v1", "token-1"])
 
 		socket.open()
+		const hello = JSON.stringify({ _tag: "Hello", since: null, paging: true })
+		// The Hello rides with the open: the snapshot answers the same round trip.
 		expect(opens(socket)).toEqual([
-			{ _tag: "Open", id: 0, kind: "user", sourceId: "u", token: "token-1" },
-			{ _tag: "Open", id: 1, kind: "org", sourceId: "o", token: "token-2" },
+			{ _tag: "Open", id: 0, kind: "user", sourceId: "u", token: "token-1", hello },
+			{ _tag: "Open", id: 1, kind: "org", sourceId: "o", token: "token-2", hello },
 		])
+		// A Worker that forwarded it: nothing more to send.
+		socket.receive({ _tag: "Opened", id: 0, hello: true })
+		expect(socket.sentRaw).not.toContain(encodeMuxData(0, hello))
+		// One that predates it: the client sends it on `Opened`, as before.
 		socket.receive({ _tag: "Opened", id: 1 })
-		expect(socket.sentRaw).toContain(
-			encodeMuxData(1, JSON.stringify({ _tag: "Hello", since: null, paging: true })),
-		)
+		expect(socket.sentRaw.filter((frame) => frame === encodeMuxData(1, hello))).toHaveLength(1)
 
 		snapshot(socket, 0, 4)
 		snapshot(socket, 1, 9)
@@ -105,6 +109,65 @@ describe("SyncMux", () => {
 			encodeMuxData(3, JSON.stringify({ _tag: "Hello", since: 9, paging: true })),
 		)
 		expect(org.connection.status.state).toBe("connecting")
+	})
+
+	it("takes a socket that went quiet for dead: every source reconnects through a new one", async () => {
+		const { sockets, hub } = setup()
+		const user = hub.acquire("user", "u")
+		await flush()
+		const first = sockets.all[0]!
+		first.open()
+		snapshot(first, 0, 4)
+
+		// Asleep, or a network change the browser has not noticed: the next stream never opens.
+		await vi.advanceTimersByTimeAsync(60_000)
+		const org = hub.acquire("org", "o")
+		await flush()
+		await vi.advanceTimersByTimeAsync(15_000)
+		expect(first.closedWith).toEqual({ code: 1000, reason: "unresponsive" })
+
+		await vi.advanceTimersByTimeAsync(2000)
+		expect(sockets.all).toHaveLength(2)
+		const second = sockets.all[1]!
+		second.open()
+		expect(
+			opens(second)
+				.map((frame) => frame.sourceId)
+				.sort(),
+		).toEqual(["o", "u"])
+		snapshot(second, opens(second)[0]!.id as number, 5)
+		snapshot(second, opens(second)[1]!.id as number, 9)
+		expect(user.connection.status.state).toBe("ready")
+		expect(org.connection.status.state).toBe("ready")
+	})
+
+	it("retries only the late stream while the socket still talks", async () => {
+		const { sockets, hub } = setup()
+		const user = hub.acquire("user", "u")
+		const org = hub.acquire("org", "o")
+		await flush()
+		const socket = sockets.all[0]!
+		socket.open()
+		snapshot(socket, 0, 4)
+
+		await vi.advanceTimersByTimeAsync(15_000)
+		expect(socket.isClosed).toBe(false)
+		expect(socket.sent.at(-1)).toEqual({ _tag: "Close", id: 1 })
+		expect(user.connection.status.state).toBe("ready")
+		expect(org.connection.status.state).toBe("error")
+		await vi.advanceTimersByTimeAsync(1000)
+		expect(opens(socket).map((frame) => frame.sourceId)).toEqual(["u", "o", "o"])
+	})
+
+	it("gives up on a handshake that never completes", async () => {
+		const { sockets, hub } = setup()
+		const org = hub.acquire("org", "o")
+		await flush()
+		await vi.advanceTimersByTimeAsync(15_000)
+		expect(sockets.all[0]!.closedWith).toEqual({ code: 1000, reason: "timeout" })
+		expect(org.connection.status.state).toBe("error")
+		await vi.advanceTimersByTimeAsync(1000)
+		expect(sockets.all).toHaveLength(2)
 	})
 
 	it("ignores a closed stream's late frames and closes the socket once idle", async () => {

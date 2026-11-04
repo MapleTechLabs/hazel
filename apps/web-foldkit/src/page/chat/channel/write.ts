@@ -31,7 +31,14 @@ import {
 } from "../message-actions"
 import * as Overlays from "../overlays"
 import type { ChatMessage } from "../rows"
-import { Message, type Model, type PageReturn, type ThreadCreation, type ThreadPanel } from "./model"
+import {
+	type HeldThreadMessage,
+	Message,
+	type Model,
+	type PageReturn,
+	type ThreadCreation,
+	type ThreadPanel,
+} from "./model"
 import { loadWidthCommands } from "./thread-width"
 import { resetWindow } from "./window"
 
@@ -149,17 +156,122 @@ const updateOneDraft = (
 		: liftDraft(model, which, DraftUpdate.update(draft, message, contextFor(model, which, shared)))
 }
 
+/**
+ * What needs the thread to exist: a send (a GIF, a bot command too), and files (their upload is
+ * presigned for its channel). A held command keeps what was submitted (`HeldThreadMessage`).
+ */
+const needsThread = (message: Draft.Message): boolean =>
+	message._tag === "SelectedFiles" ||
+	message._tag === "SelectedGif" ||
+	(message._tag === "ReceivedDropEvent" && message.event._tag === "DroppedFiles") ||
+	(message._tag === "GotComposerMessage" &&
+		(message.message._tag === "SubmittedDraft" ||
+			message.message._tag === "PastedFiles" ||
+			message.message._tag === "ClickedExecuteCommand" ||
+			(message.message._tag === "PressedCommandFieldKey" && message.message.key === "Enter")))
+
+/** The thread panel's sends and files, while its thread is still being created: held until it exists. */
+const isCommandRun = (message: Draft.Message) =>
+	message._tag === "GotComposerMessage" &&
+	(message.message._tag === "ClickedExecuteCommand" || message.message._tag === "PressedCommandFieldKey")
+
+const holdForThread = (model: Model, message: Draft.Message): PageReturn | undefined => {
+	const panel = model.threadPanel
+	if (panel?.creation !== "Creating" || !needsThread(message)) return undefined
+	const input = panel.draft.composer.commandInput
+	const held: HeldThreadMessage = {
+		message,
+		command:
+			isCommandRun(message) && input !== null
+				? { id: input.command.id, values: { ...input.values } }
+				: null,
+	}
+	// A held send's text stays in the editor until it really goes out.
+	return { model: withPanel(model, (current) => modifyFields(current, { held: (all) => [...all, held] })) }
+}
+
+const sameValues = (a: Readonly<Record<string, string>>, b: Readonly<Record<string, string>>) => {
+	const keys = Object.keys(a)
+	return keys.length === Object.keys(b).length && keys.every((key) => a[key] === b[key])
+}
+
+const isHeldSend = (message: Draft.Message) =>
+	message._tag === "GotComposerMessage" && message.message._tag === "SubmittedDraft"
+
+/**
+ * What waits for a running upload: a send (it would be ignored, or go out without the file) and a
+ * dropped file (a drop during an upload is ignored). Picked and pasted files queue behind it.
+ */
+const waitsForUpload = (message: Draft.Message) =>
+	isHeldSend(message) || (message._tag === "ReceivedDropEvent" && message.event._tag === "DroppedFiles")
+
+/**
+ * A file the held sends were waiting on failed to upload: they would go out without it, so they
+ * are dropped and their text stays in the editor, to send again.
+ */
+const dropHeldSendsOnFailedUpload = (model: Model, message: Draft.Message): Model =>
+	message._tag === "ReceivedUploadEvent" && message.event._tag === "FailedUpload"
+		? withPanel(model, (panel) =>
+				modifyFields(panel, { held: (held) => held.filter((entry) => !isHeldSend(entry.message)) }),
+			)
+		: model
+
+/**
+ * A held action still to go: a send whose text the editor still holds, a command whose field still
+ * holds the command and arguments that were submitted (not edits, or another command, since).
+ */
+const isStillWanted = (panel: ThreadPanel, { message, command }: HeldThreadMessage) => {
+	if (command !== null) {
+		const input = panel.draft.composer.commandInput
+		return input !== null && input.command.id === command.id && sameValues(input.values, command.values)
+	}
+	return (
+		message._tag !== "GotComposerMessage" ||
+		message.message._tag !== "SubmittedDraft" ||
+		panel.draft.composer.markdown.trim() === message.message.markdown.trim()
+	)
+}
+
+/**
+ * Plays back what the composer did while the panel's thread was being created, now that it exists,
+ * in order. A send waits while a file before it uploads (a send then would be ignored): playback
+ * stops there and resumes on a later thread draft update, the upload's end among them.
+ */
+export const playHeldThreadMessages = (model: Model, shared: Shared | null): PageReturn => {
+	let result: PageReturn = { model }
+	for (;;) {
+		const panel = result.model.threadPanel
+		if (panel === null || panel.creation !== "Created" || panel.held.length === 0) return result
+		const [held, ...rest] = panel.held
+		if (held === undefined || (waitsForUpload(held.message) && Draft.isUploading(panel.draft)))
+			return result
+		const next = withPanel(result.model, (current) => modifyFields(current, { held: () => rest }))
+		result = isStillWanted(panel, held)
+			? andThen({ ...result, model: next }, (current) =>
+					updateOneDraft(current, "thread", held.message, shared),
+				)
+			: { ...result, model: next }
+	}
+}
+
 export const updateDraft = (
 	model: Model,
 	which: Which,
 	message: Draft.Message,
 	shared: Shared | null,
 ): PageReturn =>
-	which === "channel" && isSharedComposerData(message)
+	(which === "thread"
+		? (holdForThread(model, message) ??
+			andThen(
+				updateOneDraft(dropHeldSendsOnFailedUpload(model, message), "thread", message, shared),
+				(next) => playHeldThreadMessages(next, shared),
+			))
+		: undefined) ??
+	(which === "channel" && isSharedComposerData(message)
 		? andThen(updateOneDraft(model, "channel", message, shared), (next) =>
 				updateOneDraft(next, "thread", message, shared),
 			)
-		: updateOneDraft(model, which, message, shared)
+		: updateOneDraft(model, which, message, shared))
 
 /** Presence and custom emojis arrive as page lookups; the composers get their copy. */
 export const forwardComposerData = (model: Model, message: Composer.Message): PageReturn =>
@@ -193,8 +305,10 @@ export const react = (model: Model, messageId: MessageId, emoji: string): PageRe
 
 // THREAD PANEL
 
+const threadEditorId = (threadChannelId: ChannelId) => `thread-composer-${threadChannelId}`
+
 export const newThreadDraft = (model: Model, threadChannelId: ChannelId): Draft.Model => {
-	const draft = Draft.init(threadChannelId, `thread-composer-${threadChannelId}`, "Reply in thread...")
+	const draft = Draft.init(threadChannelId, threadEditorId(threadChannelId), "Reply in thread...")
 	const { members, presence, mentionableBots, botCommands, customEmojis } = model.draft.composer
 	return {
 		...draft,
@@ -227,12 +341,24 @@ export const openThread = (
 						draft: newThreadDraft(model, threadChannelId),
 						memberId: null,
 						creation,
+						held: [],
 						isNaming: false,
 						messages: [],
 						rows: [],
 					}),
 				}),
-				commands: [...stopThreadTyping(model), ...loadWidthCommands(model)],
+				commands: [
+					...stopThreadTyping(model),
+					...loadWidthCommands(model),
+					// Reply at once: the panel's composer takes the focus as it mounts.
+					...Command.mapMessages(
+						[EditorCommands.FocusEditor({ editorId: threadEditorId(threadChannelId) })],
+						(message) =>
+							Message.GotThreadDraftMessage({
+								message: Draft.Message.GotComposerMessage({ message }),
+							}),
+					),
+				],
 			}
 
 export const closeThread = (model: Model): PageReturn =>
@@ -428,9 +554,13 @@ export const handleActionMessage = (model: Model, message: ActionMessage): PageR
 					}),
 				),
 			),
-		// The panel opens at once on the optimistic id; the composer waits for the RPC.
+		// The panel opens at once on the optimistic id; a send or a file waits for the RPC (`holdForThread`).
 		CompletedGenerateThreadChannelId: ({ messageId, threadChannelId }) => {
 			if (model.currentUserId === null || model.channel === null) return { model }
+			// The same message's thread: already opening here, or already made (its link not in yet).
+			if (model.threadPanel?.threadChannelId === threadChannelId) return { model }
+			if (model.lookups.threadChannels.some((channel) => channel.id === threadChannelId))
+				return openThread(model, threadChannelId, messageId, "Created")
 			const create = CreateThread({
 				threadChannelId,
 				messageId,

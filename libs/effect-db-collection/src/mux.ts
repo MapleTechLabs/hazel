@@ -38,6 +38,13 @@ export interface SyncMuxOptions {
 	readonly WebSocket?: WebSocketConstructor
 	/** How long the shared socket stays open without streams, so a reconnect reuses it. @default 10000 */
 	readonly idleCloseMs?: number
+	/**
+	 * How long a stream (or the shared socket) may wait to open. Past it, a socket that has said
+	 * nothing since is taken for dead (a sleep, a network change the browser has not noticed) and
+	 * every stream reconnects through a new one; otherwise only the late stream retries.
+	 * @default 15000
+	 */
+	readonly openTimeoutMs?: number
 	readonly log?: SyncLogger
 }
 
@@ -48,6 +55,12 @@ class MuxStream implements WebSocketLike {
 	onmessage: ((event: { readonly data: unknown }) => void) | null = null
 	onclose: ((event: { readonly code: number; readonly reason: string }) => void) | null = null
 	onerror: ((event: unknown) => void) | null = null
+	/** Whether `Open` went out; the socket's frame count then, and the timer that gives up on its `Opened`. */
+	announced = false
+	framesAtAnnounce = 0
+	/** The frame `sendFirst` gave, carried by `Open`. */
+	first: string | undefined
+	openTimer: ReturnType<typeof setTimeout> | undefined
 
 	constructor(
 		private readonly mux: SyncMux,
@@ -62,16 +75,29 @@ class MuxStream implements WebSocketLike {
 		this.mux.sendData(this.id, data)
 	}
 
+	sendFirst(data: string): void {
+		if (this.readyState !== CONNECTING || this.first !== undefined) throw new Error("Not the first frame")
+		this.first = data
+	}
+
 	close(): void {
 		if (this.readyState === CLOSED) return
 		this.readyState = CLOSED
 		this.mux.closeStream(this)
 	}
 
-	opened(): void {
+	/** `forwarded`: the Worker sent the `Open`'s first frame on (one that predates it does not). */
+	opened(forwarded: boolean): void {
 		if (this.readyState !== CONNECTING) return
+		this.clearOpenTimer()
 		this.readyState = OPEN
+		if (this.first !== undefined && !forwarded) this.mux.sendData(this.id, this.first)
 		this.onopen?.({})
+	}
+
+	clearOpenTimer(): void {
+		if (this.openTimer !== undefined) clearTimeout(this.openTimer)
+		this.openTimer = undefined
 	}
 
 	deliver(frame: string): void {
@@ -80,6 +106,7 @@ class MuxStream implements WebSocketLike {
 
 	closed(code: number, reason: string): void {
 		if (this.readyState === CLOSED) return
+		this.clearOpenTimer()
 		this.readyState = CLOSED
 		this.onclose?.({ code, reason })
 	}
@@ -98,6 +125,8 @@ export class SyncMux {
 	private nextId = 0
 	private readonly streams = new Map<number, MuxStream>()
 	private idleTimer: ReturnType<typeof setTimeout> | undefined
+	/** Frames the shared socket has received: a late stream on a socket that said nothing since means it is dead. */
+	private framesReceived = 0
 
 	constructor(options: SyncMuxOptions) {
 		this.options = options
@@ -123,6 +152,7 @@ export class SyncMux {
 	}
 
 	closeStream(stream: MuxStream): void {
+		stream.clearOpenTimer()
 		if (this.streams.get(stream.id) !== stream) return
 		this.streams.delete(stream.id)
 		if (this.isOpen) this.sendControl({ _tag: "Close", id: stream.id })
@@ -143,7 +173,12 @@ export class SyncMux {
 		this.streams.set(stream.id, stream)
 		this.clearIdleTimer()
 		if (this.socket === null) this.connect(token)
-		else if (this.isOpen) this.announce(stream)
+		// Announced after the caller's `sendFirst`, which follows `new` in the same turn.
+		else if (this.isOpen)
+			queueMicrotask(() => {
+				if (this.streams.get(stream.id) === stream && this.isOpen && !stream.announced)
+					this.announce(stream)
+			})
 		return stream
 	}
 
@@ -161,16 +196,26 @@ export class SyncMux {
 		}
 		this.socket = ws
 		this.isOpen = false
+		// A handshake that never completes would otherwise hold every stream until the browser gives up.
+		const handshakeTimer = setTimeout(() => {
+			if (this.socket !== ws || this.isOpen) return
+			this.log("warning", "The sync socket did not open; reconnecting", {})
+			this.detach(ws, 1000, "timeout")
+			this.closeStreams(ABNORMAL, "timeout")
+		}, this.openTimeoutMs)
 		ws.onopen = () => {
+			clearTimeout(handshakeTimer)
 			if (this.socket !== ws) return
 			this.isOpen = true
-			for (const stream of this.streams.values()) this.announce(stream)
+			for (const stream of this.streams.values()) if (!stream.announced) this.announce(stream)
 		}
 		ws.onmessage = (event) => {
 			if (this.socket !== ws) return
+			this.framesReceived++
 			if (typeof event.data === "string") this.onFrame(event.data)
 		}
 		ws.onclose = (event) => {
+			clearTimeout(handshakeTimer)
 			if (this.socket !== ws) return
 			this.socket = null
 			this.isOpen = false
@@ -181,14 +226,41 @@ export class SyncMux {
 		ws.onerror = () => {}
 	}
 
+	private get openTimeoutMs(): number {
+		return this.options.openTimeoutMs ?? 15_000
+	}
+
 	private announce(stream: MuxStream): void {
-		this.sendControl({
+		stream.clearOpenTimer()
+		stream.announced = true
+		stream.framesAtAnnounce = this.framesReceived
+		stream.openTimer = setTimeout(() => this.openTimedOut(stream), this.openTimeoutMs)
+		const open = {
 			_tag: "Open",
 			id: stream.id,
 			kind: stream.kind,
 			sourceId: stream.sourceId,
 			token: stream.token,
-		})
+		} as const
+		this.sendControl(stream.first === undefined ? open : { ...open, hello: stream.first })
+	}
+
+	/** A stream's `Opened` never came: the socket is dead if it went quiet too, else just that stream. */
+	private openTimedOut(stream: MuxStream): void {
+		stream.openTimer = undefined
+		if (this.streams.get(stream.id) !== stream || stream.readyState !== CONNECTING) return
+		const ws = this.socket
+		// Counted, not timed: a frame in the same millisecond as the `Open` still shows the socket lives.
+		if (ws !== null && this.framesReceived === stream.framesAtAnnounce) {
+			this.log("warning", "The sync socket went quiet; reconnecting", { source: stream.sourceId })
+			this.detach(ws, 1000, "unresponsive")
+			this.closeStreams(ABNORMAL, "unresponsive")
+			return
+		}
+		this.streams.delete(stream.id)
+		if (this.isOpen) this.sendControl({ _tag: "Close", id: stream.id })
+		if (this.streams.size === 0) this.scheduleIdleClose()
+		stream.closed(ABNORMAL, "timeout")
 	}
 
 	private onFrame(data: string): void {
@@ -205,7 +277,7 @@ export class SyncMux {
 		const control = decoded.success
 		const stream = this.streams.get(control.id)
 		if (stream === undefined) return
-		if (control._tag === "Opened") return stream.opened()
+		if (control._tag === "Opened") return stream.opened(control.hello === true)
 		this.streams.delete(control.id)
 		if (this.streams.size === 0) this.scheduleIdleClose()
 		stream.closed(control.code, control.reason)

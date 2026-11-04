@@ -201,6 +201,28 @@ const runAlarm = (object: TestObject) =>
 	})
 
 describe("ChannelObject messages", () => {
+	it("answers a send before its side effects land; they follow without another write", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const channel = yield* world.channel("direct")
+				// The OrgObject is slow (cold): the notification fan-out waits on it.
+				const slowOrg = world.objects.hold(orgTarget(world.orgId))
+
+				const message = yield* send(world, channel, world.author, "hello")
+				yield* slowOrg.reached
+				expect(yield* notificationsOf(world, world.alice)).toEqual([])
+
+				yield* slowOrg.release
+				yield* Effect.repeat(notificationsOf(world, world.alice), {
+					until: (rows) => rows.length > 0,
+				})
+				expect(yield* notificationsOf(world, world.alice)).toEqual([
+					{ memberId: world.memberIds.get(world.alice), resourceId: message.id },
+				])
+			}),
+		))
+
 	it("notifies mentioned users and the replied-to author, never the author; a mute lets a mention through", () =>
 		run(
 			Effect.gen(function* () {
