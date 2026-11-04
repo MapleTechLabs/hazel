@@ -186,20 +186,20 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		},
 		// Cleared now rather than when the query catches up, but only if it still shows one of them.
 		// …and only in the workspace it was removed from (the page may have switched since).
-		SucceededUninstallMaple: ({ botIds, organizationId }) => ({
-			model: modifyFields(model, {
-				mapleInstall: (install) =>
-					install !== null &&
-					organizationId === shared.organization?.id &&
-					botIds.includes(install.botId)
-						? null
-						: install,
-				mapleUninstalling: () => false,
-			}),
-			outMessage: PageOutMessage.RequestedToast({
-				toast: successToast("Maple removed from this workspace"),
-			}),
-		}),
+		SucceededUninstallMaple: ({ botIds, organizationId }) => {
+			const settled = modifyFields(model, { mapleUninstalling: () => false })
+			// The page may have switched workspace since: nothing was removed in this one.
+			if (organizationId !== shared.organization?.id) return { model: settled }
+			return {
+				model: modifyFields(settled, {
+					mapleInstall: (install) =>
+						install !== null && botIds.includes(install.botId) ? null : install,
+				}),
+				outMessage: PageOutMessage.RequestedToast({
+					toast: successToast("Maple removed from this workspace"),
+				}),
+			}
+		},
 		FailedUninstallMaple: ({ reason }) => ({
 			model: modifyFields(model, { mapleUninstalling: () => false }),
 			outMessage: PageOutMessage.RequestedToast({
@@ -208,6 +208,10 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 						NotFound: {
 							title: "Maple is not installed",
 							description: "It may have already been removed from this workspace.",
+						},
+						NoActiveOrganization: {
+							title: "No workspace selected",
+							description: "Open a workspace and try again.",
 						},
 					}),
 				),

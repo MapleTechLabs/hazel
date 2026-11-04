@@ -70,6 +70,17 @@ describe("event store", () => {
 		expect(Store.bounds(sql).firstRetained).toBe(5)
 		expect(Store.oldestAppendedAt(sql)).toBe(5_000)
 	})
+
+	it("caps each region's backlog on its own, so one region's traffic keeps another's events", () => {
+		const sql = freshStore()
+		Store.append(sql, body(1), 1_000, "eu")
+		Store.append(sql, body(2), 1_000, "eu")
+		for (let n = 3; n <= 10; n++) Store.append(sql, body(n), 1_000)
+		Store.enforceRetention(sql, 2_000, { maxEvents: 3, maxAgeMs: 60_000 })
+		// The default region keeps its newest three; the EU session's two, older, are untouched.
+		expect(Store.readAfter(sql, 0, 10).map((e) => e.seq)).toEqual([8, 9, 10])
+		expect(Store.readAfter(sql, 0, 10, "eu").map((e) => e.seq)).toEqual([1, 2])
+	})
 })
 
 describe("delivery: offsets, replay and acks", () => {
@@ -143,6 +154,12 @@ describe("delivery: offsets, replay and acks", () => {
 
 		expect(Store.readAfter(sql, 0, 10)).toEqual([{ seq: 1, body: body(1) }])
 		expect(Store.append(sql, body(2), 1_000, "eu")).toBe(2)
+		expect(Store.readAfter(sql, 0, 10, "eu").map((e) => e.seq)).toEqual([2])
+
+		// The old event keeps its place in the default region's count: one newer, it is the one cut.
+		Store.append(sql, body(3), 1_000)
+		Store.enforceRetention(sql, 2_000, { maxEvents: 1, maxAgeMs: 60_000 })
+		expect(Store.readAfter(sql, 0, 10).map((e) => e.seq)).toEqual([3])
 		expect(Store.readAfter(sql, 0, 10, "eu").map((e) => e.seq)).toEqual([2])
 	})
 

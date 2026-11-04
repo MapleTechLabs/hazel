@@ -30,7 +30,10 @@ export const T3CodeLinkFailure = Schema.Union([Schema.Literals(["NotConnected"])
 export type T3CodeLinkFailure = typeof T3CodeLinkFailure.Type
 
 /** What can go wrong removing Maple's bot, beyond the shared reasons. */
-export const UninstallMapleFailure = Schema.Union([Schema.Literals(["NotFound"]), CommonReason])
+export const UninstallMapleFailure = Schema.Union([
+	Schema.Literals(["NotFound", "NoActiveOrganization"]),
+	CommonReason,
+])
 export type UninstallMapleFailure = typeof UninstallMapleFailure.Type
 
 export const Message = defineMessageUnion({

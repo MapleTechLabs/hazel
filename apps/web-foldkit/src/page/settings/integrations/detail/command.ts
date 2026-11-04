@@ -35,7 +35,7 @@ export const UninstallMaple = Command.define("UninstallMaple", {
 			Effect.as(Message.SucceededUninstallMaple({ botIds, organizationId })),
 			Effect.catchTags({
 				ActiveOrganizationRequiredError: () =>
-					Effect.succeed(Message.FailedUninstallMaple({ reason: "NotFound" })),
+					Effect.succeed(Message.FailedUninstallMaple({ reason: "NoActiveOrganization" })),
 			}),
 			catchCommon((reason) => Message.FailedUninstallMaple({ reason })),
 		),
