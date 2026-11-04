@@ -10,7 +10,7 @@ class Model extends M.Class<Model>("BotInstallation")({
 	installedBy: UserId,
 	installedAt: Generated(JsonDate),
 	/** The region of the bot's service that redeemed the install (`BotGatewayRegion`); `null` for the default. */
-	region: Generated(S.NullOr(S.String)),
+	region: M.GeneratedOptional(S.NullOr(S.String)),
 }) {}
 
 export const { Insert, Update, Schema, Create, Patch } = M.expose(Model)

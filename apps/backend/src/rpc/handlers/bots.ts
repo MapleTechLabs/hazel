@@ -53,7 +53,11 @@ import { enqueueEffect } from "../../worker/objects/effects/registry"
 import { fanOut, transactionIdOf } from "../../worker/objects/fanout"
 import { orgTarget } from "../../worker/objects/kinds"
 import { mintInstallGrant } from "../../worker/objects/org/bot-install-grants"
-import { installBotHere, uninstallBotHere } from "../../worker/objects/org/bot-installs"
+import {
+	installBotHere,
+	reconcileInstallRoute,
+	uninstallBotHere,
+} from "../../worker/objects/org/bot-installs"
 import { toUserProjection, upsertUserProjection } from "../../worker/objects/org/projections"
 import { projectUserToOrgs } from "./users"
 
@@ -467,7 +471,8 @@ export const BotRpcLive = BotRpcs.toLayer(
 						})
 					}
 					// A regional install is routed before it exists, so none of its events can reach
-					// another region's session. A route whose install never commits matches no install.
+					// another region's session. After the transaction the route is reconciled with the
+					// install that did commit (`reconcileRoute`), so a failed or raced approval leaves none.
 					const regional =
 						Option.isNone(existing) && requested !== null
 							? {
@@ -475,8 +480,8 @@ export const BotRpcLive = BotRpcs.toLayer(
 									region: requested,
 								}
 							: undefined
+					const transport = yield* BotGatewayTransport
 					if (regional !== undefined) {
-						const transport = yield* BotGatewayTransport
 						yield* transport
 							.setInstallRegion(botId, organizationId, regional.installationId, regional.region)
 							.pipe(
@@ -490,36 +495,60 @@ export const BotRpcLive = BotRpcs.toLayer(
 								),
 							)
 					}
-					return yield* db.transaction(
-						Effect.gen(function* () {
-							const installed = yield* installationOf
-							if (Option.isSome(installed) && installed.value.region !== requested) {
-								return yield* new BotInstallRegionConflictError({
-									botId,
-									installedRegion: installed.value.region,
-								})
-							}
-							if (Option.isNone(installed)) {
-								yield* installBotHere({
-									bot: found.value.bot,
-									commands: found.value.commands,
+					const approved = yield* Effect.exit(
+						db.transaction(
+							Effect.gen(function* () {
+								const installed = yield* installationOf
+								if (Option.isSome(installed) && installed.value.region !== requested) {
+									return yield* new BotInstallRegionConflictError({
+										botId,
+										installedRegion: installed.value.region,
+									})
+								}
+								if (Option.isNone(installed)) {
+									yield* installBotHere({
+										bot: found.value.bot,
+										commands: found.value.commands,
+										organizationId,
+										installedBy: currentUser.id,
+										regional,
+									})
+								}
+								const code = yield* mintInstallGrant({
 									organizationId,
+									botId,
+									redirectUri,
 									installedBy: currentUser.id,
-									regional,
 								})
-							}
-							const code = yield* mintInstallGrant({
-								organizationId,
-								botId,
-								redirectUri,
-								installedBy: currentUser.id,
-							})
-							return new BotInstallAuthorizedResponse({
-								code,
-								transactionId: yield* generateTransactionId(),
-							})
-						}),
+								return new BotInstallAuthorizedResponse({
+									code,
+									transactionId: yield* generateTransactionId(),
+								})
+							}),
+						),
 					)
+					if (regional !== undefined) {
+						// Committed under our id: the route is already right. Otherwise point it at the
+						// install that exists (a concurrent approval's), or clear ours when none does.
+						const committed = yield* installationOf.pipe(
+							Effect.orElseSucceed(() => Option.none()),
+						)
+						const route = reconcileInstallRoute(regional, committed)
+						if (route !== undefined) {
+							yield* transport
+								.setInstallRegion(botId, organizationId, route.installationId, route.region)
+								.pipe(
+									Effect.catchTag("DurableStreamRequestError", (error) =>
+										Effect.logWarning("Bot install route left unreconciled", {
+											botId,
+											organizationId,
+											cause: error,
+										}),
+									),
+								)
+						}
+					}
+					return yield* approved
 				}).pipe(withRemapDbErrors("BotInstallation", "create")),
 
 			"bot.updateAvatar": ({ id, avatarUrl }) =>

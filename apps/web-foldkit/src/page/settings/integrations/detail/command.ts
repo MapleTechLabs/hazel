@@ -13,15 +13,27 @@ const Provider = IntegrationConnection.IntegrationProvider
 
 const target = { orgId: OrganizationId, provider: Provider }
 
-/** Remove Maple's bot from the workspace (`bot.uninstall`), from its integration page. */
+/**
+ * Remove Maple from the workspace (`bot.uninstall`), from its integration page: every Maple bot
+ * installed here, one after another. One already gone counts as removed.
+ */
 export const UninstallMaple = Command.define("UninstallMaple", {
-	args: { botId: BotId, organizationId: OrganizationId },
+	args: { botIds: Schema.Array(BotId), organizationId: OrganizationId },
 	messages: [Message.SucceededUninstallMaple, Message.FailedUninstallMaple],
-	execute: ({ botId, organizationId }) =>
-		HazelRpc.use((rpc) => rpc("bot.uninstall", { botId, organizationId })).pipe(
-			Effect.as(Message.SucceededUninstallMaple({ botId })),
+	execute: ({ botIds, organizationId }) =>
+		HazelRpc.use((rpc) =>
+			Effect.forEach(
+				botIds,
+				(botId) =>
+					rpc("bot.uninstall", { botId, organizationId }).pipe(
+						Effect.asVoid,
+						Effect.catchTag("BotNotFoundError", () => Effect.void),
+					),
+				{ discard: true },
+			),
+		).pipe(
+			Effect.as(Message.SucceededUninstallMaple({ botIds })),
 			Effect.catchTags({
-				BotNotFoundError: () => Effect.succeed(Message.FailedUninstallMaple({ reason: "NotFound" })),
 				ActiveOrganizationRequiredError: () =>
 					Effect.succeed(Message.FailedUninstallMaple({ reason: "NotFound" })),
 			}),

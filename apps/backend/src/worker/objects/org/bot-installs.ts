@@ -103,6 +103,22 @@ export const installBotHere = Effect.fn("OrgObject.installBot")(function* (input
 	yield* refreshInstallCount(bot.id)
 })
 
+/**
+ * The gateway route to set once a regional approval's transaction is over, given the install that
+ * committed (if any): nothing when ours did, the committed install's route when another approval
+ * won the race, and a clear of ours when no install exists (the transaction failed or rolled back).
+ */
+export const reconcileInstallRoute = (
+	ours: { readonly installationId: BotInstallationId; readonly region: string },
+	committed: Option.Option<{ readonly id: BotInstallationId; readonly region: string | null }>,
+): { readonly installationId: BotInstallationId; readonly region: string | null } | undefined => {
+	if (Option.isNone(committed)) return { installationId: ours.installationId, region: null }
+	if (committed.value.id === ours.installationId) return undefined
+	return committed.value.region === null
+		? { installationId: ours.installationId, region: null }
+		: { installationId: committed.value.id, region: committed.value.region }
+}
+
 /** Uninstall: the reverse of `installBotHere`. Returns false when the bot is not installed here. */
 export const uninstallBotHere = Effect.fn("OrgObject.uninstallBot")(function* (
 	botId: BotId,

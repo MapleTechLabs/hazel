@@ -41,6 +41,7 @@ import { init, update } from "./update"
 import { view } from "./view"
 
 const MAPLE_BOT = "ca08852a-fb2e-4df9-8602-519e7ec3b9bf" as BotId
+const OLD_EU_BOT = "de89c591-fcf9-4ff7-a13e-0118180bfc99" as BotId
 import { sharedDefaults } from "../../../test-shared"
 import * as Modal from "../../../../ui/modal"
 import {
@@ -107,7 +108,7 @@ describe("integration detail page", () => {
 			given(pageFor("maple").model),
 			Subscription.emit(
 				Message.UpdatedMapleInstall({
-					install: { botId: MAPLE_BOT, region: "eu" },
+					install: { botId: MAPLE_BOT, region: "eu", botIds: [MAPLE_BOT] },
 				}),
 			),
 			expectView(text("Connected")).toExist(),
@@ -130,7 +131,11 @@ describe("integration detail page", () => {
 		scene(
 			config,
 			given(pageFor("maple").model),
-			Subscription.emit(Message.UpdatedMapleInstall({ install: { botId: MAPLE_BOT, region: null } })),
+			Subscription.emit(
+				Message.UpdatedMapleInstall({
+					install: { botId: MAPLE_BOT, region: null, botIds: [MAPLE_BOT] },
+				}),
+			),
 			expectView(role("link", { name: "Manage in Maple" })).toHaveAttr(
 				"href",
 				"https://app.maple.dev/integrations?integration=chat-hazel",
@@ -143,11 +148,19 @@ describe("integration detail page", () => {
 		scene(
 			config,
 			given(pageFor("maple").model),
-			Subscription.emit(Message.UpdatedMapleInstall({ install: { botId: MAPLE_BOT, region: "eu" } })),
+			Subscription.emit(
+				Message.UpdatedMapleInstall({
+					install: { botId: MAPLE_BOT, region: "eu", botIds: [MAPLE_BOT, OLD_EU_BOT] },
+				}),
+			),
 			click(role("button", { name: "Remove from workspace" })),
-			Command.expectExact(UninstallMaple({ botId: MAPLE_BOT, organizationId: orgId })),
+			// Both Maple bots go: the shared one and the old EU one.
+			Command.expectExact(UninstallMaple({ botIds: [MAPLE_BOT, OLD_EU_BOT], organizationId: orgId })),
 			expectView(role("button", { name: "Removing..." })).toBeDisabled(),
-			Command.resolve(UninstallMaple, Message.SucceededUninstallMaple({ botId: MAPLE_BOT })),
+			Command.resolve(
+				UninstallMaple,
+				Message.SucceededUninstallMaple({ botIds: [MAPLE_BOT, OLD_EU_BOT] }),
+			),
 			expectOutMessage(
 				PageOutMessage.RequestedToast({ toast: successToast("Maple removed from this workspace") }),
 			),

@@ -178,16 +178,17 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 						model: modifyFields(model, { mapleUninstalling: () => true }),
 						commands: [
 							UninstallMaple({
-								botId: model.mapleInstall.botId,
+								botIds: model.mapleInstall.botIds,
 								organizationId: organization.id,
 							}),
 						],
 					}
 		},
-		// Cleared now rather than when the query catches up, but only if it still shows this bot.
-		SucceededUninstallMaple: ({ botId }) => ({
+		// Cleared now rather than when the query catches up, but only if it still shows one of them.
+		SucceededUninstallMaple: ({ botIds }) => ({
 			model: modifyFields(model, {
-				mapleInstall: (install) => (install?.botId === botId ? null : install),
+				mapleInstall: (install) =>
+					install !== null && botIds.includes(install.botId) ? null : install,
 				mapleUninstalling: () => false,
 			}),
 			outMessage: PageOutMessage.RequestedToast({

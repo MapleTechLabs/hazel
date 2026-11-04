@@ -37,7 +37,7 @@ export const Message = defineMessageUnion({
 	UpdatedConnection: { connection: Schema.NullOr(Connection) },
 	UpdatedMapleInstall: { install: Schema.NullOr(MapleInstall) },
 	ClickedUninstallMaple: {},
-	SucceededUninstallMaple: { botId: BotId },
+	SucceededUninstallMaple: { botIds: Schema.Array(BotId) },
 	FailedUninstallMaple: { reason: UninstallMapleFailure },
 	ClickedBack: {},
 	ClickedConnect: {},

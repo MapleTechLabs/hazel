@@ -8,7 +8,13 @@ import * as ConfirmAction from "../../../shared/confirm-action"
 import { Connection } from "../shared/connections"
 
 /** Maple's bot in this workspace, and the Maple region that owns the install (`null`: not known). */
-export const MapleInstall = Schema.Struct({ botId: BotId, region: Schema.NullOr(Schema.String) })
+export const MapleInstall = Schema.Struct({
+	/** The install the page shows: the shared bot's when it is there. */
+	botId: BotId,
+	region: Schema.NullOr(Schema.String),
+	/** Every Maple bot installed here (the shared one and the old EU one): Remove takes them all. */
+	botIds: Schema.Array(BotId),
+})
 export type MapleInstall = typeof MapleInstall.Type
 
 export const CallbackStatus = Schema.Literals(["success", "error"])

@@ -63,12 +63,19 @@ export const subscriptions = Subscription.make<PageSubscriptionInput<Model>, Mes
 							installationsQuery(organizationId),
 							(rows) => {
 								// In `MAPLE_BOT_IDS` order: the bot every region shares wins over the old EU one.
-								const row = MAPLE_BOT_IDS.map((botId) =>
-									rows.find((candidate) => candidate.botId === botId),
-								).find((candidate) => candidate !== undefined)
+								const installed = MAPLE_BOT_IDS.flatMap((botId) =>
+									rows.filter((candidate) => candidate.botId === botId),
+								)
+								const row = installed[0]
 								return Message.UpdatedMapleInstall({
 									install:
-										row === undefined ? null : { botId: row.botId, region: row.region },
+										row === undefined
+											? null
+											: {
+													botId: row.botId,
+													region: row.region,
+													botIds: installed.map((candidate) => candidate.botId),
+												},
 								})
 							},
 						),
