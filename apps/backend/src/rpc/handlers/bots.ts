@@ -18,7 +18,7 @@ import {
 	InternalServerError,
 	withRemapDbErrors,
 } from "@hazel/domain"
-import { isRegisteredInstallRedirect } from "@hazel/domain/bot-install"
+import { isRegisteredInstallRedirect, regionOfInstallRedirect } from "@hazel/domain/bot-install"
 import {
 	BotAlreadyInstalledError,
 	BotCommandListResponse,
@@ -440,7 +440,7 @@ export const BotRpcLive = BotRpcs.toLayer(
 				}).pipe(withRemapDbErrors("Bot", "select")),
 
 			// The consent page's approval: install (unless it already is) and mint the grant together.
-			"bot.authorizeInstall": ({ botId, organizationId: hint, redirectUri, region }) =>
+			"bot.authorizeInstall": ({ botId, organizationId: hint, redirectUri }) =>
 				Effect.gen(function* () {
 					const currentUser = yield* CurrentUser.Context
 					const organizationId = yield* activeOrganization(hint)
@@ -456,7 +456,8 @@ export const BotRpcLive = BotRpcs.toLayer(
 							.where(($) => [$.botId.eq(botId), $.organizationId.eq(organizationId)])
 							.limit(1),
 					)
-					const requested = region ?? null
+					// The registered (exactly matched) callback names the region, never the link.
+					const requested = regionOfInstallRedirect(redirectUri)
 					// One install per org: a link from another region would silently take its events.
 					const existing = yield* installationOf
 					if (Option.isSome(existing) && existing.value.region !== requested) {
@@ -468,8 +469,11 @@ export const BotRpcLive = BotRpcs.toLayer(
 					// A regional install is routed before it exists, so none of its events can reach
 					// another region's session. A route whose install never commits matches no install.
 					const regional =
-						Option.isNone(existing) && region !== undefined
-							? { installationId: BotInstallationId.make(crypto.randomUUID()), region }
+						Option.isNone(existing) && requested !== null
+							? {
+									installationId: BotInstallationId.make(crypto.randomUUID()),
+									region: requested,
+								}
 							: undefined
 					if (regional !== undefined) {
 						const transport = yield* BotGatewayTransport

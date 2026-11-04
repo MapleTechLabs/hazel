@@ -1,4 +1,3 @@
-import { BotGatewayRegion } from "@hazel/domain"
 import { BotId } from "@hazel/schema"
 import { Option, Schema } from "effect"
 import { modifyFields } from "foldkit/struct"
@@ -11,15 +10,12 @@ import { Approval, Lookup, type Model, type Request } from "./model"
 type Return = PageReturn<Model, Message>
 
 const decodeBotId = Schema.decodeUnknownOption(BotId)
-const isRegion = Schema.is(BotGatewayRegion)
 
-/** The link's parameters; `null` when one is missing or malformed (a region included). */
+/** The link's parameters; `null` when one is missing or malformed. */
 const requestOf = (route: RouteOf<"BotInstall">): Request | null => {
 	const botId = Option.flatMap(route.botId, decodeBotId)
 	if (Option.isNone(botId) || Option.isNone(route.redirectUri) || Option.isNone(route.state)) return null
-	const region = Option.getOrNull(route.region)
-	if (region !== null && !isRegion(region)) return null
-	return { botId: botId.value, redirectUri: route.redirectUri.value, state: route.state.value, region }
+	return { botId: botId.value, redirectUri: route.redirectUri.value, state: route.state.value }
 }
 
 export const init = (route: RouteOf<"BotInstall">): Return => {
@@ -101,7 +97,6 @@ export const update = (model: Model, message: Message): Return =>
 								organizationId: model.selectedOrganizationId,
 								redirectUri: model.request.redirectUri,
 								state: model.request.state,
-								region: model.request.region,
 							}),
 						],
 					},

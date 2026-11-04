@@ -5,6 +5,7 @@ import {
 	installRedirectUrl,
 	isRegisteredInstallRedirect,
 	isValidInstallRedirectUri,
+	regionOfInstallRedirect,
 } from "./bot-install"
 
 describe("bot install redirect URIs", () => {
@@ -17,6 +18,15 @@ describe("bot install redirect URIs", () => {
 		expect(isValidInstallRedirectUri("https://maple.dev/cb#frag")).toBe(false)
 		expect(isValidInstallRedirectUri("https://user:pass@maple.dev/cb")).toBe(false)
 		expect(isValidInstallRedirectUri("/relative")).toBe(false)
+	})
+
+	it("takes one well-formed region, which names the callback's region of the service", () => {
+		expect(isValidInstallRedirectUri("https://api.eu.maple.dev/cb?region=eu")).toBe(true)
+		expect(isValidInstallRedirectUri("https://api.eu.maple.dev/cb?region=EU")).toBe(false)
+		expect(isValidInstallRedirectUri("https://api.eu.maple.dev/cb?region=")).toBe(false)
+		expect(isValidInstallRedirectUri("https://api.eu.maple.dev/cb?region=eu&region=us")).toBe(false)
+		expect(regionOfInstallRedirect("https://api.eu.maple.dev/cb?region=eu")).toBe("eu")
+		expect(regionOfInstallRedirect("https://api.maple.dev/cb")).toBe(null)
 	})
 
 	it("decodes a list of at most ten", () => {

@@ -10,7 +10,6 @@ import { RouteOrganizationId } from "./routing-fields"
 import { RequiredScopes } from "../scopes/required-scopes"
 import { ApiScope } from "../scopes/api-scope"
 import { InstallRedirectUris } from "../bot-install"
-import { BotGatewayRegion } from "../bot-gateway"
 
 /**
  * Response schema for bot operations.
@@ -454,8 +453,6 @@ export class BotRpcs extends RpcGroup.make(
 			botId: BotId,
 			organizationId: RouteOrganizationId,
 			redirectUri: Schema.String,
-			/** The install link's `region`: the gateway session that receives this org's events. */
-			region: Schema.optional(BotGatewayRegion),
 		}),
 		success: BotInstallAuthorizedResponse,
 		error: Schema.Union([

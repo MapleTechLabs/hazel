@@ -413,13 +413,14 @@ describe("directory path", () => {
 			}),
 		))
 
-	it("a regional install is routed before it exists, refuses another region, and its route leaves with it", () =>
+	it("an install through a regional callback is routed before it exists, refuses another region, and its route leaves with it", () =>
 		run(
 			Effect.gen(function* () {
 				const objects = yield* makeTestObjects
 				const home = yield* seed(objects)
 				const away = yield* seed(objects)
 				const redirectUri = "https://maple.example/oauth/chat/hazel/callback"
+				const euRedirectUri = "https://eu.maple.example/oauth/chat/hazel/callback?region=eu"
 				const created = ok<{ data: { id: string } }>(
 					yield* call(
 						home.org,
@@ -433,17 +434,16 @@ describe("directory path", () => {
 				ok(
 					yield* objects.invokeDirectory(
 						"bot.update",
-						{ id: botId, installRedirectUris: [redirectUri] },
+						{ id: botId, installRedirectUris: [redirectUri, euRedirectUri] },
 						principalOf(home.seed.owner),
 					),
 				)
-				const request = { botId, organizationId: away.seed.orgId, redirectUri }
-				const authorize = (region?: string) =>
+				const authorize = (uri: string) =>
 					call(
 						away.org,
 						away.seed.orgId,
 						"bot.authorizeInstall",
-						region === undefined ? request : { ...request, region },
+						{ botId, organizationId: away.seed.orgId, redirectUri: uri },
 						away.seed.owner,
 					)
 				const installations = () =>
@@ -452,7 +452,7 @@ describe("directory path", () => {
 						region: string | null
 					}>
 
-				ok(yield* authorize("eu"))
+				ok(yield* authorize(euRedirectUri))
 				const [installation] = installations()
 				expect(installation?.region).toBe("eu")
 				// The gateway was told before the install committed, under the install's own id.
@@ -465,10 +465,13 @@ describe("directory path", () => {
 					},
 				])
 
-				// Approving again from the same region mints another grant; another region is refused.
-				ok(yield* authorize("eu"))
-				expect(errorTag(yield* authorize())).toBe("BotInstallRegionConflictError")
-				expect(errorTag(yield* authorize("us-west"))).toBe("BotInstallRegionConflictError")
+				// Approving again from the same region mints another grant; another region is refused,
+				// and a link that edits the region no longer matches a registered callback.
+				ok(yield* authorize(euRedirectUri))
+				expect(errorTag(yield* authorize(redirectUri))).toBe("BotInstallRegionConflictError")
+				expect(errorTag(yield* authorize(`${redirectUri}?region=us-west`))).toBe(
+					"BotInstallRedirectMismatchError",
+				)
 				expect(objects.installRegions).toHaveLength(1)
 
 				// Removing it clears exactly that install's route.
@@ -489,7 +492,7 @@ describe("directory path", () => {
 				})
 
 				// Then any region may install it; the default one needs no route.
-				ok(yield* authorize())
+				ok(yield* authorize(redirectUri))
 				expect(installations().map((row) => row.region)).toEqual([null])
 				expect(objects.installRegions).toHaveLength(2)
 			}),

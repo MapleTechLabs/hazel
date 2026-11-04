@@ -225,25 +225,14 @@ describe("hrefOf", () => {
 					botId: Option.some(orgId),
 					redirectUri: Option.some("https://maple.dev/cb?x=1"),
 					state: Option.some("s t"),
-					region: Option.none(),
 				}),
 				`/oauth/bot-install?bot_id=${orgId}&redirect_uri=https%3A%2F%2Fmaple.dev%2Fcb%3Fx%3D1&state=s+t`,
-			],
-			[
-				AppRoute.BotInstall({
-					botId: Option.some(orgId),
-					redirectUri: Option.some("https://maple.dev/cb"),
-					state: Option.some("s"),
-					region: Option.some("eu"),
-				}),
-				`/oauth/bot-install?bot_id=${orgId}&redirect_uri=https%3A%2F%2Fmaple.dev%2Fcb&state=s&region=eu`,
 			],
 			[
 				AppRoute.BotInstall({
 					botId: Option.none(),
 					redirectUri: Option.none(),
 					state: Option.none(),
-					region: Option.none(),
 				}),
 				"/oauth/bot-install",
 			],

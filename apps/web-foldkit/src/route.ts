@@ -18,12 +18,11 @@ export const AppRoute = defineRouteUnion({
 	Join: { slug: Schema.String },
 	/** The link in an invitation email. */
 	Invite: { token: Schema.String },
-	/** A bot's install link (`@hazel/domain/bot-install`): `?bot_id=&redirect_uri=&state=[&region=]`. */
+	/** A bot's install link (`@hazel/domain/bot-install`): `?bot_id=&redirect_uri=&state=`. */
 	BotInstall: {
 		botId: Schema.Option(Schema.String),
 		redirectUri: Schema.Option(Schema.String),
 		state: Schema.Option(Schema.String),
-		region: Schema.Option(Schema.String),
 	},
 	/** `?orgId=&step=` (`validateSearch` in `onboarding/index.tsx`). */
 	Onboarding: { orgId: Schema.Option(OrganizationId), step: Schema.Option(Schema.String) },
@@ -95,7 +94,6 @@ const BotInstallQuery = Schema.Struct({
 	botId: Schema.OptionFromOptional(Schema.String),
 	redirectUri: Schema.OptionFromOptional(Schema.String),
 	state: Schema.OptionFromOptional(Schema.String),
-	region: Schema.OptionFromOptional(Schema.String),
 }).pipe(Schema.encodeKeys({ botId: "bot_id", redirectUri: "redirect_uri" }))
 const OrgIdQuery = Schema.Struct({ orgId: Schema.OptionFromOptional(OrganizationId) })
 const OnboardingQuery = Schema.Struct({
