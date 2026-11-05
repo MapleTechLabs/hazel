@@ -228,13 +228,14 @@ const imageViewerOverlay = (h: H, model: Model): Html => {
 						caption: { title: image.title, description: image.description },
 					})),
 		index: viewer.index,
-		author: row.message.author
-			? {
-					name: `${row.message.author.firstName} ${row.message.author.lastName}`,
-					avatarUrl: row.message.author.avatarUrl,
-					seed: `${row.message.author.firstName} ${row.message.author.lastName}`,
-				}
-			: null,
+		author:
+			row.author.displayName === ""
+				? null
+				: {
+						name: row.author.displayName,
+						avatarUrl: row.author.avatarUrl,
+						seed: row.author.displayName,
+					},
 		createdAtMs: row.message.createdAtMs,
 		toClose: () => toOverlay(Overlays.Message.ClosedImageViewer()),
 		toSelect: (index) => toOverlay(Overlays.Message.SelectedViewerImage({ index })),

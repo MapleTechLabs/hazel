@@ -6,7 +6,6 @@ import {
 	messageCollection,
 	messageReactionCollection,
 	pinnedMessageCollection,
-	userCollection,
 } from "~/db/collections"
 import { liveQueryStream } from "../../data/live-query"
 import { type LiveQueryWindow, liveQueryChangeSetStream } from "../../data/live-query-changes"
@@ -75,22 +74,23 @@ const messageQueryStream = <Message>(
 	liveQueryChangeSetStream<MessageQueryRow, Message, MessageId>(
 		(q, { limit, offset }) => {
 			const isWholeChannel = loadsWholeChannel(channelId)
-			return q
-				.from({ message: messageCollection })
-				.leftJoin({ pinned: pinnedMessageCollection }, ({ message, pinned }) =>
-					eq(message.id, pinned.messageId),
-				)
-				.leftJoin({ author: userCollection }, ({ message, author }) =>
-					eq(message.authorId, author.id),
-				)
-				.where(({ message }) => eq(message.channelId, channelId))
-				.select(({ message, pinned, author }) => ({ ...message, pinnedMessage: pinned, author }))
-				.orderBy(
-					({ message }) => (isWholeChannel ? coalesce(message.createdAt) : message.createdAt),
-					"desc",
-				)
-				.limit(limit)
-				.offset(offset)
+			return (
+				q
+					.from({ message: messageCollection })
+					.leftJoin({ pinned: pinnedMessageCollection }, ({ message, pinned }) =>
+						eq(message.id, pinned.messageId),
+					)
+					// No join on the org's users: an eager collection holds the query until every org
+					// source has its snapshot. Authors come from the users lookup (`derive.ts` `authorOf`).
+					.where(({ message }) => eq(message.channelId, channelId))
+					.select(({ message, pinned }) => ({ ...message, pinnedMessage: pinned }))
+					.orderBy(
+						({ message }) => (isWholeChannel ? coalesce(message.createdAt) : message.createdAt),
+						"desc",
+					)
+					.limit(limit)
+					.offset(offset)
+			)
 		},
 		window,
 		readWindow,
@@ -195,11 +195,8 @@ const threadPanelQueryStream = <Message>(
 		(q) =>
 			q
 				.from({ message: messageCollection })
-				.leftJoin({ author: userCollection }, ({ message, author }) =>
-					eq(message.authorId, author.id),
-				)
 				.where(({ message }) => eq(message.channelId, threadChannelId))
-				.select(({ message, author }) => ({ ...message, author, pinnedMessage: null }))
+				.select(({ message }) => ({ ...message, pinnedMessage: null }))
 				.orderBy(({ message }) => message.createdAt, "asc"),
 		(rows) => toMessage(rows.map(toChatMessage)),
 	)

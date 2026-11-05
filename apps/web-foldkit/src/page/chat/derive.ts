@@ -110,6 +110,13 @@ export const toDeriveContext = (
 	replyTargets: byKey(lookups.replyTargets, (target) => target.id),
 })
 
+/** The message's author: the row's own join when its query has one, else the users lookup. */
+export const authorOf = (
+	context: DeriveContext,
+	message: ChatMessage,
+): Pick<UserInfo, "firstName" | "lastName" | "avatarUrl" | "userType"> | null =>
+	message.author ?? context.users.get(message.authorId) ?? null
+
 /** `buildChatAuthorIdentity` with `useBotName`. */
 export const authorIdentity = (
 	user: Pick<UserInfo, "firstName" | "lastName" | "avatarUrl" | "userType"> | null | undefined,
@@ -328,7 +335,7 @@ export const messageRowData = (
 	message,
 	groupPosition,
 	reactions: aggregateReactions(reactions, context),
-	author: authorIdentity(message.author, context.botNames.get(message.authorId)),
+	author: authorIdentity(authorOf(context, message), context.botNames.get(message.authorId)),
 	status: statusOf(context, message.authorId),
 	isDiscordSynced: context.discordSynced.has(message.id),
 	reply: replyOf(context, message.replyToMessageId),

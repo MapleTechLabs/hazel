@@ -13,7 +13,7 @@ import { avatar } from "../../ui/avatar"
 import { button, buttonClassName } from "../../ui/button"
 import { loader } from "../../ui/loader"
 import { MIN_CHANNEL_WIDTH, MIN_THREAD_PANEL_WIDTH } from "./channel/thread-width"
-import { type DeriveContext, authorIdentity, htmlRendersOf } from "./derive"
+import { type DeriveContext, authorIdentity, authorOf, htmlRendersOf } from "./derive"
 import type { ChatMessage, MessageRow } from "./rows"
 
 /**
@@ -220,7 +220,7 @@ const introView = <M>(h: HtmlBuilder<M>, threadName: string, starterName: string
 /** The starter message, laid out like a list row. */
 const originalView = <M>(h: HtmlBuilder<M>, original: ChatMessage, inputs: ThreadPanelInputs<M>): Html => {
 	const { context, originalRow, rowContext } = inputs
-	const author = authorIdentity(original.author, context.botNames.get(original.authorId))
+	const author = authorIdentity(authorOf(context, original), context.botNames.get(original.authorId))
 	return h.div(
 		[h.Class("flex gap-4 px-2.5 py-2")],
 		[
@@ -271,8 +271,10 @@ const scrollView = <M>(h: HtmlBuilder<M>, inputs: ThreadPanelInputs<M>): Html =>
 	const starterName =
 		inputs.original === null
 			? null
-			: authorIdentity(inputs.original.author, inputs.context.botNames.get(inputs.original.authorId))
-					.displayName
+			: authorIdentity(
+					authorOf(inputs.context, inputs.original),
+					inputs.context.botNames.get(inputs.original.authorId),
+				).displayName
 	return h.div(
 		[h.Class("flex min-h-0 flex-1 flex-col-reverse overflow-y-auto bg-bg")],
 		[
