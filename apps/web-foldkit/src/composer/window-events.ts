@@ -15,7 +15,9 @@ export const globalTypingStream = <Message>(toMessage: (key: string) => Message)
 	Dom.streamFromEventFilterMapPreventDefault({
 		target: () => document,
 		type: "keydown",
+		// A key something already handled (a focused message's E, R, +) is not typing.
 		filterMapEvent: (event) =>
+			event.defaultPrevented ||
 			isEditableTarget(event.target) ||
 			event.ctrlKey ||
 			event.altKey ||

@@ -46,18 +46,38 @@ const CHANNEL_NAVIGATION: ReadonlySet<LayoutHotkeyActionId> = new Set([
 	"mention.next",
 ])
 
+/**
+ * Actions that act on the whole app, off while a modal or the command palette holds the keyboard:
+ * behind a dialog, Shift+Escape would mark everything read and Mod+/ replace the dialog.
+ */
+const NOT_UNDER_OVERLAY: ReadonlySet<LayoutHotkeyActionId> = new Set([
+	"organization.markRead",
+	"shortcuts.open",
+	"history.back",
+	"history.forward",
+	"sidebar.toggle",
+	"inbox.open",
+])
+
 /** Formatting keys in the composer and other rich fields (Mod+I italic): only bound outside them. */
 const NOT_WHILE_TYPING: ReadonlySet<LayoutHotkeyActionId> = new Set(["inbox.open"])
 
 export const layoutHotkeys = <Message>(
 	toMessage: (actionId: LayoutHotkeyActionId) => Message,
-	options: { readonly isChannelNavigationEnabled: boolean } = { isChannelNavigationEnabled: true },
+	options: {
+		/** On a chat page, with no modal or palette open. */
+		readonly isChannelNavigationEnabled: boolean
+		/** A modal or the command palette is open. */
+		readonly isOverlayOpen: boolean
+	} = { isChannelNavigationEnabled: true, isOverlayOpen: false },
 ) =>
 	Dom.streamFromKeyBindings<Message>({
 		bindings: LAYOUT_ACTIONS.map((actionId) => ({
 			keys: HOTKEY_DEFINITIONS_BY_ID[actionId].defaultHotkey,
 			whileTyping: NOT_WHILE_TYPING.has(actionId) ? ("Suppress" as const) : ("Allow" as const),
-			isEnabled: !CHANNEL_NAVIGATION.has(actionId) || options.isChannelNavigationEnabled,
+			isEnabled:
+				(!CHANNEL_NAVIGATION.has(actionId) || options.isChannelNavigationEnabled) &&
+				(!NOT_UNDER_OVERLAY.has(actionId) || !options.isOverlayOpen),
 			mapEvent: () => toMessage(actionId),
 		})),
 	})

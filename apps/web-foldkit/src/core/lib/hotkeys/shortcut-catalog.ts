@@ -31,8 +31,6 @@ export const SHORTCUT_SECTIONS: ReadonlyArray<ShortcutSection> = [
 			fromRegistry("channel.next"),
 			fromRegistry("channel.previousUnread"),
 			fromRegistry("channel.nextUnread"),
-			fromRegistry("mention.previous"),
-			fromRegistry("mention.next"),
 			fromRegistry("organization.previous"),
 			fromRegistry("organization.next"),
 			fromRegistry("inbox.open"),

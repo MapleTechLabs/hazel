@@ -99,7 +99,7 @@ const replying = (markdown = ""): Draft.Model =>
 	withDraft({ ...fresh(), composeMode: Draft.ComposeMode.Replying({ messageId: replyId }) }, markdown)
 const editing = (): Draft.Model =>
 	withDraft(
-		{ ...fresh(), composeMode: Draft.ComposeMode.Editing({ messageId: lastOwnId }) },
+		{ ...fresh(), composeMode: Draft.ComposeMode.Editing({ messageId: lastOwnId, hadText: true }) },
 		lastOwnContent,
 	)
 

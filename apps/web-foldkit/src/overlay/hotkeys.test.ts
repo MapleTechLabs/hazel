@@ -8,9 +8,13 @@ import { layoutHotkeys } from "./hotkeys"
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform)
 const mod = (init: KeyboardEventInit): KeyboardEventInit =>
 	isMac ? { ...init, metaKey: true } : { ...init, ctrlKey: true }
-const run = (act: Parameters<typeof collectKeyStream>[1], isChannelNavigationEnabled = true) =>
+const run = (
+	act: Parameters<typeof collectKeyStream>[1],
+	isChannelNavigationEnabled = true,
+	isOverlayOpen = false,
+) =>
 	collectKeyStream(
-		layoutHotkeys((id) => id, { isChannelNavigationEnabled }),
+		layoutHotkeys((id) => id, { isChannelNavigationEnabled, isOverlayOpen }),
 		act,
 	)
 
@@ -112,6 +116,26 @@ describe("layout hotkeys", () => {
 		})
 		editable.remove()
 		expect(fired).toEqual(["inbox.open"])
+	})
+
+	test("behind a modal or the palette the app-wide actions stay off; the palette's own key does not", async () => {
+		const prevented: Array<boolean> = []
+		const fired = await run(
+			(press) => {
+				prevented.push(press({ key: "Escape", shiftKey: true }).defaultPrevented)
+				press(mod({ key: "/" }))
+				press(mod({ key: "[" }))
+				press(mod({ key: "D", shiftKey: true }))
+				press(mod({ key: "i" }))
+				press({ key: "ArrowDown", altKey: true })
+				press(mod({ key: "k" }))
+			},
+			false,
+			true,
+		)
+		expect(fired).toEqual(["commandPalette.open"])
+		// Escape is left to the dialog, which closes on it.
+		expect(prevented).toEqual([false])
 	})
 
 	test("Mod+B stays the composer's bold", async () => {

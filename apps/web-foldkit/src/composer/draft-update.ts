@@ -92,7 +92,10 @@ export const setReply = (model: Model, replyToMessageId: MessageId | null): Mode
 
 /** `setEditingMessageId` plus `onEditingMessageIdChange`: load the message into the editor. */
 export const startEditing = (model: Model, messageId: MessageId, content: string): Return =>
-	Update.combine(model, [setMode(ComposeMode.Editing({ messageId })), setDraft(content)])
+	Update.combine(model, [
+		setMode(ComposeMode.Editing({ messageId, hadText: content.trim() !== "" })),
+		setDraft(content),
+	])
 
 const leaveEditing: Step = Update.combine([setMode(ComposeMode.Plain()), clearDraft])
 
@@ -102,11 +105,15 @@ const submit = (model: Model, markdown: string, context: Context): Return => {
 	const content = markdown.trim()
 	const editingId = editingMessageIdOf(model)
 	if (editingId !== null) {
+		// Emptying a message's text asks to delete it (Discord). An edit that began empty (only
+		// attachments) has nothing to remove: Enter does nothing, as before.
 		if (!content)
-			return Update.withOutMessage(
-				leaveEditing(model),
-				OutMessage.RequestedDeleteMessage({ messageId: editingId }),
-			)
+			return model.composeMode._tag === "Editing" && model.composeMode.hadText
+				? Update.withOutMessage(
+						leaveEditing(model),
+						OutMessage.RequestedDeleteMessage({ messageId: editingId }),
+					)
+				: { model }
 		return Update.combine(model, [
 			leaveEditing,
 			(next) => ({ model: next, commands: [EditMessage({ messageId: editingId, content })] }),

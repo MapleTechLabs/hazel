@@ -209,17 +209,25 @@ const notificationSubscriptions = Subscription.make<Model, Message, Notification
 const overlaySubscriptions = Subscription.make<Model, Message>()((entry) => ({
 	// `$orgSlug/layout.tsx` hotkeys: only inside the signed-in org shell.
 	layoutHotkeys: entry(
-		{ isEnabled: Schema.Boolean, isChannelNavigationEnabled: Schema.Boolean },
 		{
-			modelToDependencies: (model) => ({
-				isEnabled: authOf(model.session) === "SignedIn" && orgSlugOf(model.route) !== undefined,
-				isChannelNavigationEnabled:
-					isChatRoute(model.route) && model.modal.current === null && !model.commandPalette.isOpen,
-			}),
-			dependenciesToStream: ({ isEnabled, isChannelNavigationEnabled }) =>
+			isEnabled: Schema.Boolean,
+			isChannelNavigationEnabled: Schema.Boolean,
+			isOverlayOpen: Schema.Boolean,
+		},
+		{
+			modelToDependencies: (model) => {
+				const isOverlayOpen = model.modal.current !== null || model.commandPalette.isOpen
+				return {
+					isEnabled: authOf(model.session) === "SignedIn" && orgSlugOf(model.route) !== undefined,
+					isChannelNavigationEnabled: isChatRoute(model.route) && !isOverlayOpen,
+					isOverlayOpen,
+				}
+			},
+			dependenciesToStream: ({ isEnabled, isChannelNavigationEnabled, isOverlayOpen }) =>
 				isEnabled
 					? layoutHotkeys((actionId) => Message.PressedHotkey({ actionId }), {
 							isChannelNavigationEnabled,
+							isOverlayOpen,
 						})
 					: Stream.empty,
 		},

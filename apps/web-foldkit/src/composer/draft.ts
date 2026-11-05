@@ -36,7 +36,8 @@ import { UploadEvent } from "./upload"
 export const ComposeMode = defineTaggedUnion({
 	Plain: {},
 	Replying: { messageId: MessageId },
-	Editing: { messageId: MessageId },
+	/** `hadText`: the message had text when the edit began (an attachment-only one has none). */
+	Editing: { messageId: MessageId, hadText: Schema.Boolean },
 })
 export type ComposeMode = typeof ComposeMode.Type
 

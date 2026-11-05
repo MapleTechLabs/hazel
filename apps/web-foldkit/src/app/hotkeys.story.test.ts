@@ -62,12 +62,17 @@ describe("organizations (Mod+Alt+ArrowUp/Down)", () => {
 	})
 
 	test("with one organization there is nowhere to go", () => {
-		story(
-			update,
-			given(signedIn("/hazel/chat")),
-			message(hotkey("organization.next")),
-			Command.expectNone(),
-		)
+		const alone = update(
+			signedIn("/hazel/chat"),
+			shell(
+				ShellModel.Message.UpdatedUserOrganizations({
+					organizations: [{ id: hazelOrg.id, name: hazelOrg.name, slug: "hazel", logoUrl: null }],
+				}),
+			),
+		).model
+		expect(alone.shell.userOrganizations).toHaveLength(1)
+		story(update, given(alone), message(hotkey("organization.next")), Command.expectNone())
+		story(update, given(alone), message(hotkey("organization.previous")), Command.expectNone())
 	})
 })
 
@@ -163,7 +168,9 @@ describe("Mod+[ / Mod+] (Slack)", () => {
 describe("the Mod+/ dialog lists every bound layout hotkey", () => {
 	test("each layout action appears in the catalog with its default keys", () => {
 		const listed = new Set(SHORTCUT_SECTIONS.flatMap((section) => section.shortcuts.map((s) => s.label)))
-		for (const actionId of LayoutHotkeyActionId.literals)
+		// Mod+Alt+Shift+Arrows run the unread-channel step until there is mention data: not listed twice.
+		const aliases: ReadonlyArray<LayoutHotkeyActionId> = ["mention.previous", "mention.next"]
+		for (const actionId of LayoutHotkeyActionId.literals.filter((id) => !aliases.includes(id)))
 			expect(listed, actionId).toContain(HOTKEY_DEFINITIONS_BY_ID[actionId].label)
 	})
 })
