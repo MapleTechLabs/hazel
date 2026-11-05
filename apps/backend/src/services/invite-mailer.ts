@@ -7,9 +7,11 @@ import { Config, Context, Effect, Layer, Schema } from "effect"
  */
 
 /**
- * The domain invitations are sent from. The stack registers it as a Cloudflare Email Sending
- * subdomain (`worker.ts`); a sender on a domain that is not onboarded can only reach verified
- * addresses ("destination address is not a verified address").
+ * The domain invitations are sent from. It is onboarded to Cloudflare Email Sending as a subdomain
+ * of the hazel.sh zone (DKIM, SPF and return-path records live on the zone). That is done once in
+ * the dashboard, not by the stack: the deploy token has no Email Sending permission. A sender on a
+ * domain that is not onboarded can only reach verified addresses ("destination address is not a
+ * verified address").
  */
 export const INVITE_EMAIL_DOMAIN = "mail.hazel.sh"
 
