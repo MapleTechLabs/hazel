@@ -22,6 +22,7 @@ export type BehaviorEvent =
 	| { readonly _tag: "PressedAutocompleteKey"; readonly key: AutocompleteKey }
 	| { readonly _tag: "PressedEscape" }
 	| { readonly _tag: "PressedArrowUpInEmpty" }
+	| { readonly _tag: "PressedShiftTab" }
 	| { readonly _tag: "PastedFiles"; readonly files: ReadonlyArray<File> }
 
 /** The block the selection starts in; a whole-document selection (`Mod+A`) starts in the first one. */
@@ -193,11 +194,19 @@ export const behaviorPlugin = (emit: (event: BehaviorEvent) => void) => {
 		const type = block.node.type.name
 		const mod = event.metaKey || event.ctrlKey
 
-		if (event.key === "ArrowUp" && isValueEmpty(blocksOf(state.doc))) {
+		// Plain keys only: Alt+ArrowUp moves between channels and Shift+Escape is the page's, as in Discord.
+		const hasModifier = mod || event.altKey || event.shiftKey
+		if (event.key === "ArrowUp" && !hasModifier && isValueEmpty(blocksOf(state.doc))) {
 			emit({ _tag: "PressedArrowUpInEmpty" })
 			return true
 		}
-		if (event.key === "Escape") {
+		// Discord: Shift+Tab leaves the composer for the messages above it. Reported, not taken: the
+		// browser still moves the focus back, so a host that does not handle it is no focus trap.
+		if (event.key === "Tab" && event.shiftKey && !mod && !event.altKey) {
+			emit({ _tag: "PressedShiftTab" })
+			return false
+		}
+		if (event.key === "Escape" && !hasModifier) {
 			emit({ _tag: "PressedEscape" })
 			return true
 		}

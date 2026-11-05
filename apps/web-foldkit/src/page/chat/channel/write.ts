@@ -40,6 +40,7 @@ import {
 	type ThreadPanel,
 } from "./model"
 import { loadWidthCommands } from "./thread-width"
+import { ClearChannelNotifications } from "./clear-notifications"
 import { resetWindow } from "./window"
 
 /** The channel page's write path: `ChatProvider`'s actions and the two drafts (channel and thread). */
@@ -114,6 +115,15 @@ export const liftDraft = (model: Model, which: Which, result: DraftUpdate.Return
 	if (out === undefined) return { model: next, commands }
 	return Draft.OutMessage.match<PageReturn>(out, {
 		RequestedToast: ({ toast: request }) => ({ model: next, commands, outMessage: toast(request) }),
+		RequestedMarkRead: () => ({
+			model: next,
+			commands: [...commands, ClearChannelNotifications({ channelId: result.model.channelId })],
+		}),
+		RequestedDeleteMessage: ({ messageId }) => ({
+			model: next,
+			commands,
+			outMessage: PageOutMessage.RequestedModal({ modal: { _tag: "DeleteMessage", messageId } }),
+		}),
 		// `onMessageSent`: the channel's list scrolls to the bottom.
 		SentMessage: () => {
 			if (which === "thread") return { model: next, commands }
@@ -498,7 +508,7 @@ export const handleOverlaysOut = (model: Model, out: Overlays.OutMessage): PageR
 	})
 
 /** A reaction or pin on a message that is gone. */
-const messageNotFoundToast = (reason: MessageActionFailure): ToastRequest =>
+export const messageNotFoundToast = (reason: MessageActionFailure): ToastRequest =>
 	errorToastOf(
 		failureMessage(reason, {
 			MessageNotFound: {
@@ -508,7 +518,7 @@ const messageNotFoundToast = (reason: MessageActionFailure): ToastRequest =>
 		}),
 	)
 
-const withToast = (model: Model, request: ToastRequest | null): PageReturn =>
+export const withToast = (model: Model, request: ToastRequest | null): PageReturn =>
 	request === null ? { model } : { model, outMessage: toast(request) }
 
 /** A button on a bot's message: `message.interact`, reported only if it fails. */
@@ -672,6 +682,18 @@ export const handleActionMessage = (model: Model, message: ActionMessage): PageR
 	})
 
 /** `useGlobalKeyboardFocus`: the typed character goes into the focused draft's editor. */
+/** Puts the keyboard back in the channel's composer (Escape or ArrowDown past the newest message). */
+export const focusComposer = (model: Model): PageReturn => ({
+	model,
+	commands: Command.mapMessages(
+		Command.mapMessages(
+			[EditorCommands.FocusEditor({ editorId: model.draft.composer.editorId })],
+			(message) => Draft.Message.GotComposerMessage({ message }),
+		),
+		wrapDraft("channel"),
+	),
+})
+
 export const insertGlobalKey = (model: Model, key: string): PageReturn => {
 	const which = focusedDraft(model)
 	const draft = draftOf(model, which)

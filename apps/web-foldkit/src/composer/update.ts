@@ -194,6 +194,7 @@ export const update = (model: Model, message: Message): Return =>
 		SubmittedDraft: () => ({ model }),
 		PressedEscape: () => ({ model }),
 		PressedArrowUpInEmpty: () => ({ model }),
+		PressedShiftTab: () => ({ model }),
 		PastedFiles: () => ({ model }),
 		CompletedPreventEditorBlur: () => noChange(model),
 		CompletedFitAutocompleteHeight: () => noChange(model),

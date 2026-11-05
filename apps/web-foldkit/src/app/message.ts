@@ -25,6 +25,7 @@ export const Message = defineMessageUnion({
 	ClickedLink: { request: UrlRequest },
 	ChangedUrl: { url: Url },
 	CompletedNavigateInternal: {},
+	CompletedNavigateHistory: {},
 	CompletedReplaceUrl: {},
 	CompletedLoadExternal: {},
 	ChangedSystemTheme: { theme: ResolvedTheme },

@@ -52,6 +52,7 @@ export const mountedChannel = (hovered: MessageId | null = null): Step =>
 				}),
 			),
 		],
+		[{ name: "TrackMessageKeys" }, Message.StartedMessageKeys()],
 		[
 			{ name: "TrackMessageHover" },
 			hovered === null

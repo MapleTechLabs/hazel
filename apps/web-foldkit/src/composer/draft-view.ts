@@ -61,7 +61,8 @@ const attachmentPreviews = <M>(h: HtmlBuilder<M>, model: Model, inputs: DraftVie
 				h.div([h.Class("text-muted-fg text-xs")], [detail]),
 			],
 		)
-	return h.div(
+	return h.keyed("div")(
+		"attachment-previews",
 		[
 			h.Class(
 				cn(
@@ -135,7 +136,8 @@ const replyIndicator = <M>(h: HtmlBuilder<M>, model: Model, inputs: DraftViewInp
 	const reply = inputs.replyPreview
 	if (model.composeMode._tag !== "Replying" || reply === null) return h.empty
 	const hasFiles = model.currentUpload !== null || model.attachmentIds.length > 0
-	return h.div(
+	return h.keyed("div")(
+		"reply-indicator",
 		[h.Class(cn(indicatorClass, hasFiles ? "rounded-t-none border-t-0" : ""))],
 		[
 			h.div(
@@ -155,7 +157,8 @@ const replyIndicator = <M>(h: HtmlBuilder<M>, model: Model, inputs: DraftViewInp
 const editIndicator = <M>(h: HtmlBuilder<M>, model: Model, inputs: DraftViewInputs<M>): Html => {
 	if (model.composeMode._tag !== "Editing") return h.empty
 	const hasFiles = model.currentUpload !== null || model.attachmentIds.length > 0
-	return h.div(
+	return h.keyed("div")(
+		"edit-indicator",
 		[h.Class(cn(indicatorClass, hasFiles ? "rounded-t-none border-t-0" : ""))],
 		[
 			h.div(

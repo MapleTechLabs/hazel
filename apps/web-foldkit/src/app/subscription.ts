@@ -13,7 +13,7 @@ import { liveQueryStream } from "../data/live-query"
 import { pageSubscriptions } from "../page/registry"
 import { SoundSettings } from "../notification-sound"
 import { type NotificationSinks, wireNotificationSinks } from "./notification-sinks"
-import { chatChannelIdOf, orgSlugOf } from "../route"
+import { chatChannelIdOf, isChatRoute, orgSlugOf } from "../route"
 import type { Member, Organization } from "../session"
 import * as ShellSubscription from "../shell/subscription"
 import * as CommandPalette from "../overlay/command-palette"
@@ -209,13 +209,19 @@ const notificationSubscriptions = Subscription.make<Model, Message, Notification
 const overlaySubscriptions = Subscription.make<Model, Message>()((entry) => ({
 	// `$orgSlug/layout.tsx` hotkeys: only inside the signed-in org shell.
 	layoutHotkeys: entry(
-		{ isEnabled: Schema.Boolean },
+		{ isEnabled: Schema.Boolean, isChannelNavigationEnabled: Schema.Boolean },
 		{
 			modelToDependencies: (model) => ({
 				isEnabled: authOf(model.session) === "SignedIn" && orgSlugOf(model.route) !== undefined,
+				isChannelNavigationEnabled:
+					isChatRoute(model.route) && model.modal.current === null && !model.commandPalette.isOpen,
 			}),
-			dependenciesToStream: ({ isEnabled }) =>
-				isEnabled ? layoutHotkeys((actionId) => Message.PressedHotkey({ actionId })) : Stream.empty,
+			dependenciesToStream: ({ isEnabled, isChannelNavigationEnabled }) =>
+				isEnabled
+					? layoutHotkeys((actionId) => Message.PressedHotkey({ actionId }), {
+							isChannelNavigationEnabled,
+						})
+					: Stream.empty,
 		},
 	),
 }))

@@ -153,6 +153,10 @@ export type Message = typeof Message.Type
 export const OutMessage = defineMessageUnion({
 	RequestedToast: { toast: ToastRequest },
 	SentMessage: {},
+	/** Enter on an edit emptied of its text: delete the message instead, once confirmed (Discord). */
+	RequestedDeleteMessage: { messageId: MessageId },
+	/** Escape with no edit or reply to cancel: Discord marks the channel read. */
+	RequestedMarkRead: {},
 })
 export type OutMessage = typeof OutMessage.Type
 

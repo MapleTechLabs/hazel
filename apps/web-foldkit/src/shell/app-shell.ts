@@ -132,6 +132,8 @@ const navRail = <Message>(h: HtmlBuilder<Message>, context: ShellContext, unread
 
 export interface MobileShell<Message> {
 	readonly isMobile: boolean
+	/** Desktop only: the sidebar docked to its nav rail. */
+	readonly isSidebarCollapsed: boolean
 	readonly isSidebarOpen: boolean
 	/** Opens the sidebar sheet (the bottom nav's Menu button). */
 	readonly onMenu: Attribute<Message>
@@ -166,7 +168,7 @@ export const orgShell = <Message>(
 					: sidebarDock(
 							h,
 							{
-								state: "expanded",
+								state: mobile.isSidebarCollapsed ? "collapsed" : "expanded",
 								className: "overflow-hidden *:data-[sidebar=default]:flex-row",
 							},
 							sidebarChildren,

@@ -354,6 +354,50 @@ describe("Composer keys the host handles", () => {
 		expect(e.press("Escape")).toBe(true)
 		expect(e.events()).toEqual([{ _tag: "PressedEscape" }])
 	})
+
+	test("Escape still works after the editor's content was replaced (ArrowUp to edit, then Escape)", () => {
+		const e = open("")
+		expect(e.press("ArrowUp")).toBe(true)
+		e.view.dispatch(e.view.state.tr.insertText("Shipped the onboarding copy"))
+		expect(e.press("Escape")).toBe(true)
+		expect(e.events()).toEqual([{ _tag: "PressedArrowUpInEmpty" }, { _tag: "PressedEscape" }])
+	})
+
+	test.each([
+		["Alt", { alt: true }],
+		["Shift", { shift: true }],
+		["Mod", { mod: true }],
+	] as const)(
+		"%s+ArrowUp in an empty composer is left to the page (Alt+ArrowUp changes channel)",
+		(_, modifiers) => {
+			const e = open("")
+			expect(e.press("ArrowUp", modifiers)).toBe(false)
+			expect(e.events()).toEqual([])
+		},
+	)
+
+	test("Shift+Tab is reported (the page moves to the messages) but keeps the browser's default", () => {
+		const e = open("hello")
+		expect(e.press("Tab", { shift: true })).toBe(false)
+		expect(e.events()).toEqual([{ _tag: "PressedShiftTab" }])
+	})
+
+	test("Shift+Escape is left to the page", () => {
+		const e = open("hello")
+		expect(e.press("Escape", { shift: true })).toBe(false)
+		expect(e.events()).toEqual([])
+	})
+
+	test.each(["e", "g", "p"])("Mod+%s is left to the page's shortcuts (emoji, GIF, pins)", (key) => {
+		const e = open("hello")
+		expect(e.press(key, { mod: true })).toBe(false)
+		expect(e.markdown()).toBe("hello")
+	})
+
+	test("Mod+Shift+U is left to the page (upload a file)", () => {
+		const e = open("hello")
+		expect(e.press("U", { mod: true, shift: true })).toBe(false)
+	})
 })
 
 describe("Autocomplete", () => {

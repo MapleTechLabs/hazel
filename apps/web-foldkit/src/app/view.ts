@@ -173,6 +173,7 @@ const orgShellView = (model: Model, h: HtmlBuilder<Message>, data: ShellData): H
 		],
 		mobile: {
 			isMobile: model.isMobile,
+			isSidebarCollapsed: model.shell.isSidebarCollapsed,
 			isSidebarOpen: model.shell.isSidebarOpen,
 			onMenu: h.OnClick(openedMobileSidebar),
 			toSheetMessage: toMobileSidebarMessage,

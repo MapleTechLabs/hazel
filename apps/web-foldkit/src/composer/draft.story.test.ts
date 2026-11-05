@@ -98,13 +98,15 @@ describe("reply and edit", () => {
 		)
 	})
 
-	test("an empty edit is not sent and keeps edit mode", () => {
+	test("an edit emptied of its text is not sent: it asks to delete the message instead (Discord)", () => {
 		story(
 			update,
 			given(editing()),
 			message(composer(Composer.Message.SubmittedDraft({ markdown: "   " }))),
-			Command.expectNone(),
-			model((current) => expect(Draft.editingMessageIdOf(current)).toBe(editId)),
+			Command.expectExact(EditorCommands.ClearEditor({ editorId })),
+			expectOutMessage(Draft.OutMessage.RequestedDeleteMessage({ messageId: editId })),
+			model((current) => expect(Draft.editingMessageIdOf(current)).toBeNull()),
+			Command.resolve(EditorCommands.ClearEditor, Composer.Message.CompletedClearEditor()),
 		)
 	})
 

@@ -102,7 +102,11 @@ const submit = (model: Model, markdown: string, context: Context): Return => {
 	const content = markdown.trim()
 	const editingId = editingMessageIdOf(model)
 	if (editingId !== null) {
-		if (!content) return { model }
+		if (!content)
+			return Update.withOutMessage(
+				leaveEditing(model),
+				OutMessage.RequestedDeleteMessage({ messageId: editingId }),
+			)
 		return Update.combine(model, [
 			leaveEditing,
 			(next) => ({ model: next, commands: [EditMessage({ messageId: editingId, content })] }),
@@ -320,13 +324,14 @@ const handleComposer = (model: Model, message: Composer.Message, context: Contex
 				),
 			SubmittedDraft: ({ markdown }) => then((next) => submit(next, markdown, context)),
 			// Escape leaves edit mode, or cancels the reply (Discord, Slack); the draft text stays when replying.
+			// With nothing to cancel it marks the channel read (Discord).
 			PressedEscape: () =>
 				then((next) =>
 					editingMessageIdOf(next) !== null
 						? leaveEditing(next)
 						: replyToMessageIdOf(next) !== null
 							? { model: setReply(next, null) }
-							: { model: next },
+							: { model: next, outMessage: OutMessage.RequestedMarkRead() },
 				),
 			PressedArrowUpInEmpty: () =>
 				then((next) =>
