@@ -1,5 +1,8 @@
+// @vitest-environment jsdom
 import { describe, expect, test, vi } from "vitest"
-import type { UserInfo } from "../lookups"
+import { toDeriveContext } from "../derive"
+import { emptyLookups, type UserInfo } from "../lookups"
+import { starterNameOf } from "../thread-panel"
 import type { MessageRow } from "../rows"
 import { ada, grace, loadedMessages, messages, shared } from "./fixtures.test-support"
 import { init, Message, type Model, update } from "./page"
@@ -79,5 +82,19 @@ describe("message authors", () => {
 			(row): row is MessageRow => row._tag === "MessageRow" && row.message.authorId === grace,
 		)!
 		expect(graceRow.author).toMatchObject({ displayName: "Maple", isBot: true })
+	})
+})
+
+describe("thread starter", () => {
+	const original = messages[1]!
+	const contextWith = (known: ReadonlyArray<UserInfo>) =>
+		toDeriveContext({ ...emptyLookups, users: known }, ada)
+
+	test('no "Started by" until the users lookup has the author', () => {
+		expect(starterNameOf(contextWith([]), original)).toBeNull()
+	})
+
+	test("the author's name once it has them", () => {
+		expect(starterNameOf(contextWith(users), original)).toBe("Grace Test")
 	})
 })
