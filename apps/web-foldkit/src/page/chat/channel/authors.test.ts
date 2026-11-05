@@ -37,12 +37,17 @@ const authorsOf = (model: Model) =>
 		.filter((row): row is MessageRow => row._tag === "MessageRow")
 		.map((row) => [row.message.content, row.author.displayName, row.author.avatarUrl])
 
+const hasAuthor = (model: Model) =>
+	model.rows.filter((row): row is MessageRow => row._tag === "MessageRow").map((row) => row.hasAuthor)
+
 const start = () => init(messages[0]!.channelId, "hazel", ada)
 
 describe("message authors", () => {
 	test("messages show as soon as they arrive, before the users lookup", () => {
 		const model = apply(start(), loadedMessages(messages))
 		expect(model.hasLoadedMessages).toBe(true)
+		// No header until the author is known.
+		expect(hasAuthor(model)).toEqual([false, false])
 		expect(authorsOf(model)).toEqual([
 			["Launch window confirmed", "", null],
 			["Shipped the onboarding copy", "", null],
@@ -55,6 +60,7 @@ describe("message authors", () => {
 			["Launch window confirmed", "Grace Test", "https://img.test/Grace.png"],
 			["Shipped the onboarding copy", "Ada Test", "https://img.test/Ada.png"],
 		])
+		expect(hasAuthor(model)).toEqual([true, true])
 	})
 
 	test("authors are there at once when the users lookup answered first", () => {

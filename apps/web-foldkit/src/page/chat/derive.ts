@@ -330,22 +330,26 @@ export const messageRowData = (
 	groupPosition: GroupPosition,
 	reactions: ReadonlyArray<ChatReaction>,
 	context: DeriveContext,
-): MessageRowData => ({
-	key: message.id,
-	message,
-	groupPosition,
-	reactions: aggregateReactions(reactions, context),
-	author: authorIdentity(authorOf(context, message), context.botNames.get(message.authorId)),
-	status: statusOf(context, message.authorId),
-	isDiscordSynced: context.discordSynced.has(message.id),
-	reply: replyOf(context, message.replyToMessageId),
-	thread: threadOf(context, message.threadChannelId),
-	attachments: context.attachmentsByMessage.get(message.id) ?? NO_ATTACHMENTS,
-	refs: refsOf(context, message.content),
-	urlEmbeds: urlEmbedsOf(context, message),
-	live: liveOf(context, message),
-	htmlRenders: htmlRendersOf(context, message, "list"),
-})
+): MessageRowData => {
+	const user = authorOf(context, message)
+	return {
+		key: message.id,
+		message,
+		groupPosition,
+		reactions: aggregateReactions(reactions, context),
+		author: authorIdentity(user, context.botNames.get(message.authorId)),
+		hasAuthor: user !== null,
+		status: statusOf(context, message.authorId),
+		isDiscordSynced: context.discordSynced.has(message.id),
+		reply: replyOf(context, message.replyToMessageId),
+		thread: threadOf(context, message.threadChannelId),
+		attachments: context.attachmentsByMessage.get(message.id) ?? NO_ATTACHMENTS,
+		refs: refsOf(context, message.content),
+		urlEmbeds: urlEmbedsOf(context, message),
+		live: liveOf(context, message),
+		htmlRenders: htmlRendersOf(context, message, "list"),
+	}
+}
 
 /**
  * Oldest-first rows with a date header before each day; `messagesNewestFirst` is the query order.

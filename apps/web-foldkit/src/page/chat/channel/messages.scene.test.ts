@@ -64,6 +64,29 @@ describe("reading", () => {
 		)
 	})
 
+	// The messages carry no author: the header comes with the users lookup, in either order.
+	test("each message's header shows its author once the users lookup has them", () => {
+		const users = [
+			{
+				id: ada,
+				firstName: "Ada",
+				lastName: "Lovelace",
+				email: "ada@hazel.sh",
+				avatarUrl: null,
+				userType: "user",
+				timezone: null,
+			},
+		]
+		const base = loadedModel()
+		Scene.scene(
+			channelScene,
+			Scene.given(derivedModel({ ...base, lookups: { ...base.lookups, users } })),
+			mountedChannel(),
+			Scene.expect(Scene.text("Ada Lovelace")).toExist(),
+			Scene.expect(Scene.text("Shipped the onboarding copy")).toExist(),
+		)
+	})
+
 	test("before its first snapshot the list says it is loading, and shows no messages", () => {
 		Scene.scene(
 			channelScene,

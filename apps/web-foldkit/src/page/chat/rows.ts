@@ -138,6 +138,8 @@ export const MessageRowData = Schema.Struct({
 	groupPosition: GroupPosition,
 	reactions: Schema.Array(AggregatedReaction),
 	author: AuthorIdentity,
+	/** The author is known (the users lookup has them); until then the row has no header. */
+	hasAuthor: Schema.Boolean,
 	status: Schema.NullOr(StatusEmoji),
 	isDiscordSynced: Schema.Boolean,
 	reply: Schema.NullOr(ReplyPreview),

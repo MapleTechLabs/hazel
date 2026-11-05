@@ -98,7 +98,7 @@ const urlEmbedView = <M>(
 			const photos =
 				tweet?.photos?.map((photo) => ({ url: photo.url, alt: tweet.text || "Tweet image" })) ?? []
 			// Legacy only mounts the viewer for a message with an author.
-			const canOpen = photos.length > 0 && row.message.author !== null
+			const canOpen = photos.length > 0 && row.hasAuthor
 			return tweetView(
 				h,
 				unfurl,
@@ -214,7 +214,7 @@ export const messageRowView = <M>(
 								h.div(
 									[h.Class("min-w-0 flex-1")],
 									[
-										showAvatar && message.author !== null
+										showAvatar && row.hasAuthor
 											? headerView(
 													h,
 													row,
