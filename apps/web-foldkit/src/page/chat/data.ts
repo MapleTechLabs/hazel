@@ -43,6 +43,22 @@ const loadsWholeChannel = (channelId: ChannelId) =>
 	messagesByChannel.equalityLookup(channelId).size * 5 <= messageCollection.size
 
 /**
+ * The collections the message queries read. Only the channel's own (on-demand) collections: an
+ * eager one, such as the org's `users`, would hold the query until every org had its snapshot.
+ */
+export interface MessageSources {
+	readonly messages: typeof messageCollection
+	readonly pinned: typeof pinnedMessageCollection
+	readonly loadsWholeChannel: (channelId: ChannelId) => boolean
+}
+
+const appMessageSources: MessageSources = {
+	messages: messageCollection,
+	pinned: pinnedMessageCollection,
+	loadsWholeChannel,
+}
+
+/**
  * The channel's messages, newest first, as change sets: `offset` newest messages skipped, `limit` kept.
  * One query per channel follows the pages `MessageWindows` publishes; only changed rows are converted.
  */
@@ -60,11 +76,13 @@ export const messageChangesStream = <Message>(
 				Stream.filter((change) => change.channelId === channelId),
 				Stream.map(({ offset, limit }) => ({ offset, limit })),
 			)
-			return messageQueryStream(channelId, window, readWindow, windows, toMessage)
+			return messageQueryStream(appMessageSources, channelId, window, readWindow, windows, toMessage)
 		}),
 	)
 
-const messageQueryStream = <Message>(
+/** `messageChangesStream` over `sources`, following `windows`. */
+export const messageQueryStream = <Message>(
+	sources: MessageSources,
 	channelId: ChannelId,
 	window: LiveQueryWindow,
 	readWindow: () => LiveQueryWindow,
@@ -73,15 +91,14 @@ const messageQueryStream = <Message>(
 ): Stream.Stream<Message> =>
 	liveQueryChangeSetStream<MessageQueryRow, Message, MessageId>(
 		(q, { limit, offset }) => {
-			const isWholeChannel = loadsWholeChannel(channelId)
+			const isWholeChannel = sources.loadsWholeChannel(channelId)
 			return (
 				q
-					.from({ message: messageCollection })
-					.leftJoin({ pinned: pinnedMessageCollection }, ({ message, pinned }) =>
+					.from({ message: sources.messages })
+					.leftJoin({ pinned: sources.pinned }, ({ message, pinned }) =>
 						eq(message.id, pinned.messageId),
 					)
-					// No join on the org's users: an eager collection holds the query until every org
-					// source has its snapshot. Authors come from the users lookup (`derive.ts` `authorOf`).
+					// Authors come from the users lookup (`derive.ts` `authorOf`), not a join: see `MessageSources`.
 					.where(({ message }) => eq(message.channelId, channelId))
 					.select(({ message, pinned }) => ({ ...message, pinnedMessage: pinned }))
 					.orderBy(
@@ -181,20 +198,25 @@ export const threadPanelStream = <Message>(
 	threadChannelId: ChannelId,
 	toMessage: (messages: ReadonlyArray<ChatMessage>) => Message,
 ): Stream.Stream<Message> =>
-	Stream.merge(threadPanelQueryStream(threadChannelId, toMessage), threadHistoryStream(threadChannelId))
+	Stream.merge(
+		threadPanelQueryStream(appMessageSources, threadChannelId, toMessage),
+		threadHistoryStream(threadChannelId),
+	)
 
 /** The whole thread's history, held while the panel is open. */
 export const threadHistoryStream = (threadChannelId: ChannelId): Stream.Stream<never> =>
 	historyDemandStream(threadChannelId, Number.POSITIVE_INFINITY)
 
-const threadPanelQueryStream = <Message>(
+/** A thread's messages over `sources`, oldest first. */
+export const threadPanelQueryStream = <Message>(
+	sources: Pick<MessageSources, "messages">,
 	threadChannelId: ChannelId,
 	toMessage: (messages: ReadonlyArray<ChatMessage>) => Message,
 ): Stream.Stream<Message> =>
 	liveQueryStream<MessageQueryRow, Message>(
 		(q) =>
 			q
-				.from({ message: messageCollection })
+				.from({ message: sources.messages })
 				.where(({ message }) => eq(message.channelId, threadChannelId))
 				.select(({ message }) => ({ ...message, pinnedMessage: null }))
 				.orderBy(({ message }) => message.createdAt, "asc"),
