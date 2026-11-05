@@ -110,6 +110,13 @@ export const toDeriveContext = (
 	replyTargets: byKey(lookups.replyTargets, (target) => target.id),
 })
 
+/** The message's author: the row's own join when its query has one, else the users lookup. */
+export const authorOf = (
+	context: DeriveContext,
+	message: ChatMessage,
+): Pick<UserInfo, "firstName" | "lastName" | "avatarUrl" | "userType"> | null =>
+	message.author ?? context.users.get(message.authorId) ?? null
+
 /** `buildChatAuthorIdentity` with `useBotName`. */
 export const authorIdentity = (
 	user: Pick<UserInfo, "firstName" | "lastName" | "avatarUrl" | "userType"> | null | undefined,
@@ -323,22 +330,26 @@ export const messageRowData = (
 	groupPosition: GroupPosition,
 	reactions: ReadonlyArray<ChatReaction>,
 	context: DeriveContext,
-): MessageRowData => ({
-	key: message.id,
-	message,
-	groupPosition,
-	reactions: aggregateReactions(reactions, context),
-	author: authorIdentity(message.author, context.botNames.get(message.authorId)),
-	status: statusOf(context, message.authorId),
-	isDiscordSynced: context.discordSynced.has(message.id),
-	reply: replyOf(context, message.replyToMessageId),
-	thread: threadOf(context, message.threadChannelId),
-	attachments: context.attachmentsByMessage.get(message.id) ?? NO_ATTACHMENTS,
-	refs: refsOf(context, message.content),
-	urlEmbeds: urlEmbedsOf(context, message),
-	live: liveOf(context, message),
-	htmlRenders: htmlRendersOf(context, message, "list"),
-})
+): MessageRowData => {
+	const user = authorOf(context, message)
+	return {
+		key: message.id,
+		message,
+		groupPosition,
+		reactions: aggregateReactions(reactions, context),
+		author: authorIdentity(user, context.botNames.get(message.authorId)),
+		hasAuthor: user !== null,
+		status: statusOf(context, message.authorId),
+		isDiscordSynced: context.discordSynced.has(message.id),
+		reply: replyOf(context, message.replyToMessageId),
+		thread: threadOf(context, message.threadChannelId),
+		attachments: context.attachmentsByMessage.get(message.id) ?? NO_ATTACHMENTS,
+		refs: refsOf(context, message.content),
+		urlEmbeds: urlEmbedsOf(context, message),
+		live: liveOf(context, message),
+		htmlRenders: htmlRendersOf(context, message, "list"),
+	}
+}
 
 /**
  * Oldest-first rows with a date header before each day; `messagesNewestFirst` is the query order.

@@ -13,7 +13,7 @@ import { avatar } from "../../ui/avatar"
 import { button, buttonClassName } from "../../ui/button"
 import { loader } from "../../ui/loader"
 import { MIN_CHANNEL_WIDTH, MIN_THREAD_PANEL_WIDTH } from "./channel/thread-width"
-import { type DeriveContext, authorIdentity, htmlRendersOf } from "./derive"
+import { type DeriveContext, authorIdentity, authorOf, htmlRendersOf } from "./derive"
 import type { ChatMessage, MessageRow } from "./rows"
 
 /**
@@ -198,6 +198,10 @@ const originalRendersView = <M>(
 	)
 }
 
+/** Who started the thread; null (no "Started by") until the users lookup has them. */
+export const starterNameOf = (context: DeriveContext, original: ChatMessage): string | null =>
+	authorIdentity(authorOf(context, original), context.botNames.get(original.authorId)).displayName || null
+
 /** The thread's opening: its icon, name and who started it. */
 const introView = <M>(h: HtmlBuilder<M>, threadName: string, starterName: string | null): Html =>
 	h.div(
@@ -220,7 +224,7 @@ const introView = <M>(h: HtmlBuilder<M>, threadName: string, starterName: string
 /** The starter message, laid out like a list row. */
 const originalView = <M>(h: HtmlBuilder<M>, original: ChatMessage, inputs: ThreadPanelInputs<M>): Html => {
 	const { context, originalRow, rowContext } = inputs
-	const author = authorIdentity(original.author, context.botNames.get(original.authorId))
+	const author = authorIdentity(authorOf(context, original), context.botNames.get(original.authorId))
 	return h.div(
 		[h.Class("flex gap-4 px-2.5 py-2")],
 		[
@@ -236,7 +240,10 @@ const originalView = <M>(h: HtmlBuilder<M>, original: ChatMessage, inputs: Threa
 					h.div(
 						[h.Class("flex items-baseline gap-2")],
 						[
-							h.span([h.Class("font-semibold text-fg")], [author.displayName]),
+							// No name until the users lookup has the author.
+							author.displayName === ""
+								? h.empty
+								: h.span([h.Class("font-semibold text-fg")], [author.displayName]),
 							h.span([h.Class("text-muted-fg text-xs")], [formatTime(original.createdAtMs)]),
 						],
 					),
@@ -268,11 +275,7 @@ const dividerView = <M>(h: HtmlBuilder<M>, count: number): Html =>
  * reply and keeps it there as replies arrive, like Discord's.
  */
 const scrollView = <M>(h: HtmlBuilder<M>, inputs: ThreadPanelInputs<M>): Html => {
-	const starterName =
-		inputs.original === null
-			? null
-			: authorIdentity(inputs.original.author, inputs.context.botNames.get(inputs.original.authorId))
-					.displayName
+	const starterName = inputs.original === null ? null : starterNameOf(inputs.context, inputs.original)
 	return h.div(
 		[h.Class("flex min-h-0 flex-1 flex-col-reverse overflow-y-auto bg-bg")],
 		[

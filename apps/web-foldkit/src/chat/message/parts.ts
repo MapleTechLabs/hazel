@@ -21,7 +21,7 @@ export const headerView = <M>(h: HtmlBuilder<M>, row: MessageRow, statusEmoji: H
 	const { message, author } = row
 	const isEdited = message.updatedAtMs !== null && message.updatedAtMs > message.createdAtMs
 	const time = formatTime(message.createdAtMs)
-	const isMachine = message.author?.userType === "machine"
+	const isMachine = author.isBot
 	return h.div(
 		[h.Class("flex items-baseline gap-2")],
 		[

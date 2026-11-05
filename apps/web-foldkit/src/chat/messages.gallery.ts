@@ -104,6 +104,7 @@ const row = (options: {
 		groupPosition: "standalone",
 		reactions: [],
 		author: { displayName: options.name, avatarUrl: null, isBot: options.isBot ?? false },
+		hasAuthor: true,
 		status: null,
 		isDiscordSynced: false,
 		reply: null,
