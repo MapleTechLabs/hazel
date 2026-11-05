@@ -92,7 +92,10 @@ export const setReply = (model: Model, replyToMessageId: MessageId | null): Mode
 
 /** `setEditingMessageId` plus `onEditingMessageIdChange`: load the message into the editor. */
 export const startEditing = (model: Model, messageId: MessageId, content: string): Return =>
-	Update.combine(model, [setMode(ComposeMode.Editing({ messageId })), setDraft(content)])
+	Update.combine(model, [
+		setMode(ComposeMode.Editing({ messageId, hadText: content.trim() !== "" })),
+		setDraft(content),
+	])
 
 const leaveEditing: Step = Update.combine([setMode(ComposeMode.Plain()), clearDraft])
 
@@ -102,7 +105,15 @@ const submit = (model: Model, markdown: string, context: Context): Return => {
 	const content = markdown.trim()
 	const editingId = editingMessageIdOf(model)
 	if (editingId !== null) {
-		if (!content) return { model }
+		// Emptying a message's text asks to delete it (Discord). An edit that began empty (only
+		// attachments) has nothing to remove: Enter does nothing, as before.
+		if (!content)
+			return model.composeMode._tag === "Editing" && model.composeMode.hadText
+				? Update.withOutMessage(
+						leaveEditing(model),
+						OutMessage.RequestedDeleteMessage({ messageId: editingId }),
+					)
+				: { model }
 		return Update.combine(model, [
 			leaveEditing,
 			(next) => ({ model: next, commands: [EditMessage({ messageId: editingId, content })] }),
@@ -320,13 +331,14 @@ const handleComposer = (model: Model, message: Composer.Message, context: Contex
 				),
 			SubmittedDraft: ({ markdown }) => then((next) => submit(next, markdown, context)),
 			// Escape leaves edit mode, or cancels the reply (Discord, Slack); the draft text stays when replying.
+			// With nothing to cancel it marks the channel read (Discord).
 			PressedEscape: () =>
 				then((next) =>
 					editingMessageIdOf(next) !== null
 						? leaveEditing(next)
 						: replyToMessageIdOf(next) !== null
 							? { model: setReply(next, null) }
-							: { model: next },
+							: { model: next, outMessage: OutMessage.RequestedMarkRead() },
 				),
 			PressedArrowUpInEmpty: () =>
 				then((next) =>

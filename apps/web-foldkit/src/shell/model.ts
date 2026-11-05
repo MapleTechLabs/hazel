@@ -53,6 +53,8 @@ export const Model = Schema.Struct({
 	settingsChannel: Schema.NullOr(ChannelSummary),
 	/** `isOpenOnMobile`: the sidebar sheet opened from the header or the bottom nav. */
 	isSidebarOpen: Schema.Boolean,
+	/** Desktop: the sidebar docked to its nav rail (`sidebar.toggle`, Mod+B). */
+	isSidebarCollapsed: Schema.Boolean,
 })
 export type Model = typeof Model.Type
 
@@ -67,6 +69,8 @@ export const Message = defineMessageUnion({
 	GotNotificationsMessage: { message: Notifications.Message },
 	UpdatedSettingsChannel: { channel: Schema.NullOr(ChannelSummary) },
 	ToggledSidebar: { isOpen: Schema.Boolean },
+	/** Desktop: dock the sidebar to its nav rail, or expand it again (Mod+Shift+D). */
+	ToggledSidebarCollapsed: {},
 	GotMobileSidebarMessage: { message: Modal.Message },
 })
 export type Message = typeof Message.Type

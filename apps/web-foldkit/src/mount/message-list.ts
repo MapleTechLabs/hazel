@@ -493,6 +493,47 @@ export const setKeys = (
 export const scrollToEnd = (model: Model): ListReturn =>
 	withPool(reconcile(modifyFields(model, { anchor: () => ViewportAnchor.End() })), "Layout")
 
+/** Margin kept between a revealed row and the viewport's edge. */
+const REVEAL_MARGIN_PX = 16
+
+/**
+ * Scrolls the least it takes for row `key` to be in view (keyboard focus moving onto it): nothing
+ * when it already is, else it lands just inside the nearer edge. A row taller than the viewport
+ * shows its top.
+ */
+export const revealRow = (model: Model, key: string): ListReturn => {
+	const layout = layoutOf(model)
+	const index = layout.indexByKey.get(key)
+	if (index === undefined || model.viewportHeight === 0) return { model }
+	const top = layout.offsets[index]!
+	const bottom = layout.offsets[index + 1]!
+	const viewTop = model.scrollTop
+	const viewBottom = model.scrollTop + model.viewportHeight
+	if (top >= viewTop && bottom <= viewBottom) return { model }
+	const target =
+		top < viewTop || bottom - top > model.viewportHeight
+			? top - REVEAL_MARGIN_PX
+			: bottom - model.viewportHeight + REVEAL_MARGIN_PX
+	return scrollTo(model, layout, target)
+}
+
+/** PageUp / PageDown: most of a viewport, keeping a little of the previous page in sight. */
+export const scrollByPage = (model: Model, direction: "Up" | "Down"): ListReturn => {
+	if (model.viewportHeight === 0) return { model }
+	const step = Math.max(model.viewportHeight - 4 * REVEAL_MARGIN_PX, model.viewportHeight / 2)
+	return scrollTo(model, layoutOf(model), model.scrollTop + (direction === "Up" ? -step : step))
+}
+
+const scrollTo = (model: Model, layout: Layout, scrollTop: number): ListReturn =>
+	withPool(
+		reconcile(
+			modifyFields(model, {
+				anchor: () => anchorAt(model, layout, clampScrollTop(model, layout, scrollTop)),
+			}),
+		),
+		"Layout",
+	)
+
 /** Within half a viewport of the newest loaded row: time to load a newer page of a capped window. */
 export const isNearEnd = (model: Model) =>
 	model.viewportHeight > 0 &&

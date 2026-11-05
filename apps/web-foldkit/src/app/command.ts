@@ -1,7 +1,7 @@
 import { NotificationId } from "@hazel/schema"
 import { Duration, Effect, Schedule, Schema } from "effect"
 import { Command } from "foldkit"
-import { load, pushUrl, replaceUrl } from "foldkit/navigation"
+import { back, forward, load, pushUrl, replaceUrl } from "foldkit/navigation"
 import { readAccessToken } from "~/lib/access-token"
 import { isRetryableError } from "~/lib/error-messages"
 import { catchCommon } from "../data/actions"
@@ -16,6 +16,14 @@ export const NavigateInternal = Command.define("NavigateInternal", {
 	args: { url: Schema.String },
 	messages: [Message.CompletedNavigateInternal],
 	execute: ({ url }) => pushUrl(url).pipe(Effect.as(Message.CompletedNavigateInternal())),
+})
+
+/** Slack's Mod+[ / Mod+]: the history's previous or next page (the desktop app has no browser keys). */
+export const NavigateHistory = Command.define("NavigateHistory", {
+	args: { direction: Schema.Literals(["Back", "Forward"]) },
+	messages: [Message.CompletedNavigateHistory],
+	execute: ({ direction }) =>
+		(direction === "Back" ? back() : forward()).pipe(Effect.as(Message.CompletedNavigateHistory())),
 })
 
 /** Redirects replace the history entry, so Back never lands on a page that forwards again. */

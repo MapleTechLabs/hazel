@@ -20,6 +20,7 @@ import * as EmailInvite from "./modal/email-invite"
 import * as Feedback from "./modal/feedback"
 import * as InstallBotById from "./modal/install-bot-by-id"
 import * as JoinChannel from "./modal/join-channel"
+import * as KeyboardShortcuts from "./modal/keyboard-shortcuts"
 import * as NewChannel from "./modal/new-channel"
 import * as RegenerateBotToken from "./modal/regenerate-bot-token"
 import * as RenameChannel from "./modal/rename-channel"
@@ -54,6 +55,7 @@ const modals = [
 	RegenerateBotToken.modal,
 	DeleteBot.modal,
 	DeleteMessage.modal,
+	KeyboardShortcuts.modal,
 ]
 
 /** What a page or the shell asks for. One variant per legacy modal. */

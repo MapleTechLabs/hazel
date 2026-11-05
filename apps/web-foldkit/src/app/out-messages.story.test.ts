@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import * as UiToast from "@foldkit/ui/toast"
+import { ChannelId, ChannelMemberId } from "@hazel/schema"
 import { Option, Schema } from "effect"
 import { Command, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
@@ -208,6 +209,46 @@ describe("hotkeys", () => {
 			given(signedIn("/hazel/chat")),
 			message(Message.PressedHotkey({ actionId: "channel.create" })),
 			model((m) => expect(m.modal.current?._tag).toBe("NewChannel")),
+		)
+	})
+
+	test("Alt+ArrowDown (channel.next) opens the sidebar's next channel; Alt+ArrowUp the one above", () => {
+		const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`
+		const [general, random] = [uuid(9001), uuid(9002)].map((raw) =>
+			Schema.decodeSync(ChannelId)(raw),
+		) as [ChannelId, ChannelId]
+		const entry = (channelId: ChannelId, n: number) => ({
+			channel: { id: channelId, name: `c${n}`, type: "public", icon: null, sectionId: null },
+			member: {
+				id: Schema.decodeSync(ChannelMemberId)(uuid(9100 + n)),
+				isMuted: false,
+				isFavorite: false,
+				notificationCount: 0,
+			},
+		})
+		const withChannels = (root: ReturnType<typeof signedIn>) =>
+			update(
+				root,
+				sidebar(
+					ChannelsSidebar.Message.UpdatedSectionChannels({
+						sectionKey: "default",
+						channels: [entry(general, 1), entry(random, 2)],
+					}),
+				),
+			).model
+		story(
+			update,
+			given(withChannels(signedIn(`/hazel/chat/${general}`))),
+			message(Message.PressedHotkey({ actionId: "channel.next" })),
+			Command.expectExact(NavigateInternal({ url: `/hazel/chat/${random}` })),
+			Command.resolve(NavigateInternal, Message.CompletedNavigateInternal()),
+		)
+		story(
+			update,
+			given(withChannels(signedIn(`/hazel/chat/${random}`))),
+			message(Message.PressedHotkey({ actionId: "channel.previous" })),
+			Command.expectExact(NavigateInternal({ url: `/hazel/chat/${general}` })),
+			Command.resolve(NavigateInternal, Message.CompletedNavigateInternal()),
 		)
 	})
 

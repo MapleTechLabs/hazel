@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { ChannelId, ChannelMemberId, MessageId, OrganizationId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
-import type { HtmlBuilder } from "foldkit/html"
+import type { Html, HtmlBuilder } from "foldkit/html"
 import * as Scene from "foldkit/scene"
-import { describe, test } from "vitest"
+import { describe, expect, test } from "vitest"
 import * as Composer from "./composer"
 import * as Draft from "./draft"
 import * as DraftUpdate from "./draft-update"
@@ -43,6 +43,53 @@ const config = (draftContext: Draft.Context = context) => ({
 		}),
 })
 
+/**
+ * Where the editor's Mount sits in a rendered tree, as the patch matches it: by key where an element
+ * has one, else by tag and index. While this path holds, the patch keeps the editor's element (and
+ * its focus); a change means the editor is rebuilt and the focus falls to <body>.
+ */
+const mountNameOf = (data: unknown): string | undefined => {
+	if (typeof data !== "object" || data === null || !("foldkitMount" in data)) return undefined
+	const marker: unknown = data.foldkitMount
+	return typeof marker === "object" &&
+		marker !== null &&
+		"name" in marker &&
+		typeof marker.name === "string"
+		? marker.name
+		: undefined
+}
+const editorPath = (node: Html, path: ReadonlyArray<string> = []): ReadonlyArray<string> | null => {
+	if (node === null) return null
+	if (mountNameOf(node.data) === "MountEditor") return path
+	for (const [index, child] of (node.children ?? []).entries()) {
+		if (typeof child === "string") continue
+		const step = child.key === undefined ? `${child.sel}@${index}` : `#${String(child.key)}`
+		const found = editorPath(child, [...path, step])
+		if (found !== null) return found
+	}
+	return null
+}
+/** The scene's config, recording the editor's path on every render. */
+const recordingConfig = (draftContext: Draft.Context = context) => {
+	const paths: Array<string> = []
+	const base = config(draftContext)
+	return {
+		paths,
+		config: {
+			...base,
+			view: (model: Draft.Model, h: HtmlBuilder<Draft.Message>) => {
+				const html = base.view(model, h)
+				paths.push(JSON.stringify(editorPath(html)))
+				return html
+			},
+		},
+	}
+}
+const expectEditorKept = (paths: ReadonlyArray<string>) => {
+	expect(paths[0]).not.toBe("null")
+	expect(new Set(paths)).toEqual(new Set([paths[0]]))
+}
+
 const fresh = () => Draft.init(channelId, editorId)
 const withDraft = (model: Draft.Model, markdown: string): Draft.Model => ({
 	...model,
@@ -52,7 +99,7 @@ const replying = (markdown = ""): Draft.Model =>
 	withDraft({ ...fresh(), composeMode: Draft.ComposeMode.Replying({ messageId: replyId }) }, markdown)
 const editing = (): Draft.Model =>
 	withDraft(
-		{ ...fresh(), composeMode: Draft.ComposeMode.Editing({ messageId: lastOwnId }) },
+		{ ...fresh(), composeMode: Draft.ComposeMode.Editing({ messageId: lastOwnId, hadText: true }) },
 		lastOwnContent,
 	)
 
@@ -62,6 +109,9 @@ const editing = (): Draft.Model =>
  */
 const editorReports = (message: Composer.Message) =>
 	Scene.Mount.resolve({ name: "MountEditor" }, Draft.Message.GotComposerMessage({ message }))
+/** A later key from the same editor: its Mount resolved already, its stream goes on. */
+const editorReportsAgain = (message: Composer.Message) =>
+	Scene.Subscription.emit(Draft.Message.GotComposerMessage({ message }))
 const dropZoneIdle = Scene.Mount.resolve(
 	{ name: "TrackFileDrop" },
 	Draft.Message.ReceivedDropEvent({ event: DropEvent.ChangedDragState({ drag: DragState.Idle() }) }),
@@ -96,13 +146,14 @@ describe("Escape", () => {
 		)
 	})
 
-	test("Escape with nothing to cancel does nothing", () => {
+	test("Escape with nothing to cancel asks to mark the channel read (Discord)", () => {
 		Scene.scene(
 			config(),
 			Scene.given(fresh()),
 			dropZoneIdle,
 			editorReports(Composer.Message.PressedEscape()),
 			Scene.Command.expectNone(),
+			Scene.expectOutMessage(Draft.OutMessage.RequestedMarkRead()),
 		)
 	})
 
@@ -145,6 +196,56 @@ describe("ArrowUp in an empty composer", () => {
 			Scene.expect(editBanner).toBeAbsent(),
 			Scene.Command.expectNone(),
 		)
+	})
+})
+
+describe("the editor keeps its element (and focus) as banners come and go", () => {
+	test("ArrowUp to edit, then Escape: the edit banner appears and leaves around the same editor", () => {
+		const { paths, config: recording } = recordingConfig()
+		Scene.scene(
+			recording,
+			Scene.given(fresh()),
+			dropZoneIdle,
+			editorReports(Composer.Message.PressedArrowUpInEmpty()),
+			Scene.expect(editBanner).toExist(),
+			Scene.Command.resolve(
+				EditorCommands.SetEditorContent,
+				Composer.Message.CompletedSetEditorContent(),
+			),
+			editorReportsAgain(Composer.Message.PressedEscape()),
+			Scene.expect(editBanner).toBeAbsent(),
+			Scene.Command.resolve(EditorCommands.ClearEditor, Composer.Message.CompletedClearEditor()),
+		)
+		expectEditorKept(paths)
+	})
+
+	test("replying, then Escape: the reply banner leaves around the same editor", () => {
+		const { paths, config: recording } = recordingConfig()
+		Scene.scene(
+			recording,
+			Scene.given(replying("half a thought")),
+			dropZoneIdle,
+			editorReports(Composer.Message.PressedEscape()),
+			Scene.expect(replyBanner).toBeAbsent(),
+		)
+		expectEditorKept(paths)
+	})
+
+	test("dragging a file over the page shows the drop overlay around the same editor", () => {
+		const { paths, config: recording } = recordingConfig()
+		Scene.scene(
+			recording,
+			Scene.given(fresh()),
+			editorReports(Composer.Message.UpdatedDraft({ markdown: "", isEmpty: true })),
+			Scene.Mount.resolve(
+				{ name: "TrackFileDrop" },
+				Draft.Message.ReceivedDropEvent({
+					event: DropEvent.ChangedDragState({ drag: DragState.DraggingOnPage() }),
+				}),
+			),
+			Scene.expect(Scene.text("Drop files here")).toExist(),
+		)
+		expectEditorKept(paths)
 	})
 })
 
@@ -192,5 +293,16 @@ describe("Enter", () => {
 		)
 	})
 
-	test.todo("Enter on an edit emptied of its text asks to delete the message (Discord)")
+	test("Enter on an edit emptied of its text asks to delete the message (Discord)", () => {
+		Scene.scene(
+			config(),
+			Scene.given(editing()),
+			dropZoneIdle,
+			editorReports(Composer.Message.SubmittedDraft({ markdown: "   " })),
+			Scene.expect(editBanner).toBeAbsent(),
+			Scene.Command.expectExact(EditorCommands.ClearEditor({ editorId })),
+			Scene.expectOutMessage(Draft.OutMessage.RequestedDeleteMessage({ messageId: lastOwnId })),
+			Scene.Command.resolve(EditorCommands.ClearEditor, Composer.Message.CompletedClearEditor()),
+		)
+	})
 })

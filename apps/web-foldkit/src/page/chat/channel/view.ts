@@ -1,3 +1,4 @@
+import { TrackMessageKeys } from "./message-keys"
 import { createLazy, type Html, type HtmlBuilder } from "foldkit/html"
 import { contentStyles, rootStyles } from "~/components/ui/split-panel/split-panel.styles"
 import { cn } from "~/lib/utils"
@@ -196,7 +197,8 @@ const listView = (model: Model, nowMs: number, h: H): Html => {
 		[
 			// The legacy hover highlight (injected `#message-<id>` CSS) is a class on the hovered row:
 			// rewriting a <style> invalidates every element's style, on each hover change while scrolling.
-			list,
+			// The message keyboard listens around the list (an element holds one Mount): no box of its own.
+			h.div([h.Class("contents"), h.OnMount(TrackMessageKeys())], [list]),
 		],
 	)
 }

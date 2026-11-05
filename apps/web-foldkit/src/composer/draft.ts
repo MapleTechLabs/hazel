@@ -36,7 +36,8 @@ import { UploadEvent } from "./upload"
 export const ComposeMode = defineTaggedUnion({
 	Plain: {},
 	Replying: { messageId: MessageId },
-	Editing: { messageId: MessageId },
+	/** `hadText`: the message had text when the edit began (an attachment-only one has none). */
+	Editing: { messageId: MessageId, hadText: Schema.Boolean },
 })
 export type ComposeMode = typeof ComposeMode.Type
 
@@ -153,6 +154,10 @@ export type Message = typeof Message.Type
 export const OutMessage = defineMessageUnion({
 	RequestedToast: { toast: ToastRequest },
 	SentMessage: {},
+	/** Enter on an edit emptied of its text: delete the message instead, once confirmed (Discord). */
+	RequestedDeleteMessage: { messageId: MessageId },
+	/** Escape with no edit or reply to cancel: Discord marks the channel read. */
+	RequestedMarkRead: {},
 })
 export type OutMessage = typeof OutMessage.Type
 

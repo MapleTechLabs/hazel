@@ -109,3 +109,22 @@ describe("modal host", () => {
 		)
 	})
 })
+
+describe("keyboard shortcuts (Mod+/)", () => {
+	test("the dialog lists the shortcuts in this platform's notation", () => {
+		const shortcuts = role("dialog", { name: "Keyboard shortcuts" })
+		scene(
+			rootScene,
+			given(after(signedIn("/hazel/chat"), [Message.PressedHotkey({ actionId: "shortcuts.open" })])),
+			...mounted.slice(0, 2),
+			Mount.resolve(Modal.AcquireResources, Modal.Message.SucceededAcquireResources()),
+			sceneExpect(shortcuts).toExist(),
+			sceneExpect(within(shortcuts, text("Previous Channel"))).toExist(),
+			sceneExpect(within(shortcuts, text("Delete Without Confirming"))).toExist(),
+			sceneExpect(within(shortcuts, text("Alt+↑"))).toExist(),
+			click(within(shortcuts, role("button", { name: "Close" }))),
+			sceneExpect(shortcuts).toBeAbsent(),
+			Mount.expectEnded(Modal.AcquireResources),
+		)
+	})
+})

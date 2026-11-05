@@ -7,6 +7,10 @@ import * as Live from "../../../chat/live-state"
 import * as Unfurl from "../../../chat/unfurl"
 import * as Composer from "../../../composer/composer"
 import * as Draft from "../../../composer/draft"
+import * as EmojiDialog from "../../../emoji-picker/dialog"
+import * as GifPicker from "../../../gif-picker/picker"
+import { PopoverEvent } from "../../../picker-popover/popover"
+import * as Popover from "../../../ui/popover"
 import * as MessageList from "../../../mount/message-list"
 import { AppRoute } from "../../../route"
 import type { Shared } from "../../contract"
@@ -33,7 +37,10 @@ import {
 	shareMessages,
 	shareStickyKeys,
 } from "../rows"
-import { type ChatTab, Message, type Model, type PageReturn, Tab } from "./model"
+import type { ChannelHotkey } from "./hotkeys"
+import { ClearChannelNotifications } from "./clear-notifications"
+import { DeleteMessageNow, FocusMessage } from "./message-keys"
+import { type ChatTab, Message, type MessageKey, type Model, type PageReturn, Tab } from "./model"
 import { loadWhenNearEdge } from "./window"
 import * as ThreadWidth from "./thread-width"
 import * as Write from "./write"
@@ -93,6 +100,7 @@ export const init = (
 		viewportHeight: options.carry?.viewportHeight ?? 0,
 		measuredHeights: options.carry?.heightsByChannel[channelId] ?? {},
 	}),
+	focusedMessageId: null,
 	overlays: Overlays.init(),
 	draft: Draft.init(channelId, composerEditorId(channelId)),
 	threadPanel: null,
@@ -335,6 +343,119 @@ const joinChannel = (model: Model): PageReturn =>
 				]),
 			}
 
+/**
+ * What a channel shortcut does. The pickers, the file picker and the pins are what their buttons send
+ * (the emoji and GIF pickers and files go to the composer the keyboard is in: the thread's while one
+ * is open); the page keys scroll the messages; Escape marks the channel read.
+ */
+const pressedChannelHotkey = (model: Model, action: ChannelHotkey, shared: Shared | null): PageReturn => {
+	const toDraft =
+		Write.focusedDraft(model) === "thread"
+			? (message: Draft.Message) => Message.GotThreadDraftMessage({ message })
+			: (message: Draft.Message) => Message.GotDraftMessage({ message })
+	const pressedTrigger = PopoverEvent.ClickedTrigger()
+	const send = (message: Message) => update(model, message, shared)
+	switch (action) {
+		case "EmojiPicker":
+			return send(
+				toDraft(
+					Draft.Message.GotEmojiPickerMessage({
+						message: EmojiDialog.Message.ReceivedPopoverEvent({ event: pressedTrigger }),
+					}),
+				),
+			)
+		case "GifPicker":
+			return send(
+				toDraft(
+					Draft.Message.GotGifPickerMessage({
+						message: GifPicker.Message.ReceivedPopoverEvent({ event: pressedTrigger }),
+					}),
+				),
+			)
+		case "Upload":
+			return send(toDraft(Draft.Message.ClickedAttach()))
+		case "Pins":
+			return send(
+				Message.GotOverlaysMessage({
+					message: Overlays.Message.GotPinnedMessage({ message: Popover.Message.ClickedButton() }),
+				}),
+			)
+		case "ScrollUp":
+			return loadWhenNearEdge(liftList(model, MessageList.scrollByPage(model.list, "Up")))
+		case "ScrollDown":
+			return loadWhenNearEdge(liftList(model, MessageList.scrollByPage(model.list, "Down")))
+		case "MarkRead":
+			return { model, commands: [ClearChannelNotifications({ channelId: model.channelId })] }
+	}
+}
+
+// MESSAGE KEYBOARD
+
+/** The list's messages, oldest first (date dividers left out). */
+const messageIdsOf = (model: Model): ReadonlyArray<MessageId> =>
+	model.rows.flatMap((row) => (row._tag === "MessageRow" ? [row.message.id] : []))
+
+/** Scrolls a message into view and moves the keyboard onto it. */
+const focusMessage = (model: Model, messageId: MessageId): PageReturn => {
+	const revealed = loadWhenNearEdge(
+		liftList(
+			modifyFields(model, { focusedMessageId: () => messageId }),
+			MessageList.revealRow(model.list, messageId),
+		),
+	)
+	return { ...revealed, commands: [...(revealed.commands ?? []), FocusMessage({ messageId })] }
+}
+
+/** Shift+Tab from the composer: back to the message the keyboard was last on, else the newest. */
+const focusMessages = (model: Model): PageReturn => {
+	const ids = messageIdsOf(model)
+	const target =
+		model.focusedMessageId !== null && ids.includes(model.focusedMessageId)
+			? model.focusedMessageId
+			: ids.at(-1)
+	return target === undefined ? { model } : focusMessage(model, target)
+}
+
+/** A key on a focused message: what Discord does with it, through the message's own actions. */
+const pressedMessageKey = (model: Model, messageId: MessageId, key: MessageKey): PageReturn => {
+	const facts = factsOf(model)
+	const isOwn = facts.isOwnMessage(messageId)
+	const act = (action: Overlays.MessageAction) =>
+		Write.handleOverlaysOut(model, Overlays.OutMessage.RequestedMessageAction({ messageId, action }))
+	const ids = messageIdsOf(model)
+	const index = ids.indexOf(messageId)
+	switch (key) {
+		case "Previous":
+			return index > 0 ? focusMessage(model, ids[index - 1]!) : { model }
+		case "Next":
+			// Past the newest message the keyboard returns to the composer, as in Discord.
+			return index >= 0 && index < ids.length - 1
+				? focusMessage(model, ids[index + 1]!)
+				: Write.focusComposer(model)
+		case "BackToComposer":
+			return Write.focusComposer(model)
+		case "Edit":
+			return isOwn ? act("edit") : { model }
+		case "Reply":
+			return Write.andThen(act("reply"), Write.focusComposer)
+		case "Thread":
+			return facts.isThreadChannel ? { model } : act("thread")
+		case "Pin":
+			return act("pin")
+		case "Delete":
+			return isOwn ? act("delete") : { model }
+		case "DeleteNow":
+			return isOwn ? { model, commands: [DeleteMessageNow({ messageId })] } : { model }
+		case "React":
+			return act("add-reaction")
+		case "Copy":
+			return act("copy")
+	}
+}
+
+const isShiftTab = (message: Draft.Message) =>
+	message._tag === "GotComposerMessage" && message.message._tag === "PressedShiftTab"
+
 export const update = (model: Model, message: Message, shared: Shared | null = null): PageReturn =>
 	Message.match<PageReturn>(message, {
 		UpdatedChannel: ({ channel }) => ({ model: modifyFields(model, { channel: () => channel }) }),
@@ -433,7 +554,9 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 		GotOverlaysMessage: ({ message: overlaysMessage }) =>
 			liftOverlays(model, Overlays.update(model.overlays, overlaysMessage)),
 		GotDraftMessage: ({ message: draftMessage }) =>
-			Write.updateDraft(model, "channel", draftMessage, shared),
+			isShiftTab(draftMessage)
+				? focusMessages(model)
+				: Write.updateDraft(model, "channel", draftMessage, shared),
 		GotThreadDraftMessage: ({ message: draftMessage }) =>
 			Write.updateDraft(model, "thread", draftMessage, shared),
 		GotActionMessage: ({ message: actionMessage }) =>
@@ -473,6 +596,16 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 		CompletedSaveThreadPanelWidth: () => ({ model }),
 		ClickedJoinChannel: () => joinChannel(model),
 		PressedGlobalKey: ({ key }) => Write.insertGlobalKey(model, key),
+		PressedChannelHotkey: ({ action }) => pressedChannelHotkey(model, action, shared),
+		PressedMessageKey: ({ messageId, key }) => pressedMessageKey(model, messageId, key),
+		FocusedMessage: ({ messageId }) =>
+			model.focusedMessageId === messageId
+				? { model }
+				: { model: modifyFields(model, { focusedMessageId: () => messageId }) },
+		CompletedFocusMessage: () => ({ model }),
+		StartedMessageKeys: () => ({ model }),
+		SucceededDeleteMessageNow: () => ({ model }),
+		FailedDeleteMessageNow: ({ reason }) => Write.withToast(model, Write.messageNotFoundToast(reason)),
 		LeftWindow: () =>
 			Write.andThen(Write.updateDraft(model, "channel", Draft.Message.LeftWindow(), shared), (next) =>
 				Write.updateDraft(next, "thread", Draft.Message.LeftWindow(), shared),

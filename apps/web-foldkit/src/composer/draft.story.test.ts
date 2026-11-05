@@ -57,7 +57,7 @@ const replying = (): Draft.Model => ({
 })
 const editing = (): Draft.Model => ({
 	...fresh(),
-	composeMode: Draft.ComposeMode.Editing({ messageId: editId }),
+	composeMode: Draft.ComposeMode.Editing({ messageId: editId, hadText: true }),
 })
 const { Message } = Draft
 const composer = (inner: Composer.Message) => Message.GotComposerMessage({ message: inner })
@@ -98,13 +98,35 @@ describe("reply and edit", () => {
 		)
 	})
 
-	test("an empty edit is not sent and keeps edit mode", () => {
+	test("an edit emptied of its text is not sent: it asks to delete the message instead (Discord)", () => {
 		story(
 			update,
 			given(editing()),
 			message(composer(Composer.Message.SubmittedDraft({ markdown: "   " }))),
+			Command.expectExact(EditorCommands.ClearEditor({ editorId })),
+			expectOutMessage(Draft.OutMessage.RequestedDeleteMessage({ messageId: editId })),
+			model((current) => expect(Draft.editingMessageIdOf(current)).toBeNull()),
+			Command.resolve(EditorCommands.ClearEditor, Composer.Message.CompletedClearEditor()),
+		)
+	})
+
+	test("Enter on an untouched edit of a message with no text (attachments only) does nothing", () => {
+		story(
+			update,
+			given({
+				...editing(),
+				composeMode: Draft.ComposeMode.Editing({ messageId: editId, hadText: false }),
+			}),
+			message(composer(Composer.Message.SubmittedDraft({ markdown: "" }))),
 			Command.expectNone(),
 			model((current) => expect(Draft.editingMessageIdOf(current)).toBe(editId)),
+		)
+	})
+
+	test("ArrowUp on an attachment-only message starts an edit that knows it had no text", () => {
+		const started = DraftUpdate.startEditing(fresh(), editId, "")
+		expect(started.model.composeMode).toEqual(
+			Draft.ComposeMode.Editing({ messageId: editId, hadText: false }),
 		)
 	})
 

@@ -136,6 +136,8 @@ export const Message = defineMessageUnion({
 	SubmittedDraft: { markdown: Schema.String },
 	PressedEscape: {},
 	PressedArrowUpInEmpty: {},
+	/** Shift+Tab in the editor: the page moves the focus to its messages. */
+	PressedShiftTab: {},
 	PastedFiles: { files: Schema.Array(File.File) },
 	HoveredAutocompleteOption: { index: Schema.Number },
 	ClickedAutocompleteOption: { index: Schema.Number },
@@ -181,6 +183,7 @@ type EditorMessage =
 	| typeof Message.SubmittedDraft.Type
 	| typeof Message.PressedEscape.Type
 	| typeof Message.PressedArrowUpInEmpty.Type
+	| typeof Message.PressedShiftTab.Type
 	| typeof Message.PastedFiles.Type
 
 const eventToMessage = (event: EditorEvent): EditorMessage =>
@@ -192,6 +195,7 @@ const eventToMessage = (event: EditorEvent): EditorMessage =>
 			Submitted: ({ markdown }) => Message.SubmittedDraft({ markdown }),
 			PressedEscape: () => Message.PressedEscape(),
 			PressedArrowUpInEmpty: () => Message.PressedArrowUpInEmpty(),
+			PressedShiftTab: () => Message.PressedShiftTab(),
 			PastedFiles: ({ files }) => Message.PastedFiles({ files }),
 		}),
 	)
@@ -211,6 +215,7 @@ export const MountEditor = Mount.defineStream("MountEditor", {
 		Message.SubmittedDraft,
 		Message.PressedEscape,
 		Message.PressedArrowUpInEmpty,
+		Message.PressedShiftTab,
 		Message.PastedFiles,
 	],
 	execute: ({ element, editorId, placeholder, initialMarkdown, viewStateChanges }) =>

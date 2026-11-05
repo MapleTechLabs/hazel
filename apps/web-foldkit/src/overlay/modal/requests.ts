@@ -51,6 +51,7 @@ export const RegenerateBotToken = Schema.TaggedStruct("RegenerateBotToken", {
 })
 export const DeleteBot = Schema.TaggedStruct("DeleteBot", { botId: BotId, botName: Schema.String })
 export const DeleteMessage = Schema.TaggedStruct("DeleteMessage", { messageId: MessageId })
+export const KeyboardShortcuts = Schema.TaggedStruct("KeyboardShortcuts", {})
 
 export const ModalRequest = Schema.Union([
 	NewChannel,
@@ -73,5 +74,6 @@ export const ModalRequest = Schema.Union([
 	RegenerateBotToken,
 	DeleteBot,
 	DeleteMessage,
+	KeyboardShortcuts,
 ])
 export type ModalRequest = typeof ModalRequest.Type

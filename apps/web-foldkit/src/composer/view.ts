@@ -109,11 +109,17 @@ export const composerBoxView = <M>(h: HtmlBuilder<M>, model: Model, extras: BoxE
 				[h.Class("relative flex h-max items-center gap-3")],
 				[
 					extras.dropOverlay ?? h.empty,
-					h.div(
+					// Keyed, like the box below: `h.empty` siblings are dropped, so the drop overlay and the
+					// reply, edit and attachment banners shift indexes as they come and go. Unkeyed, the
+					// patch would rebuild the box in place of the new sibling and remount the editor,
+					// leaving the focus on <body> (Escape after ArrowUp-to-edit did nothing).
+					h.keyed("div")(
+						"composer-column",
 						[h.Class("w-full")],
 						[
 							...(extras.topContent ?? []),
-							h.div(
+							h.keyed("div")(
+								"composer-box",
 								[
 									h.Class(
 										cn(

@@ -50,6 +50,7 @@ export const init = (options: { readonly isCreateChannelHintDismissed: boolean }
 	notifications: Notifications.init(),
 	settingsChannel: null,
 	isSidebarOpen: false,
+	isSidebarCollapsed: false,
 })
 
 // UPDATE
@@ -238,6 +239,9 @@ export const update = (model: Model, message: Message, context: Context): ShellR
 			model: modifyFields(model, { settingsChannel: () => channel }),
 		}),
 		ToggledSidebar: ({ isOpen }) => ({ model: modifyFields(model, { isSidebarOpen: () => isOpen }) }),
+		ToggledSidebarCollapsed: () => ({
+			model: modifyFields(model, { isSidebarCollapsed: (collapsed) => !collapsed }),
+		}),
 		GotMobileSidebarMessage: ({ message }) => foldMobileSidebar(model, message),
 	})
 

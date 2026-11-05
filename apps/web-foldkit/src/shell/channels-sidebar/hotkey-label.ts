@@ -30,10 +30,25 @@ const toModifier = (part: string, platform: Platform): Modifier | undefined => {
 	return undefined
 }
 
+/** Keys shown as symbols, as `formatForDisplay` does. */
+const KEY_LABELS: Readonly<Record<string, string>> = {
+	ArrowUp: "↑",
+	ArrowDown: "↓",
+	ArrowLeft: "←",
+	ArrowRight: "→",
+	Escape: "Esc",
+	PageUp: "PgUp",
+	PageDown: "PgDn",
+	Enter: "Enter",
+	Backspace: "⌫",
+	Delete: "Del",
+}
+
 export const hotkeyLabel = (hotkey: string, platform: Platform = detectPlatform()): string => {
 	const parts = hotkey.split("+")
 	const modifiers = new Set(parts.flatMap((part) => toModifier(part, platform) ?? []))
-	const key = parts.filter((part) => toModifier(part, platform) === undefined).join("+")
+	const rawKey = parts.filter((part) => toModifier(part, platform) === undefined).join("+")
+	const key = KEY_LABELS[rawKey] ?? rawKey
 	const ordered = MODIFIER_ORDER.filter((modifier) => modifiers.has(modifier))
 	return platform === "mac"
 		? [...ordered.map((modifier) => MAC_SYMBOLS[modifier]), key].join("")

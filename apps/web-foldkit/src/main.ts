@@ -11,6 +11,7 @@ import {
 	DeliverNotifications,
 	FetchCurrentUser,
 	LoadExternal,
+	NavigateHistory,
 	NavigateInternal,
 	Reload,
 	ReplaceUrl,
@@ -50,7 +51,17 @@ import * as Platform from "./platform"
 import type { DesktopMenuItem } from "./platform/desktop-menu"
 import * as Updates from "./platform/updates"
 import { authRedirect, routeRedirect } from "./redirect"
-import { AppRoute, hrefOf, isPublicRoute, orgSlugOf, urlToAppRoute } from "./route"
+import {
+	AppRoute,
+	chatChannelIdOf,
+	hrefOf,
+	isPublicRoute,
+	organizationRoute,
+	orgSlugOf,
+	urlToAppRoute,
+} from "./route"
+import * as Notifications from "./shell/notifications"
+import * as ChannelNavigation from "./shell/channels-sidebar/navigation"
 import type { CurrentUser, Member, Organization } from "./session"
 import type { Resources } from "./rpc"
 import { loadIsCreateChannelHintDismissed } from "./shell/channels-sidebar"
@@ -267,22 +278,94 @@ const informPage: Step = (model) => foldPage(model, (page) => informShared(page,
 const enteredRoute: Step = (model) =>
 	foldPage(model, (page) => enterRoute(page, model.route, sharedOf(model)))
 
-/** `useAppHotkey` handlers in `$orgSlug/layout.tsx`. */
-const pressedHotkey = (actionId: LayoutHotkeyActionId): Step =>
-	Match.value(actionId).pipe(
-		Match.withReturnType<Step>(),
-		Match.when("commandPalette.open", () => openCommandPalette("home")),
-		// Straight into message search, as the hotkey's description says (Discord, Slack).
-		Match.when("search.open", () => openCommandPalette("search")),
-		Match.when(
-			"channel.create",
-			() => (model) =>
-				can(sharedOf(model), "channel.create") ? openModal({ _tag: "NewChannel" })(model) : { model },
+/** Discord's Alt+ArrowUp/Down: the sidebar's channel above or below the open one (Shift: unread only). */
+const goToAdjacentChannel =
+	(direction: ChannelNavigation.Direction, unreadOnly: boolean): Step =>
+	(model) => {
+		const orgSlug = orgSlugOf(model.route)
+		const channelId = ChannelNavigation.adjacentChannel(
+			model.shell.channelsSidebar,
+			chatChannelIdOf(model.route),
+			direction,
+			unreadOnly,
+		)
+		return orgSlug === undefined || channelId === null
+			? { model }
+			: navigateTo(AppRoute.ChatChannel({ orgSlug, channelId }))(model)
+	}
+
+/** Discord's Mod+Alt+ArrowUp/Down: the organization above or below in the switcher, wrapping. */
+const goToAdjacentOrganization =
+	(step: 1 | -1): Step =>
+	(model) => {
+		const organizations = model.shell.userOrganizations
+		const currentId = sharedOf(model).organization?.id
+		const index = organizations.findIndex((organization) => organization.id === currentId)
+		const next =
+			organizations.length < 2 || index === -1
+				? undefined
+				: organizations.at((index + step) % organizations.length)
+		return next === undefined ? { model } : navigateTo(organizationRoute(next))(model)
+	}
+
+/** Discord's Shift+Escape: every unread notification of this organization's member marked read. */
+const markOrganizationRead: Step = (model) =>
+	foldShell(model, (shell) =>
+		Shell.update(
+			shell,
+			ShellMessage.GotNotificationsMessage({ message: Notifications.Message.ClickedMarkAllRead() }),
+			shellContextOf(model),
 		),
-		Match.when("dm.create", () => openModal({ _tag: "CreateDm" })),
-		Match.when("invite.email", () => openModal({ _tag: "EmailInvite" })),
-		Match.exhaustive,
 	)
+
+/** Mod+I: the notifications inbox. */
+const openInbox: Step = (model) => {
+	const orgSlug = orgSlugOf(model.route)
+	return orgSlug === undefined ? { model } : navigateTo(AppRoute.NotificationsAll({ orgSlug }))(model)
+}
+
+/** Mod+Shift+D: docks the desktop sidebar to its nav rail and back; on mobile, opens or closes the sheet. */
+const toggleSidebar: Step = (model) =>
+	model.isMobile
+		? foldShell(model, (shell) =>
+				Shell.update(
+					shell,
+					ShellMessage.ToggledSidebar({ isOpen: !shell.isSidebarOpen }),
+					shellContextOf(model),
+				),
+			)
+		: foldShell(model, (shell) =>
+				Shell.update(shell, ShellMessage.ToggledSidebarCollapsed(), shellContextOf(model)),
+			)
+
+/** `useAppHotkey` handlers in `$orgSlug/layout.tsx`. */
+const pressedHotkey = (actionId: LayoutHotkeyActionId): Step => hotkeySteps[actionId]()
+
+/** One step per layout hotkey; the mapped type keeps it exhaustive (a `Match` chain outgrew `pipe`). */
+const hotkeySteps = {
+	"commandPalette.open": () => openCommandPalette("home"),
+	// Straight into message search, as the hotkey's description says (Discord, Slack).
+	"search.open": () => openCommandPalette("search"),
+	"channel.create": () => (model) =>
+		can(sharedOf(model), "channel.create") ? openModal({ _tag: "NewChannel" })(model) : { model },
+	"dm.create": () => openModal({ _tag: "CreateDm" }),
+	"invite.email": () => openModal({ _tag: "EmailInvite" }),
+	"channel.previous": () => goToAdjacentChannel("Previous", false),
+	"channel.next": () => goToAdjacentChannel("Next", false),
+	"channel.previousUnread": () => goToAdjacentChannel("Previous", true),
+	"channel.nextUnread": () => goToAdjacentChannel("Next", true),
+	// Unread counts are unread notifications (mentions, DMs, followed threads): the same channels.
+	"mention.previous": () => goToAdjacentChannel("Previous", true),
+	"mention.next": () => goToAdjacentChannel("Next", true),
+	"organization.previous": () => goToAdjacentOrganization(-1),
+	"organization.next": () => goToAdjacentOrganization(1),
+	"organization.markRead": () => markOrganizationRead,
+	"inbox.open": () => openInbox,
+	"shortcuts.open": () => openModal({ _tag: "KeyboardShortcuts" }),
+	"sidebar.toggle": () => toggleSidebar,
+	"history.back": () => command(NavigateHistory({ direction: "Back" })),
+	"history.forward": () => command(NavigateHistory({ direction: "Forward" })),
+} satisfies { readonly [K in LayoutHotkeyActionId]: () => Step }
 
 /** The desktop app menu (legacy `TauriMenuListener`). */
 const pressedDesktopMenuItem = (item: DesktopMenuItem): Step =>
@@ -577,6 +660,7 @@ export const update = (model: Model, message: Message): Return =>
 			}),
 		ChangedUrl: ({ url }) => Update.combine(withUrl(model, url), [enteredRoute, informShell, redirect]),
 		CompletedNavigateInternal: () => ({ model }),
+		CompletedNavigateHistory: () => ({ model }),
 		CompletedReplaceUrl: () => ({ model }),
 		CompletedLoadExternal: () => ({ model }),
 		ChangedSystemTheme: ({ theme }) =>

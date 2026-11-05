@@ -1,3 +1,4 @@
+import { ChannelHotkey } from "./hotkeys"
 import { ChannelId, ChannelMemberId, MessageId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import type { Update } from "foldkit"
@@ -131,6 +132,8 @@ export const Model = Schema.Struct({
 	/** Newest messages skipped: the window slides older once it holds `MAX_WINDOW` messages. */
 	offset: Schema.Number,
 	list: MessageList.Model,
+	/** The message the keyboard is on (Discord's message navigation); Shift+Tab returns to it. */
+	focusedMessageId: Schema.NullOr(MessageId),
 	overlays: Overlays.Model,
 	/** The channel composer's draft (`ChatProvider` + `ComposerEditor` state). */
 	draft: Draft.Model,
@@ -155,6 +158,25 @@ export const ClearNotificationsFailure = Schema.Union([Schema.Literals(["Channel
 export type ClearNotificationsFailure = typeof ClearNotificationsFailure.Type
 
 // MESSAGE
+
+/** What a key does on a focused message, as Discord binds it. */
+export const MessageKey = Schema.Literals([
+	"Previous",
+	"Next",
+	"BackToComposer",
+	"Edit",
+	"Reply",
+	"Thread",
+	"Pin",
+	"Delete",
+	"DeleteNow",
+	"React",
+	"Copy",
+])
+export type MessageKey = typeof MessageKey.Type
+
+export const DeleteMessageNowFailure = Schema.Union([Schema.Literals(["MessageNotFound"]), CommonReason])
+export type DeleteMessageNowFailure = typeof DeleteMessageNowFailure.Type
 
 export const Message = defineMessageUnion({
 	UpdatedChannel: { channel: Schema.NullOr(ChannelInfo) },
@@ -206,6 +228,17 @@ export const Message = defineMessageUnion({
 	ClickedJoinChannel: {},
 	/** A printable key typed outside any input (`useGlobalKeyboardFocus`). */
 	PressedGlobalKey: { key: Schema.String },
+	/** One of Discord's channel shortcuts (`hotkeys.ts`). */
+	PressedChannelHotkey: { action: ChannelHotkey },
+	/** A key on a focused message (`message-keys.ts`). */
+	PressedMessageKey: { messageId: MessageId, key: MessageKey },
+	/** A message took the focus (a click, Tab, or our own `FocusMessage`). */
+	FocusedMessage: { messageId: MessageId },
+	/** The message keyboard listens on the list (`TrackMessageKeys`). */
+	StartedMessageKeys: {},
+	CompletedFocusMessage: {},
+	SucceededDeleteMessageNow: {},
+	FailedDeleteMessageNow: { reason: DeleteMessageNowFailure },
 	/** The window lost focus or the tab was hidden: typing stops. */
 	LeftWindow: {},
 	SucceededClearNotifications: { channelId: ChannelId },

@@ -189,7 +189,7 @@ export const messageRowView = <M>(
 					[
 						h.Class(
 							cn(
-								"group relative flex flex-col rounded-lg px-0.5 py-1 hover:bg-secondary",
+								"group relative flex flex-col rounded-lg px-0.5 py-1 outline-hidden hover:bg-secondary focus-visible:bg-secondary focus-visible:ring-2 focus-visible:ring-primary/40",
 								isGroupStart ? "mt-2" : "",
 								isGroupEndOf(row) ? "mb-2" : "",
 								message.isPinned
@@ -199,6 +199,10 @@ export const messageRowView = <M>(
 						),
 						h.Attribute("data-id", message.id),
 						h.Id(`message-${message.id}`),
+						// Focusable for the keyboard (Discord's message navigation: Shift+Tab from the
+						// composer, then the arrows); only keyboard focus draws the ring.
+						h.Attribute("tabindex", "-1"),
+						h.Attribute("data-message-row", ""),
 					],
 					[
 						row.reply === null ? h.empty : replySectionView(h, row.reply, null),

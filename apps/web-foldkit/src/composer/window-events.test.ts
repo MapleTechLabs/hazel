@@ -42,6 +42,16 @@ describe("typing outside the composer", () => {
 		expect(await run((press) => press({ key: "c", ...modifiers }))).toEqual([])
 	})
 
+	test("a key a focused message already took (E to edit) is not typed into the composer", async () => {
+		const row = document.createElement("div")
+		row.tabIndex = -1
+		row.addEventListener("keydown", (event) => event.preventDefault())
+		document.body.append(row)
+		const keys = await run((press) => press({ key: "e" }, row))
+		row.remove()
+		expect(keys).toEqual([])
+	})
+
 	test.each(["Enter", "Escape", "ArrowUp", "Tab", "PageDown", "Shift"])("%s is not typing", async (key) => {
 		expect(await run((press) => press({ key }))).toEqual([])
 	})
