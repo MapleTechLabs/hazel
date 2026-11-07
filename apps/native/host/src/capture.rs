@@ -25,6 +25,13 @@ enum Step {
     ClickText(String),
     /// Move the pointer over the first element with this text that listens for `mouseenter`.
     HoverText(String),
+    /// Move the pointer to a point (window points) and draw a frame.
+    Move([f32; 2]),
+    /// Press and release at a point (window points), then let the app answer.
+    ClickAt([f32; 2]),
+    /// Glide the pointer from `from` to `to` over `ms`, one move per 120 Hz frame, and report
+    /// each frame's CPU time against the 8.3 ms budget and how many trees arrived.
+    Sweep(SweepStep),
     Type(String),
     /// A named key (`"Enter"`), or `{ "name": "Enter", "until": "Hello" }` to also wait for
     /// that text to appear (a sent message) before the round trip counts.
@@ -42,6 +49,16 @@ enum Step {
     /// file, for comparing layout with a browser render of the same view.
     ExportLayout(String),
 }
+
+#[derive(Deserialize)]
+struct SweepStep {
+    from: [f32; 2],
+    to: [f32; 2],
+    ms: u64,
+}
+
+/// One 120 Hz frame: the budget a sweep's frames are held to.
+const FRAME_120: Duration = Duration::from_micros(8_333);
 
 #[derive(Deserialize)]
 #[serde(untagged)]
@@ -89,6 +106,11 @@ struct Session {
 impl Session {
     /// One real-time frame: apply what the runtime sent, run the frame, keep the 60 Hz cadence.
     fn tick(&mut self) -> bool {
+        self.tick_every(FRAME).0
+    }
+
+    /// `tick` at another cadence (a 120 Hz display's), with the frame's CPU time.
+    fn tick_every(&mut self, period: Duration) -> (bool, f64) {
         let began = Instant::now();
         let mut got_tree = false;
         while let Ok(msg) = self.messages.try_recv() {
@@ -111,7 +133,7 @@ impl Session {
             self.rt.update(|_, tx| tx.invalidate_memos_by_prefix("r"));
         }
         let frame_started = Instant::now();
-        self.rt.frame(FRAME.as_secs_f64());
+        self.rt.frame(period.as_secs_f64());
         let frame_ms = frame_started.elapsed().as_secs_f64() * 1000.0;
         if got_tree {
             self.last_tree = Instant::now();
@@ -121,10 +143,10 @@ impl Session {
         } else {
             self.timings.idle_frames.push(frame_ms);
         }
-        if let Some(rest) = FRAME.checked_sub(began.elapsed()) {
+        if let Some(rest) = period.checked_sub(began.elapsed()) {
             std::thread::sleep(rest)
         }
-        got_tree
+        (got_tree, frame_ms)
     }
 
     fn settle(&mut self, quiet_ms: u64) -> f64 {
@@ -377,6 +399,38 @@ pub fn run(script_path: &str) {
                     });
                     session.tick();
                 }
+            }
+            Step::Move([x, y]) => {
+                session.rt.pointer_move(x, y);
+                session.tick();
+            }
+            Step::ClickAt([x, y]) => {
+                session.rt.pointer_move(x, y);
+                session.rt.pointer_down(x, y);
+                session.rt.pointer_up(x, y);
+                let rtt = session.round_trip(None);
+                interactions.push(json!({ "clickAt": [x, y], "roundTripMs": rtt }));
+            }
+            Step::Sweep(sweep) => {
+                let frames = (sweep.ms as f64 / FRAME_120.as_secs_f64() / 1000.0)
+                    .ceil()
+                    .max(1.0) as usize;
+                let trees_before = session.timings.trees;
+                let mut times = Vec::with_capacity(frames);
+                for i in 0..=frames {
+                    let t = i as f32 / frames as f32;
+                    let x = sweep.from[0] + (sweep.to[0] - sweep.from[0]) * t;
+                    let y = sweep.from[1] + (sweep.to[1] - sweep.from[1]) * t;
+                    session.rt.pointer_move(x, y);
+                    times.push(session.tick_every(FRAME_120).1);
+                }
+                let budget = FRAME_120.as_secs_f64() * 1000.0;
+                interactions.push(json!({
+                    "sweep": [sweep.from, sweep.to],
+                    "frameMs": summary(&times),
+                    "overBudget": times.iter().filter(|t| **t > budget).count(),
+                    "trees": session.timings.trees - trees_before,
+                }));
             }
             Step::HoverText(label) => {
                 let mut candidates = Vec::new();

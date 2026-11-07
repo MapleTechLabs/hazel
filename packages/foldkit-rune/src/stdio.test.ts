@@ -21,6 +21,12 @@ describe("host line reader", () => {
 		expect(bad).toHaveLength(2)
 	})
 
+	it("passes a modal overlay's dismissal on", () => {
+		expect(parseHostLine('{"t":"dismiss","path":"r/1/0"}')).toEqual({
+			message: { t: "dismiss", path: "r/1/0" },
+		})
+	})
+
 	it("rejects JSON that is not a host message", () => {
 		expect(parseHostLine('{"t":"tree"}')).toEqual({ error: "not a host message" })
 		expect(parseHostLine("null")).toEqual({ error: "not a host message" })
