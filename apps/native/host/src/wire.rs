@@ -183,6 +183,9 @@ pub enum WireNode {
         view: f32,
         body: String,
         st: Style,
+        /// The svg's `preserveAspectRatio`, when it sets one.
+        #[serde(default)]
+        par: Option<String>,
     },
     #[serde(rename = "e")]
     Elem {
@@ -240,6 +243,7 @@ pub enum Node {
         view: f32,
         body: String,
         st: Style,
+        par: Option<String>,
     },
     Elem {
         hash: String,
@@ -286,11 +290,18 @@ impl Subtrees {
                 index(&node, next);
                 return node;
             }
-            WireNode::Svg { h, view, body, st } => Arc::new(Node::Svg {
+            WireNode::Svg {
+                h,
+                view,
+                body,
+                st,
+                par,
+            } => Arc::new(Node::Svg {
                 hash: h,
                 view,
                 body,
                 st,
+                par,
             }),
             WireNode::Elem {
                 h,

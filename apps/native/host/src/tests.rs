@@ -766,3 +766,31 @@ fn a_centred_element_pinned_on_both_sides_spans_between_them() {
     );
     assert_eq!(rect(&rt, "r/0")[2], 200.0, "{:?}", rect(&rt, "r/0"));
 }
+
+#[test]
+fn an_svg_keeps_its_aspect_ratio_unless_it_asks_to_stretch() {
+    let body = r#"<path d="M0 0h16v16h-16z" fill="oklch(0.628 0.2577 29.23)"/>"#;
+    let left_edge = |par: Option<&str>| {
+        let mut svg =
+            json!({ "k": "svg", "h": format!("svg-{par:?}"), "view": 16, "body": body, "st": {} });
+        if let Some(p) = par {
+            svg["par"] = json!(p);
+        }
+        let s = state(e(
+            "div",
+            json!({ "w": 64, "h": 32, "bg": "#0000ffff" }),
+            vec![svg],
+        ));
+        s.images.svg(16.0, body, 128.0).wait().expect("an svg");
+        let mut rt = Runtime::new(s, view, (64.0, 32.0), Env::new(false, 1.0));
+        rt.frame(0.0);
+        let frame = render(&mut rt, (64, 32));
+        assert!(frame.is(32, 16, RED), "{:?}", frame.at(32, 16));
+        frame.at(3, 16)
+    };
+    // `meet` (the default): a square picture centred in a wide box leaves its sides empty.
+    let fitted = left_edge(None);
+    assert!(fitted[2] > 200 && fitted[0] < 60, "{fitted:?}");
+    let stretched = left_edge(Some("none"));
+    assert!(stretched[0] > 200 && stretched[2] < 60, "{stretched:?}");
+}

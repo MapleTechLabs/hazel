@@ -184,7 +184,13 @@ fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
             Some(text_run(s, &inh))
         }
         Node::Svg { st, .. } if st.display.as_deref() == Some("none") => None,
-        Node::Svg { view, body, st, .. } => Some(build_svg(*view, body, st, inh, ctx)),
+        Node::Svg {
+            view,
+            body,
+            st,
+            par,
+            ..
+        } => Some(build_svg(*view, body, st, par.as_deref(), inh, ctx)),
         Node::Elem {
             hash,
             tag,
@@ -553,7 +559,7 @@ fn picture_size(st: &Style) -> f32 {
 
 /// An inline SVG: a `currentColor` icon tinted with the text colour, or one with its own
 /// colours (an avatar's dither pattern) drawn as a picture.
-fn build_svg(view: f32, body: &str, st: &Style, inh: Inherit, ctx: &Ctx) -> El {
+fn build_svg(view: f32, body: &str, st: &Style, par: Option<&str>, inh: Inherit, ctx: &Ctx) -> El {
     let c = color(&st.color).unwrap_or(inh.color);
     if !images::is_multicolour(body) {
         let size = match st.w {
@@ -564,7 +570,13 @@ fn build_svg(view: f32, body: &str, st: &Style, inh: Inherit, ctx: &Ctx) -> El {
         return center_vertically(apply_box(e, st), st);
     }
     let image = ctx.s.images.svg(view, body, picture_size(st));
-    let mut e = el().pixels(image.pixels());
+    // `preserveAspectRatio`: `none` stretches to the box (the dithered avatar), `slice` covers
+    // it, and the default (`meet`) fits inside it.
+    let mut e = match par.unwrap_or("xMidYMid meet") {
+        "none" => el().pixels(image.pixels()),
+        p if p.ends_with("slice") => el().pixels_fit(image.pixels(), SurfaceFit::Fill),
+        _ => el().pixels_fit(image.pixels(), SurfaceFit::Fit),
+    };
     if st.w.is_none() && st.h.is_none() && st.absolute.is_none() {
         // An unsized SVG fills its box; the decorative ones here sit under their siblings.
         e = e.pin(Some(0.0), Some(0.0), Some(0.0), Some(0.0))
