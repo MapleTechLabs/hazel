@@ -136,6 +136,10 @@ describe("makeRuneTarget", () => {
 		press(first.gen, 2)
 		await settle()
 		expect(trees().flatMap((tree) => texts(tree.root))).not.toContain("second")
+		// A press on a tree the runtime no longer keeps runs nothing rather than the newest handler.
+		press(first.gen + 1000, 3)
+		await settle()
+		expect(trees().flatMap((tree) => texts(tree.root))).not.toContain("second")
 		handle.dispose()
 	})
 

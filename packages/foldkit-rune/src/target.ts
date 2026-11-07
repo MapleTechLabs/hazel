@@ -234,8 +234,8 @@ const hash = (text: string): string => {
  * Handler ids are stable per element path, so an unchanged subtree hashes the same between
  * commits and goes over the wire as a reference.
  */
-/** How many sent trees keep their handlers: a press on a tree older than these runs the newest. */
-const HANDLER_GENERATIONS = 8
+/** How many sent trees keep their handlers (each keystroke sends one); a press on an older tree is dropped. */
+const HANDLER_GENERATIONS = 32
 
 export const makeRuneTarget = (options: RuneTargetOptions) => {
 	const { styles, send } = options
@@ -533,8 +533,9 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			options.onEditable?.(message.path, { value: message.value, key: message.key })
 			return
 		}
-		const presented = message.gen === undefined ? undefined : handlersByGen.get(message.gen)
-		const handler = (presented ?? handlers).get(message.id)
+		// A press on a tree no longer kept is dropped: the newest handler may be a different action.
+		const presented = message.gen === undefined ? handlers : handlersByGen.get(message.gen)
+		const handler = presented?.get(message.id)
 		handler?.(fakeEvent(message))
 	}
 

@@ -202,9 +202,10 @@ impl Session {
         self.round_trip(None)
     }
 
-    fn type_text(&mut self, text: &str) -> Vec<f64> {
+    /// Each key's round trip, or `None` if any key never got its update.
+    fn type_text(&mut self, text: &str) -> Option<Vec<f64>> {
         text.chars()
-            .filter_map(|c| {
+            .map(|c| {
                 self.rt.key(KeyEvent {
                     key: Key::Text(c.to_string()),
                     mods: Mods::default(),
@@ -353,7 +354,12 @@ pub fn run(script_path: &str) {
                 }
             }
             Step::Type(text) => {
-                let keys = session.type_text(&text);
+                let Some(keys) = session.type_text(&text) else {
+                    fail(
+                        &mut child,
+                        &format!("type \"{text}\": a key got no update within 5 s"),
+                    );
+                };
                 interactions.push(json!({ "type": text, "perKey": summary(&keys) }));
             }
             Step::Key(step) => {
