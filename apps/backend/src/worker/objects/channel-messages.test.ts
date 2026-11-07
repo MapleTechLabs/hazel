@@ -338,43 +338,48 @@ describe("ChannelObject messages", () => {
 			}),
 		))
 
-	it("@channel, and 120 mentions, reach every member of a channel past 100 members", () =>
-		run(
-			Effect.gen(function* () {
-				const world = yield* makeWorld
-				const channel = yield* world.channel("public")
-				const db = world.org.storage.db
-				const extra = Array.from({ length: 150 }, () => uuid())
-				for (const userId of extra) {
-					db.prepare(
-						`INSERT INTO organization_members (id, organizationId, userId, role) VALUES (?, ?, ?, 'member')`,
-					).run(uuid(), world.orgId, userId)
-					db.prepare(`INSERT INTO channel_members (channelId, userId) VALUES (?, ?)`).run(
-						channel.id,
-						userId,
+	it(
+		"@channel, and 120 mentions, reach every member of a channel past 100 members",
+		() =>
+			run(
+				Effect.gen(function* () {
+					const world = yield* makeWorld
+					const channel = yield* world.channel("public")
+					const db = world.org.storage.db
+					const extra = Array.from({ length: 150 }, () => uuid())
+					for (const userId of extra) {
+						db.prepare(
+							`INSERT INTO organization_members (id, organizationId, userId, role) VALUES (?, ?, ?, 'member')`,
+						).run(uuid(), world.orgId, userId)
+						db.prepare(`INSERT INTO channel_members (channelId, userId) VALUES (?, ?)`).run(
+							channel.id,
+							userId,
+						)
+					}
+
+					yield* send(world, channel, world.author, "@[directive:channel] all hands")
+					const counts = countsIn(world, channel.id)
+					expect(extra.every((userId) => counts[userId] === 1)).toBe(true)
+					expect(counts[world.alice]).toBe(1)
+					expect(counts[world.muted]).toBe(0)
+
+					// Mentioning 120 of them by name (on the default `mentions` level) reaches the same set.
+					const named = extra.slice(0, 120)
+					yield* send(
+						world,
+						channel,
+						world.author,
+						named.map((userId) => `@[userId:${userId}]`).join(" "),
 					)
-				}
-
-				yield* send(world, channel, world.author, "@[directive:channel] all hands")
-				const counts = countsIn(world, channel.id)
-				expect(extra.every((userId) => counts[userId] === 1)).toBe(true)
-				expect(counts[world.alice]).toBe(1)
-				expect(counts[world.muted]).toBe(0)
-
-				// Mentioning 120 of them by name (on the default `mentions` level) reaches the same set.
-				const named = extra.slice(0, 120)
-				yield* send(
-					world,
-					channel,
-					world.author,
-					named.map((userId) => `@[userId:${userId}]`).join(" "),
-				)
-				const after = countsIn(world, channel.id)
-				expect(named.every((userId) => after[userId] === 2)).toBe(true)
-				expect(extra.slice(120).every((userId) => after[userId] === 1)).toBe(true)
-				expect(after[world.alice]).toBe(1)
-			}),
-		))
+					const after = countsIn(world, channel.id)
+					expect(named.every((userId) => after[userId] === 2)).toBe(true)
+					expect(extra.slice(120).every((userId) => after[userId] === 1)).toBe(true)
+					expect(after[world.alice]).toBe(1)
+				}),
+			),
+		// Over a hundred members and 120 mentions: about 5 s on CI on its own, so the default is too tight.
+		20_000,
+	)
 
 	it("update and delete: the author's, bots hear about them, others are refused", () =>
 		run(
