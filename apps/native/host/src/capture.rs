@@ -32,6 +32,9 @@ enum Step {
     FocusEditable,
     /// Print the presented rect of every observed element and the first rows under it.
     Dump,
+    /// Write every element's presented rect, tag, own text and identifying attributes to a JSON
+    /// file, for comparing layout with a browser render of the same view.
+    ExportLayout(String),
 }
 
 #[derive(Default)]
@@ -342,6 +345,18 @@ pub fn run(script_path: &str) {
                     eprintln!("[capture] no editable field");
                 }
             }
+            Step::ExportLayout(path) => {
+                session.rt.settle_all();
+                session.rt.frame(0.0);
+                let mut out = Vec::new();
+                if let Some(root) = session.rt.state.root.clone() {
+                    export_layout(&session.rt, &root, "r", &mut out);
+                }
+                let doc = json!({ "scale": session.scale, "elements": out });
+                if let Err(error) = std::fs::write(&path, serde_json::to_string(&doc).unwrap()) {
+                    eprintln!("[capture] {path}: {error}");
+                }
+            }
             Step::Dump => {
                 let root = session.rt.state.root.clone();
                 if let Some(root) = root {
@@ -450,4 +465,53 @@ fn find_editable(node: &Arc<Node>, path: &str) -> Option<String> {
         };
         find_editable(child, &child_path)
     })
+}
+
+/// Elements in tree order: path, tag, the text directly inside, identifying attributes and the
+/// rect Rune presented (logical points; `null` when the element is not drawn).
+fn export_layout(
+    rt: &Runtime<State>,
+    node: &Arc<Node>,
+    path: &str,
+    out: &mut Vec<serde_json::Value>,
+) {
+    let Node::Elem {
+        tag,
+        attrs,
+        children,
+        ..
+    } = node.as_ref()
+    else {
+        return;
+    };
+    let own_text: String = children
+        .iter()
+        .filter_map(|c| match c.as_ref() {
+            Node::Text(s) => Some(s.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("");
+    let rect = rt.presented(path).map(
+        |(r, opacity)| json!({ "x": r[0], "y": r[1], "w": r[2], "h": r[3], "opacity": opacity }),
+    );
+    let keep: serde_json::Map<String, serde_json::Value> = attrs
+        .iter()
+        .filter(|(k, _)| {
+            k.starts_with("data-")
+                || matches!(
+                    k.as_str(),
+                    "role" | "aria-label" | "href" | "src" | "alt" | "placeholder"
+                )
+        })
+        .map(|(k, v)| (k.clone(), json!(v)))
+        .collect();
+    out.push(json!({ "path": path, "tag": tag, "text": own_text, "fullText": text_of(node), "attrs": keep, "rect": rect }));
+    for (i, child) in children.iter().enumerate() {
+        let child_path = match child.as_ref() {
+            Node::Elem { key: Some(key), .. } => format!("{path}/k{key}"),
+            _ => format!("{path}/{i}"),
+        };
+        export_layout(rt, child, &child_path, out);
+    }
 }
