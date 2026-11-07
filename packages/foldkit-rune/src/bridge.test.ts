@@ -79,4 +79,31 @@ describe("makeElementBridge", () => {
 		expect(scrolls).toBe(1)
 		expect(sent).toEqual([480])
 	})
+
+	it("treats a sibling whose path extends another's as outside it", () => {
+		const bridge = makeElementBridge({ mounts: new Set(), sendScroll: () => {} })
+		const next = new Map()
+		bridge.recordElement("r", undefined, "div", {}, [], next)
+		bridge.recordElement("r/1", "r", "div", { id: "one" }, [], next)
+		bridge.recordElement("r/10", "r", "div", { id: "ten" }, [], next)
+		bridge.recordElement("r/1/0", "r/1", "div", { id: "child" }, [], next)
+		bridge.commit(next, new Map())
+		const one = bridge.findById("one")
+		expect(one?.contains(bridge.findById("child"))).toBe(true)
+		expect(one?.contains(bridge.findById("ten"))).toBe(false)
+	})
+
+	it("releases a Mount replaced by a different one in the same slot", () => {
+		const calls: Array<string> = []
+		const bridge = makeElementBridge({
+			mounts: new Set(["ObserveList", "OtherMount"]),
+			sendScroll: () => {},
+		})
+		bridge.commit(record(bridge), new Map([["r", mountVNode(calls)]]))
+		bridge.reportLayout("r", { x: 0, y: 0, width: 300, height: 200 })
+		const other = mountVNode(calls)
+		other.data.foldkitMount.name = "OtherMount"
+		bridge.commit(record(bridge), new Map([["r", other]]))
+		expect(calls).toEqual(["insert", "destroy", "insert"])
+	})
 })

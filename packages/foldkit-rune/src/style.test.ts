@@ -105,4 +105,10 @@ describe("StyleResolver", () => {
 		const { style } = resolve("bg-white hover:bg-black")
 		expect(style).toMatchObject({ bg: "#ffffffff", hoverBg: "#000000ff" })
 	})
+
+	it("answers the page root's custom properties for the theme", () => {
+		expect(styles.customProperty("--bg", false)).toBe("#ffffff")
+		expect(styles.customProperty("--bg", true)).toBe("#000000")
+		expect(styles.customProperty("--missing", false)).toBe("")
+	})
 })

@@ -5,6 +5,7 @@
  * `HAZEL_SESSION_TOKEN` as the session bearer.
  */
 import { appendFileSync } from "node:fs"
+import { Option } from "effect"
 import {
 	makeElementBridge,
 	makeRuneTarget,
@@ -126,6 +127,14 @@ const scheduleHeadlessDom = () => {
 		void composer.loadHeadlessDom({ document, shims }, () => rune.refreshObserved())
 	}, wait)
 }
+/** Theme tokens read through `getComputedStyle` (the HTML render theme) come from the stylesheet. */
+Object.assign(globalThis, {
+	getComputedStyle: () => ({
+		getPropertyValue: (name: string) =>
+			name.startsWith("--") ? styles.customProperty(name, rune.env.dark) : "",
+	}),
+})
+
 const rune = makeRuneTarget({
 	styles,
 	bridge,
@@ -136,7 +145,10 @@ const rune = makeRuneTarget({
 	onEditable: (path, event) => {
 		if (process.env.NATIVE_DEBUG) process.stderr.write(`[editable] ${JSON.stringify(event)}\n`)
 		const mount = bridge.domMountAt(path)
-		if (mount !== undefined) composer.applyEditorEvent(mount.args, event)
+		if (mount === undefined) return
+		// A key the editor handled (undo, a markdown shortcut) changed the text under the field.
+		const isChangedByKey = Option.getOrElse(composer.applyEditorEvent(mount.args, event), () => false)
+		if (isChangedByKey) rune.refreshObserved()
 	},
 	env: { width, height, dark },
 	send: (message) => {

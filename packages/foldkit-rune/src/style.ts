@@ -147,6 +147,12 @@ export class StyleResolver {
 		this.parse(this.compiler.build([...this.known]))
 	}
 
+	/** A custom property's value on the page root (`getComputedStyle(root).getPropertyValue`). */
+	customProperty(name: string, dark: boolean): string {
+		const vars = this.rootScope(dark).vars
+		return substitute(vars.get(name) ?? "", vars).trim()
+	}
+
 	rootScope(dark: boolean): Scope {
 		return this.intern(`root:${dark}`, () => ({
 			vars: dark ? new Map([...this.vars.light, ...this.vars.dark]) : new Map(this.vars.light),

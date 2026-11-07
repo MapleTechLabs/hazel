@@ -294,10 +294,10 @@ pub fn run(script_path: &str) {
                 interactions.push(json!({ "type": text, "perKey": summary(&keys) }));
             }
             Step::Key(name) => {
-                let key = if name == "Enter" {
-                    Key::Enter
-                } else {
-                    Key::Text(name.clone())
+                let key = match name.as_str() {
+                    "Enter" => Key::Enter,
+                    "Backspace" => Key::Backspace,
+                    _ => Key::Text(name.clone()),
                 };
                 session.rt.key(KeyEvent {
                     key,

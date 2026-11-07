@@ -147,7 +147,8 @@ export const makeElementBridge = (options: {
 			querySelector: { value: (selector: string) => queryAll(path, selector)[0] ?? null },
 			closest: { value: (selector: string) => closest(path, selector) },
 			contains: {
-				value: (other: EventTarget | null) => isProxy(other) && other.__path.startsWith(path),
+				value: (other: EventTarget | null) =>
+					isProxy(other) && (other.__path === path || other.__path.startsWith(`${path}/`)),
 			},
 			scrollTo: {
 				value: (arg: { top?: number } | number, y?: number) =>
@@ -225,8 +226,13 @@ export const makeElementBridge = (options: {
 				continue
 			}
 			awaitingLayout.delete(path)
-			if (previous === undefined || !mounted.has(path)) vnode.data?.hook?.insert?.(vnode)
-			else vnode.data?.hook?.postpatch?.(previous, vnode)
+			const isSameMount =
+				previous !== undefined && mounted.has(path) && previous.data?.foldkitMount?.name === name
+			// A different Mount in the same slot releases the old one and starts fresh.
+			if (previous !== undefined && mounted.has(path) && !isSameMount)
+				previous.data?.hook?.destroy?.(previous)
+			if (isSameMount) vnode.data?.hook?.postpatch?.(previous, vnode)
+			else vnode.data?.hook?.insert?.(vnode)
 			nextMounted.set(path, vnode)
 		}
 		for (const path of [...awaitingLayout.keys()]) if (!mountVNodes.has(path)) awaitingLayout.delete(path)

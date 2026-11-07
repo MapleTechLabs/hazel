@@ -67,14 +67,15 @@ export const applyEditorEvent = (
 ) =>
 	Option.map(editorAt(args.editorId), (view) => {
 		const { state } = view
+		const before = state.doc
 		if (event.value != null) {
 			const end = state.doc.content.size
 			const paragraph = state.schema.nodes.paragraph
-			const next =
-				event.value === "" || paragraph === undefined
-					? state.tr.delete(0, end)
-					: state.tr.replaceWith(0, end, paragraph.create(null, state.schema.text(event.value)))
-			view.dispatch(next)
+			// The schema needs one block (`block+`): an empty field is an empty paragraph, as the app clears it.
+			if (paragraph !== undefined) {
+				const content = event.value === "" ? [] : [state.schema.text(event.value)]
+				view.dispatch(state.tr.replaceWith(0, end, paragraph.create(null, content)))
+			}
 		}
 		if (event.key != null && dom !== undefined) {
 			const keydown = new dom.window.KeyboardEvent("keydown", {
@@ -84,4 +85,6 @@ export const applyEditorEvent = (
 			})
 			view.someProp("handleKeyDown", (handle) => handle(view, keydown))
 		}
+		/** Whether the editor's document changed, so the native field must take its text again. */
+		return event.key != null && !view.state.doc.eq(before)
 	})
