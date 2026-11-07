@@ -88,5 +88,35 @@
 			"posP95": 4.75,
 			"textPosP95": 5.44
 		}
+	},
+	"menu-light": {
+		"min": {
+			"matchedWebPct": 97.29,
+			"posWithin4Pct": 95.43,
+			"sizeWithin4Pct": 88.57,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 80.43,
+			"pixelScore": 95.73
+		},
+		"max": {
+			"missingOnNative": 5,
+			"posP95": 4.75,
+			"textPosP95": 5.44
+		}
+	},
+	"menu-dark": {
+		"min": {
+			"matchedWebPct": 97.29,
+			"posWithin4Pct": 95.43,
+			"sizeWithin4Pct": 88.57,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 80.43,
+			"pixelScore": 95.72
+		},
+		"max": {
+			"missingOnNative": 5,
+			"posP95": 4.75,
+			"textPosP95": 5.44
+		}
 	}
 }

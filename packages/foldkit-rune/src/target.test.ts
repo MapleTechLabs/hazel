@@ -5,6 +5,7 @@ import { defineMessageUnion } from "foldkit/message"
 import { beforeAll, describe, expect, it } from "vitest"
 
 import { makeElementBridge } from "./bridge"
+import { type Overlays, makeOverlays } from "./overlays"
 import { StyleResolver } from "./style"
 import { htmlText, makeRuneTarget } from "./target"
 import type { RuntimeToHost, WireNode } from "./wire"
@@ -42,7 +43,7 @@ beforeAll(async () => {
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 20))
 
-const boot = (render: typeof view = view) => {
+const boot = (render: typeof view = view, overlays?: Overlays) => {
 	const sent: Array<RuntimeToHost> = []
 	const bridge = makeElementBridge({ mounts: new Set(), sendScroll: () => {} })
 	const rune = makeRuneTarget({
@@ -50,6 +51,7 @@ const boot = (render: typeof view = view) => {
 		bridge,
 		env: { width: 800, height: 600, dark: false },
 		send: (m) => sent.push(m),
+		overlays,
 	})
 	const handle = Runtime.embed(
 		Runtime.makeElement({
@@ -116,6 +118,39 @@ describe("makeRuneTarget", () => {
 		expect(root.k === "svg" ? root.body : "").toBe(
 			'<text x="9" text-anchor="middle" font-size="6" font-weight="700">G&lt;F</text>',
 		)
+		handle.dispose()
+	})
+
+	it("sends the overlays Mounts asked for and routes the host's dismiss back", async () => {
+		const menu = (_: Model, h: HtmlBuilder<Message>): Html =>
+			h.div(
+				[],
+				[
+					h.button([h.Id("trigger")], ["Open"]),
+					h.div([], [h.div([], ["Panel"])]),
+					// A menu renders inside its own trigger.
+					h.div([h.Id("outer")], [h.div([], ["Nested"])]),
+				],
+			)
+		const overlays = makeOverlays()
+		const { rune, handle, trees } = boot(menu, overlays)
+		await settle()
+		overlays.portal("r/1")
+		overlays.modal("r/1")
+		overlays.anchor("r/1/0", { triggerId: "trigger", side: "bottom", align: "start", gap: 4 })
+		overlays.anchor("r/2/0", { triggerId: "outer", side: "top", align: "end", gap: 2 })
+		let dismissed = 0
+		overlays.onDismiss("r/1", () => dismissed++)
+		await settle()
+		// The trigger did not change: it goes as a reference, so only the overlay's nodes are here.
+		const sentOverlays = elements(trees().at(-1)!.root).flatMap((n) => (n.ov === undefined ? [] : [n.ov]))
+		expect(sentOverlays).toEqual([
+			{ portal: 1 },
+			{ anchor: { to: "r/0", side: "bottom", align: "start", gap: 4 }, modal: "r/1" },
+			{ anchor: { to: "r/2", side: "top", align: "end", gap: 2 } },
+		])
+		rune.handleHostMessage({ t: "dismiss", path: "r/1" })
+		expect(dismissed).toBe(1)
 		handle.dispose()
 	})
 

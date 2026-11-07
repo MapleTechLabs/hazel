@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { installShims } from "./shims"
+import { cssEscape, installShims } from "./shims"
 
 describe("installShims", () => {
 	it("keeps in-app navigation in history and opens other origins outside the app", () => {
@@ -37,5 +37,12 @@ describe("installShims", () => {
 		document.documentElement.style.removeProperty("--color-brand-600")
 		expect(rootStyle.has("--color-brand-600")).toBe(false)
 		expect(changes).toBe(2)
+	})
+
+	it("escapes selector identifiers as CSS.escape does", () => {
+		expect(cssEscape("popover-r1:2")).toBe("popover-r1\\:2")
+		expect(cssEscape("1st")).toBe("\\31 st")
+		expect(cssEscape("-")).toBe("\\-")
+		expect(cssEscape("a b")).toBe("a\\ b")
 	})
 })

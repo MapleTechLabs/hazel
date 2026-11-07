@@ -2,6 +2,7 @@ import type { Document } from "foldkit/html"
 import type { RenderTarget } from "foldkit/runtime"
 
 import type { ElementBridge } from "./bridge"
+import type { OverlayWire, Overlays } from "./overlays"
 import { type NodeInfo, type Scope, type Style, StyleResolver, color } from "./style"
 import type { CommitStats, HostToRuntime, RuntimeToHost, WireNode } from "./wire"
 
@@ -40,6 +41,7 @@ type ElementFields = {
 	on: Record<string, number>
 	mount?: string
 	o?: 1
+	ov?: OverlayWire
 }
 
 type AnyVNode = {
@@ -67,6 +69,8 @@ export type RuneTargetOptions = {
 	readonly send: (message: RuntimeToHost) => void
 	readonly onStats?: (stats: CommitStats) => void
 	readonly onRelease?: () => void
+	/** Overlays the app's overlay helpers asked for (portals, anchors, modals), drawn by the host. */
+	readonly overlays?: Overlays
 	/** Element proxies for geometry-observing Mounts; without it no Mount is acquired. */
 	readonly bridge?: ElementBridge
 	/** The text a DOM-backed Mount (an editor) currently holds, drawn as a native text field. */
@@ -273,6 +277,8 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 	let ack = 0
 	/** The newest host event the last committed document reflects. */
 	let lastDocumentAck = 0
+	/** Triggers whose first width a panel waits for (`--trigger-width`). */
+	const awaitedWidths = new Set<string>()
 	let frameStartedAt = 0
 
 	const handlerId = (path: string, event: string): number => {
@@ -335,11 +341,25 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		else styles.ensure(classes)
 		styles.setViewport(env.width, env.height)
 
+		/** `--trigger-width` for a panel anchored with it, once the host has laid the trigger out. */
+		const withTriggerWidth = (path: string, inline: Record<string, string> | undefined) => {
+			const anchor = options.overlays?.anchorAt(path)
+			const trigger = anchor?.isTriggerWidthSet ? pathsById.get(anchor.triggerId) : undefined
+			if (trigger === undefined) return inline
+			const width = options.bridge?.widthOf(trigger)
+			if (width === undefined) {
+				awaitedWidths.add(trigger)
+				return inline
+			}
+			return { ...inline, "--trigger-width": `${width}px`, "--button-width": `${width}px` }
+		}
 		const records = new Map<
 			string,
 			Parameters<ElementBridge["commit"]>[0] extends Map<string, infer R> ? R : never
 		>()
 		const mountVNodes = new Map<string, AnyVNode>()
+		// A trigger comes before the overlay anchored to it: ids seen so far, by path.
+		const pathsById = new Map<string, string>()
 		const nextHandlers = new Map<number, Handler>()
 		const nextHashes = new Set<string>()
 		let nodes = 0
@@ -358,10 +378,12 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			if (NON_VISUAL_TAGS.has(tag)) return { k: "t", s: "" }
 			nodes += 1
 			const attrs = attrsOf(vnode)
+			// Before the children: an overlay may render inside its own trigger.
+			if (attrs.id !== undefined) pathsById.set(attrs.id, path)
 			const classes = classesOf(vnode)
 			options.bridge?.recordElement(path, parentPath, tag, attrs, classes, records)
 			if (vnode.data?.foldkitMount !== undefined) mountVNodes.set(path, vnode)
-			const inline = inlineStyleOf(vnode)
+			const inline = withTriggerWidth(path, inlineStyleOf(vnode))
 			const resolved = styles.resolve(
 				{
 					tag,
@@ -468,6 +490,8 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			if (vnode.key !== undefined) self.key = String(vnode.key)
 			if (mount !== undefined) self.mount = mount
 			if (options.bridge?.isObserved(path)) self.o = 1
+			const ov = options.overlays?.wireFor(path, (id) => pathsById.get(id))
+			if (ov !== undefined) self.ov = ov
 			const h = hash(
 				JSON.stringify(self) +
 					children.map((c) => ("h" in c ? c.h : c.k === "t" ? c.s : "")).join("\u0000"),
@@ -544,6 +568,12 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 				width: message.w,
 				height: message.h,
 			})
+			// A trigger's first width: the panel anchored to it takes it as `--trigger-width`.
+			if (awaitedWidths.delete(message.path)) refreshObserved()
+			return
+		}
+		if (message.t === "dismiss") {
+			options.overlays?.dismissed(message.path)
 			return
 		}
 		if (message.t === "scrolled") {
@@ -564,6 +594,9 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 
 	/** A Mount that starts observing an element after a commit needs it flagged for the host. */
 	let isRefreshScheduled = false
+	// An overlay opened or closed in a Mount: the host must draw it.
+	options.overlays?.onChange(() => refreshObserved())
+
 	// A precompiled sheet compiles classes it lacked off the input path: restyle once they are in.
 	styles.onRecompiled(() => {
 		if (lastDocument) commitDocument(lastDocument, lastDocumentAck)

@@ -101,12 +101,31 @@ const element = () =>
 		}),
 	})
 
+/** `CSS.escape` (CSS Object Model): an identifier safe to put in a selector. */
+export const cssEscape = (value: string): string => {
+	let out = ""
+	for (let i = 0; i < value.length; i++) {
+		const code = value.charCodeAt(i)
+		const ch = value.charAt(i)
+		const isDigit = code >= 0x30 && code <= 0x39
+		if (code === 0) out += "\uFFFD"
+		else if ((code >= 0x01 && code <= 0x1f) || code === 0x7f) out += `\\${code.toString(16)} `
+		else if (isDigit && (i === 0 || (i === 1 && value.charAt(0) === "-")))
+			out += `\\${code.toString(16)} `
+		else if (i === 0 && ch === "-" && value.length === 1) out += "\\-"
+		else if (code >= 0x80 || ch === "-" || ch === "_" || isDigit || /[a-zA-Z]/.test(ch)) out += ch
+		else out += `\\${ch}`
+	}
+	return out
+}
+
 export const installShims = (env: ShimEnv) => {
 	// stdout carries the render protocol; logs go to stderr.
 	console.log = console.error
 	console.info = console.error
 	console.debug = console.error
 	const g = globalThis as Record<string, unknown>
+	g.CSS ??= { escape: cssEscape, supports: () => false }
 	const windowTarget = new EventTarget()
 	let url = new URL(env.url)
 	const entries: Array<string> = [url.href]

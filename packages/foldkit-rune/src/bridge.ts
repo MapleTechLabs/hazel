@@ -79,6 +79,11 @@ const SCROLL_SETTLE_MS = 500
 export const makeElementBridge = (options: {
 	readonly mounts: ReadonlySet<string>
 	/**
+	 * Mounts in `mounts` that start as soon as their element is in the tree, not once the host has
+	 * laid it out: overlays, which the host places, on a `display: contents` element with no box.
+	 */
+	readonly immediateMounts?: ReadonlySet<string>
+	/**
 	 * Mounts that need a real DOM (a rich-text editor) get an element from here, typically a
 	 * headless DOM's, or `undefined` while it loads. The host draws a native text field in their place.
 	 */
@@ -229,7 +234,7 @@ export const makeElementBridge = (options: {
 			const previous = mounted.get(path) ?? awaitingLayout.get(path)
 			// A geometry Mount starts once the host has laid its element out, as a browser's
 			// element has a size when it is inserted.
-			if (makeDomElement === undefined && !rects.has(path)) {
+			if (makeDomElement === undefined && !rects.has(path) && !options.immediateMounts?.has(name)) {
 				awaitingLayout.set(path, vnode)
 				continue
 			}
@@ -298,6 +303,12 @@ export const makeElementBridge = (options: {
 		applyScroll(path, top)
 	}
 
+	/** The element's width as the host last laid it out; asks the host to report it from now on. */
+	const widthOf = (path: string): number | undefined => {
+		proxyFor(path)
+		return rects.get(path)?.width
+	}
+
 	const findById = (id: string): ProxyElement | null => {
 		for (const record of records.values()) if (record.attrs.id === id) return proxyFor(record.path)
 		return null
@@ -356,6 +367,7 @@ export const makeElementBridge = (options: {
 		reportLayout,
 		reportScroll,
 		findById,
+		widthOf,
 		isObserved: (path: string) => observed.has(path),
 		/** A DOM-backed Mount at `path`: its name, args and element, for the app's native glue. */
 		domMountAt: (path: string) => {

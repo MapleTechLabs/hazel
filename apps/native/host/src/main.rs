@@ -16,7 +16,9 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use rune::edit::TextEdit;
 use rune::text::Icon;
-use rune::{App, AppSpec, Color, Cursor, Cx, El, SurfaceFit, col, el, icon, row, text_input};
+use rune::{
+    Align, App, AppSpec, Color, Cursor, Cx, El, Side, SurfaceFit, col, el, icon, row, text_input,
+};
 use serde_json::json;
 
 use layout::{
@@ -43,6 +45,8 @@ pub(crate) struct State {
     /// The document's own background and text colour (`body` in the app's stylesheet).
     page: wire::Page,
     images: images::Images,
+    /// Elements drawn at the window's root (`ov.portal`), by path, in tree order.
+    portals: Vec<(String, Arc<Node>)>,
 }
 
 static OUT: OnceLock<Mutex<Box<dyn Write + Send>>> = OnceLock::new();
@@ -184,8 +188,22 @@ impl State {
         let (root, subtrees) = self.subtrees.resolve(msg.root);
         sync_fields(&root, "r", msg.ack, &mut self.fields);
         self.page = msg.page;
+        self.portals.clear();
+        collect_portals(&root, "r", &mut self.portals);
         self.root = Some(root);
         self.subtrees = subtrees;
+    }
+}
+
+fn collect_portals(node: &Arc<Node>, path: &str, out: &mut Vec<(String, Arc<Node>)>) {
+    let Node::Elem { ov, children, .. } = node.as_ref() else {
+        return;
+    };
+    if ov.as_ref().is_some_and(|o| o.portal.is_some()) {
+        out.push((path.to_string(), node.clone()));
+    }
+    for (i, child) in children.iter().enumerate() {
+        collect_portals(child, &child_path(path, i, child), out);
     }
 }
 
@@ -222,6 +240,8 @@ struct Ctx<'a> {
     form: Option<u32>,
     /// Building an inline formatting context's own children, where a space between runs counts.
     inline: bool,
+    /// The portal being built at the window's root; any other portal is skipped where it sits.
+    portal: Option<&'a str>,
 }
 
 fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
@@ -253,9 +273,14 @@ fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
             on,
             children,
             observed,
+            ov,
             ..
         } => {
             if st.display.as_deref() == Some("none") {
+                return None;
+            }
+            // A portal draws at the window's root (`view`), not where the tree puts it.
+            if ov.as_ref().is_some_and(|o| o.portal.is_some()) && ctx.portal != Some(path) {
                 return None;
             }
             let inh = inh.from(st);
@@ -274,6 +299,16 @@ fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
                 ctx.form
             };
             let has_fields = ctx.s.fields.keys().any(|k| k.starts_with(path));
+            // An anchored panel takes its content's height: `flex-1` (a 0% basis) inside a box of
+            // indefinite height is content-sized in CSS, where Rune's `grow` would collapse it.
+            let content_sized: Vec<Arc<Node>>;
+            let children: &[Arc<Node>] =
+                if ov.as_ref().is_some_and(|o| o.anchor.is_some()) && st.h.is_none() {
+                    content_sized = children.iter().map(|c| drop_grow(c, false)).collect();
+                    &content_sized
+                } else {
+                    children
+                };
             let make = || {
                 let e = build_elem(
                     path,
@@ -287,6 +322,7 @@ fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
                         s: ctx.s,
                         form,
                         inline: false,
+                        portal: ctx.portal,
                     },
                 );
                 if *observed { observe(e, path, st) } else { e }
@@ -297,7 +333,7 @@ fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
             } else {
                 rune::memo(path.to_string(), (hash, inh.key(), form), make)
             };
-            Some(center_vertically(el, st))
+            Some(overlay(center_vertically(el, st), ov))
         }
     }
 }
@@ -474,6 +510,11 @@ fn is_inline(node: &Arc<Node>) -> bool {
 }
 
 fn size_to_content(node: &Arc<Node>) -> Arc<Node> {
+    drop_grow(node, true)
+}
+
+/// `node` without its `grow` (and its `min-h`, with `min_h_too`), under its own memo key.
+fn drop_grow(node: &Arc<Node>, min_h_too: bool) -> Arc<Node> {
     match node.as_ref() {
         Node::Elem {
             hash,
@@ -483,20 +524,22 @@ fn size_to_content(node: &Arc<Node>) -> Arc<Node> {
             attrs,
             on,
             observed,
+            ov,
             children,
         } if st.grow.is_some() && st.absolute.is_none() => Arc::new(Node::Elem {
             // Its own memo key: the same wire node sized to the viewport is a different El.
-            hash: format!("{hash}~content"),
+            hash: format!("{hash}~{}", if min_h_too { "content" } else { "basis" }),
             tag: tag.clone(),
             key: key.clone(),
             st: Style {
                 grow: None,
-                min_h: None,
+                min_h: if min_h_too { None } else { st.min_h.clone() },
                 ..st.clone()
             },
             attrs: attrs.clone(),
             on: on.clone(),
             observed: *observed,
+            ov: ov.clone(),
             children: children.clone(),
         }),
         _ => node.clone(),
@@ -980,13 +1023,55 @@ pub(crate) fn view(s: &State, cx: &mut Cx<State>) -> El {
         s,
         form: None,
         inline: false,
+        portal: None,
     };
     let body = s.root.as_ref().and_then(|root| build(root, "r", inh, &ctx));
     let mut page = col().w_full().h_full().on_layout(report_env);
     if let Some(bg) = color(&s.page.bg) {
         page = page.fill(bg)
     }
-    page.child(body.unwrap_or_else(el))
+    page = page.child(body.unwrap_or_else(el));
+    // Portals inherit from the page, as an element moved into `<body>` does.
+    for (path, node) in &s.portals {
+        let ctx = Ctx {
+            portal: Some(path),
+            ..ctx
+        };
+        if let Some(overlay) = build(node, path, inh, &ctx) {
+            let layer = el().pin(Some(0.0), Some(0.0), Some(0.0), Some(0.0));
+            page = page.child(layer.child(overlay));
+        }
+    }
+    page
+}
+
+/// Places an overlay next to its trigger and makes it modal, as the runtime's `ov` asks.
+fn overlay(mut e: El, ov: &Option<Box<wire::Overlay>>) -> El {
+    let Some(ov) = ov else {
+        return e;
+    };
+    if let Some(a) = &ov.anchor {
+        let side = match a.side.as_str() {
+            "top" => Side::Top,
+            "left" => Side::Left,
+            "right" => Side::Right,
+            _ => Side::Bottom,
+        };
+        let align = match a.align.as_str() {
+            "start" => Align::Start,
+            "end" => Align::End,
+            _ => Align::Center,
+        };
+        e = e.anchored_fit(a.to.clone(), side, align, a.gap.0);
+    }
+    if let Some(root) = ov.modal.clone() {
+        e = e.modal(true, move |_: &mut State| send_dismiss(&root));
+    }
+    e
+}
+
+fn send_dismiss(path: &str) {
+    write_line(json!({ "t": "dismiss", "path": path }));
 }
 
 /// Spawns the Bun runtime; its messages arrive on the returned channel.

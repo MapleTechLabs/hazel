@@ -189,6 +189,26 @@ pub struct OutlineSpec {
     pub offset: F,
 }
 
+/// An overlay the runtime's overlay helpers asked for (`ov` on an element).
+#[derive(Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct Overlay {
+    /// Drawn at the window's root, above the page, rather than in place.
+    #[serde(default)]
+    pub portal: Option<u8>,
+    pub anchor: Option<OverlayAnchor>,
+    /// The overlay root a press outside this element (or Escape in it) dismisses.
+    pub modal: Option<String>,
+}
+
+#[derive(Deserialize, Clone, Debug, PartialEq)]
+pub struct OverlayAnchor {
+    /// The trigger's element path, which is also its Rune key.
+    pub to: String,
+    pub side: String,
+    pub align: String,
+    pub gap: F,
+}
+
 /// `background-image`: a picture by URL or a linear gradient (`angle` in CSS degrees).
 #[derive(Deserialize, Clone, Debug, Default, Hash, PartialEq)]
 pub struct BgImage {
@@ -268,6 +288,8 @@ pub enum WireNode {
         mount: Option<String>,
         #[serde(default)]
         o: Option<u8>,
+        #[serde(default, deserialize_with = "lenient")]
+        ov: Option<Box<Overlay>>,
         c: Vec<WireNode>,
     },
     #[serde(rename = "r")]
@@ -322,6 +344,7 @@ pub enum Node {
         attrs: HashMap<String, String>,
         on: HashMap<String, u32>,
         observed: bool,
+        ov: Option<Box<Overlay>>,
         children: Vec<Arc<Node>>,
     },
 }
@@ -380,6 +403,7 @@ impl Subtrees {
                 attrs,
                 on,
                 o,
+                ov,
                 c,
                 ..
             } => {
@@ -395,6 +419,7 @@ impl Subtrees {
                     attrs,
                     on,
                     observed: o.is_some(),
+                    ov,
                     children,
                 })
             }

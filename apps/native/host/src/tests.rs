@@ -1085,3 +1085,85 @@ fn a_focused_trigger_gets_its_keydown_keys() {
         .collect();
     assert_eq!(keys, ["ArrowDown"]);
 }
+
+fn sent_lines() -> Vec<Value> {
+    let _ = crate::OUT.set(std::sync::Mutex::new(Box::new(Capture)));
+    String::from_utf8_lossy(&SENT.lock().unwrap())
+        .lines()
+        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+        .collect()
+}
+
+#[test]
+fn a_portalled_panel_anchors_to_its_trigger_and_dismisses_on_an_outside_press() {
+    sent_lines();
+    let mut panel = e(
+        "div",
+        json!({ "w": 80, "h": 60, "bg": "#ff0000ff" }),
+        vec![],
+    );
+    panel["ov"] = json!({ "anchor": { "to": "r/0", "side": "bottom", "align": "start", "gap": 4 }, "modal": "r/1/0" });
+    // As the app renders it: the panel inside a `display: contents` wrapper inside the portal.
+    let wrapper = e("div", json!({ "display": "contents" }), vec![panel]);
+    let mut portal = e("div", json!({ "display": "contents" }), vec![wrapper]);
+    portal["ov"] = json!({ "portal": 1 });
+    let mut rt = runtime(
+        e(
+            "div",
+            json!({ "w": 300, "h": 200, "pad": [20, 20, 20, 20] }),
+            vec![
+                e("button", json!({ "w": 100, "h": 30 }), vec![]),
+                // The panel renders inside a clipping box, as a menu does inside its trigger.
+                e(
+                    "div",
+                    json!({ "w": 100, "h": 30, "clip": true }),
+                    vec![portal],
+                ),
+            ],
+        ),
+        (300.0, 200.0),
+    );
+    // Below the trigger (20, 20, 100x30), 4 points away, its start edges aligned.
+    assert_eq!(rect(&rt, "r/1/0/0/0"), [20.0, 54.0, 80.0, 60.0]);
+    rt.pointer_move(250.0, 150.0);
+    rt.pointer_down(250.0, 150.0);
+    rt.pointer_up(250.0, 150.0);
+    rt.frame(0.1);
+    let dismissed = sent_lines()
+        .iter()
+        .any(|m| m["t"] == "dismiss" && m["path"] == "r/1/0");
+    assert!(dismissed, "no dismiss for r/1/0");
+}
+
+#[test]
+fn an_anchored_panel_holding_a_scroller_takes_its_content_height() {
+    let item = |n: usize| e("div", json!({ "h": 30 }), vec![t(&format!("Item {n}"))]);
+    let scroller = e(
+        "div",
+        json!({ "minH": 0, "grow": 1, "shrink": 1, "scrollY": true }),
+        vec![e(
+            "div",
+            json!({ "display": "flex", "dir": "col", "pad": [4, 4, 4, 4] }),
+            vec![item(1), item(2)],
+        )],
+    );
+    let mut panel = e(
+        "div",
+        json!({ "display": "flex", "dir": "col", "minW": 128, "maxW": 320 }),
+        vec![scroller],
+    );
+    panel["ov"] =
+        json!({ "anchor": { "to": "r/0", "side": "bottom", "align": "start", "gap": 8 } });
+    let mut portal = e("div", json!({ "display": "contents" }), vec![panel]);
+    portal["ov"] = json!({ "portal": 1 });
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "w": 400, "h": 300, "pad": [20, 20, 20, 20] }),
+            vec![e("button", json!({ "w": 100, "h": 30 }), vec![]), portal],
+        ),
+        (400.0, 300.0),
+    );
+    // Two 30-point items and 4 points of padding above and below.
+    assert_eq!(rect(&rt, "r/1/0")[3], 68.0);
+}

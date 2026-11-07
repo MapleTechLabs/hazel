@@ -1,6 +1,6 @@
 /**
  * Layout and visual conformance: Hazel's native renderer against Chromium on the same Foldkit view.
- *   bun apps/native/bench/conformance/run.ts [--scenario boot|sent|focus|all] [--theme light|dark|both]
+ *   bun apps/native/bench/conformance/run.ts [--scenario boot|sent|focus|menu|all] [--theme light|dark|both]
  *     [--check] [--update-thresholds] [--skip-build]
  * Writes out/<scenario>-<theme>/ (report.md, report.json, heatmap.png, crops/) and out/summary.md.
  */
@@ -41,7 +41,7 @@ const option = (name: string, fallback: string) => {
 	const at = args.indexOf(name)
 	return at === -1 ? fallback : (args[at + 1] ?? fallback)
 }
-type Scenario = "boot" | "sent" | "focus"
+type Scenario = "boot" | "sent" | "focus" | "menu"
 /** Tabs from boot to the logo link, which draws a `focus-visible` outline. */
 const FOCUS_TABS = 1
 type Theme = "light" | "dark"
@@ -49,13 +49,16 @@ const scenarioArg = option("--scenario", "all")
 const themeArg = option("--theme", "both")
 const scenarios: Array<Scenario> =
 	scenarioArg === "all"
-		? ["boot", "sent", "focus"]
-		: scenarioArg === "boot" || scenarioArg === "sent" || scenarioArg === "focus"
+		? ["boot", "sent", "focus", "menu"]
+		: scenarioArg === "boot" ||
+			  scenarioArg === "sent" ||
+			  scenarioArg === "focus" ||
+			  scenarioArg === "menu"
 			? [scenarioArg]
 			: []
 const themes: Array<Theme> =
 	themeArg === "both" ? ["light", "dark"] : themeArg === "light" || themeArg === "dark" ? [themeArg] : []
-if (scenarios.length === 0) throw new Error("--scenario takes boot, sent, focus or all")
+if (scenarios.length === 0) throw new Error("--scenario takes boot, sent, focus, menu or all")
 if (themes.length === 0) throw new Error("--theme takes light, dark or both")
 
 // NATIVE
@@ -81,7 +84,9 @@ const nativeSteps = (scenario: Scenario, layout: string, snap: string) => {
 		{ settle: 1500 },
 	]
 	const focus = [{ tab: FOCUS_TABS }, { wait: 500 }]
-	const steps = scenario === "sent" ? send : scenario === "focus" ? focus : []
+	// The org switcher's menu: a portalled, anchored, modal overlay.
+	const menu = [{ clickText: "Hazel" }, { settle: 800 }]
+	const steps = scenario === "sent" ? send : scenario === "focus" ? focus : scenario === "menu" ? menu : []
 	return [...boot, ...steps, { exportLayout: layout }, { snap }]
 }
 
@@ -279,6 +284,10 @@ const captureWeb = async (browser: Browser, url: string, scenario: Scenario, the
 				{ timeout: 10_000 },
 			)
 			await waitQuiet(page, 1500)
+		}
+		if (scenario === "menu") {
+			await page.locator("#org-switcher-trigger").click()
+			await waitQuiet(page, 800)
 		}
 		if (scenario === "focus") {
 			for (let i = 0; i < FOCUS_TABS; i++) await page.keyboard.press("Tab")

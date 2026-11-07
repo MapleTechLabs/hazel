@@ -15,7 +15,12 @@ import {
 } from "@hazel/foldkit-rune"
 import { isBackendUrl } from "./backend-origin"
 import { type EditableEvent, makePendingEdits } from "./pending-edits"
+import { nativeOverlays } from "./overlay"
+import { overlayPlugin } from "./overlay-plugin"
 import { installShims } from "./shims"
+
+// Before any app module loads: its overlay helpers become the host-drawn ones.
+Bun.plugin(overlayPlugin)
 
 const width = Number(process.env.NATIVE_WIDTH ?? 1280)
 const height = Number(process.env.NATIVE_HEIGHT ?? 800)
@@ -109,9 +114,20 @@ const followLink = (href: string) => {
 
 const composer = await import("./composer")
 
+/** The overlay Mounts run on proxies too: their helpers ask the host for the overlay itself. */
+const OVERLAY_MOUNTS = [
+	"PortalMenu",
+	"PortalSelect",
+	"PortalComboBox",
+	"PortalDatePicker",
+	"PortalPickerPopover",
+	"PortalCommandMenu",
+]
+
 /** Mounts that only observe geometry run against host-backed element proxies; the editor gets a headless DOM. */
 const bridge = makeElementBridge({
-	mounts: new Set(["ObserveMessageList"]),
+	mounts: new Set(["ObserveMessageList", ...OVERLAY_MOUNTS]),
+	immediateMounts: new Set(OVERLAY_MOUNTS),
 	domMounts: new Map([["MountEditor", composer.makeEditorElement]]),
 	sendScroll: (command) => transport.send(command),
 	onObserve: () => rune.refreshObserved(),
@@ -166,6 +182,7 @@ const pendingEdits = makePendingEdits({ apply: applyEdit, onDrained: () => rune.
 
 const rune = makeRuneTarget({
 	styles,
+	overlays: nativeOverlays,
 	bridge,
 	// A field with edits still queued keeps the text the user typed, not the empty editor's.
 	editableText: (path) => {

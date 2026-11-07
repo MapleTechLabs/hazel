@@ -1,3 +1,4 @@
+import type { OverlayWire } from "./overlays"
 import type { Style } from "./style"
 
 /** One node of the tree sent to the native host. Styles arrive resolved; no class names. */
@@ -23,6 +24,8 @@ export type WireNode =
 			readonly mount?: string
 			/** The host reports this element's layout (and scroll, when it scrolls). */
 			readonly o?: 1
+			/** Drawn as an overlay: portalled, anchored to its trigger, modal. */
+			readonly ov?: OverlayWire
 			readonly c: ReadonlyArray<WireNode>
 	  }
 	/** A subtree the host already holds from the previous commit, by content hash. */
@@ -55,6 +58,8 @@ export type HostToRuntime =
 			readonly h: number
 	  }
 	| { readonly t: "scrolled"; readonly path: string; readonly top: number }
+	/** A press outside a modal overlay, or Escape in it: the overlay at `path` should close. */
+	| { readonly t: "dismiss"; readonly path: string }
 
 export type RuntimeToHost =
 	| {
