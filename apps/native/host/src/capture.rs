@@ -275,7 +275,8 @@ fn find_pressables(node: &Arc<Node>, path: &str, label: &str, out: &mut Vec<Stri
         };
         find_pressables(child, &child_path, label, out);
     }
-    let is_pressable = on.contains_key("click") || (tag == "a" && attrs.contains_key("href"));
+    let is_pressable = crate::PRESS_EVENTS.iter().any(|k| on.contains_key(*k))
+        || (tag == "a" && attrs.contains_key("href"));
     // An ancestor is a fallback only when nothing inside it matched.
     if out.len() == before && is_pressable && text_of(node).contains(label) {
         out.push(path.to_string());

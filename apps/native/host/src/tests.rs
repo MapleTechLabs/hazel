@@ -1046,3 +1046,42 @@ fn an_opacity_removed_without_a_transition_lands_at_once() {
     );
     assert_eq!(rt.presented("r/0").expect("drawn").1, 1.0);
 }
+
+#[test]
+fn a_press_sends_pointerdown_pointerup_and_click_in_order() {
+    sent_events(0);
+    let mut button = e("button", json!({ "w": 40, "h": 40 }), vec![]);
+    button["on"] = json!({ "pointerdown": 31, "pointerup": 31, "click": 31 });
+    let mut rt = runtime(button, (40.0, 40.0));
+    rt.pointer_move(20.0, 20.0);
+    rt.pointer_down(20.0, 20.0);
+    rt.pointer_up(20.0, 20.0);
+    rt.frame(0.1);
+    let kinds: Vec<String> = sent_events(31)
+        .iter()
+        .map(|e| e["type"].as_str().unwrap_or("").to_string())
+        .collect();
+    assert_eq!(kinds, ["pointerdown", "pointerup", "click"]);
+}
+
+#[test]
+fn a_focused_trigger_gets_its_keydown_keys() {
+    sent_events(0);
+    let mut trigger = e("button", json!({ "w": 40, "h": 40 }), vec![]);
+    trigger["on"] = json!({ "pointerdown": 32, "keydown": 33 });
+    let mut rt = runtime(trigger, (40.0, 40.0));
+    rt.key(KeyEvent {
+        key: Key::Tab,
+        mods: Mods::default(),
+    });
+    rt.key(KeyEvent {
+        key: Key::Down,
+        mods: Mods::default(),
+    });
+    rt.frame(0.1);
+    let keys: Vec<String> = sent_events(33)
+        .iter()
+        .map(|e| e["key"].as_str().unwrap_or("").to_string())
+        .collect();
+    assert_eq!(keys, ["ArrowDown"]);
+}

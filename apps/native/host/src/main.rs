@@ -94,6 +94,58 @@ fn send_key(id: u32, key: &str, mods: rune::edit::Mods) -> u64 {
     seq
 }
 
+/// What a browser fires for one press, in order.
+const PRESS_EVENTS: [&str; 3] = ["pointerdown", "pointerup", "click"];
+
+/// A press as the browser reports it, for the handlers the element has. Rune reports a press
+/// when it is released, so all of them go then (a menu opens on release, not on press).
+fn press_handlers(e: El, on: &HashMap<String, u32>) -> El {
+    let events: Vec<(&'static str, u32)> = PRESS_EVENTS
+        .iter()
+        .filter_map(|kind| on.get(*kind).map(|&id| (*kind, id)))
+        .collect();
+    if events.is_empty() {
+        return e;
+    }
+    e.cursor(Cursor::Pointer).on_press(move |_: &mut State| {
+        for (kind, id) in &events {
+            send(*id, kind, None);
+        }
+    })
+}
+
+/// `keydown` while the element or one inside it has focus (Tab stays focus navigation), and
+/// `mouseenter`/`mouseleave` as the pointer crosses it.
+fn key_and_hover_handlers(mut e: El, on: &HashMap<String, u32>) -> El {
+    if let Some(&id) = on.get("keydown") {
+        e = e.on_key(move |_: &mut State, ev: &rune::edit::KeyEvent, _| {
+            let name = match &ev.key {
+                rune::edit::Key::Text(t) if t == " " => " ",
+                key => match dom_key(key) {
+                    Some("Tab") | None => return false,
+                    Some(name) => name,
+                },
+            };
+            send_key(id, name, ev.mods);
+            true
+        });
+    }
+    let (enter, leave) = (on.get("mouseenter").copied(), on.get("mouseleave").copied());
+    if enter.is_some() || leave.is_some() {
+        e = e.on_hover_change(move |_: &mut State, inside, _| {
+            let event = if inside {
+                enter.map(|id| (id, "mouseenter"))
+            } else {
+                leave.map(|id| (id, "mouseleave"))
+            };
+            if let Some((id, kind)) = event {
+                send(id, kind, None);
+            }
+        });
+    }
+    e
+}
+
 fn send(id: u32, kind: &str, value: Option<&str>) -> u64 {
     let seq = SEQ.fetch_add(1, Ordering::SeqCst) + 1;
     write_line(
@@ -370,10 +422,8 @@ fn build_elem(
     if let Some(label) = attrs.get("aria-label") {
         e = e.label(label.clone());
     }
-    if let Some(&id) = on.get("click") {
-        e = e.cursor(Cursor::Pointer).on_press(move |_: &mut State| {
-            send(id, "click", None);
-        });
+    if PRESS_EVENTS.iter().any(|k| on.contains_key(*k)) {
+        e = press_handlers(e, on);
     } else if let (Some(href), true) = (attrs.get("href"), tag == "a") {
         let href = href.clone();
         e = e.cursor(Cursor::Pointer).on_press(move |_: &mut State| {
@@ -390,7 +440,7 @@ fn build_elem(
     if let Some(order) = focusable(tag, attrs) {
         e = e.focusable(true).tab_index(order);
     }
-    focus_styles(e, st, false)
+    focus_styles(key_and_hover_handlers(e, on), st, false)
 }
 
 fn is_inline(node: &Arc<Node>) -> bool {
@@ -618,13 +668,7 @@ fn build_img(
             _ => e.pixels(image.pixels()),
         };
     }
-    e = apply_box(e, st);
-    if let Some(&id) = on.get("click") {
-        e = e.cursor(Cursor::Pointer).on_press(move |_: &mut State| {
-            send(id, "click", None);
-        });
-    }
-    e
+    press_handlers(apply_box(e, st), on)
 }
 
 /// CSS grid as rows of flex cells. A `col-span-full` child takes a whole row; a `grid-cols-subgrid`
@@ -701,11 +745,7 @@ fn build_grid(
                         build_grid(&inner, cols, path, inh.from(cst), ctx, &sub).key(path),
                         cst,
                     );
-                    if let Some(&id) = on.get("click") {
-                        e = e.cursor(Cursor::Pointer).on_press(move |_: &mut State| {
-                            send(id, "click", None);
-                        });
-                    }
+                    e = press_handlers(e, on);
                     Some(e)
                 } else {
                     build(child, path, inh, ctx)
