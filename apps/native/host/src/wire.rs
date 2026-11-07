@@ -1,0 +1,242 @@
+//! The tree the Bun runtime sends: resolved styles, handler ids, and references to subtrees the
+//! previous commit already carried (by content hash).
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use serde::Deserialize;
+use serde_json::Value;
+
+#[derive(Deserialize, Clone, Debug, Default, Hash, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Style {
+    pub display: Option<String>,
+    pub dir: Option<String>,
+    pub wrap: Option<bool>,
+    pub gap_row: Option<F>,
+    pub gap_col: Option<F>,
+    pub child_gap: Option<F>,
+    pub pad: Option<[F; 4]>,
+    pub margin: Option<[F; 4]>,
+    pub w: Option<Len>,
+    pub h: Option<Len>,
+    pub min_w: Option<F>,
+    pub min_h: Option<F>,
+    pub max_w: Option<F>,
+    pub grow: Option<F>,
+    pub items: Option<String>,
+    pub justify: Option<String>,
+    #[serde(rename = "self")]
+    pub align_self: Option<String>,
+    pub bg: Option<String>,
+    pub hover_bg: Option<String>,
+    pub color: Option<String>,
+    pub border: Option<[F; 4]>,
+    pub border_color: Option<String>,
+    pub radius: Option<[F; 4]>,
+    pub font_size: Option<F>,
+    pub line_height: Option<F>,
+    pub font_weight: Option<F>,
+    pub opacity: Option<F>,
+    pub scroll_y: Option<bool>,
+    pub clip: Option<bool>,
+    pub truncate: Option<bool>,
+    pub nowrap: Option<bool>,
+    pub inline: Option<bool>,
+    pub absolute: Option<[Option<F>; 4]>,
+    pub grid_cols: Option<Vec<String>>,
+    pub col_span_full: Option<bool>,
+    pub subgrid: Option<bool>,
+    pub hover_group: Option<bool>,
+    pub group_opacity: Option<F>,
+    pub center_y: Option<bool>,
+}
+
+/// An `f32` that hashes, so a style can key a memo.
+#[derive(Deserialize, Clone, Copy, Debug, Default, PartialEq)]
+#[serde(transparent)]
+pub struct F(pub f32);
+impl std::hash::Hash for F {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.to_bits().hash(state)
+    }
+}
+
+/// A CSS length: px, `"full"` for 100%, or `"auto"` (no size set).
+#[derive(Clone, Debug, PartialEq, Hash)]
+pub enum Len {
+    Px(F),
+    Full,
+    Auto,
+}
+impl<'de> Deserialize<'de> for Len {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        Ok(match Value::deserialize(d)? {
+            Value::Number(n) => Len::Px(F(n.as_f64().unwrap_or(0.0) as f32)),
+            Value::String(s) if s == "full" => Len::Full,
+            _ => Len::Auto,
+        })
+    }
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(tag = "k")]
+pub enum WireNode {
+    #[serde(rename = "t")]
+    Text { s: String },
+    #[serde(rename = "svg")]
+    Svg {
+        h: String,
+        view: f32,
+        body: String,
+        st: Style,
+    },
+    #[serde(rename = "e")]
+    Elem {
+        h: String,
+        tag: String,
+        key: Option<String>,
+        st: Style,
+        attrs: HashMap<String, String>,
+        on: HashMap<String, u32>,
+        #[allow(dead_code)]
+        mount: Option<String>,
+        #[serde(default)]
+        o: Option<u8>,
+        c: Vec<WireNode>,
+    },
+    #[serde(rename = "r")]
+    Ref { h: String },
+}
+
+// One message at a time crosses the channel; boxing the tree would only add an allocation.
+#[allow(clippy::large_enum_variant)]
+#[derive(Deserialize)]
+#[serde(tag = "t")]
+pub enum RuntimeMsg {
+    #[serde(rename = "tree")]
+    Tree(TreeMsg),
+    /// Set a scroll viewport's offset (an `element.scrollTop = …` in the runtime).
+    #[serde(rename = "scroll")]
+    Scroll { path: String, top: f32 },
+}
+
+#[derive(Deserialize)]
+pub struct TreeMsg {
+    pub ack: u64,
+    #[serde(default)]
+    pub page: Page,
+    pub root: WireNode,
+}
+
+#[derive(Deserialize, Default, Clone, Debug)]
+pub struct Page {
+    pub bg: Option<String>,
+    pub color: Option<String>,
+}
+
+/// A resolved node. Children are shared, so a reused subtree costs one pointer copy.
+#[derive(Debug)]
+pub enum Node {
+    Text(String),
+    Svg {
+        hash: String,
+        view: f32,
+        body: String,
+        st: Style,
+    },
+    Elem {
+        hash: String,
+        tag: String,
+        key: Option<String>,
+        st: Style,
+        attrs: HashMap<String, String>,
+        on: HashMap<String, u32>,
+        observed: bool,
+        children: Vec<Arc<Node>>,
+    },
+}
+
+impl Node {
+    pub fn hash(&self) -> Option<&str> {
+        match self {
+            Node::Text(_) => None,
+            Node::Svg { hash, .. } | Node::Elem { hash, .. } => Some(hash),
+        }
+    }
+}
+
+/// Every hashed subtree of the tree on screen, for the next commit's references.
+#[derive(Default)]
+pub struct Subtrees(HashMap<String, Arc<Node>>);
+
+impl Subtrees {
+    /// Resolves `wire` against the previous tree's subtrees and returns the new index with it.
+    pub fn resolve(&self, wire: WireNode) -> (Arc<Node>, Subtrees) {
+        let mut next = HashMap::new();
+        let root = self.resolve_into(wire, &mut next);
+        (root, Subtrees(next))
+    }
+
+    fn resolve_into(&self, wire: WireNode, next: &mut HashMap<String, Arc<Node>>) -> Arc<Node> {
+        let node = match wire {
+            WireNode::Text { s } => return Arc::new(Node::Text(s)),
+            WireNode::Ref { h } => {
+                let node = self
+                    .0
+                    .get(&h)
+                    .cloned()
+                    .unwrap_or_else(|| Arc::new(Node::Text(String::new())));
+                index(&node, next);
+                return node;
+            }
+            WireNode::Svg { h, view, body, st } => Arc::new(Node::Svg {
+                hash: h,
+                view,
+                body,
+                st,
+            }),
+            WireNode::Elem {
+                h,
+                tag,
+                key,
+                st,
+                attrs,
+                on,
+                o,
+                c,
+                ..
+            } => {
+                let children = c
+                    .into_iter()
+                    .map(|child| self.resolve_into(child, next))
+                    .collect();
+                Arc::new(Node::Elem {
+                    hash: h,
+                    tag,
+                    key,
+                    st,
+                    attrs,
+                    on,
+                    observed: o.is_some(),
+                    children,
+                })
+            }
+        };
+        if let Some(h) = node.hash() {
+            next.insert(h.to_string(), node.clone());
+        }
+        node
+    }
+}
+
+/// A reused subtree brings all its hashed descendants into the new index.
+fn index(node: &Arc<Node>, next: &mut HashMap<String, Arc<Node>>) {
+    if let Some(h) = node.hash() {
+        next.insert(h.to_string(), node.clone());
+    }
+    if let Node::Elem { children, .. } = node.as_ref() {
+        for child in children {
+            index(child, next);
+        }
+    }
+}

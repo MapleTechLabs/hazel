@@ -1,0 +1,20 @@
+@import "tailwindcss";
+@custom-variant dark (&:is(.dark *));
+@theme inline {
+	--color-bg: var(--bg);
+	--color-fg: var(--fg);
+}
+:root {
+	--bg: #ffffff;
+	--fg: #111111;
+}
+.dark {
+	--bg: #000000;
+	--fg: #eeeeee;
+}
+@layer base {
+	body {
+		background-color: var(--bg);
+		color: var(--fg);
+	}
+}

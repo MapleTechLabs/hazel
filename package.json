@@ -79,7 +79,8 @@
 	},
 	"packageManager": "bun@1.4.3",
 	"patchedDependencies": {
-		"@alchemy.run/cloudflare@2.0.0-beta.85": "patches/@alchemy.run%2Fcloudflare@2.0.0-beta.85.patch"
+		"@alchemy.run/cloudflare@2.0.0-beta.85": "patches/@alchemy.run%2Fcloudflare@2.0.0-beta.85.patch",
+		"foldkit@0.170.0": "patches/foldkit@0.170.0.patch"
 	},
 	"trustedDependencies": []
 }
