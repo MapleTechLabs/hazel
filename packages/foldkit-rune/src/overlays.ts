@@ -49,10 +49,28 @@ export const makeOverlays = () => {
 	const anchors = new Map<string, Anchor>()
 	const dismissListeners = new Map<string, Set<() => void>>()
 	const changeListeners = new Set<() => void>()
+	/** What the host would draw, as a string: a change is a change of this. */
+	const snapshot = () =>
+		JSON.stringify([
+			[...portals].sort(),
+			[...modals].sort(),
+			[...anchors].sort(([a], [b]) => a.localeCompare(b)),
+		])
 	let version = 0
+	let versionSnapshot = snapshot()
+	let notifiedSnapshot = versionSnapshot
+	let isNotifyScheduled = false
+	// Released and set up again in one go (a Mount re-anchoring on every commit) is no change.
 	const changed = () => {
-		version += 1
-		changeListeners.forEach((listener) => listener())
+		if (isNotifyScheduled) return
+		isNotifyScheduled = true
+		queueMicrotask(() => {
+			isNotifyScheduled = false
+			const now = snapshot()
+			if (now === notifiedSnapshot) return
+			notifiedSnapshot = now
+			changeListeners.forEach((listener) => listener())
+		})
 	}
 
 	/** Adds `path` to `set` until the returned release runs. */
@@ -77,8 +95,13 @@ export const makeOverlays = () => {
 			}
 		},
 		anchorAt: (path: string): Anchor | undefined => anchors.get(path),
-		/** Bumped by every change: what an element's `ov` was computed against. */
+		/** Bumped when what the host draws changes: what an element's `ov` was computed against. */
 		get version() {
+			const now = snapshot()
+			if (now !== versionSnapshot) {
+				versionSnapshot = now
+				version += 1
+			}
 			return version
 		},
 		/** `listener` runs when the host dismisses the modal overlay at `path`. */

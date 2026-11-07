@@ -10,7 +10,7 @@ describe("overlays", () => {
 		expect(parsePlacement("end top")).toEqual({ side: "right", align: "start" })
 	})
 
-	it("portals the root, anchors the panel to its trigger and dismisses from the panel", () => {
+	it("portals the root, anchors the panel to its trigger and dismisses from the panel", async () => {
 		const overlays = makeOverlays()
 		let changes = 0
 		overlays.onChange(() => changes++)
@@ -28,9 +28,21 @@ describe("overlays", () => {
 		overlays.onDismiss("r/0/1", () => dismissed++)
 		overlays.dismissed("r/0/1")
 		expect(dismissed).toBe(1)
+		await Promise.resolve()
+		expect(changes).toBe(1)
+		const version = overlays.version
+		// A Mount re-anchoring on every commit: released and set again in one go is no change.
+		const anchor = { triggerId: "menu-trigger", side: "bottom", align: "start", gap: 8 } as const
+		const releaseAnchor = overlays.anchor("r/0/1/2", anchor)
+		releaseAnchor()
+		overlays.anchor("r/0/1/2", anchor)
+		await Promise.resolve()
+		expect(changes).toBe(1)
+		expect(overlays.version).toBe(version)
 		releasePortal()
 		expect(overlays.wireFor("r/0/1", pathOfId)).toBeUndefined()
-		expect(changes).toBe(4)
+		await Promise.resolve()
+		expect(changes).toBe(2)
 	})
 
 	it("makes a modal root without an anchored panel modal itself", () => {

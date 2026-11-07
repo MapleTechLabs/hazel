@@ -118,9 +118,15 @@ fn press_handlers(e: El, on: &HashMap<String, u32>) -> El {
     })
 }
 
-/// `keydown` while the element or one inside it has focus (Tab stays focus navigation), and
-/// `mouseenter`/`mouseleave` as the pointer crosses it.
-fn key_and_hover_handlers(mut e: El, on: &HashMap<String, u32>) -> El {
+/// `keydown` while the element or one inside it has focus (Tab stays focus navigation),
+/// `mouseenter`/`mouseleave` as the pointer crosses it, and, for an element a pointer-tracking
+/// Mount watches (`data-hover-report`), a `pointer` report to that Mount.
+fn key_and_hover_handlers(
+    mut e: El,
+    path: &str,
+    attrs: &HashMap<String, String>,
+    on: &HashMap<String, u32>,
+) -> El {
     if let Some(&id) = on.get("keydown") {
         e = e.on_key(move |_: &mut State, ev: &rune::edit::KeyEvent, _| {
             let name = match &ev.key {
@@ -135,7 +141,10 @@ fn key_and_hover_handlers(mut e: El, on: &HashMap<String, u32>) -> El {
         });
     }
     let (enter, leave) = (on.get("mouseenter").copied(), on.get("mouseleave").copied());
-    if enter.is_some() || leave.is_some() {
+    let report = attrs
+        .get("data-hover-report")
+        .map(|mount| (path.to_string(), mount.clone()));
+    if enter.is_some() || leave.is_some() || report.is_some() {
         e = e.on_hover_change(move |_: &mut State, inside, _| {
             let event = if inside {
                 enter.map(|id| (id, "mouseenter"))
@@ -144,6 +153,11 @@ fn key_and_hover_handlers(mut e: El, on: &HashMap<String, u32>) -> El {
             };
             if let Some((id, kind)) = event {
                 send(id, kind, None);
+            }
+            if let Some((path, mount)) = &report {
+                write_line(
+                    json!({ "t": "pointer", "path": path, "mount": mount, "inside": inside }),
+                );
             }
         });
     }
@@ -478,13 +492,14 @@ fn build_elem(
             });
         }
     }
-    behaviour(e, tag, attrs, on, st)
+    behaviour(e, path, tag, attrs, on, st)
 }
 
 /// What every element takes from its attributes and handlers beyond presses: a Tab stop, keys,
 /// hover events, and the rings and fills focus and presses draw.
 fn behaviour(
     mut e: El,
+    path: &str,
     tag: &str,
     attrs: &HashMap<String, String>,
     on: &HashMap<String, u32>,
@@ -493,7 +508,7 @@ fn behaviour(
     if let Some(order) = focusable(tag, attrs) {
         e = e.focusable(true).tab_index(order);
     }
-    focus_styles(key_and_hover_handlers(e, on), st, false)
+    focus_styles(key_and_hover_handlers(e, path, attrs, on), st, false)
 }
 
 fn is_inline(node: &Arc<Node>) -> bool {
@@ -795,7 +810,7 @@ fn build_grid(
                 };
                 let e = build_grid(&inner, cols, path, inh.from(cst), ctx, &sub).key(path);
                 let e = press_handlers(apply_box(e, cst), on);
-                Some(behaviour(e, tag, attrs, on, cst).grid_column_full())
+                Some(behaviour(e, path, tag, attrs, on, cst).grid_column_full())
             }
             Node::Elem { st: cst, .. } if cst.col_span_full == Some(true) => {
                 build(child, path, inh, ctx).map(El::grid_column_full)

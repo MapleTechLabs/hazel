@@ -60,6 +60,11 @@ export type HostToRuntime =
 	| { readonly t: "scrolled"; readonly path: string; readonly top: number }
 	/** A press outside a modal overlay, or Escape in it: the overlay at `path` should close. */
 	| { readonly t: "dismiss"; readonly path: string }
+	/**
+	 * The pointer entered or left an element a pointer-tracking Mount at `mount` watches (or the
+	 * Mount's own element): the bridge dispatches it there as `pointerover` / `pointerleave`.
+	 */
+	| { readonly t: "pointer"; readonly path: string; readonly mount: string; readonly inside: boolean }
 
 export type RuntimeToHost =
 	| {

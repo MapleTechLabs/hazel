@@ -1,7 +1,7 @@
 import type { Document } from "foldkit/html"
 import type { RenderTarget } from "foldkit/runtime"
 
-import type { ElementBridge } from "./bridge"
+import { type ElementBridge, matchesElement } from "./bridge"
 import type { OverlayWire, Overlays } from "./overlays"
 import { type NodeInfo, type Scope, type Style, StyleResolver, color } from "./style"
 import type { CommitStats, HostToRuntime, RuntimeToHost, WireNode } from "./wire"
@@ -61,7 +61,12 @@ type CachedElement = {
 	readonly index: number | undefined
 	readonly count: number | undefined
 	readonly context: string
+	/** The pointer-tracking Mount above it, which its `data-hover-report` names. */
+	readonly pointerMount: string | undefined
 }
+
+/** A Mount watching pointer events below it, and the selector of the elements it looks for. */
+type PointerWatch = { readonly mount: string; readonly selector: string }
 
 type AnyVNode = {
 	sel?: string
@@ -434,6 +439,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			scope: Scope,
 			position: { siblings: ReadonlyArray<NodeInfo>; index: number } | undefined,
 			prevSame: boolean,
+			pointer: PointerWatch | undefined,
 		): WireNode => {
 			if (typeof vnode === "string") return { k: "t", s: vnode }
 			if (vnode.sel === undefined) return { k: "t", s: vnode.text ?? "" }
@@ -448,6 +454,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 				last.index === position?.index &&
 				last.count === position?.siblings.length &&
 				last.context === context &&
+				last.pointerMount === pointer?.mount &&
 				sentHashes.has(last.h)
 			) {
 				replay(last)
@@ -510,6 +517,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 					index: position?.index,
 					count: position?.siblings.length,
 					context,
+					pointerMount: pointer?.mount,
 				})
 				if (sentHashes.has(h)) {
 					reusedSubtrees += 1
@@ -531,6 +539,14 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			}
 			const keep: Record<string, string> = {}
 			for (const name of HOST_ATTRS) if (name in attrs) keep[name] = attrs[name] as string
+			// A Mount that delegates pointer events: its element and the ones it looks for report them.
+			const watchSelector = options.bridge?.pointerSelector(vnode.data?.foldkitMount?.name ?? "")
+			const watch = watchSelector === undefined ? pointer : { mount: path, selector: watchSelector }
+			if (
+				watch !== undefined &&
+				(watch.mount === path || matchesElement({ tag, attrs, classes }, watch.selector))
+			)
+				keep["data-hover-report"] = watch.mount
 			const siblings = elementChildren(vnode)
 			const infoOf = new Map(siblings.map((sib) => [sib.vnode, sib.info]))
 			const infos = siblings.map((sib) => sib.info)
@@ -545,7 +561,9 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 				const childPath = `${path}/${segment}`
 				const info = typeof child === "string" ? undefined : infoOf.get(child)
 				const position = info === undefined ? undefined : { siblings: infos, index: info.index ?? 0 }
-				children.push(serialize(child, childPath, path, resolved.scope, position, siblingsSame))
+				children.push(
+					serialize(child, childPath, path, resolved.scope, position, siblingsSame, watch),
+				)
 				if (info !== undefined) {
 					childPaths.push(childPath)
 					siblingsSame &&= subtreeCache.get(childPath)?.vnode === child
@@ -623,6 +641,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 					index: position?.index,
 					count: position?.siblings.length,
 					context,
+					pointerMount: pointer?.mount,
 				})
 			if (sentHashes.has(h)) {
 				reusedSubtrees += 1
@@ -634,7 +653,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		const root: WireNode =
 			body === null
 				? { k: "t", s: "" }
-				: serialize(body, "r", undefined, styles.rootScope(env.dark), undefined, true)
+				: serialize(body, "r", undefined, styles.rootScope(env.dark), undefined, true, undefined)
 		handlers = nextHandlers
 		gen += 1
 		handlersByGen.set(gen, nextHandlers)
@@ -700,6 +719,10 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			})
 			// A trigger's first width: the panel anchored to it takes it as `--trigger-width`.
 			if (awaitedWidths.delete(message.path)) refreshObserved()
+			return
+		}
+		if (message.t === "pointer") {
+			options.bridge?.dispatchPointer(message)
 			return
 		}
 		if (message.t === "dismiss") {

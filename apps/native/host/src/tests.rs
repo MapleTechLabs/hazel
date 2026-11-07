@@ -1366,3 +1366,20 @@ fn a_subgrid_row_reports_the_pointer_entering_it() {
         "no mouseenter from the subgrid row"
     );
 }
+
+#[test]
+fn a_watched_row_reports_the_pointer_to_its_mount() {
+    sent_lines();
+    let mut row = e("div", json!({ "w": 200, "h": 30 }), vec![]);
+    row["attrs"] = json!({ "data-hover-report": "r" });
+    let mut rt = runtime(
+        e("div", json!({ "w": 200, "h": 100 }), vec![row]),
+        (200.0, 100.0),
+    );
+    rt.pointer_move(50.0, 15.0);
+    rt.frame(0.1);
+    let reported = sent_lines().iter().any(|m| {
+        m["t"] == "pointer" && m["path"] == "r/0" && m["mount"] == "r" && m["inside"] == true
+    });
+    assert!(reported, "no pointer report for r/0");
+}

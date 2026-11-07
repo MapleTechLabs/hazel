@@ -51,6 +51,9 @@ type ProxyElement = EventTarget & {
 	scrollIntoView(): void
 	focus(): void
 	blur(): void
+	/** Writes land nowhere: the view's classes and the host's layout place the element. */
+	readonly style: Record<string, unknown>
+	remove(): void
 }
 
 type ResizeEntry = {
@@ -61,6 +64,12 @@ type ResizeEntry = {
 }
 
 export type HostScrollCommand = { readonly t: "scroll"; readonly path: string; readonly top: number }
+
+/** Whether an element (tag, attributes, classes) matches one of the simple selectors Mounts use. */
+export const matchesElement = (
+	element: { tag: string; attrs: Record<string, string>; classes: ReadonlyArray<string> },
+	selector: string,
+): boolean => matchesSelector({ path: "", parent: undefined, childPaths: [], ...element }, selector)
 
 const matchesSelector = (record: ElementRecord, selector: string): boolean => {
 	const attr = /^\[([\w-]+)(?:=["']?([^"'\]]*)["']?)?\]$/.exec(selector)
@@ -84,6 +93,12 @@ export const makeElementBridge = (options: {
 	 */
 	readonly immediateMounts?: ReadonlySet<string>
 	/**
+	 * Mounts that listen for pointer events on their element (delegated `pointerover`), by name,
+	 * with the selector of the elements they look for: the host reports the pointer entering and
+	 * leaving those, and the Mount's element itself.
+	 */
+	readonly pointerTargets?: ReadonlyMap<string, string>
+	/**
 	 * Mounts that need a real DOM (a rich-text editor) get an element from here, typically a
 	 * headless DOM's, or `undefined` while it loads. The host draws a native text field in their place.
 	 */
@@ -91,6 +106,8 @@ export const makeElementBridge = (options: {
 	readonly sendScroll: (command: HostScrollCommand) => void
 	/** A new element became observed: the host must start reporting its layout. */
 	readonly onObserve?: () => void
+	/** A Mount called `remove()` on its element (it had moved it into `<body>`). */
+	readonly onRemove?: (path: string) => void
 }) => {
 	let records = new Map<string, ElementRecord>()
 	const rects = new Map<string, Rect>()
@@ -109,11 +126,14 @@ export const makeElementBridge = (options: {
 	const awaitingLayout = new Map<string, AnyVNode>()
 	const domElements = new Map<string, object>()
 
-	const proxyFor = (path: string): ProxyElement => {
+	/** `observe`: the host must report this element's layout (a Mount will read its geometry). */
+	const proxyFor = (path: string, observe = true): ProxyElement => {
 		const existing = proxies.get(path)
+		if (observe && !observed.has(path)) {
+			observed.add(path)
+			options.onObserve?.()
+		}
 		if (existing) return existing
-		observed.add(path)
-		options.onObserve?.()
 		const ElementClass: new () => EventTarget = globalThis.HTMLElement
 		const rect = () => rects.get(path) ?? { x: 0, y: 0, width: 0, height: 0 }
 		const record = () => records.get(path)
@@ -170,6 +190,9 @@ export const makeElementBridge = (options: {
 			scrollIntoView: { value: () => {} },
 			focus: { value: () => {} },
 			blur: { value: () => {} },
+			style: { value: { setProperty() {}, removeProperty() {}, getPropertyValue: () => "" } },
+			// A Mount taking its element out of the page (a portal it set up, released).
+			remove: { value: () => options.onRemove?.(path) },
 		}) as ProxyElement
 		proxies.set(path, proxy)
 		return proxy
@@ -309,6 +332,31 @@ export const makeElementBridge = (options: {
 		return rects.get(path)?.width
 	}
 
+	/** A host pointer report, as the DOM event a delegated listener on the Mount's element hears. */
+	const dispatchPointer = (report: { path: string; mount: string; inside: boolean }) => {
+		const root = proxies.get(report.mount)
+		if (root === undefined) return
+		const PointerEventClass: new (type: string, init?: EventInit) => Event =
+			globalThis.PointerEvent ?? Event
+		if (report.path === report.mount) {
+			const MouseEventClass: new (type: string, init?: EventInit) => Event =
+				globalThis.MouseEvent ?? Event
+			if (report.inside) {
+				root.dispatchEvent(new PointerEventClass("pointerenter"))
+				root.dispatchEvent(new MouseEventClass("mouseenter"))
+			} else {
+				root.dispatchEvent(new PointerEventClass("pointerleave"))
+				root.dispatchEvent(new MouseEventClass("mouseleave"))
+			}
+			return
+		}
+		if (!report.inside) return
+		const event = new PointerEventClass("pointerover", { bubbles: true })
+		// The element under the pointer, as the event's target; the listener sits on the Mount's element.
+		Object.defineProperty(event, "target", { value: proxyFor(report.path, false) })
+		root.dispatchEvent(event)
+	}
+
 	const findById = (id: string): ProxyElement | null => {
 		for (const record of records.values()) if (record.attrs.id === id) return proxyFor(record.path)
 		return null
@@ -368,6 +416,9 @@ export const makeElementBridge = (options: {
 		reportScroll,
 		findById,
 		widthOf,
+		dispatchPointer,
+		/** The selector of elements a pointer-tracking Mount named `name` watches. */
+		pointerSelector: (name: string) => options.pointerTargets?.get(name),
 		isObserved: (path: string) => observed.has(path),
 		/** How many elements are observed: it only grows, so it versions `isObserved`. */
 		get observedCount() {

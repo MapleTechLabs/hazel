@@ -15,7 +15,7 @@ import {
 } from "@hazel/foldkit-rune"
 import { isBackendUrl } from "./backend-origin"
 import { type EditableEvent, makePendingEdits } from "./pending-edits"
-import { nativeOverlays } from "./overlay"
+import { nativeOverlays, pathOf } from "./overlay"
 import { overlayPlugin } from "./overlay-plugin"
 import { installShims } from "./shims"
 
@@ -126,13 +126,28 @@ const OVERLAY_MOUNTS = [
 	"AnchorTooltipPanel",
 ]
 
+/**
+ * Mounts that listen for delegated pointer events on their element, with the selector of the
+ * elements they look for: the message list's hover (it shows a message's action toolbar).
+ */
+const POINTER_MOUNTS = new Map([
+	["TrackMessageHover", "[data-id]"],
+	// The message toolbar: its own element only (an empty selector matches nothing below it).
+	["PlaceMessageToolbar", ""],
+])
+
 /** Mounts that only observe geometry run against host-backed element proxies; the editor gets a headless DOM. */
 const bridge = makeElementBridge({
-	mounts: new Set(["ObserveMessageList", ...OVERLAY_MOUNTS]),
-	immediateMounts: new Set(OVERLAY_MOUNTS),
+	mounts: new Set(["ObserveMessageList", ...OVERLAY_MOUNTS, ...POINTER_MOUNTS.keys()]),
+	immediateMounts: new Set([...OVERLAY_MOUNTS, ...POINTER_MOUNTS.keys()]),
+	pointerTargets: POINTER_MOUNTS,
 	domMounts: new Map([["MountEditor", composer.makeEditorElement]]),
 	sendScroll: (command) => transport.send(command),
 	onObserve: () => rune.refreshObserved(),
+	onRemove: (path) => {
+		bodyPortals.get(path)?.()
+		bodyPortals.delete(path)
+	},
 })
 Object.assign(globalThis, {
 	ResizeObserver: bridge.ResizeObserver,
@@ -140,6 +155,15 @@ Object.assign(globalThis, {
 })
 // SAFETY: the app only reads the geometry ProxyElement implements from `getElementById` results.
 document.getElementById = (id: string) => bridge.findById(id) as unknown as HTMLElement | null
+// A Mount moving its element into `<body>` (the message toolbar) portals it; `remove()` undoes it.
+const bodyPortals = new Map<string, () => void>()
+Object.assign(document.body, {
+	appendChild: <T>(child: T): T => {
+		const path = pathOf(child)
+		if (path !== undefined && !bodyPortals.has(path)) bodyPortals.set(path, nativeOverlays.portal(path))
+		return child
+	},
+})
 
 const treesPath = process.env.NATIVE_TREES_OUT
 

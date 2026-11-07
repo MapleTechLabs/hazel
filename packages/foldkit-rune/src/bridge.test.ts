@@ -124,4 +124,44 @@ describe("makeElementBridge", () => {
 		bridge.commit(record(bridge), new Map([["r", other]]))
 		expect(calls).toEqual(["insert", "destroy", "insert"])
 	})
+
+	it("dispatches host pointer reports on a pointer-tracking Mount's element", () => {
+		const bridge = makeElementBridge({
+			mounts: new Set(["TrackHover"]),
+			immediateMounts: new Set(["TrackHover"]),
+			pointerTargets: new Map([["TrackHover", "[data-list-key]"]]),
+			sendScroll: () => {},
+		})
+		const seen: Array<string> = []
+		/** The key of the row an event's target sits in, as the app's delegated listener finds it. */
+		const rowKey = (target: unknown) => {
+			if (typeof target !== "object" || target === null || !("closest" in target)) return undefined
+			const closest = target.closest
+			if (typeof closest !== "function") return undefined
+			const row: unknown = closest.call(target, "[data-list-key]")
+			if (typeof row !== "object" || row === null || !("getAttribute" in row)) return undefined
+			const getAttribute = row.getAttribute
+			return typeof getAttribute === "function" ? getAttribute.call(row, "data-list-key") : undefined
+		}
+		const vnode = {
+			data: {
+				foldkitMount: { name: "TrackHover" },
+				hook: {
+					insert: (v: { elm?: unknown }) => {
+						if (!(v.elm instanceof EventTarget)) return
+						v.elm.addEventListener("pointerover", (event) =>
+							seen.push(`over ${rowKey(event.target)}`),
+						)
+						v.elm.addEventListener("pointerleave", () => seen.push("leave"))
+					},
+				},
+			},
+		}
+		bridge.commit(record(bridge), new Map([["r", vnode]]))
+		expect(bridge.pointerSelector("TrackHover")).toBe("[data-list-key]")
+		bridge.dispatchPointer({ path: "r/1", mount: "r", inside: true })
+		bridge.dispatchPointer({ path: "r/1", mount: "r", inside: false })
+		bridge.dispatchPointer({ path: "r", mount: "r", inside: false })
+		expect(seen).toEqual(["over b", "leave"])
+	})
 })

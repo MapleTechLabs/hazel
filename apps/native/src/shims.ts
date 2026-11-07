@@ -60,6 +60,33 @@ class SilentAudio extends EventTarget {
 /** Present so `instanceof Element` checks answer false instead of throwing. */
 class DomNode extends EventTarget {}
 
+/** The fields of a mouse event the app reads from pointer events the bridge dispatches. */
+class ShimMouseEvent extends Event {
+	readonly button: number
+	readonly clientX: number
+	readonly clientY: number
+	readonly relatedTarget: EventTarget | null
+	constructor(
+		type: string,
+		init: EventInit & {
+			button?: number
+			clientX?: number
+			clientY?: number
+			relatedTarget?: EventTarget | null
+		} = {},
+	) {
+		super(type, init)
+		this.button = init.button ?? 0
+		this.clientX = init.clientX ?? 0
+		this.clientY = init.clientY ?? 0
+		this.relatedTarget = init.relatedTarget ?? null
+	}
+}
+
+class ShimPointerEvent extends ShimMouseEvent {
+	readonly pointerType = "mouse"
+}
+
 const classList = () => {
 	const names = new Set<string>()
 	return {
@@ -275,8 +302,11 @@ export const installShims = (env: ShimEnv) => {
 		HTMLElement: DomNode,
 		HTMLInputElement: DomNode,
 		HTMLTextAreaElement: DomNode,
+		MouseEvent: ShimMouseEvent,
+		PointerEvent: ShimPointerEvent,
+		// The host draws at the display's rate (120 Hz on ProMotion): app frames keep that pace.
 		requestAnimationFrame: (callback: (time: number) => void) =>
-			setTimeout(() => callback(performance.now()), 16),
+			setTimeout(() => callback(performance.now()), 1000 / 120),
 		cancelAnimationFrame: (handle: ReturnType<typeof setTimeout>) => clearTimeout(handle),
 		requestIdleCallback: (callback: () => void) => setTimeout(callback, 1),
 		cancelIdleCallback: (handle: ReturnType<typeof setTimeout>) => clearTimeout(handle),
