@@ -166,16 +166,13 @@ const pageSubscriptions = Subscription.make<Input, Message>()((entry) => ({
 		},
 	),
 	presence: entry(
-		{ userId: Schema.NullOr(UserId), nowMs: Schema.Number },
+		{ userId: Schema.NullOr(UserId) },
 		{
-			modelToDependencies: (input) => ({
-				userId: contextOf(input, "Status").userId,
-				nowMs: input.shared.nowMs,
-			}),
-			dependenciesToStream: ({ userId, nowMs }) =>
+			modelToDependencies: (input) => ({ userId: contextOf(input, "Status").userId }),
+			dependenciesToStream: ({ userId }) =>
 				userId === null
 					? Stream.empty
-					: liveQueryStream<{ status: string | null; lastSeenAt: Date | null }, Message>(
+					: liveQueryStream<{ status: string | null }, Message>(
 							(q) =>
 								q
 									.from({ presence: userPresenceStatusCollection })
@@ -183,16 +180,7 @@ const pageSubscriptions = Subscription.make<Input, Message>()((entry) => ({
 									.orderBy(({ presence }) => presence.updatedAt, "desc")
 									.findOne(),
 							(rows) => {
-								const row = rows[0]
-								const status = getEffectivePresenceStatus(
-									row
-										? {
-												status: row.status,
-												lastSeenAt: row.lastSeenAt ? new Date(row.lastSeenAt) : null,
-											}
-										: null,
-									nowMs,
-								)
+								const status = getEffectivePresenceStatus(rows[0])
 								// `usePresence().status` never shows the local user as offline.
 								return Message.UpdatedPresenceStatus({
 									status: status === "offline" ? "online" : status,

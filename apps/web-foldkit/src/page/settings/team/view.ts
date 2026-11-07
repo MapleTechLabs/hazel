@@ -39,10 +39,7 @@ const memberRow = <Message>(
 ): Html => {
 	const fullName = `${member.firstName} ${member.lastName}`
 	const status = getEffectivePresenceStatus(
-		member.presenceLastSeenMs === null
-			? null
-			: { status: member.presenceStatus, lastSeenAt: new Date(member.presenceLastSeenMs) },
-		context.nowMs,
+		member.presenceLastSeenMs === null ? null : { status: member.presenceStatus },
 	)
 	const showActions =
 		context.currentUserId !== undefined &&

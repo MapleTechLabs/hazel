@@ -76,13 +76,8 @@ export const channelCard = <M>(
 		),
 	])
 
-const statusTextOf = (presence: Presence | undefined, nowMs: number) => {
-	const status = getEffectivePresenceStatus(
-		presence === undefined || presence.lastSeenMs === null
-			? null
-			: { status: presence.status, lastSeenAt: new Date(presence.lastSeenMs) },
-		nowMs,
-	)
+const statusTextOf = (presence: Presence | undefined) => {
+	const status = getEffectivePresenceStatus(presence)
 	// Legacy order: any non-offline status is "online" first, so the later labels never show.
 	const isOnline = status !== "offline"
 	const labels: Record<string, string> = { away: "Away", busy: "Busy", dnd: "Do not disturb" }
@@ -95,9 +90,8 @@ const singleDmCard = <M>(
 	channel: ChannelSummary,
 	member: DmParticipant,
 	presence: Presence | undefined,
-	nowMs: number,
 ): Html => {
-	const { isOnline, text } = statusTextOf(presence, nowMs)
+	const { isOnline, text } = statusTextOf(presence)
 	return cardLink(h, orgSlug, channel, [
 		h.div(
 			[h.Class("relative shrink-0")],
@@ -136,13 +130,12 @@ export const dmCard = <M>(
 	context: {
 		readonly currentUserId: string | undefined
 		readonly presence: Readonly<Record<string, Presence>>
-		readonly nowMs: number
 	},
 ): Html => {
 	const others = otherMembers(channel, context.currentUserId)
 	const only = others[0]
 	if (channel.type === "single" && others.length === 1 && only) {
-		return singleDmCard(h, orgSlug, channel, only, context.presence[only.userId], context.nowMs)
+		return singleDmCard(h, orgSlug, channel, only, context.presence[only.userId])
 	}
 	const shown = others.slice(0, 3)
 	return cardLink(h, orgSlug, channel, [

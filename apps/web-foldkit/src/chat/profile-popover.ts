@@ -83,15 +83,7 @@ const actionBar = <M>(h: HtmlBuilder<M>, inputs: ProfileInputs): ReadonlyArray<H
 
 export const profilePopoverContent = <M>(h: HtmlBuilder<M>, inputs: ProfileInputs): ReadonlyArray<Html> => {
 	const { user, presence, isBot } = inputs
-	const status = getEffectivePresenceStatus(
-		presence
-			? {
-					status: presence.status,
-					lastSeenAt: presence.lastSeenAtMs === null ? null : new Date(presence.lastSeenAtMs),
-				}
-			: null,
-		inputs.nowMs,
-	)
+	const status = getEffectivePresenceStatus(presence)
 	const localTime = user.timezone ? formatUserLocalTime(user.timezone) : ""
 	const expiration =
 		presence?.statusExpiresAtMs != null
