@@ -84,6 +84,14 @@ describe("StyleResolver", () => {
 		expect(resolve("has-[[data-slot=icon]]:gap-3").style.gapRow).toBeUndefined()
 	})
 
+	it("matches a class whose selector escapes a leading digit", () => {
+		// Tailwind writes `2xl:p-2` as `.\\32 xl\\:p-2`: a hex escape, then a space that ends it.
+		const input = element("2xl:p-2")
+		styles.ensure(input.classes)
+		expect(styles.resolve(input, styles.rootScope(false), false, 1600).style.pad).toEqual([8, 8, 8, 8])
+		expect(styles.resolve(input, styles.rootScope(false), false, 1280).style.pad).toBeUndefined()
+	})
+
 	it("resolves viewport units against the window", () => {
 		styles.setViewport(1000, 600)
 		expect(resolve("h-dvh min-h-svh").style).toMatchObject({ h: 600, minH: 600 })

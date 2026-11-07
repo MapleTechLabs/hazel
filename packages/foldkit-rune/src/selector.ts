@@ -92,8 +92,20 @@ class Parser {
 		for (;;) {
 			const ch = this.peek()
 			if (ch === "\\") {
-				out += this.src[this.i + 1] ?? ""
-				this.i += 2
+				// CSS escapes: up to six hex digits and one optional whitespace (Tailwind writes a
+				// leading digit as `\32 xl`), else the next character as itself.
+				const hex = /^[0-9a-fA-F]{1,6}/.exec(this.src.slice(this.i + 1, this.i + 7))?.[0]
+				if (hex === undefined) {
+					out += this.src[this.i + 1] ?? ""
+					this.i += 2
+				} else {
+					const point = Number.parseInt(hex, 16)
+					const isValid = point > 0 && point <= 0x10ffff && (point < 0xd800 || point > 0xdfff)
+					out += String.fromCodePoint(isValid ? point : 0xfffd)
+					this.i += 1 + hex.length
+					if (this.src.startsWith("\r\n", this.i)) this.i += 2
+					else if (/\s/.test(this.peek())) this.i++
+				}
 			} else if (/[\w-]/.test(ch) || ch.charCodeAt(0) > 127) {
 				out += ch
 				this.i++
