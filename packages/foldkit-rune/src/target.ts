@@ -44,6 +44,25 @@ type ElementFields = {
 	ov?: OverlayWire
 }
 
+/** One element as the last commit serialized it, with what it recorded on the way. */
+type CachedElement = {
+	readonly vnode: AnyVNode
+	readonly path: string
+	readonly parentPath: string | undefined
+	readonly tag: string
+	readonly attrs: Record<string, string>
+	readonly classes: ReadonlyArray<string>
+	readonly id: string | undefined
+	readonly h: string
+	readonly handlers: ReadonlyArray<readonly [number, Handler]>
+	/** Its element children's paths, each with an entry of its own. */
+	readonly children: ReadonlyArray<string>
+	readonly scopeId: number
+	readonly index: number | undefined
+	readonly count: number | undefined
+	readonly context: string
+}
+
 type AnyVNode = {
 	sel?: string
 	key?: string | number
@@ -273,6 +292,13 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 	let gen = 0
 	const handlerIds = new Map<string, number>()
 	let sentHashes = new Set<string>()
+	/**
+	 * Last commit's elements by path, for reuse: an element whose VNode is the same object, in the
+	 * same scope, place and context, sends its last hash and replays what it recorded.
+	 */
+	let subtreeCache = new Map<string, CachedElement>()
+	/** VNodes whose classes the last commit collected: the same object needs no second look. */
+	let seenVnodes = new WeakSet<object>()
 	let lastDocument: Document | undefined
 	let ack = 0
 	/** The newest host event the last committed document reflects. */
@@ -292,7 +318,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 	}
 
 	const collectClasses = (vnode: AnyVNode | string, into: Set<string>) => {
-		if (typeof vnode === "string") return
+		if (typeof vnode === "string" || seenVnodes.has(vnode)) return
 		for (const name of classesOf(vnode)) into.add(name)
 		for (const child of vnode.children ?? []) collectClasses(child, into)
 	}
@@ -367,21 +393,69 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		const pathsById = new Map<string, string>()
 		const nextHandlers = new Map<number, Handler>()
 		const nextHashes = new Set<string>()
+		const nextCache = new Map<string, CachedElement>()
+		const nextSeen = new WeakSet<object>()
 		let nodes = 0
 		let reusedSubtrees = 0
+		// What an element's output depends on beyond its VNode, scope and place.
+		const context = `${env.dark}|${env.width}x${env.height}|${options.overlays?.version ?? 0}|${options.bridge?.observedCount ?? 0}`
 
+		/** An unchanged element, again: its records, handlers, ids and hashes, and its children's. */
+		const replay = (entry: CachedElement) => {
+			nodes += 1
+			nextSeen.add(entry.vnode)
+			if (entry.id !== undefined) pathsById.set(entry.id, entry.path)
+			options.bridge?.recordElement(
+				entry.path,
+				entry.parentPath,
+				entry.tag,
+				entry.attrs,
+				entry.classes,
+				records,
+			)
+			if (entry.vnode.data?.foldkitMount !== undefined) mountVNodes.set(entry.path, entry.vnode)
+			for (const [id, handler] of entry.handlers) nextHandlers.set(id, handler)
+			nextHashes.add(entry.h)
+			nextCache.set(entry.path, entry)
+			for (const child of entry.children) {
+				const childEntry = subtreeCache.get(child)
+				if (childEntry !== undefined) replay(childEntry)
+			}
+		}
+
+		/**
+		 * `prevSame`: every element before this one among its siblings is the same VNode as last
+		 * commit, so sibling selectors (`peer-*`, `[&+x]`) see what they saw then.
+		 */
 		const serialize = (
 			vnode: AnyVNode | string,
 			path: string,
 			parentPath: string | undefined,
 			scope: Scope,
 			position: { siblings: ReadonlyArray<NodeInfo>; index: number } | undefined,
+			prevSame: boolean,
 		): WireNode => {
 			if (typeof vnode === "string") return { k: "t", s: vnode }
 			if (vnode.sel === undefined) return { k: "t", s: vnode.text ?? "" }
 			const tag = tagOf(vnode)
 			if (NON_VISUAL_TAGS.has(tag)) return { k: "t", s: "" }
+			const last = subtreeCache.get(path)
+			if (
+				last !== undefined &&
+				prevSame &&
+				last.vnode === vnode &&
+				last.scopeId === scope.id &&
+				last.index === position?.index &&
+				last.count === position?.siblings.length &&
+				last.context === context &&
+				sentHashes.has(last.h)
+			) {
+				replay(last)
+				reusedSubtrees += 1
+				return { k: "r", h: last.h }
+			}
 			nodes += 1
+			nextSeen.add(vnode)
 			const attrs = attrsOf(vnode)
 			// Before the children: an overlay may render inside its own trigger.
 			if (attrs.id !== undefined) pathsById.set(attrs.id, path)
@@ -421,6 +495,22 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 				const par = attrs.preserveAspectRatio
 				const h = hash(`svg${view}${body}${JSON.stringify(sized)}${par ?? ""}`)
 				nextHashes.add(h)
+				nextCache.set(path, {
+					vnode,
+					path,
+					parentPath,
+					tag,
+					attrs,
+					classes,
+					id: attrs.id,
+					h,
+					handlers: [],
+					children: [],
+					scopeId: scope.id,
+					index: position?.index,
+					count: position?.siblings.length,
+					context,
+				})
 				if (sentHashes.has(h)) {
 					reusedSubtrees += 1
 					return { k: "r", h }
@@ -430,10 +520,13 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 					: { k: "svg", h, view, body, st: sized, par }
 			}
 			const on: Record<string, number> = {}
+			const ownHandlers: Array<[number, Handler]> = []
 			for (const event in vnode.data?.on) {
 				const fn = vnode.data.on[event]
 				const id = handlerId(path, event)
-				nextHandlers.set(id, (e) => (Array.isArray(fn) ? fn.forEach((f) => f(e)) : fn?.(e)))
+				const handler: Handler = (e) => (Array.isArray(fn) ? fn.forEach((f) => f(e)) : fn?.(e))
+				nextHandlers.set(id, handler)
+				ownHandlers.push([id, handler])
 				on[event] = id
 			}
 			const keep: Record<string, string> = {}
@@ -442,14 +535,21 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			const infoOf = new Map(siblings.map((sib) => [sib.vnode, sib.info]))
 			const infos = siblings.map((sib) => sib.info)
 			const children: Array<WireNode> = []
+			const childPaths: Array<string> = []
 			const childList = vnode.children ?? []
+			let siblingsSame = true
 			for (let index = 0; index < childList.length; index++) {
 				const child = childList[index] as AnyVNode | string
 				const segment =
 					typeof child !== "string" && child.key !== undefined ? `k${child.key}` : `${index}`
+				const childPath = `${path}/${segment}`
 				const info = typeof child === "string" ? undefined : infoOf.get(child)
 				const position = info === undefined ? undefined : { siblings: infos, index: info.index ?? 0 }
-				children.push(serialize(child, `${path}/${segment}`, path, resolved.scope, position))
+				children.push(serialize(child, childPath, path, resolved.scope, position, siblingsSame))
+				if (info !== undefined) {
+					childPaths.push(childPath)
+					siblingsSame &&= subtreeCache.get(childPath)?.vnode === child
+				}
 			}
 			if (vnode.text !== undefined && children.length === 0) children.push({ k: "t", s: vnode.text })
 			// `h.InnerHTML` (highlighted code, rendered markdown) carries no child VNodes: keep its text.
@@ -502,6 +602,28 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 					children.map((c) => ("h" in c ? c.h : c.k === "t" ? c.s : "")).join("\u0000"),
 			)
 			nextHashes.add(h)
+			// An editor's text and an anchored panel's trigger width change with no VNode of theirs.
+			const isVolatile =
+				(mount !== undefined && options.bridge?.isDomMount(mount) === true) ||
+				options.overlays?.anchorAt(path) !== undefined ||
+				childPaths.some((child) => !nextCache.has(child))
+			if (!isVolatile)
+				nextCache.set(path, {
+					vnode,
+					path,
+					parentPath,
+					tag,
+					attrs,
+					classes,
+					id: attrs.id,
+					h,
+					handlers: ownHandlers,
+					children: childPaths,
+					scopeId: scope.id,
+					index: position?.index,
+					count: position?.siblings.length,
+					context,
+				})
 			if (sentHashes.has(h)) {
 				reusedSubtrees += 1
 				return { k: "r", h }
@@ -512,12 +634,14 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		const root: WireNode =
 			body === null
 				? { k: "t", s: "" }
-				: serialize(body, "r", undefined, styles.rootScope(env.dark), undefined)
+				: serialize(body, "r", undefined, styles.rootScope(env.dark), undefined, true)
 		handlers = nextHandlers
 		gen += 1
 		handlersByGen.set(gen, nextHandlers)
 		handlersByGen.delete(gen - HANDLER_GENERATIONS)
 		sentHashes = nextHashes
+		subtreeCache = nextCache
+		seenVnodes = nextSeen
 		options.bridge?.commit(records, mountVNodes)
 		const message: RuntimeToHost = {
 			t: "tree",
@@ -562,6 +686,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			// Styles depend on the window and theme, not the Model: re-resolve what is on screen.
 			if (lastDocument) {
 				sentHashes = new Set()
+				subtreeCache = new Map()
 				commitDocument(lastDocument, lastDocumentAck)
 			}
 			return

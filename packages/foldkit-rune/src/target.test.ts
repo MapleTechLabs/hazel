@@ -171,6 +171,61 @@ describe("makeRuneTarget", () => {
 		handle.dispose()
 	})
 
+	it("reuses an unchanged VNode's last result and keeps its handlers", async () => {
+		// One VNode object across renders, as a lazy view returns.
+		let shared: Html | undefined
+		const reused = (model: Model, h: HtmlBuilder<Message>): Html => {
+			shared ??= h.button([h.OnClick(Message.ClickedIncrement())], ["+"])
+			return h.div([], [h.span([], [`${model.count}`]), shared])
+		}
+		const { rune, handle, trees } = boot(reused)
+		await settle()
+		const press = () => {
+			const button = trees().at(-1)!
+			const id = elements(button.root).find((e) => e.tag === "button")?.on.click
+			// A reused button goes as a reference; its handler id is the one first sent.
+			rune.handleHostMessage({ t: "event", seq: 1, id: id ?? firstId, type: "click", gen: button.gen })
+		}
+		const firstId = elements(trees().at(-1)!.root).find((e) => e.tag === "button")!.on.click!
+		press()
+		await settle()
+		press()
+		await settle()
+		expect(texts(trees().at(-1)!.root)).toContain("2")
+		handle.dispose()
+	})
+
+	it("re-resolves a reused VNode whose earlier sibling changed", async () => {
+		let shared: Html | undefined
+		const peers = (model: Model, h: HtmlBuilder<Message>): Html => {
+			shared ??= h.span([h.Class("peer-data-[on=true]:font-bold")], ["after"])
+			return h.div(
+				[],
+				[
+					h.button(
+						[
+							h.Class("peer"),
+							h.DataAttribute("on", String(model.count > 0)),
+							h.OnClick(Message.ClickedIncrement()),
+						],
+						["+"],
+					),
+					shared,
+				],
+			)
+		}
+		const { rune, handle, trees } = boot(peers)
+		await settle()
+		const span = () => elements(trees().at(-1)!.root).find((e) => e.tag === "span")
+		expect(span()?.st.fontWeight).toBeUndefined()
+		// Unchanged since the first tree, the button may go as a reference: its handler id is stable.
+		const button = elements(trees()[0]!.root).find((e) => e.tag === "button")!
+		rune.handleHostMessage({ t: "event", seq: 1, id: button.on.click!, type: "click" })
+		await settle()
+		expect(span()?.st.fontWeight).toBe(700)
+		handle.dispose()
+	})
+
 	it("keeps handler ids stable and sends unchanged subtrees by reference", async () => {
 		const { rune, handle, trees } = boot()
 		await settle()

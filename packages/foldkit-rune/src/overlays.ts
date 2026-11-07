@@ -49,7 +49,11 @@ export const makeOverlays = () => {
 	const anchors = new Map<string, Anchor>()
 	const dismissListeners = new Map<string, Set<() => void>>()
 	const changeListeners = new Set<() => void>()
-	const changed = () => changeListeners.forEach((listener) => listener())
+	let version = 0
+	const changed = () => {
+		version += 1
+		changeListeners.forEach((listener) => listener())
+	}
 
 	/** Adds `path` to `set` until the returned release runs. */
 	const hold = (set: Set<string>, path: string) => {
@@ -73,6 +77,10 @@ export const makeOverlays = () => {
 			}
 		},
 		anchorAt: (path: string): Anchor | undefined => anchors.get(path),
+		/** Bumped by every change: what an element's `ov` was computed against. */
+		get version() {
+			return version
+		},
 		/** `listener` runs when the host dismisses the modal overlay at `path`. */
 		onDismiss: (path: string, listener: () => void) => {
 			const listeners = dismissListeners.get(path) ?? new Set()

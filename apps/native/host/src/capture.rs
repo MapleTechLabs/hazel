@@ -55,6 +55,12 @@ struct SweepStep {
     from: [f32; 2],
     to: [f32; 2],
     ms: u64,
+    /// Scroll by this many points each frame at `from` instead of moving the pointer.
+    #[serde(default)]
+    wheel: Option<f32>,
+    /// Also encode and submit each frame on the GPU, as a window does, and time that work.
+    #[serde(default)]
+    render: bool,
 }
 
 /// One 120 Hz frame: the budget a sweep's frames are held to.
@@ -241,6 +247,33 @@ impl Session {
             .collect()
     }
 
+    /// Encodes and submits the frame on screen as a window would, without reading it back: the
+    /// CPU side of drawing (instance prep, text atlas, command encoding), in ms.
+    fn encode_frame(&mut self) -> f64 {
+        let began = Instant::now();
+        let (w, h) = window_size();
+        let (dw, dh) = ((w * self.scale) as u32, (h * self.scale) as u32);
+        let (gpu, renderer, target) = self.gpu.get_or_insert_with(|| {
+            let gpu = Gpu::headless();
+            let mut renderer = Renderer::new(&gpu.device, FORMAT);
+            renderer.set_srgb_blend(true);
+            let target = Offscreen::with_format(&gpu.device, dw, dh, FORMAT);
+            (gpu, renderer, target)
+        });
+        renderer.upload_images(&gpu.device, &gpu.queue, &mut self.rt.images);
+        renderer.prepare(
+            &gpu.device,
+            &gpu.queue,
+            &mut self.rt.text.atlas,
+            &self.rt.instances,
+            (dw, dh),
+        );
+        let mut encoder = gpu.device.create_command_encoder(&Default::default());
+        renderer.draw(&mut encoder, &target.view, self.rt.clear_color());
+        renderer.submit(&gpu.queue, encoder);
+        began.elapsed().as_secs_f64() * 1000.0
+    }
+
     fn snap(&mut self, path: &str) {
         let (w, h) = window_size();
         let (dw, dh) = ((w * self.scale) as u32, (h * self.scale) as u32);
@@ -274,8 +307,6 @@ impl Session {
     }
 }
 
-/// Every element with a press handler (or a link) whose text contains `label`, deepest first,
-/// skipping hidden subtrees.
 /// Elements listening for `mouseenter` whose text contains `label`, deepest first.
 fn find_hoverables(node: &Arc<Node>, path: &str, label: &str, out: &mut Vec<String>) {
     let Node::Elem { children, on, .. } = node.as_ref() else {
@@ -294,6 +325,8 @@ fn find_hoverables(node: &Arc<Node>, path: &str, label: &str, out: &mut Vec<Stri
     }
 }
 
+/// Every element with a press handler (or a link) whose text contains `label`, deepest first,
+/// skipping hidden subtrees.
 fn find_pressables(node: &Arc<Node>, path: &str, label: &str, out: &mut Vec<String>) {
     let Node::Elem {
         children,
@@ -417,17 +450,31 @@ pub fn run(script_path: &str) {
                     .max(1.0) as usize;
                 let trees_before = session.timings.trees;
                 let mut times = Vec::with_capacity(frames);
+                let mut gpu_times = Vec::new();
                 for i in 0..=frames {
                     let t = i as f32 / frames as f32;
-                    let x = sweep.from[0] + (sweep.to[0] - sweep.from[0]) * t;
-                    let y = sweep.from[1] + (sweep.to[1] - sweep.from[1]) * t;
-                    session.rt.pointer_move(x, y);
-                    times.push(session.tick_every(FRAME_120).1);
+                    match sweep.wheel {
+                        Some(dy) => session.rt.wheel(sweep.from[0], sweep.from[1], dy),
+                        None => session.rt.pointer_move(
+                            sweep.from[0] + (sweep.to[0] - sweep.from[0]) * t,
+                            sweep.from[1] + (sweep.to[1] - sweep.from[1]) * t,
+                        ),
+                    }
+                    let (_, frame_ms) = session.tick_every(FRAME_120);
+                    let gpu_ms = if sweep.render {
+                        session.encode_frame()
+                    } else {
+                        0.0
+                    };
+                    gpu_times.push(gpu_ms);
+                    times.push(frame_ms + gpu_ms);
                 }
                 let budget = FRAME_120.as_secs_f64() * 1000.0;
                 interactions.push(json!({
                     "sweep": [sweep.from, sweep.to],
+                    "wheel": sweep.wheel,
                     "frameMs": summary(&times),
+                    "encodeMs": summary(&gpu_times),
                     "overBudget": times.iter().filter(|t| **t > budget).count(),
                     "trees": session.timings.trees - trees_before,
                 }));

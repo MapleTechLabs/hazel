@@ -478,6 +478,18 @@ fn build_elem(
             });
         }
     }
+    behaviour(e, tag, attrs, on, st)
+}
+
+/// What every element takes from its attributes and handlers beyond presses: a Tab stop, keys,
+/// hover events, and the rings and fills focus and presses draw.
+fn behaviour(
+    mut e: El,
+    tag: &str,
+    attrs: &HashMap<String, String>,
+    on: &HashMap<String, u32>,
+    st: &Style,
+) -> El {
     if let Some(order) = focusable(tag, attrs) {
         e = e.focusable(true).tab_index(order);
     }
@@ -771,6 +783,8 @@ fn build_grid(
                 st: cst,
                 children: grand,
                 on,
+                tag,
+                attrs,
                 ..
             } if cst.subgrid == Some(true) && cst.absolute.is_none() => {
                 let inner: Vec<(usize, &Arc<Node>)> = grand.iter().enumerate().collect();
@@ -780,7 +794,8 @@ fn build_grid(
                     ..cst.clone()
                 };
                 let e = build_grid(&inner, cols, path, inh.from(cst), ctx, &sub).key(path);
-                Some(press_handlers(apply_box(e, cst), on).grid_column_full())
+                let e = press_handlers(apply_box(e, cst), on);
+                Some(behaviour(e, tag, attrs, on, cst).grid_column_full())
             }
             Node::Elem { st: cst, .. } if cst.col_span_full == Some(true) => {
                 build(child, path, inh, ctx).map(El::grid_column_full)

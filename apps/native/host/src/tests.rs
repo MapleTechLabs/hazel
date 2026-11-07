@@ -1333,3 +1333,36 @@ fn a_display_contents_portal_draws_once() {
     // One 15% black layer over white; drawn in place as well as at the root it would be 184.
     assert!(frame.is(50, 50, [217, 217, 217]), "{:?}", frame.at(50, 50));
 }
+
+#[test]
+fn a_subgrid_row_reports_the_pointer_entering_it() {
+    sent_lines();
+    let mut item = e(
+        "div",
+        json!({ "display": "grid", "subgrid": true, "colSpanFull": true, "gridCols": ["auto", "1fr"], "h": 30 }),
+        vec![
+            e("span", json!({ "w": 20, "h": 20 }), vec![]),
+            e("span", json!({}), vec![t("Manage members")]),
+        ],
+    );
+    item["on"] = json!({ "click": 71, "mouseenter": 72, "mouseleave": 73 });
+    let mut rt = runtime(
+        e(
+            "div",
+            json!({ "w": 300 }),
+            vec![e(
+                "div",
+                json!({ "display": "grid", "gridCols": ["auto", "1fr"] }),
+                vec![item],
+            )],
+        ),
+        (300.0, 100.0),
+    );
+    let (x, y) = rt.find("r/0/0").expect("drawn");
+    rt.pointer_move(x, y);
+    rt.frame(0.1);
+    assert!(
+        sent_lines().iter().any(|m| m["id"] == 72),
+        "no mouseenter from the subgrid row"
+    );
+}

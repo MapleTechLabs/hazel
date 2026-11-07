@@ -369,6 +369,10 @@ export const makeElementBridge = (options: {
 		findById,
 		widthOf,
 		isObserved: (path: string) => observed.has(path),
+		/** How many elements are observed: it only grows, so it versions `isObserved`. */
+		get observedCount() {
+			return observed.size
+		},
 		/** A DOM-backed Mount at `path`: its name, args and element, for the app's native glue. */
 		domMountAt: (path: string) => {
 			const vnode = mounted.get(path)
