@@ -25,6 +25,8 @@
 		"jsdom": "^30.1.3",
 		"postcss": "8.5.32",
 		"prismjs": "^1.30.0",
+		"prosemirror-model": "^1.25.12",
+		"prosemirror-state": "^1.4.4",
 		"prosemirror-view": "^1.42.6"
 	},
 	"devDependencies": {

@@ -364,27 +364,46 @@ fn text_align_center_centres_an_inline_line() {
 
 #[test]
 fn shrink_zero_keeps_an_inline_box_at_its_size() {
-    let row = |shrink: Option<f32>| {
+    let row = |tag: &str, extra: Value| {
         let mut st = json!({ "w": 80, "h": 20 });
-        if let Some(s) = shrink {
-            st["shrink"] = json!(s);
+        for (k, v) in extra.as_object().unwrap() {
+            st[k] = v.clone();
         }
         e(
             "div",
             json!({ "display": "flex", "w": 100, "h": 20 }),
             vec![
                 e("div", json!({ "w": 60, "h": 20 }), vec![]),
-                e("span", st, vec![]),
+                e(tag, st, vec![]),
             ],
         )
     };
-    let rt = runtime(row(Some(0.0)), (100.0, 20.0));
-    assert_eq!(rect(&rt, "r/1")[2], 80.0);
-    let rt = runtime(row(None), (100.0, 20.0));
+    let width = |tag: &str, extra: Value| rect(&runtime(row(tag, extra), (100.0, 20.0)), "r/1")[2];
     assert_eq!(
-        rect(&rt, "r/1")[2],
+        width("span", json!({ "shrink": 0 })),
+        80.0,
+        "shrink-0 keeps its size"
+    );
+    assert_eq!(
+        width("span", json!({})),
         40.0,
         "an inline box shrinks by default"
+    );
+    // A block flex item shrinks by its own `shrink`, and `min-w-0 truncate` must not stop it.
+    assert_eq!(
+        width("div", json!({ "shrink": 1 })),
+        40.0,
+        "shrink 1 gives up the overflow"
+    );
+    assert_eq!(
+        width("div", json!({ "shrink": 1, "minW": 0 })),
+        40.0,
+        "min-w-0 still shrinks"
+    );
+    assert_eq!(
+        width("div", json!({ "shrink": 1, "minW": 70 })),
+        70.0,
+        "a positive min-w is the floor"
     );
 }
 
@@ -728,4 +747,22 @@ fn a_dom_backed_editor_takes_its_roots_padding_and_min_height() {
     let field = rect(&rt, "r/0/field");
     assert_eq!(field[0], 12.0, "{field:?}");
     assert!(rect(&rt, "r/0")[3] >= 40.0, "{:?}", rect(&rt, "r/0"));
+}
+
+#[test]
+fn a_centred_element_pinned_on_both_sides_spans_between_them() {
+    // `absolute inset-x-0 top-1/2 -translate-y-1/2 h-px`: a divider across its parent.
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "w": 200, "h": 100 }),
+            vec![e(
+                "div",
+                json!({ "absolute": [0, 50, 0, null], "centerY": true, "h": 2, "bg": "#ff0000ff" }),
+                vec![],
+            )],
+        ),
+        (200.0, 100.0),
+    );
+    assert_eq!(rect(&rt, "r/0")[2], 200.0, "{:?}", rect(&rt, "r/0"));
 }

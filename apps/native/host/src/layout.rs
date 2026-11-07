@@ -222,7 +222,10 @@ fn capitalize(s: &str) -> String {
         } else {
             out.push(c);
         }
-        at_start = c.is_whitespace() || (at_start && !c.is_alphanumeric());
+        // A word starts after any break but the joiners Unicode keeps inside a word (UAX #29
+        // MidLetter/MidNumLet): "hello-world" is two words, "node.js" and "it's" are one.
+        let joins_word = matches!(c, '.' | '\'' | '\u{2019}' | ':' | '\u{00B7}');
+        at_start = !c.is_alphanumeric() && !(joins_word && !at_start);
     }
     out
 }
@@ -243,6 +246,11 @@ pub fn apply_box(mut e: El, st: &Style) -> El {
         Some(Len::Full) => e = e.h_full(),
         _ => {}
     }
+    // Rune items keep their size by default (`flex-shrink: 0`); a positive shrink lets them go.
+    // Rune's `shrink` also zeroes the minimum width, so an element's own `min-w` comes after it.
+    if f(st.shrink).is_some_and(|s| s > 0.0) {
+        e = e.shrink()
+    }
     if let Some(v) = px(&st.min_w) {
         e = e.min_w(v)
     }
@@ -260,10 +268,6 @@ pub fn apply_box(mut e: El, st: &Style) -> El {
     }
     if let Some(g) = f(st.grow).filter(|g| *g > 0.0) {
         e = e.grow(g)
-    }
-    // Rune items keep their size by default (`flex-shrink: 0`); a positive shrink lets them go.
-    if f(st.shrink).is_some_and(|s| s > 0.0) && st.min_w.is_none() {
-        e = e.shrink()
     }
     if let Some([t, r, b, l]) = st.pad {
         e = e.pt(t.0).pr(r.0).pb(b.0).pl(l.0)
@@ -422,10 +426,15 @@ fn apply_shadows(mut e: El, st: &Style) -> El {
 /// `inset-y-1/2 -translate-y-1/2`: Rune has no percentage insets, so centre in a full-height slot.
 pub fn center_vertically(e: El, st: &Style) -> El {
     match (st.absolute, st.center_y) {
-        (Some([l, _, r, _]), Some(true)) => row()
-            .pin(f(l), Some(0.0), f(r), Some(0.0))
-            .items_center()
-            .child(e),
+        (Some([l, _, r, _]), Some(true)) => {
+            // Pinned on both sides with no width of its own, CSS stretches it between them
+            // (`inset-x-0 top-1/2`: a full-width divider or overlay).
+            let spans = f(l).is_some() && f(r).is_some() && st.w.is_none();
+            row()
+                .pin(f(l), Some(0.0), f(r), Some(0.0))
+                .items_center()
+                .child(if spans { e.grow(1.0) } else { e })
+        }
         _ => e,
     }
 }
@@ -536,5 +545,7 @@ mod tests {
     fn capitalize_uppercases_each_word_start() {
         assert_eq!(capitalize("hello wide world"), "Hello Wide World");
         assert_eq!(capitalize("(quoted) it's"), "(Quoted) It's");
+        assert_eq!(capitalize("hello-world a/b"), "Hello-World A/B");
+        assert_eq!(capitalize("node.js"), "Node.js");
     }
 }

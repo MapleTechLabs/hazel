@@ -14,8 +14,19 @@ const SCALE: f32 = 2.0;
 
 static CACHE: OnceLock<Arc<ImageCache>> = OnceLock::new();
 static WAKER: OnceLock<Waker> = OnceLock::new();
-/// http(s) sources: `None` while fetching, then the decoded image (or none on failure).
-static REMOTE: Mutex<Option<HashMap<String, Option<Image>>>> = Mutex::new(None);
+/// A downloaded http(s) source, by URL: fetched once, whatever sizes draw it.
+enum Fetched {
+    Pending,
+    Failed,
+    /// A bitmap decodes once; it scales like any picture.
+    Picture(Image),
+    /// An SVG keeps its bytes and rasterizes once per size it is drawn at.
+    Svg(Arc<Vec<u8>>),
+}
+
+static REMOTE: Mutex<Option<HashMap<String, Fetched>>> = Mutex::new(None);
+/// Remote SVGs rasterized, by URL and drawn size in points.
+static REMOTE_SVGS: Mutex<Option<HashMap<(String, u32), Image>>> = Mutex::new(None);
 /// A remote image arrived since the view last ran; the next frame must rebuild memoised subtrees.
 static ARRIVED: AtomicBool = AtomicBool::new(false);
 
@@ -95,33 +106,39 @@ impl Images {
     }
 }
 
-/// Starts (once) the download of `url`; the image once it has arrived.
+/// Starts (once) the download of `url`; the image at `size_pt` once it has arrived.
 fn remote(url: &str, size_pt: f32) -> Option<Image> {
     let mut remote = REMOTE.lock().unwrap();
     let map = remote.get_or_insert_with(HashMap::new);
-    if let Some(entry) = map.get(url) {
-        return entry.clone();
+    match map.get(url) {
+        Some(Fetched::Picture(image)) => return Some(image.clone()),
+        Some(Fetched::Svg(bytes)) => {
+            let bytes = bytes.clone();
+            drop(remote);
+            return Some(remote_svg(url, &bytes, size_pt));
+        }
+        Some(Fetched::Pending | Fetched::Failed) => return None,
+        None => {}
     }
-    map.insert(url.to_string(), None);
+    map.insert(url.to_string(), Fetched::Pending);
     let url = url.to_string();
     std::thread::spawn(move || {
         let output = std::process::Command::new("curl")
             .args(["-sfL", "--max-time", "15", "--", &url])
             .output();
-        let image = match output {
+        let fetched = match output {
             Ok(out) if out.status.success() && !out.stdout.is_empty() => {
-                let is_svg = url.ends_with(".svg") || out.stdout.starts_with(b"<svg");
-                Some(if is_svg {
-                    cache().svg(out.stdout, size_pt, SCALE)
+                if url.ends_with(".svg") || out.stdout.starts_with(b"<svg") {
+                    Fetched::Svg(Arc::new(out.stdout))
                 } else {
-                    cache().load(out.stdout)
-                })
+                    Fetched::Picture(cache().load(out.stdout))
+                }
             }
-            _ => None,
+            _ => Fetched::Failed,
         };
-        let failed = image.is_none();
+        let failed = matches!(fetched, Fetched::Failed);
         if let Some(map) = REMOTE.lock().unwrap().as_mut() {
-            map.insert(url, image);
+            map.insert(url, fetched);
         }
         if !failed {
             ARRIVED.store(true, Ordering::SeqCst);
@@ -129,6 +146,15 @@ fn remote(url: &str, size_pt: f32) -> Option<Image> {
         }
     });
     None
+}
+
+fn remote_svg(url: &str, bytes: &Arc<Vec<u8>>, size_pt: f32) -> Image {
+    let key = (url.to_string(), size_pt.to_bits());
+    let mut svgs = REMOTE_SVGS.lock().unwrap();
+    let map = svgs.get_or_insert_with(HashMap::new);
+    map.entry(key)
+        .or_insert_with(|| cache().svg(bytes.to_vec(), size_pt, SCALE))
+        .clone()
 }
 
 /// `[mime][;base64],payload` into its MIME type and bytes.
@@ -288,6 +314,32 @@ mod tests {
             replace_oklch(r#"<p fill="oklch(1 0 0)"/>"#),
             r##"<p fill="#ffffff"/>"##
         );
+    }
+
+    #[test]
+    fn a_downloaded_svg_rasterizes_at_each_size_it_is_drawn() {
+        let file = std::env::temp_dir().join(format!("hazel-remote-{}.svg", std::process::id()));
+        std::fs::write(
+            &file,
+            r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="8" height="8" fill="red"/></svg>"#,
+        )
+        .unwrap();
+        let url = format!("file://{}", file.display());
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let small = loop {
+            if let Some(image) = remote(&url, 16.0) {
+                break image;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the download never landed"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        };
+        let large = remote(&url, 64.0).expect("already downloaded");
+        let (small, large) = (small.wait().unwrap(), large.wait().unwrap());
+        assert!(large[0] > small[0] * 3, "{small:?} {large:?}");
+        let _ = std::fs::remove_file(file);
     }
 
     #[test]

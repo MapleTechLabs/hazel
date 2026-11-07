@@ -7,6 +7,7 @@ import type { JSDOM } from "jsdom"
 import { Effect, Option } from "effect"
 import type { EditorView } from "prosemirror-view"
 import { editorRegistry } from "../../web-foldkit/src/editor/registry"
+import { replaceFieldText } from "./text-edit"
 
 let dom: JSDOM | undefined
 
@@ -61,13 +62,6 @@ export const editorText = (args: Record<string, unknown>): string | undefined =>
 		onSome: (view) => view.state.doc.textBetween(0, view.state.doc.content.size, "\n"),
 	})
 
-/** The mounted editor root's class, which the native field takes its box and text style from. */
-export const editorClass = (args: Record<string, unknown>): string | undefined =>
-	Option.match(editorAt(args.editorId), {
-		onNone: () => undefined,
-		onSome: (view) => view.dom.getAttribute("class") ?? undefined,
-	})
-
 export const applyEditorEvent = (
 	args: Record<string, unknown>,
 	event: { readonly value?: string | null; readonly key?: string | null },
@@ -76,13 +70,8 @@ export const applyEditorEvent = (
 		const { state } = view
 		const before = state.doc
 		if (event.value != null) {
-			const end = state.doc.content.size
-			const paragraph = state.schema.nodes.paragraph
-			// The schema needs one block (`block+`): an empty field is an empty paragraph, as the app clears it.
-			if (paragraph !== undefined) {
-				const content = event.value === "" ? [] : [state.schema.text(event.value)]
-				view.dispatch(state.tr.replaceWith(0, end, paragraph.create(null, content)))
-			}
+			const edit = replaceFieldText(state, event.value)
+			if (edit !== undefined) view.dispatch(edit)
 		}
 		if (event.key != null && dom !== undefined) {
 			const keydown = new dom.window.KeyboardEvent("keydown", {
