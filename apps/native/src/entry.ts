@@ -24,11 +24,12 @@ const statsPath = process.env.NATIVE_STATS
 if (dataMode === "offline") process.env.VITE_BACKEND_URL = "http://offline.hazel.test"
 const backendUrl = process.env.VITE_BACKEND_URL ?? "http://localhost:3003"
 
-const offline = await import("./offline-session")
-const startPath = process.env.NATIVE_PATH ?? offline.startPath
+// Live mode opens the app's own landing route; the fixture's channel exists only offline.
+const offline = dataMode === "offline" ? await import("./offline-session") : undefined
+const startPath = process.env.NATIVE_PATH ?? offline?.startPath ?? "/"
 const shims = installShims({ width, height, dark, url: `http://app.hazel.test${startPath}` })
 
-if (dataMode === "offline") {
+if (offline !== undefined) {
 	const { makeOfflineFetch } = await import("./offline-backend")
 	const { makeFixtureServer, makeFixtureWebSocket } = await import("./fixture/fixture-socket")
 	const server = makeFixtureServer()

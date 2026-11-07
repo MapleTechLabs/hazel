@@ -268,5 +268,8 @@ export const installShims = (env: ShimEnv) => {
 
 const copyToClipboard = (text: string) => {
 	const copy = spawn("pbcopy", { stdio: ["pipe", "ignore", "ignore"] })
+	// Without pbcopy (Linux, a stripped PATH) the copy is dropped instead of taking the runtime down.
+	copy.on("error", () => {})
+	copy.stdin.on("error", () => {})
 	copy.stdin.end(text)
 }
