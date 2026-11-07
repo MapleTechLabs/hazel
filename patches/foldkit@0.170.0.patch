@@ -414,7 +414,7 @@ index efc3b2b23a01728fc336fcdb133271b29bf50f16..03bf435ec48560ea81e03cc1b9e61c7e
 +    // NOTE: a target owns its frame clock; a container renders on the
 +    // browser's animation frames.
 +    const requestFrame = surface._tag === 'Target'
-+        ? surface.target.requestFrame
++        ? (frame) => surface.target.requestFrame(frame)
 +        : (frame) => {
 +            requestAnimationFrame(frame);
 +        };
