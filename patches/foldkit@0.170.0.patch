@@ -1,0 +1,565 @@
+diff --git a/dist/runtime/crashUI.d.ts b/dist/runtime/crashUI.d.ts
+index b901e2d87727dd3c04b12c47160b9b3f0565d7ea..90ae81e961ced06c31e791ee59d3ca9e6d7265e7 100644
+--- a/dist/runtime/crashUI.d.ts
++++ b/dist/runtime/crashUI.d.ts
+@@ -1,6 +1,7 @@
+ import { Effect, Option } from 'effect';
+ import { Document, Html, type HtmlBuilder } from '../html/index.js';
+ import { VNode } from '../vdom.js';
++import type { RenderSurface } from './renderTarget.js';
+ /** Context provided to crash.view and crash.report when the runtime encounters
+  *  an unrecoverable error. `message` is the Message being processed when the
+  *  crash occurred, present as an `Option` because a crash during the initial
+@@ -37,5 +38,5 @@ export declare const defaultCrashView: (context: CrashContext<unknown, unknown>,
+ export type VNodeSlot = {
+     maybeCurrentVNode: Option.Option<VNode>;
+ };
+-export declare const renderCrashView: <Model, Message>(context: CrashContext<Model, Message>, crash: CrashConfig<Model, Message> | undefined, container: HTMLElement, vnodeSlot: VNodeSlot, manageDocument: boolean) => void;
++export declare const renderCrashView: <Model, Message>(context: CrashContext<Model, Message>, crash: CrashConfig<Model, Message> | undefined, surface: RenderSurface, vnodeSlot: VNodeSlot, manageDocument: boolean) => void;
+ //# sourceMappingURL=crashUI.d.ts.map
+\ No newline at end of file
+diff --git a/dist/runtime/crashUI.js b/dist/runtime/crashUI.js
+index 6bf9c807dd6c1000042724d475ec1d887e39cc46..6afaa11f45aae65fa0974d570bf1e47b2fc917c7 100644
+--- a/dist/runtime/crashUI.js
++++ b/dist/runtime/crashUI.js
+@@ -167,7 +167,19 @@ export const defaultCrashView = (context, viewError) => {
+     ]);
+     return { title: 'Application Crash', body };
+ };
+-export const renderCrashView = (context, crash, container, vnodeSlot, manageDocument) => {
++const commitCrashDocument = (document, surface, vnodeSlot, manageDocument) => {
++    if (surface._tag === 'Target') {
++        surface.target.commit(document);
++        vnodeSlot.maybeCurrentVNode = Option.fromNullishOr(document.body);
++        return;
++    }
++    const patchedVNode = __patchVNode(vnodeSlot.maybeCurrentVNode, document.body, surface.container);
++    vnodeSlot.maybeCurrentVNode = Option.some(patchedVNode);
++    if (manageDocument) {
++        applyDocumentMetadata(document, patchedVNode.elm);
++    }
++};
++export const renderCrashView = (context, crash, surface, vnodeSlot, manageDocument) => {
+     console.error('[foldkit] Application crash:', context.error);
+     if (crash?.report) {
+         try {
+@@ -192,11 +204,7 @@ export const renderCrashView = (context, crash, container, vnodeSlot, manageDocu
+         finally {
+             clearHtmlRuntime();
+         }
+-        const patchedVNode = __patchVNode(vnodeSlot.maybeCurrentVNode, crashDocument.body, container);
+-        vnodeSlot.maybeCurrentVNode = Option.some(patchedVNode);
+-        if (manageDocument) {
+-            applyDocumentMetadata(crashDocument, patchedVNode.elm);
+-        }
++        commitCrashDocument(crashDocument, surface, vnodeSlot, manageDocument);
+     }
+     catch (viewError) {
+         console.error('[foldkit] crash.view failed:', viewError);
+@@ -209,10 +217,6 @@ export const renderCrashView = (context, crash, container, vnodeSlot, manageDocu
+         finally {
+             clearHtmlRuntime();
+         }
+-        const patchedVNode = __patchVNode(vnodeSlot.maybeCurrentVNode, fallbackDocument.body, container);
+-        vnodeSlot.maybeCurrentVNode = Option.some(patchedVNode);
+-        if (manageDocument) {
+-            applyDocumentMetadata(fallbackDocument, patchedVNode.elm);
+-        }
++        commitCrashDocument(fallbackDocument, surface, vnodeSlot, manageDocument);
+     }
+ };
+diff --git a/dist/runtime/devToolsConfig.js b/dist/runtime/devToolsConfig.js
+index f5d6d249f7ba92ce8cc81bdeac85f2af6b7ef8d7..2586e3bde8f5e9ff6c5398694d2bc8e6b7e58a4e 100644
+--- a/dist/runtime/devToolsConfig.js
++++ b/dist/runtime/devToolsConfig.js
+@@ -24,8 +24,10 @@ const DEV_TOOLS_KEYFRAME_INTERVAL_MIN = 1;
+  *  dev server and a top-level window, so an app previewed inside an iframe does
+  *  not stack a second panel over its host's. */
+ export const resolveDevToolsConfig = (devTools) => {
+-    const isInIframe = window.self !== window.top;
+-    return pipe(devTools ?? {}, Option.liftPredicate(config => config !== false), Option.filter(config => isVisible(config.show ?? DEFAULT_DEV_TOOLS_SHOW, !!import.meta.hot && !isInIframe)), Option.map(config => ({
++    return pipe(devTools ?? {}, Option.liftPredicate(config => config !== false), Option.filter(config => isVisible(config.show ?? DEFAULT_DEV_TOOLS_SHOW, 
++    // NOTE: read only for an enabled config, so a disabled one (every
++    // render target) never touches `window`.
++    !!import.meta.hot && window.self === window.top)), Option.map(config => ({
+         position: config.position ?? DEFAULT_DEV_TOOLS_POSITION,
+         mode: resolveDevToolsMode(config.mode ?? DEFAULT_DEV_TOOLS_MODE),
+         maybeBanner: Option.fromNullishOr(config.banner),
+diff --git a/dist/runtime/hydrationHandoff.d.ts b/dist/runtime/hydrationHandoff.d.ts
+index b4a0bd9788a3314b07a60c04083a5b1bc1cb1bcc..d18f78544e3fbfaf60c7e8296bd82cc9c706bd71 100644
+--- a/dist/runtime/hydrationHandoff.d.ts
++++ b/dist/runtime/hydrationHandoff.d.ts
+@@ -38,7 +38,7 @@ export declare const resolveHydrationHandoff: <Flags, Resources>({ bootMode, hyd
+     isFlagsRequired: boolean;
+     FlagsCodec: Schema.Codec<Flags, any, unknown, unknown>;
+     preservedModel: unknown;
+-    container: HTMLElement;
++    container: HTMLElement | null;
+     buildId: string | undefined;
+     provideResources: <A>(effect: Effect.Effect<A, never, Resources>) => Effect.Effect<A>;
+ }>) => Effect.Effect<ResolvedHydrationHandoff<Flags>>;
+diff --git a/dist/runtime/makeApplication.d.ts b/dist/runtime/makeApplication.d.ts
+index d26239026597e8e7a096482cc13efe2e3c736bfd..38b127445ddcc4085ae5a817ef1995797107e224 100644
+--- a/dist/runtime/makeApplication.d.ts
++++ b/dist/runtime/makeApplication.d.ts
+@@ -8,6 +8,7 @@ import { Url } from '../url/index.js';
+ import type { RoutingConfig } from './browserListeners.js';
+ import type { CrashConfig } from './crashUI.js';
+ import type { DevToolsConfig } from './devToolsConfig.js';
++import type { RenderSurfaceConfig } from './renderTarget.js';
+ import { type FlagsSchemaConfig, type MakeRuntimeReturn } from './runtime.js';
+ import type { SlowConfig } from './slowPhase.js';
+ import type { ViewTransitionConfig } from './viewTransition.js';
+@@ -16,7 +17,6 @@ type BaseApplicationConfig<Model, Message, Resources = never, ManagedResourceSer
+     update: (model: Model, message: Message) => UpdateReturn<Model, Message, Resources | ManagedResourceServices>;
+     view: (model: Model, h: HtmlBuilder<Message>) => Document;
+     subscriptions?: Subscriptions<Model, Message, Resources | ManagedResourceServices>;
+-    container: HTMLElement | null;
+     ports?: P;
+     crash?: CrashConfig<Model, Message>;
+     slow?: SlowConfig<Model, Message>;
+@@ -26,7 +26,7 @@ type BaseApplicationConfig<Model, Message, Resources = never, ManagedResourceSer
+     resources?: Layer.Layer<Resources>;
+     managedResources?: ManagedResources<Model, Message, ManagedResourceServices>;
+     devTools?: DevToolsConfig;
+-}>;
++}> & RenderSurfaceConfig;
+ /** Configuration for `makeApplication` with Flags and URL routing. */
+ export type RoutingApplicationConfigWithFlags<Model, Message, Flags, Resources = never, ManagedResourceServices = never, P extends Ports | undefined = undefined> = BaseApplicationConfig<Model, Message, Resources, ManagedResourceServices, P> & FlagsSchemaConfig<Flags> & Readonly<{
+     routing: RoutingConfig<Message>;
+@@ -54,7 +54,8 @@ export type RoutingApplicationInit<Model, Message, Flags = void, Resources = nev
+  *  manages `document.title` and the canonical / og:url tags. Add a `routing`
+  *  config for URL routing. Use one page-owning application per document. To
+  *  mount an app scoped to a node without touching the document `<head>`, use
+- *  `makeElement`. */
++ *  `makeElement`. To render outside the DOM, pass a `renderTarget` instead of
++ *  a `container`. */
+ export declare function makeApplication<Model, Message extends {
+     _tag: string;
+ }, Flags, Resources = never, ManagedResourceServices = never, P extends Ports | undefined = undefined>(config: RoutingApplicationConfigWithFlags<Model, Message, Flags, Resources, ManagedResourceServices, P>): MakeRuntimeReturn<P, Flags, Resources, 'Application'>;
+diff --git a/dist/runtime/makeApplication.js b/dist/runtime/makeApplication.js
+index e1c7db4711cdbe18f7283629027758133b49ab39..cdfe9531841a4781df4da17e625d68db5f0f71df 100644
+--- a/dist/runtime/makeApplication.js
++++ b/dist/runtime/makeApplication.js
+@@ -2,10 +2,14 @@ import { Option, Predicate, Schema } from 'effect';
+ import { fromString as urlFromString } from '../url/index.js';
+ import { containRefusedPage, findDocumentHydration, hasServerRenderedMarkup, } from './hydrationHandoff.js';
+ import { makeRuntime, } from './runtime.js';
+-export function makeApplication(config) {
+-    const { container } = config;
+-    const hasRouting = 'routing' in config;
+-    const hasFlags = 'Flags' in config;
++const resolveApplicationSurface = (config, hasFlags) => {
++    if (config.renderTarget !== undefined) {
++        return {
++            surface: { _tag: 'Target', target: config.renderTarget },
++            hydration: undefined,
++        };
++    }
++    const container = config.container ?? null;
+     const hydration = findDocumentHydration(container, hasFlags);
+     const resolvedContainer = hydration?.root ?? container;
+     if (resolvedContainer === null) {
+@@ -22,6 +26,15 @@ export function makeApplication(config) {
+             'rendered, and your script runs after it). On a server-rendered page ' +
+             'the runtime instead finds the root by its `data-foldkit-app` stamp.');
+     }
++    return {
++        surface: { _tag: 'Container', container: resolvedContainer },
++        hydration,
++    };
++};
++export function makeApplication(config) {
++    const hasRouting = 'routing' in config;
++    const hasFlags = 'Flags' in config;
++    const { surface, hydration } = resolveApplicationSurface(config, hasFlags);
+     const currentUrl = hasRouting
+         ? Option.getOrThrow(urlFromString(window.location.href))
+         : undefined;
+@@ -30,10 +43,12 @@ export function makeApplication(config) {
+         Model: config.Model,
+         update: config.update,
+         view: config.view,
+-        manageDocument: true,
++        // NOTE: a target receives the whole Document; only a DOM runtime
++        // writes the `<head>`.
++        manageDocument: surface._tag === 'Container',
+         ports: config.ports,
+         ...(config.subscriptions && { subscriptions: config.subscriptions }),
+-        container: resolvedContainer,
++        surface,
+         ...(hydration && { hydration }),
+         ...(hasRouting && { routing: config.routing }),
+         ...(config.crash && { crash: config.crash }),
+diff --git a/dist/runtime/makeElement.d.ts b/dist/runtime/makeElement.d.ts
+index c520e457bf89c55d247284d48e30b9d3e979bdfe..2ca78f9c34d75fcd6ace888ff430ce837f62d394 100644
+--- a/dist/runtime/makeElement.d.ts
++++ b/dist/runtime/makeElement.d.ts
+@@ -7,6 +7,7 @@ import type { Return as UpdateReturn } from '../update/index.js';
+ import type { ElementCrashConfig } from './crashUI.js';
+ import type { DevToolsConfig } from './devToolsConfig.js';
+ import type { ApplicationInit } from './makeApplication.js';
++import type { RenderSurfaceConfig } from './renderTarget.js';
+ import { type FlagsSchemaConfig, type MakeRuntimeReturn } from './runtime.js';
+ import type { SlowConfig } from './slowPhase.js';
+ import type { ViewTransitionConfig } from './viewTransition.js';
+@@ -15,7 +16,6 @@ type BaseElementConfig<Model, Message, Resources = never, ManagedResourceService
+     update: (model: Model, message: Message) => UpdateReturn<Model, Message, Resources | ManagedResourceServices>;
+     view: (model: Model, h: HtmlBuilder<Message>) => Html;
+     subscriptions?: Subscriptions<Model, Message, Resources | ManagedResourceServices>;
+-    container: HTMLElement | null;
+     ports?: P;
+     crash?: ElementCrashConfig<Model, Message>;
+     slow?: SlowConfig<Model, Message>;
+@@ -24,7 +24,7 @@ type BaseElementConfig<Model, Message, Resources = never, ManagedResourceService
+     resources?: Layer.Layer<Resources>;
+     managedResources?: ManagedResources<Model, Message, ManagedResourceServices>;
+     devTools?: DevToolsConfig;
+-}>;
++}> & RenderSurfaceConfig;
+ /** Configuration for `makeElement` with Flags. */
+ export type ElementConfigWithFlags<Model, Message, Flags, Resources = never, ManagedResourceServices = never, P extends Ports | undefined = undefined> = BaseElementConfig<Model, Message, Resources, ManagedResourceServices, P> & FlagsSchemaConfig<Flags> & Readonly<{
+     /**
+diff --git a/dist/runtime/makeElement.js b/dist/runtime/makeElement.js
+index ffb59f2c81bfe86e0f2c4d765ec332d54e735427..db096afe0310d41d2a331d6367c408afe4a65bda 100644
+--- a/dist/runtime/makeElement.js
++++ b/dist/runtime/makeElement.js
+@@ -17,13 +17,20 @@ const toCrashConfig = (crash) => {
+         }),
+     };
+ };
+-export function makeElement(config) {
+-    const { container } = config;
++const resolveElementSurface = (config) => {
++    if (config.renderTarget !== undefined) {
++        return { _tag: 'Target', target: config.renderTarget };
++    }
++    const container = config.container ?? null;
+     if (container === null) {
+         throw new Error('[foldkit] Container is null. Make sure the element exists in the DOM ' +
+             'before calling makeElement (e.g. that your <div id="root"></div> has ' +
+             'rendered, and your script runs after it).');
+     }
++    return { _tag: 'Container', container };
++};
++export function makeElement(config) {
++    const surface = resolveElementSurface(config);
+     const hasFlags = 'Flags' in config;
+     const elementView = config.view;
+     const view = (model, h) => ({
+@@ -39,7 +46,7 @@ export function makeElement(config) {
+         manageDocument: false,
+         ports: config.ports,
+         ...(config.subscriptions && { subscriptions: config.subscriptions }),
+-        container,
++        surface,
+         ...(Predicate.isNotUndefined(crash) && { crash }),
+         ...(Predicate.isNotUndefined(config.slow) && {
+             slow: config.slow,
+diff --git a/dist/runtime/public.d.ts b/dist/runtime/public.d.ts
+index 51da6c0226f3164e9383a0a19c36173e9916b6c6..0b4a172489329615975e92946030b5028aa40481 100644
+--- a/dist/runtime/public.d.ts
++++ b/dist/runtime/public.d.ts
+@@ -1,3 +1,4 @@
+ export { SlowPhase, defaultSlowCallback, embed, hydrate, makeApplication, makeElement, run, } from './index.js';
+ export type { RoutingConfig, CrashConfig, CrashContext, ElementCrashConfig, RoutingApplicationConfigWithFlags, RoutingApplicationConfig, ApplicationConfigWithFlags, ApplicationConfig, ElementConfigWithFlags, ElementConfig, ApplicationInit, RoutingApplicationInit, ElementInit, EmbedHandle, HydrateOptions, InboundPortHandle, InboundPortHandles, OutboundPortHandle, OutboundPortHandles, PortHandles, MakeRuntimeReturn, RunOptions, Visibility, SlowConfig, SlowContext, SlowPatchContext, SlowSubscriptionDependenciesContext, SlowThresholdOverrides, SlowUpdateContext, SlowViewContext, DevToolsConfig, DevToolsMode, DevToolsModeConfig, DevToolsPosition, ViewTransitionConfig, ViewTransitionContext, ViewTransitionDecision, } from './index.js';
++export type { RenderTarget, RenderSurfaceConfig } from './renderTarget.js';
+ //# sourceMappingURL=public.d.ts.map
+\ No newline at end of file
+diff --git a/node_modules/foldkit/dist/runtime/renderTarget.d.ts b/dist/runtime/renderTarget.d.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..747f6fe34ec3124cbee7eb638ab57ba4b7d3488e
+--- /dev/null
++++ b/dist/runtime/renderTarget.d.ts
+@@ -0,0 +1,41 @@
++import type { Document } from '../html/index.js';
++/**
++ * Where a runtime renders when it does not own a DOM container: a native
++ * renderer, a canvas, a test harness. The runtime keeps everything else
++ * (update, Commands, Subscriptions, ManagedResources, Ports, routing) and
++ * hands the target each rendered Document instead of patching the DOM.
++ *
++ * The VNodes in `body` keep their `data.on` handlers, so the target routes
++ * input by calling them with an event-shaped object. Mounts are not acquired:
++ * their markers stay on `data.foldkitMount` for the target to read.
++ */
++export type RenderTarget = Readonly<{
++    /** Receives every committed Document, the crash view included. */
++    commit: (document: Document) => void;
++    /** Schedules the next render frame. A browser target would use
++     *  `requestAnimationFrame`; a native target, its own frame clock. */
++    requestFrame: (frame: () => void) => void;
++    /** Called once when the runtime is disposed. */
++    release: () => void;
++    /** Identifies the runtime, as a container's `id` does: Model preservation
++     *  across development reloads keys on it. */
++    id: string;
++}>;
++/** What a runtime renders into: a DOM container, or a {@link RenderTarget}. */
++export type RenderSurface = Readonly<{
++    _tag: 'Container';
++    container: HTMLElement;
++}> | Readonly<{
++    _tag: 'Target';
++    target: RenderTarget;
++}>;
++/** The render surface half of `makeApplication` and `makeElement` config:
++ *  exactly one of a DOM `container` or a `renderTarget`. */
++export type RenderSurfaceConfig = Readonly<{
++    container: HTMLElement | null;
++    renderTarget?: never;
++}> | Readonly<{
++    renderTarget: RenderTarget;
++    container?: never;
++}>;
++//# sourceMappingURL=renderTarget.d.ts.map
+\ No newline at end of file
+diff --git a/node_modules/foldkit/dist/runtime/renderTarget.js b/dist/runtime/renderTarget.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..cb0ff5c3b541f646105198ee23ac0fc3d805023e
+--- /dev/null
++++ b/dist/runtime/renderTarget.js
+@@ -0,0 +1 @@
++export {};
+diff --git a/dist/runtime/renderer.d.ts b/dist/runtime/renderer.d.ts
+index 26f3400a68068c50eaa09f0e2c5bc78d015d9462..683c41661b8b0abf38ca0a97601df56b1afa6c2b 100644
+--- a/dist/runtime/renderer.d.ts
++++ b/dist/runtime/renderer.d.ts
+@@ -5,6 +5,7 @@ import { type CrashConfig } from './crashUI.js';
+ import type { DevToolsIntegration, DevToolsRenderBridge } from './devToolsIntegration.js';
+ import type { DuplicateIdScanner } from './duplicateIdScanner.js';
+ import type { MessageQueue } from './messageQueue.js';
++import type { RenderSurface } from './renderTarget.js';
+ import type { RuntimeStatus } from './runtimeStatus.js';
+ import { type ResolvedSlowPhaseConfig, type SlowPatchContext, type SlowViewContext } from './slowPhase.js';
+ import { type StartViewTransition, type ViewTransitionConfig } from './viewTransition.js';
+@@ -38,17 +39,17 @@ export type Renderer<Model, Message> = Readonly<{
+  * Builds the render side of one runtime: the current vnode and, when
+  * hydrating, the server-rendered root the first render adopts, the crash
+  * renderer, the `Dispatch` service the view binds handlers to, the
+- * synchronous render that runs the view and patches the DOM, the render
+- * frame that runs in `requestAnimationFrame`, and the View Transition
++ * synchronous render that runs the view and patches the DOM (or commits to
++ * a {@link RenderTarget}), the render frame, and the View Transition
+  * that frame may run inside. It also registers the teardown finalizer
+  * that patches the tree away and restores the container, so build it
+  * before forking the perpetual fibers: scope finalizers run
+  * last-registered first, and the container must be restored only after
+  * those fibers are interrupted.
+  */
+-export declare const makeRenderer: <Model, Message>({ status, container, view, htmlBuilder, manageDocument, crash, buildId, initModel, maybeHydrationRoot, maybeSlowView, maybeSlowPatch, duplicateIdScanner, maybeResolvedViewTransition, commitNotifier, runtimeContext, readLiveModel, messageQueue, devToolsIntegration, }: Readonly<{
++export declare const makeRenderer: <Model, Message>({ status, surface, view, htmlBuilder, manageDocument, crash, buildId, initModel, maybeHydrationRoot, maybeSlowView, maybeSlowPatch, duplicateIdScanner, maybeResolvedViewTransition, commitNotifier, runtimeContext, readLiveModel, messageQueue, devToolsIntegration, }: Readonly<{
+     status: RuntimeStatus;
+-    container: HTMLElement;
++    surface: RenderSurface;
+     view: (model: Model, h: HtmlBuilder<Message>) => Document;
+     htmlBuilder: HtmlBuilder<Message>;
+     manageDocument: boolean;
+diff --git a/dist/runtime/renderer.js b/dist/runtime/renderer.js
+index efc3b2b23a01728fc336fcdb133271b29bf50f16..03bf435ec48560ea81e03cc1b9e61c7efd7ac899 100644
+--- a/dist/runtime/renderer.js
++++ b/dist/runtime/renderer.js
+@@ -13,15 +13,15 @@ import { __decideViewTransition, __silenceViewTransitionRejections, } from './vi
+  * Builds the render side of one runtime: the current vnode and, when
+  * hydrating, the server-rendered root the first render adopts, the crash
+  * renderer, the `Dispatch` service the view binds handlers to, the
+- * synchronous render that runs the view and patches the DOM, the render
+- * frame that runs in `requestAnimationFrame`, and the View Transition
++ * synchronous render that runs the view and patches the DOM (or commits to
++ * a {@link RenderTarget}), the render frame, and the View Transition
+  * that frame may run inside. It also registers the teardown finalizer
+  * that patches the tree away and restores the container, so build it
+  * before forking the perpetual fibers: scope finalizers run
+  * last-registered first, and the container must be restored only after
+  * those fibers are interrupted.
+  */
+-export const makeRenderer = ({ status, container, view, htmlBuilder, manageDocument, crash, buildId, initModel, maybeHydrationRoot, maybeSlowView, maybeSlowPatch, duplicateIdScanner, maybeResolvedViewTransition, commitNotifier, runtimeContext, readLiveModel, messageQueue, devToolsIntegration, }) => Effect.gen(function* () {
++export const makeRenderer = ({ status, surface, view, htmlBuilder, manageDocument, crash, buildId, initModel, maybeHydrationRoot, maybeSlowView, maybeSlowPatch, duplicateIdScanner, maybeResolvedViewTransition, commitNotifier, runtimeContext, readLiveModel, messageQueue, devToolsIntegration, }) => Effect.gen(function* () {
+     const { enqueueMessage, enqueueMessageEffect, drainPendingMessages, resetDrainBudget, isAnyMessageDeferred, } = messageQueue;
+     const { mountTracker, mountRuntime, drainMountEvents, readViewState, setViewState, isPausedNow, resumeDevTools, attachRenderedMounts, } = devToolsIntegration;
+     const settlePendingCommit = () => {
+@@ -73,7 +73,7 @@ export const makeRenderer = ({ status, container, view, htmlBuilder, manageDocum
+     // rendering, the dispose finalizer, the replay render) read the same
+     // slot synchronously, so no Ref is needed.
+     const vnodeSlot = { maybeCurrentVNode: Option.none() };
+-    const patchRuntimeVNode = (maybeCurrentVNode, nextVNode, seen) => {
++    const patchRuntimeVNode = (container, maybeCurrentVNode, nextVNode, seen) => {
+         try {
+             return __patchVNode(maybeCurrentVNode, nextVNode, container, seen, patchedVNode => {
+                 vnodeSlot.maybeCurrentVNode = Option.some(patchedVNode);
+@@ -109,6 +109,10 @@ export const makeRenderer = ({ status, container, view, htmlBuilder, manageDocum
+         if (!Exit.hasInterrupts(exit)) {
+             return;
+         }
++        if (surface._tag === 'Target') {
++            return yield* Effect.sync(() => surface.target.release());
++        }
++        const { container } = surface;
+         const maybeCurrentVNode = vnodeSlot.maybeCurrentVNode;
+         yield* Option.match(maybeCurrentVNode, {
+             onNone: () => Effect.void,
+@@ -143,7 +147,7 @@ export const makeRenderer = ({ status, container, view, htmlBuilder, manageDocum
+         const model = readLiveModel();
+         const squashed = Cause.squash(cause);
+         const error = squashed instanceof Error ? squashed : new Error(String(squashed));
+-        renderCrashView({ error, model, message: maybeMessage }, crash, container, vnodeSlot, manageDocument);
++        renderCrashView({ error, model, message: maybeMessage }, crash, surface, vnodeSlot, manageDocument);
+         settlePendingCommit();
+     });
+     // NOTE: `maybeLastDirtyMessage` holds the most recent dirtying Message,
+@@ -156,6 +160,13 @@ export const makeRenderer = ({ status, container, view, htmlBuilder, manageDocum
+     const setLastDirtyMessage = (message) => {
+         maybeLastDirtyMessage = Option.some(message);
+     };
++    // NOTE: a target owns its frame clock; a container renders on the
++    // browser's animation frames.
++    const requestFrame = surface._tag === 'Target'
++        ? surface.target.requestFrame
++        : (frame) => {
++            requestAnimationFrame(frame);
++        };
+     const dispatchSync = (message) => {
+         /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
+         enqueueMessage(message);
+@@ -200,6 +211,19 @@ export const makeRenderer = ({ status, container, view, htmlBuilder, manageDocum
+             thresholdMs,
+         }));
+         const { maybeCurrentVNode } = vnodeSlot;
++        if (surface._tag === 'Target') {
++            const [, maybeCommitDuration] = measureSlowPhase(maybeLiveSlowPatch, () => surface.target.commit(nextDocument));
++            vnodeSlot.maybeCurrentVNode = Option.fromNullishOr(nextVNode);
++            reportSlowPhase(maybeLiveSlowPatch, maybeCommitDuration, (durationMs, thresholdMs) => ({
++                _tag: 'Patch',
++                model,
++                message: maybeMessage,
++                durationMs,
++                thresholdMs,
++            }));
++            return;
++        }
++        const { container } = surface;
+         const [patchedVNode, maybePatchDuration] = measureSlowPhase(maybeLiveSlowPatch, () => {
+             if (Option.isNone(maybeCurrentVNode) &&
+                 pendingHydrationRoot !== null) {
+@@ -220,7 +244,7 @@ export const makeRenderer = ({ status, container, view, htmlBuilder, manageDocum
+                 // caller that reached here another way.
+                 return __hydrateVNode(hydrationRoot, nextVNode, boundaryRegistry.dedupeSeen, buildId ?? '');
+             }
+-            return patchRuntimeVNode(maybeCurrentVNode, nextVNode, boundaryRegistry.dedupeSeen);
++            return patchRuntimeVNode(container, maybeCurrentVNode, nextVNode, boundaryRegistry.dedupeSeen);
+         });
+         vnodeSlot.maybeCurrentVNode = Option.some(patchedVNode);
+         reportSlowPhase(maybeLiveSlowPatch, maybePatchDuration, (durationMs, thresholdMs) => ({
+@@ -391,7 +415,7 @@ export const makeRenderer = ({ status, container, view, htmlBuilder, manageDocum
+     const renderFramePlain = () => {
+         // NOTE: retain the scheduled frame's pending commit while the drain waits.
+         if (isLiveModelBehindQueue()) {
+-            requestAnimationFrame(renderFramePlain);
++            requestFrame(renderFramePlain);
+             return;
+         }
+         isRenderFrameScheduled = false;
+@@ -449,7 +473,7 @@ export const makeRenderer = ({ status, container, view, htmlBuilder, manageDocum
+         }
+         isRenderFrameScheduled = true;
+         commitNotifier.markCommitPending();
+-        requestAnimationFrame(renderFramePlain);
++        requestFrame(renderFramePlain);
+     };
+     const devToolsRenderBridge = {
+         // NOTE: passes `noOpDispatch` so declarative handlers and Mounts
+diff --git a/dist/runtime/runtime.d.ts b/dist/runtime/runtime.d.ts
+index 68f5c4bb27c825bb50a1b6e4ba044ac1fbdc7e20..7f8cc9becbb1b881babd37065b9e7aa01e84aa5d 100644
+--- a/dist/runtime/runtime.d.ts
++++ b/dist/runtime/runtime.d.ts
+@@ -10,6 +10,7 @@ import type { CrashConfig } from './crashUI.js';
+ import type { DevToolsConfig } from './devToolsConfig.js';
+ import { type HostConnector } from './hostConnector.js';
+ import { type BootMode, type HydrationConfig } from './hydrationHandoff.js';
++import type { RenderSurface } from './renderTarget.js';
+ import { type SlowConfig } from './slowPhase.js';
+ import { type ViewTransitionConfig } from './viewTransition.js';
+ /** Full runtime configuration including Model Schema, Flags, init, update, view, and optional routing/stream config. */
+@@ -33,7 +34,9 @@ export type RuntimeConfig<Model, Message, Flags, Resources = never, ManagedResou
+      */
+     manageDocument: boolean;
+     subscriptions?: Subscriptions<Model, Message, Resources | ManagedResourceServices>;
+-    container: HTMLElement;
++    /** A DOM container, or a {@link RenderTarget} for runtimes that render
++     *  outside the DOM. */
++    surface: RenderSurface;
+     /**
+      * Present when `makeApplication` found a server-rendered root stamped with
+      * `data-foldkit-app`. The first render then adopts that DOM in place
+@@ -168,6 +171,6 @@ type RuntimeInternals = {
+     maybeActiveFiber: Option.Option<Fiber.Fiber<void>>;
+ };
+ export declare const runtimeInternals: WeakMap<object, RuntimeInternals>;
+-export declare const makeRuntime: <Model, Message, Flags, Resources, ManagedResourceServices, P extends Ports | undefined, Kind extends 'Application' | 'Element'>({ ports, kind, Model, Flags: FlagsCodec, configuredFlags, isFlagsRequired, init, update, view, manageDocument, subscriptions, container, hydration, routing: routingConfig, crash, slow, viewTransition, freezeModel, preserveScroll, resources, managedResources, devTools, }: RuntimeConfig<Model, Message, Flags, Resources, ManagedResourceServices, P, Kind>) => MakeRuntimeReturn<P, Flags, Resources, Kind>;
++export declare const makeRuntime: <Model, Message, Flags, Resources, ManagedResourceServices, P extends Ports | undefined, Kind extends 'Application' | 'Element'>({ ports, kind, Model, Flags: FlagsCodec, configuredFlags, isFlagsRequired, init, update, view, manageDocument, subscriptions, surface, hydration, routing: routingConfig, crash, slow, viewTransition, freezeModel, preserveScroll, resources, managedResources, devTools, }: RuntimeConfig<Model, Message, Flags, Resources, ManagedResourceServices, P, Kind>) => MakeRuntimeReturn<P, Flags, Resources, Kind>;
+ export {};
+ //# sourceMappingURL=runtime.d.ts.map
+\ No newline at end of file
+diff --git a/dist/runtime/runtime.js b/dist/runtime/runtime.js
+index a26ae8ea901f2dc0af1a6977ade3ddc12df85b99..18706c0ed8f28c5dd2201637bd45c14d17c728ba 100644
+--- a/dist/runtime/runtime.js
++++ b/dist/runtime/runtime.js
+@@ -23,7 +23,7 @@ import { forkSubscriptionFibers } from './subscriptionFibers.js';
+ import { __resolveStartViewTransition, } from './viewTransition.js';
+ import { isVisible } from './visibility.js';
+ export const runtimeInternals = new WeakMap();
+-export const makeRuntime = ({ ports, kind, Model, Flags: FlagsCodec, configuredFlags, isFlagsRequired, init, update, view, manageDocument, subscriptions, container, hydration, routing: routingConfig, crash, slow, viewTransition, freezeModel, preserveScroll, resources, managedResources, devTools, }) => {
++export const makeRuntime = ({ ports, kind, Model, Flags: FlagsCodec, configuredFlags, isFlagsRequired, init, update, view, manageDocument, subscriptions, surface, hydration, routing: routingConfig, crash, slow, viewTransition, freezeModel, preserveScroll, resources, managedResources, devTools, }) => {
+     const isSlowVisible = (show) => isVisible(show, !!import.meta.hot);
+     const htmlBuilder = htmlBuilderFor();
+     const maybeResolvedSlow = __resolveSlowConfig(slow, isSlowVisible);
+@@ -35,7 +35,9 @@ export const makeRuntime = ({ ports, kind, Model, Flags: FlagsCodec, configuredF
+     // that configured the option. Resolved eagerly it would read
+     // `document.startViewTransition` and call `window.matchMedia` during
+     // `makeRuntime`, which otherwise touches no DOM global at construction.
+-    const maybeResolvedViewTransition = pipe(Option.fromNullishOr(viewTransition), Option.flatMap(decide => Option.map(__resolveStartViewTransition(), startViewTransition => ({
++    const maybeResolvedViewTransition = pipe(Option.fromNullishOr(viewTransition), 
++    // NOTE: View Transitions animate DOM snapshots; a target has none.
++    Option.filter(() => surface._tag === 'Container'), Option.flatMap(decide => Option.map(__resolveStartViewTransition(), startViewTransition => ({
+         decide,
+         startViewTransition,
+         reducedMotionQuery: window.matchMedia('(prefers-reduced-motion: reduce)'),
+@@ -51,7 +53,9 @@ export const makeRuntime = ({ ports, kind, Model, Flags: FlagsCodec, configuredF
+     }
+     const runtimeId = hydration !== undefined && hydration.runtimeId !== ''
+         ? hydration.runtimeId
+-        : (container?.id ?? '');
++        : surface._tag === 'Container'
++            ? surface.container.id
++            : surface.target.id;
+     const startWith = (maybeConnector, preservedModel, bootMode = 'Fresh', bootFlags, buildId) => {
+         // NOTE: one notifier per runtime, provided across the whole runtime
+         // Effect so Commands, Subscriptions, and Mount-forked Effects all resolve
+@@ -93,7 +97,7 @@ export const makeRuntime = ({ ports, kind, Model, Flags: FlagsCodec, configuredF
+                 isFlagsRequired,
+                 FlagsCodec,
+                 preservedModel,
+-                container,
++                container: surface._tag === 'Container' ? surface.container : null,
+                 buildId,
+                 provideResources,
+             });
+@@ -172,7 +176,8 @@ export const makeRuntime = ({ ports, kind, Model, Flags: FlagsCodec, configuredF
+             const initModel = maybeFreezeModel(initModelRaw);
+             const modelPubSub = yield* PubSub.unbounded();
+             const devToolsIntegration = yield* makeDevToolsIntegration({
+-                devTools,
++                // NOTE: the DevTools panel is a DOM overlay; a target has no DOM.
++                devTools: surface._tag === 'Container' ? devTools : false,
+                 update,
+                 maybeFreezeModel,
+                 enqueueMessageEffect,
+@@ -200,7 +205,7 @@ export const makeRuntime = ({ ports, kind, Model, Flags: FlagsCodec, configuredF
+             const runtimeContext = yield* Effect.context();
+             const { crashWith, render, setLastDirtyMessage, scheduleRenderFrame, skipPendingViewTransition, devToolsRenderBridge, } = yield* makeRenderer({
+                 status,
+-                container,
++                surface,
+                 view,
+                 htmlBuilder,
+                 manageDocument,
