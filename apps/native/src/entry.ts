@@ -70,7 +70,7 @@ if (offline !== undefined) {
 const { Layer } = await import("effect")
 const { Runtime } = await import("foldkit")
 const app = await import("../../web-foldkit/src/main")
-// The editor root's class, for the composer field before the headless editor has mounted.
+// The editor root's class: the composer field takes its padding, text size and minimum height.
 const { EDITABLE_CLASS } = await import("../../web-foldkit/src/editor/editor-view")
 const { ResourcesLive } = await import("../../web-foldkit/src/rpc")
 const { NotificationSinks } = await import("../../web-foldkit/src/app/notification-sinks")
@@ -167,10 +167,9 @@ const rune = makeRuneTarget({
 		const mount = bridge.domMountAt(path)
 		return mount === undefined ? undefined : composer.editorText(mount.args)
 	},
-	editableClass: (path) => {
-		const mount = bridge.domMountAt(path)
-		return (mount === undefined ? undefined : composer.editorClass(mount.args)) ?? EDITABLE_CLASS
-	},
+	// The editor root's own classes; ProseMirror's state classes on it carry no layout.
+	editableClass: () => EDITABLE_CLASS,
+
 	onEditable: (path, event) => {
 		if (process.env.NATIVE_DEBUG) process.stderr.write(`[editable] ${JSON.stringify(event)}\n`)
 		pendingEdits.push(path, event)

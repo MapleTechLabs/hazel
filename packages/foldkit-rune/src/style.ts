@@ -190,6 +190,7 @@ export class StyleResolver {
 	/** `@property` initial values; `inherits: false` ones reset on every element. */
 	private registered = new Map<string, { initial: string; inherits: boolean }>()
 	private known = new Set<string>()
+	private css = ""
 	/** Declarations on `body`: the page behind the app's root element. */
 	private pageDecls: Array<Decl> = []
 	private scopes = new Map<string, Scope>()
@@ -230,8 +231,23 @@ export class StyleResolver {
 				this.known.add(c)
 				added = true
 			}
-		if (!added && this.rules.size > 0) return
-		this.parse(this.compiler.build([...this.known]))
+		if (!added && this.rules.size > 0) return false
+		const css = this.compiler.build([...this.known])
+		// A class Tailwind does not generate (a typo, a non-utility) adds no CSS: nothing to re-parse.
+		if (css === this.css) return false
+		this.css = css
+		this.parse(css)
+		return true
+	}
+
+	/** The classes `ensure` would still have to compile, without compiling them. */
+	unknown(classes: Iterable<string>): Array<string> {
+		return [...classes].filter((c) => !this.known.has(c))
+	}
+
+	/** Whether a stylesheet has been compiled yet (before it, styles must compile synchronously). */
+	get isCompiled() {
+		return this.rules.size > 0
 	}
 
 	/** A custom property's value on the page root (`getComputedStyle(root).getPropertyValue`). */

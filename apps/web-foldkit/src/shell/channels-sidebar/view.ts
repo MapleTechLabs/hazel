@@ -297,7 +297,7 @@ const gotoSection = <M>(h: HtmlBuilder<M>, context: SectionsContext<M>): Html =>
 								h.Attribute("dir", "ltr"),
 								h.Class(
 									twMerge(
-										"hidden font-mono text-[0.80rem]/6 text-current/60 group-hover:text-fg group-focus:text-fg group-focus:opacity-90 group-disabled:opacity-50 lg:inline forced-colors:group-focus:text-[HighlightText",
+										"hidden font-mono text-[0.80rem]/6 text-current/60 group-hover:text-fg group-focus:text-fg group-focus:opacity-90 group-disabled:opacity-50 lg:inline forced-colors:group-focus:text-[HighlightText]",
 										"absolute top-1/2 right-2 -translate-y-1/2 font-mono text-muted-fg text-xs",
 									),
 								),

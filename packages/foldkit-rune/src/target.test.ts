@@ -158,7 +158,7 @@ describe("makeRuneTarget", () => {
 		expect(htmlText("a&#x110000;b")).toBe("a&#x110000;b")
 	})
 
-	it("styles an svg from its class attribute and keeps its aspect-ratio mode and paint", () => {
+	it("styles an svg from its class attribute and keeps its aspect-ratio mode and paint", async () => {
 		const sent: Array<RuntimeToHost> = []
 		const rune = makeRuneTarget({
 			styles,
@@ -184,7 +184,9 @@ describe("makeRuneTarget", () => {
 		const body = { sel: "div", data: { class: { relative: true, "size-8": true } }, children: [svg] }
 		// SAFETY: commit only reads `body` and `title`; this VNode has the shape the serializer walks.
 		rune.target.commit({ title: "", body } as unknown as Parameters<typeof rune.target.commit>[0])
-		const tree = sent.find((m): m is Extract<RuntimeToHost, { t: "tree" }> => m.t === "tree")
+		// Classes first seen after boot compile just after the commit, which then goes out again.
+		await settle()
+		const tree = sent.findLast((m): m is Extract<RuntimeToHost, { t: "tree" }> => m.t === "tree")
 		const root = tree?.root
 		const icon = root?.k === "e" ? root.c[0] : undefined
 		expect(icon).toMatchObject({

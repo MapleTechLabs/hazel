@@ -301,7 +301,15 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		const body = document.body as AnyVNode | null
 		const classes = new Set<string>()
 		if (body) collectClasses(body, classes)
-		styles.ensure(classes)
+		// New classes after boot (a state's first variant) compile after this commit, off the input
+		// path: the compile re-parses the whole sheet, and a frame without one class beats a slow key.
+		const fresh = styles.isCompiled ? styles.unknown(classes) : []
+		if (fresh.length > 0)
+			setTimeout(() => {
+				if (styles.ensure(fresh) && lastDocument !== undefined)
+					commitDocument(lastDocument, lastDocumentAck)
+			}, 0)
+		else styles.ensure(classes)
 		styles.setViewport(env.width, env.height)
 
 		const records = new Map<
