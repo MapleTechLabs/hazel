@@ -34,7 +34,7 @@ const asMe = (role: TeamMember["role"]) => person(0, role, "Ada", { userId })
 const others = [
 	person(1, "owner", "Olivia"),
 	person(2, "admin", "Grace", { presenceStatus: "dnd", presenceLastSeenMs: nowMs - 1_000 }),
-	person(3, "member", "Linus", { presenceStatus: "online", presenceLastSeenMs: nowMs - 60_000 }),
+	person(3, "member", "Linus", { presenceStatus: "offline", presenceLastSeenMs: nowMs - 1_000 }),
 ]
 const team = (role: TeamMember["role"]) => [asMe(role), ...others]
 const shared = makeShared({ nowMs })
@@ -42,7 +42,7 @@ const actions = Scene.all.role("button", { name: "Actions" })
 const rowOf = (name: string) => Scene.first(Scene.filter(Scene.all.role("row"), { hasText: name }))
 
 describe("live members", () => {
-	test("rows arrive from the live query with presence relative to Shared.nowMs", () => {
+	test("rows arrive from the live query with their stored presence", () => {
 		Scene.scene(
 			pageScene(update, view, shared),
 			Scene.given(init().model),
@@ -53,7 +53,7 @@ describe("live members", () => {
 			Scene.expect(
 				Scene.within(rowOf("Grace Test"), Scene.text("Do Not Disturb", { exact: false })),
 			).toExist(),
-			// Last seen a minute ago is past the 45 second threshold, so "online" reads as Offline.
+			// The stored status decides, however recently they were seen.
 			Scene.expect(
 				Scene.within(rowOf("Linus Test"), Scene.text("Offline", { exact: false })),
 			).toExist(),

@@ -1,49 +1,21 @@
-import type { DateTime } from "effect"
-
 export type PresenceStatus = "online" | "away" | "busy" | "dnd" | "offline"
-
-export const DEFAULT_OFFLINE_THRESHOLD_MS = 45_000
 
 export type PresenceLike = {
 	status?: string | null | undefined
-	lastSeenAt?: Date | DateTime.Utc | null | undefined
 } | null
 
 /**
- * Derive an "effective" presence status from the stored status + lastSeenAt.
+ * The status to show for a presence row: the stored one, which the user's `UserObject` keeps
+ * current (offline once their heartbeat goes stale, `worker/objects/user/presence.ts`).
  *
- * Rules:
+ * `lastSeenAt` is not consulted: heartbeats refresh it only in the user's own object, so the copy
+ * an org streams is as old as the last status change and says nothing about whether they are here.
+ *
  * - Missing presence row => offline
- * - Stale lastSeenAt => offline
- * - Recent lastSeenAt but stored status is "offline" => treat as "online" (anti-flicker while status replicates)
- * - Otherwise use stored status (online/away/busy/dnd)
+ * - Otherwise the stored status (online/away/busy/dnd/offline); anything unknown => offline
  */
-export function getEffectivePresenceStatus(
-	presence: PresenceLike | undefined,
-	nowMs: number,
-	offlineThresholdMs: number = DEFAULT_OFFLINE_THRESHOLD_MS,
-): PresenceStatus {
-	if (!presence) return "offline"
-
-	const lastSeenAt = presence.lastSeenAt
-	if (!lastSeenAt) {
-		return "offline"
-	}
-
-	const lastSeenMs = lastSeenAt instanceof Date ? lastSeenAt.getTime() : lastSeenAt.epochMilliseconds
-	if (Number.isNaN(lastSeenMs)) {
-		return "offline"
-	}
-
-	if (nowMs - lastSeenMs > offlineThresholdMs) {
-		return "offline"
-	}
-
-	if (presence.status === "offline") {
-		return "online"
-	}
-
-	switch (presence.status) {
+export function getEffectivePresenceStatus(presence: PresenceLike | undefined): PresenceStatus {
+	switch (presence?.status) {
 		case "online":
 		case "away":
 		case "busy":

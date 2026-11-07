@@ -5,13 +5,15 @@
  *
  * The object's alarm drives it:
  *
- * - online while the user has an open sync socket on their `UserObject`: the first socket marks
- *   them online, the last one closing marks them offline;
- * - without a socket, the heartbeat RPC keeps them online and the alarm marks them offline
- *   `HEARTBEAT_TIMEOUT_MS` after the last one (`PresenceCleanup`);
+ * - the heartbeat RPC (or a sync socket opening) marks them online, and the alarm marks them
+ *   offline `HEARTBEAT_TIMEOUT_MS` after the last heartbeat, open socket or not: a socket whose
+ *   client vanished (a laptop asleep, a dropped network, a relay or deploy that lost it) can stay
+ *   "open" here long after, and would otherwise keep them online for good;
+ * - the last socket closing marks them offline at once (the fast path for a closed tab);
  * - the alarm clears a custom status at its `statusExpiresAt` (`StatusExpiration`).
  *
- * Heartbeats only touch `lastSeenAt` locally; orgs get it with the next status change.
+ * Heartbeats only touch `lastSeenAt` locally; orgs get it with the next status change, so the
+ * projected `status` is the authority clients render, not `lastSeenAt`.
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import { type OrganizationId, UserId } from "@hazel/schema"
@@ -22,8 +24,11 @@ import { enqueueEffect } from "../effects/registry"
 import { orgTarget } from "../kinds"
 import type { PresenceProjection } from "../org/projections"
 
-/** 3x the client's 15 s heartbeat. */
-export const HEARTBEAT_TIMEOUT_MS = 45_000
+/**
+ * The client beats every 15 s, but a hidden tab's timers are throttled to about one a minute
+ * (Chrome's intensive throttling), so this outlasts two of those with room for a failed one.
+ */
+export const HEARTBEAT_TIMEOUT_MS = 150_000
 
 export type PresenceRow = schema.UserPresenceStatus
 export type PresenceFields = Omit<PresenceRow, "id" | "userId">
@@ -143,13 +148,10 @@ export const markOffline = Effect.fn("UserObject.markOffline")(function* (userId
 })
 
 /**
- * The alarm's work: clear an expired custom status, and mark a socketless user offline once their
- * heartbeat is stale. Returns whether anything changed. Inside a transaction.
+ * The alarm's work: clear an expired custom status, and mark the user offline once their heartbeat
+ * is stale. Returns whether anything changed. Inside a transaction.
  */
-export const expirePresence = Effect.fn("UserObject.expirePresence")(function* (
-	userId: UserId,
-	openSockets: number,
-) {
+export const expirePresence = Effect.fn("UserObject.expirePresence")(function* (userId: UserId) {
 	const existing = yield* findPresence(userId)
 	if (Option.isNone(existing)) return false
 	const nowMs = yield* Clock.currentTimeMillis
@@ -162,11 +164,7 @@ export const expirePresence = Effect.fn("UserObject.expirePresence")(function* (
 		next.statusExpiresAt = null
 		changed = true
 	}
-	if (
-		openSockets === 0 &&
-		fields.status !== "offline" &&
-		fields.lastSeenAt.getTime() + HEARTBEAT_TIMEOUT_MS <= nowMs
-	) {
+	if (fields.status !== "offline" && fields.lastSeenAt.getTime() + HEARTBEAT_TIMEOUT_MS <= nowMs) {
 		next.status = "offline"
 		changed = true
 	}
@@ -176,17 +174,15 @@ export const expirePresence = Effect.fn("UserObject.expirePresence")(function* (
 	return true
 })
 
-/** When the alarm must next run for presence: status expiry, and heartbeat staleness without a socket. */
-export const presenceDeadlines = (userId: UserId, openSockets: number) =>
+/** When the alarm must next run for presence: status expiry, and heartbeat staleness. */
+export const presenceDeadlines = (userId: UserId) =>
 	findPresence(userId).pipe(
 		Effect.map(
 			Option.match({
 				onNone: () => [],
 				onSome: (row) => [
 					row.statusExpiresAt?.getTime(),
-					openSockets === 0 && row.status !== "offline"
-						? row.lastSeenAt.getTime() + HEARTBEAT_TIMEOUT_MS
-						: undefined,
+					row.status !== "offline" ? row.lastSeenAt.getTime() + HEARTBEAT_TIMEOUT_MS : undefined,
 				],
 			}),
 		),
@@ -230,13 +226,11 @@ export const makePresenceHooks = (state: SyncObjectState, ownerId: () => string 
 			openSockets(socket) > 0
 				? Effect.succeed(false)
 				: forOwner("closed", markOffline).pipe(Effect.map(Option.getOrElse(() => false))),
-		alarm: forOwner("alarm", (userId) => expirePresence(userId, openSockets())).pipe(
-			Effect.map(Option.getOrElse(() => false)),
-		),
+		alarm: forOwner("alarm", expirePresence).pipe(Effect.map(Option.getOrElse(() => false))),
 		deadlines: Effect.suspend(() =>
 			Option.match(owner(), {
 				onNone: () => Effect.succeed([]),
-				onSome: (userId) => presenceDeadlines(userId, openSockets()),
+				onSome: presenceDeadlines,
 			}),
 		).pipe(
 			Effect.catchTag("DatabaseError", (error) =>
