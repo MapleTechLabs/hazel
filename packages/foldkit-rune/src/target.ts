@@ -116,6 +116,10 @@ const SVG_ATTRS = new Set([
 	"opacity",
 	"fill-opacity",
 	"stroke-opacity",
+	"text-anchor",
+	"dominant-baseline",
+	"font-size",
+	"font-weight",
 ])
 
 const tagOf = (vnode: AnyVNode) => vnode.sel?.split(/[#.]/)[0] || "div"
@@ -176,9 +180,16 @@ const svgBody = (vnode: AnyVNode, inherited: Record<string, string> = {}): strin
 			const list = Object.entries(attrs)
 				.filter(([name]) => SVG_ATTRS.has(name))
 				.map(([name, value]) => `${name}="${svgPaint(name, value).replace(/"/g, "&quot;")}"`)
+			// The host lays `<text>` over the icon itself (its rasteriser has no fonts): keep the words.
+			if (tag === "text") return `<text ${list.join(" ")}>${escapeXml(textOf(child))}</text>`
 			return `<${tag} ${list.join(" ")}/>`
 		})
 		.join("")
+
+const textOf = (vnode: AnyVNode): string =>
+	vnode.text ?? (vnode.children ?? []).map((c) => (typeof c === "string" ? c : textOf(c))).join("")
+
+const escapeXml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
 
 /** cyrb53: fast, well-mixed 53-bit string hash; collisions only cost a redundant rebuild. */
 const ENTITIES = new Map([

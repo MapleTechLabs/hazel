@@ -990,3 +990,39 @@ fn w_frac_takes_a_share_of_the_parent_width() {
     );
     assert_eq!(rect(&rt, "r/0")[2], 50.0);
 }
+
+#[test]
+fn text_inside_an_svg_icon_draws_at_its_anchor() {
+    let body = "<rect x=\"1.5\" y=\"3.5\" width=\"15\" height=\"11\" rx=\"2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"/>\
+        <text x=\"9\" y=\"10.5\" text-anchor=\"middle\" dominant-baseline=\"middle\" fill=\"currentColor\" font-size=\"6\" font-weight=\"700\">GIF</text>";
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "w": 36, "h": 36 }),
+            vec![json!({ "k": "svg", "h": "gif", "view": 18, "body": body,
+                "st": { "w": 36, "h": 36, "color": "#000000ff", "clip": true } })],
+        ),
+        (36.0, 36.0),
+    );
+    let glyphs: Vec<[f32; 4]> = rt
+        .instances
+        .iter()
+        .filter(|i| i.params[1] == rune::render::KIND_GLYPH && i.rect[2] < 20.0)
+        .map(|i| i.rect)
+        .collect();
+    // The icon's drawing is one glyph the size of the box; its letters are the rest.
+    assert_eq!(glyphs.len(), 3, "glyphs {glyphs:?}");
+    // Centred on (9, 10.5) in the viewBox: (18, 21) at twice the size.
+    let left = glyphs.iter().map(|r| r[0]).fold(f32::MAX, f32::min);
+    let right = glyphs.iter().map(|r| r[0] + r[2]).fold(f32::MIN, f32::max);
+    let top = glyphs.iter().map(|r| r[1]).fold(f32::MAX, f32::min);
+    let bottom = glyphs.iter().map(|r| r[1] + r[3]).fold(f32::MIN, f32::max);
+    assert!(
+        ((left + right) / 2.0 - 18.0).abs() < 1.5,
+        "x {left}..{right}"
+    );
+    assert!(
+        ((top + bottom) / 2.0 - 21.0).abs() < 2.0,
+        "y {top}..{bottom}"
+    );
+}

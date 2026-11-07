@@ -94,6 +94,31 @@ describe("makeRuneTarget", () => {
 		handle.dispose()
 	})
 
+	it("keeps an svg's <text> and its content in the icon body", async () => {
+		const labelled = (_: Model, h: HtmlBuilder<Message>): Html =>
+			h.svg(
+				[h.Attribute("viewBox", "0 0 18 18")],
+				[
+					h.text(
+						[
+							h.Attribute("x", "9"),
+							h.Attribute("text-anchor", "middle"),
+							h.Attribute("font-size", "6"),
+							h.Attribute("font-weight", "700"),
+						],
+						["G<F"],
+					),
+				],
+			)
+		const { handle, trees } = boot(labelled)
+		await settle()
+		const root = trees().at(-1)!.root
+		expect(root.k === "svg" ? root.body : "").toBe(
+			'<text x="9" text-anchor="middle" font-size="6" font-weight="700">G&lt;F</text>',
+		)
+		handle.dispose()
+	})
+
 	it("keeps handler ids stable and sends unchanged subtrees by reference", async () => {
 		const { rune, handle, trees } = boot()
 		await settle()

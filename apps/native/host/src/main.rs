@@ -3,6 +3,7 @@
 mod capture;
 mod images;
 mod layout;
+mod svg_text;
 #[cfg(test)]
 mod tests;
 mod wire;
@@ -565,12 +566,19 @@ fn picture_size(st: &Style) -> f32 {
 /// colours (an avatar's dither pattern) drawn as a picture.
 fn build_svg(view: f32, body: &str, st: &Style, par: Option<&str>, inh: Inherit, ctx: &Ctx) -> El {
     let c = color(&st.color).unwrap_or(inh.color);
+    let (shape, texts) = svg_text::split(body);
+    let body = shape.as_str();
+    let labels = |e: El, size: f32| {
+        texts
+            .iter()
+            .fold(e, |e, t| e.child(svg_text::overlay(t, view, size, c)))
+    };
     if !images::is_multicolour(body) {
         let size = match st.w {
             Some(wire::Len::Px(wire::F(v))) => v,
             _ => 16.0,
         };
-        let e = icon(intern_icon(view, body), size).color(c);
+        let e = labels(icon(intern_icon(view, body), size).color(c), size);
         return center_vertically(apply_box(e, st), st);
     }
     let image = ctx.s.images.svg(view, body, picture_size(st));
@@ -585,6 +593,7 @@ fn build_svg(view: f32, body: &str, st: &Style, par: Option<&str>, inh: Inherit,
         // An unsized SVG fills its box; the decorative ones here sit under their siblings.
         e = e.pin(Some(0.0), Some(0.0), Some(0.0), Some(0.0))
     }
+    let e = labels(e, picture_size(st));
     center_vertically(apply_box(e, st), st)
 }
 
