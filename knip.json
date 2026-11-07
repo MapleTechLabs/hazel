@@ -32,6 +32,19 @@
 		"apps/link-preview-worker": {
 			"entry": ["alchemy.run.ts"]
 		},
+		"apps/native": {
+			// The runtime the Rune host spawns, the benchmark runners and the browser bench page.
+			"entry": [
+				"src/entry.ts",
+				"bench/web/run.ts",
+				"bench/web/web-entry.ts",
+				"bench/web/vite.config.ts"
+			],
+			// Left external by `bun run build` and loaded at runtime from the bundle.
+			"ignoreDependencies": ["@tailwindcss/node", "@tailwindcss/oxide", "postcss", "prismjs"],
+			// The shim's clipboard on macOS.
+			"ignoreBinaries": ["pbcopy"]
+		},
 		"apps/web-foldkit": {
 			"entry": ["alchemy.run.ts", "src/main.ts", "**/*.gallery.ts", "public/sw.js"],
 			// @foldkit/devtools is loaded by @foldkit/vite-plugin's dev overlay; the oxlint plugin by

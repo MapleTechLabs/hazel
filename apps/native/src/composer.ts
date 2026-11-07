@@ -1,0 +1,87 @@
+/**
+ * The composer on Rune: Hazel's real ProseMirror editor (its keymaps, autocomplete and markdown)
+ * runs on a headless DOM inside the runtime, and the host draws a native text field over it.
+ * Edits arrive as whole-text replacements and keys go through the editor's own key handlers.
+ */
+import type { JSDOM } from "jsdom"
+import { Effect, Option } from "effect"
+import type { EditorView } from "prosemirror-view"
+import { editorRegistry } from "../../web-foldkit/src/editor/registry"
+
+let dom: JSDOM | undefined
+
+/**
+ * Loads the headless DOM off the boot path (it costs ~130 ms) and routes element creation and
+ * `instanceof Element` to it; `onReady` re-commits so the editor Mount can start.
+ */
+export const loadHeadlessDom = async (
+	globals: Readonly<{ document: object; shims: ReadonlyArray<unknown> }>,
+	onReady: () => void,
+) => {
+	const { JSDOM } = await import("jsdom")
+	const loaded = new JSDOM("<!doctype html><html><body></body></html>", { pretendToBeVisual: true })
+	dom = loaded
+	const headless = loaded.window.document
+	Object.assign(globals.document, {
+		createElement: headless.createElement.bind(headless),
+		createElementNS: headless.createElementNS.bind(headless),
+		createTextNode: headless.createTextNode.bind(headless),
+		createDocumentFragment: headless.createDocumentFragment.bind(headless),
+	})
+	// Foldkit's Mount hooks check `instanceof Element`: accept the headless DOM's elements too.
+	const DomElement = loaded.window.Element
+	for (const shim of new Set(globals.shims)) {
+		if (typeof shim !== "function") continue
+		Object.defineProperty(shim, Symbol.hasInstance, {
+			value: (value: unknown) =>
+				Function.prototype[Symbol.hasInstance].call(shim, value) || value instanceof DomElement,
+		})
+	}
+	onReady()
+}
+
+/** The element the editor Mount attaches ProseMirror to, once the headless DOM has loaded. */
+export const makeEditorElement = () => {
+	if (dom === undefined) return undefined
+	const element = dom.window.document.createElement("div")
+	dom.window.document.body.appendChild(element)
+	return element
+}
+
+/** The mounted editor, if any: `get` waits for one otherwise, so only a synchronous answer counts. */
+const editorAt = (editorId: unknown): Option.Option<EditorView> => {
+	if (typeof editorId !== "string") return Option.none()
+	const exit = Effect.runSyncExit(editorRegistry.get(editorId))
+	return exit._tag === "Success" ? Option.some(exit.value) : Option.none()
+}
+
+export const editorText = (args: Record<string, unknown>): string | undefined =>
+	Option.match(editorAt(args.editorId), {
+		onNone: () => undefined,
+		onSome: (view) => view.state.doc.textBetween(0, view.state.doc.content.size, "\n"),
+	})
+
+export const applyEditorEvent = (
+	args: Record<string, unknown>,
+	event: { readonly value?: string | null; readonly key?: string | null },
+) =>
+	Option.map(editorAt(args.editorId), (view) => {
+		const { state } = view
+		if (event.value != null) {
+			const end = state.doc.content.size
+			const paragraph = state.schema.nodes.paragraph
+			const next =
+				event.value === "" || paragraph === undefined
+					? state.tr.delete(0, end)
+					: state.tr.replaceWith(0, end, paragraph.create(null, state.schema.text(event.value)))
+			view.dispatch(next)
+		}
+		if (event.key != null && dom !== undefined) {
+			const keydown = new dom.window.KeyboardEvent("keydown", {
+				key: event.key,
+				bubbles: true,
+				cancelable: true,
+			})
+			view.someProp("handleKeyDown", (handle) => handle(view, keydown))
+		}
+	})
