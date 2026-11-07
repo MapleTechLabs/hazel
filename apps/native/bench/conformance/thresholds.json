@@ -148,5 +148,65 @@
 			"posP95": 4.75,
 			"textPosP95": 5.44
 		}
+	},
+	"dialog-light": {
+		"min": {
+			"matchedWebPct": 97.21,
+			"posWithin4Pct": 89.79,
+			"sizeWithin4Pct": 86.56,
+			"textPosWithin4Pct": 83.26,
+			"textSizeWithin4Pct": 81.16,
+			"pixelScore": 96.17
+		},
+		"max": {
+			"missingOnNative": 8,
+			"posP95": 6.63,
+			"textPosP95": 9.65
+		}
+	},
+	"dialog-dark": {
+		"min": {
+			"matchedWebPct": 97.21,
+			"posWithin4Pct": 89.79,
+			"sizeWithin4Pct": 86.56,
+			"textPosWithin4Pct": 83.26,
+			"textSizeWithin4Pct": 81.16,
+			"pixelScore": 96.59
+		},
+		"max": {
+			"missingOnNative": 8,
+			"posP95": 6.63,
+			"textPosP95": 9.65
+		}
+	},
+	"context-light": {
+		"min": {
+			"matchedWebPct": 97.29,
+			"posWithin4Pct": 95.43,
+			"sizeWithin4Pct": 88.57,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 80.43,
+			"pixelScore": 94.92
+		},
+		"max": {
+			"missingOnNative": 5,
+			"posP95": 4.75,
+			"textPosP95": 5.44
+		}
+	},
+	"context-dark": {
+		"min": {
+			"matchedWebPct": 97.29,
+			"posWithin4Pct": 95.43,
+			"sizeWithin4Pct": 88.57,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 80.43,
+			"pixelScore": 95.08
+		},
+		"max": {
+			"missingOnNative": 5,
+			"posP95": 4.75,
+			"textPosP95": 5.44
+		}
 	}
 }

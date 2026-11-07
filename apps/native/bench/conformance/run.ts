@@ -1,6 +1,7 @@
 /**
  * Layout and visual conformance: Hazel's native renderer against Chromium on the same Foldkit view.
- *   bun apps/native/bench/conformance/run.ts [--scenario boot|sent|focus|menu|palette|all] [--theme light|dark|both]
+ *   bun apps/native/bench/conformance/run.ts [--scenario boot|sent|focus|menu|palette|dialog|context|all]
+ *     [--theme light|dark|both]
  *     [--check] [--update-thresholds] [--skip-build]
  * Writes out/<scenario>-<theme>/ (report.md, report.json, heatmap.png, crops/) and out/summary.md.
  */
@@ -41,7 +42,7 @@ const option = (name: string, fallback: string) => {
 	const at = args.indexOf(name)
 	return at === -1 ? fallback : (args[at + 1] ?? fallback)
 }
-const SCENARIOS = ["boot", "sent", "focus", "menu", "palette"] as const
+const SCENARIOS = ["boot", "sent", "focus", "menu", "palette", "dialog", "context"] as const
 type Scenario = (typeof SCENARIOS)[number]
 /** Tabs from boot to the logo link, which draws a `focus-visible` outline. */
 const FOCUS_TABS = 1
@@ -82,7 +83,16 @@ const nativeSteps = (scenario: Scenario, layout: string, snap: string) => {
 	const menu = [{ clickText: "Hazel" }, { settle: 800 }]
 	// The command palette: a modal dialog centred on the window, over a backdrop.
 	const palette = [{ clickText: "Browse channels" }, { settle: 800 }]
-	const steps = { boot: [], sent: send, focus, menu, palette }[scenario]
+	// The Set status dialog: foldkit UI's Dialog, modal, centred in its middle grid row.
+	const dialog = [
+		{ clickText: "Ada Lovelace" },
+		{ settle: 500 },
+		{ clickText: "Set status" },
+		{ settle: 1000 },
+	]
+	// A message's context menu, opened at the pointer.
+	const context = [{ rightClickText: CONTENT_TEXT }, { settle: 800 }]
+	const steps = { boot: [], sent: send, focus, menu, palette, dialog, context }[scenario]
 	return [...boot, ...steps, { exportLayout: layout }, { snap }]
 }
 
@@ -283,6 +293,16 @@ const captureWeb = async (browser: Browser, url: string, scenario: Scenario, the
 		}
 		if (scenario === "palette") {
 			await page.getByText("Browse channels").first().click()
+			await waitQuiet(page, 800)
+		}
+		if (scenario === "dialog") {
+			await page.getByText("Ada Lovelace").first().click()
+			await waitQuiet(page, 500)
+			await page.getByText("Set status").first().click()
+			await waitQuiet(page, 1000)
+		}
+		if (scenario === "context") {
+			await page.getByText(CONTENT_TEXT).first().click({ button: "right" })
 			await waitQuiet(page, 800)
 		}
 		if (scenario === "menu") {
