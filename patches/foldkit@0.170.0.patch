@@ -20,23 +20,23 @@ index af18b344c2c8e0dc39f564cae0c23064160adb75..caca1acdd7f45bf37e49bef262959906
   * Focuses the next or previous focusable element in the document relative to the element matching the given selector.
   * Fails with `ElementNotFound` if the selector does not match an `HTMLElement`.
 diff --git a/dist/dom/dom.d.ts.map b/dist/dom/dom.d.ts.map
-index 9bbc2998a02d6dc9cb3f172d3a84908e46638f00..40853d4a581dd87c511e97034c47460b00b1a112 100644
+index 9bbc2998a02d6dc9cb3f172d3a84908e46638f00..30be4180ef1888c54c12382a28c757be0ec2a050 100644
 --- a/dist/dom/dom.d.ts.map
 +++ b/dist/dom/dom.d.ts.map
 @@ -1 +1 @@
 -{"version":3,"file":"dom.d.ts","sourceRoot":"","sources":["../../src/dom/dom.ts"],"names":[],"mappings":"AAAA,OAAO,EAEL,MAAM,EAOP,MAAM,QAAQ,CAAA;AAIf,OAAO,EAAE,eAAe,EAAE,MAAM,YAAY,CAAA;AA2Q5C;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;GA+CG;AACH,eAAO,MAAM,KAAK,aACN,MAAM,YACN,QAAQ,CAAC;IAAE,aAAa,CAAC,EAAE,OAAO,CAAC;IAAC,aAAa,CAAC,EAAE,OAAO,CAAA;CAAE,CAAC,KACvE,MAAM,CAAC,MAAM,CAAC,IAAI,EAAE,eAAe,CAQlC,CAAA;AAEJ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;GA8BG;AACH,eAAO,MAAM,UAAU,aACX,MAAM,YACN,QAAQ,CAAC;IACjB,aAAa,CAAC,EAAE,MAAM,CAAA;IACtB,OAAO,CAAC,EAAE,OAAO,CAAA;IACjB,uBAAuB,CAAC,EAAE,aAAa,CAAC,MAAM,CAAC,CAAA;CAChD,CAAC,KACD,MAAM,CAAC,MAAM,CAAC,OAAO,EAAE,eAAe,CA4FrC,CAAA;AA4CJ;;;;;;;;;;;;;;;;;GAiBG;AACH,eAAO,MAAM,WAAW,aACZ,MAAM,KACf,MAAM,CAAC,MAAM,CAAC,OAAO,EAAE,eAAe,CAQrC,CAAA;AA0DJ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;GAiCG;AACH,eAAO,MAAM,sBAAsB,OAAQ,MAAM,KAAG,MAAM,CAAC,MAAM,CAAC,OAAO,CAOrE,CAAA;AAEJ;;;;;;;;GAQG;AACH,eAAO,MAAM,YAAY,aACb,MAAM,KACf,MAAM,CAAC,MAAM,CAAC,IAAI,EAAE,eAAe,CAKlC,CAAA;AAEJ;;;;;;;;;;;;;;GAcG;AACH,eAAO,MAAM,cAAc,aACf,MAAM,YACN,QAAQ,CAAC;IAAE,KAAK,CAAC,EAAE,qBAAqB,CAAA;CAAE,CAAC,KACpD,MAAM,CAAC,MAAM,CAAC,IAAI,EAAE,eAAe,CAKlC,CAAA;AAEJ;;;;;;;;;;;;;;;;;;;;GAoBG;AACH,eAAO,MAAM,wBAAwB,aACzB,MAAM,YACN,QAAQ,CAAC;IAAE,KAAK,CAAC,EAAE,qBAAqB,CAAA;CAAE,CAAC,KACpD,MAAM,CAAC,MAAM,CAAC,IAAI,EAAE,eAAe,CAKlC,CAAA;AAcJ;;;;;;;;;;;;;;;;;;;;;;;GAuBG;AACH,eAAO,MAAM,0BAA0B,aAC3B,MAAM,YACN,QAAQ,CAAC;IACjB,KAAK,CAAC,EAAE,qBAAqB,CAAA;IAC7B,IAAI,CAAC,EAAE,OAAO,GAAG,QAAQ,CAAA;CAC1B,CAAC,KACD,MAAM,CAAC,MAAM,CAAC,IAAI,EAAE,eAAe,CAuBlC,CAAA;AAEJ,yEAAyE;AACzE,MAAM,MAAM,cAAc,GAAG,MAAM,GAAG,UAAU,CAAA;AAEhD;;;;;;;;GAQG;AACH,eAAO,MAAM,YAAY,aACb,MAAM,aACL,cAAc,KACxB,MAAM,CAAC,MAAM,CAAC,IAAI,EAAE,eAAe,CA+BlC,CAAA"}
 \ No newline at end of file
-+{"version":3,"file":"dom.d.ts","sourceRoot":"","sources":["../../src/dom/dom.ts"],"names":[],"mappings":"AAAA,OAAO,EAEL,MAAM,EAOP,MAAM,QAAQ,CAAA;AAIf,OAAO,EAAE,eAAe,EAAE,MAAM,YAAY,CAAA;AAG5C,OAAO,EAAE,KAAK,cAAc,EAAY,MAAM,gBAAgB,CAAA;AAyQ9D;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;GA+CG;AACH,eAAO,MAAM,KAAK,aACN,MAAM,YACN,QAAQ,CAAC;IAAE,aAAa,CAAC,EAAE,OAAO,CAAC;IAAC,aAAa,CAAC,EAAE,OAAO,CAAA;CAAE,CAAC,KACvE,MAAM,CAAC,MAAM,CAAC,IAAI,EAAE,eAAe,CAclC,CAAA;AAEJ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;GA8BG;AACH,eAAO,MAAM,UAAU,aACX,MAAM,YACN,QAAQ,CAAC;IACjB,aAAa,CAAC,EAAE,MAAM,CAAA;IACtB,OAAO,CAAC,EAAE,OAAO,CAAA;IACjB,uBAAuB,CAAC,EAAE,aAAa,CAAC,MAAM,CAAC,CAAA;CAChD,CAAC,KACD,MAAM,CAAC,MAAM,CAAC,OAAO,EAAE,eAAe,CA4FrC,CAAA;AA4CJ;;;;;;;;;;;;;;;;;GAiBG;AACH,eAAO,MAAM,WAAW,aACZ,MAAM,KACf,MAAM,CAAC,MAAM,CAAC,OAAO,EAAE,eAAe,CAQrC,CAAA;AA0DJ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;GAiCG;AACH,eAAO,MAAM,sBAAsB,OAAQ,MAAM,KAAG,MAAM,CAAC,MAAM,CAAC,OAAO,CAOrE,CAAA;AAEJ;;;;;;;;GAQG;AACH,eAAO,MAAM,YAAY,aACb,MAAM,KACf,MAAM,CAAC,MAAM,CAAC,IAAI,EAAE,eAAe,CAQlC,CAAA;AAEJ;;;;;;;;;;;;;;GAcG;AACH,eAAO,MAAM,cAAc,aACf,MAAM,YACN,QAAQ,CAAC;IAAE,KAAK,CAAC,EAAE,qBAAqB,CAAA;CAAE,CAAC,KACpD,MAAM,CAAC,MAAM,CAAC,IAAI,EAAE,eAAe,CAIlC,CAAA;AAEJ;;;;;;;;;;;;;;;;;;;;GAoBG;AACH,eAAO,MAAM,wBAAwB,aACzB,MAAM,YACN,QAAQ,CAAC;IAAE,KAAK,CAAC,EAAE,qBAAqB,CAAA;CAAE,CAAC,KACpD,MAAM,CAAC,MAAM,CAAC,IAAI,EAAE,eAAe,CAIlC,CAAA;AA0BJ;;;;;;;;;;;;;;;;;;;;;;;GAuBG;AACH,eAAO,MAAM,0BAA0B,aAC3B,MAAM,YACN,QAAQ,CAAC;IACjB,KAAK,CAAC,EAAE,qBAAqB,CAAA;IAC7B,IAAI,CAAC,EAAE,OAAO,GAAG,QAAQ,CAAA;CAC1B,CAAC,KACD,MAAM,CAAC,MAAM,CAAC,IAAI,EAAE,eAAe,CAgBlC,CAAA;AAoBJ,YAAY,EAAE,cAAc,EAAE,MAAM,gBAAgB,CAAA;AAEpD;;;;;;;;GAQG;AACH,eAAO,MAAM,YAAY,aACb,MAAM,aACL,cAAc,KACxB,MAAM,CAAC,MAAM,CAAC,IAAI,EAAE,eAAe,CAQlC,CAAA"}
++{"version":3,"file":"dom.d.ts","sourceRoot":"","sources":["../../src/dom/dom.ts"],"names":[],"mappings":"AAAA,OAAO,EAEL,MAAM,EAOP,MAAM,QAAQ,CAAA;AAIf,OAAO,EAAE,eAAe,EAAE,MAAM,YAAY,CAAA;AAG5C,OAAO,EACL,KAAK,cAAc,EAIpB,MAAM,gBAAgB,CAAA;AAyQvB;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;GA+CG;AACH,eAAO,MAAM,KAAK,aACN,MAAM,YACN,QAAQ,CAAC;IAAE,aAAa,CAAC,EAAE,OAAO,CAAC;IAAC,aAAa,CAAC,EAAE,OAAO,CAAA;CAAE,CAAC,KACvE,MAAM,CAAC,MAAM,CAAC,IAAI,EAAE,eAAe,CAclC,CAAA;AAEJ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;GA8BG;AACH,eAAO,MAAM,UAAU,aACX,MAAM,YACN,QAAQ,CAAC;IACjB,aAAa,CAAC,EAAE,MAAM,CAAA;IACtB,OAAO,CAAC,EAAE,OAAO,CAAA;IACjB,uBAAuB,CAAC,EAAE,aAAa,CAAC,MAAM,CAAC,CAAA;CAChD,CAAC,KACD,MAAM,CAAC,MAAM,CAAC,OAAO,EAAE,eAAe,CAcrC,CAAA;AA+IJ;;;;;;;;;;;;;;;;;GAiBG;AACH,eAAO,MAAM,WAAW,aACZ,MAAM,KACf,MAAM,CAAC,MAAM,CAAC,OAAO,EAAE,eAAe,CAYtC,CAAA;AA0DH;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;GAiCG;AACH,eAAO,MAAM,sBAAsB,OAAQ,MAAM,KAAG,MAAM,CAAC,MAAM,CAAC,OAAO,CAWrE,CAAA;AAEJ;;;;;;;;GAQG;AACH,eAAO,MAAM,YAAY,aACb,MAAM,KACf,MAAM,CAAC,MAAM,CAAC,IAAI,EAAE,eAAe,CAQlC,CAAA;AAEJ;;;;;;;;;;;;;;GAcG;AACH,eAAO,MAAM,cAAc,aACf,MAAM,YACN,QAAQ,CAAC;IAAE,KAAK,CAAC,EAAE,qBAAqB,CAAA;CAAE,CAAC,KACpD,MAAM,CAAC,MAAM,CAAC,IAAI,EAAE,eAAe,CAIlC,CAAA;AAEJ;;;;;;;;;;;;;;;;;;;;GAoBG;AACH,eAAO,MAAM,wBAAwB,aACzB,MAAM,YACN,QAAQ,CAAC;IAAE,KAAK,CAAC,EAAE,qBAAqB,CAAA;CAAE,CAAC,KACpD,MAAM,CAAC,MAAM,CAAC,IAAI,EAAE,eAAe,CAIlC,CAAA;AA0BJ;;;;;;;;;;;;;;;;;;;;;;;GAuBG;AACH,eAAO,MAAM,0BAA0B,aAC3B,MAAM,YACN,QAAQ,CAAC;IACjB,KAAK,CAAC,EAAE,qBAAqB,CAAA;IAC7B,IAAI,CAAC,EAAE,OAAO,GAAG,QAAQ,CAAA;CAC1B,CAAC,KACD,MAAM,CAAC,MAAM,CAAC,IAAI,EAAE,eAAe,CAgBlC,CAAA;AAoBJ,YAAY,EAAE,cAAc,EAAE,MAAM,gBAAgB,CAAA;AAEpD;;;;;;;;GAQG;AACH,eAAO,MAAM,YAAY,aACb,MAAM,aACL,cAAc,KACxB,MAAM,CAAC,MAAM,CAAC,IAAI,EAAE,eAAe,CAQlC,CAAA"}
 \ No newline at end of file
 diff --git a/dist/dom/dom.js b/dist/dom/dom.js
-index d45098dbb9bafbb75a8d13b7e425204fb974f596..e7ece696a953e66094fdb1f537bbe8eb40506603 100644
+index d45098dbb9bafbb75a8d13b7e425204fb974f596..8e8519310d1518979aa6966269ae43636be24b3b 100644
 --- a/dist/dom/dom.js
 +++ b/dist/dom/dom.js
 @@ -4,6 +4,7 @@ import { DialogRuntime } from './dialogRuntime.js';
  import { ElementNotFound } from './error.js';
  import { makeOutsideIsolation } from './inert.js';
  import { unlockScroll } from './scrollLock.js';
-+import { onTarget } from './targetDom.js';
++import { TargetDom, dialogOnTarget, onTarget, } from './targetDom.js';
  const BASE_DIALOG_Z_INDEX = 2147483600;
  let openDialogCount = 0;
  const dialogHygieneById = new Map();
@@ -59,7 +59,60 @@ index d45098dbb9bafbb75a8d13b7e425204fb974f596..e7ece696a953e66094fdb1f537bbe8eb
  });
  /**
   * Opens a dialog element using `show()` with high z-index, focus trapping,
-@@ -464,8 +467,7 @@ export const releaseDialogResources = (id) => Effect.suspend(() => {
+@@ -256,6 +259,14 @@ export const focus = (selector, options) => Effect.gen(function* () {
+  */
+ export const showDialog = (selector, options) => Effect.gen(function* () {
+     yield* afterCommit;
++    return yield* dialogOnTarget(selector, dom => dom.showDialog(selector, {
++        isModal: options?.isModal ?? false,
++        ...(options?.focusSelector !== undefined && {
++            focusSelector: options.focusSelector,
++        }),
++    }), showDialogInDocument(selector, options));
++});
++const showDialogInDocument = (selector, options) => Effect.gen(function* () {
+     const element = document.querySelector(selector);
+     if (!(element instanceof HTMLDialogElement)) {
+         return yield* Effect.fail(new ElementNotFound({ selector }));
+@@ -366,14 +377,14 @@ const trapFocusWithinDialog = (event, dialog) => {
+  * Dom.closeDialog('#my-dialog')
+  * ```
+  */
+-export const closeDialog = (selector) => Effect.suspend(() => {
++export const closeDialog = (selector) => dialogOnTarget(selector, dom => dom.closeDialog(selector), Effect.suspend(() => {
+     const element = document.querySelector(selector);
+     if (element instanceof HTMLDialogElement) {
+         element.close();
+         return Effect.succeed(releaseDialogHygieneById(element.id));
+     }
+     return Effect.fail(new ElementNotFound({ selector }));
+-});
++}));
+ const releaseDialogHygieneById = (id) => {
+     const hygiene = dialogHygieneById.get(id);
+     if (hygiene === undefined) {
+@@ -446,12 +457,16 @@ const releaseDialogHygieneById = (id) => {
+  * Dom.releaseDialogResources('my-dialog')
+  * ```
+  */
+-export const releaseDialogResources = (id) => Effect.suspend(() => {
+-    const released = releaseDialogHygieneById(id);
++export const releaseDialogResources = (id) => Effect.gen(function* () {
++    const maybeDom = yield* Effect.serviceOption(TargetDom);
++    const released = Option.match(maybeDom, {
++        onNone: () => releaseDialogHygieneById(id),
++        onSome: dom => dom.releaseDialog(id),
++    });
+     if (released) {
+-        return Effect.as(unlockScroll, true);
++        yield* unlockScroll;
+     }
+-    return Effect.succeed(false);
++    return released;
+ });
+ /**
+  * Programmatically clicks an element matching the given selector.
+@@ -464,8 +479,7 @@ export const releaseDialogResources = (id) => Effect.suspend(() => {
   */
  export const clickElement = (selector) => Effect.gen(function* () {
      yield* afterCommit;
@@ -69,7 +122,7 @@ index d45098dbb9bafbb75a8d13b7e425204fb974f596..e7ece696a953e66094fdb1f537bbe8eb
  });
  /**
   * Scrolls an element into view by selector. Resolves the selector after
-@@ -484,8 +486,7 @@ export const clickElement = (selector) => Effect.gen(function* () {
+@@ -484,8 +498,7 @@ export const clickElement = (selector) => Effect.gen(function* () {
   */
  export const scrollIntoView = (selector, options) => Effect.gen(function* () {
      yield* afterCommit;
@@ -79,7 +132,7 @@ index d45098dbb9bafbb75a8d13b7e425204fb974f596..e7ece696a953e66094fdb1f537bbe8eb
  });
  /**
   * Like `scrollIntoView`, but waits for `Render.afterPaint` instead of
-@@ -510,9 +511,9 @@ export const scrollIntoView = (selector, options) => Effect.gen(function* () {
+@@ -510,9 +523,9 @@ export const scrollIntoView = (selector, options) => Effect.gen(function* () {
   */
  export const scrollIntoViewAfterPaint = (selector, options) => Effect.gen(function* () {
      yield* afterPaint;
@@ -91,7 +144,7 @@ index d45098dbb9bafbb75a8d13b7e425204fb974f596..e7ece696a953e66094fdb1f537bbe8eb
  const findScrollParent = (element) => {
      let candidate = element.parentElement;
      while (candidate !== null) {
-@@ -551,19 +552,20 @@ const findScrollParent = (element) => {
+@@ -551,19 +564,20 @@ const findScrollParent = (element) => {
  export const scrollIntoViewIfNotVisible = (selector, options) => Effect.gen(function* () {
      const when = options?.when ?? 'Paint';
      yield* Match.value(when).pipe(Match.when('Paint', () => afterPaint), Match.when('Commit', () => afterCommit), Match.exhaustive);
@@ -125,7 +178,7 @@ index d45098dbb9bafbb75a8d13b7e425204fb974f596..e7ece696a953e66094fdb1f537bbe8eb
  });
  /**
   * Focuses the next or previous focusable element in the document relative to the element matching the given selector.
-@@ -576,6 +578,9 @@ export const scrollIntoViewIfNotVisible = (selector, options) => Effect.gen(func
+@@ -576,6 +590,9 @@ export const scrollIntoViewIfNotVisible = (selector, options) => Effect.gen(func
   */
  export const advanceFocus = (selector, direction) => Effect.gen(function* () {
      yield* afterCommit;
@@ -137,10 +190,10 @@ index d45098dbb9bafbb75a8d13b7e425204fb974f596..e7ece696a953e66094fdb1f537bbe8eb
      const referenceElementIndex = Array.findFirstIndex(focusableElements, Equal.equals(reference));
 diff --git a/node_modules/foldkit/dist/dom/targetDom.d.ts b/dist/dom/targetDom.d.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..0b7d587983b75785db4cd85406f63907e8511045
+index 0000000000000000000000000000000000000000..6432aac731493760ba7e577a288d7a688fa01d22
 --- /dev/null
 +++ b/dist/dom/targetDom.d.ts
-@@ -0,0 +1,36 @@
+@@ -0,0 +1,65 @@
 +import { Context, Effect } from 'effect';
 +import { ElementNotFound } from './error.js';
 +/** Direction for focus advancement: forward or backward in tab order. */
@@ -156,12 +209,36 @@ index 0000000000000000000000000000000000000000..0b7d587983b75785db4cd85406f63907
 +    click: (selector: string) => boolean;
 +    scrollIntoView: (selector: string, block: ScrollLogicalPosition) => boolean;
 +    advanceFocus: (selector: string, direction: FocusDirection) => boolean;
++    /** Opens the dialog `selector` matches, as `Dom.showDialog` does: `false`
++     *  when it is already open, `undefined` when nothing matches. */
++    showDialog: (selector: string, options: Readonly<{
++        focusSelector?: string;
++        isModal: boolean;
++    }>) => boolean | undefined;
++    /** Closes it: whether it held what `showDialog` took, `undefined` when
++     *  nothing matches. */
++    closeDialog: (selector: string) => boolean | undefined;
++    /** Releases what `showDialog` took for the dialog with this id, if it holds
++     *  anything (its element may be gone). */
++    releaseDialog: (id: string) => boolean;
 +}>;
 +declare const TargetDom_base: Context.ServiceClass<TargetDom, "@foldkit/TargetDom", Readonly<{
 +    focus: (selector: string) => boolean;
 +    click: (selector: string) => boolean;
 +    scrollIntoView: (selector: string, block: ScrollLogicalPosition) => boolean;
 +    advanceFocus: (selector: string, direction: FocusDirection) => boolean;
++    /** Opens the dialog `selector` matches, as `Dom.showDialog` does: `false`
++     *  when it is already open, `undefined` when nothing matches. */
++    showDialog: (selector: string, options: Readonly<{
++        focusSelector?: string;
++        isModal: boolean;
++    }>) => boolean | undefined;
++    /** Closes it: whether it held what `showDialog` took, `undefined` when
++     *  nothing matches. */
++    closeDialog: (selector: string) => boolean | undefined;
++    /** Releases what `showDialog` took for the dialog with this id, if it holds
++     *  anything (its element may be gone). */
++    releaseDialog: (id: string) => boolean;
 +}>>;
 +/**
 + * @internal The render target's {@link TargetDomEffects}, provided to Commands
@@ -170,6 +247,11 @@ index 0000000000000000000000000000000000000000..0b7d587983b75785db4cd85406f63907
 + */
 +export declare class TargetDom extends TargetDom_base {
 +}
++/**
++ * @internal A dialog helper on the target's effects when there are some:
++ * `undefined` from `run` is `ElementNotFound`. `browser` otherwise.
++ */
++export declare const dialogOnTarget: <A>(selector: string, run: (dom: TargetDomEffects) => A | undefined, browser: Effect.Effect<A, ElementNotFound>) => Effect.Effect<A, ElementNotFound>;
 +/**
 + * @internal Runs `run` on the target's effects when there are some, and fails
 + * with `ElementNotFound` when it reports no match; `browser` otherwise.
@@ -180,10 +262,10 @@ index 0000000000000000000000000000000000000000..0b7d587983b75785db4cd85406f63907
 \ No newline at end of file
 diff --git a/node_modules/foldkit/dist/dom/targetDom.js b/dist/dom/targetDom.js
 new file mode 100644
-index 0000000000000000000000000000000000000000..eac97fb6ecb70d73c4b1ac6b2048fc6aebaab995
+index 0000000000000000000000000000000000000000..5c3b513e81b3863f295ff6519e3e2f22d6cf0b2a
 --- /dev/null
 +++ b/dist/dom/targetDom.js
-@@ -0,0 +1,17 @@
+@@ -0,0 +1,30 @@
 +import { Context, Effect, Option } from 'effect';
 +import { ElementNotFound } from './error.js';
 +/**
@@ -193,6 +275,19 @@ index 0000000000000000000000000000000000000000..eac97fb6ecb70d73c4b1ac6b2048fc6a
 + */
 +export class TargetDom extends Context.Service()('@foldkit/TargetDom') {
 +}
++/**
++ * @internal A dialog helper on the target's effects when there are some:
++ * `undefined` from `run` is `ElementNotFound`. `browser` otherwise.
++ */
++export const dialogOnTarget = (selector, run, browser) => Effect.flatMap(Effect.serviceOption(TargetDom), maybeDom => Option.match(maybeDom, {
++    onNone: () => browser,
++    onSome: dom => {
++        const result = run(dom);
++        return result === undefined
++            ? Effect.fail(new ElementNotFound({ selector }))
++            : Effect.succeed(result);
++    },
++}));
 +/**
 + * @internal Runs `run` on the target's effects when there are some, and fails
 + * with `ElementNotFound` when it reports no match; `browser` otherwise.

@@ -60,6 +60,13 @@ class SilentAudio extends EventTarget {
 /** Present so `instanceof Element` checks answer false instead of throwing. */
 class DomNode extends EventTarget {}
 
+/** Any element whose tag is `dialog` (a host-backed proxy): foldkit's Dialog checks for one. */
+class ShimDialogElement extends DomNode {
+	static [Symbol.hasInstance](value: unknown): boolean {
+		return value instanceof DomNode && "tagName" in value && value.tagName === "DIALOG"
+	}
+}
+
 /** The fields of a mouse event the app reads from pointer events the bridge dispatches. */
 class ShimMouseEvent extends Event {
 	readonly button: number
@@ -314,6 +321,7 @@ export const installShims = (env: ShimEnv) => {
 		HTMLElement: DomNode,
 		HTMLInputElement: DomNode,
 		HTMLTextAreaElement: DomNode,
+		HTMLDialogElement: ShimDialogElement,
 		MouseEvent: ShimMouseEvent,
 		PointerEvent: ShimPointerEvent,
 		// The host draws at the display's rate (120 Hz on ProMotion): app frames keep that pace.

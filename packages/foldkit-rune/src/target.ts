@@ -35,7 +35,7 @@ const fakeEvent = (event: Extract<HostToRuntime, { t: "event" }>) => {
 
 type HostEvent = ReturnType<typeof fakeEvent>
 
-type Handler = (event: HostEvent) => void
+type Handler = (event: HostEvent | Event) => void
 
 /** An element's own wire fields, everything but its hash and children. */
 type ElementFields = {
@@ -689,12 +689,17 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		})
 	}
 
-	/** The element the last commit holds at `path`, clicked as `element.click()` would. */
-	const click = (path: string): void => {
-		const id = handlerIds.get(`${path}#click`)
+	/** Runs the element at `path`'s handler for `event`, as `element.dispatchEvent` would. */
+	const fire = (path: string, event: HostEvent | Event): void => {
+		const id = handlerIds.get(`${path}#${event.type}`)
 		const handler = id === undefined ? undefined : handlers.get(id)
-		handler?.(fakeEvent({ t: "event", seq: ack, id: id ?? 0, type: "click" }))
+		handler?.(event)
 	}
+	const click = (path: string): void =>
+		fire(path, fakeEvent({ t: "event", seq: ack, id: 0, type: "click" }))
+
+	/** Open dialogs by id: what releases each one's portal, modal and dismissal. */
+	const openDialogs = new Map<string, () => void>()
 
 	const dom = (bridge: ElementBridge): TargetDomEffects => {
 		const withPath = (selector: string, run: (path: string) => void): boolean => {
@@ -716,7 +721,47 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 					const next = at === -1 ? undefined : order[direction === "Next" ? at + 1 : at - 1]
 					if (next !== undefined) focusPath(next)
 				}),
+			// Drawn at the window's root; modal, the page behind goes inert and Escape fires the
+			// dialog's `cancel`, as `Dom.showDialog` does. Focus goes to `focusSelector` or the
+			// first control inside.
+			showDialog: (selector, { focusSelector, isModal }) => {
+				const path = bridge.findPath(selector)
+				if (path === undefined) return undefined
+				const id = bridge.idAt(path) ?? path
+				if (openDialogs.has(id)) return false
+				const overlays = options.overlays
+				const releases = [
+					overlays?.portal(path),
+					isModal ? overlays?.modal(path) : undefined,
+					// Foldkit's Dialog closes on the CustomEvent `Dom.showDialog` sends for Escape.
+					overlays?.onDismiss(path, () =>
+						fire(path, new CustomEvent("cancel", { cancelable: true })),
+					),
+				]
+				openDialogs.set(id, () => {
+					for (const release of releases) release?.()
+				})
+				const inside = (candidate: string) => candidate.startsWith(`${path}/`)
+				const wanted = focusSelector === undefined ? undefined : bridge.findPath(focusSelector)
+				const initial =
+					wanted !== undefined && inside(wanted) ? wanted : bridge.tabbablePaths().find(inside)
+				if (initial !== undefined) focusPath(initial)
+				return true
+			},
+			closeDialog: (selector) => {
+				const path = bridge.findPath(selector)
+				return path === undefined ? undefined : releaseDialog(bridge.idAt(path) ?? path)
+			},
+			releaseDialog,
 		}
+	}
+
+	const releaseDialog = (id: string): boolean => {
+		const release = openDialogs.get(id)
+		if (release === undefined) return false
+		openDialogs.delete(id)
+		release()
+		return true
 	}
 
 	const baseTarget: RenderTarget = {

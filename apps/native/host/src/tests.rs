@@ -1477,3 +1477,36 @@ fn a_right_click_on_a_watched_row_reaches_its_mount_at_the_pointer() {
         "the clicked row's drawn rect"
     );
 }
+
+#[test]
+fn a_modal_layout_places_its_panel_in_the_middle_row_centred_across() {
+    let panel = e("div", json!({ "w": 100, "h": 60, "rowStart": 2 }), vec![]);
+    let grid = e(
+        "div",
+        json!({ "display": "grid", "gridRows": ["1fr", "auto", "3fr"], "justifyItems": "center", "w": 300, "h": 260 }),
+        vec![panel],
+    );
+    let rt = runtime(grid, (300.0, 260.0));
+    // 200 left over for 1fr and 3fr: the panel starts a quarter of the way down.
+    assert_eq!(rect(&rt, "r/0"), [100.0, 50.0, 100.0, 60.0]);
+}
+
+#[test]
+fn a_flex_1_body_in_an_overlay_column_takes_its_contents_height() {
+    let content = e("div", json!({ "h": 40 }), vec![]);
+    let body = e(
+        "div",
+        json!({ "display": "flex", "dir": "col", "grow": 1, "shrink": 1, "minH": 0, "scrollY": true }),
+        vec![content],
+    );
+    let column = e(
+        "div",
+        json!({ "display": "flex", "dir": "col", "w": 200, "maxH": 500 }),
+        vec![body],
+    );
+    let mut portal = e("div", json!({}), vec![column]);
+    portal["ov"] = json!({ "portal": 1 });
+    let rt = runtime(e("div", json!({}), vec![portal]), (300.0, 300.0));
+    // In CSS a 0% basis in a column of indefinite height is content-sized; it must not collapse.
+    assert_eq!(rect(&rt, "r/0/0/0")[3], 40.0);
+}

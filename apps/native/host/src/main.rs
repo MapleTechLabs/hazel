@@ -375,15 +375,21 @@ fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
             };
             let has_fields = ctx.s.fields.keys().any(|k| k.starts_with(path));
             // An anchored panel takes its content's height: `flex-1` (a 0% basis) inside a box of
-            // indefinite height is content-sized in CSS, where Rune's `grow` would collapse it.
+            // indefinite height is content-sized in CSS, where Rune's `grow` would collapse it. So
+            // does a column in an overlay (a dialog's panel) that nothing gives a height.
+            let anchored = ov.as_ref().is_some_and(|o| o.anchor.is_some());
+            let unsized_column = ctx.portal.is_some()
+                && st.display.as_deref() == Some("flex")
+                && st.dir.as_deref() == Some("col")
+                && st.grow.is_none()
+                && st.absolute.is_none();
             let content_sized: Vec<Arc<Node>>;
-            let children: &[Arc<Node>] =
-                if ov.as_ref().is_some_and(|o| o.anchor.is_some()) && st.h.is_none() {
-                    content_sized = children.iter().map(|c| drop_grow(c, false)).collect();
-                    &content_sized
-                } else {
-                    children
-                };
+            let children: &[Arc<Node>] = if (anchored || unsized_column) && st.h.is_none() {
+                content_sized = children.iter().map(|c| drop_grow(c, false)).collect();
+                &content_sized
+            } else {
+                children
+            };
             let make = || {
                 let e = build_elem(
                     path,
@@ -475,7 +481,13 @@ fn build_elem(
         inline: true,
         ..*ctx
     };
-    let mut e = match (st.display.as_deref(), &st.grid_cols) {
+    // A grid with rows only has one implicit column.
+    let one_column = [String::from("auto")];
+    let grid_cols = st
+        .grid_cols
+        .as_deref()
+        .or(st.grid_rows.as_ref().map(|_| &one_column[..]));
+    let mut e = match (st.display.as_deref(), grid_cols) {
         (Some("grid"), Some(cols)) => build_grid(&kids, cols, path, inh, ctx, st),
         (Some("flex"), _) => {
             let is_row = st.dir.as_deref() != Some("col");
@@ -831,6 +843,12 @@ fn build_grid(
         Some("end" | "flex-end") => grid.items_end(),
         _ => grid,
     };
+    if let Some(rows) = &st.grid_rows {
+        grid = grid.grid_rows(rows.iter().map(|r| grid_track(r)));
+    }
+    if st.justify_items.as_deref() == Some("center") {
+        grid = grid.grid_justify_center();
+    }
     let mut items: Vec<(String, &Arc<Node>)> = Vec::new();
     fn flatten<'a>(
         children: impl Iterator<Item = (usize, &'a Arc<Node>)>,
@@ -878,8 +896,15 @@ fn build_grid(
             }
             _ => build(child, path, inh, ctx),
         };
+        let row_start = match child.as_ref() {
+            Node::Elem { st: cst, .. } => cst.row_start,
+            _ => None,
+        };
         if let Some(b) = built {
-            grid = grid.child(b)
+            grid = grid.child(match row_start {
+                Some(line) => b.grid_row_start(line),
+                None => b,
+            })
         }
     }
     grid

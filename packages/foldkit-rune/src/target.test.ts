@@ -78,6 +78,58 @@ const texts = (node: WireNode): Array<string> =>
 	node.k === "t" ? [node.s] : node.k === "e" ? node.c.flatMap(texts) : []
 
 describe("makeRuneTarget", () => {
+	it("shows a dialog as a modal overlay, focuses inside it, and turns Escape into its cancel", async () => {
+		const Shown = defineMessageUnion({ Shown: { isShown: Schema.Boolean }, Cancelled: {} })
+		const ShowStatus = Command.define("ShowStatus", {
+			messages: [Shown.Shown],
+			execute: Dom.showDialog("#status", { isModal: true, focusSelector: "#status-field" }).pipe(
+				Effect.catchTag("ElementNotFound", () => Effect.succeed(false)),
+				Effect.map((isShown) => Shown.Shown({ isShown })),
+			),
+		})
+		const sent: Array<RuntimeToHost> = []
+		const overlays = makeOverlays()
+		const rune = makeRuneTarget({
+			styles,
+			bridge: makeElementBridge({ mounts: new Set(), send: () => {} }),
+			overlays,
+			env: { width: 800, height: 600, dark: false },
+			send: (m) => sent.push(m),
+		})
+		const handle = Runtime.embed(
+			Runtime.makeElement({
+				Model: Schema.Struct({ state: Schema.String }),
+				init: () => ({ model: { state: "opening" }, commands: [ShowStatus()] }),
+				update: (_model, message: typeof Shown.Type) => ({
+					model: { state: message._tag === "Shown" ? `shown ${message.isShown}` : "cancelled" },
+				}),
+				view: (model, h) =>
+					h.div(
+						[],
+						[
+							h.span([], [model.state]),
+							h.dialog(
+								[h.Id("status"), h.OnCancelPreventDefault(Shown.Cancelled())],
+								[h.button([], ["Close"]), h.input([h.Id("status-field")])],
+							),
+						],
+					),
+				renderTarget: rune.target,
+			}),
+		)
+		await settle()
+		// Unchanged subtrees go as references: the text is in the tree that changed it.
+		const shows = (text: string) => sent.some((m) => m.t === "tree" && texts(m.root).includes(text))
+		expect(shows("shown true")).toBe(true)
+		expect(overlays.wireFor("r/1", () => undefined)).toEqual({ portal: 1, modal: "r/1" })
+		expect(sent.filter((m) => m.t === "focus")).toEqual([{ t: "focus", key: "r/1/1/field" }])
+
+		overlays.dismissed("r/1")
+		await settle()
+		expect(shows("cancelled")).toBe(true)
+		handle.dispose()
+	})
+
 	it("follows a clicked link's href unless its click handler prevented it", async () => {
 		const followed: Array<string> = []
 		const sent: Array<RuntimeToHost> = []

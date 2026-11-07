@@ -142,6 +142,12 @@ export type Style = {
 	inline?: boolean
 	absolute?: [number | null, number | null, number | null, number | null]
 	gridCols?: Array<string>
+	/** `grid-template-rows`, as written per track. */
+	gridRows?: Array<string>
+	/** `grid-row-start`: the row line a grid item starts at, 1 the first. */
+	rowStart?: number
+	/** `justify-items: center`: a grid centres each item across its cell. */
+	justifyItems?: "center"
 	colSpanFull?: boolean
 	subgrid?: boolean
 	/** CSS `text-align` as written (`left`, `center`, `right`, `justify`, `start`, `end`); inherited. */
@@ -1373,6 +1379,21 @@ export class StyleResolver {
 				if (v === "subgrid") s.subgrid = true
 				else if (v === "none") delete s.gridCols
 				else s.gridCols = expandRepeat(v)
+				break
+			case "grid-template-rows":
+				if (v === "none") delete s.gridRows
+				else s.gridRows = expandRepeat(v)
+				break
+			case "grid-row-start": {
+				const line = Number.parseInt(v, 10)
+				if (Number.isInteger(line) && line > 0) s.rowStart = line
+				else unsupported()
+				break
+			}
+			case "justify-items":
+				if (v === "center") s.justifyItems = "center"
+				else if (v === "normal" || v === "stretch" || v === "legacy") delete s.justifyItems
+				else unsupported()
 				break
 			case "grid-column":
 				if (v === "1 / -1") s.colSpanFull = true

@@ -268,6 +268,15 @@ describe("StyleResolver", () => {
 		expect(resolve("relative top-2").style.stickyTop).toBeUndefined()
 	})
 
+	it("reads grid rows, a row start and centred items, as a modal lays out", () => {
+		expect(resolve("grid grid-rows-[1fr_auto_3fr] justify-items-center").style).toMatchObject({
+			display: "grid",
+			gridRows: ["1fr", "auto", "3fr"],
+			justifyItems: "center",
+		})
+		expect(resolve("row-start-2").style).toMatchObject({ rowStart: 2 })
+	})
+
 	it("reads flex keywords before numbers", () => {
 		expect(resolve("flex-none").style).toMatchObject({ grow: 0, shrink: 0 })
 		expect(resolve("flex-auto").style).toMatchObject({ grow: 1, shrink: 1 })

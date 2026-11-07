@@ -134,6 +134,8 @@ const OVERLAY_MOUNTS = [
 	"AnchorCombobox",
 	"PortalComboboxBackdrop",
 	"AnchorTooltip",
+	// A Dialog shows itself (`Dom.showDialog`, which the render target answers) when it mounts.
+	"AcquireResources",
 ]
 
 /**

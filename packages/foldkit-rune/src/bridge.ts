@@ -428,6 +428,9 @@ export const makeElementBridge = (options: {
 	/** The element's tag, for the host's key of a text field (`<path>/field`). */
 	const tagAt = (path: string): string | undefined => records.get(path)?.tag
 
+	/** The element's `id`, which dialogs are known by. */
+	const idAt = (path: string): string | undefined => records.get(path)?.attrs.id
+
 	/** Paths of the elements Tab reaches, in document order (positive tabindex aside). */
 	const tabbablePaths = (): Array<string> =>
 		inOrder()
@@ -494,6 +497,7 @@ export const makeElementBridge = (options: {
 		findById,
 		findPath,
 		tagAt,
+		idAt,
 		tabbablePaths,
 		widthOf,
 		dispatchPointer,
