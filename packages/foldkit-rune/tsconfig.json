@@ -1,0 +1,14 @@
+{
+	"include": ["src/**/*.ts", "vitest.config.ts"],
+	"compilerOptions": {
+		"target": "ES2022",
+		"module": "ESNext",
+		"lib": ["ES2023", "DOM"],
+		"moduleResolution": "bundler",
+		"verbatimModuleSyntax": true,
+		"noEmit": true,
+		"skipLibCheck": true,
+		"strict": true,
+		"types": ["node"]
+	}
+}
