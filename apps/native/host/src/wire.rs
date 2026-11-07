@@ -19,9 +19,9 @@ pub struct Style {
     pub margin: Option<[F; 4]>,
     pub w: Option<Len>,
     pub h: Option<Len>,
-    pub min_w: Option<F>,
-    pub min_h: Option<F>,
-    pub max_w: Option<F>,
+    pub min_w: Option<Len>,
+    pub min_h: Option<Len>,
+    pub max_w: Option<Len>,
     pub grow: Option<F>,
     pub items: Option<String>,
     pub justify: Option<String>,
@@ -49,6 +49,98 @@ pub struct Style {
     pub hover_group: Option<bool>,
     pub group_opacity: Option<F>,
     pub center_y: Option<bool>,
+    // Fields below arrive from newer resolvers. Each decodes leniently: a value of an unexpected
+    // shape drops that field, never the whole tree.
+    #[serde(default, deserialize_with = "lenient")]
+    pub margin_auto: Option<[bool; 4]>,
+    #[serde(default, deserialize_with = "lenient")]
+    pub shadows: Option<Vec<BoxShadow>>,
+    #[serde(default, deserialize_with = "lenient")]
+    pub outline: Option<OutlineSpec>,
+    #[serde(default, deserialize_with = "lenient")]
+    pub bg_image: Option<BgImage>,
+    #[serde(default, deserialize_with = "lenient")]
+    pub object_fit: Option<String>,
+    #[serde(default, deserialize_with = "lenient")]
+    pub aspect_ratio: Option<F>,
+    #[serde(default, deserialize_with = "lenient")]
+    pub max_h: Option<Len>,
+    #[serde(default, deserialize_with = "lenient")]
+    pub font_family: Option<String>,
+    #[serde(default, deserialize_with = "lenient")]
+    pub italic: Option<bool>,
+    #[serde(default, deserialize_with = "lenient")]
+    pub letter_spacing: Option<F>,
+    #[serde(default, deserialize_with = "lenient")]
+    pub text_transform: Option<String>,
+    #[serde(default, deserialize_with = "lenient")]
+    pub text_decoration: Option<String>,
+    #[serde(default, deserialize_with = "lenient")]
+    pub white_space_pre: Option<bool>,
+    #[serde(default, deserialize_with = "lenient")]
+    pub visibility: Option<String>,
+    #[serde(default, deserialize_with = "lenient")]
+    pub z_index: Option<F>,
+    #[serde(default, deserialize_with = "lenient")]
+    pub translate: Option<[F; 2]>,
+    #[serde(default, deserialize_with = "lenient")]
+    pub text_align: Option<String>,
+    /// `flex-shrink`: 0 keeps the element at its size (Rune's default); above 0 lets it shrink.
+    #[serde(default, deserialize_with = "lenient")]
+    pub shrink: Option<F>,
+    #[serde(default, deserialize_with = "lenient")]
+    pub hover_color: Option<String>,
+}
+
+/// `Some(value)` when the JSON decodes as `T`, else `None`.
+fn lenient<'de, D: serde::Deserializer<'de>, T: serde::de::DeserializeOwned>(
+    d: D,
+) -> Result<Option<T>, D::Error> {
+    Ok(serde_json::from_value(Value::deserialize(d)?).ok())
+}
+
+/// One CSS `box-shadow` layer; a 0-blur, 0-offset one is a ring (Tailwind `ring-*`).
+#[derive(Deserialize, Clone, Debug, Default, Hash, PartialEq)]
+pub struct BoxShadow {
+    #[serde(default)]
+    pub x: F,
+    #[serde(default)]
+    pub y: F,
+    #[serde(default)]
+    pub blur: F,
+    #[serde(default)]
+    pub spread: F,
+    pub color: String,
+    #[serde(default)]
+    pub inset: bool,
+}
+
+#[derive(Deserialize, Clone, Debug, Default, Hash, PartialEq)]
+pub struct OutlineSpec {
+    pub width: F,
+    pub color: String,
+    #[serde(default)]
+    pub offset: F,
+}
+
+/// `background-image`: a picture by URL or a linear gradient (`angle` in CSS degrees).
+#[derive(Deserialize, Clone, Debug, Default, Hash, PartialEq)]
+pub struct BgImage {
+    pub url: Option<String>,
+    pub gradient: Option<Gradient>,
+}
+
+#[derive(Deserialize, Clone, Debug, Default, Hash, PartialEq)]
+pub struct Gradient {
+    #[serde(default)]
+    pub angle: F,
+    pub stops: Vec<GradientStop>,
+}
+
+#[derive(Deserialize, Clone, Debug, Default, Hash, PartialEq)]
+pub struct GradientStop {
+    pub color: String,
+    pub at: Option<F>,
 }
 
 /// An `f32` that hashes, so a style can key a memo.

@@ -1096,6 +1096,7 @@ dependencies = [
 name = "hazel-native"
 version = "0.0.1"
 dependencies = [
+ "base64",
  "rune",
  "serde",
  "serde_json",

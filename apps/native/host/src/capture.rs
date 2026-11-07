@@ -77,6 +77,9 @@ impl Session {
                 }
             }
         }
+        if crate::images::take_arrived() {
+            self.rt.update(|_, tx| tx.invalidate_memos_by_prefix("r"));
+        }
         let frame_started = Instant::now();
         self.rt.frame(FRAME.as_secs_f64());
         let frame_ms = frame_started.elapsed().as_secs_f64() * 1000.0;
@@ -175,12 +178,16 @@ impl Session {
         let (dw, dh) = ((w * self.scale) as u32, (h * self.scale) as u32);
         let (gpu, renderer, target) = self.gpu.get_or_insert_with(|| {
             let gpu = Gpu::headless();
-            let renderer = Renderer::new(&gpu.device, FORMAT);
+            let mut renderer = Renderer::new(&gpu.device, FORMAT);
+            // Blend in sRGB encoding as the window does, into a non-sRGB target.
+            renderer.set_srgb_blend(true);
             let target = Offscreen::with_format(&gpu.device, dw, dh, FORMAT);
             (gpu, renderer, target)
         });
         self.rt.settle_all();
         self.rt.frame(0.0);
+        // Pictures and colour emoji live in the runtime's image atlas, uploaded separately.
+        renderer.upload_images(&gpu.device, &gpu.queue, &mut self.rt.images);
         renderer.prepare(
             &gpu.device,
             &gpu.queue,
@@ -189,7 +196,7 @@ impl Session {
             (dw, dh),
         );
         let mut encoder = gpu.device.create_command_encoder(&Default::default());
-        renderer.draw(&mut encoder, &target.view, [0.0, 0.0, 0.0, 1.0]);
+        renderer.draw(&mut encoder, &target.view, self.rt.clear_color());
         target.copy(&mut encoder);
         renderer.submit(&gpu.queue, encoder);
         let pixels = target.read(&gpu.device);
@@ -261,8 +268,10 @@ pub fn run(script_path: &str) {
         .unwrap_or(2.0);
     let state = initial_state();
     let dark = state.dark;
+    let mut rt = Runtime::new(state, view, window_size(), Env::new(dark, scale));
+    rt.set_srgb_blend(true);
     let mut session = Session {
-        rt: Runtime::new(state, view, window_size(), Env::new(dark, scale)),
+        rt,
         messages,
         started,
         last_tree: started,

@@ -1,21 +1,26 @@
 //! Hazel's native window: draws the tree Hazel's Foldkit app renders in a Bun child process and
 //! sends presses, edits and the window's size and theme back to it.
 mod capture;
+mod images;
 mod layout;
+#[cfg(test)]
+mod tests;
 mod wire;
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
-use std::process::{ChildStdin, Command, Stdio};
+use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use rune::edit::TextEdit;
 use rune::text::Icon;
-use rune::{App, AppSpec, Color, Cursor, Cx, El, col, el, icon, row, text, text_input};
+use rune::{App, AppSpec, Color, Cursor, Cx, El, SurfaceFit, col, el, icon, row, text_input};
 use serde_json::json;
 
-use layout::{Inherit, apply_box, apply_flex, center_vertically, color, track};
+use layout::{
+    Inherit, apply_box, apply_flex, auto_margins, center_vertically, color, text_run, track,
+};
 use wire::{Node, RuntimeMsg, Style, Subtrees, TreeMsg};
 
 /// A text field's editor state, owned here because Rune's editor lives in app state.
@@ -35,9 +40,10 @@ pub(crate) struct State {
     dark: bool,
     /// The document's own background and text colour (`body` in the app's stylesheet).
     page: wire::Page,
+    images: images::Images,
 }
 
-static OUT: OnceLock<Mutex<ChildStdin>> = OnceLock::new();
+static OUT: OnceLock<Mutex<Box<dyn Write + Send>>> = OnceLock::new();
 static SEQ: AtomicU64 = AtomicU64::new(0);
 static ICONS: Mutex<Option<HashMap<String, &'static Icon>>> = Mutex::new(None);
 
@@ -55,6 +61,32 @@ fn send_editable(path: &str, value: Option<&str>, key: Option<&str>) -> u64 {
     write_line(
         json!({ "t": "event", "seq": seq, "id": 0, "type": "editable", "path": path, "value": value, "key": key }),
     );
+    seq
+}
+
+/// The DOM `key` of the keys a field's own keydown handler (a combo box, a picker) acts on.
+fn dom_key(key: &rune::edit::Key) -> Option<&'static str> {
+    use rune::edit::Key;
+    Some(match key {
+        Key::Enter => "Enter",
+        Key::Up => "ArrowUp",
+        Key::Down => "ArrowDown",
+        Key::Escape => "Escape",
+        Key::Tab => "Tab",
+        Key::Home => "Home",
+        Key::End => "End",
+        Key::PageUp => "PageUp",
+        Key::PageDown => "PageDown",
+        _ => return None,
+    })
+}
+
+fn send_key(id: u32, key: &str, mods: rune::edit::Mods) -> u64 {
+    let seq = SEQ.fetch_add(1, Ordering::SeqCst) + 1;
+    write_line(json!({
+        "t": "event", "seq": seq, "id": id, "type": "keydown", "key": key,
+        "shift": mods.shift, "meta": mods.cmd, "ctrl": mods.ctrl, "alt": mods.alt,
+    }));
     seq
 }
 
@@ -134,27 +166,13 @@ struct Ctx<'a> {
 fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
     match node.as_ref() {
         Node::Text(s) => {
-            if s.trim().is_empty() {
+            // Whitespace between elements collapses away, unless `white-space: pre` keeps it.
+            if s.is_empty() || (!inh.pre && s.trim().is_empty()) {
                 return None;
             }
-            let mut t = text(s.clone()).font(inh.style()).color(inh.color);
-            t = if inh.truncate {
-                t.single_line().truncate().shrink()
-            } else if inh.nowrap {
-                t.single_line()
-            } else {
-                t.wrap().shrink()
-            };
-            Some(t)
+            Some(text_run(s, &inh))
         }
-        Node::Svg { view, body, st, .. } => {
-            let size = match st.w {
-                Some(wire::Len::Px(wire::F(v))) => v,
-                _ => 16.0,
-            };
-            let c = color(&st.color).unwrap_or(inh.color);
-            Some(apply_box(icon(intern_icon(*view, body), size).color(c), st))
-        }
+        Node::Svg { view, body, st, .. } => Some(build_svg(*view, body, st, inh, ctx)),
         Node::Elem {
             hash,
             tag,
@@ -170,7 +188,10 @@ fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
             }
             let inh = inh.from(st);
             if tag == "input" || tag == "textarea" {
-                return Some(build_input(path, st, attrs, on, inh, ctx));
+                return Some(build_input(path, tag, st, attrs, on, inh, ctx));
+            }
+            if tag == "img" {
+                return Some(center_vertically(build_img(path, st, attrs, on, ctx), st));
             }
             if attrs.contains_key("data-editable") {
                 return Some(build_editable(path, st, attrs, inh, ctx));
@@ -198,14 +219,7 @@ fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
             let el = if has_fields {
                 make()
             } else {
-                let inherited = (
-                    inh.color.hex(),
-                    inh.size.to_bits(),
-                    inh.line.to_bits(),
-                    inh.weight.to_bits(),
-                    inh.truncate,
-                );
-                rune::memo(path.to_string(), (hash, inherited, form), make)
+                rune::memo(path.to_string(), (hash, inh.key(), form), make)
             };
             Some(center_vertically(el, st))
         }
@@ -247,15 +261,31 @@ fn build_elem(
     } else {
         st
     };
+    // `shrink-0` keeps an inline box at its size; Rune boxes only shrink when told to.
+    let may_shrink = st.shrink.is_none_or(|s| s.0 > 0.0);
+    let inline_row = |inline_text: bool| {
+        let mut r = row().items_center().flex_wrap();
+        if may_shrink {
+            r = r.shrink()
+        }
+        // `text-align` places an inline formatting context's runs along the line.
+        if inline_text {
+            r = match inh.align {
+                rune::Align::Center => r.justify_center(),
+                rune::Align::End => r.justify_end(),
+                rune::Align::Start => r,
+            }
+        }
+        r
+    };
+    let items = st.items.as_deref();
     let mut e = match (st.display.as_deref(), &st.grid_cols) {
         (Some("grid"), Some(cols)) => build_grid(&kids, cols, path, inh, ctx, st),
         (Some("flex"), _) => {
-            let base = if st.dir.as_deref() == Some("col") {
-                col()
-            } else {
-                row()
-            };
-            add_children(apply_flex(base, st), &kids, path, inh, ctx)
+            let is_row = st.dir.as_deref() != Some("col");
+            let base = if is_row { row() } else { col() };
+            let parent = Parent { is_row, items };
+            add_children(apply_flex(base, st), &kids, path, inh, ctx, parent)
         }
         (Some("inline") | None, _)
             if matches!(
@@ -264,30 +294,49 @@ fn build_elem(
             ) =>
         {
             // Inline boxes may shrink below their text, so the text inside can wrap.
+            let parent = Parent {
+                is_row: true,
+                items: Some("center"),
+            };
             add_children(
-                apply_flex(row().items_center().shrink().flex_wrap(), st),
+                apply_flex(inline_row(true), st),
                 &kids,
                 path,
                 inh,
                 ctx,
+                parent,
             )
         }
         // A block holding only inline content (text, spans, links): an inline formatting context,
         // approximated as a wrapping row so a mention chip stays in its sentence.
         (Some("block") | None, _) if children.len() > 1 && children.iter().all(is_inline) => {
+            let parent = Parent {
+                is_row: true,
+                items: Some("center"),
+            };
             add_children(
-                apply_flex(row().flex_wrap().items_center().shrink(), st),
+                apply_flex(inline_row(true), st),
                 &kids,
                 path,
                 inh,
                 ctx,
+                parent,
             )
         }
-        _ => add_children(apply_flex(col(), st), &kids, path, inh, ctx),
+        _ => {
+            // A block's children stack and stretch across it, as block boxes do.
+            let parent = Parent {
+                is_row: false,
+                items,
+            };
+            add_children(apply_flex(col(), st), &kids, path, inh, ctx, parent)
+        }
     };
-    if tag == "img" {
-        // Images arrive in a follow-up; keep the box and paint a neutral fill.
-        e = e.fill(inh.color.alpha(0.12));
+    if let Some(wire::BgImage { url: Some(url), .. }) = &st.bg_image
+        && let Some(image) = ctx.s.images.get(url, picture_size(st))
+    {
+        // `background-size: cover`, the common case for avatars and banners.
+        e = e.pixels_fit(image.pixels(), SurfaceFit::Fill)
     }
     e = apply_box(e.key(path), st);
     if let Some(&id) = on.get("click") {
@@ -314,11 +363,26 @@ fn is_inline(node: &Arc<Node>) -> bool {
     match node.as_ref() {
         Node::Text(_) => true,
         Node::Svg { .. } => false,
-        Node::Elem { tag, st, .. } => match (st.inline, st.display.as_deref()) {
-            (Some(true), _) => true,
+        Node::Elem {
+            tag, st, children, ..
+        } => match (st.inline, st.display.as_deref()) {
+            // `display: contents` adds no box: inline when what it holds is.
+            (_, Some("contents")) => children.iter().all(is_inline),
+            (Some(true), _) | (_, Some("inline")) => true,
             (_, None) => matches!(
                 tag.as_str(),
-                "span" | "a" | "strong" | "em" | "code" | "b" | "i" | "s" | "u" | "mark" | "time"
+                "span"
+                    | "a"
+                    | "strong"
+                    | "em"
+                    | "code"
+                    | "b"
+                    | "i"
+                    | "s"
+                    | "u"
+                    | "mark"
+                    | "time"
+                    | "br"
             ),
             _ => false,
         },
@@ -367,26 +431,136 @@ fn fills_with_scroll(node: &Arc<Node>) -> bool {
     fills && (st.scroll_y == Some(true) || children.iter().any(fills_with_scroll))
 }
 
+/// How a container lays out its children, for the children's auto margins.
+#[derive(Clone, Copy)]
+struct Parent<'a> {
+    is_row: bool,
+    items: Option<&'a str>,
+}
+
+fn style_of(node: &Node) -> Option<&Style> {
+    match node {
+        Node::Elem { st, .. } | Node::Svg { st, .. } => Some(st),
+        Node::Text(_) => None,
+    }
+}
+
+/// Paint order among siblings. Rune paints in tree order, so positioned children move after
+/// the flow (CSS paints them above it), sorted by `z-index`; a negative one goes under the flow.
+/// Out-of-flow children take no part in layout, so moving them changes only paint.
+fn paint_order<'a>(kids: &[(usize, &'a Arc<Node>)]) -> Vec<(usize, &'a Arc<Node>)> {
+    let layer = |node: &Arc<Node>| -> Option<f32> {
+        let st = style_of(node)?;
+        st.absolute?;
+        Some(st.z_index.map_or(0.0, |z| z.0))
+    };
+    if !kids
+        .iter()
+        .any(|(_, c)| style_of(c).is_some_and(|st| st.z_index.is_some()))
+    {
+        return kids.to_vec();
+    }
+    let mut ordered: Vec<(usize, &Arc<Node>)> = Vec::with_capacity(kids.len());
+    let mut positioned: Vec<(f32, usize, &Arc<Node>)> = Vec::new();
+    for &(i, child) in kids {
+        match layer(child) {
+            Some(z) => positioned.push((z, i, child)),
+            None => ordered.push((i, child)),
+        }
+    }
+    positioned.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let below = positioned.iter().take_while(|p| p.0 < 0.0).count();
+    let mut out: Vec<(usize, &Arc<Node>)> =
+        positioned[..below].iter().map(|p| (p.1, p.2)).collect();
+    out.extend(ordered);
+    out.extend(positioned[below..].iter().map(|p| (p.1, p.2)));
+    out
+}
+
 fn add_children(
     mut e: El,
     kids: &[(usize, &Arc<Node>)],
     path: &str,
     inh: Inherit,
     ctx: &Ctx,
+    parent: Parent,
 ) -> El {
-    for (i, child) in kids {
-        let child_path = child_path(path, *i, child);
+    for (i, child) in paint_order(kids) {
+        let child_path = child_path(path, i, child);
         // `display: contents`: no box of its own; its children join this one's layout.
         if let Node::Elem { st, children, .. } = child.as_ref()
             && st.display.as_deref() == Some("contents")
         {
             let inner: Vec<(usize, &Arc<Node>)> = children.iter().enumerate().collect();
-            e = add_children(e, &inner, &child_path, inh.from(st), ctx);
+            e = add_children(e, &inner, &child_path, inh.from(st), ctx, parent);
             continue;
         }
         if let Some(b) = build(child, &child_path, inh, ctx) {
-            e = e.child(b)
+            e = match style_of(child) {
+                Some(st) => e.child(auto_margins(b, st, parent.is_row, parent.items)),
+                None => e.child(b),
+            }
         }
+    }
+    e
+}
+
+/// The size a picture rasterizes for: its own width or height, else a generous default.
+fn picture_size(st: &Style) -> f32 {
+    match (&st.w, &st.h) {
+        (Some(wire::Len::Px(w)), Some(wire::Len::Px(h))) => w.0.max(h.0),
+        (Some(wire::Len::Px(v)), _) | (_, Some(wire::Len::Px(v))) => v.0,
+        _ => 128.0,
+    }
+}
+
+/// An inline SVG: a `currentColor` icon tinted with the text colour, or one with its own
+/// colours (an avatar's dither pattern) drawn as a picture.
+fn build_svg(view: f32, body: &str, st: &Style, inh: Inherit, ctx: &Ctx) -> El {
+    let c = color(&st.color).unwrap_or(inh.color);
+    if !images::is_multicolour(body) {
+        let size = match st.w {
+            Some(wire::Len::Px(wire::F(v))) => v,
+            _ => 16.0,
+        };
+        let e = icon(intern_icon(view, body), size).color(c);
+        return center_vertically(apply_box(e, st), st);
+    }
+    let image = ctx.s.images.svg(view, body, picture_size(st));
+    let mut e = el().pixels(image.pixels());
+    if st.w.is_none() && st.h.is_none() && st.absolute.is_none() {
+        // An unsized SVG fills its box; the decorative ones here sit under their siblings.
+        e = e.pin(Some(0.0), Some(0.0), Some(0.0), Some(0.0))
+    }
+    center_vertically(apply_box(e, st), st)
+}
+
+/// `<img>`: the picture at `src`, fitted by `object-fit`; an empty box until it decodes.
+fn build_img(
+    path: &str,
+    st: &Style,
+    attrs: &HashMap<String, String>,
+    on: &HashMap<String, u32>,
+    ctx: &Ctx,
+) -> El {
+    let mut e = el().key(path);
+    if let Some(image) = attrs
+        .get("src")
+        .and_then(|src| ctx.s.images.get(src, picture_size(st)))
+    {
+        e = match st.object_fit.as_deref() {
+            Some("cover") => e.pixels_fit(image.pixels(), SurfaceFit::Fill),
+            Some("contain" | "scale-down" | "none") => {
+                e.pixels_fit(image.pixels(), SurfaceFit::Fit)
+            }
+            _ => e.pixels(image.pixels()),
+        };
+    }
+    e = apply_box(e, st);
+    if let Some(&id) = on.get("click") {
+        e = e.cursor(Cursor::Pointer).on_press(move |_: &mut State| {
+            send(id, "click", None);
+        });
     }
     e
 }
@@ -475,7 +649,9 @@ fn build_grid(
                     build(child, path, inh, ctx)
                 };
                 if let Some(b) = built {
-                    grid = grid.child(b.w_full())
+                    // A spanning row fills the grid's width unless it sets its own.
+                    let b = if cst.w.is_none() { b.w_full() } else { b };
+                    grid = grid.child(b)
                 }
                 continue;
             }
@@ -492,6 +668,7 @@ fn build_grid(
 
 fn build_input(
     path: &str,
+    tag: &str,
     st: &Style,
     attrs: &HashMap<String, String>,
     on: &HashMap<String, u32>,
@@ -507,7 +684,6 @@ fn build_input(
     let key = path.to_string();
     let mut field = text_input(&edit, inh.style())
         .key(format!("{path}/field"))
-        .single_line()
         .grow(1.0)
         .shrink()
         .color(inh.color)
@@ -533,12 +709,51 @@ fn build_input(
             }
         });
     }
-    if let Some(form_id) = ctx.form {
-        field = field.on_submit(move |_: &mut State, _| {
-            send(form_id, "submit", None);
+    // An `<input>` is one line and Return submits its form; a `<textarea>` keeps Rune's
+    // multi-line field, where Return types a newline as it does in a browser.
+    if tag == "input" {
+        field = field.single_line();
+        if let Some(form_id) = ctx.form {
+            field = field.on_submit(move |_: &mut State, _| {
+                send(form_id, "submit", None);
+            });
+        }
+    }
+    // A field with its own keydown handler (a combo box) gets its navigation keys, and claims
+    // the ones a browser listbox prevents: Return picks rather than submits, arrows move the
+    // highlight rather than the caret. Rune's multi-line field submits on a plain Return (a chat
+    // composer); a textarea breaks the line instead, so insert it here and report the edit as
+    // typing would.
+    let keydown = on.get("keydown").copied();
+    let (key, input, is_textarea) = (path.to_string(), on.get("input").copied(), tag != "input");
+    if keydown.is_some() || is_textarea {
+        field = field.on_input_key(move |s: &mut State, ev, _| {
+            use rune::edit::Key;
+            if let (Some(id), Some(name)) = (keydown, dom_key(&ev.key)) {
+                send_key(id, name, ev.mods);
+                if matches!(ev.key, Key::Enter | Key::Up | Key::Down | Key::Escape) {
+                    return true;
+                }
+            }
+            let plain = ev.mods == rune::edit::Mods::default();
+            if !is_textarea || ev.key != Key::Enter || !plain {
+                return false;
+            }
+            if let Some(f) = s.fields.get_mut(&key) {
+                f.edit.insert("\n");
+                if let Some(id) = input {
+                    f.last_sent = send(id, "input", Some(&f.edit.text))
+                }
+            }
+            true
         });
     }
-    apply_box(row().items_center().key(path), st).child(field)
+    let wrapper = if tag == "input" {
+        row().items_center()
+    } else {
+        row().items_start()
+    };
+    apply_box(wrapper.key(path), st).child(field)
 }
 
 /// An element a runtime Mount observes: report its layout, and its offset when it scrolls.
@@ -626,11 +841,7 @@ pub(crate) fn view(s: &State, cx: &mut Cx<State>) -> El {
     let base = color(&s.page.color).unwrap_or(fallback);
     let inh = Inherit {
         color: base,
-        size: 16.0,
-        line: 24.0,
-        weight: 400.0,
-        truncate: false,
-        nowrap: false,
+        ..Inherit::default()
     };
     let ctx = Ctx { s, form: None };
     let body = s.root.as_ref().and_then(|root| build(root, "r", inh, &ctx));
@@ -651,7 +862,7 @@ fn spawn_runtime() -> (std::process::Child, std::sync::mpsc::Receiver<RuntimeMsg
         .stderr(Stdio::inherit())
         .spawn()
         .expect("spawn bun");
-    let _ = OUT.set(Mutex::new(child.stdin.take().unwrap()));
+    let _ = OUT.set(Mutex::new(Box::new(child.stdin.take().unwrap())));
     let lines = BufReader::new(child.stdout.take().unwrap()).lines();
     let (send, receive) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
@@ -667,6 +878,15 @@ fn spawn_runtime() -> (std::process::Child, std::sync::mpsc::Receiver<RuntimeMsg
         }
     });
     (child, receive)
+}
+
+/// A downloaded picture landed: rebuild the memoised subtrees that showed its empty box.
+fn poll(_: &mut State, _: f64, tx: &mut rune::Tx) -> bool {
+    let arrived = images::take_arrived();
+    if arrived {
+        tx.invalidate_memos_by_prefix("r");
+    }
+    arrived
 }
 
 fn window_size() -> (f32, f32) {
@@ -704,8 +924,12 @@ fn main() {
             break;
         }
     }
-    let app =
-        App::new(AppSpec::new("Hazel", window_size(), State::default, view)).init(move || initial);
+    let spec = AppSpec {
+        setup: Some(|_: &mut State, waker| images::set_waker(waker)),
+        poll: Some(poll),
+        ..AppSpec::new("Hazel", window_size(), State::default, view)
+    };
+    let app = App::new(spec).init(move || initial);
     let handle = app.handle();
     std::thread::spawn(move || {
         for msg in messages.iter() {
