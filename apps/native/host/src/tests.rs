@@ -851,3 +851,66 @@ fn press_bg_fills_the_button_while_pressed() {
     let pressed = render(&mut rt, (40, 40));
     assert!(pressed.is(20, 20, RED), "pressed {:?}", pressed.at(20, 20));
 }
+
+/// A root holding `child`; trees differ by `tag` so their hashes never collide.
+fn holder(tag: &str, children: Vec<Value>) -> Value {
+    json!({ "k": "e", "h": format!("holder-{tag}"), "tag": "div", "st": { "w": 200, "h": 40 },
+        "attrs": {}, "on": {}, "c": children })
+}
+
+fn child(tag: &str, st: Value) -> Value {
+    json!({ "k": "e", "h": format!("child-{tag}"), "tag": "div", "st": st, "attrs": {}, "on": {}, "c": [] })
+}
+
+/// Sends `root` as the runtime's next tree and draws one 16 ms frame.
+fn commit(rt: &mut Runtime<State>, root: Value) {
+    let msg: TreeMsg =
+        serde_json::from_value(json!({ "ack": 1, "root": root })).expect("wire tree");
+    rt.update(move |s: &mut State, _| s.apply(msg));
+    rt.frame(0.016);
+}
+
+#[test]
+fn a_runtime_commit_lands_at_once_without_a_transition() {
+    let box_of = |w: f32| {
+        child(
+            &format!("w{w}"),
+            json!({ "w": w, "h": 40, "bg": "#ff0000ff" }),
+        )
+    };
+    let mut rt = runtime(holder("a", vec![box_of(40.0)]), (200.0, 40.0));
+    commit(&mut rt, holder("b", vec![box_of(160.0)]));
+    assert_eq!(rect(&rt, "r/0")[2], 160.0);
+}
+
+#[test]
+fn a_new_element_shows_at_once_without_a_transition() {
+    let mut rt = runtime(holder("a", vec![]), (200.0, 40.0));
+    commit(
+        &mut rt,
+        holder(
+            "b",
+            vec![child("new", json!({ "w": 40, "h": 40, "bg": "#ff0000ff" }))],
+        ),
+    );
+    let (_, opacity) = rt.presented("r/0").expect("drawn");
+    assert_eq!(opacity, 1.0);
+}
+
+#[test]
+fn transition_opacity_fades_on_its_own_curve() {
+    let faded = |o: f32| {
+        child(
+            &format!("o{o}"),
+            json!({ "w": 40, "h": 40, "bg": "#ff0000ff", "opacity": o,
+                "transition": { "opacity": { "duration": 0.2, "delay": 0, "ease": [0, 0, 1, 1] } } }),
+        )
+    };
+    let mut rt = runtime(holder("a", vec![faded(0.0)]), (200.0, 40.0));
+    commit(&mut rt, holder("b", vec![faded(1.0)]));
+    rt.frame(0.1);
+    let (_, halfway) = rt.presented("r/0").expect("drawn");
+    assert!((0.3..0.7).contains(&halfway), "halfway {halfway}");
+    rt.frame(0.3);
+    assert_eq!(rt.presented("r/0").expect("drawn").1, 1.0);
+}

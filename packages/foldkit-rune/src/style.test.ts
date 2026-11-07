@@ -74,6 +74,30 @@ describe("StyleResolver", () => {
 		expect(resolve("bg-bg").style.bg).toBe("#ffffffff")
 	})
 
+	it("sends transitions per channel the host animates", () => {
+		expect(resolve("transition-colors duration-200 ease-out").style.transition).toEqual({
+			colors: { duration: 0.2, delay: 0, ease: [0, 0, 0.2, 1] },
+		})
+		// Tailwind's `transition`: colours, opacity and transforms on its default 150 ms curve.
+		const plain = { duration: 0.15, delay: 0, ease: [0.4, 0, 0.2, 1] }
+		expect(resolve("transition").style.transition).toEqual({
+			colors: plain,
+			opacity: plain,
+			transform: plain,
+		})
+		expect(resolve("transition-[width] duration-300 ease-linear delay-75").style.transition).toEqual({
+			layout: { duration: 0.3, delay: 0.075, ease: [0, 0, 1, 1] },
+		})
+		expect(Object.keys(resolve("transition-all").style.transition ?? {}).sort()).toEqual([
+			"colors",
+			"layout",
+			"opacity",
+			"transform",
+		])
+		expect(resolve("transition-none").style.transition).toBeUndefined()
+		expect(resolve("px-2").style.transition).toBeUndefined()
+	})
+
 	it("switches theme tokens in dark mode", () => {
 		expect(resolve("bg-bg text-fg", { dark: true }).style).toMatchObject({
 			bg: "#000000ff",

@@ -2,11 +2,14 @@
 //! features, emulated here: single-side borders, CSS text inheritance, percentage centring, auto
 //! margins and box-shadow rings.
 use rune::tok::TextStyle;
-use rune::{Align, Color, El, Family, ScrollSpec, Shadow, Span, TextCase, el, row, text};
+use rune::{
+    Align, Anim, AnimExt, Color, Curve, Easing, El, Family, ScrollSpec, Shadow, Span, Spring,
+    TextCase, Transition, el, row, text,
+};
 
 use std::collections::HashMap;
 
-use crate::wire::{BgImage, F, FocusRing, Len, OutlineSpec, Style};
+use crate::wire::{BgImage, F, FocusRing, Len, OutlineSpec, Style, Timing};
 
 pub fn color(hex: &Option<String>) -> Option<Color> {
     let h = hex.as_deref()?;
@@ -378,7 +381,36 @@ pub fn apply_box(mut e: El, st: &Style) -> El {
     if st.visibility.as_deref() == Some("hidden") {
         e = e.opacity(0.0).inert()
     }
-    e
+    apply_motion(e, st)
+}
+
+/// CSS changes land at once unless a transition names them; Rune animates by default, so every
+/// element states its own motion (children don't inherit a transition, as in CSS).
+fn apply_motion(e: El, st: &Style) -> El {
+    let t = st.transition.clone().unwrap_or_default();
+    let tween = |t: &Option<Timing>| match t {
+        Some(t) => {
+            let [x1, y1, x2, y2] = t.ease.map(|F(v)| v);
+            Anim::from(Curve::tween(t.duration.0, Easing::cubic(x1, y1, x2, y2))).delay(t.delay.0)
+        }
+        None => Anim::INSTANT,
+    };
+    // Rune moves layout and colours on one spring: the longer of the two, critically damped.
+    let spring = [&t.colors, &t.layout]
+        .into_iter()
+        .flatten()
+        .map(|t| t.duration.0)
+        .fold(0.0, f32::max);
+    let colors = tween(&t.colors);
+    e.motion(if spring > 0.0 {
+        Spring::new(spring, 0.0)
+    } else {
+        Spring::NONE
+    })
+    .hover_motion(colors, colors)
+    .opacity_motion(tween(&t.opacity))
+    .offset_motion(tween(&t.transform))
+    .transition(Transition::none())
 }
 
 /// The fill a press shows and the rings focus draws. A field's focus is its text field's, inside

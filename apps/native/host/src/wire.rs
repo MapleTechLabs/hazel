@@ -101,6 +101,26 @@ pub struct Style {
     /// The fill while a press is held (`:active`).
     #[serde(default, deserialize_with = "lenient")]
     pub press_bg: Option<String>,
+    /// CSS transitions by what Rune animates separately; a missing channel changes at once.
+    #[serde(default, deserialize_with = "lenient")]
+    pub transition: Option<Transitions>,
+}
+
+#[derive(Deserialize, Clone, Debug, Default, Hash, PartialEq)]
+pub struct Transitions {
+    pub colors: Option<Timing>,
+    pub opacity: Option<Timing>,
+    pub layout: Option<Timing>,
+    pub transform: Option<Timing>,
+}
+
+/// Seconds, and the `cubic-bezier` control points.
+#[derive(Deserialize, Clone, Debug, Default, Hash, PartialEq)]
+pub struct Timing {
+    pub duration: F,
+    #[serde(default)]
+    pub delay: F,
+    pub ease: [F; 4],
 }
 
 #[derive(Deserialize, Clone, Debug, Hash, PartialEq)]

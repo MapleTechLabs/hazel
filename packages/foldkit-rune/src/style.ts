@@ -90,6 +90,9 @@ export type ElementInput = {
 
 export type Px = number | "full" | "auto"
 export type Ring = { width: number; color: string; offset: number }
+export type TransitionChannel = "colors" | "opacity" | "layout" | "transform"
+/** Seconds, and the `cubic-bezier` control points (`linear` is `[0, 0, 1, 1]`). */
+export type Timing = { duration: number; delay: number; ease: [number, number, number, number] }
 export type Shadow = { x: number; y: number; blur: number; spread: number; color: string; inset: boolean }
 export type Style = {
 	display?: "flex" | "block" | "inline" | "grid" | "none" | "contents"
@@ -154,6 +157,8 @@ export type Style = {
 	focusWithinRing?: Ring
 	/** Background while a press is held (`:active`). */
 	pressBg?: string
+	/** CSS transitions, by what the host animates separately; absent channels change at once. */
+	transition?: Partial<Record<TransitionChannel, Timing>>
 	/** `url` as written in the stylesheet; the host resolves it against the page. */
 	bgImage?: { url: string } | { gradient: { angle: number; stops: Array<{ color: string; at: number }> } }
 	objectFit?: "cover" | "contain" | "fill" | "none" | "scale-down"
@@ -683,6 +688,7 @@ export class StyleResolver {
 			containerNames: [],
 			shadows: null,
 			outline: {},
+			transition: {},
 		}
 		for (const { mode, d } of ordered) if (d.prop === "font-size") this.apply(acc, d, mode)
 		for (const { mode, d } of ordered) if (TEXT_FIRST.has(d.prop)) this.apply(acc, d, mode)
@@ -1209,6 +1215,18 @@ export class StyleResolver {
 			case "opacity":
 				s.opacity = ratio(v)
 				break
+			case "transition-property":
+				acc.transition.property = v
+				break
+			case "transition-duration":
+				acc.transition.duration = v
+				break
+			case "transition-timing-function":
+				acc.transition.timing = v
+				break
+			case "transition-delay":
+				acc.transition.delay = v
+				break
 			case "overflow": {
 				const [x = "visible", y = x] = v.split(/\s+/)
 				if (y === "auto" || y === "scroll") s.scrollY = true
@@ -1301,6 +1319,8 @@ export class StyleResolver {
 			if (width !== null && width > 0 && c !== null && !c.endsWith("00") && offset !== null)
 				s.outline = { width, color: c, offset }
 		}
+		const transition = composeTransition(acc.transition)
+		if (transition !== undefined) s.transition = transition
 		// Flex and grid items and out-of-flow boxes are blockified: `inline-flex` is `flex`, a span is a block.
 		if (acc.scope.flexParent || s.position === "absolute") {
 			if (s.display === "inline" || (s.display === undefined && INLINE_TAGS.has(acc.tag)))
@@ -1333,6 +1353,76 @@ export class StyleResolver {
 		if (s.bg === "#00000000") delete s.bg
 		if (s.opacity === 1) delete s.opacity
 	}
+}
+
+/** What each animatable property moves in the host. Anything else (`display`, `filter`) is not animated. */
+const CHANNEL_OF = new Map<string, TransitionChannel>([
+	["color", "colors"],
+	["background-color", "colors"],
+	["background", "colors"],
+	["border-color", "colors"],
+	["outline-color", "colors"],
+	["text-decoration-color", "colors"],
+	["fill", "colors"],
+	["stroke", "colors"],
+	["box-shadow", "colors"],
+	["opacity", "opacity"],
+	["transform", "transform"],
+	["translate", "transform"],
+	["scale", "transform"],
+	["rotate", "transform"],
+])
+const LAYOUT_PROPERTY =
+	/^(width|height|min-width|min-height|max-width|max-height|margin.*|padding.*|inset.*|left|right|top|bottom|gap|row-gap|column-gap|flex.*)$/
+const CHANNELS: Array<TransitionChannel> = ["colors", "opacity", "layout", "transform"]
+
+const EASINGS = new Map<string, Timing["ease"]>([
+	["linear", [0, 0, 1, 1]],
+	["ease", [0.25, 0.1, 0.25, 1]],
+	["ease-in", [0.42, 0, 1, 1]],
+	["ease-out", [0, 0, 0.58, 1]],
+	["ease-in-out", [0.42, 0, 0.58, 1]],
+])
+
+const parseEase = (v: string): Timing["ease"] => {
+	const known = EASINGS.get(v)
+	if (known !== undefined) return known
+	const m = /^cubic-bezier\(([^)]*)\)$/.exec(v)
+	const points = m?.[1]?.split(",").map((n) => Number(n.trim()))
+	if (points?.length === 4 && points.every(Number.isFinite)) return points as Timing["ease"]
+	// `steps()` and anything else: a straight ramp is the nearest the host draws.
+	return [0, 0, 1, 1]
+}
+
+const parseSeconds = (v: string): number => {
+	const n = Number.parseFloat(v)
+	if (!Number.isFinite(n)) return 0
+	return v.trim().endsWith("ms") ? n / 1000 : n
+}
+
+/** CSS lists pair by index, a shorter list repeating; each property lands on its channel. */
+const composeTransition = (t: Accumulator["transition"]): Style["transition"] => {
+	const properties = splitTop(t.property ?? "all", /,/).map((p) => p.trim())
+	const durations = splitTop(t.duration ?? "0s", /,/)
+	const timings = splitTop(t.timing ?? "ease", /,/)
+	const delays = splitTop(t.delay ?? "0s", /,/)
+	const out: Style["transition"] = {}
+	properties.forEach((property, i) => {
+		const duration = parseSeconds(durations[i % durations.length] ?? "0s")
+		if (duration <= 0 || property === "none") return
+		const timing: Timing = {
+			duration,
+			delay: parseSeconds(delays[i % delays.length] ?? "0s"),
+			ease: parseEase((timings[i % timings.length] ?? "ease").trim()),
+		}
+		const channels =
+			property === "all"
+				? CHANNELS
+				: [CHANNEL_OF.get(property) ?? (LAYOUT_PROPERTY.test(property) ? "layout" : undefined)]
+		for (const channel of channels)
+			if (channel !== undefined && out[channel] === undefined) out[channel] = timing
+	})
+	return Object.keys(out).length === 0 ? undefined : out
 }
 
 const NO_STATES: ReadonlySet<string> = new Set()
@@ -1402,6 +1492,8 @@ type Accumulator = {
 	/** The last `box-shadow` value: composed once every custom property is known. */
 	shadows: string | null
 	outline: { style?: string; width?: string; color?: string; offset?: string }
+	/** `transition-*` longhands as written, composed in `finish`. */
+	transition: { property?: string; duration?: string; timing?: string; delay?: string }
 	/** This element's own line-height, when it sets one. */
 	line?: LineSpec
 }
@@ -1660,10 +1752,6 @@ const IGNORED = new Set([
 	"-moz-osx-font-smoothing",
 	"touch-action",
 	"transition",
-	"transition-property",
-	"transition-timing-function",
-	"transition-duration",
-	"transition-delay",
 	"transition-behavior",
 	"animation",
 	"animation-duration",
