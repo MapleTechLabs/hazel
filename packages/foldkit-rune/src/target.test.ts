@@ -6,7 +6,7 @@ import { beforeAll, describe, expect, it } from "vitest"
 
 import { makeElementBridge } from "./bridge"
 import { StyleResolver } from "./style"
-import { makeRuneTarget } from "./target"
+import { htmlText, makeRuneTarget } from "./target"
 import type { RuntimeToHost, WireNode } from "./wire"
 
 const Message = defineMessageUnion({
@@ -109,5 +109,61 @@ describe("makeRuneTarget", () => {
 		expect(latest.ack).toBe(7)
 		expect(elements(latest.root).find((e) => e.tag === "input")?.attrs.value).toBe("Ada")
 		handle.dispose()
+	})
+
+	it("decodes numeric references in any case and keeps ones that name no code point", () => {
+		expect(htmlText("&#X41;&#x42;&#67;")).toBe("ABC")
+		expect(htmlText("a&#x110000;b")).toBe("a&#x110000;b")
+	})
+
+	it("styles an svg from its class attribute and keeps its aspect-ratio mode and paint", () => {
+		const sent: Array<RuntimeToHost> = []
+		const rune = makeRuneTarget({
+			styles,
+			env: { width: 800, height: 600, dark: false },
+			send: (m) => sent.push(m),
+		})
+		const path = {
+			sel: "path",
+			data: { attrs: { d: "M0 0h1v1z", fill: "oklch(0.55 0.12 285)" } },
+			children: [],
+		}
+		const svg = {
+			sel: "svg",
+			data: {
+				attrs: {
+					class: "absolute inset-0 size-full",
+					viewBox: "0 0 8 8",
+					preserveAspectRatio: "none",
+				},
+			},
+			children: [path],
+		}
+		const body = { sel: "div", data: { class: { relative: true, "size-8": true } }, children: [svg] }
+		// SAFETY: commit only reads `body` and `title`; this VNode has the shape the serializer walks.
+		rune.target.commit({ title: "", body } as unknown as Parameters<typeof rune.target.commit>[0])
+		const tree = sent.find((m): m is Extract<RuntimeToHost, { t: "tree" }> => m.t === "tree")
+		const root = tree?.root
+		const icon = root?.k === "e" ? root.c[0] : undefined
+		expect(icon).toMatchObject({
+			k: "svg",
+			par: "none",
+			st: { absolute: [0, 0, 0, 0], w: "full", h: "full" },
+		})
+		expect(icon?.k === "svg" ? icon.body : "").toMatch(/fill="#[0-9a-f]{6}"/)
+	})
+
+	it("still sends a tree whose inner HTML holds an out-of-range reference", () => {
+		const sent: Array<RuntimeToHost> = []
+		const rune = makeRuneTarget({
+			styles,
+			env: { width: 800, height: 600, dark: false },
+			send: (m) => sent.push(m),
+		})
+		const body = { sel: "div", data: { props: { innerHTML: "x&#x110000;&#X41;" } }, children: [] }
+		// SAFETY: commit only reads `body` and `title`; this VNode has the shape the serializer walks.
+		rune.target.commit({ title: "", body } as unknown as Parameters<typeof rune.target.commit>[0])
+		const tree = sent.find((m): m is Extract<RuntimeToHost, { t: "tree" }> => m.t === "tree")
+		expect(tree === undefined ? [] : texts(tree.root)).toEqual(["x&#x110000;A"])
 	})
 })

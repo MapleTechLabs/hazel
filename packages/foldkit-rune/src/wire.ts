@@ -9,6 +9,8 @@ export type WireNode =
 			readonly view: number
 			readonly body: string
 			readonly st: Style
+			/** The svg's `preserveAspectRatio` when it sets one (`none`: stretch to the box). */
+			readonly par?: string
 	  }
 	| {
 			readonly k: "e"

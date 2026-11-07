@@ -58,7 +58,7 @@ describe("StyleResolver", () => {
 		expect(parent.style.pad).toEqual([12, 12, 12, 12])
 		const child = resolve("m-(--gutter)", { scope: parent.scope })
 		expect(child.style.margin).toEqual([12, 12, 12, 12])
-		expect(resolve("m-(--gutter)").style.margin).toEqual([0, 0, 0, 0])
+		expect(resolve("m-(--gutter)").style.margin).toBeUndefined()
 	})
 
 	it("applies data attribute variants against the element's attributes", () => {
@@ -110,5 +110,103 @@ describe("StyleResolver", () => {
 		expect(styles.customProperty("--bg", false)).toBe("#ffffff")
 		expect(styles.customProperty("--bg", true)).toBe("#000000")
 		expect(styles.customProperty("--missing", false)).toBe("")
+	})
+
+	it("expands one to four value shorthands into sides and corners", () => {
+		const inline = {
+			padding: "5px 10px",
+			margin: "1px 2px 3px",
+			gap: "4px 8px",
+			"border-radius": "1px 2px 3px 4px",
+		}
+		expect(resolve("", { extra: { inline } }).style).toMatchObject({
+			pad: [5, 10, 5, 10],
+			margin: [1, 2, 3, 2],
+			gapRow: 4,
+			gapCol: 8,
+			radius: [1, 2, 3, 4],
+		})
+	})
+
+	it("decides positioning after inline styles", () => {
+		const unpositioned = resolve("absolute top-0", { extra: { inline: { position: "static" } } }).style
+		expect(unpositioned.absolute).toBeUndefined()
+		expect(resolve("", { extra: { inline: { top: "10px" } } }).style.absolute).toBeUndefined()
+		expect(
+			resolve("", { extra: { inline: { position: "absolute", top: "10px" } } }).style.absolute,
+		).toEqual([null, 10, null, null])
+		expect(resolve("sticky top-0").style.absolute).toBeUndefined()
+	})
+
+	it("holds a sticky element at its top inset and leaves other positions in flow", () => {
+		expect(resolve("sticky top-2").style.stickyTop).toBe(8)
+		expect(resolve("sticky").style.stickyTop).toBeUndefined()
+		expect(resolve("relative top-2").style.stickyTop).toBeUndefined()
+	})
+
+	it("reads flex keywords before numbers", () => {
+		expect(resolve("flex-none").style).toMatchObject({ grow: 0, shrink: 0 })
+		expect(resolve("flex-auto").style).toMatchObject({ grow: 1, shrink: 1 })
+		expect(resolve("flex-initial").style).toMatchObject({ grow: 0, shrink: 1 })
+		expect(resolve("flex-1").style).toMatchObject({ grow: 1, shrink: 1 })
+	})
+
+	it("honours max-width breakpoints and reports media it cannot answer", () => {
+		styles.ensure(["max-md:hidden"])
+		styles.setViewport(700, 600)
+		expect(
+			styles.resolve(element("max-md:hidden"), styles.rootScope(false), false, 700).style.display,
+		).toBe("none")
+		styles.setViewport(1280, 800)
+		expect(resolve("max-md:hidden").style.display).toBeUndefined()
+		resolve("[@media(orientation:portrait)]:p-2")
+		expect([...styles.unsupportedSelectors.keys()]).toContain("@media (orientation:portrait)")
+	})
+
+	it("keeps percentages it cannot place out of the style instead of zeroing them", () => {
+		expect(resolve("min-w-full").style.minW).toBe("full")
+		expect(resolve("text-sm leading-[150%]").style.lineHeight).toBeCloseTo(21)
+		expect(resolve("min-w-1/2").style.minW).toBeUndefined()
+		expect([...styles.unsupportedProps.keys()].some((k) => k.startsWith("min-width:"))).toBe(true)
+	})
+
+	it("resolves container units against the nearest sized container, or leaves them out", () => {
+		styles.setViewport(1280, 800)
+		const avatar = resolve("size-8")
+		const box = resolve("size-full [container-type:size]", { scope: avatar.scope })
+		const letter = resolve("leading-none", {
+			scope: box.scope,
+			extra: { inline: { "font-size": "46cqw" } },
+		})
+		expect(letter.style.fontSize).toBeCloseTo(14.72)
+		expect(letter.style.lineHeight).toBeCloseTo(14.72)
+		expect(resolve("", { extra: { inline: { "font-size": "46cqw" } } }).style.fontSize).toBeUndefined()
+	})
+
+	it("composes rings and shadows into one list in paint order, without leaking them to children", () => {
+		const parent = resolve("shadow-sm ring-2 ring-black")
+		expect(parent.style.shadows).toEqual([
+			{ x: 0, y: 1, blur: 2, spread: -1, color: "#0000001a", inset: false },
+			{ x: 0, y: 1, blur: 3, spread: 0, color: "#0000001a", inset: false },
+			{ x: 0, y: 0, blur: 0, spread: 2, color: "#000000ff", inset: false },
+		])
+		expect(resolve("", { scope: parent.scope }).style.shadows).toBeUndefined()
+	})
+
+	it("marks auto margins and reads currentColor from the element's own colour", () => {
+		expect(resolve("ml-auto").style).toMatchObject({ marginAuto: [false, false, false, true] })
+		expect(resolve("text-black border border-current").style.borderColor).toBe("#000000ff")
+	})
+
+	it("matches group and structural variants against ancestors and siblings", () => {
+		// A commit compiles every class it shows before resolving any of them.
+		styles.ensure(["group", "group-data-[open=true]:font-bold"])
+		const group = resolve("group", { extra: { attrs: { "data-open": "true" } } })
+		expect(resolve("group-data-[open=true]:font-bold", { scope: group.scope }).style.fontWeight).toBe(700)
+		expect(resolve("group-data-[open=true]:font-bold").style.fontWeight).toBeUndefined()
+		const at = (index: number) => ({ extra: { index, count: 3 } })
+		expect(resolve("first:pt-1 last:pb-1", at(0)).style.pad).toEqual([4, 0, 0, 0])
+		expect(resolve("first:pt-1 last:pb-1", at(2)).style.pad).toEqual([0, 0, 4, 0])
+		expect(resolve("odd:opacity-50", at(1)).style.opacity).toBeUndefined()
 	})
 })

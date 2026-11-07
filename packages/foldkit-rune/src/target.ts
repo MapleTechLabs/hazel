@@ -2,7 +2,7 @@ import type { Document } from "foldkit/html"
 import type { RenderTarget } from "foldkit/runtime"
 
 import type { ElementBridge } from "./bridge"
-import { type Scope, type Style, StyleResolver } from "./style"
+import { type NodeInfo, type Scope, type Style, StyleResolver, color } from "./style"
 import type { CommitStats, HostToRuntime, RuntimeToHost, WireNode } from "./wire"
 
 /** Event-shaped objects with the fields Foldkit's handlers read (see foldkit html/index.ts). */
@@ -71,6 +71,8 @@ export type RuneTargetOptions = {
 	readonly bridge?: ElementBridge
 	/** The text a DOM-backed Mount (an editor) currently holds, drawn as a native text field. */
 	readonly editableText?: (path: string) => string | undefined
+	/** The class of the element a DOM-backed Mount edits in (the editor's root), styled onto the field. */
+	readonly editableClass?: (path: string) => string | undefined
 	/** A native text field over a DOM-backed Mount was edited, or a key was pressed in it. */
 	readonly onEditable?: (path: string, event: { readonly value?: string; readonly key?: string }) => void
 }
@@ -106,10 +108,15 @@ const SVG_ATTRS = new Set([
 ])
 
 const tagOf = (vnode: AnyVNode) => vnode.sel?.split(/[#.]/)[0] || "div"
-const classesOf = (vnode: AnyVNode) =>
-	Object.entries(vnode.data?.class ?? {})
-		.filter(([, isOn]) => isOn)
-		.map(([name]) => name)
+/** Classes from `h.Class`, a `class` attribute (`h.Attribute("class", …)`, common on SVG) and the selector. */
+const classesOf = (vnode: AnyVNode): Array<string> => {
+	const out = new Set<string>()
+	for (const [name, isOn] of Object.entries(vnode.data?.class ?? {})) if (isOn) out.add(name)
+	for (const source of [vnode.data?.attrs?.class, vnode.data?.props?.className])
+		if (typeof source === "string") for (const name of source.split(/\s+/)) if (name !== "") out.add(name)
+	for (const name of vnode.sel?.split("#")[0]?.split(".").slice(1) ?? []) if (name !== "") out.add(name)
+	return [...out]
+}
 
 const attrsOf = (vnode: AnyVNode): Record<string, string> => {
 	const out: Record<string, string> = {}
@@ -128,6 +135,24 @@ const attrsOf = (vnode: AnyVNode): Record<string, string> => {
 	return out
 }
 
+/** `:empty`: no element children and no text. */
+const isEmpty = (vnode: AnyVNode): boolean =>
+	(vnode.text ?? "") === "" &&
+	typeof vnode.data?.props?.innerHTML !== "string" &&
+	(vnode.children ?? []).every((child) =>
+		typeof child === "string"
+			? child === ""
+			: child.sel === "!" || (child.sel === undefined && (child.text ?? "") === ""),
+	)
+
+/** A fill or stroke in a CSS colour syntax an SVG rasteriser may not read (oklch, color-mix…) as hex. */
+const svgPaint = (name: string, value: string): string => {
+	if ((name !== "fill" && name !== "stroke") || !/^[a-z-]+\(/i.test(value) || /^(rgba?|url)\(/i.test(value))
+		return value
+	const hex = color(value)
+	return hex === null ? value : hex.endsWith("ff") ? hex.slice(0, 7) : hex
+}
+
 /** An SVG subtree as a flat icon body: `<g>` attributes pushed down onto their children. */
 const svgBody = (vnode: AnyVNode, inherited: Record<string, string> = {}): string =>
 	(vnode.children ?? [])
@@ -138,7 +163,7 @@ const svgBody = (vnode: AnyVNode, inherited: Record<string, string> = {}): strin
 			if (tag === "g") return svgBody(child, attrs)
 			const list = Object.entries(attrs)
 				.filter(([name]) => SVG_ATTRS.has(name))
-				.map(([name, value]) => `${name}="${value.replace(/"/g, "&quot;")}"`)
+				.map(([name, value]) => `${name}="${svgPaint(name, value).replace(/"/g, "&quot;")}"`)
 			return `<${tag} ${list.join(" ")}/>`
 		})
 		.join("")
@@ -153,15 +178,19 @@ const ENTITIES = new Map([
 	["nbsp", " "],
 ])
 
+/** A numeric character reference's code point, or the reference itself when it names none. */
+const codePointText = (match: string, point: number): string =>
+	Number.isInteger(point) && point >= 0 && point <= 0x10ffff ? String.fromCodePoint(point) : match
+
 /** An HTML fragment's text: line breaks kept, tags dropped, entities decoded. */
-const htmlText = (html: string): string =>
+export const htmlText = (html: string): string =>
 	html
 		.replace(/<br\s*\/?>/gi, "\n")
 		.replace(/<\/(p|div|li|h[1-6])>/gi, "\n")
 		.replace(/<[^>]*>/g, "")
 		.replace(/&(#x?[0-9a-f]+|\w+);/gi, (match, code: string) => {
-			if (code.startsWith("#x")) return String.fromCodePoint(Number.parseInt(code.slice(2), 16))
-			if (code.startsWith("#")) return String.fromCodePoint(Number(code.slice(1)))
+			if (/^#x/i.test(code)) return codePointText(match, Number.parseInt(code.slice(2), 16))
+			if (code.startsWith("#")) return codePointText(match, Number(code.slice(1)))
 			return ENTITIES.get(code) ?? match
 		})
 		.replace(/\n$/, "")
@@ -231,17 +260,31 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		for (const child of vnode.children ?? []) collectClasses(child, into)
 	}
 
+	/** The element children of a VNode (text and comment nodes skipped), as selectors see them. */
+	const elementChildren = (vnode: AnyVNode): Array<{ vnode: AnyVNode; info: NodeInfo }> => {
+		const kids = (vnode.children ?? []).filter(
+			(child): child is AnyVNode =>
+				typeof child !== "string" && child.sel !== undefined && child.sel !== "!",
+		)
+		return kids.map((child, index) => ({
+			vnode: child,
+			info: {
+				tag: tagOf(child),
+				classes: classesOf(child),
+				attrs: attrsOf(child),
+				index,
+				count: kids.length,
+				empty: isEmpty(child),
+			},
+		}))
+	}
+
 	const hasDescendant =
 		(vnode: AnyVNode) =>
-		(cond: { attrs: Array<[string, string | null]>; tag?: string }): boolean =>
-			(vnode.children ?? []).some((child) => {
-				if (typeof child === "string" || child.sel === undefined) return false
-				const attrs = attrsOf(child)
-				const isMatch =
-					(cond.tag === undefined || tagOf(child) === cond.tag) &&
-					cond.attrs.every(([n, v]) => (v === null ? n in attrs : attrs[n] === v))
-				return isMatch || hasDescendant(child)(cond)
-			})
+		(match: (node: NodeInfo) => boolean, childrenOnly = false): boolean =>
+			elementChildren(vnode).some(
+				(child) => match(child.info) || (!childrenOnly && hasDescendant(child.vnode)(match)),
+			)
 
 	const commitDocument = (document: Document) => {
 		const viewMs = frameStartedAt === 0 ? 0 : performance.now() - frameStartedAt
@@ -268,7 +311,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			path: string,
 			parentPath: string | undefined,
 			scope: Scope,
-			prevAttrs: Record<string, string> | undefined,
+			position: { siblings: ReadonlyArray<NodeInfo>; index: number } | undefined,
 		): WireNode => {
 			if (typeof vnode === "string") return { k: "t", s: vnode }
 			if (vnode.sel === undefined) return { k: "t", s: vnode.text ?? "" }
@@ -281,7 +324,20 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			if (vnode.data?.foldkitMount !== undefined) mountVNodes.set(path, vnode)
 			const inline = inlineStyleOf(vnode)
 			const resolved = styles.resolve(
-				{ classes, attrs, inline, prevAttrs, hasDescendant: hasDescendant(vnode) },
+				{
+					tag,
+					classes,
+					attrs,
+					inline,
+					// Read only by sibling selectors (`peer-*`, `[&+x]`): built when one asks.
+					get prevSiblings() {
+						return position?.siblings.slice(0, position.index).reverse()
+					},
+					index: position?.index,
+					count: position?.siblings.length,
+					empty: isEmpty(vnode),
+					hasDescendant: hasDescendant(vnode),
+				},
 				scope,
 				env.dark,
 				env.width,
@@ -295,11 +351,17 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 					h: st.h ?? (attrs.height ? Number(attrs.height) : undefined),
 				}
 				const body = svgBody(vnode)
-				const h = hash(`svg${view}${body}${JSON.stringify(sized)}`)
+				// `none` stretches the drawing to the box (the dithered avatar); absent means `xMidYMid meet`.
+				const par = attrs.preserveAspectRatio
+				const h = hash(`svg${view}${body}${JSON.stringify(sized)}${par ?? ""}`)
 				nextHashes.add(h)
-				return sentHashes.has(h)
-					? (reusedSubtrees++, { k: "r", h })
-					: { k: "svg", h, view, body, st: sized }
+				if (sentHashes.has(h)) {
+					reusedSubtrees += 1
+					return { k: "r", h }
+				}
+				return par === undefined
+					? { k: "svg", h, view, body, st: sized }
+					: { k: "svg", h, view, body, st: sized, par }
 			}
 			const on: Record<string, number> = {}
 			for (const event in vnode.data?.on) {
@@ -310,15 +372,18 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			}
 			const keep: Record<string, string> = {}
 			for (const name of HOST_ATTRS) if (name in attrs) keep[name] = attrs[name] as string
-			let previous: Record<string, string> | undefined
+			const siblings = elementChildren(vnode)
+			const infoOf = new Map(siblings.map((sib) => [sib.vnode, sib.info]))
+			const infos = siblings.map((sib) => sib.info)
 			const children: Array<WireNode> = []
 			const childList = vnode.children ?? []
 			for (let index = 0; index < childList.length; index++) {
 				const child = childList[index] as AnyVNode | string
 				const segment =
 					typeof child !== "string" && child.key !== undefined ? `k${child.key}` : `${index}`
-				children.push(serialize(child, `${path}/${segment}`, path, resolved.scope, previous))
-				if (typeof child !== "string" && child.sel !== undefined) previous = attrsOf(child)
+				const info = typeof child === "string" ? undefined : infoOf.get(child)
+				const position = info === undefined ? undefined : { siblings: infos, index: info.index ?? 0 }
+				children.push(serialize(child, `${path}/${segment}`, path, resolved.scope, position))
 			}
 			if (vnode.text !== undefined && children.length === 0) children.push({ k: "t", s: vnode.text })
 			// `h.InnerHTML` (highlighted code, rendered markdown) carries no child VNodes: keep its text.
@@ -330,6 +395,35 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 				keep["data-editable"] = "1"
 				keep.value = options.editableText?.(path) ?? ""
 				keep.placeholder = String(vnode.data?.foldkitMount?.args?.placeholder ?? "")
+				// The editor's own box (padding, text size, minimum height) lives in the headless DOM:
+				// its resolved style rides along as the field's one child.
+				const fieldClasses = (options.editableClass?.(path) ?? "")
+					.split(/\s+/)
+					.filter((c) => c !== "")
+				if (fieldClasses.length > 0) {
+					styles.ensure(fieldClasses)
+					const field = styles.resolve(
+						{
+							tag: "div",
+							classes: fieldClasses,
+							attrs: {},
+							empty: true,
+							hasDescendant: () => false,
+						},
+						resolved.scope,
+						env.dark,
+						env.width,
+					).style
+					children.push({
+						k: "e",
+						h: hash(`field${JSON.stringify(field)}`),
+						tag: "div",
+						st: field,
+						attrs: {},
+						on: {},
+						c: [],
+					})
+				}
 			}
 			const self: ElementFields = { tag, st, attrs: keep, on }
 			if (vnode.key !== undefined) self.key = String(vnode.key)
