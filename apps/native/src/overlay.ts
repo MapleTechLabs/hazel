@@ -22,7 +22,7 @@ export const nativeOverlays = makeOverlays()
 const nothing = () => undefined
 
 /** The path of an element proxy (the bridge's); a non-proxy has none and gets nothing. */
-const pathOf = (element: unknown): string | undefined => {
+export const pathOf = (element: unknown): string | undefined => {
 	if (typeof element !== "object" || element === null || !("__path" in element)) return undefined
 	const path = element.__path
 	return typeof path === "string" ? path : undefined

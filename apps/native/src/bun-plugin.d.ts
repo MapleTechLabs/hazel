@@ -1,7 +1,10 @@
 // The part of Bun's API the overlay plugin and the build script use. The app's tsconfig keeps
 // DOM's `fetch` types, which Bun's own type package replaces.
 type BunPluginBuilder = {
-	onLoad(options: { filter: RegExp }, load: () => { contents: string; loader: "ts" }): void
+	onLoad(
+		options: { filter: RegExp },
+		load: (args: { path: string }) => { contents: string; loader: "ts" | "js" },
+	): void
 }
 type BunPlugin = { name: string; setup(build: BunPluginBuilder): void }
 

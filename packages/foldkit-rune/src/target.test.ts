@@ -154,6 +154,23 @@ describe("makeRuneTarget", () => {
 		handle.dispose()
 	})
 
+	it("shows an anchored panel its view hid until positioned", async () => {
+		const tooltip = (_: Model, h: HtmlBuilder<Message>): Html =>
+			h.div(
+				[],
+				[h.button([h.Id("tip-trigger")], ["?"]), h.div([h.Style({ visibility: "hidden" })], ["Tip"])],
+			)
+		const overlays = makeOverlays()
+		const { handle, trees } = boot(tooltip, overlays)
+		await settle()
+		expect(elements(trees().at(-1)!.root).at(-1)?.st.visibility).toBe("hidden")
+		overlays.anchor("r/1", { triggerId: "tip-trigger", side: "top", align: "center", gap: 10 })
+		await settle()
+		const panel = elements(trees().at(-1)!.root).find((n) => n.ov?.anchor !== undefined)
+		expect(panel?.st.visibility).toBeUndefined()
+		handle.dispose()
+	})
+
 	it("keeps handler ids stable and sends unchanged subtrees by reference", async () => {
 		const { rune, handle, trees } = boot()
 		await settle()

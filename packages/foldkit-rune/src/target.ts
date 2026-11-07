@@ -341,17 +341,22 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		else styles.ensure(classes)
 		styles.setViewport(env.width, env.height)
 
-		/** `--trigger-width` for a panel anchored with it, once the host has laid the trigger out. */
-		const withTriggerWidth = (path: string, inline: Record<string, string> | undefined) => {
+		/**
+		 * What anchoring does to a panel's inline style in the browser: it shows a panel its view
+		 * hid until positioned, and sets `--trigger-width` once the host has laid the trigger out.
+		 */
+		const anchoredInline = (path: string, inline: Record<string, string> | undefined) => {
 			const anchor = options.overlays?.anchorAt(path)
-			const trigger = anchor?.isTriggerWidthSet ? pathsById.get(anchor.triggerId) : undefined
-			if (trigger === undefined) return inline
+			if (anchor === undefined) return inline
+			const { visibility: _hidden, ...shown } = inline ?? {}
+			const trigger = anchor.isTriggerWidthSet ? pathsById.get(anchor.triggerId) : undefined
+			if (trigger === undefined) return shown
 			const width = options.bridge?.widthOf(trigger)
 			if (width === undefined) {
 				awaitedWidths.add(trigger)
-				return inline
+				return shown
 			}
-			return { ...inline, "--trigger-width": `${width}px`, "--button-width": `${width}px` }
+			return { ...shown, "--trigger-width": `${width}px`, "--button-width": `${width}px` }
 		}
 		const records = new Map<
 			string,
@@ -383,7 +388,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			const classes = classesOf(vnode)
 			options.bridge?.recordElement(path, parentPath, tag, attrs, classes, records)
 			if (vnode.data?.foldkitMount !== undefined) mountVNodes.set(path, vnode)
-			const inline = withTriggerWidth(path, inlineStyleOf(vnode))
+			const inline = anchoredInline(path, inlineStyleOf(vnode))
 			const resolved = styles.resolve(
 				{
 					tag,

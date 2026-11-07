@@ -122,6 +122,8 @@ const OVERLAY_MOUNTS = [
 	"PortalDatePicker",
 	"PortalPickerPopover",
 	"PortalCommandMenu",
+	"PositionSubmenu",
+	"AnchorTooltipPanel",
 ]
 
 /** Mounts that only observe geometry run against host-backed element proxies; the editor gets a headless DOM. */

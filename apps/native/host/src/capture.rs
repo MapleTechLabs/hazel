@@ -23,6 +23,8 @@ enum Step {
     Settle(u64),
     Wait(u64),
     ClickText(String),
+    /// Move the pointer over the first element with this text that listens for `mouseenter`.
+    HoverText(String),
     Type(String),
     /// A named key (`"Enter"`), or `{ "name": "Enter", "until": "Hello" }` to also wait for
     /// that text to appear (a sent message) before the round trip counts.
@@ -252,6 +254,24 @@ impl Session {
 
 /// Every element with a press handler (or a link) whose text contains `label`, deepest first,
 /// skipping hidden subtrees.
+/// Elements listening for `mouseenter` whose text contains `label`, deepest first.
+fn find_hoverables(node: &Arc<Node>, path: &str, label: &str, out: &mut Vec<String>) {
+    let Node::Elem { children, on, .. } = node.as_ref() else {
+        return;
+    };
+    let before = out.len();
+    for (i, child) in children.iter().enumerate() {
+        let child_path = match child.as_ref() {
+            Node::Elem { key: Some(key), .. } => format!("{path}/k{key}"),
+            _ => format!("{path}/{i}"),
+        };
+        find_hoverables(child, &child_path, label, out);
+    }
+    if out.len() == before && on.contains_key("mouseenter") && text_of(node).contains(label) {
+        out.push(path.to_string());
+    }
+}
+
 fn find_pressables(node: &Arc<Node>, path: &str, label: &str, out: &mut Vec<String>) {
     let Node::Elem {
         children,
@@ -357,6 +377,20 @@ pub fn run(script_path: &str) {
                     });
                     session.tick();
                 }
+            }
+            Step::HoverText(label) => {
+                let mut candidates = Vec::new();
+                if let Some(root) = session.rt.state.root.clone() {
+                    find_hoverables(&root, "r", &label, &mut candidates);
+                }
+                let Some((x, y)) = candidates.iter().find_map(|path| session.rt.find(path)) else {
+                    fail(
+                        &mut child,
+                        &format!("hoverText: nothing hoverable shows \"{label}\""),
+                    );
+                };
+                session.rt.pointer_move(x, y);
+                session.tick();
             }
             Step::ClickText(label) => {
                 let rtt = session.click_text(&label);
