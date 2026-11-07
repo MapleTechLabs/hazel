@@ -193,6 +193,13 @@ const rune = makeRuneTarget({
 	},
 })
 
+// The theme customization lands on `<html>`'s inline style: restyle what is on screen with it.
+styles.setRootProperties(shims.rootStyle)
+shims.onRootStyle(() => {
+	styles.setRootProperties(shims.rootStyle)
+	rune.refreshObserved()
+})
+
 // Created last: the host writes as soon as it starts, and every handler below must exist by then.
 const transport = stdioTransport((message: HostToRuntime) => {
 	if (message.t === "env")

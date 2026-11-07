@@ -46,6 +46,17 @@ describe("StyleResolver", () => {
 		})
 	})
 
+	it("applies <html>'s inline custom properties over the stylesheet's", () => {
+		styles.setRootProperties(new Map([["--bg", "#123456"]]))
+		try {
+			expect(resolve("bg-bg").style.bg).toBe("#123456ff")
+			expect(styles.customProperty("--bg", false)).toBe("#123456")
+		} finally {
+			styles.setRootProperties(new Map())
+		}
+		expect(resolve("bg-bg").style.bg).toBe("#ffffffff")
+	})
+
 	it("switches theme tokens in dark mode", () => {
 		expect(resolve("bg-bg text-fg", { dark: true }).style).toMatchObject({
 			bg: "#000000ff",

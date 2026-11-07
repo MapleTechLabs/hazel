@@ -21,4 +21,21 @@ describe("installShims", () => {
 		expect(location.href).toBe("http://app.hazel.test/b")
 		expect(opened).toEqual(["https://example.com/docs", "mailto:ada@example.com"])
 	})
+
+	it("keeps <html>'s inline custom properties and reports each change", () => {
+		const { rootStyle, onRootStyle } = installShims({
+			width: 800,
+			height: 600,
+			dark: false,
+			url: "http://app.hazel.test/",
+		})
+		let changes = 0
+		onRootStyle(() => changes++)
+		document.documentElement.style.setProperty("--color-brand-600", "var(--color-violet-600)")
+		document.documentElement.style.setProperty("--color-brand-600", "var(--color-violet-600)")
+		expect(rootStyle.get("--color-brand-600")).toBe("var(--color-violet-600)")
+		document.documentElement.style.removeProperty("--color-brand-600")
+		expect(rootStyle.has("--color-brand-600")).toBe(false)
+		expect(changes).toBe(2)
+	})
 })

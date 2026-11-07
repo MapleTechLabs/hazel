@@ -198,7 +198,23 @@ export const installShims = (env: ShimEnv) => {
 		return list
 	}
 
-	const documentElement = element()
+	// The app themes itself through `<html>`'s inline custom properties (brand colour, radius).
+	const rootStyle = new Map<string, string>()
+	const rootStyleListeners = new Set<() => void>()
+	const changedRootStyle = () => rootStyleListeners.forEach((listener) => listener())
+	const documentElement = Object.assign(element(), {
+		style: {
+			setProperty: (name: string, value: string) => {
+				if (rootStyle.get(name) === value) return
+				rootStyle.set(name, value)
+				changedRootStyle()
+			},
+			removeProperty: (name: string) => {
+				if (rootStyle.delete(name)) changedRootStyle()
+			},
+			getPropertyValue: (name: string) => rootStyle.get(name) ?? "",
+		},
+	})
 	const document = Object.assign(new DomNode(), {
 		documentElement,
 		body: element(),
@@ -285,7 +301,8 @@ export const installShims = (env: ShimEnv) => {
 		}
 		windowTarget.dispatchEvent(new Event("resize"))
 	}
-	return { updateEnv, history, location }
+	const onRootStyle = (listener: () => void) => rootStyleListeners.add(listener)
+	return { updateEnv, history, location, rootStyle: rootStyle as ReadonlyMap<string, string>, onRootStyle }
 }
 
 /** Web and mail links open in the user's browser or mail app; any other scheme is dropped. */

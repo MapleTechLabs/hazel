@@ -190,6 +190,8 @@ export class StyleResolver {
 	/** `@property` initial values; `inherits: false` ones reset on every element. */
 	private registered = new Map<string, { initial: string; inherits: boolean }>()
 	private known = new Set<string>()
+	/** Inline custom properties on `<html>`: the theme customization the app applies at runtime. */
+	private rootProperties = new Map<string, string>()
 	private css = ""
 	/** Declarations on `body`: the page behind the app's root element. */
 	private pageDecls: Array<Decl> = []
@@ -262,6 +264,7 @@ export class StyleResolver {
 			for (const [name, p] of this.registered) vars.set(name, p.initial)
 			for (const [k, v] of this.vars.light) vars.set(k, v)
 			if (dark) for (const [k, v] of this.vars.dark) vars.set(k, v)
+			for (const [k, v] of this.rootProperties) vars.set(k, v)
 			// `<html class="dark|light">`: the root every `.dark *` condition looks for.
 			const html: NodeInfo = { tag: "html", classes: [dark ? "dark" : "light"], attrs: {} }
 			const ancestors = new Set<number>()
@@ -293,6 +296,13 @@ export class StyleResolver {
 			if (d.prop === "color") page.color = c
 		}
 		return page
+	}
+
+	/** `document.documentElement.style` custom properties; they beat the stylesheet's, as inline styles do. */
+	setRootProperties(properties: ReadonlyMap<string, string>) {
+		this.rootProperties = new Map(properties)
+		this.scopes.clear()
+		this.resolved.clear()
 	}
 
 	/** One Scope object per distinct (parent, local vars, pending rules, context): the id keys the style cache. */
