@@ -564,6 +564,11 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 
 	/** A Mount that starts observing an element after a commit needs it flagged for the host. */
 	let isRefreshScheduled = false
+	// A precompiled sheet compiles classes it lacked off the input path: restyle once they are in.
+	styles.onRecompiled(() => {
+		if (lastDocument) commitDocument(lastDocument, lastDocumentAck)
+	})
+
 	const refreshObserved = () => {
 		if (isRefreshScheduled || lastDocument === undefined) return
 		isRefreshScheduled = true

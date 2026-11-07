@@ -32,6 +32,9 @@ HAZEL_NATIVE_ENTRY=dist/entry.js host/target/release/hazel-native
 ```
 
 Without `HAZEL_NATIVE_ENTRY` the host runs `src/entry.ts` directly (slower boot, no build step).
+`bun run build` also writes `dist/styles.json`, the stylesheet compiled for every class the app's
+sources use, so the bundled runtime boots without Tailwind's compiler; a class the scan missed
+compiles after the commit that shows it, and the screen restyles.
 `NATIVE_THEME=dark`, `NATIVE_WIDTH`/`NATIVE_HEIGHT` set the window; `NATIVE_DEBUG=1` logs every
 Message and editor event; `NATIVE_STATS=<file>` appends per-commit timings.
 

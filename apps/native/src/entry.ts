@@ -4,7 +4,7 @@
  * fixture org over a local sync socket; `HAZEL_DATA=live` talks to `VITE_BACKEND_URL` with
  * `HAZEL_SESSION_TOKEN` as the session bearer.
  */
-import { appendFileSync } from "node:fs"
+import { appendFileSync, existsSync, readFileSync } from "node:fs"
 import { Option } from "effect"
 import {
 	makeElementBridge,
@@ -78,7 +78,12 @@ const { ResourcesLive } = await import("../../web-foldkit/src/rpc")
 const { NotificationSinks } = await import("../../web-foldkit/src/app/notification-sinks")
 const PendingAnnouncement = await import("../../web-foldkit/src/ui/aria/pending-announcement")
 
-const styles = await StyleResolver.load(new URL("../../web-foldkit/src/styles.css", import.meta.url).pathname)
+const stylesheet = new URL("../../web-foldkit/src/styles.css", import.meta.url).pathname
+// The bundled runtime ships its sheet compiled (`bun run build`); from source it compiles here.
+const precompiledPath = new URL("./styles.json", import.meta.url).pathname
+const styles = existsSync(precompiledPath)
+	? StyleResolver.fromPrecompiled(JSON.parse(readFileSync(precompiledPath, "utf8")), stylesheet)
+	: await StyleResolver.load(stylesheet)
 
 /** A press on an `href` replays as the click Foldkit's link listener expects on `document`. */
 const followLink = (href: string) => {

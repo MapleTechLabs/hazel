@@ -1,10 +1,9 @@
 // Resolves Tailwind class lists to plain computed styles with Tailwind's own compiler and the
 // app's real stylesheet (theme tokens, light/dark, breakpoints). The native host never sees a
 // class name: it gets px numbers, colours and a handful of enums.
-import { compile } from "@tailwindcss/node"
+import type { compile } from "@tailwindcss/node"
 import postcss, { type AtRule, type ChildNode, type Container, type Document } from "postcss"
 import { readFile } from "node:fs/promises"
-import { Scanner } from "@tailwindcss/oxide"
 
 import { color } from "./css-color"
 import { type Compound, type Context, Unsupported, parseSelectorList } from "./selector"
@@ -232,25 +231,60 @@ export class StyleResolver {
 	readonly unsupportedProps = new Map<string, number>()
 	readonly unsupportedSelectors = new Map<string, number>()
 
-	private constructor(private compiler: Awaited<ReturnType<typeof compile>>) {}
+	/** Null for a precompiled sheet until a class it lacks appears. */
+	private compiler: Compiler | null
+	private compiling = false
+	private readonly recompiledListeners = new Set<() => void>()
+
+	private constructor(
+		compiler: Compiler | null,
+		private readonly makeCompiler: () => Promise<Compiler>,
+	) {
+		this.compiler = compiler
+	}
 
 	/**
 	 * Compiles the stylesheet and, like Tailwind's build, scans its `@source` files for every class
 	 * the app can use, so a commit that shows new markup never waits on a rebuild.
 	 */
 	static async load(stylesheet: string): Promise<StyleResolver> {
-		const base = stylesheet.slice(0, stylesheet.lastIndexOf("/") + 1)
-		const css = await readFile(stylesheet, "utf8")
-		const compiler = await compile(css, { base, from: stylesheet, onDependency() {} })
-		const resolver = new StyleResolver(compiler)
-		const sources = [...compiler.sources]
-		if (compiler.root !== null && compiler.root !== "none")
-			sources.push({ ...compiler.root, negated: false })
-		if (sources.length > 0) resolver.ensure(new Scanner({ sources }).scan())
+		const compiler = await compileSheet(stylesheet)
+		const resolver = new StyleResolver(compiler, () => compileSheet(stylesheet))
+		resolver.ensure(await scanSources(compiler))
 		return resolver
 	}
 
-	/** Make sure every class in `classes` has compiled rules; rebuilds the sheet when new ones appear. */
+	/**
+	 * The sheet compiled for `classes`, by default every class its sources use: what a build ships
+	 * for `fromPrecompiled`.
+	 */
+	static async precompile(stylesheet: string, only?: Iterable<string>): Promise<PrecompiledStyles> {
+		const compiler = await compileSheet(stylesheet)
+		const classes = only === undefined ? await scanSources(compiler) : [...only]
+		return { css: compiler.build(classes), classes }
+	}
+
+	/**
+	 * A resolver over a sheet compiled at build time: no Tailwind compile or scan at boot. A class
+	 * the build did not see compiles later; `onRecompiled` listeners hear when its rules are in.
+	 */
+	static fromPrecompiled(precompiled: PrecompiledStyles, stylesheet: string): StyleResolver {
+		const resolver = new StyleResolver(null, () => compileSheet(stylesheet))
+		for (const c of precompiled.classes) resolver.known.add(c)
+		resolver.css = precompiled.css
+		resolver.parse(precompiled.css)
+		return resolver
+	}
+
+	/** `listener` runs after classes that arrived uncompiled have their rules: restyle then. */
+	onRecompiled(listener: () => void) {
+		this.recompiledListeners.add(listener)
+	}
+
+	/**
+	 * Make sure every class in `classes` has compiled rules; rebuilds the sheet when new ones appear.
+	 * False when nothing changed, or when the compiler is still loading (`onRecompiled` follows).
+	 */
 	ensure(classes: Iterable<string>) {
 		let added = false
 		for (const c of classes)
@@ -259,7 +293,32 @@ export class StyleResolver {
 				added = true
 			}
 		if (!added && this.rules.size > 0) return false
-		const css = this.compiler.build([...this.known])
+		if (this.compiler === null) {
+			this.compileLater()
+			return false
+		}
+		return this.rebuild(this.compiler)
+	}
+
+	/** Loads the compiler once, then builds every class known by then. */
+	private compileLater() {
+		if (this.compiling) return
+		this.compiling = true
+		this.makeCompiler().then(
+			(compiler) => {
+				this.compiler = compiler
+				this.compiling = false
+				if (this.rebuild(compiler)) for (const listener of this.recompiledListeners) listener()
+			},
+			(cause: unknown) => {
+				this.compiling = false
+				process.stderr.write(`[styles] the stylesheet did not compile: ${String(cause)}\n`)
+			},
+		)
+	}
+
+	private rebuild(compiler: Compiler): boolean {
+		const css = compiler.build([...this.known])
 		// A class Tailwind does not generate (a typo, a non-utility) adds no CSS: nothing to re-parse.
 		if (css === this.css) return false
 		this.css = css
@@ -1581,6 +1640,27 @@ const composeTransition = (t: Accumulator["transition"]): Style["transition"] =>
 			if (channel !== undefined && out[channel] === undefined) out[channel] = timing
 	})
 	return Object.keys(out).length === 0 ? undefined : out
+}
+
+type Compiler = Awaited<ReturnType<typeof compile>>
+/** A stylesheet compiled for `classes`, the classes its sources use. */
+export type PrecompiledStyles = { css: string; classes: Array<string> }
+
+/** Tailwind's compiler for `stylesheet`, loaded on demand: a precompiled boot never imports it. */
+const compileSheet = async (stylesheet: string): Promise<Compiler> => {
+	const { compile } = await import("@tailwindcss/node")
+	const base = stylesheet.slice(0, stylesheet.lastIndexOf("/") + 1)
+	const css = await readFile(stylesheet, "utf8")
+	return compile(css, { base, from: stylesheet, onDependency() {} })
+}
+
+/** Every class the sheet's `@source` files use, as Tailwind's build scans them. */
+const scanSources = async (compiler: Compiler): Promise<Array<string>> => {
+	const sources = [...compiler.sources]
+	if (compiler.root !== null && compiler.root !== "none") sources.push({ ...compiler.root, negated: false })
+	if (sources.length === 0) return []
+	const { Scanner } = await import("@tailwindcss/oxide")
+	return new Scanner({ sources }).scan()
 }
 
 const NO_STATES: ReadonlySet<string> = new Set()

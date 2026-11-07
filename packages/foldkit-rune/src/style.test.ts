@@ -129,6 +129,25 @@ describe("StyleResolver", () => {
 		expect(resolve("h-1/2").style.h).toBe("auto")
 	})
 
+	it("resolves from a precompiled sheet and compiles a class it lacks later", async () => {
+		const sheet = new URL("../test/styles.css", import.meta.url).pathname
+		const precompiled = await StyleResolver.precompile(sheet, ["bg-bg", "text-fg"])
+		const shipped = StyleResolver.fromPrecompiled(precompiled, sheet)
+		const page = element("bg-bg text-fg")
+		expect(shipped.resolve(page, shipped.rootScope(true), true, 1280).style).toEqual(
+			resolve("bg-bg text-fg", { dark: true }).style,
+		)
+		const pre = StyleResolver.fromPrecompiled({ ...precompiled, css: "", classes: [] }, sheet)
+		let recompiled = 0
+		pre.onRecompiled(() => recompiled++)
+		// No compiler yet: the class waits, and its rules arrive with the listener.
+		expect(pre.ensure(["px-4"])).toBe(false)
+		await new Promise<void>((done) => pre.onRecompiled(done))
+		expect(recompiled).toBe(1)
+		const input = element("px-4")
+		expect(pre.resolve(input, pre.rootScope(false), false, 1280).style.pad).toEqual([0, 16, 0, 16])
+	})
+
 	it("switches theme tokens in dark mode", () => {
 		expect(resolve("bg-bg text-fg", { dark: true }).style).toMatchObject({
 			bg: "#000000ff",
