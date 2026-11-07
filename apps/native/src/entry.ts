@@ -47,7 +47,9 @@ if (offline !== undefined) {
 	})
 	const DebugWebSocket = class extends FixtureWebSocket {
 		override send(data: string) {
-			process.stderr.write(`[offline] ws> ${data.slice(0, 120)}\n`)
+			// Only the frame's kind and size: frames carry access tokens and message text.
+			const tag = /"_tag":"([A-Za-z]+)"/.exec(data)?.[1] ?? "frame"
+			process.stderr.write(`[offline] ws> ${tag} (${data.length} bytes)\n`)
 			super.send(data)
 		}
 	}
@@ -171,7 +173,9 @@ const rune = makeRuneTarget({
 	editableClass: () => EDITABLE_CLASS,
 
 	onEditable: (path, event) => {
-		if (process.env.NATIVE_DEBUG) process.stderr.write(`[editable] ${JSON.stringify(event)}\n`)
+		// The text's length, not the text: the debug log must not hold what the user typed.
+		if (process.env.NATIVE_DEBUG)
+			process.stderr.write(`[editable] key=${event.key ?? "-"} chars=${event.value?.length ?? "-"}\n`)
 		pendingEdits.push(path, event)
 	},
 

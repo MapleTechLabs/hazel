@@ -36,8 +36,8 @@ Without `HAZEL_NATIVE_ENTRY` the host runs `src/entry.ts` directly (slower boot,
 Message and editor event; `NATIVE_STATS=<file>` appends per-commit timings.
 
 `host/target/release/hazel-native --capture script.json` runs headless on a real-time frame loop and
-follows a script (`settle`, `waitText`, `clickText`, `focusEditable`, `type`, `key`, `snap`, `dump`),
-writing timings to `NATIVE_BENCH_OUT`.
+follows a script (`settle`, `waitText`, `clickText`, `focusEditable`, `type`, `key`, `snap`, `dump`,
+`exportLayout`), writing timings to `NATIVE_BENCH_OUT`. A step that cannot complete fails the run.
 
 ## Benchmark
 
@@ -48,10 +48,22 @@ bun bench/run.ts --runs 5          # native capture and the same scenario in Chr
 Writes `bench/out/report.md`: boot to messages on screen, key to frame, Enter to the sent message,
 frame CPU and memory, medians of each.
 
+## Conformance
+
+```sh
+bun run conformance                # native vs Chromium: element rects and pixels, light and dark
+bun run --cwd ../../packages/foldkit-rune test   # resolved styles vs Chromium's computed styles
+```
+
+`bench/conformance` renders the same scenarios natively and in Chromium, matches elements and
+compares their rects and the pixels; `--check` holds the results to `thresholds.json`. The style
+suite in `packages/foldkit-rune` replays what Chromium computed for every element of the app and a
+synthetic utility page (`conformance:extract` records it).
+
 ## Not yet native
 
-- Images (avatars draw as placeholders) and emoji glyphs (no emoji font is loaded yet), iframes and
-  HTML embeds.
-- Interaction styles (`focus:`, `active:`, `disabled:`), animations, box-shadow rings.
-- Mounts other than the message list and the composer (popovers, menus, pickers) do not acquire.
+- Popovers, menus and pickers: Mounts other than the message list and the composer do not acquire.
+- Interaction styles (`focus:`, `active:`, `disabled:` colours), animations and transitions.
 - Grid is emulated with flex rows: Rune does not expose Taffy's grid templates yet.
+- Text inside SVG icons, `text-box` trimming, vertical margin collapsing (spacing is the same, a
+  block's own box is not), and fractions of the parent's width (`w-1/2`).
