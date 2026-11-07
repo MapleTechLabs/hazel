@@ -94,25 +94,30 @@ export const decodePng = (file: Uint8Array): Image => {
 			pixels[row + x] = (value + predicted) & 0xff
 		}
 	}
+	// Already RGBA: no second buffer.
+	if (colorType === 6) return { width, height, data: pixels }
 	const data = new Uint8Array(width * height * 4)
 	for (let i = 0; i < width * height; i++) {
 		const s = i * channels
 		const d = i * 4
 		const a = pixels[s] ?? 0
-		if (colorType === 6) data.set(pixels.subarray(s, s + 4), d)
-		else if (colorType === 2) data.set([a, pixels[s + 1] ?? 0, pixels[s + 2] ?? 0, 255], d)
-		else if (colorType === 3)
-			data.set(
-				[
-					palette[a * 3] ?? 0,
-					palette[a * 3 + 1] ?? 0,
-					palette[a * 3 + 2] ?? 0,
-					transparency[a] ?? 255,
-				],
-				d,
-			)
-		else if (colorType === 4) data.set([a, a, a, pixels[s + 1] ?? 0], d)
-		else data.set([a, a, a, 255], d)
+		if (colorType === 3) {
+			data[d] = palette[a * 3] ?? 0
+			data[d + 1] = palette[a * 3 + 1] ?? 0
+			data[d + 2] = palette[a * 3 + 2] ?? 0
+			data[d + 3] = transparency[a] ?? 255
+		} else if (colorType === 2) {
+			data[d] = a
+			data[d + 1] = pixels[s + 1] ?? 0
+			data[d + 2] = pixels[s + 2] ?? 0
+			data[d + 3] = 255
+		} else {
+			// Grey, with alpha (4) or without (0).
+			data[d] = a
+			data[d + 1] = a
+			data[d + 2] = a
+			data[d + 3] = colorType === 4 ? (pixels[s + 1] ?? 0) : 255
+		}
 	}
 	return { width, height, data }
 }
