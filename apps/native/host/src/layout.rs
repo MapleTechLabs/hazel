@@ -3,13 +3,13 @@
 //! margins and box-shadow rings.
 use rune::tok::TextStyle;
 use rune::{
-    Align, Anim, AnimExt, Color, Curve, Easing, El, Family, ScrollSpec, Shadow, Span, Spring,
-    TextCase, Transition, el, row, text,
+    Align, Anim, AnimExt, Color, Curve, Easing, Effect, El, Family, LoopSpec, ScrollSpec, Shadow,
+    Span, Spring, SpringPair, TextCase, Transition, Vec2, el, row, text,
 };
 
 use std::collections::HashMap;
 
-use crate::wire::{BgImage, F, FocusRing, Len, OutlineSpec, Style, Timing};
+use crate::wire::{Animation, BgImage, F, FocusRing, Len, OutlineSpec, Style, Timing};
 
 pub fn color(hex: &Option<String>) -> Option<Color> {
     let h = hex.as_deref()?;
@@ -402,15 +402,62 @@ fn apply_motion(e: El, st: &Style) -> El {
         .map(|t| t.duration.0)
         .fold(0.0, f32::max);
     let colors = tween(&t.colors);
-    e.motion(if spring > 0.0 {
+    let spring = if spring > 0.0 {
         Spring::new(spring, 0.0)
     } else {
         Spring::NONE
-    })
-    .hover_motion(colors, colors)
-    .opacity_motion(tween(&t.opacity))
-    .offset_motion(tween(&t.transform))
-    .transition(Transition::none())
+    };
+    let e = e
+        .motion(spring)
+        .hover_motion(colors, colors)
+        .opacity_motion(tween(&t.opacity))
+        .offset_motion(tween(&t.transform));
+    match &st.animation {
+        Some(Animation::Spin { period }) => e
+            .looping(LoopSpec::rotation(f64::from(period.0)))
+            .transition(Transition::none()),
+        Some(Animation::Pulse {
+            period,
+            delay,
+            from,
+            to,
+        }) => e
+            .looping(LoopSpec::opacity(
+                f64::from(period.0),
+                f64::from(delay.0),
+                from.0,
+                to.0,
+            ))
+            .transition(Transition::none()),
+        Some(Animation::Enter {
+            duration,
+            delay,
+            opacity,
+            x,
+            y,
+            scale,
+        }) => {
+            let insertion = Effect {
+                opacity: opacity.0,
+                scale: scale.0,
+                offset: Vec2::new(x.0, y.0),
+                ..Effect::IDENTITY
+            };
+            // Rune plays entrances on springs: one as long as the CSS animation, no overshoot.
+            let springs = SpringPair {
+                enter: Spring::new(duration.0.max(0.01), 0.0),
+                exit: Spring::NONE,
+            };
+            let transition = Transition {
+                insertion,
+                removal: Effect::IDENTITY,
+                pop_layout: true,
+                springs,
+            };
+            e.transition(transition).enter_delay(delay.0)
+        }
+        None => e.transition(Transition::none()),
+    }
 }
 
 /// The fill a press shows and the rings focus draws. A field's focus is its text field's, inside

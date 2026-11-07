@@ -98,6 +98,29 @@ describe("StyleResolver", () => {
 		expect(resolve("px-2").style.transition).toBeUndefined()
 	})
 
+	it("sends keyframe animations the host can loop or play on mount", () => {
+		expect(resolve("animate-spin").style.animation).toEqual({ kind: "spin", period: 1 })
+		// Tailwind's pulse: full opacity at the start and end, half at the middle.
+		expect(resolve("animate-pulse").style.animation).toEqual({
+			kind: "pulse",
+			period: 2,
+			delay: 0,
+			from: 1,
+			to: 0.5,
+		})
+		expect(resolve("animate-in fade-in slide-in-from-top-2 duration-200").style.animation).toEqual({
+			kind: "enter",
+			duration: 0.2,
+			delay: 0,
+			opacity: 0,
+			x: 0,
+			y: -8,
+			scale: 1,
+		})
+		expect(resolve("animate-bounce").style.animation).toBeUndefined()
+		expect(styles.unsupportedProps.has("animation: bounce")).toBe(true)
+	})
+
 	it("switches theme tokens in dark mode", () => {
 		expect(resolve("bg-bg text-fg", { dark: true }).style).toMatchObject({
 			bg: "#000000ff",

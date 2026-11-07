@@ -104,6 +104,33 @@ pub struct Style {
     /// CSS transitions by what Rune animates separately; a missing channel changes at once.
     #[serde(default, deserialize_with = "lenient")]
     pub transition: Option<Transitions>,
+    /// A keyframe animation: a loop, or an entrance played on mount.
+    #[serde(default, deserialize_with = "lenient")]
+    pub animation: Option<Animation>,
+}
+
+#[derive(Deserialize, Clone, Debug, Hash, PartialEq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum Animation {
+    Spin {
+        period: F,
+    },
+    /// Opacity `from` at the start of each period, `to` at its middle.
+    Pulse {
+        period: F,
+        delay: F,
+        from: F,
+        to: F,
+    },
+    /// Starts from these values (px, and a scale) and settles on the element's own.
+    Enter {
+        duration: F,
+        delay: F,
+        opacity: F,
+        x: F,
+        y: F,
+        scale: F,
+    },
 }
 
 #[derive(Deserialize, Clone, Debug, Default, Hash, PartialEq)]

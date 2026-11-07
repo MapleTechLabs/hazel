@@ -90,6 +90,12 @@ export type ElementInput = {
 
 export type Px = number | "full" | "auto"
 export type Ring = { width: number; color: string; offset: number }
+export type Animation =
+	| { kind: "spin"; period: number }
+	/** Opacity from `from` to `to` at mid-period and back, eased in and out. */
+	| { kind: "pulse"; period: number; delay: number; from: number; to: number }
+	/** Plays once on mount, from these values to the element's own (px, and a scale factor). */
+	| { kind: "enter"; duration: number; delay: number; opacity: number; x: number; y: number; scale: number }
 export type TransitionChannel = "colors" | "opacity" | "layout" | "transform"
 /** Seconds, and the `cubic-bezier` control points (`linear` is `[0, 0, 1, 1]`). */
 export type Timing = { duration: number; delay: number; ease: [number, number, number, number] }
@@ -157,6 +163,8 @@ export type Style = {
 	focusWithinRing?: Ring
 	/** Background while a press is held (`:active`). */
 	pressBg?: string
+	/** A keyframe animation the host can play: a rotation or opacity loop, or an entrance on mount. */
+	animation?: Animation
 	/** CSS transitions, by what the host animates separately; absent channels change at once. */
 	transition?: Partial<Record<TransitionChannel, Timing>>
 	/** `url` as written in the stylesheet; the host resolves it against the page. */
@@ -206,6 +214,8 @@ export class StyleResolver {
 	private known = new Set<string>()
 	/** Inline custom properties on `<html>`: the theme customization the app applies at runtime. */
 	private rootProperties = new Map<string, string>()
+	/** `@keyframes` by name: each frame's offsets (0 to 1) and declarations. */
+	private keyframes = new Map<string, Array<{ at: Array<number>; decls: Array<Decl> }>>()
 	private css = ""
 	/** Declarations on `body`: the page behind the app's root element. */
 	private pageDecls: Array<Decl> = []
@@ -337,10 +347,27 @@ export class StyleResolver {
 		this.scopes.clear()
 		this.resolved.clear()
 		this.registered.clear()
+		this.keyframes.clear()
 		this.vars = { light: new Map(), dark: new Map() }
 		this.unsupportedSelectors.clear()
 		let order = 0
 		const root = postcss.parse(`@layer ua {${UA_CSS}}\n${css}`)
+		root.walkAtRules("keyframes", (at: AtRule) => {
+			const frames: Array<{ at: Array<number>; decls: Array<Decl> }> = []
+			at.each((node: ChildNode) => {
+				if (node.type !== "rule") return
+				const offsets = node.selector.split(",").map((o) => {
+					const t = o.trim()
+					return t === "from" ? 0 : t === "to" ? 1 : Number.parseFloat(t) / 100
+				})
+				const decls: Array<Decl> = []
+				node.walkDecls((d) => {
+					decls.push({ prop: d.prop, value: d.value, important: false })
+				})
+				frames.push({ at: offsets, decls })
+			})
+			this.keyframes.set(at.params.trim(), frames)
+		})
 		root.walkAtRules("property", (at: AtRule) => {
 			let initial = ""
 			let inherits = true
@@ -1215,6 +1242,10 @@ export class StyleResolver {
 			case "opacity":
 				s.opacity = ratio(v)
 				break
+			case "animation":
+				// `var(a)var(b)` runs together once substituted: keep the parts apart.
+				acc.animation = substituteStrict(d.value.replace(/\)(?=\s*var\()/g, ") "), acc.vars) ?? "none"
+				break
 			case "transition-property":
 				acc.transition.property = v
 				break
@@ -1300,6 +1331,71 @@ export class StyleResolver {
 		}
 	}
 
+	/** The one animation in `value` the host can play, from its keyframes; others count as unsupported. */
+	private composeAnimation(value: string, acc: Accumulator, units: Units): Animation | undefined {
+		const first = splitTop(value, /,/)[0]?.trim() ?? "none"
+		let name = "none"
+		const times: Array<number> = []
+		let infinite = false
+		for (const token of splitTop(first, /\s/)) {
+			if (/^-?[\d.]+m?s$/.test(token)) times.push(parseSeconds(token))
+			else if (token === "infinite") infinite = true
+			else if (/^[a-z][\w-]*$/i.test(token) && !ANIMATION_KEYWORDS.has(token)) name = token
+		}
+		const frames = this.keyframes.get(name)
+		if (name === "none" || frames === undefined) return undefined
+		const [duration = 0, delay = 0] = times
+		if (duration <= 0) return undefined
+		const valueAt = (prop: string, at: number) =>
+			frames
+				.filter((f) => f.at.includes(at))
+				.flatMap((f) => f.decls)
+				.find((d) => d.prop === prop)?.value
+		const props = new Set(frames.flatMap((f) => f.decls.map((d) => d.prop)))
+		props.delete("animation-timing-function")
+		if (
+			infinite &&
+			[...props].every((p) => p === "transform") &&
+			frames.some((f) => f.decls.some((d) => d.value.includes("rotate(")))
+		)
+			return { kind: "spin", period: duration }
+		if (infinite && [...props].every((p) => p === "opacity")) {
+			const rest = acc.style.opacity ?? 1
+			const opacityAt = (at: number) => {
+				const v = valueAt("opacity", at)
+				return v === undefined ? rest : ratio(substitute(v, acc.vars))
+			}
+			const middle = frames.flatMap((f) => f.at).filter((at) => at > 0 && at < 1)
+			const peak = middle.sort((a, b) => Math.abs(a - 0.5) - Math.abs(b - 0.5))[0]
+			return {
+				kind: "pulse",
+				period: duration,
+				delay,
+				from: opacityAt(0),
+				to: peak === undefined ? opacityAt(0) : opacityAt(peak),
+			}
+		}
+		const start = frames.filter((f) => f.at.includes(0)).flatMap((f) => f.decls)
+		if (!infinite && start.length > 0 && [...props].every((p) => ENTER_PROPS.has(p))) {
+			const read = (prop: string) => {
+				const v = start.find((d) => d.prop === prop)?.value
+				return v === undefined ? undefined : substitute(v, acc.vars).trim()
+			}
+			const opacity = read("opacity")
+			const pose = parseEnterTransform(read("transform") ?? "none", units)
+			if (pose !== null)
+				return {
+					kind: "enter",
+					duration,
+					delay,
+					opacity: opacity === undefined ? 1 : ratio(opacity),
+					...pose,
+				}
+		}
+		this.bump(this.unsupportedProps, `animation: ${name}`)
+		return undefined
+	}
+
 	/** Composes what needs the whole element (shadows, outline) and drops values equal to "unset". */
 	private finish(acc: Accumulator) {
 		const s = acc.style
@@ -1321,6 +1417,9 @@ export class StyleResolver {
 		}
 		const transition = composeTransition(acc.transition)
 		if (transition !== undefined) s.transition = transition
+		const animation =
+			acc.animation === undefined ? undefined : this.composeAnimation(acc.animation, acc, units)
+		if (animation !== undefined) s.animation = animation
 		// Flex and grid items and out-of-flow boxes are blockified: `inline-flex` is `flex`, a span is a block.
 		if (acc.scope.flexParent || s.position === "absolute") {
 			if (s.display === "inline" || (s.display === undefined && INLINE_TAGS.has(acc.tag)))
@@ -1398,6 +1497,59 @@ const parseSeconds = (v: string): number => {
 	const n = Number.parseFloat(v)
 	if (!Number.isFinite(n)) return 0
 	return v.trim().endsWith("ms") ? n / 1000 : n
+}
+
+const ANIMATION_KEYWORDS = new Set([
+	"linear",
+	"ease",
+	"ease-in",
+	"ease-out",
+	"ease-in-out",
+	"step-start",
+	"step-end",
+	"infinite",
+	"normal",
+	"reverse",
+	"alternate",
+	"alternate-reverse",
+	"none",
+	"forwards",
+	"backwards",
+	"both",
+	"running",
+	"paused",
+])
+/** What an entrance may move; a blur or a rotation is not one the host draws. */
+const ENTER_PROPS = new Set(["opacity", "transform", "filter"])
+
+/** The arguments of the first `name(...)` in `text`, split on top-level commas. */
+const fnArgs = (text: string, name: string): Array<string> | undefined => {
+	const at = text.indexOf(`${name}(`)
+	if (at < 0) return undefined
+	let depth = 0
+	for (let i = at + name.length; i < text.length; i++) {
+		if (text[i] === "(") depth++
+		else if (text[i] === ")" && --depth === 0) return splitTop(text.slice(at + name.length + 1, i), /,/)
+	}
+	return undefined
+}
+
+/** An entrance's starting translate and scale; null when it rotates or moves by a percentage. */
+const parseEnterTransform = (v: string, units: Units): { x: number; y: number; scale: number } | null => {
+	if (v === "none") return { x: 0, y: 0, scale: 1 }
+	const rotate = fnArgs(v, "rotate")?.[0]?.trim()
+	if (rotate !== undefined && Number.parseFloat(rotate) !== 0) return null
+	const [tx = "0", ty = "0"] = fnArgs(v, "translate3d") ??
+		fnArgs(v, "translate") ??
+		(fnArgs(v, "translateY") ? ["0", fnArgs(v, "translateY")?.[0] ?? "0"] : undefined) ?? [
+			fnArgs(v, "translateX")?.[0] ?? "0",
+			"0",
+		]
+	const x = evalLength(tx.trim(), units)
+	const y = evalLength(ty.trim(), units)
+	const scale = Number.parseFloat((fnArgs(v, "scale3d") ?? fnArgs(v, "scale"))?.[0] ?? "1")
+	if (x === null || y === null || !Number.isFinite(scale)) return null
+	return { x, y, scale }
 }
 
 /** CSS lists pair by index, a shorter list repeating; each property lands on its channel. */
@@ -1492,6 +1644,8 @@ type Accumulator = {
 	/** The last `box-shadow` value: composed once every custom property is known. */
 	shadows: string | null
 	outline: { style?: string; width?: string; color?: string; offset?: string }
+	/** The `animation` shorthand, substituted; composed in `finish` with its keyframes. */
+	animation?: string
 	/** `transition-*` longhands as written, composed in `finish`. */
 	transition: { property?: string; duration?: string; timing?: string; delay?: string }
 	/** This element's own line-height, when it sets one. */
@@ -1753,7 +1907,6 @@ const IGNORED = new Set([
 	"touch-action",
 	"transition",
 	"transition-behavior",
-	"animation",
 	"animation-duration",
 	"animation-iteration-count",
 	"pointer-events",

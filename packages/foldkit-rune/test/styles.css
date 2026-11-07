@@ -18,3 +18,23 @@
 		color: var(--fg);
 	}
 }
+/* tw-animate-css's enter animation, as the app's sheet imports it. */
+@utility animate-in {
+	animation: enter var(--tw-animation-duration, var(--tw-duration, 0.15s)) var(--tw-ease, ease)
+		var(--tw-animation-delay, 0s) var(--tw-animation-iteration-count, 1)
+		var(--tw-animation-direction, normal) var(--tw-animation-fill-mode, none);
+}
+@utility fade-in {
+	--tw-enter-opacity: 0;
+}
+@utility slide-in-from-top-2 {
+	--tw-enter-translate-y: calc(2 * var(--spacing) * -1);
+}
+@keyframes enter {
+	from {
+		opacity: var(--tw-enter-opacity, 1);
+		transform: translate3d(var(--tw-enter-translate-x, 0), var(--tw-enter-translate-y, 0), 0)
+			scale3d(var(--tw-enter-scale, 1), var(--tw-enter-scale, 1), var(--tw-enter-scale, 1))
+			rotate(var(--tw-enter-rotate, 0));
+	}
+}

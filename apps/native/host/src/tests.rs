@@ -73,15 +73,20 @@ impl Frame {
     }
 }
 
-fn render(rt: &mut Runtime<State>, (w, h): (u32, u32)) -> Frame {
+fn render(rt: &mut Runtime<State>, size: (u32, u32)) -> Frame {
+    rt.settle_all();
+    rt.frame(0.0);
+    draw(rt, size)
+}
+
+/// The last frame as drawn, running animations included.
+fn draw(rt: &mut Runtime<State>, (w, h): (u32, u32)) -> Frame {
     const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
     let gpu = Gpu::headless();
     let mut renderer = Renderer::new(&gpu.device, FORMAT);
     renderer.set_srgb_blend(true);
     rt.set_srgb_blend(true);
     let target = Offscreen::with_format(&gpu.device, w, h, FORMAT);
-    rt.settle_all();
-    rt.frame(0.0);
     renderer.upload_images(&gpu.device, &gpu.queue, &mut rt.images);
     renderer.prepare(
         &gpu.device,
@@ -912,5 +917,59 @@ fn transition_opacity_fades_on_its_own_curve() {
     let (_, halfway) = rt.presented("r/0").expect("drawn");
     assert!((0.3..0.7).contains(&halfway), "halfway {halfway}");
     rt.frame(0.3);
+    assert_eq!(rt.presented("r/0").expect("drawn").1, 1.0);
+}
+
+#[test]
+fn animate_spin_turns_an_icon_on_its_period() {
+    // Rune turns an element's icon, not its box: the spinners Hazel draws are SVG icons.
+    let mut rt = runtime(
+        e(
+            "div",
+            json!({ "w": 40, "h": 40 }),
+            vec![
+                json!({ "k": "svg", "h": "spinner", "view": 24, "body": "<path d=\"M0 0h24v6H0z\"/>",
+                "st": { "w": 40, "h": 40, "color": "#ff0000ff", "animation": { "kind": "spin", "period": 1 } } }),
+            ],
+        ),
+        (40.0, 40.0),
+    );
+    // A quarter turn clockwise: the band along the top now runs down the right side.
+    rt.frame(0.25);
+    let frame = draw(&mut rt, (40, 40));
+    assert!(frame.is(37, 20, RED), "right {:?}", frame.at(37, 20));
+    assert!(frame.is(20, 3, WHITE), "top {:?}", frame.at(20, 3));
+}
+
+#[test]
+fn animate_pulse_dips_to_its_mid_opacity() {
+    let mut rt = runtime(
+        e(
+            "div",
+            json!({ "w": 40, "h": 40, "bg": "#ff0000ff",
+                "animation": { "kind": "pulse", "period": 2, "delay": 0, "from": 1, "to": 0.5 } }),
+            vec![],
+        ),
+        (40.0, 40.0),
+    );
+    let red_at = |rt: &mut Runtime<State>, t: f64| {
+        rt.frame(t);
+        draw(rt, (40, 40)).at(20, 20)[1]
+    };
+    // Red over white: the green channel rises as the red fades.
+    assert!(red_at(&mut rt, 0.0) < 20);
+    let mid = red_at(&mut rt, 1.0);
+    assert!((100..160).contains(&mid), "mid {mid}");
+}
+
+#[test]
+fn animate_in_plays_its_entrance_on_mount() {
+    let entering = json!({ "w": 40, "h": 40, "bg": "#ff0000ff",
+        "animation": { "kind": "enter", "duration": 0.2, "delay": 0, "opacity": 0, "x": 0, "y": 8, "scale": 1 } });
+    let mut rt = runtime(holder("a", vec![]), (200.0, 40.0));
+    commit(&mut rt, holder("b", vec![child("enter", entering)]));
+    let (_, early) = rt.presented("r/0").expect("drawn");
+    assert!(early < 0.5, "early {early}");
+    rt.frame(1.0);
     assert_eq!(rt.presented("r/0").expect("drawn").1, 1.0);
 }
