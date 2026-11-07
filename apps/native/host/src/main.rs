@@ -23,7 +23,7 @@ use serde_json::json;
 
 use layout::{
     Inherit, apply_box, apply_flex, auto_margins, center_vertically, color, focus_styles,
-    focusable, text_run, track,
+    focusable, grid_track, text_run,
 };
 use wire::{Node, RuntimeMsg, Style, Subtrees, TreeMsg};
 
@@ -714,8 +714,9 @@ fn build_img(
     press_handlers(apply_box(e, st), on)
 }
 
-/// CSS grid as rows of flex cells. A `col-span-full` child takes a whole row; a `grid-cols-subgrid`
-/// child lays its own children into the parent's tracks; positioned children stay out of flow.
+/// CSS grid on Rune's grid tracks. `display: contents` children are grid items through their own
+/// children. Taffy has no subgrid, so a subgrid item spans its row and lays its children out on
+/// the same column tracks (an `auto` column then sizes per row, not across the grid).
 fn build_grid(
     kids: &[(usize, &Arc<Node>)],
     cols: &[String],
@@ -724,25 +725,16 @@ fn build_grid(
     ctx: &Ctx,
     st: &Style,
 ) -> El {
-    let gap_col = st.gap_col.map(|g| g.0).unwrap_or(0.0);
-    let mut grid = col().gaps(st.gap_row.map(|g| g.0).unwrap_or(0.0), 0.0);
-    let mut cells: Vec<El> = Vec::new();
-    let flush = |grid: El, cells: &mut Vec<El>| -> El {
-        if cells.is_empty() {
-            return grid;
-        }
-        let mut r = row().gap(gap_col).w_full();
-        if matches!(st.items.as_deref(), Some("start")) {
-            r = r.items_start()
-        } else {
-            r = r.items_center()
-        }
-        for (cell, template) in cells.drain(..).zip(cols.iter().cycle()) {
-            r = r.child(track(cell, template))
-        }
-        grid.child(r)
+    let mut grid = el().grid_columns(cols.iter().map(|c| grid_track(c))).gaps(
+        st.gap_row.map(|g| g.0).unwrap_or(0.0),
+        st.gap_col.map(|g| g.0).unwrap_or(0.0),
+    );
+    grid = match st.items.as_deref() {
+        Some("start" | "flex-start") => grid.items_start(),
+        Some("center") => grid.items_center(),
+        Some("end" | "flex-end") => grid.items_end(),
+        _ => grid,
     };
-    // `display: contents` children are grid items through their own children.
     let mut items: Vec<(String, &Arc<Node>)> = Vec::new();
     fn flatten<'a>(
         children: impl Iterator<Item = (usize, &'a Arc<Node>)>,
@@ -762,53 +754,32 @@ fn build_grid(
     flatten(kids.iter().map(|(i, c)| (*i, *c)), path, &mut items);
     for (path, child) in items {
         let path = path.as_str();
-        if let Node::Elem {
-            st: cst,
-            children: grand,
-            on,
-            ..
-        } = child.as_ref()
-        {
-            if cst.absolute.is_some() {
-                if let Some(b) = build(child, path, inh, ctx) {
-                    grid = grid.child(b)
-                }
-                continue;
-            }
-            if cst.col_span_full == Some(true) || cst.subgrid == Some(true) {
-                grid = flush(grid, &mut cells);
-                let built = if cst.subgrid == Some(true) {
-                    let inner: Vec<(usize, &Arc<Node>)> = grand.iter().enumerate().collect();
-                    let sub = Style {
-                        grid_cols: Some(cols.to_vec()),
-                        gap_col: cst.gap_col.or(st.gap_col),
-                        ..cst.clone()
-                    };
-                    let mut e = apply_box(
-                        build_grid(&inner, cols, path, inh.from(cst), ctx, &sub).key(path),
-                        cst,
-                    );
-                    e = press_handlers(e, on);
-                    Some(e)
-                } else {
-                    build(child, path, inh, ctx)
+        let built = match child.as_ref() {
+            Node::Elem {
+                st: cst,
+                children: grand,
+                on,
+                ..
+            } if cst.subgrid == Some(true) && cst.absolute.is_none() => {
+                let inner: Vec<(usize, &Arc<Node>)> = grand.iter().enumerate().collect();
+                let sub = Style {
+                    grid_cols: Some(cols.to_vec()),
+                    gap_col: cst.gap_col.or(st.gap_col),
+                    ..cst.clone()
                 };
-                if let Some(b) = built {
-                    // A spanning row fills the grid's width unless it sets its own.
-                    let b = if cst.w.is_none() { b.w_full() } else { b };
-                    grid = grid.child(b)
-                }
-                continue;
+                let e = build_grid(&inner, cols, path, inh.from(cst), ctx, &sub).key(path);
+                Some(press_handlers(apply_box(e, cst), on).grid_column_full())
             }
-        }
-        if let Some(b) = build(child, path, inh, ctx) {
-            cells.push(b);
-            if cells.len() == cols.len() {
-                grid = flush(grid, &mut cells)
+            Node::Elem { st: cst, .. } if cst.col_span_full == Some(true) => {
+                build(child, path, inh, ctx).map(El::grid_column_full)
             }
+            _ => build(child, path, inh, ctx),
+        };
+        if let Some(b) = built {
+            grid = grid.child(b)
         }
     }
-    flush(grid, &mut cells)
+    grid
 }
 
 fn build_input(

@@ -3,8 +3,8 @@
 //! margins and box-shadow rings.
 use rune::tok::TextStyle;
 use rune::{
-    Align, Anim, AnimExt, Color, Curve, Easing, Effect, El, Family, LoopSpec, ScrollSpec, Shadow,
-    Span, Spring, SpringPair, TextCase, Transition, Vec2, el, row, text,
+    Align, Anim, AnimExt, Color, Curve, Easing, Effect, El, Family, GridTrack, LoopSpec,
+    ScrollSpec, Shadow, Span, Spring, SpringPair, TextCase, Transition, Vec2, el, row, text,
 };
 
 use std::collections::HashMap;
@@ -653,16 +653,22 @@ pub fn auto_margins(
     slot.grow(1.0).child(child)
 }
 
-/// One grid track as a flex item: `auto` hugs, `Nfr` grows, a length is fixed.
-pub fn track(cell: El, template: &str) -> El {
-    if let Some(fr) = template.strip_suffix("fr") {
-        cell.grow(fr.parse().unwrap_or(1.0)).min_w(0.0)
-    } else if let Some(rem) = template.strip_suffix("rem") {
-        cell.w(rem.parse::<f32>().unwrap_or(0.0) * 16.0)
-    } else if let Some(px) = template.strip_suffix("px") {
-        cell.w(px.parse().unwrap_or(0.0))
+/// One `grid-template-columns` track as the resolver sends it (`1fr`, `auto`, `1.5rem`, `320px`).
+/// `minmax(0, 1fr)` arrives as `1fr`; anything else sizes to its content.
+pub fn grid_track(template: &str) -> GridTrack {
+    let num = |v: &str| v.parse::<f32>().ok();
+    if let Some(fr) = template.strip_suffix("fr").and_then(num) {
+        GridTrack::Fr(fr)
+    } else if let Some(rem) = template.strip_suffix("rem").and_then(num) {
+        GridTrack::Px(rem * 16.0)
+    } else if let Some(px) = template.strip_suffix("px").and_then(num) {
+        GridTrack::Px(px)
     } else {
-        cell
+        match template {
+            "min-content" => GridTrack::MinContent,
+            "max-content" => GridTrack::MaxContent,
+            _ => GridTrack::Auto,
+        }
     }
 }
 

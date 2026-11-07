@@ -1167,3 +1167,26 @@ fn an_anchored_panel_holding_a_scroller_takes_its_content_height() {
     // Two 30-point items and 4 points of padding above and below.
     assert_eq!(rect(&rt, "r/1/0")[3], 68.0);
 }
+
+#[test]
+fn an_auto_grid_column_is_as_wide_as_its_widest_cell_on_every_row() {
+    let cell = |w: Option<f32>| match w {
+        Some(w) => e("div", json!({ "w": w, "h": 20 }), vec![]),
+        None => e("div", json!({ "h": 20 }), vec![]),
+    };
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "w": 300 }),
+            vec![e(
+                "div",
+                json!({ "display": "grid", "gridCols": ["auto", "1fr"], "gapCol": 10, "gapRow": 4 }),
+                vec![cell(Some(60.0)), cell(None), cell(Some(30.0)), cell(None)],
+            )],
+        ),
+        (300.0, 100.0),
+    );
+    // Both value cells start after the widest label (60) and the gap, and fill the rest.
+    assert_eq!(rect(&rt, "r/0/1"), [70.0, 0.0, 230.0, 20.0]);
+    assert_eq!(rect(&rt, "r/0/3"), [70.0, 24.0, 230.0, 20.0]);
+}

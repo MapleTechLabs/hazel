@@ -65,8 +65,13 @@ synthetic utility page (`conformance:extract` records it).
 
 ## Not yet native
 
-- Popovers, menus and pickers: Mounts other than the message list and the composer do not acquire.
-- Interaction styles (`focus:`, `active:`, `disabled:` colours), animations and transitions.
-- Grid is emulated with flex rows: Rune does not expose Taffy's grid templates yet.
-- Text inside SVG icons, `text-box` trimming, vertical margin collapsing (spacing is the same, a
-  block's own box is not), and fractions of the parent's width (`w-1/2`).
+- Overlays beyond the modal popovers: tooltips (`AnchorTooltipPanel`), submenus
+  (`PositionSubmenu`) and the image viewer.
+- Colours a `focus:` variant changes (Rune draws focus as a ring only), focus or press state on an
+  ancestor (`group-focus-visible:`), and spinners drawn as rotating CSS border rings.
+- Subgrid: Taffy has none, so a subgrid row lays its children out on its own copy of the tracks.
+- `text-box` trimming, vertical margin collapsing (spacing is the same, a block's own box is not),
+  fractions of the parent's height, and percentage insets (`left-1/2`).
+
+Rune is pinned to `Makisuo/rune` (anomalyco/rune `bca4713` plus grid tracks) until grid tracks
+land upstream; see `host/Cargo.toml`.
