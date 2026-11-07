@@ -121,6 +121,14 @@ describe("StyleResolver", () => {
 		expect(styles.unsupportedProps.has("animation: bounce")).toBe(true)
 	})
 
+	it("sends a width that is a share of the parent as a fraction", () => {
+		expect(resolve("w-1/2").style.w).toEqual({ frac: 0.5 })
+		expect(resolve("w-[37.5%]").style.w).toEqual({ frac: 0.375 })
+		// A share plus a length is not a fraction; a fraction of the height has no host form.
+		expect(resolve("w-[calc(100%-2rem)]").style.w).toBe("auto")
+		expect(resolve("h-1/2").style.h).toBe("auto")
+	})
+
 	it("switches theme tokens in dark mode", () => {
 		expect(resolve("bg-bg text-fg", { dark: true }).style).toMatchObject({
 			bg: "#000000ff",

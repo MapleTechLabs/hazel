@@ -236,10 +236,12 @@ const sameBgImage = (a: BgImage | "other" | undefined, b: BgImage | undefined) =
 const PAGE = "http://page.test/"
 
 /** A typed-OM length to what `Px` can say: a px number, "full" for 100%, null for anything else. */
-const typedLen = (v: string): number | "full" | "auto" | "other" => {
+const typedLen = (v: string): number | "full" | "auto" | { frac: number } | "other" => {
 	const n = px(v)
 	if (n !== null) return n
 	if (v === "100%") return "full"
+	const share = /^([\d.]+)%$/.exec(v)
+	if (share !== null) return { frac: Number(share[1]) / 100 }
 	// Content-sized: what the host does for a box with no size.
 	if (["auto", "none", "", "fit-content", "max-content", "min-content"].includes(v)) return "auto"
 	return "other"
@@ -503,8 +505,8 @@ const expectations = (ctx: Context): Array<Check> => {
 const ALLOWLIST: Array<{ prop: string; when: RegExp; reason: string }> = [
 	{
 		prop: "w",
-		when: /\bw-(1\/2|\[calc\(100%-2rem\)\])/,
-		reason: "Px is px, 100% or auto: a fraction or calc() of the parent's width has no wire form",
+		when: /\bw-\[calc\(100%-2rem\)\]/,
+		reason: "Px is px, a share of the parent or auto: calc() mixing a share and a length has no wire form",
 	},
 	{
 		prop: "absolute.left",

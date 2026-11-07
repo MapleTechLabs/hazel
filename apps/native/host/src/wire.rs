@@ -219,11 +219,12 @@ impl std::hash::Hash for F {
     }
 }
 
-/// A CSS length: px, `"full"` for 100%, or `"auto"` (no size set).
+/// A CSS length: px, `"full"` for 100%, `{ "frac": f }` for a share of the parent, or `"auto"`.
 #[derive(Clone, Debug, PartialEq, Hash)]
 pub enum Len {
     Px(F),
     Full,
+    Frac(F),
     Auto,
 }
 impl<'de> Deserialize<'de> for Len {
@@ -231,6 +232,10 @@ impl<'de> Deserialize<'de> for Len {
         Ok(match Value::deserialize(d)? {
             Value::Number(n) => Len::Px(F(n.as_f64().unwrap_or(0.0) as f32)),
             Value::String(s) if s == "full" => Len::Full,
+            Value::Object(o) => match o.get("frac").and_then(Value::as_f64) {
+                Some(f) => Len::Frac(F(f as f32)),
+                None => Len::Auto,
+            },
             _ => Len::Auto,
         })
     }

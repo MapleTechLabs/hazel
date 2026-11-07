@@ -973,3 +973,20 @@ fn animate_in_plays_its_entrance_on_mount() {
     rt.frame(1.0);
     assert_eq!(rt.presented("r/0").expect("drawn").1, 1.0);
 }
+
+#[test]
+fn w_frac_takes_a_share_of_the_parent_width() {
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "display": "flex", "w": 200, "h": 40 }),
+            vec![e(
+                "div",
+                json!({ "w": { "frac": 0.25 }, "h": 40, "bg": "#ff0000ff" }),
+                vec![],
+            )],
+        ),
+        (200.0, 40.0),
+    );
+    assert_eq!(rect(&rt, "r/0")[2], 50.0);
+}

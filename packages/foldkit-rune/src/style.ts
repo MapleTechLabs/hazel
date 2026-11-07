@@ -88,7 +88,8 @@ export type ElementInput = {
 	hasDescendant: (match: (node: NodeInfo) => boolean, childrenOnly?: boolean) => boolean
 }
 
-export type Px = number | "full" | "auto"
+/** px, all of the parent ("full"), a share of the parent's width (`w-1/2`), or no size. */
+export type Px = number | "full" | "auto" | { frac: number }
 export type Ring = { width: number; color: string; offset: number }
 export type Animation =
 	| { kind: "spin"; period: number }
@@ -845,8 +846,13 @@ export class StyleResolver {
 		}
 		const setLen = (key: "w" | "h") => {
 			const n = len()
-			if (n === null) unsupported()
-			s[key] = n ?? "auto"
+			// Rune sizes a share of the parent's width only (`w_frac`), not of its height.
+			const frac = n === null && key === "w" ? fractionOf(v, units) : null
+			if (frac !== null) s.w = { frac }
+			else {
+				if (n === null) unsupported()
+				s[key] = n ?? "auto"
+			}
 		}
 		const bound = (key: "minW" | "minH" | "maxW" | "maxH") => {
 			const n = len()
@@ -1670,10 +1676,19 @@ const childText = (parent: TextContext, s: Style, acc: Accumulator): TextContext
 })
 
 /** The content box children see: known only when this element's size is (or both insets pin it). */
+/** A length that is only a share of the parent (`calc(1/2 * 100%)`), as a fraction; else null. */
+const fractionOf = (v: string, units: Units): number | null => {
+	const at100 = evalLength(v, units, 100)
+	const at200 = evalLength(v, units, 200)
+	if (at100 === null || at200 === null || at100 === 0) return null
+	return Math.abs(at200 - 2 * at100) < 1e-6 ? at100 / 100 : null
+}
+
 const contentBox = (s: Style, parent: Box): Box => {
 	const outer = (v: Px | undefined, p: number | undefined, from: number | null, to: number | null) => {
 		if (typeof v === "number") return v
 		if (v === "full") return p
+		if (typeof v === "object") return p === undefined ? undefined : p * v.frac
 		if (v === undefined && p !== undefined && from !== null && to !== null) return p - from - to
 		return undefined
 	}

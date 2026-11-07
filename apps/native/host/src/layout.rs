@@ -244,6 +244,7 @@ pub fn apply_box(mut e: El, st: &Style) -> El {
     match st.w {
         Some(Len::Px(F(v))) => e = e.w(v),
         Some(Len::Full) => e = e.w_full(),
+        Some(Len::Frac(F(f))) => e = e.w_frac(f),
         _ => {}
     }
     match st.h {
