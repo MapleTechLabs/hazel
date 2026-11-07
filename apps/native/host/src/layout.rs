@@ -408,11 +408,19 @@ fn apply_motion(e: El, st: &Style) -> El {
     } else {
         Spring::NONE
     };
-    let e = e
-        .motion(spring)
-        .hover_motion(colors, colors)
-        .opacity_motion(tween(&t.opacity))
-        .offset_motion(tween(&t.transform));
+    // `token_motion` keeps Rune's motion checks out of it, and writes no per-element cold state.
+    let mut e = e.token_motion(spring);
+    // Curves only where the property can change; each one is an allocation per element.
+    let hovers = st.hover_bg.is_some() || st.hover_color.is_some() || st.hover_group == Some(true);
+    if hovers || st.group_opacity.is_some() {
+        e = e.hover_motion(colors, colors)
+    }
+    if st.opacity.is_some() || st.group_opacity.is_some() || t.opacity.is_some() {
+        e = e.opacity_motion(tween(&t.opacity))
+    }
+    if st.translate.is_some() || t.transform.is_some() {
+        e = e.offset_motion(tween(&t.transform))
+    }
     match &st.animation {
         Some(Animation::Spin { period }) => e
             .looping(LoopSpec::rotation(f64::from(period.0)))

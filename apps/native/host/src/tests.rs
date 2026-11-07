@@ -1026,3 +1026,23 @@ fn text_inside_an_svg_icon_draws_at_its_anchor() {
         "y {top}..{bottom}"
     );
 }
+
+#[test]
+fn an_opacity_removed_without_a_transition_lands_at_once() {
+    let faded = child(
+        "half",
+        json!({ "w": 40, "h": 40, "bg": "#ff0000ff", "opacity": 0.5 }),
+    );
+    let mut rt = runtime(holder("a", vec![faded]), (200.0, 40.0));
+    commit(
+        &mut rt,
+        holder(
+            "b",
+            vec![child(
+                "whole",
+                json!({ "w": 40, "h": 40, "bg": "#ff0000ff" }),
+            )],
+        ),
+    );
+    assert_eq!(rt.presented("r/0").expect("drawn").1, 1.0);
+}
