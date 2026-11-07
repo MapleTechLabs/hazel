@@ -14,6 +14,7 @@ import {
 	type HostToRuntime,
 } from "@hazel/foldkit-rune"
 import { isBackendUrl } from "./backend-origin"
+import { type EditableEvent, makePendingEdits } from "./pending-edits"
 import { installShims } from "./shims"
 
 const width = Number(process.env.NATIVE_WIDTH ?? 1280)
@@ -141,10 +142,28 @@ Object.assign(globalThis, {
 	}),
 })
 
+/** Applies a native field's edit to its editor; `false` while the editor has not mounted yet. */
+const applyEdit = (path: string, event: EditableEvent) => {
+	const mount = bridge.domMountAt(path)
+	if (mount === undefined) return false
+	return Option.match(composer.applyEditorEvent(mount.args, event), {
+		onNone: () => false,
+		onSome: (isChangedByKey) => {
+			// A key the editor handled (undo, a markdown shortcut) changed the text under the field.
+			if (isChangedByKey) rune.refreshObserved()
+			return true
+		},
+	})
+}
+const pendingEdits = makePendingEdits({ apply: applyEdit, onDrained: () => rune.refreshObserved() })
+
 const rune = makeRuneTarget({
 	styles,
 	bridge,
+	// A field with edits still queued keeps the text the user typed, not the empty editor's.
 	editableText: (path) => {
+		const queued = pendingEdits.queuedText(path)
+		if (queued !== undefined) return queued
 		const mount = bridge.domMountAt(path)
 		return mount === undefined ? undefined : composer.editorText(mount.args)
 	},
@@ -154,12 +173,9 @@ const rune = makeRuneTarget({
 	},
 	onEditable: (path, event) => {
 		if (process.env.NATIVE_DEBUG) process.stderr.write(`[editable] ${JSON.stringify(event)}\n`)
-		const mount = bridge.domMountAt(path)
-		if (mount === undefined) return
-		// A key the editor handled (undo, a markdown shortcut) changed the text under the field.
-		const isChangedByKey = Option.getOrElse(composer.applyEditorEvent(mount.args, event), () => false)
-		if (isChangedByKey) rune.refreshObserved()
+		pendingEdits.push(path, event)
 	},
+
 	env: { width, height, dark },
 	send: (message) => {
 		if (treesPath) appendFileSync(treesPath, `${JSON.stringify(message)}\n`)

@@ -58,7 +58,8 @@ const nativeRun = (index: number): NativeRun => {
 		...snap("settled"),
 		{ focusEditable: null },
 		{ type: "Hello from Rune" },
-		{ key: "Enter" },
+		// The round trip ends when the sent message is on screen, not at the first tree after Enter.
+		{ key: { name: "Enter", until: "Hello from Rune" } },
 		{ settle: 800 },
 		...snap("sent"),
 	]
@@ -134,6 +135,14 @@ const webResults = JSON.parse(readFileSync(webResultsPath, "utf8")) as {
 const webRuns = webResults.runs.length
 const web = webResults.summary
 
+// Event Timing reports only keys at or over 16 ms, so its count is the number of slow keys.
+const slowKeys = web.keyEventTimingReported
+const keyEventTiming =
+	slowKeys === undefined
+		? "Event Timing: n/a"
+		: slowKeys === 0
+			? "Event Timing: every key under 16 ms"
+			: `Event Timing: ${slowKeys} keys at or over 16 ms`
 const ms = (value: number | undefined) =>
 	value === undefined || !Number.isFinite(value) ? "n/a" : `${value.toFixed(1)} ms`
 const mb = (value: number | undefined) =>
@@ -142,9 +151,9 @@ const table = [
 	"| Metric | Native (Rune + Bun) | Web (Chromium) |",
 	"| --- | --- | --- |",
 	`| Process start to first app frame | ${ms(nativeSummary.firstTreeMs)} | ${ms(web.firstContentfulPaintMs)} (FCP, from navigation) |`,
-	`| Process start to #general's messages on screen | ${ms(nativeSummary.textReadyMs)} | ${ms(web.launchToContentReadyMs)} (${ms(web.contentReadyMs)} from navigation) |`,
+	`| Process start to #general's messages in a frame | ${ms(nativeSummary.textReadyMs)} (frame built, before GPU present) | ${ms(web.launchToContentReadyMs)} (${ms(web.contentReadyMs)} from navigation) |`,
 	`| Process start to settled (incl. editor) | ${ms(nativeSummary.settledMs)} | ${ms(web.launchToSettledMs)} |`,
-	`| Key to frame, p50 / p95 | ${ms(nativeSummary.keyP50Ms)} / ${ms(nativeSummary.keyP95Ms)} (frame built) | first rAF ${ms(web.keyFirstRafP50Ms)} / ${ms(web.keyFirstRafP95Ms)}; Event Timing: every key under 16 ms |`,
+	`| Key to frame, p50 / p95 | ${ms(nativeSummary.keyP50Ms)} / ${ms(nativeSummary.keyP95Ms)} (frame built) | first rAF ${ms(web.keyFirstRafP50Ms)} / ${ms(web.keyFirstRafP95Ms)}; ${keyEventTiming} |`,
 	`| Enter to sent message on screen | ${ms(nativeSummary.sendMs)} | ${ms(web.sendToVisibleMs)} |`,
 	`| Frame CPU with a new tree, p50 / p95 | ${ms(nativeSummary.frameWithTreeP50Ms)} / ${ms(nativeSummary.frameWithTreeP95Ms)} | n/a |`,
 	`| Memory, all processes | ${mb(nativeSummary.hostRssMb + nativeSummary.runtimeRssMb)} (host ${mb(nativeSummary.hostRssMb)}, runtime ${mb(nativeSummary.runtimeRssMb)}) | ${mb(web.rssSentMb)} |`,
@@ -158,9 +167,10 @@ boot, type "Hello from Rune", press Enter. Chromium ${webResults.chromium}, head
 
 ${table}
 
-Native "key to frame" is input to a drawn frame on the CPU; presentation then waits for the next
-vsync. The browser can't build a frame before the next requestAnimationFrame, so its honest figure
-is Event Timing's input-to-next-paint, which reports only that each key stayed under 16 ms.
+Native times end when the frame is built on the CPU (layout and draw list); presentation then
+waits for the next vsync. Web "messages on screen" is the first animation frame after they are in
+the DOM. The browser can't build a frame before the next requestAnimationFrame, so its key figure
+is Event Timing's input-to-next-paint, which reports only keys at or over 16 ms.
 `
 writeFileSync(join(outDir, "report.md"), report)
 writeFileSync(

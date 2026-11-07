@@ -112,6 +112,9 @@ export interface FixtureWebSocketOptions {
 	readonly snapshot?: (kind: SyncSourceKind, sourceId: string) => FixtureTables | undefined
 }
 
+/** One source's stream: `receive` answers client frames; `close` stops server writes reaching it. */
+type SourceStream = { readonly receive: (frame: string) => void; readonly close: () => void }
+
 /** One source's stream: answers its client frames with frames for `emit`. */
 const sourceStream = (
 	kind: SyncSourceKind,
@@ -119,8 +122,9 @@ const sourceStream = (
 	tables: FixtureTables,
 	emit: (frame: ServerFrame) => void,
 	server: FixtureServer | undefined,
-): ((frame: string) => void) => {
-	server?.subscribe(kind, sourceId, emit)
+): SourceStream => {
+	const unsubscribe = server?.subscribe(kind, sourceId, emit)
+	const currentSeq = () => (server?.seqOf(kind, sourceId) ?? FIXTURE_SEQ) as never
 	const paging = pagedTables(kind).length > 0
 	const snapshot = () => {
 		emit(
@@ -131,11 +135,11 @@ const sourceStream = (
 		// Like the source objects, an empty table sends no `Rows`.
 		for (const [table, upserts] of Object.entries(tables))
 			if (upserts.length > 0) emit({ _tag: "Rows", table, upserts, deletes: [] })
-		emit({ _tag: "Commit", seq: (server?.seqOf(kind, sourceId) ?? FIXTURE_SEQ) as never })
+		emit({ _tag: "Commit", seq: currentSeq() })
 		// Like the objects, `paging` only from a source that pages a table.
 		emit(paging ? { _tag: "Ready", paging: true } : { _tag: "Ready" })
 	}
-	return (raw) => {
+	const receive = (raw: string) => {
 		const decoded = decodeClientFrame(raw)
 		if (Result.isFailure(decoded)) {
 			emit({ _tag: "Error", code: "bad_frame", message: decoded.failure.message })
@@ -157,7 +161,7 @@ const sourceStream = (
 					request: frame.requestId,
 					windows: [{ table: frame.table, oldest: frame.before, hasMore: false }],
 				})
-				return emit({ _tag: "Commit", seq: FIXTURE_SEQ })
+				return emit({ _tag: "Commit", seq: currentSeq() })
 			case "LoadByIds": {
 				const ids = new Set(frame.ids)
 				const rows = (tables[frame.table] ?? []).filter(
@@ -166,10 +170,11 @@ const sourceStream = (
 				)
 				emit({ _tag: "Begin", reset: false, request: frame.requestId })
 				if (rows.length > 0) emit({ _tag: "Rows", table: frame.table, upserts: rows, deletes: [] })
-				return emit({ _tag: "Commit", seq: FIXTURE_SEQ })
+				return emit({ _tag: "Commit", seq: currentSeq() })
 			}
 		}
 	}
+	return { receive, close: () => unsubscribe?.() }
 }
 
 /** A `WebSocket` constructor whose sockets answer from the fixture; pass as `SyncHub({ WebSocket })`. */
@@ -194,7 +199,7 @@ export const makeFixtureWebSocket = (options: FixtureWebSocketOptions = {}): Web
 		readonly url: string
 		readonly protocols: ReadonlyArray<string>
 		/** Mux streams by id; a per-source socket uses stream 0 unframed. */
-		private readonly streams = new Map<number, (frame: string) => void>()
+		private readonly streams = new Map<number, SourceStream>()
 		private readonly mux: boolean
 
 		constructor(url: string, protocols: string | Array<string>) {
@@ -227,13 +232,14 @@ export const makeFixtureWebSocket = (options: FixtureWebSocketOptions = {}): Web
 
 		send(data: string): void {
 			if (this.readyState !== OPEN) throw new Error("The fixture socket is not open")
-			if (!this.mux) return this.streams.get(0)?.(data)
+			if (!this.mux) return this.streams.get(0)?.receive(data)
 			const routed = decodeMuxData(data)
-			if (routed !== undefined) return this.streams.get(routed.id)?.(routed.frame)
+			if (routed !== undefined) return this.streams.get(routed.id)?.receive(routed.frame)
 			const decoded = decodeControl(data)
 			if (Result.isFailure(decoded)) return
 			const control = decoded.success
 			if (control._tag === "Close") {
+				this.streams.get(control.id)?.close()
 				this.streams.delete(control.id)
 				return
 			}
@@ -253,6 +259,7 @@ export const makeFixtureWebSocket = (options: FixtureWebSocketOptions = {}): Web
 				(frame) => this.deliver(encodeMuxData(control.id, JSON.stringify(frame))),
 				options.server,
 			)
+			this.streams.get(control.id)?.close()
 			this.streams.set(control.id, stream)
 			// The `Open`'s `hello` goes to the source, as the Worker forwards it.
 			this.control(
@@ -260,7 +267,7 @@ export const makeFixtureWebSocket = (options: FixtureWebSocketOptions = {}): Web
 					? { _tag: "Opened", id: control.id }
 					: { _tag: "Opened", id: control.id, hello: true },
 			)
-			if (control.hello !== undefined) stream(control.hello)
+			if (control.hello !== undefined) stream.receive(control.hello)
 		}
 
 		close(code = 1000, reason = ""): void {
@@ -280,6 +287,7 @@ export const makeFixtureWebSocket = (options: FixtureWebSocketOptions = {}): Web
 
 		private serverClose(code: number, reason: string): void {
 			this.readyState = CLOSED
+			for (const stream of this.streams.values()) stream.close()
 			this.streams.clear()
 			later(() => this.onclose?.({ code, reason }))
 		}

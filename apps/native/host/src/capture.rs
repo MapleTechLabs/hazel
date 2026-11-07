@@ -24,7 +24,9 @@ enum Step {
     Wait(u64),
     ClickText(String),
     Type(String),
-    Key(String),
+    /// A named key (`"Enter"`), or `{ "name": "Enter", "until": "Hello" }` to also wait for
+    /// that text to appear (a sent message) before the round trip counts.
+    Key(KeyStep),
     Snap(String),
     /// Tick until a text node contains this string; reported as `textReadyMs` from process start.
     WaitText(String),
@@ -35,6 +37,30 @@ enum Step {
     /// Write every element's presented rect, tag, own text and identifying attributes to a JSON
     /// file, for comparing layout with a browser render of the same view.
     ExportLayout(String),
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum KeyStep {
+    Name(String),
+    Until { name: String, until: String },
+}
+
+/// The keys a script may press; anything else is a script error, not text to type.
+fn named_key(name: &str) -> Option<Key> {
+    Some(match name {
+        "Enter" => Key::Enter,
+        "Backspace" => Key::Backspace,
+        "Delete" => Key::Delete,
+        "Tab" => Key::Tab,
+        "Escape" => Key::Escape,
+        "ArrowUp" => Key::Up,
+        "ArrowDown" => Key::Down,
+        "ArrowLeft" => Key::Left,
+        "ArrowRight" => Key::Right,
+        _ if name.chars().count() == 1 => Key::Text(name.to_string()),
+        _ => return None,
+    })
 }
 
 #[derive(Default)]
@@ -110,22 +136,30 @@ impl Session {
         (self.last_tree - self.started).as_secs_f64() * 1000.0
     }
 
-    /// After an input: run the frame that delivers it, then wait for the runtime's tree and draw
-    /// it at once, as a window does when an update wakes its loop. The round trip in ms.
-    fn round_trip(&mut self) -> Option<f64> {
+    /// After an input: run the frame that delivers it, then wait for the runtime's tree that
+    /// acknowledges it (and, with `until`, shows that text) and draw it at once, as a window does
+    /// when an update wakes its loop. The round trip in ms, or `None` if it never arrives.
+    fn round_trip(&mut self, until: Option<&str>) -> Option<f64> {
         let sent = Instant::now();
         self.rt.frame(0.0);
+        // Every event the host sends takes the next sequence number; the runtime acks it.
+        let want = crate::SEQ.load(std::sync::atomic::Ordering::SeqCst);
         while sent.elapsed() < Duration::from_secs(5) {
             if let Ok(msg) = self.messages.try_recv() {
-                let is_tree = matches!(msg, RuntimeMsg::Tree(_));
+                let ack = match &msg {
+                    RuntimeMsg::Tree(tree) => Some(tree.ack),
+                    RuntimeMsg::Scroll { .. } => None,
+                };
                 self.apply(msg);
-                if is_tree {
-                    let frame_started = Instant::now();
-                    self.rt.frame(0.0);
-                    self.timings
-                        .frames_with_tree
-                        .push(frame_started.elapsed().as_secs_f64() * 1000.0);
-                    self.last_tree = Instant::now();
+                let Some(ack) = ack else { continue };
+                let frame_started = Instant::now();
+                self.rt.frame(0.0);
+                self.timings
+                    .frames_with_tree
+                    .push(frame_started.elapsed().as_secs_f64() * 1000.0);
+                self.last_tree = Instant::now();
+                let shows = until.is_none_or(|text| self.shows_text(text));
+                if ack >= want && shows {
                     return Some(sent.elapsed().as_secs_f64() * 1000.0);
                 }
                 continue;
@@ -133,6 +167,14 @@ impl Session {
             std::thread::sleep(Duration::from_micros(500));
         }
         None
+    }
+
+    fn shows_text(&self, needle: &str) -> bool {
+        self.rt
+            .state
+            .root
+            .as_ref()
+            .is_some_and(|root| text_of(root).contains(needle))
     }
 
     fn apply(&mut self, msg: RuntimeMsg) {
@@ -148,17 +190,16 @@ impl Session {
     }
 
     fn click_text(&mut self, label: &str) -> Option<f64> {
-        let path = self
-            .rt
-            .state
-            .root
-            .as_ref()
-            .and_then(|root| find_pressable(root, "r", label))?;
-        let (x, y) = self.rt.find(&path)?;
+        let mut candidates = Vec::new();
+        if let Some(root) = self.rt.state.root.clone() {
+            find_pressables(&root, "r", label, &mut candidates);
+        }
+        // The first match that is drawn: a narrow layout hides the desktop copy of a link.
+        let (x, y) = candidates.iter().find_map(|path| self.rt.find(path))?;
         self.rt.pointer_move(x, y);
         self.rt.pointer_down(x, y);
         self.rt.pointer_up(x, y);
-        self.round_trip()
+        self.round_trip(None)
     }
 
     fn type_text(&mut self, text: &str) -> Vec<f64> {
@@ -168,7 +209,7 @@ impl Session {
                     key: Key::Text(c.to_string()),
                     mods: Mods::default(),
                 });
-                self.round_trip()
+                self.round_trip(None)
             })
             .collect()
     }
@@ -206,29 +247,36 @@ impl Session {
     }
 }
 
-/// The deepest element with a press handler (or a link) whose text contains `label`.
-fn find_pressable(node: &Arc<Node>, path: &str, label: &str) -> Option<String> {
+/// Every element with a press handler (or a link) whose text contains `label`, deepest first,
+/// skipping hidden subtrees.
+fn find_pressables(node: &Arc<Node>, path: &str, label: &str, out: &mut Vec<String>) {
     let Node::Elem {
         children,
         on,
         attrs,
         tag,
+        st,
         ..
     } = node.as_ref()
     else {
-        return None;
+        return;
     };
+    if st.display.as_deref() == Some("none") || st.visibility.as_deref() == Some("hidden") {
+        return;
+    }
+    let before = out.len();
     for (i, child) in children.iter().enumerate() {
         let child_path = match child.as_ref() {
             Node::Elem { key: Some(key), .. } => format!("{path}/k{key}"),
             _ => format!("{path}/{i}"),
         };
-        if let Some(found) = find_pressable(child, &child_path, label) {
-            return Some(found);
-        }
+        find_pressables(child, &child_path, label, out);
     }
     let is_pressable = on.contains_key("click") || (tag == "a" && attrs.contains_key("href"));
-    (is_pressable && text_of(node).contains(label)).then(|| path.to_string())
+    // An ancestor is a fallback only when nothing inside it matched.
+    if out.len() == before && is_pressable && text_of(node).contains(label) {
+        out.push(path.to_string());
+    }
 }
 
 fn text_of(node: &Node) -> String {
@@ -286,6 +334,9 @@ pub fn run(script_path: &str) {
         match step {
             Step::Settle(quiet) => {
                 let settled = session.settle(quiet);
+                if session.first_tree_ms.is_none() {
+                    fail(&mut child, "settle: the runtime sent no tree");
+                }
                 report.entry("settledMs").or_insert(json!(settled));
             }
             Step::Wait(ms) => {
@@ -305,31 +356,38 @@ pub fn run(script_path: &str) {
                 let keys = session.type_text(&text);
                 interactions.push(json!({ "type": text, "perKey": summary(&keys) }));
             }
-            Step::Key(name) => {
-                let key = match name.as_str() {
-                    "Enter" => Key::Enter,
-                    "Backspace" => Key::Backspace,
-                    _ => Key::Text(name.clone()),
+            Step::Key(step) => {
+                let (name, until) = match step {
+                    KeyStep::Name(name) => (name, None),
+                    KeyStep::Until { name, until } => (name, Some(until)),
+                };
+                let Some(key) = named_key(&name) else {
+                    fail(&mut child, &format!("key: unsupported key name \"{name}\""));
                 };
                 session.rt.key(KeyEvent {
                     key,
                     mods: Mods::default(),
                 });
-                let rtt = session.round_trip();
+                let rtt = session.round_trip(until.as_deref());
+                if rtt.is_none() {
+                    fail(&mut child, &format!("key \"{name}\": no update within 5 s"));
+                }
                 interactions.push(json!({ "key": name, "roundTripMs": rtt }));
             }
             Step::Snap(path) => session.snap(&path),
             Step::WaitText(needle) => {
                 let deadline = Instant::now() + Duration::from_secs(30);
-                while Instant::now() < deadline {
+                loop {
+                    if Instant::now() >= deadline {
+                        fail(
+                            &mut child,
+                            &format!("waitText \"{needle}\": not shown within 30 s"),
+                        );
+                    }
                     session.tick();
-                    let found = session
-                        .rt
-                        .state
-                        .root
-                        .as_ref()
-                        .is_some_and(|root| text_of(root).contains(&needle));
-                    if found {
+                    if session.shows_text(&needle) {
+                        // The frame that shows it is built (laid out, draw list made) by `tick`;
+                        // the GPU presents it at the next vsync, which this does not include.
                         report.insert(
                             "textReadyMs".into(),
                             json!(session.started.elapsed().as_secs_f64() * 1000.0),
@@ -396,6 +454,13 @@ pub fn run(script_path: &str) {
         Err(_) => println!("{}", serde_json::to_string_pretty(&out).unwrap()),
     }
     let _ = child.kill();
+}
+
+/// A script step that cannot complete fails the run, so a benchmark never reports a partial one.
+fn fail(child: &mut std::process::Child, message: &str) -> ! {
+    eprintln!("[capture] {message}");
+    let _ = child.kill();
+    std::process::exit(1)
 }
 
 /// Resident memory of each process, from `ps` (macOS and Linux).

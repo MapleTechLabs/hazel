@@ -72,7 +72,12 @@ interface NativeLayout {
 
 const nativeSteps = (scenario: Scenario, layout: string, snap: string) => {
 	const boot = [{ waitText: CONTENT_TEXT }, { settle: scenario === "boot" ? 1500 : 2500 }]
-	const send = [{ focusEditable: null }, { type: TEXT }, { key: "Enter" }, { settle: 1500 }]
+	const send = [
+		{ focusEditable: null },
+		{ type: TEXT },
+		{ key: { name: "Enter", until: TEXT } },
+		{ settle: 1500 },
+	]
 	return [...boot, ...(scenario === "sent" ? send : []), { exportLayout: layout }, { snap }]
 }
 
