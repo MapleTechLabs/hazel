@@ -69,6 +69,8 @@ export type NodeInfo = {
 	count?: number
 	/** No element children and no text (`:empty`). */
 	empty?: boolean
+	/** The dynamic states (`focus`, `active`…) taken as true; absent on every node but the subject. */
+	states?: { has: (name: string) => boolean }
 }
 
 export type ElementInput = {
@@ -87,6 +89,7 @@ export type ElementInput = {
 }
 
 export type Px = number | "full" | "auto"
+export type Ring = { width: number; color: string; offset: number }
 export type Shadow = { x: number; y: number; blur: number; spread: number; color: string; inset: boolean }
 export type Style = {
 	display?: "flex" | "block" | "inline" | "grid" | "none" | "contents"
@@ -144,7 +147,13 @@ export type Style = {
 	/** The final box-shadow list, rings included, in paint order (bottom-most first). */
 	shadows?: Array<Shadow>
 	/** Only when outline-style is not none and the outline is visible. */
-	outline?: { width: number; color: string; offset: number }
+	outline?: Ring
+	/** The ring keyboard focus draws (`:focus-visible`); "none" when the author hid the outline. */
+	focusRing?: Ring | "none"
+	/** The ring while focus is on the element or in it, by pointer or keyboard (`:focus`, `:focus-within`). */
+	focusWithinRing?: Ring
+	/** Background while a press is held (`:active`). */
+	pressBg?: string
 	/** `url` as written in the stylesheet; the host resolves it against the page. */
 	bgImage?: { url: string } | { gradient: { angle: number; stops: Array<{ color: string; at: number }> } }
 	objectFit?: "cover" | "contain" | "fill" | "none" | "scale-down"
@@ -488,18 +497,64 @@ export class StyleResolver {
 		const hit = entries.find((e) => e.facts.every((f) => f.test(el) === f.value))
 		if (hit) return hit.result
 		const facts: Array<Fact> = []
-		const result = this.compute(el, scope, viewport, facts)
+		const seen = new Set<string>()
+		const {
+			style,
+			scope: childScope,
+			outlineHidden,
+		} = this.compute(el, scope, viewport, facts, NO_STATES, seen)
+		const result = {
+			style: this.withStates(style, outlineHidden, seen, (states) =>
+				this.compute(el, scope, viewport, facts, states, null),
+			),
+			scope: childScope,
+		}
 		entries.push({ facts, result })
 		this.resolved.set(key, entries)
 		return result
 	}
 
+	/**
+	 * Adds what focus and press change, from passes that take those states as true. Rune draws
+	 * them itself (a keyboard ring, a ring while focused within, a press fill), so only those go.
+	 */
+	private withStates(
+		style: Style,
+		outlineHidden: boolean,
+		seen: ReadonlySet<string>,
+		pass: (states: ReadonlySet<string>) => { style: Style; outlineHidden: boolean },
+	): Style {
+		const rest = ringOf(style)
+		if (seen.has("focus") || seen.has("focus-within")) {
+			const pointer = ringOf(pass(POINTER_FOCUS).style)
+			if (pointer !== undefined && !sameRing(pointer, rest)) style.focusWithinRing = pointer
+		}
+		if (style.focusWithinRing === undefined && seen.has("focus-visible")) {
+			const keyboard = pass(KEYBOARD_FOCUS)
+			const ring = ringOf(keyboard.style)
+			if (ring !== undefined && !sameRing(ring, rest)) style.focusRing = ring
+			else if (ring === undefined && keyboard.outlineHidden) style.focusRing = "none"
+		} else if (style.focusWithinRing === undefined && outlineHidden && rest === undefined)
+			style.focusRing = "none"
+		if (seen.has("active")) {
+			const pressed = pass(PRESSED).style.bg
+			if (pressed !== undefined && pressed !== style.bg) style.pressBg = pressed
+		}
+		return style
+	}
+
+	/**
+	 * `states` are the dynamic pseudo-classes taken as true; `seen` collects the ones the element's
+	 * rules ask about (null: a state pass, which returns only the style, the scope unchanged).
+	 */
 	private compute(
 		el: ElementInput,
 		scope: Scope,
 		viewport: number,
 		facts: Array<Fact>,
-	): { style: Style; scope: Scope } {
+		states: ReadonlySet<string>,
+		seen: Set<string> | null,
+	): { style: Style; scope: Scope; outlineHidden: boolean } {
 		const ask = (test: (input: ElementInput) => boolean) => {
 			const value = test(el)
 			facts.push({ test, value })
@@ -507,10 +562,17 @@ export class StyleResolver {
 		}
 		// Position and emptiness are read lazily: only a structural rule makes them part of the result.
 		const { index, count, empty } = el
+		let recording = true
 		const self: NodeInfo = {
 			tag: el.tag ?? "div",
 			classes: el.classes,
 			attrs: el.attrs,
+			states: {
+				has: (name) => {
+					if (recording) seen?.add(name)
+					return states.has(name)
+				},
+			},
 			get index() {
 				ask((e) => e.index === index)
 				return index
@@ -627,9 +689,13 @@ export class StyleResolver {
 		for (const { mode, d } of ordered)
 			if (!TEXT_FIRST.has(d.prop) && d.prop !== "font-size") this.apply(acc, d, mode)
 		this.finish(acc)
+		const outlineHidden = acc.outline.style !== undefined && style.outline === undefined
 		if (childGap !== undefined) style.childGap = childGap
 		if (hoverGroup || el.classes.some((c) => c === "group" || c.startsWith("group/")))
 			style.hoverGroup = true
+		if (seen === null) return { style, scope, outlineHidden }
+		// Conditions that hold on this element are context for others: not a state of its own.
+		recording = false
 		// Conditions this element satisfies, for its descendants and children.
 		const ancestors = new Set(scope.ancestors)
 		const parents = new Set<number>()
@@ -676,7 +742,7 @@ export class StyleResolver {
 			containers,
 			flexParent,
 		}))
-		return { style, scope: childScope }
+		return { style, scope: childScope, outlineHidden }
 	}
 
 	private units(scope: Scope, em: number): Units {
@@ -1269,6 +1335,31 @@ export class StyleResolver {
 	}
 }
 
+const NO_STATES: ReadonlySet<string> = new Set()
+/** A pointer press focuses: `:focus` and `:focus-within` hold, `:focus-visible` does not. */
+const POINTER_FOCUS: ReadonlySet<string> = new Set(["focus", "focus-within"])
+const KEYBOARD_FOCUS: ReadonlySet<string> = new Set(["focus", "focus-within", "focus-visible"])
+const PRESSED: ReadonlySet<string> = new Set(["active"])
+
+/** The ring a style draws: its outline, else its outermost spread-only shadow (Tailwind `ring-*`). */
+const ringOf = (s: Style): Ring | undefined => {
+	if (s.outline !== undefined) return s.outline
+	const rings = (s.shadows ?? []).filter(
+		(r) => !r.inset && r.x === 0 && r.y === 0 && r.blur === 0 && r.spread > 0,
+	)
+	const outer = rings.reduce<Shadow | undefined>(
+		(a, r) => (a === undefined || r.spread > a.spread ? r : a),
+		undefined,
+	)
+	if (outer === undefined) return undefined
+	// A `ring-offset-*` is the ring inside it: the outer ring starts where it ends.
+	const inner = rings.filter((r) => r !== outer).reduce((m, r) => Math.max(m, r.spread), 0)
+	return { width: outer.spread - inner, offset: inner, color: outer.color }
+}
+
+const sameRing = (a: Ring, b: Ring | undefined) =>
+	b !== undefined && a.width === b.width && a.offset === b.offset && a.color === b.color
+
 /** Tags the host lays out inline when their Style has no display (host main.rs `is_inline`). */
 const INLINE_TAGS = new Set([
 	"span",
@@ -1398,7 +1489,8 @@ const matchCompound = (
 				if (node.empty !== true) return false
 				break
 			case "never":
-				return false
+				if (node.states?.has(p.name) !== true) return false
+				break
 		}
 	}
 	for (const link of c.ctx) if (context === null || !context(link)) return false

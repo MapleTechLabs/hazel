@@ -19,7 +19,8 @@ use rune::{App, AppSpec, Color, Cursor, Cx, El, SurfaceFit, col, el, icon, row, 
 use serde_json::json;
 
 use layout::{
-    Inherit, apply_box, apply_flex, auto_margins, center_vertically, color, text_run, track,
+    Inherit, apply_box, apply_flex, auto_margins, center_vertically, color, focus_styles,
+    focusable, text_run, track,
 };
 use wire::{Node, RuntimeMsg, Style, Subtrees, TreeMsg};
 
@@ -385,7 +386,10 @@ fn build_elem(
             });
         }
     }
-    e
+    if let Some(order) = focusable(tag, attrs) {
+        e = e.focusable(true).tab_index(order);
+    }
+    focus_styles(e, st, false)
 }
 
 fn is_inline(node: &Arc<Node>) -> bool {
@@ -816,7 +820,7 @@ fn build_input(
     } else {
         row().items_start()
     };
-    apply_box(wrapper.key(path), st).child(field)
+    focus_styles(apply_box(wrapper.key(path), st), st, true).child(field)
 }
 
 /// An element a runtime Mount observes: report its layout, and its offset when it scrolls.

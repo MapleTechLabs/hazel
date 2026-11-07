@@ -6,7 +6,7 @@
 			"sizeWithin4Pct": 88.57,
 			"textPosWithin4Pct": 98,
 			"textSizeWithin4Pct": 80.43,
-			"pixelScore": 96.29
+			"pixelScore": 96.38
 		},
 		"max": {
 			"missingOnNative": 5,
@@ -21,7 +21,7 @@
 			"sizeWithin4Pct": 88.57,
 			"textPosWithin4Pct": 98,
 			"textSizeWithin4Pct": 80.43,
-			"pixelScore": 96.15
+			"pixelScore": 96.24
 		},
 		"max": {
 			"missingOnNative": 5,
@@ -36,7 +36,7 @@
 			"sizeWithin4Pct": 89.12,
 			"textPosWithin4Pct": 98,
 			"textSizeWithin4Pct": 81.56,
-			"pixelScore": 96.57
+			"pixelScore": 96.65
 		},
 		"max": {
 			"missingOnNative": 5,
@@ -51,7 +51,37 @@
 			"sizeWithin4Pct": 89.12,
 			"textPosWithin4Pct": 98,
 			"textSizeWithin4Pct": 81.56,
-			"pixelScore": 96.43
+			"pixelScore": 96.51
+		},
+		"max": {
+			"missingOnNative": 5,
+			"posP95": 4.75,
+			"textPosP95": 5.44
+		}
+	},
+	"focus-light": {
+		"min": {
+			"matchedWebPct": 97.29,
+			"posWithin4Pct": 95.43,
+			"sizeWithin4Pct": 88.57,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 80.43,
+			"pixelScore": 96.37
+		},
+		"max": {
+			"missingOnNative": 5,
+			"posP95": 4.75,
+			"textPosP95": 5.44
+		}
+	},
+	"focus-dark": {
+		"min": {
+			"matchedWebPct": 97.29,
+			"posWithin4Pct": 95.43,
+			"sizeWithin4Pct": 88.57,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 80.43,
+			"pixelScore": 96.24
 		},
 		"max": {
 			"missingOnNative": 5,

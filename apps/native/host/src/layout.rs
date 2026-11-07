@@ -4,7 +4,9 @@
 use rune::tok::TextStyle;
 use rune::{Align, Color, El, Family, ScrollSpec, Shadow, Span, TextCase, el, row, text};
 
-use crate::wire::{BgImage, F, Len, Style};
+use std::collections::HashMap;
+
+use crate::wire::{BgImage, F, FocusRing, Len, OutlineSpec, Style};
 
 pub fn color(hex: &Option<String>) -> Option<Color> {
     let h = hex.as_deref()?;
@@ -377,6 +379,45 @@ pub fn apply_box(mut e: El, st: &Style) -> El {
         e = e.opacity(0.0).inert()
     }
     e
+}
+
+/// The fill a press shows and the rings focus draws. A field's focus is its text field's, inside
+/// `e`, and a browser shows `:focus-visible` on a focused field from the pointer too.
+pub fn focus_styles(mut e: El, st: &Style, field: bool) -> El {
+    if let Some(c) = color(&st.press_bg) {
+        e = e.press(c)
+    }
+    let ring = |o: &OutlineSpec| color(&Some(o.color.clone())).map(|c| (o.width.0, o.offset.0, c));
+    let keyboard = match &st.focus_ring {
+        Some(FocusRing::Ring(o)) => Some(o),
+        _ => None,
+    };
+    let within = st.focus_within_ring.as_ref().or(keyboard.filter(|_| field));
+    if let Some((w, off, c)) = within.and_then(ring) {
+        return e.focus_within_ring(w, off, c);
+    }
+    if let Some((w, off, c)) = keyboard.and_then(ring) {
+        e = e.focus_ring(w, off, c)
+    } else if let Some(FocusRing::Hidden(_)) = &st.focus_ring {
+        e = e.no_focus_ring()
+    }
+    e
+}
+
+/// Elements HTML puts in the Tab order (or `tabindex` adds), unless disabled.
+pub fn focusable(tag: &str, attrs: &HashMap<String, String>) -> Option<i32> {
+    if attrs.contains_key("disabled") {
+        return None;
+    }
+    let native = matches!(tag, "button" | "select" | "summary")
+        || (tag == "a" && attrs.contains_key("href"));
+    match attrs
+        .get("tabindex")
+        .and_then(|t| t.trim().parse::<i32>().ok())
+    {
+        Some(order) => Some(order),
+        None => native.then_some(0),
+    }
 }
 
 /// `box-shadow` layers. The outermost spread-only ring (Tailwind `ring-*`, with any

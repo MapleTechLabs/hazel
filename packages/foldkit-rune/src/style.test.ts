@@ -46,6 +46,23 @@ describe("StyleResolver", () => {
 		})
 	})
 
+	it("sends focus and press styles as the states the host draws", () => {
+		const button = resolve(
+			"bg-[#ffffff] outline-hidden focus-visible:ring-2 focus-visible:ring-[#3366ff] active:bg-[#ff0000]",
+		)
+		expect(button.style.bg).toBe("#ffffffff")
+		expect(button.style.shadows).toBeUndefined()
+		expect(button.style.focusRing).toEqual({ width: 2, offset: 0, color: "#3366ffff" })
+		expect(button.style.pressBg).toBe("#ff0000ff")
+		// `:focus` shows on pointer focus too.
+		expect(
+			resolve("focus:outline-2 focus:outline-[#3366ff] focus:outline-offset-1").style.focusWithinRing,
+		).toEqual({ width: 2, offset: 1, color: "#3366ffff" })
+		// A hidden outline and no focus style: the browser draws no ring.
+		expect(resolve("outline-hidden").style.focusRing).toBe("none")
+		expect(resolve("px-2").style.focusRing).toBeUndefined()
+	})
+
 	it("applies <html>'s inline custom properties over the stylesheet's", () => {
 		styles.setRootProperties(new Map([["--bg", "#123456"]]))
 		try {

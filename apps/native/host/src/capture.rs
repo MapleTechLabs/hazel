@@ -32,6 +32,8 @@ enum Step {
     WaitText(String),
     /// Click the first native text field drawn over a DOM-backed editor.
     FocusEditable,
+    /// Press Tab this many times: keyboard focus moves in the host, the runtime sees nothing.
+    Tab(u32),
     /// Print the presented rect of every observed element and the first rows under it.
     Dump,
     /// Write every element's presented rect, tag, own text and identifying attributes to a JSON
@@ -343,6 +345,15 @@ pub fn run(script_path: &str) {
             Step::Wait(ms) => {
                 let until = Instant::now() + Duration::from_millis(ms);
                 while Instant::now() < until {
+                    session.tick();
+                }
+            }
+            Step::Tab(times) => {
+                for _ in 0..times {
+                    session.rt.key(KeyEvent {
+                        key: Key::Tab,
+                        mods: Mods::default(),
+                    });
                     session.tick();
                 }
             }

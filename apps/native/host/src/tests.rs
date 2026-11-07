@@ -794,3 +794,60 @@ fn an_svg_keeps_its_aspect_ratio_unless_it_asks_to_stretch() {
     let stretched = left_edge(Some("none"));
     assert!(stretched[0] > 200 && stretched[2] < 60, "{stretched:?}");
 }
+
+/// Two 40x40 buttons 20 pt apart, the first with `st`; Tab focuses it from the keyboard.
+fn tabbed_button(st: Value) -> Runtime<State> {
+    let mut rt = runtime(
+        e(
+            "div",
+            json!({ "display": "flex", "dir": "row", "gapCol": 20, "pad": [20, 20, 20, 20] }),
+            vec![
+                e("button", st, vec![]),
+                e("button", json!({ "w": 40, "h": 40 }), vec![]),
+            ],
+        ),
+        (140.0, 80.0),
+    );
+    rt.key(KeyEvent {
+        key: Key::Tab,
+        mods: Mods::default(),
+    });
+    rt
+}
+
+#[test]
+fn a_button_is_a_tab_stop_with_its_focus_visible_ring() {
+    let mut rt = tabbed_button(
+        json!({ "w": 40, "h": 40, "focusRing": { "width": 3, "offset": 0, "color": "#ff0000ff" } }),
+    );
+    let frame = render(&mut rt, (140, 80));
+    assert!(frame.is(18, 40, RED), "ring {:?}", frame.at(18, 40));
+    assert!(frame.is(40, 40, WHITE), "inside {:?}", frame.at(40, 40));
+}
+
+#[test]
+fn a_hidden_outline_draws_no_focus_ring() {
+    let mut rt = tabbed_button(json!({ "w": 40, "h": 40, "focusRing": "none" }));
+    let frame = render(&mut rt, (140, 80));
+    for x in 15..20 {
+        assert!(frame.is(x, 40, WHITE), "x {x}: {:?}", frame.at(x, 40));
+    }
+}
+
+#[test]
+fn press_bg_fills_the_button_while_pressed() {
+    let mut button = e(
+        "button",
+        json!({ "w": 40, "h": 40, "bg": "#ffffffff", "pressBg": "#ff0000ff" }),
+        vec![],
+    );
+    button["on"] = json!({ "click": 7 });
+    let mut rt = runtime(button, (40.0, 40.0));
+    let rest = render(&mut rt, (40, 40));
+    assert!(rest.is(20, 20, WHITE), "rest {:?}", rest.at(20, 20));
+    rt.pointer_move(20.0, 20.0);
+    rt.pointer_down(20.0, 20.0);
+    rt.frame(0.5);
+    let pressed = render(&mut rt, (40, 40));
+    assert!(pressed.is(20, 20, RED), "pressed {:?}", pressed.at(20, 20));
+}

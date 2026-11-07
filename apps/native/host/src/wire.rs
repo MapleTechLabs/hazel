@@ -92,6 +92,23 @@ pub struct Style {
     pub shrink: Option<F>,
     #[serde(default, deserialize_with = "lenient")]
     pub hover_color: Option<String>,
+    /// The ring keyboard focus draws (`:focus-visible`), or `"none"` when the outline is hidden.
+    #[serde(default, deserialize_with = "lenient")]
+    pub focus_ring: Option<FocusRing>,
+    /// The ring while focus is on the element or in it (`:focus`, `:focus-within`).
+    #[serde(default, deserialize_with = "lenient")]
+    pub focus_within_ring: Option<OutlineSpec>,
+    /// The fill while a press is held (`:active`).
+    #[serde(default, deserialize_with = "lenient")]
+    pub press_bg: Option<String>,
+}
+
+#[derive(Deserialize, Clone, Debug, Hash, PartialEq)]
+#[serde(untagged)]
+pub enum FocusRing {
+    Ring(OutlineSpec),
+    /// `"none"`: the author hid the outline and drew no focus style of their own.
+    Hidden(String),
 }
 
 /// `Some(value)` when the JSON decodes as `T`, else `None`.

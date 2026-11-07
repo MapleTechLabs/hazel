@@ -84,6 +84,16 @@ describe("makeRuneTarget", () => {
 		handle.dispose()
 	})
 
+	it("sends h.Tabindex as the tabindex attribute the host makes a Tab stop", async () => {
+		const tabbable = (_: Model, h: HtmlBuilder<Message>): Html =>
+			h.div([], [h.span([h.Tabindex(0), h.Role("link")], ["Home"])])
+		const { handle, trees } = boot(tabbable)
+		await settle()
+		const span = elements(trees().at(-1)!.root).find((e) => e.tag === "span")!
+		expect(span.attrs.tabindex).toBe("0")
+		handle.dispose()
+	})
+
 	it("keeps handler ids stable and sends unchanged subtrees by reference", async () => {
 		const { rune, handle, trees } = boot()
 		await settle()

@@ -1,6 +1,6 @@
 /**
  * Layout and visual conformance: Hazel's native renderer against Chromium on the same Foldkit view.
- *   bun apps/native/bench/conformance/run.ts [--scenario boot|sent|all] [--theme light|dark|both]
+ *   bun apps/native/bench/conformance/run.ts [--scenario boot|sent|focus|all] [--theme light|dark|both]
  *     [--check] [--update-thresholds] [--skip-build]
  * Writes out/<scenario>-<theme>/ (report.md, report.json, heatmap.png, crops/) and out/summary.md.
  */
@@ -41,19 +41,21 @@ const option = (name: string, fallback: string) => {
 	const at = args.indexOf(name)
 	return at === -1 ? fallback : (args[at + 1] ?? fallback)
 }
-type Scenario = "boot" | "sent"
+type Scenario = "boot" | "sent" | "focus"
+/** Tabs from boot to the logo link, which draws a `focus-visible` outline. */
+const FOCUS_TABS = 1
 type Theme = "light" | "dark"
 const scenarioArg = option("--scenario", "all")
 const themeArg = option("--theme", "both")
 const scenarios: Array<Scenario> =
 	scenarioArg === "all"
-		? ["boot", "sent"]
-		: scenarioArg === "boot" || scenarioArg === "sent"
+		? ["boot", "sent", "focus"]
+		: scenarioArg === "boot" || scenarioArg === "sent" || scenarioArg === "focus"
 			? [scenarioArg]
 			: []
 const themes: Array<Theme> =
 	themeArg === "both" ? ["light", "dark"] : themeArg === "light" || themeArg === "dark" ? [themeArg] : []
-if (scenarios.length === 0) throw new Error("--scenario takes boot, sent or all")
+if (scenarios.length === 0) throw new Error("--scenario takes boot, sent, focus or all")
 if (themes.length === 0) throw new Error("--theme takes light, dark or both")
 
 // NATIVE
@@ -78,7 +80,9 @@ const nativeSteps = (scenario: Scenario, layout: string, snap: string) => {
 		{ key: { name: "Enter", until: TEXT } },
 		{ settle: 1500 },
 	]
-	return [...boot, ...(scenario === "sent" ? send : []), { exportLayout: layout }, { snap }]
+	const focus = [{ tab: FOCUS_TABS }, { wait: 500 }]
+	const steps = scenario === "sent" ? send : scenario === "focus" ? focus : []
+	return [...boot, ...steps, { exportLayout: layout }, { snap }]
 }
 
 const captureNative = async (scenario: Scenario, theme: Theme, dir: string) => {
@@ -275,6 +279,10 @@ const captureWeb = async (browser: Browser, url: string, scenario: Scenario, the
 				{ timeout: 10_000 },
 			)
 			await waitQuiet(page, 1500)
+		}
+		if (scenario === "focus") {
+			for (let i = 0; i < FOCUS_TABS; i++) await page.keyboard.press("Tab")
+			await waitQuiet(page, 500)
 		}
 		const raw = await page.evaluate(extractDom, ID_ATTRS)
 		writeFileSync(join(dir, "web-layout.json"), JSON.stringify({ scale: SCALE, elements: raw }))

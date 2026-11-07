@@ -78,7 +78,18 @@ export type RuneTargetOptions = {
 }
 
 const NON_VISUAL_TAGS = new Set(["style", "script", "template", "noscript", "link", "meta"])
-const HOST_ATTRS = ["value", "placeholder", "type", "href", "src", "alt", "role", "disabled", "aria-label"]
+const HOST_ATTRS = [
+	"value",
+	"placeholder",
+	"type",
+	"href",
+	"src",
+	"alt",
+	"role",
+	"disabled",
+	"aria-label",
+	"tabindex",
+]
 const SVG_ATTRS = new Set([
 	"d",
 	"x",
@@ -126,7 +137,8 @@ const attrsOf = (vnode: AnyVNode): Record<string, string> => {
 			const value = source[name]
 			if (value === undefined || value === null || value === false) continue
 			if (typeof value === "object" || typeof value === "function") continue
-			out[name] = String(value)
+			// `h.Tabindex` sets the `tabIndex` property; the DOM reflects it as the attribute.
+			out[name === "tabIndex" ? "tabindex" : name] = String(value)
 		}
 	}
 	for (const name in data.dataset) {
