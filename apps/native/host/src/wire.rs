@@ -217,6 +217,9 @@ pub enum RuntimeMsg {
 #[derive(Deserialize)]
 pub struct TreeMsg {
     pub ack: u64,
+    /// The runtime's generation for this tree; events pressed on it carry it back.
+    #[serde(default, rename = "gen")]
+    pub generation: u64,
     #[serde(default)]
     pub page: Page,
     pub root: WireNode,

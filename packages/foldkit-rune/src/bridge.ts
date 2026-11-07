@@ -73,6 +73,9 @@ const matchesSelector = (record: ElementRecord, selector: string): boolean => {
 	return record.tag === selector.toLowerCase()
 }
 
+/** How long a runtime scroll waits for the host to report it before host reports win again. */
+const SCROLL_SETTLE_MS = 500
+
 export const makeElementBridge = (options: {
 	readonly mounts: ReadonlySet<string>
 	/**
@@ -88,7 +91,11 @@ export const makeElementBridge = (options: {
 	const rects = new Map<string, Rect>()
 	const scrollTops = new Map<string, number>()
 	/** Offsets the runtime set and the host has not drawn yet; older host reports are stale. */
-	const pendingScrolls = new Map<string, { top: number; at: number }>()
+	/** The runtime's own scroll per path, until the host reports it (or the wait runs out). */
+	const pendingScrolls = new Map<
+		string,
+		{ top: number; at: number; held?: number; timer?: ReturnType<typeof setTimeout> }
+	>()
 	const proxies = new Map<string, ProxyElement>()
 	const observed = new Set<string>()
 	const resizeObservers = new Map<string, Set<(target: ProxyElement) => void>>()
@@ -107,6 +114,7 @@ export const makeElementBridge = (options: {
 		const record = () => records.get(path)
 		const setScrollTop = (top: number) => {
 			scrollTops.set(path, top)
+			clearTimeout(pendingScrolls.get(path)?.timer)
 			pendingScrolls.set(path, { top, at: performance.now() })
 			options.sendScroll({ t: "scroll", path, top })
 		}
@@ -261,17 +269,33 @@ export const makeElementBridge = (options: {
 		if (proxy) for (const notify of resizeObservers.get(path) ?? []) notify(proxy)
 	}
 
+	const applyScroll = (path: string, top: number) => {
+		if (scrollTops.get(path) === top) return
+		scrollTops.set(path, top)
+		proxies.get(path)?.dispatchEvent(new Event("scroll"))
+	}
+
 	const reportScroll = (path: string, top: number) => {
 		const pending = pendingScrolls.get(path)
 		if (pending !== undefined) {
 			// The host may clamp the offset; a report near it, or one well after it, ends the wait.
-			const isSettled = Math.abs(top - pending.top) < 2 || performance.now() - pending.at > 500
-			if (!isSettled && top !== pending.top) return
+			const waited = performance.now() - pending.at
+			const isSettled = Math.abs(top - pending.top) < 2 || waited > SCROLL_SETTLE_MS
+			if (!isSettled) {
+				// Maybe stale, maybe the clamped answer to this scroll: a still viewport sends no
+				// other, so the newest one held back lands when the wait runs out.
+				pending.held = top
+				pending.timer ??= setTimeout(() => {
+					if (pendingScrolls.get(path) !== pending) return
+					pendingScrolls.delete(path)
+					if (pending.held !== undefined) applyScroll(path, pending.held)
+				}, SCROLL_SETTLE_MS - waited)
+				return
+			}
+			clearTimeout(pending.timer)
 			pendingScrolls.delete(path)
 		}
-		if (scrollTops.get(path) === top) return
-		scrollTops.set(path, top)
-		proxies.get(path)?.dispatchEvent(new Event("scroll"))
+		applyScroll(path, top)
 	}
 
 	const findById = (id: string): ProxyElement | null => {

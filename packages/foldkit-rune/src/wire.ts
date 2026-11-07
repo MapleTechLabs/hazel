@@ -36,6 +36,8 @@ export type HostToRuntime =
 			/** For `editable` events: the element path of the DOM-backed Mount. */
 			readonly path?: string
 			readonly type: string
+			/** The generation of the tree the event was pressed on. */
+			readonly gen?: number
 			readonly value?: string
 			readonly key?: string
 			readonly shift?: boolean
@@ -58,6 +60,8 @@ export type RuntimeToHost =
 	| {
 			readonly t: "tree"
 			readonly ack: number
+			/** This tree's generation; the host stamps events with the one it drew. */
+			readonly gen: number
 			readonly title: string
 			readonly page: { readonly bg?: string; readonly color?: string }
 			readonly root: WireNode

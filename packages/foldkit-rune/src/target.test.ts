@@ -42,7 +42,7 @@ beforeAll(async () => {
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 20))
 
-const boot = () => {
+const boot = (render: typeof view = view) => {
 	const sent: Array<RuntimeToHost> = []
 	const bridge = makeElementBridge({ mounts: new Set(), sendScroll: () => {} })
 	const rune = makeRuneTarget({
@@ -56,7 +56,7 @@ const boot = () => {
 			Model,
 			init: () => ({ model: { count: 0, name: "" } }),
 			update,
-			view,
+			view: render,
 			renderTarget: rune.target,
 		}),
 	)
@@ -108,6 +108,48 @@ describe("makeRuneTarget", () => {
 		const latest = trees().at(-1)!
 		expect(latest.ack).toBe(7)
 		expect(elements(latest.root).find((e) => e.tag === "input")?.attrs.value).toBe("Ada")
+		handle.dispose()
+	})
+
+	it("runs the handler of the tree the press was made on, not the one that replaced it", async () => {
+		// The button's handler changes with the Model, as a Link that became an Unlink would.
+		const stamped = (model: Model, h: HtmlBuilder<Message>): Html =>
+			h.div(
+				[],
+				[
+					h.button(
+						[h.OnClick(Message.ChangedName({ name: model.name === "" ? "first" : "second" }))],
+						[model.name],
+					),
+				],
+			)
+		const { rune, handle, trees } = boot(stamped)
+		await settle()
+		const first = trees().at(-1)!
+		const button = elements(first.root).find((e) => e.tag === "button")!
+		const press = (gen: number, seq: number) =>
+			rune.handleHostMessage({ t: "event", seq, gen, id: button.on.click!, type: "click" })
+		press(first.gen, 1)
+		await settle()
+		expect(texts(trees().at(-1)!.root)).toEqual(["first"])
+		// A second press on the first tree's button runs that button's handler, not its replacement's.
+		press(first.gen, 2)
+		await settle()
+		expect(trees().flatMap((tree) => texts(tree.root))).not.toContain("second")
+		handle.dispose()
+	})
+
+	it("keeps a refresh's acknowledgement to the events its document shows", async () => {
+		const { rune, handle, trees } = boot()
+		await settle()
+		const input = elements(trees().at(-1)!.root).find((e) => e.tag === "input")!
+		rune.handleHostMessage({ t: "event", seq: 7, id: input.on.input!, type: "input", value: "Ada" })
+		// A window resize lands before the edit's render: the old document goes out again.
+		rune.handleHostMessage({ t: "env", width: 900, height: 600, dark: false })
+		const refreshed = trees().at(-1)!
+		expect(refreshed.ack).toBeLessThan(7)
+		await settle()
+		expect(trees().at(-1)!.ack).toBe(7)
 		handle.dispose()
 	})
 

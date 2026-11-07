@@ -234,14 +234,22 @@ const hash = (text: string): string => {
  * Handler ids are stable per element path, so an unchanged subtree hashes the same between
  * commits and goes over the wire as a reference.
  */
+/** How many sent trees keep their handlers: a press on a tree older than these runs the newest. */
+const HANDLER_GENERATIONS = 8
+
 export const makeRuneTarget = (options: RuneTargetOptions) => {
 	const { styles, send } = options
 	const env = { ...options.env }
 	let handlers = new Map<number, Handler>()
+	/** Each sent tree's handlers by its generation: a press runs the handler the user saw. */
+	const handlersByGen = new Map<number, Map<number, Handler>>()
+	let gen = 0
 	const handlerIds = new Map<string, number>()
 	let sentHashes = new Set<string>()
 	let lastDocument: Document | undefined
 	let ack = 0
+	/** The newest host event the last committed document reflects. */
+	let lastDocumentAck = 0
 	let frameStartedAt = 0
 
 	const handlerId = (path: string, event: string): number => {
@@ -286,7 +294,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 				(child) => match(child.info) || (!childrenOnly && hasDescendant(child.vnode)(match)),
 			)
 
-	const commitDocument = (document: Document) => {
+	const commitDocument = (document: Document, documentAck: number) => {
 		const viewMs = frameStartedAt === 0 ? 0 : performance.now() - frameStartedAt
 		frameStartedAt = 0
 		const started = performance.now()
@@ -446,11 +454,15 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 				? { k: "t", s: "" }
 				: serialize(body, "r", undefined, styles.rootScope(env.dark), undefined)
 		handlers = nextHandlers
+		gen += 1
+		handlersByGen.set(gen, nextHandlers)
+		handlersByGen.delete(gen - HANDLER_GENERATIONS)
 		sentHashes = nextHashes
 		options.bridge?.commit(records, mountVNodes)
 		const message: RuntimeToHost = {
 			t: "tree",
-			ack,
+			ack: documentAck,
+			gen,
 			title: document.title,
 			page: styles.pageStyle(env.dark),
 			root,
@@ -470,8 +482,10 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 	const target: RenderTarget = {
 		id: "foldkit-rune",
 		commit: (document) => {
+			// Messages dispatch synchronously, so a new document reflects every event received.
 			lastDocument = document
-			commitDocument(document)
+			lastDocumentAck = ack
+			commitDocument(document, ack)
 		},
 		requestFrame: (frame) => {
 			setTimeout(() => {
@@ -488,7 +502,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			// Styles depend on the window and theme, not the Model: re-resolve what is on screen.
 			if (lastDocument) {
 				sentHashes = new Set()
-				commitDocument(lastDocument)
+				commitDocument(lastDocument, lastDocumentAck)
 			}
 			return
 		}
@@ -511,7 +525,9 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			options.onEditable?.(message.path, { value: message.value, key: message.key })
 			return
 		}
-		handlers.get(message.id)?.(fakeEvent(message))
+		const presented = message.gen === undefined ? undefined : handlersByGen.get(message.gen)
+		const handler = (presented ?? handlers).get(message.id)
+		handler?.(fakeEvent(message))
 	}
 
 	/** A Mount that starts observing an element after a commit needs it flagged for the host. */
@@ -521,7 +537,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		isRefreshScheduled = true
 		setTimeout(() => {
 			isRefreshScheduled = false
-			if (lastDocument) commitDocument(lastDocument)
+			if (lastDocument) commitDocument(lastDocument, lastDocumentAck)
 		}, 0)
 	}
 

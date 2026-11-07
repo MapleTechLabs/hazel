@@ -45,6 +45,8 @@ pub(crate) struct State {
 
 static OUT: OnceLock<Mutex<Box<dyn Write + Send>>> = OnceLock::new();
 static SEQ: AtomicU64 = AtomicU64::new(0);
+/// The generation of the tree on screen: an event runs the handler of the tree it was pressed on.
+static GEN: AtomicU64 = AtomicU64::new(0);
 static ICONS: Mutex<Option<HashMap<String, &'static Icon>>> = Mutex::new(None);
 
 fn write_line(message: serde_json::Value) {
@@ -59,7 +61,7 @@ fn write_line(message: serde_json::Value) {
 fn send_editable(path: &str, value: Option<&str>, key: Option<&str>) -> u64 {
     let seq = SEQ.fetch_add(1, Ordering::SeqCst) + 1;
     write_line(
-        json!({ "t": "event", "seq": seq, "id": 0, "type": "editable", "path": path, "value": value, "key": key }),
+        json!({ "t": "event", "seq": seq, "gen": GEN.load(Ordering::SeqCst), "id": 0, "type": "editable", "path": path, "value": value, "key": key }),
     );
     seq
 }
@@ -84,7 +86,7 @@ fn dom_key(key: &rune::edit::Key) -> Option<&'static str> {
 fn send_key(id: u32, key: &str, mods: rune::edit::Mods) -> u64 {
     let seq = SEQ.fetch_add(1, Ordering::SeqCst) + 1;
     write_line(json!({
-        "t": "event", "seq": seq, "id": id, "type": "keydown", "key": key,
+        "t": "event", "seq": seq, "gen": GEN.load(Ordering::SeqCst), "id": id, "type": "keydown", "key": key,
         "shift": mods.shift, "meta": mods.cmd, "ctrl": mods.ctrl, "alt": mods.alt,
     }));
     seq
@@ -92,7 +94,9 @@ fn send_key(id: u32, key: &str, mods: rune::edit::Mods) -> u64 {
 
 fn send(id: u32, kind: &str, value: Option<&str>) -> u64 {
     let seq = SEQ.fetch_add(1, Ordering::SeqCst) + 1;
-    write_line(json!({ "t": "event", "seq": seq, "id": id, "type": kind, "value": value }));
+    write_line(
+        json!({ "t": "event", "seq": seq, "gen": GEN.load(Ordering::SeqCst), "id": id, "type": kind, "value": value }),
+    );
     seq
 }
 
@@ -122,6 +126,7 @@ fn child_path(parent: &str, index: usize, node: &Node) -> String {
 
 impl State {
     pub(crate) fn apply(&mut self, msg: TreeMsg) {
+        GEN.store(msg.generation, Ordering::SeqCst);
         let (root, subtrees) = self.subtrees.resolve(msg.root);
         sync_fields(&root, "r", msg.ack, &mut self.fields);
         self.page = msg.page;

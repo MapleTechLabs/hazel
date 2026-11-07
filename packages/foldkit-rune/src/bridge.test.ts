@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "vitest"
+import { beforeAll, describe, expect, it, vi } from "vitest"
 
 import { makeElementBridge } from "./bridge"
 
@@ -78,6 +78,24 @@ describe("makeElementBridge", () => {
 		expect(list.scrollTop).toBe(500)
 		expect(scrolls).toBe(1)
 		expect(sent).toEqual([480])
+	})
+
+	it("takes the host's clamped offset when it never reports another", () => {
+		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] })
+		const bridge = makeElementBridge({ mounts: new Set(), sendScroll: () => {} })
+		bridge.commit(record(bridge), new Map())
+		const list = bridge.findById("list")
+		if (list === null) throw new Error("no #list element")
+		let scrolls = 0
+		list.addEventListener("scroll", () => scrolls++)
+		list.scrollTop = 2000
+		// The content is only 1800 tall: the host clamps and the viewport stays still after.
+		bridge.reportScroll("r", 1800)
+		expect(list.scrollTop).toBe(2000)
+		vi.advanceTimersByTime(600)
+		expect(list.scrollTop).toBe(1800)
+		expect(scrolls).toBe(1)
+		vi.useRealTimers()
 	})
 
 	it("treats a sibling whose path extends another's as outside it", () => {
