@@ -1,0 +1,16 @@
+[package]
+name = "hazel-native"
+version = "0.0.1"
+edition = "2024"
+publish = false
+
+[dependencies]
+# Rune is pre-release: pin a `dev` revision.
+rune = { git = "https://github.com/anomalyco/rune", rev = "bca47138e9c31a7870a79272ee2523b592b1248d" }
+base64 = "0.22"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+wgpu = { version = "~30.0.1", default-features = false, features = ["std", "parking_lot", "metal", "wgsl"] }
+
+[profile.release]
+debug = false
