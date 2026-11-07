@@ -1,6 +1,6 @@
 /**
  * Layout and visual conformance: Hazel's native renderer against Chromium on the same Foldkit view.
- *   bun apps/native/bench/conformance/run.ts [--scenario boot|sent|focus|menu|all] [--theme light|dark|both]
+ *   bun apps/native/bench/conformance/run.ts [--scenario boot|sent|focus|menu|palette|all] [--theme light|dark|both]
  *     [--check] [--update-thresholds] [--skip-build]
  * Writes out/<scenario>-<theme>/ (report.md, report.json, heatmap.png, crops/) and out/summary.md.
  */
@@ -41,24 +41,18 @@ const option = (name: string, fallback: string) => {
 	const at = args.indexOf(name)
 	return at === -1 ? fallback : (args[at + 1] ?? fallback)
 }
-type Scenario = "boot" | "sent" | "focus" | "menu"
+const SCENARIOS = ["boot", "sent", "focus", "menu", "palette"] as const
+type Scenario = (typeof SCENARIOS)[number]
 /** Tabs from boot to the logo link, which draws a `focus-visible` outline. */
 const FOCUS_TABS = 1
 type Theme = "light" | "dark"
 const scenarioArg = option("--scenario", "all")
 const themeArg = option("--theme", "both")
 const scenarios: Array<Scenario> =
-	scenarioArg === "all"
-		? ["boot", "sent", "focus", "menu"]
-		: scenarioArg === "boot" ||
-			  scenarioArg === "sent" ||
-			  scenarioArg === "focus" ||
-			  scenarioArg === "menu"
-			? [scenarioArg]
-			: []
+	scenarioArg === "all" ? [...SCENARIOS] : SCENARIOS.filter((scenario) => scenario === scenarioArg)
 const themes: Array<Theme> =
 	themeArg === "both" ? ["light", "dark"] : themeArg === "light" || themeArg === "dark" ? [themeArg] : []
-if (scenarios.length === 0) throw new Error("--scenario takes boot, sent, focus, menu or all")
+if (scenarios.length === 0) throw new Error(`--scenario takes ${SCENARIOS.join(", ")} or all`)
 if (themes.length === 0) throw new Error("--theme takes light, dark or both")
 
 // NATIVE
@@ -86,7 +80,9 @@ const nativeSteps = (scenario: Scenario, layout: string, snap: string) => {
 	const focus = [{ tab: FOCUS_TABS }, { wait: 500 }]
 	// The org switcher's menu: a portalled, anchored, modal overlay.
 	const menu = [{ clickText: "Hazel" }, { settle: 800 }]
-	const steps = scenario === "sent" ? send : scenario === "focus" ? focus : scenario === "menu" ? menu : []
+	// The command palette: a modal dialog centred on the window, over a backdrop.
+	const palette = [{ clickText: "Browse channels" }, { settle: 800 }]
+	const steps = { boot: [], sent: send, focus, menu, palette }[scenario]
 	return [...boot, ...steps, { exportLayout: layout }, { snap }]
 }
 
@@ -284,6 +280,10 @@ const captureWeb = async (browser: Browser, url: string, scenario: Scenario, the
 				{ timeout: 10_000 },
 			)
 			await waitQuiet(page, 1500)
+		}
+		if (scenario === "palette") {
+			await page.getByText("Browse channels").first().click()
+			await waitQuiet(page, 800)
 		}
 		if (scenario === "menu") {
 			await page.locator("#org-switcher-trigger").click()

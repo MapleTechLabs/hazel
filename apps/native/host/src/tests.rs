@@ -1190,3 +1190,146 @@ fn an_auto_grid_column_is_as_wide_as_its_widest_cell_on_every_row() {
     assert_eq!(rect(&rt, "r/0/1"), [70.0, 0.0, 230.0, 20.0]);
     assert_eq!(rect(&rt, "r/0/3"), [70.0, 24.0, 230.0, 20.0]);
 }
+
+#[test]
+fn closing_a_modal_overlay_gives_focus_back_to_its_trigger() {
+    sent_lines();
+    let page = |open: bool| {
+        let mut trigger = json!({ "k": "e", "h": format!("trigger{open}"), "tag": "button", "st": { "w": 100, "h": 30 },
+            "attrs": {}, "on": { "click": 41 }, "c": [] });
+        if !open {
+            trigger["h"] = json!("trigger-closed");
+        }
+        let mut children = vec![trigger];
+        if open {
+            let mut item = e("div", json!({ "w": 80, "h": 20 }), vec![]);
+            item["attrs"] = json!({ "tabindex": "0" });
+            let mut panel = e("div", json!({ "w": 80, "h": 60 }), vec![item]);
+            panel["ov"] = json!({ "anchor": { "to": "r/0", "side": "bottom", "align": "start", "gap": 4 }, "modal": "r/1" });
+            let mut portal = e("div", json!({ "display": "contents" }), vec![panel]);
+            portal["ov"] = json!({ "portal": 1 });
+            children.push(portal);
+        }
+        json!({ "k": "e", "h": format!("page{open}"), "tag": "div", "st": { "w": 300, "h": 200, "pad": [20, 20, 20, 20] },
+            "attrs": {}, "on": {}, "c": children })
+    };
+    let mut rt = runtime(page(false), (300.0, 200.0));
+    commit(&mut rt, page(true));
+    rt.frame(0.1);
+    commit(&mut rt, page(false));
+    rt.frame(0.2);
+    rt.key(KeyEvent {
+        key: Key::Text(" ".into()),
+        mods: Mods::default(),
+    });
+    rt.frame(0.3);
+    let pressed = sent_lines()
+        .iter()
+        .any(|m| m["id"] == 41 && m["type"] == "click");
+    assert!(pressed, "Space did not reach the trigger");
+}
+
+#[test]
+fn a_subgrid_row_takes_its_press() {
+    sent_lines();
+    let mut item = e(
+        "span",
+        json!({ "display": "grid", "subgrid": true, "colSpanFull": true, "gridCols": ["auto", "1fr"], "h": 30,
+            "pad": [8, 8, 8, 8], "w": "full", "minW": 0, "items": "center", "clip": true, "radius": [8, 8, 8, 8],
+            "hoverBg": "#00000009", "hoverGroup": true, "focusRing": "none", "pressBg": "#00000009",
+            "transition": { "colors": { "duration": 0.15, "delay": 0, "ease": [0.4, 0, 0.2, 1] } } }),
+        vec![
+            e("span", json!({ "w": 20, "h": 20 }), vec![]),
+            e("span", json!({}), vec![t("Browse")]),
+        ],
+    );
+    item["on"] = json!({ "click": 51 });
+    let mut rt = runtime(
+        e(
+            "div",
+            json!({ "w": 300 }),
+            vec![e(
+                "div",
+                json!({ "display": "grid", "gridCols": ["auto", "1fr"] }),
+                vec![item],
+            )],
+        ),
+        (300.0, 100.0),
+    );
+    let (x, y) = rt.find("r/0/0").expect("drawn");
+    rt.pointer_move(x, y);
+    rt.pointer_down(x, y);
+    rt.pointer_up(x, y);
+    rt.frame(0.1);
+    assert!(
+        sent_lines().iter().any(|m| m["id"] == 51),
+        "no click from the subgrid row"
+    );
+}
+
+#[test]
+fn a_press_on_a_tabindex_minus_one_child_reaches_the_row() {
+    sent_lines();
+    let mut label = e(
+        "span",
+        json!({ "w": 200, "h": 30 }),
+        vec![t("Browse channels")],
+    );
+    label["attrs"] = json!({ "tabindex": "-1" });
+    let mut row = e(
+        "span",
+        json!({ "display": "flex", "w": 300, "h": 30 }),
+        vec![label],
+    );
+    row["attrs"] = json!({ "role": "link", "tabindex": "0" });
+    row["on"] = json!({ "click": 61 });
+    let mut rt = runtime(e("div", json!({ "w": 300 }), vec![row]), (300.0, 100.0));
+    let (x, y) = rt.find("r/0/0").expect("label");
+    rt.pointer_move(x, y);
+    rt.pointer_down(x, y);
+    rt.pointer_up(x, y);
+    rt.frame(0.1);
+    assert!(
+        sent_lines().iter().any(|m| m["id"] == 61),
+        "the label kept the press"
+    );
+}
+
+#[test]
+fn center_x_centres_an_absolute_box_horizontally_at_its_top() {
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "w": 400, "h": 300 }),
+            vec![e(
+                "div",
+                json!({ "w": 100, "h": 50, "absolute": [null, 30, null, null], "centerX": true, "bg": "#ff0000ff" }),
+                vec![],
+            )],
+        ),
+        (400.0, 300.0),
+    );
+    assert_eq!(rect(&rt, "r/0"), [150.0, 30.0, 100.0, 50.0]);
+}
+
+#[test]
+fn a_display_contents_portal_draws_once() {
+    let backdrop = e(
+        "div",
+        json!({ "absolute": [0, 0, 0, 0], "w": 100, "h": 100, "bg": "#00000026" }),
+        vec![],
+    );
+    let mut portal = e("div", json!({ "display": "contents" }), vec![backdrop]);
+    portal["ov"] = json!({ "portal": 1, "modal": "r/0" });
+    let mut rt = runtime(
+        e(
+            "div",
+            json!({ "display": "flex", "w": 100, "h": 100, "bg": "#ffffffff" }),
+            vec![portal],
+        ),
+        (100.0, 100.0),
+    );
+    let frame = render(&mut rt, (100, 100));
+    // One 15% black layer over white; drawn in place as well as at the root it would be 184.
+    assert!(frame.is(50, 50, [217, 217, 217]), "{:?}", frame.at(50, 50));
+}

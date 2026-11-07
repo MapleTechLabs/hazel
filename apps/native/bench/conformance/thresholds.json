@@ -96,7 +96,7 @@
 			"sizeWithin4Pct": 88.57,
 			"textPosWithin4Pct": 98,
 			"textSizeWithin4Pct": 80.43,
-			"pixelScore": 95.77
+			"pixelScore": 95.84
 		},
 		"max": {
 			"missingOnNative": 5,
@@ -111,7 +111,37 @@
 			"sizeWithin4Pct": 88.57,
 			"textPosWithin4Pct": 98,
 			"textSizeWithin4Pct": 80.43,
-			"pixelScore": 95.76
+			"pixelScore": 95.81
+		},
+		"max": {
+			"missingOnNative": 5,
+			"posP95": 4.75,
+			"textPosP95": 5.44
+		}
+	},
+	"palette-light": {
+		"min": {
+			"matchedWebPct": 97.29,
+			"posWithin4Pct": 95.43,
+			"sizeWithin4Pct": 88.57,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 80.43,
+			"pixelScore": 97.48
+		},
+		"max": {
+			"missingOnNative": 5,
+			"posP95": 4.75,
+			"textPosP95": 5.44
+		}
+	},
+	"palette-dark": {
+		"min": {
+			"matchedWebPct": 97.29,
+			"posWithin4Pct": 95.43,
+			"sizeWithin4Pct": 88.57,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 80.43,
+			"pixelScore": 97.25
 		},
 		"max": {
 			"missingOnNative": 5,

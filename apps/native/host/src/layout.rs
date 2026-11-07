@@ -346,6 +346,7 @@ pub fn apply_box(mut e: El, st: &Style) -> El {
     }
     if let Some([l, t, r, b]) = st.absolute
         && st.center_y != Some(true)
+        && st.center_x != Some(true)
     {
         e = e.pin(f(l), f(t), f(r), f(b))
     }
@@ -492,7 +493,9 @@ pub fn focus_styles(mut e: El, st: &Style, field: bool) -> El {
     e
 }
 
-/// Elements HTML puts in the Tab order (or `tabindex` adds), unless disabled.
+/// Elements HTML puts in the Tab order (or `tabindex` adds), unless disabled. A negative
+/// `tabindex` takes them out: in Rune a focusable element keeps the presses on it, where a
+/// browser lets the click bubble, and the host has no script focus that would need it.
 pub fn focusable(tag: &str, attrs: &HashMap<String, String>) -> Option<i32> {
     if attrs.contains_key("disabled") {
         return None;
@@ -503,6 +506,7 @@ pub fn focusable(tag: &str, attrs: &HashMap<String, String>) -> Option<i32> {
         .get("tabindex")
         .and_then(|t| t.trim().parse::<i32>().ok())
     {
+        Some(order) if order < 0 => None,
         Some(order) => Some(order),
         None => native.then_some(0),
     }
@@ -555,6 +559,18 @@ fn apply_shadows(mut e: El, st: &Style) -> El {
 /// `inset-y-1/2 -translate-y-1/2`: Rune has no percentage insets, so centre in a full-height slot.
 pub fn center_vertically(e: El, st: &Style) -> El {
     match (st.absolute, st.center_y) {
+        // `left-1/2 -translate-x-1/2` (and both axes): centred in a full-width slot at its insets.
+        (Some([_, t, _, b]), centre_y) if st.center_x == Some(true) => {
+            let both = centre_y == Some(true);
+            let slot = if both {
+                row()
+                    .pin(Some(0.0), Some(0.0), Some(0.0), Some(0.0))
+                    .items_center()
+            } else {
+                row().pin(Some(0.0), f(t), Some(0.0), f(b)).items_start()
+            };
+            slot.justify_center().child(e)
+        }
         (Some([l, _, r, _]), Some(true)) => {
             // Pinned on both sides with no width of its own, CSS stretches it between them
             // (`inset-x-0 top-1/2`: a full-width divider or overlay).

@@ -148,6 +148,8 @@ export type Style = {
 	textAlign?: string
 	hoverGroup?: boolean
 	centerY?: boolean
+	/** `left-1/2 -translate-x-1/2`: centred horizontally in its containing block. */
+	centerX?: boolean
 	/** `position: sticky; top: N`: held N px below the top of the scrolling viewport around it. */
 	stickyTop?: number
 	/** Resolution scratch: whether insets apply. Never sent. */
@@ -925,7 +927,16 @@ export class StyleResolver {
 			s[key] = c
 		}
 		const inset = (i: number, value: string) => {
-			const n = value === "auto" ? null : evalLength(value, units)
+			// A percentage is of the containing block: the window for `fixed`, else (most often) the parent.
+			const horizontal = i % 2 === 0
+			const basis = acc.fixed
+				? horizontal
+					? viewportSize.width
+					: viewportSize.height
+				: horizontal
+					? acc.scope.box.w
+					: acc.scope.box.h
+			const n = value === "auto" ? null : evalLength(value, units, basis)
 			if (n === null && value !== "auto") return unsupported()
 			const a = s.absolute ?? [null, null, null, null]
 			a[i] = n
@@ -1272,6 +1283,11 @@ export class StyleResolver {
 			}
 			case "left":
 			case "inset-inline-start":
+				if (percentage(v, units) === 50) {
+					s.absolute = s.absolute ?? [null, null, null, null]
+					s.centerX = true
+					break
+				}
 				inset(0, v)
 				break
 			case "right":
@@ -1286,11 +1302,14 @@ export class StyleResolver {
 				const t = parseTranslate(tx, ty, units)
 				if (t === "none") delete s.translate
 				else if (t !== null) s.translate = t
-				// `-translate-y-1/2` under `top-1/2` is the vertical centring `centerY` already says.
-				else if (
-					!(s.centerY === true && evalLength(tx, units) === 0 && percentage(ty, units) === -50)
-				)
-					unsupported()
+				// `-translate-x/y-1/2` under `left/top-1/2` is the centring `centerX`/`centerY` already says.
+				else {
+					const xCentred =
+						s.centerX === true ? percentage(tx, units) === -50 : evalLength(tx, units) === 0
+					const yCentred =
+						s.centerY === true ? percentage(ty, units) === -50 : evalLength(ty, units) === 0
+					if (!(xCentred && yCentred)) unsupported()
+				}
 				break
 			}
 			case "transform": {
@@ -1345,6 +1364,7 @@ export class StyleResolver {
 				if (v.replace(/\s/g, "") === "inset(50%)") s.display = "none"
 				break
 			case "position":
+				acc.fixed = v === "fixed"
 				s.position =
 					v === "absolute" || v === "fixed" ? "absolute" : v === "sticky" ? "sticky" : "static"
 				if (s.position === "absolute") s.absolute = s.absolute ?? [null, null, null, null]
@@ -1497,6 +1517,7 @@ export class StyleResolver {
 		if (s.position !== "absolute") {
 			delete s.absolute
 			delete s.centerY
+			delete s.centerX
 		}
 		delete s.position
 		// A unitless line height multiplies the final font size (an inline `font-size` comes last).
@@ -1732,6 +1753,8 @@ type Accumulator = {
 	outline: { style?: string; width?: string; color?: string; offset?: string }
 	/** The `animation` shorthand, substituted; composed in `finish` with its keyframes. */
 	animation?: string
+	/** `position: fixed`: percentage insets are of the window. */
+	fixed?: boolean
 	/** `transition-*` longhands as written, composed in `finish`. */
 	transition: { property?: string; duration?: string; timing?: string; delay?: string }
 	/** This element's own line-height, when it sets one. */

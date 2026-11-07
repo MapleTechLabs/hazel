@@ -195,6 +195,11 @@ impl State {
     }
 }
 
+/// An element the runtime asked to draw at the window's root (`ov.portal`).
+fn is_portal(node: &Arc<Node>) -> bool {
+    matches!(node.as_ref(), Node::Elem { ov: Some(o), .. } if o.portal.is_some())
+}
+
 fn collect_portals(node: &Arc<Node>, path: &str, out: &mut Vec<(String, Arc<Node>)>) {
     let Node::Elem { ov, children, .. } = node.as_ref() else {
         return;
@@ -618,6 +623,9 @@ fn add_children(
     };
     for (i, child) in paint_order(kids) {
         let child_path = child_path(path, i, child);
+        if is_portal(child) && ctx.portal != Some(child_path.as_str()) {
+            continue;
+        }
         // `display: contents`: no box of its own; its children join this one's layout.
         if let Node::Elem { st, children, .. } = child.as_ref()
             && st.display.as_deref() == Some("contents")
@@ -743,6 +751,10 @@ fn build_grid(
     ) {
         for (i, child) in children {
             let child_path = child_path(path, i, child);
+            // A portal draws at the window's root (`view`), not in the grid.
+            if is_portal(child) {
+                continue;
+            }
             match child.as_ref() {
                 Node::Elem { st, children, .. } if st.display.as_deref() == Some("contents") => {
                     flatten(children.iter().enumerate(), &child_path, items);
@@ -1037,6 +1049,11 @@ fn overlay(mut e: El, ov: &Option<Box<wire::Overlay>>) -> El {
     }
     if let Some(root) = ov.modal.clone() {
         e = e.modal(true, move |_: &mut State| send_dismiss(&root));
+        // The browser hands focus back to the trigger (FocusScope `restoreFocus`), even after
+        // a pointer press that never focused it.
+        if let Some(a) = &ov.anchor {
+            e = e.focus_return(a.to.clone());
+        }
     }
     e
 }

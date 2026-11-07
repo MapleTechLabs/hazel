@@ -148,6 +148,14 @@ describe("StyleResolver", () => {
 		expect(pre.resolve(input, pre.rootScope(false), false, 1280).style.pad).toEqual([0, 16, 0, 16])
 	})
 
+	it("centres left-1/2 -translate-x-1/2 and resolves a fixed box's percentage insets on the window", () => {
+		const dialog = resolve("fixed top-[10%] left-1/2 -translate-x-1/2 w-32").style
+		expect(dialog.centerX).toBe(true)
+		expect(dialog.translate).toBeUndefined()
+		// 10% of the 800-point window the tests resolve in.
+		expect(dialog.absolute?.[1]).toBe(80)
+	})
+
 	it("switches theme tokens in dark mode", () => {
 		expect(resolve("bg-bg text-fg", { dark: true }).style).toMatchObject({
 			bg: "#000000ff",

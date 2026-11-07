@@ -98,6 +98,9 @@ pub struct Style {
     /// The ring while focus is on the element or in it (`:focus`, `:focus-within`).
     #[serde(default, deserialize_with = "lenient")]
     pub focus_within_ring: Option<OutlineSpec>,
+    /// `left-1/2 -translate-x-1/2`: centred horizontally in its containing block.
+    #[serde(default, deserialize_with = "lenient")]
+    pub center_x: Option<bool>,
     /// The fill while a press is held (`:active`).
     #[serde(default, deserialize_with = "lenient")]
     pub press_bg: Option<String>,
