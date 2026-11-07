@@ -61,6 +61,13 @@ export const editorText = (args: Record<string, unknown>): string | undefined =>
 		onSome: (view) => view.state.doc.textBetween(0, view.state.doc.content.size, "\n"),
 	})
 
+/** The mounted editor root's class, which the native field takes its box and text style from. */
+export const editorClass = (args: Record<string, unknown>): string | undefined =>
+	Option.match(editorAt(args.editorId), {
+		onNone: () => undefined,
+		onSome: (view) => view.dom.getAttribute("class") ?? undefined,
+	})
+
 export const applyEditorEvent = (
 	args: Record<string, unknown>,
 	event: { readonly value?: string | null; readonly key?: string | null },

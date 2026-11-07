@@ -620,3 +620,112 @@ fn a_field_with_a_keydown_handler_gets_its_navigation_keys() {
         "the handler's keys do not edit the text"
     );
 }
+
+#[test]
+fn a_space_between_two_inline_chips_keeps_them_apart() {
+    let chip = |name: &str| e("button", json!({ "display": "inline" }), vec![t(name)]);
+    let rt = runtime(
+        e(
+            "p",
+            json!({ "w": 600 }),
+            vec![chip("@Ada"), t(" "), chip("@Grace")],
+        ),
+        (600.0, 100.0),
+    );
+    let (first, second) = (rect(&rt, "r/0"), rect(&rt, "r/2"));
+    assert!(
+        second[0] - (first[0] + first[2]) >= 2.0,
+        "{first:?} {second:?}"
+    );
+}
+
+#[test]
+fn an_svg_with_display_none_takes_no_space() {
+    let hidden = json!({ "k": "svg", "h": "svg-hidden", "view": 16, "body": "<path d=\"M0 0h16v16z\"/>", "st": { "display": "none", "w": 50, "h": 16 } });
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "display": "flex", "w": 300 }),
+            vec![hidden, e("span", json!({ "w": 40, "h": 10 }), vec![])],
+        ),
+        (300.0, 50.0),
+    );
+    assert_eq!(rect(&rt, "r/1")[0], 0.0);
+}
+
+#[test]
+fn a_disabled_input_takes_no_typing() {
+    let input = with_attrs(
+        e("input", json!({ "w": 200, "h": 30 }), vec![]),
+        json!({ "disabled": "true" }),
+    );
+    let mut rt = runtime(e("div", json!({ "w": 300 }), vec![input]), (300.0, 100.0));
+    type_into(&mut rt, "r/0/field", &[Key::Text("a".into())]);
+    assert_eq!(field_text(&rt, "r/0"), "");
+}
+
+#[test]
+fn a_growing_sibling_takes_the_space_before_an_auto_margin() {
+    // The sidebar: header, a `flex-1` scroller, and a footer with `mt-auto`.
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "display": "flex", "dir": "col", "w": 100, "h": 400 }),
+            vec![
+                e("div", json!({ "h": 50 }), vec![]),
+                e("div", json!({ "grow": 1, "minH": 0 }), vec![]),
+                e(
+                    "div",
+                    json!({ "h": 30, "marginAuto": [true, false, false, false] }),
+                    vec![],
+                ),
+            ],
+        ),
+        (100.0, 400.0),
+    );
+    assert_eq!(rect(&rt, "r/1")[3], 320.0, "{:?}", rect(&rt, "r/1"));
+    assert_eq!(rect(&rt, "r/2")[1], 370.0);
+}
+
+#[test]
+fn a_sticky_header_stays_at_the_top_of_its_scroller() {
+    let mut rows = vec![e("div", json!({ "h": 20, "stickyTop": 0 }), vec![])];
+    rows.extend((0..20).map(|_| e("div", json!({ "h": 40 }), vec![])));
+    let mut rt = runtime(
+        e(
+            "div",
+            json!({ "h": 200, "w": 100, "scrollY": true }),
+            vec![e("div", json!({}), rows)],
+        ),
+        (100.0, 200.0),
+    );
+    let before = rect(&rt, "r/0/0")[1];
+    rt.update(|_, tx| tx.scroll_to_instant("r".to_string(), 0.0, 300.0));
+    rt.frame(0.0);
+    assert!(rect(&rt, "r/0/1")[1] < -200.0, "the rows scrolled");
+    assert_eq!(
+        rect(&rt, "r/0/0")[1],
+        before,
+        "the header stays put while its rows scroll"
+    );
+}
+
+#[test]
+fn a_dom_backed_editor_takes_its_roots_padding_and_min_height() {
+    let editor = with_attrs(
+        e(
+            "div",
+            json!({ "w": 400 }),
+            vec![e(
+                "div",
+                json!({ "pad": [8, 12, 8, 12], "minH": 40, "fontSize": 14, "lineHeight": 21 }),
+                vec![],
+            )],
+        ),
+        json!({ "data-editable": "1", "placeholder": "Type a message..." }),
+    );
+    let rt = runtime(e("div", json!({ "w": 400 }), vec![editor]), (400.0, 100.0));
+    let field = rect(&rt, "r/0/field");
+    assert_eq!(field[0], 12.0, "{field:?}");
+    assert!(rect(&rt, "r/0")[3] >= 40.0, "{:?}", rect(&rt, "r/0"));
+}

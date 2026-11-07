@@ -9,7 +9,8 @@
 		"start": "bun run host:build && host/target/release/hazel-native",
 		"typecheck": "tsc --noEmit",
 		"test": "vitest run",
-		"bench": "bun bench/run.ts"
+		"bench": "bun bench/run.ts",
+		"conformance": "bun bench/conformance/run.ts"
 	},
 	"dependencies": {
 		"@hazel/auth": "workspace:*",

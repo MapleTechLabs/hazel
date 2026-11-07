@@ -1,0 +1,62 @@
+{
+	"boot-light": {
+		"min": {
+			"matchedWebPct": 97.29,
+			"posWithin4Pct": 95.43,
+			"sizeWithin4Pct": 88.57,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 80.43,
+			"pixelScore": 96.29
+		},
+		"max": {
+			"missingOnNative": 5,
+			"posP95": 4.75,
+			"textPosP95": 5.44
+		}
+	},
+	"boot-dark": {
+		"min": {
+			"matchedWebPct": 97.29,
+			"posWithin4Pct": 95.43,
+			"sizeWithin4Pct": 88.57,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 80.43,
+			"pixelScore": 96.15
+		},
+		"max": {
+			"missingOnNative": 5,
+			"posP95": 4.75,
+			"textPosP95": 5.44
+		}
+	},
+	"sent-light": {
+		"min": {
+			"matchedWebPct": 97.31,
+			"posWithin4Pct": 95.63,
+			"sizeWithin4Pct": 89.12,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 81.56,
+			"pixelScore": 96.57
+		},
+		"max": {
+			"missingOnNative": 5,
+			"posP95": 4.75,
+			"textPosP95": 5.44
+		}
+	},
+	"sent-dark": {
+		"min": {
+			"matchedWebPct": 97.31,
+			"posWithin4Pct": 95.63,
+			"sizeWithin4Pct": 89.12,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 81.56,
+			"pixelScore": 96.43
+		},
+		"max": {
+			"missingOnNative": 5,
+			"posP95": 4.75,
+			"textPosP95": 5.44
+		}
+	}
+}

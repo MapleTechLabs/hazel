@@ -54,6 +54,8 @@ pub struct Style {
     #[serde(default, deserialize_with = "lenient")]
     pub margin_auto: Option<[bool; 4]>,
     #[serde(default, deserialize_with = "lenient")]
+    pub sticky_top: Option<F>,
+    #[serde(default, deserialize_with = "lenient")]
     pub shadows: Option<Vec<BoxShadow>>,
     #[serde(default, deserialize_with = "lenient")]
     pub outline: Option<OutlineSpec>,

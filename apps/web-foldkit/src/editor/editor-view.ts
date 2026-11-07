@@ -48,7 +48,7 @@ export interface EditorOptions {
 }
 
 /** Legacy `Editable` className, composed with the same `cx` (tailwind-merge) arguments. */
-const EDITABLE_CLASS = cx(
+export const EDITABLE_CLASS = cx(
 	"w-full whitespace-pre-wrap break-all px-3 py-2 text-base md:text-sm",
 	"rounded-xl bg-transparent",
 	"focus:border-primary focus:outline-hidden",

@@ -229,6 +229,10 @@ fn capitalize(s: &str) -> String {
 
 /// Box model, paint and flex-item properties shared by every element kind.
 pub fn apply_box(mut e: El, st: &Style) -> El {
+    // `position: sticky`: Rune holds it in the nearest vertical scroller, pushed out by its parent.
+    if let Some(F(top)) = st.sticky_top {
+        e = e.sticky_top(top);
+    }
     match st.w {
         Some(Len::Px(F(v))) => e = e.w(v),
         Some(Len::Full) => e = e.w_full(),
@@ -438,7 +442,9 @@ pub fn apply_flex(mut e: El, st: &Style) -> El {
     match st.items.as_deref() {
         Some("center") => e = e.items_center(),
         Some("flex-start" | "start") => e = e.items_start(),
-        Some("flex-end" | "end") => e = e.items_end(),
+        // Rune has no baseline alignment; lines of different sizes sharing a row (a name and
+        // its timestamp) sit bottom-aligned, within a point or two of their shared baseline.
+        Some("flex-end" | "end" | "baseline") => e = e.items_end(),
         Some("stretch") => e = e.items_stretch(),
         _ => {}
     }
@@ -461,7 +467,15 @@ pub fn apply_flex(mut e: El, st: &Style) -> El {
 /// Auto margins, which Rune lacks. On the parent's main axis the child sits in a growing slot
 /// that takes the free space and places it at the slot's end, start or centre (so no extra gap
 /// appears); on the cross axis they align the child itself.
-pub fn auto_margins(child: El, st: &Style, parent_is_row: bool, parent_items: Option<&str>) -> El {
+/// `sibling_grows`: a sibling has `flex-grow`, which takes the free space before auto margins
+/// see any (CSS flexbox §9.4), so this child's main-axis auto margins resolve to zero.
+pub fn auto_margins(
+    child: El,
+    st: &Style,
+    parent_is_row: bool,
+    parent_items: Option<&str>,
+    sibling_grows: bool,
+) -> El {
     let Some([top, right, bottom, left]) = st.margin_auto else {
         return child;
     };
@@ -479,7 +493,7 @@ pub fn auto_margins(child: El, st: &Style, parent_is_row: bool, parent_items: Op
         (false, true) => child.self_start(),
         (false, false) => child,
     };
-    if !main_start && !main_end {
+    if (!main_start && !main_end) || sibling_grows {
         return child;
     }
     let slot = if parent_is_row {

@@ -161,17 +161,24 @@ fn sync_fields(node: &Node, path: &str, ack: u64, fields: &mut HashMap<String, F
 struct Ctx<'a> {
     s: &'a State,
     form: Option<u32>,
+    /// Building an inline formatting context's own children, where a space between runs counts.
+    inline: bool,
 }
 
 fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
     match node.as_ref() {
         Node::Text(s) => {
-            // Whitespace between elements collapses away, unless `white-space: pre` keeps it.
-            if s.is_empty() || (!inh.pre && s.trim().is_empty()) {
+            // Whitespace between blocks collapses away, unless `white-space: pre` keeps it; inside
+            // a line it collapses to one space, which separates two mention chips.
+            if s.is_empty() || (!inh.pre && !ctx.inline && s.trim().is_empty()) {
                 return None;
+            }
+            if !inh.pre && s.trim().is_empty() {
+                return Some(text_run(" ", &inh));
             }
             Some(text_run(s, &inh))
         }
+        Node::Svg { st, .. } if st.display.as_deref() == Some("none") => None,
         Node::Svg { view, body, st, .. } => Some(build_svg(*view, body, st, inh, ctx)),
         Node::Elem {
             hash,
@@ -194,7 +201,7 @@ fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
                 return Some(center_vertically(build_img(path, st, attrs, on, ctx), st));
             }
             if attrs.contains_key("data-editable") {
-                return Some(build_editable(path, st, attrs, inh, ctx));
+                return Some(build_editable(path, st, attrs, children, inh, ctx));
             }
             let form = if tag == "form" {
                 on.get("submit").copied().or(ctx.form)
@@ -211,7 +218,11 @@ fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
                     on,
                     children,
                     inh,
-                    &Ctx { s: ctx.s, form },
+                    &Ctx {
+                        s: ctx.s,
+                        form,
+                        inline: false,
+                    },
                 );
                 if *observed { observe(e, path, st) } else { e }
             };
@@ -279,6 +290,10 @@ fn build_elem(
         r
     };
     let items = st.items.as_deref();
+    let inline_ctx = Ctx {
+        inline: true,
+        ..*ctx
+    };
     let mut e = match (st.display.as_deref(), &st.grid_cols) {
         (Some("grid"), Some(cols)) => build_grid(&kids, cols, path, inh, ctx, st),
         (Some("flex"), _) => {
@@ -303,7 +318,7 @@ fn build_elem(
                 &kids,
                 path,
                 inh,
-                ctx,
+                &inline_ctx,
                 parent,
             )
         }
@@ -319,7 +334,7 @@ fn build_elem(
                 &kids,
                 path,
                 inh,
-                ctx,
+                &inline_ctx,
                 parent,
             )
         }
@@ -339,6 +354,9 @@ fn build_elem(
         e = e.pixels_fit(image.pixels(), SurfaceFit::Fill)
     }
     e = apply_box(e.key(path), st);
+    if let Some(label) = attrs.get("aria-label") {
+        e = e.label(label.clone());
+    }
     if let Some(&id) = on.get("click") {
         e = e.cursor(Cursor::Pointer).on_press(move |_: &mut State| {
             send(id, "click", None);
@@ -401,7 +419,8 @@ fn size_to_content(node: &Arc<Node>) -> Arc<Node> {
             observed,
             children,
         } if st.grow.is_some() && st.absolute.is_none() => Arc::new(Node::Elem {
-            hash: hash.clone(),
+            // Its own memo key: the same wire node sized to the viewport is a different El.
+            hash: format!("{hash}~content"),
             tag: tag.clone(),
             key: key.clone(),
             st: Style {
@@ -485,6 +504,9 @@ fn add_children(
     ctx: &Ctx,
     parent: Parent,
 ) -> El {
+    let grows = |node: &Arc<Node>| {
+        style_of(node).is_some_and(|st| st.absolute.is_none() && st.grow.is_some_and(|g| g.0 > 0.0))
+    };
     for (i, child) in paint_order(kids) {
         let child_path = child_path(path, i, child);
         // `display: contents`: no box of its own; its children join this one's layout.
@@ -497,7 +519,17 @@ fn add_children(
         }
         if let Some(b) = build(child, &child_path, inh, ctx) {
             e = match style_of(child) {
-                Some(st) => e.child(auto_margins(b, st, parent.is_row, parent.items)),
+                Some(st) => {
+                    let sibling_grows =
+                        kids.iter().any(|(_, k)| !Arc::ptr_eq(k, child) && grows(k));
+                    e.child(auto_margins(
+                        b,
+                        st,
+                        parent.is_row,
+                        parent.items,
+                        sibling_grows,
+                    ))
+                }
                 None => e.child(b),
             }
         }
@@ -690,17 +722,31 @@ fn build_input(
         .placeholder(
             attrs.get("placeholder").cloned().unwrap_or_default(),
             inh.color.alpha(0.45),
-        )
-        .on_edit(rune::edit_access(move |s: &mut State| {
-            &mut s
-                .fields
-                .entry(key.clone())
-                .or_insert_with(|| Field {
-                    edit: TextEdit::new(""),
-                    last_sent: 0,
-                })
-                .edit
-        }));
+        );
+    // A disabled field shows its value but takes no edits, keys or submits, as in a browser.
+    if attrs.contains_key("disabled") {
+        let wrapper = if tag == "input" {
+            row().items_center()
+        } else {
+            row().items_start()
+        };
+        let field = if tag == "input" {
+            field.single_line()
+        } else {
+            field
+        };
+        return apply_box(wrapper.key(path), st).child(field.opacity(0.6));
+    }
+    field = field.on_edit(rune::edit_access(move |s: &mut State| {
+        &mut s
+            .fields
+            .entry(key.clone())
+            .or_insert_with(|| Field {
+                edit: TextEdit::new(""),
+                last_sent: 0,
+            })
+            .edit
+    }));
     if let Some(&id) = on.get("input") {
         let key = path.to_string();
         field = field.on_input_change(move |s: &mut State, _| {
@@ -782,9 +828,13 @@ fn build_editable(
     path: &str,
     st: &Style,
     attrs: &HashMap<String, String>,
+    children: &[Arc<Node>],
     inh: Inherit,
     ctx: &Ctx,
 ) -> El {
+    // The editor root's own style (padding, text size, minimum height), sent as the one child.
+    let field_st = children.first().and_then(|c| style_of(c));
+    let inh = field_st.map_or(inh, |fst| inh.from(fst));
     let edit = ctx
         .s
         .fields
@@ -799,7 +849,8 @@ fn build_editable(
         .color(inh.color)
         .placeholder(
             attrs.get("placeholder").cloned().unwrap_or_default(),
-            inh.color.alpha(0.45),
+            // The editor's placeholder widget: the text colour at `opacity: 0.333`.
+            inh.color.alpha(0.333),
         )
         .on_edit(rune::edit_access(move |s: &mut State| {
             &mut s
@@ -819,6 +870,18 @@ fn build_editable(
         .on_submit(move |_: &mut State, _| {
             send_editable(&submit_key, None, Some("Enter"));
         });
+    let field = match field_st {
+        Some(fst) => apply_box(
+            row().items_start().grow(1.0).shrink(),
+            &Style {
+                w: None,
+                h: None,
+                ..fst.clone()
+            },
+        )
+        .child(field),
+        None => field,
+    };
     apply_box(row().items_center().key(path), st).child(field)
 }
 
@@ -843,7 +906,11 @@ pub(crate) fn view(s: &State, cx: &mut Cx<State>) -> El {
         color: base,
         ..Inherit::default()
     };
-    let ctx = Ctx { s, form: None };
+    let ctx = Ctx {
+        s,
+        form: None,
+        inline: false,
+    };
     let body = s.root.as_ref().and_then(|root| build(root, "r", inh, &ctx));
     let mut page = col().w_full().h_full().on_layout(report_env);
     if let Some(bg) = color(&s.page.bg) {

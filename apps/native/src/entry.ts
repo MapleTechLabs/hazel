@@ -69,6 +69,8 @@ if (offline !== undefined) {
 const { Layer } = await import("effect")
 const { Runtime } = await import("foldkit")
 const app = await import("../../web-foldkit/src/main")
+// The editor root's class, for the composer field before the headless editor has mounted.
+const { EDITABLE_CLASS } = await import("../../web-foldkit/src/editor/editor-view")
 const { ResourcesLive } = await import("../../web-foldkit/src/rpc")
 const { NotificationSinks } = await import("../../web-foldkit/src/app/notification-sinks")
 const PendingAnnouncement = await import("../../web-foldkit/src/ui/aria/pending-announcement")
@@ -145,6 +147,10 @@ const rune = makeRuneTarget({
 	editableText: (path) => {
 		const mount = bridge.domMountAt(path)
 		return mount === undefined ? undefined : composer.editorText(mount.args)
+	},
+	editableClass: (path) => {
+		const mount = bridge.domMountAt(path)
+		return (mount === undefined ? undefined : composer.editorClass(mount.args)) ?? EDITABLE_CLASS
 	},
 	onEditable: (path, event) => {
 		if (process.env.NATIVE_DEBUG) process.stderr.write(`[editable] ${JSON.stringify(event)}\n`)
