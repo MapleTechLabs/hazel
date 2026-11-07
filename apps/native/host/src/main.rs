@@ -102,8 +102,9 @@ fn send_key(id: u32, key: &str, mods: rune::edit::Mods) -> u64 {
 const PRESS_EVENTS: [&str; 3] = ["pointerdown", "pointerup", "click"];
 
 /// A press as the browser reports it, for the handlers the element has. Rune reports a press
-/// when it is released, so all of them go then (a menu opens on release, not on press).
-fn press_handlers(e: El, on: &HashMap<String, u32>) -> El {
+/// when it is released, so all of them go then (a menu opens on release, not on press). A link's
+/// click carries its `href`, which the runtime follows unless the handler prevents it.
+fn press_handlers(e: El, on: &HashMap<String, u32>, href: Option<&String>) -> El {
     let events: Vec<(&'static str, u32)> = PRESS_EVENTS
         .iter()
         .filter_map(|kind| on.get(*kind).map(|&id| (*kind, id)))
@@ -111,16 +112,33 @@ fn press_handlers(e: El, on: &HashMap<String, u32>) -> El {
     if events.is_empty() {
         return e;
     }
+    let href = href.cloned();
     e.cursor(Cursor::Pointer).on_press(move |_: &mut State| {
         for (kind, id) in &events {
-            send(*id, kind, None);
+            match (&href, *kind) {
+                (Some(href), "click") => send_click(*id, href),
+                _ => send(*id, kind, None),
+            };
         }
     })
 }
 
+fn send_click(id: u32, href: &str) -> u64 {
+    let seq = SEQ.fetch_add(1, Ordering::SeqCst) + 1;
+    write_line(
+        json!({ "t": "event", "seq": seq, "gen": GEN.load(Ordering::SeqCst), "id": id, "type": "click", "href": href }),
+    );
+    seq
+}
+
+/// The `href` a press on this element follows: a link's.
+fn link_href<'a>(tag: &str, attrs: &'a HashMap<String, String>) -> Option<&'a String> {
+    attrs.get("href").filter(|_| tag == "a")
+}
+
 /// `keydown` while the element or one inside it has focus (Tab stays focus navigation),
 /// `mouseenter`/`mouseleave` as the pointer crosses it, and, for an element a pointer-tracking
-/// Mount watches (`data-hover-report`), a `pointer` report to that Mount.
+/// Mount watches (`data-hover-report`), a `pointer` report to that Mount, and its right-clicks.
 fn key_and_hover_handlers(
     mut e: El,
     path: &str,
@@ -144,6 +162,7 @@ fn key_and_hover_handlers(
     let report = attrs
         .get("data-hover-report")
         .map(|mount| (path.to_string(), mount.clone()));
+    let right_click = report.clone();
     if enter.is_some() || leave.is_some() || report.is_some() {
         e = e.on_hover_change(move |_: &mut State, inside, _| {
             let event = if inside {
@@ -159,6 +178,30 @@ fn key_and_hover_handlers(
                     json!({ "t": "pointer", "path": path, "mount": mount, "inside": inside }),
                 );
             }
+        });
+    }
+    // A right-click there reaches the Mount as a `contextmenu` at the pointer (a context menu),
+    // with where the elements from the Mount's down to this one are: the menu measures the
+    // pointer against its trigger (`getBoundingClientRect`).
+    if let Some((path, mount)) = right_click {
+        e = e.on_secondary_press(move |_: &mut State, at: rune::PointerPress, tx| {
+            let below = path.strip_prefix(mount.as_str()).unwrap_or("");
+            let mut keys = vec![mount.clone()];
+            for segment in below.split('/').filter(|s| !s.is_empty()) {
+                keys.push(format!("{}/{segment}", keys[keys.len() - 1]));
+            }
+            let (path, mount) = (path.clone(), mount.clone());
+            tx.drawn_rects(keys.clone(), move |_: &mut State, rects, _| {
+                let rects: serde_json::Map<String, serde_json::Value> = keys
+                    .into_iter()
+                    .zip(rects)
+                    .filter_map(|(key, rect)| Some((key, json!(rect?))))
+                    .collect();
+                write_line(json!({
+                    "t": "contextmenu", "path": path, "mount": mount,
+                    "x": at.x, "y": at.y, "rects": rects,
+                }));
+            });
         });
     }
     e
@@ -257,6 +300,9 @@ fn sync_fields(node: &Node, path: &str, ack: u64, fields: &mut HashMap<String, F
 struct Ctx<'a> {
     s: &'a State,
     form: Option<u32>,
+    /// The `keydown` handlers of the elements around this one, innermost first: a text field
+    /// keeps its keys from Rune's `on_key`, so it bubbles them to these as the DOM does.
+    keys: &'a [u32],
     /// Building an inline formatting context's own children, where a space between runs counts.
     inline: bool,
     /// The portal being built at the window's root; any other portal is skipped where it sits.
@@ -317,6 +363,16 @@ fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
             } else {
                 ctx.form
             };
+            let with_own_key: Vec<u32>;
+            let keys = match on.get("keydown") {
+                Some(&id) => {
+                    with_own_key = std::iter::once(id)
+                        .chain(ctx.keys.iter().copied())
+                        .collect();
+                    &with_own_key[..]
+                }
+                None => ctx.keys,
+            };
             let has_fields = ctx.s.fields.keys().any(|k| k.starts_with(path));
             // An anchored panel takes its content's height: `flex-1` (a 0% basis) inside a box of
             // indefinite height is content-sized in CSS, where Rune's `grow` would collapse it.
@@ -340,6 +396,7 @@ fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
                     &Ctx {
                         s: ctx.s,
                         form,
+                        keys,
                         inline: false,
                         portal: ctx.portal,
                     },
@@ -350,7 +407,11 @@ fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
             let el = if has_fields {
                 make()
             } else {
-                rune::memo(path.to_string(), (hash, inh.key(), form), make)
+                rune::memo(
+                    path.to_string(),
+                    (hash, inh.key(), form, keys.to_vec()),
+                    make,
+                )
             };
             Some(overlay(center_vertically(el, st), ov))
         }
@@ -478,7 +539,7 @@ fn build_elem(
         e = e.label(label.clone());
     }
     if PRESS_EVENTS.iter().any(|k| on.contains_key(*k)) {
-        e = press_handlers(e, on);
+        e = press_handlers(e, on, link_href(tag, attrs));
     } else if let (Some(href), true) = (attrs.get("href"), tag == "a") {
         let href = href.clone();
         e = e.cursor(Cursor::Pointer).on_press(move |_: &mut State| {
@@ -746,7 +807,7 @@ fn build_img(
             _ => e.pixels(image.pixels()),
         };
     }
-    press_handlers(apply_box(e, st), on)
+    press_handlers(apply_box(e, st), on, None)
 }
 
 /// CSS grid on Rune's grid tracks. `display: contents` children are grid items through their own
@@ -809,7 +870,7 @@ fn build_grid(
                     ..cst.clone()
                 };
                 let e = build_grid(&inner, cols, path, inh.from(cst), ctx, &sub).key(path);
-                let e = press_handlers(apply_box(e, cst), on);
+                let e = press_handlers(apply_box(e, cst), on, link_href(tag, attrs));
                 Some(behaviour(e, path, tag, attrs, on, cst).grid_column_full())
             }
             Node::Elem { st: cst, .. } if cst.col_span_full == Some(true) => {
@@ -898,14 +959,24 @@ fn build_input(
     // typing would.
     let keydown = on.get("keydown").copied();
     let (key, input, is_textarea) = (path.to_string(), on.get("input").copied(), tag != "input");
-    if keydown.is_some() || is_textarea {
+    let outer = ctx.keys.to_vec();
+    if keydown.is_some() || is_textarea || !outer.is_empty() {
         field = field.on_input_key(move |s: &mut State, ev, _| {
             use rune::edit::Key;
-            if let (Some(id), Some(name)) = (keydown, dom_key(&ev.key)) {
-                send_key(id, name, ev.mods);
-                if matches!(ev.key, Key::Enter | Key::Up | Key::Down | Key::Escape) {
-                    return true;
+            // The field's own handler, then the elements around it as the key bubbles.
+            let name = dom_key(&ev.key);
+            if let Some(name) = name {
+                for id in keydown.iter().chain(&outer) {
+                    send_key(*id, name, ev.mods);
                 }
+            }
+            // A field with its own handler (a combo box) claims what a listbox prevents; Escape
+            // stops at an element around it (a popover closes). Return still submits a form.
+            let claimed = keydown.is_some() && matches!(ev.key, Key::Enter | Key::Up | Key::Down);
+            if name.is_some()
+                && (claimed || ev.key == Key::Escape && (keydown.is_some() || !outer.is_empty()))
+            {
+                return true;
             }
             let plain = ev.mods == rune::edit::Mods::default();
             if !is_textarea || ev.key != Key::Enter || !plain {
@@ -1035,6 +1106,7 @@ pub(crate) fn view(s: &State, cx: &mut Cx<State>) -> El {
     let ctx = Ctx {
         s,
         form: None,
+        keys: &[],
         inline: false,
         portal: None,
     };
@@ -1063,20 +1135,6 @@ fn overlay(mut e: El, ov: &Option<Box<wire::Overlay>>) -> El {
     let Some(ov) = ov else {
         return e;
     };
-    if let Some(a) = &ov.anchor {
-        let side = match a.side.as_str() {
-            "top" => Side::Top,
-            "left" => Side::Left,
-            "right" => Side::Right,
-            _ => Side::Bottom,
-        };
-        let align = match a.align.as_str() {
-            "start" => Align::Start,
-            "end" => Align::End,
-            _ => Align::Center,
-        };
-        e = e.anchored_fit(a.to.clone(), side, align, a.gap.0);
-    }
     if let Some(root) = ov.modal.clone() {
         e = e.modal(true, move |_: &mut State| send_dismiss(&root));
         // The browser hands focus back to the trigger (FocusScope `restoreFocus`), even after
@@ -1085,7 +1143,33 @@ fn overlay(mut e: El, ov: &Option<Box<wire::Overlay>>) -> El {
             e = e.focus_return(a.to.clone());
         }
     }
-    e
+    let Some(a) = &ov.anchor else {
+        return e;
+    };
+    let side = match a.side.as_str() {
+        "top" => Side::Top,
+        "left" => Side::Left,
+        "right" => Side::Right,
+        _ => Side::Bottom,
+    };
+    let align = match a.align.as_str() {
+        "start" => Align::Start,
+        "end" => Align::End,
+        _ => Align::Center,
+    };
+    let cross = a.cross.as_ref().map_or(0.0, |c| c.0);
+    if cross == 0.0 {
+        return e.anchored_fit(a.to.clone(), side, align, a.gap.0);
+    }
+    // Floating UI's `crossOffset` (a context menu at the pointer) slides the anchored box along
+    // its trigger; a wrapper takes it, so the panel's own motion keeps its offset.
+    let (x, y) = match side {
+        Side::Top | Side::Bottom => (cross, 0.0),
+        _ => (0.0, cross),
+    };
+    el().anchored_fit(a.to.clone(), side, align, a.gap.0)
+        .offset(x, y)
+        .child(e)
 }
 
 fn send_dismiss(path: &str) {
@@ -1177,6 +1261,11 @@ fn main() {
                 RuntimeMsg::Tree(tree) => handle.update(move |s: &mut State, _| s.apply(tree)),
                 RuntimeMsg::Scroll { path, top } => {
                     handle.update(move |_: &mut State, tx| tx.scroll_to_instant(path, 0.0, top))
+                }
+                request => {
+                    if let Some(run) = request.request() {
+                        handle.update(move |_: &mut State, tx| run(tx))
+                    }
                 }
             }
         }

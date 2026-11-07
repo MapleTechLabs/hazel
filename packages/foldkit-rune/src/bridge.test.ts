@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it, vi } from "vitest"
 
-import { makeElementBridge } from "./bridge"
+import { type HostElementCommand, makeElementBridge } from "./bridge"
 
 class FakeElement extends EventTarget {}
 
@@ -16,6 +16,17 @@ const record = (bridge: ReturnType<typeof makeElementBridge>) => {
 	return next
 }
 
+/** `getBoundingClientRect().bottom` of a proxy, as the app's context menu reads it. */
+const bottomOf = (target: unknown): number => {
+	if (typeof target !== "object" || target === null || !("getBoundingClientRect" in target))
+		return Number.NaN
+	const measure = target.getBoundingClientRect
+	const rect: unknown = typeof measure === "function" ? measure.call(target) : undefined
+	return typeof rect === "object" && rect !== null && "bottom" in rect && typeof rect.bottom === "number"
+		? rect.bottom
+		: Number.NaN
+}
+
 const mountVNode = (calls: Array<string>) => ({
 	data: {
 		foldkitMount: { name: "ObserveList" },
@@ -28,9 +39,35 @@ const mountVNode = (calls: Array<string>) => ({
 })
 
 describe("makeElementBridge", () => {
+	it("finds elements by selector in document order, and asks the host to focus and reveal them", () => {
+		const sent: Array<HostElementCommand> = []
+		const bridge = makeElementBridge({ mounts: new Set(), send: (command) => sent.push(command) })
+		const next = new Map()
+		bridge.recordElement("r", undefined, "div", { role: "menu" }, [], next)
+		bridge.recordElement("r/0", "r", "button", { id: "first" }, [], next)
+		bridge.recordElement("r/1", "r", "div", { tabindex: "-1", id: "skipped" }, [], next)
+		bridge.recordElement("r/2", "r", "input", { id: "search" }, [], next)
+		bridge.recordElement("r/3", "r", "a", { href: "/x" }, [], next)
+		bridge.commit(next, new Map())
+
+		expect(bridge.findPath("#search")).toBe("r/2")
+		expect(bridge.findPath("button")).toBe("r/0")
+		expect(bridge.findPath("#missing")).toBeUndefined()
+		expect(bridge.tabbablePaths()).toEqual(["r/0", "r/2", "r/3"])
+
+		bridge.findById("first")?.focus()
+		bridge.findById("search")?.focus()
+		bridge.findById("search")?.scrollIntoView({ block: "center" })
+		expect(sent).toEqual([
+			{ t: "focus", key: "r/0" },
+			{ t: "focus", key: "r/2/field" },
+			{ t: "reveal", path: "r/2", block: "center" },
+		])
+	})
+
 	it("starts a geometry Mount once its element has a size, and releases it when it goes", () => {
 		const calls: Array<string> = []
-		const bridge = makeElementBridge({ mounts: new Set(["ObserveList"]), sendScroll: () => {} })
+		const bridge = makeElementBridge({ mounts: new Set(["ObserveList"]), send: () => {} })
 		bridge.commit(record(bridge), new Map([["r", mountVNode(calls)]]))
 		expect(calls).toEqual([])
 		bridge.reportLayout("r", { x: 0, y: 0, width: 300, height: 200 })
@@ -42,7 +79,7 @@ describe("makeElementBridge", () => {
 	})
 
 	it("answers queries, sizes and ResizeObserver from host layout", () => {
-		const bridge = makeElementBridge({ mounts: new Set(), sendScroll: () => {} })
+		const bridge = makeElementBridge({ mounts: new Set(), send: () => {} })
 		bridge.commit(record(bridge), new Map())
 		const list = bridge.findById("list")
 		if (list === null) throw new Error("no #list element")
@@ -62,7 +99,9 @@ describe("makeElementBridge", () => {
 		const sent: Array<number> = []
 		const bridge = makeElementBridge({
 			mounts: new Set(),
-			sendScroll: (command) => sent.push(command.top),
+			send: (command) => {
+				if (command.t === "scroll") sent.push(command.top)
+			},
 		})
 		bridge.commit(record(bridge), new Map())
 		const list = bridge.findById("list")
@@ -82,7 +121,7 @@ describe("makeElementBridge", () => {
 
 	it("takes the host's clamped offset when it never reports another", () => {
 		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] })
-		const bridge = makeElementBridge({ mounts: new Set(), sendScroll: () => {} })
+		const bridge = makeElementBridge({ mounts: new Set(), send: () => {} })
 		bridge.commit(record(bridge), new Map())
 		const list = bridge.findById("list")
 		if (list === null) throw new Error("no #list element")
@@ -99,7 +138,7 @@ describe("makeElementBridge", () => {
 	})
 
 	it("treats a sibling whose path extends another's as outside it", () => {
-		const bridge = makeElementBridge({ mounts: new Set(), sendScroll: () => {} })
+		const bridge = makeElementBridge({ mounts: new Set(), send: () => {} })
 		const next = new Map()
 		bridge.recordElement("r", undefined, "div", {}, [], next)
 		bridge.recordElement("r/1", "r", "div", { id: "one" }, [], next)
@@ -115,7 +154,7 @@ describe("makeElementBridge", () => {
 		const calls: Array<string> = []
 		const bridge = makeElementBridge({
 			mounts: new Set(["ObserveList", "OtherMount"]),
-			sendScroll: () => {},
+			send: () => {},
 		})
 		bridge.commit(record(bridge), new Map([["r", mountVNode(calls)]]))
 		bridge.reportLayout("r", { x: 0, y: 0, width: 300, height: 200 })
@@ -125,12 +164,12 @@ describe("makeElementBridge", () => {
 		expect(calls).toEqual(["insert", "destroy", "insert"])
 	})
 
-	it("dispatches host pointer reports on a pointer-tracking Mount's element", () => {
+	it("dispatches host pointer reports and right-clicks on a pointer-tracking Mount's element", () => {
 		const bridge = makeElementBridge({
 			mounts: new Set(["TrackHover"]),
 			immediateMounts: new Set(["TrackHover"]),
 			pointerTargets: new Map([["TrackHover", "[data-list-key]"]]),
-			sendScroll: () => {},
+			send: () => {},
 		})
 		const seen: Array<string> = []
 		/** The key of the row an event's target sits in, as the app's delegated listener finds it. */
@@ -153,6 +192,15 @@ describe("makeElementBridge", () => {
 							seen.push(`over ${rowKey(event.target)}`),
 						)
 						v.elm.addEventListener("pointerleave", () => seen.push("leave"))
+						v.elm.addEventListener("contextmenu", (event) => {
+							const y =
+								"clientY" in event && typeof event.clientY === "number" ? event.clientY : 0
+							const x = "clientX" in event ? event.clientX : undefined
+							// As a context menu measures the pointer against its trigger.
+							seen.push(
+								`menu ${rowKey(event.target)} ${x},${y} below ${y - bottomOf(event.target)}`,
+							)
+						})
 					},
 				},
 			},
@@ -162,6 +210,14 @@ describe("makeElementBridge", () => {
 		bridge.dispatchPointer({ path: "r/1", mount: "r", inside: true })
 		bridge.dispatchPointer({ path: "r/1", mount: "r", inside: false })
 		bridge.dispatchPointer({ path: "r", mount: "r", inside: false })
-		expect(seen).toEqual(["over b", "leave"])
+		bridge.dispatchContextMenu({
+			t: "contextmenu",
+			path: "r/0",
+			mount: "r",
+			x: 12,
+			y: 34,
+			rects: { "r/0": [0, 20, 100, 10] },
+		})
+		expect(seen).toEqual(["over b", "leave", "menu a 12,34 below 4"])
 	})
 })

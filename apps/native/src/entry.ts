@@ -127,13 +127,15 @@ const OVERLAY_MOUNTS = [
 ]
 
 /**
- * Mounts that listen for delegated pointer events on their element, with the selector of the
- * elements they look for: the message list's hover (it shows a message's action toolbar).
+ * Mounts that listen for delegated pointer events (hover, right-click) on their element, with the
+ * selector of the elements they look for: the message list's hover shows a message's toolbar.
  */
 const POINTER_MOUNTS = new Map([
 	["TrackMessageHover", "[data-id]"],
 	// The message toolbar: its own element only (an empty selector matches nothing below it).
 	["PlaceMessageToolbar", ""],
+	// A context menu trigger hears right-clicks on itself.
+	["CaptureContextMenu", ""],
 ])
 
 /** Mounts that only observe geometry run against host-backed element proxies; the editor gets a headless DOM. */
@@ -142,7 +144,7 @@ const bridge = makeElementBridge({
 	immediateMounts: new Set([...OVERLAY_MOUNTS, ...POINTER_MOUNTS.keys()]),
 	pointerTargets: POINTER_MOUNTS,
 	domMounts: new Map([["MountEditor", composer.makeEditorElement]]),
-	sendScroll: (command) => transport.send(command),
+	send: (command) => transport.send(command),
 	onObserve: () => rune.refreshObserved(),
 	onRemove: (path) => {
 		bodyPortals.get(path)?.()
@@ -217,6 +219,7 @@ const rune = makeRuneTarget({
 		const mount = bridge.domMountAt(path)
 		return mount === undefined ? undefined : composer.editorText(mount.args)
 	},
+	onLink: followLink,
 	// The editor root's own classes; ProseMirror's state classes on it carry no layout.
 	editableClass: () => EDITABLE_CLASS,
 

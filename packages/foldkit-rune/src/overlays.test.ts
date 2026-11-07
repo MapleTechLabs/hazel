@@ -45,6 +45,20 @@ describe("overlays", () => {
 		expect(changes).toBe(2)
 	})
 
+	it("sends a context menu's offset along its trigger", () => {
+		const overlays = makeOverlays()
+		overlays.anchor("r/2/0", {
+			triggerId: "row",
+			side: "bottom",
+			align: "start",
+			gap: 12,
+			crossOffset: 240,
+		})
+		expect(overlays.wireFor("r/2/0", (id) => (id === "row" ? "r/1" : undefined))).toEqual({
+			anchor: { to: "r/1", side: "bottom", align: "start", gap: 12, cross: 240 },
+		})
+	})
+
 	it("makes a modal root without an anchored panel modal itself", () => {
 		const overlays = makeOverlays()
 		overlays.modal("r/3")

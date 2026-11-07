@@ -1,5 +1,6 @@
-import { Schema } from "effect"
-import { Runtime } from "foldkit"
+import { Effect, Schema } from "effect"
+import { Command, Runtime } from "foldkit"
+import * as Dom from "foldkit/dom"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
 import { beforeAll, describe, expect, it } from "vitest"
@@ -15,6 +16,10 @@ const Message = defineMessageUnion({
 	ChangedName: { name: Schema.String },
 })
 type Message = typeof Message.Type
+
+const Clicked = defineMessageUnion({ Clicked: {} })
+type Clicked = typeof Clicked.Type
+type Focused = Readonly<{ _tag: "Completed"; outcome: string }>
 
 const Model = Schema.Struct({ count: Schema.Number, name: Schema.String })
 type Model = typeof Model.Type
@@ -45,7 +50,7 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 20))
 
 const boot = (render: typeof view = view, overlays?: Overlays) => {
 	const sent: Array<RuntimeToHost> = []
-	const bridge = makeElementBridge({ mounts: new Set(), sendScroll: () => {} })
+	const bridge = makeElementBridge({ mounts: new Set(), send: () => {} })
 	const rune = makeRuneTarget({
 		styles,
 		bridge,
@@ -73,6 +78,104 @@ const texts = (node: WireNode): Array<string> =>
 	node.k === "t" ? [node.s] : node.k === "e" ? node.c.flatMap(texts) : []
 
 describe("makeRuneTarget", () => {
+	it("follows a clicked link's href unless its click handler prevented it", async () => {
+		const followed: Array<string> = []
+		const sent: Array<RuntimeToHost> = []
+		const rune = makeRuneTarget({
+			styles,
+			env: { width: 800, height: 600, dark: false },
+			send: (m) => sent.push(m),
+			onLink: (href) => followed.push(href),
+		})
+		const handle = Runtime.embed(
+			Runtime.makeElement({
+				Model: Schema.Struct({ clicks: Schema.Number }),
+				init: () => ({ model: { clicks: 0 } }),
+				update: (model) => ({ model: { clicks: model.clicks + 1 } }),
+				view: (_model, h) =>
+					h.div(
+						[],
+						[
+							h.a([h.Href("/settings"), h.OnClick(Clicked.Clicked())], ["Settings"]),
+							h.a(
+								[h.Href("/kept"), h.OnClick(Clicked.Clicked(), { defaultAction: "Prevent" })],
+								["Kept"],
+							),
+						],
+					),
+				renderTarget: rune.target,
+			}),
+		)
+		await settle()
+		const tree = sent.filter((m): m is Extract<RuntimeToHost, { t: "tree" }> => m.t === "tree").at(-1)!
+		const [settings, kept] = elements(tree.root).filter((e) => e.tag === "a")
+		rune.handleHostMessage({
+			t: "event",
+			seq: 1,
+			id: settings!.on.click!,
+			type: "click",
+			href: "/settings",
+		})
+		rune.handleHostMessage({ t: "event", seq: 2, id: kept!.on.click!, type: "click", href: "/kept" })
+		expect(followed).toEqual(["/settings"])
+		handle.dispose()
+	})
+
+	it("sends Dom.focus and Dom.scrollIntoView from a Command to the host, after the tree", async () => {
+		const Focused = defineMessageUnion({ Completed: { outcome: Schema.String } })
+		const FocusName = Command.define("FocusName", {
+			messages: [Focused.Completed],
+			execute: Effect.gen(function* () {
+				yield* Dom.focus("#name")
+				yield* Dom.scrollIntoView("#name", { block: "center" })
+				yield* Dom.clickElement("#increment")
+				yield* Dom.focus("#missing")
+				return "focused"
+			}).pipe(
+				Effect.catchTag("ElementNotFound", ({ selector }) => Effect.succeed(`missing ${selector}`)),
+				Effect.map((outcome) => Focused.Completed({ outcome })),
+			),
+		})
+		const sent: Array<RuntimeToHost> = []
+		const bridge = makeElementBridge({ mounts: new Set(), send: () => {} })
+		const rune = makeRuneTarget({
+			styles,
+			bridge,
+			env: { width: 800, height: 600, dark: false },
+			send: (m) => sent.push(m),
+		})
+		const handle = Runtime.embed(
+			Runtime.makeElement({
+				Model: Schema.Struct({ outcome: Schema.String, clicks: Schema.Number }),
+				init: () => ({ model: { outcome: "", clicks: 0 }, commands: [FocusName()] }),
+				update: (model, message: Focused | Clicked) =>
+					message._tag === "Completed"
+						? { model: { ...model, outcome: message.outcome } }
+						: { model: { ...model, clicks: model.clicks + 1 } },
+				view: (model, h) =>
+					h.div(
+						[],
+						[
+							h.input([h.Id("name")]),
+							h.button([h.Id("increment"), h.OnClick(Clicked.Clicked())], ["+"]),
+							h.span([], [`${model.outcome} ${model.clicks}`]),
+						],
+					),
+				renderTarget: rune.target,
+			}),
+		)
+		await settle()
+		const requests = sent.filter((m) => m.t !== "tree")
+		expect(requests).toEqual([
+			{ t: "focus", key: "r/0/field" },
+			{ t: "reveal", path: "r/0", block: "center" },
+		])
+		expect(sent.findIndex((m) => m.t === "focus")).toBeGreaterThan(sent.findIndex((m) => m.t === "tree"))
+		const last = sent.filter((m): m is Extract<RuntimeToHost, { t: "tree" }> => m.t === "tree").at(-1)!
+		expect(texts(last.root).join("")).toContain("missing #missing 1")
+		handle.dispose()
+	})
+
 	it("sends resolved styles and routes host presses back as Messages", async () => {
 		const { rune, handle, trees } = boot()
 		await settle()

@@ -42,6 +42,8 @@ export type HostToRuntime =
 			/** The generation of the tree the event was pressed on. */
 			readonly gen?: number
 			readonly value?: string
+			/** A click on a link: its `href`, followed unless the handler calls `preventDefault()`. */
+			readonly href?: string
 			readonly key?: string
 			readonly shift?: boolean
 			readonly meta?: boolean
@@ -65,6 +67,16 @@ export type HostToRuntime =
 	 * Mount's own element): the bridge dispatches it there as `pointerover` / `pointerleave`.
 	 */
 	| { readonly t: "pointer"; readonly path: string; readonly mount: string; readonly inside: boolean }
+	/** A right-click on an element a pointer-tracking Mount at `mount` watches, at window `x`, `y`. */
+	| {
+			readonly t: "contextmenu"
+			readonly path: string
+			readonly mount: string
+			readonly x: number
+			readonly y: number
+			/** Where the elements from the Mount's down to the one clicked are: `[x, y, w, h]`. */
+			readonly rects?: Readonly<Record<string, readonly [number, number, number, number]>>
+	  }
 
 export type RuntimeToHost =
 	| {
@@ -77,6 +89,10 @@ export type RuntimeToHost =
 			readonly root: WireNode
 	  }
 	| { readonly t: "scroll"; readonly path: string; readonly top: number }
+	/** Focus the element keyed `key` once the host has the tree it is in (`element.focus()`). */
+	| { readonly t: "focus"; readonly key: string }
+	/** Scroll the element at `path` into view (`element.scrollIntoView()`). */
+	| { readonly t: "reveal"; readonly path: string; readonly block: "start" | "center" | "end" | "nearest" }
 
 /** Timings for one commit, for the benchmarks. */
 export type CommitStats = {

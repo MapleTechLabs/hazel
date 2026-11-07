@@ -102,8 +102,11 @@ const classList = () => {
 	}
 }
 
-const element = () =>
-	Object.assign(new DomNode(), {
+const element = () => {
+	// Detached nodes (a live-region announcer) build and move freely; nothing draws them.
+	const childNodes: Array<unknown> = []
+	return Object.assign(new DomNode(), {
+		childNodes,
 		classList: classList(),
 		style: { setProperty() {}, removeProperty() {} },
 		dataset: {} as Record<string, string>,
@@ -112,6 +115,14 @@ const element = () =>
 		getAttribute: () => null,
 		appendChild: <T>(child: T) => child,
 		removeChild: <T>(child: T) => child,
+		insertBefore: <T>(child: T) => child,
+		append: (...nodes: Array<unknown>) => {
+			childNodes.push(...nodes)
+		},
+		prepend: (...nodes: Array<unknown>) => {
+			childNodes.unshift(...nodes)
+		},
+		remove() {},
 		querySelector: () => null,
 		querySelectorAll: () => [],
 		getElementsByTagName: () => [],
@@ -127,6 +138,7 @@ const element = () =>
 			height: 0,
 		}),
 	})
+}
 
 /** `CSS.escape` (CSS Object Model): an identifier safe to put in a selector. */
 export const cssEscape = (value: string): string => {

@@ -4,6 +4,8 @@
  * layout, and ResizeObserver, MutationObserver and `scroll` events fire from host reports. Only
  * Mounts named in `mounts` are acquired: the rest need real DOM and stay inert.
  */
+import type { HostToRuntime, RuntimeToHost } from "./wire"
+
 type Rect = { x: number; y: number; width: number; height: number }
 
 type ElementRecord = {
@@ -48,7 +50,7 @@ type ProxyElement = EventTarget & {
 	closest(selector: string): ProxyElement | null
 	contains(other: EventTarget | null): boolean
 	scrollTo(arg: { top?: number } | number, y?: number): void
-	scrollIntoView(): void
+	scrollIntoView(arg?: boolean | { block?: HostReveal["block"] }): void
 	focus(): void
 	blur(): void
 	/** Writes land nowhere: the view's classes and the host's layout place the element. */
@@ -63,13 +65,35 @@ type ResizeEntry = {
 	readonly contentBoxSize: ReadonlyArray<{ inlineSize: number; blockSize: number }>
 }
 
-export type HostScrollCommand = { readonly t: "scroll"; readonly path: string; readonly top: number }
+/** What an element proxy asks of the host: `scrollTop =`, `focus()` and `scrollIntoView()`. */
+export type HostElementCommand = Extract<RuntimeToHost, { t: "scroll" | "focus" | "reveal" }>
+
+const TEXT_FIELD_TAGS = new Set(["input", "textarea"])
+
+/** The host keys a text field's editor `<path>/field` inside the element at `path`. */
+export const hostFocusKey = (path: string, tag: string | undefined): string =>
+	tag !== undefined && TEXT_FIELD_TAGS.has(tag) ? `${path}/field` : path
 
 /** Whether an element (tag, attributes, classes) matches one of the simple selectors Mounts use. */
 export const matchesElement = (
 	element: { tag: string; attrs: Record<string, string>; classes: ReadonlyArray<string> },
 	selector: string,
 ): boolean => matchesSelector({ path: "", parent: undefined, childPaths: [], ...element }, selector)
+
+type HostReveal = Extract<RuntimeToHost, { t: "reveal" }>
+
+/** `scrollIntoView(alignToTop)` or `scrollIntoView({ block })`, as the DOM reads them. */
+const revealBlock = (arg?: boolean | { block?: HostReveal["block"] }): HostReveal["block"] =>
+	arg === false ? "end" : typeof arg === "object" ? (arg.block ?? "start") : "start"
+
+const TABBABLE_TAGS = new Set(["button", "input", "select", "textarea"])
+
+const isTabbable = (record: ElementRecord): boolean => {
+	if ("disabled" in record.attrs || "inert" in record.attrs) return false
+	const tabIndex = record.attrs.tabindex
+	if (tabIndex !== undefined) return Number(tabIndex) >= 0
+	return TABBABLE_TAGS.has(record.tag) || (record.tag === "a" && "href" in record.attrs)
+}
 
 const matchesSelector = (record: ElementRecord, selector: string): boolean => {
 	const attr = /^\[([\w-]+)(?:=["']?([^"'\]]*)["']?)?\]$/.exec(selector)
@@ -103,7 +127,7 @@ export const makeElementBridge = (options: {
 	 * headless DOM's, or `undefined` while it loads. The host draws a native text field in their place.
 	 */
 	readonly domMounts?: ReadonlyMap<string, () => object | undefined>
-	readonly sendScroll: (command: HostScrollCommand) => void
+	readonly send: (command: HostElementCommand) => void
 	/** A new element became observed: the host must start reporting its layout. */
 	readonly onObserve?: () => void
 	/** A Mount called `remove()` on its element (it had moved it into `<body>`). */
@@ -141,7 +165,7 @@ export const makeElementBridge = (options: {
 			scrollTops.set(path, top)
 			clearTimeout(pendingScrolls.get(path)?.timer)
 			pendingScrolls.set(path, { top, at: performance.now() })
-			options.sendScroll({ t: "scroll", path, top })
+			options.send({ t: "scroll", path, top })
 		}
 		const proxy = Object.defineProperties(new ElementClass(), {
 			__path: { value: path },
@@ -187,8 +211,11 @@ export const makeElementBridge = (options: {
 				value: (arg: { top?: number } | number, y?: number) =>
 					setScrollTop(typeof arg === "number" ? (y ?? 0) : (arg.top ?? 0)),
 			},
-			scrollIntoView: { value: () => {} },
-			focus: { value: () => {} },
+			scrollIntoView: {
+				value: (arg?: boolean | { block?: HostReveal["block"] }) =>
+					options.send({ t: "reveal", path, block: revealBlock(arg) }),
+			},
+			focus: { value: () => options.send({ t: "focus", key: hostFocusKey(path, record()?.tag) }) },
 			blur: { value: () => {} },
 			style: { value: { setProperty() {}, removeProperty() {}, getPropertyValue: () => "" } },
 			// A Mount taking its element out of the page (a portal it set up, released).
@@ -357,6 +384,56 @@ export const makeElementBridge = (options: {
 		root.dispatchEvent(event)
 	}
 
+	/** A host right-click, as the `contextmenu` a listener on the Mount's element hears. */
+	const dispatchContextMenu = (report: Extract<HostToRuntime, { t: "contextmenu" }>) => {
+		const root = proxies.get(report.mount)
+		if (root === undefined) return
+		// The listener measures the pointer against the elements around it.
+		for (const [path, [x, y, width, height]] of Object.entries(report.rects ?? {}))
+			rects.set(path, { x, y, width, height })
+		const MouseEventClass: new (type: string, init?: MouseEventInit) => Event =
+			globalThis.MouseEvent ?? Event
+		const event = new MouseEventClass("contextmenu", {
+			bubbles: true,
+			cancelable: true,
+			button: 2,
+			clientX: report.x,
+			clientY: report.y,
+		})
+		Object.defineProperty(event, "target", { value: proxyFor(report.path, false) })
+		// Without a MouseEvent class (outside the app's shims) the plain Event carries the point.
+		if (!("clientX" in event))
+			Object.defineProperties(event, { clientX: { value: report.x }, clientY: { value: report.y } })
+		root.dispatchEvent(event)
+	}
+
+	/** Every element in document order: each root, then its subtree. */
+	const inOrder = (): Array<ElementRecord> => {
+		const out: Array<ElementRecord> = []
+		const walk = (record: ElementRecord) => {
+			out.push(record)
+			for (const child of record.childPaths) {
+				const next = records.get(child)
+				if (next) walk(next)
+			}
+		}
+		for (const record of records.values()) if (record.parent === undefined) walk(record)
+		return out
+	}
+
+	/** The path of the first element `selector` matches, as `document.querySelector` finds it. */
+	const findPath = (selector: string): string | undefined =>
+		inOrder().find((record) => matchesSelector(record, selector))?.path
+
+	/** The element's tag, for the host's key of a text field (`<path>/field`). */
+	const tagAt = (path: string): string | undefined => records.get(path)?.tag
+
+	/** Paths of the elements Tab reaches, in document order (positive tabindex aside). */
+	const tabbablePaths = (): Array<string> =>
+		inOrder()
+			.filter(isTabbable)
+			.map((record) => record.path)
+
 	const findById = (id: string): ProxyElement | null => {
 		for (const record of records.values()) if (record.attrs.id === id) return proxyFor(record.path)
 		return null
@@ -415,8 +492,12 @@ export const makeElementBridge = (options: {
 		reportLayout,
 		reportScroll,
 		findById,
+		findPath,
+		tagAt,
+		tabbablePaths,
 		widthOf,
 		dispatchPointer,
+		dispatchContextMenu,
 		/** The selector of elements a pointer-tracking Mount named `name` watches. */
 		pointerSelector: (name: string) => options.pointerTargets?.get(name),
 		isObserved: (path: string) => observed.has(path),

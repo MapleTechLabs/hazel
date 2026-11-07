@@ -1,12 +1,15 @@
 import type { Document } from "foldkit/html"
 import type { RenderTarget } from "foldkit/runtime"
 
-import { type ElementBridge, matchesElement } from "./bridge"
+import { type ElementBridge, hostFocusKey, matchesElement } from "./bridge"
 import type { OverlayWire, Overlays } from "./overlays"
 import { type NodeInfo, type Scope, type Style, StyleResolver, color } from "./style"
 import type { CommitStats, HostToRuntime, RuntimeToHost, WireNode } from "./wire"
 
 /** Event-shaped objects with the fields Foldkit's handlers read (see foldkit html/index.ts). */
+/** What the `Dom` helpers ask of a target (`Dom.focus`, `Dom.scrollIntoView`, ...). */
+type TargetDomEffects = NonNullable<RenderTarget["dom"]>
+
 const fakeEvent = (event: Extract<HostToRuntime, { t: "event" }>) => {
 	const eventTarget = { value: event.value ?? "", scrollTop: 0, open: false, files: [] }
 	return {
@@ -23,7 +26,9 @@ const fakeEvent = (event: Extract<HostToRuntime, { t: "event" }>) => {
 		pointerType: "mouse",
 		timeStamp: performance.now(),
 		defaultPrevented: false,
-		preventDefault() {},
+		preventDefault() {
+			this.defaultPrevented = true
+		},
 		stopPropagation() {},
 	}
 }
@@ -102,6 +107,8 @@ export type RuneTargetOptions = {
 	/** The class of the element a DOM-backed Mount edits in (the editor's root), styled onto the field. */
 	readonly editableClass?: (path: string) => string | undefined
 	/** A native text field over a DOM-backed Mount was edited, or a key was pressed in it. */
+	/** A press on a link whose click handler let it through: follow `href`. */
+	readonly onLink?: (href: string) => void
 	readonly onEditable?: (path: string, event: { readonly value?: string; readonly key?: string }) => void
 }
 
@@ -682,7 +689,37 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		})
 	}
 
-	const target: RenderTarget = {
+	/** The element the last commit holds at `path`, clicked as `element.click()` would. */
+	const click = (path: string): void => {
+		const id = handlerIds.get(`${path}#click`)
+		const handler = id === undefined ? undefined : handlers.get(id)
+		handler?.(fakeEvent({ t: "event", seq: ack, id: id ?? 0, type: "click" }))
+	}
+
+	const dom = (bridge: ElementBridge): TargetDomEffects => {
+		const withPath = (selector: string, run: (path: string) => void): boolean => {
+			const path = bridge.findPath(selector)
+			if (path === undefined) return false
+			run(path)
+			return true
+		}
+		const focusPath = (path: string) => send({ t: "focus", key: hostFocusKey(path, bridge.tagAt(path)) })
+		return {
+			focus: (selector) => withPath(selector, focusPath),
+			click: (selector) => withPath(selector, click),
+			scrollIntoView: (selector, block) =>
+				withPath(selector, (path) => send({ t: "reveal", path, block })),
+			advanceFocus: (selector, direction) =>
+				withPath(selector, (path) => {
+					const order = bridge.tabbablePaths()
+					const at = order.indexOf(path)
+					const next = at === -1 ? undefined : order[direction === "Next" ? at + 1 : at - 1]
+					if (next !== undefined) focusPath(next)
+				}),
+		}
+	}
+
+	const baseTarget: RenderTarget = {
 		id: "foldkit-rune",
 		commit: (document) => {
 			// Messages dispatch synchronously, so a new document reflects every event received.
@@ -698,6 +735,8 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		},
 		release: () => options.onRelease?.(),
 	}
+	const target: RenderTarget =
+		options.bridge === undefined ? baseTarget : { ...baseTarget, dom: dom(options.bridge) }
 
 	const handleHostMessage = (message: HostToRuntime) => {
 		if (message.t === "env") {
@@ -725,6 +764,10 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			options.bridge?.dispatchPointer(message)
 			return
 		}
+		if (message.t === "contextmenu") {
+			options.bridge?.dispatchContextMenu(message)
+			return
+		}
 		if (message.t === "dismiss") {
 			options.overlays?.dismissed(message.path)
 			return
@@ -742,7 +785,11 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		// A press on a tree no longer kept is dropped: the newest handler may be a different action.
 		const presented = message.gen === undefined ? handlers : handlersByGen.get(message.gen)
 		const handler = presented?.get(message.id)
-		handler?.(fakeEvent(message))
+		const event = fakeEvent(message)
+		handler?.(event)
+		// A click on a link carries its `href`: the browser follows it unless the handler prevented that.
+		if (message.type === "click" && message.href !== undefined && !event.defaultPrevented)
+			options.onLink?.(message.href)
 	}
 
 	/** A Mount that starts observing an element after a commit needs it flagged for the host. */

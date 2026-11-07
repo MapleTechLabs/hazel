@@ -16,6 +16,8 @@ export type OverlayWire = {
 		readonly side: OverlaySide
 		readonly align: OverlayAlign
 		readonly gap: number
+		/** Along the trigger, as Floating UI's `crossOffset` (a context menu at the pointer). */
+		readonly cross?: number
 	}
 	/** The page behind turns inert; a press outside or Escape dismisses the overlay at this path. */
 	modal?: string
@@ -26,6 +28,8 @@ type Anchor = {
 	readonly side: OverlaySide
 	readonly align: OverlayAlign
 	readonly gap: number
+	/** Along the trigger, as Floating UI's `crossOffset`. */
+	readonly crossOffset?: number
 	/** `--trigger-width` (and `--button-width`) on the panel: the trigger's width. */
 	readonly isTriggerWidthSet?: boolean
 }
@@ -138,8 +142,13 @@ export const makeOverlays = () => {
 							: undefined
 			const wire: OverlayWire = {}
 			if (portals.has(path)) wire.portal = 1
-			if (anchor !== undefined && to !== undefined)
-				wire.anchor = { to, side: anchor.side, align: anchor.align, gap: anchor.gap }
+			if (anchor !== undefined && to !== undefined) {
+				const placed = { to, side: anchor.side, align: anchor.align, gap: anchor.gap }
+				wire.anchor =
+					anchor.crossOffset === undefined || anchor.crossOffset === 0
+						? placed
+						: { ...placed, cross: anchor.crossOffset }
+			}
 			if (modal !== undefined) wire.modal = modal
 			return Object.keys(wire).length === 0 ? undefined : wire
 		},

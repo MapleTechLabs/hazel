@@ -8,7 +8,7 @@ use rune::render::{Gpu, Offscreen, Renderer};
 use rune::{Env, Runtime};
 use serde_json::{Value, json};
 
-use crate::wire::TreeMsg;
+use crate::wire::{RuntimeMsg, TreeMsg};
 use crate::{State, view};
 
 static HASH: AtomicU64 = AtomicU64::new(0);
@@ -646,6 +646,30 @@ fn a_field_with_a_keydown_handler_gets_its_navigation_keys() {
 }
 
 #[test]
+fn a_fields_keys_bubble_to_the_keydown_handlers_around_it() {
+    sent_events(0);
+    let input = e("input", json!({ "w": 200, "h": 30 }), vec![]);
+    let mut inner = e("div", json!({ "w": 300 }), vec![input]);
+    inner["on"] = json!({ "keydown": 4301 });
+    let mut outer = e("div", json!({ "w": 300 }), vec![inner]);
+    outer["on"] = json!({ "keydown": 4302 });
+    let mut rt = runtime(outer, (300.0, 100.0));
+    type_into(
+        &mut rt,
+        "r/0/0/field",
+        &[Key::Text("g".into()), Key::Escape, Key::Text("h".into())],
+    );
+    let keys = |id| -> Vec<Value> { sent_events(id).iter().map(|e| e["key"].clone()).collect() };
+    assert_eq!(keys(4301), vec![json!("Escape")]);
+    assert_eq!(keys(4302), vec![json!("Escape")]);
+    assert_eq!(
+        field_text(&rt, "r/0/0"),
+        "gh",
+        "typing still edits the field"
+    );
+}
+
+#[test]
 fn a_space_between_two_inline_chips_keeps_them_apart() {
     let chip = |name: &str| e("button", json!({ "display": "inline" }), vec![t(name)]);
     let rt = runtime(
@@ -1086,6 +1110,41 @@ fn a_focused_trigger_gets_its_keydown_keys() {
     assert_eq!(keys, ["ArrowDown"]);
 }
 
+#[test]
+fn a_runtime_focus_request_focuses_the_element_and_a_field_by_key() {
+    let mut first = e("button", json!({ "w": 40, "h": 20 }), vec![]);
+    first["on"] = json!({ "click": 40 });
+    let mut second = e("button", json!({ "w": 40, "h": 20 }), vec![]);
+    second["on"] = json!({ "click": 41 });
+    let field = e("input", json!({ "w": 80, "h": 20 }), vec![]);
+    let mut rt = runtime(
+        e("div", json!({ "flex": "col" }), vec![first, second, field]),
+        (100.0, 100.0),
+    );
+    let focused = |rt: &Runtime<State>| {
+        rt.elements()
+            .into_iter()
+            .find(|e| e.focused)
+            .and_then(|e| e.key)
+    };
+    let request = |rt: &mut Runtime<State>, msg: Value| {
+        let msg: RuntimeMsg = serde_json::from_value(msg).expect("wire request");
+        let run = msg.request().expect("a host request");
+        rt.update(move |_, tx| run(tx));
+        rt.frame(0.1);
+    };
+    request(&mut rt, json!({ "t": "focus", "key": "r/1" }));
+    assert_eq!(focused(&rt).as_deref(), Some("r/1"));
+    request(&mut rt, json!({ "t": "focus", "key": "r/2/field" }));
+    assert_eq!(focused(&rt).as_deref(), Some("r/2/field"));
+    request(&mut rt, json!({ "t": "focus", "key": "r/9" }));
+    assert_eq!(
+        focused(&rt).as_deref(),
+        Some("r/2/field"),
+        "an unknown key leaves focus where it was"
+    );
+}
+
 fn sent_lines() -> Vec<Value> {
     let _ = crate::OUT.set(std::sync::Mutex::new(Box::new(Capture)));
     String::from_utf8_lossy(&SENT.lock().unwrap())
@@ -1382,4 +1441,39 @@ fn a_watched_row_reports_the_pointer_to_its_mount() {
         m["t"] == "pointer" && m["path"] == "r/0" && m["mount"] == "r" && m["inside"] == true
     });
     assert!(reported, "no pointer report for r/0");
+}
+
+#[test]
+fn a_right_click_on_a_watched_row_reaches_its_mount_at_the_pointer() {
+    sent_lines();
+    let mut row = e("div", json!({ "w": 200, "h": 30 }), vec![]);
+    row["attrs"] = json!({ "data-hover-report": "r" });
+    let mut rt = runtime(
+        e(
+            "div",
+            json!({ "w": 200, "h": 100 }),
+            vec![e("div", json!({ "h": 40 }), vec![]), row],
+        ),
+        (200.0, 100.0),
+    );
+    rt.secondary_down(60.0, 50.0);
+    rt.secondary_up(60.0, 50.0);
+    rt.frame(0.1);
+    let reported = sent_lines()
+        .into_iter()
+        .find(|m| m["t"] == "contextmenu" && m["path"] == "r/1");
+    let reported = reported.expect("no contextmenu report for r/1");
+    assert_eq!(
+        (
+            reported["mount"].clone(),
+            reported["x"].clone(),
+            reported["y"].clone()
+        ),
+        (json!("r"), json!(60.0), json!(50.0))
+    );
+    assert_eq!(
+        reported["rects"]["r/1"],
+        json!([0.0, 40.0, 200.0, 30.0]),
+        "the clicked row's drawn rect"
+    );
 }

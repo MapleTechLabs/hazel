@@ -12,6 +12,7 @@ const HOST_MESSAGE_TAGS = {
 	scrolled: true,
 	dismiss: true,
 	pointer: true,
+	contextmenu: true,
 } satisfies Record<HostToRuntime["t"], true>
 const HOST_TAGS = new Set<string>(Object.keys(HOST_MESSAGE_TAGS))
 

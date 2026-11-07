@@ -6,8 +6,8 @@ publish = false
 
 [dependencies]
 # Rune is pre-release: pin a revision. This is anomalyco/rune bca4713 plus grid tracks
-# (El::grid_columns), on Makisuo/rune's `hazel-grid` branch until that lands upstream.
-rune = { git = "https://github.com/Makisuo/rune", rev = "df69fd4e301835aa4f82ba48e4ac02137ad09dd7" }
+# (El::grid_columns), Tx::focus and Tx::drawn_rects, on Makisuo/rune's `hazel-grid` branch until they land upstream.
+rune = { git = "https://github.com/Makisuo/rune", rev = "3bfc4c66c8f5972a5fe3980b5807b1f3a3ba9c83" }
 base64 = "0.22"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -3,6 +3,20 @@ import { describe, expect, it } from "vitest"
 import { cssEscape, installShims } from "./shims"
 
 describe("installShims", () => {
+	it("lets the app's live-region announcer build its detached nodes (a combo box announces picks)", async () => {
+		installShims({
+			width: 800,
+			height: 600,
+			dark: false,
+			url: "http://app.hazel.test/",
+			openUrl: () => {},
+		})
+		const { announce } = await import("../../web-foldkit/src/ui/aria/announcer")
+		announce("Berlin selected")
+		const [region] = document.body.childNodes
+		expect(region instanceof HTMLElement ? region.dataset.liveAnnouncer : undefined).toBe("true")
+	})
+
 	it("keeps in-app navigation in history and opens other origins outside the app", () => {
 		const opened: Array<string> = []
 		const { location } = installShims({

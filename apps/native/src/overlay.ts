@@ -33,6 +33,7 @@ const anchorPath = (path: string, config: PositionConfig): (() => void) =>
 		triggerId: config.triggerId,
 		...parsePlacement(config.placement),
 		gap: config.offset,
+		crossOffset: config.crossOffset ?? 0,
 		isTriggerWidthSet: config.isTriggerWidthSet === true,
 	})
 

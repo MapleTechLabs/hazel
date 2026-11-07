@@ -210,6 +210,9 @@ pub struct OverlayAnchor {
     pub side: String,
     pub align: String,
     pub gap: F,
+    /// Along the trigger, as Floating UI's `crossOffset` (a context menu opens at the pointer).
+    #[serde(default)]
+    pub cross: Option<F>,
 }
 
 /// `background-image`: a picture by URL or a linear gradient (`angle` in CSS degrees).
@@ -309,6 +312,31 @@ pub enum RuntimeMsg {
     /// Set a scroll viewport's offset (an `element.scrollTop = …` in the runtime).
     #[serde(rename = "scroll")]
     Scroll { path: String, top: f32 },
+    /// Focus the element keyed `key` (an `element.focus()` in the runtime).
+    #[serde(rename = "focus")]
+    Focus { key: String },
+    /// Scroll the element at `path` into view (an `element.scrollIntoView()`).
+    #[serde(rename = "reveal")]
+    Reveal { path: String, block: String },
+}
+
+/// What a runtime request does to the host's Rune runtime, sent to its update thread.
+pub type HostRequest = Box<dyn FnOnce(&mut rune::Tx) + Send>;
+
+impl RuntimeMsg {
+    /// A focus or reveal request, run against the host's next commit.
+    pub fn request(self) -> Option<HostRequest> {
+        match self {
+            RuntimeMsg::Focus { key } => Some(Box::new(move |tx: &mut rune::Tx| tx.focus(key))),
+            RuntimeMsg::Reveal { path, block } if block == "center" => {
+                Some(Box::new(move |tx: &mut rune::Tx| tx.scroll_center(path)))
+            }
+            RuntimeMsg::Reveal { path, .. } => {
+                Some(Box::new(move |tx: &mut rune::Tx| tx.scroll_into_view(path)))
+            }
+            _ => None,
+        }
+    }
 }
 
 #[derive(Deserialize)]

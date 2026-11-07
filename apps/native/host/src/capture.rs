@@ -48,6 +48,21 @@ enum Step {
     /// Write every element's presented rect, tag, own text and identifying attributes to a JSON
     /// file, for comparing layout with a browser render of the same view.
     ExportLayout(String),
+    /// Press a key and let 400 ms of frames run, whatever it changes (`key` waits for text).
+    Press(String),
+    /// Right-click the deepest element whose text contains this (a context menu).
+    RightClickText(String),
+    /// Click the deepest pressable whose `aria-label` or `title` contains this (an icon button).
+    ClickLabel(String),
+    /// Print to stderr what has focus, what is hovered and which of `texts` are visible.
+    Probe(ProbeStep),
+}
+
+#[derive(Deserialize)]
+struct ProbeStep {
+    label: String,
+    #[serde(default)]
+    texts: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -133,6 +148,11 @@ impl Session {
                     self.rt
                         .update(move |_, tx| tx.scroll_to_instant(path, 0.0, top))
                 }
+                request => {
+                    if let Some(run) = request.request() {
+                        self.rt.update(move |_, tx| run(tx))
+                    }
+                }
             }
         }
         if crate::images::take_arrived() {
@@ -180,7 +200,7 @@ impl Session {
             if let Ok(msg) = self.messages.try_recv() {
                 let ack = match &msg {
                     RuntimeMsg::Tree(tree) => Some(tree.ack),
-                    RuntimeMsg::Scroll { .. } => None,
+                    _ => None,
                 };
                 self.apply(msg);
                 let Some(ack) = ack else { continue };
@@ -218,6 +238,11 @@ impl Session {
             RuntimeMsg::Scroll { path, top } => self
                 .rt
                 .update(move |_, tx| tx.scroll_to_instant(path, 0.0, top)),
+            request => {
+                if let Some(run) = request.request() {
+                    self.rt.update(move |_, tx| run(tx))
+                }
+            }
         }
     }
 
@@ -354,6 +379,51 @@ fn find_pressables(node: &Arc<Node>, path: &str, label: &str, out: &mut Vec<Stri
         || (tag == "a" && attrs.contains_key("href"));
     // An ancestor is a fallback only when nothing inside it matched.
     if out.len() == before && is_pressable && text_of(node).contains(label) {
+        out.push(path.to_string());
+    }
+}
+
+fn find_texts(node: &Arc<Node>, path: &str, label: &str, out: &mut Vec<String>) {
+    let Node::Elem { children, .. } = node.as_ref() else {
+        return;
+    };
+    let before = out.len();
+    for (i, child) in children.iter().enumerate() {
+        let child_path = match child.as_ref() {
+            Node::Elem { key: Some(key), .. } => format!("{path}/k{key}"),
+            _ => format!("{path}/{i}"),
+        };
+        find_texts(child, &child_path, label, out);
+    }
+    if out.len() == before && text_of(node).contains(label) {
+        out.push(path.to_string());
+    }
+}
+
+fn find_labelled(node: &Arc<Node>, path: &str, label: &str, out: &mut Vec<String>) {
+    let Node::Elem {
+        children,
+        on,
+        attrs,
+        tag,
+        ..
+    } = node.as_ref()
+    else {
+        return;
+    };
+    for (i, child) in children.iter().enumerate() {
+        let child_path = match child.as_ref() {
+            Node::Elem { key: Some(key), .. } => format!("{path}/k{key}"),
+            _ => format!("{path}/{i}"),
+        };
+        find_labelled(child, &child_path, label, out);
+    }
+    let named = ["aria-label", "title"]
+        .iter()
+        .any(|a| attrs.get(*a).is_some_and(|v| v.contains(label)));
+    let pressable =
+        crate::PRESS_EVENTS.iter().any(|k| on.contains_key(*k)) || tag == "a" || tag == "button";
+    if named && pressable {
         out.push(path.to_string());
     }
 }
@@ -576,6 +646,105 @@ pub fn run(script_path: &str) {
                 if let Err(error) = std::fs::write(&path, serde_json::to_string(&doc).unwrap()) {
                     eprintln!("[capture] {path}: {error}");
                 }
+            }
+            Step::Press(name) => {
+                let Some(key) = named_key(&name) else {
+                    fail(
+                        &mut child,
+                        &format!("press: unsupported key name \"{name}\""),
+                    );
+                };
+                session.rt.key(KeyEvent {
+                    key,
+                    mods: Mods::default(),
+                });
+                let until = Instant::now() + Duration::from_millis(400);
+                while Instant::now() < until {
+                    session.tick();
+                }
+            }
+            Step::RightClickText(label) => {
+                let mut found = Vec::new();
+                if let Some(root) = session.rt.state.root.clone() {
+                    find_texts(&root, "r", &label, &mut found);
+                }
+                match found.iter().find_map(|p| session.rt.find(p)) {
+                    Some((x, y)) => {
+                        session.rt.pointer_move(x, y);
+                        session.rt.secondary_down(x, y);
+                        session.rt.secondary_up(x, y);
+                    }
+                    None => eprintln!("[capture] rightClick \"{label}\": not found"),
+                }
+                let until = Instant::now() + Duration::from_millis(500);
+                while Instant::now() < until {
+                    session.tick();
+                }
+            }
+            Step::ClickLabel(label) => {
+                let mut found = Vec::new();
+                if let Some(root) = session.rt.state.root.clone() {
+                    find_labelled(&root, "r", &label, &mut found);
+                }
+                match found.iter().find_map(|p| session.rt.find(p)) {
+                    Some((x, y)) => {
+                        session.rt.pointer_move(x, y);
+                        session.rt.pointer_down(x, y);
+                        session.rt.pointer_up(x, y);
+                        let rtt = session.round_trip(None);
+                        interactions.push(json!({ "clickLabel": label, "roundTripMs": rtt }));
+                    }
+                    None => eprintln!("[capture] clickLabel \"{label}\": not found"),
+                }
+            }
+            Step::Probe(probe) => {
+                session.rt.settle_all();
+                session.rt.frame(0.0);
+                let els = session.rt.elements();
+                let text_under = |i: usize| -> String {
+                    let mut out = String::new();
+                    for (j, e) in els.iter().enumerate() {
+                        let mut p = Some(j);
+                        while let Some(k) = p {
+                            if k == i {
+                                if let Some(t) = &e.text {
+                                    out.push_str(t);
+                                    out.push(' ');
+                                }
+                                break;
+                            }
+                            p = els[k].parent;
+                        }
+                        if out.len() > 60 {
+                            break;
+                        }
+                    }
+                    out.trim().chars().take(60).collect()
+                };
+                let focused: Vec<_> = els.iter().enumerate().filter(|(_, e)| e.focused)
+                    .map(|(i, e)| json!({"path": e.path, "role": e.role, "label": e.label, "vis": e.focus_visible, "text": text_under(i), "rect": e.rect})).collect();
+                let hovered: Vec<_> = els.iter().enumerate().filter(|(_, e)| e.hover > 0.3 && e.visible[2] > 0.0)
+                    .map(|(i, e)| json!({"path": e.path, "hover": e.hover, "fill": format!("{:?}", e.fill), "text": text_under(i), "rect": e.rect})).collect();
+                let shown: Vec<_> = probe
+                    .texts
+                    .iter()
+                    .map(|t| {
+                        let hit = els.iter().find(|e| {
+                            e.text.as_deref().is_some_and(|x| x.contains(t.as_str()))
+                                && e.opacity > 0.01
+                                && e.visible[2] > 0.5
+                                && e.visible[3] > 0.5
+                                && !e.exiting
+                        });
+                        json!({"text": t, "rect": hit.map(|e| e.visible)})
+                    })
+                    .collect();
+                let inert = els.iter().filter(|e| e.inert).count();
+                eprintln!(
+                    "[probe {}] {}",
+                    probe.label,
+                    json!({"focused": focused, "hovered": hovered, "shown": shown, "inert": inert})
+                );
             }
             Step::Dump => {
                 let root = session.rt.state.root.clone();

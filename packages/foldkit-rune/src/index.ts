@@ -10,4 +10,4 @@ export {
 	makeOverlays,
 	parsePlacement,
 } from "./overlays"
-export { type ElementBridge, type HostScrollCommand, makeElementBridge } from "./bridge"
+export { type ElementBridge, type HostElementCommand, makeElementBridge } from "./bridge"
