@@ -124,6 +124,16 @@ const OVERLAY_MOUNTS = [
 	"PortalCommandMenu",
 	"PositionSubmenu",
 	"AnchorTooltipPanel",
+	// @foldkit/ui's, through the native anchor module.
+	"AnchorPopover",
+	"PortalPopoverBackdrop",
+	"AnchorMenu",
+	"PortalMenuBackdrop",
+	"AnchorListbox",
+	"PortalListboxBackdrop",
+	"AnchorCombobox",
+	"PortalComboboxBackdrop",
+	"AnchorTooltip",
 ]
 
 /**

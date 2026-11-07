@@ -1,14 +1,15 @@
 /**
  * The native stand-ins for the app's overlay positioning, registered with `Bun.plugin` when
  * running from source and passed to `Bun.build` for the bundled runtime: `src/overlay.ts` for
- * the app's `ui/aria/overlay.ts`, and `src/anchor.ts`'s `anchorSetup` in `@foldkit/ui`'s anchor
- * module (its other exports stay).
+ * the app's `ui/aria/overlay.ts`, and `src/anchor.ts`'s `anchorSetup` and portals in
+ * `@foldkit/ui`'s anchor module (its other exports stay).
  */
 import { readFileSync } from "node:fs"
 
 const native = new URL("./overlay.ts", import.meta.url).pathname
 const nativeAnchor = new URL("./anchor.ts", import.meta.url).pathname
-const WEB_ANCHOR_SETUP = "export const anchorSetup = (element, config) => {"
+/** The anchor module's DOM-moving exports the native module replaces. */
+const NATIVE_EXPORTS = ["anchorSetup", "portalBackdrop", "portalToContainingRoot"]
 
 export const overlayPlugin: BunPlugin = {
 	name: "hazel-native-overlay",
@@ -18,12 +19,16 @@ export const overlayPlugin: BunPlugin = {
 			loader: "ts",
 		}))
 		build.onLoad({ filter: /@foldkit\/ui\/dist\/anchor\/anchor\.js$/ }, ({ path }) => {
-			const source = readFileSync(path, "utf8")
-			// A changed @foldkit/ui must fail loudly here, not position overlays with Floating UI.
-			if (!source.includes(WEB_ANCHOR_SETUP)) throw new Error(`${path}: anchorSetup not found`)
+			let source = readFileSync(path, "utf8")
+			for (const name of NATIVE_EXPORTS) {
+				const web = `export const ${name} = (element`
+				// A changed @foldkit/ui must fail loudly here, not position overlays with Floating UI.
+				if (!source.includes(web)) throw new Error(`${path}: ${name} not found`)
+				source = source.replace(web, `const web_${name} = (element`)
+			}
 			return {
-				contents: `${source.replace(WEB_ANCHOR_SETUP, "const webAnchorSetup = (element, config) => {")}
-export { anchorSetup } from ${JSON.stringify(nativeAnchor)}`,
+				contents: `${source}
+export { ${NATIVE_EXPORTS.join(", ")} } from ${JSON.stringify(nativeAnchor)}`,
 				loader: "js",
 			}
 		})

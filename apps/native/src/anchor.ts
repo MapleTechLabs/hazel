@@ -34,3 +34,11 @@ export const anchorSetup = (element: unknown, config: AnchorSetupConfig): (() =>
 		releasePortal()
 	}
 }
+
+/** A backdrop (or any element) moved to the page's portal root: the host draws it at the window's. */
+export const portalToContainingRoot = (element: unknown): (() => void) => {
+	const path = pathOf(element)
+	return path === undefined ? () => undefined : nativeOverlays.portal(path)
+}
+
+export const portalBackdrop = portalToContainingRoot

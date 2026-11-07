@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { anchorSetup, floatingPlacement } from "./anchor"
+import { anchorSetup, floatingPlacement, portalBackdrop } from "./anchor"
 import { nativeOverlays } from "./overlay"
 
 describe("anchorSetup", () => {
@@ -20,5 +20,12 @@ describe("anchorSetup", () => {
 		})
 		release()
 		expect(nativeOverlays.wireFor("r/4/1", pathOfId)).toBeUndefined()
+	})
+
+	it("draws a popover's backdrop at the window's root until released", () => {
+		const release = portalBackdrop({ __path: "r/5/0" })
+		expect(nativeOverlays.wireFor("r/5/0", () => undefined)).toEqual({ portal: 1 })
+		release()
+		expect(nativeOverlays.wireFor("r/5/0", () => undefined)).toBeUndefined()
 	})
 })
