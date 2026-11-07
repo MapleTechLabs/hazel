@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest"
 
+import { specificity } from "./selector"
 import { type ElementInput, type Scope, StyleResolver } from "./style"
 
 let styles: StyleResolver
@@ -82,6 +83,11 @@ describe("StyleResolver", () => {
 		const withIcon = resolve("has-[[data-slot=icon]]:gap-3", { extra: { hasDescendant: () => true } })
 		expect(withIcon.style.gapRow).toBe(12)
 		expect(resolve("has-[[data-slot=icon]]:gap-3").style.gapRow).toBeUndefined()
+	})
+
+	it("counts a hex escape and its closing space as part of the class", () => {
+		// `.\\32 xl\\:p-2` is one class: not a class, a space and a tag.
+		expect(specificity(".\\32 xl\\:p-2")).toBe(specificity(".a"))
 	})
 
 	it("matches a class whose selector escapes a leading digit", () => {

@@ -333,12 +333,23 @@ export const parseComplex = (text: string, base = 0): Compound => {
  * A selector's specificity as one number (ids, then classes / attributes / pseudo-classes, then
  * types): `:where()` adds nothing, `:is()` / `:not()` / `:has()` their most specific argument.
  */
+/** The last index of the CSS escape whose backslash is at `i`: hex digits and one whitespace, or one character. */
+const escapeEnd = (text: string, i: number): number => {
+	const hex = /^[0-9a-fA-F]{1,6}/.exec(text.slice(i + 1, i + 7))?.[0]
+	if (hex === undefined) return i + 1
+	const end = i + hex.length
+	return /\s/.test(text[end + 1] ?? "") ? end + 1 : end
+}
+
 export const specificity = (text: string): number => {
 	let total = 0
 	for (let i = 0; i < text.length; i++) {
 		const ch = text[i]
-		if (ch === "\\") i++
-		else if (ch === "#") total += 10000
+		if (ch === "\\") {
+			// The escape and the rest of its identifier: what follows is not a new compound.
+			i = escapeEnd(text, i)
+			while (/[\w-]/.test(text[i + 1] ?? "")) i++
+		} else if (ch === "#") total += 10000
 		else if (ch === ".") total += 100
 		else if (ch === "[") {
 			total += 100
@@ -359,7 +370,7 @@ export const specificity = (text: string): number => {
 			let depth = 0
 			const start = i + 2
 			for (i++; i < text.length; i++) {
-				if (text[i] === "\\") i++
+				if (text[i] === "\\") i = escapeEnd(text, i)
 				else if (text[i] === "(") depth++
 				else if (text[i] === ")" && --depth === 0) break
 			}
