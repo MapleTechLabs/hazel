@@ -6,7 +6,7 @@
 import { execFileSync, spawnSync } from "node:child_process"
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { createServer } from "node:http"
-import { extname, join, resolve } from "node:path"
+import { extname, join, resolve, sep } from "node:path"
 import { setTimeout as sleep } from "node:timers/promises"
 import { chromium, type CDPSession, type Page } from "playwright"
 
@@ -326,6 +326,7 @@ const runOnce = async (index: number, url: string) => {
 		const memorySent = await memory(browserPid, cdp)
 
 		const result = {
+			chromium: browser.version(),
 			run: index,
 			firstPaintMs: round(boot.paints["first-paint"] ?? Number.NaN),
 			firstContentfulPaintMs: round(boot.paints["first-contentful-paint"] ?? Number.NaN),
@@ -388,10 +389,17 @@ const mimeTypes = new Map([
 	[".mp3", "audio/mpeg"],
 ])
 const server = createServer((request, response) => {
-	const path = new URL(request.url ?? "/", "http://bench").pathname
+	const pathname = new URL(request.url ?? "/", "http://bench").pathname
+	// Decode first so an escaped name finds its file, then check containment on the decoded path.
+	const path = Buffer.from(
+		pathname.replace(/%([0-9a-f]{2})/gi, (_, hex: string) =>
+			String.fromCharCode(Number.parseInt(hex, 16)),
+		),
+		"latin1",
+	).toString("utf8")
 	const candidate = join(distDir, path)
 	const file =
-		candidate.startsWith(distDir) && existsSync(candidate) && statSync(candidate).isFile()
+		candidate.startsWith(`${distDir}${sep}`) && existsSync(candidate) && statSync(candidate).isFile()
 			? candidate
 			: join(distDir, "index.html")
 	response.writeHead(200, { "content-type": mimeTypes.get(extname(file)) ?? "application/octet-stream" })
@@ -440,11 +448,8 @@ const summary = {
 	scriptDurationAtSettleMs: med((r) => r.memorySettled.scriptDurationMs),
 	taskDurationAtSettleMs: med((r) => r.memorySettled.taskDurationMs),
 }
-const browserVersion = await chromium.launch({ headless: true }).then(async (b) => {
-	const version = b.version()
-	await b.close()
-	return version
-})
+// The version of the browser the runs measured, not of a separate probe launch.
+const browserVersion = results[0]?.chromium ?? "unknown"
 writeFileSync(
 	join(outDir, "results.json"),
 	`${JSON.stringify({ chromium: browserVersion, viewport: "1280x800@2x", summary, runs: results }, null, "\t")}\n`,

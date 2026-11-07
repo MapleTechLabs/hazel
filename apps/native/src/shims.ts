@@ -5,7 +5,14 @@ import { spawn } from "node:child_process"
  * window and document as event targets, an in-memory history, storage, matchMedia, and the
  * observers and media classes some modules construct. Import before the app.
  */
-export type ShimEnv = { width: number; height: number; dark: boolean; url: string }
+export type ShimEnv = {
+	width: number
+	height: number
+	dark: boolean
+	url: string
+	/** Opens a link outside the app. @default the system browser or mail app */
+	openUrl?: (href: string) => void
+}
 
 class MemoryStorage {
 	private items = new Map<string, string>()
@@ -127,9 +134,19 @@ export const installShims = (env: ShimEnv) => {
 		get protocol() {
 			return url.protocol
 		},
-		assign: (next: string) => history.pushState(null, "", next),
-		replace: (next: string) => history.replaceState(null, "", next),
+		set href(next: string) {
+			navigate(next, "push")
+		},
+		assign: (next: string) => navigate(next, "push"),
+		replace: (next: string) => navigate(next, "replace"),
 		reload: () => {},
+	}
+	/** In-app paths move the in-memory history; another origin opens in the system browser. */
+	const navigate = (next: string | URL, mode: "push" | "replace") => {
+		const target = URL.parse(String(next), url)
+		if (target !== null && target.origin !== url.origin) return openExternal(target, env.openUrl)
+		if (mode === "push") history.pushState(null, "", next)
+		else history.replaceState(null, "", next)
 	}
 	const navigateTo = (next: number) => {
 		index = Math.max(0, Math.min(entries.length - 1, next))
@@ -235,6 +252,11 @@ export const installShims = (env: ShimEnv) => {
 		innerHeight: env.height,
 		devicePixelRatio: 2,
 		scrollTo: () => {},
+		open: (next?: string | URL) => {
+			const target = next === undefined ? null : URL.parse(String(next), url)
+			if (target !== null) openExternal(target, env.openUrl)
+			return null
+		},
 		getComputedStyle: () => ({ getPropertyValue: () => "" }),
 		__APP_VERSION__: "native",
 	})
@@ -264,6 +286,18 @@ export const installShims = (env: ShimEnv) => {
 		windowTarget.dispatchEvent(new Event("resize"))
 	}
 	return { updateEnv, history, location }
+}
+
+/** Web and mail links open in the user's browser or mail app; any other scheme is dropped. */
+const openExternal = (target: URL, openUrl = systemOpen) => {
+	if (["http:", "https:", "mailto:"].includes(target.protocol)) openUrl(target.href)
+}
+
+const systemOpen = (href: string) => {
+	const opener = spawn(process.platform === "darwin" ? "open" : "xdg-open", [href], {
+		stdio: "ignore",
+	})
+	opener.on("error", () => {})
 }
 
 const copyToClipboard = (text: string) => {

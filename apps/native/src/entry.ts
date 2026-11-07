@@ -13,6 +13,7 @@ import {
 	StyleResolver,
 	type HostToRuntime,
 } from "@hazel/foldkit-rune"
+import { isBackendUrl } from "./backend-origin"
 import { installShims } from "./shims"
 
 const width = Number(process.env.NATIVE_WIDTH ?? 1280)
@@ -53,12 +54,14 @@ if (offline !== undefined) {
 } else {
 	const token = process.env.HAZEL_SESSION_TOKEN
 	if (!token) throw new Error("HAZEL_DATA=live needs HAZEL_SESSION_TOKEN (bun run dev:sign-in prints one)")
+	if (URL.parse(backendUrl) === null)
+		throw new Error(`HAZEL_DATA=live needs a backend URL, got "${backendUrl}"`)
 	const { setSessionBearerProvider } = await import("../../web-foldkit/src/core/lib/session-bearer")
 	setSessionBearerProvider(() => Promise.resolve(token))
 	const networkFetch = globalThis.fetch
 	globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
 		const request = new Request(input, init)
-		if (request.url.startsWith(backendUrl)) request.headers.set("authorization", `Bearer ${token}`)
+		if (isBackendUrl(request.url, backendUrl)) request.headers.set("authorization", `Bearer ${token}`)
 		return networkFetch(request)
 	}
 }

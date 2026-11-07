@@ -2,8 +2,15 @@ import { HazelAuthApi } from "@hazel/auth/contract"
 import * as DomainRpc from "@hazel/domain/rpc"
 import { Schema } from "effect"
 import * as CurrentUser from "../../../packages/domain/src/current-user"
+import { isBackendUrl } from "./backend-origin"
 import type { FixtureServer } from "./fixture/fixture-socket"
-import { generalMessageRows, presenceRows } from "./fixture/snapshot"
+import {
+	channelMemberRows,
+	generalMessageRows,
+	notificationRows,
+	orgId,
+	presenceRows,
+} from "./fixture/snapshot"
 
 /**
  * The few HTTP calls the app makes outside the sync socket, answered locally: the session check,
@@ -47,7 +54,31 @@ export const makeOfflineFetch = (options: {
 	/** Encoded success values for the RPCs the app calls on its own while idle. */
 	const responders = new Map<string, Responder>([
 		["user.me", () => encodedUser],
-		["channelMember.clearNotifications", () => ({ transactionId: crypto.randomUUID() })],
+		// Reading a channel drops its notifications and zeroes the member's count, as the backend does.
+		[
+			"channelMember.clearNotifications",
+			(payload) => {
+				const channelId = String(payload.channelId)
+				const read = notificationRows.filter((row) => row.targetedResourceId === channelId)
+				options.server?.write(
+					"user",
+					options.user.id,
+					"notifications",
+					[],
+					read.map((row) => row.id),
+				)
+				const member = channelMemberRows.find(
+					(row) => row.channelId === channelId && row.userId === options.user.id,
+				)
+				const transactionId =
+					member === undefined
+						? undefined
+						: options.server?.write("org", orgId, "channel_members", [
+								{ ...member, notificationCount: 0 },
+							])
+				return { transactionId: transactionId ?? `org:${orgId}:1` }
+			},
+		],
 		["userPresenceStatus.heartbeat", () => ({ lastSeenAt: new Date().toISOString() })],
 		// A sent message is stored as the fixture stores its own: a full row, with this payload's content.
 		[
@@ -137,7 +168,7 @@ export const makeOfflineFetch = (options: {
 		const request = new Request(input, init)
 		const url = new URL(request.url)
 		if (process.env.NATIVE_DEBUG) process.stderr.write(`[offline] ${request.method} ${url.pathname}\n`)
-		if (!request.url.startsWith(options.backendUrl)) return new Response(null, { status: 404 })
+		if (!isBackendUrl(request.url, options.backendUrl)) return new Response(null, { status: 404 })
 		switch (url.pathname.replace(/\/$/, "")) {
 			case "/auth/getSession":
 				return json({ _tag: "Success", value: encodedSession })

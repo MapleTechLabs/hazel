@@ -41,7 +41,11 @@ type ServerControl = (typeof SyncMuxServerControl)["Encoded"]
 export const makeFixtureServer = () => {
 	const streams = new Map<string, Set<(frame: ServerFrame) => void>>()
 	const seqs = new Map<string, number>()
+	/** Writes so far per source and table, by row key: the row, or `null` once deleted. */
+	const applied = new Map<string, Map<string, Map<string, unknown>>>()
 	const keyOf = (kind: SyncSourceKind, sourceId: string) => `${kind}:${sourceId}`
+	const rowKey = (row: unknown) =>
+		typeof row === "object" && row !== null && "id" in row ? String(row.id) : undefined
 	return {
 		seqOf: (kind: SyncSourceKind, sourceId: string) => seqs.get(keyOf(kind, sourceId)) ?? FIXTURE_SEQ,
 		subscribe: (kind: SyncSourceKind, sourceId: string, emit: (frame: ServerFrame) => void) => {
@@ -52,16 +56,47 @@ export const makeFixtureServer = () => {
 			return () => set.delete(emit)
 		},
 		/** Applies a write; returns its transaction id, `"<kind>:<id>:<seq>"`. */
-		write: (kind: SyncSourceKind, sourceId: string, table: string, upserts: ReadonlyArray<unknown>) => {
+		write: (
+			kind: SyncSourceKind,
+			sourceId: string,
+			table: string,
+			upserts: ReadonlyArray<unknown>,
+			deletes: ReadonlyArray<string> = [],
+		) => {
 			const key = keyOf(kind, sourceId)
 			const seq = (seqs.get(key) ?? FIXTURE_SEQ) + 1
 			seqs.set(key, seq)
+			const tables = applied.get(key) ?? new Map<string, Map<string, unknown>>()
+			applied.set(key, tables)
+			const rows = tables.get(table) ?? new Map<string, unknown>()
+			tables.set(table, rows)
+			for (const row of upserts) {
+				const id = rowKey(row)
+				if (id !== undefined) rows.set(id, row)
+			}
+			for (const id of deletes) rows.set(id, null)
 			for (const emit of streams.get(key) ?? []) {
 				emit({ _tag: "Begin", reset: false })
-				emit({ _tag: "Rows", table, upserts, deletes: [] })
+				emit({ _tag: "Rows", table, upserts, deletes })
 				emit({ _tag: "Commit", seq: seq as never })
 			}
 			return `${key}:${seq}`
+		},
+		/** A source's snapshot with every write so far applied, as a reconnecting client sees it. */
+		withWrites: (kind: SyncSourceKind, sourceId: string, tables: FixtureTables): FixtureTables => {
+			const writes = applied.get(keyOf(kind, sourceId))
+			if (writes === undefined) return tables
+			return Object.fromEntries(
+				Object.entries(tables).map(([table, base]) => {
+					const rows = writes.get(table)
+					if (rows === undefined) return [table, base]
+					const kept = base.filter((row) => {
+						const id = rowKey(row)
+						return id === undefined || !rows.has(id)
+					})
+					return [table, [...kept, ...[...rows.values()].filter((row) => row !== null)]]
+				}),
+			)
 		},
 	}
 }
@@ -96,7 +131,7 @@ const sourceStream = (
 		// Like the source objects, an empty table sends no `Rows`.
 		for (const [table, upserts] of Object.entries(tables))
 			if (upserts.length > 0) emit({ _tag: "Rows", table, upserts, deletes: [] })
-		emit({ _tag: "Commit", seq: FIXTURE_SEQ })
+		emit({ _tag: "Commit", seq: (server?.seqOf(kind, sourceId) ?? FIXTURE_SEQ) as never })
 		// Like the objects, `paging` only from a source that pages a table.
 		emit(paging ? { _tag: "Ready", paging: true } : { _tag: "Ready" })
 	}
@@ -140,7 +175,13 @@ const sourceStream = (
 /** A `WebSocket` constructor whose sockets answer from the fixture; pass as `SyncHub({ WebSocket })`. */
 export const makeFixtureWebSocket = (options: FixtureWebSocketOptions = {}): WebSocketConstructor => {
 	const latencyMs = options.latencyMs ?? 0
-	const snapshot = options.snapshot ?? snapshotFor
+	const base = options.snapshot ?? snapshotFor
+	const snapshot = (kind: SyncSourceKind, sourceId: string) => {
+		const tables = base(kind, sourceId)
+		return tables === undefined || options.server === undefined
+			? tables
+			: options.server.withWrites(kind, sourceId, tables)
+	}
 	const later = (run: () => void) => (latencyMs > 0 ? setTimeout(run, latencyMs) : queueMicrotask(run))
 
 	return class FixtureWebSocket implements WebSocketLike {

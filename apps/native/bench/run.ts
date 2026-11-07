@@ -19,6 +19,11 @@ const argValue = (name: string) => {
 	return at === -1 ? undefined : process.argv[at + 1]
 }
 const runs = Number(argValue("--runs") ?? 5)
+if (!Number.isInteger(runs) || runs < 1) throw new Error("--runs takes a positive integer")
+const skipWeb = process.argv.includes("--skip-web")
+const webResultsPath = join(here, "web/out/results.json")
+if (skipWeb && !existsSync(webResultsPath))
+	throw new Error("--skip-web reuses web/out/results.json, which does not exist yet: run once without it")
 const host = join(appDir, "host/target/release/hazel-native")
 if (!existsSync(host)) throw new Error("Build the host first: bun run host:build")
 // The packaged app ships a bundled runtime, so measure that build.
@@ -76,6 +81,11 @@ const nativeRun = (index: number): NativeRun => {
 		throw new Error(`native run ${index} failed: ${result.stderr.toString().slice(-2000)}`)
 	// SAFETY: the host's `--capture` mode writes this file in the NativeRun shape.
 	const run = JSON.parse(readFileSync(benchOut, "utf8")) as Omit<NativeRun, "heapUsedMb">
+	// Both processes are measured, or the run's memory figures would be silently partial.
+	const hostSample = run.rssKb.some((p) => p.pid === run.hostPid)
+	const runtimeSample = run.rssKb.some((p) => p.pid !== run.hostPid)
+	if (!hostSample || !runtimeSample)
+		throw new Error(`native run ${index} is missing an RSS sample: ${JSON.stringify(run.rssKb)}`)
 	const lastStats = readFileSync(stats, "utf8").trim().split("\n").at(-1) ?? "{}"
 	// SAFETY: entry.ts writes each NATIVE_STATS line with a numeric `heapUsedMb`.
 	const { heapUsedMb } = JSON.parse(lastStats) as { heapUsedMb?: number }
@@ -108,7 +118,7 @@ const nativeSummary = {
 	heapUsedMb: median(native.map((r) => r.heapUsedMb)),
 }
 
-if (!process.argv.includes("--skip-web")) {
+if (!skipWeb) {
 	const web = spawnSync("bun", [join(here, "web/run.ts"), "--runs", String(runs)], {
 		cwd: appDir,
 		stdio: "inherit",
@@ -116,10 +126,12 @@ if (!process.argv.includes("--skip-web")) {
 	if (web.status !== 0) throw new Error("web benchmark failed")
 }
 // SAFETY: web/run.ts writes results.json in this shape just above.
-const webResults = JSON.parse(readFileSync(join(here, "web/out/results.json"), "utf8")) as {
+const webResults = JSON.parse(readFileSync(webResultsPath, "utf8")) as {
 	chromium: string
 	summary: Record<string, number>
+	runs: ReadonlyArray<unknown>
 }
+const webRuns = webResults.runs.length
 const web = webResults.summary
 
 const ms = (value: number | undefined) =>
@@ -141,7 +153,7 @@ const table = [
 
 const report = `# Hazel: native (Rune) vs web (Chromium)
 
-Median of ${runs} runs each, 1280x800 at 2x, offline fixture (#general, 60 messages), same scenario:
+Median of ${runs} native and ${webRuns} web runs${skipWeb ? " (web results reused from an earlier run)" : ""}, 1280x800 at 2x, offline fixture (#general, 60 messages), same scenario:
 boot, type "Hello from Rune", press Enter. Chromium ${webResults.chromium}, headless.
 
 ${table}
