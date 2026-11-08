@@ -313,15 +313,22 @@ impl State {
 }
 
 /// An element the runtime asked to draw at the window's root (`ov.portal`).
+/// Drawn at the window's root rather than where the tree puts it: a portal, or a `fixed`
+/// element, which the window places as the browser's viewport does.
 fn is_portal(node: &Arc<Node>) -> bool {
-    matches!(node.as_ref(), Node::Elem { ov: Some(o), .. } if o.portal.is_some())
+    match node.as_ref() {
+        Node::Elem { ov, st, .. } => {
+            ov.as_ref().is_some_and(|o| o.portal.is_some()) || st.fixed == Some(true)
+        }
+        _ => false,
+    }
 }
 
 fn collect_portals(node: &Arc<Node>, path: &str, out: &mut Vec<(String, Arc<Node>)>) {
-    let Node::Elem { ov, children, .. } = node.as_ref() else {
+    let Node::Elem { children, .. } = node.as_ref() else {
         return;
     };
-    if ov.as_ref().is_some_and(|o| o.portal.is_some()) {
+    if is_portal(node) {
         out.push((path.to_string(), node.clone()));
     }
     for (i, child) in children.iter().enumerate() {
@@ -405,7 +412,7 @@ fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
                 return None;
             }
             // A portal draws at the window's root (`view`), not where the tree puts it.
-            if ov.as_ref().is_some_and(|o| o.portal.is_some()) && ctx.portal != Some(path) {
+            if is_portal(node) && ctx.portal != Some(path) {
                 return None;
             }
             let inh = inh.from(st);
@@ -1229,7 +1236,15 @@ pub(crate) fn view(s: &State, cx: &mut Cx<State>) -> El {
     if let Some(bg) = color(&s.page.bg) {
         page = page.fill(bg)
     }
-    page = page.child(body.unwrap_or_else(el));
+    // The document scrolls when it is taller than the window, as a browser's viewport does.
+    let document = col()
+        .key("document")
+        .w_full()
+        .h_full()
+        .scroll(rune::ScrollSpec {
+            stick_bottom: false,
+        });
+    page = page.child(document.child(body.unwrap_or_else(el)));
     // Portals inherit from the page, as an element moved into `<body>` does.
     for (path, node) in &s.portals {
         let ctx = Ctx {

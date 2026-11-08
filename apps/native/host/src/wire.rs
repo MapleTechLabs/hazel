@@ -44,6 +44,8 @@ pub struct Style {
     pub inline: Option<bool>,
     pub absolute: Option<[Option<F>; 4]>,
     pub grid_cols: Option<Vec<String>>,
+    /// `position: fixed`: drawn at the window's root and placed against the window.
+    pub fixed: Option<bool>,
     pub grid_rows: Option<Vec<String>>,
     pub row_start: Option<i16>,
     pub justify_items: Option<String>,

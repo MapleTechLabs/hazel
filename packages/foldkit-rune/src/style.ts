@@ -142,6 +142,8 @@ export type Style = {
 	inline?: boolean
 	absolute?: [number | null, number | null, number | null, number | null]
 	gridCols?: Array<string>
+	/** `position: fixed`: placed against the window, not its parent (with `absolute`'s insets). */
+	fixed?: boolean
 	/** `grid-template-rows`, as written per track. */
 	gridRows?: Array<string>
 	/** `grid-row-start`: the row line a grid item starts at, 1 the first. */
@@ -1371,6 +1373,8 @@ export class StyleResolver {
 				break
 			case "position":
 				acc.fixed = v === "fixed"
+				if (acc.fixed) s.fixed = true
+				else delete s.fixed
 				s.position =
 					v === "absolute" || v === "fixed" ? "absolute" : v === "sticky" ? "sticky" : "static"
 				if (s.position === "absolute") s.absolute = s.absolute ?? [null, null, null, null]

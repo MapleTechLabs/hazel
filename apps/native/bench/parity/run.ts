@@ -58,7 +58,12 @@ const TABS = 24
 type Control = { label: string; role: string; x: number; y: number }
 type Outcome = { texts: Array<string>; errors: Array<string> }
 
-const normalize = (text: string) => text.replaceAll(/\s+/g, " ").trim()
+// Bidi isolates (\u2066-\u2069) wrap names in the web build and draw nothing.
+const normalize = (text: string) =>
+	text
+		.replaceAll(/[\u2066-\u2069]/g, "")
+		.replaceAll(/\s+/g, " ")
+		.trim()
 
 /**
  * Differences by design: the version label (the web build's number, the native build's name),

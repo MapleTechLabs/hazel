@@ -1638,3 +1638,31 @@ fn a_subgrid_link_row_follows_its_href_on_a_press() {
         .any(|m| m["type"] == "link" && m["value"] == "/hazel/chat/engineering");
     assert!(followed, "a press on a subgrid row did not follow its link");
 }
+
+#[test]
+fn a_fixed_element_is_placed_against_the_window_in_a_taller_page() {
+    let bar = e(
+        "div",
+        json!({ "fixed": true, "absolute": [0, null, 0, 0], "h": 20, "bg": "#0000ffff" }),
+        vec![t("Copied")],
+    );
+    let page = e("div", json!({ "h": 1200 }), vec![e("div", json!({ "h": 1200 }), vec![bar])]);
+    let rt = runtime(page, (300.0, 800.0));
+    let [_, y, _, h] = rect(&rt, "r/0/0");
+    assert_eq!(y + h, 800.0, "a bottom-0 fixed bar sits on the window's bottom edge");
+}
+
+#[test]
+fn the_document_scrolls_when_it_is_taller_than_the_window() {
+    let page = e(
+        "div",
+        json!({}),
+        vec![e("div", json!({ "h": 1000 }), vec![]), e("p", json!({ "h": 20 }), vec![t("Danger Zone")])],
+    );
+    let mut rt = runtime(page, (300.0, 800.0));
+    let (_, before) = rt.find("r/1").expect("drawn");
+    rt.wheel(150.0, 400.0, -300.0);
+    rt.frame(0.0);
+    let (_, after) = rt.find("r/1").expect("drawn");
+    assert!(after < before - 200.0, "the page scrolled: {before} -> {after}");
+}

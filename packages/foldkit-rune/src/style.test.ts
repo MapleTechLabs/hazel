@@ -268,6 +268,11 @@ describe("StyleResolver", () => {
 		expect(resolve("relative top-2").style.stickyTop).toBeUndefined()
 	})
 
+	it("marks a fixed element, which the host places against the window", () => {
+		expect(resolve("fixed inset-y-0").style).toMatchObject({ fixed: true, absolute: [null, 0, null, 0] })
+		expect(resolve("absolute inset-y-0").style.fixed).toBeUndefined()
+	})
+
 	it("reads grid rows, a row start and centred items, as a modal lays out", () => {
 		expect(resolve("grid grid-rows-[1fr_auto_3fr] justify-items-center").style).toMatchObject({
 			display: "grid",
