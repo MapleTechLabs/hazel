@@ -31,6 +31,9 @@ const dark = process.env.NATIVE_THEME === "dark"
 const dataMode = process.env.HAZEL_DATA === "live" ? "live" : "offline"
 const statsPath = process.env.NATIVE_STATS
 
+// A production build, as the web app ships and the desktop bundle is: dev-only pages (the debug
+// settings) redirect. `HAZEL_DEV=1` keeps the dev build. Under Bun, `import.meta.env` is `process.env`.
+if (process.env.HAZEL_DEV !== "1") process.env.PROD = "true"
 if (dataMode === "offline") process.env.VITE_BACKEND_URL = "http://offline.hazel.test"
 const backendUrl = process.env.VITE_BACKEND_URL ?? "http://localhost:3003"
 
