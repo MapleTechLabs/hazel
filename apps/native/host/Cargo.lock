@@ -554,6 +554,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "color_quant"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d7b894f5411737b7867f4827955924d7c254fc9f4d91a6aad6b097804b1018b"
+
+[[package]]
 name = "combine"
 version = "4.6.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1036,6 +1042,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "gif"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee8cfcc411d9adbbaba82fb72661cc1bcca13e8bba98b364e62b2dba8f960159"
+dependencies = [
+ "color_quant",
+ "weezl",
+]
+
+[[package]]
 name = "gpu-allocator"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1263,12 +1279,25 @@ checksum = "85ab80394333c02fe689eaf900ab500fbd0c2213da414687ebf995a65d5a6104"
 dependencies = [
  "bytemuck",
  "byteorder-lite",
+ "color_quant",
+ "gif",
+ "image-webp",
  "moxcms",
  "num-traits",
  "png 0.18.1",
  "tiff",
  "zune-core",
  "zune-jpeg",
+]
+
+[[package]]
+name = "image-webp"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "525e9ff3e1a4be2fbea1fdf0e98686a6d98b4d8f937e1bf7402245af1909e8c3"
+dependencies = [
+ "byteorder-lite",
+ "quick-error",
 ]
 
 [[package]]
@@ -2524,7 +2553,7 @@ checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 [[package]]
 name = "rune"
 version = "0.0.1"
-source = "git+https://github.com/Makisuo/rune?rev=5eb83cf95634ac3b39c0c5140ae038684ef5e670#5eb83cf95634ac3b39c0c5140ae038684ef5e670"
+source = "git+https://github.com/Makisuo/rune?rev=c982e1e0240bc8a0f3d37a967a7bd63da54c198a#c982e1e0240bc8a0f3d37a967a7bd63da54c198a"
 dependencies = [
  "accesskit",
  "accesskit_macos",
@@ -2600,12 +2629,12 @@ dependencies = [
 [[package]]
 name = "rune-motion"
 version = "0.1.0"
-source = "git+https://github.com/Makisuo/rune?rev=5eb83cf95634ac3b39c0c5140ae038684ef5e670#5eb83cf95634ac3b39c0c5140ae038684ef5e670"
+source = "git+https://github.com/Makisuo/rune?rev=c982e1e0240bc8a0f3d37a967a7bd63da54c198a#c982e1e0240bc8a0f3d37a967a7bd63da54c198a"
 
 [[package]]
 name = "rune-staging"
 version = "0.0.1"
-source = "git+https://github.com/Makisuo/rune?rev=5eb83cf95634ac3b39c0c5140ae038684ef5e670#5eb83cf95634ac3b39c0c5140ae038684ef5e670"
+source = "git+https://github.com/Makisuo/rune?rev=c982e1e0240bc8a0f3d37a967a7bd63da54c198a#c982e1e0240bc8a0f3d37a967a7bd63da54c198a"
 dependencies = [
  "wgpu",
 ]
@@ -2613,7 +2642,7 @@ dependencies = [
 [[package]]
 name = "rune-taffy"
 version = "0.0.1"
-source = "git+https://github.com/Makisuo/rune?rev=5eb83cf95634ac3b39c0c5140ae038684ef5e670#5eb83cf95634ac3b39c0c5140ae038684ef5e670"
+source = "git+https://github.com/Makisuo/rune?rev=c982e1e0240bc8a0f3d37a967a7bd63da54c198a#c982e1e0240bc8a0f3d37a967a7bd63da54c198a"
 dependencies = [
  "taffy",
 ]

@@ -75,7 +75,17 @@ pub fn runtime_command(host_dir: Option<&Path>, entry: Option<String>) -> Comman
 pub fn bundled_assets() -> Option<PathBuf> {
     let host = std::env::current_exe().ok()?;
     let public = resources_of(&host)?.join("public");
-    public.is_dir().then_some(public)
+    if public.is_dir() {
+        return Some(public);
+    }
+    // Run from source (`host/target/release/hazel-native`): the web app's own public folder.
+    let source = host
+        .parent()?
+        .parent()?
+        .parent()?
+        .parent()?
+        .join("../web-foldkit/public");
+    source.is_dir().then_some(source)
 }
 
 /// `Contents/Resources` for a binary in `Contents/MacOS`.

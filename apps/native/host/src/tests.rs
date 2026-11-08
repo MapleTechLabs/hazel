@@ -246,6 +246,35 @@ fn z_index_paints_a_positioned_child_over_its_later_sibling() {
 }
 
 #[test]
+fn a_flow_child_with_a_z_index_paints_over_an_absolute_background() {
+    let background = e(
+        "div",
+        json!({ "absolute": [0, 0, 0, 0], "bg": "#ff0000ff" }),
+        vec![],
+    );
+    let card = e(
+        "div",
+        json!({ "w": 40, "h": 20, "zIndex": 20, "bg": "#0000ffff" }),
+        vec![],
+    );
+    let panel = e(
+        "div",
+        json!({ "w": 40, "h": 40, "display": "flex", "dir": "col" }),
+        vec![background, card],
+    );
+    let mut rt = runtime(panel, (40.0, 40.0));
+    let frame = render(&mut rt, (40, 40));
+    assert!(
+        frame.is(20, 10, BLUE),
+        "the z-20 card paints over the background"
+    );
+    assert!(
+        frame.is(20, 30, RED),
+        "the background shows where nothing covers it"
+    );
+}
+
+#[test]
 fn a_single_side_border_draws_only_that_side() {
     let mut rt = runtime(
         e(

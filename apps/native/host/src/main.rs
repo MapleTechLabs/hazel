@@ -734,7 +734,8 @@ fn style_of(node: &Node) -> Option<&Style> {
 }
 
 /// Paint order among siblings. Rune paints in tree order, so positioned children move after
-/// the flow (CSS paints them above it), sorted by `z-index`; a negative one goes under the flow.
+/// the flow (CSS paints them above it), sorted by `z-index`; a negative one, or one below a flow
+/// child's own `z-index`, goes under the flow.
 /// Out-of-flow children take no part in layout, so moving them changes only paint.
 fn paint_order<'a>(kids: &[(usize, &'a Arc<Node>)]) -> Vec<(usize, &'a Arc<Node>)> {
     let layer = |node: &Arc<Node>| -> Option<f32> {
@@ -757,7 +758,16 @@ fn paint_order<'a>(kids: &[(usize, &'a Arc<Node>)]) -> Vec<(usize, &'a Arc<Node>
         }
     }
     positioned.sort_by(|a, b| a.0.total_cmp(&b.0));
-    let below = positioned.iter().take_while(|p| p.0 < 0.0).count();
+    // A flow child with a `z-index` (`relative z-20`, a flex item's) stacks above a positioned
+    // sibling with a lower one: that sibling paints under the flow (a background image).
+    let flow_z = ordered
+        .iter()
+        .filter_map(|(_, c)| style_of(c).and_then(|st| st.z_index).map(|z| z.0))
+        .fold(0.0, f32::max);
+    let below = positioned
+        .iter()
+        .take_while(|p| p.0 < 0.0 || p.0 < flow_z)
+        .count();
     let mut out: Vec<(usize, &Arc<Node>)> =
         positioned[..below].iter().map(|p| (p.1, p.2)).collect();
     out.extend(ordered);
