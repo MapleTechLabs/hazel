@@ -702,7 +702,11 @@ fn build_elem(
         (Some("flex"), _) => {
             let is_row = st.dir.as_deref() != Some("col");
             let base = if is_row { row() } else { col() };
-            let parent = Parent { is_row, items };
+            let parent = Parent {
+                is_row,
+                items,
+                block: false,
+            };
             add_children(apply_flex(base, st), &kids, path, inh, ctx, parent)
         }
         (Some("inline") | None, _)
@@ -715,6 +719,7 @@ fn build_elem(
             let parent = Parent {
                 is_row: true,
                 items: Some("center"),
+                block: false,
             };
             add_children(
                 apply_flex(inline_row(true), st),
@@ -731,6 +736,7 @@ fn build_elem(
             let parent = Parent {
                 is_row: true,
                 items: Some("center"),
+                block: false,
             };
             add_children(
                 apply_flex(inline_row(true), st),
@@ -746,6 +752,7 @@ fn build_elem(
             let parent = Parent {
                 is_row: false,
                 items,
+                block: true,
             };
             add_children(apply_flex(col(), st), &kids, path, inh, ctx, parent)
         }
@@ -874,6 +881,9 @@ fn fills_with_scroll(node: &Arc<Node>) -> bool {
 struct Parent<'a> {
     is_row: bool,
     items: Option<&'a str>,
+    /// A block container: its inline-level children (`inline-flex`, `inline-block`) keep their
+    /// own width and sit where `text-align` puts them, rather than stretching across it.
+    block: bool,
 }
 
 fn style_of(node: &Node) -> Option<&Style> {
@@ -950,6 +960,21 @@ fn add_children(
             continue;
         }
         if let Some(b) = build(child, &child_path, inh, ctx) {
+            let b = match style_of(child) {
+                Some(st)
+                    if parent.block
+                        && st.inline == Some(true)
+                        && st.absolute.is_none()
+                        && st.w.is_none() =>
+                {
+                    match inh.align {
+                        rune::Align::Center => b.self_center(),
+                        rune::Align::End => b.self_end(),
+                        _ => b.self_start(),
+                    }
+                }
+                _ => b,
+            };
             e = match style_of(child) {
                 Some(st) => {
                     let sibling_grows =

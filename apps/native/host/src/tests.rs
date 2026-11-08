@@ -1756,3 +1756,20 @@ fn table_cells_line_up_in_columns_across_rows() {
         "a colspan=2 cell spans both columns"
     );
 }
+
+#[test]
+fn an_inline_flex_child_of_a_block_keeps_its_own_width() {
+    let badge = e(
+        "span",
+        json!({ "display": "flex", "inline": true, "pad": [2, 8, 2, 8] }),
+        vec![t("Owner")],
+    );
+    let cell = e("div", json!({ "w": 300 }), vec![badge]);
+    let rt = runtime(cell, (300.0, 100.0));
+    let [x, _, w, _] = rect(&rt, "r/0");
+    assert!(
+        w < 150.0,
+        "the badge is as wide as its text, not the block: {w}"
+    );
+    assert_eq!(x, 0.0, "it starts where text-align puts it");
+}
