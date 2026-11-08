@@ -92,6 +92,8 @@ pub struct Style {
     pub white_space_pre: Option<bool>,
     #[serde(default, deserialize_with = "lenient")]
     pub visibility: Option<String>,
+    /// `pointer-events`: `none` or `auto`, inherited by the host as CSS does.
+    pub pointer_events: Option<String>,
     #[serde(default, deserialize_with = "lenient")]
     pub z_index: Option<F>,
     #[serde(default, deserialize_with = "lenient")]

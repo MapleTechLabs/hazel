@@ -206,6 +206,8 @@ export type Style = {
 	/** pre or pre-wrap: keep newlines and runs of spaces. */
 	whiteSpacePre?: boolean
 	visibility?: "hidden"
+	/** `pointer-events`, inherited as CSS does: `none` takes no presses or hover here or below. */
+	pointerEvents?: "none" | "auto"
 	zIndex?: number
 	/** px, from translate/transform translate only. */
 	translate?: [number, number]
@@ -1272,6 +1274,10 @@ export class StyleResolver {
 				if (v === "hidden" || v === "collapse") s.visibility = "hidden"
 				else delete s.visibility
 				break
+			case "pointer-events":
+				if (v === "none" || v === "auto") s.pointerEvents = v
+				else delete s.pointerEvents
+				break
 			case "z-index": {
 				const z = v === "auto" ? null : evalLength(v, units)
 				if (z === null) delete s.zIndex
@@ -2076,7 +2082,6 @@ const IGNORED = new Set([
 	"transition-behavior",
 	"animation-duration",
 	"animation-iteration-count",
-	"pointer-events",
 	"box-sizing",
 	"text-rendering",
 	"scrollbar-width",

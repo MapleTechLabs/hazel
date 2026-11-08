@@ -254,6 +254,11 @@ describe("StyleResolver", () => {
 		).toEqual(["minmax(200px, 280px)", "1fr"])
 	})
 
+	it("sends pointer-events for the host to inherit", () => {
+		expect(resolve("pointer-events-none").style.pointerEvents).toBe("none")
+		expect(resolve("pointer-events-auto").style.pointerEvents).toBe("auto")
+	})
+
 	it("keeps hover colours apart from the base style", () => {
 		const { style } = resolve("bg-white hover:bg-black")
 		expect(style).toMatchObject({ bg: "#ffffffff", hoverBg: "#000000ff" })

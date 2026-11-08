@@ -381,6 +381,9 @@ fn presses(
     on: &HashMap<String, u32>,
     ctx: &Ctx,
 ) -> El {
+    if ctx.no_pointer {
+        return e;
+    }
     // A press or Space on a checkbox toggles it, and on an unchecked radio checks it: `change`.
     if is_checkable(tag, attrs)
         && let Some(&change) = on.get("change")
@@ -606,7 +609,20 @@ struct Ctx<'a> {
     inline: bool,
     /// The portal being built at the window's root; any other portal is skipped where it sits.
     portal: Option<&'a str>,
+    /// Under `pointer-events: none`: no presses or hover, though keys and focus still work.
+    no_pointer: bool,
 }
+
+/// Pointer events: `pointer-events: none` drops their handlers; keys, focus and input stay.
+const POINTER_ONLY_EVENTS: [&str; 7] = [
+    "click",
+    "pointerdown",
+    "pointerup",
+    "mouseenter",
+    "mouseleave",
+    "contextmenu",
+    "dblclick",
+];
 
 fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
     match node.as_ref() {
@@ -647,6 +663,30 @@ fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
             if is_portal(node) && ctx.portal != Some(path) {
                 return None;
             }
+            // `pointer-events` inherits: `none` here or above (unless `auto` again) takes no pointer.
+            let no_pointer = match st.pointer_events.as_deref() {
+                Some("none") => true,
+                Some("auto") => false,
+                _ => ctx.no_pointer,
+            };
+            let unpointed: HashMap<String, u32>;
+            let on = if no_pointer {
+                unpointed = on
+                    .iter()
+                    .filter(|(k, _)| !POINTER_ONLY_EVENTS.contains(&k.as_str()))
+                    .map(|(k, v)| (k.clone(), *v))
+                    .collect();
+                &unpointed
+            } else {
+                on
+            };
+            let pointed;
+            let ctx = if no_pointer == ctx.no_pointer {
+                ctx
+            } else {
+                pointed = Ctx { no_pointer, ..*ctx };
+                &pointed
+            };
             let inh = inh.from(st);
             if is_text_field(tag, attrs) {
                 return Some(build_input(path, tag, st, attrs, on, inh, ctx));
@@ -707,6 +747,7 @@ fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
                         keys,
                         inline: false,
                         portal: ctx.portal,
+                        no_pointer: ctx.no_pointer,
                     },
                 );
                 if *observed { observe(e, path, st) } else { e }
@@ -1624,6 +1665,7 @@ pub(crate) fn view(s: &State, cx: &mut Cx<State>) -> El {
         keys: &[],
         inline: false,
         portal: None,
+        no_pointer: false,
     };
     let body = s.root.as_ref().and_then(|root| build(root, "r", inh, &ctx));
     let mut page = col().w_full().h_full().on_layout(report_env);

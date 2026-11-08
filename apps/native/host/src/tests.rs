@@ -1681,7 +1681,7 @@ fn a_fixed_panel_inside_a_dialog_stays_above_the_page() {
     rt.frame(0.1);
     let clicked: Vec<Value> = sent_lines()
         .into_iter()
-        .filter(|m| m["type"] == "click")
+        .filter(|m| m["type"] == "click" && (m["id"] == 50 || m["id"] == 51))
         .map(|m| m["id"].clone())
         .collect();
     assert_eq!(clicked, [json!(51)], "the press reached the dialog's panel");
@@ -1723,7 +1723,7 @@ fn space_on_a_tabbed_unstyled_checkbox_toggles_it_and_a_checked_radio_stays() {
     );
     let changes: Vec<Value> = sent_lines()
         .into_iter()
-        .filter(|m| m["type"] == "change")
+        .filter(|m| m["type"] == "change" && (m["id"] == 60 || m["id"] == 61))
         .map(|m| m["id"].clone())
         .collect();
     assert_eq!(
@@ -1881,6 +1881,41 @@ fn a_press_on_a_label_asks_for_its_controls_activation_unless_it_handles_clicks(
         labels,
         [json!("r/0")],
         "only the label without its own click handler"
+    );
+}
+
+#[test]
+fn pointer_events_none_inherits_and_auto_turns_presses_back_on() {
+    sent_lines();
+    let mut off = e("button", json!({ "w": 100, "h": 20 }), vec![]);
+    off["on"] = json!({ "click": 80 });
+    let mut on = e(
+        "button",
+        json!({ "w": 100, "h": 20, "pointerEvents": "auto" }),
+        vec![],
+    );
+    on["on"] = json!({ "click": 81 });
+    let wrapper = e(
+        "div",
+        json!({ "display": "flex", "dir": "col", "pointerEvents": "none" }),
+        vec![off, on],
+    );
+    let mut rt = runtime(wrapper, (200.0, 100.0));
+    for y in [10.0, 30.0] {
+        rt.pointer_move(50.0, y);
+        rt.pointer_down(50.0, y);
+        rt.pointer_up(50.0, y);
+        rt.frame(0.1);
+    }
+    let clicked: Vec<Value> = sent_lines()
+        .into_iter()
+        .filter(|m| m["type"] == "click" && (m["id"] == 80 || m["id"] == 81))
+        .map(|m| m["id"].clone())
+        .collect();
+    assert_eq!(
+        clicked,
+        [json!(81)],
+        "only the pointer-events: auto button takes the press"
     );
 }
 
