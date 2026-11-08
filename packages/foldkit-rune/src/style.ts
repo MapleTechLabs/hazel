@@ -2145,7 +2145,24 @@ function expandRepeat(v: string): Array<string> {
 		return Array.from({ length: Number(rep[1]) }, () =>
 			(rep[2] ?? "").replace(/minmax\(0,\s*(.+)\)/, "$1"),
 		)
-	return v.split(/\s+/)
+	return splitTopLevel(v)
+}
+
+/** Whitespace-separated tracks, keeping `minmax(200px, 280px)` whole. */
+const splitTopLevel = (v: string): Array<string> => {
+	const out: Array<string> = []
+	let depth = 0
+	let current = ""
+	for (const ch of v.trim()) {
+		if (ch === "(") depth++
+		if (ch === ")") depth--
+		if (/\s/.test(ch) && depth === 0) {
+			if (current !== "") out.push(current)
+			current = ""
+		} else current += ch
+	}
+	if (current !== "") out.push(current)
+	return out
 }
 
 /** `flex` shorthand: keywords first, then `<grow> [<shrink>] [<basis>]`. */

@@ -235,6 +235,17 @@ describe("StyleResolver", () => {
 		).toMatchObject({ pad: [5, 5, 5, 5], margin: [3, 3, 3, 3] })
 	})
 
+	it("keeps a minmax() track whole in a grid template", () => {
+		expect(resolve("grid grid-cols-[minmax(200px,280px)_1fr]").style.gridCols).toEqual([
+			"minmax(200px,280px)",
+			"1fr",
+		])
+		expect(
+			resolve("grid", { extra: { inline: { "grid-template-columns": "minmax(200px, 280px) 1fr" } } }).style
+				.gridCols,
+		).toEqual(["minmax(200px, 280px)", "1fr"])
+	})
+
 	it("keeps hover colours apart from the base style", () => {
 		const { style } = resolve("bg-white hover:bg-black")
 		expect(style).toMatchObject({ bg: "#ffffffff", hoverBg: "#000000ff" })

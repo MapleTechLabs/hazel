@@ -717,6 +717,21 @@ pub fn auto_margins(
 /// `minmax(0, 1fr)` arrives as `1fr`; anything else sizes to its content.
 pub fn grid_track(template: &str) -> GridTrack {
     let num = |v: &str| v.parse::<f32>().ok();
+    // `minmax(200px, 280px)` between lengths; `minmax(0, 1fr)` is the fraction.
+    if let Some(args) = template
+        .strip_prefix("minmax(")
+        .and_then(|r| r.strip_suffix(')'))
+    {
+        let (lo, hi) = args.split_once(',').unwrap_or((args, args));
+        return match (grid_track(lo.trim()), grid_track(hi.trim())) {
+            (GridTrack::Px(lo), GridTrack::Px(hi)) => GridTrack::MinMaxPx(lo, hi),
+            (_, GridTrack::Fr(fr)) => GridTrack::Fr(fr),
+            _ => GridTrack::Auto,
+        };
+    }
+    if template == "0" {
+        return GridTrack::Px(0.0);
+    }
     if let Some(fr) = template.strip_suffix("fr").and_then(num) {
         GridTrack::Fr(fr)
     } else if let Some(rem) = template.strip_suffix("rem").and_then(num) {
@@ -734,7 +749,21 @@ pub fn grid_track(template: &str) -> GridTrack {
 
 #[cfg(test)]
 mod tests {
-    use super::capitalize;
+    use super::{capitalize, grid_track};
+    use rune::GridTrack;
+
+    #[test]
+    fn grid_track_reads_minmax() {
+        assert_eq!(
+            grid_track("minmax(200px,280px)"),
+            GridTrack::MinMaxPx(200.0, 280.0)
+        );
+        assert_eq!(
+            grid_track("minmax(200px, 17.5rem)"),
+            GridTrack::MinMaxPx(200.0, 280.0)
+        );
+        assert_eq!(grid_track("minmax(0, 1fr)"), GridTrack::Fr(1.0));
+    }
 
     #[test]
     fn capitalize_uppercases_each_word_start() {
