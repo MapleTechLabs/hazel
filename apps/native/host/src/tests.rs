@@ -1756,6 +1756,21 @@ fn tab_reaches_an_empty_button_as_a_browser_does() {
 }
 
 #[test]
+fn an_inline_block_without_text_sits_on_the_baseline_of_its_line() {
+    // A 96px avatar button in a block with a 16px/24px strut: the line adds the strut's
+    // descent below it, so the block is 102px tall, as in Chromium.
+    let zone = e(
+        "div",
+        json!({}),
+        vec![e("button", json!({ "w": 96, "h": 96 }), vec![])],
+    );
+    let after = e("p", json!({ "h": 16 }), vec![t("Click or drop image")]);
+    let rt = runtime(e("div", json!({}), vec![zone, after]), (300.0, 300.0));
+    let [_, y, _, _] = rect(&rt, "r/1");
+    assert!((y - 102.2).abs() < 0.5, "the text below starts at {y}");
+}
+
+#[test]
 fn the_document_scrolls_when_it_is_taller_than_the_window() {
     let page = e(
         "div",

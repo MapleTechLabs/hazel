@@ -988,6 +988,20 @@ fn add_children(
         if let Some(b) = build(child, &child_path, inh, ctx) {
             let b = match style_of(child) {
                 Some(st)
+                    if parent.block && is_atomic_inline(child, st) && st.absolute.is_none() =>
+                {
+                    let [mt, _, mb, _] = st.margin.map_or([0.0; 4], |m| m.map(|v| v.0));
+                    let (top, bottom) = line_box_space(child, st, inh);
+                    if top > 0.0 || bottom > 0.0 {
+                        b.mt(mt + top).mb(mb + bottom)
+                    } else {
+                        b
+                    }
+                }
+                _ => b,
+            };
+            let b = match style_of(child) {
+                Some(st)
                     if parent.block
                         && st.inline == Some(true)
                         && st.absolute.is_none()
@@ -1018,6 +1032,73 @@ fn add_children(
         }
     }
     e
+}
+
+/// Inter's ascent and descent, in ems: where a line's baseline sits in its content area.
+const ASCENT: f32 = 0.969;
+const DESCENT: f32 = 0.242;
+
+/// Space a CSS line box adds above and below an atomic inline child (`inline-block`) of a
+/// block: the child sits on the baseline of a line at least as tall as the parent's strut. A
+/// child with no text has its baseline at its bottom edge, so the strut's descent shows below
+/// it. A text child aligns its first line's baseline (one line assumed). Others: none.
+fn line_box_space(node: &Node, st: &Style, inh: Inherit) -> (f32, f32) {
+    let metrics = |size: f32, line: f32| {
+        let half_leading = (line - (ASCENT + DESCENT) * size) / 2.0;
+        (half_leading + ASCENT * size, half_leading + DESCENT * size)
+    };
+    let (strut_above, strut_below) = metrics(inh.size, inh.line);
+    let edge = |side: usize| {
+        [st.margin, st.border, st.pad]
+            .iter()
+            .map(|b| b.map_or(0.0, |b| b[side].0))
+            .sum::<f32>()
+    };
+    let (above, below) = if has_text(node) {
+        if st.h.is_some() {
+            return (0.0, 0.0);
+        }
+        let own = inh.from(st);
+        let (a, b) = metrics(own.size, own.line);
+        (edge(0) + a, edge(2) + b)
+    } else {
+        let Some(wire::Len::Px(h)) = st.h else {
+            return (0.0, 0.0);
+        };
+        let [mt, _, mb, _] = st.margin.map_or([0.0; 4], |m| m.map(|v| v.0));
+        (mt + h.0 + mb, 0.0)
+    };
+    (
+        (strut_above - above).max(0.0),
+        (strut_below - below).max(0.0),
+    )
+}
+
+/// An `inline-block`-like box: `inline-flex`/`inline-block`, or a control a browser draws so.
+fn is_atomic_inline(node: &Node, st: &Style) -> bool {
+    match (st.inline, st.display.as_deref(), node) {
+        (Some(inline), _, _) => inline,
+        (None, None, Node::Elem { tag, .. }) => {
+            matches!(
+                tag.as_str(),
+                "button" | "img" | "input" | "select" | "textarea"
+            )
+        }
+        _ => false,
+    }
+}
+
+/// Whether text flows inside the node (not in an absolutely placed descendant).
+fn has_text(node: &Node) -> bool {
+    match node {
+        Node::Text(t) => !t.trim().is_empty(),
+        Node::Svg { .. } => false,
+        Node::Elem { st, children, .. } => {
+            st.display.as_deref() != Some("none")
+                && st.absolute.is_none()
+                && children.iter().any(|c| has_text(c))
+        }
+    }
 }
 
 /// The size a picture rasterizes for: its own width or height, else a generous default.
