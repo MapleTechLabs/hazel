@@ -496,6 +496,16 @@ pub fn focus_styles(mut e: El, st: &Style, field: bool) -> El {
 /// Elements HTML puts in the Tab order (or `tabindex` adds), unless disabled. A negative
 /// `tabindex` takes them out: in Rune a focusable element keeps the presses on it, where a
 /// browser lets the click bubble, and the host has no script focus that would need it.
+/// `tabindex="-1"`: focusable by script (`element.focus()`, a menu moving its highlight) and
+/// by a press, but no Tab stop.
+pub fn script_focusable(attrs: &HashMap<String, String>) -> bool {
+    !attrs.contains_key("disabled")
+        && attrs
+            .get("tabindex")
+            .and_then(|t| t.trim().parse::<i32>().ok())
+            .is_some_and(|order| order < 0)
+}
+
 pub fn focusable(tag: &str, attrs: &HashMap<String, String>) -> Option<i32> {
     if attrs.contains_key("disabled") {
         return None;

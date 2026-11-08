@@ -13,6 +13,7 @@ const HOST_MESSAGE_TAGS = {
 	dismiss: true,
 	pointer: true,
 	contextmenu: true,
+	key: true,
 } satisfies Record<HostToRuntime["t"], true>
 const HOST_TAGS = new Set<string>(Object.keys(HOST_MESSAGE_TAGS))
 

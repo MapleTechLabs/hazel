@@ -42,6 +42,8 @@ export type HostToRuntime =
 			/** The generation of the tree the event was pressed on. */
 			readonly gen?: number
 			readonly value?: string
+			/** For a keydown: the handlers of the elements around the target, innermost first. */
+			readonly chain?: ReadonlyArray<number>
 			/** A click on a link: its `href`, followed unless the handler calls `preventDefault()`. */
 			readonly href?: string
 			readonly key?: string
@@ -60,6 +62,15 @@ export type HostToRuntime =
 			readonly h: number
 	  }
 	| { readonly t: "scrolled"; readonly path: string; readonly top: number }
+	/** A key nothing focused handled: a keydown on `document`, where shortcuts listen. */
+	| {
+			readonly t: "key"
+			readonly key: string
+			readonly shift?: boolean
+			readonly meta?: boolean
+			readonly ctrl?: boolean
+			readonly alt?: boolean
+	  }
 	/** A press outside a modal overlay, or Escape in it: the overlay at `path` should close. */
 	| { readonly t: "dismiss"; readonly path: string }
 	/**

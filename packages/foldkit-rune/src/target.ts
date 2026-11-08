@@ -10,6 +10,34 @@ import type { CommitStats, HostToRuntime, RuntimeToHost, WireNode } from "./wire
 /** What the `Dom` helpers ask of a target (`Dom.focus`, `Dom.scrollIntoView`, ...). */
 type TargetDomEffects = NonNullable<RenderTarget["dom"]>
 
+/**
+ * A keydown on `document` (where an app's shortcuts listen), as the browser dispatches one that
+ * bubbled up or that nothing focused took. Whether a listener prevented its default.
+ */
+const dispatchDocumentKey = (key: {
+	readonly key?: string
+	readonly shift?: boolean
+	readonly meta?: boolean
+	readonly ctrl?: boolean
+	readonly alt?: boolean
+}): boolean => {
+	const target: EventTarget | undefined = globalThis.document
+	if (target === undefined || key.key === undefined) return false
+	const KeyboardEventClass: new (type: string, init?: KeyboardEventInit) => Event =
+		globalThis.KeyboardEvent ?? Event
+	const event = new KeyboardEventClass("keydown", {
+		key: key.key,
+		shiftKey: key.shift ?? false,
+		metaKey: key.meta ?? false,
+		ctrlKey: key.ctrl ?? false,
+		altKey: key.alt ?? false,
+		bubbles: true,
+		cancelable: true,
+	})
+	target.dispatchEvent(event)
+	return event.defaultPrevented
+}
+
 const fakeEvent = (event: Extract<HostToRuntime, { t: "event" }>) => {
 	const eventTarget = { value: event.value ?? "", scrollTop: 0, open: false, files: [] }
 	return {
@@ -26,10 +54,13 @@ const fakeEvent = (event: Extract<HostToRuntime, { t: "event" }>) => {
 		pointerType: "mouse",
 		timeStamp: performance.now(),
 		defaultPrevented: false,
+		propagationStopped: false,
 		preventDefault() {
 			this.defaultPrevented = true
 		},
-		stopPropagation() {},
+		stopPropagation() {
+			this.propagationStopped = true
+		},
 	}
 }
 
@@ -809,6 +840,11 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			options.bridge?.dispatchPointer(message)
 			return
 		}
+		if (message.t === "key") {
+			const prevented = dispatchDocumentKey(message)
+			if (message.key === "Escape" && !prevented) options.overlays?.dismissTopmost()
+			return
+		}
 		if (message.t === "contextmenu") {
 			options.bridge?.dispatchContextMenu(message)
 			return
@@ -832,6 +868,20 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		const handler = presented?.get(message.id)
 		const event = fakeEvent(message)
 		handler?.(event)
+		// A keydown bubbles through the handlers around its target, then to `document`, then takes
+		// its default action.
+		for (const id of message.chain ?? []) {
+			if (event.propagationStopped) break
+			presented?.get(id)?.(event)
+		}
+		if (message.type === "keydown" && !event.propagationStopped && dispatchDocumentKey(message))
+			event.preventDefault()
+		if (message.type === "keydown" && process.env.NATIVE_DEBUG)
+			process.stderr.write(
+				`[key] ${message.key} ${[message.id, ...(message.chain ?? [])].join(">")} prevented=${event.defaultPrevented}\n`,
+			)
+		if (message.type === "keydown" && message.key === "Escape" && !event.defaultPrevented)
+			options.overlays?.dismissTopmost()
 		// A click on a link carries its `href`: the browser follows it unless the handler prevented that.
 		if (message.type === "click" && message.href !== undefined && !event.defaultPrevented)
 			options.onLink?.(message.href)

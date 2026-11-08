@@ -116,6 +116,16 @@ export const makeOverlays = () => {
 			return () => listeners.delete(listener)
 		},
 		dismissed: (path: string) => dismissListeners.get(path)?.forEach((listener) => listener()),
+		/**
+		 * Escape's default action, when no keydown handler prevented it: the topmost modal overlay
+		 * that listens for dismissal is dismissed. Whether there was one.
+		 */
+		dismissTopmost: (): boolean => {
+			const top = [...modals].reverse().find((path) => (dismissListeners.get(path)?.size ?? 0) > 0)
+			if (top === undefined) return false
+			dismissListeners.get(top)?.forEach((listener) => listener())
+			return true
+		},
 		/** Something changed what the host must draw: the screen needs a new commit. */
 		onChange: (listener: () => void) => changeListeners.add(listener),
 		/**

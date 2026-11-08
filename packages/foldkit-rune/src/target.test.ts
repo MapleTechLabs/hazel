@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect"
+import { Effect, Option, Schema } from "effect"
 import { Command, Runtime } from "foldkit"
 import * as Dom from "foldkit/dom"
 import type { Html, HtmlBuilder } from "foldkit/html"
@@ -127,6 +127,66 @@ describe("makeRuneTarget", () => {
 		overlays.dismissed("r/1")
 		await settle()
 		expect(shows("cancelled")).toBe(true)
+		handle.dispose()
+	})
+
+	it("bubbles a keydown through its chain, and Escape not prevented dismisses the topmost modal", async () => {
+		const Keys = defineMessageUnion({ Inner: { key: Schema.String }, Outer: { key: Schema.String } })
+		const sent: Array<RuntimeToHost> = []
+		const overlays = makeOverlays()
+		const rune = makeRuneTarget({
+			styles,
+			overlays,
+			env: { width: 800, height: 600, dark: false },
+			send: (m) => sent.push(m),
+		})
+		const seen: Array<string> = []
+		const handle = Runtime.embed(
+			Runtime.makeElement({
+				Model: Schema.Struct({ n: Schema.Number }),
+				init: () => ({ model: { n: 0 } }),
+				update: (model, message: typeof Keys.Type) => {
+					seen.push(`${message._tag} ${message.key}`)
+					return { model: { n: model.n + 1 } }
+				},
+				view: (_model, h) =>
+					h.div(
+						[h.OnKeyDown((key) => Keys.Outer({ key }))],
+						[
+							h.div(
+								[
+									// Handles arrows itself (preventDefault); Escape is left to the overlay.
+									h.OnKeyDownPreventDefault((key) =>
+										key === "Escape" ? Option.none() : Option.some(Keys.Inner({ key })),
+									),
+								],
+								["menu"],
+							),
+						],
+					),
+				renderTarget: rune.target,
+			}),
+		)
+		await settle()
+		const tree = sent.filter((m): m is Extract<RuntimeToHost, { t: "tree" }> => m.t === "tree").at(-1)!
+		const [outer, inner] = elements(tree.root)
+		let dismissed = 0
+		overlays.modal("r")
+		overlays.onDismiss("r", () => dismissed++)
+		const key = (name: string) =>
+			rune.handleHostMessage({
+				t: "event",
+				seq: 1,
+				id: inner!.on.keydown!,
+				chain: [outer!.on.keydown!],
+				type: "keydown",
+				key: name,
+			})
+		key("ArrowDown")
+		key("Escape")
+		await settle()
+		expect(seen).toEqual(["Inner ArrowDown", "Outer ArrowDown", "Outer Escape"])
+		expect(dismissed).toBe(1)
 		handle.dispose()
 	})
 

@@ -23,7 +23,7 @@ use serde_json::json;
 
 use layout::{
     Inherit, apply_box, apply_flex, auto_margins, center_vertically, color, focus_styles,
-    focusable, grid_track, text_run,
+    focusable, grid_track, script_focusable, text_run,
 };
 use wire::{Node, RuntimeMsg, Style, Subtrees, TreeMsg};
 
@@ -85,15 +85,44 @@ fn dom_key(key: &rune::edit::Key) -> Option<&'static str> {
         Key::End => "End",
         Key::PageUp => "PageUp",
         Key::PageDown => "PageDown",
+        Key::Left => "ArrowLeft",
+        Key::Right => "ArrowRight",
+        Key::Backspace => "Backspace",
+        Key::Delete => "Delete",
         _ => return None,
     })
 }
 
-fn send_key(id: u32, key: &str, mods: rune::edit::Mods) -> u64 {
+/// A key's DOM `key` as an element's keydown hears it: a named key, or the character typed
+/// (type-to-select in a menu, a shortcut's letter).
+fn element_key_name(key: &rune::edit::Key) -> Option<String> {
+    match key {
+        rune::edit::Key::Text(t) => Some(t.clone()),
+        key => dom_key(key).map(str::to_string),
+    }
+}
+
+/// A key nothing focused took: it reaches `document`, where an app's shortcuts listen.
+pub(crate) fn window_key(_: &mut State, ev: &rune::edit::KeyEvent, _: &mut rune::Tx) -> bool {
+    if let Some(name) = element_key_name(&ev.key) {
+        send_document_key(&name, ev.mods);
+    }
+    false
+}
+
+fn send_document_key(name: &str, m: rune::edit::Mods) {
+    write_line(
+        json!({ "t": "key", "key": name, "shift": m.shift, "meta": m.cmd, "ctrl": m.ctrl, "alt": m.alt }),
+    );
+}
+
+/// One keydown, dispatched by the runtime as the DOM does: to each handler of `chain` (the
+/// focused element's, then those around it) until one stops it, then its default action.
+fn send_key(chain: &[u32], key: &str, mods: rune::edit::Mods) -> u64 {
     let seq = SEQ.fetch_add(1, Ordering::SeqCst) + 1;
     write_line(json!({
-        "t": "event", "seq": seq, "gen": GEN.load(Ordering::SeqCst), "id": id, "type": "keydown", "key": key,
-        "shift": mods.shift, "meta": mods.cmd, "ctrl": mods.ctrl, "alt": mods.alt,
+        "t": "event", "seq": seq, "gen": GEN.load(Ordering::SeqCst), "id": chain[0], "chain": &chain[1..],
+        "type": "keydown", "key": key, "shift": mods.shift, "meta": mods.cmd, "ctrl": mods.ctrl, "alt": mods.alt,
     }));
     seq
 }
@@ -144,17 +173,16 @@ fn key_and_hover_handlers(
     path: &str,
     attrs: &HashMap<String, String>,
     on: &HashMap<String, u32>,
+    outer: &[u32],
 ) -> El {
     if let Some(&id) = on.get("keydown") {
+        let chain: Vec<u32> = std::iter::once(id).chain(outer.iter().copied()).collect();
         e = e.on_key(move |_: &mut State, ev: &rune::edit::KeyEvent, _| {
-            let name = match &ev.key {
-                rune::edit::Key::Text(t) if t == " " => " ",
-                key => match dom_key(key) {
-                    Some("Tab") | None => return false,
-                    Some(name) => name,
-                },
+            // Tab stays focus navigation; every other key is the element's keydown.
+            let Some(name) = element_key_name(&ev.key).filter(|n| n != "Tab") else {
+                return false;
             };
-            send_key(id, name, ev.mods);
+            send_key(&chain, &name, ev.mods);
             true
         });
     }
@@ -565,7 +593,13 @@ fn build_elem(
             });
         }
     }
-    behaviour(e, path, tag, attrs, on, st)
+    // `ctx.keys` starts with this element's own keydown when it has one.
+    let outer = if on.contains_key("keydown") {
+        &ctx.keys[1..]
+    } else {
+        ctx.keys
+    };
+    behaviour(e, path, tag, attrs, on, st, outer)
 }
 
 /// What every element takes from its attributes and handlers beyond presses: a Tab stop, keys,
@@ -577,11 +611,14 @@ fn behaviour(
     attrs: &HashMap<String, String>,
     on: &HashMap<String, u32>,
     st: &Style,
+    outer: &[u32],
 ) -> El {
     if let Some(order) = focusable(tag, attrs) {
         e = e.focusable(true).tab_index(order);
+    } else if script_focusable(attrs) {
+        e = e.focusable_by_script();
     }
-    focus_styles(key_and_hover_handlers(e, path, attrs, on), st, false)
+    focus_styles(key_and_hover_handlers(e, path, attrs, on, outer), st, false)
 }
 
 fn is_inline(node: &Arc<Node>) -> bool {
@@ -889,7 +926,7 @@ fn build_grid(
                 };
                 let e = build_grid(&inner, cols, path, inh.from(cst), ctx, &sub).key(path);
                 let e = press_handlers(apply_box(e, cst), on, link_href(tag, attrs));
-                Some(behaviour(e, path, tag, attrs, on, cst).grid_column_full())
+                Some(behaviour(e, path, tag, attrs, on, cst, ctx.keys).grid_column_full())
             }
             Node::Elem { st: cst, .. } if cst.col_span_full == Some(true) => {
                 build(child, path, inh, ctx).map(El::grid_column_full)
@@ -990,9 +1027,13 @@ fn build_input(
             use rune::edit::Key;
             // The field's own handler, then the elements around it as the key bubbles.
             let name = dom_key(&ev.key);
-            if let Some(name) = name {
-                for id in keydown.iter().chain(&outer) {
-                    send_key(*id, name, ev.mods);
+            let chain: Vec<u32> = keydown.iter().chain(&outer).copied().collect();
+            if let Some(name) = name.filter(|_| !chain.is_empty()) {
+                send_key(&chain, name, ev.mods);
+            } else if ev.mods.cmd || ev.mods.ctrl || ev.key == Key::Escape {
+                // No handler around the field: a shortcut or Escape still reaches `document`.
+                if let Some(name) = element_key_name(&ev.key) {
+                    send_document_key(&name, ev.mods);
                 }
             }
             // A field with its own handler (a combo box) claims what a listbox prevents; Escape
@@ -1021,7 +1062,12 @@ fn build_input(
     } else {
         row().items_start()
     };
-    focus_styles(apply_box(wrapper.key(path), st), st, true).child(field)
+    focus_styles(
+        focus_field_on_press(apply_box(wrapper.key(path), st), path),
+        st,
+        true,
+    )
+    .child(field)
 }
 
 /// An element a runtime Mount observes: report its layout, and its offset when it scrolls.
@@ -1104,7 +1150,21 @@ fn build_editable(
         .child(field),
         None => field,
     };
-    apply_box(row().items_center().key(path), st).child(field)
+    focus_field_on_press(apply_box(row().items_center().key(path), st), path).child(field)
+}
+
+/// A press anywhere on a text field's box (its padding, a composer's empty lines) puts the caret
+/// in it, as clicking a padded `<input>` or editor does in a browser.
+fn focus_field_on_press(e: El, path: &str) -> El {
+    let field = format!("{path}/field");
+    e.cursor(Cursor::Text)
+        .on_press_tx(move |_: &mut State, tx| tx.focus(field.clone()))
+}
+
+/// A DOM element appears and vanishes at once; one fades only when its CSS says so (`Style`'s
+/// `transition` and `animation`), where Rune would fade every element in and out.
+pub(crate) fn dom_motion() {
+    rune::set_default_transition(rune::Transition::none());
 }
 
 fn report_env(s: &mut State, rect: [f32; 4]) {
@@ -1258,6 +1318,7 @@ fn initial_state() -> State {
 }
 
 fn main() {
+    dom_motion();
     let args: Vec<String> = std::env::args().collect();
     if let Some(at) = args.iter().position(|a| a == "--capture") {
         let script = args.get(at + 1).expect("--capture <script.json>");
@@ -1276,6 +1337,7 @@ fn main() {
     let spec = AppSpec {
         setup: Some(|_: &mut State, waker| images::set_waker(waker)),
         poll: Some(poll),
+        on_key: Some(window_key),
         ..AppSpec::new("Hazel", window_size(), State::default, view)
     };
     let app = App::new(spec).init(move || initial);

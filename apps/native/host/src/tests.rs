@@ -38,7 +38,9 @@ fn state(root: Value) -> State {
 }
 
 fn runtime(root: Value, size: (f32, f32)) -> Runtime<State> {
+    crate::dom_motion();
     let mut rt = Runtime::new(state(root), view, size, Env::new(false, 1.0));
+    rt.on_key = Some(crate::window_key);
     rt.frame(0.0);
     rt.settle_all();
     rt.frame(0.0);
@@ -659,9 +661,11 @@ fn a_fields_keys_bubble_to_the_keydown_handlers_around_it() {
         "r/0/0/field",
         &[Key::Text("g".into()), Key::Escape, Key::Text("h".into())],
     );
-    let keys = |id| -> Vec<Value> { sent_events(id).iter().map(|e| e["key"].clone()).collect() };
-    assert_eq!(keys(4301), vec![json!("Escape")]);
-    assert_eq!(keys(4302), vec![json!("Escape")]);
+    // One keydown for the field's chain: the runtime runs each handler as the DOM bubbles it.
+    let sent = sent_events(4301);
+    let keys: Vec<Value> = sent.iter().map(|e| e["key"].clone()).collect();
+    assert_eq!(keys, vec![json!("Escape")]);
+    assert_eq!(sent[0]["chain"], json!([4302]));
     assert_eq!(
         field_text(&rt, "r/0/0"),
         "gh",
@@ -1509,4 +1513,40 @@ fn a_flex_1_body_in_an_overlay_column_takes_its_contents_height() {
     let rt = runtime(e("div", json!({}), vec![portal]), (300.0, 300.0));
     // In CSS a 0% basis in a column of indefinite height is content-sized; it must not collapse.
     assert_eq!(rect(&rt, "r/0/0/0")[3], 40.0);
+}
+
+#[test]
+fn elements_appear_and_vanish_at_once_as_in_the_dom() {
+    let tree = |children: Vec<Value>| -> TreeMsg {
+        serde_json::from_value(json!({
+            "ack": 1, "page": { "bg": "#ffffffff" },
+            "root": e("div", json!({ "w": 200, "h": 100 }), children),
+        }))
+        .expect("wire tree")
+    };
+    let mut rt = runtime(
+        e("div", json!({ "w": 200, "h": 100 }), vec![]),
+        (200.0, 100.0),
+    );
+    let shown = |rt: &Runtime<State>, text: &str| {
+        rt.elements()
+            .iter()
+            .any(|e| e.text.as_deref() == Some(text) && !e.exiting && e.opacity > 0.99)
+    };
+    let next = tree(vec![e("span", json!({}), vec![t("Toolbar")])]);
+    rt.update(move |s, _| s.apply(next));
+    rt.frame(0.016);
+    assert!(
+        shown(&rt, "Toolbar"),
+        "an inserted element shows in full on its first frame"
+    );
+    let next = tree(vec![]);
+    rt.update(move |s, _| s.apply(next));
+    rt.frame(0.016);
+    assert!(
+        !rt.elements()
+            .iter()
+            .any(|e| e.text.as_deref() == Some("Toolbar")),
+        "a removed element is gone on the next frame"
+    );
 }
