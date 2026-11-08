@@ -465,9 +465,12 @@ for (const route of ROUTES.filter((r) => routeFilter === undefined || r.includes
 		const at = compared.findIndex((w, i) => {
 			const n = nativeOrder.focused.get(`tab ${i}`) ?? null
 			if (w === null || n === null) return (w === null) !== (n === null)
+			// The same named control (a visually hidden radio sits where its box puts it), or one
+			// at the same place.
+			const named = w.label !== "" && (n.label ?? n.text) === w.label
 			const [x, y, width, height] = n.rect
 			const near = Math.abs(x + width / 2 - w.x) <= 12 && Math.abs(y + height / 2 - w.y) <= 12
-			return !near
+			return !named && !near
 		})
 		if (at !== -1) {
 			const w = webOrder[at]
