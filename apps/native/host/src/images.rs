@@ -72,12 +72,13 @@ impl Images {
         } else if src.starts_with("http://") || src.starts_with("https://") {
             remote(src, size_pt)?
         } else {
-            // A path, else one relative to the app's public assets (`HAZEL_ASSET_ROOT`).
+            // A path, else one relative to the app's public assets (`HAZEL_ASSET_ROOT`, or the bundle's).
             let path = std::path::PathBuf::from(src.strip_prefix("file://").unwrap_or(src));
-            let path = match std::env::var("HAZEL_ASSET_ROOT") {
-                Ok(root) if !path.exists() => {
-                    std::path::Path::new(&root).join(src.trim_start_matches('/'))
-                }
+            let root = std::env::var_os("HAZEL_ASSET_ROOT")
+                .map(std::path::PathBuf::from)
+                .or_else(crate::platform::bundled_assets);
+            let path = match root {
+                Some(root) if !path.exists() => root.join(src.trim_start_matches('/')),
                 _ => path,
             };
             if !path.is_file() {

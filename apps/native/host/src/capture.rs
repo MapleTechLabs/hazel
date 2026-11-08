@@ -918,13 +918,13 @@ pub fn run(script_path: &str) {
         }
         Err(_) => println!("{}", serde_json::to_string_pretty(&out).unwrap()),
     }
-    let _ = child.kill();
+    child.kill();
 }
 
 /// A script step that cannot complete fails the run, so a benchmark never reports a partial one.
-fn fail(child: &mut std::process::Child, message: &str) -> ! {
+fn fail(child: &mut crate::RuntimeChild, message: &str) -> ! {
     eprintln!("[capture] {message}");
-    let _ = child.kill();
+    child.kill();
     std::process::exit(1)
 }
 

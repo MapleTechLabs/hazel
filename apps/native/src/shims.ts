@@ -12,6 +12,11 @@ export type ShimEnv = {
 	url: string
 	/** Opens a link outside the app. @default the system browser or mail app */
 	openUrl?: (href: string) => void
+	/**
+	 * A full page load on the app's own origin (`location.assign`, `reload()`), as a browser
+	 * reboots the page. @default the in-memory history moves, the app keeps running
+	 */
+	loadDocument?: (href: string) => void
 }
 
 class MemoryStorage {
@@ -236,12 +241,13 @@ export const installShims = (env: ShimEnv) => {
 		},
 		assign: (next: string) => navigate(next, "push"),
 		replace: (next: string) => navigate(next, "replace"),
-		reload: () => {},
+		reload: () => env.loadDocument?.(url.href),
 	}
-	/** In-app paths move the in-memory history; another origin opens in the system browser. */
+	/** In-app paths move the history (or load the page anew); another origin opens in the browser. */
 	const navigate = (next: string | URL, mode: "push" | "replace") => {
 		const target = URL.parse(String(next), url)
 		if (target !== null && target.origin !== url.origin) return openExternal(target, env.openUrl)
+		if (target !== null && env.loadDocument !== undefined) return env.loadDocument(target.href)
 		if (mode === "push") history.pushState(null, "", next)
 		else history.replaceState(null, "", next)
 	}
@@ -416,7 +422,7 @@ export const installShims = (env: ShimEnv) => {
 }
 
 /** Web and mail links open in the user's browser or mail app; any other scheme is dropped. */
-const openExternal = (target: URL, openUrl = systemOpen) => {
+export const openExternal = (target: URL, openUrl = systemOpen) => {
 	if (["http:", "https:", "mailto:"].includes(target.protocol)) openUrl(target.href)
 }
 

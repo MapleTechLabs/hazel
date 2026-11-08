@@ -31,6 +31,25 @@ describe("installShims", () => {
 		expect(region instanceof HTMLElement ? region.dataset.liveAnnouncer : undefined).toBe("true")
 	})
 
+	it("loads the page anew on a full page load when the runtime can, as a browser does", () => {
+		const loaded: Array<string> = []
+		const opened: Array<string> = []
+		const { location } = installShims({
+			width: 800,
+			height: 600,
+			dark: false,
+			url: "http://app.hazel.test/sign-in",
+			openUrl: (href) => opened.push(href),
+			loadDocument: (href) => loaded.push(href),
+		})
+		location.assign("/")
+		location.reload()
+		location.assign("https://example.com/")
+		expect(loaded).toEqual(["http://app.hazel.test/", "http://app.hazel.test/sign-in"])
+		expect(opened).toEqual(["https://example.com/"])
+		expect(location.pathname).toBe("/sign-in")
+	})
+
 	it("keeps in-app navigation in history and opens other origins outside the app", () => {
 		const opened: Array<string> = []
 		const { location } = installShims({

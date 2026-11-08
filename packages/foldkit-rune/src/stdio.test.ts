@@ -27,6 +27,15 @@ describe("host line reader", () => {
 		})
 	})
 
+	it("passes on a link the system opened and a keychain answer", () => {
+		expect(parseHostLine('{"t":"openUrl","url":"com.hazel.native://auth/callback?x=1"}')).toEqual({
+			message: { t: "openUrl", url: "com.hazel.native://auth/callback?x=1" },
+		})
+		expect(parseHostLine('{"t":"vault","id":3,"record":null}')).toEqual({
+			message: { t: "vault", id: 3, record: null },
+		})
+	})
+
 	it("rejects JSON that is not a host message", () => {
 		expect(parseHostLine('{"t":"tree"}')).toEqual({ error: "not a host message" })
 		expect(parseHostLine("null")).toEqual({ error: "not a host message" })

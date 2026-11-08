@@ -3,6 +3,7 @@
 mod capture;
 mod images;
 mod layout;
+mod platform;
 mod svg_text;
 #[cfg(test)]
 mod tests;
@@ -10,7 +11,7 @@ mod wire;
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -53,6 +54,8 @@ static OUT: OnceLock<Mutex<Box<dyn Write + Send>>> = OnceLock::new();
 static SEQ: AtomicU64 = AtomicU64::new(0);
 /// The generation of the tree on screen: an event runs the handler of the tree it was pressed on.
 static GEN: AtomicU64 = AtomicU64::new(0);
+/// The window size and theme last sent, for a runtime that replaces the first.
+static REPORTED: Mutex<Option<(u32, u32, bool)>> = Mutex::new(None);
 static ICONS: Mutex<Option<HashMap<String, &'static Icon>>> = Mutex::new(None);
 
 fn write_line(message: serde_json::Value) {
@@ -1173,6 +1176,7 @@ fn report_env(s: &mut State, rect: [f32; 4]) {
         return;
     }
     s.reported = Some(next);
+    *REPORTED.lock().unwrap() = Some(next);
     write_line(json!({ "t": "env", "width": next.0, "height": next.1, "dark": next.2 }));
 }
 
@@ -1261,32 +1265,107 @@ fn send_dismiss(path: &str) {
     write_line(json!({ "t": "dismiss", "path": path }));
 }
 
-/// Spawns the Bun runtime; its messages arrive on the returned channel.
-fn spawn_runtime() -> (std::process::Child, std::sync::mpsc::Receiver<RuntimeMsg>) {
-    let entry = std::env::var("HAZEL_NATIVE_ENTRY").unwrap_or_else(|_| "src/entry.ts".into());
-    let mut child = Command::new("bun")
-        .arg(&entry)
+/// The runtime process running now; a reload replaces it.
+#[derive(Clone)]
+pub(crate) struct RuntimeChild(Arc<Mutex<Option<std::process::Child>>>);
+
+impl RuntimeChild {
+    pub(crate) fn id(&self) -> u32 {
+        self.0
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map_or(0, std::process::Child::id)
+    }
+
+    pub(crate) fn kill(&mut self) {
+        if let Some(mut child) = self.0.lock().unwrap().take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
+/// Starts a runtime at `path` (`NATIVE_PATH`), writing to it from now on; returns its stdout.
+fn start_runtime(current: &RuntimeChild, path: Option<&str>) -> std::process::ChildStdout {
+    let host = std::env::current_exe().ok();
+    let host_dir = host.as_deref().and_then(std::path::Path::parent);
+    let mut command = platform::runtime_command(host_dir, std::env::var("HAZEL_NATIVE_ENTRY").ok());
+    if let Some(path) = path {
+        command.env("NATIVE_PATH", path);
+    }
+    let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()
-        .expect("spawn bun");
-    let _ = OUT.set(Mutex::new(Box::new(child.stdin.take().unwrap())));
-    let lines = BufReader::new(child.stdout.take().unwrap()).lines();
+        .expect("spawn the runtime");
+    let stdin: Box<dyn Write + Send> = Box::new(child.stdin.take().unwrap());
+    *OUT.get_or_init(|| Mutex::new(Box::new(std::io::sink())))
+        .lock()
+        .unwrap() = stdin;
+    let stdout = child.stdout.take().unwrap();
+    *current.0.lock().unwrap() = Some(child);
+    stdout
+}
+
+/// Spawns the runtime (the bundled one, else Bun); its messages arrive on the returned channel.
+/// A `reload` (a full page load in the app) replaces it with a fresh one at the new path.
+fn spawn_runtime() -> (RuntimeChild, std::sync::mpsc::Receiver<RuntimeMsg>) {
+    let current = RuntimeChild(Arc::new(Mutex::new(None)));
+    let mut stdout = start_runtime(&current, None);
     let (send, receive) = std::sync::mpsc::channel();
+    let mut supervised = current.clone();
     std::thread::spawn(move || {
-        for line in lines.map_while(Result::ok) {
-            match serde_json::from_str::<RuntimeMsg>(&line) {
-                Ok(msg) => {
-                    if send.send(msg).is_err() {
+        loop {
+            let mut reload = None;
+            for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+                match serde_json::from_str::<RuntimeMsg>(&line) {
+                    Ok(RuntimeMsg::Vault { id, op, record }) => answer_vault(id, &op, record),
+                    Ok(RuntimeMsg::Reload { path }) => {
+                        reload = Some(path);
                         break;
                     }
+                    Ok(msg) => {
+                        if send.send(msg).is_err() {
+                            return;
+                        }
+                    }
+                    Err(error) => eprintln!("[host] bad message: {error}"),
                 }
-                Err(error) => eprintln!("[host] bad message: {error}"),
+            }
+            let Some(path) = reload else { return };
+            supervised.kill();
+            stdout = start_runtime(&supervised, Some(&path));
+            // The new runtime starts at the default size: tell it the window's.
+            if let Some((width, height, dark)) = *REPORTED.lock().unwrap() {
+                write_line(json!({ "t": "env", "width": width, "height": height, "dark": dark }));
             }
         }
     });
-    (child, receive)
+    (current, receive)
+}
+
+/// Keychain calls can wait on a permission prompt: each runs off the reader and UI threads.
+fn answer_vault(id: u64, op: &str, record: Option<String>) {
+    let Some(op) = wire::vault_op(op, record) else {
+        write_line(platform::vault_reply(
+            id,
+            Err(format!("unknown vault request {op}")),
+        ));
+        return;
+    };
+    std::thread::spawn(move || {
+        write_line(platform::vault_reply(
+            id,
+            platform::run_vault(platform::VAULT_SERVICE, &op),
+        ));
+    });
+}
+
+/// A link the system opened with the app (the sign-in callback): to the runtime as it came.
+fn open_url(_: &mut State, url: &str, _: &mut rune::Tx) {
+    write_line(platform::open_url_message(url));
 }
 
 /// A downloaded picture landed: rebuild the memoised subtrees that showed its empty box.
@@ -1340,7 +1419,7 @@ fn main() {
         on_key: Some(window_key),
         ..AppSpec::new("Hazel", window_size(), State::default, view)
     };
-    let app = App::new(spec).init(move || initial);
+    let app = App::new(spec).init(move || initial).on_open_url(open_url);
     let handle = app.handle();
     std::thread::spawn(move || {
         for msg in messages.iter() {
@@ -1358,5 +1437,5 @@ fn main() {
         }
     });
     app.run();
-    let _ = child.kill();
+    child.kill();
 }

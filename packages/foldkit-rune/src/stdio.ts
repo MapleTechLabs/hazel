@@ -14,6 +14,8 @@ const HOST_MESSAGE_TAGS = {
 	pointer: true,
 	contextmenu: true,
 	key: true,
+	openUrl: true,
+	vault: true,
 } satisfies Record<HostToRuntime["t"], true>
 const HOST_TAGS = new Set<string>(Object.keys(HOST_MESSAGE_TAGS))
 
