@@ -911,6 +911,12 @@ fn is_inline(node: &Arc<Node>) -> bool {
                     | "mark"
                     | "time"
                     | "br"
+                    | "label"
+                    | "kbd"
+                    | "small"
+                    | "abbr"
+                    | "sub"
+                    | "sup"
             ),
             _ => false,
         },
@@ -1086,7 +1092,7 @@ fn add_children(
             let b = match style_of(child) {
                 Some(st)
                     if parent.block
-                        && st.inline == Some(true)
+                        && (st.inline == Some(true) || is_inline(child))
                         && st.absolute.is_none()
                         && st.w.is_none() =>
                 {

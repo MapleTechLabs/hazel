@@ -1971,6 +1971,35 @@ fn a_lone_span_of_smaller_text_sits_on_its_blocks_baseline() {
 }
 
 #[test]
+fn an_inline_label_in_a_block_is_as_wide_as_its_text() {
+    let block = |align: Value| {
+        e(
+            "div",
+            json!({ "w": 300, "textAlign": align }),
+            vec![e("label", json!({}), vec![t("Organization Name")])],
+        )
+    };
+    let rt = runtime(
+        e(
+            "div",
+            json!({}),
+            vec![block(json!("left")), block(json!("center"))],
+        ),
+        (300.0, 100.0),
+    );
+    let [x, _, w, _] = rect(&rt, "r/0/0");
+    assert!(
+        x == 0.0 && w < 200.0,
+        "the label takes its text's width: {w}"
+    );
+    let [cx, _, cw, _] = rect(&rt, "r/1/0");
+    assert!(
+        (cx + cw / 2.0 - 150.0).abs() < 1.0,
+        "text-align centres the label"
+    );
+}
+
+#[test]
 fn an_inline_flex_child_of_a_block_keeps_its_own_width() {
     let badge = e(
         "span",
