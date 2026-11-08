@@ -1,6 +1,6 @@
 /**
  * Layout and visual conformance: Hazel's native renderer against Chromium on the same Foldkit view.
- *   bun apps/native/bench/conformance/run.ts [--scenario boot|sent|focus|menu|palette|dialog|context|all]
+ *   bun apps/native/bench/conformance/run.ts [--scenario boot|sent|focus|menu|palette|dialog|context|all|routes|route-<name>]
  *     [--theme light|dark|both]
  *     [--check] [--update-thresholds] [--skip-build]
  * Writes out/<scenario>-<theme>/ (report.md, report.json, heatmap.png, crops/) and out/summary.md.
@@ -43,17 +43,36 @@ const option = (name: string, fallback: string) => {
 	return at === -1 ? fallback : (args[at + 1] ?? fallback)
 }
 const SCENARIOS = ["boot", "sent", "focus", "menu", "palette", "dialog", "context"] as const
-type Scenario = (typeof SCENARIOS)[number]
+/** Whole pages as they load: each route's layout and pixels against Chromium's. */
+const ROUTES = new Map<`route-${string}`, string>([
+	["route-files", "/hazel/chat/00000005-0000-4000-8000-000000000001/files"],
+	["route-notifications", "/hazel/notifications"],
+	["route-appearance", "/hazel/my-settings"],
+	["route-profile", "/hazel/my-settings/profile"],
+	["route-notification-settings", "/hazel/my-settings/notifications"],
+	["route-settings", "/hazel/settings"],
+	["route-team", "/hazel/settings/team"],
+	["route-integrations", "/hazel/settings/integrations"],
+	["route-user", "/hazel/profile/00000002-0000-4000-8000-000000000001"],
+])
+type Scenario = (typeof SCENARIOS)[number] | `route-${string}`
+const isRoute = (scenario: Scenario): scenario is `route-${string}` => scenario.startsWith("route-")
+const routeOf = (scenario: Scenario) => (isRoute(scenario) ? ROUTES.get(scenario) : undefined)
 /** Tabs from boot to the logo link, which draws a `focus-visible` outline. */
 const FOCUS_TABS = 1
 type Theme = "light" | "dark"
 const scenarioArg = option("--scenario", "all")
 const themeArg = option("--theme", "both")
+const everyScenario: Array<Scenario> = [...SCENARIOS, ...ROUTES.keys()]
 const scenarios: Array<Scenario> =
-	scenarioArg === "all" ? [...SCENARIOS] : SCENARIOS.filter((scenario) => scenario === scenarioArg)
+	scenarioArg === "all"
+		? everyScenario
+		: scenarioArg === "routes"
+			? [...ROUTES.keys()]
+			: everyScenario.filter((scenario) => scenario === scenarioArg)
 const themes: Array<Theme> =
 	themeArg === "both" ? ["light", "dark"] : themeArg === "light" || themeArg === "dark" ? [themeArg] : []
-if (scenarios.length === 0) throw new Error(`--scenario takes ${SCENARIOS.join(", ")} or all`)
+if (scenarios.length === 0) throw new Error(`--scenario takes ${everyScenario.join(", ")}, all or routes`)
 if (themes.length === 0) throw new Error("--theme takes light, dark or both")
 
 // NATIVE
@@ -71,6 +90,7 @@ interface NativeLayout {
 }
 
 const nativeSteps = (scenario: Scenario, layout: string, snap: string) => {
+	if (isRoute(scenario)) return [{ settle: 2500 }, { wait: 500 }, { exportLayout: layout }, { snap }]
 	const boot = [{ waitText: CONTENT_TEXT }, { settle: scenario === "boot" ? 1500 : 2500 }]
 	const send = [
 		{ focusEditable: null },
@@ -101,18 +121,21 @@ const captureNative = async (scenario: Scenario, theme: Theme, dir: string) => {
 	const snapPath = join(dir, "native.png")
 	const script = join(dir, "native-script.json")
 	writeFileSync(script, JSON.stringify(nativeSteps(scenario, layoutPath, snapPath)))
+	const env = {
+		...process.env,
+		HAZEL_NATIVE_ENTRY: "dist/entry.js",
+		NATIVE_THEME: theme,
+		NATIVE_BENCH_OUT: join(dir, "native-bench.json"),
+		// The page to open: the app's own start page unless the scenario is a route.
+		NATIVE_PATH: routeOf(scenario) ?? process.env.NATIVE_PATH,
+	}
 	// The host binary may be mid-rebuild by someone else, so retry a failed run.
 	for (let attempt = 1; ; attempt++) {
 		rmSync(layoutPath, { force: true })
 		rmSync(snapPath, { force: true })
 		const result = spawnSync(host, ["--capture", script], {
 			cwd: appDir,
-			env: {
-				...process.env,
-				HAZEL_NATIVE_ENTRY: "dist/entry.js",
-				NATIVE_THEME: theme,
-				NATIVE_BENCH_OUT: join(dir, "native-bench.json"),
-			},
+			env,
 			stdio: ["ignore", "ignore", "pipe"],
 			timeout: 120_000,
 		})
@@ -269,8 +292,11 @@ const captureWeb = async (browser: Browser, url: string, scenario: Scenario, the
 				window.__conformanceLastMutation = performance.now()
 			}).observe(document, { subtree: true, childList: true, attributes: true, characterData: true })
 		})
-		await page.goto(url)
-		await page.getByText(CONTENT_TEXT).first().waitFor({ state: "visible", timeout: 30_000 })
+		const route = routeOf(scenario)
+		await page.goto(route === undefined ? url : `${url.replace(/\/$/, "")}${route}`)
+		if (route === undefined)
+			await page.getByText(CONTENT_TEXT).first().waitFor({ state: "visible", timeout: 30_000 })
+		else await page.waitForFunction(() => document.body.innerText.length > 40, null, { timeout: 30_000 })
 		await waitQuiet(page, 1500)
 		if (scenario === "sent") {
 			const composer = page.locator(".ProseMirror").first()
