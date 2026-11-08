@@ -149,11 +149,15 @@ const captureNative = async (scenario: Scenario, theme: Theme, dir: string) => {
 	const layout = JSON.parse(readFileSync(layoutPath, "utf8")) as NativeLayout
 	const parentPath = (path: string) => path.slice(0, path.lastIndexOf("/"))
 	const byPath = new Map<string, number>()
+	const hiddenAt = new Set<number>()
 	const els: Array<El> = []
 	for (const [index, e] of layout.elements.entries()) {
 		byPath.set(e.path, index)
 		const parent = byPath.get(parentPath(e.path)) ?? -1
 		const siblings = parent >= 0 ? (els[parent]?.children ?? []) : []
+		// The host keeps a screen-reader-only control at near-zero opacity: drawn nowhere, with all inside it.
+		const hidden = (e.rect !== null && e.rect.opacity < 0.01) || (parent >= 0 && hiddenAt.has(parent))
+		if (hidden) hiddenAt.add(index)
 		els.push({
 			index,
 			path: e.path,
@@ -163,7 +167,7 @@ const captureNative = async (scenario: Scenario, theme: Theme, dir: string) => {
 			attrs: e.attrs,
 			className: "",
 			rect:
-				e.rect === null || e.rect.opacity <= 0
+				e.rect === null || e.rect.opacity <= 0 || hidden
 					? null
 					: { x: e.rect.x, y: e.rect.y, w: e.rect.w, h: e.rect.h },
 			parent,
@@ -243,10 +247,12 @@ const waitQuiet = async (page: Page, quietMs: number) => {
 /** Runs in the page: every element under #app in document order, svg subtrees excluded. */
 const extractDom = (idAttrs: ReadonlyArray<string>) => {
 	const out: Array<WebRaw> = []
-	const walk = (el: Element, parent: number, childIndex: number, path: string) => {
+	// Screen-reader-only content (`clip-path: inset(50%)`, and all inside it) draws nothing.
+	const walk = (el: Element, parent: number, childIndex: number, path: string, hidden = false) => {
 		const index = out.length
 		const box = el.getBoundingClientRect()
-		const visible = el.checkVisibility({ opacityProperty: true, visibilityProperty: true })
+		const srOnly = hidden || getComputedStyle(el).clipPath.replaceAll(" ", "") === "inset(50%)"
+		const visible = !srOnly && el.checkVisibility({ opacityProperty: true, visibilityProperty: true })
 		const attrs: Record<string, string> = {}
 		for (const attr of el.attributes) {
 			if (attr.name.startsWith("data-") || idAttrs.includes(attr.name)) attrs[attr.name] = attr.value
@@ -269,7 +275,7 @@ const extractDom = (idAttrs: ReadonlyArray<string>) => {
 		let i = 0
 		for (const child of el.children) {
 			if (child.tagName.toLowerCase() === "svg") continue
-			walk(child, index, i, `${path}/${child.tagName.toLowerCase()}:${i}`)
+			walk(child, index, i, `${path}/${child.tagName.toLowerCase()}:${i}`, srOnly)
 			i++
 		}
 	}
