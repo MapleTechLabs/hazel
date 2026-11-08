@@ -665,17 +665,18 @@ fn build_elem(
     // content); Rune's `grow` would pin it to the viewport and leave nothing to scroll.
     let content_sized: Vec<Arc<Node>>;
     let children: &[Arc<Node>] =
-        if st.scroll_y == Some(true) && !children.iter().any(fills_with_scroll) {
+        if st.scroll_y == Some(true) && !children.iter().any(bounds_scroller) {
             content_sized = children.iter().map(size_to_content).collect();
             &content_sized
         } else {
             children
         };
     let kids: Vec<(usize, &Arc<Node>)> = children.iter().enumerate().collect();
-    // CSS bounds a filling inner scroller by its scrolling parent; Rune's scroll content is
-    // unbounded, so the outer one becomes a clipped flex column and only the inner one scrolls.
+    // CSS bounds a filling inner scroller (or a growing box that may shrink to nothing) by its
+    // scrolling parent; Rune's scroll content is unbounded, so the outer one becomes a clipped
+    // flex column and only the inner one scrolls.
     let bounded;
-    let st = if st.scroll_y == Some(true) && children.iter().any(fills_with_scroll) {
+    let st = if st.scroll_y == Some(true) && children.iter().any(bounds_scroller) {
         bounded = Style {
             scroll_y: None,
             clip: Some(true),
@@ -887,6 +888,21 @@ fn drop_grow(node: &Arc<Node>, min_h_too: bool) -> Arc<Node> {
         }),
         _ => node.clone(),
     }
+}
+
+/// A child that keeps a scrolling flex column from overflowing, as CSS flexes it: one that
+/// fills with a scroller, or one that grows and may shrink to nothing (`flex-1 min-h-0`, or
+/// `overflow: hidden`, whose automatic minimum size is zero).
+fn bounds_scroller(node: &Arc<Node>) -> bool {
+    if fills_with_scroll(node) {
+        return true;
+    }
+    let Node::Elem { st, .. } = node.as_ref() else {
+        return false;
+    };
+    st.grow.is_some_and(|g| g.0 > 0.0)
+        && st.shrink.is_none_or(|s| s.0 > 0.0)
+        && (st.min_h == Some(wire::Len::Px(wire::F(0.0))) || st.clip == Some(true))
 }
 
 /// A child that fills its parent (grows, or is full height) and either scrolls itself or holds

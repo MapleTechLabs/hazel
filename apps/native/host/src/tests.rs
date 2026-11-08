@@ -1771,6 +1771,50 @@ fn an_inline_block_without_text_sits_on_the_baseline_of_its_line() {
 }
 
 #[test]
+fn a_full_height_empty_state_leaves_room_for_the_composer() {
+    // The channel page: header, a flex-1 min-h-0 list holding an h-full empty state, composer.
+    // In CSS the list shrinks to what the scrolling column leaves; it must not push the composer out.
+    // The styles the resolver gives the app's classes.
+    let picture = e(
+        "div",
+        json!({ "aspectRatio": 1, "w": "full", "maxW": 384 }),
+        vec![with_attrs(
+            e(
+                "img",
+                json!({ "clip": true, "inline": false, "display": "block", "maxW": "full", "h": "full", "w": "full", "objectFit": "cover", "opacity": 0.5 }),
+                vec![],
+            ),
+            json!({ "src": "/images/squirrle_ocean.webp" }),
+        )],
+    );
+    let empty = e(
+        "div",
+        json!({ "pad": [32, 32, 32, 32], "inline": false, "display": "flex", "w": "full", "h": "full", "dir": "col", "items": "center", "justify": "center" }),
+        vec![picture, e("p", json!({ "h": 28 }), vec![t("Quiet")])],
+    );
+    let list = e(
+        "div",
+        json!({ "inline": false, "display": "flex", "minH": 0, "grow": 1, "shrink": 1, "dir": "col", "clip": true }),
+        vec![empty],
+    );
+    // The column itself scrolls (`overflow-y-auto`), as the split panel's content does.
+    let page = e(
+        "div",
+        json!({ "display": "flex", "dir": "col", "h": 800, "minH": 0, "grow": 1, "scrollY": true }),
+        vec![
+            e("div", json!({ "h": 96 }), vec![]),
+            list,
+            e("div", json!({ "h": 90 }), vec![t("composer")]),
+        ],
+    );
+    let rt = runtime(page, (930.0, 800.0));
+    let [_, _, _, h] = rect(&rt, "r/1");
+    assert_eq!(h, 614.0, "the list takes what header and composer leave");
+    let [_, y, _, _] = rect(&rt, "r/2");
+    assert_eq!(y, 710.0, "the composer stays in the window");
+}
+
+#[test]
 fn the_document_scrolls_when_it_is_taller_than_the_window() {
     let page = e(
         "div",
