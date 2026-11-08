@@ -386,7 +386,8 @@ const nativeRun = (route: string, steps: ReadonlyArray<Record<string, unknown>>,
 			for (const e of elements) {
 				const text = normalize(e.text)
 				const r = e.rect
-				if (text === "" || r === null || r.opacity <= 0 || r.w <= 0 || r.h <= 0) continue
+				// Below 1% opacity draws nothing: the host's mark on a screen-reader-only control.
+				if (text === "" || r === null || r.opacity < 0.01 || r.w <= 0 || r.h <= 0) continue
 				if (r.x + r.w <= 0 || r.y + r.h <= 0 || r.x >= VIEWPORT.width || r.y >= VIEWPORT.height)
 					continue
 				texts.add(text)
