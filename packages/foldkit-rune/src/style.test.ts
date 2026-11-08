@@ -225,6 +225,11 @@ describe("StyleResolver", () => {
 		expect(control.display).not.toBe("none")
 		expect(control).toMatchObject({ w: 1, h: 1, clip: true })
 		expect(control.opacity).toBeGreaterThan(0)
+		// So does the hidden box around a checkbox's or radio's own input.
+		const holdsInput = resolve("sr-only", {
+			extra: { hasDescendant: (match) => match({ tag: "input", classes: [], attrs: { type: "radio" } }) },
+		}).style
+		expect(holdsInput.display).not.toBe("none")
 		expect(
 			resolve("p-2", { extra: { inline: { padding: "5px", "--x": "3px", margin: "var(--x)" } } }).style,
 		).toMatchObject({ pad: [5, 5, 5, 5], margin: [3, 3, 3, 3] })

@@ -863,8 +863,16 @@ pub fn run(script_path: &str) {
                     }
                     out.trim().chars().take(60).collect()
                 };
-                let focused: Vec<_> = els.iter().enumerate().filter(|(_, e)| e.focused)
+                let mut focused: Vec<_> = els.iter().enumerate().filter(|(_, e)| e.focused)
                     .map(|(i, e)| json!({"path": e.path, "role": e.role, "label": e.label, "vis": e.focus_visible, "text": text_under(i), "rect": e.rect})).collect();
+                // A focused 0x0 control is not drawn: report it at its nearest drawn ancestor.
+                if let Some(path) = session.rt.focused_path().filter(|_| focused.is_empty()) {
+                    let around = els
+                        .iter()
+                        .filter(|e| path.starts_with(&format!("{}/", e.path)))
+                        .max_by_key(|e| e.path.len());
+                    focused.push(json!({"path": path, "label": null, "text": "", "rect": around.map(|e| e.rect).unwrap_or_default()}));
+                }
                 let hovered: Vec<_> = els.iter().enumerate().filter(|(_, e)| e.hover > 0.3 && e.visible[2] > 0.0)
                     .map(|(i, e)| json!({"path": e.path, "hover": e.hover, "fill": format!("{:?}", e.fill), "text": text_under(i), "rect": e.rect})).collect();
                 let shown: Vec<_> = probe

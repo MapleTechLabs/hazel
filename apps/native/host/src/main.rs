@@ -24,7 +24,7 @@ use serde_json::json;
 
 use layout::{
     Inherit, apply_box, apply_flex, auto_margins, center_vertically, color, focus_styles,
-    focusable, grid_track, script_focusable, text_run,
+    focusable, grid_track, is_checkable, is_text_field, script_focusable, text_run,
 };
 use wire::{F, Node, RuntimeMsg, Style, Subtrees, TreeMsg};
 
@@ -312,6 +312,22 @@ fn presses(
     on: &HashMap<String, u32>,
     ctx: &Ctx,
 ) -> El {
+    // A press or Space on a checkbox toggles it, and on an unchecked radio checks it: `change`.
+    if is_checkable(tag, attrs)
+        && let Some(&change) = on.get("change")
+    {
+        let checks =
+            attrs.get("type").is_some_and(|t| t == "checkbox") || !attrs.contains_key("checked");
+        let click = on.get("click").copied();
+        return e.cursor(Cursor::Pointer).on_press(move |_: &mut State| {
+            if let Some(id) = click {
+                send(id, "click", None);
+            }
+            if checks {
+                send(change, "change", None);
+            }
+        });
+    }
     if PRESS_EVENTS.iter().any(|k| on.contains_key(*k)) {
         return press_handlers(e, on, link_href(tag, attrs));
     }
@@ -487,7 +503,7 @@ fn sync_fields(node: &Node, path: &str, ack: u64, fields: &mut HashMap<String, F
     else {
         return;
     };
-    if tag == "input" || tag == "textarea" || attrs.contains_key("data-editable") {
+    if is_text_field(tag, attrs) || attrs.contains_key("data-editable") {
         let value = attrs.get("value").cloned().unwrap_or_default();
         let field = fields.entry(path.to_string()).or_insert_with(|| Field {
             edit: TextEdit::new(value.clone()),
@@ -556,7 +572,7 @@ fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
                 return None;
             }
             let inh = inh.from(st);
-            if tag == "input" || tag == "textarea" {
+            if is_text_field(tag, attrs) {
                 return Some(build_input(path, tag, st, attrs, on, inh, ctx));
             }
             if tag == "img" {
@@ -764,6 +780,15 @@ fn build_elem(
         e = e.pixels_fit(image.pixels(), SurfaceFit::Fill)
     }
     e = apply_box(e.key(path), st);
+    // A checkbox or radio is a 13px box unless styled, as a browser draws one; Tab skips a 0x0 one.
+    if is_checkable(tag, attrs) {
+        if st.w.is_none() {
+            e = e.w(13.0);
+        }
+        if st.h.is_none() {
+            e = e.h(13.0);
+        }
+    }
     if let Some(label) = attrs.get("aria-label") {
         e = e.label(label.clone());
     }
@@ -788,10 +813,11 @@ fn behaviour(
     st: &Style,
     outer: &[u32],
 ) -> El {
+    // As in the DOM, a control takes focus with no area (a visually hidden button, an empty list).
     if let Some(order) = focusable(tag, attrs) {
-        e = e.focusable(true).tab_index(order);
+        e = e.focusable(true).tab_index(order).focusable_when_empty();
     } else if script_focusable(attrs) {
-        e = e.focusable_by_script();
+        e = e.focusable_by_script().focusable_when_empty();
     }
     focus_styles(key_and_hover_handlers(e, path, attrs, on, outer), st, false)
 }

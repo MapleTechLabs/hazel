@@ -1688,6 +1688,74 @@ fn a_fixed_panel_inside_a_dialog_stays_above_the_page() {
 }
 
 #[test]
+fn space_on_a_tabbed_unstyled_checkbox_toggles_it_and_a_checked_radio_stays() {
+    sent_lines();
+    // Unstyled, as inside the app's visually hidden wrappers: a browser's 13px box.
+    let mut checkbox = with_attrs(e("input", json!({}), vec![]), json!({ "type": "checkbox" }));
+    checkbox["on"] = json!({ "change": 60 });
+    let mut radio = with_attrs(
+        e("input", json!({ "w": 16, "h": 16 }), vec![]),
+        json!({ "type": "radio", "checked": "" }),
+    );
+    radio["on"] = json!({ "change": 61 });
+    let mut rt = runtime(
+        e("div", json!({ "flex": "col" }), vec![checkbox, radio]),
+        (100.0, 100.0),
+    );
+    let space = |rt: &mut Runtime<State>| {
+        rt.key(KeyEvent {
+            key: Key::Text(" ".into()),
+            mods: Mods::default(),
+        });
+        rt.frame(0.1);
+    };
+    for _ in 0..2 {
+        rt.key(KeyEvent {
+            key: Key::Tab,
+            mods: Mods::default(),
+        });
+        rt.frame(0.1);
+        space(&mut rt);
+    }
+    assert!(
+        rt.state.fields.is_empty(),
+        "a checkbox or radio is no text field"
+    );
+    let changes: Vec<Value> = sent_lines()
+        .into_iter()
+        .filter(|m| m["type"] == "change")
+        .map(|m| m["id"].clone())
+        .collect();
+    assert_eq!(
+        changes,
+        [json!(60)],
+        "the checkbox toggled; the checked radio did not fire"
+    );
+}
+
+#[test]
+fn tab_reaches_an_empty_button_as_a_browser_does() {
+    let first = e("button", json!({ "w": 40, "h": 20 }), vec![]);
+    let hidden = e("button", json!({}), vec![]);
+    let mut rt = runtime(
+        e("div", json!({ "flex": "col" }), vec![first, hidden]),
+        (100.0, 100.0),
+    );
+    for _ in 0..2 {
+        rt.key(KeyEvent {
+            key: Key::Tab,
+            mods: Mods::default(),
+        });
+        rt.frame(0.1);
+    }
+    assert!(
+        rt.focused_path().is_some_and(|p| p.ends_with("r/1")),
+        "the 0x0 button took focus: {:?}",
+        rt.focused_path()
+    );
+}
+
+#[test]
 fn the_document_scrolls_when_it_is_taller_than_the_window() {
     let page = e(
         "div",

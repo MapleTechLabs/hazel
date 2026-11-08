@@ -61,12 +61,13 @@ export type Scope = {
 /** Barely above zero: a screen-reader-only control the host must still let take focus. */
 const SR_ONLY_OPACITY = 0.001
 
-/** Reached by Tab: a control, a link, or `tabindex >= 0`; form fields are the host's own. */
+/** Reached by Tab: a control, a form field, a link, or `tabindex >= 0`. */
 export const isTabStop = (el: { tag?: string; attrs: Readonly<Record<string, string>> }): boolean => {
 	if ("disabled" in el.attrs) return false
 	const tabIndex = el.attrs.tabindex
 	if (tabIndex !== undefined) return Number(tabIndex) >= 0
-	return el.tag === "button" || (el.tag === "a" && "href" in el.attrs)
+	if (el.tag === "input") return el.attrs.type !== "hidden"
+	return ["button", "select", "textarea"].includes(el.tag ?? "") || (el.tag === "a" && "href" in el.attrs)
 }
 
 /** An element as selectors see it: a sibling, a descendant or the element itself. */
@@ -803,10 +804,10 @@ export class StyleResolver {
 		for (const { mode, d } of ordered)
 			if (!TEXT_FIRST.has(d.prop) && d.prop !== "font-size") this.apply(acc, d, mode)
 		this.finish(acc)
-		// A screen-reader-only control stays a Tab stop, as in a browser: kept at its 1px clipped
-		// box, all but transparent (the host skips focus at opacity 0). Other sr-only content goes.
+		// A screen-reader-only control (or a hidden box holding one, as around a checkbox's input)
+		// stays a Tab stop: kept at its 1px clipped box, all but transparent. Other sr-only content goes.
 		if (acc.srOnly) {
-			if (isTabStop(el)) style.opacity = SR_ONLY_OPACITY
+			if (isTabStop(el) || hasDescendant(isTabStop, false)) style.opacity = SR_ONLY_OPACITY
 			else style.display = "none"
 		}
 		const outlineHidden = acc.outline.style !== undefined && style.outline === undefined

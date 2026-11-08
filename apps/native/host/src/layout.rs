@@ -512,12 +512,40 @@ pub fn script_focusable(attrs: &HashMap<String, String>) -> bool {
             .is_some_and(|order| order < 0)
 }
 
+/// A checkbox or radio: a control a press or Space checks, not a text field.
+pub fn is_checkable(tag: &str, attrs: &HashMap<String, String>) -> bool {
+    tag == "input"
+        && attrs
+            .get("type")
+            .is_some_and(|t| t == "checkbox" || t == "radio")
+}
+
+/// An element Rune edits as text: a textarea, or an `<input>` of a typing type.
+pub fn is_text_field(tag: &str, attrs: &HashMap<String, String>) -> bool {
+    tag == "textarea"
+        || (tag == "input"
+            && !attrs.get("type").is_some_and(|t| {
+                matches!(
+                    t.as_str(),
+                    "checkbox"
+                        | "radio"
+                        | "button"
+                        | "submit"
+                        | "reset"
+                        | "image"
+                        | "range"
+                        | "color"
+                )
+            }))
+}
+
 pub fn focusable(tag: &str, attrs: &HashMap<String, String>) -> Option<i32> {
     if attrs.contains_key("disabled") {
         return None;
     }
     let native = matches!(tag, "button" | "select" | "summary")
-        || (tag == "a" && attrs.contains_key("href"));
+        || (tag == "a" && attrs.contains_key("href"))
+        || is_checkable(tag, attrs);
     match attrs
         .get("tabindex")
         .and_then(|t| t.trim().parse::<i32>().ok())

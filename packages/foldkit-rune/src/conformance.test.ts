@@ -258,12 +258,14 @@ type Context = {
 	parentStyle: Style | undefined
 	parentDisplay: string
 	isLastChild: boolean
+	/** The element is a Tab stop or holds one: sr-only, it is kept. */
+	holdsTabStop: boolean
 }
 
-const browserDisplay = (cs: Context["cs"], el: { tag?: string; attrs: Readonly<Record<string, string>> }) => {
+const browserDisplay = (cs: Context["cs"], holdsTabStop: boolean) => {
 	const d = cs("display")
 	// sr-only content is never drawn; a screen-reader-only control stays (a Tab stop).
-	if (cs("clip-path").replace(/\s/g, "") === "inset(50%)" && !isTabStop(el)) return "none"
+	if (cs("clip-path").replace(/\s/g, "") === "inset(50%)" && !holdsTabStop) return "none"
 	if (d === "inline-block" || d === "inline") return "inline"
 	if (["none", "contents", "flex", "inline-flex", "grid", "inline-grid"].includes(d)) return d
 	return "block"
@@ -291,7 +293,7 @@ const expectations = (ctx: Context): Array<Check> => {
 		})
 	const num = (prop: string, browser: number | null, resolver: number, tolerance = 0.5) =>
 		add(prop, browser, resolver, browser !== null && near(browser, resolver, tolerance))
-	const display = browserDisplay(cs, el)
+	const display = browserDisplay(cs, ctx.holdsTabStop)
 	add("display", display, resolverDisplay(st, el.tag))
 	if (display === "none") return checks
 	const flexLike = display.endsWith("flex")
@@ -616,6 +618,7 @@ const runFixture = (styles: StyleResolver, fixture: Fixture) => {
 		out.push({ style, scope: childScope, inh })
 		const cs = (prop: string) => el.cs[prop] ?? fixture.defaults[prop] ?? ""
 		const parentRecord = el.p >= 0 ? elements[el.p] : undefined
+		const holdsTabStop = (at: number) => [at, ...descendants(at)].some((d) => isTabStop(info(d)))
 		const checks = expectations({
 			el,
 			cs,
@@ -625,8 +628,12 @@ const runFixture = (styles: StyleResolver, fixture: Fixture) => {
 			parentDisplay:
 				parentRecord === undefined
 					? "block"
-					: browserDisplay((prop) => parentRecord.cs[prop] ?? fixture.defaults[prop] ?? "", parentRecord),
+					: browserDisplay(
+							(prop) => parentRecord.cs[prop] ?? fixture.defaults[prop] ?? "",
+							holdsTabStop(el.p),
+						),
 			isLastChild: siblings.at(-1) === i,
+			holdsTabStop: holdsTabStop(i),
 		})
 		for (const check of checks) {
 			const count = counts.get(check.prop) ?? { checked: 0, failed: 0 }
