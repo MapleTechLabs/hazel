@@ -1,16 +1,20 @@
-import { desktopClient } from "@hazel/auth/contract"
 import { type DesktopAuth, layerVault, makeDesktopAuth } from "@hazel/auth/desktop"
 import { getTauriCore, getTauriDeepLink, getTauriOpener } from "@hazel/desktop/bridge"
 import { BrowserLogin } from "@yielded/auth"
 import * as WebCrypto from "@yielded/auth/WebCrypto"
 import { Context, Effect, Exit, Layer, ManagedRuntime, Option, Schema, SynchronizedRef } from "effect"
 import { FetchHttpClient } from "effect/http"
+import { desktopClient } from "@hazel/auth/contract"
+import { desktopAuthClient } from "./desktop"
 
 /**
  * Desktop sign-in (`@hazel/auth/desktop`) on Tauri: the session lives in the OS keychain (Rust
  * `auth_vault_*` commands), sign-in opens the system browser at `/auth/desktop`, and the
  * browser hands back through the `com.hazel.app://auth/callback` deep link.
  */
+
+/** The app signing in: the Tauri app's client unless the build names another. */
+const client = desktopAuthClient ?? desktopClient
 
 const unavailable = (reason: "unavailable" | "storage" = "unavailable") =>
 	BrowserLogin.PlatformError.make({ reason })
@@ -34,7 +38,7 @@ const KeychainStore = {
 }
 
 /** Only the registered callback, with exactly its query; anything else is ignored. */
-const isCallback = (url: string) => url.startsWith(`${desktopClient.returnUrl}?`)
+const isCallback = (url: string) => url.startsWith(`${client.returnUrl}?`)
 
 /**
  * Opens the hosted page in the system browser and waits (up to 10 minutes) for the deep
@@ -146,6 +150,7 @@ const DesktopAuthLive = Layer.effect(
 	makeDesktopAuth({
 		apiOrigin: import.meta.env.VITE_BACKEND_URL || "http://localhost:3003",
 		hostedUrl: hostedUrl(),
+		client,
 	}),
 ).pipe(
 	Layer.provide(Layer.mergeAll(BrowserLive, layerVault(KeychainStore), WebCrypto.layer)),

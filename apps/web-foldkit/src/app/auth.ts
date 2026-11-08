@@ -3,7 +3,7 @@ import { closeSync } from "~/db/sync-manager"
 import { clearAccessToken } from "~/lib/access-token"
 import { CommonReason, reasonOfUnknown } from "~/lib/error-messages"
 import { HazelAuthClient } from "../auth/client"
-import { isDesktop } from "../platform/desktop"
+import { desktopAuthClient } from "../platform/desktop"
 import { runDesktopAuth } from "../platform/desktop-auth"
 import type { SessionAnswer } from "./message"
 
@@ -42,7 +42,7 @@ const readBrowserSession = Effect.gen(function* () {
  * not count as signed out: that would send a signed-in user to sign-in.
  */
 export const readSession: Effect.Effect<SessionAnswer, SessionCheckError, HazelAuthClient> = (
-	isDesktop ? readDesktopSession : readBrowserSession
+	desktopAuthClient !== null ? readDesktopSession : readBrowserSession
 ).pipe(
 	Effect.mapError(toSessionCheckError),
 	Effect.tapError((error) => Effect.logWarning("[auth] session check failed", error.reason)),
@@ -56,7 +56,7 @@ export class SignOutError extends Schema.TaggedError<SignOutError>()("SignOutErr
 
 /** Ends the session on the API, closes every sync connection and drops the cached access token. */
 export const signOut: Effect.Effect<void, SignOutError, HazelAuthClient> = Effect.gen(function* () {
-	if (isDesktop) {
+	if (desktopAuthClient !== null) {
 		// Ends only the desktop app's session; the browser it signed in with stays signed in.
 		yield* runDesktopAuth((auth) => auth.signOut)
 	} else {

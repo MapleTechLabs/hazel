@@ -19,6 +19,7 @@ export {
 export {
 	Claims,
 	desktopClient,
+	nativeClient,
 	desktopLogin,
 	HazelAuthApi,
 	nativeHeaders,

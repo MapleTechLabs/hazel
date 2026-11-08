@@ -5,7 +5,7 @@ import { Effect, Layer } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
 
 import { HazelAuth, sessionConfiguration } from "./auth.ts"
-import { desktopClient, desktopLogin, nativeHeaders, nativeSession } from "./contract.ts"
+import { browserLoginClients, desktopLogin, nativeHeaders, nativeSession } from "./contract.ts"
 import type { HazelAuthConfig } from "./server.ts"
 
 /**
@@ -74,7 +74,7 @@ export const makeDesktopLoginRoutes = (config: HazelAuthConfig) => {
 
 	const browserLogin = BrowserLogin.make(HazelAuth.sessions, {
 		basePath: "/auth/browser-login",
-		clients: [desktopClient],
+		clients: browserLoginClients,
 		// The longest allowed: the browser may need a full OAuth sign-in (or registration) first.
 		lifetimeMillis: 300_000,
 	})
@@ -123,5 +123,5 @@ export const makeDesktopLoginRoutes = (config: HazelAuthConfig) => {
 export const cleanupDesktopLogins = (limit: number) =>
 	BrowserLogin.make(HazelAuth.sessions, {
 		basePath: "/auth/browser-login",
-		clients: [desktopClient],
+		clients: browserLoginClients,
 	}).cleanup(limit)

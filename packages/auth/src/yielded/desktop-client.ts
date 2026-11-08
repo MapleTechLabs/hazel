@@ -4,7 +4,13 @@ import type { CredentialSlot } from "@yielded/auth/Operations"
 import { DateTime, Effect, Layer, Redacted, Schema, Semaphore } from "effect"
 import { HttpClient, HttpClientRequest } from "effect/http"
 
-import { desktopClient, desktopLogin, nativeHeaders, nativeSession } from "./contract.ts"
+import {
+	type BrowserLoginClient,
+	desktopClient,
+	desktopLogin,
+	nativeHeaders,
+	nativeSession,
+} from "./contract.ts"
 
 /**
  * The desktop app's side of browser sign-in (browser-safe; no server code): a vault over a
@@ -113,7 +119,10 @@ export const makeDesktopAuth = Effect.fnUntraced(function* (options: {
 	readonly apiOrigin: string
 	/** The web app's handoff page, e.g. `https://app.hazel.sh/auth/desktop`. */
 	readonly hostedUrl: string
+	/** The app signing in, and so the link the browser returns to. @default desktopClient */
+	readonly client?: BrowserLoginClient
 }) {
+	const client = options.client ?? desktopClient
 	const vault = yield* BrowserLogin.Vault
 	const http = yield* nativeHttpClient
 
@@ -134,8 +143,8 @@ export const makeDesktopAuth = Effect.fnUntraced(function* (options: {
 	}).pipe(Effect.provideService(HttpClient.HttpClient, http))
 
 	const login = yield* BrowserLogin.makeClient(desktopLogin, {
-		clientId: desktopClient.clientId,
-		returnUrl: desktopClient.returnUrl,
+		clientId: client.clientId,
+		returnUrl: client.returnUrl,
 		hostedUrl: options.hostedUrl,
 	}).pipe(Effect.provideService(OperationHttpClient.Client, transport))
 
