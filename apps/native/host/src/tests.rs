@@ -1711,3 +1711,48 @@ fn a_file_input_click_opens_an_open_dialog_and_reports_the_picked_file() {
     });
     assert!(reported, "the picked file reaches the runtime");
 }
+
+#[test]
+fn table_cells_line_up_in_columns_across_rows() {
+    let cell = |w: f32, text: &str| e("td", json!({ "w": w }), vec![t(text)]);
+    let row = |cells: Vec<Value>| {
+        e(
+            "tr",
+            json!({ "border": [0, 0, 1, 0], "borderColor": "#ff0000ff" }),
+            cells,
+        )
+    };
+    let mut wide = e("td", json!({}), vec![t("spans both")]);
+    wide["attrs"] = json!({ "colspan": "2" });
+    let table = e(
+        "table",
+        json!({ "w": 300 }),
+        vec![e(
+            "tbody",
+            json!({}),
+            vec![
+                row(vec![cell(40.0, "a"), cell(120.0, "b")]),
+                row(vec![cell(90.0, "c"), cell(20.0, "d")]),
+                row(vec![wide]),
+            ],
+        )],
+    );
+    let rt = runtime(table, (300.0, 200.0));
+    let x = |path: &str| rect(&rt, path)[0];
+    let y = |path: &str| rect(&rt, path)[1];
+    assert!(
+        x("r/0/0/1") >= 90.0,
+        "a row's cells sit side by side, past the widest first cell"
+    );
+    assert_eq!(y("r/0/0/1"), y("r/0/0/0"), "a row's cells share a line");
+    assert_eq!(
+        x("r/0/0/1"),
+        x("r/0/1/1"),
+        "the second column starts at the same x in every row"
+    );
+    assert!(y("r/0/1/0") > y("r/0/0/0"), "rows stack");
+    assert!(
+        rect(&rt, "r/0/2/0")[2] >= 200.0,
+        "a colspan=2 cell spans both columns"
+    );
+}

@@ -26,7 +26,7 @@ use layout::{
     Inherit, apply_box, apply_flex, auto_margins, center_vertically, color, focus_styles,
     focusable, grid_track, script_focusable, text_run,
 };
-use wire::{Node, RuntimeMsg, Style, Subtrees, TreeMsg};
+use wire::{F, Node, RuntimeMsg, Style, Subtrees, TreeMsg};
 
 /// A text field's editor state, owned here because Rune's editor lives in app state.
 struct Field {
@@ -161,6 +161,146 @@ fn send_click(id: u32, href: &str) -> u64 {
         json!({ "t": "event", "seq": seq, "gen": GEN.load(Ordering::SeqCst), "id": id, "type": "click", "href": href }),
     );
     seq
+}
+
+/// A `<table>`: one grid whose columns every row shares, so cells line up as in CSS table
+/// layout. Each row's cells take its background, bottom border and hover (shared across the
+/// row); a cell's `colspan` spans columns. Cells keep their own paths.
+fn build_table<'a>(
+    path: &str,
+    st: &Style,
+    children: &'a [Arc<Node>],
+    inh: Inherit,
+    ctx: &Ctx,
+) -> El {
+    struct Row<'a> {
+        path: String,
+        st: Style,
+        cells: Vec<(String, &'a Arc<Node>)>,
+    }
+    let mut rows: Vec<Row<'a>> = Vec::new();
+    let mut add_row = |row_path: String, row: &'a Arc<Node>, group: Option<&Style>| {
+        let Node::Elem {
+            st: rst, children, ..
+        } = row.as_ref()
+        else {
+            return;
+        };
+        let mut merged = group.cloned().unwrap_or_default();
+        for (field, value) in [
+            (&mut merged.bg, &rst.bg),
+            (&mut merged.hover_bg, &rst.hover_bg),
+        ] {
+            if value.is_some() {
+                *field = value.clone();
+            }
+        }
+        if rst.border.is_some() {
+            merged.border = rst.border;
+            merged.border_color = rst.border_color.clone();
+        }
+        merged.color = rst.color.clone().or(merged.color);
+        let cells = children
+            .iter()
+            .enumerate()
+            .filter(
+                |(_, c)| matches!(c.as_ref(), Node::Elem { tag, .. } if tag == "td" || tag == "th"),
+            )
+            .map(|(i, c)| (child_path(&row_path, i, c), c))
+            .collect();
+        rows.push(Row {
+            path: row_path,
+            st: merged,
+            cells,
+        });
+    };
+    for (i, child) in children.iter().enumerate() {
+        let group_path = child_path(path, i, child);
+        match child.as_ref() {
+            Node::Elem { tag, .. } if tag == "tr" => add_row(group_path, child, None),
+            Node::Elem {
+                tag,
+                st: gst,
+                children: rows_of,
+                ..
+            } if matches!(tag.as_str(), "thead" | "tbody" | "tfoot") => {
+                for (j, row) in rows_of.iter().enumerate() {
+                    add_row(child_path(&group_path, j, row), row, Some(gst));
+                }
+            }
+            _ => {}
+        }
+    }
+    let span = |cell: &Arc<Node>| match cell.as_ref() {
+        Node::Elem { attrs, .. } => attrs
+            .get("colspan")
+            .and_then(|n| n.parse::<u16>().ok())
+            .unwrap_or(1)
+            .max(1),
+        _ => 1,
+    };
+    let columns = rows
+        .iter()
+        .map(|r| {
+            r.cells
+                .iter()
+                .map(|(_, c)| usize::from(span(c)))
+                .sum::<usize>()
+        })
+        .max()
+        .unwrap_or(1);
+    let mut grid = el().grid_columns(vec![rune::GridTrack::Auto; columns]);
+    for row in &rows {
+        let row_inh = inh.from(&row.st);
+        for (cell_path, cell) in &row.cells {
+            let Node::Elem {
+                hash,
+                tag,
+                key,
+                st: cst,
+                attrs,
+                on,
+                observed,
+                ov,
+                children,
+            } = cell.as_ref()
+            else {
+                continue;
+            };
+            let border_bottom = row.st.border.map_or(0.0, |b| b[2].0);
+            let decorated = Style {
+                bg: cst.bg.clone().or_else(|| row.st.bg.clone()),
+                hover_bg: cst.hover_bg.clone().or_else(|| row.st.hover_bg.clone()),
+                hover_share: row.st.hover_bg.as_ref().map(|_| row.path.clone()),
+                border: if cst.border.is_none() && border_bottom > 0.0 {
+                    Some([F(0.0), F(0.0), F(border_bottom), F(0.0)])
+                } else {
+                    cst.border
+                },
+                border_color: cst
+                    .border_color
+                    .clone()
+                    .or_else(|| row.st.border_color.clone()),
+                col_span: Some(span(cell)),
+                ..cst.clone()
+            };
+            let decorated = Arc::new(Node::Elem {
+                hash: format!("{hash}~row"),
+                tag: tag.clone(),
+                key: key.clone(),
+                st: decorated,
+                attrs: attrs.clone(),
+                on: on.clone(),
+                observed: *observed,
+                ov: ov.clone(),
+                children: children.clone(),
+            });
+            if let Some(cell) = build(&decorated, cell_path, row_inh, ctx) {
+                grid = grid.child(cell);
+            }
+        }
+    }
+    apply_box(grid.key(path), st)
 }
 
 /// What a press on the element does: its click handlers, else a link's navigation, else a
@@ -421,6 +561,9 @@ fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
             }
             if tag == "img" {
                 return Some(center_vertically(build_img(path, st, attrs, on, ctx), st));
+            }
+            if tag == "table" && st.display.as_deref() != Some("none") {
+                return Some(build_table(path, st, children, inh, ctx));
             }
             if attrs.contains_key("data-editable") {
                 return Some(build_editable(path, st, attrs, children, inh, ctx));

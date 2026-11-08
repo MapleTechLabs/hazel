@@ -44,6 +44,12 @@ pub struct Style {
     pub inline: Option<bool>,
     pub absolute: Option<[Option<F>; 4]>,
     pub grid_cols: Option<Vec<String>>,
+    /// Host-only: a table row's key, so its cells hover together (`hover_group_shared`).
+    #[serde(skip)]
+    pub hover_share: Option<String>,
+    /// Host-only: a table cell's `colspan`.
+    #[serde(skip)]
+    pub col_span: Option<u16>,
     /// `position: fixed`: drawn at the window's root and placed against the window.
     pub fixed: Option<bool>,
     pub grid_rows: Option<Vec<String>>,

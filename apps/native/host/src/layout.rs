@@ -306,6 +306,12 @@ pub fn apply_box(mut e: El, st: &Style) -> El {
     if let Some(c) = color(&st.hover_bg) {
         e = e.hover(c)
     }
+    if let Some(row) = &st.hover_share {
+        e = e.hover_group_shared(row.as_str())
+    }
+    if let Some(span) = st.col_span.filter(|&n| n > 1) {
+        e = e.grid_column_span(span)
+    }
     let radius = st.radius.map(|r| r.map(|F(v)| v.min(999.0)));
     if let Some(r) = radius {
         e = if r.iter().all(|v| *v == r[0]) {
