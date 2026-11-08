@@ -3,7 +3,7 @@ import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import type { Provider } from "../../../auth/client"
 import { IconExternalLink, IconGitHub, IconGoogle, IconLock, type IconOptions } from "../../../icons"
-import { isDesktop } from "../../../platform/desktop"
+import { desktopAuthClient } from "../../../platform/desktop"
 import { AppRoute, hrefOf } from "../../../route"
 import { button } from "../../../ui/button"
 import { loader } from "../../../ui/loader"
@@ -140,7 +140,7 @@ const desktopChoices = (h: HtmlBuilder<Message>, model: Model): ReadonlyArray<Ht
 ]
 
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, { shared }, h) =>
-	isDesktop
+	desktopAuthClient !== null
 		? authFrame(h, shared.nowMs, desktopChoices(h, model))
 		: authFrame(h, shared.nowMs, [
 				model.mode === "SignIn"

@@ -1,3 +1,4 @@
+import { type BrowserLoginClient, desktopClient } from "@hazel/auth/contract"
 import { isTauri, isTauriMacOS } from "~/lib/tauri"
 
 /**
@@ -5,6 +6,13 @@ import { isTauri, isTauriMacOS } from "~/lib/tauri"
  * may read it like a constant (legacy calls `isTauri()` / `isTauriMacOS()` during render).
  */
 export const isDesktop: boolean = typeof window !== "undefined" && isTauri()
+
+/**
+ * The app this build signs in as through the system browser, keeping its session in the OS
+ * keychain (`desktop-auth.ts`); `null` when it uses the API's cookie. The Rune-native app
+ * replaces this line with its own client (apps/native/src/overlay-plugin.ts).
+ */
+export const desktopAuthClient: BrowserLoginClient | null = isDesktop ? desktopClient : null
 
 /** macOS draws the window controls over the content: headers leave room for them. */
 export const hasDesktopTitlebar: boolean = typeof window !== "undefined" && isTauriMacOS()

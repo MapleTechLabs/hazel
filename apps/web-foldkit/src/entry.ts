@@ -8,7 +8,7 @@ import { Layer } from "effect"
 import { Runtime } from "foldkit"
 import { setSessionBearerProvider } from "~/lib/session-bearer"
 import { initTauri } from "~/lib/tauri"
-import { isDesktop } from "./platform/desktop"
+import { desktopAuthClient } from "./platform/desktop"
 import { desktopSessionBearer } from "./platform/desktop-auth"
 import { Flags, flags, init, Message, Model, subscriptions, update, view } from "./main"
 import { NotificationSinks } from "./app/notification-sinks"
@@ -40,7 +40,7 @@ const startApplication = () =>
 	)
 
 // The desktop app has no API cookie: its requests carry its own session as a bearer.
-if (isDesktop) setSessionBearerProvider(desktopSessionBearer)
+if (desktopAuthClient !== null) setSessionBearerProvider(desktopSessionBearer)
 startApplication()
 installChannelPrefetch()
 // Desktop only: native notification permission (a no-op in the browser).
