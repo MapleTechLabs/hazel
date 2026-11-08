@@ -123,7 +123,7 @@ export const messageToolbarOverlay = (h: H, model: Model): Html => {
 					// Keyed by message: the buttons' Mounts and Submodel boundaries carry the message id.
 					h.keyed("div")(
 						messageId,
-						[h.Class("-m-3 p-3")],
+						[],
 						[
 							h.submodel({
 								slotId: "message-toolbar",

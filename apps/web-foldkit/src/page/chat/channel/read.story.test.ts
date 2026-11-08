@@ -722,6 +722,60 @@ describe("image viewer", () => {
 		expect(Overlays.hoveredMessageIdOf(offToolbar)).toBe(graceMessageId)
 	})
 
+	test("leaving through the toolbar to outside the list hides the toolbar", () => {
+		const onToolbar = [
+			Overlays.Message.PointerEnteredMessage({ messageId: graceMessageId }),
+			Overlays.Message.PointerLeftList(),
+			Overlays.Message.EnteredToolbar(),
+		].reduce((current, next) => Overlays.update(current, next).model, Overlays.init())
+		const left = Overlays.update(onToolbar, Overlays.Message.LeftToolbar())
+		expect(left.model.hover._tag).toBe("HidePending")
+		expect(left.commands?.map((command) => command.name)).toEqual(["WaitForHideToolbar"])
+		const hidden = Overlays.update(
+			left.model,
+			Overlays.Message.CompletedWaitForHideToolbar({ version: left.model.hideVersion }),
+		).model
+		expect(Overlays.hoveredMessageIdOf(hidden)).toBeNull()
+	})
+
+	test("moving from the toolbar back onto a message keeps the toolbar", () => {
+		const onToolbar = [
+			Overlays.Message.PointerEnteredMessage({ messageId: graceMessageId }),
+			Overlays.Message.EnteredToolbar(),
+		].reduce((current, next) => Overlays.update(current, next).model, Overlays.init())
+		// Pointer events order: the toolbar's pointerleave, then the list's pointerover.
+		const left = Overlays.update(onToolbar, Overlays.Message.LeftToolbar()).model
+		const back = Overlays.update(
+			left,
+			Overlays.Message.PointerEnteredMessage({ messageId: graceMessageId }),
+		).model
+		expect(back.hover).toEqual(
+			Overlays.Hover.Shown({ messageId: graceMessageId, isToolbarHovered: false }),
+		)
+		const stale = Overlays.update(
+			back,
+			Overlays.Message.CompletedWaitForHideToolbar({ version: left.hideVersion }),
+		).model
+		expect(Overlays.hoveredMessageIdOf(stale)).toBe(graceMessageId)
+	})
+
+	test("closing the image viewer after the pointer left starts the deferred hide", () => {
+		const opened = [
+			Overlays.Message.PointerEnteredMessage({ messageId: graceMessageId }),
+			Overlays.Message.ClickedAttachmentImage({ messageId: graceMessageId, index: 0 }),
+		].reduce((current, next) => Overlays.update(current, next).model, Overlays.init())
+		const left = Overlays.update(opened, Overlays.Message.PointerLeftList())
+		expect(left.commands ?? []).toEqual([])
+		expect(Overlays.hoveredMessageIdOf(left.model)).toBe(graceMessageId)
+		const closed = Overlays.update(left.model, Overlays.Message.ClosedImageViewer())
+		expect(closed.commands?.map((command) => command.name)).toEqual(["WaitForHideToolbar"])
+		const hidden = Overlays.update(
+			closed.model,
+			Overlays.Message.CompletedWaitForHideToolbar({ version: closed.model.hideVersion }),
+		).model
+		expect(Overlays.hoveredMessageIdOf(hidden)).toBeNull()
+	})
+
 	test("re-entering the hovered message cancels a pending hide; moving within it changes nothing", () => {
 		const entered = Overlays.update(
 			Overlays.init(),

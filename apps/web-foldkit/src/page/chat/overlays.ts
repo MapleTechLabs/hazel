@@ -67,8 +67,10 @@ export const OpenOverlay = defineTaggedUnion({
 export type OpenOverlay = typeof OpenOverlay.Type
 
 /**
- * `MessageHoverProvider`: the message under the pointer. Leaving the list starts a hide delay
- * (`HidePending`) that re-entering the message cancels; the toolbar holds the message while hovered.
+ * `MessageHoverProvider`: the message under the pointer. Leaving it (for a gap, outside the list, or
+ * off the toolbar) starts a hide delay (`HidePending`) that entering a message or the toolbar cancels.
+ * An overlay that needs the toolbar (its menu or emoji picker, the image viewer) holds a pending hide
+ * until it closes, and closing it starts the delay again.
  */
 export const Hover = defineTaggedUnion({
 	None: {},
@@ -115,7 +117,25 @@ export const hoveredMessageIdOf = (model: Model): MessageId | null =>
  * ends the moment the pointer leaves instead of lingering in gaps or through the hide delay.
  */
 export const heldMessageIdOf = (model: Model): MessageId | null =>
-	model.hover._tag === "Shown" && model.hover.isToolbarHovered ? model.hover.messageId : null
+	Hover.match(model.hover, {
+		None: () => null,
+		Shown: ({ messageId, isToolbarHovered }) => (isToolbarHovered ? messageId : null),
+		HidePending: ({ messageId }) => (isToolbarOverlayOpen(model, messageId) ? messageId : null),
+	})
+
+/** The toolbar's own "More actions" menu or emoji picker is open on this message. */
+const isToolbarOverlayOpen = (model: Model, messageId: MessageId): boolean =>
+	(model.open._tag === "MoreMenu" || model.open._tag === "ReactionPicker") &&
+	model.open.messageId === messageId
+
+/**
+ * Whether an open overlay keeps the hovered message's toolbar up while the pointer is elsewhere: the
+ * toolbar's menu and picker render from it, and the viewer is a portal of the list in legacy.
+ */
+const holdsHover = (model: Model): boolean => {
+	const hovered = hoveredMessageIdOf(model)
+	return hovered !== null && (model.open._tag === "ImageViewer" || isToolbarOverlayOpen(model, hovered))
+}
 
 /** The active tooltip as the host renders it. */
 export const activeTooltipOf = (model: Model): TooltipHost.Model => model.tooltip?.tooltip ?? null
@@ -293,53 +313,39 @@ const nextTrigger = (
 			? null
 			: current
 
+/** Starts the hide delay for the hovered message; a holding overlay defers its timer until it closes. */
+const startHide = (model: Model, messageId: MessageId): OverlaysReturn => {
+	const version = model.hideVersion + 1
+	const next = modifyFields(model, {
+		hideVersion: () => version,
+		hover: () => Hover.HidePending({ messageId, version }),
+	})
+	return holdsHover(next) ? { model: next } : { model: next, commands: [WaitForHideToolbar({ version })] }
+}
+
 /** `MessageHoverProvider`'s transitions. */
 const hoverHandlers = (model: Model) => ({
 	// `pointerover` fires for every child entered: within the hovered message only a pending hide changes.
 	PointerEnteredMessage: ({ messageId }: { readonly messageId: MessageId }): OverlaysReturn =>
-		Hover.match(model.hover, {
-			None: () => ({
-				model: modifyFields(model, {
-					hover: () => Hover.Shown({ messageId, isToolbarHovered: false }),
-				}),
-			}),
-			Shown: (shown) =>
-				shown.messageId === messageId
-					? { model }
-					: { model: modifyFields(model, { hover: () => Hover.Shown({ ...shown, messageId }) }) },
-			HidePending: () => ({
-				model: modifyFields(model, {
-					hover: () => Hover.Shown({ messageId, isToolbarHovered: false }),
-				}),
-			}),
-		}),
-	// The viewer is a portal inside the list in legacy and covers the screen, so React sees no
-	// leave while it is open, even when the pointer moves before the viewer has rendered.
+		model.hover._tag === "Shown" && model.hover.messageId === messageId && !model.hover.isToolbarHovered
+			? { model }
+			: {
+					model: modifyFields(model, {
+						hover: () => Hover.Shown({ messageId, isToolbarHovered: false }),
+					}),
+				},
+	// The pointer left the messages: outside the list, or onto a gap or header inside it. The toolbar
+	// reports its own leave, so a leave while it is hovered is the list's, not the pointer's.
 	PointerLeftList: (): OverlaysReturn => {
 		const hover = model.hover
-		if (hover._tag !== "Shown" || hover.isToolbarHovered || model.open._tag === "ImageViewer")
-			return { model }
-		const version = model.hideVersion + 1
-		return {
-			model: modifyFields(model, {
-				hideVersion: () => version,
-				hover: () => Hover.HidePending({ messageId: hover.messageId, version }),
-			}),
-			commands: [WaitForHideToolbar({ version })],
-		}
+		if (hover._tag !== "Shown" || hover.isToolbarHovered) return { model }
+		return startHide(model, hover.messageId)
 	},
-	// The toolbar stays while its emoji picker is open (the picker is inside it).
+	// A holding overlay opened while the delay ran keeps the toolbar; its closing restarts the delay.
 	CompletedWaitForHideToolbar: ({ version }: { readonly version: number }): OverlaysReturn => {
 		const hover = model.hover
-		if (hover._tag !== "HidePending" || hover.version !== version) return { model }
-		return {
-			model: modifyFields(model, {
-				hover: () =>
-					model.open._tag === "ReactionPicker"
-						? Hover.Shown({ messageId: hover.messageId, isToolbarHovered: false })
-						: Hover.None(),
-			}),
-		}
+		if (hover._tag !== "HidePending" || hover.version !== version || holdsHover(model)) return { model }
+		return { model: modifyFields(model, { hover: () => Hover.None() }) }
 	},
 	// Entering the toolbar cancels a pending hide.
 	EnteredToolbar: (): OverlaysReturn => {
@@ -352,19 +358,34 @@ const hoverHandlers = (model: Model) => ({
 					}),
 				}
 	},
+	// Leaving the toolbar starts the hide delay; landing back on a message cancels it.
 	LeftToolbar: (): OverlaysReturn => {
 		const hover = model.hover
 		return hover._tag === "Shown" && hover.isToolbarHovered
-			? {
-					model: modifyFields(model, {
-						hover: () => Hover.Shown({ messageId: hover.messageId, isToolbarHovered: false }),
-					}),
-				}
+			? startHide(model, hover.messageId)
 			: { model }
 	},
 })
 
+/**
+ * A holding overlay closed with a hide pending: the hide was only deferred, so its delay starts now.
+ * The pointer back on the message or the toolbar cancels it as usual.
+ */
+const withReleasedHold = (before: Model, result: OverlaysReturn): OverlaysReturn => {
+	const after = result.model
+	if (!holdsHover(before) || holdsHover(after) || after.hover._tag !== "HidePending") return result
+	const released = startHide(after, after.hover.messageId)
+	return {
+		...result,
+		model: released.model,
+		commands: [...(result.commands ?? []), ...(released.commands ?? [])],
+	}
+}
+
 export const update = (model: Model, message: Message): OverlaysReturn =>
+	withReleasedHold(model, updateOverlays(model, message))
+
+const updateOverlays = (model: Model, message: Message): OverlaysReturn =>
 	Message.match<OverlaysReturn>(message, {
 		...hoverHandlers(model),
 		GotToolbarMessage: ({ message: toolbarMessage }) => {
