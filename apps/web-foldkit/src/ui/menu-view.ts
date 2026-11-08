@@ -400,6 +400,16 @@ const submenuPopover = (
 			h.Attribute("dir", "ltr"),
 			h.Role("dialog"),
 			h.Attribute("tabindex", "-1"),
+			// Focus moves into the submenu: its keys (arrows, Escape closing only it) reach the menu.
+			h.OnKeyDownPreventDefault((key, modifiers) =>
+				Option.some(
+					Message.PressedMenuKey({
+						key,
+						isModified: modifiers.ctrlKey || modifiers.metaKey || modifiers.altKey,
+						entries: viewInputs.entries,
+					}),
+				),
+			),
 			h.OnMount(PositionSubmenu({ triggerId: itemId(model.id, triggerKey) })),
 		],
 		[

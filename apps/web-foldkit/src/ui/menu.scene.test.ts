@@ -209,6 +209,28 @@ describe("menu scene", () => {
 		)
 	})
 
+	test("Escape with focus in the submenu collapses only the submenu", () => {
+		Scene.scene(
+			config,
+			Scene.given(init({ id: "file" })),
+			mounted,
+			Scene.keydown(trigger, "ArrowUp"),
+			portalled,
+			Scene.keydown(Scene.role("dialog"), "ArrowRight"),
+			Scene.Command.expectExact(FocusMenuElement({ elementId: "file-item-email" })),
+			resolveFocus,
+			Scene.Mount.resolve({ name: "PositionSubmenu" }, Message.CompletedPositionMenu()),
+			Scene.expectAll(Scene.all.role("dialog")).toHaveCount(2),
+			// The key lands on the submenu's popover, where focus is.
+			Scene.keydown(Scene.selector('[data-trigger="SubmenuTrigger"]'), "Escape"),
+			Scene.Command.expectExact(FocusMenuElement({ elementId: "file-item-share" })),
+			resolveFocus,
+			Scene.Mount.expectEnded({ name: "PositionSubmenu" }),
+			Scene.expect(menuItem("Email")).toBeAbsent(),
+			Scene.expect(menuItem("Share")).toHaveAttr("aria-expanded", "false"),
+		)
+	})
+
 	test("the hidden Dismiss button closes the menu", () => {
 		Scene.scene(
 			config,
