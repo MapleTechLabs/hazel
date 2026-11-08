@@ -2,7 +2,8 @@
  * Hazel on Rune: boots the web app's own init/update/view/subscriptions in Bun and renders through
  * a Foldkit RenderTarget to the native host on stdout. `HAZEL_DATA=offline` (the default) serves a
  * fixture org over a local sync socket; `HAZEL_DATA=live` talks to `VITE_BACKEND_URL` with
- * `HAZEL_SESSION_TOKEN` as the session bearer.
+ * `HAZEL_SESSION_TOKEN` as the session bearer, or without one signs in through the browser and
+ * keeps the session in the macOS keychain (`src/native-auth.ts`).
  */
 import { appendFileSync, existsSync, readFileSync } from "node:fs"
 import { Option } from "effect"
@@ -14,10 +15,12 @@ import {
 	type HostToRuntime,
 } from "@hazel/foldkit-rune"
 import { isBackendUrl } from "./backend-origin"
+import { describeLink, makeDesktopBridge } from "./desktop-bridge"
+import { usesKeychainSession } from "./native-auth"
 import { type EditableEvent, makePendingEdits } from "./pending-edits"
 import { nativeOverlays, pathOf } from "./overlay"
 import { overlayPlugin } from "./overlay-plugin"
-import { installShims } from "./shims"
+import { installShims, openExternal } from "./shims"
 
 // Before any app module loads: its overlay helpers become the host-drawn ones.
 Bun.plugin(overlayPlugin)
@@ -34,7 +37,20 @@ const backendUrl = process.env.VITE_BACKEND_URL ?? "http://localhost:3003"
 // Live mode opens the app's own landing route; the fixture's channel exists only offline.
 const offline = dataMode === "offline" ? await import("./offline-session") : undefined
 const startPath = process.env.NATIVE_PATH ?? offline?.startPath ?? "/"
-const shims = installShims({ width, height, dark, url: `http://app.hazel.test${startPath}` })
+const shims = installShims({
+	width,
+	height,
+	dark,
+	url: `http://app.hazel.test${startPath}`,
+	// Live, a full page load (after sign-in or sign-out) boots a fresh runtime, as a browser does.
+	loadDocument:
+		dataMode === "live"
+			? (href) => {
+					const next = new URL(href)
+					transport.send({ t: "reload", path: `${next.pathname}${next.search}${next.hash}` })
+				}
+			: undefined,
+})
 
 // A browser reports an uncaught error and keeps the page running; one stray error in a timer
 // must not end the runtime and leave the window unresponsive.
@@ -44,6 +60,15 @@ const reportUncaught = (kind: string) => (error: unknown) => {
 }
 process.on("uncaughtException", reportUncaught("error"))
 process.on("unhandledRejection", reportUncaught("rejection"))
+
+/** The Tauri APIs the app's browser sign-in uses, answered by the host (keychain, opened links). */
+const desktopBridge = makeDesktopBridge({
+	send: (request) => transport.send(request),
+	openUrl: (url) => {
+		const target = URL.parse(url)
+		if (target !== null) openExternal(target)
+	},
+})
 
 if (offline !== undefined) {
 	const { makeOfflineFetch } = await import("./offline-backend")
@@ -68,9 +93,15 @@ if (offline !== undefined) {
 		}
 	}
 	Object.assign(globalThis, { WebSocket: process.env.NATIVE_DEBUG ? DebugWebSocket : FixtureWebSocket })
+} else if (usesKeychainSession) {
+	if (URL.parse(backendUrl) === null)
+		throw new Error(`HAZEL_DATA=live needs a backend URL, got "${backendUrl}"`)
+	Object.assign(window, { __TAURI__: desktopBridge.tauri })
+	const { setSessionBearerProvider } = await import("../../web-foldkit/src/core/lib/session-bearer")
+	const { desktopSessionBearer } = await import("../../web-foldkit/src/platform/desktop-auth")
+	setSessionBearerProvider(desktopSessionBearer)
 } else {
-	const token = process.env.HAZEL_SESSION_TOKEN
-	if (!token) throw new Error("HAZEL_DATA=live needs HAZEL_SESSION_TOKEN (bun run dev:sign-in prints one)")
+	const token = process.env.HAZEL_SESSION_TOKEN ?? ""
 	if (URL.parse(backendUrl) === null)
 		throw new Error(`HAZEL_DATA=live needs a backend URL, got "${backendUrl}"`)
 	const { setSessionBearerProvider } = await import("../../web-foldkit/src/core/lib/session-bearer")
@@ -94,7 +125,7 @@ const PendingAnnouncement = await import("../../web-foldkit/src/ui/aria/pending-
 
 const stylesheet = new URL("../../web-foldkit/src/styles.css", import.meta.url).pathname
 // The bundled runtime ships its sheet compiled (`bun run build`); from source it compiles here.
-const precompiledPath = new URL("./styles.json", import.meta.url).pathname
+const precompiledPath = process.env.HAZEL_NATIVE_STYLES ?? new URL("./styles.json", import.meta.url).pathname
 const styles = existsSync(precompiledPath)
 	? StyleResolver.fromPrecompiled(JSON.parse(readFileSync(precompiledPath, "utf8")), stylesheet)
 	: await StyleResolver.load(stylesheet)
@@ -277,6 +308,15 @@ shims.onRootStyle(() => {
 const transport = stdioTransport((message: HostToRuntime) => {
 	if (message.t === "env")
 		shims.updateEnv({ width: message.width, height: message.height, dark: message.dark })
+	if (message.t === "openUrl") {
+		process.stderr.write(`[native] opened with ${describeLink(message.url)}\n`)
+		desktopBridge.openedUrl(message.url)
+		return
+	}
+	if (message.t === "vault") {
+		desktopBridge.answer(message)
+		return
+	}
 	if (message.t === "event" && message.type === "link" && message.value) {
 		followLink(message.value)
 		return

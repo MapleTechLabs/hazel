@@ -321,6 +321,26 @@ pub enum RuntimeMsg {
     /// Scroll the element at `path` into view (an `element.scrollIntoView()`).
     #[serde(rename = "reveal")]
     Reveal { path: String, block: String },
+    /// A full page load (`location.assign`, `reload()`): start a fresh runtime at `path`.
+    #[serde(rename = "reload")]
+    Reload { path: String },
+    /// Read or replace the sign-in vault's record in the keychain; answered as `vault` with `id`.
+    #[serde(rename = "vault")]
+    Vault {
+        id: u64,
+        op: String,
+        #[serde(default)]
+        record: Option<String>,
+    },
+}
+
+/// A `vault` request's operation; `None` for an unknown one or a write without a record.
+pub fn vault_op(op: &str, record: Option<String>) -> Option<crate::platform::VaultOp> {
+    match (op, record) {
+        ("read", _) => Some(crate::platform::VaultOp::Read),
+        ("write", Some(record)) => Some(crate::platform::VaultOp::Write(record)),
+        _ => None,
+    }
 }
 
 /// What a runtime request does to the host's Rune runtime, sent to its update thread.

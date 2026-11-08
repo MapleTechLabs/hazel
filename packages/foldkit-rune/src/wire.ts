@@ -88,6 +88,10 @@ export type HostToRuntime =
 			/** Where the elements from the Mount's down to the one clicked are: `[x, y, w, h]`. */
 			readonly rects?: Readonly<Record<string, readonly [number, number, number, number]>>
 	  }
+	/** A link the system opened with the app (`com.hazel.native://auth/callback?...`), as given. */
+	| { readonly t: "openUrl"; readonly url: string }
+	/** The answer to vault request `id`: the record (`null` when none), or why the keychain failed. */
+	| { readonly t: "vault"; readonly id: number; readonly record?: string | null; readonly error?: string }
 
 export type RuntimeToHost =
 	| {
@@ -104,6 +108,11 @@ export type RuntimeToHost =
 	| { readonly t: "focus"; readonly key: string }
 	/** Scroll the element at `path` into view (`element.scrollIntoView()`). */
 	| { readonly t: "reveal"; readonly path: string; readonly block: "start" | "center" | "end" | "nearest" }
+	/** A full page load: the host replaces this runtime with a fresh one at `path`. */
+	| { readonly t: "reload"; readonly path: string }
+	/** Read or replace the sign-in vault's one record in the OS keychain; answered by `vault`. */
+	| { readonly t: "vault"; readonly id: number; readonly op: "read" }
+	| { readonly t: "vault"; readonly id: number; readonly op: "write"; readonly record: string }
 
 /** Timings for one commit, for the benchmarks. */
 export type CommitStats = {
