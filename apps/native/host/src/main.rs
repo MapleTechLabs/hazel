@@ -375,6 +375,7 @@ fn is_inline_tag(tag: &str) -> bool {
 /// button's form submit, as a browser's default actions.
 fn presses(
     e: El,
+    path: &str,
     tag: &str,
     attrs: &HashMap<String, String>,
     on: &HashMap<String, u32>,
@@ -403,6 +404,13 @@ fn presses(
         let href = href.clone();
         return e.cursor(Cursor::Pointer).on_press(move |_: &mut State| {
             send(0, "link", Some(&href));
+        });
+    }
+    // A label's default action: a press on it activates its control (the runtime finds it).
+    if tag == "label" {
+        let path = path.to_string();
+        return e.on_press(move |_: &mut State| {
+            write_line(json!({ "t": "label", "path": path }));
         });
     }
     // HTML: a button inside a form submits it unless it says otherwise.
@@ -861,7 +869,7 @@ fn build_elem(
     if let Some(label) = attrs.get("aria-label") {
         e = e.label(label.clone());
     }
-    e = presses(e, tag, attrs, on, ctx);
+    e = presses(e, path, tag, attrs, on, ctx);
     // `ctx.keys` starts with this element's own keydown when it has one.
     let outer = if on.contains_key("keydown") {
         &ctx.keys[1..]
@@ -1346,7 +1354,7 @@ fn build_grid(
                     ..cst.clone()
                 };
                 let e = build_grid(&inner, cols, path, inh.from(cst), ctx, &sub).key(path);
-                let e = presses(apply_box(e, cst), tag, attrs, on, ctx);
+                let e = presses(apply_box(e, cst), path, tag, attrs, on, ctx);
                 Some(behaviour(e, path, tag, attrs, on, cst, ctx.keys).grid_column_full())
             }
             Node::Elem { st: cst, .. } if cst.col_span_full == Some(true) => {

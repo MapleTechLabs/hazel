@@ -282,6 +282,52 @@ describe("makeRuneTarget", () => {
 		handle.dispose()
 	})
 
+	it("activates a pressed label's control: focuses a field, toggles a checkbox", async () => {
+		const Toggled = defineMessageUnion({ Toggled: {} })
+		const sent: Array<RuntimeToHost> = []
+		const bridge = makeElementBridge({ mounts: new Set(), send: () => {} })
+		const rune = makeRuneTarget({
+			styles,
+			bridge,
+			env: { width: 800, height: 600, dark: false },
+			send: (m) => sent.push(m),
+		})
+		let toggles = 0
+		const handle = Runtime.embed(
+			Runtime.makeElement({
+				Model: Schema.Struct({ n: Schema.Number }),
+				init: () => ({ model: { n: 0 } }),
+				update: (model, _message: typeof Toggled.Type) => {
+					toggles++
+					return { model: { n: model.n + 1 } }
+				},
+				view: (_model, h) =>
+					h.div(
+						[],
+						[
+							h.label([h.Attribute("for", "name")], ["Name"]),
+							h.input([h.Id("name")]),
+							h.label(
+								[],
+								[
+									h.input([h.Type("checkbox"), h.OnChange(() => Toggled.Toggled())]),
+									"Remember",
+								],
+							),
+						],
+					),
+				renderTarget: rune.target,
+			}),
+		)
+		await settle()
+		rune.handleHostMessage({ t: "label", path: "r/0" })
+		rune.handleHostMessage({ t: "label", path: "r/2" })
+		await settle()
+		expect(sent.filter((m) => m.t === "focus").map((m) => m.key)).toEqual(["r/1/field", "r/2/0"])
+		expect(toggles).toBe(1)
+		handle.dispose()
+	})
+
 	it("follows a clicked link's href unless its click handler prevented it", async () => {
 		const followed: Array<string> = []
 		const sent: Array<RuntimeToHost> = []

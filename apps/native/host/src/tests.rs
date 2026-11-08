@@ -1849,6 +1849,42 @@ fn an_arrow_on_a_focused_radio_asks_the_runtime_for_the_next_in_its_group() {
 }
 
 #[test]
+fn a_press_on_a_label_asks_for_its_controls_activation_unless_it_handles_clicks() {
+    sent_lines();
+    let plain = e(
+        "label",
+        json!({ "display": "block", "h": 20 }),
+        vec![t("Name")],
+    );
+    let mut own = e(
+        "label",
+        json!({ "display": "block", "h": 20 }),
+        vec![t("Remember")],
+    );
+    own["on"] = json!({ "click": 70 });
+    let mut rt = runtime(
+        e("div", json!({ "flex": "col" }), vec![plain, own]),
+        (200.0, 100.0),
+    );
+    for y in [10.0, 30.0] {
+        rt.pointer_move(5.0, y);
+        rt.pointer_down(5.0, y);
+        rt.pointer_up(5.0, y);
+        rt.frame(0.1);
+    }
+    let labels: Vec<Value> = sent_lines()
+        .into_iter()
+        .filter(|m| m["t"] == "label")
+        .map(|m| m["path"].clone())
+        .collect();
+    assert_eq!(
+        labels,
+        [json!("r/0")],
+        "only the label without its own click handler"
+    );
+}
+
+#[test]
 fn the_document_scrolls_when_it_is_taller_than_the_window() {
     let page = e(
         "div",

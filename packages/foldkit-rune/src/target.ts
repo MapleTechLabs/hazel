@@ -869,6 +869,10 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			void filesPicked(message.path, message.files)
 			return
 		}
+		if (message.t === "label") {
+			activateLabel(message.path)
+			return
+		}
 		if (message.t === "radio") {
 			stepRadio(message.path, message.step)
 			return
@@ -948,6 +952,28 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		if (options.bridge?.tagAt(path) === "input" && attrs.type === "file")
 			send({ t: "pickFile", path, accept: attrs.accept ?? "" })
 		else click(path)
+	}
+
+	/**
+	 * A browser's label activation: a text field takes focus; a checkbox or radio is clicked
+	 * and changes, unless it is a checked radio; a button is clicked.
+	 */
+	const activateLabel = (path: string) => {
+		const control = options.bridge?.labelControl(path)
+		if (control === undefined || options.bridge === undefined) return
+		const tag = options.bridge.tagAt(control)
+		const attrs = options.bridge.attrsAt(control)
+		if ("disabled" in attrs) return
+		const focusKey = hostFocusKey(control, tag, attrs)
+		if (focusKey !== control) {
+			send({ t: "focus", key: focusKey })
+			return
+		}
+		click(control)
+		const checkable = tag === "input" && (attrs.type === "checkbox" || attrs.type === "radio")
+		if (checkable && !(attrs.type === "radio" && "checked" in attrs))
+			fire(control, fakeEvent({ t: "event", seq: ack, id: 0, type: "change", value: attrs.value ?? "" }))
+		if (checkable) send({ t: "focus", key: control })
 	}
 
 	/**

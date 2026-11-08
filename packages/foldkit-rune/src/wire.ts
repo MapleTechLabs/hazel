@@ -64,6 +64,8 @@ export type HostToRuntime =
 	| { readonly t: "scrolled"; readonly path: string; readonly top: number }
 	/** The files picked for the file input at `path` (paths on disk); none when cancelled. */
 	| { readonly t: "files"; readonly path: string; readonly files: ReadonlyArray<string> }
+	/** A press on the label at `path` that handles none itself: its control's activation. */
+	| { readonly t: "label"; readonly path: string }
 	/** An arrow key on the radio at `path`: the next (`1`) or previous (`-1`) in its group. */
 	| { readonly t: "radio"; readonly path: string; readonly step: 1 | -1 }
 	/** A key nothing focused handled: a keydown on `document`, where shortcuts listen. */

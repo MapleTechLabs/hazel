@@ -463,6 +463,30 @@ export const makeElementBridge = (options: {
 			.filter(isTabbable)
 			.map((record) => record.path)
 
+	/** A label's control: the element its `for` names, else the first control inside it. */
+	const labelControl = (path: string): string | undefined => {
+		const label = records.get(path)
+		if (label === undefined) return undefined
+		const target = label.attrs.for
+		if (target !== undefined) {
+			for (const record of records.values()) if (record.attrs.id === target) return record.path
+			return undefined
+		}
+		const isControl = (r: ElementRecord) =>
+			["input", "textarea", "select", "button"].includes(r.tag) && r.attrs.type !== "hidden"
+		const search = (at: ElementRecord): string | undefined => {
+			for (const child of at.childPaths) {
+				const record = records.get(child)
+				if (record === undefined) continue
+				if (isControl(record)) return record.path
+				const found = search(record)
+				if (found !== undefined) return found
+			}
+			return undefined
+		}
+		return search(label)
+	}
+
 	/** The enabled radios sharing the one at `path`'s `name`, in document order. */
 	const radioGroup = (path: string): Array<string> => {
 		const name = records.get(path)?.attrs.name
@@ -542,6 +566,7 @@ export const makeElementBridge = (options: {
 		attrsAt,
 		tabbablePaths,
 		radioGroup,
+		labelControl,
 		widthOf,
 		dispatchPointer,
 		dispatchContextMenu,
