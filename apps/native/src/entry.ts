@@ -180,6 +180,18 @@ const OVERLAY_MOUNTS = [
 ]
 
 /**
+ * Mounts that only ask the host to act on their element (focus it, reveal it): they run when
+ * they mount, as a hidden marker never gets a layout of its own.
+ */
+const SCRIPT_MOUNTS = [
+	// The open channel's sidebar row scrolls into view (`closest('[role="row"]')`).
+	"ScrollActiveIntoView",
+	// React's `autoFocus`.
+	"AutoFocusMemberSearch",
+	"AutoFocusOnboardingInput",
+]
+
+/**
  * Mounts that listen for delegated pointer events (hover, right-click) on their element, with the
  * selector of the elements they look for: the message list's hover shows a message's toolbar.
  */
@@ -193,8 +205,8 @@ const POINTER_MOUNTS = new Map([
 
 /** Mounts that only observe geometry run against host-backed element proxies; the editor gets a headless DOM. */
 const bridge = makeElementBridge({
-	mounts: new Set(["ObserveMessageList", ...OVERLAY_MOUNTS, ...POINTER_MOUNTS.keys()]),
-	immediateMounts: new Set([...OVERLAY_MOUNTS, ...POINTER_MOUNTS.keys()]),
+	mounts: new Set(["ObserveMessageList", ...OVERLAY_MOUNTS, ...SCRIPT_MOUNTS, ...POINTER_MOUNTS.keys()]),
+	immediateMounts: new Set([...OVERLAY_MOUNTS, ...SCRIPT_MOUNTS, ...POINTER_MOUNTS.keys()]),
 	pointerTargets: POINTER_MOUNTS,
 	domMounts: new Map([["MountEditor", composer.makeEditorElement]]),
 	send: (command) => transport.send(command),
