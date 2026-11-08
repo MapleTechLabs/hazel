@@ -320,6 +320,9 @@ pub enum RuntimeMsg {
     /// Focus the element keyed `key` (an `element.focus()` in the runtime).
     #[serde(rename = "focus")]
     Focus { key: String },
+    /// Show an Open dialog for the file input at `path` (an `input.click()`).
+    #[serde(rename = "pickFile")]
+    PickFile { path: String, accept: String },
     /// Scroll the element at `path` into view (an `element.scrollIntoView()`).
     #[serde(rename = "reveal")]
     Reveal { path: String, block: String },
@@ -353,6 +356,20 @@ impl RuntimeMsg {
     pub fn request(self) -> Option<HostRequest> {
         match self {
             RuntimeMsg::Focus { key } => Some(Box::new(move |tx: &mut rune::Tx| tx.focus(key))),
+            RuntimeMsg::PickFile { path, accept } => Some(Box::new(move |tx: &mut rune::Tx| {
+                let options = file_dialog_options(&accept);
+                tx.open_file(options, move |_: &mut crate::State, picked, _| {
+                    let files: Vec<String> = picked
+                        .ok()
+                        .flatten()
+                        .map(|p| p.display().to_string())
+                        .into_iter()
+                        .collect();
+                    crate::write_line(
+                        serde_json::json!({ "t": "files", "path": path, "files": files }),
+                    );
+                });
+            })),
             RuntimeMsg::Reveal { path, block } if block == "center" => {
                 Some(Box::new(move |tx: &mut rune::Tx| tx.scroll_center(path)))
             }
@@ -496,5 +513,31 @@ fn index(node: &Arc<Node>, next: &mut HashMap<String, Arc<Node>>) {
         for child in children {
             index(child, next);
         }
+    }
+}
+
+/// An Open dialog for an `<input type=file accept=...>`: its types as the dialog's filter.
+fn file_dialog_options(accept: &str) -> rune::FileDialogOptions {
+    let mut extensions: Vec<&str> = Vec::new();
+    for kind in accept.split(',').map(str::trim).filter(|k| !k.is_empty()) {
+        match kind {
+            "image/*" => extensions.extend(["png", "jpg", "jpeg", "gif", "webp", "heic"]),
+            "video/*" => extensions.extend(["mp4", "mov", "webm"]),
+            "audio/*" => extensions.extend(["mp3", "m4a", "wav"]),
+            _ => {
+                let ext = kind
+                    .trim_start_matches('.')
+                    .rsplit('/')
+                    .next()
+                    .unwrap_or(kind);
+                extensions.push(if ext == "jpeg" { "jpg" } else { ext });
+            }
+        }
+    }
+    let options = rune::FileDialogOptions::default();
+    if extensions.is_empty() {
+        options
+    } else {
+        options.filter("Files", &extensions)
     }
 }

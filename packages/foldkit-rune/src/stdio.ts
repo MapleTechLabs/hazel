@@ -14,6 +14,7 @@ const HOST_MESSAGE_TAGS = {
 	pointer: true,
 	contextmenu: true,
 	key: true,
+	files: true,
 	openUrl: true,
 	vault: true,
 } satisfies Record<HostToRuntime["t"], true>

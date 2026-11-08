@@ -58,7 +58,7 @@ static GEN: AtomicU64 = AtomicU64::new(0);
 static REPORTED: Mutex<Option<(u32, u32, bool)>> = Mutex::new(None);
 static ICONS: Mutex<Option<HashMap<String, &'static Icon>>> = Mutex::new(None);
 
-fn write_line(message: serde_json::Value) {
+pub(crate) fn write_line(message: serde_json::Value) {
     if let Some(out) = OUT.get() {
         let mut out = out.lock().unwrap();
         let _ = writeln!(out, "{message}");

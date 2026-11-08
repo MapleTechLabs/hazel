@@ -1646,10 +1646,18 @@ fn a_fixed_element_is_placed_against_the_window_in_a_taller_page() {
         json!({ "fixed": true, "absolute": [0, null, 0, 0], "h": 20, "bg": "#0000ffff" }),
         vec![t("Copied")],
     );
-    let page = e("div", json!({ "h": 1200 }), vec![e("div", json!({ "h": 1200 }), vec![bar])]);
+    let page = e(
+        "div",
+        json!({ "h": 1200 }),
+        vec![e("div", json!({ "h": 1200 }), vec![bar])],
+    );
     let rt = runtime(page, (300.0, 800.0));
     let [_, y, _, h] = rect(&rt, "r/0/0");
-    assert_eq!(y + h, 800.0, "a bottom-0 fixed bar sits on the window's bottom edge");
+    assert_eq!(
+        y + h,
+        800.0,
+        "a bottom-0 fixed bar sits on the window's bottom edge"
+    );
 }
 
 #[test]
@@ -1657,12 +1665,49 @@ fn the_document_scrolls_when_it_is_taller_than_the_window() {
     let page = e(
         "div",
         json!({}),
-        vec![e("div", json!({ "h": 1000 }), vec![]), e("p", json!({ "h": 20 }), vec![t("Danger Zone")])],
+        vec![
+            e("div", json!({ "h": 1000 }), vec![]),
+            e("p", json!({ "h": 20 }), vec![t("Danger Zone")]),
+        ],
     );
     let mut rt = runtime(page, (300.0, 800.0));
     let (_, before) = rt.find("r/1").expect("drawn");
     rt.wheel(150.0, 400.0, -300.0);
     rt.frame(0.0);
     let (_, after) = rt.find("r/1").expect("drawn");
-    assert!(after < before - 200.0, "the page scrolled: {before} -> {after}");
+    assert!(
+        after < before - 200.0,
+        "the page scrolled: {before} -> {after}"
+    );
+}
+
+#[test]
+fn a_file_input_click_opens_an_open_dialog_and_reports_the_picked_file() {
+    sent_lines();
+    let mut rt = runtime(
+        e("div", json!({ "w": 100, "h": 100 }), vec![]),
+        (100.0, 100.0),
+    );
+    let msg: RuntimeMsg =
+        serde_json::from_value(json!({ "t": "pickFile", "path": "r/0", "accept": "image/*" }))
+            .expect("wire request");
+    let run = msg.request().expect("a host request");
+    rt.update(move |_, tx| run(tx));
+    rt.frame(0.1);
+    let (kind, options) = rt.file_dialog().expect("an Open dialog shows");
+    assert_eq!(kind, rune::FileDialogKind::Open);
+    assert!(
+        options
+            .filters
+            .iter()
+            .any(|(_, ext)| ext.iter().any(|e| e == "png")),
+        "filtered to images"
+    );
+    rt.resolve_file_dialog(Some("/tmp/avatar.png".into()))
+        .expect("answered");
+    rt.frame(0.1);
+    let reported = sent_lines().into_iter().any(|m| {
+        m["t"] == "files" && m["path"] == "r/0" && m["files"] == json!(["/tmp/avatar.png"])
+    });
+    assert!(reported, "the picked file reaches the runtime");
 }

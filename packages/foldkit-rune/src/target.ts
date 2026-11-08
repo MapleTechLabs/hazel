@@ -1,3 +1,6 @@
+import { readFile } from "node:fs/promises"
+import { basename } from "node:path"
+
 import type { Document } from "foldkit/html"
 import type { RenderTarget } from "foldkit/runtime"
 
@@ -38,8 +41,29 @@ const dispatchDocumentKey = (key: {
 	return event.defaultPrevented
 }
 
+const MIME_TYPES: Readonly<Record<string, string>> = {
+	png: "image/png",
+	jpg: "image/jpeg",
+	jpeg: "image/jpeg",
+	gif: "image/gif",
+	webp: "image/webp",
+	heic: "image/heic",
+	svg: "image/svg+xml",
+	pdf: "application/pdf",
+	txt: "text/plain",
+	json: "application/json",
+	mp4: "video/mp4",
+	mov: "video/quicktime",
+	mp3: "audio/mpeg",
+	zip: "application/zip",
+}
+
+/** A picked file's type from its extension, as a browser reports `File.type`. */
+const mimeOf = (file: string): string => MIME_TYPES[file.split(".").pop()?.toLowerCase() ?? ""] ?? ""
+
 const fakeEvent = (event: Extract<HostToRuntime, { t: "event" }>) => {
-	const eventTarget = { value: event.value ?? "", scrollTop: 0, open: false, files: [] }
+	const files: Array<File> = []
+	const eventTarget = { value: event.value ?? "", scrollTop: 0, open: false, files }
 	return {
 		type: event.type,
 		target: eventTarget,
@@ -840,6 +864,10 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			options.bridge?.dispatchPointer(message)
 			return
 		}
+		if (message.t === "files") {
+			void filesPicked(message.path, message.files)
+			return
+		}
 		if (message.t === "key") {
 			const prevented = dispatchDocumentKey(message)
 			if (message.key === "Escape" && !prevented) options.overlays?.dismissTopmost()
@@ -906,5 +934,32 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		}, 0)
 	}
 
-	return { target, handleHostMessage, env, refreshObserved }
+	/**
+	 * `element.click()`: a file input asks the host for an Open dialog, as a browser shows its
+	 * file chooser; any other element runs its click handler.
+	 */
+	const clickElement = (path: string): void => {
+		const attrs = options.bridge?.attrsAt(path) ?? {}
+		if (options.bridge?.tagAt(path) === "input" && attrs.type === "file")
+			send({ t: "pickFile", path, accept: attrs.accept ?? "" })
+		else click(path)
+	}
+
+	/** The files picked for a file input: read, then its `change`, as a browser fires it. */
+	const filesPicked = async (path: string, paths: ReadonlyArray<string>) => {
+		if (paths.length === 0) return
+		const files = await Promise.all(
+			paths.map(
+				async (file) => new File([await readFile(file)], basename(file), { type: mimeOf(file) }),
+			),
+		)
+		const target = { files, value: "", scrollTop: 0, open: false }
+		fire(path, {
+			...fakeEvent({ t: "event", seq: ack, id: 0, type: "change" }),
+			target,
+			currentTarget: target,
+		})
+	}
+
+	return { target, handleHostMessage, env, refreshObserved, click: clickElement, filesPicked }
 }

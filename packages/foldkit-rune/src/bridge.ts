@@ -132,6 +132,8 @@ export const makeElementBridge = (options: {
 	readonly onObserve?: () => void
 	/** A Mount called `remove()` on its element (it had moved it into `<body>`). */
 	readonly onRemove?: (path: string) => void
+	/** `element.click()` on a proxy: the render target runs its click, or picks a file. */
+	readonly onClick?: (path: string) => void
 }) => {
 	let records = new Map<string, ElementRecord>()
 	const rects = new Map<string, Rect>()
@@ -216,6 +218,7 @@ export const makeElementBridge = (options: {
 					options.send({ t: "reveal", path, block: revealBlock(arg) }),
 			},
 			focus: { value: () => options.send({ t: "focus", key: hostFocusKey(path, record()?.tag) }) },
+			click: { value: () => options.onClick?.(path) },
 			blur: { value: () => {} },
 			style: { value: { setProperty() {}, removeProperty() {}, getPropertyValue: () => "" } },
 			// A Mount taking its element out of the page (a portal it set up, released).
@@ -428,6 +431,9 @@ export const makeElementBridge = (options: {
 	/** The element's tag, for the host's key of a text field (`<path>/field`). */
 	const tagAt = (path: string): string | undefined => records.get(path)?.tag
 
+	/** The element's attributes, as the last commit recorded them. */
+	const attrsAt = (path: string): Readonly<Record<string, string>> => records.get(path)?.attrs ?? {}
+
 	/** The element's `id`, which dialogs are known by. */
 	const idAt = (path: string): string | undefined => records.get(path)?.attrs.id
 
@@ -498,6 +504,7 @@ export const makeElementBridge = (options: {
 		findPath,
 		tagAt,
 		idAt,
+		attrsAt,
 		tabbablePaths,
 		widthOf,
 		dispatchPointer,

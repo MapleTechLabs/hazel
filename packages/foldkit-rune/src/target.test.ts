@@ -190,6 +190,55 @@ describe("makeRuneTarget", () => {
 		handle.dispose()
 	})
 
+	it("picks a file for a clicked file input and hands it to the input's change handler", async () => {
+		const Picked = defineMessageUnion({ PickedFiles: { names: Schema.Array(Schema.String) } })
+		const sent: Array<RuntimeToHost> = []
+		const bridge = makeElementBridge({ mounts: new Set(), send: () => {} })
+		const rune = makeRuneTarget({
+			styles,
+			bridge,
+			env: { width: 800, height: 600, dark: false },
+			send: (m) => sent.push(m),
+		})
+		const seen: Array<string> = []
+		const handle = Runtime.embed(
+			Runtime.makeElement({
+				Model: Schema.Struct({ n: Schema.Number }),
+				init: () => ({ model: { n: 0 } }),
+				update: (model, message: typeof Picked.Type) => {
+					seen.push(...message.names)
+					return { model: { n: model.n + 1 } }
+				},
+				view: (_model, h) =>
+					h.div(
+						[],
+						[
+							h.input([
+								h.Type("file"),
+								h.Attribute("accept", "image/*"),
+								h.OnFileChange((files) =>
+									Picked.PickedFiles({
+										names: files.map((f) => `${f.name} ${f.type} ${f.size}`),
+									}),
+								),
+							]),
+						],
+					),
+				renderTarget: rune.target,
+			}),
+		)
+		await settle()
+		rune.click("r/0")
+		expect(sent.filter((m) => m.t === "pickFile")).toEqual([
+			{ t: "pickFile", path: "r/0", accept: "image/*" },
+		])
+		const file = new URL("../test/styles.css", import.meta.url).pathname
+		await rune.filesPicked("r/0", [file])
+		await settle()
+		expect(seen).toEqual([`styles.css  ${(await import("node:fs")).statSync(file).size}`])
+		handle.dispose()
+	})
+
 	it("follows a clicked link's href unless its click handler prevented it", async () => {
 		const followed: Array<string> = []
 		const sent: Array<RuntimeToHost> = []

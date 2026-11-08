@@ -62,6 +62,8 @@ export type HostToRuntime =
 			readonly h: number
 	  }
 	| { readonly t: "scrolled"; readonly path: string; readonly top: number }
+	/** The files picked for the file input at `path` (paths on disk); none when cancelled. */
+	| { readonly t: "files"; readonly path: string; readonly files: ReadonlyArray<string> }
 	/** A key nothing focused handled: a keydown on `document`, where shortcuts listen. */
 	| {
 			readonly t: "key"
@@ -106,6 +108,8 @@ export type RuntimeToHost =
 	| { readonly t: "scroll"; readonly path: string; readonly top: number }
 	/** Focus the element keyed `key` once the host has the tree it is in (`element.focus()`). */
 	| { readonly t: "focus"; readonly key: string }
+	/** Show an Open dialog for the file input at `path` (`input.click()`), filtered by `accept`. */
+	| { readonly t: "pickFile"; readonly path: string; readonly accept: string }
 	/** Scroll the element at `path` into view (`element.scrollIntoView()`). */
 	| { readonly t: "reveal"; readonly path: string; readonly block: "start" | "center" | "end" | "nearest" }
 	/** A full page load: the host replaces this runtime with a fresh one at `path`. */

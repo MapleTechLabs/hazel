@@ -199,6 +199,8 @@ const bridge = makeElementBridge({
 	domMounts: new Map([["MountEditor", composer.makeEditorElement]]),
 	send: (command) => transport.send(command),
 	onObserve: () => rune.refreshObserved(),
+	// `rune` is created below; a Mount clicks only after the first commit.
+	onClick: (path) => rune.click(path),
 	onRemove: (path) => {
 		bodyPortals.get(path)?.()
 		bodyPortals.delete(path)
