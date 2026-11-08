@@ -1550,3 +1550,62 @@ fn elements_appear_and_vanish_at_once_as_in_the_dom() {
         "a removed element is gone on the next frame"
     );
 }
+
+#[test]
+fn a_link_inside_a_focusable_wrapper_follows_its_href_on_a_press() {
+    sent_lines();
+    let link = with_attrs(
+        e(
+            "a",
+            json!({ "display": "grid", "w": 40, "h": 40 }),
+            vec![t("H")],
+        ),
+        json!({ "href": "/hazel", "tabindex": "0" }),
+    );
+    let wrapper = with_attrs(
+        e("span", json!({ "display": "grid" }), vec![link]),
+        json!({ "role": "link", "aria-label": "Home", "tabindex": "0" }),
+    );
+    let mut rt = runtime(
+        e("div", json!({ "w": 100, "h": 100 }), vec![wrapper]),
+        (100.0, 100.0),
+    );
+    rt.pointer_move(20.0, 20.0);
+    rt.pointer_down(20.0, 20.0);
+    rt.pointer_up(20.0, 20.0);
+    rt.frame(0.1);
+    let followed = sent_lines()
+        .iter()
+        .any(|m| m["type"] == "link" && m["value"] == "/hazel");
+    assert!(followed, "the press did not follow the link");
+}
+
+#[test]
+fn a_subgrid_link_row_follows_its_href_on_a_press() {
+    sent_lines();
+    let link = with_attrs(
+        e(
+            "a",
+            json!({ "display": "grid", "subgrid": true, "colSpanFull": true, "gridCols": ["auto", "1fr"], "h": 32 }),
+            vec![
+                e("span", json!({}), vec![t("#")]),
+                e("span", json!({}), vec![t("engineering")]),
+            ],
+        ),
+        json!({ "href": "/hazel/chat/engineering" }),
+    );
+    let list = e(
+        "div",
+        json!({ "display": "grid", "gridCols": ["auto", "1fr"], "w": 200 }),
+        vec![link],
+    );
+    let mut rt = runtime(list, (200.0, 100.0));
+    rt.pointer_move(100.0, 16.0);
+    rt.pointer_down(100.0, 16.0);
+    rt.pointer_up(100.0, 16.0);
+    rt.frame(0.1);
+    let followed = sent_lines()
+        .iter()
+        .any(|m| m["type"] == "link" && m["value"] == "/hazel/chat/engineering");
+    assert!(followed, "a press on a subgrid row did not follow its link");
+}

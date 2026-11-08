@@ -160,6 +160,35 @@ fn send_click(id: u32, href: &str) -> u64 {
     seq
 }
 
+/// What a press on the element does: its click handlers, else a link's navigation, else a
+/// button's form submit, as a browser's default actions.
+fn presses(
+    e: El,
+    tag: &str,
+    attrs: &HashMap<String, String>,
+    on: &HashMap<String, u32>,
+    ctx: &Ctx,
+) -> El {
+    if PRESS_EVENTS.iter().any(|k| on.contains_key(*k)) {
+        return press_handlers(e, on, link_href(tag, attrs));
+    }
+    if let Some(href) = link_href(tag, attrs) {
+        let href = href.clone();
+        return e.cursor(Cursor::Pointer).on_press(move |_: &mut State| {
+            send(0, "link", Some(&href));
+        });
+    }
+    // HTML: a button inside a form submits it unless it says otherwise.
+    match ctx.form {
+        Some(form_id) if tag == "button" && attrs.get("type").is_none_or(|t| t == "submit") => {
+            e.cursor(Cursor::Pointer).on_press(move |_: &mut State| {
+                send(form_id, "submit", None);
+            })
+        }
+        _ => e,
+    }
+}
+
 /// The `href` a press on this element follows: a link's.
 fn link_href<'a>(tag: &str, attrs: &'a HashMap<String, String>) -> Option<&'a String> {
     attrs.get("href").filter(|_| tag == "a")
@@ -578,21 +607,7 @@ fn build_elem(
     if let Some(label) = attrs.get("aria-label") {
         e = e.label(label.clone());
     }
-    if PRESS_EVENTS.iter().any(|k| on.contains_key(*k)) {
-        e = press_handlers(e, on, link_href(tag, attrs));
-    } else if let (Some(href), true) = (attrs.get("href"), tag == "a") {
-        let href = href.clone();
-        e = e.cursor(Cursor::Pointer).on_press(move |_: &mut State| {
-            send(0, "link", Some(&href));
-        });
-    } else if tag == "button" && attrs.get("type").is_none_or(|t| t == "submit") {
-        // HTML: a button inside a form submits it unless it says otherwise.
-        if let Some(form_id) = ctx.form {
-            e = e.cursor(Cursor::Pointer).on_press(move |_: &mut State| {
-                send(form_id, "submit", None);
-            });
-        }
-    }
+    e = presses(e, tag, attrs, on, ctx);
     // `ctx.keys` starts with this element's own keydown when it has one.
     let outer = if on.contains_key("keydown") {
         &ctx.keys[1..]
@@ -925,7 +940,7 @@ fn build_grid(
                     ..cst.clone()
                 };
                 let e = build_grid(&inner, cols, path, inh.from(cst), ctx, &sub).key(path);
-                let e = press_handlers(apply_box(e, cst), on, link_href(tag, attrs));
+                let e = presses(apply_box(e, cst), tag, attrs, on, ctx);
                 Some(behaviour(e, path, tag, attrs, on, cst, ctx.keys).grid_column_full())
             }
             Node::Elem { st: cst, .. } if cst.col_span_full == Some(true) => {
