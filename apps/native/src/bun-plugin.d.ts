@@ -1,4 +1,4 @@
-// The part of Bun's API the overlay plugin and the build script use. The app's tsconfig keeps
+// The part of Bun's API the overlay plugin and the build scripts use. The app's tsconfig keeps
 // DOM's `fetch` types, which Bun's own type package replaces.
 type BunPluginBuilder = {
 	onLoad(
@@ -12,8 +12,12 @@ declare const Bun: {
 	plugin(plugin: BunPlugin): void
 	build(options: {
 		entrypoints: Array<string>
-		outdir: string
-		target: "bun"
+		outdir?: string
+		target?: "bun"
+		/** One executable with Bun inside (scripts/bundle.ts). */
+		compile?: { outfile: string }
+		format?: "esm"
+		bytecode?: boolean
 		minify: boolean
 		external: Array<string>
 		plugins: Array<BunPlugin>
