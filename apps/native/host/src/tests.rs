@@ -1661,6 +1661,33 @@ fn a_fixed_element_is_placed_against_the_window_in_a_taller_page() {
 }
 
 #[test]
+fn a_fixed_panel_inside_a_dialog_stays_above_the_page() {
+    sent_lines();
+    let mut cover = e("button", json!({ "w": 200, "h": 200 }), vec![]);
+    cover["on"] = json!({ "click": 50 });
+    let mut inside = e("button", json!({ "w": 60, "h": 30 }), vec![]);
+    inside["on"] = json!({ "click": 51 });
+    let panel = e(
+        "div",
+        json!({ "fixed": true, "absolute": [0, 0, null, null] }),
+        vec![inside],
+    );
+    let mut dialog = e("div", json!({}), vec![panel]);
+    dialog["ov"] = json!({ "portal": 1, "modal": "r/1" });
+    let mut rt = runtime(e("div", json!({}), vec![cover, dialog]), (200.0, 200.0));
+    rt.pointer_move(10.0, 10.0);
+    rt.pointer_down(10.0, 10.0);
+    rt.pointer_up(10.0, 10.0);
+    rt.frame(0.1);
+    let clicked: Vec<Value> = sent_lines()
+        .into_iter()
+        .filter(|m| m["type"] == "click")
+        .map(|m| m["id"].clone())
+        .collect();
+    assert_eq!(clicked, [json!(51)], "the press reached the dialog's panel");
+}
+
+#[test]
 fn the_document_scrolls_when_it_is_taller_than_the_window() {
     let page = e(
         "div",

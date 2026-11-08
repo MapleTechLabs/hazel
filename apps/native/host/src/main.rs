@@ -1412,16 +1412,41 @@ pub(crate) fn view(s: &State, cx: &mut Cx<State>) -> El {
         .scroll(rune::ScrollSpec {
             stick_bottom: false,
         });
-    page = page.child(document.child(body.unwrap_or_else(el)));
-    // Portals inherit from the page, as an element moved into `<body>` does.
-    for (path, node) in &s.portals {
+    // Fixed elements and portals draw at the window's root. Fixed ones (not dialogs or menus,
+    // which stay on top) go before the document,
+    // so Tab and assistive technology meet them in document order; every layer is raised, so
+    // they paint above the document in tree order (fixed, then menus and dialogs), as in CSS.
+    // A fixed element inside a dialog or another layer stays with it, above the document.
+    let fixed = |path: &String, node: &Arc<Node>| {
+        matches!(node.as_ref(), Node::Elem { st, ov, .. } if st.fixed == Some(true) && ov.is_none())
+            && !s
+                .portals
+                .iter()
+                .any(|(p, _)| path.starts_with(&format!("{p}/")))
+    };
+    let layer = |path: &String, node: &Arc<Node>| {
         let ctx = Ctx {
             portal: Some(path),
             ..ctx
         };
-        if let Some(overlay) = build(node, path, inh, &ctx) {
-            let layer = el().pin(Some(0.0), Some(0.0), Some(0.0), Some(0.0));
-            page = page.child(layer.child(overlay));
+        build(node, path, inh, &ctx).map(|built| {
+            // Keyed, so a layer added in front leaves the ids (focus, scroll) of the rest alone.
+            el().key(format!("layer:{path}"))
+                .pin(Some(0.0), Some(0.0), Some(0.0), Some(0.0))
+                .raise()
+                .child(built)
+        })
+    };
+    for (path, node) in s.portals.iter().filter(|(p, n)| fixed(p, n)) {
+        if let Some(l) = layer(path, node) {
+            page = page.child(l);
+        }
+    }
+    page = page.child(document.child(body.unwrap_or_else(el)));
+    // Portals inherit from the page, as an element moved into `<body>` does.
+    for (path, node) in s.portals.iter().filter(|(p, n)| !fixed(p, n)) {
+        if let Some(l) = layer(path, node) {
+            page = page.child(l);
         }
     }
     page
