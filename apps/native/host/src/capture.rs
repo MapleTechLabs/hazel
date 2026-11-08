@@ -56,6 +56,43 @@ enum Step {
     ClickLabel(String),
     /// Print to stderr what has focus, what is hovered and which of `texts` are visible.
     Probe(ProbeStep),
+    /// Hold still (after an optional pointer move and a settle), recording each frame: print the
+    /// elements whose place, size or opacity kept changing (flicker, jitter) and the trees sent.
+    Watch(WatchStep),
+}
+
+#[derive(Deserialize)]
+struct WatchStep {
+    label: String,
+    ms: u64,
+    #[serde(default)]
+    at: Option<[f32; 2]>,
+    /// Glide the pointer from `at` to here over `ms`, as a hand moves it.
+    #[serde(default)]
+    to: Option<[f32; 2]>,
+    #[serde(default = "default_watch_settle")]
+    settle: u64,
+    /// Print, each frame, the elements whose path contains this and their state.
+    #[serde(default)]
+    trace: Option<String>,
+}
+
+fn default_watch_settle() -> u64 {
+    400
+}
+
+/// An element as `watch` compares it frame to frame: its drawn box and opacity, rounded so
+/// sub-pixel settling isn't counted.
+fn watch_state(e: &rune::ElementInfo) -> (i32, i32, i32, i32, i32) {
+    let q = |v: f32| (v * 2.0).round() as i32;
+    let r = e.visible;
+    (
+        q(r[0]),
+        q(r[1]),
+        q(r[2]),
+        q(r[3]),
+        (e.opacity * 20.0).round() as i32,
+    )
 }
 
 #[derive(Deserialize)]
@@ -253,6 +290,10 @@ impl Session {
         }
         // The first match that is drawn: a narrow layout hides the desktop copy of a link.
         let (x, y) = candidates.iter().find_map(|path| self.rt.find(path))?;
+        if std::env::var("NATIVE_DEBUG").is_ok() {
+            let hit = self.rt.element_at(x, y).map(|p| p.path().to_string());
+            eprintln!("[click] \"{label}\" candidates {candidates:?} at ({x}, {y}) hits {hit:?}");
+        }
         self.rt.pointer_move(x, y);
         self.rt.pointer_down(x, y);
         self.rt.pointer_up(x, y);
@@ -466,6 +507,7 @@ pub fn run(script_path: &str) {
     let state = initial_state();
     let dark = state.dark;
     let mut rt = Runtime::new(state, view, window_size(), Env::new(dark, scale));
+    rt.on_key = Some(crate::window_key);
     rt.set_srgb_blend(true);
     let mut session = Session {
         rt,
@@ -508,6 +550,10 @@ pub fn run(script_path: &str) {
                 session.tick();
             }
             Step::ClickAt([x, y]) => {
+                if std::env::var("NATIVE_DEBUG").is_ok() {
+                    let hit = session.rt.element_at(x, y).map(|p| p.path().to_string());
+                    eprintln!("[click] at ({x}, {y}) hits {hit:?}");
+                }
                 session.rt.pointer_move(x, y);
                 session.rt.pointer_down(x, y);
                 session.rt.pointer_up(x, y);
@@ -647,17 +693,29 @@ pub fn run(script_path: &str) {
                     eprintln!("[capture] {path}: {error}");
                 }
             }
-            Step::Press(name) => {
-                let Some(key) = named_key(&name) else {
+            Step::Press(combo) => {
+                // `Meta+k`, `Shift+Tab`: modifiers, then the key.
+                let (mods_part, name) = combo
+                    .rsplit_once('+')
+                    .filter(|(_, k)| !k.is_empty())
+                    .unwrap_or(("", combo.as_str()));
+                let mut mods = Mods::default();
+                for m in mods_part.split('+').filter(|m| !m.is_empty()) {
+                    match m {
+                        "Meta" | "Cmd" => mods.cmd = true,
+                        "Ctrl" | "Control" => mods.ctrl = true,
+                        "Alt" | "Option" => mods.alt = true,
+                        "Shift" => mods.shift = true,
+                        _ => fail(&mut child, &format!("press: unknown modifier \"{m}\"")),
+                    }
+                }
+                let Some(key) = named_key(name) else {
                     fail(
                         &mut child,
                         &format!("press: unsupported key name \"{name}\""),
                     );
                 };
-                session.rt.key(KeyEvent {
-                    key,
-                    mods: Mods::default(),
-                });
+                session.rt.key(KeyEvent { key, mods });
                 let until = Instant::now() + Duration::from_millis(400);
                 while Instant::now() < until {
                     session.tick();
@@ -697,6 +755,90 @@ pub fn run(script_path: &str) {
                     None => eprintln!("[capture] clickLabel \"{label}\": not found"),
                 }
             }
+            Step::Watch(watch) => {
+                if let Some([x, y]) = watch.at {
+                    session.rt.pointer_move(x, y);
+                }
+                let until = Instant::now() + Duration::from_millis(watch.settle);
+                while Instant::now() < until {
+                    session.tick();
+                }
+                let trees_before = session.timings.trees;
+                let mut last: std::collections::HashMap<String, (i32, i32, i32, i32, i32)> =
+                    std::collections::HashMap::new();
+                let mut changes: std::collections::HashMap<String, (u32, String)> =
+                    std::collections::HashMap::new();
+                let mut frames = 0;
+                let mut inert_frames = 0;
+                let start = Instant::now();
+                let until = start + Duration::from_millis(watch.ms);
+                while Instant::now() < until {
+                    if let (Some([x0, y0]), Some([x1, y1])) = (watch.at, watch.to) {
+                        let t = (start.elapsed().as_secs_f32() * 1000.0 / watch.ms as f32).min(1.0);
+                        session
+                            .rt
+                            .pointer_move(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t);
+                    }
+                    session.tick();
+                    frames += 1;
+                    let els = session.rt.elements();
+                    if els.iter().any(|e| e.inert && !e.exiting) {
+                        inert_frames += 1;
+                    }
+                    if let Some(needle) = &watch.trace {
+                        let line: Vec<String> = els
+                            .iter()
+                            .filter(|e| e.path.ends_with(needle.as_str()))
+                            .map(|e| {
+                                format!(
+                                    "op {:.2} hover {:.2} focused {}{}",
+                                    e.opacity,
+                                    e.hover,
+                                    e.focused,
+                                    if e.exiting { " exiting" } else { "" }
+                                )
+                            })
+                            .collect();
+                        eprintln!("[trace {} {frames}] {}", watch.label, line.join(" "));
+                    }
+                    let mut seen = std::collections::HashSet::new();
+                    for e in els.iter().filter(|e| !e.exiting) {
+                        let state = watch_state(e);
+                        seen.insert(e.path.clone());
+                        if let Some(before) = last.insert(e.path.clone(), state)
+                            && before != state
+                        {
+                            let entry = changes.entry(e.path.clone()).or_insert((0, String::new()));
+                            entry.0 += 1;
+                            if entry.1.is_empty() {
+                                entry.1 = e.text.clone().or(e.label.clone()).unwrap_or_default();
+                            }
+                        }
+                    }
+                    // An element that comes and goes counts too.
+                    for gone in last
+                        .keys()
+                        .filter(|p| !seen.contains(*p))
+                        .cloned()
+                        .collect::<Vec<_>>()
+                    {
+                        last.remove(&gone);
+                        changes.entry(gone).or_insert((0, String::new())).0 += 1;
+                    }
+                }
+                let mut changing: Vec<_> = changes.into_iter().collect();
+                changing.sort_by_key(|c| std::cmp::Reverse(c.1.0));
+                let changing: Vec<_> = changing
+                    .iter()
+                    .take(12)
+                    .map(|(path, (n, text))| json!({ "path": path, "changes": n, "text": text.chars().take(40).collect::<String>() }))
+                    .collect();
+                eprintln!(
+                    "[watch {}] {}",
+                    watch.label,
+                    json!({ "frames": frames, "inertFrames": inert_frames, "trees": session.timings.trees - trees_before, "changing": changing })
+                );
+            }
             Step::Probe(probe) => {
                 session.rt.settle_all();
                 session.rt.frame(0.0);
@@ -730,7 +872,8 @@ pub fn run(script_path: &str) {
                     .iter()
                     .map(|t| {
                         let hit = els.iter().find(|e| {
-                            e.text.as_deref().is_some_and(|x| x.contains(t.as_str()))
+                            (e.text.as_deref().is_some_and(|x| x.contains(t.as_str()))
+                                || e.label.as_deref().is_some_and(|x| x.contains(t.as_str())))
                                 && e.opacity > 0.01
                                 && e.visible[2] > 0.5
                                 && e.visible[3] > 0.5
@@ -743,7 +886,7 @@ pub fn run(script_path: &str) {
                 eprintln!(
                     "[probe {}] {}",
                     probe.label,
-                    json!({"focused": focused, "hovered": hovered, "shown": shown, "inert": inert})
+                    json!({"focused": focused, "hovered": hovered, "shown": shown, "inert": inert, "pressing": session.rt.pressing()})
                 );
             }
             Step::Dump => {
