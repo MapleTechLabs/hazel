@@ -459,7 +459,10 @@ for (const route of ROUTES.filter((r) => routeFilter === undefined || r.includes
 		const steps = webOrder.flatMap((_, i) => [{ tab: 1 }, { wait: 60 }, { probe: { label: `tab ${i}` } }])
 		const nativeOrder = await nativeRun(route, steps, `${slug}-tab`)
 		// The first step where the two sides focus different controls: the rest follows from it.
-		const at = webOrder.findIndex((w, i) => {
+		// Past the last control the web's focus leaves for the browser's own UI; a window wraps.
+		const end = webOrder.indexOf(null)
+		const compared = end === -1 ? webOrder : webOrder.slice(0, end)
+		const at = compared.findIndex((w, i) => {
 			const n = nativeOrder.focused.get(`tab ${i}`) ?? null
 			if (w === null || n === null) return (w === null) !== (n === null)
 			const [x, y, width, height] = n.rect
