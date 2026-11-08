@@ -763,7 +763,8 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			run(path)
 			return true
 		}
-		const focusPath = (path: string) => send({ t: "focus", key: hostFocusKey(path, bridge.tagAt(path)) })
+		const focusPath = (path: string) =>
+			send({ t: "focus", key: hostFocusKey(path, bridge.tagAt(path), bridge.attrsAt(path)) })
 		return {
 			focus: (selector) => withPath(selector, focusPath),
 			click: (selector) => withPath(selector, click),
@@ -868,6 +869,10 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			void filesPicked(message.path, message.files)
 			return
 		}
+		if (message.t === "radio") {
+			stepRadio(message.path, message.step)
+			return
+		}
 		if (message.t === "key") {
 			const prevented = dispatchDocumentKey(message)
 			if (message.key === "Escape" && !prevented) options.overlays?.dismissTopmost()
@@ -943,6 +948,20 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		if (options.bridge?.tagAt(path) === "input" && attrs.type === "file")
 			send({ t: "pickFile", path, accept: attrs.accept ?? "" })
 		else click(path)
+	}
+
+	/**
+	 * A browser's radio group keys: an arrow moves to the next radio with the same `name`
+	 * (wrapping), checks it (its `change`) and focuses it.
+	 */
+	const stepRadio = (path: string, step: 1 | -1) => {
+		const group = options.bridge?.radioGroup(path) ?? []
+		const at = group.indexOf(path)
+		const next = group[(at + step + group.length) % group.length]
+		if (at === -1 || next === undefined || next === path) return
+		const value = options.bridge?.attrsAt(next).value ?? ""
+		fire(next, fakeEvent({ t: "event", seq: ack, id: 0, type: "change", value }))
+		send({ t: "focus", key: hostFocusKey(next, "input", { type: "radio" }) })
 	}
 
 	/** The files picked for a file input: read, then its `change`, as a browser fires it. */

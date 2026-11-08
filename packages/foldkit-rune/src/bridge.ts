@@ -68,11 +68,28 @@ type ResizeEntry = {
 /** What an element proxy asks of the host: `scrollTop =`, `focus()` and `scrollIntoView()`. */
 export type HostElementCommand = Extract<RuntimeToHost, { t: "scroll" | "focus" | "reveal" }>
 
-const TEXT_FIELD_TAGS = new Set(["input", "textarea"])
+/** `<input>` types the host draws as controls, not text fields (its `is_text_field`). */
+const CONTROL_INPUT_TYPES = new Set([
+	"checkbox",
+	"radio",
+	"button",
+	"submit",
+	"reset",
+	"image",
+	"range",
+	"color",
+])
 
 /** The host keys a text field's editor `<path>/field` inside the element at `path`. */
-export const hostFocusKey = (path: string, tag: string | undefined): string =>
-	tag !== undefined && TEXT_FIELD_TAGS.has(tag) ? `${path}/field` : path
+export const hostFocusKey = (
+	path: string,
+	tag: string | undefined,
+	attrs: Readonly<Record<string, string>> = {},
+): string => {
+	const textField =
+		tag === "textarea" || (tag === "input" && !CONTROL_INPUT_TYPES.has(attrs.type ?? "text"))
+	return textField ? `${path}/field` : path
+}
 
 /** Whether an element (tag, attributes, classes) matches one of the simple selectors Mounts use. */
 export const matchesElement = (
@@ -217,7 +234,10 @@ export const makeElementBridge = (options: {
 				value: (arg?: boolean | { block?: HostReveal["block"] }) =>
 					options.send({ t: "reveal", path, block: revealBlock(arg) }),
 			},
-			focus: { value: () => options.send({ t: "focus", key: hostFocusKey(path, record()?.tag) }) },
+			focus: {
+				value: () =>
+					options.send({ t: "focus", key: hostFocusKey(path, record()?.tag, record()?.attrs) }),
+			},
 			click: { value: () => options.onClick?.(path) },
 			blur: { value: () => {} },
 			style: { value: { setProperty() {}, removeProperty() {}, getPropertyValue: () => "" } },
@@ -443,6 +463,21 @@ export const makeElementBridge = (options: {
 			.filter(isTabbable)
 			.map((record) => record.path)
 
+	/** The enabled radios sharing the one at `path`'s `name`, in document order. */
+	const radioGroup = (path: string): Array<string> => {
+		const name = records.get(path)?.attrs.name
+		if (name === undefined) return [path]
+		return inOrder()
+			.filter(
+				(r) =>
+					r.tag === "input" &&
+					r.attrs.type === "radio" &&
+					r.attrs.name === name &&
+					!("disabled" in r.attrs),
+			)
+			.map((r) => r.path)
+	}
+
 	const findById = (id: string): ProxyElement | null => {
 		for (const record of records.values()) if (record.attrs.id === id) return proxyFor(record.path)
 		return null
@@ -506,6 +541,7 @@ export const makeElementBridge = (options: {
 		idAt,
 		attrsAt,
 		tabbablePaths,
+		radioGroup,
 		widthOf,
 		dispatchPointer,
 		dispatchContextMenu,

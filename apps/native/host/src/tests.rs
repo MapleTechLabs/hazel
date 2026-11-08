@@ -1815,6 +1815,40 @@ fn a_full_height_empty_state_leaves_room_for_the_composer() {
 }
 
 #[test]
+fn an_arrow_on_a_focused_radio_asks_the_runtime_for_the_next_in_its_group() {
+    sent_lines();
+    let radio = |checked: bool| {
+        let mut attrs = json!({ "type": "radio", "name": "mode", "tabindex": "0" });
+        if checked {
+            attrs["checked"] = json!("");
+        }
+        with_attrs(e("input", json!({}), vec![]), attrs)
+    };
+    let mut rt = runtime(
+        e(
+            "div",
+            json!({ "flex": "col" }),
+            vec![radio(true), radio(false)],
+        ),
+        (100.0, 100.0),
+    );
+    rt.key(KeyEvent {
+        key: Key::Tab,
+        mods: Mods::default(),
+    });
+    rt.frame(0.1);
+    rt.key(KeyEvent {
+        key: Key::Down,
+        mods: Mods::default(),
+    });
+    rt.frame(0.1);
+    let asked = sent_lines()
+        .into_iter()
+        .any(|m| m["t"] == "radio" && m["path"] == "r/0" && m["step"] == 1);
+    assert!(asked, "ArrowDown on the radio asks for the next one");
+}
+
+#[test]
 fn the_document_scrolls_when_it_is_taller_than_the_window() {
     let page = e(
         "div",

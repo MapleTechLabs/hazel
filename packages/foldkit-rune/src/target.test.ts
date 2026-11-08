@@ -239,6 +239,49 @@ describe("makeRuneTarget", () => {
 		handle.dispose()
 	})
 
+	it("moves an arrowed radio's group to the next radio, wrapping, and focuses it", async () => {
+		const Chose = defineMessageUnion({ Chose: { value: Schema.String } })
+		const sent: Array<RuntimeToHost> = []
+		const bridge = makeElementBridge({ mounts: new Set(), send: () => {} })
+		const rune = makeRuneTarget({
+			styles,
+			bridge,
+			env: { width: 800, height: 600, dark: false },
+			send: (m) => sent.push(m),
+		})
+		const chosen: Array<string> = []
+		const radio = (h: HtmlBuilder<typeof Chose.Type>, value: string) =>
+			h.input([
+				h.Type("radio"),
+				h.Name("mode"),
+				h.Attribute("value", value),
+				h.OnChange(() => Chose.Chose({ value })),
+			])
+		const handle = Runtime.embed(
+			Runtime.makeElement({
+				Model: Schema.Struct({ n: Schema.Number }),
+				init: () => ({ model: { n: 0 } }),
+				update: (model, message: typeof Chose.Type) => {
+					chosen.push(message.value)
+					return { model: { n: model.n + 1 } }
+				},
+				view: (_model, h) =>
+					h.div(
+						[],
+						[radio(h, "light"), radio(h, "dark"), h.input([h.Type("radio"), h.Name("other")])],
+					),
+				renderTarget: rune.target,
+			}),
+		)
+		await settle()
+		rune.handleHostMessage({ t: "radio", path: "r/0", step: 1 })
+		rune.handleHostMessage({ t: "radio", path: "r/1", step: 1 })
+		await settle()
+		expect(chosen).toEqual(["dark", "light"])
+		expect(sent.filter((m) => m.t === "focus").map((m) => m.key)).toEqual(["r/1", "r/0"])
+		handle.dispose()
+	})
+
 	it("follows a clicked link's href unless its click handler prevented it", async () => {
 		const followed: Array<string> = []
 		const sent: Array<RuntimeToHost> = []

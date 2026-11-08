@@ -888,6 +888,20 @@ fn behaviour(
     } else if script_focusable(attrs) {
         e = e.focusable_by_script().focusable_when_empty();
     }
+    // A radio's arrow keys move through its group, as a browser's do; the runtime knows the group.
+    if is_checkable(tag, attrs) && attrs.get("type").is_some_and(|t| t == "radio") {
+        let path = path.to_string();
+        e = e.on_key(move |_: &mut State, ev: &rune::edit::KeyEvent, _| {
+            use rune::edit::Key;
+            let step = match ev.key {
+                Key::Down | Key::Right => 1,
+                Key::Up | Key::Left => -1,
+                _ => return false,
+            };
+            write_line(json!({ "t": "radio", "path": path, "step": step }));
+            true
+        });
+    }
     focus_styles(key_and_hover_handlers(e, path, attrs, on, outer), st, false)
 }
 
