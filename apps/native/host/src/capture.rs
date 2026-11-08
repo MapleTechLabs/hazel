@@ -509,6 +509,7 @@ pub fn run(script_path: &str) {
     let mut rt = Runtime::new(state, view, window_size(), Env::new(dark, scale));
     rt.on_key = Some(crate::window_key);
     rt.set_srgb_blend(true);
+    rt.set_font_smoothing(crate::TEXT_SMOOTHING);
     let mut session = Session {
         rt,
         messages,

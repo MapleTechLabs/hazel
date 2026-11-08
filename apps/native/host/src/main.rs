@@ -131,6 +131,10 @@ fn send_key(chain: &[u32], key: &str, mods: rune::edit::Mods) -> u64 {
 }
 
 /// What a browser fires for one press, in order.
+/// The web app sets `-webkit-font-smoothing: antialiased` on `html`: text without CoreText's
+/// smoothing dilation, lighter than macOS's default.
+pub(crate) const TEXT_SMOOTHING: rune::FontSmoothing = rune::FontSmoothing::Off;
+
 const PRESS_EVENTS: [&str; 3] = ["pointerdown", "pointerup", "click"];
 
 /// A press as the browser reports it, for the handlers the element has. Rune reports a press
@@ -1852,7 +1856,10 @@ fn main() {
         on_key: Some(window_key),
         ..AppSpec::new("Hazel", window_size(), State::default, view)
     };
-    let app = App::new(spec).init(move || initial).on_open_url(open_url);
+    let app = App::new(spec)
+        .font_smoothing(TEXT_SMOOTHING)
+        .init(move || initial)
+        .on_open_url(open_url);
     let handle = app.handle();
     std::thread::spawn(move || {
         for msg in messages.iter() {
