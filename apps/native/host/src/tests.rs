@@ -1920,6 +1920,30 @@ fn pointer_events_none_inherits_and_auto_turns_presses_back_on() {
 }
 
 #[test]
+fn a_full_width_item_in_a_row_shrinks_to_leave_its_siblings_room() {
+    // Search (256), a w-full select field, and a count: CSS shrinks the field so all three fit.
+    let row = e(
+        "div",
+        json!({ "display": "flex", "w": 600, "gapCol": 12 }),
+        vec![
+            e("div", json!({ "w": 256, "h": 34 }), vec![]),
+            e(
+                "div",
+                json!({ "w": "full", "h": 34 }),
+                vec![e("div", json!({ "w": 144, "h": 34 }), vec![])],
+            ),
+            e("span", json!({ "nowrap": true }), vec![t("0 files")]),
+        ],
+    );
+    let rt = runtime(row, (600.0, 100.0));
+    let [x, _, w, _] = rect(&rt, "r/2");
+    assert!(
+        w > 0.0 && x + w <= 600.5,
+        "the count stays in the row: x {x}, w {w}"
+    );
+}
+
+#[test]
 fn the_document_scrolls_when_it_is_taller_than_the_window() {
     let page = e(
         "div",

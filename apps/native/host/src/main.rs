@@ -1171,6 +1171,21 @@ fn add_children(
                 }
                 _ => b,
             };
+            // A `w-full` item beside others in a row: CSS's default `flex-shrink: 1` gives the
+            // others their room. Rune boxes keep their size unless told to shrink.
+            let b = match style_of(child) {
+                Some(st)
+                    if parent.is_row
+                        && kids.len() > 1
+                        && st.w == Some(wire::Len::Full)
+                        && st.shrink.is_none()
+                        && st.min_w.is_none()
+                        && st.absolute.is_none() =>
+                {
+                    b.shrink()
+                }
+                _ => b,
+            };
             e = match style_of(child) {
                 Some(st) => {
                     let sibling_grows =
