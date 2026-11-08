@@ -162,6 +162,8 @@ const element = () => {
 			childNodes.unshift(...nodes)
 		},
 		remove() {},
+		// No canvas drawing: a probe for a 2D context finds none, as in a browser without it.
+		getContext: () => null,
 		querySelector: () => null,
 		querySelectorAll: () => [],
 		getElementsByTagName: () => [],

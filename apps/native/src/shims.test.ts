@@ -3,6 +3,17 @@ import { describe, expect, it } from "vitest"
 import { cssEscape, installShims } from "./shims"
 
 describe("installShims", () => {
+	it("answers a 2D canvas probe with no context, as a browser without canvas does", () => {
+		installShims({
+			width: 800,
+			height: 600,
+			dark: false,
+			url: "http://app.hazel.test/",
+			openUrl: () => {},
+		})
+		expect(document.createElement("canvas").getContext("2d")).toBeNull()
+	})
+
 	it("hands idle callbacks a deadline, as idle work reads its time left", async () => {
 		installShims({
 			width: 800,

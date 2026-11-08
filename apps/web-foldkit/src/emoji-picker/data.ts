@@ -193,10 +193,13 @@ const fetchEmojiData = (locale: string) =>
 		Effect.provide(Layer.fresh(FetchHttpClient.layer)),
 	)
 
-/** `isEmojiSupported`: a color emoji renders the same in two text colors. */
+/**
+ * `isEmojiSupported`: a color emoji renders the same in two text colors. Without a 2D canvas to
+ * probe with (a native renderer), every emoji counts as supported, as the system font draws them.
+ */
 const isEmojiSupported = (emoji: string): boolean => {
 	const context = document.createElement("canvas").getContext("2d", { willReadFrequently: true })
-	if (!context) return false
+	if (!context) return true
 	context.canvas.width = 2
 	context.canvas.height = 2
 	context.font = `2px ${EMOJI_FONT_FAMILY}`

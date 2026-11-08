@@ -101,6 +101,7 @@ const styles = existsSync(precompiledPath)
 
 /** A press on an `href` replays as the click Foldkit's link listener expects on `document`. */
 const followLink = (href: string) => {
+	if (process.env.NATIVE_DEBUG) process.stderr.write(`[link] ${href}\n`)
 	const link = Object.assign(new globalThis.Element(), {
 		href: new URL(href, location.href).href,
 		target: "",
