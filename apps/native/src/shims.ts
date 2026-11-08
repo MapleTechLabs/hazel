@@ -60,6 +60,9 @@ class SilentAudio extends EventTarget {
 /** Present so `instanceof Element` checks answer false instead of throwing. */
 class DomNode extends EventTarget {}
 
+/** An idle callback's budget, as a browser gives one between frames. */
+const IDLE_SLICE_MS = 50
+
 /** Any element whose tag is `dialog` (a host-backed proxy): foldkit's Dialog checks for one. */
 class ShimDialogElement extends DomNode {
 	static [Symbol.hasInstance](value: unknown): boolean {
@@ -87,6 +90,35 @@ class ShimMouseEvent extends Event {
 		this.clientX = init.clientX ?? 0
 		this.clientY = init.clientY ?? 0
 		this.relatedTarget = init.relatedTarget ?? null
+	}
+}
+
+/** The fields of a keyboard event the app's shortcut bindings read. */
+class ShimKeyboardEvent extends Event {
+	readonly key: string
+	readonly code: string
+	readonly shiftKey: boolean
+	readonly metaKey: boolean
+	readonly ctrlKey: boolean
+	readonly altKey: boolean
+	readonly repeat = false
+	readonly isComposing = false
+	constructor(type: string, init: KeyboardEventInit = {}) {
+		super(type, init)
+		this.key = init.key ?? ""
+		this.code = init.code ?? ""
+		this.shiftKey = init.shiftKey ?? false
+		this.metaKey = init.metaKey ?? false
+		this.ctrlKey = init.ctrlKey ?? false
+		this.altKey = init.altKey ?? false
+	}
+	getModifierState(name: string): boolean {
+		return (
+			(name === "Shift" && this.shiftKey) ||
+			(name === "Meta" && this.metaKey) ||
+			(name === "Control" && this.ctrlKey) ||
+			(name === "Alt" && this.altKey)
+		)
 	}
 }
 
@@ -324,11 +356,20 @@ export const installShims = (env: ShimEnv) => {
 		HTMLDialogElement: ShimDialogElement,
 		MouseEvent: ShimMouseEvent,
 		PointerEvent: ShimPointerEvent,
+		KeyboardEvent: ShimKeyboardEvent,
 		// The host draws at the display's rate (120 Hz on ProMotion): app frames keep that pace.
 		requestAnimationFrame: (callback: (time: number) => void) =>
 			setTimeout(() => callback(performance.now()), 1000 / 120),
 		cancelAnimationFrame: (handle: ReturnType<typeof setTimeout>) => clearTimeout(handle),
-		requestIdleCallback: (callback: () => void) => setTimeout(callback, 1),
+		// The callback gets an IdleDeadline: idle work (TanStack DB's) checks how much time it has.
+		requestIdleCallback: (callback: (deadline: IdleDeadline) => void) => {
+			const started = performance.now()
+			const deadline = {
+				didTimeout: false,
+				timeRemaining: () => Math.max(0, IDLE_SLICE_MS - (performance.now() - started)),
+			}
+			return setTimeout(() => callback(deadline), 1)
+		},
 		cancelIdleCallback: (handle: ReturnType<typeof setTimeout>) => clearTimeout(handle),
 		addEventListener: windowTarget.addEventListener.bind(windowTarget),
 		removeEventListener: windowTarget.removeEventListener.bind(windowTarget),

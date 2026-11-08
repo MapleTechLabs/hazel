@@ -3,6 +3,20 @@ import { describe, expect, it } from "vitest"
 import { cssEscape, installShims } from "./shims"
 
 describe("installShims", () => {
+	it("hands idle callbacks a deadline, as idle work reads its time left", async () => {
+		installShims({
+			width: 800,
+			height: 600,
+			dark: false,
+			url: "http://app.hazel.test/",
+			openUrl: () => {},
+		})
+		const remaining = await new Promise<number>((done) =>
+			requestIdleCallback((deadline) => done(deadline.timeRemaining())),
+		)
+		expect(remaining).toBeGreaterThan(0)
+	})
+
 	it("lets the app's live-region announcer build its detached nodes (a combo box announces picks)", async () => {
 		installShims({
 			width: 800,

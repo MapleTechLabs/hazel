@@ -36,6 +36,15 @@ const offline = dataMode === "offline" ? await import("./offline-session") : und
 const startPath = process.env.NATIVE_PATH ?? offline?.startPath ?? "/"
 const shims = installShims({ width, height, dark, url: `http://app.hazel.test${startPath}` })
 
+// A browser reports an uncaught error and keeps the page running; one stray error in a timer
+// must not end the runtime and leave the window unresponsive.
+const reportUncaught = (kind: string) => (error: unknown) => {
+	const detail = error instanceof Error ? (error.stack ?? error.message) : String(error)
+	process.stderr.write(`[uncaught ${kind}] ${detail}\n`)
+}
+process.on("uncaughtException", reportUncaught("error"))
+process.on("unhandledRejection", reportUncaught("rejection"))
+
 if (offline !== undefined) {
 	const { makeOfflineFetch } = await import("./offline-backend")
 	const { makeFixtureServer, makeFixtureWebSocket } = await import("./fixture/fixture-socket")
