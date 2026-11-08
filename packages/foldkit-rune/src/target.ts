@@ -41,25 +41,25 @@ const dispatchDocumentKey = (key: {
 	return event.defaultPrevented
 }
 
-const MIME_TYPES: Readonly<Record<string, string>> = {
-	png: "image/png",
-	jpg: "image/jpeg",
-	jpeg: "image/jpeg",
-	gif: "image/gif",
-	webp: "image/webp",
-	heic: "image/heic",
-	svg: "image/svg+xml",
-	pdf: "application/pdf",
-	txt: "text/plain",
-	json: "application/json",
-	mp4: "video/mp4",
-	mov: "video/quicktime",
-	mp3: "audio/mpeg",
-	zip: "application/zip",
-}
+const MIME_TYPES = new Map([
+	["png", "image/png"],
+	["jpg", "image/jpeg"],
+	["jpeg", "image/jpeg"],
+	["gif", "image/gif"],
+	["webp", "image/webp"],
+	["heic", "image/heic"],
+	["svg", "image/svg+xml"],
+	["pdf", "application/pdf"],
+	["txt", "text/plain"],
+	["json", "application/json"],
+	["mp4", "video/mp4"],
+	["mov", "video/quicktime"],
+	["mp3", "audio/mpeg"],
+	["zip", "application/zip"],
+])
 
 /** A picked file's type from its extension, as a browser reports `File.type`. */
-const mimeOf = (file: string): string => MIME_TYPES[file.split(".").pop()?.toLowerCase() ?? ""] ?? ""
+const mimeOf = (file: string): string => MIME_TYPES.get(file.split(".").pop()?.toLowerCase() ?? "") ?? ""
 
 const fakeEvent = (event: Extract<HostToRuntime, { t: "event" }>) => {
 	const files: Array<File> = []
