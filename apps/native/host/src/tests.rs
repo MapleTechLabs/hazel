@@ -1912,6 +1912,65 @@ fn table_cells_line_up_in_columns_across_rows() {
 }
 
 #[test]
+fn table_columns_share_spare_width_by_content_and_cells_centre_vertically() {
+    // Content 100 and 300 wide in an 800-wide table: CSS gives 200 and 600.
+    let row = e(
+        "tr",
+        json!({}),
+        vec![
+            e(
+                "td",
+                json!({}),
+                vec![e("div", json!({ "w": 100, "h": 60 }), vec![])],
+            ),
+            e(
+                "td",
+                json!({}),
+                vec![e("div", json!({ "w": 300, "h": 20 }), vec![])],
+            ),
+        ],
+    );
+    let table = e(
+        "table",
+        json!({ "w": 800 }),
+        vec![e("tbody", json!({}), vec![row])],
+    );
+    let rt = runtime(table, (800.0, 200.0));
+    let [x, _, w, _] = rect(&rt, "r/0/0/1");
+    assert_eq!(
+        (x, w),
+        (200.0, 600.0),
+        "columns in proportion to their content"
+    );
+    assert_eq!(
+        rect(&rt, "r/0/0/1/0")[1],
+        20.0,
+        "the short cell's content sits in the middle of the 60-tall row"
+    );
+}
+
+#[test]
+fn a_lone_span_of_smaller_text_sits_on_its_blocks_baseline() {
+    // A 12/16 span in a 16/24 block: the line is the block's 24, the span 5.45 down.
+    let label = e(
+        "div",
+        json!({}),
+        vec![e(
+            "span",
+            json!({ "fontSize": 12, "lineHeight": 16 }),
+            vec![t("Settings")],
+        )],
+    );
+    let rt = runtime(e("div", json!({}), vec![label]), (300.0, 100.0));
+    let [_, y, _, _] = rect(&rt, "r/0/0");
+    assert!((y - 5.45).abs() < 0.2, "the span starts at {y}");
+    assert!(
+        (rect(&rt, "r/0")[3] - 24.0).abs() < 0.2,
+        "the line is the block's strut"
+    );
+}
+
+#[test]
 fn an_inline_flex_child_of_a_block_keeps_its_own_width() {
     let badge = e(
         "span",

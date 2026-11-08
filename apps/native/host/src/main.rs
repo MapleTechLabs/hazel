@@ -249,7 +249,24 @@ fn build_table<'a>(
         })
         .max()
         .unwrap_or(1);
-    let mut grid = el().grid_columns(vec![rune::GridTrack::Auto; columns]);
+    // CSS's automatic table layout: each column gets its widest cell's max-content width and
+    // a share of the spare width in proportion to it, which `fr` tracks so weighted give.
+    let mut widths = vec![0.0_f32; columns];
+    for row in &rows {
+        let row_inh = inh.from(&row.st);
+        let mut at = 0;
+        for (_, cell) in &row.cells {
+            let n = usize::from(span(cell));
+            if n == 1
+                && let Some(w) = widths.get_mut(at)
+            {
+                *w = w.max(max_content(cell, row_inh));
+            }
+            at += n;
+        }
+    }
+    let tracks = widths.iter().map(|w| rune::GridTrack::Fr(w.max(1.0)));
+    let mut grid = el().grid_columns(tracks.collect::<Vec<_>>());
     for row in &rows {
         let row_inh = inh.from(&row.st);
         for (cell_path, cell) in &row.cells {
@@ -296,11 +313,58 @@ fn build_table<'a>(
                 children: children.clone(),
             });
             if let Some(cell) = build(&decorated, cell_path, row_inh, ctx) {
-                grid = grid.child(cell);
+                // A cell's content sits in the middle of its row (`vertical-align: middle`).
+                let block = matches!(cst.display.as_deref(), None | Some("block" | "table-cell"));
+                grid = grid.child(if block { cell.justify_center() } else { cell });
             }
         }
     }
     apply_box(grid.key(path), st)
+}
+
+/// A box's max-content width, estimated: text measured as drawn, a row's children side by side,
+/// a column's widest child, an explicit width as given, plus padding and borders.
+fn max_content(node: &Node, inh: Inherit) -> f32 {
+    match node {
+        Node::Text(t) => rune::text::measure(t.trim(), &[], inh.style(), None).0,
+        Node::Svg { st, .. } => match st.w {
+            Some(wire::Len::Px(w)) => w.0,
+            _ => 16.0,
+        },
+        Node::Elem {
+            st, children, tag, ..
+        } => {
+            if st.display.as_deref() == Some("none") || st.absolute.is_some() {
+                return 0.0;
+            }
+            let side = |b: Option<[F; 4]>| b.map_or(0.0, |b| b[1].0 + b[3].0);
+            let edges = side(st.pad) + side(st.border) + side(st.margin);
+            if let Some(wire::Len::Px(w)) = st.w {
+                return w.0 + side(st.margin);
+            }
+            let own = inh.from(st);
+            let kids = children.iter().map(|c| max_content(c, own));
+            let row = match st.display.as_deref() {
+                Some("flex") => st.dir.as_deref() != Some("col"),
+                Some("grid") => false,
+                _ => is_inline_tag(tag) || children.iter().all(is_inline),
+            };
+            let inner = if row {
+                let gap = st.gap_col.map_or(0.0, |g| g.0) * children.len().saturating_sub(1) as f32;
+                kids.sum::<f32>() + gap
+            } else {
+                kids.fold(0.0, f32::max)
+            };
+            inner + edges
+        }
+    }
+}
+
+fn is_inline_tag(tag: &str) -> bool {
+    matches!(
+        tag,
+        "span" | "a" | "strong" | "em" | "code" | "b" | "i" | "kbd" | "time" | "label"
+    )
 }
 
 /// What a press on the element does: its click handlers, else a link's navigation, else a
@@ -1004,10 +1068,13 @@ fn add_children(
         if let Some(b) = build(child, &child_path, inh, ctx) {
             let b = match style_of(child) {
                 Some(st)
-                    if parent.block && is_atomic_inline(child, st) && st.absolute.is_none() =>
+                    if parent.block
+                        && st.absolute.is_none()
+                        && (is_atomic_inline(child, st) || is_inline(child)) =>
                 {
                     let [mt, _, mb, _] = st.margin.map_or([0.0; 4], |m| m.map(|v| v.0));
-                    let (top, bottom) = line_box_space(child, st, inh);
+                    let atomic = is_atomic_inline(child, st);
+                    let (top, bottom) = line_box_space(child, st, inh, atomic);
                     if top > 0.0 || bottom > 0.0 {
                         b.mt(mt + top).mb(mb + bottom)
                     } else {
@@ -1058,13 +1125,17 @@ const DESCENT: f32 = 0.242;
 /// block: the child sits on the baseline of a line at least as tall as the parent's strut. A
 /// child with no text has its baseline at its bottom edge, so the strut's descent shows below
 /// it. A text child aligns its first line's baseline (one line assumed). Others: none.
-fn line_box_space(node: &Node, st: &Style, inh: Inherit) -> (f32, f32) {
+fn line_box_space(node: &Node, st: &Style, inh: Inherit, atomic: bool) -> (f32, f32) {
     let metrics = |size: f32, line: f32| {
         let half_leading = (line - (ASCENT + DESCENT) * size) / 2.0;
         (half_leading + ASCENT * size, half_leading + DESCENT * size)
     };
     let (strut_above, strut_below) = metrics(inh.size, inh.line);
+    // An inline box's own padding, border and margin do not size its line; an inline-block's do.
     let edge = |side: usize| {
+        if !atomic {
+            return 0.0;
+        }
         [st.margin, st.border, st.pad]
             .iter()
             .map(|b| b.map_or(0.0, |b| b[side].0))
