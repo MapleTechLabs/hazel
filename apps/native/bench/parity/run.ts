@@ -1,6 +1,8 @@
 /**
  * Parity crawl: every route and every control on it, in Chromium and natively, from the same
- * offline fixture. Finds what differs without a hand-written list of what to check.
+ * offline fixture. Finds what differs without a hand-written list of what to check. The `open`
+ * phase goes a level deeper: each control that opens something (a menu, a dialog, a popover)
+ * is opened again and every new control in it clicked, both sides from a fresh load.
  *   bun apps/native/bench/parity/run.ts [--route <substring>] [--max <controls per route>]
  *     [--jobs <native processes at once>] [--skip-build]
  * For each route: the texts each side shows (content missing or extra natively). For each control
@@ -51,7 +53,10 @@ const option = (name: string) => (args.includes(name) ? args[args.indexOf(name) 
 const routeFilter = option("--route")
 const maxPerRoute = Number(option("--max") ?? 40)
 const jobs = Number(option("--jobs") ?? 4)
-const phases = new Set((option("--phases") ?? "load,click,hover,tab").split(","))
+const phases = new Set((option("--phases") ?? "load,click,hover,tab,open").split(","))
+/** How many openers, and how many of the controls each opens, the `open` phase follows. */
+const maxOpeners = Number(option("--max-openers") ?? 12)
+const maxOpened = Number(option("--max-opened") ?? 12)
 /** How many Tab presses the tab-order phase follows on each route. */
 const TABS = 24
 
@@ -208,6 +213,31 @@ const webRoute = async (browser: Browser, url: string) => {
 const webClick = (browser: Browser, url: string, control: Control) =>
 	webAct(browser, url, (page) => page.mouse.click(control.x, control.y))
 
+/** Clicks `controls` in turn, each once the page has settled from the one before. */
+const webClicks = (browser: Browser, url: string, controls: ReadonlyArray<Control>) =>
+	webAct(browser, url, async (page) => {
+		for (const [i, control] of controls.entries()) {
+			if (i > 0) {
+				await sleep(300)
+				await waitQuiet(page, 500)
+			}
+			await page.mouse.click(control.x, control.y)
+		}
+	})
+
+/** Clicks `opener` and returns what shows then, and the controls that were not there before. */
+const webOpen = async (browser: Browser, url: string, opener: Control, before: ReadonlyArray<Control>) => {
+	const { page, context } = await openPage(browser, url)
+	await page.mouse.click(opener.x, opener.y)
+	await sleep(300)
+	await waitQuiet(page, 600)
+	const texts = await page.evaluate(visibleTexts)
+	const known = new Set(before.map((c) => `${c.label}@${c.x},${c.y}`))
+	const opened = (await page.evaluate(findControls)).filter((c) => !known.has(`${c.label}@${c.x},${c.y}`))
+	await context.close()
+	return { texts, opened: opened.slice(0, maxOpened) }
+}
+
 /** Points at a control and waits out a tooltip's delay. */
 const webHover = (browser: Browser, url: string, control: Control) =>
 	webAct(browser, url, async (page) => {
@@ -353,6 +383,37 @@ const overlap = (a: ReadonlyArray<string>, b: ReadonlyArray<string>) => {
 
 type Finding = { route: string; control?: string; kind: string; detail: string }
 
+/** Flags how an action's outcome differs between the sides, each against its own state before. */
+const judge = (
+	flag: (kind: string, detail: string) => void,
+	webBefore: ReadonlyArray<string>,
+	nativeBefore: ReadonlyArray<string>,
+	webOutcome: Outcome | undefined,
+	nativeOutcome: Outcome | undefined,
+) => {
+	const w = comparable(webOutcome?.texts ?? [])
+	const n = comparable(nativeOutcome?.texts ?? [])
+	for (const error of nativeOutcome?.errors ?? []) flag("native error", error)
+	const webDelta = without(w, webBefore)
+	const nativeDelta = without(n, nativeBefore)
+	const webGone = without(webBefore, w)
+	const nativeGone = without(nativeBefore, n)
+	const webChanged = webDelta.length > 0 || webGone.length > 0
+	const nativeChanged = nativeDelta.length > 0 || nativeGone.length > 0
+	if (webChanged && !nativeChanged)
+		flag(
+			"does nothing natively",
+			`web shows: ${webDelta.slice(0, 8).join(" | ") || `(removes ${webGone.slice(0, 5).join(" | ")})`}`,
+		)
+	else if (!webChanged && nativeChanged)
+		flag("does something only natively", `native shows: ${nativeDelta.slice(0, 8).join(" | ")}`)
+	else if (webChanged && overlap(webDelta, nativeDelta) < 0.5 && overlap(webGone, nativeGone) < 0.5)
+		flag(
+			"shows something else natively",
+			`web: ${webDelta.slice(0, 6).join(" | ")} || native: ${nativeDelta.slice(0, 6).join(" | ")}`,
+		)
+}
+
 // MAIN
 
 mkdirSync(join(outDir, "scripts"), { recursive: true })
@@ -417,28 +478,7 @@ for (const route of ROUTES.filter((r) => routeFilter === undefined || r.includes
 			jobs,
 		)
 		web.controls.forEach((control, i) => {
-			const flag = flagFor(control, phase)
-			const w = comparable(webOutcomes[i]?.texts ?? [])
-			const n = comparable(nativeOutcomes[i]?.texts ?? [])
-			for (const error of nativeOutcomes[i]?.errors ?? []) flag("native error", error)
-			const webDelta = without(w, web.texts)
-			const nativeDelta = without(n, native.texts)
-			const webGone = without(web.texts, w)
-			const nativeGone = without(native.texts, n)
-			const webChanged = webDelta.length > 0 || webGone.length > 0
-			const nativeChanged = nativeDelta.length > 0 || nativeGone.length > 0
-			if (webChanged && !nativeChanged)
-				flag(
-					"does nothing natively",
-					`web shows: ${webDelta.slice(0, 8).join(" | ") || `(removes ${webGone.slice(0, 5).join(" | ")})`}`,
-				)
-			else if (!webChanged && nativeChanged)
-				flag("does something only natively", `native shows: ${nativeDelta.slice(0, 8).join(" | ")}`)
-			else if (webChanged && overlap(webDelta, nativeDelta) < 0.5 && overlap(webGone, nativeGone) < 0.5)
-				flag(
-					"shows something else natively",
-					`web: ${webDelta.slice(0, 6).join(" | ")} || native: ${nativeDelta.slice(0, 6).join(" | ")}`,
-				)
+			judge(flagFor(control, phase), web.texts, native.texts, webOutcomes[i], nativeOutcomes[i])
 		})
 	}
 
@@ -454,6 +494,54 @@ for (const route of ROUTES.filter((r) => routeFilter === undefined || r.includes
 			(control) => webHover(browser, url, control),
 			(control) => [{ move: [control.x, control.y] }, { wait: 900 }, { settle: 300 }],
 		)
+	if (phases.has("open")) {
+		// Which controls open something, and what each opens (web), then that state natively.
+		const openings = (
+			await pool(
+				web.controls.map((opener) => () => webOpen(browser, url, opener, web.controls)),
+				jobs,
+			)
+		)
+			.map((o, i) => ({ ...o, opener: web.controls[i] }))
+			.filter((o): o is typeof o & { opener: Control } => o.opener !== undefined && o.opened.length > 0)
+			.slice(0, maxOpeners)
+		const openStep = (c: Control) => [{ clickAt: [c.x, c.y] }, { settle: 600 }, { wait: 300 }]
+		const nativeOpened = await pool(
+			openings.map((o, i) => () => nativeRun(route, openStep(o.opener), `${slug}-opener-${i}`)),
+			jobs,
+		)
+		const pairs = openings.flatMap((o, i) => o.opened.map((item) => ({ o, i, item })))
+		console.log(`  ${openings.length} openers, ${pairs.length} opened controls`)
+		const webOutcomes = await pool(
+			pairs.map(({ o, item }) => () => webClicks(browser, url, [o.opener, item])),
+			jobs,
+		)
+		const nativeOutcomes = await pool(
+			pairs.map(
+				({ o, item }, k) => () =>
+					nativeRun(route, [...openStep(o.opener), ...openStep(item)], `${slug}-open-${k}`),
+			),
+			jobs,
+		)
+		pairs.forEach(({ o, i, item }, k) => {
+			const flag = (kind: string, detail: string) => {
+				flagged++
+				findings.push({
+					route,
+					control: `open: ${o.opener.label} > ${item.label} (${item.role} at ${item.x},${item.y})`,
+					kind,
+					detail,
+				})
+			}
+			judge(
+				flag,
+				comparable(o.texts),
+				comparable(nativeOpened[i]?.texts ?? []),
+				webOutcomes[k],
+				nativeOutcomes[k],
+			)
+		})
+	}
 	if (phases.has("tab")) {
 		const webOrder = await webTabs(browser, url)
 		const steps = webOrder.flatMap((_, i) => [{ tab: 1 }, { wait: 60 }, { probe: { label: `tab ${i}` } }])
