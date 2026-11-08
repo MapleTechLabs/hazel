@@ -6,7 +6,7 @@
 import { readFileSync, readdirSync } from "node:fs"
 import { beforeAll, describe, expect, it } from "vitest"
 
-import { type ElementInput, type NodeInfo, type Scope, type Style, StyleResolver, color, isTabStop } from "./style"
+import { type ElementInput, type NodeInfo, type Scope, type Style, StyleResolver, color, isFocusable } from "./style"
 
 type RecordedElement = {
 	p: number
@@ -259,13 +259,13 @@ type Context = {
 	parentDisplay: string
 	isLastChild: boolean
 	/** The element is a Tab stop or holds one: sr-only, it is kept. */
-	holdsTabStop: boolean
+	holdsFocusable: boolean
 }
 
-const browserDisplay = (cs: Context["cs"], holdsTabStop: boolean) => {
+const browserDisplay = (cs: Context["cs"], holdsFocusable: boolean) => {
 	const d = cs("display")
 	// sr-only content is never drawn; a screen-reader-only control stays (a Tab stop).
-	if (cs("clip-path").replace(/\s/g, "") === "inset(50%)" && !holdsTabStop) return "none"
+	if (cs("clip-path").replace(/\s/g, "") === "inset(50%)" && !holdsFocusable) return "none"
 	if (d === "inline-block" || d === "inline") return "inline"
 	if (["none", "contents", "flex", "inline-flex", "grid", "inline-grid"].includes(d)) return d
 	return "block"
@@ -293,7 +293,7 @@ const expectations = (ctx: Context): Array<Check> => {
 		})
 	const num = (prop: string, browser: number | null, resolver: number, tolerance = 0.5) =>
 		add(prop, browser, resolver, browser !== null && near(browser, resolver, tolerance))
-	const display = browserDisplay(cs, ctx.holdsTabStop)
+	const display = browserDisplay(cs, ctx.holdsFocusable)
 	add("display", display, resolverDisplay(st, el.tag))
 	if (display === "none") return checks
 	const flexLike = display.endsWith("flex")
@@ -618,7 +618,7 @@ const runFixture = (styles: StyleResolver, fixture: Fixture) => {
 		out.push({ style, scope: childScope, inh })
 		const cs = (prop: string) => el.cs[prop] ?? fixture.defaults[prop] ?? ""
 		const parentRecord = el.p >= 0 ? elements[el.p] : undefined
-		const holdsTabStop = (at: number) => [at, ...descendants(at)].some((d) => isTabStop(info(d)))
+		const holdsFocusable = (at: number) => [at, ...descendants(at)].some((d) => isFocusable(info(d)))
 		const checks = expectations({
 			el,
 			cs,
@@ -630,10 +630,10 @@ const runFixture = (styles: StyleResolver, fixture: Fixture) => {
 					? "block"
 					: browserDisplay(
 							(prop) => parentRecord.cs[prop] ?? fixture.defaults[prop] ?? "",
-							holdsTabStop(el.p),
+							holdsFocusable(el.p),
 						),
 			isLastChild: siblings.at(-1) === i,
-			holdsTabStop: holdsTabStop(i),
+			holdsFocusable: holdsFocusable(i),
 		})
 		for (const check of checks) {
 			const count = counts.get(check.prop) ?? { checked: 0, failed: 0 }

@@ -230,6 +230,14 @@ describe("StyleResolver", () => {
 			extra: { hasDescendant: (match) => match({ tag: "input", classes: [], attrs: { type: "radio" } }) },
 		}).style
 		expect(holdsInput.display).not.toBe("none")
+		// And one around a radio a group focuses by script (`tabindex="-1"`).
+		const holdsOther = resolve("sr-only", {
+			extra: {
+				hasDescendant: (match) =>
+					match({ tag: "input", classes: [], attrs: { type: "radio", tabindex: "-1" } }),
+			},
+		}).style
+		expect(holdsOther.display).not.toBe("none")
 		expect(
 			resolve("p-2", { extra: { inline: { padding: "5px", "--x": "3px", margin: "var(--x)" } } }).style,
 		).toMatchObject({ pad: [5, 5, 5, 5], margin: [3, 3, 3, 3] })

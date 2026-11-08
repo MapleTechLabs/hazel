@@ -70,6 +70,10 @@ export const isTabStop = (el: { tag?: string; attrs: Readonly<Record<string, str
 	return ["button", "select", "textarea"].includes(el.tag ?? "") || (el.tag === "a" && "href" in el.attrs)
 }
 
+/** Focusable at all: a Tab stop, or one script focuses (`tabindex="-1"`, a radio group's others). */
+export const isFocusable = (el: { tag?: string; attrs: Readonly<Record<string, string>> }): boolean =>
+	isTabStop(el) || (!("disabled" in el.attrs) && el.attrs.tabindex !== undefined)
+
 /** An element as selectors see it: a sibling, a descendant or the element itself. */
 export type NodeInfo = {
 	tag: string
@@ -804,10 +808,10 @@ export class StyleResolver {
 		for (const { mode, d } of ordered)
 			if (!TEXT_FIRST.has(d.prop) && d.prop !== "font-size") this.apply(acc, d, mode)
 		this.finish(acc)
-		// A screen-reader-only control (or a hidden box holding one, as around a checkbox's input)
-		// stays a Tab stop: kept at its 1px clipped box, all but transparent. Other sr-only content goes.
+		// A screen-reader-only control (or a hidden box holding one, as around a radio's input)
+		// stays focusable: kept at its 1px clipped box, all but transparent. Other sr-only content goes.
 		if (acc.srOnly) {
-			if (isTabStop(el) || hasDescendant(isTabStop, false)) style.opacity = SR_ONLY_OPACITY
+			if (isFocusable(el) || hasDescendant(isFocusable, false)) style.opacity = SR_ONLY_OPACITY
 			else style.display = "none"
 		}
 		const outlineHidden = acc.outline.style !== undefined && style.outline === undefined
