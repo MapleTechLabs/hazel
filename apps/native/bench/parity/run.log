@@ -1,0 +1,4 @@
+route /hazel/chat/00000005-0000-4000-8000-000000000001
+  39 controls
+route /hazel/chat/00000005-0000-4000-8000-000000000001/files
+  27 controls
