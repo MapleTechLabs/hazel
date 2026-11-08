@@ -58,6 +58,17 @@ export type Scope = {
 	flexParent: boolean
 }
 
+/** Barely above zero: a screen-reader-only control the host must still let take focus. */
+const SR_ONLY_OPACITY = 0.001
+
+/** Reached by Tab: a control, a link, or `tabindex >= 0`; form fields are the host's own. */
+export const isTabStop = (el: { tag?: string; attrs: Readonly<Record<string, string>> }): boolean => {
+	if ("disabled" in el.attrs) return false
+	const tabIndex = el.attrs.tabindex
+	if (tabIndex !== undefined) return Number(tabIndex) >= 0
+	return el.tag === "button" || (el.tag === "a" && "href" in el.attrs)
+}
+
 /** An element as selectors see it: a sibling, a descendant or the element itself. */
 export type NodeInfo = {
 	tag: string
@@ -792,6 +803,12 @@ export class StyleResolver {
 		for (const { mode, d } of ordered)
 			if (!TEXT_FIRST.has(d.prop) && d.prop !== "font-size") this.apply(acc, d, mode)
 		this.finish(acc)
+		// A screen-reader-only control stays a Tab stop, as in a browser: kept at its 1px clipped
+		// box, all but transparent (the host skips focus at opacity 0). Other sr-only content goes.
+		if (acc.srOnly) {
+			if (isTabStop(el)) style.opacity = SR_ONLY_OPACITY
+			else style.display = "none"
+		}
 		const outlineHidden = acc.outline.style !== undefined && style.outline === undefined
 		if (childGap !== undefined) style.childGap = childGap
 		if (hoverGroup || el.classes.some((c) => c === "group" || c.startsWith("group/")))
@@ -1367,9 +1384,9 @@ export class StyleResolver {
 			case "text-overflow":
 				s.truncate = v === "ellipsis"
 				break
-			// `sr-only`: screen-reader text, never drawn.
+			// `sr-only`: screen-reader text, never drawn (a focusable one is kept: see `resolve`).
 			case "clip-path":
-				if (v.replace(/\s/g, "") === "inset(50%)") s.display = "none"
+				if (v.replace(/\s/g, "") === "inset(50%)") acc.srOnly = true
 				break
 			case "position":
 				acc.fixed = v === "fixed"
@@ -1780,6 +1797,8 @@ type Accumulator = {
 	animation?: string
 	/** `position: fixed`: percentage insets are of the window. */
 	fixed?: boolean
+	/** `sr-only` (`clip-path: inset(50%)`): drawn nowhere. */
+	srOnly?: boolean
 	/** `transition-*` longhands as written, composed in `finish`. */
 	transition: { property?: string; duration?: string; timing?: string; delay?: string }
 	/** This element's own line-height, when it sets one. */

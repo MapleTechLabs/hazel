@@ -220,6 +220,11 @@ describe("StyleResolver", () => {
 
 	it("hides screen-reader-only text and reads inline styles last", () => {
 		expect(resolve("sr-only").style.display).toBe("none")
+		// A screen-reader-only control (a keyboard drag handle) stays a Tab stop.
+		const control = resolve("sr-only", { extra: { tag: "button" } }).style
+		expect(control.display).not.toBe("none")
+		expect(control).toMatchObject({ w: 1, h: 1, clip: true })
+		expect(control.opacity).toBeGreaterThan(0)
 		expect(
 			resolve("p-2", { extra: { inline: { padding: "5px", "--x": "3px", margin: "var(--x)" } } }).style,
 		).toMatchObject({ pad: [5, 5, 5, 5], margin: [3, 3, 3, 3] })

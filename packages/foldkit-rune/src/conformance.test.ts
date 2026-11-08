@@ -6,7 +6,7 @@
 import { readFileSync, readdirSync } from "node:fs"
 import { beforeAll, describe, expect, it } from "vitest"
 
-import { type ElementInput, type NodeInfo, type Scope, type Style, StyleResolver, color } from "./style"
+import { type ElementInput, type NodeInfo, type Scope, type Style, StyleResolver, color, isTabStop } from "./style"
 
 type RecordedElement = {
 	p: number
@@ -260,9 +260,10 @@ type Context = {
 	isLastChild: boolean
 }
 
-const browserDisplay = (cs: Context["cs"]) => {
+const browserDisplay = (cs: Context["cs"], el: { tag?: string; attrs: Readonly<Record<string, string>> }) => {
 	const d = cs("display")
-	if (cs("clip-path").replace(/\s/g, "") === "inset(50%)") return "none"
+	// sr-only content is never drawn; a screen-reader-only control stays (a Tab stop).
+	if (cs("clip-path").replace(/\s/g, "") === "inset(50%)" && !isTabStop(el)) return "none"
 	if (d === "inline-block" || d === "inline") return "inline"
 	if (["none", "contents", "flex", "inline-flex", "grid", "inline-grid"].includes(d)) return d
 	return "block"
@@ -290,7 +291,7 @@ const expectations = (ctx: Context): Array<Check> => {
 		})
 	const num = (prop: string, browser: number | null, resolver: number, tolerance = 0.5) =>
 		add(prop, browser, resolver, browser !== null && near(browser, resolver, tolerance))
-	const display = browserDisplay(cs)
+	const display = browserDisplay(cs, el)
 	add("display", display, resolverDisplay(st, el.tag))
 	if (display === "none") return checks
 	const flexLike = display.endsWith("flex")
@@ -504,6 +505,11 @@ const expectations = (ctx: Context): Array<Check> => {
  */
 const ALLOWLIST: Array<{ prop: string; when: RegExp; reason: string }> = [
 	{
+		prop: "opacity",
+		when: /\bsr-only\b/,
+		reason: "a screen-reader-only control is kept all but transparent, so the host lets it take focus",
+	},
+	{
 		prop: "w",
 		when: /\bw-\[calc\(100%-2rem\)\]/,
 		reason: "Px is px, a share of the parent or auto: calc() mixing a share and a length has no wire form",
@@ -619,7 +625,7 @@ const runFixture = (styles: StyleResolver, fixture: Fixture) => {
 			parentDisplay:
 				parentRecord === undefined
 					? "block"
-					: browserDisplay((prop) => parentRecord.cs[prop] ?? fixture.defaults[prop] ?? ""),
+					: browserDisplay((prop) => parentRecord.cs[prop] ?? fixture.defaults[prop] ?? "", parentRecord),
 			isLastChild: siblings.at(-1) === i,
 		})
 		for (const check of checks) {
