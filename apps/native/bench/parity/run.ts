@@ -53,7 +53,9 @@ const option = (name: string) => (args.includes(name) ? args[args.indexOf(name) 
 const routeFilter = option("--route")
 const maxPerRoute = Number(option("--max") ?? 40)
 const jobs = Number(option("--jobs") ?? 4)
-const phases = new Set((option("--phases") ?? "load,click,hover,tab,open").split(","))
+const phases = new Set((option("--phases") ?? "load,click,hover,tab,open,type").split(","))
+/** What the `type` phase types into each field before pressing Return. */
+const TYPED = "parity probe"
 /** How many openers, and how many of the controls each opens, the `open` phase follows. */
 const maxOpeners = Number(option("--max-openers") ?? 12)
 const maxOpened = Number(option("--max-opened") ?? 12)
@@ -75,6 +77,9 @@ const normalize = (text: string) =>
  * and an editor's placeholder, which the native text field draws itself rather than as text.
  */
 const BY_DESIGN = new Set(["vnative", "v", "#.#.#", "v#.#.#", "Type a message..."])
+
+/** Openers whose result differs by design: "Generate" makes random theme palettes. */
+const RANDOM_OPENERS = new Set(["Generate"])
 
 /** A text as both sides compare it: digits masked, so clocks and counts a minute apart agree. */
 const comparable = (texts: ReadonlyArray<string>) => [
@@ -184,6 +189,29 @@ const findControls = (): Array<Control> => {
 	return out
 }
 
+/** Runs in the page: every text field drawn inside the viewport, by its centre. */
+const findFields = (): Array<Control> => {
+	const selector =
+		'input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]), textarea, [contenteditable="true"]'
+	const out: Array<Control> = []
+	for (const el of document.querySelectorAll<HTMLElement>(selector)) {
+		if (el.closest("[inert], [aria-hidden='true']") !== null) continue
+		if (el.matches(":disabled, [readonly]")) continue
+		if (!el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue
+		const box = el.getBoundingClientRect()
+		if (box.width < 8 || box.height < 8) continue
+		const x = Math.round(box.left + Math.min(box.width / 2, 40))
+		const y = Math.round(box.top + box.height / 2)
+		if (x <= 0 || y <= 0 || x >= window.innerWidth || y >= window.innerHeight) continue
+		const hit = document.elementFromPoint(x, y)
+		if (hit === null || !(el === hit || el.contains(hit) || hit.contains(el))) continue
+		const label =
+			el.getAttribute("aria-label") ?? el.getAttribute("placeholder") ?? el.getAttribute("name") ?? ""
+		out.push({ label: label.slice(0, 50) || el.tagName.toLowerCase(), role: el.tagName.toLowerCase(), x, y })
+	}
+	return out
+}
+
 const openPage = async (browser: Browser, url: string) => {
 	const context = await browser.newContext({ viewport: VIEWPORT, colorScheme: "dark" })
 	const page = await context.newPage()
@@ -213,24 +241,40 @@ const webRoute = async (browser: Browser, url: string) => {
 const webClick = (browser: Browser, url: string, control: Control) =>
 	webAct(browser, url, (page) => page.mouse.click(control.x, control.y))
 
+/** Clicks at a control, then waits for the page to settle; a click that navigates waits for the new page. */
+const clickAndSettle = async (page: Page, control: Control) => {
+	const before = page.url()
+	await page.mouse.click(control.x, control.y)
+	await sleep(300)
+	if (page.url() !== before) {
+		await page.waitForFunction(() => (document.body.innerText ?? "").length > 40, null, { timeout: 15_000 })
+		await waitQuiet(page, 900)
+	} else await waitQuiet(page, 600)
+}
+
+/** Clicks into `field`, types, and presses Return. */
+const webType = (browser: Browser, url: string, field: Control) =>
+	webAct(browser, url, async (page) => {
+		await page.mouse.click(field.x, field.y)
+		await sleep(200)
+		await page.keyboard.type(TYPED, { delay: 20 })
+		await sleep(200)
+		await page.keyboard.press("Enter")
+	})
+
 /** Clicks `controls` in turn, each once the page has settled from the one before. */
 const webClicks = (browser: Browser, url: string, controls: ReadonlyArray<Control>) =>
 	webAct(browser, url, async (page) => {
 		for (const [i, control] of controls.entries()) {
-			if (i > 0) {
-				await sleep(300)
-				await waitQuiet(page, 500)
-			}
-			await page.mouse.click(control.x, control.y)
+			if (i < controls.length - 1) await clickAndSettle(page, control)
+			else await page.mouse.click(control.x, control.y)
 		}
 	})
 
 /** Clicks `opener` and returns what shows then, and the controls that were not there before. */
 const webOpen = async (browser: Browser, url: string, opener: Control, before: ReadonlyArray<Control>) => {
 	const { page, context } = await openPage(browser, url)
-	await page.mouse.click(opener.x, opener.y)
-	await sleep(300)
-	await waitQuiet(page, 600)
+	await clickAndSettle(page, opener)
 	const texts = await page.evaluate(visibleTexts)
 	const known = new Set(before.map((c) => `${c.label}@${c.x},${c.y}`))
 	const opened = (await page.evaluate(findControls)).filter((c) => !known.has(`${c.label}@${c.x},${c.y}`))
@@ -503,7 +547,10 @@ for (const route of ROUTES.filter((r) => routeFilter === undefined || r.includes
 			)
 		)
 			.map((o, i) => ({ ...o, opener: web.controls[i] }))
-			.filter((o): o is typeof o & { opener: Control } => o.opener !== undefined && o.opened.length > 0)
+			.filter(
+				(o): o is typeof o & { opener: Control } =>
+					o.opener !== undefined && o.opened.length > 0 && !RANDOM_OPENERS.has(o.opener.label),
+			)
 			.slice(0, maxOpeners)
 		const openStep = (c: Control) => [{ clickAt: [c.x, c.y] }, { settle: 600 }, { wait: 300 }]
 		const nativeOpened = await pool(
@@ -541,6 +588,47 @@ for (const route of ROUTES.filter((r) => routeFilter === undefined || r.includes
 				nativeOutcomes[k],
 			)
 		})
+	}
+	if (phases.has("type")) {
+		const { page, context } = await openPage(browser, url)
+		const fields = await page.evaluate(findFields)
+		await context.close()
+		console.log(`  ${fields.length} fields`)
+		const webOutcomes = await pool(
+			fields.map((field) => () => webType(browser, url, field)),
+			jobs,
+		)
+		const nativeOutcomes = await pool(
+			fields.map(
+				(field, i) => () =>
+					nativeRun(
+						route,
+						[
+							{ clickAt: [field.x, field.y] },
+							{ settle: 300 },
+							{ type: TYPED },
+							{ key: "Enter" },
+							{ settle: 600 },
+							{ wait: 300 },
+						],
+						`${slug}-type-${i}`,
+					),
+			),
+			jobs,
+		)
+		// A field's own value is text natively and a value on the web: compare what typing did
+		// elsewhere, so the typed words count only where they show up outside the field.
+		const typedOnly = (o: Outcome | undefined) =>
+			o && { ...o, texts: o.texts.filter((t) => normalize(t) !== TYPED) }
+		fields.forEach((field, i) =>
+			judge(
+				flagFor(field, "type"),
+				web.texts,
+				native.texts,
+				typedOnly(webOutcomes[i]),
+				typedOnly(nativeOutcomes[i]),
+			),
+		)
 	}
 	if (phases.has("tab")) {
 		const webOrder = await webTabs(browser, url)
