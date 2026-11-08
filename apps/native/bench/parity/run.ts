@@ -84,7 +84,11 @@ const RANDOM_OPENERS = new Set(["Generate"])
 /** A text as both sides compare it: digits masked, so clocks and counts a minute apart agree. */
 const comparable = (texts: ReadonlyArray<string>) => [
 	...new Set(
-		texts.map((t) => normalize(t).replaceAll(/\d/g, "#")).filter((t) => t !== "" && !BY_DESIGN.has(t)),
+		texts
+			// The app's own origin: the test server's on the web, the configured app URL natively.
+			.map((t) => normalize(t).replaceAll(/https?:\/\/(127\.0\.0\.1:\d+|app\.hazel\.test)/g, "<origin>"))
+			.map((t) => t.replaceAll(/\d/g, "#"))
+			.filter((t) => t !== "" && !BY_DESIGN.has(t)),
 	),
 ]
 
