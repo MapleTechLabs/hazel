@@ -213,6 +213,12 @@ describe("StyleResolver", () => {
 		expect(resolve("h-dvh min-h-svh").style).toMatchObject({ h: 600, minH: 600 })
 	})
 
+	it("marks a block that starts its own formatting context", () => {
+		expect(resolve("", { extra: { inline: { contain: "layout style paint" } } }).style.isolated).toBe(true)
+		expect(resolve("flow-root").style.isolated).toBe(true)
+		expect(resolve("", { extra: { inline: { contain: "style" } } }).style.isolated).toBeUndefined()
+	})
+
 	it("applies insets only to positioned elements", () => {
 		expect(resolve("sticky top-0").style.absolute).toBeUndefined()
 		expect(resolve("absolute inset-y-0 left-0").style.absolute).toEqual([0, 0, null, 0])

@@ -2033,6 +2033,51 @@ fn space_y_collapses_with_the_top_margin_a_field_starts_with() {
 }
 
 #[test]
+fn a_contained_block_keeps_its_childs_margins_inside() {
+    // A chat row (`contain: layout`) around a date divider with `my-2`: the row is its own
+    // formatting context, so it is 40 tall, as in the browser, not 24 with the margins outside.
+    let divider = e("div", json!({ "h": 24, "margin": [8, 0, 8, 0] }), vec![]);
+    let row = e("div", json!({ "isolated": true }), vec![divider]);
+    let rt = runtime(e("div", json!({}), vec![row]), (300.0, 300.0));
+    assert_eq!(rect(&rt, "r/0")[3], 40.0);
+    assert_eq!(rect(&rt, "r/0/0")[1], 8.0);
+}
+
+#[test]
+fn block_flow_collapses_vertical_margins_as_css_does() {
+    // Siblings: 16 below one and 8 above the next make a 16pt gap, not 24.
+    let a = e("div", json!({ "h": 20, "margin": [0, 0, 16, 0] }), vec![]);
+    let b = e("div", json!({ "h": 20, "margin": [8, 0, 0, 0] }), vec![]);
+    // A row whose content has my-2: the margins pass out of the row, which stays 20 tall.
+    let content = e("div", json!({ "h": 20, "margin": [8, 0, 8, 0] }), vec![]);
+    let row = e("div", json!({}), vec![content]);
+    // In a flex column nothing collapses: its item keeps its margins inside.
+    let item = e("div", json!({ "h": 20, "margin": [8, 0, 8, 0] }), vec![]);
+    let flex = e(
+        "div",
+        json!({ "display": "flex", "dir": "col" }),
+        vec![item],
+    );
+    let rt = runtime(e("div", json!({}), vec![a, b, row, flex]), (300.0, 300.0));
+    assert_eq!(
+        rect(&rt, "r/1")[1],
+        36.0,
+        "sibling margins collapse to the larger"
+    );
+    let [_, row_y, _, row_h] = rect(&rt, "r/2");
+    assert_eq!(
+        (row_y, row_h),
+        (64.0, 20.0),
+        "a child's margins pass out of a plain block"
+    );
+    assert_eq!(
+        rect(&rt, "r/3")[3],
+        36.0,
+        "a flex column keeps its item's margins inside"
+    );
+}
+
+#[test]
 fn the_document_scrolls_when_it_is_taller_than_the_window() {
     let page = e(
         "div",

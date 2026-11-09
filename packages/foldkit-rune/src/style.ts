@@ -152,6 +152,9 @@ export type Style = {
 	opacity?: number
 	scrollY?: boolean
 	clip?: boolean
+	/** `contain: layout`/`paint`, `display: flow-root`: its own formatting context, so its
+	 * children's margins stay inside it. */
+	isolated?: boolean
 	truncate?: boolean
 	nowrap?: boolean
 	/** `inline`, `inline-flex`, `inline-block`: flows within its line rather than starting one. */
@@ -1043,6 +1046,7 @@ export class StyleResolver {
 		switch (d.prop) {
 			case "display":
 				s.inline = v.startsWith("inline")
+				if (v === "flow-root") s.isolated = true
 				s.display =
 					v === "contents"
 						? "contents"
@@ -1517,6 +1521,9 @@ export class StyleResolver {
 				break
 			case "outline-offset":
 				acc.outline.offset = v
+				break
+			case "contain":
+				if (/\b(layout|paint|content|strict)\b/.test(v)) s.isolated = true
 				break
 			case "container-type":
 				acc.containerType = v === "size" || v === "inline-size" ? v : ""

@@ -39,6 +39,8 @@ pub struct Style {
     pub opacity: Option<F>,
     pub scroll_y: Option<bool>,
     pub clip: Option<bool>,
+    /// Its own formatting context (`contain: layout`, `display: flow-root`).
+    pub isolated: Option<bool>,
     pub truncate: Option<bool>,
     pub nowrap: Option<bool>,
     pub inline: Option<bool>,
