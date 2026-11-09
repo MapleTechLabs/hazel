@@ -136,9 +136,16 @@ export const switchChannel = (
 			threadPanelWidth: model.threadPanelWidth,
 		},
 	})
-	// The theme stream keeps running across the switch, so the new page keeps the theme it read.
+	// The theme, users, presence and bots streams are not keyed by channel, so they keep running
+	// across the switch without emitting again: the new page keeps what they last sent.
 	return modifyFields(next, {
 		htmlRender: (htmlRender) => modifyFields(htmlRender, { theme: () => model.htmlRender.theme }),
+		lookups: (lookups) => ({
+			...lookups,
+			users: model.lookups.users,
+			presence: model.lookups.presence,
+			bots: model.lookups.bots,
+		}),
 	})
 }
 

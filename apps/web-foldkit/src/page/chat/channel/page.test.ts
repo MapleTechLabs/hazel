@@ -1,4 +1,4 @@
-import { ChannelId, MessageId, UserId } from "@hazel/schema"
+import { AttachmentId, ChannelId, MessageId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { Command, given, message, model, story } from "foldkit/story"
 import { describe, expect, test, vi } from "vitest"
@@ -344,6 +344,53 @@ describe("switching channels", () => {
 		expect(MessageList.layoutOf(revisited.list).totalHeight).toBe(
 			MessageList.layoutOf(reading.list).totalHeight,
 		)
+	})
+
+	test("keeps the org-wide lookups, whose streams do not restart on a switch", () => {
+		const userId = Schema.decodeSync(UserId)(uuid(42))
+		const user = {
+			id: userId,
+			firstName: "Jeremy",
+			lastName: "Funk",
+			email: "jeremy@example.com",
+			avatarUrl: "https://example.com/a.png",
+			userType: "user",
+			timezone: null,
+		}
+		const presence = {
+			userId,
+			status: "online",
+			statusEmoji: null,
+			customMessage: null,
+			statusExpiresAtMs: null,
+			lastSeenAtMs: null,
+		}
+		const reading = readingHistory()
+		const withLookups = {
+			...reading,
+			lookups: {
+				...reading.lookups,
+				users: [user],
+				presence: [presence],
+				bots: [{ userId, name: "Bot" }],
+				attachments: [
+					{
+						id: Schema.decodeSync(AttachmentId)(uuid(43)),
+						messageId: null,
+						fileName: "a.png",
+						fileSize: 1,
+						url: "https://example.com/a.png",
+						uploadedAtMs: 0,
+					},
+				],
+			},
+		}
+		const next = switchChannel(withLookups, otherChannelId, { tab: "messages" })
+		expect(next.lookups.users).toEqual([user])
+		expect(next.lookups.presence).toEqual([presence])
+		expect(next.lookups.bots).toEqual([{ userId, name: "Bot" }])
+		// Channel-scoped lookups start over: their streams restart with the channel.
+		expect(next.lookups.attachments).toEqual([])
 	})
 
 	test("remembers a bounded number of channels", () => {
