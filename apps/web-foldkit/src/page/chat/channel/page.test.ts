@@ -44,7 +44,7 @@ const page = (from: number, to: number) =>
 
 /** The messages query's result as a change set: these messages, in this order. */
 const loaded = (messages: ReadonlyArray<ChatMessage>) =>
-	Message.ChangedMessages({ order: messages.map((message) => message.id), upserts: messages })
+	Message.ChangedMessages({ channelId, order: messages.map((message) => message.id), upserts: messages })
 
 const ROW = 72
 const HEADER = 40
@@ -331,6 +331,19 @@ describe("switching channels", () => {
 		expect(next.list.viewportHeight).toBe(VIEWPORT)
 		expect(next.list.measuredHeights).toEqual({})
 		expect(next.heightsByChannel).toEqual({ [channelId]: reading.list.measuredHeights })
+	})
+
+	// The left channel's streams can still deliver after the switch (Foldkit queues what they sent):
+	// a change set of it once marked the new channel loaded with no messages, its empty state.
+	test("ignores what the left channel's streams still deliver", () => {
+		const next = switchChannel(readingHistory(), otherChannelId, { tab: "messages" })
+		const stale = update(
+			next,
+			Message.ChangedMessages({ channelId, order: page(70, 100).map((m) => m.id), upserts: [] }),
+		).model
+		expect(stale).toBe(next)
+		expect(update(next, Message.UpdatedReactions({ channelId, reactions: [] })).model).toBe(next)
+		expect(update(next, Message.UpdatedChannel({ channelId, channel: null })).model).toBe(next)
 	})
 
 	test("lays a revisited channel out at the heights it measured", () => {

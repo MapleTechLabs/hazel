@@ -465,7 +465,10 @@ const isShiftTab = (message: Draft.Message) =>
 
 export const update = (model: Model, message: Message, shared: Shared | null = null): PageReturn =>
 	Message.match<PageReturn>(message, {
-		UpdatedChannel: ({ channel }) => ({ model: modifyFields(model, { channel: () => channel }) }),
+		UpdatedChannel: ({ channelId, channel }) =>
+			channelId === model.channelId
+				? { model: modifyFields(model, { channel: () => channel }) }
+				: { model },
 		ClickedTab: ({ tab }) =>
 			tab === routeTabOf(model.tab)
 				? { model }
@@ -480,16 +483,21 @@ export const update = (model: Model, message: Message, shared: Shared | null = n
 		UpdatedParentChannel: ({ channel }) => ({
 			model: modifyFields(model, { parentChannel: () => channel }),
 		}),
-		ChangedMessages: ({ order, upserts }) =>
-			deriveRows(
-				withLiveReplies(
-					modifyFields(model, {
-						hasLoadedMessages: () => true,
-						messages: (previous) => applyMessageChanges(previous, order, upserts),
-					}),
-				),
-			),
-		UpdatedReactions: ({ reactions }) => deriveRows(modifyFields(model, { reactions: () => reactions })),
+		ChangedMessages: ({ channelId, order, upserts }) =>
+			channelId !== model.channelId
+				? { model }
+				: deriveRows(
+						withLiveReplies(
+							modifyFields(model, {
+								hasLoadedMessages: () => true,
+								messages: (previous) => applyMessageChanges(previous, order, upserts),
+							}),
+						),
+					),
+		UpdatedReactions: ({ channelId, reactions }) =>
+			channelId === model.channelId
+				? deriveRows(modifyFields(model, { reactions: () => reactions }))
+				: { model },
 		UpdatedUsers: ({ users }) => {
 			const result = withLookup(model, "users", users)
 			return { ...result, model: withTypingNames(result.model) }

@@ -54,7 +54,7 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 	chatChannel: entry(byChannel, {
 		modelToDependencies: channelOf,
 		dependenciesToStream: ({ channelId }) =>
-			channelStream(channelId, (channel) => Message.UpdatedChannel({ channel })),
+			channelStream(channelId, (channel) => Message.UpdatedChannel({ channelId, channel })),
 	}),
 	chatParentChannel: entry(
 		{ parentChannelId: Schema.NullOr(ChannelId) },
@@ -82,7 +82,7 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 			keepAliveEquivalence: (previous, next) => previous.channelId === next.channelId,
 			dependenciesToStream: ({ channelId, limit, offset }, readDependencies) =>
 				messageChangesStream(channelId, { limit, offset }, readDependencies, ({ order, upserts }) =>
-					Message.ChangedMessages({ order, upserts }),
+					Message.ChangedMessages({ channelId, order, upserts }),
 				),
 		},
 	),
@@ -152,7 +152,7 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 	chatReactions: entry(byChannel, {
 		modelToDependencies: channelOf,
 		dependenciesToStream: ({ channelId }) =>
-			reactionsStream(channelId, (reactions) => Message.UpdatedReactions({ reactions })),
+			reactionsStream(channelId, (reactions) => Message.UpdatedReactions({ channelId, reactions })),
 	}),
 	chatUsers: entry(
 		{},
