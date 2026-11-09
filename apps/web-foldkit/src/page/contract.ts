@@ -98,6 +98,41 @@ export interface PageStep<Slot, Wrapped> {
 	readonly outMessage: Option.Option<PageOutMessage>
 }
 
+type PageEntry<Message> = Subscription.Subscriptions<PageHost, Message, Resources>[string]
+
+/**
+ * Binds a lifted entry to the page instance (its key), like React's unmount: a new instance builds a
+ * fresh Model, so every Stream restarts and sends its rows again, even one whose own dependencies
+ * did not change (a `{}` entry would otherwise keep running and never refill the new Model).
+ */
+export const perInstance = <Message>(
+	entry: PageEntry<Message>,
+	keyOf: (host: PageHost) => string | null,
+): PageEntry<Message> => {
+	const fields = { pageKey: Schema.NullOr(Schema.String), dependencies: entry.dependenciesSchema }
+	const modelToDependencies = (host: PageHost) => ({
+		pageKey: keyOf(host),
+		dependencies: entry.modelToDependencies(host),
+	})
+	const keepAlive = entry.keepAliveEquivalence
+	return Subscription.make<PageHost, Message, Resources>()((define) => ({
+		bound:
+			keepAlive === undefined
+				? define(fields, {
+						modelToDependencies,
+						dependenciesToStream: (gated) => entry.dependenciesToStream(gated.dependencies),
+					})
+				: define(fields, {
+						modelToDependencies,
+						keepAliveEquivalence: (left, right) =>
+							left.pageKey === right.pageKey &&
+							keepAlive(left.dependencies, right.dependencies),
+						dependenciesToStream: (gated, read) =>
+							entry.dependenciesToStream(gated.dependencies, () => read().dependencies),
+					}),
+	})).bound
+}
+
 /** The page lives in the root Model as `{ _tag: id, key, model }`; its Messages as `{ _tag: id, message }`. */
 export const definePage = <
 	const Id extends string,
@@ -173,7 +208,12 @@ export const definePage = <
 		),
 		/** Keys are prefixed with the page id: Subscription keys share one namespace. */
 		subscriptions: Object.fromEntries(
-			Object.entries(lifted).map(([key, entry]) => [`${id}.${key}`, entry]),
+			Object.entries(lifted).map(([key, entry]) => [
+				`${id}.${key}`,
+				perInstance(entry, (host) =>
+					host.page !== null && isOwnSlot(host.page) ? host.page.key : null,
+				),
+			]),
 		),
 	}
 }
