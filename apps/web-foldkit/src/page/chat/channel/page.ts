@@ -140,12 +140,12 @@ export const switchChannel = (
 	// across the switch without emitting again: the new page keeps what they last sent.
 	return modifyFields(next, {
 		htmlRender: (htmlRender) => modifyFields(htmlRender, { theme: () => model.htmlRender.theme }),
-		lookups: (lookups) => ({
-			...lookups,
-			users: model.lookups.users,
-			presence: model.lookups.presence,
-			bots: model.lookups.bots,
-		}),
+		lookups: (lookups) =>
+			modifyFields(lookups, {
+				users: () => model.lookups.users,
+				presence: () => model.lookups.presence,
+				bots: () => model.lookups.bots,
+			}),
 	})
 }
 
