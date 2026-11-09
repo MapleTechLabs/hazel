@@ -252,7 +252,7 @@ describe("the draft survives its editor (P0: Files tab round-trip)", () => {
 					toast: {
 						intent: "error",
 						title: "Connection lost",
-						description: "Check your internet connection and try again.",
+						description: "Your message “On it” wasn't sent.",
 					},
 				}),
 			),

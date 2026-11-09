@@ -246,6 +246,17 @@ const sendFailureMessage = (failure: SendFailure) =>
 		},
 	})
 
+/** The longest excerpt of a failed message a toast quotes. */
+const NOT_SENT_EXCERPT_LENGTH = 80
+
+/** Names the message that failed after the user left its channel, whose draft is gone. */
+const notSentDescription = (content: string): string => {
+	const text = content.trim().replace(/\s+/g, " ")
+	const excerpt =
+		text.length > NOT_SENT_EXCERPT_LENGTH ? `${text.slice(0, NOT_SENT_EXCERPT_LENGTH - 1)}…` : text
+	return excerpt === "" ? "Your message wasn't sent." : `Your message “${excerpt}” wasn't sent.`
+}
+
 const warningToastOf = (message: UserErrorMessage): ToastRequest =>
 	warningToast(message.title, message.description ?? null)
 
@@ -404,7 +415,7 @@ export const update = (model: Model, message: Message, context: Context): Return
 			reason === "SyncDelayed"
 				? toast(model, warningToastOf(sendFailureMessage(reason)))
 				: channelId !== model.channelId
-					? toast(model, errorToastOf(sendFailureMessage(reason)))
+					? toast(model, errorToast(sendFailureMessage(reason).title, notSentDescription(content)))
 					: Update.withOutMessage(
 							Update.combine(
 								modifyFields(setReply(model, replyToMessageId), {
