@@ -38,6 +38,7 @@ import {
 	organizationMemberCollection,
 	pinnedMessageCollection,
 } from "./collections"
+import { prepareSend, type SendMessageVariables } from "./send-message"
 
 /**
  * The optimistic actions: each is `(variables) => Effect` that applies the change to the collections at once,
@@ -66,60 +67,24 @@ export const sendMessageAction = optimisticAction({
 	// The channel's one stream carries the attachments too; one wait confirms both.
 	collections: [messageCollection],
 
-	onMutate: (props: {
-		messageId?: MessageId // Accept pre-generated ID for retry tracking
-		channelId: ChannelId
-		authorId: UserId
-		content: string
-		replyToMessageId?: MessageId | null
-		threadChannelId?: ChannelId | null
-		attachmentIds?: AttachmentId[]
-	}) => {
-		const messageId = props.messageId ?? MessageId.make(crypto.randomUUID())
-
-		messageCollection.insert({
-			id: messageId,
-			channelId: props.channelId,
-			conversationId: getMountedConversationId(props.channelId),
-			authorId: props.authorId,
-			content: props.content,
-			replyToMessageId: props.replyToMessageId || null,
-			threadChannelId: props.threadChannelId || null,
-			embeds: null,
-			createdAt: new Date(),
-			updatedAt: null,
-			deletedAt: null,
-		})
-
+	onMutate: (variables: SendMessageVariables) => {
+		const send = prepareSend(variables, getMountedConversationId(variables.channelId))
+		messageCollection.insert(send.row)
 		// Optimistically link attachments to the new message
-		if (props.attachmentIds && props.attachmentIds.length > 0) {
-			for (const attachmentId of props.attachmentIds) {
-				attachmentCollection.update(attachmentId, (attachment) => {
-					attachment.messageId = messageId
-				})
-			}
+		for (const attachmentId of variables.attachmentIds ?? []) {
+			attachmentCollection.update(attachmentId, (attachment) => {
+				attachment.messageId = send.row.id
+			})
 		}
-
-		return { messageId }
+		return { messageId: send.row.id, payload: send.payload }
 	},
 
-	mutate: (props, _ctx) =>
+	mutate: (_variables, { mutateResult }) =>
 		Effect.gen(function* () {
 			const client = yield* HazelRpc
-
-			// Create the message with attachmentIds using RPC
-			// Note: authorId will be overridden by backend AuthMiddleware with the authenticated user
-			const result = yield* client("message.create", {
-				channelId: props.channelId,
-				content: props.content,
-				replyToMessageId: props.replyToMessageId || null,
-				threadChannelId: props.threadChannelId || null,
-				attachmentIds: props.attachmentIds || [],
-				embeds: null,
-				deletedAt: null,
-				authorId: props.authorId,
-			}).pipe(Effect.retry(MessageRetrySchedule))
-
+			const result = yield* client("message.create", mutateResult.payload).pipe(
+				Effect.retry(MessageRetrySchedule),
+			)
 			return { data: result, transactionId: result.transactionId }
 		}),
 })

@@ -4,6 +4,7 @@
  * (notifications in the `OrgObject` and `UserObject`s, bot events, thread naming, upload cleanup).
  */
 import { CurrentUser, UnauthorizedError } from "@hazel/domain"
+import { Message } from "@hazel/domain/models"
 import { CreateTypingIndicatorPayload } from "@hazel/domain/rpc"
 import type { ChannelId, ChannelMemberId, MessageId, OrganizationId, UserId } from "@hazel/schema"
 import { Cause, Effect, Exit, Option, type Scope } from "effect"
@@ -219,6 +220,51 @@ describe("ChannelObject messages", () => {
 				})
 				expect(yield* notificationsOf(world, world.alice)).toEqual([
 					{ memberId: world.memberIds.get(world.alice), resourceId: message.id },
+				])
+			}),
+		))
+
+	it("derives the id from the client nonce; a resend answers with the same message", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeWorld
+				const channel = yield* world.channel("public")
+				const clientNonce = crypto.randomUUID()
+				const create = (as: UserId) =>
+					Effect.map(
+						call(
+							channel.object,
+							channel.id,
+							"message.create",
+							{ ...message(channel.id, as, "optimistic"), clientNonce },
+							as,
+						),
+						(exit) => ok(exit).data.id as MessageId,
+					)
+				const outboxSize = () =>
+					(
+						channel.object.storage.db.prepare(`SELECT count(*) AS n FROM _outbox`).get() as {
+							n: number
+						}
+					).n
+				const expected = Message.clientMessageId(channel.id, world.author, clientNonce)
+
+				expect(yield* create(world.author)).toBe(expected)
+				const afterFirst = outboxSize()
+				// The retry finds the message: no second row, no side effects run again.
+				expect(yield* create(world.author)).toBe(expected)
+				expect(outboxSize()).toBe(afterFirst)
+
+				// The same nonce from another member names their own message, never the author's.
+				const stolen = yield* create(world.alice)
+				expect(stolen).toBe(Message.clientMessageId(channel.id, world.alice, clientNonce))
+
+				const rows = channel.object.storage.db
+					.prepare(`SELECT id, "authorId" FROM messages ORDER BY "authorId" = ? DESC`)
+					.all(world.author) as Array<{ id: string; authorId: string }>
+				expect(rows).toEqual([
+					{ id: expected, authorId: world.author },
+					{ id: stolen, authorId: world.alice },
 				])
 			}),
 		))

@@ -396,6 +396,7 @@
         "@hazel/integrations": "workspace:*",
         "@hazel/schema": "workspace:*",
         "effect": "catalog:effect",
+        "uuid": "^14.0.3",
       },
       "devDependencies": {
         "@types/bun": "1.4.3",

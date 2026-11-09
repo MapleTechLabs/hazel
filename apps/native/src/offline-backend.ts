@@ -1,5 +1,7 @@
 import { HazelAuthApi } from "@hazel/auth/contract"
+import { Message } from "@hazel/domain/models"
 import * as DomainRpc from "@hazel/domain/rpc"
+import { ChannelId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import * as CurrentUser from "../../../packages/domain/src/current-user"
 import { isBackendUrl } from "./backend-origin"
@@ -84,10 +86,18 @@ export const makeOfflineFetch = (options: {
 		[
 			"message.create",
 			(payload) => {
+				const { clientNonce, ...fields } = payload as typeof payload & { clientNonce?: string }
 				const row = {
 					...generalMessageRows[0],
-					...payload,
-					id: crypto.randomUUID(),
+					...fields,
+					id:
+						clientNonce === undefined
+							? crypto.randomUUID()
+							: Message.clientMessageId(
+									ChannelId.make(String(payload.channelId)),
+									UserId.make(options.user.id),
+									clientNonce,
+								),
 					authorId: options.user.id,
 					createdAt: new Date().toISOString(),
 					updatedAt: null,

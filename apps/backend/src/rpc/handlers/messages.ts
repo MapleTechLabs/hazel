@@ -1,7 +1,7 @@
 import { AttachmentRepo, MessageRepo } from "@hazel/backend-core"
 import { Database, SQLite, schema } from "@hazel/db"
 import { CurrentUser, MessageNotFoundError, withRemapDbErrors } from "@hazel/domain"
-import { MessageEmbed } from "@hazel/domain/models"
+import { Message, MessageEmbed } from "@hazel/domain/models"
 import {
 	HtmlRenderUrlResponse,
 	MessageActionUnavailableError,
@@ -73,7 +73,7 @@ export const MessageRpcLive = MessageRpcs.toLayer(
 		const htmlRenders = yield* HtmlRenders
 
 		return {
-			"message.create": ({ attachmentIds, ...messageData }) =>
+			"message.create": ({ attachmentIds, clientNonce, ...messageData }) =>
 				Effect.gen(function* () {
 					const user = yield* CurrentUser.Context
 					yield* checkMessageRateLimit(user.id)
@@ -82,10 +82,23 @@ export const MessageRpcLive = MessageRpcs.toLayer(
 						.transaction(
 							Effect.gen(function* () {
 								yield* messagePolicy.canCreate(messageData.channelId)
+								// The id the client already shows; a retried send finds its message and
+								// answers with it, without running its side effects again.
+								const id =
+									clientNonce === undefined
+										? undefined
+										: Message.clientMessageId(messageData.channelId, user.id, clientNonce)
+								const existing =
+									id === undefined ? Option.none() : yield* messageRepo.findById(id)
+								if (Option.isSome(existing)) {
+									const txid = yield* generateTransactionId()
+									return new MessageResponse({ data: existing.value, transactionId: txid })
+								}
 								const conversationId = yield* channelViewers.conversationId
 								const createdMessage = yield* messageRepo
 									.insert({
 										...messageData,
+										id,
 										conversationId,
 										authorId: user.id,
 										deletedAt: null,
