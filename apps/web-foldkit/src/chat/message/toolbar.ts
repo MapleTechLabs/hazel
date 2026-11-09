@@ -42,23 +42,31 @@ const scrollerOf = (element: Element): Element | null => {
 	return null
 }
 
+interface Bounds {
+	readonly top: number
+	readonly bottom: number
+	readonly left: number
+	readonly right: number
+}
+
 /**
  * Where the toolbar goes for its message: on the top right corner, overlapping the message a little.
- * It never leaves the list's scroller, so it cannot ride over the header or the composer while its
- * message scrolls away: near the top it slides down onto the message, and it hides once the message
- * has no room left for it.
+ * It never leaves the list's scroller, so it cannot ride over the header, the composer or the sidebar
+ * while its message scrolls away: near the top it slides down onto the message, and it hides once the
+ * message is out of view, has no room left for it, or the scroller is too narrow to hold it.
  */
 const toolbarPosition = (
 	target: DOMRect,
-	bounds: { readonly top: number; readonly bottom: number },
+	bounds: Bounds,
 	size: { readonly width: number; readonly height: number },
 ): { readonly top: number; readonly left: number } | null => {
 	const minTop = bounds.top + EDGE_PADDING
 	const maxTop = Math.min(bounds.bottom, target.bottom) - size.height
-	if (maxTop < minTop) return null
+	const minLeft = bounds.left + EDGE_PADDING
+	const maxLeft = bounds.right - size.width - EDGE_PADDING
+	if (target.top >= bounds.bottom || maxTop < minTop || maxLeft < minLeft) return null
 	const top = Math.min(Math.max(target.top - size.height + TOOLBAR_OVERLAP, minTop), maxTop)
-	const maxLeft = window.innerWidth - size.width - EDGE_PADDING
-	const left = Math.max(EDGE_PADDING, Math.min(target.right - size.width - TOOLBAR_RIGHT_INSET, maxLeft))
+	const left = Math.max(minLeft, Math.min(target.right - size.width - TOOLBAR_RIGHT_INSET, maxLeft))
 	return { top, left }
 }
 
@@ -95,13 +103,20 @@ export const PlaceMessageToolbar = Mount.defineStream("PlaceMessageToolbar", {
 						placed.frame = undefined
 						const target = placed.target
 						if (target === null || !target.isConnected) return hide()
-						const viewport = { top: 0, bottom: window.innerHeight }
+						const viewport = {
+							top: 0,
+							bottom: window.innerHeight,
+							left: 0,
+							right: window.innerWidth,
+						}
 						const bounds = placed.scroller?.getBoundingClientRect() ?? viewport
 						const position = toolbarPosition(
 							target.getBoundingClientRect(),
 							{
 								top: Math.max(bounds.top, viewport.top),
 								bottom: Math.min(bounds.bottom, viewport.bottom),
+								left: Math.max(bounds.left, viewport.left),
+								right: Math.min(bounds.right, viewport.right),
 							},
 							{ width: element.offsetWidth, height: element.offsetHeight },
 						)
@@ -118,11 +133,14 @@ export const PlaceMessageToolbar = Mount.defineStream("PlaceMessageToolbar", {
 					resizeObserver.observe(element)
 					const retarget = () => {
 						if (placed.target !== null) resizeObserver.unobserve(placed.target)
+						if (placed.scroller !== null) resizeObserver.unobserve(placed.scroller)
 						const messageId = element.getAttribute(TOOLBAR_TARGET_ATTRIBUTE)
 						placed.target =
 							messageId === null ? null : document.getElementById(`message-${messageId}`)
 						placed.scroller = placed.target === null ? null : scrollerOf(placed.target)
 						if (placed.target !== null) resizeObserver.observe(placed.target)
+						// The scroller shrinks without scrolling when the composer grows (a reply preview).
+						if (placed.scroller !== null) resizeObserver.observe(placed.scroller)
 						// Placed in this frame, so a hover change never shows the toolbar on the old message.
 						if (placed.frame !== undefined) window.cancelAnimationFrame(placed.frame)
 						place()

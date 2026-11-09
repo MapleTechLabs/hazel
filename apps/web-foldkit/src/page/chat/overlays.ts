@@ -123,9 +123,15 @@ export const heldMessageIdOf = (model: Model): MessageId | null =>
 		HidePending: ({ messageId }) => (isToolbarOverlayOpen(model, messageId) ? messageId : null),
 	})
 
-/** The toolbar's own "More actions" menu or emoji picker is open on this message. */
+const isMenuOpen = (menu: Menu.Model) => menu.popup._tag === "Open"
+
+/**
+ * The toolbar's own "More actions" menu or emoji picker is open on this message. A closed menu can
+ * stay in `open` (`withChild` keeps the current child), so the menu's popup decides.
+ */
 const isToolbarOverlayOpen = (model: Model, messageId: MessageId): boolean =>
-	(model.open._tag === "MoreMenu" || model.open._tag === "ReactionPicker") &&
+	((model.open._tag === "MoreMenu" && isMenuOpen(model.open.menu)) ||
+		model.open._tag === "ReactionPicker") &&
 	model.open.messageId === messageId
 
 /**
@@ -240,8 +246,6 @@ const withSelection = (
 		? { ...result, outMessage: OutMessage.RequestedMessageAction({ messageId, action: parsed.value }) }
 		: result
 }
-
-const isMenuOpen = (menu: Menu.Model) => menu.popup._tag === "Open"
 
 /**
  * Folds a child overlay's result into `open`. The child is the open overlay when it is the current

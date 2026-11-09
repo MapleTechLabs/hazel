@@ -13,6 +13,7 @@ import * as MessageList from "../../../mount/message-list"
 import { chatMessageOf, imageAttachmentOf, liveEmbeds } from "../../../test/chat-messages"
 import { PageOutMessage } from "../../out-message"
 import { ActionMessage, CopyText, GenerateThreadName, OpenUrl } from "../message-actions"
+import * as Menu from "../../../ui/menu"
 import * as Overlays from "../overlays"
 import { PAGE_SIZE } from "../queries"
 import type { DisplayRow, MessageRow } from "../rows"
@@ -774,6 +775,27 @@ describe("image viewer", () => {
 			Overlays.Message.CompletedWaitForHideToolbar({ version: closed.model.hideVersion }),
 		).model
 		expect(Overlays.hoveredMessageIdOf(hidden)).toBeNull()
+	})
+
+	test("dismissing the More menu after the pointer left starts the deferred hide", () => {
+		const more = (message: Menu.Message) =>
+			Overlays.Message.GotMoreMenuMessage({ messageId: graceMessageId, message })
+		const opened = [
+			Overlays.Message.PointerEnteredMessage({ messageId: graceMessageId }),
+			Overlays.Message.EnteredToolbar(),
+			more(Menu.Message.PressedTrigger({ pointerType: "mouse" })),
+			Overlays.Message.LeftToolbar(),
+		].reduce((current, next) => Overlays.update(current, next).model, Overlays.init())
+		expect(opened.open._tag).toBe("MoreMenu")
+		expect(Overlays.heldMessageIdOf(opened)).toBe(graceMessageId)
+		const dismissed = Overlays.update(opened, more(Menu.Message.PressedOutside()))
+		expect(dismissed.commands?.map((command) => command.name)).toContain("WaitForHideToolbar")
+		const hidden = Overlays.update(
+			dismissed.model,
+			Overlays.Message.CompletedWaitForHideToolbar({ version: dismissed.model.hideVersion }),
+		).model
+		expect(Overlays.hoveredMessageIdOf(hidden)).toBeNull()
+		expect(Overlays.heldMessageIdOf(hidden)).toBeNull()
 	})
 
 	test("re-entering the hovered message cancels a pending hide; moving within it changes nothing", () => {
