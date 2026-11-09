@@ -19,6 +19,7 @@ import { PAGE_SIZE } from "../queries"
 import type { DisplayRow, MessageRow } from "../rows"
 import {
 	ada,
+	channelId,
 	adaMessageId,
 	grace,
 	graceMessageId,
@@ -66,6 +67,7 @@ describe("change sets", () => {
 			given(before),
 			message(
 				Message.ChangedMessages({
+					channelId,
 					order: [fresh.id, adaMessageId, graceMessageId],
 					upserts: [fresh],
 				}),
@@ -84,6 +86,7 @@ describe("change sets", () => {
 			given(derived()),
 			message(
 				Message.ChangedMessages({
+					channelId,
 					order: [adaMessageId, graceMessageId],
 					upserts:
 						adaMessage === undefined
@@ -92,7 +95,7 @@ describe("change sets", () => {
 				}),
 			),
 			model((current) => expect(rowOf(current, adaMessageId)?.message.content).toBe("Shipped v2")),
-			message(Message.ChangedMessages({ order: [graceMessageId], upserts: [] })),
+			message(Message.ChangedMessages({ channelId, order: [graceMessageId], upserts: [] })),
 			model((current) => {
 				expect(messageKeys(current)).toEqual([graceMessageId])
 				expect(current.list.keys).not.toContain(adaMessageId)
@@ -106,7 +109,11 @@ describe("change sets", () => {
 			updateWithShared,
 			given(before),
 			message(
-				Message.ChangedMessages({ order: [adaMessageId, graceMessageId], upserts: [...messages] }),
+				Message.ChangedMessages({
+					channelId,
+					order: [adaMessageId, graceMessageId],
+					upserts: [...messages],
+				}),
 			),
 			model((current) => {
 				expect(current.messages).toBe(before.messages)
@@ -121,6 +128,7 @@ describe("change sets", () => {
 			given(derived()),
 			message(
 				Message.UpdatedReactions({
+					channelId,
 					reactions: [
 						{ id: "r1", messageId: graceMessageId, userId: ada, emoji: "👍" },
 						{ id: "r2", messageId: graceMessageId, userId: grace, emoji: "👍" },
@@ -251,6 +259,7 @@ describe("link unfurls", () => {
 			given(derived()),
 			message(
 				Message.ChangedMessages({
+					channelId,
 					order: [second.id, first.id, adaMessageId, graceMessageId],
 					upserts: [first, second],
 				}),
@@ -283,6 +292,7 @@ describe("link unfurls", () => {
 			given(derived()),
 			message(
 				Message.ChangedMessages({
+					channelId,
 					order: [linked.id, adaMessageId, graceMessageId],
 					upserts: [linked],
 				}),
@@ -297,7 +307,7 @@ describe("link unfurls", () => {
 					error: "TimedOut",
 				}),
 			),
-			message(Message.UpdatedReactions({ reactions: [] })),
+			message(Message.UpdatedReactions({ channelId, reactions: [] })),
 			Command.expectNone(),
 		)
 	})
@@ -309,6 +319,7 @@ describe("link unfurls", () => {
 			given(derived()),
 			message(
 				Message.ChangedMessages({
+					channelId,
 					order: [tweet.id, adaMessageId, graceMessageId],
 					upserts: [tweet],
 				}),
@@ -831,7 +842,7 @@ describe("image viewer", () => {
 			message(
 				overlays(Overlays.Message.ClickedAttachmentImage({ messageId: graceMessageId, index: 0 })),
 			),
-			message(Message.ChangedMessages({ order: [adaMessageId], upserts: [] })),
+			message(Message.ChangedMessages({ channelId, order: [adaMessageId], upserts: [] })),
 			model((current) => expect(Overlays.imageViewerOf(current.overlays)).toBeNull()),
 		)
 	})
@@ -857,10 +868,10 @@ describe("image viewer", () => {
 				expect(Overlays.imageViewerOf(current.overlays)?.messageId).toBe(reply.id)
 				expect(current.threadPanel?.rows[0]?.attachments).toHaveLength(1)
 			}),
-			message(Message.UpdatedReactions({ reactions: [] })),
+			message(Message.UpdatedReactions({ channelId, reactions: [] })),
 			model((current) => expect(Overlays.imageViewerOf(current.overlays)?.messageId).toBe(reply.id)),
 			message(Message.ClickedCloseThread()),
-			message(Message.UpdatedReactions({ reactions: [] })),
+			message(Message.UpdatedReactions({ channelId, reactions: [] })),
 			model((current) => expect(Overlays.imageViewerOf(current.overlays)).toBeNull()),
 		)
 	})
@@ -873,10 +884,10 @@ describe("image viewer", () => {
 			message(
 				overlays(Overlays.Message.ClickedAttachmentImage({ messageId: graceMessageId, index: 0 })),
 			),
-			message(Message.ChangedMessages({ order: [adaMessageId], upserts: [] })),
+			message(Message.ChangedMessages({ channelId, order: [adaMessageId], upserts: [] })),
 			model((current) => expect(Overlays.hoveredMessageIdOf(current.overlays)).toBeNull()),
 			message(overlays(Overlays.Message.PointerEnteredMessage({ messageId: adaMessageId }))),
-			message(Message.UpdatedReactions({ reactions: [] })),
+			message(Message.UpdatedReactions({ channelId, reactions: [] })),
 			model((current) => expect(Overlays.hoveredMessageIdOf(current.overlays)).toBe(adaMessageId)),
 		)
 	})
