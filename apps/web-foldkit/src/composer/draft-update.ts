@@ -391,19 +391,29 @@ export const update = (model: Model, message: Message, context: Context): Return
 		}),
 		CompletedOpenFilePicker: () => ({ model }),
 		SucceededSendMessage: () => ({ model, outMessage: OutMessage.SentMessage() }),
-		// Restore what the optimistic send cleared, then toast. A delayed sync was delivered: nothing to restore.
-		FailedSendMessage: ({ content, restoreContent, replyToMessageId, attachmentIds, reason }) =>
+		// Restore what the optimistic send cleared, then toast. A delayed sync was delivered: nothing to
+		// restore. After a switch to another channel the draft is that channel's: toast only.
+		FailedSendMessage: ({
+			channelId,
+			content,
+			restoreContent,
+			replyToMessageId,
+			attachmentIds,
+			reason,
+		}) =>
 			reason === "SyncDelayed"
 				? toast(model, warningToastOf(sendFailureMessage(reason)))
-				: Update.withOutMessage(
-						Update.combine(
-							modifyFields(setReply(model, replyToMessageId), {
-								attachmentIds: () => attachmentIds,
-							}),
-							restoreContent ? [setDraft(content)] : [],
+				: channelId !== model.channelId
+					? toast(model, errorToastOf(sendFailureMessage(reason)))
+					: Update.withOutMessage(
+							Update.combine(
+								modifyFields(setReply(model, replyToMessageId), {
+									attachmentIds: () => attachmentIds,
+								}),
+								restoreContent ? [setDraft(content)] : [],
+							),
+							OutMessage.RequestedToast({ toast: errorToastOf(sendFailureMessage(reason)) }),
 						),
-						OutMessage.RequestedToast({ toast: errorToastOf(sendFailureMessage(reason)) }),
-					),
 		SucceededEditMessage: () => ({ model }),
 		FailedEditMessage: ({ reason }) =>
 			toast(

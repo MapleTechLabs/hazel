@@ -6,12 +6,11 @@ import { describe, expect, test, vi } from "vitest"
 import * as Menu from "../../ui/menu"
 import type { Shared } from "../contract"
 import { PageOutMessage } from "../out-message"
-import { CopyEmail, CreateDm, FocusSearch } from "./commands"
+import { CopyEmail, FocusSearch } from "./commands"
 import { Message } from "./message"
 import { type DirectoryMember, DmRequest, type DmRow, filterMembers, type Model } from "./model"
 import { init, update } from "./update"
 import { sharedDefaults } from "../test-shared"
-import { errorToast } from "../../data/actions"
 import { menuEntries } from "./model"
 
 // `ui/aria/interaction` names `document` when its module loads; the update loop never touches it.
@@ -60,6 +59,12 @@ const dmWithGrace: ReadonlyArray<DmRow> = [ada, grace].map((userId) => ({
 	channel: { id: channelId, type: "single", organizationId },
 	member: { userId },
 }))
+const createDmWithGrace = PageOutMessage.RequestedDmCreation({
+	organizationId,
+	orgSlug: "hazel",
+	userId: grace,
+	name: "Grace Hopper",
+})
 const membersOnly = (): Model => update(init().model, Message.UpdatedMembers({ members }), shared).model
 /** Members and DM rows loaded; `dmRows` defaults to no DMs at all. */
 const loaded = (dmRows: ReadonlyArray<DmRow> = []): Model =>
@@ -134,58 +139,19 @@ describe("org home directory", () => {
 		)
 	})
 
-	test("Message creates a DM with a loading toast, then a success toast and navigation", () => {
+	test("Message without an existing DM asks the root to create one", () => {
 		story(
 			pageUpdate,
 			given(loaded()),
 			message(Message.PressedMessageMember({ userId: grace, name: "Grace Hopper" })),
-			Command.expectExact(CreateDm({ organizationId, userId: grace, name: "Grace Hopper" })),
-			expectOutMessage(
-				PageOutMessage.RequestedToast({
-					toast: {
-						intent: "loading",
-						title: "Starting conversation with Grace Hopper...",
-						description: null,
-						id: "home-create-dm",
-					},
-				}),
-			),
-			Command.resolve(CreateDm, Message.SucceededCreateDm({ channelId, name: "Grace Hopper" })),
-			expectOutMessage(
-				PageOutMessage.RequestedNavigation({
-					route: routeOfPath(`/hazel/chat/${channelId}`),
-					replace: false,
-					toast: {
-						intent: "success",
-						title: "Started conversation with Grace Hopper",
-						description: null,
-						id: "home-create-dm",
-					},
-				}),
-			),
+			Command.expectNone(),
+			expectOutMessage(createDmWithGrace),
+			model((current) => expect(current.dmRequest).toEqual(DmRequest.Idle())),
 		)
 	})
 })
 
 describe("org home failures and guards", () => {
-	test("a failed DM creation replaces the loading toast with the error", () => {
-		story(
-			pageUpdate,
-			given(loaded()),
-			message(Message.PressedMessageMember({ userId: grace, name: "Grace Hopper" })),
-			Command.resolve(CreateDm, Message.FailedCreateDm({ reason: "Offline" })),
-			expectOutMessage(
-				PageOutMessage.RequestedToast({
-					toast: {
-						...errorToast("Connection lost", "Check your internet connection and try again."),
-						id: "home-create-dm",
-					},
-				}),
-			),
-			model((current) => expect(current.dmRequest).toEqual(DmRequest.Idle())),
-		)
-	})
-
 	test("a failed copy toasts an error", () => {
 		story(
 			pageUpdate,
@@ -211,8 +177,7 @@ describe("org home failures and guards", () => {
 			pageUpdate,
 			given(withOpenMenu(grace)),
 			message(menuMessage(grace, Menu.Message.ClickedItem({ key: "message", entries: menuEntries }))),
-			Command.expectHas(CreateDm({ organizationId, userId: grace, name: "Grace Hopper" })),
-			Command.resolve(CreateDm, Message.SucceededCreateDm({ channelId, name: "Grace Hopper" })),
+			expectOutMessage(createDmWithGrace),
 		)
 	})
 
@@ -235,16 +200,6 @@ describe("org home failures and guards", () => {
 			),
 			model((current) => expect(current.dmRequest).toEqual(DmRequest.Idle())),
 		)
-	})
-
-	test("a DM row update while the DM is being created does not open it a second time", () => {
-		const creating = pageUpdate(
-			loaded(),
-			Message.PressedMessageMember({ userId: grace, name: "Grace Hopper" }),
-		).model
-		const synced = pageUpdate(creating, Message.UpdatedDmChannels({ rows: dmWithGrace }))
-		expect(synced.outMessage).toBeUndefined()
-		expect(synced.model.dmRequest).toEqual(DmRequest.Creating({ userId: grace }))
 	})
 
 	test("without an organization, or for an unknown member, Message does nothing", () => {

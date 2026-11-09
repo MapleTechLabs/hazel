@@ -2,15 +2,14 @@ import type { ChannelId } from "@hazel/schema"
 import { Option } from "effect"
 import { Command } from "foldkit"
 import { modifyFields } from "foldkit/struct"
-import { failureMessage } from "~/lib/error-messages"
-import { errorToast, errorToastOf, loadingToast, successToast } from "../../data/actions"
+import { errorToast, successToast } from "../../data/actions"
 import type { ToastRequest } from "../../overlay/toasts"
 import * as Interaction from "../../ui/aria/interaction"
 import { AppRoute } from "../../route"
 import * as Menu from "../../ui/menu"
 import type { PageReturn, Shared } from "../contract"
 import { PageOutMessage, requestedOrgNavigation } from "../out-message"
-import { CopyEmail, CreateDm, FocusSearch } from "./commands"
+import { CopyEmail, FocusSearch } from "./commands"
 import { findExistingDmChannel } from "./dm"
 import { Message } from "./message"
 import {
@@ -37,15 +36,10 @@ export const init = (): Return => ({
 	},
 })
 
-/** The DM flow's toasts share one id, so each replaces the previous (legacy `exitToast` loading). */
-const DM_TOAST_ID = "home-create-dm"
-
 const toast = (request: ToastRequest) => PageOutMessage.RequestedToast({ toast: request })
 
-const navigateToChannel = (shared: Shared, channelId: ChannelId, toast?: ToastRequest) =>
-	requestedOrgNavigation(shared.orgSlug, (orgSlug) => AppRoute.ChatChannel({ orgSlug, channelId }), {
-		toast,
-	})
+const navigateToChannel = (shared: Shared, channelId: ChannelId) =>
+	requestedOrgNavigation(shared.orgSlug, (orgSlug) => AppRoute.ChatChannel({ orgSlug, channelId }))
 
 /** Keeps each member's menu (and its open state) across live-query updates. */
 const reconcileMenus = (model: Model, members: ReadonlyArray<DirectoryMember>): Model["menus"] =>
@@ -62,31 +56,32 @@ const memberByUserId = (model: Model, userId: string) =>
 const withDmRequest = (model: Model, dmRequest: DmRequest): Model =>
 	modifyFields(model, { dmRequest: () => dmRequest })
 
-/** `handleOpenChat`: reuse an existing DM with the member, or create one. */
+/** `handleOpenChat`: reuse an existing DM with the member, or ask the root to create one. */
 const openDm = (
 	model: Model,
 	shared: Shared,
 	member: DirectoryMember,
 	rows: ReadonlyArray<DmRow>,
 ): Return => {
+	const idle = withDmRequest(model, DmRequest.Idle())
 	const organizationId = shared.organization?.id
 	const currentUserId = shared.currentUser?.id
-	if (!organizationId || !currentUserId) return { model: withDmRequest(model, DmRequest.Idle()) }
+	const { orgSlug } = shared
+	if (!organizationId || !currentUserId || orgSlug === null) return { model: idle }
 	const existing = findExistingDmChannel(rows, currentUserId, [member.id], organizationId)
-	if (existing !== null)
-		return {
-			model: withDmRequest(model, DmRequest.Idle()),
-			outMessage: navigateToChannel(shared, existing),
-		}
-	const name = `${member.firstName} ${member.lastName}`.trim()
+	if (existing !== null) return { model: idle, outMessage: navigateToChannel(shared, existing) }
 	return {
-		model: withDmRequest(model, DmRequest.Creating({ userId: member.id })),
-		commands: [CreateDm({ organizationId, userId: member.id, name })],
-		outMessage: toast({ ...loadingToast(`Starting conversation with ${name}...`), id: DM_TOAST_ID }),
+		model: idle,
+		outMessage: PageOutMessage.RequestedDmCreation({
+			organizationId,
+			orgSlug,
+			userId: member.id,
+			name: `${member.firstName} ${member.lastName}`.trim(),
+		}),
 	}
 }
 
-/** A press while a DM is opening is ignored; before the DM rows load, the request waits for them. */
+/** Before the DM rows load, the request waits for them; a press while one waits is ignored. */
 const requestDm = (model: Model, shared: Shared, member: DirectoryMember): Return => {
 	if (model.dmRequest._tag !== "Idle" || !shared.organization || !shared.currentUser) return { model }
 	const awaiting = withDmRequest(model, DmRequest.AwaitingChannels({ userId: member.id }))
@@ -155,27 +150,6 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				onSome: (member) => openDm(next, shared, member, rows),
 			})
 		},
-		SucceededCreateDm: ({ channelId, name }) => ({
-			model: withDmRequest(model, DmRequest.Idle()),
-			outMessage: navigateToChannel(shared, channelId, {
-				...successToast(`Started conversation with ${name}`),
-				id: DM_TOAST_ID,
-			}),
-		}),
-		FailedCreateDm: ({ reason }) => ({
-			model: withDmRequest(model, DmRequest.Idle()),
-			outMessage: toast({
-				...errorToastOf(
-					failureMessage(reason, {
-						AlreadyExists: {
-							title: "You already have a conversation with them",
-							description: "It will appear in your messages in a moment.",
-						},
-					}),
-				),
-				id: DM_TOAST_ID,
-			}),
-		}),
 		SucceededCopyEmail: ({ email }) => ({
 			model,
 			outMessage: toast(successToast("Email copied", `${email} copied to clipboard`)),

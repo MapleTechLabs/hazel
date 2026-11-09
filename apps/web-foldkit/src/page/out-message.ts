@@ -1,3 +1,4 @@
+import { OrganizationId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import { Page as CommandPalettePage } from "../overlay/command-palette/model"
@@ -19,6 +20,16 @@ export const PageOutMessage = defineMessageUnion({
 	RequestedModal: { modal: ModalRequest },
 	RequestedCommandPalette: { page: CommandPalettePage },
 	RequestedSignOut: {},
+	/**
+	 * Create a single DM with `userId` in the org at `orgSlug`, then open it. The root runs the request,
+	 * so its toast still resolves after the user leaves the page that asked.
+	 */
+	RequestedDmCreation: {
+		organizationId: OrganizationId,
+		orgSlug: Schema.String,
+		userId: UserId,
+		name: Schema.String,
+	},
 	/** Apply and persist the theme (legacy `setTheme` / `setCustomization`); read it back as `Shared.theme`. */
 	RequestedTheme: { preference: ThemePreference },
 	/** Store the notification sound settings (legacy `setSettings`); read them back as `Shared.soundSettings`. */
@@ -33,6 +44,7 @@ export const PageOutMessage = defineMessageUnion({
 	RequestedUpdateInstall: {},
 })
 export type PageOutMessage = typeof PageOutMessage.Type
+export type RequestedDmCreation = Extract<PageOutMessage, { readonly _tag: "RequestedDmCreation" }>
 
 /** `RequestedNavigation` to an org route; nothing outside an org, where org pages never update. */
 export const requestedOrgNavigation = (

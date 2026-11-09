@@ -1,4 +1,4 @@
-import { NotificationId, OrganizationId } from "@hazel/schema"
+import { ChannelId, NotificationId, OrganizationId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import { UrlRequest } from "foldkit/navigation"
@@ -20,6 +20,10 @@ import { ResolvedTheme } from "../theme"
 /** What the API said about the session, when it answered. */
 export const SessionAnswer = Schema.Literals(["SignedIn", "SignedOut"])
 export type SessionAnswer = typeof SessionAnswer.Type
+
+/** Why `channel.createDm` failed. `AlreadyExists`: the server has a DM the synced rows don't show yet. */
+export const CreateDmFailure = Schema.Union([Schema.Literals(["AlreadyExists"]), CommonReason])
+export type CreateDmFailure = typeof CreateDmFailure.Type
 
 export const Message = defineMessageUnion({
 	ClickedLink: { request: UrlRequest },
@@ -51,6 +55,8 @@ export const Message = defineMessageUnion({
 	CompletedWarmAccessToken: {},
 	SucceededSignOut: {},
 	FailedSignOut: { reason: CommonReason },
+	SucceededCreateDm: { orgSlug: Schema.String, channelId: ChannelId, name: Schema.String },
+	FailedCreateDm: { reason: CreateDmFailure },
 	/** The organization query for `orgSlug` answered (found or not). */
 	UpdatedOrganization: { orgSlug: Schema.String, organization: Schema.NullOr(Organization) },
 	/** The organization query for `orgSlug` has not loaded after a while, or its source failed. */

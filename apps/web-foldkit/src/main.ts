@@ -1,13 +1,14 @@
-import type { OrganizationId } from "@hazel/schema"
+import type { ChannelId, OrganizationId } from "@hazel/schema"
 import { Clock, Effect, Match, Option, Schema } from "effect"
 import { AsyncData, type Runtime, Update } from "foldkit"
 import { UrlRequest } from "foldkit/navigation"
 import { modifyFields } from "foldkit/struct"
 import { toString as urlToString, type Url } from "foldkit/url"
-import { commonMessage, type CommonReason, isRetryableReason } from "~/lib/error-messages"
+import { commonMessage, type CommonReason, failureMessage, isRetryableReason } from "~/lib/error-messages"
 import {
 	ApplyTheme,
 	CheckSession,
+	CreateDm,
 	DeliverNotifications,
 	FetchCurrentUser,
 	LoadExternal,
@@ -36,7 +37,7 @@ import {
 } from "./app/model"
 import { MOBILE_QUERY } from "./app/subscription"
 import { toPageMessage } from "./app/view"
-import { errorToast, errorToastOf } from "./data/actions"
+import { errorToast, errorToastOf, loadingToast, successToast } from "./data/actions"
 import { loadSoundSettings, SoundSettings } from "./notification-sound"
 import * as CommandPalette from "./overlay/command-palette"
 import type { LayoutHotkeyActionId } from "./overlay/hotkeys"
@@ -45,7 +46,7 @@ import { ModalOutMessage } from "./overlay/out-message"
 import * as Toasts from "./overlay/toaster"
 import type { ToastAction } from "./overlay/toasts"
 import { can } from "./page/contract"
-import { PageOutMessage } from "./page/out-message"
+import { PageOutMessage, type RequestedDmCreation } from "./page/out-message"
 import { enterRoute, informShared, type PageSlot, type PageTransition, updatePage } from "./page/registry"
 import * as Platform from "./platform"
 import type { DesktopMenuItem } from "./platform/desktop-menu"
@@ -383,6 +384,36 @@ const pressedDesktopMenuItem = (item: DesktopMenuItem): Step =>
 		Match.exhaustive,
 	)
 
+/** The DM flow's toasts share one id, so each replaces the previous: loading, then success or error. */
+const DM_TOAST_ID = "create-dm"
+
+const setCreatingDm = (isCreatingDm: boolean): Step =>
+	setModel((model) => modifyFields(model, { isCreatingDm: () => isCreatingDm }))
+
+/** One DM request at a time: a second press while one runs is ignored. */
+const requestedDmCreation =
+	({ organizationId, orgSlug, userId, name }: Omit<RequestedDmCreation, "_tag">): Step =>
+	(model) =>
+		model.isCreatingDm
+			? { model }
+			: Update.combine(model, [
+					setCreatingDm(true),
+					showToast({ ...loadingToast(`Starting conversation with ${name}...`), id: DM_TOAST_ID }),
+					command(CreateDm({ organizationId, orgSlug, userId, name })),
+				])
+
+/** Opens the new DM only while the user is still in its org; elsewhere the toast says it is ready. */
+const succeededCreateDm =
+	(orgSlug: string, channelId: ChannelId, name: string): Step =>
+	(model) =>
+		Update.combine(model, [
+			setCreatingDm(false),
+			showToast({ ...successToast(`Started conversation with ${name}`), id: DM_TOAST_ID }),
+			orgSlugOf(model.route) === orgSlug
+				? navigateTo(AppRoute.ChatChannel({ orgSlug, channelId }))
+				: unchanged,
+		])
+
 /** A page or the shell reported a fact; the root owns navigation, the overlays and the session. */
 const handleOutMessage = (outMessage: PageOutMessage): Step =>
 	PageOutMessage.match<Step>(outMessage, {
@@ -392,6 +423,7 @@ const handleOutMessage = (outMessage: PageOutMessage): Step =>
 		RequestedModal: ({ modal }) => openModal(modal),
 		RequestedCommandPalette: ({ page }) => openCommandPalette(page),
 		RequestedSignOut: () => command(SignOut()),
+		RequestedDmCreation: requestedDmCreation,
 		RequestedTheme: ({ preference }) => requestedTheme(preference),
 		RequestedSoundSettings: ({ settings }) =>
 			Update.combine([
@@ -634,6 +666,7 @@ export const init: Runtime.RoutingApplicationInit<Model, Message, Flags, Resourc
 			toasts: Toasts.init(),
 			platform: Platform.init(),
 			desktopUpdate: Updates.init(),
+			isCreatingDm: false,
 		},
 		url,
 	)
@@ -693,6 +726,23 @@ export const update = (model: Model, message: Message): Return =>
 		FailedFetchCurrentUser: ({ reason }) => failedFetchCurrentUser(reason)(model),
 		PressedRetryCurrentUser: () => refreshCurrentUser(model),
 		CompletedWarmAccessToken: () => ({ model }),
+		SucceededCreateDm: ({ orgSlug, channelId, name }) =>
+			succeededCreateDm(orgSlug, channelId, name)(model),
+		FailedCreateDm: ({ reason }) =>
+			Update.combine(model, [
+				setCreatingDm(false),
+				showToast({
+					...errorToastOf(
+						failureMessage(reason, {
+							AlreadyExists: {
+								title: "You already have a conversation with them",
+								description: "It will appear in your messages in a moment.",
+							},
+						}),
+					),
+					id: DM_TOAST_ID,
+				}),
+			]),
 		// A full load of `/`: every collection, token and subscription starts over, signed out.
 		SucceededSignOut: () => ({ model, commands: [LoadExternal({ href: hrefOf(AppRoute.Root()) })] }),
 		FailedSignOut: ({ reason }) =>

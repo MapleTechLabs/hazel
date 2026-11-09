@@ -96,6 +96,8 @@ export const Model = Schema.Struct({
 	platform: Platform.Model,
 	/** The desktop app's update check and install. */
 	desktopUpdate: Updates.Model,
+	/** A `channel.createDm` from `RequestedDmCreation` is in flight; another request waits for it. */
+	isCreatingDm: Schema.Boolean,
 })
 export type Model = typeof Model.Type
 

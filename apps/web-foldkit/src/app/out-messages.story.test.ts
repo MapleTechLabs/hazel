@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import * as UiToast from "@foldkit/ui/toast"
-import { ChannelId, ChannelMemberId } from "@hazel/schema"
+import { ChannelId, ChannelMemberId, UserId } from "@hazel/schema"
 import { Option, Schema } from "effect"
 import { Command, given, message, model, story } from "foldkit/story"
 import { describe, expect, test } from "vitest"
@@ -15,12 +15,13 @@ import * as Platform from "../platform"
 import * as Presence from "../platform/presence/message"
 import { AFK_TIMEOUT_MS } from "../platform/presence/model"
 import { BroadcastActivity, SendPresenceUpdate } from "../platform/presence/update"
-import { ada, plainMember, signedIn } from "../test/root-fixtures"
+import { ada, hazelOrg, plainMember, signedIn, urlOf } from "../test/root-fixtures"
 import * as CommandMenu from "../ui/command-menu"
 import { DEFAULT_SOUND_SETTINGS } from "../notification-sound"
 import * as Menu from "../ui/menu"
 import {
 	ApplyTheme,
+	CreateDm,
 	LoadExternal,
 	NavigateInternal,
 	SaveSoundSettings,
@@ -28,6 +29,9 @@ import {
 	SignOut,
 } from "./command"
 import { Message } from "./message"
+import type { Model } from "./model"
+import { Message as HomeMessage } from "../page/home/message"
+import type { DirectoryMember } from "../page/home/model"
 
 /** The facts children report (OutMessages) and what the root does with them. */
 
@@ -154,6 +158,90 @@ describe("RequestedSignOut", () => {
 			UiToast.test.drainEntry({ entryId: "toaster-entry-0" }),
 			model((m) => expect(m.toasts.entries).toEqual([])),
 		)
+	})
+})
+
+describe("RequestedDmCreation", () => {
+	const grace = Schema.decodeSync(UserId)("00000000-0000-4000-8000-0000000000d1")
+	const dmId = Schema.decodeSync(ChannelId)("00000000-0000-4000-8000-0000000000d2")
+	const home = (message: HomeMessage): Message =>
+		Message.GotPageMessage({ message: { _tag: "OrgHome", message } })
+	const graceMember: DirectoryMember = {
+		id: grace,
+		firstName: "Grace",
+		lastName: "Hopper",
+		email: "grace@hazel.test",
+		avatarUrl: null,
+		role: "member",
+		presenceStatus: null,
+	}
+	const pressGrace = home(HomeMessage.PressedMessageMember({ userId: grace, name: "Grace Hopper" }))
+	const pressMessageGrace = [
+		home(HomeMessage.UpdatedMembers({ members: [graceMember] })),
+		home(HomeMessage.UpdatedDmChannels({ rows: [] })),
+		pressGrace,
+	]
+	const createDm = CreateDm({
+		organizationId: hazelOrg.id,
+		orgSlug: "hazel",
+		userId: grace,
+		name: "Grace Hopper",
+	})
+	const succeeded = Message.SucceededCreateDm({ orgSlug: "hazel", channelId: dmId, name: "Grace Hopper" })
+	const toastTitles = (m: Model) => m.toasts.entries.map((entry) => entry.payload.title)
+
+	/**
+	 * Folds Messages through the root update, keeping the last step's Commands as `{ name, args }`.
+	 * Not `story`: it would make every test resolve the toast timers and the route's own Commands.
+	 */
+	const run = (model: Model, messages: ReadonlyArray<Message>) =>
+		messages.reduce<{ model: Model; commands: ReadonlyArray<{ name: string; args: unknown }> }>(
+			(current, next) => {
+				const result = update(current.model, next)
+				const commands = (result.commands ?? []).map(({ name, args }) => ({ name, args }))
+				return { model: result.model, commands }
+			},
+			{ model, commands: [] },
+		)
+	const asCall = ({ name, args }: { name: string; args: unknown }) => ({ name, args })
+
+	test("the loading toast resolves even after the user leaves the home page", () => {
+		const pressed = run(signedIn("/hazel"), pressMessageGrace)
+		expect(pressed.commands).toContainEqual(asCall(createDm))
+		expect(toastTitles(pressed.model)).toEqual(["Starting conversation with Grace Hopper..."])
+		expect(pressed.model.isCreatingDm).toBe(true)
+
+		// The user moves on before the RPC answers; the home page is gone.
+		const left = run(pressed.model, [Message.ChangedUrl({ url: urlOf("/hazel/notifications") })])
+		expect(left.model.page?._tag).not.toBe("OrgHome")
+
+		const done = run(left.model, [succeeded])
+		expect(toastTitles(done.model)).toEqual(["Started conversation with Grace Hopper"])
+		expect(done.model.isCreatingDm).toBe(false)
+		expect(done.commands).toContainEqual(asCall(NavigateInternal({ url: `/hazel/chat/${dmId}` })))
+	})
+
+	test("after a move to another org, success only toasts", () => {
+		const pressed = run(signedIn("/hazel"), pressMessageGrace)
+		const elsewhere = run(pressed.model, [Message.ChangedUrl({ url: urlOf("/acme") })])
+		const done = run(elsewhere.model, [succeeded])
+		expect(toastTitles(done.model)).toEqual(["Started conversation with Grace Hopper"])
+		expect(done.commands.map((command) => command.name)).not.toContain("NavigateInternal")
+	})
+
+	test("a second press while the DM is being created is ignored", () => {
+		const pressed = run(signedIn("/hazel"), pressMessageGrace)
+		const again = run(pressed.model, [pressGrace])
+		expect(again.commands).not.toContainEqual(asCall(createDm))
+		expect(again.model.toasts.entries).toHaveLength(1)
+	})
+
+	test("a failure replaces the loading toast with the error and allows another try", () => {
+		const pressed = run(signedIn("/hazel"), pressMessageGrace)
+		const failed = run(pressed.model, [Message.FailedCreateDm({ reason: "AlreadyExists" })])
+		expect(toastTitles(failed.model)).toEqual(["You already have a conversation with them"])
+		expect(failed.model.isCreatingDm).toBe(false)
+		expect(run(failed.model, [pressGrace]).commands).toContainEqual(asCall(createDm))
 	})
 })
 

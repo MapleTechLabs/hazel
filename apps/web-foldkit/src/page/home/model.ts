@@ -1,7 +1,6 @@
 import { ChannelId, OrganizationId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineTaggedUnion } from "foldkit/schema"
-import { CommonReason } from "~/lib/error-messages"
 import * as Interaction from "../../ui/aria/interaction"
 import * as Menu from "../../ui/menu"
 
@@ -25,11 +24,10 @@ export const DmRow = Schema.Struct({
 })
 export type DmRow = typeof DmRow.Type
 
-/** Opening a DM: waiting for the DM rows to load, or creating the channel. One at a time. */
+/** Opening a DM: waiting for the DM rows to load, to reuse an existing DM before creating one. */
 export const DmRequest = defineTaggedUnion({
 	Idle: {},
 	AwaitingChannels: { userId: UserId },
-	Creating: { userId: UserId },
 })
 export type DmRequest = typeof DmRequest.Type
 
@@ -46,10 +44,6 @@ export const DmChannels = defineTaggedUnion({
 	Loaded: { rows: Schema.Array(DmRow) },
 })
 export type DmChannels = typeof DmChannels.Type
-
-/** Why `channel.createDm` failed. `AlreadyExists`: the server has a DM the synced rows don't show yet. */
-export const CreateDmFailure = Schema.Union([Schema.Literals(["AlreadyExists"]), CommonReason])
-export type CreateDmFailure = typeof CreateDmFailure.Type
 
 export const Model = Schema.Struct({
 	members: Members,
