@@ -98,7 +98,7 @@ export const MessageRpcLive = MessageRpcs.toLayer(
 								const createdMessage = yield* messageRepo
 									.insert({
 										...messageData,
-										...(id === undefined ? {} : { id }),
+										id,
 										conversationId,
 										authorId: user.id,
 										deletedAt: null,
