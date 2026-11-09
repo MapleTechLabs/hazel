@@ -10,6 +10,16 @@ describe("overlays", () => {
 		expect(parsePlacement("end top")).toEqual({ side: "right", align: "start" })
 	})
 
+	it("reports only the paths whose overlay entry changed since it was last asked", () => {
+		const overlays = makeOverlays()
+		const release = overlays.portal("r/0/1")
+		overlays.anchor("r/0/1/2", { triggerId: "t", side: "bottom", align: "start", gap: 8 })
+		expect([...overlays.takeChanges()].sort()).toEqual(["r/0/1", "r/0/1/2"])
+		expect([...overlays.takeChanges()]).toEqual([])
+		release()
+		expect([...overlays.takeChanges()]).toEqual(["r/0/1"])
+	})
+
 	it("portals the root, anchors the panel to its trigger and dismisses from the panel", async () => {
 		const overlays = makeOverlays()
 		let changes = 0

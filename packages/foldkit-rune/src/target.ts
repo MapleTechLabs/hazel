@@ -347,6 +347,9 @@ const hash = (text: string): string => {
  * Handler ids are stable per element path, so an unchanged subtree hashes the same between
  * commits and goes over the wire as a reference.
  */
+/** How long a panel stays hidden waiting for its trigger's width before it shows without it. */
+const TRIGGER_WIDTH_WAIT_MS = 150
+
 /** How many sent trees keep their handlers (each keystroke sends one); a press on an older tree is dropped. */
 const HANDLER_GENERATIONS = 32
 
@@ -370,8 +373,12 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 	let ack = 0
 	/** The newest host event the last committed document reflects. */
 	let lastDocumentAck = 0
-	/** Triggers whose first width a panel waits for (`--trigger-width`). */
-	const awaitedWidths = new Set<string>()
+	/** Triggers whose first width a panel waits for (`--trigger-width`), with that trigger's id. */
+	const awaitedWidths = new Map<string, string>()
+	/** Panels whose trigger width just arrived: the next commit serializes them again. */
+	const widthArrived = new Set<string>()
+	/** When each awaited trigger width was first asked for: past a short wait the panel shows anyway. */
+	const awaitedSince = new Map<string, number>()
 	let frameStartedAt = 0
 
 	const handlerId = (path: string, event: string): number => {
@@ -433,6 +440,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			}, 0)
 		else styles.ensure(classes)
 		styles.setViewport(env.width, env.height)
+		const classesDone = performance.now()
 
 		/**
 		 * What anchoring does to a panel's inline style in the browser: it shows a panel its view
@@ -447,10 +455,23 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			const width = options.bridge?.widthOf(trigger)
 			// Until the host reports the trigger's width, the panel stays hidden, as the browser
 			// keeps it until positioned: drawn at another width it would jump on the next frame.
+			// A width that never comes (a trigger laid out before it was observed) shows it anyway.
 			if (width === undefined) {
-				awaitedWidths.add(trigger)
-				return { ...shown, visibility: "hidden" }
+				awaitedWidths.set(trigger, anchor.triggerId)
+				const since = awaitedSince.get(trigger)
+				if (since === undefined) {
+					awaitedSince.set(trigger, performance.now())
+					setTimeout(() => {
+						for (const panel of options.overlays?.anchoredTo(anchor.triggerId) ?? [])
+							widthArrived.add(panel)
+						refreshObserved()
+					}, TRIGGER_WIDTH_WAIT_MS)
+				}
+				if (since === undefined || performance.now() - since < TRIGGER_WIDTH_WAIT_MS)
+					return { ...shown, visibility: "hidden" }
+				return shown
 			}
+			awaitedSince.delete(trigger)
 			return { ...shown, "--trigger-width": `${width}px`, "--button-width": `${width}px` }
 		}
 		const records = new Map<
@@ -467,7 +488,17 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		let nodes = 0
 		let reusedSubtrees = 0
 		// What an element's output depends on beyond its VNode, scope and place.
-		const context = `${env.dark}|${env.width}x${env.height}|${options.overlays?.version ?? 0}|${options.bridge?.observedCount ?? 0}`
+		const context = `${env.dark}|${env.width}x${env.height}`
+		// Overlay and observation changes touch only the elements they name: a cached subtree
+		// holding one of those paths is serialized again, the rest is reused.
+		const touched = [
+			...(options.overlays?.takeChanges() ?? []),
+			...(options.bridge?.takeObservedChanges() ?? []),
+			...widthArrived,
+		]
+		widthArrived.clear()
+		const isTouched = (path: string) =>
+			touched.length > 0 && touched.some((p) => p === path || p.startsWith(`${path}/`))
 
 		/** An unchanged element, again: its records, handlers, ids and hashes, and its children's. */
 		const replay = (entry: CachedElement) => {
@@ -518,6 +549,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 				last.index === position?.index &&
 				last.count === position?.siblings.length &&
 				last.context === context &&
+				!isTouched(path) &&
 				last.pointerMount === pointer?.mount &&
 				sentHashes.has(last.h)
 			) {
@@ -722,13 +754,16 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		gen += 1
 		handlersByGen.set(gen, nextHandlers)
 		handlersByGen.delete(gen - HANDLER_GENERATIONS)
+		const treeDone = performance.now()
 		const previouslySent = sentHashes
 		sentHashes = nextHashes
 		subtreeCache = nextCache
 		seenVnodes = nextSeen
 		// An overlay's Mount just started: it portals and anchors its panel, so hold this tree
 		// and send the next, rather than draw the panel unpositioned for a frame.
-		if (options.bridge?.commit(records, mountVNodes) === true && !isHoldingForMount) {
+		const startedMount = options.bridge?.commit(records, mountVNodes) === true
+		const mountsDone = performance.now()
+		if (startedMount && !isHoldingForMount) {
 			sentHashes = previouslySent
 			isHoldingForMount = true
 			setTimeout(() => {
@@ -747,7 +782,14 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		}
 		const line = JSON.stringify(message)
 		send(message)
+		const sendDone = performance.now()
 		options.onStats?.({
+			phases: {
+				classesMs: classesDone - started,
+				treeMs: treeDone - classesDone,
+				mountsMs: mountsDone - treeDone,
+				sendMs: sendDone - mountsDone,
+			},
 			viewMs,
 			styleAndSerializeMs: performance.now() - started,
 			bytes: line.length,
@@ -842,7 +884,9 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			commitDocument(document, ack)
 		},
 		requestFrame: (frame) => {
+			isFramePending = true
 			setTimeout(() => {
+				isFramePending = false
 				frameStartedAt = performance.now()
 				frame()
 			}, 0)
@@ -871,7 +915,13 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 				height: message.h,
 			})
 			// A trigger's first width: the panel anchored to it takes it as `--trigger-width`.
-			if (awaitedWidths.delete(message.path)) refreshObserved()
+			const triggerId = awaitedWidths.get(message.path)
+			if (triggerId !== undefined) {
+				awaitedWidths.delete(message.path)
+				// The panel waiting on it was cached hidden: it is no change of overlay or observation.
+				for (const panel of options.overlays?.anchoredTo(triggerId) ?? []) widthArrived.add(panel)
+				refreshObserved()
+			}
 			return
 		}
 		if (message.t === "pointer") {
@@ -904,7 +954,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			return
 		}
 		if (message.t === "scrolled") {
-			options.bridge?.reportScroll(message.path, message.top)
+			options.bridge?.reportScroll(message.path, message.top, message.seq)
 			return
 		}
 		if (message.t !== "event") return
@@ -947,6 +997,8 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		if (lastDocument) commitDocument(lastDocument, lastDocumentAck)
 	})
 
+	/** A frame requested and not yet run: it will commit, so a refresh need not. */
+	let isFramePending = false
 	/** A tree held while an overlay's Mount positions its panel (`commitDocument`). */
 	let isHoldingForMount = false
 	const refreshObserved = () => {
@@ -954,7 +1006,9 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		isRefreshScheduled = true
 		setTimeout(() => {
 			isRefreshScheduled = false
-			if (lastDocument) commitDocument(lastDocument, lastDocumentAck)
+			// A frame on its way commits a newer document with the same changes: committing the
+			// last one first would only delay it.
+			if (lastDocument && !isFramePending) commitDocument(lastDocument, lastDocumentAck)
 		}, 0)
 	}
 

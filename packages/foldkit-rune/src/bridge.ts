@@ -66,7 +66,7 @@ type ResizeEntry = {
 }
 
 /** What an element proxy asks of the host: `scrollTop =`, `focus()` and `scrollIntoView()`. */
-export type HostElementCommand = Extract<RuntimeToHost, { t: "scroll" | "focus" | "reveal" }>
+export type HostElementCommand = Extract<RuntimeToHost, { t: "scroll" | "focus" | "reveal" | "measure" }>
 
 /** `<input>` types the host draws as controls, not text fields (its `is_text_field`). */
 const CONTROL_INPUT_TYPES = new Set([
@@ -159,10 +159,13 @@ export const makeElementBridge = (options: {
 	/** The runtime's own scroll per path, until the host reports it (or the wait runs out). */
 	const pendingScrolls = new Map<
 		string,
-		{ top: number; at: number; held?: number; timer?: ReturnType<typeof setTimeout> }
+		{ top: number; at: number; seq: number; held?: number; timer?: ReturnType<typeof setTimeout> }
 	>()
+	let scrollSeq = 0
 	const proxies = new Map<string, ProxyElement>()
 	const observed = new Set<string>()
+	/** Paths observed since the last `takeObservedChanges`: their `o` flag changed. */
+	let newlyObserved = new Set<string>()
 	const resizeObservers = new Map<string, Set<(target: ProxyElement) => void>>()
 	const mutationObservers = new Set<() => void>()
 	let mounted = new Map<string, AnyVNode>()
@@ -174,6 +177,9 @@ export const makeElementBridge = (options: {
 		const existing = proxies.get(path)
 		if (observe && !observed.has(path)) {
 			observed.add(path)
+			newlyObserved.add(path)
+			// Laid out before it was observed, it reports no layout until it moves: ask for it.
+			options.send({ t: "measure", path })
 			options.onObserve?.()
 		}
 		if (existing) return existing
@@ -181,10 +187,14 @@ export const makeElementBridge = (options: {
 		const rect = () => rects.get(path) ?? { x: 0, y: 0, width: 0, height: 0 }
 		const record = () => records.get(path)
 		const setScrollTop = (top: number) => {
+			// A write of the offset it read (an anchor kept with no change) is no move: sending it
+			// would put back an offset the user may have scrolled on from.
+			if (top === (scrollTops.get(path) ?? 0)) return
 			scrollTops.set(path, top)
 			clearTimeout(pendingScrolls.get(path)?.timer)
-			pendingScrolls.set(path, { top, at: performance.now() })
-			options.send({ t: "scroll", path, top })
+			const seq = ++scrollSeq
+			pendingScrolls.set(path, { top, at: performance.now(), seq })
+			options.send({ t: "scroll", path, top, seq })
 		}
 		const proxy = Object.defineProperties(new ElementClass(), {
 			__path: { value: path },
@@ -355,14 +365,32 @@ export const makeElementBridge = (options: {
 		if (proxy) for (const notify of resizeObservers.get(path) ?? []) notify(proxy)
 	}
 
+	/** Viewports whose `scroll` event is due once the current batch of host lines is in. */
+	const scrollsToDispatch = new Set<string>()
 	const applyScroll = (path: string, top: number) => {
 		if (scrollTops.get(path) === top) return
 		scrollTops.set(path, top)
-		proxies.get(path)?.dispatchEvent(new Event("scroll"))
+		// The host sends a frame's offset before the rects that frame moved: the listener runs
+		// once they are all in (the rest of this batch of host lines), as a browser's would.
+		if (scrollsToDispatch.has(path)) return
+		scrollsToDispatch.add(path)
+		queueMicrotask(() => {
+			scrollsToDispatch.delete(path)
+			proxies.get(path)?.dispatchEvent(new Event("scroll"))
+		})
 	}
 
-	const reportScroll = (path: string, top: number) => {
+	const reportScroll = (path: string, top: number, seq?: number) => {
 		const pending = pendingScrolls.get(path)
+		// A host that says which scroll it had applied: a report from before ours is stale, any
+		// after it is the offset now (the user may have scrolled on), with no wait.
+		if (pending !== undefined && seq !== undefined) {
+			if (seq < pending.seq) return
+			clearTimeout(pending.timer)
+			pendingScrolls.delete(path)
+			applyScroll(path, top)
+			return
+		}
 		if (pending !== undefined) {
 			// The host may clamp the offset; a report near it, or one well after it, ends the wait.
 			const waited = performance.now() - pending.at
@@ -584,6 +612,12 @@ export const makeElementBridge = (options: {
 		/** How many elements are observed: it only grows, so it versions `isObserved`. */
 		get observedCount() {
 			return observed.size
+		},
+		/** The paths observed since the last call, whose wire `o` flag is new. */
+		takeObservedChanges: (): ReadonlySet<string> => {
+			const changes = newlyObserved
+			newlyObserved = new Set()
+			return changes
 		},
 		/** A DOM-backed Mount at `path`: its name, args and element, for the app's native glue. */
 		domMountAt: (path: string) => {

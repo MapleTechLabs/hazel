@@ -61,7 +61,8 @@ export type HostToRuntime =
 			readonly w: number
 			readonly h: number
 	  }
-	| { readonly t: "scrolled"; readonly path: string; readonly top: number }
+	/** A viewport's offset; `seq`, the last runtime scroll the host had applied to it then. */
+	| { readonly t: "scrolled"; readonly path: string; readonly top: number; readonly seq?: number }
 	/** The files picked for the file input at `path` (paths on disk); none when cancelled. */
 	| { readonly t: "files"; readonly path: string; readonly files: ReadonlyArray<string> }
 	/** A press on the label at `path` that handles none itself: its control's activation. */
@@ -109,13 +110,22 @@ export type RuntimeToHost =
 			readonly page: { readonly bg?: string; readonly color?: string }
 			readonly root: WireNode
 	  }
-	| { readonly t: "scroll"; readonly path: string; readonly top: number }
+	/** `element.scrollTop = top`. */
+	| {
+			readonly t: "scroll"
+			readonly path: string
+			readonly top: number
+			/** Echoed by the host's next offset report, so reports from before it can be told apart. */
+			readonly seq?: number
+	  }
 	/** Focus the element keyed `key` once the host has the tree it is in (`element.focus()`). */
 	| { readonly t: "focus"; readonly key: string }
 	/** Show an Open dialog for the file input at `path` (`input.click()`), filtered by `accept`. */
 	| { readonly t: "pickFile"; readonly path: string; readonly accept: string }
 	/** Scroll the element at `path` into view (`element.scrollIntoView()`). */
 	| { readonly t: "reveal"; readonly path: string; readonly block: "start" | "center" | "end" | "nearest" }
+	/** The element at `path` was just observed: report its rect now, laid out before as it may be. */
+	| { readonly t: "measure"; readonly path: string }
 	/** A full page load: the host replaces this runtime with a fresh one at `path`. */
 	| { readonly t: "reload"; readonly path: string }
 	/** Read or replace the sign-in vault's one record in the OS keychain; answered by `vault`. */
@@ -130,4 +140,6 @@ export type CommitStats = {
 	readonly nodes: number
 	readonly reusedSubtrees: number
 	readonly handlers: number
+	/** Where `styleAndSerializeMs` went: collecting and compiling classes, the tree, the Mounts, sending. */
+	readonly phases?: { readonly classesMs: number; readonly treeMs: number; readonly mountsMs: number; readonly sendMs: number }
 }

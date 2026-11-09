@@ -254,6 +254,25 @@ describe("StyleResolver", () => {
 		).toEqual(["minmax(200px, 280px)", "1fr"])
 	})
 
+	it("turns a group-hover inset change on a positioned element into a shift", () => {
+		// Both compiled first, as the app's precompiled sheet is: the group's scope knows the rule.
+		styles.ensure(["group/sidebar-item", "relative", "absolute", "right-1.5", "group-hover/sidebar-item:right-8"])
+		const row = resolve("group/sidebar-item relative")
+		const { style } = resolve("absolute right-1.5 group-hover/sidebar-item:right-8", { scope: row.scope })
+		expect(style.groupShift).toEqual([-26, 0])
+	})
+
+	it("caches by what selectors test of an attribute, not its whole value", () => {
+		styles.ensure(["p-2", "data-[state=open]:bg-black"])
+		const button = (attrs: Record<string, string>) =>
+			resolve("p-2 data-[state=open]:bg-black", { extra: { tag: "button", attrs } })
+		// Ids and data no rule tests leave the cached result shared.
+		expect(button({ id: "a", "data-msg": "1" })).toBe(button({ id: "b", "data-msg": "2" }))
+		// A value a rule tests still tells results apart.
+		expect(button({ "data-state": "open" }).style.bg).toBe("#000000ff")
+		expect(button({ "data-state": "closed" }).style.bg).toBeUndefined()
+	})
+
 	it("sends pointer-events for the host to inherit", () => {
 		expect(resolve("pointer-events-none").style.pointerEvents).toBe("none")
 		expect(resolve("pointer-events-auto").style.pointerEvents).toBe("auto")

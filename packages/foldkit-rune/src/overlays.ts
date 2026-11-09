@@ -60,6 +60,8 @@ export const makeOverlays = () => {
 			[...modals].sort(),
 			[...anchors].sort(([a], [b]) => a.localeCompare(b)),
 		])
+	/** Each overlaid path's entry as the last `takeChanges` saw it. */
+	let takenByPath = new Map<string, string>()
 	let version = 0
 	let versionSnapshot = snapshot()
 	let notifiedSnapshot = versionSnapshot
@@ -99,6 +101,23 @@ export const makeOverlays = () => {
 			}
 		},
 		anchorAt: (path: string): Anchor | undefined => anchors.get(path),
+		/** The panels anchored to the trigger with `triggerId`. */
+		anchoredTo: (triggerId: string): Array<string> =>
+			[...anchors].filter(([, anchor]) => anchor.triggerId === triggerId).map(([path]) => path),
+		/**
+		 * The paths whose portal, modal or anchor entry changed since the last call: only the
+		 * subtrees holding one need serializing again, not the whole document.
+		 */
+		takeChanges: (): ReadonlySet<string> => {
+			const now = new Map<string, string>()
+			for (const path of new Set([...portals, ...modals, ...anchors.keys()]))
+				now.set(path, JSON.stringify([portals.has(path), modals.has(path), anchors.get(path)]))
+			const changes = new Set<string>()
+			for (const [path, entry] of now) if (takenByPath.get(path) !== entry) changes.add(path)
+			for (const path of takenByPath.keys()) if (!now.has(path)) changes.add(path)
+			takenByPath = now
+			return changes
+		},
 		/** Bumped when what the host draws changes: what an element's `ov` was computed against. */
 		get version() {
 			const now = snapshot()

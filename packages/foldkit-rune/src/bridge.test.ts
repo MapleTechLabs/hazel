@@ -41,7 +41,13 @@ const mountVNode = (calls: Array<string>) => ({
 describe("makeElementBridge", () => {
 	it("finds elements by selector in document order, and asks the host to focus and reveal them", () => {
 		const sent: Array<HostElementCommand> = []
-		const bridge = makeElementBridge({ mounts: new Set(), send: (command) => sent.push(command) })
+		// Focus and reveal here; the measure requests a newly observed element sends are covered below.
+		const bridge = makeElementBridge({
+			mounts: new Set(),
+			send: (command) => {
+				if (command.t !== "measure") sent.push(command)
+			},
+		})
 		const next = new Map()
 		bridge.recordElement("r", undefined, "div", { role: "menu" }, [], next)
 		bridge.recordElement("r/0", "r", "button", { id: "first" }, [], next)
@@ -95,7 +101,21 @@ describe("makeElementBridge", () => {
 		expect(rows[1]?.getBoundingClientRect().top).toBe(40)
 	})
 
-	it("ignores host scroll reports older than the runtime's own scroll", () => {
+	it("asks the host to measure an element once, when it is first observed", () => {
+		const measured: Array<string> = []
+		const bridge = makeElementBridge({
+			mounts: new Set(),
+			send: (command) => {
+				if (command.t === "measure") measured.push(command.path)
+			},
+		})
+		bridge.commit(record(bridge), new Map())
+		bridge.widthOf("r")
+		bridge.widthOf("r")
+		expect(measured).toEqual(["r"])
+	})
+
+	it("ignores host scroll reports older than the runtime's own scroll", async () => {
 		const sent: Array<number> = []
 		const bridge = makeElementBridge({
 			mounts: new Set(),
@@ -115,11 +135,29 @@ describe("makeElementBridge", () => {
 		bridge.reportScroll("r", 480)
 		bridge.reportScroll("r", 500)
 		expect(list.scrollTop).toBe(500)
+		// The event follows the rest of the host's batch: one for both reports.
+		await Promise.resolve()
 		expect(scrolls).toBe(1)
 		expect(sent).toEqual([480])
 	})
 
-	it("takes the host's clamped offset when it never reports another", () => {
+	it("fires scroll once the host's rects for that frame are in, as one batch", async () => {
+		const bridge = makeElementBridge({ mounts: new Set(), send: () => {} })
+		bridge.commit(record(bridge), new Map())
+		const list = bridge.findById("list")
+		if (list === null) throw new Error("no #list element")
+		const seen: Array<number> = []
+		list.addEventListener("scroll", () => seen.push(list.scrollTop))
+		// The host's order within a frame: the offset, then the rects it moved.
+		bridge.reportScroll("r", 200)
+		bridge.reportLayout("r", { x: 0, y: -200, width: 100, height: 800 })
+		expect(seen).toEqual([])
+		await Promise.resolve()
+		expect(seen).toEqual([200])
+		expect(list.getBoundingClientRect().top).toBe(-200)
+	})
+
+	it("takes the host's clamped offset when it never reports another", async () => {
 		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] })
 		const bridge = makeElementBridge({ mounts: new Set(), send: () => {} })
 		bridge.commit(record(bridge), new Map())
@@ -133,6 +171,7 @@ describe("makeElementBridge", () => {
 		expect(list.scrollTop).toBe(2000)
 		vi.advanceTimersByTime(600)
 		expect(list.scrollTop).toBe(1800)
+		await Promise.resolve()
 		expect(scrolls).toBe(1)
 		vi.useRealTimers()
 	})

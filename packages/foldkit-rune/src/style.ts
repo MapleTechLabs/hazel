@@ -6,7 +6,7 @@ import postcss, { type AtRule, type ChildNode, type Container, type Document } f
 import { readFile } from "node:fs/promises"
 
 import { color } from "./css-color"
-import { type Compound, type Context, Unsupported, parseSelectorList } from "./selector"
+import { type AttrTest, type Compound, type Context, Unsupported, parseSelectorList } from "./selector"
 
 export { color } from "./css-color"
 
@@ -179,6 +179,8 @@ export type Style = {
 	/** Resolution scratch: whether insets apply. Never sent. */
 	position?: "absolute" | "sticky" | "static"
 	groupOpacity?: number
+	/** px, [dx, dy]: how far a positioned element moves while its group is hovered (an inset change). */
+	groupShift?: [number, number]
 	/** The final box-shadow list, rings included, in paint order (bottom-most first). */
 	shadows?: Array<Shadow>
 	/** Only when outline-style is not none and the outline is visible. */
@@ -255,6 +257,18 @@ export class StyleResolver {
 	private nextRuleId = 0
 	/** Never reset: a Scope held across a re-parse must not collide with a new one in the cache. */
 	private nextScopeId = 0
+	/**
+	 * The attributes styles can depend on: those a selector tests anywhere, and the ones this
+	 * resolver reads itself. The style cache keys on these alone, so an element's id or data does
+	 * not make every element a cache miss.
+	 */
+	private referencedAttrs = new Set(["disabled", "href", "tabindex", "type"])
+	/**
+	 * Per attribute a selector tests, the tests made of it: a style can only see which of these
+	 * pass, so the key records that rather than the value (an `#id` rule leaves ids unkeyed).
+	 * The attributes the resolver reads itself key on their whole value.
+	 */
+	private attrTests = new Map<string, Array<AttrTest>>()
 	readonly unsupportedClasses = new Map<string, number>()
 	readonly unsupportedProps = new Map<string, number>()
 	readonly unsupportedSelectors = new Map<string, number>()
@@ -417,6 +431,39 @@ export class StyleResolver {
 		this.resolved.clear()
 	}
 
+	/** Notes the attributes a selector tests (around the subject, inside `:not`/`:is`/`:has` too). */
+	private noteAttrs(c: Compound) {
+		for (const a of c.attrs) {
+			if (a.name === "class" || this.referencedAttrs.has(a.name)) continue
+			const tests = this.attrTests.get(a.name) ?? []
+			if (tests.some((t) => t.op === a.op && t.value === a.value && t.insensitive === a.insensitive)) continue
+			tests.push(a)
+			this.attrTests.set(a.name, tests)
+			// A result cached without this test in its key may not hold any more.
+			this.resolved.clear()
+		}
+		for (const p of c.pseudos)
+			if (p.k === "not" || p.k === "is") p.list.forEach((x) => this.noteAttrs(x))
+			else if (p.k === "has") p.list.forEach((r) => this.noteAttrs(r.compound))
+		for (const link of c.ctx) this.noteAttrs(link.compound)
+	}
+
+	/** The cache key's part for an element's attributes: only those styles can depend on. */
+	private attrsKey(attrs: Record<string, string>): string {
+		let key = ""
+		for (const name in attrs) {
+			if (this.referencedAttrs.has(name)) key += `${name}=${attrs[name]};`
+			else {
+				const tests = this.attrTests.get(name)
+				if (tests === undefined) continue
+				key += `${name}:`
+				for (const t of tests) key += matchAttr(t, { tag: "", classes: [], attrs }) ? "1" : "0"
+				key += ";"
+			}
+		}
+		return key
+	}
+
 	/** One Scope object per distinct (parent, local vars, pending rules, context): the id keys the style cache. */
 	private intern(key: string, make: () => Omit<Scope, "id">): Scope {
 		const existing = this.scopes.get(key)
@@ -507,7 +554,8 @@ export class StyleResolver {
 			// Layer, then specificity, then source order: an unlayered rule beats every layered one.
 			for (const parsed of parseSelectorList(rule.selector)) {
 				if (parsed instanceof Unsupported) this.bump(this.unsupportedSelectors, parsed.reason)
-				else
+				else this.noteAttrs(parsed.selector)
+				if (!(parsed instanceof Unsupported))
 					this.addSelector(
 						parsed.selector,
 						layer * 1e12 + Math.min(parsed.specificity, 999_999) * 1e6 + order,
@@ -612,7 +660,7 @@ export class StyleResolver {
 	resolve(el: ElementInput, scope: Scope, dark: boolean, viewport: number): { style: Style; scope: Scope } {
 		const key = `${scope.id}|${dark ? 1 : 0}|${viewport}x${viewportSize.height}|${el.tag ?? ""}|${el.classes.join(
 			" ",
-		)}|${attrsKey(el.attrs)}|${el.inline === undefined ? "" : JSON.stringify(el.inline)}`
+		)}|${this.attrsKey(el.attrs)}|${el.inline === undefined ? "" : JSON.stringify(el.inline)}`
 		const entries = this.resolved.get(key) ?? []
 		const hit = entries.find((e) => e.facts.every((f) => f.test(el) === f.value))
 		if (hit) return hit.result
@@ -810,6 +858,18 @@ export class StyleResolver {
 		for (const { mode, d } of ordered)
 			if (!TEXT_FIRST.has(d.prop) && d.prop !== "font-size") this.apply(acc, d, mode)
 		this.finish(acc)
+		// `group-hover:right-8` on a positioned element: a move by the inset's change.
+		if (acc.groupInset !== undefined && style.absolute !== undefined) {
+			const rest = style.absolute
+			const change = (side: number) => {
+				const to = acc.groupInset?.[side]
+				const from = rest[side]
+				return to === null || to === undefined || from === null || from === undefined ? 0 : to - from
+			}
+			const dx = change(0) - change(2)
+			const dy = change(1) - change(3)
+			if (dx !== 0 || dy !== 0) style.groupShift = [dx, dy]
+		}
 		// A screen-reader-only control (or a hidden box holding one, as around a radio's input)
 		// stays focusable: kept at its 1px clipped box, all but transparent. Other sr-only content goes.
 		if (acc.srOnly) {
@@ -892,6 +952,11 @@ export class StyleResolver {
 		const current = s.color ?? acc.text.color
 		if (mode === "groupHover") {
 			if (d.prop === "opacity") s.groupOpacity = ratio(v)
+			const side = ["left", "top", "right", "bottom"].indexOf(d.prop)
+			if (side !== -1) {
+				const n = evalLength(v, this.units(acc.scope, s.fontSize ?? acc.text.size))
+				if (n !== null) (acc.groupInset ??= [null, null, null, null])[side] = n
+			}
 			return
 		}
 		if (mode === "hover") {
@@ -1810,6 +1875,8 @@ type Accumulator = {
 	fixed?: boolean
 	/** `sr-only` (`clip-path: inset(50%)`): drawn nowhere. */
 	srOnly?: boolean
+	/** Insets under group hover, [left, top, right, bottom], against the resting ones. */
+	groupInset?: Array<number | null>
 	/** `transition-*` longhands as written, composed in `finish`. */
 	transition: { property?: string; duration?: string; timing?: string; delay?: string }
 	/** This element's own line-height, when it sets one. */
@@ -2447,8 +2514,4 @@ function evalLength(expr: string, units: Units, percentOf?: number): number | nu
 }
 
 /** Attributes that can select styles; `value` changes on every keystroke and selects nothing. */
-const attrsKey = (attrs: Record<string, string>): string => {
-	let key = ""
-	for (const name in attrs) if (name !== "value") key += `${name}=${attrs[name]};`
-	return key
-}
+
