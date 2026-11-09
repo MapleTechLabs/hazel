@@ -201,6 +201,7 @@ describe("the draft survives its editor (P0: Files tab round-trip)", () => {
 			given(fresh()),
 			message(
 				Message.FailedSendMessage({
+					channelId,
 					content: "On it",
 					restoreContent: true,
 					replyToMessageId: replyId,
@@ -230,12 +231,46 @@ describe("the draft survives its editor (P0: Files tab round-trip)", () => {
 		)
 	})
 
+	test("a send that fails after a switch to another channel only toasts", () => {
+		const otherChannel = Schema.decodeSync(ChannelId)(uuid(99))
+		story(
+			update,
+			given(fresh()),
+			message(
+				Message.FailedSendMessage({
+					channelId: otherChannel,
+					content: "On it",
+					restoreContent: true,
+					replyToMessageId: replyId,
+					attachmentIds: [firstAttachment],
+					reason: "Offline",
+				}),
+			),
+			Command.expectNone(),
+			expectOutMessage(
+				Draft.OutMessage.RequestedToast({
+					toast: {
+						intent: "error",
+						title: "Connection lost",
+						description: "Your message “On it” wasn't sent.",
+					},
+				}),
+			),
+			model((current) => {
+				expect(current.composer.markdown).toBe("")
+				expect(current.composeMode).toEqual(Draft.ComposeMode.Plain())
+				expect(current.attachmentIds).toEqual([])
+			}),
+		)
+	})
+
 	test("a send whose sync is delayed was delivered: nothing is restored", () => {
 		story(
 			update,
 			given(fresh()),
 			message(
 				Message.FailedSendMessage({
+					channelId,
 					content: "On it",
 					restoreContent: true,
 					replyToMessageId: null,

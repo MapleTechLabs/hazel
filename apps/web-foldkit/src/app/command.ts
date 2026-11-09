@@ -1,4 +1,4 @@
-import { NotificationId } from "@hazel/schema"
+import { NotificationId, OrganizationId, UserId } from "@hazel/schema"
 import { Duration, Effect, Schedule, Schema } from "effect"
 import { Command } from "foldkit"
 import { back, forward, load, pushUrl, replaceUrl } from "foldkit/navigation"
@@ -110,6 +110,40 @@ export const SignOut = Command.define("SignOut", {
 		Effect.catchTag("SignOutError", ({ reason }) => Effect.succeed(Message.FailedSignOut({ reason }))),
 		catchCommon((reason) => Message.FailedSignOut({ reason })),
 	),
+})
+
+const CREATE_DM_TIMEOUT = Duration.seconds(20)
+
+/** `channel.createDm` for a single DM with `userId`. */
+export const CreateDm = Command.define("CreateDm", {
+	args: { organizationId: OrganizationId, orgSlug: Schema.String, userId: UserId, name: Schema.String },
+	messages: [Message.SucceededCreateDm, Message.FailedCreateDm],
+	execute: ({ organizationId, orgSlug, userId, name }) =>
+		HazelRpc.use((rpc) =>
+			rpc("channel.createDm", { organizationId, participantIds: [userId], type: "single" }),
+		).pipe(
+			// The root's loading toast and one-at-a-time guard wait on this: a hung request must end.
+			Effect.timeout(CREATE_DM_TIMEOUT),
+			Effect.map((result) =>
+				Message.SucceededCreateDm({
+					organizationId,
+					orgSlug,
+					userId,
+					channelId: result.data.id,
+					name,
+				}),
+			),
+			Effect.catchTags({
+				DmChannelAlreadyExistsError: () =>
+					Effect.succeed(
+						Message.FailedCreateDm({ organizationId, userId, reason: "AlreadyExists" }),
+					),
+				// Only single DMs with one member are asked for; a rejected shape is a bug here.
+				InvalidChannelRequestError: () =>
+					Effect.succeed(Message.FailedCreateDm({ organizationId, userId, reason: "Unexpected" })),
+			}),
+			catchCommon((reason) => Message.FailedCreateDm({ organizationId, userId, reason })),
+		),
 })
 
 /** A momentary `user.me` failure is retried in place before it is reported. */
