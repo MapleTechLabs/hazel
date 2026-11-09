@@ -16,6 +16,7 @@ import { Effect, Schedule, Duration } from "effect"
 import { isRetryableError } from "~/lib/error-messages"
 import { getSharedConversationIdForChannel } from "~/lib/connect-shared-channels"
 import { optimisticAction } from "@hazel/effect-db-collection"
+import { Message } from "@hazel/domain/models"
 import { HazelRpc } from "../../rpc"
 import {
 	channelOfMessage,
@@ -67,7 +68,6 @@ export const sendMessageAction = optimisticAction({
 	collections: [messageCollection],
 
 	onMutate: (props: {
-		messageId?: MessageId // Accept pre-generated ID for retry tracking
 		channelId: ChannelId
 		authorId: UserId
 		content: string
@@ -75,7 +75,9 @@ export const sendMessageAction = optimisticAction({
 		threadChannelId?: ChannelId | null
 		attachmentIds?: AttachmentId[]
 	}) => {
-		const messageId = props.messageId ?? MessageId.make(crypto.randomUUID())
+		// The server derives the same id from the nonce, so the synced row replaces this one in place.
+		const clientNonce = crypto.randomUUID()
+		const messageId = Message.clientMessageId(props.channelId, props.authorId, clientNonce)
 
 		messageCollection.insert({
 			id: messageId,
@@ -100,16 +102,17 @@ export const sendMessageAction = optimisticAction({
 			}
 		}
 
-		return { messageId }
+		return { messageId, clientNonce }
 	},
 
-	mutate: (props, _ctx) =>
+	mutate: (props, { mutateResult }) =>
 		Effect.gen(function* () {
 			const client = yield* HazelRpc
 
 			// Create the message with attachmentIds using RPC
 			// Note: authorId will be overridden by backend AuthMiddleware with the authenticated user
 			const result = yield* client("message.create", {
+				clientNonce: mutateResult.clientNonce,
 				channelId: props.channelId,
 				content: props.content,
 				replyToMessageId: props.replyToMessageId || null,

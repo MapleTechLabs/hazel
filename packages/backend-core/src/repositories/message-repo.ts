@@ -1,8 +1,8 @@
 import { Database, SQLite, Repository, schema } from "@hazel/db"
 
-import type { ChannelId, ConnectConversationId, MessageId } from "@hazel/schema"
+import { type ChannelId, type ConnectConversationId, MessageId } from "@hazel/schema"
 import { Message } from "@hazel/domain/models"
-import { Context, Effect, Layer } from "effect"
+import { Context, Effect, Layer, Schema as S } from "effect"
 
 export interface ListByChannelParams {
 	channelId: ChannelId
@@ -25,7 +25,11 @@ export class MessageRepo extends Context.Service<MessageRepo>()("MessageRepo", {
 	make: Effect.gen(function* () {
 		const baseRepo = yield* Repository.makeRepository(
 			schema.messagesTable,
-			{ insert: Message.Insert, update: Message.Update },
+			// The handler supplies `id` for a send with a client nonce (`Message.clientMessageId`).
+			{
+				insert: S.Struct({ ...Message.Insert.fields, id: S.optional(MessageId) }),
+				update: Message.Update,
+			},
 			{
 				idColumn: "id",
 				name: "Message",
