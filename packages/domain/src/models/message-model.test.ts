@@ -1,7 +1,7 @@
 import { ChannelId, MessageId, UserId } from "@hazel/schema"
 import { Schema } from "effect"
 import { describe, expect, it } from "vitest"
-import { clientMessageId } from "./message-model"
+import { clientMessageId, Insert } from "./message-model"
 
 const channel = ChannelId.make("6f1c2a1e-6a8c-4c1f-9a63-0e2a4f3f9b10")
 const otherChannel = ChannelId.make("0b7d3c52-3f6e-4b8a-8d27-5b1f0c9e2a44")
@@ -21,5 +21,22 @@ describe("clientMessageId", () => {
 		const id = clientMessageId(channel, author, nonce)
 		expect(clientMessageId(otherChannel, author, nonce)).not.toBe(id)
 		expect(clientMessageId(channel, otherAuthor, nonce)).not.toBe(id)
+	})
+})
+
+describe("Insert", () => {
+	it("refuses an empty nonce, which would name one message for every send", () => {
+		const payload = {
+			channelId: channel,
+			authorId: author,
+			content: "hi",
+			embeds: null,
+			replyToMessageId: null,
+			threadChannelId: null,
+			deletedAt: null,
+		}
+		const decode = Schema.decodeUnknownExit(Insert)
+		expect(decode({ ...payload, clientNonce: nonce })._tag).toBe("Success")
+		expect(decode({ ...payload, clientNonce: "" })._tag).toBe("Failure")
 	})
 })

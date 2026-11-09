@@ -30,7 +30,8 @@ export const clientMessageId = (channelId: ChannelId, authorId: UserId, clientNo
 // Custom insert schema that includes attachmentIds for linking
 export const Insert = S.Struct({
 	...M.structFields(Model.insert),
-	clientNonce: S.optional(S.String.check(S.isMaxLength(64))),
+	// One fixed nonce would make every send answer with the first message.
+	clientNonce: S.optional(S.NonEmptyString.check(S.isMaxLength(64))),
 	conversationId: S.optional(S.NullOr(ConnectConversationId)),
 	attachmentIds: S.optional(S.Array(AttachmentId)),
 })
