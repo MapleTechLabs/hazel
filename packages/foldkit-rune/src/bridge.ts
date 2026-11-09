@@ -289,9 +289,13 @@ export const makeElementBridge = (options: {
 		if (parent !== undefined) next.get(parent)?.childPaths.push(path)
 	}
 
-	/** After a commit: acquire new Mounts, re-patch kept ones, release gone ones, notify observers. */
-	const commit = (next: Map<string, ElementRecord>, mountVNodes: Map<string, AnyVNode>) => {
+	/**
+	 * After a commit: acquire new Mounts, re-patch kept ones, release gone ones, notify observers.
+	 * Answers whether it started an immediate Mount (an overlay's), which may move its element.
+	 */
+	const commit = (next: Map<string, ElementRecord>, mountVNodes: Map<string, AnyVNode>): boolean => {
 		records = next
+		let startedImmediate = false
 		const nextMounted = new Map<string, AnyVNode>()
 		for (const [path, vnode] of mountVNodes) {
 			const name = vnode.data?.foldkitMount?.name ?? ""
@@ -318,7 +322,10 @@ export const makeElementBridge = (options: {
 			if (previous !== undefined && mounted.has(path) && !isSameMount)
 				previous.data?.hook?.destroy?.(previous)
 			if (isSameMount) vnode.data?.hook?.postpatch?.(previous, vnode)
-			else vnode.data?.hook?.insert?.(vnode)
+			else {
+				vnode.data?.hook?.insert?.(vnode)
+				if (options.immediateMounts?.has(name)) startedImmediate = true
+			}
 			nextMounted.set(path, vnode)
 		}
 		for (const path of [...awaitingLayout.keys()]) if (!mountVNodes.has(path)) awaitingLayout.delete(path)
@@ -329,6 +336,7 @@ export const makeElementBridge = (options: {
 		}
 		mounted = nextMounted
 		for (const notify of mutationObservers) notify()
+		return startedImmediate
 	}
 
 	/** Host layout: a new rect for an observed element. */

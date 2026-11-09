@@ -445,9 +445,11 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			const trigger = anchor.isTriggerWidthSet ? pathsById.get(anchor.triggerId) : undefined
 			if (trigger === undefined) return shown
 			const width = options.bridge?.widthOf(trigger)
+			// Until the host reports the trigger's width, the panel stays hidden, as the browser
+			// keeps it until positioned: drawn at another width it would jump on the next frame.
 			if (width === undefined) {
 				awaitedWidths.add(trigger)
-				return shown
+				return { ...shown, visibility: "hidden" }
 			}
 			return { ...shown, "--trigger-width": `${width}px`, "--button-width": `${width}px` }
 		}
@@ -720,10 +722,21 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		gen += 1
 		handlersByGen.set(gen, nextHandlers)
 		handlersByGen.delete(gen - HANDLER_GENERATIONS)
+		const previouslySent = sentHashes
 		sentHashes = nextHashes
 		subtreeCache = nextCache
 		seenVnodes = nextSeen
-		options.bridge?.commit(records, mountVNodes)
+		// An overlay's Mount just started: it portals and anchors its panel, so hold this tree
+		// and send the next, rather than draw the panel unpositioned for a frame.
+		if (options.bridge?.commit(records, mountVNodes) === true && !isHoldingForMount) {
+			sentHashes = previouslySent
+			isHoldingForMount = true
+			setTimeout(() => {
+				isHoldingForMount = false
+				if (lastDocument) commitDocument(lastDocument, lastDocumentAck)
+			}, 0)
+			return
+		}
 		const message: RuntimeToHost = {
 			t: "tree",
 			ack: documentAck,
@@ -934,6 +947,8 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		if (lastDocument) commitDocument(lastDocument, lastDocumentAck)
 	})
 
+	/** A tree held while an overlay's Mount positions its panel (`commitDocument`). */
+	let isHoldingForMount = false
 	const refreshObserved = () => {
 		if (isRefreshScheduled || lastDocument === undefined) return
 		isRefreshScheduled = true
