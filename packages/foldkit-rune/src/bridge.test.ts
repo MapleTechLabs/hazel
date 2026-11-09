@@ -189,6 +189,19 @@ describe("makeElementBridge", () => {
 		expect(one?.contains(bridge.findById("ten"))).toBe(false)
 	})
 
+	it("walks parentElement up to null above the root, as the message toolbar does", () => {
+		const bridge = makeElementBridge({ mounts: new Set(), send: () => {} })
+		const next = new Map()
+		bridge.recordElement("r", undefined, "div", { id: "root" }, [], next)
+		bridge.recordElement("r/0", "r", "div", { id: "list" }, [], next)
+		bridge.recordElement("r/0/0", "r/0", "div", { id: "message" }, [], next)
+		bridge.commit(next, new Map())
+		const ids: Array<string> = []
+		for (let at = bridge.findById("message")?.parentElement ?? null; at !== null; at = at.parentElement)
+			ids.push(at.id)
+		expect(ids).toEqual(["list", "root"])
+	})
+
 	it("releases a Mount replaced by a different one in the same slot", () => {
 		const calls: Array<string> = []
 		const bridge = makeElementBridge({

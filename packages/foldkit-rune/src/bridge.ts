@@ -48,6 +48,8 @@ type ProxyElement = EventTarget & {
 	querySelectorAll(selector: string): Array<ProxyElement>
 	querySelector(selector: string): ProxyElement | null
 	closest(selector: string): ProxyElement | null
+	/** `null` above the root, as the browser's, so an ancestor walk ends. */
+	readonly parentElement: ProxyElement | null
 	contains(other: EventTarget | null): boolean
 	scrollTo(arg: { top?: number } | number, y?: number): void
 	scrollIntoView(arg?: boolean | { block?: HostReveal["block"] }): void
@@ -232,6 +234,13 @@ export const makeElementBridge = (options: {
 			querySelectorAll: { value: (selector: string) => queryAll(path, selector) },
 			querySelector: { value: (selector: string) => queryAll(path, selector)[0] ?? null },
 			closest: { value: (selector: string) => closest(path, selector) },
+			parentElement: {
+				get: () => {
+					const parent = record()?.parent
+					// Not observed: an ancestor walk passes many elements and reads few of them.
+					return parent === undefined || !records.has(parent) ? null : proxyFor(parent, false)
+				},
+			},
 			contains: {
 				value: (other: EventTarget | null) =>
 					isProxy(other) && (other.__path === path || other.__path.startsWith(`${path}/`)),
