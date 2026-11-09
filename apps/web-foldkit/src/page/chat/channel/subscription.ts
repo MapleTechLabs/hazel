@@ -391,9 +391,11 @@ const write = Subscription.make<Input, Message, HazelRpc | HazelApiClient>()((en
 			),
 	}),
 	composerBots: entry(
-		{ organizationId: Schema.NullOr(OrganizationId) },
+		// Keyed by channel too: a channel switch starts a fresh draft, which needs them sent again.
+		{ channelId: ChannelId, organizationId: Schema.NullOr(OrganizationId) },
 		{
-			modelToDependencies: ({ shared }) => ({
+			modelToDependencies: ({ model, shared }) => ({
+				channelId: model.channelId,
 				organizationId: shared.organization?.id ?? null,
 			}),
 			dependenciesToStream: ({ organizationId }) =>
@@ -405,9 +407,11 @@ const write = Subscription.make<Input, Message, HazelRpc | HazelApiClient>()((en
 		},
 	),
 	composerCommands: entry(
-		{ organizationId: Schema.NullOr(OrganizationId) },
+		// Keyed by channel too: a channel switch starts a fresh draft, which needs them sent again.
+		{ channelId: ChannelId, organizationId: Schema.NullOr(OrganizationId) },
 		{
-			modelToDependencies: ({ shared }) => ({
+			modelToDependencies: ({ model, shared }) => ({
+				channelId: model.channelId,
 				organizationId: shared.organization?.id ?? null,
 			}),
 			dependenciesToStream: ({ organizationId }) =>
