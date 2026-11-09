@@ -27,6 +27,8 @@ export const Model = Schema.Struct({
 	userId: Schema.NullOr(UserId),
 	/** `currentChannelIdAtom`. */
 	activeChannelId: Schema.NullOr(ChannelId),
+	/** Window focused and document visible; while not, the server is told no channel is open. */
+	isWindowFocused: Schema.Boolean,
 	/** `lastActivityAtom`; 0 until the first context or activity arrives. */
 	lastActivityMs: Schema.Number,
 	isAfk: Schema.Boolean,
@@ -46,6 +48,7 @@ export type Model = typeof Model.Type
 export const init = (): Model => ({
 	userId: null,
 	activeChannelId: null,
+	isWindowFocused: true,
 	lastActivityMs: 0,
 	isAfk: false,
 	manualStatus: null,
@@ -59,6 +62,13 @@ export const init = (): Model => ({
 /** `computedPresenceStatusAtom`: a manual status overrides the AFK-derived away/online. */
 export const computedStatusOf = (model: Model): PresenceStatus =>
 	model.manualStatus ?? (model.isAfk ? "away" : "online")
+
+/**
+ * The channel the server is told the user is reading. The server skips notifications for that
+ * channel, so a window in the background reports none and its messages still notify (and play).
+ */
+export const reportedChannelIdOf = (model: Model): ChannelId | null =>
+	model.isWindowFocused ? model.activeChannelId : null
 
 export const isAfkAt = (lastActivityMs: number, nowMs: number) => nowMs - lastActivityMs >= AFK_TIMEOUT_MS
 
@@ -74,7 +84,8 @@ export type UpdatePayload = {
 /** The first write of a mount carries both fields; later ones only what changed since the last confirmed one. */
 export const payloadOf = (model: Model): UpdatePayload | null => {
 	const status = computedStatusOf(model)
-	const { sent, activeChannelId } = model
+	const { sent } = model
+	const activeChannelId = reportedChannelIdOf(model)
 	if (sent === null) return { status, activeChannelId }
 	const isStatusChanged = sent.status !== status
 	const isChannelChanged = sent.activeChannelId !== activeChannelId

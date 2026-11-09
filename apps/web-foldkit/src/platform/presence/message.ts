@@ -11,6 +11,8 @@ export const Message = defineMessageUnion({
 		activeChannelId: Schema.NullOr(ChannelId),
 		nowMs: Schema.Number,
 	},
+	/** The window gained or lost focus, or the document was shown or hidden. */
+	ChangedWindowFocus: { isFocused: Schema.Boolean },
 	/** Input in this tab (throttled). */
 	DetectedActivity: { atMs: Schema.Number },
 	/** Another tab saw input. */
