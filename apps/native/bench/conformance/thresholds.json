@@ -3,14 +3,14 @@
 		"min": {
 			"matchedWebPct": 97.29,
 			"posWithin4Pct": 95.43,
-			"sizeWithin4Pct": 88.57,
+			"sizeWithin4Pct": 91.14,
 			"textPosWithin4Pct": 98,
-			"textSizeWithin4Pct": 80.43,
-			"pixelScore": 96.42
+			"textSizeWithin4Pct": 81.78,
+			"pixelScore": 96.88
 		},
 		"max": {
 			"missingOnNative": 5,
-			"posP95": 4.75,
+			"posP95": 5.23,
 			"textPosP95": 5.44
 		}
 	},
@@ -18,14 +18,14 @@
 		"min": {
 			"matchedWebPct": 97.29,
 			"posWithin4Pct": 95.43,
-			"sizeWithin4Pct": 88.57,
+			"sizeWithin4Pct": 91.14,
 			"textPosWithin4Pct": 98,
-			"textSizeWithin4Pct": 80.43,
-			"pixelScore": 96.28
+			"textSizeWithin4Pct": 81.78,
+			"pixelScore": 96.82
 		},
 		"max": {
 			"missingOnNative": 5,
-			"posP95": 4.75,
+			"posP95": 5.23,
 			"textPosP95": 5.44
 		}
 	},
@@ -33,10 +33,10 @@
 		"min": {
 			"matchedWebPct": 97.31,
 			"posWithin4Pct": 95.63,
-			"sizeWithin4Pct": 89.12,
+			"sizeWithin4Pct": 91.49,
 			"textPosWithin4Pct": 98,
-			"textSizeWithin4Pct": 81.56,
-			"pixelScore": 96.68
+			"textSizeWithin4Pct": 82.93,
+			"pixelScore": 97.05
 		},
 		"max": {
 			"missingOnNative": 5,
@@ -48,10 +48,10 @@
 		"min": {
 			"matchedWebPct": 97.31,
 			"posWithin4Pct": 95.63,
-			"sizeWithin4Pct": 89.12,
+			"sizeWithin4Pct": 91.49,
 			"textPosWithin4Pct": 98,
-			"textSizeWithin4Pct": 81.56,
-			"pixelScore": 96.55
+			"textSizeWithin4Pct": 82.93,
+			"pixelScore": 97.01
 		},
 		"max": {
 			"missingOnNative": 5,
@@ -63,14 +63,14 @@
 		"min": {
 			"matchedWebPct": 97.29,
 			"posWithin4Pct": 95.43,
-			"sizeWithin4Pct": 88.57,
+			"sizeWithin4Pct": 91.14,
 			"textPosWithin4Pct": 98,
-			"textSizeWithin4Pct": 80.43,
-			"pixelScore": 96.41
+			"textSizeWithin4Pct": 81.78,
+			"pixelScore": 96.88
 		},
 		"max": {
 			"missingOnNative": 5,
-			"posP95": 4.75,
+			"posP95": 5.23,
 			"textPosP95": 5.44
 		}
 	},
@@ -78,14 +78,14 @@
 		"min": {
 			"matchedWebPct": 97.29,
 			"posWithin4Pct": 95.43,
-			"sizeWithin4Pct": 88.57,
+			"sizeWithin4Pct": 91.14,
 			"textPosWithin4Pct": 98,
-			"textSizeWithin4Pct": 80.43,
-			"pixelScore": 96.27
+			"textSizeWithin4Pct": 81.78,
+			"pixelScore": 96.82
 		},
 		"max": {
 			"missingOnNative": 5,
-			"posP95": 4.75,
+			"posP95": 5.23,
 			"textPosP95": 5.44
 		}
 	},
@@ -93,14 +93,14 @@
 		"min": {
 			"matchedWebPct": 97.29,
 			"posWithin4Pct": 95.43,
-			"sizeWithin4Pct": 88.57,
+			"sizeWithin4Pct": 91.14,
 			"textPosWithin4Pct": 98,
-			"textSizeWithin4Pct": 80.43,
-			"pixelScore": 95.84
+			"textSizeWithin4Pct": 81.78,
+			"pixelScore": 96.85
 		},
 		"max": {
 			"missingOnNative": 5,
-			"posP95": 4.75,
+			"posP95": 5.23,
 			"textPosP95": 5.44
 		}
 	},
@@ -108,14 +108,14 @@
 		"min": {
 			"matchedWebPct": 97.29,
 			"posWithin4Pct": 95.43,
-			"sizeWithin4Pct": 88.57,
+			"sizeWithin4Pct": 91.14,
 			"textPosWithin4Pct": 98,
-			"textSizeWithin4Pct": 80.43,
-			"pixelScore": 95.81
+			"textSizeWithin4Pct": 81.78,
+			"pixelScore": 96.74
 		},
 		"max": {
 			"missingOnNative": 5,
-			"posP95": 4.75,
+			"posP95": 5.23,
 			"textPosP95": 5.44
 		}
 	},
@@ -123,14 +123,14 @@
 		"min": {
 			"matchedWebPct": 97.29,
 			"posWithin4Pct": 95.43,
-			"sizeWithin4Pct": 88.57,
+			"sizeWithin4Pct": 91.14,
 			"textPosWithin4Pct": 98,
-			"textSizeWithin4Pct": 80.43,
-			"pixelScore": 97.48
+			"textSizeWithin4Pct": 81.78,
+			"pixelScore": 98.05
 		},
 		"max": {
 			"missingOnNative": 5,
-			"posP95": 4.75,
+			"posP95": 5.23,
 			"textPosP95": 5.44
 		}
 	},
@@ -138,59 +138,59 @@
 		"min": {
 			"matchedWebPct": 97.29,
 			"posWithin4Pct": 95.43,
-			"sizeWithin4Pct": 88.57,
+			"sizeWithin4Pct": 91.14,
 			"textPosWithin4Pct": 98,
-			"textSizeWithin4Pct": 80.43,
-			"pixelScore": 97.25
+			"textSizeWithin4Pct": 81.78,
+			"pixelScore": 97.96
 		},
 		"max": {
 			"missingOnNative": 5,
-			"posP95": 4.75,
+			"posP95": 5.23,
 			"textPosP95": 5.44
 		}
 	},
 	"dialog-light": {
 		"min": {
 			"matchedWebPct": 97.21,
-			"posWithin4Pct": 89.79,
-			"sizeWithin4Pct": 86.56,
-			"textPosWithin4Pct": 83.26,
-			"textSizeWithin4Pct": 81.16,
-			"pixelScore": 96.17
+			"posWithin4Pct": 94.52,
+			"sizeWithin4Pct": 91.28,
+			"textPosWithin4Pct": 93.79,
+			"textSizeWithin4Pct": 82.21,
+			"pixelScore": 97.42
 		},
 		"max": {
-			"missingOnNative": 8,
-			"posP95": 6.63,
-			"textPosP95": 9.65
+			"missingOnNative": 5,
+			"posP95": 5.49,
+			"textPosP95": 6
 		}
 	},
 	"dialog-dark": {
 		"min": {
 			"matchedWebPct": 97.21,
-			"posWithin4Pct": 89.79,
-			"sizeWithin4Pct": 86.56,
-			"textPosWithin4Pct": 83.26,
-			"textSizeWithin4Pct": 81.16,
-			"pixelScore": 96.59
+			"posWithin4Pct": 94.52,
+			"sizeWithin4Pct": 91.28,
+			"textPosWithin4Pct": 93.79,
+			"textSizeWithin4Pct": 82.21,
+			"pixelScore": 97.51
 		},
 		"max": {
-			"missingOnNative": 8,
-			"posP95": 6.63,
-			"textPosP95": 9.65
+			"missingOnNative": 5,
+			"posP95": 5.49,
+			"textPosP95": 6
 		}
 	},
 	"context-light": {
 		"min": {
 			"matchedWebPct": 97.29,
 			"posWithin4Pct": 95.43,
-			"sizeWithin4Pct": 88.57,
+			"sizeWithin4Pct": 91.14,
 			"textPosWithin4Pct": 98,
-			"textSizeWithin4Pct": 80.43,
-			"pixelScore": 94.92
+			"textSizeWithin4Pct": 81.78,
+			"pixelScore": 95.4
 		},
 		"max": {
 			"missingOnNative": 5,
-			"posP95": 4.75,
+			"posP95": 5.23,
 			"textPosP95": 5.44
 		}
 	},
@@ -198,285 +198,285 @@
 		"min": {
 			"matchedWebPct": 97.29,
 			"posWithin4Pct": 95.43,
-			"sizeWithin4Pct": 88.57,
+			"sizeWithin4Pct": 91.14,
 			"textPosWithin4Pct": 98,
-			"textSizeWithin4Pct": 80.43,
-			"pixelScore": 95.08
+			"textSizeWithin4Pct": 81.78,
+			"pixelScore": 95.47
 		},
 		"max": {
 			"missingOnNative": 5,
-			"posP95": 4.75,
+			"posP95": 5.23,
 			"textPosP95": 5.44
 		}
 	},
 	"route-files-light": {
 		"min": {
 			"matchedWebPct": 98,
-			"posWithin4Pct": 88.48,
-			"sizeWithin4Pct": 89.67,
-			"textPosWithin4Pct": 86.24,
-			"textSizeWithin4Pct": 80.35,
-			"pixelScore": 97.6
+			"posWithin4Pct": 93.83,
+			"sizeWithin4Pct": 91.45,
+			"textPosWithin4Pct": 92.12,
+			"textSizeWithin4Pct": 83.29,
+			"pixelScore": 98.28
 		},
 		"max": {
-			"missingOnNative": 5,
-			"posP95": 29.75,
-			"textPosP95": 88.56
+			"missingOnNative": 3,
+			"posP95": 6,
+			"textPosP95": 17.64
 		}
 	},
 	"route-files-dark": {
 		"min": {
 			"matchedWebPct": 98,
-			"posWithin4Pct": 88.48,
-			"sizeWithin4Pct": 89.67,
-			"textPosWithin4Pct": 86.24,
-			"textSizeWithin4Pct": 80.35,
-			"pixelScore": 97.5
+			"posWithin4Pct": 93.83,
+			"sizeWithin4Pct": 91.45,
+			"textPosWithin4Pct": 92.12,
+			"textSizeWithin4Pct": 83.29,
+			"pixelScore": 98.26
 		},
 		"max": {
-			"missingOnNative": 5,
-			"posP95": 29.75,
-			"textPosP95": 88.56
+			"missingOnNative": 3,
+			"posP95": 6,
+			"textPosP95": 17.64
 		}
 	},
 	"route-notifications-light": {
 		"min": {
 			"matchedWebPct": 98,
-			"posWithin4Pct": 82.17,
-			"sizeWithin4Pct": 92.24,
-			"textPosWithin4Pct": 79.25,
-			"textSizeWithin4Pct": 88.63,
-			"pixelScore": 96.09
+			"posWithin4Pct": 98,
+			"sizeWithin4Pct": 96.56,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 91.75,
+			"pixelScore": 96.78
 		},
 		"max": {
 			"missingOnNative": 3,
-			"posP95": 8.5,
-			"textPosP95": 8.5
+			"posP95": 3.5,
+			"textPosP95": 3.68
 		}
 	},
 	"route-notifications-dark": {
 		"min": {
 			"matchedWebPct": 98,
-			"posWithin4Pct": 82.17,
-			"sizeWithin4Pct": 92.24,
-			"textPosWithin4Pct": 79.25,
-			"textSizeWithin4Pct": 88.63,
-			"pixelScore": 96.06
+			"posWithin4Pct": 98,
+			"sizeWithin4Pct": 96.56,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 91.75,
+			"pixelScore": 96.68
 		},
 		"max": {
 			"missingOnNative": 3,
-			"posP95": 8.5,
-			"textPosP95": 8.5
+			"posP95": 3.5,
+			"textPosP95": 3.68
 		}
 	},
 	"route-appearance-light": {
 		"min": {
 			"matchedWebPct": 98,
-			"posWithin4Pct": 93.64,
-			"sizeWithin4Pct": 94.73,
-			"textPosWithin4Pct": 92.12,
-			"textSizeWithin4Pct": 88.2,
-			"pixelScore": 94.1
+			"posWithin4Pct": 97.26,
+			"sizeWithin4Pct": 95.42,
+			"textPosWithin4Pct": 96.04,
+			"textSizeWithin4Pct": 92.12,
+			"pixelScore": 97.78
 		},
 		"max": {
-			"missingOnNative": 21,
-			"posP95": 5.3,
-			"textPosP95": 6.55
+			"missingOnNative": 3,
+			"posP95": 2.25,
+			"textPosP95": 3.68
 		}
 	},
 	"route-appearance-dark": {
 		"min": {
 			"matchedWebPct": 98,
-			"posWithin4Pct": 93.64,
-			"sizeWithin4Pct": 94.73,
-			"textPosWithin4Pct": 92.12,
-			"textSizeWithin4Pct": 88.2,
-			"pixelScore": 94.13
+			"posWithin4Pct": 97.26,
+			"sizeWithin4Pct": 95.42,
+			"textPosWithin4Pct": 96.04,
+			"textSizeWithin4Pct": 92.12,
+			"pixelScore": 97.91
 		},
 		"max": {
-			"missingOnNative": 21,
-			"posP95": 5.3,
-			"textPosP95": 6.55
+			"missingOnNative": 3,
+			"posP95": 2.25,
+			"textPosP95": 3.68
 		}
 	},
 	"route-profile-light": {
 		"min": {
 			"matchedWebPct": 98,
-			"posWithin4Pct": 94.46,
-			"sizeWithin4Pct": 90.92,
+			"posWithin4Pct": 97.12,
+			"sizeWithin4Pct": 94.46,
 			"textPosWithin4Pct": 93.65,
-			"textSizeWithin4Pct": 71.91,
-			"pixelScore": 97.62
+			"textSizeWithin4Pct": 80.61,
+			"pixelScore": 98.61
 		},
 		"max": {
 			"missingOnNative": 3,
-			"posP95": 4.99,
-			"textPosP95": 4.99
+			"posP95": 3.5,
+			"textPosP95": 5.24
 		}
 	},
 	"route-profile-dark": {
 		"min": {
 			"matchedWebPct": 98,
-			"posWithin4Pct": 94.46,
-			"sizeWithin4Pct": 90.92,
+			"posWithin4Pct": 97.12,
+			"sizeWithin4Pct": 94.46,
 			"textPosWithin4Pct": 93.65,
-			"textSizeWithin4Pct": 71.91,
-			"pixelScore": 97.54
+			"textSizeWithin4Pct": 80.61,
+			"pixelScore": 98.57
 		},
 		"max": {
 			"missingOnNative": 3,
-			"posP95": 4.99,
-			"textPosP95": 4.99
+			"posP95": 3.5,
+			"textPosP95": 5.24
 		}
 	},
 	"route-notification-settings-light": {
 		"min": {
 			"matchedWebPct": 98,
-			"posWithin4Pct": 62.47,
-			"sizeWithin4Pct": 92.08,
-			"textPosWithin4Pct": 49.16,
-			"textSizeWithin4Pct": 81.72,
-			"pixelScore": 95.7
+			"posWithin4Pct": 98,
+			"sizeWithin4Pct": 94.62,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 86.37,
+			"pixelScore": 98.2
 		},
 		"max": {
-			"missingOnNative": 4,
-			"posP95": 10.09,
-			"textPosP95": 10.09
+			"missingOnNative": 3,
+			"posP95": 3.68,
+			"textPosP95": 5.09
 		}
 	},
 	"route-notification-settings-dark": {
 		"min": {
 			"matchedWebPct": 98,
-			"posWithin4Pct": 62.47,
-			"sizeWithin4Pct": 92.08,
-			"textPosWithin4Pct": 49.16,
-			"textSizeWithin4Pct": 81.72,
-			"pixelScore": 95.59
+			"posWithin4Pct": 98,
+			"sizeWithin4Pct": 94.62,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 86.37,
+			"pixelScore": 98.15
 		},
 		"max": {
-			"missingOnNative": 4,
-			"posP95": 10.09,
-			"textPosP95": 10.09
+			"missingOnNative": 3,
+			"posP95": 3.68,
+			"textPosP95": 5.09
 		}
 	},
 	"route-settings-light": {
 		"min": {
 			"matchedWebPct": 98,
-			"posWithin4Pct": 77.86,
-			"sizeWithin4Pct": 85.5,
-			"textPosWithin4Pct": 66.42,
-			"textSizeWithin4Pct": 76.95,
-			"pixelScore": 93.72
+			"posWithin4Pct": 97.3,
+			"sizeWithin4Pct": 94.5,
+			"textPosWithin4Pct": 95.37,
+			"textSizeWithin4Pct": 84.84,
+			"pixelScore": 98.19
 		},
 		"max": {
 			"missingOnNative": 3,
-			"posP95": 13.26,
-			"textPosP95": 15.76
+			"posP95": 3.5,
+			"textPosP95": 5.24
 		}
 	},
 	"route-settings-dark": {
 		"min": {
 			"matchedWebPct": 98,
-			"posWithin4Pct": 77.86,
-			"sizeWithin4Pct": 85.5,
-			"textPosWithin4Pct": 66.42,
-			"textSizeWithin4Pct": 76.95,
-			"pixelScore": 94.42
+			"posWithin4Pct": 97.3,
+			"sizeWithin4Pct": 94.5,
+			"textPosWithin4Pct": 95.37,
+			"textSizeWithin4Pct": 84.84,
+			"pixelScore": 98.15
 		},
 		"max": {
 			"missingOnNative": 3,
-			"posP95": 13.26,
-			"textPosP95": 15.76
+			"posP95": 3.5,
+			"textPosP95": 5.24
 		}
 	},
 	"route-team-light": {
 		"min": {
 			"matchedWebPct": 98,
-			"posWithin4Pct": 63.24,
-			"sizeWithin4Pct": 90.38,
-			"textPosWithin4Pct": 57.32,
-			"textSizeWithin4Pct": 77.66,
-			"pixelScore": 94.74
+			"posWithin4Pct": 98,
+			"sizeWithin4Pct": 93.24,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 81.05,
+			"pixelScore": 98.14
 		},
 		"max": {
 			"missingOnNative": 12,
-			"posP95": 11,
-			"textPosP95": 11.96
+			"posP95": 3.5,
+			"textPosP95": 4.09
 		}
 	},
 	"route-team-dark": {
 		"min": {
 			"matchedWebPct": 98,
-			"posWithin4Pct": 63.24,
-			"sizeWithin4Pct": 90.38,
-			"textPosWithin4Pct": 57.32,
-			"textSizeWithin4Pct": 77.66,
-			"pixelScore": 94.63
+			"posWithin4Pct": 98,
+			"sizeWithin4Pct": 93.24,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 81.05,
+			"pixelScore": 98.08
 		},
 		"max": {
 			"missingOnNative": 12,
-			"posP95": 11,
-			"textPosP95": 11.96
+			"posP95": 3.5,
+			"textPosP95": 4.09
 		}
 	},
 	"route-integrations-light": {
 		"min": {
 			"matchedWebPct": 98,
-			"posWithin4Pct": 72.34,
-			"sizeWithin4Pct": 92.25,
-			"textPosWithin4Pct": 68.31,
-			"textSizeWithin4Pct": 90.19,
-			"pixelScore": 92.73
+			"posWithin4Pct": 98,
+			"sizeWithin4Pct": 96.67,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 93.31,
+			"pixelScore": 95.16
 		},
 		"max": {
 			"missingOnNative": 3,
-			"posP95": 9.75,
-			"textPosP95": 9.75
+			"posP95": 2.25,
+			"textPosP95": 3.5
 		}
 	},
 	"route-integrations-dark": {
 		"min": {
 			"matchedWebPct": 98,
-			"posWithin4Pct": 72.34,
-			"sizeWithin4Pct": 92.25,
-			"textPosWithin4Pct": 68.31,
-			"textSizeWithin4Pct": 90.19,
-			"pixelScore": 92.24
+			"posWithin4Pct": 98,
+			"sizeWithin4Pct": 96.67,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 93.31,
+			"pixelScore": 95.23
 		},
 		"max": {
 			"missingOnNative": 3,
-			"posP95": 9.75,
-			"textPosP95": 9.75
+			"posP95": 2.25,
+			"textPosP95": 3.5
 		}
 	},
 	"route-user-light": {
 		"min": {
 			"matchedWebPct": 98,
 			"posWithin4Pct": 98,
-			"sizeWithin4Pct": 94.32,
+			"sizeWithin4Pct": 94.93,
 			"textPosWithin4Pct": 98,
-			"textSizeWithin4Pct": 80.35,
-			"pixelScore": 98.19
+			"textSizeWithin4Pct": 83.29,
+			"pixelScore": 98.29
 		},
 		"max": {
 			"missingOnNative": 3,
 			"posP95": 3.5,
-			"textPosP95": 4.61
+			"textPosP95": 4.29
 		}
 	},
 	"route-user-dark": {
 		"min": {
 			"matchedWebPct": 98,
 			"posWithin4Pct": 98,
-			"sizeWithin4Pct": 94.32,
+			"sizeWithin4Pct": 94.93,
 			"textPosWithin4Pct": 98,
-			"textSizeWithin4Pct": 80.35,
-			"pixelScore": 98.11
+			"textSizeWithin4Pct": 83.29,
+			"pixelScore": 98.28
 		},
 		"max": {
 			"missingOnNative": 3,
 			"posP95": 3.5,
-			"textPosP95": 4.61
+			"textPosP95": 4.29
 		}
 	}
 }
