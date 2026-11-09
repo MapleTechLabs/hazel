@@ -34,6 +34,19 @@ type Overlay = {
 
 const OVERLAYS: ReadonlyArray<Overlay> = [
 	{ name: "org menu", open: [{ clickText: "Hazel" }], shows: "Switch Server", toggles: true },
+	{
+		name: "sidebar channel menu",
+		open: [{ move: [200, 220] }, { wait: 250 }, { clickLabel: "Channel options" }],
+		// The item a panel drawn inside its row (clipped there) would still show.
+		shows: "Settings",
+		toggles: true,
+	},
+	{
+		name: "section menu",
+		open: [{ clickLabel: "Section actions" }],
+		shows: "Join existing channel",
+		toggles: true,
+	},
 	{ name: "user menu", open: [{ clickText: "Ada Lovelace" }], shows: "My Settings", toggles: true },
 	{ name: "command palette", open: [{ clickText: "Browse channels" }], shows: "Quick Actions" },
 	{ name: "context menu", open: [{ rightClickText: CONTENT_TEXT }], shows: "Copy Text" },
@@ -157,6 +170,9 @@ if (!args.includes("--skip-build")) {
 	spawnSync("cargo", ["build", "--release"], { cwd: join(appDir, "host"), stdio: "inherit" })
 }
 
+/** Frames after opening an overlay in which its panel may not stand anywhere but where it settles. */
+const APPEAR_FRAMES = 6
+
 // OVERLAYS: open, check it shows, close one way, check it is gone and the page is usable.
 for (const overlay of OVERLAYS.filter((o) => wanted(o.name))) {
 	const closers: Array<Closer> = ["Escape", "outside", ...(overlay.toggles ? (["trigger"] as const) : [])]
@@ -169,8 +185,18 @@ for (const overlay of OVERLAYS.filter((o) => wanted(o.name))) {
 				: closer === "outside"
 					? [{ clickAt: NEUTRAL }]
 					: overlay.open.filter((s) => !("move" in s) && !("wait" in s))
+		// The first frames after opening: the panel must appear where it settles, never elsewhere first.
+		const frames: Array<Step> =
+			closer === "Escape"
+				? // The first probe reads the frame the click's own round trip drew, before any wait.
+					Array.from({ length: APPEAR_FRAMES }, (_, i) => [
+						...(i === 0 ? [] : [{ wait: 16 }]),
+						{ probe: { label: `${label}/frame${i}`, texts: [overlay.shows] } },
+					]).flat()
+				: []
 		steps.push(
 			...overlay.open,
+			...frames,
 			{ settle: 700 },
 			{ wait: 200 },
 			{ probe: { label: `${label}/open`, texts: [overlay.shows] } },
@@ -202,6 +228,21 @@ for (const overlay of OVERLAYS.filter((o) => wanted(o.name))) {
 			`"${overlay.shows}" still shown after ${closer}`,
 		)
 		record(`${label}: page usable`, (closed?.inert ?? 0) === 0, `${closed?.inert} elements still inert`)
+		if (closer === "Escape") {
+			const settled = opened?.shown.find((s) => s.text === overlay.shows)?.rect
+			const jumps = Array.from({ length: APPEAR_FRAMES }, (_, i) => {
+				const rect = probes
+					.get(`${label}/frame${i}`)
+					?.shown.find((s) => s.text === overlay.shows)?.rect
+				const off = rect && settled && rect.some((v, k) => Math.abs(v - (settled[k] ?? 0)) > 1)
+				return off ? `frame ${i} at ${rect.map(Math.round).join(",")}` : undefined
+			}).filter((j) => j !== undefined)
+			record(
+				`${overlay.name}: appears in place`,
+				jumps.length === 0,
+				`settles at ${settled?.map(Math.round).join(",")}; ${jumps.join("; ")}`,
+			)
+		}
 		const stuck = stuckHovers(closed, NEUTRAL)
 		record(`${label}: no hover left`, stuck.length === 0, `still hovered: ${stuck.join("; ")}`)
 	}
