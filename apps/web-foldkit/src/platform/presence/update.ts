@@ -12,6 +12,7 @@ import {
 	type Model,
 	payloadOf,
 	PresenceStatus,
+	reportedChannelIdOf,
 	Sent,
 	syncRetryDelayMs,
 } from "./model"
@@ -71,7 +72,7 @@ const scheduleSync = (previous: Model, next: Model): Return => {
 		next.userId !== null &&
 		(previous.userId !== next.userId ||
 			computedStatusOf(previous) !== computedStatusOf(next) ||
-			previous.activeChannelId !== next.activeChannelId)
+			reportedChannelIdOf(previous) !== reportedChannelIdOf(next))
 	return { model: isDue ? bumpSync(next) : next }
 }
 
@@ -102,6 +103,8 @@ export const update = (model: Model, message: Message): Return =>
 				}),
 			)
 		},
+		ChangedWindowFocus: ({ isFocused }) =>
+			scheduleSync(model, modifyFields(model, { isWindowFocused: () => isFocused })),
 		DetectedActivity: ({ atMs }) => {
 			const result = scheduleSync(model, withActivity(model, atMs))
 			return {
@@ -122,7 +125,10 @@ export const update = (model: Model, message: Message): Return =>
 				commands: [
 					SendPresenceUpdate({
 						userId: model.userId,
-						snapshot: { status: computedStatusOf(model), activeChannelId: model.activeChannelId },
+						snapshot: {
+							status: computedStatusOf(model),
+							activeChannelId: reportedChannelIdOf(model),
+						},
 						...payload,
 					}),
 				],

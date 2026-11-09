@@ -103,3 +103,18 @@ export const remoteActivity: Stream.Stream<number> = Stream.suspend(() =>
 						: Option.none(),
 			}),
 )
+
+const isWindowFocusedNow = () => document.hasFocus() && document.visibilityState === "visible"
+
+/** Whether the window is focused and visible: now, then on every focus, blur and visibility change. */
+export const windowFocus: Stream.Stream<boolean> = Stream.suspend(() => {
+	const changes = Stream.mergeAll(
+		[
+			Dom.streamFromEvent({ target: window, type: "focus", mapEvent: () => undefined }),
+			Dom.streamFromEvent({ target: window, type: "blur", mapEvent: () => undefined }),
+			Dom.streamFromEvent({ target: document, type: "visibilitychange", mapEvent: () => undefined }),
+		],
+		{ concurrency: "unbounded" },
+	)
+	return Stream.concat(Stream.make(undefined), changes).pipe(Stream.map(isWindowFocusedNow))
+})

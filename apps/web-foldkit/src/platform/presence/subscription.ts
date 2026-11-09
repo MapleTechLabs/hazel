@@ -1,7 +1,7 @@
 import { ChannelId, UserId } from "@hazel/schema"
 import { Clock, Duration, Effect, Schema, Stream } from "effect"
 import { Subscription } from "foldkit"
-import { localActivity, remoteActivity } from "./activity"
+import { localActivity, remoteActivity, windowFocus } from "./activity"
 import { Message } from "./message"
 import { AFK_TIMEOUT_MS, HEARTBEAT_INTERVAL, type Model, SYNC_DEBOUNCE } from "./model"
 
@@ -29,6 +29,16 @@ export const subscriptions = Subscription.make<Input, Message>()((entry) => ({
 						Effect.map((nowMs) => Message.ChangedContext({ userId, activeChannelId, nowMs })),
 					),
 				),
+		},
+	),
+	windowFocus: entry(
+		{ isRunning: Schema.Boolean },
+		{
+			modelToDependencies: (input) => ({ isRunning: isRunning(input) }),
+			dependenciesToStream: ({ isRunning }) =>
+				isRunning
+					? windowFocus.pipe(Stream.map((isFocused) => Message.ChangedWindowFocus({ isFocused })))
+					: Stream.empty,
 		},
 	),
 	localActivity: entry(

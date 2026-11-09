@@ -160,6 +160,54 @@ describe("later updates send only what changed", () => {
 	})
 })
 
+// The server skips notifications for the channel a user is reading, so a background window must
+// not claim one: otherwise messages there never notify or play a sound.
+describe("window focus", () => {
+	test("losing focus reports no channel; regaining it reports the route channel again", () => {
+		const blurred = snapshot("online", null)
+		const back = snapshot("online", general)
+		story(
+			update,
+			given(synced()),
+			message(Message.ChangedWindowFocus({ isFocused: false })),
+			message(Message.ElapsedSyncDebounce({ version: 2 })),
+			Command.expectExact(send(blurred, { activeChannelId: null })),
+			Command.resolve(SendPresenceUpdate, confirmed(blurred)),
+			message(Message.ChangedWindowFocus({ isFocused: true })),
+			message(Message.ElapsedSyncDebounce({ version: 3 })),
+			Command.expectExact(send(back, { activeChannelId: general })),
+			Command.resolve(SendPresenceUpdate, confirmed(back)),
+		)
+	})
+
+	test("switching channels in a background window reports nothing until it is focused", () => {
+		const back = snapshot("online", random)
+		story(
+			update,
+			given(synced({ isWindowFocused: false, sent: snapshot("online", null) })),
+			message(Message.ChangedContext({ userId: ada, activeChannelId: random, nowMs: T0 })),
+			Command.expectNone(),
+			model((m) => expect(m.isSyncPending).toBe(false)),
+			message(Message.ChangedWindowFocus({ isFocused: true })),
+			message(Message.ElapsedSyncDebounce({ version: 2 })),
+			Command.expectExact(send(back, { activeChannelId: random })),
+			Command.resolve(SendPresenceUpdate, confirmed(back)),
+		)
+	})
+
+	test("mounting in a background window writes a null channel", () => {
+		const state = snapshot("online", null)
+		story(
+			update,
+			given({ ...init(), isWindowFocused: false }),
+			message(mount()),
+			message(Message.ElapsedSyncDebounce({ version: 1 })),
+			Command.expectExact(send(state, { status: "online", activeChannelId: null })),
+			Command.resolve(SendPresenceUpdate, confirmed(state)),
+		)
+	})
+})
+
 // P0: a failed write used to leave `sent` claiming the new status, so nothing ever re-sent it.
 describe("a failed write", () => {
 	test("keeps the confirmed state and re-syncs after a backoff until the server has it", () => {
