@@ -1946,7 +1946,7 @@ fn a_full_width_item_in_a_row_shrinks_to_leave_its_siblings_room() {
 #[test]
 fn an_absolute_button_sizes_to_its_icon_and_padding() {
     // The sidebar row's hover-revealed menu trigger: right-0, h-full, w-auto, px-2.5, a 16px
-    // icon with a -2px right margin and an auto left one. Chromium makes it 36 wide.
+    // icon with a -2px right margin and an auto left one, and a 1px border. Chromium makes it 36 wide.
     let icon = json!({
         "k": "svg", "h": "dots", "view": 24.0,
         "body": "<path d=\"M5 12h.01M12 12h.01M19 12h.01\" stroke=\"currentColor\"/>",
@@ -1967,9 +1967,9 @@ fn an_absolute_button_sizes_to_its_icon_and_padding() {
     );
     let rt = runtime(row, (200.0, 100.0));
     let [x, _, w, h] = rect(&rt, "r/1");
-    // 16 - 2 + 20 of padding; the host draws borders inside the box (Chromium adds 2 more).
-    assert_eq!((w, h), (34.0, 40.0), "icon + padding, full height");
-    assert_eq!(x, 166.0, "against the right edge");
+    // 16 - 2 + 20 of padding + 2 of border, as Chromium lays it out.
+    assert_eq!((w, h), (36.0, 40.0), "icon + padding + border, full height");
+    assert_eq!(x, 164.0, "against the right edge");
 }
 
 #[test]
@@ -2004,6 +2004,32 @@ fn a_badge_with_a_group_shift_slides_aside_while_its_row_is_hovered() {
         "hovered: {} from {rest}",
         x(&rt)
     );
+}
+
+#[test]
+fn space_y_collapses_with_the_top_margin_a_field_starts_with() {
+    // `space-y-2`, then a field whose label is hidden and whose control has `mt-2`: CSS
+    // collapses the two 8pt margins into one, so the control starts 8pt below the heading.
+    let heading = e("h3", json!({ "h": 20 }), vec![t("Email address")]);
+    let field = e(
+        "div",
+        json!({ "w": "full" }),
+        vec![
+            e(
+                "label",
+                json!({ "display": "none" }),
+                vec![t("Email address")],
+            ),
+            e(
+                "div",
+                json!({ "margin": [8, 0, 0, 0], "display": "block", "h": 36 }),
+                vec![],
+            ),
+        ],
+    );
+    let group = e("div", json!({ "childGap": 8 }), vec![heading, field]);
+    let rt = runtime(group, (400.0, 200.0));
+    assert_eq!(rect(&rt, "r/1/1")[1], 28.0, "one 8pt gap, not 16");
 }
 
 #[test]

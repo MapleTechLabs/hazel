@@ -840,6 +840,7 @@ fn build_elem(
                 is_row,
                 items,
                 block: false,
+                gap: 0.0,
             };
             add_children(apply_flex(base, st), &kids, path, inh, ctx, parent)
         }
@@ -854,6 +855,7 @@ fn build_elem(
                 is_row: true,
                 items: Some("center"),
                 block: false,
+                gap: 0.0,
             };
             add_children(
                 apply_flex(inline_row(true), st),
@@ -871,6 +873,7 @@ fn build_elem(
                 is_row: true,
                 items: Some("center"),
                 block: false,
+                gap: 0.0,
             };
             add_children(
                 apply_flex(inline_row(true), st),
@@ -887,6 +890,7 @@ fn build_elem(
                 is_row: false,
                 items,
                 block: true,
+                gap: st.child_gap.map_or(0.0, |g| g.0),
             };
             add_children(apply_flex(col(), st), &kids, path, inh, ctx, parent)
         }
@@ -1063,6 +1067,8 @@ struct Parent<'a> {
     /// A block container: its inline-level children (`inline-flex`, `inline-block`) keep their
     /// own width and sit where `text-align` puts them, rather than stretching across it.
     block: bool,
+    /// A block's `space-y` (its child gap): the top margin each child after the first has.
+    gap: f32,
 }
 
 fn style_of(node: &Node) -> Option<&Style> {
@@ -1138,6 +1144,14 @@ fn add_children(
             e = add_children(e, &inner, &child_path, inh.from(st), ctx, parent);
             continue;
         }
+        // `space-y`'s top margin collapses with a top margin at the child's own start.
+        let collapsed;
+        let child = if parent.block && parent.gap > 0.0 && i > 0 {
+            collapsed = collapse_into_gap(child, parent.gap);
+            &collapsed
+        } else {
+            child
+        };
         if let Some(b) = build(child, &child_path, inh, ctx) {
             let b = match style_of(child) {
                 Some(st)
@@ -1203,6 +1217,98 @@ fn add_children(
         }
     }
     e
+}
+
+/// A block after the first in a `space-y` container: CSS collapses the gap (its top margin)
+/// with the top margin of its first in-flow child, when nothing (padding, a border) separates
+/// them. That margin goes; any part of it past the gap moves onto the block.
+fn collapse_into_gap(node: &Arc<Node>, gap: f32) -> Arc<Node> {
+    let Node::Elem {
+        hash,
+        tag,
+        key,
+        st,
+        attrs,
+        on,
+        observed,
+        ov,
+        children,
+    } = node.as_ref()
+    else {
+        return node.clone();
+    };
+    let side = |b: Option<[F; 4]>, i: usize| b.map_or(0.0, |b| b[i].0);
+    let separated = side(st.pad, 0) > 0.0 || side(st.border, 0) > 0.0;
+    let block = matches!(st.display.as_deref(), None | Some("block")) && st.inline != Some(true);
+    if separated
+        || !block
+        || st.absolute.is_some()
+        || st.clip == Some(true)
+        || st.scroll_y == Some(true)
+    {
+        return node.clone();
+    }
+    let in_flow = |c: &Arc<Node>| match c.as_ref() {
+        Node::Text(t) => !t.trim().is_empty(),
+        Node::Elem { st, .. } => st.display.as_deref() != Some("none") && st.absolute.is_none(),
+        Node::Svg { .. } => true,
+    };
+    let Some(first) = children.iter().position(in_flow) else {
+        return node.clone();
+    };
+    let Node::Elem { st: first_st, .. } = children[first].as_ref() else {
+        return node.clone();
+    };
+    let m = side(first_st.margin, 0);
+    if m <= 0.0 {
+        return node.clone();
+    }
+    let mut children = children.clone();
+    if let Node::Elem {
+        hash: h,
+        tag: t,
+        key: k,
+        st: s,
+        attrs: a,
+        on: o,
+        observed: ob,
+        ov: v,
+        children: c,
+    } = children[first].as_ref()
+    {
+        let mut margin = s.margin.unwrap_or([F(0.0); 4]);
+        margin[0] = F(0.0);
+        children[first] = Arc::new(Node::Elem {
+            hash: format!("{h}~collapsed"),
+            tag: t.clone(),
+            key: k.clone(),
+            st: Style {
+                margin: Some(margin),
+                ..s.clone()
+            },
+            attrs: a.clone(),
+            on: o.clone(),
+            observed: *ob,
+            ov: v.clone(),
+            children: c.clone(),
+        });
+    }
+    let mut margin = st.margin.unwrap_or([F(0.0); 4]);
+    margin[0] = F(margin[0].0 + (m - gap).max(0.0));
+    Arc::new(Node::Elem {
+        hash: format!("{hash}~collapsed"),
+        tag: tag.clone(),
+        key: key.clone(),
+        st: Style {
+            margin: Some(margin),
+            ..st.clone()
+        },
+        attrs: attrs.clone(),
+        on: on.clone(),
+        observed: *observed,
+        ov: ov.clone(),
+        children,
+    })
 }
 
 /// Inter's ascent and descent, in ems: where a line's baseline sits in its content area.

@@ -275,8 +275,12 @@ pub fn apply_box(mut e: El, st: &Style) -> El {
     if let Some(g) = f(st.grow).filter(|g| *g > 0.0) {
         e = e.grow(g)
     }
-    if let Some([t, r, b, l]) = st.pad {
-        e = e.pt(t.0).pr(r.0).pb(b.0).pl(l.0)
+    // Rune draws a border inside the box; CSS lays it out (box-sizing: border-box), so each
+    // side's border width joins its padding, a transparent border's too.
+    if st.pad.is_some() || st.border.is_some() {
+        let side = |b: Option<[F; 4]>, i: usize| b.map_or(0.0, |b| b[i].0);
+        let [t, r, b, l] = [0, 1, 2, 3].map(|i| side(st.pad, i) + side(st.border, i));
+        e = e.pt(t).pr(r).pb(b).pl(l)
     }
     if let Some([t, r, b, l]) = st.margin {
         e = e.mt(t.0).mr(r.0).mb(b.0).ml(l.0)
@@ -364,7 +368,7 @@ pub fn apply_box(mut e: El, st: &Style) -> El {
     {
         e = e.offset(x.0, y.0)
     }
-    // A transparent border only reserves space, which the padding already accounts for.
+    // A transparent border only reserves space, which the padding above accounts for.
     let is_transparent = st.border_color.is_some() && color(&st.border_color).is_none();
     if let (Some(border), false) = (st.border, is_transparent) {
         let c = color(&st.border_color).unwrap_or(rune::color::hex("#8080804d").unwrap());
