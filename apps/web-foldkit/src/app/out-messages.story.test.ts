@@ -29,7 +29,7 @@ import {
 	SignOut,
 } from "./command"
 import { Message } from "./message"
-import type { Model } from "./model"
+import { dmRequestKey, type Model } from "./model"
 import { Message as HomeMessage } from "../page/home/message"
 import type { DirectoryMember } from "../page/home/model"
 
@@ -187,7 +187,14 @@ describe("RequestedDmCreation", () => {
 		userId: grace,
 		name: "Grace Hopper",
 	})
-	const succeeded = Message.SucceededCreateDm({ orgSlug: "hazel", channelId: dmId, name: "Grace Hopper" })
+	const succeeded = Message.SucceededCreateDm({
+		organizationId: hazelOrg.id,
+		orgSlug: "hazel",
+		userId: grace,
+		channelId: dmId,
+		name: "Grace Hopper",
+	})
+	const isCreatingDmWithGrace = (m: Model) => m.creatingDms.includes(dmRequestKey(hazelOrg.id, grace))
 	const toastTitles = (m: Model) => m.toasts.entries.map((entry) => entry.payload.title)
 
 	/**
@@ -209,7 +216,7 @@ describe("RequestedDmCreation", () => {
 		const pressed = run(signedIn("/hazel"), pressMessageGrace)
 		expect(pressed.commands).toContainEqual(asCall(createDm))
 		expect(toastTitles(pressed.model)).toEqual(["Starting conversation with Grace Hopper..."])
-		expect(pressed.model.isCreatingDm).toBe(true)
+		expect(isCreatingDmWithGrace(pressed.model)).toBe(true)
 
 		// The user moves on before the RPC answers; the home page is gone.
 		const left = run(pressed.model, [Message.ChangedUrl({ url: urlOf("/hazel/notifications") })])
@@ -217,7 +224,7 @@ describe("RequestedDmCreation", () => {
 
 		const done = run(left.model, [succeeded])
 		expect(toastTitles(done.model)).toEqual(["Started conversation with Grace Hopper"])
-		expect(done.model.isCreatingDm).toBe(false)
+		expect(done.model.creatingDms).toEqual([])
 		expect(done.commands).toContainEqual(asCall(NavigateInternal({ url: `/hazel/chat/${dmId}` })))
 	})
 
@@ -229,6 +236,31 @@ describe("RequestedDmCreation", () => {
 		expect(done.commands.map((command) => command.name)).not.toContain("NavigateInternal")
 	})
 
+	test("a request for another member runs beside the first, with its own toast", () => {
+		const alan = Schema.decodeSync(UserId)("00000000-0000-4000-8000-0000000000d3")
+		const alanMember: DirectoryMember = {
+			...graceMember,
+			id: alan,
+			firstName: "Alan",
+			lastName: "Turing",
+		}
+		const pressed = run(signedIn("/hazel"), [
+			home(HomeMessage.UpdatedMembers({ members: [graceMember, alanMember] })),
+			home(HomeMessage.UpdatedDmChannels({ rows: [] })),
+			pressGrace,
+		])
+		const both = run(pressed.model, [
+			home(HomeMessage.PressedMessageMember({ userId: alan, name: "Alan Turing" })),
+		])
+		expect(both.commands.map((command) => command.name)).toContain("CreateDm")
+		expect(toastTitles(both.model)).toEqual([
+			"Starting conversation with Grace Hopper...",
+			"Starting conversation with Alan Turing...",
+		])
+		const graceDone = run(both.model, [succeeded])
+		expect(graceDone.model.creatingDms).toEqual([dmRequestKey(hazelOrg.id, alan)])
+	})
+
 	test("a second press while the DM is being created is ignored", () => {
 		const pressed = run(signedIn("/hazel"), pressMessageGrace)
 		const again = run(pressed.model, [pressGrace])
@@ -238,9 +270,11 @@ describe("RequestedDmCreation", () => {
 
 	test("a failure replaces the loading toast with the error and allows another try", () => {
 		const pressed = run(signedIn("/hazel"), pressMessageGrace)
-		const failed = run(pressed.model, [Message.FailedCreateDm({ reason: "AlreadyExists" })])
+		const failed = run(pressed.model, [
+			Message.FailedCreateDm({ organizationId: hazelOrg.id, userId: grace, reason: "AlreadyExists" }),
+		])
 		expect(toastTitles(failed.model)).toEqual(["You already have a conversation with them"])
-		expect(failed.model.isCreatingDm).toBe(false)
+		expect(failed.model.creatingDms).toEqual([])
 		expect(run(failed.model, [pressGrace]).commands).toContainEqual(asCall(createDm))
 	})
 })

@@ -124,15 +124,25 @@ export const CreateDm = Command.define("CreateDm", {
 		).pipe(
 			// The root's loading toast and one-at-a-time guard wait on this: a hung request must end.
 			Effect.timeout(CREATE_DM_TIMEOUT),
-			Effect.map((result) => Message.SucceededCreateDm({ orgSlug, channelId: result.data.id, name })),
+			Effect.map((result) =>
+				Message.SucceededCreateDm({
+					organizationId,
+					orgSlug,
+					userId,
+					channelId: result.data.id,
+					name,
+				}),
+			),
 			Effect.catchTags({
 				DmChannelAlreadyExistsError: () =>
-					Effect.succeed(Message.FailedCreateDm({ reason: "AlreadyExists" })),
+					Effect.succeed(
+						Message.FailedCreateDm({ organizationId, userId, reason: "AlreadyExists" }),
+					),
 				// Only single DMs with one member are asked for; a rejected shape is a bug here.
 				InvalidChannelRequestError: () =>
-					Effect.succeed(Message.FailedCreateDm({ reason: "Unexpected" })),
+					Effect.succeed(Message.FailedCreateDm({ organizationId, userId, reason: "Unexpected" })),
 			}),
-			catchCommon((reason) => Message.FailedCreateDm({ reason })),
+			catchCommon((reason) => Message.FailedCreateDm({ organizationId, userId, reason })),
 		),
 })
 

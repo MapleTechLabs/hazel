@@ -232,15 +232,18 @@ describe("org home failures and guards", () => {
 	})
 
 	// dmRequest marks a DM as opening, so pressing Message again cannot create a second DM.
-	test("a second Message press while a DM is opening sends nothing", () => {
+	// The root ignores a repeat of a request in flight (`app/out-messages.story.test.ts`); the page
+	// only guards the wait for the DM rows.
+	test("a second press while waiting for the DM rows is ignored", () => {
 		const first = pageUpdate(
-			loaded(),
+			membersOnly(),
 			Message.PressedMessageMember({ userId: grace, name: "Grace Hopper" }),
 		)
 		const second = pageUpdate(
 			first.model,
 			Message.PressedMessageMember({ userId: grace, name: "Grace Hopper" }),
 		)
-		expect(second.commands ?? []).toEqual([])
+		expect(second.outMessage).toBeUndefined()
+		expect(second.model.dmRequest).toEqual(DmRequest.AwaitingChannels({ userId: grace }))
 	})
 })

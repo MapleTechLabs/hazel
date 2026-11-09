@@ -26,6 +26,7 @@ import {
 import { Message } from "./app/message"
 import {
 	authOf,
+	dmRequestKey,
 	MemberData,
 	Model,
 	OrgState,
@@ -384,35 +385,55 @@ const pressedDesktopMenuItem = (item: DesktopMenuItem): Step =>
 		Match.exhaustive,
 	)
 
-/** The DM flow's toasts share one id, so each replaces the previous: loading, then success or error. */
-const DM_TOAST_ID = "create-dm"
+/** Each request's toasts share an id, so each replaces the previous: loading, then success or error. */
+const dmToastId = (key: string) => `create-dm:${key}`
 
-const setCreatingDm = (isCreatingDm: boolean): Step =>
-	setModel((model) => modifyFields(model, { isCreatingDm: () => isCreatingDm }))
+const setCreatingDm = (key: string, isCreating: boolean): Step =>
+	setModel((model) =>
+		modifyFields(model, {
+			creatingDms: (keys) => [
+				...keys.filter((current) => current !== key),
+				...(isCreating ? [key] : []),
+			],
+		}),
+	)
 
-/** One DM request at a time: a second press while one runs is ignored. */
+/** Requests run side by side, each with its own toast; a repeat of one still in flight is ignored. */
 const requestedDmCreation =
 	({ organizationId, orgSlug, userId, name }: Omit<RequestedDmCreation, "_tag">): Step =>
-	(model) =>
-		model.isCreatingDm
+	(model) => {
+		const key = dmRequestKey(organizationId, userId)
+		return model.creatingDms.includes(key)
 			? { model }
 			: Update.combine(model, [
-					setCreatingDm(true),
-					showToast({ ...loadingToast(`Starting conversation with ${name}...`), id: DM_TOAST_ID }),
+					setCreatingDm(key, true),
+					showToast({
+						...loadingToast(`Starting conversation with ${name}...`),
+						id: dmToastId(key),
+					}),
 					command(CreateDm({ organizationId, orgSlug, userId, name })),
 				])
+	}
 
 /** Opens the new DM only while the user is still in its org; elsewhere the toast says it is ready. */
 const succeededCreateDm =
-	(orgSlug: string, channelId: ChannelId, name: string): Step =>
-	(model) =>
-		Update.combine(model, [
-			setCreatingDm(false),
-			showToast({ ...successToast(`Started conversation with ${name}`), id: DM_TOAST_ID }),
+	({
+		organizationId,
+		orgSlug,
+		userId,
+		channelId,
+		name,
+	}: Omit<Extract<Message, { readonly _tag: "SucceededCreateDm" }>, "_tag">): Step =>
+	(model) => {
+		const key = dmRequestKey(organizationId, userId)
+		return Update.combine(model, [
+			setCreatingDm(key, false),
+			showToast({ ...successToast(`Started conversation with ${name}`), id: dmToastId(key) }),
 			orgSlugOf(model.route) === orgSlug
 				? navigateTo(AppRoute.ChatChannel({ orgSlug, channelId }))
 				: unchanged,
 		])
+	}
 
 /** A page or the shell reported a fact; the root owns navigation, the overlays and the session. */
 const handleOutMessage = (outMessage: PageOutMessage): Step =>
@@ -666,7 +687,7 @@ export const init: Runtime.RoutingApplicationInit<Model, Message, Flags, Resourc
 			toasts: Toasts.init(),
 			platform: Platform.init(),
 			desktopUpdate: Updates.init(),
-			isCreatingDm: false,
+			creatingDms: [],
 		},
 		url,
 	)
@@ -726,11 +747,10 @@ export const update = (model: Model, message: Message): Return =>
 		FailedFetchCurrentUser: ({ reason }) => failedFetchCurrentUser(reason)(model),
 		PressedRetryCurrentUser: () => refreshCurrentUser(model),
 		CompletedWarmAccessToken: () => ({ model }),
-		SucceededCreateDm: ({ orgSlug, channelId, name }) =>
-			succeededCreateDm(orgSlug, channelId, name)(model),
-		FailedCreateDm: ({ reason }) =>
+		SucceededCreateDm: (succeeded) => succeededCreateDm(succeeded)(model),
+		FailedCreateDm: ({ organizationId, userId, reason }) =>
 			Update.combine(model, [
-				setCreatingDm(false),
+				setCreatingDm(dmRequestKey(organizationId, userId), false),
 				showToast({
 					...errorToastOf(
 						failureMessage(reason, {
@@ -740,7 +760,7 @@ export const update = (model: Model, message: Message): Return =>
 							},
 						}),
 					),
-					id: DM_TOAST_ID,
+					id: dmToastId(dmRequestKey(organizationId, userId)),
 				}),
 			]),
 		// A full load of `/`: every collection, token and subscription starts over, signed out.

@@ -1,4 +1,5 @@
 import { Option, Schema } from "effect"
+import type { OrganizationId, UserId } from "@hazel/schema"
 import { AsyncData } from "foldkit"
 import { defineTaggedUnion } from "foldkit/schema"
 import { CommonReason } from "~/lib/error-messages"
@@ -96,12 +97,16 @@ export const Model = Schema.Struct({
 	platform: Platform.Model,
 	/** The desktop app's update check and install. */
 	desktopUpdate: Updates.Model,
-	/** A `channel.createDm` from `RequestedDmCreation` is in flight; another request waits for it. */
-	isCreatingDm: Schema.Boolean,
+	/** The `channel.createDm` requests in flight, by `dmRequestKey`; a repeat of one is ignored. */
+	creatingDms: Schema.Array(Schema.String),
 })
 export type Model = typeof Model.Type
 
 // DERIVED
+
+/** One DM request: the member, in an org. */
+export const dmRequestKey = (organizationId: OrganizationId, userId: UserId): string =>
+	`${organizationId}:${userId}`
 
 export const resolvedThemeOf = (model: Model): ResolvedTheme =>
 	resolveTheme(model.themePreference.mode, model.systemTheme)
