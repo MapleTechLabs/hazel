@@ -13,11 +13,13 @@ import * as MessageList from "../../../mount/message-list"
 import { chatMessageOf, imageAttachmentOf, liveEmbeds } from "../../../test/chat-messages"
 import { PageOutMessage } from "../../out-message"
 import { ActionMessage, CopyText, GenerateThreadName, OpenUrl } from "../message-actions"
+import * as Menu from "../../../ui/menu"
 import * as Overlays from "../overlays"
 import { PAGE_SIZE } from "../queries"
 import type { DisplayRow, MessageRow } from "../rows"
 import {
 	ada,
+	channelId,
 	adaMessageId,
 	grace,
 	graceMessageId,
@@ -65,6 +67,7 @@ describe("change sets", () => {
 			given(before),
 			message(
 				Message.ChangedMessages({
+					channelId,
 					order: [fresh.id, adaMessageId, graceMessageId],
 					upserts: [fresh],
 				}),
@@ -83,6 +86,7 @@ describe("change sets", () => {
 			given(derived()),
 			message(
 				Message.ChangedMessages({
+					channelId,
 					order: [adaMessageId, graceMessageId],
 					upserts:
 						adaMessage === undefined
@@ -91,7 +95,7 @@ describe("change sets", () => {
 				}),
 			),
 			model((current) => expect(rowOf(current, adaMessageId)?.message.content).toBe("Shipped v2")),
-			message(Message.ChangedMessages({ order: [graceMessageId], upserts: [] })),
+			message(Message.ChangedMessages({ channelId, order: [graceMessageId], upserts: [] })),
 			model((current) => {
 				expect(messageKeys(current)).toEqual([graceMessageId])
 				expect(current.list.keys).not.toContain(adaMessageId)
@@ -105,7 +109,11 @@ describe("change sets", () => {
 			updateWithShared,
 			given(before),
 			message(
-				Message.ChangedMessages({ order: [adaMessageId, graceMessageId], upserts: [...messages] }),
+				Message.ChangedMessages({
+					channelId,
+					order: [adaMessageId, graceMessageId],
+					upserts: [...messages],
+				}),
 			),
 			model((current) => {
 				expect(current.messages).toBe(before.messages)
@@ -120,6 +128,7 @@ describe("change sets", () => {
 			given(derived()),
 			message(
 				Message.UpdatedReactions({
+					channelId,
 					reactions: [
 						{ id: "r1", messageId: graceMessageId, userId: ada, emoji: "👍" },
 						{ id: "r2", messageId: graceMessageId, userId: grace, emoji: "👍" },
@@ -250,6 +259,7 @@ describe("link unfurls", () => {
 			given(derived()),
 			message(
 				Message.ChangedMessages({
+					channelId,
 					order: [second.id, first.id, adaMessageId, graceMessageId],
 					upserts: [first, second],
 				}),
@@ -282,6 +292,7 @@ describe("link unfurls", () => {
 			given(derived()),
 			message(
 				Message.ChangedMessages({
+					channelId,
 					order: [linked.id, adaMessageId, graceMessageId],
 					upserts: [linked],
 				}),
@@ -296,7 +307,7 @@ describe("link unfurls", () => {
 					error: "TimedOut",
 				}),
 			),
-			message(Message.UpdatedReactions({ reactions: [] })),
+			message(Message.UpdatedReactions({ channelId, reactions: [] })),
 			Command.expectNone(),
 		)
 	})
@@ -308,6 +319,7 @@ describe("link unfurls", () => {
 			given(derived()),
 			message(
 				Message.ChangedMessages({
+					channelId,
 					order: [tweet.id, adaMessageId, graceMessageId],
 					upserts: [tweet],
 				}),
@@ -722,6 +734,81 @@ describe("image viewer", () => {
 		expect(Overlays.hoveredMessageIdOf(offToolbar)).toBe(graceMessageId)
 	})
 
+	test("leaving through the toolbar to outside the list hides the toolbar", () => {
+		const onToolbar = [
+			Overlays.Message.PointerEnteredMessage({ messageId: graceMessageId }),
+			Overlays.Message.PointerLeftList(),
+			Overlays.Message.EnteredToolbar(),
+		].reduce((current, next) => Overlays.update(current, next).model, Overlays.init())
+		const left = Overlays.update(onToolbar, Overlays.Message.LeftToolbar())
+		expect(left.model.hover._tag).toBe("HidePending")
+		expect(left.commands?.map((command) => command.name)).toEqual(["WaitForHideToolbar"])
+		const hidden = Overlays.update(
+			left.model,
+			Overlays.Message.CompletedWaitForHideToolbar({ version: left.model.hideVersion }),
+		).model
+		expect(Overlays.hoveredMessageIdOf(hidden)).toBeNull()
+	})
+
+	test("moving from the toolbar back onto a message keeps the toolbar", () => {
+		const onToolbar = [
+			Overlays.Message.PointerEnteredMessage({ messageId: graceMessageId }),
+			Overlays.Message.EnteredToolbar(),
+		].reduce((current, next) => Overlays.update(current, next).model, Overlays.init())
+		// Pointer events order: the toolbar's pointerleave, then the list's pointerover.
+		const left = Overlays.update(onToolbar, Overlays.Message.LeftToolbar()).model
+		const back = Overlays.update(
+			left,
+			Overlays.Message.PointerEnteredMessage({ messageId: graceMessageId }),
+		).model
+		expect(back.hover).toEqual(
+			Overlays.Hover.Shown({ messageId: graceMessageId, isToolbarHovered: false }),
+		)
+		const stale = Overlays.update(
+			back,
+			Overlays.Message.CompletedWaitForHideToolbar({ version: left.hideVersion }),
+		).model
+		expect(Overlays.hoveredMessageIdOf(stale)).toBe(graceMessageId)
+	})
+
+	test("closing the image viewer after the pointer left starts the deferred hide", () => {
+		const opened = [
+			Overlays.Message.PointerEnteredMessage({ messageId: graceMessageId }),
+			Overlays.Message.ClickedAttachmentImage({ messageId: graceMessageId, index: 0 }),
+		].reduce((current, next) => Overlays.update(current, next).model, Overlays.init())
+		const left = Overlays.update(opened, Overlays.Message.PointerLeftList())
+		expect(left.commands ?? []).toEqual([])
+		expect(Overlays.hoveredMessageIdOf(left.model)).toBe(graceMessageId)
+		const closed = Overlays.update(left.model, Overlays.Message.ClosedImageViewer())
+		expect(closed.commands?.map((command) => command.name)).toEqual(["WaitForHideToolbar"])
+		const hidden = Overlays.update(
+			closed.model,
+			Overlays.Message.CompletedWaitForHideToolbar({ version: closed.model.hideVersion }),
+		).model
+		expect(Overlays.hoveredMessageIdOf(hidden)).toBeNull()
+	})
+
+	test("dismissing the More menu after the pointer left starts the deferred hide", () => {
+		const more = (message: Menu.Message) =>
+			Overlays.Message.GotMoreMenuMessage({ messageId: graceMessageId, message })
+		const opened = [
+			Overlays.Message.PointerEnteredMessage({ messageId: graceMessageId }),
+			Overlays.Message.EnteredToolbar(),
+			more(Menu.Message.PressedTrigger({ pointerType: "mouse" })),
+			Overlays.Message.LeftToolbar(),
+		].reduce((current, next) => Overlays.update(current, next).model, Overlays.init())
+		expect(opened.open._tag).toBe("MoreMenu")
+		expect(Overlays.heldMessageIdOf(opened)).toBe(graceMessageId)
+		const dismissed = Overlays.update(opened, more(Menu.Message.PressedOutside()))
+		expect(dismissed.commands?.map((command) => command.name)).toContain("WaitForHideToolbar")
+		const hidden = Overlays.update(
+			dismissed.model,
+			Overlays.Message.CompletedWaitForHideToolbar({ version: dismissed.model.hideVersion }),
+		).model
+		expect(Overlays.hoveredMessageIdOf(hidden)).toBeNull()
+		expect(Overlays.heldMessageIdOf(hidden)).toBeNull()
+	})
+
 	test("re-entering the hovered message cancels a pending hide; moving within it changes nothing", () => {
 		const entered = Overlays.update(
 			Overlays.init(),
@@ -755,7 +842,7 @@ describe("image viewer", () => {
 			message(
 				overlays(Overlays.Message.ClickedAttachmentImage({ messageId: graceMessageId, index: 0 })),
 			),
-			message(Message.ChangedMessages({ order: [adaMessageId], upserts: [] })),
+			message(Message.ChangedMessages({ channelId, order: [adaMessageId], upserts: [] })),
 			model((current) => expect(Overlays.imageViewerOf(current.overlays)).toBeNull()),
 		)
 	})
@@ -781,10 +868,10 @@ describe("image viewer", () => {
 				expect(Overlays.imageViewerOf(current.overlays)?.messageId).toBe(reply.id)
 				expect(current.threadPanel?.rows[0]?.attachments).toHaveLength(1)
 			}),
-			message(Message.UpdatedReactions({ reactions: [] })),
+			message(Message.UpdatedReactions({ channelId, reactions: [] })),
 			model((current) => expect(Overlays.imageViewerOf(current.overlays)?.messageId).toBe(reply.id)),
 			message(Message.ClickedCloseThread()),
-			message(Message.UpdatedReactions({ reactions: [] })),
+			message(Message.UpdatedReactions({ channelId, reactions: [] })),
 			model((current) => expect(Overlays.imageViewerOf(current.overlays)).toBeNull()),
 		)
 	})
@@ -797,10 +884,10 @@ describe("image viewer", () => {
 			message(
 				overlays(Overlays.Message.ClickedAttachmentImage({ messageId: graceMessageId, index: 0 })),
 			),
-			message(Message.ChangedMessages({ order: [adaMessageId], upserts: [] })),
+			message(Message.ChangedMessages({ channelId, order: [adaMessageId], upserts: [] })),
 			model((current) => expect(Overlays.hoveredMessageIdOf(current.overlays)).toBeNull()),
 			message(overlays(Overlays.Message.PointerEnteredMessage({ messageId: adaMessageId }))),
-			message(Message.UpdatedReactions({ reactions: [] })),
+			message(Message.UpdatedReactions({ channelId, reactions: [] })),
 			model((current) => expect(Overlays.hoveredMessageIdOf(current.overlays)).toBe(adaMessageId)),
 		)
 	})

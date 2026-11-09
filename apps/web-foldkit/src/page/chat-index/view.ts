@@ -135,7 +135,6 @@ const panels = (
 						dmCard(h, orgSlug, channel, {
 							currentUserId: shared.currentUser?.id,
 							presence: model.presence,
-							nowMs: shared.nowMs,
 						}),
 					() =>
 						emptyState(h, {

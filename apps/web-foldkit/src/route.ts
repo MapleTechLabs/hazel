@@ -434,7 +434,7 @@ export const titleOf = (route: AppRoute): string => {
 				Match.orElse(() => undefined),
 			),
 	)
-	return section === undefined ? "Hazel Chat" : `${section} · Hazel Chat`
+	return section === undefined ? "Hazel" : `${section} · Hazel`
 }
 
 /** `/onboarding` with its search in legacy order: `navigate({ search: (prev) => ({ ...prev, step }) })`. */

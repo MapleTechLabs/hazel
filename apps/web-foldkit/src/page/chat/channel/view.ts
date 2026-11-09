@@ -20,7 +20,7 @@ import { chatHeaderView } from "../header"
 import { messageToolbarOverlay, reactionModalView, trackHoverAttribute } from "../overlay-views"
 import * as Overlays from "../overlays"
 import { pinnedPopoverView } from "../pinned"
-import { idleRowContext, rowContextFor } from "../row-context"
+import { idleRowContext, rowContextFor, threadRowContextFor } from "../row-context"
 import type { DisplayRow, MessageRow } from "../rows"
 import { chatTabBarView } from "../tab-bar"
 import { threadPanelView } from "../thread-panel"
@@ -410,7 +410,7 @@ export const view = (h: H, model: Model, options: ViewOptions = {}): Html => {
 						model.htmlRender.urls,
 						model.htmlRender.frames,
 						model.htmlRender.theme?.appearance ?? "dark",
-						idleRowContext(h, model),
+						threadRowContextFor(h, model, model.threadPanel.rows, nowMs),
 						h,
 					]) ?? h.empty),
 			// Outside the tabs: the list's frames and the thread panel's both open it.

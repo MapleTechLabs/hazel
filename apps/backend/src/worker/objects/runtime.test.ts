@@ -139,6 +139,39 @@ describe("object runtime", () => {
 			}),
 		))
 
+	it("a stale heartbeat marks the owner offline although a socket is still open", () =>
+		run(
+			Effect.gen(function* () {
+				const objects = yield* makeTestObjects
+				const userId = uuid() as UserId
+				const user = yield* objects.get(userTarget(userId))
+				// What the upgrade does first: the object learns whose it is.
+				yield* user.run(user.identity.remember(userId).pipe(Effect.orDie))
+				const socket = makeFakeSocket()
+				expect(yield* user.adopt(socket, { userId, expiresAt: null })).toBe("accepted")
+				const status = () =>
+					(
+						user.storage.db.prepare(`SELECT status FROM user_presence_status`).get() as {
+							status: string
+						}
+					).status
+				expect(status()).toBe("online")
+				// The staleness deadline is armed while the socket is open.
+				expect(user.storage.alarm()).not.toBeNull()
+
+				// Recently seen: the alarm leaves them online.
+				yield* user.alarm
+				expect(status()).toBe("online")
+
+				// The client went away without the socket closing here (asleep, network lost).
+				user.storage.db
+					.prepare(`UPDATE user_presence_status SET lastSeenAt = ?`)
+					.run(new Date(Date.now() - 10 * 60_000).toISOString())
+				yield* user.alarm
+				expect(status()).toBe("offline")
+			}),
+		))
+
 	it("an undecodable invoke dies with the decode error", () =>
 		run(
 			Effect.gen(function* () {

@@ -179,12 +179,20 @@ export const DeleteMessageNowFailure = Schema.Union([Schema.Literals(["MessageNo
 export type DeleteMessageNowFailure = typeof DeleteMessageNowFailure.Type
 
 export const Message = defineMessageUnion({
-	UpdatedChannel: { channel: Schema.NullOr(ChannelInfo) },
+	/**
+	 * The channel's own streams are tagged with the channel they were queried for: a stream of the
+	 * channel left behind can still deliver after `switchChannel` reset the page, and is dropped.
+	 */
+	UpdatedChannel: { channelId: ChannelId, channel: Schema.NullOr(ChannelInfo) },
 	ClickedTab: { tab: ChatTab },
 	UpdatedParentChannel: { channel: Schema.NullOr(ParentChannelInfo) },
 	/** The window as a change set: the ids in order, plus inserted and updated rows. */
-	ChangedMessages: { order: Schema.Array(MessageId), upserts: Schema.Array(ChatMessage) },
-	UpdatedReactions: { reactions: Schema.Array(ChatReaction) },
+	ChangedMessages: {
+		channelId: ChannelId,
+		order: Schema.Array(MessageId),
+		upserts: Schema.Array(ChatMessage),
+	},
+	UpdatedReactions: { channelId: ChannelId, reactions: Schema.Array(ChatReaction) },
 	UpdatedUsers: { users: Schema.Array(UserInfo) },
 	UpdatedPresence: { presence: Schema.Array(PresenceInfo) },
 	UpdatedBots: { bots: Schema.Array(BotInfo) },

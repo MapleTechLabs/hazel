@@ -276,15 +276,7 @@ const singleDmContent = <M>(
 ) => {
 	const fullName = `${partner.firstName} ${partner.lastName}`
 	const presence = context.presence
-	const status = getEffectivePresenceStatus(
-		presence
-			? {
-					status: presence.status,
-					lastSeenAt: presence.lastSeenMs === null ? null : new Date(presence.lastSeenMs),
-				}
-			: null,
-		context.nowMs,
-	)
+	const status = getEffectivePresenceStatus(presence)
 	return [
 		avatar(h, {
 			size: "xs",

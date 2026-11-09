@@ -261,3 +261,17 @@ export const rowContextFor = (
 	nowMs: number,
 ): RowContext<Message> =>
 	Overlays.ownsRow(model.overlays, row.message.id) ? buildOwnerContext(h, model, nowMs) : idle
+
+/**
+ * The context for the thread panel's replies: the owner context while an overlay belongs to one of
+ * them, else the idle one. The panel memoizes as a whole, so one context serves all its rows.
+ */
+export const threadRowContextFor = (
+	h: H,
+	model: Model,
+	rows: ReadonlyArray<MessageRow>,
+	nowMs: number,
+): RowContext<Message> =>
+	rows.some((row) => Overlays.ownsRow(model.overlays, row.message.id))
+		? buildOwnerContext(h, model, nowMs)
+		: idleRowContext(h, model)

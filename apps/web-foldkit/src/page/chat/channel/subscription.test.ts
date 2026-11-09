@@ -1,5 +1,5 @@
-import { ChannelId, MessageId, TypingIndicatorId } from "@hazel/schema"
-import { Effect, Fiber, Queue, Schema, Stream } from "effect"
+import { ChannelId, MessageId, TypingIndicatorId, UserId } from "@hazel/schema"
+import { Effect, type Equivalence, Fiber, Queue, Schema, Stream } from "effect"
 import { describe, expect, test, vi } from "vitest"
 import type * as Typing from "../../../composer/typing"
 import { chatMessageOf, liveEmbeds } from "../../../test/chat-messages"
@@ -16,7 +16,8 @@ import { messageCollection } from "~/db/collections"
 import { messageHistoryStream, threadHistoryStream } from "../data"
 import { keepMessagesLoaded, replyTargetLoadStream } from "../lookup-data"
 import { PAGE_SIZE } from "../queries"
-import { setTab } from "./page"
+import { init, setTab, switchChannel } from "./page"
+import { HTML_RENDER_DEFAULT_THEMES } from "@hazel/domain/html-render"
 import { Message, type Model } from "./model"
 import { indicatorsOf, subscriptions, type TypingCleanup, typingCleanupStream } from "./subscription"
 
@@ -115,6 +116,102 @@ describe("channel subscription gates", () => {
 			messageId: live.id,
 			channelId: threadChannelId,
 		})
+	})
+})
+
+/**
+ * `switchChannel` builds a fresh Model under the same page key, so an entry whose dependencies come
+ * out equal keeps its Stream running and never sends again: whatever it fed must be carried over,
+ * or the new channel renders without it (#407: messages with no authors or avatars).
+ * Every entry that survives the switch is declared here; a new one fails until it is.
+ */
+const CARRIED_ACROSS_SWITCH = {
+	htmlRenderTheme: (model: Model) => model.htmlRender.theme,
+	chatUsers: (model: Model) => model.lookups.users,
+	chatPresence: (model: Model) => model.lookups.presence,
+	chatBots: (model: Model) => model.lookups.bots,
+}
+/** Events and clocks: they hold no rows, so the fresh Model loses nothing. */
+const STATELESS = [
+	"htmlRenderBridge",
+	"chatThreadPanelDrag",
+	"chatTypingClock",
+	"globalTyping",
+	"channelHotkeys",
+	"leftWindow",
+	"filesBreakpoint",
+	"filesInteractionModality",
+	"filesInteractionPointerRelease",
+]
+/**
+ * Keyed by data the new channel derives again (threads, live replies, the parent, the open panel) or
+ * gated off on this tab: equal here only because both sides are empty, and an empty key sends nothing.
+ */
+const KEYED_BY_CHANNEL_DATA = [
+	"chatParentChannel",
+	"chatLiveReplies",
+	"chatThreadChannels",
+	"chatThreadMessages",
+	"chatThreadPanel",
+	"threadMembership",
+	"filesAttachments",
+]
+
+describe("streams that keep running across a channel switch", () => {
+	const otherChannel = Schema.decodeSync(ChannelId)("00000000-0000-4000-8000-000000009999")
+	const userId = Schema.decodeSync(UserId)("00000000-0000-4000-8000-000000009998")
+	const before: Model = (() => {
+		const model = loadedModel()
+		return {
+			...model,
+			htmlRender: { ...model.htmlRender, theme: HTML_RENDER_DEFAULT_THEMES.light },
+			lookups: {
+				...model.lookups,
+				users: [
+					{
+						id: userId,
+						firstName: "Jeremy",
+						lastName: "Funk",
+						email: "jeremy@example.com",
+						avatarUrl: "https://example.com/a.png",
+						userType: "user",
+						timezone: null,
+					},
+				],
+				presence: [
+					{
+						userId,
+						status: "online",
+						statusEmoji: null,
+						customMessage: null,
+						statusExpiresAtMs: null,
+						lastSeenAtMs: null,
+					},
+				],
+				bots: [{ userId, name: "Bot" }],
+			},
+		}
+	})()
+	const after = switchChannel(before, otherChannel, { tab: "messages" })
+	const kept = Object.entries(subscriptions)
+		.filter(([, entry]) => {
+			type Dependencies = ReturnType<typeof entry.modelToDependencies>
+			const isSame = (entry.keepAliveEquivalence ??
+				Schema.toEquivalence(entry.dependenciesSchema)) as Equivalence.Equivalence<Dependencies>
+			return isSame(entry.modelToDependencies(input(before)), entry.modelToDependencies(input(after)))
+		})
+		.map(([key]) => key)
+
+	test("every entry that keeps running is declared", () => {
+		expect(kept.toSorted()).toEqual(
+			[...Object.keys(CARRIED_ACROSS_SWITCH), ...STATELESS, ...KEYED_BY_CHANNEL_DATA].toSorted(),
+		)
+	})
+
+	test.each(Object.entries(CARRIED_ACROSS_SWITCH))("%s: the new channel keeps what it sent", (_, slice) => {
+		// A fresh page starts without it, so carrying it is what keeps it.
+		expect(slice(before)).not.toEqual(slice(init(otherChannel, before.orgSlug, before.currentUserId)))
+		expect(slice(after)).toEqual(slice(before))
 	})
 })
 

@@ -128,6 +128,8 @@ export const Message = defineMessageUnion({
 	CompletedOpenFilePicker: {},
 	SucceededSendMessage: {},
 	FailedSendMessage: {
+		/** The channel the send was for: the draft may show another channel by the time it fails. */
+		channelId: ChannelId,
 		content: Schema.String,
 		restoreContent: Schema.Boolean,
 		replyToMessageId: Schema.NullOr(MessageId),
@@ -190,6 +192,7 @@ export const SendMessage = Command.define("SendMessage", {
 	execute: ({ restoreContent, ...variables }) => {
 		const failed = (reason: SendFailure) =>
 			Message.FailedSendMessage({
+				channelId: variables.channelId,
 				content: variables.content,
 				restoreContent,
 				replyToMessageId: variables.replyToMessageId,

@@ -38,12 +38,12 @@ describe("profile page", () => {
 		)
 	})
 
-	test("a stale presence reads as offline", () => {
+	test("a stored offline reads as offline", () => {
 		Scene.scene(
 			pageScene(update, view, shared),
 			Scene.given(init(graceId).model),
 			Scene.Subscription.emit(
-				Message.UpdatedProfileUser({ user: { ...grace, presenceLastSeenMs: NOW - 60_000 } }),
+				Message.UpdatedProfileUser({ user: { ...grace, presenceStatus: "offline" } }),
 			),
 			Scene.expect(Scene.text("Offline")).toExist(),
 			Scene.expect(Scene.text("Do Not Disturb")).toBeAbsent(),

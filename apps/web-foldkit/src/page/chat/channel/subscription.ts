@@ -54,7 +54,7 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 	chatChannel: entry(byChannel, {
 		modelToDependencies: channelOf,
 		dependenciesToStream: ({ channelId }) =>
-			channelStream(channelId, (channel) => Message.UpdatedChannel({ channel })),
+			channelStream(channelId, (channel) => Message.UpdatedChannel({ channelId, channel })),
 	}),
 	chatParentChannel: entry(
 		{ parentChannelId: Schema.NullOr(ChannelId) },
@@ -82,7 +82,7 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 			keepAliveEquivalence: (previous, next) => previous.channelId === next.channelId,
 			dependenciesToStream: ({ channelId, limit, offset }, readDependencies) =>
 				messageChangesStream(channelId, { limit, offset }, readDependencies, ({ order, upserts }) =>
-					Message.ChangedMessages({ order, upserts }),
+					Message.ChangedMessages({ channelId, order, upserts }),
 				),
 		},
 	),
@@ -152,7 +152,7 @@ const chat = Subscription.make<Input, Message, MessageWindows>()((entry) => ({
 	chatReactions: entry(byChannel, {
 		modelToDependencies: channelOf,
 		dependenciesToStream: ({ channelId }) =>
-			reactionsStream(channelId, (reactions) => Message.UpdatedReactions({ reactions })),
+			reactionsStream(channelId, (reactions) => Message.UpdatedReactions({ channelId, reactions })),
 	}),
 	chatUsers: entry(
 		{},
@@ -391,9 +391,11 @@ const write = Subscription.make<Input, Message, HazelRpc | HazelApiClient>()((en
 			),
 	}),
 	composerBots: entry(
-		{ organizationId: Schema.NullOr(OrganizationId) },
+		// Keyed by channel too: a channel switch starts a fresh draft, which needs them sent again.
+		{ channelId: ChannelId, organizationId: Schema.NullOr(OrganizationId) },
 		{
-			modelToDependencies: ({ shared }) => ({
+			modelToDependencies: ({ model, shared }) => ({
+				channelId: model.channelId,
 				organizationId: shared.organization?.id ?? null,
 			}),
 			dependenciesToStream: ({ organizationId }) =>
@@ -405,9 +407,11 @@ const write = Subscription.make<Input, Message, HazelRpc | HazelApiClient>()((en
 		},
 	),
 	composerCommands: entry(
-		{ organizationId: Schema.NullOr(OrganizationId) },
+		// Keyed by channel too: a channel switch starts a fresh draft, which needs them sent again.
+		{ channelId: ChannelId, organizationId: Schema.NullOr(OrganizationId) },
 		{
-			modelToDependencies: ({ shared }) => ({
+			modelToDependencies: ({ model, shared }) => ({
+				channelId: model.channelId,
 				organizationId: shared.organization?.id ?? null,
 			}),
 			dependenciesToStream: ({ organizationId }) =>

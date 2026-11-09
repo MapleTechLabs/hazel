@@ -39,10 +39,7 @@ const profile = (
 ) => {
 	const fullName = `${user.firstName} ${user.lastName}`
 	const effectiveStatus = getEffectivePresenceStatus(
-		user.presenceLastSeenMs === null
-			? null
-			: { status: user.presenceStatus, lastSeenAt: new Date(user.presenceLastSeenMs) },
-		options.nowMs,
+		user.presenceLastSeenMs === null ? null : { status: user.presenceStatus },
 	)
 	return h.div(
 		[h.Class("flex flex-col gap-6 px-4 py-6 lg:px-8")],

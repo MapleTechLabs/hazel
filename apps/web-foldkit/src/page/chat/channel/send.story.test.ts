@@ -107,6 +107,7 @@ describe("send", () => {
 			Command.resolve(
 				Draft.SendMessage,
 				Draft.Message.FailedSendMessage({
+					channelId,
 					content: "On it",
 					restoreContent: true,
 					replyToMessageId: graceMessageId,

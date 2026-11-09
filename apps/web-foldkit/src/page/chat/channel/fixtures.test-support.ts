@@ -85,7 +85,7 @@ export const loadedModel = (): Model => {
 
 /** The messages query's first result: every message upserted, newest first. */
 export const loadedMessages = (loaded: ReadonlyArray<ChatMessage>) =>
-	Message.ChangedMessages({ order: loaded.map((message) => message.id), upserts: loaded })
+	Message.ChangedMessages({ channelId, order: loaded.map((message) => message.id), upserts: loaded })
 
 /** `update` with the signed-in session, as `index.ts` calls it. */
 export const updateWithShared = (model: Model, message: Message) => update(model, message, shared)
