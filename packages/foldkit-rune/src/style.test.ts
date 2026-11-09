@@ -214,7 +214,9 @@ describe("StyleResolver", () => {
 	})
 
 	it("marks a block that starts its own formatting context", () => {
-		expect(resolve("", { extra: { inline: { contain: "layout style paint" } } }).style.isolated).toBe(true)
+		expect(resolve("", { extra: { inline: { contain: "layout style paint" } } }).style.isolated).toBe(
+			true,
+		)
 		expect(resolve("flow-root").style.isolated).toBe(true)
 		expect(resolve("", { extra: { inline: { contain: "style" } } }).style.isolated).toBeUndefined()
 	})
