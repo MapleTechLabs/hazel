@@ -436,7 +436,8 @@ export class StyleResolver {
 		for (const a of c.attrs) {
 			if (a.name === "class" || this.referencedAttrs.has(a.name)) continue
 			const tests = this.attrTests.get(a.name) ?? []
-			if (tests.some((t) => t.op === a.op && t.value === a.value && t.insensitive === a.insensitive)) continue
+			if (tests.some((t) => t.op === a.op && t.value === a.value && t.insensitive === a.insensitive))
+				continue
 			tests.push(a)
 			this.attrTests.set(a.name, tests)
 			// A result cached without this test in its key may not hold any more.
@@ -2514,4 +2515,3 @@ function evalLength(expr: string, units: Units, percentOf?: number): number | nu
 }
 
 /** Attributes that can select styles; `value` changes on every keystroke and selects nothing. */
-

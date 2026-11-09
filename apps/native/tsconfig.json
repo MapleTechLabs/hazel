@@ -1,5 +1,11 @@
 {
-	"include": ["src/**/*.ts", "bench/**/*.ts", "scripts/**/*.ts", "vitest.config.ts", "../web-foldkit/src/vite-env.d.ts"],
+	"include": [
+		"src/**/*.ts",
+		"bench/**/*.ts",
+		"scripts/**/*.ts",
+		"vitest.config.ts",
+		"../web-foldkit/src/vite-env.d.ts"
+	],
 	"compilerOptions": {
 		"target": "ES2022",
 		"module": "ESNext",

@@ -141,5 +141,10 @@ export type CommitStats = {
 	readonly reusedSubtrees: number
 	readonly handlers: number
 	/** Where `styleAndSerializeMs` went: collecting and compiling classes, the tree, the Mounts, sending. */
-	readonly phases?: { readonly classesMs: number; readonly treeMs: number; readonly mountsMs: number; readonly sendMs: number }
+	readonly phases?: {
+		readonly classesMs: number
+		readonly treeMs: number
+		readonly mountsMs: number
+		readonly sendMs: number
+	}
 }

@@ -3,7 +3,7 @@ import { Command, Runtime } from "foldkit"
 import * as Dom from "foldkit/dom"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
-import { beforeAll, describe, expect, it } from "vitest"
+import { beforeAll, describe, expect, it, vi } from "vitest"
 
 import { makeElementBridge } from "./bridge"
 import { type Overlays, makeOverlays } from "./overlays"
@@ -494,9 +494,15 @@ describe("makeRuneTarget", () => {
 		overlays.anchor("r/2/0", { triggerId: "outer", side: "top", align: "end", gap: 2 })
 		let dismissed = 0
 		overlays.onDismiss("r/1", () => dismissed++)
-		await settle()
 		// The trigger did not change: it goes as a reference, so only the overlay's nodes are here.
-		const sentOverlays = elements(trees().at(-1)!.root).flatMap((n) => (n.ov === undefined ? [] : [n.ov]))
+		// Waits for that frame rather than a fixed delay, which a slow CI runner can outlast.
+		const sentOverlays = await vi.waitFor(() => {
+			const ovs = trees()
+				.map((t) => elements(t.root).flatMap((n) => (n.ov === undefined ? [] : [n.ov])))
+				.findLast((o) => o.length > 0)
+			expect(ovs).toBeDefined()
+			return ovs ?? []
+		})
 		expect(sentOverlays).toEqual([
 			{ portal: 1 },
 			{ anchor: { to: "r/0", side: "bottom", align: "start", gap: 4 }, modal: "r/1" },

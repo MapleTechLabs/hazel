@@ -6,7 +6,15 @@
 import { readFileSync, readdirSync } from "node:fs"
 import { beforeAll, describe, expect, it } from "vitest"
 
-import { type ElementInput, type NodeInfo, type Scope, type Style, StyleResolver, color, isFocusable } from "./style"
+import {
+	type ElementInput,
+	type NodeInfo,
+	type Scope,
+	type Style,
+	StyleResolver,
+	color,
+	isFocusable,
+} from "./style"
 
 type RecordedElement = {
 	p: number

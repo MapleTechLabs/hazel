@@ -1041,7 +1041,10 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		click(control)
 		const checkable = tag === "input" && (attrs.type === "checkbox" || attrs.type === "radio")
 		if (checkable && !(attrs.type === "radio" && "checked" in attrs))
-			fire(control, fakeEvent({ t: "event", seq: ack, id: 0, type: "change", value: attrs.value ?? "" }))
+			fire(
+				control,
+				fakeEvent({ t: "event", seq: ack, id: 0, type: "change", value: attrs.value ?? "" }),
+			)
 		if (checkable) send({ t: "focus", key: control })
 	}
 

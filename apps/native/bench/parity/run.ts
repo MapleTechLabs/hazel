@@ -86,7 +86,9 @@ const comparable = (texts: ReadonlyArray<string>) => [
 	...new Set(
 		texts
 			// The app's own origin: the test server's on the web, the configured app URL natively.
-			.map((t) => normalize(t).replaceAll(/https?:\/\/(127\.0\.0\.1:\d+|app\.hazel\.test)/g, "<origin>"))
+			.map((t) =>
+				normalize(t).replaceAll(/https?:\/\/(127\.0\.0\.1:\d+|app\.hazel\.test)/g, "<origin>"),
+			)
 			.map((t) => t.replaceAll(/\d/g, "#"))
 			.filter((t) => t !== "" && !BY_DESIGN.has(t)),
 	),
@@ -211,7 +213,12 @@ const findFields = (): Array<Control> => {
 		if (hit === null || !(el === hit || el.contains(hit) || hit.contains(el))) continue
 		const label =
 			el.getAttribute("aria-label") ?? el.getAttribute("placeholder") ?? el.getAttribute("name") ?? ""
-		out.push({ label: label.slice(0, 50) || el.tagName.toLowerCase(), role: el.tagName.toLowerCase(), x, y })
+		out.push({
+			label: label.slice(0, 50) || el.tagName.toLowerCase(),
+			role: el.tagName.toLowerCase(),
+			x,
+			y,
+		})
 	}
 	return out
 }
@@ -251,7 +258,9 @@ const clickAndSettle = async (page: Page, control: Control) => {
 	await page.mouse.click(control.x, control.y)
 	await sleep(300)
 	if (page.url() !== before) {
-		await page.waitForFunction(() => (document.body.innerText ?? "").length > 40, null, { timeout: 15_000 })
+		await page.waitForFunction(() => (document.body.innerText ?? "").length > 40, null, {
+			timeout: 15_000,
+		})
 		await waitQuiet(page, 900)
 	} else await waitQuiet(page, 600)
 }
@@ -565,13 +574,18 @@ for (const route of ROUTES.filter((r) => routeFilter === undefined || r.includes
 		const pairs = openings.flatMap((o, i) => o.opened.map((item) => ({ o, i, item })))
 		console.log(`  ${openings.length} openers, ${pairs.length} opened controls`)
 		const webOutcomes = await pool(
-			pairs.map(({ o, item }) => () => webClicks(browser, url, [o.opener, item])),
+			pairs.map(
+				({ o, item }) =>
+					() =>
+						webClicks(browser, url, [o.opener, item]),
+			),
 			jobs,
 		)
 		const nativeOutcomes = await pool(
 			pairs.map(
-				({ o, item }, k) => () =>
-					nativeRun(route, [...openStep(o.opener), ...openStep(item)], `${slug}-open-${k}`),
+				({ o, item }, k) =>
+					() =>
+						nativeRun(route, [...openStep(o.opener), ...openStep(item)], `${slug}-open-${k}`),
 			),
 			jobs,
 		)

@@ -227,7 +227,9 @@ describe("StyleResolver", () => {
 		expect(control.opacity).toBeGreaterThan(0)
 		// So does the hidden box around a checkbox's or radio's own input.
 		const holdsInput = resolve("sr-only", {
-			extra: { hasDescendant: (match) => match({ tag: "input", classes: [], attrs: { type: "radio" } }) },
+			extra: {
+				hasDescendant: (match) => match({ tag: "input", classes: [], attrs: { type: "radio" } }),
+			},
 		}).style
 		expect(holdsInput.display).not.toBe("none")
 		// And one around a radio a group focuses by script (`tabindex="-1"`).
@@ -249,14 +251,20 @@ describe("StyleResolver", () => {
 			"1fr",
 		])
 		expect(
-			resolve("grid", { extra: { inline: { "grid-template-columns": "minmax(200px, 280px) 1fr" } } }).style
-				.gridCols,
+			resolve("grid", { extra: { inline: { "grid-template-columns": "minmax(200px, 280px) 1fr" } } })
+				.style.gridCols,
 		).toEqual(["minmax(200px, 280px)", "1fr"])
 	})
 
 	it("turns a group-hover inset change on a positioned element into a shift", () => {
 		// Both compiled first, as the app's precompiled sheet is: the group's scope knows the rule.
-		styles.ensure(["group/sidebar-item", "relative", "absolute", "right-1.5", "group-hover/sidebar-item:right-8"])
+		styles.ensure([
+			"group/sidebar-item",
+			"relative",
+			"absolute",
+			"right-1.5",
+			"group-hover/sidebar-item:right-8",
+		])
 		const row = resolve("group/sidebar-item relative")
 		const { style } = resolve("absolute right-1.5 group-hover/sidebar-item:right-8", { scope: row.scope })
 		expect(style.groupShift).toEqual([-26, 0])
