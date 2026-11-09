@@ -4,14 +4,30 @@ import type { HostToRuntime, RuntimeToHost } from "./wire"
 
 const decodeJson = Schema.decodeUnknownResult(Schema.fromJsonString(Schema.Unknown))
 
-const HOST_MESSAGE_TAGS = new Set<string>(["event", "env", "layout", "scrolled"])
+/** Every host message's tag, keyed by the wire type: a new kind of message cannot be left out. */
+const HOST_MESSAGE_TAGS = {
+	event: true,
+	env: true,
+	layout: true,
+	scrolled: true,
+	dismiss: true,
+	pointer: true,
+	contextmenu: true,
+	key: true,
+	files: true,
+	radio: true,
+	label: true,
+	openUrl: true,
+	vault: true,
+} satisfies Record<HostToRuntime["t"], true>
+const HOST_TAGS = new Set<string>(Object.keys(HOST_MESSAGE_TAGS))
 
 const isHostMessage = (value: unknown): value is HostToRuntime =>
 	typeof value === "object" &&
 	value !== null &&
 	"t" in value &&
 	typeof value.t === "string" &&
-	HOST_MESSAGE_TAGS.has(value.t)
+	HOST_TAGS.has(value.t)
 
 /** One line from the host as a message, or the reason it is not one. */
 export const parseHostLine = (line: string): { message: HostToRuntime } | { error: string } => {

@@ -6,7 +6,15 @@
 import { readFileSync, readdirSync } from "node:fs"
 import { beforeAll, describe, expect, it } from "vitest"
 
-import { type ElementInput, type NodeInfo, type Scope, type Style, StyleResolver, color } from "./style"
+import {
+	type ElementInput,
+	type NodeInfo,
+	type Scope,
+	type Style,
+	StyleResolver,
+	color,
+	isFocusable,
+} from "./style"
 
 type RecordedElement = {
 	p: number
@@ -236,10 +244,12 @@ const sameBgImage = (a: BgImage | "other" | undefined, b: BgImage | undefined) =
 const PAGE = "http://page.test/"
 
 /** A typed-OM length to what `Px` can say: a px number, "full" for 100%, null for anything else. */
-const typedLen = (v: string): number | "full" | "auto" | "other" => {
+const typedLen = (v: string): number | "full" | "auto" | { frac: number } | "other" => {
 	const n = px(v)
 	if (n !== null) return n
 	if (v === "100%") return "full"
+	const share = /^([\d.]+)%$/.exec(v)
+	if (share !== null) return { frac: Number(share[1]) / 100 }
 	// Content-sized: what the host does for a box with no size.
 	if (["auto", "none", "", "fit-content", "max-content", "min-content"].includes(v)) return "auto"
 	return "other"
@@ -256,11 +266,14 @@ type Context = {
 	parentStyle: Style | undefined
 	parentDisplay: string
 	isLastChild: boolean
+	/** The element is a Tab stop or holds one: sr-only, it is kept. */
+	holdsFocusable: boolean
 }
 
-const browserDisplay = (cs: Context["cs"]) => {
+const browserDisplay = (cs: Context["cs"], holdsFocusable: boolean) => {
 	const d = cs("display")
-	if (cs("clip-path").replace(/\s/g, "") === "inset(50%)") return "none"
+	// sr-only content is never drawn; a screen-reader-only control stays (a Tab stop).
+	if (cs("clip-path").replace(/\s/g, "") === "inset(50%)" && !holdsFocusable) return "none"
 	if (d === "inline-block" || d === "inline") return "inline"
 	if (["none", "contents", "flex", "inline-flex", "grid", "inline-grid"].includes(d)) return d
 	return "block"
@@ -288,7 +301,7 @@ const expectations = (ctx: Context): Array<Check> => {
 		})
 	const num = (prop: string, browser: number | null, resolver: number, tolerance = 0.5) =>
 		add(prop, browser, resolver, browser !== null && near(browser, resolver, tolerance))
-	const display = browserDisplay(cs)
+	const display = browserDisplay(cs, ctx.holdsFocusable)
 	add("display", display, resolverDisplay(st, el.tag))
 	if (display === "none") return checks
 	const flexLike = display.endsWith("flex")
@@ -502,9 +515,14 @@ const expectations = (ctx: Context): Array<Check> => {
  */
 const ALLOWLIST: Array<{ prop: string; when: RegExp; reason: string }> = [
 	{
+		prop: "opacity",
+		when: /\bsr-only\b/,
+		reason: "a screen-reader-only control is kept all but transparent, so the host lets it take focus",
+	},
+	{
 		prop: "w",
-		when: /\bw-(1\/2|\[calc\(100%-2rem\)\])/,
-		reason: "Px is px, 100% or auto: a fraction or calc() of the parent's width has no wire form",
+		when: /\bw-\[calc\(100%-2rem\)\]/,
+		reason: "Px is px, a share of the parent or auto: calc() mixing a share and a length has no wire form",
 	},
 	{
 		prop: "absolute.left",
@@ -608,6 +626,7 @@ const runFixture = (styles: StyleResolver, fixture: Fixture) => {
 		out.push({ style, scope: childScope, inh })
 		const cs = (prop: string) => el.cs[prop] ?? fixture.defaults[prop] ?? ""
 		const parentRecord = el.p >= 0 ? elements[el.p] : undefined
+		const holdsFocusable = (at: number) => [at, ...descendants(at)].some((d) => isFocusable(info(d)))
 		const checks = expectations({
 			el,
 			cs,
@@ -617,8 +636,12 @@ const runFixture = (styles: StyleResolver, fixture: Fixture) => {
 			parentDisplay:
 				parentRecord === undefined
 					? "block"
-					: browserDisplay((prop) => parentRecord.cs[prop] ?? fixture.defaults[prop] ?? ""),
+					: browserDisplay(
+							(prop) => parentRecord.cs[prop] ?? fixture.defaults[prop] ?? "",
+							holdsFocusable(el.p),
+						),
 			isLastChild: siblings.at(-1) === i,
+			holdsFocusable: holdsFocusable(i),
 		})
 		for (const check of checks) {
 			const count = counts.get(check.prop) ?? { checked: 0, failed: 0 }

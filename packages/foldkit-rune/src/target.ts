@@ -1,13 +1,69 @@
+import { readFile } from "node:fs/promises"
+import { basename } from "node:path"
+
 import type { Document } from "foldkit/html"
 import type { RenderTarget } from "foldkit/runtime"
 
-import type { ElementBridge } from "./bridge"
+import { type ElementBridge, hostFocusKey, matchesElement } from "./bridge"
+import type { OverlayWire, Overlays } from "./overlays"
 import { type NodeInfo, type Scope, type Style, StyleResolver, color } from "./style"
 import type { CommitStats, HostToRuntime, RuntimeToHost, WireNode } from "./wire"
 
 /** Event-shaped objects with the fields Foldkit's handlers read (see foldkit html/index.ts). */
+/** What the `Dom` helpers ask of a target (`Dom.focus`, `Dom.scrollIntoView`, ...). */
+type TargetDomEffects = NonNullable<RenderTarget["dom"]>
+
+/**
+ * A keydown on `document` (where an app's shortcuts listen), as the browser dispatches one that
+ * bubbled up or that nothing focused took. Whether a listener prevented its default.
+ */
+const dispatchDocumentKey = (key: {
+	readonly key?: string
+	readonly shift?: boolean
+	readonly meta?: boolean
+	readonly ctrl?: boolean
+	readonly alt?: boolean
+}): boolean => {
+	const target: EventTarget | undefined = globalThis.document
+	if (target === undefined || key.key === undefined) return false
+	const KeyboardEventClass: new (type: string, init?: KeyboardEventInit) => Event =
+		globalThis.KeyboardEvent ?? Event
+	const event = new KeyboardEventClass("keydown", {
+		key: key.key,
+		shiftKey: key.shift ?? false,
+		metaKey: key.meta ?? false,
+		ctrlKey: key.ctrl ?? false,
+		altKey: key.alt ?? false,
+		bubbles: true,
+		cancelable: true,
+	})
+	target.dispatchEvent(event)
+	return event.defaultPrevented
+}
+
+const MIME_TYPES = new Map([
+	["png", "image/png"],
+	["jpg", "image/jpeg"],
+	["jpeg", "image/jpeg"],
+	["gif", "image/gif"],
+	["webp", "image/webp"],
+	["heic", "image/heic"],
+	["svg", "image/svg+xml"],
+	["pdf", "application/pdf"],
+	["txt", "text/plain"],
+	["json", "application/json"],
+	["mp4", "video/mp4"],
+	["mov", "video/quicktime"],
+	["mp3", "audio/mpeg"],
+	["zip", "application/zip"],
+])
+
+/** A picked file's type from its extension, as a browser reports `File.type`. */
+const mimeOf = (file: string): string => MIME_TYPES.get(file.split(".").pop()?.toLowerCase() ?? "") ?? ""
+
 const fakeEvent = (event: Extract<HostToRuntime, { t: "event" }>) => {
-	const eventTarget = { value: event.value ?? "", scrollTop: 0, open: false, files: [] }
+	const files: Array<File> = []
+	const eventTarget = { value: event.value ?? "", scrollTop: 0, open: false, files }
 	return {
 		type: event.type,
 		target: eventTarget,
@@ -22,14 +78,19 @@ const fakeEvent = (event: Extract<HostToRuntime, { t: "event" }>) => {
 		pointerType: "mouse",
 		timeStamp: performance.now(),
 		defaultPrevented: false,
-		preventDefault() {},
-		stopPropagation() {},
+		propagationStopped: false,
+		preventDefault() {
+			this.defaultPrevented = true
+		},
+		stopPropagation() {
+			this.propagationStopped = true
+		},
 	}
 }
 
 type HostEvent = ReturnType<typeof fakeEvent>
 
-type Handler = (event: HostEvent) => void
+type Handler = (event: HostEvent | Event) => void
 
 /** An element's own wire fields, everything but its hash and children. */
 type ElementFields = {
@@ -40,7 +101,32 @@ type ElementFields = {
 	on: Record<string, number>
 	mount?: string
 	o?: 1
+	ov?: OverlayWire
 }
+
+/** One element as the last commit serialized it, with what it recorded on the way. */
+type CachedElement = {
+	readonly vnode: AnyVNode
+	readonly path: string
+	readonly parentPath: string | undefined
+	readonly tag: string
+	readonly attrs: Record<string, string>
+	readonly classes: ReadonlyArray<string>
+	readonly id: string | undefined
+	readonly h: string
+	readonly handlers: ReadonlyArray<readonly [number, Handler]>
+	/** Its element children's paths, each with an entry of its own. */
+	readonly children: ReadonlyArray<string>
+	readonly scopeId: number
+	readonly index: number | undefined
+	readonly count: number | undefined
+	readonly context: string
+	/** The pointer-tracking Mount above it, which its `data-hover-report` names. */
+	readonly pointerMount: string | undefined
+}
+
+/** A Mount watching pointer events below it, and the selector of the elements it looks for. */
+type PointerWatch = { readonly mount: string; readonly selector: string }
 
 type AnyVNode = {
 	sel?: string
@@ -67,6 +153,8 @@ export type RuneTargetOptions = {
 	readonly send: (message: RuntimeToHost) => void
 	readonly onStats?: (stats: CommitStats) => void
 	readonly onRelease?: () => void
+	/** Overlays the app's overlay helpers asked for (portals, anchors, modals), drawn by the host. */
+	readonly overlays?: Overlays
 	/** Element proxies for geometry-observing Mounts; without it no Mount is acquired. */
 	readonly bridge?: ElementBridge
 	/** The text a DOM-backed Mount (an editor) currently holds, drawn as a native text field. */
@@ -74,11 +162,24 @@ export type RuneTargetOptions = {
 	/** The class of the element a DOM-backed Mount edits in (the editor's root), styled onto the field. */
 	readonly editableClass?: (path: string) => string | undefined
 	/** A native text field over a DOM-backed Mount was edited, or a key was pressed in it. */
+	/** A press on a link whose click handler let it through: follow `href`. */
+	readonly onLink?: (href: string) => void
 	readonly onEditable?: (path: string, event: { readonly value?: string; readonly key?: string }) => void
 }
 
 const NON_VISUAL_TAGS = new Set(["style", "script", "template", "noscript", "link", "meta"])
-const HOST_ATTRS = ["value", "placeholder", "type", "href", "src", "alt", "role", "disabled", "aria-label"]
+const HOST_ATTRS = [
+	"value",
+	"placeholder",
+	"type",
+	"href",
+	"src",
+	"alt",
+	"role",
+	"disabled",
+	"aria-label",
+	"tabindex",
+]
 const SVG_ATTRS = new Set([
 	"d",
 	"x",
@@ -105,6 +206,10 @@ const SVG_ATTRS = new Set([
 	"opacity",
 	"fill-opacity",
 	"stroke-opacity",
+	"text-anchor",
+	"dominant-baseline",
+	"font-size",
+	"font-weight",
 ])
 
 const tagOf = (vnode: AnyVNode) => vnode.sel?.split(/[#.]/)[0] || "div"
@@ -126,7 +231,8 @@ const attrsOf = (vnode: AnyVNode): Record<string, string> => {
 			const value = source[name]
 			if (value === undefined || value === null || value === false) continue
 			if (typeof value === "object" || typeof value === "function") continue
-			out[name] = String(value)
+			// `h.Tabindex` sets the `tabIndex` property; the DOM reflects it as the attribute.
+			out[name === "tabIndex" ? "tabindex" : name] = String(value)
 		}
 	}
 	for (const name in data.dataset) {
@@ -164,9 +270,16 @@ const svgBody = (vnode: AnyVNode, inherited: Record<string, string> = {}): strin
 			const list = Object.entries(attrs)
 				.filter(([name]) => SVG_ATTRS.has(name))
 				.map(([name, value]) => `${name}="${svgPaint(name, value).replace(/"/g, "&quot;")}"`)
+			// The host lays `<text>` over the icon itself (its rasteriser has no fonts): keep the words.
+			if (tag === "text") return `<text ${list.join(" ")}>${escapeXml(textOf(child))}</text>`
 			return `<${tag} ${list.join(" ")}/>`
 		})
 		.join("")
+
+const textOf = (vnode: AnyVNode): string =>
+	vnode.text ?? (vnode.children ?? []).map((c) => (typeof c === "string" ? c : textOf(c))).join("")
+
+const escapeXml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
 
 /** cyrb53: fast, well-mixed 53-bit string hash; collisions only cost a redundant rebuild. */
 const ENTITIES = new Map([
@@ -234,6 +347,9 @@ const hash = (text: string): string => {
  * Handler ids are stable per element path, so an unchanged subtree hashes the same between
  * commits and goes over the wire as a reference.
  */
+/** How long a panel stays hidden waiting for its trigger's width before it shows without it. */
+const TRIGGER_WIDTH_WAIT_MS = 150
+
 /** How many sent trees keep their handlers (each keystroke sends one); a press on an older tree is dropped. */
 const HANDLER_GENERATIONS = 32
 
@@ -246,10 +362,23 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 	let gen = 0
 	const handlerIds = new Map<string, number>()
 	let sentHashes = new Set<string>()
+	/**
+	 * Last commit's elements by path, for reuse: an element whose VNode is the same object, in the
+	 * same scope, place and context, sends its last hash and replays what it recorded.
+	 */
+	let subtreeCache = new Map<string, CachedElement>()
+	/** VNodes whose classes the last commit collected: the same object needs no second look. */
+	let seenVnodes = new WeakSet<object>()
 	let lastDocument: Document | undefined
 	let ack = 0
 	/** The newest host event the last committed document reflects. */
 	let lastDocumentAck = 0
+	/** Triggers whose first width a panel waits for (`--trigger-width`), with that trigger's id. */
+	const awaitedWidths = new Map<string, string>()
+	/** Panels whose trigger width just arrived: the next commit serializes them again. */
+	const widthArrived = new Set<string>()
+	/** When each awaited trigger width was first asked for: past a short wait the panel shows anyway. */
+	const awaitedSince = new Map<string, number>()
 	let frameStartedAt = 0
 
 	const handlerId = (path: string, event: string): number => {
@@ -263,7 +392,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 	}
 
 	const collectClasses = (vnode: AnyVNode | string, into: Set<string>) => {
-		if (typeof vnode === "string") return
+		if (typeof vnode === "string" || seenVnodes.has(vnode)) return
 		for (const name of classesOf(vnode)) into.add(name)
 		for (const child of vnode.children ?? []) collectClasses(child, into)
 	}
@@ -311,34 +440,132 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			}, 0)
 		else styles.ensure(classes)
 		styles.setViewport(env.width, env.height)
+		const classesDone = performance.now()
 
+		/**
+		 * What anchoring does to a panel's inline style in the browser: it shows a panel its view
+		 * hid until positioned, and sets `--trigger-width` once the host has laid the trigger out.
+		 */
+		const anchoredInline = (path: string, inline: Record<string, string> | undefined) => {
+			const anchor = options.overlays?.anchorAt(path)
+			if (anchor === undefined) return inline
+			const { visibility: _hidden, ...shown } = inline ?? {}
+			const trigger = anchor.isTriggerWidthSet ? pathsById.get(anchor.triggerId) : undefined
+			if (trigger === undefined) return shown
+			const width = options.bridge?.widthOf(trigger)
+			// Until the host reports the trigger's width, the panel stays hidden, as the browser
+			// keeps it until positioned: drawn at another width it would jump on the next frame.
+			// A width that never comes (a trigger laid out before it was observed) shows it anyway.
+			if (width === undefined) {
+				awaitedWidths.set(trigger, anchor.triggerId)
+				const since = awaitedSince.get(trigger)
+				if (since === undefined) {
+					awaitedSince.set(trigger, performance.now())
+					setTimeout(() => {
+						for (const panel of options.overlays?.anchoredTo(anchor.triggerId) ?? [])
+							widthArrived.add(panel)
+						refreshObserved()
+					}, TRIGGER_WIDTH_WAIT_MS)
+				}
+				if (since === undefined || performance.now() - since < TRIGGER_WIDTH_WAIT_MS)
+					return { ...shown, visibility: "hidden" }
+				return shown
+			}
+			awaitedSince.delete(trigger)
+			return { ...shown, "--trigger-width": `${width}px`, "--button-width": `${width}px` }
+		}
 		const records = new Map<
 			string,
 			Parameters<ElementBridge["commit"]>[0] extends Map<string, infer R> ? R : never
 		>()
 		const mountVNodes = new Map<string, AnyVNode>()
+		// A trigger comes before the overlay anchored to it: ids seen so far, by path.
+		const pathsById = new Map<string, string>()
 		const nextHandlers = new Map<number, Handler>()
 		const nextHashes = new Set<string>()
+		const nextCache = new Map<string, CachedElement>()
+		const nextSeen = new WeakSet<object>()
 		let nodes = 0
 		let reusedSubtrees = 0
+		// What an element's output depends on beyond its VNode, scope and place.
+		const context = `${env.dark}|${env.width}x${env.height}`
+		// Overlay and observation changes touch only the elements they name: a cached subtree
+		// holding one of those paths is serialized again, the rest is reused.
+		const touched = [
+			...(options.overlays?.takeChanges() ?? []),
+			...(options.bridge?.takeObservedChanges() ?? []),
+			...widthArrived,
+		]
+		widthArrived.clear()
+		const isTouched = (path: string) =>
+			touched.length > 0 && touched.some((p) => p === path || p.startsWith(`${path}/`))
 
+		/** An unchanged element, again: its records, handlers, ids and hashes, and its children's. */
+		const replay = (entry: CachedElement) => {
+			nodes += 1
+			nextSeen.add(entry.vnode)
+			if (entry.id !== undefined) pathsById.set(entry.id, entry.path)
+			options.bridge?.recordElement(
+				entry.path,
+				entry.parentPath,
+				entry.tag,
+				entry.attrs,
+				entry.classes,
+				records,
+			)
+			if (entry.vnode.data?.foldkitMount !== undefined) mountVNodes.set(entry.path, entry.vnode)
+			for (const [id, handler] of entry.handlers) nextHandlers.set(id, handler)
+			nextHashes.add(entry.h)
+			nextCache.set(entry.path, entry)
+			for (const child of entry.children) {
+				const childEntry = subtreeCache.get(child)
+				if (childEntry !== undefined) replay(childEntry)
+			}
+		}
+
+		/**
+		 * `prevSame`: every element before this one among its siblings is the same VNode as last
+		 * commit, so sibling selectors (`peer-*`, `[&+x]`) see what they saw then.
+		 */
 		const serialize = (
 			vnode: AnyVNode | string,
 			path: string,
 			parentPath: string | undefined,
 			scope: Scope,
 			position: { siblings: ReadonlyArray<NodeInfo>; index: number } | undefined,
+			prevSame: boolean,
+			pointer: PointerWatch | undefined,
 		): WireNode => {
 			if (typeof vnode === "string") return { k: "t", s: vnode }
 			if (vnode.sel === undefined) return { k: "t", s: vnode.text ?? "" }
 			const tag = tagOf(vnode)
 			if (NON_VISUAL_TAGS.has(tag)) return { k: "t", s: "" }
+			const last = subtreeCache.get(path)
+			if (
+				last !== undefined &&
+				prevSame &&
+				last.vnode === vnode &&
+				last.scopeId === scope.id &&
+				last.index === position?.index &&
+				last.count === position?.siblings.length &&
+				last.context === context &&
+				!isTouched(path) &&
+				last.pointerMount === pointer?.mount &&
+				sentHashes.has(last.h)
+			) {
+				replay(last)
+				reusedSubtrees += 1
+				return { k: "r", h: last.h }
+			}
 			nodes += 1
+			nextSeen.add(vnode)
 			const attrs = attrsOf(vnode)
+			// Before the children: an overlay may render inside its own trigger.
+			if (attrs.id !== undefined) pathsById.set(attrs.id, path)
 			const classes = classesOf(vnode)
 			options.bridge?.recordElement(path, parentPath, tag, attrs, classes, records)
 			if (vnode.data?.foldkitMount !== undefined) mountVNodes.set(path, vnode)
-			const inline = inlineStyleOf(vnode)
+			const inline = anchoredInline(path, inlineStyleOf(vnode))
 			const resolved = styles.resolve(
 				{
 					tag,
@@ -371,6 +598,23 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 				const par = attrs.preserveAspectRatio
 				const h = hash(`svg${view}${body}${JSON.stringify(sized)}${par ?? ""}`)
 				nextHashes.add(h)
+				nextCache.set(path, {
+					vnode,
+					path,
+					parentPath,
+					tag,
+					attrs,
+					classes,
+					id: attrs.id,
+					h,
+					handlers: [],
+					children: [],
+					scopeId: scope.id,
+					index: position?.index,
+					count: position?.siblings.length,
+					context,
+					pointerMount: pointer?.mount,
+				})
 				if (sentHashes.has(h)) {
 					reusedSubtrees += 1
 					return { k: "r", h }
@@ -380,26 +624,46 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 					: { k: "svg", h, view, body, st: sized, par }
 			}
 			const on: Record<string, number> = {}
+			const ownHandlers: Array<[number, Handler]> = []
 			for (const event in vnode.data?.on) {
 				const fn = vnode.data.on[event]
 				const id = handlerId(path, event)
-				nextHandlers.set(id, (e) => (Array.isArray(fn) ? fn.forEach((f) => f(e)) : fn?.(e)))
+				const handler: Handler = (e) => (Array.isArray(fn) ? fn.forEach((f) => f(e)) : fn?.(e))
+				nextHandlers.set(id, handler)
+				ownHandlers.push([id, handler])
 				on[event] = id
 			}
 			const keep: Record<string, string> = {}
 			for (const name of HOST_ATTRS) if (name in attrs) keep[name] = attrs[name] as string
+			// A Mount that delegates pointer events: its element and the ones it looks for report them.
+			const watchSelector = options.bridge?.pointerSelector(vnode.data?.foldkitMount?.name ?? "")
+			const watch = watchSelector === undefined ? pointer : { mount: path, selector: watchSelector }
+			if (
+				watch !== undefined &&
+				(watch.mount === path || matchesElement({ tag, attrs, classes }, watch.selector))
+			)
+				keep["data-hover-report"] = watch.mount
 			const siblings = elementChildren(vnode)
 			const infoOf = new Map(siblings.map((sib) => [sib.vnode, sib.info]))
 			const infos = siblings.map((sib) => sib.info)
 			const children: Array<WireNode> = []
+			const childPaths: Array<string> = []
 			const childList = vnode.children ?? []
+			let siblingsSame = true
 			for (let index = 0; index < childList.length; index++) {
 				const child = childList[index] as AnyVNode | string
 				const segment =
 					typeof child !== "string" && child.key !== undefined ? `k${child.key}` : `${index}`
+				const childPath = `${path}/${segment}`
 				const info = typeof child === "string" ? undefined : infoOf.get(child)
 				const position = info === undefined ? undefined : { siblings: infos, index: info.index ?? 0 }
-				children.push(serialize(child, `${path}/${segment}`, path, resolved.scope, position))
+				children.push(
+					serialize(child, childPath, path, resolved.scope, position, siblingsSame, watch),
+				)
+				if (info !== undefined) {
+					childPaths.push(childPath)
+					siblingsSame &&= subtreeCache.get(childPath)?.vnode === child
+				}
 			}
 			if (vnode.text !== undefined && children.length === 0) children.push({ k: "t", s: vnode.text })
 			// `h.InnerHTML` (highlighted code, rendered markdown) carries no child VNodes: keep its text.
@@ -445,11 +709,36 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			if (vnode.key !== undefined) self.key = String(vnode.key)
 			if (mount !== undefined) self.mount = mount
 			if (options.bridge?.isObserved(path)) self.o = 1
+			const ov = options.overlays?.wireFor(path, (id) => pathsById.get(id))
+			if (ov !== undefined) self.ov = ov
 			const h = hash(
 				JSON.stringify(self) +
 					children.map((c) => ("h" in c ? c.h : c.k === "t" ? c.s : "")).join("\u0000"),
 			)
 			nextHashes.add(h)
+			// An editor's text and an anchored panel's trigger width change with no VNode of theirs.
+			const isVolatile =
+				(mount !== undefined && options.bridge?.isDomMount(mount) === true) ||
+				options.overlays?.anchorAt(path) !== undefined ||
+				childPaths.some((child) => !nextCache.has(child))
+			if (!isVolatile)
+				nextCache.set(path, {
+					vnode,
+					path,
+					parentPath,
+					tag,
+					attrs,
+					classes,
+					id: attrs.id,
+					h,
+					handlers: ownHandlers,
+					children: childPaths,
+					scopeId: scope.id,
+					index: position?.index,
+					count: position?.siblings.length,
+					context,
+					pointerMount: pointer?.mount,
+				})
 			if (sentHashes.has(h)) {
 				reusedSubtrees += 1
 				return { k: "r", h }
@@ -460,13 +749,29 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		const root: WireNode =
 			body === null
 				? { k: "t", s: "" }
-				: serialize(body, "r", undefined, styles.rootScope(env.dark), undefined)
+				: serialize(body, "r", undefined, styles.rootScope(env.dark), undefined, true, undefined)
 		handlers = nextHandlers
 		gen += 1
 		handlersByGen.set(gen, nextHandlers)
 		handlersByGen.delete(gen - HANDLER_GENERATIONS)
+		const treeDone = performance.now()
+		const previouslySent = sentHashes
 		sentHashes = nextHashes
-		options.bridge?.commit(records, mountVNodes)
+		subtreeCache = nextCache
+		seenVnodes = nextSeen
+		// An overlay's Mount just started: it portals and anchors its panel, so hold this tree
+		// and send the next, rather than draw the panel unpositioned for a frame.
+		const startedMount = options.bridge?.commit(records, mountVNodes) === true
+		const mountsDone = performance.now()
+		if (startedMount && !isHoldingForMount) {
+			sentHashes = previouslySent
+			isHoldingForMount = true
+			setTimeout(() => {
+				isHoldingForMount = false
+				if (lastDocument) commitDocument(lastDocument, lastDocumentAck)
+			}, 0)
+			return
+		}
 		const message: RuntimeToHost = {
 			t: "tree",
 			ack: documentAck,
@@ -477,7 +782,14 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		}
 		const line = JSON.stringify(message)
 		send(message)
+		const sendDone = performance.now()
 		options.onStats?.({
+			phases: {
+				classesMs: classesDone - started,
+				treeMs: treeDone - classesDone,
+				mountsMs: mountsDone - treeDone,
+				sendMs: sendDone - mountsDone,
+			},
 			viewMs,
 			styleAndSerializeMs: performance.now() - started,
 			bytes: line.length,
@@ -487,7 +799,83 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		})
 	}
 
-	const target: RenderTarget = {
+	/** Runs the element at `path`'s handler for `event`, as `element.dispatchEvent` would. */
+	const fire = (path: string, event: HostEvent | Event): void => {
+		const id = handlerIds.get(`${path}#${event.type}`)
+		const handler = id === undefined ? undefined : handlers.get(id)
+		handler?.(event)
+	}
+	const click = (path: string): void =>
+		fire(path, fakeEvent({ t: "event", seq: ack, id: 0, type: "click" }))
+
+	/** Open dialogs by id: what releases each one's portal, modal and dismissal. */
+	const openDialogs = new Map<string, () => void>()
+
+	const dom = (bridge: ElementBridge): TargetDomEffects => {
+		const withPath = (selector: string, run: (path: string) => void): boolean => {
+			const path = bridge.findPath(selector)
+			if (path === undefined) return false
+			run(path)
+			return true
+		}
+		const focusPath = (path: string) =>
+			send({ t: "focus", key: hostFocusKey(path, bridge.tagAt(path), bridge.attrsAt(path)) })
+		return {
+			focus: (selector) => withPath(selector, focusPath),
+			click: (selector) => withPath(selector, click),
+			scrollIntoView: (selector, block) =>
+				withPath(selector, (path) => send({ t: "reveal", path, block })),
+			advanceFocus: (selector, direction) =>
+				withPath(selector, (path) => {
+					const order = bridge.tabbablePaths()
+					const at = order.indexOf(path)
+					const next = at === -1 ? undefined : order[direction === "Next" ? at + 1 : at - 1]
+					if (next !== undefined) focusPath(next)
+				}),
+			// Drawn at the window's root; modal, the page behind goes inert and Escape fires the
+			// dialog's `cancel`, as `Dom.showDialog` does. Focus goes to `focusSelector` or the
+			// first control inside.
+			showDialog: (selector, { focusSelector, isModal }) => {
+				const path = bridge.findPath(selector)
+				if (path === undefined) return undefined
+				const id = bridge.idAt(path) ?? path
+				if (openDialogs.has(id)) return false
+				const overlays = options.overlays
+				const releases = [
+					overlays?.portal(path),
+					isModal ? overlays?.modal(path) : undefined,
+					// Foldkit's Dialog closes on the CustomEvent `Dom.showDialog` sends for Escape.
+					overlays?.onDismiss(path, () =>
+						fire(path, new CustomEvent("cancel", { cancelable: true })),
+					),
+				]
+				openDialogs.set(id, () => {
+					for (const release of releases) release?.()
+				})
+				const inside = (candidate: string) => candidate.startsWith(`${path}/`)
+				const wanted = focusSelector === undefined ? undefined : bridge.findPath(focusSelector)
+				const initial =
+					wanted !== undefined && inside(wanted) ? wanted : bridge.tabbablePaths().find(inside)
+				if (initial !== undefined) focusPath(initial)
+				return true
+			},
+			closeDialog: (selector) => {
+				const path = bridge.findPath(selector)
+				return path === undefined ? undefined : releaseDialog(bridge.idAt(path) ?? path)
+			},
+			releaseDialog,
+		}
+	}
+
+	const releaseDialog = (id: string): boolean => {
+		const release = openDialogs.get(id)
+		if (release === undefined) return false
+		openDialogs.delete(id)
+		release()
+		return true
+	}
+
+	const baseTarget: RenderTarget = {
 		id: "foldkit-rune",
 		commit: (document) => {
 			// Messages dispatch synchronously, so a new document reflects every event received.
@@ -496,13 +884,17 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			commitDocument(document, ack)
 		},
 		requestFrame: (frame) => {
+			isFramePending = true
 			setTimeout(() => {
+				isFramePending = false
 				frameStartedAt = performance.now()
 				frame()
 			}, 0)
 		},
 		release: () => options.onRelease?.(),
 	}
+	const target: RenderTarget =
+		options.bridge === undefined ? baseTarget : { ...baseTarget, dom: dom(options.bridge) }
 
 	const handleHostMessage = (message: HostToRuntime) => {
 		if (message.t === "env") {
@@ -510,6 +902,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			// Styles depend on the window and theme, not the Model: re-resolve what is on screen.
 			if (lastDocument) {
 				sentHashes = new Set()
+				subtreeCache = new Map()
 				commitDocument(lastDocument, lastDocumentAck)
 			}
 			return
@@ -521,10 +914,47 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 				width: message.w,
 				height: message.h,
 			})
+			// A trigger's first width: the panel anchored to it takes it as `--trigger-width`.
+			const triggerId = awaitedWidths.get(message.path)
+			if (triggerId !== undefined) {
+				awaitedWidths.delete(message.path)
+				// The panel waiting on it was cached hidden: it is no change of overlay or observation.
+				for (const panel of options.overlays?.anchoredTo(triggerId) ?? []) widthArrived.add(panel)
+				refreshObserved()
+			}
+			return
+		}
+		if (message.t === "pointer") {
+			options.bridge?.dispatchPointer(message)
+			return
+		}
+		if (message.t === "files") {
+			void filesPicked(message.path, message.files)
+			return
+		}
+		if (message.t === "label") {
+			activateLabel(message.path)
+			return
+		}
+		if (message.t === "radio") {
+			stepRadio(message.path, message.step)
+			return
+		}
+		if (message.t === "key") {
+			const prevented = dispatchDocumentKey(message)
+			if (message.key === "Escape" && !prevented) options.overlays?.dismissTopmost()
+			return
+		}
+		if (message.t === "contextmenu") {
+			options.bridge?.dispatchContextMenu(message)
+			return
+		}
+		if (message.t === "dismiss") {
+			options.overlays?.dismissed(message.path)
 			return
 		}
 		if (message.t === "scrolled") {
-			options.bridge?.reportScroll(message.path, message.top)
+			options.bridge?.reportScroll(message.path, message.top, message.seq)
 			return
 		}
 		if (message.t !== "event") return
@@ -536,19 +966,117 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		// A press on a tree no longer kept is dropped: the newest handler may be a different action.
 		const presented = message.gen === undefined ? handlers : handlersByGen.get(message.gen)
 		const handler = presented?.get(message.id)
-		handler?.(fakeEvent(message))
+		const event = fakeEvent(message)
+		handler?.(event)
+		// A keydown bubbles through the handlers around its target, then to `document`, then takes
+		// its default action.
+		for (const id of message.chain ?? []) {
+			if (event.propagationStopped) break
+			presented?.get(id)?.(event)
+		}
+		if (message.type === "keydown" && !event.propagationStopped && dispatchDocumentKey(message))
+			event.preventDefault()
+		if (message.type === "keydown" && process.env.NATIVE_DEBUG)
+			process.stderr.write(
+				`[key] ${message.key} ${[message.id, ...(message.chain ?? [])].join(">")} prevented=${event.defaultPrevented}\n`,
+			)
+		if (message.type === "keydown" && message.key === "Escape" && !event.defaultPrevented)
+			options.overlays?.dismissTopmost()
+		// A click on a link carries its `href`: the browser follows it unless the handler prevented that.
+		if (message.type === "click" && message.href !== undefined && !event.defaultPrevented)
+			options.onLink?.(message.href)
 	}
 
 	/** A Mount that starts observing an element after a commit needs it flagged for the host. */
 	let isRefreshScheduled = false
+	// An overlay opened or closed in a Mount: the host must draw it.
+	options.overlays?.onChange(() => refreshObserved())
+
+	// A precompiled sheet compiles classes it lacked off the input path: restyle once they are in.
+	styles.onRecompiled(() => {
+		if (lastDocument) commitDocument(lastDocument, lastDocumentAck)
+	})
+
+	/** A frame requested and not yet run: it will commit, so a refresh need not. */
+	let isFramePending = false
+	/** A tree held while an overlay's Mount positions its panel (`commitDocument`). */
+	let isHoldingForMount = false
 	const refreshObserved = () => {
 		if (isRefreshScheduled || lastDocument === undefined) return
 		isRefreshScheduled = true
 		setTimeout(() => {
 			isRefreshScheduled = false
-			if (lastDocument) commitDocument(lastDocument, lastDocumentAck)
+			// A frame on its way commits a newer document with the same changes: committing the
+			// last one first would only delay it.
+			if (lastDocument && !isFramePending) commitDocument(lastDocument, lastDocumentAck)
 		}, 0)
 	}
 
-	return { target, handleHostMessage, env, refreshObserved }
+	/**
+	 * `element.click()`: a file input asks the host for an Open dialog, as a browser shows its
+	 * file chooser; any other element runs its click handler.
+	 */
+	const clickElement = (path: string): void => {
+		const attrs = options.bridge?.attrsAt(path) ?? {}
+		if (options.bridge?.tagAt(path) === "input" && attrs.type === "file")
+			send({ t: "pickFile", path, accept: attrs.accept ?? "" })
+		else click(path)
+	}
+
+	/**
+	 * A browser's label activation: a text field takes focus; a checkbox or radio is clicked
+	 * and changes, unless it is a checked radio; a button is clicked.
+	 */
+	const activateLabel = (path: string) => {
+		const control = options.bridge?.labelControl(path)
+		if (control === undefined || options.bridge === undefined) return
+		const tag = options.bridge.tagAt(control)
+		const attrs = options.bridge.attrsAt(control)
+		if ("disabled" in attrs) return
+		const focusKey = hostFocusKey(control, tag, attrs)
+		if (focusKey !== control) {
+			send({ t: "focus", key: focusKey })
+			return
+		}
+		click(control)
+		const checkable = tag === "input" && (attrs.type === "checkbox" || attrs.type === "radio")
+		if (checkable && !(attrs.type === "radio" && "checked" in attrs))
+			fire(
+				control,
+				fakeEvent({ t: "event", seq: ack, id: 0, type: "change", value: attrs.value ?? "" }),
+			)
+		if (checkable) send({ t: "focus", key: control })
+	}
+
+	/**
+	 * A browser's radio group keys: an arrow moves to the next radio with the same `name`
+	 * (wrapping), checks it (its `change`) and focuses it.
+	 */
+	const stepRadio = (path: string, step: 1 | -1) => {
+		const group = options.bridge?.radioGroup(path) ?? []
+		const at = group.indexOf(path)
+		const next = group[(at + step + group.length) % group.length]
+		if (at === -1 || next === undefined || next === path) return
+		const value = options.bridge?.attrsAt(next).value ?? ""
+		fire(next, fakeEvent({ t: "event", seq: ack, id: 0, type: "change", value }))
+		send({ t: "focus", key: hostFocusKey(next, "input", { type: "radio" }) })
+	}
+
+	/** The files picked for a file input: read, then its `change`, as a browser fires it. */
+	const filesPicked = async (path: string, paths: ReadonlyArray<string>) => {
+		if (paths.length === 0) return
+		const files = await Promise.all(
+			paths.map(
+				async (file) => new File([await readFile(file)], basename(file), { type: mimeOf(file) }),
+			),
+		)
+		const target = { files, value: "", scrollTop: 0, open: false }
+		fire(path, {
+			...fakeEvent({ t: "event", seq: ack, id: 0, type: "change" }),
+			target,
+			currentTarget: target,
+		})
+	}
+
+	return { target, handleHostMessage, env, refreshObserved, click: clickElement, filesPicked }
 }

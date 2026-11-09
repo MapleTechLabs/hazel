@@ -1,6 +1,7 @@
 /**
  * Layout and visual conformance: Hazel's native renderer against Chromium on the same Foldkit view.
- *   bun apps/native/bench/conformance/run.ts [--scenario boot|sent|all] [--theme light|dark|both]
+ *   bun apps/native/bench/conformance/run.ts [--scenario boot|sent|focus|menu|palette|dialog|context|all|routes|route-<name>]
+ *     [--theme light|dark|both]
  *     [--check] [--update-thresholds] [--skip-build]
  * Writes out/<scenario>-<theme>/ (report.md, report.json, heatmap.png, crops/) and out/summary.md.
  */
@@ -41,19 +42,37 @@ const option = (name: string, fallback: string) => {
 	const at = args.indexOf(name)
 	return at === -1 ? fallback : (args[at + 1] ?? fallback)
 }
-type Scenario = "boot" | "sent"
+const SCENARIOS = ["boot", "sent", "focus", "menu", "palette", "dialog", "context"] as const
+/** Whole pages as they load: each route's layout and pixels against Chromium's. */
+const ROUTES = new Map<`route-${string}`, string>([
+	["route-files", "/hazel/chat/00000005-0000-4000-8000-000000000001/files"],
+	["route-notifications", "/hazel/notifications"],
+	["route-appearance", "/hazel/my-settings"],
+	["route-profile", "/hazel/my-settings/profile"],
+	["route-notification-settings", "/hazel/my-settings/notifications"],
+	["route-settings", "/hazel/settings"],
+	["route-team", "/hazel/settings/team"],
+	["route-integrations", "/hazel/settings/integrations"],
+	["route-user", "/hazel/profile/00000002-0000-4000-8000-000000000001"],
+])
+type Scenario = (typeof SCENARIOS)[number] | `route-${string}`
+const isRoute = (scenario: Scenario): scenario is `route-${string}` => scenario.startsWith("route-")
+const routeOf = (scenario: Scenario) => (isRoute(scenario) ? ROUTES.get(scenario) : undefined)
+/** Tabs from boot to the logo link, which draws a `focus-visible` outline. */
+const FOCUS_TABS = 1
 type Theme = "light" | "dark"
 const scenarioArg = option("--scenario", "all")
 const themeArg = option("--theme", "both")
+const everyScenario: Array<Scenario> = [...SCENARIOS, ...ROUTES.keys()]
 const scenarios: Array<Scenario> =
 	scenarioArg === "all"
-		? ["boot", "sent"]
-		: scenarioArg === "boot" || scenarioArg === "sent"
-			? [scenarioArg]
-			: []
+		? everyScenario
+		: scenarioArg === "routes"
+			? [...ROUTES.keys()]
+			: everyScenario.filter((scenario) => scenario === scenarioArg)
 const themes: Array<Theme> =
 	themeArg === "both" ? ["light", "dark"] : themeArg === "light" || themeArg === "dark" ? [themeArg] : []
-if (scenarios.length === 0) throw new Error("--scenario takes boot, sent or all")
+if (scenarios.length === 0) throw new Error(`--scenario takes ${everyScenario.join(", ")}, all or routes`)
 if (themes.length === 0) throw new Error("--theme takes light, dark or both")
 
 // NATIVE
@@ -71,6 +90,7 @@ interface NativeLayout {
 }
 
 const nativeSteps = (scenario: Scenario, layout: string, snap: string) => {
+	if (isRoute(scenario)) return [{ settle: 2500 }, { wait: 500 }, { exportLayout: layout }, { snap }]
 	const boot = [{ waitText: CONTENT_TEXT }, { settle: scenario === "boot" ? 1500 : 2500 }]
 	const send = [
 		{ focusEditable: null },
@@ -78,7 +98,22 @@ const nativeSteps = (scenario: Scenario, layout: string, snap: string) => {
 		{ key: { name: "Enter", until: TEXT } },
 		{ settle: 1500 },
 	]
-	return [...boot, ...(scenario === "sent" ? send : []), { exportLayout: layout }, { snap }]
+	const focus = [{ tab: FOCUS_TABS }, { wait: 500 }]
+	// The org switcher's menu: a portalled, anchored, modal overlay.
+	const menu = [{ clickText: "Hazel" }, { settle: 800 }]
+	// The command palette: a modal dialog centred on the window, over a backdrop.
+	const palette = [{ clickText: "Browse channels" }, { settle: 800 }]
+	// The Set status dialog: foldkit UI's Dialog, modal, centred in its middle grid row.
+	const dialog = [
+		{ clickText: "Ada Lovelace" },
+		{ settle: 500 },
+		{ clickText: "Set status" },
+		{ settle: 1000 },
+	]
+	// A message's context menu, opened at the pointer.
+	const context = [{ rightClickText: CONTENT_TEXT }, { settle: 800 }]
+	const steps = { boot: [], sent: send, focus, menu, palette, dialog, context }[scenario]
+	return [...boot, ...steps, { exportLayout: layout }, { snap }]
 }
 
 const captureNative = async (scenario: Scenario, theme: Theme, dir: string) => {
@@ -86,18 +121,21 @@ const captureNative = async (scenario: Scenario, theme: Theme, dir: string) => {
 	const snapPath = join(dir, "native.png")
 	const script = join(dir, "native-script.json")
 	writeFileSync(script, JSON.stringify(nativeSteps(scenario, layoutPath, snapPath)))
+	const env = {
+		...process.env,
+		HAZEL_NATIVE_ENTRY: "dist/entry.js",
+		NATIVE_THEME: theme,
+		NATIVE_BENCH_OUT: join(dir, "native-bench.json"),
+		// The page to open: the app's own start page unless the scenario is a route.
+		NATIVE_PATH: routeOf(scenario) ?? process.env.NATIVE_PATH,
+	}
 	// The host binary may be mid-rebuild by someone else, so retry a failed run.
 	for (let attempt = 1; ; attempt++) {
 		rmSync(layoutPath, { force: true })
 		rmSync(snapPath, { force: true })
 		const result = spawnSync(host, ["--capture", script], {
 			cwd: appDir,
-			env: {
-				...process.env,
-				HAZEL_NATIVE_ENTRY: "dist/entry.js",
-				NATIVE_THEME: theme,
-				NATIVE_BENCH_OUT: join(dir, "native-bench.json"),
-			},
+			env,
 			stdio: ["ignore", "ignore", "pipe"],
 			timeout: 120_000,
 		})
@@ -111,11 +149,15 @@ const captureNative = async (scenario: Scenario, theme: Theme, dir: string) => {
 	const layout = JSON.parse(readFileSync(layoutPath, "utf8")) as NativeLayout
 	const parentPath = (path: string) => path.slice(0, path.lastIndexOf("/"))
 	const byPath = new Map<string, number>()
+	const hiddenAt = new Set<number>()
 	const els: Array<El> = []
 	for (const [index, e] of layout.elements.entries()) {
 		byPath.set(e.path, index)
 		const parent = byPath.get(parentPath(e.path)) ?? -1
 		const siblings = parent >= 0 ? (els[parent]?.children ?? []) : []
+		// The host keeps a screen-reader-only control at near-zero opacity: drawn nowhere, with all inside it.
+		const hidden = (e.rect !== null && e.rect.opacity < 0.01) || (parent >= 0 && hiddenAt.has(parent))
+		if (hidden) hiddenAt.add(index)
 		els.push({
 			index,
 			path: e.path,
@@ -125,7 +167,7 @@ const captureNative = async (scenario: Scenario, theme: Theme, dir: string) => {
 			attrs: e.attrs,
 			className: "",
 			rect:
-				e.rect === null || e.rect.opacity <= 0
+				e.rect === null || e.rect.opacity <= 0 || hidden
 					? null
 					: { x: e.rect.x, y: e.rect.y, w: e.rect.w, h: e.rect.h },
 			parent,
@@ -205,10 +247,12 @@ const waitQuiet = async (page: Page, quietMs: number) => {
 /** Runs in the page: every element under #app in document order, svg subtrees excluded. */
 const extractDom = (idAttrs: ReadonlyArray<string>) => {
 	const out: Array<WebRaw> = []
-	const walk = (el: Element, parent: number, childIndex: number, path: string) => {
+	// Screen-reader-only content (`clip-path: inset(50%)`, and all inside it) draws nothing.
+	const walk = (el: Element, parent: number, childIndex: number, path: string, hidden = false) => {
 		const index = out.length
 		const box = el.getBoundingClientRect()
-		const visible = el.checkVisibility({ opacityProperty: true, visibilityProperty: true })
+		const srOnly = hidden || getComputedStyle(el).clipPath.replaceAll(" ", "") === "inset(50%)"
+		const visible = !srOnly && el.checkVisibility({ opacityProperty: true, visibilityProperty: true })
 		const attrs: Record<string, string> = {}
 		for (const attr of el.attributes) {
 			if (attr.name.startsWith("data-") || idAttrs.includes(attr.name)) attrs[attr.name] = attr.value
@@ -231,7 +275,7 @@ const extractDom = (idAttrs: ReadonlyArray<string>) => {
 		let i = 0
 		for (const child of el.children) {
 			if (child.tagName.toLowerCase() === "svg") continue
-			walk(child, index, i, `${path}/${child.tagName.toLowerCase()}:${i}`)
+			walk(child, index, i, `${path}/${child.tagName.toLowerCase()}:${i}`, srOnly)
 			i++
 		}
 	}
@@ -254,8 +298,11 @@ const captureWeb = async (browser: Browser, url: string, scenario: Scenario, the
 				window.__conformanceLastMutation = performance.now()
 			}).observe(document, { subtree: true, childList: true, attributes: true, characterData: true })
 		})
-		await page.goto(url)
-		await page.getByText(CONTENT_TEXT).first().waitFor({ state: "visible", timeout: 30_000 })
+		const route = routeOf(scenario)
+		await page.goto(route === undefined ? url : `${url.replace(/\/$/, "")}${route}`)
+		if (route === undefined)
+			await page.getByText(CONTENT_TEXT).first().waitFor({ state: "visible", timeout: 30_000 })
+		else await page.waitForFunction(() => document.body.innerText.length > 40, null, { timeout: 30_000 })
 		await waitQuiet(page, 1500)
 		if (scenario === "sent") {
 			const composer = page.locator(".ProseMirror").first()
@@ -275,6 +322,28 @@ const captureWeb = async (browser: Browser, url: string, scenario: Scenario, the
 				{ timeout: 10_000 },
 			)
 			await waitQuiet(page, 1500)
+		}
+		if (scenario === "palette") {
+			await page.getByText("Browse channels").first().click()
+			await waitQuiet(page, 800)
+		}
+		if (scenario === "dialog") {
+			await page.getByText("Ada Lovelace").first().click()
+			await waitQuiet(page, 500)
+			await page.getByText("Set status").first().click()
+			await waitQuiet(page, 1000)
+		}
+		if (scenario === "context") {
+			await page.getByText(CONTENT_TEXT).first().click({ button: "right" })
+			await waitQuiet(page, 800)
+		}
+		if (scenario === "menu") {
+			await page.locator("#org-switcher-trigger").click()
+			await waitQuiet(page, 800)
+		}
+		if (scenario === "focus") {
+			for (let i = 0; i < FOCUS_TABS; i++) await page.keyboard.press("Tab")
+			await waitQuiet(page, 500)
 		}
 		const raw = await page.evaluate(extractDom, ID_ATTRS)
 		writeFileSync(join(dir, "web-layout.json"), JSON.stringify({ scale: SCALE, elements: raw }))

@@ -22,6 +22,7 @@ const benchFetch: typeof fetch = (input, init) => {
 }
 Object.assign(window, { fetch: benchFetch, WebSocket: makeFixtureWebSocket({ server }) })
 
-if (location.pathname !== startPath) history.replaceState(null, "", startPath)
+// The fixture org opens at #general; any other route (the parity crawler's) loads as asked.
+if (location.pathname === "/") history.replaceState(null, "", startPath)
 
 await import("../../../web-foldkit/src/entry")

@@ -3,25 +3,31 @@
 mod capture;
 mod images;
 mod layout;
+mod margins;
+mod platform;
+mod svg_text;
 #[cfg(test)]
 mod tests;
 mod wire;
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use rune::edit::TextEdit;
 use rune::text::Icon;
-use rune::{App, AppSpec, Color, Cursor, Cx, El, SurfaceFit, col, el, icon, row, text_input};
+use rune::{
+    Align, App, AppSpec, Color, Cursor, Cx, El, Side, SurfaceFit, col, el, icon, row, text_input,
+};
 use serde_json::json;
 
 use layout::{
-    Inherit, apply_box, apply_flex, auto_margins, center_vertically, color, text_run, track,
+    Inherit, apply_box, apply_flex, auto_margins, center_vertically, color, focus_styles,
+    focusable, grid_track, is_checkable, is_text_field, script_focusable, text_run,
 };
-use wire::{Node, RuntimeMsg, Style, Subtrees, TreeMsg};
+use wire::{F, Node, RuntimeMsg, Style, Subtrees, TreeMsg};
 
 /// A text field's editor state, owned here because Rune's editor lives in app state.
 struct Field {
@@ -41,15 +47,19 @@ pub(crate) struct State {
     /// The document's own background and text colour (`body` in the app's stylesheet).
     page: wire::Page,
     images: images::Images,
+    /// Elements drawn at the window's root (`ov.portal`), by path, in tree order.
+    portals: Vec<(String, Arc<Node>)>,
 }
 
 static OUT: OnceLock<Mutex<Box<dyn Write + Send>>> = OnceLock::new();
 static SEQ: AtomicU64 = AtomicU64::new(0);
 /// The generation of the tree on screen: an event runs the handler of the tree it was pressed on.
 static GEN: AtomicU64 = AtomicU64::new(0);
+/// The window size and theme last sent, for a runtime that replaces the first.
+static REPORTED: Mutex<Option<(u32, u32, bool)>> = Mutex::new(None);
 static ICONS: Mutex<Option<HashMap<String, &'static Icon>>> = Mutex::new(None);
 
-fn write_line(message: serde_json::Value) {
+pub(crate) fn write_line(message: serde_json::Value) {
     if let Some(out) = OUT.get() {
         let mut out = out.lock().unwrap();
         let _ = writeln!(out, "{message}");
@@ -79,17 +89,418 @@ fn dom_key(key: &rune::edit::Key) -> Option<&'static str> {
         Key::End => "End",
         Key::PageUp => "PageUp",
         Key::PageDown => "PageDown",
+        Key::Left => "ArrowLeft",
+        Key::Right => "ArrowRight",
+        Key::Backspace => "Backspace",
+        Key::Delete => "Delete",
         _ => return None,
     })
 }
 
-fn send_key(id: u32, key: &str, mods: rune::edit::Mods) -> u64 {
+/// A key's DOM `key` as an element's keydown hears it: a named key, or the character typed
+/// (type-to-select in a menu, a shortcut's letter).
+fn element_key_name(key: &rune::edit::Key) -> Option<String> {
+    match key {
+        rune::edit::Key::Text(t) => Some(t.clone()),
+        key => dom_key(key).map(str::to_string),
+    }
+}
+
+/// A key nothing focused took: it reaches `document`, where an app's shortcuts listen.
+pub(crate) fn window_key(_: &mut State, ev: &rune::edit::KeyEvent, _: &mut rune::Tx) -> bool {
+    if let Some(name) = element_key_name(&ev.key) {
+        send_document_key(&name, ev.mods);
+    }
+    false
+}
+
+fn send_document_key(name: &str, m: rune::edit::Mods) {
+    write_line(
+        json!({ "t": "key", "key": name, "shift": m.shift, "meta": m.cmd, "ctrl": m.ctrl, "alt": m.alt }),
+    );
+}
+
+/// One keydown, dispatched by the runtime as the DOM does: to each handler of `chain` (the
+/// focused element's, then those around it) until one stops it, then its default action.
+fn send_key(chain: &[u32], key: &str, mods: rune::edit::Mods) -> u64 {
     let seq = SEQ.fetch_add(1, Ordering::SeqCst) + 1;
     write_line(json!({
-        "t": "event", "seq": seq, "gen": GEN.load(Ordering::SeqCst), "id": id, "type": "keydown", "key": key,
-        "shift": mods.shift, "meta": mods.cmd, "ctrl": mods.ctrl, "alt": mods.alt,
+        "t": "event", "seq": seq, "gen": GEN.load(Ordering::SeqCst), "id": chain[0], "chain": &chain[1..],
+        "type": "keydown", "key": key, "shift": mods.shift, "meta": mods.cmd, "ctrl": mods.ctrl, "alt": mods.alt,
     }));
     seq
+}
+
+/// What a browser fires for one press, in order.
+/// The web app sets `-webkit-font-smoothing: antialiased` on `html`: text without CoreText's
+/// smoothing dilation, lighter than macOS's default.
+pub(crate) const TEXT_SMOOTHING: rune::FontSmoothing = rune::FontSmoothing::Off;
+
+const PRESS_EVENTS: [&str; 3] = ["pointerdown", "pointerup", "click"];
+
+/// A press as the browser reports it, for the handlers the element has. Rune reports a press
+/// when it is released, so all of them go then (a menu opens on release, not on press). A link's
+/// click carries its `href`, which the runtime follows unless the handler prevents it.
+fn press_handlers(e: El, on: &HashMap<String, u32>, href: Option<&String>) -> El {
+    let events: Vec<(&'static str, u32)> = PRESS_EVENTS
+        .iter()
+        .filter_map(|kind| on.get(*kind).map(|&id| (*kind, id)))
+        .collect();
+    if events.is_empty() {
+        return e;
+    }
+    let href = href.cloned();
+    e.cursor(Cursor::Pointer).on_press(move |_: &mut State| {
+        for (kind, id) in &events {
+            match (&href, *kind) {
+                (Some(href), "click") => send_click(*id, href),
+                _ => send(*id, kind, None),
+            };
+        }
+    })
+}
+
+fn send_click(id: u32, href: &str) -> u64 {
+    let seq = SEQ.fetch_add(1, Ordering::SeqCst) + 1;
+    write_line(
+        json!({ "t": "event", "seq": seq, "gen": GEN.load(Ordering::SeqCst), "id": id, "type": "click", "href": href }),
+    );
+    seq
+}
+
+/// A `<table>`: one grid whose columns every row shares, so cells line up as in CSS table
+/// layout. Each row's cells take its background, bottom border and hover (shared across the
+/// row); a cell's `colspan` spans columns. Cells keep their own paths.
+fn build_table<'a>(
+    path: &str,
+    st: &Style,
+    children: &'a [Arc<Node>],
+    inh: Inherit,
+    ctx: &Ctx,
+) -> El {
+    struct Row<'a> {
+        path: String,
+        st: Style,
+        cells: Vec<(String, &'a Arc<Node>)>,
+    }
+    let mut rows: Vec<Row<'a>> = Vec::new();
+    let mut add_row = |row_path: String, row: &'a Arc<Node>, group: Option<&Style>| {
+        let Node::Elem {
+            st: rst, children, ..
+        } = row.as_ref()
+        else {
+            return;
+        };
+        let mut merged = group.cloned().unwrap_or_default();
+        for (field, value) in [
+            (&mut merged.bg, &rst.bg),
+            (&mut merged.hover_bg, &rst.hover_bg),
+        ] {
+            if value.is_some() {
+                *field = value.clone();
+            }
+        }
+        if rst.border.is_some() {
+            merged.border = rst.border;
+            merged.border_color = rst.border_color.clone();
+        }
+        merged.color = rst.color.clone().or(merged.color);
+        let cells = children
+            .iter()
+            .enumerate()
+            .filter(
+                |(_, c)| matches!(c.as_ref(), Node::Elem { tag, .. } if tag == "td" || tag == "th"),
+            )
+            .map(|(i, c)| (child_path(&row_path, i, c), c))
+            .collect();
+        rows.push(Row {
+            path: row_path,
+            st: merged,
+            cells,
+        });
+    };
+    for (i, child) in children.iter().enumerate() {
+        let group_path = child_path(path, i, child);
+        match child.as_ref() {
+            Node::Elem { tag, .. } if tag == "tr" => add_row(group_path, child, None),
+            Node::Elem {
+                tag,
+                st: gst,
+                children: rows_of,
+                ..
+            } if matches!(tag.as_str(), "thead" | "tbody" | "tfoot") => {
+                for (j, row) in rows_of.iter().enumerate() {
+                    add_row(child_path(&group_path, j, row), row, Some(gst));
+                }
+            }
+            _ => {}
+        }
+    }
+    let span = |cell: &Arc<Node>| match cell.as_ref() {
+        Node::Elem { attrs, .. } => attrs
+            .get("colspan")
+            .and_then(|n| n.parse::<u16>().ok())
+            .unwrap_or(1)
+            .max(1),
+        _ => 1,
+    };
+    let columns = rows
+        .iter()
+        .map(|r| {
+            r.cells
+                .iter()
+                .map(|(_, c)| usize::from(span(c)))
+                .sum::<usize>()
+        })
+        .max()
+        .unwrap_or(1);
+    // CSS's automatic table layout: each column gets its widest cell's max-content width and
+    // a share of the spare width in proportion to it, which `fr` tracks so weighted give.
+    let mut widths = vec![0.0_f32; columns];
+    for row in &rows {
+        let row_inh = inh.from(&row.st);
+        let mut at = 0;
+        for (_, cell) in &row.cells {
+            let n = usize::from(span(cell));
+            if n == 1
+                && let Some(w) = widths.get_mut(at)
+            {
+                *w = w.max(max_content(cell, row_inh));
+            }
+            at += n;
+        }
+    }
+    let tracks = widths.iter().map(|w| rune::GridTrack::Fr(w.max(1.0)));
+    let mut grid = el().grid_columns(tracks.collect::<Vec<_>>());
+    for row in &rows {
+        let row_inh = inh.from(&row.st);
+        for (cell_path, cell) in &row.cells {
+            let Node::Elem {
+                hash,
+                tag,
+                key,
+                st: cst,
+                attrs,
+                on,
+                observed,
+                ov,
+                children,
+            } = cell.as_ref()
+            else {
+                continue;
+            };
+            let border_bottom = row.st.border.map_or(0.0, |b| b[2].0);
+            let decorated = Style {
+                bg: cst.bg.clone().or_else(|| row.st.bg.clone()),
+                hover_bg: cst.hover_bg.clone().or_else(|| row.st.hover_bg.clone()),
+                hover_share: row.st.hover_bg.as_ref().map(|_| row.path.clone()),
+                border: if cst.border.is_none() && border_bottom > 0.0 {
+                    Some([F(0.0), F(0.0), F(border_bottom), F(0.0)])
+                } else {
+                    cst.border
+                },
+                border_color: cst
+                    .border_color
+                    .clone()
+                    .or_else(|| row.st.border_color.clone()),
+                col_span: Some(span(cell)),
+                ..cst.clone()
+            };
+            let decorated = Arc::new(Node::Elem {
+                hash: format!("{hash}~row"),
+                tag: tag.clone(),
+                key: key.clone(),
+                st: decorated,
+                attrs: attrs.clone(),
+                on: on.clone(),
+                observed: *observed,
+                ov: ov.clone(),
+                children: children.clone(),
+            });
+            if let Some(cell) = build(&decorated, cell_path, row_inh, ctx) {
+                // A cell's content sits in the middle of its row (`vertical-align: middle`).
+                let block = matches!(cst.display.as_deref(), None | Some("block" | "table-cell"));
+                grid = grid.child(if block { cell.justify_center() } else { cell });
+            }
+        }
+    }
+    apply_box(grid.key(path), st)
+}
+
+/// A box's max-content width, estimated: text measured as drawn, a row's children side by side,
+/// a column's widest child, an explicit width as given, plus padding and borders.
+fn max_content(node: &Node, inh: Inherit) -> f32 {
+    match node {
+        Node::Text(t) => rune::text::measure(t.trim(), &[], inh.style(), None).0,
+        Node::Svg { st, .. } => match st.w {
+            Some(wire::Len::Px(w)) => w.0,
+            _ => 16.0,
+        },
+        Node::Elem {
+            st, children, tag, ..
+        } => {
+            if st.display.as_deref() == Some("none") || st.absolute.is_some() {
+                return 0.0;
+            }
+            let side = |b: Option<[F; 4]>| b.map_or(0.0, |b| b[1].0 + b[3].0);
+            let edges = side(st.pad) + side(st.border) + side(st.margin);
+            if let Some(wire::Len::Px(w)) = st.w {
+                return w.0 + side(st.margin);
+            }
+            let own = inh.from(st);
+            let kids = children.iter().map(|c| max_content(c, own));
+            let row = match st.display.as_deref() {
+                Some("flex") => st.dir.as_deref() != Some("col"),
+                Some("grid") => false,
+                _ => is_inline_tag(tag) || children.iter().all(is_inline),
+            };
+            let inner = if row {
+                let gap = st.gap_col.map_or(0.0, |g| g.0) * children.len().saturating_sub(1) as f32;
+                kids.sum::<f32>() + gap
+            } else {
+                kids.fold(0.0, f32::max)
+            };
+            inner + edges
+        }
+    }
+}
+
+fn is_inline_tag(tag: &str) -> bool {
+    matches!(
+        tag,
+        "span" | "a" | "strong" | "em" | "code" | "b" | "i" | "kbd" | "time" | "label"
+    )
+}
+
+/// What a press on the element does: its click handlers, else a link's navigation, else a
+/// button's form submit, as a browser's default actions.
+fn presses(
+    e: El,
+    path: &str,
+    tag: &str,
+    attrs: &HashMap<String, String>,
+    on: &HashMap<String, u32>,
+    ctx: &Ctx,
+) -> El {
+    if ctx.no_pointer {
+        return e;
+    }
+    // A press or Space on a checkbox toggles it, and on an unchecked radio checks it: `change`.
+    if is_checkable(tag, attrs)
+        && let Some(&change) = on.get("change")
+    {
+        let checks =
+            attrs.get("type").is_some_and(|t| t == "checkbox") || !attrs.contains_key("checked");
+        let click = on.get("click").copied();
+        return e.cursor(Cursor::Pointer).on_press(move |_: &mut State| {
+            if let Some(id) = click {
+                send(id, "click", None);
+            }
+            if checks {
+                send(change, "change", None);
+            }
+        });
+    }
+    if PRESS_EVENTS.iter().any(|k| on.contains_key(*k)) {
+        return press_handlers(e, on, link_href(tag, attrs));
+    }
+    if let Some(href) = link_href(tag, attrs) {
+        let href = href.clone();
+        return e.cursor(Cursor::Pointer).on_press(move |_: &mut State| {
+            send(0, "link", Some(&href));
+        });
+    }
+    // A label's default action: a press on it activates its control (the runtime finds it).
+    if tag == "label" {
+        let path = path.to_string();
+        return e.on_press(move |_: &mut State| {
+            write_line(json!({ "t": "label", "path": path }));
+        });
+    }
+    // HTML: a button inside a form submits it unless it says otherwise.
+    match ctx.form {
+        Some(form_id) if tag == "button" && attrs.get("type").is_none_or(|t| t == "submit") => {
+            e.cursor(Cursor::Pointer).on_press(move |_: &mut State| {
+                send(form_id, "submit", None);
+            })
+        }
+        _ => e,
+    }
+}
+
+/// The `href` a press on this element follows: a link's.
+fn link_href<'a>(tag: &str, attrs: &'a HashMap<String, String>) -> Option<&'a String> {
+    attrs.get("href").filter(|_| tag == "a")
+}
+
+/// `keydown` while the element or one inside it has focus (Tab stays focus navigation),
+/// `mouseenter`/`mouseleave` as the pointer crosses it, and, for an element a pointer-tracking
+/// Mount watches (`data-hover-report`), a `pointer` report to that Mount, and its right-clicks.
+fn key_and_hover_handlers(
+    mut e: El,
+    path: &str,
+    attrs: &HashMap<String, String>,
+    on: &HashMap<String, u32>,
+    outer: &[u32],
+) -> El {
+    if let Some(&id) = on.get("keydown") {
+        let chain: Vec<u32> = std::iter::once(id).chain(outer.iter().copied()).collect();
+        e = e.on_key(move |_: &mut State, ev: &rune::edit::KeyEvent, _| {
+            // Tab stays focus navigation; every other key is the element's keydown.
+            let Some(name) = element_key_name(&ev.key).filter(|n| n != "Tab") else {
+                return false;
+            };
+            send_key(&chain, &name, ev.mods);
+            true
+        });
+    }
+    let (enter, leave) = (on.get("mouseenter").copied(), on.get("mouseleave").copied());
+    let report = attrs
+        .get("data-hover-report")
+        .map(|mount| (path.to_string(), mount.clone()));
+    let right_click = report.clone();
+    if enter.is_some() || leave.is_some() || report.is_some() {
+        e = e.on_hover_change(move |_: &mut State, inside, _| {
+            let event = if inside {
+                enter.map(|id| (id, "mouseenter"))
+            } else {
+                leave.map(|id| (id, "mouseleave"))
+            };
+            if let Some((id, kind)) = event {
+                send(id, kind, None);
+            }
+            if let Some((path, mount)) = &report {
+                write_line(
+                    json!({ "t": "pointer", "path": path, "mount": mount, "inside": inside }),
+                );
+            }
+        });
+    }
+    // A right-click there reaches the Mount as a `contextmenu` at the pointer (a context menu),
+    // with where the elements from the Mount's down to this one are: the menu measures the
+    // pointer against its trigger (`getBoundingClientRect`).
+    if let Some((path, mount)) = right_click {
+        e = e.on_secondary_press(move |_: &mut State, at: rune::PointerPress, tx| {
+            let below = path.strip_prefix(mount.as_str()).unwrap_or("");
+            let mut keys = vec![mount.clone()];
+            for segment in below.split('/').filter(|s| !s.is_empty()) {
+                keys.push(format!("{}/{segment}", keys[keys.len() - 1]));
+            }
+            let (path, mount) = (path.clone(), mount.clone());
+            tx.drawn_rects(keys.clone(), move |_: &mut State, rects, _| {
+                let rects: serde_json::Map<String, serde_json::Value> = keys
+                    .into_iter()
+                    .zip(rects)
+                    .filter_map(|(key, rect)| Some((key, json!(rect?))))
+                    .collect();
+                write_line(json!({
+                    "t": "contextmenu", "path": path, "mount": mount,
+                    "x": at.x, "y": at.y, "rects": rects,
+                }));
+            });
+        });
+    }
+    e
 }
 
 fn send(id: u32, kind: &str, value: Option<&str>) -> u64 {
@@ -128,10 +539,38 @@ impl State {
     pub(crate) fn apply(&mut self, msg: TreeMsg) {
         GEN.store(msg.generation, Ordering::SeqCst);
         let (root, subtrees) = self.subtrees.resolve(msg.root);
+        // CSS collapses vertical margins in block flow; Rune's layout does not, so do it here.
+        let root = margins::collapse(&root, false);
         sync_fields(&root, "r", msg.ack, &mut self.fields);
         self.page = msg.page;
+        self.portals.clear();
+        collect_portals(&root, "r", &mut self.portals);
         self.root = Some(root);
         self.subtrees = subtrees;
+    }
+}
+
+/// An element the runtime asked to draw at the window's root (`ov.portal`).
+/// Drawn at the window's root rather than where the tree puts it: a portal, or a `fixed`
+/// element, which the window places as the browser's viewport does.
+fn is_portal(node: &Arc<Node>) -> bool {
+    match node.as_ref() {
+        Node::Elem { ov, st, .. } => {
+            ov.as_ref().is_some_and(|o| o.portal.is_some()) || st.fixed == Some(true)
+        }
+        _ => false,
+    }
+}
+
+fn collect_portals(node: &Arc<Node>, path: &str, out: &mut Vec<(String, Arc<Node>)>) {
+    let Node::Elem { children, .. } = node.as_ref() else {
+        return;
+    };
+    if is_portal(node) {
+        out.push((path.to_string(), node.clone()));
+    }
+    for (i, child) in children.iter().enumerate() {
+        collect_portals(child, &child_path(path, i, child), out);
     }
 }
 
@@ -146,7 +585,7 @@ fn sync_fields(node: &Node, path: &str, ack: u64, fields: &mut HashMap<String, F
     else {
         return;
     };
-    if tag == "input" || tag == "textarea" || attrs.contains_key("data-editable") {
+    if is_text_field(tag, attrs) || attrs.contains_key("data-editable") {
         let value = attrs.get("value").cloned().unwrap_or_default();
         let field = fields.entry(path.to_string()).or_insert_with(|| Field {
             edit: TextEdit::new(value.clone()),
@@ -166,9 +605,27 @@ fn sync_fields(node: &Node, path: &str, ack: u64, fields: &mut HashMap<String, F
 struct Ctx<'a> {
     s: &'a State,
     form: Option<u32>,
+    /// The `keydown` handlers of the elements around this one, innermost first: a text field
+    /// keeps its keys from Rune's `on_key`, so it bubbles them to these as the DOM does.
+    keys: &'a [u32],
     /// Building an inline formatting context's own children, where a space between runs counts.
     inline: bool,
+    /// The portal being built at the window's root; any other portal is skipped where it sits.
+    portal: Option<&'a str>,
+    /// Under `pointer-events: none`: no presses or hover, though keys and focus still work.
+    no_pointer: bool,
 }
+
+/// Pointer events: `pointer-events: none` drops their handlers; keys, focus and input stay.
+const POINTER_ONLY_EVENTS: [&str; 7] = [
+    "click",
+    "pointerdown",
+    "pointerup",
+    "mouseenter",
+    "mouseleave",
+    "contextmenu",
+    "dblclick",
+];
 
 fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
     match node.as_ref() {
@@ -199,17 +656,49 @@ fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
             on,
             children,
             observed,
+            ov,
             ..
         } => {
             if st.display.as_deref() == Some("none") {
                 return None;
             }
+            // A portal draws at the window's root (`view`), not where the tree puts it.
+            if is_portal(node) && ctx.portal != Some(path) {
+                return None;
+            }
+            // `pointer-events` inherits: `none` here or above (unless `auto` again) takes no pointer.
+            let no_pointer = match st.pointer_events.as_deref() {
+                Some("none") => true,
+                Some("auto") => false,
+                _ => ctx.no_pointer,
+            };
+            let unpointed: HashMap<String, u32>;
+            let on = if no_pointer {
+                unpointed = on
+                    .iter()
+                    .filter(|(k, _)| !POINTER_ONLY_EVENTS.contains(&k.as_str()))
+                    .map(|(k, v)| (k.clone(), *v))
+                    .collect();
+                &unpointed
+            } else {
+                on
+            };
+            let pointed;
+            let ctx = if no_pointer == ctx.no_pointer {
+                ctx
+            } else {
+                pointed = Ctx { no_pointer, ..*ctx };
+                &pointed
+            };
             let inh = inh.from(st);
-            if tag == "input" || tag == "textarea" {
+            if is_text_field(tag, attrs) {
                 return Some(build_input(path, tag, st, attrs, on, inh, ctx));
             }
             if tag == "img" {
                 return Some(center_vertically(build_img(path, st, attrs, on, ctx), st));
+            }
+            if tag == "table" && st.display.as_deref() != Some("none") {
+                return Some(build_table(path, st, children, inh, ctx));
             }
             if attrs.contains_key("data-editable") {
                 return Some(build_editable(path, st, attrs, children, inh, ctx));
@@ -219,7 +708,33 @@ fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
             } else {
                 ctx.form
             };
+            let with_own_key: Vec<u32>;
+            let keys = match on.get("keydown") {
+                Some(&id) => {
+                    with_own_key = std::iter::once(id)
+                        .chain(ctx.keys.iter().copied())
+                        .collect();
+                    &with_own_key[..]
+                }
+                None => ctx.keys,
+            };
             let has_fields = ctx.s.fields.keys().any(|k| k.starts_with(path));
+            // An anchored panel takes its content's height: `flex-1` (a 0% basis) inside a box of
+            // indefinite height is content-sized in CSS, where Rune's `grow` would collapse it. So
+            // does a column in an overlay (a dialog's panel) that nothing gives a height.
+            let anchored = ov.as_ref().is_some_and(|o| o.anchor.is_some());
+            let unsized_column = ctx.portal.is_some()
+                && st.display.as_deref() == Some("flex")
+                && st.dir.as_deref() == Some("col")
+                && st.grow.is_none()
+                && st.absolute.is_none();
+            let content_sized: Vec<Arc<Node>>;
+            let children: &[Arc<Node>] = if (anchored || unsized_column) && st.h.is_none() {
+                content_sized = children.iter().map(|c| drop_grow(c, false)).collect();
+                &content_sized
+            } else {
+                children
+            };
             let make = || {
                 let e = build_elem(
                     path,
@@ -232,7 +747,10 @@ fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
                     &Ctx {
                         s: ctx.s,
                         form,
+                        keys,
                         inline: false,
+                        portal: ctx.portal,
+                        no_pointer: ctx.no_pointer,
                     },
                 );
                 if *observed { observe(e, path, st) } else { e }
@@ -241,9 +759,13 @@ fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
             let el = if has_fields {
                 make()
             } else {
-                rune::memo(path.to_string(), (hash, inh.key(), form), make)
+                rune::memo(
+                    path.to_string(),
+                    (hash, inh.key(), form, keys.to_vec()),
+                    make,
+                )
             };
-            Some(center_vertically(el, st))
+            Some(overlay(center_vertically(el, st), ov))
         }
     }
 }
@@ -263,17 +785,18 @@ fn build_elem(
     // content); Rune's `grow` would pin it to the viewport and leave nothing to scroll.
     let content_sized: Vec<Arc<Node>>;
     let children: &[Arc<Node>] =
-        if st.scroll_y == Some(true) && !children.iter().any(fills_with_scroll) {
+        if st.scroll_y == Some(true) && !children.iter().any(bounds_scroller) {
             content_sized = children.iter().map(size_to_content).collect();
             &content_sized
         } else {
             children
         };
     let kids: Vec<(usize, &Arc<Node>)> = children.iter().enumerate().collect();
-    // CSS bounds a filling inner scroller by its scrolling parent; Rune's scroll content is
-    // unbounded, so the outer one becomes a clipped flex column and only the inner one scrolls.
+    // CSS bounds a filling inner scroller (or a growing box that may shrink to nothing) by its
+    // scrolling parent; Rune's scroll content is unbounded, so the outer one becomes a clipped
+    // flex column and only the inner one scrolls.
     let bounded;
-    let st = if st.scroll_y == Some(true) && children.iter().any(fills_with_scroll) {
+    let st = if st.scroll_y == Some(true) && children.iter().any(bounds_scroller) {
         bounded = Style {
             scroll_y: None,
             clip: Some(true),
@@ -305,12 +828,22 @@ fn build_elem(
         inline: true,
         ..*ctx
     };
-    let mut e = match (st.display.as_deref(), &st.grid_cols) {
+    // A grid with rows only has one implicit column.
+    let one_column = [String::from("auto")];
+    let grid_cols = st
+        .grid_cols
+        .as_deref()
+        .or(st.grid_rows.as_ref().map(|_| &one_column[..]));
+    let mut e = match (st.display.as_deref(), grid_cols) {
         (Some("grid"), Some(cols)) => build_grid(&kids, cols, path, inh, ctx, st),
         (Some("flex"), _) => {
             let is_row = st.dir.as_deref() != Some("col");
             let base = if is_row { row() } else { col() };
-            let parent = Parent { is_row, items };
+            let parent = Parent {
+                is_row,
+                items,
+                block: false,
+            };
             add_children(apply_flex(base, st), &kids, path, inh, ctx, parent)
         }
         (Some("inline") | None, _)
@@ -323,6 +856,7 @@ fn build_elem(
             let parent = Parent {
                 is_row: true,
                 items: Some("center"),
+                block: false,
             };
             add_children(
                 apply_flex(inline_row(true), st),
@@ -339,6 +873,7 @@ fn build_elem(
             let parent = Parent {
                 is_row: true,
                 items: Some("center"),
+                block: false,
             };
             add_children(
                 apply_flex(inline_row(true), st),
@@ -354,6 +889,7 @@ fn build_elem(
             let parent = Parent {
                 is_row: false,
                 items,
+                block: true,
             };
             add_children(apply_flex(col(), st), &kids, path, inh, ctx, parent)
         }
@@ -365,27 +901,60 @@ fn build_elem(
         e = e.pixels_fit(image.pixels(), SurfaceFit::Fill)
     }
     e = apply_box(e.key(path), st);
+    // A checkbox or radio is a 13px box unless styled, as a browser draws one; Tab skips a 0x0 one.
+    if is_checkable(tag, attrs) {
+        if st.w.is_none() {
+            e = e.w(13.0);
+        }
+        if st.h.is_none() {
+            e = e.h(13.0);
+        }
+    }
     if let Some(label) = attrs.get("aria-label") {
         e = e.label(label.clone());
     }
-    if let Some(&id) = on.get("click") {
-        e = e.cursor(Cursor::Pointer).on_press(move |_: &mut State| {
-            send(id, "click", None);
-        });
-    } else if let (Some(href), true) = (attrs.get("href"), tag == "a") {
-        let href = href.clone();
-        e = e.cursor(Cursor::Pointer).on_press(move |_: &mut State| {
-            send(0, "link", Some(&href));
-        });
-    } else if tag == "button" && attrs.get("type").is_none_or(|t| t == "submit") {
-        // HTML: a button inside a form submits it unless it says otherwise.
-        if let Some(form_id) = ctx.form {
-            e = e.cursor(Cursor::Pointer).on_press(move |_: &mut State| {
-                send(form_id, "submit", None);
-            });
-        }
+    e = presses(e, path, tag, attrs, on, ctx);
+    // `ctx.keys` starts with this element's own keydown when it has one.
+    let outer = if on.contains_key("keydown") {
+        &ctx.keys[1..]
+    } else {
+        ctx.keys
+    };
+    behaviour(e, path, tag, attrs, on, st, outer)
+}
+
+/// What every element takes from its attributes and handlers beyond presses: a Tab stop, keys,
+/// hover events, and the rings and fills focus and presses draw.
+fn behaviour(
+    mut e: El,
+    path: &str,
+    tag: &str,
+    attrs: &HashMap<String, String>,
+    on: &HashMap<String, u32>,
+    st: &Style,
+    outer: &[u32],
+) -> El {
+    // As in the DOM, a control takes focus with no area (a visually hidden button, an empty list).
+    if let Some(order) = focusable(tag, attrs) {
+        e = e.focusable(true).tab_index(order).focusable_when_empty();
+    } else if script_focusable(attrs) {
+        e = e.focusable_by_script().focusable_when_empty();
     }
-    e
+    // A radio's arrow keys move through its group, as a browser's do; the runtime knows the group.
+    if is_checkable(tag, attrs) && attrs.get("type").is_some_and(|t| t == "radio") {
+        let path = path.to_string();
+        e = e.on_key(move |_: &mut State, ev: &rune::edit::KeyEvent, _| {
+            use rune::edit::Key;
+            let step = match ev.key {
+                Key::Down | Key::Right => 1,
+                Key::Up | Key::Left => -1,
+                _ => return false,
+            };
+            write_line(json!({ "t": "radio", "path": path, "step": step }));
+            true
+        });
+    }
+    focus_styles(key_and_hover_handlers(e, path, attrs, on, outer), st, false)
 }
 
 fn is_inline(node: &Arc<Node>) -> bool {
@@ -412,6 +981,12 @@ fn is_inline(node: &Arc<Node>) -> bool {
                     | "mark"
                     | "time"
                     | "br"
+                    | "label"
+                    | "kbd"
+                    | "small"
+                    | "abbr"
+                    | "sub"
+                    | "sup"
             ),
             _ => false,
         },
@@ -419,6 +994,11 @@ fn is_inline(node: &Arc<Node>) -> bool {
 }
 
 fn size_to_content(node: &Arc<Node>) -> Arc<Node> {
+    drop_grow(node, true)
+}
+
+/// `node` without its `grow` (and its `min-h`, with `min_h_too`), under its own memo key.
+fn drop_grow(node: &Arc<Node>, min_h_too: bool) -> Arc<Node> {
     match node.as_ref() {
         Node::Elem {
             hash,
@@ -428,24 +1008,41 @@ fn size_to_content(node: &Arc<Node>) -> Arc<Node> {
             attrs,
             on,
             observed,
+            ov,
             children,
         } if st.grow.is_some() && st.absolute.is_none() => Arc::new(Node::Elem {
             // Its own memo key: the same wire node sized to the viewport is a different El.
-            hash: format!("{hash}~content"),
+            hash: format!("{hash}~{}", if min_h_too { "content" } else { "basis" }),
             tag: tag.clone(),
             key: key.clone(),
             st: Style {
                 grow: None,
-                min_h: None,
+                min_h: if min_h_too { None } else { st.min_h.clone() },
                 ..st.clone()
             },
             attrs: attrs.clone(),
             on: on.clone(),
             observed: *observed,
+            ov: ov.clone(),
             children: children.clone(),
         }),
         _ => node.clone(),
     }
+}
+
+/// A child that keeps a scrolling flex column from overflowing, as CSS flexes it: one that
+/// fills with a scroller, or one that grows and may shrink to nothing (`flex-1 min-h-0`, or
+/// `overflow: hidden`, whose automatic minimum size is zero).
+fn bounds_scroller(node: &Arc<Node>) -> bool {
+    if fills_with_scroll(node) {
+        return true;
+    }
+    let Node::Elem { st, .. } = node.as_ref() else {
+        return false;
+    };
+    st.grow.is_some_and(|g| g.0 > 0.0)
+        && st.shrink.is_none_or(|s| s.0 > 0.0)
+        && (st.min_h == Some(wire::Len::Px(wire::F(0.0))) || st.clip == Some(true))
 }
 
 /// A child that fills its parent (grows, or is full height) and either scrolls itself or holds
@@ -466,6 +1063,9 @@ fn fills_with_scroll(node: &Arc<Node>) -> bool {
 struct Parent<'a> {
     is_row: bool,
     items: Option<&'a str>,
+    /// A block container: its inline-level children (`inline-flex`, `inline-block`) keep their
+    /// own width and sit where `text-align` puts them, rather than stretching across it.
+    block: bool,
 }
 
 fn style_of(node: &Node) -> Option<&Style> {
@@ -476,7 +1076,8 @@ fn style_of(node: &Node) -> Option<&Style> {
 }
 
 /// Paint order among siblings. Rune paints in tree order, so positioned children move after
-/// the flow (CSS paints them above it), sorted by `z-index`; a negative one goes under the flow.
+/// the flow (CSS paints them above it), sorted by `z-index`; a negative one, or one below a flow
+/// child's own `z-index`, goes under the flow.
 /// Out-of-flow children take no part in layout, so moving them changes only paint.
 fn paint_order<'a>(kids: &[(usize, &'a Arc<Node>)]) -> Vec<(usize, &'a Arc<Node>)> {
     let layer = |node: &Arc<Node>| -> Option<f32> {
@@ -499,7 +1100,16 @@ fn paint_order<'a>(kids: &[(usize, &'a Arc<Node>)]) -> Vec<(usize, &'a Arc<Node>
         }
     }
     positioned.sort_by(|a, b| a.0.total_cmp(&b.0));
-    let below = positioned.iter().take_while(|p| p.0 < 0.0).count();
+    // A flow child with a `z-index` (`relative z-20`, a flex item's) stacks above a positioned
+    // sibling with a lower one: that sibling paints under the flow (a background image).
+    let flow_z = ordered
+        .iter()
+        .filter_map(|(_, c)| style_of(c).and_then(|st| st.z_index).map(|z| z.0))
+        .fold(0.0, f32::max);
+    let below = positioned
+        .iter()
+        .take_while(|p| p.0 < 0.0 || p.0 < flow_z)
+        .count();
     let mut out: Vec<(usize, &Arc<Node>)> =
         positioned[..below].iter().map(|p| (p.1, p.2)).collect();
     out.extend(ordered);
@@ -520,6 +1130,9 @@ fn add_children(
     };
     for (i, child) in paint_order(kids) {
         let child_path = child_path(path, i, child);
+        if is_portal(child) && ctx.portal != Some(child_path.as_str()) {
+            continue;
+        }
         // `display: contents`: no box of its own; its children join this one's layout.
         if let Node::Elem { st, children, .. } = child.as_ref()
             && st.display.as_deref() == Some("contents")
@@ -529,6 +1142,53 @@ fn add_children(
             continue;
         }
         if let Some(b) = build(child, &child_path, inh, ctx) {
+            let b = match style_of(child) {
+                Some(st)
+                    if parent.block
+                        && st.absolute.is_none()
+                        && (is_atomic_inline(child, st) || is_inline(child)) =>
+                {
+                    let [mt, _, mb, _] = st.margin.map_or([0.0; 4], |m| m.map(|v| v.0));
+                    let atomic = is_atomic_inline(child, st);
+                    let (top, bottom) = line_box_space(child, st, inh, atomic);
+                    if top > 0.0 || bottom > 0.0 {
+                        b.mt(mt + top).mb(mb + bottom)
+                    } else {
+                        b
+                    }
+                }
+                _ => b,
+            };
+            let b = match style_of(child) {
+                Some(st)
+                    if parent.block
+                        && (st.inline == Some(true) || is_inline(child))
+                        && st.absolute.is_none()
+                        && st.w.is_none() =>
+                {
+                    match inh.align {
+                        rune::Align::Center => b.self_center(),
+                        rune::Align::End => b.self_end(),
+                        _ => b.self_start(),
+                    }
+                }
+                _ => b,
+            };
+            // A `w-full` item beside others in a row: CSS's default `flex-shrink: 1` gives the
+            // others their room. Rune boxes keep their size unless told to shrink.
+            let b = match style_of(child) {
+                Some(st)
+                    if parent.is_row
+                        && kids.len() > 1
+                        && st.w == Some(wire::Len::Full)
+                        && st.shrink.is_none()
+                        && st.min_w.is_none()
+                        && st.absolute.is_none() =>
+                {
+                    b.shrink()
+                }
+                _ => b,
+            };
             e = match style_of(child) {
                 Some(st) => {
                     let sibling_grows =
@@ -548,6 +1208,77 @@ fn add_children(
     e
 }
 
+/// Inter's ascent and descent, in ems: where a line's baseline sits in its content area.
+const ASCENT: f32 = 0.969;
+const DESCENT: f32 = 0.242;
+
+/// Space a CSS line box adds above and below an atomic inline child (`inline-block`) of a
+/// block: the child sits on the baseline of a line at least as tall as the parent's strut. A
+/// child with no text has its baseline at its bottom edge, so the strut's descent shows below
+/// it. A text child aligns its first line's baseline (one line assumed). Others: none.
+fn line_box_space(node: &Node, st: &Style, inh: Inherit, atomic: bool) -> (f32, f32) {
+    let metrics = |size: f32, line: f32| {
+        let half_leading = (line - (ASCENT + DESCENT) * size) / 2.0;
+        (half_leading + ASCENT * size, half_leading + DESCENT * size)
+    };
+    let (strut_above, strut_below) = metrics(inh.size, inh.line);
+    // An inline box's own padding, border and margin do not size its line; an inline-block's do.
+    let edge = |side: usize| {
+        if !atomic {
+            return 0.0;
+        }
+        [st.margin, st.border, st.pad]
+            .iter()
+            .map(|b| b.map_or(0.0, |b| b[side].0))
+            .sum::<f32>()
+    };
+    let (above, below) = if has_text(node) {
+        if st.h.is_some() {
+            return (0.0, 0.0);
+        }
+        let own = inh.from(st);
+        let (a, b) = metrics(own.size, own.line);
+        (edge(0) + a, edge(2) + b)
+    } else {
+        let Some(wire::Len::Px(h)) = st.h else {
+            return (0.0, 0.0);
+        };
+        let [mt, _, mb, _] = st.margin.map_or([0.0; 4], |m| m.map(|v| v.0));
+        (mt + h.0 + mb, 0.0)
+    };
+    (
+        (strut_above - above).max(0.0),
+        (strut_below - below).max(0.0),
+    )
+}
+
+/// An `inline-block`-like box: `inline-flex`/`inline-block`, or a control a browser draws so.
+fn is_atomic_inline(node: &Node, st: &Style) -> bool {
+    match (st.inline, st.display.as_deref(), node) {
+        (Some(inline), _, _) => inline,
+        (None, None, Node::Elem { tag, .. }) => {
+            matches!(
+                tag.as_str(),
+                "button" | "img" | "input" | "select" | "textarea"
+            )
+        }
+        _ => false,
+    }
+}
+
+/// Whether text flows inside the node (not in an absolutely placed descendant).
+fn has_text(node: &Node) -> bool {
+    match node {
+        Node::Text(t) => !t.trim().is_empty(),
+        Node::Svg { .. } => false,
+        Node::Elem { st, children, .. } => {
+            st.display.as_deref() != Some("none")
+                && st.absolute.is_none()
+                && children.iter().any(|c| has_text(c))
+        }
+    }
+}
+
 /// The size a picture rasterizes for: its own width or height, else a generous default.
 fn picture_size(st: &Style) -> f32 {
     match (&st.w, &st.h) {
@@ -561,12 +1292,19 @@ fn picture_size(st: &Style) -> f32 {
 /// colours (an avatar's dither pattern) drawn as a picture.
 fn build_svg(view: f32, body: &str, st: &Style, par: Option<&str>, inh: Inherit, ctx: &Ctx) -> El {
     let c = color(&st.color).unwrap_or(inh.color);
+    let (shape, texts) = svg_text::split(body);
+    let body = shape.as_str();
+    let labels = |e: El, size: f32| {
+        texts
+            .iter()
+            .fold(e, |e, t| e.child(svg_text::overlay(t, view, size, c)))
+    };
     if !images::is_multicolour(body) {
         let size = match st.w {
             Some(wire::Len::Px(wire::F(v))) => v,
             _ => 16.0,
         };
-        let e = icon(intern_icon(view, body), size).color(c);
+        let e = labels(icon(intern_icon(view, body), size).color(c), size);
         return center_vertically(apply_box(e, st), st);
     }
     let image = ctx.s.images.svg(view, body, picture_size(st));
@@ -581,6 +1319,7 @@ fn build_svg(view: f32, body: &str, st: &Style, par: Option<&str>, inh: Inherit,
         // An unsized SVG fills its box; the decorative ones here sit under their siblings.
         e = e.pin(Some(0.0), Some(0.0), Some(0.0), Some(0.0))
     }
+    let e = labels(e, picture_size(st));
     center_vertically(apply_box(e, st), st)
 }
 
@@ -605,17 +1344,12 @@ fn build_img(
             _ => e.pixels(image.pixels()),
         };
     }
-    e = apply_box(e, st);
-    if let Some(&id) = on.get("click") {
-        e = e.cursor(Cursor::Pointer).on_press(move |_: &mut State| {
-            send(id, "click", None);
-        });
-    }
-    e
+    press_handlers(apply_box(e, st), on, None)
 }
 
-/// CSS grid as rows of flex cells. A `col-span-full` child takes a whole row; a `grid-cols-subgrid`
-/// child lays its own children into the parent's tracks; positioned children stay out of flow.
+/// CSS grid on Rune's grid tracks. `display: contents` children are grid items through their own
+/// children. Taffy has no subgrid, so a subgrid item spans its row and lays its children out on
+/// the same column tracks (an `auto` column then sizes per row, not across the grid).
 fn build_grid(
     kids: &[(usize, &Arc<Node>)],
     cols: &[String],
@@ -624,25 +1358,22 @@ fn build_grid(
     ctx: &Ctx,
     st: &Style,
 ) -> El {
-    let gap_col = st.gap_col.map(|g| g.0).unwrap_or(0.0);
-    let mut grid = col().gaps(st.gap_row.map(|g| g.0).unwrap_or(0.0), 0.0);
-    let mut cells: Vec<El> = Vec::new();
-    let flush = |grid: El, cells: &mut Vec<El>| -> El {
-        if cells.is_empty() {
-            return grid;
-        }
-        let mut r = row().gap(gap_col).w_full();
-        if matches!(st.items.as_deref(), Some("start")) {
-            r = r.items_start()
-        } else {
-            r = r.items_center()
-        }
-        for (cell, template) in cells.drain(..).zip(cols.iter().cycle()) {
-            r = r.child(track(cell, template))
-        }
-        grid.child(r)
+    let mut grid = el().grid_columns(cols.iter().map(|c| grid_track(c))).gaps(
+        st.gap_row.map(|g| g.0).unwrap_or(0.0),
+        st.gap_col.map(|g| g.0).unwrap_or(0.0),
+    );
+    grid = match st.items.as_deref() {
+        Some("start" | "flex-start") => grid.items_start(),
+        Some("center") => grid.items_center(),
+        Some("end" | "flex-end") => grid.items_end(),
+        _ => grid,
     };
-    // `display: contents` children are grid items through their own children.
+    if let Some(rows) = &st.grid_rows {
+        grid = grid.grid_rows(rows.iter().map(|r| grid_track(r)));
+    }
+    if st.justify_items.as_deref() == Some("center") {
+        grid = grid.grid_justify_center();
+    }
     let mut items: Vec<(String, &Arc<Node>)> = Vec::new();
     fn flatten<'a>(
         children: impl Iterator<Item = (usize, &'a Arc<Node>)>,
@@ -651,6 +1382,10 @@ fn build_grid(
     ) {
         for (i, child) in children {
             let child_path = child_path(path, i, child);
+            // A portal draws at the window's root (`view`), not in the grid.
+            if is_portal(child) {
+                continue;
+            }
             match child.as_ref() {
                 Node::Elem { st, children, .. } if st.display.as_deref() == Some("contents") => {
                     flatten(children.iter().enumerate(), &child_path, items);
@@ -662,57 +1397,42 @@ fn build_grid(
     flatten(kids.iter().map(|(i, c)| (*i, *c)), path, &mut items);
     for (path, child) in items {
         let path = path.as_str();
-        if let Node::Elem {
-            st: cst,
-            children: grand,
-            on,
-            ..
-        } = child.as_ref()
-        {
-            if cst.absolute.is_some() {
-                if let Some(b) = build(child, path, inh, ctx) {
-                    grid = grid.child(b)
-                }
-                continue;
-            }
-            if cst.col_span_full == Some(true) || cst.subgrid == Some(true) {
-                grid = flush(grid, &mut cells);
-                let built = if cst.subgrid == Some(true) {
-                    let inner: Vec<(usize, &Arc<Node>)> = grand.iter().enumerate().collect();
-                    let sub = Style {
-                        grid_cols: Some(cols.to_vec()),
-                        gap_col: cst.gap_col.or(st.gap_col),
-                        ..cst.clone()
-                    };
-                    let mut e = apply_box(
-                        build_grid(&inner, cols, path, inh.from(cst), ctx, &sub).key(path),
-                        cst,
-                    );
-                    if let Some(&id) = on.get("click") {
-                        e = e.cursor(Cursor::Pointer).on_press(move |_: &mut State| {
-                            send(id, "click", None);
-                        });
-                    }
-                    Some(e)
-                } else {
-                    build(child, path, inh, ctx)
+        let built = match child.as_ref() {
+            Node::Elem {
+                st: cst,
+                children: grand,
+                on,
+                tag,
+                attrs,
+                ..
+            } if cst.subgrid == Some(true) && cst.absolute.is_none() => {
+                let inner: Vec<(usize, &Arc<Node>)> = grand.iter().enumerate().collect();
+                let sub = Style {
+                    grid_cols: Some(cols.to_vec()),
+                    gap_col: cst.gap_col.or(st.gap_col),
+                    ..cst.clone()
                 };
-                if let Some(b) = built {
-                    // A spanning row fills the grid's width unless it sets its own.
-                    let b = if cst.w.is_none() { b.w_full() } else { b };
-                    grid = grid.child(b)
-                }
-                continue;
+                let e = build_grid(&inner, cols, path, inh.from(cst), ctx, &sub).key(path);
+                let e = presses(apply_box(e, cst), path, tag, attrs, on, ctx);
+                Some(behaviour(e, path, tag, attrs, on, cst, ctx.keys).grid_column_full())
             }
-        }
-        if let Some(b) = build(child, path, inh, ctx) {
-            cells.push(b);
-            if cells.len() == cols.len() {
-                grid = flush(grid, &mut cells)
+            Node::Elem { st: cst, .. } if cst.col_span_full == Some(true) => {
+                build(child, path, inh, ctx).map(El::grid_column_full)
             }
+            _ => build(child, path, inh, ctx),
+        };
+        let row_start = match child.as_ref() {
+            Node::Elem { st: cst, .. } => cst.row_start,
+            _ => None,
+        };
+        if let Some(b) = built {
+            grid = grid.child(match row_start {
+                Some(line) => b.grid_row_start(line),
+                None => b,
+            })
         }
     }
-    flush(grid, &mut cells)
+    grid
 }
 
 fn build_input(
@@ -789,14 +1509,28 @@ fn build_input(
     // typing would.
     let keydown = on.get("keydown").copied();
     let (key, input, is_textarea) = (path.to_string(), on.get("input").copied(), tag != "input");
-    if keydown.is_some() || is_textarea {
+    let outer = ctx.keys.to_vec();
+    if keydown.is_some() || is_textarea || !outer.is_empty() {
         field = field.on_input_key(move |s: &mut State, ev, _| {
             use rune::edit::Key;
-            if let (Some(id), Some(name)) = (keydown, dom_key(&ev.key)) {
-                send_key(id, name, ev.mods);
-                if matches!(ev.key, Key::Enter | Key::Up | Key::Down | Key::Escape) {
-                    return true;
+            // The field's own handler, then the elements around it as the key bubbles.
+            let name = dom_key(&ev.key);
+            let chain: Vec<u32> = keydown.iter().chain(&outer).copied().collect();
+            if let Some(name) = name.filter(|_| !chain.is_empty()) {
+                send_key(&chain, name, ev.mods);
+            } else if ev.mods.cmd || ev.mods.ctrl || ev.key == Key::Escape {
+                // No handler around the field: a shortcut or Escape still reaches `document`.
+                if let Some(name) = element_key_name(&ev.key) {
+                    send_document_key(&name, ev.mods);
                 }
+            }
+            // A field with its own handler (a combo box) claims what a listbox prevents; Escape
+            // stops at an element around it (a popover closes). Return still submits a form.
+            let claimed = keydown.is_some() && matches!(ev.key, Key::Enter | Key::Up | Key::Down);
+            if name.is_some()
+                && (claimed || ev.key == Key::Escape && (keydown.is_some() || !outer.is_empty()))
+            {
+                return true;
             }
             let plain = ev.mods == rune::edit::Mods::default();
             if !is_textarea || ev.key != Key::Enter || !plain {
@@ -816,13 +1550,21 @@ fn build_input(
     } else {
         row().items_start()
     };
-    apply_box(wrapper.key(path), st).child(field)
+    focus_styles(
+        focus_field_on_press(apply_box(wrapper.key(path), st), path),
+        st,
+        true,
+    )
+    .child(field)
 }
 
 /// An element a runtime Mount observes: report its layout, and its offset when it scrolls.
 fn observe(e: El, path: &str, st: &Style) -> El {
     let layout_path = path.to_string();
-    let e = e.on_layout(move |_: &mut State, [x, y, w, h]: [f32; 4]| {
+    // A report for the runtime, no change to the host's own state: no need to build its view
+    // again, which inside a scrolling list would be every frame.
+    let e = e.on_layout_tx(move |_: &mut State, [x, y, w, h]: [f32; 4], tx| {
+        tx.live_only();
         write_line(json!({ "t": "layout", "path": layout_path, "x": x, "y": y, "w": w, "h": h }));
     });
     if st.scroll_y != Some(true) {
@@ -836,8 +1578,33 @@ fn observe(e: El, path: &str, st: &Style) -> El {
                 at.offset[1], at.max[1], at.viewport[1]
             )
         }
-        write_line(json!({ "t": "scrolled", "path": scroll_path, "top": at.offset[1] }));
+        let seq = scroll_seqs()
+            .lock()
+            .expect("scroll seqs")
+            .get(&scroll_path)
+            .copied()
+            .unwrap_or(0);
+        write_line(
+            json!({ "t": "scrolled", "path": scroll_path, "top": at.offset[1], "seq": seq }),
+        );
     })
+}
+
+/// The last runtime scroll the host applied to each viewport: its offset reports carry that
+/// scroll's `seq`, so the runtime can tell the ones sent before it apart.
+pub(crate) fn scroll_seqs() -> &'static std::sync::Mutex<HashMap<String, u64>> {
+    static SEQS: std::sync::OnceLock<std::sync::Mutex<HashMap<String, u64>>> =
+        std::sync::OnceLock::new();
+    SEQS.get_or_init(Default::default)
+}
+
+/// Notes a runtime scroll's `seq` for the offset reports after it.
+pub(crate) fn note_scroll(path: &str, seq: Option<u64>) {
+    if let Some(seq) = seq {
+        let mut seqs = scroll_seqs().lock().expect("scroll seqs");
+        let entry = seqs.entry(path.to_string()).or_default();
+        *entry = (*entry).max(seq);
+    }
 }
 
 /// A multi-line native field over a DOM-backed editor: Return submits, Shift+Return breaks a line.
@@ -899,7 +1666,21 @@ fn build_editable(
         .child(field),
         None => field,
     };
-    apply_box(row().items_center().key(path), st).child(field)
+    focus_field_on_press(apply_box(row().items_center().key(path), st), path).child(field)
+}
+
+/// A press anywhere on a text field's box (its padding, a composer's empty lines) puts the caret
+/// in it, as clicking a padded `<input>` or editor does in a browser.
+fn focus_field_on_press(e: El, path: &str) -> El {
+    let field = format!("{path}/field");
+    e.cursor(Cursor::Text)
+        .on_press_tx(move |_: &mut State, tx| tx.focus(field.clone()))
+}
+
+/// A DOM element appears and vanishes at once; one fades only when its CSS says so (`Style`'s
+/// `transition` and `animation`), where Rune would fade every element in and out.
+pub(crate) fn dom_motion() {
+    rune::set_default_transition(rune::Transition::none());
 }
 
 fn report_env(s: &mut State, rect: [f32; 4]) {
@@ -908,6 +1689,7 @@ fn report_env(s: &mut State, rect: [f32; 4]) {
         return;
     }
     s.reported = Some(next);
+    *REPORTED.lock().unwrap() = Some(next);
     write_line(json!({ "t": "env", "width": next.0, "height": next.1, "dark": next.2 }));
 }
 
@@ -926,42 +1708,230 @@ pub(crate) fn view(s: &State, cx: &mut Cx<State>) -> El {
     let ctx = Ctx {
         s,
         form: None,
+        keys: &[],
         inline: false,
+        portal: None,
+        no_pointer: false,
     };
     let body = s.root.as_ref().and_then(|root| build(root, "r", inh, &ctx));
     let mut page = col().w_full().h_full().on_layout(report_env);
     if let Some(bg) = color(&s.page.bg) {
         page = page.fill(bg)
     }
-    page.child(body.unwrap_or_else(el))
+    // The document scrolls when it is taller than the window, as a browser's viewport does.
+    let document = col()
+        .key("document")
+        .w_full()
+        .h_full()
+        .scroll(rune::ScrollSpec {
+            stick_bottom: false,
+        });
+    // Fixed elements and portals draw at the window's root. Fixed ones (not dialogs or menus,
+    // which stay on top) go before the document,
+    // so Tab and assistive technology meet them in document order; every layer is raised, so
+    // they paint above the document in tree order (fixed, then menus and dialogs), as in CSS.
+    // A fixed element inside a dialog or another layer stays with it, above the document.
+    let fixed = |path: &String, node: &Arc<Node>| {
+        matches!(node.as_ref(), Node::Elem { st, ov, .. } if st.fixed == Some(true) && ov.is_none())
+            && !s
+                .portals
+                .iter()
+                .any(|(p, _)| path.starts_with(&format!("{p}/")))
+    };
+    let layer = |path: &String, node: &Arc<Node>| {
+        let ctx = Ctx {
+            portal: Some(path),
+            ..ctx
+        };
+        build(node, path, inh, &ctx).map(|built| {
+            // Keyed, so a layer added in front leaves the ids (focus, scroll) of the rest alone.
+            el().key(format!("layer:{path}"))
+                .pin(Some(0.0), Some(0.0), Some(0.0), Some(0.0))
+                .raise()
+                .child(built)
+        })
+    };
+    for (path, node) in s.portals.iter().filter(|(p, n)| fixed(p, n)) {
+        if let Some(l) = layer(path, node) {
+            page = page.child(l);
+        }
+    }
+    page = page.child(document.child(body.unwrap_or_else(el)));
+    // Portals inherit from the page, as an element moved into `<body>` does.
+    for (path, node) in s.portals.iter().filter(|(p, n)| !fixed(p, n)) {
+        if let Some(l) = layer(path, node) {
+            page = page.child(l);
+        }
+    }
+    page
 }
 
-/// Spawns the Bun runtime; its messages arrive on the returned channel.
-fn spawn_runtime() -> (std::process::Child, std::sync::mpsc::Receiver<RuntimeMsg>) {
-    let entry = std::env::var("HAZEL_NATIVE_ENTRY").unwrap_or_else(|_| "src/entry.ts".into());
-    let mut child = Command::new("bun")
-        .arg(&entry)
+/// Places an overlay next to its trigger and makes it modal, as the runtime's `ov` asks.
+fn overlay(mut e: El, ov: &Option<Box<wire::Overlay>>) -> El {
+    let Some(ov) = ov else {
+        return e;
+    };
+    if let Some(root) = ov.modal.clone() {
+        e = e.modal(true, move |_: &mut State| send_dismiss(&root));
+        // The browser hands focus back to the trigger (FocusScope `restoreFocus`), even after
+        // a pointer press that never focused it.
+        if let Some(a) = &ov.anchor {
+            e = e.focus_return(a.to.clone());
+        }
+    }
+    let Some(a) = &ov.anchor else {
+        return e;
+    };
+    let side = match a.side.as_str() {
+        "top" => Side::Top,
+        "left" => Side::Left,
+        "right" => Side::Right,
+        _ => Side::Bottom,
+    };
+    let align = match a.align.as_str() {
+        "start" => Align::Start,
+        "end" => Align::End,
+        _ => Align::Center,
+    };
+    let cross = a.cross.as_ref().map_or(0.0, |c| c.0);
+    if cross == 0.0 {
+        return e.anchored_fit(a.to.clone(), side, align, a.gap.0);
+    }
+    // Floating UI's `crossOffset` (a context menu at the pointer) slides the anchored box along
+    // its trigger; a wrapper takes it, so the panel's own motion keeps its offset.
+    let (x, y) = match side {
+        Side::Top | Side::Bottom => (cross, 0.0),
+        _ => (0.0, cross),
+    };
+    el().anchored_fit(a.to.clone(), side, align, a.gap.0)
+        .offset(x, y)
+        .child(e)
+}
+
+fn send_dismiss(path: &str) {
+    write_line(json!({ "t": "dismiss", "path": path }));
+}
+
+/// The runtime process running now; a reload replaces it.
+#[derive(Clone)]
+pub(crate) struct RuntimeChild(Arc<Mutex<Option<std::process::Child>>>);
+
+impl RuntimeChild {
+    pub(crate) fn id(&self) -> u32 {
+        self.0
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map_or(0, std::process::Child::id)
+    }
+
+    pub(crate) fn kill(&mut self) {
+        if let Some(mut child) = self.0.lock().unwrap().take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+
+    /// Asks the runtime to exit (SIGTERM), so it finishes what it writes on exit (a CPU
+    /// profile), and kills it if it has not gone within 3 s.
+    pub(crate) fn stop(&mut self) {
+        if let Some(mut child) = self.0.lock().unwrap().take() {
+            let _ = std::process::Command::new("kill")
+                .args(["-TERM", &child.id().to_string()])
+                .status();
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+            while std::time::Instant::now() < deadline {
+                if matches!(child.try_wait(), Ok(Some(_))) {
+                    return;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
+/// Starts a runtime at `path` (`NATIVE_PATH`), writing to it from now on; returns its stdout.
+fn start_runtime(current: &RuntimeChild, path: Option<&str>) -> std::process::ChildStdout {
+    let host = std::env::current_exe().ok();
+    let host_dir = host.as_deref().and_then(std::path::Path::parent);
+    let mut command = platform::runtime_command(host_dir, std::env::var("HAZEL_NATIVE_ENTRY").ok());
+    if let Some(path) = path {
+        command.env("NATIVE_PATH", path);
+    }
+    let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()
-        .expect("spawn bun");
-    let _ = OUT.set(Mutex::new(Box::new(child.stdin.take().unwrap())));
-    let lines = BufReader::new(child.stdout.take().unwrap()).lines();
+        .expect("spawn the runtime");
+    let stdin: Box<dyn Write + Send> = Box::new(child.stdin.take().unwrap());
+    *OUT.get_or_init(|| Mutex::new(Box::new(std::io::sink())))
+        .lock()
+        .unwrap() = stdin;
+    let stdout = child.stdout.take().unwrap();
+    *current.0.lock().unwrap() = Some(child);
+    stdout
+}
+
+/// Spawns the runtime (the bundled one, else Bun); its messages arrive on the returned channel.
+/// A `reload` (a full page load in the app) replaces it with a fresh one at the new path.
+fn spawn_runtime() -> (RuntimeChild, std::sync::mpsc::Receiver<RuntimeMsg>) {
+    let current = RuntimeChild(Arc::new(Mutex::new(None)));
+    let mut stdout = start_runtime(&current, None);
     let (send, receive) = std::sync::mpsc::channel();
+    let mut supervised = current.clone();
     std::thread::spawn(move || {
-        for line in lines.map_while(Result::ok) {
-            match serde_json::from_str::<RuntimeMsg>(&line) {
-                Ok(msg) => {
-                    if send.send(msg).is_err() {
+        loop {
+            let mut reload = None;
+            for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+                match serde_json::from_str::<RuntimeMsg>(&line) {
+                    Ok(RuntimeMsg::Vault { id, op, record }) => answer_vault(id, &op, record),
+                    Ok(RuntimeMsg::Reload { path }) => {
+                        reload = Some(path);
                         break;
                     }
+                    Ok(msg) => {
+                        if send.send(msg).is_err() {
+                            return;
+                        }
+                    }
+                    Err(error) => eprintln!("[host] bad message: {error}"),
                 }
-                Err(error) => eprintln!("[host] bad message: {error}"),
+            }
+            let Some(path) = reload else { return };
+            supervised.kill();
+            stdout = start_runtime(&supervised, Some(&path));
+            // The new runtime starts at the default size: tell it the window's.
+            if let Some((width, height, dark)) = *REPORTED.lock().unwrap() {
+                write_line(json!({ "t": "env", "width": width, "height": height, "dark": dark }));
             }
         }
     });
-    (child, receive)
+    (current, receive)
+}
+
+/// Keychain calls can wait on a permission prompt: each runs off the reader and UI threads.
+fn answer_vault(id: u64, op: &str, record: Option<String>) {
+    let Some(op) = wire::vault_op(op, record) else {
+        write_line(platform::vault_reply(
+            id,
+            Err(format!("unknown vault request {op}")),
+        ));
+        return;
+    };
+    std::thread::spawn(move || {
+        write_line(platform::vault_reply(
+            id,
+            platform::run_vault(platform::VAULT_SERVICE, &op),
+        ));
+    });
+}
+
+/// A link the system opened with the app (the sign-in callback): to the runtime as it came.
+fn open_url(_: &mut State, url: &str, _: &mut rune::Tx) {
+    write_line(platform::open_url_message(url));
 }
 
 /// A downloaded picture landed: rebuild the memoised subtrees that showed its empty box.
@@ -993,6 +1963,7 @@ fn initial_state() -> State {
 }
 
 fn main() {
+    dom_motion();
     let args: Vec<String> = std::env::args().collect();
     if let Some(at) = args.iter().position(|a| a == "--capture") {
         let script = args.get(at + 1).expect("--capture <script.json>");
@@ -1011,20 +1982,30 @@ fn main() {
     let spec = AppSpec {
         setup: Some(|_: &mut State, waker| images::set_waker(waker)),
         poll: Some(poll),
+        on_key: Some(window_key),
         ..AppSpec::new("Hazel", window_size(), State::default, view)
     };
-    let app = App::new(spec).init(move || initial);
+    let app = App::new(spec)
+        .font_smoothing(TEXT_SMOOTHING)
+        .init(move || initial)
+        .on_open_url(open_url);
     let handle = app.handle();
     std::thread::spawn(move || {
         for msg in messages.iter() {
             match msg {
                 RuntimeMsg::Tree(tree) => handle.update(move |s: &mut State, _| s.apply(tree)),
-                RuntimeMsg::Scroll { path, top } => {
+                RuntimeMsg::Scroll { path, top, seq } => {
+                    note_scroll(&path, seq);
                     handle.update(move |_: &mut State, tx| tx.scroll_to_instant(path, 0.0, top))
+                }
+                request => {
+                    if let Some(run) = request.request() {
+                        handle.update(move |_: &mut State, tx| run(tx))
+                    }
                 }
             }
         }
     });
     app.run();
-    let _ = child.kill();
+    child.kill();
 }

@@ -3,14 +3,14 @@
 		"min": {
 			"matchedWebPct": 97.29,
 			"posWithin4Pct": 95.43,
-			"sizeWithin4Pct": 88.57,
+			"sizeWithin4Pct": 91.14,
 			"textPosWithin4Pct": 98,
-			"textSizeWithin4Pct": 80.43,
-			"pixelScore": 96.29
+			"textSizeWithin4Pct": 81.78,
+			"pixelScore": 96.88
 		},
 		"max": {
 			"missingOnNative": 5,
-			"posP95": 4.75,
+			"posP95": 5.23,
 			"textPosP95": 5.44
 		}
 	},
@@ -18,14 +18,14 @@
 		"min": {
 			"matchedWebPct": 97.29,
 			"posWithin4Pct": 95.43,
-			"sizeWithin4Pct": 88.57,
+			"sizeWithin4Pct": 91.14,
 			"textPosWithin4Pct": 98,
-			"textSizeWithin4Pct": 80.43,
-			"pixelScore": 96.15
+			"textSizeWithin4Pct": 81.78,
+			"pixelScore": 96.82
 		},
 		"max": {
 			"missingOnNative": 5,
-			"posP95": 4.75,
+			"posP95": 5.23,
 			"textPosP95": 5.44
 		}
 	},
@@ -33,10 +33,10 @@
 		"min": {
 			"matchedWebPct": 97.31,
 			"posWithin4Pct": 95.63,
-			"sizeWithin4Pct": 89.12,
+			"sizeWithin4Pct": 91.49,
 			"textPosWithin4Pct": 98,
-			"textSizeWithin4Pct": 81.56,
-			"pixelScore": 96.57
+			"textSizeWithin4Pct": 82.93,
+			"pixelScore": 97.05
 		},
 		"max": {
 			"missingOnNative": 5,
@@ -48,15 +48,435 @@
 		"min": {
 			"matchedWebPct": 97.31,
 			"posWithin4Pct": 95.63,
-			"sizeWithin4Pct": 89.12,
+			"sizeWithin4Pct": 91.49,
 			"textPosWithin4Pct": 98,
-			"textSizeWithin4Pct": 81.56,
-			"pixelScore": 96.43
+			"textSizeWithin4Pct": 82.93,
+			"pixelScore": 97.01
 		},
 		"max": {
 			"missingOnNative": 5,
 			"posP95": 4.75,
 			"textPosP95": 5.44
+		}
+	},
+	"focus-light": {
+		"min": {
+			"matchedWebPct": 97.29,
+			"posWithin4Pct": 95.43,
+			"sizeWithin4Pct": 91.14,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 81.78,
+			"pixelScore": 96.88
+		},
+		"max": {
+			"missingOnNative": 5,
+			"posP95": 5.23,
+			"textPosP95": 5.44
+		}
+	},
+	"focus-dark": {
+		"min": {
+			"matchedWebPct": 97.29,
+			"posWithin4Pct": 95.43,
+			"sizeWithin4Pct": 91.14,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 81.78,
+			"pixelScore": 96.82
+		},
+		"max": {
+			"missingOnNative": 5,
+			"posP95": 5.23,
+			"textPosP95": 5.44
+		}
+	},
+	"menu-light": {
+		"min": {
+			"matchedWebPct": 97.29,
+			"posWithin4Pct": 95.43,
+			"sizeWithin4Pct": 91.14,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 81.78,
+			"pixelScore": 96.85
+		},
+		"max": {
+			"missingOnNative": 5,
+			"posP95": 5.23,
+			"textPosP95": 5.44
+		}
+	},
+	"menu-dark": {
+		"min": {
+			"matchedWebPct": 97.29,
+			"posWithin4Pct": 95.43,
+			"sizeWithin4Pct": 91.14,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 81.78,
+			"pixelScore": 96.74
+		},
+		"max": {
+			"missingOnNative": 5,
+			"posP95": 5.23,
+			"textPosP95": 5.44
+		}
+	},
+	"palette-light": {
+		"min": {
+			"matchedWebPct": 97.29,
+			"posWithin4Pct": 95.43,
+			"sizeWithin4Pct": 91.14,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 81.78,
+			"pixelScore": 98.05
+		},
+		"max": {
+			"missingOnNative": 5,
+			"posP95": 5.23,
+			"textPosP95": 5.44
+		}
+	},
+	"palette-dark": {
+		"min": {
+			"matchedWebPct": 97.29,
+			"posWithin4Pct": 95.43,
+			"sizeWithin4Pct": 91.14,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 81.78,
+			"pixelScore": 97.96
+		},
+		"max": {
+			"missingOnNative": 5,
+			"posP95": 5.23,
+			"textPosP95": 5.44
+		}
+	},
+	"dialog-light": {
+		"min": {
+			"matchedWebPct": 97.21,
+			"posWithin4Pct": 94.52,
+			"sizeWithin4Pct": 91.28,
+			"textPosWithin4Pct": 93.79,
+			"textSizeWithin4Pct": 82.21,
+			"pixelScore": 97.42
+		},
+		"max": {
+			"missingOnNative": 5,
+			"posP95": 5.49,
+			"textPosP95": 6
+		}
+	},
+	"dialog-dark": {
+		"min": {
+			"matchedWebPct": 97.21,
+			"posWithin4Pct": 94.52,
+			"sizeWithin4Pct": 91.28,
+			"textPosWithin4Pct": 93.79,
+			"textSizeWithin4Pct": 82.21,
+			"pixelScore": 97.51
+		},
+		"max": {
+			"missingOnNative": 5,
+			"posP95": 5.49,
+			"textPosP95": 6
+		}
+	},
+	"context-light": {
+		"min": {
+			"matchedWebPct": 97.29,
+			"posWithin4Pct": 95.43,
+			"sizeWithin4Pct": 91.14,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 81.78,
+			"pixelScore": 95.4
+		},
+		"max": {
+			"missingOnNative": 5,
+			"posP95": 5.23,
+			"textPosP95": 5.44
+		}
+	},
+	"context-dark": {
+		"min": {
+			"matchedWebPct": 97.29,
+			"posWithin4Pct": 95.43,
+			"sizeWithin4Pct": 91.14,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 81.78,
+			"pixelScore": 95.47
+		},
+		"max": {
+			"missingOnNative": 5,
+			"posP95": 5.23,
+			"textPosP95": 5.44
+		}
+	},
+	"route-files-light": {
+		"min": {
+			"matchedWebPct": 98,
+			"posWithin4Pct": 93.83,
+			"sizeWithin4Pct": 91.45,
+			"textPosWithin4Pct": 92.12,
+			"textSizeWithin4Pct": 83.29,
+			"pixelScore": 98.28
+		},
+		"max": {
+			"missingOnNative": 3,
+			"posP95": 6,
+			"textPosP95": 17.64
+		}
+	},
+	"route-files-dark": {
+		"min": {
+			"matchedWebPct": 98,
+			"posWithin4Pct": 93.83,
+			"sizeWithin4Pct": 91.45,
+			"textPosWithin4Pct": 92.12,
+			"textSizeWithin4Pct": 83.29,
+			"pixelScore": 98.26
+		},
+		"max": {
+			"missingOnNative": 3,
+			"posP95": 6,
+			"textPosP95": 17.64
+		}
+	},
+	"route-notifications-light": {
+		"min": {
+			"matchedWebPct": 98,
+			"posWithin4Pct": 98,
+			"sizeWithin4Pct": 96.56,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 91.75,
+			"pixelScore": 96.78
+		},
+		"max": {
+			"missingOnNative": 3,
+			"posP95": 3.5,
+			"textPosP95": 3.68
+		}
+	},
+	"route-notifications-dark": {
+		"min": {
+			"matchedWebPct": 98,
+			"posWithin4Pct": 98,
+			"sizeWithin4Pct": 96.56,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 91.75,
+			"pixelScore": 96.68
+		},
+		"max": {
+			"missingOnNative": 3,
+			"posP95": 3.5,
+			"textPosP95": 3.68
+		}
+	},
+	"route-appearance-light": {
+		"min": {
+			"matchedWebPct": 98,
+			"posWithin4Pct": 97.26,
+			"sizeWithin4Pct": 95.42,
+			"textPosWithin4Pct": 96.04,
+			"textSizeWithin4Pct": 92.12,
+			"pixelScore": 97.78
+		},
+		"max": {
+			"missingOnNative": 3,
+			"posP95": 2.25,
+			"textPosP95": 3.68
+		}
+	},
+	"route-appearance-dark": {
+		"min": {
+			"matchedWebPct": 98,
+			"posWithin4Pct": 97.26,
+			"sizeWithin4Pct": 95.42,
+			"textPosWithin4Pct": 96.04,
+			"textSizeWithin4Pct": 92.12,
+			"pixelScore": 97.91
+		},
+		"max": {
+			"missingOnNative": 3,
+			"posP95": 2.25,
+			"textPosP95": 3.68
+		}
+	},
+	"route-profile-light": {
+		"min": {
+			"matchedWebPct": 98,
+			"posWithin4Pct": 97.12,
+			"sizeWithin4Pct": 94.46,
+			"textPosWithin4Pct": 93.65,
+			"textSizeWithin4Pct": 80.61,
+			"pixelScore": 98.61
+		},
+		"max": {
+			"missingOnNative": 3,
+			"posP95": 3.5,
+			"textPosP95": 5.24
+		}
+	},
+	"route-profile-dark": {
+		"min": {
+			"matchedWebPct": 98,
+			"posWithin4Pct": 97.12,
+			"sizeWithin4Pct": 94.46,
+			"textPosWithin4Pct": 93.65,
+			"textSizeWithin4Pct": 80.61,
+			"pixelScore": 98.57
+		},
+		"max": {
+			"missingOnNative": 3,
+			"posP95": 3.5,
+			"textPosP95": 5.24
+		}
+	},
+	"route-notification-settings-light": {
+		"min": {
+			"matchedWebPct": 98,
+			"posWithin4Pct": 98,
+			"sizeWithin4Pct": 94.62,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 86.37,
+			"pixelScore": 98.2
+		},
+		"max": {
+			"missingOnNative": 3,
+			"posP95": 3.68,
+			"textPosP95": 5.09
+		}
+	},
+	"route-notification-settings-dark": {
+		"min": {
+			"matchedWebPct": 98,
+			"posWithin4Pct": 98,
+			"sizeWithin4Pct": 94.62,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 86.37,
+			"pixelScore": 98.15
+		},
+		"max": {
+			"missingOnNative": 3,
+			"posP95": 3.68,
+			"textPosP95": 5.09
+		}
+	},
+	"route-settings-light": {
+		"min": {
+			"matchedWebPct": 98,
+			"posWithin4Pct": 97.3,
+			"sizeWithin4Pct": 94.5,
+			"textPosWithin4Pct": 95.37,
+			"textSizeWithin4Pct": 84.84,
+			"pixelScore": 98.19
+		},
+		"max": {
+			"missingOnNative": 3,
+			"posP95": 3.5,
+			"textPosP95": 5.24
+		}
+	},
+	"route-settings-dark": {
+		"min": {
+			"matchedWebPct": 98,
+			"posWithin4Pct": 97.3,
+			"sizeWithin4Pct": 94.5,
+			"textPosWithin4Pct": 95.37,
+			"textSizeWithin4Pct": 84.84,
+			"pixelScore": 98.15
+		},
+		"max": {
+			"missingOnNative": 3,
+			"posP95": 3.5,
+			"textPosP95": 5.24
+		}
+	},
+	"route-team-light": {
+		"min": {
+			"matchedWebPct": 98,
+			"posWithin4Pct": 98,
+			"sizeWithin4Pct": 93.24,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 81.05,
+			"pixelScore": 98.14
+		},
+		"max": {
+			"missingOnNative": 12,
+			"posP95": 3.5,
+			"textPosP95": 4.09
+		}
+	},
+	"route-team-dark": {
+		"min": {
+			"matchedWebPct": 98,
+			"posWithin4Pct": 98,
+			"sizeWithin4Pct": 93.24,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 81.05,
+			"pixelScore": 98.08
+		},
+		"max": {
+			"missingOnNative": 12,
+			"posP95": 3.5,
+			"textPosP95": 4.09
+		}
+	},
+	"route-integrations-light": {
+		"min": {
+			"matchedWebPct": 98,
+			"posWithin4Pct": 98,
+			"sizeWithin4Pct": 96.67,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 93.31,
+			"pixelScore": 95.16
+		},
+		"max": {
+			"missingOnNative": 3,
+			"posP95": 2.25,
+			"textPosP95": 3.5
+		}
+	},
+	"route-integrations-dark": {
+		"min": {
+			"matchedWebPct": 98,
+			"posWithin4Pct": 98,
+			"sizeWithin4Pct": 96.67,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 93.31,
+			"pixelScore": 95.23
+		},
+		"max": {
+			"missingOnNative": 3,
+			"posP95": 2.25,
+			"textPosP95": 3.5
+		}
+	},
+	"route-user-light": {
+		"min": {
+			"matchedWebPct": 98,
+			"posWithin4Pct": 98,
+			"sizeWithin4Pct": 94.93,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 83.29,
+			"pixelScore": 98.29
+		},
+		"max": {
+			"missingOnNative": 3,
+			"posP95": 3.5,
+			"textPosP95": 4.29
+		}
+	},
+	"route-user-dark": {
+		"min": {
+			"matchedWebPct": 98,
+			"posWithin4Pct": 98,
+			"sizeWithin4Pct": 94.93,
+			"textPosWithin4Pct": 98,
+			"textSizeWithin4Pct": 83.29,
+			"pixelScore": 98.28
+		},
+		"max": {
+			"missingOnNative": 3,
+			"posP95": 3.5,
+			"textPosP95": 4.29
 		}
 	}
 }

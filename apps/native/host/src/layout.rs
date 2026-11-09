@@ -2,9 +2,14 @@
 //! features, emulated here: single-side borders, CSS text inheritance, percentage centring, auto
 //! margins and box-shadow rings.
 use rune::tok::TextStyle;
-use rune::{Align, Color, El, Family, ScrollSpec, Shadow, Span, TextCase, el, row, text};
+use rune::{
+    Align, Anim, AnimExt, Color, Curve, Easing, Effect, El, Family, GridTrack, LoopSpec,
+    ScrollSpec, Shadow, Span, Spring, SpringPair, TextCase, Transition, Vec2, el, row, text,
+};
 
-use crate::wire::{BgImage, F, Len, Style};
+use std::collections::HashMap;
+
+use crate::wire::{Animation, BgImage, F, FocusRing, Len, OutlineSpec, Style, Timing};
 
 pub fn color(hex: &Option<String>) -> Option<Color> {
     let h = hex.as_deref()?;
@@ -239,6 +244,7 @@ pub fn apply_box(mut e: El, st: &Style) -> El {
     match st.w {
         Some(Len::Px(F(v))) => e = e.w(v),
         Some(Len::Full) => e = e.w_full(),
+        Some(Len::Frac(F(f))) => e = e.w_frac(f),
         _ => {}
     }
     match st.h {
@@ -269,8 +275,12 @@ pub fn apply_box(mut e: El, st: &Style) -> El {
     if let Some(g) = f(st.grow).filter(|g| *g > 0.0) {
         e = e.grow(g)
     }
-    if let Some([t, r, b, l]) = st.pad {
-        e = e.pt(t.0).pr(r.0).pb(b.0).pl(l.0)
+    // Rune draws a border inside the box; CSS lays it out (box-sizing: border-box), so each
+    // side's border width joins its padding, a transparent border's too.
+    if st.pad.is_some() || st.border.is_some() {
+        let side = |b: Option<[F; 4]>, i: usize| b.map_or(0.0, |b| b[i].0);
+        let [t, r, b, l] = [0, 1, 2, 3].map(|i| side(st.pad, i) + side(st.border, i));
+        e = e.pt(t).pr(r).pb(b).pl(l)
     }
     if let Some([t, r, b, l]) = st.margin {
         e = e.mt(t.0).mr(r.0).mb(b.0).ml(l.0)
@@ -300,6 +310,12 @@ pub fn apply_box(mut e: El, st: &Style) -> El {
     if let Some(c) = color(&st.hover_bg) {
         e = e.hover(c)
     }
+    if let Some(row) = &st.hover_share {
+        e = e.hover_group_shared(row.as_str())
+    }
+    if let Some(span) = st.col_span.filter(|&n| n > 1) {
+        e = e.grid_column_span(span)
+    }
     let radius = st.radius.map(|r| r.map(|F(v)| v.min(999.0)));
     if let Some(r) = radius {
         e = if r.iter().all(|v| *v == r[0]) {
@@ -322,6 +338,9 @@ pub fn apply_box(mut e: El, st: &Style) -> El {
     {
         e = e.outline(o.width.0, o.offset.0, c)
     }
+    if let Some([dx, dy]) = st.group_shift {
+        e = e.group_offset(dx.0, dy.0);
+    }
     match (f(st.opacity), f(st.group_opacity)) {
         // An ancestor's hover reveals this element; Rune animates it without re-running the view.
         (rest, Some(hovered)) => e = e.group_opacity(rest.unwrap_or(1.0), hovered),
@@ -340,6 +359,7 @@ pub fn apply_box(mut e: El, st: &Style) -> El {
     }
     if let Some([l, t, r, b]) = st.absolute
         && st.center_y != Some(true)
+        && st.center_x != Some(true)
     {
         e = e.pin(f(l), f(t), f(r), f(b))
     }
@@ -348,7 +368,7 @@ pub fn apply_box(mut e: El, st: &Style) -> El {
     {
         e = e.offset(x.0, y.0)
     }
-    // A transparent border only reserves space, which the padding already accounts for.
+    // A transparent border only reserves space, which the padding above accounts for.
     let is_transparent = st.border_color.is_some() && color(&st.border_color).is_none();
     if let (Some(border), false) = (st.border, is_transparent) {
         let c = color(&st.border_color).unwrap_or(rune::color::hex("#8080804d").unwrap());
@@ -376,7 +396,171 @@ pub fn apply_box(mut e: El, st: &Style) -> El {
     if st.visibility.as_deref() == Some("hidden") {
         e = e.opacity(0.0).inert()
     }
+    apply_motion(e, st)
+}
+
+/// CSS changes land at once unless a transition names them; Rune animates by default, so every
+/// element states its own motion (children don't inherit a transition, as in CSS).
+fn apply_motion(e: El, st: &Style) -> El {
+    let t = st.transition.clone().unwrap_or_default();
+    let tween = |t: &Option<Timing>| match t {
+        Some(t) => {
+            let [x1, y1, x2, y2] = t.ease.map(|F(v)| v);
+            Anim::from(Curve::tween(t.duration.0, Easing::cubic(x1, y1, x2, y2))).delay(t.delay.0)
+        }
+        None => Anim::INSTANT,
+    };
+    // Rune moves layout and colours on one spring: the longer of the two, critically damped.
+    let spring = [&t.colors, &t.layout]
+        .into_iter()
+        .flatten()
+        .map(|t| t.duration.0)
+        .fold(0.0, f32::max);
+    let colors = tween(&t.colors);
+    let spring = if spring > 0.0 {
+        Spring::new(spring, 0.0)
+    } else {
+        Spring::NONE
+    };
+    // `token_motion` keeps Rune's motion checks out of it, and writes no per-element cold state.
+    let mut e = e.token_motion(spring);
+    // Curves only where the property can change; each one is an allocation per element.
+    let hovers = st.hover_bg.is_some() || st.hover_color.is_some() || st.hover_group == Some(true);
+    if hovers || st.group_opacity.is_some() {
+        e = e.hover_motion(colors, colors)
+    }
+    if st.opacity.is_some() || st.group_opacity.is_some() || t.opacity.is_some() {
+        e = e.opacity_motion(tween(&t.opacity))
+    }
+    if st.translate.is_some() || t.transform.is_some() {
+        e = e.offset_motion(tween(&t.transform))
+    }
+    match &st.animation {
+        Some(Animation::Spin { period }) => e
+            .looping(LoopSpec::rotation(f64::from(period.0)))
+            .transition(Transition::none()),
+        Some(Animation::Pulse {
+            period,
+            delay,
+            from,
+            to,
+        }) => e
+            .looping(LoopSpec::opacity(
+                f64::from(period.0),
+                f64::from(delay.0),
+                from.0,
+                to.0,
+            ))
+            .transition(Transition::none()),
+        Some(Animation::Enter {
+            duration,
+            delay,
+            opacity,
+            x,
+            y,
+            scale,
+        }) => {
+            let insertion = Effect {
+                opacity: opacity.0,
+                scale: scale.0,
+                offset: Vec2::new(x.0, y.0),
+                ..Effect::IDENTITY
+            };
+            // Rune plays entrances on springs: one as long as the CSS animation, no overshoot.
+            let springs = SpringPair {
+                enter: Spring::new(duration.0.max(0.01), 0.0),
+                exit: Spring::NONE,
+            };
+            let transition = Transition {
+                insertion,
+                removal: Effect::IDENTITY,
+                pop_layout: true,
+                springs,
+            };
+            e.transition(transition).enter_delay(delay.0)
+        }
+        None => e.transition(Transition::none()),
+    }
+}
+
+/// The fill a press shows and the rings focus draws. A field's focus is its text field's, inside
+/// `e`, and a browser shows `:focus-visible` on a focused field from the pointer too.
+pub fn focus_styles(mut e: El, st: &Style, field: bool) -> El {
+    if let Some(c) = color(&st.press_bg) {
+        e = e.press(c)
+    }
+    let ring = |o: &OutlineSpec| color(&Some(o.color.clone())).map(|c| (o.width.0, o.offset.0, c));
+    let keyboard = match &st.focus_ring {
+        Some(FocusRing::Ring(o)) => Some(o),
+        _ => None,
+    };
+    let within = st.focus_within_ring.as_ref().or(keyboard.filter(|_| field));
+    if let Some((w, off, c)) = within.and_then(ring) {
+        return e.focus_within_ring(w, off, c);
+    }
+    if let Some((w, off, c)) = keyboard.and_then(ring) {
+        e = e.focus_ring(w, off, c)
+    } else if let Some(FocusRing::Hidden(_)) = &st.focus_ring {
+        e = e.no_focus_ring()
+    }
     e
+}
+
+/// Elements HTML puts in the Tab order (or `tabindex` adds), unless disabled. A negative
+/// `tabindex` takes them out: in Rune a focusable element keeps the presses on it, where a
+/// browser lets the click bubble, and the host has no script focus that would need it.
+/// `tabindex="-1"`: focusable by script (`element.focus()`, a menu moving its highlight) and
+/// by a press, but no Tab stop.
+pub fn script_focusable(attrs: &HashMap<String, String>) -> bool {
+    !attrs.contains_key("disabled")
+        && attrs
+            .get("tabindex")
+            .and_then(|t| t.trim().parse::<i32>().ok())
+            .is_some_and(|order| order < 0)
+}
+
+/// A checkbox or radio: a control a press or Space checks, not a text field.
+pub fn is_checkable(tag: &str, attrs: &HashMap<String, String>) -> bool {
+    tag == "input"
+        && attrs
+            .get("type")
+            .is_some_and(|t| t == "checkbox" || t == "radio")
+}
+
+/// An element Rune edits as text: a textarea, or an `<input>` of a typing type.
+pub fn is_text_field(tag: &str, attrs: &HashMap<String, String>) -> bool {
+    tag == "textarea"
+        || (tag == "input"
+            && !attrs.get("type").is_some_and(|t| {
+                matches!(
+                    t.as_str(),
+                    "checkbox"
+                        | "radio"
+                        | "button"
+                        | "submit"
+                        | "reset"
+                        | "image"
+                        | "range"
+                        | "color"
+                )
+            }))
+}
+
+pub fn focusable(tag: &str, attrs: &HashMap<String, String>) -> Option<i32> {
+    if attrs.contains_key("disabled") {
+        return None;
+    }
+    let native = matches!(tag, "button" | "select" | "summary")
+        || (tag == "a" && attrs.contains_key("href"))
+        || is_checkable(tag, attrs);
+    match attrs
+        .get("tabindex")
+        .and_then(|t| t.trim().parse::<i32>().ok())
+    {
+        Some(order) if order < 0 => None,
+        Some(order) => Some(order),
+        None => native.then_some(0),
+    }
 }
 
 /// `box-shadow` layers. The outermost spread-only ring (Tailwind `ring-*`, with any
@@ -426,6 +610,18 @@ fn apply_shadows(mut e: El, st: &Style) -> El {
 /// `inset-y-1/2 -translate-y-1/2`: Rune has no percentage insets, so centre in a full-height slot.
 pub fn center_vertically(e: El, st: &Style) -> El {
     match (st.absolute, st.center_y) {
+        // `left-1/2 -translate-x-1/2` (and both axes): centred in a full-width slot at its insets.
+        (Some([_, t, _, b]), centre_y) if st.center_x == Some(true) => {
+            let both = centre_y == Some(true);
+            let slot = if both {
+                row()
+                    .pin(Some(0.0), Some(0.0), Some(0.0), Some(0.0))
+                    .items_center()
+            } else {
+                row().pin(Some(0.0), f(t), Some(0.0), f(b)).items_start()
+            };
+            slot.justify_center().child(e)
+        }
         (Some([l, _, r, _]), Some(true)) => {
             // Pinned on both sides with no width of its own, CSS stretches it between them
             // (`inset-x-0 top-1/2`: a full-width divider or overlay).
@@ -505,10 +701,13 @@ pub fn auto_margins(
     if (!main_start && !main_end) || sibling_grows {
         return child;
     }
-    let slot = if parent_is_row {
-        row().min_w(0.0)
-    } else {
-        rune::col().min_h(0.0)
+    // A child of fixed width keeps it as the slot's minimum: a parent sized by its content (a
+    // shrink-to-fit button) counts it, where Rune's grow alone would count the slot as nothing.
+    let side = |i: usize| st.margin.map_or(0.0, |m| m[i].0);
+    let slot = match &st.w {
+        Some(Len::Px(F(w))) if parent_is_row => row().min_w((w + side(1) + side(3)).max(0.0)),
+        _ if parent_is_row => row().min_w(0.0),
+        _ => rune::col().min_h(0.0),
     };
     let slot = match (main_start, main_end) {
         (true, true) => slot.justify_center(),
@@ -524,22 +723,57 @@ pub fn auto_margins(
     slot.grow(1.0).child(child)
 }
 
-/// One grid track as a flex item: `auto` hugs, `Nfr` grows, a length is fixed.
-pub fn track(cell: El, template: &str) -> El {
-    if let Some(fr) = template.strip_suffix("fr") {
-        cell.grow(fr.parse().unwrap_or(1.0)).min_w(0.0)
-    } else if let Some(rem) = template.strip_suffix("rem") {
-        cell.w(rem.parse::<f32>().unwrap_or(0.0) * 16.0)
-    } else if let Some(px) = template.strip_suffix("px") {
-        cell.w(px.parse().unwrap_or(0.0))
+/// One `grid-template-columns` track as the resolver sends it (`1fr`, `auto`, `1.5rem`, `320px`).
+/// `minmax(0, 1fr)` arrives as `1fr`; anything else sizes to its content.
+pub fn grid_track(template: &str) -> GridTrack {
+    let num = |v: &str| v.parse::<f32>().ok();
+    // `minmax(200px, 280px)` between lengths; `minmax(0, 1fr)` is the fraction.
+    if let Some(args) = template
+        .strip_prefix("minmax(")
+        .and_then(|r| r.strip_suffix(')'))
+    {
+        let (lo, hi) = args.split_once(',').unwrap_or((args, args));
+        return match (grid_track(lo.trim()), grid_track(hi.trim())) {
+            (GridTrack::Px(lo), GridTrack::Px(hi)) => GridTrack::MinMaxPx(lo, hi),
+            (_, GridTrack::Fr(fr)) => GridTrack::Fr(fr),
+            _ => GridTrack::Auto,
+        };
+    }
+    if template == "0" {
+        return GridTrack::Px(0.0);
+    }
+    if let Some(fr) = template.strip_suffix("fr").and_then(num) {
+        GridTrack::Fr(fr)
+    } else if let Some(rem) = template.strip_suffix("rem").and_then(num) {
+        GridTrack::Px(rem * 16.0)
+    } else if let Some(px) = template.strip_suffix("px").and_then(num) {
+        GridTrack::Px(px)
     } else {
-        cell
+        match template {
+            "min-content" => GridTrack::MinContent,
+            "max-content" => GridTrack::MaxContent,
+            _ => GridTrack::Auto,
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::capitalize;
+    use super::{capitalize, grid_track};
+    use rune::GridTrack;
+
+    #[test]
+    fn grid_track_reads_minmax() {
+        assert_eq!(
+            grid_track("minmax(200px,280px)"),
+            GridTrack::MinMaxPx(200.0, 280.0)
+        );
+        assert_eq!(
+            grid_track("minmax(200px, 17.5rem)"),
+            GridTrack::MinMaxPx(200.0, 280.0)
+        );
+        assert_eq!(grid_track("minmax(0, 1fr)"), GridTrack::Fr(1.0));
+    }
 
     #[test]
     fn capitalize_uppercases_each_word_start() {

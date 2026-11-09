@@ -21,7 +21,8 @@ Rune host (Rust, host/)                     Bun runtime (src/entry.ts)
   drawn over it.
 - **Data**: `HAZEL_DATA=offline` (default) serves a fixture org over a local sync socket and answers
   the few HTTP calls in `src/offline-backend.ts`; `HAZEL_DATA=live` talks to `VITE_BACKEND_URL` with
-  `HAZEL_SESSION_TOKEN` as the session bearer (`bun run dev:sign-in` prints one).
+  `HAZEL_SESSION_TOKEN` as the session bearer (`bun run dev:sign-in` prints one), or without one
+  signs in through the browser and keeps the session in the keychain (see Mac app).
 
 ## Run
 
@@ -32,12 +33,44 @@ HAZEL_NATIVE_ENTRY=dist/entry.js host/target/release/hazel-native
 ```
 
 Without `HAZEL_NATIVE_ENTRY` the host runs `src/entry.ts` directly (slower boot, no build step).
+`bun run build` also writes `dist/styles.json`, the stylesheet compiled for every class the app's
+sources use, so the bundled runtime boots without Tailwind's compiler; a class the scan missed
+compiles after the commit that shows it, and the screen restyles.
 `NATIVE_THEME=dark`, `NATIVE_WIDTH`/`NATIVE_HEIGHT` set the window; `NATIVE_DEBUG=1` logs every
 Message and editor event; `NATIVE_STATS=<file>` appends per-commit timings.
 
 `host/target/release/hazel-native --capture script.json` runs headless on a real-time frame loop and
 follows a script (`settle`, `waitText`, `clickText`, `focusEditable`, `type`, `key`, `snap`, `dump`,
 `exportLayout`), writing timings to `NATIVE_BENCH_OUT`. A step that cannot complete fails the run.
+
+## Mac app
+
+```sh
+bun run bundle                     # dist/Hazel Native.app, ad-hoc signed and registered
+HAZEL_BACKEND_URL=http://localhost:3003 HAZEL_APP_URL=http://localhost:3100 bun run bundle
+```
+
+The bundle holds the release host, the runtime compiled to one executable (`bun build --compile`,
+ESM bytecode) as `Contents/MacOS/hazel-runtime`, `styles.json` and the web app's `public/` in
+`Contents/Resources`. Its Info.plist registers `com.hazel.native://` and sets `LSEnvironment`:
+live data against production (`https://api.hazel.sh`, `https://app.hazel.sh`) unless the
+`HAZEL_*_URL` overrides above were set when bundling. Those apply only when Launch Services
+starts the app (Finder, `open`); running `Contents/MacOS/hazel-native` from a shell takes the
+shell's environment.
+
+**Sign-in.** Live without `HAZEL_SESSION_TOKEN`, the app signs in like the Tauri app
+(`web-foldkit/src/platform/desktop-auth.ts`, reused as is): `src/desktop-bridge.ts` answers the
+three Tauri calls it makes. The browser opens `/auth/desktop`, which hands back
+`com.hazel.native://auth/callback?...`; the host receives that Apple Event (Rune's
+`App::on_open_url`) and passes it on as `openUrl`. The session lives in the login keychain
+(service `com.hazel.native`, account `auth`), read and written by the host with the `keyring`
+crate as the Tauri app does, so only the host binary is on the item's access list. After a
+rebuild the ad-hoc signature changes, and macOS asks once to allow the new binary.
+The app signs in as the `native` client (`@hazel/auth` `nativeClient`), its own scheme, so a Mac
+with the Tauri app installed routes each callback to the right app.
+
+A full page load in the app (`load("/")` after sign-in, `location.reload()`) sends `reload`: the
+host replaces the runtime with a fresh one at that path, as a browser reloads the page.
 
 ## Benchmark
 
@@ -62,8 +95,13 @@ synthetic utility page (`conformance:extract` records it).
 
 ## Not yet native
 
-- Popovers, menus and pickers: Mounts other than the message list and the composer do not acquire.
-- Interaction styles (`focus:`, `active:`, `disabled:` colours), animations and transitions.
-- Grid is emulated with flex rows: Rune does not expose Taffy's grid templates yet.
-- Text inside SVG icons, `text-box` trimming, vertical margin collapsing (spacing is the same, a
-  block's own box is not), and fractions of the parent's width (`w-1/2`).
+- Overlays beyond the modal popovers: tooltips (`AnchorTooltipPanel`), submenus
+  (`PositionSubmenu`) and the image viewer.
+- Colours a `focus:` variant changes (Rune draws focus as a ring only), focus or press state on an
+  ancestor (`group-focus-visible:`), and spinners drawn as rotating CSS border rings.
+- Subgrid: Taffy has none, so a subgrid row lays its children out on its own copy of the tracks.
+- `text-box` trimming, vertical margin collapsing (spacing is the same, a block's own box is not),
+  fractions of the parent's height, and percentage insets (`left-1/2`).
+
+Rune is pinned to `Makisuo/rune` (anomalyco/rune `bca4713` plus grid tracks) until grid tracks
+land upstream; see `host/Cargo.toml`.

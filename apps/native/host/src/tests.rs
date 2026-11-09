@@ -8,7 +8,7 @@ use rune::render::{Gpu, Offscreen, Renderer};
 use rune::{Env, Runtime};
 use serde_json::{Value, json};
 
-use crate::wire::TreeMsg;
+use crate::wire::{RuntimeMsg, TreeMsg};
 use crate::{State, view};
 
 static HASH: AtomicU64 = AtomicU64::new(0);
@@ -38,7 +38,9 @@ fn state(root: Value) -> State {
 }
 
 fn runtime(root: Value, size: (f32, f32)) -> Runtime<State> {
+    crate::dom_motion();
     let mut rt = Runtime::new(state(root), view, size, Env::new(false, 1.0));
+    rt.on_key = Some(crate::window_key);
     rt.frame(0.0);
     rt.settle_all();
     rt.frame(0.0);
@@ -73,15 +75,20 @@ impl Frame {
     }
 }
 
-fn render(rt: &mut Runtime<State>, (w, h): (u32, u32)) -> Frame {
+fn render(rt: &mut Runtime<State>, size: (u32, u32)) -> Frame {
+    rt.settle_all();
+    rt.frame(0.0);
+    draw(rt, size)
+}
+
+/// The last frame as drawn, running animations included.
+fn draw(rt: &mut Runtime<State>, (w, h): (u32, u32)) -> Frame {
     const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
     let gpu = Gpu::headless();
     let mut renderer = Renderer::new(&gpu.device, FORMAT);
     renderer.set_srgb_blend(true);
     rt.set_srgb_blend(true);
     let target = Offscreen::with_format(&gpu.device, w, h, FORMAT);
-    rt.settle_all();
-    rt.frame(0.0);
     renderer.upload_images(&gpu.device, &gpu.queue, &mut rt.images);
     renderer.prepare(
         &gpu.device,
@@ -236,6 +243,35 @@ fn z_index_paints_a_positioned_child_over_its_later_sibling() {
     assert!(render(&mut rt, (40, 40)).is(20, 20, RED));
     let mut rt = runtime(layers(None), (40.0, 40.0));
     assert!(render(&mut rt, (40, 40)).is(20, 20, BLUE));
+}
+
+#[test]
+fn a_flow_child_with_a_z_index_paints_over_an_absolute_background() {
+    let background = e(
+        "div",
+        json!({ "absolute": [0, 0, 0, 0], "bg": "#ff0000ff" }),
+        vec![],
+    );
+    let card = e(
+        "div",
+        json!({ "w": 40, "h": 20, "zIndex": 20, "bg": "#0000ffff" }),
+        vec![],
+    );
+    let panel = e(
+        "div",
+        json!({ "w": 40, "h": 40, "display": "flex", "dir": "col" }),
+        vec![background, card],
+    );
+    let mut rt = runtime(panel, (40.0, 40.0));
+    let frame = render(&mut rt, (40, 40));
+    assert!(
+        frame.is(20, 10, BLUE),
+        "the z-20 card paints over the background"
+    );
+    assert!(
+        frame.is(20, 30, RED),
+        "the background shows where nothing covers it"
+    );
 }
 
 #[test]
@@ -641,6 +677,32 @@ fn a_field_with_a_keydown_handler_gets_its_navigation_keys() {
 }
 
 #[test]
+fn a_fields_keys_bubble_to_the_keydown_handlers_around_it() {
+    sent_events(0);
+    let input = e("input", json!({ "w": 200, "h": 30 }), vec![]);
+    let mut inner = e("div", json!({ "w": 300 }), vec![input]);
+    inner["on"] = json!({ "keydown": 4301 });
+    let mut outer = e("div", json!({ "w": 300 }), vec![inner]);
+    outer["on"] = json!({ "keydown": 4302 });
+    let mut rt = runtime(outer, (300.0, 100.0));
+    type_into(
+        &mut rt,
+        "r/0/0/field",
+        &[Key::Text("g".into()), Key::Escape, Key::Text("h".into())],
+    );
+    // One keydown for the field's chain: the runtime runs each handler as the DOM bubbles it.
+    let sent = sent_events(4301);
+    let keys: Vec<Value> = sent.iter().map(|e| e["key"].clone()).collect();
+    assert_eq!(keys, vec![json!("Escape")]);
+    assert_eq!(sent[0]["chain"], json!([4302]));
+    assert_eq!(
+        field_text(&rt, "r/0/0"),
+        "gh",
+        "typing still edits the field"
+    );
+}
+
+#[test]
 fn a_space_between_two_inline_chips_keeps_them_apart() {
     let chip = |name: &str| e("button", json!({ "display": "inline" }), vec![t(name)]);
     let rt = runtime(
@@ -793,4 +855,1426 @@ fn an_svg_keeps_its_aspect_ratio_unless_it_asks_to_stretch() {
     assert!(fitted[2] > 200 && fitted[0] < 60, "{fitted:?}");
     let stretched = left_edge(Some("none"));
     assert!(stretched[0] > 200 && stretched[2] < 60, "{stretched:?}");
+}
+
+/// Two 40x40 buttons 20 pt apart, the first with `st`; Tab focuses it from the keyboard.
+fn tabbed_button(st: Value) -> Runtime<State> {
+    let mut rt = runtime(
+        e(
+            "div",
+            json!({ "display": "flex", "dir": "row", "gapCol": 20, "pad": [20, 20, 20, 20] }),
+            vec![
+                e("button", st, vec![]),
+                e("button", json!({ "w": 40, "h": 40 }), vec![]),
+            ],
+        ),
+        (140.0, 80.0),
+    );
+    rt.key(KeyEvent {
+        key: Key::Tab,
+        mods: Mods::default(),
+    });
+    rt
+}
+
+#[test]
+fn a_button_is_a_tab_stop_with_its_focus_visible_ring() {
+    let mut rt = tabbed_button(
+        json!({ "w": 40, "h": 40, "focusRing": { "width": 3, "offset": 0, "color": "#ff0000ff" } }),
+    );
+    let frame = render(&mut rt, (140, 80));
+    assert!(frame.is(18, 40, RED), "ring {:?}", frame.at(18, 40));
+    assert!(frame.is(40, 40, WHITE), "inside {:?}", frame.at(40, 40));
+}
+
+#[test]
+fn a_hidden_outline_draws_no_focus_ring() {
+    let mut rt = tabbed_button(json!({ "w": 40, "h": 40, "focusRing": "none" }));
+    let frame = render(&mut rt, (140, 80));
+    for x in 15..20 {
+        assert!(frame.is(x, 40, WHITE), "x {x}: {:?}", frame.at(x, 40));
+    }
+}
+
+#[test]
+fn press_bg_fills_the_button_while_pressed() {
+    let mut button = e(
+        "button",
+        json!({ "w": 40, "h": 40, "bg": "#ffffffff", "pressBg": "#ff0000ff" }),
+        vec![],
+    );
+    button["on"] = json!({ "click": 7 });
+    let mut rt = runtime(button, (40.0, 40.0));
+    let rest = render(&mut rt, (40, 40));
+    assert!(rest.is(20, 20, WHITE), "rest {:?}", rest.at(20, 20));
+    rt.pointer_move(20.0, 20.0);
+    rt.pointer_down(20.0, 20.0);
+    rt.frame(0.5);
+    let pressed = render(&mut rt, (40, 40));
+    assert!(pressed.is(20, 20, RED), "pressed {:?}", pressed.at(20, 20));
+}
+
+/// A root holding `child`; trees differ by `tag` so their hashes never collide.
+fn holder(tag: &str, children: Vec<Value>) -> Value {
+    json!({ "k": "e", "h": format!("holder-{tag}"), "tag": "div", "st": { "w": 200, "h": 40 },
+        "attrs": {}, "on": {}, "c": children })
+}
+
+fn child(tag: &str, st: Value) -> Value {
+    json!({ "k": "e", "h": format!("child-{tag}"), "tag": "div", "st": st, "attrs": {}, "on": {}, "c": [] })
+}
+
+/// Sends `root` as the runtime's next tree and draws one 16 ms frame.
+fn commit(rt: &mut Runtime<State>, root: Value) {
+    let msg: TreeMsg =
+        serde_json::from_value(json!({ "ack": 1, "root": root })).expect("wire tree");
+    rt.update(move |s: &mut State, _| s.apply(msg));
+    rt.frame(0.016);
+}
+
+#[test]
+fn a_runtime_commit_lands_at_once_without_a_transition() {
+    let box_of = |w: f32| {
+        child(
+            &format!("w{w}"),
+            json!({ "w": w, "h": 40, "bg": "#ff0000ff" }),
+        )
+    };
+    let mut rt = runtime(holder("a", vec![box_of(40.0)]), (200.0, 40.0));
+    commit(&mut rt, holder("b", vec![box_of(160.0)]));
+    assert_eq!(rect(&rt, "r/0")[2], 160.0);
+}
+
+#[test]
+fn a_new_element_shows_at_once_without_a_transition() {
+    let mut rt = runtime(holder("a", vec![]), (200.0, 40.0));
+    commit(
+        &mut rt,
+        holder(
+            "b",
+            vec![child("new", json!({ "w": 40, "h": 40, "bg": "#ff0000ff" }))],
+        ),
+    );
+    let (_, opacity) = rt.presented("r/0").expect("drawn");
+    assert_eq!(opacity, 1.0);
+}
+
+#[test]
+fn transition_opacity_fades_on_its_own_curve() {
+    let faded = |o: f32| {
+        child(
+            &format!("o{o}"),
+            json!({ "w": 40, "h": 40, "bg": "#ff0000ff", "opacity": o,
+                "transition": { "opacity": { "duration": 0.2, "delay": 0, "ease": [0, 0, 1, 1] } } }),
+        )
+    };
+    let mut rt = runtime(holder("a", vec![faded(0.0)]), (200.0, 40.0));
+    commit(&mut rt, holder("b", vec![faded(1.0)]));
+    rt.frame(0.1);
+    let (_, halfway) = rt.presented("r/0").expect("drawn");
+    assert!((0.3..0.7).contains(&halfway), "halfway {halfway}");
+    rt.frame(0.3);
+    assert_eq!(rt.presented("r/0").expect("drawn").1, 1.0);
+}
+
+#[test]
+fn animate_spin_turns_an_icon_on_its_period() {
+    // Rune turns an element's icon, not its box: the spinners Hazel draws are SVG icons.
+    let mut rt = runtime(
+        e(
+            "div",
+            json!({ "w": 40, "h": 40 }),
+            vec![
+                json!({ "k": "svg", "h": "spinner", "view": 24, "body": "<path d=\"M0 0h24v6H0z\"/>",
+                "st": { "w": 40, "h": 40, "color": "#ff0000ff", "animation": { "kind": "spin", "period": 1 } } }),
+            ],
+        ),
+        (40.0, 40.0),
+    );
+    // A quarter turn clockwise: the band along the top now runs down the right side.
+    rt.frame(0.25);
+    let frame = draw(&mut rt, (40, 40));
+    assert!(frame.is(37, 20, RED), "right {:?}", frame.at(37, 20));
+    assert!(frame.is(20, 3, WHITE), "top {:?}", frame.at(20, 3));
+}
+
+#[test]
+fn animate_pulse_dips_to_its_mid_opacity() {
+    let mut rt = runtime(
+        e(
+            "div",
+            json!({ "w": 40, "h": 40, "bg": "#ff0000ff",
+                "animation": { "kind": "pulse", "period": 2, "delay": 0, "from": 1, "to": 0.5 } }),
+            vec![],
+        ),
+        (40.0, 40.0),
+    );
+    let red_at = |rt: &mut Runtime<State>, t: f64| {
+        rt.frame(t);
+        draw(rt, (40, 40)).at(20, 20)[1]
+    };
+    // Red over white: the green channel rises as the red fades.
+    assert!(red_at(&mut rt, 0.0) < 20);
+    let mid = red_at(&mut rt, 1.0);
+    assert!((100..160).contains(&mid), "mid {mid}");
+}
+
+#[test]
+fn animate_in_plays_its_entrance_on_mount() {
+    let entering = json!({ "w": 40, "h": 40, "bg": "#ff0000ff",
+        "animation": { "kind": "enter", "duration": 0.2, "delay": 0, "opacity": 0, "x": 0, "y": 8, "scale": 1 } });
+    let mut rt = runtime(holder("a", vec![]), (200.0, 40.0));
+    commit(&mut rt, holder("b", vec![child("enter", entering)]));
+    let (_, early) = rt.presented("r/0").expect("drawn");
+    assert!(early < 0.5, "early {early}");
+    rt.frame(1.0);
+    assert_eq!(rt.presented("r/0").expect("drawn").1, 1.0);
+}
+
+#[test]
+fn w_frac_takes_a_share_of_the_parent_width() {
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "display": "flex", "w": 200, "h": 40 }),
+            vec![e(
+                "div",
+                json!({ "w": { "frac": 0.25 }, "h": 40, "bg": "#ff0000ff" }),
+                vec![],
+            )],
+        ),
+        (200.0, 40.0),
+    );
+    assert_eq!(rect(&rt, "r/0")[2], 50.0);
+}
+
+#[test]
+fn text_inside_an_svg_icon_draws_at_its_anchor() {
+    let body = "<rect x=\"1.5\" y=\"3.5\" width=\"15\" height=\"11\" rx=\"2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"/>\
+        <text x=\"9\" y=\"10.5\" text-anchor=\"middle\" dominant-baseline=\"middle\" fill=\"currentColor\" font-size=\"6\" font-weight=\"700\">GIF</text>";
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "w": 36, "h": 36 }),
+            vec![json!({ "k": "svg", "h": "gif", "view": 18, "body": body,
+                "st": { "w": 36, "h": 36, "color": "#000000ff", "clip": true } })],
+        ),
+        (36.0, 36.0),
+    );
+    let glyphs: Vec<[f32; 4]> = rt
+        .instances
+        .iter()
+        .filter(|i| i.params[1] == rune::render::KIND_GLYPH && i.rect[2] < 20.0)
+        .map(|i| i.rect)
+        .collect();
+    // The icon's drawing is one glyph the size of the box; its letters are the rest.
+    assert_eq!(glyphs.len(), 3, "glyphs {glyphs:?}");
+    // Centred on (9, 10.5) in the viewBox: (18, 21) at twice the size.
+    let left = glyphs.iter().map(|r| r[0]).fold(f32::MAX, f32::min);
+    let right = glyphs.iter().map(|r| r[0] + r[2]).fold(f32::MIN, f32::max);
+    let top = glyphs.iter().map(|r| r[1]).fold(f32::MAX, f32::min);
+    let bottom = glyphs.iter().map(|r| r[1] + r[3]).fold(f32::MIN, f32::max);
+    assert!(
+        ((left + right) / 2.0 - 18.0).abs() < 1.5,
+        "x {left}..{right}"
+    );
+    assert!(
+        ((top + bottom) / 2.0 - 21.0).abs() < 2.0,
+        "y {top}..{bottom}"
+    );
+}
+
+#[test]
+fn an_opacity_removed_without_a_transition_lands_at_once() {
+    let faded = child(
+        "half",
+        json!({ "w": 40, "h": 40, "bg": "#ff0000ff", "opacity": 0.5 }),
+    );
+    let mut rt = runtime(holder("a", vec![faded]), (200.0, 40.0));
+    commit(
+        &mut rt,
+        holder(
+            "b",
+            vec![child(
+                "whole",
+                json!({ "w": 40, "h": 40, "bg": "#ff0000ff" }),
+            )],
+        ),
+    );
+    assert_eq!(rt.presented("r/0").expect("drawn").1, 1.0);
+}
+
+#[test]
+fn a_press_sends_pointerdown_pointerup_and_click_in_order() {
+    sent_events(0);
+    let mut button = e("button", json!({ "w": 40, "h": 40 }), vec![]);
+    button["on"] = json!({ "pointerdown": 31, "pointerup": 31, "click": 31 });
+    let mut rt = runtime(button, (40.0, 40.0));
+    rt.pointer_move(20.0, 20.0);
+    rt.pointer_down(20.0, 20.0);
+    rt.pointer_up(20.0, 20.0);
+    rt.frame(0.1);
+    let kinds: Vec<String> = sent_events(31)
+        .iter()
+        .map(|e| e["type"].as_str().unwrap_or("").to_string())
+        .collect();
+    assert_eq!(kinds, ["pointerdown", "pointerup", "click"]);
+}
+
+#[test]
+fn a_focused_trigger_gets_its_keydown_keys() {
+    sent_events(0);
+    let mut trigger = e("button", json!({ "w": 40, "h": 40 }), vec![]);
+    trigger["on"] = json!({ "pointerdown": 32, "keydown": 33 });
+    let mut rt = runtime(trigger, (40.0, 40.0));
+    rt.key(KeyEvent {
+        key: Key::Tab,
+        mods: Mods::default(),
+    });
+    rt.key(KeyEvent {
+        key: Key::Down,
+        mods: Mods::default(),
+    });
+    rt.frame(0.1);
+    let keys: Vec<String> = sent_events(33)
+        .iter()
+        .map(|e| e["key"].as_str().unwrap_or("").to_string())
+        .collect();
+    assert_eq!(keys, ["ArrowDown"]);
+}
+
+#[test]
+fn a_runtime_focus_request_focuses_the_element_and_a_field_by_key() {
+    let mut first = e("button", json!({ "w": 40, "h": 20 }), vec![]);
+    first["on"] = json!({ "click": 40 });
+    let mut second = e("button", json!({ "w": 40, "h": 20 }), vec![]);
+    second["on"] = json!({ "click": 41 });
+    let field = e("input", json!({ "w": 80, "h": 20 }), vec![]);
+    let mut rt = runtime(
+        e("div", json!({ "flex": "col" }), vec![first, second, field]),
+        (100.0, 100.0),
+    );
+    let focused = |rt: &Runtime<State>| {
+        rt.elements()
+            .into_iter()
+            .find(|e| e.focused)
+            .and_then(|e| e.key)
+    };
+    let request = |rt: &mut Runtime<State>, msg: Value| {
+        let msg: RuntimeMsg = serde_json::from_value(msg).expect("wire request");
+        let run = msg.request().expect("a host request");
+        rt.update(move |_, tx| run(tx));
+        rt.frame(0.1);
+    };
+    request(&mut rt, json!({ "t": "focus", "key": "r/1" }));
+    assert_eq!(focused(&rt).as_deref(), Some("r/1"));
+    request(&mut rt, json!({ "t": "focus", "key": "r/2/field" }));
+    assert_eq!(focused(&rt).as_deref(), Some("r/2/field"));
+    request(&mut rt, json!({ "t": "focus", "key": "r/9" }));
+    assert_eq!(
+        focused(&rt).as_deref(),
+        Some("r/2/field"),
+        "an unknown key leaves focus where it was"
+    );
+}
+
+fn sent_lines() -> Vec<Value> {
+    let _ = crate::OUT.set(std::sync::Mutex::new(Box::new(Capture)));
+    String::from_utf8_lossy(&SENT.lock().unwrap())
+        .lines()
+        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+        .collect()
+}
+
+#[test]
+fn a_portalled_panel_anchors_to_its_trigger_and_dismisses_on_an_outside_press() {
+    sent_lines();
+    let mut panel = e(
+        "div",
+        json!({ "w": 80, "h": 60, "bg": "#ff0000ff" }),
+        vec![],
+    );
+    panel["ov"] = json!({ "anchor": { "to": "r/0", "side": "bottom", "align": "start", "gap": 4 }, "modal": "r/1/0" });
+    // As the app renders it: the panel inside a `display: contents` wrapper inside the portal.
+    let wrapper = e("div", json!({ "display": "contents" }), vec![panel]);
+    let mut portal = e("div", json!({ "display": "contents" }), vec![wrapper]);
+    portal["ov"] = json!({ "portal": 1 });
+    let mut rt = runtime(
+        e(
+            "div",
+            json!({ "w": 300, "h": 200, "pad": [20, 20, 20, 20] }),
+            vec![
+                e("button", json!({ "w": 100, "h": 30 }), vec![]),
+                // The panel renders inside a clipping box, as a menu does inside its trigger.
+                e(
+                    "div",
+                    json!({ "w": 100, "h": 30, "clip": true }),
+                    vec![portal],
+                ),
+            ],
+        ),
+        (300.0, 200.0),
+    );
+    // Below the trigger (20, 20, 100x30), 4 points away, its start edges aligned.
+    assert_eq!(rect(&rt, "r/1/0/0/0"), [20.0, 54.0, 80.0, 60.0]);
+    rt.pointer_move(250.0, 150.0);
+    rt.pointer_down(250.0, 150.0);
+    rt.pointer_up(250.0, 150.0);
+    rt.frame(0.1);
+    let dismissed = sent_lines()
+        .iter()
+        .any(|m| m["t"] == "dismiss" && m["path"] == "r/1/0");
+    assert!(dismissed, "no dismiss for r/1/0");
+}
+
+#[test]
+fn an_anchored_panel_holding_a_scroller_takes_its_content_height() {
+    let item = |n: usize| e("div", json!({ "h": 30 }), vec![t(&format!("Item {n}"))]);
+    let scroller = e(
+        "div",
+        json!({ "minH": 0, "grow": 1, "shrink": 1, "scrollY": true }),
+        vec![e(
+            "div",
+            json!({ "display": "flex", "dir": "col", "pad": [4, 4, 4, 4] }),
+            vec![item(1), item(2)],
+        )],
+    );
+    let mut panel = e(
+        "div",
+        json!({ "display": "flex", "dir": "col", "minW": 128, "maxW": 320 }),
+        vec![scroller],
+    );
+    panel["ov"] =
+        json!({ "anchor": { "to": "r/0", "side": "bottom", "align": "start", "gap": 8 } });
+    let mut portal = e("div", json!({ "display": "contents" }), vec![panel]);
+    portal["ov"] = json!({ "portal": 1 });
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "w": 400, "h": 300, "pad": [20, 20, 20, 20] }),
+            vec![e("button", json!({ "w": 100, "h": 30 }), vec![]), portal],
+        ),
+        (400.0, 300.0),
+    );
+    // Two 30-point items and 4 points of padding above and below.
+    assert_eq!(rect(&rt, "r/1/0")[3], 68.0);
+}
+
+#[test]
+fn an_auto_grid_column_is_as_wide_as_its_widest_cell_on_every_row() {
+    let cell = |w: Option<f32>| match w {
+        Some(w) => e("div", json!({ "w": w, "h": 20 }), vec![]),
+        None => e("div", json!({ "h": 20 }), vec![]),
+    };
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "w": 300 }),
+            vec![e(
+                "div",
+                json!({ "display": "grid", "gridCols": ["auto", "1fr"], "gapCol": 10, "gapRow": 4 }),
+                vec![cell(Some(60.0)), cell(None), cell(Some(30.0)), cell(None)],
+            )],
+        ),
+        (300.0, 100.0),
+    );
+    // Both value cells start after the widest label (60) and the gap, and fill the rest.
+    assert_eq!(rect(&rt, "r/0/1"), [70.0, 0.0, 230.0, 20.0]);
+    assert_eq!(rect(&rt, "r/0/3"), [70.0, 24.0, 230.0, 20.0]);
+}
+
+#[test]
+fn closing_a_modal_overlay_gives_focus_back_to_its_trigger() {
+    sent_lines();
+    let page = |open: bool| {
+        let mut trigger = json!({ "k": "e", "h": format!("trigger{open}"), "tag": "button", "st": { "w": 100, "h": 30 },
+            "attrs": {}, "on": { "click": 41 }, "c": [] });
+        if !open {
+            trigger["h"] = json!("trigger-closed");
+        }
+        let mut children = vec![trigger];
+        if open {
+            let mut item = e("div", json!({ "w": 80, "h": 20 }), vec![]);
+            item["attrs"] = json!({ "tabindex": "0" });
+            let mut panel = e("div", json!({ "w": 80, "h": 60 }), vec![item]);
+            panel["ov"] = json!({ "anchor": { "to": "r/0", "side": "bottom", "align": "start", "gap": 4 }, "modal": "r/1" });
+            let mut portal = e("div", json!({ "display": "contents" }), vec![panel]);
+            portal["ov"] = json!({ "portal": 1 });
+            children.push(portal);
+        }
+        json!({ "k": "e", "h": format!("page{open}"), "tag": "div", "st": { "w": 300, "h": 200, "pad": [20, 20, 20, 20] },
+            "attrs": {}, "on": {}, "c": children })
+    };
+    let mut rt = runtime(page(false), (300.0, 200.0));
+    commit(&mut rt, page(true));
+    rt.frame(0.1);
+    commit(&mut rt, page(false));
+    rt.frame(0.2);
+    rt.key(KeyEvent {
+        key: Key::Text(" ".into()),
+        mods: Mods::default(),
+    });
+    rt.frame(0.3);
+    let pressed = sent_lines()
+        .iter()
+        .any(|m| m["id"] == 41 && m["type"] == "click");
+    assert!(pressed, "Space did not reach the trigger");
+}
+
+#[test]
+fn a_subgrid_row_takes_its_press() {
+    sent_lines();
+    let mut item = e(
+        "span",
+        json!({ "display": "grid", "subgrid": true, "colSpanFull": true, "gridCols": ["auto", "1fr"], "h": 30,
+            "pad": [8, 8, 8, 8], "w": "full", "minW": 0, "items": "center", "clip": true, "radius": [8, 8, 8, 8],
+            "hoverBg": "#00000009", "hoverGroup": true, "focusRing": "none", "pressBg": "#00000009",
+            "transition": { "colors": { "duration": 0.15, "delay": 0, "ease": [0.4, 0, 0.2, 1] } } }),
+        vec![
+            e("span", json!({ "w": 20, "h": 20 }), vec![]),
+            e("span", json!({}), vec![t("Browse")]),
+        ],
+    );
+    item["on"] = json!({ "click": 51 });
+    let mut rt = runtime(
+        e(
+            "div",
+            json!({ "w": 300 }),
+            vec![e(
+                "div",
+                json!({ "display": "grid", "gridCols": ["auto", "1fr"] }),
+                vec![item],
+            )],
+        ),
+        (300.0, 100.0),
+    );
+    let (x, y) = rt.find("r/0/0").expect("drawn");
+    rt.pointer_move(x, y);
+    rt.pointer_down(x, y);
+    rt.pointer_up(x, y);
+    rt.frame(0.1);
+    assert!(
+        sent_lines().iter().any(|m| m["id"] == 51),
+        "no click from the subgrid row"
+    );
+}
+
+#[test]
+fn a_press_on_a_tabindex_minus_one_child_reaches_the_row() {
+    sent_lines();
+    let mut label = e(
+        "span",
+        json!({ "w": 200, "h": 30 }),
+        vec![t("Browse channels")],
+    );
+    label["attrs"] = json!({ "tabindex": "-1" });
+    let mut row = e(
+        "span",
+        json!({ "display": "flex", "w": 300, "h": 30 }),
+        vec![label],
+    );
+    row["attrs"] = json!({ "role": "link", "tabindex": "0" });
+    row["on"] = json!({ "click": 61 });
+    let mut rt = runtime(e("div", json!({ "w": 300 }), vec![row]), (300.0, 100.0));
+    let (x, y) = rt.find("r/0/0").expect("label");
+    rt.pointer_move(x, y);
+    rt.pointer_down(x, y);
+    rt.pointer_up(x, y);
+    rt.frame(0.1);
+    assert!(
+        sent_lines().iter().any(|m| m["id"] == 61),
+        "the label kept the press"
+    );
+}
+
+#[test]
+fn center_x_centres_an_absolute_box_horizontally_at_its_top() {
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "w": 400, "h": 300 }),
+            vec![e(
+                "div",
+                json!({ "w": 100, "h": 50, "absolute": [null, 30, null, null], "centerX": true, "bg": "#ff0000ff" }),
+                vec![],
+            )],
+        ),
+        (400.0, 300.0),
+    );
+    assert_eq!(rect(&rt, "r/0"), [150.0, 30.0, 100.0, 50.0]);
+}
+
+#[test]
+fn a_display_contents_portal_draws_once() {
+    let backdrop = e(
+        "div",
+        json!({ "absolute": [0, 0, 0, 0], "w": 100, "h": 100, "bg": "#00000026" }),
+        vec![],
+    );
+    let mut portal = e("div", json!({ "display": "contents" }), vec![backdrop]);
+    portal["ov"] = json!({ "portal": 1, "modal": "r/0" });
+    let mut rt = runtime(
+        e(
+            "div",
+            json!({ "display": "flex", "w": 100, "h": 100, "bg": "#ffffffff" }),
+            vec![portal],
+        ),
+        (100.0, 100.0),
+    );
+    let frame = render(&mut rt, (100, 100));
+    // One 15% black layer over white; drawn in place as well as at the root it would be 184.
+    assert!(frame.is(50, 50, [217, 217, 217]), "{:?}", frame.at(50, 50));
+}
+
+#[test]
+fn a_subgrid_row_reports_the_pointer_entering_it() {
+    sent_lines();
+    let mut item = e(
+        "div",
+        json!({ "display": "grid", "subgrid": true, "colSpanFull": true, "gridCols": ["auto", "1fr"], "h": 30 }),
+        vec![
+            e("span", json!({ "w": 20, "h": 20 }), vec![]),
+            e("span", json!({}), vec![t("Manage members")]),
+        ],
+    );
+    item["on"] = json!({ "click": 71, "mouseenter": 72, "mouseleave": 73 });
+    let mut rt = runtime(
+        e(
+            "div",
+            json!({ "w": 300 }),
+            vec![e(
+                "div",
+                json!({ "display": "grid", "gridCols": ["auto", "1fr"] }),
+                vec![item],
+            )],
+        ),
+        (300.0, 100.0),
+    );
+    let (x, y) = rt.find("r/0/0").expect("drawn");
+    rt.pointer_move(x, y);
+    rt.frame(0.1);
+    assert!(
+        sent_lines().iter().any(|m| m["id"] == 72),
+        "no mouseenter from the subgrid row"
+    );
+}
+
+#[test]
+fn a_watched_row_reports_the_pointer_to_its_mount() {
+    sent_lines();
+    let mut row = e("div", json!({ "w": 200, "h": 30 }), vec![]);
+    row["attrs"] = json!({ "data-hover-report": "r" });
+    let mut rt = runtime(
+        e("div", json!({ "w": 200, "h": 100 }), vec![row]),
+        (200.0, 100.0),
+    );
+    rt.pointer_move(50.0, 15.0);
+    rt.frame(0.1);
+    let reported = sent_lines().iter().any(|m| {
+        m["t"] == "pointer" && m["path"] == "r/0" && m["mount"] == "r" && m["inside"] == true
+    });
+    assert!(reported, "no pointer report for r/0");
+}
+
+#[test]
+fn a_right_click_on_a_watched_row_reaches_its_mount_at_the_pointer() {
+    sent_lines();
+    let mut row = e("div", json!({ "w": 200, "h": 30 }), vec![]);
+    row["attrs"] = json!({ "data-hover-report": "r" });
+    let mut rt = runtime(
+        e(
+            "div",
+            json!({ "w": 200, "h": 100 }),
+            vec![e("div", json!({ "h": 40 }), vec![]), row],
+        ),
+        (200.0, 100.0),
+    );
+    rt.secondary_down(60.0, 50.0);
+    rt.secondary_up(60.0, 50.0);
+    rt.frame(0.1);
+    let reported = sent_lines()
+        .into_iter()
+        .find(|m| m["t"] == "contextmenu" && m["path"] == "r/1");
+    let reported = reported.expect("no contextmenu report for r/1");
+    assert_eq!(
+        (
+            reported["mount"].clone(),
+            reported["x"].clone(),
+            reported["y"].clone()
+        ),
+        (json!("r"), json!(60.0), json!(50.0))
+    );
+    assert_eq!(
+        reported["rects"]["r/1"],
+        json!([0.0, 40.0, 200.0, 30.0]),
+        "the clicked row's drawn rect"
+    );
+}
+
+#[test]
+fn a_modal_layout_places_its_panel_in_the_middle_row_centred_across() {
+    let panel = e("div", json!({ "w": 100, "h": 60, "rowStart": 2 }), vec![]);
+    let grid = e(
+        "div",
+        json!({ "display": "grid", "gridRows": ["1fr", "auto", "3fr"], "justifyItems": "center", "w": 300, "h": 260 }),
+        vec![panel],
+    );
+    let rt = runtime(grid, (300.0, 260.0));
+    // 200 left over for 1fr and 3fr: the panel starts a quarter of the way down.
+    assert_eq!(rect(&rt, "r/0"), [100.0, 50.0, 100.0, 60.0]);
+}
+
+#[test]
+fn a_flex_1_body_in_an_overlay_column_takes_its_contents_height() {
+    let content = e("div", json!({ "h": 40 }), vec![]);
+    let body = e(
+        "div",
+        json!({ "display": "flex", "dir": "col", "grow": 1, "shrink": 1, "minH": 0, "scrollY": true }),
+        vec![content],
+    );
+    let column = e(
+        "div",
+        json!({ "display": "flex", "dir": "col", "w": 200, "maxH": 500 }),
+        vec![body],
+    );
+    let mut portal = e("div", json!({}), vec![column]);
+    portal["ov"] = json!({ "portal": 1 });
+    let rt = runtime(e("div", json!({}), vec![portal]), (300.0, 300.0));
+    // In CSS a 0% basis in a column of indefinite height is content-sized; it must not collapse.
+    assert_eq!(rect(&rt, "r/0/0/0")[3], 40.0);
+}
+
+#[test]
+fn elements_appear_and_vanish_at_once_as_in_the_dom() {
+    let tree = |children: Vec<Value>| -> TreeMsg {
+        serde_json::from_value(json!({
+            "ack": 1, "page": { "bg": "#ffffffff" },
+            "root": e("div", json!({ "w": 200, "h": 100 }), children),
+        }))
+        .expect("wire tree")
+    };
+    let mut rt = runtime(
+        e("div", json!({ "w": 200, "h": 100 }), vec![]),
+        (200.0, 100.0),
+    );
+    let shown = |rt: &Runtime<State>, text: &str| {
+        rt.elements()
+            .iter()
+            .any(|e| e.text.as_deref() == Some(text) && !e.exiting && e.opacity > 0.99)
+    };
+    let next = tree(vec![e("span", json!({}), vec![t("Toolbar")])]);
+    rt.update(move |s, _| s.apply(next));
+    rt.frame(0.016);
+    assert!(
+        shown(&rt, "Toolbar"),
+        "an inserted element shows in full on its first frame"
+    );
+    let next = tree(vec![]);
+    rt.update(move |s, _| s.apply(next));
+    rt.frame(0.016);
+    assert!(
+        !rt.elements()
+            .iter()
+            .any(|e| e.text.as_deref() == Some("Toolbar")),
+        "a removed element is gone on the next frame"
+    );
+}
+
+#[test]
+fn a_link_inside_a_focusable_wrapper_follows_its_href_on_a_press() {
+    sent_lines();
+    let link = with_attrs(
+        e(
+            "a",
+            json!({ "display": "grid", "w": 40, "h": 40 }),
+            vec![t("H")],
+        ),
+        json!({ "href": "/hazel", "tabindex": "0" }),
+    );
+    let wrapper = with_attrs(
+        e("span", json!({ "display": "grid" }), vec![link]),
+        json!({ "role": "link", "aria-label": "Home", "tabindex": "0" }),
+    );
+    let mut rt = runtime(
+        e("div", json!({ "w": 100, "h": 100 }), vec![wrapper]),
+        (100.0, 100.0),
+    );
+    rt.pointer_move(20.0, 20.0);
+    rt.pointer_down(20.0, 20.0);
+    rt.pointer_up(20.0, 20.0);
+    rt.frame(0.1);
+    let followed = sent_lines()
+        .iter()
+        .any(|m| m["type"] == "link" && m["value"] == "/hazel");
+    assert!(followed, "the press did not follow the link");
+}
+
+#[test]
+fn a_subgrid_link_row_follows_its_href_on_a_press() {
+    sent_lines();
+    let link = with_attrs(
+        e(
+            "a",
+            json!({ "display": "grid", "subgrid": true, "colSpanFull": true, "gridCols": ["auto", "1fr"], "h": 32 }),
+            vec![
+                e("span", json!({}), vec![t("#")]),
+                e("span", json!({}), vec![t("engineering")]),
+            ],
+        ),
+        json!({ "href": "/hazel/chat/engineering" }),
+    );
+    let list = e(
+        "div",
+        json!({ "display": "grid", "gridCols": ["auto", "1fr"], "w": 200 }),
+        vec![link],
+    );
+    let mut rt = runtime(list, (200.0, 100.0));
+    rt.pointer_move(100.0, 16.0);
+    rt.pointer_down(100.0, 16.0);
+    rt.pointer_up(100.0, 16.0);
+    rt.frame(0.1);
+    let followed = sent_lines()
+        .iter()
+        .any(|m| m["type"] == "link" && m["value"] == "/hazel/chat/engineering");
+    assert!(followed, "a press on a subgrid row did not follow its link");
+}
+
+#[test]
+fn a_fixed_element_is_placed_against_the_window_in_a_taller_page() {
+    let bar = e(
+        "div",
+        json!({ "fixed": true, "absolute": [0, null, 0, 0], "h": 20, "bg": "#0000ffff" }),
+        vec![t("Copied")],
+    );
+    let page = e(
+        "div",
+        json!({ "h": 1200 }),
+        vec![e("div", json!({ "h": 1200 }), vec![bar])],
+    );
+    let rt = runtime(page, (300.0, 800.0));
+    let [_, y, _, h] = rect(&rt, "r/0/0");
+    assert_eq!(
+        y + h,
+        800.0,
+        "a bottom-0 fixed bar sits on the window's bottom edge"
+    );
+}
+
+#[test]
+fn a_fixed_panel_inside_a_dialog_stays_above_the_page() {
+    sent_lines();
+    let mut cover = e("button", json!({ "w": 200, "h": 200 }), vec![]);
+    cover["on"] = json!({ "click": 50 });
+    let mut inside = e("button", json!({ "w": 60, "h": 30 }), vec![]);
+    inside["on"] = json!({ "click": 51 });
+    let panel = e(
+        "div",
+        json!({ "fixed": true, "absolute": [0, 0, null, null] }),
+        vec![inside],
+    );
+    let mut dialog = e("div", json!({}), vec![panel]);
+    dialog["ov"] = json!({ "portal": 1, "modal": "r/1" });
+    let mut rt = runtime(e("div", json!({}), vec![cover, dialog]), (200.0, 200.0));
+    rt.pointer_move(10.0, 10.0);
+    rt.pointer_down(10.0, 10.0);
+    rt.pointer_up(10.0, 10.0);
+    rt.frame(0.1);
+    let clicked: Vec<Value> = sent_lines()
+        .into_iter()
+        .filter(|m| m["type"] == "click" && (m["id"] == 50 || m["id"] == 51))
+        .map(|m| m["id"].clone())
+        .collect();
+    assert_eq!(clicked, [json!(51)], "the press reached the dialog's panel");
+}
+
+#[test]
+fn space_on_a_tabbed_unstyled_checkbox_toggles_it_and_a_checked_radio_stays() {
+    sent_lines();
+    // Unstyled, as inside the app's visually hidden wrappers: a browser's 13px box.
+    let mut checkbox = with_attrs(e("input", json!({}), vec![]), json!({ "type": "checkbox" }));
+    checkbox["on"] = json!({ "change": 60 });
+    let mut radio = with_attrs(
+        e("input", json!({ "w": 16, "h": 16 }), vec![]),
+        json!({ "type": "radio", "checked": "" }),
+    );
+    radio["on"] = json!({ "change": 61 });
+    let mut rt = runtime(
+        e("div", json!({ "flex": "col" }), vec![checkbox, radio]),
+        (100.0, 100.0),
+    );
+    let space = |rt: &mut Runtime<State>| {
+        rt.key(KeyEvent {
+            key: Key::Text(" ".into()),
+            mods: Mods::default(),
+        });
+        rt.frame(0.1);
+    };
+    for _ in 0..2 {
+        rt.key(KeyEvent {
+            key: Key::Tab,
+            mods: Mods::default(),
+        });
+        rt.frame(0.1);
+        space(&mut rt);
+    }
+    assert!(
+        rt.state.fields.is_empty(),
+        "a checkbox or radio is no text field"
+    );
+    let changes: Vec<Value> = sent_lines()
+        .into_iter()
+        .filter(|m| m["type"] == "change" && (m["id"] == 60 || m["id"] == 61))
+        .map(|m| m["id"].clone())
+        .collect();
+    assert_eq!(
+        changes,
+        [json!(60)],
+        "the checkbox toggled; the checked radio did not fire"
+    );
+}
+
+#[test]
+fn tab_reaches_an_empty_button_as_a_browser_does() {
+    let first = e("button", json!({ "w": 40, "h": 20 }), vec![]);
+    let hidden = e("button", json!({}), vec![]);
+    let mut rt = runtime(
+        e("div", json!({ "flex": "col" }), vec![first, hidden]),
+        (100.0, 100.0),
+    );
+    for _ in 0..2 {
+        rt.key(KeyEvent {
+            key: Key::Tab,
+            mods: Mods::default(),
+        });
+        rt.frame(0.1);
+    }
+    assert!(
+        rt.focused_path().is_some_and(|p| p.ends_with("r/1")),
+        "the 0x0 button took focus: {:?}",
+        rt.focused_path()
+    );
+}
+
+#[test]
+fn an_inline_block_without_text_sits_on_the_baseline_of_its_line() {
+    // A 96px avatar button in a block with a 16px/24px strut: the line adds the strut's
+    // descent below it, so the block is 102px tall, as in Chromium.
+    let zone = e(
+        "div",
+        json!({}),
+        vec![e("button", json!({ "w": 96, "h": 96 }), vec![])],
+    );
+    let after = e("p", json!({ "h": 16 }), vec![t("Click or drop image")]);
+    let rt = runtime(e("div", json!({}), vec![zone, after]), (300.0, 300.0));
+    let [_, y, _, _] = rect(&rt, "r/1");
+    assert!((y - 102.2).abs() < 0.5, "the text below starts at {y}");
+}
+
+#[test]
+fn a_full_height_empty_state_leaves_room_for_the_composer() {
+    // The channel page: header, a flex-1 min-h-0 list holding an h-full empty state, composer.
+    // In CSS the list shrinks to what the scrolling column leaves; it must not push the composer out.
+    // The styles the resolver gives the app's classes.
+    let picture = e(
+        "div",
+        json!({ "aspectRatio": 1, "w": "full", "maxW": 384 }),
+        vec![with_attrs(
+            e(
+                "img",
+                json!({ "clip": true, "inline": false, "display": "block", "maxW": "full", "h": "full", "w": "full", "objectFit": "cover", "opacity": 0.5 }),
+                vec![],
+            ),
+            json!({ "src": "/images/squirrle_ocean.webp" }),
+        )],
+    );
+    let empty = e(
+        "div",
+        json!({ "pad": [32, 32, 32, 32], "inline": false, "display": "flex", "w": "full", "h": "full", "dir": "col", "items": "center", "justify": "center" }),
+        vec![picture, e("p", json!({ "h": 28 }), vec![t("Quiet")])],
+    );
+    let list = e(
+        "div",
+        json!({ "inline": false, "display": "flex", "minH": 0, "grow": 1, "shrink": 1, "dir": "col", "clip": true }),
+        vec![empty],
+    );
+    // The column itself scrolls (`overflow-y-auto`), as the split panel's content does.
+    let page = e(
+        "div",
+        json!({ "display": "flex", "dir": "col", "h": 800, "minH": 0, "grow": 1, "scrollY": true }),
+        vec![
+            e("div", json!({ "h": 96 }), vec![]),
+            list,
+            e("div", json!({ "h": 90 }), vec![t("composer")]),
+        ],
+    );
+    let rt = runtime(page, (930.0, 800.0));
+    let [_, _, _, h] = rect(&rt, "r/1");
+    assert_eq!(h, 614.0, "the list takes what header and composer leave");
+    let [_, y, _, _] = rect(&rt, "r/2");
+    assert_eq!(y, 710.0, "the composer stays in the window");
+}
+
+#[test]
+fn an_arrow_on_a_focused_radio_asks_the_runtime_for_the_next_in_its_group() {
+    sent_lines();
+    let radio = |checked: bool| {
+        let mut attrs = json!({ "type": "radio", "name": "mode", "tabindex": "0" });
+        if checked {
+            attrs["checked"] = json!("");
+        }
+        with_attrs(e("input", json!({}), vec![]), attrs)
+    };
+    let mut rt = runtime(
+        e(
+            "div",
+            json!({ "flex": "col" }),
+            vec![radio(true), radio(false)],
+        ),
+        (100.0, 100.0),
+    );
+    rt.key(KeyEvent {
+        key: Key::Tab,
+        mods: Mods::default(),
+    });
+    rt.frame(0.1);
+    rt.key(KeyEvent {
+        key: Key::Down,
+        mods: Mods::default(),
+    });
+    rt.frame(0.1);
+    let asked = sent_lines()
+        .into_iter()
+        .any(|m| m["t"] == "radio" && m["path"] == "r/0" && m["step"] == 1);
+    assert!(asked, "ArrowDown on the radio asks for the next one");
+}
+
+#[test]
+fn a_press_on_a_label_asks_for_its_controls_activation_unless_it_handles_clicks() {
+    sent_lines();
+    let plain = e(
+        "label",
+        json!({ "display": "block", "h": 20 }),
+        vec![t("Name")],
+    );
+    let mut own = e(
+        "label",
+        json!({ "display": "block", "h": 20 }),
+        vec![t("Remember")],
+    );
+    own["on"] = json!({ "click": 70 });
+    let mut rt = runtime(
+        e("div", json!({ "flex": "col" }), vec![plain, own]),
+        (200.0, 100.0),
+    );
+    for y in [10.0, 30.0] {
+        rt.pointer_move(5.0, y);
+        rt.pointer_down(5.0, y);
+        rt.pointer_up(5.0, y);
+        rt.frame(0.1);
+    }
+    let labels: Vec<Value> = sent_lines()
+        .into_iter()
+        .filter(|m| m["t"] == "label")
+        .map(|m| m["path"].clone())
+        .collect();
+    assert_eq!(
+        labels,
+        [json!("r/0")],
+        "only the label without its own click handler"
+    );
+}
+
+#[test]
+fn pointer_events_none_inherits_and_auto_turns_presses_back_on() {
+    sent_lines();
+    let mut off = e("button", json!({ "w": 100, "h": 20 }), vec![]);
+    off["on"] = json!({ "click": 80 });
+    let mut on = e(
+        "button",
+        json!({ "w": 100, "h": 20, "pointerEvents": "auto" }),
+        vec![],
+    );
+    on["on"] = json!({ "click": 81 });
+    let wrapper = e(
+        "div",
+        json!({ "display": "flex", "dir": "col", "pointerEvents": "none" }),
+        vec![off, on],
+    );
+    let mut rt = runtime(wrapper, (200.0, 100.0));
+    for y in [10.0, 30.0] {
+        rt.pointer_move(50.0, y);
+        rt.pointer_down(50.0, y);
+        rt.pointer_up(50.0, y);
+        rt.frame(0.1);
+    }
+    let clicked: Vec<Value> = sent_lines()
+        .into_iter()
+        .filter(|m| m["type"] == "click" && (m["id"] == 80 || m["id"] == 81))
+        .map(|m| m["id"].clone())
+        .collect();
+    assert_eq!(
+        clicked,
+        [json!(81)],
+        "only the pointer-events: auto button takes the press"
+    );
+}
+
+#[test]
+fn a_full_width_item_in_a_row_shrinks_to_leave_its_siblings_room() {
+    // Search (256), a w-full select field, and a count: CSS shrinks the field so all three fit.
+    let row = e(
+        "div",
+        json!({ "display": "flex", "w": 600, "gapCol": 12 }),
+        vec![
+            e("div", json!({ "w": 256, "h": 34 }), vec![]),
+            e(
+                "div",
+                json!({ "w": "full", "h": 34 }),
+                vec![e("div", json!({ "w": 144, "h": 34 }), vec![])],
+            ),
+            e("span", json!({ "nowrap": true }), vec![t("0 files")]),
+        ],
+    );
+    let rt = runtime(row, (600.0, 100.0));
+    let [x, _, w, _] = rect(&rt, "r/2");
+    assert!(
+        w > 0.0 && x + w <= 600.5,
+        "the count stays in the row: x {x}, w {w}"
+    );
+}
+
+#[test]
+fn an_absolute_button_sizes_to_its_icon_and_padding() {
+    // The sidebar row's hover-revealed menu trigger: right-0, h-full, w-auto, px-2.5, a 16px
+    // icon with a -2px right margin and an auto left one, and a 1px border. Chromium makes it 36 wide.
+    let icon = json!({
+        "k": "svg", "h": "dots", "view": 24.0,
+        "body": "<path d=\"M5 12h.01M12 12h.01M19 12h.01\" stroke=\"currentColor\"/>",
+        // The row's `**:last:data-[slot=icon]:ml-auto` reaches it too: an auto left margin.
+        "st": { "w": 16, "h": 16, "margin": [0, -2, 0, 0], "marginAuto": [false, false, false, true], "shrink": 0, "self": "center" }
+    });
+    let trigger = e(
+        "button",
+        json!({ "display": "flex", "items": "center", "justify": "flex-end", "absolute": [null, null, 0, null],
+                "w": "auto", "h": "full", "pad": [0, 10, 0, 10], "border": [1, 1, 1, 1] }),
+        vec![icon],
+    );
+    // The row is a grid, as the sidebar item is.
+    let row = e(
+        "div",
+        json!({ "display": "grid", "gridCols": ["auto", "1fr", "1.5rem", "0.5rem", "auto"], "w": 200, "h": 40 }),
+        vec![e("span", json!({}), vec![t("design")]), trigger],
+    );
+    let rt = runtime(row, (200.0, 100.0));
+    let [x, _, w, h] = rect(&rt, "r/1");
+    // 16 - 2 + 20 of padding + 2 of border, as Chromium lays it out.
+    assert_eq!((w, h), (36.0, 40.0), "icon + padding + border, full height");
+    assert_eq!(x, 164.0, "against the right edge");
+}
+
+#[test]
+fn a_badge_with_a_group_shift_slides_aside_while_its_row_is_hovered() {
+    // `absolute right-1.5 group-hover:right-8`: 26 to the left while the row is hovered.
+    let badge = e(
+        "span",
+        json!({ "absolute": [null, null, 6, null], "w": 20, "h": 20, "bg": "#7f56d9ff", "groupShift": [-26, 0] }),
+        vec![],
+    );
+    let mut row = e(
+        "div",
+        json!({ "w": 200, "h": 40, "hoverGroup": true, "hoverBg": "#ffffff0b" }),
+        vec![badge],
+    );
+    row["on"] = json!({ "click": 90 });
+    let mut rt = runtime(e("div", json!({}), vec![row]), (200.0, 100.0));
+    let x = |rt: &Runtime<State>| {
+        rt.elements()
+            .into_iter()
+            .find(|e| e.key.as_deref() == Some("r/0/0"))
+            .map(|e| e.visible[0])
+            .expect("badge drawn")
+    };
+    let rest = x(&rt);
+    rt.pointer_move(20.0, 20.0);
+    for f in 1..=60 {
+        rt.frame(f64::from(f) / 60.0);
+    }
+    assert!(
+        (x(&rt) - (rest - 26.0)).abs() < 0.5,
+        "hovered: {} from {rest}",
+        x(&rt)
+    );
+}
+
+#[test]
+fn space_y_collapses_with_the_top_margin_a_field_starts_with() {
+    // `space-y-2`, then a field whose label is hidden and whose control has `mt-2`: CSS
+    // collapses the two 8pt margins into one, so the control starts 8pt below the heading.
+    let heading = e("h3", json!({ "h": 20 }), vec![t("Email address")]);
+    let field = e(
+        "div",
+        json!({ "w": "full" }),
+        vec![
+            e(
+                "label",
+                json!({ "display": "none" }),
+                vec![t("Email address")],
+            ),
+            e(
+                "div",
+                json!({ "margin": [8, 0, 0, 0], "display": "block", "h": 36 }),
+                vec![],
+            ),
+        ],
+    );
+    let group = e("div", json!({ "childGap": 8 }), vec![heading, field]);
+    let rt = runtime(group, (400.0, 200.0));
+    assert_eq!(rect(&rt, "r/1/1")[1], 28.0, "one 8pt gap, not 16");
+}
+
+#[test]
+fn a_contained_block_keeps_its_childs_margins_inside() {
+    // A chat row (`contain: layout`) around a date divider with `my-2`: the row is its own
+    // formatting context, so it is 40 tall, as in the browser, not 24 with the margins outside.
+    let divider = e("div", json!({ "h": 24, "margin": [8, 0, 8, 0] }), vec![]);
+    let row = e("div", json!({ "isolated": true }), vec![divider]);
+    let rt = runtime(e("div", json!({}), vec![row]), (300.0, 300.0));
+    assert_eq!(rect(&rt, "r/0")[3], 40.0);
+    assert_eq!(rect(&rt, "r/0/0")[1], 8.0);
+}
+
+#[test]
+fn block_flow_collapses_vertical_margins_as_css_does() {
+    // Siblings: 16 below one and 8 above the next make a 16pt gap, not 24.
+    let a = e("div", json!({ "h": 20, "margin": [0, 0, 16, 0] }), vec![]);
+    let b = e("div", json!({ "h": 20, "margin": [8, 0, 0, 0] }), vec![]);
+    // A row whose content has my-2: the margins pass out of the row, which stays 20 tall.
+    let content = e("div", json!({ "h": 20, "margin": [8, 0, 8, 0] }), vec![]);
+    let row = e("div", json!({}), vec![content]);
+    // In a flex column nothing collapses: its item keeps its margins inside.
+    let item = e("div", json!({ "h": 20, "margin": [8, 0, 8, 0] }), vec![]);
+    let flex = e(
+        "div",
+        json!({ "display": "flex", "dir": "col" }),
+        vec![item],
+    );
+    let rt = runtime(e("div", json!({}), vec![a, b, row, flex]), (300.0, 300.0));
+    assert_eq!(
+        rect(&rt, "r/1")[1],
+        36.0,
+        "sibling margins collapse to the larger"
+    );
+    let [_, row_y, _, row_h] = rect(&rt, "r/2");
+    assert_eq!(
+        (row_y, row_h),
+        (64.0, 20.0),
+        "a child's margins pass out of a plain block"
+    );
+    assert_eq!(
+        rect(&rt, "r/3")[3],
+        36.0,
+        "a flex column keeps its item's margins inside"
+    );
+}
+
+#[test]
+fn the_document_scrolls_when_it_is_taller_than_the_window() {
+    let page = e(
+        "div",
+        json!({}),
+        vec![
+            e("div", json!({ "h": 1000 }), vec![]),
+            e("p", json!({ "h": 20 }), vec![t("Danger Zone")]),
+        ],
+    );
+    let mut rt = runtime(page, (300.0, 800.0));
+    let (_, before) = rt.find("r/1").expect("drawn");
+    rt.wheel(150.0, 400.0, -300.0);
+    rt.frame(0.0);
+    let (_, after) = rt.find("r/1").expect("drawn");
+    assert!(
+        after < before - 200.0,
+        "the page scrolled: {before} -> {after}"
+    );
+}
+
+#[test]
+fn a_file_input_click_opens_an_open_dialog_and_reports_the_picked_file() {
+    sent_lines();
+    let mut rt = runtime(
+        e("div", json!({ "w": 100, "h": 100 }), vec![]),
+        (100.0, 100.0),
+    );
+    let msg: RuntimeMsg =
+        serde_json::from_value(json!({ "t": "pickFile", "path": "r/0", "accept": "image/*" }))
+            .expect("wire request");
+    let run = msg.request().expect("a host request");
+    rt.update(move |_, tx| run(tx));
+    rt.frame(0.1);
+    let (kind, options) = rt.file_dialog().expect("an Open dialog shows");
+    assert_eq!(kind, rune::FileDialogKind::Open);
+    assert!(
+        options
+            .filters
+            .iter()
+            .any(|(_, ext)| ext.iter().any(|e| e == "png")),
+        "filtered to images"
+    );
+    rt.resolve_file_dialog(Some("/tmp/avatar.png".into()))
+        .expect("answered");
+    rt.frame(0.1);
+    let reported = sent_lines().into_iter().any(|m| {
+        m["t"] == "files" && m["path"] == "r/0" && m["files"] == json!(["/tmp/avatar.png"])
+    });
+    assert!(reported, "the picked file reaches the runtime");
+}
+
+#[test]
+fn table_cells_line_up_in_columns_across_rows() {
+    let cell = |w: f32, text: &str| e("td", json!({ "w": w }), vec![t(text)]);
+    let row = |cells: Vec<Value>| {
+        e(
+            "tr",
+            json!({ "border": [0, 0, 1, 0], "borderColor": "#ff0000ff" }),
+            cells,
+        )
+    };
+    let mut wide = e("td", json!({}), vec![t("spans both")]);
+    wide["attrs"] = json!({ "colspan": "2" });
+    let table = e(
+        "table",
+        json!({ "w": 300 }),
+        vec![e(
+            "tbody",
+            json!({}),
+            vec![
+                row(vec![cell(40.0, "a"), cell(120.0, "b")]),
+                row(vec![cell(90.0, "c"), cell(20.0, "d")]),
+                row(vec![wide]),
+            ],
+        )],
+    );
+    let rt = runtime(table, (300.0, 200.0));
+    let x = |path: &str| rect(&rt, path)[0];
+    let y = |path: &str| rect(&rt, path)[1];
+    assert!(
+        x("r/0/0/1") >= 90.0,
+        "a row's cells sit side by side, past the widest first cell"
+    );
+    assert_eq!(y("r/0/0/1"), y("r/0/0/0"), "a row's cells share a line");
+    assert_eq!(
+        x("r/0/0/1"),
+        x("r/0/1/1"),
+        "the second column starts at the same x in every row"
+    );
+    assert!(y("r/0/1/0") > y("r/0/0/0"), "rows stack");
+    assert!(
+        rect(&rt, "r/0/2/0")[2] >= 200.0,
+        "a colspan=2 cell spans both columns"
+    );
+}
+
+#[test]
+fn table_columns_share_spare_width_by_content_and_cells_centre_vertically() {
+    // Content 100 and 300 wide in an 800-wide table: CSS gives 200 and 600.
+    let row = e(
+        "tr",
+        json!({}),
+        vec![
+            e(
+                "td",
+                json!({}),
+                vec![e("div", json!({ "w": 100, "h": 60 }), vec![])],
+            ),
+            e(
+                "td",
+                json!({}),
+                vec![e("div", json!({ "w": 300, "h": 20 }), vec![])],
+            ),
+        ],
+    );
+    let table = e(
+        "table",
+        json!({ "w": 800 }),
+        vec![e("tbody", json!({}), vec![row])],
+    );
+    let rt = runtime(table, (800.0, 200.0));
+    let [x, _, w, _] = rect(&rt, "r/0/0/1");
+    assert_eq!(
+        (x, w),
+        (200.0, 600.0),
+        "columns in proportion to their content"
+    );
+    assert_eq!(
+        rect(&rt, "r/0/0/1/0")[1],
+        20.0,
+        "the short cell's content sits in the middle of the 60-tall row"
+    );
+}
+
+#[test]
+fn a_lone_span_of_smaller_text_sits_on_its_blocks_baseline() {
+    // A 12/16 span in a 16/24 block: the line is the block's 24, the span 5.45 down.
+    let label = e(
+        "div",
+        json!({}),
+        vec![e(
+            "span",
+            json!({ "fontSize": 12, "lineHeight": 16 }),
+            vec![t("Settings")],
+        )],
+    );
+    let rt = runtime(e("div", json!({}), vec![label]), (300.0, 100.0));
+    let [_, y, _, _] = rect(&rt, "r/0/0");
+    assert!((y - 5.45).abs() < 0.2, "the span starts at {y}");
+    assert!(
+        (rect(&rt, "r/0")[3] - 24.0).abs() < 0.2,
+        "the line is the block's strut"
+    );
+}
+
+#[test]
+fn an_inline_label_in_a_block_is_as_wide_as_its_text() {
+    let block = |align: Value| {
+        e(
+            "div",
+            json!({ "w": 300, "textAlign": align }),
+            vec![e("label", json!({}), vec![t("Organization Name")])],
+        )
+    };
+    let rt = runtime(
+        e(
+            "div",
+            json!({}),
+            vec![block(json!("left")), block(json!("center"))],
+        ),
+        (300.0, 100.0),
+    );
+    let [x, _, w, _] = rect(&rt, "r/0/0");
+    assert!(
+        x == 0.0 && w < 200.0,
+        "the label takes its text's width: {w}"
+    );
+    let [cx, _, cw, _] = rect(&rt, "r/1/0");
+    assert!(
+        (cx + cw / 2.0 - 150.0).abs() < 1.0,
+        "text-align centres the label"
+    );
+}
+
+#[test]
+fn an_inline_flex_child_of_a_block_keeps_its_own_width() {
+    let badge = e(
+        "span",
+        json!({ "display": "flex", "inline": true, "pad": [2, 8, 2, 8] }),
+        vec![t("Owner")],
+    );
+    let cell = e("div", json!({ "w": 300 }), vec![badge]);
+    let rt = runtime(cell, (300.0, 100.0));
+    let [x, _, w, _] = rect(&rt, "r/0");
+    assert!(
+        w < 150.0,
+        "the badge is as wide as its text, not the block: {w}"
+    );
+    assert_eq!(x, 0.0, "it starts where text-align puts it");
 }

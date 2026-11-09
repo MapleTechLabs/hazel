@@ -39,15 +39,30 @@ pub struct Style {
     pub opacity: Option<F>,
     pub scroll_y: Option<bool>,
     pub clip: Option<bool>,
+    /// Its own formatting context (`contain: layout`, `display: flow-root`).
+    pub isolated: Option<bool>,
     pub truncate: Option<bool>,
     pub nowrap: Option<bool>,
     pub inline: Option<bool>,
     pub absolute: Option<[Option<F>; 4]>,
     pub grid_cols: Option<Vec<String>>,
+    /// Host-only: a table row's key, so its cells hover together (`hover_group_shared`).
+    #[serde(skip)]
+    pub hover_share: Option<String>,
+    /// Host-only: a table cell's `colspan`.
+    #[serde(skip)]
+    pub col_span: Option<u16>,
+    /// `position: fixed`: drawn at the window's root and placed against the window.
+    pub fixed: Option<bool>,
+    pub grid_rows: Option<Vec<String>>,
+    pub row_start: Option<i16>,
+    pub justify_items: Option<String>,
     pub col_span_full: Option<bool>,
     pub subgrid: Option<bool>,
     pub hover_group: Option<bool>,
     pub group_opacity: Option<F>,
+    /// `group-hover:right-8` on a positioned element: [dx, dy] while its group is hovered.
+    pub group_shift: Option<[F; 2]>,
     pub center_y: Option<bool>,
     // Fields below arrive from newer resolvers. Each decodes leniently: a value of an unexpected
     // shape drops that field, never the whole tree.
@@ -81,6 +96,8 @@ pub struct Style {
     pub white_space_pre: Option<bool>,
     #[serde(default, deserialize_with = "lenient")]
     pub visibility: Option<String>,
+    /// `pointer-events`: `none` or `auto`, inherited by the host as CSS does.
+    pub pointer_events: Option<String>,
     #[serde(default, deserialize_with = "lenient")]
     pub z_index: Option<F>,
     #[serde(default, deserialize_with = "lenient")]
@@ -92,6 +109,73 @@ pub struct Style {
     pub shrink: Option<F>,
     #[serde(default, deserialize_with = "lenient")]
     pub hover_color: Option<String>,
+    /// The ring keyboard focus draws (`:focus-visible`), or `"none"` when the outline is hidden.
+    #[serde(default, deserialize_with = "lenient")]
+    pub focus_ring: Option<FocusRing>,
+    /// The ring while focus is on the element or in it (`:focus`, `:focus-within`).
+    #[serde(default, deserialize_with = "lenient")]
+    pub focus_within_ring: Option<OutlineSpec>,
+    /// `left-1/2 -translate-x-1/2`: centred horizontally in its containing block.
+    #[serde(default, deserialize_with = "lenient")]
+    pub center_x: Option<bool>,
+    /// The fill while a press is held (`:active`).
+    #[serde(default, deserialize_with = "lenient")]
+    pub press_bg: Option<String>,
+    /// CSS transitions by what Rune animates separately; a missing channel changes at once.
+    #[serde(default, deserialize_with = "lenient")]
+    pub transition: Option<Transitions>,
+    /// A keyframe animation: a loop, or an entrance played on mount.
+    #[serde(default, deserialize_with = "lenient")]
+    pub animation: Option<Animation>,
+}
+
+#[derive(Deserialize, Clone, Debug, Hash, PartialEq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum Animation {
+    Spin {
+        period: F,
+    },
+    /// Opacity `from` at the start of each period, `to` at its middle.
+    Pulse {
+        period: F,
+        delay: F,
+        from: F,
+        to: F,
+    },
+    /// Starts from these values (px, and a scale) and settles on the element's own.
+    Enter {
+        duration: F,
+        delay: F,
+        opacity: F,
+        x: F,
+        y: F,
+        scale: F,
+    },
+}
+
+#[derive(Deserialize, Clone, Debug, Default, Hash, PartialEq)]
+pub struct Transitions {
+    pub colors: Option<Timing>,
+    pub opacity: Option<Timing>,
+    pub layout: Option<Timing>,
+    pub transform: Option<Timing>,
+}
+
+/// Seconds, and the `cubic-bezier` control points.
+#[derive(Deserialize, Clone, Debug, Default, Hash, PartialEq)]
+pub struct Timing {
+    pub duration: F,
+    #[serde(default)]
+    pub delay: F,
+    pub ease: [F; 4],
+}
+
+#[derive(Deserialize, Clone, Debug, Hash, PartialEq)]
+#[serde(untagged)]
+pub enum FocusRing {
+    Ring(OutlineSpec),
+    /// `"none"`: the author hid the outline and drew no focus style of their own.
+    Hidden(String),
 }
 
 /// `Some(value)` when the JSON decodes as `T`, else `None`.
@@ -125,6 +209,29 @@ pub struct OutlineSpec {
     pub offset: F,
 }
 
+/// An overlay the runtime's overlay helpers asked for (`ov` on an element).
+#[derive(Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct Overlay {
+    /// Drawn at the window's root, above the page, rather than in place.
+    #[serde(default)]
+    pub portal: Option<u8>,
+    pub anchor: Option<OverlayAnchor>,
+    /// The overlay root a press outside this element (or Escape in it) dismisses.
+    pub modal: Option<String>,
+}
+
+#[derive(Deserialize, Clone, Debug, PartialEq)]
+pub struct OverlayAnchor {
+    /// The trigger's element path, which is also its Rune key.
+    pub to: String,
+    pub side: String,
+    pub align: String,
+    pub gap: F,
+    /// Along the trigger, as Floating UI's `crossOffset` (a context menu opens at the pointer).
+    #[serde(default)]
+    pub cross: Option<F>,
+}
+
 /// `background-image`: a picture by URL or a linear gradient (`angle` in CSS degrees).
 #[derive(Deserialize, Clone, Debug, Default, Hash, PartialEq)]
 pub struct BgImage {
@@ -155,11 +262,12 @@ impl std::hash::Hash for F {
     }
 }
 
-/// A CSS length: px, `"full"` for 100%, or `"auto"` (no size set).
+/// A CSS length: px, `"full"` for 100%, `{ "frac": f }` for a share of the parent, or `"auto"`.
 #[derive(Clone, Debug, PartialEq, Hash)]
 pub enum Len {
     Px(F),
     Full,
+    Frac(F),
     Auto,
 }
 impl<'de> Deserialize<'de> for Len {
@@ -167,6 +275,10 @@ impl<'de> Deserialize<'de> for Len {
         Ok(match Value::deserialize(d)? {
             Value::Number(n) => Len::Px(F(n.as_f64().unwrap_or(0.0) as f32)),
             Value::String(s) if s == "full" => Len::Full,
+            Value::Object(o) => match o.get("frac").and_then(Value::as_f64) {
+                Some(f) => Len::Frac(F(f as f32)),
+                None => Len::Auto,
+            },
             _ => Len::Auto,
         })
     }
@@ -199,6 +311,8 @@ pub enum WireNode {
         mount: Option<String>,
         #[serde(default)]
         o: Option<u8>,
+        #[serde(default, deserialize_with = "lenient")]
+        ov: Option<Box<Overlay>>,
         c: Vec<WireNode>,
     },
     #[serde(rename = "r")]
@@ -214,7 +328,87 @@ pub enum RuntimeMsg {
     Tree(TreeMsg),
     /// Set a scroll viewport's offset (an `element.scrollTop = …` in the runtime).
     #[serde(rename = "scroll")]
-    Scroll { path: String, top: f32 },
+    Scroll {
+        path: String,
+        top: f32,
+        /// Echoed in the next offset report, so the runtime can tell reports from before it.
+        #[serde(default)]
+        seq: Option<u64>,
+    },
+    /// Focus the element keyed `key` (an `element.focus()` in the runtime).
+    #[serde(rename = "focus")]
+    Focus { key: String },
+    /// Show an Open dialog for the file input at `path` (an `input.click()`).
+    #[serde(rename = "pickFile")]
+    PickFile { path: String, accept: String },
+    /// Scroll the element at `path` into view (an `element.scrollIntoView()`).
+    #[serde(rename = "reveal")]
+    Reveal { path: String, block: String },
+    /// Report the element at `path`'s rect now: it was laid out before the runtime observed it.
+    #[serde(rename = "measure")]
+    Measure { path: String },
+    /// A full page load (`location.assign`, `reload()`): start a fresh runtime at `path`.
+    #[serde(rename = "reload")]
+    Reload { path: String },
+    /// Read or replace the sign-in vault's record in the keychain; answered as `vault` with `id`.
+    #[serde(rename = "vault")]
+    Vault {
+        id: u64,
+        op: String,
+        #[serde(default)]
+        record: Option<String>,
+    },
+}
+
+/// A `vault` request's operation; `None` for an unknown one or a write without a record.
+pub fn vault_op(op: &str, record: Option<String>) -> Option<crate::platform::VaultOp> {
+    match (op, record) {
+        ("read", _) => Some(crate::platform::VaultOp::Read),
+        ("write", Some(record)) => Some(crate::platform::VaultOp::Write(record)),
+        _ => None,
+    }
+}
+
+/// What a runtime request does to the host's Rune runtime, sent to its update thread.
+pub type HostRequest = Box<dyn FnOnce(&mut rune::Tx) + Send>;
+
+impl RuntimeMsg {
+    /// A focus or reveal request, run against the host's next commit.
+    pub fn request(self) -> Option<HostRequest> {
+        match self {
+            RuntimeMsg::Focus { key } => Some(Box::new(move |tx: &mut rune::Tx| tx.focus(key))),
+            RuntimeMsg::PickFile { path, accept } => Some(Box::new(move |tx: &mut rune::Tx| {
+                let options = file_dialog_options(&accept);
+                tx.open_file(options, move |_: &mut crate::State, picked, _| {
+                    let files: Vec<String> = picked
+                        .ok()
+                        .flatten()
+                        .map(|p| p.display().to_string())
+                        .into_iter()
+                        .collect();
+                    crate::write_line(
+                        serde_json::json!({ "t": "files", "path": path, "files": files }),
+                    );
+                });
+            })),
+            RuntimeMsg::Reveal { path, block } if block == "center" => {
+                Some(Box::new(move |tx: &mut rune::Tx| tx.scroll_center(path)))
+            }
+            RuntimeMsg::Reveal { path, .. } => {
+                Some(Box::new(move |tx: &mut rune::Tx| tx.scroll_into_view(path)))
+            }
+            RuntimeMsg::Measure { path } => Some(Box::new(move |tx: &mut rune::Tx| {
+                tx.drawn_rects(vec![path.clone()], move |_: &mut crate::State, rects, _| {
+                    if let Some(Some([x, y, w, h])) = rects.first().copied() {
+                        crate::write_line(serde_json::json!({
+                            "t": "layout", "path": path, "x": x, "y": y, "w": w, "h": h,
+                        }));
+                    }
+                });
+            })),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -253,6 +447,7 @@ pub enum Node {
         attrs: HashMap<String, String>,
         on: HashMap<String, u32>,
         observed: bool,
+        ov: Option<Box<Overlay>>,
         children: Vec<Arc<Node>>,
     },
 }
@@ -311,6 +506,7 @@ impl Subtrees {
                 attrs,
                 on,
                 o,
+                ov,
                 c,
                 ..
             } => {
@@ -326,6 +522,7 @@ impl Subtrees {
                     attrs,
                     on,
                     observed: o.is_some(),
+                    ov,
                     children,
                 })
             }
@@ -346,5 +543,31 @@ fn index(node: &Arc<Node>, next: &mut HashMap<String, Arc<Node>>) {
         for child in children {
             index(child, next);
         }
+    }
+}
+
+/// An Open dialog for an `<input type=file accept=...>`: its types as the dialog's filter.
+fn file_dialog_options(accept: &str) -> rune::FileDialogOptions {
+    let mut extensions: Vec<&str> = Vec::new();
+    for kind in accept.split(',').map(str::trim).filter(|k| !k.is_empty()) {
+        match kind {
+            "image/*" => extensions.extend(["png", "jpg", "jpeg", "gif", "webp", "heic"]),
+            "video/*" => extensions.extend(["mp4", "mov", "webm"]),
+            "audio/*" => extensions.extend(["mp3", "m4a", "wav"]),
+            _ => {
+                let ext = kind
+                    .trim_start_matches('.')
+                    .rsplit('/')
+                    .next()
+                    .unwrap_or(kind);
+                extensions.push(if ext == "jpeg" { "jpg" } else { ext });
+            }
+        }
+    }
+    let options = rune::FileDialogOptions::default();
+    if extensions.is_empty() {
+        options
+    } else {
+        options.filter("Files", &extensions)
     }
 }

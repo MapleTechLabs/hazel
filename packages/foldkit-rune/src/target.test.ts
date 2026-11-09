@@ -1,10 +1,12 @@
-import { Schema } from "effect"
-import { Runtime } from "foldkit"
+import { Effect, Option, Schema } from "effect"
+import { Command, Runtime } from "foldkit"
+import * as Dom from "foldkit/dom"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
-import { beforeAll, describe, expect, it } from "vitest"
+import { beforeAll, describe, expect, it, vi } from "vitest"
 
 import { makeElementBridge } from "./bridge"
+import { type Overlays, makeOverlays } from "./overlays"
 import { StyleResolver } from "./style"
 import { htmlText, makeRuneTarget } from "./target"
 import type { RuntimeToHost, WireNode } from "./wire"
@@ -14,6 +16,10 @@ const Message = defineMessageUnion({
 	ChangedName: { name: Schema.String },
 })
 type Message = typeof Message.Type
+
+const Clicked = defineMessageUnion({ Clicked: {} })
+type Clicked = typeof Clicked.Type
+type Focused = Readonly<{ _tag: "Completed"; outcome: string }>
 
 const Model = Schema.Struct({ count: Schema.Number, name: Schema.String })
 type Model = typeof Model.Type
@@ -42,14 +48,15 @@ beforeAll(async () => {
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 20))
 
-const boot = (render: typeof view = view) => {
+const boot = (render: typeof view = view, overlays?: Overlays) => {
 	const sent: Array<RuntimeToHost> = []
-	const bridge = makeElementBridge({ mounts: new Set(), sendScroll: () => {} })
+	const bridge = makeElementBridge({ mounts: new Set(), send: () => {} })
 	const rune = makeRuneTarget({
 		styles,
 		bridge,
 		env: { width: 800, height: 600, dark: false },
 		send: (m) => sent.push(m),
+		overlays,
 	})
 	const handle = Runtime.embed(
 		Runtime.makeElement({
@@ -71,6 +78,354 @@ const texts = (node: WireNode): Array<string> =>
 	node.k === "t" ? [node.s] : node.k === "e" ? node.c.flatMap(texts) : []
 
 describe("makeRuneTarget", () => {
+	it("shows a dialog as a modal overlay, focuses inside it, and turns Escape into its cancel", async () => {
+		const Shown = defineMessageUnion({ Shown: { isShown: Schema.Boolean }, Cancelled: {} })
+		const ShowStatus = Command.define("ShowStatus", {
+			messages: [Shown.Shown],
+			execute: Dom.showDialog("#status", { isModal: true, focusSelector: "#status-field" }).pipe(
+				Effect.catchTag("ElementNotFound", () => Effect.succeed(false)),
+				Effect.map((isShown) => Shown.Shown({ isShown })),
+			),
+		})
+		const sent: Array<RuntimeToHost> = []
+		const overlays = makeOverlays()
+		const rune = makeRuneTarget({
+			styles,
+			bridge: makeElementBridge({ mounts: new Set(), send: () => {} }),
+			overlays,
+			env: { width: 800, height: 600, dark: false },
+			send: (m) => sent.push(m),
+		})
+		const handle = Runtime.embed(
+			Runtime.makeElement({
+				Model: Schema.Struct({ state: Schema.String }),
+				init: () => ({ model: { state: "opening" }, commands: [ShowStatus()] }),
+				update: (_model, message: typeof Shown.Type) => ({
+					model: { state: message._tag === "Shown" ? `shown ${message.isShown}` : "cancelled" },
+				}),
+				view: (model, h) =>
+					h.div(
+						[],
+						[
+							h.span([], [model.state]),
+							h.dialog(
+								[h.Id("status"), h.OnCancelPreventDefault(Shown.Cancelled())],
+								[h.button([], ["Close"]), h.input([h.Id("status-field")])],
+							),
+						],
+					),
+				renderTarget: rune.target,
+			}),
+		)
+		await settle()
+		// Unchanged subtrees go as references: the text is in the tree that changed it.
+		const shows = (text: string) => sent.some((m) => m.t === "tree" && texts(m.root).includes(text))
+		expect(shows("shown true")).toBe(true)
+		expect(overlays.wireFor("r/1", () => undefined)).toEqual({ portal: 1, modal: "r/1" })
+		expect(sent.filter((m) => m.t === "focus")).toEqual([{ t: "focus", key: "r/1/1/field" }])
+
+		overlays.dismissed("r/1")
+		await settle()
+		expect(shows("cancelled")).toBe(true)
+		handle.dispose()
+	})
+
+	it("bubbles a keydown through its chain, and Escape not prevented dismisses the topmost modal", async () => {
+		const Keys = defineMessageUnion({ Inner: { key: Schema.String }, Outer: { key: Schema.String } })
+		const sent: Array<RuntimeToHost> = []
+		const overlays = makeOverlays()
+		const rune = makeRuneTarget({
+			styles,
+			overlays,
+			env: { width: 800, height: 600, dark: false },
+			send: (m) => sent.push(m),
+		})
+		const seen: Array<string> = []
+		const handle = Runtime.embed(
+			Runtime.makeElement({
+				Model: Schema.Struct({ n: Schema.Number }),
+				init: () => ({ model: { n: 0 } }),
+				update: (model, message: typeof Keys.Type) => {
+					seen.push(`${message._tag} ${message.key}`)
+					return { model: { n: model.n + 1 } }
+				},
+				view: (_model, h) =>
+					h.div(
+						[h.OnKeyDown((key) => Keys.Outer({ key }))],
+						[
+							h.div(
+								[
+									// Handles arrows itself (preventDefault); Escape is left to the overlay.
+									h.OnKeyDownPreventDefault((key) =>
+										key === "Escape" ? Option.none() : Option.some(Keys.Inner({ key })),
+									),
+								],
+								["menu"],
+							),
+						],
+					),
+				renderTarget: rune.target,
+			}),
+		)
+		await settle()
+		const tree = sent.filter((m): m is Extract<RuntimeToHost, { t: "tree" }> => m.t === "tree").at(-1)!
+		const [outer, inner] = elements(tree.root)
+		let dismissed = 0
+		overlays.modal("r")
+		overlays.onDismiss("r", () => dismissed++)
+		const key = (name: string) =>
+			rune.handleHostMessage({
+				t: "event",
+				seq: 1,
+				id: inner!.on.keydown!,
+				chain: [outer!.on.keydown!],
+				type: "keydown",
+				key: name,
+			})
+		key("ArrowDown")
+		key("Escape")
+		await settle()
+		expect(seen).toEqual(["Inner ArrowDown", "Outer ArrowDown", "Outer Escape"])
+		expect(dismissed).toBe(1)
+		handle.dispose()
+	})
+
+	it("picks a file for a clicked file input and hands it to the input's change handler", async () => {
+		const Picked = defineMessageUnion({ PickedFiles: { names: Schema.Array(Schema.String) } })
+		const sent: Array<RuntimeToHost> = []
+		const bridge = makeElementBridge({ mounts: new Set(), send: () => {} })
+		const rune = makeRuneTarget({
+			styles,
+			bridge,
+			env: { width: 800, height: 600, dark: false },
+			send: (m) => sent.push(m),
+		})
+		const seen: Array<string> = []
+		const handle = Runtime.embed(
+			Runtime.makeElement({
+				Model: Schema.Struct({ n: Schema.Number }),
+				init: () => ({ model: { n: 0 } }),
+				update: (model, message: typeof Picked.Type) => {
+					seen.push(...message.names)
+					return { model: { n: model.n + 1 } }
+				},
+				view: (_model, h) =>
+					h.div(
+						[],
+						[
+							h.input([
+								h.Type("file"),
+								h.Attribute("accept", "image/*"),
+								h.OnFileChange((files) =>
+									Picked.PickedFiles({
+										names: files.map((f) => `${f.name} ${f.type} ${f.size}`),
+									}),
+								),
+							]),
+						],
+					),
+				renderTarget: rune.target,
+			}),
+		)
+		await settle()
+		rune.click("r/0")
+		expect(sent.filter((m) => m.t === "pickFile")).toEqual([
+			{ t: "pickFile", path: "r/0", accept: "image/*" },
+		])
+		const file = new URL("../test/styles.css", import.meta.url).pathname
+		await rune.filesPicked("r/0", [file])
+		await settle()
+		expect(seen).toEqual([`styles.css  ${(await import("node:fs")).statSync(file).size}`])
+		handle.dispose()
+	})
+
+	it("moves an arrowed radio's group to the next radio, wrapping, and focuses it", async () => {
+		const Chose = defineMessageUnion({ Chose: { value: Schema.String } })
+		const sent: Array<RuntimeToHost> = []
+		const bridge = makeElementBridge({ mounts: new Set(), send: () => {} })
+		const rune = makeRuneTarget({
+			styles,
+			bridge,
+			env: { width: 800, height: 600, dark: false },
+			send: (m) => sent.push(m),
+		})
+		const chosen: Array<string> = []
+		const radio = (h: HtmlBuilder<typeof Chose.Type>, value: string) =>
+			h.input([
+				h.Type("radio"),
+				h.Name("mode"),
+				h.Attribute("value", value),
+				h.OnChange(() => Chose.Chose({ value })),
+			])
+		const handle = Runtime.embed(
+			Runtime.makeElement({
+				Model: Schema.Struct({ n: Schema.Number }),
+				init: () => ({ model: { n: 0 } }),
+				update: (model, message: typeof Chose.Type) => {
+					chosen.push(message.value)
+					return { model: { n: model.n + 1 } }
+				},
+				view: (_model, h) =>
+					h.div(
+						[],
+						[radio(h, "light"), radio(h, "dark"), h.input([h.Type("radio"), h.Name("other")])],
+					),
+				renderTarget: rune.target,
+			}),
+		)
+		await settle()
+		rune.handleHostMessage({ t: "radio", path: "r/0", step: 1 })
+		rune.handleHostMessage({ t: "radio", path: "r/1", step: 1 })
+		await settle()
+		expect(chosen).toEqual(["dark", "light"])
+		expect(sent.filter((m) => m.t === "focus").map((m) => m.key)).toEqual(["r/1", "r/0"])
+		handle.dispose()
+	})
+
+	it("activates a pressed label's control: focuses a field, toggles a checkbox", async () => {
+		const Toggled = defineMessageUnion({ Toggled: {} })
+		const sent: Array<RuntimeToHost> = []
+		const bridge = makeElementBridge({ mounts: new Set(), send: () => {} })
+		const rune = makeRuneTarget({
+			styles,
+			bridge,
+			env: { width: 800, height: 600, dark: false },
+			send: (m) => sent.push(m),
+		})
+		let toggles = 0
+		const handle = Runtime.embed(
+			Runtime.makeElement({
+				Model: Schema.Struct({ n: Schema.Number }),
+				init: () => ({ model: { n: 0 } }),
+				update: (model, _message: typeof Toggled.Type) => {
+					toggles++
+					return { model: { n: model.n + 1 } }
+				},
+				view: (_model, h) =>
+					h.div(
+						[],
+						[
+							h.label([h.Attribute("for", "name")], ["Name"]),
+							h.input([h.Id("name")]),
+							h.label(
+								[],
+								[
+									h.input([h.Type("checkbox"), h.OnChange(() => Toggled.Toggled())]),
+									"Remember",
+								],
+							),
+						],
+					),
+				renderTarget: rune.target,
+			}),
+		)
+		await settle()
+		rune.handleHostMessage({ t: "label", path: "r/0" })
+		rune.handleHostMessage({ t: "label", path: "r/2" })
+		await settle()
+		expect(sent.filter((m) => m.t === "focus").map((m) => m.key)).toEqual(["r/1/field", "r/2/0"])
+		expect(toggles).toBe(1)
+		handle.dispose()
+	})
+
+	it("follows a clicked link's href unless its click handler prevented it", async () => {
+		const followed: Array<string> = []
+		const sent: Array<RuntimeToHost> = []
+		const rune = makeRuneTarget({
+			styles,
+			env: { width: 800, height: 600, dark: false },
+			send: (m) => sent.push(m),
+			onLink: (href) => followed.push(href),
+		})
+		const handle = Runtime.embed(
+			Runtime.makeElement({
+				Model: Schema.Struct({ clicks: Schema.Number }),
+				init: () => ({ model: { clicks: 0 } }),
+				update: (model) => ({ model: { clicks: model.clicks + 1 } }),
+				view: (_model, h) =>
+					h.div(
+						[],
+						[
+							h.a([h.Href("/settings"), h.OnClick(Clicked.Clicked())], ["Settings"]),
+							h.a(
+								[h.Href("/kept"), h.OnClick(Clicked.Clicked(), { defaultAction: "Prevent" })],
+								["Kept"],
+							),
+						],
+					),
+				renderTarget: rune.target,
+			}),
+		)
+		await settle()
+		const tree = sent.filter((m): m is Extract<RuntimeToHost, { t: "tree" }> => m.t === "tree").at(-1)!
+		const [settings, kept] = elements(tree.root).filter((e) => e.tag === "a")
+		rune.handleHostMessage({
+			t: "event",
+			seq: 1,
+			id: settings!.on.click!,
+			type: "click",
+			href: "/settings",
+		})
+		rune.handleHostMessage({ t: "event", seq: 2, id: kept!.on.click!, type: "click", href: "/kept" })
+		expect(followed).toEqual(["/settings"])
+		handle.dispose()
+	})
+
+	it("sends Dom.focus and Dom.scrollIntoView from a Command to the host, after the tree", async () => {
+		const Focused = defineMessageUnion({ Completed: { outcome: Schema.String } })
+		const FocusName = Command.define("FocusName", {
+			messages: [Focused.Completed],
+			execute: Effect.gen(function* () {
+				yield* Dom.focus("#name")
+				yield* Dom.scrollIntoView("#name", { block: "center" })
+				yield* Dom.clickElement("#increment")
+				yield* Dom.focus("#missing")
+				return "focused"
+			}).pipe(
+				Effect.catchTag("ElementNotFound", ({ selector }) => Effect.succeed(`missing ${selector}`)),
+				Effect.map((outcome) => Focused.Completed({ outcome })),
+			),
+		})
+		const sent: Array<RuntimeToHost> = []
+		const bridge = makeElementBridge({ mounts: new Set(), send: () => {} })
+		const rune = makeRuneTarget({
+			styles,
+			bridge,
+			env: { width: 800, height: 600, dark: false },
+			send: (m) => sent.push(m),
+		})
+		const handle = Runtime.embed(
+			Runtime.makeElement({
+				Model: Schema.Struct({ outcome: Schema.String, clicks: Schema.Number }),
+				init: () => ({ model: { outcome: "", clicks: 0 }, commands: [FocusName()] }),
+				update: (model, message: Focused | Clicked) =>
+					message._tag === "Completed"
+						? { model: { ...model, outcome: message.outcome } }
+						: { model: { ...model, clicks: model.clicks + 1 } },
+				view: (model, h) =>
+					h.div(
+						[],
+						[
+							h.input([h.Id("name")]),
+							h.button([h.Id("increment"), h.OnClick(Clicked.Clicked())], ["+"]),
+							h.span([], [`${model.outcome} ${model.clicks}`]),
+						],
+					),
+				renderTarget: rune.target,
+			}),
+		)
+		await settle()
+		const requests = sent.filter((m) => m.t !== "tree")
+		expect(requests).toEqual([
+			{ t: "focus", key: "r/0/field" },
+			{ t: "reveal", path: "r/0", block: "center" },
+		])
+		expect(sent.findIndex((m) => m.t === "focus")).toBeGreaterThan(sent.findIndex((m) => m.t === "tree"))
+		const last = sent.filter((m): m is Extract<RuntimeToHost, { t: "tree" }> => m.t === "tree").at(-1)!
+		expect(texts(last.root).join("")).toContain("missing #missing 1")
+		handle.dispose()
+	})
+
 	it("sends resolved styles and routes host presses back as Messages", async () => {
 		const { rune, handle, trees } = boot()
 		await settle()
@@ -81,6 +436,152 @@ describe("makeRuneTarget", () => {
 		rune.handleHostMessage({ t: "event", seq: 1, id: button.on.click!, type: "click" })
 		await settle()
 		expect(texts(trees().at(-1)!.root)).toContain("1")
+		handle.dispose()
+	})
+
+	it("sends h.Tabindex as the tabindex attribute the host makes a Tab stop", async () => {
+		const tabbable = (_: Model, h: HtmlBuilder<Message>): Html =>
+			h.div([], [h.span([h.Tabindex(0), h.Role("link")], ["Home"])])
+		const { handle, trees } = boot(tabbable)
+		await settle()
+		const span = elements(trees().at(-1)!.root).find((e) => e.tag === "span")!
+		expect(span.attrs.tabindex).toBe("0")
+		handle.dispose()
+	})
+
+	it("keeps an svg's <text> and its content in the icon body", async () => {
+		const labelled = (_: Model, h: HtmlBuilder<Message>): Html =>
+			h.svg(
+				[h.Attribute("viewBox", "0 0 18 18")],
+				[
+					h.text(
+						[
+							h.Attribute("x", "9"),
+							h.Attribute("text-anchor", "middle"),
+							h.Attribute("font-size", "6"),
+							h.Attribute("font-weight", "700"),
+						],
+						["G<F"],
+					),
+				],
+			)
+		const { handle, trees } = boot(labelled)
+		await settle()
+		const root = trees().at(-1)!.root
+		expect(root.k === "svg" ? root.body : "").toBe(
+			'<text x="9" text-anchor="middle" font-size="6" font-weight="700">G&lt;F</text>',
+		)
+		handle.dispose()
+	})
+
+	it("sends the overlays Mounts asked for and routes the host's dismiss back", async () => {
+		const menu = (_: Model, h: HtmlBuilder<Message>): Html =>
+			h.div(
+				[],
+				[
+					h.button([h.Id("trigger")], ["Open"]),
+					h.div([], [h.div([], ["Panel"])]),
+					// A menu renders inside its own trigger.
+					h.div([h.Id("outer")], [h.div([], ["Nested"])]),
+				],
+			)
+		const overlays = makeOverlays()
+		const { rune, handle, trees } = boot(menu, overlays)
+		await settle()
+		overlays.portal("r/1")
+		overlays.modal("r/1")
+		overlays.anchor("r/1/0", { triggerId: "trigger", side: "bottom", align: "start", gap: 4 })
+		overlays.anchor("r/2/0", { triggerId: "outer", side: "top", align: "end", gap: 2 })
+		let dismissed = 0
+		overlays.onDismiss("r/1", () => dismissed++)
+		// The trigger did not change: it goes as a reference, so only the overlay's nodes are here.
+		// Waits for that frame rather than a fixed delay, which a slow CI runner can outlast.
+		const sentOverlays = await vi.waitFor(() => {
+			const ovs = trees()
+				.map((t) => elements(t.root).flatMap((n) => (n.ov === undefined ? [] : [n.ov])))
+				.findLast((o) => o.length > 0)
+			expect(ovs).toBeDefined()
+			return ovs ?? []
+		})
+		expect(sentOverlays).toEqual([
+			{ portal: 1 },
+			{ anchor: { to: "r/0", side: "bottom", align: "start", gap: 4 }, modal: "r/1" },
+			{ anchor: { to: "r/2", side: "top", align: "end", gap: 2 } },
+		])
+		rune.handleHostMessage({ t: "dismiss", path: "r/1" })
+		expect(dismissed).toBe(1)
+		handle.dispose()
+	})
+
+	it("shows an anchored panel its view hid until positioned", async () => {
+		const tooltip = (_: Model, h: HtmlBuilder<Message>): Html =>
+			h.div(
+				[],
+				[h.button([h.Id("tip-trigger")], ["?"]), h.div([h.Style({ visibility: "hidden" })], ["Tip"])],
+			)
+		const overlays = makeOverlays()
+		const { handle, trees } = boot(tooltip, overlays)
+		await settle()
+		expect(elements(trees().at(-1)!.root).at(-1)?.st.visibility).toBe("hidden")
+		overlays.anchor("r/1", { triggerId: "tip-trigger", side: "top", align: "center", gap: 10 })
+		await settle()
+		const panel = elements(trees().at(-1)!.root).find((n) => n.ov?.anchor !== undefined)
+		expect(panel?.st.visibility).toBeUndefined()
+		handle.dispose()
+	})
+
+	it("reuses an unchanged VNode's last result and keeps its handlers", async () => {
+		// One VNode object across renders, as a lazy view returns.
+		let shared: Html | undefined
+		const reused = (model: Model, h: HtmlBuilder<Message>): Html => {
+			shared ??= h.button([h.OnClick(Message.ClickedIncrement())], ["+"])
+			return h.div([], [h.span([], [`${model.count}`]), shared])
+		}
+		const { rune, handle, trees } = boot(reused)
+		await settle()
+		const press = () => {
+			const button = trees().at(-1)!
+			const id = elements(button.root).find((e) => e.tag === "button")?.on.click
+			// A reused button goes as a reference; its handler id is the one first sent.
+			rune.handleHostMessage({ t: "event", seq: 1, id: id ?? firstId, type: "click", gen: button.gen })
+		}
+		const firstId = elements(trees().at(-1)!.root).find((e) => e.tag === "button")!.on.click!
+		press()
+		await settle()
+		press()
+		await settle()
+		expect(texts(trees().at(-1)!.root)).toContain("2")
+		handle.dispose()
+	})
+
+	it("re-resolves a reused VNode whose earlier sibling changed", async () => {
+		let shared: Html | undefined
+		const peers = (model: Model, h: HtmlBuilder<Message>): Html => {
+			shared ??= h.span([h.Class("peer-data-[on=true]:font-bold")], ["after"])
+			return h.div(
+				[],
+				[
+					h.button(
+						[
+							h.Class("peer"),
+							h.DataAttribute("on", String(model.count > 0)),
+							h.OnClick(Message.ClickedIncrement()),
+						],
+						["+"],
+					),
+					shared,
+				],
+			)
+		}
+		const { rune, handle, trees } = boot(peers)
+		await settle()
+		const span = () => elements(trees().at(-1)!.root).find((e) => e.tag === "span")
+		expect(span()?.st.fontWeight).toBeUndefined()
+		// Unchanged since the first tree, the button may go as a reference: its handler id is stable.
+		const button = elements(trees()[0]!.root).find((e) => e.tag === "button")!
+		rune.handleHostMessage({ t: "event", seq: 1, id: button.on.click!, type: "click" })
+		await settle()
+		expect(span()?.st.fontWeight).toBe(700)
 		handle.dispose()
 	})
 

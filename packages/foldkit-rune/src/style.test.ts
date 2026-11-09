@@ -46,6 +46,116 @@ describe("StyleResolver", () => {
 		})
 	})
 
+	it("sends focus and press styles as the states the host draws", () => {
+		const button = resolve(
+			"bg-[#ffffff] outline-hidden focus-visible:ring-2 focus-visible:ring-[#3366ff] active:bg-[#ff0000]",
+		)
+		expect(button.style.bg).toBe("#ffffffff")
+		expect(button.style.shadows).toBeUndefined()
+		expect(button.style.focusRing).toEqual({ width: 2, offset: 0, color: "#3366ffff" })
+		expect(button.style.pressBg).toBe("#ff0000ff")
+		// `:focus` shows on pointer focus too.
+		expect(
+			resolve("focus:outline-2 focus:outline-[#3366ff] focus:outline-offset-1").style.focusWithinRing,
+		).toEqual({ width: 2, offset: 1, color: "#3366ffff" })
+		// A hidden outline and no focus style: the browser draws no ring.
+		expect(resolve("outline-hidden").style.focusRing).toBe("none")
+		expect(resolve("px-2").style.focusRing).toBeUndefined()
+	})
+
+	it("applies <html>'s inline custom properties over the stylesheet's", () => {
+		styles.setRootProperties(new Map([["--bg", "#123456"]]))
+		try {
+			expect(resolve("bg-bg").style.bg).toBe("#123456ff")
+			expect(styles.customProperty("--bg", false)).toBe("#123456")
+		} finally {
+			styles.setRootProperties(new Map())
+		}
+		expect(resolve("bg-bg").style.bg).toBe("#ffffffff")
+	})
+
+	it("sends transitions per channel the host animates", () => {
+		expect(resolve("transition-colors duration-200 ease-out").style.transition).toEqual({
+			colors: { duration: 0.2, delay: 0, ease: [0, 0, 0.2, 1] },
+		})
+		// Tailwind's `transition`: colours, opacity and transforms on its default 150 ms curve.
+		const plain = { duration: 0.15, delay: 0, ease: [0.4, 0, 0.2, 1] }
+		expect(resolve("transition").style.transition).toEqual({
+			colors: plain,
+			opacity: plain,
+			transform: plain,
+		})
+		expect(resolve("transition-[width] duration-300 ease-linear delay-75").style.transition).toEqual({
+			layout: { duration: 0.3, delay: 0.075, ease: [0, 0, 1, 1] },
+		})
+		expect(Object.keys(resolve("transition-all").style.transition ?? {}).sort()).toEqual([
+			"colors",
+			"layout",
+			"opacity",
+			"transform",
+		])
+		expect(resolve("transition-none").style.transition).toBeUndefined()
+		expect(resolve("px-2").style.transition).toBeUndefined()
+	})
+
+	it("sends keyframe animations the host can loop or play on mount", () => {
+		expect(resolve("animate-spin").style.animation).toEqual({ kind: "spin", period: 1 })
+		// Tailwind's pulse: full opacity at the start and end, half at the middle.
+		expect(resolve("animate-pulse").style.animation).toEqual({
+			kind: "pulse",
+			period: 2,
+			delay: 0,
+			from: 1,
+			to: 0.5,
+		})
+		expect(resolve("animate-in fade-in slide-in-from-top-2 duration-200").style.animation).toEqual({
+			kind: "enter",
+			duration: 0.2,
+			delay: 0,
+			opacity: 0,
+			x: 0,
+			y: -8,
+			scale: 1,
+		})
+		expect(resolve("animate-bounce").style.animation).toBeUndefined()
+		expect(styles.unsupportedProps.has("animation: bounce")).toBe(true)
+	})
+
+	it("sends a width that is a share of the parent as a fraction", () => {
+		expect(resolve("w-1/2").style.w).toEqual({ frac: 0.5 })
+		expect(resolve("w-[37.5%]").style.w).toEqual({ frac: 0.375 })
+		// A share plus a length is not a fraction; a fraction of the height has no host form.
+		expect(resolve("w-[calc(100%-2rem)]").style.w).toBe("auto")
+		expect(resolve("h-1/2").style.h).toBe("auto")
+	})
+
+	it("resolves from a precompiled sheet and compiles a class it lacks later", async () => {
+		const sheet = new URL("../test/styles.css", import.meta.url).pathname
+		const precompiled = await StyleResolver.precompile(sheet, ["bg-bg", "text-fg"])
+		const shipped = StyleResolver.fromPrecompiled(precompiled, sheet)
+		const page = element("bg-bg text-fg")
+		expect(shipped.resolve(page, shipped.rootScope(true), true, 1280).style).toEqual(
+			resolve("bg-bg text-fg", { dark: true }).style,
+		)
+		const pre = StyleResolver.fromPrecompiled({ ...precompiled, css: "", classes: [] }, sheet)
+		let recompiled = 0
+		pre.onRecompiled(() => recompiled++)
+		// No compiler yet: the class waits, and its rules arrive with the listener.
+		expect(pre.ensure(["px-4"])).toBe(false)
+		await new Promise<void>((done) => pre.onRecompiled(done))
+		expect(recompiled).toBe(1)
+		const input = element("px-4")
+		expect(pre.resolve(input, pre.rootScope(false), false, 1280).style.pad).toEqual([0, 16, 0, 16])
+	})
+
+	it("centres left-1/2 -translate-x-1/2 and resolves a fixed box's percentage insets on the window", () => {
+		const dialog = resolve("fixed top-[10%] left-1/2 -translate-x-1/2 w-32").style
+		expect(dialog.centerX).toBe(true)
+		expect(dialog.translate).toBeUndefined()
+		// 10% of the 800-point window the tests resolve in.
+		expect(dialog.absolute?.[1]).toBe(80)
+	})
+
 	it("switches theme tokens in dark mode", () => {
 		expect(resolve("bg-bg text-fg", { dark: true }).style).toMatchObject({
 			bg: "#000000ff",
@@ -103,6 +213,14 @@ describe("StyleResolver", () => {
 		expect(resolve("h-dvh min-h-svh").style).toMatchObject({ h: 600, minH: 600 })
 	})
 
+	it("marks a block that starts its own formatting context", () => {
+		expect(resolve("", { extra: { inline: { contain: "layout style paint" } } }).style.isolated).toBe(
+			true,
+		)
+		expect(resolve("flow-root").style.isolated).toBe(true)
+		expect(resolve("", { extra: { inline: { contain: "style" } } }).style.isolated).toBeUndefined()
+	})
+
 	it("applies insets only to positioned elements", () => {
 		expect(resolve("sticky top-0").style.absolute).toBeUndefined()
 		expect(resolve("absolute inset-y-0 left-0").style.absolute).toEqual([0, 0, null, 0])
@@ -110,9 +228,70 @@ describe("StyleResolver", () => {
 
 	it("hides screen-reader-only text and reads inline styles last", () => {
 		expect(resolve("sr-only").style.display).toBe("none")
+		// A screen-reader-only control (a keyboard drag handle) stays a Tab stop.
+		const control = resolve("sr-only", { extra: { tag: "button" } }).style
+		expect(control.display).not.toBe("none")
+		expect(control).toMatchObject({ w: 1, h: 1, clip: true })
+		expect(control.opacity).toBeGreaterThan(0)
+		// So does the hidden box around a checkbox's or radio's own input.
+		const holdsInput = resolve("sr-only", {
+			extra: {
+				hasDescendant: (match) => match({ tag: "input", classes: [], attrs: { type: "radio" } }),
+			},
+		}).style
+		expect(holdsInput.display).not.toBe("none")
+		// And one around a radio a group focuses by script (`tabindex="-1"`).
+		const holdsOther = resolve("sr-only", {
+			extra: {
+				hasDescendant: (match) =>
+					match({ tag: "input", classes: [], attrs: { type: "radio", tabindex: "-1" } }),
+			},
+		}).style
+		expect(holdsOther.display).not.toBe("none")
 		expect(
 			resolve("p-2", { extra: { inline: { padding: "5px", "--x": "3px", margin: "var(--x)" } } }).style,
 		).toMatchObject({ pad: [5, 5, 5, 5], margin: [3, 3, 3, 3] })
+	})
+
+	it("keeps a minmax() track whole in a grid template", () => {
+		expect(resolve("grid grid-cols-[minmax(200px,280px)_1fr]").style.gridCols).toEqual([
+			"minmax(200px,280px)",
+			"1fr",
+		])
+		expect(
+			resolve("grid", { extra: { inline: { "grid-template-columns": "minmax(200px, 280px) 1fr" } } })
+				.style.gridCols,
+		).toEqual(["minmax(200px, 280px)", "1fr"])
+	})
+
+	it("turns a group-hover inset change on a positioned element into a shift", () => {
+		// Both compiled first, as the app's precompiled sheet is: the group's scope knows the rule.
+		styles.ensure([
+			"group/sidebar-item",
+			"relative",
+			"absolute",
+			"right-1.5",
+			"group-hover/sidebar-item:right-8",
+		])
+		const row = resolve("group/sidebar-item relative")
+		const { style } = resolve("absolute right-1.5 group-hover/sidebar-item:right-8", { scope: row.scope })
+		expect(style.groupShift).toEqual([-26, 0])
+	})
+
+	it("caches by what selectors test of an attribute, not its whole value", () => {
+		styles.ensure(["p-2", "data-[state=open]:bg-black"])
+		const button = (attrs: Record<string, string>) =>
+			resolve("p-2 data-[state=open]:bg-black", { extra: { tag: "button", attrs } })
+		// Ids and data no rule tests leave the cached result shared.
+		expect(button({ id: "a", "data-msg": "1" })).toBe(button({ id: "b", "data-msg": "2" }))
+		// A value a rule tests still tells results apart.
+		expect(button({ "data-state": "open" }).style.bg).toBe("#000000ff")
+		expect(button({ "data-state": "closed" }).style.bg).toBeUndefined()
+	})
+
+	it("sends pointer-events for the host to inherit", () => {
+		expect(resolve("pointer-events-none").style.pointerEvents).toBe("none")
+		expect(resolve("pointer-events-auto").style.pointerEvents).toBe("auto")
 	})
 
 	it("keeps hover colours apart from the base style", () => {
@@ -156,6 +335,20 @@ describe("StyleResolver", () => {
 		expect(resolve("sticky top-2").style.stickyTop).toBe(8)
 		expect(resolve("sticky").style.stickyTop).toBeUndefined()
 		expect(resolve("relative top-2").style.stickyTop).toBeUndefined()
+	})
+
+	it("marks a fixed element, which the host places against the window", () => {
+		expect(resolve("fixed inset-y-0").style).toMatchObject({ fixed: true, absolute: [null, 0, null, 0] })
+		expect(resolve("absolute inset-y-0").style.fixed).toBeUndefined()
+	})
+
+	it("reads grid rows, a row start and centred items, as a modal lays out", () => {
+		expect(resolve("grid grid-rows-[1fr_auto_3fr] justify-items-center").style).toMatchObject({
+			display: "grid",
+			gridRows: ["1fr", "auto", "3fr"],
+			justifyItems: "center",
+		})
+		expect(resolve("row-start-2").style).toMatchObject({ rowStart: 2 })
 	})
 
 	it("reads flex keywords before numbers", () => {

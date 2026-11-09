@@ -12,6 +12,11 @@ export type ShimEnv = {
 	url: string
 	/** Opens a link outside the app. @default the system browser or mail app */
 	openUrl?: (href: string) => void
+	/**
+	 * A full page load on the app's own origin (`location.assign`, `reload()`), as a browser
+	 * reboots the page. @default the in-memory history moves, the app keeps running
+	 */
+	loadDocument?: (href: string) => void
 }
 
 class MemoryStorage {
@@ -60,6 +65,72 @@ class SilentAudio extends EventTarget {
 /** Present so `instanceof Element` checks answer false instead of throwing. */
 class DomNode extends EventTarget {}
 
+/** An idle callback's budget, as a browser gives one between frames. */
+const IDLE_SLICE_MS = 50
+
+/** Any element whose tag is `dialog` (a host-backed proxy): foldkit's Dialog checks for one. */
+class ShimDialogElement extends DomNode {
+	static [Symbol.hasInstance](value: unknown): boolean {
+		return value instanceof DomNode && "tagName" in value && value.tagName === "DIALOG"
+	}
+}
+
+/** The fields of a mouse event the app reads from pointer events the bridge dispatches. */
+class ShimMouseEvent extends Event {
+	readonly button: number
+	readonly clientX: number
+	readonly clientY: number
+	readonly relatedTarget: EventTarget | null
+	constructor(
+		type: string,
+		init: EventInit & {
+			button?: number
+			clientX?: number
+			clientY?: number
+			relatedTarget?: EventTarget | null
+		} = {},
+	) {
+		super(type, init)
+		this.button = init.button ?? 0
+		this.clientX = init.clientX ?? 0
+		this.clientY = init.clientY ?? 0
+		this.relatedTarget = init.relatedTarget ?? null
+	}
+}
+
+/** The fields of a keyboard event the app's shortcut bindings read. */
+class ShimKeyboardEvent extends Event {
+	readonly key: string
+	readonly code: string
+	readonly shiftKey: boolean
+	readonly metaKey: boolean
+	readonly ctrlKey: boolean
+	readonly altKey: boolean
+	readonly repeat = false
+	readonly isComposing = false
+	constructor(type: string, init: KeyboardEventInit = {}) {
+		super(type, init)
+		this.key = init.key ?? ""
+		this.code = init.code ?? ""
+		this.shiftKey = init.shiftKey ?? false
+		this.metaKey = init.metaKey ?? false
+		this.ctrlKey = init.ctrlKey ?? false
+		this.altKey = init.altKey ?? false
+	}
+	getModifierState(name: string): boolean {
+		return (
+			(name === "Shift" && this.shiftKey) ||
+			(name === "Meta" && this.metaKey) ||
+			(name === "Control" && this.ctrlKey) ||
+			(name === "Alt" && this.altKey)
+		)
+	}
+}
+
+class ShimPointerEvent extends ShimMouseEvent {
+	readonly pointerType = "mouse"
+}
+
 const classList = () => {
 	const names = new Set<string>()
 	return {
@@ -75,8 +146,11 @@ const classList = () => {
 	}
 }
 
-const element = () =>
-	Object.assign(new DomNode(), {
+const element = () => {
+	// Detached nodes (a live-region announcer) build and move freely; nothing draws them.
+	const childNodes: Array<unknown> = []
+	return Object.assign(new DomNode(), {
+		childNodes,
 		classList: classList(),
 		style: { setProperty() {}, removeProperty() {} },
 		dataset: {} as Record<string, string>,
@@ -85,6 +159,16 @@ const element = () =>
 		getAttribute: () => null,
 		appendChild: <T>(child: T) => child,
 		removeChild: <T>(child: T) => child,
+		insertBefore: <T>(child: T) => child,
+		append: (...nodes: Array<unknown>) => {
+			childNodes.push(...nodes)
+		},
+		prepend: (...nodes: Array<unknown>) => {
+			childNodes.unshift(...nodes)
+		},
+		remove() {},
+		// No canvas drawing: a probe for a 2D context finds none, as in a browser without it.
+		getContext: () => null,
 		querySelector: () => null,
 		querySelectorAll: () => [],
 		getElementsByTagName: () => [],
@@ -100,6 +184,25 @@ const element = () =>
 			height: 0,
 		}),
 	})
+}
+
+/** `CSS.escape` (CSS Object Model): an identifier safe to put in a selector. */
+export const cssEscape = (value: string): string => {
+	let out = ""
+	for (let i = 0; i < value.length; i++) {
+		const code = value.charCodeAt(i)
+		const ch = value.charAt(i)
+		const isDigit = code >= 0x30 && code <= 0x39
+		if (code === 0) out += "\uFFFD"
+		else if ((code >= 0x01 && code <= 0x1f) || code === 0x7f) out += `\\${code.toString(16)} `
+		else if (isDigit && (i === 0 || (i === 1 && value.charAt(0) === "-")))
+			out += `\\${code.toString(16)} `
+		else if (i === 0 && ch === "-" && value.length === 1) out += "\\-"
+		else if (code >= 0x80 || ch === "-" || ch === "_" || isDigit || /[a-zA-Z]/.test(ch)) out += ch
+		else out += `\\${ch}`
+	}
+	return out
+}
 
 export const installShims = (env: ShimEnv) => {
 	// stdout carries the render protocol; logs go to stderr.
@@ -107,6 +210,7 @@ export const installShims = (env: ShimEnv) => {
 	console.info = console.error
 	console.debug = console.error
 	const g = globalThis as Record<string, unknown>
+	g.CSS ??= { escape: cssEscape, supports: () => false }
 	const windowTarget = new EventTarget()
 	let url = new URL(env.url)
 	const entries: Array<string> = [url.href]
@@ -139,12 +243,13 @@ export const installShims = (env: ShimEnv) => {
 		},
 		assign: (next: string) => navigate(next, "push"),
 		replace: (next: string) => navigate(next, "replace"),
-		reload: () => {},
+		reload: () => env.loadDocument?.(url.href),
 	}
-	/** In-app paths move the in-memory history; another origin opens in the system browser. */
+	/** In-app paths move the history (or load the page anew); another origin opens in the browser. */
 	const navigate = (next: string | URL, mode: "push" | "replace") => {
 		const target = URL.parse(String(next), url)
 		if (target !== null && target.origin !== url.origin) return openExternal(target, env.openUrl)
+		if (target !== null && env.loadDocument !== undefined) return env.loadDocument(target.href)
 		if (mode === "push") history.pushState(null, "", next)
 		else history.replaceState(null, "", next)
 	}
@@ -198,7 +303,23 @@ export const installShims = (env: ShimEnv) => {
 		return list
 	}
 
-	const documentElement = element()
+	// The app themes itself through `<html>`'s inline custom properties (brand colour, radius).
+	const rootStyle = new Map<string, string>()
+	const rootStyleListeners = new Set<() => void>()
+	const changedRootStyle = () => rootStyleListeners.forEach((listener) => listener())
+	const documentElement = Object.assign(element(), {
+		style: {
+			setProperty: (name: string, value: string) => {
+				if (rootStyle.get(name) === value) return
+				rootStyle.set(name, value)
+				changedRootStyle()
+			},
+			removeProperty: (name: string) => {
+				if (rootStyle.delete(name)) changedRootStyle()
+			},
+			getPropertyValue: (name: string) => rootStyle.get(name) ?? "",
+		},
+	})
 	const document = Object.assign(new DomNode(), {
 		documentElement,
 		body: element(),
@@ -240,10 +361,23 @@ export const installShims = (env: ShimEnv) => {
 		HTMLElement: DomNode,
 		HTMLInputElement: DomNode,
 		HTMLTextAreaElement: DomNode,
+		HTMLDialogElement: ShimDialogElement,
+		MouseEvent: ShimMouseEvent,
+		PointerEvent: ShimPointerEvent,
+		KeyboardEvent: ShimKeyboardEvent,
+		// The host draws at the display's rate (120 Hz on ProMotion): app frames keep that pace.
 		requestAnimationFrame: (callback: (time: number) => void) =>
-			setTimeout(() => callback(performance.now()), 16),
+			setTimeout(() => callback(performance.now()), 1000 / 120),
 		cancelAnimationFrame: (handle: ReturnType<typeof setTimeout>) => clearTimeout(handle),
-		requestIdleCallback: (callback: () => void) => setTimeout(callback, 1),
+		// The callback gets an IdleDeadline: idle work (TanStack DB's) checks how much time it has.
+		requestIdleCallback: (callback: (deadline: IdleDeadline) => void) => {
+			const started = performance.now()
+			const deadline = {
+				didTimeout: false,
+				timeRemaining: () => Math.max(0, IDLE_SLICE_MS - (performance.now() - started)),
+			}
+			return setTimeout(() => callback(deadline), 1)
+		},
 		cancelIdleCallback: (handle: ReturnType<typeof setTimeout>) => clearTimeout(handle),
 		addEventListener: windowTarget.addEventListener.bind(windowTarget),
 		removeEventListener: windowTarget.removeEventListener.bind(windowTarget),
@@ -285,11 +419,12 @@ export const installShims = (env: ShimEnv) => {
 		}
 		windowTarget.dispatchEvent(new Event("resize"))
 	}
-	return { updateEnv, history, location }
+	const onRootStyle = (listener: () => void) => rootStyleListeners.add(listener)
+	return { updateEnv, history, location, rootStyle: rootStyle as ReadonlyMap<string, string>, onRootStyle }
 }
 
 /** Web and mail links open in the user's browser or mail app; any other scheme is dropped. */
-const openExternal = (target: URL, openUrl = systemOpen) => {
+export const openExternal = (target: URL, openUrl = systemOpen) => {
 	if (["http:", "https:", "mailto:"].includes(target.protocol)) openUrl(target.href)
 }
 

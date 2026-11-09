@@ -63,6 +63,21 @@ export const desktopClient = {
 	browserSession: "confirm",
 } as const
 
+/**
+ * The Rune-native app (apps/native): the same browser sign-in under its own scheme, so a Mac
+ * with both apps installed hands each callback to the app that asked for it.
+ */
+export const nativeClient = {
+	clientId: "native",
+	displayName: "Hazel Native",
+	returnUrl: "com.hazel.native://auth/callback",
+	browserSession: "confirm",
+} as const
+
+/** The apps that sign in through the browser, and the one an app signs in as. */
+export const browserLoginClients = [desktopClient, nativeClient] as const
+export type BrowserLoginClient = (typeof browserLoginClients)[number]
+
 /** The browser-to-desktop handoff: the web app authorizes, the desktop app exchanges. */
 export const desktopLogin = BrowserLoginContract.make(
 	HazelAuthApi.sessions.moduleId,

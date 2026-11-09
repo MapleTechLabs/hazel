@@ -37,6 +37,8 @@
 			"entry": [
 				"src/entry.ts",
 				"bench/web/run.ts",
+				"bench/interaction/run.ts",
+				"bench/parity/run.ts",
 				"bench/web/web-entry.ts",
 				"bench/web/vite.config.ts"
 			],
