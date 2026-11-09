@@ -1,4 +1,3 @@
-import { Anchor } from "@foldkit/ui"
 import { MessageId } from "@hazel/schema"
 import { Effect, Option, Queue, Schema, Stream } from "effect"
 import { Mount } from "foldkit"
@@ -15,7 +14,12 @@ import * as TooltipHost from "../tooltip-host"
 /** The toolbar's quick reactions. */
 export const TOP_EMOJIS = ["👍", "❤️", "😂", "🔥", "👀", "🎉"] as const
 
-const POSITION_PADDING = 12
+/** How far the toolbar overlaps the top of its message (`offset: -6` in legacy). */
+const TOOLBAR_OVERLAP = 6
+/** The toolbar's inset from the message's right edge. */
+const TOOLBAR_RIGHT_INSET = 8
+/** The least room the toolbar keeps from the edges of the list's scroller and the viewport. */
+const EDGE_PADDING = 4
 
 export const ToolbarEvent = defineMessageUnion({ EnteredToolbar: {}, LeftToolbar: {} })
 export type ToolbarEvent = typeof ToolbarEvent.Type
@@ -23,9 +27,47 @@ export type ToolbarEvent = typeof ToolbarEvent.Type
 /** The attribute naming the message the toolbar sits on; the view patches it as the hover moves. */
 export const TOOLBAR_TARGET_ATTRIBUTE = "data-toolbar-message-id"
 
+/** The attribute every message row carries, so the hover never mistakes another `data-id`. */
+export const MESSAGE_ROW_ATTRIBUTE = "data-message-row"
+
+const isScrollable = (element: Element) => {
+	const { overflowY } = getComputedStyle(element)
+	return overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay"
+}
+
+/** The nearest scrolling ancestor of a message: the area the toolbar must stay inside. */
+const scrollerOf = (element: Element): Element | null => {
+	for (let current = element.parentElement; current !== null; current = current.parentElement)
+		if (isScrollable(current)) return current
+	return null
+}
+
+/**
+ * Where the toolbar goes for its message: on the top right corner, overlapping the message a little.
+ * It never leaves the list's scroller, so it cannot ride over the header or the composer while its
+ * message scrolls away: near the top it slides down onto the message, and it hides once the message
+ * has no room left for it.
+ */
+const toolbarPosition = (
+	target: DOMRect,
+	bounds: { readonly top: number; readonly bottom: number },
+	size: { readonly width: number; readonly height: number },
+): { readonly top: number; readonly left: number } | null => {
+	const minTop = bounds.top + EDGE_PADDING
+	const maxTop = Math.min(bounds.bottom, target.bottom) - size.height
+	if (maxTop < minTop) return null
+	const top = Math.min(Math.max(target.top - size.height + TOOLBAR_OVERLAP, minTop), maxTop)
+	const maxLeft = window.innerWidth - size.width - EDGE_PADDING
+	const left = Math.max(EDGE_PADDING, Math.min(target.right - size.width - TOOLBAR_RIGHT_INSET, maxLeft))
+	return { top, left }
+}
+
 /**
  * Portals the toolbar to `<body>`, keeps it on its message and reports pointer enter and leave.
  * One toolbar element serves every message: a hover change retargets it instead of remounting it.
+ *
+ * Enter and leave are pointer events, like the list's tracking: pointer events all fire before mouse
+ * events, so with `mouseleave` the toolbar's leave arrived after the list's enter and undid it.
  */
 export const PlaceMessageToolbar = Mount.defineStream("PlaceMessageToolbar", {
 	messages: [ToolbarEvent.EnteredToolbar, ToolbarEvent.LeftToolbar],
@@ -34,44 +76,78 @@ export const PlaceMessageToolbar = Mount.defineStream("PlaceMessageToolbar", {
 			Effect.acquireRelease(
 				Effect.sync(() => {
 					if (!(element instanceof HTMLElement)) return () => undefined
-					element.style.position = "absolute"
+					element.style.position = "fixed"
+					element.style.top = "0px"
+					element.style.left = "0px"
 					element.style.zIndex = "50"
+					element.style.visibility = "hidden"
 					document.body.appendChild(element)
-					// `useOverlayPosition({ placement: "top end", offset: -6 })`: anchored to the hovered
-					// message, re-anchored whenever the view retargets the toolbar.
-					let releaseAnchor = () => undefined as void
-					const anchor = () => {
-						releaseAnchor()
-						const messageId = element.getAttribute(TOOLBAR_TARGET_ATTRIBUTE)
-						releaseAnchor =
-							messageId !== null && document.getElementById(`message-${messageId}`) !== null
-								? Anchor.anchorSetup(element, {
-										buttonId: `message-${messageId}`,
-										anchor: {
-											placement: "top-end",
-											gap: -6,
-											padding: POSITION_PADDING,
-											portal: false,
-										},
-										interceptTab: false,
-									})
-								: () => undefined
+					const placed: {
+						target: Element | null
+						scroller: Element | null
+						frame: number | undefined
+					} = { target: null, scroller: null, frame: undefined }
+					const hide = () => {
+						element.style.visibility = "hidden"
+						element.style.pointerEvents = "none"
 					}
-					anchor()
-					const attributeObserver = new MutationObserver(anchor)
+					const place = () => {
+						placed.frame = undefined
+						const target = placed.target
+						if (target === null || !target.isConnected) return hide()
+						const viewport = { top: 0, bottom: window.innerHeight }
+						const bounds = placed.scroller?.getBoundingClientRect() ?? viewport
+						const position = toolbarPosition(
+							target.getBoundingClientRect(),
+							{
+								top: Math.max(bounds.top, viewport.top),
+								bottom: Math.min(bounds.bottom, viewport.bottom),
+							},
+							{ width: element.offsetWidth, height: element.offsetHeight },
+						)
+						if (position === null) return hide()
+						element.style.top = `${position.top}px`
+						element.style.left = `${position.left}px`
+						element.style.visibility = ""
+						element.style.pointerEvents = ""
+					}
+					const schedule = () => {
+						if (placed.frame === undefined) placed.frame = window.requestAnimationFrame(place)
+					}
+					const resizeObserver = new ResizeObserver(schedule)
+					resizeObserver.observe(element)
+					const retarget = () => {
+						if (placed.target !== null) resizeObserver.unobserve(placed.target)
+						const messageId = element.getAttribute(TOOLBAR_TARGET_ATTRIBUTE)
+						placed.target =
+							messageId === null ? null : document.getElementById(`message-${messageId}`)
+						placed.scroller = placed.target === null ? null : scrollerOf(placed.target)
+						if (placed.target !== null) resizeObserver.observe(placed.target)
+						// Placed in this frame, so a hover change never shows the toolbar on the old message.
+						if (placed.frame !== undefined) window.cancelAnimationFrame(placed.frame)
+						place()
+					}
+					retarget()
+					const attributeObserver = new MutationObserver(retarget)
 					attributeObserver.observe(element, {
 						attributes: true,
 						attributeFilter: [TOOLBAR_TARGET_ATTRIBUTE],
 					})
+					// Scroll events do not bubble; capturing on the window sees the list's scroller.
+					window.addEventListener("scroll", schedule, { capture: true, passive: true })
+					window.addEventListener("resize", schedule, { passive: true })
 					const onEnter = () => Queue.offerUnsafe(queue, ToolbarEvent.EnteredToolbar())
 					const onLeave = () => Queue.offerUnsafe(queue, ToolbarEvent.LeftToolbar())
-					element.addEventListener("mouseenter", onEnter)
-					element.addEventListener("mouseleave", onLeave)
+					element.addEventListener("pointerenter", onEnter)
+					element.addEventListener("pointerleave", onLeave)
 					return () => {
+						if (placed.frame !== undefined) window.cancelAnimationFrame(placed.frame)
 						attributeObserver.disconnect()
-						releaseAnchor()
-						element.removeEventListener("mouseenter", onEnter)
-						element.removeEventListener("mouseleave", onLeave)
+						resizeObserver.disconnect()
+						window.removeEventListener("scroll", schedule, { capture: true })
+						window.removeEventListener("resize", schedule)
+						element.removeEventListener("pointerenter", onEnter)
+						element.removeEventListener("pointerleave", onLeave)
 						element.remove()
 					}
 				}),
@@ -96,8 +172,13 @@ export type HoverEvent = typeof HoverEvent.Type
 const HOVER_AFTER_SCROLL_MS = 100
 
 /**
- * `MessageListContent`'s delegated `onPointerOver` / `onPointerLeave`. While the list scrolls under a
- * resting pointer the hover holds still; the message under the pointer takes it once scrolling pauses.
+ * `MessageListContent`'s delegated `onPointerOver` / `onPointerLeave`. The pointer over a message
+ * hovers it; over anything else in the list (the gaps between groups, a date header) it leaves, like
+ * the row's own `:hover` highlight, so the toolbar never stays on a message the pointer is not on.
+ *
+ * While the list scrolls under a resting pointer the hover holds still. Once scrolling pauses, the
+ * element under the pointer's last position decides, since the browser may fire no `pointerover`
+ * when the content moves under a still pointer.
  */
 export const TrackMessageHover = Mount.defineStream("TrackMessageHover", {
 	messages: [HoverEvent.PointerEnteredMessage, HoverEvent.PointerLeftList, HoverEvent.RightClickedMessage],
@@ -105,36 +186,53 @@ export const TrackMessageHover = Mount.defineStream("TrackMessageHover", {
 		Stream.callback<HoverEvent>((queue) =>
 			Effect.acquireRelease(
 				Effect.sync(() => {
-					// DOM-side debounce: the timer of the scroll in progress and the message under the pointer.
-					const scroll: { timer: number | undefined; pending: Option.Option<MessageId> } = {
-						timer: undefined,
-						pending: Option.none(),
+					const pointer: {
+						isInside: boolean
+						x: number
+						y: number
+						scrollTimer: number | undefined
+					} = { isInside: false, x: 0, y: 0, scrollTimer: undefined }
+					/** Hovers the message `target` is in, or leaves when it is in none. */
+					const resolve = (target: Element | null) => {
+						if (target === null || !element.contains(target)) return
+						// The image viewer renders inside the list; it holds the hover while open.
+						if (target.closest(`[data-${LIST_PORTAL_ATTRIBUTE}]`)) return
+						const messageId = decodeMessageId(
+							target.closest(`[${MESSAGE_ROW_ATTRIBUTE}]`)?.getAttribute("data-id"),
+						)
+						Queue.offerUnsafe(
+							queue,
+							Option.match(messageId, {
+								onNone: () => HoverEvent.PointerLeftList(),
+								onSome: (id) => HoverEvent.PointerEnteredMessage({ messageId: id }),
+							}),
+						)
 					}
-					const enter = (messageId: MessageId) =>
-						Queue.offerUnsafe(queue, HoverEvent.PointerEnteredMessage({ messageId }))
 					const onScrollPaused = () => {
-						scroll.timer = undefined
-						Option.map(scroll.pending, enter)
-						scroll.pending = Option.none()
+						pointer.scrollTimer = undefined
+						if (pointer.isInside) resolve(document.elementFromPoint(pointer.x, pointer.y))
 					}
 					const onScroll = () => {
-						window.clearTimeout(scroll.timer)
-						scroll.timer = window.setTimeout(onScrollPaused, HOVER_AFTER_SCROLL_MS)
+						window.clearTimeout(pointer.scrollTimer)
+						pointer.scrollTimer = window.setTimeout(onScrollPaused, HOVER_AFTER_SCROLL_MS)
+					}
+					const onMove = (event: Event) => {
+						if (!(event instanceof PointerEvent)) return
+						pointer.isInside = true
+						pointer.x = event.clientX
+						pointer.y = event.clientY
 					}
 					const onOver = (event: Event) => {
-						const target =
-							event.target instanceof Element ? event.target.closest("[data-id]") : null
-						const messageId = decodeMessageId(target?.getAttribute("data-id"))
-						if (Option.isNone(messageId)) return
-						if (scroll.timer === undefined) enter(messageId.value)
-						else scroll.pending = messageId
+						onMove(event)
+						if (pointer.scrollTimer !== undefined) return
+						resolve(event.target instanceof Element ? event.target : null)
 					}
 					// React's onPointerLeave follows the React tree: moving into a portal the list rendered is no leave.
 					const onLeave = (event: Event) => {
 						const entered = event instanceof PointerEvent ? event.relatedTarget : null
 						if (entered instanceof Element && entered.closest(`[data-${LIST_PORTAL_ATTRIBUTE}]`))
 							return
-						scroll.pending = Option.none()
+						pointer.isInside = false
 						Queue.offerUnsafe(queue, HoverEvent.PointerLeftList())
 					}
 					// ContextMenuTrigger's `onContextMenu`, delegated; the open row handles its own.
@@ -159,13 +257,15 @@ export const TrackMessageHover = Mount.defineStream("TrackMessageHover", {
 							}),
 						)
 					}
+					element.addEventListener("pointermove", onMove, { passive: true })
 					element.addEventListener("pointerover", onOver)
 					element.addEventListener("pointerleave", onLeave)
 					element.addEventListener("contextmenu", onContextMenu)
 					// Scroll events do not bubble: the list's scroller is a descendant.
 					element.addEventListener("scroll", onScroll, { capture: true, passive: true })
 					return () => {
-						window.clearTimeout(scroll.timer)
+						window.clearTimeout(pointer.scrollTimer)
+						element.removeEventListener("pointermove", onMove)
 						element.removeEventListener("scroll", onScroll, { capture: true })
 						element.removeEventListener("contextmenu", onContextMenu)
 						element.removeEventListener("pointerover", onOver)
