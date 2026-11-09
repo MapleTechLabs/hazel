@@ -59,6 +59,8 @@ pub struct Style {
     pub subgrid: Option<bool>,
     pub hover_group: Option<bool>,
     pub group_opacity: Option<F>,
+    /// `group-hover:right-8` on a positioned element: [dx, dy] while its group is hovered.
+    pub group_shift: Option<[F; 2]>,
     pub center_y: Option<bool>,
     // Fields below arrive from newer resolvers. Each decodes leniently: a value of an unexpected
     // shape drops that field, never the whole tree.
@@ -324,7 +326,13 @@ pub enum RuntimeMsg {
     Tree(TreeMsg),
     /// Set a scroll viewport's offset (an `element.scrollTop = …` in the runtime).
     #[serde(rename = "scroll")]
-    Scroll { path: String, top: f32 },
+    Scroll {
+        path: String,
+        top: f32,
+        /// Echoed in the next offset report, so the runtime can tell reports from before it.
+        #[serde(default)]
+        seq: Option<u64>,
+    },
     /// Focus the element keyed `key` (an `element.focus()` in the runtime).
     #[serde(rename = "focus")]
     Focus { key: String },
@@ -334,6 +342,9 @@ pub enum RuntimeMsg {
     /// Scroll the element at `path` into view (an `element.scrollIntoView()`).
     #[serde(rename = "reveal")]
     Reveal { path: String, block: String },
+    /// Report the element at `path`'s rect now: it was laid out before the runtime observed it.
+    #[serde(rename = "measure")]
+    Measure { path: String },
     /// A full page load (`location.assign`, `reload()`): start a fresh runtime at `path`.
     #[serde(rename = "reload")]
     Reload { path: String },
@@ -384,6 +395,15 @@ impl RuntimeMsg {
             RuntimeMsg::Reveal { path, .. } => {
                 Some(Box::new(move |tx: &mut rune::Tx| tx.scroll_into_view(path)))
             }
+            RuntimeMsg::Measure { path } => Some(Box::new(move |tx: &mut rune::Tx| {
+                tx.drawn_rects(vec![path.clone()], move |_: &mut crate::State, rects, _| {
+                    if let Some(Some([x, y, w, h])) = rects.first().copied() {
+                        crate::write_line(serde_json::json!({
+                            "t": "layout", "path": path, "x": x, "y": y, "w": w, "h": h,
+                        }));
+                    }
+                });
+            })),
             _ => None,
         }
     }

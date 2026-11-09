@@ -178,7 +178,8 @@ impl Session {
                     self.timings.trees += 1;
                     self.rt.update(move |s, _| s.apply(tree));
                 }
-                RuntimeMsg::Scroll { path, top } => {
+                RuntimeMsg::Scroll { path, top, seq } => {
+                    crate::note_scroll(&path, seq);
                     if std::env::var("NATIVE_DEBUG").is_ok() {
                         eprintln!("[host] scroll_to {top}")
                     }
@@ -192,12 +193,16 @@ impl Session {
                 }
             }
         }
-        if crate::images::take_arrived() {
+        let arrived = crate::images::take_arrived();
+        if arrived {
             self.rt.update(|_, tx| tx.invalidate_memos_by_prefix("r"));
         }
         let frame_started = Instant::now();
         self.rt.frame(period.as_secs_f64());
         let frame_ms = frame_started.elapsed().as_secs_f64() * 1000.0;
+        if std::env::var("NATIVE_TRACE").is_ok() && (frame_ms > 12.0 || arrived) {
+            eprintln!("[host-frame] {frame_ms:.1}ms tree={got_tree} images_arrived={arrived}");
+        }
         if got_tree {
             self.last_tree = Instant::now();
             self.first_tree_ms
@@ -272,9 +277,11 @@ impl Session {
                 self.timings.trees += 1;
                 self.rt.update(move |s, _| s.apply(tree));
             }
-            RuntimeMsg::Scroll { path, top } => self
-                .rt
-                .update(move |_, tx| tx.scroll_to_instant(path, 0.0, top)),
+            RuntimeMsg::Scroll { path, top, seq } => {
+                crate::note_scroll(&path, seq);
+                self.rt
+                    .update(move |_, tx| tx.scroll_to_instant(path, 0.0, top))
+            }
             request => {
                 if let Some(run) = request.request() {
                     self.rt.update(move |_, tx| run(tx))
@@ -583,6 +590,11 @@ pub fn run(script_path: &str) {
                     } else {
                         0.0
                     };
+                    if std::env::var("NATIVE_TRACE").is_ok() && gpu_ms > 12.0 {
+                        eprintln!(
+                            "[host-encode] frame {i} of sweep: encode {gpu_ms:.1}ms, frame {frame_ms:.1}ms"
+                        );
+                    }
                     gpu_times.push(gpu_ms);
                     times.push(frame_ms + gpu_ms);
                 }
@@ -927,7 +939,7 @@ pub fn run(script_path: &str) {
         }
         Err(_) => println!("{}", serde_json::to_string_pretty(&out).unwrap()),
     }
-    child.kill();
+    child.stop();
 }
 
 /// A script step that cannot complete fails the run, so a benchmark never reports a partial one.

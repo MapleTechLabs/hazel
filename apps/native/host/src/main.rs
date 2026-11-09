@@ -1558,7 +1558,10 @@ fn build_input(
 /// An element a runtime Mount observes: report its layout, and its offset when it scrolls.
 fn observe(e: El, path: &str, st: &Style) -> El {
     let layout_path = path.to_string();
-    let e = e.on_layout(move |_: &mut State, [x, y, w, h]: [f32; 4]| {
+    // A report for the runtime, no change to the host's own state: no need to build its view
+    // again, which inside a scrolling list would be every frame.
+    let e = e.on_layout_tx(move |_: &mut State, [x, y, w, h]: [f32; 4], tx| {
+        tx.live_only();
         write_line(json!({ "t": "layout", "path": layout_path, "x": x, "y": y, "w": w, "h": h }));
     });
     if st.scroll_y != Some(true) {
@@ -1572,8 +1575,33 @@ fn observe(e: El, path: &str, st: &Style) -> El {
                 at.offset[1], at.max[1], at.viewport[1]
             )
         }
-        write_line(json!({ "t": "scrolled", "path": scroll_path, "top": at.offset[1] }));
+        let seq = scroll_seqs()
+            .lock()
+            .expect("scroll seqs")
+            .get(&scroll_path)
+            .copied()
+            .unwrap_or(0);
+        write_line(
+            json!({ "t": "scrolled", "path": scroll_path, "top": at.offset[1], "seq": seq }),
+        );
     })
+}
+
+/// The last runtime scroll the host applied to each viewport: its offset reports carry that
+/// scroll's `seq`, so the runtime can tell the ones sent before it apart.
+pub(crate) fn scroll_seqs() -> &'static std::sync::Mutex<HashMap<String, u64>> {
+    static SEQS: std::sync::OnceLock<std::sync::Mutex<HashMap<String, u64>>> =
+        std::sync::OnceLock::new();
+    SEQS.get_or_init(Default::default)
+}
+
+/// Notes a runtime scroll's `seq` for the offset reports after it.
+pub(crate) fn note_scroll(path: &str, seq: Option<u64>) {
+    if let Some(seq) = seq {
+        let mut seqs = scroll_seqs().lock().expect("scroll seqs");
+        let entry = seqs.entry(path.to_string()).or_default();
+        *entry = (*entry).max(seq);
+    }
 }
 
 /// A multi-line native field over a DOM-backed editor: Return submits, Shift+Return breaks a line.
@@ -1800,6 +1828,25 @@ impl RuntimeChild {
             let _ = child.wait();
         }
     }
+
+    /// Asks the runtime to exit (SIGTERM), so it finishes what it writes on exit (a CPU
+    /// profile), and kills it if it has not gone within 3 s.
+    pub(crate) fn stop(&mut self) {
+        if let Some(mut child) = self.0.lock().unwrap().take() {
+            let _ = std::process::Command::new("kill")
+                .args(["-TERM", &child.id().to_string()])
+                .status();
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+            while std::time::Instant::now() < deadline {
+                if matches!(child.try_wait(), Ok(Some(_))) {
+                    return;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
 }
 
 /// Starts a runtime at `path` (`NATIVE_PATH`), writing to it from now on; returns its stdout.
@@ -1944,7 +1991,8 @@ fn main() {
         for msg in messages.iter() {
             match msg {
                 RuntimeMsg::Tree(tree) => handle.update(move |s: &mut State, _| s.apply(tree)),
-                RuntimeMsg::Scroll { path, top } => {
+                RuntimeMsg::Scroll { path, top, seq } => {
+                    note_scroll(&path, seq);
                     handle.update(move |_: &mut State, tx| tx.scroll_to_instant(path, 0.0, top))
                 }
                 request => {

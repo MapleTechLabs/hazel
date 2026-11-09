@@ -63,6 +63,8 @@ const reportUncaught = (kind: string) => (error: unknown) => {
 }
 process.on("uncaughtException", reportUncaught("error"))
 process.on("unhandledRejection", reportUncaught("rejection"))
+// The host asks the runtime to stop with SIGTERM: exit normally, so exit work (a CPU profile) runs.
+process.on("SIGTERM", () => process.exit(0))
 
 /** The Tauri APIs the app's browser sign-in uses, answered by the host (keychain, opened links). */
 const desktopBridge = makeDesktopBridge({

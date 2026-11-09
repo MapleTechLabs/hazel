@@ -334,6 +334,9 @@ pub fn apply_box(mut e: El, st: &Style) -> El {
     {
         e = e.outline(o.width.0, o.offset.0, c)
     }
+    if let Some([dx, dy]) = st.group_shift {
+        e = e.group_offset(dx.0, dy.0);
+    }
     match (f(st.opacity), f(st.group_opacity)) {
         // An ancestor's hover reveals this element; Rune animates it without re-running the view.
         (rest, Some(hovered)) => e = e.group_opacity(rest.unwrap_or(1.0), hovered),
@@ -694,10 +697,13 @@ pub fn auto_margins(
     if (!main_start && !main_end) || sibling_grows {
         return child;
     }
-    let slot = if parent_is_row {
-        row().min_w(0.0)
-    } else {
-        rune::col().min_h(0.0)
+    // A child of fixed width keeps it as the slot's minimum: a parent sized by its content (a
+    // shrink-to-fit button) counts it, where Rune's grow alone would count the slot as nothing.
+    let side = |i: usize| st.margin.map_or(0.0, |m| m[i].0);
+    let slot = match &st.w {
+        Some(Len::Px(F(w))) if parent_is_row => row().min_w((w + side(1) + side(3)).max(0.0)),
+        _ if parent_is_row => row().min_w(0.0),
+        _ => rune::col().min_h(0.0),
     };
     let slot = match (main_start, main_end) {
         (true, true) => slot.justify_center(),

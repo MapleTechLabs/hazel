@@ -1944,6 +1944,69 @@ fn a_full_width_item_in_a_row_shrinks_to_leave_its_siblings_room() {
 }
 
 #[test]
+fn an_absolute_button_sizes_to_its_icon_and_padding() {
+    // The sidebar row's hover-revealed menu trigger: right-0, h-full, w-auto, px-2.5, a 16px
+    // icon with a -2px right margin and an auto left one. Chromium makes it 36 wide.
+    let icon = json!({
+        "k": "svg", "h": "dots", "view": 24.0,
+        "body": "<path d=\"M5 12h.01M12 12h.01M19 12h.01\" stroke=\"currentColor\"/>",
+        // The row's `**:last:data-[slot=icon]:ml-auto` reaches it too: an auto left margin.
+        "st": { "w": 16, "h": 16, "margin": [0, -2, 0, 0], "marginAuto": [false, false, false, true], "shrink": 0, "self": "center" }
+    });
+    let trigger = e(
+        "button",
+        json!({ "display": "flex", "items": "center", "justify": "flex-end", "absolute": [null, null, 0, null],
+                "w": "auto", "h": "full", "pad": [0, 10, 0, 10], "border": [1, 1, 1, 1] }),
+        vec![icon],
+    );
+    // The row is a grid, as the sidebar item is.
+    let row = e(
+        "div",
+        json!({ "display": "grid", "gridCols": ["auto", "1fr", "1.5rem", "0.5rem", "auto"], "w": 200, "h": 40 }),
+        vec![e("span", json!({}), vec![t("design")]), trigger],
+    );
+    let rt = runtime(row, (200.0, 100.0));
+    let [x, _, w, h] = rect(&rt, "r/1");
+    // 16 - 2 + 20 of padding; the host draws borders inside the box (Chromium adds 2 more).
+    assert_eq!((w, h), (34.0, 40.0), "icon + padding, full height");
+    assert_eq!(x, 166.0, "against the right edge");
+}
+
+#[test]
+fn a_badge_with_a_group_shift_slides_aside_while_its_row_is_hovered() {
+    // `absolute right-1.5 group-hover:right-8`: 26 to the left while the row is hovered.
+    let badge = e(
+        "span",
+        json!({ "absolute": [null, null, 6, null], "w": 20, "h": 20, "bg": "#7f56d9ff", "groupShift": [-26, 0] }),
+        vec![],
+    );
+    let mut row = e(
+        "div",
+        json!({ "w": 200, "h": 40, "hoverGroup": true, "hoverBg": "#ffffff0b" }),
+        vec![badge],
+    );
+    row["on"] = json!({ "click": 90 });
+    let mut rt = runtime(e("div", json!({}), vec![row]), (200.0, 100.0));
+    let x = |rt: &Runtime<State>| {
+        rt.elements()
+            .into_iter()
+            .find(|e| e.key.as_deref() == Some("r/0/0"))
+            .map(|e| e.visible[0])
+            .expect("badge drawn")
+    };
+    let rest = x(&rt);
+    rt.pointer_move(20.0, 20.0);
+    for f in 1..=60 {
+        rt.frame(f64::from(f) / 60.0);
+    }
+    assert!(
+        (x(&rt) - (rest - 26.0)).abs() < 0.5,
+        "hovered: {} from {rest}",
+        x(&rt)
+    );
+}
+
+#[test]
 fn the_document_scrolls_when_it_is_taller_than_the_window() {
     let page = e(
         "div",
