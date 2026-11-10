@@ -79,9 +79,8 @@ export class UserPresenceStatusRpcs extends RpcGroup.make(
 	/**
 	 * UserPresenceStatusHeartbeat
 	 *
-	 * Lightweight heartbeat to update lastSeenAt timestamp.
-	 * Used for reliable offline detection - if no heartbeat received
-	 * within timeout period, user is marked offline by server-side cron job.
+	 * Lightweight heartbeat: marks the user online and moves lastSeenAt. With no heartbeat for
+	 * the timeout, the user's object marks them offline on its alarm.
 	 *
 	 * @returns Updated lastSeenAt timestamp
 	 * @throws UnauthorizedError if not authenticated

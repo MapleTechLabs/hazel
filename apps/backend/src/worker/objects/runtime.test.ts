@@ -172,6 +172,41 @@ describe("object runtime", () => {
 			}),
 		))
 
+	it("an org marks a presence copy offline once its lease runs out", () =>
+		run(
+			Effect.gen(function* () {
+				const objects = yield* makeTestObjects
+				const orgId = uuid() as OrganizationId
+				const org = yield* objects.get(orgTarget(orgId))
+				yield* org.run(org.identity.remember(orgId).pipe(Effect.orDie))
+				const [fresh, ghost] = [uuid(), uuid()]
+				const insert = org.storage.db.prepare(
+					`INSERT INTO user_presence_status (id, userId, status, updatedAt, lastSeenAt) VALUES (?, ?, 'online', ?, ?)`,
+				)
+				// The stored timestamp text (`packages/db` `timestamptz`).
+				const stored = (ms: number) => new Date(ms).toISOString().replace("T", " ").slice(0, 23)
+				const now = stored(Date.now())
+				const longAgo = stored(Date.now() - 60 * 60_000)
+				insert.run(uuid(), fresh, now, now)
+				// A copy whose UserObject never told this org anything again.
+				insert.run(uuid(), ghost, longAgo, longAgo)
+				yield* org.alarm
+				const statuses = Object.fromEntries(
+					(
+						org.storage.db
+							.prepare(`SELECT userId, status FROM user_presence_status`)
+							.all() as Array<{
+							userId: string
+							status: string
+						}>
+					).map((row) => [row.userId, row.status]),
+				)
+				expect(statuses).toEqual({ [fresh]: "online", [ghost]: "offline" })
+				// The fresh copy's lease keeps the alarm armed.
+				expect(org.storage.alarm()).not.toBeNull()
+			}),
+		))
+
 	it("an undecodable invoke dies with the decode error", () =>
 		run(
 			Effect.gen(function* () {

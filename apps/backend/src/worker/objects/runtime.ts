@@ -55,6 +55,7 @@ import { pollDueRssFeeds, rssDeadlines } from "./org/rss"
 import { prepareMessageSearch, SEARCH_MIGRATION_ID } from "./org/message-search"
 import { channelDeadlines, runChannelTimers } from "./channel/timers"
 import { makePresenceHooks } from "./user/presence"
+import { expirePresenceLeases, presenceLeaseDeadlines } from "./org/projections"
 import {
 	directoryUserActive,
 	reauthenticateWith,
@@ -164,6 +165,11 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 			)
 		}
 
+		// OrgObject: RSS polls and the presence copies' leases share the alarm.
+		const orgDeadlines = Effect.map(Effect.all([rssDeadlines, presenceLeaseDeadlines]), (lists) =>
+			lists.flat(),
+		)
+
 		// UserObject presence: online while a sync socket is open, expiry on the alarm.
 		const presence = kind === "user" ? makePresenceHooks(options.state, identity.current) : undefined
 
@@ -179,7 +185,7 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 			},
 			deliver: deliverOutboxRowFrom(kind, identity.current),
 			...(kind === "channel" ? { deadlines: channelDeadlines } : {}),
-			...(kind === "org" ? { deadlines: rssDeadlines } : {}),
+			...(kind === "org" ? { deadlines: orgDeadlines } : {}),
 			...(presence === undefined ? {} : { deadlines: presence.deadlines }),
 			// Revocations land before the org answers (versioned, so out of order is safe).
 			...(kind === "org" ? { urgentKinds: [ChannelEffects.setViewers.name] } : {}),
@@ -341,6 +347,8 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 			if (presence !== undefined && (yield* run(presence.alarm))) yield* afterCommit
 			// OrgObject: poll the RSS feeds that are due (posts go out through the outbox).
 			if (kind === "org" && (yield* run(pollDueRssFeeds)) > 0) yield* afterCommit
+			// OrgObject: presence copies nobody renewed in time go offline.
+			if (kind === "org" && (yield* run(expirePresenceLeases)) > 0) yield* afterCommit
 			yield* run(synced.alarm)
 		}).pipe(Effect.withSpan("ObjectRpc.alarm", { attributes: { "object.kind": kind } }))
 
