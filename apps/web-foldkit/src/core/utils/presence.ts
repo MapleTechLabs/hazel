@@ -5,11 +5,9 @@ export type PresenceLike = {
 } | null
 
 /**
- * The status to show for a presence row: the stored one, which the user's `UserObject` keeps
- * current (offline once their heartbeat goes stale, `worker/objects/user/presence.ts`).
- *
- * `lastSeenAt` is not consulted: heartbeats refresh it only in the user's own object, so the copy
- * an org streams is as old as the last status change and says nothing about whether they are here.
+ * The status to show for a presence row: the stored one. The user's `UserObject` keeps it current
+ * (offline once their heartbeat goes stale, `worker/objects/user/presence.ts`), and each org
+ * expires its own copy when the user's object stops renewing it (`org/projections.ts`).
  *
  * - Missing presence row => offline
  * - Otherwise the stored status (online/away/busy/dnd/offline); anything unknown => offline

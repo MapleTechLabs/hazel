@@ -7,8 +7,9 @@
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import { ChannelId, UserId, UserPresenceStatusId } from "@hazel/schema"
-import { Effect, Option, Schema } from "effect"
+import { Clock, Effect, Option, Schema } from "effect"
 import { Directory } from "../../../services/directory"
+import { PRESENCE_LEASE_MS } from "../user/presence-timing"
 
 /** ISO timestamp text. */
 const Timestamp = Schema.String
@@ -103,6 +104,53 @@ export const upsertPresenceProjection = Effect.fn("OrgObject.upsertPresenceProje
 			.onConflictDoUpdate({ target: ["userId"], set }),
 	)
 })
+
+/**
+ * The org's copy of a presence row is a lease: the user's `UserObject` re-projects it at least
+ * every `PRESENCE_RENEW_MS` while they are active. A non-offline copy whose `lastSeenAt` is older
+ * than `PRESENCE_LEASE_MS` heard nothing from that object for too long (it went idle before its
+ * own alarm ran, a delivery was lost, the row predates leases), so the org marks it offline itself.
+ * The next projection from the user's object overwrites it either way.
+ */
+export const presenceLeaseDeadlines = Effect.gen(function* () {
+	const db = yield* Database.Database
+	const oldest = yield* db.first(
+		SQLite.from(schema.userPresenceStatusTable)
+			.select("lastSeenAt")
+			.where(($) => [$.status.neq("offline")])
+			.orderBy(($) => [[$.lastSeenAt, "asc"]])
+			.limit(1),
+	)
+	return Option.match(oldest, {
+		onNone: () => [],
+		onSome: ({ lastSeenAt }) => [lastSeenAt.getTime() + PRESENCE_LEASE_MS],
+	})
+}).pipe(
+	Effect.catchTag("DatabaseError", (error) =>
+		Effect.logWarning("Presence lease deadline lookup failed", { error: error.message }).pipe(
+			Effect.as([]),
+		),
+	),
+)
+
+/** Mark every copy whose lease ran out offline (due at its deadline, inclusive); returns how many. */
+export const expirePresenceLeases = Effect.gen(function* () {
+	const db = yield* Database.Database
+	const nowMs = yield* Clock.currentTimeMillis
+	const expired = yield* db.run(
+		SQLite.update(schema.userPresenceStatusTable)
+			.set({ status: "offline", updatedAt: new Date(nowMs) })
+			.where(($) => [$.status.neq("offline"), $.lastSeenAt.lte(new Date(nowMs - PRESENCE_LEASE_MS))])
+			.returning("id"),
+	)
+	yield* Effect.annotateCurrentSpan({ "presence.expired": expired.length })
+	return expired.length
+}).pipe(
+	Effect.catchTag("DatabaseError", (error) =>
+		Effect.logWarning("Presence lease expiry failed", { error: error.message }).pipe(Effect.as(0)),
+	),
+	Effect.withSpan("OrgObject.expirePresenceLeases"),
+)
 
 /** Is `userId` still someone this org shows (an active member or Connect participant)? */
 const isKnown = (userId: UserId) =>
