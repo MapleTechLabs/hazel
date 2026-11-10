@@ -568,6 +568,7 @@ fn intern_icon(view: f32, body: &str) -> &'static Icon {
     leaked
 }
 
+/// A child's path under `parent`: by its key when it has one, else by its place among its siblings.
 pub(crate) fn child_path(parent: &str, index: usize, node: &Node) -> String {
     match node {
         Node::Elem { key: Some(key), .. } => format!("{parent}/k{key}"),

@@ -325,6 +325,7 @@ const hasViewportMeta = (scan: string): boolean => {
 	return false
 }
 
+/** What goes at the start of the head: a charset and a viewport when the page names none, then the theme and bridge. */
 const bootstrapMarkup = (markup: string): string =>
 	[
 		/<meta\s[^>]*charset/i.test(markup.slice(0, 4096)) ? "" : CHARSET_META,

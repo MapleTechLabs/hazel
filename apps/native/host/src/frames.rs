@@ -30,6 +30,7 @@ pub fn collect(root: &Arc<Node>) -> Vec<FrameSpec> {
     out
 }
 
+/// Collects the frames under `node`, with the clipping ancestors met on the way down (`clips`).
 fn walk(node: &Arc<Node>, path: &str, clips: &mut Vec<String>, out: &mut Vec<FrameSpec>) {
     let Node::Elem {
         tag,
@@ -109,6 +110,7 @@ pub fn collect_covers(root: &Arc<Node>, portals: &[(String, Arc<Node>)]) -> Vec<
     out
 }
 
+/// The sticky elements under `node`, as what they paint: a frame scrolls under them.
 fn sticky(node: &Arc<Node>, path: &str, out: &mut Vec<CoverSpec>) {
     let Node::Elem { st, children, .. } = node.as_ref() else {
         return;
@@ -125,6 +127,8 @@ fn sticky(node: &Arc<Node>, path: &str, out: &mut Vec<CoverSpec>) {
     }
 }
 
+/// The outermost boxes under `node` that have a background: where an overlay is seen, and so
+/// where it covers. What such a box holds is inside it and adds nothing.
 fn painted(node: &Arc<Node>, path: &str, out: &mut Vec<CoverSpec>) {
     let Node::Elem { st, children, .. } = node.as_ref() else {
         return;
@@ -146,6 +150,7 @@ fn painted(node: &Arc<Node>, path: &str, out: &mut Vec<CoverSpec>) {
 
 type Rect = [f32; 4];
 
+/// The part two rects share; a rect with no width or height when they do not meet.
 fn intersect(a: Rect, b: Rect) -> Rect {
     let x = a[0].max(b[0]);
     let y = a[1].max(b[1]);
@@ -154,6 +159,7 @@ fn intersect(a: Rect, b: Rect) -> Rect {
     [x, y, (right - x).max(0.0), (bottom - y).max(0.0)]
 }
 
+/// Nothing of the rect can show.
 fn is_empty(r: Rect) -> bool {
     r[2] <= 0.0 || r[3] <= 0.0
 }
@@ -250,6 +256,7 @@ fn runtime_message(path: &str, body: &str) -> Option<serde_json::Value> {
     }
 }
 
+/// `value` for a double-quoted HTML attribute.
 fn escape_attribute(value: &str) -> String {
     value
         .replace('&', "&amp;")
@@ -355,6 +362,7 @@ pub fn post(path: &str, data: &serde_json::Value) {
     native::post(path, data);
 }
 
+/// No web view on this platform: frames keep their boxes and show nothing.
 #[cfg(not(target_os = "macos"))]
 mod native {
     use super::{FrameSpec, Placement};
@@ -366,6 +374,7 @@ mod native {
     pub fn post(_: &str, _: &serde_json::Value) {}
 }
 
+/// The frames' web views in the app's window: a `WKWebView` each, inside a host view that clips it.
 #[cfg(target_os = "macos")]
 mod native {
     use std::cell::{Cell, RefCell};
@@ -386,6 +395,7 @@ mod native {
 
     use super::{FrameSpec, MaskShape, Placement, Rect};
 
+    /// A Rune rect (`[x, y, w, h]`, from the top left) as AppKit's.
     fn cg(rect: Rect) -> CGRect {
         CGRect::new(
             CGPoint::new(rect[0] as f64, rect[1] as f64),
@@ -417,6 +427,8 @@ mod native {
                 true
             }
 
+            /// No view where the frame is not shown yet or something else is drawn over it: the
+            /// press goes to the window's own view behind, which is Rune's.
             #[unsafe(method(hitTest:))]
             fn hit_test(&self, point: CGPoint) -> *mut NSView {
                 let ivars = self.ivars();
@@ -483,6 +495,7 @@ mod native {
         unsafe impl NSObjectProtocol for FrameMessages {}
 
         unsafe impl WKScriptMessageHandler for FrameMessages {
+            /// The wrapper page's `load` and the framed page's messages, on to the runtime.
             #[unsafe(method(userContentController:didReceiveScriptMessage:))]
             fn did_receive(
                 &self,
@@ -516,6 +529,7 @@ mod native {
         static VIEWS: RefCell<HashMap<String, FrameView>> = RefCell::new(HashMap::new());
     }
 
+    /// Whether any web view exists: with none and no frame in the tree, a drawn frame has nothing to place.
     pub fn any() -> bool {
         VIEWS.with_borrow(|views| !views.is_empty())
     }
@@ -531,6 +545,7 @@ mod native {
             .find_map(|window| window.contentView())
     }
 
+    /// Loads the wrapper page for `src` into the view; a `src` the wrapper refuses loads nothing.
     fn load(web: &FrameWebView, src: &str) {
         let Some(html) = super::wrapper_html(src) else {
             eprintln!("[host] a frame's src is not an http(s) URL");
@@ -540,6 +555,8 @@ mod native {
         unsafe { web.loadHTMLString_baseURL(&NSString::from_str(&html), None) };
     }
 
+    /// A frame's views, hidden in `parent` until placed: the clipping host, and in it the web view
+    /// with its bridge to the runtime, a store of its own and no background.
     fn create(mtm: MainThreadMarker, parent: &NSView, frame: &FrameSpec) -> FrameView {
         let host: Retained<FrameHost> = {
             let this = FrameHost::alloc(mtm).set_ivars(HostIvars {
@@ -647,6 +664,8 @@ mod native {
         *view.host.ivars().mask.borrow_mut() = mask;
     }
 
+    /// Takes a frame's views out of the window; the bridge goes first, as the web view's content
+    /// controller would otherwise keep it, and the frame's path, alive.
     fn remove(view: FrameView) {
         unsafe {
             view.web
@@ -657,6 +676,8 @@ mod native {
         view.host.removeFromSuperview();
     }
 
+    /// Brings the web views in line with the frames of the tree just drawn: removes the ones whose
+    /// frame is gone, creates the ones that are new, reloads a changed `src`, and places each.
     pub fn apply(placed: &[(&FrameSpec, Option<Placement>)]) {
         let Some(mtm) = MainThreadMarker::new() else {
             return;
@@ -696,6 +717,7 @@ mod native {
         });
     }
 
+    /// Hands `data` to the wrapper page of the frame at `path`, which posts it to the framed page.
     pub fn post(path: &str, data: &serde_json::Value) {
         VIEWS.with_borrow(|views| {
             let Some(view) = views.get(path) else {

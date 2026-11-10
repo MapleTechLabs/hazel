@@ -224,6 +224,7 @@ export const makeElementBridge = (options: {
 	/** By path: each re-checks whether its element meets the window, on every rect the host reports. */
 	const intersectionObservers = new Map<string, Set<() => void>>()
 	const frameWindows = new Map<string, FrameWindow>()
+	/** The window of the `<iframe>` at `path`: one object per path, posting through the host. */
 	const frameWindowFor = (path: string): FrameWindow => {
 		const existing = frameWindows.get(path)
 		if (existing !== undefined) return existing

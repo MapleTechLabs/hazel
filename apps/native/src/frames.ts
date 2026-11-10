@@ -23,6 +23,7 @@ export type FrameEventsOptions = {
 	readonly navigator: { userActivation?: { readonly isActive: boolean } }
 }
 
+/** Handles a host `frame` message: the element's `load` handler, or a `message` event on `window`. */
 export const makeFrameEvents = (options: FrameEventsOptions) => (message: FrameMessage) => {
 	if (message.event === "load") {
 		options.fire(message.path, new Event("load"))
