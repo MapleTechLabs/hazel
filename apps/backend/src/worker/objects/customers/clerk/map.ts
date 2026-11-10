@@ -16,6 +16,10 @@
  *   a per-day history, so a pull can mark only those one or two days; the continuous per-day signal
  *   is the `session.created` webhook. Clerk never reports how many sessions a day held, so it
  *   writes `sessionCount: 1` as a floor and owns `signedIn`; event counts stay Maple's.
+ * - **Ordering.** Account and contact ops carry `observedAt`, so a late delivery cannot revive a
+ *   record deleted since: a webhook's is the record's `updated_at` (else the event's time), a
+ *   pull's the time it asked Clerk (a listing proves the record live then). Identity ops never set
+ *   `matchByDomain`: two organizations sharing a domain stay two customers.
  * - **Events.** Ingest raises `contact.joined` / `contact.removed` itself when a contact appears or
  *   is removed, so the only timeline entry Clerk adds is `account.created` for an organization it
  *   watched being created, keyed on the organization so a redelivery dedupes.
@@ -69,7 +73,11 @@ const seatsLimitOf = (max: number | null | undefined): number | null =>
  * An organization. Domains are not on the organization record — they come from
  * `/organization_domains` through {@link domainsAccountOp} and merge into the account.
  */
-export const accountOp = (org: ClerkOrganization, onNoMatch: OnNoMatch): UpsertAccount => {
+export const accountOp = (
+	org: ClerkOrganization,
+	onNoMatch: OnNoMatch,
+	observedAt?: IsoTimestamp,
+): UpsertAccount => {
 	const op: Types.Mutable<UpsertAccount> = {
 		_tag: "account",
 		externalId: org.id,
@@ -85,22 +93,31 @@ export const accountOp = (org: ClerkOrganization, onNoMatch: OnNoMatch): UpsertA
 	if (org.slug != null) op.attributes = { slug: org.slug }
 	const createdAt = isoOf(org.created_at)
 	if (createdAt !== null) op.createdAt = createdAt
+	if (observedAt !== undefined) op.observedAt = observedAt
 	return op
 }
 
-/** The organization's verified domains, merged into the account (ingest never removes a domain). */
+/**
+ * The organization's verified domains, merged into the account (ingest never removes a domain).
+ * They describe the account; they never match one (no `matchByDomain`).
+ */
 export const domainsAccountOp = (
 	organizationId: string,
 	domains: ReadonlyArray<string>,
 	onNoMatch: OnNoMatch,
-): UpsertAccount => ({
-	_tag: "account",
-	externalId: organizationId,
-	domains,
-	sameAs: [],
-	// A domain alone is no reason to invent a customer: the organization sweep creates those.
-	onNoMatch: onNoMatch === "create" ? "unmatched" : onNoMatch,
-})
+	observedAt?: IsoTimestamp,
+): UpsertAccount => {
+	const op: Types.Mutable<UpsertAccount> = {
+		_tag: "account",
+		externalId: organizationId,
+		domains,
+		sameAs: [],
+		// A domain alone is no reason to invent a customer: the organization sweep creates those.
+		onNoMatch: onNoMatch === "create" ? "unmatched" : onNoMatch,
+	}
+	if (observedAt !== undefined) op.observedAt = observedAt
+	return op
+}
 
 export const accountDeletedOp = (organizationId: string): UpsertAccount => ({
 	_tag: "account",
@@ -120,6 +137,7 @@ export const contactOp = (input: {
 	readonly organizationId: string
 	readonly user?: ClerkUser | undefined
 	readonly removed?: boolean
+	readonly observedAt?: IsoTimestamp | undefined
 }): UpsertContact | null => {
 	const { membership, organizationId, user } = input
 	const publicData = membership.public_user_data
@@ -148,6 +166,7 @@ export const contactOp = (input: {
 		op.lastSeenAt = isoOf(user.last_active_at)
 	}
 	if (input.removed === true) op.removed = true
+	if (input.observedAt !== undefined) op.observedAt = input.observedAt
 	return op
 }
 
@@ -167,35 +186,40 @@ export const activityOps = (user: ClerkUser, organizationId: string): Array<Reco
 	return ops
 }
 
+/** A sign-in day on its own, for when the user's memberships could not be listed. */
+export const sessionActivityOp = (userId: string, organizationId: string, day: Day): RecordActivity => ({
+	_tag: "activity",
+	contact: clerkRef(userId),
+	account: clerkRef(organizationId),
+	day,
+	sessionCount: 1,
+	signedIn: true,
+})
+
 /**
- * A new session: the day is a sign-in for every account the user belongs to. The contact comes
- * first, as everywhere else — a user whose membership webhook has not landed yet would otherwise
- * have their activity parked as an unmatched record instead of creating the contact it belongs to.
+ * A new session: the day is a sign-in for each account the user belongs to, `memberships` being
+ * the user's memberships Clerk lists. The contact comes first, built from the membership's public
+ * user data (email, name), so a session that lands before its membership webhook creates the
+ * contact its activity belongs to, the same contact the membership will name.
  */
 export const sessionOps = (
 	session: ClerkSession,
-	organizationIds: ReadonlyArray<string>,
+	memberships: ReadonlyArray<ClerkMembership>,
+	observedAt?: IsoTimestamp,
 ): Array<IngestOp> => {
 	const at = isoOf(session.created_at) ?? isoOf(session.last_active_at)
 	if (at === null) return []
 	const day = dayOf(new Date(at))
-	return organizationIds.flatMap((organizationId): Array<IngestOp> => [
-		{
-			_tag: "contact",
-			externalId: session.user_id,
-			account: clerkRef(organizationId),
-			lastSignInAt: at,
-			lastSeenAt: at,
-		},
-		{
-			_tag: "activity",
-			contact: clerkRef(session.user_id),
-			account: clerkRef(organizationId),
-			day,
-			sessionCount: 1,
-			signedIn: true,
-		},
-	])
+	return memberships.flatMap((membership): Array<IngestOp> => {
+		const organizationId = membership.organization?.id
+		if (organizationId === undefined) return []
+		const contact = contactOp({ membership, organizationId, observedAt })
+		if (contact === null) return []
+		return [
+			{ ...contact, lastSignInAt: at, lastSeenAt: at },
+			sessionActivityOp(session.user_id, organizationId, day),
+		]
+	})
 }
 
 /** The one timeline entry Clerk adds; ingest raises the contact ones itself. */
@@ -214,26 +238,31 @@ export const accountCreatedEvent = (org: ClerkOrganization, occurredAt: IsoTimes
 
 /**
  * A membership, its organization and its user, in the order ingest needs: the account exists
- * before the contact that names it, and the contact before its activity.
+ * before the contact that names it, and the contact before its activity. A removal writes only the
+ * contact: its organization may be going too (a deleted organization's memberships go with it), and
+ * an account op would revive it.
  */
 export const membershipOps = (input: {
 	readonly membership: ClerkMembership
 	readonly user?: ClerkUser | undefined
 	readonly onNoMatch: OnNoMatch
 	readonly removed?: boolean
-	/** Skip the account op when a sweep already wrote the organization in this page. */
+	/** Skip the account op: a sweep already wrote the organization in this page, say. */
 	readonly withAccount?: boolean
+	readonly observedAt?: IsoTimestamp | undefined
 }): Array<IngestOp> => {
 	const org = input.membership.organization
 	const organizationId = org?.id
 	if (organizationId === undefined) return []
 	const ops: Array<IngestOp> = []
-	if (input.withAccount !== false && org !== undefined) ops.push(accountOp(org, input.onNoMatch))
+	if (input.withAccount !== false && input.removed !== true && org !== undefined)
+		ops.push(accountOp(org, input.onNoMatch, input.observedAt))
 	const contact = contactOp({
 		membership: input.membership,
 		organizationId,
 		user: input.user,
 		removed: input.removed === true,
+		observedAt: input.observedAt,
 	})
 	if (contact === null) return ops
 	ops.push(contact)

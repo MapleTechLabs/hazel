@@ -18,7 +18,7 @@ import {
 	USER_ADA,
 	USER_GRACE,
 } from "./fixtures"
-import { accountOp, domainsAccountOp, membershipOps, sessionOps } from "./map"
+import { accountDeletedOp, accountOp, domainsAccountOp, membershipOps, sessionOps } from "./map"
 import { ClerkMembership, ClerkOrganization, ClerkSession, ClerkUser } from "./wire"
 
 const org = Schema.decodeUnknownSync(ClerkOrganization)
@@ -202,7 +202,9 @@ describe("Clerk ops through CustomerIngest", () => {
 				yield* world.ingest("clerk", backfill)
 				yield* world.ingest(
 					"clerk",
-					sessionOps(Schema.decodeUnknownSync(ClerkSession)(SESSION_ADA), [ORG_ACME.id]),
+					sessionOps(Schema.decodeUnknownSync(ClerkSession)(SESSION_ADA), [
+						member(MEMBERSHIP_ADA_ADMIN),
+					]),
 				)
 				expect(activity(world).filter((row) => row.account === "Acme Analytics")).toEqual([
 					{ day: "2026-11-09", signedIn: 1, sessionCount: 1, account: "Acme Analytics" },
@@ -220,13 +222,49 @@ describe("Clerk ops through CustomerIngest", () => {
 				yield* world.ingest("clerk", [accountOp(org(ORG_ACME), "create")])
 				yield* world.ingest(
 					"clerk",
-					sessionOps(Schema.decodeUnknownSync(ClerkSession)(SESSION_ADA), [ORG_ACME.id]),
+					sessionOps(Schema.decodeUnknownSync(ClerkSession)(SESSION_ADA), [
+						member(MEMBERSHIP_ADA_ADMIN),
+					]),
 				)
 				expect(activity(world)).toEqual([
 					{ day: "2026-11-10", signedIn: 1, sessionCount: 1, account: "Acme Analytics" },
 				])
 				// The activity belongs to a real contact, not to the unmatched queue.
 				expect(world.rows(`SELECT count(*) AS n FROM customer_unmatched_records`)).toEqual([{ n: 0 }])
+				// ...and the membership webhook then lands on that same contact, which already has its email.
+				yield* world.ingest(
+					"clerk",
+					membershipOps({ membership: member(MEMBERSHIP_ADA_ADMIN), onNoMatch: "create" }),
+				)
+				expect(
+					contacts(world).map((row) => ({
+						email: row.email,
+						account: row.account,
+						role: row.role,
+					})),
+				).toEqual([{ email: "ada@acme.com", account: "Acme Analytics", role: "Admin" }])
+			}),
+		))
+
+	it("a late membership removal or organization update does not revive a deleted organization", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", backfill)
+				yield* world.ingest("clerk", [accountDeletedOp(ORG_ACME.id)])
+				expect(accounts(world).map((row) => row.name)).toEqual(["Globex"])
+				// Clerk's retries, observed before the deletion landed.
+				const observedAt = new Date(ORG_ACME.updated_at).toISOString()
+				yield* world.ingest("clerk", [
+					...membershipOps({
+						membership: member(MEMBERSHIP_GRACE_MEMBER),
+						onNoMatch: "create",
+						removed: true,
+						observedAt,
+					}),
+					accountOp(org(ORG_ACME), "create", observedAt),
+				])
+				expect(accounts(world).map((row) => row.name)).toEqual(["Globex"])
 			}),
 		))
 

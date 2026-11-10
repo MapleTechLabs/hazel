@@ -32,6 +32,10 @@ describe("verifySvix", () => {
 		await run(verify({ headers: headers({ "svix-signature": `v1,AAAA= ${SIGNATURE} v2,ignored` }) }))
 	})
 
+	it("accepts a secret pasted with surrounding whitespace", async () => {
+		await run(verify({ secret: `  ${SECRET}\n` }))
+	})
+
 	it("finds its headers whatever the runtime cased them as", async () => {
 		await run(
 			verify({

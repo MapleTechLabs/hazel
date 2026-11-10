@@ -31,6 +31,7 @@ import {
 	domainsAccountOp,
 	membershipOps,
 	onNoMatchOf,
+	sessionOps,
 } from "./map"
 import { ClerkMembership, ClerkOrganization, ClerkSession, ClerkUser } from "./wire"
 
@@ -239,7 +240,7 @@ describe("membershipOps", () => {
 		).toEqual(["contact", "activity", "activity"])
 	})
 
-	it("writes no activity for a removal", () => {
+	it("writes only the contact for a removal: no activity, and no account op to revive a deleted org", () => {
 		expect(
 			membershipOps({
 				membership: member(MEMBERSHIP_ADA_ADMIN),
@@ -247,7 +248,19 @@ describe("membershipOps", () => {
 				onNoMatch: "create",
 				removed: true,
 			}).map((op) => op._tag),
-		).toEqual(["account", "contact"])
+		).toEqual(["contact"])
+	})
+
+	it("stamps the account and contact with `observedAt`, never with `matchByDomain`", () => {
+		const ops = membershipOps({
+			membership: member(MEMBERSHIP_ADA_ADMIN),
+			user: ada,
+			onNoMatch: "create",
+			observedAt: "2026-11-10T08:21:00.000Z",
+		})
+		expect(ops[0]).toMatchObject({ _tag: "account", observedAt: "2026-11-10T08:21:00.000Z" })
+		expect(ops[1]).toMatchObject({ _tag: "contact", observedAt: "2026-11-10T08:21:00.000Z" })
+		expect(ops[0]).not.toHaveProperty("matchByDomain")
 	})
 
 	it("makes one contact per account for a user in several organizations", () => {
@@ -280,8 +293,48 @@ describe("events", () => {
 })
 
 describe("sessionOps", () => {
-	it("credits a session's day to every account the user belongs to", () => {
-		// `sessionOps` is covered end-to-end in webhook.test.ts; here only the decode of the fixture.
-		expect(session(SESSION_ADA).last_active_organization_id).toBe(acme.id)
+	it("writes the contact from the membership, email included, before the sign-in day", () => {
+		expect(
+			sessionOps(
+				session(SESSION_ADA),
+				[member(MEMBERSHIP_ADA_ADMIN), member(MEMBERSHIP_ADA_GLOBEX)],
+				"2026-11-10T08:21:00.000Z",
+			),
+		).toEqual([
+			{
+				_tag: "contact",
+				externalId: ada.id,
+				account: { provider: "clerk", externalId: acme.id },
+				externalUrl: `https://dashboard.clerk.com/last-active?path=users/${ada.id}`,
+				email: "ada@acme.com",
+				name: "Ada Lovelace",
+				avatarUrl: null,
+				role: "Admin",
+				joinedAt: "2026-01-14T09:12:00.000Z",
+				observedAt: "2026-11-10T08:21:00.000Z",
+				lastSignInAt: "2026-11-10T08:21:00.000Z",
+				lastSeenAt: "2026-11-10T08:21:00.000Z",
+			},
+			{
+				_tag: "activity",
+				contact: { provider: "clerk", externalId: ada.id },
+				account: { provider: "clerk", externalId: acme.id },
+				day: "2026-11-10",
+				sessionCount: 1,
+				signedIn: true,
+			},
+			expect.objectContaining({
+				_tag: "contact",
+				account: { provider: "clerk", externalId: globex.id },
+			}),
+			expect.objectContaining({
+				_tag: "activity",
+				account: { provider: "clerk", externalId: globex.id },
+			}),
+		])
+	})
+
+	it("writes nothing for a user Clerk lists in no organization", () => {
+		expect(sessionOps(session(SESSION_ADA), [])).toEqual([])
 	})
 })

@@ -6,9 +6,10 @@
  * (`customers.webhook`), whose provider adapter verifies the signature with the connection's
  * secret and parses it; ingest applies it.
  *
- * 400: bad signature or payload, unreadable body (not retried). 404: unknown org, connection or
- * provider. 413: body too large. 500: storage failed, 503: directory or object unreachable (the
- * provider retries; ingest is idempotent).
+ * 400: bad signature or payload, unreadable body. 404: unknown org, connection or provider. 413:
+ * body too large. 500: storage failed, 503: directory or object unreachable. Svix-based providers
+ * (Clerk, Autumn) retry every non-2xx on their own schedule until they give up; ingest is
+ * idempotent, so a retry that does go through is safe.
  */
 import { CustomerProvider } from "@hazel/domain/customers"
 import { CustomerConnectionId, OrganizationId } from "@hazel/schema"

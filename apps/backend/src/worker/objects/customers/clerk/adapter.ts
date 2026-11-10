@@ -11,7 +11,7 @@
  * Nothing here writes the store: `webhook` and `pull` produce `IngestOp`s and `CustomerIngest`
  * applies them.
  */
-import { Effect, Option, Redacted } from "effect"
+import { Effect, Option } from "effect"
 import { HttpClient } from "effect/http"
 import type { CustomerProviderAdapter, ProviderCredentials } from "../providers"
 import { makeClerkGet } from "./http"
@@ -29,39 +29,35 @@ export const CLERK_PULL_INTERVAL_MS = 6 * 60 * 60_000
 
 export const makeClerkAdapter = Effect.gen(function* () {
 	const client = yield* HttpClient.HttpClient
-	const getOf = (credentials: ProviderCredentials) =>
-		makeClerkGet(client, Redacted.value(credentials.apiKey))
+	const getOf = (credentials: ProviderCredentials) => makeClerkGet(client, credentials.apiKey)
+
+	/**
+	 * One organizations request proves the key works *and* that it can read what Hazel needs; the
+	 * instance it opens is a second, optional request, so a plan without instance settings still
+	 * connects (its webhooks then go unchecked against the instance).
+	 */
+	const validate = Effect.fn("Clerk.validate")(function* (credentials: ProviderCredentials) {
+		const get = getOf(credentials)
+		yield* get("/organizations", [["limit", "1"]], ClerkOrganizationsPage)
+		const instance = yield* get("/instance", [], ClerkInstance).pipe(
+			Effect.map(Option.some),
+			Effect.catchTag("CustomerProviderError", () => Effect.succeed(Option.none())),
+		)
+		return {
+			externalAccountId: Option.match(instance, { onNone: () => null, onSome: (value) => value.id }),
+			externalAccountName: Option.match(instance, {
+				onNone: () => null,
+				onSome: (value) =>
+					value.environment_type === undefined
+						? "Clerk instance"
+						: `Clerk ${value.environment_type} instance`,
+			}),
+		}
+	})
 
 	const adapter: CustomerProviderAdapter = {
 		provider: "clerk",
-
-		/**
-		 * One organizations request proves the key works *and* that it can read what Hazel needs;
-		 * the instance it opens is a second, optional request, so a plan without instance settings
-		 * still connects.
-		 */
-		validate: (credentials) =>
-			Effect.gen(function* () {
-				const get = getOf(credentials)
-				yield* get("/organizations", [["limit", "1"]], ClerkOrganizationsPage)
-				const instance = yield* get("/instance", [], ClerkInstance).pipe(
-					Effect.map(Option.some),
-					Effect.catchTag("CustomerProviderError", () => Effect.succeed(Option.none())),
-				)
-				return {
-					externalAccountId: Option.match(instance, {
-						onNone: () => null,
-						onSome: (value) => value.id,
-					}),
-					externalAccountName: Option.match(instance, {
-						onNone: () => null,
-						onSome: (value) =>
-							value.environment_type === undefined
-								? "Clerk instance"
-								: `Clerk ${value.environment_type} instance`,
-					}),
-				}
-			}),
+		validate,
 
 		// Core calls `webhook` only for a connection with a signing secret.
 		webhook: (request, credentials) =>
@@ -72,6 +68,7 @@ export const makeClerkAdapter = Effect.gen(function* () {
 						headers: request.headers,
 						body: request.body,
 						webhookSecret: credentials.webhookSecret,
+						instanceId: credentials.externalAccountId,
 						onNoMatch: onNoMatchOf(credentials.config),
 					}),
 

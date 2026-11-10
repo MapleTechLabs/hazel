@@ -34,11 +34,19 @@ _is_ the Clerk org id, and Maple's `GroupId` is too (`UpsertAccount.sameAs`).
    delivery.
 
 Connecting validates the key with one `GET /organizations?limit=1` and then, best-effort,
-`GET /instance` so the UI can name the instance it opened. Without a signing secret the connection
-still works, but only through the scheduled sweep (core refuses its deliveries with a 400).
+`GET /instance`, whose id is stored as the connection's `externalAccountId` (and re-read when the
+key changes) and names the instance in the UI. Without a signing secret the connection still works,
+but only through the scheduled sweep (core refuses its deliveries with a 400).
 
 Deliveries are verified with Svix's scheme (`customers/svix.ts`): HMAC-SHA256 over the raw body,
-and a `svix-timestamp` outside ±5 minutes is refused, so a captured delivery cannot be replayed.
+and a `svix-timestamp` outside ±5 minutes is refused, so a captured delivery cannot be replayed. An
+event whose `instance_id` is not the instance the secret key opens is refused too, so a development
+instance's signing secret next to a production key cannot write test data (when `GET /instance` was
+not available at connect time there is nothing to compare against, and the check is skipped).
+
+Refused deliveries are answered 400. Svix retries every non-2xx on its schedule until it gives up,
+so the adapter refuses only what a retry cannot fix (signature, replay window, a payload that does
+not decode, the wrong instance) and acknowledges every event type it does not handle.
 
 ## Mapping
 
@@ -63,10 +71,19 @@ and a `svix-timestamp` outside ±5 minutes is refused, so a captured delivery ca
 | user `last_sign_in_at`                              | `contact.lastSignInAt`, and that day's `signedIn`                   |
 | user `last_active_at`                               | `contact.lastSeenAt`, and that day's activity                       |
 | `session.created`                                   | that day's `signedIn` + the contact's `lastSignInAt` / `lastSeenAt` |
+| `user.updated`                                      | the user's contact in every account Clerk lists them in             |
 | `organization.created`                              | `account.created` timeline event                                    |
 
 Ingest raises `contact.joined`, `contact.removed` and `contact.first_active` itself, so the adapter
 does not duplicate them.
+
+**Ordering.** Account and contact ops carry `observedAt`: a webhook's is the record's `updated_at`
+(else the event's `timestamp`), a sweep's the time it asked Clerk. Ingest ignores an op observed
+before the record's deletion, so a late retry of `organization.updated` cannot revive a deleted
+organization, and `organizationMembership.deleted` never writes the organization at all.
+
+**No domain matching.** Clerk account ops never set `matchByDomain`: two organizations sharing a
+domain are two customers. Verified domains only describe the account they belong to.
 
 **A user in several organizations** becomes one contact per account, all sharing the Clerk user id —
 which is exactly what `customer_external_refs` allows for contacts (unique on
@@ -97,11 +114,20 @@ None of Clerk's list endpoints filter by a change time, so a scheduled pull cann
 re-walks the instance and ingest writes only what changed. That is why the period is six hours —
 webhooks carry the live signal, the sweep only reconciles missed deliveries.
 
+Since every sweep lists every organization and membership, its last page sets
+`PullPage.sweep = ["account", "contact"]`: core then removes the accounts and contacts the sweep
+did not see (deleted while no webhook reached Hazel). Offset paging would skip a record whenever
+one before it is deleted mid-sweep, so each page re-reads the previous page's last 10 rows; and a
+record removed wrongly all the same comes back on the next sweep, whose ops are observed after the
+removal.
+
 Failures: 401/403 → `auth` (the run fails, the connection goes to `error`, pulls stop until the
 key changes); 429 → waited out in place while Clerk's `Retry-After` is ≤ 5 s, otherwise
-`rate_limited` with that delay; 5xx and unexpected bodies → `provider`; unreachable → `network`.
-Every failure but `auth` is retryable: the run stays `running` at its cursor and the next attempt
-resumes the sweep from the failed page, after `Retry-After` or core's backoff.
+`rate_limited` with that delay; 5xx → `provider`; unreachable → `network`. Those are retryable: the run
+stays `running` at its cursor and the next attempt resumes the sweep from the failed page, after
+`Retry-After` or core's backoff. A body that does not decode (Clerk changed its API) is a
+`provider` error that is not retried: the run fails with a message saying so, and the decode
+failure is logged by path and issue kind only, never with the payload.
 
 ## Known gaps
 
@@ -109,10 +135,12 @@ resumes the sweep from the failed page, after `Retry-After` or core's backoff.
   to learn which accounts they belonged to. Clerk emits `organizationMembership.deleted` for each of
   their memberships and that is what removes the contacts; the `user.deleted` delivery is verified
   and acknowledged.
-- **`session.created` with no active organization** (the user has not picked one yet) costs one
-  extra `GET /users/{id}/organization_memberships` and credits the day to every account they belong
-  to. If that request fails the delivery still succeeds with no activity, rather than being retried
-  forever.
+- **`user.*` and `session.created`** payloads carry no memberships, so each costs one
+  `GET /users/{id}/organization_memberships`. A session credits its organization, or every account
+  the user belongs to when they have not picked one yet; its contact is built from the membership,
+  so a session that lands before the membership webhook still creates a contact with an email. If
+  that request fails the delivery is still acknowledged (a session keeps its own organization's
+  sign-in day) and the next sweep fills the rest, rather than Svix retrying it for days.
 - **Role changes** have no "before" in Clerk's payload, so `organizationMembership.updated` writes
   the new role without a timeline entry saying what it was.
 - Unverified organization domains are ignored, so account matching never leans on a domain a

@@ -31,7 +31,6 @@ export const ClerkOrganization = Schema.Struct({
 	members_count: Nullable(Schema.Number),
 	/** Clerk's seat cap; `0` means unlimited. */
 	max_allowed_memberships: Nullable(Schema.Number),
-	public_metadata: Schema.optionalKey(Schema.Record(Schema.String, Schema.Unknown)),
 	created_at: Nullable(Schema.Number),
 	updated_at: Nullable(Schema.Number),
 })
@@ -81,8 +80,7 @@ export const ClerkUser = Schema.Struct({
 	/** Unix ms of the latest session activity, with **day** precision (Clerk keeps only the latest). */
 	last_active_at: Nullable(Schema.Number),
 	created_at: Nullable(Schema.Number),
-	/** Present on `user.*` webhook payloads: the user's memberships, each with its organization. */
-	organization_memberships: Schema.optionalKey(Schema.NullOr(Schema.Array(ClerkMembership))),
+	updated_at: Nullable(Schema.Number),
 })
 export type ClerkUser = typeof ClerkUser.Type
 
@@ -121,12 +119,14 @@ export const ClerkDomainsPage = ClerkPage(ClerkOrganizationDomain)
 /** `GET /users` answers a bare array, not a page document. */
 export const ClerkUsersList = Schema.Array(ClerkUser)
 
-/** Every delivery: `{ type, data, timestamp }` plus fields Hazel ignores. */
+/** Every delivery: `{ type, data, timestamp, instance_id }` plus fields Hazel ignores. */
 export const ClerkWebhookEnvelope = Schema.Struct({
 	type: Schema.String,
 	data: Schema.Unknown,
-	/** Unix ms Clerk stamped on the delivery. */
+	/** Unix ms Clerk stamped on the event. */
 	timestamp: Nullable(Schema.Number),
+	/** The Clerk instance the event happened in (`GET /instance`'s `id`). */
+	instance_id: Nullable(Schema.String),
 })
 export type ClerkWebhookEnvelope = typeof ClerkWebhookEnvelope.Type
 

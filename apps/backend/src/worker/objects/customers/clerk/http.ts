@@ -6,12 +6,13 @@
  * - 429 → retried in place while Clerk's `Retry-After` is short (cheaper than a whole alarm round
  *   trip), then `rate_limited` carrying `retryAfterMs`. Core keeps the run open at its cursor and
  *   resumes it after that delay.
- * - 5xx / unexpected body → `provider`; unreachable → `network`. Both retryable: the run resumes
- *   after core's backoff.
+ * - 5xx → `provider`; unreachable → `network`. Both retryable: the run resumes after core's backoff.
+ * - A body Hazel cannot read (Clerk changed its API) → `provider`, not retryable: the run fails with
+ *   a message saying so rather than retrying the same page forever.
  *
- * The key only ever travels in the `Authorization` header, and no message repeats it.
+ * The key stays `Redacted` up to the `Authorization` header, and no message or span repeats it.
  */
-import { Effect, Schema } from "effect"
+import { Effect, Redacted, Result, Schema, type SchemaIssue } from "effect"
 import { HttpClient, HttpClientRequest, type HttpClientResponse } from "effect/http"
 import { CustomerProviderError } from "../provider-errors"
 
@@ -33,6 +34,29 @@ export type ClerkPath =
 	| `/users/${string}/organization_memberships`
 
 export type ClerkQuery = ReadonlyArray<readonly [string, string]>
+
+/** The route a path belongs to, for messages, logs and spans: never a user id. */
+export const routeOf = (path: ClerkPath): string =>
+	path.startsWith("/users/") ? "/users/{user_id}/organization_memberships" : path
+
+const issuePaths = (issue: SchemaIssue.Issue, path: ReadonlyArray<PropertyKey>): Array<string> => {
+	switch (issue._tag) {
+		case "Pointer":
+			return issuePaths(issue.issue, [...path, ...issue.path])
+		case "Composite":
+		case "AnyOf":
+			return issue.issues.flatMap((inner) => issuePaths(inner, path))
+		case "Filter":
+		case "Encoding":
+			return issuePaths(issue.issue, path)
+		default:
+			return [`${path.length === 0 ? "(root)" : path.map(String).join(".")}: ${issue._tag}`]
+	}
+}
+
+/** Where a decode failed, as `path: issue kind`: never the values, which are customers' data. */
+export const issueSummary = (error: Schema.SchemaError): string =>
+	issuePaths(error.issue, []).slice(0, 5).join("; ")
 
 const ClerkErrors = Schema.Struct({
 	errors: Schema.optionalKey(
@@ -63,7 +87,7 @@ const retryAfterMsOf = (response: HttpClientResponse.HttpClientResponse): number
 	return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : DEFAULT_RETRY_AFTER_MS
 }
 
-const failureOf = (path: ClerkPath, response: HttpClientResponse.HttpClientResponse) =>
+const failureOf = (route: string, response: HttpClientResponse.HttpClientResponse) =>
 	Effect.flatMap(detailOf(response), (detail) => {
 		const suffix = detail === "" ? "" : `: ${detail}`
 		if (response.status === 401 || response.status === 403) {
@@ -91,76 +115,93 @@ const failureOf = (path: ClerkPath, response: HttpClientResponse.HttpClientRespo
 				code: "provider",
 				message:
 					response.status >= 500
-						? `Clerk failed on GET ${path} (${response.status})`
-						: `Clerk refused GET ${path} (${response.status})${suffix}`,
+						? `Clerk failed on GET ${route} (${response.status})`
+						: `Clerk refused GET ${route} (${response.status})${suffix}`,
 				httpStatus: response.status,
 				retryAfterMs: null,
 			}),
 		)
 	})
 
-/** The caller holds the key; `clerkGet` is curried over the client so the adapter binds it once. */
-export const makeClerkGet = (client: HttpClient.HttpClient, apiKey: string) => {
-	const once = <A>(path: ClerkPath, query: ClerkQuery, schema: Schema.Decoder<A>) =>
-		Effect.gen(function* () {
-			const request = HttpClientRequest.get(`${CLERK_API_URL}${path}`, { urlParams: query }).pipe(
-				HttpClientRequest.bearerToken(apiKey),
-				HttpClientRequest.acceptJson,
-			)
-			const response = yield* client.execute(request).pipe(
-				Effect.mapError(
-					(error) =>
-						new CustomerProviderError({
-							code: "network",
-							message: `Could not reach Clerk (${error.reason._tag})`,
-							httpStatus: null,
-							retryAfterMs: null,
-						}),
-				),
-			)
-			if (response.status < 200 || response.status >= 300) return yield* failureOf(path, response)
-			return yield* response.json.pipe(
-				Effect.flatMap(Schema.decodeUnknownEffect(schema)),
-				Effect.mapError(
-					() =>
-						new CustomerProviderError({
-							code: "provider",
-							message: `Clerk answered GET ${path} with an unexpected body`,
-							httpStatus: response.status,
-							retryAfterMs: null,
-						}),
-				),
-			)
-		})
+/** A body Hazel cannot read: logged by path and kind only, and not retried. */
+const unreadable = (route: string, status: number, detail: string) =>
+	Effect.logWarning("Clerk answered with a body Hazel cannot read", { route, status, detail }).pipe(
+		Effect.andThen(
+			Effect.fail(
+				new CustomerProviderError({
+					code: "provider",
+					message: `Clerk answered GET ${route} with a body Hazel cannot read (has Clerk's API changed?)`,
+					httpStatus: status,
+					retryAfterMs: null,
+					retryable: false,
+				}),
+			),
+		),
+	)
 
-	/** A rate-limited page waits out a short `Retry-After` rather than failing the whole sweep. */
-	const withRetry = <A>(
+/** The caller holds the key; `clerkGet` is curried over the client so the adapter binds it once. */
+export const makeClerkGet = (client: HttpClient.HttpClient, apiKey: Redacted.Redacted<string>) => {
+	/** One request: its JSON body, or the failure Clerk's answer maps to. */
+	const once = Effect.fn("Clerk.request")(function* (path: ClerkPath, query: ClerkQuery) {
+		const route = routeOf(path)
+		const request = HttpClientRequest.get(`${CLERK_API_URL}${path}`, { urlParams: query }).pipe(
+			HttpClientRequest.bearerToken(apiKey),
+			HttpClientRequest.acceptJson,
+		)
+		const response = yield* client.execute(request).pipe(
+			Effect.mapError(
+				(error) =>
+					new CustomerProviderError({
+						code: "network",
+						message: `Could not reach Clerk (${error.reason._tag})`,
+						httpStatus: null,
+						retryAfterMs: null,
+					}),
+			),
+		)
+		yield* Effect.annotateCurrentSpan("http.response.status_code", response.status)
+		if (response.status < 200 || response.status >= 300) return yield* failureOf(route, response)
+		const body = yield* response.json.pipe(
+			Effect.catchTag("HttpClientError", () => unreadable(route, response.status, "not JSON")),
+		)
+		return { status: response.status, body }
+	})
+
+	/** One GET's JSON body; a rate-limited request waits out a short `Retry-After` in place. */
+	const withRetry = Effect.fn("Clerk.get", { kind: "client" })(function* (
 		path: ClerkPath,
 		query: ClerkQuery,
-		schema: Schema.Decoder<A>,
-		attempt: number,
-	): Effect.Effect<A, CustomerProviderError> =>
-		once(path, query, schema).pipe(
-			Effect.catchTag("CustomerProviderError", (error) => {
-				const wait = error.retryAfterMs ?? 0
-				if (
-					error.code !== "rate_limited" ||
-					attempt >= MAX_INLINE_RETRIES ||
-					wait > MAX_INLINE_RETRY_MS
-				)
-					return Effect.fail(error)
-				return Effect.sleep(wait).pipe(
-					Effect.andThen(() => withRetry(path, query, schema, attempt + 1)),
-				)
-			}),
-		)
+	) {
+		yield* Effect.annotateCurrentSpan({ "peer.service": "clerk", "url.template": routeOf(path) })
+		for (let retries = 0; ; retries++) {
+			const result = yield* Effect.result(once(path, query))
+			if (Result.isSuccess(result)) {
+				yield* Effect.annotateCurrentSpan("clerk.retries", retries)
+				return result.success
+			}
+			const error = result.failure
+			const wait = error.retryAfterMs ?? 0
+			if (
+				error.code !== "rate_limited" ||
+				retries >= MAX_INLINE_RETRIES ||
+				wait > MAX_INLINE_RETRY_MS
+			) {
+				yield* Effect.annotateCurrentSpan("clerk.retries", retries)
+				return yield* error
+			}
+			yield* Effect.sleep(wait)
+		}
+	})
 
 	return <A>(path: ClerkPath, query: ClerkQuery, schema: Schema.Decoder<A>) =>
-		withRetry(path, query, schema, 0).pipe(
-			Effect.withSpan("Clerk.get", {
-				kind: "client",
-				attributes: { "peer.service": "clerk", "url.path": path },
-			}),
+		withRetry(path, query).pipe(
+			Effect.flatMap(({ status, body }) =>
+				Schema.decodeUnknownEffect(schema)(body).pipe(
+					Effect.catchTag("SchemaError", (error) =>
+						unreadable(routeOf(path), status, issueSummary(error)),
+					),
+				),
+			),
 		)
 }
 

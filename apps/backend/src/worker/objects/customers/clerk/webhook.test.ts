@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest"
 import {
 	DOMAIN_ACME,
 	envelope,
+	INSTANCE,
 	MEMBERSHIP_ADA_ADMIN,
 	MEMBERSHIP_ADA_GLOBEX,
 	ORG_ACME,
@@ -19,7 +20,7 @@ import {
 	USER_ADA,
 } from "./fixtures"
 import { makeClerkGet } from "./http"
-import { fakeClerkHttpClient, makeFakeClerk } from "./testing"
+import { type FakeClerkState, fakeClerkHttpClient, makeFakeClerk } from "./testing"
 import { receiveWebhook } from "./webhook"
 import { signSvix } from "../svix"
 
@@ -37,7 +38,7 @@ const fake = makeFakeClerk({
 })
 
 /** The adapter's own `get`, over the fake Clerk. */
-const getOf = Effect.map(HttpClient.HttpClient, (client) => makeClerkGet(client, API_KEY))
+const getOf = Effect.map(HttpClient.HttpClient, (client) => makeClerkGet(client, Redacted.make(API_KEY)))
 
 const deliver = (
 	body: string,
@@ -46,6 +47,8 @@ const deliver = (
 		readonly tamper?: boolean
 		readonly timestampMs?: number
 		readonly createAccounts?: boolean
+		readonly instanceId?: string | null
+		readonly clerk?: FakeClerkState
 	} = {},
 ) =>
 	Effect.gen(function* () {
@@ -60,9 +63,10 @@ const deliver = (
 			},
 			body: options.tamper === true ? `${body} ` : body,
 			webhookSecret: Redacted.make(options.secret ?? SECRET),
+			instanceId: options.instanceId === undefined ? INSTANCE.id : options.instanceId,
 			onNoMatch: options.createAccounts === false ? "unmatched" : "create",
 		})
-	}).pipe(Effect.provide(fakeClerkHttpClient(fake)))
+	}).pipe(Effect.provide(fakeClerkHttpClient(options.clerk ?? fake)))
 
 const run = <A, E>(effect: Effect.Effect<A, E>) => Effect.runPromise(effect)
 const tags = (ops: ReadonlyArray<IngestOp>) => ops.map((op) => op._tag)
@@ -85,10 +89,18 @@ describe("Clerk webhook verification", () => {
 	})
 
 	it("refuses a body that is not JSON, and one that is not a Clerk envelope", async () => {
-		expect((await run(Effect.flip(deliver("not json")))).message).toMatch(/not JSON/i)
+		expect((await run(Effect.flip(deliver("not json")))).message).toMatch(/envelope/i)
 		expect((await run(Effect.flip(deliver(JSON.stringify({ hello: "world" }))))).message).toMatch(
 			/envelope/i,
 		)
+	})
+
+	it("refuses an event from another Clerk instance than the secret key opens", async () => {
+		const body = envelope("organization.updated", ORG_ACME)
+		const error = await run(Effect.flip(deliver(body, { instanceId: "ins_2development000000000" })))
+		expect(error.message).toMatch(/another Clerk instance/i)
+		// Unchecked only when Clerk never said which instance the key opens.
+		expect(tags(await run(deliver(body, { instanceId: null })))).toEqual(["account"])
 	})
 
 	it("refuses a subscribed event whose payload is malformed, rather than retrying it forever", async () => {
@@ -103,6 +115,9 @@ describe("Clerk webhook events", () => {
 	it("organization.created writes the account and one timeline entry keyed on the organization", async () => {
 		const ops = await run(deliver(envelope("organization.created", ORG_ACME)))
 		expect(tags(ops)).toEqual(["account", "event"])
+		// Ordered by the organization's own `updated_at`; never matched by domain.
+		expect(ops[0]).toMatchObject({ observedAt: "2026-11-02T17:40:00.000Z" })
+		expect(ops[0]).not.toHaveProperty("matchByDomain")
 		expect(ops[1]).toMatchObject({
 			externalId: `clerk:organization.created:${ORG_ACME.id}`,
 			type: "account.created",
@@ -135,41 +150,32 @@ describe("Clerk webhook events", () => {
 		})
 	})
 
-	it("organizationMembership.deleted removes the contact (ingest raises contact.removed)", async () => {
+	it("organizationMembership.deleted removes the contact and never writes the organization", async () => {
 		const ops = await run(deliver(envelope("organizationMembership.deleted", MEMBERSHIP_ADA_ADMIN)))
-		expect((ops[1] as UpsertContact).removed).toBe(true)
+		// An account op here would revive an organization deleted with its memberships.
+		expect(tags(ops)).toEqual(["contact"])
+		expect((ops[0] as UpsertContact).removed).toBe(true)
 	})
 
-	it("user.updated writes one contact per membership the payload carries, with no extra request", async () => {
+	it("user.updated asks Clerk for the user's memberships and writes one contact per account", async () => {
 		const before = fake.calls.length
-		const ops = await run(
-			deliver(
-				envelope("user.updated", {
-					...USER_ADA,
-					organization_memberships: [MEMBERSHIP_ADA_ADMIN, MEMBERSHIP_ADA_GLOBEX],
-				}),
-			),
-		)
-		expect(fake.calls.length).toBe(before)
+		const ops = await run(deliver(envelope("user.updated", USER_ADA)))
+		expect(fake.calls.slice(before).map((call) => call.path)).toEqual([
+			`/users/${USER_ADA.id}/organization_memberships`,
+		])
 		const contacts = ops.filter((op): op is UpsertContact => op._tag === "contact")
 		expect(contacts.map((contact) => contact.account.externalId)).toEqual([ORG_ACME.id, ORG_GLOBEX.id])
-		// The same payload also refreshes both accounts and both days of activity.
-		expect(tags(ops)).toEqual([
-			"account",
-			"contact",
-			"activity",
-			"activity",
-			"account",
-			"contact",
-			"activity",
-			"activity",
+		expect(contacts.map((contact) => [contact.email, contact.observedAt])).toEqual([
+			["ada@acme.com", "2026-11-10T08:21:00.000Z"],
+			["ada@acme.com", "2026-11-10T08:21:00.000Z"],
 		])
+		// Each contact with the days the user record proves; the organizations' own events write those.
+		expect(tags(ops)).toEqual(["contact", "activity", "activity", "contact", "activity", "activity"])
 	})
 
 	it("user.created for a user with no organization yet writes nothing", async () => {
-		expect(
-			await run(deliver(envelope("user.created", { ...USER_ADA, organization_memberships: [] }))),
-		).toEqual([])
+		const clerk = makeFakeClerk({ secretKey: API_KEY, users: [USER_ADA] })
+		expect(await run(deliver(envelope("user.created", USER_ADA), { clerk }))).toEqual([])
 	})
 
 	it("user.deleted is verified and acknowledged; the membership events remove the contacts", async () => {
@@ -178,17 +184,21 @@ describe("Clerk webhook events", () => {
 		).toEqual([])
 	})
 
-	it("session.created credits the day to the session's organization", async () => {
+	it("session.created credits the day to the session's organization, its contact built from the membership", async () => {
 		const ops = await run(deliver(envelope("session.created", SESSION_ADA)))
-		// The contact first: a user whose membership has not landed yet must not park as unmatched.
+		// The contact first, with the email its membership carries: a session that lands before the
+		// membership webhook creates the same contact the membership will name, not an email-less twin.
 		expect(ops).toEqual([
-			{
+			expect.objectContaining({
 				_tag: "contact",
 				externalId: USER_ADA.id,
 				account: { provider: "clerk", externalId: ORG_ACME.id },
+				email: "ada@acme.com",
+				name: "Ada Lovelace",
+				role: "Admin",
 				lastSignInAt: "2026-11-10T08:21:00.000Z",
 				lastSeenAt: "2026-11-10T08:21:00.000Z",
-			},
+			}),
 			{
 				_tag: "activity",
 				contact: { provider: "clerk", externalId: USER_ADA.id },
@@ -213,27 +223,22 @@ describe("Clerk webhook events", () => {
 		).toEqual([ORG_ACME.id, ORG_GLOBEX.id])
 	})
 
-	it("session.created still succeeds when that request fails, rather than being retried forever", async () => {
+	it("session.created still succeeds when that request fails, rather than being retried for days", async () => {
 		const broken = makeFakeClerk({ secretKey: "sk_test_a_different_key", users: [USER_ADA] })
-		const ops = await run(
-			Effect.gen(function* () {
-				const timestamp = String(Math.floor(nowMs() / 1000))
-				const body = envelope("session.created", SESSION_ADA_NO_ORG)
-				const signature = yield* signSvix(SECRET, MSG_ID, timestamp, body)
-				return yield* receiveWebhook({
-					get: makeClerkGet(yield* HttpClient.HttpClient, API_KEY),
-					headers: {
-						"svix-id": MSG_ID,
-						"svix-timestamp": timestamp,
-						"svix-signature": `v1,${signature}`,
-					},
-					body,
-					webhookSecret: Redacted.make(SECRET),
-					onNoMatch: "create",
-				})
-			}).pipe(Effect.provide(fakeClerkHttpClient(broken))),
-		)
-		expect(ops).toEqual([])
+		expect(
+			await run(deliver(envelope("session.created", SESSION_ADA_NO_ORG), { clerk: broken })),
+		).toEqual([])
+		// A session that names its organization still gets that sign-in day (parked until the contact is).
+		expect(await run(deliver(envelope("session.created", SESSION_ADA), { clerk: broken }))).toEqual([
+			{
+				_tag: "activity",
+				contact: { provider: "clerk", externalId: USER_ADA.id },
+				account: { provider: "clerk", externalId: ORG_ACME.id },
+				day: "2026-11-10",
+				sessionCount: 1,
+				signedIn: true,
+			},
+		])
 	})
 
 	it("an event type nobody subscribed is acknowledged as a no-op", async () => {

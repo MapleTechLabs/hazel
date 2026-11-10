@@ -145,7 +145,7 @@ const pullFailureOf = (
 		case "CustomerProviderError":
 			return new PullFailure({
 				error: { code: error.code, message: error.message, httpStatus: error.httpStatus },
-				retryable: error.code !== "auth",
+				retryable: error.code !== "auth" && error.retryable !== false,
 				retryAfterMs: error.retryAfterMs === null ? null : Math.max(MIN_RETRY_MS, error.retryAfterMs),
 			})
 		case "DatabaseError":
