@@ -239,9 +239,10 @@ export const usersTab = (h: HtmlBuilder<Message>, model: Model, context: Context
 					className: "rounded-none border-0",
 					rows,
 					rowKey: (row) => row.contact.id,
-					...(model.contacts.status === "Loading" && model.contacts.items.length === 0
-						? { loadingRows: 8 }
-						: {}),
+					loadingRows:
+						model.contacts.status === "Loading" && model.contacts.items.length === 0
+							? 8
+							: undefined,
 					columns: [
 						{
 							key: "user",

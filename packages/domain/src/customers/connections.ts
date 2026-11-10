@@ -47,21 +47,23 @@ export const ConnectionConfig = Schema.Union([
 ])
 export type ConnectionConfig = typeof ConnectionConfig.Type
 
-export const DEFAULT_CONNECTION_CONFIG: { readonly [P in CustomerProvider]: ConnectionConfig & { _tag: P } } =
-	{
-		clerk: { _tag: "clerk", createAccounts: true },
-		stripe: { _tag: "stripe", clerkOrgMetadataKey: "clerk_org_id", matchByDomain: true },
-		autumn: { _tag: "autumn", customerIdIsClerkOrgId: true },
-		maple: {
-			_tag: "maple",
-			mapleOrgId: "",
-			activityEvents: [],
-			metricMappings: [],
-			accountKey: "GroupId",
-			userKey: "UserId",
-			lookbackDays: 90,
-		},
-	}
+/** A connection config per provider, keyed by its own provider. */
+type ConnectionConfigTable = { readonly [P in CustomerProvider]: ConnectionConfig & { _tag: P } }
+
+export const DEFAULT_CONNECTION_CONFIG: ConnectionConfigTable = {
+	clerk: { _tag: "clerk", createAccounts: true },
+	stripe: { _tag: "stripe", clerkOrgMetadataKey: "clerk_org_id", matchByDomain: true },
+	autumn: { _tag: "autumn", customerIdIsClerkOrgId: true },
+	maple: {
+		_tag: "maple",
+		mapleOrgId: "",
+		activityEvents: [],
+		metricMappings: [],
+		accountKey: "GroupId",
+		userKey: "UserId",
+		lookbackDays: 90,
+	},
+}
 
 /** Records written by a run (or, on a connection, in total). */
 export const SyncStats = Schema.Struct({

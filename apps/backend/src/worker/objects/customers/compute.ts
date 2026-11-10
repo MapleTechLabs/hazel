@@ -180,7 +180,10 @@ export const healthInputsOf = (
 	const { facts, rollup } = account
 	const { now, today } = snapshot.org
 	const live = facts.subscriptions.filter((sub) => sub.status !== "canceled")
-	const overdue = facts.openInvoices.filter((invoice) => invoice.dueAt !== null && invoice.dueAt < now)
+	/** The due dates of the overdue invoices. */
+	const overdue = facts.openInvoices.flatMap((invoice) =>
+		invoice.dueAt !== null && invoice.dueAt < now ? [invoice.dueAt] : [],
+	)
 	const weekAgo = now.getTime() - 7 * 86_400_000
 	return {
 		churned: rollup.lifecycleStage === "churned",
@@ -193,7 +196,7 @@ export const healthInputsOf = (
 			snapshot.hasBillingData && live.length > 0
 				? {
 						pastDue: live.some((sub) => sub.status === "past_due" || sub.status === "unpaid"),
-						overdueOverWeek: overdue.some((invoice) => invoice.dueAt!.getTime() < weekAgo),
+						overdueOverWeek: overdue.some((dueAt) => dueAt.getTime() < weekAgo),
 						overdue: overdue.length > 0,
 						cancelScheduled: live.some((sub) => sub.cancelAtPeriodEnd),
 					}
@@ -225,7 +228,9 @@ const writeHealth = (snapshot: Snapshot, scores: ReadonlyMap<CustomerAccountId, 
 					chunk,
 					({ stored }) =>
 						Effect.gen(function* () {
-							const breakdown = scores.get(stored.id)!
+							const breakdown = scores.get(stored.id)
+							// `scoreAll` scores every account of the snapshot.
+							if (breakdown === undefined) return
 							yield* db.run(
 								SQLite.insertInto(schema.customerHealthDailyTable)
 									.values({
@@ -287,7 +292,9 @@ const withTodayHealth = (
 ): Snapshot => ({
 	...snapshot,
 	accounts: snapshot.accounts.map((account) => {
-		const breakdown = scores.get(account.stored.id)!
+		const breakdown = scores.get(account.stored.id)
+		// `scoreAll` scores every account of the snapshot.
+		if (breakdown === undefined) return account
 		return {
 			...account,
 			facts: {
@@ -310,12 +317,12 @@ const withTodayHealth = (
 // 3–4. Signals and counters
 // ---------------------------------------------------------------------------
 
-const EVENT_TITLE: Record<LifecycleEvent["type"], string> = {
+const EVENT_TITLE = {
 	"signal.opened": "Signal",
 	"signal.resolved": "Resolved",
 	"signal.woke": "Snooze ended",
 	"signal.reopened": "Reopened",
-}
+} satisfies Record<LifecycleEvent["type"], string>
 
 /** The unclosed signals after this run: `ruleId:accountId` → its status and severity. */
 type Live = Map<string, Pick<schema.CustomerSignal, "status" | "severity" | "kind" | "accountId">>
@@ -357,7 +364,9 @@ const writeSignals = (snapshot: Snapshot) =>
 								let signalId: CustomerSignalId
 								let title: string
 								if (step._tag === "Insert") {
-									const evidence = match!.evidence
+									// `transition` inserts only on a match.
+									if (match === null) return
+									const evidence = match.evidence
 									const [row] = yield* db.run(
 										SQLite.insertInto(schema.customerSignalsTable)
 											.values({
@@ -366,10 +375,10 @@ const writeSignals = (snapshot: Snapshot) =>
 												ruleId: rule.id,
 												template: rule.template,
 												kind: rule.kind,
-												severity: match!.severity,
+												severity: match.severity,
 												status: step.status,
-												title: match!.title,
-												reason: match!.reason,
+												title: match.title,
+												reason: match.reason,
 												evidence,
 												openingEvidence: evidence,
 												actionEvidence: step.status === "dismissed" ? evidence : null,
@@ -382,33 +391,35 @@ const writeSignals = (snapshot: Snapshot) =>
 											})
 											.returning("id"),
 									)
-									signalId = row!.id
-									title = match!.title
+									signalId = row.id
+									title = match.title
 									live.set(key, {
 										status: step.status,
-										severity: match!.severity,
+										severity: match.severity,
 										kind: rule.kind,
 										accountId: stored.id,
 									})
 									if (step.status === "open") triggered.add(rule.id)
 								} else {
-									signalId = signal!.id
-									title = step.patch.title ?? signal!.title
+									// …and updates only an unclosed signal.
+									if (signal === null) return
+									signalId = signal.id
+									title = step.patch.title ?? signal.title
 									yield* db.run(
 										SQLite.update(schema.customerSignalsTable)
 											.set({ ...step.patch, updatedAt: now })
-											.where(($) => [$.id.eq(signal!.id)]),
+											.where(($) => [$.id.eq(signal.id)]),
 									)
 									if (step.patch.closedAt != null) live.delete(key)
 									else {
 										live.set(key, {
-											status: step.patch.status ?? signal!.status,
-											severity: step.patch.severity ?? signal!.severity,
-											kind: signal!.kind,
+											status: step.patch.status ?? signal.status,
+											severity: step.patch.severity ?? signal.severity,
+											kind: signal.kind,
 											accountId: stored.id,
 										})
 									}
-									if (step.patch.status === "open" && signal!.status !== "snoozed")
+									if (step.patch.status === "open" && signal.status !== "snoozed")
 										triggered.add(rule.id)
 								}
 								if (step.event !== null) {
@@ -422,7 +433,8 @@ const writeSignals = (snapshot: Snapshot) =>
 											ruleId: rule.id,
 											template: rule.template,
 											severity: match?.severity ?? signal?.severity ?? rule.severity,
-											...(match === null ? {} : { reason: match.reason }),
+											// Left out of the stored JSON when there is no match.
+											reason: match?.reason,
 											...step.event.data,
 										},
 									)
@@ -484,10 +496,11 @@ const writeSignals = (snapshot: Snapshot) =>
 			Effect.forEach(
 				snapshot.rules,
 				(rule) => {
-					const changes = diff(rule, {
-						matchingCount: matches.get(rule.id) ?? 0,
-						...(triggered.has(rule.id) ? { lastTriggeredAt: now } : {}),
-					})
+					const matchingCount = matches.get(rule.id) ?? 0
+					const changes = diff(
+						rule,
+						triggered.has(rule.id) ? { matchingCount, lastTriggeredAt: now } : { matchingCount },
+					)
 					return Object.keys(changes).length === 0
 						? Effect.void
 						: db.run(
@@ -523,16 +536,11 @@ const activeUsersByDay = (
 			for (const contact of byDay.get(day) ?? []) set.add(contact)
 		return set.size
 	}
-	return new Map(
-		days.map((day) => [
-			day,
-			{
-				dau: byDay.get(day)?.length ?? 0,
-				wau: distinct(addDays(day, -6), day),
-				mau: distinct(addDays(day, -29), day),
-			},
-		]),
-	)
+	return days.map((day) => ({
+		dau: byDay.get(day)?.length ?? 0,
+		wau: distinct(addDays(day, -6), day),
+		mau: distinct(addDays(day, -29), day),
+	}))
 }
 
 const writeOrgDay = (
@@ -543,7 +551,7 @@ const writeOrgDay = (
 	Effect.gen(function* () {
 		const db = yield* Database.Database
 		const { today } = snapshot.org
-		const users = activeUsersByDay(snapshot.activityRows, [today]).get(today)!
+		const [users] = activeUsersByDay(snapshot.activityRows, [today])
 		const highRisk = new Set(
 			[...live.values()]
 				.filter(
@@ -622,7 +630,7 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (s
 	const db = yield* Database.Database
 	const { today } = snapshot.org
 	const days = dayRange(today, HISTORY_DAYS + 1)
-	const first = days[0]!
+	const first = days[0]
 	const before = addDays(first, -1)
 	const currency = snapshot.org.currency
 	const accountMrr = new Map<CustomerAccountId, Array<number>>()
@@ -632,13 +640,13 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (s
 		accountMrr.set(stored.id, series.slice(1))
 		let everPaid = false
 		for (let index = 1; index < series.length; index++) {
-			const from = series[index - 1]!
-			const to = series[index]!
+			const from = series[index - 1]
+			const to = series[index]
 			if (from > 0) everPaid = true
 			if (from === to) continue
 			movements.push({
 				accountId: stored.id,
-				day: days[index - 1]!,
+				day: days[index - 1],
 				type: movementType(from, to, everPaid),
 				deltaMinor: to - from,
 				fromMrrMinor: from,
@@ -679,14 +687,14 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (s
 		const active = new Set<CustomerAccountId>()
 		for (let back = 0; back < 30; back++)
 			for (const id of accountDays.get(addDays(day, -back)) ?? []) active.add(id)
-		const mrrs = [...accountMrr.values()].map((series) => series[index]!)
+		const mrrs = [...accountMrr.values()].map((series) => series[index])
 		return {
 			day,
 			mrrMinor: mrrs.reduce((sum, value) => sum + value, 0),
 			payingAccounts: mrrs.filter((value) => value > 0).length,
 			trialingAccounts: trialingOn(day),
 			activeAccounts: active.size,
-			...users.get(day)!,
+			...users[index],
 			healthy: healthOf(day, "healthy"),
 			atRisk: healthOf(day, "at_risk"),
 			critical: healthOf(day, "critical"),

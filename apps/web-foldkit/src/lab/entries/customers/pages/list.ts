@@ -53,7 +53,7 @@ const builtIn = (
 	name: string,
 	filters: ViewRow["filters"],
 ): ViewRow => ({
-	id: VIEW_IDS[index]!,
+	id: VIEW_IDS[index],
 	name,
 	builtInKey,
 	ownerUserId: null,
@@ -71,7 +71,7 @@ export const LIST_VIEWS: ReadonlyArray<ViewRow> = [
 	builtIn(3, "at_risk", "At risk", { healthStatuses: ["at_risk", "critical"] }),
 	builtIn(4, "churned", "Churned", { lifecycleStages: ["churned"] }),
 	{
-		id: VIEW_IDS[5]!,
+		id: VIEW_IDS[5],
 		name: "Scale renewals",
 		builtInKey: null,
 		ownerUserId: ME.id,
@@ -133,14 +133,16 @@ const step = (model: Model, message: Message): { model: Model; commands: Readonl
 	)
 }
 
-const run = (model: Model, messages: ReadonlyArray<Message>) =>
-	messages.reduce<{ model: Model; commands: ReadonlyArray<AnyCommand> }>(
-		(current, message) => {
-			const next = step(current.model, message)
-			return { model: next.model, commands: [...current.commands, ...next.commands] }
-		},
-		{ model, commands: [] },
-	)
+const run = (model: Model, messages: ReadonlyArray<Message>) => {
+	let current = model
+	const commands: Array<AnyCommand> = []
+	for (const message of messages) {
+		const next = step(current, message)
+		current = next.model
+		commands.push(...next.commands)
+	}
+	return { model: current, commands }
+}
 
 const routeOf = (view: string | null) =>
 	AppRoute.CustomersList({ orgSlug: "lab", view: Option.fromNullishOr(view) })
@@ -163,7 +165,7 @@ const loaded = (view: string | null, empty = false) =>
 const stateOf = (state: typeof State.Type) => {
 	switch (state) {
 		case "loading":
-			return { model: init(routeOf(null)).model, commands: [] }
+			return run(init(routeOf(null)).model, [])
 		case "first-run":
 			return loaded(null, true)
 		case "at-risk":

@@ -54,7 +54,7 @@ export type RunResult =
 
 type Store = Database.Database | SqlClient
 
-export interface CustomerIngestShape {
+export interface CustomerIngestApi {
 	/** Apply `ops` in order; the report has one outcome per op and the run's stats so far. */
 	readonly apply: (
 		context: IngestContext,
@@ -96,6 +96,6 @@ export interface CustomerIngestShape {
 	) => Effect.Effect<void, DatabaseError, Store>
 }
 
-export class CustomerIngest extends Context.Service<CustomerIngest, CustomerIngestShape>()(
+export class CustomerIngest extends Context.Service<CustomerIngest, CustomerIngestApi>()(
 	"@hazel/backend/CustomerIngest",
 ) {}

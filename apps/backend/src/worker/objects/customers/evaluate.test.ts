@@ -2,12 +2,7 @@
  * Signal evaluation per template (`./evaluate.ts`): each fires on its condition, stays quiet below
  * it, escalates by evidence step, and honours scope, sources and churn.
  */
-import {
-	DEFAULT_HEALTH_SETTINGS,
-	type RuleConfig,
-	type SignalSeverity,
-	TEMPLATES,
-} from "@hazel/domain/customers"
+import { type RuleConfig, type SignalSeverity, TEMPLATES } from "@hazel/domain/customers"
 import { describe, expect, it } from "vitest"
 import { evaluate, type Match, type RuleInput } from "./evaluate"
 import { factsOf, type FactsInput, NOW, orgFacts, TODAY } from "./test-kit"
@@ -306,9 +301,5 @@ describe("signal evaluation", () => {
 			orgFacts(),
 		)
 		expect(renamed).toMatchObject({ _tag: "Match", title: "Gone dark", severity: "high" })
-	})
-
-	it("health settings default excludes the self-referential templates", () => {
-		expect(DEFAULT_HEALTH_SETTINGS.excludedTemplates).toContain("health_drop")
 	})
 })

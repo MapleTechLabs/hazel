@@ -97,7 +97,7 @@ const fetchEvents = (model: Model, shared: Shared, cursor: string | null): Retur
 	const args = target(model, shared)
 	if (args === null) return { model }
 	return {
-		model: modifyFields(model, { events: (events) => ({ ...events, status: "Loading" }) }),
+		model: modifyFields(model, { events: (events) => modifyFields(events, { status: () => "Loading" }) }),
 		commands: [
 			FetchCustomerEvents({
 				...args,
@@ -138,12 +138,16 @@ const load = (model: Model, shared: Shared): Return => {
 		commands.push(...(fetched.commands ?? []))
 	}
 	if (next.tab === "users" && next.contacts.status === "Idle") {
-		next = modifyFields(next, { contacts: (contacts) => ({ ...contacts, status: "Loading" }) })
+		next = modifyFields(next, {
+			contacts: (contacts) => modifyFields(contacts, { status: () => "Loading" }),
+		})
 		commands.push(FetchCustomerContacts({ ...args, cursor: null }))
 	}
 	if (next.tab === "billing") {
 		if (next.invoices.status === "Idle") {
-			next = modifyFields(next, { invoices: (invoices) => ({ ...invoices, status: "Loading" }) })
+			next = modifyFields(next, {
+				invoices: (invoices) => modifyFields(invoices, { status: () => "Loading" }),
+			})
 			commands.push(FetchCustomerInvoices({ ...args, cursor: null }))
 		}
 		if (AsyncData.isIdle(next.mrrHistory)) {
@@ -241,8 +245,10 @@ const MENU_MESSAGE = {
 	signalMoreMenu: (message: Menu.Message) => Message.GotSignalMoreMenuMessage({ message }),
 } as const satisfies Record<MenuField, (message: Menu.Message) => Message>
 
-const mapMenuCommands = (field: MenuField, commands: MenuCommands): Commands =>
-	Command.mapMessages(commands, (message: Menu.Message): Message => MENU_MESSAGE[field](message))
+const mapMenuCommands = (field: MenuField, commands: MenuCommands): Commands => {
+	const toMessage: (message: Menu.Message) => Message = MENU_MESSAGE[field]
+	return Command.mapMessages(commands, toMessage)
+}
 
 const updateMenu = (
 	model: Model,
@@ -555,7 +561,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				? { model }
 				: {
 						model: modifyFields(model, {
-							contacts: (contacts) => ({ ...contacts, status: "Loading" }),
+							contacts: (contacts) => modifyFields(contacts, { status: () => "Loading" }),
 						}),
 						commands: [FetchCustomerContacts({ ...args, cursor: model.contacts.nextCursor })],
 					}
@@ -570,7 +576,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			}),
 		}),
 		FailedFetchContacts: () => ({
-			model: modifyFields(model, { contacts: (contacts) => ({ ...contacts, status: "Failed" }) }),
+			model: modifyFields(model, {
+				contacts: (contacts) => modifyFields(contacts, { status: () => "Failed" }),
+			}),
 		}),
 
 		PressedMoreInvoices: () => {
@@ -579,7 +587,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				? { model }
 				: {
 						model: modifyFields(model, {
-							invoices: (invoices) => ({ ...invoices, status: "Loading" }),
+							invoices: (invoices) => modifyFields(invoices, { status: () => "Loading" }),
 						}),
 						commands: [FetchCustomerInvoices({ ...args, cursor: model.invoices.nextCursor })],
 					}
@@ -594,7 +602,9 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			}),
 		}),
 		FailedFetchInvoices: () => ({
-			model: modifyFields(model, { invoices: (invoices) => ({ ...invoices, status: "Failed" }) }),
+			model: modifyFields(model, {
+				invoices: (invoices) => modifyFields(invoices, { status: () => "Failed" }),
+			}),
 		}),
 
 		ClickedEventProvider: ({ provider }) =>
@@ -638,7 +648,11 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				: { model },
 		FailedFetchEvents: ({ filter }) =>
 			filter === eventFilterOf(model)
-				? { model: modifyFields(model, { events: (events) => ({ ...events, status: "Failed" }) }) }
+				? {
+						model: modifyFields(model, {
+							events: (events) => modifyFields(events, { status: () => "Failed" }),
+						}),
+					}
 				: { model },
 
 		GotOwnerMenuMessage: ({ message: menuMessage }) =>
@@ -730,10 +744,14 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		}),
 
 		ChangedComposer: ({ value }) => ({
-			model: modifyFields(model, { composer: (composer) => ({ ...composer, body: value }) }),
+			model: modifyFields(model, {
+				composer: (composer) => modifyFields(composer, { body: () => value }),
+			}),
 		}),
 		ToggledComposerPin: ({ pinned }) => ({
-			model: modifyFields(model, { composer: (composer) => ({ ...composer, pinned }) }),
+			model: modifyFields(model, {
+				composer: (composer) => modifyFields(composer, { pinned: () => pinned }),
+			}),
 		}),
 		SubmittedNote: () => submitNote(model, shared),
 		PressedEditNote: ({ noteId }) => {

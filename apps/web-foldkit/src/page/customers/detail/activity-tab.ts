@@ -174,7 +174,7 @@ export const activityTab = (h: HtmlBuilder<Message>, model: Model, context: Cont
 						]
 					: []),
 				...[...groups.values()].map((events) => {
-					const [heading, date] = dayHeading(msOf(events[0]!.occurredAt), context.nowMs)
+					const [heading, date] = dayHeading(msOf(events[0].occurredAt), context.nowMs)
 					return h.section(
 						[h.Class("flex flex-col")],
 						[

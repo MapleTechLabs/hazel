@@ -17,7 +17,13 @@
  * `champion_left` (champion_inactive), `near_limit`, `seat_growth`; `healthy_*`, `trial_healthy`,
  * `churned` and `lead` fill out the book (and `health_drop` follows from the risky ones).
  */
-import type { CustomerProvider, IngestOp, ProviderRef } from "@hazel/domain/customers"
+import type {
+	CustomerProvider,
+	IngestOp,
+	ProviderRef,
+	UpsertAccount,
+	UpsertContact,
+} from "@hazel/domain/customers"
 import { DAY_MS, dayOf } from "./time"
 
 export interface DemoSeedOptions {
@@ -91,7 +97,7 @@ const makeRng = (seed: number): Rng => {
 		int: (min, max) => min + Math.floor(next() * (max - min + 1)),
 		between: (min, max) => min + next() * (max - min),
 		chance: (p) => next() < p,
-		pick: (items) => items[Math.floor(next() * items.length)]!,
+		pick: (items) => items[Math.floor(next() * items.length)],
 	}
 }
 
@@ -165,8 +171,8 @@ const ENTERPRISE: Plan = {
 	storageGb: 5_000,
 }
 const TIERS = [STARTER, TEAM, BUSINESS, ENTERPRISE] as const
-const tierBelow = (plan: Plan) => TIERS[Math.max(0, TIERS.indexOf(plan as (typeof TIERS)[number]) - 1)]!
-const tierAbove = (plan: Plan) => TIERS[Math.min(3, TIERS.indexOf(plan as (typeof TIERS)[number]) + 1)]!
+const tierBelow = (plan: Plan) => TIERS[Math.max(0, TIERS.indexOf(plan as (typeof TIERS)[number]) - 1)]
+const tierAbove = (plan: Plan) => TIERS[Math.min(3, TIERS.indexOf(plan as (typeof TIERS)[number]) + 1)]
 
 /** Accounts per archetype in a 200-account book. */
 const MIX: ReadonlyArray<readonly [DemoArchetype, number]> = [
@@ -391,24 +397,24 @@ const archetypeCounts = (total: number): Array<DemoArchetype> => {
 	let missing = total - counts.reduce((sum, count) => sum + count, 0)
 	for (const { index } of byRemainder) {
 		if (missing === 0) break
-		counts[index]!++
+		counts[index]++
 		missing--
 	}
 	if (total >= 30) {
 		for (const [index, count] of counts.entries()) {
 			if (count === 0) {
 				counts[index] = 1
-				counts[0]!-- // from healthy_stable
+				counts[0]-- // from healthy_stable
 			}
 		}
 	}
-	return MIX.flatMap(([archetype], index) => Array.from({ length: counts[index]! }, () => archetype))
+	return MIX.flatMap(([archetype], index) => Array.from({ length: counts[index] }, () => archetype))
 }
 
 const shuffle = <A>(rng: Rng, items: Array<A>): Array<A> => {
 	for (let i = items.length - 1; i > 0; i--) {
 		const j = rng.int(0, i)
-		;[items[i], items[j]] = [items[j]!, items[i]!]
+		;[items[i], items[j]] = [items[j], items[i]]
 	}
 	return items
 }
@@ -420,7 +426,7 @@ const companyNames = (rng: Rng, count: number) => {
 	)
 	return Array.from({ length: count }, (_, index) => {
 		const round = Math.floor(index / combos.length)
-		const base = `${combos[index % combos.length]!}${round === 0 ? "" : ` ${round + 1}`}`
+		const base = `${combos[index % combos.length]}${round === 0 ? "" : ` ${round + 1}`}`
 		const slug = base.toLowerCase().replace(/\s+/g, "")
 		const tld = rng.chance(0.7) ? "com" : rng.chance(0.5) ? "io" : "dev"
 		return { name: `${base}${rng.pick(NAME_KINDS)}`, domain: `${slug}.${tld}` }
@@ -433,7 +439,7 @@ const weighted = <A>(rng: Rng, options: ReadonlyArray<readonly [A, number]>): A 
 		roll -= weight
 		if (roll < 0) return option
 	}
-	return options[options.length - 1]![0]
+	return options[options.length - 1][0]
 }
 
 const pickPlan = (rng: Rng, archetype: DemoArchetype): Plan => {
@@ -512,7 +518,7 @@ const planAccounts = (
 	let subSeq = 0
 
 	return archetypes.map((archetype, index) => {
-		const { name, domain } = names[index]!
+		const { name, domain } = names[index]
 		const clerkOrgId = `org_${pad(index + 1, 4)}`
 		const subs: Array<SubSpec> = []
 		const sub = (fields: Partial<SubSpec> & Pick<SubSpec, "plan" | "start">) => {
@@ -545,186 +551,187 @@ const planAccounts = (
 		let intensity = (_ago: number) => 1
 		let contacts = contactCount(rng, plan)
 		/** Contact tweaks applied once contacts exist. */
-		let shape = (_contacts: Array<ContactSpec>) => {}
+		let tweakContacts = (_contacts: Array<ContactSpec>) => {}
 
-		switch (archetype) {
-			case "lead": {
-				createdAgo = rng.int(5, 300)
-				const silent = rng.chance(0.4)
-				shape = (list) =>
-					list.forEach((contact, i) => (contact.weekdayP = silent ? 0 : i === 0 ? 0.55 : 0.15))
-				break
-			}
-			case "trial_healthy":
-			case "trial_ending_low": {
-				const endsIn = archetype === "trial_healthy" ? rng.int(7, 13) : rng.int(1, 4)
-				const trialEnd = dayAt(clock, -endsIn) + rng.int(8, 18) * 3_600_000
-				const trialStartAgo = 14 - endsIn
-				createdAgo = trialStartAgo
-				sub({
-					plan: plan!,
-					start: dayAt(clock, trialStartAgo),
-					status: "trialing",
-					trialEndsAt: trialEnd,
-					mrrMinor: 0,
-				})
-				if (archetype === "trial_healthy") {
-					contacts = rng.int(3, 6)
-					shape = (list) =>
-						list.forEach((contact, i) => {
-							contact.weekdayP = i === 0 ? 0.95 : rng.between(0.5, 0.75)
-							contact.forced.add(contact.joinAgo)
-						})
-				} else {
-					contacts = rng.int(2, 4)
-					// Only the admin shows up in the last week; the others tried it once, early.
-					shape = (list) =>
-						list.forEach((contact, i) => {
-							contact.weekdayP = i === 0 ? 0.3 : 0.25
-							if (i > 0) contact.stopAgo = 8
-						})
-				}
-				break
-			}
-			case "onboarding_stalled": {
-				createdAgo = rng.int(8, 28)
-				contacts = rng.int(2, 4)
-				sub({ plan: plan!, start: dayAt(clock, createdAgo) })
-				const championStop = rng.int(0, createdAgo - 2)
-				shape = (list) =>
-					list.forEach((contact, i) => {
-						contact.weekdayP = i === 0 ? 0.5 : 0
-						if (i === 0) contact.stopAgo = championStop
+		// Only a lead has no plan.
+		if (plan === null) {
+			createdAgo = rng.int(5, 300)
+			const silent = rng.chance(0.4)
+			tweakContacts = (list) =>
+				list.forEach((contact, i) => (contact.weekdayP = silent ? 0 : i === 0 ? 0.55 : 0.15))
+		} else {
+			switch (archetype) {
+				case "trial_healthy":
+				case "trial_ending_low": {
+					const endsIn = archetype === "trial_healthy" ? rng.int(7, 13) : rng.int(1, 4)
+					const trialEnd = dayAt(clock, -endsIn) + rng.int(8, 18) * 3_600_000
+					const trialStartAgo = 14 - endsIn
+					createdAgo = trialStartAgo
+					sub({
+						plan,
+						start: dayAt(clock, trialStartAgo),
+						status: "trialing",
+						trialEndsAt: trialEnd,
+						mrrMinor: 0,
 					})
-				break
-			}
-			case "churned": {
-				const cancelAgo = rng.int(30, 300)
-				const startAgo = Math.min(364, cancelAgo + rng.int(45, 240))
-				createdAgo = startAgo + rng.int(0, 21)
-				sub({
-					plan: plan!,
-					start: dayAt(clock, startAgo),
-					end: dayAt(clock, cancelAgo) + rng.int(9, 17) * 3_600_000,
-					status: "canceled",
-					cancellationReason: rng.pick(CHURN_REASONS),
-				})
-				const stopAgo = cancelAgo + rng.int(0, 7)
-				intensity = (ago) => (ago > cancelAgo + 45 ? 1 : 0.3 + (0.7 * (ago - cancelAgo)) / 45)
-				shape = (list) =>
-					list.forEach((contact) => (contact.stopAgo = Math.max(contact.stopAgo, stopAgo)))
-				break
-			}
-			case "payment_failed": {
-				const overdue = rng.int(8, 40)
-				const unpaid = overdue >= 30
-				const months = rng.int(2, 9)
-				const start = anchoredStart(overdue, months)
-				createdAgo = Math.round((clock.today - start) / DAY_MS) + rng.int(0, 21)
-				sub({
-					plan: plan!,
-					start,
-					status: unpaid ? "unpaid" : "past_due",
-					lastIssue: addMonths(start, months),
-					failure: { attempts: rng.int(2, 4), declineReason: rng.pick(DECLINE_REASONS) },
-				})
-				break
-			}
-			case "cancel_scheduled": {
-				const endsIn = rng.int(3, 20)
-				const start = anchoredStart(-endsIn, rng.int(3, 10))
-				createdAgo = Math.round((clock.today - start) / DAY_MS) + rng.int(0, 21)
-				sub({
-					plan: plan!,
-					start,
-					cancelAtPeriodEnd: true,
-					cancellationReason: rng.pick(CHURN_REASONS),
-				})
-				break
-			}
-			case "downgraded":
-			case "healthy_growing": {
-				// downgraded: from the tier above, 2–12 days ago; growing: up from the tier below.
-				const changeAgo = archetype === "downgraded" ? rng.int(2, 12) : rng.int(20, 200)
-				const startAgo = Math.min(364, changeAgo + rng.int(45, 300))
-				createdAgo = startAgo + rng.int(0, 21)
-				const before = archetype === "downgraded" ? tierAbove(plan!) : tierBelow(plan!)
-				const change = dayAt(clock, changeAgo) + rng.int(9, 17) * 3_600_000
-				sub({
-					plan: before,
-					mrrMinor: mrrFor(before),
-					start: dayAt(clock, startAgo),
-					end: change,
-					status: "canceled",
-				})
-				const annual = plan === ENTERPRISE ? rng.chance(0.8) : rng.chance(0.25)
-				sub({
-					plan: plan!,
-					mrrMinor: mrrFor(plan!),
-					start: change,
-					interval: annual ? "year" : "month",
-				})
-				if (archetype === "healthy_growing")
-					intensity = (ago) => 0.7 + 0.3 * Math.max(0, 1 - ago / 120)
-				break
-			}
-			default: {
-				// healthy_stable, went_quiet, usage_drop, champion_left, near_limit, seat_growth
-				const startAgo = rng.int(archetype === "healthy_stable" ? 30 : 75, 364)
-				createdAgo = startAgo + rng.int(0, 21)
-				const annual =
-					archetype === "healthy_stable" &&
-					(plan === ENTERPRISE ? rng.chance(0.8) : rng.chance(0.2))
-				sub({
-					plan: plan!,
-					mrrMinor: mrrFor(plan!),
-					start: dayAt(clock, startAgo),
-					interval: annual ? "year" : "month",
-				})
-				if (archetype === "went_quiet") {
-					const quietAgo = rng.int(15, 45)
-					contacts = Math.max(contacts, 4)
-					shape = (list) =>
-						list.forEach((contact, i) => {
-							contact.stopAgo = quietAgo
-							if (i < 3) contact.weekdayP = Math.max(contact.weekdayP, 0.5)
-							if (i < 3) contact.forced.add(quietAgo)
-						})
-				}
-				if (archetype === "usage_drop") {
-					contacts = Math.max(contacts, rng.int(6, 10))
-					// The last week: only a couple of visits, so the 7-day average falls well past -50%.
-					intensity = (ago) => (ago < 7 ? 0 : 1)
-					shape = (list) => {
-						list[0]!.forced.add(rng.int(0, 2)).add(rng.int(3, 6))
-						list[1]!.forced.add(rng.int(1, 6))
+					if (archetype === "trial_healthy") {
+						contacts = rng.int(3, 6)
+						tweakContacts = (list) =>
+							list.forEach((contact, i) => {
+								contact.weekdayP = i === 0 ? 0.95 : rng.between(0.5, 0.75)
+								contact.forced.add(contact.joinAgo)
+							})
+					} else {
+						contacts = rng.int(2, 4)
+						// Only the admin shows up in the last week; the others tried it once, early.
+						tweakContacts = (list) =>
+							list.forEach((contact, i) => {
+								contact.weekdayP = i === 0 ? 0.3 : 0.25
+								if (i > 0) contact.stopAgo = 8
+							})
 					}
+					break
 				}
-				if (archetype === "champion_left") {
-					const championStop = rng.int(15, 19)
-					contacts = Math.max(contacts, 4)
-					// Daily through the 11 days before leaving, so they stay the 30-day champion.
-					shape = (list) =>
+				case "onboarding_stalled": {
+					createdAgo = rng.int(8, 28)
+					contacts = rng.int(2, 4)
+					sub({ plan, start: dayAt(clock, createdAgo) })
+					const championStop = rng.int(0, createdAgo - 2)
+					tweakContacts = (list) =>
 						list.forEach((contact, i) => {
-							contact.weekdayP = i === 0 ? 1 : 0.12
-							if (i === 1) contact.forced.add(rng.int(1, 6))
-							if (i > 0) return
-							contact.stopAgo = championStop
-							for (let ago = championStop; ago <= championStop + 10; ago++)
-								contact.forced.add(ago)
+							contact.weekdayP = i === 0 ? 0.5 : 0
+							if (i === 0) contact.stopAgo = championStop
 						})
+					break
 				}
-				if (archetype === "seat_growth") {
-					contacts = rng.int(4, 6)
-					const newcomers = contacts + rng.int(1, 4)
-					shape = (list) => {
-						for (const contact of list) {
-							contact.weekdayP = Math.max(contact.weekdayP, 0.4)
-							contact.forced.add(40)
+				case "churned": {
+					const cancelAgo = rng.int(30, 300)
+					const startAgo = Math.min(364, cancelAgo + rng.int(45, 240))
+					createdAgo = startAgo + rng.int(0, 21)
+					sub({
+						plan,
+						start: dayAt(clock, startAgo),
+						end: dayAt(clock, cancelAgo) + rng.int(9, 17) * 3_600_000,
+						status: "canceled",
+						cancellationReason: rng.pick(CHURN_REASONS),
+					})
+					const stopAgo = cancelAgo + rng.int(0, 7)
+					intensity = (ago) => (ago > cancelAgo + 45 ? 1 : 0.3 + (0.7 * (ago - cancelAgo)) / 45)
+					tweakContacts = (list) =>
+						list.forEach((contact) => (contact.stopAgo = Math.max(contact.stopAgo, stopAgo)))
+					break
+				}
+				case "payment_failed": {
+					const overdue = rng.int(8, 40)
+					const unpaid = overdue >= 30
+					const months = rng.int(2, 9)
+					const start = anchoredStart(overdue, months)
+					createdAgo = Math.round((clock.today - start) / DAY_MS) + rng.int(0, 21)
+					sub({
+						plan,
+						start,
+						status: unpaid ? "unpaid" : "past_due",
+						lastIssue: addMonths(start, months),
+						failure: { attempts: rng.int(2, 4), declineReason: rng.pick(DECLINE_REASONS) },
+					})
+					break
+				}
+				case "cancel_scheduled": {
+					const endsIn = rng.int(3, 20)
+					const start = anchoredStart(-endsIn, rng.int(3, 10))
+					createdAgo = Math.round((clock.today - start) / DAY_MS) + rng.int(0, 21)
+					sub({
+						plan,
+						start,
+						cancelAtPeriodEnd: true,
+						cancellationReason: rng.pick(CHURN_REASONS),
+					})
+					break
+				}
+				case "downgraded":
+				case "healthy_growing": {
+					// downgraded: from the tier above, 2–12 days ago; growing: up from the tier below.
+					const changeAgo = archetype === "downgraded" ? rng.int(2, 12) : rng.int(20, 200)
+					const startAgo = Math.min(364, changeAgo + rng.int(45, 300))
+					createdAgo = startAgo + rng.int(0, 21)
+					const before = archetype === "downgraded" ? tierAbove(plan) : tierBelow(plan)
+					const change = dayAt(clock, changeAgo) + rng.int(9, 17) * 3_600_000
+					sub({
+						plan: before,
+						mrrMinor: mrrFor(before),
+						start: dayAt(clock, startAgo),
+						end: change,
+						status: "canceled",
+					})
+					const annual = plan === ENTERPRISE ? rng.chance(0.8) : rng.chance(0.25)
+					sub({
+						plan,
+						mrrMinor: mrrFor(plan),
+						start: change,
+						interval: annual ? "year" : "month",
+					})
+					if (archetype === "healthy_growing")
+						intensity = (ago) => 0.7 + 0.3 * Math.max(0, 1 - ago / 120)
+					break
+				}
+				default: {
+					// healthy_stable, went_quiet, usage_drop, champion_left, near_limit, seat_growth
+					const startAgo = rng.int(archetype === "healthy_stable" ? 30 : 75, 364)
+					createdAgo = startAgo + rng.int(0, 21)
+					const annual =
+						archetype === "healthy_stable" &&
+						(plan === ENTERPRISE ? rng.chance(0.8) : rng.chance(0.2))
+					sub({
+						plan,
+						mrrMinor: mrrFor(plan),
+						start: dayAt(clock, startAgo),
+						interval: annual ? "year" : "month",
+					})
+					if (archetype === "went_quiet") {
+						const quietAgo = rng.int(15, 45)
+						contacts = Math.max(contacts, 4)
+						tweakContacts = (list) =>
+							list.forEach((contact, i) => {
+								contact.stopAgo = quietAgo
+								if (i < 3) contact.weekdayP = Math.max(contact.weekdayP, 0.5)
+								if (i < 3) contact.forced.add(quietAgo)
+							})
+					}
+					if (archetype === "usage_drop") {
+						contacts = Math.max(contacts, rng.int(6, 10))
+						// The last week: only a couple of visits, so the 7-day average falls well past -50%.
+						intensity = (ago) => (ago < 7 ? 0 : 1)
+						tweakContacts = (list) => {
+							list[0].forced.add(rng.int(0, 2)).add(rng.int(3, 6))
+							list[1].forced.add(rng.int(1, 6))
 						}
-						for (let i = 0; i < newcomers; i++)
-							list.push(newContact(rng.int(3, 28), rng.between(0.35, 0.6)))
-						for (const contact of list.slice(contacts)) contact.forced.add(contact.joinAgo)
+					}
+					if (archetype === "champion_left") {
+						const championStop = rng.int(15, 19)
+						contacts = Math.max(contacts, 4)
+						// Daily through the 11 days before leaving, so they stay the 30-day champion.
+						tweakContacts = (list) =>
+							list.forEach((contact, i) => {
+								contact.weekdayP = i === 0 ? 1 : 0.12
+								if (i === 1) contact.forced.add(rng.int(1, 6))
+								if (i > 0) return
+								contact.stopAgo = championStop
+								for (let ago = championStop; ago <= championStop + 10; ago++)
+									contact.forced.add(ago)
+							})
+					}
+					if (archetype === "seat_growth") {
+						contacts = rng.int(4, 6)
+						const newcomers = contacts + rng.int(1, 4)
+						tweakContacts = (list) => {
+							for (const contact of list) {
+								contact.weekdayP = Math.max(contact.weekdayP, 0.4)
+								contact.forced.add(40)
+							}
+							for (let i = 0; i < newcomers; i++)
+								list.push(newContact(rng.int(3, 28), rng.between(0.35, 0.6)))
+							for (const contact of list.slice(contacts)) contact.forced.add(contact.joinAgo)
+						}
 					}
 				}
 			}
@@ -761,7 +768,7 @@ const planAccounts = (
 				? { ...contact, role: "org:admin" as const }
 				: contact
 		})
-		shape(contactList)
+		tweakContacts(contactList)
 
 		return {
 			index,
@@ -844,14 +851,14 @@ const clerkOps = (
 		onNoMatch: "create",
 	},
 	...account.contacts.map((contact): IngestOp => {
-		const days = activity.get(contact)!
+		const days = activity.get(contact) ?? []
 		const last = days[days.length - 1]
 		const lastSignInAt = last === undefined ? null : stamp(clock, rng, dayAt(clock, last.ago))
 		const lastSeenAt =
 			lastSignInAt === null
 				? null
 				: iso(Math.min(Date.parse(lastSignInAt) + rng.int(5, 180) * 60_000, clock.now))
-		return {
+		const op: UpsertContact = {
 			_tag: "contact",
 			externalId: contact.externalId,
 			account: clerkRef(account.clerkOrgId),
@@ -864,8 +871,8 @@ const clerkOps = (
 			lastSignInAt,
 			lastSeenAt,
 			signInCount30d: days.filter((day) => day.ago < 30).length,
-			...(contact.removedAgo === null ? {} : { removed: true }),
 		}
+		return contact.removedAgo === null ? op : { ...op, removed: true }
 	}),
 ]
 
@@ -927,20 +934,21 @@ const autumnOps = (
 	const ref: ProviderRef = { provider: "autumn", externalId: account.clerkOrgId }
 	const live = account.subs.find((sub) => sub.end === null)
 	const seatsUsed = account.contacts.filter((contact) => contact.removedAgo === null).length
+	const accountOp: UpsertAccount = {
+		_tag: "account",
+		externalId: account.clerkOrgId,
+		name: account.name,
+		sameAs: [clerkRef(account.clerkOrgId)],
+		onNoMatch: "unmatched",
+	}
 	const ops: Array<IngestOp> = [
-		{
-			_tag: "account",
-			externalId: account.clerkOrgId,
-			name: account.name,
-			sameAs: [clerkRef(account.clerkOrgId)],
-			onNoMatch: "unmatched",
-			...(live === undefined
-				? {}
-				: {
-						seatsUsed,
-						seatsLimit: live.plan === ENTERPRISE ? Math.max(25, seatsUsed + 5) : live.plan.seats,
-					}),
-		},
+		live === undefined
+			? accountOp
+			: {
+					...accountOp,
+					seatsUsed,
+					seatsLimit: live.plan === ENTERPRISE ? Math.max(25, seatsUsed + 5) : live.plan.seats,
+				},
 	]
 
 	const card = () => {
@@ -995,24 +1003,24 @@ const autumnOps = (
 	const planOn = (dayMs: number) =>
 		account.subs.find((sub) => sub.start <= dayMs + DAY_MS - 1 && (sub.end === null || sub.end > dayMs))
 			?.plan
-	const liveAgos = Array.from({ length: activityDays }, (_, i) => activityDays - 1 - i).filter(
-		(ago) => planOn(dayAt(clock, ago)) !== undefined,
-	)
+	const liveDays = Array.from({ length: activityDays }, (_, i) => activityDays - 1 - i).flatMap((ago) => {
+		const plan = planOn(dayAt(clock, ago))
+		return plan === undefined ? [] : [{ ago, plan }]
+	})
 	const meanActive = Math.max(
 		0.5,
-		liveAgos.reduce((sum, ago) => sum + activeByAgo[ago]!, 0) / Math.max(1, liveAgos.length),
+		liveDays.reduce((sum, { ago }) => sum + activeByAgo[ago], 0) / Math.max(1, liveDays.length),
 	)
 	const projectShare = rng.between(0.3, 0.7)
 	const storageShare = rng.between(0.1, 0.6)
 	let peak = { ago: -1, ratio: 0, limit: 0, value: 0, plan: STARTER }
-	for (const ago of liveAgos) {
-		const plan = planOn(dayAt(clock, ago))!
+	for (const { ago, plan } of liveDays) {
 		const day = dayKey(dayAt(clock, ago))
 		const progress = 1 - ago / Math.max(1, activityDays - 1)
 		const limit = plan.apiCallsPerDay
 		const usage =
 			account.usageShare *
-			(0.1 + 0.9 * Math.min(2, activeByAgo[ago]! / meanActive)) *
+			(0.1 + 0.9 * Math.min(2, activeByAgo[ago] / meanActive)) *
 			rng.between(0.9, 1.1)
 		const share =
 			account.archetype === "near_limit" && ago < 7
@@ -1222,8 +1230,7 @@ const mapleOps = (
 	activityDays: number,
 ): Array<IngestOp> =>
 	account.contacts.flatMap((contact) =>
-		activity
-			.get(contact)!
+		(activity.get(contact) ?? [])
 			.filter((day) => day.ago < activityDays)
 			.map((day): IngestOp => ({
 				_tag: "activity",
@@ -1249,8 +1256,9 @@ export const generateDemoSeed = (options: DemoSeedOptions): DemoSeed => {
 	const names = companyNames(rng, total + 3)
 	// Two lead organizations of one company share a domain (a Stripe customer on it is ambiguous).
 	const [firstLead, secondLead] = archetypes.flatMap((archetype, i) => (archetype === "lead" ? [i] : []))
-	const shared = firstLead === undefined || secondLead === undefined ? null : names[firstLead]!
-	if (shared !== null) names[secondLead!] = { name: `${shared.name} EU`, domain: shared.domain }
+	const shared = firstLead === undefined || secondLead === undefined ? null : names[firstLead]
+	if (shared !== null && secondLead !== undefined)
+		names[secondLead] = { name: `${shared.name} EU`, domain: shared.domain }
 
 	const accounts = planAccounts(rng, clock, archetypes, names)
 	addEdgeCases(rng, accounts)
@@ -1263,7 +1271,7 @@ export const generateDemoSeed = (options: DemoSeedOptions): DemoSeed => {
 	const activeByAgo = (account: AccountSpec) => {
 		const counts = Array.from({ length: activityDays }, () => 0)
 		for (const contact of account.contacts) {
-			for (const day of activity.get(contact)!) if (day.ago < activityDays) counts[day.ago]!++
+			for (const day of activity.get(contact) ?? []) if (day.ago < activityDays) counts[day.ago]++
 		}
 		return counts
 	}

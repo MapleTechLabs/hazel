@@ -109,13 +109,19 @@ export const healthDryRun = Effect.fn("Customers.healthDryRun")(function* (draft
 		mrrMinor: facts.account.mrrMinor,
 	}))
 	const transitions = new Map<string, number>()
-	const changed: Array<(typeof accounts)[number]> = []
+	const changed: Array<{
+		account: (typeof accounts)[number]
+		current: HealthBreakdown
+		proposed: HealthBreakdown
+	}> = []
 	for (const account of accounts) {
-		const from = current.get(account.id)!.status
-		const to = proposed.get(account.id)!.status
-		if (from === to) continue
-		transitions.set(`${from}:${to}`, (transitions.get(`${from}:${to}`) ?? 0) + 1)
-		changed.push(account)
+		const before = current.get(account.id)
+		const after = proposed.get(account.id)
+		// `scoreAll` scores every account of the snapshot.
+		if (before === undefined || after === undefined || before.status === after.status) continue
+		const key = `${before.status}:${after.status}`
+		transitions.set(key, (transitions.get(key) ?? 0) + 1)
+		changed.push({ account, current: before, proposed: after })
 	}
 	return {
 		current: distribution(accounts, current),
@@ -125,13 +131,13 @@ export const healthDryRun = Effect.fn("Customers.healthDryRun")(function* (draft
 			return { from, to, count }
 		}),
 		samples: changed
-			.sort((a, b) => b.mrrMinor - a.mrrMinor)
+			.sort((a, b) => b.account.mrrMinor - a.account.mrrMinor)
 			.slice(0, 5)
-			.map((account) => ({
-				accountId: account.id,
-				name: account.name,
-				current: current.get(account.id)!,
-				proposed: proposed.get(account.id)!,
+			.map((sample) => ({
+				accountId: sample.account.id,
+				name: sample.account.name,
+				current: sample.current,
+				proposed: sample.proposed,
 			})),
 	} satisfies HealthDryRunResult
 })

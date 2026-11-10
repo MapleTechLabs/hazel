@@ -15,25 +15,29 @@ import type {
 	MetricSeries,
 	Mover,
 	MrrMovementBucket,
+	MrrMovementType,
 	OverviewResult,
 } from "@hazel/domain/customers"
 import { HealthStatus } from "@hazel/domain/customers"
 import type { CustomerAccountId, CustomerContactId } from "@hazel/schema"
 import { Effect, Option } from "effect"
-import { type AccountFacts, type HealthPoint, type MetricPoint, seriesOf } from "./facts"
+import { type AccountFacts, type HealthPoint, type MetricPoint, mrrSeries, seriesOf } from "./facts"
 import { inList } from "./sql"
 import { addDays, dayOf, dayRange } from "./time"
 
 const ACTIVE = Database.sql`("eventCount" > 0 OR "sessionCount" > 0 OR "signedIn" = 1)`
 
-export const RANGE_DAYS: Record<CustomersRange, number> = { "7d": 7, "30d": 30, "90d": 90, "12m": 365 }
+export const RANGE_DAYS = { "7d": 7, "30d": 30, "90d": 90, "12m": 365 } satisfies Record<
+	CustomersRange,
+	number
+>
 
-const BUCKET: Record<CustomersRange, OverviewResult["bucket"]> = {
+const BUCKET = {
 	"7d": "day",
 	"30d": "day",
 	"90d": "week",
 	"12m": "month",
-}
+} satisfies Record<CustomersRange, OverviewResult["bucket"]>
 
 /** `limit` clamped to 1–100 (default 50); the cursor is an offset. */
 export const pageOf = (request: { readonly cursor?: string; readonly limit?: number }) => ({
@@ -134,7 +138,7 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 
 	// MRR movements per bucket.
 	const buckets = new Map<Day, MrrMovementBucket>()
-	const accountsIn = new Map<Day, Record<string, Set<string>>>()
+	const accountsIn = new Map<Day, Record<MrrMovementType, Set<string>>>()
 	for (const day of dayRange(today, days)) {
 		const key = bucketOf(day, bucket)
 		if (!buckets.has(key)) {
@@ -160,26 +164,29 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 	for (const movement of inCurrent) {
 		const key = bucketOf(movement.day, bucket)
 		const entry = buckets.get(key)
-		if (entry === undefined) continue
+		const sets = accountsIn.get(key)
+		if (entry === undefined || sets === undefined) continue
 		buckets.set(key, {
 			...entry,
 			[movement.type]: entry[movement.type] + movement.deltaMinor,
 			net: entry.net + movement.deltaMinor,
 		})
-		accountsIn.get(key)![movement.type]!.add(movement.accountId)
+		sets[movement.type].add(movement.accountId)
 	}
 	const mrrMovements = [...buckets.values()].map((entry) => {
-		const sets = accountsIn.get(entry.start)!
-		return {
-			...entry,
-			accounts: {
-				new: sets.new!.size,
-				expansion: sets.expansion!.size,
-				reactivation: sets.reactivation!.size,
-				contraction: sets.contraction!.size,
-				churn: sets.churn!.size,
-			},
-		}
+		const sets = accountsIn.get(entry.start)
+		return sets === undefined
+			? entry
+			: {
+					...entry,
+					accounts: {
+						new: sets.new.size,
+						expansion: sets.expansion.size,
+						reactivation: sets.reactivation.size,
+						contraction: sets.contraction.size,
+						churn: sets.churn.size,
+					},
+				}
 	})
 
 	// Active users per bucket: the average DAU, and WAU/MAU at the bucket's last day.
@@ -589,11 +596,8 @@ export const sparklines = Effect.fn("Customers.sparklines")(function* (
 					.orderBy(($) => [[$.day, "asc"]]),
 			)
 			for (const account of accounts) {
-				const facts = {
-					account,
-					movements: movements.filter((row) => row.accountId === account.id),
-				} as unknown as AccountFacts
-				for (const point of seriesOf(facts, "mrr", today, count))
+				const own = movements.filter((row) => row.accountId === account.id)
+				for (const point of mrrSeries(own, account.mrrMinor, today, count))
 					set(account.id, point.day, point.value)
 			}
 			break

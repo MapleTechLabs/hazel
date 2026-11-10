@@ -212,14 +212,7 @@ export const CustomerReadRpcLive = CustomerReadRpcs.toLayer(
 				Effect.gen(function* () {
 					yield* requireMember
 					yield* requireAccount(accountId)
-					return yield* contactsPage(
-						accountId,
-						{
-							...(cursor === undefined ? {} : { cursor }),
-							...(limit === undefined ? {} : { limit }),
-						},
-						yield* currentTime,
-					)
+					return yield* contactsPage(accountId, { cursor, limit }, yield* currentTime)
 				}).pipe(remap),
 
 			"customers.invoices.list": ({ accountId, ...request }) =>
@@ -344,21 +337,22 @@ export const CustomerReadRpcLive = CustomerReadRpcs.toLayer(
 type SignalAction = "assign" | "snooze" | "done" | "dismiss" | "reopen"
 
 /** Which unclosed statuses an action applies to. */
-const ALLOWED: Record<SignalAction, ReadonlyArray<schema.CustomerSignal["status"]>> = {
-	assign: ["open", "snoozed", "done", "dismissed"],
-	snooze: ["open", "snoozed"],
-	done: ["open", "snoozed"],
-	dismiss: ["open", "snoozed"],
-	reopen: ["snoozed", "done", "dismissed"],
-}
+type SignalStatus = schema.CustomerSignal["status"]
+const ALLOWED = {
+	assign: new Set<SignalStatus>(["open", "snoozed", "done", "dismissed"]),
+	snooze: new Set<SignalStatus>(["open", "snoozed"]),
+	done: new Set<SignalStatus>(["open", "snoozed"]),
+	dismiss: new Set<SignalStatus>(["open", "snoozed"]),
+	reopen: new Set<SignalStatus>(["snoozed", "done", "dismissed"]),
+} satisfies Record<SignalAction, ReadonlySet<SignalStatus>>
 
-const ACTION_EVENT: Record<SignalAction, readonly [string, string]> = {
+const ACTION_EVENT = {
 	assign: ["signal.assigned", "Assigned"],
 	snooze: ["signal.snoozed", "Snoozed"],
 	done: ["signal.done", "Done"],
 	dismiss: ["signal.dismissed", "Dismissed"],
 	reopen: ["signal.reopened", "Reopened"],
-}
+} satisfies Record<SignalAction, readonly [string, string]>
 
 /**
  * A human acted on a signal: check the action applies, write `patch` with the evidence it saw
@@ -388,7 +382,7 @@ const actOnSignal = (
 				)
 				if (Option.isNone(found)) return yield* notFound("signal", signalId)
 				const signal = found.value
-				if (signal.closedAt !== null || !ALLOWED[action].includes(signal.status)) {
+				if (signal.closedAt !== null || !ALLOWED[action].has(signal.status)) {
 					return yield* new CustomerSignalTransitionError({
 						signalId,
 						status: signal.status,
@@ -520,7 +514,7 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 							const [note] = yield* db.run(
 								SQLite.insertInto(schema.customerNotesTable)
 									.values({
-										...(id === undefined ? {} : { id }),
+										id, // `undefined`: the column's default
 										organizationId: account.organizationId,
 										accountId,
 										authorUserId: actor.userId,
@@ -535,10 +529,10 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 								actor.userId,
 								"note.added",
 								"Note added",
-								{ noteId: note!.id, signalId: signalId ?? null },
+								{ noteId: note.id, signalId: signalId ?? null },
 								now,
 							)
-							return note!
+							return note
 						}),
 					)
 				}).pipe(remap),
@@ -559,19 +553,20 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 							// Only its author edits the body; anyone pins.
 							if (body !== undefined && found.value.authorUserId !== actor.userId)
 								return yield* notFound("note", noteId)
+							const edited = body !== undefined && body !== found.value.body
 							const [note] = yield* db.run(
 								SQLite.update(schema.customerNotesTable)
+									// `undefined` leaves a column as it is.
 									.set({
-										...(body === undefined || body === found.value.body
-											? {}
-											: { body, editedAt: now }),
-										...(pinned === undefined ? {} : { pinned }),
+										body: edited ? body : undefined,
+										editedAt: edited ? now : undefined,
+										pinned,
 										updatedAt: now,
 									})
 									.where(($) => [$.id.eq(noteId)])
 									.returning(),
 							)
-							return note!
+							return note
 						}),
 					)
 				}).pipe(remap),
@@ -612,27 +607,18 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 							const account = yield* requireAccount(accountId)
 							yield* db.run(
 								SQLite.update(schema.customerAccountsTable)
+									// `undefined` leaves a column as it is.
 									.set({
-										...(ownerUserId === undefined ? {} : { ownerUserId }),
-										...(tags === undefined ? {} : { tags: cleanTags(tags) }),
-										...(lifecycleStageOverride === undefined
-											? {}
-											: {
-													lifecycleStageOverride,
-													...(lifecycleStageOverride === null
-														? {}
-														: { lifecycleStage: lifecycleStageOverride }),
-												}),
+										ownerUserId,
+										tags: tags === undefined ? undefined : cleanTags(tags),
+										lifecycleStageOverride,
+										lifecycleStage: lifecycleStageOverride ?? undefined,
 										// A manual name beats every source (`FIELD_PRECEDENCE`).
-										...(name === undefined
-											? {}
-											: {
-													name,
-													fieldSources: {
-														...account.fieldSources,
-														name: "hazel" as const,
-													},
-												}),
+										name,
+										fieldSources:
+											name === undefined
+												? undefined
+												: { ...account.fieldSources, name: "hazel" as const },
 										updatedAt: now,
 									})
 									.where(($) => [$.id.eq(accountId)]),
@@ -672,7 +658,7 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 								yield* db.run(
 									SQLite.update(schema.customerAccountsTable)
 										.set({
-											...(ownerUserId === undefined ? {} : { ownerUserId }),
+											ownerUserId, // `undefined` leaves it as it is
 											tags: cleanTags([...account.tags, ...add]).filter(
 												(tag) => !remove.has(tag),
 											),
@@ -711,7 +697,7 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 							const [row] = yield* db.run(
 								SQLite.insertInto(schema.customerSavedViewsTable)
 									.values({
-										...(id === undefined ? {} : { id }),
+										id, // `undefined`: the column's default
 										organizationId,
 										name: view.name,
 										ownerUserId: shared ? null : actor.userId,
@@ -726,7 +712,7 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 									})
 									.returning(),
 							)
-							return row!
+							return row
 						}),
 					)
 				}).pipe(remap),
@@ -750,7 +736,7 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 									.where(($) => [$.id.eq(viewId)])
 									.returning(),
 							)
-							return row!
+							return row
 						}),
 					)
 				}).pipe(remap),
@@ -932,7 +918,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 									.returning(),
 							)
 							yield* requestCompute
-							return row!
+							return row
 						}),
 					)
 				}).pipe(remap),
@@ -971,7 +957,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 							)
 							if (found.value.enabled && !rule.enabled) yield* closeRuleSignals(ruleId, now)
 							yield* requestCompute
-							return row!
+							return row
 						}),
 					)
 				}).pipe(remap),
@@ -1002,11 +988,10 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 						Effect.gen(function* () {
 							yield* db.run(
 								SQLite.update(schema.customerSettingsTable)
+									// `undefined` leaves a column as it is.
 									.set({
-										...(health === undefined ? {} : { health }),
-										...(reportingCurrency === undefined
-											? {}
-											: { reportingCurrency: reportingCurrency.toLowerCase() }),
+										health,
+										reportingCurrency: reportingCurrency?.toLowerCase(),
 										updatedBy: actor.userId,
 										updatedAt: now,
 									})
@@ -1056,13 +1041,13 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 									})
 									.returning(),
 							)
-							yield* storeSecrets(connection!.id, secrets)
-							yield* ingest.setStale(connection!.id, false)
+							yield* storeSecrets(connection.id, secrets)
+							yield* ingest.setStale(connection.id, false)
 							yield* ingest.startRun(
-								connection!.id,
-								connection!.backfilledAt === null ? "backfill" : "manual",
+								connection.id,
+								connection.backfilledAt === null ? "backfill" : "manual",
 							)
-							return connection!
+							return connection
 						}),
 					)
 				}).pipe(remap),
@@ -1128,27 +1113,26 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 									)
 								}
 							}
+							// New credentials lift an `auth` error and pull again.
+							const lifted = secrets !== undefined && connection.status === "error"
 							const [row] = yield* db.run(
 								SQLite.update(schema.customerConnectionsTable)
+									// `undefined` leaves a column as it is.
 									.set({
 										config: nextConfig,
-										...(webhookSecret === undefined && secrets === undefined
-											? {}
-											: { hasWebhookSecret: (webhookSecret ?? null) !== null }),
-										// New credentials lift an `auth` error and pull again.
-										...(secrets !== undefined && connection.status === "error"
-											? {
-													status: "active" as const,
-													nextSyncAt: now,
-													consecutiveFailures: 0,
-												}
-											: {}),
+										hasWebhookSecret:
+											webhookSecret === undefined && secrets === undefined
+												? undefined
+												: (webhookSecret ?? null) !== null,
+										status: lifted ? ("active" as const) : undefined,
+										nextSyncAt: lifted ? now : undefined,
+										consecutiveFailures: lifted ? 0 : undefined,
 										updatedAt: now,
 									})
 									.where(($) => [$.id.eq(connectionId)])
 									.returning(),
 							)
-							return row!
+							return row
 						}),
 					)
 				}).pipe(remap),
@@ -1247,8 +1231,8 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 									})
 									.returning("id"),
 							)
-							yield* linkRecord(recordId, account!.id, actor.userId)
-							return { accountId: account!.id }
+							yield* linkRecord(recordId, account.id, actor.userId)
+							return { accountId: account.id }
 						}),
 					)
 					return result
@@ -1310,10 +1294,8 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 						organizationId: organizationId as OrganizationId,
 						by: actor.userId,
 						now: yield* currentTime,
-						...(accounts === undefined
-							? {}
-							: { accounts: Math.min(1000, Math.max(1, accounts)) }),
-						...(seed === undefined ? {} : { seed }),
+						accounts: accounts === undefined ? undefined : Math.min(1000, Math.max(1, accounts)),
+						seed,
 					}).pipe(Effect.provideService(CustomerIngest, ingest))
 					return yield* txOnly(Effect.void)
 				}).pipe(

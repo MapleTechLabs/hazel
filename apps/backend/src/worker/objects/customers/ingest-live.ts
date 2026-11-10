@@ -91,12 +91,12 @@ export const normalizeDomain = (value: string): string | null => {
 		.toLowerCase()
 		.replace(/^[a-z]+:\/\//, "")
 		.replace(/^www\./, "")
-		.split(/[/?#]/)[0]!
+		.split(/[/?#]/)[0]
 	return domain.includes(".") && !FREE_MAIL.has(domain) ? domain : null
 }
 
 const emailDomain = (email: string | null | undefined) =>
-	email == null || !email.includes("@") ? null : normalizeDomain(email.split("@")[1]!)
+	email == null || !email.includes("@") ? null : normalizeDomain(email.split("@")[1])
 
 /** `*`-glob, case-insensitive, whole value. */
 export const globMatches = (pattern: string, value: string) =>
@@ -117,7 +117,7 @@ const same = (a: unknown, b: unknown) =>
 		: JSON.stringify(a) === JSON.stringify(b)
 
 const rank = (field: string, source: CustomerSource) => {
-	const order = FIELD_PRECEDENCE[field]
+	const order = FIELD_PRECEDENCE.get(field)
 	if (order === undefined) return 0
 	const index = order.indexOf(source)
 	return index === -1 ? order.length : index
@@ -135,7 +135,7 @@ export const mayWrite = (sources: Fields, field: string, source: CustomerSource)
  */
 const makePatch = (current: Record<string, unknown>, sources: Fields, source: CustomerSource) => {
 	const patch: Record<string, unknown> = {}
-	const nextSources: Fields = { ...sources }
+	const nextSources = { ...sources }
 	let sourcesChanged = false
 	const set = (field: string, value: unknown, tracked = false) => {
 		if (value === undefined) return
@@ -148,14 +148,16 @@ const makePatch = (current: Record<string, unknown>, sources: Fields, source: Cu
 		}
 		if (!same(current[field], value)) patch[field] = value
 	}
-	const result = () =>
-		sourcesChanged || Object.keys(patch).length > 0
-			? { ...patch, ...(sourcesChanged ? { fieldSources: nextSources } : {}) }
-			: undefined
+	const result = () => {
+		if (!sourcesChanged && Object.keys(patch).length === 0) return undefined
+		const changes = { ...patch }
+		if (sourcesChanged) changes.fieldSources = nextSources
+		return changes
+	}
 	return { set, result }
 }
 
-const STAT_OF: Partial<Record<IngestOp["_tag"], keyof SyncStats>> = {
+const STAT_OF = {
 	account: "accounts",
 	contact: "contacts",
 	subscription: "subscriptions",
@@ -163,7 +165,8 @@ const STAT_OF: Partial<Record<IngestOp["_tag"], keyof SyncStats>> = {
 	event: "events",
 	activity: "activityDays",
 	metric: "metricDays",
-}
+	metric_definition: null,
+} satisfies Record<IngestOp["_tag"], keyof SyncStats | null>
 
 const encodeOp = Schema.encodeUnknownSync(IngestOp)
 const decodeOp = Schema.decodeUnknownSync(IngestOp)
@@ -313,7 +316,7 @@ const make = Effect.gen(function* () {
 					.set({
 						lastSyncedAt: session.now,
 						staleAt: null,
-						...(externalUrl === undefined ? {} : { externalUrl }),
+						externalUrl,
 						updatedAt: session.now,
 					})
 					.where(($) => [$.id.eq(ref.id)]),
@@ -434,7 +437,7 @@ const make = Effect.gen(function* () {
 						})
 						.returning("id"),
 				)
-				return { _tag: "Unmatched", recordId: row!.id, reason: record.reason } satisfies IngestOutcome
+				return { _tag: "Unmatched", recordId: row.id, reason: record.reason } satisfies IngestOutcome
 			}
 			const row = existing.value
 			if (row.status === "ignored") return { _tag: "Ignored", ruleId: row.id } satisfies IngestOutcome
@@ -545,7 +548,7 @@ const make = Effect.gen(function* () {
 			if (shared.size === 1) {
 				return {
 					_tag: "Matched",
-					accountId: [...shared][0]!,
+					accountId: [...shared][0],
 					method: "shared_id",
 				} satisfies Match as Match
 			}
@@ -570,7 +573,7 @@ const make = Effect.gen(function* () {
 			if (candidates.length === 1) {
 				return {
 					_tag: "Matched",
-					accountId: candidates[0]!,
+					accountId: candidates[0],
 					method: "domain",
 				} satisfies Match as Match
 			}
@@ -600,11 +603,7 @@ const make = Effect.gen(function* () {
 			)
 			if (Option.isNone(row)) return false
 			const account = row.value
-			const patch = makePatch(
-				account as unknown as Record<string, unknown>,
-				account.fieldSources,
-				session.context.provider,
-			)
+			const patch = makePatch(account, account.fieldSources, session.context.provider)
 			patch.set("name", op.name, true)
 			patch.set("logoUrl", op.logoUrl, true)
 			patch.set("seatsUsed", op.seatsUsed, true)
@@ -658,7 +657,7 @@ const make = Effect.gen(function* () {
 					})
 					.returning("id"),
 			)
-			return row!.id
+			return row.id
 		})
 
 	const applyAccount = (session: Session, op: UpsertAccount) =>
@@ -789,8 +788,9 @@ const make = Effect.gen(function* () {
 			let created = false
 			if (contactId === undefined) {
 				if (op.removed === true) return outcome.unchanged(op.externalId)
+				const email = op.email
 				const byEmail =
-					op.email == null
+					email == null
 						? Option.none()
 						: yield* db.first(
 								SQLite.from(schema.customerContactsTable)
@@ -798,7 +798,7 @@ const make = Effect.gen(function* () {
 									.where(($) => [
 										$.accountId.eq(accountId.value),
 										$.deletedAt.isNull(),
-										SQLite.lower($.email).eq(op.email!.toLowerCase()),
+										SQLite.lower($.email).eq(email.toLowerCase()),
 									])
 									.limit(1),
 							)
@@ -821,7 +821,7 @@ const make = Effect.gen(function* () {
 							})
 							.returning("id"),
 					)
-					contactId = row!.id
+					contactId = row.id
 					created = true
 				}
 				yield* insertRef(session, {
@@ -843,11 +843,7 @@ const make = Effect.gen(function* () {
 			)
 			if (Option.isNone(current)) return outcome.unchanged(id)
 			const contact = current.value
-			const patch = makePatch(
-				contact as unknown as Record<string, unknown>,
-				contact.fieldSources,
-				provider,
-			)
+			const patch = makePatch(contact, contact.fieldSources, provider)
 			patch.set("email", op.email, true)
 			patch.set("name", op.name, true)
 			patch.set("avatarUrl", op.avatarUrl, true)
@@ -936,9 +932,10 @@ const make = Effect.gen(function* () {
 				currentPeriodEnd: toDate(op.currentPeriodEnd),
 				cancelAtPeriodEnd: op.cancelAtPeriodEnd,
 				canceledAt: toDate(op.canceledAt),
-				...(op.listMrrMinor === undefined ? {} : { listMrrMinor: op.listMrrMinor }),
-				...(op.cancellationReason === undefined ? {} : { cancellationReason: op.cancellationReason }),
-				...(op.paymentMethod === undefined ? {} : { paymentMethod: op.paymentMethod }),
+				// `undefined` leaves a column as it is (and its default on insert).
+				listMrrMinor: op.listMrrMinor,
+				cancellationReason: op.cancellationReason,
+				paymentMethod: op.paymentMethod,
 			}
 			const existing = yield* db.first(
 				SQLite.from(schema.customerSubscriptionsTable)
@@ -983,10 +980,10 @@ const make = Effect.gen(function* () {
 						null,
 					)
 				}
-				return outcome.created(row!.id)
+				return outcome.created(row.id)
 			}
 			const sub = existing.value
-			const patch = makePatch(sub as unknown as Record<string, unknown>, {}, provider)
+			const patch = makePatch(sub, {}, provider)
 			for (const [field, value] of Object.entries(values)) patch.set(field, value)
 			const changes = patch.result()
 			if (changes === undefined) return outcome.unchanged(sub.id)
@@ -1049,13 +1046,14 @@ const make = Effect.gen(function* () {
 					reason: `Its customer (${op.account.provider} ${op.account.externalId}) is not linked`,
 				})
 			}
+			const subscriptionExternalId = op.subscriptionExternalId
 			const subscriptions =
-				op.subscriptionExternalId === null
+				subscriptionExternalId === null
 					? []
 					: yield* db.run(
 							SQLite.from(schema.customerSubscriptionsTable)
 								.select("id", "provider")
-								.where(($) => [$.externalId.eq(op.subscriptionExternalId!)]),
+								.where(($) => [$.externalId.eq(subscriptionExternalId)]),
 						)
 			const subscription =
 				subscriptions.find((row) => row.provider === provider) ?? subscriptions[0] ?? undefined
@@ -1071,9 +1069,10 @@ const make = Effect.gen(function* () {
 				dueAt: toDate(op.dueAt),
 				paidAt: toDate(op.paidAt),
 				attemptCount: op.attemptCount,
-				...(op.nextRetryAt === undefined ? {} : { nextRetryAt: toDate(op.nextRetryAt) }),
-				...(op.declineReason === undefined ? {} : { declineReason: op.declineReason }),
-				...(op.hostedUrl === undefined ? {} : { hostedUrl: op.hostedUrl }),
+				// `undefined` leaves a column as it is (and its default on insert).
+				nextRetryAt: op.nextRetryAt === undefined ? undefined : toDate(op.nextRetryAt),
+				declineReason: op.declineReason,
+				hostedUrl: op.hostedUrl,
 			}
 			const existing = yield* db.first(
 				SQLite.from(schema.customerInvoicesTable)
@@ -1121,10 +1120,10 @@ const make = Effect.gen(function* () {
 						.returning("id"),
 				)
 				yield* events
-				return outcome.created(row!.id)
+				return outcome.created(row.id)
 			}
 			const invoice = existing.value
-			const patch = makePatch(invoice as unknown as Record<string, unknown>, {}, provider)
+			const patch = makePatch(invoice, {}, provider)
 			for (const [field, value] of Object.entries(values)) patch.set(field, value)
 			const changes = patch.result()
 			if (changes === undefined) return outcome.unchanged(invoice.id)
@@ -1173,10 +1172,11 @@ const make = Effect.gen(function* () {
 				})
 			}
 			const id = contactId.value
+			// `undefined` leaves a column as it is (and its default on insert).
 			const fields = {
-				...(op.eventCount === undefined ? {} : { eventCount: op.eventCount }),
-				...(op.sessionCount === undefined ? {} : { sessionCount: op.sessionCount }),
-				...(op.signedIn === undefined ? {} : { signedIn: op.signedIn }),
+				eventCount: op.eventCount,
+				sessionCount: op.sessionCount,
+				signedIn: op.signedIn,
 			}
 			const existing = yield* db.first(
 				SQLite.from(schema.customerActivityDailyTable)
@@ -1196,8 +1196,10 @@ const make = Effect.gen(function* () {
 				)
 				result = outcome.created(id)
 			} else {
-				const row = existing.value as unknown as Record<string, unknown>
-				const changed = Object.entries(fields).filter(([field, value]) => row[field] !== value)
+				const row: Record<string, unknown> = existing.value
+				const changed = Object.entries(fields).filter(
+					([field, value]) => value !== undefined && row[field] !== value,
+				)
 				if (changed.length === 0 && existing.value.accountId === accountId.value)
 					return outcome.unchanged(id)
 				yield* db.run(
@@ -1307,7 +1309,7 @@ const make = Effect.gen(function* () {
 			}
 			yield* db.run(
 				SQLite.update(schema.customerMetricDailyTable)
-					.set({ value: op.value, ...(limitValue === undefined ? {} : { limitValue }) })
+					.set({ value: op.value, limitValue })
 					.where(($) => [
 						$.accountId.eq(accountId.value),
 						$.metricKey.eq(op.metricKey),
@@ -1345,9 +1347,9 @@ const make = Effect.gen(function* () {
 						.values({ organizationId: settings.value.organizationId, key: op.key, ...values })
 						.returning("id"),
 				)
-				return outcome.created(row!.id)
+				return outcome.created(row.id)
 			}
-			const row = existing.value as unknown as Record<string, unknown>
+			const row: Record<string, unknown> = existing.value
 			if (Object.entries(values).every(([field, value]) => row[field] === value)) {
 				return outcome.unchanged(existing.value.id)
 			}
@@ -1389,9 +1391,9 @@ const make = Effect.gen(function* () {
 						.values({ provider, externalId: op.externalId, ...values })
 						.returning("id"),
 				)
-				return outcome.created(row!.id)
+				return outcome.created(row.id)
 			}
-			const event = existing.value as unknown as Record<string, unknown>
+			const event: Record<string, unknown> = existing.value
 			if (Object.entries(values).every(([field, value]) => same(event[field], value))) {
 				return outcome.unchanged(existing.value.id)
 			}
@@ -1457,17 +1459,23 @@ const make = Effect.gen(function* () {
 			} satisfies Session
 		})
 
-	const addStats = (into: SyncStats, delta: SyncStats): SyncStats =>
-		Object.fromEntries(
-			Object.entries(into).map(([key, value]) => [key, value + delta[key as keyof SyncStats]]),
-		) as unknown as SyncStats
+	const addStats = (into: SyncStats, delta: SyncStats): SyncStats => ({
+		accounts: into.accounts + delta.accounts,
+		contacts: into.contacts + delta.contacts,
+		subscriptions: into.subscriptions + delta.subscriptions,
+		invoices: into.invoices + delta.invoices,
+		events: into.events + delta.events,
+		activityDays: into.activityDays + delta.activityDays,
+		metricDays: into.metricDays + delta.metricDays,
+		unmatched: into.unmatched + delta.unmatched,
+	})
 
 	const apply = (context: IngestContext, ops: ReadonlyArray<IngestOp>) =>
 		Effect.gen(function* () {
 			const db = yield* Database.Database
 			const session = yield* openSession(context)
 			const outcomes: Array<IngestOutcome> = []
-			const stats: Record<keyof SyncStats, number> = { ...EMPTY_SYNC_STATS }
+			const stats = { ...EMPTY_SYNC_STATS }
 			for (let start = 0; start < ops.length; start += INGEST_CHUNK) {
 				const chunk = ops.slice(start, start + INGEST_CHUNK)
 				const results = yield* db.transaction(
@@ -1476,27 +1484,28 @@ const make = Effect.gen(function* () {
 				outcomes.push(...results)
 			}
 			ops.forEach((op, index) => {
-				const result = outcomes[index]!
+				const result = outcomes[index]
 				const stat = STAT_OF[op._tag]
 				if (result._tag === "Unmatched") stats.unmatched++
-				else if (stat !== undefined && (result._tag === "Created" || result._tag === "Updated"))
+				else if (stat !== null && (result._tag === "Created" || result._tag === "Updated"))
 					stats[stat]++
 			})
 			const changed = outcomes.some((result) => result._tag === "Created" || result._tag === "Updated")
 			yield* db.transaction(
 				Effect.gen(function* () {
-					if (context.runId !== null) {
+					const { runId } = context
+					if (runId !== null) {
 						const run = yield* db.first(
 							SQLite.from(schema.customerSyncRunsTable)
 								.select("stats")
-								.where(($) => [$.id.eq(context.runId!)])
+								.where(($) => [$.id.eq(runId)])
 								.limit(1),
 						)
 						if (Option.isSome(run)) {
 							yield* db.run(
 								SQLite.update(schema.customerSyncRunsTable)
 									.set({ stats: addStats(run.value.stats, stats) })
-									.where(($) => [$.id.eq(context.runId!)]),
+									.where(($) => [$.id.eq(runId)]),
 							)
 						}
 					}
@@ -1554,7 +1563,7 @@ const make = Effect.gen(function* () {
 					})
 					.returning("id"),
 			)
-			return row!.id
+			return row.id
 		})
 
 	const progress = (
@@ -1601,8 +1610,9 @@ const make = Effect.gen(function* () {
 									lastSuccessAt: now,
 									lastError: null,
 									consecutiveFailures: 0,
-									...(current.status === "error" ? { status: "active" as const } : {}),
-									...(run.trigger === "backfill" ? { backfilledAt: now } : {}),
+									// `undefined` leaves a column as it is.
+									status: current.status === "error" ? ("active" as const) : undefined,
+									backfilledAt: run.trigger === "backfill" ? now : undefined,
 									updatedAt: now,
 								}
 							: {
@@ -1610,9 +1620,10 @@ const make = Effect.gen(function* () {
 									lastErrorAt: now,
 									lastError: result.error,
 									consecutiveFailures: current.consecutiveFailures + 1,
-									...(result.error.code === "auth" && current.status === "active"
-										? { status: "error" as const }
-										: {}),
+									status:
+										result.error.code === "auth" && current.status === "active"
+											? ("error" as const)
+											: undefined,
 									updatedAt: now,
 								},
 					)
@@ -1663,7 +1674,7 @@ const make = Effect.gen(function* () {
 					provider: record.provider,
 					externalId: record.externalId,
 					entityType: "contact",
-					entityId: contact!.id,
+					entityId: contact.id,
 					accountId,
 					matchMethod: "manual",
 					matchedByUserId: by,

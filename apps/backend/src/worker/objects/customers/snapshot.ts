@@ -134,9 +134,11 @@ export const rollupAccount = (input: {
 	const champion =
 		[...totals.entries()].sort(([, a], [, b]) => b.days - a.days || b.events - a.events)[0]?.[0] ?? null
 	const championLast = input.contacts.find((contact) => contact.id === champion)?.lastActiveDay ?? null
-	const lastActive = [...input.contacts]
-		.filter((contact) => contact.lastActiveDay !== null)
-		.sort((a, b) => (a.lastActiveDay! < b.lastActiveDay! ? 1 : -1))[0]
+	const lastActive = input.contacts
+		.flatMap((contact) =>
+			contact.lastActiveDay === null ? [] : [{ id: contact.id, day: contact.lastActiveDay }],
+		)
+		.sort((a, b) => (a.day < b.day ? 1 : -1))[0]
 
 	return {
 		mrrMinor,

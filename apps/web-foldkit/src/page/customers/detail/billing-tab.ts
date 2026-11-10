@@ -346,9 +346,8 @@ const invoicesCard = (
 			className: "rounded-none border-x-0 border-b-0",
 			rows,
 			rowKey: (invoice) => invoice.id,
-			...(model.invoices.status === "Loading" && model.invoices.items.length === 0
-				? { loadingRows: 5 }
-				: {}),
+			loadingRows:
+				model.invoices.status === "Loading" && model.invoices.items.length === 0 ? 5 : undefined,
 			columns: [
 				{
 					key: "number",

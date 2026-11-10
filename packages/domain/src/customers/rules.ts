@@ -143,7 +143,10 @@ export interface TemplateMeta {
 const ACTIVITY: ReadonlyArray<CustomerProvider> = ["clerk", "maple"]
 const BILLING: ReadonlyArray<CustomerProvider> = ["stripe", "autumn"]
 
-export const TEMPLATES: { readonly [T in SignalTemplate]: TemplateMeta & { readonly template: T } } = {
+/** Each template's metadata, keyed by its own name. */
+type TemplateTable = { readonly [T in SignalTemplate]: TemplateMeta & { readonly template: T } }
+
+export const TEMPLATES: TemplateTable = {
 	inactive: {
 		template: "inactive",
 		kind: "risk",
@@ -281,5 +284,5 @@ export const TEMPLATES: { readonly [T in SignalTemplate]: TemplateMeta & { reado
 /** `severity` raised by `step` levels, capped at `high`. */
 export const escalate = (floor: SignalSeverity, step: 0 | 1 | 2): SignalSeverity => {
 	const order = SignalSeverity.literals
-	return order[Math.min(order.indexOf(floor) + step, order.length - 1)]!
+	return order[Math.min(order.indexOf(floor) + step, order.length - 1)]
 }

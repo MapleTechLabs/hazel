@@ -66,11 +66,11 @@ export interface CustomerProviderAdapter {
 	readonly pullIntervalMs: number
 }
 
-export interface CustomerProvidersShape {
+export interface CustomerProvidersApi {
 	readonly get: (provider: CustomerProvider) => Option.Option<CustomerProviderAdapter>
 }
 
-export class CustomerProviders extends Context.Service<CustomerProviders, CustomerProvidersShape>()(
+export class CustomerProviders extends Context.Service<CustomerProviders, CustomerProvidersApi>()(
 	"@hazel/backend/CustomerProviders",
 ) {
 	/** The registered adapters. Provider PRs add theirs here. */

@@ -179,10 +179,14 @@ const paymentFailed =
 			(sub) => sub.status === "past_due" || sub.status === "unpaid",
 		)
 		const overdue = facts.openInvoices
-			.filter((invoice) => invoice.dueAt !== null && invoice.dueAt.getTime() < org.now.getTime())
-			.sort((a, b) => a.dueAt!.getTime() - b.dueAt!.getTime())
+			.flatMap((invoice) =>
+				invoice.dueAt !== null && invoice.dueAt.getTime() < org.now.getTime()
+					? [{ ...invoice, dueAt: invoice.dueAt }]
+					: [],
+			)
+			.sort((a, b) => a.dueAt.getTime() - b.dueAt.getTime())
 		const oldest = overdue[0]
-		const daysOverdue = oldest === undefined ? 0 : daysSince(oldest.dueAt!, org.now)
+		const daysOverdue = oldest === undefined ? 0 : daysSince(oldest.dueAt, org.now)
 		const invoiceLate = oldest !== undefined && daysOverdue > config.overdueDays
 		if (pastDue.length === 0 && !invoiceLate) {
 			return facts.subscriptions.length === 0 && facts.openInvoices.length === 0
@@ -347,10 +351,10 @@ const healthDrop =
 		const today = facts.health.find((point) => point.day === org.today)
 		if (today === undefined || today.score === null) return "No data"
 		const since = addDays(org.today, -config.windowDays)
-		const before = facts.health.filter(
-			(point) => point.day >= since && point.day < org.today && point.score !== null,
+		const before = facts.health.flatMap((point) =>
+			point.day >= since && point.day < org.today && point.score !== null ? [point.score] : [],
 		)
-		const peak = before.reduce((max, point) => Math.max(max, point.score!), today.score)
+		const peak = before.reduce((max, score) => Math.max(max, score), today.score)
 		const drop = peak - today.score
 		const critical = config.onCritical && today.status === "critical"
 		if (drop < config.dropPoints && !critical) return "Below threshold"
@@ -430,16 +434,10 @@ const nearLimit =
 				const latest = [...points]
 					.reverse()
 					.find((point) => point.day >= recent && (point.limitValue ?? 0) > 0)
-				return latest === undefined
+				const limit = latest?.limitValue ?? null
+				return latest === undefined || limit === null
 					? []
-					: [
-							{
-								key,
-								value: latest.value,
-								limit: latest.limitValue!,
-								pct: (latest.value / latest.limitValue!) * 100,
-							},
-						]
+					: [{ key, value: latest.value, limit, pct: (latest.value / limit) * 100 }]
 			})
 			.sort((a, b) => b.pct - a.pct)
 		const top = candidates[0]

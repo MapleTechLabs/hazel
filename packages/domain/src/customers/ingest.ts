@@ -200,12 +200,15 @@ export type IngestReport = typeof IngestReport.Type
  * better source set it (`fieldSources`); `hazel` (a manual edit) beats every provider. Fields not
  * listed are written by any source.
  */
-export const FIELD_PRECEDENCE: Readonly<Record<string, ReadonlyArray<CustomerSource>>> = {
-	name: ["hazel", "clerk", "stripe", "autumn", "maple"],
-	logoUrl: ["hazel", "clerk", "stripe", "autumn"],
-	seatsUsed: ["hazel", "autumn", "clerk"],
-	seatsLimit: ["hazel", "autumn", "clerk"],
-	email: ["clerk", "stripe", "autumn", "maple"],
-	avatarUrl: ["clerk", "maple"],
-	role: ["clerk"],
-}
+export const FIELD_PRECEDENCE: ReadonlyMap<string, ReadonlyArray<CustomerSource>> = new Map<
+	string,
+	ReadonlyArray<CustomerSource>
+>([
+	["name", ["hazel", "clerk", "stripe", "autumn", "maple"]],
+	["logoUrl", ["hazel", "clerk", "stripe", "autumn"]],
+	["seatsUsed", ["hazel", "autumn", "clerk"]],
+	["seatsLimit", ["hazel", "autumn", "clerk"]],
+	["email", ["clerk", "stripe", "autumn", "maple"]],
+	["avatarUrl", ["clerk", "maple"]],
+	["role", ["clerk"]],
+])

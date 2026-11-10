@@ -68,7 +68,7 @@ const PEOPLE: ReadonlyArray<readonly [string, string, string, number | null, num
 
 const CONTACTS: ReadonlyArray<Customers.ContactRow> = PEOPLE.map(
 	([name, title, role, seenDays, signIns], index) => {
-		const email = `${name.split(" ")[0]!.toLowerCase()}@acmerobotics.io`
+		const email = `${name.split(" ")[0].toLowerCase()}@acmerobotics.io`
 		return {
 			contact: {
 				id: Schema.decodeSync(CustomerContactId)(uuid(30, 100 + index)),
@@ -104,9 +104,9 @@ const CONTACTS: ReadonlyArray<Customers.ContactRow> = PEOPLE.map(
 const ACCOUNT: Customers.Account = {
 	...acme,
 	lifecycleStage: "active",
-	championContactId: CONTACTS[0]!.contact.id,
+	championContactId: CONTACTS[0].contact.id,
 	championInactiveSince: ago(16),
-	lastActiveContactId: CONTACTS[1]!.contact.id,
+	lastActiveContactId: CONTACTS[1].contact.id,
 	seatsUsed: 23,
 	seatsLimit: 25,
 	attributes: {
@@ -125,7 +125,7 @@ const ACCOUNT: Customers.Account = {
 	},
 }
 
-const SUBSCRIPTION = ACME_DETAIL.subscriptions[0]!
+const SUBSCRIPTION = ACME_DETAIL.subscriptions[0]
 
 const invoice = (
 	n: number,
@@ -420,34 +420,35 @@ const step = (model: Model, message: Message): { model: Model; commands: Readonl
 const settle = (
 	model: Model,
 	commands: ReadonlyArray<AnyCommand>,
-): { model: Model; commands: ReadonlyArray<AnyCommand> } =>
-	commands.reduce<{ model: Model; commands: ReadonlyArray<AnyCommand> }>(
-		(current, command) => {
-			if (command.name === "CreateCustomerNote") {
-				const args = (command.args ?? {}) as { body?: string; pinned?: boolean }
-				const note: NoteRow = {
-					id: Schema.decodeSync(CustomerNoteId)(uuid(35, 100 + (current.model.notes?.length ?? 0))),
-					accountId: acme.id,
-					authorUserId: MAYA.id,
-					body: args.body ?? "",
-					pinned: args.pinned ?? false,
-					signalId: null,
-					editedAtMs: null,
-					createdAtMs: NOW.getTime(),
-				}
-				return {
-					...current,
-					model: { ...current.model, notes: [note, ...(current.model.notes ?? [])] },
-				}
+): { model: Model; commands: ReadonlyArray<AnyCommand> } => {
+	let current = model
+	const kept: Array<AnyCommand> = []
+	for (const command of commands) {
+		if (command.name === "CreateCustomerNote") {
+			const args = (command.args ?? {}) as { body?: string; pinned?: boolean }
+			const note: NoteRow = {
+				id: Schema.decodeSync(CustomerNoteId)(uuid(35, 100 + (current.notes?.length ?? 0))),
+				accountId: acme.id,
+				authorUserId: MAYA.id,
+				body: args.body ?? "",
+				pinned: args.pinned ?? false,
+				signalId: null,
+				editedAtMs: null,
+				createdAtMs: NOW.getTime(),
 			}
-			const reply = answer(command, state())
-			if (reply === "local") return { ...current, commands: [...current.commands, command] }
-			if (reply === null) return current
-			const next = step(current.model, reply)
-			return { model: next.model, commands: [...current.commands, ...next.commands] }
-		},
-		{ model, commands: [] },
-	)
+			current = { ...current, notes: [note, ...(current.notes ?? [])] }
+			continue
+		}
+		const reply = answer(command, state())
+		if (reply === "local") kept.push(command)
+		else if (reply !== null) {
+			const next = step(current, reply)
+			current = next.model
+			kept.push(...next.commands)
+		}
+	}
+	return { model: current, commands: kept }
+}
 
 const routeOf = (tab: CustomerTab) =>
 	AppRoute.CustomerDetail({

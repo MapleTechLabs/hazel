@@ -109,8 +109,9 @@ export const FetchCustomerEvents = Command.define("FetchCustomerEvents", {
 		HazelRpc.use((rpc) =>
 			rpc("customers.events.list", {
 				...args,
-				...(providers.length === 0 ? {} : { providers }),
-				...(types.length === 0 ? {} : { types }),
+				// Empty lists filter nothing, as absent ones do.
+				providers,
+				types,
 				...page(cursor),
 			}),
 		).pipe(

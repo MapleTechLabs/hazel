@@ -539,7 +539,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		SubmittedSave: () => submitSave(model, shared),
 		SucceededViewAction: ({ action, viewId }) =>
 			action === "create"
-				? { ...navigateToView(model, shared, viewId), commands: [] }
+				? navigateToView(model, shared, viewId)
 				: action === "update"
 					? { model, outMessage: toast(successToast("View updated")) }
 					: { model },
@@ -631,18 +631,11 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			),
 		}),
 
-		SucceededFetchSparklines: ({ sparklines }) =>
-			withSparklines(
-				{
-					model: modifyFields(model, {
-						sparklines: (current) => ({
-							...current,
-							...Object.fromEntries(sparklines.map((entry) => [entry.accountId, entry.values])),
-						}),
-					}),
-				},
-				shared,
-			),
+		SucceededFetchSparklines: ({ sparklines }) => {
+			const next = { ...model.sparklines }
+			for (const entry of sparklines) next[entry.accountId] = entry.values
+			return withSparklines({ model: modifyFields(model, { sparklines: () => next }) }, shared)
+		},
 		// They stay asked for: the column shows no sparkline rather than retrying in a loop.
 		FailedFetchSparklines: () => ({ model }),
 

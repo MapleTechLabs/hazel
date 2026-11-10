@@ -609,7 +609,7 @@ const activityCard = (h: HtmlBuilder<Message>, context: Context): Html => {
 							h.span(
 								[h.Class("shrink-0 text-muted-fg text-xs")],
 								[
-									`${memberOf(context, event.actorUserId)?.name ?? (event.provider === "hazel" ? "Hazel" : event.provider[0]!.toUpperCase() + event.provider.slice(1))} · ${eventTime(event, context.nowMs)}`,
+									`${memberOf(context, event.actorUserId)?.name ?? (event.provider === "hazel" ? "Hazel" : event.provider[0].toUpperCase() + event.provider.slice(1))} · ${eventTime(event, context.nowMs)}`,
 								],
 							),
 						],

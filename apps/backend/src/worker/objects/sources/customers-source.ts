@@ -20,7 +20,7 @@ const isMember = (userId: UserId) =>
 	SQLite.sql.cond`EXISTS (SELECT 1 FROM "customer_members" cm WHERE cm."userId" = ${userId})`
 
 export const customersSyncTables: ReadonlyArray<SyncTableSpec<SyncPrincipal>> = [
-	{ table: schema.customerAccountsTable, visible: (p, $) => [$.deletedAt!.isNull(), isMember(p.userId)] },
+	{ table: schema.customerAccountsTable, visible: (p, $) => [$.deletedAt.isNull(), isMember(p.userId)] },
 	{
 		table: schema.customerSignalsTable,
 		visible: (p, $) => [
@@ -31,13 +31,13 @@ export const customersSyncTables: ReadonlyArray<SyncTableSpec<SyncPrincipal>> = 
 	},
 	{
 		table: schema.customerSignalRulesTable,
-		visible: (p, $) => [$.deletedAt!.isNull(), isMember(p.userId)],
+		visible: (p, $) => [$.deletedAt.isNull(), isMember(p.userId)],
 	},
-	{ table: schema.customerNotesTable, visible: (p, $) => [$.deletedAt!.isNull(), isMember(p.userId)] },
+	{ table: schema.customerNotesTable, visible: (p, $) => [$.deletedAt.isNull(), isMember(p.userId)] },
 	{
 		table: schema.customerSavedViewsTable,
 		visible: (p, $) => [
-			$.deletedAt!.isNull(),
+			$.deletedAt.isNull(),
 			isMember(p.userId),
 			SQLite.sql.cond`(${$.ownerUserId} IS NULL OR ${$.ownerUserId} = ${p.userId})`,
 		],

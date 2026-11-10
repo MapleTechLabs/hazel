@@ -37,7 +37,7 @@ const connectionFor = (provider: CustomerProvider, organizationId: OrganizationI
 				})
 				.returning("id"),
 		)
-		return row!.id
+		return row.id
 	})
 
 export const seedDemo = Effect.fn("Customers.seedDemo")(function* (input: {
@@ -49,11 +49,7 @@ export const seedDemo = Effect.fn("Customers.seedDemo")(function* (input: {
 }) {
 	const db = yield* Database.Database
 	const ingest = yield* CustomerIngest
-	const seed = generateDemoSeed({
-		now: input.now,
-		...(input.accounts === undefined ? {} : { accounts: input.accounts }),
-		...(input.seed === undefined ? {} : { seed: input.seed }),
-	})
+	const seed = generateDemoSeed({ now: input.now, accounts: input.accounts, seed: input.seed })
 	for (const batch of seed.batches) {
 		const connectionId: CustomerConnectionId = yield* db.transaction(
 			connectionFor(batch.provider, input.organizationId, input.by, input.now),

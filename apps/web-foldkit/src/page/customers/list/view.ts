@@ -196,7 +196,7 @@ const tabsRow = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html =>
 		tabs: tabs.map((tab) => ({
 			key: tab.key ?? "",
 			label: tab.name,
-			...(model.accounts === null ? {} : { count: countMatching(accounts, tab.draft.filters, viewer) }),
+			count: model.accounts === null ? undefined : countMatching(accounts, tab.draft.filters, viewer),
 		})),
 		selected: current.key ?? "",
 		onSelect: (key) => Message.ClickedViewTab({ key: key === "" ? null : key }),
@@ -611,12 +611,9 @@ const saveDialog = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html
 						id: Modal.titleId(model.saveModal.id),
 						text: isRename ? "Rename view" : "Save view",
 					},
-					...(isRename
-						? {}
-						: {
-								description:
-									"Keeps these filters, the sort and the columns as a tab and in the sidebar.",
-							}),
+					description: isRename
+						? undefined
+						: "Keeps these filters, the sort and the columns as a tab and in the sidebar.",
 				}),
 				dialogBody(h, [
 					h.form(
@@ -823,7 +820,7 @@ const table = (
 				focusedKey: model.focusedId,
 				stickyHeader: true,
 				className: "rounded-none border-x-0",
-				...(isLoading ? { loadingRows: 12 } : {}),
+				loadingRows: isLoading ? 12 : undefined,
 			}),
 			...(model.focusedId === null
 				? []

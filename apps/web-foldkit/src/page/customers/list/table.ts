@@ -262,9 +262,7 @@ const cellOf = <M>(
 	}
 }
 
-const COLUMN_LAYOUT: Readonly<
-	Record<Customers.ListColumn, Readonly<{ align?: "right"; widthClass?: string; hideClass?: string }>>
-> = {
+const COLUMN_LAYOUT = {
 	name: { widthClass: "min-w-44" },
 	owner: { widthClass: "w-28", hideClass: "max-lg:hidden" },
 	stage: { widthClass: "w-24" },
@@ -277,7 +275,10 @@ const COLUMN_LAYOUT: Readonly<
 	open_signals: { widthClass: "w-22", hideClass: "max-lg:hidden" },
 	customer_since: { align: "right", widthClass: "w-22", hideClass: "max-xl:hidden" },
 	tags: { widthClass: "w-40", hideClass: "max-xl:hidden" },
-}
+} satisfies Record<
+	Customers.ListColumn,
+	Readonly<{ align?: "right"; widthClass?: string; hideClass?: string }>
+>
 
 export const tableColumns = <M>(
 	h: HtmlBuilder<M>,

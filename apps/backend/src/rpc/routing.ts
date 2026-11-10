@@ -161,6 +161,8 @@ const byCustomers = (payload: { readonly organizationId: OrganizationId }) =>
 type CustomersRouteTable = {
 	readonly [R in HazelRpc as R["_tag"] extends `customers.${string}` ? R["_tag"] : never]: RouteFn<R>
 }
+// SAFETY: the keys are exactly `CustomerRpcs`' tags (every `customers.*` method), and each payload
+// carries `organizationId`, all `byCustomers` reads.
 const customersRoutes = Object.fromEntries(
 	[...CustomerRpcs.requests.keys()].map((tag) => [tag, byCustomers]),
 ) as unknown as CustomersRouteTable

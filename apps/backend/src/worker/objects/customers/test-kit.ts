@@ -329,17 +329,22 @@ export const makeCustomersWorld = Effect.gen(function* () {
 	yield* call("customers.ignoreRules.list", {}, owner)
 	const rows = <T>(query: string, ...params: Array<string | number | null>) =>
 		object.storage.db.prepare(query).all(...params) as Array<T>
-	const connections = new Map<string, CustomerConnectionId>()
-	for (const provider of ["clerk", "stripe", "autumn", "maple"] as const) {
+	const insertConnection = (provider: "clerk" | "stripe" | "autumn" | "maple") => {
 		const id = uuid() as CustomerConnectionId
 		object.storage.db
 			.prepare(
 				`INSERT INTO customer_connections (id, organizationId, provider, config, connectedBy) VALUES (?, ?, ?, ?, ?)`,
 			)
 			.run(id, orgId, provider, JSON.stringify(DEFAULT_CONNECTION_CONFIG[provider]), owner)
-		connections.set(provider, id)
+		return id
 	}
-	const connection = (provider: "clerk" | "stripe" | "autumn" | "maple") => connections.get(provider)!
+	const connections = {
+		clerk: insertConnection("clerk"),
+		stripe: insertConnection("stripe"),
+		autumn: insertConnection("autumn"),
+		maple: insertConnection("maple"),
+	}
+	const connection = (provider: keyof typeof connections) => connections[provider]
 	const ingest = (provider: "clerk" | "stripe" | "autumn" | "maple", ops: ReadonlyArray<IngestOp>) =>
 		object
 			.run(

@@ -96,7 +96,7 @@ export const mrrSeries = (
 ): Array<SeriesPoint> => {
 	const sorted = [...movements].sort((a, b) => (a.day < b.day ? -1 : 1))
 	return dayRange(last, count).map((day) => {
-		let value = sorted.length === 0 ? current : sorted[0]!.fromMrrMinor
+		let value = sorted.length === 0 ? current : sorted[0].fromMrrMinor
 		for (const movement of sorted) {
 			if (movement.day > day) break
 			value = movement.toMrrMinor

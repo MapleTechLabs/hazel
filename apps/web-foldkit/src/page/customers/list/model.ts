@@ -168,7 +168,7 @@ export const currentTab = (model: Pick<Model, "view" | "views">): ViewTab => {
 	const tabs = viewTabsOf(model.views)
 	return (
 		tabs.find((tab) => tab.key !== null && (tab.key === model.view || tab.row?.id === model.view)) ??
-		tabs[0]!
+		tabs[0]
 	)
 }
 
@@ -403,7 +403,7 @@ export const moveColumn = (
 	const index = shown.indexOf(column)
 	const target = index + step
 	if (column === "name" || index < 0 || target < 1 || target >= shown.length) return shown
-	shown[index] = shown[target]!
+	shown[index] = shown[target]
 	shown[target] = column
 	return shown
 }

@@ -65,12 +65,12 @@ const ACTION_LABEL = {
 	archive: "Archive customer…",
 } as const satisfies Record<ActionKey, string>
 
-const ACTION_REASON: Partial<Record<ActionKey, string>> = {
-	recompute: "Runs on its own every hour; no manual trigger yet.",
-	link_source: "Link records from Data sources › Unmatched for now.",
-	merge: "Not available yet.",
-	archive: "Not available yet.",
-}
+const ACTION_REASON = new Map<ActionKey, string>([
+	["recompute", "Runs on its own every hour; no manual trigger yet."],
+	["link_source", "Link records from Data sources › Unmatched for now."],
+	["merge", "Not available yet."],
+	["archive", "Not available yet."],
+])
 
 const LINK_LABEL = {
 	clerk: "Clerk organization",
@@ -322,7 +322,7 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 										[IconDots(h, icon), overlay],
 									),
 								content: (key) => {
-									const reason = ACTION_REASON[key as ActionKey]
+									const reason = ACTION_REASON.get(key as ActionKey)
 									return [
 										menuLabel(
 											h,
@@ -370,7 +370,7 @@ const tabsRow = (h: HtmlBuilder<Message>, model: Model, context: Context): Html 
 					{
 						key: "notes",
 						label: "Notes",
-						...(model.notes === null ? {} : { count: model.notes.length }),
+						count: model.notes === null ? undefined : model.notes.length,
 					},
 				],
 				selected: model.tab,
