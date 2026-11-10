@@ -37,8 +37,8 @@ const fake = makeFakeClerk({
 	domains: [DOMAIN_ACME],
 })
 
-/** The adapter's own `get`, over the fake Clerk. */
-const getOf = Effect.map(HttpClient.HttpClient, (client) => makeClerkGet(client, Redacted.make(API_KEY)))
+/** The adapter's webhook `get`, over the fake Clerk: no 429 is waited out in place. */
+const getOf = Effect.map(HttpClient.HttpClient, (client) => makeClerkGet(client, Redacted.make(API_KEY), 0))
 
 const deliver = (
 	body: string,
@@ -98,10 +98,15 @@ describe("Clerk webhook verification", () => {
 	it("refuses an event from another Clerk instance than the secret key opens", async () => {
 		const body = envelope("organization.updated", ORG_ACME)
 		const error = await run(Effect.flip(deliver(body, { instanceId: "ins_2development000000000" })))
-		expect(error.message).toMatch(/another Clerk instance/i)
+		expect(error.message).toMatch(/not stamped with the Clerk instance/i)
 		// A connection with no instance on record cannot vouch for any.
 		const unknown = await run(Effect.flip(deliver(body, { instanceId: null })))
-		expect(unknown.message).toMatch(/another Clerk instance/i)
+		expect(unknown.message).toMatch(/not stamped with the Clerk instance/i)
+		// Nor can an event that names no instance.
+		const unstamped = JSON.stringify({ ...JSON.parse(body), instance_id: null })
+		expect((await run(Effect.flip(deliver(unstamped)))).message).toMatch(
+			/not stamped with the Clerk instance/i,
+		)
 	})
 
 	it("refuses a subscribed event whose payload is malformed, rather than retrying it forever", async () => {
@@ -178,8 +183,20 @@ describe("Clerk webhook events", () => {
 			["ada@acme.com", "2026-11-10T08:21:00.000Z"],
 			["ada@acme.com", "2026-11-10T08:21:00.000Z"],
 		])
-		// Each contact with the days the user record proves; the organizations' own events write those.
-		expect(tags(ops)).toEqual(["contact", "activity", "activity", "contact", "activity", "activity"])
+		// No activity day: the user record does not say which organization they were active in.
+		expect(tags(ops)).toEqual(["contact", "contact"])
+	})
+
+	it("acknowledges user.updated when Clerk is throttling, without waiting it out", async () => {
+		const clerk = makeFakeClerk({
+			secretKey: API_KEY,
+			users: [USER_ADA],
+			memberships: [MEMBERSHIP_ADA_ADMIN],
+			throttleAfter: 0,
+			retryAfterSeconds: 1,
+		})
+		expect(await run(deliver(envelope("user.updated", USER_ADA), { clerk }))).toEqual([])
+		expect(clerk.calls).toHaveLength(1)
 	})
 
 	it("user.created for a user with no organization yet writes nothing", async () => {
@@ -193,21 +210,21 @@ describe("Clerk webhook events", () => {
 		).toEqual([])
 	})
 
-	it("session.created credits the day to the session's organization, its contact built from the membership", async () => {
+	it("session.created credits the day to the session's organization, without asking Clerk", async () => {
+		const before = fake.calls.length
 		const ops = await run(deliver(envelope("session.created", SESSION_ADA)))
-		// The contact first, with the email its membership carries: a session that lands before the
-		// membership webhook creates the same contact the membership will name, not an email-less twin.
+		expect(fake.calls.length).toBe(before)
+		// The contact is matched by its Clerk user id; nothing it does not know is written.
 		expect(ops).toEqual([
-			expect.objectContaining({
+			{
 				_tag: "contact",
 				externalId: USER_ADA.id,
 				account: { provider: "clerk", externalId: ORG_ACME.id },
-				email: "ada@acme.com",
-				name: "Ada Lovelace",
-				role: "Admin",
+				externalUrl: `https://dashboard.clerk.com/last-active?path=users/${USER_ADA.id}`,
+				observedAt: "2026-11-10T08:21:00.000Z",
 				lastSignInAt: "2026-11-10T08:21:00.000Z",
 				lastSeenAt: "2026-11-10T08:21:00.000Z",
-			}),
+			},
 			{
 				_tag: "activity",
 				contact: { provider: "clerk", externalId: USER_ADA.id },
@@ -219,17 +236,25 @@ describe("Clerk webhook events", () => {
 		])
 	})
 
-	it("session.created with no active organization asks Clerk once, then credits every account", async () => {
+	it("session.created with no active organization moves every account's sign-in, crediting none of two", async () => {
 		const before = fake.calls.length
 		const ops = await run(deliver(envelope("session.created", SESSION_ADA_NO_ORG)))
 		expect(fake.calls.slice(before).map((call) => call.path)).toEqual([
 			`/users/${USER_ADA.id}/organization_memberships`,
 		])
-		expect(
-			ops
-				.filter((op) => op._tag === "activity")
-				.map((op) => (op as { account: { externalId: string } }).account.externalId),
-		).toEqual([ORG_ACME.id, ORG_GLOBEX.id])
+		expect(tags(ops)).toEqual(["contact", "contact"])
+		expect(ops[0]).toMatchObject({ email: "ada@acme.com", lastSignInAt: "2026-11-10T08:21:00.000Z" })
+	})
+
+	it("session.created with no active organization credits the day when the user has one", async () => {
+		const clerk = makeFakeClerk({
+			secretKey: API_KEY,
+			users: [USER_ADA],
+			memberships: [MEMBERSHIP_ADA_ADMIN],
+		})
+		const ops = await run(deliver(envelope("session.created", SESSION_ADA_NO_ORG), { clerk }))
+		expect(tags(ops)).toEqual(["contact", "activity"])
+		expect(ops[1]).toMatchObject({ account: { provider: "clerk", externalId: ORG_ACME.id } })
 	})
 
 	it("session.created still succeeds when that request fails, rather than being retried for days", async () => {
@@ -237,17 +262,15 @@ describe("Clerk webhook events", () => {
 		expect(
 			await run(deliver(envelope("session.created", SESSION_ADA_NO_ORG), { clerk: broken })),
 		).toEqual([])
-		// A session that names its organization still gets that sign-in day (parked until the contact is).
-		expect(await run(deliver(envelope("session.created", SESSION_ADA), { clerk: broken }))).toEqual([
-			{
-				_tag: "activity",
-				contact: { provider: "clerk", externalId: USER_ADA.id },
-				account: { provider: "clerk", externalId: ORG_ACME.id },
-				day: "2026-11-10",
-				sessionCount: 1,
-				signedIn: true,
-			},
-		])
+	})
+
+	it("session.created for an impersonation writes nothing: the user did not sign in", async () => {
+		const before = fake.calls.length
+		const impersonated = { ...SESSION_ADA, actor: { sub: "user_2support0000000000000" } }
+		expect(await run(deliver(envelope("session.created", impersonated)))).toEqual([])
+		const unscoped = { ...SESSION_ADA_NO_ORG, actor: { sub: "user_2support0000000000000" } }
+		expect(await run(deliver(envelope("session.created", unscoped)))).toEqual([])
+		expect(fake.calls.length).toBe(before)
 	})
 
 	it("an event type nobody subscribed is acknowledged as a no-op", async () => {

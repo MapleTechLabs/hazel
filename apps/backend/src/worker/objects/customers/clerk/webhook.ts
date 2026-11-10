@@ -22,16 +22,25 @@
  * | `organizationMembership.deleted` | contact removed → `contact.removed` (never the account) |
  * | `user.created` / `user.updated` | one contact per membership Clerk lists for the user |
  * | `user.deleted` | nothing (see below) |
- * | `session.created` | the contact (`lastSignInAt`) and the day's activity (`signedIn`) |
+ * | `session.created` | the contact (`lastSignInAt`) and, in one account, the day's activity (`signedIn`) |
  *
- * `user.*` and `session.*` payloads carry no memberships, so both ask Clerk for the user's
- * (`GET /users/{id}/organization_memberships`, one request). If that request fails the delivery is
- * still acknowledged with what is known (a session's own organization's sign-in day) and the next
- * sweep fills the rest, rather than Svix retrying it for days.
+ * **Sessions.** A session scoped to an organization (`last_active_organization_id`) credits that
+ * one account, with no request to Clerk: the contact is matched by its Clerk user id. An unscoped
+ * one asks Clerk for the user's memberships and moves `lastSignInAt` in each, but credits the day
+ * only when there is exactly one (else it would count once per organization). An impersonation
+ * session (`actor` set) writes nothing: the user did not sign in.
+ *
+ * **Calls to Clerk.** `user.*` and unscoped `session.created` payloads carry no memberships, so they
+ * ask Clerk for the user's (`GET /users/{id}/organization_memberships`, one request, never retried
+ * in place: a delivery must answer before Svix times out, and a 429 means the instance is busy). If
+ * that request fails the delivery is still acknowledged (2xx) with what is known and the next sweep
+ * fills the rest: failing it would have Svix redeliver it, each retry another request to a Clerk
+ * that is already refusing.
  *
  * **`user.deleted`** carries only `{ id, deleted }` and the user is already gone, so there is no way
- * left to learn which accounts they belonged to. Clerk emits `organizationMembership.deleted` for
- * each of their memberships, and that is what removes the contacts.
+ * left to learn which accounts they belonged to. Clerk's docs do not promise an
+ * `organizationMembership.deleted` per membership; when it sends them they remove the contacts, and
+ * otherwise the next sweep does (the user is in no membership it lists).
  */
 import type { IngestOp, IsoTimestamp } from "@hazel/domain/customers"
 import { Clock, Effect, Option, Redacted, Schema } from "effect"
@@ -40,7 +49,6 @@ import {
 	CustomerWebhookRejectedError,
 } from "../provider-errors"
 import { headerOf, verifySvix } from "../svix"
-import { dayOf } from "../time"
 import { type ClerkGet, issueSummary } from "./http"
 import {
 	accountCreatedEvent,
@@ -48,7 +56,6 @@ import {
 	accountOp,
 	membershipOps,
 	type OnNoMatch,
-	sessionActivityOp,
 	sessionOps,
 } from "./map"
 import {
@@ -154,20 +161,27 @@ export const opsOfEvent = Effect.fn("Clerk.opsOfEvent")(function* (
 			return []
 		case "session.created": {
 			const session = yield* decodeAs(ClerkSession, data, type)
-			const scoped = session.last_active_organization_id ?? null
-			const memberships = yield* membershipsOfUser(get, session.user_id)
-			if (Option.isSome(memberships)) {
-				const credited =
-					scoped === null
-						? memberships.value
-						: memberships.value.filter((membership) => membership.organization?.id === scoped)
-				return sessionOps(session, credited, observed(session.created_at))
+			if (session.actor != null) {
+				yield* Effect.annotateCurrentSpan("clerk.session.impersonated", true)
+				return []
 			}
-			// Clerk could not be asked: the session's own organization still gets its sign-in day.
-			const at = isoOf(session.created_at) ?? isoOf(session.last_active_at)
-			return scoped === null || at === null
-				? []
-				: [sessionActivityOp(session.user_id, scoped, dayOf(new Date(at)))]
+			const observedAt = observed(session.created_at)
+			const scoped = session.last_active_organization_id ?? null
+			if (scoped !== null) {
+				return sessionOps({
+					session,
+					accounts: [{ organizationId: scoped }],
+					credit: true,
+					observedAt,
+				})
+			}
+			const memberships = Option.getOrElse(yield* membershipsOfUser(get, session.user_id), () => [])
+			const accounts = memberships.flatMap((membership) =>
+				membership.organization === undefined
+					? []
+					: [{ organizationId: membership.organization.id, membership }],
+			)
+			return sessionOps({ session, accounts, credit: accounts.length === 1, observedAt })
 		}
 		default:
 			return []
@@ -177,7 +191,7 @@ export const opsOfEvent = Effect.fn("Clerk.opsOfEvent")(function* (
 /**
  * Verify the delivery, then map it. Core refuses a connection with no signing secret before this.
  * `instanceId` is the Clerk instance the connection's secret key opens (`validate`'s
- * `externalAccountId`): an event stamped with any other instance is refused, so a development
+ * `externalAccountId`): an event not stamped with it is refused, so a development
  * instance's webhook cannot write into a production connection, nor make Hazel fetch its users
  * with the production key.
  */
@@ -205,11 +219,12 @@ export const receiveWebhook = Effect.fn("Clerk.receiveWebhook")(function* (input
 		),
 	)
 	yield* Effect.annotateCurrentSpan("clerk.webhook.type", envelope.type)
+	// Unstamped is refused too: only Clerk's own stamp says which instance an event is from.
 	const instance = envelope.instance_id ?? null
-	if (instance !== null && instance !== input.instanceId) {
+	if (instance === null || instance !== input.instanceId) {
 		return yield* reject(
 			"instance_mismatch",
-			"The event comes from another Clerk instance than the connection's secret key opens",
+			"The event is not stamped with the Clerk instance the connection's secret key opens",
 			{ type: envelope.type, instanceId: instance, expected: input.instanceId },
 		)
 	}

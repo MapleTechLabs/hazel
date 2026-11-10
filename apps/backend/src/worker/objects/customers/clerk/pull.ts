@@ -5,7 +5,7 @@
  * | Phase | Request | Writes | Requests per page |
  * |---|---|---|---|
  * | `organizations` | `/organizations?include_members_count=true` | accounts, incl. ones with no members | 1 |
- * | `members` | `/organization_memberships` + one batched `/users?user_id=…` | contacts, roles, sign-in days | 2 |
+ * | `members` | `/organization_memberships` + one batched `/users?user_id=…` | contacts, roles, last sign-ins | 2 |
  * | `domains` | `/organization_domains?verified=true` | the accounts' domains | 1 |
  *
  * `/organization_memberships` carries each membership's whole organization and public user data,
@@ -20,14 +20,20 @@
  *
  * Because every pull lists every organization and membership, its last page sets
  * `sweep: ["account", "contact"]` and core removes the ones it did not see (deleted while no
- * webhook reached us). Offset paging skips a record when one before it is deleted mid-sweep, so
- * each page re-reads the last {@link PAGE_OVERLAP} rows of the one before; ops carry the time
- * Clerk was asked as `observedAt`, so a record removed wrongly all the same comes back on the next
- * sweep.
+ * webhook reached us). Every listing asks for `order_by=+created_at`, oldest first, so a record
+ * created mid-sweep lands at the end rather than shifting the rows not read yet. A deletion still
+ * shifts them back, which offset paging would skip, so each page re-reads the last
+ * {@link PAGE_OVERLAP} rows of the one before, and the cursor keeps the previous page's last id: if
+ * it is not among those re-read rows, more were deleted than the overlap covers (or rows created in
+ * the same millisecond came back in another order) and something may have been skipped. The sweep
+ * then goes on but is `partial`, and its last page sets no `sweep`: nothing is removed on the
+ * strength of a listing that may have missed a record. Ops carry the time Clerk was asked as
+ * `observedAt`, so a record removed wrongly all the same comes back on the next sweep.
  */
 import type { ConnectionConfig, IngestOp, IsoTimestamp, SyncProgress } from "@hazel/domain/customers"
 import { Clock, Effect, Option, Schema } from "effect"
 import type { PullPage } from "../providers"
+import type { CustomerProviderError } from "../provider-errors"
 import type { ClerkGet } from "./http"
 import { accountOp, domainsAccountOp, membershipOps, onNoMatchOf, type OnNoMatch } from "./map"
 import { ClerkDomainsPage, ClerkMembershipsPage, ClerkOrganizationsPage, ClerkUsersList } from "./wire"
@@ -39,23 +45,27 @@ export const PAGE_OVERLAP = 10
 /** Clerk's `user_id` filter takes at most 100 ids — exactly one membership page's worth. */
 const USER_BATCH = 100
 
-export const ClerkPhase = Schema.Literals(["organizations", "members", "domains"])
-export type ClerkPhase = typeof ClerkPhase.Type
+const ClerkPhase = Schema.Literals(["organizations", "members", "domains"])
+type ClerkPhase = typeof ClerkPhase.Type
 
 /** Which phase the sweep is in and how far into it; carried on the run as JSON. */
-export const ClerkCursor = Schema.Struct({
+const ClerkCursor = Schema.Struct({
 	phase: ClerkPhase,
 	offset: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+	/** The previous page's last row, which this page must re-read. */
+	lastId: Schema.optionalKey(Schema.String),
+	/** A page may have skipped a record: the sweep removes nothing at its end. */
+	partial: Schema.optionalKey(Schema.Literal(true)),
 })
-export type ClerkCursor = typeof ClerkCursor.Type
+type ClerkCursor = typeof ClerkCursor.Type
 
 const START: ClerkCursor = { phase: "organizations", offset: 0 }
 
 const decodeDocument = Schema.decodeUnknownOption(Schema.fromJsonString(ClerkCursor))
 
-/** An unreadable cursor (a format change between deploys) restarts the sweep; ingest is idempotent. */
-export const decodeCursor = (cursor: string | null): ClerkCursor =>
-	cursor === null ? START : Option.getOrElse(decodeDocument(cursor), () => START)
+/** The run's cursor; `None` when it cannot be read (a format change between deploys). */
+export const decodeCursor = (cursor: string | null): Option.Option<ClerkCursor> =>
+	cursor === null ? Option.some(START) : decodeDocument(cursor)
 
 export const encodeCursor = (cursor: ClerkCursor): string => JSON.stringify(cursor)
 
@@ -68,49 +78,54 @@ const NEXT_PHASE = {
 /** Where a page starts: a little before the cursor, to re-read what a deletion shifted past it. */
 const startOf = (cursor: ClerkCursor): number => Math.max(0, cursor.offset - PAGE_OVERLAP)
 
-/** Where the sweep goes after a page: on in this phase, into the next one, or done. */
-const advance = (cursor: ClerkCursor, received: number, total: number | undefined): string | null => {
-	const done = startOf(cursor) + received
-	const exhausted = received < PAGE_SIZE || (total !== undefined && done >= total)
-	if (!exhausted) return encodeCursor({ phase: cursor.phase, offset: done })
-	const next = NEXT_PHASE[cursor.phase]
-	return next === null ? null : encodeCursor({ phase: next, offset: 0 })
+/** One page of a phase: its ops, the ids of the rows Clerk listed, in order, and Clerk's total. */
+interface Listing {
+	readonly ops: ReadonlyArray<IngestOp>
+	readonly ids: ReadonlyArray<string>
+	readonly total: number | undefined
 }
 
-const pageOf = (
-	cursor: ClerkCursor,
-	ops: ReadonlyArray<IngestOp>,
-	received: number,
-	total: number | undefined,
-): PullPage => {
-	const nextCursor = advance(cursor, received, total)
-	const progress: SyncProgress = {
-		step: cursor.phase,
-		done: startOf(cursor) + received,
-		total: total ?? null,
-	}
-	// Only the last page of a sweep, which listed every organization and membership.
-	return nextCursor === null
-		? { ops, nextCursor, progress, sweep: ["account", "contact"] }
-		: { ops, nextCursor, progress }
+/** The previous page's last row is not among the rows this page re-read: rows shifted past it. */
+const shiftedPast = (cursor: ClerkCursor, ids: ReadonlyArray<string>): boolean =>
+	cursor.lastId !== undefined && !ids.slice(0, PAGE_OVERLAP).includes(cursor.lastId)
+
+const pageOf = (cursor: ClerkCursor, { ops, ids, total }: Listing, partial: boolean): PullPage => {
+	const done = startOf(cursor) + ids.length
+	const exhausted = ids.length < PAGE_SIZE || (total !== undefined && done >= total)
+	const flag = partial ? { partial: true as const } : {}
+	const nextPhase = NEXT_PHASE[cursor.phase]
+	// A page that is not the phase's last is full, so it has a last row.
+	const lastId = ids.at(-1)
+	const next: ClerkCursor | null =
+		!exhausted && lastId !== undefined
+			? { phase: cursor.phase, offset: done, lastId, ...flag }
+			: nextPhase === null
+				? null
+				: { phase: nextPhase, offset: 0, ...flag }
+	const progress: SyncProgress = { step: cursor.phase, done, total: total ?? null }
+	if (next !== null) return { ops, nextCursor: encodeCursor(next), progress }
+	// Only the last page of a sweep that listed every organization and membership, none skipped.
+	return partial
+		? { ops, nextCursor: null, progress }
+		: { ops, nextCursor: null, progress, sweep: ["account", "contact"] }
 }
 
+/** Oldest first: a record created mid-sweep lands after the rows not read yet. */
 const query = (cursor: ClerkCursor, extra: ReadonlyArray<readonly [string, string]> = []) => [
 	["limit", String(PAGE_SIZE)] as const,
 	["offset", String(startOf(cursor))] as const,
+	["order_by", "+created_at"] as const,
 	...extra,
 ]
 
 const organizationsPage = (get: ClerkGet, cursor: ClerkCursor, onNoMatch: OnNoMatch, at: IsoTimestamp) =>
 	Effect.map(
 		get("/organizations", query(cursor, [["include_members_count", "true"]]), ClerkOrganizationsPage),
-		(body) =>
-			pageOf(
-				cursor,
-				body.data.map((org) => accountOp(org, onNoMatch, at)),
-				body.data.length,
-				body.total_count,
-			),
+		(body): Listing => ({
+			ops: body.data.map((org) => accountOp(org, onNoMatch, at)),
+			ids: body.data.map((org) => org.id),
+			total: body.total_count,
+		}),
 	)
 
 const membersPage = Effect.fn("Clerk.membersPage")(function* (
@@ -118,7 +133,7 @@ const membersPage = Effect.fn("Clerk.membersPage")(function* (
 	cursor: ClerkCursor,
 	onNoMatch: OnNoMatch,
 	at: IsoTimestamp,
-) {
+): Effect.fn.Return<Listing, CustomerProviderError> {
 	const body = yield* get("/organization_memberships", query(cursor), ClerkMembershipsPage)
 	const userIds = [
 		...new Set(
@@ -155,13 +170,17 @@ const membersPage = Effect.fn("Clerk.membersPage")(function* (
 			observedAt: at,
 		}),
 	)
-	return pageOf(cursor, [...accounts, ...members], body.data.length, body.total_count)
+	return {
+		ops: [...accounts, ...members],
+		ids: body.data.map((membership) => membership.id),
+		total: body.total_count,
+	}
 })
 
 const domainsPage = (get: ClerkGet, cursor: ClerkCursor, onNoMatch: OnNoMatch, at: IsoTimestamp) =>
 	Effect.map(
 		get("/organization_domains", query(cursor, [["verified", "true"]]), ClerkDomainsPage),
-		(body) => {
+		(body): Listing => {
 			const byOrganization = new Map<string, Array<string>>()
 			for (const domain of body.data) {
 				const names = byOrganization.get(domain.organization_id)
@@ -171,7 +190,7 @@ const domainsPage = (get: ClerkGet, cursor: ClerkCursor, onNoMatch: OnNoMatch, a
 			const ops = [...byOrganization].map(([organizationId, names]) =>
 				domainsAccountOp(organizationId, names, onNoMatch, at),
 			)
-			return pageOf(cursor, ops, body.data.length, body.total_count)
+			return { ops, ids: body.data.map((domain) => domain.id), total: body.total_count }
 		},
 	)
 
@@ -180,21 +199,34 @@ export const pullPage = Effect.fn("Clerk.pullPage")(function* (input: {
 	readonly cursor: string | null
 	readonly config: ConnectionConfig
 }) {
-	const cursor = decodeCursor(input.cursor)
+	const decoded = decodeCursor(input.cursor)
+	// Restarting is safe (ingest is idempotent), but a sweep that keeps restarting never finishes.
+	if (Option.isNone(decoded))
+		yield* Effect.logWarning("Clerk sweep cursor unreadable; restarting the sweep")
+	const cursor = Option.getOrElse(decoded, () => START)
 	const onNoMatch = onNoMatchOf(input.config)
 	// A listing proves its records live as of the request: the ops' `observedAt`.
 	const at = new Date(yield* Clock.currentTimeMillis).toISOString()
-	const page: PullPage =
+	const listing =
 		cursor.phase === "organizations"
 			? yield* organizationsPage(input.get, cursor, onNoMatch, at)
 			: cursor.phase === "members"
 				? yield* membersPage(input.get, cursor, onNoMatch, at)
 				: yield* domainsPage(input.get, cursor, onNoMatch, at)
+	const shifted = shiftedPast(cursor, listing.ids)
+	if (shifted) {
+		yield* Effect.logWarning("Clerk sweep may have skipped rows; it will remove nothing at its end", {
+			phase: cursor.phase,
+			offset: startOf(cursor),
+		})
+	}
+	const page = pageOf(cursor, listing, cursor.partial === true || shifted)
 	yield* Effect.annotateCurrentSpan({
 		"clerk.phase": cursor.phase,
 		"clerk.offset": startOf(cursor),
-		"clerk.received": page.progress.done - startOf(cursor),
-		"clerk.total_count": page.progress.total ?? -1,
+		"clerk.received": listing.ids.length,
+		"clerk.total_count": listing.total ?? -1,
+		"clerk.shifted": shifted,
 		"clerk.sweep_complete": page.sweep !== undefined,
 	})
 	return page

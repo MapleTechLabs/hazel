@@ -2,12 +2,7 @@
  * Clerk records → `IngestOp`s, over the recorded payloads in `./fixtures.ts` (decoded through the
  * wire schemas first, so the schemas are held to the real shapes too).
  */
-import {
-	IngestOp,
-	type RecordActivity,
-	type UpsertAccount,
-	type UpsertContact,
-} from "@hazel/domain/customers"
+import { IngestOp, type UpsertAccount, type UpsertContact } from "@hazel/domain/customers"
 import { Schema } from "effect"
 import { describe, expect, it } from "vitest"
 import {
@@ -15,7 +10,6 @@ import {
 	MEMBERSHIP_ADA_ADMIN,
 	MEMBERSHIP_ADA_GLOBEX,
 	MEMBERSHIP_GRACE_MEMBER,
-	MS,
 	ORG_ACME,
 	ORG_GLOBEX,
 	SESSION_ADA,
@@ -26,7 +20,6 @@ import {
 	accountCreatedEvent,
 	accountDeletedOp,
 	accountOp,
-	activityOps,
 	contactOp,
 	domainsAccountOp,
 	membershipOps,
@@ -134,6 +127,16 @@ describe("contactOp", () => {
 		expect(mapped).not.toHaveProperty("lastSeenAt")
 	})
 
+	it("leaves what the public user data does not say as it is, rather than clearing it", () => {
+		const mapped = contactOp({
+			membership: member({ ...MEMBERSHIP_GRACE_MEMBER, public_user_data: { user_id: grace.id } }),
+			organizationId: acme.id,
+		})
+		expect(mapped).not.toHaveProperty("email")
+		expect(mapped).not.toHaveProperty("name")
+		expect(mapped).not.toHaveProperty("avatarUrl")
+	})
+
 	it("names the role from its key when Clerk sends no display name", () => {
 		expect(
 			contactOp({ membership: member(MEMBERSHIP_ADA_GLOBEX), organizationId: globex.id })?.role,
@@ -148,7 +151,8 @@ describe("contactOp", () => {
 			}),
 			organizationId: acme.id,
 		})
-		expect(mapped?.email).toBeNull()
+		// A username says nothing about the address: the stored one is left as it is.
+		expect(mapped).not.toHaveProperty("email")
 		// The user record has no verified address either: a contact with no email, not a wrong one.
 		expect(
 			contactOp({ membership: member(MEMBERSHIP_GRACE_MEMBER), organizationId: acme.id, user: grace })
@@ -164,45 +168,7 @@ describe("contactOp", () => {
 	})
 })
 
-describe("activityOps", () => {
-	it("marks the sign-in day and the last active day, each once", () => {
-		expect(activityOps(ada, acme.id)).toEqual([
-			{
-				_tag: "activity",
-				contact: { provider: "clerk", externalId: ada.id },
-				account: { provider: "clerk", externalId: acme.id },
-				day: "2026-11-09",
-				sessionCount: 1,
-				signedIn: true,
-			},
-			{
-				_tag: "activity",
-				contact: { provider: "clerk", externalId: ada.id },
-				account: { provider: "clerk", externalId: acme.id },
-				day: "2026-11-10",
-				sessionCount: 1,
-			},
-		] satisfies Array<RecordActivity>)
-	})
-
-	it("collapses to one day when the sign-in was the last activity", () => {
-		const sameDay = user({ ...USER_ADA, last_active_at: MS("2026-11-09T19:00:00.000Z") })
-		expect(activityOps(sameDay, acme.id)).toEqual([
-			{
-				_tag: "activity",
-				contact: { provider: "clerk", externalId: ada.id },
-				account: { provider: "clerk", externalId: acme.id },
-				day: "2026-11-09",
-				sessionCount: 1,
-				signedIn: true,
-			},
-		])
-	})
-
-	it("writes no activity for a user who has never signed in", () => {
-		expect(activityOps(grace, acme.id)).toEqual([])
-	})
-
+describe("timestamps", () => {
 	it("drops a timestamp outside 1970–9999 rather than emit an op ingest refuses", () => {
 		const odd = user({
 			...USER_ADA,
@@ -210,7 +176,6 @@ describe("activityOps", () => {
 			last_active_at: -86_400_000,
 			created_at: 253_402_300_800_000,
 		})
-		expect(activityOps(odd, acme.id)).toEqual([])
 		const ops = membershipOps({
 			membership: member({ ...MEMBERSHIP_ADA_ADMIN, created_at: 9e15 }),
 			user: odd,
@@ -223,12 +188,13 @@ describe("activityOps", () => {
 })
 
 describe("membershipOps", () => {
-	it("orders the account before the contact that names it, then its activity", () => {
+	it("orders the account before the contact that names it, and writes no activity day", () => {
+		// Clerk's last sign-in does not say which of the user's organizations it was in.
 		expect(
 			membershipOps({ membership: member(MEMBERSHIP_ADA_ADMIN), user: ada, onNoMatch: "create" }).map(
 				(op) => op._tag,
 			),
-		).toEqual(["account", "contact", "activity", "activity"])
+		).toEqual(["account", "contact"])
 	})
 
 	it("skips the account when the sweep already wrote it in this page", () => {
@@ -239,10 +205,10 @@ describe("membershipOps", () => {
 				onNoMatch: "create",
 				withAccount: false,
 			}).map((op) => op._tag),
-		).toEqual(["contact", "activity", "activity"])
+		).toEqual(["contact"])
 	})
 
-	it("writes only the contact for a removal: no activity, and no account op to revive a deleted org", () => {
+	it("writes only the contact for a removal: no account op to revive a deleted org", () => {
 		expect(
 			membershipOps({
 				membership: member(MEMBERSHIP_ADA_ADMIN),
@@ -295,13 +261,16 @@ describe("events", () => {
 })
 
 describe("sessionOps", () => {
+	const observedAt = "2026-11-10T08:21:00.000Z"
+
 	it("writes the contact from the membership, email included, before the sign-in day", () => {
 		expect(
-			sessionOps(
-				session(SESSION_ADA),
-				[member(MEMBERSHIP_ADA_ADMIN), member(MEMBERSHIP_ADA_GLOBEX)],
-				"2026-11-10T08:21:00.000Z",
-			),
+			sessionOps({
+				session: session(SESSION_ADA),
+				accounts: [{ organizationId: acme.id, membership: member(MEMBERSHIP_ADA_ADMIN) }],
+				credit: true,
+				observedAt,
+			}),
 		).toEqual([
 			{
 				_tag: "contact",
@@ -313,7 +282,7 @@ describe("sessionOps", () => {
 				avatarUrl: null,
 				role: "Admin",
 				joinedAt: "2026-01-14T09:12:00.000Z",
-				observedAt: "2026-11-10T08:21:00.000Z",
+				observedAt,
 				lastSignInAt: "2026-11-10T08:21:00.000Z",
 				lastSeenAt: "2026-11-10T08:21:00.000Z",
 			},
@@ -325,18 +294,41 @@ describe("sessionOps", () => {
 				sessionCount: 1,
 				signedIn: true,
 			},
-			expect.objectContaining({
-				_tag: "contact",
-				account: { provider: "clerk", externalId: globex.id },
-			}),
-			expect.objectContaining({
-				_tag: "activity",
-				account: { provider: "clerk", externalId: globex.id },
-			}),
 		])
 	})
 
+	it("names only the user and account for the session's own organization, Clerk not asked", () => {
+		expect(
+			sessionOps({
+				session: session(SESSION_ADA),
+				accounts: [{ organizationId: acme.id }],
+				credit: true,
+				observedAt,
+			})[0],
+		).toEqual({
+			_tag: "contact",
+			externalId: ada.id,
+			account: { provider: "clerk", externalId: acme.id },
+			externalUrl: `https://dashboard.clerk.com/last-active?path=users/${ada.id}`,
+			observedAt,
+			lastSignInAt: "2026-11-10T08:21:00.000Z",
+			lastSeenAt: "2026-11-10T08:21:00.000Z",
+		} satisfies UpsertContact)
+	})
+
+	it("moves the sign-in in every account but credits no day when told not to", () => {
+		const ops = sessionOps({
+			session: session(SESSION_ADA),
+			accounts: [
+				{ organizationId: acme.id, membership: member(MEMBERSHIP_ADA_ADMIN) },
+				{ organizationId: globex.id, membership: member(MEMBERSHIP_ADA_GLOBEX) },
+			],
+			credit: false,
+		})
+		expect(ops.map((op) => op._tag)).toEqual(["contact", "contact"])
+	})
+
 	it("writes nothing for a user Clerk lists in no organization", () => {
-		expect(sessionOps(session(SESSION_ADA), [])).toEqual([])
+		expect(sessionOps({ session: session(SESSION_ADA), accounts: [], credit: true })).toEqual([])
 	})
 })

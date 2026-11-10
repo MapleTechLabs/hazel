@@ -5,7 +5,7 @@
  * cannot read fails the run).
  */
 import type { ConnectionConfig, IngestOp, UpsertAccount } from "@hazel/domain/customers"
-import { Effect, Fiber, Layer, Redacted } from "effect"
+import { Effect, Fiber, Layer, Option, Redacted } from "effect"
 import { HttpClient, HttpClientError, HttpClientResponse } from "effect/http"
 import { TestClock } from "effect/testing"
 import type { PullPage } from "../providers"
@@ -93,16 +93,15 @@ describe("the Clerk sweep", () => {
 		const fake = instance()
 		await sweep(fake)
 		const paramsOf = (path: string) => fake.calls.find((call) => call.path === path)!.params
-		expect(paramsOf("/organizations")).toEqual([
+		// Every listing oldest first, so a record created mid-sweep cannot shift the rows not read yet.
+		const paging = [
 			["limit", "100"],
 			["offset", "0"],
-			["include_members_count", "true"],
-		])
-		expect(paramsOf("/organization_domains")).toEqual([
-			["limit", "100"],
-			["offset", "0"],
-			["verified", "true"],
-		])
+			["order_by", "+created_at"],
+		]
+		expect(paramsOf("/organizations")).toEqual([...paging, ["include_members_count", "true"]])
+		expect(paramsOf("/organization_memberships")).toEqual(paging)
+		expect(paramsOf("/organization_domains")).toEqual([...paging, ["verified", "true"]])
 		expect(paramsOf("/users")).toEqual([
 			["limit", "100"],
 			["user_id", USER_ADA.id],
@@ -110,22 +109,13 @@ describe("the Clerk sweep", () => {
 		])
 	})
 
-	it("writes the accounts, then the members with their activity, then the merged domains", async () => {
+	it("writes the accounts, then the members, then the merged domains", async () => {
 		const [organizations, members, domains] = await sweep(instance())
 		expect(tags(organizations!.ops)).toEqual(["account", "account"])
 
-		// Both organizations once each, before any contact that names them.
-		expect(tags(members!.ops)).toEqual([
-			"account",
-			"account",
-			"contact",
-			"activity",
-			"activity",
-			"contact",
-			"contact",
-			"activity",
-			"activity",
-		])
+		// Both organizations once each, before any contact that names them. No activity day: Clerk
+		// does not say which organization a user was last active in, and Ada is in two.
+		expect(tags(members!.ops)).toEqual(["account", "account", "contact", "contact", "contact"])
 		expect(
 			members!.ops
 				.filter((op): op is UpsertAccount => op._tag === "account")
@@ -173,7 +163,9 @@ describe("the Clerk sweep", () => {
 		const first = await run(page(fake, null))
 		expect(first.ops).toHaveLength(PAGE_SIZE)
 		expect(first.sweep).toBeUndefined()
-		expect(first.nextCursor).toBe(encodeCursor({ phase: "organizations", offset: PAGE_SIZE }))
+		expect(first.nextCursor).toBe(
+			encodeCursor({ phase: "organizations", offset: PAGE_SIZE, lastId: many[PAGE_SIZE - 1]!.id }),
+		)
 		const second = await run(page(fake, first.nextCursor))
 		expect(second.ops).toHaveLength(20 + PAGE_OVERLAP)
 		expect(second.progress).toEqual({
@@ -200,6 +192,25 @@ describe("the Clerk sweep", () => {
 		const second = await run(page(instance({ organizations: remaining }), first.nextCursor))
 		const seen = new Set([...first.ops, ...second.ops].map((op) => (op as UpsertAccount).externalId))
 		expect(remaining.every((org) => seen.has(org.id))).toBe(true)
+		// The overlap covered the shift, so the sweep stays whole.
+		expect(second.nextCursor).toBe(encodeCursor({ phase: "members", offset: 0 }))
+	})
+
+	it("removes nothing at the end of a sweep when more rows were deleted than the overlap re-reads", async () => {
+		const many = Array.from({ length: PAGE_SIZE + 20 }, (_, index) => ({
+			...ORG_GLOBEX,
+			id: `org_${String(index).padStart(20, "0")}`,
+		}))
+		const first = await run(page(instance({ organizations: many }), null))
+		// More deletions before the cursor than the overlap: rows shifted past the next page's start.
+		const remaining = many.filter((_, index) => index < 3 || index > PAGE_OVERLAP + 3)
+		const fake = instance({ organizations: remaining })
+		const second = await run(page(fake, first.nextCursor))
+		expect(second.nextCursor).toBe(encodeCursor({ phase: "members", offset: 0, partial: true }))
+		const members = await run(page(fake, second.nextCursor))
+		const domains = await run(page(fake, members.nextCursor))
+		expect(domains.nextCursor).toBeNull()
+		expect(domains.sweep).toBeUndefined()
 	})
 
 	it("skips the users request for a membership page with no public user data", async () => {
@@ -209,12 +220,21 @@ describe("the Clerk sweep", () => {
 		expect(tags(result.ops)).toEqual(["account"])
 	})
 
-	it("restarts the sweep from a cursor it cannot read, rather than failing the run", () => {
-		expect(decodeCursor(null)).toEqual({ phase: "organizations", offset: 0 })
-		expect(decodeCursor("{")).toEqual({ phase: "organizations", offset: 0 })
-		expect(decodeCursor('{"phase":"invoices","offset":0}')).toEqual({ phase: "organizations", offset: 0 })
-		expect(decodeCursor('{"phase":"members","offset":-1}')).toEqual({ phase: "organizations", offset: 0 })
-		expect(decodeCursor('{"phase":"domains","offset":300}')).toEqual({ phase: "domains", offset: 300 })
+	it("reads a cursor, and knows one it cannot read", () => {
+		expect(decodeCursor(null)).toEqual(Option.some({ phase: "organizations", offset: 0 }))
+		expect(decodeCursor("{")).toEqual(Option.none())
+		expect(decodeCursor('{"phase":"invoices","offset":0}')).toEqual(Option.none())
+		expect(decodeCursor('{"phase":"members","offset":-1}')).toEqual(Option.none())
+		expect(decodeCursor('{"phase":"domains","offset":300}')).toEqual(
+			Option.some({ phase: "domains", offset: 300 }),
+		)
+	})
+
+	it("restarts the sweep from a cursor it cannot read, rather than failing the run", async () => {
+		const fake = instance()
+		const result = await run(page(fake, "{"))
+		expect(result.progress.step).toBe("organizations")
+		expect(fake.calls.map((call) => call.path)).toEqual(["/organizations"])
 	})
 })
 
@@ -226,6 +246,15 @@ describe("when Clerk refuses", () => {
 		// Clerk's own explanation reaches the UI; the key never does.
 		expect(error.message).toMatch(/Clerk rejected the secret key \(401\)/)
 		expect(error.message).not.toContain("sk_test_wrong")
+	})
+
+	it("truncates Clerk's explanation of a refused key, and keeps it out of any other refusal", async () => {
+		const refusing = (status: number) =>
+			answering(() => Response.json({ errors: [{ long_message: "x".repeat(1_000) }] }, { status }))
+		const auth = await run(Effect.flip(pageOver(refusing(401), null)))
+		expect(auth.message.length).toBeLessThan(300)
+		const other = await run(Effect.flip(pageOver(refusing(422), null)))
+		expect(other.message).toBe("Clerk refused GET /organizations (422)")
 	})
 
 	it("waits out a short Retry-After and finishes the page", async () => {
@@ -259,7 +288,8 @@ describe("when Clerk refuses", () => {
 		const error = await run(
 			Effect.gen(function* () {
 				const fiber = yield* Effect.forkChild(Effect.flip(page(fake, null)))
-				yield* TestClock.adjust(10_000)
+				// A second at a time, so each retry's sleep is reached before the clock passes it.
+				for (let second = 0; second < 5; second++) yield* TestClock.adjust(1_000)
 				return yield* Fiber.join(fiber)
 			}).pipe(Effect.provide(TestClock.layer())),
 		)

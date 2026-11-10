@@ -49,7 +49,7 @@ export type ClerkPublicUserData = typeof ClerkPublicUserData.Type
 
 /** A membership carries its whole organization, so one list gives accounts, contacts and roles. */
 export const ClerkMembership = Schema.Struct({
-	id: Schema.optionalKey(Schema.String),
+	id: Schema.String,
 	/** `org:admin`, `org:member`, or a custom role key. */
 	role: Nullable(Schema.String),
 	/** The role's display name ("Admin"), when Clerk sends it. */
@@ -85,7 +85,7 @@ export const ClerkUser = Schema.Struct({
 export type ClerkUser = typeof ClerkUser.Type
 
 export const ClerkOrganizationDomain = Schema.Struct({
-	id: Schema.optionalKey(Schema.String),
+	id: Schema.String,
 	organization_id: Schema.String,
 	name: Schema.String,
 })
@@ -96,6 +96,8 @@ export const ClerkSession = Schema.Struct({
 	user_id: Schema.String,
 	/** The organization the session is scoped to; null until the user picks one. */
 	last_active_organization_id: Nullable(Schema.String),
+	/** Set on an impersonation (or agent) session: the user did not sign in themselves. */
+	actor: Nullable(Schema.Unknown),
 	created_at: Nullable(Schema.Number),
 	last_active_at: Nullable(Schema.Number),
 })
@@ -110,7 +112,7 @@ export const ClerkDeletedObject = Schema.Struct({
 export type ClerkDeletedObject = typeof ClerkDeletedObject.Type
 
 /** `{ data, total_count }`, the shape of every list endpoint Hazel pages through. */
-export const ClerkPage = <S extends Schema.Top>(item: S) =>
+const ClerkPage = <S extends Schema.Top>(item: S) =>
 	Schema.Struct({ data: Schema.Array(item), total_count: Schema.optionalKey(Schema.Number) })
 
 export const ClerkOrganizationsPage = ClerkPage(ClerkOrganization)

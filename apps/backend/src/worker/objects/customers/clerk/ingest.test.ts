@@ -1,7 +1,7 @@
 /**
  * The Clerk mapping against the real `CustomerIngest`, in a `CustomersObject` on node SQLite: the
- * ops this adapter produces have to resolve the identities they name, merge domains, land the
- * activity days and stay idempotent across a redelivery.
+ * ops this adapter produces have to resolve the identities they name, merge domains, land a
+ * session's activity day and stay idempotent across a redelivery.
  */
 import { Effect, Schema, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
@@ -24,6 +24,7 @@ import { ClerkMembership, ClerkOrganization, ClerkSession, ClerkUser } from "./w
 const org = Schema.decodeUnknownSync(ClerkOrganization)
 const user = Schema.decodeUnknownSync(ClerkUser)
 const member = Schema.decodeUnknownSync(ClerkMembership)
+const session = Schema.decodeUnknownSync(ClerkSession)
 
 const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
 	Effect.runPromise(Effect.scoped(effect) as Effect.Effect<A, E>)
@@ -85,7 +86,7 @@ const refs = (world: CustomersWorld) =>
 	)
 
 describe("Clerk ops through CustomerIngest", () => {
-	it("creates the accounts, their members and the days Clerk knows they were active", () =>
+	it("creates the accounts and their members, with no activity day a user record cannot place", () =>
 		run(
 			Effect.gen(function* () {
 				const world = yield* makeCustomersWorld
@@ -139,13 +140,9 @@ describe("Clerk ops through CustomerIngest", () => {
 					},
 				])
 
-				// Grace has never signed in: no activity row, so she cannot count as an active user.
-				expect(activity(world)).toEqual([
-					{ day: "2026-11-09", signedIn: 1, sessionCount: 1, account: "Acme Analytics" },
-					{ day: "2026-11-10", signedIn: 0, sessionCount: 1, account: "Acme Analytics" },
-					{ day: "2026-11-09", signedIn: 1, sessionCount: 1, account: "Globex" },
-					{ day: "2026-11-10", signedIn: 0, sessionCount: 1, account: "Globex" },
-				])
+				// Ada's last sign-in does not say which of her two organizations it was in: a sweep writes
+				// no activity day, so neither account is credited with it.
+				expect(activity(world)).toEqual([])
 
 				// The Clerk org id is the account's ref — the shared id Stripe, Autumn and Maple match on.
 				expect(refs(world)).toEqual([
@@ -202,15 +199,47 @@ describe("Clerk ops through CustomerIngest", () => {
 				yield* world.ingest("clerk", backfill)
 				yield* world.ingest(
 					"clerk",
-					sessionOps(Schema.decodeUnknownSync(ClerkSession)(SESSION_ADA), [
-						member(MEMBERSHIP_ADA_ADMIN),
-					]),
+					sessionOps({
+						session: session(SESSION_ADA),
+						accounts: [{ organizationId: ORG_ACME.id }],
+						credit: true,
+					}),
 				)
-				expect(activity(world).filter((row) => row.account === "Acme Analytics")).toEqual([
-					{ day: "2026-11-09", signedIn: 1, sessionCount: 1, account: "Acme Analytics" },
-					// The same day Clerk had only reported activity on is now a sign-in.
+				expect(activity(world)).toEqual([
 					{ day: "2026-11-10", signedIn: 1, sessionCount: 1, account: "Acme Analytics" },
 				])
+				// Matched by the Clerk user id: the contact keeps what the session does not say.
+				expect(
+					contacts(world).find((row) => row.account === "Acme Analytics" && row.role === "Admin"),
+				).toEqual({
+					email: "ada@acme.com",
+					name: "Ada Lovelace",
+					role: "Admin",
+					account: "Acme Analytics",
+					lastSignInAt: "2026-11-10 08:21:00.000",
+					deletedAt: null,
+				})
+			}),
+		))
+
+	it("leaves a contact's email and name alone when a membership webhook's public data omits them", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", backfill)
+				yield* world.ingest(
+					"clerk",
+					membershipOps({
+						membership: member({
+							...MEMBERSHIP_ADA_ADMIN,
+							public_user_data: { user_id: USER_ADA.id },
+						}),
+						onNoMatch: "create",
+					}),
+				)
+				expect(
+					contacts(world).filter((row) => row.account === "Acme Analytics" && row.role === "Admin"),
+				).toEqual([expect.objectContaining({ email: "ada@acme.com", name: "Ada Lovelace" })])
 			}),
 		))
 
@@ -222,16 +251,19 @@ describe("Clerk ops through CustomerIngest", () => {
 				yield* world.ingest("clerk", [accountOp(org(ORG_ACME), "create")])
 				yield* world.ingest(
 					"clerk",
-					sessionOps(Schema.decodeUnknownSync(ClerkSession)(SESSION_ADA), [
-						member(MEMBERSHIP_ADA_ADMIN),
-					]),
+					sessionOps({
+						session: session(SESSION_ADA),
+						accounts: [{ organizationId: ORG_ACME.id }],
+						credit: true,
+					}),
 				)
 				expect(activity(world)).toEqual([
 					{ day: "2026-11-10", signedIn: 1, sessionCount: 1, account: "Acme Analytics" },
 				])
 				// The activity belongs to a real contact, not to the unmatched queue.
 				expect(world.rows(`SELECT count(*) AS n FROM customer_unmatched_records`)).toEqual([{ n: 0 }])
-				// ...and the membership webhook then lands on that same contact, which already has its email.
+				// ...and the membership webhook then lands on that same contact (by its Clerk user id) and
+				// fills in what the session could not say.
 				yield* world.ingest(
 					"clerk",
 					membershipOps({ membership: member(MEMBERSHIP_ADA_ADMIN), onNoMatch: "create" }),
@@ -290,9 +322,7 @@ describe("Clerk ops through CustomerIngest", () => {
 						`SELECT type FROM customer_events WHERE type LIKE 'contact.%' ORDER BY type`,
 					),
 				).toEqual([
-					// Ada, in each of her two accounts; Grace was never active.
-					{ type: "contact.first_active" },
-					{ type: "contact.first_active" },
+					// A sweep writes no activity day, so no one is first active yet.
 					{ type: "contact.joined" },
 					{ type: "contact.joined" },
 					{ type: "contact.joined" },

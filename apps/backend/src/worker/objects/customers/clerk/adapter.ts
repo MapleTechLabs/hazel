@@ -12,7 +12,7 @@
  * applies them.
  *
  * Only the connection's instance (`credentials.externalAccountId`, what `validate` found): a
- * delivery stamped with another `instance_id` is refused (`./webhook.ts`). A secret key opens
+ * delivery not stamped with its `instance_id` is refused (`./webhook.ts`). A secret key opens
  * exactly one instance, and a new key is validated again (core drops the old instance's data when
  * it differs), so what a pull lists is always the connection's instance.
  */
@@ -83,7 +83,8 @@ export const makeClerkAdapter = Effect.gen(function* () {
 			credentials.webhookSecret === null
 				? Effect.die("Clerk webhook called without a signing secret")
 				: receiveWebhook({
-						get: getOf(credentials),
+						// A delivery answers fast: a 429 is not waited out in place (`./webhook.ts`).
+						get: makeClerkGet(client, credentials.apiKey, 0),
 						headers: request.headers,
 						body: request.body,
 						webhookSecret: credentials.webhookSecret,
