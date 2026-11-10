@@ -2016,7 +2016,9 @@ const make = Effect.gen(function* () {
 					result._tag === "Succeeded"
 						? {
 								lastSyncAt: now,
-								lastSuccessAt: now,
+								// The next pull's watermark: records changed while a long run walked its
+								// earlier phases are newer than its start, not its finish.
+								lastSuccessAt: run.startedAt,
 								lastError: null,
 								consecutiveFailures: 0,
 								// `undefined` leaves a column as it is.

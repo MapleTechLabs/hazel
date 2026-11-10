@@ -340,6 +340,74 @@ describe("Customers compute and sync loop", () => {
 			}),
 		))
 
+	it("pulls incrementally from the previous run's start, not its finish", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				const connectionId = world.connection("clerk")
+				const pulls: Array<{ cursor: string | null; since: Date | null }> = []
+				let stalled = true
+				const adapter: CustomerProviderAdapter = {
+					...scriptedAdapter([]),
+					pull: ({ cursor, since }) => {
+						pulls.push({ cursor, since })
+						if (cursor === null) return Effect.succeed(page([], "page-2"))
+						return stalled
+							? Effect.fail(
+									new CustomerProviderError({
+										code: "provider",
+										message: "Clerk timed out",
+										httpStatus: 504,
+										retryAfterMs: null,
+									}),
+								)
+							: Effect.succeed(page([], null))
+					},
+				}
+				const services = Layer.mergeAll(
+					CustomerIngest.layer,
+					encryption,
+					Layer.succeed(
+						CustomerProviders,
+						CustomerProviders.of({ get: () => Option.some(adapter) }),
+					),
+				)
+				yield* world.object
+					.run(
+						Effect.gen(function* () {
+							yield* storeSecrets(connectionId, yield* encryptSecrets("sk_test", null))
+						}).pipe(Effect.provide(encryption)),
+					)
+					.pipe(Effect.orDie)
+				const pull = () => {
+					world.object.storage.db
+						.prepare(
+							`UPDATE customer_connections SET nextSyncAt = '2000-01-01 00:00:00.000' WHERE id = ?`,
+						)
+						.run(connectionId)
+					return world.object.run(runDuePullsWith(services)(NOW)).pipe(Effect.orDie)
+				}
+				// A backfill that walked its phases for hours: its first page landed long before it ends.
+				const startedAt = "2026-01-01 00:00:00.000"
+				yield* pull()
+				world.object.storage.db
+					.prepare(`UPDATE customer_sync_runs SET startedAt = ? WHERE connectionId = ?`)
+					.run(startedAt, connectionId)
+				stalled = false
+				pulls.length = 0
+				yield* pull()
+				expect(pulls).toEqual([{ cursor: "page-2", since: null }])
+				expect(
+					world.rows(`SELECT lastSuccessAt FROM customer_connections WHERE id = ?`, connectionId),
+				).toEqual([{ lastSuccessAt: startedAt }])
+
+				// The next pull reaches back to the backfill's start (with the overlap).
+				pulls.length = 0
+				yield* pull()
+				expect(pulls[0]).toEqual({ cursor: null, since: new Date(epoch(startedAt) - 10 * 60_000) })
+			}),
+		))
+
 	it("backs compute off when it fails instead of retrying on every alarm", () =>
 		run(
 			Effect.gen(function* () {

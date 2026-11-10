@@ -77,10 +77,11 @@ export interface CustomerIngestApi {
 	) => Effect.Effect<void, DatabaseError>
 
 	/**
-	 * Close a run (or record a retryable failure on it) and update its connection (`lastSuccessAt` /
-	 * `lastErrorAt`, `consecutiveFailures`). A successful `backfill` sets `backfilledAt` and arms the
-	 * silent baseline evaluation (`docs/customers/tech-design.md` §4.7); the connection's first one
-	 * also rebuilds the daily history.
+	 * Close a run (or record a retryable failure on it) and update its connection (`lastSuccessAt`, set
+	 * to the run's start as the next pull's watermark, or `lastErrorAt`; `consecutiveFailures`). A
+	 * successful `backfill` sets `backfilledAt` and arms the silent baseline evaluation
+	 * (`docs/customers/tech-design.md` §4.7); the connection's first one also rebuilds the daily
+	 * history.
 	 */
 	readonly finishRun: (runId: CustomerSyncRunId, result: RunResult) => Effect.Effect<void, DatabaseError>
 
