@@ -20,6 +20,7 @@ import type { ChatSyncProviders } from "../../../services/chat-sync/chat-sync-pr
 import { aiReceivers, AiEffects } from "./ai-effects"
 import { botGatewayReceivers, BotGatewayEffects } from "./bot-gateway-effects"
 import { channelReceivers, ChannelEffects, channelSenderRefusal } from "./channel-effects"
+import { customersReceivers, CustomersEffects, customersSenderRefusal } from "./customers-effects"
 import { directoryReceivers, DirectoryEffects } from "./directory-effects"
 import { connectSenderRefusal } from "../org/connect"
 import { searchSenderRefusal } from "../org/message-search"
@@ -53,6 +54,7 @@ export const objectReceivers: Record<ObjectKind, Side<Database.Database | SqlCli
 	org: side(OrgEffects, orgReceivers),
 	channel: side(ChannelEffects, channelReceivers),
 	user: side(UserEffects, userReceivers),
+	customers: side(CustomersEffects, customersReceivers),
 }
 
 const directorySide = side<Directory | CurrentEffectSender>(DirectoryEffects, directoryReceivers)
@@ -90,6 +92,7 @@ type SenderGuard = (
 
 const senderGuards: Partial<Record<ObjectKind, SenderGuard>> = {
 	channel: channelSenderRefusal,
+	customers: customersSenderRefusal,
 	// Each check refuses only the kinds it owns; the first refusal wins.
 	org: (kind, payload, sender) =>
 		connectSenderRefusal(kind, payload, sender).pipe(

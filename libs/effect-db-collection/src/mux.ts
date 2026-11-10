@@ -29,7 +29,7 @@ const ABNORMAL = 1006
 
 const decodeControl = Schema.decodeUnknownResult(Schema.fromJsonString(SyncMuxServerControl))
 
-const SOURCE_PATH = /\/sync\/(org|channel|user)\/([^/?]+)$/
+const SOURCE_PATH = /\/sync\/(org|channel|user|customers)\/([^/?]+)$/
 
 export interface SyncMuxOptions {
 	/** The sync Worker's origin, `http(s)://` or `ws(s)://`. */

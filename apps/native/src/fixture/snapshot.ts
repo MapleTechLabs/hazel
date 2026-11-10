@@ -492,6 +492,8 @@ export const SOURCE_TABLES = {
 		"chat_sync_message_links",
 		"typing_indicators",
 	],
+	// The native app has no Customers area.
+	customers: [],
 } as const satisfies Record<SyncSourceKind, ReadonlyArray<string>>
 
 /** Tables a source pages (`Begin.windows`): a channel's `messages`. */

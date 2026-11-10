@@ -10,6 +10,7 @@
  *   with only an org row id carries `organizationId` (`@hazel/domain/rpc/routing-fields`); a call
  *   missing it fails here with `RoutingError`.
  * - User-scoped calls → the caller's `UserObject`.
+ * - `customers.*` → the org's `CustomersObject` (its `organizationId`).
  *
  * `routes` is total: a method added to HazelRpc without an entry fails to compile.
  *
@@ -18,6 +19,7 @@
  */
 import { type DatabaseError, SQLite, schema } from "@hazel/db"
 import type { CurrentUser, RateLimitExceededError } from "@hazel/domain"
+import { CustomerRpcs } from "@hazel/domain/rpc"
 import type { ChannelId, ConnectConversationId, ConnectInviteId, OrganizationId } from "@hazel/schema"
 import { Effect, Option, Schema } from "effect"
 import type { Rpc } from "effect/rpc"
@@ -30,6 +32,7 @@ import {
 import type { RateLimiter } from "../services/rate-limiter"
 import {
 	channelTarget,
+	customersTarget,
 	directoryTarget,
 	formatTarget,
 	orgTarget,
@@ -151,7 +154,21 @@ const connectDisconnect = (
 		return orgTarget(inGuest ? payload.organizationId : host.value) as RpcTarget
 	})
 
+/** Every `customers.*` method: the `CustomersObject` of the payload's organization. */
+const byCustomers = (payload: { readonly organizationId: OrganizationId }) =>
+	Effect.succeed<RpcTarget>(customersTarget(payload.organizationId))
+
+type CustomersRouteTable = {
+	readonly [R in HazelRpc as R["_tag"] extends `customers.${string}` ? R["_tag"] : never]: RouteFn<R>
+}
+const customersRoutes = Object.fromEntries(
+	[...CustomerRpcs.requests.keys()].map((tag) => [tag, byCustomers]),
+) as unknown as CustomersRouteTable
+
 export const routes: RouteTable = {
+	// CustomersObject
+	...customersRoutes,
+
 	// ChannelObject
 	"message.create": byChannel,
 	"message.update": channelHint("message.update"),

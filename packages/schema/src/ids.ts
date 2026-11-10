@@ -295,3 +295,141 @@ export const InvitationId = Schema.String.check(Schema.isUUID())
 		title: "Invitation ID",
 	})
 export type InvitationId = Schema.Schema.Type<typeof InvitationId>
+
+// Customers (`docs/customers/tech-design.md`): rows of the per-organization `CustomersObject`.
+
+export const CustomerAccountId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerAccountId"))
+	.annotate({
+		description: "The ID of a customer account (a B2B customer company)",
+		title: "Customer Account ID",
+	})
+export type CustomerAccountId = Schema.Schema.Type<typeof CustomerAccountId>
+
+export const CustomerContactId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerContactId"))
+	.annotate({
+		description: "The ID of a customer contact (an end user of a customer account)",
+		title: "Customer Contact ID",
+	})
+export type CustomerContactId = Schema.Schema.Type<typeof CustomerContactId>
+
+export const CustomerExternalRefId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerExternalRefId"))
+	.annotate({
+		description: "The ID of a provider record linked to a customer account or contact",
+		title: "Customer External Ref ID",
+	})
+export type CustomerExternalRefId = Schema.Schema.Type<typeof CustomerExternalRefId>
+
+export const CustomerSubscriptionId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerSubscriptionId"))
+	.annotate({
+		description: "The ID of a customer subscription",
+		title: "Customer Subscription ID",
+	})
+export type CustomerSubscriptionId = Schema.Schema.Type<typeof CustomerSubscriptionId>
+
+export const CustomerInvoiceId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerInvoiceId"))
+	.annotate({
+		description: "The ID of a customer invoice",
+		title: "Customer Invoice ID",
+	})
+export type CustomerInvoiceId = Schema.Schema.Type<typeof CustomerInvoiceId>
+
+export const CustomerEventId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerEventId"))
+	.annotate({
+		description: "The ID of a customer timeline event",
+		title: "Customer Event ID",
+	})
+export type CustomerEventId = Schema.Schema.Type<typeof CustomerEventId>
+
+export const CustomerMrrMovementId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerMrrMovementId"))
+	.annotate({
+		description: "The ID of a customer MRR movement",
+		title: "Customer MRR Movement ID",
+	})
+export type CustomerMrrMovementId = Schema.Schema.Type<typeof CustomerMrrMovementId>
+
+export const CustomerSignalRuleId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerSignalRuleId"))
+	.annotate({
+		description: "The ID of a customer signal rule",
+		title: "Customer Signal Rule ID",
+	})
+export type CustomerSignalRuleId = Schema.Schema.Type<typeof CustomerSignalRuleId>
+
+export const CustomerSignalId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerSignalId"))
+	.annotate({
+		description: "The ID of a customer signal (a needs-attention queue item)",
+		title: "Customer Signal ID",
+	})
+export type CustomerSignalId = Schema.Schema.Type<typeof CustomerSignalId>
+
+export const CustomerNoteId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerNoteId"))
+	.annotate({
+		description: "The ID of a note on a customer account",
+		title: "Customer Note ID",
+	})
+export type CustomerNoteId = Schema.Schema.Type<typeof CustomerNoteId>
+
+export const CustomerSavedViewId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerSavedViewId"))
+	.annotate({
+		description: "The ID of a saved customers list view",
+		title: "Customer Saved View ID",
+	})
+export type CustomerSavedViewId = Schema.Schema.Type<typeof CustomerSavedViewId>
+
+export const CustomerSettingsId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerSettingsId"))
+	.annotate({
+		description: "The ID of an organization's customers settings",
+		title: "Customer Settings ID",
+	})
+export type CustomerSettingsId = Schema.Schema.Type<typeof CustomerSettingsId>
+
+export const CustomerConnectionId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerConnectionId"))
+	.annotate({
+		description: "The ID of a customers data source connection (Clerk, Stripe, Autumn, Maple)",
+		title: "Customer Connection ID",
+	})
+export type CustomerConnectionId = Schema.Schema.Type<typeof CustomerConnectionId>
+
+export const CustomerSyncRunId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerSyncRunId"))
+	.annotate({
+		description: "The ID of a customers data source sync run",
+		title: "Customer Sync Run ID",
+	})
+export type CustomerSyncRunId = Schema.Schema.Type<typeof CustomerSyncRunId>
+
+export const CustomerUnmatchedRecordId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerUnmatchedRecordId"))
+	.annotate({
+		description: "The ID of a provider record not yet matched to a customer",
+		title: "Customer Unmatched Record ID",
+	})
+export type CustomerUnmatchedRecordId = Schema.Schema.Type<typeof CustomerUnmatchedRecordId>
+
+export const CustomerIgnoreRuleId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerIgnoreRuleId"))
+	.annotate({
+		description: "The ID of a rule ignoring provider records during matching",
+		title: "Customer Ignore Rule ID",
+	})
+export type CustomerIgnoreRuleId = Schema.Schema.Type<typeof CustomerIgnoreRuleId>
+
+export const CustomerMetricDefinitionId = Schema.String.check(Schema.isUUID())
+	.pipe(Schema.brand("@HazelChat/CustomerMetricDefinitionId"))
+	.annotate({
+		description: "The ID of a customer metric definition",
+		title: "Customer Metric Definition ID",
+	})
+export type CustomerMetricDefinitionId = Schema.Schema.Type<typeof CustomerMetricDefinitionId>

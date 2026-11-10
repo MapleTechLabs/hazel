@@ -34,7 +34,8 @@ import {
 } from "@hazel/effect-db-collection"
 import { persistedCollectionOptions } from "@tanstack/browser-db-sqlite-persistence"
 import { localCachePersistence } from "./local-cache"
-import { orgSources, syncHub, unionSources, userSources } from "./sync"
+import * as Customers from "@hazel/domain/customers"
+import { customersSources, orgSources, syncHub, unionSources, userSources } from "./sync"
 
 /**
  * Collections over the Durable Object sources (`./sync.ts`): the user's own object, the orgs it
@@ -160,3 +161,30 @@ export const botCollection = orgCollection("bots", Bot.Schema)
 export const botCommandCollection = orgCollection("bot_commands", BotCommand.Schema)
 export const botInstallationCollection = orgCollection("bot_installations", BotInstallation.Schema)
 export const customEmojiCollection = orgCollection("custom_emojis", CustomEmoji.Schema)
+
+// Customers (`docs/customers/tech-design.md` §6): the org's `CustomersObject`, opened when the
+// Customers area is first entered (`openCustomersSource`). Filter by `organizationId`.
+const customersCollection = <A extends { readonly id: string }>(table: string, schema: Schema.Schema<A>) =>
+	syncedCollection(table, schema, customersSources)
+
+export const customerAccountCollection = customersCollection("customer_accounts", Customers.Account.Schema)
+export const customerSignalCollection = customersCollection("customer_signals", Customers.Signal.Schema)
+export const customerSignalRuleCollection = customersCollection(
+	"customer_signal_rules",
+	Customers.SignalRule.Schema,
+)
+export const customerNoteCollection = customersCollection("customer_notes", Customers.Note.Schema)
+export const customerSavedViewCollection = customersCollection(
+	"customer_saved_views",
+	Customers.SavedView.Schema,
+)
+export const customerSettingsCollection = customersCollection("customer_settings", Customers.Settings.Schema)
+export const customerMetricDefinitionCollection = customersCollection(
+	"customer_metric_definitions",
+	Customers.MetricDefinition.Schema,
+)
+export const customerConnectionCollection = customersCollection(
+	"customer_connections",
+	Customers.Connection.Schema,
+)
+export const customerSyncRunCollection = customersCollection("customer_sync_runs", Customers.SyncRun.Schema)

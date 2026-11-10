@@ -47,10 +47,15 @@ const program = Effect.gen(function* () {
 	const blocked: Array<string> = []
 	for (const store of storeNames) {
 		const path = snapshotPath(store)
-		if (!existsSync(path))
+		// A new store starts empty, and its first migration is `0001_initial`.
+		const fresh = (migrations[store] ?? []).length === 0
+		if (!existsSync(path) && !fresh)
 			return yield* Effect.fail(new Error(`No snapshot for the ${store} store at ${path}`))
-		const previous = JSON.parse(readFileSync(path, "utf8")) as StoreSnapshot
-		const last = migrations[store].at(-1)?.id
+		migrations[store] = migrations[store] ?? []
+		const previous: StoreSnapshot = existsSync(path)
+			? (JSON.parse(readFileSync(path, "utf8")) as StoreSnapshot)
+			: { migration: "", entities: [], extraIndexes: [] }
+		const last = migrations[store].at(-1)?.id ?? ""
 		if (previous.migration !== last)
 			return yield* Effect.fail(
 				new Error(
@@ -68,7 +73,7 @@ const program = Effect.gen(function* () {
 		}
 		if (values.name === undefined || !isMigrationName(values.name))
 			return yield* Effect.fail(new Error("Pass --name <snake_case_name> for the new migration"))
-		const id = nextMigrationId(migrations[store], values.name)
+		const id = fresh ? "0001_initial" : nextMigrationId(migrations[store], values.name)
 		migrations[store] = [...migrations[store], { id, statements: plan.statements }]
 		snapshots[store] = { migration: id, ...next }
 	}

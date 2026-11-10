@@ -8,6 +8,9 @@ import {
 	ChannelWebhookRpcs,
 	ConnectShareRpcs,
 	CustomEmojiRpcs,
+	CustomerAdminRpcs,
+	CustomerQueueRpcs,
+	CustomerReadRpcs,
 	InvitationRpcs,
 	GitHubSubscriptionRpcs,
 	IntegrationRequestRpcs,
@@ -33,6 +36,7 @@ import { ChannelWebhookRpcLive } from "./handlers/channel-webhooks"
 import { ChannelRpcLive } from "./handlers/channels"
 import { ConnectShareRpcLive } from "./handlers/connect-shares"
 import { CustomEmojiRpcLive } from "./handlers/custom-emojis"
+import { CustomerAdminRpcLive, CustomerQueueRpcLive, CustomerReadRpcLive } from "./handlers/customers"
 import { InvitationRpcLive } from "./handlers/invitations"
 import { GitHubSubscriptionRpcLive } from "./handlers/github-subscriptions"
 import { IntegrationRequestRpcLive } from "./handlers/integration-requests"
@@ -87,7 +91,12 @@ const BaseRpcs = MessageRpcs.merge(
 	InvitationRpcs,
 )
 
-export const AllRpcs = BaseRpcs.merge(ChatSyncRpcs).middleware(ScopeInjectionMiddleware)
+export const AllRpcs = BaseRpcs.merge(
+	ChatSyncRpcs,
+	CustomerReadRpcs,
+	CustomerQueueRpcs,
+	CustomerAdminRpcs,
+).middleware(ScopeInjectionMiddleware)
 
 // Startup validation: ensure all RPCs have RequiredScopes annotations
 const rpcGroups = [
@@ -113,6 +122,9 @@ const rpcGroups = [
 	["CustomEmojiRpcs", CustomEmojiRpcs],
 	["InvitationRpcs", InvitationRpcs],
 	["ChatSyncRpcs", ChatSyncRpcs],
+	["CustomerReadRpcs", CustomerReadRpcs],
+	["CustomerQueueRpcs", CustomerQueueRpcs],
+	["CustomerAdminRpcs", CustomerAdminRpcs],
 ] as const
 
 for (const [name, group] of rpcGroups) {
@@ -154,6 +166,11 @@ export const RpcHandlersLive = Layer.empty
 		Layer.provideMerge(BotRpcLive),
 		Layer.provideMerge(CustomEmojiRpcLive),
 		Layer.provideMerge(InvitationRpcLive),
+	)
+	.pipe(
+		Layer.provideMerge(CustomerReadRpcLive),
+		Layer.provideMerge(CustomerQueueRpcLive),
+		Layer.provideMerge(CustomerAdminRpcLive),
 	)
 
 /** The handlers behind the api's own middleware, served in-process (tests). */

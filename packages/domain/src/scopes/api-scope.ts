@@ -21,6 +21,8 @@ export const ApiScope = Schema.Literals([
 	"channel-webhooks:write",
 	"custom-emojis:read",
 	"custom-emojis:write",
+	"customers:read",
+	"customers:write",
 	"github-subscriptions:read",
 	"github-subscriptions:write",
 	"integration-connections:read",

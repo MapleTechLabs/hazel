@@ -128,6 +128,8 @@ export const callReceivers: Record<ObjectKind, ReadonlyMap<string, Receiver>> = 
 		receiver(LiveAccessCall, liveAccess),
 	]),
 	user: byName([]),
+	// Webhook deliveries and the members pull land here (`docs/customers/tech-design.md` §5).
+	customers: byName([]),
 }
 
 export interface ObjectCallsShape {

@@ -57,7 +57,7 @@ class SyncForwardError extends Schema.TaggedError<SyncForwardError>()("SyncForwa
 	cause: Schema.Unknown,
 }) {}
 
-const SYNC_PATH = /^\/sync\/(org|channel|user)\/([^/?]+)/
+const SYNC_PATH = /^\/sync\/(org|channel|user|customers)\/([^/?]+)/
 
 /** `<protocol>, <token>` (`hazel.v1`, or `hazel.mux.v1` on `/sync/mux`) → the token. */
 export const tokenFromProtocols = (

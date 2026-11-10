@@ -96,6 +96,7 @@ export const unmodeledStatements: Record<StoreName, ReadonlyArray<string>> = {
 	org: messageSearchStatements,
 	channel: [],
 	user: [],
+	customers: [],
 }
 
 /**

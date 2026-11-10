@@ -51,6 +51,7 @@ import type { InvokeRequest, InvokeResponse, ObjectStubs } from "./protocol"
 import { makeChannelSource } from "./sources/channel-source"
 import { makeOrgSource } from "./sources/org-source"
 import { makeUserSource } from "./sources/user-source"
+import { makeCustomersSource } from "./sources/customers-source"
 import { pollDueRssFeeds, rssDeadlines } from "./org/rss"
 import { prepareMessageSearch, SEARCH_MIGRATION_ID } from "./org/message-search"
 import { channelDeadlines, runChannelTimers } from "./channel/timers"
@@ -92,7 +93,12 @@ export interface ObjectRuntimeOptions {
 	readonly migrations?: ReadonlyArray<StoreMigration>
 }
 
-const storeOf: Record<ObjectKind, StoreName> = { org: "org", channel: "channel", user: "user" }
+const storeOf: Record<ObjectKind, StoreName> = {
+	org: "org",
+	channel: "channel",
+	user: "user",
+	customers: "customers",
+}
 
 const sourceOf = (
 	kind: ObjectKind,
@@ -106,6 +112,8 @@ const sourceOf = (
 			return makeChannelSource()
 		case "user":
 			return makeUserSource(ownerId)
+		case "customers":
+			return makeCustomersSource()
 	}
 }
 

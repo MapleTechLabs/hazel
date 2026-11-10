@@ -6,7 +6,7 @@
 import { Schema } from "effect"
 
 /** The kinds of object a client syncs from. */
-export const SyncSourceKind = Schema.Literals(["org", "channel", "user"])
+export const SyncSourceKind = Schema.Literals(["org", "channel", "user", "customers"])
 export type SyncSourceKind = typeof SyncSourceKind.Type
 
 /** A source's change sequence number: monotonic per object, never reused. */
@@ -218,7 +218,7 @@ export interface SyncWritePosition {
 	readonly seq: SyncSeq
 }
 
-const WRITE_POSITION = /^(org|channel|user):([^:]+):(\d+)$/
+const WRITE_POSITION = /^(org|channel|user|customers):([^:]+):(\d+)$/
 
 export const formatWritePosition = (position: SyncWritePosition): string =>
 	`${position.kind}:${position.id}:${position.seq}`
