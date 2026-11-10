@@ -132,15 +132,20 @@ class ShimPointerEvent extends ShimMouseEvent {
 	readonly pointerType = "mouse"
 }
 
-const classList = () => {
+/** An element's classes; `onChange` hears every call that adds or removes one. */
+const classList = (onChange?: () => void) => {
 	const names = new Set<string>()
+	const changing = (change: () => void) => {
+		const before = [...names].join(" ")
+		change()
+		if (onChange !== undefined && [...names].join(" ") !== before) onChange()
+	}
 	return {
-		add: (...tokens: Array<string>) => tokens.forEach((t) => names.add(t)),
-		remove: (...tokens: Array<string>) => tokens.forEach((t) => names.delete(t)),
+		add: (...tokens: Array<string>) => changing(() => tokens.forEach((t) => names.add(t))),
+		remove: (...tokens: Array<string>) => changing(() => tokens.forEach((t) => names.delete(t))),
 		toggle: (token: string, force?: boolean) => {
 			const isOn = force ?? !names.has(token)
-			if (isOn) names.add(token)
-			else names.delete(token)
+			changing(() => (isOn ? names.add(token) : names.delete(token)))
 			return isOn
 		},
 		contains: (token: string) => names.has(token),
@@ -310,11 +315,14 @@ export const installShims = (env: ShimEnv) => {
 		return list
 	}
 
-	// The app themes itself through `<html>`'s inline custom properties (brand colour, radius).
+	// The app themes itself through `<html>`'s inline custom properties (brand colour, radius)
+	// and its `light`/`dark` class (the resolved theme); a change to either restyles the screen.
 	const rootStyle = new Map<string, string>()
 	const rootStyleListeners = new Set<() => void>()
 	const changedRootStyle = () => rootStyleListeners.forEach((listener) => listener())
+	const rootClasses = classList(changedRootStyle)
 	const documentElement = Object.assign(element(), {
+		classList: rootClasses,
 		style: {
 			setProperty: (name: string, value: string) => {
 				if (rootStyle.get(name) === value) return
@@ -441,6 +449,9 @@ export const installShims = (env: ShimEnv) => {
 		history,
 		location,
 		rootStyle: rootStyle as ReadonlyMap<string, string>,
+		/** The theme `<html>`'s class names (the app's resolved theme), if it names one. */
+		rootTheme: (): "dark" | "light" | undefined =>
+			rootClasses.contains("dark") ? "dark" : rootClasses.contains("light") ? "light" : undefined,
 		onRootStyle,
 		/** An element scrolled: the window's capturing `scroll` listeners hear it. */
 		dispatchElementScroll: () => capturedScrolls.dispatchEvent(new Event("scroll")),

@@ -19,6 +19,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # The sign-in vault in the macOS keychain, as the Tauri app keeps its own (apps/desktop).
 keyring = { version = "3", features = ["apple-native"] }
+# Verifies an update's signature as the Tauri updater does (apps/desktop), with the same key.
+minisign-verify = "0.2"
 wgpu = { version = "~30.0.1", default-features = false, features = ["std", "parking_lot", "metal", "wgsl"] }
 
 [profile.release]

@@ -8,12 +8,13 @@ mod platform;
 mod svg_text;
 #[cfg(test)]
 mod tests;
+mod updater;
 mod wire;
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::process::Stdio;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use rune::edit::TextEdit;
@@ -43,6 +44,7 @@ pub(crate) struct State {
     fields: HashMap<String, Field>,
     /// Last window size and theme reported to the runtime.
     reported: Option<(u32, u32, bool)>,
+    /// The appearance a headless capture runs with (`NATIVE_THEME`); a window follows macOS's.
     dark: bool,
     /// The document's own background and text colour (`body` in the app's stylesheet).
     page: wire::Page,
@@ -164,6 +166,10 @@ fn send_key(chain: &[u32], key: &str, mods: rune::edit::Mods) -> u64 {
 /// The web app sets `-webkit-font-smoothing: antialiased` on `html`: text without CoreText's
 /// smoothing dilation, lighter than macOS's default.
 pub(crate) const TEXT_SMOOTHING: rune::FontSmoothing = rune::FontSmoothing::Off;
+/// The band the window's controls sit in, as the Tauri app's (`set_traffic_lights_inset(16, 20)`):
+/// 40 points tall, the traffic lights 16 points in and centred. The web layout leaves this room
+/// under `hasDesktopTitlebar`, and only `data-tauri-drag-region` elements move the window.
+const TITLEBAR: rune::Titlebar = rune::Titlebar::new(40.0).traffic_lights(16.0, 13.0);
 
 const PRESS_EVENTS: [&str; 3] = ["pointerdown", "pointerup", "click"];
 
@@ -994,6 +1000,10 @@ fn behaviour(
         e = e.focusable(true).tab_index(order).focusable_when_empty();
     } else if script_focusable(attrs) {
         e = e.focusable_by_script().focusable_when_empty();
+    }
+    // Tauri's drag attribute: pressing the element (not the controls in it) moves the window.
+    if attrs.contains_key("data-tauri-drag-region") {
+        e = e.window_drag();
     }
     // A radio's arrow keys move through its group, as a browser's do; the runtime knows the group.
     if is_checkable(tag, attrs) && attrs.get("type").is_some_and(|t| t == "radio") {
@@ -1845,8 +1855,37 @@ pub(crate) fn dom_motion() {
     rune::set_default_transition(rune::Transition::none());
 }
 
+/// `NATIVE_THEME=dark|light` pins the appearance (benchmarks, captures); otherwise it is macOS's.
+fn theme_override() -> Option<bool> {
+    match std::env::var("NATIVE_THEME").as_deref() {
+        Ok("dark") => Some(true),
+        Ok("light") => Some(false),
+        _ => None,
+    }
+}
+
+/// The appearance the view last drew with, which the runtime's `prefers-color-scheme` follows.
+static DARK: AtomicBool = AtomicBool::new(false);
+
+/// The view runs again when the system appearance changes: tell the runtime, whose media
+/// queries (and so the app's System theme) follow it. The size comes from the last report.
+fn note_appearance(dark: bool) {
+    if DARK.swap(dark, Ordering::Relaxed) == dark {
+        return;
+    }
+    let mut reported = REPORTED.lock().unwrap();
+    if let Some((width, height, _)) = *reported {
+        *reported = Some((width, height, dark));
+        write_line(json!({ "t": "env", "width": width, "height": height, "dark": dark }));
+    }
+}
+
 fn report_env(s: &mut State, rect: [f32; 4]) {
-    let next = (rect[2].round() as u32, rect[3].round() as u32, s.dark);
+    let next = (
+        rect[2].round() as u32,
+        rect[3].round() as u32,
+        DARK.load(Ordering::Relaxed),
+    );
     if s.reported == Some(next) || next.0 == 0 {
         return;
     }
@@ -1856,8 +1895,9 @@ fn report_env(s: &mut State, rect: [f32; 4]) {
 }
 
 pub(crate) fn view(s: &State, cx: &mut Cx<State>) -> El {
-    let _ = cx;
-    let fallback = if s.dark {
+    let dark = theme_override().unwrap_or_else(|| cx.system_dark());
+    note_appearance(dark);
+    let fallback = if dark {
         Color::WHITE
     } else {
         rune::color::hex("#09090b").unwrap()
@@ -2022,6 +2062,14 @@ fn start_runtime(current: &RuntimeChild, path: Option<&str>) -> std::process::Ch
     if let Some(path) = path {
         command.env("NATIVE_PATH", path);
     }
+    // The runtime offers the app's update checks only where the host can install them.
+    if updater::enabled() {
+        command.env("HAZEL_UPDATES", "1");
+    }
+    // The version Settings > Desktop shows, for a build that knows it.
+    if let Some(version) = updater::version() {
+        command.env("HAZEL_APP_VERSION", version);
+    }
     let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -2050,6 +2098,17 @@ fn spawn_runtime() -> (RuntimeChild, std::sync::mpsc::Receiver<RuntimeMsg>) {
             for line in BufReader::new(stdout).lines().map_while(Result::ok) {
                 match serde_json::from_str::<RuntimeMsg>(&line) {
                     Ok(RuntimeMsg::Vault { id, op, record }) => answer_vault(id, &op, record),
+                    Ok(RuntimeMsg::Update { id, op }) => answer_update(id, op),
+                    Ok(RuntimeMsg::Relaunch { id }) => match updater::relaunch_after_exit() {
+                        Ok(()) => {
+                            supervised.kill();
+                            std::process::exit(0);
+                        }
+                        Err(error) => {
+                            eprintln!("[host] {error}");
+                            write_line(updater::reply(id, Err(error)));
+                        }
+                    },
                     Ok(RuntimeMsg::Reload { path }) => {
                         reload = Some(path);
                         break;
@@ -2088,6 +2147,25 @@ fn answer_vault(id: u64, op: &str, record: Option<String>) {
             id,
             platform::run_vault(platform::VAULT_SERVICE, &op),
         ));
+    });
+}
+
+/// Updater steps fetch, verify and move files: each runs off the reader and UI threads.
+fn answer_update(id: u64, op: String) {
+    std::thread::spawn(move || {
+        let result = match op.as_str() {
+            "check" => updater::check(),
+            "download" => updater::download(|downloaded, total| {
+                write_line(updater::progress_message(id, downloaded, total))
+            })
+            .map(|()| None),
+            "install" => updater::install().map(|()| None),
+            _ => Err(format!("unknown update request {op}")),
+        };
+        if let Err(error) = &result {
+            eprintln!("[host] update {op}: {error}");
+        }
+        write_line(updater::reply(id, result));
     });
 }
 
@@ -2149,6 +2227,7 @@ fn main() {
     };
     let app = App::new(spec)
         .font_smoothing(TEXT_SMOOTHING)
+        .titlebar(TITLEBAR)
         .init(move || initial)
         .on_open_url(open_url);
     let handle = app.handle();

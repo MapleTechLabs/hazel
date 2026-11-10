@@ -399,6 +399,14 @@ pub enum RuntimeMsg {
         #[serde(default)]
         record: Option<String>,
     },
+    /// An updater step (`check`, `download`, `install`); answered as `update` with `id`, and a
+    /// download reports `updateProgress` as it goes.
+    #[serde(rename = "update")]
+    Update { id: u64, op: String },
+    /// Quit, and open the app again once this process has gone (after an update installs);
+    /// a relaunch that cannot start is answered as `update` with `id`.
+    #[serde(rename = "relaunch")]
+    Relaunch { id: u64 },
 }
 
 /// A `vault` request's operation; `None` for an unknown one or a write without a record.

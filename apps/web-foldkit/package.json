@@ -9,7 +9,7 @@
 		"test": "vitest run",
 		"test:browser": "vitest run --config vitest.browser.config.ts",
 		"gallery": "vitest run --config vitest.gallery.config.ts",
-		"build:desktop": "./scripts/build-desktop.sh"
+		"build:desktop": "bash ./scripts/build-desktop.sh"
 	},
 	"dependencies": {
 		"@effect/platform-browser": "catalog:effect",

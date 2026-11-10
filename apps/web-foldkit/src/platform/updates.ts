@@ -4,7 +4,7 @@ import { Command, Subscription, type Update } from "foldkit"
 import { defineMessageUnion } from "foldkit/message"
 import { defineTaggedUnion } from "foldkit/schema"
 import { ToastRequest } from "../overlay/toasts"
-import { isDesktop } from "./desktop"
+import { hasUpdater } from "./desktop"
 
 /**
  * Desktop app updates (legacy `tauri-update-atoms.ts` and `TauriUpdateCheck`): a check at start
@@ -234,9 +234,9 @@ const installStream: Stream.Stream<Message> = Stream.callback<Message>((queue) =
 )
 
 export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
-	// At start, then every 6 hours; never in the browser.
+	// At start, then every 6 hours, wherever an updater answers; never in the browser.
 	periodicCheck: Subscription.persistentEntry(
-		isDesktop
+		hasUpdater
 			? Stream.concat(Stream.succeed(undefined), Stream.tick(CHECK_INTERVAL)).pipe(
 					Stream.map(() => Message.TickedUpdateCheck()),
 				)

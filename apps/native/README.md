@@ -52,11 +52,17 @@ HAZEL_BACKEND_URL=http://localhost:3003 HAZEL_APP_URL=http://localhost:3100 bun 
 
 The bundle holds the release host, the runtime compiled to one executable (`bun build --compile`,
 ESM bytecode) as `Contents/MacOS/hazel-runtime`, `styles.json` and the web app's `public/` in
-`Contents/Resources`. Its Info.plist registers `com.hazel.native://` and sets `LSEnvironment`:
-live data against production (`https://api.hazel.sh`, `https://app.hazel.sh`) unless the
-`HAZEL_*_URL` overrides above were set when bundling. Those apply only when Launch Services
-starts the app (Finder, `open`); running `Contents/MacOS/hazel-native` from a shell takes the
-shell's environment.
+`Contents/Resources`, and `Contents/Resources/environment.json`: live data against production
+(`https://api.hazel.sh`, `https://app.hazel.sh`) unless the `HAZEL_*_URL` overrides above were set
+when bundling. The host hands that environment to the runtime however the app starts (Finder,
+`open`, or a direct exec such as the Tauri updater's relaunch); a variable the host itself was
+started with wins, so `HAZEL_DATA=offline Contents/MacOS/hazel-native` runs a bundle on the fixture.
+Its Info.plist registers `com.hazel.native://`.
+
+The window draws its own 40-point titlebar (`TITLEBAR` in `host/src/main.rs`) with the traffic
+lights 16 points in and centred, as the Tauri app places them; the runtime reports
+`hasDesktopTitlebar` (`src/overlay-plugin.ts`), so the web layout leaves that room, and elements
+with `data-tauri-drag-region` move the window.
 
 **Sign-in.** Live without `HAZEL_SESSION_TOKEN`, the app signs in like the Tauri app
 (`web-foldkit/src/platform/desktop-auth.ts`, reused as is): `src/desktop-bridge.ts` answers the
@@ -71,6 +77,41 @@ with the Tauri app installed routes each callback to the right app.
 
 A full page load in the app (`load("/")` after sign-in, `location.reload()`) sends `reload`: the
 host replaces the runtime with a fresh one at that path, as a browser reloads the page.
+
+## Releases
+
+The native app is what Hazel ships for macOS: `.github/workflows/tauri-release.yml` (on a `v*` tag)
+builds the Tauri app for Windows and Linux and this one for both Macs, into the same draft release.
+
+```sh
+HAZEL_RELEASE=1 APPLE_SIGNING_IDENTITY="Developer ID Application: ..." bun scripts/bundle.ts
+bun scripts/release.ts             # dist/release: the .dmg, the .app.tar.gz and its .sig
+```
+
+`HAZEL_RELEASE=1` makes `dist/Hazel.app` as `com.hazel.app` at the Tauri app's version
+(`apps/desktop/src-tauri/tauri.conf.json`, the one place to bump it), signed under the hardened
+runtime (the Bun runtime gets the JIT entitlements); `HAZEL_BUNDLE_ARCH=x86_64` builds for Intel.
+`scripts/release.ts` notarizes and staples the disk image and the app, archives the app as Tauri's
+updater expects (`Hazel.app` at the top of `Hazel_<version>_<arch>.app.tar.gz`), and signs the
+archive with the Tauri updater key (`TAURI_SIGNING_PRIVATE_KEY`).
+
+**Updates.** The workflow's `publish-macos` job adds the archives to the release's `latest.json`
+as its `darwin-aarch64` and `darwin-x86_64` entries; the Windows and Linux entries stay the Tauri
+app's. Both apps read that one feed (`releases/latest/download/latest.json`) with one key:
+
+- The Tauri app on a Mac finds the native app as its update, verifies it, unpacks it over its own
+  `Hazel.app` and relaunches into it. The session does not carry over (the native app keeps its
+  own keychain item and signs in as the `native` client), so the first launch signs in again.
+- The native app checks the same way (`host/src/updater.rs`): at start and every 6 hours, through
+  the web app's own update flow (`platform/updates.ts`: the toast, Settings > Desktop), which the
+  host answers through `src/desktop-bridge.ts`. It downloads with `curl`, verifies the minisign
+  signature, swaps the bundle in place (the old one comes back if the new one cannot be moved in)
+  and reopens through Launch Services. Only a release bundle offers updates; `HAZEL_UPDATE_FEED`
+  points one at another manifest (a `file://` one works) to try the flow.
+
+Publishing the draft release ships it: the feed and the landing page's downloads
+(`apps/landing/src/lib/download-config.ts`, refreshed in the visitor's browser) follow
+`releases/latest`.
 
 ## Benchmark
 

@@ -4,7 +4,7 @@ import { modifyFields } from "foldkit/struct"
 import { getTauriApp } from "@hazel/desktop/bridge"
 import { disableAutostart, enableAutostart, isAutostartEnabled } from "~/lib/tauri-autostart"
 import { errorToast } from "../../../data/actions"
-import { isDesktop } from "../../../platform/desktop"
+import { hasUpdater, isDesktop } from "../../../platform/desktop"
 import { PageOutMessage } from "../../out-message"
 import * as Interaction from "../../../ui/aria/interaction"
 import type { PageReturn, PageSubscriptionInput } from "../../contract"
@@ -63,7 +63,8 @@ export const ReadVersion = Command.define("ReadVersion", {
 
 export const init = (): PageReturn<Model, Message> => ({
 	model: { autostartEnabled: null, isUpdating: false, version: null, interaction: Interaction.init() },
-	commands: isDesktop ? [CheckAutostart(), ReadVersion()] : [CheckAutostart()],
+	// The version shows wherever updates do: the Tauri app, and the native app (its host answers).
+	commands: isDesktop || hasUpdater ? [CheckAutostart(), ReadVersion()] : [CheckAutostart()],
 })
 
 const settleAutostart = (model: Model, isEnabled: boolean): Model =>

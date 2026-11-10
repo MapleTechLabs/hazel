@@ -7,6 +7,7 @@ import {
 	getDownloadUrl,
 	type Platform,
 	type ReleaseData,
+	useLatestRelease,
 } from "@/lib/download-config"
 import { cn } from "@/lib/utils"
 
@@ -64,7 +65,8 @@ const platformIcons: Record<Platform, React.FC<{ className?: string }>> = {
 	linux: LinuxIcon,
 }
 
-export function HeroDownloadButton({ release }: HeroDownloadButtonProps) {
+export function HeroDownloadButton({ release: builtRelease }: HeroDownloadButtonProps) {
+	const release = useLatestRelease(builtRelease)
 	const [platform, setPlatform] = useState<Platform | null>(null)
 	const [selectedArchId, setSelectedArchId] = useState<string>("")
 

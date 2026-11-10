@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react"
+
 export type Platform = "macos" | "windows" | "linux"
 
 // GitHub release types
@@ -15,6 +17,29 @@ interface GitHubRelease {
 export interface ReleaseData {
 	version: string
 	assets: GitHubAsset[]
+}
+
+let latestInBrowser: Promise<ReleaseData | null> | undefined
+
+/**
+ * The release the page was built with, then the latest one as the visitor's browser sees it: a
+ * release published after the last deploy (the page builds only when its sources change) still
+ * gets its downloads offered. Keeps `initial` when GitHub does not answer.
+ */
+export function useLatestRelease(initial: ReleaseData | null): ReleaseData | null {
+	const [release, setRelease] = useState(initial)
+	useEffect(() => {
+		let live = true
+		// One request per page view, however many download buttons ask (GitHub allows 60 an hour).
+		latestInBrowser ??= fetchLatestRelease()
+		latestInBrowser.then((latest) => {
+			if (live && latest !== null) setRelease(latest)
+		})
+		return () => {
+			live = false
+		}
+	}, [])
+	return release
 }
 
 // Fetch latest release from GitHub API
@@ -74,11 +99,12 @@ export const downloadConfig: Record<Platform, PlatformConfig> = {
 				pattern: /Hazel.*x64.*\.dmg$/i,
 			},
 		],
+		// The native (Rune) app: GPU-drawn with Metal, LSMinimumSystemVersion 13.0.
 		requirements: {
-			os: "macOS 10.15 (Catalina) or later",
+			os: "macOS 13 (Ventura) or later",
 			processor: "Apple Silicon or Intel 64-bit",
 			memory: "512 MB RAM",
-			storage: "150 MB available space",
+			storage: "200 MB available space",
 		},
 	},
 	windows: {

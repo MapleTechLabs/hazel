@@ -7,6 +7,7 @@ import {
 	type Platform,
 	type PlatformConfig,
 	type ReleaseData,
+	useLatestRelease,
 } from "@/lib/download-config"
 import { cn } from "@/lib/utils"
 
@@ -72,11 +73,12 @@ interface PlatformCardProps {
 export function PlatformCard({
 	platform,
 	config,
-	release,
+	release: builtRelease,
 	isPrimary = false,
 	detectedArch,
 	index = 0,
 }: PlatformCardProps) {
+	const release = useLatestRelease(builtRelease)
 	const [selectedArch, setSelectedArch] = useState<ArchitectureOption>(
 		config.architectures.find((a) => a.id === detectedArch) ||
 			config.architectures.find((a) => a.recommended) ||

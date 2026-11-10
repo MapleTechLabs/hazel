@@ -57,8 +57,11 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 	)?.id
 	const brandHex = customization.primary.toUpperCase()
 
+	// The cards wrap onto more rows instead of scrolling sideways: no scroll container clips the
+	// selected card's ring, and a narrow window (or the native app, which scrolls only vertically)
+	// still reaches every preset.
 	const presets = h.div(
-		[h.Class("-mx-4 w-screen overflow-auto p-4 lg:mx-0 lg:w-auto lg:p-0")],
+		[h.Class("p-1")],
 		[
 			ariaRadioGroup(
 				h,
@@ -67,7 +70,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 					value: activePresetId ?? "custom",
 					onChange: toPresetMessage,
 					ariaLabel: "Theme preset",
-					className: "flex gap-4",
+					className: "flex flex-wrap gap-4",
 					interaction: wiring,
 				},
 				(radio) =>
@@ -187,8 +190,10 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 			RADIUS_PRESETS.map((preset) => radiusOption(h, radio, preset, customization.radius === preset)),
 	)
 
+	// Wraps like the presets: nothing clips the selected option's ring, and every option is
+	// reachable without sideways scrolling.
 	const displayMode = h.div(
-		[h.Class("-mx-4 -mb-4 w-screen overflow-auto p-4 lg:w-[calc(100%+48px)]")],
+		[h.Class("p-1")],
 		[
 			ariaRadioGroup(
 				h,
@@ -197,7 +202,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 					value: mode,
 					onChange: toModeMessage,
 					ariaLabel: "Display preference",
-					className: "flex gap-5",
+					className: "flex flex-wrap gap-5",
 					interaction: wiring,
 				},
 				(radio) =>

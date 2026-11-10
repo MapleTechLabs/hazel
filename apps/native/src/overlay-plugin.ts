@@ -3,7 +3,8 @@
  * running from source and passed to `Bun.build` for the bundled runtime: `src/overlay.ts` for
  * the app's `ui/aria/overlay.ts`, and `src/anchor.ts`'s `anchorSetup` and portals in
  * `@foldkit/ui`'s anchor module (its other exports stay). Also the client the app signs in as
- * (`platform/desktop.ts`), from `src/native-auth.ts`.
+ * (`platform/desktop.ts`), from `src/native-auth.ts`, and its titlebar flag: the host keeps
+ * the macOS traffic lights over the content, so headers leave room for them.
  */
 import { readFileSync } from "node:fs"
 
@@ -13,6 +14,11 @@ const nativeAuth = new URL("./native-auth.ts", import.meta.url).pathname
 /** The line in `platform/desktop.ts` that picks the client; the native app picks its own. */
 const WEB_AUTH_CLIENT =
 	"export const desktopAuthClient: BrowserLoginClient | null = isDesktop ? desktopClient : null"
+/** The line in `platform/desktop.ts` that says the window controls sit over the content. */
+const WEB_TITLEBAR =
+	'export const hasDesktopTitlebar: boolean = typeof window !== "undefined" && isTauriMacOS()'
+/** The host draws the traffic lights over the content on macOS, as the Tauri app does. */
+const NATIVE_TITLEBAR = 'export const hasDesktopTitlebar: boolean = process.platform === "darwin"'
 /** The anchor module's DOM-moving exports the native module replaces. */
 const NATIVE_EXPORTS = ["anchorSetup", "portalBackdrop", "portalToContainingRoot"]
 
@@ -27,11 +33,15 @@ export const overlayPlugin: BunPlugin = {
 			const source = readFileSync(path, "utf8")
 			// A changed line must fail loudly here, not leave the native app unable to sign in.
 			if (!source.includes(WEB_AUTH_CLIENT)) throw new Error(`${path}: desktopAuthClient not found`)
+			// Likewise a changed titlebar line, or the traffic lights draw over the sidebar.
+			if (!source.includes(WEB_TITLEBAR)) throw new Error(`${path}: hasDesktopTitlebar not found`)
 			return {
-				contents: source.replace(
-					WEB_AUTH_CLIENT,
-					`export { desktopAuthClient } from ${JSON.stringify(nativeAuth)}`,
-				),
+				contents: source
+					.replace(
+						WEB_AUTH_CLIENT,
+						`export { desktopAuthClient } from ${JSON.stringify(nativeAuth)}`,
+					)
+					.replace(WEB_TITLEBAR, NATIVE_TITLEBAR),
 				loader: "ts",
 			}
 		})

@@ -69,11 +69,18 @@ process.on("SIGTERM", () => process.exit(0))
 /** The Tauri APIs the app's browser sign-in uses, answered by the host (keychain, opened links). */
 const desktopBridge = makeDesktopBridge({
 	send: (request) => transport.send(request),
+	// The host sets this for a release bundle it can update in place.
+	updates: process.env.HAZEL_UPDATES === "1",
+	version: process.env.HAZEL_APP_VERSION,
 	openUrl: (url) => {
 		const target = URL.parse(url)
 		if (target !== null) openExternal(target)
 	},
 })
+
+// The Tauri APIs the host answers: for the keychain sign-in, and for updates where it offers them.
+if (usesKeychainSession || process.env.HAZEL_UPDATES === "1")
+	Object.assign(window, { __TAURI__: desktopBridge.tauri })
 
 if (offline !== undefined) {
 	const { makeOfflineFetch } = await import("./offline-backend")
@@ -101,7 +108,6 @@ if (offline !== undefined) {
 } else if (usesKeychainSession) {
 	if (URL.parse(backendUrl) === null)
 		throw new Error(`HAZEL_DATA=live needs a backend URL, got "${backendUrl}"`)
-	Object.assign(window, { __TAURI__: desktopBridge.tauri })
 	const { setSessionBearerProvider } = await import("../../web-foldkit/src/core/lib/session-bearer")
 	const { desktopSessionBearer } = await import("../../web-foldkit/src/platform/desktop-auth")
 	setSessionBearerProvider(desktopSessionBearer)
@@ -298,6 +304,8 @@ const rune = makeRuneTarget({
 		return mount === undefined ? undefined : composer.editorText(mount.args)
 	},
 	onLink: followLink,
+	// The app's resolved theme (its Light/Dark/System setting) on `<html>`, over the host's appearance.
+	theme: shims.rootTheme,
 	// The editor root's own classes; ProseMirror's state classes on it carry no layout.
 	editableClass: () => EDITABLE_CLASS,
 
@@ -322,7 +330,7 @@ const rune = makeRuneTarget({
 	},
 })
 
-// The theme customization lands on `<html>`'s inline style: restyle what is on screen with it.
+// The theme lands on `<html>` (inline custom properties, the light/dark class): restyle what is on screen with it.
 styles.setRootProperties(shims.rootStyle)
 shims.onRootStyle(() => {
 	styles.setRootProperties(shims.rootStyle)
@@ -338,7 +346,7 @@ const transport = stdioTransport((message: HostToRuntime) => {
 		desktopBridge.openedUrl(message.url)
 		return
 	}
-	if (message.t === "vault") {
+	if (message.t === "vault" || message.t === "update" || message.t === "updateProgress") {
 		desktopBridge.answer(message)
 		return
 	}
