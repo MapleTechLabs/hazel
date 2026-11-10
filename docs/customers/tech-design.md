@@ -200,22 +200,25 @@ Rules:
   nothing parked). A `removed` contact of an unknown account is `Unchanged`, never parked.
 - **Field precedence:** `FIELD_PRECEDENCE` (`hazel` manual edit > clerk > stripe > autumn > maple for
   name; per field), recorded in `fieldSources`; domains merge (never removed); fixed in v1.
-- **Deletes:** `account.deleted` → ref `staleAt`; account soft-deleted when it has no live ref.
-  `contact.removed` → soft delete + `contact.removed` event.
+- **Deletes:** `account.deleted` / `contact.removed` → ref `staleAt` (+ the op's `observedAt` as
+  `deletedObservedAt`); the account or contact is soft-deleted (contacts with a `contact.removed`
+  event) once it has no live ref.
 - **Full sweeps:** every account and contact op touches its ref (`lastSyncedAt`). A pull that listed
   all of a provider's accounts / contacts sets `PullPage.sweep` on its last page; the pull loop then
   calls `completeSweep(connectionId, run.startedAt, entityTypes)`, which treats the provider's live
-  refs not seen since the run started as deleted (accounts as `deleted`, contacts as `removed`).
-  Only for complete listings: an incremental or partial pull must not set it.
+  refs not seen since the run started as deleted (accounts as `deleted`, contacts as `removed`),
+  except refs a person linked (`manual`). Only for complete listings: an incremental or partial pull
+  must not set it.
 - **Ordering:** account and contact ops carry `observedAt` (the source's `updated_at`). A
-  non-deleting op observed at or before the record's deletion (the ref's `staleAt`, the contact's
-  `deletedAt`) changes nothing, so a late delivery cannot revive it; without `observedAt` ops apply
-  in arrival order. `lastSeenAt` / `lastSignInAt` only move forward; a day's `sessionCount` keeps
+  non-deleting op observed at or before the provider's delete op (the ref's `deletedObservedAt`)
+  changes nothing, so a late delivery cannot revive it; any other sighting (a later listing after a
+  sweep, an op without `observedAt`) revives the record. `lastSeenAt` / `lastSignInAt` only move forward; a day's `sessionCount` keeps
   the highest value and `signedIn` stays true once set.
 - **Events** are emitted by ingest for state changes it observes (subscription started / plan
   changed / canceled, invoice paid / payment_failed, contact joined / removed), deduped by
   `externalId`.
-- Ingest never computes; it marks compute due (`requestCompute`, ≤ 2 min debounce).
+- Ingest never computes; it marks compute due (`requestComputeAfterIngest`: ≥ 2 min out and ≥ 15
+  min after the last compute). An op the store refuses is skipped and counted (`stats.rejected`).
 - **Disconnect** keeps all data: refs of the connection get `staleAt`, connection `disconnected`,
   secrets deleted; UI shows stale source chips.
 
@@ -224,10 +227,14 @@ Rules:
 ### 4.1 Schedule
 
 - Alarm deadlines (folded into the object's one alarm, like `rssDeadlines`): `computeDueAt`
-  (hourly, and ≤ 2 min after ingest / rule / settings changes), each connection's `nextSyncAt`,
-  the earliest `snoozedUntil`, the earliest `reopenAfter`.
-- Compute is one function `runCompute(now)`, steps below; each step its own transaction(s), chunked
-  by 500 accounts. `customer_settings.lastComputedAt` records it.
+  (hourly, ≤ 2 min after a person's rule / settings / signal change, ≥ 15 min after the last
+  compute for ingest), each connection's `nextSyncAt`, the earliest `snoozedUntil`, the earliest
+  `reopenAfter`. The alarm runs due pulls, then compute; each first moves its deadline a 5 min lease
+  ahead (a killed run retries after it); failed computes back off exponentially.
+- Compute is one function `runCompute(now)`, steps below, over accounts loaded in chunks of 250
+  (one chunk's activity in memory; the org's DAU/WAU/MAU from SQL). `customer_settings.lastComputedAt`
+  records it. Once a day it prunes daily rows > 400 d, events > 2 y, closed signals > 180 d, sync
+  runs > 30 d.
 
 ### 4.2 Rollups (per account, then org)
 
@@ -321,8 +328,10 @@ needs ≥ 1 of its `requiredSources` connected, else it matches nothing (dry-run
 
 ### 4.7 Backfill must not flood
 
-- `finishRun` of a successful `backfill` sets meta `baselineFor = <connectionId>`; the next compute
-  runs rules whose template has `baselineOnBackfill` in **baseline mode**: a new match is written as
+- `finishRun` of a successful `backfill` adds its connection to meta `baselineFor`; the next compute
+  (and every compute while a backfill younger than 24 h, on a connection failing < 3 times in a row,
+  is running) runs the rules whose template has `baselineOnBackfill` and a source among those
+  connections' providers (any, for a source-less template) in **baseline mode**: a new match is written as
   `dismissed` with `dismissReason = "baseline"` (no event, no queue entry). It surfaces only if it
   gets worse by a full step (dismissed reopen rule) or after it clears and recurs.
 - Time-bounded templates (`payment_failed`, `cancel_scheduled`, `trial_ending_low_activation`) open

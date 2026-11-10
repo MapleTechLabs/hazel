@@ -64,6 +64,19 @@ import { RequiredScopes } from "../scopes/required-scopes"
 import { AuthMiddleware } from "./middleware"
 
 // ---------------------------------------------------------------------------
+// Input bounds (member-writable text and lists)
+// ---------------------------------------------------------------------------
+
+const Text = (max: number) => Schema.String.check(Schema.isMaxLength(max))
+const NonEmptyText = (max: number) => Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(max))
+/** An account's tags: ≤ 20, each ≤ 50 characters. */
+const Tags = Schema.Array(Text(50)).check(Schema.isMaxLength(20))
+/** An ignore rule's glob: ≤ 200 characters, ≤ 5 `*`. */
+const GlobPattern = NonEmptyText(200).check(
+	Schema.makeFilter((pattern) => (pattern.split("*").length <= 6 ? undefined : "At most 5 wildcards")),
+)
+
+// ---------------------------------------------------------------------------
 // Errors
 // ---------------------------------------------------------------------------
 
@@ -187,9 +200,9 @@ export class CustomerReadRpcs extends RpcGroup.make(
 		"customers.events.list",
 		{
 			accountId: Schema.optionalKey(CustomerAccountId),
-			providers: Schema.optionalKey(Schema.Array(CustomerSource)),
+			providers: Schema.optionalKey(Schema.Array(CustomerSource).check(Schema.isMaxLength(10))),
 			/** Type prefixes, e.g. `invoice.`, `signal.opened`. */
-			types: Schema.optionalKey(Schema.Array(Schema.String)),
+			types: Schema.optionalKey(Schema.Array(Text(100)).check(Schema.isMaxLength(20))),
 			...PageRequest,
 		},
 		Page(Event.Schema),
@@ -236,15 +249,17 @@ export class CustomerReadRpcs extends RpcGroup.make(
 export class CustomerQueueRpcs extends RpcGroup.make(
 	write(
 		"customers.signal.assign",
+		/** The assignee must be a member of the organization (else `CustomersInvalidRequestError`). */
 		{ signalId: CustomerSignalId, assigneeUserId: Schema.NullOr(UserId) },
 		Tx,
 		CustomersNotFoundError,
 		CustomerSignalTransitionError,
+		CustomersInvalidRequestError,
 	),
 
 	write(
 		"customers.signal.snooze",
-		{ signalId: CustomerSignalId, until: JsonDate, note: Schema.optionalKey(Schema.String) },
+		{ signalId: CustomerSignalId, until: JsonDate, note: Schema.optionalKey(Text(2000)) },
 		Tx,
 		CustomersNotFoundError,
 		CustomerSignalTransitionError,
@@ -252,7 +267,7 @@ export class CustomerQueueRpcs extends RpcGroup.make(
 
 	write(
 		"customers.signal.done",
-		{ signalId: CustomerSignalId, outcome: SignalOutcome, note: Schema.optionalKey(Schema.String) },
+		{ signalId: CustomerSignalId, outcome: SignalOutcome, note: Schema.optionalKey(Text(2000)) },
 		Tx,
 		CustomersNotFoundError,
 		CustomerSignalTransitionError,
@@ -260,7 +275,7 @@ export class CustomerQueueRpcs extends RpcGroup.make(
 
 	write(
 		"customers.signal.dismiss",
-		{ signalId: CustomerSignalId, reason: Schema.optionalKey(Schema.String) },
+		{ signalId: CustomerSignalId, reason: Schema.optionalKey(Text(500)) },
 		Tx,
 		CustomersNotFoundError,
 		CustomerSignalTransitionError,
@@ -281,7 +296,7 @@ export class CustomerQueueRpcs extends RpcGroup.make(
 			/** Client-generated, for the optimistic row. */
 			id: Schema.optionalKey(CustomerNoteId),
 			accountId: CustomerAccountId,
-			body: Schema.String.check(Schema.isMinLength(1)),
+			body: NonEmptyText(10_000),
 			pinned: Schema.optionalKey(Schema.Boolean),
 			signalId: Schema.optionalKey(CustomerSignalId),
 		},
@@ -294,7 +309,7 @@ export class CustomerQueueRpcs extends RpcGroup.make(
 		"customers.note.update",
 		{
 			noteId: CustomerNoteId,
-			body: Schema.optionalKey(Schema.String.check(Schema.isMinLength(1))),
+			body: Schema.optionalKey(NonEmptyText(10_000)),
 			pinned: Schema.optionalKey(Schema.Boolean),
 		},
 		withTx(Note.Schema),
@@ -310,12 +325,14 @@ export class CustomerQueueRpcs extends RpcGroup.make(
 		{
 			accountId: CustomerAccountId,
 			ownerUserId: Schema.optionalKey(Schema.NullOr(UserId)),
-			tags: Schema.optionalKey(Schema.Array(Schema.String)),
+			tags: Schema.optionalKey(Tags),
 			lifecycleStageOverride: Schema.optionalKey(Schema.NullOr(LifecycleStage)),
-			name: Schema.optionalKey(Schema.String.check(Schema.isMinLength(1))),
+			name: Schema.optionalKey(NonEmptyText(200)),
 		},
 		Tx,
 		CustomersNotFoundError,
+		/** The owner is not a member of the organization. */
+		CustomersInvalidRequestError,
 	),
 
 	/** The list's bulk actions. */
@@ -325,8 +342,8 @@ export class CustomerQueueRpcs extends RpcGroup.make(
 			/** ≤ 500, else `CustomersInvalidRequestError`. */
 			accountIds: Schema.Array(CustomerAccountId),
 			ownerUserId: Schema.optionalKey(Schema.NullOr(UserId)),
-			addTags: Schema.optionalKey(Schema.Array(Schema.String)),
-			removeTags: Schema.optionalKey(Schema.Array(Schema.String)),
+			addTags: Schema.optionalKey(Tags),
+			removeTags: Schema.optionalKey(Tags),
 		},
 		Schema.Struct({ updated: Schema.Int, transactionId: TransactionId }),
 		CustomersInvalidRequestError,
@@ -468,12 +485,14 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 			rule: Schema.optionalKey(
 				Schema.Struct({
 					field: Schema.Literals(["email", "domain", "name", "external_id"]),
-					pattern: Schema.String.check(Schema.isMinLength(1)),
+					pattern: GlobPattern,
 				}),
 			),
 		},
 		Tx,
 		CustomersNotFoundError,
+		/** The record is not open. */
+		CustomersInvalidRequestError,
 	),
 
 	write("customers.ignoreRule.delete", { ruleId: CustomerIgnoreRuleId }, Tx, CustomersNotFoundError),

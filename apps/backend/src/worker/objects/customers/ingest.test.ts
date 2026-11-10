@@ -6,8 +6,7 @@ import type { IngestOp, RefEntityType, UpsertAccount, UpsertContact } from "@haz
 import { Effect, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { CustomerIngest } from "./ingest"
-import { type CustomersWorld, makeCustomersWorld } from "./test-kit"
-import { dayOf } from "./time"
+import { type CustomersWorld, makeCustomersWorld, NOW, TODAY } from "./test-kit"
 
 const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
 	Effect.runPromise(Effect.scoped(effect) as Effect.Effect<A, E>)
@@ -44,7 +43,7 @@ const refsOf = (world: CustomersWorld, accountId: string) =>
 const changes = (world: CustomersWorld) =>
 	world.rows<{ n: number }>(`SELECT count(*) AS n FROM _changes`)[0]!.n
 
-const today = dayOf(new Date())
+const today = TODAY
 
 const member = (id: string, org: string, fields: Partial<UpsertContact> = {}): UpsertContact => ({
 	_tag: "contact",
@@ -76,7 +75,9 @@ const liveContacts = (world: CustomersWorld) =>
 		.rows<{ name: string }>(`SELECT name FROM customer_contacts WHERE deletedAt IS NULL ORDER BY name`)
 		.map((row) => row.name)
 
-const isoAgo = (ms: number) => new Date(Date.now() - ms).toISOString()
+/** When the provider deleted the records of the ordering tests. */
+const DELETED_AT = NOW
+const isoAt = (offsetMs: number) => new Date(DELETED_AT.getTime() + offsetMs).toISOString()
 
 describe("CustomerIngest", () => {
 	it("matches accounts by ref, shared id, then domain; parks the rest", () =>
@@ -244,7 +245,7 @@ describe("CustomerIngest", () => {
 					currency: "USD",
 					interval: "month",
 					quantity: 1,
-					startedAt: new Date(Date.now() - 40 * 86_400_000).toISOString(),
+					startedAt: new Date(NOW.getTime() - 40 * 86_400_000).toISOString(),
 					trialEndsAt: null,
 					currentPeriodEnd: null,
 					cancelAtPeriodEnd: false,
@@ -357,7 +358,7 @@ describe("CustomerIngest", () => {
 					currency: "usd",
 					interval: "month",
 					quantity: 1,
-					startedAt: new Date(Date.now() - 60 * 86_400_000).toISOString(),
+					startedAt: new Date(NOW.getTime() - 60 * 86_400_000).toISOString(),
 					trialEndsAt: null,
 					currentPeriodEnd: null,
 					cancelAtPeriodEnd: false,
@@ -379,8 +380,8 @@ describe("CustomerIngest", () => {
 						amountDueMinor: 19_900,
 						amountPaidMinor: 0,
 						currency: "usd",
-						issuedAt: new Date().toISOString(),
-						dueAt: new Date().toISOString(),
+						issuedAt: NOW.toISOString(),
+						dueAt: NOW.toISOString(),
 						paidAt: null,
 						attemptCount: 2,
 						declineReason: "card_declined",
@@ -426,8 +427,9 @@ describe("CustomerIngest", () => {
 							)
 						}).pipe(Effect.provide(CustomerIngest.layer)),
 					)
-					.pipe(Effect.flip)
-				expect(refused._tag).toBe("CustomerIngestRejectedError")
+					.pipe(Effect.orDie)
+				expect(outcomeTags(refused)).toEqual(["Rejected"])
+				expect(refused.stats.rejected).toBe(1)
 
 				const disconnected = yield* world.call(
 					"customers.connection.disconnect",
@@ -457,13 +459,21 @@ describe("CustomerIngest", () => {
 				yield* world.ingest("stripe", [
 					stripeCustomer("cus_2", { sameAs: [{ provider: "clerk", externalId: "org_2" }] }),
 				])
-				yield* Effect.sleep("5 millis")
-				const since = new Date()
+				// Everything was last seen long ago; Initech's ref a person linked (sweeps keep it).
+				world.object.storage.db
+					.prepare(`UPDATE customer_external_refs SET lastSyncedAt = '2000-01-01 00:00:00.000'`)
+					.run()
+				world.object.storage.db
+					.prepare(
+						`UPDATE customer_external_refs SET matchMethod = 'manual' WHERE externalId = 'org_3'`,
+					)
+					.run()
+				const since = new Date("2001-01-01T00:00:00.000Z")
 				// The sweep lists Acme and Ann only.
 				yield* world.ingest("clerk", [clerkOrg("org_1", "Acme"), member("ann", "org_1")])
 				yield* sweep(world, "clerk", since, ["account", "contact"])
 
-				expect(accounts(world).map((account) => account.name)).toEqual(["Acme", "Globex"])
+				expect(accounts(world).map((account) => account.name)).toEqual(["Acme", "Globex", "Initech"])
 				expect(
 					world.rows(
 						`SELECT externalId, staleAt IS NOT NULL AS stale FROM customer_external_refs WHERE entityType = 'account' ORDER BY externalId`,
@@ -472,7 +482,7 @@ describe("CustomerIngest", () => {
 					{ externalId: "cus_2", stale: 0 },
 					{ externalId: "org_1", stale: 0 },
 					{ externalId: "org_2", stale: 1 },
-					{ externalId: "org_3", stale: 1 },
+					{ externalId: "org_3", stale: 0 },
 				])
 				expect(liveContacts(world)).toEqual(["ann"])
 				const removed = () =>
@@ -483,9 +493,12 @@ describe("CustomerIngest", () => {
 				yield* sweep(world, "clerk", since, ["account", "contact"])
 				expect(removed()).toHaveLength(1)
 				// A sweep of accounts only leaves contacts alone.
-				yield* Effect.sleep("5 millis")
-				yield* sweep(world, "clerk", new Date(), ["account"])
+				yield* sweep(world, "clerk", new Date("2100-01-01T00:00:00.000Z"), ["account"])
 				expect(liveContacts(world)).toEqual(["ann"])
+				// A removed record seen again (a later listing) is back.
+				yield* world.ingest("clerk", [clerkOrg("org_1", "Acme"), member("bob", "org_1")])
+				expect(liveContacts(world)).toEqual(["ann", "bob"])
+				expect(accounts(world).map((account) => account.name)).toContain("Acme")
 			}),
 		))
 
@@ -495,14 +508,14 @@ describe("CustomerIngest", () => {
 				const world = yield* makeCustomersWorld
 				yield* world.ingest("clerk", [clerkOrg("org_1", "Acme"), member("ann", "org_1")])
 				yield* world.ingest("clerk", [
-					member("ann", "org_1", { removed: true, observedAt: new Date().toISOString() }),
-					{ ...clerkOrg("org_1", "Acme"), deleted: true },
+					member("ann", "org_1", { removed: true, observedAt: isoAt(0) }),
+					{ ...clerkOrg("org_1", "Acme"), deleted: true, observedAt: isoAt(0) },
 				])
 				expect(accounts(world)).toHaveLength(0)
 
 				// Observed before the deletion: nothing changes.
 				const late = yield* world.ingest("clerk", [
-					{ ...clerkOrg("org_1", "Acme Late"), observedAt: isoAgo(60_000) },
+					{ ...clerkOrg("org_1", "Acme Late"), observedAt: isoAt(-60_000) },
 				])
 				expect(outcomeTags(late)).toEqual(["Unchanged"])
 				expect(accounts(world)).toHaveLength(0)
@@ -514,13 +527,13 @@ describe("CustomerIngest", () => {
 
 				// Observed after it (restored at the source): the account is back.
 				const restored = yield* world.ingest("clerk", [
-					{ ...clerkOrg("org_1", "Acme"), observedAt: new Date(Date.now() + 60_000).toISOString() },
+					{ ...clerkOrg("org_1", "Acme"), observedAt: isoAt(60_000) },
 				])
 				expect(outcomeTags(restored)).toEqual(["Updated"])
 				expect(accounts(world).map((account) => account.name)).toEqual(["Acme"])
 
 				const lateMember = yield* world.ingest("clerk", [
-					member("ann", "org_1", { name: "Ann Late", observedAt: isoAgo(60_000) }),
+					member("ann", "org_1", { name: "Ann Late", observedAt: isoAt(-60_000) }),
 				])
 				expect(outcomeTags(lateMember)).toEqual(["Unchanged"])
 				expect(liveContacts(world)).toEqual([])
@@ -652,13 +665,13 @@ describe("CustomerIngest", () => {
 		run(
 			Effect.gen(function* () {
 				const world = yield* makeCustomersWorld
-				const seen = isoAgo(60_000)
+				const seen = isoAt(-60_000)
 				yield* world.ingest("clerk", [
 					clerkOrg("org_1", "Acme"),
 					member("ann", "org_1", { lastSeenAt: seen, lastSignInAt: seen }),
 				])
 				const older = yield* world.ingest("clerk", [
-					member("ann", "org_1", { lastSeenAt: isoAgo(3_600_000), lastSignInAt: null }),
+					member("ann", "org_1", { lastSeenAt: isoAt(-3_600_000), lastSignInAt: null }),
 				])
 				expect(outcomeTags(older)).toEqual(["Unchanged"])
 				const contact = () =>
@@ -666,9 +679,7 @@ describe("CustomerIngest", () => {
 						`SELECT lastSeenAt, lastSignInAt FROM customer_contacts`,
 					)[0]!
 				const before = contact()
-				yield* world.ingest("clerk", [
-					member("ann", "org_1", { lastSeenAt: new Date().toISOString() }),
-				])
+				yield* world.ingest("clerk", [member("ann", "org_1", { lastSeenAt: isoAt(0) })])
 				expect(contact().lastSeenAt).not.toEqual(before.lastSeenAt)
 				expect(contact().lastSignInAt).toEqual(before.lastSignInAt)
 

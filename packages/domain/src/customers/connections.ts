@@ -76,6 +76,8 @@ export const SyncStats = Schema.Struct({
 	activityDays: Schema.Int,
 	metricDays: Schema.Int,
 	unmatched: Schema.Int,
+	/** Ops the store refused (skipped); absent on stats recorded before it was counted. */
+	rejected: Schema.optionalKey(Schema.Int),
 })
 export type SyncStats = typeof SyncStats.Type
 

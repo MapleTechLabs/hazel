@@ -10,6 +10,7 @@ import { OrganizationId, UserId } from "@hazel/schema"
 import { Clock, Effect, Option, Schema } from "effect"
 import type { SqlClient } from "effect/sql/SqlClient"
 import { disconnectConnections } from "../customers/credentials"
+import { inList } from "../customers/sql"
 import { stopComputing } from "../customers/schedule"
 import { readObjectMeta, writeObjectMeta } from "../meta"
 import { defineEffect, type EffectReceivers, type EffectSender, isOrgSender } from "./registry"
@@ -47,7 +48,7 @@ export const applyMembers = Effect.fn("CustomersEffects.applyMembers")(function*
 	const next = new Map(members.map((member) => [member.userId, member.role]))
 	const gone = current.filter((row) => !next.has(row.userId)).map((row) => row.userId)
 	if (gone.length > 0) {
-		yield* db.run(SQLite.deleteFrom(schema.customerMembersTable).where(($) => [$.userId.in_(...gone)]))
+		yield* db.run(SQLite.deleteFrom(schema.customerMembersTable).where(($) => [inList($.userId, gone)]))
 	}
 	const roles = new Map(current.map((row) => [row.userId, row.role]))
 	for (const member of members) {

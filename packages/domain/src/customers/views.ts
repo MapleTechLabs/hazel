@@ -38,16 +38,20 @@ export const DEFAULT_LIST_COLUMNS: ReadonlyArray<ListColumn> = [
 
 /** Every field narrows; an empty object matches every non-deleted account. */
 export const ViewFilters = Schema.Struct({
-	search: Schema.optionalKey(Schema.String),
+	search: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(200))),
 	/** The viewer's own accounts ("My customers"). */
 	ownedByMe: Schema.optionalKey(Schema.Boolean),
-	ownerUserIds: Schema.optionalKey(Schema.Array(UserId)),
+	ownerUserIds: Schema.optionalKey(Schema.Array(UserId).check(Schema.isMaxLength(100))),
 	/** Accounts with no owner. */
 	unowned: Schema.optionalKey(Schema.Boolean),
 	lifecycleStages: Schema.optionalKey(Schema.Array(LifecycleStage)),
 	healthStatuses: Schema.optionalKey(Schema.Array(HealthStatus)),
-	planNames: Schema.optionalKey(Schema.Array(Schema.String)),
-	tagsAny: Schema.optionalKey(Schema.Array(Schema.String)),
+	planNames: Schema.optionalKey(
+		Schema.Array(Schema.String.check(Schema.isMaxLength(100))).check(Schema.isMaxLength(50)),
+	),
+	tagsAny: Schema.optionalKey(
+		Schema.Array(Schema.String.check(Schema.isMaxLength(50))).check(Schema.isMaxLength(50)),
+	),
 	minMrrMinor: Schema.optionalKey(Schema.Int),
 	maxMrrMinor: Schema.optionalKey(Schema.Int),
 	/** MRR > 0. */

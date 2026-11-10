@@ -16,10 +16,12 @@
  * metrics and events, the unknown account or contact they name (no payload: the next pull brings
  * the data again). Creating a ref (matching, linking) replays every open record it unblocks.
  *
- * Ordering: an account or contact op carrying `observedAt` at or before its record's deletion (the
- * ref's `staleAt`, the contact's `deletedAt`) is late and changes nothing; contacts' `lastSeenAt` /
- * `lastSignInAt` only move forward. A successful full sweep (`completeSweep`) removes the records it
- * did not see.
+ * Ordering: an account or contact op carrying `observedAt` at or before the `observedAt` of the
+ * provider's delete op that removed its record (the ref's `deletedObservedAt`) is late and changes
+ * nothing; any other sighting revives the record. Contacts' `lastSeenAt` / `lastSignInAt` /
+ * `lastActiveDay` only move forward. A successful full sweep (`completeSweep`) removes the records
+ * it did not see (never a ref a person linked). A removed ref goes stale; its account or contact is
+ * soft-deleted once no live ref of it is left.
  *
  * Writes compare first, so an op that changes nothing writes nothing (`Unchanged`, no `_changes`
  * row). Ingest also records timeline events for the state changes it sees (subscription started,
@@ -60,10 +62,12 @@ import { Clock, Context, Effect, Layer, Option, Schema } from "effect"
 import { SqlClient } from "effect/sql/SqlClient"
 import { isBuiltInMetric } from "./defaults"
 import type { CustomerIngestApi, IngestContext, RunResult } from "./ingest"
-import { requestCompute, requestHistoryRebuild, setBaselineFor } from "./schedule"
+import { requestCompute, requestComputeAfterIngest, requestHistoryRebuild, setBaselineFor } from "./schedule"
 
 /** Ops per transaction. */
 const INGEST_CHUNK = 500
+/** Domains an account op brings (they bind as parameters of the domain match). */
+const MAX_DOMAINS = 20
 
 /** An op the store cannot take (a built-in metric key, a negative amount). Not retried. */
 export class CustomerIngestRejectedError extends Schema.TaggedError<CustomerIngestRejectedError>()(
@@ -136,21 +140,39 @@ export const normalizeDomain = (value: string): string | null => {
 const emailDomain = (email: string | null | undefined) =>
 	email == null || !email.includes("@") ? null : normalizeDomain(email.split("@")[1])
 
-/** `*`-glob, case-insensitive, whole value. */
-export const globMatches = (pattern: string, value: string) =>
-	new RegExp(
-		`^${pattern
-			.split("*")
-			.map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&"))
-			.join(".*")}$`,
-		"i",
-	).test(value)
+/**
+ * `*`-glob, case-insensitive, whole value. No regex: the literal parts are found in order (each
+ * the earliest occurrence, which is enough for `*`), so a pattern cannot backtrack catastrophically.
+ */
+export const globMatches = (pattern: string, value: string) => {
+	const parts = pattern.toLowerCase().split("*")
+	const text = value.toLowerCase()
+	if (parts.length === 1) return text === parts[0]
+	const first = parts[0]
+	const last = parts[parts.length - 1]
+	if (!text.startsWith(first) || text.length < first.length + last.length) return false
+	let at = first.length
+	for (const part of parts.slice(1, -1)) {
+		const found = text.indexOf(part, at)
+		if (found === -1) return false
+		at = found + part.length
+	}
+	return text.length - last.length >= at && text.endsWith(last)
+}
 
 const toDate = (value: string | null | undefined): Date | null => (value == null ? null : new Date(value))
 
-/** An op observed at or before its record's deletion arrived late: it must not revive it. */
-const observedBefore = (observedAt: string | undefined, deletedAt: Date | null) =>
-	observedAt !== undefined && deletedAt !== null && new Date(observedAt) <= deletedAt
+/** An op observed at or before the provider deleted its record arrived late: it must not revive it. */
+const observedBefore = (observedAt: string | undefined, ref: schema.CustomerExternalRef) =>
+	observedAt !== undefined &&
+	ref.deletedObservedAt !== null &&
+	new Date(observedAt) <= ref.deletedObservedAt
+
+/** A delete op that changes nothing: the ref is already removed by one observed as late or later. */
+const alreadyRemoved = (observedAt: string | undefined, ref: schema.CustomerExternalRef) =>
+	ref.staleAt !== null &&
+	(observedAt === undefined ||
+		(ref.deletedObservedAt !== null && new Date(observedAt) <= ref.deletedObservedAt))
 
 /** `next` when it is later than `current` (a timestamp never moves backwards). */
 const later = (current: Date | null, next: string | null | undefined) => {
@@ -158,9 +180,11 @@ const later = (current: Date | null, next: string | null | undefined) => {
 	return at !== null && (current === null || at > current) ? at : undefined
 }
 
-const accountDomains = (op: UpsertAccount) => [
-	...new Set((op.domains ?? []).map(normalizeDomain).filter((domain) => domain !== null)),
-]
+const accountDomains = (op: UpsertAccount) =>
+	[...new Set((op.domains ?? []).map(normalizeDomain).filter((domain) => domain !== null))].slice(
+		0,
+		MAX_DOMAINS,
+	)
 
 /** How a parked account reads in the unmatched list. */
 const describeAccount = (op: UpsertAccount) => {
@@ -262,7 +286,10 @@ interface Session {
 	readonly accounts: Map<string, CustomerAccountId>
 	/** `provider:externalId:accountId` → contact. */
 	readonly contacts: Map<string, CustomerContactId>
-	readonly firstActive: Map<CustomerContactId, Date | null>
+	/** A contact's first and last active day, as stored. */
+	readonly active: Map<CustomerContactId, { readonly first: Date | null; readonly last: string | null }>
+	/** The connection was disconnected: nothing it sends lands. */
+	readonly disconnected: boolean
 }
 
 const refKey = (ref: ProviderRef) => `${ref.provider}:${ref.externalId}`
@@ -302,6 +329,8 @@ const make = Effect.gen(function* () {
 	// Compute scheduling lives in `_object_meta`, read and written through the raw client.
 	const sql = yield* SqlClient
 	const withSql = Effect.provideService(SqlClient, sql)
+	const withStore = <A, E>(effect: Effect.Effect<A, E, SqlClient | Database.Database>) =>
+		effect.pipe(Effect.provideService(SqlClient, sql), Effect.provideService(Database.Database, db))
 	// -----------------------------------------------------------------------
 	// Lookups
 	// -----------------------------------------------------------------------
@@ -419,6 +448,7 @@ const make = Effect.gen(function* () {
 				.set({
 					lastSyncedAt: session.now,
 					staleAt: null,
+					deletedObservedAt: null,
 					externalUrl,
 					updatedAt: session.now,
 				})
@@ -485,6 +515,49 @@ const make = Effect.gen(function* () {
 					.limit(1),
 			)
 			return Option.map(record, (): IngestOutcome => ({ _tag: "Ignored", ruleId: null }))
+		})
+
+	/** An account an ignore rule matched by its domain or name: its record, ignored. */
+	const recordIgnored = (session: Session, op: UpsertAccount) =>
+		Effect.gen(function* () {
+			const { provider } = session.context
+			const existing = yield* db.first(
+				SQLite.from(schema.customerUnmatchedRecordsTable)
+					.select("id", "status")
+					.where(($) => [
+						$.provider.eq(provider),
+						$.entityType.eq("account"),
+						$.externalId.eq(op.externalId),
+					])
+					.limit(1),
+			)
+			if (Option.isSome(existing)) {
+				if (existing.value.status === "ignored") return
+				yield* db.run(
+					SQLite.update(schema.customerUnmatchedRecordsTable)
+						.set({
+							status: "ignored",
+							payload: null,
+							resolvedAt: session.now,
+							updatedAt: session.now,
+						})
+						.where(($) => [$.id.eq(existing.value.id)]),
+				)
+				return
+			}
+			yield* db.run(
+				SQLite.insertInto(schema.customerUnmatchedRecordsTable).values({
+					connectionId: session.context.connectionId,
+					provider,
+					entityType: "account",
+					externalId: op.externalId,
+					...describeAccount(op),
+					payload: null,
+					reason: "Matches an ignore rule",
+					status: "ignored",
+					resolvedAt: session.now,
+				}),
+			)
 		})
 
 	/**
@@ -784,14 +857,22 @@ const make = Effect.gen(function* () {
 			return row.id
 		})
 
+	/** A removed ref: stale, with the delete op's `observedAt` (null for a sweep, or an undated op). */
+	const removeRef = (now: Date, ref: schema.CustomerExternalRef, observedAt: string | undefined) =>
+		db.run(
+			SQLite.update(schema.customerExternalRefsTable)
+				.set({
+					staleAt: ref.staleAt ?? now,
+					deletedObservedAt: toDate(observedAt) ?? ref.deletedObservedAt,
+					updatedAt: now,
+				})
+				.where(($) => [$.id.eq(ref.id)]),
+		)
+
 	/** A provider's account record is gone: its ref goes stale, the account too once no live ref is left. */
-	const staleAccountRef = (now: Date, ref: schema.CustomerExternalRef) =>
+	const staleAccountRef = (now: Date, ref: schema.CustomerExternalRef, observedAt?: string) =>
 		Effect.gen(function* () {
-			yield* db.run(
-				SQLite.update(schema.customerExternalRefsTable)
-					.set({ staleAt: now, updatedAt: now })
-					.where(($) => [$.id.eq(ref.id)]),
-			)
+			yield* removeRef(now, ref, observedAt)
 			const live = yield* db.first(
 				SQLite.from(schema.customerExternalRefsTable)
 					.select("id")
@@ -820,15 +901,14 @@ const make = Effect.gen(function* () {
 			if (op.deleted === true) {
 				if (Option.isNone(ref)) return outcome.unchanged(op.externalId)
 				const { accountId } = ref.value
-				if (ref.value.staleAt !== null) return outcome.unchanged(accountId)
-				yield* staleAccountRef(session.now, ref.value)
+				if (alreadyRemoved(op.observedAt, ref.value)) return outcome.unchanged(accountId)
+				yield* staleAccountRef(session.now, ref.value, op.observedAt)
 				return outcome.updated(accountId)
 			}
 
 			if (Option.isSome(ref)) {
 				// Deleted after the source last changed it: a late delivery.
-				if (observedBefore(op.observedAt, ref.value.staleAt))
-					return outcome.unchanged(ref.value.accountId)
+				if (observedBefore(op.observedAt, ref.value)) return outcome.unchanged(ref.value.accountId)
 				yield* touchRef(session, ref.value, op.externalUrl)
 				const changed = yield* applyAccountFields(session, ref.value.accountId, op, domains)
 				return changed ? outcome.updated(ref.value.accountId) : outcome.unchanged(ref.value.accountId)
@@ -854,8 +934,11 @@ const make = Effect.gen(function* () {
 				name: op.name ?? null,
 				externalId: op.externalId,
 			})
-			if (Option.isSome(ignored))
+			if (Option.isSome(ignored)) {
+				// Recorded as ignored, so its members, billing and usage (named by id) are ignored too.
+				yield* recordIgnored(session, op)
 				return { _tag: "Ignored", ruleId: ignored.value.id } satisfies IngestOutcome
+			}
 
 			const create =
 				match._tag === "None" &&
@@ -909,6 +992,37 @@ const make = Effect.gen(function* () {
 			externalId: `ingest:contact.removed:${contactId}:${session.now.toISOString()}`,
 		})
 
+	/**
+	 * A provider's contact record is gone from the account: its ref goes stale, the contact is
+	 * soft-deleted (with a `contact.removed` event) once no live ref of it is left.
+	 */
+	const removeContactRef = (session: Session, ref: schema.CustomerExternalRef, observedAt?: string) =>
+		Effect.gen(function* () {
+			yield* removeRef(session.now, ref, observedAt)
+			const contactId = ref.entityId as CustomerContactId
+			const other = yield* db.first(
+				SQLite.from(schema.customerExternalRefsTable)
+					.select("id")
+					.where(($) => [
+						$.entityType.eq("contact"),
+						$.entityId.eq(contactId),
+						$.staleAt.isNull(),
+						$.id.neq(ref.id),
+					])
+					.limit(1),
+			)
+			if (Option.isSome(other)) return false
+			const [contact] = yield* db.run(
+				SQLite.update(schema.customerContactsTable)
+					.set({ deletedAt: session.now, updatedAt: session.now })
+					.where(($) => [$.id.eq(contactId), $.deletedAt.isNull()])
+					.returning("name", "email"),
+			)
+			if (contact === undefined) return false
+			yield* recordRemoved(session, ref.accountId, contactId, contactName(contact))
+			return true
+		})
+
 	const applyContact = (session: Session, op: UpsertContact) =>
 		Effect.gen(function* () {
 			const { provider } = session.context
@@ -936,10 +1050,18 @@ const make = Effect.gen(function* () {
 				})
 			}
 			const known = yield* contactRef({ provider, externalId: op.externalId }, accountId.value)
+			if (op.removed === true) {
+				if (Option.isNone(known) || alreadyRemoved(op.observedAt, known.value))
+					return outcome.unchanged(op.externalId)
+				yield* removeContactRef(session, known.value, op.observedAt)
+				return outcome.updated(known.value.entityId)
+			}
+			// Removed after the source last changed it: a late delivery.
+			if (Option.isSome(known) && observedBefore(op.observedAt, known.value))
+				return outcome.unchanged(known.value.entityId)
 			let contactId = Option.isSome(known) ? (known.value.entityId as CustomerContactId) : undefined
 			let created = false
 			if (contactId === undefined) {
-				if (op.removed === true) return outcome.unchanged(op.externalId)
 				const email = op.email
 				const byEmail =
 					email == null
@@ -995,9 +1117,6 @@ const make = Effect.gen(function* () {
 			)
 			if (Option.isNone(current)) return outcome.unchanged(id)
 			const contact = current.value
-			// Removed after the source last changed it: a late delivery.
-			if (op.removed !== true && observedBefore(op.observedAt, contact.deletedAt))
-				return outcome.unchanged(id)
 			// Seen again (a full sweep removes the contacts it does not see).
 			if (Option.isSome(known)) yield* touchRef(session, known.value, op.externalUrl)
 			const patch = makePatch(contact, contact.fieldSources, provider)
@@ -1013,9 +1132,7 @@ const make = Effect.gen(function* () {
 			patch.set("signInCount30d", op.signInCount30d)
 			if (op.attributes !== undefined)
 				patch.set("attributes", { ...contact.attributes, ...op.attributes })
-			const removing = op.removed === true && contact.deletedAt === null
-			if (removing) patch.set("deletedAt", session.now)
-			else if (op.removed !== true && contact.deletedAt !== null) patch.set("deletedAt", null)
+			if (contact.deletedAt !== null) patch.set("deletedAt", null)
 			const changes = patch.result()
 			if (changes !== undefined) {
 				yield* db.run(
@@ -1035,7 +1152,6 @@ const make = Effect.gen(function* () {
 					externalId: `ingest:contact.joined:${id}`,
 				})
 			}
-			if (removing) yield* recordRemoved(session, accountId.value, id, name)
 			return created
 				? outcome.created(id)
 				: changes === undefined
@@ -1378,11 +1494,12 @@ const make = Effect.gen(function* () {
 				result = outcome.updated(id)
 			}
 			const active = (op.eventCount ?? 0) > 0 || (op.sessionCount ?? 0) > 0 || op.signedIn === true
-			if (active) yield* markFirstActive(session, accountId.value, id, op.day)
+			if (active) yield* markActive(session, accountId.value, id, op.day)
 			return result
 		})
 
-	const markFirstActive = (
+	/** An active day: the contact's first active instant and last active day widen to cover it. */
+	const markActive = (
 		session: Session,
 		accountId: CustomerAccountId,
 		contactId: CustomerContactId,
@@ -1390,16 +1507,17 @@ const make = Effect.gen(function* () {
 	) =>
 		Effect.gen(function* () {
 			const at = new Date(`${day}T00:00:00.000Z`)
-			let known = session.firstActive.get(contactId)
+			let known = session.active.get(contactId)
 			if (known === undefined) {
 				const row = yield* db.first(
 					SQLite.from(schema.customerContactsTable)
-						.select("firstActiveAt", "name", "email")
+						.select("firstActiveAt", "lastActiveDay", "name", "email")
 						.where(($) => [$.id.eq(contactId)])
 						.limit(1),
 				)
-				known = Option.match(row, { onNone: () => null, onSome: (contact) => contact.firstActiveAt })
-				if (known === null && Option.isSome(row)) {
+				if (Option.isNone(row)) return
+				known = { first: row.value.firstActiveAt, last: row.value.lastActiveDay }
+				if (known.first === null) {
 					yield* recordEvent(session, {
 						accountId,
 						contactId,
@@ -1410,11 +1528,14 @@ const make = Effect.gen(function* () {
 					})
 				}
 			}
-			if (known !== null && known <= at) return
-			session.firstActive.set(contactId, at)
+			const first = known.first === null || at < known.first ? at : undefined
+			const last = known.last === null || day > known.last ? day : undefined
+			if (first === undefined && last === undefined) return
+			session.active.set(contactId, { first: first ?? known.first, last: last ?? known.last })
 			yield* db.run(
 				SQLite.update(schema.customerContactsTable)
-					.set({ firstActiveAt: at, updatedAt: session.now })
+					// `undefined` leaves a column as it is.
+					.set({ firstActiveAt: first, lastActiveDay: last, updatedAt: session.now })
 					.where(($) => [$.id.eq(contactId)]),
 			)
 		})
@@ -1604,7 +1725,7 @@ const make = Effect.gen(function* () {
 		Effect.gen(function* () {
 			const connection = yield* db.first(
 				SQLite.from(schema.customerConnectionsTable)
-					.select("config")
+					.select("config", "status")
 					.where(($) => [$.id.eq(context.connectionId)])
 					.limit(1),
 			)
@@ -1616,7 +1737,11 @@ const make = Effect.gen(function* () {
 				ignoreRules,
 				accounts: new Map(),
 				contacts: new Map(),
-				firstActive: new Map(),
+				active: new Map(),
+				disconnected: Option.match(connection, {
+					onNone: () => false,
+					onSome: (row) => row.status === "disconnected",
+				}),
 			} satisfies Session
 		})
 
@@ -1629,336 +1754,350 @@ const make = Effect.gen(function* () {
 		activityDays: into.activityDays + delta.activityDays,
 		metricDays: into.metricDays + delta.metricDays,
 		unmatched: into.unmatched + delta.unmatched,
+		rejected: (into.rejected ?? 0) + (delta.rejected ?? 0),
 	})
 
-	const apply = (context: IngestContext, ops: ReadonlyArray<IngestOp>) =>
-		Effect.gen(function* () {
-			const session = yield* openSession(context)
-			const outcomes: Array<IngestOutcome> = []
-			const stats = { ...EMPTY_SYNC_STATS }
-			for (let start = 0; start < ops.length; start += INGEST_CHUNK) {
-				const chunk = ops.slice(start, start + INGEST_CHUNK)
-				const results = yield* db.transaction(
-					Effect.forEach(chunk, (op, offset) => applyOp(session, op, start + offset)),
-				)
-				outcomes.push(...results)
-			}
-			ops.forEach((op, index) => {
-				const result = outcomes[index]
-				const stat = STAT_OF[op._tag]
-				if (result._tag === "Unmatched") stats.unmatched++
-				else if (stat !== null && (result._tag === "Created" || result._tag === "Updated"))
-					stats[stat]++
-			})
-			const changed = outcomes.some((result) => result._tag === "Created" || result._tag === "Updated")
-			yield* db.transaction(
-				Effect.gen(function* () {
-					const { runId } = context
-					if (runId !== null) {
-						const run = yield* db.first(
-							SQLite.from(schema.customerSyncRunsTable)
-								.select("stats")
-								.where(($) => [$.id.eq(runId)])
-								.limit(1),
-						)
-						if (Option.isSome(run)) {
-							yield* db.run(
-								SQLite.update(schema.customerSyncRunsTable)
-									.set({ stats: addStats(run.value.stats, stats) })
-									.where(($) => [$.id.eq(runId)]),
-							)
-						}
-					}
-					if (changed || stats.unmatched > 0) {
-						const connection = yield* db.first(
-							SQLite.from(schema.customerConnectionsTable)
-								.select("stats")
-								.where(($) => [$.id.eq(context.connectionId)])
-								.limit(1),
-						)
-						if (Option.isSome(connection)) {
-							yield* db.run(
-								SQLite.update(schema.customerConnectionsTable)
-									.set({
-										stats: addStats(connection.value.stats, stats),
-										updatedAt: session.now,
-									})
-									.where(($) => [$.id.eq(context.connectionId)]),
-							)
-						}
-					}
-					if (changed) yield* withSql(requestCompute)
-				}),
+	/**
+	 * One op; an op the store refuses is skipped (and counted), so one bad record cannot block its
+	 * connection. Refusals happen before the op writes anything. Logged by position and kind only:
+	 * the op's values are customer data.
+	 */
+	const applyOrSkip = (session: Session, op: IngestOp, index: number) =>
+		applyOp(session, op, index).pipe(
+			Effect.catchTag("CustomerIngestRejectedError", (error) =>
+				Effect.logWarning("Customers ingest skipped an op", {
+					connectionId: session.context.connectionId,
+					index: error.index,
+					op: error.op,
+					message: error.message,
+				}).pipe(Effect.as<IngestOutcome>({ _tag: "Rejected", message: error.message })),
+			),
+		)
+
+	const apply = Effect.fn("CustomerIngest.apply")(function* (
+		context: IngestContext,
+		ops: ReadonlyArray<IngestOp>,
+	) {
+		yield* Effect.annotateCurrentSpan({ "ingest.ops": ops.length, "ingest.provider": context.provider })
+		const session = yield* openSession(context)
+		const stats = { ...EMPTY_SYNC_STATS, rejected: 0 }
+		// A disconnected connection's late deliveries (an in-flight pull page) change nothing.
+		if (session.disconnected) {
+			return { stats, outcomes: ops.map((): IngestOutcome => ({ _tag: "Ignored", ruleId: null })) }
+		}
+		const outcomes: Array<IngestOutcome> = []
+		for (let start = 0; start < ops.length; start += INGEST_CHUNK) {
+			const chunk = ops.slice(start, start + INGEST_CHUNK)
+			const results = yield* db.transaction(
+				Effect.forEach(chunk, (op, offset) => applyOrSkip(session, op, start + offset)),
 			)
-			yield* Effect.annotateCurrentSpan({
-				"ingest.changed": changed,
-				...Object.fromEntries(Object.entries(stats).map(([key, value]) => [`ingest.${key}`, value])),
-			})
-			return { stats, outcomes }
-		}).pipe(
-			Effect.withSpan("CustomerIngest.apply", {
-				attributes: { "ingest.ops": ops.length, "ingest.provider": context.provider },
+			outcomes.push(...results)
+		}
+		ops.forEach((op, index) => {
+			const result = outcomes[index]
+			const stat = STAT_OF[op._tag]
+			if (result._tag === "Unmatched") stats.unmatched++
+			else if (result._tag === "Rejected") stats.rejected++
+			else if (stat !== null && (result._tag === "Created" || result._tag === "Updated")) stats[stat]++
+		})
+		const changed = outcomes.some((result) => result._tag === "Created" || result._tag === "Updated")
+		yield* db.transaction(
+			Effect.gen(function* () {
+				const { runId } = context
+				if (runId !== null) {
+					const run = yield* db.first(
+						SQLite.from(schema.customerSyncRunsTable)
+							.select("stats")
+							.where(($) => [$.id.eq(runId)])
+							.limit(1),
+					)
+					if (Option.isSome(run)) {
+						yield* db.run(
+							SQLite.update(schema.customerSyncRunsTable)
+								.set({ stats: addStats(run.value.stats, stats) })
+								.where(($) => [$.id.eq(runId)]),
+						)
+					}
+				}
+				if (changed || stats.unmatched > 0) {
+					const connection = yield* db.first(
+						SQLite.from(schema.customerConnectionsTable)
+							.select("stats")
+							.where(($) => [$.id.eq(context.connectionId)])
+							.limit(1),
+					)
+					if (Option.isSome(connection)) {
+						yield* db.run(
+							SQLite.update(schema.customerConnectionsTable)
+								.set({
+									stats: addStats(connection.value.stats, stats),
+									updatedAt: session.now,
+								})
+								.where(($) => [$.id.eq(context.connectionId)]),
+						)
+					}
+				}
+				if (changed) yield* withStore(requestComputeAfterIngest)
 			}),
 		)
+		yield* Effect.annotateCurrentSpan({
+			"ingest.changed": changed,
+			...Object.fromEntries(Object.entries(stats).map(([key, value]) => [`ingest.${key}`, value])),
+		})
+		return { stats, outcomes }
+	})
 
 	// -----------------------------------------------------------------------
 	// Runs, links, staleness
 	// -----------------------------------------------------------------------
 
-	const startRun = (connectionId: CustomerConnectionId, trigger: IngestContext["trigger"]) =>
-		Effect.gen(function* () {
-			const connection = yield* db.first(
-				SQLite.from(schema.customerConnectionsTable)
-					.select()
-					.where(($) => [$.id.eq(connectionId)])
-					.limit(1),
-			)
-			if (Option.isNone(connection))
-				return yield* Effect.die(new Error(`No connection ${connectionId}`))
-			const [row] = yield* db.run(
-				SQLite.insertInto(schema.customerSyncRunsTable)
-					.values({
-						organizationId: connection.value.organizationId,
-						connectionId,
-						provider: connection.value.provider,
-						trigger,
-						startedAt: new Date(yield* Clock.currentTimeMillis),
-					})
-					.returning(),
-			)
-			return row
-		})
+	const startRun = Effect.fn("CustomerIngest.startRun")(function* (
+		connectionId: CustomerConnectionId,
+		trigger: IngestContext["trigger"],
+	) {
+		const connection = yield* db.first(
+			SQLite.from(schema.customerConnectionsTable)
+				.select()
+				.where(($) => [$.id.eq(connectionId)])
+				.limit(1),
+		)
+		if (Option.isNone(connection)) return yield* Effect.die(new Error(`No connection ${connectionId}`))
+		const [row] = yield* db.run(
+			SQLite.insertInto(schema.customerSyncRunsTable)
+				.values({
+					organizationId: connection.value.organizationId,
+					connectionId,
+					provider: connection.value.provider,
+					trigger,
+					startedAt: new Date(yield* Clock.currentTimeMillis),
+				})
+				.returning(),
+		)
+		return row
+	})
 
-	const progress = (
+	const progress = Effect.fn("CustomerIngest.progress")(function* (
 		runId: CustomerSyncRunId,
 		value: { step: string; done: number; total: number | null },
-	) =>
-		db
-			.run(
-				SQLite.update(schema.customerSyncRunsTable)
-					.set({ progress: value })
-					.where(($) => [$.id.eq(runId)]),
-			)
-			.pipe(Effect.asVoid)
+	) {
+		yield* db.run(
+			SQLite.update(schema.customerSyncRunsTable)
+				.set({ progress: value })
+				.where(($) => [$.id.eq(runId)]),
+		)
+	})
 
-	const finishRun = (runId: CustomerSyncRunId, result: RunResult) =>
-		Effect.gen(function* () {
-			const now = new Date(yield* Clock.currentTimeMillis)
-			const [run] = yield* db.run(
-				SQLite.update(schema.customerSyncRunsTable)
-					.set(
-						result._tag === "Succeeded"
-							? { status: "succeeded", finishedAt: now, cursor: result.cursor, error: null }
-							: result._tag === "Failed"
-								? { status: "failed", finishedAt: now, error: result.error }
-								: { error: result.error },
-					)
-					.where(($) => [$.id.eq(runId)])
-					.returning(),
-			)
-			if (run === undefined) return
-			const connection = yield* db.first(
-				SQLite.from(schema.customerConnectionsTable)
-					.select()
-					.where(($) => [$.id.eq(run.connectionId)])
-					.limit(1),
-			)
-			if (Option.isNone(connection)) return
-			const current = connection.value
-			yield* db.run(
-				SQLite.update(schema.customerConnectionsTable)
-					.set(
-						result._tag === "Succeeded"
-							? {
-									lastSyncAt: now,
-									lastSuccessAt: now,
-									lastError: null,
-									consecutiveFailures: 0,
-									// `undefined` leaves a column as it is.
-									status: current.status === "error" ? ("active" as const) : undefined,
-									backfilledAt: run.trigger === "backfill" ? now : undefined,
-									updatedAt: now,
-								}
-							: {
-									lastSyncAt: now,
-									lastErrorAt: now,
-									lastError: result.error,
-									consecutiveFailures: current.consecutiveFailures + 1,
-									status:
-										result.error.code === "auth" && current.status === "active"
-											? ("error" as const)
-											: undefined,
-									updatedAt: now,
-								},
-					)
-					.where(($) => [$.id.eq(current.id)]),
-			)
-			if (result._tag === "Succeeded" && run.trigger === "backfill") {
-				yield* withSql(setBaselineFor(current.id))
-				// The first import brings old data: chart history is rebuilt once, not on later imports.
-				if (current.backfilledAt === null) yield* withSql(requestHistoryRebuild)
-			}
-			yield* withSql(requestCompute)
-		})
-
-	const link = (recordId: CustomerUnmatchedRecordId, accountId: CustomerAccountId, by: UserId) =>
-		Effect.gen(function* () {
-			const found = yield* db.first(
-				SQLite.from(schema.customerUnmatchedRecordsTable)
-					.select()
-					.where(($) => [$.id.eq(recordId)])
-					.limit(1),
-			)
-			const fail = (message: string) =>
-				new CustomerIngestRejectedError({ index: 0, op: "link", message })
-			if (Option.isNone(found)) return yield* fail("No such unmatched record")
-			const record = found.value
-			if (record.status !== "open") return yield* fail(`The record is already ${record.status}`)
-			if (Option.isNone(yield* liveAccount(accountId)))
-				return yield* fail("The customer does not exist")
-			const session: Session = {
-				...(yield* openSession({
-					connectionId: record.connectionId,
-					provider: record.provider,
-					runId: null,
-					trigger: "manual",
-				})),
-			}
-			const ops = yield* parkedOps(record)
-			if (ops.length === 0 && Array.isArray(record.payload) && record.payload.length > 0)
-				return yield* fail("The record's data is unreadable")
-			// A contact parked in several unknown accounts: the first one is linked.
-			const op = ops[0] ?? null
-			// The ref that places it: its own (account records), or its account's (the rest).
-			const target: ProviderRef =
-				record.entityType === "account" || op === null || !("account" in op)
-					? { provider: record.provider, externalId: record.externalId }
-					: op.account
-			if (record.entityType === "contact" && op === null) {
-				// Activity of an unknown user: a contact in the chosen account carries it from now on.
-				const [contact] = yield* db.run(
-					SQLite.insertInto(schema.customerContactsTable)
-						.values({ accountId, name: record.label, email: record.email })
-						.returning("id"),
+	const finishRun = Effect.fn("CustomerIngest.finishRun")(function* (
+		runId: CustomerSyncRunId,
+		result: RunResult,
+	) {
+		const now = new Date(yield* Clock.currentTimeMillis)
+		const [run] = yield* db.run(
+			SQLite.update(schema.customerSyncRunsTable)
+				.set(
+					result._tag === "Succeeded"
+						? { status: "succeeded", finishedAt: now, cursor: result.cursor, error: null }
+						: result._tag === "Failed"
+							? { status: "failed", finishedAt: now, error: result.error }
+							: { error: result.error },
 				)
-				yield* insertRef(session, {
-					provider: record.provider,
-					externalId: record.externalId,
-					entityType: "contact",
-					entityId: contact.id,
-					accountId,
-					matchMethod: "manual",
-					matchedByUserId: by,
-				})
-			} else {
-				const existing = yield* accountRef(target.provider, target.externalId)
-				if (Option.isSome(existing)) {
-					return yield* fail(
-						`${target.provider} ${target.externalId} is already linked to a customer`,
-					)
-				}
-				yield* insertRef(session, {
-					provider: target.provider,
-					externalId: target.externalId,
-					entityType: "account",
-					entityId: accountId,
-					accountId,
-					matchMethod: "manual",
-					matchedByUserId: by,
-				})
+				// A run a disconnect (or the org's deletion) already ended stays as it ended.
+				.where(($) => [$.id.eq(runId), $.status.eq("running")])
+				.returning(),
+		)
+		if (run === undefined) return
+		const connection = yield* db.first(
+			SQLite.from(schema.customerConnectionsTable)
+				.select()
+				.where(($) => [$.id.eq(run.connectionId)])
+				.limit(1),
+		)
+		if (Option.isNone(connection) || connection.value.status === "disconnected") return
+		const current = connection.value
+		yield* db.run(
+			SQLite.update(schema.customerConnectionsTable)
+				.set(
+					result._tag === "Succeeded"
+						? {
+								lastSyncAt: now,
+								lastSuccessAt: now,
+								lastError: null,
+								consecutiveFailures: 0,
+								// `undefined` leaves a column as it is.
+								status: current.status === "error" ? ("active" as const) : undefined,
+								backfilledAt: run.trigger === "backfill" ? now : undefined,
+								updatedAt: now,
+							}
+						: {
+								lastSyncAt: now,
+								lastErrorAt: now,
+								lastError: result.error,
+								consecutiveFailures: current.consecutiveFailures + 1,
+								status:
+									result.error.code === "auth" && current.status === "active"
+										? ("error" as const)
+										: undefined,
+								updatedAt: now,
+							},
+				)
+				.where(($) => [$.id.eq(current.id)]),
+		)
+		if (result._tag === "Succeeded" && run.trigger === "backfill") {
+			yield* withSql(setBaselineFor(current.id))
+			// The first import brings old data: chart history is rebuilt once, not on later imports.
+			if (current.backfilledAt === null) yield* withSql(requestHistoryRebuild)
+		}
+		yield* withSql(requestCompute)
+	})
+
+	const link = Effect.fn("CustomerIngest.link")(function* (
+		recordId: CustomerUnmatchedRecordId,
+		accountId: CustomerAccountId,
+		by: UserId,
+	) {
+		const found = yield* db.first(
+			SQLite.from(schema.customerUnmatchedRecordsTable)
+				.select()
+				.where(($) => [$.id.eq(recordId)])
+				.limit(1),
+		)
+		const fail = (message: string) => new CustomerIngestRejectedError({ index: 0, op: "link", message })
+		if (Option.isNone(found)) return yield* fail("No such unmatched record")
+		const record = found.value
+		if (record.status !== "open") return yield* fail(`The record is already ${record.status}`)
+		if (Option.isNone(yield* liveAccount(accountId))) return yield* fail("The customer does not exist")
+		const session: Session = {
+			...(yield* openSession({
+				connectionId: record.connectionId,
+				provider: record.provider,
+				runId: null,
+				trigger: "manual",
+			})),
+		}
+		const ops = yield* parkedOps(record)
+		if (ops.length === 0 && Array.isArray(record.payload) && record.payload.length > 0)
+			return yield* fail("The record's data is unreadable")
+		// A contact parked in several unknown accounts: the first one is linked.
+		const op = ops[0] ?? null
+		// The ref that places it: its own (account records), or its account's (the rest).
+		const target: ProviderRef =
+			record.entityType === "account" || op === null || !("account" in op)
+				? { provider: record.provider, externalId: record.externalId }
+				: op.account
+		if (record.entityType === "contact" && op === null) {
+			// Activity of an unknown user: a contact in the chosen account carries it from now on.
+			const [contact] = yield* db.run(
+				SQLite.insertInto(schema.customerContactsTable)
+					.values({ accountId, name: record.label, email: record.email })
+					.returning("id"),
+			)
+			yield* insertRef(session, {
+				provider: record.provider,
+				externalId: record.externalId,
+				entityType: "contact",
+				entityId: contact.id,
+				accountId,
+				matchMethod: "manual",
+				matchedByUserId: by,
+			})
+		} else {
+			const existing = yield* accountRef(target.provider, target.externalId)
+			if (Option.isSome(existing)) {
+				return yield* fail(`${target.provider} ${target.externalId} is already linked to a customer`)
 			}
-			yield* db.run(
-				SQLite.update(schema.customerUnmatchedRecordsTable)
-					.set({
-						status: "linked",
-						resolvedByUserId: by,
-						resolvedAt: session.now,
-						updatedAt: session.now,
-					})
-					// Still open when an op of it could not land yet (parked again).
-					.where(($) => [$.id.eq(recordId), $.status.eq("linked")]),
-			)
-			yield* withSql(requestCompute)
-			return outcome.updated(accountId)
-		})
+			yield* insertRef(session, {
+				provider: target.provider,
+				externalId: target.externalId,
+				entityType: "account",
+				entityId: accountId,
+				accountId,
+				matchMethod: "manual",
+				matchedByUserId: by,
+			})
+		}
+		yield* db.run(
+			SQLite.update(schema.customerUnmatchedRecordsTable)
+				.set({
+					status: "linked",
+					resolvedByUserId: by,
+					resolvedAt: session.now,
+					updatedAt: session.now,
+				})
+				// Still open when an op of it could not land yet (parked again).
+				.where(($) => [$.id.eq(recordId), $.status.eq("linked")]),
+		)
+		yield* withSql(requestCompute)
+		return outcome.updated(accountId)
+	})
 
-	const setStale = (connectionId: CustomerConnectionId, stale: boolean) =>
-		Effect.gen(function* () {
-			const now = new Date(yield* Clock.currentTimeMillis)
-			yield* db.run(
-				SQLite.update(schema.customerExternalRefsTable)
-					.set({ staleAt: stale ? now : null, updatedAt: now })
-					.where(($) => [
-						$.connectionId.eq(connectionId),
-						stale ? $.staleAt.isNull() : $.staleAt.isNotNull(),
-					]),
-			)
-		})
+	const setStale = Effect.fn("CustomerIngest.setStale")(function* (
+		connectionId: CustomerConnectionId,
+		stale: boolean,
+	) {
+		const now = new Date(yield* Clock.currentTimeMillis)
+		yield* db.run(
+			SQLite.update(schema.customerExternalRefsTable)
+				.set({ staleAt: stale ? now : null, updatedAt: now })
+				.where(($) => [
+					$.connectionId.eq(connectionId),
+					stale ? $.staleAt.isNull() : $.staleAt.isNotNull(),
+				]),
+		)
+	})
 
-	const completeSweep = (
+	const completeSweep = Effect.fn("CustomerIngest.completeSweep")(function* (
 		connectionId: CustomerConnectionId,
 		since: Date,
 		entityTypes: ReadonlyArray<RefEntityType>,
-	) =>
-		Effect.gen(function* () {
-			const connection = yield* db.first(
-				SQLite.from(schema.customerConnectionsTable)
-					.select("provider")
-					.where(($) => [$.id.eq(connectionId)])
-					.limit(1),
+	) {
+		yield* Effect.annotateCurrentSpan({
+			"ingest.connection_id": connectionId,
+			"ingest.entity_types": entityTypes.join(","),
+		})
+		const connection = yield* db.first(
+			SQLite.from(schema.customerConnectionsTable)
+				.select("provider")
+				.where(($) => [$.id.eq(connectionId)])
+				.limit(1),
+		)
+		if (Option.isNone(connection)) return
+		const { provider } = connection.value
+		const session = yield* openSession({ connectionId, provider, runId: null, trigger: "schedule" })
+		// The provider's live refs not seen (touched or created) since the sweep started. By provider,
+		// not connection: a ref placed through another connection (usage of a Clerk user) is still
+		// this provider's record.
+		const unseen = (entityType: RefEntityType) =>
+			db.run(
+				SQLite.from(schema.customerExternalRefsTable)
+					.select()
+					.where(($) => [
+						$.provider.eq(provider),
+						$.entityType.eq(entityType),
+						$.staleAt.isNull(),
+						// A ref a person linked stays until they unlink it.
+						$.matchMethod.neq("manual"),
+						SQLite.or($.lastSyncedAt.isNull(), $.lastSyncedAt.lt(since)),
+					]),
 			)
-			if (Option.isNone(connection)) return
-			const { provider } = connection.value
-			const session = yield* openSession({ connectionId, provider, runId: null, trigger: "schedule" })
-			// The provider's live refs not seen (touched or created) since the sweep started. By provider,
-			// not connection: a ref placed through another connection (usage of a Clerk user) is still
-			// this provider's record.
-			const unseen = (entityType: RefEntityType) =>
-				db.run(
-					SQLite.from(schema.customerExternalRefsTable)
-						.select()
-						.where(($) => [
-							$.provider.eq(provider),
-							$.entityType.eq(entityType),
-							$.staleAt.isNull(),
-							SQLite.or($.lastSyncedAt.isNull(), $.lastSyncedAt.lt(since)),
-						]),
-				)
-			const removed = yield* db.transaction(
-				Effect.gen(function* () {
-					let count = 0
-					if (entityTypes.includes("account")) {
-						const refs = yield* unseen("account")
-						for (const ref of refs) yield* staleAccountRef(session.now, ref)
-						count += refs.length
+		const removed = yield* db.transaction(
+			Effect.gen(function* () {
+				let count = 0
+				if (entityTypes.includes("account")) {
+					const refs = yield* unseen("account")
+					for (const ref of refs) yield* staleAccountRef(session.now, ref)
+					count += refs.length
+				}
+				if (entityTypes.includes("contact")) {
+					for (const ref of yield* unseen("contact")) {
+						if (yield* removeContactRef(session, ref)) count++
 					}
-					if (entityTypes.includes("contact")) {
-						for (const ref of yield* unseen("contact")) {
-							const contactId = ref.entityId as CustomerContactId
-							const [contact] = yield* db.run(
-								SQLite.update(schema.customerContactsTable)
-									.set({ deletedAt: session.now, updatedAt: session.now })
-									.where(($) => [$.id.eq(contactId), $.deletedAt.isNull()])
-									.returning("name", "email"),
-							)
-							if (contact === undefined) continue
-							yield* recordRemoved(session, ref.accountId, contactId, contactName(contact))
-							count++
-						}
-					}
-					if (count > 0) yield* withSql(requestCompute)
-					return count
-				}),
-			)
-			yield* Effect.annotateCurrentSpan({ "ingest.sweep_removed": removed })
-		}).pipe(
-			Effect.withSpan("CustomerIngest.completeSweep", {
-				attributes: {
-					"ingest.connection_id": connectionId,
-					"ingest.entity_types": entityTypes.join(","),
-				},
+				}
+				if (count > 0) yield* withStore(requestComputeAfterIngest)
+				return count
 			}),
 		)
+		yield* Effect.annotateCurrentSpan({ "ingest.sweep_removed": removed })
+	})
 
 	return {
 		apply,

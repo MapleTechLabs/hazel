@@ -165,6 +165,8 @@ export const customerContactsTable = SQLite.table("customer_contacts", {
 		lastSignInAt: SQLite.nullable(timestamptz),
 		signInCount30d: count(),
 		eventCount30d: count(),
+		/** The last day (`YYYY-MM-DD`) it was active, all time; kept by ingest (compute reads it). */
+		lastActiveDay: SQLite.nullable(SQLite.text),
 		attributes: SQLite.column(jsonb<Record<string, unknown>>(), { default: {} }),
 		fieldSources: SQLite.column(jsonb<Readonly<Record<string, CustomerSource>>>(), { default: {} }),
 		createdAt: createdAt(),
@@ -203,8 +205,16 @@ export const customerExternalRefsTable = SQLite.table("customer_external_refs", 
 		matchedByUserId: SQLite.nullable(uuid(UserId)),
 		matchedAt: SQLite.column(timestamptz, { defaultExpr: SQLite.timestampNow }),
 		lastSyncedAt: SQLite.nullable(timestamptz),
-		/** Set when its connection was disconnected: the data it brought is kept, marked stale. */
+		/**
+		 * Set when its connection was disconnected or the provider record is gone (a delete op, a full
+		 * sweep): the data it brought is kept, marked stale. A later sighting clears it.
+		 */
 		staleAt: SQLite.nullable(timestamptz),
+		/**
+		 * The provider's `observedAt` of the explicit delete op that staled it: ops observed at or before
+		 * it arrived late and change nothing. Null for a sweep or an undated delete (any sighting revives).
+		 */
+		deletedObservedAt: SQLite.nullable(timestamptz),
 		createdAt: createdAt(),
 		updatedAt: updatedAt(),
 	},

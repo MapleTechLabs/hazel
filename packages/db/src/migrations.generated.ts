@@ -413,5 +413,12 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'CREATE UNIQUE INDEX IF NOT EXISTS "customer_signals_episode_unique" ON "customer_signals" ("ruleId", "accountId") WHERE "closedAt" IS NULL',
 			],
 		},
+		{
+			id: "0002_customers_contact_last_active",
+			statements: [
+				'ALTER TABLE "customer_contacts" ADD COLUMN "lastActiveDay" text',
+				'ALTER TABLE "customer_external_refs" ADD COLUMN "deletedObservedAt" text',
+			],
+		},
 	],
 }

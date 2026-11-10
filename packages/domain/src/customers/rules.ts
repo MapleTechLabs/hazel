@@ -107,9 +107,13 @@ export const RuleScope = Schema.Struct({
 	/** Only accounts with MRR > 0 (or a trial). */
 	payingOnly: Schema.optionalKey(Schema.Boolean),
 	lifecycleStages: Schema.optionalKey(Schema.Array(LifecycleStage)),
-	planNames: Schema.optionalKey(Schema.Array(Schema.String)),
+	planNames: Schema.optionalKey(
+		Schema.Array(Schema.String.check(Schema.isMaxLength(100))).check(Schema.isMaxLength(50)),
+	),
 	minMrrMinor: Schema.optionalKey(Schema.Int),
-	tagsAny: Schema.optionalKey(Schema.Array(Schema.String)),
+	tagsAny: Schema.optionalKey(
+		Schema.Array(Schema.String.check(Schema.isMaxLength(50))).check(Schema.isMaxLength(50)),
+	),
 })
 export type RuleScope = typeof RuleScope.Type
 

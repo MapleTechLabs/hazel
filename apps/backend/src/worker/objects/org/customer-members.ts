@@ -16,6 +16,7 @@ import { Database, SQLite, schema } from "@hazel/db"
 import { OrganizationId } from "@hazel/schema"
 import { Clock, Effect, Option, Schema } from "effect"
 import { defineCall } from "../calls"
+import { inList } from "../customers/sql"
 import { CustomerMember, CustomersEffects } from "../effects/customers-effects"
 import { enqueueEffect } from "../effects/registry"
 import { customersTarget } from "../kinds"
@@ -44,7 +45,13 @@ const currentMembers = Effect.fn("OrgObject.currentCustomerMembers")(function* (
 	const machines = yield* db.run(
 		SQLite.from(schema.usersTable)
 			.select("id")
-			.where(($) => [$.id.in_(...members.map((member) => member.userId)), $.userType.eq("machine")]),
+			.where(($) => [
+				inList(
+					$.id,
+					members.map((member) => member.userId),
+				),
+				$.userType.eq("machine"),
+			]),
 	)
 	const bots = new Set(machines.map((machine) => machine.id))
 	return members.filter((member) => !bots.has(member.userId))
@@ -58,28 +65,35 @@ const nextVersion = Effect.gen(function* () {
 	return version
 })
 
-export const customerMembers = Effect.fn("OrgObject.customerMembers")(function* (payload: {
-	readonly organizationId: OrganizationId
-}) {
+const isLive = Effect.fn("OrgObject.isLiveOrganization")(function* (organizationId: OrganizationId) {
 	const db = yield* Database.Database
 	const organization = yield* db.first(
 		SQLite.from(schema.organizationsTable)
 			.select("id")
-			.where(($) => [$.id.eq(payload.organizationId), $.deletedAt.isNull()])
+			.where(($) => [$.id.eq(organizationId), $.deletedAt.isNull()])
 			.limit(1),
 	)
-	if (Option.isNone(organization)) return null
-	yield* writeObjectMeta(ENABLED_KEY, "1")
+	return Option.isSome(organization)
+})
+
+export const customerMembers = Effect.fn("OrgObject.customerMembers")(function* (payload: {
+	readonly organizationId: OrganizationId
+}) {
+	if (!(yield* isLive(payload.organizationId))) return null
 	const members = yield* currentMembers(payload.organizationId)
+	yield* writeObjectMeta(ENABLED_KEY, "1")
 	return { members, version: yield* nextVersion }
 }, Effect.orDie)
 
-/** Push the members snapshot to the org's customers object, once it exists. Inside the handler's transaction. */
+/**
+ * Push the members snapshot to the org's customers object, once it exists and while the org is live
+ * (a deleted org's object got its final, empty snapshot). Inside the handler's transaction.
+ */
 export const publishCustomerMembers = Effect.fn("OrgObject.publishCustomerMembers")(function* (
 	organizationId: OrganizationId,
 ) {
 	const enabled = yield* readObjectMeta(ENABLED_KEY).pipe(Effect.mapError(Database.toDatabaseError))
-	if (Option.isNone(enabled)) return
+	if (Option.isNone(enabled) || !(yield* isLive(organizationId))) return
 	const members = yield* currentMembers(organizationId)
 	yield* enqueueEffect(CustomersEffects.setMembers, customersTarget(organizationId), {
 		organizationId,

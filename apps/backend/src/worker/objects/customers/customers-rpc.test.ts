@@ -291,7 +291,7 @@ describe("Customers RPCs", () => {
 									enabled: true,
 								},
 							},
-							world.member,
+							world.owner,
 						),
 					)
 					const open = world.rows<{ n: number }>(
@@ -314,7 +314,7 @@ describe("Customers RPCs", () => {
 									bands: { healthyMin: 95, atRiskMin: 60 },
 								},
 							},
-							world.member,
+							world.owner,
 						),
 					)
 					expect(healthDry.transitions.length).toBeGreaterThan(0)

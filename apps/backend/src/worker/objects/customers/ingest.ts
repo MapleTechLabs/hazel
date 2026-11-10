@@ -18,8 +18,10 @@
  *   account does not resolve become unmatched records holding the op (replayed once linked).
  * - Precedence: `FIELD_PRECEDENCE` per field, recorded in `fieldSources`.
  * - Ordering: an op's `observedAt` at or before its record's deletion leaves it deleted.
- * - Removal: `deleted` / `removed` ops, or `completeSweep` after a full pull.
- * - It never computes: it marks compute due (`requestCompute`), which the alarm runs soon after.
+ * - Removal: `deleted` / `removed` ops, or `completeSweep` after a full pull; a later sighting
+ *   revives, unless the delete op was observed at or after it.
+ * - It never computes: it marks compute due (`requestComputeAfterIngest`), which the alarm runs
+ *   soon after (no sooner than the minimum gap since the last compute).
  */
 import type { DatabaseError, schema } from "@hazel/db"
 import type { IngestOp, IngestOutcome, IngestReport, SyncError, SyncProgress } from "@hazel/domain/customers"
@@ -54,11 +56,14 @@ export type RunResult =
 	| { readonly _tag: "Retrying"; readonly error: SyncError }
 
 export interface CustomerIngestApi {
-	/** Apply `ops` in order; the report has one outcome per op and the run's stats so far. */
+	/**
+	 * Apply `ops` in order; the report has one outcome per op and the run's stats so far. An op the
+	 * store refuses is skipped (`Rejected`), the rest still land.
+	 */
 	readonly apply: (
 		context: IngestContext,
 		ops: ReadonlyArray<IngestOp>,
-	) => Effect.Effect<IngestReport, CustomerIngestRejectedError | DatabaseError>
+	) => Effect.Effect<IngestReport, DatabaseError>
 
 	/** Open a run (`customer_sync_runs`, synced: the data sources page shows it live). */
 	readonly startRun: (

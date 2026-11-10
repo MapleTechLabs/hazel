@@ -1,6 +1,6 @@
 /**
- * The `CustomersObject`'s own loop on node SQLite: pulls that fail and resume, compute that backs
- * off, signals of deleted accounts, baseline mode during a backfill, the one-time history rebuild,
+ * The `CustomersObject`'s own loop on node SQLite: pulls that fail and resume, skip refused ops,
+ * stop on bad credentials or a disconnect, compute that backs off and leases its run, signals of deleted accounts, baseline mode during a backfill, the one-time history rebuild,
  * and usage data that stops counting once its source is gone.
  */
 import { Database, SQLite, schema } from "@hazel/db"
@@ -12,7 +12,7 @@ import { IntegrationEncryption } from "../../../services/integration-encryption"
 import { runCompute } from "./compute"
 import { encryptSecrets, storeSecrets } from "./credentials"
 import { CustomerIngest } from "./ingest"
-import { runDuePulls } from "./jobs"
+import { runDuePullsWith } from "./jobs"
 import {
 	type CustomerProviderAdapter,
 	CustomerProviderError,
@@ -20,15 +20,15 @@ import {
 	type PullPage,
 } from "./providers"
 import { nextReopenAt, requestHistoryRebuild } from "./schedule"
-import { loadSnapshot } from "./snapshot"
-import { type CustomersWorld, makeCustomersWorld } from "./test-kit"
+import { loadBase } from "./snapshot"
+import { type CustomersWorld, makeCustomersWorld, NOW } from "./test-kit"
 import { addDays, dayOf } from "./time"
 
 const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
 	Effect.runPromise(Effect.scoped(effect) as Effect.Effect<A, E>)
 
 const DAY = 86_400_000
-const day = (offset: number) => addDays(dayOf(new Date()), offset)
+const day = (offset: number) => addDays(dayOf(NOW), offset)
 /** A stored timestamp (`YYYY-MM-DD HH:MM:SS.sss`, UTC) as epoch milliseconds. */
 const epoch = (text: string) => new Date(`${text.replace(" ", "T")}Z`).getTime()
 
@@ -113,7 +113,7 @@ describe("Customers compute and sync loop", () => {
 					),
 				)
 				const pulls = (now: Date) =>
-					world.object.run(runDuePulls(now).pipe(Effect.provide(services))).pipe(Effect.orDie)
+					world.object.run(runDuePullsWith(services)(now)).pipe(Effect.orDie)
 				yield* world.object
 					.run(
 						Effect.gen(function* () {
@@ -146,7 +146,7 @@ describe("Customers compute and sync loop", () => {
 					)[0]!
 
 				// Rate limited mid-backfill: the run stays open, the connection waits as asked.
-				const now = new Date()
+				const now = NOW
 				due()
 				script.push(
 					Effect.succeed(
@@ -188,7 +188,7 @@ describe("Customers compute and sync loop", () => {
 				expect(meta(world, "baselineFor")).toBe(connectionId)
 				expect(meta(world, "rebuildHistory")).toBe("1")
 
-				// A scheduled pull with an op the store refuses: the run fails, the connection backs off.
+				// A scheduled pull with an op the store refuses: the op is skipped (counted), the run succeeds.
 				due()
 				script.splice(
 					0,
@@ -210,9 +210,16 @@ describe("Customers compute and sync loop", () => {
 				)
 				const later = new Date(now.getTime() + 2 * 60_000)
 				yield* pulls(later)
-				expect(runs()[1]).toMatchObject({ trigger: "schedule", status: "failed" })
-				expect(connection().consecutiveFailures).toBe(1)
-				expect(epoch(connection().nextSyncAt!)).toBe(later.getTime() + 60_000)
+				expect(runs()[1]).toMatchObject({ trigger: "schedule", status: "succeeded" })
+				expect(
+					JSON.parse(
+						world.rows<{ stats: string }>(
+							`SELECT stats FROM customer_sync_runs WHERE trigger = 'schedule'`,
+						)[0]!.stats,
+					),
+				).toMatchObject({ rejected: 1 })
+				expect(connection().consecutiveFailures).toBe(0)
+				expect(epoch(connection().nextSyncAt!)).toBe(later.getTime() + 60 * 60_000)
 
 				// A later backfill (the connection has one) arms the baseline but rebuilds no history.
 				world.object.storage.db.prepare(`DELETE FROM _object_meta WHERE key = 'rebuildHistory'`).run()
@@ -250,7 +257,7 @@ describe("Customers compute and sync loop", () => {
 			Effect.gen(function* () {
 				const world = yield* makeCustomersWorld
 				const accountId = yield* quietOrg(world)
-				const now = new Date()
+				const now = NOW
 				yield* world.object
 					.run(
 						Effect.gen(function* () {
@@ -313,7 +320,7 @@ describe("Customers compute and sync loop", () => {
 					.run(
 						Effect.gen(function* () {
 							yield* (yield* CustomerIngest).startRun(world.connection("maple"), "backfill")
-							yield* runCompute(new Date())
+							yield* runCompute(NOW)
 						}).pipe(Effect.provide(CustomerIngest.layer)),
 					)
 					.pipe(Effect.orDie)
@@ -341,7 +348,7 @@ describe("Customers compute and sync loop", () => {
 						currency: "usd",
 						interval: "month",
 						quantity: 1,
-						startedAt: new Date(Date.now() - 90 * DAY).toISOString(),
+						startedAt: new Date(NOW.getTime() - 90 * DAY).toISOString(),
 						trialEndsAt: null,
 						currentPeriodEnd: null,
 						cancelAtPeriodEnd: false,
@@ -352,7 +359,7 @@ describe("Customers compute and sync loop", () => {
 					.prepare(`INSERT INTO customer_org_daily (day, mrrMinor) VALUES (?, 12345)`)
 					.run(day(-10))
 				yield* world.object
-					.run(Effect.andThen(requestHistoryRebuild, runCompute(new Date())))
+					.run(Effect.andThen(requestHistoryRebuild, runCompute(NOW)))
 					.pipe(Effect.orDie)
 				expect(
 					world.rows(
@@ -374,7 +381,7 @@ describe("Customers compute and sync loop", () => {
 			Effect.gen(function* () {
 				const world = yield* makeCustomersWorld
 				yield* quietOrg(world)
-				const snapshot = () => world.object.run(loadSnapshot(new Date())).pipe(Effect.orDie)
+				const snapshot = () => world.object.run(loadBase(NOW)).pipe(Effect.orDie)
 				expect((yield* snapshot()).hasActivityData).toBe(true)
 				world.object.storage.db
 					.prepare(
@@ -387,6 +394,89 @@ describe("Customers compute and sync loop", () => {
 				const stale = yield* snapshot()
 				expect(stale.hasActivityData).toBe(false)
 				expect([...stale.org.connected].sort()).toEqual(["autumn", "stripe"])
+			}),
+		))
+
+	it("stops pulling on bad credentials, and leases a pull so a killed one cannot loop", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				const connectionId = world.connection("clerk")
+				const script: Array<Effect.Effect<PullPage, CustomerProviderError>> = []
+				const services = Layer.mergeAll(
+					CustomerIngest.layer,
+					encryption,
+					Layer.succeed(
+						CustomerProviders,
+						CustomerProviders.of({
+							get: (provider) =>
+								provider === "clerk" ? Option.some(scriptedAdapter(script)) : Option.none(),
+						}),
+					),
+				)
+				yield* world.object
+					.run(
+						Effect.gen(function* () {
+							yield* storeSecrets(connectionId, yield* encryptSecrets("sk_test", null))
+						}).pipe(Effect.provide(encryption)),
+					)
+					.pipe(Effect.orDie)
+				const due = () =>
+					world.object.storage.db
+						.prepare(
+							`UPDATE customer_connections SET status = 'active', nextSyncAt = '2000-01-01 00:00:00.000' WHERE id = ?`,
+						)
+						.run(connectionId)
+				const connection = () =>
+					world.rows<{ status: string; nextSyncAt: string | null; lastError: string | null }>(
+						`SELECT status, nextSyncAt, lastError FROM customer_connections WHERE id = ?`,
+						connectionId,
+					)[0]!
+
+				// Killed mid-pull (the runtime ends the alarm): due again only after the lease.
+				due()
+				script.push(Effect.interrupt as never)
+				yield* world.object.run(runDuePullsWith(services)(NOW)).pipe(Effect.exit)
+				expect(epoch(connection().nextSyncAt!)).toBe(NOW.getTime() + 5 * 60_000)
+
+				// Bad credentials: the connection is in error and nothing is scheduled.
+				due()
+				script.splice(
+					0,
+					script.length,
+					Effect.fail(
+						new CustomerProviderError({
+							code: "auth",
+							message: "Invalid API key",
+							httpStatus: 401,
+							retryAfterMs: null,
+						}),
+					),
+				)
+				yield* world.object.run(runDuePullsWith(services)(NOW)).pipe(Effect.orDie)
+				expect(connection()).toMatchObject({ status: "error", nextSyncAt: null })
+				expect(JSON.parse(connection().lastError!)).toMatchObject({ code: "auth" })
+			}),
+		))
+
+	it("keeps signals as they are while their source is in error", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* quietOrg(world)
+				const inactive = () =>
+					world.rows(
+						`SELECT status, closedAt IS NULL AS unclosed FROM customer_signals WHERE template = 'inactive'`,
+					)
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(inactive()).toEqual([{ status: "open", unclosed: 1 }])
+				world.object.storage.db
+					.prepare(
+						`UPDATE customer_connections SET status = 'error' WHERE provider IN ('clerk', 'maple')`,
+					)
+					.run()
+				yield* world.object.run(runCompute(new Date(NOW.getTime() + DAY))).pipe(Effect.orDie)
+				expect(inactive()).toEqual([{ status: "open", unclosed: 1 }])
 			}),
 		))
 })

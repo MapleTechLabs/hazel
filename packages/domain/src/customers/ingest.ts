@@ -158,8 +158,8 @@ export const RecordMetric = Schema.TaggedStruct("metric", {
 	account: ProviderRef,
 	metricKey: Schema.String,
 	day: Day,
-	value: Schema.Number,
-	limitValue: optional(Schema.NullOr(Schema.Number)),
+	value: Schema.Finite,
+	limitValue: optional(Schema.NullOr(Schema.Finite)),
 })
 export type RecordMetric = typeof RecordMetric.Type
 
@@ -207,6 +207,8 @@ export const IngestOutcome = Schema.Union([
 	Schema.TaggedStruct("Unmatched", { recordId: CustomerUnmatchedRecordId, reason: Schema.String }),
 	/** An ignore rule matched (`null`: the record was ignored by hand). */
 	Schema.TaggedStruct("Ignored", { ruleId: Schema.NullOr(CustomerIgnoreRuleId) }),
+	/** The store refuses the op (it breaks the contract, a built-in metric key): skipped, not retried. */
+	Schema.TaggedStruct("Rejected", { message: Schema.String }),
 ])
 export type IngestOutcome = typeof IngestOutcome.Type
 

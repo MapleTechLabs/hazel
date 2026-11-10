@@ -135,6 +135,29 @@ const hazelEvent = (
 		),
 	)
 
+/** An assignee or owner: one of the organization's members (`null` clears it). */
+const requirePerson = (userId: UserId | null | undefined) =>
+	userId == null
+		? Effect.void
+		: Effect.flatMap(Database.Database, (db) =>
+				db.first(
+					SQLite.from(schema.customerMembersTable)
+						.select("userId")
+						.where(($) => [$.userId.eq(userId)])
+						.limit(1),
+				),
+			).pipe(
+				Effect.flatMap(
+					Option.match({
+						onNone: () => Effect.fail(invalid("That user is not a member of the organization")),
+						onSome: () => Effect.void,
+					}),
+				),
+			)
+
+/** A webhook secret as given: blank means none. */
+const secretOf = (secret: string | null) => (secret === null || secret.trim() === "" ? null : secret.trim())
+
 const requireAccount = (accountId: CustomerAccountId) =>
 	Effect.flatMap(
 		liveAccount(accountId),
@@ -291,15 +314,16 @@ export const CustomerReadRpcLive = CustomerReadRpcs.toLayer(
 					return pageResult(rows, page)
 				}).pipe(remap),
 
+			// Admins only: a dry run reads every account (the rule editor and health settings are theirs).
 			"customers.rule.dryRun": ({ draft, ruleId }) =>
 				Effect.gen(function* () {
-					yield* requireMember
+					yield* requireAdmin
 					return yield* ruleDryRun(draft, ruleId, yield* currentTime)
 				}).pipe(remap),
 
 			"customers.health.dryRun": ({ draft }) =>
 				Effect.gen(function* () {
-					yield* requireMember
+					yield* requireAdmin
 					return yield* healthDryRun(draft, yield* currentTime)
 				}).pipe(remap),
 
@@ -461,7 +485,10 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 
 		return {
 			"customers.signal.assign": ({ signalId, assigneeUserId }) =>
-				actOnSignal(signalId, "assign", () => ({ assigneeUserId }), { assigneeUserId }),
+				Effect.andThen(
+					requirePerson(assigneeUserId).pipe(remap),
+					actOnSignal(signalId, "assign", () => ({ assigneeUserId }), { assigneeUserId }),
+				),
 
 			"customers.signal.snooze": ({ signalId, until, note }) =>
 				actOnSignal(
@@ -616,6 +643,7 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 			"customers.account.update": ({ accountId, ownerUserId, tags, lifecycleStageOverride, name }) =>
 				Effect.gen(function* () {
 					const actor = yield* requireMember
+					yield* requirePerson(ownerUserId)
 					const now = yield* currentTime
 					return yield* txOnly(
 						Effect.gen(function* () {
@@ -659,6 +687,7 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 					if (accountIds.length > BULK_LIMIT) {
 						return yield* invalid(`At most ${BULK_LIMIT} accounts at a time`)
 					}
+					yield* requirePerson(ownerUserId)
 					const now = yield* currentTime
 					const result = yield* withTx(
 						Effect.gen(function* () {
@@ -1020,9 +1049,16 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					)
 				}).pipe(remap),
 
-			"customers.connection.connect": ({ provider, apiKey, webhookSecret, config, organizationId }) =>
+			"customers.connection.connect": ({
+				provider,
+				apiKey,
+				webhookSecret: given,
+				config,
+				organizationId,
+			}) =>
 				Effect.gen(function* () {
 					const actor = yield* requireAdmin
+					const webhookSecret = secretOf(given)
 					if (config._tag !== provider)
 						return yield* invalid(`The config is for ${config._tag}, not ${provider}`)
 					yield* checkConfig(config)
@@ -1062,6 +1098,21 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 							)
 							yield* storeSecrets(connection.id, secrets)
 							yield* ingest.setStale(connection.id, false)
+							// New credentials start a new run: one left running (connected again without a
+							// disconnect) ends, so only one run pulls.
+							yield* db.run(
+								SQLite.update(schema.customerSyncRunsTable)
+									.set({
+										status: "failed",
+										finishedAt: now,
+										error: {
+											code: "internal",
+											message: "Replaced by a new connection",
+											httpStatus: null,
+										},
+									})
+									.where(($) => [$.connectionId.eq(connection.id), $.status.eq("running")]),
+							)
 							yield* ingest.startRun(
 								connection.id,
 								connection.backfilledAt === null ? "backfill" : "manual",
@@ -1071,9 +1122,10 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					)
 				}).pipe(remap),
 
-			"customers.connection.update": ({ connectionId, config, apiKey, webhookSecret }) =>
+			"customers.connection.update": ({ connectionId, config, apiKey, webhookSecret: given }) =>
 				Effect.gen(function* () {
 					yield* requireAdmin
+					const webhookSecret = given === undefined ? undefined : secretOf(given)
 					const connection = yield* requireConnection(connectionId)
 					if (config !== undefined && config._tag !== connection.provider) {
 						return yield* invalid(`The config is for ${config._tag}, not ${connection.provider}`)
@@ -1179,7 +1231,13 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 									.where(($) => [$.connectionId.eq(connectionId), $.status.eq("running")])
 									.limit(1),
 							)
-							if (Option.isNone(running)) yield* ingest.startRun(connectionId, "manual")
+							// Until a backfill succeeded, any run is one (a partial import is not history).
+							if (Option.isNone(running)) {
+								yield* ingest.startRun(
+									connectionId,
+									connection.backfilledAt === null ? "backfill" : "manual",
+								)
+							}
 							yield* db.run(
 								SQLite.update(schema.customerConnectionsTable)
 									.set({ nextSyncAt: now, updatedAt: now })
@@ -1210,21 +1268,14 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 							if (record.entityType !== "account" || record.status !== "open") {
 								return yield* invalid("Only an open account record can become a customer")
 							}
-							const payload = record.payload as {
-								readonly name?: string
-								readonly domains?: ReadonlyArray<string>
-							} | null
-							const domains = (
-								payload?.domains ?? (record.domain === null ? [] : [record.domain])
-							)
-								.map(normalizeDomain)
-								.filter((domain) => domain !== null)
+							// Linking replays the record's op, which brings its name and domains.
+							const domain = record.domain === null ? null : normalizeDomain(record.domain)
 							const [account] = yield* db.run(
 								SQLite.insertInto(schema.customerAccountsTable)
 									.values({
 										organizationId,
-										name: payload?.name ?? record.label,
-										domains: [...new Set(domains)],
+										name: record.label,
+										domains: domain === null ? [] : [domain],
 									})
 									.returning("id"),
 							)
@@ -1242,6 +1293,8 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					return yield* txOnly(
 						Effect.gen(function* () {
 							const record = yield* requireRecord(recordId)
+							if (record.status !== "open")
+								return yield* invalid(`The record is already ${record.status}`)
 							yield* db.run(
 								SQLite.update(schema.customerUnmatchedRecordsTable)
 									.set({
@@ -1329,12 +1382,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 						seed,
 					}).pipe(Effect.provideService(CustomerIngest, ingest))
 					return yield* txOnly(Effect.void)
-				}).pipe(
-					Effect.catchTag("CustomerIngestRejectedError", (error) =>
-						Effect.fail(invalid(error.message)),
-					),
-					remap,
-				),
+				}).pipe(remap),
 		}
 	}),
 ).pipe(Layer.provide(CustomersServicesLive))

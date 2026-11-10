@@ -35,7 +35,7 @@ import type { ThreadNamer } from "../../services/thread-namer"
 import type { ChatSyncProviders } from "../../services/chat-sync/chat-sync-providers"
 import { ObjectCalls } from "./call-receivers"
 import { type AnyObjectCall, type CallRequest, type CallResponse, exitCodec, payloadCodec } from "./calls"
-import { CustomersBootstrapCall, CustomersTickCall } from "./customers/jobs"
+import { CustomersBootstrapCall, CustomersTickCall, CustomersWebhookCall } from "./customers/jobs"
 import { customersDeadlines } from "./customers/schedule"
 import { ChannelEffects } from "./effects/channel-effects"
 import { CustomersEffects } from "./effects/customers-effects"
@@ -298,7 +298,9 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 		const call = (request: CallRequest): Effect.Effect<CallResponse> =>
 			Effect.gen(function* () {
 				const id = yield* remember(request.objectId)
-				yield* prepare
+				// A webhook is unauthenticated until its signature checks out: it never sets Customers up
+				// (no connection on an object that is not set up, so it answers 404).
+				if (request.name !== CustomersWebhookCall.name) yield* prepare
 				const response = yield* calls
 					.run(kind, request)
 					.pipe(Effect.provideService(CurrentObject, { kind, id }))

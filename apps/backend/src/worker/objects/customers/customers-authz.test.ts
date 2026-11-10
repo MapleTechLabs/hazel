@@ -92,8 +92,10 @@ const PAYLOADS = {
 	"customers.demo.seed": { accounts: 1 },
 } satisfies Record<HazelRpcTag & `customers.${string}`, Record<string, unknown>>
 
-/** Settings, rules, shared views, data sources, unmatched records, the demo seed. */
+/** Settings, rules and their dry runs, shared views, data sources, unmatched records, the demo seed. */
 const ADMIN_ONLY = new Set([
+	"customers.rule.dryRun",
+	"customers.health.dryRun",
 	"customers.unmatched.list",
 	"customers.ignoreRules.list",
 	"customers.view.create", // `shared: true`
@@ -221,6 +223,49 @@ describe("Customers members and lifecycle", () => {
 			}),
 		))
 
+	it("projects and replaces 150 members (past the 100 bound-parameter limit)", () =>
+		run(
+			Effect.gen(function* () {
+				const objects = yield* makeTestObjects
+				const orgId = uuid() as OrganizationId
+				const org = yield* objects.get(orgTarget(orgId))
+				org.storage.db.prepare(`INSERT INTO organizations (id, name) VALUES (?, 'Acme')`).run(orgId)
+				const insert = org.storage.db.prepare(
+					`INSERT INTO organization_members (id, organizationId, userId, role) VALUES (?, ?, ?, ?)`,
+				)
+				const users = Array.from({ length: 150 }, () => uuid() as UserId)
+				for (const userId of users) insert.run(uuid(), orgId, userId, "member")
+				const answer = (yield* org.call({
+					objectId: orgId,
+					name: CustomerMembersCall.name,
+					payload: { organizationId: orgId },
+				})).exit as { _tag: string; value: { members: Array<{ userId: string }> } }
+				expect(answer._tag).toBe("Success")
+				expect(answer.value.members).toHaveLength(150)
+
+				const customers = yield* objects.get(customersTarget(orgId))
+				const setMembers = (version: number, members: ReadonlyArray<UserId>, deleted: boolean) =>
+					customers.applyEffect({
+						objectId: orgId,
+						kind: "customers.setMembers",
+						payload: {
+							organizationId: orgId,
+							members: members.map((userId) => ({ userId, role: "member" })),
+							version,
+							organizationDeleted: deleted,
+						},
+						key: uuid(),
+						sender: { kind: "org", id: orgId },
+					})
+				const count = () =>
+					customers.storage.db.prepare(`SELECT count(*) AS n FROM customer_members`).all()
+				expect((yield* setMembers(1, users, false))._tag).toBe("Applied")
+				expect(count()).toEqual([{ n: 150 }])
+				expect((yield* setMembers(2, [], true))._tag).toBe("Applied")
+				expect(count()).toEqual([{ n: 0 }])
+			}),
+		))
+
 	it("an object for an unknown org installs nothing and schedules no compute", () =>
 		run(
 			Effect.gen(function* () {
@@ -292,6 +337,51 @@ describe("Customers members and lifecycle", () => {
 })
 
 describe("Customers data-source handlers", () => {
+	it("answers a storage failure as an InternalServerError, and refuses an assignee or owner who is not a member", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				expect(
+					tagOf(
+						yield* world.call(
+							"customers.account.update",
+							{ accountId: uuid(), ownerUserId: world.stranger },
+							world.member,
+						),
+					),
+				).toBe("CustomersInvalidRequestError")
+				expect(
+					tagOf(
+						yield* world.call(
+							"customers.signal.assign",
+							{ signalId: uuid(), assigneeUserId: world.stranger },
+							world.member,
+						),
+					),
+				).toBe("CustomersInvalidRequestError")
+				world.object.storage.db.prepare(`DROP TABLE customer_org_daily`).run()
+				expect(tagOf(yield* world.call("customers.overview", { range: "30d" }, world.member))).toBe(
+					"InternalServerError",
+				)
+			}),
+		))
+
+	it("ignores only an open unmatched record", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				const recordId = uuid()
+				world.object.storage.db
+					.prepare(
+						`INSERT INTO customer_unmatched_records (id, connectionId, provider, entityType, externalId, label, reason, payload, status) VALUES (?, ?, 'stripe', 'account', 'cus_1', 'Test', 'no_match', 'null', 'linked')`,
+					)
+					.run(recordId, world.connection("stripe"))
+				expect(
+					tagOf(yield* world.call("customers.unmatched.ignore", { recordId }, world.owner)),
+				).toBe("CustomersInvalidRequestError")
+			}),
+		))
+
 	it("disconnecting ends the connection's running sync runs", () =>
 		run(
 			Effect.gen(function* () {

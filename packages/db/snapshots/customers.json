@@ -1,5 +1,5 @@
 {
-	"migration": "0001_initial",
+	"migration": "0002_customers_contact_last_active",
 	"entities": [
 		{
 			"kind": "table",
@@ -948,16 +948,16 @@
 		{
 			"kind": "column",
 			"table": "customer_contacts",
-			"name": "attributes",
+			"name": "lastActiveDay",
 			"position": 14,
 			"type": "text",
-			"notNull": true,
-			"default": "'{}'"
+			"notNull": false,
+			"default": null
 		},
 		{
 			"kind": "column",
 			"table": "customer_contacts",
-			"name": "fieldSources",
+			"name": "attributes",
 			"position": 15,
 			"type": "text",
 			"notNull": true,
@@ -966,16 +966,16 @@
 		{
 			"kind": "column",
 			"table": "customer_contacts",
-			"name": "createdAt",
+			"name": "fieldSources",
 			"position": 16,
 			"type": "text",
 			"notNull": true,
-			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+			"default": "'{}'"
 		},
 		{
 			"kind": "column",
 			"table": "customer_contacts",
-			"name": "updatedAt",
+			"name": "createdAt",
 			"position": 17,
 			"type": "text",
 			"notNull": true,
@@ -984,8 +984,17 @@
 		{
 			"kind": "column",
 			"table": "customer_contacts",
-			"name": "deletedAt",
+			"name": "updatedAt",
 			"position": 18,
+			"type": "text",
+			"notNull": true,
+			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
+		},
+		{
+			"kind": "column",
+			"table": "customer_contacts",
+			"name": "deletedAt",
+			"position": 19,
 			"type": "text",
 			"notNull": false,
 			"default": null
@@ -1209,8 +1218,17 @@
 		{
 			"kind": "column",
 			"table": "customer_external_refs",
-			"name": "createdAt",
+			"name": "deletedObservedAt",
 			"position": 13,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_external_refs",
+			"name": "createdAt",
+			"position": 14,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -1219,7 +1237,7 @@
 			"kind": "column",
 			"table": "customer_external_refs",
 			"name": "updatedAt",
-			"position": 14,
+			"position": 15,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"

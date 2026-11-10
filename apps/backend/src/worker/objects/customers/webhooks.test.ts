@@ -7,11 +7,13 @@ import type { CustomerConnectionId } from "@hazel/schema"
 import { ConfigProvider, Effect, Exit, Layer, Option, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { IntegrationEncryption } from "../../../services/integration-encryption"
+import { customersTarget, orgTarget } from "../kinds"
+import { makeTestObjects } from "../testing"
 import { encryptSecrets, storeSecrets } from "./credentials"
 import { CustomerIngest } from "./ingest"
-import { handleWebhookWith } from "./jobs"
+import { CustomersWebhookCall, handleWebhookWith } from "./jobs"
 import { type CustomerProviderAdapter, CustomerProviders, CustomerWebhookRejectedError } from "./providers"
-import { type CustomersWorld, makeCustomersWorld } from "./test-kit"
+import { type CustomersWorld, makeCustomersWorld, uuid } from "./test-kit"
 
 const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
 	Effect.runPromise(Effect.scoped(effect) as Effect.Effect<A, E>)
@@ -143,7 +145,7 @@ describe("Customers webhook delivery", () => {
 			}),
 		))
 
-	it("answers 400 for a rejected delivery or an op off the contract, else the applied count", () =>
+	it("answers 400 for a rejected delivery, skips an op off the contract, else the applied count", () =>
 		run(
 			Effect.gen(function* () {
 				const world = yield* makeCustomersWorld
@@ -166,11 +168,42 @@ describe("Customers webhook delivery", () => {
 						} satisfies IngestOp,
 					]),
 				)
-				expect(yield* deliver(world, connectionId, { adapter: badDay })).toMatchObject({
-					status: 400,
-				})
+				expect(yield* deliver(world, connectionId, { adapter: badDay })).toEqual({ applied: 0 })
 				const parsing = stripeAdapter(() => Effect.succeed([account]))
 				expect(yield* deliver(world, connectionId, { adapter: parsing })).toEqual({ applied: 1 })
+			}),
+		))
+
+	it("never sets up Customers: a webhook to an existing org's fresh object answers 404", () =>
+		run(
+			Effect.gen(function* () {
+				const objects = yield* makeTestObjects
+				const orgId = uuid()
+				const org = yield* objects.get(orgTarget(orgId as never))
+				org.storage.db.prepare(`INSERT INTO organizations (id, name) VALUES (?, 'Acme')`).run(orgId)
+				org.storage.db
+					.prepare(
+						`INSERT INTO organization_members (id, organizationId, userId, role) VALUES (?, ?, ?, 'owner')`,
+					)
+					.run(uuid(), orgId, uuid())
+				const object = yield* objects.get(customersTarget(orgId as never))
+				const response = yield* object.call({
+					objectId: orgId,
+					name: CustomersWebhookCall.name,
+					payload: { connectionId: uuid(), provider: "stripe", headers: {}, body: "{}" },
+				})
+				expect(response.exit).toMatchObject({ _tag: "Failure" })
+				expect(JSON.stringify(response.exit)).toContain("404")
+				const rows = (query: string) => object.storage.db.prepare(query).all()
+				expect(
+					rows(`SELECT key FROM _object_meta WHERE key IN ('defaultsInstalled', 'membersVersion')`),
+				).toEqual([])
+				expect(rows(`SELECT id FROM customer_signal_rules`)).toEqual([])
+				expect(
+					org.storage.db
+						.prepare(`SELECT key FROM _object_meta WHERE key = 'customersEnabled'`)
+						.all(),
+				).toEqual([])
 			}),
 		))
 })
