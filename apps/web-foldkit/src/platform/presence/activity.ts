@@ -106,15 +106,26 @@ export const remoteActivity: Stream.Stream<number> = Stream.suspend(() =>
 
 const isWindowFocusedNow = () => document.hasFocus() && document.visibilityState === "visible"
 
-/** Whether the window is focused and visible: now, then on every focus, blur and visibility change. */
-export const windowFocus: Stream.Stream<boolean> = Stream.suspend(() => {
-	const changes = Stream.mergeAll(
-		[
-			Dom.streamFromEvent({ target: window, type: "focus", mapEvent: () => undefined }),
-			Dom.streamFromEvent({ target: window, type: "blur", mapEvent: () => undefined }),
-			Dom.streamFromEvent({ target: document, type: "visibilitychange", mapEvent: () => undefined }),
-		],
-		{ concurrency: "unbounded" },
-	)
-	return Stream.concat(Stream.make(undefined), changes).pipe(Stream.map(isWindowFocusedNow))
-})
+/**
+ * Whether the window is focused and visible: now, then on every focus, blur and visibility change.
+ * The listeners attach before the first reading and each event reads the state as it fires, so
+ * a change right after start is not lost and a later one cannot stand in for it.
+ */
+export const windowFocus: Stream.Stream<boolean> = Stream.callback<boolean>((queue) =>
+	Effect.acquireRelease(
+		Effect.sync(() => {
+			const read = () => Queue.offerUnsafe(queue, isWindowFocusedNow())
+			window.addEventListener("focus", read)
+			window.addEventListener("blur", read)
+			document.addEventListener("visibilitychange", read)
+			read()
+			return read
+		}),
+		(read) =>
+			Effect.sync(() => {
+				window.removeEventListener("focus", read)
+				window.removeEventListener("blur", read)
+				document.removeEventListener("visibilitychange", read)
+			}),
+	).pipe(Effect.flatMap(() => Effect.never)),
+)
