@@ -1,7 +1,7 @@
 import type { Attribute, ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { IconChevronRight, IconEye, IconHashtag, IconPin, IconThread } from "../../icons"
 import { AppRoute, hrefOf } from "../../route"
-import { avatar } from "../../ui/avatar"
+import { avatar, type AvatarProps } from "../../ui/avatar"
 import { button } from "../../ui/button"
 import { presenceDot } from "../../ui/presence-dot"
 import type { PresenceStatus } from "~/utils/presence"
@@ -86,20 +86,23 @@ const threadTitle = <M>(h: HtmlBuilder<M>, inputs: HeaderInputs, channel: Channe
 		],
 	)
 
+const dmAvatar = <M>(h: HtmlBuilder<M>, member: AuthorIdentity, presence: PresenceStatus | null): Html => {
+	const props = {
+		size: "sm",
+		src: member.avatarUrl,
+		seed: member.displayName || undefined,
+		alt: member.displayName,
+	} satisfies AvatarProps
+	if (presence === null) return avatar(h, props)
+	return avatar(h, { ...props, badge: presenceDot(h, presence, "sm") })
+}
+
 const dmTitle = <M>(
 	h: HtmlBuilder<M>,
 	members: ReadonlyArray<AuthorIdentity>,
 	presence: PresenceStatus | null,
 ): ReadonlyArray<Html> => [
-	members[0]
-		? avatar(h, {
-				size: "sm",
-				src: members[0].avatarUrl,
-				seed: members[0].displayName || undefined,
-				alt: members[0].displayName,
-				...(presence === null ? {} : { badge: presenceDot(h, presence, "sm") }),
-			})
-		: h.empty,
+	members[0] ? dmAvatar(h, members[0], presence) : h.empty,
 	h.div(
 		[],
 		[
