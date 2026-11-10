@@ -7,7 +7,15 @@ import { button } from "../../../../ui/button"
 import { input } from "../../../../ui/input"
 import { switchControl } from "../../../../ui/switch"
 import { type ConfigTarget, Message } from "./message"
-import { configFlag, configText, isSettingsDirty, isSettingsValid, type Model, settingsOf } from "./model"
+import {
+	configFlag,
+	configText,
+	isSettingsDirty,
+	isSettingsValid,
+	type Model,
+	settingsOf,
+	settingsProblemOf,
+} from "./model"
 import { card, cardHeader, eyebrow, formField, type H } from "./parts"
 import type { ConnectionRow } from "./queries"
 
@@ -158,6 +166,16 @@ const activityEvents = (h: H, model: Model, config: MapleConfig, isDisabled: boo
 								),
 							],
 						),
+						...(model.activityEventInput.trim() === ""
+							? []
+							: [
+									h.p(
+										[h.Class("text-warning-subtle-fg text-xs")],
+										[
+											`Press Add to include “${model.activityEventInput.trim()}”: saving leaves it out.`,
+										],
+									),
+								]),
 					]),
 		],
 	)
@@ -294,11 +312,7 @@ export const settingsCard = (h: H, model: Model, connection: ConnectionRow, isAd
 						[
 							h.span(
 								[h.Class("mr-auto text-muted-fg text-sm")],
-								[
-									isSettingsValid(config)
-										? "Unsaved changes"
-										: "Fill in or remove the empty metric rows",
-								],
+								[settingsProblemOf(config) ?? "Unsaved changes"],
 							),
 							button(
 								h,

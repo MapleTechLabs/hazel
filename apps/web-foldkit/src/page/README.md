@@ -68,7 +68,8 @@ memoized views and a `sharedChanged` hook. `page/root/` shows a page that only r
       `toast`. A modal's own result (toast, navigation, closing) is the modal's job, not the page's: the
       page only sends `RequestedModal` with the request fields the modal declares.
 - **Never pair a sticky or loading toast with a page Command.** A page's Command results are
-  dropped once the user leaves the page, so nothing would ever replace the toast. Hand work whose
+  dropped once the user leaves the page (or its instance: another key, e.g. another org), so an
+  answer never needs an org check of its own, and nothing would ever replace the toast. Hand work whose
   feedback must outlive the page to the root as an OutMessage (`RequestedDmCreation`, `RequestedSignOut`).
 - **Layout.** Render only what the legacy route's own component renders (its `<Outlet />` content). The
   root wraps it in the org shell and the route's section layout (`shell/layouts.ts`): `main` for

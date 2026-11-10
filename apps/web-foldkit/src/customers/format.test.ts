@@ -16,7 +16,10 @@ import {
 	formatMoneyCompact,
 	formatPct,
 	formatRelative,
+	currencySymbol,
+	formatMajor,
 	toMajor,
+	toMinor,
 } from "./format"
 
 const NOW = new Date("2026-11-10T12:00:00Z")
@@ -35,6 +38,16 @@ describe("money", () => {
 		expect(formatMoney(5_000, "JPY")).toBe("¥5,000")
 		expect(toMajor(5_000, "JPY")).toBe(5_000)
 		expect(formatMoney(4_821_000, "EUR")).toBe("€48,210")
+	})
+
+	it("reads typed amounts and labels them in the currency's own units", () => {
+		expect(toMinor(12.34)).toBe(1_234)
+		expect(toMinor(5_000, "JPY")).toBe(5_000)
+		expect(formatMajor(215_000)).toBe("2150.00")
+		expect(formatMajor(5_000, "JPY")).toBe("5000")
+		expect(currencySymbol("EUR")).toBe("€")
+		expect(currencySymbol("JPY")).toBe("¥")
+		expect(currencySymbol("XYZ1")).toBe("XYZ1")
 	})
 
 	it("formats compact money", () => {

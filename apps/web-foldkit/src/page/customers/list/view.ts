@@ -816,6 +816,7 @@ const table = (
 							isSelected,
 						}),
 					onToggleAll: (isSelected) => Message.ToggledAllRows({ isSelected }),
+					rowLabel: (account) => account.name,
 				},
 				onRowPress: (account) => Message.ClickedRow({ accountId: account.id }),
 				focusedKey: model.focusedId,

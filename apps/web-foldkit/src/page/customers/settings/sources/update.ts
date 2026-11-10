@@ -142,13 +142,24 @@ const closeConnect = (model: Model): Model => ({
 	connectModal: Modal.close(model.connectModal).model,
 })
 
-/** A Modal's own Messages; closing from inside drops its form. */
+type ModalField = "connectModal" | "keysModal" | "disconnectModal"
+
+/** Its request is running: closing now would lose the answer (or let a second one start). */
+const isModalPending = (model: Model, field: ModalField): boolean =>
+	field === "connectModal"
+		? model.connectForm?.isPending === true
+		: field === "keysModal"
+			? model.keysForm?.isPending === true
+			: model.isDisconnecting
+
+/** A Modal's own Messages; closing from inside drops its form, and waits while its request runs. */
 const updateModal = (
 	model: Model,
-	field: "connectModal" | "keysModal" | "disconnectModal",
+	field: ModalField,
 	message: Modal.Message,
 	toMessage: (message: Modal.Message) => Message,
 ): Return => {
+	if (Modal.isCloseRequest(message) && isModalPending(model, field)) return { model }
 	const result = Modal.update(model[field], message)
 	const isClosed = result.outMessage?._tag === "Closed"
 	const next: Model = { ...model, [field]: result.model }

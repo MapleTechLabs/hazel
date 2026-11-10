@@ -1,6 +1,6 @@
 import * as Customers from "@hazel/domain/customers"
 import { Option, Schema, type Types } from "effect"
-import { toMajor } from "../../../../customers/format"
+import { toMajor, toMinor } from "../../../../customers/format"
 import type { AccountRow } from "../../../../customers/queries"
 import {
 	type ConfigForm,
@@ -128,8 +128,6 @@ const configCandidateOf = (form: RuleForm): Record<string, unknown> => ({
 	),
 })
 
-const minorOf = (major: number, currency: string): number => Math.round(major / toMajor(1, currency))
-
 const isMrr = (text: string): boolean => {
 	const value = numberOf(text)
 	return Number.isFinite(value) && value >= 0
@@ -142,7 +140,7 @@ export const scopeOf = (form: ScopeForm, currency: string): Customers.RuleScope 
 	if (form.stages !== null && form.stages.length > 0) scope.lifecycleStages = form.stages
 	if (form.plans !== null && form.plans.length > 0) scope.planNames = form.plans
 	if (form.minMrr !== null && isMrr(form.minMrr))
-		scope.minMrrMinor = minorOf(numberOf(form.minMrr), currency)
+		scope.minMrrMinor = toMinor(numberOf(form.minMrr), currency)
 	if (form.tags.length > 0) scope.tagsAny = form.tags
 	return scope
 }
@@ -168,6 +166,16 @@ export const fieldErrors = (form: RuleForm, currency: string): Readonly<Record<s
 		if (kind !== undefined && !Schema.is(schema)(candidate.config[key])) {
 			errors[`config.${key}`] = FIELD_ERROR[kind]
 		}
+	}
+	// The schema's cross-field check: each age reads fine alone, so the maximum carries it.
+	const { minAgeDays, maxAgeDays } = candidate.config
+	if (
+		form.template === "onboarding_stalled" &&
+		errors["config.minAgeDays"] === undefined &&
+		errors["config.maxAgeDays"] === undefined &&
+		Number(minAgeDays) > Number(maxAgeDays)
+	) {
+		errors["config.maxAgeDays"] = "At least the minimum age"
 	}
 	if (form.scope.minMrr !== null && !isMrr(form.scope.minMrr)) {
 		errors["scope.minMrr"] = "An amount of 0 or more"

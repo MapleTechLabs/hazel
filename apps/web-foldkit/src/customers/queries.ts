@@ -385,7 +385,6 @@ export const orgMembersStream = <Message>(
 
 // HELPERS
 
-/** "Mine": a signal on an account `userId` owns. */
 /** The queue tabs: Done holds every resolution (done, dismissed, and cleared on its own). */
 export type QueueTab = "open" | "snoozed" | "done"
 export const queueTabOf = (signal: SignalRow): QueueTab =>

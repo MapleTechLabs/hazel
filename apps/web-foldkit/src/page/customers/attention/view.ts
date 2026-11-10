@@ -91,6 +91,17 @@ const menu = (
 
 const icon = { attributes: { "data-slot": "icon" } }
 
+/** A row's actions, whose clicks (a menu's items too) stop before the row's own click opens it. */
+const inRow = (h: HtmlBuilder<Message>, actions: ReadonlyArray<Html>): ReadonlyArray<Html> =>
+	actions.length === 0
+		? []
+		: [
+				h.div(
+					[h.Class("contents"), h.OnClick(Message.ClickedRowActions(), { propagation: "Stop" })],
+					[...actions],
+				),
+			]
+
 /** The selected signal's actions: Assign, Snooze, Done and `⋯` (open), or Wake / Reopen. */
 const signalActions = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): ReadonlyArray<Html> => {
 	const signal = selectedSignal(model)
@@ -548,7 +559,7 @@ const list = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html => {
 		accountsById: accountsByIdOfModel(model),
 		membersById: new Map(model.members.map((member) => [member.id, member])),
 		selectedId: model.selectedId,
-		actions: model.isPreviewOpen ? [] : signalActions(h, model, viewer),
+		actions: model.isPreviewOpen ? [] : inRow(h, signalActions(h, model, viewer)),
 	}
 	if (model.tab === "snoozed")
 		return queueList(h, { ariaLabel: "Snoozed signals" }, [

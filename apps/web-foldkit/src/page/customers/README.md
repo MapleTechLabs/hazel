@@ -23,20 +23,17 @@ here is an ordinary page (`definePage`), registered in `src/page/registry.ts`.
   `churned`) or a saved view's id; the sidebar links built-ins by key, so they work before views sync.
 - `CustomerTab` = `overview | users | billing | activity | notes` (none = overview).
 - Helpers: `customersListRoute(orgSlug, view?)`, `customerRoute(orgSlug, accountId, tab?)`;
-  `isCustomersRoute`, `isCustomersSettingsRoute`. Links are `h.Href(hrefOf(route))`; navigation from
-  `update` is `requestedOrgNavigation(shared.orgSlug, (orgSlug) => customerRoute(orgSlug, id))`.
+  `isCustomersRoute`. Links are `h.Href(hrefOf(route))`; navigation from `update` is `requestedOrgNavigation(shared.orgSlug, (orgSlug) => customerRoute(orgSlug, id))`.
 - `orgSectionOf` is `"Customers"` for all of them: the shell shows the Customers sidebar
   (`src/shell/customers-sidebar.ts`) and wraps the page in a full-height `main` with
   `overflow-hidden`. **A page scrolls itself** (`h-full overflow-y-auto` on its root).
 
-## Adding / replacing a page
+## Page instances
 
-The pages not built yet are placeholders (`placeholder.ts`) already registered under their final id
-and routes. To build one, replace its `index.ts` with a real `definePage` **with the same id** (e.g.
-`"CustomersList"`) and routes; the registry needs no change. Key choices already made:
-`CustomersList` is keyed by org (view changes arrive as `routeChanged`), `CustomerDetail` by
-`accountId` (tab changes arrive as `routeChanged`). Ask agent c to split a page's routes into
-separate pages or add routes (`route.ts`, `registry.ts` and `route.test.ts` are c's).
+`CustomersList` and `CustomersSettingsSignals` are keyed by org (a view or editor change arrives as
+`routeChanged`), `CustomerDetail` by `accountId` (tab changes arrive as `routeChanged`); the others
+by their whole route. A Command's answer reaches only the instance that sent it
+(`page/contract.ts`), so answers need no org or account check of their own.
 
 ## Live data: `src/customers/queries.ts`
 
@@ -51,9 +48,9 @@ Synced rows become plain page rows (dates as epoch ms), the same shape the lab f
     - `connectedProvidersStream(orgId, toMessage)`: providers not disconnected.
     - `settingsSummaryStream(orgId, toMessage)`: `{ lastComputedAtMs, bands, reportingCurrency }` or null.
     - `orgMembersStream(orgId, toMessage)`: `MemberRow`s (owners, assignees); from the org source.
-- Helpers: `accountsByIdOf`, `isOnMyAccount` ("Mine" = signals on accounts I own), `queueTabOf`,
-  `msOf`, `withCustomersSource(orgId, stream)` for a query of your own over the customer collections
-  (`src/core/db/collections.ts`: `customerNoteCollection`, `customerSignalRuleCollection`,
+- "Mine" everywhere (queue filter, sidebar badge, overview) = signals on accounts I own.
+- Helpers: `queueTabOf`, `msOf`, `withCustomersSource(orgId, stream)` for a query of your own over
+  the customer collections (`src/core/db/collections.ts`: `customerNoteCollection`, `customerSignalRuleCollection`,
   `customerSettingsCollection`, `customerMetricDefinitionCollection`, `customerConnectionCollection`,
   `customerSyncRunCollection`).
 
@@ -114,7 +111,9 @@ const AssignSignal = Command.define("AssignSignal", {
 })
 ```
 
-`attention/commands.ts` has the queue's Commands built this way; reuse them where they fit.
+`attention/commands.ts` has the queue's signal Commands built this way; the customer page reuses
+them (its `SucceededSignalAction` / `FailedSignalAction` match the queue's), and both snooze with the
+kit's presets (`customers/ui/menus.ts`).
 Timestamps and the new note's id are taken when the action runs (`Clock`), so callers never pass
 them. A Command's name must match its const (`foldkit/command-binding-matches-name`) and be unique
 app-wide.

@@ -8,6 +8,7 @@ import { CustomerTab } from "../../../route"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
 import * as Popover from "../../../ui/popover"
+import { SignalAction, SignalActionFailure } from "../attention/message"
 import { ContactFilter, DetailFailure, MetricRow, NoteRow, SignalMenu } from "./model"
 
 /** A note or signal action: the row is gone, its status moved on, or a common reason. */
@@ -20,9 +21,6 @@ export type NoteAction = typeof NoteAction.Type
 /** The text of a failed note save (noteId null) or edit, put back so it is not lost. */
 export const NoteDraft = Schema.Struct({ noteId: Schema.NullOr(CustomerNoteId), body: Schema.String })
 export type NoteDraft = typeof NoteDraft.Type
-
-export const SignalAction = Schema.Literals(["assign", "snooze", "done", "dismiss"])
-export type SignalAction = typeof SignalAction.Type
 
 export const Message = defineMessageUnion({
 	UpdatedAccounts: { accounts: Schema.Array(AccountRow) },
@@ -98,8 +96,9 @@ export const Message = defineMessageUnion({
 	GotSnoozeMenuMessage: { message: Menu.Message },
 	GotDoneMenuMessage: { message: Menu.Message },
 	GotSignalMoreMenuMessage: { message: Menu.Message },
-	SucceededSignalAction: { action: SignalAction },
-	FailedSignalAction: { action: SignalAction, reason: ActionFailure },
+	/** The queue's Commands answer (`attention/commands.ts`), so these match its Messages. */
+	SucceededSignalAction: { signalId: CustomerSignalId, action: SignalAction },
+	FailedSignalAction: { signalId: CustomerSignalId, action: SignalAction, reason: SignalActionFailure },
 
 	ChangedComposer: { value: Schema.String },
 	ToggledComposerPin: { pinned: Schema.Boolean },
@@ -110,6 +109,8 @@ export const Message = defineMessageUnion({
 	SubmittedEditNote: {},
 	PressedPinNote: { noteId: CustomerNoteId, pinned: Schema.Boolean },
 	PressedDeleteNote: { noteId: CustomerNoteId },
+	GotDeleteNoteModalMessage: { message: Modal.Message },
+	PressedConfirmDeleteNote: {},
 	SucceededNoteAction: { action: NoteAction },
 	FailedNoteAction: { action: NoteAction, reason: ActionFailure, draft: Schema.NullOr(NoteDraft) },
 

@@ -1,5 +1,5 @@
 import * as Customers from "@hazel/domain/customers"
-import { CustomerAccountId, CustomerSavedViewId, OrganizationId } from "@hazel/schema"
+import { CustomerAccountId, CustomerSavedViewId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import { CommonReason } from "~/lib/error-messages"
@@ -52,9 +52,8 @@ export const Message = defineMessageUnion({
 	ChangedSaveName: { value: Schema.String },
 	ToggledSaveShared: { isShared: Schema.Boolean },
 	SubmittedSave: {},
-	/** Command answers name their organization: the page is keyed by org, an answer for another is dropped. */
-	SucceededViewAction: { organizationId: OrganizationId, action: ViewAction, viewId: CustomerSavedViewId },
-	FailedViewAction: { organizationId: OrganizationId, action: ViewAction, reason: ViewFailure },
+	SucceededViewAction: { action: ViewAction, viewId: CustomerSavedViewId },
+	FailedViewAction: { action: ViewAction, reason: ViewFailure },
 
 	ToggledRow: { accountId: CustomerAccountId, isSelected: Schema.Boolean },
 	ToggledAllRows: { isSelected: Schema.Boolean },
@@ -64,13 +63,9 @@ export const Message = defineMessageUnion({
 	GotTagPopoverMessage: { message: Popover.Message },
 	ChangedTagInput: { value: Schema.String },
 	SubmittedTag: { tag: Schema.String },
-	SucceededBulkUpdate: {
-		organizationId: OrganizationId,
-		action: BulkAction,
-		count: Schema.Int,
-		label: Schema.String,
-	},
-	FailedBulkUpdate: { organizationId: OrganizationId, action: BulkAction, reason: CommonReason },
+	SucceededBulkUpdate: { action: BulkAction, count: Schema.Int, label: Schema.String },
+	/** `isBatched`: over one call's limit, so the batches before the failing one are already saved. */
+	FailedBulkUpdate: { action: BulkAction, reason: CommonReason, isBatched: Schema.Boolean },
 	PressedExport: { scope: Schema.Literals(["all", "selected"]) },
 	CompletedExport: {},
 
@@ -83,11 +78,8 @@ export const Message = defineMessageUnion({
 
 	PressedConnect: { provider: Customers.CustomerProvider },
 
-	SucceededFetchSparklines: {
-		organizationId: OrganizationId,
-		sparklines: Schema.Array(Customers.Sparkline),
-	},
-	FailedFetchSparklines: { organizationId: OrganizationId, reason: CommonReason },
+	SucceededFetchSparklines: { sparklines: Schema.Array(Customers.Sparkline) },
+	FailedFetchSparklines: { reason: CommonReason },
 
 	CompletedFocusSearch: {},
 	CompletedScrollRow: {},

@@ -427,8 +427,9 @@ const attentionCard = (
 	const open = (model.signals ?? []).filter((signal) => signal.status === "open")
 	const top = topOpenSignals(model, 5)
 	const risks = open.filter((signal) => signal.kind === "risk").length
+	// "Mine" as the queue and the sidebar badge count it: signals on accounts I own.
 	const mine = open.filter(
-		(signal) => signal.assigneeUserId !== null && signal.assigneeUserId === userId,
+		(signal) => userId !== null && context.accountsById.get(signal.accountId)?.ownerUserId === userId,
 	).length
 	const row = (signal: SignalRow) => {
 		const account = context.accountsById.get(signal.accountId)
@@ -507,7 +508,7 @@ const attentionCard = (
 						`${risks} risk${risks === 1 ? "" : "s"} · ${open.length - risks} opportunit${open.length - risks === 1 ? "y" : "ies"}`,
 					],
 				),
-				h.span([], [`${mine} assigned to you`]),
+				h.span([], [`${mine} on your accounts`]),
 			],
 		),
 	])

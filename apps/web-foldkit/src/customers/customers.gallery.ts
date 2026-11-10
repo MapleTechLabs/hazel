@@ -264,6 +264,7 @@ const table = (h: HtmlBuilder<M>) =>
 			selected: new Set([ACCOUNTS_BY_KEY.kestrel.id]),
 			onToggle: () => ignored,
 			onToggleAll: () => ignored,
+			rowLabel: (account) => account.name,
 		},
 		focusedKey: ACCOUNTS_BY_KEY.acme.id,
 	})

@@ -54,6 +54,22 @@ const fractionDigitsOf = (currency: string): number =>
 /** Minor units → major units, using the currency's own exponent (JPY has none). */
 export const toMajor = (minor: number, currency = "USD"): number => minor / 10 ** fractionDigitsOf(currency)
 
+/** `2150.00` (`2150` for JPY): the plain major amount, for an export. */
+export const formatMajor = (minor: number, currency = "USD"): string =>
+	toMajor(minor, currency).toFixed(fractionDigitsOf(currency))
+
+/** Major units → whole minor units: `toMajor`'s inverse, for amounts a user types. */
+export const toMinor = (major: number, currency = "USD"): number =>
+	Math.round(major * 10 ** fractionDigitsOf(currency))
+
+/** What labels an amount field: `$`, `¥`, `€`; the code itself for a currency `Intl` does not know. */
+export const currencySymbol = (currency: string): string =>
+	isKnownCurrency(currency)
+		? (numberFormat({ style: "currency", currency })
+				.formatToParts(0)
+				.find((part) => part.type === "currency")?.value ?? currency)
+		: currency
+
 /** `value` is what the text shows, rounded: a negative that rounds to zero reads `$0`, not `−$0`. */
 const withSign = (value: number, text: string, signed: boolean): string =>
 	value < 0 ? `${MINUS}${text}` : signed && value > 0 ? `+${text}` : text

@@ -161,6 +161,16 @@ describe("signals: the form builds the draft", () => {
 		const blank = pageUpdate(opened, Message.ChangedName({ value: "  " })).model
 		expect(Object.keys(editorStatus(blank, blank.editor!, formOf(blank)).errors)).toEqual(["name"])
 	})
+	test("an onboarding minimum age above the maximum marks the maximum", () => {
+		const opened = init(newRoute("onboarding_stalled"), shared).model
+		const crossed = pageUpdate(
+			opened,
+			Message.ChangedConfigNumber({ key: "minAgeDays", value: "40" }),
+		).model
+		const status = editorStatus(crossed, crossed.editor!, formOf(crossed))
+		expect(status.errors).toEqual({ "config.maxAgeDays": "At least the minimum age" })
+		expect(status.canSave).toBe(false)
+	})
 })
 
 describe("signals: the live preview", () => {
@@ -193,6 +203,29 @@ describe("signals: the live preview", () => {
 		expect(second.editor?.version).toBeGreaterThan(firstVersion)
 		const stale = pageUpdate(second, Message.SucceededFetchDryRun({ version: firstVersion, result }))
 		expect(stale.model.editor?.preview._tag).not.toBe("Success")
+	})
+
+	test("rules that arrive before the settings read their min MRR again in the reporting currency", () => {
+		const yenRule: RuleRow = { ...inactiveRule, scope: { minMrrMinor: 100_000 } }
+		const opened = pageUpdate(
+			init(ruleRoute, shared).model,
+			Message.UpdatedRules({ rules: [yenRule] }),
+		).model
+		expect(formOf(opened).scope.minMrr).toBe("1000")
+		const settings = { lastComputedAtMs: null, bands: { healthyMin: 70, atRiskMin: 40 } }
+		const inYen = pageUpdate(
+			opened,
+			Message.UpdatedSettings({ settings: { ...settings, reportingCurrency: "JPY" } }),
+		).model
+		expect(formOf(inYen).scope.minMrr).toBe("100000")
+		expect(Option.getOrThrow(draftOf(formOf(inYen), "JPY")).scope.minMrrMinor).toBe(100_000)
+
+		const edited = pageUpdate(opened, Message.ChangedScopeMrr({ value: "50" })).model
+		const keptEdit = pageUpdate(
+			edited,
+			Message.UpdatedSettings({ settings: { ...settings, reportingCurrency: "JPY" } }),
+		).model
+		expect(formOf(keptEdit).scope.minMrr).toBe("50")
 	})
 
 	test("edits debounce; only the latest version's answer lands", () => {

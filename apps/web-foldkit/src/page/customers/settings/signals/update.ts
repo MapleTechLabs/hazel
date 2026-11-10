@@ -251,6 +251,21 @@ const hydrateEditor = (model: Model, shared: Shared): Return => {
 	)
 }
 
+/**
+ * The reporting currency arrived (or changed) after the editor filled its form: an unedited form
+ * re-reads its rule's min MRR in it, so "1000 JPY" is not read as "10.00 USD".
+ */
+const settingsChanged = (model: Model, settings: Model["settings"]): Return => {
+	const next = { ...model, settings }
+	const editor = model.editor
+	const rule = ruleById(model, editor?.ruleId ?? null)
+	const isUnedited =
+		editor !== null && editor.form !== null && editorStatus(model, editor, editor.form).changes === 0
+	return editor === null || rule === undefined || !isUnedited || currencyOf(next) === currencyOf(model)
+		? { model: next }
+		: { model: { ...next, editor: { ...editor, form: formOfRule(rule, currencyOf(next)) } } }
+}
+
 const updateModal = (
 	model: Model,
 	field: "pickerModal" | "discardModal" | "deleteModal",
@@ -278,7 +293,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		UpdatedConnectedProviders: ({ providers }) => ({
 			model: { ...model, connectedProviders: providers },
 		}),
-		UpdatedSettings: ({ settings }) => ({ model: { ...model, settings } }),
+		UpdatedSettings: ({ settings }) => settingsChanged(model, settings),
 		UpdatedMetrics: ({ metrics }) => ({ model: { ...model, metrics } }),
 
 		ToggledRule: ({ ruleId, enabled }) => toggleRule(model, shared, ruleId, enabled),

@@ -21,6 +21,7 @@ import { severityChip } from "../../../customers/ui/badges"
 import { evidenceViz } from "../../../customers/ui/evidence"
 import { healthBreakdown } from "../../../customers/ui/health-breakdown"
 import { personLabel, sourceMark } from "../../../customers/ui/identity"
+import { snoozeMenuContent } from "../../../customers/ui/menus"
 import { queueAction } from "../../../customers/ui/queue-row"
 import { markdownView } from "../../../chat/markdown/markdown-view"
 import { IconCheck, IconChevronDown, IconChevronRight, IconClock, IconDots } from "../../../icons"
@@ -297,7 +298,6 @@ const healthCard = (
 
 // SIGNALS
 
-const SNOOZE_LABEL = { tomorrow: "Tomorrow", in_3_days: "In 3 days", next_week: "Next week" } as const
 const OUTCOME_LABEL = {
 	contacted: "Contacted",
 	fixed: "Fixed",
@@ -313,8 +313,16 @@ const MORE_LABEL = {
 
 const labelOf = (labels: Readonly<Record<string, string>>, key: string) => labels[key] ?? key
 
-const signalButtons = (h: HtmlBuilder<Message>, model: Model, signal: SignalRow): ReadonlyArray<Html> => {
+const signalButtons = (
+	h: HtmlBuilder<Message>,
+	model: Model,
+	signal: SignalRow,
+	nowMs: number,
+): ReadonlyArray<Html> => {
 	const isActive = model.activeSignalId === signal.id
+	const labeled = (menuId: string, labels: Readonly<Record<string, string>>) => (key: string) => [
+		menuLabel(h, menuId, key, labelOf(labels, key)),
+	]
 	/** The active signal's buttons are the menus' triggers; the others open them for their signal. */
 	const action = (
 		which: "snooze" | "done" | "more",
@@ -322,7 +330,7 @@ const signalButtons = (h: HtmlBuilder<Message>, model: Model, signal: SignalRow)
 		glyph: Html,
 		menuModel: Model["snoozeMenu"],
 		entries: ReadonlyArray<Parameters<typeof menu>[2]["entries"][number]>,
-		labels: Readonly<Record<string, string>>,
+		content: (key: string) => ReadonlyArray<Html | string>,
 		toMessage: Parameters<typeof menu>[2]["toMessage"],
 	): Html =>
 		isActive
@@ -336,7 +344,7 @@ const signalButtons = (h: HtmlBuilder<Message>, model: Model, signal: SignalRow)
 							attributes,
 							overlay,
 						}),
-					content: (key) => [menuLabel(h, menuModel.id, key, labelOf(labels, key))],
+					content,
 					toMessage,
 				})
 			: queueAction(h, {
@@ -352,11 +360,17 @@ const signalButtons = (h: HtmlBuilder<Message>, model: Model, signal: SignalRow)
 			IconClock(h, icon),
 			model.snoozeMenu,
 			snoozeEntries,
-			SNOOZE_LABEL,
+			snoozeMenuContent(h, model.snoozeMenu.id, new Date(nowMs)),
 			(message) => Message.GotSnoozeMenuMessage({ message }),
 		),
-		action("done", "Done", IconCheck(h, icon), model.doneMenu, doneEntries, OUTCOME_LABEL, (message) =>
-			Message.GotDoneMenuMessage({ message }),
+		action(
+			"done",
+			"Done",
+			IconCheck(h, icon),
+			model.doneMenu,
+			doneEntries,
+			labeled(model.doneMenu.id, OUTCOME_LABEL),
+			(message) => Message.GotDoneMenuMessage({ message }),
 		),
 		action(
 			"more",
@@ -364,7 +378,7 @@ const signalButtons = (h: HtmlBuilder<Message>, model: Model, signal: SignalRow)
 			IconDots(h, icon),
 			model.signalMoreMenu,
 			signalMoreEntries,
-			MORE_LABEL,
+			labeled(model.signalMoreMenu.id, MORE_LABEL),
 			(message) => Message.GotSignalMoreMenuMessage({ message }),
 		),
 	]
@@ -422,7 +436,7 @@ const signalsCard = (h: HtmlBuilder<Message>, model: Model, context: Context): H
 									h.p([h.Class("text-fg-2 text-sm")], [signal.reason]),
 									h.div(
 										[h.Class("flex flex-wrap items-center gap-1.5")],
-										signalButtons(h, model, signal),
+										signalButtons(h, model, signal, context.nowMs),
 									),
 								],
 							),

@@ -374,18 +374,27 @@ describe("needs attention: keyboard", () => {
 	test("keys inside fields or with modifiers are left alone", () => {
 		const event = (
 			key: string,
-			extra: Partial<{ ctrlKey: boolean; metaKey: boolean; altKey: boolean; repeat: boolean }> = {},
+			extra: Partial<{
+				ctrlKey: boolean
+				metaKey: boolean
+				altKey: boolean
+				shiftKey: boolean
+				repeat: boolean
+			}> = {},
 		) => ({
 			key,
 			target: null,
 			altKey: false,
 			ctrlKey: false,
 			metaKey: false,
+			shiftKey: false,
 			repeat: false,
 			...extra,
 		})
 		expect(queueKeyOf(event("j"))).toBe("next")
+		// Caps Lock: still j. Shift+A is not A.
 		expect(queueKeyOf(event("J"))).toBe("next")
+		expect(queueKeyOf(event("A", { shiftKey: true }))).toBeNull()
 		expect(queueKeyOf(event("ArrowUp"))).toBe("previous")
 		expect(queueKeyOf(event(" "))).toBe("preview")
 		expect(queueKeyOf(event("d", { metaKey: true }))).toBeNull()

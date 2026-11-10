@@ -108,7 +108,7 @@ h.submodel({
 ## Empty states and sources — `ui/empty-states.ts`, `ui/connect-card.ts`
 
 - `allClearState(h, { snoozedCount, onViewSnoozed? })`, `noSourcesState(h, { onConnect? | action? })`, `noResultsState(h, { onClear?, title?, description? })` — `framed: false` drops the border.
-- `connectCard(h, { provider, now, status })` — `status._tag`: `NotConnected { onConnect }`, `Syncing { step, done, total, onCancel? }`, `Connected { syncedAt, summary, onSyncNow? }`, `Error { at, message, action }`. `PROVIDER_BLURB`.
+- `connectCard(h, { provider, now, status })` — `status._tag`: `NotConnected { onConnect }`, `Syncing { step, done, total, onCancel? }`, `Connected { syncedAt, summary, onSyncNow? }`, `Error { at, message, action }`. The line under the name is `providerOf(provider).blurb` unless `description` is given.
 
 ## Lab
 

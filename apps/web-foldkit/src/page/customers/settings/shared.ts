@@ -11,10 +11,12 @@ import type { Shared } from "../../contract"
 export const isCustomersAdmin = (shared: Shared): boolean =>
 	shared.member?.role === "admin" || shared.member?.role === "owner"
 
-export interface Crumb {
+export interface Crumb<M = never> {
 	readonly label: string
 	/** Absent: the current page. */
 	readonly href?: string
+	/** Sent instead of following `href` (a form with unsaved changes asks first). */
+	readonly onClick?: M
 }
 
 /** The scrolling page root: settings pages scroll themselves inside the shell's `main`. */
@@ -24,14 +26,23 @@ export const settingsPage = <M>(h: HtmlBuilder<M>, children: ReadonlyArray<Html>
 		[h.div([h.Class("mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-6 lg:px-8")], [...children])],
 	)
 
-const breadcrumb = <M>(h: HtmlBuilder<M>, crumbs: ReadonlyArray<Crumb>): Html =>
+const breadcrumb = <M>(h: HtmlBuilder<M>, crumbs: ReadonlyArray<Crumb<M>>): Html =>
 	h.nav(
 		[h.AriaLabel("Breadcrumb"), h.Class("flex items-center gap-1 text-muted-fg text-sm")],
 		crumbs.flatMap((crumb, index) => [
 			...(index === 0 ? [] : [IconChevronRight(h, { className: "size-3.5" })]),
 			crumb.href === undefined
 				? h.span([h.AriaCurrent("page"), h.Class("text-fg")], [crumb.label])
-				: h.a([h.Href(crumb.href), h.Class("hover:text-fg")], [crumb.label]),
+				: h.a(
+						[
+							h.Href(crumb.href),
+							h.Class("hover:text-fg"),
+							...(crumb.onClick === undefined
+								? []
+								: [h.OnClick(crumb.onClick, { defaultAction: "Prevent" })]),
+						],
+						[crumb.label],
+					),
 		]),
 	)
 
@@ -41,7 +52,7 @@ export const settingsHeader = <M>(
 	options: Readonly<{
 		title: string
 		subtitle?: string | Html
-		crumbs?: ReadonlyArray<Crumb>
+		crumbs?: ReadonlyArray<Crumb<M>>
 		leading?: Html
 		badges?: ReadonlyArray<Html>
 		actions?: ReadonlyArray<Html>

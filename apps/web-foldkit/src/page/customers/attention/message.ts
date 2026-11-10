@@ -30,6 +30,8 @@ export const Message = defineMessageUnion({
 	PressedShowAllOwners: {},
 
 	ClickedRow: { signalId: CustomerSignalId },
+	/** A click inside a row's inline actions, stopped there so it does not also open the row. */
+	ClickedRowActions: {},
 	ClosedPreview: {},
 	PressedQueueKey: { key: QueueKey },
 	PressedOpenCustomer: { accountId: CustomerAccountId },

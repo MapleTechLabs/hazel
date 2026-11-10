@@ -1,6 +1,6 @@
 import type * as Customers from "@hazel/domain/customers"
 import type { Html, HtmlBuilder } from "foldkit/html"
-import { formatCount } from "../../../../customers/format"
+import { currencySymbol, formatCount } from "../../../../customers/format"
 import { STAGE_LABEL } from "../../../../customers/ui/badges"
 import { IconClose, IconPlus } from "../../../../icons"
 import { button } from "../../../../ui/button"
@@ -87,9 +87,10 @@ const mrrInput = (
 	scope: RuleForm["scope"],
 	error: string | undefined,
 	isAdmin: boolean,
+	currency: string,
 ): ReadonlyArray<Html> => [
 	inputGroup(h, { className: "w-44", isInvalid: error !== undefined, isDisabled: !isAdmin }, [
-		h.span([h.DataAttribute("slot", "text"), h.Class("text-muted-fg")], ["$"]),
+		h.span([h.DataAttribute("slot", "text"), h.Class("text-muted-fg")], [currencySymbol(currency)]),
 		inputElement(h, {
 			isInvalid: error !== undefined,
 			isDisabled: !isAdmin,
@@ -176,7 +177,7 @@ export const scopeCard = (
 					{
 						condition: "mrr" as const,
 						operator: "is at least",
-						value: mrrInput(h, scope, options.errors["scope.minMrr"], isAdmin),
+						value: mrrInput(h, scope, options.errors["scope.minMrr"], isAdmin, currencyOf(model)),
 					},
 				]),
 		...(scope.tags.length === 0

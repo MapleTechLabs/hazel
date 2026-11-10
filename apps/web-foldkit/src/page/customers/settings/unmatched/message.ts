@@ -56,8 +56,11 @@ export const Message = defineMessageUnion({
 	PressedDeleteRule: { ruleId: CustomerIgnoreRuleId },
 
 	SucceededRecordAction: { recordId: CustomerUnmatchedRecordId, action: RecordAction },
-	/** Ignored, and its pattern saved as an ignore rule. */
-	SucceededIgnoreWithRule: { recordId: CustomerUnmatchedRecordId },
+	/** Ignored, and its pattern saved as an ignore rule; the server swept `coveredIds` (open, loaded) with it. */
+	SucceededIgnoreWithRule: {
+		recordId: CustomerUnmatchedRecordId,
+		coveredIds: Schema.Array(CustomerUnmatchedRecordId),
+	},
 	FailedRecordAction: {
 		recordId: CustomerUnmatchedRecordId,
 		action: RecordAction,

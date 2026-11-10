@@ -184,6 +184,7 @@ const view = (model: Model, h: HtmlBuilder<Message>): Html => {
 						selected: new Set(model.selected),
 						onToggle: (key, isSelected) => Message.ToggledRow({ key, isSelected }),
 						onToggleAll: (isSelected) => Message.ToggledAll({ isSelected }),
+						rowLabel: (account) => account.name,
 					},
 					onRowPress: (account) => Message.PressedRow({ key: account.id }),
 					focusedKey: model.focused,

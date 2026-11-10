@@ -133,7 +133,11 @@ export const perInstance = <Message>(
 	})).bound
 }
 
-/** The page lives in the root Model as `{ _tag: id, key, model }`; its Messages as `{ _tag: id, message }`. */
+/**
+ * The page lives in the root Model as `{ _tag: id, key, model }`; its Messages as `{ _tag: id, message }`,
+ * plus the instance `key` on a Command's answer: one for an instance that is gone (another org,
+ * account or provider) is dropped, so pages need no per-answer org check.
+ */
 export const definePage = <
 	const Id extends string,
 	Tags extends RouteTag,
@@ -147,13 +151,15 @@ export const definePage = <
 	type Model = ModelSchema["Type"]
 	type Message = MessageSchema["Type"]
 	const Slot = Schema.TaggedStruct(id, { key: Schema.String, model: schemas.Model })
-	const Wrapped = Schema.TaggedStruct(id, { message: schemas.Message })
+	const Wrapped = Schema.TaggedStruct(id, { message: schemas.Message, key: Schema.optional(Schema.String) })
 	type SlotType = { readonly _tag: Id; readonly key: string; readonly model: Model }
-	type WrappedType = { readonly _tag: Id; readonly message: Message }
+	type WrappedType = { readonly _tag: Id; readonly message: Message; readonly key?: string }
 
 	// The tags are unique across the registry, so a matching tag is this page's slot or Message.
 	const isOwnSlot = (slot: PageSlotBase): slot is SlotType => slot._tag === id
 	const isOwnMessage = (message: PageMessageBase): message is WrappedType => message._tag === id
+	const isForInstance = (slot: SlotType, message: WrappedType) =>
+		message.key === undefined || message.key === slot.key
 	const ownsRoute = (route: AppRoute): route is RouteOf<Tags> =>
 		Array.some(spec.routes, (tag) => tag === route._tag)
 	const wrap = (message: Message): WrappedType => ({ _tag: id, message })
@@ -161,7 +167,11 @@ export const definePage = <
 
 	const step = (key: string, result: PageReturn<Model, Message>): PageStep<SlotType, WrappedType> => ({
 		slot: { _tag: id, key, model: result.model },
-		commands: Command.mapMessages(result.commands, wrap),
+		commands: Command.mapMessages(result.commands, (message): WrappedType => ({
+			_tag: id,
+			key,
+			message,
+		})),
 		outMessage: Option.fromNullishOr(result.outMessage),
 	})
 
@@ -183,7 +193,7 @@ export const definePage = <
 		init: (route: AppRoute, shared: Shared): Option.Option<PageStep<SlotType, WrappedType>> =>
 			ownsRoute(route) ? Option.some(step(keyOf(route), spec.init(route, shared))) : Option.none(),
 		update: (slot: PageSlotBase, message: PageMessageBase, shared: Shared) =>
-			isOwnSlot(slot) && isOwnMessage(message)
+			isOwnSlot(slot) && isOwnMessage(message) && isForInstance(slot, message)
 				? Option.some(step(slot.key, spec.update(slot.model, message.message, shared)))
 				: Option.none<PageStep<SlotType, WrappedType>>(),
 		routeChanged: (slot: PageSlotBase, route: AppRoute, shared: Shared) =>

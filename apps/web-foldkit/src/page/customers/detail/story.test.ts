@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import type * as Customers from "@hazel/domain/customers"
 import type { SignalEvidence } from "@hazel/domain/customers"
 import {
@@ -10,8 +11,9 @@ import {
 	UserId,
 } from "@hazel/schema"
 import { Option, Schema } from "effect"
-import { describe, expect, test, vi } from "vitest"
+import { describe, expect, test } from "vitest"
 import type { AccountRow, SignalRow } from "../../../customers/queries"
+import { snoozeUntil } from "../../../customers/ui/menus"
 import { AppRoute, type CustomerTab } from "../../../route"
 import * as Menu from "../../../ui/menu"
 import type { Shared } from "../../contract"
@@ -27,12 +29,8 @@ import {
 	snoozeEntries,
 	sortedNotes,
 } from "./model"
+import { page } from "./index"
 import { init, routeChanged, update } from "./update"
-
-// `ui/aria/*` names `document` when its modules load; the update loop never touches it.
-vi.hoisted(() => {
-	Object.assign(globalThis, { document: globalThis.document ?? {} })
-})
 
 /** Update-loop tests for the customer page: tab routing and loading, owner and tags, notes, signals. */
 
@@ -373,7 +371,7 @@ describe("customer page: notes", () => {
 		expect(commandNames(update(loaded(), Message.SubmittedNote(), shared))).toEqual([])
 	})
 
-	test("pin, edit and delete apply to the list at once", () => {
+	test("pin, edit and a confirmed delete apply to the list at once", () => {
 		const target = note(1).id
 		const pinned = update(loaded(), Message.PressedPinNote({ noteId: target, pinned: true }), shared)
 		expect(pinned.model.notes?.find((row) => row.id === target)?.pinned).toBe(true)
@@ -390,7 +388,12 @@ describe("customer page: notes", () => {
 			editedAtMs: NOW,
 		})
 
-		const deleted = update(editing, Message.PressedDeleteNote({ noteId: target }), shared)
+		const asking = update(editing, Message.PressedDeleteNote({ noteId: target }), shared)
+		expect(asking.model.deleteNoteModal.isOpen).toBe(true)
+		expect(asking.model.notes?.map((row) => row.id)).toContain(target)
+		expect(commandNames(asking)).toEqual([])
+		const deleted = update(asking.model, Message.PressedConfirmDeleteNote(), shared)
+		expect(deleted.model.deleteNoteModal.isOpen).toBe(false)
 		expect(deleted.model.notes?.map((row) => row.id)).not.toContain(target)
 		expect(deleted.model.editingNote).toBeNull()
 		expect(commandNames(deleted)).toEqual(["DeleteCustomerNote"])
@@ -423,6 +426,24 @@ describe("customer page: notes", () => {
 		expect(failed({ noteId: null, body: "Call booked" }, typedSince).model.composer.body).toBe("Next one")
 	})
 
+	test("a failed save answering after the user left for another customer stays with its own", () => {
+		const fromBeta = Option.getOrThrow(page.init(route("notes", beta.id), shared))
+		const onAcme = Option.getOrThrow(page.init(route("notes", acme.id), shared))
+		const answer = {
+			_tag: "CustomerDetail" as const,
+			key: fromBeta.slot.key,
+			message: Message.FailedNoteAction({
+				action: "create",
+				reason: "Offline",
+				draft: { noteId: null, body: "Call booked" },
+			}),
+		}
+		expect(Option.isNone(page.update(onAcme.slot, answer, shared))).toBe(true)
+		expect(Option.getOrThrow(page.update(fromBeta.slot, answer, shared)).slot.model.composer.body).toBe(
+			"Call booked",
+		)
+	})
+
 	test("Add note opens the notes tab and focuses the composer", () => {
 		const result = update(loaded(), Message.PressedAddNote(), shared)
 		expect(result.outMessage).toMatchObject({ route: route("notes") })
@@ -447,7 +468,11 @@ describe("customer page: signals", () => {
 			shared,
 		)
 		expect(snoozed.model.signals?.[0]?.status).toBe("snoozed")
-		expect(commandNames(snoozed)).toContain("SnoozeCustomerSignal")
+		// The queue's presets: "Next week" is next Monday at 9:00, as in Needs attention.
+		expect(snoozed.model.signals?.[0]?.snoozedUntilMs).toBe(
+			snoozeUntil("next_week", new Date(NOW)).getTime(),
+		)
+		expect(commandNames(snoozed)).toContain("SnoozeSignal")
 
 		const more = update(
 			loaded(),
@@ -462,12 +487,12 @@ describe("customer page: signals", () => {
 			shared,
 		)
 		expect(assigned.model.signals?.[0]?.assigneeUserId).toBe(ada)
-		expect(commandNames(assigned)).toContain("AssignCustomerSignal")
+		expect(commandNames(assigned)).toContain("AssignSignal")
 	})
 	test("a failed signal or account action says so; the synced rows roll back on their own", () => {
 		const signalFailed = update(
 			loaded(),
-			Message.FailedSignalAction({ action: "snooze", reason: "Stale" }),
+			Message.FailedSignalAction({ signalId: signal.id, action: "snooze", reason: "Stale" }),
 			shared,
 		)
 		expect(signalFailed.outMessage?._tag).toBe("RequestedToast")

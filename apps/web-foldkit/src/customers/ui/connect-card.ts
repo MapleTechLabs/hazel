@@ -7,20 +7,13 @@ import { button } from "../../ui/button"
 import { loader } from "../../ui/loader"
 import { progressBar, progressBarTrack } from "../../ui/progress-bar"
 import { formatCount, formatRelative, type Instant } from "../format"
+import { providerOf } from "../providers"
 import { SOURCE_LABEL, sourceMark } from "./identity"
 
 /**
  * A data source card (Foundations › Integration Connect Cards): what the source brings, then its
  * state: not connected, syncing with progress, connected, or failing with the way out.
  */
-
-/** What each source brings, in one line. */
-export const PROVIDER_BLURB = {
-	clerk: "Organizations become customers, users become contacts. Sign-ins feed activity.",
-	stripe: "Subscriptions, invoices and MRR. Matched to customers by Clerk org ID or domain.",
-	autumn: "Plans, feature usage and limits. Powers the “near limit” expansion signal.",
-	maple: "Product events by GroupId and UserId. Drives active users and usage trends.",
-} as const satisfies Record<CustomerProvider, string>
 
 export type ConnectCardStatus<M> =
 	| Readonly<{ _tag: "NotConnected"; onConnect: M }>
@@ -184,7 +177,7 @@ export const connectCard = <M>(
 							),
 							h.p(
 								[h.Class("text-muted-fg text-sm")],
-								[options.description ?? PROVIDER_BLURB[options.provider]],
+								[options.description ?? providerOf(options.provider).blurb],
 							),
 						],
 					),

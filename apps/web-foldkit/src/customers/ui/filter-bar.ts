@@ -19,7 +19,10 @@ import { kbd } from "./shortcuts"
 
 export type ViewTab<K extends string> = Readonly<{ key: K; label: string; count?: number }>
 
-/** `Open 12 · Snoozed 4 · Done`, underlined like the app's tabs; `trailing` follows them (e.g. `+`). */
+/**
+ * `Open 12 · Snoozed 4 · Done`, underlined like the app's tabs; `trailing` follows them (e.g. `+`).
+ * Stateless, so no roving focus: every tab is a button in the Tab order.
+ */
 export const viewTabs = <M, K extends string>(
 	h: HtmlBuilder<M>,
 	options: Readonly<{
@@ -47,7 +50,6 @@ export const viewTabs = <M, K extends string>(
 							h.Type("button"),
 							h.Role("tab"),
 							h.AriaSelected(isSelected),
-							h.Tabindex(isSelected ? 0 : -1),
 							...(isSelected ? [h.DataAttribute("selected", "true")] : []),
 							h.Class(
 								twMerge(...tabsStyles.tab("horizontal", false), "cursor-pointer gap-1.5"),

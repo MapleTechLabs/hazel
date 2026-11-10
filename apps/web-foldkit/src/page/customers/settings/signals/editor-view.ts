@@ -10,7 +10,7 @@ import { dialogClose, dialogFooter, dialogHeader } from "../../../../ui/dialog"
 import { input } from "../../../../ui/input"
 import * as Modal from "../../../../ui/modal"
 import type { Shared } from "../../../contract"
-import { isCustomersAdmin, readOnlyNotice, settingsHeader, settingsPage } from "../shared"
+import { type Crumb, isCustomersAdmin, readOnlyNotice, settingsHeader, settingsPage } from "../shared"
 import { conditionCards } from "./condition-view"
 import { plainWords, renderParts } from "./describe"
 import { editorStatus, type EditorStatus, scopeOf } from "./draft"
@@ -37,10 +37,17 @@ const plural = (count: number, word: string) => `${formatCount(count)} ${count =
 const listHref = (shared: Shared) =>
 	hrefOf(AppRoute.CustomersSettingsSignals({ orgSlug: shared.orgSlug ?? "" }))
 
-const crumbs = (shared: Shared, isNew: boolean) => [
-	{ label: "Signals", href: listHref(shared) },
-	{ label: isNew ? "New rule" : "Edit rule" },
-]
+/**
+ * With unsaved changes the "Signals" crumb asks first, like Close. The sidebar's links and the
+ * browser's back button still leave without asking: the app has no navigation guard.
+ */
+const crumbs = (shared: Shared, isNew: boolean, hasChanges = false): ReadonlyArray<Crumb<Message>> => {
+	const signals: Crumb<Message> = { label: "Signals", href: listHref(shared) }
+	return [
+		hasChanges ? { ...signals, onClick: Message.PressedClose() } : signals,
+		{ label: isNew ? "New rule" : "Edit rule" },
+	]
+}
 
 const label = (h: H, text: string, forId?: string): Html =>
 	forId === undefined
@@ -327,7 +334,7 @@ export const editorView = (h: H, model: Model, editor: Editor, shared: Shared): 
 			settingsPage(h, [
 				settingsHeader(h, {
 					title: form.name.trim() === "" ? Customers.TEMPLATES[form.template].name : form.name,
-					crumbs: crumbs(shared, editor.ruleId === null),
+					crumbs: crumbs(shared, editor.ruleId === null, status.changes > 0),
 					leading: templateTile(h, form.template, "size-9"),
 					badges: badges(h, editor, form, status, shared.nowMs),
 					actions: actions(h, editor, form, status, isAdmin),

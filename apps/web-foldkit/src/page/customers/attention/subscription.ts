@@ -52,6 +52,12 @@ const isInOverlay = (target: EventTarget | null): boolean =>
 const isPressable = (target: EventTarget | null): boolean =>
 	elementOf(target)?.closest("button, a, [role=menuitem]") != null
 
+/** The arrows walk the queue from a row or with nothing focused; anywhere else they scroll. */
+const isArrowForQueue = (target: EventTarget | null): boolean => {
+	const element = elementOf(target)
+	return element === null || element.tagName === "BODY" || element.closest("[role=table]") !== null
+}
+
 /** The queue key a keydown means, or none (typing, a modifier, a pressable target for Enter/Space). */
 export const queueKeyOf = (event: {
 	readonly key: string
@@ -59,18 +65,22 @@ export const queueKeyOf = (event: {
 	readonly altKey: boolean
 	readonly ctrlKey: boolean
 	readonly metaKey: boolean
+	readonly shiftKey: boolean
 	readonly repeat: boolean
 }): QueueKey | null => {
 	if (
 		event.altKey ||
 		event.ctrlKey ||
 		event.metaKey ||
+		// Some layouts need Shift for "/".
+		(event.shiftKey && event.key !== "/") ||
 		isEditable(event.target) ||
 		isInOverlay(event.target)
 	)
 		return null
 	const key = KEYS.get(event.key.length === 1 ? event.key.toLowerCase() : event.key)
 	if (key === undefined) return null
+	if ((event.key === "ArrowUp" || event.key === "ArrowDown") && !isArrowForQueue(event.target)) return null
 	// Holding j/k walks the queue; a held action key acts once.
 	if (event.repeat && key !== "next" && key !== "previous") return null
 	if ((key === "open" || key === "preview") && isPressable(event.target)) return null

@@ -14,7 +14,7 @@ import { PageOutMessage } from "../../../out-message"
 import { sharedDefaults } from "../../../test-shared"
 import * as Slider from "../../../../ui/slider"
 import { DelayHealthPreview, FetchHealthCheckDetail, FetchHealthDryRun, SaveHealthSettings } from "./commands"
-import { numberText } from "./fields"
+import { numberText, parseNumber } from "./fields"
 import { Message } from "./message"
 import { invalidFieldsOf, isDirty, type Model, scaledWeights, validDraftOf, weightTotal } from "./model"
 import { init, update } from "./update"
@@ -216,6 +216,11 @@ describe("health settings: typing numbers", () => {
 		// Another value (a reset, a discard) shows the value, not the old text.
 		expect(numberText(point.typing, "pastDue", 5)).toBe("5")
 		expect(numberText(point.typing, "trend.0.score", 1)).toBe("1")
+	})
+
+	test("only plain decimals read as numbers", () => {
+		expect([" 12 ", "-0.5", "1.", ".5"].map(parseNumber)).toEqual([12, -0.5, 1, 0.5])
+		for (const text of ["", "-", "1e2", "0x10", "Infinity", "1,5"]) expect(parseNumber(text)).toBeNaN()
 	})
 })
 

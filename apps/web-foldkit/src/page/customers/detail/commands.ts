@@ -1,23 +1,19 @@
 import * as Customers from "@hazel/domain/customers"
-import type { CustomerSignalTransitionError, CustomersNotFoundError } from "@hazel/domain/rpc"
-import { CustomerAccountId, CustomerNoteId, CustomerSignalId, OrganizationId, UserId } from "@hazel/schema"
+import type { CustomersNotFoundError } from "@hazel/domain/rpc"
+import { CustomerAccountId, CustomerNoteId, OrganizationId, UserId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
 import { Command } from "foldkit"
 import * as Dom from "foldkit/dom"
 import type { CommonError } from "~/lib/error-messages"
 import {
-	assignSignalAction,
 	createNoteAction,
 	deleteNoteAction,
-	dismissSignalAction,
-	markSignalDoneAction,
-	snoozeSignalAction,
 	updateAccountAction,
 	updateNoteAction,
 } from "../../../customers/actions"
 import { catchCommon } from "../../../data/actions"
 import { HazelRpc } from "../../../rpc"
-import { Message, type NoteAction, type NoteDraft, type SignalAction } from "./message"
+import { Message, type NoteAction, type NoteDraft } from "./message"
 import { COMPOSER_ID, PAGE_SIZE } from "./model"
 
 /** The customer page's Commands: its reads, and the account, note and signal actions. */
@@ -193,52 +189,6 @@ export const DeleteCustomerNote = Command.define("DeleteCustomerNote", {
 	args: { organizationId: OrganizationId, noteId: CustomerNoteId },
 	messages: noteMessages,
 	execute: (args) => deleteNoteAction(args).pipe(settleNote("delete")),
-})
-
-// SIGNALS
-
-const settleSignal =
-	(action: SignalAction) =>
-	<A, R>(
-		effect: Effect.Effect<A, CustomersNotFoundError | CustomerSignalTransitionError | CommonError, R>,
-	) =>
-		effect.pipe(
-			Effect.as(Message.SucceededSignalAction({ action })),
-			Effect.catchTags({
-				CustomersNotFoundError: () =>
-					Effect.succeed(Message.FailedSignalAction({ action, reason: "NotFound" })),
-				CustomerSignalTransitionError: () =>
-					Effect.succeed(Message.FailedSignalAction({ action, reason: "Stale" })),
-			}),
-			catchCommon((reason) => Message.FailedSignalAction({ action, reason })),
-		)
-
-const signalMessages = [Message.SucceededSignalAction, Message.FailedSignalAction]
-const signalTarget = { organizationId: OrganizationId, signalId: CustomerSignalId }
-
-export const AssignCustomerSignal = Command.define("AssignCustomerSignal", {
-	args: { ...signalTarget, assigneeUserId: Schema.NullOr(UserId) },
-	messages: signalMessages,
-	execute: (args) => assignSignalAction(args).pipe(settleSignal("assign")),
-})
-
-export const SnoozeCustomerSignal = Command.define("SnoozeCustomerSignal", {
-	args: { ...signalTarget, userId: UserId, untilMs: Schema.Number },
-	messages: signalMessages,
-	execute: ({ untilMs, ...args }) =>
-		snoozeSignalAction({ ...args, until: new Date(untilMs) }).pipe(settleSignal("snooze")),
-})
-
-export const MarkCustomerSignalDone = Command.define("MarkCustomerSignalDone", {
-	args: { ...signalTarget, userId: UserId, outcome: Customers.SignalOutcome },
-	messages: signalMessages,
-	execute: (args) => markSignalDoneAction(args).pipe(settleSignal("done")),
-})
-
-export const DismissCustomerSignal = Command.define("DismissCustomerSignal", {
-	args: { ...signalTarget, userId: UserId },
-	messages: signalMessages,
-	execute: (args) => dismissSignalAction(args).pipe(settleSignal("dismiss")),
 })
 
 // LOCAL

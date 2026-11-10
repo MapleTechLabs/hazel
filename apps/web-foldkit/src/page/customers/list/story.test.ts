@@ -276,26 +276,10 @@ describe("customers list: saving views", () => {
 		expect(saved.model.saveForm).toBeNull()
 		const done = update(
 			saved.model,
-			Message.SucceededViewAction({ organizationId, action: "create", viewId: mine.id }),
+			Message.SucceededViewAction({ action: "create", viewId: mine.id }),
 			shared,
 		)
 		expect(done.outMessage?._tag).toBe("RequestedNavigation")
-	})
-
-	test("an answer for the org shown before is dropped", () => {
-		const other = Schema.decodeSync(OrganizationId)(uuid(4))
-		const stale = update(
-			loaded(),
-			Message.SucceededViewAction({ organizationId: other, action: "create", viewId: mine.id }),
-			shared,
-		)
-		expect(stale.outMessage).toBeUndefined()
-		const failed = update(
-			loaded(),
-			Message.FailedBulkUpdate({ organizationId: other, action: "tag", reason: "Offline" }),
-			shared,
-		)
-		expect(failed.outMessage).toBeUndefined()
 	})
 
 	test("Save changes updates the current view; deleting goes back to All", () => {
@@ -357,7 +341,7 @@ describe("customers list: selection and bulk actions", () => {
 	test("a failed bulk update says so (the synced rows roll back on their own)", () => {
 		const failed = update(
 			loaded(),
-			Message.FailedBulkUpdate({ organizationId, action: "owner", reason: "Offline" }),
+			Message.FailedBulkUpdate({ action: "owner", reason: "Offline", isBatched: false }),
 			shared,
 		)
 		expect(failed.outMessage?._tag).toBe("RequestedToast")
@@ -366,7 +350,7 @@ describe("customers list: selection and bulk actions", () => {
 	test("the toast counts what the server updated", () => {
 		const done = update(
 			loaded(),
-			Message.SucceededBulkUpdate({ organizationId, action: "tag", count: 500, label: "vip" }),
+			Message.SucceededBulkUpdate({ action: "tag", count: 500, label: "vip" }),
 			shared,
 		)
 		expect(JSON.stringify(done.outMessage)).toContain("Tagged 500 customers")

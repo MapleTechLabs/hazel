@@ -136,8 +136,10 @@ const loadMore = (model: Model, shared: Shared, status: RecordStatus): Return =>
 	const cursor = Option.getOrUndefined(AsyncData.getData(listOf(model, status)))?.nextCursor ?? null
 	if (organizationId === undefined || cursor === null || model.loadingMore !== null) return { model }
 	// An ignored record joins the ignored list at the top: its next page repeats rows, which
-	// `receivedPage` skips. A resolved open record leaves: the open page starts that many earlier.
-	const shift = status === "open" ? model.resolvedSincePage : 0
+	// `receivedPage` skips. A resolved open record leaves: the open page starts that many earlier,
+	// counting the ones in flight (the server may have resolved them already). Starting too early
+	// only repeats rows; too late would skip some.
+	const shift = status === "open" ? model.resolvedSincePage + model.inFlight.length : 0
 	return {
 		model: modifyFields(model, {
 			loadingMore: () => status,
@@ -231,27 +233,29 @@ const createAccount = (model: Model, shared: Shared, recordId: CustomerUnmatched
 
 /**
  * `key`: Ignore this record, or all matching one of its patterns (`ignorePatternsOf`): the rule is
- * saved with this record, and the other open records it covers are ignored with it.
+ * saved with this record and the server ignores the open records it covers, so those leave the
+ * list when it answers (`SucceededIgnoreWithRule`), not one call each.
  */
 const ignore = (model: Model, shared: Shared, recordId: CustomerUnmatchedRecordId, key: string): Return => {
 	const record = recordById(model, recordId)
 	const pattern =
 		record === undefined ? undefined : ignorePatternsOf(record).find((option) => option.key === key)
-	const single = act(model, shared, recordId, "ignore", (organizationId) =>
+	return act(model, shared, recordId, "ignore", (organizationId) =>
 		key === IGNORE_KEY
-			? IgnoreUnmatchedRecord({ organizationId, recordId, rule: null })
-			: pattern === undefined
+			? IgnoreUnmatchedRecord({ organizationId, recordId, rule: null, coveredIds: [] })
+			: pattern === undefined || record === undefined
 				? undefined
 				: IgnoreUnmatchedRecord({
 						organizationId,
 						recordId,
 						rule: { field: pattern.field, pattern: pattern.pattern },
+						coveredIds: openRecords(model)
+							.filter(
+								(other) => other.id !== recordId && matchesPattern(record, pattern, other),
+							)
+							.map((other) => other.id),
 					}),
 	)
-	if (record === undefined || pattern === undefined || single.model === model) return single
-	const others = openRecords(single.model).filter((other) => matchesPattern(record, pattern, other))
-	const rest = ignoreAll(single.model, shared, others)
-	return { model: rest.model, commands: [...(single.commands ?? []), ...(rest.commands ?? [])] }
 }
 
 /** Links each record to its suggestion in one Command (no bulk RPC: one call per record). */
@@ -296,6 +300,13 @@ const DONE = { link: "Linked", create: "Created accounts from", ignore: "Ignored
 >
 
 const records = (count: number) => `${count} record${count === 1 ? "" : "s"}`
+
+/** A new search keeps only the selected records it still shows (bulk actions act on what shows). */
+const searched = (model: Model, search: string): Model => {
+	const next = modifyFields(model, { search: () => search })
+	const visible = new Set(visibleRecords(next).map((record) => record.id))
+	return modifyFields(next, { selected: (ids) => ids.filter((id) => visible.has(id)) })
+}
 
 // MENUS AND THE LINK SEARCH
 
@@ -387,8 +398,8 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		PressedLoadMore: ({ status }) => loadMore(model, shared, status),
 
 		ClickedTab: ({ tab }) => ({ model: modifyFields(model, { tab: () => tab, selected: () => [] }) }),
-		ChangedSearch: ({ value }) => ({ model: modifyFields(model, { search: () => value }) }),
-		ClearedSearch: () => ({ model: modifyFields(model, { search: () => "" }) }),
+		ChangedSearch: ({ value }) => ({ model: searched(model, value) }),
+		ClearedSearch: () => ({ model: searched(model, "") }),
 		GotSortMenuMessage: ({ message: menuMessage }) => {
 			const result = Menu.update(model.sortMenu, menuMessage)
 			return foldMenu(
@@ -468,11 +479,13 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		},
 
 		SucceededRecordAction: ({ recordId }) => ({ model: settled(model, [recordId]) }),
-		SucceededIgnoreWithRule: ({ recordId }) => {
+		SucceededIgnoreWithRule: ({ recordId, coveredIds }) => {
 			const organizationId = adminOrganizationOf(shared)
+			const covered = openRecords(model).filter((record) => coveredIds.includes(record.id))
+			const swept = covered.reduce((next, record) => takeOff(next, record, "ignore"), model)
 			// The new rule shows in the rules list.
 			return {
-				model: settled(model, [recordId]),
+				model: settled(swept, [recordId, ...covered.map((record) => record.id)]),
 				commands: organizationId === undefined ? [] : [FetchUnmatchedIgnoreRules({ organizationId })],
 			}
 		},

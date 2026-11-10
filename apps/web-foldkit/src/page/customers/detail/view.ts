@@ -775,6 +775,24 @@ const rawDialog = (h: HtmlBuilder<Message>, model: Model, context: Context): Htm
 		],
 	})
 
+const deleteNoteDialog = (h: HtmlBuilder<Message>, model: Model): Html =>
+	Modal.controlledModal(h, {
+		model: model.deleteNoteModal,
+		toParentMessage: (message) => Message.GotDeleteNoteModalMessage({ message }),
+		role: "alertdialog",
+		size: "sm",
+		toContent: (closeAttributes) => [
+			dialogHeader(h, {
+				title: { id: Modal.titleId(model.deleteNoteModal.id), text: "Delete this note?" },
+				description: "It's removed for everyone. This can't be undone.",
+			}),
+			dialogFooter(h, [
+				dialogClose(h, closeAttributes, ["Cancel"]),
+				button(h, { intent: "danger", onPress: Message.PressedConfirmDeleteNote() }, ["Delete note"]),
+			]),
+		],
+	})
+
 // PAGE
 
 export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, { shared }, h) => {
@@ -884,6 +902,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 				],
 			),
 			rawDialog(h, model, context),
+			deleteNoteDialog(h, model),
 		],
 	)
 })

@@ -1,4 +1,4 @@
-import { CustomerSavedViewId, OrganizationId } from "@hazel/schema"
+import { CustomerSavedViewId } from "@hazel/schema"
 import { Effect, Option, Schema } from "effect"
 import { Subscription } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
@@ -121,7 +121,6 @@ const step = (model: Model, message: Message): { model: Model; commands: Readonl
 			const answered = step(
 				current.model,
 				Message.SucceededFetchSparklines({
-					organizationId: Schema.decodeUnknownSync(OrganizationId)(fetch.args?.organizationId),
 					sparklines: ACCOUNTS.filter((account) => ids.includes(account.id)).map((account) => ({
 						accountId: account.id,
 						values: sparklineOf(account.id),

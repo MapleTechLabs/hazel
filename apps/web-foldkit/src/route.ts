@@ -471,7 +471,6 @@ export const isCustomersRoute = AppRoute.isAnyOf([
 	"CustomersUnmatched",
 ])
 
-/** `/$orgSlug/customers/settings/*`. */
 /** `/$orgSlug/chat/$channelId/*`: a channel's messages, files or media. */
 export const isChannelChatRoute = AppRoute.isAnyOf(["ChatChannel", "ChatFiles", "ChatFilesMedia"])
 

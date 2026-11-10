@@ -39,7 +39,9 @@ export const cardTitle = (h: H, title: string, subtitle: string): Html =>
 
 /** An input's text: an emptied field holds `NaN`. */
 export const textOf = (value: number): string => (Number.isNaN(value) ? "" : String(value))
-export const parseNumber = (text: string): number => (text.trim() === "" ? Number.NaN : Number(text))
+/** Plain decimals only (`12`, `-0.5`, `1.`): `1e2`, `0x10` or `Infinity` read as invalid, not as a number. */
+const DECIMAL = /^\s*-?(\d+\.?\d*|\.\d+)\s*$/
+export const parseNumber = (text: string): number => (DECIMAL.test(text) ? Number(text) : Number.NaN)
 
 /** The field's text: what was typed in it while that still reads as `value` (`-`, `1.`), else the value. */
 export const numberText = (typing: Context["typing"], field: string, value: number): string =>

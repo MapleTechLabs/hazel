@@ -503,6 +503,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 
 		ClickedRow: ({ signalId }) =>
 			select(modifyFields(model, { isPreviewOpen: () => true }), shared, signalId),
+		ClickedRowActions: () => ({ model }),
 		ClosedPreview: () => ({ model: modifyFields(model, { isPreviewOpen: () => false }) }),
 		PressedQueueKey: ({ key }) => onKey(model, shared, key),
 		PressedOpenCustomer: ({ accountId }) => ({

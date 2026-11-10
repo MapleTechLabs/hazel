@@ -120,14 +120,16 @@ export const IgnoreUnmatchedRecord = Command.define("IgnoreUnmatchedRecord", {
 	args: {
 		...target,
 		rule: Schema.NullOr(Schema.Struct({ field: IgnoreRuleField, pattern: Schema.String })),
+		/** The other loaded open records the rule covers: the server ignores them with it. */
+		coveredIds: Schema.Array(CustomerUnmatchedRecordId),
 	},
 	messages: [...recordMessages, Message.SucceededIgnoreWithRule],
-	execute: ({ organizationId, recordId, rule }) =>
+	execute: ({ organizationId, recordId, rule, coveredIds }) =>
 		ignore(organizationId, recordId, rule ?? undefined).pipe(
 			settle(recordId, "ignore"),
 			Effect.map((message) =>
 				message._tag === "SucceededRecordAction" && rule !== null
-					? Message.SucceededIgnoreWithRule({ recordId })
+					? Message.SucceededIgnoreWithRule({ recordId, coveredIds })
 					: message,
 			),
 		),

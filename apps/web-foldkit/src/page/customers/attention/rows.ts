@@ -342,6 +342,16 @@ const outcomeChip = (h: HtmlBuilder<Message>, signal: SignalRow): Html => {
 	)
 }
 
+/** The reasons the server writes as codes; anything else is a person's own words. */
+const NOT_USEFUL = "Dismissed as not useful"
+const DISMISS_NOTE = new Map([
+	["not_useful", NOT_USEFUL],
+	["baseline", "Dismissed as a baseline: it already held when the rule was set up"],
+])
+
+const dismissNoteOf = (reason: string | null): string =>
+	reason === null ? NOT_USEFUL : (DISMISS_NOTE.get(reason) ?? `Dismissed: ${reason}`)
+
 /** Done tab: resolution, outcome, who resolved it (Hazel when it cleared on its own), how long it was open. */
 export const doneRow = (h: HtmlBuilder<Message>, signal: SignalRow, context: RowContext): Html => {
 	const account = context.accountsById.get(signal.accountId)
@@ -351,7 +361,7 @@ export const doneRow = (h: HtmlBuilder<Message>, signal: SignalRow, context: Row
 		signal.status === "auto_resolved"
 			? `Condition cleared · ${signal.reason}`
 			: signal.status === "dismissed"
-				? `Dismissed as not useful${signal.dismissReason ? `: ${signal.dismissReason}` : ""}`
+				? dismissNoteOf(signal.dismissReason)
 				: signal.resolutionNote === null
 					? signal.reason
 					: `“${signal.resolutionNote}”`

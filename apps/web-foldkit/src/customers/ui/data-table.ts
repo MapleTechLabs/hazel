@@ -41,6 +41,8 @@ export type DataTableOptions<Row, M, K extends string = string> = Readonly<{
 		selected: ReadonlySet<string>
 		onToggle: (rowKey: string, isSelected: boolean) => M
 		onToggleAll: (isSelected: boolean) => M
+		/** Names a row's checkbox (`Select Acme`). */
+		rowLabel: (row: Row) => string
 	}>
 	/** A press on a row (outside its checkbox and actions). */
 	onRowPress?: (row: Row) => M
@@ -176,7 +178,7 @@ export const dataTable = <Row, M, K extends string = string>(
 										{
 											id: `${options.id}-${key}`,
 											isSelected,
-											ariaLabel: "Select row",
+											ariaLabel: `Select ${selection.rowLabel(entry)}`,
 											stopsClickPropagation: true,
 											onChange: (next) => selection.onToggle(key, next),
 										},

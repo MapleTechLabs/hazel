@@ -441,17 +441,9 @@ const onKey = (model: Model, shared: Shared, key: ListKey): Return => {
 
 // UPDATE
 
-/**
- * The page is keyed by org, but a Command's answer reaches whichever list instance is open: one for
- * the org shown before is dropped.
- */
-const isForOtherOrg = (message: Message, shared: Shared) =>
-	"organizationId" in message && message.organizationId !== shared.organization?.id
+const PARTLY_SAVED = "Part of the selection was saved before it stopped; the list shows which."
 
 export const update = (model: Model, message: Message, shared: Shared): Return =>
-	isForOtherOrg(message, shared) ? { model } : updateOwn(model, message, shared)
-
-const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
 		UpdatedAccounts: ({ accounts }) =>
 			withSparklines(
@@ -628,12 +620,14 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 				),
 			),
 		}),
-		FailedBulkUpdate: ({ action, reason }) => ({
+		FailedBulkUpdate: ({ action, reason, isBatched }) => ({
 			model,
 			outMessage: toast(
 				errorToastOf({
 					title: action === "owner" ? "Couldn't assign the owner" : "Couldn't add the tag",
-					description: commonMessage(reason).title,
+					description: isBatched
+						? `${commonMessage(reason).title}. ${PARTLY_SAVED}`
+						: commonMessage(reason).title,
 				}),
 			),
 		}),

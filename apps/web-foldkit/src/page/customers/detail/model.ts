@@ -4,6 +4,7 @@ import { Schema } from "effect"
 import * as AsyncData from "foldkit/asyncData"
 import { CommonReason } from "~/lib/error-messages"
 import { AccountRow, MemberRow, msOf, SignalRow } from "../../../customers/queries"
+import { SNOOZE_KEYS } from "../../../customers/ui/menus"
 import { CustomerTab } from "../../../route"
 import * as Menu from "../../../ui/menu"
 import * as Modal from "../../../ui/modal"
@@ -118,6 +119,9 @@ export const Model = Schema.Struct({
 	tagPopover: Popover.Model,
 	tagInput: Schema.String,
 	rawModal: Modal.Model,
+	/** The note the delete confirmation asks about (kept while the dialog animates out). */
+	deletingNoteId: Schema.NullOr(CustomerNoteId),
+	deleteNoteModal: Modal.Model,
 })
 export type Model = typeof Model.Type
 
@@ -130,6 +134,7 @@ export const DONE_MENU_ID = "customer-signal-done"
 export const SIGNAL_MORE_MENU_ID = "customer-signal-more"
 export const TAG_POPOVER_ID = "customer-tag"
 export const RAW_MODAL_ID = "customer-raw"
+export const DELETE_NOTE_MODAL_ID = "customer-delete-note"
 export const COMPOSER_ID = "customer-note-composer"
 
 export const PAGE_SIZE = 50
@@ -263,9 +268,8 @@ export const metricEntries = (metrics: ReadonlyArray<MetricRow>): ReadonlyArray<
 
 export const eventTypeEntries: ReadonlyArray<Menu.Entry> = EventType.literals.map((type) => Menu.item(type))
 
-/** Snooze presets (days from now, at 9:00 local like the queue's). */
-export const SNOOZE_DAYS = { tomorrow: 1, in_3_days: 3, next_week: 7 } as const
-export const snoozeEntries: ReadonlyArray<Menu.Entry> = Object.keys(SNOOZE_DAYS).map((key) => Menu.item(key))
+/** The queue's snooze presets (no date picker here). */
+export const snoozeEntries: ReadonlyArray<Menu.Entry> = SNOOZE_KEYS.map((key) => Menu.item(key))
 export const doneEntries: ReadonlyArray<Menu.Entry> = Customers.SignalOutcome.literals.map((outcome) =>
 	Menu.item(outcome),
 )

@@ -6,6 +6,7 @@ import {
 	deltaTone,
 	formatCount,
 	formatDeltaPct,
+	formatMajor,
 	formatMoney,
 	formatRelative,
 } from "../../../customers/format"
@@ -76,7 +77,7 @@ export const csvValue = (
 		case "plan":
 			return account.planName ?? ""
 		case "mrr":
-			return (account.mrrMinor / 100).toFixed(2)
+			return formatMajor(account.mrrMinor, account.currency)
 		case "health":
 			return account.healthStatus === "unknown"
 				? HEALTH_LABEL.unknown

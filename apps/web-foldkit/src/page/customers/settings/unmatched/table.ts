@@ -390,18 +390,24 @@ export interface TableContext {
 
 const cell = "px-3 first:pl-4 last:pr-4"
 
+/** One total per currency, never summed across them: `$1,840 + €200`. */
+const moneyTotal = (records: RecordGroup["records"]): string | null => {
+	const totals = new Map<string | null, number>()
+	for (const record of records)
+		if (record.valueMinor !== null)
+			totals.set(record.currency, (totals.get(record.currency) ?? 0) + record.valueMinor)
+	return totals.size === 0
+		? null
+		: [...totals].map(([currency, minor]) => formatMoney(minor, currency ?? undefined)).join(" + ")
+}
+
 /** `STRIPE CUSTOMERS · 5 · $1,840 MRR`, `MAPLE GROUPS · 9 · 6,951 EVENTS · 30D`. */
 const groupSummary = (group: RecordGroup): string => {
-	const money = group.records.filter((record) => record.valueMinor !== null)
+	const money = moneyTotal(group.records)
 	const events = group.records.reduce((sum, record) => sum + (record.eventCount30d ?? 0), 0)
 	const value =
-		money.length > 0
-			? [
-					`${formatMoney(
-						money.reduce((sum, record) => sum + (record.valueMinor ?? 0), 0),
-						money[0]?.currency ?? undefined,
-					)} ${VALUE_SUFFIX[group.entityType]}`.trim(),
-				]
+		money !== null
+			? [`${money} ${VALUE_SUFFIX[group.entityType]}`.trim()]
 			: events > 0
 				? [`${formatCount(events)} events · 30d`]
 				: []

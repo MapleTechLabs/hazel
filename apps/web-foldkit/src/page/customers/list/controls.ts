@@ -2,7 +2,7 @@ import * as Customers from "@hazel/domain/customers"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { distributionBar } from "../../../customers/charts/distribution"
-import { formatCount, formatMoney } from "../../../customers/format"
+import { currencySymbol, formatCount, formatMoney, toMajor, toMinor } from "../../../customers/format"
 import type { AccountRow, MemberRow } from "../../../customers/queries"
 import { HEALTH_FILL, HEALTH_LABEL, STAGE_LABEL } from "../../../customers/ui/badges"
 import { IconChevronDown, IconChevronRight } from "../../../icons"
@@ -238,6 +238,7 @@ const editor = (
 	accounts: ReadonlyArray<AccountRow>,
 	members: ReadonlyArray<MemberRow>,
 	viewer: Viewer,
+	currency: string,
 ): ReadonlyArray<Html> => {
 	const { pending } = builder
 	const optionId = (value: string) => `customers-filter-${builder.field}-${value}`
@@ -334,24 +335,28 @@ const editor = (
 					[
 						numberField(
 							h,
-							"At least ($)",
-							pending.minMrrMinor === undefined ? undefined : pending.minMrrMinor / 100,
+							`At least (${currencySymbol(currency)})`,
+							pending.minMrrMinor === undefined
+								? undefined
+								: toMajor(pending.minMrrMinor, currency),
 							(value) =>
 								withFilter(
 									pending,
 									"minMrrMinor",
-									value === undefined ? undefined : Math.round(value * 100),
+									value === undefined ? undefined : toMinor(value, currency),
 								),
 						),
 						numberField(
 							h,
-							"At most ($)",
-							pending.maxMrrMinor === undefined ? undefined : pending.maxMrrMinor / 100,
+							`At most (${currencySymbol(currency)})`,
+							pending.maxMrrMinor === undefined
+								? undefined
+								: toMajor(pending.maxMrrMinor, currency),
 							(value) =>
 								withFilter(
 									pending,
 									"maxMrrMinor",
-									value === undefined ? undefined : Math.round(value * 100),
+									value === undefined ? undefined : toMinor(value, currency),
 								),
 						),
 					],
@@ -573,7 +578,14 @@ export const filterBuilder = (
 						),
 						h.div(
 							[h.Class("flex max-h-64 flex-col overflow-y-auto")],
-							editor(h, builder, options.accounts, options.members, options.viewer),
+							editor(
+								h,
+								builder,
+								options.accounts,
+								options.members,
+								options.viewer,
+								options.currency,
+							),
 						),
 						matchPreview(h, builder, options),
 						h.div(

@@ -3,7 +3,7 @@ import { CustomerAccountId, CustomerSavedViewId, OrganizationId, UserId } from "
 import { Duration, Effect, Schema } from "effect"
 import { Command, Mount } from "foldkit"
 import * as Dom from "foldkit/dom"
-import { bulkUpdateAccountsAction } from "../../../customers/actions"
+import { BULK_BATCH, bulkUpdateAccountsAction } from "../../../customers/actions"
 import { catchCommon } from "../../../data/actions"
 import { HazelRpc } from "../../../rpc"
 import { searchFieldIds } from "../../../ui/search-field"
@@ -25,13 +25,10 @@ export const FetchListSparklines = Command.define("FetchListSparklines", {
 				days: SPARKLINE_DAYS,
 			}),
 		).pipe(
-			Effect.map(({ sparklines }) => Message.SucceededFetchSparklines({ organizationId, sparklines })),
-			catchCommon((reason) => Message.FailedFetchSparklines({ organizationId, reason })),
+			Effect.map(({ sparklines }) => Message.SucceededFetchSparklines({ sparklines })),
+			catchCommon((reason) => Message.FailedFetchSparklines({ reason })),
 		),
 })
-
-/** Answers name their organization: one for the org shown before is dropped. */
-const orgOf = ({ organizationId }: { readonly organizationId: OrganizationId }) => ({ organizationId })
 
 const viewMessages = [Message.SucceededViewAction, Message.FailedViewAction]
 
@@ -46,8 +43,8 @@ export const CreateSavedView = Command.define("CreateSavedView", {
 	messages: viewMessages,
 	execute: (args) =>
 		createViewAction(args).pipe(
-			Effect.map((viewId) => Message.SucceededViewAction({ ...orgOf(args), action: "create", viewId })),
-			catchCommon((reason) => Message.FailedViewAction({ ...orgOf(args), action: "create", reason })),
+			Effect.map((viewId) => Message.SucceededViewAction({ action: "create", viewId })),
+			catchCommon((reason) => Message.FailedViewAction({ action: "create", reason })),
 		),
 })
 
@@ -56,13 +53,11 @@ export const UpdateSavedView = Command.define("UpdateSavedView", {
 	messages: viewMessages,
 	execute: (args) =>
 		updateViewAction(args).pipe(
-			Effect.as(Message.SucceededViewAction({ ...orgOf(args), action: "update", viewId: args.viewId })),
+			Effect.as(Message.SucceededViewAction({ action: "update", viewId: args.viewId })),
 			Effect.catchTag("CustomersNotFoundError", () =>
-				Effect.succeed(
-					Message.FailedViewAction({ ...orgOf(args), action: "update", reason: "NotFound" }),
-				),
+				Effect.succeed(Message.FailedViewAction({ action: "update", reason: "NotFound" })),
 			),
-			catchCommon((reason) => Message.FailedViewAction({ ...orgOf(args), action: "update", reason })),
+			catchCommon((reason) => Message.FailedViewAction({ action: "update", reason })),
 		),
 })
 
@@ -71,22 +66,20 @@ export const DeleteSavedView = Command.define("DeleteSavedView", {
 	messages: viewMessages,
 	execute: (args) =>
 		deleteViewAction(args).pipe(
-			Effect.as(Message.SucceededViewAction({ ...orgOf(args), action: "delete", viewId: args.viewId })),
+			Effect.as(Message.SucceededViewAction({ action: "delete", viewId: args.viewId })),
 			Effect.catchTags({
 				CustomersNotFoundError: () =>
-					Effect.succeed(
-						Message.FailedViewAction({ ...orgOf(args), action: "delete", reason: "NotFound" }),
-					),
+					Effect.succeed(Message.FailedViewAction({ action: "delete", reason: "NotFound" })),
 				CustomersInvalidRequestError: () =>
-					Effect.succeed(
-						Message.FailedViewAction({ ...orgOf(args), action: "delete", reason: "Refused" }),
-					),
+					Effect.succeed(Message.FailedViewAction({ action: "delete", reason: "Refused" })),
 			}),
-			catchCommon((reason) => Message.FailedViewAction({ ...orgOf(args), action: "delete", reason })),
+			catchCommon((reason) => Message.FailedViewAction({ action: "delete", reason })),
 		),
 })
 
 const bulkMessages = [Message.SucceededBulkUpdate, Message.FailedBulkUpdate]
+const isBatched = (args: { readonly accountIds: ReadonlyArray<unknown> }) =>
+	args.accountIds.length > BULK_BATCH
 
 /** `label` names the owner for the toast ("Maya Reinhardt", "nobody"). */
 export const BulkAssignOwner = Command.define("BulkAssignOwner", {
@@ -100,15 +93,21 @@ export const BulkAssignOwner = Command.define("BulkAssignOwner", {
 	execute: ({ label, ...args }) =>
 		bulkUpdateAccountsAction(args).pipe(
 			Effect.map(({ data }) =>
-				Message.SucceededBulkUpdate({ ...orgOf(args), action: "owner", count: data.updated, label }),
+				Message.SucceededBulkUpdate({ action: "owner", count: data.updated, label }),
 			),
 			// Over the per-call limit: the list never sends that many.
 			Effect.catchTag("CustomersInvalidRequestError", () =>
 				Effect.succeed(
-					Message.FailedBulkUpdate({ ...orgOf(args), action: "owner", reason: "Unexpected" }),
+					Message.FailedBulkUpdate({
+						action: "owner",
+						reason: "Unexpected",
+						isBatched: isBatched(args),
+					}),
 				),
 			),
-			catchCommon((reason) => Message.FailedBulkUpdate({ ...orgOf(args), action: "owner", reason })),
+			catchCommon((reason) =>
+				Message.FailedBulkUpdate({ action: "owner", reason, isBatched: isBatched(args) }),
+			),
 		),
 })
 
@@ -118,20 +117,21 @@ export const BulkAddTag = Command.define("BulkAddTag", {
 	execute: ({ tag, ...args }) =>
 		bulkUpdateAccountsAction({ ...args, addTags: [tag] }).pipe(
 			Effect.map(({ data }) =>
-				Message.SucceededBulkUpdate({
-					...orgOf(args),
-					action: "tag",
-					count: data.updated,
-					label: tag,
-				}),
+				Message.SucceededBulkUpdate({ action: "tag", count: data.updated, label: tag }),
 			),
 			// Over the per-call limit: the list never sends that many.
 			Effect.catchTag("CustomersInvalidRequestError", () =>
 				Effect.succeed(
-					Message.FailedBulkUpdate({ ...orgOf(args), action: "tag", reason: "Unexpected" }),
+					Message.FailedBulkUpdate({
+						action: "tag",
+						reason: "Unexpected",
+						isBatched: isBatched(args),
+					}),
 				),
 			),
-			catchCommon((reason) => Message.FailedBulkUpdate({ ...orgOf(args), action: "tag", reason })),
+			catchCommon((reason) =>
+				Message.FailedBulkUpdate({ action: "tag", reason, isBatched: isBatched(args) }),
+			),
 		),
 })
 

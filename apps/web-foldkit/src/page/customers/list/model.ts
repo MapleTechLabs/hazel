@@ -404,12 +404,15 @@ export const accountsPerOwner = (
 		return counts
 	})
 
-/** The selection without the rows the list no longer shows. */
+/** The selection and the keyboard cursor without the rows the list no longer shows. */
 export const keepVisibleSelection = (model: Model, viewer: Viewer): Model => {
-	if (model.selected.length === 0) return model
+	if (model.selected.length === 0 && model.focusedId === null) return model
 	const visible = new Set<string>(visibleAccounts(model, viewer).map((account) => account.id))
 	const selected = model.selected.filter((id) => visible.has(id))
-	return selected.length === model.selected.length ? model : { ...model, selected }
+	const focusedId = model.focusedId !== null && visible.has(model.focusedId) ? model.focusedId : null
+	return selected.length === model.selected.length && focusedId === model.focusedId
+		? model
+		: { ...model, selected, focusedId }
 }
 
 /** A header press: the same column flips, another starts descending (ascending for text). */

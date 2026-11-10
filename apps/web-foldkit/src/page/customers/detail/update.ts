@@ -7,6 +7,7 @@ import * as AsyncData from "foldkit/asyncData"
 import { modifyFields } from "foldkit/struct"
 import { failureMessage } from "~/lib/error-messages"
 import type { AccountRow, SignalRow } from "../../../customers/queries"
+import { isSnoozeKey, snoozeUntil } from "../../../customers/ui/menus"
 import { errorToastOf, successToast } from "../../../data/actions"
 import { AppRoute, type CustomerTab, customerRoute, hrefOf, type RouteOf } from "../../../route"
 import * as Menu from "../../../ui/menu"
@@ -14,12 +15,12 @@ import * as Modal from "../../../ui/modal"
 import * as Popover from "../../../ui/popover"
 import type { PageReturn, Shared } from "../../contract"
 import { PageOutMessage, requestedOrgNavigation } from "../../out-message"
+import { AssignSignal, DismissSignal, MarkSignalDone, SnoozeSignal } from "../attention/commands"
+import type { SignalAction } from "../attention/message"
 import {
-	AssignCustomerSignal,
 	CopyCustomerText,
 	CreateCustomerNote,
 	DeleteCustomerNote,
-	DismissCustomerSignal,
 	FetchCustomerContacts,
 	FetchCustomerDetail,
 	FetchCustomerEvents,
@@ -27,17 +28,16 @@ import {
 	FetchCustomerMrrHistory,
 	FetchCustomerUsage,
 	FocusNoteComposer,
-	MarkCustomerSignalDone,
-	SnoozeCustomerSignal,
 	UpdateCustomerAccount,
 	UpdateCustomerNote,
 } from "./commands"
-import { Message, type NoteAction, type NoteDraft, type SignalAction } from "./message"
+import { Message, type NoteAction, type NoteDraft } from "./message"
 import {
 	ACTIONS_MENU_ID,
 	accountOf,
 	ASSIGN_ME,
 	ActionKey,
+	DELETE_NOTE_MODAL_ID,
 	DISMISS,
 	DONE_MENU_ID,
 	doneEntries,
@@ -57,7 +57,6 @@ import {
 	RAW_MODAL_ID,
 	SIGNAL_MORE_MENU_ID,
 	type SignalMenu,
-	SNOOZE_DAYS,
 	SNOOZE_MENU_ID,
 	signalMoreEntries,
 	snoozeEntries,
@@ -206,13 +205,15 @@ export const init = (route: Route, shared: Shared): Return =>
 			tagPopover: Popover.init(TAG_POPOVER_ID),
 			tagInput: "",
 			rawModal: Modal.init(RAW_MODAL_ID),
+			deletingNoteId: null,
+			deleteNoteModal: Modal.init(DELETE_NOTE_MODAL_ID),
 		},
 		shared,
 	)
 
-/** Another tab of the same customer. */
+/** Another tab of the same customer; a note being edited (and the composer) waits on the notes tab. */
 export const routeChanged = (model: Model, route: Route, shared: Shared): Return =>
-	load(modifyFields(model, { tab: () => tabOf(route), editingNote: () => null }), shared)
+	load(modifyFields(model, { tab: () => tabOf(route) }), shared)
 
 /** The organization arrived after the page opened. */
 export const sharedChanged = (model: Model, shared: Shared): Return => load(model, shared)
@@ -343,14 +344,6 @@ const SIGNAL_MENU = {
 	more: ["signalMoreMenu", signalMoreEntries],
 } as const satisfies Record<SignalMenu, readonly [MenuField, ReadonlyArray<Menu.Entry>]>
 
-/** A day `days` from now at 9:00 local, the queue's snooze hour. */
-const snoozeMs = (nowMs: number, days: number) => {
-	const date = new Date(nowMs)
-	date.setDate(date.getDate() + days)
-	date.setHours(9, 0, 0, 0)
-	return date.getTime()
-}
-
 const onSignalMenu = (model: Model, shared: Shared, menu: SignalMenu, key: string): Return => {
 	const signal = activeSignal(model)
 	const organizationId = shared.organization?.id
@@ -358,9 +351,8 @@ const onSignalMenu = (model: Model, shared: Shared, menu: SignalMenu, key: strin
 	if (signal === undefined || organizationId === undefined || userId === undefined) return { model }
 	const actor = { organizationId, signalId: signal.id }
 	if (menu === "snooze") {
-		const days = Object.entries(SNOOZE_DAYS).find(([snoozeKey]) => snoozeKey === key)?.[1]
-		if (days === undefined) return { model }
-		const untilMs = snoozeMs(shared.nowMs, days)
+		if (!isSnoozeKey(key)) return { model }
+		const untilMs = snoozeUntil(key, new Date(shared.nowMs)).getTime()
 		return {
 			model: patchSignal(model, signal.id, (row) => ({
 				...row,
@@ -369,7 +361,7 @@ const onSignalMenu = (model: Model, shared: Shared, menu: SignalMenu, key: strin
 				snoozedAtMs: shared.nowMs,
 				snoozedByUserId: userId,
 			})),
-			commands: [SnoozeCustomerSignal({ ...actor, userId, untilMs })],
+			commands: [SnoozeSignal({ ...actor, userId, untilMs })],
 		}
 	}
 	if (menu === "done") {
@@ -383,7 +375,7 @@ const onSignalMenu = (model: Model, shared: Shared, menu: SignalMenu, key: strin
 				resolvedAtMs: shared.nowMs,
 				resolvedByUserId: userId,
 			})),
-			commands: [MarkCustomerSignalDone({ ...actor, userId, outcome })],
+			commands: [MarkSignalDone({ ...actor, userId, outcome, note: "" })],
 		}
 	}
 	switch (key) {
@@ -392,7 +384,7 @@ const onSignalMenu = (model: Model, shared: Shared, menu: SignalMenu, key: strin
 			const assigneeUserId = key === ASSIGN_ME ? userId : null
 			return {
 				model: patchSignal(model, signal.id, (row) => ({ ...row, assigneeUserId })),
-				commands: [AssignCustomerSignal({ ...actor, assigneeUserId })],
+				commands: [AssignSignal({ ...actor, assigneeUserId })],
 			}
 		}
 		case DISMISS:
@@ -403,7 +395,7 @@ const onSignalMenu = (model: Model, shared: Shared, menu: SignalMenu, key: strin
 					resolvedAtMs: shared.nowMs,
 					resolvedByUserId: userId,
 				})),
-				commands: [DismissCustomerSignal({ ...actor, userId })],
+				commands: [DismissSignal({ ...actor, userId })],
 			}
 		case OPEN_QUEUE:
 			return {
@@ -422,6 +414,7 @@ const SIGNAL_VERB = {
 	snooze: "snooze",
 	done: "mark done",
 	dismiss: "dismiss",
+	reopen: "reopen",
 } as const satisfies Record<SignalAction, string>
 
 // NOTES
@@ -809,13 +802,30 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 						commands: [UpdateCustomerNote({ organizationId, noteId, pinned })],
 					}
 		},
-		PressedDeleteNote: ({ noteId }) => {
+		PressedDeleteNote: ({ noteId }) => ({
+			model: modifyFields(model, {
+				deletingNoteId: () => noteId,
+				deleteNoteModal: (modal) => Modal.open(modal).model,
+			}),
+		}),
+		GotDeleteNoteModalMessage: ({ message: modalMessage }) => {
+			const result = Modal.update(model.deleteNoteModal, modalMessage)
+			return {
+				model: modifyFields(model, { deleteNoteModal: () => result.model }),
+				commands: Command.mapMessages(result.commands ?? [], (child) =>
+					Message.GotDeleteNoteModalMessage({ message: child }),
+				),
+			}
+		},
+		PressedConfirmDeleteNote: () => {
 			const organizationId = shared.organization?.id
-			return organizationId === undefined
-				? { model }
+			const noteId = model.deletingNoteId
+			const closed = modifyFields(model, { deleteNoteModal: (modal) => Modal.close(modal).model })
+			return organizationId === undefined || noteId === null
+				? { model: closed }
 				: {
 						model: modifyFields(
-							patchNote(model, noteId, () => null),
+							patchNote(closed, noteId, () => null),
 							{
 								editingNote: (editing) => (editing?.noteId === noteId ? null : editing),
 							},
