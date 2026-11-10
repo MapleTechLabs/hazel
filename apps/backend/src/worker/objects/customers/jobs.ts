@@ -42,7 +42,7 @@ import { installDefaults } from "./defaults"
 import { CustomerIngest } from "./ingest"
 import type { CustomerProviderAdapter, CustomerProviderError } from "./providers"
 import { CustomerProviders } from "./providers"
-import { clearComputeProgress, computeDueAt, LEASE_MS, scheduleComputeAt, takeComputeLease } from "./schedule"
+import { computeDueAt, LEASE_MS, scheduleComputeAt, takeComputeLease } from "./schedule"
 import { CustomersServicesLive } from "./services"
 
 const DEFAULTS_KEY = "defaultsInstalled"
@@ -393,10 +393,9 @@ export const tick = Effect.fn("CustomersObject.tick")(function* () {
 			Effect.catchCause((cause) =>
 				Cause.hasInterruptsOnly(cause)
 					? Effect.failCause(cause)
-					: Effect.logError("Customers compute failed", { cause: Cause.pretty(cause) }).pipe(
-							// A failed turn's progress is dropped: the next attempt starts over.
-							Effect.andThen(Effect.ignore(clearComputeProgress)),
-						),
+					: // Progress is kept: the failing turn retries alone, after a growing backoff (a partial
+						// turn resets the count). Progress older than an hour is dropped (`computeProgress`).
+						Effect.logError("Customers compute failed", { cause: Cause.pretty(cause) }),
 			),
 		)
 		return { computed: true }

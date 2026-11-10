@@ -973,7 +973,7 @@ describe("Customers compute and sync loop", () => {
 			}),
 		))
 
-	it("drops a failed compute's progress; a change during a stuck one brings a compute forward", () =>
+	it("keeps a failed compute's progress and backs off; a change during a stuck one brings a compute forward", () =>
 		run(
 			Effect.gen(function* () {
 				const world = yield* makeCustomersWorld
@@ -998,7 +998,9 @@ describe("Customers compute and sync loop", () => {
 					.prepare(`UPDATE _object_meta SET value = '0' WHERE key = 'computeDueAt'`)
 					.run()
 				yield* world.object.alarm
-				expect(meta(world, "computeProgress")).toBeUndefined()
+				// The failing turn keeps its progress and retries alone, after a growing backoff.
+				expect(meta(world, "computeProgress")).toBeDefined()
+				expect(Number(meta(world, "computeDueAt"))).toBeGreaterThan(Date.now() + 15 * 60_000)
 			}),
 		))
 })
