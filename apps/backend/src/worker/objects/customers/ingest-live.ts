@@ -3,10 +3,10 @@
  *
  * Identity, in order:
  *
- * - Account op: its own ref → a `sameAs` ref → a shared domain (free-mail excluded; Stripe's
- *   `matchByDomain`) → create (`onNoMatch: "create"`, Clerk's `createAccounts`) or park. Several
- *   candidates at a step park it as ambiguous, suggesting the first. Ignore rules run before
- *   creating or parking.
+ * - Account op: its own ref → a `sameAs` ref → a shared domain (only when the op opts in with
+ *   `matchByDomain`, free-mail excluded; Stripe's `matchByDomain` config can turn it off) → create
+ *   (`onNoMatch: "create"`, Clerk's `createAccounts`) or park. Several candidates at a step park it
+ *   as ambiguous, suggesting the first. Ignore rules run before creating or parking.
  * - Contact op: the account through its ref, then the contact's ref in that account → the same email
  *   in that account → create.
  * - Every other op names its account (and contact) by ref.
@@ -15,6 +15,11 @@
  * itself (account, contact, subscription, invoice ops: replayed once linked), or, for activity,
  * metrics and events, the unknown account or contact they name (no payload: the next pull brings
  * the data again). Creating a ref (matching, linking) replays every open record it unblocks.
+ *
+ * Ordering: an account or contact op carrying `observedAt` at or before its record's deletion (the
+ * ref's `staleAt`, the contact's `deletedAt`) is late and changes nothing; contacts' `lastSeenAt` /
+ * `lastSignInAt` only move forward. A successful full sweep (`completeSweep`) removes the records it
+ * did not see.
  *
  * Writes compare first, so an op that changes nothing writes nothing (`Unchanged`, no `_changes`
  * row). Ingest also records timeline events for the state changes it sees (subscription started,
@@ -32,6 +37,7 @@ import {
 	type IngestOutcome,
 	type ProviderRef,
 	type RecordActivity,
+	type RefEntityType,
 	type RecordEvent,
 	type RecordMetric,
 	type DefineMetric,
@@ -142,6 +148,49 @@ export const globMatches = (pattern: string, value: string) =>
 
 const toDate = (value: string | null | undefined): Date | null => (value == null ? null : new Date(value))
 
+/** An op observed at or before its record's deletion arrived late: it must not revive it. */
+const observedBefore = (observedAt: string | undefined, deletedAt: Date | null) =>
+	observedAt !== undefined && deletedAt !== null && new Date(observedAt) <= deletedAt
+
+/** `next` when it is later than `current` (a timestamp never moves backwards). */
+const later = (current: Date | null, next: string | null | undefined) => {
+	const at = toDate(next)
+	return at !== null && (current === null || at > current) ? at : undefined
+}
+
+const accountDomains = (op: UpsertAccount) => [
+	...new Set((op.domains ?? []).map(normalizeDomain).filter((domain) => domain !== null)),
+]
+
+/** How a parked account reads in the unmatched list. */
+const describeAccount = (op: UpsertAccount) => {
+	const domains = accountDomains(op)
+	return { label: op.name ?? domains[0] ?? op.externalId, domain: domains[0] ?? null }
+}
+
+/**
+ * A parked account's held op and a later one, folded: the newer op's fields win (by `observedAt`
+ * when both carry it, else arrival), fields it leaves out are kept, and lists and attributes merge.
+ */
+const mergeAccountOps = (held: UpsertAccount, op: UpsertAccount): UpsertAccount => {
+	const [older, newer] =
+		op.observedAt !== undefined &&
+		held.observedAt !== undefined &&
+		new Date(op.observedAt) < new Date(held.observedAt)
+			? [op, held]
+			: [held, op]
+	const sameAs = new Map([...older.sameAs, ...newer.sameAs].map((ref) => [refKey(ref), ref]))
+	const merged: UpsertAccount = {
+		...older,
+		...newer,
+		domains: [...new Set([...(older.domains ?? []), ...(newer.domains ?? [])])],
+		sameAs: [...sameAs.values()],
+	}
+	return older.attributes === undefined && newer.attributes === undefined
+		? merged
+		: { ...merged, attributes: { ...older.attributes, ...newer.attributes } }
+}
+
 /** Equal as stored: instants by time, documents by their JSON. */
 const same = (a: unknown, b: unknown) =>
 	a instanceof Date || b instanceof Date
@@ -220,7 +269,8 @@ const refKey = (ref: ProviderRef) => `${ref.provider}:${ref.externalId}`
 
 /**
  * A parked record's ops: `payload` holds their encoded list, one per kind (a newer op of the record
- * replaces the older), except contacts, one per account (a user of two unknown organizations).
+ * replaces the older, an account op is merged into the held one), except contacts, one per account
+ * (a user of two unknown organizations).
  */
 const parkKey = (op: IngestOp) => (op._tag === "contact" ? `contact:${refKey(op.account)}` : op._tag)
 
@@ -289,22 +339,25 @@ const make = Effect.gen(function* () {
 			return Option.some(account.value.id)
 		})
 
+	const contactRef = (ref: ProviderRef, accountId: CustomerAccountId) =>
+		db.first(
+			SQLite.from(schema.customerExternalRefsTable)
+				.select()
+				.where(($) => [
+					$.entityType.eq("contact"),
+					$.provider.eq(ref.provider),
+					$.externalId.eq(ref.externalId),
+					$.accountId.eq(accountId),
+				])
+				.limit(1),
+		)
+
 	const resolveContact = (session: Session, ref: ProviderRef, accountId: CustomerAccountId) =>
 		Effect.gen(function* () {
 			const key = `${refKey(ref)}:${accountId}`
 			const cached = session.contacts.get(key)
 			if (cached !== undefined) return Option.some(cached)
-			const row = yield* db.first(
-				SQLite.from(schema.customerExternalRefsTable)
-					.select("entityId")
-					.where(($) => [
-						$.entityType.eq("contact"),
-						$.provider.eq(ref.provider),
-						$.externalId.eq(ref.externalId),
-						$.accountId.eq(accountId),
-					])
-					.limit(1),
-			)
+			const row = yield* contactRef(ref, accountId)
 			if (Option.isNone(row)) return Option.none<CustomerContactId>()
 			const contactId = row.value.entityId as CustomerContactId
 			session.contacts.set(key, contactId)
@@ -400,12 +453,39 @@ const make = Effect.gen(function* () {
 				.onConflictDoNothing(),
 		)
 
-	const ignoredBy = (session: Session, entityType: UnmatchedEntityType, values: IgnoreCandidate) =>
+	const ignoredBy = (
+		session: Session,
+		entityType: UnmatchedEntityType,
+		values: IgnoreCandidate,
+		provider: CustomerProvider = session.context.provider,
+	) =>
 		Option.fromNullishOr(
-			session.ignoreRules.find((rule) =>
-				ignoreRuleMatches(rule, entityType, session.context.provider, values),
-			),
+			session.ignoreRules.find((rule) => ignoreRuleMatches(rule, entityType, provider, values)),
 		)
+
+	/**
+	 * Whether an account no customer holds is ignored: by a rule on its id, or by hand (its record).
+	 * What names it (members, billing, usage) is ignored with it.
+	 */
+	const ignoredAccount = (session: Session, ref: ProviderRef) =>
+		Effect.gen(function* () {
+			const rule = ignoredBy(session, "account", { externalId: ref.externalId }, ref.provider)
+			if (Option.isSome(rule)) {
+				return Option.some<IngestOutcome>({ _tag: "Ignored", ruleId: rule.value.id })
+			}
+			const record = yield* db.first(
+				SQLite.from(schema.customerUnmatchedRecordsTable)
+					.select("id")
+					.where(($) => [
+						$.provider.eq(ref.provider),
+						$.entityType.eq("account"),
+						$.externalId.eq(ref.externalId),
+						$.status.eq("ignored"),
+					])
+					.limit(1),
+			)
+			return Option.map(record, (): IngestOutcome => ({ _tag: "Ignored", ruleId: null }))
+		})
 
 	/**
 	 * Park a record matching could not place (one row per provider record; a repeat updates it). An
@@ -441,7 +521,7 @@ const make = Effect.gen(function* () {
 					])
 					.limit(1),
 			)
-			const values = {
+			const fields = {
 				label: record.label,
 				email: record.email ?? null,
 				domain: record.domain ?? null,
@@ -461,7 +541,7 @@ const make = Effect.gen(function* () {
 							externalId: record.externalId,
 							eventCount30d: record.events ?? null,
 							payload: record.op === null ? null : [encodeOp(record.op)],
-							...values,
+							...fields,
 						})
 						.returning("id"),
 				)
@@ -473,8 +553,13 @@ const make = Effect.gen(function* () {
 			// Overlapping pulls count a day's events again: an estimate, not a ledger.
 			const events =
 				record.events === undefined ? row.eventCount30d : (row.eventCount30d ?? 0) + record.events
-			const { op } = record
 			const held = row.status === "open" ? yield* parkedOps(row) : []
+			const prior = held.find((item) => item._tag === "account")
+			const op =
+				record.op?._tag === "account" && prior?._tag === "account"
+					? mergeAccountOps(prior, record.op)
+					: record.op
+			const values = op?._tag === "account" ? { ...fields, ...describeAccount(op) } : fields
 			const next =
 				op !== null
 					? {
@@ -600,10 +685,10 @@ const make = Effect.gen(function* () {
 					reason: `Its shared ids name ${shared.size} different customers`,
 				} satisfies Match as Match
 			}
-			// Identity sources (`onNoMatch: "create"`) never merge by domain: two Clerk organizations
-			// sharing one are two customers. Billing sources join them by it unless Stripe's config says not.
+			// Only an op that opts in merges by domain (billing sources): two Clerk organizations sharing
+			// one are two customers. Stripe's config can still turn it off.
 			const byDomain =
-				op.onNoMatch === "unmatched" &&
+				op.matchByDomain === true &&
 				!(session.config?._tag === "stripe" && !session.config.matchByDomain)
 			if (!byDomain || domains.length === 0) return { _tag: "None" } satisfies Match as Match
 			const rows = yield* db.query(
@@ -699,44 +784,51 @@ const make = Effect.gen(function* () {
 			return row.id
 		})
 
+	/** A provider's account record is gone: its ref goes stale, the account too once no live ref is left. */
+	const staleAccountRef = (now: Date, ref: schema.CustomerExternalRef) =>
+		Effect.gen(function* () {
+			yield* db.run(
+				SQLite.update(schema.customerExternalRefsTable)
+					.set({ staleAt: now, updatedAt: now })
+					.where(($) => [$.id.eq(ref.id)]),
+			)
+			const live = yield* db.first(
+				SQLite.from(schema.customerExternalRefsTable)
+					.select("id")
+					.where(($) => [
+						$.accountId.eq(ref.accountId),
+						$.entityType.eq("account"),
+						$.staleAt.isNull(),
+					])
+					.limit(1),
+			)
+			if (Option.isNone(live)) {
+				yield* db.run(
+					SQLite.update(schema.customerAccountsTable)
+						.set({ deletedAt: now, updatedAt: now })
+						.where(($) => [$.id.eq(ref.accountId), $.deletedAt.isNull()]),
+				)
+			}
+		})
+
 	const applyAccount = (session: Session, op: UpsertAccount) =>
 		Effect.gen(function* () {
 			const { provider } = session.context
-			const domains = [
-				...new Set((op.domains ?? []).map(normalizeDomain).filter((domain) => domain !== null)),
-			]
+			const domains = accountDomains(op)
 			const ref = yield* accountRef(provider, op.externalId)
 
 			if (op.deleted === true) {
 				if (Option.isNone(ref)) return outcome.unchanged(op.externalId)
 				const { accountId } = ref.value
 				if (ref.value.staleAt !== null) return outcome.unchanged(accountId)
-				yield* db.run(
-					SQLite.update(schema.customerExternalRefsTable)
-						.set({ staleAt: session.now, updatedAt: session.now })
-						.where(($) => [$.id.eq(ref.value.id)]),
-				)
-				const live = yield* db.first(
-					SQLite.from(schema.customerExternalRefsTable)
-						.select("id")
-						.where(($) => [
-							$.accountId.eq(accountId),
-							$.entityType.eq("account"),
-							$.staleAt.isNull(),
-						])
-						.limit(1),
-				)
-				if (Option.isNone(live)) {
-					yield* db.run(
-						SQLite.update(schema.customerAccountsTable)
-							.set({ deletedAt: session.now, updatedAt: session.now })
-							.where(($) => [$.id.eq(accountId), $.deletedAt.isNull()]),
-					)
-				}
+				yield* staleAccountRef(session.now, ref.value)
 				return outcome.updated(accountId)
 			}
 
 			if (Option.isSome(ref)) {
+				// Deleted after the source last changed it: a late delivery.
+				if (observedBefore(op.observedAt, ref.value.staleAt))
+					return outcome.unchanged(ref.value.accountId)
 				yield* touchRef(session, ref.value, op.externalUrl)
 				const changed = yield* applyAccountFields(session, ref.value.accountId, op, domains)
 				return changed ? outcome.updated(ref.value.accountId) : outcome.unchanged(ref.value.accountId)
@@ -774,8 +866,7 @@ const make = Effect.gen(function* () {
 					provider,
 					entityType: "account",
 					externalId: op.externalId,
-					label: op.name ?? domains[0] ?? op.externalId,
-					domain: domains[0] ?? null,
+					...describeAccount(op),
 					op,
 					suggestedAccountId: match._tag === "Ambiguous" ? match.candidates[0] : null,
 					confidence: match._tag === "Ambiguous" ? 1 / match.candidates.length : null,
@@ -803,11 +894,36 @@ const make = Effect.gen(function* () {
 	const contactName = (contact: { readonly name: string | null; readonly email: string | null }) =>
 		contact.name ?? contact.email ?? "A user"
 
+	const recordRemoved = (
+		session: Session,
+		accountId: CustomerAccountId,
+		contactId: CustomerContactId,
+		name: string,
+	) =>
+		recordEvent(session, {
+			accountId,
+			contactId,
+			type: "contact.removed",
+			title: `${name} left`,
+			occurredAt: session.now,
+			externalId: `ingest:contact.removed:${contactId}:${session.now.toISOString()}`,
+		})
+
 	const applyContact = (session: Session, op: UpsertContact) =>
 		Effect.gen(function* () {
 			const { provider } = session.context
 			const accountId = yield* resolveAccount(session, op.account)
 			if (Option.isNone(accountId)) {
+				if (op.removed === true) return outcome.unchanged(op.externalId)
+				const ignoredWith = yield* ignoredAccount(session, op.account)
+				if (Option.isSome(ignoredWith)) return ignoredWith.value
+				const ignored = ignoredBy(session, "contact", {
+					email: op.email ?? null,
+					name: op.name ?? null,
+					externalId: op.externalId,
+				})
+				if (Option.isSome(ignored))
+					return { _tag: "Ignored", ruleId: ignored.value.id } satisfies IngestOutcome
 				return yield* park(session, {
 					provider,
 					entityType: "contact",
@@ -819,9 +935,8 @@ const make = Effect.gen(function* () {
 					reason: `Its account (${op.account.provider} ${op.account.externalId}) is not linked to a customer`,
 				})
 			}
-			const refId = { provider, externalId: op.externalId }
-			const known = yield* resolveContact(session, refId, accountId.value)
-			let contactId = Option.getOrUndefined(known)
+			const known = yield* contactRef({ provider, externalId: op.externalId }, accountId.value)
+			let contactId = Option.isSome(known) ? (known.value.entityId as CustomerContactId) : undefined
 			let created = false
 			if (contactId === undefined) {
 				if (op.removed === true) return outcome.unchanged(op.externalId)
@@ -880,6 +995,11 @@ const make = Effect.gen(function* () {
 			)
 			if (Option.isNone(current)) return outcome.unchanged(id)
 			const contact = current.value
+			// Removed after the source last changed it: a late delivery.
+			if (op.removed !== true && observedBefore(op.observedAt, contact.deletedAt))
+				return outcome.unchanged(id)
+			// Seen again (a full sweep removes the contacts it does not see).
+			if (Option.isSome(known)) yield* touchRef(session, known.value, op.externalUrl)
 			const patch = makePatch(contact, contact.fieldSources, provider)
 			patch.set("email", op.email, true)
 			patch.set("name", op.name, true)
@@ -888,8 +1008,8 @@ const make = Effect.gen(function* () {
 			patch.set("role", op.role, true)
 			patch.set("isBillingContact", op.isBillingContact)
 			patch.set("joinedAt", op.joinedAt === undefined ? undefined : toDate(op.joinedAt))
-			patch.set("lastSeenAt", op.lastSeenAt === undefined ? undefined : toDate(op.lastSeenAt))
-			patch.set("lastSignInAt", op.lastSignInAt === undefined ? undefined : toDate(op.lastSignInAt))
+			patch.set("lastSeenAt", later(contact.lastSeenAt, op.lastSeenAt))
+			patch.set("lastSignInAt", later(contact.lastSignInAt, op.lastSignInAt))
 			patch.set("signInCount30d", op.signInCount30d)
 			if (op.attributes !== undefined)
 				patch.set("attributes", { ...contact.attributes, ...op.attributes })
@@ -915,16 +1035,7 @@ const make = Effect.gen(function* () {
 					externalId: `ingest:contact.joined:${id}`,
 				})
 			}
-			if (removing) {
-				yield* recordEvent(session, {
-					accountId: accountId.value,
-					contactId: id,
-					type: "contact.removed",
-					title: `${name} left`,
-					occurredAt: session.now,
-					externalId: `ingest:contact.removed:${id}:${session.now.toISOString()}`,
-				})
-			}
+			if (removing) yield* recordRemoved(session, accountId.value, id, name)
 			return created
 				? outcome.created(id)
 				: changes === undefined
@@ -944,6 +1055,8 @@ const make = Effect.gen(function* () {
 			const { provider } = session.context
 			const accountId = yield* resolveAccount(session, op.account)
 			if (Option.isNone(accountId)) {
+				const ignored = yield* ignoredAccount(session, op.account)
+				if (Option.isSome(ignored)) return ignored.value
 				return yield* park(session, {
 					provider,
 					entityType: "subscription",
@@ -1070,6 +1183,8 @@ const make = Effect.gen(function* () {
 			const { provider } = session.context
 			const accountId = yield* resolveAccount(session, op.account)
 			if (Option.isNone(accountId)) {
+				const ignored = yield* ignoredAccount(session, op.account)
+				if (Option.isSome(ignored)) return ignored.value
 				return yield* park(session, {
 					provider,
 					entityType: "invoice",
@@ -1175,16 +1290,20 @@ const make = Effect.gen(function* () {
 	// Usage and timeline
 	// -----------------------------------------------------------------------
 
-	/** An account named by activity, a metric or an event that no customer holds. */
+	/** An account named by activity, a metric or an event that no customer holds (unless ignored). */
 	const parkUnknownAccount = (session: Session, ref: ProviderRef, events = 0) =>
-		park(session, {
-			provider: ref.provider,
-			entityType: "account",
-			externalId: ref.externalId,
-			label: ref.externalId,
-			events,
-			op: null,
-			reason: "Usage arrives for it, but no customer is linked to it",
+		Effect.gen(function* () {
+			const ignored = yield* ignoredAccount(session, ref)
+			if (Option.isSome(ignored)) return ignored.value
+			return yield* park(session, {
+				provider: ref.provider,
+				entityType: "account",
+				externalId: ref.externalId,
+				label: ref.externalId,
+				events,
+				op: null,
+				reason: "Usage arrives for it, but no customer is linked to it",
+			})
 		})
 
 	const applyActivity = (session: Session, op: RecordActivity) =>
@@ -1194,6 +1313,14 @@ const make = Effect.gen(function* () {
 				return yield* parkUnknownAccount(session, op.account, op.eventCount ?? 0)
 			const contactId = yield* resolveContact(session, op.contact, accountId.value)
 			if (Option.isNone(contactId)) {
+				const ignored = ignoredBy(
+					session,
+					"contact",
+					{ externalId: op.contact.externalId },
+					op.contact.provider,
+				)
+				if (Option.isSome(ignored))
+					return { _tag: "Ignored", ruleId: ignored.value.id } satisfies IngestOutcome
 				return yield* park(session, {
 					provider: op.contact.provider,
 					entityType: "contact",
@@ -1206,12 +1333,6 @@ const make = Effect.gen(function* () {
 				})
 			}
 			const id = contactId.value
-			// `undefined` leaves a column as it is (and its default on insert).
-			const fields = {
-				eventCount: op.eventCount,
-				sessionCount: op.sessionCount,
-				signedIn: op.signedIn,
-			}
 			const existing = yield* db.first(
 				SQLite.from(schema.customerActivityDailyTable)
 					.select()
@@ -1225,17 +1346,30 @@ const make = Effect.gen(function* () {
 						contactId: id,
 						day: op.day,
 						accountId: accountId.value,
-						...fields,
+						// `undefined` leaves a column at its default.
+						eventCount: op.eventCount,
+						sessionCount: op.sessionCount,
+						signedIn: op.signedIn,
 					}),
 				)
 				result = outcome.created(id)
 			} else {
-				const row: Record<string, unknown> = existing.value
+				const day = existing.value
+				// A retry or another source never lowers the day: the most sessions seen, signed in once
+				// signed in. `undefined` leaves a column as it is.
+				const fields = {
+					eventCount: op.eventCount,
+					sessionCount:
+						op.sessionCount === undefined
+							? undefined
+							: Math.max(day.sessionCount, op.sessionCount),
+					signedIn: op.signedIn === undefined ? undefined : day.signedIn || op.signedIn,
+				}
+				const row: Record<string, unknown> = day
 				const changed = Object.entries(fields).filter(
 					([field, value]) => value !== undefined && row[field] !== value,
 				)
-				if (changed.length === 0 && existing.value.accountId === accountId.value)
-					return outcome.unchanged(id)
+				if (changed.length === 0 && day.accountId === accountId.value) return outcome.unchanged(id)
 				yield* db.run(
 					SQLite.update(schema.customerActivityDailyTable)
 						.set({ ...fields, accountId: accountId.value })
@@ -1761,6 +1895,71 @@ const make = Effect.gen(function* () {
 			)
 		})
 
+	const completeSweep = (
+		connectionId: CustomerConnectionId,
+		since: Date,
+		entityTypes: ReadonlyArray<RefEntityType>,
+	) =>
+		Effect.gen(function* () {
+			const connection = yield* db.first(
+				SQLite.from(schema.customerConnectionsTable)
+					.select("provider")
+					.where(($) => [$.id.eq(connectionId)])
+					.limit(1),
+			)
+			if (Option.isNone(connection)) return
+			const { provider } = connection.value
+			const session = yield* openSession({ connectionId, provider, runId: null, trigger: "schedule" })
+			// The provider's live refs not seen (touched or created) since the sweep started. By provider,
+			// not connection: a ref placed through another connection (usage of a Clerk user) is still
+			// this provider's record.
+			const unseen = (entityType: RefEntityType) =>
+				db.run(
+					SQLite.from(schema.customerExternalRefsTable)
+						.select()
+						.where(($) => [
+							$.provider.eq(provider),
+							$.entityType.eq(entityType),
+							$.staleAt.isNull(),
+							SQLite.or($.lastSyncedAt.isNull(), $.lastSyncedAt.lt(since)),
+						]),
+				)
+			const removed = yield* db.transaction(
+				Effect.gen(function* () {
+					let count = 0
+					if (entityTypes.includes("account")) {
+						const refs = yield* unseen("account")
+						for (const ref of refs) yield* staleAccountRef(session.now, ref)
+						count += refs.length
+					}
+					if (entityTypes.includes("contact")) {
+						for (const ref of yield* unseen("contact")) {
+							const contactId = ref.entityId as CustomerContactId
+							const [contact] = yield* db.run(
+								SQLite.update(schema.customerContactsTable)
+									.set({ deletedAt: session.now, updatedAt: session.now })
+									.where(($) => [$.id.eq(contactId), $.deletedAt.isNull()])
+									.returning("name", "email"),
+							)
+							if (contact === undefined) continue
+							yield* recordRemoved(session, ref.accountId, contactId, contactName(contact))
+							count++
+						}
+					}
+					if (count > 0) yield* withSql(requestCompute)
+					return count
+				}),
+			)
+			yield* Effect.annotateCurrentSpan({ "ingest.sweep_removed": removed })
+		}).pipe(
+			Effect.withSpan("CustomerIngest.completeSweep", {
+				attributes: {
+					"ingest.connection_id": connectionId,
+					"ingest.entity_types": entityTypes.join(","),
+				},
+			}),
+		)
+
 	return {
 		apply,
 		startRun,
@@ -1768,6 +1967,7 @@ const make = Effect.gen(function* () {
 		finishRun,
 		link,
 		setStale,
+		completeSweep,
 	} satisfies CustomerIngestApi
 })
 

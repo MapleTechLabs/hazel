@@ -28,6 +28,13 @@ const NullableText = Schema.NullOr(Schema.String)
 const When = Schema.NullOr(IsoTimestamp)
 
 /**
+ * When the source last changed the record (its `updated_at`), so a late delivery cannot undo a
+ * newer deletion: a non-deleting op observed at or before the record's deletion changes nothing.
+ * Absent: the op is applied whatever the order.
+ */
+const ObservedAt = optional(IsoTimestamp)
+
+/**
  * A provider's account record (Clerk organization, Stripe customer, Autumn customer). Absent
  * fields are left as they are; `null` clears.
  */
@@ -45,10 +52,17 @@ export const UpsertAccount = Schema.TaggedStruct("account", {
 	createdAt: optional(IsoTimestamp),
 	/** Shared ids naming the same customer elsewhere, e.g. Stripe `metadata.clerk_org_id`. */
 	sameAs: Schema.Array(ProviderRef),
+	/**
+	 * Match an existing account by a shared domain when no ref or `sameAs` id places it (billing
+	 * sources; Stripe's `matchByDomain` config can still turn it off). Identity sources leave it
+	 * unset: two organizations sharing a domain are two customers.
+	 */
+	matchByDomain: optional(Schema.Boolean),
 	/** With no match: create the account (Clerk), or park it as an unmatched record (billing sources). */
 	onNoMatch: Schema.Literals(["create", "unmatched"]),
 	/** The provider deleted it: its ref goes stale; the account is soft-deleted when no live ref is left. */
 	deleted: optional(Schema.Boolean),
+	observedAt: ObservedAt,
 })
 export type UpsertAccount = typeof UpsertAccount.Type
 
@@ -64,12 +78,15 @@ export const UpsertContact = Schema.TaggedStruct("contact", {
 	role: optional(NullableText),
 	isBillingContact: optional(Schema.Boolean),
 	joinedAt: optional(When),
+	/** Only ever moves forward: an earlier time (or `null`) than the stored one is ignored. */
 	lastSeenAt: optional(When),
+	/** Only ever moves forward, like `lastSeenAt`. */
 	lastSignInAt: optional(When),
 	signInCount30d: optional(Schema.Int),
 	attributes: optional(Schema.Record(Schema.String, Schema.Unknown)),
 	/** Left the organization: soft-deleted, a `contact.removed` event. */
 	removed: optional(Schema.Boolean),
+	observedAt: ObservedAt,
 })
 export type UpsertContact = typeof UpsertContact.Type
 
@@ -121,7 +138,11 @@ export const UpsertInvoice = Schema.TaggedStruct("invoice", {
 })
 export type UpsertInvoice = typeof UpsertInvoice.Type
 
-/** A contact's activity on a day. Only the given fields are written (each provider owns its own). */
+/**
+ * A contact's activity on a day. Only the given fields are written (each provider owns its own):
+ * `eventCount` replaces, `sessionCount` keeps the highest count seen for the day, `signedIn` once
+ * true stays true.
+ */
 export const RecordActivity = Schema.TaggedStruct("activity", {
 	contact: ProviderRef,
 	account: ProviderRef,

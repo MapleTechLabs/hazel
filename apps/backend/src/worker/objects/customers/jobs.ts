@@ -209,7 +209,7 @@ const pullConnection = Effect.fn("CustomersObject.pullConnection")(function* (
 		}
 		let cursor = run.cursor
 		while (pages < PAGES_PER_TICK) {
-			const { ops, nextCursor, progress } = yield* adapter.pull({
+			const { ops, nextCursor, progress, sweep } = yield* adapter.pull({
 				credentials: credentials.value,
 				cursor,
 				since,
@@ -224,6 +224,7 @@ const pullConnection = Effect.fn("CustomersObject.pullConnection")(function* (
 			)
 			cursor = nextCursor
 			if (nextCursor === null) {
+				if (sweep !== undefined) yield* ingest.completeSweep(connection.id, run.startedAt, sweep)
 				yield* ingest.finishRun(run.id, { _tag: "Succeeded", cursor: null })
 				return yield* setNextSync(
 					connection.id,

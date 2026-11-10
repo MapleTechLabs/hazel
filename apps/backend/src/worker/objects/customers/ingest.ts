@@ -9,17 +9,21 @@
  *   time (`Unchanged`); replaying a whole page is safe.
  * - Ordered: ops apply in the given order, in transactions of ≤ `INGEST_CHUNK` ops, so a page's
  *   accounts land before the contacts and subscriptions that name them.
- * - Matching (accounts): existing ref → `sameAs` shared id → domain → create (`onNoMatch: "create"`)
- *   or an unmatched record. More than one candidate at a step is ambiguous: unmatched, with the
- *   best candidate as `suggestedAccountId`. Ignore rules are checked before creating.
+ * - Matching (accounts): existing ref → `sameAs` shared id → domain (only with the op's
+ *   `matchByDomain`) → create (`onNoMatch: "create"`) or an unmatched record. More than one
+ *   candidate at a step is ambiguous: unmatched, with the best candidate as `suggestedAccountId`.
+ *   Ignore rules are checked before creating, and an ignored account's members, billing and usage
+ *   are ignored with it.
  * - Contacts: ref → same email within the account → create. Billing rows and metrics whose
  *   account does not resolve become unmatched records holding the op (replayed once linked).
  * - Precedence: `FIELD_PRECEDENCE` per field, recorded in `fieldSources`.
+ * - Ordering: an op's `observedAt` at or before its record's deletion leaves it deleted.
+ * - Removal: `deleted` / `removed` ops, or `completeSweep` after a full pull.
  * - It never computes: it marks compute due (`requestCompute`), which the alarm runs soon after.
  */
 import type { DatabaseError, schema } from "@hazel/db"
 import type { IngestOp, IngestOutcome, IngestReport, SyncError, SyncProgress } from "@hazel/domain/customers"
-import type { CustomerProvider, SyncTrigger } from "@hazel/domain/customers"
+import type { CustomerProvider, RefEntityType, SyncTrigger } from "@hazel/domain/customers"
 import type {
 	CustomerAccountId,
 	CustomerConnectionId,
@@ -86,5 +90,18 @@ export interface CustomerIngestApi {
 	readonly setStale: (
 		connectionId: CustomerConnectionId,
 		stale: boolean,
+	) => Effect.Effect<void, DatabaseError>
+
+	/**
+	 * A pull that listed every record of `entityTypes` of the connection's provider finished: the
+	 * provider's refs not seen since `since` (the run's start) are gone. An account ref goes stale
+	 * (the account is soft-deleted once no live ref is left, as with `deleted`); a contact is
+	 * soft-deleted with a `contact.removed` event. Only for a complete listing: a partial or
+	 * incremental pull would remove what it did not ask for (the caller's responsibility).
+	 */
+	readonly completeSweep: (
+		connectionId: CustomerConnectionId,
+		since: Date,
+		entityTypes: ReadonlyArray<RefEntityType>,
 	) => Effect.Effect<void, DatabaseError>
 }

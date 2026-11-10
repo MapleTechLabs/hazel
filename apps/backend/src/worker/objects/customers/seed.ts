@@ -1116,6 +1116,7 @@ const stripeCustomerOp = (
 	domains: [domain],
 	createdAt: stamp(clock, rng, dayAt(clock, createdAgo)),
 	sameAs,
+	matchByDomain: true,
 	onNoMatch: "unmatched",
 })
 

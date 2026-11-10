@@ -172,6 +172,7 @@ interface CustomerIngestShape {
   finishRun(runId, { _tag: "Succeeded"; cursor } | { _tag: "Failed"; error: SyncError }): Effect<void, …>
   link(recordId, accountId, by: UserId): Effect<IngestOutcome, …>   // manual match + replay
   setStale(connectionId, stale: boolean): Effect<void, …>            // disconnect / reconnect
+  completeSweep(connectionId, since: Date, entityTypes: RefEntityType[]): Effect<void, DatabaseError>
 }
 interface IngestContext { connectionId; provider; runId: CustomerSyncRunId | null; trigger: SyncTrigger }
 // IngestReport = { stats: SyncStats; outcomes: (Created|Updated|Unchanged|Unmatched|Ignored)[] }
@@ -183,18 +184,34 @@ Rules:
   Ops apply in order, ≤ 500 per transaction (`INGEST_CHUNK`).
 - **Account matching**, first hit wins: (1) existing ref → (2) `sameAs` shared ids (Stripe
   `metadata.clerk_org_id`, Autumn id = Clerk org id, Maple GroupId = Clerk org id) resolved through
-  refs → (3) domain (any of the record's domains, free-mail domains excluded) → (4)
+  refs → (3) domain (any of the record's domains, free-mail domains excluded), only for an op with
+  `matchByDomain: true` (billing sources; Stripe's `matchByDomain` config can turn it off; identity
+  sources never set it, so two Clerk orgs sharing a domain stay two customers) → (4)
   `onNoMatch: "create"` creates (`matchMethod: created`) or parks an **unmatched record**. More than
   one candidate at a step = ambiguous → unmatched with `suggestedAccountId` + `confidence`. Ignore
-  rules run before (4).
+  rules run before (4). A later op of a parked account merges into the held one (given fields win,
+  absent ones are kept, domains / `sameAs` / attributes merge).
 - **Contacts:** ref `(provider, externalId, accountId)` → same email (case-insensitive) in the
   account → create. Unknown account → unmatched (entityType `contact`).
 - **Billing/metrics/events/activity** resolve the account (and contact) through refs; unresolved →
   unmatched record holding the op, replayed by `link`.
+- **Ignored accounts:** an account no customer holds that an ignore rule matches by id, or whose
+  unmatched record was ignored by hand, takes its members, billing and usage with it (`Ignored`,
+  nothing parked). A `removed` contact of an unknown account is `Unchanged`, never parked.
 - **Field precedence:** `FIELD_PRECEDENCE` (`hazel` manual edit > clerk > stripe > autumn > maple for
   name; per field), recorded in `fieldSources`; domains merge (never removed); fixed in v1.
 - **Deletes:** `account.deleted` → ref `staleAt`; account soft-deleted when it has no live ref.
   `contact.removed` → soft delete + `contact.removed` event.
+- **Full sweeps:** every account and contact op touches its ref (`lastSyncedAt`). A pull that listed
+  all of a provider's accounts / contacts sets `PullPage.sweep` on its last page; the pull loop then
+  calls `completeSweep(connectionId, run.startedAt, entityTypes)`, which treats the provider's live
+  refs not seen since the run started as deleted (accounts as `deleted`, contacts as `removed`).
+  Only for complete listings: an incremental or partial pull must not set it.
+- **Ordering:** account and contact ops carry `observedAt` (the source's `updated_at`). A
+  non-deleting op observed at or before the record's deletion (the ref's `staleAt`, the contact's
+  `deletedAt`) changes nothing, so a late delivery cannot revive it; without `observedAt` ops apply
+  in arrival order. `lastSeenAt` / `lastSignInAt` only move forward; a day's `sessionCount` keeps
+  the highest value and `signedIn` stays true once set.
 - **Events** are emitted by ingest for state changes it observes (subscription started / plan
   changed / canceled, invoice paid / payment_failed, contact joined / removed), deduped by
   `externalId`.
@@ -343,7 +360,8 @@ needs ≥ 1 of its `requiredSources` connected, else it matches nothing (dry-run
   (`consecutiveFailures`, exponential, cap 6 h).
 - **Sync now** = a `manual` run scheduled immediately.
 - Adapter contract: `apps/backend/src/worker/objects/customers/providers.ts`
-  (`validate`, `webhook`, `pull`, `pullIntervalMs`); provider PRs register theirs in
+  (`validate`, `webhook`, `pull` (with `sweep` on a full listing's last page), `pullIntervalMs`;
+  ops carry `observedAt`, billing sources' accounts `matchByDomain`); provider PRs register theirs in
   `CustomerProviders.layer`.
 
 ## 6. Frontend (`apps/web-foldkit`)

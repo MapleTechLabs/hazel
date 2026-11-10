@@ -4,8 +4,23 @@
  * `IngestOp`s; it never writes the store. Core registers none: connecting answers
  * `CustomerProviderUnavailableError` until a provider's PR adds its adapter to
  * `CustomerProviders.layer`.
+ *
+ * What an adapter's ops must carry:
+ *
+ * - `observedAt` on account and contact ops: the record's source-side `updated_at` (or the webhook
+ *   event's time), so a late delivery cannot revive a record deleted since.
+ * - `matchByDomain: true` on account ops only for billing sources (Stripe, Autumn); identity
+ *   sources (Clerk) leave it unset so organizations sharing a domain never merge.
+ * - Deletions as `deleted` / `removed` ops; a full listing also sets `PullPage.sweep` on its last
+ *   page so records deleted without a webhook are removed.
  */
-import type { ConnectionConfig, CustomerProvider, IngestOp, SyncProgress } from "@hazel/domain/customers"
+import type {
+	ConnectionConfig,
+	CustomerProvider,
+	IngestOp,
+	RefEntityType,
+	SyncProgress,
+} from "@hazel/domain/customers"
 import { Context, type Effect, Layer, Option, type Redacted, Schema } from "effect"
 
 /** A provider call failed. `auth` failures mark the connection `error` and stop scheduled pulls. */
@@ -37,6 +52,13 @@ export interface PullPage {
 	/** Null when the pull is complete. */
 	readonly nextCursor: string | null
 	readonly progress: SyncProgress
+	/**
+	 * On the last page (`nextCursor` null) of a pull that listed every record of these entity types,
+	 * deleted ones excluded: core then removes the ones the run did not see
+	 * (`CustomerIngest.completeSweep`). Leave it unset for an incremental or partial pull, or one
+	 * whose listing can skip live records: anything not listed is removed.
+	 */
+	readonly sweep?: ReadonlyArray<RefEntityType>
 }
 
 export interface CustomerProviderAdapter {
