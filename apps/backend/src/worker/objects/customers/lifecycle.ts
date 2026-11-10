@@ -34,8 +34,6 @@ export const priorityScore = (severity: SignalSeverity, valueMinor: number, open
 export const valueOf = (account: Pick<schema.CustomerAccount, "mrrMinor" | "trialListMrrMinor">) =>
 	account.mrrMinor > 0 ? account.mrrMinor : (account.trialListMrrMinor ?? 0)
 
-export const severityRank = (severity: SignalSeverity) => SignalSeverity.literals.indexOf(severity)
-
 /** "Worse by a full step" than the evidence a human acted on. */
 export const isWorse = (evidence: SignalEvidence, acted: SignalEvidence | null) =>
 	evidence.step > (acted?.step ?? 0)

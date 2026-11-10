@@ -63,7 +63,7 @@ import type { CustomerIngestApi, IngestContext, RunResult } from "./ingest"
 import { requestCompute, requestHistoryRebuild, setBaselineFor } from "./schedule"
 
 /** Ops per transaction. */
-export const INGEST_CHUNK = 500
+const INGEST_CHUNK = 500
 
 /** An op the store cannot take (a built-in metric key, a negative amount). Not retried. */
 export class CustomerIngestRejectedError extends Schema.TaggedError<CustomerIngestRejectedError>()(

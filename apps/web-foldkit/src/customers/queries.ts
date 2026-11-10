@@ -386,15 +386,6 @@ export const orgMembersStream = <Message>(
 // HELPERS
 
 /** "Mine": a signal on an account `userId` owns. */
-export const isOnMyAccount = (
-	accountsById: ReadonlyMap<string, AccountRow>,
-	userId: UserId | null,
-	signal: SignalRow,
-): boolean => userId !== null && accountsById.get(signal.accountId)?.ownerUserId === userId
-
-export const accountsByIdOf = (accounts: ReadonlyArray<AccountRow>): ReadonlyMap<string, AccountRow> =>
-	new Map(accounts.map((account) => [account.id, account]))
-
 /** The queue tabs: Done holds every resolution (done, dismissed, and cleared on its own). */
 export type QueueTab = "open" | "snoozed" | "done"
 export const queueTabOf = (signal: SignalRow): QueueTab =>

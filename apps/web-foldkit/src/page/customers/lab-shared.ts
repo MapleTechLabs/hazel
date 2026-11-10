@@ -1,4 +1,4 @@
-import { ME, NOW, ORGANIZATION_ID } from "../../lab/fixtures/customers"
+import { MAYA as ME, NOW, ORGANIZATION_ID } from "../../lab/fixtures/customers"
 import type { Shared } from "../contract"
 import { sharedDefaults } from "../test-shared"
 

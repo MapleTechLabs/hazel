@@ -274,12 +274,6 @@ export const plansOf = (model: Model): ReadonlyArray<string> => {
 }
 
 /** The open signals the header sums up: on accounts I own, or any. */
-export const isAllClear = (model: Model, viewer: Viewer): boolean =>
-	model.tab === "open" &&
-	model.signals !== null &&
-	model.accounts !== null &&
-	rowIds(model, viewer).length === 0
-
 // MENUS
 
 export const ASSIGN_ME = "me"
@@ -349,7 +343,6 @@ export const localDateOf = (nowMs: number, days = 0): string => {
 	return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
 }
 
-export const MoreKey = Schema.Literals(["dismiss", "open_customer"])
 export const moreEntries: ReadonlyArray<Menu.Entry> = [
 	Menu.item("open_customer"),
 	Menu.separator,

@@ -228,9 +228,6 @@ export const highConfidenceRecords = (model: Model): ReadonlyArray<RecordRow> =>
 export const recordById = (model: Model, recordId: CustomerUnmatchedRecordId): RecordRow | undefined =>
 	openRecords(model).find((record) => record.id === recordId)
 
-export const accountById = (model: Model, accountId: CustomerAccountId | null): AccountRow | undefined =>
-	accountId === null ? undefined : (model.accounts ?? []).find((account) => account.id === accountId)
-
 // IGNORE PATTERNS
 
 export type IgnorePatternKey = "ignore_domain" | "ignore_prefix"

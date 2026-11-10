@@ -36,7 +36,7 @@ import type { CustomerIngestRejectedError } from "./ingest-live"
 
 // The service and its runtime values live with the implementation (`./ingest-live.ts`), so that
 // module imports only types from here.
-export { CustomerIngest, CustomerIngestRejectedError, INGEST_CHUNK } from "./ingest-live"
+export { CustomerIngest, CustomerIngestRejectedError } from "./ingest-live"
 
 /** Who is writing: the connection (its provider), and the sync run it belongs to. */
 export interface IngestContext {

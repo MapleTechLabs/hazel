@@ -7,7 +7,14 @@ import type {
 } from "@hazel/domain/customers"
 import { CustomerIgnoreRuleId, CustomerUnmatchedRecordId } from "@hazel/schema"
 import { Schema } from "effect"
-import { ACCOUNTS_BY_KEY, MAPLE_CONNECTION, ME, NOW, type NamedAccount, STRIPE_CONNECTION } from "./customers"
+import {
+	ACCOUNTS_BY_KEY,
+	MAPLE_CONNECTION,
+	MAYA as ME,
+	NOW,
+	type NamedAccount,
+	STRIPE_CONNECTION,
+} from "./customers"
 
 /**
  * Unmatched records for the resolver (Wonder `ids`): five Stripe customers and nine Maple groups with

@@ -244,8 +244,6 @@ export const ActionKey = Schema.Literals([
 export type ActionKey = typeof ActionKey.Type
 
 /** What the RPCs support runs; the rest shows, disabled, with why. */
-export const UNSUPPORTED_ACTIONS: ReadonlyArray<ActionKey> = ["recompute", "link_source", "merge", "archive"]
-
 export const actionEntries: ReadonlyArray<Menu.Entry> = [
 	Menu.item("copy_link"),
 	Menu.item("change_owner"),

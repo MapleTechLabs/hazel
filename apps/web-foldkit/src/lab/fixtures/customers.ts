@@ -100,7 +100,6 @@ export const DANA = member(3, "Dana Kim", "dana@hazel.sh")
 export const PRIYA = member(4, "Priya Shah", "priya@hazel.sh")
 export const TEAM: ReadonlyArray<TeamMember> = [MAYA, JONAS, DANA, PRIYA]
 /** The signed-in user ("Mine"). */
-export const ME = MAYA
 
 export const memberOf = (id: UserId | null): TeamMember | null =>
 	TEAM.find((entry) => entry.id === id) ?? null
@@ -686,12 +685,12 @@ const makeSignal = (seed: SignalSeed, n: number): SignalEntry => {
 			seed.snoozedUntilDays === undefined
 				? null
 				: new Date(NOW.getTime() + seed.snoozedUntilDays * DAY),
-		snoozedByUserId: status === "snoozed" ? ME.id : null,
+		snoozedByUserId: status === "snoozed" ? MAYA.id : null,
 		snoozedAt: status === "snoozed" ? daysAgo(1) : null,
 		snoozeNote: status === "snoozed" ? "Waiting on their Q4 planning" : null,
 		resolvedAt:
 			status === "done" || status === "dismissed" || status === "auto_resolved" ? resolved : null,
-		resolvedByUserId: status === "done" || status === "dismissed" ? ME.id : null,
+		resolvedByUserId: status === "done" || status === "dismissed" ? MAYA.id : null,
 		outcome: status === "done" ? "contacted" : null,
 		resolutionNote: status === "done" ? "Called their CTO; they're rolling out to two more teams." : null,
 		dismissReason: status === "dismissed" ? "Seasonal dip, expected" : null,
@@ -1116,7 +1115,7 @@ const connection = (
 	externalAccountId: null,
 	externalAccountName: null,
 	config: DEFAULT_CONNECTION_CONFIG[provider],
-	connectedBy: ME.id,
+	connectedBy: MAYA.id,
 	connectedAt: daysAgo(120),
 	hasWebhookSecret: true,
 	lastSyncAt: ago(4 * 60_000),
@@ -1347,28 +1346,6 @@ export const overviewFixture = (
 }
 
 /** No sources connected yet. */
-export const EMPTY_OVERVIEW: OverviewResult = {
-	...overviewFixture("30d"),
-	kpis: {
-		mrrMinor: kpi(0, 0),
-		payingCustomers: kpi(0, 0),
-		activeCustomers: kpi(0, 0),
-		wau: kpi(0, 0),
-		mau: kpi(0, 0),
-		stickinessPct: kpi(0, 0),
-		logoChurn: kpi(0, 0),
-		atRiskMrrMinor: kpi(0, 0),
-		nrrPct: null,
-	},
-	mrrMovements: [],
-	activeUsers: [],
-	healthDistribution: [],
-	topMovers: { gainers: [], decliners: [] },
-	recentChurn: [],
-	recentNew: [],
-	hasData: { activity: false, billing: false },
-}
-
 // ---------------------------------------------------------------------------
 // One account (`customers.account.detail`): Acme Robotics, past due
 // ---------------------------------------------------------------------------

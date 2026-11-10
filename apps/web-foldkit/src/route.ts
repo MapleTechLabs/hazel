@@ -472,16 +472,6 @@ export const isCustomersRoute = AppRoute.isAnyOf([
 ])
 
 /** `/$orgSlug/customers/settings/*`. */
-export const isCustomersSettingsRoute = AppRoute.isAnyOf([
-	"CustomersSettingsSignals",
-	"CustomersSettingsSignalNew",
-	"CustomersSettingsSignalRule",
-	"CustomersSettingsHealth",
-	"CustomersSettingsSources",
-	"CustomersSourceDetail",
-	"CustomersUnmatched",
-])
-
 /** `/$orgSlug/chat/$channelId/*`: a channel's messages, files or media. */
 export const isChannelChatRoute = AppRoute.isAnyOf(["ChatChannel", "ChatFiles", "ChatFilesMedia"])
 
