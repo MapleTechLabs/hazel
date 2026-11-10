@@ -381,13 +381,17 @@ needs ≥ 1 of its `requiredSources` connected, else it matches nothing (dry-run
   400, the adapter is never called), `adapter.webhook` verifies (signature and timestamp tolerance)
   and parses, `CustomerIngest.apply` (trigger `webhook`; ops are checked against the contract).
   Bad signature → 400, unknown connection → 404, ingest failure → 500 (provider retries; ingest is
-  idempotent).
+  idempotent). A connection that changed account (`externalAccountId`) or was disconnected while
+  the adapter ran (it may call the provider with the old key): the ops are dropped inside the apply
+  transaction and the delivery answered 2xx, so the provider does not retry it into the new account.
   The webhook URL shown in the UI is built client-side from these ids.
 - **Scheduled pulls:** per connection `nextSyncAt = lastSyncAt + adapter.pullIntervalMs`; the alarm
   runs due pulls page by page (`adapter.pull(cursor, since)` → `apply` → `progress`), persisting the
   cursor on the run so an evicted object resumes. Backfill = `since: null`. `auth` errors →
   connection `error`, pulls stop until credentials change; other errors back off
-  (`consecutiveFailures`, exponential, cap 6 h).
+  (`consecutiveFailures`, exponential, cap 6 h; a page that lands resets it). 8 failed attempts in a
+  row at one cursor (rate limits aside) fail the run with a client-safe message, no sweep applied;
+  the next scheduled pull starts a new run from the start.
 - **Sync now** = a `manual` run scheduled immediately.
 - Adapter contract: `apps/backend/src/worker/objects/customers/providers.ts`
   (`validate`, which always returns the provider account id, `webhook`, `pull` (with `sweep` on a

@@ -253,6 +253,93 @@ describe("Customers compute and sync loop", () => {
 			}),
 		))
 
+	it("fails a run stuck at one cursor without a sweep; the next pull starts over", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				const connectionId = world.connection("clerk")
+				// Seen by no pull: a sweep would remove it.
+				yield* world.ingest("clerk", [
+					{ _tag: "account", externalId: "org_old", name: "Old", sameAs: [], onNoMatch: "create" },
+				])
+				const cursors: Array<string | null> = []
+				const adapter: CustomerProviderAdapter = {
+					...scriptedAdapter([]),
+					pull: ({ cursor }) => {
+						cursors.push(cursor)
+						return cursor === null
+							? Effect.succeed({
+									...page(manyAccounts(1), "offset-5000"),
+									sweep: ["account"],
+								})
+							: Effect.fail(
+									new CustomerProviderError({
+										code: "provider",
+										message: "Clerk timed out",
+										httpStatus: 504,
+										retryAfterMs: null,
+									}),
+								)
+					},
+				}
+				const services = Layer.mergeAll(
+					CustomerIngest.layer,
+					encryption,
+					Layer.succeed(
+						CustomerProviders,
+						CustomerProviders.of({ get: () => Option.some(adapter) }),
+					),
+				)
+				yield* world.object
+					.run(
+						Effect.gen(function* () {
+							yield* storeSecrets(connectionId, yield* encryptSecrets("sk_test", null))
+						}).pipe(Effect.provide(encryption)),
+					)
+					.pipe(Effect.orDie)
+				const pull = () => {
+					world.object.storage.db
+						.prepare(
+							`UPDATE customer_connections SET nextSyncAt = '2000-01-01 00:00:00.000' WHERE id = ?`,
+						)
+						.run(connectionId)
+					return world.object.run(runDuePullsWith(services)(NOW)).pipe(Effect.orDie)
+				}
+				const runs = () =>
+					world.rows<{ status: string; cursor: string | null; error: string | null }>(
+						`SELECT status, cursor, error FROM customer_sync_runs ORDER BY startedAt, rowid`,
+					)
+				const failures = () =>
+					world.rows<{ consecutiveFailures: number }>(
+						`SELECT consecutiveFailures FROM customer_connections WHERE id = ?`,
+						connectionId,
+					)[0]!.consecutiveFailures
+
+				// A page lands, the next one fails, and keeps failing at its cursor.
+				for (let attempt = 1; attempt <= 7; attempt++) yield* pull()
+				expect(runs()).toMatchObject([{ status: "running", cursor: "offset-5000" }])
+				expect(failures()).toBe(7)
+
+				// The 8th failure there gives the run up: failed, nothing swept.
+				yield* pull()
+				expect(runs()).toMatchObject([{ status: "failed", cursor: "offset-5000" }])
+				expect(JSON.parse(runs()[0]!.error!)).toMatchObject({
+					code: "provider",
+					message: expect.stringContaining("Stopped after 8 failed attempts"),
+				})
+				expect(
+					world.rows(`SELECT externalId FROM customer_external_refs WHERE staleAt IS NULL`),
+				).toContainEqual({ externalId: "org_old" })
+
+				// The next pull starts a new run from the start; its landed page resets the streak.
+				cursors.length = 0
+				yield* pull()
+				expect(cursors).toEqual([null, "offset-5000"])
+				expect(runs()[1]).toMatchObject({ status: "running", cursor: "offset-5000" })
+				expect(failures()).toBe(1)
+			}),
+		))
+
 	it("backs compute off when it fails instead of retrying on every alarm", () =>
 		run(
 			Effect.gen(function* () {

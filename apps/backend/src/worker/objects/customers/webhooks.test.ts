@@ -174,6 +174,27 @@ describe("Customers webhook delivery", () => {
 			}),
 		))
 
+	it("accepts unapplied a delivery whose connection switched account while the adapter ran", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				const connectionId = yield* liveConnection(world, "whsec")
+				const setAccount = (externalAccountId: string) =>
+					world.object.storage.db
+						.prepare(`UPDATE customer_connections SET externalAccountId = ? WHERE id = ?`)
+						.run(externalAccountId, connectionId)
+				setAccount("acct_old")
+				const switching = stripeAdapter(() =>
+					Effect.sync(() => {
+						setAccount("acct_new")
+						return [account]
+					}),
+				)
+				expect(yield* deliver(world, connectionId, { adapter: switching })).toEqual({ applied: 0 })
+				expect(world.rows(`SELECT id FROM customer_accounts`)).toEqual([])
+			}),
+		))
+
 	it("answers 500 when the store fails, without the storage error's text", () =>
 		run(
 			Effect.gen(function* () {

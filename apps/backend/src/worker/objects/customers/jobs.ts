@@ -14,7 +14,9 @@
  * running run (a backfill or a "sync now") or a new one (`backfill` until one succeeded, else
  * `schedule`) pulls page by page, keeping the cursor on the run so an evicted object resumes.
  * Success schedules the next pull one adapter interval later; `auth` failures stop pulls until the
- * credentials change; others back off, the run staying open to resume from its cursor. Each pull
+ * credentials change; others back off, the run staying open to resume from its cursor, until
+ * `MAX_STUCK_ATTEMPTS` attempts in a row fail at one cursor: the run then fails and the next pull
+ * starts over (a page that never loads, e.g. a provider timing out past a deep offset). Each pull
  * (and each compute) first moves its own deadline a lease ahead, so one the runtime kills mid-way
  * retries after the lease instead of on every alarm. A pull stops when its connection is
  * disconnected or its run ended meanwhile.
@@ -49,6 +51,8 @@ const DEFAULTS_KEY = "defaultsInstalled"
 /** Pages per connection per alarm; the rest resumes on the next one. */
 const PAGES_PER_TICK = 20
 const MAX_BACKOFF_MS = 6 * 60 * 60_000
+/** Failed attempts in a row at one cursor (rate limits aside) after which a run gives up. */
+const MAX_STUCK_ATTEMPTS = 8
 /** Scheduled pulls ask for changes since the last success, minus this overlap. */
 const PULL_OVERLAP_MS = 10 * 60_000
 
@@ -180,7 +184,9 @@ const stillPulling = (connectionId: CustomerConnectionId, runId: schema.Customer
 /**
  * One due connection: resume its running run or start one (a `backfill` until the first one
  * succeeded, else a `schedule` run), pull up to the page budget. A retryable failure keeps the run
- * running, so the next attempt resumes from its cursor after a backoff; any other closes it.
+ * running, so the next attempt resumes from its cursor after a backoff; any other closes it, as
+ * does the `MAX_STUCK_ATTEMPTS`th one in a row at the same cursor. A page that lands resets
+ * `consecutiveFailures`: the streak (and its backoff) counts attempts that got nowhere.
  */
 const pullConnection = Effect.fn("CustomersObject.pullConnection")(function* (
 	connection: schema.CustomerConnection,
@@ -218,6 +224,7 @@ const pullConnection = Effect.fn("CustomersObject.pullConnection")(function* (
 		trigger: run.trigger,
 	}
 	let pages = 0
+	let failures = connection.consecutiveFailures
 	const pull = Effect.gen(function* () {
 		const credentials = yield* loadCredentials(connection)
 		if (Option.isNone(credentials)) {
@@ -254,6 +261,14 @@ const pullConnection = Effect.fn("CustomersObject.pullConnection")(function* (
 					now,
 				)
 			}
+			if (failures > 0) {
+				yield* db.run(
+					SQLite.update(schema.customerConnectionsTable)
+						.set({ consecutiveFailures: 0, updatedAt: now })
+						.where(($) => [$.id.eq(connection.id)]),
+				)
+				failures = 0
+			}
 		}
 		// Out of budget for this alarm: continue right after.
 		yield* setNextSync(connection.id, new Date(now.getTime() + 1_000), now)
@@ -268,6 +283,13 @@ const pullConnection = Effect.fn("CustomersObject.pullConnection")(function* (
 	yield* pull.pipe(
 		Effect.catchTag("PullFailure", (failure) =>
 			Effect.gen(function* () {
+				// Stuck at the run's cursor: give the run up. It never reaches its last page, so no
+				// sweep removes anything; the next pull starts a new run from the start.
+				const stuck =
+					failure.retryable &&
+					failure.error.code !== "rate_limited" &&
+					run.cursor !== null &&
+					failures + 1 >= MAX_STUCK_ATTEMPTS
 				yield* Effect.logWarning("Customers pull failed", {
 					connectionId: connection.id,
 					provider: connection.provider,
@@ -275,18 +297,25 @@ const pullConnection = Effect.fn("CustomersObject.pullConnection")(function* (
 					code: failure.error.code,
 					message: failure.error.message,
 					retryable: failure.retryable,
+					stuck,
 					cause: failure.cause,
 				})
 				// Replaced (new credentials) or disconnected meanwhile: the next pull is not this run's.
 				const current = yield* stillPulling(connection.id, run.id)
-				yield* ingest.finishRun(run.id, {
-					_tag: failure.retryable ? "Retrying" : "Failed",
-					error: failure.error,
-				})
-				if (!current) return
-				const retryAt = new Date(
-					now.getTime() + (failure.retryAfterMs ?? backoffMs(connection.consecutiveFailures)),
+				yield* ingest.finishRun(
+					run.id,
+					stuck
+						? {
+								_tag: "Failed",
+								error: {
+									...failure.error,
+									message: `Stopped after ${MAX_STUCK_ATTEMPTS} failed attempts at the same page; the next sync starts over. ${failure.error.message}`,
+								},
+							}
+						: { _tag: failure.retryable ? "Retrying" : "Failed", error: failure.error },
 				)
+				if (!current) return
+				const retryAt = new Date(now.getTime() + (failure.retryAfterMs ?? backoffMs(failures)))
 				yield* setNextSync(connection.id, failure.error.code === "auth" ? null : retryAt, now)
 			}),
 		),
@@ -462,17 +491,45 @@ export const handleWebhookWith = <R>(
 				.webhook({ headers: payload.headers, body: payload.body }, credentials.value)
 				.pipe(Effect.mapError((error) => fail(400, error.message)))
 			const ingest = yield* CustomerIngest
-			const report = yield* ingest.apply(
-				{
+			// The connection switched account (or was disconnected) while the adapter ran: the ops are
+			// the old account's. Accepted unapplied, so the provider does not retry them.
+			const report = yield* db.transaction(
+				Effect.gen(function* () {
+					const current = yield* db.first(
+						SQLite.from(schema.customerConnectionsTable)
+							.select("status", "externalAccountId")
+							.where(($) => [$.id.eq(connection.value.id)])
+							.limit(1),
+					)
+					if (
+						Option.isNone(current) ||
+						current.value.status === "disconnected" ||
+						current.value.externalAccountId !== credentials.value.externalAccountId
+					) {
+						return Option.none()
+					}
+					return Option.some(
+						yield* ingest.apply(
+							{
+								connectionId: connection.value.id,
+								provider: payload.provider,
+								runId: null,
+								trigger: "webhook",
+							},
+							ops,
+						),
+					)
+				}),
+			)
+			if (Option.isNone(report)) {
+				yield* Effect.logWarning("Customers webhook dropped: the connection changed meanwhile", {
 					connectionId: connection.value.id,
 					provider: payload.provider,
-					runId: null,
-					trigger: "webhook",
-				},
-				ops,
-			)
+				})
+				return { applied: 0 }
+			}
 			return {
-				applied: report.outcomes.filter(
+				applied: report.value.outcomes.filter(
 					(outcome) => outcome._tag === "Created" || outcome._tag === "Updated",
 				).length,
 			}

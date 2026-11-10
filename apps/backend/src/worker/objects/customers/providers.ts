@@ -91,7 +91,8 @@ export interface CustomerProviderAdapter {
 	 * raw body, refuse a delivery whose signed timestamp is outside a short tolerance (replay
 	 * protection), e.g. 5 minutes, and refuse one of another provider account than
 	 * `credentials.externalAccountId`. `CustomerWebhookRejectedError.message` is answered to the
-	 * caller verbatim: keep it client-safe (no secrets, no provider internals).
+	 * caller verbatim: keep it client-safe (no secrets, no provider internals). The ops are dropped
+	 * (answered 2xx) when the connection switched account or was disconnected while this ran.
 	 */
 	readonly webhook: (
 		request: { readonly headers: Readonly<Record<string, string>>; readonly body: string },
@@ -99,7 +100,9 @@ export interface CustomerProviderAdapter {
 	) => Effect.Effect<ReadonlyArray<IngestOp>, CustomerWebhookRejectedError>
 	/**
 	 * One page of a pull. `since` null: a full backfill; else changes since then (scheduled pulls
-	 * overlap the last one by a margin; ingest is idempotent).
+	 * overlap the last one by a margin; ingest is idempotent). A retryable error resumes at the same
+	 * cursor after a backoff; after 8 failed attempts in a row there core fails the run (no sweep)
+	 * and the next pull starts over with a null cursor.
 	 */
 	readonly pull: (input: {
 		readonly credentials: ProviderCredentials
