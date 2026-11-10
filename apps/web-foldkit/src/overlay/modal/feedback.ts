@@ -91,8 +91,17 @@ const update = (model: Model, message: Message): Return =>
 
 const toCategoryMessage = (message: Select.Message): Message => Message.GotCategoryMessage({ message })
 
-const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _inputs, h) =>
-	frameView(
+const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _inputs, h) => {
+	// Built outside `textField`'s render callback: textField renders its parts twice (a probe pass
+	// for which slots are used), and a second `h.submodel` with the same slotId crashes the runtime.
+	const categorySelect = h.submodel({
+		slotId: `${ID}-category-select`,
+		model: model.category,
+		view: selectView,
+		viewInputs: { items: CATEGORY_ITEMS },
+		toParentMessage: toCategoryMessage,
+	})
+	return frameView(
 		h,
 		model.frame,
 		{ size: "lg" },
@@ -112,13 +121,7 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 						[
 							textField(h, { id: `${ID}-category`, value: "" }, (field) => [
 								field.label(["Category"]),
-								h.submodel({
-									slotId: `${ID}-category-select`,
-									model: model.category,
-									view: selectView,
-									viewInputs: { items: CATEGORY_ITEMS },
-									toParentMessage: toCategoryMessage,
-								}),
+								categorySelect,
 							]),
 							textField(
 								h,
@@ -160,8 +163,8 @@ const view = Submodel.defineView<Model, Message, ModalViewInputs>((model, _input
 			),
 		],
 		(message) => Message.GotFrameMessage({ message }),
-	),
-)
+	)
+})
 
 export const modal = defineModal(
 	"Feedback",
