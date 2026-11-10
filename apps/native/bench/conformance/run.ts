@@ -46,6 +46,8 @@ const SCENARIOS = ["boot", "sent", "focus", "menu", "palette", "dialog", "contex
 /** Whole pages as they load: each route's layout and pixels against Chromium's. */
 const ROUTES = new Map<`route-${string}`, string>([
 	["route-files", "/hazel/chat/00000005-0000-4000-8000-000000000001/files"],
+	// A channel with no messages: the empty state's masked picture.
+	["route-empty", "/hazel/chat/00000005-0000-4000-8000-000000000002"],
 	["route-notifications", "/hazel/notifications"],
 	["route-appearance", "/hazel/my-settings"],
 	["route-profile", "/hazel/my-settings/profile"],
@@ -206,6 +208,7 @@ const mimeTypes = new Map([
 	[".wasm", "application/wasm"],
 	[".svg", "image/svg+xml"],
 	[".png", "image/png"],
+	[".webp", "image/webp"],
 	[".woff2", "font/woff2"],
 	[".woff", "font/woff"],
 	[".json", "application/json"],

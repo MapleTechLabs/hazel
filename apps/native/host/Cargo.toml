@@ -6,12 +6,15 @@ publish = false
 
 [dependencies]
 # Rune is pre-release: pin a revision. This is anomalyco/rune bca4713 plus grid tracks
-# (El::grid_columns, grid_row_start), Tx::focus, Tx::drawn_rects, set_default_transition and
-# El::focusable_by_script, on Makisuo/rune's `hazel-grid` branch until they land upstream.
-rune = { git = "https://github.com/Makisuo/rune", rev = "26a20301a1aff2983151e7a34c0efbf913ac2cce", features = [
+# (El::grid_columns, grid_row_start), Tx::focus, Tx::drawn_rects, set_default_transition,
+# El::focusable_by_script and El::clip_fade_linear_frac, on Makisuo/rune's `hazel-grid` branch
+# until they land upstream.
+rune = { git = "https://github.com/Makisuo/rune", rev = "081a2c3abc0dc0c00b4d8b6999a318627349d52b", features = [
 	"native-file-dialog",
 ] }
 base64 = "0.22"
+# Decodes a picture and its mask picture to composite them (Rune's own decoder, same features).
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # The sign-in vault in the macOS keychain, as the Tauri app keeps its own (apps/desktop).

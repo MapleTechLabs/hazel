@@ -121,6 +121,48 @@ describe("StyleResolver", () => {
 		expect(styles.unsupportedProps.has("animation: bounce")).toBe(true)
 	})
 
+	it("sends fit-content as a size of its own, which a parent does not stretch", () => {
+		expect(resolve("size-fit").style).toMatchObject({ w: "fit", h: "fit" })
+		expect(resolve("w-max h-min").style).toMatchObject({ w: "fit", h: "fit" })
+		expect(resolve("w-auto").style.w).toBe("auto")
+		// As a bound it is no bound at all.
+		expect(resolve("max-w-fit min-h-fit").style).not.toHaveProperty("maxW")
+	})
+
+	it("sends text-box trim as the font metric each trimmed side ends at", () => {
+		expect(resolve("leading-none [text-box:trim-both_cap_alphabetic]").style.textBox).toEqual({
+			over: "cap",
+			under: "alphabetic",
+		})
+		expect(resolve("[text-box:trim-start_ex_alphabetic]").style.textBox).toEqual({ over: "ex" })
+		expect(resolve("[text-box-trim:trim-end] [text-box-edge:cap_alphabetic]").style.textBox).toEqual({
+			under: "alphabetic",
+		})
+		// Edges with no trim do nothing, and the trim is not inherited.
+		expect(resolve("[text-box-edge:cap_alphabetic]").style.textBox).toBeUndefined()
+		const parent = resolve("[text-box:trim-both_cap_alphabetic]")
+		expect(resolve("font-bold", { scope: parent.scope }).style.textBox).toBeUndefined()
+	})
+
+	it("sends a mask as the edges it fades and the picture that shows the box", () => {
+		// Tailwind intersects seven layers; all but the bottom one are opaque.
+		expect(resolve("mask-b-from-95%").style.mask).toEqual({ fade: [0, 0, 0, expect.closeTo(0.05)] })
+		expect(resolve("mask-b-from-95% mask-l-from-50%").style.mask).toEqual({
+			fade: [0.5, 0, 0, expect.closeTo(0.05)],
+		})
+		expect(resolve("mask-b-from-95% mask-none").style.mask).toBeUndefined()
+		expect(
+			resolve("mask-[url(/images/image-mask.webp)] mask-size-[110%_90%] mask-center mask-no-repeat")
+				.style.mask,
+		).toEqual({ image: { url: "/images/image-mask.webp", w: 1.1, h: 0.9 } })
+		// A mask the host cannot draw is counted, never sent as a different one.
+		styles.unsupportedProps.clear()
+		expect(resolve("mask-b-from-50% mask-b-to-80%").style.mask).toBeUndefined()
+		expect(resolve("mask-radial-from-black mask-radial-to-transparent").style.mask).toBeUndefined()
+		expect(resolve("mask-[url(/images/image-mask.webp)]").style.mask).toBeUndefined()
+		expect([...styles.unsupportedProps.keys()].filter((k) => k.startsWith("mask-image"))).toHaveLength(3)
+	})
+
 	it("sends a width that is a share of the parent as a fraction", () => {
 		expect(resolve("w-1/2").style.w).toEqual({ frac: 0.5 })
 		expect(resolve("w-[37.5%]").style.w).toEqual({ frac: 0.375 })

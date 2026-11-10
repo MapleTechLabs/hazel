@@ -173,7 +173,7 @@ pub fn collapse(node: &Arc<Node>, in_flow: bool) -> Arc<Node> {
                     changed = true;
                 }
             }
-            let auto_height = st.h.is_none() || matches!(st.h, Some(Len::Auto));
+            let auto_height = st.h.is_none() || matches!(st.h, Some(Len::Auto | Len::Fit));
             let last = kids.iter().rposition(|k| !is_absent(k));
             if let Some(i) = last.filter(|&i| {
                 is_block_level(&kids[i]) && edge(st, 2) == 0.0 && auto_height && st.min_h.is_none()

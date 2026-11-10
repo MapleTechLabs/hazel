@@ -14,6 +14,17 @@ describe("installShims", () => {
 		expect(document.createElement("canvas").getContext("2d")).toBeNull()
 	})
 
+	it("reports the app's version as the web build does, so the sidebar's label matches", () => {
+		installShims({
+			width: 800,
+			height: 600,
+			dark: false,
+			url: "http://app.hazel.test/",
+			openUrl: () => {},
+		})
+		expect(__APP_VERSION__).toMatch(/^\d+\.\d+\.\d+$/)
+	})
+
 	it("hands idle callbacks a deadline, as idle work reads its time left", async () => {
 		installShims({
 			width: 800,

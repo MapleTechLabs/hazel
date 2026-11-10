@@ -1125,6 +1125,7 @@ name = "hazel-native"
 version = "0.0.1"
 dependencies = [
  "base64",
+ "image",
  "keyring",
  "rune",
  "serde",
@@ -2579,7 +2580,7 @@ checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 [[package]]
 name = "rune"
 version = "0.0.1"
-source = "git+https://github.com/Makisuo/rune?rev=26a20301a1aff2983151e7a34c0efbf913ac2cce#26a20301a1aff2983151e7a34c0efbf913ac2cce"
+source = "git+https://github.com/Makisuo/rune?rev=081a2c3abc0dc0c00b4d8b6999a318627349d52b#081a2c3abc0dc0c00b4d8b6999a318627349d52b"
 dependencies = [
  "accesskit",
  "accesskit_macos",
@@ -2656,12 +2657,12 @@ dependencies = [
 [[package]]
 name = "rune-motion"
 version = "0.1.0"
-source = "git+https://github.com/Makisuo/rune?rev=26a20301a1aff2983151e7a34c0efbf913ac2cce#26a20301a1aff2983151e7a34c0efbf913ac2cce"
+source = "git+https://github.com/Makisuo/rune?rev=081a2c3abc0dc0c00b4d8b6999a318627349d52b#081a2c3abc0dc0c00b4d8b6999a318627349d52b"
 
 [[package]]
 name = "rune-staging"
 version = "0.0.1"
-source = "git+https://github.com/Makisuo/rune?rev=26a20301a1aff2983151e7a34c0efbf913ac2cce#26a20301a1aff2983151e7a34c0efbf913ac2cce"
+source = "git+https://github.com/Makisuo/rune?rev=081a2c3abc0dc0c00b4d8b6999a318627349d52b#081a2c3abc0dc0c00b4d8b6999a318627349d52b"
 dependencies = [
  "wgpu",
 ]
@@ -2669,7 +2670,7 @@ dependencies = [
 [[package]]
 name = "rune-taffy"
 version = "0.0.1"
-source = "git+https://github.com/Makisuo/rune?rev=26a20301a1aff2983151e7a34c0efbf913ac2cce#26a20301a1aff2983151e7a34c0efbf913ac2cce"
+source = "git+https://github.com/Makisuo/rune?rev=081a2c3abc0dc0c00b4d8b6999a318627349d52b#081a2c3abc0dc0c00b4d8b6999a318627349d52b"
 dependencies = [
  "taffy",
 ]

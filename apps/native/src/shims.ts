@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process"
+import desktopApp from "../../desktop/src-tauri/tauri.conf.json" with { type: "json" }
 
 /**
  * The browser surface Hazel's app touches outside rendering, for a Bun process with no DOM:
@@ -392,7 +393,8 @@ export const installShims = (env: ShimEnv) => {
 			return null
 		},
 		getComputedStyle: () => ({ getPropertyValue: () => "" }),
-		__APP_VERSION__: "native",
+		// The version the web build shows (its Vite config reads the same file).
+		__APP_VERSION__: desktopApp.version,
 	})
 	Object.defineProperty(globalThis, "navigator", {
 		configurable: true,

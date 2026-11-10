@@ -103,8 +103,11 @@ export type ElementInput = {
 	hasDescendant: (match: (node: NodeInfo) => boolean, childrenOnly?: boolean) => boolean
 }
 
-/** px, all of the parent ("full"), a share of the parent's width (`w-1/2`), or no size. */
-export type Px = number | "full" | "auto" | { frac: number }
+/**
+ * px, all of the parent ("full"), a share of the parent's width (`w-1/2`), the content's own
+ * size ("fit": `fit-content`, which a flex or block parent does not stretch), or no size.
+ */
+export type Px = number | "full" | "auto" | "fit" | { frac: number }
 export type Ring = { width: number; color: string; offset: number }
 export type Animation =
 	| { kind: "spin"; period: number }
@@ -116,6 +119,15 @@ export type TransitionChannel = "colors" | "opacity" | "layout" | "transform"
 /** Seconds, and the `cubic-bezier` control points (`linear` is `[0, 0, 1, 1]`). */
 export type Timing = { duration: number; delay: number; ease: [number, number, number, number] }
 export type Shadow = { x: number; y: number; blur: number; spread: number; color: string; inset: boolean }
+/** `text-box-trim` with `text-box-edge`: the metric each trimmed side ends at. Absent: untrimmed. */
+export type TextBox = { over?: "cap" | "ex" | "text"; under?: "alphabetic" | "text" }
+/** `mask-image`, as what the host draws: fading edges and one picture's alpha. */
+export type Mask = {
+	/** left top right bottom: the share of the box each edge fades out over, linearly. */
+	fade?: [number, number, number, number]
+	/** A picture whose alpha shows the box: centred, not repeated, `w` by `h` of the box. */
+	image?: { url: string; w: number; h: number }
+}
 export type Style = {
 	display?: "flex" | "block" | "inline" | "grid" | "none" | "contents"
 	dir?: "row" | "col"
@@ -200,6 +212,10 @@ export type Style = {
 	transition?: Partial<Record<TransitionChannel, Timing>>
 	/** `url` as written in the stylesheet; the host resolves it against the page. */
 	bgImage?: { url: string } | { gradient: { angle: number; stops: Array<{ color: string; at: number }> } }
+	/** `mask-image`: where the element and all inside it show. */
+	mask?: Mask
+	/** `text-box`: the text's box ends at these font metrics, not at the line's own edges. */
+	textBox?: TextBox
 	objectFit?: "cover" | "contain" | "fill" | "none" | "scale-down"
 	aspectRatio?: number
 	fontFamily?: "sans" | "mono"
@@ -856,6 +872,7 @@ export class StyleResolver {
 			shadows: null,
 			outline: {},
 			transition: {},
+			mask: {},
 		}
 		for (const { mode, d } of ordered) if (d.prop === "font-size") this.apply(acc, d, mode)
 		for (const { mode, d } of ordered) if (TEXT_FIRST.has(d.prop)) this.apply(acc, d, mode)
@@ -976,16 +993,10 @@ export class StyleResolver {
 		}
 		const fontSize = s.fontSize ?? acc.text.size
 		const units = this.units(acc.scope, d.prop === "font-size" ? acc.text.size : fontSize)
-		const len = (): number | "full" | "auto" | null => {
+		const len = (): number | "full" | "auto" | "fit" | null => {
 			if (v === "100%") return "full"
-			if (
-				v === "auto" ||
-				v === "fit-content" ||
-				v === "max-content" ||
-				v === "min-content" ||
-				v === "none"
-			)
-				return "auto"
+			if (v === "fit-content" || v === "max-content" || v === "min-content") return "fit"
+			if (v === "auto" || v === "none") return "auto"
 			return evalLength(v, units)
 		}
 		const num = (): number | null => {
@@ -1018,7 +1029,7 @@ export class StyleResolver {
 		}
 		const bound = (key: "minW" | "minH" | "maxW" | "maxH") => {
 			const n = len()
-			if (n === "auto") delete s[key]
+			if (n === "auto" || n === "fit") delete s[key]
 			else if (n === null) unsupported()
 			else s[key] = n
 		}
@@ -1507,6 +1518,31 @@ export class StyleResolver {
 			case "box-shadow":
 				acc.shadows = v
 				break
+			case "text-box":
+				acc.textBox = parseTextBox(v)
+				break
+			case "text-box-trim":
+				acc.textBox = { ...acc.textBox, trim: v }
+				break
+			case "text-box-edge":
+				acc.textBox = { ...acc.textBox, edge: v }
+				break
+			case "mask-image":
+			case "-webkit-mask-image":
+				acc.mask.image = v
+				break
+			case "mask-composite":
+				acc.mask.composite = v
+				break
+			case "mask-size":
+				acc.mask.size = v
+				break
+			case "mask-position":
+				acc.mask.position = v
+				break
+			case "mask-repeat":
+				acc.mask.repeat = v
+				break
 			case "outline":
 				acc.outline = parseOutlineShorthand(v)
 				break
@@ -1625,6 +1661,16 @@ export class StyleResolver {
 			const offset = o.offset === undefined ? 0 : evalLength(o.offset, units)
 			if (width !== null && width > 0 && c !== null && !c.endsWith("00") && offset !== null)
 				s.outline = { width, color: c, offset }
+		}
+		if (acc.textBox !== undefined) {
+			const textBox = composeTextBox(acc.textBox)
+			if (textBox === null) this.bump(this.unsupportedProps, `text-box-edge: ${acc.textBox.edge}`)
+			else if (textBox !== "none") s.textBox = textBox
+		}
+		if (acc.mask.image !== undefined) {
+			const mask = composeMask(acc.mask, units)
+			if (mask === null) this.bump(this.unsupportedProps, `mask-image: ${acc.mask.image}`)
+			else if (mask !== "none") s.mask = mask
 		}
 		const transition = composeTransition(acc.transition)
 		if (transition !== undefined) s.transition = transition
@@ -1877,6 +1923,10 @@ type Accumulator = {
 	/** The last `box-shadow` value: composed once every custom property is known. */
 	shadows: string | null
 	outline: { style?: string; width?: string; color?: string; offset?: string }
+	/** `mask-*` longhands as written, composed in `finish`. */
+	mask: MaskDecls
+	/** `text-box-trim` and `text-box-edge` as written, composed in `finish`. */
+	textBox?: { trim?: string; edge?: string }
 	/** The `animation` shorthand, substituted; composed in `finish` with its keyframes. */
 	animation?: string
 	/** `position: fixed`: percentage insets are of the window. */
@@ -2189,9 +2239,6 @@ const IGNORED = new Set([
 	"will-change",
 	"content",
 	"quotes",
-	"text-box",
-	"text-box-trim",
-	"text-box-edge",
 	"word-break",
 	"overflow-wrap",
 	"hyphens",
@@ -2205,9 +2252,6 @@ const IGNORED = new Set([
 	"accent-color",
 	"interpolate-size",
 	"backface-visibility",
-	"mask-image",
-	"-webkit-mask-image",
-	"mask-composite",
 	"-webkit-mask-composite",
 	"background-repeat",
 	"background-position",
@@ -2340,6 +2384,86 @@ const SIDE_ANGLES = new Map([
 	["top left", 315],
 	["left top", 315],
 ])
+
+/** The `text-box` shorthand: a trim keyword, then the edges; edges alone trim both sides. */
+const parseTextBox = (v: string): { trim: string; edge: string } => {
+	if (v === "normal") return { trim: "none", edge: "auto" }
+	const parts = splitTop(v, /\s/)
+	const trim = parts.find((part) => part === "none" || part.startsWith("trim-"))
+	const edge = parts.filter((part) => part !== trim).join(" ")
+	return { trim: trim ?? "trim-both", edge: edge === "" ? "auto" : edge }
+}
+
+/** The sides `text-box-trim` trims, each at its `text-box-edge` metric; null for an ideographic edge. */
+const composeTextBox = (decls: { trim?: string; edge?: string }): TextBox | "none" | null => {
+	const trim = decls.trim ?? "none"
+	if (trim === "none") return "none"
+	// `auto` is `text`: the font's own ascent and descent, which leaves only the half-leading out.
+	const [over = "text", under = over === "cap" || over === "ex" ? "text" : over] =
+		decls.edge === undefined || decls.edge === "auto" ? [] : splitTop(decls.edge, /\s/)
+	if (over !== "cap" && over !== "ex" && over !== "text") return null
+	if (under !== "alphabetic" && under !== "text") return null
+	const textBox: TextBox = {}
+	if (trim === "trim-both" || trim === "trim-start") textBox.over = over
+	if (trim === "trim-both" || trim === "trim-end") textBox.under = under
+	return textBox
+}
+
+type MaskDecls = { image?: string; composite?: string; size?: string; position?: string; repeat?: string }
+
+/**
+ * One `linear-gradient()` mask layer as the edge it fades: opaque up to a point, then a straight
+ * ramp to nothing at the box's edge. "opaque" when it hides nothing; null for any other shape.
+ */
+const maskFade = (layer: string): { edge: number; share: number } | "opaque" | null => {
+	const image = parseBackgroundImage(layer, "#000000ff")
+	if (image === null || image === "none" || image === undefined || !("gradient" in image)) return null
+	const { angle, stops } = image.gradient
+	// A mask shows by alpha (`mask-mode: match-source`): the colour itself is unused.
+	const alphas = stops.map((stop) => Number.parseInt(stop.color.slice(7, 9), 16) / 255)
+	if (alphas.every((a) => a === 1)) return "opaque"
+	// left top right bottom, by the side the gradient runs towards.
+	const edge = [270, 0, 90, 180].indexOf(angle)
+	const [from, to] = stops
+	if (edge < 0 || stops.length !== 2 || from === undefined || to === undefined) return null
+	if (alphas[0] !== 1 || alphas[1] !== 0 || to.at !== 1 || from.at < 0 || from.at >= 1) return null
+	return { edge, share: 1 - from.at }
+}
+
+/**
+ * `mask-image` as the host draws it: layers that all must show (`mask-composite: intersect`, as
+ * Tailwind's `mask-*` write it), each an edge fade or one centred picture. "none" when nothing
+ * is hidden; null when a layer is some other mask.
+ */
+const composeMask = (decls: MaskDecls, units: Units): Mask | "none" | null => {
+	const image = decls.image ?? "none"
+	if (image === "none" || image === "initial") return "none"
+	const layers = splitTop(image, /,/).map((layer) => layer.trim())
+	if (layers.length > 1 && decls.composite !== "intersect") return null
+	const mask: Mask = {}
+	for (const layer of layers) {
+		const url = /^url\(\s*["']?([^"')]*)["']?\s*\)$/.exec(layer)
+		if (url) {
+			// A picture stretched to a share of the box, once, in its middle.
+			const [w = "", h = w] = splitTop(decls.size ?? "auto", /\s/)
+			const [x = "", y = x] = splitTop(decls.position ?? "0% 0%", /\s/)
+			const centred = [x, y].every((p) => p === "center" || percentage(p, units) === 50)
+			const share = [percentage(w, units), percentage(h, units)]
+			const [sw, sh] = share
+			if (mask.image !== undefined || decls.repeat !== "no-repeat" || !centred) return null
+			if (sw === null || sw === undefined || sh === null || sh === undefined) return null
+			mask.image = { url: url[1] ?? "", w: sw / 100, h: sh / 100 }
+			continue
+		}
+		const fade = maskFade(layer)
+		if (fade === null) return null
+		if (fade === "opaque") continue
+		const edges = mask.fade ?? [0, 0, 0, 0]
+		edges[fade.edge] = Math.max(edges[fade.edge] ?? 0, fade.share)
+		mask.fade = edges
+	}
+	return mask.fade === undefined && mask.image === undefined ? "none" : mask
+}
 
 /** `background-image`: one `url()` or one `linear-gradient()`; "none" when there is none. */
 const parseBackgroundImage = (v: string, current: string): Style["bgImage"] | "none" | null => {

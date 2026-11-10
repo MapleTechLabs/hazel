@@ -51,6 +51,123 @@ pub fn take_arrived() -> bool {
     ARRIVED.swap(false, Ordering::SeqCst)
 }
 
+/// A picture composited with its mask, by what was asked for: the size it was last asked at,
+/// and the latest finished one (shown while a new size composites).
+struct Masked {
+    size: (u32, u32),
+    image: Option<Image>,
+}
+
+static MASKED: Mutex<Option<HashMap<String, Masked>>> = Mutex::new(None);
+
+/// Whether `src` is read from here (a `data:` URL or a file), not fetched.
+pub fn is_local(src: &str) -> bool {
+    !(src.starts_with("http://") || src.starts_with("https://"))
+}
+
+/// The bytes of a picture the host can read at once: a `data:` URL or a file among the app's
+/// public assets. `None` for an http(s) source, which arrives later.
+fn local_bytes(src: &str) -> Option<Vec<u8>> {
+    if let Some(rest) = src.strip_prefix("data:") {
+        return decode_data_url(rest).map(|(_, bytes)| bytes);
+    }
+    std::fs::read(local_path(src)?).ok()
+}
+
+/// `src` as a file: a path, else one relative to the app's public assets (`HAZEL_ASSET_ROOT`, or
+/// the bundle's).
+fn local_path(src: &str) -> Option<std::path::PathBuf> {
+    if !is_local(src) {
+        return None;
+    }
+    let path = std::path::PathBuf::from(src.strip_prefix("file://").unwrap_or(src));
+    let root = std::env::var_os("HAZEL_ASSET_ROOT")
+        .map(std::path::PathBuf::from)
+        .or_else(crate::platform::bundled_assets);
+    let path = match root {
+        Some(root) if !path.exists() => root.join(src.trim_start_matches('/')),
+        _ => path,
+    };
+    path.is_file().then_some(path)
+}
+
+/// `picture` as CSS draws it in a `w` by `h` box under a mask: fitted by `object-fit`, its alpha
+/// scaled by the mask picture's (centred, `share` of the box, nothing outside it) and by the
+/// edges that fade (`fade`: left top right bottom, each a share of the box). Straight RGBA rows.
+pub fn composite(
+    picture: &image::RgbaImage,
+    mask: Option<(&image::RgbaImage, [f32; 2])>,
+    fade: [f32; 4],
+    (w, h): (u32, u32),
+    fit: Option<&str>,
+) -> Vec<u8> {
+    use image::imageops::{FilterType, crop_imm, overlay, resize};
+    let (pw, ph) = (picture.width() as f32, picture.height() as f32);
+    let (bw, bh) = (w as f32, h as f32);
+    let mut out = match fit {
+        Some("cover") => {
+            // The middle of the picture with the box's shape, scaled to fill it.
+            let scale = (bw / pw).max(bh / ph);
+            let (cw, ch) = ((bw / scale).min(pw), (bh / scale).min(ph));
+            let (x, y) = ((pw - cw) / 2.0, (ph - ch) / 2.0);
+            let crop = crop_imm(
+                picture,
+                x as u32,
+                y as u32,
+                cw.max(1.0) as u32,
+                ch.max(1.0) as u32,
+            );
+            resize(&crop.to_image(), w, h, FilterType::Triangle)
+        }
+        Some("contain" | "scale-down" | "none") => {
+            let scale = (bw / pw).min(bh / ph);
+            let (dw, dh) = ((pw * scale).round().max(1.0), (ph * scale).round().max(1.0));
+            let fitted = resize(picture, dw as u32, dh as u32, FilterType::Triangle);
+            let mut canvas = image::RgbaImage::new(w, h);
+            let (x, y) = ((bw - dw) / 2.0, (bh - dh) / 2.0);
+            overlay(&mut canvas, &fitted, x as i64, y as i64);
+            canvas
+        }
+        _ => resize(picture, w, h, FilterType::Triangle),
+    };
+    let shape = mask.map(|(mask, [sw, sh])| {
+        let (mw, mh) = ((bw * sw).round().max(1.0), (bh * sh).round().max(1.0));
+        let scaled = resize(mask, mw as u32, mh as u32, FilterType::Triangle);
+        (
+            scaled,
+            ((bw - mw) / 2.0).round() as i64,
+            ((bh - mh) / 2.0).round() as i64,
+        )
+    });
+    // A linear ramp from the edge: whole once `share` of the box in from it.
+    let ramp = |at: f32, share: f32| {
+        if share > 0.0 {
+            (at / share).clamp(0.0, 1.0)
+        } else {
+            1.0
+        }
+    };
+    for (x, y, pixel) in out.enumerate_pixels_mut() {
+        let (fx, fy) = ((x as f32 + 0.5) / bw, (y as f32 + 0.5) / bh);
+        let mut alpha = ramp(fx, fade[0])
+            * ramp(fy, fade[1])
+            * ramp(1.0 - fx, fade[2])
+            * ramp(1.0 - fy, fade[3]);
+        if let Some((mask, ox, oy)) = &shape {
+            let (mx, my) = (x as i64 - ox, y as i64 - oy);
+            let inside =
+                mx >= 0 && my >= 0 && mx < mask.width() as i64 && my < mask.height() as i64;
+            alpha *= if inside {
+                mask.get_pixel(mx as u32, my as u32)[3] as f32 / 255.0
+            } else {
+                0.0
+            };
+        }
+        pixel[3] = (pixel[3] as f32 * alpha).round() as u8;
+    }
+    out.into_raw()
+}
+
 /// Decoded images by source, kept alive while the app may draw them.
 #[derive(Default)]
 pub struct Images {
@@ -72,22 +189,74 @@ impl Images {
         } else if src.starts_with("http://") || src.starts_with("https://") {
             remote(src, size_pt)?
         } else {
-            // A path, else one relative to the app's public assets (`HAZEL_ASSET_ROOT`, or the bundle's).
-            let path = std::path::PathBuf::from(src.strip_prefix("file://").unwrap_or(src));
-            let root = std::env::var_os("HAZEL_ASSET_ROOT")
-                .map(std::path::PathBuf::from)
-                .or_else(crate::platform::bundled_assets);
-            let path = match root {
-                Some(root) if !path.exists() => root.join(src.trim_start_matches('/')),
-                _ => path,
-            };
-            if !path.is_file() {
-                return None;
-            }
-            cache().file(path, size_pt, SCALE)
+            cache().file(local_path(src)?, size_pt, SCALE)
         };
         self.loaded.borrow_mut().insert(key, image.clone());
         Some(image)
+    }
+
+    /// The picture at `src` as it shows under `mask` in a box `size` points big (CSS
+    /// `mask-image` on an `<img>`), composited off the main thread. `None` until the first one
+    /// is ready, or when the picture or its mask picture cannot be read here (an http(s) one).
+    pub fn masked(
+        &self,
+        src: &str,
+        mask: &crate::wire::Mask,
+        size: [f32; 2],
+        fit: Option<&str>,
+    ) -> Option<Image> {
+        let px = |v: f32| (v * SCALE).round().clamp(1.0, 4096.0) as u32;
+        let size = (px(size[0]), px(size[1]));
+        let key = format!("{src}|{mask:?}|{fit:?}");
+        let mut masked = MASKED.lock().unwrap();
+        let map = masked.get_or_insert_with(HashMap::new);
+        if let Some(entry) = map.get_mut(&key) {
+            if entry.size == size {
+                return entry.image.clone();
+            }
+            entry.size = size;
+        } else {
+            map.insert(key.clone(), Masked { size, image: None });
+        }
+        let shown = map.get(&key).and_then(|entry| entry.image.clone());
+        drop(masked);
+        let (src, mask, fit) = (src.to_string(), mask.clone(), fit.map(str::to_string));
+        std::thread::spawn(move || {
+            let decode = |src: &str| {
+                let bytes = local_bytes(src)?;
+                Some(image::load_from_memory(&bytes).ok()?.to_rgba8())
+            };
+            let Some(picture) = decode(&src) else { return };
+            let shape = match &mask.image {
+                Some(m) => match decode(&m.url) {
+                    Some(shape) => Some((shape, [m.w.0, m.h.0])),
+                    None => return,
+                },
+                None => None,
+            };
+            let fade = mask.fade.map_or([0.0; 4], |f| f.map(|v| v.0));
+            let rgba = composite(
+                &picture,
+                shape.as_ref().map(|(shape, share)| (shape, *share)),
+                fade,
+                size,
+                fit.as_deref(),
+            );
+            let image = cache().rgba(size.0, size.1, rgba);
+            // A newer size asked for since then composites on its own thread; keep that one.
+            if let Some(entry) = MASKED
+                .lock()
+                .unwrap()
+                .as_mut()
+                .and_then(|m| m.get_mut(&key))
+                && entry.size == size
+            {
+                entry.image = Some(image);
+                ARRIVED.store(true, Ordering::SeqCst);
+                wake();
+            }
+        });
+        shown
     }
 
     /// An inline SVG drawn in its own colours (not tinted like an icon).
