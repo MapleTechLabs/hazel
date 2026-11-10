@@ -606,3 +606,9 @@ If you want to use the typography plugin, uncomment the line below.
 [data-html-render-pointer-outside] [id^="message-"]:hover:not([class*="bg-warning"]) {
 	background-color: transparent;
 }
+
+/* While a message list scrolls (`SCROLLING_ATTRIBUTE`, mount/message-list.ts), HTML render frames
+   ignore the pointer: a frame that slides under it would otherwise take the wheel and stop the scroll. */
+[data-list-scrolling] iframe {
+	pointer-events: none;
+}

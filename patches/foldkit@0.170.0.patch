@@ -985,3 +985,52 @@ index a26ae8ea901f2dc0af1a6977ade3ddc12df85b99..47c599347dcdda8c59755a610ea88628
              register: id => {
                  dialogIds.add(id);
              },
+diff --git a/dist/snabbdom/init.js b/dist/snabbdom/init.js
+index c6cf757..aa1246d 100644
+--- a/dist/snabbdom/init.js
++++ b/dist/snabbdom/init.js
+@@ -43,6 +43,16 @@ function createKeyToPreviousIndex(children, beginIndex, endIndex) {
+     }
+     return map;
+ }
++function createNextKeys(children, beginIndex, endIndex) {
++    const keys = new Set();
++    for (let childIndex = beginIndex; childIndex <= endIndex; ++childIndex) {
++        const key = children[childIndex]?.key;
++        if (key !== undefined) {
++            keys.add(key);
++        }
++    }
++    return keys;
++}
+ const hooks = [
+     'create',
+     'update',
+@@ -354,6 +364,7 @@ export function init(modules, domApi, options) {
+         let nextStartVnode = nextChildren[nextStartIndex];
+         let nextEndVnode = nextChildren[nextEndIndex];
+         let previousKeyToIndex;
++        let nextKeys;
+         let indexInPreviousChildren;
+         let vnodeToMove;
+         while (previousStartIndex <= previousEndIndex &&
+@@ -380,6 +391,19 @@ export function init(modules, domApi, options) {
+                 previousEndVnode = previousChildren[--previousEndIndex];
+                 nextEndVnode = nextChildren[--nextEndIndex];
+             }
++            // An old keyed node with no place in the new children is removed before anything is
++            // moved past it. Moving a node reloads any iframe in it, so children that only gain and
++            // lose nodes, keeping the order of the rest, never move a node.
++            else if (previousStartVnode.key !== undefined &&
++                !(nextKeys ??= createNextKeys(nextChildren, nextStartIndex, nextEndIndex)).has(previousStartVnode.key)) {
++                removeVnodes(parentElement, previousChildren, previousStartIndex, previousStartIndex);
++                previousStartVnode = previousChildren[++previousStartIndex];
++            }
++            else if (previousEndVnode.key !== undefined &&
++                !(nextKeys ??= createNextKeys(nextChildren, nextStartIndex, nextEndIndex)).has(previousEndVnode.key)) {
++                removeVnodes(parentElement, previousChildren, previousEndIndex, previousEndIndex);
++                previousEndVnode = previousChildren[--previousEndIndex];
++            }
+             else if (sameVnode(previousStartVnode, nextEndVnode)) {
+                 // Vnode moved right
+                 patchVnode(previousStartVnode, nextEndVnode, insertedVnodeQueue);
