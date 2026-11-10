@@ -1,0 +1,194 @@
+/*
+ * The image viewer's look (`chat/image-viewer.ts`); its gestures are in `viewer/gestures.ts`.
+ * The structure and timings follow Maple's docs screenshot viewer, a port of ramka (MIT).
+ */
+
+/* The morph. The plate on the page holds the shared name until the viewer renders, then the open
+   slide does; that render runs in a View Transition, so the browser carries the image between the
+   two boxes (`viewer/morph.ts`). */
+@media (prefers-reduced-motion: no-preference) {
+	:root:not(:has([data-image-viewer])) [data-image-viewer-origin],
+	[data-image-viewer] [data-viewer-media][data-active] {
+		view-transition-name: image-viewer-media;
+	}
+
+	:root:active-view-transition-type(image-viewer)::view-transition-old(root),
+	:root:active-view-transition-type(image-viewer)::view-transition-new(root) {
+		animation-duration: 300ms;
+		animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+	}
+
+	:root:active-view-transition-type(image-viewer)::view-transition-group(image-viewer-media) {
+		overflow: hidden;
+		border-radius: 6px;
+		animation-duration: 320ms;
+		animation-timing-function: cubic-bezier(0.44, 0.58, 0, 1);
+	}
+
+	/* No crossfade between the two bitmaps: only the viewer's image is drawn, stretched between the
+	   boxes. It is the incoming image on the way in and the outgoing one on the way out. */
+	:root:active-view-transition-type(image-viewer)::view-transition-old(image-viewer-media),
+	:root:active-view-transition-type(image-viewer)::view-transition-new(image-viewer-media) {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		animation: none;
+		mix-blend-mode: normal;
+	}
+
+	:root:active-view-transition-type(image-viewer):has(
+			[data-image-viewer-origin]
+		)::view-transition-new(image-viewer-media) {
+		opacity: 0;
+	}
+
+	:root:active-view-transition-type(image-viewer):has(
+			[data-image-viewer]
+		)::view-transition-new(image-viewer-media) {
+		opacity: 1;
+	}
+}
+
+/* The plate is in the viewer while it is open; left on the page, it would show through the backdrop. */
+:root:has([data-image-viewer]) [data-image-viewer-origin] {
+	opacity: 0;
+}
+
+/* Where the browser does not animate the open (reduced motion, no View Transitions), the viewer
+   still arrives rather than appearing. */
+@keyframes image-viewer-arrive {
+	from {
+		opacity: 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	[data-image-viewer] {
+		animation: image-viewer-arrive 150ms ease-out;
+	}
+}
+
+@supports not (view-transition-name: none) {
+	[data-image-viewer] {
+		animation: image-viewer-arrive 200ms ease-out;
+	}
+}
+
+[data-image-viewer] {
+	/* Room for the header and toolbar above, the thumbnails below, the step buttons beside. */
+	--viewer-inset-top: calc(4.75rem + env(safe-area-inset-top, 0px));
+	--viewer-inset-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+	--viewer-inset-inline: 0.75rem;
+}
+
+[data-image-viewer]:has([data-viewer-thumbs]) {
+	--viewer-inset-bottom: calc(7rem + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 768px) {
+	[data-image-viewer] {
+		--viewer-inset-bottom: calc(2.5rem + env(safe-area-inset-bottom, 0px));
+		--viewer-inset-inline: 2.5rem;
+	}
+
+	[data-image-viewer]:has([data-viewer-step]) {
+		--viewer-inset-inline: 5.5rem;
+	}
+
+	[data-image-viewer]:has([data-viewer-thumbs]) {
+		--viewer-inset-bottom: calc(7rem + env(safe-area-inset-bottom, 0px));
+	}
+}
+
+/* A real element, not ::backdrop: a pull thins it frame by frame while the image is dragged away,
+   then brings it back on the snap's own clock. */
+[data-viewer-backdrop] {
+	opacity: calc(1 - var(--viewer-pull-progress, 0) * 0.6);
+	transition: opacity var(--viewer-pull-snap-duration, 0s) var(--viewer-pull-snap-easing, linear);
+}
+
+[data-image-viewer][data-pulling] [data-viewer-backdrop] {
+	transition: none;
+}
+
+[data-viewer-content] {
+	overscroll-behavior: contain;
+	user-select: none;
+	-webkit-user-select: none;
+	touch-action: pan-x;
+}
+
+/* The carousel is a native scroller: swiping, momentum and snapping are the browser's. Vertical
+   touches are left to the gestures, which read them as a pull. */
+[data-viewer-slides] {
+	overflow-x: auto;
+	overflow-y: hidden;
+	overscroll-behavior-x: contain;
+	scroll-snap-type: x mandatory;
+	scroll-behavior: auto;
+	scrollbar-width: none;
+	overflow-anchor: none;
+	touch-action: pan-x;
+}
+
+[data-viewer-slides]::-webkit-scrollbar {
+	display: none;
+}
+
+[data-viewer-slide] {
+	padding: var(--viewer-inset-top) var(--viewer-inset-inline) var(--viewer-inset-bottom);
+	scroll-snap-align: center;
+	scroll-snap-stop: always;
+}
+
+[data-viewer-zoom] {
+	transform-origin: center center;
+	touch-action: pan-x;
+}
+
+[data-viewer-slide][data-active] [data-viewer-zoom] {
+	will-change: transform;
+}
+
+[data-viewer-media] {
+	cursor: zoom-in;
+	-webkit-user-drag: none;
+}
+
+[data-viewer-content][data-zoomed] [data-viewer-media] {
+	cursor: grab;
+}
+
+[data-viewer-content][data-zoomed] [data-viewer-media]:active {
+	cursor: grabbing;
+}
+
+/* Everything but the image steps back while it is pulled away, and what a zoomed image would run
+   under steps back while it is zoomed. */
+[data-viewer-chrome] {
+	transition:
+		opacity 200ms ease,
+		visibility 0s linear 0s;
+}
+
+[data-image-viewer]:is([data-pulling], [data-pull-dismissing]) [data-viewer-chrome],
+[data-viewer-content][data-zoomed]
+	:is([data-viewer-step], [data-viewer-thumbs], [data-viewer-caption], [data-viewer-author]) {
+	visibility: hidden;
+	opacity: 0;
+	transition:
+		opacity 200ms ease,
+		visibility 0s linear 200ms;
+}
+
+/* A finger swipes; the step buttons are for a pointer. */
+@media (hover: none), (max-width: 767px) {
+	[data-viewer-step] {
+		display: none;
+	}
+}
+
+[data-viewer-zoom-step][aria-disabled="true"] {
+	opacity: 0.4;
+	cursor: default;
+}
