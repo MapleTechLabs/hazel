@@ -140,6 +140,8 @@ export type CommitStats = {
 	readonly nodes: number
 	readonly reusedSubtrees: number
 	readonly handlers: number
+	/** The tree was the one the host already shows, with nothing to acknowledge: not sent. */
+	readonly skipped: boolean
 	/** Where `styleAndSerializeMs` went: collecting and compiling classes, the tree, the Mounts, sending. */
 	readonly phases?: {
 		readonly classesMs: number

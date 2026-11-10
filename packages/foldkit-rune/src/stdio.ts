@@ -73,12 +73,15 @@ export const stdioTransport = (onMessage: (message: HostToRuntime) => void) => {
 		exitWhenFlushed()
 	})
 	return {
-		send: (message: RuntimeToHost) => {
+		/** Answers the line's length, so a caller counting bytes need not serialize it again. */
+		send: (message: RuntimeToHost): number => {
 			pending += 1
-			process.stdout.write(`${JSON.stringify(message)}\n`, () => {
+			const line = JSON.stringify(message)
+			process.stdout.write(`${line}\n`, () => {
 				pending -= 1
 				exitWhenFlushed()
 			})
+			return line.length
 		},
 	}
 }

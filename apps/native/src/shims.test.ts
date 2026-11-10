@@ -91,6 +91,27 @@ describe("installShims", () => {
 		expect(opened).toEqual(["https://example.com/docs", "mailto:ada@example.com"])
 	})
 
+	it("tells only the window's capturing scroll listeners that an element scrolled", () => {
+		const { dispatchElementScroll } = installShims({
+			width: 800,
+			height: 600,
+			dark: false,
+			url: "http://app.hazel.test/",
+			openUrl: () => {},
+		})
+		const heard: Array<string> = []
+		const capturing = () => heard.push("capturing")
+		const bubbling = () => heard.push("bubbling")
+		window.addEventListener("scroll", capturing, { capture: true, passive: true })
+		window.addEventListener("scroll", bubbling, { passive: true })
+		dispatchElementScroll()
+		expect(heard).toEqual(["capturing"])
+		window.removeEventListener("scroll", capturing, { capture: true })
+		dispatchElementScroll()
+		expect(heard).toEqual(["capturing"])
+		window.removeEventListener("scroll", bubbling)
+	})
+
 	it("keeps <html>'s inline custom properties and reports each change", () => {
 		const { rootStyle, onRootStyle } = installShims({
 			width: 800,

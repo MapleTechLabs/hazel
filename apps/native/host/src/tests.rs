@@ -928,7 +928,7 @@ fn child(tag: &str, st: Value) -> Value {
 fn commit(rt: &mut Runtime<State>, root: Value) {
     let msg: TreeMsg =
         serde_json::from_value(json!({ "ack": 1, "root": root })).expect("wire tree");
-    rt.update(move |s: &mut State, _| s.apply(msg));
+    rt.update_if(move |s: &mut State, _| s.apply(msg));
     rt.frame(0.016);
 }
 
@@ -1545,6 +1545,36 @@ fn a_flex_1_body_in_an_overlay_column_takes_its_contents_height() {
 }
 
 #[test]
+fn the_tree_on_screen_again_changes_nothing_unless_a_field_owes_the_app_its_value() {
+    let field = with_attrs(e("input", json!({}), vec![]), json!({ "value": "" }));
+    let root = e("div", json!({ "w": 200, "h": 100 }), vec![field]);
+    let hash = root["h"].as_str().expect("hash").to_string();
+    let mut s = state(root);
+    let again = |ack: u64| -> TreeMsg {
+        serde_json::from_value(json!({
+            "ack": ack, "page": { "bg": "#ffffffff" }, "root": { "k": "r", "h": hash },
+        }))
+        .expect("wire tree")
+    };
+    assert!(!s.apply(again(1)), "the same tree is no change");
+    assert!(s.root.is_some(), "and the tree stays");
+    // Typed since, and reported as event 5: the app's empty value waits for that event's tree.
+    let typed = s.fields.get_mut("r/0").expect("the field");
+    typed.edit.text = "a".into();
+    typed.last_sent = 5;
+    assert!(!s.apply(again(4)), "a tree from before the edit keeps it");
+    assert_eq!(s.fields["r/0"].edit.text, "a");
+    assert!(
+        s.apply(again(5)),
+        "the tree that saw the edit puts the app's value back"
+    );
+    assert_eq!(s.fields["r/0"].edit.text, "");
+    let mut page: TreeMsg = again(6);
+    page.page.bg = Some("#000000ff".into());
+    assert!(s.apply(page), "a new page colour is a change");
+}
+
+#[test]
 fn elements_appear_and_vanish_at_once_as_in_the_dom() {
     let tree = |children: Vec<Value>| -> TreeMsg {
         serde_json::from_value(json!({
@@ -1563,14 +1593,14 @@ fn elements_appear_and_vanish_at_once_as_in_the_dom() {
             .any(|e| e.text.as_deref() == Some(text) && !e.exiting && e.opacity > 0.99)
     };
     let next = tree(vec![e("span", json!({}), vec![t("Toolbar")])]);
-    rt.update(move |s, _| s.apply(next));
+    rt.update_if(move |s, _| s.apply(next));
     rt.frame(0.016);
     assert!(
         shown(&rt, "Toolbar"),
         "an inserted element shows in full on its first frame"
     );
     let next = tree(vec![]);
-    rt.update(move |s, _| s.apply(next));
+    rt.update_if(move |s, _| s.apply(next));
     rt.frame(0.016);
     assert!(
         !rt.elements()

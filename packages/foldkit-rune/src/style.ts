@@ -44,7 +44,13 @@ type ContainerBox = { names: Array<string>; w?: number; h?: number }
 
 /** What an element passes down: inherited custom properties, pending chain rules, context. */
 export type Scope = {
+	/** One per distinct (core, box): what a caller compares to know nothing above an element changed. */
 	id: number
+	/**
+	 * Everything but `box`. Styles are cached by this, with the box dimensions a resolution read as
+	 * facts, so a box no descendant reads (a list's growing height) restyles nothing below it.
+	 */
+	core: number
 	vars: Map<string, string>
 	pending: Array<Pending>
 	/** Condition ids an ancestor satisfies, and the ones the parent itself satisfies. */
@@ -249,7 +255,57 @@ const UNLAYERED = LAYERS.length
 const ROOT_TEXT: TextContext = { color: "#000000ff", size: 16, line: { mult: 1.5 }, weight: 400 }
 
 /** One resolution's recorded dependence on the element beyond its classes and attributes. */
-type Fact = { test: (el: ElementInput) => boolean; value: boolean }
+type Fact = { test: (el: ElementInput, box: Box) => boolean; value: boolean }
+
+/** A scope without its box: the part interned once and shared by every box it is seen with. */
+type CoreScope = Omit<Scope, "id" | "box">
+
+/** A resolution as cached: the child's box is its own, or (`null`) the parent's passed through. */
+type Resolved = {
+	style: Style
+	childCore: CoreScope
+	childBox: Box | null
+	/** What the last caller got: handed out again while the child scope is the same. */
+	last?: { style: Style; scope: Scope }
+}
+
+/**
+ * A cache bounded by two generations: a full young one becomes the old one, and what the old
+ * one held and nobody asked for since is dropped. Inline styles (a virtual row's `top`) make
+ * keys without end; this keeps the ones in use.
+ */
+class Generations<V> {
+	private young = new Map<string, V>()
+	private old = new Map<string, V>()
+	constructor(private readonly limit: number) {}
+	get(key: string): V | undefined {
+		const fresh = this.young.get(key)
+		if (fresh !== undefined) return fresh
+		const kept = this.old.get(key)
+		if (kept !== undefined) this.set(key, kept)
+		return kept
+	}
+	set(key: string, value: V) {
+		if (this.young.size >= this.limit && !this.young.has(key)) {
+			this.old = this.young
+			this.young = new Map()
+		}
+		this.young.set(key, value)
+	}
+	clear() {
+		this.young.clear()
+		this.old.clear()
+	}
+	get size() {
+		return this.young.size + this.old.size
+	}
+}
+
+/** Distinct style keys kept per generation, and distinct (core, box) scopes. */
+const RESOLVED_LIMIT = 8192
+const SCOPE_LIMIT = 4096
+/** Answers kept for one key, told apart by their facts (position, siblings, the parent's box). */
+const ENTRIES_PER_KEY = 16
 
 export class StyleResolver {
 	/** Element rules by anchor class; `*` holds tag and universal rules. */
@@ -268,11 +324,11 @@ export class StyleResolver {
 	private css = ""
 	/** Declarations on `body`: the page behind the app's root element. */
 	private pageDecls: Array<Decl> = []
-	private scopes = new Map<string, Scope>()
-	private resolved = new Map<
-		string,
-		Array<{ facts: Array<Fact>; result: { style: Style; scope: Scope } }>
-	>()
+	private cores = new Map<string, CoreScope>()
+	private scopes = new Generations<Scope>(SCOPE_LIMIT)
+	private resolved = new Generations<Array<{ facts: Array<Fact>; result: Resolved }>>(RESOLVED_LIMIT)
+	/** The page's style by theme (`dark`), until the sheet or the root's properties change. */
+	private pages = new Map<boolean, PageStyle>()
 	private nextRuleId = 0
 	/** Never reset: a Scope held across a re-parse must not collide with a new one in the cache. */
 	private nextScopeId = 0
@@ -404,7 +460,7 @@ export class StyleResolver {
 	}
 
 	rootScope(dark: boolean): Scope {
-		return this.intern(`root:${dark}:${viewportSize.width}x${viewportSize.height}`, () => {
+		const core = this.intern(`root:${dark}:${viewportSize.width}x${viewportSize.height}`, () => {
 			const vars = new Map<string, string>()
 			for (const [name, p] of this.registered) vars.set(name, p.initial)
 			for (const [k, v] of this.vars.light) vars.set(k, v)
@@ -422,15 +478,17 @@ export class StyleResolver {
 				ancestors,
 				parents: new Set(),
 				text: { ...ROOT_TEXT, color: page.color ?? ROOT_TEXT.color },
-				box: { w: viewportSize.width, h: viewportSize.height },
 				containers: [],
 				flexParent: false,
 			}
 		})
+		return this.withBox(core, { w: viewportSize.width, h: viewportSize.height })
 	}
 
 	/** The page's own background and text colour, from the stylesheet's `body` rules. */
 	pageStyle(dark: boolean): PageStyle {
+		const cached = this.pages.get(dark)
+		if (cached !== undefined) return cached
 		const vars = new Map<string, string>(this.vars.light)
 		if (dark) for (const [k, v] of this.vars.dark) vars.set(k, v)
 		const page: PageStyle = {}
@@ -440,12 +498,14 @@ export class StyleResolver {
 			if (d.prop === "background-color") page.bg = c
 			if (d.prop === "color") page.color = c
 		}
+		this.pages.set(dark, page)
 		return page
 	}
 
 	/** `document.documentElement.style` custom properties; they beat the stylesheet's, as inline styles do. */
 	setRootProperties(properties: ReadonlyMap<string, string>) {
 		this.rootProperties = new Map(properties)
+		this.cores.clear()
 		this.scopes.clear()
 		this.resolved.clear()
 	}
@@ -485,10 +545,20 @@ export class StyleResolver {
 	}
 
 	/** One Scope object per distinct (parent, local vars, pending rules, context): the id keys the style cache. */
-	private intern(key: string, make: () => Omit<Scope, "id">): Scope {
+	private intern(key: string, make: () => Omit<CoreScope, "core">): CoreScope {
+		const existing = this.cores.get(key)
+		if (existing) return existing
+		const core = { core: ++this.nextScopeId, ...make() }
+		this.cores.set(key, core)
+		return core
+	}
+
+	/** The scope `core` is with `box`: one object, and one id, per distinct pair. */
+	private withBox(core: CoreScope, box: Box): Scope {
+		const key = `${core.core}|${box.w}x${box.h}`
 		const existing = this.scopes.get(key)
 		if (existing) return existing
-		const scope = { id: ++this.nextScopeId, ...make() }
+		const scope: Scope = { ...core, id: ++this.nextScopeId, box: { w: box.w, h: box.h } }
 		this.scopes.set(key, scope)
 		return scope
 	}
@@ -503,6 +573,8 @@ export class StyleResolver {
 		this.resolved.clear()
 		this.registered.clear()
 		this.keyframes.clear()
+		this.cores.clear()
+		this.pages.clear()
 		this.vars = { light: new Map(), dark: new Map() }
 		this.unsupportedSelectors.clear()
 		let order = 0
@@ -678,28 +750,42 @@ export class StyleResolver {
 
 	/** Computes one element's style in its scope and the scope its children inherit. */
 	resolve(el: ElementInput, scope: Scope, dark: boolean, viewport: number): { style: Style; scope: Scope } {
-		const key = `${scope.id}|${dark ? 1 : 0}|${viewport}x${viewportSize.height}|${el.tag ?? ""}|${el.classes.join(
+		const key = `${scope.core}|${dark ? 1 : 0}|${viewport}x${viewportSize.height}|${el.tag ?? ""}|${el.classes.join(
 			" ",
 		)}|${this.attrsKey(el.attrs)}|${el.inline === undefined ? "" : JSON.stringify(el.inline)}`
 		const entries = this.resolved.get(key) ?? []
-		const hit = entries.find((e) => e.facts.every((f) => f.test(el) === f.value))
-		if (hit) return hit.result
+		const box = scope.box
+		const hit = entries.find((e) => e.facts.every((f) => f.test(el, box) === f.value))
+		if (hit) return this.withChildScope(hit.result, box)
 		const facts: Array<Fact> = []
 		const seen = new Set<string>()
-		const {
-			style,
-			scope: childScope,
-			outlineHidden,
-		} = this.compute(el, scope, viewport, facts, NO_STATES, seen)
-		const result = {
+		const { style, childCore, childBox, outlineHidden } = this.compute(
+			el,
+			scope,
+			viewport,
+			facts,
+			NO_STATES,
+			seen,
+		)
+		const result: Resolved = {
 			style: this.withStates(style, outlineHidden, seen, (states) =>
 				this.compute(el, scope, viewport, facts, states, null),
 			),
-			scope: childScope,
+			childCore,
+			childBox,
 		}
+		// A box-reading element under a box that keeps changing: keep the newest answers only.
+		if (entries.length >= ENTRIES_PER_KEY) entries.shift()
 		entries.push({ facts, result })
 		this.resolved.set(key, entries)
-		return result
+		return this.withChildScope(result, box)
+	}
+
+	/** A cached resolution with its child scope in this box: the same object while the box holds. */
+	private withChildScope(result: Resolved, parentBox: Box): { style: Style; scope: Scope } {
+		const scope = this.withBox(result.childCore, result.childBox ?? parentBox)
+		if (result.last?.scope !== scope) result.last = { style: result.style, scope }
+		return result.last
 	}
 
 	/**
@@ -742,11 +828,27 @@ export class StyleResolver {
 		facts: Array<Fact>,
 		states: ReadonlySet<string>,
 		seen: Set<string> | null,
-	): { style: Style; scope: Scope; outlineHidden: boolean } {
+	): { style: Style; childCore: CoreScope; childBox: Box | null; outlineHidden: boolean } {
 		const ask = (test: (input: ElementInput) => boolean) => {
 			const value = test(el)
 			facts.push({ test, value })
 			return value
+		}
+		// The parent's content box, read lazily: a dimension the result took becomes a fact, so
+		// one it never read (most heights) can change without this element resolving again.
+		const { w: parentW, h: parentH } = scope.box
+		const read = { w: false, h: false }
+		const parentBox: Box = {
+			get w() {
+				if (!read.w) facts.push({ test: (_, box) => box.w === parentW, value: true })
+				read.w = true
+				return parentW
+			},
+			get h() {
+				if (!read.h) facts.push({ test: (_, box) => box.h === parentH, value: true })
+				read.h = true
+				return parentH
+			},
 		}
 		// Position and emptiness are read lazily: only a structural rule makes them part of the result.
 		const { index, count, empty } = el
@@ -867,6 +969,7 @@ export class StyleResolver {
 			text: scope.text,
 			vars,
 			scope,
+			parentBox,
 			containerType: "",
 			containerNames: [],
 			shadows: null,
@@ -901,7 +1004,7 @@ export class StyleResolver {
 		if (childGap !== undefined) style.childGap = childGap
 		if (hoverGroup || el.classes.some((c) => c === "group" || c.startsWith("group/")))
 			style.hoverGroup = true
-		if (seen === null) return { style, scope, outlineHidden }
+		if (seen === null) return { style, childCore: scope, childBox: null, outlineHidden }
 		// Conditions that hold on this element are context for others: not a state of its own.
 		recording = false
 		// Conditions this element satisfies, for its descendants and children.
@@ -913,7 +1016,10 @@ export class StyleResolver {
 			else parents.add(c.id)
 		}
 		const text = childText(scope.text, style, acc)
-		const box = style.display === "contents" ? scope.box : contentBox(style, scope.box)
+		// `display: contents` has no box: its children are laid out by the grandparent, in its box.
+		const contents = style.display === "contents"
+		const childBox = contents ? null : contentBox(style, parentBox)
+		const box = childBox ?? parentBox
 		const containers: Array<ContainerBox> =
 			acc.containerType === ""
 				? scope.containers
@@ -926,31 +1032,27 @@ export class StyleResolver {
 						...scope.containers,
 					]
 		const childPending = [...scope.pending.filter((p) => p.rel === "desc"), ...pending]
-		// `display: contents` has no box: its children are laid out by the grandparent.
-		const contents = style.display === "contents"
 		const flexParent = contents ? scope.flexParent : style.display === "flex" || style.display === "grid"
 		const key = [
 			flexParent ? "f" : "",
-			scope.id,
+			scope.core,
 			[...local].map(([k, v]) => `${k}:${v}`).join(";"),
 			childPending.map((p) => `${p.rule.id}.${p.step}.${p.rel}.${p.originHover ? 1 : 0}`).join(","),
 			[...ancestors].sort((a, b) => a - b).join(","),
 			[...parents].sort((a, b) => a - b).join(","),
 			JSON.stringify(text),
-			`${box.w}x${box.h}`,
 			JSON.stringify(containers),
 		].join("|")
-		const childScope = this.intern(key, () => ({
+		const childCore = this.intern(key, () => ({
 			vars,
 			pending: childPending,
 			ancestors,
 			parents,
 			text,
-			box,
 			containers,
 			flexParent,
 		}))
-		return { style, scope: childScope, outlineHidden }
+		return { style, childCore, childBox, outlineHidden }
 	}
 
 	private units(scope: Scope, em: number): Units {
@@ -1041,13 +1143,16 @@ export class StyleResolver {
 		const inset = (i: number, value: string) => {
 			// A percentage is of the containing block: the window for `fixed`, else (most often) the parent.
 			const horizontal = i % 2 === 0
-			const basis = acc.fixed
-				? horizontal
-					? viewportSize.width
-					: viewportSize.height
-				: horizontal
-					? acc.scope.box.w
-					: acc.scope.box.h
+			// Read only for a percentage: a box an inset never looked at is no fact about it.
+			const basis = !value.includes("%")
+				? undefined
+				: acc.fixed
+					? horizontal
+						? viewportSize.width
+						: viewportSize.height
+					: horizontal
+						? acc.parentBox.w
+						: acc.parentBox.h
 			const n = value === "auto" ? null : evalLength(value, units, basis)
 			if (n === null && value !== "auto") return unsupported()
 			const a = s.absolute ?? [null, null, null, null]
@@ -1918,6 +2023,8 @@ type Accumulator = {
 	text: TextContext
 	vars: Map<string, string>
 	scope: Scope
+	/** The parent's content box; reading a dimension records the result's dependence on it. */
+	parentBox: Box
 	containerType: "" | "size" | "inline-size"
 	containerNames: Array<string>
 	/** The last `box-shadow` value: composed once every custom property is known. */
@@ -1968,16 +2075,23 @@ const fractionOf = (v: string, units: Units): number | null => {
 }
 
 const contentBox = (s: Style, parent: Box): Box => {
-	const outer = (v: Px | undefined, p: number | undefined, from: number | null, to: number | null) => {
+	// The parent's dimension is read only where the result needs it (`parent` may record reads).
+	const outer = (v: Px | undefined, side: "w" | "h", from: number | null, to: number | null) => {
 		if (typeof v === "number") return v
-		if (v === "full") return p
-		if (typeof v === "object") return p === undefined ? undefined : p * v.frac
-		if (v === undefined && p !== undefined && from !== null && to !== null) return p - from - to
+		if (v === "full") return parent[side]
+		if (typeof v === "object") {
+			const p = parent[side]
+			return p === undefined ? undefined : p * v.frac
+		}
+		if (v === undefined && from !== null && to !== null) {
+			const p = parent[side]
+			return p === undefined ? undefined : p - from - to
+		}
 		return undefined
 	}
 	const [left = null, top = null, right = null, bottom = null] = s.absolute ?? []
-	const w = outer(s.w, parent.w, left, right)
-	const h = outer(s.h, parent.h, top, bottom)
+	const w = outer(s.w, "w", left, right)
+	const h = outer(s.h, "h", top, bottom)
 	const pad = s.pad ?? [0, 0, 0, 0]
 	const border = s.border ?? [0, 0, 0, 0]
 	return {

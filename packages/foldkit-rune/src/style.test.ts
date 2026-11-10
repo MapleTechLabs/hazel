@@ -419,6 +419,26 @@ describe("StyleResolver", () => {
 		expect([...styles.unsupportedProps.keys()].some((k) => k.startsWith("min-width:"))).toBe(true)
 	})
 
+	it("keeps the scope below a box whose height nothing there reads", () => {
+		styles.setViewport(1280, 800)
+		// A virtual list's wrapper grows as its rows are measured; the rows are placed in px.
+		const list = (height: string) => resolve("relative w-96", { extra: { inline: { height } } })
+		const row = (scope: Scope) =>
+			resolve("absolute inset-x-0", { scope, extra: { inline: { top: "40px" } } })
+		const short = list("400px")
+		const tall = list("900px")
+		expect(tall.scope.id).not.toBe(short.scope.id)
+		// The row took the list's width alone: what is inside it sees one scope at either height.
+		expect(row(tall.scope)).toBe(row(short.scope))
+		// A row that reads the height (both insets pinned, a percentage) sees each one.
+		const pinned = (scope: Scope) => resolve("absolute inset-0", { scope })
+		expect(pinned(tall.scope).scope.id).not.toBe(pinned(short.scope).scope.id)
+		const quarter = (scope: Scope) =>
+			resolve("absolute", { scope, extra: { inline: { top: "25%" } } }).style.absolute?.[1]
+		expect(quarter(short.scope)).toBe(100)
+		expect(quarter(tall.scope)).toBe(225)
+	})
+
 	it("resolves container units against the nearest sized container, or leaves them out", () => {
 		styles.setViewport(1280, 800)
 		const avatar = resolve("size-8")

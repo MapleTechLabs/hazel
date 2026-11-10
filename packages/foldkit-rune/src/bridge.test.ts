@@ -202,6 +202,82 @@ describe("makeElementBridge", () => {
 		expect(ids).toEqual(["list", "root"])
 	})
 
+	it("draws what a styled Mount writes on its element's style, hidden until the host has measured it", () => {
+		let restyles = 0
+		const bridge = makeElementBridge({
+			mounts: new Set(["ObserveList", "PlaceToolbar"]),
+			immediateMounts: new Set(["PlaceToolbar"]),
+			styledMounts: new Set(["PlaceToolbar"]),
+			send: () => {},
+			onRestyle: () => {
+				restyles += 1
+			},
+		})
+		const toolbar = mountVNode([])
+		toolbar.data.foldkitMount.name = "PlaceToolbar"
+		const other = mountVNode([])
+		const next = new Map()
+		bridge.recordElement("r", undefined, "div", {}, [], next)
+		bridge.recordElement("r/0", "r", "div", { id: "toolbar" }, [], next)
+		bridge.recordElement("r/1", "r", "div", { id: "other" }, [], next)
+		bridge.commit(
+			next,
+			new Map([
+				["r/0", toolbar],
+				["r/1", other],
+			]),
+		)
+		bridge.reportLayout("r/1", { x: 0, y: 0, width: 10, height: 10 })
+		const style = bridge.findById("toolbar")?.style ?? {}
+		style.position = "fixed"
+		style.top = "120px"
+		style.pointerEvents = "none"
+		style.top = "120px"
+		expect(restyles).toBe(3)
+		expect(style.top).toBe("120px")
+		// Placed from a size of zero: not shown yet.
+		expect(bridge.styleAt("r/0")).toEqual({
+			position: "fixed",
+			top: "120px",
+			"pointer-events": "none",
+			visibility: "hidden",
+		})
+		expect([...bridge.takeRestyled()]).toEqual(["r/0"])
+
+		bridge.reportLayout("r/0", { x: 0, y: 0, width: 200, height: 32 })
+		expect([...bridge.takeRestyled()]).toEqual(["r/0"])
+		style.pointerEvents = ""
+		expect(bridge.styleAt("r/0")).toEqual({ position: "fixed", top: "120px" })
+
+		// Any other Mount's element is placed by the host: its writes are not drawn.
+		const unstyled = bridge.findById("other")?.style ?? {}
+		unstyled.top = "5px"
+		expect(bridge.styleAt("r/1")).toBeUndefined()
+
+		// The Mount gone, the next one in its slot starts unstyled.
+		bridge.commit(record(bridge), new Map())
+		expect(bridge.styleAt("r/0")).toBeUndefined()
+	})
+
+	it("measures an element a ResizeObserver observes, and names a scroller by its overflow class", () => {
+		const sent: Array<HostElementCommand> = []
+		const bridge = makeElementBridge({ mounts: new Set(), send: (command) => sent.push(command) })
+		const next = new Map()
+		bridge.recordElement("r", undefined, "div", { id: "root" }, ["flex", "overflow-y-auto"], next)
+		bridge.recordElement("r/0", "r", "div", { id: "message" }, ["overflow-hidden"], next)
+		bridge.commit(next, new Map())
+		const message = bridge.findById("message")
+		sent.length = 0
+		// Reached by walking up: not observed until something asks for its size.
+		const scroller = message?.parentElement
+		expect(bridge.isObserved("r")).toBe(false)
+		expect(bridge.overflowYOf(scroller)).toBe("auto")
+		expect(bridge.overflowYOf(message)).toBe("visible")
+		new bridge.ResizeObserver(() => {}).observe(scroller)
+		expect(bridge.isObserved("r")).toBe(true)
+		expect(sent).toEqual([{ t: "measure", path: "r" }])
+	})
+
 	it("releases a Mount replaced by a different one in the same slot", () => {
 		const calls: Array<string> = []
 		const bridge = makeElementBridge({

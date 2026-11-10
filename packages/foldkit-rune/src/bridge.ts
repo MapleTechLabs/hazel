@@ -55,7 +55,10 @@ type ProxyElement = EventTarget & {
 	scrollIntoView(arg?: boolean | { block?: HostReveal["block"] }): void
 	focus(): void
 	blur(): void
-	/** Writes land nowhere: the view's classes and the host's layout place the element. */
+	/**
+	 * Writes are kept by path and drawn only for a `styledMounts` Mount's element: the view's
+	 * classes and the host's layout place every other one.
+	 */
 	readonly style: Record<string, unknown>
 	remove(): void
 }
@@ -153,6 +156,15 @@ export const makeElementBridge = (options: {
 	readonly onRemove?: (path: string) => void
 	/** `element.click()` on a proxy: the render target runs its click, or picks a file. */
 	readonly onClick?: (path: string) => void
+	/**
+	 * Mounts that place their own element by writing its inline style (`element.style.top = …`),
+	 * by name: what they write is drawn. The host places every other Mount's element.
+	 */
+	readonly styledMounts?: ReadonlySet<string>
+	/** A drawn inline style changed: the tree must be rendered again. */
+	readonly onRestyle?: () => void
+	/** An element scrolled, after its own `scroll` event: a capturing listener above it hears it. */
+	readonly onScroll?: () => void
 }) => {
 	let records = new Map<string, ElementRecord>()
 	const rects = new Map<string, Rect>()
@@ -168,6 +180,31 @@ export const makeElementBridge = (options: {
 	const observed = new Set<string>()
 	/** Paths observed since the last `takeObservedChanges`: their `o` flag changed. */
 	let newlyObserved = new Set<string>()
+	/** What was written to each element's `style`, by path and CSS property. */
+	const writtenStyles = new Map<string, Map<string, string>>()
+	/** Paths whose drawn inline style changed since the last `takeRestyled`. */
+	let restyled = new Set<string>()
+	const mountNameAt = (path: string) =>
+		(mounted.get(path) ?? awaitingLayout.get(path))?.data?.foldkitMount?.name
+	const isStyled = (path: string) => options.styledMounts?.has(mountNameAt(path) ?? "") === true
+	const restyle = (path: string) => {
+		restyled.add(path)
+		options.onRestyle?.()
+	}
+	const writeStyle = (path: string, name: string, value: unknown) => {
+		const property = name.startsWith("--") ? name : name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)
+		const text = value === null || value === undefined ? "" : String(value)
+		const written = writtenStyles.get(path) ?? new Map<string, string>()
+		if ((written.get(property) ?? "") === text) return
+		if (text === "") written.delete(property)
+		else written.set(property, text)
+		writtenStyles.set(path, written)
+		restyle(path)
+	}
+	const readStyle = (path: string, name: string) =>
+		writtenStyles
+			.get(path)
+			?.get(name.startsWith("--") ? name : name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)) ?? ""
 	const resizeObservers = new Map<string, Set<(target: ProxyElement) => void>>()
 	const mutationObservers = new Set<() => void>()
 	let mounted = new Map<string, AnyVNode>()
@@ -186,6 +223,11 @@ export const makeElementBridge = (options: {
 		}
 		if (existing) return existing
 		const ElementClass: new () => EventTarget = globalThis.HTMLElement
+		const styleMethods = {
+			setProperty: (name: string, value: unknown) => writeStyle(path, name, value),
+			removeProperty: (name: string) => writeStyle(path, name, ""),
+			getPropertyValue: (name: string) => readStyle(path, name),
+		}
 		const rect = () => rects.get(path) ?? { x: 0, y: 0, width: 0, height: 0 }
 		const record = () => records.get(path)
 		const setScrollTop = (top: number) => {
@@ -259,7 +301,21 @@ export const makeElementBridge = (options: {
 			},
 			click: { value: () => options.onClick?.(path) },
 			blur: { value: () => {} },
-			style: { value: { setProperty() {}, removeProperty() {}, getPropertyValue: () => "" } },
+			style: {
+				value: new Proxy(styleMethods, {
+					get: (methods, name) => {
+						if (typeof name !== "string") return undefined
+						if (name === "setProperty") return methods.setProperty
+						if (name === "removeProperty") return methods.removeProperty
+						if (name === "getPropertyValue") return methods.getPropertyValue
+						return readStyle(path, name)
+					},
+					set: (_, name, value) => {
+						if (typeof name === "string") writeStyle(path, name, value)
+						return true
+					},
+				}),
+			},
 			// A Mount taking its element out of the page (a portal it set up, released).
 			remove: { value: () => options.onRemove?.(path) },
 		}) as ProxyElement
@@ -352,6 +408,8 @@ export const makeElementBridge = (options: {
 			if (nextMounted.has(path)) continue
 			vnode.data?.hook?.destroy?.(vnode)
 			domElements.delete(path)
+			// The next Mount here starts from an element with no style of the last one's.
+			writtenStyles.delete(path)
 		}
 		mounted = nextMounted
 		for (const notify of mutationObservers) notify()
@@ -362,6 +420,8 @@ export const makeElementBridge = (options: {
 	const reportLayout = (path: string, rect: Rect) => {
 		const previous = rects.get(path)
 		rects.set(path, rect)
+		// Hidden until measured (`styleAt`): its first rect shows it.
+		if (previous === undefined && writtenStyles.has(path) && isStyled(path)) restyle(path)
 		const waiting = awaitingLayout.get(path)
 		if (waiting !== undefined) {
 			awaitingLayout.delete(path)
@@ -386,6 +446,7 @@ export const makeElementBridge = (options: {
 		queueMicrotask(() => {
 			scrollsToDispatch.delete(path)
 			proxies.get(path)?.dispatchEvent(new Event("scroll"))
+			options.onScroll?.()
 		})
 	}
 
@@ -560,6 +621,8 @@ export const makeElementBridge = (options: {
 		observe(target: unknown) {
 			if (!isProxy(target)) return
 			const path = target.__path
+			// An element reached by walking (`parentElement`) is not observed yet: its size is asked for.
+			proxyFor(path)
 			const notify = (proxy: ProxyElement) => {
 				const r = rects.get(path) ?? { x: 0, y: 0, width: 0, height: 0 }
 				const size = [{ inlineSize: r.width, blockSize: r.height }]
@@ -627,6 +690,32 @@ export const makeElementBridge = (options: {
 			const changes = newlyObserved
 			newlyObserved = new Set()
 			return changes
+		},
+		/**
+		 * The inline style a `styledMounts` Mount wrote on its element. An element whose size the
+		 * host has not reported yet stays hidden: the Mount placed it from a size of zero, and
+		 * places it again when the size arrives.
+		 */
+		styleAt: (path: string): Record<string, string> | undefined => {
+			const written = writtenStyles.get(path)
+			if (written === undefined || written.size === 0 || !isStyled(path)) return undefined
+			const style = Object.fromEntries(written)
+			return observed.has(path) && !rects.has(path) ? { ...style, visibility: "hidden" } : style
+		},
+		/** The paths whose `styleAt` changed since the last call. */
+		takeRestyled: (): ReadonlySet<string> => {
+			const changes = restyled
+			restyled = new Set()
+			return changes
+		},
+		/**
+		 * `getComputedStyle(element).overflowY`, from the element's classes: what an ancestor walk
+		 * looking for the nearest scroller reads.
+		 */
+		overflowYOf: (element: unknown): string => {
+			const classes = isProxy(element) ? (records.get(element.__path)?.classes ?? []) : []
+			const scrolling = classes.find((name) => /^overflow(-y)?-(auto|scroll)$/.test(name))
+			return scrolling === undefined ? "visible" : scrolling.endsWith("scroll") ? "scroll" : "auto"
 		},
 		/** A DOM-backed Mount at `path`: its name, args and element, for the app's native glue. */
 		domMountAt: (path: string) => {

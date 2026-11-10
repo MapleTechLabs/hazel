@@ -49,6 +49,8 @@ pub(crate) struct State {
     images: images::Images,
     /// Elements drawn at the window's root (`ov.portal`), by path, in tree order.
     portals: Vec<(String, Arc<Node>)>,
+    /// The content hash of the tree on screen, as the runtime sent its root.
+    root_hash: Option<String>,
 }
 
 static OUT: OnceLock<Mutex<Box<dyn Write + Send>>> = OnceLock::new();
@@ -59,10 +61,37 @@ static GEN: AtomicU64 = AtomicU64::new(0);
 static REPORTED: Mutex<Option<(u32, u32, bool)>> = Mutex::new(None);
 static ICONS: Mutex<Option<HashMap<String, &'static Icon>>> = Mutex::new(None);
 
+/// Lines on their way to the runtime, in order. One thread writes them, so the UI thread never
+/// waits on the pipe (the runtime may be mid-render), and what a frame reports (every observed
+/// row's rect, while a list scrolls) goes out in one write.
+static LINES: OnceLock<std::sync::mpsc::Sender<String>> = OnceLock::new();
+
 pub(crate) fn write_line(message: serde_json::Value) {
+    let line = format!("{message}\n");
+    // Tests read what was sent right after the frame that sent it.
+    if cfg!(test) {
+        write_now(&line);
+        return;
+    }
+    let lines = LINES.get_or_init(|| {
+        let (send, receive) = std::sync::mpsc::channel::<String>();
+        std::thread::spawn(move || {
+            for mut batch in receive.iter() {
+                while let Ok(more) = receive.try_recv() {
+                    batch.push_str(&more);
+                }
+                write_now(&batch);
+            }
+        });
+        send
+    });
+    let _ = lines.send(line);
+}
+
+fn write_now(text: &str) {
     if let Some(out) = OUT.get() {
         let mut out = out.lock().unwrap();
-        let _ = writeln!(out, "{message}");
+        let _ = out.write_all(text.as_bytes());
         let _ = out.flush();
     }
 }
@@ -536,8 +565,21 @@ fn child_path(parent: &str, index: usize, node: &Node) -> String {
 }
 
 impl State {
-    pub(crate) fn apply(&mut self, msg: TreeMsg) {
+    /// Takes the runtime's tree. Whether anything the view reads changed: a tree that is the
+    /// one on screen again (the app answered an event with no change) leaves the view as built.
+    pub(crate) fn apply(&mut self, msg: TreeMsg) -> bool {
         GEN.store(msg.generation, Ordering::SeqCst);
+        if let (wire::WireNode::Ref { h }, Some(shown), Some(root)) =
+            (&msg.root, &self.root_hash, &self.root)
+            && h == shown
+        {
+            // Its fields may still owe the app's value to an edit this tree acknowledges.
+            let fields_changed = sync_fields(root, "r", msg.ack, &mut self.fields);
+            let page_changed = self.page != msg.page;
+            self.page = msg.page;
+            return fields_changed || page_changed;
+        }
+        self.root_hash = msg.root.hash().map(str::to_string);
         let (root, subtrees) = self.subtrees.resolve(msg.root);
         // CSS collapses vertical margins in block flow; Rune's layout does not, so do it here.
         let root = margins::collapse(&root, false);
@@ -547,6 +589,7 @@ impl State {
         collect_portals(&root, "r", &mut self.portals);
         self.root = Some(root);
         self.subtrees = subtrees;
+        true
     }
 }
 
@@ -575,7 +618,8 @@ fn collect_portals(node: &Arc<Node>, path: &str, out: &mut Vec<(String, Arc<Node
 }
 
 /// Controlled inputs: take the app's `value` unless the user has typed past what the tree reflects.
-fn sync_fields(node: &Node, path: &str, ack: u64, fields: &mut HashMap<String, Field>) {
+/// Whether any field's text changed.
+fn sync_fields(node: &Node, path: &str, ack: u64, fields: &mut HashMap<String, Field>) -> bool {
     let Node::Elem {
         tag,
         attrs,
@@ -583,8 +627,9 @@ fn sync_fields(node: &Node, path: &str, ack: u64, fields: &mut HashMap<String, F
         ..
     } = node
     else {
-        return;
+        return false;
     };
+    let mut changed = false;
     if is_text_field(tag, attrs) || attrs.contains_key("data-editable") {
         let value = attrs.get("value").cloned().unwrap_or_default();
         let field = fields.entry(path.to_string()).or_insert_with(|| Field {
@@ -595,11 +640,13 @@ fn sync_fields(node: &Node, path: &str, ack: u64, fields: &mut HashMap<String, F
             field.edit.text = value;
             let end = field.edit.text.len();
             (field.edit.anchor, field.edit.focus) = (end, end);
+            changed = true;
         }
     }
     for (i, child) in children.iter().enumerate() {
-        sync_fields(child, &child_path(path, i, child), ack, fields);
+        changed |= sync_fields(child, &child_path(path, i, child), ack, fields);
     }
+    changed
 }
 
 struct Ctx<'a> {
@@ -718,7 +765,11 @@ fn build(node: &Arc<Node>, path: &str, inh: Inherit, ctx: &Ctx) -> Option<El> {
                 }
                 None => ctx.keys,
             };
-            let has_fields = ctx.s.fields.keys().any(|k| k.starts_with(path));
+            // The element itself or one below it: `r/1` is no ancestor of `r/10/field`.
+            let has_fields = ctx.s.fields.keys().any(|k| {
+                k.strip_prefix(path)
+                    .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+            });
             // An anchored panel takes its content's height: `flex-1` (a 0% basis) inside a box of
             // indefinite height is content-sized in CSS, where Rune's `grow` would collapse it. So
             // does a column in an overlay (a dialog's panel) that nothing gives a height.
@@ -2104,7 +2155,7 @@ fn main() {
     std::thread::spawn(move || {
         for msg in messages.iter() {
             match msg {
-                RuntimeMsg::Tree(tree) => handle.update(move |s: &mut State, _| s.apply(tree)),
+                RuntimeMsg::Tree(tree) => handle.update_if(move |s: &mut State, _| s.apply(tree)),
                 RuntimeMsg::Scroll { path, top, seq } => {
                     note_scroll(&path, seq);
                     handle.update(move |_: &mut State, tx| tx.scroll_to_instant(path, 0.0, top))

@@ -150,7 +150,8 @@ export type Env = { width: number; height: number; dark: boolean }
 export type RuneTargetOptions = {
 	readonly styles: StyleResolver
 	readonly env: Env
-	readonly send: (message: RuntimeToHost) => void
+	/** Sends one message; may answer how many characters it wrote, for the commit's stats. */
+	readonly send: (message: RuntimeToHost) => number | void
 	readonly onStats?: (stats: CommitStats) => void
 	readonly onRelease?: () => void
 	/** Overlays the app's overlay helpers asked for (portals, anchors, modals), drawn by the host. */
@@ -342,6 +343,62 @@ const hash = (text: string): string => {
 	return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36)
 }
 
+type ChildInfo = { readonly vnode: AnyVNode; readonly info: NodeInfo }
+
+/**
+ * A VNode's element children (text and comment nodes skipped) as selectors see them. Built once
+ * per VNode: a render never changes one it has returned, and an unchanged subtree is the same
+ * objects commit after commit.
+ */
+const childInfos = new WeakMap<object, ReadonlyArray<ChildInfo>>()
+const elementChildren = (vnode: AnyVNode): ReadonlyArray<ChildInfo> => {
+	const known = childInfos.get(vnode)
+	if (known !== undefined) return known
+	const kids = (vnode.children ?? []).filter(
+		(child): child is AnyVNode =>
+			typeof child !== "string" && child.sel !== undefined && child.sel !== "!",
+	)
+	const infos = kids.map((child, index) => ({
+		vnode: child,
+		info: {
+			tag: tagOf(child),
+			classes: classesOf(child),
+			attrs: attrsOf(child),
+			index,
+			count: kids.length,
+			empty: isEmpty(child),
+		},
+	}))
+	childInfos.set(vnode, infos)
+	return infos
+}
+
+/**
+ * Whether anything below a VNode matches, by VNode and matcher. A cached style re-asks its
+ * `:has()` on every commit with the matcher it was computed with, so below an unchanged VNode
+ * the answer is the one already given, without walking it again.
+ */
+const descendantAnswers = new WeakMap<object, WeakMap<object, boolean>>()
+const anyDescendant = (vnode: AnyVNode, match: (node: NodeInfo) => boolean): boolean => {
+	let answers = descendantAnswers.get(vnode)
+	const known = answers?.get(match)
+	if (known !== undefined) return known
+	const found = elementChildren(vnode).some(
+		(child) => match(child.info) || anyDescendant(child.vnode, match),
+	)
+	if (answers === undefined) {
+		answers = new WeakMap()
+		descendantAnswers.set(vnode, answers)
+	}
+	answers.set(match, found)
+	return found
+}
+
+const hasDescendant =
+	(vnode: AnyVNode) =>
+	(match: (node: NodeInfo) => boolean, childrenOnly = false): boolean =>
+		childrenOnly ? elementChildren(vnode).some((child) => match(child.info)) : anyDescendant(vnode, match)
+
 /**
  * A Foldkit RenderTarget that resolves each committed Document to the native host's wire tree.
  * Handler ids are stable per element path, so an unchanged subtree hashes the same between
@@ -362,6 +419,15 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 	let gen = 0
 	const handlerIds = new Map<string, number>()
 	let sentHashes = new Set<string>()
+	/** The last tree sent: its root, the newest event it acknowledged, and the page around it. */
+	let sent:
+		| {
+				readonly rootHash: string | undefined
+				readonly ack: number
+				readonly title: string
+				readonly page: { readonly bg?: string; readonly color?: string }
+		  }
+		| undefined
 	/**
 	 * Last commit's elements by path, for reuse: an element whose VNode is the same object, in the
 	 * same scope, place and context, sends its last hash and replays what it recorded.
@@ -396,32 +462,6 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		for (const name of classesOf(vnode)) into.add(name)
 		for (const child of vnode.children ?? []) collectClasses(child, into)
 	}
-
-	/** The element children of a VNode (text and comment nodes skipped), as selectors see them. */
-	const elementChildren = (vnode: AnyVNode): Array<{ vnode: AnyVNode; info: NodeInfo }> => {
-		const kids = (vnode.children ?? []).filter(
-			(child): child is AnyVNode =>
-				typeof child !== "string" && child.sel !== undefined && child.sel !== "!",
-		)
-		return kids.map((child, index) => ({
-			vnode: child,
-			info: {
-				tag: tagOf(child),
-				classes: classesOf(child),
-				attrs: attrsOf(child),
-				index,
-				count: kids.length,
-				empty: isEmpty(child),
-			},
-		}))
-	}
-
-	const hasDescendant =
-		(vnode: AnyVNode) =>
-		(match: (node: NodeInfo) => boolean, childrenOnly = false): boolean =>
-			elementChildren(vnode).some(
-				(child) => match(child.info) || (!childrenOnly && hasDescendant(child.vnode)(match)),
-			)
 
 	const commitDocument = (document: Document, documentAck: number) => {
 		const viewMs = frameStartedAt === 0 ? 0 : performance.now() - frameStartedAt
@@ -494,6 +534,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		const touched = [
 			...(options.overlays?.takeChanges() ?? []),
 			...(options.bridge?.takeObservedChanges() ?? []),
+			...(options.bridge?.takeRestyled() ?? []),
 			...widthArrived,
 		]
 		widthArrived.clear()
@@ -538,7 +579,9 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		): WireNode => {
 			if (typeof vnode === "string") return { k: "t", s: vnode }
 			if (vnode.sel === undefined) return { k: "t", s: vnode.text ?? "" }
-			const tag = tagOf(vnode)
+			// What the parent read of this element for its children's selectors, when it has one.
+			const own = position?.siblings[position.index]
+			const tag = own?.tag ?? tagOf(vnode)
 			if (NON_VISUAL_TAGS.has(tag)) return { k: "t", s: "" }
 			const last = subtreeCache.get(path)
 			if (
@@ -559,13 +602,18 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			}
 			nodes += 1
 			nextSeen.add(vnode)
-			const attrs = attrsOf(vnode)
+			const attrs = own?.attrs ?? attrsOf(vnode)
 			// Before the children: an overlay may render inside its own trigger.
 			if (attrs.id !== undefined) pathsById.set(attrs.id, path)
-			const classes = classesOf(vnode)
+			const classes = own?.classes ?? classesOf(vnode)
 			options.bridge?.recordElement(path, parentPath, tag, attrs, classes, records)
 			if (vnode.data?.foldkitMount !== undefined) mountVNodes.set(path, vnode)
-			const inline = anchoredInline(path, inlineStyleOf(vnode))
+			// What a Mount wrote on the element's `style` wins over the view's, as in the DOM.
+			const written = options.bridge?.styleAt(path)
+			const inline = anchoredInline(
+				path,
+				written === undefined ? inlineStyleOf(vnode) : { ...inlineStyleOf(vnode), ...written },
+			)
 			const resolved = styles.resolve(
 				{
 					tag,
@@ -578,7 +626,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 					},
 					index: position?.index,
 					count: position?.siblings.length,
-					empty: isEmpty(vnode),
+					empty: own?.empty ?? isEmpty(vnode),
 					hasDescendant: hasDescendant(vnode),
 				},
 				scope,
@@ -751,9 +799,6 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 				? { k: "t", s: "" }
 				: serialize(body, "r", undefined, styles.rootScope(env.dark), undefined, true, undefined)
 		handlers = nextHandlers
-		gen += 1
-		handlersByGen.set(gen, nextHandlers)
-		handlersByGen.delete(gen - HANDLER_GENERATIONS)
 		const treeDone = performance.now()
 		const previouslySent = sentHashes
 		sentHashes = nextHashes
@@ -764,24 +809,53 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		const startedMount = options.bridge?.commit(records, mountVNodes) === true
 		const mountsDone = performance.now()
 		if (startedMount && !isHoldingForMount) {
+			// Held: the host still shows the last tree it was sent, and presses on it run that
+			// tree's handlers.
 			sentHashes = previouslySent
 			isHoldingForMount = true
-			setTimeout(() => {
+			setImmediate(() => {
 				isHoldingForMount = false
 				if (lastDocument) commitDocument(lastDocument, lastDocumentAck)
-			}, 0)
+			})
 			return
 		}
-		const message: RuntimeToHost = {
-			t: "tree",
-			ack: documentAck,
-			gen,
-			title: document.title,
-			page: styles.pageStyle(env.dark),
-			root,
+		const page = styles.pageStyle(env.dark)
+		// The tree the host already shows, with no event of its to acknowledge: a scroll or a
+		// layout report the view answered with the same thing. Nothing to send or draw; presses on
+		// the tree on screen run this render's handlers.
+		const isUnchanged =
+			root.k === "r" &&
+			sent !== undefined &&
+			root.h === sent.rootHash &&
+			documentAck === sent.ack &&
+			document.title === sent.title &&
+			page.bg === sent.page.bg &&
+			page.color === sent.page.color
+		let bytes = 0
+		if (isUnchanged) handlersByGen.set(gen, nextHandlers)
+		else {
+			gen += 1
+			handlersByGen.set(gen, nextHandlers)
+			handlersByGen.delete(gen - HANDLER_GENERATIONS)
+			const message: RuntimeToHost = {
+				t: "tree",
+				ack: documentAck,
+				gen,
+				title: document.title,
+				page,
+				root,
+			}
+			const written = send(message)
+			// A transport that serializes says how much it wrote; only a stats reader pays for it otherwise.
+			if (typeof written === "number") bytes = written
+			else if (options.onStats !== undefined) bytes = JSON.stringify(message).length
+			sent = {
+				rootHash: root.k === "t" ? undefined : root.h,
+				ack: documentAck,
+				title: document.title,
+				page,
+			}
 		}
-		const line = JSON.stringify(message)
-		send(message)
 		const sendDone = performance.now()
 		options.onStats?.({
 			phases: {
@@ -792,10 +866,11 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			},
 			viewMs,
 			styleAndSerializeMs: performance.now() - started,
-			bytes: line.length,
+			bytes,
 			nodes,
 			reusedSubtrees,
 			handlers: nextHandlers.size,
+			skipped: isUnchanged,
 		})
 	}
 
@@ -885,11 +960,12 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		},
 		requestFrame: (frame) => {
 			isFramePending = true
-			setTimeout(() => {
+			// Not a 0 ms timer: Bun fires one about 1 ms late, which every key and frame would wait out.
+			setImmediate(() => {
 				isFramePending = false
 				frameStartedAt = performance.now()
 				frame()
-			}, 0)
+			})
 		},
 		release: () => options.onRelease?.(),
 	}
@@ -1004,12 +1080,12 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 	const refreshObserved = () => {
 		if (isRefreshScheduled || lastDocument === undefined) return
 		isRefreshScheduled = true
-		setTimeout(() => {
+		setImmediate(() => {
 			isRefreshScheduled = false
 			// A frame on its way commits a newer document with the same changes: committing the
 			// last one first would only delay it.
 			if (lastDocument && !isFramePending) commitDocument(lastDocument, lastDocumentAck)
-		}, 0)
+		})
 	}
 
 	/**
