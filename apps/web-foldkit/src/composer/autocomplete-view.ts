@@ -1,8 +1,9 @@
 import { Mount } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { cx } from "~/utils/cx"
-import { getStatusDotColor } from "~/utils/status"
+import { getEffectivePresenceStatus } from "~/utils/presence"
 import { avatar } from "../ui/avatar"
+import { presenceDot } from "../ui/presence-dot"
 import {
 	FitAutocompleteHeight,
 	listboxId,
@@ -16,18 +17,6 @@ import { commandTriggerContent, emojiTriggerContent } from "./trigger-views"
 
 /** `EditorAutocomplete` with the trigger lists (`MentionTrigger`, `CommandTrigger`, `EmojiTrigger`). */
 
-/** `AvatarOnlineIndicator` at size xs, inside `AvatarBadge`. */
-const statusDot = <M>(h: HtmlBuilder<M>, status: string) =>
-	h.span([
-		h.Class(
-			cx(
-				"absolute right-0 bottom-0 rounded-full ring-[1.5px] ring-bg",
-				getStatusDotColor(status),
-				"size-1.5",
-			),
-		),
-	])
-
 /** `MentionItem` from `triggers/mention-trigger.tsx`. */
 const mentionItem = <M>(h: HtmlBuilder<M>, option: MentionOption): Html =>
 	h.div(
@@ -39,7 +28,9 @@ const mentionItem = <M>(h: HtmlBuilder<M>, option: MentionOption): Html =>
 						src: option.avatarUrl,
 						seed: option.displayName,
 						alt: option.displayName,
-						...(option.status ? { badge: statusDot(h, option.status) } : {}),
+						...(option.status
+							? { badge: presenceDot(h, getEffectivePresenceStatus({ status: option.status })) }
+							: {}),
 					})
 				: h.div(
 						[

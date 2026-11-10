@@ -113,7 +113,7 @@ const memberRow = (
 								? h.span([
 										h.Class(
 											cn(
-												"absolute right-0 bottom-0 size-2.5 rounded-full border-2 border-bg",
+												"absolute right-0 bottom-0 size-3 rounded-full border-2 border-bg",
 												getStatusDotColor(member.presenceStatus),
 											),
 										),

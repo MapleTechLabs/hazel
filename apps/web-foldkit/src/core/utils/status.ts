@@ -13,7 +13,8 @@ export function getStatusDotColor(status?: PresenceStatus | string): string {
 		case "dnd":
 			return "bg-danger"
 		default:
-			return "bg-muted"
+			// Hollow: a filled gray dot disappears against dark avatars and backgrounds.
+			return "bg-bg inset-ring-2 inset-ring-muted-fg"
 	}
 }
 
