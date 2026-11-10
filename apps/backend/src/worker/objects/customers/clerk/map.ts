@@ -165,7 +165,11 @@ export const activityOps = (user: ClerkUser, organizationId: string): Array<Reco
 	return ops
 }
 
-/** A new session: the day is a sign-in for every account the user belongs to. */
+/**
+ * A new session: the day is a sign-in for every account the user belongs to. The contact comes
+ * first, as everywhere else — a user whose membership webhook has not landed yet would otherwise
+ * have their activity parked as an unmatched record instead of creating the contact it belongs to.
+ */
 export const sessionOps = (
 	session: ClerkSession,
 	organizationIds: ReadonlyArray<string>,
@@ -175,19 +179,19 @@ export const sessionOps = (
 	const day = dayOf(new Date(at))
 	return organizationIds.flatMap((organizationId): Array<IngestOp> => [
 		{
+			_tag: "contact",
+			externalId: session.user_id,
+			account: clerkRef(organizationId),
+			lastSignInAt: at,
+			lastSeenAt: at,
+		},
+		{
 			_tag: "activity",
 			contact: clerkRef(session.user_id),
 			account: clerkRef(organizationId),
 			day,
 			sessionCount: 1,
 			signedIn: true,
-		},
-		{
-			_tag: "contact",
-			externalId: session.user_id,
-			account: clerkRef(organizationId),
-			lastSignInAt: at,
-			lastSeenAt: at,
 		},
 	])
 }

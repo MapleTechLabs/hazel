@@ -182,7 +182,15 @@ describe("Clerk webhook events", () => {
 
 	it("session.created credits the day to the session's organization", async () => {
 		const ops = await run(deliver(envelope("session.created", SESSION_ADA)))
+		// The contact first: a user whose membership has not landed yet must not park as unmatched.
 		expect(ops).toEqual([
+			{
+				_tag: "contact",
+				externalId: USER_ADA.id,
+				account: { provider: "clerk", externalId: ORG_ACME.id },
+				lastSignInAt: "2026-11-10T08:21:00.000Z",
+				lastSeenAt: "2026-11-10T08:21:00.000Z",
+			},
 			{
 				_tag: "activity",
 				contact: { provider: "clerk", externalId: USER_ADA.id },
@@ -190,13 +198,6 @@ describe("Clerk webhook events", () => {
 				day: "2026-11-10",
 				sessionCount: 1,
 				signedIn: true,
-			},
-			{
-				_tag: "contact",
-				externalId: USER_ADA.id,
-				account: { provider: "clerk", externalId: ORG_ACME.id },
-				lastSignInAt: "2026-11-10T08:21:00.000Z",
-				lastSeenAt: "2026-11-10T08:21:00.000Z",
 			},
 		])
 	})

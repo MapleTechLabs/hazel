@@ -212,6 +212,24 @@ describe("Clerk ops through CustomerIngest", () => {
 			}),
 		))
 
+	it("creates the contact from a session that arrives before their membership webhook", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				// Only the organization is known: Ada has no contact row yet.
+				yield* world.ingest("clerk", [accountOp(org(ORG_ACME), "create")])
+				yield* world.ingest(
+					"clerk",
+					sessionOps(Schema.decodeUnknownSync(ClerkSession)(SESSION_ADA), [ORG_ACME.id]),
+				)
+				expect(activity(world)).toEqual([
+					{ day: "2026-11-10", signedIn: 1, sessionCount: 1, account: "Acme Analytics" },
+				])
+				// The activity belongs to a real contact, not to the unmatched queue.
+				expect(world.rows(`SELECT count(*) AS n FROM customer_unmatched_records`)).toEqual([{ n: 0 }])
+			}),
+		))
+
 	it("removes a contact when their membership goes, and raises contact.removed", () =>
 		run(
 			Effect.gen(function* () {
