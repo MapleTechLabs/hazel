@@ -213,6 +213,12 @@ export const installShims = (env: ShimEnv) => {
 	const g = globalThis as Record<string, unknown>
 	g.CSS ??= { escape: cssEscape, supports: () => false }
 	const windowTarget = new EventTarget()
+	// `scroll` does not bubble: only a capturing listener on the window hears an element's.
+	const capturedScrolls = new EventTarget()
+	const targetFor = (type: string, options?: boolean | AddEventListenerOptions) =>
+		type === "scroll" && (options === true || (typeof options === "object" && options.capture === true))
+			? capturedScrolls
+			: windowTarget
 	let url = new URL(env.url)
 	const entries: Array<string> = [url.href]
 	let index = 0
@@ -380,8 +386,16 @@ export const installShims = (env: ShimEnv) => {
 			return setTimeout(() => callback(deadline), 1)
 		},
 		cancelIdleCallback: (handle: ReturnType<typeof setTimeout>) => clearTimeout(handle),
-		addEventListener: windowTarget.addEventListener.bind(windowTarget),
-		removeEventListener: windowTarget.removeEventListener.bind(windowTarget),
+		addEventListener: (
+			type: string,
+			listener: EventListenerOrEventListenerObject | null,
+			options?: boolean | AddEventListenerOptions,
+		) => targetFor(type, options).addEventListener(type, listener, options),
+		removeEventListener: (
+			type: string,
+			listener: EventListenerOrEventListenerObject | null,
+			options?: boolean | EventListenerOptions,
+		) => targetFor(type, options).removeEventListener(type, listener, options),
 		dispatchEvent: windowTarget.dispatchEvent.bind(windowTarget),
 		innerWidth: env.width,
 		innerHeight: env.height,
@@ -422,7 +436,15 @@ export const installShims = (env: ShimEnv) => {
 		windowTarget.dispatchEvent(new Event("resize"))
 	}
 	const onRootStyle = (listener: () => void) => rootStyleListeners.add(listener)
-	return { updateEnv, history, location, rootStyle: rootStyle as ReadonlyMap<string, string>, onRootStyle }
+	return {
+		updateEnv,
+		history,
+		location,
+		rootStyle: rootStyle as ReadonlyMap<string, string>,
+		onRootStyle,
+		/** An element scrolled: the window's capturing `scroll` listeners hear it. */
+		dispatchElementScroll: () => capturedScrolls.dispatchEvent(new Event("scroll")),
+	}
 }
 
 /** Web and mail links open in the user's browser or mail app; any other scheme is dropped. */

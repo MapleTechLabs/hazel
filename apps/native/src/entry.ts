@@ -216,6 +216,10 @@ const bridge = makeElementBridge({
 	domMounts: new Map([["MountEditor", composer.makeEditorElement]]),
 	send: (command) => transport.send(command),
 	onObserve: () => rune.refreshObserved(),
+	// The message toolbar places itself on its message (`element.style.top`, `left`, `visibility`).
+	styledMounts: new Set(["PlaceMessageToolbar"]),
+	onRestyle: () => rune.refreshObserved(),
+	onScroll: () => shims.dispatchElementScroll(),
 	// `rune` is created below; a Mount clicks only after the first commit.
 	onClick: (path) => rune.click(path),
 	onRemove: (path) => {
@@ -259,9 +263,11 @@ const scheduleHeadlessDom = () => {
 }
 /** Theme tokens read through `getComputedStyle` (the HTML render theme) come from the stylesheet. */
 Object.assign(globalThis, {
-	getComputedStyle: () => ({
+	getComputedStyle: (element?: unknown) => ({
 		getPropertyValue: (name: string) =>
 			name.startsWith("--") ? styles.customProperty(name, rune.env.dark) : "",
+		// The message toolbar looks for its message's scroller.
+		overflowY: bridge.overflowYOf(element),
 	}),
 })
 

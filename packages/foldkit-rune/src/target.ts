@@ -534,6 +534,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		const touched = [
 			...(options.overlays?.takeChanges() ?? []),
 			...(options.bridge?.takeObservedChanges() ?? []),
+			...(options.bridge?.takeRestyled() ?? []),
 			...widthArrived,
 		]
 		widthArrived.clear()
@@ -607,7 +608,12 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			const classes = own?.classes ?? classesOf(vnode)
 			options.bridge?.recordElement(path, parentPath, tag, attrs, classes, records)
 			if (vnode.data?.foldkitMount !== undefined) mountVNodes.set(path, vnode)
-			const inline = anchoredInline(path, inlineStyleOf(vnode))
+			// What a Mount wrote on the element's `style` wins over the view's, as in the DOM.
+			const written = options.bridge?.styleAt(path)
+			const inline = anchoredInline(
+				path,
+				written === undefined ? inlineStyleOf(vnode) : { ...inlineStyleOf(vnode), ...written },
+			)
 			const resolved = styles.resolve(
 				{
 					tag,
