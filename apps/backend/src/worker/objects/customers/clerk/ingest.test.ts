@@ -251,9 +251,11 @@ describe("Clerk ops through CustomerIngest", () => {
 			Effect.gen(function* () {
 				const world = yield* makeCustomersWorld
 				yield* world.ingest("clerk", backfill)
-				yield* world.ingest("clerk", [accountDeletedOp(ORG_ACME.id)])
+				// `organization.deleted`, dated by the event: after the organization's last update.
+				const deletedAt = new Date(ORG_ACME.updated_at + 60_000).toISOString()
+				yield* world.ingest("clerk", [accountDeletedOp(ORG_ACME.id, deletedAt)])
 				expect(accounts(world).map((row) => row.name)).toEqual(["Globex"])
-				// Clerk's retries, observed before the deletion landed.
+				// Clerk's retries, observed before the deletion.
 				const observedAt = new Date(ORG_ACME.updated_at).toISOString()
 				yield* world.ingest("clerk", [
 					...membershipOps({

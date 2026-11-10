@@ -1,4 +1,4 @@
-/** Connecting: `validate` proves the key, and names the instance it opens when Clerk says. */
+/** Connecting: `validate` proves the key, and names the instance it opens. */
 import type { ConnectionConfig } from "@hazel/domain/customers"
 import { Effect, Redacted } from "effect"
 import { describe, expect, it } from "vitest"
@@ -32,11 +32,12 @@ describe("Clerk validate", () => {
 		expect(fake.calls.map((call) => call.path)).toEqual(["/organizations", "/instance"])
 	})
 
-	it("still connects when `/instance` is refused (403), with no instance to name", async () => {
-		expect(await validate(makeFakeClerk({ secretKey: API_KEY, instance: null }))).toEqual({
-			externalAccountId: null,
-			externalAccountName: null,
-		})
+	it("refuses to connect when `/instance` is refused (403): there is no instance id to record", async () => {
+		const error = await Effect.runPromise(
+			Effect.flip(validateWith(makeFakeClerk({ secretKey: API_KEY, instance: null }), API_KEY)),
+		)
+		expect(error).toMatchObject({ code: "provider", httpStatus: 403 })
+		expect(error.message).toMatch(/which instance/i)
 	})
 
 	it("refuses a key Clerk rejects as `auth`", async () => {

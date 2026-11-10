@@ -117,7 +117,7 @@ export const opsOfEvent = Effect.fn("Clerk.opsOfEvent")(function* (
 		}
 		case "organization.deleted": {
 			const deleted = yield* decodeAs(ClerkDeletedObject, data, type)
-			return deleted.id === undefined ? [] : [accountDeletedOp(deleted.id)]
+			return deleted.id === undefined ? [] : [accountDeletedOp(deleted.id, eventAt ?? undefined)]
 		}
 		case "organizationMembership.created":
 		case "organizationMembership.updated":
@@ -128,7 +128,11 @@ export const opsOfEvent = Effect.fn("Clerk.opsOfEvent")(function* (
 				onNoMatch,
 				// A removal writes the contact only, never the (possibly deleted) organization.
 				removed: type === "organizationMembership.deleted",
-				observedAt: observed(membership.updated_at),
+				// A removal is dated by the event (it happened then), an update by the record.
+				observedAt:
+					type === "organizationMembership.deleted"
+						? (eventAt ?? observed(membership.updated_at))
+						: observed(membership.updated_at),
 			})
 		}
 		case "user.created":
@@ -172,9 +176,10 @@ export const opsOfEvent = Effect.fn("Clerk.opsOfEvent")(function* (
 
 /**
  * Verify the delivery, then map it. Core refuses a connection with no signing secret before this.
- * `instanceId` is the Clerk instance the connection's secret key opens (null when Clerk did not
- * say): an event from any other instance is refused, so a development instance's webhook cannot
- * write into a production connection, nor make Hazel fetch its users with the production key.
+ * `instanceId` is the Clerk instance the connection's secret key opens (`validate`'s
+ * `externalAccountId`): an event stamped with any other instance is refused, so a development
+ * instance's webhook cannot write into a production connection, nor make Hazel fetch its users
+ * with the production key.
  */
 export const receiveWebhook = Effect.fn("Clerk.receiveWebhook")(function* (input: {
 	readonly get: ClerkGet
@@ -201,7 +206,7 @@ export const receiveWebhook = Effect.fn("Clerk.receiveWebhook")(function* (input
 	)
 	yield* Effect.annotateCurrentSpan("clerk.webhook.type", envelope.type)
 	const instance = envelope.instance_id ?? null
-	if (input.instanceId !== null && instance !== null && instance !== input.instanceId) {
+	if (instance !== null && instance !== input.instanceId) {
 		return yield* reject(
 			"instance_mismatch",
 			"The event comes from another Clerk instance than the connection's secret key opens",

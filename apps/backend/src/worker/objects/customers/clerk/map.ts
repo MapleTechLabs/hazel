@@ -119,13 +119,21 @@ export const domainsAccountOp = (
 	return op
 }
 
-export const accountDeletedOp = (organizationId: string): UpsertAccount => ({
-	_tag: "account",
-	externalId: organizationId,
-	sameAs: [],
-	onNoMatch: "unmatched",
-	deleted: true,
-})
+/**
+ * The organization is gone. `observedAt` (the event's time) dates the deletion, so a late delivery
+ * observed before it leaves the account deleted.
+ */
+export const accountDeletedOp = (organizationId: string, observedAt?: IsoTimestamp): UpsertAccount => {
+	const op: Types.Mutable<UpsertAccount> = {
+		_tag: "account",
+		externalId: organizationId,
+		sameAs: [],
+		onNoMatch: "unmatched",
+		deleted: true,
+	}
+	if (observedAt !== undefined) op.observedAt = observedAt
+	return op
+}
 
 /**
  * A membership, with the user record behind it when we have one. Without it (a membership webhook

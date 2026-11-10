@@ -90,12 +90,14 @@ describe("accountOp", () => {
 	})
 
 	it("marks a deleted organization's ref stale rather than guessing at a new one", () => {
-		expect(accountDeletedOp(acme.id)).toEqual({
+		const at = "2026-03-01T00:00:00.000Z"
+		expect(accountDeletedOp(acme.id, at)).toEqual({
 			_tag: "account",
 			externalId: acme.id,
 			sameAs: [],
 			onNoMatch: "unmatched",
 			deleted: true,
+			observedAt: at,
 		} satisfies UpsertAccount)
 	})
 })

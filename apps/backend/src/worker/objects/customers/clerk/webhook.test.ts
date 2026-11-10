@@ -99,8 +99,9 @@ describe("Clerk webhook verification", () => {
 		const body = envelope("organization.updated", ORG_ACME)
 		const error = await run(Effect.flip(deliver(body, { instanceId: "ins_2development000000000" })))
 		expect(error.message).toMatch(/another Clerk instance/i)
-		// Unchecked only when Clerk never said which instance the key opens.
-		expect(tags(await run(deliver(body, { instanceId: null })))).toEqual(["account"])
+		// A connection with no instance on record cannot vouch for any.
+		const unknown = await run(Effect.flip(deliver(body, { instanceId: null })))
+		expect(unknown.message).toMatch(/another Clerk instance/i)
 	})
 
 	it("refuses a subscribed event whose payload is malformed, rather than retrying it forever", async () => {
@@ -125,14 +126,21 @@ describe("Clerk webhook events", () => {
 		})
 	})
 
-	it("organization.deleted stales the ref; a payload with no id is a no-op", async () => {
+	it("organization.deleted stales the ref, dated by the event; a payload with no id is a no-op", async () => {
 		const ops = await run(
 			deliver(
 				envelope("organization.deleted", { object: "organization", id: ORG_ACME.id, deleted: true }),
 			),
 		)
 		expect(ops).toEqual([
-			{ _tag: "account", externalId: ORG_ACME.id, sameAs: [], onNoMatch: "unmatched", deleted: true },
+			{
+				_tag: "account",
+				externalId: ORG_ACME.id,
+				sameAs: [],
+				onNoMatch: "unmatched",
+				deleted: true,
+				observedAt: "2026-11-10T08:21:01.000Z",
+			},
 		] satisfies Array<UpsertAccount>)
 		expect(
 			await run(deliver(envelope("organization.deleted", { object: "organization", deleted: true }))),
@@ -154,7 +162,8 @@ describe("Clerk webhook events", () => {
 		const ops = await run(deliver(envelope("organizationMembership.deleted", MEMBERSHIP_ADA_ADMIN)))
 		// An account op here would revive an organization deleted with its memberships.
 		expect(tags(ops)).toEqual(["contact"])
-		expect((ops[0] as UpsertContact).removed).toBe(true)
+		// Dated by the event, when the membership went, not by its last update.
+		expect(ops[0]).toMatchObject({ removed: true, observedAt: "2026-11-10T08:21:01.000Z" })
 	})
 
 	it("user.updated asks Clerk for the user's memberships and writes one contact per account", async () => {

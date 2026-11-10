@@ -33,16 +33,19 @@ _is_ the Clerk org id, and Maple's `GroupId` is too (`UpsertAccount.sameAs`).
    stored encrypted in `customer_connection_secrets` and decrypted only to call Clerk or verify a
    delivery.
 
-Connecting validates the key with one `GET /organizations?limit=1` and then, best-effort,
-`GET /instance`, whose id is stored as the connection's `externalAccountId` (and re-read when the
-key changes) and names the instance in the UI. Without a signing secret the connection still works,
-but only through the scheduled sweep (core refuses its deliveries with a 400).
+Connecting validates the key with one `GET /organizations?limit=1` and then `GET /instance`, whose
+id is stored as the connection's `externalAccountId` (and re-read when the key changes: a key of
+another instance makes core drop the old instance's data) and names the instance in the UI. The id
+is required: a Clerk secret key carries no instance id of its own, so when `/instance` is refused
+there is nothing stable to fall back on, and connecting fails with a message saying so. A secret
+key opens exactly one instance, so what a sweep lists is always the connection's. Without a signing
+secret the connection still works, but only through the scheduled sweep (core refuses its
+deliveries with a 400).
 
 Deliveries are verified with Svix's scheme (`customers/svix.ts`): HMAC-SHA256 over the raw body,
 and a `svix-timestamp` outside ±5 minutes is refused, so a captured delivery cannot be replayed. An
 event whose `instance_id` is not the instance the secret key opens is refused too, so a development
-instance's signing secret next to a production key cannot write test data (when `GET /instance` was
-not available at connect time there is nothing to compare against, and the check is skipped).
+instance's signing secret next to a production key cannot write test data.
 
 Refused deliveries are answered 400. Svix retries every non-2xx on its schedule until it gives up,
 so the adapter refuses only what a retry cannot fix (signature, replay window, a payload that does
@@ -78,8 +81,9 @@ Ingest raises `contact.joined`, `contact.removed` and `contact.first_active` its
 does not duplicate them.
 
 **Ordering.** Account and contact ops carry `observedAt`: a webhook's is the record's `updated_at`
-(else the event's `timestamp`), a sweep's the time it asked Clerk. Ingest ignores an op observed
-before the record's deletion, so a late retry of `organization.updated` cannot revive a deleted
+(else the event's `timestamp`), a sweep's the time it asked Clerk; `organization.deleted` and
+`organizationMembership.deleted` are dated by the event's `timestamp`. Ingest ignores an op observed
+at or before the deletion, so a late retry of `organization.updated` cannot revive a deleted
 organization, and `organizationMembership.deleted` never writes the organization at all.
 
 **No domain matching.** Clerk account ops never set `matchByDomain`: two organizations sharing a
