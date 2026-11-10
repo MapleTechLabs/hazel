@@ -1,7 +1,7 @@
 import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { IconCheck, IconCube, IconDownload } from "../../../icons"
-import { isDesktop } from "../../../platform/desktop"
+import { hasUpdater } from "../../../platform/desktop"
 import * as Updates from "../../../platform/updates"
 import { badge } from "../../../ui/badge"
 import { button } from "../../../ui/button"
@@ -283,7 +283,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 					),
 				],
 			),
-			...(isDesktop ? appUpdates(h, model, shared.desktopUpdate) : []),
+			...(hasUpdater ? appUpdates(h, model, shared.desktopUpdate) : []),
 		],
 	),
 )

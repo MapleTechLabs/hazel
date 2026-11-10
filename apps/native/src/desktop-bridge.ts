@@ -1,33 +1,90 @@
 /**
- * The three Tauri APIs the app's desktop sign-in uses (`web-foldkit/src/platform/desktop-auth.ts`),
+ * The Tauri APIs the app's desktop sign-in uses (`web-foldkit/src/platform/desktop-auth.ts`),
  * answered by the native host: `core.invoke` for the keychain vault, `deepLink` for the callback
- * the system opens with the app, and `opener` for the system browser. Installed as
+ * the system opens with the app, and `opener` for the system browser. A release bundle also gets
+ * the two its updates use (`web-foldkit/src/platform/updates.ts`): `updater` (check, download,
+ * install, done by the host on its own bundle) and `process.relaunch`. Installed as
  * `window.__TAURI__` without `__TAURI_INTERNALS__`, so the app's other Tauri features stay off.
  */
 import type { HostToRuntime, RuntimeToHost } from "@hazel/foldkit-rune"
 
 type VaultRequest = Extract<RuntimeToHost, { t: "vault" }>
 type VaultAnswer = Extract<HostToRuntime, { t: "vault" }>
+type UpdateRequest = Extract<RuntimeToHost, { t: "update" }>
+type UpdateAnswer = Extract<HostToRuntime, { t: "update" }>
+type UpdateProgress = Extract<HostToRuntime, { t: "updateProgress" }>
+type HostRequest = VaultRequest | UpdateRequest | Extract<RuntimeToHost, { t: "relaunch" }>
+
+/** The download events Tauri's `Update.download` reports, as `updates.ts` reads them. */
+export type DownloadEvent =
+	| { readonly event: "Started"; readonly data: { readonly contentLength?: number } }
+	| { readonly event: "Progress"; readonly data: { readonly chunkLength: number } }
+	| { readonly event: "Finished" }
 
 /** Links kept before the sign-in listens: the one that launched the app, at most a few. */
 const MAX_QUEUED_LINKS = 8
 
 export const makeDesktopBridge = (options: {
-	readonly send: (request: VaultRequest) => void
+	readonly send: (request: HostRequest) => void
 	/** Opens a web link in the system browser. */
 	readonly openUrl: (url: string) => void
+	/** The host can update this app (a release bundle): offer `updater` and `process`. */
+	readonly updates?: boolean
 }) => {
 	let nextId = 0
 	const waiting = new Map<
 		number,
-		{ resolve: (record: string | null) => void; reject: (error: Error) => void }
+		{ resolve: (answer: VaultAnswer | UpdateAnswer) => void; reject: (error: Error) => void }
 	>()
-	const vault = (request: { op: "read" } | { op: "write"; record: string }) =>
-		new Promise<string | null>((resolve, reject) => {
+	/** Sends a request with a fresh id; the host's answer with that id settles it. */
+	const request = <A extends VaultAnswer | UpdateAnswer>(make: (id: number) => HostRequest) =>
+		new Promise<A>((resolve, reject) => {
 			nextId += 1
-			waiting.set(nextId, { resolve, reject })
-			options.send({ t: "vault", id: nextId, ...request })
+			waiting.set(nextId, { resolve: (answer) => resolve(answer as A), reject })
+			options.send(make(nextId))
 		})
+	const vault = (body: { op: "read" } | { op: "write"; record: string }) =>
+		request<VaultAnswer>((id) => ({ t: "vault", id, ...body })).then((answer) => answer.record ?? null)
+
+	const progressListeners = new Map<number, (message: UpdateProgress) => void>()
+	const update = (op: UpdateRequest["op"]) => request<UpdateAnswer>((id) => ({ t: "update", id, op }))
+	/** Downloads the update `check` found, reporting progress as Tauri's events. */
+	const download = (onEvent?: (event: DownloadEvent) => void) => {
+		let started = false
+		let reported = 0
+		return request<UpdateAnswer>((id) => {
+			progressListeners.set(id, ({ downloaded, total }) => {
+				if (!started) {
+					started = true
+					onEvent?.({ event: "Started", data: total == null ? {} : { contentLength: total } })
+				}
+				if (downloaded > reported) {
+					onEvent?.({ event: "Progress", data: { chunkLength: downloaded - reported } })
+					reported = downloaded
+				}
+			})
+			return { t: "update", id, op: "download" }
+		}).then(() => onEvent?.({ event: "Finished" }))
+	}
+	const updater = {
+		/** The newer release, as Tauri's `Update` (what `updates.ts` reads of it), or `null`. */
+		check: () =>
+			update("check").then((answer) =>
+				answer.version === undefined
+					? null
+					: {
+							version: answer.version,
+							body: answer.notes ?? undefined,
+							download,
+							install: () => update("install").then(() => undefined),
+						},
+			),
+	}
+	const appProcess = {
+		/** The host quits and opens the app again: this runtime ends with it. */
+		relaunch: () => Promise.resolve(options.send({ t: "relaunch" })),
+		exit: () => Promise.reject(new Error("the native app quits through relaunch")),
+	}
 
 	const queued: Array<string> = []
 	const listeners = new Set<(urls: ReadonlyArray<string>) => void>()
@@ -40,27 +97,38 @@ export const makeDesktopBridge = (options: {
 		return Promise.reject(new Error(`the native app has no command ${command}`))
 	}
 
+	const deepLink = {
+		onOpenUrl: (listener: (urls: ReadonlyArray<string>) => void) => {
+			listeners.add(listener)
+			return Promise.resolve(() => void listeners.delete(listener))
+		},
+		/** The links that arrived before anyone listened (a cold start from the callback). */
+		getCurrent: () => Promise.resolve(queued.length === 0 ? null : queued.splice(0)),
+	}
+	const opener = {
+		openUrl: (url: string) => Promise.resolve(options.openUrl(url)),
+	}
+	// `updater` and `process` only for a bundle the host can update; elsewhere the app sees none.
 	const tauri = {
 		core: { invoke },
-		deepLink: {
-			onOpenUrl: (listener: (urls: ReadonlyArray<string>) => void) => {
-				listeners.add(listener)
-				return Promise.resolve(() => void listeners.delete(listener))
-			},
-			/** The links that arrived before anyone listened (a cold start from the callback). */
-			getCurrent: () => Promise.resolve(queued.length === 0 ? null : queued.splice(0)),
-		},
-		opener: {
-			openUrl: (url: string) => Promise.resolve(options.openUrl(url)),
-		},
+		deepLink,
+		opener,
+		updater: options.updates ? updater : undefined,
+		process: options.updates ? appProcess : undefined,
 	}
 
-	const answer = (message: VaultAnswer) => {
-		const request = waiting.get(message.id)
-		if (request === undefined) return
+	/** The host's answer to a vault or update request, or a download's progress. */
+	const answer = (message: VaultAnswer | UpdateAnswer | UpdateProgress) => {
+		if (message.t === "updateProgress") {
+			progressListeners.get(message.id)?.(message)
+			return
+		}
+		progressListeners.delete(message.id)
+		const pending = waiting.get(message.id)
+		if (pending === undefined) return
 		waiting.delete(message.id)
-		if (message.error !== undefined) request.reject(new Error(message.error))
-		else request.resolve(message.record ?? null)
+		if (message.error !== undefined) pending.reject(new Error(message.error))
+		else pending.resolve(message)
 	}
 
 	const openedUrl = (url: string) => {

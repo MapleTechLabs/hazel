@@ -49,8 +49,31 @@ pub fn open_url_message(url: &str) -> Value {
 /// The runtime a bundle ships beside the host (`Contents/MacOS/hazel-runtime`).
 pub const BUNDLED_RUNTIME: &str = "hazel-runtime";
 
-/// The bundled runtime when there is one beside the host, with the precompiled styles from
-/// `Contents/Resources`; otherwise Bun on `HAZEL_NATIVE_ENTRY` (default `src/entry.ts`).
+/// The environment a bundle runs with (`Contents/Resources/environment.json`, written by
+/// `scripts/bundle.ts`: live data against production). It applies however the app starts —
+/// Finder, `open`, or the Tauri updater's relaunch, which runs the executable directly and so
+/// skips Info.plist's `LSEnvironment` — and a variable the host was started with wins.
+pub const BUNDLED_ENVIRONMENT: &str = "environment.json";
+
+/// The bundle's environment, minus what the host's own environment already sets.
+pub fn bundled_environment(resources: &Path) -> Vec<(String, String)> {
+    let Ok(text) = std::fs::read_to_string(resources.join(BUNDLED_ENVIRONMENT)) else {
+        return Vec::new();
+    };
+    let Ok(Value::Object(entries)) = serde_json::from_str::<Value>(&text) else {
+        eprintln!("[host] {BUNDLED_ENVIRONMENT} is not a JSON object");
+        return Vec::new();
+    };
+    entries
+        .into_iter()
+        .filter_map(|(key, value)| Some((key, value.as_str()?.to_string())))
+        .filter(|(key, _)| std::env::var_os(key).is_none())
+        .collect()
+}
+
+/// The bundled runtime when there is one beside the host, with the precompiled styles and the
+/// environment from `Contents/Resources`; otherwise Bun on `HAZEL_NATIVE_ENTRY` (default
+/// `src/entry.ts`).
 pub fn runtime_command(host_dir: Option<&Path>, entry: Option<String>) -> Command {
     let bundled = host_dir
         .map(|dir| dir.join(BUNDLED_RUNTIME))
@@ -58,8 +81,9 @@ pub fn runtime_command(host_dir: Option<&Path>, entry: Option<String>) -> Comman
     match (bundled, entry) {
         (Some(runtime), None) => {
             let mut command = Command::new(&runtime);
-            if let Some(styles) = resources_of(&runtime).map(|dir| dir.join("styles.json")) {
-                command.env("HAZEL_NATIVE_STYLES", styles);
+            if let Some(resources) = resources_of(&runtime) {
+                command.env("HAZEL_NATIVE_STYLES", resources.join("styles.json"));
+                command.envs(bundled_environment(&resources));
             }
             command
         }
@@ -155,6 +179,25 @@ mod tests {
         let reload: RuntimeMsg =
             serde_json::from_str(r#"{"t":"reload","path":"/hazel/chat"}"#).unwrap();
         assert!(matches!(reload, RuntimeMsg::Reload { path } if path == "/hazel/chat"));
+    }
+
+    #[test]
+    fn a_bundle_runs_with_its_environment_unless_the_host_sets_it() {
+        let root = std::env::temp_dir().join(format!("hazel-native-env-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join(BUNDLED_ENVIRONMENT),
+            r#"{"HAZEL_TEST_BUNDLE_ONLY":"live","PATH":"/nowhere","HAZEL_TEST_NUMBER":1}"#,
+        )
+        .unwrap();
+        let env = bundled_environment(&root);
+        let _ = std::fs::remove_dir_all(&root);
+        // PATH is the host's own; a value that is not a string is skipped.
+        assert_eq!(
+            env,
+            [("HAZEL_TEST_BUNDLE_ONLY".to_string(), "live".to_string())]
+        );
+        assert!(bundled_environment(Path::new("/nonexistent")).is_empty());
     }
 
     #[test]

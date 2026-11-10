@@ -15,7 +15,7 @@ declare const Bun: {
 		outdir?: string
 		target?: "bun"
 		/** One executable with Bun inside (scripts/bundle.ts). */
-		compile?: { outfile: string }
+		compile?: { outfile: string; target?: string }
 		format?: "esm"
 		bytecode?: boolean
 		minify: boolean

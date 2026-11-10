@@ -1,4 +1,5 @@
 import { type BrowserLoginClient, desktopClient } from "@hazel/auth/contract"
+import { getTauriUpdater } from "@hazel/desktop/bridge"
 import { isTauri, isTauriMacOS } from "~/lib/tauri"
 
 /**
@@ -6,6 +7,12 @@ import { isTauri, isTauriMacOS } from "~/lib/tauri"
  * may read it like a constant (legacy calls `isTauri()` / `isTauriMacOS()` during render).
  */
 export const isDesktop: boolean = typeof window !== "undefined" && isTauri()
+
+/**
+ * Whether this build can update itself: the Tauri app, and the native (Rune) Mac app, whose host
+ * answers the same updater calls (`apps/native/src/desktop-bridge.ts`). Never the browser.
+ */
+export const hasUpdater: boolean = typeof window !== "undefined" && getTauriUpdater() !== undefined
 
 /**
  * The app this build signs in as through the system browser, keeping its session in the OS

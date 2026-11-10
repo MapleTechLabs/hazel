@@ -99,6 +99,21 @@ export type HostToRuntime =
 	| { readonly t: "openUrl"; readonly url: string }
 	/** The answer to vault request `id`: the record (`null` when none), or why the keychain failed. */
 	| { readonly t: "vault"; readonly id: number; readonly record?: string | null; readonly error?: string }
+	/** The answer to update request `id`: the newer release `check` found (none: no `version`), or why it failed. */
+	| {
+			readonly t: "update"
+			readonly id: number
+			readonly version?: string
+			readonly notes?: string | null
+			readonly error?: string
+	  }
+	/** How much of update download `id` has arrived; `total` when the server said. */
+	| {
+			readonly t: "updateProgress"
+			readonly id: number
+			readonly downloaded: number
+			readonly total?: number | null
+	  }
 
 export type RuntimeToHost =
 	| {
@@ -131,6 +146,10 @@ export type RuntimeToHost =
 	/** Read or replace the sign-in vault's one record in the OS keychain; answered by `vault`. */
 	| { readonly t: "vault"; readonly id: number; readonly op: "read" }
 	| { readonly t: "vault"; readonly id: number; readonly op: "write"; readonly record: string }
+	/** An updater step on the app's own bundle; answered by `update` (and `updateProgress`). */
+	| { readonly t: "update"; readonly id: number; readonly op: "check" | "download" | "install" }
+	/** Quit, and open the app again once it has gone (after an update installs). */
+	| { readonly t: "relaunch" }
 
 /** Timings for one commit, for the benchmarks. */
 export type CommitStats = {

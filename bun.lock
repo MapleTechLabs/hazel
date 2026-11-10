@@ -74,7 +74,7 @@
     },
     "apps/desktop": {
       "name": "@hazel/desktop",
-      "version": "1.0.4",
+      "version": "1.1.0",
       "dependencies": {
         "@tauri-apps/api": "~2.12.4",
         "@tauri-apps/plugin-autostart": "~2.7.0",

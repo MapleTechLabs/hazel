@@ -69,11 +69,17 @@ process.on("SIGTERM", () => process.exit(0))
 /** The Tauri APIs the app's browser sign-in uses, answered by the host (keychain, opened links). */
 const desktopBridge = makeDesktopBridge({
 	send: (request) => transport.send(request),
+	// The host sets this for a release bundle it can update in place.
+	updates: process.env.HAZEL_UPDATES === "1",
 	openUrl: (url) => {
 		const target = URL.parse(url)
 		if (target !== null) openExternal(target)
 	},
 })
+
+// The Tauri APIs the host answers: for the keychain sign-in, and for updates where it offers them.
+if (usesKeychainSession || process.env.HAZEL_UPDATES === "1")
+	Object.assign(window, { __TAURI__: desktopBridge.tauri })
 
 if (offline !== undefined) {
 	const { makeOfflineFetch } = await import("./offline-backend")
@@ -101,7 +107,6 @@ if (offline !== undefined) {
 } else if (usesKeychainSession) {
 	if (URL.parse(backendUrl) === null)
 		throw new Error(`HAZEL_DATA=live needs a backend URL, got "${backendUrl}"`)
-	Object.assign(window, { __TAURI__: desktopBridge.tauri })
 	const { setSessionBearerProvider } = await import("../../web-foldkit/src/core/lib/session-bearer")
 	const { desktopSessionBearer } = await import("../../web-foldkit/src/platform/desktop-auth")
 	setSessionBearerProvider(desktopSessionBearer)
@@ -338,7 +343,7 @@ const transport = stdioTransport((message: HostToRuntime) => {
 		desktopBridge.openedUrl(message.url)
 		return
 	}
-	if (message.t === "vault") {
+	if (message.t === "vault" || message.t === "update" || message.t === "updateProgress") {
 		desktopBridge.answer(message)
 		return
 	}

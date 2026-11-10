@@ -180,6 +180,8 @@ const HOST_ATTRS = [
 	"disabled",
 	"aria-label",
 	"tabindex",
+	// Moves the window, as Tauri's own attribute does: the host makes the element a drag region.
+	"data-tauri-drag-region",
 ]
 const SVG_ATTRS = new Set([
 	"d",

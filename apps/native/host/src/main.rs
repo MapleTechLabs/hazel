@@ -8,6 +8,7 @@ mod platform;
 mod svg_text;
 #[cfg(test)]
 mod tests;
+mod updater;
 mod wire;
 
 use std::collections::HashMap;
@@ -164,6 +165,10 @@ fn send_key(chain: &[u32], key: &str, mods: rune::edit::Mods) -> u64 {
 /// The web app sets `-webkit-font-smoothing: antialiased` on `html`: text without CoreText's
 /// smoothing dilation, lighter than macOS's default.
 pub(crate) const TEXT_SMOOTHING: rune::FontSmoothing = rune::FontSmoothing::Off;
+/// The band the window's controls sit in, as the Tauri app's (`set_traffic_lights_inset(16, 20)`):
+/// 40 points tall, the traffic lights 16 points in and centred. The web layout leaves this room
+/// under `hasDesktopTitlebar`, and only `data-tauri-drag-region` elements move the window.
+const TITLEBAR: rune::Titlebar = rune::Titlebar::new(40.0).traffic_lights(16.0, 13.0);
 
 const PRESS_EVENTS: [&str; 3] = ["pointerdown", "pointerup", "click"];
 
@@ -994,6 +999,10 @@ fn behaviour(
         e = e.focusable(true).tab_index(order).focusable_when_empty();
     } else if script_focusable(attrs) {
         e = e.focusable_by_script().focusable_when_empty();
+    }
+    // Tauri's drag attribute: pressing the element (not the controls in it) moves the window.
+    if attrs.contains_key("data-tauri-drag-region") {
+        e = e.window_drag();
     }
     // A radio's arrow keys move through its group, as a browser's do; the runtime knows the group.
     if is_checkable(tag, attrs) && attrs.get("type").is_some_and(|t| t == "radio") {
@@ -2022,6 +2031,10 @@ fn start_runtime(current: &RuntimeChild, path: Option<&str>) -> std::process::Ch
     if let Some(path) = path {
         command.env("NATIVE_PATH", path);
     }
+    // The runtime offers the app's update checks only where the host can install them.
+    if updater::enabled() {
+        command.env("HAZEL_UPDATES", "1");
+    }
     let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -2050,6 +2063,14 @@ fn spawn_runtime() -> (RuntimeChild, std::sync::mpsc::Receiver<RuntimeMsg>) {
             for line in BufReader::new(stdout).lines().map_while(Result::ok) {
                 match serde_json::from_str::<RuntimeMsg>(&line) {
                     Ok(RuntimeMsg::Vault { id, op, record }) => answer_vault(id, &op, record),
+                    Ok(RuntimeMsg::Update { id, op }) => answer_update(id, op),
+                    Ok(RuntimeMsg::Relaunch) => match updater::relaunch_after_exit() {
+                        Ok(()) => {
+                            supervised.kill();
+                            std::process::exit(0);
+                        }
+                        Err(error) => eprintln!("[host] {error}"),
+                    },
                     Ok(RuntimeMsg::Reload { path }) => {
                         reload = Some(path);
                         break;
@@ -2088,6 +2109,25 @@ fn answer_vault(id: u64, op: &str, record: Option<String>) {
             id,
             platform::run_vault(platform::VAULT_SERVICE, &op),
         ));
+    });
+}
+
+/// Updater steps fetch, verify and move files: each runs off the reader and UI threads.
+fn answer_update(id: u64, op: String) {
+    std::thread::spawn(move || {
+        let result = match op.as_str() {
+            "check" => updater::check(),
+            "download" => updater::download(|downloaded, total| {
+                write_line(updater::progress_message(id, downloaded, total))
+            })
+            .map(|()| None),
+            "install" => updater::install().map(|()| None),
+            _ => Err(format!("unknown update request {op}")),
+        };
+        if let Err(error) = &result {
+            eprintln!("[host] update {op}: {error}");
+        }
+        write_line(updater::reply(id, result));
     });
 }
 
@@ -2149,6 +2189,7 @@ fn main() {
     };
     let app = App::new(spec)
         .font_smoothing(TEXT_SMOOTHING)
+        .titlebar(TITLEBAR)
         .init(move || initial)
         .on_open_url(open_url);
     let handle = app.handle();
