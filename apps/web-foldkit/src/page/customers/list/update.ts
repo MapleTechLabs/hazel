@@ -1,4 +1,5 @@
 import type * as Customers from "@hazel/domain/customers"
+import { MAX_VIEWS } from "@hazel/domain/customers"
 import type { CustomerAccountId, UserId } from "@hazel/schema"
 import { Option } from "effect"
 import { Command } from "foldkit"
@@ -584,7 +585,10 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 						},
 						Refused: {
 							title: `Couldn't ${VIEW_VERB[action]} the view`,
-							description: "Built-in views cannot be deleted.",
+							description:
+								action === "create"
+									? `There are already ${MAX_VIEWS} views. Delete one first.`
+									: "Built-in views cannot be deleted.",
 						},
 					}),
 				),

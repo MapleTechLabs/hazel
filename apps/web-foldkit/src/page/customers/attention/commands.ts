@@ -1,5 +1,9 @@
 import * as Customers from "@hazel/domain/customers"
-import type { CustomerSignalTransitionError, CustomersNotFoundError } from "@hazel/domain/rpc"
+import type {
+	CustomerSignalTransitionError,
+	CustomersInvalidRequestError,
+	CustomersNotFoundError,
+} from "@hazel/domain/rpc"
 import { CustomerAccountId, CustomerSignalId, OrganizationId, UserId } from "@hazel/schema"
 import { Effect, Schema } from "effect"
 import { Command, Mount } from "foldkit"
@@ -26,7 +30,14 @@ const signalMessages = [Message.SucceededSignalAction, Message.FailedSignalActio
 const settle =
 	(signalId: CustomerSignalId, action: SignalAction) =>
 	<A, R>(
-		effect: Effect.Effect<A, CustomersNotFoundError | CustomerSignalTransitionError | CommonError, R>,
+		effect: Effect.Effect<
+			A,
+			| CustomersNotFoundError
+			| CustomerSignalTransitionError
+			| CustomersInvalidRequestError
+			| CommonError,
+			R
+		>,
 	) =>
 		effect.pipe(
 			Effect.as(Message.SucceededSignalAction({ signalId, action })),
@@ -34,6 +45,9 @@ const settle =
 				CustomersNotFoundError: () =>
 					Effect.succeed(Message.FailedSignalAction({ signalId, action, reason: "NotFound" })),
 				CustomerSignalTransitionError: () =>
+					Effect.succeed(Message.FailedSignalAction({ signalId, action, reason: "Stale" })),
+				// The assignee left the organization since the menu showed them.
+				CustomersInvalidRequestError: () =>
 					Effect.succeed(Message.FailedSignalAction({ signalId, action, reason: "Stale" })),
 			}),
 			catchCommon((reason) => Message.FailedSignalAction({ signalId, action, reason })),

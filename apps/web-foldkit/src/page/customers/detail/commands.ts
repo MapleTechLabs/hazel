@@ -144,9 +144,13 @@ export const UpdateCustomerAccount = Command.define("UpdateCustomerAccount", {
 	execute: (args) =>
 		updateAccountAction(args).pipe(
 			Effect.as(Message.SucceededAccountUpdate()),
-			Effect.catchTag("CustomersNotFoundError", () =>
-				Effect.succeed(Message.FailedAccountUpdate({ reason: "NotFound" })),
-			),
+			Effect.catchTags({
+				CustomersNotFoundError: () =>
+					Effect.succeed(Message.FailedAccountUpdate({ reason: "NotFound" })),
+				// The owner left the organization since the menu showed them.
+				CustomersInvalidRequestError: () =>
+					Effect.succeed(Message.FailedAccountUpdate({ reason: "Stale" })),
+			}),
 			catchCommon((reason) => Message.FailedAccountUpdate({ reason })),
 		),
 })

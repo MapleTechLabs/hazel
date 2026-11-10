@@ -44,6 +44,10 @@ export const CreateSavedView = Command.define("CreateSavedView", {
 	execute: (args) =>
 		createViewAction(args).pipe(
 			Effect.map((viewId) => Message.SucceededViewAction({ action: "create", viewId })),
+			// Over `MAX_VIEWS` (one's own, or the shared ones).
+			Effect.catchTag("CustomersInvalidRequestError", () =>
+				Effect.succeed(Message.FailedViewAction({ action: "create", reason: "Refused" })),
+			),
 			catchCommon((reason) => Message.FailedViewAction({ action: "create", reason })),
 		),
 })
