@@ -115,7 +115,7 @@ export const opsOfEvent = (
 				return membershipOps({
 					membership,
 					onNoMatch,
-					...(type === "organizationMembership.deleted" ? { removed: true } : {}),
+					removed: type === "organizationMembership.deleted",
 				})
 			}
 			case "user.created":
@@ -141,18 +141,15 @@ export const opsOfEvent = (
 		}
 	})
 
-/** Verify the delivery, then map it. */
+/** Verify the delivery, then map it. Core refuses a connection with no signing secret before this. */
 export const receiveWebhook = (input: {
 	readonly get: ClerkGet
 	readonly headers: Readonly<Record<string, string>>
 	readonly body: string
-	readonly webhookSecret: Redacted.Redacted<string> | null
+	readonly webhookSecret: Redacted.Redacted<string>
 	readonly onNoMatch: OnNoMatch
 }): Effect.Effect<ReadonlyArray<IngestOp>, RejectedError> =>
 	Effect.gen(function* () {
-		if (input.webhookSecret === null) {
-			return yield* reject("The Clerk connection has no signing secret")
-		}
 		yield* verifySvix({
 			secret: Redacted.value(input.webhookSecret),
 			headers: input.headers,

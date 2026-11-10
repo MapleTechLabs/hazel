@@ -12,7 +12,6 @@ import {
 	envelope,
 	MEMBERSHIP_ADA_ADMIN,
 	MEMBERSHIP_ADA_GLOBEX,
-	MS,
 	ORG_ACME,
 	ORG_GLOBEX,
 	SESSION_ADA,
@@ -43,7 +42,7 @@ const getOf = Effect.map(HttpClient.HttpClient, (client) => makeClerkGet(client,
 const deliver = (
 	body: string,
 	options: {
-		readonly secret?: string | null
+		readonly secret?: string
 		readonly tamper?: boolean
 		readonly timestampMs?: number
 		readonly createAccounts?: boolean
@@ -60,7 +59,7 @@ const deliver = (
 				"svix-signature": `v1,${signature}`,
 			},
 			body: options.tamper === true ? `${body} ` : body,
-			webhookSecret: options.secret === null ? null : Redacted.make(options.secret ?? SECRET),
+			webhookSecret: Redacted.make(options.secret ?? SECRET),
 			onNoMatch: options.createAccounts === false ? "unmatched" : "create",
 		})
 	}).pipe(Effect.provide(fakeClerkHttpClient(fake)))
@@ -74,13 +73,12 @@ describe("Clerk webhook verification", () => {
 		expect(tags(ops)).toEqual(["account"])
 	})
 
-	it("refuses a tampered body, a wrong secret, a connection with no secret and a replay", async () => {
+	it("refuses a tampered body, a wrong secret and a replay", async () => {
 		const body = envelope("organization.updated", ORG_ACME)
 		expect((await run(Effect.flip(deliver(body, { tamper: true })))).message).toMatch(/signature/i)
 		expect(
 			(await run(Effect.flip(deliver(body, { secret: "whsec_AAAAAAAAAAAAAAAAAAAAAA==" })))).message,
 		).toMatch(/signature/i)
-		expect((await run(Effect.flip(deliver(body, { secret: null })))).message).toMatch(/signing secret/i)
 		expect(
 			(await run(Effect.flip(deliver(body, { timestampMs: nowMs() - 10 * 60_000 })))).message,
 		).toMatch(/replay window/i)

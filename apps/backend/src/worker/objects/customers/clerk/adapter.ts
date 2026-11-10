@@ -63,14 +63,17 @@ export const makeClerkAdapter = Effect.gen(function* () {
 				}
 			}),
 
+		// Core calls `webhook` only for a connection with a signing secret.
 		webhook: (request, credentials) =>
-			receiveWebhook({
-				get: getOf(credentials),
-				headers: request.headers,
-				body: request.body,
-				webhookSecret: credentials.webhookSecret,
-				onNoMatch: onNoMatchOf(credentials.config),
-			}),
+			credentials.webhookSecret === null
+				? Effect.die("Clerk webhook called without a signing secret")
+				: receiveWebhook({
+						get: getOf(credentials),
+						headers: request.headers,
+						body: request.body,
+						webhookSecret: credentials.webhookSecret,
+						onNoMatch: onNoMatchOf(credentials.config),
+					}),
 
 		pull: (input) =>
 			pullPage({

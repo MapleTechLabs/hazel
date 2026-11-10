@@ -2,7 +2,12 @@
  * Clerk records → `IngestOp`s, over the recorded payloads in `./fixtures.ts` (decoded through the
  * wire schemas first, so the schemas are held to the real shapes too).
  */
-import type { RecordActivity, UpsertAccount, UpsertContact } from "@hazel/domain/customers"
+import {
+	IngestOp,
+	type RecordActivity,
+	type UpsertAccount,
+	type UpsertContact,
+} from "@hazel/domain/customers"
 import { Schema } from "effect"
 import { describe, expect, it } from "vitest"
 import {
@@ -193,6 +198,24 @@ describe("activityOps", () => {
 
 	it("writes no activity for a user who has never signed in", () => {
 		expect(activityOps(grace, acme.id)).toEqual([])
+	})
+
+	it("drops a timestamp outside 1970–9999 rather than emit an op ingest refuses", () => {
+		const odd = user({
+			...USER_ADA,
+			last_sign_in_at: 9e15,
+			last_active_at: -86_400_000,
+			created_at: 253_402_300_800_000,
+		})
+		expect(activityOps(odd, acme.id)).toEqual([])
+		const ops = membershipOps({
+			membership: member({ ...MEMBERSHIP_ADA_ADMIN, created_at: 9e15 }),
+			user: odd,
+			onNoMatch: "create",
+		})
+		expect(ops.every(Schema.is(IngestOp))).toBe(true)
+		expect(ops[1]).toMatchObject({ lastSignInAt: null, lastSeenAt: null })
+		expect(ops[1]).not.toHaveProperty("joinedAt")
 	})
 })
 

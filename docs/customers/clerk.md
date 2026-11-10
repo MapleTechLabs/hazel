@@ -35,7 +35,10 @@ _is_ the Clerk org id, and Maple's `GroupId` is too (`UpsertAccount.sameAs`).
 
 Connecting validates the key with one `GET /organizations?limit=1` and then, best-effort,
 `GET /instance` so the UI can name the instance it opened. Without a signing secret the connection
-still works, but only through the scheduled sweep.
+still works, but only through the scheduled sweep (core refuses its deliveries with a 400).
+
+Deliveries are verified with Svix's scheme (`customers/svix.ts`): HMAC-SHA256 over the raw body,
+and a `svix-timestamp` outside ±5 minutes is refused, so a captured delivery cannot be replayed.
 
 ## Mapping
 
@@ -94,9 +97,11 @@ None of Clerk's list endpoints filter by a change time, so a scheduled pull cann
 re-walks the instance and ingest writes only what changed. That is why the period is six hours —
 webhooks carry the live signal, the sweep only reconciles missed deliveries.
 
-Failures: 401/403 → `auth` (the connection goes to `error`, pulls stop until the key changes);
-429 → waited out in place while Clerk's `Retry-After` is ≤ 5 s, otherwise handed to the alarm as
+Failures: 401/403 → `auth` (the run fails, the connection goes to `error`, pulls stop until the
+key changes); 429 → waited out in place while Clerk's `Retry-After` is ≤ 5 s, otherwise
 `rate_limited` with that delay; 5xx and unexpected bodies → `provider`; unreachable → `network`.
+Every failure but `auth` is retryable: the run stays `running` at its cursor and the next attempt
+resumes the sweep from the failed page, after `Retry-After` or core's backoff.
 
 ## Known gaps
 

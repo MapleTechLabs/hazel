@@ -10,6 +10,7 @@
  * fields freely and ships new webhook event types, and a decode failure here would 400 a delivery
  * we could otherwise have handled. Timestamps are Unix **milliseconds**.
  */
+import type { IsoTimestamp } from "@hazel/domain/customers"
 import { Schema } from "effect"
 
 const Nullable = <S extends Schema.Top>(schema: S) => Schema.optionalKey(Schema.NullOr(schema))
@@ -133,9 +134,15 @@ export type ClerkWebhookEnvelope = typeof ClerkWebhookEnvelope.Type
 // Accessors
 // ---------------------------------------------------------------------------
 
-/** An ISO instant from a Clerk Unix-ms timestamp; null when Clerk sent none. */
-export const isoOf = (millis: number | null | undefined): string | null =>
-	millis === null || millis === undefined || !Number.isFinite(millis)
+/** 10000-01-01: past it `toISOString` widens the year, which is no `Day` (and past ±8.64e15 it throws). */
+const MAX_MILLIS = 253_402_300_800_000
+
+/**
+ * An ISO instant from a Clerk Unix-ms timestamp; null when Clerk sent none, or one outside
+ * 1970–9999, so every instant (and its `dayOf`) passes ingest's `IsoTimestamp` / `Day` checks.
+ */
+export const isoOf = (millis: number | null | undefined): IsoTimestamp | null =>
+	millis === null || millis === undefined || !(millis >= 0 && millis < MAX_MILLIS)
 		? null
 		: new Date(millis).toISOString()
 

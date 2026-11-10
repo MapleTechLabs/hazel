@@ -123,7 +123,7 @@ export const PROVIDERS: Descriptors = {
 			label: "Secret key",
 			placeholder: "sk_live_…",
 			createHref: "https://dashboard.clerk.com/last-active?path=api-keys",
-			help: "Clerk Dashboard → Configure → API keys → Secret keys. Copy the key of the instance whose customers you track: a `sk_test_…` key reads your development instance, `sk_live_…` your production one.",
+			help: "Clerk Dashboard → Configure → API keys → Secret keys. Copy the key of the instance whose customers you track: an sk_test_… key reads your development instance, sk_live_… your production one.",
 		},
 		// Clerk secret keys are not scoped, so there is nothing to tick: the key reads the instance.
 		permissions: [],

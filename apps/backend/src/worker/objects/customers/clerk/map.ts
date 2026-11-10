@@ -24,11 +24,14 @@ import type {
 	ConnectionConfig,
 	Day,
 	IngestOp,
+	IsoTimestamp,
 	ProviderRef,
 	RecordActivity,
+	RecordEvent,
 	UpsertAccount,
 	UpsertContact,
 } from "@hazel/domain/customers"
+import type { Types } from "effect"
 import { dayOf } from "../time"
 import {
 	type ClerkMembership,
@@ -67,25 +70,22 @@ const seatsLimitOf = (max: number | null | undefined): number | null =>
  * `/organization_domains` through {@link domainsAccountOp} and merge into the account.
  */
 export const accountOp = (org: ClerkOrganization, onNoMatch: OnNoMatch): UpsertAccount => {
-	const createdAt = isoOf(org.created_at)
-	return {
+	const op: Types.Mutable<UpsertAccount> = {
 		_tag: "account",
 		externalId: org.id,
 		externalUrl: organizationUrlOf(org.id),
-		...(org.name === null || org.name === undefined ? {} : { name: org.name }),
 		logoUrl: imageUrlOf(org),
-		// Absent (a webhook payload without counts) must not clear what a pull established.
-		...(org.members_count === null || org.members_count === undefined
-			? {}
-			: { seatsUsed: Math.trunc(org.members_count) }),
-		...(org.max_allowed_memberships === undefined
-			? {}
-			: { seatsLimit: seatsLimitOf(org.max_allowed_memberships) }),
-		...(org.slug === null || org.slug === undefined ? {} : { attributes: { slug: org.slug } }),
-		...(createdAt === null ? {} : { createdAt }),
 		sameAs: [],
 		onNoMatch,
 	}
+	if (org.name != null) op.name = org.name
+	// Absent (a webhook payload without counts) must not clear what a pull established.
+	if (org.members_count != null) op.seatsUsed = Math.trunc(org.members_count)
+	if (org.max_allowed_memberships !== undefined) op.seatsLimit = seatsLimitOf(org.max_allowed_memberships)
+	if (org.slug != null) op.attributes = { slug: org.slug }
+	const createdAt = isoOf(org.created_at)
+	if (createdAt !== null) op.createdAt = createdAt
+	return op
 }
 
 /** The organization's verified domains, merged into the account (ingest never removes a domain). */
@@ -129,9 +129,7 @@ export const contactOp = (input: {
 	const name =
 		user === undefined ? fullNameOf(publicData ?? {}) : (fullNameOf(user) ?? user.username ?? null)
 	const avatarUrl = user === undefined ? imageUrlOf(publicData ?? {}) : imageUrlOf(user)
-	const joinedAt = isoOf(membership.created_at) ?? isoOf(user?.created_at)
-	const role = roleLabelOf(membership)
-	return {
+	const op: Types.Mutable<UpsertContact> = {
 		_tag: "contact",
 		externalId: userId,
 		account: clerkRef(organizationId),
@@ -140,13 +138,17 @@ export const contactOp = (input: {
 		email: email !== null && email.includes("@") ? email : null,
 		name,
 		avatarUrl,
-		...(role === null ? {} : { role }),
-		...(joinedAt === null ? {} : { joinedAt }),
-		...(user === undefined
-			? {}
-			: { lastSignInAt: isoOf(user.last_sign_in_at), lastSeenAt: isoOf(user.last_active_at) }),
-		...(input.removed === true ? { removed: true } : {}),
 	}
+	const role = roleLabelOf(membership)
+	if (role !== null) op.role = role
+	const joinedAt = isoOf(membership.created_at) ?? isoOf(user?.created_at)
+	if (joinedAt !== null) op.joinedAt = joinedAt
+	if (user !== undefined) {
+		op.lastSignInAt = isoOf(user.last_sign_in_at)
+		op.lastSeenAt = isoOf(user.last_active_at)
+	}
+	if (input.removed === true) op.removed = true
+	return op
 }
 
 /**
@@ -197,15 +199,18 @@ export const sessionOps = (
 }
 
 /** The one timeline entry Clerk adds; ingest raises the contact ones itself. */
-export const accountCreatedEvent = (org: ClerkOrganization, occurredAt: string): IngestOp => ({
-	_tag: "event",
-	externalId: `clerk:organization.created:${org.id}`,
-	account: clerkRef(org.id),
-	type: "account.created",
-	title: `${org.name ?? "An organization"} was created in Clerk`,
-	...(org.slug === null || org.slug === undefined ? {} : { data: { slug: org.slug } }),
-	occurredAt,
-})
+export const accountCreatedEvent = (org: ClerkOrganization, occurredAt: IsoTimestamp): RecordEvent => {
+	const event: Types.Mutable<RecordEvent> = {
+		_tag: "event",
+		externalId: `clerk:organization.created:${org.id}`,
+		account: clerkRef(org.id),
+		type: "account.created",
+		title: `${org.name ?? "An organization"} was created in Clerk`,
+		occurredAt,
+	}
+	if (org.slug != null) event.data = { slug: org.slug }
+	return event
+}
 
 /**
  * A membership, its organization and its user, in the order ingest needs: the account exists
@@ -228,7 +233,7 @@ export const membershipOps = (input: {
 		membership: input.membership,
 		organizationId,
 		user: input.user,
-		...(input.removed === true ? { removed: true } : {}),
+		removed: input.removed === true,
 	})
 	if (contact === null) return ops
 	ops.push(contact)

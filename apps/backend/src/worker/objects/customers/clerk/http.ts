@@ -3,10 +3,11 @@
  * `CustomerProviderError`:
  *
  * - 401/403 → `auth`: the connection goes to `error` and scheduled pulls stop until the key changes.
- * - 429 → retried in place while Clerk's `Retry-After` is short (a page is cheap to redo and a
- *   failed page restarts the whole sweep), then `rate_limited` carrying `retryAfterMs`, which the
- *   alarm uses as the next pull's delay.
- * - 5xx / unexpected body → `provider`; unreachable → `network`.
+ * - 429 → retried in place while Clerk's `Retry-After` is short (cheaper than a whole alarm round
+ *   trip), then `rate_limited` carrying `retryAfterMs`. Core keeps the run open at its cursor and
+ *   resumes it after that delay.
+ * - 5xx / unexpected body → `provider`; unreachable → `network`. Both retryable: the run resumes
+ *   after core's backoff.
  *
  * The key only ever travels in the `Authorization` header, and no message repeats it.
  */
