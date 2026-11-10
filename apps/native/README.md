@@ -100,8 +100,12 @@ synthetic utility page (`conformance:extract` records it).
 - Colours a `focus:` variant changes (Rune draws focus as a ring only), focus or press state on an
   ancestor (`group-focus-visible:`), and spinners drawn as rotating CSS border rings.
 - Subgrid: Taffy has none, so a subgrid row lays its children out on its own copy of the tracks.
-- `text-box` trimming, vertical margin collapsing (spacing is the same, a block's own box is not),
-  fractions of the parent's height, and percentage insets (`left-1/2`).
+- Vertical margin collapsing (spacing is the same, a block's own box is not), fractions of the
+  parent's height, and percentage insets (`left-1/2`).
+- Masks other than an edge that fades to nothing and one centred mask picture on an `<img>`:
+  radial gradients (the app loader's), repeated or offset mask pictures, and a fading edge on
+  the box's own fill (Rune fades what is inside the box).
+- Emoji inside text are about a quarter narrower than Chromium draws them.
 
-Rune is pinned to `Makisuo/rune` (anomalyco/rune `bca4713` plus grid tracks) until grid tracks
-land upstream; see `host/Cargo.toml`.
+Rune is pinned to `Makisuo/rune` (anomalyco/rune `bca4713` plus grid tracks and
+`El::clip_fade_linear_frac`) until they land upstream; see `host/Cargo.toml`.
