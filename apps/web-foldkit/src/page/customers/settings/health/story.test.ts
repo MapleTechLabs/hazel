@@ -71,6 +71,8 @@ const result = (moved: number): Customers.HealthDryRunResult => ({
 			proposed: { score: 64, status: "at_risk", components: [] },
 		},
 	],
+	evaluatedAccounts: 10,
+	totalAccounts: 10,
 })
 
 describe("health settings: weights", () => {

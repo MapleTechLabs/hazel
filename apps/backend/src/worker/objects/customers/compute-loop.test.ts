@@ -72,6 +72,16 @@ const quietOrg = (world: CustomersWorld) =>
 		return world.rows<{ id: CustomerAccountId }>(`SELECT id FROM customer_accounts`)[0]!.id
 	})
 
+/** `count` Clerk organizations: more than one chunk of accounts (250). */
+const manyAccounts = (count: number) =>
+	Array.from({ length: count }, (_, index): IngestOp => ({
+		_tag: "account",
+		externalId: `org_${index}`,
+		name: `Co ${index}`,
+		sameAs: [],
+		onNoMatch: "create",
+	}))
+
 const meta = (world: CustomersWorld, key: string) =>
 	world.rows<{ value: string }>(`SELECT value FROM _object_meta WHERE key = ?`, key)[0]?.value
 
@@ -309,7 +319,9 @@ describe("Customers compute and sync loop", () => {
 				world.object.storage.db
 					.prepare(`UPDATE customer_accounts SET deletedAt = '2026-01-01 00:00:00.000'`)
 					.run()
-				expect(Option.isNone(yield* world.object.run(nextReopenAt).pipe(Effect.orDie))).toBe(true)
+				expect(Option.isNone(yield* world.object.run(nextReopenAt(now)).pipe(Effect.orDie))).toBe(
+					true,
+				)
 				yield* world.object.run(runCompute(now)).pipe(Effect.orDie)
 				expect(
 					world.rows(`SELECT status, closedAt IS NOT NULL AS closed FROM customer_signals`),
@@ -894,16 +906,7 @@ describe("Customers compute and sync loop", () => {
 		run(
 			Effect.gen(function* () {
 				const world = yield* makeCustomersWorld
-				yield* world.ingest(
-					"clerk",
-					Array.from({ length: 260 }, (_, index): IngestOp => ({
-						_tag: "account",
-						externalId: `org_${index}`,
-						name: `Co ${index}`,
-						sameAs: [],
-						onNoMatch: "create",
-					})),
-				)
+				yield* world.ingest("clerk", manyAccounts(260))
 				const scored = () =>
 					world.rows<{ n: number }>(`SELECT count(*) AS n FROM customer_health_daily`)[0]!.n
 				const lastComputed = () =>
@@ -934,6 +937,68 @@ describe("Customers compute and sync loop", () => {
 				// …and computes again soon after it ends.
 				expect(Number(meta(world, "computeDueAt"))).toBe(NOW.getTime() + 2 * 60_000)
 				expect(meta(world, "computeAgain")).toBeUndefined()
+			}),
+		))
+
+	it("starts a compute spread over turns over when its progress is stale, unreadable, or of another day or billing provider", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", manyAccounts(260))
+				const progress = (): Record<string, unknown> => JSON.parse(meta(world, "computeProgress")!)
+				const save = (value: string) =>
+					world.object.storage.db
+						.prepare(`UPDATE _object_meta SET value = ? WHERE key = 'computeProgress'`)
+						.run(value)
+
+				yield* world.object.run(runCompute(NOW, 0)).pipe(Effect.orDie)
+				const first = progress()
+				expect(first).toMatchObject({ day: day(0), startedAt: NOW.getTime() })
+				const other = first.billingProvider === "stripe" ? "autumn" : "stripe"
+				// Each starts over: the first chunk again, and the same progress after it.
+				for (const saved of [
+					JSON.stringify({ ...first, billingProvider: other }),
+					JSON.stringify({ ...first, day: day(-1) }),
+					JSON.stringify({ ...first, startedAt: NOW.getTime() - 2 * 60 * 60_000 }),
+					JSON.stringify({ ...first, after: 42 }),
+					"{not json",
+				]) {
+					save(saved)
+					yield* world.object.run(runCompute(NOW, 0)).pipe(Effect.orDie)
+					expect(progress()).toEqual(first)
+				}
+				// A current one continues to the end.
+				yield* world.object.run(runCompute(NOW, 0)).pipe(Effect.orDie)
+				expect(meta(world, "computeProgress")).toBeUndefined()
+			}),
+		))
+
+	it("drops a failed compute's progress; a change during a stuck one brings a compute forward", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", manyAccounts(260))
+				yield* world.object.run(runCompute(NOW, 0)).pipe(Effect.orDie)
+				expect(meta(world, "computeProgress")).toBeDefined()
+
+				// Its next turns were killed: the leases pushed the deadline out.
+				yield* world.object.run(takeComputeLease(Date.now())).pipe(Effect.orDie)
+				yield* world.object.run(takeComputeLease(Date.now())).pipe(Effect.orDie)
+				expect(Number(meta(world, "computeDueAt"))).toBeGreaterThan(Date.now() + 5 * 60_000)
+				yield* world.object.run(requestCompute).pipe(Effect.orDie)
+				expect(Number(meta(world, "computeDueAt"))).toBeLessThanOrEqual(Date.now() + 2 * 60_000)
+				expect(meta(world, "computeAgain")).toBe("1")
+
+				world.object.storage.db
+					.prepare(
+						`CREATE TRIGGER fail_health BEFORE INSERT ON customer_health_daily BEGIN SELECT RAISE(ABORT, 'boom'); END`,
+					)
+					.run()
+				world.object.storage.db
+					.prepare(`UPDATE _object_meta SET value = '0' WHERE key = 'computeDueAt'`)
+					.run()
+				yield* world.object.alarm
+				expect(meta(world, "computeProgress")).toBeUndefined()
 			}),
 		))
 })

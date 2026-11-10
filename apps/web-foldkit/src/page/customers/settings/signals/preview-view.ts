@@ -128,8 +128,9 @@ const queueEffect = (h: H, context: PreviewContext, result: Result): Html => {
 
 const headline = (h: H, context: PreviewContext, result: Result): Html => {
 	const saved = context.status.saved
-	const delta = saved === undefined ? 0 : result.matchCount - saved.matchingCount
-	const total = context.model.accounts?.length ?? null
+	const partial = result.evaluatedAccounts < result.totalAccounts
+	// A partial preview's count is not comparable with the saved rule's.
+	const delta = saved === undefined || partial ? 0 : result.matchCount - saved.matchingCount
 	return h.div(
 		[h.Class("flex flex-col gap-0.5")],
 		[
@@ -157,7 +158,9 @@ const headline = (h: H, context: PreviewContext, result: Result): Html => {
 				[h.Class("text-muted-fg text-xs")],
 				[
 					`${formatMoney(result.mrrMinor, result.currency)} MRR`,
-					...(total === null ? [] : [` · checked against all ${formatCount(total)} accounts`]),
+					partial
+						? ` · Preview based on ${formatCount(result.evaluatedAccounts)} of ${formatCount(result.totalAccounts)} customers`
+						: ` · checked against all ${formatCount(result.totalAccounts)} accounts`,
 				],
 			),
 		],

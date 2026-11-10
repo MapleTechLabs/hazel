@@ -329,16 +329,14 @@ const parkKey = (op: IngestOp) => (op._tag === "contact" ? `contact:${refKey(op.
 /** The account a parked op waits for: the one it names, for every op but an account's own. */
 const blockedByOf = (op: IngestOp) => (op._tag !== "account" && "account" in op ? refKey(op.account) : null)
 
-/** Several accounts (`blockedBy`): the ops are checked when any account's ref is created. */
-const SEVERAL = "*"
-
 /**
- * What a parked record's ops wait for (`blockedBy`): their one account, or `SEVERAL` (a contact
- * parked under several unknown accounts). A replay applies them all; those still blocked park again.
+ * What a parked record's ops wait for (`blockedBy`): their one account's key, or a JSON array of
+ * the keys (a contact parked under several unknown accounts). A replay applies them all; those still
+ * blocked park again.
  */
 const blockedByAll = (ops: ReadonlyArray<IngestOp>) => {
 	const keys = new Set(ops.flatMap((op) => Option.toArray(Option.fromNullishOr(blockedByOf(op)))))
-	return keys.size === 0 ? null : keys.size === 1 ? [...keys][0] : SEVERAL
+	return keys.size === 0 ? null : keys.size === 1 ? [...keys][0] : JSON.stringify([...keys].sort())
 }
 
 /** The ops of a parked record that decode (the rest are logged and skipped). */
@@ -730,20 +728,15 @@ const make = Effect.gen(function* () {
 					]),
 			)
 			const key = refKey({ provider, externalId })
+			// A key starts with its provider (a lowercase letter), an array with `[`: the index's range
+			// `['[', ']')` holds only the records blocked by several accounts.
 			const waiting =
 				entityType === "account"
-					? (yield* db.run(
-							SQLite.from(schema.customerUnmatchedRecordsTable)
-								.select("id", "blockedBy", "payload")
-								.where(($) => [$.blockedBy.in_(key, SEVERAL), $.status.eq("open")]),
-						)).filter(
-							(row) =>
-								row.blockedBy === key ||
-								(Array.isArray(row.payload) &&
-									row.payload.some((item) =>
-										Option.exists(decodeOp(item), (op) => blockedByOf(op) === key),
-									)),
-						)
+					? ((yield* db.query(
+							Database.sql`SELECT "id" FROM "customer_unmatched_records" WHERE "status" = 'open'
+							AND ("blockedBy" = ${key} OR ("blockedBy" >= '[' AND "blockedBy" < ']'
+								AND EXISTS (SELECT 1 FROM json_each("blockedBy") WHERE "value" = ${key})))`,
+						)) as ReadonlyArray<{ id: CustomerUnmatchedRecordId }>)
 					: []
 			for (const id of new Set([...own, ...waiting].map((row) => row.id))) {
 				const found = yield* db.first(
@@ -1600,32 +1593,42 @@ const make = Effect.gen(function* () {
 			)
 		})
 
-	const ensureDefinition = (session: Session, key: string) =>
-		Effect.gen(function* () {
-			const existing = yield* db.first(
-				SQLite.from(schema.customerMetricDefinitionsTable)
-					.select("id")
-					.where(($) => [$.key.eq(key)])
-					.limit(1),
-			)
-			if (Option.isSome(existing)) return
-			yield* applyDefinition(session, {
-				_tag: "metric_definition",
-				key,
-				name: key,
-				unit: null,
-				aggregation: "sum",
-				description: null,
-			})
-		})
+	/** Who defined a metric key: its rows are that provider's alone (a switch deletes them). */
+	const definitionOwner = (key: string) =>
+		db.first(
+			SQLite.from(schema.customerMetricDefinitionsTable)
+				.select("provider")
+				.where(($) => [$.key.eq(key)])
+				.limit(1),
+		)
+
+	const otherOwner = (
+		session: Session,
+		index: number,
+		op: IngestOp,
+		key: string,
+		owner: CustomerProvider | null,
+	) => reject(index, op, `${key} is ${owner ?? "Hazel"}'s metric, not ${session.context.provider}'s`)
 
 	const applyMetric = (session: Session, op: RecordMetric, index: number) =>
 		Effect.gen(function* () {
 			if (isBuiltInMetric(op.metricKey))
 				return yield* reject(index, op, `${op.metricKey} is computed by Hazel`)
+			const definition = yield* definitionOwner(op.metricKey)
+			if (Option.isSome(definition) && definition.value.provider !== session.context.provider)
+				return yield* otherOwner(session, index, op, op.metricKey, definition.value.provider)
 			const accountId = yield* resolveAccount(session, op.account)
 			if (Option.isNone(accountId)) return yield* parkUnknownAccount(session, op.account)
-			yield* ensureDefinition(session, op.metricKey)
+			if (Option.isNone(definition)) {
+				yield* applyDefinition(session, {
+					_tag: "metric_definition",
+					key: op.metricKey,
+					name: op.metricKey,
+					unit: null,
+					aggregation: "sum",
+					description: null,
+				})
+			}
 			const existing = yield* db.first(
 				SQLite.from(schema.customerMetricDailyTable)
 					.select()
@@ -1681,6 +1684,9 @@ const make = Effect.gen(function* () {
 					.where(($) => [$.key.eq(op.key)])
 					.limit(1),
 			)
+			// Two providers never share a key.
+			if (Option.isSome(existing) && existing.value.provider !== values.provider)
+				return yield* otherOwner(session, index, op, op.key, existing.value.provider)
 			if (Option.isNone(existing)) {
 				const settings = yield* db.first(
 					SQLite.from(schema.customerSettingsTable).select("organizationId").limit(1),

@@ -221,7 +221,7 @@ describe("CustomerIngest", () => {
 				const updated = yield* world.call(
 					"customers.account.update",
 					{ accountId, name: "Acme (key account)" },
-					world.member,
+					world.owner,
 				)
 				expect(updated._tag).toBe("Success")
 				yield* world.ingest("clerk", [clerkOrg("org_1", "Acme Renamed")])
@@ -288,6 +288,31 @@ describe("CustomerIngest", () => {
 					world.member,
 				)
 				expect(again._tag).toBe("Failure")
+			}),
+		))
+
+	it("parks a user of two unknown organizations under both, and replays it as each appears", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", [member("ann", "org_8"), member("ann", "org_9")])
+				const record = () =>
+					world.rows<{ status: string; blockedBy: string | null }>(
+						`SELECT status, blockedBy FROM customer_unmatched_records WHERE entityType = 'contact'`,
+					)
+				expect(record()).toEqual([
+					{ status: "open", blockedBy: JSON.stringify(["clerk:org_8", "clerk:org_9"]) },
+				])
+				// Another organization's ref replays nothing.
+				yield* world.ingest("clerk", [clerkOrg("org_7", "Initech")])
+				expect(record()[0]!.status).toBe("open")
+
+				// One of them appears: its membership lands, the other parks again.
+				yield* world.ingest("clerk", [clerkOrg("org_9", "Globex")])
+				expect(liveContacts(world)).toEqual(["ann"])
+				expect(record()).toEqual([{ status: "open", blockedBy: "clerk:org_8" }])
+				yield* world.ingest("clerk", [clerkOrg("org_8", "Acme")])
+				expect(record()[0]!.status).toBe("linked")
 			}),
 		))
 

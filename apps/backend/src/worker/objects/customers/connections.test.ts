@@ -1,11 +1,15 @@
 /**
  * Connection credentials through the RPCs, with a Stripe adapter registered (core registers none):
- * an API key of another provider account drops the old account's webhook secret.
+ * an API key of another provider account drops the old account's webhook secret, and an update
+ * refuses a connection that changed while the provider checked the key.
  */
 import { DEFAULT_CONNECTION_CONFIG } from "@hazel/domain/customers"
 import { Effect, type Scope } from "effect"
 import { describe, expect, it, vi } from "vitest"
-import { makeCustomersWorld, ok } from "./test-kit"
+import { makeCustomersWorld, ok, tagOf } from "./test-kit"
+
+/** Runs while the provider checks a key (another request's turn). */
+const validating = vi.hoisted(() => ({ hook: (): void => undefined }))
 
 // TEST-SEAM: core registers no adapter and the object's RPC handlers build their own services, so
 // the registry's layer is the only place a test adapter can enter the real RPC path.
@@ -16,9 +20,12 @@ vi.mock("./providers", async (importOriginal) => {
 		provider: "stripe",
 		// Each key opens its own account: `sk_a` → `acct_a`.
 		validate: (credentials) =>
-			Effect.succeed({
-				externalAccountId: Redacted.value(credentials.apiKey).replace("sk_", "acct_"),
-				externalAccountName: null,
+			Effect.sync(() => {
+				validating.hook()
+				return {
+					externalAccountId: Redacted.value(credentials.apiKey).replace("sk_", "acct_"),
+					externalAccountName: null,
+				}
 			}),
 		webhook: () => Effect.succeed([]),
 		pull: () => Effect.die("not pulled here"),
@@ -87,6 +94,48 @@ describe("Customers connection credentials", () => {
 				)
 				expect(connection()).toEqual([{ externalAccountId: "acct_b", hasWebhookSecret: 0 }])
 				expect(secret()).toBeNull()
+			}),
+		))
+
+	it("refuses an update when the connection moved to another account while the key was checked", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				const { id: connectionId } = ok(
+					yield* world.call(
+						"customers.connection.connect",
+						{
+							provider: "stripe",
+							apiKey: "sk_a",
+							webhookSecret: "whsec_a",
+							config: DEFAULT_CONNECTION_CONFIG.stripe,
+						},
+						world.owner,
+					),
+				).data
+				const secrets = () => world.rows(`SELECT * FROM customer_connection_secrets`)
+				const before = secrets()
+				validating.hook = () =>
+					world.object.storage.db
+						.prepare(`UPDATE customer_connections SET externalAccountId = 'acct_c' WHERE id = ?`)
+						.run(connectionId)
+				try {
+					const exit = yield* world.call(
+						"customers.connection.update",
+						{ connectionId, apiKey: "sk_a" },
+						world.owner,
+					)
+					expect(tagOf(exit)).toBe("CustomersInvalidRequestError")
+				} finally {
+					validating.hook = () => undefined
+				}
+				expect(
+					world.rows(
+						`SELECT externalAccountId FROM customer_connections WHERE id = ?`,
+						connectionId,
+					),
+				).toEqual([{ externalAccountId: "acct_c" }])
+				expect(secrets()).toEqual(before)
 			}),
 		))
 })

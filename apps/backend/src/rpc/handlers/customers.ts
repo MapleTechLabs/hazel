@@ -644,7 +644,10 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 
 			"customers.account.update": ({ accountId, ownerUserId, tags, lifecycleStageOverride, name }) =>
 				Effect.gen(function* () {
-					const actor = yield* requireMember
+					// Owner and tags are queue work; the name and the stage change what everyone sees.
+					const actor = yield* name !== undefined || lifecycleStageOverride !== undefined
+						? requireAdmin
+						: requireMember
 					yield* requirePerson(ownerUserId)
 					const now = yield* currentTime
 					return yield* txOnly(
@@ -1115,7 +1118,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 						Effect.gen(function* () {
 							const previous = yield* db.first(
 								SQLite.from(schema.customerConnectionsTable)
-									.select("externalAccountId")
+									.select("externalAccountId", "lastSuccessAt", "backfilledAt")
 									.where(($) => [$.provider.eq(provider)])
 									.limit(1),
 							)
@@ -1143,7 +1146,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 							)
 							yield* storeSecrets(connection.id, secrets)
 							const current = otherProviderAccount(
-								Option.getOrNull(Option.map(previous, (row) => row.externalAccountId)),
+								Option.getOrNull(previous),
 								account.externalAccountId,
 							)
 								? yield* switchAccount(connection, now)
@@ -1220,10 +1223,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 												)
 									const switched =
 										account !== null &&
-										otherProviderAccount(
-											connection.externalAccountId,
-											account.externalAccountId,
-										)
+										otherProviderAccount(connection, account.externalAccountId)
 									const nextSecret =
 										switched && webhookSecret === undefined ? null : givenOrStored
 									return {
@@ -1237,12 +1237,21 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					const now = yield* currentTime
 					return yield* withTx(
 						Effect.gen(function* () {
+							// The secrets and the switch were chosen for the connection as read above:
+							// another update or a disconnect since (while the provider answered) voids them.
+							const fresh = yield* requireConnection(connectionId)
+							if (
+								fresh.status === "disconnected" ||
+								fresh.externalAccountId !== connection.externalAccountId
+							) {
+								return yield* invalid("The connection changed meanwhile: try again")
+							}
 							if (secrets !== undefined) yield* storeSecrets(connectionId, secrets.encrypted)
 							const switched = secrets?.switched === true
-							const current = switched ? yield* switchAccount(connection, now) : connection
+							const current = switched ? yield* switchAccount(fresh, now) : fresh
 							// A new API key lifts an `auth` error and pulls again; one of another account
 							// imports it from scratch.
-							const lifted = account !== null && (switched || connection.status === "error")
+							const lifted = account !== null && (switched || fresh.status === "error")
 							if (switched) yield* restartRun(current, now)
 							const [row] = yield* db.run(
 								SQLite.update(schema.customerConnectionsTable)

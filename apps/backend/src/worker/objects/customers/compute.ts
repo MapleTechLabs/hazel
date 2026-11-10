@@ -16,23 +16,24 @@
  *
  * Accounts are processed in chunks (`ACCOUNT_CHUNK`, `./snapshot.ts`): steps 1–4 run per chunk, so
  * memory holds one chunk's activity and signals; the org's distinct user counts come from SQL. A
- * compute past `COMPUTE_TURN_BUDGET_MS` stops after a chunk and continues in the next alarm turn
- * from where it stopped (`computeProgress`); step 4's rule counts, 5 and 6 run after the last chunk.
+ * compute past `COMPUTE_TURN_BUDGET_MS` or `MAX_CHUNKS_PER_TURN` stops after a chunk and continues
+ * in the next alarm turn from where it stopped (`computeProgress`; started over when it is stale, or
+ * the day or billing provider changed); step 4's rule counts, 5 and 6 run after the last chunk.
  *
  * Per-account built-in series are not stored daily: they derive from their sources at read time
  * (active users from activity, MRR from movements, health from `customer_health_daily`).
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import {
-	type CustomerProvider,
-	type Day,
+	CustomerProvider,
+	Day,
 	type HealthBreakdown,
 	type HealthSettings,
 	type SignalTemplate,
 	TEMPLATES,
 } from "@hazel/domain/customers"
-import type { CustomerAccountId, CustomerSignalId } from "@hazel/schema"
-import { Clock, Effect, Option } from "effect"
+import { CustomerAccountId, type CustomerSignalId } from "@hazel/schema"
+import { Clock, Effect, Option, Schema } from "effect"
 import type { SqlError } from "effect/sql/SqlError"
 import { readObjectMeta, writeObjectMeta } from "../meta"
 import { evaluate, type Match } from "./evaluate"
@@ -75,6 +76,10 @@ const BACKFILL_MAX_AGE_MS = 24 * 60 * 60_000
 const MAX_REBUILD_ATTEMPTS = 3
 /** A compute's alarm turn stops after the chunk that passes this; the next turn continues. */
 const COMPUTE_TURN_BUDGET_MS = 10_000
+/** …or after this many chunks, whatever the clock says (a Worker's clock may not advance while it computes). */
+const MAX_CHUNKS_PER_TURN = 8
+/** A compute spread over turns that started longer ago than this starts over (its totals are stale). */
+const COMPUTE_PROGRESS_MAX_AGE_MS = 60 * 60_000
 /** A done signal whose reopen cannot be checked (its source is unavailable) is checked again then. */
 const REOPEN_RETRY_MS = DAY_MS
 /** A source disconnected this long is gone for good: the signals that need it close. */
@@ -91,6 +96,9 @@ const PRUNED_KEY = "prunedOn"
 
 const meta = <A, R>(effect: Effect.Effect<A, SqlError, R>) =>
 	effect.pipe(Effect.mapError(Database.toDatabaseError))
+
+/** The billing provider MRR was last computed from; none before the first compute. */
+export const mrrSource = meta(readObjectMeta(MRR_SOURCE_KEY))
 
 const same = (a: unknown, b: unknown) =>
 	a instanceof Date || b instanceof Date
@@ -894,7 +902,7 @@ export const mrrHistory = (
 
 /**
  * The last year rebuilt from the sources (after a connection's first backfill or the demo seed):
- * MRR movements of the accounts without any before today (today's replaced; their MRR set to where
+ * MRR movements of the accounts without any in that year before today (today's replaced; their MRR set to where
  * the movements end, in the same transaction, so a crash before the rollups cannot count them
  * twice), and the org's daily
  * rows (MRR, paying, trialing, active, DAU/WAU/MAU, health counts) for the days without one; a day
@@ -928,7 +936,8 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 	const withMovements = new Set(
 		(
 			(yield* db.query(
-				Database.sql`SELECT DISTINCT "accountId" FROM "customer_mrr_movements" WHERE "day" < ${today}`,
+				Database.sql`SELECT DISTINCT "accountId" FROM "customer_mrr_movements"
+				WHERE "day" >= ${first} AND "day" < ${today}`,
 			)) as ReadonlyArray<{ accountId: CustomerAccountId }>
 		).map((row) => row.accountId),
 	)
@@ -1007,7 +1016,7 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 		Effect.gen(function* () {
 			yield* db.query(
 				Database.sql`DELETE FROM "customer_mrr_movements" WHERE "day" = ${today} AND "accountId" NOT IN
-					(SELECT "accountId" FROM "customer_mrr_movements" WHERE "day" < ${today})`,
+					(SELECT "accountId" FROM "customer_mrr_movements" WHERE "day" >= ${first} AND "day" < ${today})`,
 			)
 			for (const chunk of accountChunks(movements, rowsPerInsert(7))) {
 				yield* db.run(SQLite.insertInto(schema.customerMrrMovementsTable).values(chunk as never))
@@ -1101,14 +1110,29 @@ export const runComputeStep = Effect.fn("Customers.computeStep")(function* (now:
 })
 
 /** Where a compute spread over several alarm turns stopped, and what it has gathered so far. */
-interface ComputeProgress {
+const ComputeProgress = Schema.Struct({
+	/** When its first turn ran, its day and billing provider: another one starts over. */
+	startedAt: Schema.Number,
+	day: Day,
+	billingProvider: CustomerProvider,
 	/** The last account done (accounts go in id order). */
-	readonly after: CustomerAccountId
-	readonly armed: ReadonlyArray<string>
-	readonly totals: OrgTotals
-	readonly matches: Record<string, number>
-	readonly triggered: ReadonlyArray<string>
-}
+	after: CustomerAccountId,
+	armed: Schema.Array(Schema.String),
+	totals: Schema.Struct({
+		mrrMinor: Schema.Number,
+		payingAccounts: Schema.Number,
+		trialingAccounts: Schema.Number,
+		healthy: Schema.Number,
+		atRisk: Schema.Number,
+		critical: Schema.Number,
+		atRiskMrrMinor: Schema.Number,
+	}),
+	matches: Schema.Record(Schema.String, Schema.Number),
+	triggered: Schema.Array(Schema.String),
+})
+const ComputeProgressJson = Schema.fromJsonString(ComputeProgress)
+const decodeComputeProgress = Schema.decodeUnknownOption(ComputeProgressJson)
+const encodeComputeProgress = Schema.encodeSync(ComputeProgressJson)
 
 /**
  * A compute, or its next part: chunks of accounts until `budgetMs` has passed, then the rest in the
@@ -1122,27 +1146,36 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 	const started = yield* Clock.currentTimeMillis
 	const base = yield* loadBase(now)
 	const importing = yield* importingProviders(now)
-	const source = yield* meta(readObjectMeta(MRR_SOURCE_KEY))
+	const source = yield* mrrSource
 	const switched = Option.isSome(source) && source.value !== base.billingProvider
 	const holdMovements = switched || billingImporting(importing) || (yield* historyRebuildPending)
-	// SAFETY: `computeProgress` holds only what the previous turn of this compute saved below.
+	// The previous turn's, unless unreadable, stale, or from another day or billing provider.
 	const progress = Option.getOrUndefined(
-		Option.map(yield* computeProgress, (json) => JSON.parse(json) as ComputeProgress),
+		Option.filter(
+			Option.flatMap(yield* computeProgress, decodeComputeProgress),
+			(saved) =>
+				saved.day === base.org.today &&
+				saved.billingProvider === base.billingProvider &&
+				now.getTime() - saved.startedAt < COMPUTE_PROGRESS_MAX_AGE_MS,
+		),
 	)
 	const signals = yield* startSignals(now, importing, {
 		armed: progress?.armed ?? (yield* baselineConnections),
 		matches: new Map(Object.entries(progress?.matches ?? {})),
 		triggered: new Set(progress?.triggered),
 	})
-	const totals: OrgTotals = progress?.totals ?? {
-		mrrMinor: 0,
-		payingAccounts: 0,
-		trialingAccounts: 0,
-		healthy: 0,
-		atRisk: 0,
-		critical: 0,
-		atRiskMrrMinor: 0,
-	}
+	const totals: OrgTotals =
+		progress === undefined
+			? {
+					mrrMinor: 0,
+					payingAccounts: 0,
+					trialingAccounts: 0,
+					healthy: 0,
+					atRisk: 0,
+					critical: 0,
+					atRiskMrrMinor: 0,
+				}
+			: { ...progress.totals }
 	const chunks = accountChunks(
 		progress === undefined ? base.accountIds : base.accountIds.filter((id) => id > progress.after),
 	)
@@ -1155,7 +1188,11 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 		const live = yield* writeSignals(withTodayHealth(snapshot, scores), signals)
 		addTotals(totals, snapshot, scores, live)
 		done++
-		if (done < chunks.length && (yield* Clock.currentTimeMillis) - started >= budgetMs) break
+		if (
+			done < chunks.length &&
+			(done >= MAX_CHUNKS_PER_TURN || (yield* Clock.currentTimeMillis) - started >= budgetMs)
+		)
+			break
 	}
 	const elapsedMs = (yield* Clock.currentTimeMillis) - started
 	yield* Effect.annotateCurrentSpan({
@@ -1172,13 +1209,16 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 	if (done < chunks.length) {
 		const last = chunks[done - 1]
 		yield* saveComputeProgress(
-			JSON.stringify({
+			encodeComputeProgress({
+				startedAt: progress?.startedAt ?? now.getTime(),
+				day: base.org.today,
+				billingProvider: base.billingProvider,
 				after: last[last.length - 1],
 				armed: signals.armed,
 				totals,
 				matches: Object.fromEntries(signals.matches),
 				triggered: [...signals.triggered],
-			} satisfies ComputeProgress),
+			}),
 		)
 		yield* Effect.logInfo("Customers compute continues next turn", {
 			chunks: done,
@@ -1203,7 +1243,7 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 	// Hourly; sooner after a person's change during a compute spread over turns, or for a done
 	// signal's reopen check (one already overdue, its source unavailable, waits for the hourly run).
 	const again = yield* takeComputeAgain
-	const reopen = yield* nextReopenAt
+	const reopen = yield* nextReopenAt(now)
 	const hourly = now.getTime() + COMPUTE_INTERVAL_MS
 	const soon = now.getTime() + COMPUTE_DEBOUNCE_MS
 	yield* scheduleComputeAt(
@@ -1211,7 +1251,7 @@ export const runCompute = Effect.fn("Customers.compute")(function* (
 			? soon
 			: Option.match(reopen, {
 					onNone: () => hourly,
-					onSome: (at) => (at <= now.getTime() ? hourly : Math.min(hourly, Math.max(at, soon))),
+					onSome: (at) => Math.min(hourly, Math.max(at, soon)),
 				}),
 	)
 })

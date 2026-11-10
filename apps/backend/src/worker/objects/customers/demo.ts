@@ -11,6 +11,7 @@ import { Effect, Option } from "effect"
 import { rebuildHistory, runCompute } from "./compute"
 import { CustomerIngest } from "./ingest"
 import { loadBase } from "./snapshot"
+import { clearComputeProgress } from "./schedule"
 import { generateDemoSeed } from "./seed"
 
 const connectionFor = (provider: CustomerProvider, organizationId: OrganizationId, by: UserId, now: Date) =>
@@ -29,6 +30,8 @@ const connectionFor = (provider: CustomerProvider, organizationId: OrganizationI
 					organizationId,
 					provider,
 					status: "active",
+					// Not a real account: connecting one replaces the demo data.
+					externalAccountId: "demo",
 					externalAccountName: `Demo ${provider}`,
 					config: DEFAULT_CONNECTION_CONFIG[provider],
 					connectedBy: by,
@@ -62,6 +65,8 @@ export const seedDemo = Effect.fn("Customers.seedDemo")(function* (input: {
 		yield* ingest.finishRun(run.id, { _tag: "Succeeded", cursor: null })
 	}
 	yield* rebuildHistory(yield* loadBase(input.now))
+	// A compute spread over turns before the seed counted none of its accounts: start over.
+	yield* clearComputeProgress
 	yield* runCompute(input.now)
 	return seed.accounts.length
 })

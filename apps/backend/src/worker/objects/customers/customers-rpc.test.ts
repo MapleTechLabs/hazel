@@ -3,15 +3,22 @@
  * bootstrap from the `OrgObject`, the demo seed through ingest and compute, the queue actions,
  * dry runs, and baseline mode after a backfill.
  */
-import { SignalTemplate, TEMPLATES } from "@hazel/domain/customers"
+import {
+	DEFAULT_HEALTH_SETTINGS,
+	type IngestOp,
+	type RuleDraft,
+	SignalTemplate,
+	TEMPLATES,
+} from "@hazel/domain/customers"
 import type { OrganizationId, UserId } from "@hazel/schema"
 import { Effect, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { customersTarget, orgTarget } from "../kinds"
 import { makeTestObjects } from "../testing"
 import { runCompute } from "./compute"
+import { healthDryRun, ruleDryRun } from "./dry-run"
 import { CustomerIngest } from "./ingest"
-import { makeCustomersWorld, ok, tagOf, uuid } from "./test-kit"
+import { makeCustomersWorld, NOW, ok, tagOf, uuid } from "./test-kit"
 
 const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
 	Effect.runPromise(Effect.scoped(effect) as Effect.Effect<A, E>)
@@ -299,6 +306,7 @@ describe("Customers RPCs", () => {
 						top.ruleId,
 					)[0]!.n
 					expect(dry.matchCount).toBe(open)
+					expect(dry.evaluatedAccounts).toBe(dry.totalAccounts)
 					expect(dry.queueDelta).toEqual({ opens: 0, resolves: 0, stays: open })
 					expect(dry.topMatches[0].evidence._tag).toBe("amount")
 					const healthDry = ok(
@@ -530,6 +538,44 @@ describe("Customers RPCs", () => {
 				expect(yield* webhook(uuid())).toContain('"status":404')
 				// Known connection without a webhook secret: refused.
 				expect(yield* webhook(world.connection("stripe"))).toContain('"status":400')
+			}),
+		))
+
+	it("evaluates a bounded share of the accounts per dry run, and says how many", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest(
+					"clerk",
+					Array.from({ length: 260 }, (_, index): IngestOp => ({
+						_tag: "account",
+						externalId: `org_${index}`,
+						name: `Co ${index}`,
+						sameAs: [],
+						onNoMatch: "create",
+					})),
+				)
+				const draft: RuleDraft = {
+					name: "Quiet for a week",
+					severity: "high",
+					config: TEMPLATES.inactive.defaultConfig,
+					scope: {},
+					enabled: true,
+				}
+				const full = ok(yield* world.call("customers.rule.dryRun", { draft }, world.owner))
+				expect([full.evaluatedAccounts, full.totalAccounts]).toEqual([260, 260])
+
+				// Out of time after the first chunk: its 250 accounts only.
+				const rule = yield* world.object.run(ruleDryRun(draft, undefined, NOW, 0)).pipe(Effect.orDie)
+				expect([rule.evaluatedAccounts, rule.totalAccounts]).toEqual([250, 260])
+				expect(rule.matchCount + rule.nonMatches.reduce((sum, entry) => sum + entry.count, 0)).toBe(
+					250,
+				)
+				const health = yield* world.object
+					.run(healthDryRun(DEFAULT_HEALTH_SETTINGS, NOW, 0))
+					.pipe(Effect.orDie)
+				expect([health.evaluatedAccounts, health.totalAccounts]).toEqual([250, 260])
+				expect(health.current.reduce((sum, row) => sum + row.count, 0)).toBe(250)
 			}),
 		))
 })

@@ -7,9 +7,11 @@ import { Database, SQLite, schema } from "@hazel/db"
 import type { CustomerConnectionId } from "@hazel/schema"
 import { Clock, Effect, Option, Redacted } from "effect"
 import { IntegrationEncryption } from "../../../services/integration-encryption"
+import { HISTORY_DAYS, mrrSource } from "./compute"
 import { CustomerIngest } from "./ingest"
 import type { ProviderCredentials } from "./providers"
 import { requestHistoryRebuild } from "./schedule"
+import { addDays, dayOf } from "./time"
 
 /** Encrypt the API key and the webhook secret for storing, both under the current key version. */
 export const encryptSecrets = Effect.fn("Customers.encryptSecrets")(function* (
@@ -110,17 +112,30 @@ export const loadCredentials = Effect.fn("Customers.loadCredentials")(function* 
 	})
 })
 
-/** Credentials of another provider account than the connection's (none recorded: not another). */
-export const otherProviderAccount = (before: string | null, after: string) =>
-	before !== null && before !== after
+/**
+ * Credentials of another provider account than the connection's (`after`). None recorded: another
+ * once the connection imported something (whose account is unknown), else not.
+ */
+export const otherProviderAccount = (
+	connection: Pick<
+		schema.CustomerConnection,
+		"externalAccountId" | "lastSuccessAt" | "backfilledAt"
+	> | null,
+	after: string,
+) =>
+	connection !== null &&
+	(connection.externalAccountId === null
+		? connection.lastSuccessAt !== null || connection.backfilledAt !== null
+		: connection.externalAccountId !== after)
 
 /**
  * New credentials open another provider account than the connection's: what the old account
  * brought is not this one's. Its records are swept, linked ones included (an account or contact no
  * other source holds is deleted, with the activity only it placed), its billing rows, events,
  * metrics and parked records go, and the connection imports from scratch (its next run a backfill).
- * A billing source's MRR history (movements, the org's daily MRR) is rebuilt once that import is
- * done. The caller starts that run.
+ * When it is the MRR source, the last year of MRR history (movements, the org's daily MRR) is
+ * rebuilt once that import is done; older history, or another provider's, stays. The caller starts
+ * that run.
  */
 export const switchProviderAccount = Effect.fn("Customers.switchProviderAccount")(function* (
 	connection: schema.CustomerConnection,
@@ -151,12 +166,17 @@ export const switchProviderAccount = Effect.fn("Customers.switchProviderAccount"
 				SELECT 1 FROM "customer_external_refs" AS "o" WHERE "o"."entityType" = 'contact'
 					AND "o"."entityId" = "r"."entityId" AND "o"."provider" <> ${provider} AND "o"."staleAt" IS NULL))`,
 	)
-	if (provider === "stripe" || provider === "autumn") {
-		yield* db.run(SQLite.deleteFrom(schema.customerMrrMovementsTable).allRows())
+	// No MRR computed yet: a rebuild's movements are this provider's.
+	if (
+		(provider === "stripe" || provider === "autumn") &&
+		Option.getOrElse(yield* mrrSource, () => provider) === provider
+	) {
+		const first = addDays(dayOf(now), -HISTORY_DAYS)
+		yield* db.run(SQLite.deleteFrom(schema.customerMrrMovementsTable).where(($) => [$.day.gte(first)]))
 		yield* db.run(
 			SQLite.update(schema.customerOrgDailyTable)
 				.set({ mrrMinor: 0, payingAccounts: 0, trialingAccounts: 0, atRiskMrrMinor: 0 })
-				.allRows(),
+				.where(($) => [$.day.gte(first)]),
 		)
 		yield* requestHistoryRebuild
 	}

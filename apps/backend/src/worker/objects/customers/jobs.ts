@@ -42,7 +42,7 @@ import { installDefaults } from "./defaults"
 import { CustomerIngest } from "./ingest"
 import type { CustomerProviderAdapter, CustomerProviderError } from "./providers"
 import { CustomerProviders } from "./providers"
-import { computeDueAt, LEASE_MS, scheduleComputeAt, takeComputeLease } from "./schedule"
+import { clearComputeProgress, computeDueAt, LEASE_MS, scheduleComputeAt, takeComputeLease } from "./schedule"
 import { CustomersServicesLive } from "./services"
 
 const DEFAULTS_KEY = "defaultsInstalled"
@@ -277,10 +277,13 @@ const pullConnection = Effect.fn("CustomersObject.pullConnection")(function* (
 					retryable: failure.retryable,
 					cause: failure.cause,
 				})
+				// Replaced (new credentials) or disconnected meanwhile: the next pull is not this run's.
+				const current = yield* stillPulling(connection.id, run.id)
 				yield* ingest.finishRun(run.id, {
 					_tag: failure.retryable ? "Retrying" : "Failed",
 					error: failure.error,
 				})
+				if (!current) return
 				const retryAt = new Date(
 					now.getTime() + (failure.retryAfterMs ?? backoffMs(connection.consecutiveFailures)),
 				)
@@ -390,7 +393,10 @@ export const tick = Effect.fn("CustomersObject.tick")(function* () {
 			Effect.catchCause((cause) =>
 				Cause.hasInterruptsOnly(cause)
 					? Effect.failCause(cause)
-					: Effect.logError("Customers compute failed", { cause: Cause.pretty(cause) }),
+					: Effect.logError("Customers compute failed", { cause: Cause.pretty(cause) }).pipe(
+							// A failed turn's progress is dropped: the next attempt starts over.
+							Effect.andThen(Effect.ignore(clearComputeProgress)),
+						),
 			),
 		)
 		return { computed: true }

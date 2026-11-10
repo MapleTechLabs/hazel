@@ -63,6 +63,8 @@ const result: RuleDryRunResult = {
 	nonMatches: [{ reason: "Below threshold", count: 200 }],
 	queueDelta: { opens: 2, resolves: 0, stays: 5 },
 	missingSources: [],
+	evaluatedAccounts: 207,
+	totalAccounts: 207,
 }
 
 const pageUpdate = (current: Model, next: Message) => update(current, next, shared)

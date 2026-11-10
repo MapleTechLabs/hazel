@@ -146,4 +146,6 @@ export const HEALTH_DRY_RUN: HealthDryRunResult = {
 			proposed: breakdownOf(HEALTH_DRAFT, ACME),
 		},
 	],
+	evaluatedAccounts: ACCOUNTS.length,
+	totalAccounts: ACCOUNTS.length,
 }

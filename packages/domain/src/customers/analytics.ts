@@ -195,6 +195,9 @@ export const RuleMatch = Schema.Struct({
 })
 export type RuleMatch = typeof RuleMatch.Type
 
+/** A dry run evaluates a bounded share of the accounts: below `totalAccounts`, its result is partial. */
+const DryRunCoverage = Schema.Struct({ evaluatedAccounts: Schema.Int, totalAccounts: Schema.Int })
+
 export const RuleDryRunResult = Schema.Struct({
 	matchCount: Schema.Int,
 	mrrMinor: Schema.Int,
@@ -207,6 +210,7 @@ export const RuleDryRunResult = Schema.Struct({
 	queueDelta: Schema.Struct({ opens: Schema.Int, resolves: Schema.Int, stays: Schema.Int }),
 	/** The rule's template needs a source that is not connected. */
 	missingSources: Schema.Array(CustomerProvider),
+	...DryRunCoverage.fields,
 })
 export type RuleDryRunResult = typeof RuleDryRunResult.Type
 
@@ -224,5 +228,6 @@ export const HealthDryRunResult = Schema.Struct({
 			proposed: HealthBreakdown,
 		}),
 	),
+	...DryRunCoverage.fields,
 })
 export type HealthDryRunResult = typeof HealthDryRunResult.Type

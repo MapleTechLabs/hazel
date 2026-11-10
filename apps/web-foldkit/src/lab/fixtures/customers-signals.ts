@@ -130,5 +130,7 @@ export const dryRunOf = (draft: RuleDraft, ruleId: CustomerSignalRuleId | null):
 				? { opens: matches.length, resolves: 0, stays: 0 }
 				: { opens: Math.min(2, matches.length), resolves: 0, stays: Math.max(0, matches.length - 2) },
 		missingSources: missing ? [...required] : [],
+		evaluatedAccounts: ACCOUNTS.length,
+		totalAccounts: ACCOUNTS.length,
 	}
 }

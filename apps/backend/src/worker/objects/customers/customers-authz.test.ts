@@ -155,6 +155,37 @@ describe("Customers authorization", () => {
 			}),
 		))
 
+	it("lets members set an account's owner and tags, and only admins its name and stage", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", [
+					{ _tag: "account", externalId: "org_1", name: "Acme", sameAs: [], onNoMatch: "create" },
+				])
+				const accountId = world.rows<{ id: string }>(`SELECT id FROM customer_accounts`)[0]!.id
+				const update = (payload: Record<string, unknown>, user: UserId) =>
+					world
+						.call("customers.account.update", { accountId, ...payload }, user)
+						.pipe(Effect.map(tagOf))
+				expect(yield* update({ ownerUserId: world.member, tags: ["vip"] }, world.member)).toBe(
+					"Success",
+				)
+				expect(yield* update({ name: "Acme Inc" }, world.member)).toBe("UnauthorizedError")
+				expect(yield* update({ lifecycleStageOverride: "churned" }, world.member)).toBe(
+					"UnauthorizedError",
+				)
+				expect(world.rows(`SELECT name, lifecycleStageOverride FROM customer_accounts`)).toEqual([
+					{ name: "Acme", lifecycleStageOverride: null },
+				])
+				expect(
+					yield* update({ name: "Acme Inc", lifecycleStageOverride: "churned" }, world.owner),
+				).toBe("Success")
+				expect(world.rows(`SELECT name, lifecycleStageOverride FROM customer_accounts`)).toEqual([
+					{ name: "Acme Inc", lifecycleStageOverride: "churned" },
+				])
+			}),
+		))
+
 	it("routes a customers call only for a current member of the org", () =>
 		run(
 			Effect.gen(function* () {

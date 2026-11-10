@@ -406,28 +406,33 @@ const previewResult = (
 	totals: (rows: ReadonlyArray<Row>) => string,
 	isRefreshing: boolean,
 ): Html =>
-	frame(`${totals(result.proposed)} · scored with your unsaved changes`, [
-		h.div(
-			[
-				h.Class(twMerge("flex flex-col gap-4 transition-opacity", isRefreshing && "opacity-60")),
-				h.AriaBusy(isRefreshing),
-			],
-			[
-				h.div(
-					[h.Class("flex flex-col gap-2")],
-					[
-						bar(h, "Saved", result.current, model.previewMetric),
-						bar(h, "With changes", result.proposed, model.previewMetric),
-					],
-				),
-				distributionTable(h, result.current, result.proposed, context.draft.bands, currency),
-				h.p(
-					[h.Class("rounded-lg bg-warning-subtle/60 px-3 py-2 text-fg text-xs")],
-					[transitionsText(result)],
-				),
-			],
-		),
-	])
+	frame(
+		result.evaluatedAccounts < result.totalAccounts
+			? `Preview based on ${formatCount(result.evaluatedAccounts)} of ${formatCount(result.totalAccounts)} customers · scored with your unsaved changes`
+			: `${totals(result.proposed)} · scored with your unsaved changes`,
+		[
+			h.div(
+				[
+					h.Class(twMerge("flex flex-col gap-4 transition-opacity", isRefreshing && "opacity-60")),
+					h.AriaBusy(isRefreshing),
+				],
+				[
+					h.div(
+						[h.Class("flex flex-col gap-2")],
+						[
+							bar(h, "Saved", result.current, model.previewMetric),
+							bar(h, "With changes", result.proposed, model.previewMetric),
+						],
+					),
+					distributionTable(h, result.current, result.proposed, context.draft.bands, currency),
+					h.p(
+						[h.Class("rounded-lg bg-warning-subtle/60 px-3 py-2 text-fg text-xs")],
+						[transitionsText(result)],
+					),
+				],
+			),
+		],
+	)
 
 // CHECK ONE CUSTOMER
 

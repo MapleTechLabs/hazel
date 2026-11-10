@@ -1,8 +1,9 @@
 /**
  * Dry runs (`docs/customers/tech-design.md` §4.8): a draft rule or draft health settings evaluated
  * over the current data with the same pure functions compute uses, without writing. Admins only
- * (they read every account); accounts load in chunks, a rule's with only the activity its own
- * window needs.
+ * (they read the accounts); accounts load in chunks, a rule's with only the activity its own
+ * window needs. One RPC evaluates at most `MAX_CHUNKS` chunks, and none after `BUDGET_MS`: past
+ * that the result is partial (`evaluatedAccounts` of `totalAccounts`, accounts in id order).
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import {
@@ -15,11 +16,29 @@ import {
 	type RuleMatch,
 } from "@hazel/domain/customers"
 import type { CustomerAccountId, CustomerSignalRuleId } from "@hazel/schema"
-import { Effect } from "effect"
+import { Clock, Effect } from "effect"
 import { scoreAll } from "./compute"
 import { evaluate, missingSources, type RuleInput } from "./evaluate"
 import { priorityScore, valueOf } from "./lifecycle"
-import { accountChunks, loadAccounts, loadBase } from "./snapshot"
+import { accountChunks, loadAccounts, loadBase, type SnapshotBase } from "./snapshot"
+
+const MAX_CHUNKS = 8
+const BUDGET_MS = 5_000
+
+/** The chunks of accounts a dry run evaluates: the first always, then within the caps. */
+const chunksWithinBudget = (base: SnapshotBase, budgetMs: number) =>
+	Effect.gen(function* () {
+		const started = yield* Clock.currentTimeMillis
+		const chunks = accountChunks(base.accountIds).slice(0, MAX_CHUNKS)
+		return {
+			chunks,
+			more: (done: number) =>
+				Effect.map(
+					Clock.currentTimeMillis,
+					(time) => done < chunks.length && (done === 0 || time - started < budgetMs),
+				),
+		}
+	})
 
 export const ruleInputOf = (draft: RuleDraft): RuleInput => ({
 	name: draft.name,
@@ -33,6 +52,7 @@ export const ruleDryRun = Effect.fn("Customers.ruleDryRun")(function* (
 	draft: RuleDraft,
 	ruleId: CustomerSignalRuleId | undefined,
 	now: Date,
+	budgetMs = BUDGET_MS,
 ) {
 	const db = yield* Database.Database
 	const rule = ruleInputOf(draft)
@@ -42,9 +62,12 @@ export const ruleDryRun = Effect.fn("Customers.ruleDryRun")(function* (
 	const matched = new Set<CustomerAccountId>()
 	let mrrMinor = 0
 	const reasons = new Map<string, number>()
-	for (const ids of accountChunks(base.accountIds)) {
-		const snapshot = yield* loadAccounts(base, ids)
+	const evaluated = new Set<CustomerAccountId>()
+	const { chunks, more } = yield* chunksWithinBudget(base, budgetMs)
+	for (let done = 0; yield* more(done); done++) {
+		const snapshot = yield* loadAccounts(base, chunks[done])
 		for (const { facts } of snapshot.accounts) {
+			evaluated.add(facts.account.id)
 			const result = evaluate(rule, facts, snapshot.org)
 			if (result._tag === "NoMatch") {
 				reasons.set(result.reason, (reasons.get(result.reason) ?? 0) + 1)
@@ -77,7 +100,11 @@ export const ruleDryRun = Effect.fn("Customers.ruleDryRun")(function* (
 				)
 	const queued = new Set(
 		existing
-			.filter((signal) => signal.status === "open" || signal.status === "snoozed")
+			.filter(
+				(signal) =>
+					evaluated.has(signal.accountId) &&
+					(signal.status === "open" || signal.status === "snoozed"),
+			)
 			.map((signal) => signal.accountId),
 	)
 	const unclosed = new Set(existing.map((signal) => signal.accountId))
@@ -95,12 +122,18 @@ export const ruleDryRun = Effect.fn("Customers.ruleDryRun")(function* (
 			stays: [...queued].filter((accountId) => matched.has(accountId)).length,
 		},
 		missingSources: [...missingSources(rule.template, base.org)],
+		evaluatedAccounts: evaluated.size,
+		totalAccounts: base.accountIds.length,
 	} satisfies RuleDryRunResult
 })
 
 type Account = { readonly id: CustomerAccountId; readonly name: string; readonly mrrMinor: number }
 
-export const healthDryRun = Effect.fn("Customers.healthDryRun")(function* (draft: HealthSettings, now: Date) {
+export const healthDryRun = Effect.fn("Customers.healthDryRun")(function* (
+	draft: HealthSettings,
+	now: Date,
+	budgetMs = BUDGET_MS,
+) {
 	// Health reads 30 days of activity (the 35-day trend at most): the shortest window.
 	const base = yield* loadBase(now, { windowRules: [] })
 	const distribution = () =>
@@ -109,8 +142,11 @@ export const healthDryRun = Effect.fn("Customers.healthDryRun")(function* (draft
 	const proposed = distribution()
 	const transitions = new Map<string, number>()
 	const changed: Array<{ account: Account; current: HealthBreakdown; proposed: HealthBreakdown }> = []
-	for (const ids of accountChunks(base.accountIds)) {
-		const snapshot = yield* loadAccounts(base, ids)
+	let evaluatedAccounts = 0
+	const { chunks, more } = yield* chunksWithinBudget(base, budgetMs)
+	for (let done = 0; yield* more(done); done++) {
+		const snapshot = yield* loadAccounts(base, chunks[done])
+		evaluatedAccounts += snapshot.accounts.length
 		const before = scoreAll(snapshot)
 		const after = scoreAll(snapshot, draft)
 		for (const { facts } of snapshot.accounts) {
@@ -156,5 +192,7 @@ export const healthDryRun = Effect.fn("Customers.healthDryRun")(function* (draft
 			current: sample.current,
 			proposed: sample.proposed,
 		})),
+		evaluatedAccounts,
+		totalAccounts: base.accountIds.length,
 	} satisfies HealthDryRunResult
 })

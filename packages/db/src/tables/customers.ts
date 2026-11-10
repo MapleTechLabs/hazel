@@ -712,7 +712,7 @@ export const customerUnmatchedRecordsTable = SQLite.table("customer_unmatched_re
 		payload: jsonb<unknown>(),
 		/**
 		 * The account (`provider:externalId`) the held ops name, whose ref replays them once created;
-		 * `*` when they name several (a user of two unknown organizations).
+		 * a JSON array of those when they name several (a user of two unknown organizations).
 		 */
 		blockedBy: SQLite.nullable(SQLite.text),
 		suggestedAccountId: SQLite.nullable(uuid(CustomerAccountId)),

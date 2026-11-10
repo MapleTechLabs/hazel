@@ -100,7 +100,7 @@ Access control:
       activation, then applies them with `applyMembers`.
 - Read: any member (`customer_members`). Queue work (assign, snooze, done, dismiss, notes, owner,
   tags, personal views): any member. Settings, rules, shared views, built-in views, data sources,
-  unmatched: `admin`/`owner` only.
+  unmatched, an account's name and lifecycle stage: `admin`/`owner` only.
 - A `CustomersAccess` service in the object (`requireMember`, `requireAdmin`) replaces `OrgResolver`
   there (which reads `organization_members`, not present in this store). Scopes `customers:read` /
   `customers:write` (added to `ApiScope`, granted to every role) are declared on the RPCs.
@@ -362,6 +362,8 @@ needs ≥ 1 of its `requiredSources` connected, else it matches nothing (dry-run
   histogram (out of scope / below threshold / no data / missing source), queue delta vs the rule's
   current signals.
 - `customers.health.dryRun`: current vs proposed distribution, transitions, sample breakdowns.
+- Both evaluate at most 8 chunks of accounts (2,000) and stop after 5 s: the result carries
+  `evaluatedAccounts` of `totalAccounts`, and the editors say "Preview based on X of Y customers".
 - Evaluation and scoring are pure (`(snapshot, config) → result`) so compute, dry runs and unit
   tests share them.
 

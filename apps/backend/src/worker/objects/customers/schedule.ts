@@ -66,10 +66,11 @@ export const takeComputeAgain = Effect.gen(function* () {
 
 /**
  * Compute soon (≤ 2 minutes): a person changed something it reads. A compute spread over turns is
- * not restarted: another one follows it.
+ * not restarted: another one follows it (its next turn, due right away, stays first; a stuck one's
+ * backoff does not hold this one back).
  */
 export const requestCompute = Effect.gen(function* () {
-	if (Option.isSome(yield* computeProgress)) return yield* meta(writeObjectMeta(COMPUTE_AGAIN_KEY, "1"))
+	if (Option.isSome(yield* computeProgress)) yield* meta(writeObjectMeta(COMPUTE_AGAIN_KEY, "1"))
 	yield* computeBy((yield* Clock.currentTimeMillis) + COMPUTE_DEBOUNCE_MS)
 })
 
@@ -163,10 +164,11 @@ export const takeRebuildAttempt = Effect.gen(function* () {
 })
 
 /**
- * The earliest `reopenAfter` of a done signal still unclosed, on a live account (a deleted account's
- * signals are closed by the next compute, never reopened).
+ * The earliest `reopenAfter` after `now` of a done signal still unclosed, on a live account (a
+ * deleted account's signals are closed by the next compute, never reopened; an overdue one, its
+ * source unavailable, waits for the hourly run).
  */
-export const nextReopenAt = Effect.gen(function* () {
+export const nextReopenAt = Effect.fn("Customers.nextReopenAt")(function* (now: Date) {
 	const db = yield* Database.Database
 	const row = yield* db.first(
 		SQLite.from(schema.customerSignalsTable, "s")
@@ -174,7 +176,7 @@ export const nextReopenAt = Effect.gen(function* () {
 				SQLite.and(a.id.eq(s.accountId), a.deletedAt.isNull()),
 			)
 			.select(($) => ({ reopenAfter: $.reopenAfter }))
-			.where(($) => [$.status.eq("done"), $.closedAt.isNull(), $.reopenAfter.isNotNull()])
+			.where(($) => [$.status.eq("done"), $.closedAt.isNull(), $.reopenAfter.gt(now)])
 			.orderBy(($) => [[$.reopenAfter, "asc"]])
 			.limit(1),
 	)
