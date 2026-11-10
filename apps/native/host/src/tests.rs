@@ -2278,3 +2278,281 @@ fn an_inline_flex_child_of_a_block_keeps_its_own_width() {
     );
     assert_eq!(x, 0.0, "it starts where text-align puts it");
 }
+
+#[test]
+fn a_mask_fade_fades_what_is_inside_the_box_towards_that_edge() {
+    // `mask-b-from-50%`: whole down to half the box, then a straight ramp to nothing.
+    let mut rt = runtime(
+        e(
+            "div",
+            json!({ "w": 100, "h": 100, "mask": { "fade": [0, 0, 0, 0.5] } }),
+            vec![e(
+                "div",
+                json!({ "w": 100, "h": 100, "bg": "#ff0000ff" }),
+                vec![],
+            )],
+        ),
+        (100.0, 100.0),
+    );
+    let frame = render(&mut rt, (100, 100));
+    assert!(
+        frame.is(50, 25, RED),
+        "above the ramp {:?}",
+        frame.at(50, 25)
+    );
+    // Row 75 is 24.5 of 50 points from the edge: red at about half strength over the white page.
+    let half = frame.at(50, 75)[1];
+    assert!(
+        (110..=150).contains(&half),
+        "half way down the ramp: {half}"
+    );
+    assert!(
+        frame.at(50, 98)[1] > 235,
+        "at the edge {:?}",
+        frame.at(50, 98)
+    );
+}
+
+/// A PNG of these RGBA pixels as a data: URL.
+fn png_data_url(width: u32, height: u32, rgba: &[u8]) -> String {
+    use base64::Engine;
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let n = NEXT.fetch_add(1, Ordering::SeqCst);
+    let path = std::env::temp_dir().join(format!("hazel-host-{}-{n}.png", std::process::id()));
+    rune::render::write_png(&path, width, height, rgba).unwrap();
+    let bytes = std::fs::read(&path).unwrap();
+    let _ = std::fs::remove_file(&path);
+    format!(
+        "data:image/png;base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    )
+}
+
+#[test]
+fn a_mask_picture_shows_an_img_only_where_it_is_opaque() {
+    // A red picture under a mask whose left half is opaque and right half clear, box sized.
+    let picture = png_data_url(2, 2, &[255, 0, 0, 255].repeat(4));
+    let shape = png_data_url(2, 1, &[0, 0, 0, 255, 0, 0, 0, 0]);
+    let img = with_attrs(
+        e(
+            "img",
+            json!({
+                "w": 100, "h": 100, "objectFit": "cover",
+                "mask": { "image": { "url": shape, "w": 1, "h": 1 } },
+            }),
+            vec![],
+        ),
+        json!({ "src": picture }),
+    );
+    let mut rt = runtime(
+        e("div", json!({ "w": 100, "h": 100 }), vec![img]),
+        (100.0, 100.0),
+    );
+    // The composite is made off the main thread once the box is laid out; `poll` shows it.
+    let started = std::time::Instant::now();
+    let frame = loop {
+        rt.update(|s: &mut State, tx| {
+            crate::poll(s, 0.0, tx);
+        });
+        rt.frame(0.016);
+        let frame = render(&mut rt, (100, 100));
+        if frame.is(10, 50, RED) || started.elapsed().as_secs() > 10 {
+            break frame;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    };
+    assert!(
+        frame.is(10, 50, RED),
+        "under the opaque half {:?}",
+        frame.at(10, 50)
+    );
+    assert!(
+        frame.is(90, 50, WHITE),
+        "under the clear half {:?}",
+        frame.at(90, 50)
+    );
+}
+
+#[test]
+fn a_composite_fits_the_picture_and_centres_its_mask_in_the_box() {
+    use image::{Rgba, RgbaImage};
+    // Left half red, right half blue, twice as wide as the square box: `cover` shows its middle.
+    let picture = RgbaImage::from_fn(40, 10, |x, _| {
+        Rgba(if x < 20 {
+            [255, 0, 0, 255]
+        } else {
+            [0, 0, 255, 255]
+        })
+    });
+    let opaque = RgbaImage::from_pixel(4, 4, Rgba([0, 0, 0, 255]));
+    // A mask half the box wide and all of its height, and a top edge fading over half the box.
+    let rgba = crate::images::composite(
+        &picture,
+        Some((&opaque, [0.5, 1.0])),
+        [0.0, 0.5, 0.0, 0.0],
+        (20, 20),
+        Some("cover"),
+    );
+    let at = |x: usize, y: usize| &rgba[(y * 20 + x) * 4..(y * 20 + x) * 4 + 4];
+    assert_eq!(
+        at(7, 15),
+        [255, 0, 0, 255],
+        "left of the middle, inside the mask"
+    );
+    assert_eq!(
+        at(12, 15),
+        [0, 0, 255, 255],
+        "right of the middle, inside the mask"
+    );
+    assert_eq!(at(2, 15)[3], 0, "outside the mask picture");
+    assert_eq!(at(17, 15)[3], 0, "outside the mask picture");
+    assert!(
+        (at(7, 4)[3] as i32 - 115).abs() <= 3,
+        "4.5 of 10 down the ramp: {:?}",
+        at(7, 4)
+    );
+}
+
+/// An avatar's letter: a 20/20 span centred in a 40pt box, with or without `text-box` trim.
+fn avatar_letter(trim: bool) -> Runtime<State> {
+    let mut st =
+        json!({ "display": "block", "fontSize": 20, "lineHeight": 20, "color": "#000000ff" });
+    if trim {
+        st["textBox"] = json!({ "over": "cap", "under": "alphabetic" });
+    }
+    runtime(
+        e(
+            "div",
+            json!({ "display": "flex", "w": 40, "h": 40, "items": "center", "justify": "center" }),
+            vec![e("span", st, vec![t("H")])],
+        ),
+        (40.0, 40.0),
+    )
+}
+
+#[test]
+fn text_box_trim_ends_the_letters_box_at_its_cap_height_and_baseline() {
+    let mut trimmed = avatar_letter(true);
+    let [_, y, _, h] = rect(&trimmed, "r/0");
+    // Inter's capitals are 0.727em tall: 14.54 of the 20pt line, centred in the 40pt box.
+    assert!((h - 14.54).abs() <= 0.5, "the box is {h} tall");
+    assert!((y - 12.73).abs() <= 0.5, "the box starts at {y}");
+    // The glyph itself stays where the untrimmed line drew it.
+    let mut plain = avatar_letter(false);
+    assert_eq!(rect(&plain, "r/0")[3], 20.0);
+    let (a, b) = (render(&mut trimmed, (40, 40)), render(&mut plain, (40, 40)));
+    let moved = (0..40 * 40)
+        .filter(|i| (a.rgba[i * 4] as i32 - b.rgba[i * 4] as i32).abs() > 24)
+        .count();
+    assert_eq!(moved, 0, "pixels that differ between the two");
+}
+
+#[test]
+fn adjacent_text_nodes_lay_out_as_one_text() {
+    // A badge's `["6", " users"]`: one flex item in the DOM, so no gap falls inside it.
+    let badge = |texts: Vec<Value>| {
+        let span = e("span", json!({ "display": "flex", "gapCol": 6 }), texts);
+        runtime(
+            e("div", json!({ "display": "flex" }), vec![span]),
+            (300.0, 40.0),
+        )
+    };
+    let split = badge(vec![t("6"), t(" users")]);
+    let whole = badge(vec![t("6 users")]);
+    assert_eq!(rect(&split, "r/0")[2], rect(&whole, "r/0")[2]);
+}
+
+#[test]
+fn a_subgrid_item_stretches_across_a_grid_that_centres_its_items() {
+    // The rail's link: a subgrid `a` in a `justify-items-center` item of a 36pt grid.
+    let link = e(
+        "a",
+        json!({ "display": "grid", "subgrid": true, "colSpanFull": true, "pad": [8, 8, 8, 8] }),
+        vec![e("div", json!({ "w": 16, "h": 16 }), vec![])],
+    );
+    let item = e(
+        "span",
+        json!({
+            "display": "grid", "subgrid": true, "colSpanFull": true,
+            "justifyItems": "center", "items": "center", "h": 36,
+        }),
+        vec![link],
+    );
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "display": "grid", "gridCols": ["auto", "1fr"], "w": 36 }),
+            vec![item],
+        ),
+        (100.0, 100.0),
+    );
+    let [x, _, w, _] = rect(&rt, "r/0/0");
+    assert_eq!((x, w), (0.0, 36.0));
+}
+
+#[test]
+fn a_fit_content_box_keeps_its_contents_size_in_a_taller_row() {
+    // A message's avatar button (`size-fit`) beside taller text: not stretched to the row.
+    let button = e(
+        "button",
+        json!({ "display": "block", "w": "fit", "h": "fit" }),
+        vec![e("div", json!({ "w": 40, "h": 40 }), vec![])],
+    );
+    let text = e("div", json!({ "w": 100, "h": 80 }), vec![]);
+    let rt = runtime(
+        e(
+            "div",
+            json!({ "display": "flex", "w": 300 }),
+            vec![button, text],
+        ),
+        (300.0, 200.0),
+    );
+    assert_eq!(rect(&rt, "r")[3], 80.0);
+    assert_eq!(rect(&rt, "r/0"), [0.0, 0.0, 40.0, 40.0]);
+    // In a block (or a column) it is its width that stays the content's.
+    let fit = e(
+        "div",
+        json!({ "w": "fit" }),
+        vec![e("div", json!({ "w": 40, "h": 10 }), vec![])],
+    );
+    let rt = runtime(e("div", json!({ "w": 300 }), vec![fit]), (300.0, 200.0));
+    assert_eq!(rect(&rt, "r/0")[2], 40.0);
+}
+
+#[test]
+fn a_baseline_row_sets_a_name_and_its_smaller_timestamp_on_one_baseline() {
+    let row = |items: &str| {
+        runtime(
+            e(
+                "div",
+                json!({ "display": "flex", "items": items, "gapCol": 8, "w": 300 }),
+                vec![
+                    e(
+                        "span",
+                        json!({ "display": "block", "fontSize": 16, "lineHeight": 24 }),
+                        vec![t("Ada")],
+                    ),
+                    e(
+                        "span",
+                        json!({ "display": "block", "fontSize": 12, "lineHeight": 16 }),
+                        vec![t("01:17")],
+                    ),
+                    e("div", json!({ "w": 10, "h": 10 }), vec![]),
+                ],
+            ),
+            (300.0, 100.0),
+        )
+    };
+    let rt = row("baseline");
+    // 16/24 has its baseline 18 down and 12/16 has it 12 down, as Chromium rounds them: 6 apart.
+    assert_eq!(rect(&rt, "r/0")[1], 0.0);
+    assert_eq!(rect(&rt, "r/1")[1], 6.0);
+    assert_eq!(
+        rect(&rt, "r")[3],
+        24.0,
+        "the row is as tall as its tallest line"
+    );
+    // A box with no text has no baseline of its own: it stays at the bottom.
+    assert_eq!(rect(&rt, "r/2")[1], 14.0);
+    assert_eq!(rect(&row("flex-end"), "r/1")[1], 8.0);
+}

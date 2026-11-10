@@ -127,6 +127,34 @@ pub struct Style {
     /// A keyframe animation: a loop, or an entrance played on mount.
     #[serde(default, deserialize_with = "lenient")]
     pub animation: Option<Animation>,
+    /// `mask-image`: edges that fade out, and a picture whose alpha shows the box.
+    #[serde(default, deserialize_with = "lenient")]
+    pub mask: Option<Mask>,
+    /// `text-box-trim`: the font metric each trimmed side of the text's box ends at.
+    #[serde(default, deserialize_with = "lenient")]
+    pub text_box: Option<TextBox>,
+}
+
+/// `over`: `cap`, `ex` or `text`; `under`: `alphabetic` or `text`. An absent side is untrimmed.
+#[derive(Deserialize, Clone, Debug, Default, Hash, PartialEq)]
+pub struct TextBox {
+    pub over: Option<String>,
+    pub under: Option<String>,
+}
+
+#[derive(Deserialize, Clone, Debug, Default, Hash, PartialEq)]
+pub struct Mask {
+    /// left top right bottom: the share of the box each edge fades out over, linearly.
+    pub fade: Option<[F; 4]>,
+    pub image: Option<MaskImage>,
+}
+
+/// A mask picture, centred and drawn once at `w` by `h` of the box.
+#[derive(Deserialize, Clone, Debug, Default, Hash, PartialEq)]
+pub struct MaskImage {
+    pub url: String,
+    pub w: F,
+    pub h: F,
 }
 
 #[derive(Deserialize, Clone, Debug, Hash, PartialEq)]
@@ -262,12 +290,14 @@ impl std::hash::Hash for F {
     }
 }
 
-/// A CSS length: px, `"full"` for 100%, `{ "frac": f }` for a share of the parent, or `"auto"`.
+/// A CSS length: px, `"full"` for 100%, `{ "frac": f }` for a share of the parent, `"fit"` for
+/// the content's own size (`fit-content`: never stretched by its parent), or `"auto"`.
 #[derive(Clone, Debug, PartialEq, Hash)]
 pub enum Len {
     Px(F),
     Full,
     Frac(F),
+    Fit,
     Auto,
 }
 impl<'de> Deserialize<'de> for Len {
@@ -275,6 +305,7 @@ impl<'de> Deserialize<'de> for Len {
         Ok(match Value::deserialize(d)? {
             Value::Number(n) => Len::Px(F(n.as_f64().unwrap_or(0.0) as f32)),
             Value::String(s) if s == "full" => Len::Full,
+            Value::String(s) if s == "fit" => Len::Fit,
             Value::Object(o) => match o.get("frac").and_then(Value::as_f64) {
                 Some(f) => Len::Frac(F(f as f32)),
                 None => Len::Auto,

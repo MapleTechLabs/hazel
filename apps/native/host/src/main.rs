@@ -24,8 +24,8 @@ use rune::{
 use serde_json::json;
 
 use layout::{
-    Inherit, apply_box, apply_flex, auto_margins, center_vertically, color, focus_styles,
-    focusable, grid_track, is_checkable, is_text_field, script_focusable, text_run,
+    ASCENT, DESCENT, Inherit, apply_box, apply_flex, auto_margins, center_vertically, color,
+    focus_styles, focusable, grid_track, is_checkable, is_text_field, script_focusable, text_run,
 };
 use wire::{F, Node, RuntimeMsg, Style, Subtrees, TreeMsg};
 
@@ -791,7 +791,11 @@ fn build_elem(
         } else {
             children
         };
-    let kids: Vec<(usize, &Arc<Node>)> = children.iter().enumerate().collect();
+    let joined = join_text(children);
+    let kids: Vec<(usize, &Arc<Node>)> = match &joined {
+        Some(joined) => joined.iter().map(|(i, child)| (*i, child)).collect(),
+        None => children.iter().enumerate().collect(),
+    };
     // CSS bounds a filling inner scroller (or a growing box that may shrink to nothing) by its
     // scrolling parent; Rune's scroll content is unbounded, so the outer one becomes a clipped
     // flex column and only the inner one scrolls.
@@ -869,7 +873,7 @@ fn build_elem(
         }
         // A block holding only inline content (text, spans, links): an inline formatting context,
         // approximated as a wrapping row so a mention chip stays in its sentence.
-        (Some("block") | None, _) if children.len() > 1 && children.iter().all(is_inline) => {
+        (Some("block") | None, _) if kids.len() > 1 && kids.iter().all(|(_, c)| is_inline(c)) => {
             let parent = Parent {
                 is_row: true,
                 items: Some("center"),
@@ -1058,6 +1062,31 @@ fn fills_with_scroll(node: &Arc<Node>) -> bool {
     fills && (st.scroll_y == Some(true) || children.iter().any(fills_with_scroll))
 }
 
+/// `children` with each run of adjacent text nodes as one, at the first one's index: the DOM
+/// lays `["6", " users"]` out as one text (and one flex item). `None` when no two are adjacent.
+fn join_text(children: &[Arc<Node>]) -> Option<Vec<(usize, Arc<Node>)>> {
+    let is_text = |node: &Arc<Node>| matches!(node.as_ref(), Node::Text(_));
+    if !children
+        .windows(2)
+        .any(|pair| is_text(&pair[0]) && is_text(&pair[1]))
+    {
+        return None;
+    }
+    let mut out: Vec<(usize, Arc<Node>)> = Vec::with_capacity(children.len());
+    for (i, child) in children.iter().enumerate() {
+        match (out.last_mut(), child.as_ref()) {
+            (Some((_, last)), Node::Text(more)) if is_text(last) => {
+                let Node::Text(text) = last.as_ref() else {
+                    continue;
+                };
+                *last = Arc::new(Node::Text(format!("{text}{more}")));
+            }
+            _ => out.push((i, child.clone())),
+        }
+    }
+    Some(out)
+}
+
 /// How a container lays out its children, for the children's auto margins.
 #[derive(Clone, Copy)]
 struct Parent<'a> {
@@ -1128,6 +1157,18 @@ fn add_children(
     let grows = |node: &Arc<Node>| {
         style_of(node).is_some_and(|st| st.absolute.is_none() && st.grow.is_some_and(|g| g.0 > 0.0))
     };
+    // `align-items: baseline`: the children start at the top and each drops by what its first
+    // baseline lacks of the deepest one. One with no text keeps to the bottom, as before.
+    let deepest = if parent.is_row && parent.items == Some("baseline") {
+        kids.iter()
+            .filter_map(|(_, child)| first_baseline(child, inh))
+            .reduce(f32::max)
+    } else {
+        None
+    };
+    if deepest.is_some() {
+        e = e.items_start();
+    }
     for (i, child) in paint_order(kids) {
         let child_path = child_path(path, i, child);
         if is_portal(child) && ctx.portal != Some(child_path.as_str()) {
@@ -1138,7 +1179,12 @@ fn add_children(
             && st.display.as_deref() == Some("contents")
         {
             let inner: Vec<(usize, &Arc<Node>)> = children.iter().enumerate().collect();
-            e = add_children(e, &inner, &child_path, inh.from(st), ctx, parent);
+            // It has no box to trim either: its text is still this box's own.
+            let through = Inherit {
+                trim: inh.trim,
+                ..inh.from(st)
+            };
+            e = add_children(e, &inner, &child_path, through, ctx, parent);
             continue;
         }
         if let Some(b) = build(child, &child_path, inh, ctx) {
@@ -1170,6 +1216,29 @@ fn add_children(
                         rune::Align::Center => b.self_center(),
                         rune::Align::End => b.self_end(),
                         _ => b.self_start(),
+                    }
+                }
+                _ => b,
+            };
+            let b = match (deepest, first_baseline(child, inh)) {
+                (Some(deepest), Some(own)) => {
+                    let mt = style_of(child)
+                        .and_then(|st| st.margin)
+                        .map_or(0.0, |m| m[0].0);
+                    b.mt(mt + deepest - own)
+                }
+                (Some(_), None) => b.self_end(),
+                _ => b,
+            };
+            // `fit-content` across the parent's cross axis is a size, so `align-items: stretch`
+            // (and a block's own stretch) leaves the box at its content's, at the start.
+            let b = match style_of(child) {
+                Some(st) if st.absolute.is_none() && st.align_self.is_none() => {
+                    let cross = if parent.is_row { &st.h } else { &st.w };
+                    if *cross == Some(wire::Len::Fit) {
+                        b.self_start()
+                    } else {
+                        b
                     }
                 }
                 _ => b,
@@ -1208,10 +1277,6 @@ fn add_children(
     e
 }
 
-/// Inter's ascent and descent, in ems: where a line's baseline sits in its content area.
-const ASCENT: f32 = 0.969;
-const DESCENT: f32 = 0.242;
-
 /// Space a CSS line box adds above and below an atomic inline child (`inline-block`) of a
 /// block: the child sits on the baseline of a line at least as tall as the parent's strut. A
 /// child with no text has its baseline at its bottom edge, so the strut's descent shows below
@@ -1238,7 +1303,8 @@ fn line_box_space(node: &Node, st: &Style, inh: Inherit, atomic: bool) -> (f32, 
         }
         let own = inh.from(st);
         let (a, b) = metrics(own.size, own.line);
-        (edge(0) + a, edge(2) + b)
+        // A trimmed box ends at its metric: that much less of it lies above and below the baseline.
+        (edge(0) + a - own.trim[0], edge(2) + b - own.trim[1])
     } else {
         let Some(wire::Len::Px(h)) = st.h else {
             return (0.0, 0.0);
@@ -1250,6 +1316,34 @@ fn line_box_space(node: &Node, st: &Style, inh: Inherit, atomic: bool) -> (f32, 
         (strut_above - above).max(0.0),
         (strut_below - below).max(0.0),
     )
+}
+
+/// How far below a node's top margin edge its first line of text has its baseline; `None`
+/// when it holds no text in flow. Chromium lays lines out on whole-pixel font metrics.
+fn first_baseline(node: &Node, inh: Inherit) -> Option<f32> {
+    match node {
+        Node::Text(text) if text.trim().is_empty() => None,
+        Node::Text(_) => {
+            let (ascent, descent) = ((ASCENT * inh.size).round(), (DESCENT * inh.size).round());
+            let half_leading = ((inh.line - ascent - descent) / 2.0).floor();
+            Some(half_leading + ascent - inh.trim[0])
+        }
+        Node::Svg { .. } => None,
+        Node::Elem { st, children, .. } => {
+            if st.display.as_deref() == Some("none") || st.absolute.is_some() {
+                return None;
+            }
+            let own = inh.from(st);
+            let edge: f32 = [st.margin, st.border, st.pad]
+                .iter()
+                .map(|b| b.map_or(0.0, |b| b[0].0))
+                .sum();
+            children
+                .iter()
+                .find_map(|child| first_baseline(child, own))
+                .map(|inner| edge + inner)
+        }
+    }
 }
 
 /// An `inline-block`-like box: `inline-flex`/`inline-block`, or a control a browser draws so.
@@ -1332,7 +1426,17 @@ fn build_img(
     ctx: &Ctx,
 ) -> El {
     let mut e = el().key(path);
-    if let Some(image) = attrs
+    let mask = st.mask.as_ref().filter(|m| m.image.is_some());
+    let local = attrs.get("src").filter(|src| images::is_local(src));
+    if let (Some(src), Some(mask)) = (local, mask) {
+        // A mask picture is placed in the box, so the picture composites at the box's own size:
+        // nothing shows until it is laid out and the composite is ready.
+        let size = rune::memo::layout_size(path).filter(|[w, h]| *w > 0.0 && *h > 0.0);
+        let fit = st.object_fit.as_deref();
+        if let Some(image) = size.and_then(|size| ctx.s.images.masked(src, mask, size, fit)) {
+            e = e.pixels(image.pixels());
+        }
+    } else if let Some(image) = attrs
         .get("src")
         .and_then(|src| ctx.s.images.get(src, picture_size(st)))
     {
@@ -1414,7 +1518,14 @@ fn build_grid(
                 };
                 let e = build_grid(&inner, cols, path, inh.from(cst), ctx, &sub).key(path);
                 let e = presses(apply_box(e, cst), path, tag, attrs, on, ctx);
-                Some(behaviour(e, path, tag, attrs, on, cst, ctx.keys).grid_column_full())
+                let e = behaviour(e, path, tag, attrs, on, cst, ctx.keys).grid_column_full();
+                // A subgrid always stretches across its tracks: `justify-items` does not place it.
+                let centred = st.justify_items.as_deref() == Some("center");
+                Some(if centred && cst.w.is_none() {
+                    e.w_full()
+                } else {
+                    e
+                })
             }
             Node::Elem { st: cst, .. } if cst.col_span_full == Some(true) => {
                 build(child, path, inh, ctx).map(El::grid_column_full)
@@ -1935,7 +2046,7 @@ fn open_url(_: &mut State, url: &str, _: &mut rune::Tx) {
 }
 
 /// A downloaded picture landed: rebuild the memoised subtrees that showed its empty box.
-fn poll(_: &mut State, _: f64, tx: &mut rune::Tx) -> bool {
+pub(crate) fn poll(_: &mut State, _: f64, tx: &mut rune::Tx) -> bool {
     let arrived = images::take_arrived();
     if arrived {
         tx.invalidate_memos_by_prefix("r");

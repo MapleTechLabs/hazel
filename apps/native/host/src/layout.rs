@@ -9,7 +9,7 @@ use rune::{
 
 use std::collections::HashMap;
 
-use crate::wire::{Animation, BgImage, F, FocusRing, Len, OutlineSpec, Style, Timing};
+use crate::wire::{Animation, BgImage, F, FocusRing, Len, OutlineSpec, Style, TextBox, Timing};
 
 pub fn color(hex: &Option<String>) -> Option<Color> {
     let h = hex.as_deref()?;
@@ -66,6 +66,9 @@ pub struct Inherit {
     pub justify: bool,
     /// Text colour while the nearest hover-coloured ancestor is hovered.
     pub hover_color: Option<Color>,
+    /// `text-box-trim` on the element itself (never inherited): what comes off the top and the
+    /// bottom of its text's line, in points.
+    pub trim: [f32; 2],
 }
 
 impl Default for Inherit {
@@ -86,8 +89,33 @@ impl Default for Inherit {
             align: Align::Start,
             justify: false,
             hover_color: None,
+            trim: [0.0; 2],
         }
     }
+}
+
+/// Inter's metrics in ems: where a line's baseline, capitals and lowercase sit in its content area.
+pub const ASCENT: f32 = 0.969;
+pub const DESCENT: f32 = 0.242;
+const CAP_HEIGHT: f32 = 0.727;
+const X_HEIGHT: f32 = 0.546;
+
+/// What `text-box-trim` takes off the top and the bottom of a line `line` points tall set at
+/// `size`: from the line's edge to the metric named, the half-leading included.
+pub fn text_box_trim(text_box: &TextBox, size: f32, line: f32) -> [f32; 2] {
+    let half_leading = (line - (ASCENT + DESCENT) * size) / 2.0;
+    let over = match text_box.over.as_deref() {
+        Some("cap") => half_leading + (ASCENT - CAP_HEIGHT) * size,
+        Some("ex") => half_leading + (ASCENT - X_HEIGHT) * size,
+        Some(_) => half_leading,
+        None => 0.0,
+    };
+    let under = match text_box.under.as_deref() {
+        Some("alphabetic") => half_leading + DESCENT * size,
+        Some(_) => half_leading,
+        None => 0.0,
+    };
+    [over, under]
 }
 
 impl Inherit {
@@ -96,16 +124,21 @@ impl Inherit {
         let own_size = f(st.font_size).filter(|s| *s > 0.0);
         let size = own_size.unwrap_or(self.size);
         let own_color = color(&st.color);
+        let line = f(st.line_height)
+            .filter(|l| *l > 0.0)
+            .unwrap_or(if own_size.is_some() {
+                size * 1.4
+            } else {
+                self.line
+            });
         Inherit {
             color: own_color.unwrap_or(self.color),
             size,
-            line: f(st.line_height)
-                .filter(|l| *l > 0.0)
-                .unwrap_or(if own_size.is_some() {
-                    size * 1.4
-                } else {
-                    self.line
-                }),
+            line,
+            trim: st
+                .text_box
+                .as_ref()
+                .map_or([0.0; 2], |text_box| text_box_trim(text_box, size, line)),
             weight: f(st.font_weight).unwrap_or(self.weight),
             truncate: self.truncate || st.truncate.unwrap_or(false),
             nowrap: if st.nowrap == Some(true) {
@@ -173,6 +206,7 @@ impl Inherit {
             (self.case, self.decoration, self.justify),
             self.align as u8,
             self.hover_color.map(|c| c.hex()),
+            self.trim.map(f32::to_bits),
         )
     }
 }
@@ -214,6 +248,10 @@ pub fn text_run(s: &str, inh: &Inherit) -> El {
     }
     if let Some(c) = inh.hover_color {
         t = t.group_color(c)
+    }
+    // `text-box-trim`: the line keeps its glyphs where they are and gives up the space around them.
+    if inh.trim != [0.0; 2] {
+        t = t.mt(-inh.trim[0]).mb(-inh.trim[1])
     }
     t
 }
@@ -330,6 +368,10 @@ pub fn apply_box(mut e: El, st: &Style) -> El {
             Some(r) if r.iter().any(|v| *v > 0.0) => e.clip_corners(r),
             _ => e.clip_soft(0.0),
         }
+    }
+    // A gradient mask that fades an edge: Rune fades what is inside the box over that share of it.
+    if let Some([l, t, r, b]) = st.mask.as_ref().and_then(|m| m.fade) {
+        e = e.clip_fade_linear_frac(l.0, t.0, r.0, b.0)
     }
     e = apply_shadows(e, st);
     if let Some(o) = &st.outline
@@ -647,8 +689,8 @@ pub fn apply_flex(mut e: El, st: &Style) -> El {
     match st.items.as_deref() {
         Some("center") => e = e.items_center(),
         Some("flex-start" | "start") => e = e.items_start(),
-        // Rune has no baseline alignment; lines of different sizes sharing a row (a name and
-        // its timestamp) sit bottom-aligned, within a point or two of their shared baseline.
+        // Rune has no baseline alignment: `add_children` places a row's text on one baseline,
+        // and what holds no text sits at the bottom.
         Some("flex-end" | "end" | "baseline") => e = e.items_end(),
         Some("stretch") => e = e.items_stretch(),
         _ => {}
