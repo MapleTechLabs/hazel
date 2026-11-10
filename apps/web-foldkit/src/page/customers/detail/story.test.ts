@@ -10,7 +10,7 @@ import {
 	OrganizationId,
 	UserId,
 } from "@hazel/schema"
-import { Option, Schema } from "effect"
+import { Effect, Option, Schema } from "effect"
 import { describe, expect, test } from "vitest"
 import type { AccountRow, SignalRow } from "../../../customers/queries"
 import { snoozeUntil } from "../../../customers/ui/menus"
@@ -20,6 +20,7 @@ import type { Shared } from "../../contract"
 import { sharedDefaults } from "../../test-shared"
 import { Message } from "./message"
 import {
+	EMPTY_NOTE_DRAFTS,
 	isNotFound,
 	type Model,
 	type NoteRow,
@@ -30,6 +31,7 @@ import {
 	sortedNotes,
 } from "./model"
 import { page } from "./index"
+import { restoreNoteDraft, writeNoteDrafts } from "./note-drafts"
 import { init, routeChanged, update } from "./update"
 
 /** Update-loop tests for the customer page: tab routing and loading, owner and tags, notes, signals. */
@@ -218,6 +220,19 @@ describe("customer page: tabs", () => {
 		expect(
 			isNotFound(run(loaded(), [Message.FailedFetchDetail({ accountId: beta.id, reason: "Offline" })])),
 		).toBe(false)
+	})
+
+	test("an account merged or deleted while shown is not found; one still syncing is not", () => {
+		// Only its tag matters here; the constructor would check a whole detail.
+		const fetched = { _tag: "SucceededFetchDetail", accountId: beta.id, detail: {} } as Message
+		const shown = run(loaded(), [fetched])
+		expect(isNotFound(shown)).toBe(false)
+		expect(isNotFound(run(shown, [Message.UpdatedAccounts({ accounts: [acme, gamma] })]))).toBe(true)
+		const syncing = run(init(route(null), shared).model, [
+			fetched,
+			Message.UpdatedAccounts({ accounts: [acme] }),
+		])
+		expect(isNotFound(syncing)).toBe(false)
 	})
 
 	test("an answer for a metric the user left is dropped", () => {
@@ -417,7 +432,8 @@ describe("customer page: notes", () => {
 			)
 		const restored = failed({ noteId: null, body: "Call booked" }, saved)
 		expect(restored.model.composer.body).toBe("Call booked")
-		expect(restored.outMessage?._tag).toBe("RequestedToast")
+		// The Command tells the user itself (`showBackgroundToast`): the page may be gone by then.
+		expect(restored.outMessage).toBeUndefined()
 		expect(failed({ noteId: note(1).id, body: "Edited" }, saved).model.editingNote).toEqual({
 			noteId: note(1).id,
 			body: "Edited",
@@ -427,11 +443,11 @@ describe("customer page: notes", () => {
 	})
 
 	test("a failed save answering after the user left for another customer stays with its own", () => {
-		const fromBeta = Option.getOrThrow(page.init(route("notes", beta.id), shared))
-		const onAcme = Option.getOrThrow(page.init(route("notes", acme.id), shared))
+		const fromBeta = Option.getOrThrow(page.init(route("notes", beta.id), shared, 1))
+		const onAcme = Option.getOrThrow(page.init(route("notes", acme.id), shared, 2))
 		const answer = {
 			_tag: "CustomerDetail" as const,
-			key: fromBeta.slot.key,
+			key: `${fromBeta.slot.key}#${fromBeta.slot.instance}`,
 			message: Message.FailedNoteAction({
 				action: "create",
 				reason: "Offline",
@@ -442,6 +458,40 @@ describe("customer page: notes", () => {
 		expect(Option.getOrThrow(page.update(fromBeta.slot, answer, shared)).slot.model.composer.body).toBe(
 			"Call booked",
 		)
+	})
+
+	test("unsent text outlives the page instance: Prev/Next and back finds it again", () => {
+		const loadDrafts = (opened: ReturnType<typeof init>) => {
+			const command = opened.commands?.find((entry) => entry.name === "LoadNoteDrafts")
+			if (command === undefined) throw new Error("no LoadNoteDrafts")
+			return Effect.runSync(command.effect as Effect.Effect<Message>)
+		}
+		const opened = init(route("notes", gamma.id), shared)
+		// Nothing is written over the kept drafts before they are read back.
+		expect(opened.model.hasLoadedDrafts).toBe(false)
+		const typed = run(opened.model, [
+			loadDrafts(opened),
+			Message.ChangedComposer({ value: "Renewal call" }),
+		])
+		Effect.runSync(
+			writeNoteDrafts(gamma.id, { composer: typed.composer, editingNote: typed.editingNote }),
+		)
+		const back = init(route("notes", gamma.id), shared)
+		expect(run(back.model, [loadDrafts(back)]).composer.body).toBe("Renewal call")
+
+		// A save that fails after the user left keeps its text for the customer.
+		Effect.runSync(writeNoteDrafts(gamma.id, EMPTY_NOTE_DRAFTS))
+		Effect.runSync(restoreNoteDraft(gamma.id, { noteId: null, body: "Call booked" }))
+		const returned = init(route("notes", gamma.id), shared)
+		expect(run(returned.model, [loadDrafts(returned)]).composer.body).toBe("Call booked")
+		Effect.runSync(writeNoteDrafts(gamma.id, EMPTY_NOTE_DRAFTS))
+	})
+
+	test("the delete confirmation runs once, for the note it asked about", () => {
+		const asking = update(loaded(), Message.PressedDeleteNote({ noteId: note(1).id }), shared).model
+		const deleted = update(asking, Message.PressedConfirmDeleteNote(), shared)
+		expect(deleted.model.deletingNoteId).toBeNull()
+		expect(commandNames(update(deleted.model, Message.PressedConfirmDeleteNote(), shared))).toEqual([])
 	})
 
 	test("Add note opens the notes tab and focuses the composer", () => {

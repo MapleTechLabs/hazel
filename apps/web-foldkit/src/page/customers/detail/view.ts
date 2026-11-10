@@ -26,6 +26,7 @@ import {
 	IconExternalLink,
 	IconPlus,
 } from "../../../icons"
+import { safeSourceUrl } from "../../../customers/providers"
 import { AppRoute, hrefOf } from "../../../route"
 import { button } from "../../../ui/button"
 import { dialogBody, dialogClose, dialogFooter, dialogHeader } from "../../../ui/dialog"
@@ -86,6 +87,51 @@ const MATCH_LABEL = {
 	manual: "linked by hand",
 	created: "created from this record",
 } as const satisfies Record<Customers.MatchMethod, string>
+
+// LINKS
+
+/** The account's site: a link only when the domain is a plain host (it is provider data). */
+const domainLink = (h: HtmlBuilder<Message>, domain: string): Html => {
+	const href = Option.liftThrowable(() => new URL(`https://${domain}`))().pipe(
+		Option.filter((url) => url.hostname === domain.toLowerCase()),
+		Option.map((url) => url.href),
+	)
+	return Option.match(href, {
+		onNone: () => h.span([h.Class("text-fg-2")], [domain]),
+		onSome: (site) =>
+			h.a(
+				[
+					h.Href(site),
+					h.Attribute("target", "_blank"),
+					h.Attribute("rel", "noreferrer"),
+					h.Class("inline-flex items-center gap-1 text-fg-2 hover:underline"),
+				],
+				[domain, IconExternalLink(h, { className: "size-3" })],
+			),
+	})
+}
+
+/** `↗` to the record in its provider, when its URL is on the provider's hosts (`safeSourceUrl`). */
+const recordLink = (
+	h: HtmlBuilder<Message>,
+	ref: Readonly<{ provider: Customers.CustomerSource; externalUrl: string | null }>,
+): ReadonlyArray<Html> => {
+	const href = safeSourceUrl(ref.provider, ref.externalUrl)
+	return href === null
+		? []
+		: [
+				h.a(
+					[
+						h.Href(href),
+						h.Attribute("target", "_blank"),
+						h.Attribute("rel", "noreferrer"),
+						h.AriaLabel(`Open in ${SOURCE_LABEL[ref.provider]}`),
+						h.Class("text-muted-fg hover:text-fg"),
+					],
+					[IconExternalLink(h, { className: "size-3.5" })],
+				),
+			]
+}
 
 // HEADER
 
@@ -242,22 +288,7 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 										[
 											...(account.domain === null
 												? []
-												: [
-														h.a(
-															[
-																h.Href(`https://${account.domain}`),
-																h.Attribute("target", "_blank"),
-																h.Attribute("rel", "noreferrer"),
-																h.Class(
-																	"inline-flex items-center gap-1 text-fg-2 hover:underline",
-																),
-															],
-															[
-																account.domain,
-																IconExternalLink(h, { className: "size-3" }),
-															],
-														),
-													]),
+												: [domainLink(h, account.domain)]),
 											...meta.map((part) => h.span([], [`· ${part}`])),
 										],
 									),
@@ -622,22 +653,7 @@ const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context): Html 
 											],
 											[sourceLogo(h, ref.provider), LINK_LABEL[ref.provider]],
 										),
-										...(ref.externalUrl === null
-											? []
-											: [
-													h.a(
-														[
-															h.Href(ref.externalUrl),
-															h.Attribute("target", "_blank"),
-															h.Attribute("rel", "noreferrer"),
-															h.AriaLabel(
-																`Open in ${SOURCE_LABEL[ref.provider]}`,
-															),
-															h.Class("text-muted-fg hover:text-fg"),
-														],
-														[IconExternalLink(h, { className: "size-3.5" })],
-													),
-												]),
+										...recordLink(h, ref),
 									],
 								),
 								h.span(

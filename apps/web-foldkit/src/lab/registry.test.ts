@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { labEntryPaths, labPathOf } from "./boot"
+import { labEntryPaths } from "./boot"
+import { labPathOf } from "./path"
 import { LAB_DESCRIPTIONS, labGroupOf, labNameOf, labPathOfFile } from "./registry"
 
 describe("lab registry", () => {

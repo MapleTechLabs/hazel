@@ -418,15 +418,21 @@ const openMenu = (model: Model, field: MenuField, entries: ReadonlyArray<Menu.En
 		model: next,
 	}))
 
+/**
+ * Runs an action key on the selected row. A selection the search or filters now hide only moves to
+ * the first row: the key never acts on a row the user has not seen selected.
+ */
 const withSelected = (
 	model: Model,
 	shared: Shared,
 	run: (model: Model, signal: SignalRow) => Return,
-): Return =>
-	then(ensureSelection(model, shared), (next) => {
+): Return => {
+	const isHidden = model.selectedId !== null && !isSelectionVisible(model, viewerOf(shared))
+	return then(ensureSelection(model, shared), (next) => {
 		const signal = selectedSignal(next)
-		return signal === undefined ? { model: next } : run(next, signal)
+		return signal === undefined || isHidden ? { model: next } : run(next, signal)
 	})
+}
 
 const onKey = (model: Model, shared: Shared, key: QueueKey): Return => {
 	const viewer = viewerOf(shared)

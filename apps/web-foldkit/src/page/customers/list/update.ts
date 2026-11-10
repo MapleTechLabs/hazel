@@ -595,7 +595,11 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		ToggledAllRows: ({ isSelected }) => ({
 			model: modifyFields(model, {
 				selected: () =>
-					isSelected ? visibleAccounts(model, viewerOf(shared)).map((account) => account.id) : [],
+					isSelected
+						? visibleAccounts(model, viewerOf(shared))
+								.slice(0, model.rowLimit)
+								.map((account) => account.id)
+						: [],
 			}),
 		}),
 		PressedSelectAll: () => ({
@@ -670,8 +674,15 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			for (const entry of sparklines) next[entry.accountId] = entry.values
 			return withSparklines({ model: modifyFields(model, { sparklines: () => next }) }, shared)
 		},
-		// They stay asked for: the column shows no sparkline rather than retrying in a loop.
-		FailedFetchSparklines: () => ({ model }),
+		// Asked for again with the next batch (more rows, other filters), not in a loop.
+		FailedFetchSparklines: ({ accountIds }) => {
+			const failed = new Set<string>(accountIds)
+			return {
+				model: modifyFields(model, {
+					requestedSparklines: (requested) => requested.filter((id) => !failed.has(id)),
+				}),
+			}
+		},
 
 		CompletedFocusSearch: () => ({ model }),
 		CompletedScrollRow: () => ({ model }),

@@ -6,7 +6,7 @@ import type {
 	CustomersNotFoundError,
 } from "@hazel/domain/rpc"
 import { CustomerConnectionId, OrganizationId } from "@hazel/schema"
-import { Effect, Schema } from "effect"
+import { Effect, Redacted, Schema } from "effect"
 import { Command } from "foldkit"
 import type { CommonError } from "~/lib/error-messages"
 import { catchCommon } from "../../../../data/actions"
@@ -17,6 +17,9 @@ import type { ConnectFailure } from "./model"
 /** The Data sources Commands: connect, rotate keys, save settings, sync, disconnect, demo data. */
 
 const org = { organizationId: OrganizationId }
+
+/** A key or signing secret: Redacted, so Command spans and DevTools history show `<redacted>`. */
+const Secret = Schema.Redacted(Schema.String)
 
 /** `customers.connection.update`'s payload: an absent optional key stays absent. */
 interface UpdatePayload {
@@ -81,11 +84,12 @@ export const ConnectCustomerSource = Command.define("ConnectCustomerSource", {
 		...org,
 		provider: Customers.CustomerProvider,
 		reconnectId: Schema.NullOr(CustomerConnectionId),
-		apiKey: Schema.String,
+		apiKey: Secret,
 		config: Customers.ConnectionConfig,
 	},
 	messages: [Message.SucceededConnect, Message.FailedConnect],
-	execute: ({ organizationId, provider, reconnectId, apiKey, config }) => {
+	execute: ({ organizationId, provider, reconnectId, apiKey: secret, config }) => {
+		const apiKey = Redacted.value(secret)
 		const connected = ({ data }: { readonly data: Customers.Connection }) =>
 			Message.SucceededConnect({
 				provider,
@@ -120,13 +124,13 @@ export const ConnectCustomerSource = Command.define("ConnectCustomerSource", {
 
 /** The connect modal's last step: the webhook's signing secret, once the endpoint exists. */
 export const SaveCustomerWebhookSecret = Command.define("SaveCustomerWebhookSecret", {
-	args: { ...org, connectionId: CustomerConnectionId, webhookSecret: Schema.String },
+	args: { ...org, connectionId: CustomerConnectionId, webhookSecret: Secret },
 	messages: [Message.SucceededSaveWebhookSecret, Message.FailedSaveWebhookSecret],
-	execute: (payload) =>
-		updateConnection(payload).pipe(
+	execute: ({ organizationId, connectionId, webhookSecret }) =>
+		updateConnection({ organizationId, connectionId, webhookSecret: Redacted.value(webhookSecret) }).pipe(
 			settleUpdate(
-				() => Message.SucceededSaveWebhookSecret({ connectionId: payload.connectionId }),
-				(reason) => Message.FailedSaveWebhookSecret({ connectionId: payload.connectionId, reason }),
+				() => Message.SucceededSaveWebhookSecret({ connectionId }),
+				(reason) => Message.FailedSaveWebhookSecret({ connectionId, reason }),
 			),
 		),
 })
@@ -136,14 +140,14 @@ export const UpdateCustomerSourceKeys = Command.define("UpdateCustomerSourceKeys
 	args: {
 		...org,
 		connectionId: CustomerConnectionId,
-		apiKey: Schema.NullOr(Schema.String),
-		webhookSecret: Schema.NullOr(Schema.String),
+		apiKey: Schema.NullOr(Secret),
+		webhookSecret: Schema.NullOr(Secret),
 	},
 	messages: [Message.SucceededUpdateKeys, Message.FailedUpdateKeys],
 	execute: ({ organizationId, connectionId, apiKey, webhookSecret }) => {
 		const payload: UpdatePayload = { organizationId, connectionId }
-		if (apiKey !== null) payload.apiKey = apiKey
-		if (webhookSecret !== null) payload.webhookSecret = webhookSecret
+		if (apiKey !== null) payload.apiKey = Redacted.value(apiKey)
+		if (webhookSecret !== null) payload.webhookSecret = Redacted.value(webhookSecret)
 		return updateConnection(payload).pipe(
 			settleUpdate(
 				() => Message.SucceededUpdateKeys(),

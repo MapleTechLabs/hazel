@@ -132,7 +132,12 @@ const pageById = (id: string) => Array.findFirst(pages, (page) => page.id === id
  * Navigation: keep the page when its key is unchanged (informing it of the new route), otherwise
  * build the route's page and drop the previous one (React's unmount semantics).
  */
-export const enterRoute = (current: PageSlot | null, route: AppRoute, shared: Shared): PageTransition =>
+export const enterRoute = (
+	current: PageSlot | null,
+	route: AppRoute,
+	shared: Shared,
+	instance: number,
+): PageTransition =>
 	Option.match(
 		Array.findFirst(pages, (page) => page.ownsRoute(route)),
 		{
@@ -144,7 +149,7 @@ export const enterRoute = (current: PageSlot | null, route: AppRoute, shared: Sh
 					Option.contains(page.keyOf(route), current.key)
 				return isSameInstance
 					? toTransition(page.routeChanged(current, route, shared), current)
-					: toTransition(page.init(route, shared), null)
+					: toTransition(page.init(route, shared, instance), null)
 			},
 		},
 	)

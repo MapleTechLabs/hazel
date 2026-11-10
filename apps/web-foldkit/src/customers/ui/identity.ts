@@ -3,6 +3,7 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { twMerge } from "tailwind-merge"
 import { getBrandfetchIcon } from "~/lib/integrations/__data"
 import { IconExternalLink, IconUser } from "../../icons"
+import { safeSourceUrl } from "../providers"
 
 /**
  * Who and where (Foundations › Source Chips, Avatars And Company Logos): data source marks and
@@ -78,14 +79,20 @@ export const sourceChip = <M>(
 		[logoImage(h, source, "size-4"), options.label ?? SOURCE_LABEL[source]],
 	)
 
-/** `[mark] cus_Q8f2Lk ↗`: links out to the provider's record in a new tab. */
+/**
+ * `[mark] cus_Q8f2Lk ↗`: links out to the provider's record in a new tab; a plain chip when `href`
+ * is not on the provider's hosts (`safeSourceUrl`).
+ */
 export const sourceLinkChip = <M>(
 	h: HtmlBuilder<M>,
 	options: Readonly<{ source: CustomerSource; label: string; href: string; className?: string }>,
-): Html =>
-	h.a(
+): Html => {
+	const href = safeSourceUrl(options.source, options.href)
+	if (href === null)
+		return sourceChip(h, options.source, { label: options.label, className: options.className })
+	return h.a(
 		[
-			h.Href(options.href),
+			h.Href(href),
 			h.Target("_blank"),
 			h.Rel("noreferrer"),
 			h.AriaLabel(`${options.label} in ${SOURCE_LABEL[options.source]}`),
@@ -103,6 +110,7 @@ export const sourceLinkChip = <M>(
 			IconExternalLink(h, { className: "size-3 text-muted-fg group-hover:text-fg" }),
 		],
 	)
+}
 
 // TINTS
 
@@ -171,6 +179,7 @@ export const companyLogo = <M>(
 				h.Src(logoUrl),
 				h.Alt(""),
 				h.Attribute("loading", "lazy"),
+				h.Attribute("referrerpolicy", "no-referrer"),
 				h.Class(twMerge("shrink-0 bg-secondary object-cover", size, options.className)),
 			])
 		: h.span(
@@ -220,10 +229,12 @@ export const personAvatar = <M>(
 			],
 			[IconUser(h, { className: "size-3" })],
 		)
-	return person.avatarUrl
+	const avatarUrl = safeLogoUrl(person.avatarUrl)
+	return avatarUrl !== null
 		? h.img([
-				h.Src(person.avatarUrl),
+				h.Src(avatarUrl),
 				h.Alt(""),
+				h.Attribute("referrerpolicy", "no-referrer"),
 				h.Title(person.name),
 				h.Class(twMerge("shrink-0 rounded-full object-cover", size, ring, options.className)),
 			])

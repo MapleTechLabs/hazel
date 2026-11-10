@@ -83,7 +83,7 @@ describe("select organization", () => {
 			onSome: urlToAppRoute,
 		})
 		expect(route._tag).toBe("OnboardingSetupOrganization")
-		const entered = enterRoute(null, route, onboarded)
+		const entered = enterRoute(null, route, onboarded, 1)
 		expect(entered.slot?._tag).toBe("OnboardingSetupOrganization")
 		expect(Option.isNone(entered.outMessage)).toBe(true)
 	})

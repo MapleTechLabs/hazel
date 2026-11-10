@@ -11,6 +11,7 @@ import {
 	formatMonthLong,
 	formatMonthShort,
 } from "../../../customers/format"
+import { safeSourceUrl } from "../../../customers/providers"
 import { stageBadge } from "../../../customers/ui/badges"
 import { dataTable } from "../../../customers/ui/data-table"
 import { IconCopy, IconExternalLink, IconWarning } from "../../../icons"
@@ -64,7 +65,8 @@ const banner = (h: HtmlBuilder<Message>, context: Context, detail: Customers.Acc
 			? detail.account.attributes.billingEmail
 			: null)
 	const stripeUrl =
-		invoice?.hostedUrl ?? detail.refs.find((ref) => ref.provider === "stripe")?.externalUrl ?? null
+		(invoice === null ? null : safeSourceUrl(invoice.provider, invoice.hostedUrl)) ??
+		safeSourceUrl("stripe", detail.refs.find((ref) => ref.provider === "stripe")?.externalUrl ?? null)
 	const title =
 		invoice === null
 			? `The subscription is ${issue.subscription?.status.replace("_", " ")}`
@@ -402,19 +404,21 @@ const invoicesCard = (
 					label: "",
 					align: "right",
 					widthClass: "w-12",
-					cell: (invoice) =>
-						invoice.hostedUrl === null
+					cell: (invoice) => {
+						const href = safeSourceUrl(invoice.provider, invoice.hostedUrl)
+						return href === null
 							? ""
 							: h.a(
 									[
-										h.Href(invoice.hostedUrl),
+										h.Href(href),
 										h.Attribute("target", "_blank"),
 										h.Attribute("rel", "noreferrer"),
 										h.AriaLabel(`Open invoice ${invoice.number ?? ""}`),
 										h.Class("inline-flex text-muted-fg hover:text-fg"),
 									],
 									[IconExternalLink(h, { className: "size-4" })],
-								),
+								)
+					},
 				},
 			],
 		}),

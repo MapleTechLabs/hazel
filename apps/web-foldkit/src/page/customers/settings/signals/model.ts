@@ -114,6 +114,8 @@ export const Model = Schema.Struct({
 	accounts: Schema.NullOr(Schema.Array(AccountRow)),
 	connectedProviders: Schema.NullOr(Schema.Array(Customers.CustomerProvider)),
 	settings: Schema.NullOr(SettingsSummary),
+	/** The settings query answered (null settings then: no row yet, USD). A rule's form waits for it. */
+	hasSettings: Schema.Boolean,
 	metrics: Schema.Array(MetricRow),
 	/** Null: the rules list. */
 	editor: Schema.NullOr(Editor),

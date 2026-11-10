@@ -1,6 +1,6 @@
 import type * as Customers from "@hazel/domain/customers"
 import type { CustomerConnectionId } from "@hazel/schema"
-import { Result } from "effect"
+import { Redacted, Result } from "effect"
 import { Command } from "foldkit"
 import * as AsyncData from "foldkit/asyncData"
 import { failureMessage } from "~/lib/error-messages"
@@ -331,7 +331,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 						organizationId,
 						provider: form.provider,
 						reconnectId: form.reconnectId,
-						apiKey: form.apiKey.trim(),
+						apiKey: Redacted.make(form.apiKey.trim()),
 						config: form.config,
 					}),
 				],
@@ -375,7 +375,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 					SaveCustomerWebhookSecret({
 						organizationId,
 						connectionId: form.connected.connectionId,
-						webhookSecret,
+						webhookSecret: Redacted.make(webhookSecret),
 					}),
 				],
 			}
@@ -448,8 +448,8 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 					UpdateCustomerSourceKeys({
 						organizationId,
 						connectionId: form.connectionId,
-						apiKey: apiKey === "" ? null : apiKey,
-						webhookSecret: webhookSecret === "" ? null : webhookSecret,
+						apiKey: apiKey === "" ? null : Redacted.make(apiKey),
+						webhookSecret: webhookSecret === "" ? null : Redacted.make(webhookSecret),
 					}),
 				],
 			}

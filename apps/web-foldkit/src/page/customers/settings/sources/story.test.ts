@@ -1,6 +1,6 @@
 import { DEFAULT_CONNECTION_CONFIG, EMPTY_SYNC_STATS } from "@hazel/domain/customers"
 import { CustomerConnectionId, OrganizationId, OrganizationMemberId, UserId } from "@hazel/schema"
-import { Schema } from "effect"
+import { Redacted, Schema } from "effect"
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story"
 import { describe, expect, test, vi } from "vitest"
 import { AppRoute } from "../../../../route"
@@ -120,7 +120,7 @@ describe("data sources: connect", () => {
 					organizationId,
 					provider: "stripe",
 					reconnectId: null,
-					apiKey: "rk_live_1",
+					apiKey: Redacted.make("rk_live_1"),
 					config: { _tag: "stripe", clerkOrgMetadataKey: "org_id", matchByDomain: false },
 				}),
 			),
@@ -145,7 +145,7 @@ describe("data sources: connect", () => {
 				SaveCustomerWebhookSecret({
 					organizationId,
 					connectionId: stripe.id,
-					webhookSecret: "whsec_1",
+					webhookSecret: Redacted.make("whsec_1"),
 				}),
 			),
 			Command.resolve(
@@ -220,7 +220,7 @@ describe("data sources: connect", () => {
 					organizationId,
 					provider: "maple",
 					reconnectId: maple.id,
-					apiKey: "mpl_live_2",
+					apiKey: Redacted.make("mpl_live_2"),
 					config: maple.config,
 				}),
 			),

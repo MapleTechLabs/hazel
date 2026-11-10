@@ -15,7 +15,7 @@ import { NotificationSinks } from "./app/notification-sinks"
 import { viewTransition } from "./app/view-transition"
 import { installImageViewerMorph } from "./chat/viewer/morph"
 import { installChannelPrefetch } from "./core/db/channel-prefetch"
-import { labEnabled, labPathOf, startLab } from "./lab/boot"
+import { labPathOf } from "./lab/path"
 import { ResourcesLive } from "./rpc"
 import * as PendingAnnouncement from "./ui/aria/pending-announcement"
 
@@ -44,9 +44,11 @@ const startApplication = () =>
 		{ flags },
 	)
 
-// `/lab/<path>` boots that lab page's own program instead of the app (dev, or `VITE_HAZEL_LAB=on`).
-const labPath = labEnabled ? labPathOf(location.pathname) : undefined
-if (labPath !== undefined) void startLab(labPath, container)
+// `/lab/<path>` boots that lab page's own program instead of the app (dev, or `VITE_HAZEL_LAB=on`). The
+// flags are inlined at build time, so a production build drops the import and every lab chunk.
+const labPath = labPathOf(location.pathname)
+if ((import.meta.env.DEV || import.meta.env.VITE_HAZEL_LAB === "on") && labPath !== undefined)
+	void import("./lab/boot").then(({ startLab }) => startLab(labPath, container))
 else {
 	// The desktop app has no API cookie: its requests carry its own session as a bearer.
 	if (desktopAuthClient !== null) setSessionBearerProvider(desktopSessionBearer)

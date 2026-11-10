@@ -173,6 +173,17 @@ describe("customers list: filters and views", () => {
 		const matches = (filters: Parameters<typeof matchesFilters>[0]) =>
 			accounts.filter((row) => matchesFilters(filters, row, viewer)).map((row) => row.name)
 		expect(matches({ ownedByMe: true })).toEqual(["Acme Robotics", "Kestrel Systems"])
+		// "Me" is one owner among the picked ones, not a narrowing of them.
+		expect(matches({ ownedByMe: true, ownerUserIds: [grace] })).toEqual([
+			"Acme Robotics",
+			"Brightfield",
+			"Kestrel Systems",
+		])
+		expect(matches({ ownedByMe: true, unowned: true })).toEqual([
+			"Acme Robotics",
+			"Kestrel Systems",
+			"Northwind Labs",
+		])
 		expect(matches({ unowned: true, ownerUserIds: [grace] })).toEqual(["Brightfield", "Northwind Labs"])
 		expect(matches({ payingOnly: true, maxMrrMinor: 200_000 })).toEqual(["Kestrel Systems"])
 		expect(matches({ inactiveForDays: 14 })).toEqual(["Kestrel Systems"])
@@ -393,6 +404,24 @@ describe("customers list: many accounts", () => {
 		expect(first.model.requestedSparklines).toHaveLength(200)
 		const more = update(first.model, Message.PressedShowMoreRows(), shared)
 		expect(commandNames(more)).toEqual(["FetchListSparklines"])
+	})
+
+	test("failed sparklines are asked for again with the next batch", () => {
+		const first = update(init(route(null)).model, Message.UpdatedAccounts({ accounts: many }), shared)
+		const failedIds = first.model.requestedSparklines.slice(0, 3).map((id) => accountId(id))
+		const failed = run(first.model, [
+			Message.FailedFetchSparklines({ reason: "Offline", accountIds: failedIds }),
+		])
+		expect(failed.requestedSparklines).toHaveLength(197)
+		const more = update(failed, Message.PressedShowMoreRows(), shared)
+		expect(more.model.requestedSparklines).toEqual(expect.arrayContaining(failedIds))
+	})
+
+	test("the header checkbox takes the rendered rows; select all takes every match", () => {
+		const model = run(init(route(null)).model, [Message.UpdatedAccounts({ accounts: many })])
+		const page = run(model, [Message.ToggledAllRows({ isSelected: true })])
+		expect(page.selected).toHaveLength(200)
+		expect(run(page, [Message.PressedSelectAll()]).selected).toHaveLength(450)
 	})
 })
 

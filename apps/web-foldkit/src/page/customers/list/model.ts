@@ -220,13 +220,12 @@ const hasRisk = (account: AccountRow) =>
 	account.openRiskHigh + account.openRiskMedium + account.openRiskLow > 0
 
 const matchesOwner = (filters: Customers.ViewFilters, account: AccountRow, viewer: Viewer): boolean => {
-	if (filters.ownedByMe && account.ownerUserId !== viewer.userId) return false
 	const ids = filters.ownerUserIds ?? []
-	if (ids.length === 0 && !filters.unowned) return true
-	return (
-		(account.ownerUserId !== null && ids.includes(account.ownerUserId)) ||
-		(filters.unowned === true && account.ownerUserId === null)
-	)
+	if (!filters.ownedByMe && ids.length === 0 && !filters.unowned) return true
+	const owner = account.ownerUserId
+	return owner === null
+		? filters.unowned === true
+		: (filters.ownedByMe === true && owner === viewer.userId) || ids.includes(owner)
 }
 
 /** One account against a view's filters (`ViewFilters`: every field narrows). */

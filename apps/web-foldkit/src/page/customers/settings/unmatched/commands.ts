@@ -6,7 +6,7 @@ import {
 	CustomerUnmatchedRecordId,
 	OrganizationId,
 } from "@hazel/schema"
-import { Effect, Schema } from "effect"
+import { Effect, Result, Schema } from "effect"
 import { Command } from "foldkit"
 import type { CommonError } from "~/lib/error-messages"
 import { catchCommon } from "../../../../data/actions"
@@ -56,28 +56,41 @@ export const FetchUnmatchedIgnoreRules = Command.define("FetchUnmatchedIgnoreRul
 
 type ActionError = CustomersNotFoundError | CustomersInvalidRequestError | CommonError
 
-/** An action's outcome for one record: none, or why it failed. */
+/** An action's outcome for one record: its answer, or why it failed. */
+const resultOf = <A, R>(
+	effect: Effect.Effect<A, ActionError, R>,
+): Effect.Effect<Result.Result<A, RecordActionFailure>, never, R> =>
+	effect.pipe(
+		Effect.map((answer) => Result.succeed(answer)),
+		Effect.catchTags({
+			CustomersNotFoundError: () => Effect.succeed(Result.fail("NotFound" as const)),
+			CustomersInvalidRequestError: () => Effect.succeed(Result.fail("Invalid" as const)),
+		}),
+		catchCommon((reason) => Result.fail(reason)),
+	)
+
 const outcomeOf = <A, R>(
 	effect: Effect.Effect<A, ActionError, R>,
 ): Effect.Effect<RecordActionFailure | null, never, R> =>
-	effect.pipe(
-		Effect.as(null),
-		Effect.catchTags({
-			CustomersNotFoundError: () => Effect.succeed("NotFound" as const),
-			CustomersInvalidRequestError: () => Effect.succeed("Invalid" as const),
-		}),
-		catchCommon((reason) => reason),
-	)
+	Effect.map(resultOf(effect), Result.match({ onSuccess: () => null, onFailure: (reason) => reason }))
 
+/** `succeeded` reads the answer (default: `SucceededRecordAction`); a failure says why. */
 const settle =
-	(recordId: CustomerUnmatchedRecordId, action: RecordAction) =>
-	<A, R>(effect: Effect.Effect<A, ActionError, R>) =>
-		outcomeOf(effect).pipe(
-			Effect.map((reason) =>
-				reason === null
-					? Message.SucceededRecordAction({ recordId, action })
-					: Message.FailedRecordAction({ recordId, action, reason }),
-			),
+	<A, S = ReturnType<typeof Message.SucceededRecordAction>>(
+		recordId: CustomerUnmatchedRecordId,
+		action: RecordAction,
+		succeeded?: (answer: A) => S,
+	) =>
+	<R>(effect: Effect.Effect<A, ActionError, R>) =>
+		Effect.map(
+			resultOf(effect),
+			Result.match({
+				onSuccess: (answer) =>
+					succeeded === undefined
+						? Message.SucceededRecordAction({ recordId, action })
+						: succeeded(answer),
+				onFailure: (reason) => Message.FailedRecordAction({ recordId, action, reason }),
+			}),
 		)
 
 const recordMessages = [Message.SucceededRecordAction, Message.FailedRecordAction]
@@ -120,17 +133,14 @@ export const IgnoreUnmatchedRecord = Command.define("IgnoreUnmatchedRecord", {
 	args: {
 		...target,
 		rule: Schema.NullOr(Schema.Struct({ field: IgnoreRuleField, pattern: Schema.String })),
-		/** The other loaded open records the rule covers: the server ignores them with it. */
-		coveredIds: Schema.Array(CustomerUnmatchedRecordId),
 	},
 	messages: [...recordMessages, Message.SucceededIgnoreWithRule],
-	execute: ({ organizationId, recordId, rule, coveredIds }) =>
+	execute: ({ organizationId, recordId, rule }) =>
 		ignore(organizationId, recordId, rule ?? undefined).pipe(
-			settle(recordId, "ignore"),
-			Effect.map((message) =>
-				message._tag === "SucceededRecordAction" && rule !== null
-					? Message.SucceededIgnoreWithRule({ recordId, coveredIds })
-					: message,
+			settle(recordId, "ignore", ({ data }) =>
+				rule === null
+					? Message.SucceededRecordAction({ recordId, action: "ignore" })
+					: Message.SucceededIgnoreWithRule({ recordId, ignoredRecordIds: data.ignoredRecordIds }),
 			),
 		),
 })

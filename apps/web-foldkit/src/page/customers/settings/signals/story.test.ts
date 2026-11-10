@@ -72,8 +72,12 @@ const ruleRoute = AppRoute.CustomersSettingsSignalRule({ orgSlug: "hazel", ruleI
 const newRoute = (template: RuleRow["template"]) =>
 	AppRoute.CustomersSettingsSignalNew({ orgSlug: "hazel", template: Option.some(template) }) as SignalsRoute
 
+const settings = { lastComputedAtMs: null, bands: { healthyMin: 70, atRiskMin: 40 } }
+const usd = Message.UpdatedSettings({ settings: { ...settings, reportingCurrency: "USD" } })
+const yen = Message.UpdatedSettings({ settings: { ...settings, reportingCurrency: "JPY" } })
+
 const withRules = (route: SignalsRoute): Model => {
-	const opened = init(route, shared).model
+	const opened = pageUpdate(init(route, shared).model, usd).model
 	return pageUpdate(opened, Message.UpdatedRules({ rules: [inactiveRule] })).model
 }
 
@@ -177,7 +181,9 @@ describe("signals: the live preview", () => {
 	test("opening a rule dry-runs it at once, with its id", () => {
 		const opened = init(ruleRoute, shared)
 		expect(names(opened.commands)).toEqual([])
-		const loaded = pageUpdate(opened.model, Message.UpdatedRules({ rules: [inactiveRule] }))
+		const withSettings = pageUpdate(opened.model, usd)
+		expect(names(withSettings.commands)).toEqual([])
+		const loaded = pageUpdate(withSettings.model, Message.UpdatedRules({ rules: [inactiveRule] }))
 		expect(loaded.model.editor?.preview._tag).toBe("Loading")
 		const [command] = loaded.commands ?? []
 		expect(command?.name).toBe(FetchRuleDryRun.name)
@@ -205,27 +211,31 @@ describe("signals: the live preview", () => {
 		expect(stale.model.editor?.preview._tag).not.toBe("Success")
 	})
 
-	test("rules that arrive before the settings read their min MRR again in the reporting currency", () => {
+	test("a rule's form waits for the settings, then reads its min MRR in the reporting currency", () => {
 		const yenRule: RuleRow = { ...inactiveRule, scope: { minMrrMinor: 100_000 } }
-		const opened = pageUpdate(
-			init(ruleRoute, shared).model,
-			Message.UpdatedRules({ rules: [yenRule] }),
-		).model
-		expect(formOf(opened).scope.minMrr).toBe("1000")
-		const settings = { lastComputedAtMs: null, bands: { healthyMin: 70, atRiskMin: 40 } }
-		const inYen = pageUpdate(
-			opened,
-			Message.UpdatedSettings({ settings: { ...settings, reportingCurrency: "JPY" } }),
-		).model
-		expect(formOf(inYen).scope.minMrr).toBe("100000")
-		expect(Option.getOrThrow(draftOf(formOf(inYen), "JPY")).scope.minMrrMinor).toBe(100_000)
+		const opened = pageUpdate(init(ruleRoute, shared).model, Message.UpdatedRules({ rules: [yenRule] }))
+		expect(opened.model.editor?.form).toBeNull()
+		expect(names(opened.commands)).toEqual([])
+		const inYen = pageUpdate(opened.model, yen)
+		expect(formOf(inYen.model).scope.minMrr).toBe("100000")
+		expect(Option.getOrThrow(draftOf(formOf(inYen.model), "JPY")).scope.minMrrMinor).toBe(100_000)
+		expect(names(inYen.commands)).toEqual([FetchRuleDryRun.name])
 
+		// No settings row yet: USD, the server's default.
+		const noRow = edits(init(ruleRoute, shared).model, [
+			Message.UpdatedRules({ rules: [yenRule] }),
+			Message.UpdatedSettings({ settings: null }),
+		])
+		expect(formOf(noRow).scope.minMrr).toBe("1000")
+	})
+
+	test("the reporting currency changing re-reads an unedited form, never an edited one", () => {
+		const yenRule: RuleRow = { ...inactiveRule, scope: { minMrrMinor: 100_000 } }
+		const opened = edits(init(ruleRoute, shared).model, [usd, Message.UpdatedRules({ rules: [yenRule] })])
+		expect(formOf(opened).scope.minMrr).toBe("1000")
+		expect(formOf(pageUpdate(opened, yen).model).scope.minMrr).toBe("100000")
 		const edited = pageUpdate(opened, Message.ChangedScopeMrr({ value: "50" })).model
-		const keptEdit = pageUpdate(
-			edited,
-			Message.UpdatedSettings({ settings: { ...settings, reportingCurrency: "JPY" } }),
-		).model
-		expect(formOf(keptEdit).scope.minMrr).toBe("50")
+		expect(formOf(pageUpdate(edited, yen).model).scope.minMrr).toBe("50")
 	})
 
 	test("edits debounce; only the latest version's answer lands", () => {
@@ -349,6 +359,45 @@ describe("signals: saving", () => {
 				}),
 			),
 		)
+	})
+
+	test("an answer for a rule whose editor was left touches the open editor only by toast", () => {
+		const otherId = Schema.decodeSync(CustomerSignalRuleId)(uuid(5))
+		const deleting = edits(withRules(ruleRoute), [
+			Message.PressedDelete(),
+			Message.PressedConfirmDelete(),
+		])
+		expect(deleting.editor?.isDeleting).toBe(true)
+		// The editor's own rule: back to the list.
+		expect(pageUpdate(deleting, Message.SucceededDeleteRule({ ruleId })).outMessage?._tag).toBe(
+			"RequestedNavigation",
+		)
+		// Another rule (deleted from an editor left before): a toast, the open editor stays.
+		const other = pageUpdate(deleting, Message.SucceededDeleteRule({ ruleId: otherId }))
+		expect(other.outMessage?._tag).toBe("RequestedToast")
+		const failedOther = pageUpdate(
+			deleting,
+			Message.FailedDeleteRule({ ruleId: otherId, reason: "Offline" }),
+		).model
+		expect(failedOther.editor?.isDeleting).toBe(true)
+		// The list is open: a toast, no navigation.
+		const listed = routeChanged(deleting, listRoute, shared).model
+		expect(pageUpdate(listed, Message.SucceededDeleteRule({ ruleId })).outMessage?._tag).toBe(
+			"RequestedToast",
+		)
+
+		const saving = pageUpdate(
+			pageUpdate(withRules(ruleRoute), Message.PressedToggleEnabled()).model,
+			Message.PressedSave(),
+		).model
+		expect(saving.editor?.isSaving).toBe(true)
+		const savedOther = pageUpdate(saving, Message.SucceededUpdateRule({ ruleId: otherId }))
+		expect(savedOther.model.editor?.isSaving).toBe(true)
+		expect(savedOther.outMessage?._tag).toBe("RequestedToast")
+		expect(
+			pageUpdate(saving, Message.FailedUpdateRule({ ruleId: otherId, reason: "Offline" })).model.editor
+				?.isSaving,
+		).toBe(true)
 	})
 
 	test("closing with changes asks first; discarding goes back to the list", () => {

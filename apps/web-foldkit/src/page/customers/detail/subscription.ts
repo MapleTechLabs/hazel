@@ -12,7 +12,8 @@ import {
 import type { PageSubscriptionInput } from "../../contract"
 import { metricsStream, notesStream } from "./data"
 import { Message } from "./message"
-import type { Model } from "./model"
+import { type Model, NoteDrafts } from "./model"
+import { writeNoteDrafts } from "./note-drafts"
 
 /** The customer page's live rows: every account (prev/next and this one), signals, notes, people. */
 
@@ -47,6 +48,20 @@ export const subscriptions = Subscription.make<Input, Message>()((entry) => ({
 				organizationId === null
 					? Stream.empty
 					: notesStream(organizationId, accountId, (notes) => Message.UpdatedNotes({ notes })),
+		},
+	),
+	// Keeps the unsent text for the customer's next page instance, once this one has read it back.
+	noteDrafts: entry(
+		{ accountId: Schema.NullOr(CustomerAccountId), drafts: NoteDrafts },
+		{
+			modelToDependencies: ({ model }) => ({
+				accountId: model.hasLoadedDrafts ? model.accountId : null,
+				drafts: { composer: model.composer, editingNote: model.editingNote },
+			}),
+			dependenciesToStream: ({ accountId, drafts }) =>
+				accountId === null
+					? Stream.empty
+					: Stream.drain(Stream.fromEffect(writeNoteDrafts(accountId, drafts))),
 		},
 	),
 	members: entry(organization, {

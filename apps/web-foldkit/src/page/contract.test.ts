@@ -1,7 +1,8 @@
 import { UserId } from "@hazel/schema"
-import { Effect, Option, Schema, Stream } from "effect"
+import { Context, Effect, Option, Schema, Stream } from "effect"
 import { Submodel, Subscription } from "foldkit"
 import { describe, expect, test } from "vitest"
+import type { Resources } from "../rpc"
 import { AppRoute } from "../route"
 import { definePage, type PageHost, type PageSubscriptionInput, type Shared } from "./contract"
 
@@ -29,8 +30,8 @@ const page = definePage(
 )
 
 const shared = {} as Shared
-const hostOn = (key: string): PageHost => ({
-	page: { _tag: "Fake", key, model: { userId: key } } as PageHost["page"],
+const hostOn = (key: string, instance = 1): PageHost => ({
+	page: { _tag: "Fake", key, instance, model: { userId: key } } as PageHost["page"],
 	shared,
 })
 const entry = page.subscriptions["Fake.rows"]!
@@ -47,6 +48,23 @@ describe("page Subscriptions follow the page instance", () => {
 		expect(isSame(entry.modelToDependencies(hostOn("a")), entry.modelToDependencies(hostOn("b")))).toBe(
 			false,
 		)
+	})
+
+	test("leaving a key and coming back to it restarts it", () => {
+		expect(
+			isSame(entry.modelToDependencies(hostOn("a", 1)), entry.modelToDependencies(hostOn("a", 2))),
+		).toBe(false)
+	})
+
+	test("its Messages carry the instance's key", () => {
+		const stream = entry.dependenciesToStream(entry.modelToDependencies(hostOn("a", 7)), () =>
+			entry.modelToDependencies(hostOn("a", 7)),
+		)
+		// The entry needs no resource: its Stream is a plain value.
+		const rows = Effect.runSyncWith(Context.empty() as Context.Context<Resources>)(
+			Stream.runCollect(stream),
+		)
+		expect(rows).toMatchObject([{ key: "a#7" }])
 	})
 
 	test("another page stops it", () => {
@@ -73,8 +91,10 @@ describe("a Command's answer reaches only the page instance that sent it", () =>
 		},
 	)
 	const userOf = (id: number) => Schema.decodeSync(UserId)(`00000000-0000-4000-8000-00000000000${id}`)
-	const enter = (id: number) =>
-		Option.getOrThrow(answering.init(AppRoute.Profile({ orgSlug: "hazel", userId: userOf(id) }), shared))
+	const enter = (id: number, instance = id) =>
+		Option.getOrThrow(
+			answering.init(AppRoute.Profile({ orgSlug: "hazel", userId: userOf(id) }), shared, instance),
+		)
 	// The Command needs no resource: its answer is a plain value.
 	const answerOf = (step: ReturnType<typeof enter>) =>
 		Effect.runSync(step.commands[0]!.effect as Effect.Effect<typeof answering.Wrapped.Type>)
@@ -93,7 +113,12 @@ describe("a Command's answer reaches only the page instance that sent it", () =>
 		expect(answersAfter(enter(2), answerOf(enter(1)))).toEqual([])
 	})
 
-	test("a view or Subscription Message (no key) reaches the current instance", () => {
+	test("leaving a key and coming back to it drops the first instance's answer", () => {
+		const first = enter(1)
+		expect(answersAfter(enter(1, 2), answerOf(first))).toEqual([])
+	})
+
+	test("a view Message (no key) reaches the current instance", () => {
 		expect(answersAfter(enter(2), { _tag: "Answering", message: "clicked" })).toEqual(["clicked"])
 	})
 })

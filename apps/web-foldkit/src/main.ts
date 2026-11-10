@@ -277,8 +277,13 @@ const foldPage = Update.foldChild({
 
 const informPage: Step = (model) => foldPage(model, (page) => informShared(page, sharedOf(model)))
 
-const enteredRoute: Step = (model) =>
-	foldPage(model, (page) => enterRoute(page, model.route, sharedOf(model)))
+/** Numbered, a page built for the route drops what its previous instance's Commands answer. */
+const enteredRoute: Step = (model) => {
+	const instance = model.pageInstances + 1
+	return foldPage(modifyFields(model, { pageInstances: () => instance }), (page) =>
+		enterRoute(page, model.route, sharedOf(model), instance),
+	)
+}
 
 /** Discord's Alt+ArrowUp/Down: the sidebar's channel above or below the open one (Shift: unread only). */
 const goToAdjacentChannel =
@@ -681,6 +686,7 @@ export const init: Runtime.RoutingApplicationInit<Model, Message, Flags, Resourc
 			soundSettings: flags.soundSettings,
 			sessionStartMs: flags.sessionStartMs,
 			page: null,
+			pageInstances: 0,
 			shell: Shell.init({ isCreateChannelHintDismissed: flags.isCreateChannelHintDismissed }),
 			modal: Modal.initialModel,
 			commandPalette: CommandPalette.init(),
@@ -794,6 +800,7 @@ export const update = (model: Model, message: Message): Return =>
 			foldCommandPalette(model, (palette) => CommandPalette.update(palette, message, sharedOf(model))),
 		PressedHotkey: ({ actionId }) => pressedHotkey(actionId)(model),
 		GotToastsMessage: ({ message }) => foldToastsWithAction(model, message),
+		ReceivedBackgroundToast: ({ toast }) => showToast(toast)(model),
 		GotUpdatesMessage: ({ message }) => stepUpdates((updates) => Updates.update(updates, message))(model),
 		PressedDesktopMenuItem: ({ item }) => pressedDesktopMenuItem(item)(model),
 		GotPlatformMessage: ({ message }) =>

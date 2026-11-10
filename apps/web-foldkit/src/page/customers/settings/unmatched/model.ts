@@ -242,14 +242,6 @@ export interface IgnorePattern {
 /** `staging-acme` → `staging-*`; underscore id prefixes (`cus_`, `org_`) would match every record. */
 const PREFIX = /^([^-\s]+)-\S/
 
-/** Whether a rule made from `source`'s pattern also covers `record` (same provider and kind). */
-export const matchesPattern = (source: RecordRow, pattern: IgnorePattern, record: RecordRow): boolean =>
-	record.provider === source.provider &&
-	record.entityType === source.entityType &&
-	(pattern.field === "domain"
-		? record.domain?.toLowerCase() === pattern.pattern.toLowerCase()
-		: record.externalId.toLowerCase().startsWith(pattern.pattern.slice(0, -1).toLowerCase()))
-
 /** The patterns offered for a record: its domain, and its external id's `<prefix>-*`. */
 export const ignorePatternsOf = (record: RecordRow): ReadonlyArray<IgnorePattern> => {
 	const prefix = PREFIX.exec(record.externalId)?.[1]

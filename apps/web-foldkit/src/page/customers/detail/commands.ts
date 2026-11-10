@@ -4,17 +4,19 @@ import { CustomerAccountId, CustomerNoteId, OrganizationId, UserId } from "@haze
 import { Effect, Schema } from "effect"
 import { Command } from "foldkit"
 import * as Dom from "foldkit/dom"
-import type { CommonError } from "~/lib/error-messages"
+import { type CommonError, failureMessage } from "~/lib/error-messages"
 import {
 	createNoteAction,
 	deleteNoteAction,
 	updateAccountAction,
 	updateNoteAction,
 } from "../../../customers/actions"
-import { catchCommon } from "../../../data/actions"
+import { catchCommon, errorToastOf } from "../../../data/actions"
+import { showBackgroundToast } from "../../../overlay/background-toasts"
 import { HazelRpc } from "../../../rpc"
 import { Message, type NoteAction, type NoteDraft } from "./message"
 import { COMPOSER_ID, PAGE_SIZE } from "./model"
+import { readNoteDrafts, restoreNoteDraft } from "./note-drafts"
 
 /** The customer page's Commands: its reads, and the account, note and signal actions. */
 
@@ -151,16 +153,46 @@ export const UpdateCustomerAccount = Command.define("UpdateCustomerAccount", {
 
 // NOTES
 
+const NOTE_VERB = { create: "save", update: "update", delete: "delete" } as const satisfies Record<
+	NoteAction,
+	string
+>
+
+type NoteAnswer = Extract<Message, { readonly _tag: "SucceededNoteAction" | "FailedNoteAction" }>
+type FailedNoteAction = Extract<NoteAnswer, { readonly _tag: "FailedNoteAction" }>
+
+/** Told from here, and the text kept for its customer: the page that asked may be gone by now. */
+const failedNote = (accountId: CustomerAccountId, { action, reason, draft }: FailedNoteAction) =>
+	Effect.andThen(
+		showBackgroundToast(
+			errorToastOf(
+				failureMessage(reason, {
+					NotFound: {
+						title: `Couldn't ${NOTE_VERB[action]} the note`,
+						description: "It was deleted.",
+					},
+					Stale: { title: `Couldn't ${NOTE_VERB[action]} the note` },
+				}),
+			),
+		),
+		draft === null ? Effect.void : restoreNoteDraft(accountId, draft),
+	)
+
 /** `draft` is the text a failed save or edit hands back (null for pin and delete). */
 const settleNote =
-	(action: NoteAction, draft: NoteDraft | null = null) =>
-	<A, R>(effect: Effect.Effect<A, CustomersNotFoundError | CommonError, R>) =>
+	(action: NoteAction, accountId: CustomerAccountId, draft: NoteDraft | null = null) =>
+	<A, R>(
+		effect: Effect.Effect<A, CustomersNotFoundError | CommonError, R>,
+	): Effect.Effect<NoteAnswer, never, R> =>
 		effect.pipe(
-			Effect.as(Message.SucceededNoteAction({ action })),
+			Effect.as<NoteAnswer>(Message.SucceededNoteAction({ action })),
 			Effect.catchTag("CustomersNotFoundError", () =>
 				Effect.succeed(Message.FailedNoteAction({ action, reason: "NotFound", draft })),
 			),
 			catchCommon((reason) => Message.FailedNoteAction({ action, reason, draft })),
+			Effect.tap((message) =>
+				message._tag === "FailedNoteAction" ? failedNote(accountId, message) : Effect.void,
+			),
 		)
 
 const noteMessages = [Message.SucceededNoteAction, Message.FailedNoteAction]
@@ -168,27 +200,40 @@ const noteMessages = [Message.SucceededNoteAction, Message.FailedNoteAction]
 export const CreateCustomerNote = Command.define("CreateCustomerNote", {
 	args: { ...target, authorUserId: UserId, body: Schema.String, pinned: Schema.Boolean },
 	messages: noteMessages,
-	execute: (args) => createNoteAction(args).pipe(settleNote("create", { noteId: null, body: args.body })),
+	execute: (args) =>
+		createNoteAction(args).pipe(settleNote("create", args.accountId, { noteId: null, body: args.body })),
 })
 
 export const UpdateCustomerNote = Command.define("UpdateCustomerNote", {
 	args: {
-		organizationId: OrganizationId,
+		...target,
 		noteId: CustomerNoteId,
 		body: Schema.optionalKey(Schema.String),
 		pinned: Schema.optionalKey(Schema.Boolean),
 	},
 	messages: noteMessages,
-	execute: (args) =>
-		updateNoteAction(args).pipe(
-			settleNote("update", args.body === undefined ? null : { noteId: args.noteId, body: args.body }),
+	execute: ({ accountId, ...edit }) =>
+		updateNoteAction(edit).pipe(
+			settleNote(
+				"update",
+				accountId,
+				edit.body === undefined ? null : { noteId: edit.noteId, body: edit.body },
+			),
 		),
 })
 
 export const DeleteCustomerNote = Command.define("DeleteCustomerNote", {
-	args: { organizationId: OrganizationId, noteId: CustomerNoteId },
+	args: { ...target, noteId: CustomerNoteId },
 	messages: noteMessages,
-	execute: (args) => deleteNoteAction(args).pipe(settleNote("delete")),
+	execute: ({ accountId, ...note }) => deleteNoteAction(note).pipe(settleNote("delete", accountId)),
+})
+
+/** The drafts kept for this customer, for its new page instance. */
+export const LoadNoteDrafts = Command.define("LoadNoteDrafts", {
+	args: { accountId: CustomerAccountId },
+	messages: [Message.LoadedNoteDrafts],
+	execute: ({ accountId }) =>
+		Effect.map(readNoteDrafts(accountId), (drafts) => Message.LoadedNoteDrafts({ drafts })),
 })
 
 // LOCAL

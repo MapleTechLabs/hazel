@@ -7,15 +7,6 @@ import { labPathOfFile } from "./registry"
  */
 const entries = import.meta.glob<{ lab: LabEntry }>(["./entries/**/*.ts", "!./entries/**/*.test.ts"])
 
-/** On in dev, and wherever `VITE_HAZEL_LAB=on` (preview deploys). */
-export const labEnabled = import.meta.env.DEV || import.meta.env.VITE_HAZEL_LAB === "on"
-
-/** `/lab` → `index`, `/lab/customers/kit/badges` → `customers/kit/badges`, anything else → undefined. */
-export const labPathOf = (pathname: string): string | undefined => {
-	const match = /^\/lab(?:\/(.+?))?\/?$/.exec(pathname)
-	return match === null ? undefined : (match[1] ?? "index")
-}
-
 /** Every lab page's URL path, read from the file names without loading any. */
 export const labEntryPaths = (): ReadonlyArray<string> => Object.keys(entries).map(labPathOfFile)
 

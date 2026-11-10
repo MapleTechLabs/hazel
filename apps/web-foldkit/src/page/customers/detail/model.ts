@@ -78,11 +78,22 @@ export const EVENT_TYPE_PREFIXES = {
 export const SignalMenu = Schema.Literals(["snooze", "done", "more"])
 export type SignalMenu = typeof SignalMenu.Type
 
+/** The unsent note text: the composer's, and an edit's. */
+export const NoteDrafts = Schema.Struct({
+	composer: Schema.Struct({ body: Schema.String, pinned: Schema.Boolean }),
+	editingNote: Schema.NullOr(Schema.Struct({ noteId: CustomerNoteId, body: Schema.String })),
+})
+export type NoteDrafts = typeof NoteDrafts.Type
+
+export const EMPTY_NOTE_DRAFTS: NoteDrafts = { composer: { body: "", pinned: false }, editingNote: null }
+
 export const Model = Schema.Struct({
 	accountId: CustomerAccountId,
 	tab: CustomerTab,
 	/** Live rows; null until each query answers. */
 	accounts: Schema.NullOr(Schema.Array(AccountRow)),
+	/** The synced list has had this account: it leaving then means merged or deleted, not still syncing. */
+	hasSeenAccount: Schema.Boolean,
 	signals: Schema.NullOr(Schema.Array(SignalRow)),
 	notes: Schema.NullOr(Schema.Array(NoteRow)),
 	members: Schema.Array(MemberRow),
@@ -104,8 +115,10 @@ export const Model = Schema.Struct({
 	events: Events,
 	eventProvider: Schema.NullOr(Customers.CustomerSource),
 	eventType: EventType,
-	composer: Schema.Struct({ body: Schema.String, pinned: Schema.Boolean }),
-	editingNote: Schema.NullOr(Schema.Struct({ noteId: CustomerNoteId, body: Schema.String })),
+	composer: NoteDrafts.fields.composer,
+	editingNote: NoteDrafts.fields.editingNote,
+	/** The drafts kept for this customer (`note-drafts.ts`) are back; only then are they written. */
+	hasLoadedDrafts: Schema.Boolean,
 	isSidebarOpen: Schema.Boolean,
 	ownerMenu: Menu.Model,
 	actionsMenu: Menu.Model,
@@ -165,10 +178,15 @@ export const positionOf = (
 	}
 }
 
-/** Gone: the RPC says so, or the synced list has loaded without it. */
+/**
+ * Gone: the RPC says so, or the synced list lacks it, having loaded without it (a new account may
+ * reach the RPC first) or dropped it (merged or deleted while shown).
+ */
 export const isNotFound = (model: Model): boolean =>
 	(model.detail._tag === "Failure" && model.detail.error === "NotFound") ||
-	(model.accounts !== null && accountOf(model) === undefined && model.detail._tag !== "Success")
+	(model.accounts !== null &&
+		accountOf(model) === undefined &&
+		(model.detail._tag !== "Success" || model.hasSeenAccount))
 
 /** Open and snoozed signals on this account, highest priority first. */
 export const openSignals = (model: Model): ReadonlyArray<SignalRow> =>

@@ -28,10 +28,11 @@ import {
 	FetchCustomerMrrHistory,
 	FetchCustomerUsage,
 	FocusNoteComposer,
+	LoadNoteDrafts,
 	UpdateCustomerAccount,
 	UpdateCustomerNote,
 } from "./commands"
-import { Message, type NoteAction, type NoteDraft } from "./message"
+import { Message, type NoteDraft } from "./message"
 import {
 	ACTIONS_MENU_ID,
 	accountOf,
@@ -41,6 +42,7 @@ import {
 	DISMISS,
 	DONE_MENU_ID,
 	doneEntries,
+	EMPTY_NOTE_DRAFTS,
 	EMPTY_PAGE,
 	EVENT_TYPE_MENU_ID,
 	EVENT_TYPE_PREFIXES,
@@ -165,51 +167,57 @@ const load = (model: Model, shared: Shared): Return => {
 
 // INIT
 
-export const init = (route: Route, shared: Shared): Return =>
-	load(
-		{
-			accountId: route.accountId,
-			tab: tabOf(route),
-			accounts: null,
-			signals: null,
-			notes: null,
-			members: [],
-			metrics: [],
-			connectedProviders: [],
-			bands: Customers.DEFAULT_HEALTH_SETTINGS.bands,
-			detail: AsyncData.Idle(),
-			usageMetric: "active_users",
-			usageRange: "30d",
-			usage: AsyncData.Idle(),
-			hoveredUsage: null,
-			mrrHistory: AsyncData.Idle(),
-			hoveredMrr: null,
-			contacts: EMPTY_PAGE,
-			contactFilter: "all",
-			contactSearch: "",
-			invoices: EMPTY_PAGE,
-			events: EMPTY_PAGE,
-			eventProvider: null,
-			eventType: "all",
-			composer: { body: "", pinned: false },
-			editingNote: null,
-			isSidebarOpen: true,
-			ownerMenu: Menu.init({ id: OWNER_MENU_ID }),
-			actionsMenu: Menu.init({ id: ACTIONS_MENU_ID, placement: "bottom end" }),
-			metricMenu: Menu.init({ id: METRIC_MENU_ID, placement: "bottom end", selectionMode: "Single" }),
-			eventTypeMenu: Menu.init({ id: EVENT_TYPE_MENU_ID, selectionMode: "Single" }),
-			activeSignalId: null,
-			snoozeMenu: Menu.init({ id: SNOOZE_MENU_ID }),
-			doneMenu: Menu.init({ id: DONE_MENU_ID }),
-			signalMoreMenu: Menu.init({ id: SIGNAL_MORE_MENU_ID, placement: "bottom end" }),
-			tagPopover: Popover.init(TAG_POPOVER_ID),
-			tagInput: "",
-			rawModal: Modal.init(RAW_MODAL_ID),
-			deletingNoteId: null,
-			deleteNoteModal: Modal.init(DELETE_NOTE_MODAL_ID),
-		},
-		shared,
-	)
+/** The drafts kept for this customer come back with `LoadedNoteDrafts`. */
+export const init = (route: Route, shared: Shared): Return => {
+	const loaded = load(initialModel(route), shared)
+	return {
+		...loaded,
+		commands: [...(loaded.commands ?? []), LoadNoteDrafts({ accountId: route.accountId })],
+	}
+}
+
+const initialModel = (route: Route): Model => ({
+	accountId: route.accountId,
+	tab: tabOf(route),
+	accounts: null,
+	hasSeenAccount: false,
+	signals: null,
+	notes: null,
+	members: [],
+	metrics: [],
+	connectedProviders: [],
+	bands: Customers.DEFAULT_HEALTH_SETTINGS.bands,
+	detail: AsyncData.Idle(),
+	usageMetric: "active_users",
+	usageRange: "30d",
+	usage: AsyncData.Idle(),
+	hoveredUsage: null,
+	mrrHistory: AsyncData.Idle(),
+	hoveredMrr: null,
+	contacts: EMPTY_PAGE,
+	contactFilter: "all",
+	contactSearch: "",
+	invoices: EMPTY_PAGE,
+	events: EMPTY_PAGE,
+	eventProvider: null,
+	eventType: "all",
+	...EMPTY_NOTE_DRAFTS,
+	hasLoadedDrafts: false,
+	isSidebarOpen: true,
+	ownerMenu: Menu.init({ id: OWNER_MENU_ID }),
+	actionsMenu: Menu.init({ id: ACTIONS_MENU_ID, placement: "bottom end" }),
+	metricMenu: Menu.init({ id: METRIC_MENU_ID, placement: "bottom end", selectionMode: "Single" }),
+	eventTypeMenu: Menu.init({ id: EVENT_TYPE_MENU_ID, selectionMode: "Single" }),
+	activeSignalId: null,
+	snoozeMenu: Menu.init({ id: SNOOZE_MENU_ID }),
+	doneMenu: Menu.init({ id: DONE_MENU_ID }),
+	signalMoreMenu: Menu.init({ id: SIGNAL_MORE_MENU_ID, placement: "bottom end" }),
+	tagPopover: Popover.init(TAG_POPOVER_ID),
+	tagInput: "",
+	rawModal: Modal.init(RAW_MODAL_ID),
+	deletingNoteId: null,
+	deleteNoteModal: Modal.init(DELETE_NOTE_MODAL_ID),
+})
 
 /** Another tab of the same customer; a note being edited (and the composer) waits on the notes tab. */
 export const routeChanged = (model: Model, route: Route, shared: Shared): Return =>
@@ -442,9 +450,9 @@ const submitNote = (model: Model, shared: Shared): Return => {
 
 const submitEdit = (model: Model, shared: Shared): Return => {
 	const editing = model.editingNote
-	const organizationId = shared.organization?.id
+	const args = target(model, shared)
 	const body = editing?.body.trim() ?? ""
-	if (editing === null || organizationId === undefined || body === "") return { model }
+	if (editing === null || args === null || body === "") return { model }
 	return {
 		model: modifyFields(
 			patchNote(model, editing.noteId, (note) => ({ ...note, body, editedAtMs: shared.nowMs })),
@@ -452,7 +460,7 @@ const submitEdit = (model: Model, shared: Shared): Return => {
 				editingNote: () => null,
 			},
 		),
-		commands: [UpdateCustomerNote({ organizationId, noteId: editing.noteId, body })],
+		commands: [UpdateCustomerNote({ ...args, noteId: editing.noteId, body })],
 	}
 }
 
@@ -470,11 +478,6 @@ const restoreDraft = (model: Model, draft: NoteDraft | null): Model => {
 		? modifyFields(model, { editingNote: () => ({ noteId, body: draft.body }) })
 		: model
 }
-
-const NOTE_VERB = { create: "save", update: "update", delete: "delete" } as const satisfies Record<
-	NoteAction,
-	string
->
 
 // UPDATE
 
@@ -514,7 +517,12 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 
 const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
-		UpdatedAccounts: ({ accounts }) => ({ model: modifyFields(model, { accounts: () => accounts }) }),
+		UpdatedAccounts: ({ accounts }) => ({
+			model: modifyFields(model, {
+				accounts: () => accounts,
+				hasSeenAccount: (seen) => seen || accounts.some((account) => account.id === model.accountId),
+			}),
+		}),
 		UpdatedSignals: ({ signals }) => ({ model: modifyFields(model, { signals: () => signals }) }),
 		UpdatedNotes: ({ notes }) => ({ model: modifyFields(model, { notes: () => notes }) }),
 		UpdatedMembers: ({ members }) => ({ model: modifyFields(model, { members: () => members }) }),
@@ -779,6 +787,13 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 				composer: (composer) => modifyFields(composer, { pinned: () => pinned }),
 			}),
 		}),
+		LoadedNoteDrafts: ({ drafts }) => ({
+			model: modifyFields(model, {
+				hasLoadedDrafts: () => true,
+				composer: (composer) => (composer.body === "" ? drafts.composer : composer),
+				editingNote: (editing) => editing ?? drafts.editingNote,
+			}),
+		}),
 		SubmittedNote: () => submitNote(model, shared),
 		PressedEditNote: ({ noteId }) => {
 			const note = model.notes?.find((entry) => entry.id === noteId)
@@ -794,12 +809,12 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 		CanceledEditNote: () => ({ model: modifyFields(model, { editingNote: () => null }) }),
 		SubmittedEditNote: () => submitEdit(model, shared),
 		PressedPinNote: ({ noteId, pinned }) => {
-			const organizationId = shared.organization?.id
-			return organizationId === undefined
+			const args = target(model, shared)
+			return args === null
 				? { model }
 				: {
 						model: patchNote(model, noteId, (note) => ({ ...note, pinned })),
-						commands: [UpdateCustomerNote({ organizationId, noteId, pinned })],
+						commands: [UpdateCustomerNote({ ...args, noteId, pinned })],
 					}
 		},
 		PressedDeleteNote: ({ noteId }) => ({
@@ -818,37 +833,26 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 			}
 		},
 		PressedConfirmDeleteNote: () => {
-			const organizationId = shared.organization?.id
+			const args = target(model, shared)
 			const noteId = model.deletingNoteId
-			const closed = modifyFields(model, { deleteNoteModal: (modal) => Modal.close(modal).model })
-			return organizationId === undefined || noteId === null
-				? { model: closed }
-				: {
-						model: modifyFields(
-							patchNote(closed, noteId, () => null),
-							{
-								editingNote: (editing) => (editing?.noteId === noteId ? null : editing),
-							},
-						),
-						commands: [DeleteCustomerNote({ organizationId, noteId })],
-					}
+			// The dialog may be closing already (a second press while it animates out).
+			if (!model.deleteNoteModal.isOpen || args === null || noteId === null) return { model }
+			return {
+				model: modifyFields(
+					patchNote(model, noteId, () => null),
+					{
+						deleteNoteModal: (modal) => Modal.close(modal).model,
+						deletingNoteId: () => null,
+						editingNote: (editing) => (editing?.noteId === noteId ? null : editing),
+					},
+				),
+				commands: [DeleteCustomerNote({ ...args, noteId })],
+			}
 		},
 		SucceededNoteAction: ({ action }) =>
 			action === "create" ? { model, outMessage: toast(successToast("Note saved")) } : { model },
-		FailedNoteAction: ({ action, reason, draft }) => ({
-			model: restoreDraft(model, draft),
-			outMessage: toast(
-				errorToastOf(
-					failureMessage(reason, {
-						NotFound: {
-							title: `Couldn't ${NOTE_VERB[action]} the note`,
-							description: "It was deleted.",
-						},
-						Stale: { title: `Couldn't ${NOTE_VERB[action]} the note` },
-					}),
-				),
-			),
-		}),
+		// The Command told the user, and kept the text for the customer, in case this page is gone.
+		FailedNoteAction: ({ draft }) => ({ model: restoreDraft(model, draft) }),
 
 		PressedCopy: ({ text, label }) => ({ model, commands: [CopyCustomerText({ text, label })] }),
 		CompletedCopy: ({ label, isCopied }) => ({

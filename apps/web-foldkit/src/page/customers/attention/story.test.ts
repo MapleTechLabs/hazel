@@ -366,6 +366,13 @@ describe("needs attention: keyboard", () => {
 		// A selection filtered out of the rows moves to the first row.
 		const hidden = pageUpdate(withSelection(nearLimit), Message.ChangedSearch({ value: "kestrel" })).model
 		expect(pageUpdate(hidden, key("snooze")).model.selectedId).toBe(stoppedLogging.id)
+		// …and stops there: the first e selects the row, the next one dismisses it.
+		const selecting = pageUpdate(hidden, key("dismiss"))
+		expect(selecting.model.selectedId).toBe(stoppedLogging.id)
+		expect(selecting.commands?.map((command) => command.name)).not.toContain("DismissSignal")
+		expect(
+			pageUpdate(selecting.model, key("dismiss")).commands?.map((command) => command.name),
+		).toContain("DismissSignal")
 		// The snoozed tab has no Assign button.
 		const snoozedTab = { ...loaded(), tab: "snoozed" as const, selectedId: snoozed.id }
 		expect(pageUpdate(snoozedTab, key("assign")).model.assignMenu.popup._tag).toBe("Closed")

@@ -89,7 +89,7 @@ const openRoute = (model: Model, route: SignalsRoute, shared: Shared): Return =>
 			}),
 		CustomersSettingsSignalRule: ({ ruleId }): Return => {
 			const rule = ruleById(base, ruleId)
-			const form = rule === undefined ? null : formOfRule(rule, currencyOf(base))
+			const form = rule === undefined || !base.hasSettings ? null : formOfRule(rule, currencyOf(base))
 			return fetchPreview({ ...base, editor: editorOf(version, ruleId, form) }, shared)
 		},
 	})
@@ -103,6 +103,7 @@ export const init = (route: SignalsRoute, shared: Shared): Return =>
 			accounts: null,
 			connectedProviders: null,
 			settings: null,
+			hasSettings: false,
 			metrics: [],
 			editor: null,
 			lastVersion: 0,
@@ -126,6 +127,13 @@ export const sharedChanged = (model: Model, shared: Shared): Return =>
 
 const withEditor = (model: Model, change: (editor: Editor) => Editor): Model =>
 	model.editor === null ? model : { ...model, editor: change(model.editor) }
+
+/** An answer about one rule changes its editor only (another rule's may be open by then). */
+const withRuleEditor = (
+	model: Model,
+	ruleId: CustomerSignalRuleId,
+	change: (editor: Editor) => Editor,
+): Model => (model.editor?.ruleId === ruleId ? withEditor(model, change) : model)
 
 /** Dry-runs the current draft (its version tags the answer); nothing while it is invalid. */
 const fetchPreview = (model: Model, shared: Shared): Return => {
@@ -240,11 +248,14 @@ const toggleRule = (model: Model, shared: Shared, ruleId: CustomerSignalRuleId, 
 	}
 }
 
-/** The rules arrived after the editor opened on one: fill its form and preview it. */
+/**
+ * The rules and the settings arrived after the editor opened on one: fill its form (min MRR in the
+ * reporting currency) and preview it.
+ */
 const hydrateEditor = (model: Model, shared: Shared): Return => {
 	const editor = model.editor
 	const rule = ruleById(model, editor?.ruleId ?? null)
-	if (editor === null || editor.form !== null || rule === undefined) return { model }
+	if (editor === null || editor.form !== null || rule === undefined || !model.hasSettings) return { model }
 	return fetchPreview(
 		{ ...model, editor: { ...editor, form: formOfRule(rule, currencyOf(model)) } },
 		shared,
@@ -293,7 +304,10 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		UpdatedConnectedProviders: ({ providers }) => ({
 			model: { ...model, connectedProviders: providers },
 		}),
-		UpdatedSettings: ({ settings }) => settingsChanged(model, settings),
+		UpdatedSettings: ({ settings }) =>
+			model.hasSettings
+				? settingsChanged(model, settings)
+				: hydrateEditor({ ...model, settings, hasSettings: true }, shared),
 		UpdatedMetrics: ({ metrics }) => ({ model: { ...model, metrics } }),
 
 		ToggledRule: ({ ruleId, enabled }) => toggleRule(model, shared, ruleId, enabled),
@@ -385,12 +399,12 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			model: withEditor(model, (editor) => ({ ...editor, isSaving: false })),
 			outMessage: writeFailure("Couldn't create the rule", reason),
 		}),
-		SucceededUpdateRule: () => ({
-			model: withEditor(model, (editor) => ({ ...editor, isSaving: false })),
+		SucceededUpdateRule: ({ ruleId }) => ({
+			model: withRuleEditor(model, ruleId, (editor) => ({ ...editor, isSaving: false })),
 			outMessage: toast(successToast("Rule saved", "It runs on the next hourly check.")),
 		}),
-		FailedUpdateRule: ({ reason }) => ({
-			model: withEditor(model, (editor) => ({ ...editor, isSaving: false })),
+		FailedUpdateRule: ({ ruleId, reason }) => ({
+			model: withRuleEditor(model, ruleId, (editor) => ({ ...editor, isSaving: false })),
 			outMessage: writeFailure("Couldn't save the rule", reason),
 		}),
 		PressedClose: () => close(model, shared),
@@ -415,12 +429,15 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				commands: [DeleteSignalRule({ organizationId, ruleId })],
 			}
 		},
-		SucceededDeleteRule: () => ({
-			model,
-			outMessage: toList(shared, successToast("Rule deleted", "Its open items were resolved.")),
-		}),
-		FailedDeleteRule: ({ reason }) => ({
-			model: withEditor(model, (editor) => ({ ...editor, isDeleting: false })),
+		SucceededDeleteRule: ({ ruleId }) => {
+			const deleted = successToast("Rule deleted", "Its open items were resolved.")
+			// Only the editor still deleting this rule leaves it; one left meanwhile just says so.
+			return model.editor?.ruleId === ruleId && model.editor.isDeleting
+				? { model, outMessage: toList(shared, deleted) }
+				: { model, outMessage: toast(deleted) }
+		},
+		FailedDeleteRule: ({ ruleId, reason }) => ({
+			model: withRuleEditor(model, ruleId, (editor) => ({ ...editor, isDeleting: false })),
 			outMessage: writeFailure("Couldn't delete the rule", reason),
 		}),
 

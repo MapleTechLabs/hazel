@@ -28,7 +28,6 @@ import {
 	ignorePatternsOf,
 	linkCandidates,
 	linkPopoverId,
-	matchesPattern,
 	type Model,
 	openRecords,
 	recordById,
@@ -242,18 +241,13 @@ const ignore = (model: Model, shared: Shared, recordId: CustomerUnmatchedRecordI
 		record === undefined ? undefined : ignorePatternsOf(record).find((option) => option.key === key)
 	return act(model, shared, recordId, "ignore", (organizationId) =>
 		key === IGNORE_KEY
-			? IgnoreUnmatchedRecord({ organizationId, recordId, rule: null, coveredIds: [] })
-			: pattern === undefined || record === undefined
+			? IgnoreUnmatchedRecord({ organizationId, recordId, rule: null })
+			: pattern === undefined
 				? undefined
 				: IgnoreUnmatchedRecord({
 						organizationId,
 						recordId,
 						rule: { field: pattern.field, pattern: pattern.pattern },
-						coveredIds: openRecords(model)
-							.filter(
-								(other) => other.id !== recordId && matchesPattern(record, pattern, other),
-							)
-							.map((other) => other.id),
 					}),
 	)
 }
@@ -479,9 +473,12 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		},
 
 		SucceededRecordAction: ({ recordId }) => ({ model: settled(model, [recordId]) }),
-		SucceededIgnoreWithRule: ({ recordId, coveredIds }) => {
+		SucceededIgnoreWithRule: ({ recordId, ignoredRecordIds }) => {
 			const organizationId = adminOrganizationOf(shared)
-			const covered = openRecords(model).filter((record) => coveredIds.includes(record.id))
+			// Exactly what the server ignored: the open records it found the rule covers.
+			const covered = openRecords(model).filter(
+				(record) => record.id !== recordId && ignoredRecordIds.includes(record.id),
+			)
 			const swept = covered.reduce((next, record) => takeOff(next, record, "ignore"), model)
 			// The new rule shows in the rules list.
 			return {

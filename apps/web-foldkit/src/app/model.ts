@@ -89,6 +89,8 @@ export const Model = Schema.Struct({
 	/** When this app load started (from Flags), for the notification sinks. */
 	sessionStartMs: Schema.Number,
 	page: Schema.NullOr(PageSlot),
+	/** Page instances built so far: numbers the next one (`page/contract.ts`). */
+	pageInstances: Schema.Int,
 	shell: Shell.Model,
 	modal: Modal.Model,
 	commandPalette: CommandPalette.Model,

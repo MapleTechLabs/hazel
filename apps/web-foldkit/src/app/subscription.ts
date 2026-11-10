@@ -21,6 +21,7 @@ import { layoutHotkeys } from "../overlay/hotkeys"
 import * as Modal from "../overlay/modal"
 import * as Platform from "../platform"
 import { desktopMenuItems } from "../platform/desktop-menu"
+import { backgroundToasts } from "../overlay/background-toasts"
 import * as Updates from "../platform/updates"
 import * as Toasts from "../overlay/toaster"
 import { Message } from "./message"
@@ -272,6 +273,9 @@ const updateSubscriptions = Subscription.lift(Updates.subscriptions)<Model, Mess
 const desktopMenuSubscriptions = Subscription.make<Model, Message>()(() => ({
 	desktopMenu: Subscription.persistentEntry(
 		desktopMenuItems.pipe(Stream.map((item) => Message.PressedDesktopMenuItem({ item }))),
+	),
+	backgroundToasts: Subscription.persistentEntry(
+		backgroundToasts.pipe(Stream.map((toast) => Message.ReceivedBackgroundToast({ toast }))),
 	),
 }))
 

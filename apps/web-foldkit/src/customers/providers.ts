@@ -57,6 +57,8 @@ export interface ProviderDescriptor<P extends CustomerProvider = CustomerProvide
 	readonly name: string
 	/** Brandfetch domain for the logo (the kit's `sourceMark` uses the same). */
 	readonly domain: string
+	/** The hosts its record and invoice links may point to (`*.` takes any subdomain): see `safeSourceUrl`. */
+	readonly linkHosts: ReadonlyArray<string>
 	/** One line under the name. */
 	readonly blurb: string
 	/** Chips on the source card: what it writes. */
@@ -106,6 +108,7 @@ export const PROVIDERS: Descriptors = {
 		provider: "clerk",
 		name: "Clerk",
 		domain: "clerk.com",
+		linkHosts: ["dashboard.clerk.com"],
 		blurb: "Organizations become accounts, users become contacts, sign-ins feed activity. Source of truth for identity.",
 		provides: ["Accounts", "Contacts", "Activity"],
 		adds: [
@@ -172,6 +175,7 @@ export const PROVIDERS: Descriptors = {
 		provider: "stripe",
 		name: "Stripe",
 		domain: "stripe.com",
+		linkHosts: ["*.stripe.com"],
 		blurb: "Subscriptions, invoices and MRR. Customers match by their Clerk organization id, then email domain.",
 		provides: ["Billing", "Account links"],
 		adds: [
@@ -254,6 +258,7 @@ export const PROVIDERS: Descriptors = {
 		provider: "autumn",
 		name: "Autumn",
 		domain: "useautumn.com",
+		linkHosts: ["*.useautumn.com"],
 		blurb: "Plans, metered features and limits. Customers match by Autumn customer id = Clerk org id.",
 		provides: ["Plans", "Usage", "Limits"],
 		adds: [
@@ -315,6 +320,7 @@ export const PROVIDERS: Descriptors = {
 		provider: "maple",
 		name: "Maple",
 		domain: "maple.dev",
+		linkHosts: ["*.maple.dev"],
 		blurb: "Product events by GroupId and UserId. Drives active users, usage trends and per-account metrics.",
 		provides: ["Usage", "Activity"],
 		adds: [
@@ -382,6 +388,23 @@ export const PROVIDER_ORDER: ReadonlyArray<CustomerProvider> = ["clerk", "stripe
 
 export const providerOf = <P extends CustomerProvider>(provider: P): ProviderDescriptor<P> =>
 	PROVIDERS[provider] as ProviderDescriptor<P>
+
+/**
+ * `url` (provider data: a record's or an invoice's page) if it is https on one of `source`'s
+ * `linkHosts`; anything else gets no link.
+ */
+export const safeSourceUrl = (source: CustomerSource, url: string | null): string | null => {
+	if (url === null || source === "hazel") return null
+	try {
+		const { protocol, hostname } = new URL(url)
+		const isOwnHost = PROVIDERS[source].linkHosts.some((host) =>
+			host.startsWith("*.") ? hostname.endsWith(host.slice(1)) : hostname === host,
+		)
+		return protocol === "https:" && isOwnHost ? url : null
+	} catch {
+		return null
+	}
+}
 
 /** The config a new connection starts from. */
 export const defaultConfigOf = <P extends CustomerProvider>(provider: P): ConnectionConfig & { _tag: P } =>

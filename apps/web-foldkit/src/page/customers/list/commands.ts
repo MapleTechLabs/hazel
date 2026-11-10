@@ -26,7 +26,7 @@ export const FetchListSparklines = Command.define("FetchListSparklines", {
 			}),
 		).pipe(
 			Effect.map(({ sparklines }) => Message.SucceededFetchSparklines({ sparklines })),
-			catchCommon((reason) => Message.FailedFetchSparklines({ reason })),
+			catchCommon((reason) => Message.FailedFetchSparklines({ reason, accountIds })),
 		),
 })
 

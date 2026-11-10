@@ -450,9 +450,7 @@ describe("unmatched: one record", () => {
 				expect(openIds(current)).not.toContain(tally.id)
 				expect(ids(itemsOf(current.ignored))).toEqual([tally.id, ignoredRecord.id])
 			}),
-			Command.expectHas(
-				IgnoreUnmatchedRecord({ organizationId, recordId: tally.id, rule: null, coveredIds: [] }),
-			),
+			Command.expectHas(IgnoreUnmatchedRecord({ organizationId, recordId: tally.id, rule: null })),
 			Command.resolve(
 				IgnoreUnmatchedRecord,
 				Message.SucceededRecordAction({ recordId: tally.id, action: "ignore" }),
@@ -471,7 +469,6 @@ describe("unmatched: one record", () => {
 					organizationId,
 					recordId: stagingAcme.id,
 					rule: { field: "external_id", pattern: "staging-*" },
-					coveredIds: [],
 				}),
 			),
 			Command.resolve(
@@ -501,14 +498,16 @@ describe("unmatched: one record", () => {
 		const [openMenu, clickItem] = pick(tally, "ignore_domain")
 		const result = pageUpdate(pageUpdate(withMore, openMenu!).model, clickItem!)
 		// One call: the server sweeps the records the rule covers, so they leave when it answers.
-		expect(result.commands?.map((command) => [command.name, command.args?.coveredIds])).toEqual([
-			["IgnoreUnmatchedRecord", [sameDomain.id]],
-		])
+		expect(result.commands?.map((command) => command.name)).toEqual(["IgnoreUnmatchedRecord"])
 		expect(openIds(result.model)).not.toContain(tally.id)
 		expect(openIds(result.model)).toContain(sameDomain.id)
 		const done = pageUpdate(
 			result.model,
-			Message.SucceededIgnoreWithRule({ recordId: tally.id, coveredIds: [sameDomain.id] }),
+			// The server's answer, not a guess here: the ids it ignored, this record's included.
+			Message.SucceededIgnoreWithRule({
+				recordId: tally.id,
+				ignoredRecordIds: [tally.id, sameDomain.id],
+			}),
 		)
 		expect(openIds(done.model)).not.toContain(sameDomain.id)
 		expect(openIds(done.model)).toContain(otherSource.id)
