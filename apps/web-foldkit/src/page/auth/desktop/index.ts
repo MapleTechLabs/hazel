@@ -148,7 +148,11 @@ export const update = (model: Model, message: Message): Return =>
 	})
 
 const isRetryableHandoff = (reason: HandoffFailure): boolean =>
-	reason !== "Expired" && reason !== "NeedsSignIn" && isRetryableReason(reason)
+	!isSignInReason(reason) && reason !== "Expired" && isRetryableReason(reason)
+
+/** A failure this browser fixes by signing in (again) and continuing the same attempt. */
+const isSignInReason = (reason: HandoffFailure): reason is "NeedsSignIn" | "SignInAgain" =>
+	reason === "NeedsSignIn" || reason === "SignInAgain"
 
 const handoffMessage = (reason: HandoffFailure): UserErrorMessage =>
 	failureMessage(reason, {
@@ -157,6 +161,10 @@ const handoffMessage = (reason: HandoffFailure): UserErrorMessage =>
 			description: "Start again from the desktop app.",
 		},
 		NeedsSignIn: { title: "Sign in first, then continue" },
+		SignInAgain: {
+			title: "Sign in again to continue",
+			description: "The app gets its own session from a fresh sign-in in this browser.",
+		},
 	})
 
 const confirm = (h: HtmlBuilder<Message>, appName: string, shared: Shared, isAuthorizing: boolean) =>
@@ -189,7 +197,22 @@ const confirm = (h: HtmlBuilder<Message>, appName: string, shared: Shared, isAut
 				),
 			]
 
-const failed = (h: HtmlBuilder<Message>, reason: HandoffFailure | null): ReadonlyArray<Html> => [
+const failed = (h: HtmlBuilder<Message>, reason: HandoffFailure | null): ReadonlyArray<Html> =>
+	reason !== null && isSignInReason(reason)
+		? [
+				authHeading(
+					h,
+					"Confirm it's you",
+					"Sign in here in your browser; the app picks up from there.",
+				),
+				authError(h, handoffMessage(reason)) ?? h.empty,
+				button(h, { intent: "primary", className: "mt-4 w-full", onPress: Message.ClickedSignIn() }, [
+					"Sign in again",
+				]),
+			]
+		: failedToStart(h, reason)
+
+const failedToStart = (h: HtmlBuilder<Message>, reason: HandoffFailure | null): ReadonlyArray<Html> => [
 	authHeading(h, "Couldn't sign in the app", "Start signing in again from the Hazel desktop app."),
 	...(reason === null
 		? []

@@ -168,9 +168,23 @@ export const makeDesktopAuth = Effect.fnUntraced(function* (options: {
 		yield* vault.accept([{ _tag: "Clear", slot: "session" }])
 	})
 
+	/**
+	 * A sign-in whose exchange failed keeps its attempt `Exchanging`: the library cannot tell a
+	 * refused exchange from a lost answer, and refuses every later sign-in as busy, across
+	 * restarts. With no session in the vault the exchange gave this app nothing, so the attempt
+	 * is retired and a new sign-in can start (a session the server issued but never delivered
+	 * only expires).
+	 */
+	const retireFailedExchange = Effect.gen(function* () {
+		const pending = yield* vault.loadAttempt
+		if (pending?.phase !== "Exchanging") return
+		if ((yield* vault.read).session !== undefined) return
+		yield* login.acknowledge
+	})
+
 	return {
 		/** Opens the browser and waits for its callback, then exchanges it for a session. */
-		signIn: login.signIn,
+		signIn: Effect.andThen(retireFailedExchange, login.signIn),
 		/** Continues a sign-in left waiting (the app restarted mid-way). */
 		resume: login.resume,
 		cancel: login.cancel,
