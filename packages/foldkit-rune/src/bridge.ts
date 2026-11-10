@@ -1,10 +1,11 @@
 /**
  * Element proxies for Mounts that observe geometry (a virtualized list measuring itself). Each
  * proxy stands for one element path; its size and scroll position come from the native host's
- * layout, and ResizeObserver, MutationObserver and `scroll` events fire from host reports. Only
- * Mounts named in `mounts` are acquired: the rest need real DOM and stay inert.
+ * layout, and ResizeObserver, IntersectionObserver, MutationObserver and `scroll` events fire from
+ * host reports. Only Mounts named in `mounts` are acquired: the rest need real DOM and stay inert.
+ * An `<iframe>`'s proxy has a `contentWindow`: the host shows the frame's page in a web view.
  */
-import type { HostToRuntime, RuntimeToHost } from "./wire"
+import type { FrameData, HostToRuntime, RuntimeToHost } from "./wire"
 
 type Rect = { x: number; y: number; width: number; height: number }
 
@@ -61,7 +62,12 @@ type ProxyElement = EventTarget & {
 	 */
 	readonly style: Record<string, unknown>
 	remove(): void
+	/** An `<iframe>`'s window: the same object for as long as the frame's path lives. */
+	readonly contentWindow: FrameWindow | null
 }
+
+/** What the app does with a framed page's window: post to it, and tell its messages by identity. */
+type FrameWindow = { postMessage(data: FrameData, targetOrigin?: string): void }
 
 type ResizeEntry = {
 	readonly target: ProxyElement
@@ -70,8 +76,14 @@ type ResizeEntry = {
 	readonly contentBoxSize: ReadonlyArray<{ inlineSize: number; blockSize: number }>
 }
 
-/** What an element proxy asks of the host: `scrollTop =`, `focus()` and `scrollIntoView()`. */
-export type HostElementCommand = Extract<RuntimeToHost, { t: "scroll" | "focus" | "reveal" | "measure" }>
+/**
+ * What an element proxy asks of the host: `scrollTop =`, `focus()`, `scrollIntoView()`, and an
+ * `<iframe>`'s `contentWindow.postMessage()`.
+ */
+export type HostElementCommand = Extract<
+	RuntimeToHost,
+	{ t: "scroll" | "focus" | "reveal" | "measure" | "framePost" }
+>
 
 /** `<input>` types the host draws as controls, not text fields (its `is_text_field`). */
 const CONTROL_INPUT_TYPES = new Set([
@@ -123,6 +135,9 @@ const matchesSelector = (record: ElementRecord, selector: string): boolean => {
 		const [, name, value] = attr
 		return value === undefined ? name in record.attrs : record.attrs[name] === value
 	}
+	// A tag with an attribute (`iframe[data-html-render-id]`).
+	const tagged = /^([a-zA-Z][\w-]*)(\[.+\])$/.exec(selector)
+	if (tagged) return record.tag === tagged[1]?.toLowerCase() && matchesSelector(record, tagged[2] ?? "")
 	if (selector.startsWith("#")) return record.attrs.id === selector.slice(1)
 	if (selector.startsWith(".")) return record.classes.includes(selector.slice(1))
 	return record.tag === selector.toLowerCase()
@@ -206,6 +221,18 @@ export const makeElementBridge = (options: {
 			.get(path)
 			?.get(name.startsWith("--") ? name : name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)) ?? ""
 	const resizeObservers = new Map<string, Set<(target: ProxyElement) => void>>()
+	/** By path: each re-checks whether its element meets the window, on every rect the host reports. */
+	const intersectionObservers = new Map<string, Set<() => void>>()
+	const frameWindows = new Map<string, FrameWindow>()
+	const frameWindowFor = (path: string): FrameWindow => {
+		const existing = frameWindows.get(path)
+		if (existing !== undefined) return existing
+		const frameWindow: FrameWindow = {
+			postMessage: (data) => options.send({ t: "framePost", path, data }),
+		}
+		frameWindows.set(path, frameWindow)
+		return frameWindow
+	}
 	const mutationObservers = new Set<() => void>()
 	let mounted = new Map<string, AnyVNode>()
 	const awaitingLayout = new Map<string, AnyVNode>()
@@ -318,6 +345,7 @@ export const makeElementBridge = (options: {
 			},
 			// A Mount taking its element out of the page (a portal it set up, released).
 			remove: { value: () => options.onRemove?.(path) },
+			contentWindow: { get: () => (record()?.tag === "iframe" ? frameWindowFor(path) : null) },
 		}) as ProxyElement
 		proxies.set(path, proxy)
 		return proxy
@@ -412,6 +440,7 @@ export const makeElementBridge = (options: {
 			writtenStyles.delete(path)
 		}
 		mounted = nextMounted
+		for (const path of [...frameWindows.keys()]) if (!next.has(path)) frameWindows.delete(path)
 		for (const notify of mutationObservers) notify()
 		return startedImmediate
 	}
@@ -429,6 +458,7 @@ export const makeElementBridge = (options: {
 			waiting.data?.hook?.insert?.(waiting)
 			return
 		}
+		for (const check of intersectionObservers.get(path) ?? []) check()
 		if (previous && previous.width === rect.width && previous.height === rect.height) return
 		const proxy = proxies.get(path)
 		if (proxy) for (const notify of resizeObservers.get(path) ?? []) notify(proxy)
@@ -608,6 +638,15 @@ export const makeElementBridge = (options: {
 			.map((r) => r.path)
 	}
 
+	/** Every element `selector` matches, in document order, as `document.querySelectorAll` finds them. */
+	const queryDocument = (selector: string): Array<ProxyElement> =>
+		inOrder()
+			.filter((record) => matchesSelector(record, selector))
+			.map((record) => proxyFor(record.path, false))
+
+	/** The element at `path`, while the tree has it. */
+	const proxyAt = (path: string): ProxyElement | null => (records.has(path) ? proxyFor(path, false) : null)
+
 	const findById = (id: string): ProxyElement | null => {
 		for (const record of records.values()) if (record.attrs.id === id) return proxyFor(record.path)
 		return null
@@ -648,6 +687,57 @@ export const makeElementBridge = (options: {
 		}
 	}
 
+	/**
+	 * Against the window, grown above and below by `rootMargin`'s first length: the callback runs
+	 * with the first rect the host reports, then whenever the element starts or stops meeting it.
+	 */
+	class BridgeIntersectionObserver {
+		private targets = new Map<string, () => void>()
+		private margin: number
+		constructor(
+			private callback: (
+				entries: Array<{ target: ProxyElement; isIntersecting: boolean; intersectionRatio: number }>,
+				observer: BridgeIntersectionObserver,
+			) => void,
+			init?: { rootMargin?: string },
+		) {
+			this.margin = Number.parseFloat(init?.rootMargin ?? "0") || 0
+		}
+		observe(target: unknown) {
+			if (!isProxy(target) || this.targets.has(target.__path)) return
+			const path = target.__path
+			proxyFor(path)
+			let last: boolean | undefined
+			const check = () => {
+				const rect = rects.get(path)
+				if (rect === undefined) return
+				const isIntersecting =
+					rect.y + rect.height >= -this.margin && rect.y <= globalThis.innerHeight + this.margin
+				if (isIntersecting === last) return
+				last = isIntersecting
+				this.callback([{ target, isIntersecting, intersectionRatio: isIntersecting ? 1 : 0 }], this)
+			}
+			this.targets.set(path, check)
+			const set = intersectionObservers.get(path) ?? new Set()
+			set.add(check)
+			intersectionObservers.set(path, set)
+			if (rects.has(path)) queueMicrotask(check)
+		}
+		unobserve(target: unknown) {
+			if (!isProxy(target)) return
+			const check = this.targets.get(target.__path)
+			if (check) intersectionObservers.get(target.__path)?.delete(check)
+			this.targets.delete(target.__path)
+		}
+		disconnect() {
+			for (const [path, check] of this.targets) intersectionObservers.get(path)?.delete(check)
+			this.targets.clear()
+		}
+		takeRecords() {
+			return []
+		}
+	}
+
 	class BridgeMutationObserver {
 		private notify = () => this.callback([], this)
 		constructor(private callback: (records: Array<never>, observer: BridgeMutationObserver) => void) {}
@@ -668,6 +758,8 @@ export const makeElementBridge = (options: {
 		reportLayout,
 		reportScroll,
 		findById,
+		queryDocument,
+		proxyAt,
 		findPath,
 		tagAt,
 		idAt,
@@ -728,6 +820,7 @@ export const makeElementBridge = (options: {
 		},
 		isDomMount: (name: string) => options.domMounts?.has(name) ?? false,
 		ResizeObserver: BridgeResizeObserver,
+		IntersectionObserver: BridgeIntersectionObserver,
 		MutationObserver: BridgeMutationObserver,
 	}
 }

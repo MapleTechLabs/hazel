@@ -5,6 +5,7 @@ import {
 	HTML_RENDER_DEFAULT_THEMES,
 	injectHtmlRenderBootstrap,
 	readHtmlRenderContentHeight,
+	isHtmlRenderInlineRequest,
 	isHtmlRenderPointerLeft,
 	readHtmlRenderLinkRequest,
 } from "./html-render"
@@ -42,6 +43,26 @@ describe("injectHtmlRenderBootstrap", () => {
 		expect(page.match(/charset/g)).toHaveLength(1)
 		expect(page.match(/name="viewport"/g)).toHaveLength(1)
 	})
+
+	it("replaces the bootstrap a page was stored with, where it stood", () => {
+		const page = injectHtmlRenderBootstrap(
+			"<!doctype html><html><head><title>x</title></head><h1>Hi</h1>",
+		)
+		expect(injectHtmlRenderBootstrap(page)).toBe(page)
+		// A page published before the display modes: its old stylesheet and script go.
+		const earlier = page.replace(
+			/<style id="hazel-theme">[\s\S]*?<\/script>/,
+			'<style id="hazel-theme">html{padding:8px}</style><script>window.old=1</script>',
+		)
+		expect(earlier).not.toBe(page)
+		expect(injectHtmlRenderBootstrap(earlier)).toBe(page)
+	})
+
+	it("keeps an inline page's root from scrolling, and lets a fullscreen one scroll in view", () => {
+		const page = injectHtmlRenderBootstrap("<h1>Hi</h1>")
+		expect(page).toContain("html[data-hazel-display=inline]{overflow:hidden}")
+		expect(page).toContain("html[data-hazel-display=fullscreen]{padding:16px;scrollbar-width:thin")
+	})
 })
 
 describe("findViewportHeightUnit", () => {
@@ -75,6 +96,16 @@ describe("bridge", () => {
 			true,
 		)
 		expect(isHtmlRenderPointerLeft({ method: "hazel/notifications/pointer-left" })).toBe(false)
+
+		const display = {
+			jsonrpc: "2.0",
+			id: 1,
+			method: "ui/request-display-mode",
+			params: { mode: "inline" },
+		}
+		expect(isHtmlRenderInlineRequest(display)).toBe(true)
+		expect(isHtmlRenderInlineRequest({ ...display, params: { mode: "fullscreen" } })).toBe(false)
+		expect(isHtmlRenderInlineRequest(size)).toBe(false)
 	})
 
 	it("carries the theme in the URL fragment", () => {
@@ -82,6 +113,16 @@ describe("bridge", () => {
 		expect(fragment.startsWith("#hazel-theme=")).toBe(true)
 		expect(JSON.parse(decodeURIComponent(fragment.slice("#hazel-theme=".length)))).toEqual(
 			HTML_RENDER_DEFAULT_THEMES.light,
+		)
+	})
+
+	it("names the display mode after the theme, when the app gives one", () => {
+		const theme = htmlRenderThemeFragment(HTML_RENDER_DEFAULT_THEMES.light)
+		expect(htmlRenderThemeFragment(HTML_RENDER_DEFAULT_THEMES.light, "inline")).toBe(
+			`${theme}&hazel-display=inline`,
+		)
+		expect(htmlRenderThemeFragment(HTML_RENDER_DEFAULT_THEMES.light, "fullscreen")).toBe(
+			`${theme}&hazel-display=fullscreen`,
 		)
 	})
 })

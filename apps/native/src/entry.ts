@@ -16,11 +16,12 @@ import {
 } from "@hazel/foldkit-rune"
 import { isBackendUrl } from "./backend-origin"
 import { describeLink, makeDesktopBridge } from "./desktop-bridge"
+import { makeFrameEvents } from "./frames"
 import { usesKeychainSession } from "./native-auth"
 import { type EditableEvent, makePendingEdits } from "./pending-edits"
 import { nativeOverlays, pathOf } from "./overlay"
 import { overlayPlugin } from "./overlay-plugin"
-import { installShims, openExternal } from "./shims"
+import { installShims, makeRootAwareMutationObserver, openExternal } from "./shims"
 
 // Before any app module loads: its overlay helpers become the host-drawn ones.
 Bun.plugin(overlayPlugin)
@@ -86,9 +87,18 @@ if (offline !== undefined) {
 	const { makeOfflineFetch } = await import("./offline-backend")
 	const { makeFixtureServer, makeFixtureWebSocket } = await import("./fixture/fixture-socket")
 	const server = makeFixtureServer()
+	// `HAZEL_FIXTURE_HTML=<file.html>`: #general ends with that page as an HTML render.
+	const fixtureHtml = process.env.HAZEL_FIXTURE_HTML
+	const htmlRender =
+		fixtureHtml === undefined
+			? undefined
+			: await (await import("./fixture/html-render")).makeFixtureHtmlRender(fixtureHtml)
+	if (htmlRender !== undefined)
+		server.write("channel", htmlRender.message.channelId, "messages", [htmlRender.message])
 	globalThis.fetch = makeOfflineFetch({
 		backendUrl,
 		server,
+		htmlRenderUrl: htmlRender?.url,
 		user: offline.currentUser,
 		onUnknownRpc: (tag) => process.stderr.write(`[offline] rpc ${tag} has no offline answer\n`),
 	})
@@ -214,9 +224,18 @@ const POINTER_MOUNTS = new Map([
 	["CaptureContextMenu", ""],
 ])
 
-/** Mounts that only observe geometry run against host-backed element proxies; the editor gets a headless DOM. */
+/**
+ * Mounts that only observe geometry run against host-backed element proxies; the editor gets a headless DOM.
+ * An HTML render's frame mints its URL once its box comes near the window (`HtmlRenderFrameMounted`).
+ */
 const bridge = makeElementBridge({
-	mounts: new Set(["ObserveMessageList", ...OVERLAY_MOUNTS, ...SCRIPT_MOUNTS, ...POINTER_MOUNTS.keys()]),
+	mounts: new Set([
+		"ObserveMessageList",
+		"HtmlRenderFrameMounted",
+		...OVERLAY_MOUNTS,
+		...SCRIPT_MOUNTS,
+		...POINTER_MOUNTS.keys(),
+	]),
 	immediateMounts: new Set([...OVERLAY_MOUNTS, ...SCRIPT_MOUNTS, ...POINTER_MOUNTS.keys()]),
 	pointerTargets: POINTER_MOUNTS,
 	domMounts: new Map([["MountEditor", composer.makeEditorElement]]),
@@ -235,10 +254,22 @@ const bridge = makeElementBridge({
 })
 Object.assign(globalThis, {
 	ResizeObserver: bridge.ResizeObserver,
-	MutationObserver: bridge.MutationObserver,
+	IntersectionObserver: bridge.IntersectionObserver,
+	MutationObserver: makeRootAwareMutationObserver(
+		bridge.MutationObserver,
+		document.documentElement,
+		shims.onRootStyle,
+	),
 })
 // SAFETY: the app only reads the geometry ProxyElement implements from `getElementById` results.
 document.getElementById = (id: string) => bridge.findById(id) as unknown as HTMLElement | null
+// The app finds its HTML render frames this way, to post the theme to them and to tell whose
+// message arrived; every other query still finds nothing, as before.
+// SAFETY: the app reads attributes and `contentWindow` from them, which ProxyElement implements.
+document.querySelectorAll = ((selector: string) =>
+	selector.startsWith("iframe")
+		? bridge.queryDocument(selector)
+		: []) as unknown as typeof document.querySelectorAll
 // A Mount moving its element into `<body>` (the message toolbar) portals it; `remove()` undoes it.
 const bodyPortals = new Map<string, () => void>()
 Object.assign(document.body, {
@@ -267,11 +298,19 @@ const scheduleHeadlessDom = () => {
 		void composer.loadHeadlessDom({ document, shims }, () => rune.refreshObserved())
 	}, wait)
 }
-/** Theme tokens read through `getComputedStyle` (the HTML render theme) come from the stylesheet. */
+/**
+ * Theme tokens read through `getComputedStyle` (the HTML render theme) come from the stylesheet,
+ * for the app's own theme when it names one, as the screen is drawn.
+ */
 Object.assign(globalThis, {
 	getComputedStyle: (element?: unknown) => ({
 		getPropertyValue: (name: string) =>
-			name.startsWith("--") ? styles.customProperty(name, rune.env.dark) : "",
+			name.startsWith("--")
+				? styles.customProperty(
+						name,
+						(shims.rootTheme() ?? (rune.env.dark ? "dark" : "light")) === "dark",
+					)
+				: "",
 		// The message toolbar looks for its message's scroller.
 		overflowY: bridge.overflowYOf(element),
 	}),
@@ -337,6 +376,15 @@ shims.onRootStyle(() => {
 	rune.refreshObserved()
 })
 
+/** A frame's `load` and its page's messages, as the events the web app listens for. */
+const frameEvents = makeFrameEvents({
+	frameAt: (path) => bridge.proxyAt(path),
+	fire: (path, event) => rune.fire(path, event),
+	window,
+	document,
+	navigator,
+})
+
 // Created last: the host writes as soon as it starts, and every handler below must exist by then.
 const transport = stdioTransport((message: HostToRuntime) => {
 	if (message.t === "env")
@@ -348,6 +396,10 @@ const transport = stdioTransport((message: HostToRuntime) => {
 	}
 	if (message.t === "vault" || message.t === "update" || message.t === "updateProgress") {
 		desktopBridge.answer(message)
+		return
+	}
+	if (message.t === "frame") {
+		frameEvents(message)
 		return
 	}
 	if (message.t === "event" && message.type === "link" && message.value) {

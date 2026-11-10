@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { cssEscape, installShims } from "./shims"
+import { cssEscape, installShims, makeRootAwareMutationObserver } from "./shims"
 
 describe("installShims", () => {
 	it("answers a 2D canvas probe with no context, as a browser without canvas does", () => {
@@ -127,6 +127,48 @@ describe("installShims", () => {
 		document.documentElement.style.removeProperty("--color-brand-600")
 		expect(rootStyle.has("--color-brand-600")).toBe(false)
 		expect(changes).toBe(2)
+	})
+
+	it("keeps the attributes the app sets on <html>, as it marks the pointer outside a frame", () => {
+		installShims({ width: 800, height: 600, dark: false, url: "http://app.hazel.test/" })
+		const root = document.documentElement
+		expect(root.hasAttribute("data-html-render-pointer-outside")).toBe(false)
+		root.setAttribute("data-html-render-pointer-outside", "")
+		expect(root.hasAttribute("data-html-render-pointer-outside")).toBe(true)
+		expect(root.getAttribute("data-html-render-pointer-outside")).toBe("")
+		root.removeAttribute("data-html-render-pointer-outside")
+		expect(root.getAttribute("data-html-render-pointer-outside")).toBeNull()
+	})
+
+	it("tells a MutationObserver on <html> when the theme changes, and leaves other targets to the bridge", () => {
+		const { onRootStyle } = installShims({
+			width: 800,
+			height: 600,
+			dark: false,
+			url: "http://app.hazel.test/",
+		})
+		const observed: Array<unknown> = []
+		class Elements {
+			observe(target: Node) {
+				observed.push(target)
+			}
+			disconnect() {
+				observed.push("disconnected")
+			}
+		}
+		const Observer = makeRootAwareMutationObserver(Elements, document.documentElement, onRootStyle)
+		let changes = 0
+		const observer = new Observer(() => changes++)
+		observer.observe(document.documentElement)
+		document.documentElement.classList.add("dark")
+		expect(changes).toBe(1)
+		const other = document.body
+		observer.observe(other)
+		expect(observed).toEqual([other])
+		observer.disconnect()
+		document.documentElement.classList.remove("dark")
+		expect(changes).toBe(1)
+		expect(observed).toEqual([other, "disconnected"])
 	})
 
 	it("escapes selector identifiers as CSS.escape does", () => {

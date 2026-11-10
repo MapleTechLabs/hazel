@@ -348,4 +348,51 @@ describe("makeElementBridge", () => {
 		})
 		expect(seen).toEqual(["over b", "leave", "menu a 12,34 below 4"])
 	})
+	it("gives an iframe a window that posts to the host, and finds frames as the document does", () => {
+		const sent: Array<unknown> = []
+		const bridge = makeElementBridge({ mounts: new Set(), send: (command) => sent.push(command) })
+		const next = new Map()
+		bridge.recordElement("r", undefined, "div", {}, [], next)
+		bridge.recordElement("r/0", "r", "div", { "data-html-render-id": "not-a-frame" }, [], next)
+		bridge.recordElement("r/1", "r", "iframe", { "data-html-render-id": "a" }, [], next)
+		bridge.recordElement("r/2", "r", "iframe", {}, [], next)
+		bridge.commit(next, new Map())
+
+		const frames = bridge.queryDocument("iframe[data-html-render-id]")
+		expect(frames.map((frame) => frame.getAttribute("data-html-render-id"))).toEqual(["a"])
+		const frame = frames[0]
+		// The same window every time: the app tells a frame's messages by identity.
+		expect(frame?.contentWindow).toBe(bridge.proxyAt("r/1")?.contentWindow)
+		expect(bridge.proxyAt("r/0")?.contentWindow).toBeNull()
+		expect(bridge.proxyAt("r/9")).toBeNull()
+		frame?.contentWindow?.postMessage({ jsonrpc: "2.0" }, "*")
+		expect(sent).toEqual([{ t: "framePost", path: "r/1", data: { jsonrpc: "2.0" } }])
+		// Finding frames observes nothing: the host is not asked for their layout.
+		expect(bridge.isObserved("r/1")).toBe(false)
+	})
+
+	it("tells an IntersectionObserver when its element comes near the window, from host layout", async () => {
+		Object.assign(globalThis, { innerHeight: 800 })
+		const bridge = makeElementBridge({ mounts: new Set(), send: () => {} })
+		bridge.commit(record(bridge), new Map())
+		const list = bridge.findById("list")
+		if (list === null) throw new Error("no #list element")
+		const seen: Array<boolean> = []
+		const observer = new bridge.IntersectionObserver(
+			(entries) => seen.push(...entries.map((entry) => entry.isIntersecting)),
+			{ rootMargin: "600px 0px" },
+		)
+		observer.observe(list)
+		// Nothing until the host has laid it out; then where it is, and each time that changes.
+		await Promise.resolve()
+		expect(seen).toEqual([])
+		bridge.reportLayout("r", { x: 0, y: 2000, width: 100, height: 300 })
+		bridge.reportLayout("r", { x: 0, y: 1900, width: 100, height: 300 })
+		expect(seen).toEqual([false])
+		bridge.reportLayout("r", { x: 0, y: 1400, width: 100, height: 300 })
+		expect(seen).toEqual([false, true])
+		observer.disconnect()
+		bridge.reportLayout("r", { x: 0, y: 3000, width: 100, height: 300 })
+		expect(seen).toEqual([false, true])
+	})
 })

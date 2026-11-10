@@ -1,7 +1,7 @@
 export { type Env, type RuneTargetOptions, makeRuneTarget } from "./target"
 export { type PrecompiledStyles, type Scope, type Style, StyleResolver } from "./style"
 export { stdioTransport } from "./stdio"
-export type { CommitStats, HostToRuntime, RuntimeToHost, WireNode } from "./wire"
+export type { CommitStats, FrameData, HostToRuntime, RuntimeToHost, WireNode } from "./wire"
 export {
 	type OverlayAlign,
 	type OverlaySide,

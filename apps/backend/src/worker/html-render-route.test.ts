@@ -2,7 +2,7 @@
  * `GET /html-renders/...`: serves a page only for a valid, unexpired signature over its exact
  * location, always with the sandbox CSP.
  */
-import { HTML_RENDER_CONTENT_SECURITY_POLICY } from "@hazel/domain/html-render"
+import { HTML_RENDER_CONTENT_SECURITY_POLICY, injectHtmlRenderBootstrap } from "@hazel/domain/html-render"
 import type { ChannelId, HtmlRenderId, UserId } from "@hazel/schema"
 import { ConfigProvider, Effect, Layer, Option } from "effect"
 import { HttpRouter } from "effect/http"
@@ -17,7 +17,8 @@ import {
 } from "../services/html-renders"
 import { HtmlRenderRoute } from "./html-render-route"
 
-const PAGE = "<!doctype html><p>chart</p>"
+/** As `HtmlRenders.publish` stores it: with the bootstrap. */
+const PAGE = injectHtmlRenderBootstrap("<!doctype html><p>chart</p>")
 
 const setup = (options: { readonly storageDown?: boolean } = {}) => {
 	const bucket = new Map<string, string>()
@@ -67,6 +68,17 @@ describe("HtmlRenderRoute", () => {
 		expect(response.headers.get("x-content-type-options")).toBe("nosniff")
 		expect(response.headers.get("referrer-policy")).toBe("no-referrer")
 		expect(response.headers.get("cache-control")).toMatch(/^private, max-age=\d+$/)
+	})
+
+	it("serves a page stored with an earlier bootstrap with the current one", async () => {
+		const { fetch, location, sign, bucket } = setup()
+		const earlier = PAGE.replace(
+			/<style id="hazel-theme">[\s\S]*?<\/script>/,
+			'<style id="hazel-theme">html{padding:8px}</style><script>window.old=1</script>',
+		)
+		expect(earlier).not.toBe(PAGE)
+		bucket.set(htmlRenderKey(location), earlier)
+		expect(await (await fetch(await sign(location))).text()).toBe(PAGE)
 	})
 
 	it("refuses a tampered, moved or unsigned URL", async () => {

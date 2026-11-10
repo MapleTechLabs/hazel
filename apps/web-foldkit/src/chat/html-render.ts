@@ -2,12 +2,14 @@ import { getTauriOpener } from "@hazel/desktop/bridge"
 import {
 	clampHtmlRenderHeight,
 	HTML_RENDER_DEFAULT_THEMES,
+	type HtmlRenderDisplayMode,
 	type HtmlRenderTheme,
 	type HtmlRenderThemeVariable,
 	htmlRenderFitHeight,
 	htmlRenderThemeFragment,
 	htmlRenderThemeMessage,
 	readHtmlRenderContentHeight,
+	isHtmlRenderInlineRequest,
 	isHtmlRenderPointerLeft,
 	readHtmlRenderLinkRequest,
 } from "@hazel/domain/html-render"
@@ -85,7 +87,7 @@ export const FrameState = Schema.Struct({
 	/** The page's own height (`size-changed`), once it reported one. */
 	contentHeight: Schema.NullOr(Schema.Number),
 	isExpanded: Schema.Boolean,
-	/** The frame fired `load`: it shows, with the app's color scheme. */
+	/** The page reported a height (it is parsed and themed) or the frame fired `load`: it shows. */
 	isLoaded: Schema.Boolean,
 })
 export type FrameState = typeof FrameState.Type
@@ -133,6 +135,8 @@ export const Message = defineMessageUnion({
 		height: Schema.Number,
 	},
 	RequestedOpenLink: { url: Schema.String },
+	/** Escape pressed inside the fullscreen page, which holds the keyboard while it has focus. */
+	RequestedLeaveFullscreen: {},
 	ChangedAppTheme: { theme: HtmlRenderThemeSchema },
 	ClickedToggleExpanded: { ref: RenderRef, surface: FrameSurface },
 	ClickedFullscreen: { ref: RenderRef, title: Schema.String },
@@ -240,9 +244,12 @@ const readDocumentTheme = (): HtmlRenderTheme => {
 
 const themeOf = (model: Model): HtmlRenderTheme => model.theme ?? HTML_RENDER_DEFAULT_THEMES.dark
 
-/** The frame's src: the signed URL with the theme in its fragment, applied before first paint. */
-export const frameSrc = (url: string, theme: HtmlRenderTheme): string =>
-	`${url.split("#", 1)[0]}${htmlRenderThemeFragment(theme)}`
+/**
+ * The frame's src: the signed URL with the theme and display mode in its fragment, applied before
+ * first paint.
+ */
+export const frameSrc = (url: string, theme: HtmlRenderTheme, displayMode: HtmlRenderDisplayMode): string =>
+	`${url.split("#", 1)[0]}${htmlRenderThemeFragment(theme, displayMode)}`
 
 // UPDATE
 
@@ -292,7 +299,7 @@ const mountFrame = (model: Model, ref: RenderRef, surface: FrameSurface, nowMs: 
 		return {
 			model: setFrame(withFrame, fkey, {
 				...waiting,
-				src: frameSrc(url.url, themeOf(model)),
+				src: frameSrc(url.url, themeOf(model), "inline"),
 				srcExpiresAt: url.expiresAt,
 			}),
 		}
@@ -331,7 +338,7 @@ const succeedMint = (
 							? next
 							: setFrame(next, key, {
 									...frame,
-									src: frameSrc(url, themeOf(model)),
+									src: frameSrc(url, themeOf(model), "inline"),
 									srcExpiresAt: expiresAt,
 								}),
 					withUrl,
@@ -345,7 +352,7 @@ const succeedMint = (
 		? modifyFields(withFrames, {
 				fullscreen: () =>
 					modifyFields(fullscreen, {
-						src: () => frameSrc(url, themeOf(withFrames)),
+						src: () => frameSrc(url, themeOf(withFrames), "fullscreen"),
 						isFailed: () => false,
 					}),
 			})
@@ -385,7 +392,7 @@ const openFullscreen = (model: Model, ref: RenderRef, title: string, nowMs: numb
 		fullscreen: () => ({
 			ref,
 			title,
-			src: isFresh ? frameSrc(url.url, themeOf(model)) : null,
+			src: isFresh ? frameSrc(url.url, themeOf(model), "fullscreen") : null,
 			isFailed: false,
 			isLoaded: false,
 			modal: Modal.initOpen(FULLSCREEN_MODAL_ID),
@@ -429,11 +436,14 @@ export const update = (model: Model, message: Message, nowMs: number): UpdateRet
 		ReportedContentHeight: ({ messageId, renderId, surface, height }) => {
 			const key = frameKey(surface, { messageId, renderId })
 			const frame = model.frames[key]
-			return frame === undefined || frame.contentHeight === height
+			// A page reports once it is parsed, with the theme applied: it shows from then on, and
+			// does not wait behind the skeleton for its last image (the frame's `load`).
+			return frame === undefined || (frame.contentHeight === height && frame.isLoaded)
 				? { model }
-				: { model: setFrame(model, key, { ...frame, contentHeight: height }) }
+				: { model: setFrame(model, key, { ...frame, contentHeight: height, isLoaded: true }) }
 		},
 		RequestedOpenLink: ({ url }) => ({ model, commands: [OpenHtmlRenderLink({ url })] }),
+		RequestedLeaveFullscreen: () => ({ model: modifyFields(model, { fullscreen: () => null }) }),
 		ChangedAppTheme: ({ theme }) =>
 			model.theme !== null && isSameTheme(model.theme, theme)
 				? { model }
@@ -490,8 +500,8 @@ const decodeHeightTarget = Schema.decodeUnknownOption(
 
 /**
  * The Message a `message` event stands for: only events from one of our frames' windows count;
- * inline frames report heights, to their own surface's state, and a link opens only from the focused
- * frame while the reader acts.
+ * inline frames report heights, to their own surface's state, only the fullscreen frame asks to
+ * leave fullscreen, and a link opens only from the focused frame while the reader acts.
  */
 export const frameMessageOf = (
 	event: { readonly source: unknown; readonly data: unknown },
@@ -509,6 +519,8 @@ export const frameMessageOf = (
 			: undefined
 	}
 	if (isHtmlRenderPointerLeft(event.data)) return Message.PointerLeftFrame()
+	if (isHtmlRenderInlineRequest(event.data))
+		return frame.mode === "fullscreen" ? Message.RequestedLeaveFullscreen() : undefined
 	const url = readHtmlRenderLinkRequest(event.data)
 	return url !== undefined && frame.isFocused && hasUserActivation
 		? Message.RequestedOpenLink({ url })
@@ -647,9 +659,14 @@ export const OpenHtmlRenderLink = Command.define("OpenHtmlRenderLink", {
 /** Set on the root while the pointer is outside the app after leaving a frame (`styles.css`). */
 export const POINTER_OUTSIDE_ATTRIBUTE = "data-html-render-pointer-outside"
 
+/** What tells the app the pointer is over it again: a move, or coming over an element (a frame's too). */
+const POINTER_BACK_EVENTS = ["pointermove", "pointerover"] as const
+
 /**
  * The pointer left a frame, maybe straight out of the window: the browser can keep the app's
  * `:hover` on the frame's row until the app sees the pointer again, so row hover is off until then.
+ * A frame also loses the pointer while its list scrolls (`styles.css`) and gets it back, unmoved,
+ * when the scroll settles: the app then only hears it come over the frame's element.
  */
 export const MarkPointerOutside = Command.define("MarkPointerOutside", {
 	messages: [Message.CompletedMarkPointerOutside],
@@ -657,9 +674,11 @@ export const MarkPointerOutside = Command.define("MarkPointerOutside", {
 		const root = document.documentElement
 		if (!root.hasAttribute(POINTER_OUTSIDE_ATTRIBUTE)) {
 			root.setAttribute(POINTER_OUTSIDE_ATTRIBUTE, "")
-			window.addEventListener("pointermove", () => root.removeAttribute(POINTER_OUTSIDE_ATTRIBUTE), {
-				once: true,
-			})
+			const clear = () => {
+				root.removeAttribute(POINTER_OUTSIDE_ATTRIBUTE)
+				for (const type of POINTER_BACK_EVENTS) window.removeEventListener(type, clear)
+			}
+			for (const type of POINTER_BACK_EVENTS) window.addEventListener(type, clear)
 		}
 		return Message.CompletedMarkPointerOutside()
 	}),

@@ -1169,5 +1169,5 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		})
 	}
 
-	return { target, handleHostMessage, env, refreshObserved, click: clickElement, filesPicked }
+	return { target, handleHostMessage, env, refreshObserved, click: clickElement, filesPicked, fire }
 }

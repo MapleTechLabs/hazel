@@ -4,9 +4,10 @@
  * the frame that loads the page has no credentials to send (opaque origin, desktop bearer auth).
  *
  * Served with the sandbox CSP, so even opened directly the page runs in an opaque origin and
- * cannot connect anywhere (`@hazel/domain/html-render`).
+ * cannot connect anywhere (`@hazel/domain/html-render`). A stored page carries the bootstrap of
+ * the day it was published: it is served with the current one, so a fix reaches every page.
  */
-import { HTML_RENDER_CONTENT_SECURITY_POLICY } from "@hazel/domain/html-render"
+import { HTML_RENDER_CONTENT_SECURITY_POLICY, injectHtmlRenderBootstrap } from "@hazel/domain/html-render"
 import { ChannelId, HtmlRenderId, UserId } from "@hazel/schema"
 import { Clock, Effect, Option, Schema } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
@@ -49,7 +50,7 @@ export const HtmlRenderRoute = HttpRouter.use((router) =>
 				if (Option.isNone(page)) return notFound()
 
 				const maxAge = Math.max(0, Math.floor((expiresAt - (yield* Clock.currentTimeMillis)) / 1000))
-				return HttpServerResponse.text(page.value, {
+				return HttpServerResponse.text(injectHtmlRenderBootstrap(page.value), {
 					contentType: "text/html; charset=utf-8",
 					headers: {
 						"Content-Security-Policy": HTML_RENDER_CONTENT_SECURITY_POLICY,

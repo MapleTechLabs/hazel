@@ -1,6 +1,15 @@
 import type { OverlayWire } from "./overlays"
 import type { Style } from "./style"
 
+/** What crosses `postMessage` between the app and a framed page: JSON, as the host carries it. */
+export type FrameData =
+	| null
+	| boolean
+	| number
+	| string
+	| ReadonlyArray<FrameData>
+	| { readonly [key: string]: FrameData }
+
 /** One node of the tree sent to the native host. Styles arrive resolved; no class names. */
 export type WireNode =
 	| { readonly k: "t"; readonly s: string }
@@ -97,6 +106,20 @@ export type HostToRuntime =
 	  }
 	/** A link the system opened with the app (`com.hazel.native://auth/callback?...`), as given. */
 	| { readonly t: "openUrl"; readonly url: string }
+	/** The `<iframe>` at `path`, which the host shows in a web view, loaded its page. */
+	| { readonly t: "frame"; readonly path: string; readonly event: "load" }
+	/**
+	 * The page framed at `path` posted `data` to its parent (`window.parent.postMessage`).
+	 * `active`: the frame had focus and the reader had just acted in it, as `document.activeElement`
+	 * and `navigator.userActivation` say in a browser.
+	 */
+	| {
+			readonly t: "frame"
+			readonly path: string
+			readonly event: "message"
+			readonly data: FrameData
+			readonly active: boolean
+	  }
 	/** The answer to vault request `id`: the record (`null` when none), or why the keychain failed. */
 	| { readonly t: "vault"; readonly id: number; readonly record?: string | null; readonly error?: string }
 	/** The answer to update request `id`: the newer release `check` found (none: no `version`), or why it failed. */
@@ -141,6 +164,8 @@ export type RuntimeToHost =
 	| { readonly t: "reveal"; readonly path: string; readonly block: "start" | "center" | "end" | "nearest" }
 	/** The element at `path` was just observed: report its rect now, laid out before as it may be. */
 	| { readonly t: "measure"; readonly path: string }
+	/** `iframe.contentWindow.postMessage(data, "*")` on the `<iframe>` at `path`. */
+	| { readonly t: "framePost"; readonly path: string; readonly data: FrameData }
 	/** A full page load: the host replaces this runtime with a fresh one at `path`. */
 	| { readonly t: "reload"; readonly path: string }
 	/** Read or replace the sign-in vault's one record in the OS keychain; answered by `vault`. */

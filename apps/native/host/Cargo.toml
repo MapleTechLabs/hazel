@@ -23,5 +23,15 @@ keyring = { version = "3", features = ["apple-native"] }
 minisign-verify = "0.2"
 wgpu = { version = "~30.0.1", default-features = false, features = ["std", "parking_lot", "metal", "wgsl"] }
 
+# The web views HTML render frames show their pages in (`src/frames.rs`).
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = "0.3"
+objc2-app-kit = "0.3"
+objc2-web-kit = "0.3"
+objc2-quartz-core = "0.3"
+objc2-core-graphics = "0.3"
+objc2-core-foundation = "0.3"
+
 [profile.release]
 debug = false
