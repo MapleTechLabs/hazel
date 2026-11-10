@@ -117,38 +117,64 @@ export const PROVIDERS: Descriptors = {
 			{ title: "Activity", detail: "sign-ins and sessions per user per day" },
 		],
 		accessNote:
-			"Read-only. Hazel reads organizations, memberships and sessions and never writes to Clerk.",
-		isAvailable: false,
+			"Read-only. Hazel reads organizations, memberships, domains and sessions and never writes to Clerk.",
+		isAvailable: true,
 		apiKey: {
 			label: "Secret key",
 			placeholder: "sk_live_…",
 			createHref: "https://dashboard.clerk.com/last-active?path=api-keys",
-			help: "Clerk Dashboard → API keys → Secret keys.",
+			help: "Clerk Dashboard → Configure → API keys → Secret keys. Copy the key of the instance whose customers you track: a `sk_test_…` key reads your development instance, `sk_live_…` your production one.",
 		},
+		// Clerk secret keys are not scoped, so there is nothing to tick: the key reads the instance.
 		permissions: [],
 		webhook: {
-			instructions: "In Clerk → Webhooks, add this endpoint, then paste its signing secret.",
-			events: ["organization.*", "organizationMembership.*", "user.*", "session.created"],
+			instructions:
+				"In Clerk Dashboard → Configure → Webhooks, add an endpoint with this URL, subscribe the events below, then copy its signing secret here. Without it Hazel still syncs, but only every few hours.",
+			events: [
+				"organization.created",
+				"organization.updated",
+				"organization.deleted",
+				"organizationMembership.created",
+				"organizationMembership.updated",
+				"organizationMembership.deleted",
+				"user.created",
+				"user.updated",
+				"user.deleted",
+				"session.created",
+			],
 			secretLabel: "Signing secret",
 			secretPlaceholder: "whsec_…",
 		},
-		syncMode: "Webhooks + hourly sync",
+		syncMode: "Webhooks + full sync every 6 hours",
 		configFields: [
 			{
 				_tag: "Toggle",
 				key: "createAccounts",
 				label: "Create accounts for new organizations",
-				description: "Every Clerk organization becomes an account, matched or not.",
+				description:
+					"Every Clerk organization becomes an account. Off: organizations wait under unmatched records until someone links them.",
 			},
 		],
 		mapping: [
 			{
 				group: "Organization → Account",
 				fields: [
+					{ from: "id", to: "external ref (the shared id Stripe, Autumn and Maple match on)" },
 					{ from: "name", to: "account.name" },
-					{ from: "domains[0] (verified)", to: "account.domain" },
+					{ from: "verified organization domains", to: "account.domains" },
 					{ from: "image_url", to: "account.logoUrl" },
-					{ from: "max_allowed_memberships", to: "account.seatsLimit" },
+					{ from: "members_count", to: "account.seatsUsed" },
+					{ from: "max_allowed_memberships", to: "account.seatsLimit (0 = unlimited)" },
+					{ from: "slug", to: "account.attributes.slug" },
+					{ from: "created_at", to: "account.firstSeenAt" },
+				],
+			},
+			{
+				group: "Membership → Contact",
+				fields: [
+					{ from: "public_user_data.user_id", to: "one contact per organization the user is in" },
+					{ from: "role_name (else role)", to: "contact.role" },
+					{ from: "membership created_at", to: "contact.joinedAt" },
 				],
 			},
 			{
@@ -157,14 +183,18 @@ export const PROVIDERS: Descriptors = {
 					{ from: "primary email", to: "contact.email" },
 					{ from: "first_name + last_name", to: "contact.name" },
 					{ from: "image_url", to: "contact.avatarUrl" },
-					{ from: "membership role", to: "contact.role" },
+					{ from: "last_sign_in_at", to: "contact.lastSignInAt" },
+					{ from: "last_active_at", to: "contact.lastSeenAt" },
 				],
 			},
 			{
 				group: "Sign-ins → Activity",
 				fields: [
-					{ from: "last_sign_in_at", to: "contact.lastSignInAt" },
-					{ from: "session.created", to: "activity_daily.signedIn" },
+					{ from: "session.created", to: "activity_daily.signedIn (per user per day)" },
+					{
+						from: "last_sign_in_at / last_active_at",
+						to: "activity_daily (the days a sync can see)",
+					},
 				],
 			},
 		],

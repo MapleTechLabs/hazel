@@ -1,9 +1,10 @@
 /**
  * The seam the integration PRs (Clerk, Stripe, Autumn, Maple) plug into
  * (`docs/customers/tech-design.md` §5). An adapter talks to its provider and produces
- * `IngestOp`s; it never writes the store. Core registers none: connecting answers
- * `CustomerProviderUnavailableError` until a provider's PR adds its adapter to
- * `CustomerProviders.layer`.
+ * `IngestOp`s; it never writes the store. A provider with no adapter here answers
+ * `CustomerProviderUnavailableError` on connect (the UI shows "coming soon").
+ *
+ * Registered: **clerk** (`./clerk/adapter.ts`). Stripe, Autumn and Maple are still to come.
  *
  * What an adapter's ops must carry:
  *
@@ -38,30 +39,12 @@ import type {
 	SweepEntityType,
 	SyncProgress,
 } from "@hazel/domain/customers"
-import { Context, type Effect, Layer, Option, type Redacted, Schema } from "effect"
+import { Context, Effect, Layer, Option, type Redacted } from "effect"
+import { FetchHttpClient } from "effect/http"
+import { makeClerkAdapter } from "./clerk/adapter"
+import { CustomerProviderError, CustomerWebhookRejectedError } from "./provider-errors"
 
-/**
- * A provider call failed. `auth` failures mark the connection `error` and stop scheduled pulls.
- * `message` is stored on the run and the connection and synced to every member of the org: it must
- * be client-safe (what went wrong, in words a person can act on), never a raw response body,
- * request URL, header, token or stack.
- */
-export class CustomerProviderError extends Schema.TaggedError<CustomerProviderError>()(
-	"CustomerProviderError",
-	{
-		code: Schema.Literals(["auth", "rate_limited", "provider", "network"]),
-		message: Schema.String,
-		httpStatus: Schema.NullOr(Schema.Int),
-		/** For `rate_limited`. */
-		retryAfterMs: Schema.NullOr(Schema.Number),
-	},
-) {}
-
-/** A webhook delivery whose signature or payload does not check out: answered 400, never retried. */
-export class CustomerWebhookRejectedError extends Schema.TaggedError<CustomerWebhookRejectedError>()(
-	"CustomerWebhookRejectedError",
-	{ message: Schema.String },
-) {}
+export { CustomerProviderError, CustomerWebhookRejectedError }
 
 export interface ProviderCredentials {
 	readonly apiKey: Redacted.Redacted<string>
@@ -138,6 +121,18 @@ export interface CustomerProvidersApi {
 export class CustomerProviders extends Context.Service<CustomerProviders, CustomerProvidersApi>()(
 	"@hazel/backend/CustomerProviders",
 ) {
-	/** The registered adapters. Provider PRs add theirs here. */
-	static readonly layer = Layer.succeed(this, CustomerProviders.of({ get: () => Option.none() }))
+	/**
+	 * The registered adapters. Provider PRs add theirs here. The layer brings its own
+	 * `FetchHttpClient` so every consumer (the RPC handlers, the alarm, the webhook call) keeps
+	 * taking the service with no requirement of its own.
+	 */
+	static readonly layer = Layer.effect(
+		this,
+		Effect.gen(function* () {
+			const adapters = new Map<CustomerProvider, CustomerProviderAdapter>([
+				["clerk", yield* makeClerkAdapter],
+			])
+			return CustomerProviders.of({ get: (provider) => Option.fromNullishOr(adapters.get(provider)) })
+		}),
+	).pipe(Layer.provide(FetchHttpClient.layer))
 }
