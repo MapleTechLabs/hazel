@@ -16,13 +16,14 @@ import {
 } from "foldkit/scene"
 import { describe, test } from "vitest"
 import * as CreateSection from "../overlay/modal/create-section"
-import { orgSwitcherEntries } from "../shell/menus"
+import { orgSwitcherEntries, userMenuEntries } from "../shell/menus"
 import * as Shell from "../shell/model"
-import { after, hazelOrg, rootScene, signedIn } from "../test/root-fixtures"
+import { ada, after, hazelOrg, rootScene, signedIn } from "../test/root-fixtures"
 import { drainToast } from "../test/toast-fixtures"
 import * as Menu from "../ui/menu"
 import { FocusTriggerOnPress } from "../ui/menu-view"
 import * as Modal from "../ui/modal"
+import * as Select from "../ui/select"
 import { Message } from "./message"
 
 /** The root modal slot: a modal opened by the shell, its result toast, and closing (legacy `useModal`). */
@@ -106,6 +107,26 @@ describe("modal host", () => {
 			sceneExpect(dialog).toBeAbsent(),
 			Mount.expectEnded(Modal.AcquireResources),
 			Command.expectNone(),
+		)
+	})
+
+	test("the Feedback modal opens from the user menu with its Category select", () => {
+		const userMenu = (inner: Menu.Message): Message =>
+			Message.GotShellMessage({ message: Shell.Message.GotUserMenuMessage({ message: inner }) })
+		const withFeedback = after(signedIn("/hazel/chat"), [
+			userMenu(Menu.Message.PressedTrigger({ pointerType: "mouse" })),
+			userMenu(
+				Menu.Message.ClickedItem({ key: "feedback", entries: userMenuEntries("hazel", ada.id) }),
+			),
+		])
+		const feedback = role("dialog", { name: "Send Feedback" })
+		scene(
+			rootScene,
+			given(withFeedback),
+			...mounted,
+			Mount.resolve({ name: "FocusSelectTriggerOnPress" }, Select.Message.CompletedPortalSelect()),
+			sceneExpect(feedback).toExist(),
+			sceneExpect(within(feedback, text("Bug"))).toExist(),
 		)
 	})
 })
