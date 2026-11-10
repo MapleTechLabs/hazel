@@ -13,6 +13,10 @@
  *   sources (Clerk) leave it unset so organizations sharing a domain never merge.
  * - Deletions as `deleted` / `removed` ops; a full listing also sets `PullPage.sweep` on its last
  *   page so records deleted without a webhook are removed.
+ * - Links (`externalUrl`, `hostedUrl`) as `https:` URLs on the provider's own hosts; ingest stores
+ *   any other as null.
+ *
+ * Errors are synced: a `CustomerProviderError`'s `message` reaches every member (see there).
  */
 import type {
 	ConnectionConfig,
@@ -23,7 +27,12 @@ import type {
 } from "@hazel/domain/customers"
 import { Context, type Effect, Layer, Option, type Redacted, Schema } from "effect"
 
-/** A provider call failed. `auth` failures mark the connection `error` and stop scheduled pulls. */
+/**
+ * A provider call failed. `auth` failures mark the connection `error` and stop scheduled pulls.
+ * `message` is stored on the run and the connection and synced to every member of the org: it must
+ * be client-safe (what went wrong, in words a person can act on), never a raw response body,
+ * request URL, header, token or stack.
+ */
 export class CustomerProviderError extends Schema.TaggedError<CustomerProviderError>()(
 	"CustomerProviderError",
 	{

@@ -44,8 +44,8 @@ export const ViewFilters = Schema.Struct({
 	ownerUserIds: Schema.optionalKey(Schema.Array(UserId).check(Schema.isMaxLength(100))),
 	/** Accounts with no owner. */
 	unowned: Schema.optionalKey(Schema.Boolean),
-	lifecycleStages: Schema.optionalKey(Schema.Array(LifecycleStage)),
-	healthStatuses: Schema.optionalKey(Schema.Array(HealthStatus)),
+	lifecycleStages: Schema.optionalKey(Schema.Array(LifecycleStage).check(Schema.isMaxLength(20))),
+	healthStatuses: Schema.optionalKey(Schema.Array(HealthStatus).check(Schema.isMaxLength(20))),
 	planNames: Schema.optionalKey(
 		Schema.Array(Schema.String.check(Schema.isMaxLength(100))).check(Schema.isMaxLength(50)),
 	),
@@ -68,10 +68,13 @@ export const ViewSort = Schema.Struct({
 })
 export type ViewSort = typeof ViewSort.Type
 
+/** Saved views a person may own, and shared ones an org may have. */
+export const MAX_VIEWS = 50
+
 export const ViewDraft = Schema.Struct({
 	name: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(80)),
 	filters: ViewFilters,
 	sort: ViewSort,
-	columns: Schema.Array(ListColumn),
+	columns: Schema.Array(ListColumn).check(Schema.isMaxLength(50)),
 })
 export type ViewDraft = typeof ViewDraft.Type

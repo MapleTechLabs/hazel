@@ -5,12 +5,13 @@
  * history, plus the account fields compute derives from them (`rollupAccount`, §4.2).
  */
 import { Database, SQLite, schema } from "@hazel/db"
-import type {
-	CustomerProvider,
-	Day,
-	HealthBreakdown,
-	HealthSettings,
-	LifecycleStage,
+import {
+	type CustomerProvider,
+	type Day,
+	type HealthBreakdown,
+	type HealthSettings,
+	type LifecycleStage,
+	MAX_WINDOW_DAYS,
 } from "@hazel/domain/customers"
 import type { CustomerAccountId, CustomerContactId } from "@hazel/schema"
 import { Effect, Option } from "effect"
@@ -62,8 +63,6 @@ export interface SnapshotBase {
 	readonly settings: schema.CustomerSettings
 	readonly health: HealthSettings
 	readonly rules: ReadonlyArray<schema.CustomerSignalRule>
-	/** Every unclosed signal (deleted accounts' too: compute closes them). */
-	readonly signals: ReadonlyArray<schema.CustomerSignal>
 	/**
 	 * Usage data is live: an activity source is connected (not in error or disconnected), or, with
 	 * no activity connection at all, some contact was ever active.
@@ -84,6 +83,8 @@ export interface SnapshotBase {
 /** The org and one chunk of its accounts. */
 export interface Snapshot extends SnapshotBase {
 	readonly accounts: ReadonlyArray<AccountSnapshot>
+	/** The accounts' unclosed signals. */
+	readonly signals: ReadonlyArray<schema.CustomerSignal>
 	/** Today's stored health breakdowns, so an unchanged one is not written again. */
 	readonly todayHealth: ReadonlyMap<CustomerAccountId, HealthBreakdown>
 }
@@ -238,8 +239,8 @@ export const billingProviderOf = (
 /** Accounts loaded (and their activity held in memory) at a time. */
 const ACCOUNT_CHUNK = 250
 
-/** Days of health history the rules read (`health_drop`, its 30-day series). */
-const HEALTH_DAYS = 31
+/** Days of health history the rules read (`health_drop`'s window, its 30-day series). */
+const HEALTH_DAYS = MAX_WINDOW_DAYS + 1
 
 export const accountChunks = <A>(items: ReadonlyArray<A>, size = ACCOUNT_CHUNK) =>
 	Array.from({ length: Math.ceil(items.length / size) }, (_, index) =>
@@ -295,11 +296,6 @@ export const loadBase = Effect.fn("Customers.loadBase")(function* (
 	const definitions = yield* db.run(
 		SQLite.from(schema.customerMetricDefinitionsTable).select("key", "name", "aggregation"),
 	)
-	const signals = yield* db.run(
-		SQLite.from(schema.customerSignalsTable)
-			.select()
-			.where(($) => [$.closedAt.isNull()]),
-	)
 	const activityConnections = connections.filter((connection) =>
 		ACTIVITY_PROVIDERS.has(connection.provider),
 	)
@@ -323,7 +319,6 @@ export const loadBase = Effect.fn("Customers.loadBase")(function* (
 		settings,
 		health: settings.health,
 		rules,
-		signals,
 		// Stale rows of a disconnected source must not keep decaying everyone's usage score.
 		hasActivityData:
 			activityConnections.length > 0
@@ -377,13 +372,15 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 
 	const contactsBy = groupBy(contacts, (contact) => contact.accountId)
 	const activityBy = groupBy(activity, (row) => row.accountId)
+	// The last active day over the live contacts and the activity the rollups count (a removed
+	// contact's recent days included), so engagement and active users agree.
 	const lastActiveDayBy = new Map<CustomerAccountId, Day>()
-	for (const contact of contacts) {
-		const last = contact.lastActiveDay
-		const current = lastActiveDayBy.get(contact.accountId)
-		if (last !== null && (current === undefined || last > current))
-			lastActiveDayBy.set(contact.accountId, last)
+	const seen = (accountId: CustomerAccountId, last: Day | null) => {
+		const current = lastActiveDayBy.get(accountId)
+		if (last !== null && (current === undefined || last > current)) lastActiveDayBy.set(accountId, last)
 	}
+	for (const contact of contacts) seen(contact.accountId, contact.lastActiveDay)
+	for (const row of activity) seen(row.accountId, row.day)
 
 	// `inactive`'s "active users before": distinct users over the window ending on each account's
 	// last active day. From the loaded rows when the window covers it; else one indexed query over
@@ -449,6 +446,11 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 		SQLite.from(schema.customerHealthDailyTable)
 			.select("accountId", "breakdown")
 			.where(($) => [inList($.accountId, ids), $.day.eq(today)]),
+	)
+	const signals = yield* db.run(
+		SQLite.from(schema.customerSignalsTable)
+			.select()
+			.where(($) => [inList($.accountId, ids), $.closedAt.isNull()]),
 	)
 
 	const subsBy = groupBy(subscriptions, (sub) => sub.accountId)
@@ -520,6 +522,7 @@ export const loadAccounts = Effect.fn("Customers.loadAccounts")(function* (
 	return {
 		...base,
 		accounts: snapshots,
+		signals,
 		todayHealth: new Map(todayHealth.map((row) => [row.accountId, row.breakdown])),
 	} satisfies Snapshot
 })

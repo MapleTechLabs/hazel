@@ -209,6 +209,14 @@ describe("signal lifecycle", () => {
 			event: { type: "signal.reopened", data: { from: "dismissed" } },
 		})
 		expect(transition(dismissed, null, input)).toMatchObject({ patch: { closedAt: NOW } })
+		// Worse in baseline mode (old data arriving): still dismissed, at the new evidence.
+		const baseline = transition(dismissed, matchOf(1), { ...input, baseline: true })
+		expect(baseline).toMatchObject({
+			_tag: "Update",
+			event: null,
+			patch: { actionEvidence: evidence(1) },
+		})
+		expect(baseline).not.toHaveProperty("patch.status")
 	})
 })
 

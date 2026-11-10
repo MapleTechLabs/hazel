@@ -6,6 +6,7 @@ import type { IngestOp, RefEntityType, UpsertAccount, UpsertContact } from "@haz
 import { Effect, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { CustomerIngest } from "./ingest"
+import { normalizeDomain } from "./ingest-live"
 import { type CustomersWorld, makeCustomersWorld, NOW, TODAY } from "./test-kit"
 
 const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
@@ -342,7 +343,7 @@ describe("CustomerIngest", () => {
 			}),
 		))
 
-	it("records billing events, refuses built-in metrics, and marks a disconnected source stale", () =>
+	it("records billing events, refuses built-in metrics, and keeps a disconnected source's data", () =>
 		run(
 			Effect.gen(function* () {
 				const world = yield* makeCustomersWorld
@@ -439,7 +440,7 @@ describe("CustomerIngest", () => {
 				expect(disconnected._tag).toBe("Success")
 				expect(
 					world.rows(`SELECT provider, staleAt IS NOT NULL AS stale FROM customer_external_refs`),
-				).toEqual([{ provider: "clerk", stale: 1 }])
+				).toEqual([{ provider: "clerk", stale: 0 }])
 				expect(accounts(world)).toHaveLength(1)
 			}),
 		))
@@ -697,6 +698,42 @@ describe("CustomerIngest", () => {
 				expect(day()).toEqual({ sessionCount: 5, signedIn: 1 })
 				yield* world.ingest("clerk", [activity({ sessionCount: 7 })])
 				expect(day()).toEqual({ sessionCount: 7, signedIn: 1 })
+			}),
+		))
+
+	it("keeps only hostnames as domains, and only https links on the provider's hosts", () =>
+		run(
+			Effect.gen(function* () {
+				expect(
+					["https://www.Acme.com/pricing", "a@acme.com", "acme.com:8080", "acme"].map(
+						normalizeDomain,
+					),
+				).toEqual(["acme.com", null, null, null])
+				const world = yield* makeCustomersWorld
+				const org = (externalId: string, externalUrl: string): IngestOp => ({
+					_tag: "account",
+					externalId,
+					externalUrl,
+					name: externalId,
+					sameAs: [],
+					onNoMatch: "create",
+				})
+				yield* world.ingest("clerk", [
+					org("org_1", "https://dashboard.clerk.com/organizations/org_1"),
+					org("org_2", "javascript:alert(1)"),
+					org("org_3", "https://evil.example/clerk.com"),
+					org("org_4", "http://dashboard.clerk.com/organizations/org_4"),
+				])
+				expect(
+					world.rows(
+						`SELECT externalId, externalUrl FROM customer_external_refs ORDER BY externalId`,
+					),
+				).toEqual([
+					{ externalId: "org_1", externalUrl: "https://dashboard.clerk.com/organizations/org_1" },
+					{ externalId: "org_2", externalUrl: null },
+					{ externalId: "org_3", externalUrl: null },
+					{ externalId: "org_4", externalUrl: null },
+				])
 			}),
 		))
 })

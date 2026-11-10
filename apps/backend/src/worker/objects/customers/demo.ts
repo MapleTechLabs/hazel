@@ -8,9 +8,9 @@ import { Database, SQLite, schema } from "@hazel/db"
 import { type CustomerProvider, DEFAULT_CONNECTION_CONFIG } from "@hazel/domain/customers"
 import type { CustomerConnectionId, OrganizationId, UserId } from "@hazel/schema"
 import { Effect, Option } from "effect"
-import { runCompute } from "./compute"
+import { rebuildHistory, runCompute } from "./compute"
 import { CustomerIngest } from "./ingest"
-import { requestHistoryRebuild } from "./schedule"
+import { loadBase } from "./snapshot"
 import { generateDemoSeed } from "./seed"
 
 const connectionFor = (provider: CustomerProvider, organizationId: OrganizationId, by: UserId, now: Date) =>
@@ -61,7 +61,7 @@ export const seedDemo = Effect.fn("Customers.seedDemo")(function* (input: {
 		)
 		yield* ingest.finishRun(run.id, { _tag: "Succeeded", cursor: null })
 	}
-	yield* requestHistoryRebuild
+	yield* rebuildHistory(yield* loadBase(input.now))
 	yield* runCompute(input.now)
 	return seed.accounts.length
 })

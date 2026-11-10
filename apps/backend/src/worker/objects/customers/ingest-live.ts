@@ -127,6 +127,9 @@ export const ignoreRuleMatches = (
 	return candidates.some((value) => value != null && globMatches(rule.pattern, value))
 }
 
+/** A hostname (no user, port or path), with at least two labels. */
+const HOSTNAME = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/
+
 export const normalizeDomain = (value: string): string | null => {
 	const domain = value
 		.trim()
@@ -134,7 +137,29 @@ export const normalizeDomain = (value: string): string | null => {
 		.replace(/^[a-z]+:\/\//, "")
 		.replace(/^www\./, "")
 		.split(/[/?#]/)[0]
-	return domain.includes(".") && !FREE_MAIL.has(domain) ? domain : null
+	return HOSTNAME.test(domain) && !FREE_MAIL.has(domain) ? domain : null
+}
+
+/** The hosts a provider's links (dashboard pages, hosted invoices) live on, subdomains included. */
+const LINK_HOSTS = {
+	clerk: ["clerk.com"],
+	stripe: ["stripe.com"],
+	autumn: ["useautumn.com"],
+	maple: ["maple.dev"],
+} satisfies Record<CustomerProvider, ReadonlyArray<string>>
+
+/** A provider's link as given when it is `https:` on one of its hosts, else null (`undefined` stays). */
+const providerLink = (provider: CustomerProvider, url: string | null | undefined) => {
+	if (url == null) return url
+	try {
+		const { protocol, hostname } = new URL(url)
+		return protocol === "https:" &&
+			LINK_HOSTS[provider].some((host) => hostname === host || hostname.endsWith(`.${host}`))
+			? url
+			: null
+	} catch {
+		return null
+	}
 }
 
 const emailDomain = (email: string | null | undefined) =>
@@ -300,6 +325,13 @@ const refKey = (ref: ProviderRef) => `${ref.provider}:${ref.externalId}`
  * (a user of two unknown organizations).
  */
 const parkKey = (op: IngestOp) => (op._tag === "contact" ? `contact:${refKey(op.account)}` : op._tag)
+
+/**
+ * The account a parked op waits for (`blockedBy`): the one it names, for every op but an account's
+ * own. A contact parked under several unknown accounts waits for the latest one; linking that one
+ * replays them all, and those still blocked park again under theirs.
+ */
+const blockedByOf = (op: IngestOp) => (op._tag !== "account" && "account" in op ? refKey(op.account) : null)
 
 /** The ops of a parked record that decode (the rest are logged and skipped). */
 const parkedOps = (record: Pick<schema.CustomerUnmatchedRecord, "id" | "payload">) =>
@@ -614,6 +646,7 @@ const make = Effect.gen(function* () {
 							externalId: record.externalId,
 							eventCount30d: record.events ?? null,
 							payload: record.op === null ? null : [encodeOp(record.op)],
+							blockedBy: record.op === null ? null : blockedByOf(record.op),
 							...fields,
 						})
 						.returning("id"),
@@ -640,11 +673,12 @@ const make = Effect.gen(function* () {
 							payload: [...held.filter((item) => parkKey(item) !== parkKey(op)), op].map(
 								(item) => encodeOp(item),
 							),
+							blockedBy: blockedByOf(op),
 							eventCount30d: events,
 						}
 					: row.status === "open"
 						? { eventCount30d: events }
-						: { ...values, payload: null, eventCount30d: events }
+						: { ...values, payload: null, blockedBy: null, eventCount30d: events }
 			const current: Record<string, unknown> = row
 			const changed =
 				row.status !== "open" ||
@@ -677,22 +711,33 @@ const make = Effect.gen(function* () {
 		externalId: string,
 	): Effect.Effect<void, CustomerIngestRejectedError | Database.DatabaseError> =>
 		Effect.gen(function* () {
-			const byPayload = entityType === "account" ? 1 : 0
-			const ids = yield* db.query(
-				Database.sql`SELECT "id" FROM "customer_unmatched_records" r WHERE "status" = 'open' AND (
-					("provider" = ${provider} AND "entityType" = ${entityType} AND "externalId" = ${externalId})
-					OR (${byPayload} = 1 AND json_type(r."payload") = 'array' AND EXISTS (
-						SELECT 1 FROM json_each(r."payload") p
-						WHERE json_extract(p.value, '$.account.provider') = ${provider}
-							AND json_extract(p.value, '$.account.externalId') = ${externalId}
-					))
-				)`,
+			// The record itself, and (an account's ref) the records whose ops wait for that account.
+			const own = yield* db.run(
+				SQLite.from(schema.customerUnmatchedRecordsTable)
+					.select("id")
+					.where(($) => [
+						$.provider.eq(provider),
+						$.entityType.eq(entityType),
+						$.externalId.eq(externalId),
+						$.status.eq("open"),
+					]),
 			)
-			for (const { id } of ids) {
+			const waiting =
+				entityType === "account"
+					? yield* db.run(
+							SQLite.from(schema.customerUnmatchedRecordsTable)
+								.select("id")
+								.where(($) => [
+									$.blockedBy.eq(refKey({ provider, externalId })),
+									$.status.eq("open"),
+								]),
+						)
+					: []
+			for (const id of new Set([...own, ...waiting].map((row) => row.id))) {
 				const found = yield* db.first(
 					SQLite.from(schema.customerUnmatchedRecordsTable)
 						.select()
-						.where(($) => [$.id.eq(id as CustomerUnmatchedRecordId), $.status.eq("open")])
+						.where(($) => [$.id.eq(id), $.status.eq("open")])
 						.limit(1),
 				)
 				if (Option.isNone(found)) continue
@@ -703,6 +748,7 @@ const make = Effect.gen(function* () {
 						.set({
 							status: "linked",
 							payload: null,
+							blockedBy: null,
 							resolvedAt: session.now,
 							updatedAt: session.now,
 						})
@@ -909,7 +955,7 @@ const make = Effect.gen(function* () {
 			if (Option.isSome(ref)) {
 				// Deleted after the source last changed it: a late delivery.
 				if (observedBefore(op.observedAt, ref.value)) return outcome.unchanged(ref.value.accountId)
-				yield* touchRef(session, ref.value, op.externalUrl)
+				yield* touchRef(session, ref.value, providerLink(session.context.provider, op.externalUrl))
 				const changed = yield* applyAccountFields(session, ref.value.accountId, op, domains)
 				return changed ? outcome.updated(ref.value.accountId) : outcome.unchanged(ref.value.accountId)
 			}
@@ -924,7 +970,7 @@ const make = Effect.gen(function* () {
 					entityId: match.accountId,
 					accountId: match.accountId,
 					matchMethod: match.method,
-					externalUrl: op.externalUrl,
+					externalUrl: providerLink(session.context.provider, op.externalUrl),
 				})
 				return outcome.updated(match.accountId)
 			}
@@ -965,7 +1011,7 @@ const make = Effect.gen(function* () {
 				entityId: accountId,
 				accountId,
 				matchMethod: "created",
-				externalUrl: op.externalUrl,
+				externalUrl: providerLink(session.context.provider, op.externalUrl),
 			})
 			return outcome.created(accountId)
 		})
@@ -1105,7 +1151,7 @@ const make = Effect.gen(function* () {
 					entityId: contactId,
 					accountId: accountId.value,
 					matchMethod: created ? "created" : "existing",
-					externalUrl: op.externalUrl,
+					externalUrl: providerLink(session.context.provider, op.externalUrl),
 				})
 			}
 			const id = contactId
@@ -1118,7 +1164,8 @@ const make = Effect.gen(function* () {
 			if (Option.isNone(current)) return outcome.unchanged(id)
 			const contact = current.value
 			// Seen again (a full sweep removes the contacts it does not see).
-			if (Option.isSome(known)) yield* touchRef(session, known.value, op.externalUrl)
+			if (Option.isSome(known))
+				yield* touchRef(session, known.value, providerLink(session.context.provider, op.externalUrl))
 			const patch = makePatch(contact, contact.fieldSources, provider)
 			patch.set("email", op.email, true)
 			patch.set("name", op.name, true)
@@ -1338,7 +1385,7 @@ const make = Effect.gen(function* () {
 				// `undefined` leaves a column as it is (and its default on insert).
 				nextRetryAt: op.nextRetryAt === undefined ? undefined : toDate(op.nextRetryAt),
 				declineReason: op.declineReason,
-				hostedUrl: op.hostedUrl,
+				hostedUrl: providerLink(session.context.provider, op.hostedUrl),
 			}
 			const existing = yield* db.first(
 				SQLite.from(schema.customerInvoicesTable)
@@ -1471,10 +1518,11 @@ const make = Effect.gen(function* () {
 				result = outcome.created(id)
 			} else {
 				const day = existing.value
-				// A retry or another source never lowers the day: the most sessions seen, signed in once
-				// signed in. `undefined` leaves a column as it is.
+				// A retry or another source never lowers the day: the most events and sessions seen, signed
+				// in once signed in. `undefined` leaves a column as it is.
 				const fields = {
-					eventCount: op.eventCount,
+					eventCount:
+						op.eventCount === undefined ? undefined : Math.max(day.eventCount, op.eventCount),
 					sessionCount:
 						op.sessionCount === undefined
 							? undefined
@@ -1848,7 +1896,7 @@ const make = Effect.gen(function* () {
 	})
 
 	// -----------------------------------------------------------------------
-	// Runs, links, staleness
+	// Runs, links, sweeps
 	// -----------------------------------------------------------------------
 
 	const startRun = Effect.fn("CustomerIngest.startRun")(function* (
@@ -1946,8 +1994,14 @@ const make = Effect.gen(function* () {
 			yield* withSql(setBaselineFor(current.id))
 			// The first import brings old data: chart history is rebuilt once, not on later imports.
 			if (current.backfilledAt === null) yield* withSql(requestHistoryRebuild)
+			return yield* withSql(requestCompute)
 		}
-		yield* withSql(requestCompute)
+		// The source went in or out of error (its templates match nothing while it is): compute
+		// like after ingest. What the run brought already asked for one (`apply`).
+		const recovered = result._tag === "Succeeded" && current.status === "error"
+		const failed =
+			result._tag !== "Succeeded" && result.error.code === "auth" && current.status === "active"
+		if (recovered || failed) yield* withStore(requestComputeAfterIngest)
 	})
 
 	const link = Effect.fn("CustomerIngest.link")(function* (
@@ -2030,21 +2084,6 @@ const make = Effect.gen(function* () {
 		return outcome.updated(accountId)
 	})
 
-	const setStale = Effect.fn("CustomerIngest.setStale")(function* (
-		connectionId: CustomerConnectionId,
-		stale: boolean,
-	) {
-		const now = new Date(yield* Clock.currentTimeMillis)
-		yield* db.run(
-			SQLite.update(schema.customerExternalRefsTable)
-				.set({ staleAt: stale ? now : null, updatedAt: now })
-				.where(($) => [
-					$.connectionId.eq(connectionId),
-					stale ? $.staleAt.isNull() : $.staleAt.isNotNull(),
-				]),
-		)
-	})
-
 	const completeSweep = Effect.fn("CustomerIngest.completeSweep")(function* (
 		connectionId: CustomerConnectionId,
 		since: Date,
@@ -2105,7 +2144,6 @@ const make = Effect.gen(function* () {
 		progress,
 		finishRun,
 		link,
-		setStale,
 		completeSweep,
 	} satisfies CustomerIngestApi
 })

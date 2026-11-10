@@ -174,6 +174,24 @@ describe("Customers webhook delivery", () => {
 			}),
 		))
 
+	it("answers 500 when the store fails, without the storage error's text", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				const connectionId = yield* liveConnection(world, "whsec")
+				world.object.storage.db
+					.prepare(
+						`CREATE TRIGGER fail_accounts BEFORE INSERT ON customer_accounts BEGIN SELECT RAISE(ABORT, 'disk detail'); END`,
+					)
+					.run()
+				const result = yield* deliver(world, connectionId, {
+					adapter: stripeAdapter(() => Effect.succeed([account])),
+				})
+				expect(result).toMatchObject({ status: 500 })
+				expect(JSON.stringify(result)).not.toContain("disk detail")
+			}),
+		))
+
 	it("never sets up Customers: a webhook to an existing org's fresh object answers 404", () =>
 		run(
 			Effect.gen(function* () {

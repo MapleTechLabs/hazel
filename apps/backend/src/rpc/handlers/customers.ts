@@ -11,7 +11,7 @@
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import { InternalServerError } from "@hazel/domain"
-import { type ConnectionConfig, type CustomerProvider, TEMPLATES } from "@hazel/domain/customers"
+import { type ConnectionConfig, type CustomerProvider, MAX_VIEWS, TEMPLATES } from "@hazel/domain/customers"
 import {
 	CustomerAdminRpcs,
 	CustomerConnectionCredentialsError,
@@ -27,7 +27,6 @@ import type {
 	CustomerSavedViewId,
 	CustomerSignalId,
 	CustomerSignalRuleId,
-	OrganizationId,
 	UserId,
 } from "@hazel/schema"
 import { Clock, DateTime, Effect, Layer, Option, Predicate, Redacted } from "effect"
@@ -39,7 +38,9 @@ import {
 	disconnectConnections,
 	encryptSecrets,
 	loadCredentials,
+	otherProviderAccount,
 	storeSecrets,
+	switchProviderAccount,
 } from "../../worker/objects/customers/credentials"
 import { seedDemo } from "../../worker/objects/customers/demo"
 import { healthDryRun, ruleDryRun } from "../../worker/objects/customers/dry-run"
@@ -486,7 +487,8 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 		return {
 			"customers.signal.assign": ({ signalId, assigneeUserId }) =>
 				Effect.andThen(
-					requirePerson(assigneeUserId).pipe(remap),
+					// A member first: who is a member is not for outsiders to probe.
+					requireMember.pipe(Effect.andThen(requirePerson(assigneeUserId)), remap),
 					actOnSignal(signalId, "assign", () => ({ assigneeUserId }), { assigneeUserId }),
 				),
 
@@ -730,8 +732,19 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 			"customers.view.create": ({ id, view, shared, organizationId }) =>
 				Effect.gen(function* () {
 					const actor = shared ? yield* requireAdmin : yield* requireMember
+					const owner = shared ? null : actor.userId
 					return yield* withTx(
 						Effect.gen(function* () {
+							const views = yield* db.run(
+								SQLite.from(schema.customerSavedViewsTable)
+									.select("id")
+									.where(($) => [
+										owner === null ? $.ownerUserId.isNull() : $.ownerUserId.eq(owner),
+										$.deletedAt.isNull(),
+									])
+									.limit(MAX_VIEWS),
+							)
+							if (views.length >= MAX_VIEWS) return yield* invalid(`At most ${MAX_VIEWS} views`)
 							const last = yield* db.first(
 								SQLite.from(schema.customerSavedViewsTable)
 									.select("position")
@@ -744,7 +757,7 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 										id, // `undefined`: the column's default
 										organizationId,
 										name: view.name,
-										ownerUserId: shared ? null : actor.userId,
+										ownerUserId: owner,
 										filters: view.filters,
 										sort: view.sort,
 										columns: view.columns,
@@ -941,6 +954,31 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					),
 				)
 
+		/** New credentials start a new run: one left running ends, so only one run pulls. */
+		const restartRun = (connection: schema.CustomerConnection, now: Date) =>
+			Effect.gen(function* () {
+				yield* db.run(
+					SQLite.update(schema.customerSyncRunsTable)
+						.set({
+							status: "failed",
+							finishedAt: now,
+							error: {
+								code: "internal",
+								message: "Replaced by new credentials",
+								httpStatus: null,
+							},
+						})
+						.where(($) => [$.connectionId.eq(connection.id), $.status.eq("running")]),
+				)
+				yield* ingest.startRun(
+					connection.id,
+					connection.backfilledAt === null ? "backfill" : "manual",
+				)
+			})
+
+		const switchAccount = (connection: schema.CustomerConnection, now: Date) =>
+			switchProviderAccount(connection, now).pipe(Effect.provideService(CustomerIngest, ingest))
+
 		return {
 			"customers.rule.create": ({ rule, organizationId }) =>
 				Effect.gen(function* () {
@@ -1074,11 +1112,17 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					const now = yield* currentTime
 					return yield* withTx(
 						Effect.gen(function* () {
+							const previous = yield* db.first(
+								SQLite.from(schema.customerConnectionsTable)
+									.select("externalAccountId")
+									.where(($) => [$.provider.eq(provider)])
+									.limit(1),
+							)
 							const values = {
 								status: "active" as const,
 								externalAccountId: account.externalAccountId,
 								externalAccountName: account.externalAccountName,
-								config: config as ConnectionConfig,
+								config,
 								connectedBy: actor.userId,
 								connectedAt: now,
 								hasWebhookSecret: webhookSecret !== null,
@@ -1097,27 +1141,14 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 									.returning(),
 							)
 							yield* storeSecrets(connection.id, secrets)
-							yield* ingest.setStale(connection.id, false)
-							// New credentials start a new run: one left running (connected again without a
-							// disconnect) ends, so only one run pulls.
-							yield* db.run(
-								SQLite.update(schema.customerSyncRunsTable)
-									.set({
-										status: "failed",
-										finishedAt: now,
-										error: {
-											code: "internal",
-											message: "Replaced by a new connection",
-											httpStatus: null,
-										},
-									})
-									.where(($) => [$.connectionId.eq(connection.id), $.status.eq("running")]),
+							const current = otherProviderAccount(
+								Option.getOrNull(Option.map(previous, (row) => row.externalAccountId)),
+								account.externalAccountId,
 							)
-							yield* ingest.startRun(
-								connection.id,
-								connection.backfilledAt === null ? "backfill" : "manual",
-							)
-							return connection
+								? yield* switchAccount(connection, now)
+								: connection
+							yield* restartRun(current, now)
+							return current
 						}),
 					)
 				}).pipe(remap),
@@ -1127,6 +1158,9 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					yield* requireAdmin
 					const webhookSecret = given === undefined ? undefined : secretOf(given)
 					const connection = yield* requireConnection(connectionId)
+					// Its secrets were deleted: new ones come with a connect.
+					if (connection.status === "disconnected")
+						return yield* invalid("The connection is disconnected: connect it again")
 					if (config !== undefined && config._tag !== connection.provider) {
 						return yield* invalid(`The config is for ${config._tag}, not ${connection.provider}`)
 					}
@@ -1160,34 +1194,54 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 															? null
 															: Redacted.value(c.webhookSecret),
 												})
-									if (apiKey !== undefined) {
-										const adapter = yield* adapterOf(connection.provider)
-										yield* adapter
-											.validate({
-												apiKey: Redacted.make(apiKey),
-												webhookSecret:
-													nextSecret === null ? null : Redacted.make(nextSecret),
-												config: nextConfig,
-											})
-											.pipe(Effect.mapError(credentialsError(connection.provider)))
-									}
+									const account =
+										apiKey === undefined
+											? null
+											: yield* Effect.flatMap(
+													adapterOf(connection.provider),
+													(adapter) =>
+														adapter
+															.validate({
+																apiKey: Redacted.make(apiKey),
+																webhookSecret:
+																	nextSecret === null
+																		? null
+																		: Redacted.make(nextSecret),
+																config: nextConfig,
+															})
+															.pipe(
+																Effect.mapError(
+																	credentialsError(connection.provider),
+																),
+															),
+												)
 									return {
 										encrypted: yield* encrypt(nextApiKey, nextSecret),
 										hasWebhookSecret: nextSecret !== null,
+										account,
 									}
 								})
+					const account = secrets?.account ?? null
 					const now = yield* currentTime
 					return yield* withTx(
 						Effect.gen(function* () {
 							if (secrets !== undefined) yield* storeSecrets(connectionId, secrets.encrypted)
-							// A new API key lifts an `auth` error and pulls again.
-							const lifted = apiKey !== undefined && connection.status === "error"
+							const switched =
+								account !== null &&
+								otherProviderAccount(connection.externalAccountId, account.externalAccountId)
+							const current = switched ? yield* switchAccount(connection, now) : connection
+							// A new API key lifts an `auth` error and pulls again; one of another account
+							// imports it from scratch.
+							const lifted = account !== null && (switched || connection.status === "error")
+							if (switched) yield* restartRun(current, now)
 							const [row] = yield* db.run(
 								SQLite.update(schema.customerConnectionsTable)
 									// `undefined` leaves a column as it is.
 									.set({
 										config: nextConfig,
 										hasWebhookSecret: secrets?.hasWebhookSecret,
+										externalAccountId: account?.externalAccountId ?? undefined,
+										externalAccountName: account?.externalAccountName ?? undefined,
 										status: lifted ? ("active" as const) : undefined,
 										nextSyncAt: lifted ? now : undefined,
 										consecutiveFailures: lifted ? 0 : undefined,
@@ -1209,7 +1263,6 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					return yield* txOnly(
 						Effect.gen(function* () {
 							yield* disconnectConnections([connectionId], now)
-							yield* ingest.setStale(connectionId, true)
 							yield* requestCompute
 						}),
 					)
@@ -1290,7 +1343,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 				Effect.gen(function* () {
 					const actor = yield* requireAdmin
 					const now = yield* currentTime
-					return yield* txOnly(
+					return yield* withTx(
 						Effect.gen(function* () {
 							const record = yield* requireRecord(recordId)
 							if (record.status !== "open")
@@ -1349,7 +1402,9 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 											.where(($) => [inList($.id, covered)]),
 									)
 								}
+								return { ignoredRecordIds: [recordId, ...covered] }
 							}
+							return { ignoredRecordIds: [recordId] }
 						}),
 					)
 				}).pipe(remap),
@@ -1375,7 +1430,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					const enabled = yield* NonProductionStage.pipe(Effect.orElseSucceed(() => false))
 					if (!enabled) return yield* invalid("Demo data is disabled on this stage")
 					yield* seedDemo({
-						organizationId: organizationId as OrganizationId,
+						organizationId,
 						by: actor.userId,
 						now: yield* currentTime,
 						accounts: accounts === undefined ? undefined : Math.min(1000, Math.max(1, accounts)),

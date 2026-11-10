@@ -5,7 +5,8 @@
  * - `customers.bootstrap` (the runtime, before the first request): pull the members from the
  *   `OrgObject` when none were projected yet, then, once the org has members, install the
  *   defaults and start computing.
- * - `customers.tick` (the alarm): run due pulls, then compute when due (else wake snoozes). Only
+ * - `customers.tick` (the alarm): compute (or rebuild history) when due, else run the due pulls
+ *   and wake snoozes; one kind of work per turn, so each alarm stays within the CPU budget. Only
  *   the pulls need the credentials' encryption: compute never depends on its key.
  * - `customers.webhook` (`routes/customers-webhooks.http.ts`): verify and apply one delivery.
  *
@@ -35,13 +36,13 @@ import { applyMembers, CUSTOMERS_MEMBERS_VERSION_KEY } from "../effects/customer
 import { orgTarget } from "../kinds"
 import { readObjectMeta, writeObjectMeta } from "../meta"
 import { CustomerMembersCall } from "../org/customer-members"
-import { runCompute, wakeSnoozed } from "./compute"
+import { runComputeStep, wakeSnoozed } from "./compute"
 import { loadCredentials } from "./credentials"
 import { installDefaults } from "./defaults"
 import { CustomerIngest } from "./ingest"
 import type { CustomerProviderAdapter, CustomerProviderError } from "./providers"
 import { CustomerProviders } from "./providers"
-import { backOffCompute, computeDueAt, LEASE_MS, scheduleComputeAt } from "./schedule"
+import { computeDueAt, LEASE_MS, scheduleComputeAt, takeComputeLease } from "./schedule"
 import { CustomersServicesLive } from "./services"
 
 const DEFAULTS_KEY = "defaultsInstalled"
@@ -379,24 +380,24 @@ export const tick = Effect.fn("CustomersObject.tick")(function* () {
 	const db = yield* Database.Database
 	const now = new Date(yield* Clock.currentTimeMillis)
 	if (Option.isNone(yield* readObjectMeta(DEFAULTS_KEY))) return { computed: false }
-	// Pulls first: the compute that follows sees what they brought.
-	yield* runDuePulls(now)
+	// One kind of work per alarm turn, each bounded on its own (a compute or a history rebuild, else
+	// the due pulls, ≤ `PAGES_PER_TICK` pages each): work still due re-arms the alarm right away.
 	const due = yield* computeDueAt
-	const computed = Option.isSome(due) && due.value <= now.getTime()
-	if (computed) {
-		// The lease, then the run; a failed compute backs off instead of retrying on every alarm.
-		yield* scheduleComputeAt(now.getTime() + LEASE_MS)
-		yield* runCompute(now).pipe(
+	if (Option.isSome(due) && due.value <= now.getTime()) {
+		// The lease counts the attempt: a failed or killed run retries after a growing backoff.
+		yield* takeComputeLease(now.getTime())
+		yield* runComputeStep(now).pipe(
 			Effect.catchCause((cause) =>
 				Cause.hasInterruptsOnly(cause)
 					? Effect.failCause(cause)
-					: Effect.logError("Customers compute failed", { cause: Cause.pretty(cause) }).pipe(
-							Effect.andThen(backOffCompute(now.getTime())),
-						),
+					: Effect.logError("Customers compute failed", { cause: Cause.pretty(cause) }),
 			),
 		)
-	} else yield* db.transaction(wakeSnoozed(now))
-	return { computed }
+		return { computed: true }
+	}
+	yield* runDuePulls(now)
+	yield* db.transaction(wakeSnoozed(now))
+	return { computed: false }
 }, Effect.orDie)
 
 // ---------------------------------------------------------------------------

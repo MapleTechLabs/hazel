@@ -57,7 +57,7 @@ import {
 	UnmatchedRecord,
 } from "../customers/models"
 import { RuleDraft } from "../customers/rules"
-import { ViewDraft } from "../customers/views"
+import { MAX_VIEWS, ViewDraft } from "../customers/views"
 import { InternalServerError, UnauthorizedError } from "../errors"
 import { JsonDate } from "../models/utils"
 import { RequiredScopes } from "../scopes/required-scopes"
@@ -349,11 +349,15 @@ export class CustomerQueueRpcs extends RpcGroup.make(
 		CustomersInvalidRequestError,
 	),
 
-	/** Personal views for anyone; shared ones (`shared: true`) for admins. */
+	/**
+	 * Personal views for anyone; shared ones (`shared: true`) for admins. At most `MAX_VIEWS` of
+	 * each (a person's own, the shared ones), else `CustomersInvalidRequestError`.
+	 */
 	write(
 		"customers.view.create",
 		{ id: Schema.optionalKey(CustomerSavedViewId), view: ViewDraft, shared: Schema.Boolean },
 		withTx(SavedView.Schema),
+		CustomersInvalidRequestError,
 	),
 
 	/** Own personal views; shared and built-in views for admins. */
@@ -374,7 +378,11 @@ export class CustomerQueueRpcs extends RpcGroup.make(
 	),
 
 	/** The caller's tab order: personal views, and (admins) shared ones. */
-	write("customers.view.reorder", { viewIds: Schema.Array(CustomerSavedViewId) }, Tx),
+	write(
+		"customers.view.reorder",
+		{ viewIds: Schema.Array(CustomerSavedViewId).check(Schema.isMaxLength(2 * MAX_VIEWS)) },
+		Tx,
+	),
 ) {}
 
 // ---------------------------------------------------------------------------
@@ -477,7 +485,7 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 		CustomersInvalidRequestError,
 	),
 
-	/** Ignore it; with `pattern`, also every future record matching it. */
+	/** Ignore it; with `rule`, also the open and future records matching it. */
 	write(
 		"customers.unmatched.ignore",
 		{
@@ -489,7 +497,8 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 				}),
 			),
 		},
-		Tx,
+		/** Every record it ignored: this one, and the open ones the rule covers. */
+		withTx(Schema.Struct({ ignoredRecordIds: Schema.Array(CustomerUnmatchedRecordId) })),
 		CustomersNotFoundError,
 		/** The record is not open. */
 		CustomersInvalidRequestError,

@@ -10,6 +10,7 @@ import {
 	type CustomerProvider,
 	escalate,
 	type EvidenceStep,
+	MAX_WINDOW_DAYS,
 	type RuleConfig,
 	type RuleScope,
 	type SignalEvidence,
@@ -546,10 +547,10 @@ export const evaluate = (rule: RuleInput, facts: AccountFacts, org: OrgFacts): E
 	}
 }
 
-/** The days of activity an evaluation of `rules` looks back over. */
+/** The days of activity an evaluation of `rules` looks back over (bounded: windows ≤ `MAX_WINDOW_DAYS`). */
 export const activityWindowDays = (rules: ReadonlyArray<RuleInput>) =>
 	Math.min(
-		400,
+		2 * MAX_WINDOW_DAYS + 31,
 		Math.max(
 			62,
 			...rules.map((rule) => {

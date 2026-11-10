@@ -6,9 +6,10 @@
  *   ≤ 2 minutes after a person's change (rule, settings, a signal's status: `requestCompute`, a
  *   debounce that only moves the deadline earlier), and after ingest no sooner than
  *   `MIN_COMPUTE_GAP_MS` after the last compute (`requestComputeAfterIngest`), so steady webhooks
- *   do not recompute everything every few minutes. A compute takes a lease first (`COMPUTE_LEASE_MS`)
- *   and a failed one backs off exponentially (`./jobs.ts`), so nothing past due keeps the alarm
- *   firing, not even a run the runtime killed;
+ *   do not recompute everything every few minutes. A compute takes a lease first
+ *   (`takeComputeLease`), which counts the attempt: until one succeeds, each lease is twice the
+ *   last, so a run that fails, or that the runtime kills, cannot keep the alarm firing, and ingest
+ *   does not bring a failing compute closer;
  * - the earliest `snoozedUntil` (wake);
  * - each active connection's `nextSyncAt` (scheduled pulls).
  */
@@ -48,8 +49,18 @@ export const requestCompute = Effect.flatMap(Clock.currentTimeMillis, (now) =>
 	computeBy(now + COMPUTE_DEBOUNCE_MS),
 )
 
-/** Provider data changed: compute soon, but not sooner than `MIN_COMPUTE_GAP_MS` after the last run. */
+const computeAttempts = meta(
+	Effect.map(readObjectMeta(COMPUTE_FAILURES_KEY), (value) =>
+		Option.getOrElse(Option.map(value, Number), () => 0),
+	),
+)
+
+/**
+ * Provider data changed: compute soon, but not sooner than `MIN_COMPUTE_GAP_MS` after the last run,
+ * and never sooner than the backoff of a compute that has not succeeded since its last attempt.
+ */
 export const requestComputeAfterIngest = Effect.gen(function* () {
+	if ((yield* computeAttempts) > 0) return
 	const db = yield* Database.Database
 	const now = yield* Clock.currentTimeMillis
 	const settings = yield* db.first(
@@ -59,15 +70,16 @@ export const requestComputeAfterIngest = Effect.gen(function* () {
 	yield* computeBy(Math.max(now + COMPUTE_DEBOUNCE_MS, last + MIN_COMPUTE_GAP_MS))
 })
 
-/** A compute failed: retry after an exponential backoff (5 minutes, doubling, ≤ 6 hours). */
-export const backOffCompute = (now: number) =>
+/**
+ * Before a compute runs: count the attempt and move the deadline past it (5 minutes, doubling per
+ * attempt since the last success, ≤ 6 hours). A success reschedules (`scheduleComputeAt`) and
+ * resets the count; a failure, caught or a kill, leaves this backoff in place.
+ */
+export const takeComputeLease = (now: number) =>
 	Effect.gen(function* () {
-		const failures = Option.getOrElse(
-			Option.map(yield* meta(readObjectMeta(COMPUTE_FAILURES_KEY)), Number),
-			() => 0,
-		)
-		yield* meta(writeObjectMeta(COMPUTE_FAILURES_KEY, String(failures + 1)))
-		yield* scheduleComputeAt(now + Math.min(MAX_COMPUTE_BACKOFF_MS, LEASE_MS * 2 ** failures))
+		const attempts = yield* computeAttempts
+		yield* meta(writeObjectMeta(COMPUTE_FAILURES_KEY, String(attempts + 1)))
+		yield* scheduleComputeAt(now + Math.min(MAX_COMPUTE_BACKOFF_MS, LEASE_MS * 2 ** attempts))
 	})
 
 export const resetComputeFailures = meta(deleteObjectMeta(COMPUTE_FAILURES_KEY))
@@ -95,7 +107,10 @@ export const setBaselineFor = (connectionId: string) =>
 
 export const clearBaseline = meta(deleteObjectMeta(BASELINE_KEY))
 
-/** The next compute rebuilds the daily history (a backfill or the demo seed brought old data). */
+/**
+ * The daily history is rebuilt (a backfill or the demo seed brought old data), in an alarm turn of
+ * its own before the next compute, once no billing backfill is importing (`./compute.ts`).
+ */
 export const requestHistoryRebuild = meta(writeObjectMeta(REBUILD_KEY, "1"))
 export const historyRebuildPending = meta(Effect.map(readObjectMeta(REBUILD_KEY), Option.isSome))
 export const clearHistoryRebuild = meta(deleteObjectMeta(REBUILD_KEY))

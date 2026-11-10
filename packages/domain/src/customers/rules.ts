@@ -13,7 +13,10 @@ import {
 	type SignalTemplate,
 } from "./enums"
 
-const Days = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 365 }))
+/** The longest window a rule looks back over: compute loads every account's activity for it. */
+export const MAX_WINDOW_DAYS = 90
+const Days = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: MAX_WINDOW_DAYS }))
+const AgeDays = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 365 }))
 const Pct = Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 1000 }))
 const Count = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 100_000 }))
 
@@ -52,8 +55,8 @@ export const TrialEndingLowActivationConfig = Schema.TaggedStruct("trial_ending_
 
 /** First seen `minAgeDays`–`maxAgeDays` ago, and fewer than `minActiveContacts` contacts ever active. */
 export const OnboardingStalledConfig = Schema.TaggedStruct("onboarding_stalled", {
-	minAgeDays: Days,
-	maxAgeDays: Days,
+	minAgeDays: AgeDays,
+	maxAgeDays: AgeDays,
 	minActiveContacts: Count,
 }).check(
 	Schema.makeFilter((config) =>

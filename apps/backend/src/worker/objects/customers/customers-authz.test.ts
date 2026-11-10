@@ -382,11 +382,32 @@ describe("Customers data-source handlers", () => {
 			}),
 		))
 
-	it("disconnecting ends the connection's running sync runs", () =>
+	it("disconnecting ends the connection's running sync runs and leaves its refs as they are", () =>
 		run(
 			Effect.gen(function* () {
 				const world = yield* makeCustomersWorld
 				const connectionId = world.connection("clerk")
+				const org = (externalId: string) => ({
+					_tag: "account" as const,
+					externalId,
+					name: externalId,
+					sameAs: [],
+					onNoMatch: "create" as const,
+				})
+				yield* world.ingest("clerk", [
+					org("org_live"),
+					org("org_gone"),
+					{ ...org("org_gone"), deleted: true },
+				])
+				const refs = () =>
+					world.rows(
+						`SELECT externalId, staleAt IS NOT NULL AS stale FROM customer_external_refs ORDER BY externalId`,
+					)
+				const before = refs()
+				expect(before).toEqual([
+					{ externalId: "org_gone", stale: 1 },
+					{ externalId: "org_live", stale: 0 },
+				])
 				world.object.storage.db
 					.prepare(
 						`INSERT INTO customer_sync_runs (id, organizationId, connectionId, provider, trigger) VALUES (?, ?, ?, 'clerk', 'backfill')`,
@@ -394,6 +415,18 @@ describe("Customers data-source handlers", () => {
 					.run(uuid(), world.orgId, connectionId)
 				ok(yield* world.call("customers.connection.disconnect", { connectionId }, world.owner))
 				expect(world.rows(`SELECT status FROM customer_sync_runs`)).toEqual([{ status: "failed" }])
+				// Staleness is the provider's removal only: the UI reads a disconnect from the connection.
+				expect(refs()).toEqual(before)
+				// New credentials for a disconnected connection come with a connect.
+				expect(
+					tagOf(
+						yield* world.call(
+							"customers.connection.update",
+							{ connectionId, apiKey: "sk_new" },
+							world.owner,
+						),
+					),
+				).toBe("CustomersInvalidRequestError")
 			}),
 		))
 
@@ -410,13 +443,14 @@ describe("Customers data-source handlers", () => {
 				insert.run(sibling, connectionId, "account", "cus_2", "Test 2", "b@test.io")
 				insert.run(other, connectionId, "account", "cus_3", "Real", "c@real.io")
 				insert.run(contact, connectionId, "contact", "u_1", "Test user", "d@test.io")
-				ok(
+				const ignored = ok(
 					yield* world.call(
 						"customers.unmatched.ignore",
 						{ recordId: first, rule: { field: "email", pattern: "*@test.io" } },
 						world.owner,
 					),
 				)
+				expect([...ignored.data.ignoredRecordIds].sort()).toEqual([first, sibling].sort())
 				expect(
 					world.rows(`SELECT id, status FROM customer_unmatched_records ORDER BY label`),
 				).toEqual(

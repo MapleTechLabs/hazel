@@ -171,7 +171,6 @@ interface CustomerIngestShape {
   progress(runId, progress: SyncProgress): Effect<void, DatabaseError, …>
   finishRun(runId, { _tag: "Succeeded"; cursor } | { _tag: "Failed"; error: SyncError }): Effect<void, …>
   link(recordId, accountId, by: UserId): Effect<IngestOutcome, …>   // manual match + replay
-  setStale(connectionId, stale: boolean): Effect<void, …>            // disconnect / reconnect
   completeSweep(connectionId, since: Date, entityTypes: RefEntityType[]): Effect<void, DatabaseError>
 }
 interface IngestContext { connectionId; provider; runId: CustomerSyncRunId | null; trigger: SyncTrigger }
@@ -219,8 +218,14 @@ Rules:
   `externalId`.
 - Ingest never computes; it marks compute due (`requestComputeAfterIngest`: ≥ 2 min out and ≥ 15
   min after the last compute). An op the store refuses is skipped and counted (`stats.rejected`).
-- **Disconnect** keeps all data: refs of the connection get `staleAt`, connection `disconnected`,
-  secrets deleted; UI shows stale source chips.
+- **Disconnect** keeps all data: connection `disconnected`, secrets deleted; the UI derives stale
+  source chips from the connection's status (a ref's `staleAt` only ever means the provider removed
+  the record, so a reconnect revives nothing a delete or sweep removed). New credentials of another
+  provider account (`externalAccountId` changed, on connect or update) drop the provider's billing
+  rows, sweep its refs (`completeSweep`), and import from scratch (a backfill, history rebuilt).
+- **Links** (`externalUrl`, `hostedUrl`) are kept only as `https:` URLs on the provider's own
+  hosts; domains only as hostnames. A pull's error message is synced to every member: adapters
+  report client-safe messages only.
 
 ## 4. Compute pipeline (in the `CustomersObject`)
 
@@ -229,8 +234,11 @@ Rules:
 - Alarm deadlines (folded into the object's one alarm, like `rssDeadlines`): `computeDueAt`
   (hourly, ≤ 2 min after a person's rule / settings / signal change, ≥ 15 min after the last
   compute for ingest), each connection's `nextSyncAt`, the earliest `snoozedUntil`, the earliest
-  `reopenAfter`. The alarm runs due pulls, then compute; each first moves its deadline a 5 min lease
-  ahead (a killed run retries after it); failed computes back off exponentially.
+  `reopenAfter`. One kind of work per alarm turn, each bounded for the default 30 s CPU / 128 MB:
+  a due compute (or, before it, a pending history rebuild, alone in its turn), else the due pulls
+  (≤ 20 pages per connection). Each first moves its deadline a lease ahead; a compute's lease counts
+  the attempt and doubles until one succeeds (5 min … 6 h), so a failed or killed run cannot loop,
+  and ingest does not bring a failing compute closer.
 - Compute is one function `runCompute(now)`, steps below, over accounts loaded in chunks of 250
   (one chunk's activity in memory; the org's DAU/WAU/MAU from SQL). `customer_settings.lastComputedAt`
   records it. Once a day it prunes daily rows > 400 d, events > 2 y, closed signals > 180 d, sync
@@ -259,6 +267,8 @@ Rules:
   risk signal).
 - After a backfill: rebuild `active_users*`, `mrr` (from subscription start/cancel dates),
   movements and `customer_org_daily` for the last 365 days, so charts have history on day one.
+  While a billing backfill is importing, or its rebuild is pending, compute writes no movements
+  (the accounts' history comes from the rebuild, which waits for billing imports to finish).
 
 ### 4.3 Health (`packages/domain/src/customers/health.ts`)
 
@@ -528,7 +538,7 @@ mutations/compute → end-to-end pass on `alchemy:dev` with the demo seed.
   authorization (member vs admin), transactionId confirmation.
 - **Ingest:** matching order table-driven (ref, shared id, domain, ambiguous, ignore rule, create),
   idempotent replays (apply twice → `Unchanged`, no `_changes` rows), precedence, unmatched → link
-  replay, stale on disconnect.
+  replay, reconnect keeps removed refs removed, another provider account sweeps the old one.
 - **Compute (pure, fixtures):** rollup formulas, MRR movements, health components +
   redistribution + bands + churned → unknown, each template's match/evidence/step, lifecycle state
   machine (open → snooze → wake worse, done → reopen after 7 d, dismissed reopen on step, auto

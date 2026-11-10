@@ -91,12 +91,6 @@ export interface CustomerIngestApi {
 		by: UserId,
 	) => Effect.Effect<IngestOutcome, CustomerIngestRejectedError | DatabaseError>
 
-	/** Mark a connection's refs stale (disconnect) or fresh again (reconnect). */
-	readonly setStale: (
-		connectionId: CustomerConnectionId,
-		stale: boolean,
-	) => Effect.Effect<void, DatabaseError>
-
 	/**
 	 * A pull that listed every record of `entityTypes` of the connection's provider finished: the
 	 * provider's refs not seen since `since` (the run's start) are gone. An account ref goes stale

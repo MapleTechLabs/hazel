@@ -37,7 +37,10 @@ export const ruleDryRun = Effect.fn("Customers.ruleDryRun")(function* (
 	const db = yield* Database.Database
 	const rule = ruleInputOf(draft)
 	const base = yield* loadBase(now, { windowRules: [rule] })
-	const matches: Array<RuleMatch & { priority: number }> = []
+	// Only the 10 highest priorities are shown: keep those, and count the rest.
+	const top: Array<RuleMatch & { priority: number }> = []
+	const matched = new Set<CustomerAccountId>()
+	let mrrMinor = 0
 	const reasons = new Map<string, number>()
 	for (const ids of accountChunks(base.accountIds)) {
 		const snapshot = yield* loadAccounts(base, ids)
@@ -47,7 +50,9 @@ export const ruleDryRun = Effect.fn("Customers.ruleDryRun")(function* (
 				reasons.set(result.reason, (reasons.get(result.reason) ?? 0) + 1)
 				continue
 			}
-			matches.push({
+			matched.add(facts.account.id)
+			mrrMinor += facts.account.mrrMinor
+			top.push({
 				accountId: facts.account.id,
 				name: facts.account.name,
 				logoUrl: facts.account.logoUrl,
@@ -58,6 +63,8 @@ export const ruleDryRun = Effect.fn("Customers.ruleDryRun")(function* (
 				evidence: result.evidence,
 				priority: priorityScore(result.severity, valueOf(facts.account), now, now),
 			})
+			top.sort((a, b) => b.priority - a.priority)
+			top.splice(10)
 		}
 	}
 	const existing =
@@ -74,15 +81,11 @@ export const ruleDryRun = Effect.fn("Customers.ruleDryRun")(function* (
 			.map((signal) => signal.accountId),
 	)
 	const unclosed = new Set(existing.map((signal) => signal.accountId))
-	const matched = new Set<CustomerAccountId>(matches.map((match) => match.accountId))
 	return {
-		matchCount: matches.length,
-		mrrMinor: matches.reduce((sum, match) => sum + match.mrrMinor, 0),
+		matchCount: matched.size,
+		mrrMinor,
 		currency: base.org.currency,
-		topMatches: matches
-			.sort((a, b) => b.priority - a.priority)
-			.slice(0, 10)
-			.map(({ priority: _priority, ...match }) => match),
+		topMatches: top.map(({ priority: _priority, ...match }) => match),
 		nonMatches: [...reasons.entries()]
 			.map(([reason, count]) => ({ reason, count }))
 			.sort((a, b) => b.count - a.count),

@@ -8,6 +8,7 @@ import type { ConnectionConfig } from "@hazel/domain/customers"
 import type { CustomerConnectionId } from "@hazel/schema"
 import { Clock, Effect, Option, Redacted } from "effect"
 import { IntegrationEncryption } from "../../../services/integration-encryption"
+import { CustomerIngest } from "./ingest"
 import type { ProviderCredentials } from "./providers"
 
 /** Encrypt the API key and the webhook secret for storing, both under the current key version. */
@@ -107,4 +108,37 @@ export const loadCredentials = Effect.fn("Customers.loadCredentials")(function* 
 		webhookSecret: webhookSecret === null ? null : Redacted.make(webhookSecret),
 		config,
 	})
+})
+
+/** Credentials of another provider account than the connection's (both known). */
+export const otherProviderAccount = (before: string | null, after: string | null) =>
+	before !== null && after !== null && before !== after
+
+/**
+ * New credentials open another provider account than the connection's: what the old account
+ * brought is not this one's. The provider's billing rows go, its records are swept (an account or
+ * contact no other source holds is deleted), and the connection imports from scratch (its next run
+ * a backfill, history rebuilt after). The caller starts that run.
+ */
+export const switchProviderAccount = Effect.fn("Customers.switchProviderAccount")(function* (
+	connection: schema.CustomerConnection,
+	now: Date,
+) {
+	const db = yield* Database.Database
+	yield* db.run(
+		SQLite.deleteFrom(schema.customerSubscriptionsTable).where(($) => [
+			$.provider.eq(connection.provider),
+		]),
+	)
+	yield* db.run(
+		SQLite.deleteFrom(schema.customerInvoicesTable).where(($) => [$.provider.eq(connection.provider)]),
+	)
+	yield* (yield* CustomerIngest).completeSweep(connection.id, now, ["account", "contact"])
+	const [row] = yield* db.run(
+		SQLite.update(schema.customerConnectionsTable)
+			.set({ backfilledAt: null, lastSuccessAt: null, updatedAt: now })
+			.where(($) => [$.id.eq(connection.id)])
+			.returning(),
+	)
+	return row
 })

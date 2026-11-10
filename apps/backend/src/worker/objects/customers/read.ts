@@ -194,7 +194,9 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 	const grouped = new Map<Day, Array<Day>>()
 	for (const day of dayRange(today, days)) {
 		const key = bucketOf(day, bucket)
-		grouped.set(key, [...(grouped.get(key) ?? []), day])
+		const list = grouped.get(key)
+		if (list === undefined) grouped.set(key, [day])
+		else list.push(day)
 	}
 	for (const [key, list] of grouped) {
 		const rows = list.map((day) => byDay.get(day)).filter((row) => row !== undefined)
@@ -220,39 +222,52 @@ export const overview = Effect.fn("Customers.overview")(function* (range: Custom
 	})
 	const accountById = new Map(accounts.map((account) => [account.id, account]))
 
-	// Movers: average daily active users in the range vs the one before.
+	// Movers: average daily active users in the range vs the one before. SQL sums each account's
+	// active user-days per window; only the movers shown load their daily series.
 	const moverDays = Math.min(days, 90)
 	const moverStart = addDays(today, -(moverDays - 1))
 	const moverPrevious = addDays(moverStart, -moverDays)
-	const activity = (yield* db.query(
-		Database.sql`SELECT "accountId", "day", count(*) AS "users" FROM "customer_activity_daily"
-			WHERE "day" >= ${moverPrevious} AND ${ACTIVE} GROUP BY "accountId", "day"`,
-	)) as ReadonlyArray<{ accountId: CustomerAccountId; day: Day; users: number }>
-	const perAccount = new Map<CustomerAccountId, Map<Day, number>>()
-	for (const row of activity) {
-		const map = perAccount.get(row.accountId) ?? new Map<Day, number>()
-		map.set(row.day, Number(row.users))
-		perAccount.set(row.accountId, map)
-	}
-	const movers: Array<Mover> = []
-	for (const [accountId, map] of perAccount) {
-		const account = accountById.get(accountId)
-		if (account === undefined) continue
-		let currentSum = 0
-		let previousSum = 0
-		for (const [day, users] of map) {
-			if (day >= moverStart) currentSum += users
-			else previousSum += users
-		}
-		if (previousSum === 0) continue
-		movers.push({
-			accountId,
-			name: account.name,
-			logoUrl: account.logoUrl,
-			changePct: Math.round(((currentSum - previousSum) / previousSum) * 1000) / 10,
-			series: dayRange(today, moverDays).map((day) => ({ day, value: map.get(day) ?? 0 })),
-		})
-	}
+	const sums = (yield* db.query(
+		Database.sql`SELECT "accountId", sum("day" >= ${moverStart}) AS "current", sum("day" < ${moverStart}) AS "previous"
+			FROM "customer_activity_daily" WHERE "day" >= ${moverPrevious} AND ${ACTIVE}
+			GROUP BY "accountId" HAVING "previous" > 0`,
+	)) as ReadonlyArray<{ accountId: CustomerAccountId; current: number; previous: number }>
+	const changes = sums.flatMap((row) => {
+		const account = accountById.get(row.accountId)
+		const previous = Number(row.previous)
+		return account === undefined
+			? []
+			: [{ account, changePct: Math.round(((Number(row.current) - previous) / previous) * 1000) / 10 }]
+	})
+	const shown = [
+		...changes
+			.filter((row) => row.changePct > 0)
+			.sort((a, b) => b.changePct - a.changePct)
+			.slice(0, 5),
+		...changes
+			.filter((row) => row.changePct < 0)
+			.sort((a, b) => a.changePct - b.changePct)
+			.slice(0, 5),
+	]
+	const shownDaily =
+		shown.length === 0
+			? []
+			: ((yield* db.query(
+					Database.sql`SELECT "accountId", "day", count(*) AS "users" FROM "customer_activity_daily"
+						WHERE "accountId" IN (SELECT value FROM json_each(${JSON.stringify(shown.map((row) => row.account.id))}))
+						AND "day" >= ${moverStart} AND ${ACTIVE} GROUP BY "accountId", "day"`,
+				)) as ReadonlyArray<{ accountId: CustomerAccountId; day: Day; users: number }>)
+	const usersOn = new Map(shownDaily.map((row) => [`${row.accountId}:${row.day}`, Number(row.users)]))
+	const movers: Array<Mover> = shown.map(({ account, changePct }) => ({
+		accountId: account.id,
+		name: account.name,
+		logoUrl: account.logoUrl,
+		changePct,
+		series: dayRange(today, moverDays).map((day) => ({
+			day,
+			value: usersOn.get(`${account.id}:${day}`) ?? 0,
+		})),
+	}))
 	const gainers = movers
 		.filter((mover) => mover.changePct > 0)
 		.sort((a, b) => b.changePct - a.changePct)
@@ -355,7 +370,9 @@ const accountFacts = (account: schema.CustomerAccount, days: number, now: Date) 
 		)
 		const metricMap = new Map<string, Array<MetricPoint>>()
 		for (const row of metrics) {
-			metricMap.set(row.metricKey, [...(metricMap.get(row.metricKey) ?? []), row])
+			const points = metricMap.get(row.metricKey)
+			if (points === undefined) metricMap.set(row.metricKey, [row])
+			else points.push(row)
 		}
 		const movements = yield* db.run(
 			SQLite.from(schema.customerMrrMovementsTable)
@@ -564,21 +581,32 @@ export const sparklines = Effect.fn("Customers.sparklines")(function* (
 				Database.sql`SELECT "accountId", "contactId", "day" FROM "customer_activity_daily"
 					WHERE "accountId" IN (SELECT value FROM json_each(${idList})) AND "day" >= ${rolling ? addDays(from, -29) : from} AND ${ACTIVE}`,
 			)) as ReadonlyArray<{ accountId: CustomerAccountId; contactId: string; day: Day }>
-			const byAccount = new Map<CustomerAccountId, Array<{ contactId: string; day: Day }>>()
-			for (const row of rows)
-				byAccount.set(row.accountId, [...(byAccount.get(row.accountId) ?? []), row])
-			for (const [accountId, list] of byAccount) {
+			// Per account, each day's active contacts; a 30-day window slides over them, counting
+			// each contact's active days inside it.
+			const byAccount = new Map<CustomerAccountId, Map<Day, Array<string>>>()
+			for (const row of rows) {
+				const byDay = byAccount.get(row.accountId) ?? new Map<Day, Array<string>>()
+				const contacts = byDay.get(row.day)
+				if (contacts === undefined) byDay.set(row.day, [row.contactId])
+				else contacts.push(row.contactId)
+				byAccount.set(row.accountId, byDay)
+			}
+			const width = rolling ? 30 : 1
+			for (const [accountId, byDay] of byAccount) {
+				const inWindow = new Map<string, number>()
+				const shift = (day: Day, by: 1 | -1) => {
+					for (const contact of byDay.get(day) ?? []) {
+						const active = (inWindow.get(contact) ?? 0) + by
+						if (active === 0) inWindow.delete(contact)
+						else inWindow.set(contact, active)
+					}
+				}
+				// The window of the first day, but that day itself.
+				for (const day of dayRange(addDays(from, -1), width - 1)) shift(day, 1)
 				for (const day of dayRange(today, count)) {
-					const lower = rolling ? addDays(day, -29) : day
-					set(
-						accountId,
-						day,
-						new Set(
-							list
-								.filter((row) => row.day >= lower && row.day <= day)
-								.map((row) => row.contactId),
-						).size,
-					)
+					shift(day, 1)
+					set(accountId, day, inWindow.size)
+					shift(addDays(day, -(width - 1)), -1)
 				}
 			}
 			break
@@ -595,8 +623,14 @@ export const sparklines = Effect.fn("Customers.sparklines")(function* (
 					.where(($) => [inList($.accountId, ids)])
 					.orderBy(($) => [[$.day, "asc"]]),
 			)
+			const movementsOf = new Map<CustomerAccountId, Array<schema.CustomerMrrMovement>>()
+			for (const row of movements) {
+				const list = movementsOf.get(row.accountId)
+				if (list === undefined) movementsOf.set(row.accountId, [row])
+				else list.push(row)
+			}
 			for (const account of accounts) {
-				const own = movements.filter((row) => row.accountId === account.id)
+				const own = movementsOf.get(account.id) ?? []
 				for (const point of mrrSeries(own, account.mrrMinor, today, count))
 					set(account.id, point.day, point.value)
 			}

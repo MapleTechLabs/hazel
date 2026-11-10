@@ -61,7 +61,29 @@ export const applyMembers = Effect.fn("CustomersEffects.applyMembers")(function*
 	}
 })
 
-/** The org is gone: its data sources disconnect (credentials dropped) and nothing is scheduled. */
+/** What the org's customers are: purged with the org (its configuration stays, inert). */
+const CUSTOMER_DATA: ReadonlyArray<Parameters<typeof SQLite.deleteFrom>[0]> = [
+	schema.customerAccountsTable,
+	schema.customerContactsTable,
+	schema.customerExternalRefsTable,
+	schema.customerSubscriptionsTable,
+	schema.customerInvoicesTable,
+	schema.customerActivityDailyTable,
+	schema.customerMetricDailyTable,
+	schema.customerOrgDailyTable,
+	schema.customerEventsTable,
+	schema.customerMrrMovementsTable,
+	schema.customerSignalsTable,
+	schema.customerHealthDailyTable,
+	schema.customerNotesTable,
+	schema.customerSyncRunsTable,
+	schema.customerUnmatchedRecordsTable,
+]
+
+/**
+ * The org is gone: its data sources disconnect (credentials dropped), nothing is scheduled, and
+ * its customer data is deleted (no member can read it any more, and an org is not restored).
+ */
 const shutDown = Effect.gen(function* () {
 	const db = yield* Database.Database
 	const connections = yield* db.run(
@@ -74,6 +96,7 @@ const shutDown = Effect.gen(function* () {
 		new Date(yield* Clock.currentTimeMillis),
 	)
 	yield* stopComputing
+	for (const table of CUSTOMER_DATA) yield* db.run(SQLite.deleteFrom(table).allRows())
 })
 
 export const customersReceivers = {

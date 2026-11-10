@@ -420,5 +420,12 @@ export const generatedMigrations: Record<StoreName, ReadonlyArray<StoreMigration
 				'ALTER TABLE "customer_external_refs" ADD COLUMN "deletedObservedAt" text',
 			],
 		},
+		{
+			id: "0003_customers_unmatched_blocked_by",
+			statements: [
+				'ALTER TABLE "customer_unmatched_records" ADD COLUMN "blockedBy" text',
+				'CREATE INDEX IF NOT EXISTS "customer_unmatched_blocked_by_idx" ON "customer_unmatched_records" ("blockedBy")',
+			],
+		},
 	],
 }

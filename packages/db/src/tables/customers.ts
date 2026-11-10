@@ -710,6 +710,8 @@ export const customerUnmatchedRecordsTable = SQLite.table("customer_unmatched_re
 		eventCount30d: SQLite.nullable(SQLite.integer),
 		/** The ingest op that could not land, replayed once linked (`IngestOp`, encoded). */
 		payload: jsonb<unknown>(),
+		/** The account (`provider:externalId`) the held ops name, whose ref replays them once created. */
+		blockedBy: SQLite.nullable(SQLite.text),
 		suggestedAccountId: SQLite.nullable(uuid(CustomerAccountId)),
 		/** 0–1. */
 		confidence: SQLite.nullable(SQLite.real),
@@ -725,6 +727,7 @@ export const customerUnmatchedRecordsTable = SQLite.table("customer_unmatched_re
 	indexes: [
 		SQLite.uniqueIndex("customer_unmatched_external_unique", ["provider", "entityType", "externalId"]),
 		SQLite.index("customer_unmatched_status_idx", ["status"]),
+		SQLite.index("customer_unmatched_blocked_by_idx", ["blockedBy"]),
 	],
 })
 export type CustomerUnmatchedRecord = SQLite.SelectRowOf<typeof customerUnmatchedRecordsTable>

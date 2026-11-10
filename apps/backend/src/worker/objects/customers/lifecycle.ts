@@ -8,7 +8,7 @@
  * - done: reopens if still true at `reopenAfter` (7 days after); closed once false.
  * - dismissed: reopens only a full step worse than when dismissed; closed once false.
  * - Baseline mode (first evaluation after a backfill): a new match is recorded dismissed
- *   (`baseline`), silently.
+ *   (`baseline`), silently; a dismissed one that got worse stays dismissed at its new evidence.
  */
 import type { schema } from "@hazel/db"
 import { type SignalEvidence, SignalSeverity } from "@hazel/domain/customers"
@@ -51,6 +51,7 @@ type SignalPatch = Partial<
 		| "title"
 		| "reason"
 		| "evidence"
+		| "actionEvidence"
 		| "priorityScore"
 		| "lastEvaluatedAt"
 		| "openedAt"
@@ -185,9 +186,16 @@ export const transition = (
 		}
 		case "dismissed": {
 			if (match === null) return updated({ closedAt: now, lastEvaluatedAt: now })
-			return isWorse(match.evidence, signal.actionEvidence)
-				? reopened(signal, match, input)
-				: updated(refresh(signal, match, input, signal.openedAt))
+			if (!isWorse(match.evidence, signal.actionEvidence))
+				return updated(refresh(signal, match, input, signal.openedAt))
+			// Worse in baseline mode is old data arriving, not news: the dismissal now covers it.
+			return input.baseline
+				? updated({
+						...refresh(signal, match, input, signal.openedAt),
+						actionEvidence: match.evidence,
+						lastEvaluatedAt: now,
+					})
+				: reopened(signal, match, input)
 		}
 		case "auto_resolved":
 			return KEEP

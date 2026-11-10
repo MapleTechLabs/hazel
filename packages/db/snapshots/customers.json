@@ -1,5 +1,5 @@
 {
-	"migration": "0002_customers_contact_last_active",
+	"migration": "0003_customers_unmatched_blocked_by",
 	"entities": [
 		{
 			"kind": "table",
@@ -2991,7 +2991,7 @@
 		{
 			"kind": "column",
 			"table": "customer_unmatched_records",
-			"name": "suggestedAccountId",
+			"name": "blockedBy",
 			"position": 12,
 			"type": "text",
 			"notNull": false,
@@ -3000,8 +3000,17 @@
 		{
 			"kind": "column",
 			"table": "customer_unmatched_records",
-			"name": "confidence",
+			"name": "suggestedAccountId",
 			"position": 13,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_unmatched_records",
+			"name": "confidence",
+			"position": 14,
 			"type": "real",
 			"notNull": false,
 			"default": null
@@ -3010,7 +3019,7 @@
 			"kind": "column",
 			"table": "customer_unmatched_records",
 			"name": "reason",
-			"position": 14,
+			"position": 15,
 			"type": "text",
 			"notNull": true,
 			"default": null
@@ -3019,7 +3028,7 @@
 			"kind": "column",
 			"table": "customer_unmatched_records",
 			"name": "status",
-			"position": 15,
+			"position": 16,
 			"type": "text",
 			"notNull": true,
 			"default": "'open'"
@@ -3028,15 +3037,6 @@
 			"kind": "column",
 			"table": "customer_unmatched_records",
 			"name": "resolvedByUserId",
-			"position": 16,
-			"type": "text",
-			"notNull": false,
-			"default": null
-		},
-		{
-			"kind": "column",
-			"table": "customer_unmatched_records",
-			"name": "resolvedAt",
 			"position": 17,
 			"type": "text",
 			"notNull": false,
@@ -3045,8 +3045,17 @@
 		{
 			"kind": "column",
 			"table": "customer_unmatched_records",
-			"name": "createdAt",
+			"name": "resolvedAt",
 			"position": 18,
+			"type": "text",
+			"notNull": false,
+			"default": null
+		},
+		{
+			"kind": "column",
+			"table": "customer_unmatched_records",
+			"name": "createdAt",
+			"position": 19,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -3055,7 +3064,7 @@
 			"kind": "column",
 			"table": "customer_unmatched_records",
 			"name": "updatedAt",
-			"position": 19,
+			"position": 20,
 			"type": "text",
 			"notNull": true,
 			"default": "(strftime('%Y-%m-%d %H:%M:%f', 'now'))"
@@ -3290,6 +3299,13 @@
 			"name": "customer_sync_runs_connection_started_idx",
 			"unique": false,
 			"columns": ["\"connectionId\"", "\"startedAt\""]
+		},
+		{
+			"kind": "index",
+			"table": "customer_unmatched_records",
+			"name": "customer_unmatched_blocked_by_idx",
+			"unique": false,
+			"columns": ["\"blockedBy\""]
 		},
 		{
 			"kind": "index",
