@@ -350,6 +350,16 @@ pub enum WireNode {
     Ref { h: String },
 }
 
+impl WireNode {
+    /// The node's content hash; text has none.
+    pub fn hash(&self) -> Option<&str> {
+        match self {
+            WireNode::Text { .. } => None,
+            WireNode::Svg { h, .. } | WireNode::Elem { h, .. } | WireNode::Ref { h } => Some(h),
+        }
+    }
+}
+
 // One message at a time crosses the channel; boxing the tree would only add an allocation.
 #[allow(clippy::large_enum_variant)]
 #[derive(Deserialize)]
@@ -453,7 +463,7 @@ pub struct TreeMsg {
     pub root: WireNode,
 }
 
-#[derive(Deserialize, Default, Clone, Debug)]
+#[derive(Deserialize, Default, Clone, Debug, PartialEq)]
 pub struct Page {
     pub bg: Option<String>,
     pub color: Option<String>,

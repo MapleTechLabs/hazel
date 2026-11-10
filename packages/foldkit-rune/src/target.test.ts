@@ -600,6 +600,45 @@ describe("makeRuneTarget", () => {
 		handle.dispose()
 	})
 
+	it("sends nothing for a render that shows what the host already has", async () => {
+		const stats: Array<{ skipped: boolean }> = []
+		const sent: Array<RuntimeToHost> = []
+		const rune = makeRuneTarget({
+			styles,
+			bridge: makeElementBridge({ mounts: new Set(), send: () => {} }),
+			env: { width: 800, height: 600, dark: false },
+			send: (m) => sent.push(m),
+			onStats: (s) => stats.push(s),
+		})
+		const handle = Runtime.embed(
+			Runtime.makeElement({
+				Model,
+				init: () => ({ model: { count: 0, name: "" } }),
+				update,
+				view,
+				renderTarget: rune.target,
+			}),
+		)
+		const trees = () => sent.filter((m): m is Extract<RuntimeToHost, { t: "tree" }> => m.t === "tree")
+		await settle()
+		const shown = trees().length
+		const gen = trees().at(-1)!.gen
+		// A scroll or layout report the view answers with the same tree.
+		rune.refreshObserved()
+		await settle()
+		expect(trees().length).toBe(shown)
+		expect(stats.at(-1)?.skipped).toBe(true)
+		// A press on the tree still on screen reaches its handler.
+		const button = trees()
+			.flatMap((tree) => elements(tree.root))
+			.find((e) => e.tag === "button")!
+		rune.handleHostMessage({ t: "event", seq: 1, gen, id: button.on.click!, type: "click" })
+		await settle()
+		expect(trees().length).toBe(shown + 1)
+		expect(texts(trees().at(-1)!.root)).toContain("1")
+		handle.dispose()
+	})
+
 	it("acknowledges host events so a controlled input keeps the user's newest text", async () => {
 		const { rune, handle, trees } = boot()
 		await settle()

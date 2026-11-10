@@ -176,7 +176,7 @@ impl Session {
                 RuntimeMsg::Tree(tree) => {
                     got_tree = true;
                     self.timings.trees += 1;
-                    self.rt.update(move |s, _| s.apply(tree));
+                    self.rt.update_if(move |s, _| s.apply(tree));
                 }
                 RuntimeMsg::Scroll { path, top, seq } => {
                     crate::note_scroll(&path, seq);
@@ -275,7 +275,7 @@ impl Session {
         match msg {
             RuntimeMsg::Tree(tree) => {
                 self.timings.trees += 1;
-                self.rt.update(move |s, _| s.apply(tree));
+                self.rt.update_if(move |s, _| s.apply(tree));
             }
             RuntimeMsg::Scroll { path, top, seq } => {
                 crate::note_scroll(&path, seq);

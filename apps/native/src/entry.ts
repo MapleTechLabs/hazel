@@ -305,7 +305,7 @@ const rune = makeRuneTarget({
 	env: { width, height, dark },
 	send: (message) => {
 		if (treesPath) appendFileSync(treesPath, `${JSON.stringify(message)}\n`)
-		transport.send(message)
+		return transport.send(message)
 	},
 	onStats: (stats) => {
 		scheduleHeadlessDom()
