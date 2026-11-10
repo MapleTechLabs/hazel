@@ -58,6 +58,33 @@ describe("injectHtmlRenderBootstrap", () => {
 		expect(injectHtmlRenderBootstrap(earlier)).toBe(page)
 	})
 
+	it("replaces an earlier bootstrap only where it was put, at the start of the head", () => {
+		const earlier = '<style id="hazel-theme">html{padding:8px}</style><script>window.old=1</script>'
+		// The same text in a comment, a script and the body is the page's own.
+		const page = `<!-- ${earlier} --><html><head><title>x</title></head><body><textarea>${earlier}</textarea><pre>${earlier.replaceAll("<", "&lt;")}</pre>${earlier}</body></html>`
+		const injected = injectHtmlRenderBootstrap(page)
+		expect(injected.startsWith(`<!-- ${earlier} --><html><head><meta charset="utf-8">`)).toBe(true)
+		// All four copies are still there.
+		expect(injected.match(/window\.old=1/g)).toHaveLength(4)
+		// And today's went into the head.
+		expect(injected).toContain(
+			'<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style id="hazel-theme">:root{color-scheme:dark',
+		)
+		expect(injectHtmlRenderBootstrap(injected)).toBe(injected)
+
+		// A page with no head got one of its own: its bootstrap is found there on the way back.
+		for (const bare of [
+			"<h1>Hi</h1>",
+			"<!doctype html><h1>Hi</h1>",
+			'<html lang="en"><body>x</body></html>',
+		]) {
+			const once = injectHtmlRenderBootstrap(bare)
+			expect(injectHtmlRenderBootstrap(once)).toBe(once)
+			const old = once.replace(/<style id="hazel-theme">[\s\S]*?<\/script>/, earlier)
+			expect(injectHtmlRenderBootstrap(old)).toBe(once)
+		}
+	})
+
 	it("keeps an inline page's root from scrolling, and lets a fullscreen one scroll in view", () => {
 		const page = injectHtmlRenderBootstrap("<h1>Hi</h1>")
 		expect(page).toContain("html[data-hazel-display=inline]{overflow:hidden}")

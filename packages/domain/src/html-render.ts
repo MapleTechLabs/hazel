@@ -284,8 +284,13 @@ const bootstrapMarkup = (markup: string): string =>
 		themeAndScript(),
 	].join("")
 
-/** What an earlier `injectHtmlRenderBootstrap` left in a page; neither part can hold its own end tag. */
-const EARLIER_BOOTSTRAP = /<style id="hazel-theme">[\s\S]*?<\/style><script>[\s\S]*?<\/script>/
+/**
+ * What an earlier `injectHtmlRenderBootstrap` left right after the page's `<head>`: the metas it
+ * added, then the stylesheet and script, neither of which can hold its own end tag. Matched only
+ * there (sticky), so the same text in a comment, a script or the body is the page's own.
+ */
+const EARLIER_BOOTSTRAP =
+	/((?:<meta charset="utf-8">)?(?:<meta name="viewport" content="width=device-width, initial-scale=1">)?)<style id="hazel-theme">[\s\S]*?<\/style><script>[\s\S]*?<\/script>/y
 
 /** Blank comments and raw-text elements without shifting offsets, so tag scans skip them. */
 const blankNonMarkup = (html: string): string => {
@@ -319,16 +324,21 @@ const blankNonMarkup = (html: string): string => {
  * carries them (stored with the bootstrap of the day it was published) gets today's in their place.
  */
 export const injectHtmlRenderBootstrap = (html: string): string => {
-	const earlier = EARLIER_BOOTSTRAP.exec(html)
-	if (earlier !== null)
-		return html.slice(0, earlier.index) + themeAndScript() + html.slice(earlier.index + earlier[0].length)
 	const scan = blankNonMarkup(html)
-	const markup = bootstrapMarkup(scan)
 	const headOpen = /<head(?:\s[^>]*)?>/i.exec(scan)
 	if (headOpen) {
 		const at = headOpen.index + headOpen[0].length
-		return html.slice(0, at) + markup + html.slice(at)
+		// A page that went through here before has a head (its own, or the one added below), and
+		// the earlier bootstrap is the first thing in it.
+		EARLIER_BOOTSTRAP.lastIndex = at
+		const earlier = EARLIER_BOOTSTRAP.exec(html)
+		if (earlier !== null) {
+			const start = at + (earlier[1]?.length ?? 0)
+			return html.slice(0, start) + themeAndScript() + html.slice(at + earlier[0].length)
+		}
+		return html.slice(0, at) + bootstrapMarkup(scan) + html.slice(at)
 	}
+	const markup = bootstrapMarkup(scan)
 	const htmlOpen = /<html(?:\s[^>]*)?>/i.exec(scan)
 	if (htmlOpen) {
 		const at = htmlOpen.index + htmlOpen[0].length

@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs"
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { HTML_RENDER_CONTENT_SECURITY_POLICY } from "@hazel/domain/html-render"
@@ -55,5 +55,10 @@ describe("makeFixtureHtmlRender", () => {
 		// Read per request: an edit shows on the next load.
 		writeFileSync(file, "<h1>Edited</h1>")
 		expect(await (await fetch(url)).text()).toContain("<h1>Edited</h1>")
+		// The file gone for a moment (an editor saving by rename): that load fails, the next reads it.
+		rmSync(file)
+		expect((await fetch(url)).status).toBe(500)
+		writeFileSync(file, "<h1>Back</h1>")
+		expect(await (await fetch(url)).text()).toContain("<h1>Back</h1>")
 	})
 })

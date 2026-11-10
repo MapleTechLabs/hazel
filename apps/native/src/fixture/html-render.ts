@@ -16,13 +16,23 @@ const HOUR = 3_600_000
 export const makeFixtureHtmlRender = async (file: string) => {
 	// Read per request: an edit to the file shows on the next load.
 	const server = createServer((_request, response) => {
+		let page: string
+		try {
+			page = injectHtmlRenderBootstrap(readFileSync(file, "utf8"))
+		} catch (error) {
+			// An editor that saves by renaming leaves no file for a moment: this load fails, as a
+			// missing page does on the api, and the next one reads the file again.
+			response.writeHead(500, { "content-type": "text/plain; charset=utf-8" })
+			response.end(`Could not read the page: ${error instanceof Error ? error.message : String(error)}`)
+			return
+		}
 		response.writeHead(200, {
 			"content-type": "text/html; charset=utf-8",
 			"content-security-policy": HTML_RENDER_CONTENT_SECURITY_POLICY,
 			"x-content-type-options": "nosniff",
 			"referrer-policy": "no-referrer",
 		})
-		response.end(injectHtmlRenderBootstrap(readFileSync(file, "utf8")))
+		response.end(page)
 	})
 	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
 	// SAFETY: a TCP server that is listening has an `AddressInfo`.
