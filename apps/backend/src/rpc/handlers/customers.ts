@@ -1107,18 +1107,16 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 											.where(($) => [$.connectionId.eq(connectionId)]),
 									)
 								} else {
-									const encrypted = yield* encryption
-										.encrypt(webhookSecret)
-										.pipe(
-											Effect.mapError(
-												(cause) =>
-													new InternalServerError({
-														message: "Could not store the credentials",
-														detail: cause._tag,
-														cause,
-													}),
-											),
-										)
+									const encrypted = yield* encryption.encrypt(webhookSecret).pipe(
+										Effect.mapError(
+											(cause) =>
+												new InternalServerError({
+													message: "Could not store the credentials",
+													detail: cause._tag,
+													cause,
+												}),
+										),
+									)
 									yield* db.run(
 										SQLite.update(schema.customerConnectionSecretsTable)
 											.set({

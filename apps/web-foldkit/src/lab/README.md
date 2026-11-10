@@ -26,13 +26,19 @@ export const lab = defineLabWithFlags("Customers overview", {
 	flags: Effect.all({ state: queryParam("state", STATES, "default") }),
 	init: ({ state }) => ({ model: Page.modelOf(fixtureFor(state)) }), // AsyncData already settled
 	update: (model, message) => ({ ...Page.update(model, message), commands: [] }), // stub the RPCs
-	view: (model, h) => labPage(h, { title: "Overview", switches: [{ name: "state", values: STATES, current: model.state }] }, [Page.view(model, h)]),
+	view: (model, h) =>
+		labPage(
+			h,
+			{ title: "Overview", switches: [{ name: "state", values: STATES, current: model.state }] },
+			[Page.view(model, h)],
+		),
 })
 ```
 
-   - Commands run with the app's Resources; drop the ones that would reach the network (as above),
-     or keep the ones that are local (focus, scroll).
-   - A page that renders inside the shell: render just the page body; the lab has no shell yet.
+- Commands run with the app's Resources; drop the ones that would reach the network (as above),
+  or keep the ones that are local (focus, scroll).
+- A page that renders inside the shell: render just the page body; the lab has no shell yet.
+
 3. Optional: a one-line description on `/lab` — ask the kit owner to add it to `LAB_DESCRIPTIONS`
    (`registry.test.ts` fails on a description for a path with no entry).
 

@@ -64,7 +64,10 @@ export const settingsHeader = <M>(
 									h.div(
 										[h.Class("flex flex-wrap items-center gap-2")],
 										[
-											h.h1([h.Class("font-semibold text-2xl text-fg")], [options.title]),
+											h.h1(
+												[h.Class("font-semibold text-2xl text-fg")],
+												[options.title],
+											),
 											...(options.badges ?? []),
 										],
 									),

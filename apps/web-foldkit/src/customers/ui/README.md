@@ -10,17 +10,17 @@ churn,neutral,series-1..3,grid,net}`, `health-{healthy,at-risk,critical,unknown}
 
 ## Formatting — `src/customers/format.ts`
 
-| Export | Example |
-|---|---|
-| `formatMoney(minor, currency?, { cents?, signed? })` | `$48,210`, `$1,240.00`, `+$9,400`, `−$1,000` |
-| `formatMoneyCompact(minor, currency?, { signed? })` | `$48.2K`, `−$4K` |
-| `formatCount(n)` / `formatCompact(n)` | `1,611` / `461K` |
-| `formatPct(pct)` / `formatDeltaPct(pct)` / `formatDeltaPoints(pts, unit?)` / `formatDeltaCount(n)` | `61%` / `+6.2%` / `+0.9 pt` / `+12` |
-| `deltaTone(delta, goodWhen?)` | `"positive" \| "negative" \| "neutral"` |
-| `formatRelative(at, now)` / `daysBetween(at, now)` | `18d ago`, `in 4d` |
-| `formatDays(n)` / `formatDaysLeft(n)` | `4 days` / `4 days left` |
-| `formatDate(at, { now?, timeZone?, withYear? })` / `formatDateTime` / `formatWeekdayTime` | `Nov 9` / `Nov 9, 18:42` / `Wed, 9:00 AM` |
-| `formatDay(day)` / `formatDayLong` / `formatMonthShort` / `formatMonthLong` / `bucketLabels(bucket, day)` | UTC `Day` labels |
+| Export                                                                                                    | Example                                      |
+| --------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| `formatMoney(minor, currency?, { cents?, signed? })`                                                      | `$48,210`, `$1,240.00`, `+$9,400`, `−$1,000` |
+| `formatMoneyCompact(minor, currency?, { signed? })`                                                       | `$48.2K`, `−$4K`                             |
+| `formatCount(n)` / `formatCompact(n)`                                                                     | `1,611` / `461K`                             |
+| `formatPct(pct)` / `formatDeltaPct(pct)` / `formatDeltaPoints(pts, unit?)` / `formatDeltaCount(n)`        | `61%` / `+6.2%` / `+0.9 pt` / `+12`          |
+| `deltaTone(delta, goodWhen?)`                                                                             | `"positive" \| "negative" \| "neutral"`      |
+| `formatRelative(at, now)` / `daysBetween(at, now)`                                                        | `18d ago`, `in 4d`                           |
+| `formatDays(n)` / `formatDaysLeft(n)`                                                                     | `4 days` / `4 days left`                     |
+| `formatDate(at, { now?, timeZone?, withYear? })` / `formatDateTime` / `formatWeekdayTime`                 | `Nov 9` / `Nov 9, 18:42` / `Wed, 9:00 AM`    |
+| `formatDay(day)` / `formatDayLong` / `formatMonthShort` / `formatMonthLong` / `bucketLabels(bucket, day)` | UTC `Day` labels                             |
 
 `Instant = Date | DateTime.Utc` (what `JsonDate` rows carry). Time-relative helpers take `now`.
 
@@ -92,11 +92,14 @@ Charts fill their container's width (no measuring); set the height with `heightC
 
 ```ts
 h.submodel({
-	slotId: model.snoozeMenu.id, model: model.snoozeMenu, view: MenuView.view,
+	slotId: model.snoozeMenu.id,
+	model: model.snoozeMenu,
+	view: MenuView.view,
 	viewInputs: {
 		entries: snoozeMenuEntries,
 		content: snoozeMenuContent(h, model.snoozeMenu.id, now),
-		toTrigger: (attributes, overlay) => queueAction(h, { label: "Snooze", icon: IconClock(h), attributes, overlay }),
+		toTrigger: (attributes, overlay) =>
+			queueAction(h, { label: "Snooze", icon: IconClock(h), attributes, overlay }),
 	},
 	toParentMessage: (message) => Message.GotSnoozeMenuMessage({ message }),
 })
