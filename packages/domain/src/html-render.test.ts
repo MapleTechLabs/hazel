@@ -3,6 +3,7 @@ import {
 	findViewportHeightUnit,
 	htmlRenderThemeFragment,
 	HTML_RENDER_DEFAULT_THEMES,
+	HTML_RENDER_MAX_BYTES,
 	injectHtmlRenderBootstrap,
 	readHtmlRenderContentHeight,
 	isHtmlRenderInlineRequest,
@@ -83,6 +84,55 @@ describe("injectHtmlRenderBootstrap", () => {
 			const old = once.replace(/<style id="hazel-theme">[\s\S]*?<\/script>/, earlier)
 			expect(injectHtmlRenderBootstrap(old)).toBe(once)
 		}
+	})
+
+	it("reads a page made to look like an unfinished bootstrap in one pass", () => {
+		// The largest page allowed, opening its head as a bootstrap does and never closing the script.
+		const runs = "</style><script>".repeat(Math.floor(HTML_RENDER_MAX_BYTES / 16))
+		const page = `<head><style id="hazel-theme">${runs}</head>`
+		const startedAt = performance.now()
+		const injected = injectHtmlRenderBootstrap(page)
+		// A pattern that retried at every run took seconds here; a pass takes a few milliseconds.
+		expect(performance.now() - startedAt).toBeLessThan(500)
+		// Not a bootstrap (its script never ends): the page keeps it, and gets a real one before it.
+		expect(injected.endsWith(`<style id="hazel-theme">${runs}</head>`)).toBe(true)
+		expect(injected.match(/<style id="hazel-theme">/g)).toHaveLength(2)
+		// Its stylesheet ends at the first end tag, and anything but a script after it is no bootstrap.
+		const other = '<head><style id="hazel-theme">a</style><p>x</p><script>b</script></head>'
+		expect(injectHtmlRenderBootstrap(other)).toContain('<style id="hazel-theme">a</style><p>x</p>')
+	})
+
+	it("reads a page of unclosed tags in one pass", () => {
+		// Each of these made a pattern that ran on to the tag's `>` retry from every start.
+		for (const unit of ["<head ", "<html ", "<meta ", "<meta name ", "<template ", "</template "]) {
+			const page = unit.repeat(Math.floor(HTML_RENDER_MAX_BYTES / unit.length))
+			const startedAt = performance.now()
+			const injected = injectHtmlRenderBootstrap(page)
+			expect(performance.now() - startedAt, unit).toBeLessThan(500)
+			// No tag ever closes: the page gets a head of its own, in front.
+			expect(injected.startsWith("<!doctype html><head>"), unit).toBe(true)
+			expect(injected.endsWith(page), unit).toBe(true)
+		}
+	})
+
+	it("finds tags as before: attributes, case, self-closed templates, a viewport in any meta", () => {
+		expect(injectHtmlRenderBootstrap('<HEAD\n lang="en"><title>x</title></HEAD>')).toMatch(
+			/^<HEAD\n lang="en"><meta charset="utf-8">/,
+		)
+		// `<header>` is no head, and a head inside a template is the template's.
+		const fragment = injectHtmlRenderBootstrap(
+			"<header>x</header><template/><template ><head></template>",
+		)
+		expect(fragment.startsWith("<!doctype html><head>")).toBe(true)
+		const page = injectHtmlRenderBootstrap(
+			'<meta charset="utf-8"><meta x="1"><META content="width=500" NAME = viewport>',
+		)
+		expect(page.match(/viewport/gi)).toHaveLength(1)
+		// An unfinished meta still names its viewport; a viewport outside any meta is none.
+		expect(injectHtmlRenderBootstrap("<meta name=viewport").match(/viewport/g)).toHaveLength(1)
+		expect(
+			injectHtmlRenderBootstrap("<meta x><p>name=viewport</p>").match(/name="viewport"/g),
+		).toHaveLength(1)
 	})
 
 	it("keeps an inline page's root from scrolling, and lets a fullscreen one scroll in view", () => {

@@ -269,28 +269,87 @@ const rootRule = (theme: HtmlRenderTheme): string =>
 // outgrows, and the frame would shrink and grow back); in fullscreen, Escape asks to leave it.
 const BOOTSTRAP_SCRIPT = `(function(){var s=document.getElementById("hazel-theme"),n=0,P=window.parent!==window,H=location.hash,D;if(!s)return;var b=${JSON.stringify(BASE_CSS)};function a(t){if(!t||typeof t!=="object"||!t.variables||typeof t.variables!=="object")return;var c=":root{color-scheme:"+(t.appearance==="light"?"light":"dark")+";";for(var k in t.variables){if(/^--[a-z0-9-]+$/.test(k))c+=k+":"+String(t.variables[k]).replace(/[;{}<>]/g,"")+";";}s.textContent=c+"}"+b;}function q(m){window.parent.postMessage(m,"*");}try{D=/[#&]${DISPLAY_FRAGMENT_KEY}=(inline|fullscreen)(?:&|$)/.exec(H);D=D&&D[1];if(D)document.documentElement.setAttribute(${JSON.stringify(DISPLAY_ATTRIBUTE)},D);var m=/[#&]${THEME_FRAGMENT_KEY}=([^&]*)/.exec(H);if(m)a(JSON.parse(decodeURIComponent(m[1])));if(m||D)history.replaceState(history.state,"",location.pathname+location.search);}catch(e){}window.addEventListener("message",function(e){var d=e.data,p=d&&d.params;if(e.source===window.parent&&d&&d.jsonrpc==="2.0"&&d.method===${JSON.stringify(HOST_CONTEXT_CHANGED_METHOD)}&&p&&p.styles)a({appearance:p.theme,variables:p.styles.variables});});document.addEventListener("click",function(e){var l=e.isTrusted?e.composedPath().find(function(t){return t&&t.matches&&t.matches("a[href]");}):null,u;if(!l)return;try{u=new URL(l.getAttribute("href"),document.baseURI);}catch(x){return;}if(!/^https?:$/.test(u.protocol)||u.href.split("#")[0]===location.href.split("#")[0])return;if(!P)return;e.preventDefault();q({jsonrpc:"2.0",id:"hazel-link-"+(++n),method:${JSON.stringify(OPEN_LINK_METHOD)},params:{url:u.href}});},true);if(P){var h,o,z=function(){if(document.readyState==="loading")return;var r=document.documentElement,v=Math.ceil(r.scrollHeight>r.clientHeight?r.scrollHeight:r.getBoundingClientRect().height);if(v===h)return;h=v;q({jsonrpc:"2.0",method:${JSON.stringify(SIZE_CHANGED_METHOD)},params:{height:v}});};if(window.ResizeObserver){o=new ResizeObserver(z);o.observe(document.documentElement);}document.addEventListener("DOMContentLoaded",function(){if(o&&document.body)o.observe(document.body);z();});window.addEventListener("load",z);document.addEventListener("mouseout",function(e){if(!e.relatedTarget)q({jsonrpc:"2.0",method:${JSON.stringify(POINTER_LEFT_METHOD)}});});if(D==="fullscreen")window.addEventListener("keydown",function(e){if(e.isTrusted&&e.key==="Escape"&&!e.defaultPrevented)q({jsonrpc:"2.0",id:"hazel-display-"+(++n),method:${JSON.stringify(REQUEST_DISPLAY_MODE_METHOD)},params:{mode:"inline"}});});}})();`
 
+const CHARSET_META = '<meta charset="utf-8">'
+const VIEWPORT_META = '<meta name="viewport" content="width=device-width, initial-scale=1">'
+const THEME_STYLE_OPEN = '<style id="hazel-theme">'
+const STYLE_CLOSE = "</style>"
+const SCRIPT_OPEN = "<script>"
+const SCRIPT_CLOSE = "</script>"
+
 /** The theme stylesheet and bridge script, as one run of markup. */
 const themeAndScript = (): string => {
 	const defaultCss = `${rootRule(HTML_RENDER_DEFAULT_THEMES.dark)}@media (prefers-color-scheme: light){${rootRule(HTML_RENDER_DEFAULT_THEMES.light)}}${BASE_CSS}`
-	return `<style id="hazel-theme">${defaultCss}</style><script>${BOOTSTRAP_SCRIPT}</script>`
+	return `${THEME_STYLE_OPEN}${defaultCss}${STYLE_CLOSE}${SCRIPT_OPEN}${BOOTSTRAP_SCRIPT}${SCRIPT_CLOSE}`
+}
+
+/** A tag found in a scan: where it starts, where it ends (after its `>`), and whether it closes. */
+interface TagSpan {
+	readonly index: number
+	readonly end: number
+	readonly isClose: boolean
+}
+
+// Tag names only: what follows is read by `nextTag`, not by the pattern.
+const HEAD_OPEN = /<head(?=[\s>])/gi
+const HTML_OPEN = /<html(?=[\s>])/gi
+const META_OPEN = /<meta(?=\s)/gi
+const TEMPLATE_TAG = /<(\/?)template(?=\s|\/?>)/gi
+const VIEWPORT_NAME = /name\s*=\s*["']?viewport/i
+
+/**
+ * The next tag `name` starts in `scan` at or after `from`; it ends at its first `>`. When no `>`
+ * follows a start, none follows the starts after it, so the search ends there. A pattern that
+ * runs on to the `>` itself (`<head(?:\s[^>]*)?>`) retries that run from every start instead:
+ * seconds on a page of unclosed tags, and this runs on every load of a page.
+ */
+const nextTag = (scan: string, name: RegExp, from: number): TagSpan | undefined => {
+	name.lastIndex = from
+	const match = name.exec(scan)
+	if (match === null) return undefined
+	const close = scan.indexOf(">", match.index)
+	return close === -1 ? undefined : { index: match.index, end: close + 1, isClose: match[1] === "/" }
+}
+
+/** A `<meta name=viewport>` in the page; each meta tag is read once, to its `>` or the page's end. */
+const hasViewportMeta = (scan: string): boolean => {
+	let from = 0
+	while (from < scan.length) {
+		META_OPEN.lastIndex = from
+		const match = META_OPEN.exec(scan)
+		if (match === null) return false
+		const close = scan.indexOf(">", match.index)
+		if (VIEWPORT_NAME.test(scan.slice(match.index, close === -1 ? scan.length : close))) return true
+		if (close === -1) return false
+		from = close + 1
+	}
+	return false
 }
 
 const bootstrapMarkup = (markup: string): string =>
 	[
-		/<meta\s[^>]*charset/i.test(markup.slice(0, 4096)) ? "" : '<meta charset="utf-8">',
-		/<meta\s[^>]*name\s*=\s*["']?viewport/i.test(markup)
-			? ""
-			: '<meta name="viewport" content="width=device-width, initial-scale=1">',
+		/<meta\s[^>]*charset/i.test(markup.slice(0, 4096)) ? "" : CHARSET_META,
+		hasViewportMeta(markup) ? "" : VIEWPORT_META,
 		themeAndScript(),
 	].join("")
 
 /**
- * What an earlier `injectHtmlRenderBootstrap` left right after the page's `<head>`: the metas it
- * added, then the stylesheet and script, neither of which can hold its own end tag. Matched only
- * there (sticky), so the same text in a comment, a script or the body is the page's own.
+ * The stylesheet and script an earlier `injectHtmlRenderBootstrap` left at `at`, right after the
+ * page's `<head>` and after the metas it may have added. Each ends at its first end tag, as the
+ * browser reads it, and the script follows the stylesheet at once. Read with plain searches from
+ * left to right: a page of nothing but `</style><script>` costs one pass, where a pattern with
+ * two open-ended runs would retry at each of them.
  */
-const EARLIER_BOOTSTRAP =
-	/((?:<meta charset="utf-8">)?(?:<meta name="viewport" content="width=device-width, initial-scale=1">)?)<style id="hazel-theme">[\s\S]*?<\/style><script>[\s\S]*?<\/script>/y
+const earlierBootstrapAt = (html: string, at: number): { start: number; end: number } | undefined => {
+	let start = at
+	for (const meta of [CHARSET_META, VIEWPORT_META]) if (html.startsWith(meta, start)) start += meta.length
+	if (!html.startsWith(THEME_STYLE_OPEN, start)) return undefined
+	const styleClose = html.indexOf(STYLE_CLOSE, start + THEME_STYLE_OPEN.length)
+	if (styleClose === -1) return undefined
+	const scriptOpen = styleClose + STYLE_CLOSE.length
+	if (!html.startsWith(SCRIPT_OPEN, scriptOpen)) return undefined
+	const scriptClose = html.indexOf(SCRIPT_CLOSE, scriptOpen + SCRIPT_OPEN.length)
+	return scriptClose === -1 ? undefined : { start, end: scriptClose + SCRIPT_CLOSE.length }
+}
 
 /** Blank comments and raw-text elements without shifting offsets, so tag scans skip them. */
 const blankNonMarkup = (html: string): string => {
@@ -302,14 +361,15 @@ const blankNonMarkup = (html: string): string => {
 	let depth = 0
 	let start = 0
 	let at = 0
-	for (const match of scan.matchAll(/<(\/?)template(?:\s[^>]*)?\/?>/gi)) {
-		if (!match[1]) {
-			if (depth++ === 0) start = match.index
+	let tag = nextTag(scan, TEMPLATE_TAG, 0)
+	while (tag !== undefined) {
+		if (!tag.isClose) {
+			if (depth++ === 0) start = tag.index
 		} else if (depth > 0 && --depth === 0) {
-			const end = match.index + match[0].length
-			parts.push(scan.slice(at, start), " ".repeat(end - start))
-			at = end
+			parts.push(scan.slice(at, start), " ".repeat(tag.end - start))
+			at = tag.end
 		}
+		tag = nextTag(scan, TEMPLATE_TAG, tag.end)
 	}
 	if (depth > 0) {
 		parts.push(scan.slice(at, start), " ".repeat(scan.length - start))
@@ -325,23 +385,20 @@ const blankNonMarkup = (html: string): string => {
  */
 export const injectHtmlRenderBootstrap = (html: string): string => {
 	const scan = blankNonMarkup(html)
-	const headOpen = /<head(?:\s[^>]*)?>/i.exec(scan)
-	if (headOpen) {
-		const at = headOpen.index + headOpen[0].length
+	const headOpen = nextTag(scan, HEAD_OPEN, 0)
+	if (headOpen !== undefined) {
+		const at = headOpen.end
 		// A page that went through here before has a head (its own, or the one added below), and
 		// the earlier bootstrap is the first thing in it.
-		EARLIER_BOOTSTRAP.lastIndex = at
-		const earlier = EARLIER_BOOTSTRAP.exec(html)
-		if (earlier !== null) {
-			const start = at + (earlier[1]?.length ?? 0)
-			return html.slice(0, start) + themeAndScript() + html.slice(at + earlier[0].length)
-		}
+		const earlier = earlierBootstrapAt(html, at)
+		if (earlier !== undefined)
+			return html.slice(0, earlier.start) + themeAndScript() + html.slice(earlier.end)
 		return html.slice(0, at) + bootstrapMarkup(scan) + html.slice(at)
 	}
 	const markup = bootstrapMarkup(scan)
-	const htmlOpen = /<html(?:\s[^>]*)?>/i.exec(scan)
-	if (htmlOpen) {
-		const at = htmlOpen.index + htmlOpen[0].length
+	const htmlOpen = nextTag(scan, HTML_OPEN, 0)
+	if (htmlOpen !== undefined) {
+		const at = htmlOpen.end
 		return `${html.slice(0, at)}<head>${markup}</head>${html.slice(at)}`
 	}
 	const doctype = /^\s*<!doctype[^>]*>/i.exec(html)
