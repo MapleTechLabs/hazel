@@ -347,6 +347,28 @@ describe("when Clerk refuses", () => {
 		expect(error.retryable).toBeUndefined()
 	})
 
+	it("fails the run on any other refusal, without Clerk's text: a retry would be refused again", async () => {
+		const error = await run(
+			Effect.flip(
+				pageOver(
+					answering(() =>
+						Response.json(
+							{ errors: [{ message: "offset is invalid", code: "form_param_value_invalid" }] },
+							{ status: 422 },
+						),
+					),
+					null,
+				),
+			),
+		)
+		expect(error).toMatchObject({
+			code: "provider",
+			httpStatus: 422,
+			retryable: false,
+			message: expect.stringMatching(/^Clerk refused GET \/\S+ \(422\)$/),
+		})
+	})
+
 	it("maps an unreachable Clerk to a retryable `network` failure", async () => {
 		const unreachable = Layer.succeed(
 			HttpClient.HttpClient,

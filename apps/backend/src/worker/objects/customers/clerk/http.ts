@@ -10,6 +10,8 @@
  * - 5xx → `provider`; unreachable, or no answer within the request's timeout (30 s on a pull, 5 s
  *   on the webhook path, which must answer Svix) → `network`. Both retryable: the run resumes after
  *   core's backoff.
+ * - Any other 4xx (a cursor Clerk no longer accepts, say) → `provider`, not retryable: the same
+ *   request would be refused again, so the run fails and the next one starts over.
  * - A body Hazel cannot read (Clerk changed its API) → `provider`, not retryable: the run fails with
  *   a message saying so rather than retrying the same page forever.
  *
@@ -131,15 +133,20 @@ const failureOf = (route: string, response: HttpClientResponse.HttpClientRespons
 		)
 	}
 	return Effect.fail(
-		new CustomerProviderError({
-			code: "provider",
-			message:
-				response.status >= 500
-					? `Clerk failed on GET ${route} (${response.status})`
-					: `Clerk refused GET ${route} (${response.status})`,
-			httpStatus: response.status,
-			retryAfterMs: null,
-		}),
+		response.status >= 500
+			? new CustomerProviderError({
+					code: "provider",
+					message: `Clerk failed on GET ${route} (${response.status})`,
+					httpStatus: response.status,
+					retryAfterMs: null,
+				})
+			: new CustomerProviderError({
+					code: "provider",
+					message: `Clerk refused GET ${route} (${response.status})`,
+					httpStatus: response.status,
+					retryAfterMs: null,
+					retryable: false,
+				}),
 	)
 }
 
