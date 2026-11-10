@@ -12,7 +12,7 @@ export const page = definePage(
 	{
 		routes: ["CustomerDetail"],
 		// One instance per account: switching tabs arrives as `routeChanged`.
-		key: (route) => route.accountId,
+		key: (route) => `${route.orgSlug}:${route.accountId}`,
 		init,
 		update,
 		routeChanged,

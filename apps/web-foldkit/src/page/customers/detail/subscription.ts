@@ -13,7 +13,7 @@ import type { PageSubscriptionInput } from "../../contract"
 import { metricsStream, notesStream } from "./data"
 import { Message } from "./message"
 import { type Model, NoteDrafts } from "./model"
-import { writeNoteDrafts } from "./note-drafts"
+import { restoredNoteDrafts, writeNoteDrafts } from "./note-drafts"
 
 /** The customer page's live rows: every account (prev/next and this one), signals, notes, people. */
 
@@ -62,6 +62,16 @@ export const subscriptions = Subscription.make<Input, Message>()((entry) => ({
 				accountId === null
 					? Stream.empty
 					: Stream.drain(Stream.fromEffect(writeNoteDrafts(accountId, drafts))),
+		},
+	),
+	// A failed save's text restored for this customer while this instance is open, e.g. one sent before
+	// the user left and came back.
+	restoredNoteDrafts: entry(
+		{ accountId: CustomerAccountId },
+		{
+			modelToDependencies: ({ model }) => ({ accountId: model.accountId }),
+			dependenciesToStream: ({ accountId }) =>
+				Stream.map(restoredNoteDrafts(accountId), (draft) => Message.RestoredNoteDraft({ draft })),
 		},
 	),
 	members: entry(organization, {

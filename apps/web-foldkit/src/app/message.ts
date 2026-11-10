@@ -53,6 +53,7 @@ export const Message = defineMessageUnion({
 	FailedFetchCurrentUser: { reason: CommonReason },
 	PressedRetryCurrentUser: {},
 	CompletedWarmAccessToken: {},
+	CompletedClearNoteDrafts: {},
 	SucceededSignOut: {},
 	FailedSignOut: { reason: CommonReason },
 	SucceededCreateDm: {

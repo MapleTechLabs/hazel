@@ -406,15 +406,21 @@ describe("customers list: many accounts", () => {
 		expect(commandNames(more)).toEqual(["FetchListSparklines"])
 	})
 
-	test("failed sparklines are asked for again with the next batch", () => {
+	test("failed sparklines are asked for again after a while, not on each key", () => {
 		const first = update(init(route(null)).model, Message.UpdatedAccounts({ accounts: many }), shared)
 		const failedIds = first.model.requestedSparklines.slice(0, 3).map((id) => accountId(id))
-		const failed = run(first.model, [
+		const failed = update(
+			first.model,
 			Message.FailedFetchSparklines({ reason: "Offline", accountIds: failedIds }),
-		])
-		expect(failed.requestedSparklines).toHaveLength(197)
-		const more = update(failed, Message.PressedShowMoreRows(), shared)
-		expect(more.model.requestedSparklines).toEqual(expect.arrayContaining(failedIds))
+			shared,
+		)
+		expect(commandNames(failed)).toEqual(["WaitBeforeSparklineRetry"])
+		expect(commandNames(update(failed.model, Message.PressedListKey({ key: "next" }), shared))).toEqual(
+			[],
+		)
+		const retried = update(failed.model, Message.ElapsedSparklineRetry({ accountIds: failedIds }), shared)
+		expect(commandNames(retried)).toEqual(["FetchListSparklines"])
+		expect(retried.commands?.[0]?.args).toMatchObject({ accountIds: failedIds })
 	})
 
 	test("the header checkbox takes the rendered rows; select all takes every match", () => {

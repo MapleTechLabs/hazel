@@ -66,6 +66,7 @@ import {
 	UNASSIGN,
 	userIdOfOwnerKey,
 } from "./model"
+import { draftToRestore } from "./note-drafts"
 
 type Return = PageReturn<Model, Message>
 type Commands = NonNullable<Return["commands"]>
@@ -852,7 +853,8 @@ const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 		SucceededNoteAction: ({ action }) =>
 			action === "create" ? { model, outMessage: toast(successToast("Note saved")) } : { model },
 		// The Command told the user, and kept the text for the customer, in case this page is gone.
-		FailedNoteAction: ({ draft }) => ({ model: restoreDraft(model, draft) }),
+		FailedNoteAction: (failure) => ({ model: restoreDraft(model, draftToRestore(failure)) }),
+		RestoredNoteDraft: ({ draft }) => ({ model: restoreDraft(model, draft) }),
 
 		PressedCopy: ({ text, label }) => ({ model, commands: [CopyCustomerText({ text, label })] }),
 		CompletedCopy: ({ label, isCopied }) => ({

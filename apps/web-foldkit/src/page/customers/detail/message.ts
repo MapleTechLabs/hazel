@@ -101,6 +101,8 @@ export const Message = defineMessageUnion({
 	FailedSignalAction: { signalId: CustomerSignalId, action: SignalAction, reason: SignalActionFailure },
 
 	LoadedNoteDrafts: { drafts: NoteDrafts },
+	/** A failed save's text, put back for this customer (`note-drafts.ts`), maybe by an earlier instance. */
+	RestoredNoteDraft: { draft: NoteDraft },
 	ChangedComposer: { value: Schema.String },
 	ToggledComposerPin: { pinned: Schema.Boolean },
 	SubmittedNote: {},

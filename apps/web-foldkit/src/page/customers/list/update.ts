@@ -24,6 +24,7 @@ import {
 	FocusListSearch,
 	UpdateSavedView,
 	WaitBeforeHoverCard,
+	WaitBeforeSparklineRetry,
 } from "./commands"
 import { Message, type ViewAction } from "./message"
 import {
@@ -678,14 +679,21 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 			for (const entry of sparklines) next[entry.accountId] = entry.values
 			return withSparklines({ model: modifyFields(model, { sparklines: () => next }) }, shared)
 		},
-		// Asked for again with the next batch (more rows, other filters), not in a loop.
-		FailedFetchSparklines: ({ accountIds }) => {
+		// Still counted as asked, so moving through the rows does not ask again; that waits a while.
+		FailedFetchSparklines: ({ accountIds }) => ({
+			model,
+			commands: [WaitBeforeSparklineRetry({ accountIds })],
+		}),
+		ElapsedSparklineRetry: ({ accountIds }) => {
 			const failed = new Set<string>(accountIds)
-			return {
-				model: modifyFields(model, {
-					requestedSparklines: (requested) => requested.filter((id) => !failed.has(id)),
-				}),
-			}
+			return withSparklines(
+				{
+					model: modifyFields(model, {
+						requestedSparklines: (requested) => requested.filter((id) => !failed.has(id)),
+					}),
+				},
+				shared,
+			)
 		},
 
 		CompletedFocusSearch: () => ({ model }),

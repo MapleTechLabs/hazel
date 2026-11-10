@@ -38,6 +38,10 @@ const isShellReady = (model: Model): boolean =>
 	currentUserOf(model) !== null && Option.isSome(loadedOrgOf(model))
 
 const rootSubscriptions = Subscription.make<Model, Message>()((entry) => ({
+	// Toasts from Commands that outlive the page that sent them.
+	backgroundToasts: Subscription.persistentEntry(
+		backgroundToasts.pipe(Stream.map((toast) => Message.ReceivedBackgroundToast({ toast }))),
+	),
 	systemTheme: Subscription.persistentEntry(
 		Dom.streamFromMediaQuery({
 			query: "(prefers-color-scheme: dark)",
@@ -273,9 +277,6 @@ const updateSubscriptions = Subscription.lift(Updates.subscriptions)<Model, Mess
 const desktopMenuSubscriptions = Subscription.make<Model, Message>()(() => ({
 	desktopMenu: Subscription.persistentEntry(
 		desktopMenuItems.pipe(Stream.map((item) => Message.PressedDesktopMenuItem({ item }))),
-	),
-	backgroundToasts: Subscription.persistentEntry(
-		backgroundToasts.pipe(Stream.map((toast) => Message.ReceivedBackgroundToast({ toast }))),
 	),
 }))
 

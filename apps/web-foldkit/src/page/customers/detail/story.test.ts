@@ -10,7 +10,7 @@ import {
 	OrganizationId,
 	UserId,
 } from "@hazel/schema"
-import { Effect, Option, Schema } from "effect"
+import { Effect, Fiber, Option, Schema, Stream } from "effect"
 import { describe, expect, test } from "vitest"
 import type { AccountRow, SignalRow } from "../../../customers/queries"
 import { snoozeUntil } from "../../../customers/ui/menus"
@@ -31,7 +31,13 @@ import {
 	sortedNotes,
 } from "./model"
 import { page } from "./index"
-import { restoreNoteDraft, writeNoteDrafts } from "./note-drafts"
+import {
+	clearNoteDrafts,
+	readNoteDrafts,
+	restoredNoteDrafts,
+	restoreNoteDraft,
+	writeNoteDrafts,
+} from "./note-drafts"
 import { init, routeChanged, update } from "./update"
 
 /** Update-loop tests for the customer page: tab routing and loading, owner and tags, notes, signals. */
@@ -485,6 +491,61 @@ describe("customer page: notes", () => {
 		const returned = init(route("notes", gamma.id), shared)
 		expect(run(returned.model, [loadDrafts(returned)]).composer.body).toBe("Call booked")
 		Effect.runSync(writeNoteDrafts(gamma.id, EMPTY_NOTE_DRAFTS))
+	})
+
+	test("a save failing after the user came back reaches the open instance before its write-back", async () => {
+		const open = run(init(route("notes", gamma.id), shared).model, [
+			Message.LoadedNoteDrafts({ drafts: EMPTY_NOTE_DRAFTS }),
+		])
+		const restored = await Effect.runPromise(
+			Effect.gen(function* () {
+				const listening = yield* restoredNoteDrafts(gamma.id).pipe(
+					Stream.take(1),
+					Stream.runCollect,
+					Effect.forkChild({ startImmediately: true }),
+				)
+				yield* restoreNoteDraft(beta.id, { noteId: null, body: "For Beta" })
+				yield* restoreNoteDraft(gamma.id, { noteId: null, body: "Call booked" })
+				return yield* Fiber.join(listening)
+			}),
+		)
+		expect(restored).toEqual([{ noteId: null, body: "Call booked" }])
+		const shown = run(
+			open,
+			restored.map((draft) => Message.RestoredNoteDraft({ draft })),
+		)
+		// The instance's drafts, which it writes back, now hold the text.
+		expect(shown.composer.body).toBe("Call booked")
+
+		// A new sign-in drops every customer's drafts.
+		Effect.runSync(clearNoteDrafts)
+		expect(Effect.runSync(readNoteDrafts(beta.id))).toEqual(EMPTY_NOTE_DRAFTS)
+		expect(Effect.runSync(readNoteDrafts(gamma.id))).toEqual(EMPTY_NOTE_DRAFTS)
+	})
+
+	test("a failed edit of a deleted note drops its text", () => {
+		const failed = update(
+			loaded("notes"),
+			Message.FailedNoteAction({
+				action: "update",
+				reason: "NotFound",
+				draft: { noteId: note(1).id, body: "Edited" },
+			}),
+			shared,
+		)
+		expect(failed.model.editingNote).toBeNull()
+	})
+
+	test("one instance per organization and customer", () => {
+		const onHazel = Option.getOrThrow(page.init(route("notes", gamma.id), shared, 1))
+		const onAcme = Option.getOrThrow(
+			page.init(
+				AppRoute.CustomerDetail({ orgSlug: "acme", accountId: gamma.id, tab: Option.none() }),
+				shared,
+				2,
+			),
+		)
+		expect(onHazel.slot.key).not.toBe(onAcme.slot.key)
 	})
 
 	test("the delete confirmation runs once, for the note it asked about", () => {

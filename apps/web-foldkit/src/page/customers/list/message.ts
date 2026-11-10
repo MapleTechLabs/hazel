@@ -80,6 +80,7 @@ export const Message = defineMessageUnion({
 
 	SucceededFetchSparklines: { sparklines: Schema.Array(Customers.Sparkline) },
 	FailedFetchSparklines: { reason: CommonReason, accountIds: Schema.Array(CustomerAccountId) },
+	ElapsedSparklineRetry: { accountIds: Schema.Array(CustomerAccountId) },
 
 	CompletedFocusSearch: {},
 	CompletedScrollRow: {},

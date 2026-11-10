@@ -8,6 +8,7 @@ import { commonMessage, type CommonReason, failureMessage, isRetryableReason } f
 import {
 	ApplyTheme,
 	CheckSession,
+	ClearNoteDrafts,
 	CreateDm,
 	DeliverNotifications,
 	FetchCurrentUser,
@@ -509,6 +510,8 @@ const changedAuth =
 		return Update.combine(modifyFields(model, { session: () => signedInSession }), [
 			sessionChanged,
 			isFetchingUser ? unchanged : command(FetchCurrentUser()),
+			// Signed out and in again without a reload: maybe someone else.
+			model.session._tag === "SignedOut" ? command(ClearNoteDrafts()) : unchanged,
 		])
 	}
 
@@ -723,6 +726,7 @@ export const update = (model: Model, message: Message): Return =>
 		CompletedNavigateHistory: () => ({ model }),
 		CompletedReplaceUrl: () => ({ model }),
 		CompletedLoadExternal: () => ({ model }),
+		CompletedClearNoteDrafts: () => ({ model }),
 		ChangedSystemTheme: ({ theme }) =>
 			transitionTheme((current) => modifyFields(current, { systemTheme: () => theme }), false)(model),
 		ChangedViewport: ({ isMobile }) =>

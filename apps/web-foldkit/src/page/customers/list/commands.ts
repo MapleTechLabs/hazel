@@ -30,6 +30,16 @@ export const FetchListSparklines = Command.define("FetchListSparklines", {
 		),
 })
 
+const SPARKLINE_RETRY = Duration.seconds(30)
+
+/** Failed sparklines are asked for again after a while, not on each key or sync that renders their rows. */
+export const WaitBeforeSparklineRetry = Command.define("WaitBeforeSparklineRetry", {
+	args: { accountIds: Schema.Array(CustomerAccountId) },
+	messages: [Message.ElapsedSparklineRetry],
+	execute: ({ accountIds }) =>
+		Effect.sleep(SPARKLINE_RETRY).pipe(Effect.as(Message.ElapsedSparklineRetry({ accountIds }))),
+})
+
 const viewMessages = [Message.SucceededViewAction, Message.FailedViewAction]
 
 export const CreateSavedView = Command.define("CreateSavedView", {

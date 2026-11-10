@@ -16,7 +16,7 @@ import { showBackgroundToast } from "../../../overlay/background-toasts"
 import { HazelRpc } from "../../../rpc"
 import { Message, type NoteAction, type NoteDraft } from "./message"
 import { COMPOSER_ID, PAGE_SIZE } from "./model"
-import { readNoteDrafts, restoreNoteDraft } from "./note-drafts"
+import { draftToRestore, readNoteDrafts, restoreNoteDraft } from "./note-drafts"
 
 /** The customer page's Commands: its reads, and the account, note and signal actions. */
 
@@ -166,8 +166,10 @@ type NoteAnswer = Extract<Message, { readonly _tag: "SucceededNoteAction" | "Fai
 type FailedNoteAction = Extract<NoteAnswer, { readonly _tag: "FailedNoteAction" }>
 
 /** Told from here, and the text kept for its customer: the page that asked may be gone by now. */
-const failedNote = (accountId: CustomerAccountId, { action, reason, draft }: FailedNoteAction) =>
-	Effect.andThen(
+const failedNote = (accountId: CustomerAccountId, failure: FailedNoteAction) => {
+	const { action, reason } = failure
+	const draft = draftToRestore(failure)
+	return Effect.andThen(
 		showBackgroundToast(
 			errorToastOf(
 				failureMessage(reason, {
@@ -181,6 +183,7 @@ const failedNote = (accountId: CustomerAccountId, { action, reason, draft }: Fai
 		),
 		draft === null ? Effect.void : restoreNoteDraft(accountId, draft),
 	)
+}
 
 /** `draft` is the text a failed save or edit hands back (null for pin and delete). */
 const settleNote =
