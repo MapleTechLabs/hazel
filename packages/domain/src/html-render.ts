@@ -9,9 +9,13 @@
  * requests can still tell a server that the page was viewed; the page holds only its own content.
  *
  * The page and the app talk JSON-RPC over `postMessage`, with MCP Apps method names: the page
- * reports its height (`ui/notifications/size-changed`) and asks the app to open links
- * (`ui/open-link`); the app pushes its theme (`ui/notifications/host-context-changed`). The
- * bootstrap the server injects (`injectHtmlRenderBootstrap`) is the page's side.
+ * reports its height (`ui/notifications/size-changed`), asks the app to open links
+ * (`ui/open-link`) and to leave fullscreen (`ui/request-display-mode`); the app pushes its theme
+ * (`ui/notifications/host-context-changed`). The bootstrap the server injects
+ * (`injectHtmlRenderBootstrap`) is the page's side.
+ *
+ * A frame shows the page inline (as tall as the page, so its own root never scrolls) or
+ * fullscreen (the page scrolls in the frame); the app says which in the URL fragment.
  */
 
 export const HTML_RENDER_MAX_BYTES = 512_000
@@ -169,7 +173,7 @@ export const HTML_RENDER_DEFAULT_THEMES: Record<HtmlRenderAppearance, HtmlRender
 export const HTML_RENDER_AUTHOR_GUIDE = [
 	"Send one self-contained HTML document: inline <style> and <script>; https assets load, but the page cannot fetch, open sockets or submit forms.",
 	"Use the theme CSS variables on :root instead of fixed colors: --background, --foreground, --muted, --card, --border, --ring, --primary, --secondary, --accent, --destructive, --warning, --success (most have a -foreground), --code-background, --chart-1 to --chart-5, --radius, --font-sans, --font-mono.",
-	"The frame is the message column's width and sits on the channel background: leave html and body without a background, outer card or side padding, and use fluid widths.",
+	"The frame is the message column's width and sits on the channel background: leave html and body without a background, outer card or side padding, and use fluid widths. In a message the page itself does not scroll: put anything wider than the column (a table) in its own overflow-x:auto container.",
 	"Let content set the height: vh units are rejected, and height:100% on html or body loops.",
 ].join(" ")
 
@@ -178,10 +182,20 @@ export const HTML_RENDER_AUTHOR_GUIDE = [
 const HOST_CONTEXT_CHANGED_METHOD = "ui/notifications/host-context-changed"
 const SIZE_CHANGED_METHOD = "ui/notifications/size-changed"
 const OPEN_LINK_METHOD = "ui/open-link"
+const REQUEST_DISPLAY_MODE_METHOD = "ui/request-display-mode"
 // Hazel's own: the pointer left the page. The app sees no pointer events while it is over the
 // frame, so without this a row can stay highlighted after the pointer leaves through the frame.
 const POINTER_LEFT_METHOD = "hazel/notifications/pointer-left"
 const THEME_FRAGMENT_KEY = "hazel-theme"
+const DISPLAY_FRAGMENT_KEY = "hazel-display"
+/** On the page's `<html>`: how the frame shows it. */
+const DISPLAY_ATTRIBUTE = "data-hazel-display"
+
+/**
+ * How a frame shows the page. Inline, the frame is as tall as the page and the page's root does
+ * not scroll, so a wheel over it always scrolls the app. Fullscreen, the page scrolls in the frame.
+ */
+export type HtmlRenderDisplayMode = "inline" | "fullscreen"
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
 	typeof value === "object" && value !== null
@@ -200,6 +214,14 @@ export const readHtmlRenderLinkRequest = (data: unknown): string | undefined => 
 	return typeof url === "string" && /^https?:\/\//i.test(url) ? url : undefined
 }
 
+/** The page asks to leave fullscreen (Escape pressed inside it). */
+export const isHtmlRenderInlineRequest = (data: unknown): boolean =>
+	isRecord(data) &&
+	data.jsonrpc === "2.0" &&
+	data.method === REQUEST_DISPLAY_MODE_METHOD &&
+	isRecord(data.params) &&
+	data.params.mode === "inline"
+
 /** The page says the pointer left it. */
 export const isHtmlRenderPointerLeft = (data: unknown): boolean =>
 	isRecord(data) && data.jsonrpc === "2.0" && data.method === POINTER_LEFT_METHOD
@@ -211,15 +233,29 @@ export const htmlRenderThemeMessage = (theme: HtmlRenderTheme) =>
 		params: { theme: theme.appearance, styles: { variables: theme.variables } },
 	}) as const
 
-/** Append to the page's URL: the bootstrap applies the theme before first paint. */
-export const htmlRenderThemeFragment = (theme: HtmlRenderTheme): string =>
-	`#${THEME_FRAGMENT_KEY}=${encodeURIComponent(JSON.stringify(theme))}`
+/**
+ * Append to the page's URL: the bootstrap applies the theme, and the display mode when given,
+ * before first paint. A page framed without a mode keeps a scrolling root, as older apps expect.
+ */
+export const htmlRenderThemeFragment = (
+	theme: HtmlRenderTheme,
+	displayMode?: HtmlRenderDisplayMode,
+): string =>
+	`#${THEME_FRAGMENT_KEY}=${encodeURIComponent(JSON.stringify(theme))}${
+		displayMode === undefined ? "" : `&${DISPLAY_FRAGMENT_KEY}=${displayMode}`
+	}`
 
 // ============ Bootstrap (the page's side) ============
 
+// Inline, the root never scrolls: a page wider than its frame would otherwise scroll sideways
+// behind a hidden scrollbar and take every wheel with a sideways part from the app's list.
+// Fullscreen, the page lines up with the dialog's title and shows a scrollbar.
 const BASE_CSS =
 	"html{box-sizing:border-box;padding:8px;background:transparent;color:var(--foreground);font-family:var(--font-sans);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%;scrollbar-width:none}" +
-	"html::-webkit-scrollbar{display:none}body{margin:0}code,kbd,pre,samp{font-family:var(--font-mono)}" +
+	`html:not([${DISPLAY_ATTRIBUTE}=fullscreen])::-webkit-scrollbar{display:none}` +
+	`html[${DISPLAY_ATTRIBUTE}=inline]{overflow:hidden}` +
+	`html[${DISPLAY_ATTRIBUTE}=fullscreen]{padding:16px;scrollbar-width:thin;scrollbar-color:var(--border) transparent}` +
+	"body{margin:0}code,kbd,pre,samp{font-family:var(--font-mono)}" +
 	":where(:focus-visible){outline:2px solid var(--ring);outline-offset:-2px}"
 
 const rootRule = (theme: HtmlRenderTheme): string =>
@@ -227,20 +263,93 @@ const rootRule = (theme: HtmlRenderTheme): string =>
 		.map(([name, value]) => `${name}:${value};`)
 		.join("")}}`
 
-// Applies the theme from the URL fragment before paint and from the app's notifications after;
-// hands link clicks to the app; reports the content height whenever it changes.
-const BOOTSTRAP_SCRIPT = `(function(){var s=document.getElementById("hazel-theme"),n=0,P=window.parent!==window;if(!s)return;var b=${JSON.stringify(BASE_CSS)};function a(t){if(!t||typeof t!=="object"||!t.variables||typeof t.variables!=="object")return;var c=":root{color-scheme:"+(t.appearance==="light"?"light":"dark")+";";for(var k in t.variables){if(/^--[a-z0-9-]+$/.test(k))c+=k+":"+String(t.variables[k]).replace(/[;{}<>]/g,"")+";";}s.textContent=c+"}"+b;}try{var m=/[#&]${THEME_FRAGMENT_KEY}=([^&]*)/.exec(location.hash);if(m){a(JSON.parse(decodeURIComponent(m[1])));history.replaceState(history.state,"",location.pathname+location.search);}}catch(e){}window.addEventListener("message",function(e){var d=e.data,p=d&&d.params;if(e.source===window.parent&&d&&d.jsonrpc==="2.0"&&d.method===${JSON.stringify(HOST_CONTEXT_CHANGED_METHOD)}&&p&&p.styles)a({appearance:p.theme,variables:p.styles.variables});});document.addEventListener("click",function(e){var l=e.isTrusted?e.composedPath().find(function(t){return t&&t.matches&&t.matches("a[href]");}):null,u;if(!l)return;try{u=new URL(l.getAttribute("href"),document.baseURI);}catch(x){return;}if(!/^https?:$/.test(u.protocol)||u.href.split("#")[0]===location.href.split("#")[0])return;if(!P)return;e.preventDefault();window.parent.postMessage({jsonrpc:"2.0",id:"hazel-link-"+(++n),method:${JSON.stringify(OPEN_LINK_METHOD)},params:{url:u.href}},"*");},true);if(P){var h,o,z=function(){var r=document.documentElement,v=Math.ceil(r.scrollHeight>r.clientHeight?r.scrollHeight:r.getBoundingClientRect().height);if(v===h)return;h=v;window.parent.postMessage({jsonrpc:"2.0",method:${JSON.stringify(SIZE_CHANGED_METHOD)},params:{height:v}},"*");};if(window.ResizeObserver){o=new ResizeObserver(z);o.observe(document.documentElement);}document.addEventListener("DOMContentLoaded",function(){if(o&&document.body)o.observe(document.body);z();});window.addEventListener("load",z);document.addEventListener("mouseout",function(e){if(!e.relatedTarget)window.parent.postMessage({jsonrpc:"2.0",method:${JSON.stringify(POINTER_LEFT_METHOD)}},"*");});}})();`
+// Applies the theme and display mode from the URL fragment before paint, and the theme from the
+// app's notifications after; hands link clicks to the app; reports the content height whenever it
+// changes, once the document is parsed (a half-parsed page would report a height it then
+// outgrows, and the frame would shrink and grow back); in fullscreen, Escape asks to leave it.
+const BOOTSTRAP_SCRIPT = `(function(){var s=document.getElementById("hazel-theme"),n=0,P=window.parent!==window,H=location.hash,D;if(!s)return;var b=${JSON.stringify(BASE_CSS)};function a(t){if(!t||typeof t!=="object"||!t.variables||typeof t.variables!=="object")return;var c=":root{color-scheme:"+(t.appearance==="light"?"light":"dark")+";";for(var k in t.variables){if(/^--[a-z0-9-]+$/.test(k))c+=k+":"+String(t.variables[k]).replace(/[;{}<>]/g,"")+";";}s.textContent=c+"}"+b;}function q(m){window.parent.postMessage(m,"*");}try{D=/[#&]${DISPLAY_FRAGMENT_KEY}=(inline|fullscreen)(?:&|$)/.exec(H);D=D&&D[1];if(D)document.documentElement.setAttribute(${JSON.stringify(DISPLAY_ATTRIBUTE)},D);var m=/[#&]${THEME_FRAGMENT_KEY}=([^&]*)/.exec(H);if(m)a(JSON.parse(decodeURIComponent(m[1])));if(m||D)history.replaceState(history.state,"",location.pathname+location.search);}catch(e){}window.addEventListener("message",function(e){var d=e.data,p=d&&d.params;if(e.source===window.parent&&d&&d.jsonrpc==="2.0"&&d.method===${JSON.stringify(HOST_CONTEXT_CHANGED_METHOD)}&&p&&p.styles)a({appearance:p.theme,variables:p.styles.variables});});document.addEventListener("click",function(e){var l=e.isTrusted?e.composedPath().find(function(t){return t&&t.matches&&t.matches("a[href]");}):null,u;if(!l)return;try{u=new URL(l.getAttribute("href"),document.baseURI);}catch(x){return;}if(!/^https?:$/.test(u.protocol)||u.href.split("#")[0]===location.href.split("#")[0])return;if(!P)return;e.preventDefault();q({jsonrpc:"2.0",id:"hazel-link-"+(++n),method:${JSON.stringify(OPEN_LINK_METHOD)},params:{url:u.href}});},true);if(P){var h,o,z=function(){if(document.readyState==="loading")return;var r=document.documentElement,v=Math.ceil(r.scrollHeight>r.clientHeight?r.scrollHeight:r.getBoundingClientRect().height);if(v===h)return;h=v;q({jsonrpc:"2.0",method:${JSON.stringify(SIZE_CHANGED_METHOD)},params:{height:v}});};if(window.ResizeObserver){o=new ResizeObserver(z);o.observe(document.documentElement);}document.addEventListener("DOMContentLoaded",function(){if(o&&document.body)o.observe(document.body);z();});window.addEventListener("load",z);document.addEventListener("mouseout",function(e){if(!e.relatedTarget)q({jsonrpc:"2.0",method:${JSON.stringify(POINTER_LEFT_METHOD)}});});if(D==="fullscreen")window.addEventListener("keydown",function(e){if(e.isTrusted&&e.key==="Escape"&&!e.defaultPrevented)q({jsonrpc:"2.0",id:"hazel-display-"+(++n),method:${JSON.stringify(REQUEST_DISPLAY_MODE_METHOD)},params:{mode:"inline"}});});}})();`
 
-const bootstrapMarkup = (markup: string): string => {
+const CHARSET_META = '<meta charset="utf-8">'
+const VIEWPORT_META = '<meta name="viewport" content="width=device-width, initial-scale=1">'
+const THEME_STYLE_OPEN = '<style id="hazel-theme">'
+const STYLE_CLOSE = "</style>"
+const SCRIPT_OPEN = "<script>"
+const SCRIPT_CLOSE = "</script>"
+
+/** The theme stylesheet and bridge script, as one run of markup. */
+const themeAndScript = (): string => {
 	const defaultCss = `${rootRule(HTML_RENDER_DEFAULT_THEMES.dark)}@media (prefers-color-scheme: light){${rootRule(HTML_RENDER_DEFAULT_THEMES.light)}}${BASE_CSS}`
-	return [
-		/<meta\s[^>]*charset/i.test(markup.slice(0, 4096)) ? "" : '<meta charset="utf-8">',
-		/<meta\s[^>]*name\s*=\s*["']?viewport/i.test(markup)
-			? ""
-			: '<meta name="viewport" content="width=device-width, initial-scale=1">',
-		`<style id="hazel-theme">${defaultCss}</style>`,
-		`<script>${BOOTSTRAP_SCRIPT}</script>`,
+	return `${THEME_STYLE_OPEN}${defaultCss}${STYLE_CLOSE}${SCRIPT_OPEN}${BOOTSTRAP_SCRIPT}${SCRIPT_CLOSE}`
+}
+
+/** A tag found in a scan: where it starts, where it ends (after its `>`), and whether it closes. */
+interface TagSpan {
+	readonly index: number
+	readonly end: number
+	readonly isClose: boolean
+}
+
+// Tag names only: what follows is read by `nextTag`, not by the pattern.
+const HEAD_OPEN = /<head(?=[\s>])/gi
+const HTML_OPEN = /<html(?=[\s>])/gi
+const META_OPEN = /<meta(?=\s)/gi
+const TEMPLATE_TAG = /<(\/?)template(?=\s|\/?>)/gi
+const VIEWPORT_NAME = /name\s*=\s*["']?viewport/i
+
+/**
+ * The next tag `name` starts in `scan` at or after `from`; it ends at its first `>`. When no `>`
+ * follows a start, none follows the starts after it, so the search ends there. A pattern that
+ * runs on to the `>` itself (`<head(?:\s[^>]*)?>`) retries that run from every start instead:
+ * seconds on a page of unclosed tags, and this runs on every load of a page.
+ */
+const nextTag = (scan: string, name: RegExp, from: number): TagSpan | undefined => {
+	name.lastIndex = from
+	const match = name.exec(scan)
+	if (match === null) return undefined
+	const close = scan.indexOf(">", match.index)
+	return close === -1 ? undefined : { index: match.index, end: close + 1, isClose: match[1] === "/" }
+}
+
+/** A `<meta name=viewport>` in the page; each meta tag is read once, to its `>` or the page's end. */
+const hasViewportMeta = (scan: string): boolean => {
+	let from = 0
+	while (from < scan.length) {
+		META_OPEN.lastIndex = from
+		const match = META_OPEN.exec(scan)
+		if (match === null) return false
+		const close = scan.indexOf(">", match.index)
+		if (VIEWPORT_NAME.test(scan.slice(match.index, close === -1 ? scan.length : close))) return true
+		if (close === -1) return false
+		from = close + 1
+	}
+	return false
+}
+
+/** What goes at the start of the head: a charset and a viewport when the page names none, then the theme and bridge. */
+const bootstrapMarkup = (markup: string): string =>
+	[
+		/<meta\s[^>]*charset/i.test(markup.slice(0, 4096)) ? "" : CHARSET_META,
+		hasViewportMeta(markup) ? "" : VIEWPORT_META,
+		themeAndScript(),
 	].join("")
+
+/**
+ * The stylesheet and script an earlier `injectHtmlRenderBootstrap` left at `at`, right after the
+ * page's `<head>` and after the metas it may have added. Each ends at its first end tag, as the
+ * browser reads it, and the script follows the stylesheet at once. Read with plain searches from
+ * left to right: a page of nothing but `</style><script>` costs one pass, where a pattern with
+ * two open-ended runs would retry at each of them.
+ */
+const earlierBootstrapAt = (html: string, at: number): { start: number; end: number } | undefined => {
+	let start = at
+	for (const meta of [CHARSET_META, VIEWPORT_META]) if (html.startsWith(meta, start)) start += meta.length
+	if (!html.startsWith(THEME_STYLE_OPEN, start)) return undefined
+	const styleClose = html.indexOf(STYLE_CLOSE, start + THEME_STYLE_OPEN.length)
+	if (styleClose === -1) return undefined
+	const scriptOpen = styleClose + STYLE_CLOSE.length
+	if (!html.startsWith(SCRIPT_OPEN, scriptOpen)) return undefined
+	const scriptClose = html.indexOf(SCRIPT_CLOSE, scriptOpen + SCRIPT_OPEN.length)
+	return scriptClose === -1 ? undefined : { start, end: scriptClose + SCRIPT_CLOSE.length }
 }
 
 /** Blank comments and raw-text elements without shifting offsets, so tag scans skip them. */
@@ -253,14 +362,15 @@ const blankNonMarkup = (html: string): string => {
 	let depth = 0
 	let start = 0
 	let at = 0
-	for (const match of scan.matchAll(/<(\/?)template(?:\s[^>]*)?\/?>/gi)) {
-		if (!match[1]) {
-			if (depth++ === 0) start = match.index
+	let tag = nextTag(scan, TEMPLATE_TAG, 0)
+	while (tag !== undefined) {
+		if (!tag.isClose) {
+			if (depth++ === 0) start = tag.index
 		} else if (depth > 0 && --depth === 0) {
-			const end = match.index + match[0].length
-			parts.push(scan.slice(at, start), " ".repeat(end - start))
-			at = end
+			parts.push(scan.slice(at, start), " ".repeat(tag.end - start))
+			at = tag.end
 		}
+		tag = nextTag(scan, TEMPLATE_TAG, tag.end)
 	}
 	if (depth > 0) {
 		parts.push(scan.slice(at, start), " ".repeat(scan.length - start))
@@ -270,18 +380,26 @@ const blankNonMarkup = (html: string): string => {
 	return parts.join("")
 }
 
-/** Put the theme stylesheet and bridge script first in the page's `<head>`. */
+/**
+ * Put the theme stylesheet and bridge script first in the page's `<head>`. A page that already
+ * carries them (stored with the bootstrap of the day it was published) gets today's in their place.
+ */
 export const injectHtmlRenderBootstrap = (html: string): string => {
 	const scan = blankNonMarkup(html)
-	const markup = bootstrapMarkup(scan)
-	const headOpen = /<head(?:\s[^>]*)?>/i.exec(scan)
-	if (headOpen) {
-		const at = headOpen.index + headOpen[0].length
-		return html.slice(0, at) + markup + html.slice(at)
+	const headOpen = nextTag(scan, HEAD_OPEN, 0)
+	if (headOpen !== undefined) {
+		const at = headOpen.end
+		// A page that went through here before has a head (its own, or the one added below), and
+		// the earlier bootstrap is the first thing in it.
+		const earlier = earlierBootstrapAt(html, at)
+		if (earlier !== undefined)
+			return html.slice(0, earlier.start) + themeAndScript() + html.slice(earlier.end)
+		return html.slice(0, at) + bootstrapMarkup(scan) + html.slice(at)
 	}
-	const htmlOpen = /<html(?:\s[^>]*)?>/i.exec(scan)
-	if (htmlOpen) {
-		const at = htmlOpen.index + htmlOpen[0].length
+	const markup = bootstrapMarkup(scan)
+	const htmlOpen = nextTag(scan, HTML_OPEN, 0)
+	if (htmlOpen !== undefined) {
+		const at = htmlOpen.end
 		return `${html.slice(0, at)}<head>${markup}</head>${html.slice(at)}`
 	}
 	const doctype = /^\s*<!doctype[^>]*>/i.exec(html)

@@ -115,9 +115,11 @@ describe("update", () => {
 		expect(readyOf(result.model).url).toBe(URL_A)
 	})
 
-	test("the minted URL becomes the frame's src, with the theme in its fragment", () => {
+	test("the minted URL becomes the frame's src, with the theme and inline display in its fragment", () => {
 		const frame = frameOf(minted())
-		expect(frame.src).toBe(`${URL_A}${htmlRenderThemeFragment(HTML_RENDER_DEFAULT_THEMES.dark)}`)
+		expect(frame.src).toBe(
+			`${URL_A}${htmlRenderThemeFragment(HTML_RENDER_DEFAULT_THEMES.dark, "inline")}`,
+		)
 		expect(frame.srcExpiresAt).toBe(60 * MINUTE)
 	})
 
@@ -162,6 +164,20 @@ describe("update", () => {
 		expect(same.model).toBe(resized)
 	})
 
+	test("the page's first height shows the frame, before its load", () => {
+		const waiting = minted()
+		expect(frameOf(waiting).isLoaded).toBe(false)
+		const reported = step(waiting, reportHeight(400)).model
+		expect(frameOf(reported)).toMatchObject({ contentHeight: 400, isLoaded: true })
+		// A frame that reloads (a new URL) hides again, keeps its height, and shows on the next report.
+		const reloading = HtmlRender.update(
+			{ ...reported, frames: { [listKey]: { ...frameOf(reported), isLoaded: false } } },
+			reportHeight(400),
+			0,
+		).model
+		expect(frameOf(reloading).isLoaded).toBe(true)
+	})
+
 	test("Show more and Show less toggle the render", () => {
 		const toggle = HtmlRender.Message.ClickedToggleExpanded({ ref, surface: "list" })
 		const expanded = step(minted(), toggle).model
@@ -200,7 +216,20 @@ describe("update", () => {
 			40 * MINUTE,
 		)
 		expect(commandsOf(result)).toEqual([])
-		expect(result.model.fullscreen?.src?.startsWith(URL_A)).toBe(true)
+		expect(result.model.fullscreen?.src).toBe(
+			`${URL_A}${htmlRenderThemeFragment(HTML_RENDER_DEFAULT_THEMES.dark, "fullscreen")}`,
+		)
+	})
+
+	test("Escape inside the fullscreen page closes the dialog", () => {
+		const opened = step(
+			minted(),
+			HtmlRender.Message.ClickedFullscreen({ ref, title: "Report" }),
+			40 * MINUTE,
+		).model
+		const left = step(opened, HtmlRender.Message.RequestedLeaveFullscreen())
+		expect(left.model.fullscreen).toBeNull()
+		expect(frameOf(left.model)).toEqual(frameOf(opened))
 	})
 
 	test("fullscreen on a URL about to expire re-mints; the inline frame keeps its src", () => {
@@ -435,6 +464,14 @@ describe("frameMessageOf", () => {
 		expect(
 			HtmlRender.frameMessageOf({ source: threadWindow, data: link("https://hazel.sh") }, frames, true),
 		).toBeUndefined()
+	})
+
+	test("only the fullscreen frame asks to leave fullscreen", () => {
+		const leave = { jsonrpc: "2.0", id: 1, method: "ui/request-display-mode", params: { mode: "inline" } }
+		expect(HtmlRender.frameMessageOf({ source: fullscreenWindow, data: leave }, frames, false)).toEqual(
+			HtmlRender.Message.RequestedLeaveFullscreen(),
+		)
+		expect(HtmlRender.frameMessageOf({ source: inlineWindow, data: leave }, frames, true)).toBeUndefined()
 	})
 
 	test("the fullscreen frame's size never resizes the inline one", () => {

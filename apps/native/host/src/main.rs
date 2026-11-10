@@ -1,6 +1,7 @@
 //! Hazel's native window: draws the tree Hazel's Foldkit app renders in a Bun child process and
 //! sends presses, edits and the window's size and theme back to it.
 mod capture;
+mod frames;
 mod images;
 mod layout;
 mod margins;
@@ -53,6 +54,10 @@ pub(crate) struct State {
     portals: Vec<(String, Arc<Node>)>,
     /// The content hash of the tree on screen, as the runtime sent its root.
     root_hash: Option<String>,
+    /// The `<iframe>`s in the tree: each one's page shows in a web view over its box.
+    frames: Vec<frames::FrameSpec>,
+    /// What the overlays among `portals` draw over the page, and so over those web views.
+    covers: Vec<frames::CoverSpec>,
 }
 
 static OUT: OnceLock<Mutex<Box<dyn Write + Send>>> = OnceLock::new();
@@ -563,7 +568,8 @@ fn intern_icon(view: f32, body: &str) -> &'static Icon {
     leaked
 }
 
-fn child_path(parent: &str, index: usize, node: &Node) -> String {
+/// A child's path under `parent`: by its key when it has one, else by its place among its siblings.
+pub(crate) fn child_path(parent: &str, index: usize, node: &Node) -> String {
     match node {
         Node::Elem { key: Some(key), .. } => format!("{parent}/k{key}"),
         _ => format!("{parent}/{index}"),
@@ -593,6 +599,12 @@ impl State {
         self.page = msg.page;
         self.portals.clear();
         collect_portals(&root, "r", &mut self.portals);
+        self.frames = frames::collect(&root);
+        self.covers = if self.frames.is_empty() {
+            Vec::new()
+        } else {
+            frames::collect_covers(&root, &self.portals)
+        };
         self.root = Some(root);
         self.subtrees = subtrees;
         true
@@ -602,7 +614,7 @@ impl State {
 /// An element the runtime asked to draw at the window's root (`ov.portal`).
 /// Drawn at the window's root rather than where the tree puts it: a portal, or a `fixed`
 /// element, which the window places as the browser's viewport does.
-fn is_portal(node: &Arc<Node>) -> bool {
+pub(crate) fn is_portal(node: &Arc<Node>) -> bool {
     match node.as_ref() {
         Node::Elem { ov, st, .. } => {
             ov.as_ref().is_some_and(|o| o.portal.is_some()) || st.fixed == Some(true)
@@ -2229,7 +2241,8 @@ fn main() {
         .font_smoothing(TEXT_SMOOTHING)
         .titlebar(TITLEBAR)
         .init(move || initial)
-        .on_open_url(open_url);
+        .on_open_url(open_url)
+        .on_frame_drawn(frames::sync);
     let handle = app.handle();
     std::thread::spawn(move || {
         for msg in messages.iter() {

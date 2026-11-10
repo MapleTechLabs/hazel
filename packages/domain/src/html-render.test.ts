@@ -3,8 +3,10 @@ import {
 	findViewportHeightUnit,
 	htmlRenderThemeFragment,
 	HTML_RENDER_DEFAULT_THEMES,
+	HTML_RENDER_MAX_BYTES,
 	injectHtmlRenderBootstrap,
 	readHtmlRenderContentHeight,
+	isHtmlRenderInlineRequest,
 	isHtmlRenderPointerLeft,
 	readHtmlRenderLinkRequest,
 } from "./html-render"
@@ -42,6 +44,102 @@ describe("injectHtmlRenderBootstrap", () => {
 		expect(page.match(/charset/g)).toHaveLength(1)
 		expect(page.match(/name="viewport"/g)).toHaveLength(1)
 	})
+
+	it("replaces the bootstrap a page was stored with, where it stood", () => {
+		const page = injectHtmlRenderBootstrap(
+			"<!doctype html><html><head><title>x</title></head><h1>Hi</h1>",
+		)
+		expect(injectHtmlRenderBootstrap(page)).toBe(page)
+		// A page published before the display modes: its old stylesheet and script go.
+		const earlier = page.replace(
+			/<style id="hazel-theme">[\s\S]*?<\/script>/,
+			'<style id="hazel-theme">html{padding:8px}</style><script>window.old=1</script>',
+		)
+		expect(earlier).not.toBe(page)
+		expect(injectHtmlRenderBootstrap(earlier)).toBe(page)
+	})
+
+	it("replaces an earlier bootstrap only where it was put, at the start of the head", () => {
+		const earlier = '<style id="hazel-theme">html{padding:8px}</style><script>window.old=1</script>'
+		// The same text in a comment, a script and the body is the page's own.
+		const page = `<!-- ${earlier} --><html><head><title>x</title></head><body><textarea>${earlier}</textarea><pre>${earlier.replaceAll("<", "&lt;")}</pre>${earlier}</body></html>`
+		const injected = injectHtmlRenderBootstrap(page)
+		expect(injected.startsWith(`<!-- ${earlier} --><html><head><meta charset="utf-8">`)).toBe(true)
+		// All four copies are still there.
+		expect(injected.match(/window\.old=1/g)).toHaveLength(4)
+		// And today's went into the head.
+		expect(injected).toContain(
+			'<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style id="hazel-theme">:root{color-scheme:dark',
+		)
+		expect(injectHtmlRenderBootstrap(injected)).toBe(injected)
+
+		// A page with no head got one of its own: its bootstrap is found there on the way back.
+		for (const bare of [
+			"<h1>Hi</h1>",
+			"<!doctype html><h1>Hi</h1>",
+			'<html lang="en"><body>x</body></html>',
+		]) {
+			const once = injectHtmlRenderBootstrap(bare)
+			expect(injectHtmlRenderBootstrap(once)).toBe(once)
+			const old = once.replace(/<style id="hazel-theme">[\s\S]*?<\/script>/, earlier)
+			expect(injectHtmlRenderBootstrap(old)).toBe(once)
+		}
+	})
+
+	it("reads a page made to look like an unfinished bootstrap in one pass", () => {
+		// The largest page allowed, opening its head as a bootstrap does and never closing the script.
+		const runs = "</style><script>".repeat(Math.floor(HTML_RENDER_MAX_BYTES / 16))
+		const page = `<head><style id="hazel-theme">${runs}</head>`
+		const startedAt = performance.now()
+		const injected = injectHtmlRenderBootstrap(page)
+		// A pattern that retried at every run took seconds here; a pass takes a few milliseconds.
+		expect(performance.now() - startedAt).toBeLessThan(500)
+		// Not a bootstrap (its script never ends): the page keeps it, and gets a real one before it.
+		expect(injected.endsWith(`<style id="hazel-theme">${runs}</head>`)).toBe(true)
+		expect(injected.match(/<style id="hazel-theme">/g)).toHaveLength(2)
+		// Its stylesheet ends at the first end tag, and anything but a script after it is no bootstrap.
+		const other = '<head><style id="hazel-theme">a</style><p>x</p><script>b</script></head>'
+		expect(injectHtmlRenderBootstrap(other)).toContain('<style id="hazel-theme">a</style><p>x</p>')
+	})
+
+	it("reads a page of unclosed tags in one pass", () => {
+		// Each of these made a pattern that ran on to the tag's `>` retry from every start.
+		for (const unit of ["<head ", "<html ", "<meta ", "<meta name ", "<template ", "</template "]) {
+			const page = unit.repeat(Math.floor(HTML_RENDER_MAX_BYTES / unit.length))
+			const startedAt = performance.now()
+			const injected = injectHtmlRenderBootstrap(page)
+			expect(performance.now() - startedAt, unit).toBeLessThan(500)
+			// No tag ever closes: the page gets a head of its own, in front.
+			expect(injected.startsWith("<!doctype html><head>"), unit).toBe(true)
+			expect(injected.endsWith(page), unit).toBe(true)
+		}
+	})
+
+	it("finds tags as before: attributes, case, self-closed templates, a viewport in any meta", () => {
+		expect(injectHtmlRenderBootstrap('<HEAD\n lang="en"><title>x</title></HEAD>')).toMatch(
+			/^<HEAD\n lang="en"><meta charset="utf-8">/,
+		)
+		// `<header>` is no head, and a head inside a template is the template's.
+		const fragment = injectHtmlRenderBootstrap(
+			"<header>x</header><template/><template ><head></template>",
+		)
+		expect(fragment.startsWith("<!doctype html><head>")).toBe(true)
+		const page = injectHtmlRenderBootstrap(
+			'<meta charset="utf-8"><meta x="1"><META content="width=500" NAME = viewport>',
+		)
+		expect(page.match(/viewport/gi)).toHaveLength(1)
+		// An unfinished meta still names its viewport; a viewport outside any meta is none.
+		expect(injectHtmlRenderBootstrap("<meta name=viewport").match(/viewport/g)).toHaveLength(1)
+		expect(
+			injectHtmlRenderBootstrap("<meta x><p>name=viewport</p>").match(/name="viewport"/g),
+		).toHaveLength(1)
+	})
+
+	it("keeps an inline page's root from scrolling, and lets a fullscreen one scroll in view", () => {
+		const page = injectHtmlRenderBootstrap("<h1>Hi</h1>")
+		expect(page).toContain("html[data-hazel-display=inline]{overflow:hidden}")
+		expect(page).toContain("html[data-hazel-display=fullscreen]{padding:16px;scrollbar-width:thin")
+	})
 })
 
 describe("findViewportHeightUnit", () => {
@@ -75,6 +173,16 @@ describe("bridge", () => {
 			true,
 		)
 		expect(isHtmlRenderPointerLeft({ method: "hazel/notifications/pointer-left" })).toBe(false)
+
+		const display = {
+			jsonrpc: "2.0",
+			id: 1,
+			method: "ui/request-display-mode",
+			params: { mode: "inline" },
+		}
+		expect(isHtmlRenderInlineRequest(display)).toBe(true)
+		expect(isHtmlRenderInlineRequest({ ...display, params: { mode: "fullscreen" } })).toBe(false)
+		expect(isHtmlRenderInlineRequest(size)).toBe(false)
 	})
 
 	it("carries the theme in the URL fragment", () => {
@@ -82,6 +190,16 @@ describe("bridge", () => {
 		expect(fragment.startsWith("#hazel-theme=")).toBe(true)
 		expect(JSON.parse(decodeURIComponent(fragment.slice("#hazel-theme=".length)))).toEqual(
 			HTML_RENDER_DEFAULT_THEMES.light,
+		)
+	})
+
+	it("names the display mode after the theme, when the app gives one", () => {
+		const theme = htmlRenderThemeFragment(HTML_RENDER_DEFAULT_THEMES.light)
+		expect(htmlRenderThemeFragment(HTML_RENDER_DEFAULT_THEMES.light, "inline")).toBe(
+			`${theme}&hazel-display=inline`,
+		)
+		expect(htmlRenderThemeFragment(HTML_RENDER_DEFAULT_THEMES.light, "fullscreen")).toBe(
+			`${theme}&hazel-display=fullscreen`,
 		)
 	})
 })

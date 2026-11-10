@@ -2586,3 +2586,138 @@ fn a_baseline_row_sets_a_name_and_its_smaller_timestamp_on_one_baseline() {
     assert_eq!(rect(&rt, "r/2")[1], 14.0);
     assert_eq!(rect(&row("flex-end"), "r/1")[1], 8.0);
 }
+
+#[test]
+fn a_frame_takes_its_box_its_clips_and_what_overlays_paint_over_it() {
+    use crate::frames::{self, Cover, CoverSpec, FrameSpec};
+
+    let frame = with_attrs(
+        e("iframe", json!({ "w": "full", "h": 500 }), vec![]),
+        json!({ "src": "https://api.hazel.sh/html-renders/a?sig=1#hazel-display=inline" }),
+    );
+    // A frame with nothing to load yet is no frame.
+    let waiting = e("iframe", json!({ "w": "full", "h": 40 }), vec![]);
+    // A pinned date: its line paints nothing, its pill does.
+    let pinned = e(
+        "div",
+        json!({ "w": "full", "h": 0, "stickyTop": 0 }),
+        vec![e(
+            "div",
+            json!({ "w": 80, "h": 24, "bg": "#333333ff" }),
+            vec![],
+        )],
+    );
+    let list = e(
+        "div",
+        json!({ "w": 400, "h": 300, "scrollY": true }),
+        vec![
+            pinned,
+            e("div", json!({ "w": "full", "h": 100 }), vec![]),
+            frame,
+            waiting,
+        ],
+    );
+    // A menu: the layer that places it is as large as the window and paints nothing.
+    let mut menu = e(
+        "div",
+        json!({ "fixed": true, "absolute": [0, 0, 0, 0] }),
+        vec![e(
+            "div",
+            json!({ "absolute": [150, null, null, 50], "w": 100, "h": 60, "bg": "#222222ff" }),
+            vec![e(
+                "div",
+                json!({ "w": 20, "h": 20, "bg": "#ff0000ff" }),
+                vec![],
+            )],
+        )],
+    );
+    menu["ov"] = json!({ "portal": 1 });
+    let rt = runtime(
+        e("div", json!({ "w": 400, "h": 300 }), vec![list, menu]),
+        (400.0, 300.0),
+    );
+
+    assert_eq!(
+        rt.state.frames,
+        vec![FrameSpec {
+            path: "r/0/2".into(),
+            src: "https://api.hazel.sh/html-renders/a?sig=1#hazel-display=inline".into(),
+            clips: vec!["r/0".into()],
+        }]
+    );
+    // The pinned date's pill; and the menu's panel, not its layer and not what the panel holds.
+    assert_eq!(
+        rt.state.covers,
+        vec![
+            CoverSpec {
+                path: "r/0/0/0".into(),
+                modal: false
+            },
+            CoverSpec {
+                path: "r/1/0".into(),
+                modal: false
+            }
+        ]
+    );
+
+    let covers: Vec<Cover> = rt
+        .state
+        .covers
+        .iter()
+        .map(|cover| Cover {
+            rect: rect(&rt, &cover.path),
+            modal: cover.modal,
+        })
+        .collect();
+    let placed = frames::place(rect(&rt, "r/0/2"), 1.0, &[rect(&rt, "r/0")], &covers).unwrap();
+    assert_eq!(placed.rect, [0.0, 100.0, 400.0, 500.0]);
+    assert_eq!(placed.visible, [0.0, 100.0, 400.0, 200.0]);
+    // The panel is drawn over the part of the frame that shows: the view is cut out there.
+    let panel = rect(&rt, "r/1/0");
+    assert_eq!(panel[2..], [100.0, 60.0]);
+    assert_eq!(placed.holes, vec![panel]);
+}
+
+#[test]
+fn a_dialog_covers_the_frames_behind_it_and_not_its_own() {
+    use crate::frames::CoverSpec;
+
+    let src = json!({ "src": "https://api.hazel.sh/html-renders/a?sig=1" });
+    let inline = with_attrs(
+        e("iframe", json!({ "w": 100, "h": 100 }), vec![]),
+        src.clone(),
+    );
+    let fullscreen = with_attrs(e("iframe", json!({ "w": 100, "h": 100 }), vec![]), src);
+    let mut dialog = e(
+        "div",
+        json!({ "fixed": true, "absolute": [0, 0, 0, 0] }),
+        vec![e(
+            "div",
+            json!({ "fixed": true, "absolute": [0, 0, 0, 0], "bg": "#00000080" }),
+            vec![fullscreen],
+        )],
+    );
+    dialog["ov"] = json!({ "portal": 1, "modal": "r/1" });
+    let s = state(e(
+        "div",
+        json!({ "w": 400, "h": 300 }),
+        vec![inline, dialog],
+    ));
+    assert_eq!(
+        s.covers,
+        vec![CoverSpec {
+            path: "r/1".into(),
+            modal: true
+        }]
+    );
+    let inside = |frame: &str| {
+        s.covers.iter().any(|cover| {
+            frame
+                .strip_prefix(cover.path.as_str())
+                .is_some_and(|rest| rest.starts_with('/'))
+        })
+    };
+    let paths: Vec<&str> = s.frames.iter().map(|frame| frame.path.as_str()).collect();
+    assert_eq!(paths, ["r/0", "r/1/0/0"]);
+    assert!(!inside("r/0") && inside("r/1/0/0"));
+}

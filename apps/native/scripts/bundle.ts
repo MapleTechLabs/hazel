@@ -106,6 +106,18 @@ writeFileSync(`${contents}/Resources/environment.json`, `${JSON.stringify(enviro
 const escape = (value: string) =>
 	value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
 
+// HTML render frames load their pages from the backend in a web view, which App Transport
+// Security holds to https: a bundle built against a local backend (http://localhost) may load
+// from the local network. A release bundle talks https and gets no exception.
+const localNetworking = environment.VITE_BACKEND_URL.startsWith("http://")
+	? `
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>`
+	: ""
+
 writeFileSync(
 	`${contents}/Info.plist`,
 	`<?xml version="1.0" encoding="UTF-8"?>
@@ -133,7 +145,7 @@ writeFileSync(
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.business</string>
 	<key>NSHighResolutionCapable</key>
-	<true/>
+	<true/>${localNetworking}
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

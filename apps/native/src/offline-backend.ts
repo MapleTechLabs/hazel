@@ -27,6 +27,8 @@ export const makeOfflineFetch = (options: {
 	readonly onUnknownRpc?: (tag: string) => void
 	/** Where writes go: a sent message streams back to the channel's subscribers. */
 	readonly server?: FixtureServer
+	/** `message.htmlRenderUrl`'s answer, when the fixture shows an HTML render. */
+	readonly htmlRenderUrl?: () => { readonly url: string; readonly expiresAt: number }
 }): typeof fetch => {
 	const now = Date.now()
 	const session: typeof HazelAuthApi.sessions.Session.Type = Schema.decodeUnknownSync(
@@ -117,6 +119,8 @@ export const makeOfflineFetch = (options: {
 			}),
 		],
 	])
+	const { htmlRenderUrl } = options
+	if (htmlRenderUrl !== undefined) responders.set("message.htmlRenderUrl", htmlRenderUrl)
 
 	/**
 	 * Any other RPC: the first plausible answer its success schema accepts (nothing, a transaction

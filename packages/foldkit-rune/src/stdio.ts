@@ -18,6 +18,7 @@ const HOST_MESSAGE_TAGS = {
 	radio: true,
 	label: true,
 	openUrl: true,
+	frame: true,
 	vault: true,
 	update: true,
 	updateProgress: true,

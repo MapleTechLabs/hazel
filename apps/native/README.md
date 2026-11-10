@@ -19,6 +19,11 @@ Rune host (Rust, host/)                     Bun runtime (src/entry.ts)
 - **Mounts** that measure geometry (the message list) run against element proxies backed by the
   host's layout; the composer's ProseMirror editor runs on a headless DOM with a native text field
   drawn over it.
+- **HTML renders** (`<iframe>`s): the host shows each page in a `WKWebView` laid over the box
+  Rune draws for it (`host/src/frames.rs`), in the same sandboxed frame and over the same
+  `postMessage` bridge as the web app; `src/frames.ts` turns what the page posts into the events
+  the web app listens for. After every frame the view goes where its box was drawn: clipped by
+  the list it scrolls in, cut out under a menu or the message toolbar, hidden under a dialog.
 - **Data**: `HAZEL_DATA=offline` (default) serves a fixture org over a local sync socket and answers
   the few HTTP calls in `src/offline-backend.ts`; `HAZEL_DATA=live` talks to `VITE_BACKEND_URL` with
   `HAZEL_SESSION_TOKEN` as the session bearer (`bun run dev:sign-in` prints one), or without one
@@ -38,6 +43,8 @@ sources use, so the bundled runtime boots without Tailwind's compiler; a class t
 compiles after the commit that shows it, and the screen restyles.
 `NATIVE_THEME=dark`, `NATIVE_WIDTH`/`NATIVE_HEIGHT` set the window; `NATIVE_DEBUG=1` logs every
 Message and editor event; `NATIVE_STATS=<file>` appends per-commit timings.
+`HAZEL_FIXTURE_HTML=<file.html>` ends the offline #general with a message showing that page as an
+HTML render, served from a local port as the api serves one (the file is read on every load).
 
 `host/target/release/hazel-native --capture script.json` runs headless on a real-time frame loop and
 follows a script (`settle`, `waitText`, `clickText`, `focusEditable`, `type`, `key`, `snap`, `dump`,
@@ -147,6 +154,9 @@ synthetic utility page (`conformance:extract` records it).
   radial gradients (the app loader's), repeated or offset mask pictures, and a fading edge on
   the box's own fill (Rune fades what is inside the box).
 - Emoji inside text are about a quarter narrower than Chromium draws them.
+- An HTML render's web view is above everything Rune draws: a collapsed page ends in a hard edge
+  (the fade is a mask Rune applies to its own drawing), and a headless capture shows the frame's
+  box empty. Frames show on macOS only; other platforms have no web view yet.
 
 Rune is pinned to `Makisuo/rune` (anomalyco/rune `bca4713` plus grid tracks and
 `El::clip_fade_linear_frac`) until they land upstream; see `host/Cargo.toml`.

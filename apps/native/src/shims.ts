@@ -155,14 +155,21 @@ const classList = (onChange?: () => void) => {
 const element = () => {
 	// Detached nodes (a live-region announcer) build and move freely; nothing draws them.
 	const childNodes: Array<unknown> = []
+	// Kept, so what the app sets on `<html>` reads back (`hasAttribute` before a `setAttribute`).
+	const attributes = new Map<string, string>()
 	return Object.assign(new DomNode(), {
 		childNodes,
 		classList: classList(),
 		style: { setProperty() {}, removeProperty() {} },
 		dataset: {} as Record<string, string>,
-		setAttribute() {},
-		removeAttribute() {},
-		getAttribute: () => null,
+		setAttribute: (name: string, value: unknown) => {
+			attributes.set(name, String(value))
+		},
+		removeAttribute: (name: string) => {
+			attributes.delete(name)
+		},
+		getAttribute: (name: string) => attributes.get(name) ?? null,
+		hasAttribute: (name: string) => attributes.has(name),
 		appendChild: <T>(child: T) => child,
 		removeChild: <T>(child: T) => child,
 		insertBefore: <T>(child: T) => child,
@@ -443,7 +450,13 @@ export const installShims = (env: ShimEnv) => {
 		}
 		windowTarget.dispatchEvent(new Event("resize"))
 	}
-	const onRootStyle = (listener: () => void) => rootStyleListeners.add(listener)
+	/** Hears every change to `<html>`'s class or inline custom properties; returns how to stop. */
+	const onRootStyle = (listener: () => void) => {
+		rootStyleListeners.add(listener)
+		return () => {
+			rootStyleListeners.delete(listener)
+		}
+	}
 	return {
 		updateEnv,
 		history,
@@ -457,6 +470,40 @@ export const installShims = (env: ShimEnv) => {
 		dispatchElementScroll: () => capturedScrolls.dispatchEvent(new Event("scroll")),
 	}
 }
+
+type ObserverLike = { observe(target: Node): void; disconnect(): void }
+
+/**
+ * A `MutationObserver` that also hears `<html>`: the app re-reads its theme for HTML render frames
+ * when the root's class or style changes. Every other target goes to `Elements` (the bridge's
+ * observer, over element proxies).
+ */
+export const makeRootAwareMutationObserver = (
+	Elements: new (callback: () => void) => ObserverLike,
+	root: Node,
+	onRootChange: (listener: () => void) => () => void,
+) =>
+	class RootAwareMutationObserver {
+		private readonly elements: ObserverLike
+		private stopRoot: (() => void) | undefined
+		private readonly notify: () => void
+		constructor(callback: (records: Array<never>, observer: RootAwareMutationObserver) => void) {
+			this.notify = () => callback([], this)
+			this.elements = new Elements(this.notify)
+		}
+		observe(target: Node) {
+			if (target === root) this.stopRoot ??= onRootChange(this.notify)
+			else this.elements.observe(target)
+		}
+		disconnect() {
+			this.stopRoot?.()
+			this.stopRoot = undefined
+			this.elements.disconnect()
+		}
+		takeRecords() {
+			return []
+		}
+	}
 
 /** Web and mail links open in the user's browser or mail app; any other scheme is dropped. */
 export const openExternal = (target: URL, openUrl = systemOpen) => {

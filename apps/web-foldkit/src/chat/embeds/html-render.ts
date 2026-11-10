@@ -4,7 +4,6 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { htmlRenderDialogStyles, htmlRenderStyles } from "~/components/embeds/html-render.styles"
 import type { HtmlRenderRow } from "../../page/chat/rows"
 import { IconMaximize } from "../../icons"
-import { button } from "../../ui/button"
 import { controlledModal, titleId } from "../../ui/modal"
 import * as HtmlRender from "../html-render"
 import type { EmbedType } from "./types"
@@ -88,7 +87,14 @@ export const htmlRenderView = <M>(
 		],
 		[
 			h.div(
-				[h.Class(styles.viewport()), h.Style({ height: `${shownHeight}px` })],
+				[
+					h.Class(
+						htmlRenderStyles({
+							isCollapsed: row !== undefined && row.isTall && !row.isExpanded,
+						}).viewport(),
+					),
+					h.Style({ height: `${shownHeight}px` }),
+				],
 				[
 					row !== undefined && row.status === "Ready" && row.src !== null
 						? frameView(h, ref, html.title, row, surface, toMessage)
@@ -98,33 +104,44 @@ export const htmlRenderView = <M>(
 						: isLoaded
 							? h.empty
 							: h.div([h.Class(styles.skeleton()), h.AriaHidden(true)]),
-					row?.isTall && !row.isExpanded ? h.div([h.Class(styles.fade())]) : h.empty,
 				],
 			),
 			status === "Ready"
-				? button(
-						h,
-						{
-							intent: "plain",
-							size: "sq-xs",
-							className: styles.fullscreen(),
-							onPress: toMessage(
-								HtmlRender.Message.ClickedFullscreen({ ref, title: html.title }),
-							),
-							attributes: [h.AriaLabel(`Open ${html.title} full screen`)],
-						},
-						[IconMaximize(h)],
-					)
-				: h.empty,
-			row?.isTall
-				? h.button(
+				? h.div(
+						[h.Class(styles.controls())],
 						[
-							h.Type("button"),
-							h.Class(styles.toggle()),
-							h.AriaExpanded(row.isExpanded),
-							h.OnClick(toMessage(HtmlRender.Message.ClickedToggleExpanded({ ref, surface }))),
+							row?.isTall
+								? h.button(
+										[
+											h.Type("button"),
+											h.Class(styles.control()),
+											h.AriaExpanded(row.isExpanded),
+											h.OnClick(
+												toMessage(
+													HtmlRender.Message.ClickedToggleExpanded({
+														ref,
+														surface,
+													}),
+												),
+											),
+										],
+										[row.isExpanded ? "Show less" : "Show more"],
+									)
+								: h.empty,
+							h.button(
+								[
+									h.Type("button"),
+									h.Class(styles.control()),
+									h.AriaLabel(`Open ${html.title} full screen`),
+									h.OnClick(
+										toMessage(
+											HtmlRender.Message.ClickedFullscreen({ ref, title: html.title }),
+										),
+									),
+								],
+								[IconMaximize(h), "Full screen"],
+							),
 						],
-						[row.isExpanded ? "Show less" : "Show more"],
 					)
 				: h.empty,
 		],

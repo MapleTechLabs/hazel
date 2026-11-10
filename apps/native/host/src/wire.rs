@@ -388,6 +388,12 @@ pub enum RuntimeMsg {
     /// Report the element at `path`'s rect now: it was laid out before the runtime observed it.
     #[serde(rename = "measure")]
     Measure { path: String },
+    /// `contentWindow.postMessage(data)` on the `<iframe>` at `path`.
+    #[serde(rename = "framePost")]
+    FramePost {
+        path: String,
+        data: serde_json::Value,
+    },
     /// A full page load (`location.assign`, `reload()`): start a fresh runtime at `path`.
     #[serde(rename = "reload")]
     Reload { path: String },
@@ -439,6 +445,9 @@ impl RuntimeMsg {
                         serde_json::json!({ "t": "files", "path": path, "files": files }),
                     );
                 });
+            })),
+            RuntimeMsg::FramePost { path, data } => Some(Box::new(move |_: &mut rune::Tx| {
+                crate::frames::post(&path, &data)
             })),
             RuntimeMsg::Reveal { path, block } if block == "center" => {
                 Some(Box::new(move |tx: &mut rune::Tx| tx.scroll_center(path)))
