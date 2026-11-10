@@ -17,10 +17,10 @@
  * | `organization.created` | account + an `account.created` timeline entry |
  * | `organization.updated` | account (name, logo, seats, slug) |
  * | `organization.deleted` | the ref goes stale; the account is soft-deleted with no live ref left |
- * | `organizationMembership.created` | account + contact (role, `joinedAt`) → `contact.joined` |
- * | `organizationMembership.updated` | account + contact's role |
+ * | `organizationMembership.created` | the account by ref only + contact (role, `joinedAt`) → `contact.joined` |
+ * | `organizationMembership.updated` | the account by ref only + contact's role |
  * | `organizationMembership.deleted` | contact removed → `contact.removed` (never the account) |
- * | `user.created` / `user.updated` | one contact per membership Clerk lists for the user |
+ * | `user.created` / `user.updated` | one contact per membership Clerk lists for the user, and its `last_active_at` day |
  * | `user.deleted` | nothing (see below) |
  * | `session.created` | the contact (`lastSignInAt`) and, in one account, the day's activity (`signedIn`) |
  *
@@ -28,10 +28,14 @@
  * one account, with no request to Clerk: the contact is matched by its Clerk user id. An unscoped
  * one asks Clerk for the user's memberships and moves `lastSignInAt` in each, but credits the day
  * only when there is exactly one (else it would count once per organization). An impersonation
- * session (`actor` set) writes nothing: the user did not sign in.
+ * session (`actor` set) writes nothing: the user did not sign in. A session for an organization
+ * Hazel does not hold yet (its `organization.created` not delivered) parks its contact and day; the
+ * sweep credits the user's `last_active_at` day once the account exists.
  *
  * **Calls to Clerk.** `user.*` and unscoped `session.created` payloads carry no memberships, so they
- * ask Clerk for the user's (`GET /users/{id}/organization_memberships`, one request, never retried
+ * ask Clerk for the user's (`GET /users/{id}/organization_memberships`, one request of up to
+ * {@link USER_MEMBERSHIPS_LIMIT}, Clerk's cap: a user in more organizations is placed in those only
+ * until the sweep, which lists every membership; never retried
  * in place: a delivery must answer before Svix times out, and a 429 means the instance is busy). If
  * that request fails the delivery is still acknowledged (2xx) with what is known and the next sweep
  * fills the rest: failing it would have Svix redeliver it, each retry another request to a Clerk
@@ -88,9 +92,16 @@ const decodeAs = <A>(schema: Schema.Decoder<A>, data: unknown, type: string) =>
 		),
 	)
 
+/** Clerk's largest page: the one request a delivery makes covers a user in this many organizations. */
+const USER_MEMBERSHIPS_LIMIT = 500
+
 /** The user's memberships Clerk lists; `None` when Clerk could not be asked. Never fails the delivery. */
 const membershipsOfUser = (get: ClerkGet, userId: string) =>
-	get(`/users/${userId}/organization_memberships`, [["limit", "100"]], ClerkMembershipsPage).pipe(
+	get(
+		`/users/${encodeURIComponent(userId)}/organization_memberships`,
+		[["limit", String(USER_MEMBERSHIPS_LIMIT)]],
+		ClerkMembershipsPage,
+	).pipe(
 		Effect.map((page) => Option.some(page.data)),
 		Effect.catchTag("CustomerProviderError", (error) =>
 			Effect.logWarning("Clerk user's memberships could not be listed", {

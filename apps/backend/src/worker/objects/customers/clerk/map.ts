@@ -13,12 +13,14 @@
  *   `customer_external_refs` allows for contacts (`(provider, externalId, accountId)`). Role and
  *   `joinedAt` come from the membership, profile and activity from the user.
  * - **Activity.** Clerk keeps only the *latest* `last_sign_in_at` / `last_active_at` per user, not
- *   a per-day history, and not which organization the user was active in, so a user record moves
- *   only the contact's `lastSignInAt` / `lastSeenAt` and writes no activity day (one per account
- *   would credit every organization the user belongs to). The per-day signal is the
- *   `session.created` webhook, credited to one account only. Clerk never reports how many sessions
- *   a day held, so it writes `sessionCount: 1` as a floor and owns `signedIn`; event counts stay
- *   Maple's.
+ *   a per-day history, and not which organization the user was active in. A user record (the
+ *   sweep, `user.updated`) moves the contact's `lastSignInAt` / `lastSeenAt` and credits the
+ *   `last_active_at` day in *every* account the user is a member of (`signedIn` when it is also the
+ *   `last_sign_in_at` day): a user in several organizations over-credits recency to the ones they
+ *   were not active in, which beats every Clerk-only account reading as never active. The
+ *   `session.created` webhook credits its day to one account. Clerk never reports how many
+ *   sessions a day held, so it writes `sessionCount: 1` as a floor and owns `signedIn`; event
+ *   counts stay Maple's.
  * - **Ordering.** Account and contact ops carry `observedAt`, so a late delivery cannot revive a
  *   record deleted since: a webhook's is the record's `updated_at` (else the event's time), a
  *   pull's the time it asked Clerk (a listing proves the record live then). Identity ops never set
@@ -32,6 +34,7 @@ import type {
 	IngestOp,
 	IsoTimestamp,
 	ProviderRef,
+	RecordActivity,
 	RecordEvent,
 	UpsertAccount,
 	UpsertContact,
@@ -92,6 +95,22 @@ export const accountOp = (
 	return op
 }
 
+/** An account op that names only the organization: it places what names it, and sets no field. */
+const accountRefOp = (
+	organizationId: string,
+	onNoMatch: OnNoMatch,
+	observedAt: IsoTimestamp | undefined,
+): Types.Mutable<UpsertAccount> => {
+	const op: Types.Mutable<UpsertAccount> = {
+		_tag: "account",
+		externalId: organizationId,
+		sameAs: [],
+		onNoMatch,
+	}
+	if (observedAt !== undefined) op.observedAt = observedAt
+	return op
+}
+
 /**
  * The organization's verified domains, merged into the account. Ingest only ever adds domains
  * (`UpsertAccount.domains`), so one Clerk unverifies or removes stays on the account.
@@ -102,34 +121,20 @@ export const domainsAccountOp = (
 	domains: ReadonlyArray<string>,
 	onNoMatch: OnNoMatch,
 	observedAt?: IsoTimestamp,
-): UpsertAccount => {
-	const op: Types.Mutable<UpsertAccount> = {
-		_tag: "account",
-		externalId: organizationId,
-		domains,
-		sameAs: [],
-		// A domain alone is no reason to invent a customer: the organization sweep creates those.
-		onNoMatch: onNoMatch === "create" ? "unmatched" : onNoMatch,
-	}
-	if (observedAt !== undefined) op.observedAt = observedAt
-	return op
-}
+): UpsertAccount => ({
+	// A domain alone is no reason to invent a customer: the organization sweep creates those.
+	...accountRefOp(organizationId, onNoMatch === "create" ? "unmatched" : onNoMatch, observedAt),
+	domains,
+})
 
 /**
  * The organization is gone. `observedAt` (the event's time) dates the deletion, so a late delivery
  * observed before it leaves the account deleted.
  */
-export const accountDeletedOp = (organizationId: string, observedAt?: IsoTimestamp): UpsertAccount => {
-	const op: Types.Mutable<UpsertAccount> = {
-		_tag: "account",
-		externalId: organizationId,
-		sameAs: [],
-		onNoMatch: "unmatched",
-		deleted: true,
-	}
-	if (observedAt !== undefined) op.observedAt = observedAt
-	return op
-}
+export const accountDeletedOp = (organizationId: string, observedAt?: IsoTimestamp): UpsertAccount => ({
+	...accountRefOp(organizationId, "unmatched", observedAt),
+	deleted: true,
+})
 
 /** A contact that only names the user and their account; every field it carries is left as it is. */
 const bareContactOp = (
@@ -184,6 +189,27 @@ export const contactOp = (input: {
 	const joinedAt = isoOf(membership.created_at) ?? isoOf(user?.created_at)
 	if (joinedAt !== null) op.joinedAt = joinedAt
 	if (input.removed === true) op.removed = true
+	return op
+}
+
+/**
+ * The user's `last_active_at` day in one account (see the module doc on over-crediting), a sign-in
+ * when it is also the `last_sign_in_at` day. Comes after the contact op: ingest parks activity for a
+ * contact it does not know.
+ */
+const lastActiveOp = (user: ClerkUser, organizationId: string): RecordActivity | null => {
+	const activeAt = isoOf(user.last_active_at)
+	if (activeAt === null) return null
+	const day = dayOf(new Date(activeAt))
+	const signInAt = isoOf(user.last_sign_in_at)
+	const op: Types.Mutable<RecordActivity> = {
+		_tag: "activity",
+		contact: clerkRef(user.id),
+		account: clerkRef(organizationId),
+		day,
+		sessionCount: 1,
+	}
+	if (signInAt !== null && dayOf(new Date(signInAt)) === day) op.signedIn = true
 	return op
 }
 
@@ -244,9 +270,11 @@ export const accountCreatedEvent = (org: ClerkOrganization, occurredAt: IsoTimes
 
 /**
  * A membership, its organization and its user, in the order ingest needs: the account exists
- * before the contact that names it. A removal writes only the
- * contact: its organization may be going too (a deleted organization's memberships go with it), and
- * an account op would revive it.
+ * before the contact that names it, and the contact before its activity day. The account op names
+ * the organization only: the membership's copy of it may be older than what an
+ * `organization.updated` already wrote, so it never sets the account's fields. A removal writes only
+ * the contact: its organization may be going too (a deleted organization's memberships go with it),
+ * and an account op would revive it.
  */
 export const membershipOps = (input: {
 	readonly membership: ClerkMembership
@@ -257,12 +285,15 @@ export const membershipOps = (input: {
 	readonly withAccount?: boolean
 	readonly observedAt?: IsoTimestamp | undefined
 }): Array<IngestOp> => {
-	const org = input.membership.organization
-	const organizationId = org?.id
+	const organizationId = input.membership.organization?.id
 	if (organizationId === undefined) return []
 	const ops: Array<IngestOp> = []
-	if (input.withAccount !== false && input.removed !== true && org !== undefined)
-		ops.push(accountOp(org, input.onNoMatch, input.observedAt))
+	if (input.withAccount !== false && input.removed !== true) {
+		ops.push({
+			...accountRefOp(organizationId, input.onNoMatch, input.observedAt),
+			externalUrl: organizationUrlOf(organizationId),
+		})
+	}
 	const contact = contactOp({
 		membership: input.membership,
 		organizationId,
@@ -270,6 +301,10 @@ export const membershipOps = (input: {
 		removed: input.removed === true,
 		observedAt: input.observedAt,
 	})
-	if (contact !== null) ops.push(contact)
+	if (contact === null) return ops
+	ops.push(contact)
+	const activity =
+		input.user === undefined || input.removed === true ? null : lastActiveOp(input.user, organizationId)
+	if (activity !== null) ops.push(activity)
 	return ops
 }

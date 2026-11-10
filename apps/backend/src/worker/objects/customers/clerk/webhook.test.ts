@@ -19,7 +19,7 @@ import {
 	SESSION_ADA_NO_ORG,
 	USER_ADA,
 } from "./fixtures"
-import { makeClerkGet } from "./http"
+import { makeClerkGet, WEBHOOK_REQUESTS } from "./http"
 import { type FakeClerkState, fakeClerkHttpClient, makeFakeClerk } from "./testing"
 import { receiveWebhook } from "./webhook"
 import { signSvix } from "../svix"
@@ -38,7 +38,9 @@ const fake = makeFakeClerk({
 })
 
 /** The adapter's webhook `get`, over the fake Clerk: no 429 is waited out in place. */
-const getOf = Effect.map(HttpClient.HttpClient, (client) => makeClerkGet(client, Redacted.make(API_KEY), 0))
+const getOf = Effect.map(HttpClient.HttpClient, (client) =>
+	makeClerkGet(client, Redacted.make(API_KEY), WEBHOOK_REQUESTS),
+)
 
 const deliver = (
 	body: string,
@@ -155,6 +157,15 @@ describe("Clerk webhook events", () => {
 	it("organizationMembership.created writes the account then the contact with its role", async () => {
 		const ops = await run(deliver(envelope("organizationMembership.created", MEMBERSHIP_ADA_ADMIN)))
 		expect(tags(ops)).toEqual(["account", "contact"])
+		// The membership's copy of the organization may be older than what Hazel holds: ref only.
+		expect(ops[0]).toEqual({
+			_tag: "account",
+			externalId: ORG_ACME.id,
+			externalUrl: `https://dashboard.clerk.com/last-active?path=organizations/${ORG_ACME.id}`,
+			sameAs: [],
+			onNoMatch: "create",
+			observedAt: expect.any(String),
+		})
 		expect(ops[1]).toMatchObject({
 			externalId: USER_ADA.id,
 			account: { provider: "clerk", externalId: ORG_ACME.id },
@@ -171,7 +182,7 @@ describe("Clerk webhook events", () => {
 		expect(ops[0]).toMatchObject({ removed: true, observedAt: "2026-11-10T08:21:01.000Z" })
 	})
 
-	it("user.updated asks Clerk for the user's memberships and writes one contact per account", async () => {
+	it("user.updated asks Clerk for the user's memberships and writes one contact and day per account", async () => {
 		const before = fake.calls.length
 		const ops = await run(deliver(envelope("user.updated", USER_ADA)))
 		expect(fake.calls.slice(before).map((call) => call.path)).toEqual([
@@ -183,8 +194,15 @@ describe("Clerk webhook events", () => {
 			["ada@acme.com", "2026-11-10T08:21:00.000Z"],
 			["ada@acme.com", "2026-11-10T08:21:00.000Z"],
 		])
-		// No activity day: the user record does not say which organization they were active in.
-		expect(tags(ops)).toEqual(["contact", "contact"])
+		// The `last_active_at` day in every account: Clerk does not say which one it was.
+		expect(tags(ops)).toEqual(["contact", "activity", "contact", "activity"])
+		expect(ops[1]).toEqual({
+			_tag: "activity",
+			contact: { provider: "clerk", externalId: USER_ADA.id },
+			account: { provider: "clerk", externalId: ORG_ACME.id },
+			day: "2026-11-10",
+			sessionCount: 1,
+		})
 	})
 
 	it("acknowledges user.updated when Clerk is throttling, without waiting it out", async () => {

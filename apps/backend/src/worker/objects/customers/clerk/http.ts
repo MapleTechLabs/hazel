@@ -7,7 +7,9 @@
  * - 429 → for a pull, retried in place while Clerk's `Retry-After` is short (cheaper than a whole
  *   alarm round trip), then `rate_limited` carrying `retryAfterMs`. Core keeps the run open at its
  *   cursor and resumes it after that delay. A webhook's requests are never retried in place.
- * - 5xx → `provider`; unreachable → `network`. Both retryable: the run resumes after core's backoff.
+ * - 5xx → `provider`; unreachable, or no answer within the request's timeout (30 s on a pull, 5 s
+ *   on the webhook path, which must answer Svix) → `network`. Both retryable: the run resumes after
+ *   core's backoff.
  * - A body Hazel cannot read (Clerk changed its API) → `provider`, not retryable: the run fails with
  *   a message saying so rather than retrying the same page forever.
  *
@@ -26,6 +28,17 @@ const MAX_INLINE_RETRY_MS = 5_000
 const MAX_INLINE_RETRIES = 2
 /** `Retry-After` is optional on a 429; assume a second. */
 const DEFAULT_RETRY_AFTER_MS = 1_000
+
+/** How one GET behaves: 429s waited out in place, and how long one attempt may take. */
+interface ClerkGetOptions {
+	readonly inlineRetries: number
+	readonly timeoutMs: number
+}
+
+const PULL_REQUESTS: ClerkGetOptions = { inlineRetries: MAX_INLINE_RETRIES, timeoutMs: 30_000 }
+
+/** A delivery answers fast: no 429 waited out in place, and a short timeout. */
+export const WEBHOOK_REQUESTS: ClerkGetOptions = { inlineRetries: 0, timeoutMs: 5_000 }
 
 /** The read endpoints this integration may call. */
 export type ClerkPath =
@@ -146,14 +159,11 @@ const unreadable = (route: string, status: number, detail: string) =>
 		),
 	)
 
-/**
- * The caller holds the key; `clerkGet` is curried over the client so the adapter binds it once.
- * `inlineRetries`: how many 429s one GET waits out in place (none on the webhook path).
- */
+/** The caller holds the key; `clerkGet` is curried over the client so the adapter binds it once. */
 export const makeClerkGet = (
 	client: HttpClient.HttpClient,
 	apiKey: Redacted.Redacted<string>,
-	inlineRetries = MAX_INLINE_RETRIES,
+	{ inlineRetries, timeoutMs }: ClerkGetOptions = PULL_REQUESTS,
 ) => {
 	/** One request: its JSON body, or the failure Clerk's answer maps to. */
 	const once = Effect.fn("Clerk.request")(function* (path: ClerkPath, query: ClerkQuery) {
@@ -185,7 +195,22 @@ export const makeClerkGet = (
 	const withRetry = Effect.fn("Clerk.get")(function* (path: ClerkPath, query: ClerkQuery) {
 		yield* Effect.annotateCurrentSpan({ "peer.service": "clerk", "url.template": routeOf(path) })
 		for (let retries = 0; ; retries++) {
-			const result = yield* Effect.result(once(path, query))
+			const result = yield* Effect.result(
+				once(path, query).pipe(
+					Effect.timeoutOrElse({
+						duration: timeoutMs,
+						orElse: () =>
+							Effect.fail(
+								new CustomerProviderError({
+									code: "network",
+									message: `Clerk did not answer GET ${routeOf(path)} within ${timeoutMs / 1000} s`,
+									httpStatus: null,
+									retryAfterMs: null,
+								}),
+							),
+					}),
+				),
+			)
 			if (Result.isSuccess(result)) {
 				yield* Effect.annotateCurrentSpan("clerk.retries", retries)
 				return result.success

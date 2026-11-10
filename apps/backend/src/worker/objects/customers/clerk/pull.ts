@@ -5,7 +5,7 @@
  * | Phase | Request | Writes | Requests per page |
  * |---|---|---|---|
  * | `organizations` | `/organizations?include_members_count=true` | accounts, incl. ones with no members | 1 |
- * | `members` | `/organization_memberships` + one batched `/users?user_id=…` | contacts, roles, last sign-ins | 2 |
+ * | `members` | `/organization_memberships` + one batched `/users?user_id=…` | contacts, roles, last active days | 2 |
  * | `domains` | `/organization_domains?verified=true` | the accounts' domains | 1 |
  *
  * `/organization_memberships` carries each membership's whole organization and public user data,
@@ -25,9 +25,11 @@
  * shifts them back, which offset paging would skip, so each page re-reads the last
  * {@link PAGE_OVERLAP} rows of the one before, and the cursor keeps the previous page's last id: if
  * it is not among those re-read rows, more were deleted than the overlap covers (or rows created in
- * the same millisecond came back in another order) and something may have been skipped. The sweep
- * then goes on but is `partial`, and its last page sets no `sweep`: nothing is removed on the
- * strength of a listing that may have missed a record. Ops carry the time Clerk was asked as
+ * the same millisecond came back in another order) and something may have been skipped. Clerk
+ * orders rows created in the same millisecond no fixed way, so a page ending in at least
+ * {@link PAGE_OVERLAP} of them may see the next request list one it never read before the rows it
+ * re-reads. Either way the sweep goes on but is `partial`, and its last page sets no `sweep`:
+ * nothing is removed on the strength of a listing that may have missed a record. Ops carry the time Clerk was asked as
  * `observedAt`, so a record removed wrongly all the same comes back on the next sweep.
  */
 import type { ConnectionConfig, IngestOp, IsoTimestamp, SyncProgress } from "@hazel/domain/customers"
@@ -78,24 +80,40 @@ const NEXT_PHASE = {
 /** Where a page starts: a little before the cursor, to re-read what a deletion shifted past it. */
 const startOf = (cursor: ClerkCursor): number => Math.max(0, cursor.offset - PAGE_OVERLAP)
 
-/** One page of a phase: its ops, the ids of the rows Clerk listed, in order, and Clerk's total. */
+interface Row {
+	readonly id: string
+	readonly created_at?: number | null | undefined
+}
+
+/** One page of a phase: its ops, the rows Clerk listed, in order, and Clerk's total. */
 interface Listing {
 	readonly ops: ReadonlyArray<IngestOp>
-	readonly ids: ReadonlyArray<string>
+	readonly rows: ReadonlyArray<Row>
 	readonly total: number | undefined
 }
 
 /** The previous page's last row is not among the rows this page re-read: rows shifted past it. */
-const shiftedPast = (cursor: ClerkCursor, ids: ReadonlyArray<string>): boolean =>
-	cursor.lastId !== undefined && !ids.slice(0, PAGE_OVERLAP).includes(cursor.lastId)
+const shiftedPast = (cursor: ClerkCursor, rows: ReadonlyArray<Row>): boolean =>
+	cursor.lastId !== undefined && !rows.slice(0, PAGE_OVERLAP).some((row) => row.id === cursor.lastId)
 
-const pageOf = (cursor: ClerkCursor, { ops, ids, total }: Listing, partial: boolean): PullPage => {
-	const done = startOf(cursor) + ids.length
-	const exhausted = ids.length < PAGE_SIZE || (total !== undefined && done >= total)
+/** The phase has no rows past this page. */
+const exhaustedBy = (cursor: ClerkCursor, { rows, total }: Listing): boolean =>
+	rows.length < PAGE_SIZE || (total !== undefined && startOf(cursor) + rows.length >= total)
+
+/** At least {@link PAGE_OVERLAP} rows end the page created in the same millisecond. */
+const tiedAtEnd = (rows: ReadonlyArray<Row>): boolean => {
+	const tail = rows.slice(-PAGE_OVERLAP)
+	return tail.length === PAGE_OVERLAP && tail.every((row) => row.created_at === tail[0]?.created_at)
+}
+
+const pageOf = (cursor: ClerkCursor, listing: Listing, partial: boolean): PullPage => {
+	const { ops, rows, total } = listing
+	const done = startOf(cursor) + rows.length
+	const exhausted = exhaustedBy(cursor, listing)
 	const flag = partial ? { partial: true as const } : {}
 	const nextPhase = NEXT_PHASE[cursor.phase]
 	// A page that is not the phase's last is full, so it has a last row.
-	const lastId = ids.at(-1)
+	const lastId = rows.at(-1)?.id
 	const next: ClerkCursor | null =
 		!exhausted && lastId !== undefined
 			? { phase: cursor.phase, offset: done, lastId, ...flag }
@@ -123,7 +141,7 @@ const organizationsPage = (get: ClerkGet, cursor: ClerkCursor, onNoMatch: OnNoMa
 		get("/organizations", query(cursor, [["include_members_count", "true"]]), ClerkOrganizationsPage),
 		(body): Listing => ({
 			ops: body.data.map((org) => accountOp(org, onNoMatch, at)),
-			ids: body.data.map((org) => org.id),
+			rows: body.data,
 			total: body.total_count,
 		}),
 	)
@@ -172,7 +190,7 @@ const membersPage = Effect.fn("Clerk.membersPage")(function* (
 	)
 	return {
 		ops: [...accounts, ...members],
-		ids: body.data.map((membership) => membership.id),
+		rows: body.data,
 		total: body.total_count,
 	}
 })
@@ -190,7 +208,7 @@ const domainsPage = (get: ClerkGet, cursor: ClerkCursor, onNoMatch: OnNoMatch, a
 			const ops = [...byOrganization].map(([organizationId, names]) =>
 				domainsAccountOp(organizationId, names, onNoMatch, at),
 			)
-			return { ops, ids: body.data.map((domain) => domain.id), total: body.total_count }
+			return { ops, rows: body.data, total: body.total_count }
 		},
 	)
 
@@ -213,20 +231,23 @@ export const pullPage = Effect.fn("Clerk.pullPage")(function* (input: {
 			: cursor.phase === "members"
 				? yield* membersPage(input.get, cursor, onNoMatch, at)
 				: yield* domainsPage(input.get, cursor, onNoMatch, at)
-	const shifted = shiftedPast(cursor, listing.ids)
-	if (shifted) {
+	const shifted = shiftedPast(cursor, listing.rows)
+	const tied = !exhaustedBy(cursor, listing) && tiedAtEnd(listing.rows)
+	if (shifted || tied) {
 		yield* Effect.logWarning("Clerk sweep may have skipped rows; it will remove nothing at its end", {
 			phase: cursor.phase,
 			offset: startOf(cursor),
+			reason: shifted ? "shifted" : "created_at_ties",
 		})
 	}
-	const page = pageOf(cursor, listing, cursor.partial === true || shifted)
+	const page = pageOf(cursor, listing, cursor.partial === true || shifted || tied)
 	yield* Effect.annotateCurrentSpan({
 		"clerk.phase": cursor.phase,
 		"clerk.offset": startOf(cursor),
-		"clerk.received": listing.ids.length,
+		"clerk.received": listing.rows.length,
 		"clerk.total_count": listing.total ?? -1,
 		"clerk.shifted": shifted,
+		"clerk.tied": tied,
 		"clerk.sweep_complete": page.sweep !== undefined,
 	})
 	return page

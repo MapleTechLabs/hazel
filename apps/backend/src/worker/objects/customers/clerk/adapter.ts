@@ -20,7 +20,7 @@ import { Effect } from "effect"
 import { HttpClient } from "effect/http"
 import { CustomerProviderError } from "../provider-errors"
 import type { CustomerProviderAdapter, ProviderCredentials } from "../providers"
-import { makeClerkGet } from "./http"
+import { makeClerkGet, WEBHOOK_REQUESTS } from "./http"
 import { onNoMatchOf } from "./map"
 import { pullPage } from "./pull"
 import { receiveWebhook } from "./webhook"
@@ -83,8 +83,8 @@ export const makeClerkAdapter = Effect.gen(function* () {
 			credentials.webhookSecret === null
 				? Effect.die("Clerk webhook called without a signing secret")
 				: receiveWebhook({
-						// A delivery answers fast: a 429 is not waited out in place (`./webhook.ts`).
-						get: makeClerkGet(client, credentials.apiKey, 0),
+						// A delivery answers fast (`./http.ts`, `./webhook.ts`).
+						get: makeClerkGet(client, credentials.apiKey, WEBHOOK_REQUESTS),
 						headers: request.headers,
 						body: request.body,
 						webhookSecret: credentials.webhookSecret,

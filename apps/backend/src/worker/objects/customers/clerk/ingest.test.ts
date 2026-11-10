@@ -3,8 +3,11 @@
  * ops this adapter produces have to resolve the identities they name, merge domains, land a
  * session's activity day and stay idempotent across a redelivery.
  */
-import { Effect, Schema, type Scope } from "effect"
+import { Effect, Redacted, Schema, type Scope } from "effect"
+import { HttpClient } from "effect/http"
 import { describe, expect, it } from "vitest"
+import { runCompute } from "../compute"
+import type { PullPage } from "../providers"
 import { type CustomersWorld, makeCustomersWorld } from "../test-kit"
 import {
 	DOMAIN_ACME,
@@ -12,13 +15,17 @@ import {
 	MEMBERSHIP_ADA_ADMIN,
 	MEMBERSHIP_ADA_GLOBEX,
 	MEMBERSHIP_GRACE_MEMBER,
+	membership,
 	ORG_ACME,
 	ORG_GLOBEX,
 	SESSION_ADA,
 	USER_ADA,
 	USER_GRACE,
 } from "./fixtures"
+import { makeClerkGet } from "./http"
 import { accountDeletedOp, accountOp, domainsAccountOp, membershipOps, sessionOps } from "./map"
+import { pullPage } from "./pull"
+import { fakeClerkHttpClient, makeFakeClerk } from "./testing"
 import { ClerkMembership, ClerkOrganization, ClerkSession, ClerkUser } from "./wire"
 
 const org = Schema.decodeUnknownSync(ClerkOrganization)
@@ -86,7 +93,7 @@ const refs = (world: CustomersWorld) =>
 	)
 
 describe("Clerk ops through CustomerIngest", () => {
-	it("creates the accounts and their members, with no activity day a user record cannot place", () =>
+	it("creates the accounts and their members, crediting each the user's last active day", () =>
 		run(
 			Effect.gen(function* () {
 				const world = yield* makeCustomersWorld
@@ -140,9 +147,12 @@ describe("Clerk ops through CustomerIngest", () => {
 					},
 				])
 
-				// Ada's last sign-in does not say which of her two organizations it was in: a sweep writes
-				// no activity day, so neither account is credited with it.
-				expect(activity(world)).toEqual([])
+				// Clerk does not say which of Ada's two organizations she was last active in: both are
+				// credited the day. She signed in the day before, so neither day is a sign-in.
+				expect(activity(world)).toEqual([
+					{ day: "2026-11-10", signedIn: 0, sessionCount: 1, account: "Acme Analytics" },
+					{ day: "2026-11-10", signedIn: 0, sessionCount: 1, account: "Globex" },
+				])
 
 				// The Clerk org id is the account's ref — the shared id Stripe, Autumn and Maple match on.
 				expect(refs(world)).toEqual([
@@ -205,8 +215,10 @@ describe("Clerk ops through CustomerIngest", () => {
 						credit: true,
 					}),
 				)
+				// The sweep's day in each account; the session's sign-in in the one it names.
 				expect(activity(world)).toEqual([
 					{ day: "2026-11-10", signedIn: 1, sessionCount: 1, account: "Acme Analytics" },
+					{ day: "2026-11-10", signedIn: 0, sessionCount: 1, account: "Globex" },
 				])
 				// Matched by the Clerk user id: the contact keeps what the session does not say.
 				expect(
@@ -322,7 +334,9 @@ describe("Clerk ops through CustomerIngest", () => {
 						`SELECT type FROM customer_events WHERE type LIKE 'contact.%' ORDER BY type`,
 					),
 				).toEqual([
-					// A sweep writes no activity day, so no one is first active yet.
+					// Ada, active in both accounts as far as the sweep can tell; Grace never was.
+					{ type: "contact.first_active" },
+					{ type: "contact.first_active" },
 					{ type: "contact.joined" },
 					{ type: "contact.joined" },
 					{ type: "contact.joined" },
@@ -349,6 +363,64 @@ describe("Clerk ops through CustomerIngest", () => {
 					{ provider: "clerk", entityType: "account", label: "Acme Analytics" },
 					{ provider: "clerk", entityType: "account", label: "Globex" },
 				])
+			}),
+		))
+
+	it("a Clerk-only customer whose members were active yesterday reads as active, not stalled", () =>
+		run(
+			Effect.gen(function* () {
+				const now = new Date()
+				const daysAgo = (days: number) => now.getTime() - days * 86_400_000
+				// Twenty days old: inside the default onboarding window, where two active members are enough.
+				const organization = { ...ORG_ACME, created_at: daysAgo(20), updated_at: daysAgo(20) }
+				const users = [USER_ADA, USER_GRACE].map((clerkUser) => ({
+					...clerkUser,
+					last_sign_in_at: daysAgo(3),
+					last_active_at: daysAgo(1),
+				}))
+				const clerk = makeFakeClerk({
+					secretKey: "sk_test_fake000000000000000000",
+					organizations: [organization],
+					memberships: users.map((clerkUser, index) =>
+						membership({
+							id: `orgmem_${index}`,
+							organization,
+							userId: clerkUser.id,
+							identifier: `${clerkUser.id}@acme.com`,
+							createdAt: daysAgo(20 - index),
+						}),
+					),
+					users,
+				})
+				const world = yield* makeCustomersWorld
+				// The real sweep, page by page, as the alarm runs it.
+				const get = yield* Effect.map(HttpClient.HttpClient, (client) =>
+					makeClerkGet(client, Redacted.make(clerk.secretKey)),
+				).pipe(Effect.provide(fakeClerkHttpClient(clerk)))
+				let cursor: string | null = null
+				do {
+					const page: PullPage = yield* pullPage({
+						get,
+						cursor,
+						config: { _tag: "clerk", createAccounts: true },
+					})
+					yield* world.ingest("clerk", page.ops)
+					cursor = page.nextCursor
+				} while (cursor !== null)
+				expect(world.rows(`SELECT count(*) AS n FROM customer_unmatched_records`)).toEqual([{ n: 0 }])
+
+				yield* world.object.run(runCompute(now)).pipe(Effect.orDie)
+				const [account] = world.rows<{ healthStatus: string; healthScore: number | null }>(
+					`SELECT healthStatus, healthScore FROM customer_accounts`,
+				)
+				expect(account!.healthStatus).not.toBe("critical")
+				expect(account!.healthScore).not.toBeNull()
+				expect(
+					world.rows(
+						`SELECT template FROM customer_signals
+						 WHERE template IN ('onboarding_stalled', 'inactive', 'champion_inactive') AND status = 'open'`,
+					),
+				).toEqual([])
 			}),
 		))
 })

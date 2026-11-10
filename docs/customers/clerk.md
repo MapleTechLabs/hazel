@@ -71,10 +71,11 @@ not decode, the wrong instance) and acknowledges every event type it does not ha
 | user primary email                                  | `contact.email`                                                            |
 | user `first_name` + `last_name` (else `username`)   | `contact.name`                                                             |
 | user `image_url` (when `has_image`)                 | `contact.avatarUrl`                                                        |
-| user `last_sign_in_at`                              | `contact.lastSignInAt` (no activity day)                                   |
-| user `last_active_at`                               | `contact.lastSeenAt` (no activity day)                                     |
+| user `last_sign_in_at`                              | `contact.lastSignInAt`; `signedIn` on the activity day when it is that day |
+| user `last_active_at`                               | `contact.lastSeenAt` + that day's activity in every account of the user    |
 | `session.created`                                   | the contact's `lastSignInAt` / `lastSeenAt` + one account's `signedIn` day |
-| `user.updated`                                      | the user's contact in every account Clerk lists them in                    |
+| `user.updated`                                      | the user's contact and activity day in every account Clerk lists them in   |
+| membership webhooks' `organization`                 | the account's ref only: never its name, logo or seats                      |
 | `organization.created`                              | `account.created` timeline event                                           |
 
 Ingest raises `contact.joined`, `contact.removed` and `contact.first_active` itself, so the adapter
@@ -95,10 +96,15 @@ which is exactly what `customer_external_refs` allows for contacts (unique on
 so Ada can be an admin of one customer and a billing manager of another.
 
 **Activity.** Clerk keeps only the _latest_ `last_sign_in_at` / `last_active_at` per user, never a
-per-day history, and never which organization it was in, so a user record (a sweep, `user.updated`)
-moves the contacts' `lastSignInAt` / `lastSeenAt` and writes no activity day: one per account would
-credit every organization of a user in several. The per-day signal is the `session.created`
-webhook, credited to one account:
+per-day history, and never which organization it was in. A user record (a sweep, `user.updated`)
+moves the contacts' `lastSignInAt` / `lastSeenAt` and credits the `last_active_at` UTC day, in
+**every** account the user is a member of, with `signedIn` when it is also the `last_sign_in_at`
+day. A user in several organizations therefore over-credits recency to the ones they were not
+active in; without it a Clerk-only account would have no activity day at all, read as never
+active, score near critical on health and raise `onboarding_stalled` / `inactive` /
+`champion_inactive` for customers using the product. The activity op follows its contact op, since
+ingest parks activity for a contact it does not know. The `session.created` webhook adds the
+day's sign-in, credited to one account:
 
 - a session scoped to an organization (`last_active_organization_id`) credits that one, without a
   request to Clerk: the contact op names only the Clerk user id and the account, so it lands on the
@@ -112,7 +118,9 @@ Clerk never says how many sessions a day held, so Clerk writes `sessionCount: 1`
 
 **Partial user data.** A membership webhook names its user only through `public_user_data`; what that
 does not say (an `identifier` that is no email address, no name, no `has_image`) is left as stored
-rather than cleared.
+rather than cleared. Its copy of the organization may be older than what `organization.updated`
+already wrote, so its account op carries the organization's ref only (creating the account, named by
+its id, if the organization's own events have not arrived yet).
 
 ## Syncing
 
@@ -122,7 +130,7 @@ phases, held in the run's cursor so an evicted object resumes where it stopped:
 | Phase           | Request                                                      | Writes                                   | Requests per page |
 | --------------- | ------------------------------------------------------------ | ---------------------------------------- | ----------------- |
 | `organizations` | `/organizations?include_members_count=true`                  | accounts, including ones with no members | 1                 |
-| `members`       | `/organization_memberships` + one batched `/users?user_id=…` | contacts, roles, last sign-ins           | 2                 |
+| `members`       | `/organization_memberships` + one batched `/users?user_id=…` | contacts, roles, last active days        | 2                 |
 | `domains`       | `/organization_domains?verified=true`                        | the accounts' domains                    | 1                 |
 
 `/organization_memberships` carries each membership's whole organization and public user data, so
@@ -142,13 +150,15 @@ each page re-reads the previous page's last 10 rows, and the cursor keeps that p
 it is not among the re-read rows, more were deleted than the overlap covers (or rows created in the
 same millisecond came back in another order: Clerk documents no tie-breaker), so the sweep carries
 on as `partial` and its last page sets no `sweep`: nothing is removed on a listing that may have
-missed a record. A record removed wrongly all the same comes back on the next sweep, whose ops are
+missed a record. A page that ends in 10 or more rows created in the same millisecond is `partial`
+too: the next request may list one of them before the rows it re-reads. A record removed wrongly all the same comes back on the next sweep, whose ops are
 observed after the removal.
 
 Failures: 401/403 → `auth` (the run fails, the connection goes to `error`, pulls stop until the
 key changes; the message carries Clerk's explanation, truncated); 429 → waited out in place while
 Clerk's `Retry-After` is ≤ 5 s, otherwise `rate_limited` with that delay; 5xx → `provider`;
-unreachable → `network`. Those are retryable: the run stays `running` at its cursor and the next
+unreachable, or no answer within 30 s (5 s for the one request a webhook makes, which must answer
+Svix) → `network`. Those are retryable: the run stays `running` at its cursor and the next
 attempt resumes the sweep from the failed page, after `Retry-After` or core's backoff. Messages
 reach every member, so other refusals name only the route and status, never Clerk's text. A body that does not decode (Clerk changed its API) is a
 `provider` error that is not retried: the run fails with a message saying so, and the decode
@@ -165,6 +175,12 @@ failure is logged by path and issue kind only, never with the payload.
   `GET /users/{id}/organization_memberships`, never retried in place (a delivery must answer before
   Svix times out). If that request fails the delivery is still acknowledged (2xx) and the next sweep
   fills the rest: refusing it would have Svix redeliver it into a Clerk that is already refusing.
+  The request asks for 500 memberships (Clerk's largest page) and does not page further: a user in
+  more organizations is updated in the first 500 only, until the next sweep.
+- **A session for an organization Hazel does not hold yet** (its `organization.created` not
+  delivered, or `createAccounts` off) parks its contact and its sign-in day. The next sweep credits
+  the user's `last_active_at` day once the account exists, so that day is lost only when the user
+  was active again on a later day before the sweep ran.
 - **A scoped session before its membership webhook** creates the contact from the Clerk user id
   alone (no email yet); the membership webhook then fills it in. Should a contact with that email
   already exist in the account from another source and with no Clerk ref, the two are not merged.

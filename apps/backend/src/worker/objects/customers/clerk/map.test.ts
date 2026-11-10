@@ -188,13 +188,57 @@ describe("timestamps", () => {
 })
 
 describe("membershipOps", () => {
-	it("orders the account before the contact that names it, and writes no activity day", () => {
-		// Clerk's last sign-in does not say which of the user's organizations it was in.
+	it("orders the account, then the contact that names it, then its last active day", () => {
+		const ops = membershipOps({
+			membership: member(MEMBERSHIP_ADA_ADMIN),
+			user: ada,
+			onNoMatch: "create",
+		})
+		expect(ops.map((op) => op._tag)).toEqual(["account", "contact", "activity"])
+		// Ada was last active on the 10th but signed in on the 9th: no sign-in that day.
+		expect(ops[2]).toEqual({
+			_tag: "activity",
+			contact: { provider: "clerk", externalId: ada.id },
+			account: { provider: "clerk", externalId: acme.id },
+			day: "2026-11-10",
+			sessionCount: 1,
+		})
+	})
+
+	it("credits a sign-in when the last active day is also the last sign-in day", () => {
+		const signedInThatDay = user({ ...USER_ADA, last_sign_in_at: USER_ADA.last_active_at + 3_600_000 })
+		const ops = membershipOps({
+			membership: member(MEMBERSHIP_ADA_ADMIN),
+			user: signedInThatDay,
+			onNoMatch: "create",
+		})
+		expect(ops[2]).toMatchObject({ _tag: "activity", day: "2026-11-10", signedIn: true })
+	})
+
+	it("writes no activity day for a user Clerk has never seen active, or with no user record", () => {
 		expect(
-			membershipOps({ membership: member(MEMBERSHIP_ADA_ADMIN), user: ada, onNoMatch: "create" }).map(
+			membershipOps({
+				membership: member(MEMBERSHIP_GRACE_MEMBER),
+				user: grace,
+				onNoMatch: "create",
+			}).map((op) => op._tag),
+		).toEqual(["account", "contact"])
+		expect(
+			membershipOps({ membership: member(MEMBERSHIP_ADA_ADMIN), onNoMatch: "create" }).map(
 				(op) => op._tag,
 			),
 		).toEqual(["account", "contact"])
+	})
+
+	it("names the organization by ref only, so a membership's stale copy cannot revert it", () => {
+		const [account] = membershipOps({ membership: member(MEMBERSHIP_ADA_ADMIN), onNoMatch: "create" })
+		expect(account).toEqual({
+			_tag: "account",
+			externalId: acme.id,
+			externalUrl: `https://dashboard.clerk.com/last-active?path=organizations/${acme.id}`,
+			sameAs: [],
+			onNoMatch: "create",
+		})
 	})
 
 	it("skips the account when the sweep already wrote it in this page", () => {
@@ -205,7 +249,7 @@ describe("membershipOps", () => {
 				onNoMatch: "create",
 				withAccount: false,
 			}).map((op) => op._tag),
-		).toEqual(["contact"])
+		).toEqual(["contact", "activity"])
 	})
 
 	it("writes only the contact for a removal: no account op to revive a deleted org", () => {

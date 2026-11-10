@@ -57,6 +57,14 @@ const answering = (respond: () => Response) =>
 	)
 const tags = (ops: ReadonlyArray<IngestOp>) => ops.map((op) => op._tag)
 
+/** `count` organizations, oldest first, each created a millisecond after the one before. */
+const organizations = (count: number) =>
+	Array.from({ length: count }, (_, index) => ({
+		...ORG_GLOBEX,
+		id: `org_${String(index).padStart(20, "0")}`,
+		created_at: ORG_GLOBEX.created_at + index,
+	}))
+
 /** Walk the whole sweep, as the alarm does: each page's `nextCursor` drives the next call. */
 const sweep = async (fake: FakeClerkState) => {
 	const pages: Array<{
@@ -113,9 +121,17 @@ describe("the Clerk sweep", () => {
 		const [organizations, members, domains] = await sweep(instance())
 		expect(tags(organizations!.ops)).toEqual(["account", "account"])
 
-		// Both organizations once each, before any contact that names them. No activity day: Clerk
-		// does not say which organization a user was last active in, and Ada is in two.
-		expect(tags(members!.ops)).toEqual(["account", "account", "contact", "contact", "contact"])
+		// Both organizations once each, before any contact that names them; each contact before its
+		// last active day (Grace has none).
+		expect(tags(members!.ops)).toEqual([
+			"account",
+			"account",
+			"contact",
+			"activity",
+			"contact",
+			"contact",
+			"activity",
+		])
 		expect(
 			members!.ops
 				.filter((op): op is UpsertAccount => op._tag === "account")
@@ -155,10 +171,7 @@ describe("the Clerk sweep", () => {
 	})
 
 	it("pages a phase until Clerk runs out, re-reading the last rows of the page before", async () => {
-		const many = Array.from({ length: PAGE_SIZE + 20 }, (_, index) => ({
-			...ORG_GLOBEX,
-			id: `org_${String(index).padStart(20, "0")}`,
-		}))
+		const many = organizations(PAGE_SIZE + 20)
 		const fake = instance({ organizations: many })
 		const first = await run(page(fake, null))
 		expect(first.ops).toHaveLength(PAGE_SIZE)
@@ -181,10 +194,7 @@ describe("the Clerk sweep", () => {
 	})
 
 	it("sees every organization when some are deleted mid-sweep", async () => {
-		const many = Array.from({ length: PAGE_SIZE + 20 }, (_, index) => ({
-			...ORG_GLOBEX,
-			id: `org_${String(index).padStart(20, "0")}`,
-		}))
+		const many = organizations(PAGE_SIZE + 20)
 		const fake = instance({ organizations: many })
 		const first = await run(page(fake, null))
 		// Three organizations of the first page are deleted before the second is asked for.
@@ -197,10 +207,7 @@ describe("the Clerk sweep", () => {
 	})
 
 	it("removes nothing at the end of a sweep when more rows were deleted than the overlap re-reads", async () => {
-		const many = Array.from({ length: PAGE_SIZE + 20 }, (_, index) => ({
-			...ORG_GLOBEX,
-			id: `org_${String(index).padStart(20, "0")}`,
-		}))
+		const many = organizations(PAGE_SIZE + 20)
 		const first = await run(page(instance({ organizations: many }), null))
 		// More deletions before the cursor than the overlap: rows shifted past the next page's start.
 		const remaining = many.filter((_, index) => index < 3 || index > PAGE_OVERLAP + 3)
@@ -211,6 +218,36 @@ describe("the Clerk sweep", () => {
 		const domains = await run(page(fake, members.nextCursor))
 		expect(domains.nextCursor).toBeNull()
 		expect(domains.sweep).toBeUndefined()
+	})
+
+	it("removes nothing at the end of a sweep whose page ends in more same-millisecond rows than it re-reads", async () => {
+		// Clerk orders rows created in the same millisecond no fixed way: the next request may list
+		// one of the tied rows before the ones it re-reads.
+		const many = organizations(PAGE_SIZE + 20).map((org, index) =>
+			index >= PAGE_SIZE - PAGE_OVERLAP
+				? { ...org, created_at: ORG_GLOBEX.created_at + PAGE_SIZE }
+				: org,
+		)
+		const fake = instance({ organizations: many })
+		const first = await run(page(fake, null))
+		expect(first.nextCursor).toBe(
+			encodeCursor({
+				phase: "organizations",
+				offset: PAGE_SIZE,
+				lastId: many[PAGE_SIZE - 1]!.id,
+				partial: true,
+			}),
+		)
+		// Fewer ties than the overlap are re-read whole: the sweep stays complete.
+		const fewer = organizations(PAGE_SIZE + 20).map((org, index) =>
+			index >= PAGE_SIZE - PAGE_OVERLAP + 1
+				? { ...org, created_at: ORG_GLOBEX.created_at + PAGE_SIZE }
+				: org,
+		)
+		const whole = await run(page(instance({ organizations: fewer }), null))
+		expect(decodeCursor(whole.nextCursor)).toEqual(
+			Option.some({ phase: "organizations", offset: PAGE_SIZE, lastId: fewer[PAGE_SIZE - 1]!.id }),
+		)
 	})
 
 	it("skips the users request for a membership page with no public user data", async () => {
@@ -330,6 +367,26 @@ describe("when Clerk refuses", () => {
 			httpStatus: null,
 			message: "Could not reach Clerk (TransportError)",
 		})
+	})
+
+	it("maps a Clerk that does not answer in time to a retryable `network` failure", async () => {
+		const silent = Layer.succeed(
+			HttpClient.HttpClient,
+			HttpClient.make(() => Effect.never),
+		)
+		const error = await run(
+			Effect.gen(function* () {
+				const fiber = yield* Effect.forkChild(Effect.flip(pageOver(silent, null)))
+				yield* TestClock.adjust(30_000)
+				return yield* Fiber.join(fiber)
+			}).pipe(Effect.provide(TestClock.layer())),
+		)
+		expect(error).toMatchObject({
+			code: "network",
+			httpStatus: null,
+			message: "Clerk did not answer GET /organizations within 30 s",
+		})
+		expect(error.retryable).toBeUndefined()
 	})
 
 	it("fails the run, without retrying, on a body it cannot read", async () => {

@@ -88,6 +88,7 @@ export const ClerkOrganizationDomain = Schema.Struct({
 	id: Schema.String,
 	organization_id: Schema.String,
 	name: Schema.String,
+	created_at: Nullable(Schema.Number),
 })
 export type ClerkOrganizationDomain = typeof ClerkOrganizationDomain.Type
 
