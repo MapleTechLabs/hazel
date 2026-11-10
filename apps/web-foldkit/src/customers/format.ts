@@ -50,6 +50,7 @@ export const formatMoneyCompact = (
 ): string => {
 	const text = currencyFormat(currency, {
 		notation: "compact",
+		minimumFractionDigits: 0,
 		maximumFractionDigits: 1,
 	}).format(Math.abs(toMajor(minor, currency)))
 	return withSign(minor, text, options.signed ?? false)
