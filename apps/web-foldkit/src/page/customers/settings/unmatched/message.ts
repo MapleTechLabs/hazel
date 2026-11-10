@@ -56,6 +56,8 @@ export const Message = defineMessageUnion({
 	PressedDeleteRule: { ruleId: CustomerIgnoreRuleId },
 
 	SucceededRecordAction: { recordId: CustomerUnmatchedRecordId, action: RecordAction },
+	/** Ignored, and its pattern saved as an ignore rule. */
+	SucceededIgnoreWithRule: { recordId: CustomerUnmatchedRecordId },
 	FailedRecordAction: {
 		recordId: CustomerUnmatchedRecordId,
 		action: RecordAction,

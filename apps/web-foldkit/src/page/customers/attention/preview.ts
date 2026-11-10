@@ -222,7 +222,8 @@ export const previewPanel = (
 		[
 			h.AriaLabel(`${account.name}: ${signal.title}`),
 			h.Class(
-				"flex w-[440px] shrink-0 flex-col overflow-y-auto border-border border-l bg-bg max-lg:hidden",
+				// Below lg it slides over the queue (a row press opens it there too).
+				"flex w-[440px] shrink-0 flex-col overflow-y-auto border-border border-l bg-bg max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-30 max-lg:max-w-full max-lg:shadow-lg",
 			),
 		],
 		[

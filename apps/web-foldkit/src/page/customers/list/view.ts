@@ -31,16 +31,16 @@ import { menuLabel, view as menuView } from "../../../ui/menu-view"
 import * as Modal from "../../../ui/modal"
 import * as Popover from "../../../ui/popover"
 import type { PageViewInputs } from "../../contract"
-import { PositionHoverCard, ScrollListRowIntoView } from "./commands"
+import { LetModifierClicksThrough, PositionHoverCard, ScrollListRowIntoView } from "./commands"
 import { chipOf, columnPicker, filterBuilder } from "./controls"
 import { Message } from "./message"
 import {
+	accountsPerOwner,
 	activeFields,
 	bestFilterToRemove,
 	canDeleteView,
 	canUpdateView,
 	COLUMN_NAME,
-	countMatching,
 	currentTab,
 	effectiveFilters,
 	HOVER_CARD_ID,
@@ -50,6 +50,7 @@ import {
 	OWNER_NONE,
 	ownerEntries,
 	parseSortKey,
+	ROW_PAGE,
 	SEARCH_ID,
 	shownColumns,
 	sortEntries,
@@ -57,6 +58,7 @@ import {
 	userIdOfOwnerKey,
 	viewMenuEntries,
 	type Viewer,
+	viewTabCounts,
 	viewTabsOf,
 	visibleAccounts,
 } from "./model"
@@ -131,13 +133,12 @@ const header = (
 ): Html => {
 	const tab = currentTab(model)
 	const mrr = rows.reduce((sum, account) => sum + account.mrrMinor, 0)
-	const currency = model.accounts?.[0]?.currency ?? "USD"
 	const subtitle =
 		model.accounts === null
 			? "Loading…"
 			: tab.key === null
 				? "Every account from Clerk, Stripe, Autumn and Maple, merged into one list."
-				: `${formatCount(rows.length)} account${rows.length === 1 ? "" : "s"} in ${tab.name}, worth ${formatMoney(mrr, currency)} MRR.`
+				: `${formatCount(rows.length)} account${rows.length === 1 ? "" : "s"} in ${tab.name}, worth ${formatMoney(mrr, model.reportingCurrency)} MRR.`
 	return h.div(
 		[h.Class("flex items-start justify-between gap-4")],
 		[
@@ -186,7 +187,7 @@ const VIEW_MENU_LABEL = {
 } as const
 
 const tabsRow = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html => {
-	const accounts = model.accounts ?? []
+	const counts = viewTabCounts(model, viewer)
 	const tabs = viewTabsOf(model.views)
 	const current = currentTab(model)
 	const edited = isEdited(model)
@@ -196,7 +197,7 @@ const tabsRow = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html =>
 		tabs: tabs.map((tab) => ({
 			key: tab.key ?? "",
 			label: tab.name,
-			count: model.accounts === null ? undefined : countMatching(accounts, tab.draft.filters, viewer),
+			count: model.accounts === null ? undefined : counts.get(tab.key),
 		})),
 		selected: current.key ?? "",
 		onSelect: (key) => Message.ClickedViewTab({ key: key === "" ? null : key }),
@@ -254,7 +255,7 @@ const tabsRow = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html =>
 // CONTROLS
 
 const controls = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, count: number): Html => {
-	const currency = model.accounts?.[0]?.currency ?? "USD"
+	const currency = model.reportingCurrency
 	return filterBar(h, {
 		start: [
 			searchBox(h, {
@@ -286,6 +287,7 @@ const controls = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, count: 
 								accounts: model.accounts ?? [],
 								members: model.members,
 								search: model.search,
+								currency,
 								viewer,
 								closeAttributes,
 							}),
@@ -493,10 +495,10 @@ const bulkBar = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer, total: n
 						key === OWNER_ME
 							? (model.members.find((entry) => entry.id === viewer.userId) ?? { name: "Me" })
 							: (member ?? null)
-					const count = (model.accounts ?? []).filter(
-						(account) =>
-							account.ownerUserId === (key === OWNER_ME ? viewer.userId : (member?.id ?? null)),
-					).length
+					const count =
+						accountsPerOwner(model.accounts).get(
+							key === OWNER_ME ? viewer.userId : (member?.id ?? null),
+						) ?? 0
 					return [
 						h.span(
 							[h.DataAttribute("slot", "icon"), h.Class("inline-flex")],
@@ -726,9 +728,7 @@ const firstRun = (h: HtmlBuilder<Message>, orgSlug: string, nowMs: number): Html
 const noResults = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): Html => {
 	const best = bestFilterToRemove(model, viewer)
 	const chip =
-		best === null
-			? null
-			: chipOf(best.field, model.draft.filters, model.members, model.accounts?.[0]?.currency ?? "USD")
+		best === null ? null : chipOf(best.field, model.draft.filters, model.members, model.reportingCurrency)
 	const label = chip === null ? null : `${chip.field} ${chip.operator} ${chip.value}`.replace(/\s+/g, " ")
 	return h.div(
 		[h.Class("flex flex-col items-center gap-4 py-16")],
@@ -780,6 +780,7 @@ const table = (
 ): Html => {
 	const context: TableContext = {
 		orgSlug,
+		currency: model.reportingCurrency,
 		nowMs: viewer.nowMs,
 		membersById: new Map(model.members.map((member) => [member.id, member])),
 		sparklines: model.sparklines,
@@ -797,13 +798,13 @@ const table = (
 	const columns = tableColumns(h, shownColumns(model.draft.columns), rows, context)
 	const isLoading = model.accounts === null
 	return h.div(
-		[h.Id(TABLE_ID)],
+		[h.Id(TABLE_ID), h.OnMount(LetModifierClicksThrough())],
 		[
 			dataTable(h, {
 				ariaLabel: "Customers",
 				id: "customers-list",
 				columns,
-				rows,
+				rows: rows.slice(0, model.rowLimit),
 				rowKey: (account) => account.id,
 				sort: { key: model.draft.sort.column, direction: model.draft.sort.direction },
 				onSort: (column) => Message.ClickedSortHeader({ column }),
@@ -822,6 +823,23 @@ const table = (
 				className: "rounded-none border-x-0",
 				loadingRows: isLoading ? 12 : undefined,
 			}),
+			...(rows.length > model.rowLimit
+				? [
+						h.div(
+							[h.Class("flex items-center justify-center gap-3 py-4 text-muted-fg text-sm")],
+							[
+								`Showing ${formatCount(model.rowLimit)} of ${formatCount(rows.length)}`,
+								button(
+									h,
+									{ intent: "outline", size: "sm", onPress: Message.PressedShowMoreRows() },
+									[
+										`Show ${formatCount(Math.min(ROW_PAGE, rows.length - model.rowLimit))} more`,
+									],
+								),
+							],
+						),
+					]
+				: []),
 			...(model.focusedId === null
 				? []
 				: [

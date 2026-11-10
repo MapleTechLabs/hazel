@@ -34,6 +34,7 @@ import {
 	type Draft,
 	FILTER_POPOVER_ID,
 	type ListKey,
+	keepVisibleSelection,
 	missingSparklines,
 	type Model,
 	moveColumn,
@@ -42,6 +43,7 @@ import {
 	OWNER_MENU_ID,
 	OWNER_NONE,
 	parseSortKey,
+	ROW_PAGE,
 	SAVE_MODAL_ID,
 	sameDraft,
 	SORT_MENU_ID,
@@ -84,9 +86,11 @@ export const init = (route: Route): Return => {
 			members: [],
 			connectedProviders: null,
 			lastComputedAtMs: null,
+			reportingCurrency: "USD",
 			sparklines: {},
 			requestedSparklines: [],
 			selected: [],
+			rowLimit: ROW_PAGE,
 			focusedId: null,
 			hoverPendingId: null,
 			hoveredId: null,
@@ -113,6 +117,7 @@ export const routeChanged = (model: Model, route: Route): Return => {
 			view: () => view,
 			draft: () => currentTab({ view, views: model.views }).draft,
 			selected: () => [],
+			rowLimit: () => ROW_PAGE,
 			focusedId: () => null,
 			builder: () => null,
 		}),
@@ -135,8 +140,15 @@ const withSparklines = (result: Return, shared: Shared): Return => {
 	}
 }
 
+/** Other rows show: back to the first page of them, and the selection keeps only what still shows. */
+const withRows = (model: Model, shared: Shared): Return =>
+	withSparklines(
+		{ model: keepVisibleSelection(modifyFields(model, { rowLimit: () => ROW_PAGE }), viewerOf(shared)) },
+		shared,
+	)
+
 const withDraft = (model: Model, shared: Shared, change: (draft: Draft) => Draft): Return =>
-	withSparklines({ model: modifyFields(model, { draft: change }) }, shared)
+	withRows(modifyFields(model, { draft: change }), shared)
 
 // VIEWS
 
@@ -387,7 +399,13 @@ const move = (model: Model, shared: Shared, step: 1 | -1): Return => {
 	if (ids.length === 0) return { model }
 	const index = model.focusedId === null ? -1 : ids.indexOf(model.focusedId)
 	const next = index < 0 ? 0 : Math.min(ids.length - 1, Math.max(0, index + step))
-	return { model: modifyFields(model, { focusedId: () => ids[next] ?? null }) }
+	return {
+		model: modifyFields(model, {
+			focusedId: () => ids[next] ?? null,
+			// The cursor walking past the rendered rows renders the next page.
+			rowLimit: (limit) => (next < limit ? limit : limit + ROW_PAGE),
+		}),
+	}
 }
 
 const toggleSelected = (model: Model, accountId: CustomerAccountId, isSelected: boolean): Model =>
@@ -403,7 +421,7 @@ const toggleSelected = (model: Model, accountId: CustomerAccountId, isSelected: 
 const onKey = (model: Model, shared: Shared, key: ListKey): Return => {
 	switch (key) {
 		case "next":
-			return move(model, shared, 1)
+			return withSparklines(move(model, shared, 1), shared)
 		case "previous":
 			return move(model, shared, -1)
 		case "open":
@@ -423,10 +441,28 @@ const onKey = (model: Model, shared: Shared, key: ListKey): Return => {
 
 // UPDATE
 
+/**
+ * The page is keyed by org, but a Command's answer reaches whichever list instance is open: one for
+ * the org shown before is dropped.
+ */
+const isForOtherOrg = (message: Message, shared: Shared) =>
+	"organizationId" in message && message.organizationId !== shared.organization?.id
+
 export const update = (model: Model, message: Message, shared: Shared): Return =>
+	isForOtherOrg(message, shared) ? { model } : updateOwn(model, message, shared)
+
+const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
 		UpdatedAccounts: ({ accounts }) =>
-			withSparklines({ model: modifyFields(model, { accounts: () => accounts }) }, shared),
+			withSparklines(
+				{
+					model: keepVisibleSelection(
+						modifyFields(model, { accounts: () => accounts }),
+						viewerOf(shared),
+					),
+				},
+				shared,
+			),
 		UpdatedSignals: ({ signals }) => ({ model: modifyFields(model, { signals: () => signals }) }),
 		UpdatedViews: ({ views }) => {
 			// Unedited, the draft follows its view (it synced, or someone changed it).
@@ -441,14 +477,16 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		UpdatedConnectedProviders: ({ providers }) => ({
 			model: modifyFields(model, { connectedProviders: () => providers }),
 		}),
-		UpdatedLastComputedAt: ({ lastComputedAtMs }) => ({
-			model: modifyFields(model, { lastComputedAtMs: () => lastComputedAtMs }),
+		UpdatedSettings: ({ lastComputedAtMs, reportingCurrency }) => ({
+			model: modifyFields(model, {
+				lastComputedAtMs: () => lastComputedAtMs,
+				reportingCurrency: () => reportingCurrency,
+			}),
 		}),
 
 		ClickedViewTab: ({ key }) => navigateToView(model, shared, key),
-		ChangedSearch: ({ value }) =>
-			withSparklines({ model: modifyFields(model, { search: () => value }) }, shared),
-		ClearedSearch: () => ({ model: modifyFields(model, { search: () => "" }) }),
+		ChangedSearch: ({ value }) => withRows(modifyFields(model, { search: () => value }), shared),
+		ClearedSearch: () => withRows(modifyFields(model, { search: () => "" }), shared),
 		ClickedSortHeader: ({ column }) =>
 			withDraft(model, shared, (draft) => ({ ...draft, sort: nextSort(draft.sort, column) })),
 		ClearedFilter: ({ field }) =>
@@ -602,6 +640,8 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		PressedExport: ({ scope }) => exportCsv(model, shared, scope),
 		CompletedExport: () => ({ model }),
 
+		PressedShowMoreRows: () =>
+			withSparklines({ model: modifyFields(model, { rowLimit: (limit) => limit + ROW_PAGE }) }, shared),
 		ClickedRow: ({ accountId }) => openCustomer(model, shared, accountId),
 		PressedListKey: ({ key }) => onKey(model, shared, key),
 		HoveredRow: ({ accountId }) =>
@@ -642,4 +682,5 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		CompletedFocusSearch: () => ({ model }),
 		CompletedScrollRow: () => ({ model }),
 		CompletedPositionHoverCard: () => ({ model }),
+		CompletedLetModifierClicksThrough: () => ({ model }),
 	})

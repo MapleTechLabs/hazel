@@ -14,6 +14,7 @@ import { PageOutMessage } from "../../../out-message"
 import { sharedDefaults } from "../../../test-shared"
 import * as Slider from "../../../../ui/slider"
 import { DelayHealthPreview, FetchHealthCheckDetail, FetchHealthDryRun, SaveHealthSettings } from "./commands"
+import { numberText } from "./fields"
 import { Message } from "./message"
 import { invalidFieldsOf, isDirty, type Model, scaledWeights, validDraftOf, weightTotal } from "./model"
 import { init, update } from "./update"
@@ -149,7 +150,10 @@ describe("health settings: bands and steps", () => {
 	})
 
 	test("typed bands may cross, and then the draft is invalid", () => {
-		const crossed = pageUpdate(loaded(), Message.ChangedBand({ band: "atRiskMin", value: 80 })).model
+		const crossed = pageUpdate(
+			loaded(),
+			Message.ChangedBand({ band: "atRiskMin", value: 80, text: "80" }),
+		).model
 		expect(invalidFieldsOf(crossed.draft ?? DEFAULTS)).toEqual(new Set(["healthyMin", "atRiskMin"]))
 		expect(validDraftOf(crossed)).toBeNull()
 	})
@@ -157,25 +161,61 @@ describe("health settings: bands and steps", () => {
 	test("steps out of order or out of range are flagged", () => {
 		const unordered = pageUpdate(
 			loaded(),
-			Message.ChangedStep({ list: "daysSinceActive", index: 1, field: "threshold", value: 0 }),
+			Message.ChangedStep({
+				list: "daysSinceActive",
+				index: 1,
+				field: "threshold",
+				value: 0,
+				text: "0",
+			}),
 		).model
 		expect(invalidFieldsOf(unordered.draft ?? DEFAULTS).has("daysSinceActive.1.threshold")).toBe(true)
 		const tooHigh = pageUpdate(
 			loaded(),
-			Message.ChangedStep({ list: "trend", index: 0, field: "score", value: 120 }),
+			Message.ChangedStep({ list: "trend", index: 0, field: "score", value: 120, text: "120" }),
 		).model
 		expect(invalidFieldsOf(tooHigh.draft ?? DEFAULTS).has("trend.0.score")).toBe(true)
 		const emptied = pageUpdate(
 			loaded(),
-			Message.ChangedScore({ field: "pastDue", value: Number.NaN }),
+			Message.ChangedScore({ field: "pastDue", value: Number.NaN, text: "" }),
 		).model
 		expect(invalidFieldsOf(emptied.draft ?? DEFAULTS).has("pastDue")).toBe(true)
 		expect(validDraftOf(emptied)).toBeNull()
 		const ratio = pageUpdate(
 			loaded(),
-			Message.ChangedStep({ list: "activeRatio", index: 0, field: "threshold", value: 0.5 }),
+			Message.ChangedStep({
+				list: "activeRatio",
+				index: 0,
+				field: "threshold",
+				value: 0.5,
+				text: "50",
+			}),
 		).model
 		expect(validDraftOf(ratio)?.steps.usage.activeRatio[0]).toEqual({ min: 0.5, score: 100 })
+	})
+})
+
+describe("health settings: typing numbers", () => {
+	test("a minus or a trailing point stays in the field while it is typed", () => {
+		const minus = pageUpdate(
+			loaded(),
+			Message.ChangedStep({
+				list: "trend",
+				index: 0,
+				field: "threshold",
+				value: Number.NaN,
+				text: "-",
+			}),
+		).model
+		expect(numberText(minus.typing, "trend.0.threshold", Number.NaN)).toBe("-")
+		const point = pageUpdate(
+			loaded(),
+			Message.ChangedScore({ field: "pastDue", value: 1, text: "1." }),
+		).model
+		expect(numberText(point.typing, "pastDue", 1)).toBe("1.")
+		// Another value (a reset, a discard) shows the value, not the old text.
+		expect(numberText(point.typing, "pastDue", 5)).toBe("5")
+		expect(numberText(point.typing, "trend.0.score", 1)).toBe("1")
 	})
 })
 

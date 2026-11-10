@@ -1,5 +1,6 @@
 import type * as Customers from "@hazel/domain/customers"
 import {
+	CustomerAccountId,
 	CustomerContactId,
 	CustomerEventId,
 	CustomerInvoiceId,
@@ -359,26 +360,38 @@ const page = <A>(items: ReadonlyArray<A>, cursor: unknown, size = 10) => {
 /** The fixture answer to a read Command; none for a Command that stays local or goes nowhere. */
 const answer = (command: AnyCommand, current: typeof State.Type): Message | null | "local" => {
 	const args = (command.args ?? {}) as Record<string, unknown>
+	// Every read names the account it asked about; the answer carries it back.
+	const accountId = () => Schema.decodeUnknownSync(CustomerAccountId)(args.accountId)
 	switch (command.name) {
 		case "FetchCustomerDetail":
 			return current === "loading"
 				? null
 				: current === "not-found"
-					? Message.FailedFetchDetail({ reason: "NotFound" })
-					: Message.SucceededFetchDetail({ detail: detailFor(current) })
+					? Message.FailedFetchDetail({ accountId: accountId(), reason: "NotFound" })
+					: Message.SucceededFetchDetail({ accountId: accountId(), detail: detailFor(current) })
 		case "FetchCustomerUsage": {
 			const range = args.range as Customers.CustomersRange
 			const metricKey = String(args.metricKey)
-			return Message.SucceededFetchUsage({ metricKey, range, series: [usageOf(metricKey, range)] })
+			return Message.SucceededFetchUsage({
+				accountId: accountId(),
+				metricKey,
+				range,
+				series: [usageOf(metricKey, range)],
+			})
 		}
 		case "FetchCustomerMrrHistory":
 			return Message.SucceededFetchMrrHistory({
+				accountId: accountId(),
 				series: current === "excluded-health" ? [] : [MRR_HISTORY],
 			})
 		case "FetchCustomerContacts":
-			return Message.SucceededFetchContacts({ page: page(CONTACTS, args.cursor, 50) })
+			return Message.SucceededFetchContacts({
+				accountId: accountId(),
+				page: page(CONTACTS, args.cursor, 50),
+			})
 		case "FetchCustomerInvoices":
 			return Message.SucceededFetchInvoices({
+				accountId: accountId(),
 				page: page(
 					current === "payment-failed"
 						? [...ACME_DETAIL.openInvoices, ...PAID_INVOICES]
@@ -395,6 +408,7 @@ const answer = (command: AnyCommand, current: typeof State.Type): Message | null
 					(types.length === 0 || types.some((prefix) => entry.type.startsWith(prefix))),
 			)
 			return Message.SucceededFetchEvents({
+				accountId: accountId(),
 				filter: String(args.filter),
 				page: page(matching, args.cursor, 6),
 			})

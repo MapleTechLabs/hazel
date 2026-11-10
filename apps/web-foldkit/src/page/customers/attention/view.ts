@@ -31,6 +31,7 @@ import {
 	ASSIGN_ME,
 	ASSIGN_NONE,
 	assignEntries,
+	canReopen,
 	filterEntries,
 	type Filters,
 	moreEntries,
@@ -140,13 +141,15 @@ const signalActions = (h: HtmlBuilder<Message>, model: Model, viewer: Viewer): R
 		onPress: Message.PressedMarkDone({ signalId: signal.id }),
 	})
 	if (model.tab === "done")
-		return [
-			queueAction(h, {
-				label: "Reopen",
-				icon: IconArrowPath(h, icon),
-				onPress: Message.PressedReopen({ signalId: signal.id }),
-			}),
-		]
+		return canReopen(signal)
+			? [
+					queueAction(h, {
+						label: "Reopen",
+						icon: IconArrowPath(h, icon),
+						onPress: Message.PressedReopen({ signalId: signal.id }),
+					}),
+				]
+			: []
 	if (model.tab === "snoozed")
 		return [
 			queueAction(h, {

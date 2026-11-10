@@ -12,6 +12,8 @@ export interface Context {
 	readonly total: number
 	readonly isDirty: boolean
 	readonly canEdit: boolean
+	/** `Model.typing`. */
+	readonly typing: Readonly<{ field: string; text: string }> | null
 }
 
 export type H = HtmlBuilder<Message>
@@ -39,34 +41,42 @@ export const cardTitle = (h: H, title: string, subtitle: string): Html =>
 export const textOf = (value: number): string => (Number.isNaN(value) ? "" : String(value))
 export const parseNumber = (text: string): number => (text.trim() === "" ? Number.NaN : Number(text))
 
-/** A compact number field for a step's threshold or score. */
+/** The field's text: what was typed in it while that still reads as `value` (`-`, `1.`), else the value. */
+export const numberText = (typing: Context["typing"], field: string, value: number): string =>
+	typing !== null && typing.field === field && Object.is(parseNumber(typing.text), value)
+		? typing.text
+		: textOf(value)
+
+/** A compact number field for a step's threshold or score; `field` is its `invalidFieldsOf` key. */
 export const numberInput = (
 	h: H,
+	context: Context,
 	options: Readonly<{
-		value: string
+		field: string
+		value: number
 		ariaLabel: string
-		isInvalid: boolean
-		isDisabled: boolean
 		onInput: (text: string) => Message
 		className?: string
 	}>,
-): Html =>
-	h.input([
+): Html => {
+	const isInvalid = context.invalid.has(options.field)
+	return h.input([
 		h.Type("text"),
 		h.InputMode("decimal"),
-		h.Value(options.value),
+		h.Value(numberText(context.typing, options.field, options.value)),
 		h.AriaLabel(options.ariaLabel),
-		h.AriaInvalid(options.isInvalid),
-		h.Disabled(options.isDisabled),
+		h.AriaInvalid(isInvalid),
+		h.Disabled(!context.canEdit),
 		h.OnInput(options.onInput),
 		h.Class(
 			twMerge(
 				"h-7 w-12 rounded-md border border-input bg-bg px-1.5 text-right text-fg text-xs tabular-nums outline-hidden focus-visible:border-ring/70 focus-visible:ring-3 focus-visible:ring-ring/20 disabled:opacity-60",
-				options.isInvalid && "border-danger focus-visible:border-danger focus-visible:ring-danger/20",
+				isInvalid && "border-danger focus-visible:border-danger focus-visible:ring-danger/20",
 				options.className,
 			),
 		),
 	])
+}
 
 /** A scoring rule's row: the condition (text and inputs) left, the points right. */
 export const ruleRow = (

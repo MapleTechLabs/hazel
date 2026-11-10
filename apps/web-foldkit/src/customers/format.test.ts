@@ -44,6 +44,15 @@ describe("money", () => {
 		expect(formatMoneyCompact(160_000_000)).toBe("$1.6M")
 		expect(formatMoneyCompact(360_000, "USD", { signed: true })).toBe("+$3.6K")
 	})
+
+	it("never shows a minus on zero, and survives an unknown currency", () => {
+		expect(formatMoney(-40)).toBe("$0")
+		expect(formatMoney(-40, "USD", { cents: true })).toBe("−$0.40")
+		expect(formatMoney(-50)).toBe("−$1")
+		expect(formatMoneyCompact(-4)).toBe("$0")
+		expect(formatMoney(123_456, "NOPE")).toBe("1,235 NOPE")
+		expect(formatMoneyCompact(-480_000, "NOPE")).toBe("−4.8K NOPE")
+	})
 })
 
 describe("numbers", () => {

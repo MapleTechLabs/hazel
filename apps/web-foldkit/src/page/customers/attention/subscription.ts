@@ -44,6 +44,10 @@ const isEditable = (target: EventTarget | null): boolean => {
 	)
 }
 
+/** A dialog or an open menu has the keyboard (its own focus and keys). */
+const isInOverlay = (target: EventTarget | null): boolean =>
+	elementOf(target)?.closest("dialog, [role=dialog], [role=menu]") != null
+
 /** Enter and Space keep activating a focused button or link. */
 const isPressable = (target: EventTarget | null): boolean =>
 	elementOf(target)?.closest("button, a, [role=menuitem]") != null
@@ -55,10 +59,20 @@ export const queueKeyOf = (event: {
 	readonly altKey: boolean
 	readonly ctrlKey: boolean
 	readonly metaKey: boolean
+	readonly repeat: boolean
 }): QueueKey | null => {
-	if (event.altKey || event.ctrlKey || event.metaKey || isEditable(event.target)) return null
+	if (
+		event.altKey ||
+		event.ctrlKey ||
+		event.metaKey ||
+		isEditable(event.target) ||
+		isInOverlay(event.target)
+	)
+		return null
 	const key = KEYS.get(event.key.length === 1 ? event.key.toLowerCase() : event.key)
 	if (key === undefined) return null
+	// Holding j/k walks the queue; a held action key acts once.
+	if (event.repeat && key !== "next" && key !== "previous") return null
 	if ((key === "open" || key === "preview") && isPressable(event.target)) return null
 	return key
 }
@@ -104,12 +118,16 @@ export const subscriptions = Subscription.make<Input, Message>()((entry) => ({
 						}),
 					),
 	}),
-	// Off while a root overlay, the done dialog or a menu holds the keyboard.
+	// Off while a root overlay, the done or snooze-date dialog, or a menu holds the keyboard.
 	keys: entry(
 		{ isActive: Schema.Boolean },
 		{
 			modelToDependencies: ({ model, shared }) => ({
-				isActive: !shared.isOverlayOpen && !model.doneModal.isOpen && !isMenuOpen(model),
+				isActive:
+					!shared.isOverlayOpen &&
+					!model.doneModal.isOpen &&
+					!model.snoozeDateModal.isOpen &&
+					!isMenuOpen(model),
 			}),
 			dependenciesToStream: ({ isActive }) =>
 				isActive

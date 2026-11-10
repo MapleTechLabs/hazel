@@ -41,6 +41,8 @@ import { userMenuFooter } from "./menus"
 // MODEL
 
 export const Model = Schema.Struct({
+	/** The organization the rows below are for (the root's); another one clears them. */
+	organizationId: Schema.NullOr(OrganizationId),
 	/** Open signals on accounts I own; null until the query answers. */
 	attentionCount: Schema.NullOr(Schema.Int),
 	/** Shared and my own views in tab order; null until the query answers (the built-ins show). */
@@ -48,23 +50,30 @@ export const Model = Schema.Struct({
 })
 export type Model = typeof Model.Type
 
-export const init = (): Model => ({ attentionCount: null, views: null })
+export const init = (): Model => ({ organizationId: null, attentionCount: null, views: null })
+
+/** The root's organization: switching to another drops the previous one's count and views. */
+export const setOrganization = (model: Model, organizationId: OrganizationId | null): Model =>
+	model.organizationId === organizationId ? model : { organizationId, attentionCount: null, views: null }
 
 // MESSAGE
 
+/** Each names its organization: a row still in flight from the previous one is dropped. */
 export const Message = defineMessageUnion({
-	UpdatedAttentionCount: { count: Schema.Int },
-	UpdatedSavedViews: { views: Schema.Array(SavedViewRow) },
+	UpdatedAttentionCount: { organizationId: OrganizationId, count: Schema.Int },
+	UpdatedSavedViews: { organizationId: OrganizationId, views: Schema.Array(SavedViewRow) },
 })
 export type Message = typeof Message.Type
 
 export const update = (model: Model, message: Message): { readonly model: Model } =>
-	Message.match(message, {
-		UpdatedAttentionCount: ({ count }) => ({
-			model: modifyFields(model, { attentionCount: () => count }),
-		}),
-		UpdatedSavedViews: ({ views }) => ({ model: modifyFields(model, { views: () => views }) }),
-	})
+	message.organizationId !== model.organizationId
+		? { model }
+		: Message.match(message, {
+				UpdatedAttentionCount: ({ count }) => ({
+					model: modifyFields(model, { attentionCount: () => count }),
+				}),
+				UpdatedSavedViews: ({ views }) => ({ model: modifyFields(model, { views: () => views }) }),
+			})
 
 // SUBSCRIPTIONS
 
@@ -84,7 +93,7 @@ export const subscriptions = Subscription.make<Input, Message>()((entry) => ({
 			organizationId === null || userId === null
 				? Stream.empty
 				: myOpenSignalCountStream(organizationId, userId, (count) =>
-						Message.UpdatedAttentionCount({ count }),
+						Message.UpdatedAttentionCount({ organizationId, count }),
 					),
 	}),
 	customersSavedViews: entry(dependencies, {
@@ -92,7 +101,9 @@ export const subscriptions = Subscription.make<Input, Message>()((entry) => ({
 		dependenciesToStream: ({ organizationId, userId }) =>
 			organizationId === null || userId === null
 				? Stream.empty
-				: savedViewsStream(organizationId, userId, (views) => Message.UpdatedSavedViews({ views })),
+				: savedViewsStream(organizationId, userId, (views) =>
+						Message.UpdatedSavedViews({ organizationId, views }),
+					),
 	}),
 }))
 

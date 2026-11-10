@@ -42,6 +42,7 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 		total: weightTotal(draft),
 		isDirty: isDirty(model),
 		canEdit,
+		typing: model.typing,
 	}
 	const isValid = validDraftOf(model) !== null
 	const gaps = model.accounts === null ? null : dataGapsOf(model.accounts)

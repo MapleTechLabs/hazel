@@ -218,12 +218,10 @@ describe("unmatched: loading", () => {
 		const extra = record(6, { provider: "stripe", label: "extra@corp.io" })
 		story(
 			pageUpdate,
-			given(loaded("cursor-2")),
+			given(loaded("50")),
 			message(Message.PressedLoadMore({ status: "open" })),
 			model((current) => expect(current.loadingMore).toBe("open")),
-			Command.expectExact(
-				FetchUnmatchedRecords({ organizationId, status: "open", cursor: "cursor-2" }),
-			),
+			Command.expectExact(FetchUnmatchedRecords({ organizationId, status: "open", cursor: "50" })),
 			Command.resolve(
 				FetchUnmatchedRecords,
 				Message.SucceededFetchRecords({
@@ -240,6 +238,16 @@ describe("unmatched: loading", () => {
 				expect(current.loadingMore).toBeNull()
 			}),
 		)
+	})
+
+	test("Load more starts earlier by the records resolved since: the cursor is an offset", () => {
+		const resolved = pageUpdate(
+			pageUpdate(loaded("50"), Message.PressedLinkSuggested({ recordId: northwindBilling.id })).model,
+			Message.SucceededRecordAction({ recordId: northwindBilling.id, action: "link" }),
+		).model
+		const more = pageUpdate(resolved, Message.PressedLoadMore({ status: "open" }))
+		expect(more.commands?.[0]?.args).toMatchObject({ cursor: "49" })
+		expect(more.model.resolvedSincePage).toBe(0)
 	})
 
 	test("the last page has no Load more", () => {
@@ -463,6 +471,30 @@ describe("unmatched: one record", () => {
 				expect(ids(itemsOf(current.ignored))).toEqual([ignoredRecord.id])
 			}),
 		)
+	})
+
+	test("Ignore all from a domain ignores every open record it covers, then reloads the rules", () => {
+		const sameDomain = record(7, {
+			provider: "stripe",
+			label: "billing@tallyhq.com",
+			domain: "TallyHQ.com",
+		})
+		const otherSource = record(8, { provider: "clerk", label: "ops@tallyhq.com", domain: "tallyhq.com" })
+		const withMore: Model = {
+			...loaded(),
+			open: AsyncData.Success({
+				data: { items: [...open, sameDomain, otherSource], nextCursor: null },
+			}),
+		}
+		const [openMenu, clickItem] = pick(tally, "ignore_domain")
+		const result = pageUpdate(pageUpdate(withMore, openMenu!).model, clickItem!)
+		expect(openIds(result.model)).not.toContain(sameDomain.id)
+		expect(openIds(result.model)).toContain(otherSource.id)
+		expect((result.commands ?? []).map((command) => command.name)).toEqual(
+			expect.arrayContaining(["IgnoreUnmatchedRecord", "IgnoreUnmatchedRecords"]),
+		)
+		const done = pageUpdate(result.model, Message.SucceededIgnoreWithRule({ recordId: tally.id }))
+		expect((done.commands ?? []).map((command) => command.name)).toEqual(["FetchUnmatchedIgnoreRules"])
 	})
 
 	test("members cannot act", () => {

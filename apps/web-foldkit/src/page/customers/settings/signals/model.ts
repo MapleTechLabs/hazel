@@ -83,7 +83,7 @@ export const Editor = Schema.Struct({
 	ruleId: Schema.NullOr(CustomerSignalRuleId),
 	/** Null until the rule has synced. */
 	form: Schema.NullOr(RuleForm),
-	/** Bumped on every edit: a dry-run answer for an older version is dropped. */
+	/** A fresh one per editor and per edit (`Model.lastVersion`): a dry-run answer for another is dropped. */
 	version: Schema.Int,
 	preview: DryRun.schema,
 	/** The usage chart's example account, among the preview's top matches. */
@@ -117,6 +117,8 @@ export const Model = Schema.Struct({
 	metrics: Schema.Array(MetricRow),
 	/** Null: the rules list. */
 	editor: Schema.NullOr(Editor),
+	/** The last dry-run version handed out, across editors: an answer for a rule left is never current. */
+	lastVersion: Schema.Int,
 	pickerModal: Modal.Model,
 	picker: Picker,
 	discardModal: Modal.Model,

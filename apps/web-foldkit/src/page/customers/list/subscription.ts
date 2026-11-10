@@ -112,8 +112,9 @@ export const subscriptions = Subscription.make<Input, Message>()((entry) => ({
 			organizationId === null
 				? Stream.empty
 				: settingsSummaryStream(organizationId, (settings) =>
-						Message.UpdatedLastComputedAt({
+						Message.UpdatedSettings({
 							lastComputedAtMs: settings?.lastComputedAtMs ?? null,
+							reportingCurrency: settings?.reportingCurrency ?? "USD",
 						}),
 					),
 	}),

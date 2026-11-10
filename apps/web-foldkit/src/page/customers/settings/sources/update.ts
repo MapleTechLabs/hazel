@@ -10,6 +10,7 @@ import type { AppRoute } from "../../../../route"
 import * as Modal from "../../../../ui/modal"
 import type { PageReturn, Shared } from "../../../contract"
 import { PageOutMessage } from "../../../out-message"
+import { isCustomersAdmin } from "../shared"
 import {
 	ConnectCustomerSource,
 	CopyCustomerWebhookUrl,
@@ -68,9 +69,10 @@ const seedFailureMessage = (reason: SeedFailure) =>
 
 // INIT
 
+/** The unmatched count is admins' (the RPC refuses members), so only they ask for it. */
 const fetchUnmatched = (model: Model, shared: Shared): Return => {
 	const organizationId = shared.organization?.id
-	return organizationId === undefined
+	return organizationId === undefined || !isCustomersAdmin(shared)
 		? { model }
 		: {
 				model: { ...model, unmatched: AsyncData.Loading() },
@@ -324,17 +326,27 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				],
 			}
 		},
-		SucceededConnect: ({ connectionId, accountName }) => ({
-			model: withConnectForm(model, (form) => ({
-				...form,
-				apiKey: "",
-				isPending: false,
-				connected: { connectionId, accountName },
-			})),
-		}),
-		FailedConnect: ({ reason }) => ({
-			model: withConnectForm(model, (form) => ({ ...form, isPending: false, failure: reason })),
-		}),
+		SucceededConnect: ({ provider, connectionId, accountName }) =>
+			model.connectForm?.provider !== provider
+				? { model }
+				: {
+						model: withConnectForm(model, (form) => ({
+							...form,
+							apiKey: "",
+							isPending: false,
+							connected: { connectionId, accountName },
+						})),
+					},
+		FailedConnect: ({ provider, reason }) =>
+			model.connectForm?.provider !== provider
+				? { model }
+				: {
+						model: withConnectForm(model, (form) => ({
+							...form,
+							isPending: false,
+							failure: reason,
+						})),
+					},
 		ChangedWebhookSecret: ({ value }) => ({
 			model: withConnectForm(model, (form) => ({ ...form, webhookSecret: value, failure: null })),
 		}),
@@ -357,13 +369,20 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 				],
 			}
 		},
-		SucceededSaveWebhookSecret: () => ({
-			model: closeConnect(model),
+		SucceededSaveWebhookSecret: ({ connectionId }) => ({
+			model: model.connectForm?.connected?.connectionId === connectionId ? closeConnect(model) : model,
 			outMessage: toast(successToast("Signing secret saved")),
 		}),
-		FailedSaveWebhookSecret: ({ reason }) => ({
-			model: withConnectForm(model, (form) => ({ ...form, isPending: false, failure: reason })),
-		}),
+		FailedSaveWebhookSecret: ({ connectionId, reason }) =>
+			model.connectForm?.connected?.connectionId !== connectionId
+				? { model }
+				: {
+						model: withConnectForm(model, (form) => ({
+							...form,
+							isPending: false,
+							failure: reason,
+						})),
+					},
 		PressedCopyWebhookUrl: ({ url }) => ({ model, commands: [CopyCustomerWebhookUrl({ url })] }),
 		SucceededCopyWebhookUrl: () => ({ model, outMessage: toast(successToast("Webhook URL copied")) }),
 		FailedCopyWebhookUrl: () => ({

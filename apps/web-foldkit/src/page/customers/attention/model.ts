@@ -249,6 +249,19 @@ export const selectedSignal = (model: Model): SignalRowType | undefined => signa
 export const isSelectionVisible = (model: Model, viewer: Viewer): boolean =>
 	model.selectedId !== null && rowIds(model, viewer).includes(model.selectedId)
 
+/**
+ * Whether the selected row's action buttons (and so the Assign, Snooze and `⋯` menus) are on screen:
+ * in the preview, or inline on a visible row (an account group row has none).
+ */
+export const areActionsShown = (model: Model, viewer: Viewer): boolean =>
+	isSelectionVisible(model, viewer) &&
+	(model.isPreviewOpen || model.tab !== "open" || model.grouping === "signals")
+
+/** What the server reopens: a snoozed, done or dismissed signal that is not closed yet. */
+export const canReopen = (signal: SignalRowType): boolean =>
+	signal.closedAtMs === null &&
+	(signal.status === "snoozed" || signal.status === "done" || signal.status === "dismissed")
+
 /** Distinct plans of the accounts with signals, for the plan filter. */
 export const plansOf = (model: Model): ReadonlyArray<string> => {
 	const accountsById = accountsByIdOfModel(model)
@@ -314,10 +327,12 @@ export const snoozeEntries = (signal: SignalRowType | undefined): ReadonlyArray<
 	Menu.item(PICK_DATE_KEY, { textValue: "Pick date" }),
 ]
 
-export const snoozeUntilMs = (option: SnoozeOption, nowMs: number, signal: SignalRowType): number =>
-	option === NEXT_RETRY
-		? (nextRetryMsOf(signal) ?? snoozeUntil("tomorrow", new Date(nowMs)).getTime())
-		: snoozeUntil(option, new Date(nowMs)).getTime()
+/** A retry already past (the evidence is as old as the last compute) snoozes until tomorrow instead. */
+export const snoozeUntilMs = (option: SnoozeOption, nowMs: number, signal: SignalRowType): number => {
+	if (option !== NEXT_RETRY) return snoozeUntil(option, new Date(nowMs)).getTime()
+	const retryMs = nextRetryMsOf(signal)
+	return retryMs !== null && retryMs > nowMs ? retryMs : snoozeUntil("tomorrow", new Date(nowMs)).getTime()
+}
 
 /** A picked day (`YYYY-MM-DD`, local) at 9:00 local, the kit's snooze hour; none unless after `nowMs`. */
 export const pickedSnoozeMs = (date: string, nowMs: number): number | null => {

@@ -32,7 +32,7 @@ import {
 	UpdateCustomerAccount,
 	UpdateCustomerNote,
 } from "./commands"
-import { Message, type NoteAction, type SignalAction } from "./message"
+import { Message, type NoteAction, type NoteDraft, type SignalAction } from "./message"
 import {
 	ACTIONS_MENU_ID,
 	accountOf,
@@ -49,6 +49,7 @@ import {
 	type Model,
 	type NoteRow,
 	OPEN_QUEUE,
+	type Paged,
 	OWNER_MENU_ID,
 	OWNER_NONE,
 	ownerEntries,
@@ -462,6 +463,21 @@ const submitEdit = (model: Model, shared: Shared): Return => {
 	}
 }
 
+/** Puts a failed save's text back in the composer, or a failed edit's back in its editor, if free. */
+const restoreDraft = (model: Model, draft: NoteDraft | null): Model => {
+	if (draft === null) return model
+	if (draft.noteId === null)
+		return model.composer.body === ""
+			? modifyFields(model, {
+					composer: (composer) => modifyFields(composer, { body: () => draft.body }),
+				})
+			: model
+	const noteId = draft.noteId
+	return model.editingNote === null && model.notes?.some((note) => note.id === noteId) === true
+		? modifyFields(model, { editingNote: () => ({ noteId, body: draft.body }) })
+		: model
+}
+
 const NOTE_VERB = { create: "save", update: "update", delete: "delete" } as const satisfies Record<
 	NoteAction,
 	string
@@ -472,7 +488,38 @@ const NOTE_VERB = { create: "save", update: "update", delete: "delete" } as cons
 const settle = <A, E>(current: AsyncData.AsyncData<A, E>, result: Result.Result<A, E>) =>
 	AsyncData.settle(current, result)
 
+/**
+ * Appends a page, skipping rows already shown: offset paging repeats a row when one is added in front
+ * between two pages.
+ */
+const appendPage = <A>(
+	current: Paged<A>,
+	page: Readonly<{ items: ReadonlyArray<A>; nextCursor: string | null }>,
+	idOf: (item: A) => string,
+): Paged<A> => {
+	const seen = new Set(current.items.map(idOf))
+	return {
+		items: [...current.items, ...page.items.filter((item) => !seen.has(idOf(item)))],
+		nextCursor: page.nextCursor,
+		status: "Loaded",
+	}
+}
+
+/** Nothing to ask for: a page is on its way, or the last one loaded. A failed page is asked for again. */
+const isPageSettled = (paged: Paged<unknown>) =>
+	paged.status === "Loading" || (paged.status !== "Failed" && paged.nextCursor === null)
+
+/**
+ * Commands outlive the page instance: an answer for the customer shown before (same page id, another
+ * key) still arrives here, so a read for another account is dropped.
+ */
+const isForOtherAccount = (model: Model, message: Message) =>
+	"accountId" in message && message.accountId !== model.accountId
+
 export const update = (model: Model, message: Message, shared: Shared): Return =>
+	isForOtherAccount(model, message) ? { model } : updateOwn(model, message, shared)
+
+const updateOwn = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
 		UpdatedAccounts: ({ accounts }) => ({ model: modifyFields(model, { accounts: () => accounts }) }),
 		UpdatedSignals: ({ signals }) => ({ model: modifyFields(model, { signals: () => signals }) }),
@@ -557,7 +604,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		ClearedContactSearch: () => ({ model: modifyFields(model, { contactSearch: () => "" }) }),
 		PressedMoreContacts: () => {
 			const args = target(model, shared)
-			return args === null || model.contacts.nextCursor === null || model.contacts.status === "Loading"
+			return args === null || isPageSettled(model.contacts)
 				? { model }
 				: {
 						model: modifyFields(model, {
@@ -568,11 +615,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		},
 		SucceededFetchContacts: ({ page }) => ({
 			model: modifyFields(model, {
-				contacts: (contacts) => ({
-					items: [...contacts.items, ...page.items],
-					nextCursor: page.nextCursor,
-					status: "Loaded",
-				}),
+				contacts: (contacts) => appendPage(contacts, page, (row) => row.contact.id),
 			}),
 		}),
 		FailedFetchContacts: () => ({
@@ -583,7 +626,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 
 		PressedMoreInvoices: () => {
 			const args = target(model, shared)
-			return args === null || model.invoices.nextCursor === null || model.invoices.status === "Loading"
+			return args === null || isPageSettled(model.invoices)
 				? { model }
 				: {
 						model: modifyFields(model, {
@@ -594,11 +637,7 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		},
 		SucceededFetchInvoices: ({ page }) => ({
 			model: modifyFields(model, {
-				invoices: (invoices) => ({
-					items: [...invoices.items, ...page.items],
-					nextCursor: page.nextCursor,
-					status: "Loaded",
-				}),
+				invoices: (invoices) => appendPage(invoices, page, (invoice) => invoice.id),
 			}),
 		}),
 		FailedFetchInvoices: () => ({
@@ -631,18 +670,12 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 						)
 			}),
 		PressedMoreEvents: () =>
-			model.events.nextCursor === null || model.events.status === "Loading"
-				? { model }
-				: fetchEvents(model, shared, model.events.nextCursor),
+			isPageSettled(model.events) ? { model } : fetchEvents(model, shared, model.events.nextCursor),
 		SucceededFetchEvents: ({ filter, page }) =>
 			filter === eventFilterOf(model)
 				? {
 						model: modifyFields(model, {
-							events: (events) => ({
-								items: [...events.items, ...page.items],
-								nextCursor: page.nextCursor,
-								status: "Loaded",
-							}),
+							events: (events) => appendPage(events, page, (event) => event.id),
 						}),
 					}
 				: { model },
@@ -792,8 +825,8 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		},
 		SucceededNoteAction: ({ action }) =>
 			action === "create" ? { model, outMessage: toast(successToast("Note saved")) } : { model },
-		FailedNoteAction: ({ action, reason }) => ({
-			model,
+		FailedNoteAction: ({ action, reason, draft }) => ({
+			model: restoreDraft(model, draft),
 			outMessage: toast(
 				errorToastOf(
 					failureMessage(reason, {

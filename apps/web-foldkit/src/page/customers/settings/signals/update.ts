@@ -49,10 +49,10 @@ const toList = (shared: Shared, request?: ToastRequest) =>
 
 // ROUTES
 
-const editorOf = (ruleId: CustomerSignalRuleId | null, form: RuleForm | null): Editor => ({
+const editorOf = (version: number, ruleId: CustomerSignalRuleId | null, form: RuleForm | null): Editor => ({
 	ruleId,
 	form,
-	version: 0,
+	version,
 	preview: AsyncData.Idle(),
 	exampleAccountId: null,
 	isSaving: false,
@@ -74,19 +74,23 @@ const openPicker = (model: Model): Model => ({
 
 /** The list, the list with the picker open (`/new` without a template), or the editor. */
 const openRoute = (model: Model, route: SignalsRoute, shared: Shared): Return => {
-	const base = withModalsClosed(model)
+	const version = model.lastVersion + 1
+	const base = { ...withModalsClosed(model), lastVersion: version }
 	return Match.valueTags(route, {
 		CustomersSettingsSignals: (): Return => ({ model: { ...base, editor: null } }),
 		CustomersSettingsSignalNew: ({ template }): Return =>
 			Option.match(template, {
 				onNone: () => ({ model: openPicker({ ...base, editor: null }) }),
 				onSome: (picked) =>
-					fetchPreview({ ...base, editor: editorOf(null, formOfTemplate(picked)) }, shared),
+					fetchPreview(
+						{ ...base, editor: editorOf(version, null, formOfTemplate(picked)) },
+						shared,
+					),
 			}),
 		CustomersSettingsSignalRule: ({ ruleId }): Return => {
 			const rule = ruleById(base, ruleId)
 			const form = rule === undefined ? null : formOfRule(rule, currencyOf(base))
-			return fetchPreview({ ...base, editor: editorOf(ruleId, form) }, shared)
+			return fetchPreview({ ...base, editor: editorOf(version, ruleId, form) }, shared)
 		},
 	})
 }
@@ -101,6 +105,7 @@ export const init = (route: SignalsRoute, shared: Shared): Return =>
 			settings: null,
 			metrics: [],
 			editor: null,
+			lastVersion: 0,
 			pickerModal: Modal.init(PICKER_MODAL_ID),
 			picker: { search: "", kind: "all", selected: null },
 			discardModal: Modal.init(DISCARD_MODAL_ID),
@@ -154,9 +159,9 @@ const edit = (model: Model, change: (form: RuleForm) => RuleForm): Return => {
 	const editor = model.editor
 	if (editor === null || editor.form === null) return { model }
 	const form = change(editor.form)
-	const version = editor.version + 1
+	const version = model.lastVersion + 1
 	return {
-		model: { ...model, editor: { ...editor, form, version } },
+		model: { ...model, lastVersion: version, editor: { ...editor, form, version } },
 		commands: Option.isSome(draftOf(form, currencyOf(model)))
 			? [WaitForRuleDryRunDelay({ version })]
 			: [],
@@ -347,14 +352,20 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 		PressedToggleEnabled: () => edit(model, (form) => ({ ...form, enabled: !form.enabled })),
 
 		PressedSave: () => save(model, shared),
-		SucceededCreateRule: ({ ruleId }) => ({
-			model: withEditor(model, (editor) => ({ ...editor, isSaving: false })),
-			outMessage: requestedOrgNavigation(
-				shared.orgSlug,
-				(orgSlug) => AppRoute.CustomersSettingsSignalRule({ orgSlug, ruleId }),
-				{ replace: true, toast: successToast("Rule created", "It runs on the next hourly check.") },
-			),
-		}),
+		SucceededCreateRule: ({ ruleId }) => {
+			const created = successToast("Rule created", "It runs on the next hourly check.")
+			// Only the editor that is still saving opens the new rule; one left meanwhile just says so.
+			return model.editor?.isSaving === true && model.editor.ruleId === null
+				? {
+						model: withEditor(model, (editor) => ({ ...editor, isSaving: false })),
+						outMessage: requestedOrgNavigation(
+							shared.orgSlug,
+							(orgSlug) => AppRoute.CustomersSettingsSignalRule({ orgSlug, ruleId }),
+							{ replace: true, toast: created },
+						),
+					}
+				: { model, outMessage: toast(created) }
+		},
 		FailedCreateRule: ({ reason }) => ({
 			model: withEditor(model, (editor) => ({ ...editor, isSaving: false })),
 			outMessage: writeFailure("Couldn't create the rule", reason),

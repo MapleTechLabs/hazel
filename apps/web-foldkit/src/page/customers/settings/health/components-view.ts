@@ -292,12 +292,11 @@ const weightSlider = (h: H, model: Model, key: ComponentKey, context: Context): 
 }
 
 const scoreInput = (h: H, field: ScoreField, value: number, ariaLabel: string, context: Context): Html =>
-	numberInput(h, {
-		value: textOf(value),
+	numberInput(h, context, {
+		field,
+		value,
 		ariaLabel,
-		isInvalid: context.invalid.has(field),
-		isDisabled: !context.canEdit,
-		onInput: (text) => Message.ChangedScore({ field, value: parseNumber(text) }),
+		onInput: (text) => Message.ChangedScore({ field, value: parseNumber(text), text }),
 	})
 
 /** One threshold list: every step but the last has a threshold; the last catches the rest. */
@@ -317,32 +316,32 @@ const stepRows = (
 ): ReadonlyArray<Html> =>
 	options.steps.map((step, index) => {
 		const isLast = index === options.steps.length - 1
-		const threshold = numberInput(h, {
-			value: textOf(options.show(step.threshold)),
+		const threshold = numberInput(h, context, {
+			field: `${options.list}.${index}.threshold`,
+			value: options.show(step.threshold),
 			ariaLabel: `Step ${index + 1} threshold, ${options.unit}`,
-			isInvalid: context.invalid.has(`${options.list}.${index}.threshold`),
-			isDisabled: !context.canEdit,
 			onInput: (text) =>
 				Message.ChangedStep({
 					list: options.list,
 					index,
 					field: "threshold",
 					value: options.read(parseNumber(text)),
+					text,
 				}),
 		})
 		return ruleRow(h, isLast ? [options.otherwise] : options.condition(threshold), [
 			"→",
-			numberInput(h, {
-				value: textOf(step.score),
+			numberInput(h, context, {
+				field: `${options.list}.${index}.score`,
+				value: step.score,
 				ariaLabel: `Step ${index + 1} score`,
-				isInvalid: context.invalid.has(`${options.list}.${index}.score`),
-				isDisabled: !context.canEdit,
 				onInput: (text) =>
 					Message.ChangedStep({
 						list: options.list,
 						index,
 						field: "score",
 						value: parseNumber(text),
+						text,
 					}),
 			}),
 		])

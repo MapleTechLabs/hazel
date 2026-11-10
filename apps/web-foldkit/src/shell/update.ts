@@ -258,5 +258,11 @@ export const informContext = (model: Model, context: Context): Model => {
 		organizationId: context.organizationId,
 		currentUserId: context.currentUserId,
 	})
-	return withMenuEntries(modifyFields(model, { channelsSidebar: () => channelsSidebar }), context)
+	return withMenuEntries(
+		modifyFields(model, {
+			channelsSidebar: () => channelsSidebar,
+			customersSidebar: (sidebar) => CustomersSidebar.setOrganization(sidebar, context.organizationId),
+		}),
+		context,
+	)
 }

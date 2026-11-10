@@ -26,11 +26,14 @@ import {
 	ASSIGN_ME,
 	ASSIGN_MENU_ID,
 	ASSIGN_NONE,
+	areActionsShown,
 	assignEntries,
+	canReopen,
 	clearFilter,
 	DEFAULT_FILTERS,
 	DONE_MODAL_ID,
 	FILTER_MENU_ID,
+	isSelectionVisible,
 	MORE_MENU_ID,
 	type Model,
 	type QueueKey,
@@ -117,7 +120,7 @@ const move = (model: Model, shared: Shared, step: 1 | -1): Return => {
 
 /** The selection, or the first row when there is none (an action key on an unselected queue). */
 const ensureSelection = (model: Model, shared: Shared): Return => {
-	if (selectedSignal(model) !== undefined) return { model }
+	if (isSelectionVisible(model, viewerOf(shared))) return { model }
 	const first = rowIds(model, viewerOf(shared))[0]
 	return first === undefined ? { model } : select(model, shared, first)
 }
@@ -238,7 +241,7 @@ const dismiss = (model: Model, shared: Shared, signal: SignalRow): Return => {
 
 const reopen = (model: Model, shared: Shared, signal: SignalRow): Return => {
 	const organizationId = shared.organization?.id
-	if (organizationId === undefined || signal.status === "open") return { model }
+	if (organizationId === undefined || !canReopen(signal)) return { model }
 	return act(
 		model,
 		shared,
@@ -442,17 +445,22 @@ const onKey = (model: Model, shared: Shared, key: QueueKey): Return => {
 			return openCustomer(model, shared, selectedSignal(model))
 		case "search":
 			return { model, commands: [FocusAttentionSearch()] }
+		// Only a menu whose button is on screen opens: Assign on the open tab, Snooze on open and snoozed.
 		case "assign":
-			return model.tab === "done"
+			return model.tab !== "open"
 				? { model }
 				: withSelected(model, shared, (next) =>
-						openMenu(next, "assignMenu", assignEntries(next.members, viewer)),
+						areActionsShown(next, viewer)
+							? openMenu(next, "assignMenu", assignEntries(next.members, viewer))
+							: { model: next },
 					)
 		case "snooze":
 			return model.tab === "done"
 				? { model }
 				: withSelected(model, shared, (next, signal) =>
-						openMenu(next, "snoozeMenu", snoozeEntries(signal)),
+						areActionsShown(next, viewer)
+							? openMenu(next, "snoozeMenu", snoozeEntries(signal))
+							: { model: next },
 					)
 		case "done":
 			return withSelected(model, shared, openDoneDialog)

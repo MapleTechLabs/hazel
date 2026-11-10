@@ -121,9 +121,16 @@ export const IgnoreUnmatchedRecord = Command.define("IgnoreUnmatchedRecord", {
 		...target,
 		rule: Schema.NullOr(Schema.Struct({ field: IgnoreRuleField, pattern: Schema.String })),
 	},
-	messages: recordMessages,
+	messages: [...recordMessages, Message.SucceededIgnoreWithRule],
 	execute: ({ organizationId, recordId, rule }) =>
-		ignore(organizationId, recordId, rule ?? undefined).pipe(settle(recordId, "ignore")),
+		ignore(organizationId, recordId, rule ?? undefined).pipe(
+			settle(recordId, "ignore"),
+			Effect.map((message) =>
+				message._tag === "SucceededRecordAction" && rule !== null
+					? Message.SucceededIgnoreWithRule({ recordId })
+					: message,
+			),
+		),
 })
 
 // BULK

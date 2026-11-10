@@ -145,7 +145,7 @@ const coverageCard = (h: H, model: Model, context: Context, live: ReadonlyArray<
 					),
 				],
 			),
-			unmatchedPanel(h, model, context),
+			...(context.isAdmin ? [unmatchedPanel(h, model, context)] : []),
 		],
 		"grid gap-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)_minmax(0,1fr)]",
 	)

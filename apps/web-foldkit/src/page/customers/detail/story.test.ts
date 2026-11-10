@@ -1,6 +1,8 @@
+import type * as Customers from "@hazel/domain/customers"
 import type { SignalEvidence } from "@hazel/domain/customers"
 import {
 	CustomerAccountId,
+	CustomerEventId,
 	CustomerNoteId,
 	CustomerSignalId,
 	CustomerSignalRuleId,
@@ -210,18 +212,34 @@ describe("customer page: tabs", () => {
 				]),
 			),
 		).toBe(true)
-		expect(isNotFound(run(loaded(), [Message.FailedFetchDetail({ reason: "NotFound" })]))).toBe(true)
-		expect(isNotFound(run(loaded(), [Message.FailedFetchDetail({ reason: "Offline" })]))).toBe(false)
+		expect(
+			isNotFound(
+				run(loaded(), [Message.FailedFetchDetail({ accountId: beta.id, reason: "NotFound" })]),
+			),
+		).toBe(true)
+		expect(
+			isNotFound(run(loaded(), [Message.FailedFetchDetail({ accountId: beta.id, reason: "Offline" })])),
+		).toBe(false)
 	})
 
 	test("an answer for a metric the user left is dropped", () => {
 		const switched = run(loaded(), [Message.ClickedUsageRange({ range: "90d" })])
 		const stale = run(switched, [
-			Message.SucceededFetchUsage({ metricKey: "active_users", range: "30d", series: [] }),
+			Message.SucceededFetchUsage({
+				accountId: beta.id,
+				metricKey: "active_users",
+				range: "30d",
+				series: [],
+			}),
 		])
 		expect(stale.usage._tag).toBe("Loading")
 		const fresh = run(switched, [
-			Message.SucceededFetchUsage({ metricKey: "active_users", range: "90d", series: [] }),
+			Message.SucceededFetchUsage({
+				accountId: beta.id,
+				metricKey: "active_users",
+				range: "90d",
+				series: [],
+			}),
 		])
 		expect(fresh.usage._tag).toBe("Success")
 	})
@@ -232,9 +250,65 @@ describe("customer page: tabs", () => {
 		expect(commandNames(filtered)).toEqual(["FetchCustomerEvents"])
 		expect(filtered.commands?.[0]?.args).toMatchObject({ providers: ["stripe"], cursor: null })
 		const stale = run(filtered.model, [
-			Message.SucceededFetchEvents({ filter: "all:all", page: { items: [], nextCursor: "50" } }),
+			Message.SucceededFetchEvents({
+				accountId: beta.id,
+				filter: "all:all",
+				page: { items: [], nextCursor: "50" },
+			}),
 		])
 		expect(stale.events.status).toBe("Loading")
+	})
+
+	test("an answer for the customer shown before is dropped", () => {
+		const fresh = init(route(null, gamma.id), shared).model
+		const stale = run(fresh, [
+			Message.FailedFetchDetail({ accountId: beta.id, reason: "NotFound" }),
+			Message.SucceededFetchUsage({
+				accountId: beta.id,
+				metricKey: "active_users",
+				range: "30d",
+				series: [],
+			}),
+		])
+		expect(stale.detail._tag).toBe("Loading")
+		expect(stale.usage._tag).toBe("Loading")
+	})
+
+	test("a page appends without repeating rows, and a failed first page can be asked for again", () => {
+		const users = routeChanged(loaded(), route("users"), shared).model
+		const failed = run(users, [Message.FailedFetchContacts({ accountId: beta.id, reason: "Offline" })])
+		const retried = update(failed, Message.PressedMoreContacts(), shared)
+		expect(commandNames(retried)).toEqual(["FetchCustomerContacts"])
+		expect(retried.commands?.[0]?.args).toMatchObject({ cursor: null })
+		expect(commandNames(update(users, Message.PressedMoreContacts(), shared))).toEqual([])
+
+		const event = (n: number): Customers.Event => ({
+			id: Schema.decodeSync(CustomerEventId)(uuid(400 + n)),
+			accountId: beta.id,
+			contactId: null,
+			provider: "hazel",
+			type: "note.created",
+			title: `Event ${n}`,
+			data: {},
+			occurredAt: new Date(NOW),
+			externalId: null,
+			actorUserId: null,
+			createdAt: new Date(NOW),
+		})
+		const activity = routeChanged(loaded(), route("activity"), shared).model
+		const appended = run(activity, [
+			Message.SucceededFetchEvents({
+				accountId: beta.id,
+				filter: "all:all",
+				page: { items: [event(1), event(2)], nextCursor: "2" },
+			}),
+			Message.SucceededFetchEvents({
+				accountId: beta.id,
+				filter: "all:all",
+				page: { items: [event(2), event(3)], nextCursor: null },
+			}),
+		])
+		expect(appended.events.items.map((item) => item.title)).toEqual(["Event 1", "Event 2", "Event 3"])
 	})
 })
 
@@ -322,6 +396,33 @@ describe("customer page: notes", () => {
 		expect(commandNames(deleted)).toEqual(["DeleteCustomerNote"])
 	})
 
+	test("a failed save or edit puts the text back", () => {
+		const saved = update(
+			run(loaded("notes"), [Message.ChangedComposer({ value: "Call booked" })]),
+			Message.SubmittedNote(),
+			shared,
+		).model
+		const failed = (draft: { noteId: CustomerNoteId | null; body: string }, model: Model) =>
+			update(
+				model,
+				Message.FailedNoteAction({
+					action: draft.noteId === null ? "create" : "update",
+					reason: "Offline",
+					draft,
+				}),
+				shared,
+			)
+		const restored = failed({ noteId: null, body: "Call booked" }, saved)
+		expect(restored.model.composer.body).toBe("Call booked")
+		expect(restored.outMessage?._tag).toBe("RequestedToast")
+		expect(failed({ noteId: note(1).id, body: "Edited" }, saved).model.editingNote).toEqual({
+			noteId: note(1).id,
+			body: "Edited",
+		})
+		const typedSince = run(saved, [Message.ChangedComposer({ value: "Next one" })])
+		expect(failed({ noteId: null, body: "Call booked" }, typedSince).model.composer.body).toBe("Next one")
+	})
+
 	test("Add note opens the notes tab and focuses the composer", () => {
 		const result = update(loaded(), Message.PressedAddNote(), shared)
 		expect(result.outMessage).toMatchObject({ route: route("notes") })
@@ -362,5 +463,20 @@ describe("customer page: signals", () => {
 		)
 		expect(assigned.model.signals?.[0]?.assigneeUserId).toBe(ada)
 		expect(commandNames(assigned)).toContain("AssignCustomerSignal")
+	})
+	test("a failed signal or account action says so; the synced rows roll back on their own", () => {
+		const signalFailed = update(
+			loaded(),
+			Message.FailedSignalAction({ action: "snooze", reason: "Stale" }),
+			shared,
+		)
+		expect(signalFailed.outMessage?._tag).toBe("RequestedToast")
+		expect(signalFailed.model.signals).toEqual([signal])
+		const accountFailed = update(loaded(), Message.FailedAccountUpdate({ reason: "NotFound" }), shared)
+		expect(accountFailed.outMessage?._tag).toBe("RequestedToast")
+		// The rollback arrives as the synced rows again, replacing the optimistic patch.
+		const patched = update(loaded(), Message.RemovedTag({ tag: "pilot" }), shared).model
+		const rolledBack = run(patched, [Message.UpdatedAccounts({ accounts: [acme, beta, gamma] })])
+		expect(rolledBack.accounts?.find((row) => row.id === beta.id)?.tags).toEqual(["pilot"])
 	})
 })

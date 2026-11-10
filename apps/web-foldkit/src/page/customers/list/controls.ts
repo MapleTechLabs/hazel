@@ -14,9 +14,9 @@ import { Message } from "./message"
 import {
 	type Builder,
 	COLUMN_NAME,
-	countMatching,
 	type FilterField,
 	hiddenColumns,
+	matchesFilters,
 	plansOf,
 	shownColumns,
 	tagsOf,
@@ -442,12 +442,16 @@ const editor = (
 const matchPreview = (
 	h: HtmlBuilder<Message>,
 	builder: Builder,
-	accounts: ReadonlyArray<AccountRow>,
-	search: string,
-	viewer: Viewer,
+	options: Readonly<{
+		accounts: ReadonlyArray<AccountRow>
+		search: string
+		currency: string
+		viewer: Viewer
+	}>,
 ): Html => {
+	const { accounts, search, viewer } = options
 	const filters = search.trim() === "" ? builder.pending : { ...builder.pending, search }
-	const matches = accounts.filter((account) => countMatching([account], filters, viewer) === 1)
+	const matches = accounts.filter((account) => matchesFilters(filters, account, viewer))
 	const mrr = matches.reduce((sum, account) => sum + account.mrrMinor, 0)
 	const counts = Customers.HealthStatus.literals.map((status) => ({
 		status,
@@ -462,9 +466,7 @@ const matchPreview = (
 					h.span([h.Class("font-semibold text-fg")], [`${formatCount(matches.length)} customers`]),
 					h.span(
 						[h.Class("text-muted-fg")],
-						[
-							` of ${formatCount(accounts.length)} · ${formatMoney(mrr, accounts[0]?.currency ?? "USD")} MRR`,
-						],
+						[` of ${formatCount(accounts.length)} · ${formatMoney(mrr, options.currency)} MRR`],
 					),
 				],
 			),
@@ -496,6 +498,7 @@ export const filterBuilder = (
 		accounts: ReadonlyArray<AccountRow>
 		members: ReadonlyArray<MemberRow>
 		search: string
+		currency: string
 		viewer: Viewer
 		closeAttributes: ReadonlyArray<ChildAttribute>
 	}>,
@@ -572,7 +575,7 @@ export const filterBuilder = (
 							[h.Class("flex max-h-64 flex-col overflow-y-auto")],
 							editor(h, builder, options.accounts, options.members, options.viewer),
 						),
-						matchPreview(h, builder, options.accounts, options.search, options.viewer),
+						matchPreview(h, builder, options),
 						h.div(
 							[h.Class("flex justify-end gap-2")],
 							[

@@ -17,7 +17,7 @@ import {
 import { draftOf, editorStatus } from "./draft"
 import { Message } from "./message"
 import type { Model, RuleRow } from "./model"
-import { init, type SignalsRoute, update } from "./update"
+import { init, routeChanged, type SignalsRoute, update } from "./update"
 
 // `ui/aria/*` names `document` when its modules load; the update loop never touches it.
 vi.hoisted(() => {
@@ -173,7 +173,7 @@ describe("signals: the live preview", () => {
 		expect(command?.name).toBe(FetchRuleDryRun.name)
 		expect(command && "args" in command ? command.args : null).toEqual({
 			organizationId,
-			version: 0,
+			version: 1,
 			draft: {
 				name: "Stopped logging in",
 				severity: "medium",
@@ -185,14 +185,24 @@ describe("signals: the live preview", () => {
 		})
 	})
 
+	test("an answer for the rule left before is dropped, though both editors start fresh", () => {
+		const first = withRules(ruleRoute)
+		const firstVersion = first.editor?.version ?? -1
+		const listed = routeChanged(first, listRoute, shared).model
+		const second = routeChanged(listed, ruleRoute, shared).model
+		expect(second.editor?.version).toBeGreaterThan(firstVersion)
+		const stale = pageUpdate(second, Message.SucceededFetchDryRun({ version: firstVersion, result }))
+		expect(stale.model.editor?.preview._tag).not.toBe("Success")
+	})
+
 	test("edits debounce; only the latest version's answer lands", () => {
 		const opened = pageUpdate(
 			withRules(ruleRoute),
-			Message.SucceededFetchDryRun({ version: 0, result }),
+			Message.SucceededFetchDryRun({ version: 1, result }),
 		).model
 		const first = pageUpdate(opened, Message.ChangedConfigNumber({ key: "inactiveDays", value: "20" }))
 		expect(first.commands?.map((command) => ("args" in command ? command.args : null))).toEqual([
-			{ version: 1 },
+			{ version: 2 },
 		])
 		expect(names(first.commands)).toEqual([WaitForRuleDryRunDelay.name])
 		const second = pageUpdate(
@@ -201,27 +211,27 @@ describe("signals: the live preview", () => {
 		)
 		// The first pause ends after a newer edit: nothing runs.
 		expect(
-			pageUpdate(second.model, Message.ElapsedRuleDryRunDelay({ version: 1 })).commands ?? [],
+			pageUpdate(second.model, Message.ElapsedRuleDryRunDelay({ version: 2 })).commands ?? [],
 		).toHaveLength(0)
 		story(
 			pageUpdate,
 			given(second.model),
-			message(Message.ElapsedRuleDryRunDelay({ version: 2 })),
+			message(Message.ElapsedRuleDryRunDelay({ version: 3 })),
 			model((current) => expect(current.editor?.preview._tag).toBe("Refreshing")),
 			Command.expectExact(
 				FetchRuleDryRun({
 					organizationId,
-					version: 2,
+					version: 3,
 					draft: { ...draftOfModel(second.model) },
 					ruleId,
 				}),
 			),
 			Command.resolve(
 				FetchRuleDryRun,
-				Message.SucceededFetchDryRun({ version: 2, result: { ...result, matchCount: 9 } }),
+				Message.SucceededFetchDryRun({ version: 3, result: { ...result, matchCount: 9 } }),
 			),
-			// A slow answer for version 1 arrives late: dropped.
-			message(Message.SucceededFetchDryRun({ version: 1, result: { ...result, matchCount: 3 } })),
+			// A slow answer for version 2 arrives late: dropped.
+			message(Message.SucceededFetchDryRun({ version: 2, result: { ...result, matchCount: 3 } })),
 			model((current) => {
 				const preview = current.editor?.preview
 				expect(preview?._tag).toBe("Success")
@@ -264,6 +274,13 @@ describe("signals: saving", () => {
 				}),
 			),
 		)
+	})
+
+	test("a rule created after the editor was left does not open it", () => {
+		const saving = pageUpdate(init(newRoute("seat_growth"), shared).model, Message.PressedSave()).model
+		const left = routeChanged(saving, listRoute, shared).model
+		const done = pageUpdate(left, Message.SucceededCreateRule({ ruleId: newRuleId }))
+		expect(done.outMessage?._tag).toBe("RequestedToast")
 	})
 
 	test("an unchanged rule can't be saved; a changed one updates", () => {

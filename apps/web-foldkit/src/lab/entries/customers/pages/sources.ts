@@ -56,10 +56,11 @@ const answered = (model: Model, shared: Shared): Model => {
 			? [
 					form.connected === null
 						? Message.SucceededConnect({
+								provider: form.provider,
 								connectionId: STRIPE_CONNECTION.id,
 								accountName: "Northwind Inc.",
 							})
-						: Message.SucceededSaveWebhookSecret(),
+						: Message.SucceededSaveWebhookSecret({ connectionId: form.connected.connectionId }),
 				]
 			: []),
 		...(model.keysForm?.isPending === true ? [Message.SucceededUpdateKeys()] : []),
@@ -134,13 +135,19 @@ const stateModel = (state: State): Model => {
 		case "connect-failure":
 			return steps(
 				connect,
-				[Message.SubmittedConnect(), Message.FailedConnect({ reason: "Refused" })],
+				[
+					Message.SubmittedConnect(),
+					Message.FailedConnect({ provider: "stripe", reason: "Refused" }),
+				],
 				shared,
 			)
 		case "connect-unavailable":
 			return steps(
 				connect,
-				[Message.SubmittedConnect(), Message.FailedConnect({ reason: "ComingSoon" })],
+				[
+					Message.SubmittedConnect(),
+					Message.FailedConnect({ provider: "stripe", reason: "ComingSoon" }),
+				],
 				shared,
 			)
 		case "detail-maple-settings":

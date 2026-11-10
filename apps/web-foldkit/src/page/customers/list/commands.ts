@@ -25,10 +25,13 @@ export const FetchListSparklines = Command.define("FetchListSparklines", {
 				days: SPARKLINE_DAYS,
 			}),
 		).pipe(
-			Effect.map(({ sparklines }) => Message.SucceededFetchSparklines({ sparklines })),
-			catchCommon((reason) => Message.FailedFetchSparklines({ reason })),
+			Effect.map(({ sparklines }) => Message.SucceededFetchSparklines({ organizationId, sparklines })),
+			catchCommon((reason) => Message.FailedFetchSparklines({ organizationId, reason })),
 		),
 })
+
+/** Answers name their organization: one for the org shown before is dropped. */
+const orgOf = ({ organizationId }: { readonly organizationId: OrganizationId }) => ({ organizationId })
 
 const viewMessages = [Message.SucceededViewAction, Message.FailedViewAction]
 
@@ -43,8 +46,8 @@ export const CreateSavedView = Command.define("CreateSavedView", {
 	messages: viewMessages,
 	execute: (args) =>
 		createViewAction(args).pipe(
-			Effect.map((viewId) => Message.SucceededViewAction({ action: "create", viewId })),
-			catchCommon((reason) => Message.FailedViewAction({ action: "create", reason })),
+			Effect.map((viewId) => Message.SucceededViewAction({ ...orgOf(args), action: "create", viewId })),
+			catchCommon((reason) => Message.FailedViewAction({ ...orgOf(args), action: "create", reason })),
 		),
 })
 
@@ -53,11 +56,13 @@ export const UpdateSavedView = Command.define("UpdateSavedView", {
 	messages: viewMessages,
 	execute: (args) =>
 		updateViewAction(args).pipe(
-			Effect.as(Message.SucceededViewAction({ action: "update", viewId: args.viewId })),
+			Effect.as(Message.SucceededViewAction({ ...orgOf(args), action: "update", viewId: args.viewId })),
 			Effect.catchTag("CustomersNotFoundError", () =>
-				Effect.succeed(Message.FailedViewAction({ action: "update", reason: "NotFound" })),
+				Effect.succeed(
+					Message.FailedViewAction({ ...orgOf(args), action: "update", reason: "NotFound" }),
+				),
 			),
-			catchCommon((reason) => Message.FailedViewAction({ action: "update", reason })),
+			catchCommon((reason) => Message.FailedViewAction({ ...orgOf(args), action: "update", reason })),
 		),
 })
 
@@ -66,14 +71,18 @@ export const DeleteSavedView = Command.define("DeleteSavedView", {
 	messages: viewMessages,
 	execute: (args) =>
 		deleteViewAction(args).pipe(
-			Effect.as(Message.SucceededViewAction({ action: "delete", viewId: args.viewId })),
+			Effect.as(Message.SucceededViewAction({ ...orgOf(args), action: "delete", viewId: args.viewId })),
 			Effect.catchTags({
 				CustomersNotFoundError: () =>
-					Effect.succeed(Message.FailedViewAction({ action: "delete", reason: "NotFound" })),
+					Effect.succeed(
+						Message.FailedViewAction({ ...orgOf(args), action: "delete", reason: "NotFound" }),
+					),
 				CustomersInvalidRequestError: () =>
-					Effect.succeed(Message.FailedViewAction({ action: "delete", reason: "Refused" })),
+					Effect.succeed(
+						Message.FailedViewAction({ ...orgOf(args), action: "delete", reason: "Refused" }),
+					),
 			}),
-			catchCommon((reason) => Message.FailedViewAction({ action: "delete", reason })),
+			catchCommon((reason) => Message.FailedViewAction({ ...orgOf(args), action: "delete", reason })),
 		),
 })
 
@@ -90,8 +99,10 @@ export const BulkAssignOwner = Command.define("BulkAssignOwner", {
 	messages: bulkMessages,
 	execute: ({ label, ...args }) =>
 		bulkUpdateAccountsAction(args).pipe(
-			Effect.as(Message.SucceededBulkUpdate({ action: "owner", count: args.accountIds.length, label })),
-			catchCommon((reason) => Message.FailedBulkUpdate({ action: "owner", reason })),
+			Effect.map(({ data }) =>
+				Message.SucceededBulkUpdate({ ...orgOf(args), action: "owner", count: data.updated, label }),
+			),
+			catchCommon((reason) => Message.FailedBulkUpdate({ ...orgOf(args), action: "owner", reason })),
 		),
 })
 
@@ -100,10 +111,15 @@ export const BulkAddTag = Command.define("BulkAddTag", {
 	messages: bulkMessages,
 	execute: ({ tag, ...args }) =>
 		bulkUpdateAccountsAction({ ...args, addTags: [tag] }).pipe(
-			Effect.as(
-				Message.SucceededBulkUpdate({ action: "tag", count: args.accountIds.length, label: tag }),
+			Effect.map(({ data }) =>
+				Message.SucceededBulkUpdate({
+					...orgOf(args),
+					action: "tag",
+					count: data.updated,
+					label: tag,
+				}),
 			),
-			catchCommon((reason) => Message.FailedBulkUpdate({ action: "tag", reason })),
+			catchCommon((reason) => Message.FailedBulkUpdate({ ...orgOf(args), action: "tag", reason })),
 		),
 })
 
@@ -158,6 +174,29 @@ export const PositionHoverCard = Mount.define("PositionHoverCard", {
 			element.style.left = `${rect.left}px`
 			element.style.visibility = "visible"
 		}).pipe(Effect.as(Message.CompletedPositionHoverCard())),
+})
+
+/**
+ * A Cmd/Ctrl/Shift/middle click on a link in the table (the customer's name) is the browser's: it
+ * stops here, before the row's click opens the customer in this tab, and the link opens a new one.
+ */
+export const LetModifierClicksThrough = Mount.define("LetModifierClicksThrough", {
+	messages: [Message.CompletedLetModifierClicksThrough],
+	execute: ({ element }) =>
+		Effect.acquireRelease(
+			Effect.sync(() => {
+				const onClick = (event: Event) => {
+					if (!(event instanceof MouseEvent)) return
+					const isModified =
+						event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0
+					if (isModified && event.target instanceof Element && event.target.closest("a") !== null)
+						event.stopPropagation()
+				}
+				element.addEventListener("click", onClick, { capture: true })
+				return () => element.removeEventListener("click", onClick, { capture: true })
+			}),
+			(release) => Effect.sync(release),
+		).pipe(Effect.as(Message.CompletedLetModifierClicksThrough())),
 })
 
 /** Keeps the keyboard cursor's row on screen. */

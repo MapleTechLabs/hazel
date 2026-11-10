@@ -1,5 +1,5 @@
 import * as Customers from "@hazel/domain/customers"
-import { CustomerNoteId, CustomerSignalId } from "@hazel/schema"
+import { CustomerAccountId, CustomerNoteId, CustomerSignalId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import { CommonReason } from "~/lib/error-messages"
@@ -16,6 +16,10 @@ export type ActionFailure = typeof ActionFailure.Type
 
 export const NoteAction = Schema.Literals(["create", "update", "delete"])
 export type NoteAction = typeof NoteAction.Type
+
+/** The text of a failed note save (noteId null) or edit, put back so it is not lost. */
+export const NoteDraft = Schema.Struct({ noteId: Schema.NullOr(CustomerNoteId), body: Schema.String })
+export type NoteDraft = typeof NoteDraft.Type
 
 export const SignalAction = Schema.Literals(["assign", "snooze", "done", "dismiss"])
 export type SignalAction = typeof SignalAction.Type
@@ -35,39 +39,50 @@ export const Message = defineMessageUnion({
 	PressedAddNote: {},
 	PressedRetryDetail: {},
 
-	SucceededFetchDetail: { detail: Customers.AccountDetail },
-	FailedFetchDetail: { reason: DetailFailure },
+	/** Every read's answer names its account: one for the previous customer is dropped. */
+	SucceededFetchDetail: { accountId: CustomerAccountId, detail: Customers.AccountDetail },
+	FailedFetchDetail: { accountId: CustomerAccountId, reason: DetailFailure },
 
 	GotMetricMenuMessage: { message: Menu.Message },
 	ClickedUsageRange: { range: Customers.CustomersRange },
 	HoveredUsage: { index: Schema.NullOr(Schema.Int) },
 	SucceededFetchUsage: {
+		accountId: CustomerAccountId,
 		metricKey: Schema.String,
 		range: Customers.CustomersRange,
 		series: Schema.Array(Customers.MetricSeries),
 	},
-	FailedFetchUsage: { metricKey: Schema.String, range: Customers.CustomersRange, reason: CommonReason },
-	SucceededFetchMrrHistory: { series: Schema.Array(Customers.MetricSeries) },
-	FailedFetchMrrHistory: { reason: CommonReason },
+	FailedFetchUsage: {
+		accountId: CustomerAccountId,
+		metricKey: Schema.String,
+		range: Customers.CustomersRange,
+		reason: CommonReason,
+	},
+	SucceededFetchMrrHistory: { accountId: CustomerAccountId, series: Schema.Array(Customers.MetricSeries) },
+	FailedFetchMrrHistory: { accountId: CustomerAccountId, reason: CommonReason },
 	HoveredMrr: { index: Schema.NullOr(Schema.Int) },
 
 	ClickedContactFilter: { filter: ContactFilter },
 	ChangedContactSearch: { value: Schema.String },
 	ClearedContactSearch: {},
 	PressedMoreContacts: {},
-	SucceededFetchContacts: { page: Customers.Page(Customers.ContactRow) },
-	FailedFetchContacts: { reason: CommonReason },
+	SucceededFetchContacts: { accountId: CustomerAccountId, page: Customers.Page(Customers.ContactRow) },
+	FailedFetchContacts: { accountId: CustomerAccountId, reason: CommonReason },
 
 	PressedMoreInvoices: {},
-	SucceededFetchInvoices: { page: Customers.Page(Customers.Invoice.Schema) },
-	FailedFetchInvoices: { reason: CommonReason },
+	SucceededFetchInvoices: { accountId: CustomerAccountId, page: Customers.Page(Customers.Invoice.Schema) },
+	FailedFetchInvoices: { accountId: CustomerAccountId, reason: CommonReason },
 
 	ClickedEventProvider: { provider: Schema.NullOr(Customers.CustomerSource) },
 	GotEventTypeMenuMessage: { message: Menu.Message },
 	PressedMoreEvents: {},
 	/** `filter` names the filters it was asked for, so an answer for old filters is dropped. */
-	SucceededFetchEvents: { filter: Schema.String, page: Customers.Page(Customers.Event.Schema) },
-	FailedFetchEvents: { filter: Schema.String, reason: CommonReason },
+	SucceededFetchEvents: {
+		accountId: CustomerAccountId,
+		filter: Schema.String,
+		page: Customers.Page(Customers.Event.Schema),
+	},
+	FailedFetchEvents: { accountId: CustomerAccountId, filter: Schema.String, reason: CommonReason },
 
 	GotOwnerMenuMessage: { message: Menu.Message },
 	GotActionsMenuMessage: { message: Menu.Message },
@@ -96,7 +111,7 @@ export const Message = defineMessageUnion({
 	PressedPinNote: { noteId: CustomerNoteId, pinned: Schema.Boolean },
 	PressedDeleteNote: { noteId: CustomerNoteId },
 	SucceededNoteAction: { action: NoteAction },
-	FailedNoteAction: { action: NoteAction, reason: ActionFailure },
+	FailedNoteAction: { action: NoteAction, reason: ActionFailure, draft: Schema.NullOr(NoteDraft) },
 
 	PressedCopy: { text: Schema.String, label: Schema.String },
 	CompletedCopy: { label: Schema.String, isCopied: Schema.Boolean },

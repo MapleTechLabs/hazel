@@ -334,16 +334,29 @@ export const deleteNoteAction = optimisticAction({
 // ACCOUNTS
 
 /** Owner, tags, stage override (null clears it) or name; only the fields given change. */
+interface AccountUpdate {
+	readonly organizationId: OrganizationId
+	readonly accountId: CustomerAccountId
+	readonly ownerUserId?: UserId | null
+	readonly tags?: ReadonlyArray<string>
+	readonly lifecycleStageOverride?: Customers.LifecycleStage | null
+	readonly name?: string
+}
+
+/** `customers.account.update`'s payload: only the fields given. */
+export const accountUpdatePayload = (props: AccountUpdate): AccountUpdatePayload => {
+	const payload: AccountUpdatePayload = { organizationId: props.organizationId, accountId: props.accountId }
+	if (props.ownerUserId !== undefined) payload.ownerUserId = props.ownerUserId
+	if (props.tags !== undefined) payload.tags = props.tags
+	if (props.lifecycleStageOverride !== undefined)
+		payload.lifecycleStageOverride = props.lifecycleStageOverride
+	if (props.name !== undefined) payload.name = props.name
+	return payload
+}
+
 export const updateAccountAction = optimisticAction({
 	collections: [customerAccountCollection],
-	onMutate: (props: {
-		readonly organizationId: OrganizationId
-		readonly accountId: CustomerAccountId
-		readonly ownerUserId?: UserId | null
-		readonly tags?: ReadonlyArray<string>
-		readonly lifecycleStageOverride?: Customers.LifecycleStage | null
-		readonly name?: string
-	}) => {
+	onMutate: (props: AccountUpdate) => {
 		customerAccountCollection.update(props.accountId, (account) => {
 			if (props.ownerUserId !== undefined) account.ownerUserId = props.ownerUserId
 			if (props.tags !== undefined) account.tags = [...props.tags]
@@ -360,30 +373,50 @@ export const updateAccountAction = optimisticAction({
 	mutate: (props) =>
 		Effect.gen(function* () {
 			const client = yield* HazelRpc
-			const payload: AccountUpdatePayload = {
-				organizationId: props.organizationId,
-				accountId: props.accountId,
-			}
-			if (props.ownerUserId !== undefined) payload.ownerUserId = props.ownerUserId
-			if (props.tags !== undefined) payload.tags = props.tags
-			if (props.lifecycleStageOverride !== undefined)
-				payload.lifecycleStageOverride = props.lifecycleStageOverride
-			if (props.name !== undefined) payload.name = props.name
-			const result = yield* client("customers.account.update", payload)
+			const result = yield* client("customers.account.update", accountUpdatePayload(props))
 			return { data: result, transactionId: result.transactionId }
 		}),
 })
 
-/** The list's bulk actions: one owner (null: unassign) and/or tags added and removed. */
+/** `customers.account.bulkUpdate`'s limit on ids per call. */
+export const BULK_BATCH = 500
+
+interface BulkUpdate {
+	readonly organizationId: OrganizationId
+	readonly accountIds: ReadonlyArray<CustomerAccountId>
+	readonly ownerUserId?: UserId | null
+	readonly addTags?: ReadonlyArray<string>
+	readonly removeTags?: ReadonlyArray<string>
+}
+
+/** `customers.account.bulkUpdate`'s payloads: BULK_BATCH ids each, only the fields given. */
+export const bulkUpdatePayloads = (
+	props: BulkUpdate,
+): readonly [BulkUpdatePayload, ...Array<BulkUpdatePayload>] => {
+	const payloadOf = (start: number): BulkUpdatePayload => {
+		const payload: BulkUpdatePayload = {
+			organizationId: props.organizationId,
+			accountIds: props.accountIds.slice(start, start + BULK_BATCH),
+		}
+		if (props.ownerUserId !== undefined) payload.ownerUserId = props.ownerUserId
+		if (props.addTags !== undefined) payload.addTags = props.addTags
+		if (props.removeTags !== undefined) payload.removeTags = props.removeTags
+		return payload
+	}
+	const rest: Array<BulkUpdatePayload> = []
+	for (let start = BULK_BATCH; start < props.accountIds.length; start += BULK_BATCH)
+		rest.push(payloadOf(start))
+	return [payloadOf(0), ...rest]
+}
+
+/**
+ * The list's bulk actions: one owner (null: unassign) and/or tags added and removed, in batches of
+ * BULK_BATCH run in order; `data.updated` is how many the server changed, and the last batch's
+ * transaction is awaited (the org's stream delivers them in order).
+ */
 export const bulkUpdateAccountsAction = optimisticAction({
 	collections: [customerAccountCollection],
-	onMutate: (props: {
-		readonly organizationId: OrganizationId
-		readonly accountIds: ReadonlyArray<CustomerAccountId>
-		readonly ownerUserId?: UserId | null
-		readonly addTags?: ReadonlyArray<string>
-		readonly removeTags?: ReadonlyArray<string>
-	}) => {
+	onMutate: (props: BulkUpdate) => {
 		const removed = new Set(props.removeTags ?? [])
 		customerAccountCollection.update([...props.accountIds], (accounts) => {
 			for (const account of accounts) {
@@ -399,14 +432,13 @@ export const bulkUpdateAccountsAction = optimisticAction({
 	mutate: (props) =>
 		Effect.gen(function* () {
 			const client = yield* HazelRpc
-			const payload: BulkUpdatePayload = {
-				organizationId: props.organizationId,
-				accountIds: props.accountIds,
+			const [first, ...rest] = bulkUpdatePayloads(props)
+			let { updated, transactionId } = yield* client("customers.account.bulkUpdate", first)
+			for (const payload of rest) {
+				const result = yield* client("customers.account.bulkUpdate", payload)
+				updated += result.updated
+				transactionId = result.transactionId
 			}
-			if (props.ownerUserId !== undefined) payload.ownerUserId = props.ownerUserId
-			if (props.addTags !== undefined) payload.addTags = props.addTags
-			if (props.removeTags !== undefined) payload.removeTags = props.removeTags
-			const result = yield* client("customers.account.bulkUpdate", payload)
-			return { data: { updated: result.updated }, transactionId: result.transactionId }
+			return { data: { updated }, transactionId }
 		}),
 })

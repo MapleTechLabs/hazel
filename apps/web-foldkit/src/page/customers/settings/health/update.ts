@@ -60,6 +60,7 @@ export const init = (): Return => ({
 		checkAccount: Select.init({ id: CHECK_ACCOUNT_ID }),
 		check: null,
 		isSaving: false,
+		typing: null,
 	},
 })
 
@@ -156,16 +157,23 @@ const dryRunSucceeded = (model: Model, shared: Shared, result: Customers.HealthD
 
 const discarded = (model: Model): Return => previewed({ ...model, draft: null, lastWeight: null })
 
+/** Keeps what was typed in a number field (`-`, `1.`): the draft only holds the number. */
+const typed = (model: Model, field: string, text: string): Model => ({ ...model, typing: { field, text } })
+
 export const update = (model: Model, message: Message, shared: Shared): Return =>
 	Message.match<Return>(message, {
 		UpdatedSettings: ({ settings }) => ({ model: settled({ ...model, settings }) }),
 		UpdatedAccounts: ({ accounts }) => ({ model: { ...model, accounts } }),
 
 		ChangedWeight: ({ key, value }) => editedWeight(model, key, value),
-		ChangedBand: ({ band, value }) => edited(model, (draft) => withBand(draft, band, value)),
-		ChangedStep: ({ list, index, field, value }) =>
-			edited(model, (draft) => withStep(draft, list, index, field, value)),
-		ChangedScore: ({ field, value }) => edited(model, (draft) => withScore(draft, field, value)),
+		ChangedBand: ({ band, value, text }) =>
+			edited(typed(model, band, text), (draft) => withBand(draft, band, value)),
+		ChangedStep: ({ list, index, field, value, text }) =>
+			edited(typed(model, `${list}.${index}.${field}`, text), (draft) =>
+				withStep(draft, list, index, field, value),
+			),
+		ChangedScore: ({ field, value, text }) =>
+			edited(typed(model, field, text), (draft) => withScore(draft, field, value)),
 		GotSliderMessage: ({ id, message }) => sliderChanged(model, id, message),
 		PressedScaleWeights: () =>
 			edited({ ...model, lastWeight: null }, (draft) => ({

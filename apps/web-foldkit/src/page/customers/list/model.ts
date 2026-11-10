@@ -74,11 +74,16 @@ export const Model = Schema.Struct({
 	members: Schema.Array(MemberRow),
 	connectedProviders: Schema.NullOr(Schema.Array(Customers.CustomerProvider)),
 	lastComputedAtMs: Schema.NullOr(Schema.Number),
+	/** What totals and MRR filters are shown in (the org's settings). */
+	reportingCurrency: Schema.String,
 	/** 30 days of daily active users per account (`customers.sparklines`). */
 	sparklines: Schema.Record(Schema.String, Schema.Array(Schema.Number)),
 	/** Accounts whose sparkline was asked for (answered or not), so none is asked twice. */
 	requestedSparklines: Schema.Array(Schema.String),
+	/** Always among the visible rows: a search or filter change drops what it hides. */
 	selected: Schema.Array(CustomerAccountId),
+	/** The table renders this many rows; "Show more" adds ROW_PAGE. */
+	rowLimit: Schema.Int,
 	/** The keyboard cursor (j/k). */
 	focusedId: Schema.NullOr(CustomerAccountId),
 	/** The pointer rests on this row's name; the card shows once the delay passes. */
@@ -106,6 +111,9 @@ export const VIEW_MENU_ID = "customers-list-view"
 export const OWNER_MENU_ID = "customers-list-owner"
 export const SAVE_MODAL_ID = "customers-list-save"
 export const HOVER_CARD_ID = "customers-list-hover-card"
+
+/** Rows rendered at a time: thousands of rows make every keystroke slow. */
+export const ROW_PAGE = 200
 
 /** At most this many accounts per `customers.sparklines` call (the RPC's limit). */
 export const SPARKLINE_BATCH = 200
@@ -330,13 +338,79 @@ export const sortAccounts = (
 	)
 }
 
+/**
+ * Remembers the last result: update and view ask for the same derived rows many times per Message,
+ * and recomputing them over thousands of accounts on each ask is what makes the list slow.
+ */
+const memoLast = <A>() => {
+	let last: { readonly inputs: ReadonlyArray<unknown>; readonly value: A } | null = null
+	return (inputs: ReadonlyArray<unknown>, compute: () => A): A => {
+		if (last !== null && inputs.every((input, index) => Object.is(input, last?.inputs[index])))
+			return last.value
+		const value = compute()
+		last = { inputs, value }
+		return value
+	}
+}
+
+const visibleMemo = memoLast<ReadonlyArray<AccountRow>>()
+
 /** The rows the table shows, in order. */
 export const visibleAccounts = (model: Model, viewer: Viewer): ReadonlyArray<AccountRow> =>
-	sortAccounts(
-		(model.accounts ?? []).filter((account) => matchesFilters(effectiveFilters(model), account, viewer)),
-		model.draft.sort,
-		model.members,
+	visibleMemo(
+		[
+			model.accounts,
+			model.draft.filters,
+			model.draft.sort,
+			model.search,
+			model.members,
+			viewer.userId,
+			viewer.nowMs,
+		],
+		() =>
+			sortAccounts(
+				(model.accounts ?? []).filter((account) =>
+					matchesFilters(effectiveFilters(model), account, viewer),
+				),
+				model.draft.sort,
+				model.members,
+			),
 	)
+
+const tabCountsMemo = memoLast<ReadonlyMap<string | null, number>>()
+
+/** Each view tab's count, by tab key. */
+export const viewTabCounts = (model: Model, viewer: Viewer): ReadonlyMap<string | null, number> =>
+	tabCountsMemo([model.accounts, model.views, viewer.userId, viewer.nowMs], () => {
+		const accounts = model.accounts ?? []
+		return new Map(
+			viewTabsOf(model.views).map((tab) => [
+				tab.key,
+				countMatching(accounts, tab.draft.filters, viewer),
+			]),
+		)
+	})
+
+const perOwnerMemo = memoLast<ReadonlyMap<UserId | null, number>>()
+
+/** How many accounts each owner has (null: unowned): the owner menu's counts. */
+export const accountsPerOwner = (
+	accounts: ReadonlyArray<AccountRow> | null,
+): ReadonlyMap<UserId | null, number> =>
+	perOwnerMemo([accounts], () => {
+		const counts = new Map<UserId | null, number>()
+		for (const account of accounts ?? [])
+			counts.set(account.ownerUserId, (counts.get(account.ownerUserId) ?? 0) + 1)
+		return counts
+	})
+
+/** The selection without the rows the list no longer shows. */
+export const keepVisibleSelection = (model: Model, viewer: Viewer): Model => {
+	if (model.selected.length === 0) return model
+	const visible = new Set<string>(visibleAccounts(model, viewer).map((account) => account.id))
+	const selected = model.selected.filter((id) => visible.has(id))
+	return selected.length === model.selected.length ? model : { ...model, selected }
+}
 
 /** A header press: the same column flips, another starts descending (ascending for text). */
 export const nextSort = (sort: Customers.ViewSort, column: Customers.ListColumn): Customers.ViewSort =>
@@ -479,10 +553,11 @@ export const withFilter = <K extends keyof Customers.ViewFilters>(
 
 // SPARKLINES
 
-/** The next accounts (by display order) whose sparkline was not asked for yet. */
+/** The next rendered accounts (by display order) whose sparkline was not asked for yet. */
 export const missingSparklines = (model: Model, viewer: Viewer): ReadonlyArray<CustomerAccountId> => {
 	const requested = new Set(model.requestedSparklines)
 	return visibleAccounts(model, viewer)
+		.slice(0, model.rowLimit)
 		.filter((account) => !requested.has(account.id))
 		.slice(0, SPARKLINE_BATCH)
 		.map((account) => account.id)

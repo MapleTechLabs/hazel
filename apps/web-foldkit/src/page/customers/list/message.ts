@@ -1,5 +1,5 @@
 import * as Customers from "@hazel/domain/customers"
-import { CustomerAccountId, CustomerSavedViewId } from "@hazel/schema"
+import { CustomerAccountId, CustomerSavedViewId, OrganizationId } from "@hazel/schema"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 import { CommonReason } from "~/lib/error-messages"
@@ -25,7 +25,7 @@ export const Message = defineMessageUnion({
 	UpdatedViews: { views: Schema.Array(ViewRow) },
 	UpdatedMembers: { members: Schema.Array(MemberRow) },
 	UpdatedConnectedProviders: { providers: Schema.Array(Customers.CustomerProvider) },
-	UpdatedLastComputedAt: { lastComputedAtMs: Schema.NullOr(Schema.Number) },
+	UpdatedSettings: { lastComputedAtMs: Schema.NullOr(Schema.Number), reportingCurrency: Schema.String },
 
 	ClickedViewTab: { key: Schema.NullOr(Schema.String) },
 	ChangedSearch: { value: Schema.String },
@@ -52,8 +52,9 @@ export const Message = defineMessageUnion({
 	ChangedSaveName: { value: Schema.String },
 	ToggledSaveShared: { isShared: Schema.Boolean },
 	SubmittedSave: {},
-	SucceededViewAction: { action: ViewAction, viewId: CustomerSavedViewId },
-	FailedViewAction: { action: ViewAction, reason: ViewFailure },
+	/** Command answers name their organization: the page is keyed by org, an answer for another is dropped. */
+	SucceededViewAction: { organizationId: OrganizationId, action: ViewAction, viewId: CustomerSavedViewId },
+	FailedViewAction: { organizationId: OrganizationId, action: ViewAction, reason: ViewFailure },
 
 	ToggledRow: { accountId: CustomerAccountId, isSelected: Schema.Boolean },
 	ToggledAllRows: { isSelected: Schema.Boolean },
@@ -63,11 +64,17 @@ export const Message = defineMessageUnion({
 	GotTagPopoverMessage: { message: Popover.Message },
 	ChangedTagInput: { value: Schema.String },
 	SubmittedTag: { tag: Schema.String },
-	SucceededBulkUpdate: { action: BulkAction, count: Schema.Int, label: Schema.String },
-	FailedBulkUpdate: { action: BulkAction, reason: CommonReason },
+	SucceededBulkUpdate: {
+		organizationId: OrganizationId,
+		action: BulkAction,
+		count: Schema.Int,
+		label: Schema.String,
+	},
+	FailedBulkUpdate: { organizationId: OrganizationId, action: BulkAction, reason: CommonReason },
 	PressedExport: { scope: Schema.Literals(["all", "selected"]) },
 	CompletedExport: {},
 
+	PressedShowMoreRows: {},
 	ClickedRow: { accountId: CustomerAccountId },
 	PressedListKey: { key: ListKey },
 	HoveredRow: { accountId: CustomerAccountId },
@@ -76,11 +83,15 @@ export const Message = defineMessageUnion({
 
 	PressedConnect: { provider: Customers.CustomerProvider },
 
-	SucceededFetchSparklines: { sparklines: Schema.Array(Customers.Sparkline) },
-	FailedFetchSparklines: { reason: CommonReason },
+	SucceededFetchSparklines: {
+		organizationId: OrganizationId,
+		sparklines: Schema.Array(Customers.Sparkline),
+	},
+	FailedFetchSparklines: { organizationId: OrganizationId, reason: CommonReason },
 
 	CompletedFocusSearch: {},
 	CompletedScrollRow: {},
 	CompletedPositionHoverCard: {},
+	CompletedLetModifierClicksThrough: {},
 })
 export type Message = typeof Message.Type

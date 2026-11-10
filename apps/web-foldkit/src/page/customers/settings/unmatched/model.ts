@@ -119,6 +119,11 @@ export const Model = Schema.Struct({
 	selected: Schema.Array(CustomerUnmatchedRecordId),
 	/** Records taken off the open list while their action runs; a failure puts them back. */
 	inFlight: Schema.Array(RecordRow),
+	/**
+	 * Open records resolved since the last open page was asked for: the cursor is an offset, and each
+	 * one moved the rows after it up by one, so "Load more" starts that many earlier.
+	 */
+	resolvedSincePage: Schema.Int,
 	/** Ignore rules deleted while the delete runs. */
 	deletedRules: Schema.Array(IgnoreRuleRow),
 	sortMenu: Menu.Model,
@@ -239,6 +244,14 @@ export interface IgnorePattern {
 
 /** `staging-acme` → `staging-*`; underscore id prefixes (`cus_`, `org_`) would match every record. */
 const PREFIX = /^([^-\s]+)-\S/
+
+/** Whether a rule made from `source`'s pattern also covers `record` (same provider and kind). */
+export const matchesPattern = (source: RecordRow, pattern: IgnorePattern, record: RecordRow): boolean =>
+	record.provider === source.provider &&
+	record.entityType === source.entityType &&
+	(pattern.field === "domain"
+		? record.domain?.toLowerCase() === pattern.pattern.toLowerCase()
+		: record.externalId.toLowerCase().startsWith(pattern.pattern.slice(0, -1).toLowerCase()))
 
 /** The patterns offered for a record: its domain, and its external id's `<prefix>-*`. */
 export const ignorePatternsOf = (record: RecordRow): ReadonlyArray<IgnorePattern> => {

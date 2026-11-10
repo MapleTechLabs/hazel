@@ -83,11 +83,15 @@ export const update = (model: Model, message: Message, shared: Shared): Return =
 						}),
 					}
 				: { model },
+		// Numbers held for another range are dropped, so the failure (and its retry) shows.
 		FailedFetchOverview: ({ range, reason }) =>
 			range === model.range
 				? {
 						model: modifyFields(model, {
-							overview: (current) => AsyncData.settle(current, Result.fail(reason)),
+							overview: (current) =>
+								Option.exists(AsyncData.getData(current), (data) => data.range === range)
+									? AsyncData.settle(current, Result.fail(reason))
+									: AsyncData.Failure({ error: reason }),
 						}),
 					}
 				: { model },

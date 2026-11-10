@@ -27,6 +27,8 @@ import { COLUMN_LABEL } from "./model"
 
 export interface TableContext {
 	readonly orgSlug: string
+	/** The org's reporting currency: the MRR total's. */
+	readonly currency: string
 	readonly nowMs: number
 	readonly membersById: ReadonlyMap<string, MemberRow>
 	readonly sparklines: Readonly<Record<string, ReadonlyArray<number>>>
@@ -101,7 +103,14 @@ export const csvValue = (
 	}
 }
 
-const escapeCsv = (value: string) => (/[",\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value)
+/** A spreadsheet runs a cell starting with one of these as a formula; plain numbers stay numbers. */
+const FORMULA_START = /^[=+\-@\t\r]/
+const NUMBER = /^-?\d+(\.\d+)?%?$/
+
+const escapeCsv = (raw: string) => {
+	const value = FORMULA_START.test(raw) && !NUMBER.test(raw) ? `'${raw}` : raw
+	return /[",\n\r]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value
+}
 
 /** The rows as CSV, one column per shown column (plus the domain after the name). */
 export const toCsv = (
@@ -125,6 +134,7 @@ const footerOf = <M>(
 	h: HtmlBuilder<M>,
 	column: Customers.ListColumn,
 	accounts: ReadonlyArray<AccountRow>,
+	currency: string,
 ): Html | string | undefined => {
 	switch (column) {
 		case "name":
@@ -135,7 +145,7 @@ const footerOf = <M>(
 		case "mrr":
 			return formatMoney(
 				accounts.reduce((sum, account) => sum + account.mrrMinor, 0),
-				accounts[0]?.currency ?? "USD",
+				currency,
 			)
 		case "health": {
 			const scored = accounts.filter(
@@ -292,5 +302,5 @@ export const tableColumns = <M>(
 		sortable: true,
 		...COLUMN_LAYOUT[column],
 		cell: (account) => cellOf(h, column, account, context),
-		footer: footerOf(h, column, accounts),
+		footer: footerOf(h, column, accounts, context.currency),
 	}))

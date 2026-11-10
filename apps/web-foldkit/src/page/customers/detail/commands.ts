@@ -17,7 +17,7 @@ import {
 } from "../../../customers/actions"
 import { catchCommon } from "../../../data/actions"
 import { HazelRpc } from "../../../rpc"
-import { type NoteAction, Message, type SignalAction } from "./message"
+import { Message, type NoteAction, type NoteDraft, type SignalAction } from "./message"
 import { COMPOSER_ID, PAGE_SIZE } from "./model"
 
 /** The customer page's Commands: its reads, and the account, note and signal actions. */
@@ -31,28 +31,30 @@ export const FetchCustomerDetail = Command.define("FetchCustomerDetail", {
 	messages: [Message.SucceededFetchDetail, Message.FailedFetchDetail],
 	execute: (args) =>
 		HazelRpc.use((rpc) => rpc("customers.account.detail", args)).pipe(
-			Effect.map((detail) => Message.SucceededFetchDetail({ detail })),
+			Effect.map((detail) => Message.SucceededFetchDetail({ accountId: args.accountId, detail })),
 			Effect.catchTag("CustomersNotFoundError", () =>
-				Effect.succeed(Message.FailedFetchDetail({ reason: "NotFound" })),
+				Effect.succeed(Message.FailedFetchDetail({ accountId: args.accountId, reason: "NotFound" })),
 			),
-			catchCommon((reason) => Message.FailedFetchDetail({ reason })),
+			catchCommon((reason) => Message.FailedFetchDetail({ accountId: args.accountId, reason })),
 		),
 })
 
 export const FetchCustomerUsage = Command.define("FetchCustomerUsage", {
 	args: { ...target, metricKey: Schema.String, range: Customers.CustomersRange },
 	messages: [Message.SucceededFetchUsage, Message.FailedFetchUsage],
-	execute: ({ metricKey, range, ...args }) =>
-		HazelRpc.use((rpc) =>
+	execute: ({ metricKey, range, ...args }) => {
+		const asked = { accountId: args.accountId, metricKey, range }
+		return HazelRpc.use((rpc) =>
 			rpc("customers.account.series", { ...args, metricKeys: [metricKey], range }),
 		).pipe(
-			Effect.map(({ series }) => Message.SucceededFetchUsage({ metricKey, range, series })),
+			Effect.map(({ series }) => Message.SucceededFetchUsage({ ...asked, series })),
 			// A deleted account shows its not-found state from the detail call; the chart only retries.
 			Effect.catchTag("CustomersNotFoundError", () =>
-				Effect.succeed(Message.FailedFetchUsage({ metricKey, range, reason: "Unexpected" })),
+				Effect.succeed(Message.FailedFetchUsage({ ...asked, reason: "Unexpected" })),
 			),
-			catchCommon((reason) => Message.FailedFetchUsage({ metricKey, range, reason })),
-		),
+			catchCommon((reason) => Message.FailedFetchUsage({ ...asked, reason })),
+		)
+	},
 })
 
 export const FetchCustomerMrrHistory = Command.define("FetchCustomerMrrHistory", {
@@ -62,11 +64,15 @@ export const FetchCustomerMrrHistory = Command.define("FetchCustomerMrrHistory",
 		HazelRpc.use((rpc) =>
 			rpc("customers.account.series", { ...args, metricKeys: ["mrr"], range: "12m" }),
 		).pipe(
-			Effect.map(({ series }) => Message.SucceededFetchMrrHistory({ series })),
-			Effect.catchTag("CustomersNotFoundError", () =>
-				Effect.succeed(Message.FailedFetchMrrHistory({ reason: "Unexpected" })),
+			Effect.map(({ series }) =>
+				Message.SucceededFetchMrrHistory({ accountId: args.accountId, series }),
 			),
-			catchCommon((reason) => Message.FailedFetchMrrHistory({ reason })),
+			Effect.catchTag("CustomersNotFoundError", () =>
+				Effect.succeed(
+					Message.FailedFetchMrrHistory({ accountId: args.accountId, reason: "Unexpected" }),
+				),
+			),
+			catchCommon((reason) => Message.FailedFetchMrrHistory({ accountId: args.accountId, reason })),
 		),
 })
 
@@ -78,11 +84,15 @@ export const FetchCustomerContacts = Command.define("FetchCustomerContacts", {
 	messages: [Message.SucceededFetchContacts, Message.FailedFetchContacts],
 	execute: ({ cursor, ...args }) =>
 		HazelRpc.use((rpc) => rpc("customers.contacts.list", { ...args, ...page(cursor) })).pipe(
-			Effect.map((result) => Message.SucceededFetchContacts({ page: result })),
-			Effect.catchTag("CustomersNotFoundError", () =>
-				Effect.succeed(Message.FailedFetchContacts({ reason: "Unexpected" })),
+			Effect.map((result) =>
+				Message.SucceededFetchContacts({ accountId: args.accountId, page: result }),
 			),
-			catchCommon((reason) => Message.FailedFetchContacts({ reason })),
+			Effect.catchTag("CustomersNotFoundError", () =>
+				Effect.succeed(
+					Message.FailedFetchContacts({ accountId: args.accountId, reason: "Unexpected" }),
+				),
+			),
+			catchCommon((reason) => Message.FailedFetchContacts({ accountId: args.accountId, reason })),
 		),
 })
 
@@ -91,8 +101,10 @@ export const FetchCustomerInvoices = Command.define("FetchCustomerInvoices", {
 	messages: [Message.SucceededFetchInvoices, Message.FailedFetchInvoices],
 	execute: ({ cursor, ...args }) =>
 		HazelRpc.use((rpc) => rpc("customers.invoices.list", { ...args, ...page(cursor) })).pipe(
-			Effect.map((result) => Message.SucceededFetchInvoices({ page: result })),
-			catchCommon((reason) => Message.FailedFetchInvoices({ reason })),
+			Effect.map((result) =>
+				Message.SucceededFetchInvoices({ accountId: args.accountId, page: result }),
+			),
+			catchCommon((reason) => Message.FailedFetchInvoices({ accountId: args.accountId, reason })),
 		),
 })
 
@@ -115,8 +127,10 @@ export const FetchCustomerEvents = Command.define("FetchCustomerEvents", {
 				...page(cursor),
 			}),
 		).pipe(
-			Effect.map((result) => Message.SucceededFetchEvents({ filter, page: result })),
-			catchCommon((reason) => Message.FailedFetchEvents({ filter, reason })),
+			Effect.map((result) =>
+				Message.SucceededFetchEvents({ accountId: args.accountId, filter, page: result }),
+			),
+			catchCommon((reason) => Message.FailedFetchEvents({ accountId: args.accountId, filter, reason })),
 		),
 })
 
@@ -141,15 +155,16 @@ export const UpdateCustomerAccount = Command.define("UpdateCustomerAccount", {
 
 // NOTES
 
+/** `draft` is the text a failed save or edit hands back (null for pin and delete). */
 const settleNote =
-	(action: NoteAction) =>
+	(action: NoteAction, draft: NoteDraft | null = null) =>
 	<A, R>(effect: Effect.Effect<A, CustomersNotFoundError | CommonError, R>) =>
 		effect.pipe(
 			Effect.as(Message.SucceededNoteAction({ action })),
 			Effect.catchTag("CustomersNotFoundError", () =>
-				Effect.succeed(Message.FailedNoteAction({ action, reason: "NotFound" })),
+				Effect.succeed(Message.FailedNoteAction({ action, reason: "NotFound", draft })),
 			),
-			catchCommon((reason) => Message.FailedNoteAction({ action, reason })),
+			catchCommon((reason) => Message.FailedNoteAction({ action, reason, draft })),
 		)
 
 const noteMessages = [Message.SucceededNoteAction, Message.FailedNoteAction]
@@ -157,7 +172,7 @@ const noteMessages = [Message.SucceededNoteAction, Message.FailedNoteAction]
 export const CreateCustomerNote = Command.define("CreateCustomerNote", {
 	args: { ...target, authorUserId: UserId, body: Schema.String, pinned: Schema.Boolean },
 	messages: noteMessages,
-	execute: (args) => createNoteAction(args).pipe(settleNote("create")),
+	execute: (args) => createNoteAction(args).pipe(settleNote("create", { noteId: null, body: args.body })),
 })
 
 export const UpdateCustomerNote = Command.define("UpdateCustomerNote", {
@@ -168,7 +183,10 @@ export const UpdateCustomerNote = Command.define("UpdateCustomerNote", {
 		pinned: Schema.optionalKey(Schema.Boolean),
 	},
 	messages: noteMessages,
-	execute: (args) => updateNoteAction(args).pipe(settleNote("update")),
+	execute: (args) =>
+		updateNoteAction(args).pipe(
+			settleNote("update", args.body === undefined ? null : { noteId: args.noteId, body: args.body }),
+		),
 })
 
 export const DeleteCustomerNote = Command.define("DeleteCustomerNote", {

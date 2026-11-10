@@ -149,15 +149,26 @@ const LOGO_SIZE = {
 	lg: "size-12 rounded-xl text-base",
 } as const satisfies Record<LogoSize, string>
 
+/** A provider's logo URL, if it is https (anything else, `http:` or `data:` included, shows initials). */
+export const safeLogoUrl = (url: string | null | undefined): string | null => {
+	if (!url) return null
+	try {
+		return new URL(url).protocol === "https:" ? url : null
+	} catch {
+		return null
+	}
+}
+
 /** The company's logo, else its initials on a tint. Decorative: the name is always next to it. */
 export const companyLogo = <M>(
 	h: HtmlBuilder<M>,
 	options: Readonly<{ name: string; logoUrl?: string | null; size?: LogoSize; className?: string }>,
 ): Html => {
 	const size = LOGO_SIZE[options.size ?? "sm"]
-	return options.logoUrl
+	const logoUrl = safeLogoUrl(options.logoUrl)
+	return logoUrl !== null
 		? h.img([
-				h.Src(options.logoUrl),
+				h.Src(logoUrl),
 				h.Alt(""),
 				h.Attribute("loading", "lazy"),
 				h.Class(twMerge("shrink-0 bg-secondary object-cover", size, options.className)),

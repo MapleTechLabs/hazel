@@ -86,6 +86,16 @@ const loaded = (route: Parameters<typeof init>[0] = overviewRoute): Model =>
 	pageUpdate(init(route, shared).model, Message.UpdatedConnections({ connections: [clerk, maple, stripe] }))
 		.model
 
+describe("data sources: the unmatched count", () => {
+	test("admins ask for it; members, whom the RPC refuses, do not", () => {
+		expect((init(overviewRoute, shared).commands ?? []).map((command) => command.name)).toEqual([
+			"FetchUnmatchedCount",
+		])
+		const member = { ...shared, member: shared.member && { ...shared.member, role: "member" as const } }
+		expect(init(overviewRoute, member).commands ?? []).toEqual([])
+	})
+})
+
 describe("data sources: connect", () => {
 	test("Test and connect sends the key and the form's config, then shows the webhook step", () => {
 		story(
@@ -116,7 +126,11 @@ describe("data sources: connect", () => {
 			),
 			Command.resolve(
 				ConnectCustomerSource,
-				Message.SucceededConnect({ connectionId: stripe.id, accountName: "Northwind Inc." }),
+				Message.SucceededConnect({
+					provider: "stripe",
+					connectionId: stripe.id,
+					accountName: "Northwind Inc.",
+				}),
 			),
 			model((current) => {
 				expect(current.connectForm?.connected).toEqual({
@@ -134,7 +148,10 @@ describe("data sources: connect", () => {
 					webhookSecret: "whsec_1",
 				}),
 			),
-			Command.resolve(SaveCustomerWebhookSecret, Message.SucceededSaveWebhookSecret()),
+			Command.resolve(
+				SaveCustomerWebhookSecret,
+				Message.SucceededSaveWebhookSecret({ connectionId: stripe.id }),
+			),
 			model((current) => {
 				expect(current.connectModal.isOpen).toBe(false)
 				expect(current.connectForm).toBeNull()
@@ -149,7 +166,10 @@ describe("data sources: connect", () => {
 			message(Message.PressedConnect({ provider: "stripe" })),
 			message(Message.ChangedApiKey({ value: "rk_live_1" })),
 			message(Message.SubmittedConnect()),
-			Command.resolve(ConnectCustomerSource, Message.FailedConnect({ reason: "Refused" })),
+			Command.resolve(
+				ConnectCustomerSource,
+				Message.FailedConnect({ provider: "stripe", reason: "Refused" }),
+			),
 			model((current) => {
 				expect(current.connectForm?.failure).toBe("Refused")
 				expect(current.connectForm?.connected).toBeNull()
@@ -167,9 +187,25 @@ describe("data sources: connect", () => {
 			message(Message.PressedConnect({ provider: "autumn" })),
 			message(Message.ChangedApiKey({ value: "am_sk_1" })),
 			message(Message.SubmittedConnect()),
-			Command.resolve(ConnectCustomerSource, Message.FailedConnect({ reason: "ComingSoon" })),
+			Command.resolve(
+				ConnectCustomerSource,
+				Message.FailedConnect({ provider: "autumn", reason: "ComingSoon" }),
+			),
 			model((current) => expect(current.connectForm?.failure).toBe("ComingSoon")),
 		)
+	})
+
+	test("an answer for another provider's form is dropped", () => {
+		const opened = pageUpdate(loaded(), Message.PressedConnect({ provider: "autumn" })).model
+		const stale = pageUpdate(
+			opened,
+			Message.SucceededConnect({ provider: "stripe", connectionId: stripe.id, accountName: null }),
+		).model
+		expect(stale.connectForm?.connected).toBeNull()
+		expect(
+			pageUpdate(opened, Message.FailedConnect({ provider: "stripe", reason: "Refused" })).model
+				.connectForm?.failure,
+		).toBeNull()
 	})
 
 	test("Reconnect rotates the failing connection's key", () => {
@@ -190,7 +226,11 @@ describe("data sources: connect", () => {
 			),
 			Command.resolve(
 				ConnectCustomerSource,
-				Message.SucceededConnect({ connectionId: maple.id, accountName: "Northwind" }),
+				Message.SucceededConnect({
+					provider: "maple",
+					connectionId: maple.id,
+					accountName: "Northwind",
+				}),
 			),
 			// Maple has no webhooks: Done closes.
 			message(Message.SubmittedWebhookSecret()),

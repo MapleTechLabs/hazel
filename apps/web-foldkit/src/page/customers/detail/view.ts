@@ -89,16 +89,16 @@ const MATCH_LABEL = {
 
 // HEADER
 
-const ownerMenu = (h: HtmlBuilder<Message>, model: Model, context: Context, compact: boolean): Html =>
+/** The header's owner picker; the sidebar only shows the owner (one Menu model, one rendering). */
+const ownerMenu = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =>
 	menu(h, model.ownerMenu, {
 		entries: ownerEntries(model.members),
 		trigger: (attributes, overlay) =>
 			button(
 				h,
 				{
-					intent: compact ? "plain" : "outline",
+					intent: "outline",
 					size: "xs",
-					className: compact ? "-ml-2" : undefined,
 					attributes: [...attributes, h.AriaLabel("Owner")],
 				},
 				[
@@ -264,7 +264,7 @@ const header = (h: HtmlBuilder<Message>, model: Model, context: Context): Html =
 									h.div(
 										[h.Class("flex flex-wrap items-center gap-2 pt-1")],
 										[
-											ownerMenu(h, model, context, false),
+											ownerMenu(h, model, context),
 											h.span([h.Class("mx-1 h-5 w-px bg-border")]),
 											...refs
 												.filter(
@@ -517,7 +517,7 @@ const sidebar = (h: HtmlBuilder<Message>, model: Model, context: Context): Html 
 		],
 		[
 			sidebarSection(h, "Properties", null, [
-				property(h, "Owner", ownerMenu(h, model, context, true)),
+				property(h, "Owner", personLabel(h, memberOf(context, account.ownerUserId))),
 				property(
 					h,
 					"Stage",

@@ -116,6 +116,8 @@ export const Model = Schema.Struct({
 	checkAccount: Select.Model,
 	check: Schema.NullOr(Check),
 	isSaving: Schema.Boolean,
+	/** The number field last typed in (its `invalidFieldsOf` key) and its text, shown while it reads as the value. */
+	typing: Schema.NullOr(Schema.Struct({ field: Schema.String, text: Schema.String })),
 })
 export type Model = typeof Model.Type
 

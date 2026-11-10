@@ -82,12 +82,11 @@ const bandHandle = (h: H, model: Model, band: BandKey, context: Context): Html =
 }
 
 const bandInput = (h: H, band: BandKey, context: Context): Html =>
-	numberInput(h, {
-		value: textOf(context.draft.bands[band]),
+	numberInput(h, context, {
+		field: band,
+		value: context.draft.bands[band],
 		ariaLabel: band === "healthyMin" ? "Healthy from score" : "At risk from score",
-		isInvalid: context.invalid.has(band),
-		isDisabled: !context.canEdit,
-		onInput: (text) => Message.ChangedBand({ band, value: parseNumber(text) }),
+		onInput: (text) => Message.ChangedBand({ band, value: parseNumber(text), text }),
 	})
 
 const statusLabel = (h: H, status: Status): Html =>

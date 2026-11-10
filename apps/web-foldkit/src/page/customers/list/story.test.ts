@@ -20,6 +20,7 @@ import {
 	visibleAccounts,
 } from "./model"
 import { listKeyOf } from "./subscription"
+import { toCsv } from "./table"
 import { init, routeChanged, update, viewerOf } from "./update"
 
 // `ui/aria/*` names `document` when its modules load; the update loop never touches it.
@@ -275,10 +276,26 @@ describe("customers list: saving views", () => {
 		expect(saved.model.saveForm).toBeNull()
 		const done = update(
 			saved.model,
-			Message.SucceededViewAction({ action: "create", viewId: mine.id }),
+			Message.SucceededViewAction({ organizationId, action: "create", viewId: mine.id }),
 			shared,
 		)
 		expect(done.outMessage?._tag).toBe("RequestedNavigation")
+	})
+
+	test("an answer for the org shown before is dropped", () => {
+		const other = Schema.decodeSync(OrganizationId)(uuid(4))
+		const stale = update(
+			loaded(),
+			Message.SucceededViewAction({ organizationId: other, action: "create", viewId: mine.id }),
+			shared,
+		)
+		expect(stale.outMessage).toBeUndefined()
+		const failed = update(
+			loaded(),
+			Message.FailedBulkUpdate({ organizationId: other, action: "tag", reason: "Offline" }),
+			shared,
+		)
+		expect(failed.outMessage).toBeUndefined()
 	})
 
 	test("Save changes updates the current view; deleting goes back to All", () => {
@@ -335,6 +352,77 @@ describe("customers list: selection and bulk actions", () => {
 		expect(commandNames(result)).toContain("BulkAddTag")
 		expect(result.model.accounts?.find((row) => row.id === kestrel.id)?.tags).toEqual(["enterprise"])
 		expect(result.model.accounts?.find((row) => row.id === acme.id)?.tags).toEqual(["enterprise"])
+	})
+
+	test("a failed bulk update says so (the synced rows roll back on their own)", () => {
+		const failed = update(
+			loaded(),
+			Message.FailedBulkUpdate({ organizationId, action: "owner", reason: "Offline" }),
+			shared,
+		)
+		expect(failed.outMessage?._tag).toBe("RequestedToast")
+	})
+
+	test("the toast counts what the server updated", () => {
+		const done = update(
+			loaded(),
+			Message.SucceededBulkUpdate({ organizationId, action: "tag", count: 500, label: "vip" }),
+			shared,
+		)
+		expect(JSON.stringify(done.outMessage)).toContain("Tagged 500 customers")
+	})
+
+	test("a search or filter keeps only the selected rows it still shows", () => {
+		const selected = run(loaded(), [Message.ToggledAllRows({ isSelected: true })])
+		expect(run(selected, [Message.ChangedSearch({ value: "acme" })]).selected).toEqual([acme.id])
+		const scale = run(selected, [Message.ChangedPendingFilters({ filters: { planNames: ["Scale"] } })])
+		expect(scale.selected).toHaveLength(4)
+		expect(
+			run(selected, [
+				Message.PressedEditFilter({ field: "plan" }),
+				Message.ChangedPendingFilters({ filters: { planNames: ["Scale"] } }),
+				Message.AppliedFilter(),
+			]).selected,
+		).toEqual([acme.id, northwind.id])
+		// A sort shows the same rows.
+		expect(run(selected, [Message.ClickedSortHeader({ column: "mrr" })]).selected).toHaveLength(4)
+	})
+})
+
+describe("customers list: many accounts", () => {
+	const many = Array.from({ length: 450 }, (_, index) => account(1000 + index, `Account ${index}`))
+
+	test("renders a page of rows at a time; j past the last one renders the next", () => {
+		const model = run(init(route(null)).model, [Message.UpdatedAccounts({ accounts: many })])
+		expect(model.rowLimit).toBe(200)
+		expect(run(model, [Message.PressedShowMoreRows()]).rowLimit).toBe(400)
+		const walked = run(
+			model,
+			Array.from({ length: 201 }, () => Message.PressedListKey({ key: "next" })),
+		)
+		expect(walked.rowLimit).toBe(400)
+		expect(run(walked, [Message.ChangedSearch({ value: "Account" })]).rowLimit).toBe(200)
+	})
+
+	test("sparklines are asked for the rendered rows only", () => {
+		const first = update(init(route(null)).model, Message.UpdatedAccounts({ accounts: many }), shared)
+		expect(first.model.requestedSparklines).toHaveLength(200)
+		const more = update(first.model, Message.PressedShowMoreRows(), shared)
+		expect(commandNames(more)).toEqual(["FetchListSparklines"])
+	})
+})
+
+describe("customers list: CSV", () => {
+	test("a cell a spreadsheet would run as a formula is escaped", () => {
+		const csv = toCsv(
+			[{ ...acme, name: "=HYPERLINK(1)", domain: "@evil", tags: ["+x", "a\rb"] }],
+			["name", "tags", "mrr"],
+			{ membersById: new Map(), nowMs: NOW },
+		)
+		expect(csv.split("\n")[1]).toBe(`'=HYPERLINK(1),'@evil,"'+x; a\rb",2150.00`)
+		expect(
+			toCsv([{ ...acme, mrrMinor: -500 }], ["mrr"], { membersById: new Map(), nowMs: NOW }),
+		).toContain("-5.00")
 	})
 })
 

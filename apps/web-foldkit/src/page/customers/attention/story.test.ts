@@ -354,16 +354,34 @@ describe("needs attention: keyboard", () => {
 		expect(snoozing.snoozeMenu.popup._tag).toBe("Open")
 	})
 
+	test("a and s open nothing whose button is not on screen", () => {
+		// Grouped by account, a row shows no actions until the preview opens.
+		const grouped = pageUpdate(
+			withSelection(stoppedLogging),
+			Message.ClickedGrouping({ grouping: "accounts" }),
+		).model
+		expect(pageUpdate(grouped, key("assign")).model.assignMenu.popup._tag).toBe("Closed")
+		const previewed = { ...grouped, isPreviewOpen: true }
+		expect(pageUpdate(previewed, key("assign")).model.assignMenu.popup._tag).toBe("Open")
+		// A selection filtered out of the rows moves to the first row.
+		const hidden = pageUpdate(withSelection(nearLimit), Message.ChangedSearch({ value: "kestrel" })).model
+		expect(pageUpdate(hidden, key("snooze")).model.selectedId).toBe(stoppedLogging.id)
+		// The snoozed tab has no Assign button.
+		const snoozedTab = { ...loaded(), tab: "snoozed" as const, selectedId: snoozed.id }
+		expect(pageUpdate(snoozedTab, key("assign")).model.assignMenu.popup._tag).toBe("Closed")
+	})
+
 	test("keys inside fields or with modifiers are left alone", () => {
 		const event = (
 			key: string,
-			extra: Partial<{ ctrlKey: boolean; metaKey: boolean; altKey: boolean }> = {},
+			extra: Partial<{ ctrlKey: boolean; metaKey: boolean; altKey: boolean; repeat: boolean }> = {},
 		) => ({
 			key,
 			target: null,
 			altKey: false,
 			ctrlKey: false,
 			metaKey: false,
+			repeat: false,
 			...extra,
 		})
 		expect(queueKeyOf(event("j"))).toBe("next")
@@ -372,6 +390,8 @@ describe("needs attention: keyboard", () => {
 		expect(queueKeyOf(event(" "))).toBe("preview")
 		expect(queueKeyOf(event("d", { metaKey: true }))).toBeNull()
 		expect(queueKeyOf(event("x"))).toBeNull()
+		expect(queueKeyOf(event("j", { repeat: true }))).toBe("next")
+		expect(queueKeyOf(event("e", { repeat: true }))).toBeNull()
 	})
 })
 
@@ -409,6 +429,10 @@ describe("needs attention: actions", () => {
 		expect([tomorrow.getHours(), tomorrow.getMinutes()]).toEqual([9, 0])
 		expect(new Date(snoozeUntilMs("next_week", NOW, paymentFailed)).getDay()).toBe(1)
 		expect(snoozeUntilMs("next_retry", NOW, paymentFailed)).toBe(NOW + 2 * DAY)
+		// A retry already past snoozes until tomorrow.
+		expect(snoozeUntilMs("next_retry", NOW + 3 * DAY, paymentFailed)).toBe(
+			snoozeUntilMs("tomorrow", NOW + 3 * DAY, paymentFailed),
+		)
 		const items = (signal: SignalRow) =>
 			snoozeEntries(signal).flatMap((entry) =>
 				entry._tag === "Section" ? entry.items.map((item) => item.key) : [],
@@ -494,6 +518,20 @@ describe("needs attention: actions", () => {
 				}),
 			),
 		)
+	})
+
+	test("a closed or auto-resolved signal is not reopened (the server refuses it)", () => {
+		const doneTab = { ...loaded(), tab: "done" as const }
+		const closed = { ...doneTab, signals: [{ ...done, closedAtMs: NOW }], selectedId: done.id }
+		expect(pageUpdate(closed, key("reopen")).commands ?? []).toEqual([])
+		const auto = {
+			...doneTab,
+			signals: [{ ...done, status: "auto_resolved" as const }],
+			selectedId: done.id,
+		}
+		expect(pageUpdate(auto, Message.PressedReopen({ signalId: done.id })).commands ?? []).toEqual([])
+		const reopened = pageUpdate({ ...doneTab, selectedId: done.id }, key("reopen"))
+		expect((reopened.commands ?? []).map((command) => command.name)).toEqual(["ReopenSignal"])
 	})
 
 	test("assigning keeps the row and its selection", () => {

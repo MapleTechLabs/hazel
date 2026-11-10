@@ -121,7 +121,11 @@ describe("connect modal", () => {
 			Scene.given(
 				modelAfter([
 					...opened,
-					Message.SucceededConnect({ connectionId: clerk.id, accountName: "Northwind Inc." }),
+					Message.SucceededConnect({
+						provider: "stripe",
+						connectionId: clerk.id,
+						accountName: "Northwind Inc.",
+					}),
 				]),
 			),
 			portalModalMounted,
@@ -135,7 +139,9 @@ describe("connect modal", () => {
 	test("a refused key says so and offers to test again", () => {
 		Scene.scene(
 			pageScene(update, view, admin),
-			Scene.given(modelAfter([...opened, Message.FailedConnect({ reason: "Refused" })])),
+			Scene.given(
+				modelAfter([...opened, Message.FailedConnect({ provider: "stripe", reason: "Refused" })]),
+			),
 			portalModalMounted,
 			Scene.expect(Scene.text("Key was refused")).toExist(),
 			Scene.expect(Scene.role("button", { name: "Test again" })).toExist(),

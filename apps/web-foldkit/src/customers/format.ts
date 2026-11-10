@@ -15,18 +15,57 @@ const MINUS = "−"
 
 const DAY_MS = 86_400_000
 
+/** Building an `Intl` formatter is slow (a 10k-row table formats every cell), so each is built once. */
+const cached = <O, F>(make: (options: O) => F) => {
+	const formatters = new Map<string, F>()
+	return (options: O): F => {
+		const key = JSON.stringify(options)
+		const existing = formatters.get(key)
+		if (existing !== undefined) return existing
+		const formatter = make(options)
+		formatters.set(key, formatter)
+		return formatter
+	}
+}
+
+const numberFormat = cached((options: Intl.NumberFormatOptions) => new Intl.NumberFormat("en-US", options))
+
+const validCurrencies = new Map<string, boolean>()
+
+/** Providers send the currency code as is; one `Intl` does not know is shown as a plain number + code. */
+const isKnownCurrency = (currency: string): boolean => {
+	const known = validCurrencies.get(currency)
+	if (known !== undefined) return known
+	let isKnown = true
+	try {
+		numberFormat({ style: "currency", currency })
+	} catch {
+		isKnown = false
+	}
+	validCurrencies.set(currency, isKnown)
+	return isKnown
+}
+
 const fractionDigitsOf = (currency: string): number =>
-	new Intl.NumberFormat("en-US", { style: "currency", currency }).resolvedOptions().maximumFractionDigits ??
-	2
+	isKnownCurrency(currency)
+		? (numberFormat({ style: "currency", currency }).resolvedOptions().maximumFractionDigits ?? 2)
+		: 2
 
 /** Minor units → major units, using the currency's own exponent (JPY has none). */
 export const toMajor = (minor: number, currency = "USD"): number => minor / 10 ** fractionDigitsOf(currency)
 
+/** `value` is what the text shows, rounded: a negative that rounds to zero reads `$0`, not `−$0`. */
 const withSign = (value: number, text: string, signed: boolean): string =>
 	value < 0 ? `${MINUS}${text}` : signed && value > 0 ? `+${text}` : text
 
-const currencyFormat = (currency: string, options: Intl.NumberFormatOptions) =>
-	new Intl.NumberFormat("en-US", { style: "currency", currency, ...options })
+/** Rounds to `digits` decimals half away from zero, as the formatter does. */
+const roundTo = (value: number, digits: number): number =>
+	(Math.sign(value) * Math.round(Math.abs(value) * 10 ** digits)) / 10 ** digits
+
+const currencyText = (major: number, currency: string, options: Intl.NumberFormatOptions): string =>
+	isKnownCurrency(currency)
+		? numberFormat({ style: "currency", currency, ...options }).format(major)
+		: `${numberFormat(options).format(major)} ${currency}`
 
 /** `$48,210`; `cents` keeps the minor units (`$1,240.00`); `signed` adds `+` to a gain. */
 export const formatMoney = (
@@ -35,11 +74,12 @@ export const formatMoney = (
 	options: Readonly<{ cents?: boolean; signed?: boolean }> = {},
 ): string => {
 	const digits = options.cents ? fractionDigitsOf(currency) : 0
-	const text = currencyFormat(currency, {
+	const major = toMajor(minor, currency)
+	const text = currencyText(Math.abs(major), currency, {
 		minimumFractionDigits: digits,
 		maximumFractionDigits: digits,
-	}).format(Math.abs(toMajor(minor, currency)))
-	return withSign(Math.round(minor), text, options.signed ?? false)
+	})
+	return withSign(roundTo(major, digits), text, options.signed ?? false)
 }
 
 /** `$940`, `$48.2K`, `$1.2M`: KPI subtitles, axis ticks, tight cells. */
@@ -48,25 +88,24 @@ export const formatMoneyCompact = (
 	currency = "USD",
 	options: Readonly<{ signed?: boolean }> = {},
 ): string => {
-	const text = currencyFormat(currency, {
+	const major = toMajor(minor, currency)
+	const text = currencyText(Math.abs(major), currency, {
 		notation: "compact",
 		minimumFractionDigits: 0,
 		maximumFractionDigits: 1,
-	}).format(Math.abs(toMajor(minor, currency)))
-	return withSign(minor, text, options.signed ?? false)
+	})
+	// Compact keeps one decimal at most, so anything under 0.05 shows as 0.
+	return withSign(roundTo(major, 1), text, options.signed ?? false)
 }
 
 /** `1,611`. */
-export const formatCount = (value: number): string =>
-	new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value)
+export const formatCount = (value: number): string => numberFormat({ maximumFractionDigits: 0 }).format(value)
 
 /** `461K`, `1.2M`, `980`. */
 export const formatCompact = (value: number): string =>
 	withSign(
 		value,
-		new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(
-			Math.abs(value),
-		),
+		numberFormat({ notation: "compact", maximumFractionDigits: 1 }).format(Math.abs(value)),
 		false,
 	)
 
@@ -74,10 +113,7 @@ export const formatCompact = (value: number): string =>
 const percentNumber = (value: number, digits?: number): string => {
 	const abs = Math.abs(value)
 	const fraction = digits ?? (abs !== 0 && abs < 10 ? 1 : 0)
-	return new Intl.NumberFormat("en-US", {
-		minimumFractionDigits: 0,
-		maximumFractionDigits: fraction,
-	}).format(abs)
+	return numberFormat({ minimumFractionDigits: 0, maximumFractionDigits: fraction }).format(abs)
 }
 
 /** A percent given as a percent number (`61` → `61%`, `2.8` → `2.8%`). */
@@ -133,8 +169,12 @@ export const formatDays = (days: number): string =>
 export const formatDaysLeft = (days: number): string =>
 	days > 0 ? `${formatDays(days)} left` : days === 0 ? "Ends today" : `Ended ${formatDays(-days)} ago`
 
+const dateTimeFormat = cached(
+	(options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("en-US", options),
+)
+
 const dateFormat = (options: Intl.DateTimeFormatOptions, timeZone: string | undefined) =>
-	new Intl.DateTimeFormat("en-US", { ...options, timeZone })
+	dateTimeFormat({ ...options, timeZone })
 
 const yearOf = (ms: number, timeZone: string | undefined) =>
 	Number(dateFormat({ year: "numeric" }, timeZone).format(ms))
@@ -172,8 +212,7 @@ export const formatWeekdayTime = (at: Instant, options: Readonly<{ timeZone?: st
 export const dayToMs = (day: string): number => Date.parse(`${day}T00:00:00Z`)
 
 /** Day labels are UTC: a `Day` names a UTC calendar day. */
-const dayFormat = (options: Intl.DateTimeFormatOptions) =>
-	new Intl.DateTimeFormat("en-US", { ...options, timeZone: "UTC" })
+const dayFormat = (options: Intl.DateTimeFormatOptions) => dateTimeFormat({ ...options, timeZone: "UTC" })
 
 /** `Nov 2` (axis ticks). */
 export const formatDay = (day: string): string =>

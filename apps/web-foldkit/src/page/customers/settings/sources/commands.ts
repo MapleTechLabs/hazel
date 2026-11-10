@@ -84,8 +84,12 @@ export const ConnectCustomerSource = Command.define("ConnectCustomerSource", {
 	messages: [Message.SucceededConnect, Message.FailedConnect],
 	execute: ({ organizationId, provider, reconnectId, apiKey, config }) => {
 		const connected = ({ data }: { readonly data: Customers.Connection }) =>
-			Message.SucceededConnect({ connectionId: data.id, accountName: data.externalAccountName })
-		const failed = (reason: ConnectFailure) => Message.FailedConnect({ reason })
+			Message.SucceededConnect({
+				provider,
+				connectionId: data.id,
+				accountName: data.externalAccountName,
+			})
+		const failed = (reason: ConnectFailure) => Message.FailedConnect({ provider, reason })
 		if (reconnectId !== null)
 			return updateConnection({ organizationId, connectionId: reconnectId, apiKey, config }).pipe(
 				settleUpdate(connected, failed),
@@ -118,8 +122,8 @@ export const SaveCustomerWebhookSecret = Command.define("SaveCustomerWebhookSecr
 	execute: (payload) =>
 		updateConnection(payload).pipe(
 			settleUpdate(
-				() => Message.SucceededSaveWebhookSecret(),
-				(reason) => Message.FailedSaveWebhookSecret({ reason }),
+				() => Message.SucceededSaveWebhookSecret({ connectionId: payload.connectionId }),
+				(reason) => Message.FailedSaveWebhookSecret({ connectionId: payload.connectionId, reason }),
 			),
 		),
 })
