@@ -44,6 +44,23 @@ describe("desktop handoff page", () => {
 		)
 	})
 
+	test("a browser session from before the app asked signs in again and comes back to this attempt", () => {
+		Scene.scene(
+			pageScene(update, view, makeShared()),
+			Scene.given(described),
+			Scene.click(Scene.role("button", { name: "Continue" })),
+			Scene.Command.resolve(AuthorizeAttempt, { _tag: "FailedAuthorize", reason: "SignInAgain" }),
+			Scene.expect(Scene.role("heading", { name: "Confirm it's you" })).toExist(),
+			Scene.expect(Scene.role("alert")).toHaveText(
+				"Sign in again to continue. The app gets its own session from a fresh sign-in in this browser.",
+			),
+			Scene.expect(Scene.role("button", { name: "Try again" })).toBeAbsent(),
+			Scene.click(Scene.role("button", { name: "Sign in again" })),
+			Scene.Command.expectExact(SignInForDesktop({ returnTo: `/auth/desktop?attempt=${attempt}` })),
+			Scene.Command.resolve(SignInForDesktop, { _tag: "LeftForSignIn" }),
+		)
+	})
+
 	test("an expired attempt says to start again from the app", () => {
 		Scene.scene(
 			pageScene(update, view, makeShared()),

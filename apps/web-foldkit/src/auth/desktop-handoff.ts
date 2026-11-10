@@ -24,9 +24,14 @@ const TransportLive = OperationHttpClient.layer({
 
 /**
  * Why the handoff failed, beyond the shared reasons. `Expired`: the attempt is gone or used, so
- * the desktop app has to start again. `NeedsSignIn`: this browser has no session.
+ * the desktop app has to start again. `NeedsSignIn`: this browser has no session. `SignInAgain`:
+ * the attempt is still open but this browser's session predates it; the apps ask for a fresh
+ * sign-in (`browserSession: "reauthenticate"`), so signing in again here and continuing works.
  */
-export const HandoffFailure = Schema.Union([Schema.Literals(["Expired", "NeedsSignIn"]), CommonReason])
+export const HandoffFailure = Schema.Union([
+	Schema.Literals(["Expired", "NeedsSignIn", "SignInAgain"]),
+	CommonReason,
+])
 export type HandoffFailure = typeof HandoffFailure.Type
 
 export class HandoffError extends Schema.TaggedError<HandoffError>()("HandoffError", {
@@ -93,7 +98,17 @@ export const authorizeAttempt = (attemptId: string) =>
 		if (session === null) return yield* new HandoffError({ reason: "NeedsSignIn" })
 		const transport = yield* OperationHttpClient.Client
 		const result = yield* callAuthorize(transport, attemptId, session.sessionId).pipe(
-			Effect.mapError(failed),
+			// Refused while the attempt still describes as open: what is left is this browser's
+			// session (signed in before the app asked), so a fresh sign-in here fixes it.
+			Effect.catchTag("BrowserLoginInvalid", (refused) =>
+				callDescribe(transport, attemptId).pipe(
+					Effect.matchEffect({
+						onSuccess: () => Effect.fail(new HandoffError({ reason: "SignInAgain" })),
+						onFailure: () => Effect.fail(refused),
+					}),
+				),
+			),
+			Effect.mapError((error) => (Schema.is(HandoffError)(error) ? error : failed(error))),
 		)
 		return Redacted.value(result.callbackUrl)
 	}).pipe(Effect.provide(TransportLive))
