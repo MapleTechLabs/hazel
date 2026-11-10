@@ -5,6 +5,8 @@
 import { type RuleConfig, type SignalSeverity, TEMPLATES } from "@hazel/domain/customers"
 import { describe, expect, it } from "vitest"
 import { evaluate, type Match, type RuleInput } from "./evaluate"
+import { formatMoney, metricSeries } from "./facts"
+import { billingProviderOf } from "./snapshot"
 import { factsOf, type FactsInput, NOW, orgFacts, TODAY } from "./test-kit"
 import { addDays } from "./time"
 
@@ -80,6 +82,63 @@ describe("signal evaluation", () => {
 			reason: "Below threshold",
 		})
 		expect(run("usage_drop", {})).toEqual({ _tag: "NoMatch", reason: "No data" })
+	})
+
+	it("usage_drop on a built-in metric reads its derived series (MRR from movements)", () => {
+		const config = defaults("usage_drop")
+		if (config._tag !== "usage_drop") throw new Error("usage_drop defaults")
+		const rule = ruleOf({ ...config, metricKey: "mrr" })
+		const facts = factsOf({
+			account: { mrrMinor: 5_000 },
+			movements: [
+				{ day: addDays(TODAY, -60), type: "new", fromMrrMinor: 0, toMrrMinor: 20_000 },
+				{ day: addDays(TODAY, -3), type: "contraction", fromMrrMinor: 20_000, toMrrMinor: 5_000 },
+			],
+		})
+		expect(evaluate(rule, facts, orgFacts())).toMatchObject({
+			_tag: "Match",
+			evidence: { _tag: "series", metricKey: "mrr", baselineAvg: 20_000 },
+		})
+	})
+
+	it("carries a level metric's last value over missing days; sums count them as 0", () => {
+		const facts = factsOf({
+			metrics: new Map([
+				[
+					"seats",
+					[
+						{ day: addDays(TODAY, -10), value: 5, limitValue: null },
+						{ day: addDays(TODAY, -8), value: 7, limitValue: null },
+					],
+				],
+			]),
+		})
+		const values = (aggregation: "sum" | "last") =>
+			metricSeries(facts, "seats", addDays(TODAY, -6), 4, aggregation).map((point) => point.value)
+		expect(values("last")).toEqual([5, 7, 7, 7])
+		expect(values("sum")).toEqual([0, 7, 0, 0])
+	})
+
+	it("formats money in the currency's own minor unit", () => {
+		expect(formatMoney(1_500, "usd")).toBe("$15.00")
+		expect(formatMoney(1_500, "jpy")).toBe("¥1,500")
+	})
+
+	it("bills from Autumn only once its first import finished; never zeroes MRR on a disconnect", () => {
+		const autumn = (status: "active" | "disconnected", backfilledAt: Date | null) => ({
+			provider: "autumn" as const,
+			status,
+			backfilledAt,
+		})
+		const both = new Map([
+			["stripe", 3],
+			["autumn", 2],
+		])
+		expect(billingProviderOf([autumn("active", null)], both)).toBe("stripe")
+		expect(billingProviderOf([autumn("active", NOW)], both)).toBe("autumn")
+		expect(billingProviderOf([autumn("disconnected", NOW)], both)).toBe("stripe")
+		expect(billingProviderOf([autumn("disconnected", NOW)], new Map([["autumn", 2]]))).toBe("autumn")
+		expect(billingProviderOf([], new Map())).toBe("stripe")
 	})
 
 	it("payment_failed: past due, or an invoice open 7+ days past due; escalates by age and unpaid", () => {
@@ -192,7 +251,7 @@ describe("signal evaluation", () => {
 		)
 	})
 
-	it("health_drop: −20 points within 7 days, or critical", () => {
+	it("health_drop: −20 points within 7 days, or entered critical", () => {
 		const health = (
 			before: number,
 			now: number,
@@ -208,6 +267,11 @@ describe("signal evaluation", () => {
 		expect(match("health_drop", health(90, 50)).evidence.step).toBe(1)
 		expect(run("health_drop", health(70, 60))._tag).toBe("NoMatch")
 		expect(match("health_drop", health(38, 35, "critical")).reason).toContain("now critical")
+		// Entered critical: a new account first scored critical has not.
+		expect(run("health_drop", { health: [{ day: TODAY, score: 35, status: "critical" }] })).toEqual({
+			_tag: "NoMatch",
+			reason: "Below threshold",
+		})
 		expect(run("health_drop", {})).toEqual({ _tag: "NoMatch", reason: "No data" })
 	})
 

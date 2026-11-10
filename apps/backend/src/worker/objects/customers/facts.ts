@@ -9,6 +9,7 @@ import type {
 	Day,
 	HealthStatus,
 	LifecycleStage,
+	MetricAggregation,
 	SeriesPoint,
 } from "@hazel/domain/customers"
 import type { CustomerContactId } from "@hazel/schema"
@@ -67,6 +68,8 @@ export interface OrgFacts {
 	/** Providers with a connection that is not disconnected. */
 	readonly connected: ReadonlySet<CustomerProvider>
 	readonly metricNames: ReadonlyMap<string, string>
+	/** How each metric aggregates: `last`/`max` series carry a missing day's value forward. */
+	readonly metricAggregations: ReadonlyMap<string, MetricAggregation>
 	readonly currency: string
 }
 
@@ -105,19 +108,49 @@ export const mrrSeries = (
 	})
 }
 
-/** A source metric's daily values (0 where missing). */
+/**
+ * A source metric's daily values. A missing day is 0 for a `sum` (nothing happened), and the last
+ * known value for a `last`/`max` level (seats, storage), from the loaded points before the range too.
+ */
 export const metricSeries = (
 	facts: AccountFacts,
 	key: string,
 	last: Day,
 	count: number,
+	aggregation: MetricAggregation = "sum",
 ): Array<SeriesPoint> => {
-	const points = new Map((facts.metrics.get(key) ?? []).map((point) => [point.day, point.value]))
-	return dayRange(last, count).map((day) => ({ day, value: points.get(day) ?? 0 }))
+	const sorted = facts.metrics.get(key) ?? []
+	const points = new Map(sorted.map((point) => [point.day, point.value]))
+	const days = dayRange(last, count)
+	let carried = 0
+	for (const point of sorted) {
+		if (point.day >= days[0]) break
+		carried = point.value
+	}
+	return days.map((day) => {
+		const value = points.get(day)
+		if (aggregation === "sum") return { day, value: value ?? 0 }
+		if (value !== undefined) carried = value
+		return { day, value: carried }
+	})
 }
 
+/** Hazel's own series, derived from activity, movements and health (never stored as metrics). */
+export const DERIVED_METRICS: ReadonlySet<string> = new Set([
+	"active_users",
+	"active_users_30d",
+	"mrr",
+	"health_score",
+])
+
 /** Any built-in or source metric's series. */
-export const seriesOf = (facts: AccountFacts, key: string, last: Day, count: number): Array<SeriesPoint> => {
+export const seriesOf = (
+	facts: AccountFacts,
+	key: string,
+	last: Day,
+	count: number,
+	aggregation: MetricAggregation = "sum",
+): Array<SeriesPoint> => {
 	switch (key) {
 		case "active_users":
 			return dauSeries(facts, last, count)
@@ -130,15 +163,15 @@ export const seriesOf = (facts: AccountFacts, key: string, last: Day, count: num
 			return dayRange(last, count).map((day) => ({ day, value: scores.get(day) ?? 0 }))
 		}
 		default:
-			return metricSeries(facts, key, last, count)
+			return metricSeries(facts, key, last, count, aggregation)
 	}
 }
 
+/** Minor units in the currency's own scale (JPY has none, KWD three). */
 export const formatMoney = (minor: number, currency: string) => {
 	try {
-		return new Intl.NumberFormat("en-US", { style: "currency", currency: currency.toUpperCase() }).format(
-			minor / 100,
-		)
+		const format = new Intl.NumberFormat("en-US", { style: "currency", currency: currency.toUpperCase() })
+		return format.format(minor / 10 ** (format.resolvedOptions().maximumFractionDigits ?? 2))
 	} catch {
 		return `${(minor / 100).toFixed(2)} ${currency.toUpperCase()}`
 	}

@@ -4,7 +4,13 @@
  * history, plus the account fields compute derives from them (`rollupAccount`, §4.2).
  */
 import { Database, SQLite, schema } from "@hazel/db"
-import type { CustomerProvider, Day, HealthSettings, LifecycleStage } from "@hazel/domain/customers"
+import type {
+	CustomerProvider,
+	Day,
+	HealthBreakdown,
+	HealthSettings,
+	LifecycleStage,
+} from "@hazel/domain/customers"
 import type { CustomerAccountId, CustomerContactId } from "@hazel/schema"
 import { Effect, Option } from "effect"
 import { type RuleInput, activityWindowDays } from "./evaluate"
@@ -54,16 +60,25 @@ export interface Snapshot {
 	readonly health: HealthSettings
 	readonly rules: ReadonlyArray<schema.CustomerSignalRule>
 	readonly accounts: ReadonlyArray<AccountSnapshot>
-	/** Every unclosed signal. */
+	/** Every unclosed signal (deleted accounts' too: compute closes them). */
 	readonly signals: ReadonlyArray<schema.CustomerSignal>
-	/** Usage data exists (an activity source, or activity rows). */
+	/** Today's stored health breakdowns, so an unchanged one is not written again. */
+	readonly todayHealth: ReadonlyMap<CustomerAccountId, HealthBreakdown>
+	/**
+	 * Usage data is live: an activity source is connected (not in error or disconnected), or, with
+	 * no activity connection at all, activity rows exist.
+	 */
 	readonly hasActivityData: boolean
 	/** Billing data exists (a billing source, or subscriptions). */
 	readonly hasBillingData: boolean
-	/** Whose subscriptions count for MRR: Autumn when connected, else Stripe. */
+	/** Whose subscriptions count for MRR (`billingProviderOf`). */
 	readonly billingProvider: CustomerProvider
 	/** Every active contact-day of the window, for the org's DAU/WAU/MAU. */
-	readonly activityRows: ReadonlyArray<{ readonly contactId: CustomerContactId; readonly day: Day }>
+	readonly activityRows: ReadonlyArray<{
+		readonly accountId: CustomerAccountId
+		readonly contactId: CustomerContactId
+		readonly day: Day
+	}>
 }
 
 const sum = (values: ReadonlyArray<number>) => values.reduce((total, value) => total + value, 0)
@@ -87,13 +102,15 @@ export const rollupAccount = (input: {
 		(sub) => sub.status === "active" || sub.status === "past_due" || sub.status === "unpaid",
 	)
 	const mrrMinor = sum(paying.filter((sub) => sub.currency === currency).map((sub) => sub.mrrMinor))
+	// Paying in any currency (MRR counts only the reporting currency's; `attributes.foreignMrr` the rest).
+	const paid = paying.some((sub) => sub.mrrMinor > 0)
 	const foreign = paying.filter((sub) => sub.currency !== currency)
 	const trialing = live.filter((sub) => sub.status === "trialing")
 	const top = [...paying].sort((a, b) => b.mrrMinor - a.mrrMinor)[0] ?? trialing[0] ?? live[0]
 	const trialEnds = trialing.map((sub) => sub.trialEndsAt).filter((date) => date !== null)
 	const derived: LifecycleStage = live.some((sub) => sub.status === "past_due" || sub.status === "unpaid")
 		? "past_due"
-		: mrrMinor > 0
+		: paid
 			? "active"
 			: trialing.length > 0
 				? "trialing"
@@ -108,19 +125,21 @@ export const rollupAccount = (input: {
 		.map((date) => date.getTime())
 	const customerSince =
 		account.customerSince ??
-		(mrrMinor > 0 ? new Date(paidStarts.length > 0 ? Math.min(...paidStarts) : now.getTime()) : null)
+		(paid ? new Date(paidStarts.length > 0 ? Math.min(...paidStarts) : now.getTime()) : null)
 	const canceled = subscriptions.map((sub) => sub.canceledAt?.getTime() ?? 0)
 	const churnedAt =
 		derived === "churned"
 			? (account.churnedAt ?? new Date(Math.max(...canceled, 0) || now.getTime()))
-			: mrrMinor > 0
+			: paid
 				? null
 				: account.churnedAt
 
-	// Usage: 30-day active users, the 7-day vs prior 28-day daily average, the champion.
+	// Usage: 30-day active users, the 7-day vs prior 28-day daily average (ending yesterday: today
+	// is still filling in), the champion.
 	const dau = (day: Day) => input.activity.get(day)?.size ?? 0
-	const recent = sum(dayRange(today, 7).map(dau)) / 7
-	const baseline = sum(dayRange(addDays(today, -7), 28).map(dau)) / 28
+	const yesterday = addDays(today, -1)
+	const recent = sum(dayRange(yesterday, 7).map(dau)) / 7
+	const baseline = sum(dayRange(addDays(yesterday, -7), 28).map(dau)) / 28
 	const facts = { activity: input.activity } as AccountFacts
 	const activeUsers30d = activeUsersIn(facts, addDays(today, -29), today)
 	const totals = new Map<CustomerContactId, { days: number; events: number }>()
@@ -187,6 +206,28 @@ const groupBy = <A, K>(items: ReadonlyArray<A>, key: (item: A) => K) => {
 	return groups
 }
 
+const ACTIVITY_PROVIDERS: ReadonlySet<CustomerProvider> = new Set(["clerk", "maple"])
+
+/**
+ * Whose subscriptions count for MRR: Autumn once its connection finished its first import (until
+ * then its data is partial), else Stripe; with no subscriptions there (Autumn disconnected and no
+ * Stripe), whichever provider still has some, so a disconnect does not zero every MRR.
+ */
+export const billingProviderOf = (
+	connections: ReadonlyArray<Pick<schema.CustomerConnection, "provider" | "status" | "backfilledAt">>,
+	subscriptionCounts: ReadonlyMap<string, number>,
+): CustomerProvider => {
+	const autumnReady = connections.some(
+		(connection) =>
+			connection.provider === "autumn" &&
+			connection.status !== "disconnected" &&
+			connection.backfilledAt !== null,
+	)
+	if (autumnReady) return "autumn"
+	if ((subscriptionCounts.get("stripe") ?? 0) > 0) return "stripe"
+	return (subscriptionCounts.get("autumn") ?? 0) > 0 ? "autumn" : "stripe"
+}
+
 export const loadSnapshot = Effect.fn("Customers.loadSnapshot")(function* (
 	now: Date,
 	options?: {
@@ -203,12 +244,19 @@ export const loadSnapshot = Effect.fn("Customers.loadSnapshot")(function* (
 	const currency = settings.reportingCurrency
 
 	const connections = yield* db.run(SQLite.from(schema.customerConnectionsTable).select())
+	// A connection in error (bad credentials) is not a source to rely on: its templates match nothing.
 	const connected = new Set(
 		connections
-			.filter((connection) => connection.status !== "disconnected")
+			.filter((connection) => connection.status === "active")
 			.map((connection) => connection.provider),
 	)
-	const billingProvider: CustomerProvider = connected.has("autumn") ? "autumn" : "stripe"
+	const subscriptionCounts = (yield* db.query(
+		Database.sql`SELECT "provider", count(*) AS "count" FROM "customer_subscriptions" GROUP BY "provider"`,
+	)) as ReadonlyArray<{ provider: CustomerProvider; count: number }>
+	const billingProvider = billingProviderOf(
+		connections,
+		new Map(subscriptionCounts.map((row) => [row.provider, Number(row.count)])),
+	)
 	const rules = yield* db.run(
 		SQLite.from(schema.customerSignalRulesTable)
 			.select()
@@ -237,6 +285,8 @@ export const loadSnapshot = Effect.fn("Customers.loadSnapshot")(function* (
 		day: Day
 		eventCount: number
 	}>
+	// The one all-time scan: each contact's last active day (an account quiet for longer than the
+	// window still has one).
 	const lastActive = (yield* db.query(
 		Database.sql`SELECT "contactId", "accountId", max("day") AS "last" FROM "customer_activity_daily"
 			WHERE ${ACTIVE} GROUP BY "contactId", "accountId"`,
@@ -245,6 +295,17 @@ export const loadSnapshot = Effect.fn("Customers.loadSnapshot")(function* (
 		Database.sql`SELECT "accountId", count(*) AS "count" FROM "customer_contacts"
 			WHERE "deletedAt" IS NULL AND "firstActiveAt" IS NOT NULL GROUP BY "accountId"`,
 	)) as ReadonlyArray<{ accountId: CustomerAccountId; count: number }>
+
+	const activityBy = groupBy(activity, (row) => row.accountId)
+	const lastActiveDayBy = new Map<CustomerAccountId, Day>()
+	for (const row of lastActive) {
+		const current = lastActiveDayBy.get(row.accountId)
+		if (current === undefined || row.last > current) lastActiveDayBy.set(row.accountId, row.last)
+	}
+
+	// `inactive`'s "active users before": distinct users over the window ending on each account's
+	// last active day. From the loaded rows when the window covers it; else one indexed query over
+	// the accounts quiet for longer (`customer_activity_account_day_idx`).
 	const priorWindows = [
 		...new Set(
 			allRules.flatMap((rule) =>
@@ -254,27 +315,42 @@ export const loadSnapshot = Effect.fn("Customers.loadSnapshot")(function* (
 	]
 	const priorActive = new Map<number, Map<CustomerAccountId, number>>()
 	for (const days of priorWindows) {
-		const rows = (yield* db.query(
-			Database.sql`WITH "last" AS (
-				SELECT "accountId", max("day") AS "last" FROM "customer_activity_daily" WHERE ${ACTIVE} GROUP BY "accountId"
-			)
-			SELECT a."accountId" AS "accountId", count(DISTINCT a."contactId") AS "count"
-			FROM "customer_activity_daily" a JOIN "last" l ON l."accountId" = a."accountId"
-			WHERE (a."eventCount" > 0 OR a."sessionCount" > 0 OR a."signedIn" = 1)
-				AND a."day" > date(l."last", ${`-${days} days`})
-			GROUP BY a."accountId"`,
-		)) as ReadonlyArray<{ accountId: CustomerAccountId; count: number }>
-		priorActive.set(days, new Map(rows.map((row) => [row.accountId, Number(row.count)])))
+		const counts = new Map<CustomerAccountId, number>()
+		const older: Record<string, Day> = {}
+		for (const [accountId, last] of lastActiveDayBy) {
+			const start = addDays(last, -(days - 1))
+			if (start < from) {
+				older[accountId] = addDays(last, -days)
+				continue
+			}
+			const users = new Set<CustomerContactId>()
+			for (const row of activityBy.get(accountId) ?? []) {
+				if (row.day >= start && row.day <= last) users.add(row.contactId)
+			}
+			counts.set(accountId, users.size)
+		}
+		if (Object.keys(older).length > 0) {
+			const rows = (yield* db.query(
+				Database.sql`SELECT a."accountId" AS "accountId", count(DISTINCT a."contactId") AS "count"
+				FROM json_each(${JSON.stringify(older)}) j
+				JOIN "customer_activity_daily" a ON a."accountId" = j.key AND a."day" > j.value
+				WHERE (a."eventCount" > 0 OR a."sessionCount" > 0 OR a."signedIn" = 1)
+				GROUP BY a."accountId"`,
+			)) as ReadonlyArray<{ accountId: CustomerAccountId; count: number }>
+			for (const row of rows) counts.set(row.accountId, Number(row.count))
+		}
+		priorActive.set(days, counts)
 	}
 	const subscriptions = yield* db.run(
 		SQLite.from(schema.customerSubscriptionsTable)
 			.select()
 			.where(($) => [$.provider.eq(billingProvider)]),
 	)
+	// Invoices come from Stripe only (Autumn bills through it).
 	const openInvoices = yield* db.run(
 		SQLite.from(schema.customerInvoicesTable)
 			.select()
-			.where(($) => [$.status.eq("open")]),
+			.where(($) => [$.status.eq("open"), $.provider.eq("stripe")]),
 	)
 	const metrics = yield* db.run(
 		SQLite.from(schema.customerMetricDailyTable)
@@ -283,7 +359,7 @@ export const loadSnapshot = Effect.fn("Customers.loadSnapshot")(function* (
 			.orderBy(($) => [[$.day, "asc"]]),
 	)
 	const definitions = yield* db.run(
-		SQLite.from(schema.customerMetricDefinitionsTable).select("key", "name"),
+		SQLite.from(schema.customerMetricDefinitionsTable).select("key", "name", "aggregation"),
 	)
 	const movements = yield* db.run(
 		SQLite.from(schema.customerMrrMovementsTable)
@@ -296,6 +372,11 @@ export const loadSnapshot = Effect.fn("Customers.loadSnapshot")(function* (
 			.where(($) => [$.day.gte(from)])
 			.orderBy(($) => [[$.day, "asc"]]),
 	)
+	const todayHealth = yield* db.run(
+		SQLite.from(schema.customerHealthDailyTable)
+			.select("accountId", "breakdown")
+			.where(($) => [$.day.eq(today)]),
+	)
 	const signals = yield* db.run(
 		SQLite.from(schema.customerSignalsTable)
 			.select()
@@ -303,9 +384,7 @@ export const loadSnapshot = Effect.fn("Customers.loadSnapshot")(function* (
 	)
 
 	const contactsBy = groupBy(contacts, (contact) => contact.accountId)
-	const activityBy = groupBy(activity, (row) => row.accountId)
 	const lastBy = new Map(lastActive.map((row) => [row.contactId, row.last]))
-	const lastActiveBy = groupBy(lastActive, (row) => row.accountId)
 	const everBy = new Map(everActive.map((row) => [row.accountId, Number(row.count)]))
 	const subsBy = groupBy(subscriptions, (sub) => sub.accountId)
 	const invoicesBy = groupBy(openInvoices, (invoice) => invoice.accountId)
@@ -328,10 +407,7 @@ export const loadSnapshot = Effect.fn("Customers.loadSnapshot")(function* (
 			day.set(row.contactId, Number(row.eventCount))
 			byDay.set(row.day, day)
 		}
-		const lastActiveDay = (lastActiveBy.get(stored.id) ?? []).reduce<Day | null>(
-			(max, row) => (max === null || row.last > max ? row.last : max),
-			null,
-		)
+		const lastActiveDay = lastActiveDayBy.get(stored.id) ?? null
 		const accountSubs = subsBy.get(stored.id) ?? []
 		const rollup = rollupAccount({
 			account: stored,
@@ -376,12 +452,18 @@ export const loadSnapshot = Effect.fn("Customers.loadSnapshot")(function* (
 		}
 	})
 
+	const activityConnections = connections.filter((connection) =>
+		ACTIVITY_PROVIDERS.has(connection.provider),
+	)
 	return {
 		org: {
 			now,
 			today,
 			connected,
 			metricNames: new Map(definitions.map((definition) => [definition.key, definition.name])),
+			metricAggregations: new Map(
+				definitions.map((definition) => [definition.key, definition.aggregation]),
+			),
 			currency,
 		},
 		settings,
@@ -389,9 +471,18 @@ export const loadSnapshot = Effect.fn("Customers.loadSnapshot")(function* (
 		rules,
 		accounts: snapshots,
 		signals,
-		hasActivityData: connected.has("clerk") || connected.has("maple") || lastActive.length > 0,
+		todayHealth: new Map(todayHealth.map((row) => [row.accountId, row.breakdown])),
+		// Stale rows of a disconnected source must not keep decaying everyone's usage score.
+		hasActivityData:
+			activityConnections.length > 0
+				? activityConnections.some((connection) => connection.status === "active")
+				: lastActive.length > 0,
 		hasBillingData: connected.has("stripe") || connected.has("autumn") || subscriptions.length > 0,
 		billingProvider,
-		activityRows: activity.map((row) => ({ contactId: row.contactId, day: row.day })),
+		activityRows: activity.map((row) => ({
+			accountId: row.accountId,
+			contactId: row.contactId,
+			day: row.day,
+		})),
 	} satisfies Snapshot
 })

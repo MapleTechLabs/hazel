@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest"
 import { customersTarget, orgTarget } from "../kinds"
 import { makeTestObjects } from "../testing"
 import { runCompute } from "./compute"
-import { customerIngest } from "./ingest-live"
+import { CustomerIngest } from "./ingest"
 import { makeCustomersWorld, ok, tagOf, uuid } from "./test-kit"
 
 const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
@@ -467,11 +467,11 @@ describe("Customers RPCs", () => {
 				yield* world.object
 					.run(
 						Effect.gen(function* () {
-							const ingest = yield* customerIngest
-							const runId = yield* ingest.startRun(world.connection("clerk"), "backfill")
-							yield* ingest.finishRun(runId, { _tag: "Succeeded", cursor: null })
+							const ingest = yield* CustomerIngest
+							const backfill = yield* ingest.startRun(world.connection("clerk"), "backfill")
+							yield* ingest.finishRun(backfill.id, { _tag: "Succeeded", cursor: null })
 							yield* runCompute(new Date())
-						}),
+						}).pipe(Effect.provide(CustomerIngest.layer)),
 					)
 					.pipe(Effect.orDie)
 				expect(

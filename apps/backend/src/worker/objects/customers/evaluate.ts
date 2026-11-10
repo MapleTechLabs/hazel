@@ -19,12 +19,12 @@ import {
 import {
 	type AccountFacts,
 	activeUsersIn,
-	dauSeries,
+	DERIVED_METRICS,
 	formatMoney,
-	metricSeries,
 	mrrSeries,
 	type OrgFacts,
 	rollingActiveSeries,
+	seriesOf,
 } from "./facts"
 import { addDays, DAY_MS, daysBetween, daysSince } from "./time"
 
@@ -130,19 +130,14 @@ const usageDrop =
 		// Today is still filling in: the windows end yesterday.
 		const last = addDays(org.today, -1)
 		const days = config.recentDays + config.baselineDays
-		const series =
-			config.metricKey === "active_users"
-				? dauSeries(facts, last, days)
-				: config.metricKey === "active_users_30d"
-					? rollingActiveSeries(facts, last, days)
-					: metricSeries(facts, config.metricKey, last, days)
-		if (
-			config.metricKey !== "active_users" &&
-			config.metricKey !== "active_users_30d" &&
-			!facts.metrics.has(config.metricKey)
-		) {
-			return "No data"
-		}
+		if (!DERIVED_METRICS.has(config.metricKey) && !facts.metrics.has(config.metricKey)) return "No data"
+		const series = seriesOf(
+			facts,
+			config.metricKey,
+			last,
+			days,
+			org.metricAggregations.get(config.metricKey),
+		)
 		const baselineAvg = average(series.slice(0, config.baselineDays).map((point) => point.value))
 		const recentAvg = average(series.slice(config.baselineDays).map((point) => point.value))
 		if (baselineAvg <= 0)
@@ -356,7 +351,18 @@ const healthDrop =
 		)
 		const peak = before.reduce((max, score) => Math.max(max, score), today.score)
 		const drop = peak - today.score
-		const critical = config.onCritical && today.status === "critical"
+		// Entered critical: a scored, non-critical day in the window before (a new account first
+		// scored critical has not "entered" it).
+		const critical =
+			config.onCritical &&
+			today.status === "critical" &&
+			facts.health.some(
+				(point) =>
+					point.day >= since &&
+					point.day < org.today &&
+					point.status !== "critical" &&
+					point.status !== "unknown",
+			)
 		if (drop < config.dropPoints && !critical) return "Below threshold"
 		const step = stepOf(drop >= 50, drop >= 35)
 		const series = facts.health

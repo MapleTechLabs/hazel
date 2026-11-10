@@ -25,7 +25,7 @@ import { customersTarget } from "../kinds"
 import { encodeInvokePrincipal } from "../principal"
 import { makeTestObjects, type TestObject, type TestObjects } from "../testing"
 import type { AccountFacts, ContactFacts, OrgFacts } from "./facts"
-import { customerIngest } from "./ingest-live"
+import { CustomerIngest } from "./ingest"
 import { addDays, dayOf } from "./time"
 
 export const uuid = () => crypto.randomUUID()
@@ -213,6 +213,7 @@ export const orgFacts = (overrides: Partial<OrgFacts> = {}): OrgFacts => ({
 	today: TODAY,
 	connected: new Set(["clerk", "stripe", "autumn", "maple"]),
 	metricNames: new Map([["active_users", "Daily active users"]]),
+	metricAggregations: new Map(),
 	currency: "usd",
 	...overrides,
 })
@@ -349,12 +350,12 @@ export const makeCustomersWorld = Effect.gen(function* () {
 		object
 			.run(
 				Effect.gen(function* () {
-					const service = yield* customerIngest
+					const service = yield* CustomerIngest
 					return yield* service.apply(
 						{ connectionId: connection(provider), provider, runId: null, trigger: "manual" },
 						ops,
 					)
-				}),
+				}).pipe(Effect.provide(CustomerIngest.layer)),
 			)
 			.pipe(Effect.orDie)
 	return {

@@ -54,9 +54,12 @@ export const seedDemo = Effect.fn("Customers.seedDemo")(function* (input: {
 		const connectionId: CustomerConnectionId = yield* db.transaction(
 			connectionFor(batch.provider, input.organizationId, input.by, input.now),
 		)
-		const runId = yield* ingest.startRun(connectionId, "manual")
-		yield* ingest.apply({ connectionId, provider: batch.provider, runId, trigger: "manual" }, batch.ops)
-		yield* ingest.finishRun(runId, { _tag: "Succeeded", cursor: null })
+		const run = yield* ingest.startRun(connectionId, "manual")
+		yield* ingest.apply(
+			{ connectionId, provider: batch.provider, runId: run.id, trigger: "manual" },
+			batch.ops,
+		)
+		yield* ingest.finishRun(run.id, { _tag: "Succeeded", cursor: null })
 	}
 	yield* requestHistoryRebuild
 	yield* runCompute(input.now)

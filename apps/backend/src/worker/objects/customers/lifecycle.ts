@@ -21,11 +21,12 @@ const SEVERITY_WEIGHT = { low: 1, medium: 2, high: 4 } as const
 
 /**
  * Queue order: severity × value × freshness. `valueMinor` is the account's MRR, else its trial's
- * list price, else 0 (weight 1: severity and freshness decide).
+ * list price, else 0 (weight 1: severity and freshness decide). Freshness moves in whole days, so
+ * an unchanged signal is not rewritten by every hourly compute.
  */
 export const priorityScore = (severity: SignalSeverity, valueMinor: number, openedAt: Date, now: Date) => {
 	const valueWeight = 1 + Math.log10(1 + Math.max(0, valueMinor) / 100)
-	const ageDays = Math.max(0, (now.getTime() - openedAt.getTime()) / DAY_MS)
+	const ageDays = Math.max(0, Math.floor((now.getTime() - openedAt.getTime()) / DAY_MS))
 	const freshness = Math.max(0.5, 1 - ageDays / 28)
 	return Math.round(SEVERITY_WEIGHT[severity] * valueWeight * freshness * 1000) / 1000
 }

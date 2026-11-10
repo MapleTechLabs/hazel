@@ -17,7 +17,7 @@
  * - Precedence: `FIELD_PRECEDENCE` per field, recorded in `fieldSources`.
  * - It never computes: it marks compute due (`requestCompute`), which the alarm runs soon after.
  */
-import type { DatabaseError, Database } from "@hazel/db"
+import type { DatabaseError, schema } from "@hazel/db"
 import type { IngestOp, IngestOutcome, IngestReport, SyncError, SyncProgress } from "@hazel/domain/customers"
 import type { CustomerProvider, SyncTrigger } from "@hazel/domain/customers"
 import type {
@@ -27,11 +27,12 @@ import type {
 	CustomerUnmatchedRecordId,
 	UserId,
 } from "@hazel/schema"
-import { Context, type Effect, Schema } from "effect"
-import type { SqlClient } from "effect/sql/SqlClient"
+import type { Effect } from "effect"
+import type { CustomerIngestRejectedError } from "./ingest-live"
 
-/** Ops per transaction. */
-export const INGEST_CHUNK = 500
+// The service and its runtime values live with the implementation (`./ingest-live.ts`), so that
+// module imports only types from here.
+export { CustomerIngest, CustomerIngestRejectedError, INGEST_CHUNK } from "./ingest-live"
 
 /** Who is writing: the connection (its provider), and the sync run it belongs to. */
 export interface IngestContext {
@@ -42,60 +43,48 @@ export interface IngestContext {
 	readonly trigger: SyncTrigger
 }
 
-/** An op the store cannot take (a built-in metric key, a negative amount). Not retried. */
-export class CustomerIngestRejectedError extends Schema.TaggedError<CustomerIngestRejectedError>()(
-	"CustomerIngestRejectedError",
-	{ index: Schema.Int, op: Schema.String, message: Schema.String },
-) {}
-
 export type RunResult =
 	| { readonly _tag: "Succeeded"; readonly cursor: string | null }
 	| { readonly _tag: "Failed"; readonly error: SyncError }
-
-type Store = Database.Database | SqlClient
+	/** A retryable failure: the run stays `running` (its cursor resumes), the connection backs off. */
+	| { readonly _tag: "Retrying"; readonly error: SyncError }
 
 export interface CustomerIngestApi {
 	/** Apply `ops` in order; the report has one outcome per op and the run's stats so far. */
 	readonly apply: (
 		context: IngestContext,
 		ops: ReadonlyArray<IngestOp>,
-	) => Effect.Effect<IngestReport, CustomerIngestRejectedError | DatabaseError, Store>
+	) => Effect.Effect<IngestReport, CustomerIngestRejectedError | DatabaseError>
 
 	/** Open a run (`customer_sync_runs`, synced: the data sources page shows it live). */
 	readonly startRun: (
 		connectionId: CustomerConnectionId,
 		trigger: SyncTrigger,
-	) => Effect.Effect<CustomerSyncRunId, DatabaseError, Store>
+	) => Effect.Effect<schema.CustomerSyncRun, DatabaseError>
 
 	readonly progress: (
 		runId: CustomerSyncRunId,
 		progress: SyncProgress,
-	) => Effect.Effect<void, DatabaseError, Store>
+	) => Effect.Effect<void, DatabaseError>
 
 	/**
-	 * Close a run and update its connection (`lastSuccessAt` / `lastErrorAt`, `consecutiveFailures`,
-	 * `nextSyncAt`). A successful `backfill` sets `backfilledAt` and arms the silent baseline
-	 * evaluation (`docs/customers/tech-design.md` §4.7).
+	 * Close a run (or record a retryable failure on it) and update its connection (`lastSuccessAt` /
+	 * `lastErrorAt`, `consecutiveFailures`). A successful `backfill` sets `backfilledAt` and arms the
+	 * silent baseline evaluation (`docs/customers/tech-design.md` §4.7); the connection's first one
+	 * also rebuilds the daily history.
 	 */
-	readonly finishRun: (
-		runId: CustomerSyncRunId,
-		result: RunResult,
-	) => Effect.Effect<void, DatabaseError, Store>
+	readonly finishRun: (runId: CustomerSyncRunId, result: RunResult) => Effect.Effect<void, DatabaseError>
 
 	/** A human linked an unmatched record: record a `manual` ref and apply its op. */
 	readonly link: (
 		recordId: CustomerUnmatchedRecordId,
 		accountId: CustomerAccountId,
 		by: UserId,
-	) => Effect.Effect<IngestOutcome, CustomerIngestRejectedError | DatabaseError, Store>
+	) => Effect.Effect<IngestOutcome, CustomerIngestRejectedError | DatabaseError>
 
 	/** Mark a connection's refs stale (disconnect) or fresh again (reconnect). */
 	readonly setStale: (
 		connectionId: CustomerConnectionId,
 		stale: boolean,
-	) => Effect.Effect<void, DatabaseError, Store>
+	) => Effect.Effect<void, DatabaseError>
 }
-
-export class CustomerIngest extends Context.Service<CustomerIngest, CustomerIngestApi>()(
-	"@hazel/backend/CustomerIngest",
-) {}

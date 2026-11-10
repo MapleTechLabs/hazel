@@ -50,16 +50,20 @@ import {
 	type CustomerUnmatchedRecordId,
 	type UserId,
 } from "@hazel/schema"
-import { Clock, Effect, Layer, Option, Schema } from "effect"
+import { Clock, Context, Effect, Layer, Option, Schema } from "effect"
+import { SqlClient } from "effect/sql/SqlClient"
 import { isBuiltInMetric } from "./defaults"
-import {
-	CustomerIngest,
-	CustomerIngestRejectedError,
-	INGEST_CHUNK,
-	type IngestContext,
-	type RunResult,
-} from "./ingest"
-import { requestCompute, setBaselineFor } from "./schedule"
+import type { CustomerIngestApi, IngestContext, RunResult } from "./ingest"
+import { requestCompute, requestHistoryRebuild, setBaselineFor } from "./schedule"
+
+/** Ops per transaction. */
+export const INGEST_CHUNK = 500
+
+/** An op the store cannot take (a built-in metric key, a negative amount). Not retried. */
+export class CustomerIngestRejectedError extends Schema.TaggedError<CustomerIngestRejectedError>()(
+	"CustomerIngestRejectedError",
+	{ index: Schema.Int, op: Schema.String, message: Schema.String },
+) {}
 
 type Fields = Record<string, CustomerSource>
 
@@ -169,7 +173,7 @@ const STAT_OF = {
 } satisfies Record<IngestOp["_tag"], keyof SyncStats | null>
 
 const encodeOp = Schema.encodeUnknownSync(IngestOp)
-const decodeOp = Schema.decodeUnknownSync(IngestOp)
+const decodeOp = Schema.decodeUnknownOption(IngestOp)
 
 interface Session {
 	readonly context: IngestContext
@@ -185,6 +189,26 @@ interface Session {
 
 const refKey = (ref: ProviderRef) => `${ref.provider}:${ref.externalId}`
 
+/**
+ * A parked record's ops: `payload` holds their encoded list, one per kind (a newer op of the record
+ * replaces the older), except contacts, one per account (a user of two unknown organizations).
+ */
+const parkKey = (op: IngestOp) => (op._tag === "contact" ? `contact:${refKey(op.account)}` : op._tag)
+
+/** The ops of a parked record that decode (the rest are logged and skipped). */
+const parkedOps = (record: Pick<schema.CustomerUnmatchedRecord, "id" | "payload">) =>
+	Effect.gen(function* () {
+		const items = Array.isArray(record.payload) ? record.payload : []
+		const ops = items.flatMap((item) => Option.toArray(decodeOp(item)))
+		if (ops.length < items.length) {
+			yield* Effect.logWarning("Customers unmatched record holds unreadable ops", {
+				recordId: record.id,
+				skipped: items.length - ops.length,
+			})
+		}
+		return ops
+	})
+
 const outcome = {
 	created: (id: string): IngestOutcome => ({ _tag: "Created", id }),
 	updated: (id: string): IngestOutcome => ({ _tag: "Updated", id }),
@@ -195,32 +219,32 @@ const reject = (index: number, op: IngestOp, message: string) =>
 	new CustomerIngestRejectedError({ index, op: op._tag, message })
 
 const make = Effect.gen(function* () {
+	const db = yield* Database.Database
+	// Compute scheduling lives in `_object_meta`, read and written through the raw client.
+	const sql = yield* SqlClient
+	const withSql = Effect.provideService(SqlClient, sql)
 	// -----------------------------------------------------------------------
 	// Lookups
 	// -----------------------------------------------------------------------
 
 	const accountRef = (provider: CustomerProvider, externalId: string) =>
-		Effect.flatMap(Database.Database, (db) =>
-			db.first(
-				SQLite.from(schema.customerExternalRefsTable)
-					.select()
-					.where(($) => [
-						$.entityType.eq("account"),
-						$.provider.eq(provider),
-						$.externalId.eq(externalId),
-					])
-					.limit(1),
-			),
+		db.first(
+			SQLite.from(schema.customerExternalRefsTable)
+				.select()
+				.where(($) => [
+					$.entityType.eq("account"),
+					$.provider.eq(provider),
+					$.externalId.eq(externalId),
+				])
+				.limit(1),
 		)
 
 	const liveAccount = (accountId: CustomerAccountId) =>
-		Effect.flatMap(Database.Database, (db) =>
-			db.first(
-				SQLite.from(schema.customerAccountsTable)
-					.select()
-					.where(($) => [$.id.eq(accountId), $.deletedAt.isNull()])
-					.limit(1),
-			),
+		db.first(
+			SQLite.from(schema.customerAccountsTable)
+				.select()
+				.where(($) => [$.id.eq(accountId), $.deletedAt.isNull()])
+				.limit(1),
 		)
 
 	/** The live account a ref names. */
@@ -241,7 +265,6 @@ const make = Effect.gen(function* () {
 			const key = `${refKey(ref)}:${accountId}`
 			const cached = session.contacts.get(key)
 			if (cached !== undefined) return Option.some(cached)
-			const db = yield* Database.Database
 			const row = yield* db.first(
 				SQLite.from(schema.customerExternalRefsTable)
 					.select("entityId")
@@ -277,7 +300,6 @@ const make = Effect.gen(function* () {
 		},
 	) =>
 		Effect.gen(function* () {
-			const db = yield* Database.Database
 			yield* db.run(
 				SQLite.insertInto(schema.customerExternalRefsTable).values({
 					connectionId: session.context.connectionId,
@@ -310,17 +332,15 @@ const make = Effect.gen(function* () {
 		ref: schema.CustomerExternalRef,
 		externalUrl: string | null | undefined,
 	) =>
-		Effect.flatMap(Database.Database, (db) =>
-			db.run(
-				SQLite.update(schema.customerExternalRefsTable)
-					.set({
-						lastSyncedAt: session.now,
-						staleAt: null,
-						externalUrl,
-						updatedAt: session.now,
-					})
-					.where(($) => [$.id.eq(ref.id)]),
-			),
+		db.run(
+			SQLite.update(schema.customerExternalRefsTable)
+				.set({
+					lastSyncedAt: session.now,
+					staleAt: null,
+					externalUrl,
+					updatedAt: session.now,
+				})
+				.where(($) => [$.id.eq(ref.id)]),
 		)
 
 	/** A timeline event, once per `externalId`. */
@@ -336,21 +356,19 @@ const make = Effect.gen(function* () {
 			readonly externalId: string
 		},
 	) =>
-		Effect.flatMap(Database.Database, (db) =>
-			db.run(
-				SQLite.insertInto(schema.customerEventsTable)
-					.values({
-						accountId: event.accountId,
-						contactId: event.contactId ?? null,
-						provider: session.context.provider,
-						type: event.type,
-						title: event.title,
-						data: event.data ?? {},
-						occurredAt: event.occurredAt ?? session.now,
-						externalId: event.externalId,
-					})
-					.onConflictDoNothing(),
-			),
+		db.run(
+			SQLite.insertInto(schema.customerEventsTable)
+				.values({
+					accountId: event.accountId,
+					contactId: event.contactId ?? null,
+					provider: session.context.provider,
+					type: event.type,
+					title: event.title,
+					data: event.data ?? {},
+					occurredAt: event.occurredAt ?? session.now,
+					externalId: event.externalId,
+				})
+				.onConflictDoNothing(),
 		)
 
 	const ignoredBy = (
@@ -381,7 +399,8 @@ const make = Effect.gen(function* () {
 
 	/**
 	 * Park a record matching could not place (one row per provider record; a repeat updates it). An
-	 * ignored record stays ignored.
+	 * ignored record stays ignored. A record parked for its usage only (`op: null`) keeps what an
+	 * op parked it with (label, suggestion), and only counts the events.
 	 */
 	const park = (
 		session: Session,
@@ -402,7 +421,6 @@ const make = Effect.gen(function* () {
 		},
 	) =>
 		Effect.gen(function* () {
-			const db = yield* Database.Database
 			const existing = yield* db.first(
 				SQLite.from(schema.customerUnmatchedRecordsTable)
 					.select()
@@ -419,7 +437,6 @@ const make = Effect.gen(function* () {
 				domain: record.domain ?? null,
 				valueMinor: record.valueMinor ?? null,
 				currency: record.currency ?? null,
-				payload: record.op === null ? null : encodeOp(record.op),
 				suggestedAccountId: record.suggestedAccountId ?? null,
 				confidence: record.confidence ?? null,
 				reason: record.reason,
@@ -433,6 +450,7 @@ const make = Effect.gen(function* () {
 							entityType: record.entityType,
 							externalId: record.externalId,
 							eventCount30d: record.events ?? null,
+							payload: record.op === null ? null : [encodeOp(record.op)],
 							...values,
 						})
 						.returning("id"),
@@ -441,23 +459,32 @@ const make = Effect.gen(function* () {
 			}
 			const row = existing.value
 			if (row.status === "ignored") return { _tag: "Ignored", ruleId: row.id } satisfies IngestOutcome
+			// Overlapping pulls count a day's events again: an estimate, not a ledger.
 			const events =
 				record.events === undefined ? row.eventCount30d : (row.eventCount30d ?? 0) + record.events
+			const { op } = record
+			const held = row.status === "open" ? yield* parkedOps(row) : []
+			const next =
+				op !== null
+					? {
+							...values,
+							payload: [...held.filter((item) => parkKey(item) !== parkKey(op)), op].map(
+								(item) => encodeOp(item),
+							),
+							eventCount30d: events,
+						}
+					: row.status === "open"
+						? { eventCount30d: events }
+						: { ...values, payload: null, eventCount30d: events }
+			const current: Record<string, unknown> = row
 			const changed =
 				row.status !== "open" ||
-				!same(row.payload ?? null, values.payload) ||
-				row.reason !== values.reason ||
-				row.label !== values.label ||
-				events !== row.eventCount30d ||
-				row.suggestedAccountId !== values.suggestedAccountId
+				Object.entries(next).some(([field, value]) => !same(current[field] ?? null, value))
 			if (changed) {
 				yield* db.run(
 					SQLite.update(schema.customerUnmatchedRecordsTable)
 						.set({
-							...values,
-							// A record whose payload is the latest op keeps the last one seen.
-							payload: values.payload ?? row.payload,
-							eventCount30d: events,
+							...next,
 							status: "open",
 							resolvedAt: null,
 							resolvedByUserId: null,
@@ -471,43 +498,47 @@ const make = Effect.gen(function* () {
 
 	/**
 	 * A ref was created: the open records it places are linked, and the ops they hold applied (the
-	 * record itself, and billing ops naming that account).
+	 * record itself, and billing ops naming that account). An op that still cannot land parks its
+	 * record again.
 	 */
 	const replayUnblocked = (
 		session: Session,
 		provider: CustomerProvider,
 		entityType: "account" | "contact",
 		externalId: string,
-	): Effect.Effect<void, CustomerIngestRejectedError | Database.DatabaseError, Database.Database> =>
+	): Effect.Effect<void, CustomerIngestRejectedError | Database.DatabaseError> =>
 		Effect.gen(function* () {
-			const db = yield* Database.Database
-			const records = yield* db.run(
-				SQLite.from(schema.customerUnmatchedRecordsTable)
-					.select()
-					.where(($) => [
-						$.status.eq("open"),
-						SQLite.or(
-							SQLite.and(
-								$.provider.eq(provider),
-								$.entityType.eq(entityType),
-								$.externalId.eq(externalId),
-							),
-							entityType === "account"
-								? SQLite.and(
-										SQLite.jsonText($.payload, "account.provider").eq(provider),
-										SQLite.jsonText($.payload, "account.externalId").eq(externalId),
-									)
-								: undefined,
-						),
-					]),
+			const byPayload = entityType === "account" ? 1 : 0
+			const ids = yield* db.query(
+				Database.sql`SELECT "id" FROM "customer_unmatched_records" r WHERE "status" = 'open' AND (
+					("provider" = ${provider} AND "entityType" = ${entityType} AND "externalId" = ${externalId})
+					OR (${byPayload} = 1 AND json_type(r."payload") = 'array' AND EXISTS (
+						SELECT 1 FROM json_each(r."payload") p
+						WHERE json_extract(p.value, '$.account.provider') = ${provider}
+							AND json_extract(p.value, '$.account.externalId') = ${externalId}
+					))
+				)`,
 			)
-			for (const record of records) {
+			for (const { id } of ids) {
+				const found = yield* db.first(
+					SQLite.from(schema.customerUnmatchedRecordsTable)
+						.select()
+						.where(($) => [$.id.eq(id as CustomerUnmatchedRecordId), $.status.eq("open")])
+						.limit(1),
+				)
+				if (Option.isNone(found)) continue
+				const record = found.value
+				const ops = yield* parkedOps(record)
 				yield* db.run(
 					SQLite.update(schema.customerUnmatchedRecordsTable)
-						.set({ status: "linked", resolvedAt: session.now, updatedAt: session.now })
+						.set({
+							status: "linked",
+							payload: null,
+							resolvedAt: session.now,
+							updatedAt: session.now,
+						})
 						.where(($) => [$.id.eq(record.id)]),
 				)
-				if (record.payload === null) continue
 				const replay: Session = {
 					...session,
 					context: {
@@ -516,7 +547,7 @@ const make = Effect.gen(function* () {
 						provider: record.provider,
 					},
 				}
-				yield* applyOp(replay, decodeOp(record.payload), 0)
+				yield* Effect.forEach(ops, (op) => applyOp(replay, op, 0), { discard: true })
 			}
 		})
 
@@ -539,7 +570,6 @@ const make = Effect.gen(function* () {
 
 	const matchAccount = (session: Session, op: UpsertAccount, domains: ReadonlyArray<string>) =>
 		Effect.gen(function* () {
-			const db = yield* Database.Database
 			const shared = new Set<CustomerAccountId>()
 			for (const ref of op.sameAs) {
 				const accountId = yield* resolveAccount(session, ref)
@@ -594,7 +624,6 @@ const make = Effect.gen(function* () {
 		domains: ReadonlyArray<string>,
 	) =>
 		Effect.gen(function* () {
-			const db = yield* Database.Database
 			const row = yield* db.first(
 				SQLite.from(schema.customerAccountsTable)
 					.select()
@@ -627,7 +656,6 @@ const make = Effect.gen(function* () {
 
 	const createAccount = (session: Session, op: UpsertAccount, domains: ReadonlyArray<string>) =>
 		Effect.gen(function* () {
-			const db = yield* Database.Database
 			const settings = yield* db.first(SQLite.from(schema.customerSettingsTable).select().limit(1))
 			const organizationId = Option.map(settings, (row) => row.organizationId)
 			if (Option.isNone(organizationId)) {
@@ -662,7 +690,6 @@ const make = Effect.gen(function* () {
 
 	const applyAccount = (session: Session, op: UpsertAccount) =>
 		Effect.gen(function* () {
-			const db = yield* Database.Database
 			const { provider } = session.context
 			const domains = [
 				...new Set((op.domains ?? []).map(normalizeDomain).filter((domain) => domain !== null)),
@@ -767,7 +794,6 @@ const make = Effect.gen(function* () {
 
 	const applyContact = (session: Session, op: UpsertContact) =>
 		Effect.gen(function* () {
-			const db = yield* Database.Database
 			const { provider } = session.context
 			const accountId = yield* resolveAccount(session, op.account)
 			if (Option.isNone(accountId)) {
@@ -904,7 +930,6 @@ const make = Effect.gen(function* () {
 	const applySubscription = (session: Session, op: UpsertSubscription, index: number) =>
 		Effect.gen(function* () {
 			if (op.mrrMinor < 0) return yield* reject(index, op, "mrrMinor must not be negative")
-			const db = yield* Database.Database
 			const { provider } = session.context
 			const accountId = yield* resolveAccount(session, op.account)
 			if (Option.isNone(accountId)) {
@@ -1031,7 +1056,6 @@ const make = Effect.gen(function* () {
 			if (op.amountDueMinor < 0 || op.amountPaidMinor < 0) {
 				return yield* reject(index, op, "Invoice amounts must not be negative")
 			}
-			const db = yield* Database.Database
 			const { provider } = session.context
 			const accountId = yield* resolveAccount(session, op.account)
 			if (Option.isNone(accountId)) {
@@ -1154,7 +1178,6 @@ const make = Effect.gen(function* () {
 
 	const applyActivity = (session: Session, op: RecordActivity) =>
 		Effect.gen(function* () {
-			const db = yield* Database.Database
 			const accountId = yield* resolveAccount(session, op.account)
 			if (Option.isNone(accountId))
 				return yield* parkUnknownAccount(session, op.account, op.eventCount ?? 0)
@@ -1221,7 +1244,6 @@ const make = Effect.gen(function* () {
 		day: string,
 	) =>
 		Effect.gen(function* () {
-			const db = yield* Database.Database
 			const at = new Date(`${day}T00:00:00.000Z`)
 			let known = session.firstActive.get(contactId)
 			if (known === undefined) {
@@ -1254,7 +1276,6 @@ const make = Effect.gen(function* () {
 
 	const ensureDefinition = (session: Session, key: string) =>
 		Effect.gen(function* () {
-			const db = yield* Database.Database
 			const existing = yield* db.first(
 				SQLite.from(schema.customerMetricDefinitionsTable)
 					.select("id")
@@ -1276,7 +1297,6 @@ const make = Effect.gen(function* () {
 		Effect.gen(function* () {
 			if (isBuiltInMetric(op.metricKey))
 				return yield* reject(index, op, `${op.metricKey} is computed by Hazel`)
-			const db = yield* Database.Database
 			const accountId = yield* resolveAccount(session, op.account)
 			if (Option.isNone(accountId)) return yield* parkUnknownAccount(session, op.account)
 			yield* ensureDefinition(session, op.metricKey)
@@ -1322,7 +1342,6 @@ const make = Effect.gen(function* () {
 	const applyDefinition = (session: Session, op: DefineMetric, index = 0) =>
 		Effect.gen(function* () {
 			if (isBuiltInMetric(op.key)) return yield* reject(index, op, `${op.key} is a built-in metric`)
-			const db = yield* Database.Database
 			const values = {
 				name: op.name,
 				unit: op.unit,
@@ -1363,7 +1382,6 @@ const make = Effect.gen(function* () {
 
 	const applyEvent = (session: Session, op: RecordEvent) =>
 		Effect.gen(function* () {
-			const db = yield* Database.Database
 			const { provider } = session.context
 			const accountId = yield* resolveAccount(session, op.account)
 			if (Option.isNone(accountId)) return yield* parkUnknownAccount(session, op.account)
@@ -1413,11 +1431,7 @@ const make = Effect.gen(function* () {
 		session: Session,
 		op: IngestOp,
 		index: number,
-	): Effect.Effect<
-		IngestOutcome,
-		CustomerIngestRejectedError | Database.DatabaseError,
-		Database.Database
-	> => {
+	): Effect.Effect<IngestOutcome, CustomerIngestRejectedError | Database.DatabaseError> => {
 		switch (op._tag) {
 			case "account":
 				return applyAccount(session, op)
@@ -1440,7 +1454,6 @@ const make = Effect.gen(function* () {
 
 	const openSession = (context: IngestContext) =>
 		Effect.gen(function* () {
-			const db = yield* Database.Database
 			const connection = yield* db.first(
 				SQLite.from(schema.customerConnectionsTable)
 					.select("config")
@@ -1472,7 +1485,6 @@ const make = Effect.gen(function* () {
 
 	const apply = (context: IngestContext, ops: ReadonlyArray<IngestOp>) =>
 		Effect.gen(function* () {
-			const db = yield* Database.Database
 			const session = yield* openSession(context)
 			const outcomes: Array<IngestOutcome> = []
 			const stats = { ...EMPTY_SYNC_STATS }
@@ -1527,9 +1539,13 @@ const make = Effect.gen(function* () {
 							)
 						}
 					}
-					if (changed) yield* requestCompute
+					if (changed) yield* withSql(requestCompute)
 				}),
 			)
+			yield* Effect.annotateCurrentSpan({
+				"ingest.changed": changed,
+				...Object.fromEntries(Object.entries(stats).map(([key, value]) => [`ingest.${key}`, value])),
+			})
 			return { stats, outcomes }
 		}).pipe(
 			Effect.withSpan("CustomerIngest.apply", {
@@ -1543,7 +1559,6 @@ const make = Effect.gen(function* () {
 
 	const startRun = (connectionId: CustomerConnectionId, trigger: IngestContext["trigger"]) =>
 		Effect.gen(function* () {
-			const db = yield* Database.Database
 			const connection = yield* db.first(
 				SQLite.from(schema.customerConnectionsTable)
 					.select()
@@ -1561,33 +1576,34 @@ const make = Effect.gen(function* () {
 						trigger,
 						startedAt: new Date(yield* Clock.currentTimeMillis),
 					})
-					.returning("id"),
+					.returning(),
 			)
-			return row.id
+			return row
 		})
 
 	const progress = (
 		runId: CustomerSyncRunId,
 		value: { step: string; done: number; total: number | null },
 	) =>
-		Effect.flatMap(Database.Database, (db) =>
-			db.run(
+		db
+			.run(
 				SQLite.update(schema.customerSyncRunsTable)
 					.set({ progress: value })
 					.where(($) => [$.id.eq(runId)]),
-			),
-		).pipe(Effect.asVoid)
+			)
+			.pipe(Effect.asVoid)
 
 	const finishRun = (runId: CustomerSyncRunId, result: RunResult) =>
 		Effect.gen(function* () {
-			const db = yield* Database.Database
 			const now = new Date(yield* Clock.currentTimeMillis)
 			const [run] = yield* db.run(
 				SQLite.update(schema.customerSyncRunsTable)
 					.set(
 						result._tag === "Succeeded"
 							? { status: "succeeded", finishedAt: now, cursor: result.cursor, error: null }
-							: { status: "failed", finishedAt: now, error: result.error },
+							: result._tag === "Failed"
+								? { status: "failed", finishedAt: now, error: result.error }
+								: { error: result.error },
 					)
 					.where(($) => [$.id.eq(runId)])
 					.returning(),
@@ -1629,13 +1645,16 @@ const make = Effect.gen(function* () {
 					)
 					.where(($) => [$.id.eq(current.id)]),
 			)
-			if (result._tag === "Succeeded" && run.trigger === "backfill") yield* setBaselineFor(current.id)
-			yield* requestCompute
+			if (result._tag === "Succeeded" && run.trigger === "backfill") {
+				yield* withSql(setBaselineFor(current.id))
+				// The first import brings old data: chart history is rebuilt once, not on later imports.
+				if (current.backfilledAt === null) yield* withSql(requestHistoryRebuild)
+			}
+			yield* withSql(requestCompute)
 		})
 
 	const link = (recordId: CustomerUnmatchedRecordId, accountId: CustomerAccountId, by: UserId) =>
 		Effect.gen(function* () {
-			const db = yield* Database.Database
 			const found = yield* db.first(
 				SQLite.from(schema.customerUnmatchedRecordsTable)
 					.select()
@@ -1657,7 +1676,11 @@ const make = Effect.gen(function* () {
 					trigger: "manual",
 				})),
 			}
-			const op = record.payload === null ? null : decodeOp(record.payload)
+			const ops = yield* parkedOps(record)
+			if (ops.length === 0 && Array.isArray(record.payload) && record.payload.length > 0)
+				return yield* fail("The record's data is unreadable")
+			// A contact parked in several unknown accounts: the first one is linked.
+			const op = ops[0] ?? null
 			// The ref that places it: its own (account records), or its account's (the rest).
 			const target: ProviderRef =
 				record.entityType === "account" || op === null || !("account" in op)
@@ -1704,15 +1727,15 @@ const make = Effect.gen(function* () {
 						resolvedAt: session.now,
 						updatedAt: session.now,
 					})
-					.where(($) => [$.id.eq(recordId)]),
+					// Still open when an op of it could not land yet (parked again).
+					.where(($) => [$.id.eq(recordId), $.status.eq("linked")]),
 			)
-			yield* requestCompute
+			yield* withSql(requestCompute)
 			return outcome.updated(accountId)
 		})
 
 	const setStale = (connectionId: CustomerConnectionId, stale: boolean) =>
 		Effect.gen(function* () {
-			const db = yield* Database.Database
 			const now = new Date(yield* Clock.currentTimeMillis)
 			yield* db.run(
 				SQLite.update(schema.customerExternalRefsTable)
@@ -1724,17 +1747,21 @@ const make = Effect.gen(function* () {
 			)
 		})
 
-	return CustomerIngest.of({
+	return {
 		apply,
-		startRun: (connectionId, trigger) => startRun(connectionId, trigger),
+		startRun,
 		progress,
 		finishRun,
 		link,
 		setStale,
-	})
+	} satisfies CustomerIngestApi
 })
 
-export const CustomerIngestLive = Layer.effect(CustomerIngest, make)
+export class CustomerIngest extends Context.Service<CustomerIngest, CustomerIngestApi>()(
+	"@hazel/backend/CustomerIngest",
+) {
+	static readonly layer = Layer.effect(this, make)
+}
 
-/** Apply without a context service (tests, the seed): the live implementation. */
-export const customerIngest = make
+/** @deprecated Use `CustomerIngest.layer` (or `CustomersServicesLive`). */
+export const CustomerIngestLive = CustomerIngest.layer

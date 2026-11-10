@@ -5,7 +5,7 @@
 import type { IngestOp, UpsertAccount } from "@hazel/domain/customers"
 import { Effect, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
-import { customerIngest } from "./ingest-live"
+import { CustomerIngest } from "./ingest"
 import { type CustomersWorld, makeCustomersWorld } from "./test-kit"
 import { dayOf } from "./time"
 
@@ -373,7 +373,7 @@ describe("CustomerIngest", () => {
 				const refused = yield* world.object
 					.run(
 						Effect.gen(function* () {
-							const ingest = yield* customerIngest
+							const ingest = yield* CustomerIngest
 							return yield* ingest.apply(
 								{
 									connectionId: world.connection("autumn"),
@@ -391,7 +391,7 @@ describe("CustomerIngest", () => {
 									},
 								],
 							)
-						}),
+						}).pipe(Effect.provide(CustomerIngest.layer)),
 					)
 					.pipe(Effect.flip)
 				expect(refused._tag).toBe("CustomerIngestRejectedError")

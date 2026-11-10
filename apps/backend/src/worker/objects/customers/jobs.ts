@@ -8,15 +8,19 @@
  * - `customers.webhook` (`routes/customers-webhooks.http.ts`): verify and apply one delivery.
  *
  * Scheduled pulls (`docs/customers/tech-design.md` §5): a connection is due at `nextSyncAt`; its
- * running run (a backfill or a "sync now") or a new `schedule` run pulls page by page, keeping the
- * cursor on the run so an evicted object resumes. Success schedules the next pull one adapter
- * interval later; `auth` failures stop pulls until the credentials change; others back off.
+ * running run (a backfill or a "sync now") or a new one (`backfill` until one succeeded, else
+ * `schedule`) pulls page by page, keeping the cursor on the run so an evicted object resumes.
+ * Success schedules the next pull one adapter interval later; `auth` failures stop pulls until the
+ * credentials change; others back off, the run staying open to resume from its cursor.
  */
-import { Database, SQLite, schema } from "@hazel/db"
+import { Database, type DatabaseError, SQLite, schema } from "@hazel/db"
 import { CustomerProvider, type SyncError } from "@hazel/domain/customers"
 import { CustomerConnectionId, OrganizationId } from "@hazel/schema"
-import { Cause, Clock, Effect, Option, Schema } from "effect"
-import { IntegrationEncryption } from "../../../services/integration-encryption"
+import { Cause, Clock, Data, Effect, Option, Schema } from "effect"
+import type {
+	IntegrationEncryptionError,
+	KeyVersionNotFoundError,
+} from "../../../services/integration-encryption"
 import { callObject, defineCall } from "../calls"
 import { applyMembers, CUSTOMERS_MEMBERS_VERSION_KEY } from "../effects/customers-effects"
 import { orgTarget } from "../kinds"
@@ -25,10 +29,11 @@ import { CustomerMembersCall } from "../org/customer-members"
 import { runCompute, wakeSnoozed } from "./compute"
 import { loadCredentials } from "./credentials"
 import { installDefaults } from "./defaults"
-import { CustomerIngest } from "./ingest"
-import { CustomerIngestLive } from "./ingest-live"
-import { type CustomerProviderAdapter, CustomerProviderError, CustomerProviders } from "./providers"
-import { computeDueAt, scheduleComputeAt } from "./schedule"
+import { CustomerIngest, type CustomerIngestRejectedError } from "./ingest"
+import type { CustomerProviderAdapter, CustomerProviderError } from "./providers"
+import { CustomerProviders } from "./providers"
+import { COMPUTE_RETRY_MS, computeDueAt, scheduleComputeAt } from "./schedule"
+import { CustomersServicesLive } from "./services"
 
 const DEFAULTS_KEY = "defaultsInstalled"
 /** Pages per connection per alarm; the rest resumes on the next one. */
@@ -88,69 +93,118 @@ export const bootstrap = Effect.fn("CustomersObject.bootstrap")(function* (paylo
 // Pulls
 // ---------------------------------------------------------------------------
 
-const syncErrorOf = (error: CustomerProviderError): SyncError => ({
-	code: error.code,
-	message: error.message,
-	httpStatus: error.httpStatus,
-})
+const backoffMs = (failures: number) => Math.min(MAX_BACKOFF_MS, 60_000 * 2 ** failures)
 
-/** One due connection: resume its running run or start a scheduled one, pull up to the page budget. */
-const pullConnection = (connection: schema.CustomerConnection, adapter: CustomerProviderAdapter, now: Date) =>
-	Effect.gen(function* () {
-		const db = yield* Database.Database
-		const ingest = yield* CustomerIngest
-		const setNext = (at: Date | null) =>
-			db.run(
-				SQLite.update(schema.customerConnectionsTable)
-					.set({ nextSyncAt: at, updatedAt: now })
-					.where(($) => [$.id.eq(connection.id)]),
-			)
+const setNextSync = (connectionId: CustomerConnectionId, at: Date | null, now: Date) =>
+	Effect.flatMap(Database.Database, (db) =>
+		db.run(
+			SQLite.update(schema.customerConnectionsTable)
+				.set({ nextSyncAt: at, updatedAt: now })
+				.where(($) => [$.id.eq(connectionId)]),
+		),
+	)
+
+/** Why a pull stopped: auth failures (and unreadable credentials) stop pulls, the rest retry. */
+class PullFailure extends Data.TaggedError("PullFailure")<{
+	readonly error: SyncError
+	readonly retryable: boolean
+	readonly retryAfterMs: number | null
+}> {}
+
+const pullFailureOf = (
+	error:
+		| CustomerProviderError
+		| CustomerIngestRejectedError
+		| DatabaseError
+		| IntegrationEncryptionError
+		| KeyVersionNotFoundError,
+): PullFailure => {
+	switch (error._tag) {
+		case "CustomerProviderError":
+			return new PullFailure({
+				error: { code: error.code, message: error.message, httpStatus: error.httpStatus },
+				retryable: error.code !== "auth",
+				retryAfterMs: error.retryAfterMs,
+			})
+		case "CustomerIngestRejectedError":
+			// The provider sent an op the store refuses: retrying the page refuses it again.
+			return new PullFailure({
+				error: { code: "internal", message: error.message, httpStatus: null },
+				retryable: false,
+				retryAfterMs: null,
+			})
+		case "DatabaseError":
+			return new PullFailure({
+				error: { code: "internal", message: error.message, httpStatus: null },
+				retryable: true,
+				retryAfterMs: null,
+			})
+		case "IntegrationEncryptionError":
+		case "KeyVersionNotFoundError":
+			return new PullFailure({
+				error: { code: "auth", message: "The stored credentials cannot be read", httpStatus: null },
+				retryable: false,
+				retryAfterMs: null,
+			})
+	}
+}
+
+/**
+ * One due connection: resume its running run or start one (a `backfill` until the first one
+ * succeeded, else a `schedule` run), pull up to the page budget. A retryable failure keeps the run
+ * running, so the next attempt resumes from its cursor after a backoff; any other closes it.
+ */
+const pullConnection = Effect.fn("CustomersObject.pullConnection")(function* (
+	connection: schema.CustomerConnection,
+	adapter: CustomerProviderAdapter,
+	now: Date,
+) {
+	const db = yield* Database.Database
+	const ingest = yield* CustomerIngest
+	const running = yield* db.first(
+		SQLite.from(schema.customerSyncRunsTable)
+			.select()
+			.where(($) => [$.connectionId.eq(connection.id), $.status.eq("running")])
+			.orderBy(($) => [[$.startedAt, "desc"]])
+			.limit(1),
+	)
+	const run = Option.isSome(running)
+		? running.value
+		: yield* ingest.startRun(connection.id, connection.backfilledAt === null ? "backfill" : "schedule")
+	yield* Effect.annotateCurrentSpan({
+		"customers.connection_id": connection.id,
+		"customers.provider": connection.provider,
+		"customers.run_id": run.id,
+		"customers.trigger": run.trigger,
+	})
+	const since =
+		run.trigger === "backfill" || connection.lastSuccessAt === null
+			? null
+			: new Date(connection.lastSuccessAt.getTime() - PULL_OVERLAP_MS)
+	const context = {
+		connectionId: connection.id,
+		provider: connection.provider,
+		runId: run.id,
+		trigger: run.trigger,
+	}
+	let pages = 0
+	const pull = Effect.gen(function* () {
 		const credentials = yield* loadCredentials(connection.id, connection.config)
-		if (Option.isNone(credentials)) return yield* setNext(null)
-		const running = yield* db.first(
-			SQLite.from(schema.customerSyncRunsTable)
-				.select()
-				.where(($) => [$.connectionId.eq(connection.id), $.status.eq("running")])
-				.orderBy(($) => [[$.startedAt, "desc"]])
-				.limit(1),
-		)
-		const run = Option.isSome(running)
-			? running.value
-			: yield* ingest.startRun(connection.id, "schedule").pipe(
-					Effect.flatMap((id) =>
-						db.first(
-							SQLite.from(schema.customerSyncRunsTable)
-								.select()
-								.where(($) => [$.id.eq(id)])
-								.limit(1),
-						),
-					),
-					Effect.map(Option.getOrThrow),
-				)
-		const since =
-			run.trigger === "backfill" || connection.lastSuccessAt === null
-				? null
-				: new Date(connection.lastSuccessAt.getTime() - PULL_OVERLAP_MS)
-		const context = {
-			connectionId: connection.id,
-			provider: connection.provider,
-			runId: run.id,
-			trigger: run.trigger,
+		if (Option.isNone(credentials)) {
+			return yield* new PullFailure({
+				error: { code: "auth", message: "The connection has no credentials", httpStatus: null },
+				retryable: false,
+				retryAfterMs: null,
+			})
 		}
 		let cursor = run.cursor
-		for (let page = 0; page < PAGES_PER_TICK; page++) {
-			const result = yield* adapter
-				.pull({ credentials: credentials.value, cursor, since })
-				.pipe(Effect.result)
-			if (result._tag === "Failure") {
-				const error = result.failure
-				yield* ingest.finishRun(run.id, { _tag: "Failed", error: syncErrorOf(error) })
-				const backoff = Math.min(MAX_BACKOFF_MS, 60_000 * 2 ** connection.consecutiveFailures)
-				return yield* setNext(
-					error.code === "auth" ? null : new Date(now.getTime() + (error.retryAfterMs ?? backoff)),
-				)
-			}
-			const { ops, nextCursor, progress } = result.success
+		while (pages < PAGES_PER_TICK) {
+			const { ops, nextCursor, progress } = yield* adapter.pull({
+				credentials: credentials.value,
+				cursor,
+				since,
+			})
+			pages++
 			yield* ingest.apply(context, ops)
 			yield* ingest.progress(run.id, progress)
 			yield* db.run(
@@ -161,12 +215,48 @@ const pullConnection = (connection: schema.CustomerConnection, adapter: Customer
 			cursor = nextCursor
 			if (nextCursor === null) {
 				yield* ingest.finishRun(run.id, { _tag: "Succeeded", cursor: null })
-				return yield* setNext(new Date(now.getTime() + adapter.pullIntervalMs))
+				return yield* setNextSync(
+					connection.id,
+					new Date(now.getTime() + adapter.pullIntervalMs),
+					now,
+				)
 			}
 		}
 		// Out of budget for this alarm: continue right after.
-		yield* setNext(new Date(now.getTime() + 1_000))
-	})
+		yield* setNextSync(connection.id, new Date(now.getTime() + 1_000), now)
+	}).pipe(
+		Effect.catchTags({
+			CustomerProviderError: (error) => Effect.fail(pullFailureOf(error)),
+			CustomerIngestRejectedError: (error) => Effect.fail(pullFailureOf(error)),
+			DatabaseError: (error) => Effect.fail(pullFailureOf(error)),
+			IntegrationEncryptionError: (error) => Effect.fail(pullFailureOf(error)),
+			KeyVersionNotFoundError: (error) => Effect.fail(pullFailureOf(error)),
+		}),
+	)
+	yield* pull.pipe(
+		Effect.catchTag("PullFailure", (failure) =>
+			Effect.gen(function* () {
+				yield* Effect.logWarning("Customers pull failed", {
+					connectionId: connection.id,
+					provider: connection.provider,
+					runId: run.id,
+					code: failure.error.code,
+					message: failure.error.message,
+					retryable: failure.retryable,
+				})
+				yield* ingest.finishRun(run.id, {
+					_tag: failure.retryable ? "Retrying" : "Failed",
+					error: failure.error,
+				})
+				const retryAt = new Date(
+					now.getTime() + (failure.retryAfterMs ?? backoffMs(connection.consecutiveFailures)),
+				)
+				yield* setNextSync(connection.id, failure.error.code === "auth" ? null : retryAt, now)
+			}),
+		),
+	)
+	yield* Effect.annotateCurrentSpan({ "customers.pages": pages })
+})
 
 export const runDuePulls = Effect.fn("CustomersObject.runDuePulls")(function* (now: Date) {
 	const db = yield* Database.Database
@@ -176,26 +266,39 @@ export const runDuePulls = Effect.fn("CustomersObject.runDuePulls")(function* (n
 			.select()
 			.where(($) => [$.status.eq("active"), $.nextSyncAt.lte(now)]),
 	)
-	for (const connection of due) {
-		const adapter = providers.get(connection.provider)
-		if (Option.isNone(adapter)) {
-			// No integration for it (core): nothing to pull until one is registered.
-			yield* db.run(
-				SQLite.update(schema.customerConnectionsTable)
-					.set({ nextSyncAt: null, updatedAt: now })
-					.where(($) => [$.id.eq(connection.id)]),
-			)
-			continue
-		}
-		yield* pullConnection(connection, adapter.value, now).pipe(
-			Effect.catchCause((cause) =>
-				Effect.logError("Customers pull failed", {
-					connectionId: connection.id,
-					cause: Cause.pretty(cause),
-				}),
-			),
-		)
-	}
+	yield* Effect.annotateCurrentSpan({ "customers.due_connections": due.length })
+	yield* Effect.forEach(
+		due,
+		(connection) =>
+			Option.match(providers.get(connection.provider), {
+				// No integration for it (core): nothing to pull until one is registered.
+				onNone: () => setNextSync(connection.id, null, now),
+				onSome: (adapter) =>
+					pullConnection(connection, adapter, now).pipe(
+						// Recording the failure itself failed (or a defect): back off all the same, so a
+						// broken connection cannot keep the alarm firing.
+						Effect.catchCause((cause) =>
+							Cause.hasInterruptsOnly(cause)
+								? Effect.failCause(cause)
+								: Effect.logError("Customers pull failed", {
+										connectionId: connection.id,
+										cause: Cause.pretty(cause),
+									}).pipe(
+										Effect.andThen(
+											setNextSync(
+												connection.id,
+												new Date(
+													now.getTime() + backoffMs(connection.consecutiveFailures),
+												),
+												now,
+											),
+										),
+									),
+						),
+					),
+			}),
+		{ discard: true },
+	)
 })
 
 // ---------------------------------------------------------------------------
@@ -214,19 +317,23 @@ export const tick = Effect.fn("CustomersObject.tick")(
 		const now = new Date(yield* Clock.currentTimeMillis)
 		if (Option.isNone(yield* readObjectMeta(DEFAULTS_KEY))) return { computed: false }
 		const due = yield* computeDueAt
-		const reopen = yield* db.first(
-			SQLite.from(schema.customerSignalsTable)
-				.select("id")
-				.where(($) => [$.status.eq("done"), $.closedAt.isNull(), $.reopenAfter.lte(now)])
-				.limit(1),
-		)
-		const computed = (Option.isSome(due) && due.value <= now.getTime()) || Option.isSome(reopen)
-		if (computed) yield* runCompute(now)
-		else yield* db.transaction(wakeSnoozed(now))
+		const computed = Option.isSome(due) && due.value <= now.getTime()
+		if (computed) {
+			// A failed compute retries later instead of on every alarm; pulls still run.
+			yield* runCompute(now).pipe(
+				Effect.catchCause((cause) =>
+					Cause.hasInterruptsOnly(cause)
+						? Effect.failCause(cause)
+						: Effect.logError("Customers compute failed", { cause: Cause.pretty(cause) }).pipe(
+								Effect.andThen(scheduleComputeAt(now.getTime() + COMPUTE_RETRY_MS)),
+							),
+				),
+			)
+		} else yield* db.transaction(wakeSnoozed(now))
 		yield* runDuePulls(now)
 		return { computed }
 	},
-	Effect.provide([CustomerIngestLive, CustomerProviders.layer, IntegrationEncryption.layer]),
+	Effect.provide(CustomersServicesLive),
 	Effect.orDie,
 )
 
@@ -300,8 +407,13 @@ export const receiveWebhook = Effect.fn("CustomersObject.webhook")(
 			).length,
 		}
 	},
-	Effect.provide([CustomerIngestLive, CustomerProviders.layer, IntegrationEncryption.layer]),
+	Effect.provide(CustomersServicesLive),
 	// Storage, config and credential failures: the provider retries (ingest is idempotent).
+	Effect.tapError((error) =>
+		error._tag === "CustomerWebhookFailedError"
+			? Effect.void
+			: Effect.logError("Customers webhook failed", { error: Cause.pretty(Cause.fail(error)) }),
+	),
 	Effect.mapError((error) =>
 		error._tag === "CustomerWebhookFailedError"
 			? error
