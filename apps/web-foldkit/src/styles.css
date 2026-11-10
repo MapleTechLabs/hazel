@@ -1,5 +1,6 @@
 @import "./core/styles/styles.css";
 @import "./core/styles/code-syntax.css";
+@import "./chat/viewer/image-viewer.css";
 
 @source "./";
 
