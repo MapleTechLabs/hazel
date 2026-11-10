@@ -1,8 +1,20 @@
-import { placeholderPage } from "../../placeholder"
+import { definePage } from "../../../contract"
+import { Message } from "./message"
+import { Model } from "./model"
+import { subscriptions } from "./subscription"
+import { init, sharedChanged, update } from "./update"
+import { view } from "./view"
 
-/** Data sources and one source's detail: placeholder until the settings pages land (agent d). */
-export const page = placeholderPage(
+/** `/$orgSlug/customers/settings/sources[/$provider]`: data sources, and one source's detail. */
+export const page = definePage(
 	"CustomersSettingsSources",
-	["CustomersSettingsSources", "CustomersSourceDetail"],
-	"Data sources",
+	{ Model, Message },
+	{
+		routes: ["CustomersSettingsSources", "CustomersSourceDetail"],
+		init,
+		update,
+		sharedChanged,
+		view,
+		subscriptions,
+	},
 )
