@@ -179,6 +179,30 @@ pub struct Placement {
     pub opacity: f32,
 }
 
+/// What a frame's view is cut from where something is drawn over it: the size of the part that
+/// shows, and the holes in it, from that part's top left. A mask is as large as what it was
+/// made for, so one made for a smaller part hides the rest of a part that grew.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MaskShape {
+    pub size: [f32; 2],
+    pub holes: Vec<Rect>,
+}
+
+impl Placement {
+    /// The mask the view needs; none when nothing is drawn over it.
+    pub fn mask(&self) -> Option<MaskShape> {
+        let [vx, vy, width, height] = self.visible;
+        (!self.holes.is_empty()).then(|| MaskShape {
+            size: [width, height],
+            holes: self
+                .holes
+                .iter()
+                .map(|[x, y, w, h]| [x - vx, y - vy, *w, *h])
+                .collect(),
+        })
+    }
+}
+
 /// The web view's place for a box drawn at `rect`; `None` when none of it shows (clipped away,
 /// or under a dialog). A box with no opacity keeps its place: its page loads before it shows.
 pub fn place(rect: Rect, opacity: f32, clips: &[Rect], covers: &[Cover]) -> Option<Placement> {
@@ -360,7 +384,7 @@ mod native {
         WKWebViewConfiguration, WKWebsiteDataStore,
     };
 
-    use super::{FrameSpec, Placement, Rect};
+    use super::{FrameSpec, MaskShape, Placement, Rect};
 
     fn cg(rect: Rect) -> CGRect {
         CGRect::new(
@@ -370,8 +394,8 @@ mod native {
     }
 
     struct HostIvars {
-        /// Where something else is drawn over the view, in its own coordinates.
-        holes: RefCell<Vec<CGRect>>,
+        /// The mask on the view now: where something else is drawn over it.
+        mask: RefCell<Option<MaskShape>>,
         /// Not shown yet (its box has no opacity): presses go to what is behind.
         passes_presses: Cell<bool>,
     }
@@ -401,11 +425,11 @@ mod native {
                 }
                 // `point` is in the superview's coordinates.
                 let own = self.convertPoint_fromView(point, unsafe { self.superview() }.as_deref());
-                let in_hole = ivars.holes.borrow().iter().any(|hole| {
-                    own.x >= hole.origin.x
-                        && own.x < hole.origin.x + hole.size.width
-                        && own.y >= hole.origin.y
-                        && own.y < hole.origin.y + hole.size.height
+                let (x, y) = (own.x as f32, own.y as f32);
+                let in_hole = ivars.mask.borrow().as_ref().is_some_and(|mask| {
+                    mask.holes
+                        .iter()
+                        .any(|[hx, hy, hw, hh]| x >= *hx && x < hx + hw && y >= *hy && y < hy + hh)
                 });
                 if in_hole {
                     return std::ptr::null_mut();
@@ -519,7 +543,7 @@ mod native {
     fn create(mtm: MainThreadMarker, parent: &NSView, frame: &FrameSpec) -> FrameView {
         let host: Retained<FrameHost> = {
             let this = FrameHost::alloc(mtm).set_ivars(HostIvars {
-                holes: RefCell::new(Vec::new()),
+                mask: RefCell::new(None),
                 passes_presses: Cell::new(true),
             });
             unsafe { msg_send![super(this), initWithFrame: cg([0.0; 4])] }
@@ -593,36 +617,34 @@ mod native {
         view.host.setAlphaValue(placement.opacity as f64);
         view.host.setHidden(false);
 
-        let holes: Vec<CGRect> = placement
-            .holes
-            .iter()
-            .map(|[hx, hy, hw, hh]| cg([hx - vx, hy - vy, *hw, *hh]))
-            .collect();
-        if *view.host.ivars().holes.borrow() == holes {
+        // Rebuilt when the holes move and when the part that shows changes size.
+        let mask = placement.mask();
+        if *view.host.ivars().mask.borrow() == mask {
             return;
         }
         let Some(layer) = view.host.layer() else {
             return;
         };
-        if holes.is_empty() {
-            unsafe { layer.setMask(None) };
-        } else {
-            // Everything but the holes: with the even-odd rule a rect inside the outer one is cut out.
-            let path = CGMutablePath::new();
-            let outer = cg([0.0, 0.0, placement.visible[2], placement.visible[3]]);
-            unsafe {
-                CGMutablePath::add_rect(Some(&path), std::ptr::null(), outer);
-                for hole in &holes {
-                    CGMutablePath::add_rect(Some(&path), std::ptr::null(), *hole);
+        match &mask {
+            None => unsafe { layer.setMask(None) },
+            Some(shape) => {
+                // Everything but the holes: with the even-odd rule a rect inside the outer one is cut out.
+                let path = CGMutablePath::new();
+                let outer = cg([0.0, 0.0, shape.size[0], shape.size[1]]);
+                unsafe {
+                    CGMutablePath::add_rect(Some(&path), std::ptr::null(), outer);
+                    for hole in &shape.holes {
+                        CGMutablePath::add_rect(Some(&path), std::ptr::null(), cg(*hole));
+                    }
                 }
+                let layer_mask = CAShapeLayer::new();
+                layer_mask.setFrame(outer);
+                layer_mask.setFillRule(unsafe { kCAFillRuleEvenOdd });
+                layer_mask.setPath(Some(&path));
+                unsafe { layer.setMask(Some(&layer_mask)) };
             }
-            let mask = CAShapeLayer::new();
-            mask.setFrame(outer);
-            mask.setFillRule(unsafe { kCAFillRuleEvenOdd });
-            mask.setPath(Some(&path));
-            unsafe { layer.setMask(Some(&mask)) };
         }
-        *view.host.ivars().holes.borrow_mut() = holes;
+        *view.host.ivars().mask.borrow_mut() = mask;
     }
 
     fn remove(view: FrameView) {
@@ -724,6 +746,31 @@ mod tests {
             modal: true,
         };
         assert_eq!(place(rect, 1.0, &[], &[dialog]), None);
+    }
+
+    #[test]
+    fn a_frame_that_grows_under_a_cover_needs_a_new_mask() {
+        let toolbar = Cover {
+            rect: [400.0, 90.0, 80.0, 30.0],
+            modal: false,
+        };
+        let list = [0.0, 100.0, 800.0, 600.0];
+        let short = place([100.0, 100.0, 400.0, 300.0], 1.0, &[list], &[toolbar]).unwrap();
+        let grown = place([100.0, 100.0, 400.0, 500.0], 1.0, &[list], &[toolbar]).unwrap();
+        // The hole is where it was, from the view's top left; only the view's size changed.
+        let short_mask = short.mask().unwrap();
+        let grown_mask = grown.mask().unwrap();
+        assert_eq!(short_mask.holes, vec![[300.0, 0.0, 80.0, 20.0]]);
+        assert_eq!(grown_mask.holes, short_mask.holes);
+        assert_eq!(grown_mask.size, [400.0, 500.0]);
+        assert_ne!(grown_mask, short_mask);
+        // Nothing over it: no mask at all.
+        assert_eq!(
+            place([100.0, 100.0, 400.0, 300.0], 1.0, &[list], &[])
+                .unwrap()
+                .mask(),
+            None
+        );
     }
 
     #[test]
