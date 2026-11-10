@@ -687,6 +687,52 @@ describe("CustomerIngest", () => {
 			}),
 		))
 
+	it("keeps a contact an ignore rule matched by email ignored when its activity arrives", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest("clerk", [clerkOrg("org_1", "Acme")])
+				// A member of an unknown organization parks; ignoring it adds the rule.
+				yield* world.ingest("clerk", [member("qa1", "org_9", { email: "qa1@qa.test" })])
+				const parked = world.rows<{ id: string }>(`SELECT id FROM customer_unmatched_records`)[0]!
+				yield* world.call(
+					"customers.unmatched.ignore",
+					{ recordId: parked.id, rule: { field: "email", pattern: "*@qa.test" } },
+					world.owner,
+				)
+
+				const joined = yield* world.ingest("clerk", [
+					member("qa2", "org_1", { email: "qa2@qa.test" }),
+				])
+				expect(outcomeTags(joined)).toEqual(["Ignored"])
+				const usage: IngestOp = {
+					_tag: "activity",
+					contact: { provider: "clerk", externalId: "qa2" },
+					account: { provider: "clerk", externalId: "org_1" },
+					day: today,
+					eventCount: 3,
+				}
+				expect((yield* world.ingest("maple", [usage, usage])).outcomes).toEqual([
+					{ _tag: "Ignored", ruleId: null },
+					{ _tag: "Ignored", ruleId: null },
+				])
+				expect(
+					world.rows(
+						`SELECT externalId, label, email, status, eventCount30d FROM customer_unmatched_records WHERE externalId = 'qa2'`,
+					),
+				).toEqual([
+					{
+						externalId: "qa2",
+						label: "qa2",
+						email: "qa2@qa.test",
+						status: "ignored",
+						eventCount30d: null,
+					},
+				])
+				expect(liveContacts(world)).toEqual([])
+			}),
+		))
+
 	it("never moves sign-in times or a day's sessions backwards", () =>
 		run(
 			Effect.gen(function* () {

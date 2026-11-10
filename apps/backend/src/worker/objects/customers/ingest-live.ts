@@ -555,8 +555,20 @@ const make = Effect.gen(function* () {
 			return Option.map(record, (): IngestOutcome => ({ _tag: "Ignored", ruleId: null }))
 		})
 
-	/** An account an ignore rule matched by its domain or name: its record, ignored. */
-	const recordIgnored = (session: Session, op: UpsertAccount) =>
+	/**
+	 * A record an ignore rule matched by more than its id (an account's domain or name, a contact's
+	 * email or name): its record, ignored, so what later names it by id is ignored too.
+	 */
+	const recordIgnored = (
+		session: Session,
+		record: {
+			readonly entityType: "account" | "contact"
+			readonly externalId: string
+			readonly label: string
+			readonly email?: string | null
+			readonly domain: string | null
+		},
+	) =>
 		Effect.gen(function* () {
 			const { provider } = session.context
 			const existing = yield* db.first(
@@ -564,8 +576,8 @@ const make = Effect.gen(function* () {
 					.select("id", "status")
 					.where(($) => [
 						$.provider.eq(provider),
-						$.entityType.eq("account"),
-						$.externalId.eq(op.externalId),
+						$.entityType.eq(record.entityType),
+						$.externalId.eq(record.externalId),
 					])
 					.limit(1),
 			)
@@ -587,9 +599,11 @@ const make = Effect.gen(function* () {
 				SQLite.insertInto(schema.customerUnmatchedRecordsTable).values({
 					connectionId: session.context.connectionId,
 					provider,
-					entityType: "account",
-					externalId: op.externalId,
-					...describeAccount(op),
+					entityType: record.entityType,
+					externalId: record.externalId,
+					label: record.label,
+					email: record.email ?? null,
+					domain: record.domain,
 					payload: null,
 					reason: "Matches an ignore rule",
 					status: "ignored",
@@ -987,7 +1001,11 @@ const make = Effect.gen(function* () {
 			})
 			if (Option.isSome(ignored)) {
 				// Recorded as ignored, so its members, billing and usage (named by id) are ignored too.
-				yield* recordIgnored(session, op)
+				yield* recordIgnored(session, {
+					entityType: "account",
+					externalId: op.externalId,
+					...describeAccount(op),
+				})
 				return { _tag: "Ignored", ruleId: ignored.value.id } satisfies IngestOutcome
 			}
 
@@ -1074,6 +1092,28 @@ const make = Effect.gen(function* () {
 			return true
 		})
 
+	/**
+	 * A contact an ignore rule matches: recorded as ignored, so its activity (named by id) is ignored
+	 * too rather than parked.
+	 */
+	const ignoredContact = (session: Session, op: UpsertContact) =>
+		Effect.gen(function* () {
+			const rule = ignoredBy(session, "contact", {
+				email: op.email ?? null,
+				name: op.name ?? null,
+				externalId: op.externalId,
+			})
+			if (Option.isNone(rule)) return Option.none<IngestOutcome>()
+			yield* recordIgnored(session, {
+				entityType: "contact",
+				externalId: op.externalId,
+				label: op.name ?? op.email ?? op.externalId,
+				email: op.email ?? null,
+				domain: emailDomain(op.email),
+			})
+			return Option.some<IngestOutcome>({ _tag: "Ignored", ruleId: rule.value.id })
+		})
+
 	const applyContact = (session: Session, op: UpsertContact) =>
 		Effect.gen(function* () {
 			const { provider } = session.context
@@ -1082,13 +1122,8 @@ const make = Effect.gen(function* () {
 				if (op.removed === true) return outcome.unchanged(op.externalId)
 				const ignoredWith = yield* ignoredAccount(session, op.account)
 				if (Option.isSome(ignoredWith)) return ignoredWith.value
-				const ignored = ignoredBy(session, "contact", {
-					email: op.email ?? null,
-					name: op.name ?? null,
-					externalId: op.externalId,
-				})
-				if (Option.isSome(ignored))
-					return { _tag: "Ignored", ruleId: ignored.value.id } satisfies IngestOutcome
+				const ignored = yield* ignoredContact(session, op)
+				if (Option.isSome(ignored)) return ignored.value
 				return yield* park(session, {
 					provider,
 					entityType: "contact",
@@ -1130,13 +1165,8 @@ const make = Effect.gen(function* () {
 				if (Option.isSome(byEmail)) {
 					contactId = byEmail.value.id
 				} else {
-					const ignored = ignoredBy(session, "contact", {
-						email: op.email ?? null,
-						name: op.name ?? null,
-						externalId: op.externalId,
-					})
-					if (Option.isSome(ignored))
-						return { _tag: "Ignored", ruleId: ignored.value.id } satisfies IngestOutcome
+					const ignored = yield* ignoredContact(session, op)
+					if (Option.isSome(ignored)) return ignored.value
 					const [row] = yield* db.run(
 						SQLite.insertInto(schema.customerContactsTable)
 							.values({
