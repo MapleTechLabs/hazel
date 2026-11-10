@@ -27,6 +27,7 @@ import { UserEffects } from "../effects/user-effects"
 import { ConnectOrgEffects } from "../connect-wire"
 import { channelTarget, orgTarget, userTarget } from "../kinds"
 import { activeMountOf, conversationOf, mountsOf } from "./connect"
+import { publishCustomerMembers } from "./customer-members"
 import { toUserProjection } from "./projections"
 
 /** The channel's `setViewers` payload from the org's current tables; `None` for an unknown channel. */
@@ -284,6 +285,8 @@ export const syncMemberAccess = Effect.fn("OrgObject.syncMemberAccess")(function
 	for (const id of after) if (!before.has(id) || options?.republish) changed.add(id)
 	yield* Effect.forEach(changed, publishChannelAccess, { discard: true })
 	if (options?.membership !== false) yield* publishMembership(userId, organizationId)
+	// Joined, left, or (`republish`) changed role: the customers object's members.
+	if (options?.membership !== false || options?.republish) yield* publishCustomerMembers(organizationId)
 	yield* Effect.annotateCurrentSpan({ "org.channels_republished": changed.size })
 })
 

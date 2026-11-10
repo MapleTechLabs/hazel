@@ -17,6 +17,7 @@ import {
 import { type CurrentUser, displayNameOf, type Organization } from "../session"
 import { orgShell } from "../shell/app-shell"
 import * as ChannelsSidebar from "../shell/channels-sidebar"
+import * as CustomersSidebar from "../shell/customers-sidebar"
 import type { ShellContext } from "../shell/context"
 import {
 	appError,
@@ -98,6 +99,9 @@ const sectionBody = (model: Model, h: HtmlBuilder<Message>): Html => {
 		)
 	if (section === "MySettings" || section === "Notifications")
 		return sectionLayout(h, pageBody(model, h, true))
+	// Customers pages own their scrolling (the queue's preview panel spans the full height).
+	if (section === "Customers")
+		return h.main([h.Class("h-full w-full min-w-0 overflow-hidden bg-bg")], [pageBody(model, h, true)])
 	const tab = channelSettingsTabOf(route)
 	if (tab !== undefined && "channelId" in route)
 		return channelSettingsLayout(
@@ -132,6 +136,7 @@ const secondarySidebar = (model: Model, h: HtmlBuilder<Message>, context: ShellC
 	const section = orgSectionOf(model.route)
 	if (section === "Settings") return settingsSidebar(h, context, chrome)
 	if (section === "MySettings") return mySettingsSidebar(h, context, chrome)
+	if (section === "Customers") return CustomersSidebar.view(h, shell.customersSidebar, context, chrome)
 	if (section === "Notifications")
 		return notificationsSidebar(h, context, chrome, {
 			unreadCount: Notifications.unreadIdsOf(shell.notifications).length,

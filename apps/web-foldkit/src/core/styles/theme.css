@@ -376,3 +376,66 @@
 	--color-yellow-900: rgb(113 59 18);
 	--color-yellow-950: rgb(84 44 13);
 }
+
+/*
+ * Customers: chart, health and severity colors (Wonder "Maple Design System" › Foundations › Color
+ * Token Reference). Chart hues fill marks only; text never takes a chart color, and every color is
+ * paired with a label or legend. Health and severity reuse the chart hues for marks (bars, legend
+ * squares, dots in charts); badges keep the semantic `*-subtle` pairs.
+ */
+@theme inline {
+	--color-chart-new: var(--chart-new);
+	--color-chart-expansion: var(--chart-expansion);
+	--color-chart-contraction: var(--chart-contraction);
+	--color-chart-churn: var(--chart-churn);
+	--color-chart-neutral: var(--chart-neutral);
+	--color-chart-series-1: var(--chart-series-1);
+	--color-chart-series-2: var(--chart-series-2);
+	--color-chart-series-3: var(--chart-series-3);
+	--color-chart-grid: var(--chart-grid);
+	--color-chart-net: var(--chart-net);
+
+	--color-health-healthy: var(--health-healthy);
+	--color-health-at-risk: var(--health-at-risk);
+	--color-health-critical: var(--health-critical);
+	--color-health-unknown: var(--health-unknown);
+
+	--color-severity-high: var(--severity-high);
+	--color-severity-medium: var(--severity-medium);
+	--color-severity-low: var(--severity-low);
+	--color-severity-off: var(--severity-off);
+}
+
+:root {
+	--chart-new: rgb(7 148 85);
+	--chart-expansion: rgb(46 144 250);
+	--chart-contraction: rgb(201 133 0);
+	--chart-churn: rgb(217 45 32);
+	--chart-neutral: oklch(0.552 0.016 285.938);
+	--chart-series-1: rgb(89 37 220);
+	--chart-series-2: rgb(122 90 248);
+	--chart-series-3: rgb(189 180 254);
+	--chart-grid: var(--border);
+	--chart-net: var(--fg);
+
+	--health-healthy: var(--chart-new);
+	--health-at-risk: var(--chart-contraction);
+	--health-critical: var(--chart-churn);
+	--health-unknown: var(--chart-neutral);
+
+	--severity-high: var(--danger-subtle-fg);
+	--severity-medium: var(--warning-subtle-fg);
+	--severity-low: var(--muted-fg);
+	--severity-off: var(--secondary);
+}
+
+.dark {
+	--chart-new: rgb(7 148 85);
+	--chart-expansion: rgb(46 144 250);
+	--chart-contraction: rgb(201 133 0);
+	--chart-churn: rgb(217 45 32);
+	--chart-neutral: oklch(0.442 0.017 285.786);
+	--chart-series-1: rgb(105 56 239);
+	--chart-series-2: rgb(155 138 251);
+	--chart-series-3: rgb(217 214 254);
+}

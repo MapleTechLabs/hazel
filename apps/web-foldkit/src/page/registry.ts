@@ -12,6 +12,14 @@ import * as ChannelSettingsOverview from "./channel-settings/overview"
 import * as ChannelSettingsRedirect from "./channel-settings/redirect"
 import * as ChatChannel from "./chat/channel"
 import * as ChatIndex from "./chat-index"
+import * as CustomersAttention from "./customers/attention"
+import * as CustomerDetail from "./customers/detail"
+import * as CustomersList from "./customers/list"
+import * as CustomersOverview from "./customers/overview"
+import * as CustomersSettingsHealth from "./customers/settings/health"
+import * as CustomersSettingsSignals from "./customers/settings/signals"
+import * as CustomersSettingsSources from "./customers/settings/sources"
+import * as CustomersUnmatched from "./customers/settings/unmatched"
 import type { PageHost, PageMessageBase, PageSlotBase, PageStep, PageViewInputs, Shared } from "./contract"
 import type { PageOutMessage } from "./out-message"
 import * as NotificationsInbox from "./notifications/inbox"
@@ -85,6 +93,14 @@ export const pages = [
 	MySettingsLinkedAccounts.page,
 	MySettingsNotifications.page,
 	MySettingsProfile.page,
+	CustomersOverview.page,
+	CustomersAttention.page,
+	CustomersList.page,
+	CustomerDetail.page,
+	CustomersSettingsSignals.page,
+	CustomersSettingsHealth.page,
+	CustomersSettingsSources.page,
+	CustomersUnmatched.page,
 ]
 
 export const PageSlot = Schema.Union(pages.map((page) => page.Slot))

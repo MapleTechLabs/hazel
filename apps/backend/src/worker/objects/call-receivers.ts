@@ -19,6 +19,14 @@ import type { WebhookBotService } from "../../services/webhook-bot-service"
 import { type AnyObjectCall, type CallRequest, type CallResponse, exitCodec, payloadCodec } from "./calls"
 import { listMessages, ListMessagesCall, messageThread, MessageThreadCall } from "./channel/api-messages"
 import { liveAccess, LiveAccessCall } from "./channel/live-access"
+import {
+	bootstrap,
+	CustomersBootstrapCall,
+	CustomersTickCall,
+	CustomersWebhookCall,
+	receiveWebhook,
+	tick,
+} from "./customers/jobs"
 import type { ObjectKind } from "./kinds"
 import {
 	organizationChannels,
@@ -44,6 +52,7 @@ import {
 	githubInstallation,
 	GitHubInstallationCall,
 } from "./org/github-webhooks"
+import { customerMembers, CustomerMembersCall } from "./org/customer-members"
 import { executeWebhook, ExecuteWebhookCall } from "./org/incoming-webhooks"
 import {
 	activeIntegrations,
@@ -121,6 +130,7 @@ export const callReceivers: Record<ObjectKind, ReadonlyMap<string, Receiver>> = 
 		receiver(BotInstallRegionCall, botInstallRegion),
 		receiver(OrganizationUsersCall, organizationUsers),
 		receiver(OrganizationChannelsCall, organizationChannels),
+		receiver(CustomerMembersCall, customerMembers),
 	]),
 	channel: byName([
 		receiver(ListMessagesCall, listMessages),
@@ -128,8 +138,12 @@ export const callReceivers: Record<ObjectKind, ReadonlyMap<string, Receiver>> = 
 		receiver(LiveAccessCall, liveAccess),
 	]),
 	user: byName([]),
-	// Webhook deliveries and the members pull land here (`docs/customers/tech-design.md` §5).
-	customers: byName([]),
+	// Its own bootstrap and alarm work, and webhook deliveries (`docs/customers/tech-design.md` §5).
+	customers: byName([
+		receiver(CustomersBootstrapCall, bootstrap),
+		receiver(CustomersTickCall, () => tick()),
+		receiver(CustomersWebhookCall, receiveWebhook),
+	]),
 }
 
 export interface ObjectCallsShape {

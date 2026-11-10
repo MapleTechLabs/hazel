@@ -1,4 +1,11 @@
-import { ChannelId, OrganizationId, SyncConnectionId, UserId } from "@hazel/schema"
+import {
+	ChannelId,
+	CustomerAccountId,
+	CustomerSignalRuleId,
+	OrganizationId,
+	SyncConnectionId,
+	UserId,
+} from "@hazel/schema"
 import { Option, Schema } from "effect"
 import { fromString } from "foldkit/url"
 import { describe, expect, it } from "vitest"
@@ -6,7 +13,10 @@ import { authRedirect, rootRedirect, routeRedirect } from "./redirect"
 import {
 	AppRoute,
 	chatMessageHref,
+	customerRoute,
+	customersListRoute,
 	hrefOf,
+	isCustomersRoute,
 	onboardingHref,
 	organizationHref,
 	orgSectionOf,
@@ -20,6 +30,8 @@ const channelId = "0b5a1f7e-3c55-5d0e-9a51-0b7e6b2f0c11"
 const userId = "891c4881-7560-578d-965a-fb38c858ca67"
 const connectionId = "5f0c2b8e-1d4a-5b6c-8e9f-2a3b4c5d6e7f"
 const orgId = "7c9e6679-7425-50de-944b-e07fc1f90ae7"
+const accountId = "3d6f0a8e-9b1c-4e2d-8f3a-1c2b3d4e5f60"
+const ruleId = "9a8b7c6d-5e4f-4a3b-9c2d-1e0f9a8b7c6d"
 
 const parse = (path: string): AppRoute =>
 	Option.match(fromString(`http://localhost${path}`), {
@@ -140,6 +152,60 @@ describe("urlToAppRoute", () => {
 	})
 })
 
+describe("customers routes", () => {
+	const customerPaths: ReadonlyArray<readonly [string, RouteTag]> = [
+		["/hazel/customers", "CustomersOverview"],
+		["/hazel/customers/attention", "CustomersAttention"],
+		["/hazel/customers/list", "CustomersList"],
+		["/hazel/customers/list?view=at_risk", "CustomersList"],
+		[`/hazel/customers/${accountId}`, "CustomerDetail"],
+		[`/hazel/customers/${accountId}?tab=billing`, "CustomerDetail"],
+		["/hazel/customers/settings/signals", "CustomersSettingsSignals"],
+		["/hazel/customers/settings/signals/new", "CustomersSettingsSignalNew"],
+		[`/hazel/customers/settings/signals/${ruleId}`, "CustomersSettingsSignalRule"],
+		["/hazel/customers/settings/health", "CustomersSettingsHealth"],
+		["/hazel/customers/settings/sources", "CustomersSettingsSources"],
+		["/hazel/customers/settings/sources/stripe", "CustomersSourceDetail"],
+		["/hazel/customers/settings/sources/unmatched", "CustomersUnmatched"],
+	]
+
+	it.each(customerPaths)("%s resolves to %s in the Customers section", (path, tag) => {
+		const route = parse(path)
+		expect(route._tag).toBe(tag)
+		expect(isCustomersRoute(route)).toBe(true)
+		expect(orgSectionOf(route)).toBe("Customers")
+	})
+
+	it("decodes the account, tab, view, template and provider", () => {
+		expect(parse(`/hazel/customers/${accountId}?tab=users`)).toMatchObject({
+			accountId,
+			tab: Option.some("users"),
+		})
+		expect(parse(`/hazel/customers/${accountId}`)).toMatchObject({ tab: Option.none() })
+		expect(parse("/hazel/customers/list?view=paying")).toMatchObject({ view: Option.some("paying") })
+		expect(parse("/hazel/customers/settings/signals/new?template=usage_drop")).toMatchObject({
+			template: Option.some("usage_drop"),
+		})
+		expect(parse("/hazel/customers/settings/sources/maple")).toMatchObject({ provider: "maple" })
+	})
+
+	it("refuses what is not a customer, rule or provider", () => {
+		expect(parse("/hazel/customers/not-a-uuid")._tag).toBe("NotFound")
+		expect(parse("/hazel/customers/settings/sources/salesforce")._tag).toBe("NotFound")
+		expect(parse("/hazel/customers/settings/nope")._tag).toBe("NotFound")
+	})
+
+	it("builds the helper routes", () => {
+		const account = Schema.decodeUnknownSync(CustomerAccountId)(accountId)
+		expect(hrefOf(customersListRoute("hazel"))).toBe("/hazel/customers/list")
+		expect(hrefOf(customersListRoute("hazel", "churned"))).toBe("/hazel/customers/list?view=churned")
+		expect(hrefOf(customerRoute("hazel", account))).toBe(`/hazel/customers/${accountId}`)
+		expect(hrefOf(customerRoute("hazel", account, "notes"))).toBe(
+			`/hazel/customers/${accountId}?tab=notes`,
+		)
+	})
+})
+
 describe("redirects", () => {
 	it("leaves the channel settings index to its redirect page", () => {
 		expect(routeRedirect(parse(`/hazel/channels/${channelId}/settings`), { isProd: true })).toEqual(
@@ -193,6 +259,8 @@ describe("hrefOf", () => {
 	const user = Schema.decodeUnknownSync(UserId)(userId)
 	const connection = Schema.decodeUnknownSync(SyncConnectionId)(connectionId)
 	const organization = Schema.decodeUnknownSync(OrganizationId)(orgId)
+	const account = Schema.decodeUnknownSync(CustomerAccountId)(accountId)
+	const rule = Schema.decodeUnknownSync(CustomerSignalRuleId)(ruleId)
 	const none = Option.none<string>()
 
 	/** One value per tag (the record keeps it exhaustive) and the exact URL it must print. */
@@ -368,6 +436,59 @@ describe("hrefOf", () => {
 				}),
 				"/hazel/settings/integrations/github?connection_status=success&error_code=denied",
 			],
+		],
+		CustomersOverview: [[AppRoute.CustomersOverview({ orgSlug }), "/hazel/customers"]],
+		CustomersAttention: [[AppRoute.CustomersAttention({ orgSlug }), "/hazel/customers/attention"]],
+		CustomersList: [
+			[AppRoute.CustomersList({ orgSlug, view: none }), "/hazel/customers/list"],
+			[
+				AppRoute.CustomersList({ orgSlug, view: Option.some("at_risk") }),
+				"/hazel/customers/list?view=at_risk",
+			],
+		],
+		CustomerDetail: [
+			[
+				AppRoute.CustomerDetail({ orgSlug, accountId: account, tab: Option.none() }),
+				`/hazel/customers/${accountId}`,
+			],
+			[
+				AppRoute.CustomerDetail({ orgSlug, accountId: account, tab: Option.some("billing") }),
+				`/hazel/customers/${accountId}?tab=billing`,
+			],
+		],
+		CustomersSettingsSignals: [
+			[AppRoute.CustomersSettingsSignals({ orgSlug }), "/hazel/customers/settings/signals"],
+		],
+		CustomersSettingsSignalNew: [
+			[
+				AppRoute.CustomersSettingsSignalNew({ orgSlug, template: Option.none() }),
+				"/hazel/customers/settings/signals/new",
+			],
+			[
+				AppRoute.CustomersSettingsSignalNew({ orgSlug, template: Option.some("inactive") }),
+				"/hazel/customers/settings/signals/new?template=inactive",
+			],
+		],
+		CustomersSettingsSignalRule: [
+			[
+				AppRoute.CustomersSettingsSignalRule({ orgSlug, ruleId: rule }),
+				`/hazel/customers/settings/signals/${ruleId}`,
+			],
+		],
+		CustomersSettingsHealth: [
+			[AppRoute.CustomersSettingsHealth({ orgSlug }), "/hazel/customers/settings/health"],
+		],
+		CustomersSettingsSources: [
+			[AppRoute.CustomersSettingsSources({ orgSlug }), "/hazel/customers/settings/sources"],
+		],
+		CustomersSourceDetail: [
+			[
+				AppRoute.CustomersSourceDetail({ orgSlug, provider: "clerk" }),
+				"/hazel/customers/settings/sources/clerk",
+			],
+		],
+		CustomersUnmatched: [
+			[AppRoute.CustomersUnmatched({ orgSlug }), "/hazel/customers/settings/sources/unmatched"],
 		],
 		NotFound: [[AppRoute.NotFound({ path: "/hazel/settings/nope" }), "/hazel/settings/nope"]],
 	}

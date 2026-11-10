@@ -131,7 +131,7 @@ export const customerAccountsTable = SQLite.table("customer_accounts", {
 		tags: SQLite.column(jsonb<ReadonlyArray<string>>(), { default: [] }),
 		attributes: SQLite.column(jsonb<Record<string, unknown>>(), { default: {} }),
 		/** Field → the source that last set it (per-field precedence, `CustomerIngest`). */
-		fieldSources: SQLite.column(jsonb<Partial<Record<string, CustomerSource>>>(), { default: {} }),
+		fieldSources: SQLite.column(jsonb<Readonly<Record<string, CustomerSource>>>(), { default: {} }),
 		createdAt: createdAt(),
 		updatedAt: updatedAt(),
 		deletedAt: SQLite.nullable(timestamptz),
@@ -166,7 +166,7 @@ export const customerContactsTable = SQLite.table("customer_contacts", {
 		signInCount30d: count(),
 		eventCount30d: count(),
 		attributes: SQLite.column(jsonb<Record<string, unknown>>(), { default: {} }),
-		fieldSources: SQLite.column(jsonb<Partial<Record<string, CustomerSource>>>(), { default: {} }),
+		fieldSources: SQLite.column(jsonb<Readonly<Record<string, CustomerSource>>>(), { default: {} }),
 		createdAt: createdAt(),
 		updatedAt: updatedAt(),
 		deletedAt: SQLite.nullable(timestamptz),

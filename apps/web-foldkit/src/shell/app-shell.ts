@@ -1,6 +1,13 @@
 import type { Attribute, Html, HtmlBuilder } from "foldkit/html"
-import { IconBell, IconDashboard, IconGear, IconMsgs, Logo } from "../icons"
-import { AppRoute, hrefOf, isChatRoute, isNotificationsRoute, isSettingsRoute } from "../route"
+import { IconBell, IconDashboard, IconGear, IconMsgs, IconOffice, Logo } from "../icons"
+import {
+	AppRoute,
+	hrefOf,
+	isChatRoute,
+	isCustomersRoute,
+	isNotificationsRoute,
+	isSettingsRoute,
+} from "../route"
 import { linkClassName } from "../ui/link"
 import {
 	sidebarContent,
@@ -54,6 +61,7 @@ const navRail = <Message>(h: HtmlBuilder<Message>, context: ShellContext, unread
 	const { orgSlug, route } = context
 	const home = hrefOf(AppRoute.OrgHome({ orgSlug }))
 	const chat = hrefOf(AppRoute.ChatIndex({ orgSlug }))
+	const customers = hrefOf(AppRoute.CustomersOverview({ orgSlug }))
 	const notifications = hrefOf(AppRoute.NotificationsAll({ orgSlug }))
 	const settings = hrefOf(AppRoute.SettingsGeneral({ orgSlug }))
 	const navItem = (label: string, to: string, isActive: boolean, icon: Html) =>
@@ -104,6 +112,12 @@ const navRail = <Message>(h: HtmlBuilder<Message>, context: ShellContext, unread
 								IconDashboard(h, { className: "size-5" }),
 							),
 							navItem("Chat", chat, isChatRoute(route), IconMsgs(h, { className: "size-5" })),
+							navItem(
+								"Customers",
+								customers,
+								isCustomersRoute(route),
+								IconOffice(h, { className: "size-5" }),
+							),
 							navItem(
 								"Notifications",
 								notifications,

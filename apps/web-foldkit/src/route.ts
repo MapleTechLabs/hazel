@@ -1,8 +1,20 @@
-import { ChannelId, OrganizationId, SyncConnectionId, UserId } from "@hazel/schema"
+import { CustomerProvider, SignalTemplate } from "@hazel/domain/customers"
+import {
+	ChannelId,
+	CustomerAccountId,
+	CustomerSignalRuleId,
+	OrganizationId,
+	SyncConnectionId,
+	UserId,
+} from "@hazel/schema"
 import { Match, Option, Schema, pipe } from "effect"
 import { Route } from "foldkit"
 import * as Url from "foldkit/url"
 import { defineRouteUnion, literal, query, schemaSegment, slash, string } from "foldkit/route"
+
+/** The customer page's tabs (`?tab=`). */
+export const CustomerTab = Schema.Literals(["overview", "users", "billing", "activity", "notes"])
+export type CustomerTab = typeof CustomerTab.Type
 
 /** Flat route union mirroring the 39 legacy TanStack routes, plus NotFound. */
 export const AppRoute = defineRouteUnion({
@@ -72,6 +84,26 @@ export const AppRoute = defineRouteUnion({
 		connectionStatus: Schema.Option(Schema.String),
 		errorCode: Schema.Option(Schema.String),
 	},
+	/** `/$orgSlug/customers`: revenue, usage and health across the org's customers. */
+	CustomersOverview: { orgSlug: Schema.String },
+	/** The ranked signal queue. */
+	CustomersAttention: { orgSlug: Schema.String },
+	/** `?view=`: a saved view's id, or a built-in view's key (`BuiltInViewKey`, e.g. `at_risk`). */
+	CustomersList: { orgSlug: Schema.String, view: Schema.Option(Schema.String) },
+	/** One customer; `?tab=` picks the tab (none: overview). */
+	CustomerDetail: {
+		orgSlug: Schema.String,
+		accountId: CustomerAccountId,
+		tab: Schema.Option(CustomerTab),
+	},
+	CustomersSettingsSignals: { orgSlug: Schema.String },
+	/** The rule editor for a new rule; `?template=` preselects the template picked in the modal. */
+	CustomersSettingsSignalNew: { orgSlug: Schema.String, template: Schema.Option(SignalTemplate) },
+	CustomersSettingsSignalRule: { orgSlug: Schema.String, ruleId: CustomerSignalRuleId },
+	CustomersSettingsHealth: { orgSlug: Schema.String },
+	CustomersSettingsSources: { orgSlug: Schema.String },
+	CustomersSourceDetail: { orgSlug: Schema.String, provider: CustomerProvider },
+	CustomersUnmatched: { orgSlug: Schema.String },
 	NotFound: { path: Schema.String },
 })
 export type AppRoute = typeof AppRoute.Type
@@ -111,6 +143,9 @@ const IntegrationCallbackQuery = Schema.Struct({
 	connectionStatus: Schema.OptionFromOptional(Schema.String),
 	errorCode: Schema.OptionFromOptional(Schema.String),
 }).pipe(Schema.encodeKeys({ connectionStatus: "connection_status", errorCode: "error_code" }))
+const ListViewQuery = Schema.Struct({ view: Schema.OptionFromOptional(Schema.String) })
+const CustomerTabQuery = Schema.Struct({ tab: Schema.OptionFromOptional(CustomerTab) })
+const SignalTemplateQuery = Schema.Struct({ template: Schema.OptionFromOptional(SignalTemplate) })
 
 const org = string("orgSlug")
 const orgPath = (...segments: ReadonlyArray<string>) =>
@@ -242,6 +277,50 @@ const routers = {
 		query(IntegrationCallbackQuery),
 		Route.mapTo(AppRoute.SettingsIntegration),
 	),
+	CustomersOverview: pipe(orgPath("customers"), Route.mapTo(AppRoute.CustomersOverview)),
+	CustomersAttention: pipe(orgPath("customers", "attention"), Route.mapTo(AppRoute.CustomersAttention)),
+	CustomersList: pipe(
+		orgPath("customers", "list"),
+		query(ListViewQuery),
+		Route.mapTo(AppRoute.CustomersList),
+	),
+	CustomerDetail: pipe(
+		orgPath("customers"),
+		slash(schemaSegment("accountId", CustomerAccountId)),
+		query(CustomerTabQuery),
+		Route.mapTo(AppRoute.CustomerDetail),
+	),
+	CustomersSettingsSignals: pipe(
+		orgPath("customers", "settings", "signals"),
+		Route.mapTo(AppRoute.CustomersSettingsSignals),
+	),
+	CustomersSettingsSignalNew: pipe(
+		orgPath("customers", "settings", "signals", "new"),
+		query(SignalTemplateQuery),
+		Route.mapTo(AppRoute.CustomersSettingsSignalNew),
+	),
+	CustomersSettingsSignalRule: pipe(
+		orgPath("customers", "settings", "signals"),
+		slash(schemaSegment("ruleId", CustomerSignalRuleId)),
+		Route.mapTo(AppRoute.CustomersSettingsSignalRule),
+	),
+	CustomersSettingsHealth: pipe(
+		orgPath("customers", "settings", "health"),
+		Route.mapTo(AppRoute.CustomersSettingsHealth),
+	),
+	CustomersSettingsSources: pipe(
+		orgPath("customers", "settings", "sources"),
+		Route.mapTo(AppRoute.CustomersSettingsSources),
+	),
+	CustomersSourceDetail: pipe(
+		orgPath("customers", "settings", "sources"),
+		slash(schemaSegment("provider", CustomerProvider)),
+		Route.mapTo(AppRoute.CustomersSourceDetail),
+	),
+	CustomersUnmatched: pipe(
+		orgPath("customers", "settings", "sources", "unmatched"),
+		Route.mapTo(AppRoute.CustomersUnmatched),
+	),
 } as const
 
 // Top-level literals before `$orgSlug`, which would otherwise claim `/onboarding` and friends.
@@ -292,6 +371,18 @@ export const urlToAppRoute = Route.parseUrlWithFallback(
 		routers.SettingsIntegrationsMarketplace,
 		routers.SettingsIntegrationsYourApps,
 		routers.SettingsIntegration,
+		routers.CustomersOverview,
+		// Literal segments before `$accountId`, `$ruleId` and `$provider`.
+		routers.CustomersAttention,
+		routers.CustomersList,
+		routers.CustomersSettingsSignals,
+		routers.CustomersSettingsSignalNew,
+		routers.CustomersSettingsSignalRule,
+		routers.CustomersSettingsHealth,
+		routers.CustomersSettingsSources,
+		routers.CustomersUnmatched,
+		routers.CustomersSourceDetail,
+		routers.CustomerDetail,
 	),
 	AppRoute.NotFound,
 )
@@ -365,6 +456,32 @@ export const isNotificationsRoute = AppRoute.isAnyOf([
 	"NotificationsDms",
 ])
 
+/** `/$orgSlug/customers/*`: the Customers area, with its own secondary sidebar. */
+export const isCustomersRoute = AppRoute.isAnyOf([
+	"CustomersOverview",
+	"CustomersAttention",
+	"CustomersList",
+	"CustomerDetail",
+	"CustomersSettingsSignals",
+	"CustomersSettingsSignalNew",
+	"CustomersSettingsSignalRule",
+	"CustomersSettingsHealth",
+	"CustomersSettingsSources",
+	"CustomersSourceDetail",
+	"CustomersUnmatched",
+])
+
+/** `/$orgSlug/customers/settings/*`. */
+export const isCustomersSettingsRoute = AppRoute.isAnyOf([
+	"CustomersSettingsSignals",
+	"CustomersSettingsSignalNew",
+	"CustomersSettingsSignalRule",
+	"CustomersSettingsHealth",
+	"CustomersSettingsSources",
+	"CustomersSourceDetail",
+	"CustomersUnmatched",
+])
+
 /** `/$orgSlug/chat/$channelId/*`: a channel's messages, files or media. */
 export const isChannelChatRoute = AppRoute.isAnyOf(["ChatChannel", "ChatFiles", "ChatFilesMedia"])
 
@@ -383,13 +500,14 @@ export const hasContentColumn = AppRoute.isAnyOf([
 ])
 
 /** Which secondary sidebar and section layout an org route gets (legacy `AppSidebar`). */
-export type OrgSection = "Chat" | "Settings" | "MySettings" | "Notifications"
+export type OrgSection = "Chat" | "Settings" | "MySettings" | "Notifications" | "Customers"
 
 export const orgSectionOf = (route: AppRoute): OrgSection | undefined => {
 	if (orgSlugOf(route) === undefined) return undefined
 	if (isSettingsRoute(route)) return "Settings"
 	if (isMySettingsRoute(route)) return "MySettings"
 	if (isNotificationsRoute(route)) return "Notifications"
+	if (isCustomersRoute(route)) return "Customers"
 	return "Chat"
 }
 
@@ -431,6 +549,7 @@ export const titleOf = (route: AppRoute): string => {
 				Match.when("Settings", () => "Settings"),
 				Match.when("MySettings", () => "My settings"),
 				Match.when("Notifications", () => "Activity"),
+				Match.when("Customers", () => "Customers"),
 				Match.orElse(() => undefined),
 			),
 	)
@@ -482,6 +601,17 @@ export const integrationRoute = (orgSlug: string, integrationId: string): AppRou
 		connectionStatus: Option.none(),
 		errorCode: Option.none(),
 	})
+
+/** The customers list, unfiltered or on a saved view (its id, or a built-in view's key). */
+export const customersListRoute = (orgSlug: string, view: string | null = null): AppRoute =>
+	AppRoute.CustomersList({ orgSlug, view: Option.fromNullishOr(view) })
+
+/** A customer's page on `tab` (none: the overview tab). */
+export const customerRoute = (
+	orgSlug: string,
+	accountId: CustomerAccountId,
+	tab: CustomerTab | null = null,
+): AppRoute => AppRoute.CustomerDetail({ orgSlug, accountId, tab: Option.fromNullishOr(tab) })
 
 /** An org route, or `undefined` outside an org, where the org-only overlays never open. */
 export const orgRouteOf = (

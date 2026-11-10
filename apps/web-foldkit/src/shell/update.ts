@@ -9,6 +9,7 @@ import type { HazelRpc } from "../rpc"
 import * as Menu from "../ui/menu"
 import * as Modal from "../ui/modal"
 import * as ChannelsSidebar from "./channels-sidebar"
+import * as CustomersSidebar from "./customers-sidebar"
 import {
 	decodeSwitcherKey,
 	decodeUserMenuKey,
@@ -48,6 +49,7 @@ export const init = (options: { readonly isCreateChannelHintDismissed: boolean }
 	userOrganizations: [],
 	userStatus: null,
 	notifications: Notifications.init(),
+	customersSidebar: CustomersSidebar.init(),
 	settingsChannel: null,
 	isSidebarOpen: false,
 	isSidebarCollapsed: false,
@@ -235,6 +237,11 @@ export const update = (model: Model, message: Message, context: Context): ShellR
 		}),
 		UpdatedUserStatus: ({ status }) => ({ model: modifyFields(model, { userStatus: () => status }) }),
 		GotNotificationsMessage: ({ message }) => foldNotifications(model, message),
+		GotCustomersSidebarMessage: ({ message }) => ({
+			model: modifyFields(model, {
+				customersSidebar: (sidebar) => CustomersSidebar.update(sidebar, message).model,
+			}),
+		}),
 		UpdatedSettingsChannel: ({ channel }) => ({
 			model: modifyFields(model, { settingsChannel: () => channel }),
 		}),
