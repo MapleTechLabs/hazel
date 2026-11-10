@@ -31,7 +31,7 @@ const stripeAdapter = (
 	parse: (body: string) => Effect.Effect<ReadonlyArray<IngestOp>, CustomerWebhookRejectedError>,
 ): CustomerProviderAdapter => ({
 	provider: "stripe",
-	validate: () => Effect.succeed({ externalAccountId: null, externalAccountName: null }),
+	validate: () => Effect.succeed({ externalAccountId: "acct_test", externalAccountName: null }),
 	webhook: (request) => parse(request.body),
 	pull: () => Effect.die("no pulls here"),
 	pullIntervalMs: 60 * 60_000,

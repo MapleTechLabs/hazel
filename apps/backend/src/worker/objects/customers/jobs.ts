@@ -219,7 +219,7 @@ const pullConnection = Effect.fn("CustomersObject.pullConnection")(function* (
 	}
 	let pages = 0
 	const pull = Effect.gen(function* () {
-		const credentials = yield* loadCredentials(connection.id, connection.config)
+		const credentials = yield* loadCredentials(connection)
 		if (Option.isNone(credentials)) {
 			return yield* new PullFailure({
 				error: { code: "auth", message: "The connection has no credentials", httpStatus: null },
@@ -447,7 +447,7 @@ export const handleWebhookWith = <R>(
 				return yield* fail(400, "The connection has no webhook secret")
 			const adapter = (yield* CustomerProviders).get(payload.provider)
 			if (Option.isNone(adapter)) return yield* fail(404, `No ${payload.provider} integration`)
-			const credentials = yield* loadCredentials(connection.value.id, connection.value.config)
+			const credentials = yield* loadCredentials(connection.value)
 			if (Option.isNone(credentials)) return yield* fail(404, "Unknown connection")
 			// Never hand an adapter a delivery it cannot verify.
 			if (credentials.value.webhookSecret === null) {

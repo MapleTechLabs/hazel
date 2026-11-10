@@ -4,7 +4,9 @@
  *
  * - `computeDueAt` (meta): hourly, sooner when a done signal's `reopenAfter` comes first,
  *   ≤ 2 minutes after a person's change (rule, settings, a signal's status: `requestCompute`, a
- *   debounce that only moves the deadline earlier), and after ingest no sooner than
+ *   debounce that only moves the deadline earlier; during a compute spread over several turns, ≤ 2
+ *   minutes after it ends), right away while such a compute continues (`computeProgress`), and
+ *   after ingest no sooner than
  *   `MIN_COMPUTE_GAP_MS` after the last compute (`requestComputeAfterIngest`), so steady webhooks
  *   do not recompute everything every few minutes. A compute takes a lease first
  *   (`takeComputeLease`), which counts the attempt: until one succeeds, each lease is twice the
@@ -32,8 +34,11 @@ const meta = <A, R>(effect: Effect.Effect<A, SqlError, R>) =>
 
 const COMPUTE_DUE_KEY = "computeDueAt"
 const COMPUTE_FAILURES_KEY = "computeFailures"
+const COMPUTE_PROGRESS_KEY = "computeProgress"
+const COMPUTE_AGAIN_KEY = "computeAgain"
 const BASELINE_KEY = "baselineFor"
 const REBUILD_KEY = "rebuildHistory"
+const REBUILD_ATTEMPTS_KEY = "rebuildAttempts"
 
 export const computeDueAt = meta(Effect.map(readObjectMeta(COMPUTE_DUE_KEY), Option.map(Number)))
 
@@ -44,10 +49,29 @@ const computeBy = (at: number) =>
 		if (Option.isNone(due) || due.value > at) yield* meta(writeObjectMeta(COMPUTE_DUE_KEY, String(at)))
 	})
 
-/** Compute soon (≤ 2 minutes): a person changed something it reads. */
-export const requestCompute = Effect.flatMap(Clock.currentTimeMillis, (now) =>
-	computeBy(now + COMPUTE_DEBOUNCE_MS),
-)
+/**
+ * The state of a compute spread over several alarm turns (`./compute.ts`), as JSON; none between
+ * computes.
+ */
+export const computeProgress = meta(readObjectMeta(COMPUTE_PROGRESS_KEY))
+export const saveComputeProgress = (progress: string) => meta(writeObjectMeta(COMPUTE_PROGRESS_KEY, progress))
+export const clearComputeProgress = meta(deleteObjectMeta(COMPUTE_PROGRESS_KEY))
+
+/** A person changed something during a compute spread over turns: true once, and it runs again soon. */
+export const takeComputeAgain = Effect.gen(function* () {
+	const again = Option.isSome(yield* meta(readObjectMeta(COMPUTE_AGAIN_KEY)))
+	if (again) yield* meta(deleteObjectMeta(COMPUTE_AGAIN_KEY))
+	return again
+})
+
+/**
+ * Compute soon (≤ 2 minutes): a person changed something it reads. A compute spread over turns is
+ * not restarted: another one follows it.
+ */
+export const requestCompute = Effect.gen(function* () {
+	if (Option.isSome(yield* computeProgress)) return yield* meta(writeObjectMeta(COMPUTE_AGAIN_KEY, "1"))
+	yield* computeBy((yield* Clock.currentTimeMillis) + COMPUTE_DEBOUNCE_MS)
+})
 
 const computeAttempts = meta(
 	Effect.map(readObjectMeta(COMPUTE_FAILURES_KEY), (value) =>
@@ -88,7 +112,7 @@ export const resetComputeFailures = meta(deleteObjectMeta(COMPUTE_FAILURES_KEY))
 export const scheduleComputeAt = (at: number) => meta(writeObjectMeta(COMPUTE_DUE_KEY, String(at)))
 
 /** Never compute again (the org was deleted). */
-export const stopComputing = meta(deleteObjectMeta(COMPUTE_DUE_KEY))
+export const stopComputing = Effect.andThen(meta(deleteObjectMeta(COMPUTE_DUE_KEY)), clearComputeProgress)
 
 /** The connections whose backfill finished since the last compute (comma-separated ids). */
 export const baselineConnections = meta(
@@ -105,15 +129,38 @@ export const setBaselineFor = (connectionId: string) =>
 			yield* meta(writeObjectMeta(BASELINE_KEY, [...ids, connectionId].join(",")))
 	})
 
-export const clearBaseline = meta(deleteObjectMeta(BASELINE_KEY))
+/** These connections' baseline was applied (others armed meanwhile stay for the next compute). */
+export const clearBaselineFor = (connectionIds: ReadonlyArray<string>) =>
+	Effect.gen(function* () {
+		const left = (yield* baselineConnections).filter((id) => !connectionIds.includes(id))
+		yield* meta(
+			left.length === 0
+				? deleteObjectMeta(BASELINE_KEY)
+				: writeObjectMeta(BASELINE_KEY, left.join(",")),
+		)
+	})
 
 /**
  * The daily history is rebuilt (a backfill or the demo seed brought old data), in an alarm turn of
- * its own before the next compute, once no billing backfill is importing (`./compute.ts`).
+ * its own before the next compute, once no billing backfill is importing (`./compute.ts`). A rebuild
+ * that keeps failing is given up after a few attempts, so computes go on.
  */
 export const requestHistoryRebuild = meta(writeObjectMeta(REBUILD_KEY, "1"))
 export const historyRebuildPending = meta(Effect.map(readObjectMeta(REBUILD_KEY), Option.isSome))
-export const clearHistoryRebuild = meta(deleteObjectMeta(REBUILD_KEY))
+export const clearHistoryRebuild = Effect.andThen(
+	meta(deleteObjectMeta(REBUILD_KEY)),
+	meta(deleteObjectMeta(REBUILD_ATTEMPTS_KEY)),
+)
+
+/** Count a rebuild attempt before it runs (a killed one counts too); the attempts before this one. */
+export const takeRebuildAttempt = Effect.gen(function* () {
+	const attempts = Option.getOrElse(
+		Option.map(yield* meta(readObjectMeta(REBUILD_ATTEMPTS_KEY)), Number),
+		() => 0,
+	)
+	yield* meta(writeObjectMeta(REBUILD_ATTEMPTS_KEY, String(attempts + 1)))
+	return attempts
+})
 
 /**
  * The earliest `reopenAfter` of a done signal still unclosed, on a live account (a deleted account's

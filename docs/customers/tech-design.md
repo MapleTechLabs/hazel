@@ -113,7 +113,9 @@ Access control:
 - People only: bots' machine users are not projected, and `requireMember` refuses a bot token
   whatever its scopes (V1 gives bots no Customers access).
 - Org deletion: the `OrgObject` sends an empty `customers.setMembers` with `organizationDeleted`;
-  the object disconnects every source (secrets dropped, running runs failed) and stops computing.
+  the object disconnects every source (secrets dropped, running runs failed, account names,
+  configs and errors cleared), deletes the customer data, ignore rules and saved views' filters, and
+  stops computing.
   `customers.setMembers` is an urgent outbox kind (removals land before the org answers).
 
 ## 2. Tables (`packages/db/src/tables/customers.ts`, migration `customers/0001_initial`)
@@ -222,7 +224,9 @@ Rules:
   source chips from the connection's status (a ref's `staleAt` only ever means the provider removed
   the record, so a reconnect revives nothing a delete or sweep removed). New credentials of another
   provider account (`externalAccountId` changed, on connect or update) drop the provider's billing
-  rows, sweep its refs (`completeSweep`), and import from scratch (a backfill, history rebuilt).
+  rows, events, metrics, open unmatched records and the activity only its contacts carry, sweep its
+  refs (`completeSweep`, linked ones included), drop a webhook secret not given with them, and
+  import from scratch (a backfill; a billing source's movements and daily MRR rebuilt after).
 - **Links** (`externalUrl`, `hostedUrl`) are kept only as `https:` URLs on the provider's own
   hosts; domains only as hostnames. A pull's error message is synced to every member: adapters
   report client-safe messages only.
@@ -238,10 +242,14 @@ Rules:
   a due compute (or, before it, a pending history rebuild, alone in its turn), else the due pulls
   (≤ 20 pages per connection). Each first moves its deadline a lease ahead; a compute's lease counts
   the attempt and doubles until one succeeds (5 min … 6 h), so a failed or killed run cannot loop,
-  and ingest does not bring a failing compute closer.
+  and ingest does not bring a failing compute closer. A rebuild that failed 3 times is given up.
+  A done signal's overdue `reopenAfter` never schedules a compute sooner than hourly (one its
+  source cannot check is retried a day later).
 - Compute is one function `runCompute(now)`, steps below, over accounts loaded in chunks of 250
-  (one chunk's activity in memory; the org's DAU/WAU/MAU from SQL). `customer_settings.lastComputedAt`
-  records it. Once a day it prunes daily rows > 400 d, events > 2 y, closed signals > 180 d, sync
+  (one chunk's activity in memory; the org's DAU/WAU/MAU from SQL). A turn past ~10 s stops after a
+  chunk and the next alarm turn continues from a cursor in object meta (the org-level steps run
+  after the last chunk; a person's change meanwhile computes again right after, never restarts it).
+  `customer_settings.lastComputedAt` records it. Once a day it prunes daily rows > 400 d, events > 2 y, closed signals > 180 d, sync
   runs > 30 d.
 
 ### 4.2 Rollups (per account, then org)
@@ -268,7 +276,8 @@ Rules:
 - After a backfill: rebuild `active_users*`, `mrr` (from subscription start/cancel dates),
   movements and `customer_org_daily` for the last 365 days, so charts have history on day one.
   While a billing backfill is importing, or its rebuild is pending, compute writes no movements
-  (the accounts' history comes from the rebuild, which waits for billing imports to finish).
+  (the accounts' history comes from the rebuild, which waits for billing imports to finish, and
+  replaces a movement of today on an account with none before).
 
 ### 4.3 Health (`packages/domain/src/customers/health.ts`)
 
@@ -339,8 +348,8 @@ needs ≥ 1 of its `requiredSources` connected, else it matches nothing (dry-run
 ### 4.7 Backfill must not flood
 
 - `finishRun` of a successful `backfill` adds its connection to meta `baselineFor`; the next compute
-  (and every compute while a backfill younger than 24 h, on a connection failing < 3 times in a row,
-  is running) runs the rules whose template has `baselineOnBackfill` and a source among those
+  (and every compute while a backfill younger than 24 h is running; retryable failures keep it
+  running) runs the rules whose template has `baselineOnBackfill` and a source among those
   connections' providers (any, for a source-less template) in **baseline mode**: a new match is written as
   `dismissed` with `dismissReason = "baseline"` (no event, no queue entry). It surfaces only if it
   gets worse by a full step (dismissed reopen rule) or after it clears and recurs.
@@ -379,9 +388,13 @@ needs ≥ 1 of its `requiredSources` connected, else it matches nothing (dry-run
   (`consecutiveFailures`, exponential, cap 6 h).
 - **Sync now** = a `manual` run scheduled immediately.
 - Adapter contract: `apps/backend/src/worker/objects/customers/providers.ts`
-  (`validate`, `webhook`, `pull` (with `sweep` on a full listing's last page), `pullIntervalMs`;
-  ops carry `observedAt`, billing sources' accounts `matchByDomain`); provider PRs register theirs in
-  `CustomerProviders.layer`.
+  (`validate`, which always returns the provider account id, `webhook`, `pull` (with `sweep` on a
+  full listing's last page), `pullIntervalMs`; ops carry `observedAt`, billing sources' accounts
+  `matchByDomain`; deliveries and records of another account than `credentials.externalAccountId`
+  are refused); provider PRs register theirs in `CustomerProviders.layer`.
+- A webhook to an org with a live `org_index` row wakes its customers object even when Customers
+  was never opened there (no cheap directory flag says so); the org id is unguessable and the
+  object refuses the unknown connection.
 
 ## 6. Frontend (`apps/web-foldkit`)
 

@@ -11,10 +11,13 @@
  * 6. once a day, retention: old daily rows, events, closed signals and sync runs are deleted.
  *
  * After a connection's first backfill, an alarm turn of its own (`runComputeStep`) rebuilds the last
- * year of history where none is recorded, once no billing backfill is importing.
+ * year of history where none is recorded, once no billing backfill is importing (given up after
+ * `MAX_REBUILD_ATTEMPTS` failed attempts).
  *
  * Accounts are processed in chunks (`ACCOUNT_CHUNK`, `./snapshot.ts`): steps 1–4 run per chunk, so
- * memory holds one chunk's activity and signals; the org's distinct user counts come from SQL.
+ * memory holds one chunk's activity and signals; the org's distinct user counts come from SQL. A
+ * compute past `COMPUTE_TURN_BUDGET_MS` stops after a chunk and continues in the next alarm turn
+ * from where it stopped (`computeProgress`); step 4's rule counts, 5 and 6 run after the last chunk.
  *
  * Per-account built-in series are not stored daily: they derive from their sources at read time
  * (active users from activity, MRR from movements, health from `customer_health_daily`).
@@ -29,7 +32,7 @@ import {
 	TEMPLATES,
 } from "@hazel/domain/customers"
 import type { CustomerAccountId, CustomerSignalId } from "@hazel/schema"
-import { Effect, Option } from "effect"
+import { Clock, Effect, Option } from "effect"
 import type { SqlError } from "effect/sql/SqlError"
 import { readObjectMeta, writeObjectMeta } from "../meta"
 import { evaluate, type Match } from "./evaluate"
@@ -37,14 +40,19 @@ import { type HealthInputs, scoreHealth } from "./health"
 import { type LifecycleEvent, transition, valueOf, wakeDue } from "./lifecycle"
 import {
 	baselineConnections,
-	clearBaseline,
+	clearBaselineFor,
+	clearComputeProgress,
 	clearHistoryRebuild,
 	COMPUTE_DEBOUNCE_MS,
 	COMPUTE_INTERVAL_MS,
+	computeProgress,
 	historyRebuildPending,
 	nextReopenAt,
 	resetComputeFailures,
+	saveComputeProgress,
 	scheduleComputeAt,
+	takeComputeAgain,
+	takeRebuildAttempt,
 } from "./schedule"
 import {
 	ACTIVE,
@@ -61,9 +69,14 @@ import { addDays, DAY_MS, dayOf, dayRange, daysBetween } from "./time"
 
 /** Days of history a rebuild covers. */
 export const HISTORY_DAYS = 365
-/** A backfill run older than this, or whose connection failed this often in a row, is not importing. */
+/** A backfill run older than this is not importing any more (a stuck one must not hold compute for good). */
 const BACKFILL_MAX_AGE_MS = 24 * 60 * 60_000
-const BACKFILL_MAX_FAILURES = 3
+/** A history rebuild that failed this often is given up: computes go on without it. */
+const MAX_REBUILD_ATTEMPTS = 3
+/** A compute's alarm turn stops after the chunk that passes this; the next turn continues. */
+const COMPUTE_TURN_BUDGET_MS = 10_000
+/** A done signal whose reopen cannot be checked (its source is unavailable) is checked again then. */
+const REOPEN_RETRY_MS = DAY_MS
 /** A source disconnected this long is gone for good: the signals that need it close. */
 const GONE_AFTER_MS = 14 * DAY_MS
 /** Retention (`prune`). */
@@ -375,11 +388,12 @@ const EVENT_TITLE = {
 /** A chunk's unclosed signals after this run: `ruleId:accountId` → its status and severity. */
 type Live = Map<string, Pick<schema.CustomerSignal, "status" | "severity" | "kind" | "accountId">>
 
-/** One compute's signal evaluation, across the account chunks. */
+/** One compute's signal evaluation, across the account chunks (and alarm turns). */
 interface SignalRun {
 	/** Providers whose import is news to no one (§4.7): their templates run in baseline mode. */
 	readonly baseline: ReadonlySet<CustomerProvider>
-	readonly armed: boolean
+	/** The connections whose finished backfill armed the baseline when the compute started. */
+	readonly armed: ReadonlyArray<string>
 	/** Providers disconnected for over `GONE_AFTER_MS`: the signals of their templates close. */
 	readonly gone: ReadonlySet<CustomerProvider>
 	readonly matches: Map<string, number>
@@ -387,18 +401,17 @@ interface SignalRun {
 	readonly counts: { opened: number; baselined: number; updated: number; events: number; orphaned: number }
 }
 
-/** The providers still importing a backfill (younger than a day, and not failing over and over). */
+/**
+ * The providers still importing a backfill: a running one, younger than a day. Retryable failures
+ * (rate limits, outages) keep the run running, so they do not end the import early.
+ */
 const importingProviders = (now: Date) =>
 	Effect.gen(function* () {
 		const db = yield* Database.Database
 		const rows = yield* db.run(
 			SQLite.from(schema.customerSyncRunsTable, "r")
 				.innerJoin(schema.customerConnectionsTable, "c", (r, c) =>
-					SQLite.and(
-						c.id.eq(r.connectionId),
-						c.status.eq("active"),
-						c.consecutiveFailures.lt(BACKFILL_MAX_FAILURES),
-					),
+					SQLite.and(c.id.eq(r.connectionId), c.status.eq("active")),
 				)
 				.select(($) => ({ provider: $.provider }))
 				.where(($) => [
@@ -419,10 +432,9 @@ const billingImporting = (importing: ReadonlySet<CustomerProvider>) =>
  * (`baselineFor`), and those still importing one (`importingProviders`: a stuck import must not
  * silence the queue for good).
  */
-const baselineProviders = (importing: ReadonlySet<CustomerProvider>) =>
+const baselineProviders = (importing: ReadonlySet<CustomerProvider>, armed: ReadonlyArray<string>) =>
 	Effect.gen(function* () {
 		const db = yield* Database.Database
-		const armed = yield* baselineConnections
 		const finished =
 			armed.length === 0
 				? []
@@ -431,10 +443,7 @@ const baselineProviders = (importing: ReadonlySet<CustomerProvider>) =>
 							.select("provider")
 							.where(($) => [$.status.eq("active"), inList($.id, armed)]),
 					)
-		return {
-			armed: armed.length > 0,
-			providers: new Set([...finished.map((row) => row.provider), ...importing]),
-		}
+		return new Set([...finished.map((row) => row.provider), ...importing])
 	})
 
 /** A template is in baseline mode when one of its sources (any, for a source-less one) is. */
@@ -444,10 +453,13 @@ const inBaseline = (template: SignalTemplate, providers: ReadonlySet<CustomerPro
 	return requiredSources.length === 0 || requiredSources.some((provider) => providers.has(provider))
 }
 
-const startSignals = (now: Date, importing: ReadonlySet<CustomerProvider>) =>
+const startSignals = (
+	now: Date,
+	importing: ReadonlySet<CustomerProvider>,
+	resumed: Pick<SignalRun, "armed" | "matches" | "triggered">,
+) =>
 	Effect.gen(function* () {
 		const db = yield* Database.Database
-		const baseline = yield* baselineProviders(importing)
 		const gone = yield* db.run(
 			SQLite.from(schema.customerConnectionsTable)
 				.select("provider")
@@ -457,11 +469,9 @@ const startSignals = (now: Date, importing: ReadonlySet<CustomerProvider>) =>
 				]),
 		)
 		return {
-			baseline: baseline.providers,
-			armed: baseline.armed,
+			...resumed,
+			baseline: yield* baselineProviders(importing, resumed.armed),
 			gone: new Set(gone.map((row) => row.provider)),
-			matches: new Map(),
-			triggered: new Set(),
 			counts: { opened: 0, baselined: 0, updated: 0, events: 0, orphaned: 0 },
 		} satisfies SignalRun
 	})
@@ -502,7 +512,26 @@ const writeSignals = Effect.fn("Customers.writeSignals")(function* (snapshot: Sn
 						// stays as it is, and nothing new opens until the source is back; disconnected for
 						// good, the signal closes.
 						if (result._tag === "NoMatch" && result.reason === "Missing data source") {
-							if (!sourceGone || signal === null) return
+							if (signal === null) return
+							if (!sourceGone) {
+								// A done signal due to reopen cannot be checked: checked again later, so
+								// its overdue reopen does not bring every compute forward.
+								if (
+									signal.status === "done" &&
+									signal.reopenAfter !== null &&
+									signal.reopenAfter <= now
+								) {
+									yield* db.run(
+										SQLite.update(schema.customerSignalsTable)
+											.set({
+												reopenAfter: new Date(now.getTime() + REOPEN_RETRY_MS),
+												updatedAt: now,
+											})
+											.where(($) => [$.id.eq(signal.id)]),
+									)
+								}
+								return
+							}
 							counts.updated++
 							live.delete(key)
 							yield* db.run(
@@ -645,7 +674,7 @@ const finishSignals = Effect.fn("Customers.finishSignals")(function* (
 ) {
 	const db = yield* Database.Database
 	const { matches, triggered, counts } = run
-	if (run.armed) yield* clearBaseline
+	if (run.armed.length > 0) yield* clearBaselineFor(run.armed)
 
 	// Signals of deleted accounts: closed (an account no longer evaluated never resolves them).
 	const orphans = (yield* db.query(
@@ -865,8 +894,9 @@ export const mrrHistory = (
 
 /**
  * The last year rebuilt from the sources (after a connection's first backfill or the demo seed):
- * MRR movements of the accounts without any yet (their MRR set to where the movements end, in the
- * same transaction, so a crash before the rollups cannot count them twice), and the org's daily
+ * MRR movements of the accounts without any before today (today's replaced; their MRR set to where
+ * the movements end, in the same transaction, so a crash before the rollups cannot count them
+ * twice), and the org's daily
  * rows (MRR, paying, trialing, active, DAU/WAU/MAU, health counts) for the days without one; a day
  * recorded before billing data existed (no MRR, no paying account) gets its billing columns.
  */
@@ -893,10 +923,12 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 		if (list === undefined) subsBy.set(sub.accountId, [sub])
 		else list.push(sub)
 	}
+	// Today's movement alone is not history: one a compute wrote while billing was still importing
+	// (a partial MRR's jump) is replaced by the rebuilt series.
 	const withMovements = new Set(
 		(
 			(yield* db.query(
-				Database.sql`SELECT DISTINCT "accountId" FROM "customer_mrr_movements"`,
+				Database.sql`SELECT DISTINCT "accountId" FROM "customer_mrr_movements" WHERE "day" < ${today}`,
 			)) as ReadonlyArray<{ accountId: CustomerAccountId }>
 		).map((row) => row.accountId),
 	)
@@ -973,6 +1005,10 @@ export const rebuildHistory = Effect.fn("Customers.rebuildHistory")(function* (b
 	const now = base.org.now
 	yield* db.transaction(
 		Effect.gen(function* () {
+			yield* db.query(
+				Database.sql`DELETE FROM "customer_mrr_movements" WHERE "day" = ${today} AND "accountId" NOT IN
+					(SELECT "accountId" FROM "customer_mrr_movements" WHERE "day" < ${today})`,
+			)
 			for (const chunk of accountChunks(movements, rowsPerInsert(7))) {
 				yield* db.run(SQLite.insertInto(schema.customerMrrMovementsTable).values(chunk as never))
 			}
@@ -1045,35 +1081,60 @@ const prune = Effect.fn("Customers.prune")(function* (now: Date) {
 
 /**
  * One alarm turn's compute work: the history rebuild when one is pending and no billing backfill
- * is importing (alone in its turn, the compute right after), else the compute.
+ * is importing (alone in its turn, the compute right after), else the compute (or its next part).
  */
 export const runComputeStep = Effect.fn("Customers.computeStep")(function* (now: Date) {
 	const importing = yield* importingProviders(now)
 	if (!billingImporting(importing) && (yield* historyRebuildPending)) {
-		yield* rebuildHistory(yield* loadBase(now))
+		const attempts = yield* takeRebuildAttempt
+		if (attempts < MAX_REBUILD_ATTEMPTS) {
+			yield* rebuildHistory(yield* loadBase(now))
+			yield* clearHistoryRebuild
+			yield* resetComputeFailures
+			return yield* scheduleComputeAt(now.getTime())
+		}
+		// It keeps failing: charts go without the rebuilt history rather than computes stopping for good.
+		yield* Effect.logError("Customers history rebuild given up", { attempts })
 		yield* clearHistoryRebuild
-		yield* resetComputeFailures
-		return yield* scheduleComputeAt(now.getTime())
 	}
 	yield* runCompute(now)
 })
 
-export const runCompute = Effect.fn("Customers.compute")(function* (now: Date) {
+/** Where a compute spread over several alarm turns stopped, and what it has gathered so far. */
+interface ComputeProgress {
+	/** The last account done (accounts go in id order). */
+	readonly after: CustomerAccountId
+	readonly armed: ReadonlyArray<string>
+	readonly totals: OrgTotals
+	readonly matches: Record<string, number>
+	readonly triggered: ReadonlyArray<string>
+}
+
+/**
+ * A compute, or its next part: chunks of accounts until `budgetMs` has passed, then the rest in the
+ * next alarm turn (right away), or, after the last chunk, the org-level steps and the next hourly run.
+ */
+export const runCompute = Effect.fn("Customers.compute")(function* (
+	now: Date,
+	budgetMs = COMPUTE_TURN_BUDGET_MS,
+) {
 	const db = yield* Database.Database
+	const started = yield* Clock.currentTimeMillis
 	const base = yield* loadBase(now)
 	const importing = yield* importingProviders(now)
 	const source = yield* meta(readObjectMeta(MRR_SOURCE_KEY))
 	const switched = Option.isSome(source) && source.value !== base.billingProvider
 	const holdMovements = switched || billingImporting(importing) || (yield* historyRebuildPending)
-	yield* Effect.annotateCurrentSpan({
-		"customers.accounts": base.accountIds.length,
-		"customers.rules": base.rules.length,
-		"customers.billing_provider": base.billingProvider,
-		"customers.mrr_source_switched": switched,
-		"customers.movements_held": holdMovements,
+	// SAFETY: `computeProgress` holds only what the previous turn of this compute saved below.
+	const progress = Option.getOrUndefined(
+		Option.map(yield* computeProgress, (json) => JSON.parse(json) as ComputeProgress),
+	)
+	const signals = yield* startSignals(now, importing, {
+		armed: progress?.armed ?? (yield* baselineConnections),
+		matches: new Map(Object.entries(progress?.matches ?? {})),
+		triggered: new Set(progress?.triggered),
 	})
-	const signals = yield* startSignals(now, importing)
-	const totals: OrgTotals = {
+	const totals: OrgTotals = progress?.totals ?? {
 		mrrMinor: 0,
 		payingAccounts: 0,
 		trialingAccounts: 0,
@@ -1082,13 +1143,51 @@ export const runCompute = Effect.fn("Customers.compute")(function* (now: Date) {
 		critical: 0,
 		atRiskMrrMinor: 0,
 	}
-	for (const ids of accountChunks(base.accountIds)) {
+	const chunks = accountChunks(
+		progress === undefined ? base.accountIds : base.accountIds.filter((id) => id > progress.after),
+	)
+	let done = 0
+	for (const ids of chunks) {
 		const snapshot = yield* loadAccounts(base, ids)
 		yield* writeRollups(snapshot, holdMovements)
 		const scores = scoreAll(snapshot)
 		yield* writeHealth(snapshot, scores)
 		const live = yield* writeSignals(withTodayHealth(snapshot, scores), signals)
 		addTotals(totals, snapshot, scores, live)
+		done++
+		if (done < chunks.length && (yield* Clock.currentTimeMillis) - started >= budgetMs) break
+	}
+	const elapsedMs = (yield* Clock.currentTimeMillis) - started
+	yield* Effect.annotateCurrentSpan({
+		"customers.accounts": base.accountIds.length,
+		"customers.rules": base.rules.length,
+		"customers.billing_provider": base.billingProvider,
+		"customers.mrr_source_switched": switched,
+		"customers.movements_held": holdMovements,
+		"customers.resumed": progress !== undefined,
+		"customers.chunks": done,
+		"customers.chunks_left": chunks.length - done,
+		"customers.turn_ms": elapsedMs,
+	})
+	if (done < chunks.length) {
+		const last = chunks[done - 1]
+		yield* saveComputeProgress(
+			JSON.stringify({
+				after: last[last.length - 1],
+				armed: signals.armed,
+				totals,
+				matches: Object.fromEntries(signals.matches),
+				triggered: [...signals.triggered],
+			} satisfies ComputeProgress),
+		)
+		yield* Effect.logInfo("Customers compute continues next turn", {
+			chunks: done,
+			chunksLeft: chunks.length - done,
+			accounts: base.accountIds.length,
+			elapsedMs,
+		})
+		yield* resetComputeFailures
+		return yield* scheduleComputeAt(yield* Clock.currentTimeMillis)
 	}
 	yield* finishSignals(now, base.rules, signals)
 	yield* writeOrgDay(base, totals)
@@ -1099,15 +1198,21 @@ export const runCompute = Effect.fn("Customers.compute")(function* (now: Date) {
 			.set({ lastComputedAt: now, updatedAt: now })
 			.where(($) => [$.id.eq(base.settings.id)]),
 	)
+	yield* clearComputeProgress
 	yield* resetComputeFailures
-	// Hourly, or sooner for a done signal's reopen check (never a hot loop on an overdue one).
+	// Hourly; sooner after a person's change during a compute spread over turns, or for a done
+	// signal's reopen check (one already overdue, its source unavailable, waits for the hourly run).
+	const again = yield* takeComputeAgain
 	const reopen = yield* nextReopenAt
 	const hourly = now.getTime() + COMPUTE_INTERVAL_MS
+	const soon = now.getTime() + COMPUTE_DEBOUNCE_MS
 	yield* scheduleComputeAt(
-		Option.match(reopen, {
-			onNone: () => hourly,
-			onSome: (at) => Math.min(hourly, Math.max(at, now.getTime() + COMPUTE_DEBOUNCE_MS)),
-		}),
+		again
+			? soon
+			: Option.match(reopen, {
+					onNone: () => hourly,
+					onSome: (at) => (at <= now.getTime() ? hourly : Math.min(hourly, Math.max(at, soon))),
+				}),
 	)
 })
 

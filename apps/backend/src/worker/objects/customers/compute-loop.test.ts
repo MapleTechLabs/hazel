@@ -6,12 +6,12 @@
 import { Database, SQLite, schema } from "@hazel/db"
 import type { IngestOp, ProviderRef } from "@hazel/domain/customers"
 import type { CustomerAccountId, CustomerSignalRuleId, OrganizationId } from "@hazel/schema"
-import { ConfigProvider, Effect, Layer, Option, type Scope } from "effect"
+import { ConfigProvider, Effect, Exit, Layer, Option, type Scope } from "effect"
 import { describe, expect, it } from "vitest"
 import { IntegrationEncryption } from "../../../services/integration-encryption"
 import { runCompute, runComputeStep } from "./compute"
 import { encryptSecrets, storeSecrets, switchProviderAccount } from "./credentials"
-import { CustomerIngest } from "./ingest"
+import { CustomerIngest, type CustomerIngestApi } from "./ingest"
 import { runDuePullsWith } from "./jobs"
 import {
 	type CustomerProviderAdapter,
@@ -22,6 +22,7 @@ import {
 import {
 	computeDueAt,
 	nextReopenAt,
+	requestCompute,
 	requestComputeAfterIngest,
 	requestHistoryRebuild,
 	takeComputeLease,
@@ -79,7 +80,7 @@ const scriptedAdapter = (
 	script: Array<Effect.Effect<PullPage, CustomerProviderError>>,
 ): CustomerProviderAdapter => ({
 	provider: "clerk",
-	validate: () => Effect.succeed({ externalAccountId: null, externalAccountName: null }),
+	validate: () => Effect.succeed({ externalAccountId: "acct_test", externalAccountName: null }),
 	webhook: () => Effect.succeed([]),
 	pull: () => (script.length > 1 ? script.shift()! : script[0]!),
 	pullIntervalMs: 60 * 60_000,
@@ -635,6 +636,15 @@ describe("Customers compute and sync loop", () => {
 						`UPDATE customer_connections SET backfilledAt = '2026-01-01 00:00:00.000', lastSuccessAt = '2026-01-01 00:00:00.000' WHERE id = ?`,
 					)
 					.run(connectionId)
+				// A ref a person linked names the old account's record too.
+				world.object.storage.db
+					.prepare(`UPDATE customer_external_refs SET matchMethod = 'manual'`)
+					.run()
+				world.object.storage.db
+					.prepare(
+						`INSERT INTO customer_unmatched_records (id, connectionId, provider, entityType, externalId, label, reason, payload) VALUES ('rec_1', ?, 'stripe', 'account', 'cus_2', 'Other', 'no_match', 'null')`,
+					)
+					.run(connectionId)
 				const connection = world.rows<Record<string, unknown>>(
 					`SELECT id, provider FROM customer_connections WHERE id = ?`,
 					connectionId,
@@ -654,6 +664,9 @@ describe("Customers compute and sync loop", () => {
 				expect(world.rows(`SELECT deletedAt IS NOT NULL AS deleted FROM customer_accounts`)).toEqual([
 					{ deleted: 1 },
 				])
+				expect(world.rows(`SELECT id FROM customer_events WHERE provider = 'stripe'`)).toEqual([])
+				expect(world.rows(`SELECT id FROM customer_unmatched_records`)).toEqual([])
+				expect(meta(world, "rebuildHistory")).toBe("1")
 			}),
 		))
 
@@ -734,6 +747,193 @@ describe("Customers compute and sync loop", () => {
 					.run(runDuePullsWith(Layer.mergeAll(CustomerIngest.layer, noKey, providers))(NOW))
 					.pipe(Effect.orDie)
 				expect(epoch(connection().nextSyncAt!)).toBeGreaterThan(NOW.getTime())
+			}),
+		))
+	it("an overdue reopen its source cannot check waits a day, and never brings computes forward", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				const accountId = yield* quietOrg(world)
+				yield* world.object
+					.run(
+						Effect.gen(function* () {
+							const db = yield* Database.Database
+							const rule = world.rows<{ id: CustomerSignalRuleId }>(
+								`SELECT id FROM customer_signal_rules WHERE template = 'inactive'`,
+							)[0]!
+							const evidence = {
+								_tag: "last_active" as const,
+								step: 0 as const,
+								lastActiveAt: null,
+								daysInactive: 21,
+								priorActiveUsers: 2,
+								contactId: null,
+								contactName: null,
+								contactEmail: null,
+							}
+							yield* db.run(
+								SQLite.insertInto(schema.customerSignalsTable).values({
+									organizationId: world.orgId as OrganizationId,
+									accountId,
+									ruleId: rule.id,
+									template: "inactive",
+									kind: "risk",
+									severity: "medium",
+									status: "done",
+									title: "Stopped using the product",
+									reason: "",
+									evidence,
+									openingEvidence: evidence,
+									priorityScore: 1,
+									firstDetectedAt: new Date(NOW.getTime() - 10 * DAY),
+									openedAt: new Date(NOW.getTime() - 10 * DAY),
+									lastEvaluatedAt: new Date(NOW.getTime() - 10 * DAY),
+									resolvedAt: new Date(NOW.getTime() - 8 * DAY),
+									reopenAfter: new Date(NOW.getTime() - DAY),
+								}),
+							)
+						}),
+					)
+					.pipe(Effect.orDie)
+				// Its activity sources are in error: the reopen cannot be checked.
+				world.object.storage.db
+					.prepare(
+						`UPDATE customer_connections SET status = 'error' WHERE provider IN ('clerk', 'maple')`,
+					)
+					.run()
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				const [signal] = world.rows<{ status: string; reopenAfter: string }>(
+					`SELECT status, reopenAfter FROM customer_signals`,
+				)
+				expect(signal!.status).toBe("done")
+				expect(epoch(signal!.reopenAfter)).toBe(NOW.getTime() + DAY)
+				expect(Number(meta(world, "computeDueAt"))).toBe(NOW.getTime() + 60 * 60_000)
+
+				// Overdue again (no compute ran since): still the hourly run, not one 2 minutes out.
+				const later = new Date(NOW.getTime() + 2 * DAY)
+				world.object.storage.db
+					.prepare(`UPDATE customer_signals SET reopenAfter = '2000-01-01 00:00:00.000'`)
+					.run()
+				// Its rule no longer evaluates it (disabled behind compute's back): it stays overdue.
+				world.object.storage.db
+					.prepare(`UPDATE customer_signal_rules SET enabled = 0 WHERE template = 'inactive'`)
+					.run()
+				yield* world.object.run(runCompute(later)).pipe(Effect.orDie)
+				expect(Number(meta(world, "computeDueAt"))).toBe(later.getTime() + 60 * 60_000)
+			}),
+		))
+
+	it("a billing backfill failing now and then still imports; the rebuild replaces today's movement", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				const accountId = yield* quietOrg(world)
+				const movements = () =>
+					world.rows(`SELECT day, type FROM customer_mrr_movements WHERE accountId = ?`, accountId)
+				const ingest = <A, E>(f: (service: CustomerIngestApi) => Effect.Effect<A, E>) =>
+					world.object
+						.run(Effect.flatMap(CustomerIngest, f).pipe(Effect.provide(CustomerIngest.layer)))
+						.pipe(Effect.orDie)
+
+				// Rate limited three times in a row: the run is still running, so still importing.
+				const backfill = yield* ingest((service) =>
+					service.startRun(world.connection("stripe"), "backfill"),
+				)
+				world.object.storage.db
+					.prepare(`UPDATE customer_connections SET consecutiveFailures = 3 WHERE id = ?`)
+					.run(world.connection("stripe"))
+				yield* world.ingest("stripe", [subscription(90)])
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(movements()).toEqual([])
+
+				// A movement a compute wrote today (the import's jump) is replaced by the rebuilt history.
+				yield* ingest((service) =>
+					service.finishRun(backfill.id, {
+						_tag: "Failed",
+						error: { code: "provider", message: "Down", httpStatus: 500 },
+					}),
+				)
+				world.object.storage.db.prepare(`UPDATE customer_accounts SET mrrMinor = 0`).run()
+				yield* world.object.run(runCompute(NOW)).pipe(Effect.orDie)
+				expect(movements()).toEqual([{ day: day(0), type: "new" }])
+				yield* world.object.run(requestHistoryRebuild).pipe(Effect.orDie)
+				yield* world.object.run(runComputeStep(NOW)).pipe(Effect.orDie)
+				expect(movements()).toEqual([{ day: day(-90), type: "new" }])
+			}),
+		))
+
+	it("gives a failing history rebuild up after three attempts, and computes", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* quietOrg(world)
+				yield* world.ingest("stripe", [subscription(90)])
+				// The rebuild's old movements fail; today's (the compute's) land.
+				world.object.storage.db
+					.prepare(
+						`CREATE TRIGGER fail_history BEFORE INSERT ON customer_mrr_movements WHEN NEW.day <> '${day(0)}' BEGIN SELECT RAISE(ABORT, 'boom'); END`,
+					)
+					.run()
+				yield* world.object.run(requestHistoryRebuild).pipe(Effect.orDie)
+				for (let attempt = 1; attempt <= 3; attempt++) {
+					const exit = yield* world.object.run(runComputeStep(NOW)).pipe(Effect.exit)
+					expect(Exit.isFailure(exit)).toBe(true)
+					expect(meta(world, "rebuildHistory")).toBe("1")
+					expect(meta(world, "rebuildAttempts")).toBe(String(attempt))
+				}
+				yield* world.object.run(runComputeStep(NOW)).pipe(Effect.orDie)
+				expect(meta(world, "rebuildHistory")).toBeUndefined()
+				expect(meta(world, "rebuildAttempts")).toBeUndefined()
+				expect(
+					world.rows(`SELECT lastComputedAt IS NOT NULL AS computed FROM customer_settings`),
+				).toEqual([{ computed: 1 }])
+			}),
+		))
+
+	it("spreads a compute over alarm turns from a cursor; a change meanwhile runs it again after", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				yield* world.ingest(
+					"clerk",
+					Array.from({ length: 260 }, (_, index): IngestOp => ({
+						_tag: "account",
+						externalId: `org_${index}`,
+						name: `Co ${index}`,
+						sameAs: [],
+						onNoMatch: "create",
+					})),
+				)
+				const scored = () =>
+					world.rows<{ n: number }>(`SELECT count(*) AS n FROM customer_health_daily`)[0]!.n
+				const lastComputed = () =>
+					world.rows<{ lastComputedAt: string | null }>(
+						`SELECT lastComputedAt FROM customer_settings`,
+					)[0]!.lastComputedAt
+
+				// No time budget: one chunk per turn; the next turn is due right away.
+				const before = Date.now()
+				yield* world.object.run(runCompute(NOW, 0)).pipe(Effect.orDie)
+				expect(scored()).toBe(250)
+				expect(lastComputed()).toBeNull()
+				expect(meta(world, "computeProgress")).toBeDefined()
+				expect(world.rows(`SELECT day FROM customer_org_daily`)).toEqual([])
+				const due = Number(meta(world, "computeDueAt"))
+				expect(due).toBeGreaterThanOrEqual(before)
+				expect(due).toBeLessThanOrEqual(Date.now())
+
+				// A person's change does not restart it.
+				yield* world.object.run(requestCompute).pipe(Effect.orDie)
+				expect(Number(meta(world, "computeDueAt"))).toBe(due)
+
+				yield* world.object.run(runCompute(NOW, 0)).pipe(Effect.orDie)
+				expect(scored()).toBe(260)
+				expect(lastComputed()).not.toBeNull()
+				expect(meta(world, "computeProgress")).toBeUndefined()
+				expect(world.rows(`SELECT day FROM customer_org_daily`)).toEqual([{ day: day(0) }])
+				// …and computes again soon after it ends.
+				expect(Number(meta(world, "computeDueAt"))).toBe(NOW.getTime() + 2 * 60_000)
+				expect(meta(world, "computeAgain")).toBeUndefined()
 			}),
 		))
 })

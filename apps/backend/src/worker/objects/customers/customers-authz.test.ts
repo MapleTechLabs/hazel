@@ -508,10 +508,14 @@ describe("Customers data-source handlers", () => {
 				)
 				const stored = yield* world.object
 					.run(
-						loadCredentials(connectionId, {
-							_tag: "stripe",
-							clerkOrgMetadataKey: "clerk_org_id",
-							matchByDomain: true,
+						loadCredentials({
+							id: connectionId,
+							config: {
+								_tag: "stripe",
+								clerkOrgMetadataKey: "clerk_org_id",
+								matchByDomain: true,
+							},
+							externalAccountId: null,
 						}).pipe(Effect.provide(encryption)),
 					)
 					.pipe(Effect.orDie)

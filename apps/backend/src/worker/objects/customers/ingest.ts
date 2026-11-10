@@ -96,11 +96,14 @@ export interface CustomerIngestApi {
 	 * provider's refs not seen since `since` (the run's start) are gone. An account ref goes stale
 	 * (the account is soft-deleted once no live ref is left, as with `deleted`); a contact is
 	 * soft-deleted with a `contact.removed` event. Only for a complete listing: a partial or
-	 * incremental pull would remove what it did not ask for (the caller's responsibility).
+	 * incremental pull would remove what it did not ask for (the caller's responsibility). Refs a
+	 * person linked (`manual`) stay, unless `manual` (another provider account: they name the old
+	 * one's records).
 	 */
 	readonly completeSweep: (
 		connectionId: CustomerConnectionId,
 		since: Date,
 		entityTypes: ReadonlyArray<RefEntityType>,
+		manual?: boolean,
 	) => Effect.Effect<void, DatabaseError>
 }

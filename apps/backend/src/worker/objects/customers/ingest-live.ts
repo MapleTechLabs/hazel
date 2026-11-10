@@ -326,12 +326,20 @@ const refKey = (ref: ProviderRef) => `${ref.provider}:${ref.externalId}`
  */
 const parkKey = (op: IngestOp) => (op._tag === "contact" ? `contact:${refKey(op.account)}` : op._tag)
 
-/**
- * The account a parked op waits for (`blockedBy`): the one it names, for every op but an account's
- * own. A contact parked under several unknown accounts waits for the latest one; linking that one
- * replays them all, and those still blocked park again under theirs.
- */
+/** The account a parked op waits for: the one it names, for every op but an account's own. */
 const blockedByOf = (op: IngestOp) => (op._tag !== "account" && "account" in op ? refKey(op.account) : null)
+
+/** Several accounts (`blockedBy`): the ops are checked when any account's ref is created. */
+const SEVERAL = "*"
+
+/**
+ * What a parked record's ops wait for (`blockedBy`): their one account, or `SEVERAL` (a contact
+ * parked under several unknown accounts). A replay applies them all; those still blocked park again.
+ */
+const blockedByAll = (ops: ReadonlyArray<IngestOp>) => {
+	const keys = new Set(ops.flatMap((op) => Option.toArray(Option.fromNullishOr(blockedByOf(op)))))
+	return keys.size === 0 ? null : keys.size === 1 ? [...keys][0] : SEVERAL
+}
 
 /** The ops of a parked record that decode (the rest are logged and skipped). */
 const parkedOps = (record: Pick<schema.CustomerUnmatchedRecord, "id" | "payload">) =>
@@ -666,14 +674,13 @@ const make = Effect.gen(function* () {
 					? mergeAccountOps(prior, record.op)
 					: record.op
 			const values = op?._tag === "account" ? { ...fields, ...describeAccount(op) } : fields
+			const ops = op === null ? [] : [...held.filter((item) => parkKey(item) !== parkKey(op)), op]
 			const next =
 				op !== null
 					? {
 							...values,
-							payload: [...held.filter((item) => parkKey(item) !== parkKey(op)), op].map(
-								(item) => encodeOp(item),
-							),
-							blockedBy: blockedByOf(op),
+							payload: ops.map((item) => encodeOp(item)),
+							blockedBy: blockedByAll(ops),
 							eventCount30d: events,
 						}
 					: row.status === "open"
@@ -722,15 +729,20 @@ const make = Effect.gen(function* () {
 						$.status.eq("open"),
 					]),
 			)
+			const key = refKey({ provider, externalId })
 			const waiting =
 				entityType === "account"
-					? yield* db.run(
+					? (yield* db.run(
 							SQLite.from(schema.customerUnmatchedRecordsTable)
-								.select("id")
-								.where(($) => [
-									$.blockedBy.eq(refKey({ provider, externalId })),
-									$.status.eq("open"),
-								]),
+								.select("id", "blockedBy", "payload")
+								.where(($) => [$.blockedBy.in_(key, SEVERAL), $.status.eq("open")]),
+						)).filter(
+							(row) =>
+								row.blockedBy === key ||
+								(Array.isArray(row.payload) &&
+									row.payload.some((item) =>
+										Option.exists(decodeOp(item), (op) => blockedByOf(op) === key),
+									)),
 						)
 					: []
 			for (const id of new Set([...own, ...waiting].map((row) => row.id))) {
@@ -2088,6 +2100,7 @@ const make = Effect.gen(function* () {
 		connectionId: CustomerConnectionId,
 		since: Date,
 		entityTypes: ReadonlyArray<RefEntityType>,
+		manual = false,
 	) {
 		yield* Effect.annotateCurrentSpan({
 			"ingest.connection_id": connectionId,
@@ -2113,8 +2126,8 @@ const make = Effect.gen(function* () {
 						$.provider.eq(provider),
 						$.entityType.eq(entityType),
 						$.staleAt.isNull(),
-						// A ref a person linked stays until they unlink it.
-						$.matchMethod.neq("manual"),
+						// A ref a person linked stays until they unlink it (or the provider account changes).
+						...(manual ? [] : [$.matchMethod.neq("manual")]),
 						SQLite.or($.lastSyncedAt.isNull(), $.lastSyncedAt.lt(since)),
 					]),
 			)

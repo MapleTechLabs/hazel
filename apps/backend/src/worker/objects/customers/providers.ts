@@ -15,6 +15,10 @@
  *   page so records deleted without a webhook are removed.
  * - Links (`externalUrl`, `hostedUrl`) as `https:` URLs on the provider's own hosts; ingest stores
  *   any other as null.
+ * - Only the connection's provider account: `validate` returns the account the credentials open
+ *   (always: a change of account is how core knows to drop the old one's data), and a webhook
+ *   delivery or a pulled record of another account (`credentials.externalAccountId`) is refused, so
+ *   a stale secret or a misrouted endpoint cannot write another account's data.
  *
  * Errors are synced: a `CustomerProviderError`'s `message` reaches every member (see there).
  */
@@ -54,6 +58,8 @@ export interface ProviderCredentials {
 	readonly apiKey: Redacted.Redacted<string>
 	readonly webhookSecret: Redacted.Redacted<string> | null
 	readonly config: ConnectionConfig
+	/** The provider account the connection reads (what `validate` returned); null while validating. */
+	readonly externalAccountId: string | null
 }
 
 export interface PullPage {
@@ -72,19 +78,20 @@ export interface PullPage {
 
 export interface CustomerProviderAdapter {
 	readonly provider: CustomerProvider
-	/** Check the credentials; the provider account they open. */
+	/** Check the credentials; the provider account they open (its stable id, never left out). */
 	readonly validate: (
 		credentials: ProviderCredentials,
 	) => Effect.Effect<
-		{ readonly externalAccountId: string | null; readonly externalAccountName: string | null },
+		{ readonly externalAccountId: string; readonly externalAccountName: string | null },
 		CustomerProviderError
 	>
 	/**
 	 * Verify one webhook delivery (raw body, headers) and parse it. Core calls it only with a webhook
 	 * secret (`credentials.webhookSecret` is non-null). The adapter must check the signature over the
-	 * raw body and refuse a delivery whose signed timestamp is outside a short tolerance (replay
-	 * protection), e.g. 5 minutes. `CustomerWebhookRejectedError.message` is answered to the caller
-	 * verbatim: keep it client-safe (no secrets, no provider internals).
+	 * raw body, refuse a delivery whose signed timestamp is outside a short tolerance (replay
+	 * protection), e.g. 5 minutes, and refuse one of another provider account than
+	 * `credentials.externalAccountId`. `CustomerWebhookRejectedError.message` is answered to the
+	 * caller verbatim: keep it client-safe (no secrets, no provider internals).
 	 */
 	readonly webhook: (
 		request: { readonly headers: Readonly<Record<string, string>>; readonly body: string },

@@ -710,7 +710,10 @@ export const customerUnmatchedRecordsTable = SQLite.table("customer_unmatched_re
 		eventCount30d: SQLite.nullable(SQLite.integer),
 		/** The ingest op that could not land, replayed once linked (`IngestOp`, encoded). */
 		payload: jsonb<unknown>(),
-		/** The account (`provider:externalId`) the held ops name, whose ref replays them once created. */
+		/**
+		 * The account (`provider:externalId`) the held ops name, whose ref replays them once created;
+		 * `*` when they name several (a user of two unknown organizations).
+		 */
 		blockedBy: SQLite.nullable(SQLite.text),
 		suggestedAccountId: SQLite.nullable(uuid(CustomerAccountId)),
 		/** 0–1. */

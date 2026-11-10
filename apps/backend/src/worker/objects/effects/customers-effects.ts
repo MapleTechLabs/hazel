@@ -5,6 +5,7 @@
  * snapshot with `organizationDeleted`), which shuts the customers object down.
  */
 import { Database, SQLite, schema } from "@hazel/db"
+import { DEFAULT_CONNECTION_CONFIG } from "@hazel/domain/customers"
 import { OrganizationMember } from "@hazel/domain/models"
 import { OrganizationId, UserId } from "@hazel/schema"
 import { Clock, Effect, Option, Schema } from "effect"
@@ -61,7 +62,10 @@ export const applyMembers = Effect.fn("CustomersEffects.applyMembers")(function*
 	}
 })
 
-/** What the org's customers are: purged with the org (its configuration stays, inert). */
+/**
+ * What the org's customers are, and what names them (ignore rules): purged with the org (its
+ * configuration stays, inert).
+ */
 const CUSTOMER_DATA: ReadonlyArray<Parameters<typeof SQLite.deleteFrom>[0]> = [
 	schema.customerAccountsTable,
 	schema.customerContactsTable,
@@ -78,22 +82,40 @@ const CUSTOMER_DATA: ReadonlyArray<Parameters<typeof SQLite.deleteFrom>[0]> = [
 	schema.customerNotesTable,
 	schema.customerSyncRunsTable,
 	schema.customerUnmatchedRecordsTable,
+	schema.customerIgnoreRulesTable,
 ]
 
 /**
- * The org is gone: its data sources disconnect (credentials dropped), nothing is scheduled, and
- * its customer data is deleted (no member can read it any more, and an org is not restored).
+ * The org is gone: its data sources disconnect (credentials dropped, provider account names,
+ * settings and errors cleared), nothing is scheduled, and its customer data is deleted, saved
+ * views' filters too (no member can read it any more, and an org is not restored).
  */
 const shutDown = Effect.gen(function* () {
 	const db = yield* Database.Database
+	const now = new Date(yield* Clock.currentTimeMillis)
 	const connections = yield* db.run(
-		SQLite.from(schema.customerConnectionsTable)
-			.select("id")
-			.where(($) => [$.status.neq("disconnected")]),
+		SQLite.from(schema.customerConnectionsTable).select("id", "provider", "status"),
 	)
 	yield* disconnectConnections(
-		connections.map((connection) => connection.id),
-		new Date(yield* Clock.currentTimeMillis),
+		connections
+			.filter((connection) => connection.status !== "disconnected")
+			.map((connection) => connection.id),
+		now,
+	)
+	for (const connection of connections) {
+		yield* db.run(
+			SQLite.update(schema.customerConnectionsTable)
+				.set({
+					externalAccountName: null,
+					config: DEFAULT_CONNECTION_CONFIG[connection.provider],
+					lastError: null,
+					updatedAt: now,
+				})
+				.where(($) => [$.id.eq(connection.id)]),
+		)
+	}
+	yield* db.run(
+		SQLite.update(schema.customerSavedViewsTable).set({ filters: {}, updatedAt: now }).allRows(),
 	)
 	yield* stopComputing
 	for (const table of CUSTOMER_DATA) yield* db.run(SQLite.deleteFrom(table).allRows())

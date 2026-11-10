@@ -1106,6 +1106,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 							apiKey: Redacted.make(apiKey),
 							webhookSecret: webhookSecret === null ? null : Redacted.make(webhookSecret),
 							config,
+							externalAccountId: null,
 						})
 						.pipe(Effect.mapError(credentialsError(provider)))
 					const secrets = yield* encrypt(apiKey, webhookSecret)
@@ -1167,12 +1168,16 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					if (config !== undefined) yield* checkConfig(config)
 					const nextConfig = config ?? connection.config
 					// Rotating either credential re-encrypts both under the current key (one key version
-					// per row); the one not given is kept as stored.
+					// per row); the one not given is kept as stored, except a webhook secret when the API
+					// key opens another provider account (its deliveries are signed with another one).
 					const secrets =
 						apiKey === undefined && webhookSecret === undefined
 							? undefined
 							: yield* Effect.gen(function* () {
-									const stored = yield* loadCredentials(connectionId, nextConfig).pipe(
+									const stored = yield* loadCredentials({
+										...connection,
+										config: nextConfig,
+									}).pipe(
 										Effect.provideService(IntegrationEncryption, encryption),
 										Effect.mapError(storeFailed),
 									)
@@ -1184,16 +1189,13 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 									if (nextApiKey === undefined) {
 										return yield* invalid("The connection has no API key: enter one")
 									}
-									const nextSecret =
-										webhookSecret !== undefined
-											? webhookSecret
-											: Option.match(stored, {
-													onNone: () => null,
-													onSome: (c) =>
-														c.webhookSecret === null
-															? null
-															: Redacted.value(c.webhookSecret),
-												})
+									const storedSecret = Option.match(stored, {
+										onNone: () => null,
+										onSome: (c) =>
+											c.webhookSecret === null ? null : Redacted.value(c.webhookSecret),
+									})
+									const givenOrStored =
+										webhookSecret !== undefined ? webhookSecret : storedSecret
 									const account =
 										apiKey === undefined
 											? null
@@ -1204,10 +1206,11 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 															.validate({
 																apiKey: Redacted.make(apiKey),
 																webhookSecret:
-																	nextSecret === null
+																	givenOrStored === null
 																		? null
-																		: Redacted.make(nextSecret),
+																		: Redacted.make(givenOrStored),
 																config: nextConfig,
+																externalAccountId: null,
 															})
 															.pipe(
 																Effect.mapError(
@@ -1215,10 +1218,19 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 																),
 															),
 												)
+									const switched =
+										account !== null &&
+										otherProviderAccount(
+											connection.externalAccountId,
+											account.externalAccountId,
+										)
+									const nextSecret =
+										switched && webhookSecret === undefined ? null : givenOrStored
 									return {
 										encrypted: yield* encrypt(nextApiKey, nextSecret),
 										hasWebhookSecret: nextSecret !== null,
 										account,
+										switched,
 									}
 								})
 					const account = secrets?.account ?? null
@@ -1226,9 +1238,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					return yield* withTx(
 						Effect.gen(function* () {
 							if (secrets !== undefined) yield* storeSecrets(connectionId, secrets.encrypted)
-							const switched =
-								account !== null &&
-								otherProviderAccount(connection.externalAccountId, account.externalAccountId)
+							const switched = secrets?.switched === true
 							const current = switched ? yield* switchAccount(connection, now) : connection
 							// A new API key lifts an `auth` error and pulls again; one of another account
 							// imports it from scratch.
@@ -1240,8 +1250,9 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 									.set({
 										config: nextConfig,
 										hasWebhookSecret: secrets?.hasWebhookSecret,
-										externalAccountId: account?.externalAccountId ?? undefined,
-										externalAccountName: account?.externalAccountName ?? undefined,
+										externalAccountId: account?.externalAccountId,
+										externalAccountName:
+											account === null ? undefined : account.externalAccountName,
 										status: lifted ? ("active" as const) : undefined,
 										nextSyncAt: lifted ? now : undefined,
 										consecutiveFailures: lifted ? 0 : undefined,
