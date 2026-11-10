@@ -32,7 +32,7 @@ import {
 import type { SidebarChrome } from "./channels-sidebar"
 import type { ShellContext } from "./context"
 import { orgSwitcherHeader, userMenuFooter } from "./menus"
-import { isDesktop, sidebarHeaderHeightClass } from "../platform/desktop"
+import { hasUpdater, isDesktop, sidebarHeaderHeightClass } from "../platform/desktop"
 
 /** The settings, my-settings and notifications sidebars next to the nav rail. */
 
@@ -203,7 +203,8 @@ export const mySettingsSidebar = <Message>(
 						onRoutes(route, "MySettingsNotifications"),
 						IconBell,
 					),
-					...(isDesktop
+					// Desktop settings: the Tauri app's, and the native app's update section.
+					...(isDesktop || hasUpdater
 						? [item("Desktop", desktop, onRoutes(route, "MySettingsDesktop"), IconCube)]
 						: []),
 				]),

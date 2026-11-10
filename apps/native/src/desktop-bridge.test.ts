@@ -62,6 +62,7 @@ describe("the native desktop bridge", () => {
 		expect(makeBridge().bridge.tauri.updater).toBeUndefined()
 		expect(makeBridge().bridge.tauri.process).toBeUndefined()
 		expect(makeBridge(true).bridge.tauri.updater).toBeDefined()
+		expect(makeBridge().bridge.tauri.app).toBeUndefined()
 	})
 
 	it("checks, downloads with Tauri's progress events, installs and relaunches through the host", async () => {
@@ -91,12 +92,15 @@ describe("the native desktop bridge", () => {
 		const installed = found.install()
 		bridge.answer({ t: "update", id: 3 })
 		await installed
-		await process.relaunch()
+		// A relaunch that works ends the runtime; one the host could not do rejects, so the app says so.
+		const relaunched = process.relaunch()
+		bridge.answer({ t: "update", id: 4, error: "cannot relaunch: denied" })
+		await expect(relaunched).rejects.toThrow("cannot relaunch")
 		expect(sent).toEqual([
 			{ t: "update", id: 1, op: "check" },
 			{ t: "update", id: 2, op: "download" },
 			{ t: "update", id: 3, op: "install" },
-			{ t: "relaunch" },
+			{ t: "relaunch", id: 4 },
 		])
 	})
 
@@ -116,6 +120,11 @@ describe("the native desktop bridge", () => {
 		await settle()
 		bridge.answer({ t: "update", id: 3, error: "the update's signature does not verify" })
 		await expect(download).rejects.toThrow("signature")
+	})
+
+	it("reports the host's version to the app", async () => {
+		const bridge = makeDesktopBridge({ send: () => {}, openUrl: () => {}, version: "1.1.0" })
+		expect(await bridge.tauri.app?.getVersion()).toBe("1.1.0")
 	})
 
 	it("logs a link without its query's values", () => {

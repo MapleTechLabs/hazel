@@ -71,6 +71,7 @@ const desktopBridge = makeDesktopBridge({
 	send: (request) => transport.send(request),
 	// The host sets this for a release bundle it can update in place.
 	updates: process.env.HAZEL_UPDATES === "1",
+	version: process.env.HAZEL_APP_VERSION,
 	openUrl: (url) => {
 		const target = URL.parse(url)
 		if (target !== null) openExternal(target)

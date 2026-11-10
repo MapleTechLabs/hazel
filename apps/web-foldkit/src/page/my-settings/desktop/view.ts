@@ -1,7 +1,7 @@
 import { Submodel } from "foldkit"
 import type { Html, HtmlBuilder } from "foldkit/html"
 import { IconCheck, IconCube, IconDownload } from "../../../icons"
-import { hasUpdater } from "../../../platform/desktop"
+import { hasUpdater, isDesktop } from "../../../platform/desktop"
 import * as Updates from "../../../platform/updates"
 import { badge } from "../../../ui/badge"
 import { button } from "../../../ui/button"
@@ -244,45 +244,54 @@ export const view = Submodel.defineView<Model, Message, PageViewInputs>((model, 
 		[h.Class("flex flex-col gap-6 px-4 lg:px-8")],
 		[
 			pageHeader(h, "Desktop", "Settings for the desktop application."),
-			h.div(
-				[h.Class("flex flex-col gap-5")],
-				[
-					settingsRow(
-						h,
-						{
-							title: "Launch at Startup",
-							description: "Automatically start the app when you log in.",
-						},
+			// Autostart is a Tauri plugin: the native app (an updater without Tauri) has none yet.
+			...(!hasUpdater || isDesktop
+				? [
 						h.div(
-							[h.Class("flex flex-col gap-4")],
+							[h.Class("flex flex-col gap-5")],
 							[
-								h.div(
-									[h.Class("rounded-lg border border-border bg-secondary/50 p-4")],
-									[
-										switchControl(
-											h,
-											{
-												id: "my-settings-autostart",
-												isSelected: model.autostartEnabled ?? false,
-												isDisabled: model.autostartEnabled === null,
-												onChange: (isSelected) =>
-													Message.ToggledAutostart({ isSelected }),
-											},
-											"Open at login",
-										),
-										h.p(
-											[h.Class("mt-3 text-muted-fg text-sm")],
-											[
-												"When enabled, the app will automatically launch when you log in to your computer.",
-											],
-										),
-									],
+								settingsRow(
+									h,
+									{
+										title: "Launch at Startup",
+										description: "Automatically start the app when you log in.",
+									},
+									h.div(
+										[h.Class("flex flex-col gap-4")],
+										[
+											h.div(
+												[
+													h.Class(
+														"rounded-lg border border-border bg-secondary/50 p-4",
+													),
+												],
+												[
+													switchControl(
+														h,
+														{
+															id: "my-settings-autostart",
+															isSelected: model.autostartEnabled ?? false,
+															isDisabled: model.autostartEnabled === null,
+															onChange: (isSelected) =>
+																Message.ToggledAutostart({ isSelected }),
+														},
+														"Open at login",
+													),
+													h.p(
+														[h.Class("mt-3 text-muted-fg text-sm")],
+														[
+															"When enabled, the app will automatically launch when you log in to your computer.",
+														],
+													),
+												],
+											),
+										],
+									),
 								),
 							],
 						),
-					),
-				],
-			),
+					]
+				: []),
 			...(hasUpdater ? appUpdates(h, model, shared.desktopUpdate) : []),
 		],
 	),

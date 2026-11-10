@@ -3,7 +3,7 @@
  * answered by the native host: `core.invoke` for the keychain vault, `deepLink` for the callback
  * the system opens with the app, and `opener` for the system browser. A release bundle also gets
  * the two its updates use (`web-foldkit/src/platform/updates.ts`): `updater` (check, download,
- * install, done by the host on its own bundle) and `process.relaunch`. Installed as
+ * install, done by the host on its own bundle), `process.relaunch` and `app.getVersion`. Installed as
  * `window.__TAURI__` without `__TAURI_INTERNALS__`, so the app's other Tauri features stay off.
  */
 import type { HostToRuntime, RuntimeToHost } from "@hazel/foldkit-rune"
@@ -30,6 +30,8 @@ export const makeDesktopBridge = (options: {
 	readonly openUrl: (url: string) => void
 	/** The host can update this app (a release bundle): offer `updater` and `process`. */
 	readonly updates?: boolean
+	/** This build's version, from the host (`app.getVersion`, shown in Settings > Desktop). */
+	readonly version?: string
 }) => {
 	let nextId = 0
 	const waiting = new Map<
@@ -81,8 +83,11 @@ export const makeDesktopBridge = (options: {
 			),
 	}
 	const appProcess = {
-		/** The host quits and opens the app again: this runtime ends with it. */
-		relaunch: () => Promise.resolve(options.send({ t: "relaunch" })),
+		/**
+		 * The host quits and opens the app again, so this runtime ends with it and the promise
+		 * never settles; it rejects when the host could not relaunch, so the app says so.
+		 */
+		relaunch: () => request<UpdateAnswer>((id) => ({ t: "relaunch", id })).then(() => undefined),
 		exit: () => Promise.reject(new Error("the native app quits through relaunch")),
 	}
 
@@ -115,6 +120,10 @@ export const makeDesktopBridge = (options: {
 		opener,
 		updater: options.updates ? updater : undefined,
 		process: options.updates ? appProcess : undefined,
+		app:
+			options.version === undefined
+				? undefined
+				: { getVersion: () => Promise.resolve(options.version) },
 	}
 
 	/** The host's answer to a vault or update request, or a download's progress. */

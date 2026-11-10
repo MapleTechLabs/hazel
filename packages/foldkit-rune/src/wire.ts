@@ -148,8 +148,8 @@ export type RuntimeToHost =
 	| { readonly t: "vault"; readonly id: number; readonly op: "write"; readonly record: string }
 	/** An updater step on the app's own bundle; answered by `update` (and `updateProgress`). */
 	| { readonly t: "update"; readonly id: number; readonly op: "check" | "download" | "install" }
-	/** Quit, and open the app again once it has gone (after an update installs). */
-	| { readonly t: "relaunch" }
+	/** Quit, and open the app again once it has gone (after an update installs); a failure is answered by `update` with `id`. */
+	| { readonly t: "relaunch"; readonly id: number }
 
 /** Timings for one commit, for the benchmarks. */
 export type CommitStats = {

@@ -63,6 +63,11 @@ pub fn target() -> &'static str {
     }
 }
 
+/// This build's version, when it is a release build.
+pub fn version() -> Option<&'static str> {
+    VERSION
+}
+
 /// Whether this app can update itself: a release build, run from its bundle.
 pub fn enabled() -> bool {
     VERSION.is_some() && PUBKEY.is_some() && bundle_path().is_some()

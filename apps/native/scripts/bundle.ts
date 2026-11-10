@@ -43,12 +43,13 @@ const scheme = new URL(nativeClient.returnUrl).protocol.slice(0, -1)
 const identity = release ? process.env.APPLE_SIGNING_IDENTITY : undefined
 if (release && !identity) throw new Error("HAZEL_RELEASE=1 needs APPLE_SIGNING_IDENTITY")
 
-// The Tauri app's production origins (apps/web-foldkit/scripts/production-env.sh).
+// The Tauri app's production origins (apps/web-foldkit/scripts/production-env.sh). `||`: an
+// unset GitHub `vars` value arrives as an empty string, which must not ship as the backend.
 const environment = {
 	HAZEL_DATA: "live",
-	VITE_BACKEND_URL: process.env.HAZEL_BACKEND_URL ?? "https://api.hazel.sh",
-	VITE_APP_URL: process.env.HAZEL_APP_URL ?? "https://app.hazel.sh",
-	VITE_R2_PUBLIC_URL: process.env.HAZEL_R2_PUBLIC_URL ?? "https://cdn.hazel.sh",
+	VITE_BACKEND_URL: process.env.HAZEL_BACKEND_URL || "https://api.hazel.sh",
+	VITE_APP_URL: process.env.HAZEL_APP_URL || "https://app.hazel.sh",
+	VITE_R2_PUBLIC_URL: process.env.HAZEL_R2_PUBLIC_URL || "https://cdn.hazel.sh",
 }
 
 const run = (command: string, args: Array<string>, options: { cwd?: string; env?: NodeJS.ProcessEnv } = {}) =>

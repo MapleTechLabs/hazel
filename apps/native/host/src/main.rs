@@ -2035,6 +2035,10 @@ fn start_runtime(current: &RuntimeChild, path: Option<&str>) -> std::process::Ch
     if updater::enabled() {
         command.env("HAZEL_UPDATES", "1");
     }
+    // The version Settings > Desktop shows, for a build that knows it.
+    if let Some(version) = updater::version() {
+        command.env("HAZEL_APP_VERSION", version);
+    }
     let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -2064,12 +2068,15 @@ fn spawn_runtime() -> (RuntimeChild, std::sync::mpsc::Receiver<RuntimeMsg>) {
                 match serde_json::from_str::<RuntimeMsg>(&line) {
                     Ok(RuntimeMsg::Vault { id, op, record }) => answer_vault(id, &op, record),
                     Ok(RuntimeMsg::Update { id, op }) => answer_update(id, op),
-                    Ok(RuntimeMsg::Relaunch) => match updater::relaunch_after_exit() {
+                    Ok(RuntimeMsg::Relaunch { id }) => match updater::relaunch_after_exit() {
                         Ok(()) => {
                             supervised.kill();
                             std::process::exit(0);
                         }
-                        Err(error) => eprintln!("[host] {error}"),
+                        Err(error) => {
+                            eprintln!("[host] {error}");
+                            write_line(updater::reply(id, Err(error)));
+                        }
                     },
                     Ok(RuntimeMsg::Reload { path }) => {
                         reload = Some(path);
