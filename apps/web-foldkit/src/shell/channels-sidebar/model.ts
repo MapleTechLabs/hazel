@@ -62,6 +62,8 @@ export const SidebarOutcome = Schema.Literals([
 	"Unmuted",
 	"Favorited",
 	"Unfavorited",
+	"Hidden",
+	"Unhidden",
 	"Left",
 	"MovedToSection",
 	"MovedToDefault",

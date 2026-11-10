@@ -7,7 +7,7 @@ import { AppRoute, hrefOf } from "../../route"
 import { sidebarItem, sidebarLink } from "../../ui/sidebar"
 import type * as Menu from "../../ui/menu"
 import { canOn, openRowMenu } from "./menu-update"
-import { closedRowMenu, rowMenuView } from "./menus"
+import { closedRowMenu, dmMenuView, rowMenuView } from "./menus"
 import { Message, type Model } from "./model"
 import { createChannelHint } from "./create-channel-hint"
 import { hotkeyLabel } from "./hotkey-label"
@@ -203,6 +203,8 @@ const dmRowView = <M>(
 	setSize: number,
 	allowsDragging: boolean,
 	onActiveMount: Attribute<M> | null,
+	openMenu: Menu.Model | null,
+	toParentMessage: (message: Message) => M,
 ): Html =>
 	treeRow(h, {
 		onActiveMount,
@@ -212,13 +214,19 @@ const dmRowView = <M>(
 		position,
 		setSize,
 		allowsDragging,
-		content: dmItem(h, channel, notificationCount, {
-			orgSlug,
-			isActive: isLinkActive,
-			currentUserId,
-			nowMs,
-			presence,
-		}),
+		content: dmItem(
+			h,
+			channel,
+			notificationCount,
+			{ orgSlug, isActive: isLinkActive, currentUserId, nowMs, presence },
+			dmMenuView(h, {
+				menu: openMenu ?? closedRowMenu(channel.id),
+				channelId: channel.id,
+				member: channel.currentUser,
+				toMessage: (message) =>
+					toParentMessage(Message.GotRowMenuMessage({ channelId: channel.id, orgSlug, message })),
+			}),
+		),
 	})
 
 /** A `DmChannelItem` renders nothing until its channel and the user's membership load. */
@@ -246,6 +254,8 @@ const dmRow = <M>(
 			place.setSize,
 			place.allowsDragging,
 			channel.id === context.activeChannelId ? context.onActiveMount : null,
+			openRowMenu(context.openMenu, channel.id),
+			context.toParentMessage,
 		]) ?? h.empty
 	)
 }

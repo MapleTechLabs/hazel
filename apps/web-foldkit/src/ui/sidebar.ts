@@ -245,6 +245,9 @@ export const sidebarItem = <Message>(
 						"cursor-default",
 						"w-full min-w-0 items-center rounded-lg text-left font-normal text-base/6 text-fg-3",
 						"group/sidebar-item relative col-span-full overflow-hidden focus-visible:outline-hidden",
+						// The trigger fills the row's right edge, so the button's offset ring would be clipped into a
+						// bracket by the row's overflow: a focused trigger lights the row and its dots instead.
+						"**:data-[slot=menu-trigger]:rounded-none **:data-[slot=menu-trigger]:focus-visible:outline-0 **:data-[slot=menu-trigger]:focus-visible:ring-0 **:data-[slot=menu-trigger]:focus-visible:ring-offset-0 **:data-[slot=menu-trigger]:focus-visible:text-fg **:data-[slot=menu-trigger]:data-pressed:text-fg **:data-[slot=menu-trigger]:hover:text-fg has-[[data-slot=menu-trigger]:focus-visible]:bg-wash has-[[data-slot=menu-trigger][data-pressed]]:bg-wash",
 						"**:data-[slot=menu-trigger]:absolute **:data-[slot=menu-trigger]:right-0 **:data-[slot=menu-trigger]:flex **:data-[slot=menu-trigger]:h-full **:data-[slot=menu-trigger]:w-auto **:data-[slot=menu-trigger]:items-center **:data-[slot=menu-trigger]:justify-end **:data-[slot=menu-trigger]:px-2.5 **:data-[slot=menu-trigger]:opacity-0 **:data-[slot=menu-trigger]:data-pressed:opacity-100 **:data-[slot=menu-trigger]:has-data-focus:opacity-100 **:data-[slot=menu-trigger]:focus-visible:opacity-100 hover:**:data-[slot=menu-trigger]:opacity-100",
 						"**:data-[slot=icon]:size-5 **:data-[slot=icon]:shrink-0 **:data-[slot=icon]:text-fg-2 sm:**:data-[slot=icon]:size-4",
 						"**:last:data-[slot=icon]:size-5 sm:**:last:data-[slot=icon]:size-4",

@@ -352,6 +352,7 @@ export const dmItem = <M>(
 	channel: DmChannel,
 	notificationCount: number,
 	context: DmRowContext,
+	menu: Html = dotsMenuTrigger(h, "Conversation options"),
 ): Html => {
 	const href = chatHref(context, channel.id)
 	const partners = dmPartners(channel, context.currentUserId)
@@ -364,7 +365,7 @@ export const dmItem = <M>(
 				? singleDmContent(h, channel, only, context)
 				: groupDmContent(h, channel, partners),
 		),
-		dotsMenuTrigger(h, "Conversation options"),
+		menu,
 		...badgeIf(h, notificationCount),
 	])
 }
