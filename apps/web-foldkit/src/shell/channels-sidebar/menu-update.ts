@@ -13,14 +13,16 @@ import { DeleteChannelSection, LeaveChannel, MoveChannelToSection, UpdateChannel
 import {
 	closedMenu,
 	closedRowMenu,
+	decodeDmMenuKey,
 	decodeRowMenuKey,
 	decodeSectionMenuKey,
+	type DmMenuKey,
 	type RowMenuKey,
 	sectionIdOfKey,
 	sectionMenuId,
 } from "./menus"
 import { Message, type Model, OpenMenu, type SectionAction } from "./model"
-import type { ChannelEntry } from "./rows"
+import type { ChannelEntry, DmChannel } from "./rows"
 
 /** Opening, folding and acting on the row and section menus. */
 
@@ -147,7 +149,42 @@ const selectedMoveTarget = (model: Model, { channel }: ChannelEntry, key: string
 				: { model, commands: [MoveChannelToSection({ channelId: channel.id, sectionId })] },
 	})
 
+/** A DM row's item: the same member toggles, plus hiding the conversation. */
+const selectedDmKey = (model: Model, { currentUser: member }: DmChannel, key: DmMenuKey): SidebarReturn =>
+	Match.value(key).pipe(
+		Match.when("mute", () => ({
+			model,
+			commands: [
+				UpdateChannelMember({ memberId: member.id, field: "isMuted", value: !member.isMuted }),
+			],
+		})),
+		Match.when("favorite", () => ({
+			model,
+			commands: [
+				UpdateChannelMember({ memberId: member.id, field: "isFavorite", value: !member.isFavorite }),
+			],
+		})),
+		Match.when("hide", () => ({
+			model,
+			commands: [UpdateChannelMember({ memberId: member.id, field: "isHidden", value: true })],
+		})),
+		Match.exhaustive,
+	)
+
+/** A DM row (favorited or not) opens the DM menu; its keys never reach the channel row's. */
 const selectedRowItem =
+	(channelId: ChannelId, orgSlug: string) =>
+	(model: Model, key: string): SidebarReturn => {
+		const dm = model.dmChannels[channelId]
+		return dm
+			? Option.match(decodeDmMenuKey(key), {
+					onNone: () => ({ model }),
+					onSome: (dmKey) => selectedDmKey(model, dm, dmKey),
+				})
+			: selectedChannelItem(channelId, orgSlug)(model, key)
+	}
+
+const selectedChannelItem =
 	(channelId: ChannelId, orgSlug: string) =>
 	(model: Model, key: string): SidebarReturn =>
 		Option.match(entryOf(model, channelId), {

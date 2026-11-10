@@ -3,6 +3,7 @@ import { Array, Option, Schema } from "effect"
 import type { ChildAttribute, Html, HtmlBuilder } from "foldkit/html"
 import {
 	IconCirclePlus,
+	IconClose,
 	IconDots,
 	IconFolderPlus,
 	IconGear,
@@ -18,7 +19,7 @@ import { button } from "../../ui/button"
 import * as Menu from "../../ui/menu"
 import { menuLabel, view as menuView } from "../../ui/menu-view"
 import { SectionAction } from "./model"
-import type { ChannelEntry, Section } from "./rows"
+import type { ChannelEntry, Section, SidebarMember } from "./rows"
 
 /** The channel row "dots" menu (`ChannelItem`) and the section "+" menu (`SectionGroup`). */
 
@@ -40,6 +41,11 @@ export const decodeRowMenuKey = Schema.decodeUnknownOption(RowMenuKey)
 export const SectionMenuKey = Schema.Union([SectionAction, Schema.Literal("delete-section")])
 export type SectionMenuKey = typeof SectionMenuKey.Type
 export const decodeSectionMenuKey = Schema.decodeUnknownOption(SectionMenuKey)
+
+/** A DM row's items (`DmChannelItem`): no settings, sections or leave; "Hide" closes the conversation. */
+export const DmMenuKey = Schema.Literals(["mute", "favorite", "hide"])
+export type DmMenuKey = typeof DmMenuKey.Type
+export const decodeDmMenuKey = Schema.decodeUnknownOption(DmMenuKey)
 
 const rowItem = (key: RowMenuKey, options?: Parameters<typeof Menu.item>[1]) => Menu.item(key, options)
 
@@ -68,6 +74,13 @@ export const rowMenuEntries = (
 	...(canDelete ? [rowItem("delete", { intent: "Danger" })] : []),
 	Menu.separator,
 	rowItem("leave", { intent: "Danger" }),
+]
+
+export const dmMenuEntries: ReadonlyArray<Menu.Entry> = [
+	Menu.item("mute" satisfies DmMenuKey),
+	Menu.item("favorite" satisfies DmMenuKey),
+	Menu.separator,
+	Menu.item("hide" satisfies DmMenuKey, { intent: "Danger" }),
 ]
 
 /** The move target a submenu key names: `null` for the default section. */
@@ -101,26 +114,50 @@ export const closedRowMenu = (channelId: string) => closedMenu(rowMenuId(channel
 
 // VIEW
 
+/** The mute and favorite items, which channel and DM rows share. */
+const memberItemContent = <M>(
+	h: HtmlBuilder<M>,
+	member: SidebarMember,
+	key: string,
+	text: (value: string) => Html,
+): ReadonlyArray<Html | string> | null => {
+	if (key === "mute")
+		return [
+			member.isMuted
+				? IconVolume(h, { className: "size-4" })
+				: IconVolumeMute(h, { className: "size-4" }),
+			text(member.isMuted ? "Unmute" : "Mute"),
+		]
+	if (key === "favorite")
+		return [
+			IconStar(h, { className: member.isFavorite ? "size-4 text-favorite" : "size-4 text-muted-fg" }),
+			text(member.isFavorite ? "Unfavorite" : "Favorite"),
+		]
+	return null
+}
+
+/** The dots trigger of a row's menu, shown on hover or while its menu is open. */
+const rowMenuTrigger =
+	<M>(h: HtmlBuilder<M>, label: string) =>
+	(attributes: ReadonlyArray<ChildAttribute>, overlay: Html): Html =>
+		button(
+			h,
+			{
+				intent: "plain",
+				size: "sq-xs",
+				className: "size-5 text-muted-fg",
+				attributes: [h.Attribute("data-slot", "menu-trigger"), h.AriaLabel(label), ...attributes],
+			},
+			[IconDots(h, { className: "size-4" }), overlay],
+		)
+
 const rowMenuContent =
 	<M>(h: HtmlBuilder<M>, entry: ChannelEntry, sections: ReadonlyArray<Section>) =>
 	(key: string): ReadonlyArray<Html | string> => {
 		const id = rowMenuId(entry.channel.id)
 		const text = (value: string, className?: string) => menuLabel(h, id, key, value, className)
-		const { member } = entry
-		if (key === "mute")
-			return [
-				member.isMuted
-					? IconVolume(h, { className: "size-4" })
-					: IconVolumeMute(h, { className: "size-4" }),
-				text(member.isMuted ? "Unmute" : "Mute"),
-			]
-		if (key === "favorite")
-			return [
-				IconStar(h, {
-					className: member.isFavorite ? "size-4 text-favorite" : "size-4 text-muted-fg",
-				}),
-				text(member.isFavorite ? "Unfavorite" : "Favorite"),
-			]
+		const memberItem = memberItemContent(h, entry.member, key, text)
+		if (memberItem !== null) return memberItem
 		if (key === "move") return [IconFolderPlus(h, { className: "size-4" }), text("Move to section")]
 		if (key === "settings") return [IconGear(h), text("Settings")]
 		if (key === "delete") return [IconTrash(h), text("Delete")]
@@ -147,30 +184,50 @@ export const rowMenuView = <M>(
 		view: menuView,
 		viewInputs: {
 			entries: rowMenuEntries(options.sections, options.canDelete),
-			toTrigger: (attributes: ReadonlyArray<ChildAttribute>, overlay: Html) =>
-				button(
-					h,
-					{
-						intent: "plain",
-						size: "sq-xs",
-						className: "size-5 text-muted-fg",
-						attributes: [
-							h.Attribute("data-slot", "menu-trigger"),
-							h.AriaLabel(
-								options.entry.channel.type === "single" ||
-									options.entry.channel.type === "direct"
-									? "Conversation options"
-									: "Channel options",
-							),
-							...attributes,
-						],
-					},
-					[IconDots(h, { className: "size-4" }), overlay],
-				),
+			toTrigger: rowMenuTrigger(
+				h,
+				options.entry.channel.type === "single" || options.entry.channel.type === "direct"
+					? "Conversation options"
+					: "Channel options",
+			),
 			content: rowMenuContent(h, options.entry, options.sections),
 			className: "w-42",
 			itemClassName: (key) =>
 				key === sectionKeyOf(options.entry.channel.sectionId) ? "bg-accent" : undefined,
+		},
+		toParentMessage: options.toMessage,
+	})
+
+/** `DmChannelItem`'s `<Menu>`: Mute, Favorite and Hide conversation, on the same dots trigger. */
+export const dmMenuView = <M>(
+	h: HtmlBuilder<M>,
+	options: Readonly<{
+		menu: Menu.Model
+		channelId: string
+		member: SidebarMember
+		toMessage: (message: Menu.Message) => M
+	}>,
+): Html =>
+	h.submodel({
+		slotId: options.menu.id,
+		model: options.menu,
+		view: menuView,
+		viewInputs: {
+			entries: dmMenuEntries,
+			toTrigger: rowMenuTrigger(h, "Conversation options"),
+			content: (key: string): ReadonlyArray<Html | string> => {
+				const text = (value: string, className?: string) =>
+					menuLabel(h, rowMenuId(options.channelId), key, value, className)
+				const memberItem = memberItemContent(h, options.member, key, text)
+				if (memberItem !== null) return memberItem
+				if (key === "hide")
+					return [
+						IconClose(h, { className: "size-4" }),
+						text("Hide conversation", "text-destructive"),
+					]
+				return []
+			},
+			className: "w-48",
 		},
 		toParentMessage: options.toMessage,
 	})

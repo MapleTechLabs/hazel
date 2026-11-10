@@ -15,16 +15,17 @@ import { Message, type SidebarFailure, type SidebarOutcome } from "./model"
 
 const failed = (reason: SidebarFailure) => Message.FailedSidebarAction({ reason })
 
-const MemberField = Schema.Literals(["isMuted", "isFavorite"])
+const MemberField = Schema.Literals(["isMuted", "isFavorite", "isHidden"])
 
 const memberOutcomes: {
 	readonly [F in typeof MemberField.Type]: { readonly on: SidebarOutcome; readonly off: SidebarOutcome }
 } = {
 	isMuted: { on: "Muted", off: "Unmuted" },
 	isFavorite: { on: "Favorited", off: "Unfavorited" },
+	isHidden: { on: "Hidden", off: "Unhidden" },
 }
 
-/** `useChannelMemberActions` mute and favorite toggles. */
+/** `useChannelMemberActions` mute and favorite toggles, and a DM's "Hide conversation". */
 export const UpdateChannelMember = Command.define("UpdateChannelMember", {
 	args: { memberId: ChannelMemberId, field: MemberField, value: Schema.Boolean },
 	messages: [Message.SucceededSidebarAction, Message.FailedSidebarAction],

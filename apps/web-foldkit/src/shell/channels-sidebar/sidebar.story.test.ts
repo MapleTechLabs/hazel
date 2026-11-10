@@ -17,7 +17,7 @@ import {
 } from "../channels-sidebar"
 import { UpdateChannelMember } from "./actions"
 import { PersistDismissedHint } from "./hints"
-import { rowMenuEntries, sectionMenuEntries } from "./menus"
+import { dmMenuEntries, rowMenuEntries, sectionMenuEntries } from "./menus"
 
 /** The sidebar's menus, hint and action toasts: typed menu identity, outcomes and reasons. */
 
@@ -98,6 +98,48 @@ describe("open menu", () => {
 	test("OpenMenu is a tagged union", () => {
 		const menu = Menu.init({ id: "x" })
 		expect(OpenMenu.Section({ sectionKey: "dms", menu })._tag).toBe("Section")
+	})
+})
+
+describe("DM row menu", () => {
+	const dmId = ChannelId.make("00000000-0000-4000-8000-000000000011")
+	const dmMemberId = ChannelMemberId.make("00000000-0000-4000-8000-000000000012")
+	const withDm: Model = {
+		...loaded,
+		dmChannelIds: [dmId],
+		dmChannels: {
+			[dmId]: {
+				id: dmId,
+				type: "single",
+				members: [],
+				currentUser: { id: dmMemberId, isMuted: false, isFavorite: true, notificationCount: 0 },
+			},
+		},
+	}
+	const dmMenu = (state: Model, menuMessage: Menu.Message) =>
+		update(state, Message.GotRowMenuMessage({ channelId: dmId, orgSlug: "acme", message: menuMessage }))
+	const dmClicked = (key: string) => Menu.Message.ClickedItem({ key, entries: dmMenuEntries })
+	const memberWrite = (key: string) => {
+		const open = dmMenu(withDm, pressed).model
+		expect(open.openMenu).toMatchObject({ _tag: "Row", channelId: dmId })
+		const { model: next, commands } = dmMenu(open, dmClicked(key))
+		expect(next.openMenu).toBeNull()
+		return commands?.find((command) => command.name === UpdateChannelMember.name)?.args
+	}
+
+	test("the dots open a menu whose items write the DM's own membership", () => {
+		expect(memberWrite("mute")).toEqual({ memberId: dmMemberId, field: "isMuted", value: true })
+		expect(memberWrite("favorite")).toEqual({ memberId: dmMemberId, field: "isFavorite", value: false })
+		expect(memberWrite("hide")).toEqual({ memberId: dmMemberId, field: "isHidden", value: true })
+	})
+
+	test("hiding a conversation succeeds silently", () => {
+		story(
+			update,
+			given(withDm),
+			message(Message.SucceededSidebarAction({ outcome: "Hidden" })),
+			expectNoOutMessage(),
+		)
 	})
 })
 

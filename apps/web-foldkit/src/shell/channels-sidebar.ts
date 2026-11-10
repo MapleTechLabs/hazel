@@ -51,11 +51,14 @@ export { loadIsCreateChannelHintDismissed } from "./channels-sidebar/hints"
 
 export type { SidebarReturn } from "./channels-sidebar/menu-update"
 
-const outcomeTitles: { readonly [O in SidebarOutcome]: string } = {
+/** `null`: a silent success (hiding a DM only removes its row, as in legacy). */
+const outcomeTitles: { readonly [O in SidebarOutcome]: string | null } = {
 	Muted: "Channel muted",
 	Unmuted: "Channel unmuted",
 	Favorited: "Added to favorites",
 	Unfavorited: "Removed from favorites",
+	Hidden: null,
+	Unhidden: "Conversation shown",
 	Left: "Left channel successfully",
 	MovedToSection: "Channel moved to section",
 	MovedToDefault: "Channel moved to default",
@@ -113,10 +116,12 @@ export const update = (model: Model, message: Message): SidebarReturn =>
 			outMessage: PageOutMessage.RequestedCommandPalette({ page: "home" }),
 		}),
 		ClickedSectionAction: ({ action }) => requestedSectionAction(model, action),
-		SucceededSidebarAction: ({ outcome }) => ({
-			model,
-			outMessage: PageOutMessage.RequestedToast({ toast: successToast(outcomeTitles[outcome]) }),
-		}),
+		SucceededSidebarAction: ({ outcome }) => {
+			const title = outcomeTitles[outcome]
+			return title === null
+				? { model }
+				: { model, outMessage: PageOutMessage.RequestedToast({ toast: successToast(title) }) }
+		},
 		FailedSidebarAction: ({ reason }) => ({
 			model,
 			outMessage: PageOutMessage.RequestedToast({
