@@ -165,6 +165,12 @@ export type RuneTargetOptions = {
 	/** A native text field over a DOM-backed Mount was edited, or a key was pressed in it. */
 	/** A press on a link whose click handler let it through: follow `href`. */
 	readonly onLink?: (href: string) => void
+	/**
+	 * The page's own theme, as its root's class says (`<html class="dark">`), when it sets one:
+	 * the app's resolved theme (Light, Dark, or System from the host's appearance). Without one,
+	 * the host's appearance (`env.dark`).
+	 */
+	readonly theme?: () => "dark" | "light" | undefined
 	readonly onEditable?: (path: string, event: { readonly value?: string; readonly key?: string }) => void
 }
 
@@ -465,7 +471,14 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		for (const child of vnode.children ?? []) collectClasses(child, into)
 	}
 
+	/** Dark when the page's theme says so, else when the host's appearance is. */
+	const isDark = () => {
+		const theme = options.theme?.()
+		return theme === undefined ? env.dark : theme === "dark"
+	}
+
 	const commitDocument = (document: Document, documentAck: number) => {
+		const dark = isDark()
 		const viewMs = frameStartedAt === 0 ? 0 : performance.now() - frameStartedAt
 		frameStartedAt = 0
 		const started = performance.now()
@@ -530,7 +543,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		let nodes = 0
 		let reusedSubtrees = 0
 		// What an element's output depends on beyond its VNode, scope and place.
-		const context = `${env.dark}|${env.width}x${env.height}`
+		const context = `${dark}|${env.width}x${env.height}`
 		// Overlay and observation changes touch only the elements they name: a cached subtree
 		// holding one of those paths is serialized again, the rest is reused.
 		const touched = [
@@ -632,7 +645,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 					hasDescendant: hasDescendant(vnode),
 				},
 				scope,
-				env.dark,
+				dark,
 				env.width,
 			)
 			const st: Style = resolved.style
@@ -741,7 +754,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 							hasDescendant: () => false,
 						},
 						resolved.scope,
-						env.dark,
+						dark,
 						env.width,
 					).style
 					children.push({
@@ -799,7 +812,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 		const root: WireNode =
 			body === null
 				? { k: "t", s: "" }
-				: serialize(body, "r", undefined, styles.rootScope(env.dark), undefined, true, undefined)
+				: serialize(body, "r", undefined, styles.rootScope(dark), undefined, true, undefined)
 		handlers = nextHandlers
 		const treeDone = performance.now()
 		const previouslySent = sentHashes
@@ -821,7 +834,7 @@ export const makeRuneTarget = (options: RuneTargetOptions) => {
 			})
 			return
 		}
-		const page = styles.pageStyle(env.dark)
+		const page = styles.pageStyle(dark)
 		// The tree the host already shows, with no event of its to acknowledge: a scroll or a
 		// layout report the view answered with the same thing. Nothing to send or draw; presses on
 		// the tree on screen run this render's handlers.

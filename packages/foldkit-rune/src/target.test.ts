@@ -741,6 +741,38 @@ describe("makeRuneTarget", () => {
 		expect(icon?.k === "svg" ? icon.body : "").toMatch(/fill="#[0-9a-f]{6}"/)
 	})
 
+	it("draws the page's own theme over the host's appearance, and the host's without one", () => {
+		const sent: Array<RuntimeToHost> = []
+		let theme: "dark" | "light" | undefined = "dark"
+		const rune = makeRuneTarget({
+			styles,
+			env: { width: 800, height: 600, dark: false },
+			send: (m) => sent.push(m),
+			theme: () => theme,
+		})
+		const pageBg = () =>
+			sent.findLast((m): m is Extract<RuntimeToHost, { t: "tree" }> => m.t === "tree")?.page.bg
+		const commit = (text: string) =>
+			// SAFETY: commit only reads `body` and `title`; this VNode has the shape the serializer walks.
+			rune.target.commit({
+				title: "",
+				body: { sel: "div", data: {}, children: [], text },
+			} as unknown as Parameters<typeof rune.target.commit>[0])
+		// The app chose Dark on a light Mac: dark.
+		commit("a")
+		const dark = pageBg()
+		// It chose Light: light, whatever the host says.
+		theme = "light"
+		commit("b")
+		const light = pageBg()
+		expect(dark).not.toEqual(light)
+		// No theme on the page: the host's appearance decides.
+		theme = undefined
+		rune.handleHostMessage({ t: "env", width: 800, height: 600, dark: true })
+		commit("c")
+		expect(pageBg()).toEqual(dark)
+	})
+
 	it("still sends a tree whose inner HTML holds an out-of-range reference", () => {
 		const sent: Array<RuntimeToHost> = []
 		const rune = makeRuneTarget({

@@ -14,7 +14,7 @@ mod wire;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::process::Stdio;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use rune::edit::TextEdit;
@@ -44,6 +44,7 @@ pub(crate) struct State {
     fields: HashMap<String, Field>,
     /// Last window size and theme reported to the runtime.
     reported: Option<(u32, u32, bool)>,
+    /// The appearance a headless capture runs with (`NATIVE_THEME`); a window follows macOS's.
     dark: bool,
     /// The document's own background and text colour (`body` in the app's stylesheet).
     page: wire::Page,
@@ -1854,8 +1855,37 @@ pub(crate) fn dom_motion() {
     rune::set_default_transition(rune::Transition::none());
 }
 
+/// `NATIVE_THEME=dark|light` pins the appearance (benchmarks, captures); otherwise it is macOS's.
+fn theme_override() -> Option<bool> {
+    match std::env::var("NATIVE_THEME").as_deref() {
+        Ok("dark") => Some(true),
+        Ok("light") => Some(false),
+        _ => None,
+    }
+}
+
+/// The appearance the view last drew with, which the runtime's `prefers-color-scheme` follows.
+static DARK: AtomicBool = AtomicBool::new(false);
+
+/// The view runs again when the system appearance changes: tell the runtime, whose media
+/// queries (and so the app's System theme) follow it. The size comes from the last report.
+fn note_appearance(dark: bool) {
+    if DARK.swap(dark, Ordering::Relaxed) == dark {
+        return;
+    }
+    let mut reported = REPORTED.lock().unwrap();
+    if let Some((width, height, _)) = *reported {
+        *reported = Some((width, height, dark));
+        write_line(json!({ "t": "env", "width": width, "height": height, "dark": dark }));
+    }
+}
+
 fn report_env(s: &mut State, rect: [f32; 4]) {
-    let next = (rect[2].round() as u32, rect[3].round() as u32, s.dark);
+    let next = (
+        rect[2].round() as u32,
+        rect[3].round() as u32,
+        DARK.load(Ordering::Relaxed),
+    );
     if s.reported == Some(next) || next.0 == 0 {
         return;
     }
@@ -1865,8 +1895,9 @@ fn report_env(s: &mut State, rect: [f32; 4]) {
 }
 
 pub(crate) fn view(s: &State, cx: &mut Cx<State>) -> El {
-    let _ = cx;
-    let fallback = if s.dark {
+    let dark = theme_override().unwrap_or_else(|| cx.system_dark());
+    note_appearance(dark);
+    let fallback = if dark {
         Color::WHITE
     } else {
         rune::color::hex("#09090b").unwrap()

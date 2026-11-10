@@ -304,6 +304,8 @@ const rune = makeRuneTarget({
 		return mount === undefined ? undefined : composer.editorText(mount.args)
 	},
 	onLink: followLink,
+	// The app's resolved theme (its Light/Dark/System setting) on `<html>`, over the host's appearance.
+	theme: shims.rootTheme,
 	// The editor root's own classes; ProseMirror's state classes on it carry no layout.
 	editableClass: () => EDITABLE_CLASS,
 
@@ -328,7 +330,7 @@ const rune = makeRuneTarget({
 	},
 })
 
-// The theme customization lands on `<html>`'s inline style: restyle what is on screen with it.
+// The theme lands on `<html>` (inline custom properties, the light/dark class): restyle what is on screen with it.
 styles.setRootProperties(shims.rootStyle)
 shims.onRootStyle(() => {
 	styles.setRootProperties(shims.rootStyle)
