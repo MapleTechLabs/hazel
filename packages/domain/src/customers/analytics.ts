@@ -5,7 +5,13 @@
 import { CustomerAccountId } from "@hazel/schema"
 import { Schema } from "effect"
 import { JsonDate } from "../models/utils"
-import { ContactActivityStatus, CustomersRange, HealthStatus, SignalSeverity } from "./enums"
+import {
+	ContactActivityStatus,
+	CustomerProvider,
+	CustomersRange,
+	HealthStatus,
+	SignalSeverity,
+} from "./enums"
 import { Day, SeriesPoint, SignalEvidence } from "./evidence"
 import { HealthBreakdown } from "./health"
 import { Account, Contact, Event, ExternalRef, Invoice, Subscription } from "./models"
@@ -200,7 +206,7 @@ export const RuleDryRunResult = Schema.Struct({
 	/** Against the rule's current signals (an existing rule) or none (a new one). */
 	queueDelta: Schema.Struct({ opens: Schema.Int, resolves: Schema.Int, stays: Schema.Int }),
 	/** The rule's template needs a source that is not connected. */
-	missingSources: Schema.Array(Schema.String),
+	missingSources: Schema.Array(CustomerProvider),
 })
 export type RuleDryRunResult = typeof RuleDryRunResult.Type
 

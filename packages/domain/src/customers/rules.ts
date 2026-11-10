@@ -55,7 +55,11 @@ export const OnboardingStalledConfig = Schema.TaggedStruct("onboarding_stalled",
 	minAgeDays: Days,
 	maxAgeDays: Days,
 	minActiveContacts: Count,
-})
+}).check(
+	Schema.makeFilter((config) =>
+		config.minAgeDays <= config.maxAgeDays ? undefined : "The minimum age must not exceed the maximum",
+	),
+)
 
 /** Health fell ≥ `dropPoints` within `windowDays`, or (with `onCritical`) entered `critical`. */
 export const HealthDropConfig = Schema.TaggedStruct("health_drop", {

@@ -7,6 +7,7 @@
  * through the refs: Autumn's customer id is the Clerk organization id, Maple's `UserId` is the
  * Clerk user id.
  */
+import { CustomerIgnoreRuleId, CustomerUnmatchedRecordId } from "@hazel/schema"
 import { Schema } from "effect"
 import { SyncStats } from "./connections"
 import {
@@ -182,9 +183,9 @@ export const IngestOutcome = Schema.Union([
 	Schema.TaggedStruct("Updated", { id: Schema.String }),
 	Schema.TaggedStruct("Unchanged", { id: Schema.String }),
 	/** Parked for a human: no match, an ambiguous match, or an unknown account. */
-	Schema.TaggedStruct("Unmatched", { recordId: Schema.String, reason: Schema.String }),
-	/** An ignore rule matched. */
-	Schema.TaggedStruct("Ignored", { ruleId: Schema.String }),
+	Schema.TaggedStruct("Unmatched", { recordId: CustomerUnmatchedRecordId, reason: Schema.String }),
+	/** An ignore rule matched (`null`: the record was ignored by hand). */
+	Schema.TaggedStruct("Ignored", { ruleId: Schema.NullOr(CustomerIgnoreRuleId) }),
 ])
 export type IngestOutcome = typeof IngestOutcome.Type
 

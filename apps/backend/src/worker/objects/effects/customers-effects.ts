@@ -1,18 +1,22 @@
 /**
  * Effects a `CustomersObject` receives (`docs/customers/tech-design.md` §1): its org's members,
  * projected by the `OrgObject` whenever a membership or role changes, and pulled once by the
- * customers object itself when it has none (`org.customerMembers`).
+ * customers object itself when it has none (`org.customerMembers`); and the org's deletion (an empty
+ * snapshot with `organizationDeleted`), which shuts the customers object down.
  */
 import { Database, SQLite, schema } from "@hazel/db"
+import { OrganizationMember } from "@hazel/domain/models"
 import { OrganizationId, UserId } from "@hazel/schema"
-import { Effect, Option, Schema } from "effect"
+import { Clock, Effect, Option, Schema } from "effect"
 import type { SqlClient } from "effect/sql/SqlClient"
+import { disconnectConnections } from "../customers/credentials"
+import { stopComputing } from "../customers/schedule"
 import { readObjectMeta, writeObjectMeta } from "../meta"
 import { defineEffect, type EffectReceivers, type EffectSender, isOrgSender } from "./registry"
 
 export const CustomerMember = Schema.Struct({
 	userId: UserId,
-	role: Schema.Literals(["owner", "admin", "member"]),
+	role: OrganizationMember.OrganizationRole,
 })
 export type CustomerMember = typeof CustomerMember.Type
 
@@ -22,6 +26,8 @@ export const SetMembersPayload = Schema.Struct({
 	members: Schema.Array(CustomerMember),
 	/** Increases with every snapshot the org sends (out-of-order deliveries drop the older one). */
 	version: Schema.Number,
+	/** The org was deleted (`members` is empty): disconnect every data source, stop computing. */
+	organizationDeleted: Schema.optionalKey(Schema.Boolean),
 })
 export type SetMembersPayload = typeof SetMembersPayload.Type
 
@@ -54,6 +60,21 @@ export const applyMembers = Effect.fn("CustomersEffects.applyMembers")(function*
 	}
 })
 
+/** The org is gone: its data sources disconnect (credentials dropped) and nothing is scheduled. */
+const shutDown = Effect.gen(function* () {
+	const db = yield* Database.Database
+	const connections = yield* db.run(
+		SQLite.from(schema.customerConnectionsTable)
+			.select("id")
+			.where(($) => [$.status.neq("disconnected")]),
+	)
+	yield* disconnectConnections(
+		connections.map((connection) => connection.id),
+		new Date(yield* Clock.currentTimeMillis),
+	)
+	yield* stopComputing
+})
+
 export const customersReceivers = {
 	"customers.setMembers": (payload) =>
 		Effect.gen(function* () {
@@ -61,6 +82,7 @@ export const customersReceivers = {
 			if (Option.isSome(applied) && payload.version < applied.value) return
 			yield* writeObjectMeta(CUSTOMERS_MEMBERS_VERSION_KEY, String(payload.version))
 			yield* applyMembers(payload.members)
+			if (payload.organizationDeleted === true) yield* shutDown
 		}),
 } satisfies EffectReceivers<typeof CustomersEffects, Database.Database | SqlClient>
 

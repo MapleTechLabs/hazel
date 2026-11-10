@@ -8,7 +8,7 @@
  * - `directory` → the real handler in process (`LocalRpcDispatcher`), with `Database` over D1.
  *   D1 has no transactions: a directory handler must not use `db.transaction`.
  */
-import { InternalServerError } from "@hazel/domain"
+import { InternalServerError, UnauthorizedError } from "@hazel/domain"
 import type { CurrentUser } from "@hazel/domain"
 import { Context, Effect, type Exit, Layer } from "effect"
 import { objectHandlersLive } from "../worker/objects/handlers"
@@ -54,6 +54,14 @@ const makeRoutedHandlers = Effect.gen(function* () {
 				Effect.provideService(Directory, directory),
 				Effect.catchTags({
 					RoutingError: (error) => Effect.fail(internal(error.message)),
+					// Only `customers.*` routes refuse, and every one of them declares `UnauthorizedError`.
+					RouteRefusedError: (error) =>
+						Effect.fail(
+							new UnauthorizedError({
+								message: "You do not have access to this organization",
+								detail: error.message,
+							}),
+						),
 					DatabaseError: (error) => Effect.fail(internal("Could not route the request", error)),
 				}),
 			)

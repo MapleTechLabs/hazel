@@ -38,6 +38,7 @@ import { type AnyObjectCall, type CallRequest, type CallResponse, exitCodec, pay
 import { CustomersBootstrapCall, CustomersTickCall } from "./customers/jobs"
 import { customersDeadlines } from "./customers/schedule"
 import { ChannelEffects } from "./effects/channel-effects"
+import { CustomersEffects } from "./effects/customers-effects"
 import { applyReceivedEffect, deliverOutboxRowFrom } from "./effects/deliver"
 import type { ApplyEffectRequest, ApplyEffectResult } from "./effects/registry"
 import type { ObjectKind } from "./kinds"
@@ -199,7 +200,9 @@ export const makeObjectRuntime = (options: ObjectRuntimeOptions) =>
 			...(presence === undefined ? {} : { deadlines: presence.deadlines }),
 			...(kind === "customers" ? { deadlines: customersDeadlines } : {}),
 			// Revocations land before the org answers (versioned, so out of order is safe).
-			...(kind === "org" ? { urgentKinds: [ChannelEffects.setViewers.name] } : {}),
+			...(kind === "org"
+				? { urgentKinds: [ChannelEffects.setViewers.name, CustomersEffects.setMembers.name] }
+				: {}),
 		})
 
 		const handlers = yield* Layer.build(options.handlers.pipe(Layer.provide(Layer.succeedContext(base))))

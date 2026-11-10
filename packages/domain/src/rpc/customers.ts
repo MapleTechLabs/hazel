@@ -322,13 +322,14 @@ export class CustomerQueueRpcs extends RpcGroup.make(
 	write(
 		"customers.account.bulkUpdate",
 		{
-			/** ≤ 500. */
+			/** ≤ 500, else `CustomersInvalidRequestError`. */
 			accountIds: Schema.Array(CustomerAccountId),
 			ownerUserId: Schema.optionalKey(Schema.NullOr(UserId)),
 			addTags: Schema.optionalKey(Schema.Array(Schema.String)),
 			removeTags: Schema.optionalKey(Schema.Array(Schema.String)),
 		},
 		Schema.Struct({ updated: Schema.Int, transactionId: TransactionId }),
+		CustomersInvalidRequestError,
 	),
 
 	/** Personal views for anyone; shared ones (`shared: true`) for admins. */
@@ -385,7 +386,11 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 	/** Health weights, bands, steps; the reporting currency. Rescores on the next compute (soon). */
 	write(
 		"customers.settings.update",
-		{ health: Schema.optionalKey(HealthSettings), reportingCurrency: Schema.optionalKey(Schema.String) },
+		{
+			health: Schema.optionalKey(HealthSettings),
+			/** An ISO 4217 code, e.g. `usd`. */
+			reportingCurrency: Schema.optionalKey(Schema.String.check(Schema.isPattern(/^[A-Za-z]{3}$/))),
+		},
 		Tx,
 	),
 
@@ -417,6 +422,7 @@ export class CustomerAdminRpcs extends RpcGroup.make(
 		CustomersNotFoundError,
 		CustomerProviderUnavailableError,
 		CustomerConnectionCredentialsError,
+		CustomersInvalidRequestError,
 	),
 
 	/** Drops the credentials and stops syncing; the data stays, marked stale. */

@@ -36,7 +36,8 @@ export const MapleConnectionConfig = Schema.TaggedStruct("maple", {
 	/** Which event attribute names the account and the user (default `GroupId` / `UserId`). */
 	accountKey: Schema.String,
 	userKey: Schema.String,
-	lookbackDays: Schema.Int,
+	/** 1–365. */
+	lookbackDays: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 365 })),
 })
 
 export const ConnectionConfig = Schema.Union([

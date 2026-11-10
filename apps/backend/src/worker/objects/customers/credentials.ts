@@ -6,11 +6,11 @@
 import { Database, SQLite, schema } from "@hazel/db"
 import type { ConnectionConfig } from "@hazel/domain/customers"
 import type { CustomerConnectionId } from "@hazel/schema"
-import { Effect, Option, Redacted } from "effect"
+import { Clock, Effect, Option, Redacted } from "effect"
 import { IntegrationEncryption } from "../../../services/integration-encryption"
 import type { ProviderCredentials } from "./providers"
 
-/** Encrypt the API key (and webhook secret) for storing; `undefined` keeps a stored secret. */
+/** Encrypt the API key and the webhook secret for storing, both under the current key version. */
 export const encryptSecrets = Effect.fn("Customers.encryptSecrets")(function* (
 	apiKey: string,
 	webhookSecret: string | null,
@@ -27,17 +27,52 @@ export const encryptSecrets = Effect.fn("Customers.encryptSecrets")(function* (
 	}
 })
 
-export const storeSecrets = (
+export const storeSecrets = Effect.fn("Customers.storeSecrets")(function* (
 	connectionId: CustomerConnectionId,
 	secrets: Effect.Success<ReturnType<typeof encryptSecrets>>,
-) =>
-	Effect.flatMap(Database.Database, (db) =>
-		db.run(
-			SQLite.insertInto(schema.customerConnectionSecretsTable)
-				.values({ connectionId, ...secrets })
-				.onConflictDoUpdate({ target: ["connectionId"], set: { ...secrets, updatedAt: new Date() } }),
-		),
+) {
+	const db = yield* Database.Database
+	const updatedAt = new Date(yield* Clock.currentTimeMillis)
+	yield* db.run(
+		SQLite.insertInto(schema.customerConnectionSecretsTable)
+			.values({ connectionId, ...secrets })
+			.onConflictDoUpdate({ target: ["connectionId"], set: { ...secrets, updatedAt } }),
 	)
+})
+
+/** Stop connections: drop their credentials, end their running sync runs, schedule no pulls. */
+export const disconnectConnections = Effect.fn("Customers.disconnectConnections")(function* (
+	connectionIds: ReadonlyArray<CustomerConnectionId>,
+	now: Date,
+) {
+	if (connectionIds.length === 0) return
+	const db = yield* Database.Database
+	yield* db.run(
+		SQLite.update(schema.customerConnectionsTable)
+			.set({
+				status: "disconnected",
+				disconnectedAt: now,
+				nextSyncAt: null,
+				hasWebhookSecret: false,
+				updatedAt: now,
+			})
+			.where(($) => [$.id.in_(...connectionIds)]),
+	)
+	yield* db.run(
+		SQLite.deleteFrom(schema.customerConnectionSecretsTable).where(($) => [
+			$.connectionId.in_(...connectionIds),
+		]),
+	)
+	yield* db.run(
+		SQLite.update(schema.customerSyncRunsTable)
+			.set({
+				status: "failed",
+				finishedAt: now,
+				error: { code: "internal", message: "The connection was disconnected", httpStatus: null },
+			})
+			.where(($) => [$.connectionId.in_(...connectionIds), $.status.eq("running")]),
+	)
+})
 
 /** The decrypted credentials of a connection; `None` once disconnected (no secrets). */
 export const loadCredentials = Effect.fn("Customers.loadCredentials")(function* (

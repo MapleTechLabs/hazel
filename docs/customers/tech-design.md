@@ -106,8 +106,15 @@ Access control:
   `customers:write` (added to `ApiScope`, granted to every role) are declared on the RPCs.
 - Sync: members only; `customer_members` is a declared dependency, so a membership change
   re-snapshots or refuses that user's sockets (`sources/customers-source.ts`).
-- The sync route should refuse `customers/<id>` for users without a `membership_index` row before
-  waking the object (avoids creating objects for arbitrary ids) — backend agent.
+- The sync route refuses `customers/<id>`, and RPC routing refuses every `customers.*` call, for
+  users without a live `membership_index` row before waking the object (no objects for arbitrary
+  ids). `org.customerMembers` answers `null` for an org with no live organization row; the object
+  installs its defaults and starts computing only once it has members.
+- People only: bots' machine users are not projected, and `requireMember` refuses a bot token
+  whatever its scopes (V1 gives bots no Customers access).
+- Org deletion: the `OrgObject` sends an empty `customers.setMembers` with `organizationDeleted`;
+  the object disconnects every source (secrets dropped, running runs failed) and stops computing.
+  `customers.setMembers` is an urgent outbox kind (removals land before the org answers).
 
 ## 2. Tables (`packages/db/src/tables/customers.ts`, migration `customers/0001_initial`)
 
@@ -320,11 +327,14 @@ needs ≥ 1 of its `requiredSources` connected, else it matches nothing (dry-run
   `customer_connections` (one per provider) → schedule a `backfill` run. No adapter registered →
   `CustomerProviderUnavailableError` (core state; the UI shows "coming soon" / seeded demo data).
 - **Webhook route** on the api Worker: `POST /webhooks/customers/:provider/:organizationId/:connectionId`
-  (org id in the path: no directory index needed; the signature is the auth). The route reads the
+  (org id in the path; the signature is the auth). The route reads the
   raw body and forwards it with a typed call `customers.webhook` (`defineCall(..., "customers", …)`)
-  to `customersTarget(organizationId)`; the object loads the secret, `adapter.webhook` verifies and
-  parses, `CustomerIngest.apply` (trigger `webhook`). Bad signature → 400, unknown connection → 404,
-  ingest failure → 500 (provider retries; ingest is idempotent).
+  to `customersTarget(organizationId)` once `org_index` knows the org (else 404, nothing woken),
+  reading at most 1 MB (413 past it, counted while streaming); the object loads the secret (none →
+  400, the adapter is never called), `adapter.webhook` verifies (signature and timestamp tolerance)
+  and parses, `CustomerIngest.apply` (trigger `webhook`; ops are checked against the contract).
+  Bad signature → 400, unknown connection → 404, ingest failure → 500 (provider retries; ingest is
+  idempotent).
   The webhook URL shown in the UI is built client-side from these ids.
 - **Scheduled pulls:** per connection `nextSyncAt = lastSyncAt + adapter.pullIntervalMs`; the alarm
   runs due pulls page by page (`adapter.pull(cursor, since)` → `apply` → `progress`), persisting the

@@ -2,8 +2,9 @@
  * The `CustomersObject`'s own work, as typed calls (`../calls.ts`) so it runs with the object's
  * full services (config, encryption, provider adapters):
  *
- * - `customers.bootstrap` (the runtime, before the first request): install the defaults, pull
- *   the members from the `OrgObject` when none were projected yet.
+ * - `customers.bootstrap` (the runtime, before the first request): pull the members from the
+ *   `OrgObject` when none were projected yet, then, once the org has members, install the
+ *   defaults and start computing.
  * - `customers.tick` (the alarm): compute when due, wake snoozes, run due pulls.
  * - `customers.webhook` (`routes/customers-webhooks.http.ts`): verify and apply one delivery.
  *
@@ -16,8 +17,9 @@
 import { Database, type DatabaseError, SQLite, schema } from "@hazel/db"
 import { CustomerProvider, type SyncError } from "@hazel/domain/customers"
 import { CustomerConnectionId, OrganizationId } from "@hazel/schema"
-import { Cause, Clock, Data, Effect, Option, Schema } from "effect"
+import { Cause, Clock, type Config, Data, Effect, type Layer, Option, Schema } from "effect"
 import type {
+	IntegrationEncryption,
 	IntegrationEncryptionError,
 	KeyVersionNotFoundError,
 } from "../../../services/integration-encryption"
@@ -56,36 +58,44 @@ export const bootstrap = Effect.fn("CustomersObject.bootstrap")(function* (paylo
 	readonly organizationId: OrganizationId
 }) {
 	const db = yield* Database.Database
-	if (Option.isNone(yield* readObjectMeta(DEFAULTS_KEY))) {
+	if (Option.isNone(yield* readObjectMeta(CUSTOMERS_MEMBERS_VERSION_KEY))) {
+		const pulled = yield* callObject(CustomerMembersCall, orgTarget(payload.organizationId), {
+			organizationId: payload.organizationId,
+		}).pipe(
+			Effect.map(Option.some),
+			Effect.catchTag("ObjectCallError", (error) =>
+				Effect.logWarning("Customers members pull failed", { error: error.message }).pipe(
+					Effect.as(Option.none()),
+				),
+			),
+		)
+		if (Option.isNone(pulled)) return { ready: false }
+		// No such organization: nothing to set up, and every request is refused (no members).
+		if (pulled.value === null) return { ready: true }
+		const snapshot = pulled.value
 		yield* db.transaction(
 			Effect.gen(function* () {
-				yield* installDefaults(payload.organizationId)
-				yield* writeObjectMeta(DEFAULTS_KEY, "1")
-				yield* scheduleComputeAt(yield* Clock.currentTimeMillis)
+				// A push may have landed while the pull was out: keep the newer one.
+				const applied = Option.map(yield* readObjectMeta(CUSTOMERS_MEMBERS_VERSION_KEY), Number)
+				if (Option.isSome(applied) && applied.value >= snapshot.version) return
+				yield* writeObjectMeta(CUSTOMERS_MEMBERS_VERSION_KEY, String(snapshot.version))
+				yield* applyMembers(snapshot.members)
 			}),
 		)
 	}
-	if (Option.isSome(yield* readObjectMeta(CUSTOMERS_MEMBERS_VERSION_KEY))) return { ready: true }
-	const pulled = yield* callObject(CustomerMembersCall, orgTarget(payload.organizationId), {
-		organizationId: payload.organizationId,
-	}).pipe(
-		Effect.map(Option.some),
-		Effect.catchTag("ObjectCallError", (error) =>
-			Effect.logWarning("Customers members pull failed", { error: error.message }).pipe(
-				Effect.as(Option.none()),
-			),
-		),
-	)
-	if (Option.isNone(pulled)) return { ready: false }
-	yield* db.transaction(
-		Effect.gen(function* () {
-			// A push may have landed while the pull was out: keep the newer one.
-			const applied = Option.map(yield* readObjectMeta(CUSTOMERS_MEMBERS_VERSION_KEY), Number)
-			if (Option.isSome(applied) && applied.value >= pulled.value.version) return
-			yield* writeObjectMeta(CUSTOMERS_MEMBERS_VERSION_KEY, String(pulled.value.version))
-			yield* applyMembers(pulled.value.members)
-		}),
-	)
+	// Defaults and the compute schedule only for an org with members (not an unknown or deleted one).
+	if (Option.isNone(yield* readObjectMeta(DEFAULTS_KEY))) {
+		const member = yield* db.first(SQLite.from(schema.customerMembersTable).select("userId").limit(1))
+		if (Option.isSome(member)) {
+			yield* db.transaction(
+				Effect.gen(function* () {
+					yield* installDefaults(payload.organizationId)
+					yield* writeObjectMeta(DEFAULTS_KEY, "1")
+					yield* scheduleComputeAt(yield* Clock.currentTimeMillis)
+				}),
+			)
+		}
+	}
 	return { ready: true }
 }, Effect.orDie)
 
@@ -358,65 +368,75 @@ export const CustomersWebhookCall = defineCall("customers.webhook", "customers",
 	error: CustomerWebhookFailedError,
 })
 
-export const receiveWebhook = Effect.fn("CustomersObject.webhook")(
-	function* (payload: typeof CustomersWebhookCall.payload.Type) {
-		const db = yield* Database.Database
-		const fail = (status: 400 | 404 | 500, message: string) =>
-			new CustomerWebhookFailedError({ status, message })
-		const connection = yield* db.first(
-			SQLite.from(schema.customerConnectionsTable)
-				.select()
-				.where(($) => [$.id.eq(payload.connectionId)])
-				.limit(1),
-		)
-		if (
-			Option.isNone(connection) ||
-			connection.value.provider !== payload.provider ||
-			connection.value.status === "disconnected"
-		) {
-			return yield* fail(404, "Unknown connection")
-		}
-		if (!connection.value.hasWebhookSecret)
-			return yield* fail(400, "The connection has no webhook secret")
-		const adapter = (yield* CustomerProviders).get(payload.provider)
-		if (Option.isNone(adapter)) return yield* fail(404, `No ${payload.provider} integration`)
-		const credentials = yield* loadCredentials(connection.value.id, connection.value.config)
-		if (Option.isNone(credentials)) return yield* fail(404, "Unknown connection")
-		const ops = yield* adapter.value
-			.webhook({ headers: payload.headers, body: payload.body }, credentials.value)
-			.pipe(Effect.mapError((error) => fail(400, error.message)))
-		const ingest = yield* CustomerIngest
-		const report = yield* ingest
-			.apply(
-				{
-					connectionId: connection.value.id,
-					provider: payload.provider,
-					runId: null,
-					trigger: "webhook",
-				},
-				ops,
+/** One delivery, with `services` (the adapters among them); `receiveWebhook` uses the real ones. */
+export const handleWebhookWith = <R>(
+	services: Layer.Layer<CustomerIngest | CustomerProviders | IntegrationEncryption, Config.ConfigError, R>,
+) =>
+	Effect.fn("CustomersObject.webhook")(
+		function* (payload: typeof CustomersWebhookCall.payload.Type) {
+			const db = yield* Database.Database
+			const fail = (status: 400 | 404 | 500, message: string) =>
+				new CustomerWebhookFailedError({ status, message })
+			const connection = yield* db.first(
+				SQLite.from(schema.customerConnectionsTable)
+					.select()
+					.where(($) => [$.id.eq(payload.connectionId)])
+					.limit(1),
 			)
-			.pipe(
-				Effect.catchTag("CustomerIngestRejectedError", (error) =>
-					Effect.fail(fail(400, error.message)),
-				),
-			)
-		return {
-			applied: report.outcomes.filter(
-				(outcome) => outcome._tag === "Created" || outcome._tag === "Updated",
-			).length,
-		}
-	},
-	Effect.provide(CustomersServicesLive),
-	// Storage, config and credential failures: the provider retries (ingest is idempotent).
-	Effect.tapError((error) =>
-		error._tag === "CustomerWebhookFailedError"
-			? Effect.void
-			: Effect.logError("Customers webhook failed", { error: Cause.pretty(Cause.fail(error)) }),
-	),
-	Effect.mapError((error) =>
-		error._tag === "CustomerWebhookFailedError"
-			? error
-			: new CustomerWebhookFailedError({ status: 500, message: `Webhook failed (${error._tag})` }),
-	),
-)
+			if (
+				Option.isNone(connection) ||
+				connection.value.provider !== payload.provider ||
+				connection.value.status === "disconnected"
+			) {
+				return yield* fail(404, "Unknown connection")
+			}
+			if (!connection.value.hasWebhookSecret)
+				return yield* fail(400, "The connection has no webhook secret")
+			const adapter = (yield* CustomerProviders).get(payload.provider)
+			if (Option.isNone(adapter)) return yield* fail(404, `No ${payload.provider} integration`)
+			const credentials = yield* loadCredentials(connection.value.id, connection.value.config)
+			if (Option.isNone(credentials)) return yield* fail(404, "Unknown connection")
+			// Never hand an adapter a delivery it cannot verify.
+			if (credentials.value.webhookSecret === null) {
+				return yield* fail(400, "The connection has no webhook secret")
+			}
+			const ops = yield* adapter.value
+				.webhook({ headers: payload.headers, body: payload.body }, credentials.value)
+				.pipe(Effect.mapError((error) => fail(400, error.message)))
+			const ingest = yield* CustomerIngest
+			const report = yield* ingest
+				.apply(
+					{
+						connectionId: connection.value.id,
+						provider: payload.provider,
+						runId: null,
+						trigger: "webhook",
+					},
+					ops,
+				)
+				.pipe(
+					Effect.catchTag("CustomerIngestRejectedError", (error) =>
+						Effect.fail(fail(400, error.message)),
+					),
+				)
+			return {
+				applied: report.outcomes.filter(
+					(outcome) => outcome._tag === "Created" || outcome._tag === "Updated",
+				).length,
+			}
+		},
+		Effect.provide(services),
+		// Storage, config and credential failures: the provider retries (ingest is idempotent).
+		Effect.tapError((error) =>
+			error._tag === "CustomerWebhookFailedError"
+				? Effect.void
+				: Effect.logError("Customers webhook failed", { error: Cause.pretty(Cause.fail(error)) }),
+		),
+		Effect.mapError((error) =>
+			error._tag === "CustomerWebhookFailedError"
+				? error
+				: new CustomerWebhookFailedError({ status: 500, message: `Webhook failed (${error._tag})` }),
+		),
+	)
+
+export const receiveWebhook = handleWebhookWith(CustomersServicesLive)

@@ -7,6 +7,7 @@
  * by a full step" compares steps. A non-match says why, for the dry run's histogram.
  */
 import {
+	type CustomerProvider,
 	escalate,
 	type EvidenceStep,
 	type RuleConfig,
@@ -525,7 +526,7 @@ const checkOf = (config: RuleConfig): Check => {
 }
 
 /** The template needs one of its sources connected. */
-export const missingSources = (template: SignalTemplate, org: OrgFacts): ReadonlyArray<string> => {
+export const missingSources = (template: SignalTemplate, org: OrgFacts): ReadonlyArray<CustomerProvider> => {
 	const required = TEMPLATES[template].requiredSources
 	return required.length === 0 || required.some((provider) => org.connected.has(provider)) ? [] : required
 }

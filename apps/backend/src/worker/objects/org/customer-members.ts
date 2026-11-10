@@ -3,9 +3,14 @@
  * snapshot of `(userId, role)`, versioned like `channel.setViewers`.
  *
  * - `org.customerMembers` (call): the customers object pulls the snapshot once, when it has none;
- *   answering it marks the org `customersEnabled`.
+ *   answering it marks the org `customersEnabled`. An object with no live organization row (an
+ *   unknown or deleted org) answers `null` and stays disabled.
  * - `publishCustomerMembers`: after a membership or role change, an enabled org pushes the new
  *   snapshot (`customers.setMembers`, outbox). Orgs that never opened Customers send nothing.
+ * - `publishCustomersOrganizationDeleted`: the org was deleted; its customers object drops every
+ *   member, disconnects its data sources and stops computing.
+ *
+ * Members are people: bots' machine users (org members since their install) are left out.
  */
 import { Database, SQLite, schema } from "@hazel/db"
 import { OrganizationId } from "@hazel/schema"
@@ -22,18 +27,28 @@ const VERSION_KEY = "customersMembersVersion"
 
 export const CustomerMembersCall = defineCall("org.customerMembers", "org", {
 	payload: Schema.Struct({ organizationId: OrganizationId }),
-	success: Schema.Struct({ members: Schema.Array(CustomerMember), version: Schema.Number }),
+	success: Schema.NullOr(Schema.Struct({ members: Schema.Array(CustomerMember), version: Schema.Number })),
 	error: Schema.Never,
 })
 
-const currentMembers = (organizationId: OrganizationId) =>
-	Effect.flatMap(Database.Database, (db) =>
-		db.run(
-			SQLite.from(schema.organizationMembersTable)
-				.select("userId", "role")
-				.where(($) => [$.organizationId.eq(organizationId), $.deletedAt.isNull()]),
-		),
+const currentMembers = Effect.fn("OrgObject.currentCustomerMembers")(function* (
+	organizationId: OrganizationId,
+) {
+	const db = yield* Database.Database
+	const members = yield* db.run(
+		SQLite.from(schema.organizationMembersTable)
+			.select("userId", "role")
+			.where(($) => [$.organizationId.eq(organizationId), $.deletedAt.isNull()]),
 	)
+	if (members.length === 0) return members
+	const machines = yield* db.run(
+		SQLite.from(schema.usersTable)
+			.select("id")
+			.where(($) => [$.id.in_(...members.map((member) => member.userId)), $.userType.eq("machine")]),
+	)
+	const bots = new Set(machines.map((machine) => machine.id))
+	return members.filter((member) => !bots.has(member.userId))
+})
 
 /** Past the last version and at least the clock, so it increases across restarts. */
 const nextVersion = Effect.gen(function* () {
@@ -46,6 +61,14 @@ const nextVersion = Effect.gen(function* () {
 export const customerMembers = Effect.fn("OrgObject.customerMembers")(function* (payload: {
 	readonly organizationId: OrganizationId
 }) {
+	const db = yield* Database.Database
+	const organization = yield* db.first(
+		SQLite.from(schema.organizationsTable)
+			.select("id")
+			.where(($) => [$.id.eq(payload.organizationId), $.deletedAt.isNull()])
+			.limit(1),
+	)
+	if (Option.isNone(organization)) return null
 	yield* writeObjectMeta(ENABLED_KEY, "1")
 	const members = yield* currentMembers(payload.organizationId)
 	return { members, version: yield* nextVersion }
@@ -64,3 +87,17 @@ export const publishCustomerMembers = Effect.fn("OrgObject.publishCustomerMember
 		version: yield* nextVersion.pipe(Effect.mapError(Database.toDatabaseError)),
 	})
 })
+
+/** The org was deleted: its customers object (if it has one) shuts down. Inside the delete's transaction. */
+export const publishCustomersOrganizationDeleted = Effect.fn("OrgObject.publishCustomersOrganizationDeleted")(
+	function* (organizationId: OrganizationId) {
+		const enabled = yield* readObjectMeta(ENABLED_KEY).pipe(Effect.mapError(Database.toDatabaseError))
+		if (Option.isNone(enabled)) return
+		yield* enqueueEffect(CustomersEffects.setMembers, customersTarget(organizationId), {
+			organizationId,
+			members: [],
+			organizationDeleted: true,
+			version: yield* nextVersion.pipe(Effect.mapError(Database.toDatabaseError)),
+		})
+	},
+)

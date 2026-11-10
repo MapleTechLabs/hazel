@@ -89,6 +89,34 @@ const FREE_MAIL = new Set([
 	"fastmail.com",
 ])
 
+/** What an ignore rule is checked against: a provider record's identifying fields. */
+export interface IgnoreCandidate {
+	readonly email?: string | null
+	readonly domains?: ReadonlyArray<string>
+	readonly name?: string | null
+	readonly externalId: string
+}
+
+/** Whether `rule` ignores a `provider` record of `entityType` with these fields. */
+export const ignoreRuleMatches = (
+	rule: Pick<schema.CustomerIgnoreRule, "entityType" | "provider" | "field" | "pattern">,
+	entityType: UnmatchedEntityType,
+	provider: CustomerProvider,
+	values: IgnoreCandidate,
+) => {
+	if (rule.entityType !== entityType) return false
+	if (rule.provider !== null && rule.provider !== provider) return false
+	const candidates =
+		rule.field === "email"
+			? [values.email]
+			: rule.field === "domain"
+				? [...(values.domains ?? []), emailDomain(values.email)]
+				: rule.field === "name"
+					? [values.name]
+					: [values.externalId]
+	return candidates.some((value) => value != null && globMatches(rule.pattern, value))
+}
+
 export const normalizeDomain = (value: string): string | null => {
 	const domain = value
 		.trim()
@@ -174,6 +202,7 @@ const STAT_OF = {
 
 const encodeOp = Schema.encodeUnknownSync(IngestOp)
 const decodeOp = Schema.decodeUnknownOption(IngestOp)
+const isIngestOp = Schema.is(IngestOp)
 
 interface Session {
 	readonly context: IngestContext
@@ -371,30 +400,11 @@ const make = Effect.gen(function* () {
 				.onConflictDoNothing(),
 		)
 
-	const ignoredBy = (
-		session: Session,
-		entityType: UnmatchedEntityType,
-		values: {
-			readonly email?: string | null
-			readonly domains?: ReadonlyArray<string>
-			readonly name?: string | null
-			readonly externalId: string
-		},
-	) =>
+	const ignoredBy = (session: Session, entityType: UnmatchedEntityType, values: IgnoreCandidate) =>
 		Option.fromNullishOr(
-			session.ignoreRules.find((rule) => {
-				if (rule.entityType !== entityType) return false
-				if (rule.provider !== null && rule.provider !== session.context.provider) return false
-				const candidates =
-					rule.field === "email"
-						? [values.email]
-						: rule.field === "domain"
-							? [...(values.domains ?? []), emailDomain(values.email)]
-							: rule.field === "name"
-								? [values.name]
-								: [values.externalId]
-				return candidates.some((value) => value != null && globMatches(rule.pattern, value))
-			}),
+			session.ignoreRules.find((rule) =>
+				ignoreRuleMatches(rule, entityType, session.context.provider, values),
+			),
 		)
 
 	/**
@@ -458,7 +468,8 @@ const make = Effect.gen(function* () {
 				return { _tag: "Unmatched", recordId: row.id, reason: record.reason } satisfies IngestOutcome
 			}
 			const row = existing.value
-			if (row.status === "ignored") return { _tag: "Ignored", ruleId: row.id } satisfies IngestOutcome
+			// Ignored by hand (no rule).
+			if (row.status === "ignored") return { _tag: "Ignored", ruleId: null } satisfies IngestOutcome
 			// Overlapping pulls count a day's events again: an estimate, not a ledger.
 			const events =
 				record.events === undefined ? row.eventCount30d : (row.eventCount30d ?? 0) + record.events
@@ -1432,6 +1443,9 @@ const make = Effect.gen(function* () {
 		op: IngestOp,
 		index: number,
 	): Effect.Effect<IngestOutcome, CustomerIngestRejectedError | Database.DatabaseError> => {
+		// Adapters build ops in code: check them against the contract (dates parse, days exist).
+		if (!isIngestOp(op))
+			return Effect.fail(reject(index, op, "The op does not match the ingest contract"))
 		switch (op._tag) {
 			case "account":
 				return applyAccount(session, op)
@@ -1762,6 +1776,3 @@ export class CustomerIngest extends Context.Service<CustomerIngest, CustomerInge
 ) {
 	static readonly layer = Layer.effect(this, make)
 }
-
-/** @deprecated Use `CustomerIngest.layer` (or `CustomersServicesLive`). */
-export const CustomerIngestLive = CustomerIngest.layer

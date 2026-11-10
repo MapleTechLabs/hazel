@@ -2,6 +2,7 @@ import * as Customers from "@hazel/domain/customers"
 import type {
 	CustomerConnectionCredentialsError,
 	CustomerProviderUnavailableError,
+	CustomersInvalidRequestError,
 	CustomersNotFoundError,
 } from "@hazel/domain/rpc"
 import { CustomerConnectionId, OrganizationId } from "@hazel/schema"
@@ -39,6 +40,7 @@ const settleUpdate =
 			| CustomersNotFoundError
 			| CustomerProviderUnavailableError
 			| CustomerConnectionCredentialsError
+			| CustomersInvalidRequestError
 			| CommonError,
 			R
 		>,
@@ -47,6 +49,7 @@ const settleUpdate =
 			Effect.map(succeeded),
 			Effect.catchTags({
 				CustomersNotFoundError: () => Effect.succeed(failed("NotFound")),
+				CustomersInvalidRequestError: () => Effect.succeed(failed("Invalid")),
 				CustomerProviderUnavailableError: () => Effect.succeed(failed("ComingSoon")),
 				CustomerConnectionCredentialsError: (error) =>
 					Effect.succeed(failed(credentialsFailure(error))),

@@ -35,12 +35,18 @@ import { generateTransactionId } from "../../lib/create-transactionId"
 import { NonProductionStage } from "../../lib/stage"
 import { IntegrationEncryption } from "../../services/integration-encryption"
 import { type CustomersActor, requireAdmin, requireMember } from "../../worker/objects/customers/access"
-import { encryptSecrets, storeSecrets } from "../../worker/objects/customers/credentials"
+import {
+	disconnectConnections,
+	encryptSecrets,
+	loadCredentials,
+	storeSecrets,
+} from "../../worker/objects/customers/credentials"
 import { seedDemo } from "../../worker/objects/customers/demo"
 import { healthDryRun, ruleDryRun } from "../../worker/objects/customers/dry-run"
 import { CustomerIngest } from "../../worker/objects/customers/ingest"
-import { CustomerIngestLive, normalizeDomain } from "../../worker/objects/customers/ingest-live"
+import { ignoreRuleMatches, normalizeDomain } from "../../worker/objects/customers/ingest-live"
 import { CustomerProviders } from "../../worker/objects/customers/providers"
+import { CustomersServicesLive } from "../../worker/objects/customers/services"
 import {
 	accountDetail,
 	accountSeries,
@@ -354,6 +360,9 @@ const ACTION_EVENT = {
 	reopen: ["signal.reopened", "Reopened"],
 } satisfies Record<SignalAction, readonly [string, string]>
 
+const countsTowardHealth = (status: schema.CustomerSignal["status"]) =>
+	status === "open" || status === "snoozed"
+
 /**
  * A human acted on a signal: check the action applies, write `patch` with the evidence it saw
  * (`actionEvidence`, what "worse by a full step" compares to), record the event, refresh counters.
@@ -389,10 +398,11 @@ const actOnSignal = (
 						action,
 					})
 				}
+				const changes = patch(signal, actor, now)
 				yield* db.run(
 					SQLite.update(schema.customerSignalsTable)
 						.set({
-							...patch(signal, actor, now),
+							...changes,
 							actionEvidence: signal.evidence,
 							updatedAt: now,
 						})
@@ -408,7 +418,9 @@ const actOnSignal = (
 					now,
 				)
 				yield* refreshCounters(signal.accountId, now)
-				yield* requestCompute
+				// Health counts open and snoozed risk signals: rescore only when that set changed.
+				const next = typeof changes.status === "string" ? changes.status : signal.status
+				if (countsTowardHealth(next) !== countsTowardHealth(signal.status)) yield* requestCompute
 			}),
 		)
 	}).pipe(remap)
@@ -435,6 +447,9 @@ const requireView = (viewId: CustomerSavedViewId, actor: CustomersActor) =>
 		if (!canEditView(view.value, actor)) return yield* notFound("view", viewId)
 		return view.value
 	})
+
+/** Accounts per `account.bulkUpdate`. */
+const BULK_LIMIT = 500
 
 const cleanTags = (tags: ReadonlyArray<string>) => [
 	...new Set(tags.map((tag) => tag.trim()).filter((tag) => tag.length > 0)),
@@ -641,16 +656,16 @@ export const CustomerQueueRpcLive = CustomerQueueRpcs.toLayer(
 			"customers.account.bulkUpdate": ({ accountIds, ownerUserId, addTags, removeTags }) =>
 				Effect.gen(function* () {
 					const actor = yield* requireMember
+					if (accountIds.length > BULK_LIMIT) {
+						return yield* invalid(`At most ${BULK_LIMIT} accounts at a time`)
+					}
 					const now = yield* currentTime
 					const result = yield* withTx(
 						Effect.gen(function* () {
 							const accounts = yield* db.run(
 								SQLite.from(schema.customerAccountsTable)
 									.select("id", "tags", "ownerUserId")
-									.where(($) => [
-										inList($.id, accountIds.slice(0, 500)),
-										$.deletedAt.isNull(),
-									]),
+									.where(($) => [inList($.id, accountIds), $.deletedAt.isNull()]),
 							)
 							const add = cleanTags(addTags ?? [])
 							const remove = new Set(cleanTags(removeTags ?? []))
@@ -819,6 +834,16 @@ const closeRuleSignals = (ruleId: CustomerSignalRuleId, now: Date) =>
 			yield* refreshCounters(accountId, now)
 	})
 
+/** Reading or writing the encrypted credentials failed: client-safe, the cause stays server-side. */
+const storeFailed = (cause: { readonly _tag: string }) =>
+	new InternalServerError({ message: "Could not store the credentials", detail: cause._tag, cause })
+
+/** What the config schema cannot say: Maple needs the org to read from. */
+const checkConfig = (config: ConnectionConfig) =>
+	config._tag === "maple" && config.mapleOrgId.trim() === ""
+		? Effect.fail(invalid("Enter the Maple organization id"))
+		: Effect.void
+
 const credentialsError =
 	(provider: CustomerProvider) => (error: { readonly code: string; readonly message: string }) =>
 		new CustomerConnectionCredentialsError({
@@ -843,14 +868,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 		const encrypt = (apiKey: string, webhookSecret: string | null) =>
 			encryptSecrets(apiKey, webhookSecret).pipe(
 				Effect.provideService(IntegrationEncryption, encryption),
-				Effect.mapError(
-					(cause) =>
-						new InternalServerError({
-							message: "Could not store the credentials",
-							detail: cause._tag,
-							cause,
-						}),
-				),
+				Effect.mapError(storeFailed),
 			)
 
 		const requireConnection = (connectionId: schema.CustomerConnection["id"]) =>
@@ -1007,6 +1025,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					const actor = yield* requireAdmin
 					if (config._tag !== provider)
 						return yield* invalid(`The config is for ${config._tag}, not ${provider}`)
+					yield* checkConfig(config)
 					const adapter = yield* adapterOf(provider)
 					const account = yield* adapter
 						.validate({
@@ -1057,73 +1076,66 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					yield* requireAdmin
 					const connection = yield* requireConnection(connectionId)
 					if (config !== undefined && config._tag !== connection.provider) {
-						return yield* new CustomerProviderUnavailableError({ provider: connection.provider })
+						return yield* invalid(`The config is for ${config._tag}, not ${connection.provider}`)
 					}
+					if (config !== undefined) yield* checkConfig(config)
 					const nextConfig = config ?? connection.config
+					// Rotating either credential re-encrypts both under the current key (one key version
+					// per row); the one not given is kept as stored.
 					const secrets =
-						apiKey === undefined
+						apiKey === undefined && webhookSecret === undefined
 							? undefined
 							: yield* Effect.gen(function* () {
-									const adapter = yield* adapterOf(connection.provider)
-									const secret = webhookSecret === undefined ? null : webhookSecret
-									yield* adapter
-										.validate({
-											apiKey: Redacted.make(apiKey),
-											webhookSecret: secret === null ? null : Redacted.make(secret),
-											config: nextConfig,
-										})
-										.pipe(Effect.mapError(credentialsError(connection.provider)))
-									return yield* encrypt(apiKey, secret)
+									const stored = yield* loadCredentials(connectionId, nextConfig).pipe(
+										Effect.provideService(IntegrationEncryption, encryption),
+										Effect.mapError(storeFailed),
+									)
+									const nextApiKey =
+										apiKey ??
+										Option.getOrUndefined(
+											Option.map(stored, (c) => Redacted.value(c.apiKey)),
+										)
+									if (nextApiKey === undefined) {
+										return yield* invalid("The connection has no API key: enter one")
+									}
+									const nextSecret =
+										webhookSecret !== undefined
+											? webhookSecret
+											: Option.match(stored, {
+													onNone: () => null,
+													onSome: (c) =>
+														c.webhookSecret === null
+															? null
+															: Redacted.value(c.webhookSecret),
+												})
+									if (apiKey !== undefined) {
+										const adapter = yield* adapterOf(connection.provider)
+										yield* adapter
+											.validate({
+												apiKey: Redacted.make(apiKey),
+												webhookSecret:
+													nextSecret === null ? null : Redacted.make(nextSecret),
+												config: nextConfig,
+											})
+											.pipe(Effect.mapError(credentialsError(connection.provider)))
+									}
+									return {
+										encrypted: yield* encrypt(nextApiKey, nextSecret),
+										hasWebhookSecret: nextSecret !== null,
+									}
 								})
 					const now = yield* currentTime
 					return yield* withTx(
 						Effect.gen(function* () {
-							if (secrets !== undefined) yield* storeSecrets(connectionId, secrets)
-							else if (webhookSecret !== undefined) {
-								// A new webhook secret alone: re-encrypt under the stored API key's row.
-								if (webhookSecret === null) {
-									yield* db.run(
-										SQLite.update(schema.customerConnectionSecretsTable)
-											.set({
-												encryptedWebhookSecret: null,
-												webhookSecretIv: null,
-												updatedAt: now,
-											})
-											.where(($) => [$.connectionId.eq(connectionId)]),
-									)
-								} else {
-									const encrypted = yield* encryption.encrypt(webhookSecret).pipe(
-										Effect.mapError(
-											(cause) =>
-												new InternalServerError({
-													message: "Could not store the credentials",
-													detail: cause._tag,
-													cause,
-												}),
-										),
-									)
-									yield* db.run(
-										SQLite.update(schema.customerConnectionSecretsTable)
-											.set({
-												encryptedWebhookSecret: encrypted.ciphertext,
-												webhookSecretIv: encrypted.iv,
-												updatedAt: now,
-											})
-											.where(($) => [$.connectionId.eq(connectionId)]),
-									)
-								}
-							}
-							// New credentials lift an `auth` error and pull again.
-							const lifted = secrets !== undefined && connection.status === "error"
+							if (secrets !== undefined) yield* storeSecrets(connectionId, secrets.encrypted)
+							// A new API key lifts an `auth` error and pulls again.
+							const lifted = apiKey !== undefined && connection.status === "error"
 							const [row] = yield* db.run(
 								SQLite.update(schema.customerConnectionsTable)
 									// `undefined` leaves a column as it is.
 									.set({
 										config: nextConfig,
-										hasWebhookSecret:
-											webhookSecret === undefined && secrets === undefined
-												? undefined
-												: (webhookSecret ?? null) !== null,
+										hasWebhookSecret: secrets?.hasWebhookSecret,
 										status: lifted ? ("active" as const) : undefined,
 										nextSyncAt: lifted ? now : undefined,
 										consecutiveFailures: lifted ? 0 : undefined,
@@ -1144,22 +1156,7 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 					yield* requireConnection(connectionId)
 					return yield* txOnly(
 						Effect.gen(function* () {
-							yield* db.run(
-								SQLite.update(schema.customerConnectionsTable)
-									.set({
-										status: "disconnected",
-										disconnectedAt: now,
-										nextSyncAt: null,
-										hasWebhookSecret: false,
-										updatedAt: now,
-									})
-									.where(($) => [$.id.eq(connectionId)]),
-							)
-							yield* db.run(
-								SQLite.deleteFrom(schema.customerConnectionSecretsTable).where(($) => [
-									$.connectionId.eq(connectionId),
-								]),
-							)
+							yield* disconnectConnections([connectionId], now)
 							yield* ingest.setStale(connectionId, true)
 							yield* requestCompute
 						}),
@@ -1256,15 +1253,49 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 									.where(($) => [$.id.eq(recordId)]),
 							)
 							if (rule !== undefined) {
-								yield* db.run(
-									SQLite.insertInto(schema.customerIgnoreRulesTable).values({
-										provider: record.provider,
-										entityType: record.entityType,
-										field: rule.field,
-										pattern: rule.pattern,
-										createdBy: actor.userId,
-									}),
+								const [created] = yield* db.run(
+									SQLite.insertInto(schema.customerIgnoreRulesTable)
+										.values({
+											provider: record.provider,
+											entityType: record.entityType,
+											field: rule.field,
+											pattern: rule.pattern,
+											createdBy: actor.userId,
+										})
+										.returning(),
 								)
+								// The open records it already covers go too.
+								const open = yield* db.run(
+									SQLite.from(schema.customerUnmatchedRecordsTable)
+										.select()
+										.where(($) => [
+											$.provider.eq(record.provider),
+											$.entityType.eq(record.entityType),
+											$.status.eq("open"),
+										]),
+								)
+								const covered = open
+									.filter((row) =>
+										ignoreRuleMatches(created, row.entityType, row.provider, {
+											email: row.email,
+											domains: row.domain === null ? [] : [row.domain],
+											name: row.label,
+											externalId: row.externalId,
+										}),
+									)
+									.map((row) => row.id)
+								if (covered.length > 0) {
+									yield* db.run(
+										SQLite.update(schema.customerUnmatchedRecordsTable)
+											.set({
+												status: "ignored",
+												resolvedByUserId: actor.userId,
+												resolvedAt: now,
+												updatedAt: now,
+											})
+											.where(($) => [inList($.id, covered)]),
+									)
+								}
 							}
 						}),
 					)
@@ -1287,9 +1318,9 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 
 			"customers.demo.seed": ({ accounts, seed, organizationId }) =>
 				Effect.gen(function* () {
+					const actor = yield* requireAdmin
 					const enabled = yield* NonProductionStage.pipe(Effect.orElseSucceed(() => false))
 					if (!enabled) return yield* invalid("Demo data is disabled on this stage")
-					const actor = yield* requireAdmin
 					yield* seedDemo({
 						organizationId: organizationId as OrganizationId,
 						by: actor.userId,
@@ -1306,4 +1337,4 @@ export const CustomerAdminRpcLive = CustomerAdminRpcs.toLayer(
 				),
 		}
 	}),
-).pipe(Layer.provide([CustomerIngestLive, CustomerProviders.layer, IntegrationEncryption.layer]))
+).pipe(Layer.provide(CustomersServicesLive))

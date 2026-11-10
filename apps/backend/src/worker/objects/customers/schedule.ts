@@ -40,6 +40,9 @@ export const requestCompute = Effect.gen(function* () {
 /** Compute at `at` (the end of a compute: the next hourly run). */
 export const scheduleComputeAt = (at: number) => meta(writeObjectMeta(COMPUTE_DUE_KEY, String(at)))
 
+/** Never compute again (the org was deleted). */
+export const stopComputing = meta(deleteObjectMeta(COMPUTE_DUE_KEY))
+
 /** The next compute evaluates its rules in baseline mode (§4.7): a backfill just finished. */
 export const setBaselineFor = (connectionId: string) => meta(writeObjectMeta(BASELINE_KEY, connectionId))
 

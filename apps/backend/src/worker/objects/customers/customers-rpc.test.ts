@@ -115,6 +115,7 @@ describe("Customers RPCs", () => {
 				const orgId = uuid() as OrganizationId
 				const org = yield* objects.get(orgTarget(orgId))
 				const [owner, member] = [uuid(), uuid()] as Array<UserId>
+				org.storage.db.prepare(`INSERT INTO organizations (id, name) VALUES (?, 'Acme')`).run(orgId)
 				const insert = org.storage.db.prepare(
 					`INSERT INTO organization_members (id, organizationId, userId, role) VALUES (?, ?, ?, ?)`,
 				)

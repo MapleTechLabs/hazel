@@ -5,10 +5,18 @@
  * signal's severity is the rule's severity raised by `step` (capped at `high`), and "worse by a
  * full step" (wake a snoozed signal early, reopen a dismissed one) means `step` went up.
  */
+import { CustomerContactId, CustomerInvoiceId } from "@hazel/schema"
 import { Schema } from "effect"
+import { SubscriptionStatus } from "./enums"
 
-/** A UTC calendar day, `YYYY-MM-DD`: the key of every daily table. */
-export const Day = Schema.String.check(Schema.isPattern(/^\d{4}-\d{2}-\d{2}$/)).annotate({
+/** A UTC calendar day, `YYYY-MM-DD`: the key of every daily table. A real date (no `2026-02-30`). */
+export const Day = Schema.String.check(
+	Schema.isPattern(/^\d{4}-\d{2}-\d{2}$/),
+	Schema.makeFilter((day) => {
+		const date = new Date(`${day}T00:00:00Z`)
+		return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(day) ? undefined : "Not a date"
+	}),
+).annotate({
 	title: "Day",
 	description: "A UTC calendar day, YYYY-MM-DD",
 })
@@ -18,7 +26,9 @@ export type Day = typeof Day.Type
  * An instant inside a JSON document (evidence, breakdowns, configs): ISO-8601 text, so a stored
  * document reads back exactly as written.
  */
-export const IsoTimestamp = Schema.String.annotate({ title: "IsoTimestamp", description: "ISO-8601 instant" })
+export const IsoTimestamp = Schema.String.check(
+	Schema.makeFilter((value) => (Number.isNaN(Date.parse(value)) ? "Not a date" : undefined)),
+).annotate({ title: "IsoTimestamp", description: "ISO-8601 instant" })
 export type IsoTimestamp = typeof IsoTimestamp.Type
 
 export const SeriesPoint = Schema.Struct({ day: Day, value: Schema.Number })
@@ -32,9 +42,9 @@ export const AmountEvidence = Schema.TaggedStruct("amount", {
 	step: EvidenceStep,
 	amountMinor: Schema.Int,
 	currency: Schema.String,
-	invoiceId: Schema.NullOr(Schema.String),
+	invoiceId: Schema.NullOr(CustomerInvoiceId),
 	invoiceNumber: Schema.NullOr(Schema.String),
-	subscriptionStatus: Schema.NullOr(Schema.String),
+	subscriptionStatus: Schema.NullOr(SubscriptionStatus),
 	dueAt: Schema.NullOr(IsoTimestamp),
 	daysOverdue: Schema.Int,
 	attemptCount: Schema.NullOr(Schema.Int),
@@ -50,7 +60,7 @@ export const LastActiveEvidence = Schema.TaggedStruct("last_active", {
 	/** Distinct active users in the window before the quiet period. */
 	priorActiveUsers: Schema.Int,
 	/** `champion_inactive`: the champion. */
-	contactId: Schema.NullOr(Schema.String),
+	contactId: Schema.NullOr(CustomerContactId),
 	contactName: Schema.NullOr(Schema.String),
 	contactEmail: Schema.NullOr(Schema.String),
 })

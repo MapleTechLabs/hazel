@@ -102,6 +102,12 @@ export const BulkAssignOwner = Command.define("BulkAssignOwner", {
 			Effect.map(({ data }) =>
 				Message.SucceededBulkUpdate({ ...orgOf(args), action: "owner", count: data.updated, label }),
 			),
+			// Over the per-call limit: the list never sends that many.
+			Effect.catchTag("CustomersInvalidRequestError", () =>
+				Effect.succeed(
+					Message.FailedBulkUpdate({ ...orgOf(args), action: "owner", reason: "Unexpected" }),
+				),
+			),
 			catchCommon((reason) => Message.FailedBulkUpdate({ ...orgOf(args), action: "owner", reason })),
 		),
 })
@@ -118,6 +124,12 @@ export const BulkAddTag = Command.define("BulkAddTag", {
 					count: data.updated,
 					label: tag,
 				}),
+			),
+			// Over the per-call limit: the list never sends that many.
+			Effect.catchTag("CustomersInvalidRequestError", () =>
+				Effect.succeed(
+					Message.FailedBulkUpdate({ ...orgOf(args), action: "tag", reason: "Unexpected" }),
+				),
 			),
 			catchCommon((reason) => Message.FailedBulkUpdate({ ...orgOf(args), action: "tag", reason })),
 		),

@@ -4,6 +4,7 @@
  */
 import type { schema } from "@hazel/db"
 import { CurrentUser } from "@hazel/domain"
+import type { ApiScope } from "@hazel/domain/scopes"
 import {
 	type Day,
 	DEFAULT_CONNECTION_CONFIG,
@@ -276,11 +277,12 @@ export interface CustomersWorld {
 	readonly owner: UserId
 	readonly member: UserId
 	readonly stranger: UserId
-	/** Invoke an RPC as `user`; the decoded exit. */
+	/** Invoke an RPC as `user` (a bot when `botScopes` is given); the decoded exit. */
 	readonly call: (
 		tag: HazelRpcTag,
 		payload: Record<string, unknown>,
 		user: UserId,
+		botScopes?: ReadonlyArray<ApiScope>,
 	) => Effect.Effect<Exit.Exit<any, unknown>>
 	/** Raw SQL rows of the object's store. */
 	readonly rows: <T = Record<string, unknown>>(
@@ -315,14 +317,17 @@ export const makeCustomersWorld = Effect.gen(function* () {
 		key: uuid(),
 		sender: { kind: "org", id: orgId },
 	})
-	const call: CustomersWorld["call"] = (tag, payload, user) =>
+	const call: CustomersWorld["call"] = (tag, payload, user, botScopes) =>
 		Effect.gen(function* () {
 			const rpc = yield* rpcFor(tag)
 			const response = yield* object.invoke({
 				objectId: orgId,
 				tag,
 				payload: yield* encodePayload(rpc, { organizationId: orgId, ...payload }),
-				principal: yield* encodeInvokePrincipal({ user: userOf(user), botScopes: null }),
+				principal: yield* encodeInvokePrincipal({
+					user: userOf(user),
+					botScopes: botScopes === undefined ? null : [...botScopes],
+				}),
 			})
 			return yield* decodeExit(rpc, structuredClone(response).exit)
 		}).pipe(Effect.orDie)

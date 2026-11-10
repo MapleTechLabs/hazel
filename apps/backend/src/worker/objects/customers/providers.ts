@@ -48,7 +48,13 @@ export interface CustomerProviderAdapter {
 		{ readonly externalAccountId: string | null; readonly externalAccountName: string | null },
 		CustomerProviderError
 	>
-	/** Verify one webhook delivery (raw body, headers) and parse it. */
+	/**
+	 * Verify one webhook delivery (raw body, headers) and parse it. Core calls it only with a webhook
+	 * secret (`credentials.webhookSecret` is non-null). The adapter must check the signature over the
+	 * raw body and refuse a delivery whose signed timestamp is outside a short tolerance (replay
+	 * protection), e.g. 5 minutes. `CustomerWebhookRejectedError.message` is answered to the caller
+	 * verbatim: keep it client-safe (no secrets, no provider internals).
+	 */
 	readonly webhook: (
 		request: { readonly headers: Readonly<Record<string, string>>; readonly body: string },
 		credentials: ProviderCredentials,

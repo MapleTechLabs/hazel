@@ -11,11 +11,11 @@ import { HealthComponentKey, HealthStatus, SignalTemplate } from "./enums"
 const Score = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 100 }))
 
 /** First step whose `min` ≤ the input wins; sorted by `min` descending (no `Infinity`: stored as JSON). */
-export const MinStep = Schema.Struct({ min: Schema.Number, score: Score })
+export const MinStep = Schema.Struct({ min: Schema.Finite, score: Score })
 export type MinStep = typeof MinStep.Type
 
 /** First step whose `max` ≥ the input wins; steps are sorted by `max` ascending. */
-export const MaxStep = Schema.Struct({ max: Schema.Number, score: Score })
+export const MaxStep = Schema.Struct({ max: Schema.Finite, score: Score })
 export type MaxStep = typeof MaxStep.Type
 
 export const HealthWeights = Schema.Struct({
