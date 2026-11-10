@@ -694,6 +694,9 @@ export interface ViewInputs<Item, ParentMessage> {
 	readonly toParentMessage: (message: Message) => ParentMessage
 }
 
+/** Set on the list while the reader scrolls. */
+export const SCROLLING_ATTRIBUTE = "data-list-scrolling"
+
 /** LegendList's `POSITION_OUT_OF_VIEW`, where empty containers wait. */
 const OUT_OF_VIEW_PX = -10000000
 
@@ -748,17 +751,24 @@ export const view = <Item, ParentMessage>(
 		const activeIndex =
 			model.activeStickyKey === null ? undefined : layout.indexByKey.get(model.activeStickyKey)
 		// The pinned divider renders even when its day started above the window.
-		return [
-			...indexes.filter((index) => index !== activeIndex),
-			...(activeIndex === undefined ? [] : [activeIndex]),
-		].map(row)
+		return activeIndex === undefined || (activeIndex >= range.from && activeIndex <= range.to)
+			? indexes.map(row)
+			: [activeIndex, ...indexes].map(row)
 	}
-	const containerRows = () =>
-		Array.from({ length: model.pool.pooledCount }, (_, slot) => {
+	// Rows render in row order in both phases, with empty containers after them: rows sit at
+	// absolute offsets, so DOM order is not visible, and keeping it the same means a phase switch
+	// never moves a row's node. Moving a node reloads any iframe in it (HTML renders flash).
+	const containerRows = () => {
+		const indexes: Array<number> = []
+		const empty: Array<number> = []
+		for (let slot = 0; slot < model.pool.pooledCount; slot++) {
 			const key = model.pool.slots[slot] ?? null
 			const index = key === null ? undefined : layout.indexByKey.get(key)
-			return index === undefined ? emptyContainer(slot) : row(index)
-		})
+			if (index === undefined) empty.push(slot)
+			else indexes.push(index)
+		}
+		return [...indexes.sort((a, b) => a - b).map(row), ...empty.map(emptyContainer)]
+	}
 	const rows =
 		model.viewportHeight === 0
 			? []
@@ -770,6 +780,9 @@ export const view = <Item, ParentMessage>(
 		[
 			h.Id(model.id),
 			h.OnMount(Mount.mapMessage(ObserveMessageList({ id: model.id }), inputs.toParentMessage)),
+			// Frames inside ignore the pointer while this is set (`styles.css`), so a scroll never
+			// lands in an HTML render that slides under the pointer.
+			...(model.scrollPhase._tag === "Scrolling" ? [h.Attribute(SCROLLING_ATTRIBUTE, "")] : []),
 			h.Style({ overflow: "auto", flex: "1 1 0%", "min-height": "0px", "overflow-anchor": "none" }),
 		],
 		[
