@@ -104,7 +104,7 @@ const signInFailureMessage = (reason: SignInFailure): UserErrorMessage | null =>
 		: reason === "BrowserBusy"
 			? { title: "A sign-in is already in progress in your browser" }
 			: reason === "BrowserIndeterminate"
-				? { title: "Couldn't confirm the last sign-in", description: "Restart Hazel and try again." }
+				? { title: "Couldn't finish signing in", description: "Please try again." }
 				: authFailureMessage(reason)
 
 const failureOf = (model: Model): UserErrorMessage | null =>

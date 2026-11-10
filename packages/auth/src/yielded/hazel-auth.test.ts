@@ -549,7 +549,17 @@ describe("Hazel auth on D1 (node SQLite)", () => {
 			)
 
 			// The hosted page's half, played by the browser: describe, then confirm the account.
+			// The apps ask for a fresh sign-in: the session from before the app asked is refused
+			// (the page shows "Sign in again"), and one signed in after it is accepted. The
+			// exchange issues the app's session from that sign-in, which must be recent.
 			let callbackUrl = ""
+			let freshSessionId = ""
+			const authorize = (attemptId: string, expectedSessionId: string) =>
+				call(browser, "POST", desktopLogin.routes.authorize.path, {
+					attemptId,
+					decision: "continue",
+					expectedSessionId,
+				}).then((response) => response.json())
 			const FakeBrowser = Layer.succeed(BrowserLogin.Browser, {
 				open: ({ url }) =>
 					Effect.promise(async () => {
@@ -559,14 +569,18 @@ describe("Hazel auth on D1 (node SQLite)", () => {
 						})
 						expect(await described.json()).toMatchObject({
 							_tag: "Success",
-							value: { displayName: client.displayName, browserSession: "confirm" },
+							value: { displayName: client.displayName, browserSession: "reauthenticate" },
 						})
-						const authorized = await call(browser, "POST", desktopLogin.routes.authorize.path, {
-							attemptId,
-							decision: "continue",
-							expectedSessionId: browserSession.value.sessionId,
+						// What the hosted page turns into "Sign in again" (`auth/desktop-handoff.ts`).
+						expect(await authorize(attemptId, browserSession.value.sessionId)).toEqual({
+							_tag: "Failure",
+							error: { _tag: "BrowserLoginInvalid" },
 						})
-						const result = await authorized.json()
+
+						expect((await signInWithGitHub(browser)).pathname).toBe("/")
+						const fresh = await (await call(browser, "POST", "/auth/getSession")).json()
+						freshSessionId = fresh.value.sessionId
+						const result = await authorize(attemptId, freshSessionId)
 						expect(result).toMatchObject({ _tag: "Success" })
 						callbackUrl = result.value.callbackUrl
 						return callbackUrl
@@ -598,6 +612,7 @@ describe("Hazel auth on D1 (node SQLite)", () => {
 					const session = yield* desktop.session
 					expect(session?.claims.displayName).toBe("Octo Cat")
 					expect(session?.sessionId).not.toBe(browserSession.value.sessionId)
+					expect(session?.sessionId).not.toBe(freshSessionId)
 					expect(callbackUrl.startsWith(`${client.returnUrl}?`)).toBe(true)
 
 					// The API accepts the desktop session as a bearer, as the RPC middleware does.
@@ -621,4 +636,74 @@ describe("Hazel auth on D1 (node SQLite)", () => {
 		},
 		60_000,
 	)
+
+	test("a sign-in whose exchange failed does not leave the app busy: the next one works", async () => {
+		githubUserId = 7779
+		const browser = jar()
+		await register(browser, await signInWithGitHub(browser))
+
+		const DesktopHttp = Layer.succeed(
+			HttpClient.HttpClient,
+			HttpClient.make((request, url) =>
+				Effect.promise(async () => {
+					const body =
+						request.body._tag === "Uint8Array"
+							? new TextDecoder().decode(request.body.body)
+							: undefined
+					const response = await send(
+						new Request(url.href, { method: request.method, headers: request.headers, body }),
+					)
+					return HttpClientResponse.fromWeb(request, response)
+				}),
+			),
+		)
+
+		// Each open signs the browser in afresh and authorizes; the first hands back a wrong code,
+		// so its exchange fails after the attempt was marked as exchanging.
+		let opens = 0
+		const FakeBrowser = Layer.succeed(BrowserLogin.Browser, {
+			open: ({ url }) =>
+				Effect.promise(async () => {
+					opens += 1
+					const attemptId = new URL(url).searchParams.get("attempt")!
+					await signInWithGitHub(browser)
+					const session = await (await call(browser, "POST", "/auth/getSession")).json()
+					const authorized = await call(browser, "POST", desktopLogin.routes.authorize.path, {
+						attemptId,
+						decision: "continue",
+						expectedSessionId: session.value.sessionId,
+					})
+					const callback = new URL((await authorized.json()).value.callbackUrl)
+					if (opens === 1) callback.searchParams.set("code", "x".repeat(43))
+					return callback.href
+				}),
+		})
+
+		let stored: string | null = null
+		const MemoryVault = layerVault({
+			read: Effect.sync(() => stored),
+			write: (json) => Effect.sync(() => void (stored = json)),
+		})
+
+		await Effect.runPromise(
+			Effect.gen(function* () {
+				const desktop = yield* makeDesktopAuth({
+					apiOrigin: origin,
+					hostedUrl: `${webOrigin}/auth/desktop`,
+					client: nativeClient,
+				})
+				const failed = yield* Effect.flip(desktop.signIn)
+				expect(failed._tag).not.toBe("BrowserLoginPlatformError")
+				expect((yield* desktop.pendingAttempt)?.phase).toBe("Exchanging")
+
+				yield* desktop.signIn
+				expect((yield* desktop.session)?.claims.displayName).toBe("Octo Cat")
+				expect(yield* desktop.pendingAttempt).toBeUndefined()
+				expect(opens).toBe(2)
+			}).pipe(
+				Effect.provide(Layer.mergeAll(FakeBrowser, MemoryVault, DesktopHttp, CryptoLive)),
+				Effect.scoped,
+			),
+		)
+	}, 60_000)
 })

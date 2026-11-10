@@ -51,6 +51,13 @@ export const HazelAuthApi = AuthContract.make("hazel", {
 	},
 })
 
+/**
+ * The apps that sign in through the system browser (`BrowserLogin`) take `reauthenticate`: the
+ * browser signs in after the app asks, not with a session from before. The exchange issues the
+ * app's session from that sign-in, and issuance requires it fresh (`requirement`, 5 minutes), so
+ * `confirm` with an older browser session passed the browser step and failed the exchange.
+ */
+
 /** The desktop app, signing in through the system browser (`BrowserLogin`). */
 export const desktopClient = {
 	clientId: "desktop",
@@ -60,7 +67,7 @@ export const desktopClient = {
 	 * only reverse-domain custom schemes, so it is the app identifier, not `hazel:`.
 	 */
 	returnUrl: "com.hazel.app://auth/callback",
-	browserSession: "confirm",
+	browserSession: "reauthenticate",
 } as const
 
 /**
@@ -71,7 +78,7 @@ export const nativeClient = {
 	clientId: "native",
 	displayName: "Hazel Native",
 	returnUrl: "com.hazel.native://auth/callback",
-	browserSession: "confirm",
+	browserSession: "reauthenticate",
 } as const
 
 /** The apps that sign in through the browser, and the one an app signs in as. */
