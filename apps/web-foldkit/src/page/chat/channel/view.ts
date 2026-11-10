@@ -2,6 +2,7 @@ import { TrackMessageKeys } from "./message-keys"
 import { createLazy, type Html, type HtmlBuilder } from "foldkit/html"
 import { contentStyles, rootStyles } from "~/components/ui/split-panel/split-panel.styles"
 import { cn } from "~/lib/utils"
+import { getEffectivePresenceStatus } from "~/utils/presence"
 import { isImageAttachment } from "../../../chat/attachments"
 import { htmlRenderFullscreenView } from "../../../chat/embeds/html-render"
 import type * as HtmlRender from "../../../chat/html-render"
@@ -305,6 +306,13 @@ const headerView = (
 	const botNames = new Map(lookups.bots.map((bot) => [bot.userId, bot.name]))
 	const others = (members ?? []).filter((member) => member.userId !== currentUserId)
 	const currentMember = (members ?? []).find((member) => member.userId === currentUserId)
+	const partner = channel?.type === "single" && others.length === 1 ? others[0] : undefined
+	const dmPresence =
+		partner === undefined || botNames.has(partner.userId)
+			? null
+			: getEffectivePresenceStatus(
+					lookups.presence.find((presence) => presence.userId === partner.userId),
+				)
 	return chatHeaderView(h, {
 		channel,
 		parentChannel,
@@ -315,6 +323,7 @@ const headerView = (
 			return user ? [authorIdentity(user, botNames.get(member.userId))] : []
 		}),
 		isHiddenDm: currentMember?.isHidden ?? false,
+		dmPresence,
 		// Legacy renders the menu button only on mobile (`isMobile` in `ChatHeader`).
 		mobileMenu: (className) =>
 			isMobile

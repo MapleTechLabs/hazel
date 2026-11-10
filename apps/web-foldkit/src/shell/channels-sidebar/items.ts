@@ -4,10 +4,10 @@ import { twMerge } from "tailwind-merge"
 import { styles as avatarStyles } from "~/components/ui/avatar/styles"
 import { cx } from "~/utils/cx"
 import { getEffectivePresenceStatus } from "~/utils/presence"
-import { getStatusDotColor } from "~/utils/status"
 import { IconHashtag } from "../../icons"
 import { AppRoute, hrefOf } from "../../route"
 import { avatar } from "../../ui/avatar"
+import { presenceDot } from "../../ui/presence-dot"
 import { sidebarItem, sidebarLink } from "../../ui/sidebar"
 import type {
 	ChannelEntry,
@@ -235,18 +235,6 @@ export const dmDisplayName = (channel: DmChannel, partners: ReadonlyArray<DmMemb
 		: partners.map((member) => member.firstName).join(", ")
 }
 
-/** `AvatarOnlineIndicator` at size xs. */
-const statusDot = <M>(h: HtmlBuilder<M>, status: string): Html =>
-	h.span([
-		h.Class(
-			cx(
-				"absolute right-0 bottom-0 rounded-full ring-[1.5px] ring-bg",
-				getStatusDotColor(status),
-				"size-1.5",
-			),
-		),
-	])
-
 /** `DmUserStatusEmoji` (a tooltip trigger when the user set an emoji). */
 const statusEmoji = <M>(h: HtmlBuilder<M>, presence: Presence | undefined): Html[] =>
 	presence?.statusEmoji
@@ -283,7 +271,7 @@ const singleDmContent = <M>(
 			src: partner.avatarUrl,
 			alt: fullName,
 			seed: fullName,
-			badge: statusDot(h, status),
+			badge: presenceDot(h, status),
 		}),
 		label(
 			h,

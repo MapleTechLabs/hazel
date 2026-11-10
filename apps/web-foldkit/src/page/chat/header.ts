@@ -3,6 +3,8 @@ import { IconChevronRight, IconEye, IconHashtag, IconPin, IconThread } from "../
 import { AppRoute, hrefOf } from "../../route"
 import { avatar } from "../../ui/avatar"
 import { button } from "../../ui/button"
+import { presenceDot } from "../../ui/presence-dot"
+import type { PresenceStatus } from "~/utils/presence"
 import { type AuthorIdentity } from "./rows"
 import type { ChannelInfo, ParentChannelInfo } from "./queries"
 
@@ -24,6 +26,8 @@ export interface HeaderInputs {
 	/** DM participants other than the signed-in user, in member order. */
 	readonly otherMembers: ReadonlyArray<AuthorIdentity>
 	readonly isHiddenDm: boolean
+	/** The partner's presence in a one-on-one DM with a person; null otherwise (group DMs, bots). */
+	readonly dmPresence: PresenceStatus | null
 	/** The pinned messages trigger (a popover trigger with its overlay). */
 	readonly pinnedTrigger: Html
 	/** The mobile menu button (`md:hidden`), with an extra className for the fallback header. */
@@ -82,13 +86,18 @@ const threadTitle = <M>(h: HtmlBuilder<M>, inputs: HeaderInputs, channel: Channe
 		],
 	)
 
-const dmTitle = <M>(h: HtmlBuilder<M>, members: ReadonlyArray<AuthorIdentity>): ReadonlyArray<Html> => [
+const dmTitle = <M>(
+	h: HtmlBuilder<M>,
+	members: ReadonlyArray<AuthorIdentity>,
+	presence: PresenceStatus | null,
+): ReadonlyArray<Html> => [
 	members[0]
 		? avatar(h, {
 				size: "sm",
 				src: members[0].avatarUrl,
 				seed: members[0].displayName || undefined,
 				alt: members[0].displayName,
+				...(presence === null ? {} : { badge: presenceDot(h, presence, "sm") }),
 			})
 		: h.empty,
 	h.div(
@@ -148,7 +157,7 @@ export const chatHeaderView = <M>(h: HtmlBuilder<M>, inputs: HeaderInputs): Html
 					...(channel.type === "thread"
 						? [threadTitle(h, inputs, channel)]
 						: isDirectMessage
-							? dmTitle(h, inputs.otherMembers)
+							? dmTitle(h, inputs.otherMembers, inputs.dmPresence)
 							: [
 									channelIcon(h, channel.icon, "size-5 text-muted-fg"),
 									h.div(
