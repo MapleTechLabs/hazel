@@ -75,7 +75,7 @@ not decode, the wrong instance) and acknowledges every event type it does not ha
 | user `last_active_at`                               | `contact.lastSeenAt` + that day's activity in every account of the user    |
 | `session.created`                                   | the contact's `lastSignInAt` / `lastSeenAt` + one account's `signedIn` day |
 | `user.updated`                                      | the user's contact and activity day in every account Clerk lists them in   |
-| membership webhooks' `organization`                 | the account's ref only: never its name, logo or seats                      |
+| membership webhooks' `organization`                 | the account's ref only: never its name, logo or seats, never creates it    |
 | `organization.created`                              | `account.created` timeline event                                           |
 
 Ingest raises `contact.joined`, `contact.removed` and `contact.first_active` itself, so the adapter
@@ -103,7 +103,9 @@ day. A user in several organizations therefore over-credits recency to the ones 
 active in; without it a Clerk-only account would have no activity day at all, read as never
 active, score near critical on health and raise `onboarding_stalled` / `inactive` /
 `champion_inactive` for customers using the product. The activity op follows its contact op, since
-ingest parks activity for a contact it does not know. The `session.created` webhook adds the
+ingest parks activity for a contact it does not know. A `last_active_at` day already past core's
+400-day activity retention when the user was observed is not written (the next prune would delete
+it). The `session.created` webhook adds the
 day's sign-in, credited to one account:
 
 - a session scoped to an organization (`last_active_organization_id`) credits that one, without a
@@ -181,6 +183,11 @@ failure is logged by path and issue kind only, never with the payload.
   delivered, or `createAccounts` off) parks its contact and its sign-in day. The next sweep credits
   the user's `last_active_at` day once the account exists, so that day is lost only when the user
   was active again on a later day before the sweep ran.
+- **A membership webhook for an organization Hazel does not hold yet** parks the organization (its
+  ref only) and the contact: the membership's account op never creates an account, so a customer
+  is created only from the organization's own record, its name checked against ignore rules. The
+  organization's `organization.created` / `.updated` or the next sweep creates it, and the parked
+  contact lands then.
 - **A scoped session before its membership webhook** creates the contact from the Clerk user id
   alone (no email yet); the membership webhook then fills it in. Should a contact with that email
   already exist in the account from another source and with no Clerk ref, the two are not merged.

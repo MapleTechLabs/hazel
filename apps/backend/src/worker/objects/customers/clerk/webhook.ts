@@ -143,7 +143,6 @@ export const opsOfEvent = Effect.fn("Clerk.opsOfEvent")(function* (
 			const membership = yield* decodeAs(ClerkMembership, data, type)
 			return membershipOps({
 				membership,
-				onNoMatch,
 				// A removal writes the contact only, never the (possibly deleted) organization.
 				removed: type === "organizationMembership.deleted",
 				// A removal is dated by the event (it happened then), an update by the record.
@@ -161,7 +160,6 @@ export const opsOfEvent = Effect.fn("Clerk.opsOfEvent")(function* (
 				membershipOps({
 					membership,
 					user,
-					onNoMatch,
 					// The membership's organization is not the event's subject: its own events write it.
 					withAccount: false,
 					observedAt: observed(user.updated_at),

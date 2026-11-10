@@ -163,7 +163,8 @@ describe("Clerk webhook events", () => {
 			externalId: ORG_ACME.id,
 			externalUrl: `https://dashboard.clerk.com/last-active?path=organizations/${ORG_ACME.id}`,
 			sameAs: [],
-			onNoMatch: "create",
+			// Never creates it: an unknown organization waits for its own event or the sweep.
+			onNoMatch: "unmatched",
 			observedAt: expect.any(String),
 		})
 		expect(ops[1]).toMatchObject({

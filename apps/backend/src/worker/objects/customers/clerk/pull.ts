@@ -183,7 +183,6 @@ const membersPage = Effect.fn("Clerk.membersPage")(function* (
 		membershipOps({
 			membership,
 			user: byId.get(membership.public_user_data?.user_id ?? ""),
-			onNoMatch,
 			withAccount: false,
 			observedAt: at,
 		}),

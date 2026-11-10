@@ -2,7 +2,7 @@
  * Clerk records → `IngestOp`s, over the recorded payloads in `./fixtures.ts` (decoded through the
  * wire schemas first, so the schemas are held to the real shapes too).
  */
-import { IngestOp, type UpsertAccount, type UpsertContact } from "@hazel/domain/customers"
+import { IngestOp, type IsoTimestamp, type UpsertAccount, type UpsertContact } from "@hazel/domain/customers"
 import { Schema } from "effect"
 import { describe, expect, it } from "vitest"
 import {
@@ -179,7 +179,6 @@ describe("timestamps", () => {
 		const ops = membershipOps({
 			membership: member({ ...MEMBERSHIP_ADA_ADMIN, created_at: 9e15 }),
 			user: odd,
-			onNoMatch: "create",
 		})
 		expect(ops.every(Schema.is(IngestOp))).toBe(true)
 		expect(ops[1]).toMatchObject({ lastSignInAt: null, lastSeenAt: null })
@@ -192,7 +191,6 @@ describe("membershipOps", () => {
 		const ops = membershipOps({
 			membership: member(MEMBERSHIP_ADA_ADMIN),
 			user: ada,
-			onNoMatch: "create",
 		})
 		expect(ops.map((op) => op._tag)).toEqual(["account", "contact", "activity"])
 		// Ada was last active on the 10th but signed in on the 9th: no sign-in that day.
@@ -210,7 +208,6 @@ describe("membershipOps", () => {
 		const ops = membershipOps({
 			membership: member(MEMBERSHIP_ADA_ADMIN),
 			user: signedInThatDay,
-			onNoMatch: "create",
 		})
 		expect(ops[2]).toMatchObject({ _tag: "activity", day: "2026-11-10", signedIn: true })
 	})
@@ -220,25 +217,33 @@ describe("membershipOps", () => {
 			membershipOps({
 				membership: member(MEMBERSHIP_GRACE_MEMBER),
 				user: grace,
-				onNoMatch: "create",
 			}).map((op) => op._tag),
 		).toEqual(["account", "contact"])
-		expect(
-			membershipOps({ membership: member(MEMBERSHIP_ADA_ADMIN), onNoMatch: "create" }).map(
-				(op) => op._tag,
-			),
-		).toEqual(["account", "contact"])
+		expect(membershipOps({ membership: member(MEMBERSHIP_ADA_ADMIN) }).map((op) => op._tag)).toEqual([
+			"account",
+			"contact",
+		])
 	})
 
-	it("names the organization by ref only, so a membership's stale copy cannot revert it", () => {
-		const [account] = membershipOps({ membership: member(MEMBERSHIP_ADA_ADMIN), onNoMatch: "create" })
+	it("names the organization by ref only and never creates it: a stale copy cannot revert it", () => {
+		const [account] = membershipOps({ membership: member(MEMBERSHIP_ADA_ADMIN) })
 		expect(account).toEqual({
 			_tag: "account",
 			externalId: acme.id,
 			externalUrl: `https://dashboard.clerk.com/last-active?path=organizations/${acme.id}`,
 			sameAs: [],
-			onNoMatch: "create",
+			onNoMatch: "unmatched",
 		})
+	})
+
+	it("writes no activity day already past core's retention when the user was observed", () => {
+		const tags = (observedAt: IsoTimestamp) =>
+			membershipOps({ membership: member(MEMBERSHIP_ADA_ADMIN), user: ada, observedAt }).map(
+				(op) => op._tag,
+			)
+		// Ada was last active on 2026-11-10: 400 days later the day is still kept, 401 it is not.
+		expect(tags("2027-12-15T12:00:00.000Z")).toEqual(["account", "contact", "activity"])
+		expect(tags("2027-12-16T12:00:00.000Z")).toEqual(["account", "contact"])
 	})
 
 	it("skips the account when the sweep already wrote it in this page", () => {
@@ -246,7 +251,6 @@ describe("membershipOps", () => {
 			membershipOps({
 				membership: member(MEMBERSHIP_ADA_ADMIN),
 				user: ada,
-				onNoMatch: "create",
 				withAccount: false,
 			}).map((op) => op._tag),
 		).toEqual(["contact", "activity"])
@@ -257,7 +261,6 @@ describe("membershipOps", () => {
 			membershipOps({
 				membership: member(MEMBERSHIP_ADA_ADMIN),
 				user: ada,
-				onNoMatch: "create",
 				removed: true,
 			}).map((op) => op._tag),
 		).toEqual(["contact"])
@@ -267,7 +270,6 @@ describe("membershipOps", () => {
 		const ops = membershipOps({
 			membership: member(MEMBERSHIP_ADA_ADMIN),
 			user: ada,
-			onNoMatch: "create",
 			observedAt: "2026-11-10T08:21:00.000Z",
 		})
 		expect(ops[0]).toMatchObject({ _tag: "account", observedAt: "2026-11-10T08:21:00.000Z" })
@@ -277,8 +279,8 @@ describe("membershipOps", () => {
 
 	it("makes one contact per account for a user in several organizations", () => {
 		const ops = [
-			...membershipOps({ membership: member(MEMBERSHIP_ADA_ADMIN), user: ada, onNoMatch: "create" }),
-			...membershipOps({ membership: member(MEMBERSHIP_ADA_GLOBEX), user: ada, onNoMatch: "create" }),
+			...membershipOps({ membership: member(MEMBERSHIP_ADA_ADMIN), user: ada }),
+			...membershipOps({ membership: member(MEMBERSHIP_ADA_GLOBEX), user: ada }),
 		]
 		const contacts = ops.filter((op): op is UpsertContact => op._tag === "contact")
 		expect(

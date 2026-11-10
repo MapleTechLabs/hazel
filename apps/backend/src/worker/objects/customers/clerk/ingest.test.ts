@@ -40,16 +40,14 @@ const run = <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) =>
 const backfill = [
 	accountOp(org(ORG_ACME), "create"),
 	accountOp(org(ORG_GLOBEX), "create"),
-	...membershipOps({ membership: member(MEMBERSHIP_ADA_ADMIN), user: user(USER_ADA), onNoMatch: "create" }),
+	...membershipOps({ membership: member(MEMBERSHIP_ADA_ADMIN), user: user(USER_ADA) }),
 	...membershipOps({
 		membership: member(MEMBERSHIP_GRACE_MEMBER),
 		user: user(USER_GRACE),
-		onNoMatch: "create",
 	}),
 	...membershipOps({
 		membership: member(MEMBERSHIP_ADA_GLOBEX),
 		user: user(USER_ADA),
-		onNoMatch: "create",
 	}),
 	domainsAccountOp(ORG_ACME.id, [DOMAIN_ACME.name, DOMAIN_ACME_EU.name], "create"),
 ]
@@ -246,7 +244,6 @@ describe("Clerk ops through CustomerIngest", () => {
 							...MEMBERSHIP_ADA_ADMIN,
 							public_user_data: { user_id: USER_ADA.id },
 						}),
-						onNoMatch: "create",
 					}),
 				)
 				expect(
@@ -276,10 +273,7 @@ describe("Clerk ops through CustomerIngest", () => {
 				expect(world.rows(`SELECT count(*) AS n FROM customer_unmatched_records`)).toEqual([{ n: 0 }])
 				// ...and the membership webhook then lands on that same contact (by its Clerk user id) and
 				// fills in what the session could not say.
-				yield* world.ingest(
-					"clerk",
-					membershipOps({ membership: member(MEMBERSHIP_ADA_ADMIN), onNoMatch: "create" }),
-				)
+				yield* world.ingest("clerk", membershipOps({ membership: member(MEMBERSHIP_ADA_ADMIN) }))
 				expect(
 					contacts(world).map((row) => ({
 						email: row.email,
@@ -304,7 +298,6 @@ describe("Clerk ops through CustomerIngest", () => {
 				yield* world.ingest("clerk", [
 					...membershipOps({
 						membership: member(MEMBERSHIP_GRACE_MEMBER),
-						onNoMatch: "create",
 						removed: true,
 						observedAt,
 					}),
@@ -324,7 +317,6 @@ describe("Clerk ops through CustomerIngest", () => {
 					membershipOps({
 						membership: member(MEMBERSHIP_GRACE_MEMBER),
 						user: user(USER_GRACE),
-						onNoMatch: "create",
 						removed: true,
 					}),
 				)
@@ -363,6 +355,32 @@ describe("Clerk ops through CustomerIngest", () => {
 					{ provider: "clerk", entityType: "account", label: "Acme Analytics" },
 					{ provider: "clerk", entityType: "account", label: "Globex" },
 				])
+			}),
+		))
+
+	it("parks a membership of an unknown organization with its contact until the organization lands", () =>
+		run(
+			Effect.gen(function* () {
+				const world = yield* makeCustomersWorld
+				const parked = yield* world.ingest(
+					"clerk",
+					membershipOps({ membership: member(MEMBERSHIP_ADA_ADMIN), user: user(USER_ADA) }),
+				)
+				expect(parked.outcomes.map((outcome) => outcome._tag)).toEqual([
+					"Unmatched",
+					"Unmatched",
+					"Unmatched",
+				])
+				expect(accounts(world)).toEqual([])
+
+				yield* world.ingest("clerk", [accountOp(org(ORG_ACME), "create")])
+				expect(accounts(world).map((row) => row.name)).toEqual(["Acme Analytics"])
+				expect(contacts(world)).toMatchObject([
+					{ email: "ada@acme.com", role: "Admin", account: "Acme Analytics" },
+				])
+				expect(
+					world.rows(`SELECT count(*) AS n FROM customer_unmatched_records WHERE status = 'open'`),
+				).toEqual([{ n: 0 }])
 			}),
 		))
 

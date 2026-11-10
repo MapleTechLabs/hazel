@@ -40,7 +40,7 @@ import type {
 	UpsertContact,
 } from "@hazel/domain/customers"
 import type { Types } from "effect"
-import { dayOf } from "../time"
+import { addDays, dayOf } from "../time"
 import {
 	type ClerkMembership,
 	type ClerkOrganization,
@@ -193,14 +193,26 @@ export const contactOp = (input: {
 }
 
 /**
+ * How long core keeps activity days (`compute.ts` `DAILY_RETENTION_DAYS`, not exported): an older
+ * day would be written only for the next prune to delete it.
+ */
+const ACTIVITY_RETENTION_DAYS = 400
+
+/**
  * The user's `last_active_at` day in one account (see the module doc on over-crediting), a sign-in
  * when it is also the `last_sign_in_at` day. Comes after the contact op: ingest parks activity for a
- * contact it does not know.
+ * contact it does not know. None when the day was already past retention when the user was observed.
  */
-const lastActiveOp = (user: ClerkUser, organizationId: string): RecordActivity | null => {
+const lastActiveOp = (
+	user: ClerkUser,
+	organizationId: string,
+	observedAt: IsoTimestamp | undefined,
+): RecordActivity | null => {
 	const activeAt = isoOf(user.last_active_at)
 	if (activeAt === null) return null
 	const day = dayOf(new Date(activeAt))
+	if (observedAt !== undefined && day < addDays(dayOf(new Date(observedAt)), -ACTIVITY_RETENTION_DAYS))
+		return null
 	const signInAt = isoOf(user.last_sign_in_at)
 	const op: Types.Mutable<RecordActivity> = {
 		_tag: "activity",
@@ -272,14 +284,15 @@ export const accountCreatedEvent = (org: ClerkOrganization, occurredAt: IsoTimes
  * A membership, its organization and its user, in the order ingest needs: the account exists
  * before the contact that names it, and the contact before its activity day. The account op names
  * the organization only: the membership's copy of it may be older than what an
- * `organization.updated` already wrote, so it never sets the account's fields. A removal writes only
- * the contact: its organization may be going too (a deleted organization's memberships go with it),
- * and an account op would revive it.
+ * `organization.updated` already wrote, so it never sets the account's fields, and it never creates
+ * one (an unknown organization parks with its contact until the organization's own event or the
+ * sweep creates it, its name checked against ignore rules then). A removal writes only the contact:
+ * its organization may be going too (a deleted organization's memberships go with it), and an
+ * account op would revive it.
  */
 export const membershipOps = (input: {
 	readonly membership: ClerkMembership
 	readonly user?: ClerkUser | undefined
-	readonly onNoMatch: OnNoMatch
 	readonly removed?: boolean
 	/** Skip the account op: a sweep already wrote the organization in this page, say. */
 	readonly withAccount?: boolean
@@ -290,7 +303,7 @@ export const membershipOps = (input: {
 	const ops: Array<IngestOp> = []
 	if (input.withAccount !== false && input.removed !== true) {
 		ops.push({
-			...accountRefOp(organizationId, input.onNoMatch, input.observedAt),
+			...accountRefOp(organizationId, "unmatched", input.observedAt),
 			externalUrl: organizationUrlOf(organizationId),
 		})
 	}
@@ -304,7 +317,9 @@ export const membershipOps = (input: {
 	if (contact === null) return ops
 	ops.push(contact)
 	const activity =
-		input.user === undefined || input.removed === true ? null : lastActiveOp(input.user, organizationId)
+		input.user === undefined || input.removed === true
+			? null
+			: lastActiveOp(input.user, organizationId, input.observedAt)
 	if (activity !== null) ops.push(activity)
 	return ops
 }
